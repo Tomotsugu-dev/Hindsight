@@ -5,8 +5,8 @@ import { WindowControls } from "../components/WindowControls/WindowControls";
 import styles from "./AppLayout.module.css";
 
 export function AppLayout() {
-  /** 鼠标进入侧栏时展开，离开时收成图标条 */
-  const [expanded, setExpanded] = useState(true);
+  /** 默认收起为图标条，鼠标进入时展开 */
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div className={`${styles.shell} ${expanded ? styles.expanded : ""}`}>

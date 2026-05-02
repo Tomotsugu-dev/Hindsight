@@ -5,7 +5,11 @@ import Today from "./pages/Today";
 import Week from "./pages/Week";
 import Month from "./pages/Month";
 import Sync from "./pages/Sync";
-import Settings from "./pages/Settings";
+import SettingsPage from "./pages/Settings/SettingsPage";
+import GeneralTab from "./pages/Settings/tabs/GeneralTab";
+import DataTab from "./pages/Settings/tabs/DataTab";
+import LabelsTab from "./pages/Settings/tabs/LabelsTab";
+import AboutTab from "./pages/Settings/tabs/AboutTab";
 
 function App() {
   return (
@@ -15,7 +19,12 @@ function App() {
         <Route path={ROUTES.week} element={<Week />} />
         <Route path={ROUTES.month} element={<Month />} />
         <Route path={ROUTES.sync} element={<Sync />} />
-        <Route path={ROUTES.settings} element={<Settings />} />
+        <Route path={ROUTES.settings} element={<SettingsPage />}>
+          <Route index element={<GeneralTab />} />
+          <Route path="data" element={<DataTab />} />
+          <Route path="labels" element={<LabelsTab />} />
+          <Route path="about" element={<AboutTab />} />
+        </Route>
       </Route>
     </Routes>
   );

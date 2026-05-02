@@ -1,0 +1,44 @@
+.toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.12);
+  transition:
+    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.toggle:hover {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.toggle.on {
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 30%, transparent);
+}
+
+.toggle.on:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.18),
+    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toggle.on .thumb {
+  transform: translateX(16px);
+}

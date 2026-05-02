@@ -1,0 +1,55 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 20px;
+  min-height: 56px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowBlock {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.rowDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.description {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: -0.002em;
+}
+
+.control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowBlock .control {
+  width: 100%;
+}
