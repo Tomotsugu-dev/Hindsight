@@ -1,0 +1,100 @@
+.chart {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 32px;
+  padding: 0 18px;
+  border-radius: 6px;
+  transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.row:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.rowToday {
+  background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+}
+
+.rowToday:hover {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+/* —— 左侧：周几 + 日期 —— */
+.label {
+  flex-shrink: 0;
+  width: 64px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dow {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.date {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— 中间：水平堆叠条 —— */
+.track {
+  flex: 1;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  display: flex;
+  border-radius: 999px;
+  overflow: hidden;
+  transition:
+    width 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.row:hover .bar {
+  filter: brightness(1.04) saturate(1.04);
+}
+
+.segment {
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.segment:not(:first-child) {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.55);
+}
+
+/* —— 右侧：总时长 —— */
+.total {
+  flex-shrink: 0;
+  width: 60px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+}
+
+.totalEmpty {
+  color: var(--text-faint);
+  font-weight: 500;
+}

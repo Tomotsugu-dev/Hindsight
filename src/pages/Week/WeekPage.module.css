@@ -1,0 +1,164 @@
+.page {
+  padding: 32px 40px 48px;
+  max-width: 880px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.card {
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.dayNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: var(--text-faint);
+  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.navBtn:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+
+.navBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.dayPill {
+  min-width: 56px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dayPillClickable {
+  cursor: pointer;
+}
+
+.dayPillClickable:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.dayPill:disabled {
+  cursor: default;
+}
+
+.swipeFrame {
+  position: relative;
+  overflow: hidden;
+}
+
+.swipeTrack {
+  display: flex;
+  width: 100%;
+  will-change: transform;
+}
+
+.swipeAnimated {
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.ranks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 18px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-regular);
+  font-weight: 500;
+}
+
+.legendDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 1px 1px rgba(20, 20, 40, 0.1);
+}
