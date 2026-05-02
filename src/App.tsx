@@ -6,6 +6,7 @@ import Week from "./pages/Week/WeekPage";
 import Month from "./pages/Month/MonthPage";
 import AI from "./pages/AI";
 import Sync from "./pages/Sync";
+import Devices from "./pages/Devices";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import GeneralTab from "./pages/Settings/tabs/GeneralTab";
 import DataTab from "./pages/Settings/tabs/DataTab";
@@ -21,6 +22,7 @@ function App() {
         <Route path={ROUTES.month} element={<Month />} />
         <Route path={ROUTES.ai} element={<AI />} />
         <Route path={ROUTES.sync} element={<Sync />} />
+        <Route path={ROUTES.devices} element={<Devices />} />
         <Route path={ROUTES.settings} element={<SettingsPage />}>
           <Route index element={<GeneralTab />} />
           <Route path="data" element={<DataTab />} />
