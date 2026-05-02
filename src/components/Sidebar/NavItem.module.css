@@ -1,0 +1,65 @@
+.item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition:
+    color var(--duration-base) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.item:hover {
+  color: var(--text-strong);
+}
+
+.item:active {
+  transform: scale(0.985);
+}
+
+.item.active {
+  color: var(--text-on-pill);
+}
+
+/* 图标外框 — 不画底色，仅作为定位/对齐容器 */
+.iconWrap {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon {
+  color: var(--icon-color);
+  /* 未激活时也保持 90% 饱和度，避免变灰 */
+  opacity: 0.92;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.item.active .icon {
+  opacity: 1;
+}
+
+.label {
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: var(--label-opacity, 1);
+  transform: translateX(var(--label-translate, 0));
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}

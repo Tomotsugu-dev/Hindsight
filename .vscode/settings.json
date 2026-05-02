@@ -1,0 +1,33 @@
+{
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/dist-ssr": true,
+    "**/.vite": true,
+    "src-tauri/target": true,
+    "src-tauri/gen": true,
+    "src-tauri/icons": true,
+    "src-tauri/Cargo.lock": true,
+    "src-tauri/build.rs": true,
+    "src-tauri/.gitignore": true,
+    ".gitignore": false,
+    "package-lock.json": true,
+    "tsconfig.node.json": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/dist-ssr": true,
+    "**/.vite": true,
+    "src-tauri/target": true,
+    "src-tauri/gen/schemas": true,
+    "package-lock.json": true,
+    "src-tauri/Cargo.lock": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.vite/**": true,
+    "src-tauri/target/**": true
+  }
+}

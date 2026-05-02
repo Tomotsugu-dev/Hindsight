@@ -1,0 +1,124 @@
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  background: var(--sidebar-gradient);
+  border-right: 1px solid var(--sidebar-border);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.4);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-3);
+  /* 拖动热区：双保险 */
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.logoMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background:
+    conic-gradient(
+      from 220deg at 50% 50%,
+      #6c5ce7 0deg,
+      #ec4899 120deg,
+      #f59e0b 240deg,
+      #6c5ce7 360deg
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 1px 2px rgba(20, 20, 40, 0.15);
+}
+
+.logoText {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  opacity: var(--label-opacity, 1);
+  transform: translateX(var(--label-translate, 0));
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  padding-bottom: var(--space-3);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sectionTitle {
+  padding: 0 var(--space-3);
+  height: 22px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  /* 收起时只淡出文字，不动布局 — 否则下面 item 上移导致胶囊错位 */
+  opacity: var(--label-opacity, 1);
+  transition: opacity 180ms var(--ease-out);
+}
+
+.sectionItems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* —— 浮动激活胶囊 —— */
+.pill {
+  position: absolute;
+  left: var(--pill-left, 0);
+  width: var(--pill-width, 100%);
+  top: 0;
+  z-index: 0;
+  border-radius: var(--radius-md);
+  background: var(--pill-bg);
+  /* 毛玻璃：让侧栏渐变从胶囊后方透出来，但带高斯模糊 */
+  backdrop-filter: var(--pill-blur);
+  -webkit-backdrop-filter: var(--pill-blur);
+  box-shadow: var(--pill-shadow);
+  pointer-events: none;
+  /* 首帧不带过渡，避免从 (0,0) 滑下来的诡异感 */
+  transition: opacity 200ms var(--ease-out);
+  will-change: transform, height, width, left, opacity;
+  backface-visibility: hidden;
+}
+
+/* 测量完成后才挂上"丝滑+惯性+弹跳"的过渡 */
+.pillAnimated {
+  transition:
+    transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    height 460ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms var(--ease-out);
+}
