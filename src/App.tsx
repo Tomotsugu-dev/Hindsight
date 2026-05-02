@@ -1,9 +1,10 @@
 import { Routes, Route } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
-import Today from "./pages/Today";
+import Today from "./pages/Today/TodayPage";
 import Week from "./pages/Week";
 import Month from "./pages/Month";
+import AI from "./pages/AI";
 import Sync from "./pages/Sync";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import GeneralTab from "./pages/Settings/tabs/GeneralTab";
@@ -18,6 +19,7 @@ function App() {
         <Route path={ROUTES.today} element={<Today />} />
         <Route path={ROUTES.week} element={<Week />} />
         <Route path={ROUTES.month} element={<Month />} />
+        <Route path={ROUTES.ai} element={<AI />} />
         <Route path={ROUTES.sync} element={<Sync />} />
         <Route path={ROUTES.settings} element={<SettingsPage />}>
           <Route index element={<GeneralTab />} />

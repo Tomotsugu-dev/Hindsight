@@ -1,0 +1,118 @@
+.chart {
+  padding: 18px 16px 10px;
+}
+
+/* —— 绘图主体（Y 轴 + 绘图区） —— */
+.plot {
+  display: flex;
+  align-items: stretch;
+  height: 180px;
+}
+
+/* —— Y 轴 —— */
+.yAxis {
+  position: relative;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.yTick {
+  position: absolute;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  /* 让标签的"基线"对齐参考线 */
+  transform: translateY(50%);
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+/* —— 绘图区 —— */
+.plotArea {
+  position: relative;
+  flex: 1;
+  /* 底部基线 */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 水平参考线 — 极淡，不喧宾夺主 */
+.gridLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.05);
+  pointer-events: none;
+}
+
+/* —— 工作时段柔色填充 —— */
+.workBand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  border-top: 1px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
+  pointer-events: none;
+}
+
+/* —— 柱子 —— */
+.bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.column {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  /* 只圆顶角 — Apple 屏幕使用时间风 */
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  transition: filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.bar:hover {
+  filter: brightness(1.06) saturate(1.05);
+}
+
+.segment {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* 段间分隔 — 在每段顶部画 1px 白线，最顶段（DOM 最后）不画 */
+.segment:not(:last-child) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* —— X 轴 —— */
+.xAxis {
+  position: relative;
+  margin-left: 32px;
+  height: 18px;
+  margin-top: 6px;
+}
+
+.xLabel {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
