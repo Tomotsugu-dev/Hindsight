@@ -10,7 +10,6 @@ type CaptureStatus = "ok" | "idle" | "error";
 
 interface StatusFooterProps {
   captureStatus?: CaptureStatus;
-  todayCount?: number;
   onToggleCapture?: () => void;
 }
 
@@ -28,7 +27,6 @@ function parseHM(s: string): number {
 
 export function StatusFooter({
   captureStatus = "ok",
-  todayCount = 0,
   onToggleCapture,
 }: StatusFooterProps) {
   const navigate = useNavigate();
@@ -105,21 +103,13 @@ export function StatusFooter({
                 aria-hidden
               />
             )}
-            <span className={styles.text}>
-              {CAPTURE_TEXT[captureStatus]}
-              <span className={styles.divider}> · </span>
-              今日 {todayCount}
-            </span>
+            <span className={styles.text}>{CAPTURE_TEXT[captureStatus]}</span>
           </span>
 
           {/* 工作时间外：休息态 */}
           <span className={`${styles.face} ${styles.faceResting}`}>
             <Coffee size={12} strokeWidth={2} className={styles.restIcon} />
-            <span className={styles.text}>
-              休息中
-              <span className={styles.divider}> · </span>
-              今日 {todayCount}
-            </span>
+            <span className={styles.text}>休息中</span>
           </span>
 
           {/* hover 态 */}

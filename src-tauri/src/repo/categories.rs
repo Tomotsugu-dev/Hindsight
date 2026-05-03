@@ -41,13 +41,14 @@ pub struct UnclassifiedApp {
     pub last_seen_at: String,
 }
 
-fn category_payload(id: &str, name: &str, color: &str, icon: &str, builtin: bool, updated_at: &str, deleted_at: Option<&str>) -> String {
+fn category_payload(id: &str, name: &str, color: &str, icon: &str, builtin: bool, sort_order: i64, updated_at: &str, deleted_at: Option<&str>) -> String {
     serde_json::json!({
         "id": id,
         "name": name,
         "color": color,
         "icon": icon,
         "builtin": builtin,
+        "sortOrder": sort_order,
         "updatedAt": updated_at,
         "deletedAt": deleted_at,
     })
@@ -70,10 +71,10 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
         .call(|conn| {
             let mut stmt = conn
                 .prepare_cached(
-                    // 'other' 永远排最后（紧挨"未归类"section）；其余按 builtin 优先 + id 字典序
+                    // 用户拖拽排序后的 sort_order 决定显示顺序；id 作为 tiebreaker。
                     "SELECT id, name, color, icon, builtin FROM categories
                      WHERE deleted_at IS NULL
-                     ORDER BY (id = 'other') ASC, builtin DESC, id",
+                     ORDER BY sort_order ASC, id ASC",
                 )
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let cat_rows = stmt
@@ -150,14 +151,22 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
 
     pool.0
         .call(move |conn| {
+            // 新分类默认放最后：sort_order = max(active sort_order) + 1
+            let next_sort: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE deleted_at IS NULL",
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
             conn.execute(
-                "INSERT INTO categories(id, name, color, icon, builtin, updated_at)
-                 VALUES(?, ?, ?, ?, 0, ?)",
-                rusqlite::params![id_clone, n, c, i, updated_clone],
+                "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at)
+                 VALUES(?, ?, ?, ?, 0, ?, ?)",
+                rusqlite::params![id_clone, n, c, i, next_sort, updated_clone],
             )
             .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
-            let payload = category_payload(&id_clone, &n, &c, &i, false, &updated_clone, None);
+            let payload = category_payload(&id_clone, &n, &c, &i, false, next_sort, &updated_clone, None);
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id_clone, &payload)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             Ok(())
@@ -180,14 +189,15 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
     pool.0
         .call(move |conn| {
             // 读出当前行做基线
-            let row: Option<(String, String, String, i64)> = conn
+            let row: Option<(String, String, String, i64, i64)> = conn
                 .query_row(
-                    "SELECT name, color, icon, builtin FROM categories WHERE id = ? AND deleted_at IS NULL",
+                    "SELECT name, color, icon, builtin, sort_order FROM categories
+                     WHERE id = ? AND deleted_at IS NULL",
                     rusqlite::params![id],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
                 .ok();
-            let Some((cur_name, cur_color, cur_icon, builtin_i)) = row else {
+            let Some((cur_name, cur_color, cur_icon, builtin_i, cur_sort)) = row else {
                 return Ok(());
             };
 
@@ -216,10 +226,51 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
             )
             .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
-            let payload = category_payload(&id, &next_name, &next_color, &next_icon, builtin_i != 0, &updated, None);
+            let payload = category_payload(&id, &next_name, &next_color, &next_icon, builtin_i != 0, cur_sort, &updated, None);
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// 用户拖拽重排：把 ordered_ids 列表里每个 id 的 sort_order 设为它在列表中的位置。
+/// 仅对 sort_order 实际变了的行 enqueue outbox（幂等：原地拖一下不重复推）。
+/// `updated_at` 也 bump，保证跨设备 LWW 拿到的是新顺序。
+pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    pool.0
+        .call(move |conn| {
+            for (idx, id) in ordered_ids.iter().enumerate() {
+                let next_sort = idx as i64;
+                // 拿当前行做基线（payload 里要带完整字段）
+                let row: Option<(String, String, String, i64, i64)> = conn
+                    .query_row(
+                        "SELECT name, color, icon, builtin, sort_order FROM categories
+                         WHERE id = ?1 AND deleted_at IS NULL",
+                        rusqlite::params![id],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                    )
+                    .ok();
+                let Some((name, color, icon, builtin_i, cur_sort)) = row else {
+                    continue;
+                };
+                if cur_sort == next_sort {
+                    continue; // 没变，幂等跳过
+                }
+                conn.execute(
+                    "UPDATE categories SET sort_order = ?1, updated_at = ?2
+                     WHERE id = ?3 AND deleted_at IS NULL",
+                    rusqlite::params![next_sort, now, id],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                let payload =
+                    category_payload(id, &name, &color, &icon, builtin_i != 0, next_sort, &now, None);
+                enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, id, &payload)
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            }
             Ok(())
         })
         .await?;
@@ -232,14 +283,15 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     pool.0
         .call(move |conn| {
             // 读出元信息
-            let row: Option<(String, String, String, i64)> = conn
+            let row: Option<(String, String, String, i64, i64)> = conn
                 .query_row(
-                    "SELECT name, color, icon, builtin FROM categories WHERE id = ? AND deleted_at IS NULL",
+                    "SELECT name, color, icon, builtin, sort_order FROM categories
+                     WHERE id = ? AND deleted_at IS NULL",
                     rusqlite::params![id],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
                 .ok();
-            let Some((name, color, icon, builtin_i)) = row else {
+            let Some((name, color, icon, builtin_i, sort_order)) = row else {
                 // 已经被删过了 —— 幂等：no-op 直接返回，不重复写 category 行 + outbox
                 return Ok(());
             };
@@ -254,7 +306,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
             )
             .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
-            let cat_payload = category_payload(&id, &name, &color, &icon, builtin_i != 0, &now, Some(&now));
+            let cat_payload = category_payload(&id, &name, &color, &icon, builtin_i != 0, sort_order, &now, Some(&now));
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &cat_payload)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
 

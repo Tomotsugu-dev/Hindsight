@@ -322,15 +322,32 @@ const APP_GROUPS_SQL: &str = r#"
       AND NOT EXISTS (SELECT 1 FROM app_group_members m WHERE m.process_name = p.process_name);
 "#;
 
+/// v16：给 categories 加 sort_order 列，让用户能拖拽排序。回填用现有的稳定可视顺序
+/// （'other' 在最后、其它按 id 字典序）作为初始值，前端排序后会把每个 category 的
+/// sort_order 改成 0,1,2... 然后跨同步走 category outbox 推到对端，LWW 保证一致。
+const ADD_CATEGORY_SORT_ORDER_SQL: &str = r#"
+    ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+
+    UPDATE categories SET sort_order = (
+        SELECT rn FROM (
+            SELECT id,
+                   ROW_NUMBER() OVER (ORDER BY (id = 'other') ASC, id) - 1 AS rn
+            FROM categories
+        ) ranked
+        WHERE ranked.id = categories.id
+    );
+"#;
+
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 5] = [
-        cross_os_cleanup_sql(), // v11
-        V12_PLACEHOLDER,        // v12（occupied，no-op）
-        BACKFILL_OUTBOX_SQL,    // v13
-        APP_ICONS_TABLE_SQL,    // v14
-        APP_GROUPS_SQL,         // v15
+    let extras: [&'static str; 6] = [
+        cross_os_cleanup_sql(),       // v11
+        V12_PLACEHOLDER,              // v12（occupied，no-op）
+        BACKFILL_OUTBOX_SQL,          // v13
+        APP_ICONS_TABLE_SQL,          // v14
+        APP_GROUPS_SQL,               // v15
+        ADD_CATEGORY_SORT_ORDER_SQL,  // v16
     ];
     pool.0
         .call(move |conn| {

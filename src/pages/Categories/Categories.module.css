@@ -111,6 +111,12 @@
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(20, 20, 40, 0.04),
     0 6px 16px rgba(20, 20, 40, 0.04);
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease-out;
 }
 
 .catRow::before {
@@ -122,6 +128,118 @@
   width: 4px;
   border-radius: 0 3px 3px 0;
   background: var(--cat-color);
+}
+
+/* 拖拽源行：淡化，告诉你"它现在不在这" */
+.catRowSource {
+  opacity: 0.45;
+}
+
+/* 拖拽悬停目标行：抬升 + accent 描边 + 阴影 + 微缩放 = 物理碰撞抬起感
+   （跟 PairingSection 的 .row.hot 完全同款的视觉语言）*/
+.catRowHot {
+  background: color-mix(in oklab, var(--color-accent) 8%, white);
+  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  box-shadow:
+    0 6px 16px color-mix(in oklab, var(--color-accent) 18%, transparent),
+    0 0 0 2px color-mix(in oklab, var(--color-accent) 22%, transparent);
+  transform: translateY(-1px) scale(1.005);
+}
+
+/* 落地撞击：源行刚 reorder 到位时短暂"啪嗒"一下（squish + restore），
+   配合 FLIP 的 back-ease 给一个有重量感的着陆 */
+@keyframes catLand {
+  0%   { transform: translateY(0) scaleY(1); }
+  35%  { transform: translateY(0) scaleY(0.94); box-shadow: 0 1px 1px rgba(20,20,40,0.06); }
+  70%  { transform: translateY(0) scaleY(1.015); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+
+.catRowLanded {
+  animation: catLand 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* grip 拖动手柄：行 hover 才浮现，平时低调 */
+.catDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 32px;
+  margin-right: -8px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: grab;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 140ms ease-out, color 140ms ease-out, background-color 140ms ease-out;
+  flex-shrink: 0;
+}
+
+.catRow:hover .catDragHandle {
+  opacity: 1;
+}
+
+.catDragHandle:hover {
+  color: var(--text-strong);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.catDragHandle:active {
+  cursor: grabbing;
+}
+
+/* 拖动时跟随光标的"飞行"行：维持原行的视觉（colored stripe + icon + name），
+   但加阴影 + accent 高亮，明确处于"被提起"的中间态 */
+.catFlyChip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px 0 28px;
+  background: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 30%, rgba(0, 0, 0, 0.08));
+  border-radius: 14px;
+  box-shadow:
+    0 12px 28px rgba(20, 20, 40, 0.18),
+    0 2px 6px rgba(20, 20, 40, 0.08),
+    0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
+  user-select: none;
+  transform: scale(1.02);
+}
+
+.catFlyChip::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 0 3px 3px 0;
+  background: var(--cat-color);
+}
+
+.catFlyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--cat-color) 14%, transparent);
+  color: var(--cat-color);
+  flex-shrink: 0;
+}
+
+.catFlyName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
 }
 
 .catIconWrap {

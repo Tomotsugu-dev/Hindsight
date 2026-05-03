@@ -24,6 +24,7 @@ interface CategoriesContextValue {
   remove: (id: string) => Promise<void>;
   assignApp: (processName: string, categoryId: string) => Promise<void>;
   unassignApp: (processName: string) => Promise<void>;
+  reorder: (orderedIds: string[]) => Promise<void>;
 }
 
 const CategoriesContext = createContext<CategoriesContextValue | null>(null);
@@ -88,6 +89,24 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const reorder = useCallback(
+    async (orderedIds: string[]) => {
+      // 乐观更新：先按新顺序刷一次本地 state，让 UI 立刻响应；同时调后端
+      // 持久化 + 推同步。后端落库后 refresh() 会拿到权威顺序覆盖。
+      setCategories((prev) => {
+        const idx = new Map(orderedIds.map((id, i) => [id, i]));
+        return [...prev].sort((a, b) => {
+          const ai = idx.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+          const bi = idx.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+          return ai - bi;
+        });
+      });
+      await api.reorderCategories(orderedIds);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const getCategory = useCallback(
     (id: string) => categories.find((c) => c.id === id),
     [categories],
@@ -104,8 +123,9 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
       remove,
       assignApp,
       unassignApp,
+      reorder,
     }),
-    [categories, loading, getCategory, refresh, create, update, remove, assignApp, unassignApp],
+    [categories, loading, getCategory, refresh, create, update, remove, assignApp, unassignApp, reorder],
   );
 
   return (

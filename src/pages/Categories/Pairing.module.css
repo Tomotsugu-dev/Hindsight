@@ -169,8 +169,12 @@
   transition: border-color 120ms ease-out, background-color 120ms ease-out;
 }
 
+/* 鼠标靠近本行（不必精准悬停在 input 上）就显出文本框形状，告诉用户「这里能改名」。
+   用 .row:hover 触发，比 .nameInput:hover 命中区域大得多。*/
+.row:hover .nameInput,
 .nameInput:hover {
-  border-color: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .nameInput:focus {

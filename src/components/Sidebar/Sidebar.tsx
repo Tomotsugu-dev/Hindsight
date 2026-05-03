@@ -109,11 +109,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <StatusFooter
-        captureStatus={captureUI}
-        todayCount={status?.todayCount ?? 0}
-        onToggleCapture={toggle}
-      />
+      <StatusFooter captureStatus={captureUI} onToggleCapture={toggle} />
     </aside>
   );
 }

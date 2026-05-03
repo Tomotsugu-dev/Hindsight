@@ -10,29 +10,36 @@ export interface WorkRange {
 interface HourlyChartProps {
   hours: HourSlot[];
   workHours: WorkRange[] | null;
+  /** Y 轴最大值（分钟）。默认 60（单设备一小时）。多设备聚合时传 60 × deviceCount。*/
+  maxMinutes?: number;
 }
-
-/** Y 轴刻度（分钟，从下往上） */
-const Y_TICKS = [15, 30, 45, 60];
-const Y_LABEL: Record<number, string> = { 15: "15m", 30: "30m", 45: "45m", 60: "1h" };
 
 /** X 轴标签 */
 const X_LABELS = [0, 6, 12, 18, 24];
 
-export function HourlyChart({ hours, workHours }: HourlyChartProps) {
+function formatMinLabel(min: number): string {
+  if (min < 60) return `${min}m`;
+  if (min % 60 === 0) return `${min / 60}h`;
+  // 半小时精度足够，避免 "1.33h" 这类
+  return `${(min / 60).toFixed(1)}h`;
+}
+
+export function HourlyChart({ hours, workHours, maxMinutes = 60 }: HourlyChartProps) {
   const { getCategory } = useCategories();
+  // 4 等分刻度：max/4, max/2, 3max/4, max。每条对应 25/50/75/100% 高度。
+  const yTicks = [maxMinutes / 4, maxMinutes / 2, (maxMinutes * 3) / 4, maxMinutes];
   return (
     <div className={styles.chart}>
       <div className={styles.plot}>
         {/* Y 轴 */}
         <div className={styles.yAxis} aria-hidden>
-          {Y_TICKS.map((t) => (
+          {yTicks.map((t) => (
             <span
               key={t}
               className={styles.yTick}
-              style={{ bottom: `${(t / 60) * 100}%` }}
+              style={{ bottom: `${(t / maxMinutes) * 100}%` }}
             >
-              {Y_LABEL[t]}
+              {formatMinLabel(Math.round(t))}
             </span>
           ))}
         </div>
@@ -40,11 +47,11 @@ export function HourlyChart({ hours, workHours }: HourlyChartProps) {
         {/* 绘图区 */}
         <div className={styles.plotArea}>
           {/* 水平参考线 */}
-          {Y_TICKS.map((t) => (
+          {yTicks.map((t) => (
             <div
               key={t}
               className={styles.gridLine}
-              style={{ bottom: `${(t / 60) * 100}%` }}
+              style={{ bottom: `${(t / maxMinutes) * 100}%` }}
               aria-hidden
             />
           ))}
@@ -66,7 +73,7 @@ export function HourlyChart({ hours, workHours }: HourlyChartProps) {
           <div className={styles.bars}>
             {hours.map((slot) => {
               const total = slot.segments.reduce((s, x) => s + x.minutes, 0);
-              const heightPct = (total / 60) * 100;
+              const heightPct = Math.min((total / maxMinutes) * 100, 100);
 
               return (
                 <div key={slot.hour} className={styles.column}>

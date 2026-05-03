@@ -137,11 +137,13 @@ pub async fn day_hours(
 
     let slots: Vec<HourSlot> = (0u8..24)
         .map(|h| {
+            // 不再 clamp 60 上限：多设备聚合时一个时段总分钟可超 60，前端按
+            // 设备数动态调整 Y 轴 limit（max = 60 × deviceCount）
             let mut segs: Vec<HourSegment> = buckets[h as usize]
                 .iter()
                 .map(|(cat, secs)| HourSegment {
                     category_id: cat.clone(),
-                    minutes: ((*secs as f64 / 60.0).round() as u32).min(60),
+                    minutes: ((*secs as f64 / 60.0).round() as u32),
                 })
                 .filter(|s| s.minutes > 0)
                 .collect();

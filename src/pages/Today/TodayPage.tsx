@@ -48,7 +48,9 @@ function dateForOffset(offset: number): Date {
 
 export default function TodayPage() {
   const [offset, setOffset] = useState(0);
-  const { selectedDeviceId } = useDeviceFilter();
+  const { selectedDeviceId, devices } = useDeviceFilter();
+  // Y 轴上限：单设备 60 分钟一小时；"所有设备"聚合时 = 60 × 设备数（多台叠加可超 60）
+  const maxMinutes = selectedDeviceId === undefined ? 60 * Math.max(1, devices.length) : 60;
   const { get: getDay } = useDayCache(offset, selectedDeviceId);
   const { categories, getCategory } = useCategories();
   const { settings } = useSettings();
@@ -217,15 +219,17 @@ export default function TodayPage() {
               <HourlyChart
                 hours={getDay(offset - 1).hours}
                 workHours={workRanges}
+                maxMinutes={maxMinutes}
               />
             </div>
             <div className={styles.slide}>
-              <HourlyChart hours={hours} workHours={workRanges} />
+              <HourlyChart hours={hours} workHours={workRanges} maxMinutes={maxMinutes} />
             </div>
             <div className={styles.slide}>
               <HourlyChart
                 hours={getDay(offset + 1).hours}
                 workHours={workRanges}
+                maxMinutes={maxMinutes}
               />
             </div>
           </div>

@@ -35,6 +35,16 @@ pub async fn delete_category(pool: State<'_, DbPool>, id: String) -> Result<(), 
 }
 
 #[tauri::command]
+pub async fn reorder_categories(
+    pool: State<'_, DbPool>,
+    ordered_ids: Vec<String>,
+) -> Result<(), String> {
+    categories::reorder(&pool, ordered_ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn assign_app_to_category(
     pool: State<'_, DbPool>,
     process_name: String,

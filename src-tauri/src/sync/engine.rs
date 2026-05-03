@@ -831,6 +831,9 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
         let color = v.get("color").and_then(|x| x.as_str()).unwrap_or("").to_string();
         let icon = v.get("icon").and_then(|x| x.as_str()).unwrap_or("Tag").to_string();
         let builtin = v.get("builtin").and_then(|x| x.as_bool()).unwrap_or(false);
+        // 老对端推过来的 payload 没有 sortOrder 字段 → fallback 0；新行随后被本端
+        // 重排操作覆盖即可。
+        let sort_order = v.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0);
         let updated_at = v
             .get("updatedAt")
             .and_then(|x| x.as_str())
@@ -861,17 +864,17 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 
                 if cur.is_none() {
                     conn.execute(
-                        "INSERT INTO categories(id, name, color, icon, builtin, updated_at, deleted_at)
-                         VALUES(?, ?, ?, ?, ?, ?, ?)",
-                        rusqlite::params![id, name, color, icon, builtin as i64, updated_at, deleted_at],
+                        "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
+                         VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                        rusqlite::params![id, name, color, icon, builtin as i64, sort_order, updated_at, deleted_at],
                     )
                     .map_err(tokio_rusqlite::Error::Rusqlite)?;
                 } else {
                     conn.execute(
                         "UPDATE categories SET name = ?, color = ?, icon = ?, builtin = ?,
-                                                updated_at = ?, deleted_at = ?
+                                                sort_order = ?, updated_at = ?, deleted_at = ?
                          WHERE id = ?",
-                        rusqlite::params![name, color, icon, builtin as i64, updated_at, deleted_at, id],
+                        rusqlite::params![name, color, icon, builtin as i64, sort_order, updated_at, deleted_at, id],
                     )
                     .map_err(tokio_rusqlite::Error::Rusqlite)?;
                 }

@@ -160,6 +160,8 @@ export const api = {
   updateCategory: (id: string, patch: CategoryPatch) =>
     invoke<void>("update_category", { id, patch }),
   deleteCategory: (id: string) => invoke<void>("delete_category", { id }),
+  reorderCategories: (orderedIds: string[]) =>
+    invoke<void>("reorder_categories", { orderedIds }),
   assignApp: (processName: string, categoryId: string) =>
     invoke<void>("assign_app_to_category", { processName, categoryId }),
   unassignApp: (processName: string) =>
