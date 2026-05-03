@@ -27,6 +27,7 @@ pub enum OutboxEntity {
     AppCategory,
     ProcessPath,
     Device,
+    AppIcon,
 }
 
 impl OutboxEntity {
@@ -37,6 +38,7 @@ impl OutboxEntity {
             OutboxEntity::AppCategory => "app_category",
             OutboxEntity::ProcessPath => "process_path",
             OutboxEntity::Device => "device",
+            OutboxEntity::AppIcon => "app_icon",
         }
     }
 }

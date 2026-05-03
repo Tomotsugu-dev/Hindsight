@@ -232,13 +232,29 @@ const BACKFILL_OUTBOX_SQL: &str = r#"
 /// 框架直接跳过 —— 两边都对得上，只是 v12 这个版本号永久作废。
 const V12_PLACEHOLDER: &str = "";
 
+/// v14：建 app_icons 表，存解码好的 PNG 字节，让 icon 数据跨设备同步。
+/// 解决「Mac 看 Windows 同步过来的 activities 拿不到 icon」—— Windows 端的 chrome.exe
+/// 在 Mac 上没文件可提取，必须由原始设备把 icon 字节传上来。
+///
+/// 不做 OS 过滤同步：process_name 跨 OS key 不撞（Win="chrome.exe" / mac="Google Chrome"），
+/// 各 OS 上传各自的，对方按 process_name 精确查就能给跨设备的活动行渲染图标。
+const APP_ICONS_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS app_icons (
+      process_name TEXT PRIMARY KEY,
+      icon_png     BLOB NOT NULL,
+      updated_at   TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+      deleted_at   TEXT
+    );
+"#;
+
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 3] = [
+    let extras: [&'static str; 4] = [
         cross_os_cleanup_sql(), // v11
         V12_PLACEHOLDER,        // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,    // v13
+        APP_ICONS_TABLE_SQL,    // v14
     ];
     pool.0
         .call(move |conn| {

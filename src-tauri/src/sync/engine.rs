@@ -150,6 +150,7 @@ enum DirtyKey {
     AppCategories,
     ProcessPaths,
     DeviceMeta,
+    AppIcons,
 }
 
 async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
@@ -246,6 +247,7 @@ fn group_outbox(rows: &[OutboxRow]) -> HashMap<DirtyKey, Vec<i64>> {
             "app_category" => DirtyKey::AppCategories,
             "process_path" => DirtyKey::ProcessPaths,
             "device" => DirtyKey::DeviceMeta,
+            "app_icon" => DirtyKey::AppIcons,
             _ => {
                 log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
                 continue;
@@ -263,6 +265,7 @@ fn file_name_for(self_id: &str, key: &DirtyKey) -> String {
         DirtyKey::AppCategories => format!("device.{self_id}.app_categories.json"),
         DirtyKey::ProcessPaths => format!("device.{self_id}.process_paths.json"),
         DirtyKey::DeviceMeta => format!("device.{self_id}.meta.json"),
+        DirtyKey::AppIcons => format!("device.{self_id}.icons.json"),
     }
 }
 
@@ -273,6 +276,7 @@ async fn build_content(pool: &DbPool, self_id: &str, key: &DirtyKey) -> Result<V
         DirtyKey::AppCategories => build_app_categories(pool).await,
         DirtyKey::ProcessPaths => build_process_paths(pool).await,
         DirtyKey::DeviceMeta => build_device_meta(pool, self_id).await,
+        DirtyKey::AppIcons => build_app_icons(pool).await,
     }
 }
 
@@ -409,6 +413,37 @@ async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
     Ok(serde_json::to_vec(&Value::Array(arr))?)
 }
 
+async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    let arr = pool
+        .0
+        .call(|conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT process_name, icon_png, updated_at, deleted_at
+                     FROM app_icons ORDER BY process_name",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let rows = stmt
+                .query_map([], |r| {
+                    let bytes: Vec<u8> = r.get::<_, Vec<u8>>(1)?;
+                    Ok(json!({
+                        "processName": r.get::<_, String>(0)?,
+                        // BLOB → base64：JSON 不支持 binary，统一用 base64 标准编码
+                        "iconPngBase64": BASE64.encode(&bytes),
+                        "updatedAt":   r.get::<_, String>(2)?,
+                        "deletedAt":   r.get::<_, Option<String>>(3)?,
+                    }))
+                })
+                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(rows)
+        })
+        .await?;
+    Ok(serde_json::to_vec(&Value::Array(arr))?)
+}
+
 async fn build_device_meta(pool: &DbPool, self_id: &str) -> Result<Vec<u8>> {
     let self_id = self_id.to_string();
     let obj = pool
@@ -448,6 +483,7 @@ enum ParsedFile {
     AppCategories { device_id: String },
     ProcessPaths { device_id: String },
     DeviceMeta { device_id: String },
+    AppIcons { device_id: String },
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
@@ -470,6 +506,9 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
             device_id: uuid.to_string(),
         }),
         ["device", uuid, "meta", "json"] => Some(ParsedFile::DeviceMeta {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "icons", "json"] => Some(ParsedFile::AppIcons {
             device_id: uuid.to_string(),
         }),
         _ => None,
@@ -552,7 +591,8 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::ActivityDay { device_id, .. }
             | ParsedFile::Categories { device_id }
             | ParsedFile::AppCategories { device_id }
-            | ParsedFile::ProcessPaths { device_id } => device_id.as_str(),
+            | ParsedFile::ProcessPaths { device_id }
+            | ParsedFile::AppIcons { device_id } => device_id.as_str(),
             ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
         if device_id == self_id {
@@ -563,7 +603,8 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         //   Windows tracker 写 process_name = "chrome.exe"，exe_path = "C:\\..."
         //   macOS tracker  写 process_name = "Google Chrome"，exe_path = "/Applications/.../MacOS/..."
         // 跨 OS 合并要么完全无用（key 对不上），要么坏事（同名 key 撞车，把本机能用的路径覆盖掉，icon 提取失败）。
-        // activities 不在这里过滤 —— 跨设备聚合是 app 的核心价值，Windows 那台的活动记录就是要在 Mac 上看到的。
+        // activities / app_icons 不过滤 —— 跨设备聚合活动是核心价值；icon 字节就是要让对方
+        // 给从那台机器同步过来的 activity 行渲染图标用的。
         if matches!(
             parsed,
             ParsedFile::AppCategories { .. } | ParsedFile::ProcessPaths { .. }
@@ -600,6 +641,9 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
             ParsedFile::ProcessPaths { device_id } => {
                 merge_process_paths(&inner.pool, &device_id, &body).await
+            }
+            ParsedFile::AppIcons { device_id } => {
+                merge_app_icons(&inner.pool, &device_id, &body).await
             }
             ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
@@ -854,6 +898,88 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
                 Ok(())
             })
             .await?;
+    }
+    Ok(())
+}
+
+async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    let arr: Vec<Value> =
+        serde_json::from_slice(body).map_err(|e| Error::Other(format!("app_icons JSON: {e}")))?;
+    for v in arr {
+        let process_name = match v.get("processName").and_then(|x| x.as_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let icon_b64 = v.get("iconPngBase64").and_then(|x| x.as_str()).unwrap_or("");
+        let icon_bytes = match BASE64.decode(icon_b64.as_bytes()) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("app_icon process={process_name} base64 解码失败: {e}");
+                continue;
+            }
+        };
+        let updated_at = v
+            .get("updatedAt")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let deleted_at = v
+            .get("deletedAt")
+            .and_then(|x| x.as_str())
+            .map(String::from);
+
+        let process_name_db = process_name.clone();
+        let icon_bytes_db = icon_bytes.clone();
+        let updated_at_db = updated_at.clone();
+        let deleted_at_db = deleted_at.clone();
+        let applied: bool = pool
+            .0
+            .call(move |conn| {
+                let cur: Option<String> = conn
+                    .query_row(
+                        "SELECT updated_at FROM app_icons WHERE process_name = ?1",
+                        rusqlite::params![process_name_db],
+                        |r| r.get(0),
+                    )
+                    .ok();
+                let should_apply = match &cur {
+                    None => true,
+                    Some(c) => updated_at_db.as_str() > c.as_str(),
+                };
+                if !should_apply {
+                    return Ok(false);
+                }
+                conn.execute(
+                    "INSERT INTO app_icons(process_name, icon_png, updated_at, deleted_at)
+                     VALUES(?, ?, ?, ?)
+                     ON CONFLICT(process_name) DO UPDATE SET
+                       icon_png   = excluded.icon_png,
+                       updated_at = excluded.updated_at,
+                       deleted_at = excluded.deleted_at",
+                    rusqlite::params![process_name_db, icon_bytes_db, updated_at_db, deleted_at_db],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                Ok(true)
+            })
+            .await?;
+
+        // 把 BLOB 同步落到文件 cache —— 让 UI 后续 get_app_icon 直接命中文件 cache 返回。
+        // 软删（deleted_at != NULL）时反过来：把 cache 文件清掉，避免渲染过期图标。
+        if applied {
+            let path = match crate::repo::app_icons::icon_cache_path(&process_name) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::warn!("解析 icon cache 路径失败 process={process_name}: {e}");
+                    continue;
+                }
+            };
+            if deleted_at.is_some() {
+                let _ = std::fs::remove_file(&path);
+            } else {
+                crate::repo::app_icons::write_cache_file(&path, &icon_bytes);
+            }
+        }
     }
     Ok(())
 }
