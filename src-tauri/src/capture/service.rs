@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::{Local, Timelike};
 use serde::Serialize;
@@ -11,7 +12,7 @@ use crate::repo::settings::TimeRange;
 use crate::repo::{activities, process_paths};
 use crate::storage::DbPool;
 
-const MERGE_GAP_SECS: i64 = 600;
+const POLL_INTERVAL_SECS: u64 = 1;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +50,18 @@ impl Default for ScreenshotConfig {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+struct FocusState {
+    app_name: String,
+    title: String,
+}
+
+struct CurrentSession {
+    id: i64,
+    focus: FocusState,
+    last_extend_at: Instant,
+}
+
 struct Inner {
     pool: DbPool,
     interval_secs: Mutex<u32>,
@@ -57,6 +70,7 @@ struct Inner {
     last_error: Mutex<Option<String>>,
     work_hours: Mutex<WorkHoursState>,
     screenshot: Mutex<ScreenshotConfig>,
+    current: Mutex<Option<CurrentSession>>,
 }
 
 pub struct CaptureService {
@@ -74,6 +88,7 @@ impl CaptureService {
                 last_error: Mutex::new(None),
                 work_hours: Mutex::new(WorkHoursState::default()),
                 screenshot: Mutex::new(ScreenshotConfig::default()),
+                current: Mutex::new(None),
             }),
         }
     }
@@ -104,8 +119,7 @@ impl CaptureService {
         let inner = Arc::clone(&self.inner);
         *h = Some(tokio::spawn(async move {
             loop {
-                let secs = *inner.interval_secs.lock().await;
-                tokio::time::sleep(std::time::Duration::from_secs(secs as u64)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
                 if let Err(e) = tick(&inner).await {
                     log::warn!("采集 tick 失败: {e}");
                     let mut le = inner.last_error.lock().await;
@@ -120,6 +134,7 @@ impl CaptureService {
         if let Some(handle) = h.take() {
             handle.abort();
         }
+        *self.inner.current.lock().await = None;
     }
 
     pub async fn is_running(&self) -> bool {
@@ -166,6 +181,8 @@ async fn tick(inner: &Inner) -> Result<()> {
             });
             if !in_range {
                 log::debug!("跳过本次采集：当前不在工作时段");
+                // 离开工作时段时清空当前会话，重新进入时会创建新会话并截图
+                *inner.current.lock().await = None;
                 return Ok(());
             }
         }
@@ -179,25 +196,39 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
     };
 
-    let now = Local::now();
-    let latest = activities::latest_for(&inner.pool, &info.app_name).await?;
+    if info.app_name.is_empty() || info.app_name == "Unknown" {
+        return Ok(());
+    }
 
-    let should_merge = match latest.as_ref() {
-        Some(l) => {
-            let gap = (now - l.ended_at).num_seconds();
-            let same_title = l.window_title.as_deref().unwrap_or("") == info.title;
-            info.app_name != "Unknown" && gap <= MERGE_GAP_SECS && same_title
-        }
-        None => false,
+    let now = Local::now();
+    let new_focus = FocusState {
+        app_name: info.app_name.clone(),
+        title: info.title.clone(),
     };
 
-    if should_merge {
-        let id = latest.unwrap().id;
-        activities::extend(&inner.pool, id, now).await?;
-    } else {
+    let mut current_lock = inner.current.lock().await;
+    let need_new = match current_lock.as_ref() {
+        None => true,
+        Some(cur) => cur.focus != new_focus,
+    };
+
+    if need_new {
         let shot = take_screenshot(inner).await;
-        activities::insert_new(&inner.pool, &info, now, shot).await?;
+        let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
+        *current_lock = Some(CurrentSession {
+            id,
+            focus: new_focus,
+            last_extend_at: Instant::now(),
+        });
+    } else {
+        let interval_secs = *inner.interval_secs.lock().await;
+        let cur = current_lock.as_mut().unwrap();
+        if cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs {
+            activities::extend(&inner.pool, cur.id, now).await?;
+            cur.last_extend_at = Instant::now();
+        }
     }
+    drop(current_lock);
 
     if let Some(path) = info.app_path.as_ref() {
         if !path.is_empty() {

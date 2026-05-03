@@ -4,47 +4,6 @@ use crate::capture::WindowInfo;
 use crate::error::Result;
 use crate::storage::DbPool;
 
-#[derive(Debug, Clone)]
-pub struct LatestActivity {
-    pub id: i64,
-    pub window_title: Option<String>,
-    pub ended_at: DateTime<Local>,
-}
-
-pub async fn latest_for(pool: &DbPool, process_name: &str) -> Result<Option<LatestActivity>> {
-    let p = process_name.to_string();
-    let row = pool
-        .0
-        .call(move |conn| {
-            let mut stmt = conn
-                .prepare_cached(
-                    "SELECT id, window_title, ended_at
-                     FROM activities
-                     WHERE process_name = ?
-                     ORDER BY ended_at DESC
-                     LIMIT 1",
-                )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            let r = stmt
-                .query_row([&p], |r| {
-                    Ok((
-                        r.get::<_, i64>(0)?,
-                        r.get::<_, Option<String>>(1)?,
-                        r.get::<_, String>(2)?,
-                    ))
-                })
-                .ok();
-            Ok(r)
-        })
-        .await?;
-
-    Ok(row.map(|(id, window_title, ended)| LatestActivity {
-        id,
-        window_title,
-        ended_at: parse_local(&ended),
-    }))
-}
-
 pub async fn insert_new(
     pool: &DbPool,
     info: &WindowInfo,
@@ -147,10 +106,4 @@ pub async fn today_count(pool: &DbPool) -> Result<u32> {
         })
         .await?;
     Ok(count)
-}
-
-fn parse_local(s: &str) -> DateTime<Local> {
-    DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&Local))
-        .unwrap_or_else(|_| Local::now())
 }

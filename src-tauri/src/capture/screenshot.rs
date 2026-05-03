@@ -7,12 +7,12 @@ use crate::error::{Error, Result};
 
 pub async fn capture_active_window(
     dir: PathBuf,
-    target_width: u32,
-    target_height: u32,
+    max_width: u32,
+    max_height: u32,
     jpeg_quality: u8,
 ) -> Result<Option<String>> {
     let result = tokio::task::spawn_blocking(move || {
-        capture_blocking(&dir, target_width, target_height, jpeg_quality)
+        capture_blocking(&dir, max_width, max_height, jpeg_quality)
     })
     .await
     .map_err(|e| Error::Other(format!("截图任务异常: {e}")))?;
@@ -21,8 +21,8 @@ pub async fn capture_active_window(
 
 fn capture_blocking(
     dir: &Path,
-    target_width: u32,
-    target_height: u32,
+    max_width: u32,
+    max_height: u32,
     jpeg_quality: u8,
 ) -> Result<Option<String>> {
     let windows = xcap::Window::all().map_err(|e| Error::Capture(e.to_string()))?;
@@ -40,7 +40,7 @@ fn capture_blocking(
     };
 
     let img = DynamicImage::ImageRgba8(rgba);
-    let normalized = fit_cover_crop(img, target_width, target_height);
+    let normalized = fit_within(img, max_width, max_height);
     let rgb = normalized.to_rgb8();
 
     let now = Local::now();
@@ -59,21 +59,13 @@ fn capture_blocking(
     Ok(Some(target.to_string_lossy().to_string()))
 }
 
-/// 缩放到刚好覆盖 target，再从中心裁出精确 target 尺寸。
-/// 不变形，超出部分对称裁掉。
-fn fit_cover_crop(img: DynamicImage, target_w: u32, target_h: u32) -> DynamicImage {
-    if target_w == 0 || target_h == 0 {
+/// 整窗保留：等比缩放使其装入 max_w × max_h，超过任一上限才缩，否则保持原始尺寸。
+fn fit_within(img: DynamicImage, max_w: u32, max_h: u32) -> DynamicImage {
+    if max_w == 0 || max_h == 0 {
         return img;
     }
-    let src_w = img.width().max(1);
-    let src_h = img.height().max(1);
-    let scale_w = target_w as f64 / src_w as f64;
-    let scale_h = target_h as f64 / src_h as f64;
-    let scale = scale_w.max(scale_h);
-    let new_w = ((src_w as f64 * scale).ceil() as u32).max(target_w);
-    let new_h = ((src_h as f64 * scale).ceil() as u32).max(target_h);
-    let resized = img.resize_exact(new_w, new_h, image::imageops::FilterType::Triangle);
-    let crop_x = new_w.saturating_sub(target_w) / 2;
-    let crop_y = new_h.saturating_sub(target_h) / 2;
-    resized.crop_imm(crop_x, crop_y, target_w, target_h)
+    if img.width() <= max_w && img.height() <= max_h {
+        return img;
+    }
+    img.resize(max_w, max_h, image::imageops::FilterType::Triangle)
 }
