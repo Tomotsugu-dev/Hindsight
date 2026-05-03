@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Cloud, CloudOff, Pause } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Cloud, CloudOff, Coffee, Pause } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../config/nav";
 import { api, type AuthState } from "../../api/hindsight";
+import { useSettings } from "../../state/settings";
 import styles from "./StatusFooter.module.css";
 
 type CaptureStatus = "ok" | "idle" | "error";
@@ -19,13 +20,21 @@ const CAPTURE_TEXT: Record<CaptureStatus, string> = {
   error: "采集异常",
 };
 
+function parseHM(s: string): number {
+  const [h, m] = s.split(":").map((p) => parseInt(p, 10));
+  if (Number.isNaN(h)) return 0;
+  return h + (Number.isNaN(m) ? 0 : m / 60);
+}
+
 export function StatusFooter({
   captureStatus = "ok",
   todayCount = 0,
   onToggleCapture,
 }: StatusFooterProps) {
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const [auth, setAuth] = useState<AuthState | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const fetch = () => {
@@ -45,19 +54,42 @@ export function StatusFooter({
     };
   }, []);
 
+  // 每分钟 tick 一次，让"是否在工作时间"重新评估
+  useEffect(() => {
+    const t = window.setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // 当前是否在用户设定的工作时间段内（未启用 / 没有时段都视为"始终工作"）
+  const inWorkHours = useMemo(() => {
+    void tick; // 让 tick 触发重新计算
+    if (!settings?.workHoursEnabled) return true;
+    const ranges = settings.workRanges ?? [];
+    if (ranges.length === 0) return true;
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    return ranges.some((r) => {
+      const s = parseHM(r.start);
+      const e = parseHM(r.end);
+      return h >= s && h < e;
+    });
+  }, [settings, tick]);
+
   const signedIn = auth?.signedIn ?? false;
   const syncLabel = signedIn ? auth?.email ?? "已连接" : "未登录";
 
   return (
     <div className={styles.footer}>
       <button
-        className={`${styles.row} ${styles.captureRow}`}
+        className={`${styles.row} ${styles.captureRow} ${
+          !inWorkHours ? styles.captureRowResting : ""
+        }`}
         type="button"
         onClick={onToggleCapture}
         aria-label="点击切换采集状态"
       >
         <span className={styles.swap} aria-hidden>
-          {/* 默认态 */}
+          {/* 默认态：工作时间内 —— 采集中 */}
           <span className={`${styles.face} ${styles.faceDefault}`}>
             {captureStatus === "idle" ? (
               <Pause
@@ -75,6 +107,16 @@ export function StatusFooter({
             )}
             <span className={styles.text}>
               {CAPTURE_TEXT[captureStatus]}
+              <span className={styles.divider}> · </span>
+              今日 {todayCount}
+            </span>
+          </span>
+
+          {/* 工作时间外：休息态 */}
+          <span className={`${styles.face} ${styles.faceResting}`}>
+            <Coffee size={12} strokeWidth={2} className={styles.restIcon} />
+            <span className={styles.text}>
+              休息中
               <span className={styles.divider}> · </span>
               今日 {todayCount}
             </span>

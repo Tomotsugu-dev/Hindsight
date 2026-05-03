@@ -59,10 +59,18 @@
   will-change: transform, opacity;
 }
 
-/* 默认态：在原位 */
+/* 默认态：工作时间内 —— 采集中，原位 */
 .faceDefault {
   transform: translateY(0);
   opacity: 1;
+}
+
+/* 休息态：默认藏在下方，等"非工作时间"或"hover"时才会动 */
+.faceResting {
+  transform: translateY(100%);
+  opacity: 0;
+  filter: blur(2px);
+  color: var(--text-muted);
 }
 
 /* hover 态：从下方进入 */
@@ -73,8 +81,21 @@
   color: var(--status-error);
 }
 
-/* hover 时切换 */
-.captureRow:hover .faceDefault {
+/* —— 非工作时间：采集中滚走，休息态进入 —— */
+.captureRowResting .faceDefault {
+  transform: translateY(-100%);
+  opacity: 0;
+  filter: blur(2px);
+}
+.captureRowResting .faceResting {
+  transform: translateY(0);
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* —— hover 时：不管当前是 default 还是 resting，都让 hover 上来覆盖 —— */
+.captureRow:hover .faceDefault,
+.captureRow:hover .faceResting {
   transform: translateY(-100%);
   opacity: 0;
   filter: blur(2px);
@@ -140,6 +161,11 @@
 
 .pauseIcon {
   flex-shrink: 0;
+}
+
+.restIcon {
+  flex-shrink: 0;
+  color: var(--text-muted);
 }
 
 .text {
