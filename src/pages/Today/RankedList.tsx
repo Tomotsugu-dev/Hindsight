@@ -14,6 +14,8 @@ export interface RankedItem {
   minutes: number;
   /** 自定义前置图标（如真实 app 图标）；不传则用 color 画圆点 */
   leading?: ReactNode;
+  /** 文字与进度条之间的额外内容（如分类的常用应用堆叠图标） */
+  extras?: ReactNode;
 }
 
 interface RankedListProps {
@@ -52,6 +54,7 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
                 <div className={styles.subtitle}>{item.subtitle}</div>
               ) : null}
             </div>
+            <div className={styles.extras}>{item.extras}</div>
             <div className={styles.barWrap}>
               <div
                 className={styles.barFill}

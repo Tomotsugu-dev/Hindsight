@@ -26,29 +26,27 @@
   transform: scale(0.97);
 }
 
-/* —— 打开文件夹按钮：黄色 ghost + icon + 文字 —— */
+/* —— 打开文件夹按钮：与 PathField 的 "选择" 同款灰色 ghost —— */
 .openBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  background: color-mix(in oklab, #f59e0b 14%, transparent);
-  border: 1px solid color-mix(in oklab, #f59e0b 28%, transparent);
+  background: rgba(0, 0, 0, 0.045);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   font-size: 12px;
   font-weight: 550;
-  color: #b45309;
+  color: var(--text-strong);
   cursor: pointer;
   transition:
     background-color 180ms ease-out,
-    border-color 180ms ease-out,
     transform 120ms ease-out;
 }
 
 .openBtn:hover {
-  background: color-mix(in oklab, #f59e0b 22%, transparent);
-  border-color: color-mix(in oklab, #f59e0b 42%, transparent);
+  background: rgba(0, 0, 0, 0.075);
 }
 
 .openBtn:active {

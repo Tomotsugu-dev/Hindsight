@@ -1,6 +1,6 @@
 import styles from "./Page.module.css";
 
-export default function AI() {
+export default function AISummary() {
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>AI 总结</h1>

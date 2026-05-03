@@ -1,3 +1,4 @@
+mod bootstrap;
 mod capture;
 mod commands;
 mod error;
@@ -87,6 +88,8 @@ pub fn run() {
             commands::storage::purge_activities,
             commands::storage::purge_screenshots,
             commands::storage::open_screenshots_dir,
+            commands::storage::get_data_root,
+            commands::storage::set_data_root,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

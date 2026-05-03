@@ -4,6 +4,7 @@ import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { AppStack } from "../../components/AppStack/AppStack";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
@@ -79,16 +80,29 @@ export default function TodayPage() {
         );
       }
     }
+    const topAppsByCat = new Map<string, string[]>();
+    for (const a of apps) {
+      if (!a.categoryId) continue;
+      const list = topAppsByCat.get(a.categoryId) ?? [];
+      list.push(a.process);
+      topAppsByCat.set(a.categoryId, list);
+    }
     return categories
       .map((c) => ({
         id: c.id,
         name: c.name,
         color: c.color,
         minutes: totals.get(c.id) ?? 0,
+        extras: (
+          <AppStack
+            apps={topAppsByCat.get(c.id) ?? []}
+            fallbackColor={c.color}
+          />
+        ),
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [hours, categories]);
+  }, [hours, apps, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return apps.map((a) => {

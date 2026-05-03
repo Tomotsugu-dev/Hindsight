@@ -58,6 +58,20 @@ pub async fn purge_activities(
 }
 
 #[tauri::command]
+pub fn get_data_root() -> String {
+    crate::bootstrap::data_root().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+pub fn set_data_root(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("路径不能为空".into());
+    }
+    crate::bootstrap::set_data_root(trimmed).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn open_screenshots_dir(pool: State<'_, DbPool>) -> Result<(), String> {
     let cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
     if cfg.screenshot_path.trim().is_empty() {

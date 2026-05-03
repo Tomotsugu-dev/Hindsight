@@ -64,7 +64,8 @@ export function ScrollBox({
       className={cls}
       style={
         {
-          maxHeight: `${maxHeight}px`,
+          height: `${maxHeight}px`,
+          minHeight: `${maxHeight}px`,
           "--fade-size": `${fadeSize}px`,
         } as CSSProperties
       }

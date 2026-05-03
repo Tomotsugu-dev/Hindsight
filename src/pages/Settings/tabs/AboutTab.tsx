@@ -35,7 +35,7 @@ export default function AboutTab() {
 
       <Section title="信息">
         <Row label="作者" description="个人项目，非商用" icon={User}>
-          <span className={styles.value}>TomokotoKiyoshi</span>
+          <span className={styles.value}>Tomotsugu-dev</span>
         </Row>
         <Row label="许可证" icon={Scale}>
           <span className={styles.value}>MIT</span>

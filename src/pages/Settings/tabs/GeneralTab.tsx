@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Aperture, Clock, Rocket } from "lucide-react";
 import { Section } from "../components/Section";
@@ -5,10 +6,19 @@ import { Row } from "../components/Row";
 import { Toggle } from "../components/Toggle";
 import { PathField } from "../components/PathField";
 import { TimeRangeList } from "../components/TimeRangeList";
+import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "../../../state/settings";
+import { api } from "../../../api/hindsight";
 
 export default function GeneralTab() {
   const { settings, update } = useSettings();
+  const [dataRoot, setDataRoot] = useState<string>("");
+  const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
+  }, []);
+
   if (!settings) return null;
 
   const pickScreenshotDir = async () => {
@@ -24,6 +34,32 @@ export default function GeneralTab() {
     } catch (e) {
       console.error("打开目录选择失败:", e);
     }
+  };
+
+  const pickDataDir = async () => {
+    try {
+      const picked = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: dataRoot || undefined,
+      });
+      if (typeof picked === "string" && picked.length > 0 && picked !== dataRoot) {
+        setPendingDataRoot(picked);
+      }
+    } catch (e) {
+      console.error("打开目录选择失败:", e);
+    }
+  };
+
+  const confirmDataRoot = async () => {
+    if (!pendingDataRoot) return;
+    try {
+      await api.setDataRoot(pendingDataRoot);
+      setDataRoot(pendingDataRoot);
+    } catch (e) {
+      console.error("保存数据路径失败:", e);
+    }
+    setPendingDataRoot(null);
   };
 
   return (
@@ -45,6 +81,12 @@ export default function GeneralTab() {
             onChange={(v) => update({ screenshotPath: v })}
             onPick={pickScreenshotDir}
           />
+        </Row>
+        <Row
+          label="数据保存路径"
+          description="数据库与默认截图根目录所在位置。更改后需重启应用，旧数据需手动迁移。"
+        >
+          <PathField value={dataRoot} onPick={pickDataDir} readOnly />
         </Row>
       </Section>
 
@@ -85,6 +127,17 @@ export default function GeneralTab() {
           />
         </Row>
       </Section>
+
+      <ConfirmDialog
+        open={pendingDataRoot !== null}
+        title="切换数据保存路径？"
+        message={`新路径：${pendingDataRoot ?? ""}\n\n保存后需要重启应用才会生效。\n\n旧目录的数据库与截图不会自动迁移——若想保留历史，请先手动把 ${dataRoot} 下的内容拷贝到新位置。`}
+        confirmLabel="保存"
+        cancelLabel="取消"
+        variant="primary"
+        onConfirm={confirmDataRoot}
+        onCancel={() => setPendingDataRoot(null)}
+      />
     </>
   );
 }

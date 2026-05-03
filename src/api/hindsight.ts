@@ -130,4 +130,6 @@ export const api = {
   purgeActivities: () => invoke<void>("purge_activities"),
   purgeScreenshots: () => invoke<void>("purge_screenshots"),
   openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
+  getDataRoot: () => invoke<string>("get_data_root"),
+  setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),
 };

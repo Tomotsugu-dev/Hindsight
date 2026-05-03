@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use tokio_rusqlite::Connection;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 #[derive(Clone)]
 pub struct DbPool(pub Connection);
@@ -19,9 +19,7 @@ pub fn db_path() -> Result<PathBuf> {
 }
 
 pub fn db_path_dir() -> Result<PathBuf> {
-    let dir = dirs::data_dir()
-        .ok_or_else(|| Error::Other("找不到系统数据目录".into()))?
-        .join("Hindsight");
+    let dir = crate::bootstrap::data_root();
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

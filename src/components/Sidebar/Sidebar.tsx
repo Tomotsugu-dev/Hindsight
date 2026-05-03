@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { NAV_ITEMS, ROUTES } from "../../config/nav";
+import { NAV_ITEMS } from "../../config/nav";
 import type { NavGroup } from "../../types/nav";
 import { NavItem } from "./NavItem";
 import { StatusFooter } from "./StatusFooter";
@@ -9,6 +9,7 @@ import styles from "./Sidebar.module.css";
 
 const GROUP_TITLE: Record<NavGroup, string> = {
   primary: "概览",
+  ai: "AI",
   system: "系统",
 };
 
@@ -19,7 +20,7 @@ interface PillStyle {
 }
 
 export function Sidebar() {
-  const groups: NavGroup[] = ["primary", "system"];
+  const groups: NavGroup[] = ["primary", "ai", "system"];
   const location = useLocation();
   const { status, toggle } = useCaptureStatus();
 
@@ -92,7 +93,7 @@ export function Sidebar() {
                     label={item.label}
                     Icon={item.icon}
                     color={item.color}
-                    end={item.path === ROUTES.today}
+                    end={item.end}
                   />
                 ))}
               </div>
