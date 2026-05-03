@@ -108,6 +108,18 @@ pub fn run() {
 
                 spawn_cleanup_task(pool.clone());
 
+                // 一次性 backfill：把老用户已经在文件 cache 里、但 app_icons 表里没行的图标
+                // 灌进 DB + 入 outbox。否则这些"开启同步前提取过的图标"对端永远拉不到。
+                // 后台跑，不挡启动；已存在的会跳过，重复启动开销很低。
+                let pool_for_backfill = pool.clone();
+                tokio::spawn(async move {
+                    match repo::app_icons::backfill_db_from_cache_or_extract(&pool_for_backfill).await {
+                        Ok(n) if n > 0 => log::info!("icon backfill: 新增 {n} 行 app_icons"),
+                        Ok(_) => {}
+                        Err(e) => log::warn!("icon backfill 失败: {e}"),
+                    }
+                });
+
                 // 4) 同步引擎：登录态由 engine 内部检查，未登录时所有循环都是 no-op；
                 //    所以可以无条件 start，登录后自动开始推
                 let sync_engine = Arc::new(SyncEngine::new(pool.clone()));
