@@ -1,0 +1,134 @@
+use chrono::{DateTime, Local, TimeZone, Timelike};
+
+use crate::capture::WindowInfo;
+use crate::error::Result;
+use crate::storage::DbPool;
+
+#[derive(Debug, Clone)]
+pub struct LatestActivity {
+    pub id: i64,
+    pub window_title: Option<String>,
+    pub ended_at: DateTime<Local>,
+}
+
+pub async fn latest_for(pool: &DbPool, process_name: &str) -> Result<Option<LatestActivity>> {
+    let p = process_name.to_string();
+    let row = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT id, window_title, ended_at
+                     FROM activities
+                     WHERE process_name = ?
+                     ORDER BY ended_at DESC
+                     LIMIT 1",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let r = stmt
+                .query_row([&p], |r| {
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, Option<String>>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
+                })
+                .ok();
+            Ok(r)
+        })
+        .await?;
+
+    Ok(row.map(|(id, window_title, ended)| LatestActivity {
+        id,
+        window_title,
+        ended_at: parse_local(&ended),
+    }))
+}
+
+pub async fn insert_new(
+    pool: &DbPool,
+    info: &WindowInfo,
+    captured_at: DateTime<Local>,
+) -> Result<i64> {
+    let info = info.clone();
+    let started = captured_at.to_rfc3339();
+    let ended = captured_at.to_rfc3339();
+    let local_date = captured_at.format("%Y-%m-%d").to_string();
+    let local_hour = captured_at.hour() as u8;
+
+    let id = pool
+        .0
+        .call(move |conn| {
+            conn.execute(
+                "INSERT INTO activities(
+                    started_at, ended_at, duration_secs,
+                    local_date, local_hour,
+                    process_name, window_title, category_id
+                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other')",
+                rusqlite::params![
+                    started,
+                    ended,
+                    local_date,
+                    local_hour,
+                    info.app_name,
+                    info.title,
+                ],
+            )
+            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(conn.last_insert_rowid())
+        })
+        .await?;
+    Ok(id)
+}
+
+pub async fn extend(pool: &DbPool, id: i64, captured_at: DateTime<Local>) -> Result<()> {
+    let ended = captured_at.to_rfc3339();
+    pool.0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare_cached("SELECT started_at FROM activities WHERE id = ?")
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let started_at: String = stmt
+                .query_row([id], |r| r.get(0))
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let started = DateTime::parse_from_rfc3339(&started_at)
+                .map(|dt| dt.with_timezone(&Local))
+                .unwrap_or_else(|_| Local.timestamp_opt(0, 0).unwrap());
+            let ended_dt = DateTime::parse_from_rfc3339(&ended)
+                .map(|dt| dt.with_timezone(&Local))
+                .unwrap_or_else(|_| Local::now());
+            let dur = (ended_dt - started).num_seconds().max(0);
+
+            conn.execute(
+                "UPDATE activities SET ended_at = ?, duration_secs = ? WHERE id = ?",
+                rusqlite::params![ended, dur, id],
+            )
+            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+pub async fn today_count(pool: &DbPool) -> Result<u32> {
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let count = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare_cached("SELECT COUNT(*) FROM activities WHERE local_date = ?")
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let n: i64 = stmt
+                .query_row([&today], |r| r.get(0))
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(n as u32)
+        })
+        .await?;
+    Ok(count)
+}
+
+fn parse_local(s: &str) -> DateTime<Local> {
+    DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&Local))
+        .unwrap_or_else(|_| Local::now())
+}

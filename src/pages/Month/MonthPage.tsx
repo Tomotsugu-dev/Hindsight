@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { useCategories } from "../../state/categories";
+import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
@@ -32,6 +33,7 @@ function fmtMonth(monthOffset: number): string {
 
 export default function MonthPage() {
   const [offset, setOffset] = useState(0);
+  const { categories, getCategory } = useCategories();
 
   const days = useMemo(() => getMonthDays(offset), [offset]);
 
@@ -60,7 +62,7 @@ export default function MonthPage() {
         );
       }
     }
-    return DEFAULT_CATEGORIES
+    return categories
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -69,20 +71,22 @@ export default function MonthPage() {
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [days]);
+  }, [days, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return getMonthApps(offset).map((a) => {
       const cat = getCategory(a.categoryId);
+      const color = cat?.color ?? "#94a3b8";
       return {
         id: a.process,
         name: a.process,
         subtitle: cat?.name,
-        color: cat?.color ?? "#94a3b8",
+        color,
         minutes: a.minutes,
+        leading: <AppIcon processName={a.process} fallbackColor={color} />,
       };
     });
-  }, [offset]);
+  }, [offset, getCategory]);
 
   const frameRef = useRef<HTMLDivElement>(null);
   const [delta, setDelta] = useState(0);
@@ -221,9 +225,10 @@ export default function MonthPage() {
 }
 
 function Legend() {
+  const { categories } = useCategories();
   return (
     <div className={styles.legend}>
-      {DEFAULT_CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <span key={c.id} className={styles.legendItem}>
           <span
             className={styles.legendDot}

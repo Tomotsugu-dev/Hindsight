@@ -1,4 +1,4 @@
-import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { useCategories } from "../../state/categories";
 import type { DaySummary } from "./mockData";
 import styles from "./WeeklyBarChart.module.css";
 
@@ -21,15 +21,14 @@ function fmtDate(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-/** 把 segments 按 DEFAULT_CATEGORIES 顺序排列，确保跨行视觉一致 */
-function sortSegments(segments: DaySummary["segments"]) {
-  const order = new Map(DEFAULT_CATEGORIES.map((c, i) => [c.id, i]));
-  return [...segments].sort(
-    (a, b) => (order.get(a.categoryId) ?? 99) - (order.get(b.categoryId) ?? 99),
-  );
-}
-
 export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
+  const { categories, getCategory } = useCategories();
+  const order = new Map(categories.map((c, i) => [c.id, i]));
+  const sortSegments = (segments: DaySummary["segments"]) =>
+    [...segments].sort(
+      (a, b) => (order.get(a.categoryId) ?? 99) - (order.get(b.categoryId) ?? 99),
+    );
+
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
   const maxTotal = Math.max(0, ...totals);
   const today = new Date();

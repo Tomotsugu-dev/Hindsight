@@ -5,25 +5,26 @@ import {
   Sparkles,
   Network,
   Settings,
+  Tags,
 } from "lucide-react";
 import type { NavItem } from "../types/nav";
 
-/** 路由路径常量 */
 export const ROUTES = {
   today: "/",
   week: "/week",
   month: "/month",
   ai: "/ai",
   devices: "/devices",
+  categories: "/categories",
   settings: "/settings",
 } as const;
 
-/** 导航项单一数据源（侧边栏渲染 + 路由生成都从这里来） */
 export const NAV_ITEMS: NavItem[] = [
-  { path: ROUTES.today,    label: "今日总览", icon: LayoutDashboard, group: "primary", color: "#f97316" }, // 橘
-  { path: ROUTES.week,     label: "周统计",   icon: CalendarDays,    group: "primary", color: "#3b82f6" }, // 蓝
-  { path: ROUTES.month,    label: "月统计",   icon: CalendarRange,   group: "primary", color: "#8b5cf6" }, // 紫
-  { path: ROUTES.ai,       label: "AI 总结",  icon: Sparkles,        group: "primary", color: "#d946ef" }, // 品红
-  { path: ROUTES.devices,  label: "设备",     icon: Network,         group: "system",  color: "#10b981" }, // 翡翠绿（同步状态合并到此页）
-  { path: ROUTES.settings, label: "设置",     icon: Settings,        group: "system",  color: "#64748b" }, // 石板灰
+  { path: ROUTES.today,      label: "今日总览", icon: LayoutDashboard, group: "primary", color: "#f97316" },
+  { path: ROUTES.week,       label: "周统计",   icon: CalendarDays,    group: "primary", color: "#3b82f6" },
+  { path: ROUTES.month,      label: "月统计",   icon: CalendarRange,   group: "primary", color: "#8b5cf6" },
+  { path: ROUTES.ai,         label: "AI 总结",  icon: Sparkles,        group: "primary", color: "#d946ef" },
+  { path: ROUTES.devices,    label: "设备",     icon: Network,         group: "system",  color: "#10b981" },
+  { path: ROUTES.categories, label: "应用分类", icon: Tags,            group: "system",  color: "#0ea5e9" },
+  { path: ROUTES.settings,   label: "设置",     icon: Settings,        group: "system",  color: "#64748b" },
 ];

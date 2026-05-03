@@ -1,4 +1,4 @@
-import { getCategory } from "../../config/categories";
+import { useCategories } from "../../state/categories";
 import type { HourSlot, WorkRange } from "./mockData";
 import styles from "./HourlyChart.module.css";
 
@@ -15,6 +15,7 @@ const Y_LABEL: Record<number, string> = { 15: "15m", 30: "30m", 45: "45m", 60: "
 const X_LABELS = [0, 6, 12, 18, 24];
 
 export function HourlyChart({ hours, workHours }: HourlyChartProps) {
+  const { getCategory } = useCategories();
   return (
     <div className={styles.chart}>
       <div className={styles.plot}>

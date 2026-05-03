@@ -1,0 +1,12 @@
+.icon {
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: contain;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+}
+
+.dot {
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}

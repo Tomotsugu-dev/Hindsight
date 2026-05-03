@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import styles from "./RankedList.module.css";
 
 export interface RankedItem {
@@ -7,10 +8,12 @@ export interface RankedItem {
   name: string;
   /** 副标签（如分类名）— 可选 */
   subtitle?: string;
-  /** 颜色（图标色块） */
+  /** 颜色（用于条形和默认圆点；当 leading 提供时不再画圆点） */
   color: string;
   /** 该项分钟数 */
   minutes: number;
+  /** 自定义前置图标（如真实 app 图标）；不传则用 color 画圆点 */
+  leading?: ReactNode;
 }
 
 interface RankedListProps {
@@ -36,11 +39,13 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
         return (
           <li key={item.id} className={styles.row}>
             <span className={styles.rank}>{idx + 1}</span>
-            <span
-              className={styles.dot}
-              style={{ background: item.color }}
-              aria-hidden
-            />
+            {item.leading ?? (
+              <span
+                className={styles.dot}
+                style={{ background: item.color }}
+                aria-hidden
+              />
+            )}
             <div className={styles.text}>
               <div className={styles.name}>{item.name}</div>
               {item.subtitle ? (

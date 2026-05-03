@@ -5,7 +5,6 @@ import styles from "./SettingsPage.module.css";
 const TABS = [
   { to: "", label: "常规", end: true },
   { to: "data", label: "数据" },
-  { to: "labels", label: "应用分类" },
   { to: "about", label: "关于" },
 ];
 

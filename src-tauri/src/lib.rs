@@ -1,37 +1,61 @@
-use::serde::Serialize;
-use::xcap::Window;
+mod capture;
+mod commands;
+mod error;
+mod icons;
+mod repo;
+mod storage;
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+use std::sync::Arc;
 
-#[derive(Serialize)]
-struct WindowInfo {
-    app_name: String,
-    title: String,
-}
+use capture::CaptureService;
+use storage::{db_path, DbPool};
+use tauri::Manager;
 
-#[tauri::command]
-fn get_current_window() -> Result<WindowInfo, String> {
-    let windows = Window::all().map_err(|e| e.to_string())?;
-
-    let focused = windows
-        .iter()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .ok_or("没有焦点窗口".to_string())?;
-
-    Ok(WindowInfo {
-        app_name: focused.app_name().unwrap_or_default().to_string(),
-        title: focused.title().unwrap_or_default().to_string(),
-    })
-}
+const DEFAULT_CAPTURE_INTERVAL_SECS: u32 = 10;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = env_logger::try_init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, get_current_window])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::block_on(async move {
+                let path = db_path().expect("解析数据库路径");
+                log::info!("数据库路径: {}", path.display());
+
+                let pool = DbPool::open(&path).await.expect("打开数据库");
+                storage::migrations::run(&pool)
+                    .await
+                    .expect("执行数据库迁移");
+
+                let svc = Arc::new(CaptureService::new(
+                    pool.clone(),
+                    DEFAULT_CAPTURE_INTERVAL_SECS,
+                ));
+                svc.start().await;
+
+                handle.manage(pool);
+                handle.manage(svc);
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::capture::start_capture,
+            commands::capture::stop_capture,
+            commands::capture::get_capture_status,
+            commands::data::get_day_hours,
+            commands::data::get_day_apps,
+            commands::categories::list_categories,
+            commands::categories::create_category,
+            commands::categories::update_category,
+            commands::categories::delete_category,
+            commands::categories::assign_app_to_category,
+            commands::categories::unassign_app,
+            commands::categories::list_unclassified_apps,
+            commands::icons::get_app_icon,
+        ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("启动 Tauri 应用失败");
 }

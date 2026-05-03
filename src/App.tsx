@@ -6,10 +6,10 @@ import Week from "./pages/Week/WeekPage";
 import Month from "./pages/Month/MonthPage";
 import AI from "./pages/AI";
 import Devices from "./pages/Devices/DevicesPage";
+import CategoriesPage from "./pages/Categories/CategoriesPage";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import GeneralTab from "./pages/Settings/tabs/GeneralTab";
 import DataTab from "./pages/Settings/tabs/DataTab";
-import LabelsTab from "./pages/Settings/tabs/LabelsTab";
 import AboutTab from "./pages/Settings/tabs/AboutTab";
 
 function App() {
@@ -21,10 +21,10 @@ function App() {
         <Route path={ROUTES.month} element={<Month />} />
         <Route path={ROUTES.ai} element={<AI />} />
         <Route path={ROUTES.devices} element={<Devices />} />
+        <Route path={ROUTES.categories} element={<CategoriesPage />} />
         <Route path={ROUTES.settings} element={<SettingsPage />}>
           <Route index element={<GeneralTab />} />
           <Route path="data" element={<DataTab />} />
-          <Route path="labels" element={<LabelsTab />} />
           <Route path="about" element={<AboutTab />} />
         </Route>
       </Route>

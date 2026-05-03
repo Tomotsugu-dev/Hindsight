@@ -1,4 +1,4 @@
-import { getCategory } from "../../config/categories";
+import { useCategories } from "../../state/categories";
 import type { DaySummary } from "./mockData";
 import styles from "./DailyBarChart.module.css";
 
@@ -26,6 +26,7 @@ function niceYMax(max: number): number {
 }
 
 export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
+  const { getCategory } = useCategories();
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
   const maxTotal = Math.max(0, ...totals);
   const yMax = niceYMax(maxTotal);

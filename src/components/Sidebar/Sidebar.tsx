@@ -4,6 +4,7 @@ import { NAV_ITEMS, ROUTES } from "../../config/nav";
 import type { NavGroup } from "../../types/nav";
 import { NavItem } from "./NavItem";
 import { StatusFooter } from "./StatusFooter";
+import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import styles from "./Sidebar.module.css";
 
 const GROUP_TITLE: Record<NavGroup, string> = {
@@ -20,12 +21,20 @@ interface PillStyle {
 export function Sidebar() {
   const groups: NavGroup[] = ["primary", "system"];
   const location = useLocation();
+  const { status, toggle } = useCaptureStatus();
+
+  const captureUI: "ok" | "idle" | "error" = !status
+    ? "ok"
+    : status.lastError
+      ? "error"
+      : status.running
+        ? "ok"
+        : "idle";
 
   const navRef = useRef<HTMLElement | null>(null);
   const [pill, setPill] = useState<PillStyle>({ top: 0, height: 0, visible: false });
   const [animated, setAnimated] = useState(false);
 
-  /** 路由变化 / 挂载时测量当前激活项位置 */
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
@@ -43,7 +52,6 @@ export function Sidebar() {
     });
   }, [location.pathname]);
 
-  /** 第一次定位完成后开启过渡，避免初始从 0 滑下来 */
   useEffect(() => {
     if (pill.visible && !animated) {
       const id = requestAnimationFrame(() => setAnimated(true));
@@ -59,7 +67,6 @@ export function Sidebar() {
       </div>
 
       <nav className={styles.nav} ref={navRef}>
-        {/* 浮动胶囊 — 在所有导航项之下 */}
         <div
           className={`${styles.pill} ${animated ? styles.pillAnimated : ""}`}
           style={{
@@ -94,7 +101,11 @@ export function Sidebar() {
         })}
       </nav>
 
-      <StatusFooter />
+      <StatusFooter
+        captureStatus={captureUI}
+        todayCount={status?.todayCount ?? 0}
+        onToggleCapture={toggle}
+      />
     </aside>
   );
 }

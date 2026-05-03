@@ -1,16 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { useCategories } from "../../state/categories";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { HourlyChart } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
-import {
-  MOCK_HOURS,
-  MOCK_TOP_APPS,
-  MOCK_WORK_HOURS,
-  type HourSlot,
-  type AppUsage,
-} from "./mockData";
+import { useDayCache } from "../../hooks/useDayCache";
+import { MOCK_WORK_HOURS } from "./mockData";
 import styles from "./TodayPage.module.css";
 
 const SWIPE_DURATION = 420;
@@ -39,36 +35,12 @@ function dateForOffset(offset: number): Date {
   return d;
 }
 
-function getDayHours(offset: number): HourSlot[] {
-  if (offset > 0) {
-    return MOCK_HOURS.map((s) => ({ hour: s.hour, segments: [] }));
-  }
-  if (offset === 0) return MOCK_HOURS;
-  const factor = 0.45 + (Math.abs(offset) % 5) * 0.14;
-  return MOCK_HOURS.map((s) => ({
-    hour: s.hour,
-    segments: s.segments.map((seg) => ({
-      ...seg,
-      minutes: Math.max(0, Math.round(seg.minutes * factor)),
-    })),
-  }));
-}
-
-function getDayApps(offset: number): AppUsage[] {
-  if (offset > 0) return [];
-  if (offset === 0) return MOCK_TOP_APPS;
-  const factor = 0.45 + (Math.abs(offset) % 5) * 0.14;
-  return MOCK_TOP_APPS.map((a) => ({
-    ...a,
-    minutes: Math.max(0, Math.round(a.minutes * factor)),
-  }));
-}
-
 export default function TodayPage() {
   const [offset, setOffset] = useState(0);
+  const { get: getDay } = useDayCache(offset);
+  const { categories, getCategory } = useCategories();
 
-  const hours = useMemo(() => getDayHours(offset), [offset]);
-  const apps = useMemo(() => getDayApps(offset), [offset]);
+  const { hours, apps } = useMemo(() => getDay(offset), [getDay, offset]);
 
   const totalMinutes = useMemo(
     () =>
@@ -89,7 +61,7 @@ export default function TodayPage() {
         );
       }
     }
-    return DEFAULT_CATEGORIES
+    return categories
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -98,20 +70,22 @@ export default function TodayPage() {
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [hours]);
+  }, [hours, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return apps.map((a) => {
       const cat = getCategory(a.categoryId);
+      const color = cat?.color ?? "#94a3b8";
       return {
         id: a.process,
         name: a.process,
         subtitle: cat?.name,
-        color: cat?.color ?? "#94a3b8",
+        color,
         minutes: a.minutes,
+        leading: <AppIcon processName={a.process} fallbackColor={color} />,
       };
     });
-  }, [apps]);
+  }, [apps, getCategory]);
 
   // —— 滑动动画状态 ——
   const frameRef = useRef<HTMLDivElement>(null);
@@ -198,7 +172,7 @@ export default function TodayPage() {
           >
             <div className={styles.slide}>
               <HourlyChart
-                hours={getDayHours(offset - 1)}
+                hours={getDay(offset - 1).hours}
                 workHours={MOCK_WORK_HOURS}
               />
             </div>
@@ -207,7 +181,7 @@ export default function TodayPage() {
             </div>
             <div className={styles.slide}>
               <HourlyChart
-                hours={getDayHours(offset + 1)}
+                hours={getDay(offset + 1).hours}
                 workHours={MOCK_WORK_HOURS}
               />
             </div>
@@ -249,9 +223,10 @@ interface LegendProps {
 }
 
 function Legend({ hasWorkHours }: LegendProps) {
+  const { categories } = useCategories();
   return (
     <div className={styles.legend}>
-      {DEFAULT_CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <span key={c.id} className={styles.legendItem}>
           <span
             className={styles.legendDot}

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { useCategories } from "../../state/categories";
+import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
@@ -37,6 +38,7 @@ function weekLabel(offset: number): string {
 
 export default function WeekPage() {
   const [offset, setOffset] = useState(0);
+  const { categories, getCategory } = useCategories();
 
   const days = useMemo(() => getWeekDays(offset), [offset]);
 
@@ -65,7 +67,7 @@ export default function WeekPage() {
         );
       }
     }
-    return DEFAULT_CATEGORIES
+    return categories
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -74,20 +76,22 @@ export default function WeekPage() {
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [days]);
+  }, [days, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return getWeekApps(offset).map((a) => {
       const cat = getCategory(a.categoryId);
+      const color = cat?.color ?? "#94a3b8";
       return {
         id: a.process,
         name: a.process,
         subtitle: cat?.name,
-        color: cat?.color ?? "#94a3b8",
+        color,
         minutes: a.minutes,
+        leading: <AppIcon processName={a.process} fallbackColor={color} />,
       };
     });
-  }, [offset]);
+  }, [offset, getCategory]);
 
   // —— 滑动动画 ——
   const frameRef = useRef<HTMLDivElement>(null);
@@ -214,9 +218,10 @@ export default function WeekPage() {
 }
 
 function Legend() {
+  const { categories } = useCategories();
   return (
     <div className={styles.legend}>
-      {DEFAULT_CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <span key={c.id} className={styles.legendItem}>
           <span
             className={styles.legendDot}
