@@ -1,0 +1,336 @@
+.page {
+  padding: 32px 40px 48px;
+  max-width: 880px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* —— 同步状态卡（顶部） —— */
+.syncCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+}
+
+.syncCardConnected {
+  /* 连接成功时多一点强调 */
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--color-accent) 5%, #ffffff),
+    #fbfbfd
+  );
+  border-color: color-mix(in oklab, var(--color-accent) 22%, rgba(0, 0, 0, 0.07));
+}
+
+.syncIcon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.syncIconMuted {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+}
+
+.syncBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.syncTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.syncMeta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.syncActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.smallBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-strong);
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    transform 100ms ease-out;
+}
+
+.smallBtn:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.smallBtn:active {
+  transform: scale(0.97);
+}
+
+.smallBtnDanger:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.connectBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--color-accent);
+  color: #ffffff;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition:
+    background-color 200ms ease-out,
+    transform 100ms ease-out;
+}
+
+.connectBtn:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+}
+
+.connectBtn:active {
+  transform: scale(0.97);
+}
+
+/* —— 设备分区 —— */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0;
+  margin: 0;
+  padding: 0 4px;
+}
+
+/* —— 设备卡 —— */
+.card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+}
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.iconBox {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.renameBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.renameBtn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-strong);
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dot {
+  color: var(--text-faint);
+}
+
+/* —— 改名输入框 —— */
+.editRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input {
+  flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
+}
+
+.iconBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.04);
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 100ms ease-out;
+}
+
+.iconBtn:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--text-strong);
+}
+
+.iconBtn:active {
+  transform: scale(0.92);
+}
+
+.iconBtnPrimary {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.iconBtnPrimary:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  color: #ffffff;
+}
+
+/* —— 空态 —— */
+.empty {
+  padding: 18px 18px;
+  background: #fbfbfd;
+  border: 1px dashed rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

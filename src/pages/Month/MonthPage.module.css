@@ -53,6 +53,12 @@
   margin: 0;
 }
 
+.headRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .dayNav {
   display: inline-flex;
   align-items: center;

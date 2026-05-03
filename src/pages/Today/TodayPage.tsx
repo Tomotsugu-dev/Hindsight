@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { HourlyChart } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
 import {
@@ -151,6 +152,9 @@ export default function TodayPage() {
         <header className={styles.cardHead}>
           <h2 className={styles.cardTitle}>24 小时活动分布</h2>
 
+          <div className={styles.headRight}>
+            <DevicePicker />
+
           <div className={styles.dayNav}>
             <button
               type="button"
@@ -183,6 +187,7 @@ export default function TodayPage() {
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
+          </div>
           </div>
         </header>
 

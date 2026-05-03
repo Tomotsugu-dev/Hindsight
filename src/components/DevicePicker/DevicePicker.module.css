@@ -1,0 +1,134 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* —— 触发按钮：跟日期 dayPill 同级别的极简风 —— */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  transition:
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.trigger:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.triggerOpen {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.label {
+  white-space: nowrap;
+}
+
+.chev {
+  color: var(--text-faint);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chevOpen {
+  transform: rotate(180deg);
+}
+
+/* —— 下拉菜单 —— */
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 180px;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 9px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 4px 12px rgba(20, 20, 40, 0.08),
+    0 12px 28px rgba(20, 20, 40, 0.1);
+  /* 出场 */
+  animation: menuIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top right;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-regular);
+  text-align: left;
+  letter-spacing: -0.005em;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-strong);
+}
+
+.itemChecked {
+  color: var(--text-strong);
+}
+
+.itemIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+.itemChecked .itemIcon {
+  color: var(--color-accent);
+}
+
+.itemLabel {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemHint {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.itemCheck {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.sep {
+  height: 1px;
+  margin: 4px 4px;
+  background: rgba(0, 0, 0, 0.06);
+}

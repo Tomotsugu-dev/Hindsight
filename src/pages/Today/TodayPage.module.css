@@ -54,6 +54,13 @@
   margin: 0;
 }
 
+/* —— 卡片头右侧：DevicePicker + 日期导航 并排 —— */
+.headRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* —— 日期导航：纯文字 + 小箭头 —— */
 .dayNav {
   display: inline-flex;

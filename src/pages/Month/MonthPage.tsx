@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
 import type { DaySummary } from "../Week/mockData";
@@ -131,6 +132,9 @@ export default function MonthPage() {
         <header className={styles.cardHead}>
           <h2 className={styles.cardTitle}>每日活动分布</h2>
 
+          <div className={styles.headRight}>
+            <DevicePicker />
+
           <div className={styles.dayNav}>
             <button
               type="button"
@@ -163,6 +167,7 @@ export default function MonthPage() {
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
+          </div>
           </div>
         </header>
 

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DEFAULT_CATEGORIES, getCategory } from "../../config/categories";
+import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
 import { getWeekDays, getWeekApps, type DaySummary } from "./mockData";
@@ -126,6 +127,9 @@ export default function WeekPage() {
         <header className={styles.cardHead}>
           <h2 className={styles.cardTitle}>每日活动分布</h2>
 
+          <div className={styles.headRight}>
+            <DevicePicker />
+
           <div className={styles.dayNav}>
             <button
               type="button"
@@ -158,6 +162,7 @@ export default function WeekPage() {
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
+          </div>
           </div>
         </header>
 
