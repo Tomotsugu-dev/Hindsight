@@ -162,15 +162,94 @@ const MIGRATIONS: &[&str] = &[
     "#,
 ];
 
+/// v11：清掉跨 OS 拉过来的 process_paths / app_categories 脏数据。
+/// process_name / exe_path 在不同系统语义不一样：
+///   Windows: process_name 形如 "chrome.exe"，exe_path "C:\\..."
+///   macOS:   process_name 形如 "Google Chrome"，exe_path "/Applications/.../MacOS/..."
+/// 在同步引擎做了 OS 过滤之前，这两张表里混进了别的 OS 的行（key 对不上 / 撞车把本机路径覆盖掉）。
+/// activities 不在这里清 —— 跨设备聚合活动时长是 app 的核心价值，Windows 的活动记录留着。
+fn cross_os_cleanup_sql() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        r#"
+        DELETE FROM process_paths
+        WHERE exe_path = '' OR exe_path NOT LIKE '/%';
+
+        DELETE FROM app_categories
+        WHERE process_name LIKE '%.exe' OR process_name LIKE '%.EXE';
+        "#
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // GLOB '?:\*' / '?:/*' —— Windows 路径形如 C:\... 或 C:/...
+        r#"
+        DELETE FROM process_paths
+        WHERE exe_path = '' OR (exe_path NOT GLOB '?:\*' AND exe_path NOT GLOB '?:/*');
+
+        DELETE FROM app_categories
+        WHERE process_name NOT LIKE '%.exe';
+        "#
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        ""
+    }
+}
+
+/// v13：把每个历史 local_date（origin='local'）重新入 outbox，启动后 push tick 会把所有
+/// 日期的 ndjson 全量推到 Drive。
+///
+/// 背景：v9 那次 backend 切换（Firestore → Drive）一刀切清空了 sync_outbox，导致 v9
+/// 之前采集的活动数据从未推到 Drive。之后 [activities.rs:seal_session] 只对当前正在
+/// 结束的那条会话入 outbox，历史日期没机会被重新触发 → Drive 上缺一大堆 ndjson。
+///
+/// 这里按 local_date 分组，每个日期一行 outbox：
+///   - payload.localDate 是 [group_outbox] 唯一用到的字段（决定文件名 day 部分）
+///   - entity_pk 用 MIN(id) 仅满足 NOT NULL 约束；build_activities_day 实际重新查全量
+///   - next_retry_at 必须跟 chrono::to_rfc3339() 同格式 ("...+00:00") 才能被字典序对比
+///     选中（[engine.rs:read_due_outbox]）。SQLite 的 datetime() 输出 "...Z" 后缀比不过，
+///     这里直接写远古时间字面量。
+///
+/// 副作用：每台老设备启动后会一次性多推几次（每个历史日期一次），其它设备 pull 时会
+/// 把 modifiedTime 刷新过的同名文件重新下载一遍，但去重靠 (device_id, remote_id)，
+/// LWW 比较 updated_at，本地数据不会丢、不会重复。
+const BACKFILL_OUTBOX_SQL: &str = r#"
+    INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+    SELECT 'upsert', 'activity', CAST(MIN(id) AS TEXT),
+           json_object('localDate', local_date),
+           '1970-01-01T00:00:00+00:00',
+           0,
+           '1970-01-01T00:00:00+00:00'
+    FROM activities
+    WHERE origin = 'local'
+    GROUP BY local_date;
+"#;
+
+/// v12：占位，无操作。
+///
+/// 上一版本里这个槽位曾经是个错误的「删除跨 OS activities」迁移，已被 revert，但部分
+/// 用户的 schema_version 表里 v12 已被记录为 done。新装机器跑这里 = no-op，老用户
+/// 框架直接跳过 —— 两边都对得上，只是 v12 这个版本号永久作废。
+const V12_PLACEHOLDER: &str = "";
+
 pub async fn run(pool: &DbPool) -> Result<()> {
+    // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
+    // 顺序就是版本顺序（idx + static_count + 1 = version）。
+    let extras: [&'static str; 3] = [
+        cross_os_cleanup_sql(), // v11
+        V12_PLACEHOLDER,        // v12（occupied，no-op）
+        BACKFILL_OUTBOX_SQL,    // v13
+    ];
     pool.0
-        .call(|conn| {
+        .call(move |conn| {
             conn.execute_batch(
                 "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)",
             )
             .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
-            for (idx, sql) in MIGRATIONS.iter().enumerate() {
+            let static_count = MIGRATIONS.len();
+            let total = static_count + extras.len();
+            for idx in 0..total {
                 let version = (idx + 1) as i64;
                 let already: i64 = conn
                     .query_row(
@@ -182,8 +261,15 @@ pub async fn run(pool: &DbPool) -> Result<()> {
                 if already > 0 {
                     continue;
                 }
-                conn.execute_batch(sql)
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                let sql = if idx < static_count {
+                    MIGRATIONS[idx]
+                } else {
+                    extras[idx - static_count]
+                };
+                if !sql.trim().is_empty() {
+                    conn.execute_batch(sql)
+                        .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                }
                 conn.execute(
                     "INSERT INTO schema_version VALUES (?)",
                     rusqlite::params![version],

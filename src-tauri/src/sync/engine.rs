@@ -503,9 +503,12 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     }
 
     let self_id = crate::device::self_id();
+    let local_os = std::env::consts::OS;
     let mut max_modified: Option<String> = None;
     let mut applied = 0u64;
 
+    // Pass 1: 只跑 device.meta.json，让 devices.os 在 Pass 2 之前就位。
+    // 否则一台陌生设备首次出现时，我们读 devices.os 是空的，没法做跨 OS 过滤。
     for f in &files {
         // 比较 modifiedTime 用字符串字典序就够（RFC3339 都是 ISO 8601）
         if max_modified.as_ref().map_or(true, |c| f.modified_time.as_str() > c.as_str()) {
@@ -516,15 +519,65 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             Some(p) => p,
             None => continue,
         };
+        let ParsedFile::DeviceMeta { device_id } = parsed else {
+            continue;
+        };
+        if device_id == self_id {
+            continue;
+        }
+        let body = match drive::download(&token.access_token, &f.id).await {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("下载 {} 失败: {e}", f.name);
+                continue;
+            }
+        };
+        if let Err(e) = merge_device_meta(&inner.pool, &device_id, &body).await {
+            log::warn!("merge {} 失败: {e}", f.name);
+            continue;
+        }
+        applied += 1;
+    }
+
+    // Pass 2: 其余类型；对平台特定的两类做 OS 过滤。
+    for f in &files {
+        let parsed = match parse_filename(&f.name) {
+            Some(p) => p,
+            None => continue,
+        };
+        if matches!(parsed, ParsedFile::DeviceMeta { .. }) {
+            continue;
+        }
         let device_id = match &parsed {
             ParsedFile::ActivityDay { device_id, .. }
             | ParsedFile::Categories { device_id }
             | ParsedFile::AppCategories { device_id }
-            | ParsedFile::ProcessPaths { device_id }
-            | ParsedFile::DeviceMeta { device_id } => device_id.as_str(),
+            | ParsedFile::ProcessPaths { device_id } => device_id.as_str(),
+            ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
         if device_id == self_id {
             continue;
+        }
+
+        // app_categories / process_paths 是平台特定的：
+        //   Windows tracker 写 process_name = "chrome.exe"，exe_path = "C:\\..."
+        //   macOS tracker  写 process_name = "Google Chrome"，exe_path = "/Applications/.../MacOS/..."
+        // 跨 OS 合并要么完全无用（key 对不上），要么坏事（同名 key 撞车，把本机能用的路径覆盖掉，icon 提取失败）。
+        // activities 不在这里过滤 —— 跨设备聚合是 app 的核心价值，Windows 那台的活动记录就是要在 Mac 上看到的。
+        if matches!(
+            parsed,
+            ParsedFile::AppCategories { .. } | ParsedFile::ProcessPaths { .. }
+        ) {
+            let remote_os = remote_device_os(&inner.pool, device_id).await;
+            if remote_os.as_deref() != Some(local_os) {
+                log::debug!(
+                    "跳过跨 OS 文件 {} (远端 os={:?}, 本机 {})",
+                    f.name,
+                    remote_os,
+                    local_os,
+                );
+                continue;
+            }
         }
 
         let body = match drive::download(&token.access_token, &f.id).await {
@@ -548,9 +601,7 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::ProcessPaths { device_id } => {
                 merge_process_paths(&inner.pool, &device_id, &body).await
             }
-            ParsedFile::DeviceMeta { device_id } => {
-                merge_device_meta(&inner.pool, &device_id, &body).await
-            }
+            ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
         if let Err(e) = res {
             log::warn!("merge {} 失败: {e}", f.name);
@@ -567,6 +618,27 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         log::info!("sync pull 完成，应用 {} 个远端文件", applied);
     }
     Ok(())
+}
+
+/// 查 devices 表里某个远端设备的 os；没有 device_meta 同步过来时返回 None。
+async fn remote_device_os(pool: &DbPool, device_id: &str) -> Option<String> {
+    let id = device_id.to_string();
+    pool.0
+        .call(move |conn| {
+            let r = conn
+                .query_row(
+                    "SELECT os FROM devices WHERE device_id = ?1",
+                    rusqlite::params![id],
+                    |r| r.get::<_, Option<String>>(0),
+                )
+                .ok()
+                .flatten()
+                .filter(|s| !s.is_empty());
+            Ok(r)
+        })
+        .await
+        .ok()
+        .flatten()
 }
 
 async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
