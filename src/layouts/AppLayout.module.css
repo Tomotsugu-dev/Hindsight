@@ -21,6 +21,12 @@
   --pill-width: 36px;
 }
 
+/* macOS：原生窗口已经自带圆角和阴影，关掉自己的，避免双层圆角 / 阴影叠加 */
+:global(body[data-platform="macos"]) .shell {
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* 展开态：所有变量一起翻转 */
 .shell.expanded {
   --sb-current-width: var(--sidebar-width);

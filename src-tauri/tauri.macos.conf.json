@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "hindsight",
+        "width": 960,
+        "height": 720,
+        "minWidth": 960,
+        "minHeight": 720,
+        "maxWidth": 960,
+        "maxHeight": 720,
+        "resizable": false,
+        "maximizable": false,
+        "transparent": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "shadow": true
+      }
+    ]
+  }
+}

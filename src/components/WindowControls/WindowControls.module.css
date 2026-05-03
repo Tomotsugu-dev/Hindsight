@@ -9,6 +9,11 @@
   -webkit-app-region: no-drag;
 }
 
+/* macOS 用原生红绿灯，不显示自己的关闭/最小化按钮 */
+:global(body[data-platform="macos"]) .controls {
+  display: none;
+}
+
 .btn {
   width: 26px;
   height: 26px;

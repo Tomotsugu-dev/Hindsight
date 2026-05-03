@@ -23,6 +23,12 @@
   -webkit-user-select: none;
 }
 
+/* macOS：把 brand 整体往下推，避开左上角原生红绿灯（约 22px 高） */
+:global(body[data-platform="macos"]) .brand {
+  padding-top: 28px;
+  height: 72px;
+}
+
 .logoMark {
   width: 26px;
   height: 26px;
