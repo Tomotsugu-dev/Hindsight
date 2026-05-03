@@ -2,8 +2,30 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/hindsight";
 import styles from "./AppIcon.module.css";
 
-const cache = new Map<string, string | null>();
+interface CacheEntry {
+  src: string | null;
+  ts: number;
+}
+
+const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<string | null>>();
+
+/**
+ * null 项缓存 60 秒后过期重查 —— 否则首次渲染时图标还没同步过来 cache 写了 null，
+ * 之后 sync engine 拉下图标也永远不会被前端发现，必须重启 app 才能看到。
+ * 命中（非 null）的项不过期：图标内容很少变，重复 invoke 浪费。
+ */
+const NULL_CACHE_TTL_MS = 60_000;
+
+function readCache(processName: string): string | null | undefined {
+  const entry = cache.get(processName);
+  if (!entry) return undefined;
+  if (entry.src !== null) return entry.src;
+  if (Date.now() - entry.ts < NULL_CACHE_TTL_MS) return null;
+  // null 项过期 → 当作未缓存，触发重查
+  cache.delete(processName);
+  return undefined;
+}
 
 interface AppIconProps {
   processName: string;
@@ -13,14 +35,15 @@ interface AppIconProps {
 
 export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps) {
   const [src, setSrc] = useState<string | null | undefined>(() =>
-    cache.get(processName) ?? undefined,
+    readCache(processName),
   );
 
   useEffect(() => {
     if (src !== undefined) return;
 
-    if (cache.has(processName)) {
-      setSrc(cache.get(processName) ?? null);
+    const cached = readCache(processName);
+    if (cached !== undefined) {
+      setSrc(cached);
       return;
     }
 
@@ -31,12 +54,12 @@ export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps)
       api
         .getAppIcon(processName)
         .then((data) => {
-          cache.set(processName, data ?? null);
+          cache.set(processName, { src: data ?? null, ts: Date.now() });
           inflight.delete(processName);
           return data ?? null;
         })
         .catch(() => {
-          cache.set(processName, null);
+          cache.set(processName, { src: null, ts: Date.now() });
           inflight.delete(processName);
           return null;
         });
