@@ -397,6 +397,12 @@ function DraggableCategoryList({
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [landedId, setLandedId] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // 拖动开始时快照各行 top/bottom，整个 drag 都用这份静态数据做命中检测。
+  // 不能在 mousemove 时读 getBoundingClientRect()：FLIP 动画期间行位置正在动，
+  // 读到的是过渡中的值，会导致 hoverId 在两行之间来回跳变 → 鬼畜。
+  const snapshotRects = useRef<Map<string, { top: number; bottom: number }>>(
+    new Map(),
+  );
 
   const setRowRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) rowRefs.current.set(id, el);
@@ -456,9 +462,9 @@ function DraggableCategoryList({
     if (!drag) return;
     const onMove = (e: MouseEvent) => {
       setDrag((d) => (d ? { ...d, cursorY: e.clientY } : null));
+      // 用 startDrag 时快照的静态 rect 做命中，FLIP 动画期间行位置在变也不会抖。
       let hit: string | null = null;
-      for (const [id, el] of rowRefs.current) {
-        const r = el.getBoundingClientRect();
+      for (const [id, r] of snapshotRects.current) {
         if (e.clientY >= r.top && e.clientY <= r.bottom) {
           hit = id;
           break;
@@ -502,6 +508,13 @@ function DraggableCategoryList({
     const row = rowRefs.current.get(cat.id);
     if (!row) return;
     const rect = row.getBoundingClientRect();
+    // 给所有行做一份位置快照，整个 drag 命中检测都用它（不读 mid-FLIP 的实时 rect）
+    const snap = new Map<string, { top: number; bottom: number }>();
+    rowRefs.current.forEach((el, id) => {
+      const r = el.getBoundingClientRect();
+      snap.set(id, { top: r.top, bottom: r.bottom });
+    });
+    snapshotRects.current = snap;
     setDrag({
       id: cat.id,
       name: cat.name,
