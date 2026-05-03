@@ -23,6 +23,8 @@ pub struct FileMeta {
     pub name: String,
     /// RFC3339
     pub modified_time: String,
+    /// 文件大小 (bytes)；保留给将来用于诊断 / "云端用量"展示
+    #[allow(dead_code)]
     pub size: Option<u64>,
 }
 
@@ -223,6 +225,8 @@ async fn update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> 
 }
 
 /// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
+/// 留给将来 purge_cloud_data 命令用。
+#[allow(dead_code)]
 pub async fn delete(token: &str, file_id: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client

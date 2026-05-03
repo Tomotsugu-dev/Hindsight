@@ -227,6 +227,8 @@ pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
 
 #[derive(Debug, Clone)]
 pub struct TokenInfo {
+    /// 当前登录用户的 Google sub（id_token 解出来的）；将来 purge_cloud_data 等命令会用到
+    #[allow(dead_code)]
     pub uid: String,
     pub access_token: String,
 }

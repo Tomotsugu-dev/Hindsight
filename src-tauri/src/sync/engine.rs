@@ -72,6 +72,8 @@ impl SyncEngine {
         log::info!("sync engine 已启动");
     }
 
+    /// 停止后台 push/pull 循环。当前没有 UI 入口；保留给将来"sign_out 后停 engine"的场景。
+    #[allow(dead_code)]
     pub async fn stop(&self) {
         let mut h = self.inner.handle.lock().await;
         if let Some(handle) = h.take() {

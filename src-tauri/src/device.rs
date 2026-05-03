@@ -105,6 +105,7 @@ pub fn self_id() -> &'static str {
 }
 
 /// 获取当前设备完整 meta。
+#[allow(dead_code)] // 公开 API，外部可调用
 pub fn self_meta() -> &'static DeviceMeta {
     SELF_META
         .get()

@@ -5,6 +5,8 @@ use rusqlite::{params, Connection};
 #[derive(Debug, Clone, Copy)]
 pub enum OutboxOp {
     Upsert,
+    /// 软删 / 整体删除占位；当前业务路径只走 Upsert（带 deleted_at），保留以备未来云端硬删
+    #[allow(dead_code)]
     Delete,
 }
 
