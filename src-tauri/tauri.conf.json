@@ -23,7 +23,8 @@
         "maximizable": false,
         "transparent": true,
         "decorations": false,
-        "shadow": true
+        "shadow": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

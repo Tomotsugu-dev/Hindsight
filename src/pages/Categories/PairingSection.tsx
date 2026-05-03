@@ -5,6 +5,7 @@ import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { useCategories } from "../../state/categories";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { displayAppName } from "../../utils/displayName";
+import { AssignDropdown } from "./parts";
 import styles from "./Pairing.module.css";
 
 /** 把 group + 设备列表换算成「每个 device 列对应哪个 member（如果有）」的 lookup */
@@ -26,7 +27,7 @@ function fmtDuration(secs: number): string {
 
 export function PairingSection() {
   const { devices } = useDeviceFilter();
-  const { getCategory } = useCategories();
+  const { categories } = useCategories();
   const [groups, setGroups] = useState<AppGroup[] | null>(null);
   const [draggingProcessName, setDraggingProcessName] = useState<string | null>(null);
   const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
@@ -100,6 +101,15 @@ export function PairingSection() {
     }
   };
 
+  const onAssignCategory = async (groupId: string, categoryId: string | null) => {
+    try {
+      await api.assignAppGroupCategory(groupId, categoryId);
+      await reload();
+    } catch (e) {
+      console.error("assign category 失败:", e);
+    }
+  };
+
   const onCommitName = async (groupId: string) => {
     const next = pendingNames[groupId];
     if (next === undefined) return;
@@ -146,7 +156,6 @@ export function PairingSection() {
         const slots = membersByDevice(group, sortedDevices);
         const isPaired = group.members.length > 1;
         const isHover = hoverGroupId === group.id;
-        const cat = group.categoryId ? getCategory(group.categoryId) : null;
         const nameDraft = pendingNames[group.id] ?? group.displayName;
 
         return (
@@ -253,17 +262,12 @@ export function PairingSection() {
             </div>
 
             <div className={styles.actionCol}>
-              {cat && (
-                <span
-                  className={styles.catTag}
-                  style={{
-                    background: `color-mix(in oklab, ${cat.color} 18%, white)`,
-                    color: `color-mix(in oklab, ${cat.color} 60%, black)`,
-                  }}
-                >
-                  {cat.name}
-                </span>
-              )}
+              <AssignDropdown
+                categories={categories}
+                currentCategoryId={group.categoryId}
+                allowClear
+                onPick={(cid) => void onAssignCategory(group.id, cid)}
+              />
             </div>
           </div>
         );

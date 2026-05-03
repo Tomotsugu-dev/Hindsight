@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
-import { api, type Category, type UnclassifiedApp } from "../../api/hindsight";
+import type { Category } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { displayAppName } from "../../utils/displayName";
 import styles from "./Categories.module.css";
@@ -102,74 +102,30 @@ export function AppList({ category }: { category: Category }) {
   );
 }
 
-export function UnclassifiedSection() {
-  const { categories, assignApp } = useCategories();
-  const [items, setItems] = useState<UnclassifiedApp[] | null>(null);
-
-  const reload = async () => {
-    try {
-      const list = await api.listUnclassifiedApps(7);
-      setItems(list);
-    } catch {
-      setItems([]);
-    }
-  };
-
-  useEffect(() => {
-    reload();
-  }, []);
-
-  if (items === null) {
-    return <div className={styles.empty}>加载中…</div>;
-  }
-  if (items.length === 0) {
-    return <div className={styles.empty}>所有应用都已归类。</div>;
-  }
-
-  return (
-    <>
-      {items.map((it) => {
-        const display = displayAppName(it.processName);
-        return (
-          <div key={it.processName} className={styles.unclassRow}>
-            <AppIcon
-              processName={it.processName}
-              fallbackColor="#94a3b8"
-              size={18}
-            />
-            <span className={styles.unclassName} title={display}>
-              {display}
-            </span>
-            <span className={styles.unclassMeta}>
-              近 7 天 {fmtMin(it.minutes)}
-            </span>
-            <AssignDropdown
-              categories={categories}
-              onPick={async (cid) => {
-                await assignApp(it.processName, cid);
-                await reload();
-              }}
-            />
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
 interface MenuRect {
   top: number;
   left: number;
   width: number;
 }
 
-function AssignDropdown({
+export function AssignDropdown({
   categories,
+  currentCategoryId,
   onPick,
+  allowClear = false,
 }: {
   categories: Category[];
-  onPick: (categoryId: string) => void | Promise<void>;
+  /** 当前已选中的 category id；用于在 trigger 上显示当前分类名 + 颜色 */
+  currentCategoryId?: string | null;
+  /** allowClear=true 时给 null 走「取消分类」语义 */
+  onPick: (categoryId: string | null) => void | Promise<void>;
+  /** 是否在下拉里加一行「取消分类」（仅在已分类时有意义）*/
+  allowClear?: boolean;
 }) {
+  const current =
+    currentCategoryId != null
+      ? categories.find((c) => c.id === currentCategoryId) ?? null
+      : null;
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState<MenuRect | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -219,16 +175,35 @@ function AssignDropdown({
     setOpen(true);
   };
 
+  // trigger 按 current 是否存在切换显示形态：
+  //   未分类 → "+ 指派"
+  //   已分类 → "● <分类名>"（带分类色作为左侧色点）
+  const triggerStyle = current
+    ? ({ "--cat-color": current.color } as CSSProperties)
+    : undefined;
+
   return (
     <div className={styles.assignWrap}>
       <button
         ref={btnRef}
         type="button"
-        className={`${styles.assignBtn} ${open ? styles.assignBtnOpen : ""}`}
+        className={`${styles.assignBtn} ${open ? styles.assignBtnOpen : ""} ${
+          current ? styles.assignBtnPicked : ""
+        }`}
+        style={triggerStyle}
         onClick={handleToggle}
       >
-        <Plus size={11} strokeWidth={2.25} />
-        指派
+        {current ? (
+          <>
+            <span className={styles.assignOptionDot} aria-hidden />
+            <span className={styles.assignBtnLabel}>{current.name}</span>
+          </>
+        ) : (
+          <>
+            <Plus size={11} strokeWidth={2.25} />
+            指派
+          </>
+        )}
         <ChevronDown size={11} strokeWidth={2.25} className={styles.chev} />
       </button>
       {open && menuRect && (
@@ -242,14 +217,30 @@ function AssignDropdown({
             width: menuRect.width,
           }}
         >
+          {allowClear && current && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${styles.assignOption} ${styles.assignOptionClear}`}
+              onClick={() => {
+                setOpen(false);
+                void onPick(null);
+              }}
+            >
+              <span className={styles.assignOptionLabel}>取消分类</span>
+            </button>
+          )}
           {categories.map((c) => {
             const style = { "--cat-color": c.color } as CSSProperties;
+            const isCurrent = current?.id === c.id;
             return (
               <button
                 key={c.id}
                 type="button"
                 role="menuitem"
-                className={styles.assignOption}
+                className={`${styles.assignOption} ${
+                  isCurrent ? styles.assignOptionCurrent : ""
+                }`}
                 style={style}
                 onClick={() => {
                   setOpen(false);
@@ -267,11 +258,3 @@ function AssignDropdown({
   );
 }
 
-function fmtMin(min: number): string {
-  if (min === 0) return "—";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m} 分`;
-  if (m === 0) return `${h} 小时`;
-  return `${h} 小时 ${m} 分`;
-}

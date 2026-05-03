@@ -499,3 +499,39 @@
   position: relative;
   display: inline-flex;
 }
+
+/* 已分类的 trigger：底色用分类色淡化版本 + 彩色文字 */
+.assignBtnPicked {
+  background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 14%, white);
+  border-color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 30%, transparent);
+  color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 65%, black);
+}
+
+.assignBtnPicked:hover {
+  background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 22%, white);
+  border-color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 45%, transparent);
+  color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 70%, black);
+}
+
+.assignBtnLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* 「取消分类」选项：灰底，没有色点 */
+.assignOptionClear {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.assignOptionClear:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* 当前已选中那项：背景填充 + 加粗，告诉用户「就是这个」*/
+.assignOptionCurrent {
+  background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 14%, transparent);
+  font-weight: 600;
+}
