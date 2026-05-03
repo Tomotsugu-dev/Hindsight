@@ -843,20 +843,22 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 
         pool.0
             .call(move |conn| {
-                let cur: Option<String> = conn
+                let cur: Option<(String, Option<String>)> = conn
                     .query_row(
-                        "SELECT updated_at FROM categories WHERE id = ?1",
+                        "SELECT updated_at, deleted_at FROM categories WHERE id = ?1",
                         rusqlite::params![id],
-                        |r| r.get(0),
+                        |r| Ok((r.get(0)?, r.get(1)?)),
                     )
                     .ok();
                 let should_apply = match &cur {
                     None => true,
-                    Some(c) => updated_at.as_str() > c.as_str(),
+                    Some((cur_upd, _)) => updated_at.as_str() > cur_upd.as_str(),
                 };
                 if !should_apply {
                     return Ok(());
                 }
+                let prev_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
+
                 if cur.is_none() {
                     conn.execute(
                         "INSERT INTO categories(id, name, color, icon, builtin, updated_at, deleted_at)
@@ -872,6 +874,16 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                         rusqlite::params![name, color, icon, builtin as i64, updated_at, deleted_at, id],
                     )
                     .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                }
+
+                // 远端把这个分类删了 —— 跑一次本地 cascade，让指向它的 app_categories /
+                // app_groups 也跟着清掉，否则跨 OS 设备会卡在「分类已删但本地引用没清」状态。
+                // 仅在「之前没删，现在变成删了」的边沿触发；同样的 deletion 同步重复到达，
+                // should_apply / 本地 cascade SQL 的 WHERE 条件会让二次操作变成 no-op（幂等）。
+                let just_deleted = deleted_at.is_some() && prev_deleted.is_none();
+                if just_deleted {
+                    crate::repo::categories::cascade_category_deletion(conn, &id, &updated_at)
+                        .map_err(tokio_rusqlite::Error::Rusqlite)?;
                 }
                 Ok(())
             })

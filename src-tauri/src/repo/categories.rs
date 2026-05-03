@@ -1,4 +1,5 @@
 use chrono::Utc;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
@@ -239,6 +240,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 )
                 .ok();
             let Some((name, color, icon, builtin_i)) = row else {
+                // 已经被删过了 —— 幂等：no-op 直接返回，不重复写 category 行 + outbox
                 return Ok(());
             };
             if builtin_i != 0 {
@@ -256,34 +258,66 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &cat_payload)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
-            // 软删所有指向这个分类的 app_categories（同时写每条 outbox）
-            let mut stmt = conn
-                .prepare(
-                    "SELECT process_name FROM app_categories
-                     WHERE category_id = ? AND deleted_at IS NULL",
-                )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            let processes: Vec<String> = stmt
-                .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            drop(stmt);
-
-            for p in &processes {
-                conn.execute(
-                    "UPDATE app_categories SET deleted_at = ?1, updated_at = ?1 WHERE process_name = ?2",
-                    rusqlite::params![now, p],
-                )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
-                let payload = app_category_payload(p, &id, &now, Some(&now));
-                enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppCategory, p, &payload)
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            }
+            cascade_category_deletion(conn, &id, &now)?;
 
             Ok(())
         })
         .await?;
+    Ok(())
+}
+
+/// 分类被删（无论是用户本机操作还是同步收到的远端事件）后，把所有指向它的引用一起清掉。
+/// 幂等：所有 UPDATE 都带 `WHERE ... IS NULL` / `WHERE category_id = ?` 这类条件，
+/// 重复跑一次时受影响行数为 0，不会重复 enqueue outbox。
+///
+/// 清理两类引用：
+///   1. app_categories.category_id = X & deleted_at IS NULL → 软删
+///   2. app_groups.category_id = X & deleted_at IS NULL → 设 NULL（让组回到「未分类」）
+///
+/// 各自仅对实际受影响的行 enqueue outbox，所以外层多次调用是 cheap no-op。
+pub fn cascade_category_deletion(
+    conn: &Connection,
+    category_id: &str,
+    now: &str,
+) -> rusqlite::Result<()> {
+    // 1) app_categories：取出受影响的 process_name 再 UPDATE，同时给每条入 outbox。
+    let mut stmt = conn.prepare(
+        "SELECT process_name FROM app_categories
+         WHERE category_id = ?1 AND deleted_at IS NULL",
+    )?;
+    let affected_processes: Vec<String> = stmt
+        .query_map(rusqlite::params![category_id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(stmt);
+    for p in &affected_processes {
+        conn.execute(
+            "UPDATE app_categories SET deleted_at = ?1, updated_at = ?1
+             WHERE process_name = ?2 AND deleted_at IS NULL",
+            rusqlite::params![now, p],
+        )?;
+        let payload = app_category_payload(p, category_id, now, Some(now));
+        enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppCategory, p, &payload)?;
+    }
+
+    // 2) app_groups：取出受影响的 group id 再清空 category_id + 入 outbox。
+    let mut stmt = conn.prepare(
+        "SELECT id FROM app_groups
+         WHERE category_id = ?1 AND deleted_at IS NULL",
+    )?;
+    let affected_groups: Vec<String> = stmt
+        .query_map(rusqlite::params![category_id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(stmt);
+    for g in &affected_groups {
+        conn.execute(
+            "UPDATE app_groups SET category_id = NULL, updated_at = ?1
+             WHERE id = ?2 AND category_id IS NOT NULL",
+            rusqlite::params![now, g],
+        )?;
+        let payload = serde_json::json!({ "groupId": g }).to_string();
+        enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppGroup, g, &payload)?;
+    }
+
     Ok(())
 }
 
@@ -311,14 +345,21 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
     let rows = pool
         .0
         .call(move |conn| {
+            // 双 LEFT JOIN：m 是 active app_categories 行，c 是 m 指向的、active 的 category。
+            // 「未归类」= 找不到 active mapping 或 mapping 指向已删/不存在的分类。
+            // 这层防御让即便 cascade 因 sync 时序错过、有 stale app_categories 残留，
+            // UI 还是能正确把那些 app 显示在未归类里。
             let mut stmt = conn
                 .prepare_cached(
                     "SELECT a.process_name,
                             CAST(SUM(a.duration_secs) / 60 AS INTEGER) AS minutes,
                             MAX(a.ended_at) AS last_seen_at
                      FROM activities a
-                     LEFT JOIN app_categories m ON m.process_name = a.process_name AND m.deleted_at IS NULL
-                     WHERE m.process_name IS NULL
+                     LEFT JOIN app_categories m
+                       ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                     LEFT JOIN categories c
+                       ON c.id = m.category_id AND c.deleted_at IS NULL
+                     WHERE c.id IS NULL
                        AND a.local_date >= date('now','localtime', '-' || ?1 || ' days')
                        AND a.process_name <> 'Unknown'
                      GROUP BY a.process_name
