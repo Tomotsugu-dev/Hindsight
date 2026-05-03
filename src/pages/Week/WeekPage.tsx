@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
+import { displayAppName } from "../../utils/displayName";
 import { useWeekCache } from "../../hooks/useWeekCache";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
@@ -86,7 +88,7 @@ export default function WeekPage() {
       const color = cat?.color ?? "#94a3b8";
       return {
         id: a.process,
-        name: a.process,
+        name: displayAppName(a.process),
         subtitle: cat?.name,
         color,
         minutes: a.minutes,
@@ -198,7 +200,9 @@ export default function WeekPage() {
             <h2 className={styles.cardTitle}>本周最常用应用</h2>
           </header>
           {appRanks.length > 0 ? (
-            <RankedList items={appRanks} />
+            <ScrollBox maxHeight={280}>
+              <RankedList items={appRanks} />
+            </ScrollBox>
           ) : (
             <EmptyHint />
           )}
@@ -209,7 +213,9 @@ export default function WeekPage() {
             <h2 className={styles.cardTitle}>本周最常用分类</h2>
           </header>
           {categoryRanks.length > 0 ? (
-            <RankedList items={categoryRanks} />
+            <ScrollBox maxHeight={280}>
+              <RankedList items={categoryRanks} />
+            </ScrollBox>
           ) : (
             <EmptyHint />
           )}

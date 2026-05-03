@@ -23,6 +23,13 @@
   pointer-events: none;
 }
 
+.left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .text {
   display: flex;
   flex-direction: column;
@@ -52,4 +59,24 @@
 
 .rowBlock .control {
   width: 100%;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.tone_primary {
+  background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+  color: var(--color-accent);
+}
+
+.tone_danger {
+  background: color-mix(in oklab, #ef4444 13%, transparent);
+  color: #ef4444;
 }

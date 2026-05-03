@@ -3,6 +3,7 @@ import { ChevronDown, Plus, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { api, type Category, type UnclassifiedApp } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { displayAppName } from "../../utils/displayName";
 import styles from "./Categories.module.css";
 
 export const DEFAULT_PALETTE = [
@@ -51,21 +52,28 @@ export function AppList({ category }: { category: Category }) {
           （暂无绑定应用）
         </span>
       )}
-      {category.apps.map((app) => (
-        <span key={app} className={styles.appChip}>
-          <AppIcon processName={app} fallbackColor={category.color} size={14} />
-          {app}
-          <button
-            type="button"
-            className={styles.appChipRemove}
-            onClick={() => unassignApp(app)}
-            aria-label={`移除 ${app}`}
-            title="移除"
-          >
-            <X size={10} strokeWidth={2.25} />
-          </button>
-        </span>
-      ))}
+      {category.apps.map((app) => {
+        const display = displayAppName(app);
+        return (
+          <span key={app} className={styles.appChip}>
+            <AppIcon
+              processName={app}
+              fallbackColor={category.color}
+              size={14}
+            />
+            {display}
+            <button
+              type="button"
+              className={styles.appChipRemove}
+              onClick={() => unassignApp(app)}
+              aria-label={`移除 ${display}`}
+              title="移除"
+            >
+              <X size={10} strokeWidth={2.25} />
+            </button>
+          </span>
+        );
+      })}
       {adding ? (
         <input
           ref={inputRef}
@@ -120,22 +128,31 @@ export function UnclassifiedSection() {
 
   return (
     <>
-      {items.map((it) => (
-        <div key={it.processName} className={styles.unclassRow}>
-          <AppIcon processName={it.processName} fallbackColor="#94a3b8" size={18} />
-          <span className={styles.unclassName} title={it.processName}>
-            {it.processName}
-          </span>
-          <span className={styles.unclassMeta}>近 7 天 {fmtMin(it.minutes)}</span>
-          <AssignDropdown
-            categories={categories}
-            onPick={async (cid) => {
-              await assignApp(it.processName, cid);
-              await reload();
-            }}
-          />
-        </div>
-      ))}
+      {items.map((it) => {
+        const display = displayAppName(it.processName);
+        return (
+          <div key={it.processName} className={styles.unclassRow}>
+            <AppIcon
+              processName={it.processName}
+              fallbackColor="#94a3b8"
+              size={18}
+            />
+            <span className={styles.unclassName} title={display}>
+              {display}
+            </span>
+            <span className={styles.unclassMeta}>
+              近 7 天 {fmtMin(it.minutes)}
+            </span>
+            <AssignDropdown
+              categories={categories}
+              onPick={async (cid) => {
+                await assignApp(it.processName, cid);
+                await reload();
+              }}
+            />
+          </div>
+        );
+      })}
     </>
   );
 }

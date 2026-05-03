@@ -147,7 +147,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  align-items: start;
 }
+
 
 /* —— 图例（在图表卡片底部） —— */
 .legend {

@@ -112,6 +112,12 @@
   background: var(--status-error);
 }
 
+/* idle 状态下，"灰点"换成实心红色 ⏸ */
+.idleIcon {
+  flex-shrink: 0;
+  color: var(--status-error);
+}
+
 .cloud {
   flex-shrink: 0;
   opacity: 0.7;

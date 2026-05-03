@@ -127,4 +127,7 @@ export const api = {
   updateSettings: (patch: SettingsPatch) =>
     invoke<Settings>("update_settings", { patch }),
   getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
+  purgeActivities: () => invoke<void>("purge_activities"),
+  purgeScreenshots: () => invoke<void>("purge_screenshots"),
+  openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
 };

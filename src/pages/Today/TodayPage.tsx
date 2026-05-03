@@ -4,6 +4,8 @@ import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
+import { displayAppName } from "../../utils/displayName";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
@@ -94,7 +96,7 @@ export default function TodayPage() {
       const color = cat?.color ?? "#94a3b8";
       return {
         id: a.process,
-        name: a.process,
+        name: displayAppName(a.process),
         subtitle: cat?.name,
         color,
         minutes: a.minutes,
@@ -213,7 +215,9 @@ export default function TodayPage() {
             <h2 className={styles.cardTitle}>最常用应用</h2>
           </header>
           {appRanks.length > 0 ? (
-            <RankedList items={appRanks} />
+            <ScrollBox maxHeight={280}>
+              <RankedList items={appRanks} />
+            </ScrollBox>
           ) : (
             <EmptyHint />
           )}
@@ -224,7 +228,9 @@ export default function TodayPage() {
             <h2 className={styles.cardTitle}>最常用分类</h2>
           </header>
           {categoryRanks.length > 0 ? (
-            <RankedList items={categoryRanks} />
+            <div className={styles.rankBody}>
+              <RankedList items={categoryRanks} />
+            </div>
           ) : (
             <EmptyHint />
           )}

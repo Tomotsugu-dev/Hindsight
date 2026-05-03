@@ -1,4 +1,5 @@
 import { open } from "@tauri-apps/plugin-dialog";
+import { Aperture, Clock, Rocket } from "lucide-react";
 import { Section } from "../components/Section";
 import { Row } from "../components/Row";
 import { Toggle } from "../components/Toggle";
@@ -30,6 +31,7 @@ export default function GeneralTab() {
       <Section
         title="采集"
         description="定时记录焦点窗口和当时的屏幕截图，作为之后回看的依据。"
+        icon={Aperture}
       >
         <Row label="启用采集" description="关闭后停止记录窗口信息和截图。">
           <Toggle
@@ -49,6 +51,7 @@ export default function GeneralTab() {
       <Section
         title="工作时段"
         description="只在指定时段内采集，避免下班后还在记录。可设置多段。"
+        icon={Clock}
       >
         <Row label="启用工作时段">
           <Toggle
@@ -64,7 +67,7 @@ export default function GeneralTab() {
         </Row>
       </Section>
 
-      <Section title="启动行为">
+      <Section title="启动行为" icon={Rocket}>
         <Row label="开机自动启动" description="登录系统后由 Hindsight 自动运行。">
           <Toggle
             checked={settings.autoStart}

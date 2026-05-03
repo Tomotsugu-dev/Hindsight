@@ -84,6 +84,9 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::storage::get_storage_info,
+            commands::storage::purge_activities,
+            commands::storage::purge_screenshots,
+            commands::storage::open_screenshots_dir,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

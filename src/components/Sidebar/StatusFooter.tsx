@@ -33,10 +33,20 @@ export function StatusFooter({
         <span className={styles.swap} aria-hidden>
           {/* 默认态 */}
           <span className={`${styles.face} ${styles.faceDefault}`}>
-            <span
-              className={`${styles.dot} ${styles[`dot_${captureStatus}`]}`}
-              aria-hidden
-            />
+            {captureStatus === "idle" ? (
+              <Pause
+                size={12}
+                strokeWidth={2.25}
+                fill="currentColor"
+                className={styles.idleIcon}
+                aria-hidden
+              />
+            ) : (
+              <span
+                className={`${styles.dot} ${styles[`dot_${captureStatus}`]}`}
+                aria-hidden
+              />
+            )}
             <span className={styles.text}>
               {CAPTURE_TEXT[captureStatus]}
               <span className={styles.divider}> · </span>

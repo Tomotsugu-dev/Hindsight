@@ -137,6 +137,11 @@ impl CaptureService {
         *self.inner.current.lock().await = None;
     }
 
+    /// 清空当前会话指针；用于在外部清空 activities 表后避免下一次 tick 去 UPDATE 已被删除的行。
+    pub async fn reset_session(&self) {
+        *self.inner.current.lock().await = None;
+    }
+
     pub async fn is_running(&self) -> bool {
         self.inner.handle.lock().await.is_some()
     }

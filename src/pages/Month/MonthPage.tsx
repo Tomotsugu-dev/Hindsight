@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
+import { displayAppName } from "../../utils/displayName";
 import { useMonthCache } from "../../hooks/useMonthCache";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
@@ -85,7 +87,7 @@ export default function MonthPage() {
       const color = cat?.color ?? "#94a3b8";
       return {
         id: a.process,
-        name: a.process,
+        name: displayAppName(a.process),
         subtitle: cat?.name,
         color,
         minutes: a.minutes,
@@ -209,7 +211,9 @@ export default function MonthPage() {
             <h2 className={styles.cardTitle}>本月最常用应用</h2>
           </header>
           {appRanks.length > 0 ? (
-            <RankedList items={appRanks} />
+            <ScrollBox maxHeight={280}>
+              <RankedList items={appRanks} />
+            </ScrollBox>
           ) : (
             <EmptyHint />
           )}
@@ -220,7 +224,9 @@ export default function MonthPage() {
             <h2 className={styles.cardTitle}>本月最常用分类</h2>
           </header>
           {categoryRanks.length > 0 ? (
-            <RankedList items={categoryRanks} />
+            <ScrollBox maxHeight={280}>
+              <RankedList items={categoryRanks} />
+            </ScrollBox>
           ) : (
             <EmptyHint />
           )}

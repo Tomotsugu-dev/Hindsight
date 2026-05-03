@@ -1,0 +1,56 @@
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  background: color-mix(in oklab, #ef4444 12%, transparent);
+  border: 1px solid color-mix(in oklab, #ef4444 22%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: #b91c1c;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    transform 120ms ease-out;
+}
+
+.dangerBtn:hover {
+  background: color-mix(in oklab, #ef4444 18%, transparent);
+  border-color: color-mix(in oklab, #ef4444 35%, transparent);
+}
+
+.dangerBtn:active {
+  transform: scale(0.97);
+}
+
+/* —— 打开文件夹按钮：黄色 ghost + icon + 文字 —— */
+.openBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: color-mix(in oklab, #f59e0b 14%, transparent);
+  border: 1px solid color-mix(in oklab, #f59e0b 28%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: #b45309;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    transform 120ms ease-out;
+}
+
+.openBtn:hover {
+  background: color-mix(in oklab, #f59e0b 22%, transparent);
+  border-color: color-mix(in oklab, #f59e0b 42%, transparent);
+}
+
+.openBtn:active {
+  transform: scale(0.97);
+}

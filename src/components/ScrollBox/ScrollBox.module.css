@@ -1,0 +1,62 @@
+.box {
+  --fade-size: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-size),
+    #000 calc(100% - var(--fade-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-size),
+    #000 calc(100% - var(--fade-size)),
+    transparent 100%
+  );
+}
+
+.box::-webkit-scrollbar {
+  display: none;
+}
+
+/* 已滚到顶 → 顶端不再渐隐 */
+.box.atTop {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - var(--fade-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - var(--fade-size)),
+    transparent 100%
+  );
+}
+
+/* 已滚到底 → 底端不再渐隐 */
+.box.atBottom {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-size),
+    #000 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-size),
+    #000 100%
+  );
+}
+
+/* 内容根本没溢出（顶且底）→ 完全不渐隐 */
+.box.atTop.atBottom {
+  mask-image: none;
+  -webkit-mask-image: none;
+}

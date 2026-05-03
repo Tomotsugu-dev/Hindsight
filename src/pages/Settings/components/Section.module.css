@@ -1,21 +1,28 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 12px;
   padding: 0 4px;
 }
 
+.headText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 650;
   color: var(--text-strong);
-  letter-spacing: 0;
+  letter-spacing: -0.005em;
   margin: 0;
 }
 
@@ -25,6 +32,26 @@
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.tone_primary {
+  background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+  color: var(--color-accent);
+}
+
+.tone_danger {
+  background: color-mix(in oklab, #ef4444 13%, transparent);
+  color: #ef4444;
 }
 
 .card {
