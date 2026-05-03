@@ -1,4 +1,4 @@
-import { Minus, Square, X } from "lucide-react";
+import { Minus, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import styles from "./WindowControls.module.css";
 
@@ -14,14 +14,6 @@ export function WindowControls() {
         title="最小化"
       >
         <Minus size={12} strokeWidth={2} />
-      </button>
-      <button
-        className={styles.btn}
-        onClick={() => appWindow.toggleMaximize()}
-        aria-label="最大化"
-        title="最大化"
-      >
-        <Square size={9} strokeWidth={2} />
       </button>
       <button
         className={`${styles.btn} ${styles.close}`}

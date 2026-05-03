@@ -1,47 +1,77 @@
-import { useEffect, useRef, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import type { Category } from "../../api/hindsight";
-import { AppList, ColorPalette, CreateCategory, UnclassifiedSection } from "./parts";
+import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
+import { resolveCategoryIcon } from "../../config/categoryIcons";
+import { AppList, DEFAULT_PALETTE, UnclassifiedSection } from "./parts";
 import styles from "./Categories.module.css";
 
+const DEFAULT_NEW_ICON = "Tag";
+
 export default function CategoriesPage() {
-  const { categories, loading } = useCategories();
+  const { categories, loading, create } = useCategories();
+  const [creating, setCreating] = useState(false);
+
+  const handleCreated = async (input: { name: string; color: string; icon: string }) => {
+    await create(input);
+    setCreating(false);
+  };
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>应用分类</h1>
-        <p className={styles.meta}>
-          不同进程归属到不同的活动类别。颜色、名称、绑定应用都可自定义。
-        </p>
+        <div className={styles.headerText}>
+          <h1 className={styles.title}>应用分类</h1>
+          <p className={styles.meta}>
+            不同进程归属到不同的活动类别。颜色、图标、名称、绑定应用都可自定义。
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.createBtn}
+          onClick={() => setCreating(true)}
+          disabled={creating}
+        >
+          <Plus size={14} strokeWidth={2.25} />
+          新建分类
+        </button>
       </header>
 
       <section className={styles.card}>
+        {creating && (
+          <CreatingRow
+            onCommit={handleCreated}
+            onCancel={() => setCreating(false)}
+          />
+        )}
         {loading && categories.length === 0 ? (
           <div className={styles.empty}>加载中…</div>
         ) : (
-          <>
-            {categories.map((c) => (
-              <CategoryRow key={c.id} category={c} />
-            ))}
-            <div className={styles.createRow}>
-              <CreateCategory />
-            </div>
-          </>
+          categories.map((c) => <CategoryRow key={c.id} category={c} />)
         )}
       </section>
 
       <header className={styles.header} style={{ marginTop: 8 }}>
-        <h2 className={styles.title} style={{ fontSize: 18 }}>
-          未归类
-        </h2>
-        <p className={styles.meta}>
-          近 7 天采集到、还没归类的应用。指派到任意分类立即生效。
-        </p>
+        <div className={styles.headerText}>
+          <h2 className={styles.title} style={{ fontSize: 18 }}>
+            未归类
+          </h2>
+          <p className={styles.meta}>
+            近 7 天采集到、还没归类的应用。指派到任意分类立即生效。
+          </p>
+        </div>
       </header>
 
-      <section className={styles.card}>
+      <section
+        className={styles.card}
+        style={{
+          background: "#fbfbfd",
+          borderRadius: 14,
+          border: "1px solid rgba(0,0,0,0.06)",
+        }}
+      >
         <UnclassifiedSection />
       </section>
     </div>
@@ -52,8 +82,10 @@ function CategoryRow({ category }: { category: Category }) {
   const { update, remove } = useCategories();
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(category.name);
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const Icon = resolveCategoryIcon(category.icon);
 
   useEffect(() => {
     if (editingName) {
@@ -81,88 +113,196 @@ function CategoryRow({ category }: { category: Category }) {
     setEditingName(false);
   };
 
-  const pickColor = async (color: string) => {
-    setPaletteOpen(false);
-    if (color !== category.color) {
-      await update(category.id, { color });
-    }
-  };
-
-  const onDelete = async () => {
-    if (!window.confirm(`确认删除分类「${category.name}」？其下应用会回到「其他」。`)) {
-      return;
-    }
+  const onConfirmDelete = async () => {
+    setConfirmOpen(false);
     await remove(category.id);
   };
 
+  const styleVar = { "--cat-color": category.color } as CSSProperties;
+
   return (
-    <div className={styles.catRow}>
-      <div className={styles.catHead}>
-        <div className={styles.popoverWrap}>
-          <button
-            type="button"
-            className={styles.colorChipBtn}
-            style={{ background: category.color }}
-            onClick={() => setPaletteOpen((v) => !v)}
-            aria-label="改颜色"
+    <div className={styles.catRow} style={styleVar}>
+      <div className={styles.catIconWrap}>
+        <button
+          type="button"
+          className={styles.catIconBtn}
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-label="改外观"
+          title="改颜色和图标"
+        >
+          <Icon size={28} strokeWidth={1.85} />
+        </button>
+        {pickerOpen && (
+          <AppearancePicker
+            color={category.color}
+            icon={category.icon}
+            onColorChange={(c) => update(category.id, { color: c })}
+            onIconChange={(i) => {
+              update(category.id, { icon: i });
+              setPickerOpen(false);
+            }}
+            onDismiss={() => setPickerOpen(false)}
           />
-          {paletteOpen && (
-            <ColorPalette
-              current={category.color}
-              onPick={pickColor}
-              onDismiss={() => setPaletteOpen(false)}
+        )}
+      </div>
+
+      <div className={styles.catBody}>
+        <div className={styles.catNameRow}>
+          {editingName ? (
+            <input
+              ref={inputRef}
+              className={styles.catNameInput}
+              value={draftName}
+              maxLength={16}
+              onChange={(e) => setDraftName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") cancelName();
+              }}
             />
+          ) : (
+            <span
+              className={styles.catName}
+              onDoubleClick={() => setEditingName(true)}
+              title="双击改名"
+            >
+              {category.name}
+            </span>
           )}
         </div>
 
-        {editingName ? (
+        <AppList category={category} />
+      </div>
+
+      <div className={styles.catActions}>
+        <button
+          type="button"
+          className={styles.actionBtn}
+          onClick={() => setEditingName(true)}
+          aria-label="改名"
+          title="改名"
+        >
+          <Pencil size={14} strokeWidth={1.85} />
+        </button>
+        <button
+          type="button"
+          className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+          onClick={() => setConfirmOpen(true)}
+          aria-label="删除分类"
+          title="删除分类"
+        >
+          <Trash2 size={14} strokeWidth={1.85} />
+        </button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="删除分类"
+        message={`确认删除分类「${category.name}」？其下应用会回到「其他」。`}
+        confirmLabel="删除"
+        variant="danger"
+        onConfirm={onConfirmDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </div>
+  );
+}
+
+function CreatingRow({
+  onCommit,
+  onCancel,
+}: {
+  onCommit: (input: { name: string; color: string; icon: string }) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(DEFAULT_PALETTE[0]);
+  const [icon, setIcon] = useState(DEFAULT_NEW_ICON);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const Icon = resolveCategoryIcon(icon);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const commit = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      onCancel();
+      return;
+    }
+    await onCommit({ name: trimmed, color, icon });
+  };
+
+  const styleVar = { "--cat-color": color } as CSSProperties;
+
+  return (
+    <div className={styles.catRow} style={styleVar}>
+      <div className={styles.catIconWrap}>
+        <button
+          type="button"
+          className={styles.catIconBtn}
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-label="选颜色和图标"
+          title="选颜色和图标"
+        >
+          <Icon size={28} strokeWidth={1.85} />
+        </button>
+        {pickerOpen && (
+          <AppearancePicker
+            color={color}
+            icon={icon}
+            onColorChange={setColor}
+            onIconChange={(i) => {
+              setIcon(i);
+              setPickerOpen(false);
+            }}
+            onDismiss={() => setPickerOpen(false)}
+          />
+        )}
+      </div>
+
+      <div className={styles.catBody}>
+        <div className={styles.catNameRow}>
           <input
             ref={inputRef}
             className={styles.catNameInput}
-            value={draftName}
+            placeholder="分类名"
+            value={name}
             maxLength={16}
-            onChange={(e) => setDraftName(e.target.value)}
-            onBlur={commitName}
+            onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") commitName();
-              if (e.key === "Escape") cancelName();
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") onCancel();
             }}
           />
-        ) : (
-          <span
-            className={styles.catName}
-            onDoubleClick={() => setEditingName(true)}
-            title="双击改名"
-          >
-            {category.name}
-          </span>
-        )}
-
-        <div className={styles.catActions}>
-          {!editingName && (
-            <button
-              type="button"
-              className={styles.iconBtn}
-              onClick={() => setEditingName(true)}
-              aria-label="改名"
-              title="改名"
-            >
-              <Pencil size={12} strokeWidth={1.85} />
-            </button>
-          )}
-          <button
-            type="button"
-            className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-            onClick={onDelete}
-            aria-label="删除分类"
-            title="删除分类"
-          >
-            <Trash2 size={12} strokeWidth={1.85} />
-          </button>
         </div>
       </div>
 
-      <AppList category={category} indent />
+      <div className={styles.catActions}>
+        <button
+          type="button"
+          className={`${styles.actionBtn}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={commit}
+          aria-label="确认"
+          title="确认"
+        >
+          <Check size={14} strokeWidth={2.25} />
+        </button>
+        <button
+          type="button"
+          className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onCancel}
+          aria-label="取消"
+          title="取消"
+        >
+          <X size={14} strokeWidth={2.25} />
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCategories } from "../../state/categories";
-import type { DaySummary } from "./mockData";
+import type { DaySummary } from "../../api/hindsight";
 import styles from "./DailyBarChart.module.css";
 
 interface DailyBarChartProps {

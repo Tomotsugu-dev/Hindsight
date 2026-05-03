@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Duration, Local, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike};
 use serde::Serialize;
 
 use crate::error::Result;
@@ -8,13 +8,20 @@ use crate::storage::DbPool;
 #[serde(rename_all = "camelCase")]
 pub struct HourSegment {
     pub category_id: String,
-    pub minutes: u16,
+    pub minutes: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HourSlot {
     pub hour: u8,
+    pub segments: Vec<HourSegment>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaySummary {
+    pub date: String,
     pub segments: Vec<HourSegment>,
 }
 
@@ -79,7 +86,7 @@ pub async fn day_hours(pool: &DbPool, day_offset: i32) -> Result<Vec<HourSlot>> 
                 .iter()
                 .map(|(cat, secs)| HourSegment {
                     category_id: cat.clone(),
-                    minutes: ((*secs as f64 / 60.0).round() as u32).min(60) as u16,
+                    minutes: ((*secs as f64 / 60.0).round() as u32).min(60),
                 })
                 .filter(|s| s.minutes > 0)
                 .collect();
@@ -140,6 +147,190 @@ pub async fn day_apps(pool: &DbPool, day_offset: i32, limit: u32) -> Result<Vec<
         })
         .filter(|a| a.minutes > 0)
         .collect())
+}
+
+pub async fn week_days(pool: &DbPool, week_offset: i32) -> Result<Vec<DaySummary>> {
+    let (monday, sunday) = week_range(week_offset);
+    days_in_range(pool, monday, sunday).await
+}
+
+pub async fn week_apps(
+    pool: &DbPool,
+    week_offset: i32,
+    limit: u32,
+) -> Result<Vec<AppUsage>> {
+    let (monday, sunday) = week_range(week_offset);
+    apps_in_range(pool, monday, sunday, limit).await
+}
+
+pub async fn month_days(pool: &DbPool, month_offset: i32) -> Result<Vec<DaySummary>> {
+    let (first, last) = month_range(month_offset);
+    days_in_range(pool, first, last).await
+}
+
+pub async fn month_apps(
+    pool: &DbPool,
+    month_offset: i32,
+    limit: u32,
+) -> Result<Vec<AppUsage>> {
+    let (first, last) = month_range(month_offset);
+    apps_in_range(pool, first, last, limit).await
+}
+
+async fn days_in_range(
+    pool: &DbPool,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<Vec<DaySummary>> {
+    let from_str = from.format("%Y-%m-%d").to_string();
+    let to_str = to.format("%Y-%m-%d").to_string();
+
+    let rows: Vec<(String, String, i64)> = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT a.local_date,
+                            COALESCE(m.category_id, 'other') AS cat,
+                            SUM(a.duration_secs) AS total
+                     FROM activities a
+                     LEFT JOIN app_categories m ON m.process_name = a.process_name
+                     WHERE a.local_date >= ? AND a.local_date <= ?
+                     GROUP BY a.local_date, cat",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let it = stmt
+                .query_map(rusqlite::params![from_str, to_str], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
+                })
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let mut out = Vec::new();
+            for r in it {
+                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+            }
+            Ok(out)
+        })
+        .await?;
+
+    let mut buckets: std::collections::HashMap<String, std::collections::HashMap<String, u32>> =
+        std::collections::HashMap::new();
+    for (date, cat, secs) in rows {
+        let minutes = ((secs as f64 / 60.0).round() as u32).max(0);
+        if minutes == 0 {
+            continue;
+        }
+        buckets.entry(date).or_default().insert(cat, minutes);
+    }
+
+    let mut out = Vec::new();
+    let mut cur = from;
+    while cur <= to {
+        let key = cur.format("%Y-%m-%d").to_string();
+        let mut segs: Vec<HourSegment> = buckets
+            .remove(&key)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(category_id, minutes)| HourSegment {
+                category_id,
+                minutes,
+            })
+            .collect();
+        segs.sort_by(|a, b| b.minutes.cmp(&a.minutes));
+        out.push(DaySummary {
+            date: key,
+            segments: segs,
+        });
+        cur = cur + Duration::days(1);
+    }
+
+    Ok(out)
+}
+
+async fn apps_in_range(
+    pool: &DbPool,
+    from: NaiveDate,
+    to: NaiveDate,
+    limit: u32,
+) -> Result<Vec<AppUsage>> {
+    let from_str = from.format("%Y-%m-%d").to_string();
+    let to_str = to.format("%Y-%m-%d").to_string();
+
+    let rows: Vec<(String, String, i64)> = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT a.process_name,
+                            COALESCE(m.category_id, 'other') AS cat,
+                            SUM(a.duration_secs) AS total
+                     FROM activities a
+                     LEFT JOIN app_categories m ON m.process_name = a.process_name
+                     WHERE a.local_date >= ? AND a.local_date <= ?
+                     GROUP BY a.process_name, cat
+                     ORDER BY total DESC
+                     LIMIT ?",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let it = stmt
+                .query_map(rusqlite::params![from_str, to_str, limit], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
+                })
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let mut out = Vec::new();
+            for r in it {
+                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+            }
+            Ok(out)
+        })
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(process, cat, secs)| AppUsage {
+            process,
+            category_id: cat,
+            minutes: (secs as f64 / 60.0).round() as u32,
+        })
+        .filter(|a| a.minutes > 0)
+        .collect())
+}
+
+fn week_range(week_offset: i32) -> (NaiveDate, NaiveDate) {
+    let today = Local::now().date_naive();
+    let dow = today.weekday().num_days_from_monday() as i64;
+    let monday = today - Duration::days(dow) + Duration::days(week_offset as i64 * 7);
+    let sunday = monday + Duration::days(6);
+    (monday, sunday)
+}
+
+fn month_range(month_offset: i32) -> (NaiveDate, NaiveDate) {
+    let today = Local::now().date_naive();
+    let mut year = today.year();
+    let mut month = today.month() as i32 + month_offset;
+    while month <= 0 {
+        month += 12;
+        year -= 1;
+    }
+    while month > 12 {
+        month -= 12;
+        year += 1;
+    }
+    let first = NaiveDate::from_ymd_opt(year, month as u32, 1).unwrap();
+    let next = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(year, (month + 1) as u32, 1).unwrap()
+    };
+    let last = next - Duration::days(1);
+    (first, last)
 }
 
 fn parse_local(s: &str) -> DateTime<Local> {

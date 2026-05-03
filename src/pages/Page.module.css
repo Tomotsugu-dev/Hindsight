@@ -1,5 +1,7 @@
 .page {
   padding: var(--space-8);
+  max-width: 720px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

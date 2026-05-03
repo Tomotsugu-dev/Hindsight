@@ -5,7 +5,7 @@ import { WindowControls } from "../components/WindowControls/WindowControls";
 import styles from "./AppLayout.module.css";
 
 const RAIL_WIDTH = 56;
-const FULL_WIDTH = 232;
+const FULL_WIDTH = 180;
 const DRAG_STRIP_HEIGHT = 36;
 const HOVER_INTENT_MS = 150;
 

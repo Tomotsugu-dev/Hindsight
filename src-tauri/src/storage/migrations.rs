@@ -67,6 +67,17 @@ const MIGRATIONS: &[&str] = &[
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('fun',    '娱乐', '#fb7185', 0);
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('other',  '其他', '#94a3b8', 0);
     "#,
+    // v6：为分类加上图标字段，给 6 个默认分类填好默认图标
+    r#"
+    ALTER TABLE categories ADD COLUMN icon TEXT NOT NULL DEFAULT 'Tag';
+
+    UPDATE categories SET icon = 'Code'           WHERE id = 'code';
+    UPDATE categories SET icon = 'Globe'          WHERE id = 'browse';
+    UPDATE categories SET icon = 'MessageCircle'  WHERE id = 'talk';
+    UPDATE categories SET icon = 'Brush'          WHERE id = 'design';
+    UPDATE categories SET icon = 'Gamepad2'       WHERE id = 'fun';
+    UPDATE categories SET icon = 'MoreHorizontal' WHERE id = 'other';
+    "#,
 ];
 
 pub async fn run(pool: &DbPool) -> Result<()> {

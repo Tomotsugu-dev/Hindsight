@@ -3,10 +3,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { useMonthCache } from "../../hooks/useMonthCache";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
-import type { DaySummary } from "../Week/mockData";
-import { getMonthDays, getMonthApps, getMonthRange } from "./mockData";
+import type { DaySummary } from "../../api/hindsight";
 import styles from "./MonthPage.module.css";
 
 const SWIPE_DURATION = 420;
@@ -26,16 +26,22 @@ function monthLabel(offset: number): string {
   return `${offset} 月后`;
 }
 
-function fmtMonth(monthOffset: number): string {
-  const { first } = getMonthRange(monthOffset);
-  return `${first.getFullYear()}年${first.getMonth() + 1}月`;
+function fmtMonth(days: DaySummary[], offset: number): string {
+  if (days.length > 0) {
+    const d = days[0].date;
+    return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+  }
+  const today = new Date();
+  const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  return `${d.getFullYear()}年${d.getMonth() + 1}月`;
 }
 
 export default function MonthPage() {
   const [offset, setOffset] = useState(0);
   const { categories, getCategory } = useCategories();
+  const { get: getMonth } = useMonthCache(offset);
 
-  const days = useMemo(() => getMonthDays(offset), [offset]);
+  const { days, apps } = useMemo(() => getMonth(offset), [getMonth, offset]);
 
   const totalMinutes = useMemo(
     () =>
@@ -74,7 +80,7 @@ export default function MonthPage() {
   }, [days, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
-    return getMonthApps(offset).map((a) => {
+    return apps.map((a) => {
       const cat = getCategory(a.categoryId);
       const color = cat?.color ?? "#94a3b8";
       return {
@@ -86,7 +92,7 @@ export default function MonthPage() {
         leading: <AppIcon processName={a.process} fallbackColor={color} />,
       };
     });
-  }, [offset, getCategory]);
+  }, [apps, getCategory]);
 
   const frameRef = useRef<HTMLDivElement>(null);
   const [delta, setDelta] = useState(0);
@@ -128,7 +134,7 @@ export default function MonthPage() {
       <header className={styles.header}>
         <h1 className={styles.title}>月统计</h1>
         <p className={styles.meta}>
-          {fmtMonth(offset)} · 共 {fmtHM(totalMinutes)} · 日均 {fmtHM(Math.round(avgPerDay))}
+          {fmtMonth(days, offset)} · 共 {fmtHM(totalMinutes)} · 日均 {fmtHM(Math.round(avgPerDay))}
         </p>
       </header>
 
@@ -181,7 +187,7 @@ export default function MonthPage() {
             style={{ transform: `translate3d(calc(-100% + ${delta}px), 0, 0)` }}
           >
             {[offset - 1, offset, offset + 1].map((o, idx) => {
-              const slideDays = idx === 1 ? days : getMonthDays(o);
+              const slideDays = idx === 1 ? days : getMonth(o).days;
               return (
                 <div className={styles.slide} key={o}>
                   <DailyBarChart

@@ -3,9 +3,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { useWeekCache } from "../../hooks/useWeekCache";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
-import { getWeekDays, getWeekApps, type DaySummary } from "./mockData";
+import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeekPage.module.css";
 
 const SWIPE_DURATION = 420;
@@ -39,8 +40,9 @@ function weekLabel(offset: number): string {
 export default function WeekPage() {
   const [offset, setOffset] = useState(0);
   const { categories, getCategory } = useCategories();
+  const { get: getWeek } = useWeekCache(offset);
 
-  const days = useMemo(() => getWeekDays(offset), [offset]);
+  const { days, apps } = useMemo(() => getWeek(offset), [getWeek, offset]);
 
   const totalMinutes = useMemo(
     () =>
@@ -79,7 +81,7 @@ export default function WeekPage() {
   }, [days, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
-    return getWeekApps(offset).map((a) => {
+    return apps.map((a) => {
       const cat = getCategory(a.categoryId);
       const color = cat?.color ?? "#94a3b8";
       return {
@@ -91,7 +93,7 @@ export default function WeekPage() {
         leading: <AppIcon processName={a.process} fallbackColor={color} />,
       };
     });
-  }, [offset, getCategory]);
+  }, [apps, getCategory]);
 
   // —— 滑动动画 ——
   const frameRef = useRef<HTMLDivElement>(null);
@@ -176,13 +178,13 @@ export default function WeekPage() {
             style={{ transform: `translate3d(calc(-100% + ${delta}px), 0, 0)` }}
           >
             <div className={styles.slide}>
-              <WeeklyBarChart days={getWeekDays(offset - 1)} />
+              <WeeklyBarChart days={getWeek(offset - 1).days} />
             </div>
             <div className={styles.slide}>
               <WeeklyBarChart days={days} />
             </div>
             <div className={styles.slide}>
-              <WeeklyBarChart days={getWeekDays(offset + 1)} />
+              <WeeklyBarChart days={getWeek(offset + 1).days} />
             </div>
           </div>
         </div>

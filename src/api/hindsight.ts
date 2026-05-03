@@ -16,10 +16,29 @@ export interface AppUsage {
   minutes: number;
 }
 
+export interface DaySummaryDto {
+  date: string;
+  segments: HourSegment[];
+}
+
+export interface DaySummary {
+  date: Date;
+  segments: HourSegment[];
+}
+
+export function dtoToDaySummary(dto: DaySummaryDto): DaySummary {
+  const [y, m, d] = dto.date.split("-").map((s) => parseInt(s, 10));
+  return {
+    date: new Date(y, m - 1, d),
+    segments: dto.segments,
+  };
+}
+
 export interface Category {
   id: string;
   name: string;
   color: string;
+  icon: string;
   builtin: boolean;
   apps: string[];
 }
@@ -27,11 +46,13 @@ export interface Category {
 export interface CategoryInput {
   name: string;
   color: string;
+  icon: string;
 }
 
 export interface CategoryPatch {
   name?: string;
   color?: string;
+  icon?: string;
 }
 
 export interface UnclassifiedApp {
@@ -52,6 +73,14 @@ export const api = {
     invoke<HourSlot[]>("get_day_hours", { dayOffset }),
   getDayApps: (dayOffset: number, limit?: number) =>
     invoke<AppUsage[]>("get_day_apps", { dayOffset, limit }),
+  getWeekDays: (weekOffset: number) =>
+    invoke<DaySummaryDto[]>("get_week_days", { weekOffset }),
+  getWeekApps: (weekOffset: number, limit?: number) =>
+    invoke<AppUsage[]>("get_week_apps", { weekOffset, limit }),
+  getMonthDays: (monthOffset: number) =>
+    invoke<DaySummaryDto[]>("get_month_days", { monthOffset }),
+  getMonthApps: (monthOffset: number, limit?: number) =>
+    invoke<AppUsage[]>("get_month_apps", { monthOffset, limit }),
   listCategories: () => invoke<Category[]>("list_categories"),
   createCategory: (input: CategoryInput) =>
     invoke<Category>("create_category", { input }),

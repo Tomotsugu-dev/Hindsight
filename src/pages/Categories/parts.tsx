@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { api, type Category, type UnclassifiedApp } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import styles from "./Categories.module.css";
 
-export const PALETTE = [
+export const DEFAULT_PALETTE = [
   "#a78bfa",
   "#60a5fa",
   "#34d399",
@@ -20,50 +20,7 @@ export const PALETTE = [
   "#facc15",
 ];
 
-export function ColorPalette({
-  current,
-  onPick,
-  onDismiss,
-}: {
-  current: string;
-  onPick: (color: string) => void;
-  onDismiss: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target as Node)) onDismiss();
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [onDismiss]);
-
-  return (
-    <div ref={ref} className={`${styles.popover} ${styles.palette}`}>
-      {PALETTE.map((c) => (
-        <button
-          key={c}
-          type="button"
-          className={`${styles.swatch} ${
-            c.toLowerCase() === current.toLowerCase() ? styles.swatchActive : ""
-          }`}
-          style={{ background: c }}
-          onClick={() => onPick(c)}
-          aria-label={c}
-        />
-      ))}
-    </div>
-  );
-}
-
-export function AppList({
-  category,
-  indent = false,
-}: {
-  category: Category;
-  indent?: boolean;
-}) {
+export function AppList({ category }: { category: Category }) {
   const { unassignApp, assignApp } = useCategories();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -88,7 +45,7 @@ export function AppList({
   };
 
   return (
-    <div className={`${styles.appList} ${indent ? styles.appListIndent : ""}`}>
+    <div className={styles.appList}>
       {category.apps.length === 0 && !adding && (
         <span className={styles.empty} style={{ padding: 0 }}>
           （暂无绑定应用）
@@ -134,107 +91,6 @@ export function AppList({
         </button>
       )}
     </div>
-  );
-}
-
-export function CreateCategory({ onCreated }: { onCreated?: (id: string) => void }) {
-  const { create } = useCategories();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(PALETTE[0]);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
-  const commit = async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setOpen(false);
-      return;
-    }
-    const created = await create({ name: trimmed, color });
-    setName("");
-    setColor(PALETTE[0]);
-    setOpen(false);
-    if (created && onCreated) onCreated(created.id);
-  };
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className={styles.createBtn}
-        onClick={() => setOpen(true)}
-      >
-        <Plus size={13} strokeWidth={2} />
-        新建分类
-      </button>
-    );
-  }
-
-  return (
-    <>
-      <div className={styles.popoverWrap}>
-        <button
-          type="button"
-          className={styles.colorChipBtn}
-          style={{ background: color }}
-          onClick={() => setPaletteOpen((v) => !v)}
-          aria-label="选颜色"
-        />
-        {paletteOpen && (
-          <ColorPalette
-            current={color}
-            onPick={(c) => {
-              setColor(c);
-              setPaletteOpen(false);
-            }}
-            onDismiss={() => setPaletteOpen(false)}
-          />
-        )}
-      </div>
-      <input
-        ref={inputRef}
-        className={styles.catNameInput}
-        placeholder="分类名"
-        value={name}
-        maxLength={16}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") {
-            setName("");
-            setOpen(false);
-          }
-        }}
-      />
-      <button
-        type="button"
-        className={styles.iconBtn}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={commit}
-        aria-label="确认"
-        title="确认"
-      >
-        <Check size={14} strokeWidth={2.25} />
-      </button>
-      <button
-        type="button"
-        className={styles.iconBtn}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => {
-          setName("");
-          setOpen(false);
-        }}
-        aria-label="取消"
-        title="取消"
-      >
-        <X size={14} strokeWidth={2.25} />
-      </button>
-    </>
   );
 }
 

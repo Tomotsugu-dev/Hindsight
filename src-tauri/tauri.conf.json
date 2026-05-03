@@ -13,10 +13,14 @@
     "windows": [
       {
         "title": "hindsight",
-        "width": 1100,
+        "width": 960,
         "height": 720,
-        "minWidth": 880,
-        "minHeight": 560,
+        "minWidth": 960,
+        "minHeight": 720,
+        "maxWidth": 960,
+        "maxHeight": 720,
+        "resizable": false,
+        "maximizable": false,
         "transparent": true,
         "decorations": false,
         "shadow": true

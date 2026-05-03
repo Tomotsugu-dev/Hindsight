@@ -9,6 +9,7 @@ pub struct Category {
     pub id: String,
     pub name: String,
     pub color: String,
+    pub icon: String,
     pub builtin: bool,
     pub apps: Vec<String>,
 }
@@ -18,6 +19,7 @@ pub struct Category {
 pub struct CategoryInput {
     pub name: String,
     pub color: String,
+    pub icon: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -25,6 +27,7 @@ pub struct CategoryInput {
 pub struct CategoryPatch {
     pub name: Option<String>,
     pub color: Option<String>,
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,7 +44,7 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
         .call(|conn| {
             let mut stmt = conn
                 .prepare_cached(
-                    "SELECT id, name, color, builtin FROM categories ORDER BY builtin DESC, id",
+                    "SELECT id, name, color, icon, builtin FROM categories ORDER BY builtin DESC, id",
                 )
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let cat_rows = stmt
@@ -50,15 +53,16 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, String>(2)?,
-                        r.get::<_, i64>(3)? != 0,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, i64>(4)? != 0,
                     ))
                 })
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            let mut cats: Vec<(String, String, String, bool, Vec<String>)> = Vec::new();
+            let mut cats: Vec<(String, String, String, String, bool, Vec<String>)> = Vec::new();
             for r in cat_rows {
-                let (id, name, color, builtin) =
+                let (id, name, color, icon, builtin) =
                     r.map_err(tokio_rusqlite::Error::Rusqlite)?;
-                cats.push((id, name, color, builtin, Vec::new()));
+                cats.push((id, name, color, icon, builtin, Vec::new()));
             }
 
             let mut stmt2 = conn
@@ -74,7 +78,7 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
             for r in map_rows {
                 let (process, cat_id) = r.map_err(tokio_rusqlite::Error::Rusqlite)?;
                 if let Some(c) = cats.iter_mut().find(|c| c.0 == cat_id) {
-                    c.4.push(process);
+                    c.5.push(process);
                 }
             }
             Ok(cats)
@@ -83,10 +87,11 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
 
     Ok(cats
         .into_iter()
-        .map(|(id, name, color, builtin, apps)| Category {
+        .map(|(id, name, color, icon, builtin, apps)| Category {
             id,
             name,
             color,
+            icon,
             builtin,
             apps,
         })
@@ -98,20 +103,23 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     let id_clone = id.clone();
     let name = input.name.trim().to_string();
     let color = input.color.trim().to_string();
+    let icon = input.icon.trim().to_string();
     if name.is_empty() {
         return Err(Error::Other("分类名不能为空".into()));
     }
     if color.is_empty() {
         return Err(Error::Other("颜色不能为空".into()));
     }
+    let final_icon = if icon.is_empty() { "Tag".to_string() } else { icon };
     let n = name.clone();
     let c = color.clone();
+    let i = final_icon.clone();
 
     pool.0
         .call(move |conn| {
             conn.execute(
-                "INSERT INTO categories(id, name, color, builtin) VALUES(?, ?, ?, 0)",
-                rusqlite::params![id_clone, n, c],
+                "INSERT INTO categories(id, name, color, icon, builtin) VALUES(?, ?, ?, ?, 0)",
+                rusqlite::params![id_clone, n, c, i],
             )
             .map_err(tokio_rusqlite::Error::Rusqlite)?;
             Ok(())
@@ -122,6 +130,7 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
         id,
         name,
         color,
+        icon: final_icon,
         builtin: false,
         apps: Vec::new(),
     })
@@ -133,25 +142,33 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
         .call(move |conn| {
             if let Some(name) = patch.name.as_ref() {
                 let trimmed = name.trim();
-                if trimmed.is_empty() {
-                    return Ok(());
+                if !trimmed.is_empty() {
+                    conn.execute(
+                        "UPDATE categories SET name = ? WHERE id = ?",
+                        rusqlite::params![trimmed, id],
+                    )
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
                 }
-                conn.execute(
-                    "UPDATE categories SET name = ? WHERE id = ?",
-                    rusqlite::params![trimmed, id],
-                )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
             }
             if let Some(color) = patch.color.as_ref() {
                 let trimmed = color.trim();
-                if trimmed.is_empty() {
-                    return Ok(());
+                if !trimmed.is_empty() {
+                    conn.execute(
+                        "UPDATE categories SET color = ? WHERE id = ?",
+                        rusqlite::params![trimmed, id],
+                    )
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
                 }
-                conn.execute(
-                    "UPDATE categories SET color = ? WHERE id = ?",
-                    rusqlite::params![trimmed, id],
-                )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            }
+            if let Some(icon) = patch.icon.as_ref() {
+                let trimmed = icon.trim();
+                if !trimmed.is_empty() {
+                    conn.execute(
+                        "UPDATE categories SET icon = ? WHERE id = ?",
+                        rusqlite::params![trimmed, id],
+                    )
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                }
             }
             Ok(())
         })
