@@ -4,6 +4,7 @@ mod commands;
 mod device;
 mod error;
 mod icons;
+mod permissions;
 mod repo;
 mod storage;
 mod sync;
@@ -33,6 +34,13 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
+                // 0) 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
+                //    的窗口，焦点采集功能整个废掉，但不会报错（CG API 静默降级），所以
+                //    必须先在启动早期触发系统弹框请求权限。
+                //    阻塞调用：用户没决定前 macOS 不返回。授权后 TCC 在下次进程启动时缓存。
+                let perm = permissions::ensure_screen_recording();
+                log::info!("Screen Recording permission: {:?}", perm);
+
                 // 1) 启动级身份：必须在打开 DB 之前确定 device_id（device.json 在 DB 之外）
                 let dev_meta = device::ensure_loaded()
                     .expect("加载设备身份")
