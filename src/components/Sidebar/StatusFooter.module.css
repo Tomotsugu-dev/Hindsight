@@ -121,6 +121,21 @@
 .cloud {
   flex-shrink: 0;
   opacity: 0.7;
+  transition:
+    color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 已连接 Firebase：云朵染成 accent 紫，并加内发光感的细微 drop-shadow */
+.cloudOn {
+  opacity: 1;
+  color: var(--color-accent);
+  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-accent) 35%, transparent));
+}
+
+.textOn {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
 }
 
 .pauseIcon {

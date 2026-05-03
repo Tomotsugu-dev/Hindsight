@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod capture;
 pub mod categories;
 pub mod data;

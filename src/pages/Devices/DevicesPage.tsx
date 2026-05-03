@@ -1,25 +1,17 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Cloud, CloudOff, Pencil, RefreshCw, Unplug } from "lucide-react";
+import { Cloud, CloudOff, LogIn, LogOut, Pencil } from "lucide-react";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
+import { useSettings } from "../../state/settings";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
+import { api, type AuthState } from "../../api/hindsight";
 import styles from "./DevicesPage.module.css";
-
-interface SyncState {
-  connected: boolean;
-  account?: string;
-  lastSyncAt?: string;
-}
-
-const MOCK_INITIAL_SYNC: SyncState = { connected: false };
 
 export default function DevicesPage() {
   const { devices, renameSelf, recolorSelf, reiconSelf } = useDeviceFilter();
   const self = devices.find((d) => d.current);
   const others = devices.filter((d) => !d.current);
-
-  const [sync, setSync] = useState<SyncState>(MOCK_INITIAL_SYNC);
 
   return (
     <div className={styles.page}>
@@ -28,7 +20,7 @@ export default function DevicesPage() {
         <p className={styles.meta}>管理本机名称，与其他设备的同步状态。</p>
       </header>
 
-      <SyncCard sync={sync} onChange={setSync} />
+      <CloudSyncCard />
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>本机</h2>
@@ -46,9 +38,7 @@ export default function DevicesPage() {
         <h2 className={styles.sectionTitle}>其他设备</h2>
         {others.length === 0 ? (
           <div className={styles.empty}>
-            {sync.connected
-              ? "暂无其他设备。在新设备上用同一账号登录即可加入。"
-              : "未连接同步。连接后可在多台设备之间共享数据。"}
+            登录同账号后，其他设备会出现在这里。
           </div>
         ) : (
           others.map((d) => <OtherRow key={d.id} device={d} />)
@@ -58,78 +48,161 @@ export default function DevicesPage() {
   );
 }
 
-function SyncCard({
-  sync,
-  onChange,
-}: {
-  sync: SyncState;
-  onChange: (s: SyncState) => void;
-}) {
-  if (sync.connected) {
-    return (
-      <div className={`${styles.syncCard} ${styles.syncCardConnected}`}>
-        <div className={styles.syncIcon}>
-          <Cloud size={20} strokeWidth={1.6} />
+function CloudSyncCard() {
+  const { settings, update } = useSettings();
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .authStatus()
+      .then(setAuth)
+      .catch(() => setAuth(null));
+  }, []);
+
+  const refreshAuth = () => {
+    api
+      .authStatus()
+      .then(setAuth)
+      .catch(() => setAuth(null));
+  };
+
+  const onSignIn = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await api.signInWithGoogle();
+      setAuth(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      refreshAuth();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSignOut = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.signOut();
+      refreshAuth();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!settings) return null;
+
+  const credsConfigured = !!(
+    settings.firebaseClientId.trim() &&
+    settings.firebaseClientSecret.trim() &&
+    settings.firebaseApiKey.trim()
+  );
+  const signedIn = auth?.signedIn ?? false;
+
+  return (
+    <div
+      className={`${styles.syncCard} ${signedIn ? styles.syncCardConnected : ""}`}
+    >
+      <div className={styles.syncHeader}>
+        <div
+          className={
+            signedIn
+              ? styles.syncIcon
+              : `${styles.syncIcon} ${styles.syncIconMuted}`
+          }
+        >
+          {signedIn ? (
+            <Cloud size={20} strokeWidth={1.6} />
+          ) : (
+            <CloudOff size={20} strokeWidth={1.6} />
+          )}
         </div>
         <div className={styles.syncBody}>
           <div className={styles.syncTitle}>
-            已连接 · {sync.account ?? "Google Drive"}
+            {signedIn ? "已连接 Firebase" : "未连接"}
           </div>
           <div className={styles.syncMeta}>
-            上次同步: {sync.lastSyncAt ?? "刚刚"}
+            {signedIn
+              ? auth?.email ?? auth?.uid ?? ""
+              : "数据存进你自己的 Firebase 项目，多设备同账号互通。截图不上传。"}
           </div>
         </div>
         <div className={styles.syncActions}>
-          <button
-            type="button"
-            className={styles.smallBtn}
-            onClick={() => onChange({ ...sync, lastSyncAt: "刚刚" })}
-            title="立即同步"
-          >
-            <RefreshCw size={13} strokeWidth={1.85} />
-            立即同步
-          </button>
-          <button
-            type="button"
-            className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
-            onClick={() => onChange({ connected: false })}
-            title="断开连接"
-          >
-            <Unplug size={13} strokeWidth={1.85} />
-            断开
-          </button>
+          {signedIn ? (
+            <button
+              type="button"
+              className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
+              onClick={onSignOut}
+              disabled={busy}
+            >
+              <LogOut size={13} strokeWidth={1.85} />
+              退出
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.connectBtn}
+              onClick={onSignIn}
+              disabled={busy || !credsConfigured}
+            >
+              <LogIn size={13} strokeWidth={2} />
+              {busy ? "浏览器中…" : "用 Google 登录"}
+            </button>
+          )}
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className={styles.syncCard}>
-      <div className={`${styles.syncIcon} ${styles.syncIconMuted}`}>
-        <CloudOff size={20} strokeWidth={1.6} />
-      </div>
-      <div className={styles.syncBody}>
-        <div className={styles.syncTitle}>未连接</div>
-        <div className={styles.syncMeta}>
-          连接 Google Drive 后，可在多台设备之间同步采集数据。
+      <div className={styles.credForm}>
+        <label className={styles.credField}>
+          <span className={styles.credLabel}>Client ID</span>
+          <input
+            type="text"
+            className={styles.credInput}
+            value={settings.firebaseClientId}
+            onChange={(e) => update({ firebaseClientId: e.target.value })}
+            placeholder="xxxxxx.apps.googleusercontent.com"
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+        <label className={styles.credField}>
+          <span className={styles.credLabel}>Client Secret</span>
+          <input
+            type="password"
+            className={styles.credInput}
+            value={settings.firebaseClientSecret}
+            onChange={(e) =>
+              update({ firebaseClientSecret: e.target.value })
+            }
+            placeholder="GOCSPX-..."
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+        <label className={styles.credField}>
+          <span className={styles.credLabel}>Web API Key</span>
+          <input
+            type="text"
+            className={styles.credInput}
+            value={settings.firebaseApiKey}
+            onChange={(e) => update({ firebaseApiKey: e.target.value })}
+            placeholder="AIzaSy..."
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+        <div className={styles.credHint}>
+          需要在自己的 Firebase 项目里启用 Google 登录方法。
+          {!credsConfigured && signedIn === false ? " 三项都填好后才能点登录。" : ""}
         </div>
       </div>
-      <div className={styles.syncActions}>
-        <button
-          type="button"
-          className={styles.connectBtn}
-          onClick={() =>
-            onChange({
-              connected: true,
-              account: "demo@gmail.com",
-              lastSyncAt: "刚刚",
-            })
-          }
-        >
-          <Cloud size={13} strokeWidth={2} />
-          连接 Google Drive
-        </button>
-      </div>
+
+      {error && <div className={styles.syncError}>{error}</div>}
     </div>
   );
 }

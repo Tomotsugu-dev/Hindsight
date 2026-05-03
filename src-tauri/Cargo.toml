@@ -37,6 +37,15 @@ sysinfo = "0.32"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
+# Phase 2 - 云同步认证
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+keyring = "3"
+aes-gcm = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+urlencoding = "2"
+open = "5"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi"] }
 

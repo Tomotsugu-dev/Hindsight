@@ -27,6 +27,10 @@ pub struct Settings {
     pub auto_start: bool,
     pub show_window_on_auto_start: bool,
     pub retention_days: u32,
+    /// 用户自带的 Firebase 项目凭证（BYO 架构 —— 数据放进用户自己的 Firebase）
+    pub firebase_client_id: String,
+    pub firebase_client_secret: String,
+    pub firebase_api_key: String,
 }
 
 impl Default for Settings {
@@ -40,6 +44,9 @@ impl Default for Settings {
             auto_start: false,
             show_window_on_auto_start: false,
             retention_days: 7,
+            firebase_client_id: String::new(),
+            firebase_client_secret: String::new(),
+            firebase_api_key: String::new(),
         }
     }
 }
@@ -55,6 +62,9 @@ pub struct SettingsPatch {
     pub auto_start: Option<bool>,
     pub show_window_on_auto_start: Option<bool>,
     pub retention_days: Option<u32>,
+    pub firebase_client_id: Option<String>,
+    pub firebase_client_secret: Option<String>,
+    pub firebase_api_key: Option<String>,
 }
 
 pub async fn load(pool: &DbPool) -> Result<Settings> {
@@ -124,5 +134,17 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .retention_days
             .map(|v| v.clamp(1, 365))
             .unwrap_or(current.retention_days),
+        firebase_client_id: patch
+            .firebase_client_id
+            .map(|v| v.trim().to_string())
+            .unwrap_or(current.firebase_client_id),
+        firebase_client_secret: patch
+            .firebase_client_secret
+            .map(|v| v.trim().to_string())
+            .unwrap_or(current.firebase_client_secret),
+        firebase_api_key: patch
+            .firebase_api_key
+            .map(|v| v.trim().to_string())
+            .unwrap_or(current.firebase_api_key),
     }
 }

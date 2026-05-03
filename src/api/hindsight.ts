@@ -82,6 +82,10 @@ export interface Settings {
   autoStart: boolean;
   showWindowOnAutoStart: boolean;
   retentionDays: number;
+  /** 用户自带 Firebase 项目凭证（BYO 架构） */
+  firebaseClientId: string;
+  firebaseClientSecret: string;
+  firebaseApiKey: string;
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -101,6 +105,14 @@ export interface DeviceRow {
   os: string | null;
   lastSeenAt: string | null;
   isSelf: boolean;
+}
+
+export interface AuthState {
+  signedIn: boolean;
+  uid: string | null;
+  email: string | null;
+  /** 同步配置（client id / secret / api key 三件套）是否齐全 */
+  configured: boolean;
 }
 
 export const api = {
@@ -148,4 +160,7 @@ export const api = {
     color?: string,
     icon?: string,
   ) => invoke<DeviceRow>("update_self_device", { name, color, icon }),
+  authStatus: () => invoke<AuthState>("auth_status"),
+  signInWithGoogle: () => invoke<AuthState>("sign_in_with_google"),
+  signOut: () => invoke<void>("sign_out"),
 };

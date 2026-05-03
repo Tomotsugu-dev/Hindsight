@@ -1,4 +1,8 @@
-import { Cloud, Pause } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Cloud, CloudOff, Pause } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ROUTES } from "../../config/nav";
+import { api, type AuthState } from "../../api/hindsight";
 import styles from "./StatusFooter.module.css";
 
 type CaptureStatus = "ok" | "idle" | "error";
@@ -6,7 +10,6 @@ type CaptureStatus = "ok" | "idle" | "error";
 interface StatusFooterProps {
   captureStatus?: CaptureStatus;
   todayCount?: number;
-  syncLabel?: string;
   onToggleCapture?: () => void;
 }
 
@@ -19,9 +22,32 @@ const CAPTURE_TEXT: Record<CaptureStatus, string> = {
 export function StatusFooter({
   captureStatus = "ok",
   todayCount = 0,
-  syncLabel = "未登录",
   onToggleCapture,
 }: StatusFooterProps) {
+  const navigate = useNavigate();
+  const [auth, setAuth] = useState<AuthState | null>(null);
+
+  useEffect(() => {
+    const fetch = () => {
+      api
+        .authStatus()
+        .then(setAuth)
+        .catch(() => {});
+    };
+    fetch();
+    // 周期性刷新；窗口重新聚焦时也立刻刷一次（登录回到 app 后能秒变色）
+    const interval = window.setInterval(fetch, 60_000);
+    const onFocus = () => fetch();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  const signedIn = auth?.signedIn ?? false;
+  const syncLabel = signedIn ? auth?.email ?? "已连接" : "未登录";
+
   return (
     <div className={styles.footer}>
       <button
@@ -62,9 +88,29 @@ export function StatusFooter({
         </span>
       </button>
 
-      <button className={styles.row} type="button">
-        <Cloud size={14} strokeWidth={1.75} className={styles.cloud} />
-        <span className={styles.text}>{syncLabel}</span>
+      <button
+        className={styles.row}
+        type="button"
+        onClick={() => navigate(ROUTES.devices)}
+        aria-label="管理设备与云同步"
+        title="设备 / 云同步"
+      >
+        {signedIn ? (
+          <Cloud
+            size={14}
+            strokeWidth={1.75}
+            className={`${styles.cloud} ${styles.cloudOn}`}
+          />
+        ) : (
+          <CloudOff
+            size={14}
+            strokeWidth={1.75}
+            className={styles.cloud}
+          />
+        )}
+        <span className={`${styles.text} ${signedIn ? styles.textOn : ""}`}>
+          {syncLabel}
+        </span>
       </button>
     </div>
   );

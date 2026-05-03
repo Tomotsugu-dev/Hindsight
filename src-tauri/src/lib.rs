@@ -6,6 +6,7 @@ mod error;
 mod icons;
 mod repo;
 mod storage;
+mod sync;
 
 use std::sync::Arc;
 
@@ -130,6 +131,9 @@ pub fn run() {
             commands::storage::set_data_root,
             commands::devices::list_devices,
             commands::devices::update_self_device,
+            commands::auth::auth_status,
+            commands::auth::sign_in_with_google,
+            commands::auth::sign_out,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
