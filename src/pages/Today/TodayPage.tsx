@@ -1,15 +1,21 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
+import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
-import { HourlyChart } from "./HourlyChart";
+import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
-import { MOCK_WORK_HOURS } from "./mockData";
 import styles from "./TodayPage.module.css";
 
 const SWIPE_DURATION = 420;
+
+function parseHM(s: string): number {
+  const [h, m] = s.split(":").map((p) => parseInt(p, 10));
+  if (Number.isNaN(h)) return 0;
+  return h + (Number.isNaN(m) ? 0 : m / 60);
+}
 
 function fmtHM(min: number): string {
   const h = Math.floor(min / 60);
@@ -39,8 +45,18 @@ export default function TodayPage() {
   const [offset, setOffset] = useState(0);
   const { get: getDay } = useDayCache(offset);
   const { categories, getCategory } = useCategories();
+  const { settings } = useSettings();
 
   const { hours, apps } = useMemo(() => getDay(offset), [getDay, offset]);
+
+  const workRanges: WorkRange[] | null = useMemo(() => {
+    if (!settings?.workHoursEnabled) return null;
+    if (!settings.workRanges.length) return null;
+    return settings.workRanges.map((r) => ({
+      startHour: parseHM(r.start),
+      endHour: parseHM(r.end),
+    }));
+  }, [settings]);
 
   const totalMinutes = useMemo(
     () =>
@@ -173,22 +189,22 @@ export default function TodayPage() {
             <div className={styles.slide}>
               <HourlyChart
                 hours={getDay(offset - 1).hours}
-                workHours={MOCK_WORK_HOURS}
+                workHours={workRanges}
               />
             </div>
             <div className={styles.slide}>
-              <HourlyChart hours={hours} workHours={MOCK_WORK_HOURS} />
+              <HourlyChart hours={hours} workHours={workRanges} />
             </div>
             <div className={styles.slide}>
               <HourlyChart
                 hours={getDay(offset + 1).hours}
-                workHours={MOCK_WORK_HOURS}
+                workHours={workRanges}
               />
             </div>
           </div>
         </div>
 
-        <Legend hasWorkHours={!!MOCK_WORK_HOURS && MOCK_WORK_HOURS.length > 0} />
+        <Legend hasWorkHours={!!workRanges} />
       </section>
 
       <div className={styles.ranks}>

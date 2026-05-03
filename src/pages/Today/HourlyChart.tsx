@@ -1,6 +1,11 @@
 import { useCategories } from "../../state/categories";
-import type { HourSlot, WorkRange } from "./mockData";
+import type { HourSlot } from "../../api/hindsight";
 import styles from "./HourlyChart.module.css";
+
+export interface WorkRange {
+  startHour: number;
+  endHour: number;
+}
 
 interface HourlyChartProps {
   hours: HourSlot[];

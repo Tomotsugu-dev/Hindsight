@@ -8,56 +8,56 @@ import {
   type ReactNode,
 } from "react";
 
-/** 单台设备 */
 export interface Device {
   id: string;
   name: string;
-  /** 是否本机 */
+  color: string;
+  icon: string;
   current: boolean;
 }
 
-/** 选中目标：设备 id 或 "all" 表示所有设备 */
 export type DeviceFilterValue = string | "all";
 
 interface DeviceFilterState {
-  /** 所有已知设备（含本机） */
   devices: Device[];
-  /** 当前筛选选中 */
   selected: DeviceFilterValue;
-  /** 切换选中 */
   setSelected: (id: DeviceFilterValue) => void;
-  /** 给本机改名 */
   renameSelf: (newName: string) => void;
+  recolorSelf: (color: string) => void;
+  reiconSelf: (icon: string) => void;
 }
 
 const DeviceFilterContext = createContext<DeviceFilterState | null>(null);
 
-/** 占位数据 — Phase C 后端上线后从 invoke("list_devices") 拿 */
 const MOCK_DEVICES: Device[] = [
-  { id: "self", name: "我的电脑", current: true },
-  // { id: "laptop", name: "工作笔记本", current: false },  // 取消注释可演示多设备
+  { id: "self", name: "我的电脑", color: "#60a5fa", icon: "Monitor", current: true },
 ];
 
 const SELF_NAME_KEY = "hindsight.device.selfName";
+const SELF_COLOR_KEY = "hindsight.device.selfColor";
+const SELF_ICON_KEY = "hindsight.device.selfIcon";
 const SELECTED_KEY = "hindsight.device.selected";
 
 export function DeviceFilterProvider({ children }: { children: ReactNode }) {
-  // 本机名 — 持久化到 localStorage（Phase C 改成 tauri-plugin-store）
-  const [selfName, setSelfName] = useState<string>(() => {
-    return localStorage.getItem(SELF_NAME_KEY) ?? "我的电脑";
-  });
+  const [selfName, setSelfName] = useState<string>(
+    () => localStorage.getItem(SELF_NAME_KEY) ?? "我的电脑",
+  );
+  const [selfColor, setSelfColor] = useState<string>(
+    () => localStorage.getItem(SELF_COLOR_KEY) ?? "#60a5fa",
+  );
+  const [selfIcon, setSelfIcon] = useState<string>(
+    () => localStorage.getItem(SELF_ICON_KEY) ?? "Monitor",
+  );
 
-  // 当前筛选 — 持久化
-  const [selected, setSelectedState] = useState<DeviceFilterValue>(() => {
-    return (localStorage.getItem(SELECTED_KEY) as DeviceFilterValue) ?? "self";
-  });
+  const [selected, setSelectedState] = useState<DeviceFilterValue>(
+    () => (localStorage.getItem(SELECTED_KEY) as DeviceFilterValue) ?? "self",
+  );
 
-  // 把当前 selfName 注入 mock 列表
   const devices = useMemo<Device[]>(() => {
     return MOCK_DEVICES.map((d) =>
-      d.current ? { ...d, name: selfName } : d,
+      d.current ? { ...d, name: selfName, color: selfColor, icon: selfIcon } : d,
     );
-  }, [selfName]);
+  }, [selfName, selfColor, selfIcon]);
 
   const setSelected = useCallback((id: DeviceFilterValue) => {
     setSelectedState(id);
@@ -71,7 +71,16 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(SELF_NAME_KEY, trimmed);
   }, []);
 
-  // selected 失效时（设备被移除）兜底回退到 self
+  const recolorSelf = useCallback((color: string) => {
+    setSelfColor(color);
+    localStorage.setItem(SELF_COLOR_KEY, color);
+  }, []);
+
+  const reiconSelf = useCallback((icon: string) => {
+    setSelfIcon(icon);
+    localStorage.setItem(SELF_ICON_KEY, icon);
+  }, []);
+
   useEffect(() => {
     if (selected === "all") return;
     if (!devices.some((d) => d.id === selected)) {
@@ -84,6 +93,8 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
     selected,
     setSelected,
     renameSelf,
+    recolorSelf,
+    reiconSelf,
   };
 
   return (

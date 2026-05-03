@@ -1,3 +1,4 @@
+pub mod screenshot;
 pub mod service;
 pub mod window;
 

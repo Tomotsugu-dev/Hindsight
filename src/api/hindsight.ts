@@ -68,6 +68,31 @@ export interface CaptureStatus {
   lastError: string | null;
 }
 
+export interface TimeRange {
+  start: string;
+  end: string;
+}
+
+export interface Settings {
+  captureEnabled: boolean;
+  captureIntervalSeconds: number;
+  screenshotPath: string;
+  workHoursEnabled: boolean;
+  workRanges: TimeRange[];
+  autoStart: boolean;
+  showWindowOnAutoStart: boolean;
+  retentionDays: number;
+}
+
+export type SettingsPatch = Partial<Settings>;
+
+export interface StorageInfo {
+  dbBytes: number;
+  screenshotsBytes: number;
+  dbPath: string;
+  screenshotsPath: string;
+}
+
 export const api = {
   getDayHours: (dayOffset: number) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset }),
@@ -98,4 +123,8 @@ export const api = {
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),
   getAppIcon: (processName: string) =>
     invoke<string | null>("get_app_icon", { processName }),
+  getSettings: () => invoke<Settings>("get_settings"),
+  updateSettings: (patch: SettingsPatch) =>
+    invoke<Settings>("update_settings", { patch }),
+  getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
 };

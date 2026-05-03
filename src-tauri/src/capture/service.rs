@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use chrono::Local;
+use chrono::{Local, Timelike};
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::capture::window;
+use crate::capture::{screenshot, window};
 use crate::error::Result;
+use crate::repo::settings::TimeRange;
 use crate::repo::{activities, process_paths};
 use crate::storage::DbPool;
 
@@ -21,12 +22,41 @@ pub struct CaptureStatus {
     pub last_error: Option<String>,
 }
 
+#[derive(Default, Clone)]
+struct WorkHoursState {
+    enabled: bool,
+    ranges: Vec<TimeRange>,
+}
+
+#[derive(Clone)]
+struct ScreenshotConfig {
+    enabled: bool,
+    dir: String,
+    target_width: u32,
+    target_height: u32,
+    jpeg_quality: u8,
+}
+
+impl Default for ScreenshotConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            dir: String::new(),
+            target_width: 1280,
+            target_height: 720,
+            jpeg_quality: 80,
+        }
+    }
+}
+
 struct Inner {
     pool: DbPool,
     interval_secs: Mutex<u32>,
     handle: Mutex<Option<JoinHandle<()>>>,
     last_capture_at: Mutex<Option<String>>,
     last_error: Mutex<Option<String>>,
+    work_hours: Mutex<WorkHoursState>,
+    screenshot: Mutex<ScreenshotConfig>,
 }
 
 pub struct CaptureService {
@@ -42,8 +72,28 @@ impl CaptureService {
                 handle: Mutex::new(None),
                 last_capture_at: Mutex::new(None),
                 last_error: Mutex::new(None),
+                work_hours: Mutex::new(WorkHoursState::default()),
+                screenshot: Mutex::new(ScreenshotConfig::default()),
             }),
         }
+    }
+
+    pub async fn set_screenshot_config(
+        &self,
+        enabled: bool,
+        dir: String,
+        target_width: u32,
+        target_height: u32,
+        jpeg_quality: u8,
+    ) {
+        let mut cfg = self.inner.screenshot.lock().await;
+        *cfg = ScreenshotConfig {
+            enabled,
+            dir,
+            target_width,
+            target_height,
+            jpeg_quality,
+        };
     }
 
     pub async fn start(&self) {
@@ -76,6 +126,16 @@ impl CaptureService {
         self.inner.handle.lock().await.is_some()
     }
 
+    pub async fn set_interval(&self, secs: u32) {
+        let secs = secs.clamp(1, 600);
+        *self.inner.interval_secs.lock().await = secs;
+    }
+
+    pub async fn set_work_hours(&self, enabled: bool, ranges: Vec<TimeRange>) {
+        let mut state = self.inner.work_hours.lock().await;
+        *state = WorkHoursState { enabled, ranges };
+    }
+
     pub async fn status(&self) -> CaptureStatus {
         let today_count = activities::today_count(&self.inner.pool)
             .await
@@ -90,6 +150,27 @@ impl CaptureService {
 }
 
 async fn tick(inner: &Inner) -> Result<()> {
+    {
+        let wh = inner.work_hours.lock().await;
+        if wh.enabled && !wh.ranges.is_empty() {
+            let now = Local::now();
+            let now_minutes = now.hour() as i32 * 60 + now.minute() as i32;
+            let in_range = wh.ranges.iter().any(|r| {
+                let start = parse_hm(&r.start);
+                let end = parse_hm(&r.end);
+                if start <= end {
+                    now_minutes >= start && now_minutes < end
+                } else {
+                    now_minutes >= start || now_minutes < end
+                }
+            });
+            if !in_range {
+                log::debug!("跳过本次采集：当前不在工作时段");
+                return Ok(());
+            }
+        }
+    }
+
     let info = match window::current_window() {
         Ok(i) => i,
         Err(e) => {
@@ -114,7 +195,8 @@ async fn tick(inner: &Inner) -> Result<()> {
         let id = latest.unwrap().id;
         activities::extend(&inner.pool, id, now).await?;
     } else {
-        activities::insert_new(&inner.pool, &info, now).await?;
+        let shot = take_screenshot(inner).await;
+        activities::insert_new(&inner.pool, &info, now, shot).await?;
     }
 
     if let Some(path) = info.app_path.as_ref() {
@@ -129,4 +211,33 @@ async fn tick(inner: &Inner) -> Result<()> {
     *last_err = None;
 
     Ok(())
+}
+
+fn parse_hm(s: &str) -> i32 {
+    let mut parts = s.split(':');
+    let h: i32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let m: i32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    h * 60 + m
+}
+
+async fn take_screenshot(inner: &Inner) -> Option<String> {
+    let cfg = inner.screenshot.lock().await.clone();
+    if !cfg.enabled || cfg.dir.trim().is_empty() {
+        return None;
+    }
+    let path = std::path::PathBuf::from(&cfg.dir);
+    match screenshot::capture_active_window(
+        path,
+        cfg.target_width,
+        cfg.target_height,
+        cfg.jpeg_quality,
+    )
+    .await
+    {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("截图失败: {e}");
+            None
+        }
+    }
 }

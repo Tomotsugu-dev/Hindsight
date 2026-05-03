@@ -78,6 +78,14 @@ const MIGRATIONS: &[&str] = &[
     UPDATE categories SET icon = 'Gamepad2'       WHERE id = 'fun';
     UPDATE categories SET icon = 'MoreHorizontal' WHERE id = 'other';
     "#,
+    // v7：用户设置（单行 JSON 表）
+    r#"
+    CREATE TABLE IF NOT EXISTS settings_store (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        data TEXT NOT NULL
+    );
+    INSERT OR IGNORE INTO settings_store(id, data) VALUES (1, '{}');
+    "#,
 ];
 
 pub async fn run(pool: &DbPool) -> Result<()> {

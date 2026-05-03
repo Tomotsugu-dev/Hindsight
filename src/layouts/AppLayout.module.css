@@ -61,6 +61,33 @@
   display: none;
 }
 
+/* 上下边缘的高斯模糊条带：滚动时文字穿过这层会被柔化 */
+.shell::before,
+.shell::after {
+  content: "";
+  position: absolute;
+  left: var(--sb-current-width);
+  right: 0;
+  height: 32px;
+  z-index: 3;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: left 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shell::before {
+  top: 0;
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+
+.shell::after {
+  bottom: 0;
+  mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+}
+
 /* 侧栏宿主：宽度也跟着同一个变量走 */
 .sidebarHost {
   position: absolute;

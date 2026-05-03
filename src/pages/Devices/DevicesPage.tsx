@@ -1,19 +1,21 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Cloud, CloudOff, Monitor, Pencil, RefreshCw, Unplug, X } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Cloud, CloudOff, Pencil, RefreshCw, Unplug } from "lucide-react";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
+import { useCaptureStatus } from "../../hooks/useCaptureStatus";
+import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
+import { resolveCategoryIcon } from "../../config/categoryIcons";
 import styles from "./DevicesPage.module.css";
 
-/** 同步状态 — Phase A 用本地 state，Phase C 接到后端 */
 interface SyncState {
   connected: boolean;
   account?: string;
-  lastSyncAt?: string; // 人类可读
+  lastSyncAt?: string;
 }
 
 const MOCK_INITIAL_SYNC: SyncState = { connected: false };
 
 export default function DevicesPage() {
-  const { devices, renameSelf } = useDeviceFilter();
+  const { devices, renameSelf, recolorSelf, reiconSelf } = useDeviceFilter();
   const self = devices.find((d) => d.current);
   const others = devices.filter((d) => !d.current);
 
@@ -23,16 +25,21 @@ export default function DevicesPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>设备</h1>
-        <p className={styles.meta}>
-          管理本机名称，与其他设备的同步状态。
-        </p>
+        <p className={styles.meta}>管理本机名称，与其他设备的同步状态。</p>
       </header>
 
       <SyncCard sync={sync} onChange={setSync} />
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>本机</h2>
-        {self && <SelfCard device={self} onRename={renameSelf} />}
+        {self && (
+          <SelfRow
+            device={self}
+            onRename={renameSelf}
+            onRecolor={recolorSelf}
+            onReicon={reiconSelf}
+          />
+        )}
       </section>
 
       <section className={styles.section}>
@@ -44,25 +51,20 @@ export default function DevicesPage() {
               : "未连接同步。连接后可在多台设备之间共享数据。"}
           </div>
         ) : (
-          <div className={styles.cardList}>
-            {others.map((d) => (
-              <OtherCard key={d.id} device={d} />
-            ))}
-          </div>
+          others.map((d) => <OtherRow key={d.id} device={d} />)
         )}
       </section>
     </div>
   );
 }
 
-/* —— 同步状态卡 —— */
-
-interface SyncCardProps {
+function SyncCard({
+  sync,
+  onChange,
+}: {
   sync: SyncState;
   onChange: (s: SyncState) => void;
-}
-
-function SyncCard({ sync, onChange }: SyncCardProps) {
+}) {
   if (sync.connected) {
     return (
       <div className={`${styles.syncCard} ${styles.syncCardConnected}`}>
@@ -132,17 +134,23 @@ function SyncCard({ sync, onChange }: SyncCardProps) {
   );
 }
 
-/* —— 本机卡 —— */
-
-interface SelfCardProps {
+function SelfRow({
+  device,
+  onRename,
+  onRecolor,
+  onReicon,
+}: {
   device: Device;
   onRename: (name: string) => void;
-}
-
-function SelfCard({ device, onRename }: SelfCardProps) {
+  onRecolor: (color: string) => void;
+  onReicon: (icon: string) => void;
+}) {
+  const { status } = useCaptureStatus();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(device.name);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const Icon = resolveCategoryIcon(device.icon);
 
   useEffect(() => {
     if (editing) {
@@ -155,7 +163,7 @@ function SelfCard({ device, onRename }: SelfCardProps) {
     if (!editing) setDraft(device.name);
   }, [device.name, editing]);
 
-  const commit = () => {
+  const commitName = () => {
     const trimmed = draft.trim();
     if (trimmed && trimmed !== device.name) {
       onRename(trimmed);
@@ -165,86 +173,102 @@ function SelfCard({ device, onRename }: SelfCardProps) {
     setEditing(false);
   };
 
-  const cancel = () => {
+  const cancelName = () => {
     setDraft(device.name);
     setEditing(false);
   };
 
+  const styleVar = { "--cat-color": device.color } as CSSProperties;
+  const lastSeen = status?.lastCaptureAt ? "刚刚" : "—";
+  const todayCount = status?.todayCount ?? 0;
+
   return (
-    <div className={styles.card}>
-      <div className={styles.iconBox}>
-        <Monitor size={20} strokeWidth={1.5} />
+    <div className={styles.deviceRow} style={styleVar}>
+      <div className={styles.deviceIconWrap}>
+        <button
+          type="button"
+          className={styles.deviceIconBtn}
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-label="改外观"
+          title="改颜色和图标"
+        >
+          <Icon size={28} strokeWidth={1.85} />
+        </button>
+        {pickerOpen && (
+          <AppearancePicker
+            color={device.color}
+            icon={device.icon}
+            onColorChange={onRecolor}
+            onIconChange={(i) => {
+              onReicon(i);
+              setPickerOpen(false);
+            }}
+            onDismiss={() => setPickerOpen(false)}
+          />
+        )}
       </div>
 
-      <div className={styles.body}>
-        {editing ? (
-          <div className={styles.editRow}>
+      <div className={styles.deviceBody}>
+        <div className={styles.deviceNameRow}>
+          {editing ? (
             <input
               ref={inputRef}
-              className={styles.input}
+              className={styles.deviceNameInput}
               value={draft}
               maxLength={32}
               onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitName}
               onKeyDown={(e) => {
-                if (e.key === "Enter") commit();
-                if (e.key === "Escape") cancel();
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") cancelName();
               }}
-              onBlur={commit}
             />
-            <button
-              type="button"
-              className={`${styles.iconBtn} ${styles.iconBtnPrimary}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={commit}
-              aria-label="保存"
+          ) : (
+            <span
+              className={styles.deviceName}
+              onDoubleClick={() => setEditing(true)}
+              title="双击改名"
             >
-              <Check size={14} strokeWidth={2.25} />
-            </button>
-            <button
-              type="button"
-              className={styles.iconBtn}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={cancel}
-              aria-label="取消"
-            >
-              <X size={14} strokeWidth={2.25} />
-            </button>
-          </div>
-        ) : (
-          <div className={styles.nameRow}>
-            <span className={styles.name}>{device.name}</span>
-            <span className={styles.tag}>本机</span>
-            <button
-              type="button"
-              className={styles.renameBtn}
-              onClick={() => setEditing(true)}
-              aria-label="改名"
-              title="改名"
-            >
-              <Pencil size={12} strokeWidth={1.85} />
-              改名
-            </button>
-          </div>
-        )}
-        <div className={styles.metaRow}>
-          <span>上次活动: 刚刚</span>
-          <span className={styles.dot}>·</span>
-          <span>今日采集 0 条</span>
+              {device.name}
+            </span>
+          )}
+          <span className={styles.tag}>本机</span>
         </div>
+        <div className={styles.metaRow}>
+          <span>上次活动: {lastSeen}</span>
+          <span className={styles.dotSep}>·</span>
+          <span>今日采集 {todayCount} 条</span>
+        </div>
+      </div>
+
+      <div className={styles.deviceActions}>
+        <button
+          type="button"
+          className={styles.actionBtn}
+          onClick={() => setEditing(true)}
+          aria-label="改名"
+          title="改名"
+        >
+          <Pencil size={14} strokeWidth={1.85} />
+        </button>
       </div>
     </div>
   );
 }
 
-function OtherCard({ device }: { device: Device }) {
+function OtherRow({ device }: { device: Device }) {
+  const Icon = resolveCategoryIcon(device.icon);
+  const styleVar = { "--cat-color": device.color } as CSSProperties;
   return (
-    <div className={styles.card}>
-      <div className={styles.iconBox}>
-        <Monitor size={20} strokeWidth={1.5} />
+    <div className={styles.deviceRow} style={styleVar}>
+      <div className={styles.deviceIconWrap}>
+        <div className={styles.deviceIconBtn} aria-hidden>
+          <Icon size={28} strokeWidth={1.85} />
+        </div>
       </div>
-      <div className={styles.body}>
-        <div className={styles.nameRow}>
-          <span className={styles.name}>{device.name}</span>
+      <div className={styles.deviceBody}>
+        <div className={styles.deviceNameRow}>
+          <span className={styles.deviceName}>{device.name}</span>
         </div>
         <div className={styles.metaRow}>
           <span>上次同步: —</span>

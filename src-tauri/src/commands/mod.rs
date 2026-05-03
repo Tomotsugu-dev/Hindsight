@@ -2,3 +2,5 @@ pub mod capture;
 pub mod categories;
 pub mod data;
 pub mod icons;
+pub mod settings;
+pub mod storage;

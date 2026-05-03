@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, TimeZone, Timelike};
+use chrono::{DateTime, Duration, Local, TimeZone, Timelike};
 
 use crate::capture::WindowInfo;
 use crate::error::Result;
@@ -49,6 +49,7 @@ pub async fn insert_new(
     pool: &DbPool,
     info: &WindowInfo,
     captured_at: DateTime<Local>,
+    screenshot_path: Option<String>,
 ) -> Result<i64> {
     let info = info.clone();
     let started = captured_at.to_rfc3339();
@@ -63,8 +64,8 @@ pub async fn insert_new(
                 "INSERT INTO activities(
                     started_at, ended_at, duration_secs,
                     local_date, local_hour,
-                    process_name, window_title, category_id
-                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other')",
+                    process_name, window_title, category_id, screenshot_path
+                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other', ?)",
                 rusqlite::params![
                     started,
                     ended,
@@ -72,6 +73,7 @@ pub async fn insert_new(
                     local_hour,
                     info.app_name,
                     info.title,
+                    screenshot_path,
                 ],
             )
             .map_err(tokio_rusqlite::Error::Rusqlite)?;
@@ -108,6 +110,26 @@ pub async fn extend(pool: &DbPool, id: i64, captured_at: DateTime<Local>) -> Res
         })
         .await?;
     Ok(())
+}
+
+pub async fn delete_older_than(pool: &DbPool, retention_days: u32) -> Result<u64> {
+    let days = retention_days.max(1) as i64;
+    let cutoff = (Local::now() - Duration::days(days))
+        .format("%Y-%m-%d")
+        .to_string();
+    let affected = pool
+        .0
+        .call(move |conn| {
+            let n = conn
+                .execute(
+                    "DELETE FROM activities WHERE local_date < ?",
+                    rusqlite::params![cutoff],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(n as u64)
+        })
+        .await?;
+    Ok(affected)
 }
 
 pub async fn today_count(pool: &DbPool) -> Result<u32> {

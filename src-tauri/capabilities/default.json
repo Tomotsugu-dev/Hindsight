@@ -6,6 +6,10 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "dialog:allow-open",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
     "core:window:allow-minimize",
     "core:window:allow-close",
     "core:window:allow-start-dragging"

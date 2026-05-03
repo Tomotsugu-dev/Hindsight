@@ -8,10 +8,11 @@ mod storage;
 use std::sync::Arc;
 
 use capture::CaptureService;
+use repo::{activities, settings};
 use storage::{db_path, DbPool};
 use tauri::Manager;
 
-const DEFAULT_CAPTURE_INTERVAL_SECS: u32 = 10;
+const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +20,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
@@ -30,11 +36,27 @@ pub fn run() {
                     .await
                     .expect("执行数据库迁移");
 
+                let cfg = settings::load(&pool).await.expect("读取设置");
+
                 let svc = Arc::new(CaptureService::new(
                     pool.clone(),
-                    DEFAULT_CAPTURE_INTERVAL_SECS,
+                    cfg.capture_interval_seconds,
                 ));
-                svc.start().await;
+                svc.set_work_hours(cfg.work_hours_enabled, cfg.work_ranges.clone())
+                    .await;
+                svc.set_screenshot_config(
+                    cfg.capture_enabled,
+                    cfg.screenshot_path.clone(),
+                    1280,
+                    720,
+                    80,
+                )
+                .await;
+                if cfg.capture_enabled {
+                    svc.start().await;
+                }
+
+                spawn_cleanup_task(pool.clone());
 
                 handle.manage(pool);
                 handle.manage(svc);
@@ -59,7 +81,28 @@ pub fn run() {
             commands::categories::unassign_app,
             commands::categories::list_unclassified_apps,
             commands::icons::get_app_icon,
+            commands::settings::get_settings,
+            commands::settings::update_settings,
+            commands::storage::get_storage_info,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
+}
+
+fn spawn_cleanup_task(pool: DbPool) {
+    tokio::spawn(async move {
+        loop {
+            match settings::load(&pool).await {
+                Ok(cfg) => {
+                    match activities::delete_older_than(&pool, cfg.retention_days).await {
+                        Ok(n) if n > 0 => log::info!("清理了 {n} 条过期记录"),
+                        Ok(_) => {}
+                        Err(e) => log::warn!("清理过期记录失败: {e}"),
+                    }
+                }
+                Err(e) => log::warn!("清理任务读取设置失败: {e}"),
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(CLEANUP_INTERVAL_SECS)).await;
+        }
+    });
 }

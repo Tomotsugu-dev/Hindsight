@@ -27,7 +27,6 @@
   margin: 0;
 }
 
-/* —— 同步状态卡（顶部） —— */
 .syncCard {
   display: flex;
   align-items: center;
@@ -43,7 +42,6 @@
 }
 
 .syncCardConnected {
-  /* 连接成功时多一点强调 */
   background: linear-gradient(180deg,
     color-mix(in oklab, var(--color-accent) 5%, #ffffff),
     #fbfbfd
@@ -152,7 +150,6 @@
   transform: scale(0.97);
 }
 
-/* —— 设备分区 —— */
 .section {
   display: flex;
   flex-direction: column;
@@ -168,61 +165,102 @@
   padding: 0 4px;
 }
 
-/* —— 设备卡 —— */
-.card {
+.deviceRow {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 14px 18px;
-  background: #fbfbfd;
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
+  padding: 16px 18px 16px 28px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 6px 16px rgba(20, 20, 40, 0.04);
 }
 
-.cardList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.deviceRow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 0 3px 3px 0;
+  background: var(--cat-color);
 }
 
-.iconBox {
-  width: 40px;
-  height: 40px;
+.deviceIconWrap {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
-  color: var(--color-accent);
-  border-radius: 10px;
   flex-shrink: 0;
 }
 
-.body {
+.deviceIconBtn {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--cat-color) 14%, transparent);
+  color: var(--cat-color);
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.deviceIconBtn:hover {
+  background: color-mix(in oklab, var(--cat-color) 22%, transparent);
+  transform: scale(1.04);
+}
+
+.deviceIconBtn:active {
+  transform: scale(0.97);
+}
+
+.deviceBody {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
-.nameRow {
+.deviceNameRow {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.name {
+.deviceName {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-strong);
   letter-spacing: -0.005em;
+  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.deviceNameInput {
+  flex: 0 0 auto;
+  min-width: 120px;
+  max-width: 240px;
+  height: 28px;
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
 
 .tag {
@@ -230,32 +268,12 @@
   align-items: center;
   height: 18px;
   padding: 0 7px;
-  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
+  background: color-mix(in oklab, var(--cat-color) 18%, transparent);
+  color: var(--cat-color);
   font-size: 10px;
   font-weight: 600;
   border-radius: 4px;
   letter-spacing: 0.02em;
-}
-
-.renameBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out;
-}
-
-.renameBtn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text-strong);
 }
 
 .metaRow {
@@ -266,66 +284,41 @@
   color: var(--text-muted);
 }
 
-.dot {
+.dotSep {
   color: var(--text-faint);
 }
 
-/* —— 改名输入框 —— */
-.editRow {
-  display: flex;
+.deviceActions {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.input {
-  flex: 1;
-  height: 30px;
-  padding: 0 10px;
-  background: #ffffff;
-  border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-  border-radius: 7px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-strong);
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
-}
-
-.iconBtn {
-  width: 28px;
-  height: 28px;
+.actionBtn {
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.04);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--cat-color) 10%, transparent);
+  color: var(--cat-color);
+  border: none;
+  cursor: pointer;
   transition:
     background-color 160ms ease-out,
-    color 160ms ease-out,
     transform 100ms ease-out;
 }
 
-.iconBtn:hover {
-  background: rgba(0, 0, 0, 0.07);
-  color: var(--text-strong);
+.actionBtn:hover {
+  background: color-mix(in oklab, var(--cat-color) 18%, transparent);
 }
 
-.iconBtn:active {
-  transform: scale(0.92);
+.actionBtn:active {
+  transform: scale(0.94);
 }
 
-.iconBtnPrimary {
-  background: var(--color-accent);
-  color: #ffffff;
-}
-
-.iconBtnPrimary:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
-  color: #ffffff;
-}
-
-/* —— 空态 —— */
 .empty {
   padding: 18px 18px;
   background: #fbfbfd;
