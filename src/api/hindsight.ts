@@ -61,6 +61,21 @@ export interface UnclassifiedApp {
   lastSeenAt: string;
 }
 
+export interface AppGroupMember {
+  processName: string;
+  /// 该成员近 7 天累计时长（秒），按 process_name 聚合，跨设备求和
+  recentSecs: number;
+  /// 该成员最后一次被采集到时所在的设备 ID（用于按设备分列）
+  lastDeviceId: string | null;
+}
+
+export interface AppGroup {
+  id: string;
+  displayName: string;
+  categoryId: string | null;
+  members: AppGroupMember[];
+}
+
 export interface CaptureStatus {
   running: boolean;
   todayCount: number;
@@ -148,6 +163,15 @@ export const api = {
     invoke<void>("unassign_app", { processName }),
   listUnclassifiedApps: (daysBack?: number) =>
     invoke<UnclassifiedApp[]>("list_unclassified_apps", { daysBack }),
+  listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
+  mergeAppGroup: (processName: string, targetGroupId: string) =>
+    invoke<void>("merge_app_group", { processName, targetGroupId }),
+  unmergeAppGroup: (processName: string) =>
+    invoke<void>("unmerge_app_group", { processName }),
+  renameAppGroup: (groupId: string, displayName: string) =>
+    invoke<void>("rename_app_group", { groupId, displayName }),
+  assignAppGroupCategory: (groupId: string, categoryId: string | null) =>
+    invoke<void>("assign_app_group_category", { groupId, categoryId }),
   startCapture: () => invoke<void>("start_capture"),
   stopCapture: () => invoke<void>("stop_capture"),
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),

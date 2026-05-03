@@ -1,4 +1,5 @@
 pub mod activities;
+pub mod app_groups;
 pub mod app_icons;
 pub mod categories;
 pub mod devices;

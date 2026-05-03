@@ -151,6 +151,8 @@ enum DirtyKey {
     ProcessPaths,
     DeviceMeta,
     AppIcons,
+    AppGroups,
+    AppGroupMembers,
 }
 
 async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
@@ -248,6 +250,8 @@ fn group_outbox(rows: &[OutboxRow]) -> HashMap<DirtyKey, Vec<i64>> {
             "process_path" => DirtyKey::ProcessPaths,
             "device" => DirtyKey::DeviceMeta,
             "app_icon" => DirtyKey::AppIcons,
+            "app_group" => DirtyKey::AppGroups,
+            "app_group_member" => DirtyKey::AppGroupMembers,
             _ => {
                 log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
                 continue;
@@ -266,6 +270,8 @@ fn file_name_for(self_id: &str, key: &DirtyKey) -> String {
         DirtyKey::ProcessPaths => format!("device.{self_id}.process_paths.json"),
         DirtyKey::DeviceMeta => format!("device.{self_id}.meta.json"),
         DirtyKey::AppIcons => format!("device.{self_id}.icons.json"),
+        DirtyKey::AppGroups => format!("device.{self_id}.app_groups.json"),
+        DirtyKey::AppGroupMembers => format!("device.{self_id}.app_group_members.json"),
     }
 }
 
@@ -277,6 +283,8 @@ async fn build_content(pool: &DbPool, self_id: &str, key: &DirtyKey) -> Result<V
         DirtyKey::ProcessPaths => build_process_paths(pool).await,
         DirtyKey::DeviceMeta => build_device_meta(pool, self_id).await,
         DirtyKey::AppIcons => build_app_icons(pool).await,
+        DirtyKey::AppGroups => build_app_groups(pool).await,
+        DirtyKey::AppGroupMembers => build_app_group_members(pool).await,
     }
 }
 
@@ -444,6 +452,63 @@ async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
     Ok(serde_json::to_vec(&Value::Array(arr))?)
 }
 
+async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
+    let arr = pool
+        .0
+        .call(|conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, display_name, category_id, updated_at, deleted_at
+                     FROM app_groups ORDER BY id",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let rows = stmt
+                .query_map([], |r| {
+                    Ok(json!({
+                        "id":          r.get::<_, String>(0)?,
+                        "displayName": r.get::<_, String>(1)?,
+                        "categoryId":  r.get::<_, Option<String>>(2)?,
+                        "updatedAt":   r.get::<_, String>(3)?,
+                        "deletedAt":   r.get::<_, Option<String>>(4)?,
+                    }))
+                })
+                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(rows)
+        })
+        .await?;
+    Ok(serde_json::to_vec(&Value::Array(arr))?)
+}
+
+async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
+    let arr = pool
+        .0
+        .call(|conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT process_name, group_id, updated_at, deleted_at
+                     FROM app_group_members ORDER BY process_name",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            let rows = stmt
+                .query_map([], |r| {
+                    Ok(json!({
+                        "processName": r.get::<_, String>(0)?,
+                        "groupId":     r.get::<_, String>(1)?,
+                        "updatedAt":   r.get::<_, String>(2)?,
+                        "deletedAt":   r.get::<_, Option<String>>(3)?,
+                    }))
+                })
+                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(rows)
+        })
+        .await?;
+    Ok(serde_json::to_vec(&Value::Array(arr))?)
+}
+
 async fn build_device_meta(pool: &DbPool, self_id: &str) -> Result<Vec<u8>> {
     let self_id = self_id.to_string();
     let obj = pool
@@ -484,6 +549,8 @@ enum ParsedFile {
     ProcessPaths { device_id: String },
     DeviceMeta { device_id: String },
     AppIcons { device_id: String },
+    AppGroups { device_id: String },
+    AppGroupMembers { device_id: String },
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
@@ -509,6 +576,12 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
             device_id: uuid.to_string(),
         }),
         ["device", uuid, "icons", "json"] => Some(ParsedFile::AppIcons {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "app_groups", "json"] => Some(ParsedFile::AppGroups {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "app_group_members", "json"] => Some(ParsedFile::AppGroupMembers {
             device_id: uuid.to_string(),
         }),
         _ => None,
@@ -592,7 +665,9 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             | ParsedFile::Categories { device_id }
             | ParsedFile::AppCategories { device_id }
             | ParsedFile::ProcessPaths { device_id }
-            | ParsedFile::AppIcons { device_id } => device_id.as_str(),
+            | ParsedFile::AppIcons { device_id }
+            | ParsedFile::AppGroups { device_id }
+            | ParsedFile::AppGroupMembers { device_id } => device_id.as_str(),
             ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
         if device_id == self_id {
@@ -644,6 +719,12 @@ async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
             ParsedFile::AppIcons { device_id } => {
                 merge_app_icons(&inner.pool, &device_id, &body).await
+            }
+            ParsedFile::AppGroups { device_id } => {
+                merge_app_groups(&inner.pool, &device_id, &body).await
+            }
+            ParsedFile::AppGroupMembers { device_id } => {
+                merge_app_group_members(&inner.pool, &device_id, &body).await
             }
             ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
@@ -980,6 +1061,200 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
                 crate::repo::app_icons::write_cache_file(&path, &icon_bytes);
             }
         }
+    }
+    Ok(())
+}
+
+async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+    let arr: Vec<Value> = serde_json::from_slice(body)
+        .map_err(|e| Error::Other(format!("app_groups JSON: {e}")))?;
+    for v in arr {
+        let id = match v.get("id").and_then(|x| x.as_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let display_name = v
+            .get("displayName")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let category_id = v
+            .get("categoryId")
+            .and_then(|x| x.as_str())
+            .map(String::from);
+        let updated_at = v
+            .get("updatedAt")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let deleted_at = v
+            .get("deletedAt")
+            .and_then(|x| x.as_str())
+            .map(String::from);
+
+        // 拿当前本地 category_id 用来对比 —— 远端的分类 LWW 赢了之后，要 mirror 到
+        // app_categories 表里所有成员行（让 reports.rs 的 LEFT JOIN 仍能拿到正确分类）。
+        let id_db = id.clone();
+        let display_name_db = display_name.clone();
+        let category_id_db = category_id.clone();
+        let updated_at_db = updated_at.clone();
+        let deleted_at_db = deleted_at.clone();
+        let applied: Option<(Option<String>, Option<String>)> = pool
+            .0
+            .call(move |conn| {
+                let prev: Option<(String, Option<String>)> = conn
+                    .query_row(
+                        "SELECT updated_at, category_id FROM app_groups WHERE id = ?1",
+                        rusqlite::params![id_db],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .ok();
+                let should_apply = match &prev {
+                    None => true,
+                    Some((cur_upd, _)) => updated_at_db.as_str() > cur_upd.as_str(),
+                };
+                if !should_apply {
+                    return Ok(None);
+                }
+                let prev_cat = prev.map(|(_, c)| c).unwrap_or(None);
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES(?, ?, ?, ?, ?)
+                     ON CONFLICT(id) DO UPDATE SET
+                       display_name = excluded.display_name,
+                       category_id  = excluded.category_id,
+                       updated_at   = excluded.updated_at,
+                       deleted_at   = excluded.deleted_at",
+                    rusqlite::params![
+                        id_db,
+                        display_name_db,
+                        category_id_db,
+                        updated_at_db,
+                        deleted_at_db
+                    ],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                Ok(Some((prev_cat, category_id_db.clone())))
+            })
+            .await?;
+
+        // 如果分类变了 —— 把新分类同步到组里所有 (active) 成员的 app_categories 行。
+        // 用本地的 process_name 列表（成员可能是 Mac 风格也可能是 Win 风格），
+        // 每行 enqueue outbox 让其它设备也拿到（同 OS 的对端会收到同样的 app_category 行）。
+        if let Some((prev_cat, next_cat)) = applied {
+            if prev_cat != next_cat {
+                let id_for_mirror = id.clone();
+                let next_for_mirror = next_cat.clone();
+                let now = chrono::Utc::now().to_rfc3339();
+                pool.0
+                    .call(move |conn| {
+                        let members: Vec<String> = {
+                            let mut stmt = conn
+                                .prepare(
+                                    "SELECT process_name FROM app_group_members
+                                     WHERE group_id = ?1 AND deleted_at IS NULL",
+                                )
+                                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                            let rows = stmt
+                                .query_map(rusqlite::params![id_for_mirror], |r| {
+                                    r.get::<_, String>(0)
+                                })
+                                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                            let mut out = Vec::new();
+                            for r in rows {
+                                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                            }
+                            out
+                        };
+                        for m in &members {
+                            match &next_for_mirror {
+                                Some(cat) => {
+                                    conn.execute(
+                                        "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                                         VALUES(?, ?, ?, NULL)
+                                         ON CONFLICT(process_name) DO UPDATE SET
+                                           category_id = excluded.category_id,
+                                           updated_at  = excluded.updated_at,
+                                           deleted_at  = NULL",
+                                        rusqlite::params![m, cat, now],
+                                    )
+                                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                                }
+                                None => {
+                                    conn.execute(
+                                        "UPDATE app_categories SET deleted_at = ?, updated_at = ?
+                                         WHERE process_name = ?",
+                                        rusqlite::params![now, now, m],
+                                    )
+                                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                                }
+                            }
+                        }
+                        Ok(())
+                    })
+                    .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+    let arr: Vec<Value> = serde_json::from_slice(body)
+        .map_err(|e| Error::Other(format!("app_group_members JSON: {e}")))?;
+    for v in arr {
+        let process_name = match v.get("processName").and_then(|x| x.as_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let group_id = v
+            .get("groupId")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let updated_at = v
+            .get("updatedAt")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let deleted_at = v
+            .get("deletedAt")
+            .and_then(|x| x.as_str())
+            .map(String::from);
+
+        if group_id.is_empty() {
+            continue;
+        }
+
+        pool.0
+            .call(move |conn| {
+                let cur: Option<String> = conn
+                    .query_row(
+                        "SELECT updated_at FROM app_group_members WHERE process_name = ?1",
+                        rusqlite::params![process_name],
+                        |r| r.get(0),
+                    )
+                    .ok();
+                let should_apply = match &cur {
+                    None => true,
+                    Some(c) => updated_at.as_str() > c.as_str(),
+                };
+                if !should_apply {
+                    return Ok(());
+                }
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES(?, ?, ?, ?)
+                     ON CONFLICT(process_name) DO UPDATE SET
+                       group_id   = excluded.group_id,
+                       updated_at = excluded.updated_at,
+                       deleted_at = excluded.deleted_at",
+                    rusqlite::params![process_name, group_id, updated_at, deleted_at],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                Ok(())
+            })
+            .await?;
     }
     Ok(())
 }

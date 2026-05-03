@@ -59,6 +59,10 @@ export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps)
         alt={processName}
         width={size}
         height={size}
+        // <img> 默认 draggable 会拦截父元素的 HTML5 drag —— 用户从图标按下拖时
+        // 浏览器触发的是 img 自身的拖图行为，不会冒泡到外层 draggable 容器。
+        // 显式禁掉，让外层 chip 的 drag handler 能正常接到事件。
+        draggable={false}
       />
     );
   }

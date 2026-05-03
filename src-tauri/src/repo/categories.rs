@@ -287,67 +287,23 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// 给应用绑定分类。走 app_groups 通道：找 process_name 所在的 group，给整组分类
+/// （联动该组的所有成员，跨设备/跨平台名字一起更新）。
 pub async fn assign_app(pool: &DbPool, process_name: &str, category_id: &str) -> Result<()> {
     let p = process_name.trim().to_string();
-    let c = category_id.to_string();
+    let c = category_id.trim().to_string();
     if p.is_empty() {
         return Err(Error::Other("应用名不能为空".into()));
     }
-    let updated = Utc::now().to_rfc3339();
-    let p_clone = p.clone();
-    let c_clone = c.clone();
-    let updated_clone = updated.clone();
-    pool.0
-        .call(move |conn| {
-            // upsert + 重新激活（如果之前被软删）
-            conn.execute(
-                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, NULL)
-                 ON CONFLICT(process_name) DO UPDATE SET
-                   category_id = excluded.category_id,
-                   updated_at = excluded.updated_at,
-                   deleted_at = NULL",
-                rusqlite::params![p_clone, c_clone, updated_clone],
-            )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
-
-            let payload = app_category_payload(&p_clone, &c_clone, &updated_clone, None);
-            enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppCategory, &p_clone, &payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            Ok(())
-        })
-        .await?;
-    Ok(())
+    if c.is_empty() {
+        return Err(Error::Other("分类 ID 不能为空".into()));
+    }
+    crate::repo::app_groups::assign_category_for_process(pool, &p, Some(c)).await
 }
 
+/// 取消应用分类。同走 app_groups：把组的 category_id 置 NULL。
 pub async fn unassign_app(pool: &DbPool, process_name: &str) -> Result<()> {
-    let p = process_name.to_string();
-    let now = Utc::now().to_rfc3339();
-    pool.0
-        .call(move |conn| {
-            // 先读 category_id（payload 用）
-            let cat: Option<String> = conn
-                .query_row(
-                    "SELECT category_id FROM app_categories WHERE process_name = ? AND deleted_at IS NULL",
-                    rusqlite::params![p],
-                    |r| r.get(0),
-                )
-                .ok();
-            let Some(cat) = cat else { return Ok(()); };
-
-            conn.execute(
-                "UPDATE app_categories SET deleted_at = ?1, updated_at = ?1 WHERE process_name = ?2",
-                rusqlite::params![now, p],
-            )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
-
-            let payload = app_category_payload(&p, &cat, &now, Some(&now));
-            enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppCategory, &p, &payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
-            Ok(())
-        })
-        .await?;
-    Ok(())
+    crate::repo::app_groups::assign_category_for_process(pool, process_name, None).await
 }
 
 pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<UnclassifiedApp>> {

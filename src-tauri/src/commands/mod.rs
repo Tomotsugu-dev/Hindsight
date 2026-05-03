@@ -1,3 +1,4 @@
+pub mod app_groups;
 pub mod auth;
 pub mod capture;
 pub mod categories;

@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { AppList, DEFAULT_PALETTE, UnclassifiedSection } from "./parts";
+import { PairingSection } from "./PairingSection";
 import styles from "./Categories.module.css";
 
 const DEFAULT_NEW_ICON = "Tag";
@@ -56,10 +57,26 @@ export default function CategoriesPage() {
       <header className={styles.header} style={{ marginTop: 8 }}>
         <div className={styles.headerText}>
           <h2 className={styles.title} style={{ fontSize: 18 }}>
+            跨设备配对
+          </h2>
+          <p className={styles.meta}>
+            xcap 在 mac / win 上对同一应用返回不同进程名（mac="Code" / win="Visual Studio Code"）。
+            把不同设备上的同一应用拖到一行里就合并成一组，分类一次跨平台联动。
+          </p>
+        </div>
+      </header>
+
+      <section className={styles.card}>
+        <PairingSection />
+      </section>
+
+      <header className={styles.header} style={{ marginTop: 8 }}>
+        <div className={styles.headerText}>
+          <h2 className={styles.title} style={{ fontSize: 18 }}>
             未归类
           </h2>
           <p className={styles.meta}>
-            近 7 天采集到、还没归类的应用。指派到任意分类立即生效。
+            近 7 天采集到、还没归类的应用。指派到任意分类立即生效（如果配对过会联动整组）。
           </p>
         </div>
       </header>

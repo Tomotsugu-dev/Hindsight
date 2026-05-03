@@ -247,14 +247,90 @@ const APP_ICONS_TABLE_SQL: &str = r#"
     );
 "#;
 
+/// v15：app_groups + app_group_members —— 跨设备配对的核心数据层。
+///
+/// 解决：xcap 在不同 OS 上对同一 app 返回不同 owner_name（mac="Code" /
+/// win="Visual Studio Code"），导致同一 app 在 UI 里出现两条独立记录、分类要分别绑定
+/// 两次。新模型把 (display_name, category_id) 挂到 group 上，每个 process_name 通过
+/// app_group_members 指向自己的组。
+///
+/// **关键设计**：group_id 初始值就用 process_name 自身，不用随机 UUID。理由：两台设备
+/// 各自跑 backfill 时用同样的 process_name 会产生**同样的 group_id**，跨设备同步后
+/// 自然合并。如果用随机 UUID，每台 backfill 出不同 ID，sync 后会出现两个名字相同
+/// 但 ID 不同的重复组。
+///
+/// 跨 OS 同步：app_groups 和 app_group_members 都不做 OS 过滤 —— 这就是这个功能的
+/// 核心价值。
+///
+/// 与 app_categories 的关系：app_groups.category_id 是新的 source of truth；
+/// app_categories 表保留作为「组 → 成员分类」的 derived view，由 group 操作的代码
+/// 同步维护。下游报表查询 (reports.rs 的 LEFT JOIN app_categories) 不动，依然能拿到
+/// 正确的分类。
+///
+/// Backfill 用临时表保证 (process_name → group_id) 的两次插入用同一个生成的 ID：
+const APP_GROUPS_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS app_groups (
+      id           TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      category_id  TEXT,
+      updated_at   TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+      deleted_at   TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS app_group_members (
+      process_name TEXT PRIMARY KEY,
+      group_id     TEXT NOT NULL REFERENCES app_groups(id),
+      updated_at   TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+      deleted_at   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_app_group_members_group ON app_group_members(group_id);
+
+    -- Backfill：每个出现过的 process_name（来自 activities 或 app_categories）建一个
+    -- 单成员组，group_id = process_name 自身（确定性、跨设备一致）。category_id 从
+    -- 现有 app_categories 继承，让老用户配过的分类不丢。
+    INSERT INTO app_groups (id, display_name, category_id, updated_at, deleted_at)
+    SELECT p.process_name AS id,
+           p.process_name AS display_name,
+           (SELECT ac.category_id FROM app_categories ac
+              WHERE ac.process_name = p.process_name AND ac.deleted_at IS NULL
+              LIMIT 1) AS category_id,
+           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+           NULL
+    FROM (
+        SELECT DISTINCT process_name FROM activities
+        UNION
+        SELECT DISTINCT process_name FROM app_categories WHERE deleted_at IS NULL
+    ) p
+    WHERE p.process_name IS NOT NULL
+      AND p.process_name <> ''
+      AND p.process_name <> 'Unknown'
+      AND NOT EXISTS (SELECT 1 FROM app_groups g WHERE g.id = p.process_name);
+
+    INSERT INTO app_group_members (process_name, group_id, updated_at, deleted_at)
+    SELECT p.process_name,
+           p.process_name,
+           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+           NULL
+    FROM (
+        SELECT DISTINCT process_name FROM activities
+        UNION
+        SELECT DISTINCT process_name FROM app_categories WHERE deleted_at IS NULL
+    ) p
+    WHERE p.process_name IS NOT NULL
+      AND p.process_name <> ''
+      AND p.process_name <> 'Unknown'
+      AND NOT EXISTS (SELECT 1 FROM app_group_members m WHERE m.process_name = p.process_name);
+"#;
+
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 4] = [
+    let extras: [&'static str; 5] = [
         cross_os_cleanup_sql(), // v11
         V12_PLACEHOLDER,        // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,    // v13
         APP_ICONS_TABLE_SQL,    // v14
+        APP_GROUPS_SQL,         // v15
     ];
     pool.0
         .call(move |conn| {

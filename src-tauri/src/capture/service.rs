@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 use crate::capture::{screenshot, window};
 use crate::error::Result;
 use crate::repo::settings::TimeRange;
-use crate::repo::{activities, process_paths};
+use crate::repo::{activities, app_groups, process_paths};
 use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 1;
@@ -243,6 +243,10 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
         let shot = take_screenshot(inner).await;
         let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
+        // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
+        if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {
+            log::warn!("ensure_group 失败 ({}): {e}", info.app_name);
+        }
         *current_lock = Some(CurrentSession {
             id,
             focus: new_focus,

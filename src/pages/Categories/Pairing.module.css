@@ -1,0 +1,202 @@
+.pairing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 所有列（设备 + 统一名）都用 1fr 等分；操作列 auto 自适应。*/
+.row {
+  display: grid;
+  grid-template-columns: var(--device-cols) 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.row:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.row.dropTarget {
+  background: color-mix(in oklab, var(--color-accent) 10%, white);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 20%, transparent);
+}
+
+.devCol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  /* WebKit (Tauri WKWebView macOS) 对 <div draggable=true> 不一定主动渲染 drag preview；
+     显式声明这个属性让 WebKit 把整个元素当 drag source 处理。*/
+  -webkit-user-drag: element;
+}
+
+.devCol.empty {
+  -webkit-user-drag: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  justify-content: flex-start;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.chip:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.chip:active {
+  cursor: grabbing;
+}
+
+.chip.dragging {
+  opacity: 0.4;
+}
+
+.chipName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.chipMeta {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-feature-settings: "tnum";
+}
+
+.chipUnmerge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 120ms ease-out, background-color 120ms ease-out;
+}
+
+.chip:hover .chipUnmerge {
+  opacity: 1;
+}
+
+.chipUnmerge:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-strong);
+}
+
+.nameCol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.nameInput {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+  outline: none;
+  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+}
+
+.nameInput:hover {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.nameInput:focus {
+  border-color: color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.08));
+  background: #ffffff;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.actionCol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 64px;
+  justify-content: flex-end;
+}
+
+.catTag {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 表头：跟 row 用同一套列模板，对齐每个 column */
+.devHeader {
+  display: grid;
+  grid-template-columns: var(--device-cols) 1fr auto;
+  gap: 12px;
+  padding: 0 12px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 4px;
+}
+
+.devHeaderName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.devHeaderActionPad {
+  min-width: 64px;
+}
+
+.toolbar {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 0 4px 12px;
+  line-height: 1.5;
+}

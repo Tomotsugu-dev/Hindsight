@@ -28,6 +28,8 @@ pub enum OutboxEntity {
     ProcessPath,
     Device,
     AppIcon,
+    AppGroup,
+    AppGroupMember,
 }
 
 impl OutboxEntity {
@@ -39,6 +41,8 @@ impl OutboxEntity {
             OutboxEntity::ProcessPath => "process_path",
             OutboxEntity::Device => "device",
             OutboxEntity::AppIcon => "app_icon",
+            OutboxEntity::AppGroup => "app_group",
+            OutboxEntity::AppGroupMember => "app_group_member",
         }
     }
 }
