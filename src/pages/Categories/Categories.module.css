@@ -175,6 +175,40 @@
   background: rgba(239, 68, 68, 0.18);
 }
 
+/* —— App chips 的"两行夹片" —— 默认 height 锁到 2 行 + 底部渐隐 mask；
+   hover 时 height 变 auto（依赖全局 interpolate-size）+ mask 消失，平滑动画展开。 */
+.appListClip {
+  --collapsed-h: 56px; /* 2 行 chip (24px) + 1 个 6px gap + 一点 buffer */
+  position: relative;
+  width: 100%;            /* 锁宽：hover 时绝不允许横向变化 */
+  box-sizing: border-box;
+  height: var(--collapsed-h);
+  /* 即使 hover 后切到 height: auto，也不允许塌陷到 collapsed 以下 */
+  min-height: var(--collapsed-h);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 65%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 65%,
+    transparent 100%
+  );
+  transition:
+    height 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    -webkit-mask-image 600ms ease-out,
+    mask-image 600ms ease-out;
+}
+
+.catRow:hover .appListClip,
+.catRow:focus-within .appListClip {
+  height: auto;
+  -webkit-mask-image: linear-gradient(to bottom, #000 100%, #000 100%);
+  mask-image: linear-gradient(to bottom, #000 100%, #000 100%);
+}
+
 .appList {
   display: flex;
   flex-wrap: wrap;

@@ -1,18 +1,27 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Layers, Monitor } from "lucide-react";
-import { useDeviceFilter } from "../../state/deviceFilter";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Check, ChevronDown, Layers } from "lucide-react";
+import { useDeviceFilter, type Device } from "../../state/deviceFilter";
+import { resolveCategoryIcon } from "../../config/categoryIcons";
+import { useMouseGlow } from "../../hooks/useMouseGlow";
 import styles from "./DevicePicker.module.css";
 
 export function DevicePicker() {
   const { devices, selected, setSelected } = useDeviceFilter();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const { ref: triggerRef } = useMouseGlow<HTMLButtonElement>();
 
   const showAllOption = devices.length >= 2;
+  const currentDevice =
+    selected === "all" ? null : devices.find((d) => d.id === selected) ?? null;
   const currentLabel =
-    selected === "all"
-      ? "所有设备"
-      : devices.find((d) => d.id === selected)?.name ?? "本机";
+    selected === "all" ? "所有设备" : currentDevice?.name ?? "本机";
+
+  // 所有可能的 label —— 用来 grid 撑宽，让 trigger 宽度固定为"最宽那个"，切换不抖动
+  const allLabels = [
+    ...(showAllOption ? ["所有设备"] : []),
+    ...devices.map((d) => d.name),
+  ];
 
   // 点外面关闭
   useEffect(() => {
@@ -29,13 +38,22 @@ export function DevicePicker() {
   return (
     <div className={styles.wrap} ref={wrapRef}>
       <button
+        ref={triggerRef}
         type="button"
-        className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
+        className={`${styles.trigger} ${open ? styles.triggerOpen : ""} glow`}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={styles.label}>{currentLabel}</span>
+        <DeviceTile device={currentDevice} all={selected === "all"} />
+        <span className={styles.labelStack}>
+          <span className={styles.label}>{currentLabel}</span>
+          {allLabels.map((l, i) => (
+            <span key={i} className={styles.labelMeasure} aria-hidden>
+              {l}
+            </span>
+          ))}
+        </span>
         <ChevronDown
           size={12}
           strokeWidth={2}
@@ -48,7 +66,7 @@ export function DevicePicker() {
           {showAllOption && (
             <MenuItem
               label="所有设备"
-              icon={<Layers size={13} strokeWidth={1.85} />}
+              tile={<DeviceTile device={null} all />}
               checked={selected === "all"}
               onClick={() => {
                 setSelected("all");
@@ -62,7 +80,7 @@ export function DevicePicker() {
               key={d.id}
               label={d.name}
               hint={d.current ? "本机" : undefined}
-              icon={<Monitor size={13} strokeWidth={1.85} />}
+              tile={<DeviceTile device={d} all={false} />}
               checked={selected === d.id}
               onClick={() => {
                 setSelected(d.id);
@@ -76,15 +94,38 @@ export function DevicePicker() {
   );
 }
 
+function DeviceTile({
+  device,
+  all,
+}: {
+  device: Device | null;
+  all: boolean;
+}) {
+  if (all || !device) {
+    return (
+      <span className={`${styles.tile} ${styles.tileMuted}`}>
+        <Layers size={12} strokeWidth={2} />
+      </span>
+    );
+  }
+  const Icon = resolveCategoryIcon(device.icon);
+  const style = { "--tile-color": device.color } as CSSProperties;
+  return (
+    <span className={styles.tile} style={style}>
+      <Icon size={12} strokeWidth={2} />
+    </span>
+  );
+}
+
 interface MenuItemProps {
   label: string;
   hint?: string;
-  icon?: React.ReactNode;
+  tile: React.ReactNode;
   checked: boolean;
   onClick: () => void;
 }
 
-function MenuItem({ label, hint, icon, checked, onClick }: MenuItemProps) {
+function MenuItem({ label, hint, tile, checked, onClick }: MenuItemProps) {
   return (
     <button
       type="button"
@@ -93,7 +134,7 @@ function MenuItem({ label, hint, icon, checked, onClick }: MenuItemProps) {
       role="option"
       aria-selected={checked}
     >
-      <span className={styles.itemIcon}>{icon}</span>
+      {tile}
       <span className={styles.itemLabel}>
         {label}
         {hint && <span className={styles.itemHint}> · {hint}</span>}

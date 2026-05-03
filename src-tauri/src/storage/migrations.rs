@@ -62,7 +62,7 @@ const MIGRATIONS: &[&str] = &[
 
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('code',   '编程', '#a78bfa', 0);
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('browse', '浏览', '#60a5fa', 0);
-    INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('talk',   '沟通', '#34d399', 0);
+    INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('talk',   '社交', '#34d399', 0);
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('design', '设计', '#fbbf24', 0);
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('fun',    '娱乐', '#fb7185', 0);
     INSERT OR IGNORE INTO categories(id, name, color, builtin) VALUES('other',  '其他', '#94a3b8', 0);
@@ -151,6 +151,14 @@ const MIGRATIONS: &[&str] = &[
     r#"
     DELETE FROM sync_outbox;
     DELETE FROM sync_cursor;
+    "#,
+    // v10：把默认分类 'talk' 的名字从 "沟通" 改成 "社交"。
+    // 只在用户没改过名字时才动；已改名的不覆盖。同时 bump updated_at 让同步推一次。
+    r#"
+    UPDATE categories
+       SET name = '社交',
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = 'talk' AND name = '沟通';
     "#,
 ];
 

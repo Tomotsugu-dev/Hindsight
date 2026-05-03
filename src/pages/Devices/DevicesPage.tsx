@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
+  ChevronRight,
   Cloud,
   CloudOff,
-  ExternalLink,
+  Eye,
+  EyeOff,
   LogIn,
   LogOut,
   Pencil,
@@ -201,19 +203,41 @@ function CloudSyncCard() {
           </div>
           {signedIn && sync && (
             <div className={styles.syncStats}>
-              <span>
-                {sync.pending > 0
-                  ? `待发送 ${sync.pending}`
-                  : sync.lastPushedAt
-                    ? `已同步 · ${fmtRelative(sync.lastPushedAt)}`
-                    : "等待首次同步"}
-              </span>
+              {sync.pending > 0 ? (
+                <>
+                  <span
+                    className={`${styles.syncDot} ${styles.syncDotPending}`}
+                    aria-hidden
+                  />
+                  <span className={styles.syncStatPending}>
+                    待发送 {sync.pending}
+                  </span>
+                </>
+              ) : sync.lastPushedAt ? (
+                <>
+                  <span className={styles.syncDot} aria-hidden />
+                  <span className={styles.syncStatOk}>
+                    已同步 · {fmtRelative(sync.lastPushedAt)}
+                  </span>
+                </>
+              ) : (
+                <span>等待首次同步</span>
+              )}
               {sync.deadLetter > 0 && (
                 <span className={styles.syncStatErr}>
                   · {sync.deadLetter} 条失败
                 </span>
               )}
             </div>
+          )}
+          {!signedIn && canSignIn && !setupOpen && (
+            <button
+              type="button"
+              className={styles.editCredsLink}
+              onClick={() => setSetupOpen(true)}
+            >
+              改凭证
+            </button>
           )}
         </div>
         <div className={styles.syncActions}>
@@ -244,25 +268,15 @@ function CloudSyncCard() {
               </button>
             </>
           ) : canSignIn ? (
-            <>
-              <button
-                type="button"
-                className={styles.smallBtn}
-                onClick={() => setSetupOpen((v) => !v)}
-                title="改 OAuth 凭证"
-              >
-                <Settings2 size={13} strokeWidth={1.85} />
-              </button>
-              <button
-                type="button"
-                className={styles.connectBtn}
-                onClick={onSignIn}
-                disabled={busy}
-              >
-                <LogIn size={13} strokeWidth={2} />
-                {busy ? "浏览器中…" : "用 Google 登录"}
-              </button>
-            </>
+            <button
+              type="button"
+              className={styles.connectBtn}
+              onClick={onSignIn}
+              disabled={busy}
+            >
+              <LogIn size={13} strokeWidth={2} />
+              {busy ? "浏览器中…" : "用 Google 登录"}
+            </button>
           ) : (
             <button
               type="button"
@@ -276,16 +290,23 @@ function CloudSyncCard() {
         </div>
       </div>
 
-      {setupOpen && !signedIn && (
-        <SetupPanel
-          clientId={settings.googleClientId}
-          clientSecret={settings.googleClientSecret}
-          onChangeId={(v) => update({ googleClientId: v })}
-          onChangeSecret={(v) => update({ googleClientSecret: v })}
-          collapsible={canSignIn}
-          onCollapse={() => setSetupOpen(false)}
-        />
-      )}
+      <div
+        className={`${styles.setupWrap} ${
+          setupOpen && !signedIn ? styles.setupWrapOpen : ""
+        }`}
+        aria-hidden={!setupOpen || signedIn}
+      >
+        <div className={styles.setupInner}>
+          <SetupPanel
+            clientId={settings.googleClientId}
+            clientSecret={settings.googleClientSecret}
+            onChangeId={(v) => update({ googleClientId: v })}
+            onChangeSecret={(v) => update({ googleClientSecret: v })}
+            collapsible={canSignIn}
+            onCollapse={() => setSetupOpen(false)}
+          />
+        </div>
+      </div>
 
       {error && <div className={styles.syncError}>{error}</div>}
     </div>
@@ -307,6 +328,7 @@ function SetupPanel({
   collapsible: boolean;
   onCollapse: () => void;
 }) {
+  const [secretVisible, setSecretVisible] = useState(false);
   const open = (url: string) => {
     void openUrl(url).catch(() => {});
   };
@@ -342,7 +364,7 @@ function SetupPanel({
                 )
               }
             >
-              打开 Drive API <ExternalLink size={11} strokeWidth={2} />
+              打开 Drive API <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
@@ -360,7 +382,7 @@ function SetupPanel({
               className={styles.stepBtn}
               onClick={() => open("https://console.cloud.google.com/auth/audience")}
             >
-              打开 Audience <ExternalLink size={11} strokeWidth={2} />
+              打开 Audience <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
@@ -377,7 +399,7 @@ function SetupPanel({
               className={styles.stepBtn}
               onClick={() => open("https://console.cloud.google.com/auth/clients")}
             >
-              打开 Clients <ExternalLink size={11} strokeWidth={2} />
+              打开 Clients <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
@@ -399,15 +421,31 @@ function SetupPanel({
             </label>
             <label className={styles.credField}>
               <span className={styles.credLabel}>Client Secret</span>
-              <input
-                type="password"
-                className={styles.credInput}
-                value={clientSecret}
-                onChange={(e) => onChangeSecret(e.target.value)}
-                placeholder="GOCSPX-..."
-                spellCheck={false}
-                autoComplete="off"
-              />
+              <div className={styles.credInputWrap}>
+                <input
+                  type={secretVisible ? "text" : "password"}
+                  className={`${styles.credInput} ${styles.credInputWithBtn}`}
+                  value={clientSecret}
+                  onChange={(e) => onChangeSecret(e.target.value)}
+                  placeholder="GOCSPX-..."
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  className={styles.credEyeBtn}
+                  onClick={() => setSecretVisible((v) => !v)}
+                  aria-label={secretVisible ? "隐藏 Client Secret" : "显示 Client Secret"}
+                  title={secretVisible ? "隐藏" : "显示"}
+                  tabIndex={-1}
+                >
+                  {secretVisible ? (
+                    <EyeOff size={14} strokeWidth={1.85} />
+                  ) : (
+                    <Eye size={14} strokeWidth={1.85} />
+                  )}
+                </button>
+              </div>
             </label>
             <div className={styles.credHint}>
               凭证只存本地。两项都填好后，"用 Google 登录"按钮会自动变可点。

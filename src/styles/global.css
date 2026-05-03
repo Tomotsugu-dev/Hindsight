@@ -44,3 +44,53 @@ a {
   background: var(--color-accent-soft);
   color: var(--text-strong);
 }
+
+/* 让 height/width 等关键字（auto / max-content / fit-content）可以参与 transition。
+   Chromium 129+ / WebView2 现代版本支持。这样 height: 56px → auto 可以平滑动画，
+   不再受 max-height 那种"被实际内容封顶导致视觉瞬间到位"的问题影响。 */
+:root {
+  interpolate-size: allow-keywords;
+}
+
+/* —— Glow utility：跟随鼠标的橙紫色描边光（接近触发） ——
+   配合 useMouseGlow hook 使用：hook 在 window mousemove 时把
+     --glow-mx / --glow-my：光标相对按钮左上角的坐标
+     --glow-strength      ：0~1，鼠标越近越接近 1，越远越接近 0
+   写到元素 style 上。这里 ::before 用 mask 把 radial-gradient 限定在 1px 边框
+   范围，opacity 直接绑定 --glow-strength，鼠标靠近时整圈描边渐显。 */
+.glow {
+  position: relative;
+  --glow-mx: 50%;
+  --glow-my: 50%;
+  --glow-radius: 160px;
+  --glow-strength: 0;
+}
+
+.glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    var(--glow-radius) circle at var(--glow-mx) var(--glow-my),
+    rgba(108, 92, 231, 0.95) 0%,
+    rgba(255, 145, 90, 0.7) 28%,
+    rgba(108, 92, 231, 0.18) 55%,
+    transparent 78%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: var(--glow-strength);
+  /* 极短的 transition 让 strength 跳变时也丝滑（避免 60fps mousemove 抖动） */
+  transition: opacity 90ms linear;
+}
+
+.glow:disabled::before,
+.glow[aria-disabled="true"]::before {
+  opacity: 0;
+}

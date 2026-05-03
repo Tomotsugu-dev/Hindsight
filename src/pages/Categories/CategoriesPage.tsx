@@ -172,7 +172,9 @@ function CategoryRow({ category }: { category: Category }) {
           )}
         </div>
 
-        <AppList category={category} />
+        <div className={styles.appListClip}>
+          <AppList category={category} />
+        </div>
       </div>
 
       <div className={styles.catActions}>

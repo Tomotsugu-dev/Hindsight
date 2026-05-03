@@ -8,6 +8,7 @@ import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
 import { useMonthCache } from "../../hooks/useMonthCache";
 import { useDeviceFilter } from "../../state/deviceFilter";
+import { useMouseGlow } from "../../hooks/useMouseGlow";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
 import type { DaySummary } from "../../api/hindsight";
@@ -115,6 +116,9 @@ export default function MonthPage() {
   const frameRef = useRef<HTMLDivElement>(null);
   const [delta, setDelta] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
 
   const canGoForward = offset < 0;
 
@@ -165,8 +169,9 @@ export default function MonthPage() {
 
           <div className={styles.dayNav}>
             <button
+              ref={prevBtnRef}
               type="button"
-              className={styles.navBtn}
+              className={`${styles.navBtn} glow`}
               onClick={() => commit(-1)}
               disabled={transitioning}
               aria-label="前一月"
@@ -176,8 +181,9 @@ export default function MonthPage() {
             </button>
 
             <button
+              ref={pillRef}
               type="button"
-              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""}`}
+              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
               onClick={jumpToThis}
               disabled={offset === 0 || transitioning}
               title={offset === 0 ? undefined : "回到本月"}
@@ -186,8 +192,9 @@ export default function MonthPage() {
             </button>
 
             <button
+              ref={nextBtnRef}
               type="button"
-              className={styles.navBtn}
+              className={`${styles.navBtn} glow`}
               onClick={() => commit(1)}
               disabled={!canGoForward || transitioning}
               aria-label="后一月"

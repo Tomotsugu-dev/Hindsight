@@ -69,9 +69,10 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
         .call(|conn| {
             let mut stmt = conn
                 .prepare_cached(
+                    // 'other' 永远排最后（紧挨"未归类"section）；其余按 builtin 优先 + id 字典序
                     "SELECT id, name, color, icon, builtin FROM categories
                      WHERE deleted_at IS NULL
-                     ORDER BY builtin DESC, id",
+                     ORDER BY (id = 'other') ASC, builtin DESC, id",
                 )
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let cat_rows = stmt

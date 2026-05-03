@@ -5,6 +5,7 @@ import type { NavGroup } from "../../types/nav";
 import { NavItem } from "./NavItem";
 import { StatusFooter } from "./StatusFooter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
+import logoUrl from "../../assets/logo.png";
 import styles from "./Sidebar.module.css";
 
 const GROUP_TITLE: Record<NavGroup, string> = {
@@ -63,7 +64,13 @@ export function Sidebar() {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand} data-tauri-drag-region>
-        <div className={styles.logoMark} aria-hidden />
+        <img
+          className={styles.logoMark}
+          src={logoUrl}
+          alt=""
+          aria-hidden
+          draggable={false}
+        />
         <span className={styles.logoText}>Hindsight</span>
       </div>
 

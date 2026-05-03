@@ -11,6 +11,7 @@ import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
 import { useDeviceFilter } from "../../state/deviceFilter";
+import { useMouseGlow } from "../../hooks/useMouseGlow";
 import styles from "./TodayPage.module.css";
 
 const SWIPE_DURATION = 420;
@@ -125,6 +126,9 @@ export default function TodayPage() {
   const frameRef = useRef<HTMLDivElement>(null);
   const [delta, setDelta] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
 
   const canGoForward = offset < 0;
 
@@ -165,8 +169,9 @@ export default function TodayPage() {
 
           <div className={styles.dayNav}>
             <button
+              ref={prevBtnRef}
               type="button"
-              className={styles.navBtn}
+              className={`${styles.navBtn} glow`}
               onClick={() => commit(-1)}
               disabled={transitioning}
               aria-label="前一天"
@@ -176,8 +181,9 @@ export default function TodayPage() {
             </button>
 
             <button
+              ref={pillRef}
               type="button"
-              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""}`}
+              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
               onClick={jumpToToday}
               disabled={offset === 0 || transitioning}
               title={offset === 0 ? undefined : "回到今天"}
@@ -186,8 +192,9 @@ export default function TodayPage() {
             </button>
 
             <button
+              ref={nextBtnRef}
               type="button"
-              className={styles.navBtn}
+              className={`${styles.navBtn} glow`}
               onClick={() => commit(1)}
               disabled={!canGoForward || transitioning}
               aria-label="后一天"

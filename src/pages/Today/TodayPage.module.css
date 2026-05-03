@@ -62,43 +62,56 @@
   gap: 12px;
 }
 
-/* —— 日期导航：纯文字 + 小箭头 —— */
+/* —— 日期导航：outlined 按钮组，配合 .glow 跟随鼠标的描边光 —— */
 .dayNav {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .navBtn {
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
-  color: var(--text-faint);
-  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-muted);
+  transition:
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .navBtn:hover:not(:disabled) {
-  color: var(--text-strong);
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .navBtn:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .dayPill {
-  min-width: 56px;
-  padding: 4px 8px;
+  min-width: 64px;
+  height: 26px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;
-  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dayPillClickable {
@@ -107,6 +120,7 @@
 
 .dayPillClickable:hover:not(:disabled) {
   color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .dayPill:disabled {

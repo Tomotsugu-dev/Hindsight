@@ -8,6 +8,7 @@ import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
 import { useWeekCache } from "../../hooks/useWeekCache";
 import { useDeviceFilter } from "../../state/deviceFilter";
+import { useMouseGlow } from "../../hooks/useMouseGlow";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
 import type { DaySummary } from "../../api/hindsight";
@@ -117,6 +118,9 @@ export default function WeekPage() {
   const frameRef = useRef<HTMLDivElement>(null);
   const [delta, setDelta] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
 
   const canGoForward = offset < 0;
 
@@ -156,8 +160,9 @@ export default function WeekPage() {
 
           <div className={styles.dayNav}>
             <button
+              ref={prevBtnRef}
               type="button"
-              className={styles.navBtn}
+              className={`${styles.navBtn} glow`}
               onClick={() => commit(-1)}
               disabled={transitioning}
               aria-label="前一周"
@@ -167,8 +172,9 @@ export default function WeekPage() {
             </button>
 
             <button
+              ref={pillRef}
               type="button"
-              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""}`}
+              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
               onClick={jumpToThis}
               disabled={offset === 0 || transitioning}
               title={offset === 0 ? undefined : "回到本周"}
@@ -177,8 +183,9 @@ export default function WeekPage() {
             </button>
 
             <button
+              ref={nextBtnRef}
               type="button"
-              className={styles.navBtn}
+              className={`${styles.navBtn} glow`}
               onClick={() => commit(1)}
               disabled={!canGoForward || transitioning}
               aria-label="后一周"
