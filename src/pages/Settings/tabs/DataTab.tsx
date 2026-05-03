@@ -98,10 +98,13 @@ export default function DataTab() {
 
       <Section
         title="存储"
-        description="数据保留时长和当前占用情况。"
+        description="截图保留时长和当前占用情况；数据库永不自动清理。"
         icon={Database}
       >
-        <Row label="保留天数" description="超期数据将被自动清理。">
+        <Row
+          label="截图保留天数"
+          description="到期的截图文件将被自动删除（活动记录本身保留）。"
+        >
           <Slider
             value={settings.retentionDays}
             onChange={(v) => update({ retentionDays: v })}

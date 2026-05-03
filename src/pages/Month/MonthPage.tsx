@@ -7,6 +7,7 @@ import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
 import { useMonthCache } from "../../hooks/useMonthCache";
+import { useDeviceFilter } from "../../state/deviceFilter";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
 import type { DaySummary } from "../../api/hindsight";
@@ -42,7 +43,8 @@ function fmtMonth(days: DaySummary[], offset: number): string {
 export default function MonthPage() {
   const [offset, setOffset] = useState(0);
   const { categories, getCategory } = useCategories();
-  const { get: getMonth } = useMonthCache(offset);
+  const { selectedDeviceId } = useDeviceFilter();
+  const { get: getMonth } = useMonthCache(offset, selectedDeviceId);
 
   const { days, apps } = useMemo(() => getMonth(offset), [getMonth, offset]);
 

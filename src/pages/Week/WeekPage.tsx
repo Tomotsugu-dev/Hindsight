@@ -7,6 +7,7 @@ import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
 import { useWeekCache } from "../../hooks/useWeekCache";
+import { useDeviceFilter } from "../../state/deviceFilter";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList, type RankedItem } from "../Today/RankedList";
 import type { DaySummary } from "../../api/hindsight";
@@ -43,7 +44,8 @@ function weekLabel(offset: number): string {
 export default function WeekPage() {
   const [offset, setOffset] = useState(0);
   const { categories, getCategory } = useCategories();
-  const { get: getWeek } = useWeekCache(offset);
+  const { selectedDeviceId } = useDeviceFilter();
+  const { get: getWeek } = useWeekCache(offset, selectedDeviceId);
 
   const { days, apps } = useMemo(() => getWeek(offset), [getWeek, offset]);
 

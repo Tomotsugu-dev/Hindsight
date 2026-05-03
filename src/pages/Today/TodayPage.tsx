@@ -10,6 +10,7 @@ import { displayAppName } from "../../utils/displayName";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
+import { useDeviceFilter } from "../../state/deviceFilter";
 import styles from "./TodayPage.module.css";
 
 const SWIPE_DURATION = 420;
@@ -46,7 +47,8 @@ function dateForOffset(offset: number): Date {
 
 export default function TodayPage() {
   const [offset, setOffset] = useState(0);
-  const { get: getDay } = useDayCache(offset);
+  const { selectedDeviceId } = useDeviceFilter();
+  const { get: getDay } = useDayCache(offset, selectedDeviceId);
   const { categories, getCategory } = useCategories();
   const { settings } = useSettings();
 

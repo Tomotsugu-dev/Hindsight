@@ -134,7 +134,16 @@ impl CaptureService {
         if let Some(handle) = h.take() {
             handle.abort();
         }
-        *self.inner.current.lock().await = None;
+        // seal 当前会话（如果有），让它进入 outbox 在下次同步推送
+        let mut cur_lock = self.inner.current.lock().await;
+        if let Some(prev) = cur_lock.take() {
+            drop(cur_lock);
+            if let Err(e) =
+                activities::seal_session(&self.inner.pool, prev.id, chrono::Local::now()).await
+            {
+                log::warn!("stop: seal_session 失败 (id={}): {e}", prev.id);
+            }
+        }
     }
 
     /// 清空当前会话指针；用于在外部清空 activities 表后避免下一次 tick 去 UPDATE 已被删除的行。
@@ -186,8 +195,16 @@ async fn tick(inner: &Inner) -> Result<()> {
             });
             if !in_range {
                 log::debug!("跳过本次采集：当前不在工作时段");
-                // 离开工作时段时清空当前会话，重新进入时会创建新会话并截图
-                *inner.current.lock().await = None;
+                // 离开工作时段：seal 当前会话（推到云端） + 清空 current
+                let mut cur_lock = inner.current.lock().await;
+                if let Some(prev) = cur_lock.take() {
+                    drop(cur_lock);
+                    if let Err(e) =
+                        activities::seal_session(&inner.pool, prev.id, Local::now()).await
+                    {
+                        log::warn!("seal_session 失败 (离开工作时段, id={}): {e}", prev.id);
+                    }
+                }
                 return Ok(());
             }
         }
@@ -218,6 +235,12 @@ async fn tick(inner: &Inner) -> Result<()> {
     };
 
     if need_new {
+        // 焦点切换：先把旧会话钉死（推 outbox），再开新会话
+        if let Some(prev) = current_lock.take() {
+            if let Err(e) = activities::seal_session(&inner.pool, prev.id, now).await {
+                log::warn!("seal_session 失败 (焦点切换, id={}): {e}", prev.id);
+            }
+        }
         let shot = take_screenshot(inner).await;
         let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
         *current_lock = Some(CurrentSession {

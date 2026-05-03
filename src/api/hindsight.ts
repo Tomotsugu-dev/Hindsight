@@ -93,19 +93,29 @@ export interface StorageInfo {
   screenshotsPath: string;
 }
 
+export interface DeviceRow {
+  deviceId: string;
+  displayName: string;
+  color: string;
+  icon: string;
+  os: string | null;
+  lastSeenAt: string | null;
+  isSelf: boolean;
+}
+
 export const api = {
-  getDayHours: (dayOffset: number) =>
-    invoke<HourSlot[]>("get_day_hours", { dayOffset }),
-  getDayApps: (dayOffset: number, limit?: number) =>
-    invoke<AppUsage[]>("get_day_apps", { dayOffset, limit }),
-  getWeekDays: (weekOffset: number) =>
-    invoke<DaySummaryDto[]>("get_week_days", { weekOffset }),
-  getWeekApps: (weekOffset: number, limit?: number) =>
-    invoke<AppUsage[]>("get_week_apps", { weekOffset, limit }),
-  getMonthDays: (monthOffset: number) =>
-    invoke<DaySummaryDto[]>("get_month_days", { monthOffset }),
-  getMonthApps: (monthOffset: number, limit?: number) =>
-    invoke<AppUsage[]>("get_month_apps", { monthOffset, limit }),
+  getDayHours: (dayOffset: number, deviceId?: string) =>
+    invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
+  getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>
+    invoke<AppUsage[]>("get_day_apps", { dayOffset, limit, deviceId }),
+  getWeekDays: (weekOffset: number, deviceId?: string) =>
+    invoke<DaySummaryDto[]>("get_week_days", { weekOffset, deviceId }),
+  getWeekApps: (weekOffset: number, limit?: number, deviceId?: string) =>
+    invoke<AppUsage[]>("get_week_apps", { weekOffset, limit, deviceId }),
+  getMonthDays: (monthOffset: number, deviceId?: string) =>
+    invoke<DaySummaryDto[]>("get_month_days", { monthOffset, deviceId }),
+  getMonthApps: (monthOffset: number, limit?: number, deviceId?: string) =>
+    invoke<AppUsage[]>("get_month_apps", { monthOffset, limit, deviceId }),
   listCategories: () => invoke<Category[]>("list_categories"),
   createCategory: (input: CategoryInput) =>
     invoke<Category>("create_category", { input }),
@@ -132,4 +142,10 @@ export const api = {
   openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
   getDataRoot: () => invoke<string>("get_data_root"),
   setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),
+  listDevices: () => invoke<DeviceRow[]>("list_devices"),
+  updateSelfDevice: (
+    name?: string,
+    color?: string,
+    icon?: string,
+  ) => invoke<DeviceRow>("update_self_device", { name, color, icon }),
 };

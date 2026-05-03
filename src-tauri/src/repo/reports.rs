@@ -1,4 +1,5 @@
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike};
+use rusqlite::ToSql;
 use serde::Serialize;
 
 use crate::error::Result;
@@ -33,24 +34,68 @@ pub struct AppUsage {
     pub minutes: u32,
 }
 
-pub async fn day_hours(pool: &DbPool, day_offset: i32) -> Result<Vec<HourSlot>> {
+/// 报表层的设备维度：All=多设备聚合，Only(id)=只看某一台
+#[derive(Debug, Clone)]
+pub enum DeviceFilter {
+    All,
+    Only(String),
+}
+
+impl DeviceFilter {
+    /// 给 SQL 拼上设备过滤条件（如果有的话）
+    fn sql_clause(&self) -> &'static str {
+        match self {
+            DeviceFilter::All => "",
+            DeviceFilter::Only(_) => " AND a.device_id = ? ",
+        }
+    }
+
+    fn extra_param(&self) -> Option<&String> {
+        match self {
+            DeviceFilter::All => None,
+            DeviceFilter::Only(id) => Some(id),
+        }
+    }
+}
+
+pub fn device_filter_from_option(id: Option<String>) -> DeviceFilter {
+    match id {
+        None => DeviceFilter::All,
+        Some(s) if s.trim().is_empty() => DeviceFilter::All,
+        Some(s) => DeviceFilter::Only(s),
+    }
+}
+
+pub async fn day_hours(
+    pool: &DbPool,
+    day_offset: i32,
+    device: DeviceFilter,
+) -> Result<Vec<HourSlot>> {
     let target = Local::now() + Duration::days(day_offset as i64);
     let date = target.format("%Y-%m-%d").to_string();
 
     let rows: Vec<(String, String, String)> = pool
         .0
         .call(move |conn| {
+            let sql = format!(
+                "SELECT a.started_at, a.ended_at,
+                        COALESCE(m.category_id, 'other') AS cat
+                 FROM activities a
+                 LEFT JOIN app_categories m
+                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 WHERE a.local_date = ? {}",
+                device.sql_clause()
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&date);
+            if let Some(extra) = device.extra_param() {
+                params.push(extra);
+            }
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT a.started_at, a.ended_at,
-                            COALESCE(m.category_id, 'other') AS cat
-                     FROM activities a
-                     LEFT JOIN app_categories m ON m.process_name = a.process_name
-                     WHERE a.local_date = ?",
-                )
+                .prepare(&sql)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let it = stmt
-                .query_map([&date], |r| {
+                .query_map(params.as_slice(), |r| {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
@@ -101,28 +146,42 @@ pub async fn day_hours(pool: &DbPool, day_offset: i32) -> Result<Vec<HourSlot>> 
     Ok(slots)
 }
 
-pub async fn day_apps(pool: &DbPool, day_offset: i32, limit: u32) -> Result<Vec<AppUsage>> {
+pub async fn day_apps(
+    pool: &DbPool,
+    day_offset: i32,
+    limit: u32,
+    device: DeviceFilter,
+) -> Result<Vec<AppUsage>> {
     let target = Local::now() + Duration::days(day_offset as i64);
     let date = target.format("%Y-%m-%d").to_string();
 
     let rows: Vec<(String, String, i64)> = pool
         .0
         .call(move |conn| {
+            let sql = format!(
+                "SELECT a.process_name,
+                        COALESCE(m.category_id, 'other') AS cat,
+                        SUM(a.duration_secs) AS total
+                 FROM activities a
+                 LEFT JOIN app_categories m
+                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 WHERE a.local_date = ? {}
+                 GROUP BY a.process_name, cat
+                 ORDER BY total DESC
+                 LIMIT ?",
+                device.sql_clause()
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&date);
+            if let Some(extra) = device.extra_param() {
+                params.push(extra);
+            }
+            params.push(&limit);
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT a.process_name,
-                            COALESCE(m.category_id, 'other') AS cat,
-                            SUM(a.duration_secs) AS total
-                     FROM activities a
-                     LEFT JOIN app_categories m ON m.process_name = a.process_name
-                     WHERE a.local_date = ?
-                     GROUP BY a.process_name, cat
-                     ORDER BY total DESC
-                     LIMIT ?",
-                )
+                .prepare(&sql)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let it = stmt
-                .query_map(rusqlite::params![date, limit], |r| {
+                .query_map(params.as_slice(), |r| {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
@@ -149,38 +208,49 @@ pub async fn day_apps(pool: &DbPool, day_offset: i32, limit: u32) -> Result<Vec<
         .collect())
 }
 
-pub async fn week_days(pool: &DbPool, week_offset: i32) -> Result<Vec<DaySummary>> {
+pub async fn week_days(
+    pool: &DbPool,
+    week_offset: i32,
+    device: DeviceFilter,
+) -> Result<Vec<DaySummary>> {
     let (monday, sunday) = week_range(week_offset);
-    days_in_range(pool, monday, sunday).await
+    days_in_range(pool, monday, sunday, device).await
 }
 
 pub async fn week_apps(
     pool: &DbPool,
     week_offset: i32,
     limit: u32,
+    device: DeviceFilter,
 ) -> Result<Vec<AppUsage>> {
     let (monday, sunday) = week_range(week_offset);
-    apps_in_range(pool, monday, sunday, limit).await
+    apps_in_range(pool, monday, sunday, limit, device).await
 }
 
-pub async fn month_days(pool: &DbPool, month_offset: i32) -> Result<Vec<DaySummary>> {
+pub async fn month_days(
+    pool: &DbPool,
+    month_offset: i32,
+    device: DeviceFilter,
+) -> Result<Vec<DaySummary>> {
     let (first, last) = month_range(month_offset);
-    days_in_range(pool, first, last).await
+    days_in_range(pool, first, last, device).await
 }
 
 pub async fn month_apps(
     pool: &DbPool,
     month_offset: i32,
     limit: u32,
+    device: DeviceFilter,
 ) -> Result<Vec<AppUsage>> {
     let (first, last) = month_range(month_offset);
-    apps_in_range(pool, first, last, limit).await
+    apps_in_range(pool, first, last, limit, device).await
 }
 
 async fn days_in_range(
     pool: &DbPool,
     from: NaiveDate,
     to: NaiveDate,
+    device: DeviceFilter,
 ) -> Result<Vec<DaySummary>> {
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
@@ -188,19 +258,28 @@ async fn days_in_range(
     let rows: Vec<(String, String, i64)> = pool
         .0
         .call(move |conn| {
+            let sql = format!(
+                "SELECT a.local_date,
+                        COALESCE(m.category_id, 'other') AS cat,
+                        SUM(a.duration_secs) AS total
+                 FROM activities a
+                 LEFT JOIN app_categories m
+                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                 GROUP BY a.local_date, cat",
+                device.sql_clause()
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&from_str);
+            params.push(&to_str);
+            if let Some(extra) = device.extra_param() {
+                params.push(extra);
+            }
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT a.local_date,
-                            COALESCE(m.category_id, 'other') AS cat,
-                            SUM(a.duration_secs) AS total
-                     FROM activities a
-                     LEFT JOIN app_categories m ON m.process_name = a.process_name
-                     WHERE a.local_date >= ? AND a.local_date <= ?
-                     GROUP BY a.local_date, cat",
-                )
+                .prepare(&sql)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let it = stmt
-                .query_map(rusqlite::params![from_str, to_str], |r| {
+                .query_map(params.as_slice(), |r| {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
@@ -255,6 +334,7 @@ async fn apps_in_range(
     from: NaiveDate,
     to: NaiveDate,
     limit: u32,
+    device: DeviceFilter,
 ) -> Result<Vec<AppUsage>> {
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
@@ -262,21 +342,31 @@ async fn apps_in_range(
     let rows: Vec<(String, String, i64)> = pool
         .0
         .call(move |conn| {
+            let sql = format!(
+                "SELECT a.process_name,
+                        COALESCE(m.category_id, 'other') AS cat,
+                        SUM(a.duration_secs) AS total
+                 FROM activities a
+                 LEFT JOIN app_categories m
+                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                 GROUP BY a.process_name, cat
+                 ORDER BY total DESC
+                 LIMIT ?",
+                device.sql_clause()
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&from_str);
+            params.push(&to_str);
+            if let Some(extra) = device.extra_param() {
+                params.push(extra);
+            }
+            params.push(&limit);
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT a.process_name,
-                            COALESCE(m.category_id, 'other') AS cat,
-                            SUM(a.duration_secs) AS total
-                     FROM activities a
-                     LEFT JOIN app_categories m ON m.process_name = a.process_name
-                     WHERE a.local_date >= ? AND a.local_date <= ?
-                     GROUP BY a.process_name, cat
-                     ORDER BY total DESC
-                     LIMIT ?",
-                )
+                .prepare(&sql)
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
             let it = stmt
-                .query_map(rusqlite::params![from_str, to_str, limit], |r| {
+                .query_map(params.as_slice(), |r| {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,

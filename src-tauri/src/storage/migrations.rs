@@ -86,6 +86,67 @@ const MIGRATIONS: &[&str] = &[
     );
     INSERT OR IGNORE INTO settings_store(id, data) VALUES (1, '{}');
     "#,
+    // v8：多设备云同步基础设施
+    // - 给共享数据加 updated_at + 软删除列（LWW + tombstone）
+    // - activities 加 remote_id / updated_at / origin（不软删）
+    // - 新表：devices / sync_outbox / sync_cursor / auth_state
+    r#"
+    ALTER TABLE categories     ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z';
+    ALTER TABLE categories     ADD COLUMN deleted_at TEXT;
+    ALTER TABLE app_categories ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z';
+    ALTER TABLE app_categories ADD COLUMN deleted_at TEXT;
+    ALTER TABLE process_paths  ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z';
+
+    ALTER TABLE activities ADD COLUMN remote_id  TEXT;
+    ALTER TABLE activities ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z';
+    ALTER TABLE activities ADD COLUMN origin     TEXT NOT NULL DEFAULT 'local';
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_remote
+      ON activities(device_id, remote_id) WHERE remote_id IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS devices (
+      device_id     TEXT PRIMARY KEY,
+      display_name  TEXT NOT NULL,
+      color         TEXT NOT NULL DEFAULT '#60a5fa',
+      icon          TEXT NOT NULL DEFAULT 'Monitor',
+      os            TEXT,
+      last_seen_at  TEXT,
+      is_self       INTEGER NOT NULL DEFAULT 0,
+      updated_at    TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+      deleted_at    TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_outbox (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      op            TEXT NOT NULL,
+      entity        TEXT NOT NULL,
+      entity_pk     TEXT NOT NULL,
+      payload       TEXT NOT NULL,
+      created_at    TEXT NOT NULL,
+      attempts      INTEGER NOT NULL DEFAULT 0,
+      last_error    TEXT,
+      next_retry_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_outbox_due ON sync_outbox(next_retry_at);
+
+    CREATE TABLE IF NOT EXISTS sync_cursor (
+      entity         TEXT PRIMARY KEY,
+      last_pulled_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z'
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_state (
+      id                INTEGER PRIMARY KEY CHECK (id = 1),
+      uid               TEXT,
+      email             TEXT,
+      refresh_token_enc BLOB,
+      access_token      TEXT,
+      expires_at        TEXT
+    );
+    INSERT OR IGNORE INTO auth_state(id) VALUES(1);
+
+    -- 把现有 activities 的 updated_at 回填到 ended_at（首次同步会推这批存量）
+    UPDATE activities SET updated_at = ended_at WHERE updated_at = '1970-01-01T00:00:00Z';
+    "#,
 ];
 
 pub async fn run(pool: &DbPool) -> Result<()> {

@@ -1,0 +1,60 @@
+use chrono::Utc;
+use rusqlite::{params, Connection};
+
+/// outbox 操作类型
+#[derive(Debug, Clone, Copy)]
+pub enum OutboxOp {
+    Upsert,
+    Delete,
+}
+
+impl OutboxOp {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OutboxOp::Upsert => "upsert",
+            OutboxOp::Delete => "delete",
+        }
+    }
+}
+
+/// outbox 实体类型 —— 跟 Firestore collection 名一一对应
+#[derive(Debug, Clone, Copy)]
+pub enum OutboxEntity {
+    Activity,
+    Category,
+    AppCategory,
+    ProcessPath,
+    Device,
+}
+
+impl OutboxEntity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OutboxEntity::Activity => "activity",
+            OutboxEntity::Category => "category",
+            OutboxEntity::AppCategory => "app_category",
+            OutboxEntity::ProcessPath => "process_path",
+            OutboxEntity::Device => "device",
+        }
+    }
+}
+
+/// 在已有事务里写一条 outbox 行。业务表写入与这条 outbox 写入必须共享同一个 conn / 同一个事务，
+/// 才能保证"业务持久化即同步可达"。
+///
+/// `payload` 是 JSON 字符串：upsert 时是当前行的快照；delete 时通常只需要 entity_pk，payload 可以为 "{}"。
+pub fn enqueue(
+    conn: &Connection,
+    op: OutboxOp,
+    entity: OutboxEntity,
+    entity_pk: &str,
+    payload: &str,
+) -> rusqlite::Result<()> {
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO sync_outbox (op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?5)",
+        params![op.as_str(), entity.as_str(), entity_pk, payload, now],
+    )?;
+    Ok(())
+}

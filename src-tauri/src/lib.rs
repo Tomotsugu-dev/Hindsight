@@ -1,6 +1,7 @@
 mod bootstrap;
 mod capture;
 mod commands;
+mod device;
 mod error;
 mod icons;
 mod repo;
@@ -9,7 +10,7 @@ mod storage;
 use std::sync::Arc;
 
 use capture::CaptureService;
-use repo::{activities, settings};
+use repo::{activities, devices, settings};
 use storage::{db_path, DbPool};
 use tauri::Manager;
 
@@ -29,6 +30,13 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
+                // 1) 启动级身份：必须在打开 DB 之前确定 device_id（device.json 在 DB 之外）
+                let dev_meta = device::ensure_loaded()
+                    .expect("加载设备身份")
+                    .clone();
+                log::info!("device_id: {}", dev_meta.device_id);
+
+                // 2) 数据根 + DB
                 let path = db_path().expect("解析数据库路径");
                 log::info!("数据库路径: {}", path.display());
 
@@ -36,6 +44,36 @@ pub fn run() {
                 storage::migrations::run(&pool)
                     .await
                     .expect("执行数据库迁移");
+
+                // 3) 把当前机器写进 devices 表（is_self=1）+ outbox
+                devices::upsert_self(
+                    &pool,
+                    dev_meta.device_id.clone(),
+                    dev_meta.display_name.clone(),
+                    dev_meta.color.clone(),
+                    dev_meta.icon.clone(),
+                    dev_meta.os.clone(),
+                )
+                .await
+                .expect("注册当前设备");
+
+                // 3b) v8 之前硬编码的 'local' device_id 改成真实 self id（幂等，对老数据一次性生效）
+                let self_id_for_fix = dev_meta.device_id.clone();
+                let _ = pool
+                    .0
+                    .call(move |conn| {
+                        let n = conn
+                            .execute(
+                                "UPDATE activities SET device_id = ?1 WHERE device_id = 'local'",
+                                rusqlite::params![self_id_for_fix],
+                            )
+                            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                        if n > 0 {
+                            log::info!("把 {} 条 v8 之前的历史活动 device_id 改为 self", n);
+                        }
+                        Ok(())
+                    })
+                    .await;
 
                 let cfg = settings::load(&pool).await.expect("读取设置");
 
@@ -90,6 +128,8 @@ pub fn run() {
             commands::storage::open_screenshots_dir,
             commands::storage::get_data_root,
             commands::storage::set_data_root,
+            commands::devices::list_devices,
+            commands::devices::update_self_device,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
@@ -100,10 +140,10 @@ fn spawn_cleanup_task(pool: DbPool) {
         loop {
             match settings::load(&pool).await {
                 Ok(cfg) => {
-                    match activities::delete_older_than(&pool, cfg.retention_days).await {
-                        Ok(n) if n > 0 => log::info!("清理了 {n} 条过期记录"),
+                    match activities::delete_screenshots_older_than(&pool, cfg.retention_days).await {
+                        Ok(n) if n > 0 => log::info!("清理了 {n} 张过期截图"),
                         Ok(_) => {}
-                        Err(e) => log::warn!("清理过期记录失败: {e}"),
+                        Err(e) => log::warn!("清理过期截图失败: {e}"),
                     }
                 }
                 Err(e) => log::warn!("清理任务读取设置失败: {e}"),
