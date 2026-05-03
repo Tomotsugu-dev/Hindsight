@@ -29,9 +29,13 @@ pub struct DaySummary {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppUsage {
+    /// 显示名：组的 display_name（如 "Visual Studio Code"），同组的成员合并成一行
     pub process: String,
     pub category_id: String,
     pub minutes: u32,
+    /// AppIcon 用来查图标的代表 process_name —— 在合并组里取一个稳定的成员名，
+    /// 让前端拿组里任一个 process_name 都能查到（图标已跨设备同步）。
+    pub icon_process: String,
 }
 
 /// 报表层的设备维度：All=多设备聚合，Only(id)=只看某一台
@@ -77,12 +81,18 @@ pub async fn day_hours(
     let rows: Vec<(String, String, String)> = pool
         .0
         .call(move |conn| {
+            // 通过 app_group_members → app_groups 拿分类（group 是 cross-OS 同步的真相），
+            // 再 LEFT JOIN active categories 把指向已删分类的归到 'other'。
             let sql = format!(
                 "SELECT a.started_at, a.ended_at,
-                        COALESCE(m.category_id, 'other') AS cat
+                        COALESCE(c.id, 'other') AS cat
                  FROM activities a
-                 LEFT JOIN app_categories m
-                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 LEFT JOIN categories c
+                   ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}",
                 device.sql_clause()
             );
@@ -155,18 +165,29 @@ pub async fn day_apps(
     let target = Local::now() + Duration::days(day_offset as i64);
     let date = target.format("%Y-%m-%d").to_string();
 
-    let rows: Vec<(String, String, i64)> = pool
+    let rows: Vec<(String, String, String, i64)> = pool
         .0
         .call(move |conn| {
+            // 按组聚合（不是按 process_name）：同一个组的多个进程名（mac="Code" + win=
+            // "Visual Studio Code"）合并成一行，时长相加。display 用组的 display_name；
+            // icon_process 取组里 MIN(process_name) 当稳定代表（前端 AppIcon 拿它查
+            // app_icons 表，图标已跨设备同步）。
+            // 没 group 的进程（理论上 v15 backfill + capture::ensure_group 后不存在）
+            // 退化为按 process_name 聚合。
             let sql = format!(
-                "SELECT a.process_name,
-                        COALESCE(m.category_id, 'other') AS cat,
-                        SUM(a.duration_secs) AS total
+                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                        COALESCE(c.id, 'other')                         AS cat,
+                        MIN(a.process_name)                             AS icon_process,
+                        SUM(a.duration_secs)                            AS total
                  FROM activities a
-                 LEFT JOIN app_categories m
-                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 LEFT JOIN categories c
+                   ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}
-                 GROUP BY a.process_name, cat
+                 GROUP BY COALESCE(g.id, a.process_name)
                  ORDER BY total DESC
                  LIMIT ?",
                 device.sql_clause()
@@ -185,7 +206,8 @@ pub async fn day_apps(
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
                     ))
                 })
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
@@ -199,10 +221,11 @@ pub async fn day_apps(
 
     Ok(rows
         .into_iter()
-        .map(|(process, cat, secs)| AppUsage {
+        .map(|(process, cat, icon_process, secs)| AppUsage {
             process,
             category_id: cat,
             minutes: ((secs as f64 / 60.0).round() as u32),
+            icon_process,
         })
         .filter(|a| a.minutes > 0)
         .collect())
@@ -258,13 +281,18 @@ async fn days_in_range(
     let rows: Vec<(String, String, i64)> = pool
         .0
         .call(move |conn| {
+            // 同 day_hours：通过 group → category 拿分类，过滤已删分类
             let sql = format!(
                 "SELECT a.local_date,
-                        COALESCE(m.category_id, 'other') AS cat,
+                        COALESCE(c.id, 'other') AS cat,
                         SUM(a.duration_secs) AS total
                  FROM activities a
-                 LEFT JOIN app_categories m
-                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 LEFT JOIN categories c
+                   ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
                  GROUP BY a.local_date, cat",
                 device.sql_clause()
@@ -339,18 +367,24 @@ async fn apps_in_range(
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
 
-    let rows: Vec<(String, String, i64)> = pool
+    let rows: Vec<(String, String, String, i64)> = pool
         .0
         .call(move |conn| {
+            // 同 day_apps：按组聚合，display = display_name，icon_process = MIN(process_name)
             let sql = format!(
-                "SELECT a.process_name,
-                        COALESCE(m.category_id, 'other') AS cat,
-                        SUM(a.duration_secs) AS total
+                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                        COALESCE(c.id, 'other')                         AS cat,
+                        MIN(a.process_name)                             AS icon_process,
+                        SUM(a.duration_secs)                            AS total
                  FROM activities a
-                 LEFT JOIN app_categories m
-                   ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 LEFT JOIN categories c
+                   ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
-                 GROUP BY a.process_name, cat
+                 GROUP BY COALESCE(g.id, a.process_name)
                  ORDER BY total DESC
                  LIMIT ?",
                 device.sql_clause()
@@ -370,7 +404,8 @@ async fn apps_in_range(
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
                     ))
                 })
                 .map_err(tokio_rusqlite::Error::Rusqlite)?;
@@ -384,10 +419,11 @@ async fn apps_in_range(
 
     Ok(rows
         .into_iter()
-        .map(|(process, cat, secs)| AppUsage {
+        .map(|(process, cat, icon_process, secs)| AppUsage {
             process,
             category_id: cat,
             minutes: (secs as f64 / 60.0).round() as u32,
+            icon_process,
         })
         .filter(|a| a.minutes > 0)
         .collect())

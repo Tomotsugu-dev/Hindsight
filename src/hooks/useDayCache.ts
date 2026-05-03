@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type AppUsage, type HourSlot } from "../api/hindsight";
+import { useCategories } from "../state/categories";
 
 interface DayData {
   hours: HourSlot[];
@@ -15,9 +16,10 @@ const EMPTY_DAY: DayData = { hours: EMPTY_HOURS, apps: [] };
 
 /**
  * `deviceId === undefined` 表示"全部设备聚合"；具体 UUID 表示只看该设备。
- * 切换 deviceId 时缓存清空（不同设备的数据物理上不一样）。
+ * 切换 deviceId / 分类数据变更时清空缓存重新拉取。
  */
 export function useDayCache(currentOffset: number, deviceId?: string) {
+  const { categories } = useCategories();
   const [cache, setCache] = useState<Map<number, DayData>>(new Map());
   const inFlightRef = useRef<Set<number>>(new Set());
 
@@ -45,11 +47,12 @@ export function useDayCache(currentOffset: number, deviceId?: string) {
     [deviceId],
   );
 
-  // 切设备 → 清空缓存与 in-flight，触发重新拉取
+  // 切设备 / categories 引用变化（CategoriesProvider 每次 refresh 后都换新数组）→
+  // 清空缓存重新拉。这样应用分类页里指派 / 配对操作完，Today / Week / Month 立刻反映。
   useEffect(() => {
     setCache(new Map());
     inFlightRef.current.clear();
-  }, [deviceId]);
+  }, [deviceId, categories]);
 
   useEffect(() => {
     fetchOne(currentOffset - 1);

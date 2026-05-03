@@ -27,7 +27,7 @@ function fmtDuration(secs: number): string {
 
 export function PairingSection() {
   const { devices } = useDeviceFilter();
-  const { categories } = useCategories();
+  const { categories, refresh: refreshCategories } = useCategories();
   const [groups, setGroups] = useState<AppGroup[] | null>(null);
   const [draggingProcessName, setDraggingProcessName] = useState<string | null>(null);
   const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
@@ -86,7 +86,9 @@ export function PairingSection() {
     if (!src) return;
     try {
       await api.mergeAppGroup(src, targetGroupId);
-      await reload();
+      // merge 会把 src 的 app_categories 行 mirror 到目标组的分类 → 顶部分类列表
+      // 里成员归属可能变（src 加入目标组的分类），同步刷新。
+      await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
       console.error("merge 失败:", e);
     }
@@ -95,7 +97,9 @@ export function PairingSection() {
   const onUnmerge = async (processName: string) => {
     try {
       await api.unmergeAppGroup(processName);
-      await reload();
+      // unmerge 后该 process 的 app_categories 行同步到它新独立组的分类（继承自原组），
+      // 顶部分类列表里的成员归属也会跟着调，同步刷新。
+      await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
       console.error("unmerge 失败:", e);
     }
@@ -104,7 +108,11 @@ export function PairingSection() {
   const onAssignCategory = async (groupId: string, categoryId: string | null) => {
     try {
       await api.assignAppGroupCategory(groupId, categoryId);
-      await reload();
+      // 同时刷新两边状态：
+      // - reload()：本 section 的组列表（新分类显示在每行末尾的下拉里）
+      // - refreshCategories()：顶部「应用分类」section 的成员列表
+      //   （后端 mirror 已经写了 app_categories 行，前端 useCategories 不会自动重拉）
+      await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
       console.error("assign category 失败:", e);
     }

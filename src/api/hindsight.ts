@@ -11,9 +11,12 @@ export interface HourSlot {
 }
 
 export interface AppUsage {
+  /** 显示名：组的 display_name（合并组内多个进程名） */
   process: string;
   categoryId: string;
   minutes: number;
+  /** AppIcon 用来查图标的代表 process_name；合并组里取一个稳定成员名 */
+  iconProcess: string;
 }
 
 export interface DaySummaryDto {

@@ -87,7 +87,9 @@ export default function TodayPage() {
     for (const a of apps) {
       if (!a.categoryId) continue;
       const list = topAppsByCat.get(a.categoryId) ?? [];
-      list.push(a.process);
+      // AppStack 拿这串去查图标，必须用 iconProcess（合并组里的稳定代表名）；
+      // a.process 是组的 display_name，可能跟 app_icons 表里的 key 不一致。
+      list.push(a.iconProcess);
       topAppsByCat.set(a.categoryId, list);
     }
     return categories
@@ -117,7 +119,7 @@ export default function TodayPage() {
         subtitle: cat?.name,
         color,
         minutes: a.minutes,
-        leading: <AppIcon processName={a.process} fallbackColor={color} />,
+        leading: <AppIcon processName={a.iconProcess} fallbackColor={color} />,
       };
     });
   }, [apps, getCategory]);

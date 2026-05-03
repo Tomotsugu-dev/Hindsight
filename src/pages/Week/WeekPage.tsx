@@ -79,7 +79,7 @@ export default function WeekPage() {
     for (const a of apps) {
       if (!a.categoryId) continue;
       const list = topAppsByCat.get(a.categoryId) ?? [];
-      list.push(a.process);
+      list.push(a.iconProcess);
       topAppsByCat.set(a.categoryId, list);
     }
     return categories
@@ -109,7 +109,7 @@ export default function WeekPage() {
         subtitle: cat?.name,
         color,
         minutes: a.minutes,
-        leading: <AppIcon processName={a.process} fallbackColor={color} />,
+        leading: <AppIcon processName={a.iconProcess} fallbackColor={color} />,
       };
     });
   }, [apps, getCategory]);

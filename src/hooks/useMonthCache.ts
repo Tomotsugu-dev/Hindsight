@@ -5,6 +5,7 @@ import {
   type AppUsage,
   type DaySummary,
 } from "../api/hindsight";
+import { useCategories } from "../state/categories";
 
 interface MonthData {
   days: DaySummary[];
@@ -14,6 +15,7 @@ interface MonthData {
 const EMPTY_MONTH: MonthData = { days: [], apps: [] };
 
 export function useMonthCache(currentOffset: number, deviceId?: string) {
+  const { categories } = useCategories();
   const [cache, setCache] = useState<Map<number, MonthData>>(new Map());
   const inFlightRef = useRef<Set<number>>(new Set());
 
@@ -42,10 +44,12 @@ export function useMonthCache(currentOffset: number, deviceId?: string) {
     [deviceId],
   );
 
+  // 切设备 / categories 引用变化（CategoriesProvider 每次 refresh 后都换新数组）→
+  // 清空缓存重新拉，让分类页里的指派 / 配对操作立刻反映到本月数据上。
   useEffect(() => {
     setCache(new Map());
     inFlightRef.current.clear();
-  }, [deviceId]);
+  }, [deviceId, categories]);
 
   useEffect(() => {
     fetchOne(currentOffset - 1);
