@@ -69,8 +69,7 @@
   --font-weight-semibold: 650;
 
   /* Layout */
-  --sidebar-width: 180px;
-  --sidebar-rail-width: 56px;
+  --sidebar-width: 156px;
 
   /* Motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);

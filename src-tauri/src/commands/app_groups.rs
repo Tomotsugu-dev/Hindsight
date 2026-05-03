@@ -11,6 +11,26 @@ pub async fn list_app_groups(pool: State<'_, DbPool>) -> Result<Vec<AppGroup>, S
 }
 
 #[tauri::command]
+pub async fn create_app_group(
+    pool: State<'_, DbPool>,
+    display_name: String,
+) -> Result<String, String> {
+    app_groups::create(&pool, &display_name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn delete_app_group(
+    pool: State<'_, DbPool>,
+    group_id: String,
+) -> Result<(), String> {
+    app_groups::delete(&pool, &group_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn merge_app_group(
     pool: State<'_, DbPool>,
     process_name: String,

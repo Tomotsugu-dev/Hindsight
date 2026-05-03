@@ -1,5 +1,13 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
+import { Plus, Trash2, X } from "lucide-react";
 import { api, type AppGroup, type AppGroupMember } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { useCategories } from "../../state/categories";
@@ -10,10 +18,7 @@ import styles from "./Pairing.module.css";
 
 /** 把 group + 设备列表换算成「每个 device 列对应哪个 member（如果有）」的 lookup */
 function membersByDevice(group: AppGroup, devices: Device[]): (AppGroupMember | null)[] {
-  return devices.map((d) => {
-    // 优先匹配 last_device_id；如果某个 member 的 last_device_id 是这个设备就放进来
-    return group.members.find((m) => m.lastDeviceId === d.id) ?? null;
-  });
+  return devices.map((d) => group.members.find((m) => m.lastDeviceId === d.id) ?? null);
 }
 
 function fmtDuration(secs: number): string {
@@ -25,13 +30,37 @@ function fmtDuration(secs: number): string {
   return rem === 0 ? `${h}h` : `${h}h${rem}m`;
 }
 
+/** 拖拽状态：源 process / 源组 / 锁定的列索引 / 源列水平中心（屏幕坐标）/ 当前 cursor Y */
+interface DragState {
+  processName: string;
+  sourceGroupId: string;
+  deviceColIdx: number;
+  /** 源列的水平中心 X，固定，飞行 chip 锁在这条线上（实现「列内移动」） */
+  lockedX: number;
+  /** 飞行 chip 显示用的初始内容快照（避免 setState race） */
+  displayName: string;
+  recentSecs: number;
+  /** 当前鼠标 Y（屏幕坐标） */
+  cursorY: number;
+}
+
 export function PairingSection() {
   const { devices } = useDeviceFilter();
   const { categories, refresh: refreshCategories } = useCategories();
   const [groups, setGroups] = useState<AppGroup[] | null>(null);
-  const [draggingProcessName, setDraggingProcessName] = useState<string | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
   const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
+
+  // 每行（一个 group）的 DOM 引用，mousemove 时拿来做命中检测
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const setRowRef = useCallback(
+    (id: string) => (el: HTMLDivElement | null) => {
+      if (el) rowRefs.current.set(id, el);
+      else rowRefs.current.delete(id);
+    },
+    [],
+  );
 
   const reload = async () => {
     try {
@@ -47,7 +76,7 @@ export function PairingSection() {
     void reload();
   }, []);
 
-  // self 设备先排前面，其他设备按名字稳定排序
+  // self 设备先排前面，其它按名字稳定排序
   const sortedDevices = useMemo<Device[]>(() => {
     const arr = [...devices];
     arr.sort((a, b) => {
@@ -58,15 +87,50 @@ export function PairingSection() {
     return arr;
   }, [devices]);
 
-  // 过滤掉永远没有任何成员（被软删 / 全成员被 unmerge 走）的空组，避免列表里出现一行全是「—」
+  // 显示规则：
+  //   - 空组保留（误操作 merge 后源行变空 → 用户能看到、能拖回）
+  //   - 已删的组不显示（list_groups 已过滤 deleted_at IS NULL，保险再过一遍）
+  //   - 有成员但全在未知设备上的也保留（避免数据偶尔漏 device_meta 时整行消失）
   const visibleGroups = useMemo(() => {
     if (!groups) return null;
-    return groups
-      .filter((g) => g.members.length > 0)
-      .filter((g) =>
-        g.members.some((m) => sortedDevices.some((d) => d.id === m.lastDeviceId)),
-      );
-  }, [groups, sortedDevices]);
+    return groups;
+  }, [groups]);
+
+  // —— 拖拽：mousemove 实时锁 X、跟随 Y、命中检测 ——
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e: MouseEvent) => {
+      setDrag((d) => (d ? { ...d, cursorY: e.clientY } : null));
+      // 命中检测：找鼠标 Y 落在哪个 row 内（X 不参与，因为我们要求列锁但仍允许拖到任意行）
+      let hit: string | null = null;
+      for (const [gid, el] of rowRefs.current) {
+        const r = el.getBoundingClientRect();
+        if (e.clientY >= r.top && e.clientY <= r.bottom) {
+          hit = gid;
+          break;
+        }
+      }
+      setHoverGroupId(hit);
+    };
+    const onUp = () => {
+      const cur = drag;
+      const target = hoverGroupId;
+      setDrag(null);
+      setHoverGroupId(null);
+      if (cur && target && target !== cur.sourceGroupId) {
+        void api
+          .mergeAppGroup(cur.processName, target)
+          .then(() => Promise.all([reload(), refreshCategories()]))
+          .catch((e) => console.error("merge 失败:", e));
+      }
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [drag, hoverGroupId, refreshCategories]);
 
   if (visibleGroups === null) {
     return <div className={styles.toolbar}>加载中…</div>;
@@ -75,30 +139,59 @@ export function PairingSection() {
     return <div className={styles.toolbar}>还没有设备数据。启动一段时间后再来看。</div>;
   }
 
-  // 所有列（每台设备 + 统一名）等宽 1fr；操作列 auto 自适应。
+  // 所有列等宽 1fr；操作列 auto。
   const deviceColsTemplate = sortedDevices.map(() => "1fr").join(" ");
   const cssVars = { "--device-cols": deviceColsTemplate } as CSSProperties;
 
-  const onDrop = async (targetGroupId: string) => {
-    const src = draggingProcessName;
-    setDraggingProcessName(null);
-    setHoverGroupId(null);
-    if (!src) return;
+  const startDrag = (
+    e: React.MouseEvent<HTMLDivElement>,
+    member: AppGroupMember,
+    sourceGroupId: string,
+    deviceColIdx: number,
+  ) => {
+    if (e.button !== 0) return; // 只接左键
+    e.preventDefault();
+    // 用源 chip 的列容器水平中心做 lockedX —— 后续飞行 chip 永远停在这条线上
+    const colEl = e.currentTarget as HTMLElement;
+    const rect = colEl.getBoundingClientRect();
+    const lockedX = rect.left + rect.width / 2;
+    setDrag({
+      processName: member.processName,
+      sourceGroupId,
+      deviceColIdx,
+      lockedX,
+      displayName: displayAppName(member.processName),
+      recentSecs: member.recentSecs,
+      cursorY: e.clientY,
+    });
+  };
+
+  const onDeleteRow = async (groupId: string) => {
     try {
-      await api.mergeAppGroup(src, targetGroupId);
-      // merge 会把 src 的 app_categories 行 mirror 到目标组的分类 → 顶部分类列表
-      // 里成员归属可能变（src 加入目标组的分类），同步刷新。
-      await Promise.all([reload(), refreshCategories()]);
+      await api.deleteAppGroup(groupId);
+      await reload();
     } catch (e) {
-      console.error("merge 失败:", e);
+      console.error("删除行失败:", e);
+    }
+  };
+
+  const onCreateGroup = async () => {
+    // 默认名 + 时间后缀防重；用户可立即在 nameInput 里改
+    const defaultName = `新行 ${new Date().toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+    try {
+      await api.createAppGroup(defaultName);
+      await reload();
+    } catch (e) {
+      console.error("创建行失败:", e);
     }
   };
 
   const onUnmerge = async (processName: string) => {
     try {
       await api.unmergeAppGroup(processName);
-      // unmerge 后该 process 的 app_categories 行同步到它新独立组的分类（继承自原组），
-      // 顶部分类列表里的成员归属也会跟着调，同步刷新。
       await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
       console.error("unmerge 失败:", e);
@@ -108,10 +201,6 @@ export function PairingSection() {
   const onAssignCategory = async (groupId: string, categoryId: string | null) => {
     try {
       await api.assignAppGroupCategory(groupId, categoryId);
-      // 同时刷新两边状态：
-      // - reload()：本 section 的组列表（新分类显示在每行末尾的下拉里）
-      // - refreshCategories()：顶部「应用分类」section 的成员列表
-      //   （后端 mirror 已经写了 app_categories 行，前端 useCategories 不会自动重拉）
       await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
       console.error("assign category 失败:", e);
@@ -146,10 +235,6 @@ export function PairingSection() {
 
   return (
     <div className={styles.pairing} style={cssVars}>
-      <div className={styles.toolbar}>
-        把左边的应用拖到右边一行里，就能合并成一组（跨平台 / 跨设备同名应用）。一组共享一个分类。
-      </div>
-
       <div className={styles.devHeader}>
         {sortedDevices.map((d) => (
           <span key={d.id} className={styles.devHeaderName}>
@@ -158,69 +243,50 @@ export function PairingSection() {
         ))}
         <span className={styles.devHeaderName}>统一名</span>
         <span className={styles.devHeaderActionPad} />
+        <span className={styles.deleteCol} />
       </div>
 
-      {visibleGroups.map((group) => {
+      {visibleGroups.map((group, idx) => {
         const slots = membersByDevice(group, sortedDevices);
         const isPaired = group.members.length > 1;
-        const isHover = hoverGroupId === group.id;
+        const isHot = drag !== null && hoverGroupId === group.id && drag.sourceGroupId !== group.id;
+        const isSourceRow = drag !== null && drag.sourceGroupId === group.id;
         const nameDraft = pendingNames[group.id] ?? group.displayName;
 
         return (
           <div
             key={group.id}
+            ref={setRowRef(group.id)}
             className={[
               styles.row,
-              isPaired ? styles.paired : "",
-              isHover ? styles.dropTarget : "",
+              idx % 2 === 0 ? styles.rowEven : styles.rowOdd,
+              isHot ? styles.hot : "",
+              isSourceRow ? styles.sourceRow : "",
             ]
               .filter(Boolean)
               .join(" ")}
-            onDragOver={(e) => {
-              if (!draggingProcessName) return;
-              // 只在源 process 不属于本 group 时允许 drop（拖回原位无意义）
-              const sourceInThisGroup = group.members.some(
-                (m) => m.processName === draggingProcessName,
-              );
-              if (sourceInThisGroup) return;
-              e.preventDefault();
-              if (hoverGroupId !== group.id) setHoverGroupId(group.id);
-            }}
-            onDragLeave={() => {
-              if (hoverGroupId === group.id) setHoverGroupId(null);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              void onDrop(group.id);
-            }}
           >
             {slots.map((member, idx) => {
               const dev = sortedDevices[idx];
               if (!member) {
                 return (
                   <div key={dev.id} className={`${styles.devCol} ${styles.empty}`}>
-                    —
+                    <span className={styles.emptyDash} aria-hidden />
                   </div>
                 );
               }
-              const isDragging = draggingProcessName === member.processName;
+              const isDraggingThis =
+                drag !== null && drag.processName === member.processName;
               return (
                 <div
                   key={dev.id}
                   className={styles.devCol}
-                  draggable
-                  onDragStart={(e) => {
-                    setDraggingProcessName(member.processName);
-                    e.dataTransfer.setData("text/plain", member.processName);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragEnd={() => {
-                    setDraggingProcessName(null);
-                    setHoverGroupId(null);
-                  }}
+                  onMouseDown={(e) => startDrag(e, member, group.id, idx)}
                 >
                   <span
-                    className={`${styles.chip} ${isDragging ? styles.dragging : ""}`}
+                    className={`${styles.chip} ${
+                      isDraggingThis ? styles.chipPlaceholder : ""
+                    }`}
                   >
                     <AppIcon
                       processName={member.processName}
@@ -231,10 +297,11 @@ export function PairingSection() {
                       {displayAppName(member.processName)}
                     </span>
                     <span className={styles.chipMeta}>{fmtDuration(member.recentSecs)}</span>
-                    {isPaired && (
+                    {isPaired && !isDraggingThis && (
                       <button
                         type="button"
                         className={styles.chipUnmerge}
+                        onMouseDown={(e) => e.stopPropagation()}
                         onClick={() => void onUnmerge(member.processName)}
                         title="从该组移出"
                       >
@@ -250,6 +317,7 @@ export function PairingSection() {
               <input
                 className={styles.nameInput}
                 value={nameDraft}
+                onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) =>
                   setPendingNames((p) => ({ ...p, [group.id]: e.target.value }))
                 }
@@ -277,9 +345,50 @@ export function PairingSection() {
                 onPick={(cid) => void onAssignCategory(group.id, cid)}
               />
             </div>
+
+            <div className={styles.deleteCol}>
+              {group.members.length === 0 && (
+                <button
+                  type="button"
+                  className={styles.deleteRowBtn}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => void onDeleteRow(group.id)}
+                  title="删除此空行"
+                  aria-label="删除此空行"
+                >
+                  <Trash2 size={12} strokeWidth={2.25} />
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
+
+      <button
+        type="button"
+        className={styles.createRowBtn}
+        onClick={() => void onCreateGroup()}
+      >
+        <Plus size={12} strokeWidth={2.25} />
+        新建行
+      </button>
+
+      {drag &&
+        createPortal(
+          <div
+            className={styles.flyChip}
+            style={{
+              // X 锁在源列水平中心；Y 跟着鼠标
+              left: drag.lockedX,
+              top: drag.cursorY,
+            }}
+          >
+            <AppIcon processName={drag.processName} fallbackColor="#94a3b8" size={14} />
+            <span>{drag.displayName}</span>
+            <span className={styles.flyChipMeta}>{fmtDuration(drag.recentSecs)}</span>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

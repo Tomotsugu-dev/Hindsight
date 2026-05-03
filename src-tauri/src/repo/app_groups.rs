@@ -139,6 +139,89 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
     Ok(groups)
 }
 
+/// 用户在 UI 主动建一个空组：随机 UUID 作 id，display_name 用户给。
+/// enqueue outbox 让对端也拉到这个空组。返回新组的 id 给前端，方便后续操作。
+///
+/// 主要用途：误把 chip 拖进了别的组，源行被过滤光后想回到一个干净的目标行 —— 现在
+/// 用户能主动新建，而不是依赖 capture loop 见到新 process_name 才被动 ensure_group。
+pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
+    let name = display_name.trim().to_string();
+    if name.is_empty() {
+        return Err(crate::error::Error::Other("组名不能为空".into()));
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+    let id_for_db = id.clone();
+    let id_for_outbox = id.clone();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                 VALUES(?, ?, NULL, ?, NULL)",
+                rusqlite::params![id_for_db, name, now],
+            )
+            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            enqueue(
+                conn,
+                OutboxOp::Upsert,
+                OutboxEntity::AppGroup,
+                &id_for_outbox,
+                &serde_json::json!({ "groupId": id_for_outbox }).to_string(),
+            )
+            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            Ok(())
+        })
+        .await?;
+    Ok(id)
+}
+
+/// 软删一个**空组**。仅对 0 成员的组生效（有成员强制走 unmerge 路径，避免孤儿成员
+/// 突然没有 group_id 可指）。enqueue outbox 让对端也把这个组从列表里去掉。
+/// 幂等：组已被删 / 不存在 → no-op。
+pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
+    let id = group_id.to_string();
+    let now = Utc::now().to_rfc3339();
+    pool.0
+        .call(move |conn| {
+            let has_members: bool = conn
+                .query_row(
+                    "SELECT 1 FROM app_group_members
+                     WHERE group_id = ?1 AND deleted_at IS NULL",
+                    rusqlite::params![id],
+                    |_| Ok(true),
+                )
+                .optional()
+                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .unwrap_or(false);
+            if has_members {
+                return Err(tokio_rusqlite::Error::Other(
+                    "组内仍有成员，不能删除（先把成员拖出来）".into(),
+                ));
+            }
+            let n = conn
+                .execute(
+                    "UPDATE app_groups SET deleted_at = ?1, updated_at = ?1
+                     WHERE id = ?2 AND deleted_at IS NULL",
+                    rusqlite::params![now, id],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            // n == 0 → 已经被删过 / 不存在；不入 outbox
+            if n > 0 {
+                enqueue(
+                    conn,
+                    OutboxOp::Upsert,
+                    OutboxEntity::AppGroup,
+                    &id,
+                    &serde_json::json!({ "groupId": id }).to_string(),
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// 配对：把 source_process_name 的 group 改成 target_group_id。
 /// 如果 source 原本就在 target_group_id，no-op。
 /// 操作完成后 source 原来所在的组（如果空了）保留为软删占位 —— 同步到对端便于 LWW。

@@ -9,31 +9,16 @@
     0 0 0 1px rgba(20, 20, 40, 0.06),
     0 24px 60px rgba(20, 20, 40, 0.18);
 
-  /* 共享几何变量 — 用一个总开关控制所有联动元素的尺寸 */
-  --sb-current-width: var(--sidebar-rail-width);
-
-  /* 文字层 — 收起态 */
-  --label-opacity: 0;
-  --label-translate: -6px;
-
-  /* 胶囊几何 — 收起态：围着图标的小方块 */
-  --pill-left: 5px;
-  --pill-width: 36px;
+  /* 侧栏永远展开宽度 —— 不再有收起态。
+     label/pill 相关 CSS var 都移走，子组件会用 var(name, default) 里 default 值
+     （1 / 0 / 0 / 100%），刚好就是展开态的视觉。*/
+  --sb-current-width: var(--sidebar-width);
 }
 
 /* macOS：原生窗口已经自带圆角和阴影，关掉自己的，避免双层圆角 / 阴影叠加 */
 :global(body[data-platform="macos"]) .shell {
   border-radius: 0;
   box-shadow: none;
-}
-
-/* 展开态：所有变量一起翻转 */
-.shell.expanded {
-  --sb-current-width: var(--sidebar-width);
-  --label-opacity: 1;
-  --label-translate: 0;
-  --pill-left: 0px;
-  --pill-width: 100%;
 }
 
 .dragStrip {
@@ -49,7 +34,7 @@
   -webkit-user-select: none;
 }
 
-/* 主内容：left 跟着侧栏宽度走 */
+/* 主内容：left 锁在侧栏宽度（侧栏不再收起，无需 transition） */
 .content {
   position: absolute;
   top: 0;
@@ -58,8 +43,6 @@
   right: 0;
   overflow: auto;
   background: var(--surface-card);
-  transition: left 360ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: left;
   /* 隐藏滚动条（功能保留） */
   scrollbar-width: none;
 }
@@ -79,7 +62,6 @@
   pointer-events: none;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  transition: left 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .shell::before {
@@ -94,7 +76,7 @@
   -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
 }
 
-/* 侧栏宿主：宽度也跟着同一个变量走 */
+/* 侧栏宿主：固定宽度 */
 .sidebarHost {
   position: absolute;
   top: 0;
@@ -103,7 +85,5 @@
   width: var(--sb-current-width);
   overflow: hidden;
   z-index: 4;
-  transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: width;
   filter: drop-shadow(8px 0 18px rgba(20, 20, 40, 0.06));
 }

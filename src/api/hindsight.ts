@@ -167,6 +167,10 @@ export const api = {
   listUnclassifiedApps: (daysBack?: number) =>
     invoke<UnclassifiedApp[]>("list_unclassified_apps", { daysBack }),
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
+  createAppGroup: (displayName: string) =>
+    invoke<string>("create_app_group", { displayName }),
+  deleteAppGroup: (groupId: string) =>
+    invoke<void>("delete_app_group", { groupId }),
   mergeAppGroup: (processName: string, targetGroupId: string) =>
     invoke<void>("merge_app_group", { processName, targetGroupId }),
   unmergeAppGroup: (processName: string) =>

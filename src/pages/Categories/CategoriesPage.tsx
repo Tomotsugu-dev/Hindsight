@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Info, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import type { Category } from "../../api/hindsight";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
@@ -58,10 +58,19 @@ export default function CategoriesPage() {
         <div className={styles.headerText}>
           <h2 className={styles.title} style={{ fontSize: 18 }}>
             应用 · 跨设备配对
+            <span className={styles.infoTip} tabIndex={0} aria-label="详细说明">
+              <Info size={14} strokeWidth={2.25} />
+              <span className={styles.infoTipBody} role="tooltip">
+                同一个应用在不同系统上的进程名可能不一样（macOS 上叫 “Code”，
+                Windows 上叫 “Visual Studio Code”），如果不配对，时长会被算成两个
+                独立应用、分类也得在每台设备上单独绑定。配对后，名字、分类、图标、
+                时长全部统一。
+              </span>
+            </span>
           </h2>
           <p className={styles.meta}>
-            xcap 在 mac / win 上对同一应用返回不同进程名（mac="Code" / win="Visual Studio Code"）。
-            把不同设备上的同一应用拖到一行里就合并成一组，行末「指派」给整组指定分类，跨平台联动。
+            在设备列里 <strong className={styles.metaEmph}>上下拖动</strong>{" "}
+            应用到目标行 → 合并成一组，统一名字 / 分类 / 时长。
           </p>
         </div>
       </header>

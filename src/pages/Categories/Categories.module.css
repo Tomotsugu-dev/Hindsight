@@ -34,6 +34,64 @@
   margin: 0;
 }
 
+/* meta 文本里需要强调的关键词（操作动词等）—— 不喧宾夺主，但比正文显眼一档 */
+.metaEmph {
+  color: var(--color-accent);
+  font-weight: 650;
+  letter-spacing: 0.005em;
+  padding: 0 1px;
+}
+
+/* 标题旁的 (i) 图标：hover/focus 出现详细说明 tooltip */
+.infoTip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 6px;
+  color: var(--text-faint);
+  cursor: help;
+  outline: none;
+}
+
+.infoTip:hover,
+.infoTip:focus-visible {
+  color: var(--text-muted);
+}
+
+.infoTipBody {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: rgba(20, 20, 40, 0.94);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  border-radius: 8px;
+  box-shadow:
+    0 8px 24px rgba(20, 20, 40, 0.18),
+    0 1px 2px rgba(20, 20, 40, 0.06);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+}
+
+.infoTip:hover .infoTipBody,
+.infoTip:focus-visible .infoTipBody {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .card {
   display: flex;
   flex-direction: column;

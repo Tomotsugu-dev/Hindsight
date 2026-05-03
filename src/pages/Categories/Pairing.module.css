@@ -4,46 +4,69 @@
   gap: 4px;
 }
 
-/* 所有列（设备 + 统一名）都用 1fr 等分；操作列 auto 自适应。*/
+/* 所有列（设备 + 统一名）等分 1fr；操作列 auto。表头跟 row 共用。*/
 .row {
   display: grid;
-  grid-template-columns: var(--device-cols) 1fr auto;
+  /* device cols / unified name / 指派下拉 / 行末删除（仅空行有，但占位保持整列对齐）*/
+  grid-template-columns: var(--device-cols) 1fr auto auto;
   align-items: center;
   gap: 12px;
   padding: 6px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
   transition:
-    background-color 120ms ease-out,
-    border-color 120ms ease-out,
-    box-shadow 120ms ease-out;
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.row:hover {
+/* zebra：相邻行底色错开一档，分块更清晰。先于 hover / hot 写，
+   让那几个交互状态的特定 background 能覆盖。 */
+.rowEven {
   background: rgba(0, 0, 0, 0.025);
 }
 
-.row.dropTarget {
+.rowOdd {
+  background: transparent;
+}
+
+.row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 拖拽时悬停的目标行：撞起来 —— 抬升 + 阴影 + 描边 + 微缩放 */
+.row.hot {
   background: color-mix(in oklab, var(--color-accent) 10%, white);
-  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 20%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  box-shadow:
+    0 4px 12px color-mix(in oklab, var(--color-accent) 18%, transparent),
+    0 0 0 2px color-mix(in oklab, var(--color-accent) 22%, transparent);
+  transform: translateY(-1px) scale(1.005);
+}
+
+/* 当前正在被拖的源行：稍微下沉、淡化，告诉你"它现在不在这" */
+.row.sourceRow {
+  opacity: 0.55;
 }
 
 .devCol {
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 32px;
-  /* WebKit (Tauri WKWebView macOS) 对 <div draggable=true> 不一定主动渲染 drag preview；
-     显式声明这个属性让 WebKit 把整个元素当 drag source 处理。*/
-  -webkit-user-drag: element;
+  min-height: 36px;
 }
 
+/* 空槽：居中虚线，比文字"—"更像"留位"的视觉语言 */
 .devCol.empty {
-  -webkit-user-drag: none;
-  color: var(--text-faint);
-  font-size: 12px;
-  justify-content: flex-start;
+  justify-content: stretch;
+}
+
+.emptyDash {
+  flex: 1;
+  height: 0;
+  border-top: 1px dashed rgba(0, 0, 0, 0.18);
+  margin: 0 12px;
 }
 
 .chip {
@@ -60,7 +83,8 @@
   border: 1px solid transparent;
   transition:
     background-color 120ms ease-out,
-    border-color 120ms ease-out;
+    border-color 120ms ease-out,
+    opacity 120ms ease-out;
 }
 
 .chip:hover {
@@ -72,8 +96,12 @@
   cursor: grabbing;
 }
 
-.chip.dragging {
-  opacity: 0.4;
+/* 源 chip 在拖动过程中变虚线占位 —— 占据原槽，告诉你"原始位置在这" */
+.chipPlaceholder {
+  opacity: 0.35;
+  border: 1px dashed rgba(0, 0, 0, 0.25);
+  background: transparent;
+  pointer-events: none;
 }
 
 .chipName {
@@ -137,6 +165,7 @@
   font-weight: 500;
   color: var(--text-strong);
   outline: none;
+  text-align: center;
   transition: border-color 120ms ease-out, background-color 120ms ease-out;
 }
 
@@ -158,20 +187,10 @@
   justify-content: flex-end;
 }
 
-.catTag {
-  font-size: 10px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-/* 表头：跟 row 用同一套列模板，对齐每个 column */
+/* 表头跟 row 用同一套列模板（含末尾删除占位列），对齐每个 column */
 .devHeader {
   display: grid;
-  grid-template-columns: var(--device-cols) 1fr auto;
+  grid-template-columns: var(--device-cols) 1fr auto auto;
   gap: 12px;
   padding: 0 12px 8px;
   font-size: 10px;
@@ -188,10 +207,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .devHeaderActionPad {
   min-width: 64px;
+}
+
+/* 行末删除按钮所在列：固定宽度让 grid 对齐；非空行渲染空 div 占位 */
+.deleteCol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
 }
 
 .toolbar {
@@ -199,4 +228,90 @@
   color: var(--text-faint);
   padding: 0 4px 12px;
   line-height: 1.5;
+}
+
+/* 拖拽时跟随光标的"飞行" chip —— X 锁在源列中央，Y 跟鼠标。
+   带阴影 + 轻微缩放表示"提起来了"，与原 chip 的占位框形成对比。*/
+.flyChip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.04);
+  background: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow:
+    0 8px 24px rgba(20, 20, 40, 0.18),
+    0 2px 4px rgba(20, 20, 40, 0.08),
+    0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.flyChipMeta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* 「+ 新建行」按钮：克制风格，不抢眼但能找到。误操作后用它建一个新空行作 drop 靶 */
+.createRowBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  margin-top: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.createRowBtn:hover {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+}
+
+.createRowBtn:active {
+  transform: translateY(0.5px);
+}
+
+/* 空行末尾的删除按钮：低饱和度，hover 时变红色提示破坏性操作 */
+.deleteRowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.deleteRowBtn:hover {
+  background: color-mix(in oklab, #ef4444 10%, transparent);
+  border-color: color-mix(in oklab, #ef4444 35%, transparent);
+  color: #ef4444;
 }
