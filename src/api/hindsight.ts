@@ -82,10 +82,9 @@ export interface Settings {
   autoStart: boolean;
   showWindowOnAutoStart: boolean;
   retentionDays: number;
-  /** 用户自带 Firebase 项目凭证（BYO 架构） */
-  firebaseClientId: string;
-  firebaseClientSecret: string;
-  firebaseApiKey: string;
+  /** Google Cloud Console 创建的 Desktop App OAuth 凭证（Drive 同步用） */
+  googleClientId: string;
+  googleClientSecret: string;
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -111,8 +110,17 @@ export interface AuthState {
   signedIn: boolean;
   uid: string | null;
   email: string | null;
-  /** 同步配置（client id / secret / api key 三件套）是否齐全 */
+  /** OAuth 凭证是否齐全（决定登录按钮是否可点） */
   configured: boolean;
+}
+
+export interface SyncStatus {
+  running: boolean;
+  lastPushedAt: string | null;
+  lastPulledAt: string | null;
+  lastError: string | null;
+  pending: number;
+  deadLetter: number;
 }
 
 export const api = {
@@ -163,4 +171,6 @@ export const api = {
   authStatus: () => invoke<AuthState>("auth_status"),
   signInWithGoogle: () => invoke<AuthState>("sign_in_with_google"),
   signOut: () => invoke<void>("sign_out"),
+  syncStatus: () => invoke<SyncStatus>("sync_status"),
+  syncNow: () => invoke<void>("sync_now"),
 };

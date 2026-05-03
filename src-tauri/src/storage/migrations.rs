@@ -147,6 +147,11 @@ const MIGRATIONS: &[&str] = &[
     -- 把现有 activities 的 updated_at 回填到 ended_at（首次同步会推这批存量）
     UPDATE activities SET updated_at = ended_at WHERE updated_at = '1970-01-01T00:00:00Z';
     "#,
+    // v9：切换云同步后端，旧 cursor 名不再使用，outbox 从头开始。
+    r#"
+    DELETE FROM sync_outbox;
+    DELETE FROM sync_cursor;
+    "#,
 ];
 
 pub async fn run(pool: &DbPool) -> Result<()> {

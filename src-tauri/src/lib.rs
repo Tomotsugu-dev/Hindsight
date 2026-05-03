@@ -13,6 +13,7 @@ use std::sync::Arc;
 use capture::CaptureService;
 use repo::{activities, devices, settings};
 use storage::{db_path, DbPool};
+use sync::engine::SyncEngine;
 use tauri::Manager;
 
 const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
@@ -98,8 +99,14 @@ pub fn run() {
 
                 spawn_cleanup_task(pool.clone());
 
+                // 4) 同步引擎：登录态由 engine 内部检查，未登录时所有循环都是 no-op；
+                //    所以可以无条件 start，登录后自动开始推
+                let sync_engine = Arc::new(SyncEngine::new(pool.clone()));
+                sync_engine.start().await;
+
                 handle.manage(pool);
                 handle.manage(svc);
+                handle.manage(sync_engine);
             });
             Ok(())
         })
@@ -134,6 +141,8 @@ pub fn run() {
             commands::auth::auth_status,
             commands::auth::sign_in_with_google,
             commands::auth::sign_out,
+            commands::sync::sync_status,
+            commands::sync::sync_now,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

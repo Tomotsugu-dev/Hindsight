@@ -6,3 +6,4 @@ pub mod devices;
 pub mod icons;
 pub mod settings;
 pub mod storage;
+pub mod sync;

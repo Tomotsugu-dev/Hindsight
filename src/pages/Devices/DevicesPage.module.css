@@ -92,6 +92,29 @@
   color: var(--text-muted);
 }
 
+.syncStats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.01em;
+  padding-top: 2px;
+}
+
+.syncStatErr {
+  color: var(--status-error);
+  font-weight: 550;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .syncActions {
   display: inline-flex;
   align-items: center;
@@ -161,23 +184,148 @@
   cursor: not-allowed;
 }
 
-/* —— 凭证表单 —— */
-.credForm {
+.syncError {
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b91c1c;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* —— OAuth 设置面板 —— */
+.setupPanel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding-top: 14px;
   border-top: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.setupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+}
+
+.setupHeader svg {
+  color: var(--color-accent);
+}
+
+.setupClose {
+  margin-left: auto;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  transition:
+    color 180ms ease-out,
+    background-color 180ms ease-out;
+}
+
+.setupClose:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-strong);
+}
+
+.setupSteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setupSteps > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.stepNum {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-top: 1px;
+}
+
+.stepBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stepTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.stepDesc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.stepBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  color: var(--color-accent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 25%, transparent);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 550;
+  transition:
+    background-color 180ms ease-out,
+    transform 100ms ease-out;
+}
+
+.stepBtn:hover {
+  background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+}
+
+.stepBtn:active {
+  transform: scale(0.97);
+}
+
+/* —— Client ID / Secret 输入 —— */
 .credField {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  margin-top: 4px;
 }
 
 .credLabel {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.02em;
@@ -213,17 +361,6 @@
   color: var(--text-muted);
   line-height: 1.5;
   padding-top: 2px;
-}
-
-.syncError {
-  padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.18);
-  border-radius: 8px;
-  font-size: 12px;
-  color: #b91c1c;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .section {

@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Cloud, CloudOff, LogIn, LogOut, Pencil } from "lucide-react";
+import {
+  Cloud,
+  CloudOff,
+  ExternalLink,
+  LogIn,
+  LogOut,
+  Pencil,
+  RefreshCw,
+  Settings2,
+} from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import { useSettings } from "../../state/settings";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
-import { api, type AuthState } from "../../api/hindsight";
+import { api, type AuthState, type SyncStatus } from "../../api/hindsight";
 import styles from "./DevicesPage.module.css";
 
 export default function DevicesPage() {
@@ -48,24 +58,50 @@ export default function DevicesPage() {
   );
 }
 
+function fmtRelative(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "刚刚";
+  const diff = Date.now() - t;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+  return `${Math.floor(diff / 86_400_000)} 天前`;
+}
+
 function CloudSyncCard() {
   const { settings, update } = useSettings();
+  const { reload: reloadDevices } = useDeviceFilter();
   const [auth, setAuth] = useState<AuthState | null>(null);
+  const [sync, setSync] = useState<SyncStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   useEffect(() => {
-    api
-      .authStatus()
-      .then(setAuth)
-      .catch(() => setAuth(null));
+    api.authStatus().then(setAuth).catch(() => setAuth(null));
+    const fetchSync = () => {
+      api.syncStatus().then(setSync).catch(() => {});
+    };
+    fetchSync();
+    const t = window.setInterval(fetchSync, 10_000);
+    return () => window.clearInterval(t);
   }, []);
 
+  // 没填凭证 → 默认展开设置面板；填好且未登录 → 收起
+  useEffect(() => {
+    if (auth && !auth.signedIn) {
+      setSetupOpen(!auth.configured);
+    } else if (auth?.signedIn) {
+      setSetupOpen(false);
+    }
+  }, [auth?.configured, auth?.signedIn]);
+
   const refreshAuth = () => {
-    api
-      .authStatus()
-      .then(setAuth)
-      .catch(() => setAuth(null));
+    api.authStatus().then(setAuth).catch(() => setAuth(null));
+  };
+  const refreshSync = () => {
+    api.syncStatus().then(setSync).catch(() => {});
   };
 
   const onSignIn = async () => {
@@ -74,6 +110,7 @@ function CloudSyncCard() {
     try {
       const next = await api.signInWithGoogle();
       setAuth(next);
+      refreshSync();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       refreshAuth();
@@ -88,6 +125,7 @@ function CloudSyncCard() {
     try {
       await api.signOut();
       refreshAuth();
+      refreshSync();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -95,14 +133,38 @@ function CloudSyncCard() {
     }
   };
 
+  const onSyncNow = async () => {
+    setSyncBusy(true);
+    setError(null);
+    try {
+      await api.syncNow();
+      refreshSync();
+      // 拉到新的远端活动后，让 device 列表也刷一下
+      reloadDevices();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      refreshSync();
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
   if (!settings) return null;
 
-  const credsConfigured = !!(
-    settings.firebaseClientId.trim() &&
-    settings.firebaseClientSecret.trim() &&
-    settings.firebaseApiKey.trim()
-  );
   const signedIn = auth?.signedIn ?? false;
+  const configured = auth?.configured ?? false;
+  // 用户改凭证后 auth.configured 可能没及时更新，所以 UI 也按本地 settings 算一遍
+  const credsFilled = !!(
+    settings.googleClientId.trim() && settings.googleClientSecret.trim()
+  );
+  const canSignIn = configured || credsFilled;
+
+  // 当填好凭证后，刷新一下 auth 让 configured 同步过来（用于按钮可点态）
+  useEffect(() => {
+    if (credsFilled && !configured && !signedIn) {
+      api.authStatus().then(setAuth).catch(() => {});
+    }
+  }, [credsFilled, configured, signedIn]);
 
   return (
     <div
@@ -124,85 +186,235 @@ function CloudSyncCard() {
         </div>
         <div className={styles.syncBody}>
           <div className={styles.syncTitle}>
-            {signedIn ? "已连接 Firebase" : "未连接"}
+            {signedIn
+              ? "已连接 Google Drive"
+              : canSignIn
+                ? "未连接"
+                : "未配置"}
           </div>
           <div className={styles.syncMeta}>
             {signedIn
               ? auth?.email ?? auth?.uid ?? ""
-              : "数据存进你自己的 Firebase 项目，多设备同账号互通。截图不上传。"}
+              : canSignIn
+                ? "用 Google 账号登录，活动数据通过 Drive 在多设备间同步。截图不上传。"
+                : "首次使用前需要在 Google Cloud Console 创建一个 OAuth 凭证（约 3 分钟）。"}
           </div>
+          {signedIn && sync && (
+            <div className={styles.syncStats}>
+              <span>
+                {sync.pending > 0
+                  ? `待发送 ${sync.pending}`
+                  : sync.lastPushedAt
+                    ? `已同步 · ${fmtRelative(sync.lastPushedAt)}`
+                    : "等待首次同步"}
+              </span>
+              {sync.deadLetter > 0 && (
+                <span className={styles.syncStatErr}>
+                  · {sync.deadLetter} 条失败
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className={styles.syncActions}>
           {signedIn ? (
-            <button
-              type="button"
-              className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
-              onClick={onSignOut}
-              disabled={busy}
-            >
-              <LogOut size={13} strokeWidth={1.85} />
-              退出
-            </button>
+            <>
+              <button
+                type="button"
+                className={styles.smallBtn}
+                onClick={onSyncNow}
+                disabled={syncBusy}
+                title="立即同步"
+              >
+                <RefreshCw
+                  size={13}
+                  strokeWidth={1.85}
+                  className={syncBusy ? styles.spinning : ""}
+                />
+                {syncBusy ? "同步中…" : "立即同步"}
+              </button>
+              <button
+                type="button"
+                className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
+                onClick={onSignOut}
+                disabled={busy}
+              >
+                <LogOut size={13} strokeWidth={1.85} />
+                退出
+              </button>
+            </>
+          ) : canSignIn ? (
+            <>
+              <button
+                type="button"
+                className={styles.smallBtn}
+                onClick={() => setSetupOpen((v) => !v)}
+                title="改 OAuth 凭证"
+              >
+                <Settings2 size={13} strokeWidth={1.85} />
+              </button>
+              <button
+                type="button"
+                className={styles.connectBtn}
+                onClick={onSignIn}
+                disabled={busy}
+              >
+                <LogIn size={13} strokeWidth={2} />
+                {busy ? "浏览器中…" : "用 Google 登录"}
+              </button>
+            </>
           ) : (
             <button
               type="button"
               className={styles.connectBtn}
-              onClick={onSignIn}
-              disabled={busy || !credsConfigured}
+              onClick={() => setSetupOpen(true)}
             >
-              <LogIn size={13} strokeWidth={2} />
-              {busy ? "浏览器中…" : "用 Google 登录"}
+              <Settings2 size={13} strokeWidth={2} />
+              配置 OAuth
             </button>
           )}
         </div>
       </div>
 
-      <div className={styles.credForm}>
-        <label className={styles.credField}>
-          <span className={styles.credLabel}>Client ID</span>
-          <input
-            type="text"
-            className={styles.credInput}
-            value={settings.firebaseClientId}
-            onChange={(e) => update({ firebaseClientId: e.target.value })}
-            placeholder="xxxxxx.apps.googleusercontent.com"
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </label>
-        <label className={styles.credField}>
-          <span className={styles.credLabel}>Client Secret</span>
-          <input
-            type="password"
-            className={styles.credInput}
-            value={settings.firebaseClientSecret}
-            onChange={(e) =>
-              update({ firebaseClientSecret: e.target.value })
-            }
-            placeholder="GOCSPX-..."
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </label>
-        <label className={styles.credField}>
-          <span className={styles.credLabel}>Web API Key</span>
-          <input
-            type="text"
-            className={styles.credInput}
-            value={settings.firebaseApiKey}
-            onChange={(e) => update({ firebaseApiKey: e.target.value })}
-            placeholder="AIzaSy..."
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </label>
-        <div className={styles.credHint}>
-          需要在自己的 Firebase 项目里启用 Google 登录方法。
-          {!credsConfigured && signedIn === false ? " 三项都填好后才能点登录。" : ""}
-        </div>
-      </div>
+      {setupOpen && !signedIn && (
+        <SetupPanel
+          clientId={settings.googleClientId}
+          clientSecret={settings.googleClientSecret}
+          onChangeId={(v) => update({ googleClientId: v })}
+          onChangeSecret={(v) => update({ googleClientSecret: v })}
+          collapsible={canSignIn}
+          onCollapse={() => setSetupOpen(false)}
+        />
+      )}
 
       {error && <div className={styles.syncError}>{error}</div>}
+    </div>
+  );
+}
+
+function SetupPanel({
+  clientId,
+  clientSecret,
+  onChangeId,
+  onChangeSecret,
+  collapsible,
+  onCollapse,
+}: {
+  clientId: string;
+  clientSecret: string;
+  onChangeId: (v: string) => void;
+  onChangeSecret: (v: string) => void;
+  collapsible: boolean;
+  onCollapse: () => void;
+}) {
+  const open = (url: string) => {
+    void openUrl(url).catch(() => {});
+  };
+  return (
+    <div className={styles.setupPanel}>
+      <div className={styles.setupHeader}>
+        <Settings2 size={13} strokeWidth={2} />
+        <span>OAuth 凭证设置</span>
+        {collapsible && (
+          <button
+            type="button"
+            className={styles.setupClose}
+            onClick={onCollapse}
+          >
+            收起
+          </button>
+        )}
+      </div>
+      <ol className={styles.setupSteps}>
+        <li>
+          <span className={styles.stepNum}>1</span>
+          <div className={styles.stepBody}>
+            <div className={styles.stepTitle}>启用 Google Drive API</div>
+            <div className={styles.stepDesc}>
+              在任意 Cloud 项目里 Enable 一下（没项目就新建一个，免费）。
+            </div>
+            <button
+              type="button"
+              className={styles.stepBtn}
+              onClick={() =>
+                open(
+                  "https://console.cloud.google.com/apis/library/drive.googleapis.com",
+                )
+              }
+            >
+              打开 Drive API <ExternalLink size={11} strokeWidth={2} />
+            </button>
+          </div>
+        </li>
+        <li>
+          <span className={styles.stepNum}>2</span>
+          <div className={styles.stepBody}>
+            <div className={styles.stepTitle}>配置 OAuth 同意页</div>
+            <div className={styles.stepDesc}>
+              左侧 <b>Audience</b> → User Type 选 External →{" "}
+              <b>Test users</b> 加你的 Gmail。<br />
+              首次配置会先跳到 <b>Branding</b>，填个应用名 + 联系邮箱即可。
+            </div>
+            <button
+              type="button"
+              className={styles.stepBtn}
+              onClick={() => open("https://console.cloud.google.com/auth/audience")}
+            >
+              打开 Audience <ExternalLink size={11} strokeWidth={2} />
+            </button>
+          </div>
+        </li>
+        <li>
+          <span className={styles.stepNum}>3</span>
+          <div className={styles.stepBody}>
+            <div className={styles.stepTitle}>创建 OAuth 客户端</div>
+            <div className={styles.stepDesc}>
+              左侧 <b>Clients</b> → Create client → Application type 选{" "}
+              <b>Desktop app</b>，名字随意。建好后会显示 Client ID + Secret。
+            </div>
+            <button
+              type="button"
+              className={styles.stepBtn}
+              onClick={() => open("https://console.cloud.google.com/auth/clients")}
+            >
+              打开 Clients <ExternalLink size={11} strokeWidth={2} />
+            </button>
+          </div>
+        </li>
+        <li>
+          <span className={styles.stepNum}>4</span>
+          <div className={styles.stepBody}>
+            <div className={styles.stepTitle}>把 Client ID / Secret 粘到下面</div>
+            <label className={styles.credField}>
+              <span className={styles.credLabel}>Client ID</span>
+              <input
+                type="text"
+                className={styles.credInput}
+                value={clientId}
+                onChange={(e) => onChangeId(e.target.value)}
+                placeholder="xxxxxx.apps.googleusercontent.com"
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+            <label className={styles.credField}>
+              <span className={styles.credLabel}>Client Secret</span>
+              <input
+                type="password"
+                className={styles.credInput}
+                value={clientSecret}
+                onChange={(e) => onChangeSecret(e.target.value)}
+                placeholder="GOCSPX-..."
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+            <div className={styles.credHint}>
+              凭证只存本地。两项都填好后，"用 Google 登录"按钮会自动变可点。
+            </div>
+          </div>
+        </li>
+      </ol>
     </div>
   );
 }

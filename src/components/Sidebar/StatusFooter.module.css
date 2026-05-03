@@ -126,7 +126,7 @@
     opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* 已连接 Firebase：云朵染成 accent 紫，并加内发光感的细微 drop-shadow */
+/* 已连接 Google Drive：云朵染成 accent 紫，并加内发光感的细微 drop-shadow */
 .cloudOn {
   opacity: 1;
   color: var(--color-accent);

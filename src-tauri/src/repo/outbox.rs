@@ -17,7 +17,7 @@ impl OutboxOp {
     }
 }
 
-/// outbox 实体类型 —— 跟 Firestore collection 名一一对应
+/// outbox 实体类型 —— 对应 Drive 上的文件 kind
 #[derive(Debug, Clone, Copy)]
 pub enum OutboxEntity {
     Activity,
