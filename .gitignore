@@ -19,6 +19,9 @@ src-tauri/gen/schemas/
 # Vite 缓存
 .vite/
 
+# release script 临时产物（每次 npm run release 都会重写，没必要 track）
+/latest.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
