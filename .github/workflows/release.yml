@@ -1,9 +1,8 @@
 name: Release
 
+# 不再监听 tag push —— 本地 `npm run release` 已经会推 tag 并直接发布，
+# 让 CI 也跑会重复编译。需要 CI build 的话从 Actions 页手动 Run workflow。
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
