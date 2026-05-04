@@ -91,7 +91,14 @@ async function main() {
     fail(`Missing signature: ${sigPath}\n  TAURI_SIGNING_PRIVATE_KEY 没生效；检查 ~/.tauri/hindsight_updater.key 是否完整`);
 
   // —— 8. 生成 latest.json（Tauri Updater 的 manifest）——
+  // macOS 占位：当前没付 Apple Developer，没法签名 .app.tar.gz 让 updater 真做静默替换。
+  // 但仍要列在 platforms 里，否则 macOS 端 check() 找不到对应平台 key 会返回 null
+  // （= "已是最新版"），用户永远收不到新版通知。
+  // - url 指向 release tag 页面（前端 useUpdater 在 macOS 分支调 openUrl 跳浏览器）
+  // - signature 复用 Windows 的真实签名当 dummy；check() 阶段 Tauri 不验证 signature
+  //   内容，只在 downloadAndInstall 时才用——而 macOS 端我们根本不调 downloadAndInstall
   const sig = (await readFile(sigPath, "utf-8")).trim();
+  const tagPageUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
   const latestJson = {
     version,
     notes: `Hindsight ${tag}`,
@@ -100,6 +107,14 @@ async function main() {
       "windows-x86_64": {
         signature: sig,
         url: `https://github.com/${REPO}/releases/download/${tag}/${exeName}`,
+      },
+      "darwin-x86_64": {
+        signature: sig,
+        url: tagPageUrl,
+      },
+      "darwin-aarch64": {
+        signature: sig,
+        url: tagPageUrl,
       },
     },
   };
