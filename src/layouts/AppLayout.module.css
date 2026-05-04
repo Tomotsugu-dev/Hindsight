@@ -5,9 +5,7 @@
   background: transparent;
   border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow:
-    0 0 0 1px rgba(20, 20, 40, 0.06),
-    0 24px 60px rgba(20, 20, 40, 0.18);
+  box-shadow: 0 24px 60px rgba(20, 20, 40, 0.18);
 
   /* 侧栏永远展开宽度 —— 不再有收起态。
      label/pill 相关 CSS var 都移走，子组件会用 var(name, default) 里 default 值
