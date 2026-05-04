@@ -82,29 +82,8 @@ pub async fn open_screenshots_dir(pool: State<'_, DbPool>) -> Result<(), String>
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
 
     let path_clone = path.clone();
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        #[cfg(target_os = "windows")]
-        {
-            std::process::Command::new("explorer")
-                .arg(&path_clone)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
-        #[cfg(target_os = "macos")]
-        {
-            std::process::Command::new("open")
-                .arg(&path_clone)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
-        #[cfg(target_os = "linux")]
-        {
-            std::process::Command::new("xdg-open")
-                .arg(&path_clone)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
-        Ok(())
+    tokio::task::spawn_blocking(move || {
+        crate::platform::open_in_file_manager(&path_clone).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())??;

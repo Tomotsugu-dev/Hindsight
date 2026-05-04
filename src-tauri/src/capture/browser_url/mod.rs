@@ -17,9 +17,21 @@
 
 #[cfg(target_os = "windows")]
 mod windows;
-
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+mod stub {
+    pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
+        None
+    }
+}
+
+#[cfg(target_os = "windows")]
+use windows as imp;
+#[cfg(target_os = "macos")]
+use macos as imp;
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+use stub as imp;
 
 /// 该应用是不是浏览器（基于进程名 / app_name 粗判）。
 /// 非浏览器就不要花平台调用的钱。
@@ -44,20 +56,7 @@ pub fn is_browser_app(app_name: &str) -> bool {
 /// `app_name` 在 macOS 上必填（osascript 需要知道目标 app）；Windows 上忽略
 /// （走 GetForegroundWindow + UIA，自洽拿前台 HWND）。
 pub fn try_get_foreground_browser_url(app_name: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = app_name;
-        windows::try_get_url()
-    }
-    #[cfg(target_os = "macos")]
-    {
-        macos::try_get_url(app_name)
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        let _ = app_name;
-        None
-    }
+    imp::try_get_url(app_name)
 }
 
 /// 把平台拿到的字符串规范化成 URL。能解析就返回，否则 None。

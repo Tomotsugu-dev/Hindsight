@@ -42,14 +42,8 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // 让 Windows 11 把主窗口处理成圆角（DWM 阴影会跟着圆角走，避免方形阴影
-            // 包圆角卡片产生四角 halo）。Win10 / 其它平台 no-op。
-            #[cfg(target_os = "windows")]
             if let Some(main_window) = handle.get_webview_window("main") {
-                match main_window.hwnd() {
-                    Ok(hwnd) => platform::enable_win11_rounded_corners(hwnd.0 as isize),
-                    Err(e) => log::warn!("拿主窗口 HWND 失败: {e}"),
-                }
+                platform::apply_window_tweaks(&main_window);
             }
 
             tauri::async_runtime::block_on(async move {

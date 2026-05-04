@@ -10,6 +10,19 @@
 mod macos_impl;
 #[cfg(target_os = "windows")]
 mod windows_impl;
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+mod stub_impl {
+    pub fn ensure_screen_recording() -> super::ScreenRecordingState {
+        super::ScreenRecordingState::Granted
+    }
+}
+
+#[cfg(target_os = "macos")]
+use macos_impl as imp;
+#[cfg(target_os = "windows")]
+use windows_impl as imp;
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+use stub_impl as imp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScreenRecordingState {
@@ -25,16 +38,5 @@ pub enum ScreenRecordingState {
 ///
 /// 返回值 = 当前最终的状态。
 pub fn ensure_screen_recording() -> ScreenRecordingState {
-    #[cfg(target_os = "macos")]
-    {
-        macos_impl::ensure_screen_recording()
-    }
-    #[cfg(target_os = "windows")]
-    {
-        windows_impl::ensure_screen_recording()
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        ScreenRecordingState::Granted
-    }
+    imp::ensure_screen_recording()
 }

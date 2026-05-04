@@ -79,7 +79,7 @@ fn generate_default() -> DeviceMeta {
         display_name: "本机".into(),
         color: default_color(),
         icon: default_icon(),
-        os: std::env::consts::OS.into(),
+        os: crate::platform::local_os_id().into(),
         created_at: Utc::now().to_rfc3339(),
     }
 }

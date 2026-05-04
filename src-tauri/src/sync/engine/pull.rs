@@ -124,7 +124,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     }
 
     let self_id = crate::device::self_id();
-    let local_os = std::env::consts::OS;
+    let local_os = crate::platform::local_os_id();
     let mut max_modified: Option<String> = None;
     let mut applied = 0u64;
 

@@ -169,33 +169,27 @@ const MIGRATIONS: &[&str] = &[
 ///   macOS:   process_name 形如 "Google Chrome"，exe_path "/Applications/.../MacOS/..."
 /// 在同步引擎做了 OS 过滤之前，这两张表里混进了别的 OS 的行（key 对不上 / 撞车把本机路径覆盖掉）。
 /// activities 不在这里清 —— 跨设备聚合活动时长是 app 的核心价值，Windows 的活动记录留着。
-fn cross_os_cleanup_sql() -> &'static str {
-    #[cfg(target_os = "macos")]
-    {
-        r#"
-        DELETE FROM process_paths
-        WHERE exe_path = '' OR exe_path NOT LIKE '/%';
+#[cfg(target_os = "macos")]
+const CROSS_OS_CLEANUP_SQL: &str = r#"
+    DELETE FROM process_paths
+    WHERE exe_path = '' OR exe_path NOT LIKE '/%';
 
-        DELETE FROM app_categories
-        WHERE process_name LIKE '%.exe' OR process_name LIKE '%.EXE';
-        "#
-    }
-    #[cfg(target_os = "windows")]
-    {
-        // GLOB '?:\*' / '?:/*' —— Windows 路径形如 C:\... 或 C:/...
-        r#"
-        DELETE FROM process_paths
-        WHERE exe_path = '' OR (exe_path NOT GLOB '?:\*' AND exe_path NOT GLOB '?:/*');
+    DELETE FROM app_categories
+    WHERE process_name LIKE '%.exe' OR process_name LIKE '%.EXE';
+"#;
 
-        DELETE FROM app_categories
-        WHERE process_name NOT LIKE '%.exe';
-        "#
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        ""
-    }
-}
+// GLOB '?:\*' / '?:/*' —— Windows 路径形如 C:\... 或 C:/...
+#[cfg(target_os = "windows")]
+const CROSS_OS_CLEANUP_SQL: &str = r#"
+    DELETE FROM process_paths
+    WHERE exe_path = '' OR (exe_path NOT GLOB '?:\*' AND exe_path NOT GLOB '?:/*');
+
+    DELETE FROM app_categories
+    WHERE process_name NOT LIKE '%.exe';
+"#;
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const CROSS_OS_CLEANUP_SQL: &str = "";
 
 /// v13：把每个历史 local_date（origin='local'）重新入 outbox，启动后 push tick 会把所有
 /// 日期的 ndjson 全量推到 Drive。
@@ -376,7 +370,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
     let extras: [&'static str; 7] = [
-        cross_os_cleanup_sql(),                  // v11
+        CROSS_OS_CLEANUP_SQL,                    // v11
         V12_PLACEHOLDER,                         // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                     // v13
         APP_ICONS_TABLE_SQL,                     // v14

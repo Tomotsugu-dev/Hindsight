@@ -18,7 +18,8 @@
 use super::normalize_url;
 
 /// 同步阻塞：从当前前台窗口抠 URL。调用方包 spawn_blocking。
-pub(super) fn try_get_url() -> Option<String> {
+/// `_app_name` 在 Windows 上忽略（走 GetForegroundWindow 自洽拿前台 HWND）。
+pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
     // catch_unwind 防 COM 异常一路把进程带崩
     std::panic::catch_unwind(get_url_via_uiautomation)
         .ok()
