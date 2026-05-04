@@ -41,6 +41,10 @@ pub struct AuthState {
     pub email: Option<String>,
     /// Google OAuth client_id / client_secret 是否齐全（决定 UI 上"用 Google 登录"按钮是否可点）
     pub configured: bool,
+    /// 多账号场景下登录到了不同账号，需要用户重启 app 才能切到新账号的 DB。
+    /// `current_state` 永远返回 false；只有 `sign_in_with_google` 在切账号时会置 true。
+    #[serde(default)]
+    pub requires_restart: bool,
 }
 
 pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
@@ -77,6 +81,7 @@ pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
             Some(email)
         },
         configured,
+        requires_restart: false,
     })
 }
 
@@ -137,6 +142,42 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
     let access = google.access_token.clone();
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(google.expires_in);
     let expires_at_str = expires_at.to_rfc3339();
+
+    // 多账号分流：currently active uid vs 这次登的 uid
+    //   None    → Case A: 第一次登录（匿名 DB）。把 token 写进当前 pool，标记 active_uid，
+    //             下次启动 startup migration 把 hindsight.sqlite 改名 hindsight.<uid>.sqlite。
+    //   uid 同  → Case B: 同账号续期/重新登。直接更新 auth_state，无重启。
+    //   uid 不同 → Case C: 切账号。当前 pool 是旧账号的 DB，不能写新 token；同时把旧账号
+    //             auth_state 清掉避免后台 sync 继续推到旧 Drive。更新 active_uid，告诉用户
+    //             重启 app；重启后开新 DB，需要再做一次 OAuth 把 token 写进去。
+    let prev_active = crate::account::active_uid();
+    let switching = matches!(&prev_active, Some(prev) if prev != &uid);
+
+    if switching {
+        log::info!("Google 登录到不同账号：{:?} -> {uid}，需要重启", prev_active);
+        // 旧 DB 里的 auth_state 清掉，立刻停止后台 sync 推到旧 Drive
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE auth_state SET uid = NULL, email = NULL,
+                       refresh_token_enc = NULL, access_token = NULL, expires_at = NULL
+                     WHERE id = 1",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await?;
+        crate::account::set_active_uid(Some(&uid))?;
+        let mut s = current_state(pool).await?;
+        s.requires_restart = true;
+        s.uid = Some(uid);
+        s.email = if email.is_empty() { None } else { Some(email) };
+        s.signed_in = true;
+        return Ok(s);
+    }
+
+    // Case A / B：写当前 pool
     let uid_db = uid.clone();
     let email_db = email.clone();
     pool.0
@@ -153,8 +194,14 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
         })
         .await?;
 
-    log::info!("Google 登录成功 uid={uid}");
+    if prev_active.is_none() {
+        // Case A：把 active_uid 立起来 + 声明 hindsight.sqlite 归属于这个 uid。
+        // 下次启动 startup migration 会把文件 rename 为 hindsight.<uid>.sqlite。
+        crate::account::set_active_uid(Some(&uid))?;
+        crate::account::claim_legacy_for(&uid)?;
+    }
 
+    log::info!("Google 登录成功 uid={uid}");
     current_state(pool).await
 }
 

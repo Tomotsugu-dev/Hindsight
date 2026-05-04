@@ -312,6 +312,20 @@ function CloudSyncCard() {
       {!error && signedIn && sync?.lastError && (
         <div className={styles.syncError}>{sync.lastError}</div>
       )}
+      {auth?.requiresRestart && (
+        <div className={styles.syncError}>
+          已登录到新的账号，需要重启 app 才能切换到该账号的本地数据库。
+          <button
+            type="button"
+            className={styles.smallBtn}
+            style={{ marginLeft: 8 }}
+            onClick={() => api.restartApp().catch(() => {})}
+          >
+            <RefreshCw size={13} strokeWidth={1.85} />
+            重启 app
+          </button>
+        </div>
+      )}
     </div>
   );
 }

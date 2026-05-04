@@ -1,3 +1,4 @@
+mod account;
 mod bootstrap;
 mod capture;
 mod commands;
@@ -59,6 +60,16 @@ pub fn run() {
                     .expect("加载设备身份")
                     .clone();
                 log::info!("device_id: {}", dev_meta.device_id);
+
+                // 1b) 多账号：处理老安装升级 / sign-in 后未重启的延迟迁移；之后 db_path()
+                //     才知道开哪份 DB（hindsight.sqlite vs hindsight.<uid>.sqlite）。
+                let data_root = bootstrap::data_root();
+                if let Err(e) = account::migrate_legacy_db(&data_root).await {
+                    log::warn!("legacy DB 迁移失败（继续使用现有 DB）: {e}");
+                }
+                if let Some(uid) = account::active_uid() {
+                    log::info!("active_uid: {uid}");
+                }
 
                 // 2) 数据根 + DB
                 let path = db_path().expect("解析数据库路径");
@@ -188,6 +199,7 @@ pub fn run() {
             commands::auth::auth_status,
             commands::auth::sign_in_with_google,
             commands::auth::sign_out,
+            commands::auth::restart_app,
             commands::sync::sync_status,
             commands::sync::sync_now,
         ])

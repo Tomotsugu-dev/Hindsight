@@ -136,6 +136,8 @@ export interface AuthState {
   email: string | null;
   /** OAuth 凭证是否齐全（决定登录按钮是否可点） */
   configured: boolean;
+  /** 多账号场景下登到了不同账号；前端拿到后应提示用户重启 app 切换 DB */
+  requiresRestart?: boolean;
 }
 
 export interface SyncStatus {
@@ -210,6 +212,7 @@ export const api = {
   authStatus: () => invoke<AuthState>("auth_status"),
   signInWithGoogle: () => invoke<AuthState>("sign_in_with_google"),
   signOut: () => invoke<void>("sign_out"),
+  restartApp: () => invoke<void>("restart_app"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncNow: () => invoke<void>("sync_now"),
 };

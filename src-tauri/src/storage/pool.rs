@@ -15,7 +15,11 @@ impl DbPool {
 
 pub fn db_path() -> Result<PathBuf> {
     let dir = db_path_dir()?;
-    Ok(dir.join("hindsight.sqlite"))
+    let name = match crate::account::active_uid() {
+        Some(uid) => format!("hindsight.{uid}.sqlite"),
+        None => "hindsight.sqlite".to_string(),
+    };
+    Ok(dir.join(name))
 }
 
 pub fn db_path_dir() -> Result<PathBuf> {
