@@ -31,27 +31,19 @@
   border-color: color-mix(in oklab, var(--color-accent) 32%, rgba(0, 0, 0, 0.06));
 }
 
-/* —— label 堆叠：所有候选 label 用 grid 占同一格，
-       不可见的撑出最大宽度，可见的 label 居中显示 —— */
+/* —— label 容器：宽度定死，超长设备名 ellipsis 截断，避免 trigger 宽度跟着设备名漂移 —— */
 .labelStack {
-  display: inline-grid;
-  grid-template-columns: 1fr;
+  display: inline-block;
+  width: 150px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .label {
-  grid-area: 1 / 1;
+  display: block;
   white-space: nowrap;
-}
-
-.labelMeasure {
-  grid-area: 1 / 1;
-  white-space: nowrap;
-  visibility: hidden;
-  pointer-events: none;
-  /* 不影响 baseline / 高度 */
-  height: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chev {

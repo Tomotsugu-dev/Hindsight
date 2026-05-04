@@ -17,11 +17,6 @@ export function DevicePicker() {
   const currentLabel =
     selected === "all" ? "所有设备" : currentDevice?.name ?? "本机";
 
-  // 所有可能的 label —— 用来 grid 撑宽，让 trigger 宽度固定为"最宽那个"，切换不抖动。
-  // "所有设备" 始终参与撑宽，即使当前只有一台设备（看不到这个选项），trigger 也保持
-  // ≥ "所有设备" label 的宽度，不会缩短。
-  const allLabels = ["所有设备", ...devices.map((d) => d.name)];
-
   // 点外面关闭
   useEffect(() => {
     if (!open) return;
@@ -47,11 +42,6 @@ export function DevicePicker() {
         <DeviceTile device={currentDevice} all={selected === "all"} />
         <span className={styles.labelStack}>
           <span className={styles.label}>{currentLabel}</span>
-          {allLabels.map((l, i) => (
-            <span key={i} className={styles.labelMeasure} aria-hidden>
-              {l}
-            </span>
-          ))}
         </span>
         <ChevronDown
           size={12}
