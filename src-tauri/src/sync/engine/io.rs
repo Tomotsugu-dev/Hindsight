@@ -4,6 +4,7 @@ use rand::Rng;
 
 use crate::error::Result;
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 pub(super) const MAX_ATTEMPTS: i64 = 10;
 const RETRY_BASE_SECS: i64 = 5;
@@ -33,7 +34,7 @@ pub(super) async fn read_due_outbox(pool: &DbPool, limit: usize) -> Result<Vec<O
                      ORDER BY id ASC
                      LIMIT ?3",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map(rusqlite::params![now_rfc, MAX_ATTEMPTS, limit], |r| {
                     Ok(OutboxRow {
@@ -42,9 +43,9 @@ pub(super) async fn read_due_outbox(pool: &DbPool, limit: usize) -> Result<Vec<O
                         payload: r.get(2)?,
                     })
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -63,7 +64,7 @@ pub(super) async fn delete_outbox_rows(pool: &DbPool, ids: &[i64]) -> Result<()>
             let params: Vec<&dyn rusqlite::ToSql> =
                 ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
             conn.execute(&sql, params.as_slice())
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(())
         })
         .await?;
@@ -98,7 +99,7 @@ pub(super) async fn bump_outbox_retry(pool: &DbPool, ids: &[i64], err: &str) -> 
                      WHERE id = ?",
                     rusqlite::params![err, next_at, id],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             }
             Ok(())
         })
@@ -168,7 +169,7 @@ pub(super) async fn write_cursor(pool: &DbPool, entity: &str, value: &str) -> Re
                  ON CONFLICT(entity) DO UPDATE SET last_pulled_at = excluded.last_pulled_at",
                 rusqlite::params![entity, value],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::storage::{db_path_dir, DbPool};
+use crate::db::SqliteResultExt;
 
 pub fn default_screenshot_path() -> String {
     db_path_dir()
@@ -72,7 +73,7 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
                 .query_row("SELECT data FROM settings_store WHERE id = 1", [], |r| {
                     r.get(0)
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(row)
         })
         .await?;
@@ -95,7 +96,7 @@ pub async fn save(pool: &DbPool, settings: &Settings) -> Result<()> {
                 "UPDATE settings_store SET data = ? WHERE id = 1",
                 rusqlite::params![data],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;

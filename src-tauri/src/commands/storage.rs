@@ -7,6 +7,7 @@ use tauri::State;
 use crate::capture::CaptureService;
 use crate::repo::settings;
 use crate::storage::{db_path, DbPool};
+use crate::db::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,7 +126,7 @@ pub async fn purge_screenshots(pool: State<'_, DbPool>) -> Result<(), String> {
                 "UPDATE activities SET screenshot_path = NULL WHERE screenshot_path IS NOT NULL",
                 [],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await

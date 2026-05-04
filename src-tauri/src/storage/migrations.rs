@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 const MIGRATIONS: &[&str] = &[
     // v1
@@ -354,7 +355,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
             conn.execute_batch(
                 "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)",
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             let static_count = MIGRATIONS.len();
             let total = static_count + extras.len();
@@ -366,7 +367,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
                         [version],
                         |r| r.get(0),
                     )
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 if already > 0 {
                     continue;
                 }
@@ -377,13 +378,13 @@ pub async fn run(pool: &DbPool) -> Result<()> {
                 };
                 if !sql.trim().is_empty() {
                     conn.execute_batch(sql)
-                        .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                        .db()?;
                 }
                 conn.execute(
                     "INSERT INTO schema_version VALUES (?)",
                     rusqlite::params![version],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             }
             Ok(())
         })

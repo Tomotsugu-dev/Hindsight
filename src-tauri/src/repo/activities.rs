@@ -5,6 +5,7 @@ use crate::device;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 /// 创建一条新的会话记录。device_id = self；updated_at = captured_at；
 /// **不**写 outbox —— 用户明确要求只在会话结束 (seal) 时才推到云端。
@@ -44,7 +45,7 @@ pub async fn insert_new(
                     updated,
                 ],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(conn.last_insert_rowid())
         })
         .await?;
@@ -58,10 +59,10 @@ pub async fn extend(pool: &DbPool, id: i64, captured_at: DateTime<Local>) -> Res
         .call(move |conn| {
             let mut stmt = conn
                 .prepare_cached("SELECT started_at FROM activities WHERE id = ?")
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let started_at: String = stmt
                 .query_row([id], |r| r.get(0))
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let started = DateTime::parse_from_rfc3339(&started_at)
                 .map(|dt| dt.with_timezone(&Local))
                 .unwrap_or_else(|_| Local.timestamp_opt(0, 0).unwrap());
@@ -75,7 +76,7 @@ pub async fn extend(pool: &DbPool, id: i64, captured_at: DateTime<Local>) -> Res
                 "UPDATE activities SET ended_at = ?, duration_secs = ?, updated_at = ? WHERE id = ?",
                 rusqlite::params![ended, dur, updated, id],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;
@@ -142,7 +143,7 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
                 "UPDATE activities SET ended_at = ?, duration_secs = ?, updated_at = ? WHERE id = ?",
                 rusqlite::params![ended, dur, updated, id],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             // 只对 local 来源的会话写 outbox：远端拉来的不要再推回去
             if this_device == device_id {
@@ -166,7 +167,7 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
                     &id.to_string(),
                     &payload,
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             }
 
             Ok(())
@@ -192,12 +193,12 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
                     "SELECT id, screenshot_path FROM activities
                      WHERE screenshot_path IS NOT NULL AND local_date < ?",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([&cutoff], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -230,7 +231,7 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
                 let params: Vec<&dyn rusqlite::ToSql> =
                     ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
                 conn.execute(&sql, params.as_slice())
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 Ok(())
             })
             .await?;
@@ -246,10 +247,10 @@ pub async fn today_count(pool: &DbPool) -> Result<u32> {
         .call(move |conn| {
             let mut stmt = conn
                 .prepare_cached("SELECT COUNT(*) FROM activities WHERE local_date = ?")
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let n: i64 = stmt
                 .query_row([&today], |r| r.get(0))
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(n as u32)
         })
         .await?;

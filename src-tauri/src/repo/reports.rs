@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::error::Result;
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,7 +104,7 @@ pub async fn day_hours(
             }
             let mut stmt = conn
                 .prepare(&sql)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -112,10 +113,10 @@ pub async fn day_hours(
                         r.get::<_, String>(2)?,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut out = Vec::new();
             for r in it {
-                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                out.push(r.db()?);
             }
             Ok(out)
         })
@@ -202,7 +203,7 @@ pub async fn day_apps(
             params.push(&limit);
             let mut stmt = conn
                 .prepare(&sql)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -212,10 +213,10 @@ pub async fn day_apps(
                         r.get::<_, i64>(3)?,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut out = Vec::new();
             for r in it {
-                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                out.push(r.db()?);
             }
             Ok(out)
         })
@@ -307,7 +308,7 @@ async fn days_in_range(
             }
             let mut stmt = conn
                 .prepare(&sql)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -316,10 +317,10 @@ async fn days_in_range(
                         r.get::<_, i64>(2)?,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut out = Vec::new();
             for r in it {
-                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                out.push(r.db()?);
             }
             Ok(out)
         })
@@ -400,7 +401,7 @@ async fn apps_in_range(
             params.push(&limit);
             let mut stmt = conn
                 .prepare(&sql)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -410,10 +411,10 @@ async fn apps_in_range(
                         r.get::<_, i64>(3)?,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut out = Vec::new();
             for r in it {
-                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                out.push(r.db()?);
             }
             Ok(out)
         })

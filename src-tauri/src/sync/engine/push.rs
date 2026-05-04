@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
+use crate::db::SqliteResultExt;
 
 const PUSH_BATCH_SIZE: usize = 200;
 
@@ -175,7 +176,7 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
                      WHERE device_id = ?1 AND local_date = ?2 AND origin = 'local'
                      ORDER BY id",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map(rusqlite::params![self_id, day], |r| {
                     Ok(json!({
@@ -191,9 +192,9 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
                         "updatedAt":     r.get::<_, String>(9)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -216,7 +217,7 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
                     "SELECT id, name, color, icon, builtin, updated_at, deleted_at
                      FROM categories ORDER BY id",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok(json!({
@@ -229,9 +230,9 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
                         "deletedAt": r.get::<_, Option<String>>(6)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -247,7 +248,7 @@ async fn build_app_categories(pool: &DbPool) -> Result<Vec<u8>> {
                     "SELECT process_name, category_id, updated_at, deleted_at
                      FROM app_categories ORDER BY process_name",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok(json!({
@@ -257,9 +258,9 @@ async fn build_app_categories(pool: &DbPool) -> Result<Vec<u8>> {
                         "deletedAt":   r.get::<_, Option<String>>(3)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -275,7 +276,7 @@ async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
                     "SELECT process_name, exe_path, seen_at, updated_at
                      FROM process_paths ORDER BY process_name",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok(json!({
@@ -285,9 +286,9 @@ async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
                         "updatedAt":   r.get::<_, String>(3)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -304,7 +305,7 @@ async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
                     "SELECT process_name, icon_png, updated_at, deleted_at
                      FROM app_icons ORDER BY process_name",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     let bytes: Vec<u8> = r.get::<_, Vec<u8>>(1)?;
@@ -316,9 +317,9 @@ async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
                         "deletedAt":   r.get::<_, Option<String>>(3)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -334,7 +335,7 @@ async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
                     "SELECT id, display_name, category_id, updated_at, deleted_at
                      FROM app_groups ORDER BY id",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok(json!({
@@ -345,9 +346,9 @@ async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
                         "deletedAt":   r.get::<_, Option<String>>(4)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -363,7 +364,7 @@ async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
                     "SELECT process_name, group_id, updated_at, deleted_at
                      FROM app_group_members ORDER BY process_name",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok(json!({
@@ -373,9 +374,9 @@ async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
                         "deletedAt":   r.get::<_, Option<String>>(3)?,
                     }))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;

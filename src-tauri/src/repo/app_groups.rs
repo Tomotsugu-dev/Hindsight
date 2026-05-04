@@ -18,6 +18,7 @@ use serde::Serialize;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +51,7 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                      FROM app_groups g
                      WHERE g.deleted_at IS NULL",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok((
@@ -59,10 +60,10 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                         r.get::<_, Option<String>>(2)?,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut out = Vec::new();
             for r in rows {
-                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                out.push(r.db()?);
             }
 
             // 一次性把所有未软删成员 + 时长统计拉出来；用 GROUP BY process_name 聚合活动时长
@@ -86,7 +87,7 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                      ) s ON s.process_name = m.process_name
                      WHERE m.deleted_at IS NULL",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mit = mstmt
                 .query_map([], |r| {
                     Ok((
@@ -96,10 +97,10 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                         r.get::<_, Option<String>>(3)?,         // last_device_id
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut members: Vec<(String, String, i64, Option<String>)> = Vec::new();
             for r in mit {
-                members.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                members.push(r.db()?);
             }
             Ok((out, members))
         })
@@ -160,7 +161,7 @@ pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
                  VALUES(?, ?, NULL, ?, NULL)",
                 rusqlite::params![id_for_db, name, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -168,7 +169,7 @@ pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
                 &id_for_outbox,
                 &serde_json::json!({ "groupId": id_for_outbox }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;
@@ -191,7 +192,7 @@ pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
                     |_| Ok(true),
                 )
                 .optional()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .unwrap_or(false);
             if has_members {
                 return Err(tokio_rusqlite::Error::Other(
@@ -204,7 +205,7 @@ pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
                      WHERE id = ?2 AND deleted_at IS NULL",
                     rusqlite::params![now, id],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             // n == 0 → 已经被删过 / 不存在；不入 outbox
             if n > 0 {
                 enqueue(
@@ -214,7 +215,7 @@ pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
                     &id,
                     &serde_json::json!({ "groupId": id }).to_string(),
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             }
             Ok(())
         })
@@ -240,7 +241,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                     |_| Ok(true),
                 )
                 .optional()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .unwrap_or(false);
             if !tgt_exists {
                 return Err(tokio_rusqlite::Error::Other(
@@ -257,7 +258,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                     |r| r.get::<_, String>(0),
                 )
                 .optional()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             if cur_group_id.as_deref() == Some(tgt.as_str()) {
                 return Ok(());
             }
@@ -272,7 +273,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                    deleted_at = NULL",
                 rusqlite::params![src, tgt, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             enqueue(
                 conn,
@@ -281,7 +282,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                 &src,
                 &serde_json::json!({ "processName": src }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             // 联动 app_categories：让 source 的 category 跟 target group 一致
             sync_member_category(conn, &src, &tgt, &now)?;
@@ -311,7 +312,7 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                     |r| r.get::<_, Option<String>>(0),
                 )
                 .optional()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .flatten();
 
             // 确保 (id = process_name) 这个原始组存在 / 未删
@@ -325,7 +326,7 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                    deleted_at   = NULL",
                 rusqlite::params![p, p, cur_cat, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -333,7 +334,7 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                 &p,
                 &serde_json::json!({ "groupId": p }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             conn.execute(
                 "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
@@ -344,7 +345,7 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                    deleted_at = NULL",
                 rusqlite::params![p, p, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -352,7 +353,7 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                 &p,
                 &serde_json::json!({ "processName": p }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             // app_categories 跟随：把 source 这个 process_name 的分类同步到 cur_cat
             sync_app_category_row(conn, &p, cur_cat.as_deref(), &now)?;
@@ -376,7 +377,7 @@ pub async fn rename(pool: &DbPool, group_id: &str, new_name: &str) -> Result<()>
                  WHERE id = ?1",
                 rusqlite::params![id, name, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -384,7 +385,7 @@ pub async fn rename(pool: &DbPool, group_id: &str, new_name: &str) -> Result<()>
                 &id,
                 &serde_json::json!({ "groupId": id }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;
@@ -409,7 +410,7 @@ pub async fn assign_category(
                  WHERE id = ?1",
                 rusqlite::params![id, cat, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -417,7 +418,7 @@ pub async fn assign_category(
                 &id,
                 &serde_json::json!({ "groupId": id }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             // 把所有成员的 app_categories 同步到组的新分类
             let members: Vec<String> = {
@@ -426,13 +427,13 @@ pub async fn assign_category(
                         "SELECT process_name FROM app_group_members
                          WHERE group_id = ?1 AND deleted_at IS NULL",
                     )
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 let rows = stmt
                     .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 let mut out = Vec::new();
                 for r in rows {
-                    out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                    out.push(r.db()?);
                 }
                 out
             };
@@ -473,7 +474,7 @@ pub async fn group_id_for(pool: &DbPool, process_name: &str) -> Result<Option<St
                     |r| r.get::<_, String>(0),
                 )
                 .optional()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(r)
         })
         .await?;
@@ -500,7 +501,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                     |_| Ok(true),
                 )
                 .optional()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .unwrap_or(false);
             if exists {
                 return Ok(());
@@ -514,7 +515,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                    deleted_at   = NULL",
                 rusqlite::params![p, p, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -522,7 +523,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                 &p,
                 &serde_json::json!({ "groupId": p }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             conn.execute(
                 "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
@@ -533,7 +534,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                    deleted_at = NULL",
                 rusqlite::params![p, p, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
@@ -541,7 +542,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                 &p,
                 &serde_json::json!({ "processName": p }).to_string(),
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;

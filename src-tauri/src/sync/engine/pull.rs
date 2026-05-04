@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
+use crate::db::SqliteResultExt;
 
 const PULL_CURSOR_KEY: &str = "drive_files";
 
@@ -341,7 +342,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                          VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
                         rusqlite::params![id, name, color, icon, builtin as i64, sort_order, updated_at, deleted_at],
                     )
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 } else {
                     conn.execute(
                         "UPDATE categories SET name = ?, color = ?, icon = ?, builtin = ?,
@@ -349,7 +350,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                          WHERE id = ?",
                         rusqlite::params![name, color, icon, builtin as i64, sort_order, updated_at, deleted_at, id],
                     )
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 }
 
                 // 远端把这个分类删了 —— 跑一次本地 cascade，让指向它的 app_categories /
@@ -359,7 +360,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                 let just_deleted = deleted_at.is_some() && prev_deleted.is_none();
                 if just_deleted {
                     crate::repo::categories::cascade_category_deletion(conn, &id, &updated_at)
-                        .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                        .db()?;
                 }
                 Ok(())
             })
@@ -415,7 +416,7 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
                        deleted_at = excluded.deleted_at",
                     rusqlite::params![process_name, category_id, updated_at, deleted_at],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(())
             })
             .await?;
@@ -463,7 +464,7 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
                        updated_at = excluded.updated_at",
                     rusqlite::params![process_name, exe_path, seen_at, updated_at],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(())
             })
             .await?;
@@ -528,7 +529,7 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
                        deleted_at = excluded.deleted_at",
                     rusqlite::params![process_name_db, icon_bytes_db, updated_at_db, deleted_at_db],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(true)
             })
             .await?;
@@ -621,7 +622,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                         deleted_at_db
                     ],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(Some((prev_cat, category_id_db.clone())))
             })
             .await?;
@@ -642,15 +643,15 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                                     "SELECT process_name FROM app_group_members
                                      WHERE group_id = ?1 AND deleted_at IS NULL",
                                 )
-                                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                                .db()?;
                             let rows = stmt
                                 .query_map(rusqlite::params![id_for_mirror], |r| {
                                     r.get::<_, String>(0)
                                 })
-                                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                                .db()?;
                             let mut out = Vec::new();
                             for r in rows {
-                                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                                out.push(r.db()?);
                             }
                             out
                         };
@@ -666,7 +667,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                                            deleted_at  = NULL",
                                         rusqlite::params![m, cat, now],
                                     )
-                                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                                    .db()?;
                                 }
                                 None => {
                                     conn.execute(
@@ -674,7 +675,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                                          WHERE process_name = ?",
                                         rusqlite::params![now, now, m],
                                     )
-                                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                                    .db()?;
                                 }
                             }
                         }
@@ -739,7 +740,7 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
                        deleted_at = excluded.deleted_at",
                     rusqlite::params![process_name, group_id, updated_at, deleted_at],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(())
             })
             .await?;
@@ -795,7 +796,7 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
                    updated_at = excluded.updated_at",
                 rusqlite::params![device_id, display_name, color, icon, os, last_seen_at, updated_at],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;
@@ -850,7 +851,7 @@ async fn upsert_remote_activity(
                             device_id, remote_id, updated_at,
                         ],
                     )
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
                 }
                 Some((id, cur_updated)) => {
                     if updated_at > cur_updated {
@@ -868,7 +869,7 @@ async fn upsert_remote_activity(
                                 updated_at, id,
                             ],
                         )
-                        .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                        .db()?;
                     }
                 }
             }

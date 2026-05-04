@@ -3,6 +3,7 @@ use chrono::{Local, Utc};
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result<()> {
     let p = process_name.to_string();
@@ -34,7 +35,7 @@ pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result
                    updated_at = excluded.updated_at",
                 rusqlite::params![p_clone, e_clone, seen_clone, updated_clone],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             let path_changed = prev.as_deref() != Some(&e_clone);
             if path_changed {
@@ -52,7 +53,7 @@ pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result
                     &p_clone,
                     &payload,
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             }
             Ok(())
         })

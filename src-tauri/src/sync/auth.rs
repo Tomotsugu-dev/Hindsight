@@ -26,6 +26,7 @@ use tokio::time::timeout;
 use crate::error::{Error, Result};
 use crate::repo::settings;
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 const KEYRING_SERVICE: &str = "Hindsight";
 const KEYRING_USER: &str = "auth_key_v1";
@@ -151,7 +152,7 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
                  WHERE id = 1",
                 rusqlite::params![uid_db, email_db, enc, access, expires_at_str],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;
@@ -214,7 +215,7 @@ pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
                 "UPDATE auth_state SET access_token = ?1, expires_at = ?2 WHERE id = 1",
                 rusqlite::params![new_access_db, new_expires_db],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;
@@ -276,7 +277,7 @@ pub async fn sign_out(pool: &DbPool) -> Result<()> {
                  WHERE id = 1",
                 [],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
             Ok(())
         })
         .await?;

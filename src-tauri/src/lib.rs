@@ -1,6 +1,7 @@
 mod bootstrap;
 mod capture;
 mod commands;
+mod db;
 mod device;
 mod error;
 mod icons;
@@ -12,6 +13,7 @@ mod sync;
 use std::sync::Arc;
 
 use capture::CaptureService;
+use db::SqliteResultExt;
 use repo::{activities, devices, settings};
 use storage::{db_path, DbPool};
 use sync::engine::SyncEngine;
@@ -78,7 +80,7 @@ pub fn run() {
                                 "UPDATE activities SET device_id = ?1 WHERE device_id = 'local'",
                                 rusqlite::params![self_id_for_fix],
                             )
-                            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                            .db()?;
                         if n > 0 {
                             log::info!("把 {} 条 v8 之前的历史活动 device_id 改为 self", n);
                         }

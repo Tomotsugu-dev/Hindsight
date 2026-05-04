@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,7 +77,7 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                      WHERE deleted_at IS NULL
                      ORDER BY sort_order ASC, id ASC",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let cat_rows = stmt
                 .query_map([], |r| {
                     Ok((
@@ -87,11 +88,11 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                         r.get::<_, i64>(4)? != 0,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut cats: Vec<(String, String, String, String, bool, Vec<String>)> = Vec::new();
             for r in cat_rows {
                 let (id, name, color, icon, builtin) =
-                    r.map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    r.db()?;
                 cats.push((id, name, color, icon, builtin, Vec::new()));
             }
 
@@ -101,14 +102,14 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                      WHERE deleted_at IS NULL
                      ORDER BY process_name",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let map_rows = stmt2
                 .query_map([], |r| {
                     Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             for r in map_rows {
-                let (process, cat_id) = r.map_err(tokio_rusqlite::Error::Rusqlite)?;
+                let (process, cat_id) = r.db()?;
                 if let Some(c) = cats.iter_mut().find(|c| c.0 == cat_id) {
                     c.5.push(process);
                 }
@@ -158,17 +159,17 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
                     [],
                     |r| r.get(0),
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             conn.execute(
                 "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at)
                  VALUES(?, ?, ?, ?, 0, ?, ?)",
                 rusqlite::params![id_clone, n, c, i, next_sort, updated_clone],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             let payload = category_payload(&id_clone, &n, &c, &i, false, next_sort, &updated_clone, None);
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id_clone, &payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(())
         })
         .await?;
@@ -224,11 +225,11 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
                 "UPDATE categories SET name = ?, color = ?, icon = ?, updated_at = ? WHERE id = ?",
                 rusqlite::params![next_name, next_color, next_icon, updated, id],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             let payload = category_payload(&id, &next_name, &next_color, &next_icon, builtin_i != 0, cur_sort, &updated, None);
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             Ok(())
         })
@@ -265,11 +266,11 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
                      WHERE id = ?3 AND deleted_at IS NULL",
                     rusqlite::params![next_sort, now, id],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 let payload =
                     category_payload(id, &name, &color, &icon, builtin_i != 0, next_sort, &now, None);
                 enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, id, &payload)
-                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                    .db()?;
             }
             Ok(())
         })
@@ -304,11 +305,11 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 "UPDATE categories SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
                 rusqlite::params![now, id],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             let cat_payload = category_payload(&id, &name, &color, &icon, builtin_i != 0, sort_order, &now, Some(&now));
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &cat_payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             cascade_category_deletion(conn, &id, &now)?;
 
@@ -417,7 +418,7 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
                      GROUP BY a.process_name
                      ORDER BY minutes DESC",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let it = stmt
                 .query_map(rusqlite::params![days], |r| {
                     Ok((
@@ -426,10 +427,10 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
                         r.get::<_, String>(2)?,
                     ))
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             let mut out = Vec::new();
             for r in it {
-                out.push(r.map_err(tokio_rusqlite::Error::Rusqlite)?);
+                out.push(r.db()?);
             }
             Ok(out)
         })

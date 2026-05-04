@@ -4,6 +4,7 @@ use serde::Serialize;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
+use crate::db::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,7 +32,7 @@ pub async fn upsert_self(
         .call(move |conn| {
             // 先把所有 is_self 清掉，确保只有一行 self
             conn.execute("UPDATE devices SET is_self = 0", [])
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             // upsert：如果当前 device_id 已经有行，只更新 last_seen_at / os / is_self；
             // 否则插一条新的
@@ -45,7 +46,7 @@ pub async fn upsert_self(
                    updated_at = excluded.updated_at",
                 rusqlite::params![device_id, default_name, default_color, default_icon, os, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             // 写 outbox（self 设备的元信息要同步给其他机器看）
             let payload = serde_json::json!({
@@ -59,7 +60,7 @@ pub async fn upsert_self(
             })
             .to_string();
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Device, &device_id, &payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             Ok(())
         })
@@ -79,7 +80,7 @@ pub async fn list_all(pool: &DbPool) -> Result<Vec<DeviceRow>> {
                      WHERE deleted_at IS NULL
                      ORDER BY is_self DESC, last_seen_at DESC NULLS LAST",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             let rows = stmt
                 .query_map([], |r| {
@@ -93,9 +94,9 @@ pub async fn list_all(pool: &DbPool) -> Result<Vec<DeviceRow>> {
                         is_self: r.get::<_, i64>(6)? != 0,
                     })
                 })
-                .map_err(tokio_rusqlite::Error::Rusqlite)?
+                .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
             Ok(rows)
         })
         .await?;
@@ -121,7 +122,7 @@ pub async fn update_self_meta(
                     rusqlite::params![device_id],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             let next_name = name.unwrap_or(current.0);
             let next_color = color.unwrap_or(current.1);
@@ -132,7 +133,7 @@ pub async fn update_self_meta(
                  WHERE device_id = ?1",
                 rusqlite::params![device_id, next_name, next_color, next_icon, now],
             )
-            .map_err(tokio_rusqlite::Error::Rusqlite)?;
+            .db()?;
 
             let payload = serde_json::json!({
                 "deviceId": device_id,
@@ -145,7 +146,7 @@ pub async fn update_self_meta(
             })
             .to_string();
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Device, &device_id, &payload)
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
 
             Ok(DeviceRow {
                 device_id,
