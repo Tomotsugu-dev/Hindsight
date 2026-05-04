@@ -280,8 +280,23 @@ pub fn run() {
             commands::sync::sync_status,
             commands::sync::sync_now,
         ])
-        .run(tauri::generate_context!())
-        .expect("启动 Tauri 应用失败");
+        .build(tauri::generate_context!())
+        .expect("启动 Tauri 应用失败")
+        .run(|_app, _event| {
+            // macOS：点窗口左上 X 关闭最后一个窗口时，NSApplication 会触发 terminate
+            // （applicationShouldTerminateAfterLastWindowClosed 默认 YES）。即使 WindowEvent
+            // 已经 prevent_close + hide，系统仍会发 ExitRequested 把进程结束。
+            // 这里在 minimize_to_tray=true 时拦截 system / Cmd+Q 触发的退出，让 app
+            // 留在托盘里。code=Some(_) 是程序显式调 app.exit()（托盘"退出"按钮），放行。
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = _event {
+                if code.is_none()
+                    && MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
 
 fn spawn_cleanup_task(pool: DbPool) {

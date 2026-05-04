@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { platform } from "@tauri-apps/plugin-os";
 import { Aperture, Clock, Rocket } from "lucide-react";
 import { Section } from "../components/Section";
 import { Row } from "../components/Row";
@@ -15,9 +16,12 @@ export default function GeneralTab() {
   const { settings, update } = useSettings();
   const [dataRoot, setDataRoot] = useState<string>("");
   const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
+  // macOS 关闭按钮在窗口左上角；Win/Linux 在右上角。文案要根据平台变。
+  const [isMacOS, setIsMacOS] = useState(false);
 
   useEffect(() => {
     api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
+    setIsMacOS(platform() === "macos");
   }, []);
 
   if (!settings) return null;
@@ -149,7 +153,7 @@ export default function GeneralTab() {
         </Row>
         <Row
           label="关闭后最小化到右下角托盘"
-          description="点窗口右上角 X 时隐藏到系统托盘，采集与同步继续在后台运行。关闭则点 X 直接退出应用。"
+          description={`点窗口${isMacOS ? "左上角" : "右上角"} X 时隐藏到系统托盘，采集与同步继续在后台运行。关闭则点 X 直接退出应用。`}
         >
           <Toggle
             checked={settings.minimizeToTray}
