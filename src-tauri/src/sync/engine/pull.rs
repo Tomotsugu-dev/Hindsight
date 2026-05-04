@@ -12,7 +12,44 @@ use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
+use crate::sync::payload::{
+    ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
+    CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
+};
 use crate::db::SqliteResultExt;
+
+/// 解析一个 JSON 数组到 `Vec<T>`，但保留**每行容错**：单行解析失败仅打 warn 跳过，
+/// 不让整文件因一行坏数据全废。`kind` 仅用于日志。
+fn parse_rows<T: serde::de::DeserializeOwned>(kind: &'static str, body: &[u8]) -> Result<Vec<T>> {
+    let arr: Vec<Value> = serde_json::from_slice(body)
+        .map_err(|e| Error::SyncParse { kind, source: e })?;
+    let mut out = Vec::with_capacity(arr.len());
+    for (idx, v) in arr.into_iter().enumerate() {
+        match serde_json::from_value::<T>(v) {
+            Ok(row) => out.push(row),
+            Err(e) => log::warn!("{kind} 行 {idx} 解析失败: {e}"),
+        }
+    }
+    Ok(out)
+}
+
+/// LWW 比较：拿表里当前 row 的 updated_at，看远端 `new` 是不是更新。row 不存在算"更新"。
+/// 用 `OptionalExtension::optional()` 把 NoRows 转 None —— 不像 `.ok()` 会吞掉真错误。
+fn is_remote_newer<P: rusqlite::Params>(
+    conn: &rusqlite::Connection,
+    select_updated_at_sql: &str,
+    key: P,
+    new: &str,
+) -> rusqlite::Result<bool> {
+    use rusqlite::OptionalExtension;
+    let cur: Option<String> = conn
+        .query_row(select_updated_at_sql, key, |r| r.get(0))
+        .optional()?;
+    Ok(match cur {
+        None => true,
+        Some(c) => new > c.as_str(),
+    })
+}
 
 const PULL_CURSOR_KEY: &str = "drive_files";
 
@@ -239,53 +276,42 @@ async fn remote_device_os(pool: &DbPool, device_id: &str) -> Option<String> {
 }
 
 async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
+    // ndjson：一行一个 ActivityPayload
     let s = std::str::from_utf8(body).map_err(Error::from)?;
     for (lineno, line) in s.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        let v: Value = match serde_json::from_str(line) {
-            Ok(v) => v,
+        let row: ActivityPayload = match serde_json::from_str(line) {
+            Ok(r) => r,
             Err(e) => {
                 log::warn!("activities 行 {lineno} 解析失败: {e}");
                 continue;
             }
         };
-        let local_id = v.get("id").and_then(|x| x.as_i64()).unwrap_or(-1);
-        if local_id < 0 {
+        if row.id < 0 {
             continue;
         }
-        let remote_id = local_id.to_string();
-        let started_at = v.get("startedAt").and_then(|x| x.as_str()).unwrap_or("");
-        let ended_at = v.get("endedAt").and_then(|x| x.as_str()).unwrap_or("");
-        let duration_secs = v.get("durationSecs").and_then(|x| x.as_i64()).unwrap_or(0);
-        let local_date = v.get("localDate").and_then(|x| x.as_str()).unwrap_or("");
-        let local_hour = v.get("localHour").and_then(|x| x.as_i64()).unwrap_or(0) as u8;
-        let process_name = v.get("processName").and_then(|x| x.as_str()).unwrap_or("");
-        let window_title = v.get("windowTitle").and_then(|x| x.as_str()).unwrap_or("");
-        let category_id = v
-            .get("categoryId")
-            .and_then(|x| x.as_str())
-            .unwrap_or("other");
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or(ended_at);
-
+        let remote_id = row.id.to_string();
+        let updated_at = if row.updated_at.is_empty() {
+            row.ended_at.clone()
+        } else {
+            row.updated_at.clone()
+        };
         upsert_remote_activity(
             pool,
             device_id,
             &remote_id,
-            started_at,
-            ended_at,
-            duration_secs,
-            local_date,
-            local_hour,
-            process_name,
-            window_title,
-            category_id,
-            updated_at,
+            &row.started_at,
+            &row.ended_at,
+            row.duration_secs,
+            &row.local_date,
+            row.local_hour as u8,
+            &row.process_name,
+            row.window_title.as_deref().unwrap_or(""),
+            &row.category_id,
+            &updated_at,
         )
         .await?;
     }
@@ -293,41 +319,23 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
 }
 
 async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "categories", source: e })?;
-    for v in arr {
-        let id = match v.get("id").and_then(|x| x.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let name = v.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string();
-        let color = v.get("color").and_then(|x| x.as_str()).unwrap_or("").to_string();
-        let icon = v.get("icon").and_then(|x| x.as_str()).unwrap_or("Tag").to_string();
-        let builtin = v.get("builtin").and_then(|x| x.as_bool()).unwrap_or(false);
-        // 老对端推过来的 payload 没有 sortOrder 字段 → fallback 0；新行随后被本端
-        // 重排操作覆盖即可。
-        let sort_order = v.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0);
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let deleted_at = v
-            .get("deletedAt")
-            .and_then(|x| x.as_str())
-            .map(String::from);
-
+    let rows: Vec<CategoryPayload> = parse_rows("categories", body)?;
+    for row in rows {
+        if row.id.is_empty() {
+            continue;
+        }
         pool.0
             .call(move |conn| {
                 let cur: Option<(String, Option<String>)> = conn
                     .query_row(
                         "SELECT updated_at, deleted_at FROM categories WHERE id = ?1",
-                        rusqlite::params![id],
+                        rusqlite::params![row.id],
                         |r| Ok((r.get(0)?, r.get(1)?)),
                     )
                     .ok();
                 let should_apply = match &cur {
                     None => true,
-                    Some((cur_upd, _)) => updated_at.as_str() > cur_upd.as_str(),
+                    Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),
                 };
                 if !should_apply {
                     return Ok(());
@@ -338,7 +346,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                     conn.execute(
                         "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
                          VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
-                        rusqlite::params![id, name, color, icon, builtin as i64, sort_order, updated_at, deleted_at],
+                        rusqlite::params![row.id, row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at],
                     )
                     .db()?;
                 } else {
@@ -346,19 +354,16 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                         "UPDATE categories SET name = ?, color = ?, icon = ?, builtin = ?,
                                                 sort_order = ?, updated_at = ?, deleted_at = ?
                          WHERE id = ?",
-                        rusqlite::params![name, color, icon, builtin as i64, sort_order, updated_at, deleted_at, id],
+                        rusqlite::params![row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at, row.id],
                     )
                     .db()?;
                 }
 
-                // 远端把这个分类删了 —— 跑一次本地 cascade，让指向它的 app_categories /
-                // app_groups 也跟着清掉，否则跨 OS 设备会卡在「分类已删但本地引用没清」状态。
-                // 仅在「之前没删，现在变成删了」的边沿触发；同样的 deletion 同步重复到达，
-                // should_apply / 本地 cascade SQL 的 WHERE 条件会让二次操作变成 no-op（幂等）。
-                let just_deleted = deleted_at.is_some() && prev_deleted.is_none();
+                // 远端把这个分类删了 —— 跑一次本地 cascade。仅在「之前没删，现在变成删了」的
+                // 边沿触发；幂等 cascade SQL 让重复同步是 no-op。
+                let just_deleted = row.deleted_at.is_some() && prev_deleted.is_none();
                 if just_deleted {
-                    crate::repo::categories::cascade_category_deletion(conn, &id, &updated_at)
-                        .db()?;
+                    crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
                 }
                 Ok(())
             })
@@ -368,41 +373,19 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 }
 
 async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "app_categories", source: e })?;
-    for v in arr {
-        let process_name = match v.get("processName").and_then(|x| x.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let category_id = v
-            .get("categoryId")
-            .and_then(|x| x.as_str())
-            .unwrap_or("other")
-            .to_string();
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let deleted_at = v
-            .get("deletedAt")
-            .and_then(|x| x.as_str())
-            .map(String::from);
-
+    let rows: Vec<AppCategoryPayload> = parse_rows("app_categories", body)?;
+    for row in rows {
+        if row.process_name.is_empty() {
+            continue;
+        }
         pool.0
             .call(move |conn| {
-                let cur: Option<String> = conn
-                    .query_row(
-                        "SELECT updated_at FROM app_categories WHERE process_name = ?1",
-                        rusqlite::params![process_name],
-                        |r| r.get(0),
-                    )
-                    .ok();
-                let should_apply = match &cur {
-                    None => true,
-                    Some(c) => updated_at.as_str() > c.as_str(),
-                };
-                if !should_apply {
+                if !is_remote_newer(
+                    conn,
+                    "SELECT updated_at FROM app_categories WHERE process_name = ?1",
+                    rusqlite::params![row.process_name],
+                    &row.updated_at,
+                )? {
                     return Ok(());
                 }
                 conn.execute(
@@ -412,7 +395,7 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
                        category_id = excluded.category_id,
                        updated_at = excluded.updated_at,
                        deleted_at = excluded.deleted_at",
-                    rusqlite::params![process_name, category_id, updated_at, deleted_at],
+                    rusqlite::params![row.process_name, row.category_id, row.updated_at, row.deleted_at],
                 )
                 .db()?;
                 Ok(())
@@ -423,34 +406,19 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
 }
 
 async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "process_paths", source: e })?;
-    for v in arr {
-        let process_name = match v.get("processName").and_then(|x| x.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let exe_path = v.get("exePath").and_then(|x| x.as_str()).unwrap_or("").to_string();
-        let seen_at = v.get("seenAt").and_then(|x| x.as_str()).unwrap_or("").to_string();
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-
+    let rows: Vec<ProcessPathPayload> = parse_rows("process_paths", body)?;
+    for row in rows {
+        if row.process_name.is_empty() {
+            continue;
+        }
         pool.0
             .call(move |conn| {
-                let cur: Option<String> = conn
-                    .query_row(
-                        "SELECT updated_at FROM process_paths WHERE process_name = ?1",
-                        rusqlite::params![process_name],
-                        |r| r.get(0),
-                    )
-                    .ok();
-                let should_apply = match &cur {
-                    None => true,
-                    Some(c) => updated_at.as_str() > c.as_str(),
-                };
-                if !should_apply {
+                if !is_remote_newer(
+                    conn,
+                    "SELECT updated_at FROM process_paths WHERE process_name = ?1",
+                    rusqlite::params![row.process_name],
+                    &row.updated_at,
+                )? {
                     return Ok(());
                 }
                 conn.execute(
@@ -460,7 +428,7 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
                        exe_path = excluded.exe_path,
                        seen_at = excluded.seen_at,
                        updated_at = excluded.updated_at",
-                    rusqlite::params![process_name, exe_path, seen_at, updated_at],
+                    rusqlite::params![row.process_name, row.exe_path, row.seen_at, row.updated_at],
                 )
                 .db()?;
                 Ok(())
@@ -472,30 +440,21 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
 
 async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-    let arr: Vec<Value> =
-        serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "app_icons", source: e })?;
-    for v in arr {
-        let process_name = match v.get("processName").and_then(|x| x.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let icon_b64 = v.get("iconPngBase64").and_then(|x| x.as_str()).unwrap_or("");
-        let icon_bytes = match BASE64.decode(icon_b64.as_bytes()) {
+    let rows: Vec<AppIconPayload> = parse_rows("app_icons", body)?;
+    for row in rows {
+        if row.process_name.is_empty() {
+            continue;
+        }
+        let process_name = row.process_name;
+        let icon_bytes = match BASE64.decode(row.icon_png_base64.as_bytes()) {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("app_icon process={process_name} base64 解码失败: {e}");
                 continue;
             }
         };
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let deleted_at = v
-            .get("deletedAt")
-            .and_then(|x| x.as_str())
-            .map(String::from);
+        let updated_at = row.updated_at;
+        let deleted_at = row.deleted_at;
 
         let process_name_db = process_name.clone();
         let icon_bytes_db = icon_bytes.clone();
@@ -504,18 +463,12 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
         let applied: bool = pool
             .0
             .call(move |conn| {
-                let cur: Option<String> = conn
-                    .query_row(
-                        "SELECT updated_at FROM app_icons WHERE process_name = ?1",
-                        rusqlite::params![process_name_db],
-                        |r| r.get(0),
-                    )
-                    .ok();
-                let should_apply = match &cur {
-                    None => true,
-                    Some(c) => updated_at_db.as_str() > c.as_str(),
-                };
-                if !should_apply {
+                if !is_remote_newer(
+                    conn,
+                    "SELECT updated_at FROM app_icons WHERE process_name = ?1",
+                    rusqlite::params![process_name_db],
+                    &updated_at_db,
+                )? {
                     return Ok(false);
                 }
                 conn.execute(
@@ -553,52 +506,27 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
 }
 
 async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body)
-        .map_err(|e| Error::SyncParse { kind: "app_groups", source: e })?;
-    for v in arr {
-        let id = match v.get("id").and_then(|x| x.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let display_name = v
-            .get("displayName")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let category_id = v
-            .get("categoryId")
-            .and_then(|x| x.as_str())
-            .map(String::from);
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let deleted_at = v
-            .get("deletedAt")
-            .and_then(|x| x.as_str())
-            .map(String::from);
-
+    let rows: Vec<AppGroupPayload> = parse_rows("app_groups", body)?;
+    for row in rows {
+        if row.id.is_empty() {
+            continue;
+        }
         // 拿当前本地 category_id 用来对比 —— 远端的分类 LWW 赢了之后，要 mirror 到
         // app_categories 表里所有成员行（让 reports.rs 的 LEFT JOIN 仍能拿到正确分类）。
-        let id_db = id.clone();
-        let display_name_db = display_name.clone();
-        let category_id_db = category_id.clone();
-        let updated_at_db = updated_at.clone();
-        let deleted_at_db = deleted_at.clone();
+        let id = row.id.clone();
         let applied: Option<(Option<String>, Option<String>)> = pool
             .0
             .call(move |conn| {
                 let prev: Option<(String, Option<String>)> = conn
                     .query_row(
                         "SELECT updated_at, category_id FROM app_groups WHERE id = ?1",
-                        rusqlite::params![id_db],
+                        rusqlite::params![row.id],
                         |r| Ok((r.get(0)?, r.get(1)?)),
                     )
                     .ok();
                 let should_apply = match &prev {
                     None => true,
-                    Some((cur_upd, _)) => updated_at_db.as_str() > cur_upd.as_str(),
+                    Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),
                 };
                 if !should_apply {
                     return Ok(None);
@@ -613,15 +541,15 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                        updated_at   = excluded.updated_at,
                        deleted_at   = excluded.deleted_at",
                     rusqlite::params![
-                        id_db,
-                        display_name_db,
-                        category_id_db,
-                        updated_at_db,
-                        deleted_at_db
+                        row.id,
+                        row.display_name,
+                        row.category_id,
+                        row.updated_at,
+                        row.deleted_at
                     ],
                 )
                 .db()?;
-                Ok(Some((prev_cat, category_id_db.clone())))
+                Ok(Some((prev_cat, row.category_id)))
             })
             .await?;
 
@@ -654,28 +582,14 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                             out
                         };
                         for m in &members {
-                            match &next_for_mirror {
-                                Some(cat) => {
-                                    conn.execute(
-                                        "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                                         VALUES(?, ?, ?, NULL)
-                                         ON CONFLICT(process_name) DO UPDATE SET
-                                           category_id = excluded.category_id,
-                                           updated_at  = excluded.updated_at,
-                                           deleted_at  = NULL",
-                                        rusqlite::params![m, cat, now],
-                                    )
-                                    .db()?;
-                                }
-                                None => {
-                                    conn.execute(
-                                        "UPDATE app_categories SET deleted_at = ?, updated_at = ?
-                                         WHERE process_name = ?",
-                                        rusqlite::params![now, now, m],
-                                    )
-                                    .db()?;
-                                }
-                            }
+                            // 远端推过来的分类变更：mirror 到 app_categories 但不入 outbox
+                            // —— 否则会形成「收到对端推 → 本端再推回去」的死循环。
+                            crate::repo::app_groups::apply_app_category_change(
+                                conn,
+                                m,
+                                next_for_mirror.as_deref(),
+                                &now,
+                            )?;
                         }
                         Ok(())
                     })
@@ -687,46 +601,19 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 }
 
 async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body)
-        .map_err(|e| Error::SyncParse { kind: "app_group_members", source: e })?;
-    for v in arr {
-        let process_name = match v.get("processName").and_then(|x| x.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let group_id = v
-            .get("groupId")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let updated_at = v
-            .get("updatedAt")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let deleted_at = v
-            .get("deletedAt")
-            .and_then(|x| x.as_str())
-            .map(String::from);
-
-        if group_id.is_empty() {
+    let rows: Vec<AppGroupMemberPayload> = parse_rows("app_group_members", body)?;
+    for row in rows {
+        if row.process_name.is_empty() || row.group_id.is_empty() {
             continue;
         }
-
         pool.0
             .call(move |conn| {
-                let cur: Option<String> = conn
-                    .query_row(
-                        "SELECT updated_at FROM app_group_members WHERE process_name = ?1",
-                        rusqlite::params![process_name],
-                        |r| r.get(0),
-                    )
-                    .ok();
-                let should_apply = match &cur {
-                    None => true,
-                    Some(c) => updated_at.as_str() > c.as_str(),
-                };
-                if !should_apply {
+                if !is_remote_newer(
+                    conn,
+                    "SELECT updated_at FROM app_group_members WHERE process_name = ?1",
+                    rusqlite::params![row.process_name],
+                    &row.updated_at,
+                )? {
                     return Ok(());
                 }
                 conn.execute(
@@ -736,7 +623,7 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
                        group_id   = excluded.group_id,
                        updated_at = excluded.updated_at,
                        deleted_at = excluded.deleted_at",
-                    rusqlite::params![process_name, group_id, updated_at, deleted_at],
+                    rusqlite::params![row.process_name, row.group_id, row.updated_at, row.deleted_at],
                 )
                 .db()?;
                 Ok(())
@@ -747,39 +634,26 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
 }
 
 async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
-    let v: Value = match serde_json::from_slice(body) {
-        Ok(v) => v,
-        Err(e) => return Err(Error::SyncParse { kind: "device_meta", source: e }),
+    // device meta 是单对象，不是数组。空对象当作"还没数据"，跳过。
+    let parsed: Value = serde_json::from_slice(body)
+        .map_err(|e| Error::SyncParse { kind: "device_meta", source: e })?;
+    let Value::Object(_) = parsed else { return Ok(()) };
+    let row: DeviceMetaPayload = match serde_json::from_value(parsed) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("device_meta 解析失败: {e}");
+            return Ok(());
+        }
     };
-    if !v.is_object() {
-        return Ok(());
-    }
-    let display_name = v.get("displayName").and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let color = v.get("color").and_then(|x| x.as_str()).unwrap_or("#60a5fa").to_string();
-    let icon = v.get("icon").and_then(|x| x.as_str()).unwrap_or("Monitor").to_string();
-    let os = v.get("os").and_then(|x| x.as_str()).map(String::from);
-    let last_seen_at = v.get("lastSeenAt").and_then(|x| x.as_str()).map(String::from);
-    let updated_at = v
-        .get("updatedAt")
-        .and_then(|x| x.as_str())
-        .unwrap_or("")
-        .to_string();
     let device_id = device_id.to_string();
-
     pool.0
         .call(move |conn| {
-            let cur: Option<String> = conn
-                .query_row(
-                    "SELECT updated_at FROM devices WHERE device_id = ?1",
-                    rusqlite::params![device_id],
-                    |r| r.get(0),
-                )
-                .ok();
-            let should_apply = match &cur {
-                None => true,
-                Some(c) => updated_at.as_str() > c.as_str(),
-            };
-            if !should_apply {
+            if !is_remote_newer(
+                conn,
+                "SELECT updated_at FROM devices WHERE device_id = ?1",
+                rusqlite::params![device_id],
+                &row.updated_at,
+            )? {
                 return Ok(());
             }
             conn.execute(
@@ -792,7 +666,7 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
                    os = excluded.os,
                    last_seen_at = excluded.last_seen_at,
                    updated_at = excluded.updated_at",
-                rusqlite::params![device_id, display_name, color, icon, os, last_seen_at, updated_at],
+                rusqlite::params![device_id, row.display_name, row.color, row.icon, row.os, row.last_seen_at, row.updated_at],
             )
             .db()?;
             Ok(())

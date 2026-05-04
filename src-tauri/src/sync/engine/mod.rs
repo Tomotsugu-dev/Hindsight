@@ -98,7 +98,7 @@ impl SyncEngine {
         // push/pull 内部如果 token 拿不到会写 last_error 但 return Ok；这里统一暴露给 UI
         let last_err = self.inner.status.read().await.last_error.clone();
         if let Some(e) = last_err {
-            return Err(crate::error::Error::Other(e));
+            return Err(crate::error::Error::SyncIncomplete(e));
         }
         Ok(())
     }

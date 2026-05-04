@@ -15,7 +15,7 @@ use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension};
 use serde::Serialize;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
 use crate::db::SqliteResultExt;
@@ -182,7 +182,8 @@ pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
 pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
     let id = group_id.to_string();
     let now = Utc::now().to_rfc3339();
-    pool.0
+    let outcome: std::result::Result<(), &'static str> = pool
+        .0
         .call(move |conn| {
             let has_members: bool = conn
                 .query_row(
@@ -195,9 +196,7 @@ pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
                 .db()?
                 .unwrap_or(false);
             if has_members {
-                return Err(tokio_rusqlite::Error::Other(
-                    "组内仍有成员，不能删除（先把成员拖出来）".into(),
-                ));
+                return Ok(Err("组内仍有成员，不能删除（先把成员拖出来）"));
             }
             let n = conn
                 .execute(
@@ -217,10 +216,10 @@ pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
                 )
                 .db()?;
             }
-            Ok(())
+            Ok(Ok(()))
         })
         .await?;
-    Ok(())
+    outcome.map_err(Error::InvalidInput)
 }
 
 /// 配对：把 source_process_name 的 group 改成 target_group_id。
@@ -231,9 +230,9 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
     let tgt = target_group_id.to_string();
     let now = Utc::now().to_rfc3339();
 
-    pool.0
+    let outcome: std::result::Result<(), &'static str> = pool
+        .0
         .call(move |conn| {
-            // 检查 target group 是否存在 + 未软删
             let tgt_exists: bool = conn
                 .query_row(
                     "SELECT 1 FROM app_groups WHERE id = ?1 AND deleted_at IS NULL",
@@ -244,12 +243,9 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                 .db()?
                 .unwrap_or(false);
             if !tgt_exists {
-                return Err(tokio_rusqlite::Error::Other(
-                    format!("target group {tgt} 不存在").into(),
-                ));
+                return Ok(Err("目标组不存在或已被删除"));
             }
 
-            // 拿 source 当前所属组（用来判断是否需要 / 拿 category 联动）
             let cur_group_id: Option<String> = conn
                 .query_row(
                     "SELECT group_id FROM app_group_members
@@ -260,10 +256,9 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                 .optional()
                 .db()?;
             if cur_group_id.as_deref() == Some(tgt.as_str()) {
-                return Ok(());
+                return Ok(Ok(()));
             }
 
-            // 把成员指针改到 target，bump updated_at
             conn.execute(
                 "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
                  VALUES(?, ?, ?, NULL)
@@ -284,13 +279,12 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
             )
             .db()?;
 
-            // 联动 app_categories：让 source 的 category 跟 target group 一致
             sync_member_category(conn, &src, &tgt, &now)?;
 
-            Ok(())
+            Ok(Ok(()))
         })
         .await?;
-    Ok(())
+    outcome.map_err(Error::InvalidInput)
 }
 
 /// 拆开：把 process_name 还原到自己的单成员组（id = process_name）。
@@ -568,8 +562,29 @@ fn sync_member_category(
     sync_app_category_row(conn, process_name, cat.as_deref(), now)
 }
 
-/// 写一行 app_categories（cat=None 则软删），并入 outbox（这条是 app_category 同步通道）。
+/// 写一行 app_categories（cat=None 则软删），并入 outbox（本端做的修改，需要 push）。
 fn sync_app_category_row(
+    conn: &Connection,
+    process_name: &str,
+    category_id: Option<&str>,
+    now: &str,
+) -> rusqlite::Result<()> {
+    apply_app_category_change(conn, process_name, category_id, now)?;
+    let payload = serde_json::json!({ "processName": process_name }).to_string();
+    enqueue(
+        conn,
+        OutboxOp::Upsert,
+        OutboxEntity::AppCategory,
+        process_name,
+        &payload,
+    )?;
+    Ok(())
+}
+
+/// 纯 SQL 写一行 app_categories（cat=None 则软删），**不**入 outbox。
+/// 给 sync pull 的 mirror 路径用：远端来的变更不需要回推，否则会造成同步死循环。
+/// 本端用户操作走 sync_app_category_row（多一步 enqueue）。
+pub(crate) fn apply_app_category_change(
     conn: &Connection,
     process_name: &str,
     category_id: Option<&str>,
@@ -595,13 +610,5 @@ fn sync_app_category_row(
             )?;
         }
     }
-    let payload = serde_json::json!({ "processName": process_name }).to_string();
-    enqueue(
-        conn,
-        OutboxOp::Upsert,
-        OutboxEntity::AppCategory,
-        process_name,
-        &payload,
-    )?;
     Ok(())
 }

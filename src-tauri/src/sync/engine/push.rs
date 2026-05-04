@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use super::io::{self, OutboxRow};
 use super::Inner;
@@ -12,6 +12,10 @@ use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
+use crate::sync::payload::{
+    ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
+    CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
+};
 use crate::db::SqliteResultExt;
 
 const PUSH_BATCH_SIZE: usize = 200;
@@ -96,7 +100,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         let err = last_err.clone().unwrap_or_else(|| "未知错误".into());
         io::bump_outbox_retry(&inner.pool, &failed_ids, &err).await?;
         inner.status.write().await.last_error = last_err.clone();
-        return Err(Error::Other(
+        return Err(Error::SyncIncomplete(
             last_err.unwrap_or_else(|| "push 失败".into()),
         ));
     }
@@ -165,7 +169,7 @@ async fn build_content(pool: &DbPool, self_id: &str, key: &DirtyKey) -> Result<V
 async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result<Vec<u8>> {
     let self_id = self_id.to_string();
     let day = day.to_string();
-    let lines = pool
+    let rows: Vec<ActivityPayload> = pool
         .0
         .call(move |conn| {
             let mut stmt = conn
@@ -179,18 +183,18 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
                 .db()?;
             let rows = stmt
                 .query_map(rusqlite::params![self_id, day], |r| {
-                    Ok(json!({
-                        "id":            r.get::<_, i64>(0)?,
-                        "startedAt":     r.get::<_, String>(1)?,
-                        "endedAt":       r.get::<_, String>(2)?,
-                        "durationSecs":  r.get::<_, i64>(3)?,
-                        "localDate":     r.get::<_, String>(4)?,
-                        "localHour":     r.get::<_, i64>(5)?,
-                        "processName":   r.get::<_, String>(6)?,
-                        "windowTitle":   r.get::<_, Option<String>>(7)?,
-                        "categoryId":    r.get::<_, String>(8)?,
-                        "updatedAt":     r.get::<_, String>(9)?,
-                    }))
+                    Ok(ActivityPayload {
+                        id: r.get(0)?,
+                        started_at: r.get(1)?,
+                        ended_at: r.get(2)?,
+                        duration_secs: r.get(3)?,
+                        local_date: r.get(4)?,
+                        local_hour: r.get(5)?,
+                        process_name: r.get(6)?,
+                        window_title: r.get(7)?,
+                        category_id: r.get(8)?,
+                        updated_at: r.get(9)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -199,9 +203,9 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
         })
         .await?;
 
-    let mut out = Vec::with_capacity(lines.len() * 200);
-    for line in &lines {
-        let s = serde_json::to_string(line)?;
+    let mut out = Vec::with_capacity(rows.len() * 200);
+    for row in &rows {
+        let s = serde_json::to_string(row)?;
         out.extend_from_slice(s.as_bytes());
         out.push(b'\n');
     }
@@ -209,26 +213,27 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
 }
 
 async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
-    let arr = pool
+    let rows: Vec<CategoryPayload> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT id, name, color, icon, builtin, updated_at, deleted_at
+                    "SELECT id, name, color, icon, builtin, sort_order, updated_at, deleted_at
                      FROM categories ORDER BY id",
                 )
                 .db()?;
             let rows = stmt
                 .query_map([], |r| {
-                    Ok(json!({
-                        "id":        r.get::<_, String>(0)?,
-                        "name":      r.get::<_, String>(1)?,
-                        "color":     r.get::<_, String>(2)?,
-                        "icon":      r.get::<_, String>(3)?,
-                        "builtin":   r.get::<_, i64>(4)? != 0,
-                        "updatedAt": r.get::<_, String>(5)?,
-                        "deletedAt": r.get::<_, Option<String>>(6)?,
-                    }))
+                    Ok(CategoryPayload {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        color: r.get(2)?,
+                        icon: r.get(3)?,
+                        builtin: r.get::<_, i64>(4)? != 0,
+                        sort_order: r.get(5)?,
+                        updated_at: r.get(6)?,
+                        deleted_at: r.get(7)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -236,11 +241,11 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
             Ok(rows)
         })
         .await?;
-    Ok(serde_json::to_vec(&Value::Array(arr))?)
+    Ok(serde_json::to_vec(&rows)?)
 }
 
 async fn build_app_categories(pool: &DbPool) -> Result<Vec<u8>> {
-    let arr = pool
+    let rows: Vec<AppCategoryPayload> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
@@ -251,12 +256,12 @@ async fn build_app_categories(pool: &DbPool) -> Result<Vec<u8>> {
                 .db()?;
             let rows = stmt
                 .query_map([], |r| {
-                    Ok(json!({
-                        "processName": r.get::<_, String>(0)?,
-                        "categoryId":  r.get::<_, String>(1)?,
-                        "updatedAt":   r.get::<_, String>(2)?,
-                        "deletedAt":   r.get::<_, Option<String>>(3)?,
-                    }))
+                    Ok(AppCategoryPayload {
+                        process_name: r.get(0)?,
+                        category_id: r.get(1)?,
+                        updated_at: r.get(2)?,
+                        deleted_at: r.get(3)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -264,11 +269,11 @@ async fn build_app_categories(pool: &DbPool) -> Result<Vec<u8>> {
             Ok(rows)
         })
         .await?;
-    Ok(serde_json::to_vec(&Value::Array(arr))?)
+    Ok(serde_json::to_vec(&rows)?)
 }
 
 async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
-    let arr = pool
+    let rows: Vec<ProcessPathPayload> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
@@ -279,12 +284,12 @@ async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
                 .db()?;
             let rows = stmt
                 .query_map([], |r| {
-                    Ok(json!({
-                        "processName": r.get::<_, String>(0)?,
-                        "exePath":     r.get::<_, String>(1)?,
-                        "seenAt":      r.get::<_, String>(2)?,
-                        "updatedAt":   r.get::<_, String>(3)?,
-                    }))
+                    Ok(ProcessPathPayload {
+                        process_name: r.get(0)?,
+                        exe_path: r.get(1)?,
+                        seen_at: r.get(2)?,
+                        updated_at: r.get(3)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -292,12 +297,12 @@ async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
             Ok(rows)
         })
         .await?;
-    Ok(serde_json::to_vec(&Value::Array(arr))?)
+    Ok(serde_json::to_vec(&rows)?)
 }
 
 async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-    let arr = pool
+    let rows: Vec<AppIconPayload> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
@@ -308,14 +313,14 @@ async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
                 .db()?;
             let rows = stmt
                 .query_map([], |r| {
-                    let bytes: Vec<u8> = r.get::<_, Vec<u8>>(1)?;
-                    Ok(json!({
-                        "processName": r.get::<_, String>(0)?,
+                    let bytes: Vec<u8> = r.get(1)?;
+                    Ok(AppIconPayload {
+                        process_name: r.get(0)?,
                         // BLOB → base64：JSON 不支持 binary，统一用 base64 标准编码
-                        "iconPngBase64": BASE64.encode(&bytes),
-                        "updatedAt":   r.get::<_, String>(2)?,
-                        "deletedAt":   r.get::<_, Option<String>>(3)?,
-                    }))
+                        icon_png_base64: BASE64.encode(&bytes),
+                        updated_at: r.get(2)?,
+                        deleted_at: r.get(3)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -323,11 +328,11 @@ async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
             Ok(rows)
         })
         .await?;
-    Ok(serde_json::to_vec(&Value::Array(arr))?)
+    Ok(serde_json::to_vec(&rows)?)
 }
 
 async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
-    let arr = pool
+    let rows: Vec<AppGroupPayload> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
@@ -338,13 +343,13 @@ async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
                 .db()?;
             let rows = stmt
                 .query_map([], |r| {
-                    Ok(json!({
-                        "id":          r.get::<_, String>(0)?,
-                        "displayName": r.get::<_, String>(1)?,
-                        "categoryId":  r.get::<_, Option<String>>(2)?,
-                        "updatedAt":   r.get::<_, String>(3)?,
-                        "deletedAt":   r.get::<_, Option<String>>(4)?,
-                    }))
+                    Ok(AppGroupPayload {
+                        id: r.get(0)?,
+                        display_name: r.get(1)?,
+                        category_id: r.get(2)?,
+                        updated_at: r.get(3)?,
+                        deleted_at: r.get(4)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -352,11 +357,11 @@ async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
             Ok(rows)
         })
         .await?;
-    Ok(serde_json::to_vec(&Value::Array(arr))?)
+    Ok(serde_json::to_vec(&rows)?)
 }
 
 async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
-    let arr = pool
+    let rows: Vec<AppGroupMemberPayload> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
@@ -367,12 +372,12 @@ async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
                 .db()?;
             let rows = stmt
                 .query_map([], |r| {
-                    Ok(json!({
-                        "processName": r.get::<_, String>(0)?,
-                        "groupId":     r.get::<_, String>(1)?,
-                        "updatedAt":   r.get::<_, String>(2)?,
-                        "deletedAt":   r.get::<_, Option<String>>(3)?,
-                    }))
+                    Ok(AppGroupMemberPayload {
+                        process_name: r.get(0)?,
+                        group_id: r.get(1)?,
+                        updated_at: r.get(2)?,
+                        deleted_at: r.get(3)?,
+                    })
                 })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -380,36 +385,37 @@ async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
             Ok(rows)
         })
         .await?;
-    Ok(serde_json::to_vec(&Value::Array(arr))?)
+    Ok(serde_json::to_vec(&rows)?)
 }
 
 async fn build_device_meta(pool: &DbPool, self_id: &str) -> Result<Vec<u8>> {
     let self_id = self_id.to_string();
-    let obj = pool
+    let obj: Option<DeviceMetaPayload> = pool
         .0
         .call(move |conn| {
-            let row: Option<(String, String, String, String, Option<String>, Option<String>, String)> = conn
+            let row = conn
                 .query_row(
                     "SELECT device_id, display_name, color, icon, os, last_seen_at, updated_at
                      FROM devices WHERE device_id = ?1",
                     rusqlite::params![self_id],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+                    |r| {
+                        Ok(DeviceMetaPayload {
+                            device_id: r.get(0)?,
+                            display_name: r.get(1)?,
+                            color: r.get(2)?,
+                            icon: r.get(3)?,
+                            os: r.get(4)?,
+                            last_seen_at: r.get(5)?,
+                            updated_at: r.get(6)?,
+                        })
+                    },
                 )
                 .ok();
             Ok(row)
         })
         .await?;
-    let Some((device_id, display_name, color, icon, os, last_seen_at, updated_at)) = obj else {
+    let Some(meta) = obj else {
         return Ok(b"{}".to_vec());
     };
-    let v = json!({
-        "deviceId":    device_id,
-        "displayName": display_name,
-        "color":       color,
-        "icon":        icon,
-        "os":          os,
-        "lastSeenAt":  last_seen_at,
-        "updatedAt":   updated_at,
-    });
-    Ok(serde_json::to_vec(&v)?)
+    Ok(serde_json::to_vec(&meta)?)
 }

@@ -98,6 +98,11 @@ pub enum Error {
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
 
+    /// sync_now 跑完了但 push/pull 内部记下了 last_error（多半是 token 不可用）。
+    /// 用 String 因为这里聚合的是「内部 push/pull 各自塞回 status 的人类可读信息」，不需要 caller match。
+    #[error("sync incomplete: {0}")]
+    SyncIncomplete(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

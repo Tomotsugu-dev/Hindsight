@@ -281,9 +281,11 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
 pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     let id = id.to_string();
     let now = Utc::now().to_rfc3339();
-    pool.0
+    // 闭包返回 Ok(Err(msg)) 表示业务校验拒绝，外层翻译成 Error::InvalidInput；
+    // 真正的 db 错误仍走 ? 通道。这样 InvalidInput 不会被 tokio_rusqlite::Error::Other 包一层。
+    let outcome: std::result::Result<(), &'static str> = pool
+        .0
         .call(move |conn| {
-            // 读出元信息
             let row: Option<(String, String, String, i64, i64)> = conn
                 .query_row(
                     "SELECT name, color, icon, builtin, sort_order FROM categories
@@ -293,14 +295,12 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 )
                 .ok();
             let Some((name, color, icon, builtin_i, sort_order)) = row else {
-                // 已经被删过了 —— 幂等：no-op 直接返回，不重复写 category 行 + outbox
-                return Ok(());
+                return Ok(Ok(()));
             };
             if builtin_i != 0 {
-                return Err(tokio_rusqlite::Error::Other("内置分类不可删除".into()));
+                return Ok(Err("内置分类不可删除"));
             }
 
-            // 软删 category
             conn.execute(
                 "UPDATE categories SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
                 rusqlite::params![now, id],
@@ -313,10 +313,10 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
 
             cascade_category_deletion(conn, &id, &now)?;
 
-            Ok(())
+            Ok(Ok(()))
         })
         .await?;
-    Ok(())
+    outcome.map_err(Error::InvalidInput)
 }
 
 /// 分类被删（无论是用户本机操作还是同步收到的远端事件）后，把所有指向它的引用一起清掉。
