@@ -30,6 +30,3 @@ src-tauri/gen/schemas/
 *.njsproj
 *.sln
 *.sw?
-
-# Dev-log
-Docs/

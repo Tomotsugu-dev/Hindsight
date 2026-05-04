@@ -1,63 +1,55 @@
-# Hindsight
 
-> 一个本地运行的电脑使用记录工具，帮你回看「今天到底把时间花在了哪里」。
+<p align="center">
+  <img src="./src/assets/logo.png" alt="Hindsight" width="200">
+</p>
 
-Hindsight 在后台静默地记录你在电脑上看到了什么、用了什么应用、停留了多久；之后用图表、应用排行、定时截图三种角度让你"事后回看"。
+<h1 align="center">Hindsight</h1>
 
-数据全部存在本地，默认不上传任何东西。
+<p align="center">
+  <i>本地运行的电脑活动记录工具 — 追踪你一天里使用过的应用（可选云同步）</i>
+</p>
+
+<p align="center">
+  <a href="README.md">中文</a> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/releases">
+    <img alt="GitHub Release" src="https://img.shields.io/github/v/release/Tomotsugu-dev/Hindsight?color=blue&logo=github">
+  </a>
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <a href="LICENSE">
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+  </a>
+</p>
 
 ---
 
-## 功能
+## 界面预览
 
-- **焦点窗口采集** — 每秒检测当前聚焦的窗口；切换应用 / 窗口标题就立刻开一个新会话，记录到 SQLite
-- **整窗截图** — 焦点切换瞬间抓一张当前窗口的截图，等比缩放到 1280×720 上限，JPEG 80 存盘；按日期分子目录
-- **今日 / 本周 / 本月总览** — 24 小时堆叠柱状图、每日/每周柱状图、应用排行、分类排行；左右切换日期带平滑过渡
-- **应用分类** — 用户自定义分类（颜色 + 图标 + 应用绑定），未分类应用会单独列出方便逐个指派
-- **工作时段过滤** — 设置上下班时段，时段外不采集
-- **设备视图** — 多设备区分（云同步铺垫）
-- **AI 总结 / 设置**（占位） — 后续接入本地大模型分析
 
-## 技术栈
 
-| 层 | 实现 |
-|---|---|
-| 桌面壳 | [Tauri 2](https://tauri.app/) |
-| 前端 | React 19 + TypeScript + Vite + react-router-dom + CSS Modules |
-| 后端 | Rust 2021 + tokio + tokio-rusqlite |
-| 数据 | SQLite（带版本化迁移） |
-| 抓窗 / 截图 | [xcap](https://crates.io/crates/xcap) |
-| 应用图标提取 | Win32 (`SHGetFileInfo` + GDI) / macOS (`icns` + `plist`) |
-| 图标素材 | [lucide-react](https://lucide.dev/) |
+## 主要功能
 
-支持平台：**Windows** / **macOS**（Linux 未测试，理论可跑）。
+- **自动记录** — 后台静默运行，实时检测你在用什么应用，自动记录停留时长
+- **时间可视化** — 用分时段的柱状图、使用时间排行榜显示应用使用的时间分布
+- **快照回顾** — 可选择开启屏幕快照，回看时知道你具体在做什么
+- **应用分类** — 自定义分类（比如"工作"、"娱乐"、"学习"），按分类统计和查看
+- **工作时段设置** — 只在设定的工作时间记录，下班后不追踪隐私
+- **隐私保护** — 自动识别登录页、密码页等敏感内容，跳过截图保护隐私
+- **多设备支持** — 可选云同步，在多台电脑上查看汇总数据（截图数据本地存储）
 
-## 本地开发
+## 未来计划
 
-```sh
-# 装依赖（Node 端）
-npm install
-
-# 启动 dev（vite + tauri 一起拉起，热重载）
-npm run tauri dev
-
-# 打 release 包
-npm run tauri build
-```
-
-需要本地有 Rust toolchain（`rustup` 默认稳定版）+ Tauri 2 prerequisites（Windows 需要 WebView2 Runtime；macOS 需要 Xcode CLT）。
-
-## 数据存放位置
-
-- 默认数据根：`%APPDATA%/Hindsight/`（Windows）/ `~/Library/Application Support/Hindsight/`（macOS）
-- 主数据库：`<data_root>/hindsight.sqlite`
-- 截图根：`<data_root>/screenshots/YYYY-MM-DD/HHMMSS_mmm.jpg`
-- 数据根可以在「设置 → 常规 → 数据保存路径」修改（重启生效，旧数据需手动迁移）
-
-## 状态
-
-仍在迭代中，UI / Schema 都可能再调整。Phase 1 / 2 的本地能力（采集 + 分类 + 总览）已经能用，Phase 3 的云同步与 AI 总结刚开始铺路。
+- [ ] 加入 AI 分析功能（分析日概览、周概览、月概览），根据截图内容更精确地识别用户的工作内容
+- [ ] 支持生成工作报告（日报、周报、月报）
+- [ ] 加入图片加密功能，保护截图隐私
+- [ ] 支持更多平台（Linux、移动端）
 
 ## License
 
-MIT
+<p align="center">
+  本项目基于 <a href="LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
+  <sub>© 2026 Hindsight contributors</sub>
+</p>
