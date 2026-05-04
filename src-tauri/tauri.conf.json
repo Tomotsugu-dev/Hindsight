@@ -45,6 +45,9 @@
       "nsis": {
         "installerHooks": "nsis/installer_hooks.nsh"
       }
+    },
+    "macOS": {
+      "signingIdentity": "-"
     }
   }
 }
