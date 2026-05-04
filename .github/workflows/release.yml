@@ -44,7 +44,7 @@ jobs:
           releaseName: "Hindsight ${{ github.ref_name }}"
           releaseBody: |
             从下方资源中下载安装包：
-            - `Hindsight_x.y.z_x64_zh-CN.msi` — Windows 安装版（推荐）
-            - `Hindsight_x.y.z_x64-setup.exe` — Windows NSIS 安装器
+            - `hindsight_x.y.z_x64.msi` — Windows 安装版（推荐）
+            - `hindsight_x.y.z_x64-setup.exe` — Windows NSIS 安装器
           releaseDraft: true
           prerelease: false
