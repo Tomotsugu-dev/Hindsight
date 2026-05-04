@@ -199,6 +199,50 @@
   border-color: rgba(239, 68, 68, 0.2);
 }
 
+/* 凭证失效时按钮平时就是 accent 色，hover 加深 */
+.smallBtnAccent {
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  border-color: color-mix(
+    in oklab,
+    var(--color-accent) 28%,
+    rgba(0, 0, 0, 0.06)
+  );
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    transform 100ms ease-out;
+}
+
+.smallBtnAccent:hover {
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+/* 双 face 切换：两个 <span> 占同一 grid cell，宽度跟"更宽"那个走，不抖。
+   非激活的 face 用 opacity 淡出，激活的 face 淡入。 */
+.smallBtnSwap {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+
+.smallBtnFace {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+
+.smallBtnFace[data-active="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .connectBtn {
   display: inline-flex;
   align-items: center;

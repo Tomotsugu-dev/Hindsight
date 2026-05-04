@@ -155,6 +155,14 @@ function CloudSyncCard() {
 
   const signedIn = auth?.signedIn ?? false;
   const configured = auth?.configured ?? false;
+  // sync 报告 token 解密失败 / 凭证失效时，把"退出"换成"重新登录"
+  // —— 用户多半就是想刷新 token 而不是真的登出
+  const authExpired =
+    signedIn &&
+    !!sync?.lastError &&
+    (sync.lastError.includes("登录凭证失效") ||
+      sync.lastError.includes("aes decrypt") ||
+      sync.lastError.includes("crypto: aes"));
   // 用户改凭证后 auth.configured 可能没及时更新，所以 UI 也按本地 settings 算一遍
   const credsFilled = !!(
     settings.googleClientId.trim() && settings.googleClientSecret.trim()
@@ -259,12 +267,29 @@ function CloudSyncCard() {
               </button>
               <button
                 type="button"
-                className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
-                onClick={onSignOut}
+                className={`${styles.smallBtn} ${styles.smallBtnSwap} ${
+                  authExpired ? styles.smallBtnAccent : styles.smallBtnDanger
+                }`}
+                onClick={authExpired ? onSignIn : onSignOut}
                 disabled={busy}
+                title={authExpired ? "凭证失效，重新登录刷新 token" : "退出当前账号"}
               >
-                <LogOut size={13} strokeWidth={1.85} />
-                退出
+                <span
+                  className={styles.smallBtnFace}
+                  data-active={!authExpired}
+                  aria-hidden={authExpired}
+                >
+                  <LogOut size={13} strokeWidth={1.85} />
+                  退出
+                </span>
+                <span
+                  className={styles.smallBtnFace}
+                  data-active={authExpired}
+                  aria-hidden={!authExpired}
+                >
+                  <LogIn size={13} strokeWidth={1.85} />
+                  重新登录
+                </span>
               </button>
             </>
           ) : canSignIn ? (

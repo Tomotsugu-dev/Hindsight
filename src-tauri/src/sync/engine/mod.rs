@@ -81,6 +81,12 @@ impl SyncEngine {
         self.inner.handle.lock().await.is_some()
     }
 
+    /// 清掉缓存的 last_error。重新登录成功后调用，避免 UI 还显示旧的
+    /// "登录凭证失效"错误，导致"退出"按钮一直停留在"重新登录"形态。
+    pub async fn clear_last_error(&self) {
+        self.inner.status.write().await.last_error = None;
+    }
+
     pub async fn status(&self) -> SyncStatus {
         let mut s = self.inner.status.read().await.clone();
         s.running = self.is_running().await;

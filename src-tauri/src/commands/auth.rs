@@ -1,7 +1,9 @@
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::storage::DbPool;
 use crate::sync::auth::{self, AuthState};
+use crate::sync::engine::SyncEngine;
 
 #[tauri::command]
 pub async fn auth_status(pool: State<'_, DbPool>) -> Result<AuthState, String> {
@@ -9,8 +11,14 @@ pub async fn auth_status(pool: State<'_, DbPool>) -> Result<AuthState, String> {
 }
 
 #[tauri::command]
-pub async fn sign_in_with_google(pool: State<'_, DbPool>) -> Result<AuthState, String> {
-    auth::sign_in_with_google(&pool).await.map_err(Into::into)
+pub async fn sign_in_with_google(
+    pool: State<'_, DbPool>,
+    engine: State<'_, Arc<SyncEngine>>,
+) -> Result<AuthState, String> {
+    let next = auth::sign_in_with_google(&pool).await.map_err(|e| e.to_string())?;
+    // 登录成功 = 拿到新 token，旧的 "登录凭证失效" 错误立刻作废
+    engine.clear_last_error().await;
+    Ok(next)
 }
 
 #[tauri::command]
