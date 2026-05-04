@@ -309,6 +309,9 @@ function CloudSyncCard() {
       </div>
 
       {error && <div className={styles.syncError}>{error}</div>}
+      {!error && signedIn && sync?.lastError && (
+        <div className={styles.syncError}>{sync.lastError}</div>
+      )}
     </div>
   );
 }

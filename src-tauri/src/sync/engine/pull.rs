@@ -104,9 +104,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         Ok(t) => t,
         Err(Error::NotSignedIn) => return Ok(()),
         Err(e) => {
-            let msg = e.to_string();
-            log::warn!("sync pull 拿不到有效 token: {msg}");
-            inner.status.write().await.last_error = Some(msg);
+            let raw = e.to_string();
+            log::warn!("sync pull 拿不到有效 token: {raw}");
+            inner.status.write().await.last_error =
+                Some(format!("登录凭证失效（{raw}），请尝试重新登录"));
             return Ok(());
         }
     };
