@@ -46,7 +46,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             capture_enabled: true,
-            capture_interval_seconds: 10,
+            capture_interval_seconds: 30,
             screenshot_path: String::new(),
             work_hours_enabled: false,
             work_ranges: Vec::new(),

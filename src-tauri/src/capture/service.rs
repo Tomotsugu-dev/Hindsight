@@ -12,7 +12,7 @@ use crate::repo::settings::TimeRange;
 use crate::repo::{activities, app_groups, process_paths};
 use crate::storage::DbPool;
 
-const POLL_INTERVAL_SECS: u64 = 1;
+const POLL_INTERVAL_SECS: u64 = 5;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +53,9 @@ impl Default for ScreenshotConfig {
 #[derive(Clone, PartialEq, Eq)]
 struct FocusState {
     app_name: String,
-    title: String,
+    /// 仅浏览器场景填值；非浏览器为 None。
+    /// title 不参与 focus 比较，避免光标位置 / 未保存标记等带来的频繁抖动。
+    url: Option<String>,
 }
 
 struct CurrentSession {
@@ -235,40 +237,48 @@ async fn tick(inner: &Inner) -> Result<()> {
     }
 
     let now = Local::now();
+
+    // 浏览器场景：每次 tick 都抓 URL，因为 URL 是 focus 的一部分（切 URL 要立即触发新会话）。
+    // 平台调用阻塞 + 偶尔卡几百 ms，扔到 spawn_blocking 不堵 async runtime。
+    // 非浏览器跳过这步，省 50–300ms。
+    let url = if browser_url::is_browser_app(&info.app_name) {
+        let app_name_for_url = info.app_name.clone();
+        tokio::task::spawn_blocking(move || {
+            browser_url::try_get_foreground_browser_url(&app_name_for_url)
+        })
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+
     let new_focus = FocusState {
         app_name: info.app_name.clone(),
-        title: info.title.clone(),
+        url: url.clone(),
     };
 
     let mut current_lock = inner.current.lock().await;
+    let interval_secs = *inner.interval_secs.lock().await;
     let need_new = match current_lock.as_ref() {
         None => true,
-        Some(cur) => cur.focus != new_focus,
+        // 触发新会话的两种情况：
+        //   1) 焦点切换（不同 app / 不同 url）—— 立即截图
+        //   2) 同一焦点停留满 interval_secs —— 周期性补一张图，让长时间停留也有时间序列
+        Some(cur) => {
+            cur.focus != new_focus
+                || cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs
+        }
     };
 
     if need_new {
-        // 焦点切换：先把旧会话钉死（推 outbox），再开新会话
+        // 焦点切换 / 间隔到点：先把旧会话钉死（推 outbox），再开新会话
         if let Some(prev) = current_lock.take() {
             if let Err(e) = activities::seal_session(&inner.pool, prev.id, now).await {
-                log::warn!("seal_session 失败 (焦点切换, id={}): {e}", prev.id);
+                log::warn!("seal_session 失败 (开新会话, id={}): {e}", prev.id);
             }
         }
         // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
-        // 浏览器场景下抠地址栏 URL（Windows: UIA / macOS: AppleScript）；
-        // 非浏览器跳过这步，省 50–300ms。
-        let url = if browser_url::is_browser_app(&info.app_name) {
-            // 平台调用阻塞 + 偶尔卡几百 ms，扔到 spawn_blocking 不堵 async runtime
-            let app_name_for_url = info.app_name.clone();
-            tokio::task::spawn_blocking(move || {
-                browser_url::try_get_foreground_browser_url(&app_name_for_url)
-            })
-            .await
-            .ok()
-            .flatten()
-        } else {
-            None
-        };
-
         let skip = should_skip_for_privacy(inner, &info, url.as_deref()).await;
         if skip {
             log::info!(
@@ -293,13 +303,6 @@ async fn tick(inner: &Inner) -> Result<()> {
             focus: new_focus,
             last_extend_at: Instant::now(),
         });
-    } else {
-        let interval_secs = *inner.interval_secs.lock().await;
-        let cur = current_lock.as_mut().unwrap();
-        if cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs {
-            activities::extend(&inner.pool, cur.id, now).await?;
-            cur.last_extend_at = Instant::now();
-        }
     }
     drop(current_lock);
 

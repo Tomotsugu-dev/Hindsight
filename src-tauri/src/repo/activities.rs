@@ -52,37 +52,6 @@ pub async fn insert_new(
     Ok(id)
 }
 
-/// 心跳：仅本地更新 ended_at / duration_secs / updated_at。**不**写 outbox。
-pub async fn extend(pool: &DbPool, id: i64, captured_at: DateTime<Local>) -> Result<()> {
-    let ended = captured_at.to_rfc3339();
-    pool.0
-        .call(move |conn| {
-            let mut stmt = conn
-                .prepare_cached("SELECT started_at FROM activities WHERE id = ?")
-                .db()?;
-            let started_at: String = stmt
-                .query_row([id], |r| r.get(0))
-                .db()?;
-            let started = DateTime::parse_from_rfc3339(&started_at)
-                .map(|dt| dt.with_timezone(&Local))
-                .unwrap_or_else(|_| Local.timestamp_opt(0, 0).unwrap());
-            let ended_dt = DateTime::parse_from_rfc3339(&ended)
-                .map(|dt| dt.with_timezone(&Local))
-                .unwrap_or_else(|_| Local::now());
-            let dur = (ended_dt - started).num_seconds().max(0);
-            let updated = Utc::now().to_rfc3339();
-
-            conn.execute(
-                "UPDATE activities SET ended_at = ?, duration_secs = ?, updated_at = ? WHERE id = ?",
-                rusqlite::params![ended, dur, updated, id],
-            )
-            .db()?;
-            Ok(())
-        })
-        .await?;
-    Ok(())
-}
-
 /// 会话结束（焦点切到别的窗口那一刻）。
 /// 同事务里：把 ended_at 钉死成 final_ended_at，更新 duration_secs / updated_at，并写一条 outbox 推到云端。
 pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local>) -> Result<()> {
