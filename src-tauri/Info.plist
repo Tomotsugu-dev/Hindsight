@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<!--
+  Hindsight macOS Info.plist 增量。
+  tauri-bundler 自动把这个文件 merge 进生成的 Info.plist —— 只放需要新增 / 覆盖的 key。
+
+  NSAppleEventsUsageDescription：第一次 osascript 控制 Chrome / Safari 时弹出
+  "自动化"权限对话框，文案就来自这里。10.14+ 必填，否则系统直接拒绝调用。
+  仅用于隐私过滤（看当前标签 URL 决定是否截图），URL 不出本机。
+-->
+<plist version="1.0">
+<dict>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Hindsight needs to read the current tab URL from your browser to apply privacy filters (skip screenshots on banking / login pages). URLs are evaluated locally and never leave your device.</string>
+</dict>
+</plist>

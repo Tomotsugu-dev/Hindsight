@@ -254,13 +254,17 @@ async fn tick(inner: &Inner) -> Result<()> {
             }
         }
         // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
-        // 浏览器场景下用 UIA 抠地址栏 URL；非浏览器跳过这步，省 50–200ms。
+        // 浏览器场景下抠地址栏 URL（Windows: UIA / macOS: AppleScript）；
+        // 非浏览器跳过这步，省 50–300ms。
         let url = if browser_url::is_browser_app(&info.app_name) {
-            // UIA 阻塞 + 偶尔卡 ~300ms，扔到 spawn_blocking 不堵 async runtime
-            tokio::task::spawn_blocking(browser_url::try_get_foreground_browser_url)
-                .await
-                .ok()
-                .flatten()
+            // 平台调用阻塞 + 偶尔卡几百 ms，扔到 spawn_blocking 不堵 async runtime
+            let app_name_for_url = info.app_name.clone();
+            tokio::task::spawn_blocking(move || {
+                browser_url::try_get_foreground_browser_url(&app_name_for_url)
+            })
+            .await
+            .ok()
+            .flatten()
         } else {
             None
         };
