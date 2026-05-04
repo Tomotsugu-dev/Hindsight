@@ -12,6 +12,7 @@ mod repo;
 mod storage;
 mod sync;
 
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use capture::CaptureService;
@@ -22,6 +23,11 @@ use sync::engine::SyncEngine;
 use tauri::Manager;
 
 const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
+
+/// 关闭按钮的行为标志（true = 隐藏到托盘 / false = 直接退出）。
+/// 由 settings.minimize_to_tray 同步：启动时从 DB 载入一次，commands::settings
+/// update 后写一次。close handler 在 window 事件回调里读，避免每次点 X 都查 DB。
+pub static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(true);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -45,6 +51,75 @@ pub fn run() {
 
             if let Some(main_window) = handle.get_webview_window("main") {
                 platform::apply_window_tweaks(&main_window);
+
+                // 点窗口右上角 X 的行为：默认隐藏到托盘（不退出进程，避免采集中断），
+                // 用户可在「设置 → 常规 → 关闭后最小化到托盘」关掉这个行为，关掉后 X
+                // 就是真正退出。真正的"退出"在托盘右键菜单里。
+                let win_for_close = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        if MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) {
+                            api.prevent_close();
+                            let _ = win_for_close.hide();
+                        }
+                    }
+                });
+            }
+
+            // 系统托盘：图标用主窗口同款。左键单击 toggle 显示 / 隐藏；
+            // 右键 / 菜单提供"显示主窗口" + "退出"。退出走 app.exit(0)。
+            {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder};
+                use tauri::tray::{
+                    MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent,
+                };
+
+                let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
+                let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+                let menu = MenuBuilder::new(app)
+                    .item(&show_item)
+                    .separator()
+                    .item(&quit_item)
+                    .build()?;
+
+                let _tray = TrayIconBuilder::with_id("hindsight-tray")
+                    .icon(app.default_window_icon().cloned().unwrap())
+                    .tooltip("Hindsight")
+                    .menu(&menu)
+                    // 左键不弹菜单（留给 toggle 显隐）；菜单只在右键 / macOS 上 showMenu 时弹
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(w) = app.get_webview_window("main") {
+                                match w.is_visible() {
+                                    Ok(true) => {
+                                        let _ = w.hide();
+                                    }
+                                    _ => {
+                                        let _ = w.show();
+                                        let _ = w.set_focus();
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .build(app)?;
             }
 
             tauri::async_runtime::block_on(async move {
@@ -111,6 +186,8 @@ pub fn run() {
                     .await;
 
                 let cfg = settings::load(&pool).await.expect("读取设置");
+                MINIMIZE_TO_TRAY
+                    .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
                 let svc = Arc::new(CaptureService::new(
                     pool.clone(),

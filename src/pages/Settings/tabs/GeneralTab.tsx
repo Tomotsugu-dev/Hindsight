@@ -126,6 +126,15 @@ export default function GeneralTab() {
             onChange={(v) => update({ showWindowOnAutoStart: v })}
           />
         </Row>
+        <Row
+          label="关闭后最小化到右下角托盘"
+          description="点窗口右上角 X 时隐藏到系统托盘，采集与同步继续在后台运行。关闭则点 X 直接退出应用。"
+        >
+          <Toggle
+            checked={settings.minimizeToTray}
+            onChange={(v) => update({ minimizeToTray: v })}
+          />
+        </Row>
       </Section>
 
       <ConfirmDialog

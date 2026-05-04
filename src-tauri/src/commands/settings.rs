@@ -27,6 +27,11 @@ pub async fn update_settings(
     let next = settings::apply_patch(current, patch);
     settings::save(&pool, &next).await.map_err(|e| e.to_string())?;
 
+    // 关闭按钮行为切换：同步给 close handler 读的 static，下次点 X 立即生效，
+    // 不需要重启
+    crate::MINIMIZE_TO_TRAY
+        .store(next.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
+
     if next.capture_enabled != prev_enabled {
         if next.capture_enabled {
             svc.start().await;

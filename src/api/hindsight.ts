@@ -109,6 +109,8 @@ export interface Settings {
   /** 应用过滤：应用名或窗口标题包含其中任意一条（忽略大小写）即跳过截图。
    *  默认空，用户自填（如 微信、招商银行）。 */
   privacyAppKeywords: string[];
+  /** 关闭按钮（窗口右上角 X）行为：true=隐藏到系统托盘，false=直接退出。 */
+  minimizeToTray: boolean;
 }
 
 export type SettingsPatch = Partial<Settings>;

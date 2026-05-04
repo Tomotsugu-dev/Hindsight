@@ -37,6 +37,9 @@ pub struct Settings {
     /// 应用过滤：应用名或窗口标题包含其中任意一条（子串忽略大小写）即跳过截图。
     /// 默认空，用户自己加（如 微信、招商银行、特定文件名）
     pub privacy_app_keywords: Vec<String>,
+    /// 关闭按钮（窗口右上角 X）的行为：true=隐藏到托盘，false=直接退出。
+    /// 默认 true 是为了避免用户误点导致采集中断。
+    pub minimize_to_tray: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +57,7 @@ impl Default for Settings {
             google_client_secret: String::new(),
             privacy_url_keywords: default_privacy_url_keywords(),
             privacy_app_keywords: Vec::new(),
+            minimize_to_tray: true,
         }
     }
 }
@@ -94,6 +98,7 @@ pub struct SettingsPatch {
     pub google_client_secret: Option<String>,
     pub privacy_url_keywords: Option<Vec<String>>,
     pub privacy_app_keywords: Option<Vec<String>>,
+    pub minimize_to_tray: Option<bool>,
 }
 
 pub async fn load(pool: &DbPool) -> Result<Settings> {
@@ -179,6 +184,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .privacy_app_keywords
             .map(sanitize_keywords)
             .unwrap_or(current.privacy_app_keywords),
+        minimize_to_tray: patch
+            .minimize_to_tray
+            .unwrap_or(current.minimize_to_tray),
     }
 }
 
