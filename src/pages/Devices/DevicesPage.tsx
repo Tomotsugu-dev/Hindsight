@@ -370,7 +370,7 @@ function SetupPanel({
           <div className={styles.stepBody}>
             <div className={styles.stepTitle}>启用 Google Drive API</div>
             <div className={styles.stepDesc}>
-              在任意 Cloud 项目里 Enable 一下（没项目就新建一个，免费）。
+              点击蓝色 `启用` 按钮。
             </div>
             <button
               type="button"
