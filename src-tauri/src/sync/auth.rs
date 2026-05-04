@@ -465,27 +465,45 @@ async fn exchange_code(
 // ───────────── 内部：keyring + AES-GCM ─────────────
 
 /// 拿到 OS keyring 里的 32 字节 AES key；没有就生成并落盘。
+///
+/// 关键：必须区分"条目不存在"和"读 keyring 失败"。
+/// 之前的实现凡是 Err 都 fall through 去生成新 key 覆盖，
+/// 导致 Windows 凭据管理器一过性读失败时把旧 key 干掉，
+/// 数据库里加密过的 refresh_token 再也解不开 → 被迫重新登录。
 fn ensure_keyring_key() -> Result<[u8; 32]> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
         .map_err(|e| Error::Keyring(format!("open: {e}")))?;
 
-    if let Ok(s) = entry.get_password() {
-        if let Ok(bytes) = general_purpose::STANDARD.decode(s.as_bytes()) {
-            if bytes.len() == 32 {
-                let mut k = [0u8; 32];
-                k.copy_from_slice(&bytes);
-                return Ok(k);
+    match entry.get_password() {
+        Ok(s) => {
+            let bytes = general_purpose::STANDARD
+                .decode(s.as_bytes())
+                .map_err(|_| Error::Keyring("auth key base64 decode failed".into()))?;
+            if bytes.len() != 32 {
+                return Err(Error::Keyring(format!(
+                    "auth key length = {}, expected 32",
+                    bytes.len()
+                )));
             }
+            let mut k = [0u8; 32];
+            k.copy_from_slice(&bytes);
+            Ok(k)
+        }
+        Err(keyring::Error::NoEntry) => {
+            // 真没有 → 生成新的并写入
+            let mut k = [0u8; 32];
+            OsRng.fill_bytes(&mut k);
+            entry
+                .set_password(&general_purpose::STANDARD.encode(k))
+                .map_err(|e| Error::Keyring(format!("write: {e}")))?;
+            Ok(k)
+        }
+        Err(e) => {
+            // 其它错（凭据管理器抽风、权限、平台一过性问题）→ 直接报错，
+            // 绝对不能覆盖既有 key，否则旧密文就解不开了
+            Err(Error::Keyring(format!("read: {e}")))
         }
     }
-
-    let mut k = [0u8; 32];
-    OsRng.fill_bytes(&mut k);
-    let s = general_purpose::STANDARD.encode(k);
-    entry
-        .set_password(&s)
-        .map_err(|e| Error::Keyring(format!("write: {e}")))?;
-    Ok(k)
 }
 
 fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
