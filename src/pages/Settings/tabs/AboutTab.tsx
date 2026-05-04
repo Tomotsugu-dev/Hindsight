@@ -1,8 +1,17 @@
 import { forwardRef } from "react";
 import { MessageSquare, Scale, User, type LucideProps } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Section } from "../components/Section";
 import { Row } from "../components/Row";
 import styles from "./AboutTab.module.css";
+
+const REPO_URL = "https://github.com/Tomotsugu-dev/Hindsight";
+const ISSUES_URL = "https://github.com/Tomotsugu-dev/Hindsight/issues";
+
+const openExternal = (e: React.MouseEvent, url: string) => {
+  e.preventDefault();
+  void openUrl(url).catch(() => {});
+};
 
 /** GitHub Octocat 标记 —— lucide v0.300+ 移除了 brand icon，自己塞一个 */
 const GithubMark = forwardRef<SVGSVGElement, LucideProps>(
@@ -44,12 +53,20 @@ export default function AboutTab() {
 
       <Section title="链接">
         <Row label="GitHub 仓库" icon={GithubMark}>
-          <a href="#" className={styles.link}>
+          <a
+            href={REPO_URL}
+            className={styles.link}
+            onClick={(e) => openExternal(e, REPO_URL)}
+          >
             查看 →
           </a>
         </Row>
         <Row label="反馈与建议" icon={MessageSquare}>
-          <a href="#" className={styles.link}>
+          <a
+            href={ISSUES_URL}
+            className={styles.link}
+            onClick={(e) => openExternal(e, ISSUES_URL)}
+          >
             提交 →
           </a>
         </Row>

@@ -370,7 +370,7 @@ function SetupPanel({
           <div className={styles.stepBody}>
             <div className={styles.stepTitle}>启用 Google Drive API</div>
             <div className={styles.stepDesc}>
-              点击蓝色 `启用` 按钮。
+              点击 <span className={styles.cueBtn}>启用</span> 按钮。
             </div>
             <button
               type="button"
@@ -390,9 +390,10 @@ function SetupPanel({
           <div className={styles.stepBody}>
             <div className={styles.stepTitle}>配置 OAuth 同意页</div>
             <div className={styles.stepDesc}>
-              左侧 <b>Audience</b> → User Type 选 External →{" "}
-              <b>Test users</b> 加你的 Gmail。<br />
-              首次配置会先跳到 <b>Branding</b>，填个应用名 + 联系邮箱即可。
+              首次进入可能要先点击 <span className={styles.cueBtn}>开始</span>{" "}
+              按钮 → 随意填写应用名称与邮箱 → 受众群体选择 外部 →
+              在联系信息里再次填写邮箱地址 → 点击{" "}
+              <span className={styles.cueBtn}>创建</span> 按钮。
             </div>
             <button
               type="button"
@@ -408,8 +409,9 @@ function SetupPanel({
           <div className={styles.stepBody}>
             <div className={styles.stepTitle}>创建 OAuth 客户端</div>
             <div className={styles.stepDesc}>
-              左侧 <b>Clients</b> → Create client → Application type 选{" "}
-              <b>Desktop app</b>，名字随意。建好后会显示 Client ID + Secret。
+              左侧 客户端 → 点击上方{" "}
+              <span className={styles.cueLink}>+创建新客户端</span> →
+              应用类型选择 桌面应用 → 名称随意，然后会显示 客户端 ID 与 客户端密钥。
             </div>
             <button
               type="button"
@@ -423,9 +425,9 @@ function SetupPanel({
         <li>
           <span className={styles.stepNum}>4</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>把 Client ID / Secret 粘到下面</div>
+            <div className={styles.stepTitle}>把 客户端 ID 和 客户端密钥 粘贴到下面</div>
             <label className={styles.credField}>
-              <span className={styles.credLabel}>Client ID</span>
+              <span className={styles.credLabel}>客户端 ID</span>
               <input
                 type="text"
                 className={styles.credInput}
@@ -437,7 +439,7 @@ function SetupPanel({
               />
             </label>
             <label className={styles.credField}>
-              <span className={styles.credLabel}>Client Secret</span>
+              <span className={styles.credLabel}>客户端密钥</span>
               <div className={styles.credInputWrap}>
                 <input
                   type={secretVisible ? "text" : "password"}
@@ -452,7 +454,7 @@ function SetupPanel({
                   type="button"
                   className={styles.credEyeBtn}
                   onClick={() => setSecretVisible((v) => !v)}
-                  aria-label={secretVisible ? "隐藏 Client Secret" : "显示 Client Secret"}
+                  aria-label={secretVisible ? "隐藏客户端密钥" : "显示客户端密钥"}
                   title={secretVisible ? "隐藏" : "显示"}
                   tabIndex={-1}
                 >
@@ -464,9 +466,6 @@ function SetupPanel({
                 </button>
               </div>
             </label>
-            <div className={styles.credHint}>
-              凭证只存本地。两项都填好后，"用 Google 登录"按钮会自动变可点。
-            </div>
           </div>
         </li>
       </ol>

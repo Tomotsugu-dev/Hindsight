@@ -463,6 +463,28 @@
   opacity: 0.8;
 }
 
+/* —— GCP 控制台风格的小型 chip：在向导文案里"借"一下原界面里的按钮外观，
+       让用户对得上"我现在该点哪个" —— */
+.cueBtn {
+  display: inline-block;
+  background: #1a73e8;
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.01em;
+  vertical-align: 1px;
+  user-select: none;
+}
+
+/* GCP 里那种"蓝色文字 + 号"风格的轻量按钮（无背景填充）。 */
+.cueLink {
+  color: #1a73e8;
+  font-weight: 600;
+}
+
 /* —— Client ID / Secret 输入 —— */
 .credField {
   display: flex;
@@ -548,13 +570,6 @@
   box-shadow:
     0 1px 1px rgba(20, 20, 40, 0.03) inset,
     0 0 0 3px color-mix(in oklab, var(--color-accent) 16%, transparent);
-}
-
-.credHint {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.55;
-  padding-top: 4px;
 }
 
 .section {
