@@ -61,3 +61,41 @@ pub fn apply_window_tweaks(window: &tauri::WebviewWindow) {
 
 #[cfg(not(target_os = "windows"))]
 pub fn apply_window_tweaks(_window: &tauri::WebviewWindow) {}
+
+/// Tauri 的 `App::run()` 回调。按平台分发系统级事件：
+///
+/// - macOS：
+///   - `ExitRequested`：拦截 Cmd+Q / 关闭最后一个窗口触发的隐式退出，让 app 留在 Dock。
+///     `code=Some(_)` 是程序显式 `app.exit()`（托盘"退出"），放行。
+///   - `Reopen`：所有窗口都隐藏后点 Dock 图标，手动 show + focus 主窗口。
+///     不处理这个事件，用户会觉得 app "卡死"——点 Dock 没反应。
+/// - Windows：no-op。点关闭按钮的窗口隐藏逻辑已在 `WindowEvent::CloseRequested`
+///   里处理，且 Windows 没有 Dock / Reopen 概念。
+#[cfg(target_os = "macos")]
+pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+    use tauri::Manager;
+    match event {
+        tauri::RunEvent::ExitRequested { api, code, .. } => {
+            if code.is_none()
+                && crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed)
+            {
+                api.prevent_exit();
+            }
+        }
+        tauri::RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } => {
+            if !has_visible_windows {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn handle_run_event(_app: &tauri::AppHandle, _event: tauri::RunEvent) {}
