@@ -64,7 +64,7 @@
 
 ### Windows
 
-下载 `.msi`，双击安装即可，无需额外权限设置。
+下载 `hindsight_x.y.z_x64-setup.exe`，双击安装即可。
 
 ### MacOS
 

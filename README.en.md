@@ -64,7 +64,7 @@ Download the installer for your platform from [Releases](https://github.com/Tomo
 
 ### Windows
 
-Download the `.msi` file and double-click to install. No additional permission setup required.
+Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
 ### macOS
 
