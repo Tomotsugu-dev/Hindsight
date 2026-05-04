@@ -148,7 +148,7 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
 pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
     let name = display_name.trim().to_string();
     if name.is_empty() {
-        return Err(crate::error::Error::Other("组名不能为空".into()));
+        return Err(crate::error::Error::InvalidInput("组名不能为空"));
     }
     let id = uuid::Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();

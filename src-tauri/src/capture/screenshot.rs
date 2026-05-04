@@ -15,7 +15,7 @@ pub async fn capture_active_window(
         capture_blocking(&dir, max_width, max_height, jpeg_quality)
     })
     .await
-    .map_err(|e| Error::Other(format!("截图任务异常: {e}")))?;
+    .map_err(|e| Error::Capture(format!("screenshot task join: {e}")))?;
     result
 }
 
@@ -54,7 +54,7 @@ fn capture_blocking(
     let encoder = JpegEncoder::new_with_quality(file, jpeg_quality.clamp(30, 95));
     encoder
         .write_image(&rgb, rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-        .map_err(|e| Error::Other(format!("JPEG 编码: {e}")))?;
+        .map_err(|e| Error::Capture(format!("jpeg encode: {e}")))?;
 
     Ok(Some(target.to_string_lossy().to_string()))
 }

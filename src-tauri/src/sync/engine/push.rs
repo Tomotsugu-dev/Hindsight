@@ -32,13 +32,13 @@ enum DirtyKey {
 pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     let token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
+        // NotSignedIn 是预期状态，不当错误显示；其它（续期失败 / refresh_token 失效）让用户看见
+        Err(Error::NotSignedIn) => {
+            log::debug!("sync 跳过 push（未登录）");
+            return Ok(());
+        }
         Err(e) => {
             let msg = e.to_string();
-            // "未登录" 是预期状态，不当错误显示；其它（续期失败 / refresh_token 失效）要让用户看见
-            if msg.contains("未登录") {
-                log::debug!("sync 跳过 push（未登录）");
-                return Ok(());
-            }
             log::warn!("sync push 拿不到有效 token: {msg}");
             inner.status.write().await.last_error = Some(msg);
             return Ok(());

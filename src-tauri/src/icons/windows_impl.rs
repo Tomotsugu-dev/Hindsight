@@ -126,10 +126,12 @@ unsafe fn extract_inner(exe_path: &Path) -> Result<Option<Vec<u8>>> {
 
     let img: ImageBuffer<Rgba<u8>, Vec<u8>> =
         ImageBuffer::from_raw(ICON_SIZE as u32, ICON_SIZE as u32, pixels)
-            .ok_or_else(|| crate::error::Error::Other("PNG buffer 构造失败".into()))?;
+            .ok_or(crate::error::Error::Capture(
+                "icon: PNG buffer 构造失败".into(),
+            ))?;
 
     let mut out = std::io::Cursor::new(Vec::new());
     img.write_to(&mut out, image::ImageFormat::Png)
-        .map_err(|e| crate::error::Error::Other(format!("PNG 编码失败: {e}")))?;
+        .map_err(|e| crate::error::Error::Capture(format!("icon: PNG encode: {e}")))?;
     Ok(Some(out.into_inner()))
 }

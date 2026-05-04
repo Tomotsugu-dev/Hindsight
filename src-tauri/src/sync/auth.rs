@@ -92,26 +92,26 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
     // 2) loopback listener
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
-        .map_err(|e| Error::Other(format!("启动 OAuth 回调 server 失败: {e}")))?;
+        .map_err(|e| Error::OAuthSetup(format!("bind callback listener: {e}")))?;
     let port = listener
         .local_addr()
-        .map_err(|e| Error::Other(format!("读取本地端口失败: {e}")))?
+        .map_err(|e| Error::OAuthSetup(format!("local_addr: {e}")))?
         .port();
     let redirect_uri = format!("http://127.0.0.1:{port}/callback");
 
     // 3) 打开浏览器
     let auth_url = build_auth_url(&client_id, &redirect_uri, &challenge, &state);
     if let Err(e) = open::that(&auth_url) {
-        return Err(Error::Other(format!("打开浏览器失败: {e}")));
+        return Err(Error::OAuthSetup(format!("open browser: {e}")));
     }
 
     // 4) 等回调（最多 OAUTH_TIMEOUT_SECS 秒）
     let code_state =
         timeout(Duration::from_secs(OAUTH_TIMEOUT_SECS), accept_callback(listener))
             .await
-            .map_err(|_| Error::Other("等待 OAuth 回调超时（3 分钟内未完成）".into()))??;
+            .map_err(|_| Error::OAuthTimeout)??;
     if code_state.state != state {
-        return Err(Error::Other("OAuth state 不匹配（可能被劫持）".into()));
+        return Err(Error::OAuthStateMismatch);
     }
 
     // 5) code → access_token + refresh_token + id_token
@@ -126,13 +126,9 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
 
     // 6) 从 id_token 解 sub / email
     let (uid, email) = decode_id_token(google.id_token.as_deref().unwrap_or(""))
-        .ok_or_else(|| Error::Other("id_token 解析失败：缺 sub".into()))?;
+        .ok_or(Error::OAuthIdTokenInvalid("missing sub claim"))?;
 
-    let refresh_token = google.refresh_token.ok_or_else(|| {
-        Error::Other(
-            "Google 没返回 refresh_token：检查 access_type=offline + prompt=consent".into(),
-        )
-    })?;
+    let refresh_token = google.refresh_token.ok_or(Error::OAuthMissingRefreshToken)?;
 
     // 7) 加密存储
     let key = ensure_keyring_key()?;
@@ -180,7 +176,7 @@ pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
         .await?;
 
     let Some((Some(uid), Some(rt_enc), Some(access), Some(expires_at))) = row else {
-        return Err(Error::Other("未登录".into()));
+        return Err(Error::NotSignedIn);
     };
 
     // 还在有效期 + 5 分钟以上缓冲 → 直接复用
@@ -199,8 +195,8 @@ pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
     let (client_id, client_secret) = load_creds(pool).await?;
     let key = ensure_keyring_key()?;
     let rt_bytes = aes_decrypt(&key, &rt_enc)?;
-    let refresh_token = String::from_utf8(rt_bytes)
-        .map_err(|e| Error::Other(format!("refresh_token 解码失败: {e}")))?;
+    let refresh_token =
+        String::from_utf8(rt_bytes).map_err(|_| Error::Crypto("refresh_token utf-8 decode"))?;
 
     log::debug!("access_token 已过期，调 oauth2 端点续期…");
     let fresh = refresh_with_google(&client_id, &client_secret, &refresh_token).await?;
@@ -255,17 +251,14 @@ async fn refresh_with_google(
             ("grant_type", "refresh_token"),
         ])
         .send()
-        .await
-        .map_err(|e| Error::Other(format!("调用 Google token 续期失败: {e}")))?;
+        .await?;
     if !resp.status().is_success() {
-        let s = resp.status();
+        let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
         // 401/400 多半是 refresh_token 失效（用户在 myaccount.google.com 撤销了授权）
-        return Err(Error::Other(format!("Google token 续期返回 {s}: {body}")));
+        return Err(Error::OAuthHttp { endpoint: "refresh", status, body });
     }
-    resp.json::<GoogleRefreshResp>()
-        .await
-        .map_err(|e| Error::Other(format!("解析续期响应失败: {e}")))
+    Ok(resp.json::<GoogleRefreshResp>().await?)
 }
 
 pub async fn sign_out(pool: &DbPool) -> Result<()> {
@@ -295,9 +288,8 @@ async fn load_creds(pool: &DbPool) -> Result<(String, String)> {
     let id = s.google_client_id.trim().to_string();
     let secret = s.google_client_secret.trim().to_string();
     if id.is_empty() || secret.is_empty() {
-        return Err(Error::Other(
-            "Google OAuth 凭证未填：到 设备 页面按指引填入 Client ID / Client Secret 后再登录。"
-                .into(),
+        return Err(Error::OAuthNotConfigured(
+            "Google Client ID / Client Secret 未填：到设备页按指引配置后再登录".into(),
         ));
     }
     Ok((id, secret))
@@ -375,7 +367,7 @@ async fn accept_callback(listener: TcpListener) -> Result<CodeState> {
     let (mut socket, _) = listener
         .accept()
         .await
-        .map_err(|e| Error::Other(format!("接受回调连接失败: {e}")))?;
+        .map_err(|e| Error::OAuthSetup(format!("accept callback: {e}")))?;
 
     let mut buf = vec![0u8; 4096];
     let n = {
@@ -383,7 +375,7 @@ async fn accept_callback(listener: TcpListener) -> Result<CodeState> {
         socket
             .read(&mut buf)
             .await
-            .map_err(|e| Error::Other(format!("读取请求失败: {e}")))?
+            .map_err(|e| Error::OAuthSetup(format!("read callback: {e}")))?
     };
     let req = String::from_utf8_lossy(&buf[..n]).to_string();
     let first = req.lines().next().unwrap_or("");
@@ -424,10 +416,10 @@ async fn accept_callback(listener: TcpListener) -> Result<CodeState> {
     }
 
     if let Some(e) = error {
-        return Err(Error::Other(format!("Google 拒绝授权: {e}")));
+        return Err(Error::OAuthDenied(e));
     }
     if code.is_empty() {
-        return Err(Error::Other("回调没有带 code".into()));
+        return Err(Error::OAuthMissingCode);
     }
     Ok(CodeState { code, state })
 }
@@ -582,16 +574,13 @@ async fn exchange_code(
             ("redirect_uri", redirect_uri),
         ])
         .send()
-        .await
-        .map_err(|e| Error::Other(format!("调用 Google token 接口失败: {e}")))?;
+        .await?;
     if !resp.status().is_success() {
-        let s = resp.status();
+        let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Other(format!("Google token 接口返回 {s}: {body}")));
+        return Err(Error::OAuthHttp { endpoint: "token", status, body });
     }
-    resp.json::<GoogleTokenResp>()
-        .await
-        .map_err(|e| Error::Other(format!("解析 Google token 响应失败: {e}")))
+    Ok(resp.json::<GoogleTokenResp>().await?)
 }
 
 // ───────────── 内部：keyring + AES-GCM ─────────────
@@ -599,7 +588,7 @@ async fn exchange_code(
 /// 拿到 OS keyring 里的 32 字节 AES key；没有就生成并落盘。
 fn ensure_keyring_key() -> Result<[u8; 32]> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-        .map_err(|e| Error::Other(format!("打开 keyring 失败: {e}")))?;
+        .map_err(|e| Error::Keyring(format!("open: {e}")))?;
 
     if let Ok(s) = entry.get_password() {
         if let Ok(bytes) = general_purpose::STANDARD.decode(s.as_bytes()) {
@@ -616,7 +605,7 @@ fn ensure_keyring_key() -> Result<[u8; 32]> {
     let s = general_purpose::STANDARD.encode(k);
     entry
         .set_password(&s)
-        .map_err(|e| Error::Other(format!("写 keyring 失败: {e}")))?;
+        .map_err(|e| Error::Keyring(format!("write: {e}")))?;
     Ok(k)
 }
 
@@ -627,7 +616,7 @@ fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher
         .encrypt(nonce, plaintext)
-        .map_err(|e| Error::Other(format!("AES 加密失败: {e}")))?;
+        .map_err(|_| Error::Crypto("aes encrypt"))?;
 
     // 输出格式：[12 字节 nonce][密文+tag]
     let mut out = Vec::with_capacity(12 + ct.len());
@@ -638,12 +627,12 @@ fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
 
 pub fn aes_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
     if ciphertext.len() < 13 {
-        return Err(Error::Other("密文太短".into()));
+        return Err(Error::Crypto("ciphertext too short"));
     }
     let (nonce_bytes, ct) = ciphertext.split_at(12);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(nonce_bytes);
     cipher
         .decrypt(nonce, ct)
-        .map_err(|e| Error::Other(format!("AES 解密失败: {e}")))
+        .map_err(|_| Error::Crypto("aes decrypt"))
 }

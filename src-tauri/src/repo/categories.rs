@@ -138,10 +138,10 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     let color = input.color.trim().to_string();
     let icon = input.icon.trim().to_string();
     if name.is_empty() {
-        return Err(Error::Other("分类名不能为空".into()));
+        return Err(Error::InvalidInput("分类名不能为空"));
     }
     if color.is_empty() {
-        return Err(Error::Other("颜色不能为空".into()));
+        return Err(Error::InvalidInput("颜色不能为空"));
     }
     let final_icon = if icon.is_empty() { "Tag".to_string() } else { icon };
     let n = name.clone();
@@ -380,10 +380,10 @@ pub async fn assign_app(pool: &DbPool, process_name: &str, category_id: &str) ->
     let p = process_name.trim().to_string();
     let c = category_id.trim().to_string();
     if p.is_empty() {
-        return Err(Error::Other("应用名不能为空".into()));
+        return Err(Error::InvalidInput("应用名不能为空"));
     }
     if c.is_empty() {
-        return Err(Error::Other("分类 ID 不能为空".into()));
+        return Err(Error::InvalidInput("分类 ID 不能为空"));
     }
     crate::repo::app_groups::assign_category_for_process(pool, &p, Some(c)).await
 }

@@ -65,11 +65,9 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     let token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
+        Err(Error::NotSignedIn) => return Ok(()),
         Err(e) => {
             let msg = e.to_string();
-            if msg.contains("未登录") {
-                return Ok(());
-            }
             log::warn!("sync pull 拿不到有效 token: {msg}");
             inner.status.write().await.last_error = Some(msg);
             return Ok(());
@@ -241,7 +239,7 @@ async fn remote_device_os(pool: &DbPool, device_id: &str) -> Option<String> {
 }
 
 async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
-    let s = std::str::from_utf8(body).map_err(|e| Error::Other(format!("ndjson UTF-8: {e}")))?;
+    let s = std::str::from_utf8(body).map_err(Error::from)?;
     for (lineno, line) in s.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() {
@@ -295,7 +293,7 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
 }
 
 async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::Other(format!("categories JSON: {e}")))?;
+    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "categories", source: e })?;
     for v in arr {
         let id = match v.get("id").and_then(|x| x.as_str()) {
             Some(s) => s.to_string(),
@@ -370,7 +368,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 }
 
 async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::Other(format!("app_categories JSON: {e}")))?;
+    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "app_categories", source: e })?;
     for v in arr {
         let process_name = match v.get("processName").and_then(|x| x.as_str()) {
             Some(s) => s.to_string(),
@@ -425,7 +423,7 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
 }
 
 async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::Other(format!("process_paths JSON: {e}")))?;
+    let arr: Vec<Value> = serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "process_paths", source: e })?;
     for v in arr {
         let process_name = match v.get("processName").and_then(|x| x.as_str()) {
             Some(s) => s.to_string(),
@@ -475,7 +473,7 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
 async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
     let arr: Vec<Value> =
-        serde_json::from_slice(body).map_err(|e| Error::Other(format!("app_icons JSON: {e}")))?;
+        serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind: "app_icons", source: e })?;
     for v in arr {
         let process_name = match v.get("processName").and_then(|x| x.as_str()) {
             Some(s) => s.to_string(),
@@ -556,7 +554,7 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
 
 async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
     let arr: Vec<Value> = serde_json::from_slice(body)
-        .map_err(|e| Error::Other(format!("app_groups JSON: {e}")))?;
+        .map_err(|e| Error::SyncParse { kind: "app_groups", source: e })?;
     for v in arr {
         let id = match v.get("id").and_then(|x| x.as_str()) {
             Some(s) => s.to_string(),
@@ -690,7 +688,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 
 async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
     let arr: Vec<Value> = serde_json::from_slice(body)
-        .map_err(|e| Error::Other(format!("app_group_members JSON: {e}")))?;
+        .map_err(|e| Error::SyncParse { kind: "app_group_members", source: e })?;
     for v in arr {
         let process_name = match v.get("processName").and_then(|x| x.as_str()) {
             Some(s) => s.to_string(),
@@ -751,7 +749,7 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
 async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
     let v: Value = match serde_json::from_slice(body) {
         Ok(v) => v,
-        Err(e) => return Err(Error::Other(format!("device meta JSON: {e}"))),
+        Err(e) => return Err(Error::SyncParse { kind: "device_meta", source: e }),
     };
     if !v.is_object() {
         return Ok(());

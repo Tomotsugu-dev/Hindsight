@@ -243,18 +243,20 @@ pub async fn delete(token: &str, file_id: &str) -> Result<()> {
 
 // ─────────────── 错误工具 ───────────────
 
-fn net_err(stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
-    move |e| Error::Other(format!("Drive {stage} 网络错误: {e}"))
+fn net_err(_stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
+    // reqwest::Error 直接走 #[from]，stage 体现在调用栈的 chain 里足够定位
+    Error::from
 }
 
-fn parse_err(stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
-    move |e| Error::Other(format!("Drive {stage} 解析响应失败: {e}"))
+fn parse_err(_stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
+    Error::from
 }
 
 async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
-    let status = resp.status();
+    let status = resp.status().as_u16();
     let body = resp.text().await.unwrap_or_default();
-    if status.as_u16() == 403 && body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT") {
+    if status == 403 && body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT") {
+        // 这条留 Other 当兜底，因为给用户的提示是定向「请重登」，不需要程序 match 处理
         return Error::Other(
             "Drive 权限不足：你的登录 token 没有 drive.appdata 权限\
              （多半是 scope 升级前登的）。请在设备页点【退出】再重新【用 Google 登录】，\
@@ -262,5 +264,5 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
                 .into(),
         );
     }
-    Error::Other(format!("{stage} 返回 {status}: {body}"))
+    Error::DriveHttp { stage, status, body }
 }
