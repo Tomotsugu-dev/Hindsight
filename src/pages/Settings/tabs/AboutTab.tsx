@@ -1,17 +1,32 @@
-import { forwardRef } from "react";
-import { MessageSquare, Scale, User, type LucideProps } from "lucide-react";
+import { forwardRef, useEffect, useState } from "react";
+import {
+  MessageSquare,
+  RefreshCw,
+  Scale,
+  Sparkles,
+  User,
+  type LucideProps,
+} from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { platform } from "@tauri-apps/plugin-os";
+import { getVersion } from "@tauri-apps/api/app";
 import { Section } from "../components/Section";
 import { Row } from "../components/Row";
+import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import styles from "./AboutTab.module.css";
 
 const REPO_URL = "https://github.com/Tomotsugu-dev/Hindsight";
 const ISSUES_URL = "https://github.com/Tomotsugu-dev/Hindsight/issues";
+const RELEASES_URL = "https://github.com/Tomotsugu-dev/Hindsight/releases";
 
 const openExternal = (e: React.MouseEvent, url: string) => {
   e.preventDefault();
   void openUrl(url).catch(() => {});
 };
+
+type Phase = "idle" | "checking" | "uptodate" | "installing" | "error";
 
 /** GitHub Octocat 标记 —— lucide v0.300+ 移除了 brand icon，自己塞一个 */
 const GithubMark = forwardRef<SVGSVGElement, LucideProps>(
@@ -32,15 +47,124 @@ const GithubMark = forwardRef<SVGSVGElement, LucideProps>(
 GithubMark.displayName = "GithubMark";
 
 export default function AboutTab() {
+  const [appVersion, setAppVersion] = useState<string>("");
+  const [isMacOS, setIsMacOS] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+
+  useEffect(() => {
+    void getVersion().then(setAppVersion).catch(() => {});
+    setIsMacOS(platform() === "macos");
+  }, []);
+
+  const handleCheck = async () => {
+    setPhase("checking");
+    setErrorMsg("");
+    try {
+      const update = await check();
+      if (update) {
+        // 检测到新版本：先把 update 存住，然后弹 ConfirmDialog 让用户决定是否下载安装
+        setPendingUpdate(update);
+        setPhase("idle");
+      } else {
+        setPhase("uptodate");
+      }
+    } catch (e) {
+      setPhase("error");
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleConfirmUpdate = async () => {
+    const update = pendingUpdate;
+    if (!update) return;
+    setPendingUpdate(null);
+    // macOS 占位：当前没用 Apple Developer 签名/公证，应用内静默替换会破坏
+    // codesign。直接跳到 Releases 那个 tag 让用户手动下载新 .dmg。
+    if (isMacOS) {
+      await openUrl(`${RELEASES_URL}/tag/v${update.version}`);
+      return;
+    }
+    setPhase("installing");
+    try {
+      await update.downloadAndInstall();
+      await relaunch();
+    } catch (e) {
+      setPhase("error");
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const cancelUpdate = () => setPendingUpdate(null);
+
+  const checkBtnDisabled = phase === "checking" || phase === "installing";
+  const statusText =
+    phase === "checking"
+      ? "正在检查…"
+      : phase === "uptodate"
+        ? "已是最新版本"
+        : phase === "installing"
+          ? "下载并安装中，完成后将自动重启…"
+          : phase === "error"
+            ? `检查失败：${errorMsg}`
+            : isMacOS
+              ? "macOS 暂不支持应用内自动更新，发现新版会跳转到 Releases 页"
+              : undefined;
+
   return (
     <>
       <div className={styles.hero}>
         <div className={styles.logo} aria-hidden />
         <div className={styles.heroText}>
           <div className={styles.appName}>Hindsight</div>
-          <div className={styles.version}>0.1.0 · Tauri 2 + React</div>
+          <div className={styles.version}>
+            {appVersion || "0.1.0"} · Tauri 2 + React
+          </div>
         </div>
       </div>
+
+      <Section title="应用更新" icon={Sparkles}>
+        <Row label="当前版本" description={statusText}>
+          <span className={styles.value}>{appVersion || "—"}</span>
+          <button
+            type="button"
+            className={styles.checkBtn}
+            onClick={handleCheck}
+            disabled={checkBtnDisabled}
+          >
+            <RefreshCw
+              size={13}
+              strokeWidth={1.85}
+              className={
+                phase === "checking" || phase === "installing"
+                  ? styles.spinning
+                  : ""
+              }
+            />
+            {phase === "checking"
+              ? "检查中…"
+              : phase === "installing"
+                ? "更新中…"
+                : "检查更新"}
+          </button>
+        </Row>
+      </Section>
+
+      <ConfirmDialog
+        open={pendingUpdate !== null}
+        title={`发现新版本 v${pendingUpdate?.version ?? ""}`}
+        message={
+          isMacOS
+            ? `点击"前往下载"将打开浏览器到 GitHub Releases 页，请手动下载新版 .dmg 安装。\n\n更新说明：\n${pendingUpdate?.body || "（无）"}`
+            : `点击"现在更新"将下载并自动安装新版本，完成后应用会重启。\n\n更新说明：\n${pendingUpdate?.body || "（无）"}`
+        }
+        confirmLabel={isMacOS ? "前往下载" : "现在更新"}
+        cancelLabel="稍后"
+        variant="primary"
+        onConfirm={handleConfirmUpdate}
+        onCancel={cancelUpdate}
+      />
 
       <Section title="信息">
         <Row label="作者" description="个人项目，非商用" icon={User}>

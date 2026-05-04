@@ -55,3 +55,70 @@
 .link:hover {
   opacity: 0.7;
 }
+
+.checkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-strong);
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    transform 100ms ease-out;
+}
+
+.checkBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.checkBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.checkBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.installBtn {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.installBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 90%, black);
+}
+
+.spinning {
+  animation: aboutSpin 900ms linear infinite;
+}
+
+@keyframes aboutSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.updateNotes {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.updateError {
+  font-size: 12px;
+  color: #ef4444;
+}

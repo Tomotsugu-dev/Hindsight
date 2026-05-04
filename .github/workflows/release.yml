@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build Windows (.msi + .exe)
+    name: Build Windows (.exe)
     runs-on: windows-latest
 
     steps:
@@ -39,6 +39,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tauri Updater：tauri-action 检测到下面两个变量后会自动签名 NSIS .exe
+          # 并生成 latest.json 一起上传到 Release，App 内 check() 即可拉到。
+          # 私钥本地生成（npx @tauri-apps/cli signer generate），保存到 GitHub
+          # Repository Secrets，密码为空就只填 KEY 不填 PASSWORD。
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Hindsight ${{ github.ref_name }}"
@@ -47,3 +53,4 @@ jobs:
             - `hindsight_x.y.z_x64-setup.exe` — Windows 安装器
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
