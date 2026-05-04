@@ -5,6 +5,7 @@ import { Section } from "../components/Section";
 import { Row } from "../components/Row";
 import { Toggle } from "../components/Toggle";
 import { PathField } from "../components/PathField";
+import { Slider } from "../components/Slider";
 import { TimeRangeList } from "../components/TimeRangeList";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "../../../state/settings";
@@ -73,6 +74,26 @@ export default function GeneralTab() {
           <Toggle
             checked={settings.captureEnabled}
             onChange={(v) => update({ captureEnabled: v })}
+          />
+        </Row>
+        <Row
+          label="采集间隔"
+          description="窗口信息和截图的采集频率。间隔越短，记录越精细，磁盘占用越大。"
+          disabled={!settings.captureEnabled}
+          labelHint={
+            "截图触发时机：\n" +
+            "• 切换应用 → 立即截图\n" +
+            "• 浏览器切换 URL → 立即截图\n" +
+            "• 同一窗口停留满设定的间隔 → 截图"
+          }
+        >
+          <Slider
+            value={settings.captureIntervalSeconds}
+            onChange={(v) => update({ captureIntervalSeconds: v })}
+            min={5}
+            max={120}
+            step={5}
+            suffix="秒"
           />
         </Row>
         <Row label="截图保存路径" disabled={!settings.captureEnabled}>

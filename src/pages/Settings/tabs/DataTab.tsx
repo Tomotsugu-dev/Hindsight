@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertCircle,
-  Aperture,
   Database,
   FolderOpen,
   ImageDown,
@@ -79,23 +78,6 @@ export default function DataTab() {
 
   return (
     <>
-      <Section
-        title="采集"
-        description="窗口信息和截图的采集频率。间隔越短，记录越精细，磁盘占用越大。"
-        icon={Aperture}
-      >
-        <Row label="采集间隔">
-          <Slider
-            value={settings.captureIntervalSeconds}
-            onChange={(v) => update({ captureIntervalSeconds: v })}
-            min={5}
-            max={120}
-            step={5}
-            suffix="秒"
-          />
-        </Row>
-      </Section>
-
       <Section
         title="存储"
         description="截图保留时长和当前占用情况；数据库永不自动清理。"

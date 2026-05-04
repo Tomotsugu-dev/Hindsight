@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import { Info, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import styles from "./Row.module.css";
 
@@ -14,6 +14,8 @@ interface RowProps {
   icon?: LucideIcon;
   /** 图标色调 */
   tone?: "primary" | "danger";
+  /** label 右侧 info 图标的 hover 提示（多行用 \n 分隔） */
+  labelHint?: string;
 }
 
 export function Row({
@@ -24,6 +26,7 @@ export function Row({
   block,
   icon: Icon,
   tone = "primary",
+  labelHint,
 }: RowProps) {
   return (
     <div
@@ -36,7 +39,25 @@ export function Row({
           </div>
         ) : null}
         <div className={styles.text}>
-          <span className={styles.label}>{label}</span>
+          <span className={styles.labelLine}>
+            <span className={styles.label}>{label}</span>
+            {labelHint ? (
+              <span
+                className={styles.infoWrap}
+                tabIndex={0}
+                aria-label={labelHint}
+              >
+                <Info
+                  size={14}
+                  strokeWidth={1.85}
+                  className={styles.infoIcon}
+                />
+                <span className={styles.infoTip} role="tooltip">
+                  {labelHint}
+                </span>
+              </span>
+            ) : null}
+          </span>
           {description ? (
             <span className={styles.description}>{description}</span>
           ) : null}

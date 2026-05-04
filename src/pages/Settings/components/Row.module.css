@@ -37,11 +37,84 @@
   min-width: 0;
 }
 
+.labelLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .label {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-strong);
   letter-spacing: -0.005em;
+}
+
+/* —— info 图标 + hover 气泡 ——
+   规格跟 Section 的 info 一致：14px 图标 / dark tooltip / 小三角 / 200ms 过渡 */
+.infoWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  cursor: help;
+  outline: none;
+  transition: color 140ms ease-out;
+}
+
+.infoWrap:hover,
+.infoWrap:focus-visible {
+  color: var(--color-accent);
+}
+
+.infoIcon {
+  display: block;
+}
+
+.infoTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  z-index: 10;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(28, 28, 36, 0.94);
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.20),
+    0 2px 4px rgba(0, 0, 0, 0.10);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  white-space: pre-line;
+  text-align: left;
+}
+
+.infoTip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(28, 28, 36, 0.94);
+}
+
+.infoWrap:hover .infoTip,
+.infoWrap:focus-visible .infoTip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .description {
