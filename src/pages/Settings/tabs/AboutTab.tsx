@@ -122,20 +122,25 @@ export default function AboutTab() {
           />
         </Row>
 
-        <Row
-          label="检查频率"
-          disabled={!settings.autoUpdateEnabled}
+        <div
+          className={`${styles.collapsible} ${
+            settings.autoUpdateEnabled ? styles.collapsibleOpen : ""
+          }`}
         >
-          <SimplePicker
-            value={settings.autoUpdateInterval}
-            options={INTERVAL_OPTIONS}
-            onChange={(v) =>
-              updateSettings({
-                autoUpdateInterval: v as Settings["autoUpdateInterval"],
-              })
-            }
-          />
-        </Row>
+          <div className={styles.collapsibleInner}>
+            <Row label="检查频率">
+              <SimplePicker
+                value={settings.autoUpdateInterval}
+                options={INTERVAL_OPTIONS}
+                onChange={(v) =>
+                  updateSettings({
+                    autoUpdateInterval: v as Settings["autoUpdateInterval"],
+                  })
+                }
+              />
+            </Row>
+          </div>
+        </div>
       </Section>
 
       <Section title="信息">
