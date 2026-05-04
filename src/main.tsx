@@ -6,6 +6,7 @@ import App from "./App";
 import { DeviceFilterProvider } from "./state/deviceFilter";
 import { CategoriesProvider } from "./state/categories";
 import { SettingsProvider } from "./state/settings";
+import { UpdaterProvider } from "./state/updater";
 import "./styles/global.css";
 
 // 把当前 OS 写到 body[data-platform]，CSS 据此区分 macOS / windows / linux 的 chrome 表现
@@ -19,11 +20,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <BrowserRouter>
       <SettingsProvider>
-        <CategoriesProvider>
-          <DeviceFilterProvider>
-            <App />
-          </DeviceFilterProvider>
-        </CategoriesProvider>
+        <UpdaterProvider>
+          <CategoriesProvider>
+            <DeviceFilterProvider>
+              <App />
+            </DeviceFilterProvider>
+          </CategoriesProvider>
+        </UpdaterProvider>
       </SettingsProvider>
     </BrowserRouter>
   </React.StrictMode>,

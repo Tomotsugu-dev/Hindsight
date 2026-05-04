@@ -111,6 +111,12 @@ export interface Settings {
   privacyAppKeywords: string[];
   /** 关闭按钮（窗口右上角 X）行为：true=隐藏到系统托盘，false=直接退出。 */
   minimizeToTray: boolean;
+  /** 是否自动检查应用更新 */
+  autoUpdateEnabled: boolean;
+  /** 自动检查频率：daily / weekly / monthly / onstartup */
+  autoUpdateInterval: "daily" | "weekly" | "monthly" | "onstartup";
+  /** 上次检查更新的 RFC3339 时间戳；从未查过则为 null */
+  lastUpdateCheckAt: string | null;
 }
 
 export type SettingsPatch = Partial<Settings>;

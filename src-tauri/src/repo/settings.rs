@@ -40,6 +40,14 @@ pub struct Settings {
     /// 关闭按钮（窗口右上角 X）的行为：true=隐藏到托盘，false=直接退出。
     /// 默认 true 是为了避免用户误点导致采集中断。
     pub minimize_to_tray: bool,
+    /// 是否在 app 启动时自动检查更新。前端读这个 + auto_update_interval +
+    /// last_update_check_at，决定要不要拉 latest.json。
+    pub auto_update_enabled: bool,
+    /// 自动检查的频率：daily / weekly / monthly / onstartup（每次启动）。
+    /// 用字符串而不是枚举，避免新增选项时破坏旧 settings JSON 的反序列化。
+    pub auto_update_interval: String,
+    /// 上次检查更新的时刻（RFC3339）。前端检查后写一次。None 表示从未查过。
+    pub last_update_check_at: Option<String>,
 }
 
 impl Default for Settings {
@@ -58,6 +66,9 @@ impl Default for Settings {
             privacy_url_keywords: default_privacy_url_keywords(),
             privacy_app_keywords: Vec::new(),
             minimize_to_tray: true,
+            auto_update_enabled: true,
+            auto_update_interval: "weekly".to_string(),
+            last_update_check_at: None,
         }
     }
 }
@@ -99,6 +110,9 @@ pub struct SettingsPatch {
     pub privacy_url_keywords: Option<Vec<String>>,
     pub privacy_app_keywords: Option<Vec<String>>,
     pub minimize_to_tray: Option<bool>,
+    pub auto_update_enabled: Option<bool>,
+    pub auto_update_interval: Option<String>,
+    pub last_update_check_at: Option<Option<String>>,
 }
 
 pub async fn load(pool: &DbPool) -> Result<Settings> {
@@ -187,6 +201,24 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         minimize_to_tray: patch
             .minimize_to_tray
             .unwrap_or(current.minimize_to_tray),
+        auto_update_enabled: patch
+            .auto_update_enabled
+            .unwrap_or(current.auto_update_enabled),
+        auto_update_interval: patch
+            .auto_update_interval
+            .map(|v| sanitize_interval(&v))
+            .unwrap_or(current.auto_update_interval),
+        last_update_check_at: patch
+            .last_update_check_at
+            .unwrap_or(current.last_update_check_at),
+    }
+}
+
+/// 把 UI 传来的 interval 字符串收敛到合法集合，非法值回退 weekly
+fn sanitize_interval(v: &str) -> String {
+    match v {
+        "daily" | "weekly" | "monthly" | "onstartup" => v.to_string(),
+        _ => "weekly".to_string(),
     }
 }
 
