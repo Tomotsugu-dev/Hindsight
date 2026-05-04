@@ -110,7 +110,6 @@
 /* "已同步" 状态：绿色文字 + 前面一个绿色小圆点（带轻微光晕） */
 .syncStatOk {
   color: var(--status-ok);
-  font-weight: 600;
 }
 
 .syncDot {

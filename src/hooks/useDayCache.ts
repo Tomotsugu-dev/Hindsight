@@ -54,11 +54,14 @@ export function useDayCache(currentOffset: number, deviceId?: string) {
     inFlightRef.current.clear();
   }, [deviceId, categories]);
 
+  // categories 进 deps：CategoriesProvider 初次 mount 是空数组，
+  // 数据回来后会换新引用 → 上面的清缓存 effect 已触发把刚到的数据清掉，
+  // 这里不带 categories 的话就再也不会补一发，UI 卡在空。
   useEffect(() => {
     fetchOne(currentOffset - 1);
     fetchOne(currentOffset);
     fetchOne(currentOffset + 1);
-  }, [currentOffset, fetchOne]);
+  }, [currentOffset, fetchOne, categories]);
 
   useEffect(() => {
     if (currentOffset !== 0) return;

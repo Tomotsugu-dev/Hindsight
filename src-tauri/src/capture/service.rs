@@ -6,7 +6,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::capture::{screenshot, window};
+use crate::capture::{browser_url, privacy, screenshot, window};
 use crate::error::Result;
 use crate::repo::settings::TimeRange;
 use crate::repo::{activities, app_groups, process_paths};
@@ -70,6 +70,10 @@ struct Inner {
     last_error: Mutex<Option<String>>,
     work_hours: Mutex<WorkHoursState>,
     screenshot: Mutex<ScreenshotConfig>,
+    /// 浏览器 URL 关键词；地址栏 URL 命中其中一条即跳过截图
+    privacy_url_keywords: Mutex<Vec<String>>,
+    /// 应用 / 标题关键词；app_name 或 window title 命中其中一条即跳过截图
+    privacy_app_keywords: Mutex<Vec<String>>,
     current: Mutex<Option<CurrentSession>>,
 }
 
@@ -88,6 +92,8 @@ impl CaptureService {
                 last_error: Mutex::new(None),
                 work_hours: Mutex::new(WorkHoursState::default()),
                 screenshot: Mutex::new(ScreenshotConfig::default()),
+                privacy_url_keywords: Mutex::new(Vec::new()),
+                privacy_app_keywords: Mutex::new(Vec::new()),
                 current: Mutex::new(None),
             }),
         }
@@ -163,6 +169,12 @@ impl CaptureService {
     pub async fn set_work_hours(&self, enabled: bool, ranges: Vec<TimeRange>) {
         let mut state = self.inner.work_hours.lock().await;
         *state = WorkHoursState { enabled, ranges };
+    }
+
+    /// 更新隐私关键词。设置页改完后由命令层调一次。
+    pub async fn set_privacy_keywords(&self, url_keywords: Vec<String>, app_keywords: Vec<String>) {
+        *self.inner.privacy_url_keywords.lock().await = url_keywords;
+        *self.inner.privacy_app_keywords.lock().await = app_keywords;
     }
 
     pub async fn status(&self) -> CaptureStatus {
@@ -241,7 +253,32 @@ async fn tick(inner: &Inner) -> Result<()> {
                 log::warn!("seal_session 失败 (焦点切换, id={}): {e}", prev.id);
             }
         }
-        let shot = take_screenshot(inner).await;
+        // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
+        // 浏览器场景下用 UIA 抠地址栏 URL；非浏览器跳过这步，省 50–200ms。
+        let url = if browser_url::is_browser_app(&info.app_name) {
+            // UIA 阻塞 + 偶尔卡 ~300ms，扔到 spawn_blocking 不堵 async runtime
+            tokio::task::spawn_blocking(browser_url::try_get_foreground_browser_url)
+                .await
+                .ok()
+                .flatten()
+        } else {
+            None
+        };
+
+        let skip = should_skip_for_privacy(inner, &info, url.as_deref()).await;
+        if skip {
+            log::info!(
+                "隐私过滤命中，跳过截图 app={} title={:?} url={:?}",
+                info.app_name,
+                info.title,
+                url
+            );
+        }
+        let shot = if skip {
+            None
+        } else {
+            take_screenshot(inner).await
+        };
         let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
         if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {
@@ -281,6 +318,21 @@ fn parse_hm(s: &str) -> i32 {
     let h: i32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
     let m: i32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
     h * 60 + m
+}
+
+/// 隐私关键词是否命中本次焦点。
+/// `url` 是浏览器地址栏 URL（暂未接入抓取，永远 None；接入后由调用方传入）。
+async fn should_skip_for_privacy(
+    inner: &Inner,
+    info: &window::WindowInfo,
+    url: Option<&str>,
+) -> bool {
+    let url_kw = inner.privacy_url_keywords.lock().await.clone();
+    let app_kw = inner.privacy_app_keywords.lock().await.clone();
+    if url_kw.is_empty() && app_kw.is_empty() {
+        return false;
+    }
+    privacy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
 }
 
 async fn take_screenshot(inner: &Inner) -> Option<String> {

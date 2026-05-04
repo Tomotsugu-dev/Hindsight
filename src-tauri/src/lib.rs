@@ -6,6 +6,7 @@ mod device;
 mod error;
 mod icons;
 mod permissions;
+mod platform;
 mod repo;
 mod storage;
 mod sync;
@@ -23,7 +24,12 @@ const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let _ = env_logger::try_init();
+    // 默认开 hindsight=info（用户可用 RUST_LOG 覆盖）。隐私命中 / 同步错误 / 启动信息
+    // 都是 info 级别，普通运行也能在终端看到。
+    let _ = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("hindsight=info"),
+    )
+    .try_init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -35,6 +41,17 @@ pub fn run() {
         ))
         .setup(|app| {
             let handle = app.handle().clone();
+
+            // 让 Windows 11 把主窗口处理成圆角（DWM 阴影会跟着圆角走，避免方形阴影
+            // 包圆角卡片产生四角 halo）。Win10 / 其它平台 no-op。
+            #[cfg(target_os = "windows")]
+            if let Some(main_window) = handle.get_webview_window("main") {
+                match main_window.hwnd() {
+                    Ok(hwnd) => platform::enable_win11_rounded_corners(hwnd.0 as isize),
+                    Err(e) => log::warn!("拿主窗口 HWND 失败: {e}"),
+                }
+            }
+
             tauri::async_runtime::block_on(async move {
                 // 0) 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
                 //    的窗口，焦点采集功能整个废掉，但不会报错（CG API 静默降级），所以
@@ -102,6 +119,11 @@ pub fn run() {
                     1280,
                     720,
                     80,
+                )
+                .await;
+                svc.set_privacy_keywords(
+                    cfg.privacy_url_keywords.clone(),
+                    cfg.privacy_app_keywords.clone(),
                 )
                 .await;
                 if cfg.capture_enabled {

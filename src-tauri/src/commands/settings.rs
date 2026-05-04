@@ -47,6 +47,11 @@ pub async fn update_settings(
         80,
     )
     .await;
+    svc.set_privacy_keywords(
+        next.privacy_url_keywords.clone(),
+        next.privacy_app_keywords.clone(),
+    )
+    .await;
 
     if next.auto_start != prev_autostart {
         let mgr = app.autolaunch();

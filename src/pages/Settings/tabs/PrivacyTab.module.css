@@ -1,0 +1,116 @@
+/* —— 关键词列表：横向 flex-wrap，跟分类页 .appList 对齐 —— */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* —— 单条 chip：跟分类页 .appChip 同款方圆角 —— */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-regular);
+  font-variant-numeric: tabular-nums;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", monospace;
+}
+
+.chipText {
+  line-height: 1;
+}
+
+.chipRemove {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.chipRemove:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* —— "+ 添加 xxx" 虚线按钮：跟分类页 .appAddBtn 同款 —— */
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.addBtn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* —— 输入态：实线 + accent 微光，跟分类页 .appAddInput 同款 —— */
+.addInput {
+  height: 24px;
+  padding: 0 8px;
+  width: 160px;
+  background: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", monospace;
+}
+
+.addInput::placeholder {
+  color: var(--text-faint);
+  font-family: inherit;
+}
+
+/* —— "作用范围" Section 的纯文本说明 —— */
+.notice {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* "对已经存下来的历史截图无效" + "设置 · 数据 · 清空截图" 强调；
+   配色与分类页 "上下拖动" 等强调词保持一致，都走 brand accent 紫色。 */
+.attention {
+  color: var(--color-accent);
+  font-weight: 650;
+}
+
+.kbd {
+  color: var(--color-accent);
+  font-weight: 650;
+}

@@ -11,6 +11,7 @@ import CategoriesPage from "./pages/Categories/CategoriesPage";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import GeneralTab from "./pages/Settings/tabs/GeneralTab";
 import DataTab from "./pages/Settings/tabs/DataTab";
+import PrivacyTab from "./pages/Settings/tabs/PrivacyTab";
 import AboutTab from "./pages/Settings/tabs/AboutTab";
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
         <Route path={ROUTES.settings} element={<SettingsPage />}>
           <Route index element={<GeneralTab />} />
           <Route path="data" element={<DataTab />} />
+          <Route path="privacy" element={<PrivacyTab />} />
           <Route path="about" element={<AboutTab />} />
         </Route>
       </Route>

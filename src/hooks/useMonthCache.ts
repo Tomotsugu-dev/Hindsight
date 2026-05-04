@@ -51,11 +51,13 @@ export function useMonthCache(currentOffset: number, deviceId?: string) {
     inFlightRef.current.clear();
   }, [deviceId, categories]);
 
+  // categories 进 deps：原因同 useDayCache —— 否则启动时 categories 后到，
+  // 上面的清缓存 effect 把已到数据清掉后这里不会补一发，UI 卡空白。
   useEffect(() => {
     fetchOne(currentOffset - 1);
     fetchOne(currentOffset);
     fetchOne(currentOffset + 1);
-  }, [currentOffset, fetchOne]);
+  }, [currentOffset, fetchOne, categories]);
 
   useEffect(() => {
     if (currentOffset !== 0) return;

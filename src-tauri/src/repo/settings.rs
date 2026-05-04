@@ -31,6 +31,12 @@ pub struct Settings {
     /// Google Cloud Console 创建的 Desktop App OAuth client_id（Drive 同步用）
     pub google_client_id: String,
     pub google_client_secret: String,
+    /// 浏览器过滤：浏览器地址栏 URL 包含其中任意一条（子串忽略大小写）即跳过截图。
+    /// 默认装一套常见登录页路径片段
+    pub privacy_url_keywords: Vec<String>,
+    /// 应用过滤：应用名或窗口标题包含其中任意一条（子串忽略大小写）即跳过截图。
+    /// 默认空，用户自己加（如 微信、招商银行、特定文件名）
+    pub privacy_app_keywords: Vec<String>,
 }
 
 impl Default for Settings {
@@ -46,8 +52,31 @@ impl Default for Settings {
             retention_days: 7,
             google_client_id: String::new(),
             google_client_secret: String::new(),
+            privacy_url_keywords: default_privacy_url_keywords(),
+            privacy_app_keywords: Vec::new(),
         }
     }
+}
+
+/// 默认浏览器登录页 URL 路径片段；用户在隐私页可以增删。
+/// 注意：匹配是"子串忽略大小写"，所以 `/password` 会顺带覆盖
+/// `/passwords` / `/password-reset` 等所有变体，不需要额外加复数形式
+pub fn default_privacy_url_keywords() -> Vec<String> {
+    [
+        "/login",
+        "/signin",
+        "/sign-in",
+        "/sign_in",
+        "/auth",
+        "/oauth",
+        "/sso",
+        "/logon",
+        "/connect/authorize",
+        "/password",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +92,8 @@ pub struct SettingsPatch {
     pub retention_days: Option<u32>,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
+    pub privacy_url_keywords: Option<Vec<String>>,
+    pub privacy_app_keywords: Option<Vec<String>>,
 }
 
 pub async fn load(pool: &DbPool) -> Result<Settings> {
@@ -140,5 +171,22 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .google_client_secret
             .map(|v| v.trim().to_string())
             .unwrap_or(current.google_client_secret),
+        privacy_url_keywords: patch
+            .privacy_url_keywords
+            .map(sanitize_keywords)
+            .unwrap_or(current.privacy_url_keywords),
+        privacy_app_keywords: patch
+            .privacy_app_keywords
+            .map(sanitize_keywords)
+            .unwrap_or(current.privacy_app_keywords),
     }
+}
+
+/// 关键词清洗：trim + 去空 + 去重（保持原顺序）
+fn sanitize_keywords(list: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    list.into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && seen.insert(s.clone()))
+        .collect()
 }

@@ -5,7 +5,10 @@
   background: transparent;
   border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: 0 24px 60px rgba(20, 20, 40, 0.18);
+  /* 阴影交给 OS：Windows DWM (shadow: true in tauri.conf.json) 自带 Cascadia
+     窗口阴影；macOS 原生窗口本身就有阴影。CSS 不再画 box-shadow，避免和 OS 阴影
+     叠加。 */
+  box-shadow: none;
 
   /* 侧栏永远展开宽度 —— 不再有收起态。
      label/pill 相关 CSS var 都移走，子组件会用 var(name, default) 里 default 值
@@ -17,6 +20,13 @@
 :global(body[data-platform="macos"]) .shell {
   border-radius: 0;
   box-shadow: none;
+}
+
+/* Windows：lib.rs 启动时调 DwmSetWindowAttribute(DWMWCP_ROUND) 让 OS 把窗口
+   本身处理成圆角，半径约 8 px。CSS .shell 这里也对齐到 8 px，避免 CSS 圆角
+   (20 px) 比 OS 圆角小一圈、四角处露出桌面背景。 */
+:global(body[data-platform="windows"]) .shell {
+  border-radius: 8px;
 }
 
 .dragStrip {

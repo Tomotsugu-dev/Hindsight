@@ -103,6 +103,12 @@ export interface Settings {
   /** Google Cloud Console 创建的 Desktop App OAuth 凭证（Drive 同步用） */
   googleClientId: string;
   googleClientSecret: string;
+  /** 浏览器过滤：浏览器地址栏 URL 包含其中任意一条（忽略大小写）即跳过截图。
+   *  默认装一组常见登录页路径片段。 */
+  privacyUrlKeywords: string[];
+  /** 应用过滤：应用名或窗口标题包含其中任意一条（忽略大小写）即跳过截图。
+   *  默认空，用户自填（如 微信、招商银行）。 */
+  privacyAppKeywords: string[];
 }
 
 export type SettingsPatch = Partial<Settings>;

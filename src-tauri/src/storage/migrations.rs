@@ -339,16 +339,50 @@ const ADD_CATEGORY_SORT_ORDER_SQL: &str = r#"
     );
 "#;
 
+/// v17：给老安装的隐私 URL 关键词列表补上 `/password`。
+/// 原因：v17 之前 default_privacy_url_keywords() 是 9 项，老安装的 settings_store
+/// 已固化成 9 项；后端把 `/password` 加进默认（第 10 项）只对新安装生效，老用户列表
+/// 里仍没有 `/password`，导致 chrome://password-manager 这类页面拦不住。
+///
+/// 三种状态分别处理：
+/// - 字段不存在（settings JSON 没写过 privacyUrlKeywords）→ 写入完整 10 项默认
+/// - 字段存在但列表里**没有** `/password` → append 一项
+/// - 已经有 `/password` → 不动
+///
+/// 用户事后再删掉 `/password` 不会被这条迁移撤销（schema_version 只跑一次）。
+const ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL: &str = r#"
+    -- 字段缺失：直接补完整 10 项
+    UPDATE settings_store
+    SET data = json_set(
+        data,
+        '$.privacyUrlKeywords',
+        json('["/login","/signin","/sign-in","/sign_in","/auth","/oauth","/sso","/logon","/connect/authorize","/password"]')
+    )
+    WHERE id = 1
+      AND json_type(data, '$.privacyUrlKeywords') IS NULL;
+
+    -- 字段已存在但不含 /password：append
+    UPDATE settings_store
+    SET data = json_insert(data, '$.privacyUrlKeywords[#]', '/password')
+    WHERE id = 1
+      AND json_type(data, '$.privacyUrlKeywords') = 'array'
+      AND NOT EXISTS (
+          SELECT 1 FROM json_each(json_extract(data, '$.privacyUrlKeywords'))
+          WHERE value = '/password'
+      );
+"#;
+
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 6] = [
-        cross_os_cleanup_sql(),       // v11
-        V12_PLACEHOLDER,              // v12（occupied，no-op）
-        BACKFILL_OUTBOX_SQL,          // v13
-        APP_ICONS_TABLE_SQL,          // v14
-        APP_GROUPS_SQL,               // v15
-        ADD_CATEGORY_SORT_ORDER_SQL,  // v16
+    let extras: [&'static str; 7] = [
+        cross_os_cleanup_sql(),                  // v11
+        V12_PLACEHOLDER,                         // v12（occupied，no-op）
+        BACKFILL_OUTBOX_SQL,                     // v13
+        APP_ICONS_TABLE_SQL,                     // v14
+        APP_GROUPS_SQL,                          // v15
+        ADD_CATEGORY_SORT_ORDER_SQL,             // v16
+        ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL,     // v17
     ];
     pool.0
         .call(move |conn| {
