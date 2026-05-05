@@ -1,36 +1,102 @@
 import { useState } from "react";
-import { Clock, Filter, Image as ImageIcon, Server, User } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Clock,
+  Filter,
+  Image as ImageIcon,
+  Loader2,
+  Server,
+  User,
+} from "lucide-react";
 import { Section } from "./Settings/components/Section";
 import { Row } from "./Settings/components/Row";
 import { Slider } from "./Settings/components/Slider";
 import { SegmentList } from "./Settings/components/SegmentList";
 import { CategoryChipMultiSelect } from "./Settings/components/CategoryChipMultiSelect";
-import type { AiSegment } from "../api/hindsight";
+import { api, type AiConfig, type AiSegment } from "../api/hindsight";
+import { useSettings } from "../state/settings";
 import styles from "./AISettings.module.css";
 
-const DEFAULT_SEGMENTS: AiSegment[] = [
-  { label: "早", startHour: 6, endHour: 9 },
-  { label: "上午", startHour: 9, endHour: 12 },
-  { label: "下午", startHour: 12, endHour: 18 },
-  { label: "晚", startHour: 18, endHour: 24 },
-];
+type TestState =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "ok"; models: string[] }
+  | { kind: "fail"; message: string };
+
+function TestStatus({ state }: { state: TestState }) {
+  if (state.kind === "idle") return null;
+  if (state.kind === "running") {
+    return (
+      <span className={styles.testStatus}>
+        <Loader2 size={14} strokeWidth={2.2} className={styles.testSpin} />
+        测试中…
+      </span>
+    );
+  }
+  if (state.kind === "ok") {
+    const preview = state.models.slice(0, 3).join("、");
+    const more = state.models.length > 3 ? ` …等 ${state.models.length} 个` : "";
+    return (
+      <span className={`${styles.testStatus} ${styles.testStatusOk}`}>
+        <Check size={14} strokeWidth={2.4} />
+        已连接{state.models.length > 0 ? `，可用模型：${preview}${more}` : ""}
+      </span>
+    );
+  }
+  return (
+    <span className={`${styles.testStatus} ${styles.testStatusFail}`}>
+      <AlertCircle size={14} strokeWidth={2.2} />
+      {state.message}
+    </span>
+  );
+}
 
 export default function AISettings() {
-  // Phase 1A 阶段 1：所有字段先用 useState（不持久化），跑 UI 视觉/交互。
-  // 阶段 2 接通 settings 后，把这些 state 换成 useSettings + update。
-  const [endpoint, setEndpoint] = useState("http://localhost:11434/v1");
-  const [model, setModel] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [userBrief, setUserBrief] = useState("");
-  const [segments, setSegments] = useState<AiSegment[]>(DEFAULT_SEGMENTS);
-  const [excludedCategoryIds, setExcludedCategoryIds] = useState<string[]>([
-    "other",
-  ]);
-  const [maxImagesPerSegment, setMaxImagesPerSegment] = useState(30);
-  const [hashThreshold, setHashThreshold] = useState(5);
-  const [hashWindowMinutes, setHashWindowMinutes] = useState(5);
+  const { settings, update } = useSettings();
+  if (!settings) return null;
 
-  const canTest = endpoint.trim().length > 0;
+  const ai = settings.ai;
+
+  /**
+   * 所有 ai 子字段更新都必须走这个 wrapper。
+   *
+   * 原因：[useSettings.update](../state/settings.tsx) 内部用浅合并
+   * `setSettings(prev => ({ ...prev, ...patch }))`。如果直接调
+   * `update({ ai: { endpoint: v } })`，settings.ai 整个会被替换成
+   * `{ endpoint: v }`，model / segments / 等其他子字段全没了；
+   * 后端收到这个 patch 后，#[serde(default)] 会把缺字段填默认值，
+   * 把用户已经存好的其他字段彻底擦除。
+   *
+   * 所以这里 spread 旧 ai 一次，保证发出去的 patch 总是完整 AiConfig。
+   */
+  const updateAi = (patch: Partial<AiConfig>) => {
+    update({ ai: { ...ai, ...patch } });
+  };
+
+  const [testState, setTestState] = useState<TestState>({ kind: "idle" });
+
+  const onTest = async () => {
+    setTestState({ kind: "running" });
+    try {
+      const r = await api.testAiEndpoint(
+        ai.endpoint,
+        ai.apiKey.trim() ? ai.apiKey : undefined,
+      );
+      if (r.ok) setTestState({ kind: "ok", models: r.models });
+      else setTestState({ kind: "fail", message: r.message });
+    } catch (e) {
+      // 后端理论上把所有异常都包成 ok=false 返回，
+      // 这里只兜底前端 invoke 层本身的 reject（极少见）
+      setTestState({
+        kind: "fail",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  const canTest =
+    testState.kind !== "running" && ai.endpoint.trim().length > 0;
 
   return (
     <div className={styles.page}>
@@ -48,8 +114,8 @@ export default function AISettings() {
             <input
               type="text"
               className={styles.textInput}
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
+              value={ai.endpoint}
+              onChange={(e) => updateAi({ endpoint: e.target.value })}
               placeholder="http://localhost:11434/v1"
               spellCheck={false}
             />
@@ -58,8 +124,8 @@ export default function AISettings() {
             <input
               type="text"
               className={styles.textInput}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
+              value={ai.model}
+              onChange={(e) => updateAi({ model: e.target.value })}
               placeholder="minicpm-v:8b"
               spellCheck={false}
             />
@@ -68,8 +134,8 @@ export default function AISettings() {
             <input
               type="password"
               className={styles.textInput}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              value={ai.apiKey}
+              onChange={(e) => updateAi({ apiKey: e.target.value })}
               placeholder="（可留空）"
               spellCheck={false}
             />
@@ -80,12 +146,11 @@ export default function AISettings() {
                 type="button"
                 className={styles.testBtn}
                 disabled={!canTest}
+                onClick={() => void onTest()}
               >
-                测试连接
+                {testState.kind === "running" ? "测试中…" : "测试连接"}
               </button>
-              <span className={styles.testHint}>
-                待接入后端（阶段 2）。当前阶段仅校验 UI。
-              </span>
+              <TestStatus state={testState} />
             </div>
           </Row>
         </Section>
@@ -98,8 +163,8 @@ export default function AISettings() {
           <Row label="关于你（可选）" block>
             <textarea
               className={styles.textarea}
-              value={userBrief}
-              onChange={(e) => setUserBrief(e.target.value)}
+              value={ai.userBrief}
+              onChange={(e) => updateAi({ userBrief: e.target.value })}
               placeholder="例：我是做后端开发的，平时主要写 Rust 和 TypeScript；周末会做点游戏。"
               rows={6}
             />
@@ -112,7 +177,10 @@ export default function AISettings() {
           info="AI 按段汇总；段内截图按相似度抽帧再发给模型。"
         >
           <Row label="时段" block>
-            <SegmentList segments={segments} onChange={setSegments} />
+            <SegmentList
+              segments={ai.segments}
+              onChange={(next: AiSegment[]) => updateAi({ segments: next })}
+            />
           </Row>
         </Section>
 
@@ -127,8 +195,8 @@ export default function AISettings() {
             block
           >
             <CategoryChipMultiSelect
-              selectedIds={excludedCategoryIds}
-              onChange={setExcludedCategoryIds}
+              selectedIds={ai.excludedCategories}
+              onChange={(next) => updateAi({ excludedCategories: next })}
             />
           </Row>
         </Section>
@@ -138,16 +206,6 @@ export default function AISettings() {
           icon={ImageIcon}
           description="一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。"
         >
-          <Row label="单段最多图片数">
-            <Slider
-              value={maxImagesPerSegment}
-              onChange={setMaxImagesPerSegment}
-              min={1}
-              max={100}
-              step={1}
-              suffix="张"
-            />
-          </Row>
           <Row
             label="相似度阈值"
             labelHint={
@@ -158,8 +216,8 @@ export default function AISettings() {
             }
           >
             <Slider
-              value={hashThreshold}
-              onChange={setHashThreshold}
+              value={ai.hashThreshold}
+              onChange={(v) => updateAi({ hashThreshold: v })}
               min={0}
               max={32}
               step={1}
@@ -173,8 +231,8 @@ export default function AISettings() {
             }
           >
             <Slider
-              value={hashWindowMinutes}
-              onChange={setHashWindowMinutes}
+              value={ai.hashWindowMinutes}
+              onChange={(v) => updateAi({ hashWindowMinutes: v })}
               min={0}
               max={30}
               step={1}

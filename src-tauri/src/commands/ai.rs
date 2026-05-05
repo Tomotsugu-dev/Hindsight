@@ -63,7 +63,7 @@ pub async fn test_ai_endpoint(
 
     let resp = match req.send().await {
         Ok(r) => r,
-        Err(e) => return Ok(fail(&format!("连接失败：{e}"))),
+        Err(e) => return Ok(fail(&fmt_send_err(e))),
     };
 
     let status = resp.status();
@@ -91,6 +91,38 @@ pub async fn test_ai_endpoint(
         models,
         message: String::new(),
     })
+}
+
+/// 把 reqwest 发送错误格式化成对用户可读的字符串。
+///
+/// reqwest::Error 的 Display 只给最外层（"error sending request for url ..."），
+/// 真正告诉用户"为啥连不上"的是 source chain 最深处的 io::Error
+/// （`Connection refused`、`os error 10061` 等）。这里把整条链拼起来，
+/// 并按 reqwest 提供的分类给一句开场白。
+fn fmt_send_err(e: reqwest::Error) -> String {
+    let head = if e.is_timeout() {
+        "请求超时"
+    } else if e.is_connect() {
+        "连接失败（确认服务是否启动、端口是否正确）"
+    } else if e.is_request() {
+        "请求构造失败"
+    } else {
+        "网络错误"
+    };
+
+    // 跳过 reqwest::Error 自己（它的 to_string 跟 URL 重复了），从 source 起拼
+    let mut details: Vec<String> = Vec::new();
+    let mut cur: Option<&dyn std::error::Error> = std::error::Error::source(&e);
+    while let Some(s) = cur {
+        details.push(s.to_string());
+        cur = s.source();
+    }
+
+    if details.is_empty() {
+        head.to_string()
+    } else {
+        format!("{head}：{}", details.join(" → "))
+    }
 }
 
 fn fail(msg: &str) -> TestAiEndpointResp {

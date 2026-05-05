@@ -19,6 +19,8 @@
   touch-action: none;
   /* 提到 ticks 之上，让 hover 时间气泡（在 .bar 里 top:100% 浮层）能覆盖刻度 */
   z-index: 2;
+  /* 整条悬浮感：底下一道柔阴影，让胶囊"贴在面板上"而不是嵌进去 */
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.08));
 }
 
 /* 圆角剪裁层：off + 段块都画在这里；handle 不进来，避免被裁掉 */
@@ -26,9 +28,13 @@
   position: absolute;
   inset: 0;
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 10px;
   overflow: hidden;
+  /* 顶部一道白色高光 + 底部微暗——给胶囊"从上往下打灯"的立体感 */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.04);
 }
 
 /* off 斜纹背景：未被段覆盖的区域可见，段块叠上去盖住 */
@@ -65,6 +71,22 @@
   justify-content: center;
   overflow: hidden;
   /* 不画 border，颜色就是边界；但内部 body button 圆角让段看起来更柔 */
+}
+
+/* 段块顶光 + 底阴渐变 → "胶囊片" 的立体感。
+   ::before 在 background 之上、children 之下，不挡文字。 */
+.segment::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.10) 38%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.07) 100%
+  );
 }
 
 .segmentBody {

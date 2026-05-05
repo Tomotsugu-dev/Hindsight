@@ -105,6 +105,29 @@ export interface TestAiEndpointResp {
   message: string;
 }
 
+/** AI 子系统的所有用户配置；嵌进 Settings.ai。
+ *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
+export interface AiConfig {
+  /** OpenAI 兼容 base URL；本机 Ollama 默认 http://localhost:11434/v1 */
+  endpoint: string;
+  /** 模型 ID，例如 minicpm-v:8b */
+  model: string;
+  /** 可选 Bearer token；Ollama 不用填 */
+  apiKey: string;
+  /** 用户对自己的简短描述，AI 总结时拼进 system prompt */
+  userBrief: string;
+  /** 一天的时段划分（按 startHour 排序、相邻段共边） */
+  segments: AiSegment[];
+  /** 不分析的 category id 列表 */
+  excludedCategories: string[];
+  /** 单段送 AI 的截图上限 */
+  maxImagesPerSegment: number;
+  /** dHash 64bit 汉明距离阈值（去重） */
+  hashThreshold: number;
+  /** 哈希聚类时间窗（分钟）；只在窗内的截图之间比相似度 */
+  hashWindowMinutes: number;
+}
+
 export interface Settings {
   captureEnabled: boolean;
   captureIntervalSeconds: number;
@@ -135,6 +158,13 @@ export interface Settings {
    *  避免离开电脑后还在累计使用时长。0 = 关闭挂机检测。
    *  UI 按分钟展示，值进出后端时由调用方做秒↔分钟转换。 */
   idleThresholdSeconds: number;
+  /** AI 总结相关配置（端点、模型、时段、过滤、抽帧参数）。
+   *  嵌套结构而不是平铺，跟后端 Settings.ai 对齐；
+   *  更新某个子字段时调用方必须 spread 旧 ai：
+   *    update({ ai: { ...settings.ai, model: v } })
+   *  否则 useSettings.update 的浅合并会把其他子字段擦掉，
+   *  后端 #[serde(default)] 又会把缺失字段填回默认值——双重擦除。 */
+  ai: AiConfig;
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -241,4 +271,9 @@ export const api = {
   restartApp: () => invoke<void>("restart_app"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncNow: () => invoke<void>("sync_now"),
+  /** 测试 AI 端点连通性：GET {endpoint}/models。
+   *  失败不抛 Promise reject，而是 resolve { ok: false, message }，
+   *  前端只需检查 ok 字段。 */
+  testAiEndpoint: (endpoint: string, apiKey?: string) =>
+    invoke<TestAiEndpointResp>("test_ai_endpoint", { endpoint, apiKey }),
 };

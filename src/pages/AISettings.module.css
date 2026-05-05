@@ -117,3 +117,34 @@
   font-size: 12px;
   color: var(--text-faint);
 }
+
+/* —— 测试连接状态行 —— */
+.testStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  /* 失败可能比较长，超出宽度自然换行不溢出 */
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.testStatusOk {
+  color: #16a34a; /* green-600 */
+}
+
+.testStatusFail {
+  color: #dc2626; /* red-600 */
+}
+
+.testSpin {
+  animation: testSpin 900ms linear infinite;
+}
+
+@keyframes testSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
