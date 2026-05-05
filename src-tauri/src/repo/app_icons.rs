@@ -21,16 +21,21 @@ pub fn icon_cache_path(process_name: &str) -> Result<PathBuf> {
     Ok(dir.join(format!("{}.png", sanitize(process_name))))
 }
 
+/// 把 process_name 转成可作为文件名的字符串。非 ASCII / 非安全字符按 codepoint
+/// 编码成 `uXX-`（hex + `-`分隔），保证不同字符不冲突，且不产生连续 `_`。
+///
+/// 历史 bug：之前所有非 ASCII 字符都换成 `_`，导致"提示" / "音乐" / "微信" 等
+/// 任意 2 字符纯中文 app 都共用 `__.png`，后写的覆盖前写的，前端图标互相串。
 fn sanitize(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    let mut out = String::new();
+    for c in s.chars() {
+        if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+            out.push(c);
+        } else {
+            out.push_str(&format!("u{:X}-", c as u32));
+        }
+    }
+    out
 }
 
 /// 把字节写到 cache 文件位置（自动建目录），失败 log 一下不上抛。
