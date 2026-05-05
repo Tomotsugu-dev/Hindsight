@@ -35,6 +35,15 @@
   background: rgba(0, 0, 0, 0.04);
 }
 
+/* 未分类行：淡黄橙色背景提醒去指派。优先级压过 .rowEven / .rowOdd 的灰色斑马纹 */
+.row.unassigned {
+  background: rgba(251, 191, 36, 0.10);
+}
+
+.row.unassigned:hover {
+  background: rgba(251, 191, 36, 0.16);
+}
+
 /* 拖拽时悬停的目标行：撞起来 —— 抬升 + 阴影 + 描边 + 微缩放 */
 .row.hot {
   background: color-mix(in oklab, var(--color-accent) 10%, white);

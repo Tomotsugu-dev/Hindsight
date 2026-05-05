@@ -228,6 +228,18 @@ pub fn run() {
                     }
                 });
 
+                // builtin 分类 backfill：升级到带新规则的版本时，给老 DB 里 category_id IS NULL
+                // 的 group 自动归类（命中 chrome / code / wechat 等内置规则）。
+                // 用户手动归过类的不动；本次没命中的下次升级 JSON 加规则后还会再尝试。
+                let pool_for_cat_backfill = pool.clone();
+                tokio::spawn(async move {
+                    match repo::builtin_categories::backfill_builtin_categories(&pool_for_cat_backfill).await {
+                        Ok(n) if n > 0 => log::info!("builtin category backfill: 自动归类 {n} 个 app_group"),
+                        Ok(_) => {}
+                        Err(e) => log::warn!("builtin category backfill 失败: {e}"),
+                    }
+                });
+
                 // 4) 同步引擎：登录态由 engine 内部检查，未登录时所有循环都是 no-op；
                 //    所以可以无条件 start，登录后自动开始推
                 let sync_engine = Arc::new(SyncEngine::new(pool.clone()));

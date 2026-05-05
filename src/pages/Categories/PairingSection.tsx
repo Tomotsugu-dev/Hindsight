@@ -253,6 +253,11 @@ export function PairingSection() {
         const isSourceRow = drag !== null && drag.sourceGroupId === group.id;
         const nameDraft = pendingNames[group.id] ?? group.displayName;
 
+        // 没分类的行用淡黄橙色高亮，提醒用户去指派；
+        // 注意还要排除找不到对应 active category 的孤儿引用情况（categoryId 非 null 但 categories 里没匹配）
+        const hasActiveCategory =
+          group.categoryId != null &&
+          categories.some((c) => c.id === group.categoryId);
         return (
           <div
             key={group.id}
@@ -262,6 +267,7 @@ export function PairingSection() {
               idx % 2 === 0 ? styles.rowEven : styles.rowOdd,
               isHot ? styles.hot : "",
               isSourceRow ? styles.sourceRow : "",
+              !hasActiveCategory ? styles.unassigned : "",
             ]
               .filter(Boolean)
               .join(" ")}

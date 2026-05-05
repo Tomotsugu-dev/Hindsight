@@ -484,6 +484,9 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
         return Ok(());
     }
     let now = Utc::now().to_rfc3339();
+    // 第一次见到这个 process_name 时，按内置字典自动归类（命中常见浏览器 / 编辑器
+    // / 聊天工具等）。命中保留 None 让前端显示"其他"。用户后面手动改了不会被覆盖。
+    let builtin_cat = super::builtin_categories::match_builtin_category(&p);
 
     pool.0
         .call(move |conn| {
@@ -502,12 +505,12 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
             }
             conn.execute(
                 "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, NULL, ?, NULL)
+                 VALUES(?, ?, ?, ?, NULL)
                  ON CONFLICT(id) DO UPDATE SET
                    display_name = excluded.display_name,
                    updated_at   = excluded.updated_at,
                    deleted_at   = NULL",
-                rusqlite::params![p, p, now],
+                rusqlite::params![p, p, builtin_cat, now],
             )
             .db()?;
             enqueue(
@@ -537,6 +540,11 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                 &serde_json::json!({ "processName": p }).to_string(),
             )
             .db()?;
+            // 命中内置规则时镜像写一份到 app_categories（list_unclassified / 旧 reports
+            // 走的就是这张表）。否则 UI 的"应用分类"页会一直把这个 app 当未分类。
+            if let Some(cat) = builtin_cat {
+                sync_app_category_row(conn, &p, Some(cat), &now)?;
+            }
             Ok(())
         })
         .await?;

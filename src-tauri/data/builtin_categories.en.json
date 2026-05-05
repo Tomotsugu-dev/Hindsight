@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "comment": "英文 / 二进制名 / 跨语言通用名。匹配是 lowercase 完全相等。中文系统名见 builtin_categories.zh.json，日文系统名见 builtin_categories.ja.json。三个文件运行时合并到同一查找表。社区贡献请保持 category 顺序：browse / code / talk / design / fun。",
+  "rules": [
+    {
+      "category": "browse",
+      "processNames": [
+        "arc.exe", "arc",
+        "brave.exe", "brave browser",
+        "chrome", "chrome.exe", "google chrome",
+        "chromium",
+        "firefox.exe", "firefox",
+        "hindsight", "hindsight.exe",
+        "msedge.exe", "microsoft edge",
+        "opera.exe", "opera",
+        "operagx.exe",
+        "safari",
+        "tor browser.exe", "tor browser",
+        "vivaldi.exe", "vivaldi"
+      ]
+    },
+    {
+      "category": "code",
+      "processNames": [
+        "alacritty.exe", "alacritty",
+        "android studio.exe", "android studio", "studio64.exe",
+        "clion.exe", "clion",
+        "code.exe", "code - insiders.exe", "visual studio code", "vscode",
+        "cursor.exe", "cursor",
+        "datagrip.exe", "datagrip",
+        "devenv.exe",
+        "fleet.exe", "fleet",
+        "goland.exe", "goland",
+        "idea64.exe", "intellij idea",
+        "iterm2",
+        "neovim", "nvim", "vim",
+        "obsidian.exe", "obsidian",
+        "ollama.exe", "ollama",
+        "openjdk platform", "openjdk platform binary",
+        "phpstorm64.exe", "phpstorm",
+        "pycharm64.exe", "pycharm",
+        "rider64.exe", "rider",
+        "rubymine64.exe", "rubymine",
+        "rustrover.exe", "rustrover",
+        "sublime_text.exe", "sublime text",
+        "typora.exe", "typora",
+        "warp.exe", "warp",
+        "webstorm64.exe", "webstorm",
+        "windowsterminal.exe", "windows terminal", "windows terminal host",
+        "windsurf.exe", "windsurf",
+        "wt.exe",
+        "xcode"
+      ]
+    },
+    {
+      "category": "talk",
+      "processNames": [
+        "dingtalk.exe", "dingtalkrelease.exe", "dingtalk",
+        "discord.exe", "discord",
+        "feishu.exe", "feishu",
+        "lark.exe", "lark",
+        "line.exe", "line",
+        "messenger.exe", "messenger",
+        "msteams.exe", "microsoft teams", "teams.exe",
+        "qq.exe", "qq", "tim.exe",
+        "skype.exe", "skype",
+        "slack.exe", "slack",
+        "telegram.exe", "telegramdesktop.exe", "telegram",
+        "wechat.exe", "weixin.exe", "wechat", "weixin", "wechatappex",
+        "whatsapp.exe", "whatsapp",
+        "zoom.exe", "zoom"
+      ]
+    },
+    {
+      "category": "design",
+      "processNames": [
+        "afdesigner.exe", "affinity designer",
+        "afphoto.exe", "affinity photo",
+        "afpublisher.exe", "affinity publisher",
+        "blender.exe", "blender",
+        "figma.exe", "figma",
+        "framer.exe", "framer",
+        "illustrator.exe", "adobe illustrator",
+        "indesign.exe", "adobe indesign",
+        "lightroom.exe", "adobe lightroom",
+        "photoshop.exe", "adobe photoshop",
+        "premiere pro.exe", "adobe premiere pro",
+        "sketch"
+      ]
+    },
+    {
+      "category": "fun",
+      "processNames": [
+        "bilibili.exe", "bilibili",
+        "epicgameslauncher.exe", "epic games launcher",
+        "hyp.exe", "hoyoplay.exe", "hoyoplay",
+        "iina",
+        "iqiyi.exe",
+        "minecraft.exe", "minecraft",
+        "mpv.exe", "mpv",
+        "netflix.exe", "netflix",
+        "potplayer.exe", "potplayermini64.exe",
+        "qqlive.exe",
+        "roblox.exe", "roblox",
+        "spotify.exe", "spotify",
+        "starrail.exe", "star rail", "honkai: star rail",
+        "steam.exe", "steam",
+        "twitch.exe", "twitch",
+        "vlc.exe", "vlc"
+      ]
+    },
+    {
+      "category": "other",
+      "processNames": [
+        "gpu-z", "gpu-z - video card information utility",
+        "nvidia app", "nvidia geforce experience",
+        "photos.exe", "photos",
+        "snippingtool.exe", "snippingtool", "snipping tool",
+        "task manager",
+        "windows installer"
+      ]
+    }
+  ]
+}

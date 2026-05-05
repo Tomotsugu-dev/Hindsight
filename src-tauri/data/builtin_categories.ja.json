@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "comment": "日本語 OS / 日本語アプリの表示名。実行時に .en.json / .zh.json と同じ lookup map にマージされる（小文字完全一致）。英語 / バイナリ名以外の本地化された表示名のみ列挙。",
+  "rules": [
+    {
+      "category": "browse",
+      "processNames": [
+        "グーグル クローム", "グーグルクローム",
+        "マイクロソフト エッジ",
+        "ファイアフォックス"
+      ]
+    },
+    {
+      "category": "code",
+      "processNames": [
+        "メモ帳",
+        "ターミナル",
+        "コマンド プロンプト"
+      ]
+    },
+    {
+      "category": "talk",
+      "processNames": [
+        "ウィーチャット",
+        "ライン"
+      ]
+    },
+    {
+      "category": "design",
+      "processNames": []
+    },
+    {
+      "category": "fun",
+      "processNames": [
+        "ミュージック", "音楽",
+        "原神", "げんしん",
+        "崩壊：スターレイル", "スターレイル",
+        "ゼンレスゾーンゼロ"
+      ]
+    },
+    {
+      "category": "other",
+      "processNames": [
+        "エクスプローラー",
+        "タスク マネージャー", "タスクマネージャー",
+        "windows® インストーラー", "windows インストーラー",
+        "設定", "システム設定",
+        "写真",
+        "プレビュー"
+      ]
+    }
+  ]
+}

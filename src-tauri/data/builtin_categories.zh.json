@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "comment": "中文 OS / 中文应用界面下的进程名。运行时跟 .en.json / .ja.json 一起合并到同一查找表（lowercase 完全相等匹配）。补充时只列在英文 / 二进制名以外的中文显示名（比如 macOS 的「音乐」、Windows 的「微信」windowed display name）。",
+  "rules": [
+    {
+      "category": "browse",
+      "processNames": [
+        "谷歌浏览器", "微软浏览器", "火狐浏览器"
+      ]
+    },
+    {
+      "category": "code",
+      "processNames": [
+        "记事本",
+        "终端",
+        "命令提示符"
+      ]
+    },
+    {
+      "category": "talk",
+      "processNames": [
+        "微信",
+        "企业微信",
+        "钉钉",
+        "飞书",
+        "腾讯会议"
+      ]
+    },
+    {
+      "category": "design",
+      "processNames": []
+    },
+    {
+      "category": "fun",
+      "processNames": [
+        "qq音乐",
+        "网易云音乐",
+        "酷狗音乐",
+        "音乐",
+        "腾讯视频",
+        "爱奇艺",
+        "优酷视频",
+        "搜狐视频",
+        "原神",
+        "崩坏3", "崩坏3rd",
+        "崩坏：星穹铁道",
+        "绝区零"
+      ]
+    },
+    {
+      "category": "other",
+      "processNames": [
+        "资源管理器",
+        "任务管理器",
+        "设置",
+        "系统设置",
+        "系统信息",
+        "截屏",
+        "提示",
+        "预览",
+        "访达",
+        "文件",
+        "照片"
+      ]
+    }
+  ]
+}

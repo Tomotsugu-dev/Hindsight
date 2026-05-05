@@ -1,6 +1,7 @@
 pub mod activities;
 pub mod app_groups;
 pub mod app_icons;
+pub mod builtin_categories;
 pub mod categories;
 pub mod devices;
 pub mod outbox;

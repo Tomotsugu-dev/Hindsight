@@ -30,6 +30,9 @@ pub enum ScreenRecordingState {
     Granted,
     /// 没拿到 —— 可能是从未请求过（弹框中 / 用户没决定），可能是用户显式拒绝过。
     /// CG API 没法区分这两种状态；上层只关心「能不能工作」，不区分原因。
+    /// `#[allow]` 因为只在 macOS 编译目标下被 macos_impl 构造，Windows / Linux
+    /// build 时 macos_impl 不参与编译 → 编译器看不到 producer → dead_code 警告。
+    #[allow(dead_code)]
     NotGranted,
 }
 
