@@ -57,6 +57,7 @@ pub async fn update_settings(
         next.privacy_app_keywords.clone(),
     )
     .await;
+    svc.set_idle_threshold(next.idle_threshold_seconds).await;
 
     if next.auto_start != prev_autostart {
         let mgr = app.autolaunch();

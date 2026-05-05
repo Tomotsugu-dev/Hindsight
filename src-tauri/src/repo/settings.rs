@@ -48,6 +48,9 @@ pub struct Settings {
     pub auto_update_interval: String,
     /// 上次检查更新的时刻（RFC3339）。前端检查后写一次。None 表示从未查过。
     pub last_update_check_at: Option<String>,
+    /// 用户多久不动鼠键就算"挂机"，超过这个秒数 capture 不再延续当前会话，
+    /// 避免离开电脑后还在累计使用时长。0 = 关闭挂机检测（永远算在用）。
+    pub idle_threshold_seconds: u32,
 }
 
 impl Default for Settings {
@@ -69,6 +72,7 @@ impl Default for Settings {
             auto_update_enabled: true,
             auto_update_interval: "weekly".to_string(),
             last_update_check_at: None,
+            idle_threshold_seconds: 180,
         }
     }
 }
@@ -113,6 +117,7 @@ pub struct SettingsPatch {
     pub auto_update_enabled: Option<bool>,
     pub auto_update_interval: Option<String>,
     pub last_update_check_at: Option<Option<String>>,
+    pub idle_threshold_seconds: Option<u32>,
 }
 
 pub async fn load(pool: &DbPool) -> Result<Settings> {
@@ -211,6 +216,11 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         last_update_check_at: patch
             .last_update_check_at
             .unwrap_or(current.last_update_check_at),
+        idle_threshold_seconds: patch
+            .idle_threshold_seconds
+            // 0 = 关闭检测；上限 3600 (1h) 防止用户填怪值
+            .map(|v| v.min(3600))
+            .unwrap_or(current.idle_threshold_seconds),
     }
 }
 

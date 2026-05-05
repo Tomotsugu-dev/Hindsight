@@ -210,6 +210,7 @@ pub fn run() {
                     cfg.privacy_app_keywords.clone(),
                 )
                 .await;
+                svc.set_idle_threshold(cfg.idle_threshold_seconds).await;
                 if cfg.capture_enabled {
                     svc.start().await;
                 }

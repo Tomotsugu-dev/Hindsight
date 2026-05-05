@@ -100,6 +100,25 @@ export default function GeneralTab() {
             suffix="秒"
           />
         </Row>
+        <Row
+          label="挂机不计时"
+          description="鼠键长时间无操作时停止累计当前会话的时长，避免离开电脑后仍在记录使用时间。设为 0 = 永远算在用。"
+          disabled={!settings.captureEnabled}
+          labelHint={
+            "判断依据是系统级的鼠标 / 键盘 / 触控板事件——\n" +
+            "看视频、长时间阅读不会触发。\n" +
+            "用户回来动鼠键后会自动开始新会话。"
+          }
+        >
+          <Slider
+            value={Math.round(settings.idleThresholdSeconds / 60)}
+            onChange={(v) => update({ idleThresholdSeconds: v * 60 })}
+            min={0}
+            max={30}
+            step={1}
+            suffix="分钟"
+          />
+        </Row>
         <Row label="截图保存路径" disabled={!settings.captureEnabled}>
           <PathField
             value={settings.screenshotPath}

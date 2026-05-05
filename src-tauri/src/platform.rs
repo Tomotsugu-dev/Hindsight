@@ -99,3 +99,60 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn handle_run_event(_app: &tauri::AppHandle, _event: tauri::RunEvent) {}
+
+/// 用户最后一次鼠标 / 键盘事件距今的秒数。返回 0 = 当前活跃，大数值 = 挂机。
+///
+/// 用途：capture 模块每次 tick 看这个值，超过用户配置的阈值就 seal 当前会话，
+/// 避免离开电脑后仍在累计"使用时长"。
+///
+/// - macOS：`CGEventSourceSecondsSinceLastEventType` (CoreGraphics)。
+///   合并所有输入源（trackpad / 蓝牙鼠标 / 外接键盘），不分前台 / 后台 app。
+/// - Windows：`GetLastInputInfo` + `GetTickCount` 算 ms 差。
+///   `wrapping_sub` 处理 49 天溢出（GetTickCount u32 ms 大约 49.7 天回绕）。
+/// - 其它平台：返回 0（当作永远活跃，不影响功能）。
+#[cfg(target_os = "macos")]
+pub fn idle_secs() -> u64 {
+    use std::os::raw::c_int;
+    // kCGEventSourceStateCombinedSessionState = 1
+    const COMBINED_SESSION_STATE: c_int = 1;
+    // kCGAnyInputEventType = 0xFFFFFFFF —— 任意键鼠 / 触控板事件
+    const ANY_INPUT_EVENT: u32 = !0u32;
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(state: c_int, event_type: u32) -> f64;
+    }
+    let s = unsafe {
+        CGEventSourceSecondsSinceLastEventType(COMBINED_SESSION_STATE, ANY_INPUT_EVENT)
+    };
+    if s.is_finite() && s >= 0.0 {
+        s as u64
+    } else {
+        0
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn idle_secs() -> u64 {
+    use winapi::um::winuser::{GetLastInputInfo, LASTINPUTINFO};
+    extern "system" {
+        fn GetTickCount() -> u32;
+    }
+    unsafe {
+        let mut info = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
+        if GetLastInputInfo(&mut info) == 0 {
+            return 0;
+        }
+        let now = GetTickCount();
+        // GetTickCount 是 u32 ms，~49.7 天溢出回绕。wrapping_sub 算出的 delta
+        // 在溢出场景仍是正确的"已过 ms 数"。
+        (now.wrapping_sub(info.dwTime) / 1000) as u64
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn idle_secs() -> u64 {
+    0
+}

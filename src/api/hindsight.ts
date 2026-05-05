@@ -117,6 +117,10 @@ export interface Settings {
   autoUpdateInterval: "daily" | "weekly" | "monthly" | "onstartup";
   /** 上次检查更新的 RFC3339 时间戳；从未查过则为 null */
   lastUpdateCheckAt: string | null;
+  /** 用户多久不动鼠键就算"挂机"：超过这个秒数 capture 不再延续会话，
+   *  避免离开电脑后还在累计使用时长。0 = 关闭挂机检测。
+   *  UI 按分钟展示，值进出后端时由调用方做秒↔分钟转换。 */
+  idleThresholdSeconds: number;
 }
 
 export type SettingsPatch = Partial<Settings>;

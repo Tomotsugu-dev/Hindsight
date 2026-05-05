@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::{Local, Timelike};
+use chrono::{Duration, Local, Timelike};
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -76,6 +76,9 @@ struct Inner {
     privacy_url_keywords: Mutex<Vec<String>>,
     /// 应用 / 标题关键词；app_name 或 window title 命中其中一条即跳过截图
     privacy_app_keywords: Mutex<Vec<String>>,
+    /// 用户多久不动鼠键就算"挂机"，超过这个秒数 tick 就 seal 当前会话不再延续。
+    /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
+    idle_threshold_secs: Mutex<u32>,
     current: Mutex<Option<CurrentSession>>,
 }
 
@@ -96,6 +99,9 @@ impl CaptureService {
                 screenshot: Mutex::new(ScreenshotConfig::default()),
                 privacy_url_keywords: Mutex::new(Vec::new()),
                 privacy_app_keywords: Mutex::new(Vec::new()),
+                // 真实值由 lib.rs 启动时根据 settings 写入；此处给个安全默认（180s = 3min），
+                // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
+                idle_threshold_secs: Mutex::new(180),
                 current: Mutex::new(None),
             }),
         }
@@ -173,6 +179,11 @@ impl CaptureService {
         *state = WorkHoursState { enabled, ranges };
     }
 
+    /// 更新挂机阈值（秒）。0 = 关闭检测。设置页改完由命令层调一次。
+    pub async fn set_idle_threshold(&self, secs: u32) {
+        *self.inner.idle_threshold_secs.lock().await = secs.min(3600);
+    }
+
     /// 更新隐私关键词。设置页改完后由命令层调一次。
     pub async fn set_privacy_keywords(&self, url_keywords: Vec<String>, app_keywords: Vec<String>) {
         *self.inner.privacy_url_keywords.lock().await = url_keywords;
@@ -217,6 +228,32 @@ async fn tick(inner: &Inner) -> Result<()> {
                         activities::seal_session(&inner.pool, prev.id, Local::now()).await
                     {
                         log::warn!("seal_session 失败 (离开工作时段, id={}): {e}", prev.id);
+                    }
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // 挂机检测：用户多久没动鼠键。超过阈值就 seal 当前会话并 return，让"挂机时段"
+    // 不计入使用时长。ended_at 用"用户最后一次活动时间" = now - idle，duration 才准。
+    // 用户回来动鼠键 → 下次 tick 看到 current=None → 自然开新会话。
+    {
+        let threshold = *inner.idle_threshold_secs.lock().await;
+        if threshold > 0 {
+            let idle = crate::platform::idle_secs();
+            if idle as u32 >= threshold {
+                let mut cur_lock = inner.current.lock().await;
+                if let Some(prev) = cur_lock.take() {
+                    drop(cur_lock);
+                    let real_end = Local::now() - Duration::seconds(idle as i64);
+                    if let Err(e) =
+                        activities::seal_session(&inner.pool, prev.id, real_end).await
+                    {
+                        log::warn!(
+                            "seal_session 失败 (用户挂机 {idle}s, id={}): {e}",
+                            prev.id
+                        );
                     }
                 }
                 return Ok(());
