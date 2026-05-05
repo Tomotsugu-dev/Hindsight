@@ -16,6 +16,9 @@ interface SettingsContextValue {
   settings: Settings | null;
   loading: boolean;
   update: (patch: SettingsPatch) => void;
+  /** 后端 settings 被旁路命令（如 set_active_model）改写后，前端调一下重读，
+   *  让 useSettings 订阅者拿到新值。普通改设置不要用这个，用 update。 */
+  reload: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -51,6 +54,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const reload = useCallback(async () => {
+    try {
+      setSettings(await api.getSettings());
+    } catch (e) {
+      console.error("重新加载设置失败:", e);
+    }
+  }, []);
+
   const update = useCallback(
     (patch: SettingsPatch) => {
       setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -73,8 +84,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [flush]);
 
   const value = useMemo<SettingsContextValue>(
-    () => ({ settings, loading, update }),
-    [settings, loading, update],
+    () => ({ settings, loading, update, reload }),
+    [settings, loading, update, reload],
   );
 
   return (

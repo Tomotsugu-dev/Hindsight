@@ -10,12 +10,14 @@ use serde::{Deserialize, Serialize};
 ///
 /// 取值约束：`start_hour ∈ 0..=23`、`end_hour ∈ 1..=24`、`start_hour < end_hour`。
 /// 不支持跨午夜（晚段最大 `[18, 24]`）。约束在 [`sanitize`] 里强制。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct AiSegment {
     pub label: String,
     pub start_hour: u8,
     pub end_hour: u8,
+    /// 用户自定义底色，hex 格式 `#rrggbb`；空字符串 = 走 UI 自动按时段渐变
+    pub color: String,
 }
 
 /// AI 子系统的所有用户配置。嵌进 [`crate::repo::settings::Settings::ai`]。
@@ -44,6 +46,18 @@ pub struct AiConfig {
     pub hash_threshold: u32,
     /// 哈希聚类时间窗（分钟）；只在窗内的截图之间比相似度
     pub hash_window_minutes: u32,
+    /// 模型（GGUF 文件）保存路径。
+    ///
+    /// 空字符串 = 走 [`crate::ai::models::default_root_dir`]（`<data_root>/ai/models/`）；
+    /// `repo::settings::load` 会在启动时把空值填成实际默认路径。
+    /// 用户在 设置 → 数据 里能改成大硬盘上的目录。
+    pub models_path: String,
+    /// 当前选中的主权重 GGUF 文件名（在 `models_path` 目录下）。
+    /// 空字符串 = 还没选模型；`start_engine` 会拒绝启动，让用户先去选。
+    pub active_main: String,
+    /// 当前选中的 mmproj GGUF 文件名（vision 模型必带）。
+    /// 空字符串 = 没有 mmproj（纯文本模型）。
+    pub active_mmproj: String,
 }
 
 impl Default for AiConfig {
@@ -58,32 +72,46 @@ impl Default for AiConfig {
             max_images_per_segment: 30,
             hash_threshold: 5,
             hash_window_minutes: 5,
+            models_path: String::new(),
+            active_main: String::new(),
+            active_mmproj: String::new(),
         }
     }
 }
 
-/// 默认 4 段：早 06-09 / 上午 09-12 / 下午 12-18 / 晚 18-24。
+/// 默认 5 段，覆盖整 24 小时：
+/// 深夜 00-06 / 早上 06-09 / 上午 09-12 / 下午 12-18 / 晚上 18-24
 pub fn default_segments() -> Vec<AiSegment> {
     vec![
         AiSegment {
-            label: "早".to_string(),
+            label: "深夜".to_string(),
+            start_hour: 0,
+            end_hour: 6,
+            color: String::new(),
+        },
+        AiSegment {
+            label: "早上".to_string(),
             start_hour: 6,
             end_hour: 9,
+            color: String::new(),
         },
         AiSegment {
             label: "上午".to_string(),
             start_hour: 9,
             end_hour: 12,
+            color: String::new(),
         },
         AiSegment {
             label: "下午".to_string(),
             start_hour: 12,
             end_hour: 18,
+            color: String::new(),
         },
         AiSegment {
-            label: "晚".to_string(),
+            label: "晚上".to_string(),
             start_hour: 18,
             end_hour: 24,
+            color: String::new(),
         },
     ]
 }
@@ -107,6 +135,11 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         .segments
         .into_iter()
         .filter(|s| s.start_hour < s.end_hour && s.end_hour <= 24)
+        .map(|mut s| {
+            s.label = s.label.trim().to_string();
+            s.color = sanitize_hex_color(&s.color);
+            s
+        })
         .collect();
     next.segments = if valid_segments.is_empty() {
         old.segments.clone()
@@ -125,5 +158,42 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.hash_threshold = next.hash_threshold.min(32);
     next.hash_window_minutes = next.hash_window_minutes.min(60);
 
+    next.models_path = next.models_path.trim().to_string();
+    next.active_main = next.active_main.trim().to_string();
+    next.active_mmproj = next.active_mmproj.trim().to_string();
+
     next
+}
+
+/// 校验 hex 颜色：接受 `#rgb` / `#rrggbb`，统一返回小写 `#rrggbb`；非法值置空。
+fn sanitize_hex_color(raw: &str) -> String {
+    let s = raw.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    let body = match s.strip_prefix('#') {
+        Some(b) => b,
+        None => return String::new(),
+    };
+    let valid_len = matches!(body.len(), 3 | 6);
+    if !valid_len || !body.chars().all(|c| c.is_ascii_hexdigit()) {
+        return String::new();
+    }
+    if body.len() == 3 {
+        let mut out = String::with_capacity(7);
+        out.push('#');
+        for c in body.chars() {
+            let lc = c.to_ascii_lowercase();
+            out.push(lc);
+            out.push(lc);
+        }
+        out
+    } else {
+        let mut out = String::with_capacity(7);
+        out.push('#');
+        for c in body.chars() {
+            out.push(c.to_ascii_lowercase());
+        }
+        out
+    }
 }

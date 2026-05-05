@@ -97,6 +97,8 @@ export interface AiSegment {
   startHour: number;
   /** 1..=24（24 = 当日午夜结束） */
   endHour: number;
+  /** 用户自定义底色，hex 格式 `#rrggbb`；空字符串 = 走 UI 自动按时段渐变 */
+  color: string;
 }
 
 export interface TestAiEndpointResp {
@@ -135,6 +137,39 @@ export interface EngineStatus extends EngineBinaryStatus {
   runtime: EngineRuntimeStatus;
 }
 
+/** 本地磁盘上的 GGUF 文件条目（可能是主权重，也可能是 mmproj）。 */
+export interface ModelEntry {
+  /** 文件名（含 .gguf 后缀） */
+  filename: string;
+  /** 绝对路径，可直接传给删除 / 选中等命令 */
+  path: string;
+  /** 字节数 */
+  sizeBytes: number;
+  /** 文件名包含 mmproj → 是 vision 投影，不是主模型 */
+  isMmproj: boolean;
+}
+
+/** Hindsight 内置推荐 vision LLM。前端按这张表渲染推荐卡片。 */
+export interface RecommendedModel {
+  displayName: string;
+  /** HF 仓库 ID，例如 `ggml-org/Qwen2.5-VL-3B-Instruct-GGUF` */
+  repo: string;
+  mainFile: string;
+  mainBytes: number;
+  mmprojFile: string | null;
+  mmprojBytes: number;
+}
+
+/** 下载 GGUF 时的进度事件 payload。`file` 字段标识哪个文件（main / mmproj）。 */
+export interface ModelDownloadProgress {
+  file: string;
+  downloaded: number;
+  total: number | null;
+}
+
+/** 模型下载进度事件名。前端 listen 这个。 */
+export const MODEL_DOWNLOAD_EVENT = "ai://model-download-progress";
+
 /** 下载进度阶段。`downloaded` / `total` 只在 downloading 阶段有意义。 */
 export type EngineDownloadPhase =
   | "downloading"
@@ -172,6 +207,15 @@ export interface AiConfig {
   hashThreshold: number;
   /** 哈希聚类时间窗（分钟）；只在窗内的截图之间比相似度 */
   hashWindowMinutes: number;
+  /** 模型（GGUF）保存路径。
+   *  空字符串 = 走默认 `<data_root>/ai/models/`；后端 settings load 启动时
+   *  会把空值填成实际默认路径，所以前端拿到的总是非空字符串。 */
+  modelsPath: string;
+  /** 当前选中的主权重 GGUF 文件名（在 `modelsPath` 目录下）。
+   *  空 = 还没选；启动引擎会拒绝。 */
+  activeMain: string;
+  /** 当前选中的 mmproj GGUF 文件名（vision 模型必带）。空 = 没有。 */
+  activeMmproj: string;
 }
 
 export interface Settings {
@@ -332,4 +376,24 @@ export const api = {
    *  Phase 1B-α 不传模型，会因为缺模型 fail；Phase 1B-β 起会真传值。 */
   startEngine: () => invoke<number>("start_engine"),
   stopEngine: () => invoke<void>("stop_engine"),
+  /** 扫描 settings.ai.modelsPath 下所有 .gguf 文件（main + mmproj 平等列）。
+   *  目录不存在或为空都返回 []，不抛错。 */
+  listLocalModels: () => invoke<ModelEntry[]>("list_local_models"),
+  /** 删除一个本地 GGUF。filename 必须是 basename（不含路径分隔符）。 */
+  deleteModel: (filename: string) =>
+    invoke<void>("delete_model", { filename }),
+  /** Hindsight 内置推荐表，前端拿来渲染推荐卡片。静态数据。 */
+  listRecommendedModels: () =>
+    invoke<RecommendedModel[]>("list_recommended_models"),
+  /** 从 HuggingFace 下载一个 GGUF 文件到 settings.ai.modelsPath。
+   *  进度通过 listen(MODEL_DOWNLOAD_EVENT, ...) 拿。
+   *  Promise resolve = 整个文件下载完毕；reject = 任何阶段失败。
+   *  返回值是落盘后的完整路径。 */
+  downloadModel: (repo: string, file: string, expectedBytes: number) =>
+    invoke<string>("download_model", { repo, file, expectedBytes }),
+  /** 切换 / 设置当前在用的模型。写 settings 后会把在跑的 server 停掉，
+   *  让用户主动点"启动引擎"按新模型重起。
+   *  mmprojFile 传 null 表示没有（纯文本模型）。 */
+  setActiveModel: (mainFile: string, mmprojFile: string | null) =>
+    invoke<void>("set_active_model", { mainFile, mmprojFile }),
 };

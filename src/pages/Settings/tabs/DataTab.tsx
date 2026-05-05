@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertCircle,
   Database,
   FolderOpen,
+  HardDrive,
   ImageDown,
   PieChart,
 } from "lucide-react";
 import { Section } from "../components/Section";
 import { Row } from "../components/Row";
 import { Slider } from "../components/Slider";
+import { PathField } from "../components/PathField";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "../../../state/settings";
 import { api, type StorageInfo } from "../../../api/hindsight";
@@ -76,6 +79,26 @@ export default function DataTab() {
     }
   };
 
+  const updateAiModelsPath = (v: string) => {
+    if (!settings) return;
+    update({ ai: { ...settings.ai, modelsPath: v } });
+  };
+
+  const pickModelsDir = async () => {
+    try {
+      const picked = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: settings.ai.modelsPath || undefined,
+      });
+      if (typeof picked === "string" && picked.length > 0) {
+        updateAiModelsPath(picked);
+      }
+    } catch (e) {
+      console.error("打开目录选择失败:", e);
+    }
+  };
+
   return (
     <>
       <Section
@@ -110,6 +133,17 @@ export default function DataTab() {
           >
             {storage ? fmtBytes(total) : "—"}
           </span>
+        </Row>
+        <Row
+          label="AI 模型保存路径"
+          labelHint="切换路径后，旧目录里的模型不会自动迁移——要么手动拷过去，要么在新路径里重新下载。"
+          icon={HardDrive}
+        >
+          <PathField
+            value={settings.ai.modelsPath}
+            onChange={updateAiModelsPath}
+            onPick={pickModelsDir}
+          />
         </Row>
       </Section>
 

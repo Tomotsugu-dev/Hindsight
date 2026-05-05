@@ -141,9 +141,21 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         .await?;
 
     let mut settings = serde_json::from_str::<Settings>(&data).unwrap_or_default();
+    let mut dirty = false;
 
     if settings.screenshot_path.trim().is_empty() {
         settings.screenshot_path = default_screenshot_path();
+        dirty = true;
+    }
+
+    if settings.ai.models_path.trim().is_empty() {
+        settings.ai.models_path = crate::ai::models::default_root_dir()
+            .to_string_lossy()
+            .into_owned();
+        dirty = true;
+    }
+
+    if dirty {
         save(pool, &settings).await?;
     }
 

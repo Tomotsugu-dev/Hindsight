@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::binary::{self, DownloadPhase, EngineBinaryStatus};
+use crate::ai::models::{self, ModelEntry};
+use crate::ai::recommended::{Recommended, RECOMMENDED};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
+use crate::repo::settings;
+use crate::storage::DbPool;
 
 /// `test_ai_endpoint` 的返回。
 ///
@@ -30,11 +34,13 @@ pub struct TestAiEndpointResp {
 
 #[derive(Debug, Deserialize)]
 struct ModelsResp {
-    data: Vec<ModelEntry>,
+    data: Vec<OpenAIModelEntry>,
 }
 
+/// OpenAI `/v1/models` 响应里的一项；只为本地解析用，跟
+/// 本地磁盘上的 [`crate::ai::models::ModelEntry`] 是两个概念
 #[derive(Debug, Deserialize)]
-struct ModelEntry {
+struct OpenAIModelEntry {
     id: String,
 }
 
@@ -163,14 +169,46 @@ pub async fn get_engine_status(
     Ok(EngineStatusResp { binary, runtime })
 }
 
-/// 启动 llama-server 子进程。Phase 1B-α 不传 model/mmproj，所以会以
-/// "缺模型" 失败收场，supervisor 把 stderr 回吐给用户。Phase 1B-β
-/// 起会改成接 settings.ai.activeModel 真传值进来。
+/// 启动 llama-server 子进程。
+///
+/// 读 `settings.ai.active_main` / `active_mmproj` 决定加载哪个模型。
+/// 没选模型时直接拒绝启动——比让 server 起空跑然后 `/v1/models` 返空
+/// 列表友好（用户能立刻知道要先去选）。
 #[tauri::command]
 pub async fn start_engine(
+    pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
 ) -> Result<u16, String> {
-    supervisor.start(None, None).await.map_err(Into::into)
+    let cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
+    if cfg.ai.active_main.trim().is_empty() {
+        return Err(
+            "请先在「模型」里下载并使用一个模型，再启动引擎".to_string(),
+        );
+    }
+    let models_dir = crate::ai::models::root_dir(&cfg.ai);
+    let main_path = models_dir.join(&cfg.ai.active_main);
+    if !main_path.exists() {
+        return Err(format!(
+            "选中的主权重不存在：{}（可能被删除或路径变了）",
+            cfg.ai.active_main
+        ));
+    }
+    let mmproj_path = if cfg.ai.active_mmproj.trim().is_empty() {
+        None
+    } else {
+        let p = models_dir.join(&cfg.ai.active_mmproj);
+        if !p.exists() {
+            return Err(format!(
+                "选中的 vision 投影文件不存在：{}",
+                cfg.ai.active_mmproj
+            ));
+        }
+        Some(p)
+    };
+    supervisor
+        .start(Some(main_path), mmproj_path)
+        .await
+        .map_err(Into::into)
 }
 
 /// 停掉子进程（如果在跑）。
@@ -179,6 +217,131 @@ pub async fn stop_engine(
     supervisor: State<'_, Arc<EngineSupervisor>>,
 ) -> Result<(), String> {
     supervisor.stop().await.map_err(Into::into)
+}
+
+/// 切换 / 设置当前在用的模型。
+///
+/// 写 settings 后顺手 stop 在跑的 server——下次用户点"启动引擎"会带新模型重起。
+/// 不在这里自动 start，因为 start 可能 90s 才返回，命令调用方等不动；让用户主动触发更可控。
+#[tauri::command]
+pub async fn set_active_model(
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    main_file: String,
+    mmproj_file: Option<String>,
+) -> Result<(), String> {
+    let mut cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
+    cfg.ai.active_main = main_file.trim().to_string();
+    cfg.ai.active_mmproj = mmproj_file.unwrap_or_default().trim().to_string();
+    settings::save(&pool, &cfg).await.map_err(|e| e.to_string())?;
+
+    // 切了模型，旧 server 跑的就是旧模型，停掉等用户手动重启
+    let _ = supervisor.stop().await;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────
+//  模型管理（Phase 1B-β β.1）
+// ─────────────────────────────────────────────────────────
+
+/// 列当前 settings 配的模型目录里所有 `.gguf` 文件。
+/// 目录不存在或为空都返回 `[]`，不当错误。
+#[tauri::command]
+pub async fn list_local_models(
+    pool: State<'_, DbPool>,
+) -> Result<Vec<ModelEntry>, String> {
+    let cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
+    models::list_local(&cfg.ai).map_err(Into::into)
+}
+
+/// 删除一个本地 GGUF 文件。`filename` 必须是文件名（不含路径），后端
+/// 会再次校验防 `..` / 分隔符注入。
+///
+/// 顺手清理：被删文件如果是当前 active_main / active_mmproj，把 settings
+/// 里那项清掉——下次 `start_engine` 才不会拿一个不存在的文件名报错。
+#[tauri::command]
+pub async fn delete_model(
+    pool: State<'_, DbPool>,
+    filename: String,
+) -> Result<(), String> {
+    let mut cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
+    models::delete(&cfg.ai, &filename).map_err(|e| e.to_string())?;
+
+    let mut dirty = false;
+    if cfg.ai.active_main == filename {
+        cfg.ai.active_main.clear();
+        dirty = true;
+    }
+    if cfg.ai.active_mmproj == filename {
+        cfg.ai.active_mmproj.clear();
+        dirty = true;
+    }
+    if dirty {
+        settings::save(&pool, &cfg).await.map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 返回 Hindsight 内置的推荐模型清单——前端拿来渲染推荐卡片。
+/// 静态数据，不查 DB / 网络。
+#[tauri::command]
+pub async fn list_recommended_models() -> Result<Vec<Recommended>, String> {
+    Ok(RECOMMENDED.to_vec())
+}
+
+/// 下载 GGUF 时进度事件 payload。前端 listen 这条事件名拿到。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelDownloadProgressPayload {
+    /// 文件名，方便前端区分多个并发下载（main / mmproj）属于谁
+    file: String,
+    /// 已下载字节数
+    downloaded: u64,
+    /// 总字节数；HF 一般给 content-length
+    total: Option<u64>,
+}
+
+const MODEL_PROGRESS_EVENT: &str = "ai://model-download-progress";
+
+/// 从 HuggingFace 下载一个 GGUF 文件到当前 settings.ai.modelsPath。
+///
+/// - `repo` 形如 `ggml-org/Qwen2.5-VL-3B-Instruct-GGUF`
+/// - `file` 是文件名（不含路径分隔符）
+/// - `expected_bytes` 是预期字节数；用来判断"是否已下完整"的容差比对，
+///    传 0 关闭这个检查
+///
+/// 进度通过 [`MODEL_PROGRESS_EVENT`] 流式推送给前端，命令本身在下载完才 resolve。
+/// 返回值是落盘后的完整路径。
+#[tauri::command]
+pub async fn download_model(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    repo: String,
+    file: String,
+    expected_bytes: u64,
+) -> Result<String, String> {
+    let cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
+    let app_for_emit = app.clone();
+    let file_for_emit = file.clone();
+    let path = models::download_from_hf(
+        &cfg.ai,
+        &repo,
+        &file,
+        expected_bytes,
+        move |downloaded, total| {
+            let payload = ModelDownloadProgressPayload {
+                file: file_for_emit.clone(),
+                downloaded,
+                total,
+            };
+            if let Err(e) = app_for_emit.emit(MODEL_PROGRESS_EVENT, &payload) {
+                log::warn!("emit {MODEL_PROGRESS_EVENT} 失败: {e}");
+            }
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 /// 进度事件 payload。前端 listen 这条事件名拿到。

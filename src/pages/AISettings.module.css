@@ -372,6 +372,284 @@
   pointer-events: none;
 }
 
+/* —— 模型管理 Section（Phase 1B-β） —— */
+.modelsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+}
+
+.modelList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modelCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 9px;
+}
+
+/* 卡片单行：name + ⓘ + size 在左，下载按钮 / 已安装 badge 在右 */
+.modelCardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modelCardLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.modelCardRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 模型卡 disabled 卸载按钮——layout 占位但变灰，跟 .engineActions 同款 */
+.modelCardRight .engineUninstall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* "使用" 状态徽章——跟 .testBtn 等宽等高，
+   颜色跟 .engineBadgeOk（"已安装"）同步：半透明绿底 + 深绿字。
+   状态而非动作，所以不用 testBtn 那种纯色实心强调。 */
+/* "使用" 状态徽章——尺寸跟 .testBtn 等大，颜色 + 描边跟 .engineStart
+   ("启动引擎" 按钮) 同一族绿色，视觉上是 "ghost tint" 而不是实心强调 */
+.modelActivePill {
+  display: inline-flex;
+  align-items: center;
+  /* 不要 justify-content: center —— testBtn 默认 flex-start，icon 贴左 padding 内沿。
+     这里也得 flex-start，stacked 卡片间 icon 才能纵向对齐 */
+  gap: 8px;
+  height: 36px;
+  padding: 0 24px;
+  background: color-mix(in oklab, #16a34a 12%, transparent);
+  border: 1px solid color-mix(in oklab, #16a34a 26%, transparent);
+  color: #15803d; /* green-700 */
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+/* hover：颜色加深一档，提示"点击可取消激活，切回已下载" */
+.modelActivePill:hover {
+  background: color-mix(in oklab, #16a34a 20%, transparent);
+  border-color: color-mix(in oklab, #16a34a 40%, transparent);
+}
+
+.modelActivePill:active {
+  background: color-mix(in oklab, #16a34a 26%, transparent);
+}
+
+/* "已下载" 状态按钮——灰色 outline，可点击切到"使用中"。
+   视觉：与 testBtn (蓝实心) / modelActivePill (绿实心) 都拉开差距，
+   保留可点感（hover 微微抬一下 + accent 描边），但不抢"使用中"的高亮。 */
+.modelReadyBtn {
+  display: inline-flex;
+  align-items: center;
+  /* 跟 testBtn / modelActivePill 一样 flex-start，icon 贴左 padding 内沿 */
+  gap: 8px;
+  height: 36px;
+  padding: 0 24px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  color: var(--text-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.modelReadyBtn:hover {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  color: var(--color-accent);
+}
+
+.modelReadyBtn:active {
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+/* 主按钮槽位（下载 / 已下载 / 使用中）等宽兜底——防字体宽度差导致
+   各状态卡片的 action 列对不齐。统一 min-width，"下载中…" 4 字态
+   也不被压缩 */
+.modelCardRight .testBtn,
+.modelCardRight .modelActivePill,
+.modelCardRight .modelReadyBtn {
+  min-width: 110px;
+}
+
+.modelCardName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.modelCardSize {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* tail 推荐卡片包装：grid-template-rows 0fr↔1fr 实现"自适应内容高度"折叠动画 */
+.modelTailWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modelTailWrapOpen {
+  grid-template-rows: 1fr;
+}
+
+.modelTailInner {
+  /* overflow hidden 让 0fr 行真正塌缩；动画期间 cards 被 clip */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* 配合主动画做内容淡入淡出，闭合时不至于"突然消失" */
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.modelTailWrapOpen .modelTailInner {
+  opacity: 1;
+}
+
+/* "查看更多模型 (N)" / "收起" 切换按钮：克制风格虚线 ghost
+   跟 SegmentList 的"添加段"按钮同款语言 */
+.modelExpandBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  margin-top: 4px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.modelExpandBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+}
+
+.modelExpandBtn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.modelExpandBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* chevron 不靠两个图标切换，而是一个 ChevronDown 旋转 180°，过渡更顺 */
+.modelExpandChevron {
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modelExpandChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* —— 已下载列表 —— */
+.modelLocalList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modelLocalHeader {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+  margin-top: 4px;
+}
+
+.modelLocalRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.modelLocalName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.modelLocalTag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-family: inherit;
+}
+
+.modelLocalSize {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 /* —— 引擎运行时控制行（Phase 1B-α） —— */
 .engineRuntime {
   display: flex;

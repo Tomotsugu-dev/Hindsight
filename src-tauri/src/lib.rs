@@ -308,6 +308,11 @@ pub fn run() {
             commands::ai::open_engine_dir,
             commands::ai::start_engine,
             commands::ai::stop_engine,
+            commands::ai::list_local_models,
+            commands::ai::delete_model,
+            commands::ai::list_recommended_models,
+            commands::ai::download_model,
+            commands::ai::set_active_model,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")

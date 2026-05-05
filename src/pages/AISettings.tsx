@@ -3,11 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
+  Bot,
   Check,
+  ChevronDown,
   Clock,
   Download,
   Filter,
   FolderOpen,
+  HardDrive,
   Image as ImageIcon,
   Info,
   Loader2,
@@ -26,10 +29,14 @@ import { CategoryChipMultiSelect } from "./Settings/components/CategoryChipMulti
 import {
   api,
   ENGINE_DOWNLOAD_EVENT,
+  MODEL_DOWNLOAD_EVENT,
   type AiConfig,
   type AiSegment,
   type EngineDownloadProgress,
   type EngineStatus,
+  type ModelDownloadProgress,
+  type ModelEntry,
+  type RecommendedModel,
 } from "../api/hindsight";
 import { useSettings } from "../state/settings";
 import styles from "./AISettings.module.css";
@@ -69,6 +76,14 @@ export default function AISettings() {
           icon={Server}
         >
           <EngineSection />
+        </Section>
+
+        <Section
+          title="模型"
+          description="本地推理用的 vision LLM；GGUF 文件下载自 HuggingFace。"
+          icon={Bot}
+        >
+          <ModelsSection />
         </Section>
 
         <Section
@@ -576,6 +591,384 @@ function EngineRuntimeRow({
 
       {isError && rt.error ? (
         <div className={styles.engineRuntimeError}>{rt.error}</div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 模型管理 Section（Phase 1B-β）。
+ *
+ * 顶部展示 Hindsight 内置推荐卡片（HF 一键下载）；下面是用户已下载的本地
+ * .gguf 文件清单 + 删除入口。
+ *
+ * "已安装"判定：推荐里的 main + （如有）mmproj 文件名都能在本地清单里
+ * 找到。失败的下载留下半成品（.partial），ai/models.rs 里 download
+ * 函数失败时已经清理过，所以本地清单看到的都是完整文件。
+ */
+function ModelsSection() {
+  // settings 用来读 activeMain：决定哪个推荐 / 本地文件在"当前使用"态。
+  // reload 是因为 set_active_model 是旁路命令（不走 update_settings 通道），
+  // 写完 settings 后前端 SettingsContext 不会自动 refetch，必须手动 reload。
+  const { settings, reload } = useSettings();
+  const activeMain = settings?.ai.activeMain ?? "";
+
+  const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
+  const [local, setLocal] = useState<ModelEntry[]>([]);
+  const [progress, setProgress] = useState<
+    Record<string, ModelDownloadProgress>
+  >({});
+  const [busyFiles, setBusyFiles] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  /** "查看更多模型" 是否点开过——展开后看到完整推荐列表 */
+  const [showAllRecs, setShowAllRecs] = useState(false);
+
+  const refresh = async () => {
+    try {
+      const [rec, loc] = await Promise.all([
+        api.listRecommendedModels(),
+        api.listLocalModels(),
+      ]);
+      setRecommended(rec);
+      setLocal(loc);
+    } catch (e) {
+      console.error("ModelsSection refresh:", e);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+    const p = listen<ModelDownloadProgress>(MODEL_DOWNLOAD_EVENT, (ev) => {
+      setProgress((prev) => ({ ...prev, [ev.payload.file]: ev.payload }));
+    });
+    return () => {
+      void p.then((unlisten) => unlisten());
+    };
+  }, []);
+
+  const localFilenames = new Set(local.map((m) => m.filename));
+  const isInstalled = (rec: RecommendedModel): boolean => {
+    if (!localFilenames.has(rec.mainFile)) return false;
+    if (rec.mmprojFile && !localFilenames.has(rec.mmprojFile)) return false;
+    return true;
+  };
+
+  const onDownloadRecommended = async (rec: RecommendedModel) => {
+    const files: { name: string; bytes: number }[] = [
+      { name: rec.mainFile, bytes: rec.mainBytes },
+    ];
+    if (rec.mmprojFile) {
+      files.push({ name: rec.mmprojFile, bytes: rec.mmprojBytes });
+    }
+    setError(null);
+    setBusyFiles((prev) => {
+      const next = new Set(prev);
+      files.forEach((f) => next.add(f.name));
+      return next;
+    });
+    try {
+      // 串行下：一个文件下完再开下一个，省网络竞争 + 进度展示更清晰
+      for (const f of files) {
+        await api.downloadModel(rec.repo, f.name, f.bytes);
+        setProgress((prev) => {
+          const next = { ...prev };
+          delete next[f.name];
+          return next;
+        });
+      }
+      // 全部文件下完 → 把这个推荐自动标为当前使用，省一次"使用"点击
+      await api.setActiveModel(rec.mainFile, rec.mmprojFile ?? null);
+      await Promise.all([refresh(), reload()]);
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    } finally {
+      setBusyFiles((prev) => {
+        const next = new Set(prev);
+        files.forEach((f) => next.delete(f.name));
+        return next;
+      });
+    }
+  };
+
+  const onUseRecommended = async (rec: RecommendedModel) => {
+    setError(null);
+    try {
+      await api.setActiveModel(rec.mainFile, rec.mmprojFile ?? null);
+      await Promise.all([refresh(), reload()]);
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+  /** 取消当前激活——把 activeMain / activeMmproj 清空，同时停在跑的 server。
+   *  状态从"使用中"回到"已下载"。 */
+  const onClearActive = async () => {
+    setError(null);
+    try {
+      await api.setActiveModel("", null);
+      await Promise.all([refresh(), reload()]);
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+  const onUninstallRecommended = async (rec: RecommendedModel) => {
+    if (
+      !confirm(
+        `卸载 ${rec.displayName}？将删除 main 权重${rec.mmprojFile ? " + mmproj 投影" : ""}两个文件，无法撤销。`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await api.deleteModel(rec.mainFile);
+      if (rec.mmprojFile) {
+        await api.deleteModel(rec.mmprojFile);
+      }
+      await refresh();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+
+  return (
+    <div className={styles.modelsSection}>
+      {error ? <div className={styles.engineError}>{error}</div> : null}
+
+      <div className={styles.modelList}>
+        {(() => {
+          // 默认只露 top 2，其它藏在"查看更多"按钮后面。
+          // 下载中的 tail 卡片必须可见——用户从展开列表点了下载然后又折叠
+          // 会看不到进度。"已安装"不强制：用户可以在下方"已下载"列表里看见。
+          const VISIBLE_DEFAULT = 2;
+          const head = recommended.slice(0, VISIBLE_DEFAULT);
+          const tail = recommended.slice(VISIBLE_DEFAULT);
+          const tailHasBusy = tail.some((rec) => {
+            const mainBusy = busyFiles.has(rec.mainFile);
+            const mmprojBusy =
+              !!rec.mmprojFile && busyFiles.has(rec.mmprojFile);
+            return mainBusy || mmprojBusy;
+          });
+          const isOpen = showAllRecs || tailHasBusy;
+
+          return (
+            <>
+              {head.map((rec) => (
+                <RecommendedCard
+                  key={rec.mainFile}
+                  rec={rec}
+                  installed={isInstalled(rec)}
+                  active={activeMain === rec.mainFile}
+                  busyFiles={busyFiles}
+                  progress={progress}
+                  onDownload={onDownloadRecommended}
+                  onUse={onUseRecommended}
+                  onClear={onClearActive}
+                  onUninstall={onUninstallRecommended}
+                />
+              ))}
+
+              {/* tail 用 grid-template-rows 0fr↔1fr 的 trick 做高度自适应动画 */}
+              {tail.length > 0 ? (
+                <div
+                  className={`${styles.modelTailWrap} ${
+                    isOpen ? styles.modelTailWrapOpen : ""
+                  }`}
+                  // 动画完成前 tail 内容仍可见（不能 display:none），
+                  // 但 collapsed 时把内容隐藏对辅助技术更友好
+                  aria-hidden={!isOpen}
+                >
+                  <div className={styles.modelTailInner}>
+                    {tail.map((rec) => (
+                      <RecommendedCard
+                        key={rec.mainFile}
+                        rec={rec}
+                        installed={isInstalled(rec)}
+                        active={activeMain === rec.mainFile}
+                        busyFiles={busyFiles}
+                        progress={progress}
+                        onDownload={onDownloadRecommended}
+                        onUse={onUseRecommended}
+                        onClear={onClearActive}
+                        onUninstall={onUninstallRecommended}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {tail.length > 0 ? (
+                <button
+                  type="button"
+                  className={styles.modelExpandBtn}
+                  onClick={() => setShowAllRecs(!showAllRecs)}
+                  disabled={tailHasBusy && !showAllRecs}
+                  title={
+                    tailHasBusy && !showAllRecs
+                      ? "下载完成后才能折叠"
+                      : undefined
+                  }
+                >
+                  <ChevronDown
+                    size={14}
+                    strokeWidth={2}
+                    className={`${styles.modelExpandChevron} ${
+                      isOpen ? styles.modelExpandChevronOpen : ""
+                    }`}
+                  />
+                  {isOpen ? "收起" : `查看更多模型 (${tail.length})`}
+                </button>
+              ) : null}
+            </>
+          );
+        })()}
+      </div>
+
+    </div>
+  );
+}
+
+/**
+ * 推荐模型卡片——单行紧凑：左边名字 + 大小 + ⓘ tooltip，右贴齐下载按钮。
+ *
+ * blurb（"平衡选择..."）+ HuggingFace repo 路径都进 ⓘ 气泡，平时不占地方。
+ * 下载中卡片下方追加进度条占满宽。
+ */
+function RecommendedCard({
+  rec,
+  installed,
+  active,
+  busyFiles,
+  progress,
+  onDownload,
+  onUse,
+  onClear,
+  onUninstall,
+}: {
+  rec: RecommendedModel;
+  installed: boolean;
+  /** 是否是当前 settings.ai.activeMain 选中的模型 */
+  active: boolean;
+  busyFiles: Set<string>;
+  progress: Record<string, ModelDownloadProgress>;
+  onDownload: (rec: RecommendedModel) => void;
+  /** 已下载但未启用时点"已下载"按钮 → 设为 active（变成"使用中"） */
+  onUse: (rec: RecommendedModel) => void;
+  /** 当前在"使用中"时点击 → 取消激活，变回"已下载" */
+  onClear: () => void;
+  /** 卸载按钮——删除 main + mmproj 两个本地文件 */
+  onUninstall: (rec: RecommendedModel) => void;
+}) {
+  const totalGB = (rec.mainBytes + rec.mmprojBytes) / 1024 / 1024 / 1024;
+  const mainBusy = busyFiles.has(rec.mainFile);
+  const mmprojBusy = !!rec.mmprojFile && busyFiles.has(rec.mmprojFile);
+  const busy = mainBusy || mmprojBusy;
+  const activeFile = mainBusy
+    ? rec.mainFile
+    : mmprojBusy
+      ? rec.mmprojFile
+      : null;
+  const activeProgress = activeFile ? progress[activeFile] : null;
+  const activeIsMmproj = activeFile === rec.mmprojFile;
+
+  return (
+    <div className={styles.modelCard}>
+      <div className={styles.modelCardRow}>
+        <div className={styles.modelCardLeft}>
+          <span className={styles.modelCardName}>{rec.displayName}</span>
+          <span
+            className={styles.engineInfoWrap}
+            tabIndex={0}
+            aria-label={`HuggingFace ${rec.repo}`}
+          >
+            <Info
+              size={12}
+              strokeWidth={2.2}
+              className={styles.engineInfoIcon}
+            />
+            <span className={styles.engineInfoTip} role="tooltip">
+              HuggingFace · <code>{rec.repo}</code>
+            </span>
+          </span>
+          <span className={styles.modelCardSize}>~{totalGB.toFixed(1)} GB</span>
+        </div>
+        <div className={styles.modelCardRight}>
+          {!installed ? (
+            <button
+              type="button"
+              className={styles.testBtn}
+              onClick={() => onDownload(rec)}
+              disabled={busy}
+            >
+              {busy ? (
+                <Loader2
+                  size={14}
+                  strokeWidth={2}
+                  className={styles.testSpin}
+                />
+              ) : (
+                <Download size={14} strokeWidth={2} />
+              )}
+              {busy ? "下载中…" : "下载"}
+            </button>
+          ) : active ? (
+            <button
+              type="button"
+              className={styles.modelActivePill}
+              onClick={() => onClear()}
+              title="点击取消激活，切回'已下载'状态（会停掉在跑的 server）"
+            >
+              <Check size={14} strokeWidth={2} />
+              使用中
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.modelReadyBtn}
+              onClick={() => onUse(rec)}
+              title="点击启用此模型（会停掉在跑的 server，等手动重启加载新模型）"
+            >
+              <HardDrive size={14} strokeWidth={2} />
+              已下载
+            </button>
+          )}
+          {/* 卸载放在最右边，跟"本地 AI 引擎"行的卸载按钮同款。
+              未装时仍渲染一个 disabled 占位，layout 不抖。 */}
+          <button
+            type="button"
+            className={styles.engineUninstall}
+            onClick={() => onUninstall(rec)}
+            disabled={!installed || busy}
+            title={installed ? "删除本地文件（main + mmproj）" : "尚未安装"}
+          >
+            <Trash2 size={14} strokeWidth={1.85} />
+            卸载
+          </button>
+        </div>
+      </div>
+      {busy && activeProgress ? (
+        <div className={styles.engineProgressWrap}>
+          <div className={styles.engineProgressBar}>
+            <div
+              className={styles.engineProgressFill}
+              style={{
+                width: activeProgress.total
+                  ? `${(activeProgress.downloaded / activeProgress.total) * 100}%`
+                  : "10%",
+              }}
+            />
+          </div>
+          <div className={styles.engineProgressText}>
+            {activeIsMmproj ? "vision 投影" : "主权重"} ·{" "}
+            {(activeProgress.downloaded / 1024 / 1024).toFixed(1)} /
+            {activeProgress.total
+              ? ` ${(activeProgress.total / 1024 / 1024).toFixed(1)}`
+              : " ?"}{" "}
+            MB
+          </div>
+        </div>
       ) : null}
     </div>
   );
