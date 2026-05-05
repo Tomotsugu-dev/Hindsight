@@ -75,7 +75,7 @@ Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 ## Future Roadmap
 
 - [x] Auto-identify and categorize frequently-used apps, with user adjustment capability
-- [x] Support for online updates
+- [x] Support for auto-updates
 - [ ] AI analysis features (analyze daily, weekly, and monthly overviews, identify work content more accurately based on screenshot content)
 - [ ] Generate work reports (daily, weekly, monthly)
 - [ ] Add screenshot encryption to protect privacy
