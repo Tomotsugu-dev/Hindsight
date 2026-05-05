@@ -86,7 +86,8 @@ export default function CategoriesPage() {
           </h2>
           <p className={styles.meta}>
             在设备列里 <strong className={styles.metaEmph}>上下拖动</strong>{" "}
-            应用到目标行 → 合并成一组，统一名字 / 分类 / 时长。
+            将相同应用移到同一行 → 统一名字 / 分类 / 合并计算时长。
+            <span className={styles.metaUnassigned}>未指派背景为黄色</span>
           </p>
         </div>
       </header>

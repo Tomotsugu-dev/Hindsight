@@ -4,9 +4,9 @@ import {
   CalendarRange,
   Sparkles,
   BrainCircuit,
-  Network,
+  Cloud,
   Settings,
-  Tags,
+  Boxes,
 } from "lucide-react";
 import type { NavItem } from "../types/nav";
 
@@ -27,7 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: ROUTES.month,      label: "月统计",   icon: CalendarRange,   group: "primary", color: "#8b5cf6" },
   { path: ROUTES.aiSummary,  label: "AI 总结",  icon: Sparkles,        group: "ai",      color: "#d946ef", end: true },
   { path: ROUTES.aiSettings, label: "AI 设置",  icon: BrainCircuit,    group: "ai",      color: "#a855f7" },
-  { path: ROUTES.devices,    label: "设备",     icon: Network,         group: "system",  color: "#10b981" },
-  { path: ROUTES.categories, label: "应用分类", icon: Tags,            group: "system",  color: "#0ea5e9" },
+  { path: ROUTES.categories, label: "应用分类", icon: Boxes,           group: "system",  color: "#0ea5e9" },
+  { path: ROUTES.devices,    label: "云同步",   icon: Cloud,           group: "system",  color: "#10b981" },
   { path: ROUTES.settings,   label: "设置",     icon: Settings,        group: "system",  color: "#64748b" },
 ];

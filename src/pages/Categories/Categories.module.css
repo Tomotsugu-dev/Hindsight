@@ -42,6 +42,13 @@
   padding: 0 1px;
 }
 
+/* "未指派背景为黄色"提示：跟列表里 row 的 unassigned 黄橙色对应，只用文字色不加底色 */
+.metaUnassigned {
+  margin-left: 8px;
+  color: #d97706;
+  font-weight: 550;
+}
+
 /* 标题旁的 (i) 图标：hover/focus 出现详细说明 tooltip */
 .infoTip {
   position: relative;
