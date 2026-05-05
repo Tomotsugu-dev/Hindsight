@@ -1,4 +1,5 @@
 mod account;
+mod ai;
 mod bootstrap;
 mod capture;
 mod commands;
@@ -294,6 +295,7 @@ pub fn run() {
             commands::auth::restart_app,
             commands::sync::sync_status,
             commands::sync::sync_now,
+            commands::ai::test_ai_endpoint,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")
