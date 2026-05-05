@@ -90,7 +90,21 @@ async function main() {
   if (!existsSync(sigPath))
     fail(`Missing signature: ${sigPath}\n  TAURI_SIGNING_PRIVATE_KEY 没生效；检查 ~/.tauri/hindsight_updater.key 是否完整`);
 
-  // —— 8. 生成 latest.json（Tauri Updater 的 manifest）——
+  // —— 8. release notes ——
+  // 按版本归档：docs/release-notes/v<version>.md。
+  // 同时用作两处：
+  //   - latest.json 的 notes 字段（应用内"检查更新"对话框里显示给用户看）
+  //   - gh release create 的 --notes-file（GitHub Release body）
+  // 文件不存在则降级到自动生成（少版本 metadata 也比 broken 好）
+  const notesPath = path.join("docs", "release-notes", `${tag}.md`);
+  let releaseNotes = `Hindsight ${tag}`;
+  if (existsSync(notesPath)) {
+    releaseNotes = (await readFile(notesPath, "utf-8")).trim();
+  } else {
+    console.warn(`⚠ ${notesPath} 不存在，notes 用占位字符串`);
+  }
+
+  // —— 9. 生成 latest.json（Tauri Updater 的 manifest）——
   // macOS 占位：当前没付 Apple Developer，没法签名 .app.tar.gz 让 updater 真做静默替换。
   // 但仍要列在 platforms 里，否则 macOS 端 check() 找不到对应平台 key 会返回 null
   // （= "已是最新版"），用户永远收不到新版通知。
@@ -101,7 +115,7 @@ async function main() {
   const tagPageUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
   const latestJson = {
     version,
-    notes: `Hindsight ${tag}`,
+    notes: releaseNotes,
     pub_date: new Date().toISOString(),
     platforms: {
       "windows-x86_64": {
@@ -122,20 +136,23 @@ async function main() {
   await writeFile(latestPath, JSON.stringify(latestJson, null, 2));
   console.log(`Generated ${latestPath}`);
 
-  // —— 9. tag + push ——
+  // —— 10. tag + push ——
   run(`git tag ${tag}`);
   run(`git push origin ${tag}`);
 
-  // —— 10. 创建 release + 上传 ——
-  // --generate-notes 让 GitHub 自动从 commits 生成 release notes
-  // 用 cmd.exe 友好的引号格式（脚本主要在 Windows 跑）
+  // —— 11. 创建 release + 上传 ——
+  // 用 docs/release-notes/<tag>.md 当 release body（跟应用内对话框是同一份）；
+  // 不存在则降级到 --generate-notes
+  const notesArg = existsSync(notesPath)
+    ? `--notes-file "${notesPath}"`
+    : `--generate-notes`;
   const ghCmd = [
     `gh release create ${tag}`,
     `"${exePath}"`,
     `"${sigPath}"`,
     `${latestPath}`,
     `--title "Hindsight ${tag}"`,
-    `--generate-notes`,
+    notesArg,
   ].join(" ");
   run(ghCmd);
 
