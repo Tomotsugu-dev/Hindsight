@@ -22,6 +22,9 @@ src-tauri/gen/schemas/
 # release script 临时产物（每次 npm run release 都会重写，没必要 track）
 /latest.json
 
+# 一次性脚本输出（dedupe_today_screenshots.py 等）
+test_screenshots/
+
 # 签名私钥 / 证书：永远不要提交。Tauri updater 用 ~/.tauri/*.key，CI 走 secret。
 *.key
 *.pem
@@ -38,3 +41,14 @@ src-tauri/gen/schemas/
 *.njsproj
 *.sln
 *.sw?
+
+# Python test cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Python Files
+*.py
+.python-version
+pyproject.toml
+uv.lock

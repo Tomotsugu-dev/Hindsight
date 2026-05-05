@@ -12,7 +12,13 @@
     "src-tauri/.gitignore": true,
     ".gitignore": false,
     "package-lock.json": true,
-    "tsconfig.node.json": true
+    "tsconfig.node.json": true,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    ".python-version": true,
+    "pyproject.toml": true,
+    "uv.lock": true,
   },
   "search.exclude": {
     "**/node_modules": true,
@@ -22,7 +28,12 @@
     "src-tauri/target": true,
     "src-tauri/gen/schemas": true,
     "package-lock.json": true,
-    "src-tauri/Cargo.lock": true
+    "src-tauri/Cargo.lock": true,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/*.py": true,
+    "uv.lock": true,
   },
   "files.watcherExclude": {
     "**/node_modules/**": true,
