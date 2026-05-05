@@ -1,6 +1,12 @@
 //! AI 总结相关后端代码。
 //!
-//! Phase 1A 只放配置类型（[`config`]）；
-//! Phase 1B 起会加 `llm`（chat completion 客户端）/ `prompt`（system prompt 构造）/
-//! `image`（截图编码）等子模块。
+//! - [`config`] AI 用户配置（嵌进 Settings.ai）
+//! - [`platform`] 当前主机 → llama.cpp release asset 路由（Phase 1B-α）
+//!
+//! Phase 1B-α 之后还会加：`binary`（下载 / 校验 / 安装）/ `server`（子进程管理）；
+//! Phase 1B-β：`models`（GGUF 扫描 / 下载）+ `recommended`（推荐表）；
+//! Phase 1B-γ：`llm`（chat completion）/ `prompt` / `image`。
+pub mod binary;
 pub mod config;
+pub mod platform;
+pub mod server;

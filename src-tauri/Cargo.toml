@@ -39,7 +39,7 @@ base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 # Phase 2 - 云同步认证
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 keyring = "3"
 aes-gcm = "0.10"
 rand = "0.8"
@@ -48,6 +48,14 @@ urlencoding = "2"
 open = "5"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+
+# Phase 1B - 本地 AI 引擎下载与解压
+# zip 走 deflate（llama.cpp Windows 包用的就是这个），其它压缩算法用不到，关掉省体积
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+# 流式下载：reqwest::Response::bytes_stream() + StreamExt::next()
+futures-util = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi"] }

@@ -105,6 +105,52 @@ export interface TestAiEndpointResp {
   message: string;
 }
 
+/** 本地 llama-server binary 的安装状态。 */
+export interface EngineBinaryStatus {
+  /** 当前主机对应的 binary 是否已落到磁盘 */
+  installed: boolean;
+  /** 已安装的 PIN tag；未安装 = null */
+  installedVersion: string | null;
+  /** Hindsight 当前 PIN 的 llama.cpp 版本 */
+  currentPin: string;
+  /** 当前主机被路由到的变体 ID（"win-cuda-12.4-x64" 等） */
+  platformId: string;
+  /** 完整 asset 文件名 */
+  assetName: string;
+  /** 估算下载体积（字节）；UI 给用户提示 "约 NN MB" 用 */
+  estimatedBytes: number;
+}
+
+/** llama-server 子进程运行时状态。 */
+export interface EngineRuntimeStatus {
+  state: "stopped" | "starting" | "running" | "error";
+  /** running 时的端口；其它状态 null */
+  port: number | null;
+  /** error 时的可读错误（stderr 截短）；其它状态 null */
+  error: string | null;
+}
+
+/** binary + runtime 合并；getEngineStatus 返回这个 */
+export interface EngineStatus extends EngineBinaryStatus {
+  runtime: EngineRuntimeStatus;
+}
+
+/** 下载进度阶段。`downloaded` / `total` 只在 downloading 阶段有意义。 */
+export type EngineDownloadPhase =
+  | "downloading"
+  | "verifying"
+  | "extracting"
+  | "done";
+
+export interface EngineDownloadProgress {
+  phase: EngineDownloadPhase;
+  downloaded: number;
+  total: number | null;
+}
+
+/** 后端 emit 进度事件用的事件名。前端 listen 它。 */
+export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
+
 /** AI 子系统的所有用户配置；嵌进 Settings.ai。
  *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
 export interface AiConfig {
@@ -276,4 +322,14 @@ export const api = {
    *  前端只需检查 ok 字段。 */
   testAiEndpoint: (endpoint: string, apiKey?: string) =>
     invoke<TestAiEndpointResp>("test_ai_endpoint", { endpoint, apiKey }),
+  getEngineStatus: () => invoke<EngineStatus>("get_engine_status"),
+  /** 触发下载；进度通过 listen(ENGINE_DOWNLOAD_EVENT, ...) 拿。
+   *  Promise resolve = 下载 + 校验 + 解压全部成功；reject = 任何一阶段失败。 */
+  downloadBinary: () => invoke<void>("download_binary"),
+  deleteBinary: () => invoke<void>("delete_binary"),
+  openEngineDir: () => invoke<void>("open_engine_dir"),
+  /** 启动 llama-server 子进程；返回监听端口。
+   *  Phase 1B-α 不传模型，会因为缺模型 fail；Phase 1B-β 起会真传值。 */
+  startEngine: () => invoke<number>("start_engine"),
+  stopEngine: () => invoke<void>("stop_engine"),
 };

@@ -16,6 +16,7 @@ mod sync;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use ai::server::EngineSupervisor;
 use capture::CaptureService;
 use db::SqliteResultExt;
 use repo::{activities, devices, settings};
@@ -39,6 +40,10 @@ pub fn run() {
     )
     .try_init();
 
+    // AI 引擎子进程守护者：lazy spawn，app 退出时 stop
+    let engine_supervisor = Arc::new(EngineSupervisor::new());
+    let engine_for_exit = engine_supervisor.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -49,7 +54,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
 
             if let Some(main_window) = handle.get_webview_window("main") {
@@ -250,6 +255,7 @@ pub fn run() {
                 handle.manage(pool);
                 handle.manage(svc);
                 handle.manage(sync_engine);
+                handle.manage(engine_supervisor);
             });
             Ok(())
         })
@@ -296,10 +302,26 @@ pub fn run() {
             commands::sync::sync_status,
             commands::sync::sync_now,
             commands::ai::test_ai_endpoint,
+            commands::ai::get_engine_status,
+            commands::ai::download_binary,
+            commands::ai::delete_binary,
+            commands::ai::open_engine_dir,
+            commands::ai::start_engine,
+            commands::ai::stop_engine,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")
-        .run(|app, event| platform::handle_run_event(app, event));
+        .run(move |app, event| {
+            // app 真正退出前等 llama-server 子进程收尸——避免遗留孤儿进程
+            // 一直 hold 着模型在内存里。block_on 是同步等，因为 Exit 已经是 final。
+            if matches!(&event, tauri::RunEvent::Exit) {
+                let s = engine_for_exit.clone();
+                tauri::async_runtime::block_on(async move {
+                    let _ = s.stop().await;
+                });
+            }
+            platform::handle_run_event(app, event);
+        });
 }
 
 fn spawn_cleanup_task(pool: DbPool) {
