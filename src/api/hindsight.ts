@@ -91,6 +91,20 @@ export interface TimeRange {
   end: string;
 }
 
+export interface AiSegment {
+  label: string;
+  /** 0..=23 */
+  startHour: number;
+  /** 1..=24（24 = 当日午夜结束） */
+  endHour: number;
+}
+
+export interface TestAiEndpointResp {
+  ok: boolean;
+  models: string[];
+  message: string;
+}
+
 export interface Settings {
   captureEnabled: boolean;
   captureIntervalSeconds: number;

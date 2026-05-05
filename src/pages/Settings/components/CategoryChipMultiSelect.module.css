@@ -1,0 +1,70 @@
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.loading,
+.empty {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 4px 0;
+}
+
+/* 默认（参与分析）：实色彩色，白字。视觉上"它在工作中" */
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition:
+    transform 120ms ease-out,
+    filter 200ms ease-out,
+    opacity 200ms ease-out,
+    box-shadow 200ms ease-out;
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+.chip:active {
+  transform: scale(0.97);
+}
+
+/* 已排除（不分析）：灰色空心 + 图标换 EyeOff + 名字划线
+   "AI 看不到这个分类"——三个信号叠加但都很轻，不堆装饰 */
+.excluded {
+  background: transparent !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.excluded:hover {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.28) !important;
+  color: var(--text-strong);
+}
+
+.excluded .name {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.2px;
+  text-decoration-color: rgba(0, 0, 0, 0.45);
+}
+
+.name {
+  white-space: nowrap;
+}
