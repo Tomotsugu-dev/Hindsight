@@ -7,6 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import {
   Check,
   GripVertical,
@@ -28,6 +29,7 @@ import styles from "./Categories.module.css";
 const DEFAULT_NEW_ICON = "Tag";
 
 export default function CategoriesPage() {
+  const { t } = useTranslation();
   const { categories, loading, create, reorder } = useCategories();
   const [creating, setCreating] = useState(false);
 
@@ -40,10 +42,8 @@ export default function CategoriesPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerText}>
-          <h1 className={styles.title}>应用分类</h1>
-          <p className={styles.meta}>
-            不同进程归属到不同的活动类别。颜色、图标、名称、绑定应用都可自定义。
-          </p>
+          <h1 className={styles.title}>{t("categories.title")}</h1>
+          <p className={styles.meta}>{t("categories.intro")}</p>
         </div>
         <button
           type="button"
@@ -52,7 +52,7 @@ export default function CategoriesPage() {
           disabled={creating}
         >
           <Plus size={14} strokeWidth={2.25} />
-          新建分类
+          {t("categories.newCategory")}
         </button>
       </header>
 
@@ -64,7 +64,7 @@ export default function CategoriesPage() {
           />
         )}
         {loading && categories.length === 0 ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("categories.loading")}</div>
         ) : (
           <DraggableCategoryList categories={categories} onReorder={reorder} />
         )}
@@ -73,21 +73,27 @@ export default function CategoriesPage() {
       <header className={styles.header} style={{ marginTop: 8 }}>
         <div className={styles.headerText}>
           <h2 className={styles.title} style={{ fontSize: 18 }}>
-            应用分类，多设备设置
-            <span className={styles.infoTip} tabIndex={0} aria-label="详细说明">
+            {t("categories.pairing.sectionTitle")}
+            <span
+              className={styles.infoTip}
+              tabIndex={0}
+              aria-label={t("categories.pairing.infoTipAria")}
+            >
               <Info size={14} strokeWidth={2.25} />
               <span className={styles.infoTipBody} role="tooltip">
-                同一个应用在不同系统上的进程名可能不一样（macOS 上叫 “Code”，
-                Windows 上叫 “Visual Studio Code”），如果不配对，时长会被算成两个
-                独立应用、分类也得在每台设备上单独绑定。配对后，名字、分类、图标、
-                时长全部统一。
+                {t("categories.pairing.infoTipBody")}
               </span>
             </span>
           </h2>
           <p className={styles.meta}>
-            在设备列里 <strong className={styles.metaEmph}>上下拖动</strong>{" "}
-            将相同应用移到同一行 → 统一名字 / 分类 / 合并计算时长。
-            <span className={styles.metaUnassigned}>未指派背景为黄色</span>
+            {t("categories.pairing.instructionPrefix")}
+            <strong className={styles.metaEmph}>
+              {t("categories.pairing.instructionEmph")}
+            </strong>
+            {t("categories.pairing.instructionSuffix")}
+            <span className={styles.metaUnassigned}>
+              {t("categories.pairing.unassignedHint")}
+            </span>
           </p>
         </div>
       </header>
@@ -117,6 +123,7 @@ function CategoryRow({
   isLanded,
   onHandleMouseDown,
 }: CategoryRowProps) {
+  const { t } = useTranslation();
   const { update, remove } = useCategories();
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(category.name);
@@ -175,8 +182,8 @@ function CategoryRow({
         type="button"
         className={styles.catDragHandle}
         onMouseDown={onHandleMouseDown}
-        aria-label="拖动排序"
-        title="拖动排序"
+        aria-label={t("categories.list.dragHandleAria")}
+        title={t("categories.list.dragHandleAria")}
       >
         <GripVertical size={14} strokeWidth={2} />
       </button>
@@ -185,8 +192,8 @@ function CategoryRow({
           type="button"
           className={styles.catIconBtn}
           onClick={() => setPickerOpen((v) => !v)}
-          aria-label="改外观"
-          title="改颜色和图标"
+          aria-label={t("categories.list.iconBtnAria")}
+          title={t("categories.list.iconBtnTitle")}
         >
           <Icon size={28} strokeWidth={1.85} />
         </button>
@@ -223,7 +230,7 @@ function CategoryRow({
             <span
               className={styles.catName}
               onDoubleClick={() => setEditingName(true)}
-              title="双击改名"
+              title={t("categories.list.renameTooltip")}
             >
               {category.name}
             </span>
@@ -240,8 +247,8 @@ function CategoryRow({
           type="button"
           className={styles.actionBtn}
           onClick={() => setEditingName(true)}
-          aria-label="改名"
-          title="改名"
+          aria-label={t("categories.list.renameAria")}
+          title={t("categories.list.renameAria")}
         >
           <Pencil size={14} strokeWidth={1.85} />
         </button>
@@ -249,8 +256,8 @@ function CategoryRow({
           type="button"
           className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
           onClick={() => setConfirmOpen(true)}
-          aria-label="删除分类"
-          title="删除分类"
+          aria-label={t("categories.list.deleteAria")}
+          title={t("categories.list.deleteAria")}
         >
           <Trash2 size={14} strokeWidth={1.85} />
         </button>
@@ -258,9 +265,9 @@ function CategoryRow({
 
       <ConfirmDialog
         open={confirmOpen}
-        title="删除分类"
-        message={`确认删除分类「${category.name}」？其下应用会回到「其他」。`}
-        confirmLabel="删除"
+        title={t("categories.deleteDialog.title")}
+        message={t("categories.deleteDialog.message", { name: category.name })}
+        confirmLabel={t("categories.deleteDialog.confirm")}
         variant="danger"
         onConfirm={onConfirmDelete}
         onCancel={() => setConfirmOpen(false)}
@@ -276,6 +283,7 @@ function CreatingRow({
   onCommit: (input: { name: string; color: string; icon: string }) => void | Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_PALETTE[0]);
   const [icon, setIcon] = useState(DEFAULT_NEW_ICON);
@@ -305,8 +313,8 @@ function CreatingRow({
           type="button"
           className={styles.catIconBtn}
           onClick={() => setPickerOpen((v) => !v)}
-          aria-label="选颜色和图标"
-          title="选颜色和图标"
+          aria-label={t("categories.list.createIconAria")}
+          title={t("categories.list.createIconAria")}
         >
           <Icon size={28} strokeWidth={1.85} />
         </button>
@@ -329,7 +337,7 @@ function CreatingRow({
           <input
             ref={inputRef}
             className={styles.catNameInput}
-            placeholder="分类名"
+            placeholder={t("categories.list.namePlaceholder")}
             value={name}
             maxLength={16}
             onChange={(e) => setName(e.target.value)}
@@ -347,8 +355,8 @@ function CreatingRow({
           className={`${styles.actionBtn}`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={commit}
-          aria-label="确认"
-          title="确认"
+          aria-label={t("categories.list.confirm")}
+          title={t("categories.list.confirm")}
         >
           <Check size={14} strokeWidth={2.25} />
         </button>
@@ -357,8 +365,8 @@ function CreatingRow({
           className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={onCancel}
-          aria-label="取消"
-          title="取消"
+          aria-label={t("categories.list.cancel")}
+          title={t("categories.list.cancel")}
         >
           <X size={14} strokeWidth={2.25} />
         </button>

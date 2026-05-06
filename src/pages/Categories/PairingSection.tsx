@@ -7,6 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Plus, Trash2, X } from "lucide-react";
 import { api, type AppGroup, type AppGroupMember } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
@@ -45,6 +46,7 @@ interface DragState {
 }
 
 export function PairingSection() {
+  const { t } = useTranslation();
   const { devices } = useDeviceFilter();
   const { categories, refresh: refreshCategories } = useCategories();
   const [groups, setGroups] = useState<AppGroup[] | null>(null);
@@ -133,10 +135,10 @@ export function PairingSection() {
   }, [drag, hoverGroupId, refreshCategories]);
 
   if (visibleGroups === null) {
-    return <div className={styles.toolbar}>加载中…</div>;
+    return <div className={styles.toolbar}>{t("categories.pairing.loading")}</div>;
   }
   if (sortedDevices.length === 0) {
-    return <div className={styles.toolbar}>还没有设备数据。启动一段时间后再来看。</div>;
+    return <div className={styles.toolbar}>{t("categories.pairing.noDevices")}</div>;
   }
 
   // 所有列等宽 1fr；操作列 auto。
@@ -177,10 +179,11 @@ export function PairingSection() {
 
   const onCreateGroup = async () => {
     // 默认名 + 时间后缀防重；用户可立即在 nameInput 里改
-    const defaultName = `新行 ${new Date().toLocaleTimeString("zh-CN", {
+    const time = new Date().toLocaleTimeString(undefined, {
       hour: "2-digit",
       minute: "2-digit",
-    })}`;
+    });
+    const defaultName = t("categories.pairing.newRowDefaultName", { time });
     try {
       await api.createAppGroup(defaultName);
       await reload();
@@ -241,7 +244,9 @@ export function PairingSection() {
             {d.name}
           </span>
         ))}
-        <span className={styles.devHeaderName}>统一名</span>
+        <span className={styles.devHeaderName}>
+          {t("categories.pairing.header.displayName")}
+        </span>
         <span className={styles.devHeaderActionPad} />
         <span className={styles.deleteCol} />
       </div>
@@ -309,7 +314,7 @@ export function PairingSection() {
                         className={styles.chipUnmerge}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={() => void onUnmerge(member.processName)}
-                        title="从该组移出"
+                        title={t("categories.pairing.chip.unmergeTooltip")}
                       >
                         <X size={11} strokeWidth={2.25} />
                       </button>
@@ -359,8 +364,8 @@ export function PairingSection() {
                   className={styles.deleteRowBtn}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => void onDeleteRow(group.id)}
-                  title="删除此空行"
-                  aria-label="删除此空行"
+                  title={t("categories.pairing.row.deleteEmptyTooltip")}
+                  aria-label={t("categories.pairing.row.deleteEmptyAria")}
                 >
                   <Trash2 size={12} strokeWidth={2.25} />
                 </button>
@@ -376,7 +381,7 @@ export function PairingSection() {
         onClick={() => void onCreateGroup()}
       >
         <Plus size={12} strokeWidth={2.25} />
-        新建行
+        {t("categories.pairing.newRow")}
       </button>
 
       {drag &&

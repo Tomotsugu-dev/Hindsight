@@ -75,6 +75,10 @@
     "devicePicker": {
       "all": "所有设备",
       "thisDevice": "本机"
+    },
+    "appearancePicker": {
+      "color": "颜色",
+      "icon": "图标"
     }
   },
   "today": {
@@ -153,6 +157,63 @@
     "ranks": {
       "topApps": "本月最常用应用",
       "topCategories": "本月最常用分类"
+    }
+  },
+  "categories": {
+    "title": "应用分类",
+    "intro": "不同进程归属到不同的活动类别。颜色、图标、名称、绑定应用都可自定义。",
+    "newCategory": "新建分类",
+    "loading": "加载中…",
+    "list": {
+      "namePlaceholder": "分类名",
+      "renameTooltip": "双击改名",
+      "dragHandleAria": "拖动排序",
+      "iconBtnAria": "改外观",
+      "iconBtnTitle": "改颜色和图标",
+      "createIconAria": "选颜色和图标",
+      "renameAria": "改名",
+      "deleteAria": "删除分类",
+      "confirm": "确认",
+      "cancel": "取消"
+    },
+    "appList": {
+      "empty": "（暂无绑定应用）",
+      "addPlaceholder": "如 chrome.exe",
+      "add": "添加应用",
+      "removeAria": "移除 {{name}}",
+      "removeTooltip": "移除"
+    },
+    "deleteDialog": {
+      "title": "删除分类",
+      "message": "确认删除分类「{{name}}」？其下应用会回到「其他」。",
+      "confirm": "删除"
+    },
+    "pairing": {
+      "sectionTitle": "应用分类，多设备设置",
+      "infoTipAria": "详细说明",
+      "infoTipBody": "同一个应用在不同系统上的进程名可能不一样（macOS 上叫 “Code”，Windows 上叫 “Visual Studio Code”），如果不配对，时长会被算成两个独立应用、分类也得在每台设备上单独绑定。配对后，名字、分类、图标、时长全部统一。",
+      "instructionPrefix": "在设备列里 ",
+      "instructionEmph": "上下拖动",
+      "instructionSuffix": " 将相同应用移到同一行 → 统一名字 / 分类 / 合并计算时长。",
+      "unassignedHint": "未指派背景为黄色",
+      "loading": "加载中…",
+      "noDevices": "还没有设备数据。启动一段时间后再来看。",
+      "header": {
+        "displayName": "统一名"
+      },
+      "chip": {
+        "unmergeTooltip": "从该组移出"
+      },
+      "row": {
+        "deleteEmptyTooltip": "删除此空行",
+        "deleteEmptyAria": "删除此空行"
+      },
+      "newRow": "新建行",
+      "newRowDefaultName": "新行 {{time}}"
+    },
+    "assign": {
+      "label": "指派",
+      "clear": "取消分类"
     }
   }
 }

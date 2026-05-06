@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import type { Category } from "../../api/hindsight";
@@ -22,6 +23,7 @@ export const DEFAULT_PALETTE = [
 ];
 
 export function AppList({ category }: { category: Category }) {
+  const { t } = useTranslation();
   const { unassignApp, assignApp } = useCategories();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -49,7 +51,7 @@ export function AppList({ category }: { category: Category }) {
     <div className={styles.appList}>
       {category.apps.length === 0 && !adding && (
         <span className={styles.empty} style={{ padding: 0 }}>
-          （暂无绑定应用）
+          {t("categories.appList.empty")}
         </span>
       )}
       {category.apps.map((app) => {
@@ -66,8 +68,8 @@ export function AppList({ category }: { category: Category }) {
               type="button"
               className={styles.appChipRemove}
               onClick={() => unassignApp(app)}
-              aria-label={`移除 ${display}`}
-              title="移除"
+              aria-label={t("categories.appList.removeAria", { name: display })}
+              title={t("categories.appList.removeTooltip")}
             >
               <X size={10} strokeWidth={2.25} />
             </button>
@@ -78,7 +80,7 @@ export function AppList({ category }: { category: Category }) {
         <input
           ref={inputRef}
           className={styles.appAddInput}
-          placeholder="如 chrome.exe"
+          placeholder={t("categories.appList.addPlaceholder")}
           value={draft}
           maxLength={64}
           onChange={(e) => setDraft(e.target.value)}
@@ -95,7 +97,7 @@ export function AppList({ category }: { category: Category }) {
           onClick={() => setAdding(true)}
         >
           <Plus size={11} strokeWidth={2} />
-          添加应用
+          {t("categories.appList.add")}
         </button>
       )}
     </div>
@@ -122,6 +124,7 @@ export function AssignDropdown({
   /** 是否在下拉里加一行「取消分类」（仅在已分类时有意义）*/
   allowClear?: boolean;
 }) {
+  const { t } = useTranslation();
   const current =
     currentCategoryId != null
       ? categories.find((c) => c.id === currentCategoryId) ?? null
@@ -201,7 +204,7 @@ export function AssignDropdown({
         ) : (
           <>
             <Plus size={11} strokeWidth={2.25} />
-            指派
+            {t("categories.assign.label")}
           </>
         )}
         <ChevronDown size={11} strokeWidth={2.25} className={styles.chev} />
@@ -227,7 +230,9 @@ export function AssignDropdown({
                 void onPick(null);
               }}
             >
-              <span className={styles.assignOptionLabel}>取消分类</span>
+              <span className={styles.assignOptionLabel}>
+                {t("categories.assign.clear")}
+              </span>
             </button>
           )}
           {categories.map((c) => {

@@ -75,6 +75,10 @@
     "devicePicker": {
       "all": "All devices",
       "thisDevice": "This device"
+    },
+    "appearancePicker": {
+      "color": "Color",
+      "icon": "Icon"
     }
   },
   "today": {
@@ -153,6 +157,63 @@
     "ranks": {
       "topApps": "Top apps this month",
       "topCategories": "Top categories this month"
+    }
+  },
+  "categories": {
+    "title": "App Categories",
+    "intro": "Group processes into activity categories. Color, icon, name, and bound apps are all customizable.",
+    "newCategory": "New category",
+    "loading": "Loading…",
+    "list": {
+      "namePlaceholder": "Category name",
+      "renameTooltip": "Double-click to rename",
+      "dragHandleAria": "Drag to reorder",
+      "iconBtnAria": "Edit appearance",
+      "iconBtnTitle": "Change color and icon",
+      "createIconAria": "Pick color and icon",
+      "renameAria": "Rename",
+      "deleteAria": "Delete category",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
+    },
+    "appList": {
+      "empty": "(no apps bound)",
+      "addPlaceholder": "e.g. chrome.exe",
+      "add": "Add app",
+      "removeAria": "Remove {{name}}",
+      "removeTooltip": "Remove"
+    },
+    "deleteDialog": {
+      "title": "Delete category",
+      "message": "Delete category \"{{name}}\"? Its apps will be returned to \"Other\".",
+      "confirm": "Delete"
+    },
+    "pairing": {
+      "sectionTitle": "App pairing across devices",
+      "infoTipAria": "Details",
+      "infoTipBody": "The same app may have different process names on different systems (\"Code\" on macOS, \"Visual Studio Code\" on Windows). Without pairing, time is counted as two separate apps and the category has to be set on each device. Once paired, the name, category, icon, and time are unified.",
+      "instructionPrefix": "Within a device column, ",
+      "instructionEmph": "drag vertically",
+      "instructionSuffix": " to move the same app onto one row — unifying name, category, and merged time.",
+      "unassignedHint": "Unassigned rows are highlighted in yellow",
+      "loading": "Loading…",
+      "noDevices": "No device data yet. Check back after capturing for a while.",
+      "header": {
+        "displayName": "Display name"
+      },
+      "chip": {
+        "unmergeTooltip": "Remove from this group"
+      },
+      "row": {
+        "deleteEmptyTooltip": "Delete this empty row",
+        "deleteEmptyAria": "Delete this empty row"
+      },
+      "newRow": "New row",
+      "newRowDefaultName": "New row {{time}}"
+    },
+    "assign": {
+      "label": "Assign",
+      "clear": "Clear category"
     }
   }
 }

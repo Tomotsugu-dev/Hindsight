@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { CATEGORY_ICONS, ICON_NAMES } from "../../config/categoryIcons";
 import styles from "./AppearancePicker.module.css";
 
@@ -32,6 +33,7 @@ export function AppearancePicker({
   onIconChange,
   onDismiss,
 }: AppearancePickerProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export function AppearancePicker({
   return (
     <div ref={ref} className={styles.popover} style={styleVar}>
       <div className={styles.section}>
-        <span className={styles.label}>颜色</span>
+        <span className={styles.label}>{t("components.appearancePicker.color")}</span>
         <div className={styles.colorRow}>
           {PALETTE.map((c) => (
             <button
@@ -73,7 +75,7 @@ export function AppearancePicker({
       </div>
 
       <div className={styles.section}>
-        <span className={styles.label}>图标</span>
+        <span className={styles.label}>{t("components.appearancePicker.icon")}</span>
         <div className={styles.iconGrid}>
           {ICON_NAMES.map((name) => {
             const Icon = CATEGORY_ICONS[name];
