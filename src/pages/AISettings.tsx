@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -46,6 +47,7 @@ import { useSettings } from "../state/settings";
 import styles from "./AISettings.module.css";
 
 export default function AISettings() {
+  const { t } = useTranslation();
   const { settings, update } = useSettings();
   if (!settings) return null;
 
@@ -70,41 +72,41 @@ export default function AISettings() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>AI 设置</h1>
+        <h1 className={styles.title}>{t("aiSettings.title")}</h1>
       </header>
 
       <div className={styles.content}>
         <Section
-          title="本地 AI 引擎"
-          description="Hindsight 自带 llama.cpp 推理引擎，在你机器上本地跑——截图不上传任何外部服务。"
+          title={t("aiSettings.engine.sectionTitle")}
+          description={t("aiSettings.engine.sectionDesc")}
           icon={Server}
         >
           <EngineSection />
         </Section>
 
         <Section
-          title="模型"
-          description="本地推理用的 vision LLM；GGUF 文件下载自 HuggingFace。"
+          title={t("aiSettings.models.sectionTitle")}
+          description={t("aiSettings.models.sectionDesc")}
           icon={Bot}
         >
           <ModelsSection />
         </Section>
 
         <Section
-          title="个人简介"
+          title={t("aiSettings.brief.sectionTitle")}
           icon={User}
-          info="AI 总结时会带上这段，帮模型更懂你的工作内容与上下文。"
+          info={t("aiSettings.brief.sectionInfo")}
         >
           {/* hover 整个 Row（含 label）或 focus textarea 时才展开 textarea。
               Row label 一直可见，避免折叠态用户看不出这块是什么。 */}
           <div className={styles.briefHover}>
-            <Row label="关于你（可选）" block>
+            <Row label={t("aiSettings.brief.rowLabel")} block>
               <div className={styles.briefCell}>
                 <textarea
                   className={`${styles.textarea} ${styles.briefTextarea}`}
                   value={ai.userBrief}
                   onChange={(e) => updateAi({ userBrief: e.target.value })}
-                  placeholder="例：我是做后端开发的，平时主要写 Rust 和 TypeScript；周末会做点游戏。"
+                  placeholder={t("aiSettings.brief.placeholder")}
                   rows={6}
                 />
               </div>
@@ -113,9 +115,9 @@ export default function AISettings() {
         </Section>
 
         <Section
-          title="提示词"
+          title={t("aiSettings.prompt.sectionTitle")}
           icon={MessageSquareText}
-          description="告诉模型怎么写总结。三种语言各有内置默认；改完点保存生效，点重置回默认。"
+          description={t("aiSettings.prompt.sectionDesc")}
         >
           <PromptSection
             language={ai.promptLanguage}
@@ -132,11 +134,11 @@ export default function AISettings() {
         </Section>
 
         <Section
-          title="时段划分"
+          title={t("aiSettings.segments.sectionTitle")}
           icon={Clock}
-          info="AI 按段汇总；段内截图按相似度抽帧再发给模型。"
+          info={t("aiSettings.segments.sectionInfo")}
         >
-          <Row label="时段" block>
+          <Row label={t("aiSettings.segments.rowLabel")} block>
             <SegmentList
               segments={ai.segments}
               onChange={(next: AiSegment[]) => updateAi({ segments: next })}
@@ -144,14 +146,10 @@ export default function AISettings() {
           </Row>
         </Section>
 
-        <Section title="过滤" icon={Filter}>
+        <Section title={t("aiSettings.filter.sectionTitle")} icon={Filter}>
           <Row
-            label="不分析这些分类"
-            labelHint={
-              "点击切换：\n" +
-              "• 彩色 + 分类图标 = 参与 AI 分析\n" +
-              "• 灰色空心 + 闭眼图标 = 已排除"
-            }
+            label={t("aiSettings.filter.rowLabel")}
+            labelHint={t("aiSettings.filter.rowHint")}
             block
           >
             <CategoryChipMultiSelect
@@ -162,18 +160,13 @@ export default function AISettings() {
         </Section>
 
         <Section
-          title="抽帧参数"
+          title={t("aiSettings.frame.sectionTitle")}
           icon={ImageIcon}
-          description="一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。"
+          description={t("aiSettings.frame.sectionDesc")}
         >
           <Row
-            label="相似度阈值"
-            labelHint={
-              "dHash 64 位汉明距离\n" +
-              "• 越小越严格（同一画面才算重复）\n" +
-              "• 5 通常合适\n" +
-              "• 0 = 像素级一致才去重"
-            }
+            label={t("aiSettings.frame.thresholdLabel")}
+            labelHint={t("aiSettings.frame.thresholdHint")}
           >
             <Slider
               value={ai.hashThreshold}
@@ -184,11 +177,8 @@ export default function AISettings() {
             />
           </Row>
           <Row
-            label="时间窗"
-            labelHint={
-              "只在窗口内的截图之间比相似度。\n" +
-              "避免把不同时间段的相似画面（如同一应用上午 / 下午）误合并。"
-            }
+            label={t("aiSettings.frame.windowLabel")}
+            labelHint={t("aiSettings.frame.windowHint")}
           >
             <Slider
               value={ai.hashWindowMinutes}
@@ -196,7 +186,7 @@ export default function AISettings() {
               min={0}
               max={30}
               step={1}
-              suffix="分钟"
+              suffix={t("aiSettings.frame.windowSuffix")}
             />
           </Row>
         </Section>
@@ -216,6 +206,7 @@ export default function AISettings() {
  * 拆 3 个 Row 看着像调试 dump。
  */
 function EngineSection() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [progress, setProgress] = useState<EngineDownloadProgress | null>(null);
   const [busy, setBusy] = useState(false);
@@ -268,7 +259,7 @@ function EngineSection() {
   };
 
   const onDelete = async () => {
-    if (!confirm("卸载本地 AI 引擎？模型文件不受影响。")) return;
+    if (!confirm(t("aiSettings.engine.uninstallConfirm"))) return;
     setBusy(true);
     setError(null);
     try {
@@ -314,11 +305,11 @@ function EngineSection() {
   };
 
   if (!status) {
-    return <div className={styles.engineCard}>加载中…</div>;
+    return <div className={styles.engineCard}>{t("aiSettings.engine.loading")}</div>;
   }
 
   const installed = status.installed;
-  const accelLabel = humanAccelLabel(status.platformId);
+  const accelLabel = humanAccelLabel(status.platformId, t);
   const version = installed ? status.installedVersion : status.currentPin;
   const stale =
     installed &&
@@ -326,6 +317,19 @@ function EngineSection() {
     status.installedVersion !== status.currentPin;
   // Windows 但 CUDA 未检测到：建议先装 NVIDIA CUDA
   const noCudaWarning = status.platformId === "win-cpu-x64";
+
+  // 下载按钮的当前文案：busy / 已装 / stale / 全新 四态
+  const downloadBtnLabel = busy
+    ? installed
+      ? t("aiSettings.engine.actions.updating")
+      : t("aiSettings.engine.actions.downloading")
+    : installed
+      ? stale
+        ? t("aiSettings.engine.actions.updateToLatest")
+        : t("aiSettings.engine.actions.redownload")
+      : t("aiSettings.engine.actions.downloadEngine");
+
+  const versionDisplay = version ?? t("aiSettings.engine.versionUnknown");
 
   return (
     <div className={styles.engineCard}>
@@ -335,14 +339,23 @@ function EngineSection() {
             installed ? styles.engineBadgeOk : styles.engineBadgeWarn
           }`}
         >
-          {installed ? "已安装" : "未安装"}
+          {installed
+            ? t("aiSettings.engine.installed")
+            : t("aiSettings.engine.notInstalled")}
         </span>
         <span className={styles.engineMeta}>
           llama.cpp
           <span
             className={styles.engineInfoWrap}
             tabIndex={0}
-            aria-label={`版本 ${version ?? "?"}${stale ? `（最新 ${status.currentPin}）` : ""}`}
+            aria-label={
+              stale
+                ? t("aiSettings.engine.versionStaleAria", {
+                    version: versionDisplay,
+                    latest: status.currentPin,
+                  })
+                : t("aiSettings.engine.versionAria", { version: versionDisplay })
+            }
           >
             <Info
               size={12}
@@ -350,12 +363,16 @@ function EngineSection() {
               className={styles.engineInfoIcon}
             />
             <span className={styles.engineInfoTip} role="tooltip">
-              版本 {version ?? "?"}
-              {stale ? ` · 最新 ${status.currentPin}` : ""}
+              {t("aiSettings.engine.versionLabel", { version: versionDisplay })}
+              {stale
+                ? t("aiSettings.engine.versionStaleLabel", {
+                    latest: status.currentPin,
+                  })
+                : ""}
             </span>
           </span>
           <span className={styles.engineMetaSep}>·</span>
-          检测到 {accelLabel}
+          {t("aiSettings.engine.detected", { accel: accelLabel })}
         </span>
       </div>
 
@@ -363,10 +380,9 @@ function EngineSection() {
         <div className={styles.engineWarning}>
           <AlertTriangle size={14} strokeWidth={2.2} />
           <div className={styles.engineWarningBody}>
-            <strong>未检测到 NVIDIA CUDA。</strong>
+            <strong>{t("aiSettings.engine.noCuda.headline")}</strong>
             <span>
-              {" "}
-              vision LLM 在 CPU 上跑会非常慢。建议先去
+              {t("aiSettings.engine.noCuda.prefix")}
               <a
                 className={styles.engineWarningLink}
                 href="#"
@@ -375,9 +391,9 @@ function EngineSection() {
                   void openUrl("https://developer.nvidia.com/cuda-downloads");
                 }}
               >
-                {" "}NVIDIA 官网安装 CUDA Toolkit
+                {t("aiSettings.engine.noCuda.linkText")}
               </a>
-              （≥ 12.4），重启 Hindsight 后会自动切到 GPU 加速变体。
+              {t("aiSettings.engine.noCuda.suffix")}
             </span>
           </div>
         </div>
@@ -399,17 +415,7 @@ function EngineSection() {
           ) : (
             <Download size={16} strokeWidth={2.2} />
           )}
-          <span>
-            {busy
-              ? installed
-                ? "更新中…"
-                : "下载中…"
-              : installed
-                ? stale
-                  ? "更新到最新"
-                  : "重新下载"
-                : "下载 AI 引擎"}
-          </span>
+          <span>{downloadBtnLabel}</span>
         </button>
         {/* 「测试连接」合并按钮：未启动 → 先 start_engine → 再 test_ai_endpoint。
             放「重新下载」右边；testResult 状态展示在下方 EngineRuntimeRow 区域。 */}
@@ -420,41 +426,51 @@ function EngineSection() {
           disabled={busy || !installed || engineBusy}
           title={
             installed
-              ? "启动引擎（如未运行）并向本地 /v1/models 发请求验证"
-              : "尚未安装"
+              ? t("aiSettings.engine.actions.testTooltipReady")
+              : t("aiSettings.engine.actions.testTooltipNotInstalled")
           }
         >
           {engineBusy ? (
             <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
           ) : null}
-          测试连接
+          {t("aiSettings.engine.actions.testConnection")}
         </button>
-        {!busy ? (
-          <span className={styles.engineSize}>
-            约 {Math.round(status.estimatedBytes / 1024 / 1024)} MB
-          </span>
-        ) : null}
+        {/* busy 时用 visibility:hidden 保住占位，避免后面的「打开」「卸载」按钮往左跳 */}
+        <span
+          className={styles.engineSize}
+          style={busy ? { visibility: "hidden" } : undefined}
+        >
+          {t("aiSettings.engine.actions.approxSize", {
+            size: Math.round(status.estimatedBytes / 1024 / 1024),
+          })}
+        </span>
         <button
           type="button"
           className={styles.engineFolderBtn}
           onClick={() => void api.openEngineDir().catch(console.error)}
           disabled={busy || !installed}
           title={
-            installed ? "在文件管理器打开安装目录" : "尚未安装"
+            installed
+              ? t("aiSettings.engine.actions.openFolderTooltipInstalled")
+              : t("aiSettings.engine.actions.openFolderTooltipNotInstalled")
           }
         >
           <FolderOpen size={14} strokeWidth={1.85} />
-          打开
+          {t("common.open")}
         </button>
         <button
           type="button"
           className={styles.engineUninstall}
           onClick={() => void onDelete()}
           disabled={busy || !installed}
-          title={installed ? "卸载本地 AI 引擎" : "尚未安装"}
+          title={
+            installed
+              ? t("aiSettings.engine.actions.uninstallTooltipInstalled")
+              : t("aiSettings.engine.actions.uninstallTooltipNotInstalled")
+          }
         >
           <Trash2 size={14} strokeWidth={1.85} />
-          卸载
+          {t("aiSettings.engine.actions.uninstall")}
         </button>
       </div>
 
@@ -466,27 +482,26 @@ function EngineSection() {
 }
 
 function EngineProgress({ progress }: { progress: EngineDownloadProgress }) {
-  const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+  const { t } = useTranslation();
+  // 取整 + 单调递增显示：消除小数频繁跳动，并守住「数字只能涨不能退」。
+  // 用 ref 不触发额外 render；新值 ≤ 当前 max 就保持显示老值。
+  const maxMbRef = useRef(0);
+  const currentMb = Math.round(progress.downloaded / 1024 / 1024);
+  if (currentMb > maxMbRef.current) maxMbRef.current = currentMb;
+  // phase 切到 verifying 后下次又回 downloading 时（第二个 zip 开始）重置：
+  // 这里不重置——combined 累计应该贯穿两个文件。
   if (progress.phase === "downloading") {
-    const pct =
-      progress.total !== null && progress.total > 0
-        ? (progress.downloaded / progress.total) * 100
-        : null;
     return (
       <div className={styles.engineProgressWrap}>
         <div className={styles.engineProgressBar}>
           <div
-            className={styles.engineProgressFill}
-            style={{
-              width: pct !== null ? `${pct}%` : "20%",
-              animation: pct === null ? "indeterminate 1.4s infinite" : undefined,
-            }}
+            className={`${styles.engineProgressFill} ${styles.engineProgressFillIndeterminate}`}
           />
         </div>
         <div className={styles.engineProgressText}>
-          {pct !== null ? `${Math.round(pct)}% · ` : ""}
-          {mb(progress.downloaded)}
-          {progress.total ? ` / ${mb(progress.total)}` : ""} MB
+          {t("aiSettings.engine.progress.downloading", {
+            size: maxMbRef.current,
+          })}
         </div>
       </div>
     );
@@ -494,10 +509,10 @@ function EngineProgress({ progress }: { progress: EngineDownloadProgress }) {
   // verifying / extracting / done 都没字节进度，给单行文字提示
   const label =
     progress.phase === "verifying"
-      ? "校验中…"
+      ? t("aiSettings.engine.progress.verifying")
       : progress.phase === "extracting"
-        ? "解压中…"
-        : "✓ 完成";
+        ? t("aiSettings.engine.progress.extracting")
+        : t("aiSettings.engine.progress.done");
   return <div className={styles.engineProgressText}>{label}</div>;
 }
 
@@ -523,16 +538,26 @@ function EngineRuntimeRow({
   status: EngineStatus;
   testResult: RtTestResult;
 }) {
+  const { t } = useTranslation();
   const rt = status.runtime;
   const isError = rt.state === "error";
 
   const badge =
     rt.state === "running"
-      ? { text: `已运行 · 端口：${rt.port}`, cls: styles.engineBadgeOk }
+      ? {
+          text: t("aiSettings.engine.runtime.running", { port: rt.port }),
+          cls: styles.engineBadgeOk,
+        }
       : rt.state === "starting"
-        ? { text: "启动中…", cls: styles.engineBadgeWarn }
+        ? {
+            text: t("aiSettings.engine.runtime.starting"),
+            cls: styles.engineBadgeWarn,
+          }
         : rt.state === "error"
-          ? { text: "出错", cls: styles.engineBadgeFail }
+          ? {
+              text: t("aiSettings.engine.runtime.error"),
+              cls: styles.engineBadgeFail,
+            }
           : null;
 
   // 没在测、没出错、状态条又能直接看 → 不渲染额外行，避免多一道空白
@@ -548,8 +573,10 @@ function EngineRuntimeRow({
           >
             <Check size={14} strokeWidth={2.2} />
             {testResult.models.length === 0
-              ? "已连接（暂无模型加载）"
-              : `已连接，${testResult.models.length} 个模型`}
+              ? t("aiSettings.engine.runtime.connectedNoModels")
+              : t("aiSettings.engine.runtime.connectedWithModels", {
+                  count: testResult.models.length,
+                })}
           </span>
         ) : null}
         {testResult.kind === "fail" ? (
@@ -589,6 +616,7 @@ function EngineRuntimeRow({
  * 函数失败时已经清理过，所以本地清单看到的都是完整文件。
  */
 function ModelsSection() {
+  const { t } = useTranslation();
   // settings 用来读 activeMain：决定哪个推荐 / 本地文件在"当前使用"态。
   // reload 是因为 set_active_model 是旁路命令（不走 update_settings 通道），
   // 写完 settings 后前端 SettingsContext 不会自动 refetch，必须手动 reload。
@@ -697,7 +725,12 @@ function ModelsSection() {
   const onUninstallRecommended = async (rec: RecommendedModel) => {
     if (
       !confirm(
-        `卸载 ${rec.displayName}？将删除 main 权重${rec.mmprojFile ? " + mmproj 投影" : ""}两个文件，无法撤销。`,
+        t("aiSettings.models.uninstallConfirm", {
+          name: rec.displayName,
+          extra: rec.mmprojFile
+            ? t("aiSettings.models.uninstallConfirmExtra")
+            : "",
+        }),
       )
     ) {
       return;
@@ -789,7 +822,7 @@ function ModelsSection() {
                   disabled={tailHasBusy && !showAllRecs}
                   title={
                     tailHasBusy && !showAllRecs
-                      ? "下载完成后才能折叠"
+                      ? t("aiSettings.models.expand.busyTooltip")
                       : undefined
                   }
                 >
@@ -800,7 +833,11 @@ function ModelsSection() {
                       isOpen ? styles.modelExpandChevronOpen : ""
                     }`}
                   />
-                  {isOpen ? "收起" : `查看更多模型 (${tail.length})`}
+                  {isOpen
+                    ? t("aiSettings.models.expand.collapse")
+                    : t("aiSettings.models.expand.more", {
+                        count: tail.length,
+                      })}
                 </button>
               ) : null}
             </>
@@ -843,6 +880,7 @@ function RecommendedCard({
   /** 卸载按钮——删除 main + mmproj 两个本地文件 */
   onUninstall: (rec: RecommendedModel) => void;
 }) {
+  const { t } = useTranslation();
   const totalGB = (rec.mainBytes + rec.mmprojBytes) / 1024 / 1024 / 1024;
   const mainBusy = busyFiles.has(rec.mainFile);
   const mmprojBusy = !!rec.mmprojFile && busyFiles.has(rec.mmprojFile);
@@ -863,7 +901,9 @@ function RecommendedCard({
           <span
             className={styles.engineInfoWrap}
             tabIndex={0}
-            aria-label={`HuggingFace ${rec.repo}`}
+            aria-label={t("aiSettings.models.card.hfTooltipAria", {
+              repo: rec.repo,
+            })}
           >
             <Info
               size={12}
@@ -871,10 +911,15 @@ function RecommendedCard({
               className={styles.engineInfoIcon}
             />
             <span className={styles.engineInfoTip} role="tooltip">
-              HuggingFace · <code>{rec.repo}</code>
+              {t("aiSettings.models.card.hfTooltipPrefix")}
+              <code>{rec.repo}</code>
             </span>
           </span>
-          <span className={styles.modelCardSize}>~{totalGB.toFixed(1)} GB</span>
+          <span className={styles.modelCardSize}>
+            {t("aiSettings.models.card.approxSize", {
+              size: totalGB.toFixed(1),
+            })}
+          </span>
         </div>
         <div className={styles.modelCardRight}>
           {!installed ? (
@@ -893,27 +938,29 @@ function RecommendedCard({
               ) : (
                 <Download size={14} strokeWidth={2} />
               )}
-              {busy ? "下载中…" : "下载"}
+              {busy
+                ? t("aiSettings.models.card.downloading")
+                : t("aiSettings.models.card.download")}
             </button>
           ) : active ? (
             <button
               type="button"
               className={styles.modelActivePill}
               onClick={() => onClear()}
-              title="点击取消激活，切回'已下载'状态（会停掉在跑的 server）"
+              title={t("aiSettings.models.card.inUseTooltip")}
             >
               <Check size={14} strokeWidth={2} />
-              使用中
+              {t("aiSettings.models.card.inUse")}
             </button>
           ) : (
             <button
               type="button"
               className={styles.modelReadyBtn}
               onClick={() => onUse(rec)}
-              title="点击启用此模型（会停掉在跑的 server，等手动重启加载新模型）"
+              title={t("aiSettings.models.card.readyTooltip")}
             >
               <HardDrive size={14} strokeWidth={2} />
-              已下载
+              {t("aiSettings.models.card.ready")}
             </button>
           )}
           {/* 卸载放在最右边，跟"本地 AI 引擎"行的卸载按钮同款。
@@ -923,10 +970,14 @@ function RecommendedCard({
             className={styles.engineUninstall}
             onClick={() => onUninstall(rec)}
             disabled={!installed || busy}
-            title={installed ? "删除本地文件（main + mmproj）" : "尚未安装"}
+            title={
+              installed
+                ? t("aiSettings.models.card.uninstallTooltipInstalled")
+                : t("aiSettings.models.card.uninstallTooltipNotInstalled")
+            }
           >
             <Trash2 size={14} strokeWidth={1.85} />
-            卸载
+            {t("aiSettings.engine.actions.uninstall")}
           </button>
         </div>
       </div>
@@ -943,12 +994,15 @@ function RecommendedCard({
             />
           </div>
           <div className={styles.engineProgressText}>
-            {activeIsMmproj ? "vision 投影" : "主权重"} ·{" "}
+            {activeIsMmproj
+              ? t("aiSettings.models.card.progressMmproj")
+              : t("aiSettings.models.card.progressMain")}{" "}
+            ·{" "}
             {(activeProgress.downloaded / 1024 / 1024).toFixed(1)} /
             {activeProgress.total
               ? ` ${(activeProgress.total / 1024 / 1024).toFixed(1)}`
-              : " ?"}{" "}
-            MB
+              : ` ${t("aiSettings.models.card.progressUnknownTotal")}`}{" "}
+            {t("aiSettings.models.card.progressUnit")}
           </div>
         </div>
       ) : null}
@@ -957,20 +1011,23 @@ function RecommendedCard({
 }
 
 /** 平台变体 ID → 人话加速类型标签 */
-function humanAccelLabel(platformId: string): string {
+function humanAccelLabel(
+  platformId: string,
+  t: (key: string) => string,
+): string {
   switch (platformId) {
     case "win-cuda-12.4-x64":
-      return "CUDA 12.4";
+      return t("aiSettings.engine.accel.cuda12");
     case "win-cuda-13.1-x64":
-      return "CUDA 13.1";
+      return t("aiSettings.engine.accel.cuda13");
     case "win-cpu-x64":
-      return "CPU 模式";
+      return t("aiSettings.engine.accel.winCpu");
     case "macos-arm64":
-      return "Apple Silicon · Metal";
+      return t("aiSettings.engine.accel.macArm");
     case "macos-x64":
-      return "Intel Mac";
+      return t("aiSettings.engine.accel.macIntel");
     case "ubuntu-x64":
-      return "Linux CPU";
+      return t("aiSettings.engine.accel.linuxCpu");
     default:
       return platformId;
   }
@@ -997,6 +1054,7 @@ function PromptSection({
   overrides: PromptOverrides;
   onSaveOverride: (lang: PromptLanguage, text: string) => void;
 }) {
+  const { t } = useTranslation();
   const persistedFor = (lang: PromptLanguage): string => {
     const ov = overrides[overrideKey(lang)];
     return ov.trim().length > 0 ? ov : DEFAULT_SYSTEM_PROMPTS[lang];
@@ -1025,7 +1083,7 @@ function PromptSection({
 
   return (
     <div className={styles.promptWrap}>
-      <Row label="System Prompt" block>
+      <Row label={t("aiSettings.prompt.rowLabel")} block>
         {/* Row.control 默认是 row flex；用 promptStack 改成 column，
             让 textarea 和按钮行各占一行而不是挤在同一行 */}
         <div className={styles.promptStack}>
@@ -1039,30 +1097,30 @@ function PromptSection({
           <div className={styles.promptActions}>
             <span className={styles.promptHint}>
               {isDirty
-                ? "有未保存的改动"
+                ? t("aiSettings.prompt.hint.dirty")
                 : hasOverride
-                  ? "已使用自定义提示词"
-                  : "正在使用内置默认"}
+                  ? t("aiSettings.prompt.hint.custom")
+                  : t("aiSettings.prompt.hint.default")}
             </span>
             <button
               type="button"
               className={styles.promptResetBtn}
               onClick={handleReset}
               disabled={draft === DEFAULT_SYSTEM_PROMPTS[language]}
-              title="把编辑器内容填回内置默认（要点保存才真正生效）"
+              title={t("aiSettings.prompt.actions.resetTooltip")}
             >
               <RotateCcw size={13} strokeWidth={2} />
-              重置默认
+              {t("aiSettings.prompt.actions.reset")}
             </button>
             <button
               type="button"
               className={styles.promptSaveBtn}
               onClick={handleSave}
               disabled={!isDirty}
-              title="保存当前语言的覆盖"
+              title={t("aiSettings.prompt.actions.saveTooltip")}
             >
               <Save size={13} strokeWidth={2} />
-              保存
+              {t("aiSettings.prompt.actions.save")}
             </button>
           </div>
         </div>

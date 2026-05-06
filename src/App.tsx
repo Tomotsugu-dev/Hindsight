@@ -1,6 +1,10 @@
+import { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
+import { useSettings } from "./state/settings";
+import type { PromptLanguage } from "./api/hindsight";
 import Today from "./pages/Today/TodayPage";
 import Week from "./pages/Week/WeekPage";
 import Month from "./pages/Month/MonthPage";
@@ -19,7 +23,27 @@ import DataTab from "./pages/Settings/tabs/DataTab";
 import PrivacyTab from "./pages/Settings/tabs/PrivacyTab";
 import AboutTab from "./pages/Settings/tabs/AboutTab";
 
+/** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/en/ja）。 */
+function i18nToPromptLang(lang: string): PromptLanguage {
+  if (lang.startsWith("en")) return "en";
+  if (lang.startsWith("ja")) return "ja";
+  return "zh";
+}
+
 function App() {
+  const { i18n } = useTranslation();
+  const { settings, update } = useSettings();
+
+  // UI 语言切换时同步 settings.ai.promptLanguage —— 让 AISettings 提示词编辑器、
+  // DebugTab、以及后端 generate 用的 prompt 都跟随 UI 语言走
+  useEffect(() => {
+    if (!settings) return;
+    const target = i18nToPromptLang(i18n.language);
+    if (settings.ai.promptLanguage !== target) {
+      update({ ai: { ...settings.ai, promptLanguage: target } });
+    }
+  }, [i18n.language, settings, update]);
+
   return (
     <Routes>
       <Route element={<AppLayout />}>
