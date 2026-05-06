@@ -173,6 +173,11 @@ impl Step2Chat {
         }
     }
 
+    /// 当前 step2 是否走本地引擎（用于 idle watcher：只有本地调用才 acquire 推理 guard）。
+    pub fn is_local(&self) -> bool {
+        matches!(self, Step2Chat::Local(_))
+    }
+
     /// step 2 实际写入 `ai_summaries.model` 的标识——本地用 GGUF 文件名，
     /// 外部用 provider 上的模型 ID（让导出的 Markdown / DailyTab UI 都能区分）。
     pub fn model_label(&self) -> &str {

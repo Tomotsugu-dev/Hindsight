@@ -1,0 +1,182 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 30px;
+  padding: 0 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  transition:
+    background-color 200ms ease-out,
+    border-color 200ms ease-out,
+    box-shadow 200ms ease-out;
+}
+
+/* —— 悬浮提示（右侧） —— */
+.tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 5px 10px;
+  background: #1a1a1f;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(20, 20, 40, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  /* 默认无延迟（鼠标移开时立刻消失） */
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+/* 左指小三角箭头（指向字段） */
+.tooltip::after {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 4px solid transparent;
+  border-right-color: #1a1a1f;
+}
+
+/* hover 500ms 才浮现 — 防误触 */
+.wrap:hover .tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+  transition-delay: 500ms;
+}
+
+.wrap:focus-within {
+  background: #ffffff;
+  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
+}
+
+.part {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  cursor: default;
+  transition:
+    background-color 160ms ease-out,
+    transform 100ms ease-out;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  /* 触感反馈：按下时收缩，松开数字滚到位时弹回 */
+}
+
+/* 半区淡色高亮 — 用 ::before 画一道渐变 */
+.part::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 180ms ease-out,
+    background 180ms ease-out;
+}
+
+/* 上半区：光标↑ + 顶部淡紫渐变 */
+.part.dirUp {
+  cursor: n-resize;
+}
+.part.dirUp::before {
+  opacity: 1;
+  background: linear-gradient(
+    to top,
+    transparent 45%,
+    color-mix(in oklab, var(--color-accent) 18%, transparent) 100%
+  );
+}
+
+/* 下半区：光标↓ + 底部淡紫渐变 */
+.part.dirDown {
+  cursor: s-resize;
+}
+.part.dirDown::before {
+  opacity: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent 45%,
+    color-mix(in oklab, var(--color-accent) 18%, transparent) 100%
+  );
+}
+
+.part:active {
+  transform: scale(0.93);
+}
+
+.part.focused {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.colon {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1;
+  pointer-events: none;
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 60%, 100% { opacity: 1; }
+  80% { opacity: 0.35; }
+}
+
+/* —— 数字滚轴 ——
+   z-index 让数字浮在 ::before 半区高亮之上 */
+.column {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  height: 1em;
+  line-height: 1;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  /* 弹簧曲线：滚到位时轻微回弹（"数字弹跳一下"） */
+  transition: transform 380ms var(--ease-spring);
+  will-change: transform;
+}
+
+.digit {
+  height: 1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-feature-settings: "tnum";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strip { transition: none; }
+  .colon { animation: none; }
+}

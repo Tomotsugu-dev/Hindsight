@@ -35,14 +35,15 @@ import {
 import { useSettings } from "../../../state/settings";
 import { resolveSegmentChip } from "../../../utils/segmentColor";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
-import { CategoryChipMultiSelect } from "../../Settings/components/CategoryChipMultiSelect";
-import { Row } from "../../Settings/components/Row";
-import { Section } from "../../Settings/components/Section";
-import { Slider } from "../../Settings/components/Slider";
+import { CategoryChipMultiSelect } from "../../../components/FormControls/CategoryChipMultiSelect";
+import { Row } from "../../../components/FormLayout/Row";
+import { Section } from "../../../components/FormLayout/Section";
+import { Slider } from "../../../components/FormControls/Slider";
 import {
   DEFAULT_IMAGE_DESCRIBE_PROMPTS,
   DEFAULT_SYSTEM_PROMPTS,
 } from "../../../lib/aiPrompts";
+import { logError, logWarn } from "../../../lib/logger";
 import styles from "./DebugTab.module.css";
 
 /** 事件流 log 单条。 */
@@ -372,7 +373,7 @@ export default function DebugTab() {
       const lines = await api.getEngineLogs();
       setEngineLogs(lines);
     } catch (e) {
-      console.warn("getEngineLogs 失败:", e);
+      logWarn("debug.getEngineLogs", e);
     } finally {
       setEngineLogsBusy(false);
     }
@@ -394,7 +395,7 @@ export default function DebugTab() {
 
     Promise.all([
       api.getEngineStatus().catch((e) => {
-        console.error("getEngineStatus 失败:", e);
+        logError("debug.getEngineStatus", e);
         return null;
       }),
       api.getDayImageDescriptions(date, "debug").catch(() => [] as ImageDescriptionRow[]),
@@ -578,7 +579,7 @@ export default function DebugTab() {
     try {
       await api.cancelDaySummary();
     } catch (e) {
-      console.warn("cancel 失败:", e);
+      logWarn("debug.cancel", e);
     }
   };
 
@@ -1303,7 +1304,7 @@ function DescItem({
                 await openPath(row.screenshotPath);
                 return;
               } catch (e) {
-                console.warn("openPath 失败，fallback 到 reveal:", e);
+                logWarn("debug.openPathFallback", e);
               }
               try {
                 await revealItemInDir(row.screenshotPath);

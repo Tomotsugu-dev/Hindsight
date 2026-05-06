@@ -14,7 +14,11 @@ import WeeklyTab from "./pages/AISummary/tabs/WeeklyTab";
 import MonthlyTab from "./pages/AISummary/tabs/MonthlyTab";
 import ChatTab from "./pages/AISummary/tabs/ChatTab";
 import DebugTab from "./pages/AISummary/tabs/DebugTab";
-import AISettings from "./pages/AISettings";
+import AISettingsPage from "./pages/AISettings/AISettingsPage";
+import EngineTab from "./pages/AISettings/tabs/EngineTab";
+import AiGeneralTab from "./pages/AISettings/tabs/GeneralTab";
+import PromptTab from "./pages/AISettings/tabs/PromptTab";
+import ExternalApiTab from "./pages/AISettings/tabs/ExternalApiTab";
 import Devices from "./pages/Devices/DevicesPage";
 import CategoriesPage from "./pages/Categories/CategoriesPage";
 import SettingsPage from "./pages/Settings/SettingsPage";
@@ -57,7 +61,12 @@ function App() {
           <Route path="chat" element={<ChatTab />} />
           <Route path="debug" element={<DebugTab />} />
         </Route>
-        <Route path={ROUTES.aiSettings} element={<AISettings />} />
+        <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
+          <Route index element={<EngineTab />} />
+          <Route path="general" element={<AiGeneralTab />} />
+          <Route path="prompt" element={<PromptTab />} />
+          <Route path="external" element={<ExternalApiTab />} />
+        </Route>
         <Route path={ROUTES.devices} element={<Devices />} />
         <Route path={ROUTES.categories} element={<CategoriesPage />} />
         <Route path={ROUTES.settings} element={<SettingsPage />}>

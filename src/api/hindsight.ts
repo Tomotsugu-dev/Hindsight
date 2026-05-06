@@ -130,6 +130,8 @@ export interface EngineRuntimeStatus {
   port: number | null;
   /** error 时的可读错误（stderr 截短）；其它状态 null */
   error: string | null;
+  /** running 且空闲时，距 idle watcher 自动 stop 还剩多少秒；in-flight 时为 null */
+  idleSecondsRemaining: number | null;
 }
 
 /** binary + runtime 合并；getEngineStatus 返回这个 */

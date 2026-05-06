@@ -23,9 +23,9 @@
   color: var(--text-strong);
   letter-spacing: -0.005em;
   transition:
-    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out);
 }
 
 .trigger:hover:not(:disabled) {
@@ -65,7 +65,7 @@
 
 .chev {
   color: var(--text-faint);
-  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 200ms var(--ease-out);
   flex-shrink: 0;
 }
 
@@ -88,7 +88,7 @@
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 4px 12px rgba(20, 20, 40, 0.08),
     0 12px 28px rgba(20, 20, 40, 0.1);
-  animation: menuIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: menuIn 200ms var(--ease-out);
   transform-origin: top center;
 }
 

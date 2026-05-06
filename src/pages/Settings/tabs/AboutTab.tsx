@@ -10,9 +10,9 @@ import {
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
-import { Section } from "../components/Section";
-import { Row } from "../components/Row";
-import { Toggle } from "../components/Toggle";
+import { Section } from "../../../components/FormLayout/Section";
+import { Row } from "../../../components/FormLayout/Row";
+import { Toggle } from "../../../components/FormControls/Toggle";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { useSettings } from "../../../state/settings";
 import { useUpdater } from "../../../state/updater";

@@ -1,7 +1,8 @@
-/* Design tokens — Arc-inspired light palette for Hindsight */
+/* Design tokens — Arc-inspired light palette for Hindsight.
+   暗色模式预留：dark 命名空间留给后续 issue，本文件仅 light 主题。 */
 
 :root {
-  /* Brand / accent */
+  /* —— Brand / accent —— */
   --color-accent: #6c5ce7;
   --color-accent-soft: rgba(108, 92, 231, 0.12);
 
@@ -10,9 +11,10 @@
     radial-gradient(120% 80% at 0% 0%, #efe7ff 0%, #ffe9f0 60%, #fff4e6 100%);
   --sidebar-border: rgba(0, 0, 0, 0.04);
 
-  /* Surfaces */
+  /* —— Surfaces —— */
   --surface-app: #fafafa;
   --surface-card: #ffffff;
+  --surface-card-elevated: #fbfbfd;
   --surface-overlay: rgba(255, 255, 255, 0.75);
 
   /* Pill (active nav item) — 半透明 + 毛玻璃，能透出渐变 */
@@ -27,35 +29,60 @@
   /* Hover (translucent wash on tinted bg) */
   --hover-bg: rgba(255, 255, 255, 0.45);
 
-  /* Text */
+  /* —— Text —— */
   --text-strong: #1d1c25;
   --text-regular: #2e2c3a;
   --text-muted: #6b6680;
   --text-faint: #9a96aa;
   --text-on-pill: #1d1c25;
 
-  /* Status colors */
+  /* —— Status colors （字色） —— */
   --status-ok: #22c55e;
   --status-pending: #f59e0b;
   --status-idle: #94a3b8;
   --status-error: #ef4444;
 
-  /* Radii */
+  /* Status surface（chip / badge 背景；区别于 --status-* 的字色） */
+  --status-ok-soft: rgba(34, 197, 94, 0.12);
+  --status-error-soft: rgba(239, 68, 68, 0.12);
+  --status-pending-soft: rgba(245, 158, 11, 0.12);
+
+  /* —— Borders / overlays（统一 rgba(0,0,0,X) 写法的级别） —— */
+  --alpha-border-subtle: 0.04;
+  --alpha-border: 0.07;
+  --alpha-border-strong: 0.12;
+  --alpha-overlay-subtle: 0.06;
+  --alpha-overlay: 0.16;
+
+  /* —— Shadows —— */
+  --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.08);
+  --shadow-md:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+  --shadow-lg:
+    0 12px 32px rgba(20, 20, 40, 0.16),
+    0 2px 6px rgba(20, 20, 40, 0.08);
+  --shadow-inset-hi: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+
+  /* —— Radii —— */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
 
-  /* Spacing scale */
+  /* —— Spacing —— */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
+  --space-10: 40px;
 
-  /* Typography */
+  /* —— Typography —— */
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -68,11 +95,18 @@
   --font-weight-medium: 550;
   --font-weight-semibold: 650;
 
-  /* Layout */
+  /* —— Layout —— */
   --sidebar-width: 156px;
 
-  /* Motion */
+  /* —— Motion —— */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 120ms;
   --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --duration-slower: 360ms;
+  --duration-spring: 460ms;
+
+  /* 跨页滑动动画时长（Today/Week/Month 切日期、AISettings/Settings/AISummary 切 tab） */
+  --duration-swipe: 420ms;
 }

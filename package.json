@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run lint && tsc && vite build",
+    "build:notest": "tsc && vite build",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src",
     "preview": "vite preview",
     "tauri": "tauri",
     "release": "node scripts/release.mjs"
@@ -25,11 +30,21 @@
     "react-router-dom": "^7.14.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^15.15.0",
+    "prettier": "^3.8.3",
     "typescript": "~5.8.3",
+    "typescript-eslint": "^8.59.2",
     "vite": "^7.0.4"
   }
 }

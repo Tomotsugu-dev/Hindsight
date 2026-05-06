@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { AppWindow, EyeOff, Globe, Plus, X } from "lucide-react";
-import { Section } from "../components/Section";
-import { Row } from "../components/Row";
+import { Section } from "../../../components/FormLayout/Section";
+import { Row } from "../../../components/FormLayout/Row";
 import { useSettings } from "../../../state/settings";
 import styles from "./PrivacyTab.module.css";
 

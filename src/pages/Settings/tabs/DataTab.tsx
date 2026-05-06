@@ -10,13 +10,14 @@ import {
   ImageDown,
   PieChart,
 } from "lucide-react";
-import { Section } from "../components/Section";
-import { Row } from "../components/Row";
-import { Slider } from "../components/Slider";
-import { PathField } from "../components/PathField";
+import { Section } from "../../../components/FormLayout/Section";
+import { Row } from "../../../components/FormLayout/Row";
+import { Slider } from "../../../components/FormControls/Slider";
+import { PathField } from "../../../components/FormControls/PathField";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "../../../state/settings";
 import { api, type StorageInfo } from "../../../api/hindsight";
+import { logError } from "../../../lib/logger";
 import styles from "./DataTab.module.css";
 
 function fmtBytes(n: number): string {
@@ -60,7 +61,7 @@ export default function DataTab() {
       else await api.purgeScreenshots();
       refreshStorage();
     } catch (e) {
-      console.error("清除失败:", e);
+      logError("data.clear", e);
     }
   };
 
@@ -69,7 +70,7 @@ export default function DataTab() {
     try {
       await revealItemInDir(storage.dbPath);
     } catch (e) {
-      console.error("打开数据库目录失败:", e);
+      logError("data.openDbDir", e);
     }
   };
 
@@ -77,7 +78,7 @@ export default function DataTab() {
     try {
       await api.openScreenshotsDir();
     } catch (e) {
-      console.error("打开截图目录失败:", e);
+      logError("data.openScreenshotDir", e);
     }
   };
 
@@ -97,7 +98,7 @@ export default function DataTab() {
         updateAiModelsPath(picked);
       }
     } catch (e) {
-      console.error("打开目录选择失败:", e);
+      logError("data.openDirPicker", e);
     }
   };
 

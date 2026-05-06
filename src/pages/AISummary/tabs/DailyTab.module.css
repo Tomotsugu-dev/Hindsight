@@ -38,8 +38,8 @@
   color: var(--text-muted);
   cursor: pointer;
   transition:
-    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
 }
 
 .navBtn:hover:not(:disabled) {
@@ -68,8 +68,8 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;
   transition:
-    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
 }
 
 .dayPillClickable {
@@ -217,7 +217,7 @@
   font-size: 12px;
   font-weight: 500;
   color: #15803d;
-  animation: successFadeIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: successFadeIn 200ms var(--ease-out);
 }
 
 @keyframes successFadeIn {

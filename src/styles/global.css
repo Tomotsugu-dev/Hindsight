@@ -1,4 +1,5 @@
 @import "./tokens.css";
+@import "./utilities.css";
 
 *,
 *::before,
@@ -46,11 +47,35 @@ a {
   color: var(--text-strong);
 }
 
+/* a11y 兜底：键盘聚焦时如果元素没有自定义 focus 样式，给一个默认的描边。
+   各组件自己定义了 :focus / :focus-visible（box-shadow 软光晕 / border-color 等）
+   会盖过这条；纯 outline:none 而没替代的也至少能看到这一道描边。 */
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
 /* 让 height/width 等关键字（auto / max-content / fit-content）可以参与 transition。
    Chromium 129+ / WebView2 现代版本支持。这样 height: 56px → auto 可以平滑动画，
    不再受 max-height 那种"被实际内容封顶导致视觉瞬间到位"的问题影响。 */
 :root {
   interpolate-size: allow-keywords;
+}
+
+/* —— Reduced motion ——
+   尊重系统级"减少动画"偏好：把所有 transition / animation 收紧到 1ms，
+   滑动、淡入、弹簧之类的视觉效果都几乎瞬间完成。
+   注意：用 !important 强制覆盖各 module.css 中的 transition；这是仅对
+   prefers-reduced-motion: reduce 用户生效，不影响默认体验。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* —— Glow utility：跟随鼠标的橙紫色描边光（接近触发） ——

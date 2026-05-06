@@ -262,6 +262,9 @@ pub fn run() {
                 handle.manage(pool);
                 handle.manage(svc);
                 handle.manage(sync_engine);
+                // 启动 idle watcher：跑完日报/调试 N 秒无新请求 → 自动 stop 释放显存。
+                // watcher 持 Weak<EngineSupervisor>，supervisor drop 后自然退出，无需手动取消。
+                let _watcher = engine_supervisor.spawn_idle_watcher();
                 handle.manage(engine_supervisor);
                 // AI 总结取消信号——单例，前端调 cancel_day_summary 设 true，
                 // summary.rs 每段循环检查；不能中断已在路上的 LLM 单段请求。

@@ -1,0 +1,1110 @@
+.page {
+  padding: 32px 32px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* —— 文本输入 —— */
+.textInput {
+  width: 280px;
+  height: 32px;
+  padding: 0 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text-strong);
+  outline: none;
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.textInput:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.textInput::placeholder {
+  color: var(--text-faint);
+}
+
+/* —— textarea —— */
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  /* 内容超过这个高度后内部滚动，不让 Section 越拉越长。用户仍可以拖右下角
+     resize 自己拉高（resize: vertical 仍生效）。 */
+  max-height: 280px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.55;
+  color: var(--text-strong);
+  resize: vertical;
+  outline: none;
+  overflow-y: auto;
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.textarea::placeholder {
+  color: var(--text-faint);
+}
+
+/* "个人简介" 容器：textarea 一直展开，不再 hover 折叠。 */
+.briefHover {
+  display: contents;
+}
+
+.briefCell {
+  width: 100%;
+}
+
+/* —— 提示词编辑器（Phase 1B-γ+）——
+   语言由应用全局 i18n 决定，UI 上不暴露切换器；这里只展示当前语言的 system prompt
+   编辑器 + 重置 / 保存。 */
+.promptWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Row.control 默认 row flex 会把 textarea 和按钮挤同一行；
+   用这个 stack 把它们改成 column，textarea 占整行，actions 单独一行在下。 */
+.promptStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 提示词 textarea：比 userBrief 那个更大、字号更小，配代码风字体让长 prompt 易读 */
+.promptTextarea {
+  width: 100%;
+  min-height: 220px;
+  /* 内容超出后内部滚动，避免 Section 越拉越长。用户仍能拖右下角自己加高。 */
+  max-height: 420px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-family:
+    ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.6;
+  color: var(--text-strong);
+  resize: vertical;
+  outline: none;
+  overflow-y: auto;
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.promptTextarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.promptActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.promptHint {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+}
+
+/* 重置 = 灰色虚线 ghost；不抢主操作 */
+.promptResetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.promptResetBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+}
+
+.promptResetBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 保存 = 蓝色实心，主操作 */
+.promptSaveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: filter 140ms ease-out;
+}
+
+.promptSaveBtn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.promptSaveBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* —— 测试连接 —— */
+.testRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.testBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 24px;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    filter 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.testBtn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.testBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.testBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.testHint {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* —— 测试连接状态行 —— */
+.testStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  /* 失败可能比较长，超出宽度自然换行不溢出 */
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.testStatusOk {
+  color: #16a34a; /* green-600 */
+}
+
+.testStatusFail {
+  color: #dc2626; /* red-600 */
+}
+
+.testSpin {
+  animation: testSpin 900ms linear infinite;
+}
+
+@keyframes testSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* —— 本地 AI 引擎卡片（Phase 1B-α） —— */
+.engineCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.engineHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.engineBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 11px;
+  letter-spacing: -0.005em;
+  flex-shrink: 0;
+}
+
+.engineBadgeOk {
+  background: color-mix(in oklab, #16a34a 18%, transparent);
+  color: #15803d;
+}
+
+.engineBadgeOff {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+}
+
+/* 未安装 / starting：琥珀色，"需要操作" 的视觉提示 */
+.engineBadgeWarn {
+  background: color-mix(in oklab, #f59e0b 22%, transparent);
+  color: #b45309;
+}
+
+/* 出错：红色 */
+.engineBadgeFail {
+  background: color-mix(in oklab, #dc2626 18%, transparent);
+  color: #991b1b;
+}
+
+.engineMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.engineMetaSep {
+  color: var(--text-faint);
+  margin: 0 2px;
+}
+
+/* 版本号 hover info（学 Section.module.css 的 infoTip 模式） */
+.engineInfoWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  cursor: help;
+  outline: none;
+  transition: color 140ms ease-out;
+}
+
+.engineInfoWrap:hover,
+.engineInfoWrap:focus-visible {
+  color: var(--color-accent);
+}
+
+.engineInfoIcon {
+  display: block;
+}
+
+.engineInfoTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%) translateY(4px);
+  z-index: 10;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(28, 28, 36, 0.94);
+  border-radius: 6px;
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.20),
+    0 2px 4px rgba(0, 0, 0, 0.10);
+  opacity: 0;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: normal;
+  text-align: left;
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms var(--ease-out);
+}
+
+.engineInfoTip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(28, 28, 36, 0.94);
+}
+
+.engineInfoWrap:hover .engineInfoTip,
+.engineInfoWrap:focus-visible .engineInfoTip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* CUDA 缺失警告条 */
+.engineWarning {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, #f59e0b 10%, transparent);
+  border: 1px solid color-mix(in oklab, #f59e0b 30%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.engineWarning > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #d97706;
+}
+
+.engineWarningBody {
+  flex: 1;
+}
+
+.engineWarningLink {
+  color: #b45309;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.engineWarningLink:hover {
+  color: #92400e;
+}
+
+.engineError {
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
+  word-break: break-word;
+  background: color-mix(in oklab, #dc2626 8%, transparent);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.engineActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 下载按钮左对齐"未安装"badge，跟 engineHead 同一垂直线 */
+}
+
+/* picker 行下面的 VRAM 估算条 —— 跟 DebugTab 同款配色 */
+.vramEst {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 20px 14px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vramEstLabel {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vramEstValue {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.vramEstBreakdown {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* 三档颜色：< 16 GB 绿、16-24 GB 橙警告、> 24 GB 红危险（跟 DebugTab 一致）*/
+.vramEstOk .vramEstValue {
+  color: #16a34a;
+}
+
+.vramEstWarn .vramEstValue {
+  color: #b45309;
+}
+
+.vramEstDanger .vramEstValue {
+  color: #dc2626;
+}
+
+/* 包大小提示：在操作行最右端 */
+.engineSize {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* "打开" / "卸载" 按钮 = 复用 DataTab 已有样式，只 override 高度统一到 36px */
+.engineFolderBtn {
+  composes: openBtn from "../Settings/tabs/DataTab.module.css";
+}
+
+.engineUninstall {
+  composes: dangerBtn from "../Settings/tabs/DataTab.module.css";
+  /* dangerBtn 没有 icon 间距，加一下让 Trash2 和 "卸载" 不挤 */
+  gap: 6px;
+}
+
+/* 三个按钮在同一行，高度统一到 36px。把高度 override 写在 .engineActions
+   作用域下，selector specificity (0,2,0) 高过 composes 来源 (0,1,0)，
+   保证 36 胜出 DataTab 默认的 30，无需 !important */
+.engineActions .testBtn,
+.engineActions .engineFolderBtn,
+.engineActions .engineUninstall {
+  height: 36px;
+  font-size: 13px;
+}
+
+/* DataTab 的 .openBtn / .dangerBtn 没定义 :disabled 样式（那边没用到），
+   在这里加：未安装时打开 / 卸载按钮变灰 + 不响应 hover */
+.engineActions .engineFolderBtn:disabled,
+.engineActions .engineUninstall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* —— 模型管理 Section（Phase 1B-β） —— */
+.modelsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+}
+
+.modelList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modelCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 9px;
+}
+
+/* 卡片单行：name + ⓘ + size 在左，下载按钮 / 已安装 badge 在右 */
+.modelCardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modelCardLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.modelCardRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 模型卡 disabled 卸载按钮——layout 占位但变灰，跟 .engineActions 同款 */
+.modelCardRight .engineUninstall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* "使用" 状态徽章——跟 .testBtn 等宽等高，
+   颜色跟 .engineBadgeOk（"已安装"）同步：半透明绿底 + 深绿字。
+   状态而非动作，所以不用 testBtn 那种纯色实心强调。 */
+/* "使用" 状态徽章——尺寸跟 .testBtn 等大，颜色 + 描边跟 .engineStart
+   ("启动引擎" 按钮) 同一族绿色，视觉上是 "ghost tint" 而不是实心强调 */
+.modelActivePill {
+  display: inline-flex;
+  align-items: center;
+  /* 不要 justify-content: center —— testBtn 默认 flex-start，icon 贴左 padding 内沿。
+     这里也得 flex-start，stacked 卡片间 icon 才能纵向对齐 */
+  gap: 8px;
+  height: 36px;
+  padding: 0 24px;
+  background: color-mix(in oklab, #16a34a 12%, transparent);
+  border: 1px solid color-mix(in oklab, #16a34a 26%, transparent);
+  color: #15803d; /* green-700 */
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+/* hover：颜色加深一档，提示"点击可取消激活，切回已下载" */
+.modelActivePill:hover {
+  background: color-mix(in oklab, #16a34a 20%, transparent);
+  border-color: color-mix(in oklab, #16a34a 40%, transparent);
+}
+
+.modelActivePill:active {
+  background: color-mix(in oklab, #16a34a 26%, transparent);
+}
+
+/* "已下载" 状态按钮——灰色 outline，可点击切到"使用中"。
+   视觉：与 testBtn (蓝实心) / modelActivePill (绿实心) 都拉开差距，
+   保留可点感（hover 微微抬一下 + accent 描边），但不抢"使用中"的高亮。 */
+.modelReadyBtn {
+  display: inline-flex;
+  align-items: center;
+  /* 跟 testBtn / modelActivePill 一样 flex-start，icon 贴左 padding 内沿 */
+  gap: 8px;
+  height: 36px;
+  padding: 0 24px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  color: var(--text-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.modelReadyBtn:hover {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  color: var(--color-accent);
+}
+
+.modelReadyBtn:active {
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+/* 主按钮槽位（下载 / 已下载 / 使用中）等宽兜底——防字体宽度差导致
+   各状态卡片的 action 列对不齐。统一 min-width，"下载中…" 4 字态
+   也不被压缩 */
+.modelCardRight .testBtn,
+.modelCardRight .modelActivePill,
+.modelCardRight .modelReadyBtn {
+  min-width: 110px;
+}
+
+.modelCardName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+.modelCardSize {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* tail 推荐卡片包装：grid-template-rows 0fr↔1fr 实现"自适应内容高度"折叠动画 */
+.modelTailWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms var(--ease-out);
+}
+
+.modelTailWrapOpen {
+  grid-template-rows: 1fr;
+}
+
+.modelTailInner {
+  /* overflow hidden 让 0fr 行真正塌缩；动画期间 cards 被 clip */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* 配合主动画做内容淡入淡出，闭合时不至于"突然消失" */
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.modelTailWrapOpen .modelTailInner {
+  opacity: 1;
+}
+
+/* "查看更多模型 (N)" / "收起" 切换按钮：克制风格虚线 ghost
+   跟 SegmentList 的"添加段"按钮同款语言 */
+.modelExpandBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  margin-top: 4px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.modelExpandBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+}
+
+.modelExpandBtn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.modelExpandBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* chevron 不靠两个图标切换，而是一个 ChevronDown 旋转 180°，过渡更顺 */
+.modelExpandChevron {
+  transition: transform 240ms var(--ease-out);
+}
+
+.modelExpandChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* —— 引擎运行时控制行（Phase 1B-α） —— */
+.engineRuntime {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.engineRuntimeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 状态 badge 吸到行右端，跟左侧的按钮 / 测试结果拉开 */
+.engineRuntimeBadgeRight {
+  margin-left: auto;
+}
+
+/* idle 倒计时小提示——比 badge 弱化的灰字，紧贴 badge 左侧 */
+.engineIdleHint {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* idleHint 在场时它已经 margin-left:auto 了；badge 紧跟其后不再需要再 auto */
+.engineIdleHint + .engineRuntimeBadgeRight {
+  margin-left: 0;
+}
+
+/* —— 三个运行时控制按钮：共用尺寸结构 + 各自语义色 —— */
+.engineStart,
+.engineStop,
+.engineTest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+/* 启动引擎：绿色 = "go" */
+.engineStart {
+  background: color-mix(in oklab, #16a34a 12%, transparent);
+  border: 1px solid color-mix(in oklab, #16a34a 26%, transparent);
+  color: #15803d;
+}
+
+.engineStart:hover:not(:disabled) {
+  background: color-mix(in oklab, #16a34a 20%, transparent);
+  border-color: color-mix(in oklab, #16a34a 42%, transparent);
+}
+
+/* 停止：琥珀 = "caution"（reversible，比 destructive 卸载弱一档） */
+.engineStop {
+  background: color-mix(in oklab, #f59e0b 14%, transparent);
+  border: 1px solid color-mix(in oklab, #f59e0b 30%, transparent);
+  color: #b45309;
+}
+
+.engineStop:hover:not(:disabled) {
+  background: color-mix(in oklab, #f59e0b 22%, transparent);
+  border-color: color-mix(in oklab, #f59e0b 46%, transparent);
+}
+
+/* 测试连接：蓝色 = "info / diagnostic" */
+.engineTest {
+  background: color-mix(in oklab, #3b82f6 11%, transparent);
+  border: 1px solid color-mix(in oklab, #3b82f6 26%, transparent);
+  color: #1d4ed8;
+}
+
+.engineTest:hover:not(:disabled) {
+  background: color-mix(in oklab, #3b82f6 18%, transparent);
+  border-color: color-mix(in oklab, #3b82f6 40%, transparent);
+}
+
+.engineStart:disabled,
+.engineStop:disabled,
+.engineTest:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 测试连接结果 inline 展示 */
+.engineRuntimeStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  word-break: break-word;
+}
+
+.engineRuntimeStatusOk {
+  color: #16a34a;
+}
+
+.engineRuntimeStatusFail {
+  color: #dc2626;
+}
+
+/* 启动失败时的 stderr 详情：浅红框包起来，等宽字便于看 */
+.engineRuntimeError {
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  line-height: 1.5;
+  color: #7f1d1d;
+  background: color-mix(in oklab, #dc2626 6%, transparent);
+  border: 1px solid color-mix(in oklab, #dc2626 20%, transparent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* —— 进度条 —— */
+.engineProgressWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.engineProgressBar {
+  width: 100%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.engineProgressFill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transition: width 200ms ease-out;
+}
+
+/* 不定动画样式：固定 20% 宽，靠 keyframe translateX 来回滑动。
+   写在同一 module 里 animation 才能引用到 hash 化后的 keyframe 名。 */
+.engineProgressFillIndeterminate {
+  width: 20%;
+  animation: indeterminate 1.4s infinite ease-in-out;
+}
+
+.engineProgressText {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* total 不知道时进度条来回走的 indeterminate 动画 */
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(500%);
+  }
+}
+
+/* —— 云端 API（可选）section —— */
+
+/* 启用 toggle 切换时的高度过渡：grid-rows 0fr↔1fr trick，让里面 Row 们
+   按 max-content 自适应展开高度，不用硬编 max-height。
+   pointer-events / opacity 一并切，收起态阻止 tab 进入 input。 */
+.externalDetails {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows 280ms var(--ease-out),
+    opacity 220ms var(--ease-out);
+}
+
+.externalDetailsOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 中间层压 min-height: 0 才能 0fr 真生效；overflow: hidden 在收起过程中
+   截断溢出的 Row 内容，不让它在 0fr 容器外漏出来。 */
+.externalDetailsInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 文本输入框：跟 PathField 同款配色，让 base URL / API key / model 输入感观一致 */
+.externalInput {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
+  outline: none;
+  transition:
+    border-color 200ms ease-out,
+    background-color 200ms ease-out,
+    box-shadow 200ms ease-out;
+}
+
+.externalInput:focus {
+  background: #ffffff;
+  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
+}
+
+.externalInput::placeholder {
+  color: var(--text-faint);
+}
+
+/* API Key 行：input 占据剩余宽度 + 右侧眼睛按钮 */
+.externalKeyRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.externalEyeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease-out,
+    background-color 160ms ease-out;
+}
+
+.externalEyeBtn:hover {
+  color: var(--text-strong);
+  background: rgba(0, 0, 0, 0.075);
+}
+
+/* 测试连接行：按钮 + 状态文字横排 */
+.externalActionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding: 0 16px;
+}
+
+/* 蓝色实心：跟 .testBtn 同款，但稍微低调一点（高度短点、padding 小点） */
+.externalTestBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    filter 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.externalTestBtn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.externalTestBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.externalTestBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.externalTestOk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #15803d; /* green-700 */
+}
+
+.externalTestFail {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #991b1b; /* red-800 */
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* 隐私 hint：底部一条柔和文字，跟错误条不同的语气，是 informational */
+.externalPrivacyNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  /* 下边距跟上边距对称（12px），别贴到 Section 底——之前 0 让提示框紧挨容器边 */
+  margin: 12px 16px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, transparent);
+  border-radius: 7px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.externalPrivacyNote svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent);
+}

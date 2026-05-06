@@ -13,6 +13,7 @@ import {
   type CategoryInput,
   type CategoryPatch,
 } from "../api/hindsight";
+import { logError } from "../lib/logger";
 
 interface CategoriesContextValue {
   categories: Category[];
@@ -38,7 +39,7 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
       const list = await api.listCategories();
       setCategories(list);
     } catch (e) {
-      console.error("加载分类失败:", e);
+      logError("categories.load", e);
     } finally {
       setLoading(false);
     }
@@ -135,6 +136,9 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// hook 跟 Provider 同文件是有意为之——消费方一次 import 解决，dev 期 fast refresh
+// 在改动 Provider 时退化为整页刷新（state 文件极少改动，影响可接受）。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useCategories() {
   const ctx = useContext(CategoriesContext);
   if (!ctx) {

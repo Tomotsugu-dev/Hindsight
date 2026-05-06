@@ -39,22 +39,17 @@
 ## 界面预览
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/今日总览.png" alt="今日总览" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/today.png" alt="今日总览" width="700"><br/>
   <sub><i>今日总览 · 24 小时堆叠 + 应用排行</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/月统计.png" alt="月统计" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/monthly.png" alt="月统计" width="700"><br/>
   <sub><i>月统计 · 每日柱状 + 月度排行</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/应用分类.png" alt="应用分类" width="700"><br/>
-  <sub><i>应用分类 · 自定义颜色 / 图标，未分类应用一眼可见</i></sub>
-</p>
-
-<p align="center">
-  <img src="./docs/intro_zh/imgs/多设备同步.png" alt="多设备同步" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="多设备同步" width="700"><br/>
   <sub><i>多设备同步 · 通过 Google Drive 在多台设备间汇总</i></sub>
 </p>
 
@@ -68,7 +63,7 @@
 
 ### MacOS
 
-<--占位符-->
+下载 `hindsight_x.y.z_aarch64.dmg`，双击挂载后将 Hindsight 拖入「应用程序」。
 
 > 所有活动数据 / 截图默认仅存本地。如果开启 Google Drive 同步，只会上传活动元数据，**不会上传截图**。
 

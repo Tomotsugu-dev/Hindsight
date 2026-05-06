@@ -121,8 +121,8 @@
   transition:
     background-color 140ms ease-out,
     border-color 140ms ease-out,
-    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
     opacity 140ms ease-out;
 }
 
@@ -163,7 +163,7 @@
 }
 
 .catRowLanded {
-  animation: catLand 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: catLand 320ms var(--ease-out);
 }
 
 /* grip 拖动手柄：行 hover 才浮现，平时低调 */
@@ -380,7 +380,7 @@
     transparent 100%
   );
   transition:
-    height 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 900ms var(--ease-out),
     -webkit-mask-image 600ms ease-out,
     mask-image 600ms ease-out;
 }
@@ -619,7 +619,7 @@
 }
 
 .assignBtn .chev {
-  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 200ms var(--ease-out);
 }
 
 .assignBtnOpen .chev {

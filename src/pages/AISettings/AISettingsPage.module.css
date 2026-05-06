@@ -1,0 +1,22 @@
+/* AI 设置页外壳样式：tab 已抽到 components/TabNav；
+   各 tab 内容用 AISettings.module.css 中的 .content 等共享 class。 */
+
+.page {
+  padding: 32px 32px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  margin: 0;
+}

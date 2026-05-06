@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { api, type DeviceRow } from "../api/hindsight";
+import { logError } from "../lib/logger";
 
 export interface Device {
   id: string;
@@ -59,7 +60,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
       const rows = await api.listDevices();
       setDevices(rows.map(rowToDevice));
     } catch (e) {
-      console.error("listDevices 失败:", e);
+      logError("devices.list", e);
     }
   }, []);
 
@@ -112,7 +113,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
             prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)),
           );
         })
-        .catch((e) => console.error("renameSelf 失败:", e));
+        .catch((e) => logError("devices.renameSelf", e));
     },
     [],
   );
@@ -125,7 +126,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
           prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)),
         );
       })
-      .catch((e) => console.error("recolorSelf 失败:", e));
+      .catch((e) => logError("devices.recolorSelf", e));
   }, []);
 
   const reiconSelf = useCallback((icon: string) => {
@@ -136,7 +137,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
           prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)),
         );
       })
-      .catch((e) => console.error("reiconSelf 失败:", e));
+      .catch((e) => logError("devices.reiconSelf", e));
   }, []);
 
   const value: DeviceFilterState = {
@@ -159,6 +160,9 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// hook 跟 Provider 同文件是有意为之——消费方一次 import 解决，dev 期 fast refresh
+// 在改动 Provider 时退化为整页刷新（state 文件极少改动，影响可接受）。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useDeviceFilter(): DeviceFilterState {
   const ctx = useContext(DeviceFilterContext);
   if (!ctx) throw new Error("useDeviceFilter must be used within DeviceFilterProvider");

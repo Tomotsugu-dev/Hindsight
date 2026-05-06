@@ -1,22 +1,19 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
-import { AppIcon } from "../../components/AppIcon/AppIcon";
-import { AppStack } from "../../components/AppStack/AppStack";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
-import { displayAppName } from "../../utils/displayName";
-import { displayCategoryName } from "../../utils/categoryName";
+import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
+import { PeriodLegend } from "../../components/PeriodLegend/PeriodLegend";
+import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
-import { RankedList, type RankedItem } from "./RankedList";
+import { RankedList } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
 import { useDeviceFilter } from "../../state/deviceFilter";
-import { useMouseGlow } from "../../hooks/useMouseGlow";
+import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
+import { usePeriodRankings } from "../../hooks/usePeriodRankings";
+import { useDurationFormatter } from "../../utils/duration";
 import styles from "./TodayPage.module.css";
-
-const SWIPE_DURATION = 420;
 
 function parseHM(s: string): number {
   const [h, m] = s.split(":").map((p) => parseInt(p, 10));
@@ -36,19 +33,12 @@ function dateForOffset(offset: number): Date {
 
 export default function TodayPage() {
   const { t } = useTranslation();
-  const [offset, setOffset] = useState(0);
   const { selectedDeviceId } = useDeviceFilter();
+  const { offset, delta, transitioning, canGoForward, frameRef, commit, jumpToCurrent } =
+    usePeriodNavigation();
   const { get: getDay } = useDayCache(offset, selectedDeviceId);
-  const { categories, getCategory } = useCategories();
   const { settings } = useSettings();
-
-  // 把分钟数格式化成本地化的时长文案 —— 依赖 i18n，因此放在组件内
-  const fmtHM = (min: number): string => {
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    if (h === 0) return t("common.duration.minutesShort", { count: m });
-    return t("common.duration.hourMinute", { hours: h, minutes: m });
-  };
+  const fmtHM = useDurationFormatter();
 
   // 日期切换 pill 的本地化文案
   const dayLabel = (off: number): string => {
@@ -78,85 +68,7 @@ export default function TodayPage() {
     [hours],
   );
 
-  const categoryRanks = useMemo<RankedItem[]>(() => {
-    const totals = new Map<string, number>();
-    for (const slot of hours) {
-      for (const seg of slot.segments) {
-        totals.set(
-          seg.categoryId,
-          (totals.get(seg.categoryId) ?? 0) + seg.minutes,
-        );
-      }
-    }
-    const topAppsByCat = new Map<string, string[]>();
-    for (const a of apps) {
-      if (!a.categoryId) continue;
-      const list = topAppsByCat.get(a.categoryId) ?? [];
-      // AppStack 拿这串去查图标，必须用 iconProcess（合并组里的稳定代表名）；
-      // a.process 是组的 display_name，可能跟 app_icons 表里的 key 不一致。
-      list.push(a.iconProcess);
-      topAppsByCat.set(a.categoryId, list);
-    }
-    return categories
-      .map((c) => ({
-        id: c.id,
-        name: displayCategoryName(c, t),
-        color: c.color,
-        minutes: totals.get(c.id) ?? 0,
-        extras: (
-          <AppStack
-            apps={topAppsByCat.get(c.id) ?? []}
-            fallbackColor={c.color}
-          />
-        ),
-      }))
-      .filter((c) => c.minutes > 0)
-      .sort((a, b) => b.minutes - a.minutes);
-  }, [hours, apps, categories, t]);
-
-  const appRanks = useMemo<RankedItem[]>(() => {
-    return apps.map((a) => {
-      const cat = getCategory(a.categoryId);
-      const color = cat?.color ?? "#94a3b8";
-      return {
-        id: a.process,
-        name: displayAppName(a.process),
-        subtitle: cat ? displayCategoryName(cat, t) : undefined,
-        color,
-        minutes: a.minutes,
-        leading: <AppIcon processName={a.iconProcess} fallbackColor={color} />,
-      };
-    });
-  }, [apps, getCategory, t]);
-
-  // —— 滑动动画状态 ——
-  const frameRef = useRef<HTMLDivElement>(null);
-  const [delta, setDelta] = useState(0);
-  const [transitioning, setTransitioning] = useState(false);
-  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
-
-  const canGoForward = offset < 0;
-
-  /** 切到目标方向：先动画到边界，再无过渡复位 */
-  const commit = (direction: -1 | 1) => {
-    if (transitioning) return;
-    if (direction === 1 && !canGoForward) return;
-    const width = frameRef.current?.clientWidth ?? 0;
-    setTransitioning(true);
-    setDelta(direction === -1 ? width : -width);
-    window.setTimeout(() => {
-      setTransitioning(false);
-      setOffset((o) => o + direction);
-      setDelta(0);
-    }, SWIPE_DURATION);
-  };
-
-  const jumpToToday = () => {
-    if (transitioning || offset === 0) return;
-    setOffset(0);
-  };
+  const { categoryRanks, appRanks } = usePeriodRankings(hours, apps);
 
   return (
     <div className={styles.page}>
@@ -170,77 +82,32 @@ export default function TodayPage() {
         </p>
       </header>
 
-      <section className={styles.card}>
-        <header className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>{t("today.chart.title")}</h2>
-
-          <div className={styles.headRight}>
-            <DevicePicker />
-
-          <div className={styles.dayNav}>
-            <button
-              ref={prevBtnRef}
-              type="button"
-              className={`${styles.navBtn} glow`}
-              onClick={() => commit(-1)}
-              disabled={transitioning}
-              aria-label={t("today.dayNav.prev")}
-              title={t("today.dayNav.prev")}
-            >
-              <ChevronLeft size={14} strokeWidth={1.75} />
-            </button>
-
-            <button
-              ref={pillRef}
-              type="button"
-              className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
-              onClick={jumpToToday}
-              disabled={offset === 0 || transitioning}
-              title={offset === 0 ? undefined : t("today.dayNav.backToToday")}
-            >
-              {dayLabel(offset)}
-            </button>
-
-            <button
-              ref={nextBtnRef}
-              type="button"
-              className={`${styles.navBtn} glow`}
-              onClick={() => commit(1)}
-              disabled={!canGoForward || transitioning}
-              aria-label={t("today.dayNav.next")}
-              title={t("today.dayNav.next")}
-            >
-              <ChevronRight size={14} strokeWidth={1.75} />
-            </button>
-          </div>
-          </div>
-        </header>
-
-        <div className={styles.swipeFrame} ref={frameRef}>
-          <div
-            className={`${styles.swipeTrack} ${transitioning ? styles.swipeAnimated : ""}`}
-            style={{ transform: `translate3d(calc(-100% + ${delta}px), 0, 0)` }}
-          >
-            <div className={styles.slide}>
-              <HourlyChart
-                hours={getDay(offset - 1).hours}
-                workHours={workRanges}
-              />
-            </div>
-            <div className={styles.slide}>
-              <HourlyChart hours={hours} workHours={workRanges} />
-            </div>
-            <div className={styles.slide}>
-              <HourlyChart
-                hours={getDay(offset + 1).hours}
-                workHours={workRanges}
-              />
-            </div>
-          </div>
-        </div>
-
-        <Legend hasWorkHours={!!workRanges} />
-      </section>
+      <PeriodCard
+        title={t("today.chart.title")}
+        pillLabel={dayLabel(offset)}
+        pillTooltip={t("today.dayNav.backToToday")}
+        prevAriaLabel={t("today.dayNav.prev")}
+        nextAriaLabel={t("today.dayNav.next")}
+        offset={offset}
+        transitioning={transitioning}
+        delta={delta}
+        frameRef={frameRef}
+        canGoForward={canGoForward}
+        onPrev={() => commit(-1)}
+        onNext={() => commit(1)}
+        onJumpToCurrent={jumpToCurrent}
+        rightExtras={<DevicePicker />}
+        footer={
+          <PeriodLegend
+            workHoursLabel={workRanges ? t("today.legend.workHours") : undefined}
+          />
+        }
+        slides={[
+          <HourlyChart key="prev" hours={getDay(offset - 1).hours} workHours={workRanges} />,
+          <HourlyChart key="current" hours={hours} workHours={workRanges} />,
+          <HourlyChart key="next" hours={getDay(offset + 1).hours} workHours={workRanges} />,
+        ]}
+      />
 
       <div className={styles.ranks}>
         <section className={styles.card}>
@@ -271,38 +138,4 @@ export default function TodayPage() {
       </div>
     </div>
   );
-}
-
-interface LegendProps {
-  hasWorkHours: boolean;
-}
-
-function Legend({ hasWorkHours }: LegendProps) {
-  const { t } = useTranslation();
-  const { categories } = useCategories();
-  return (
-    <div className={styles.legend}>
-      {categories.map((c) => (
-        <span key={c.id} className={styles.legendItem}>
-          <span
-            className={styles.legendDot}
-            style={{ background: c.color }}
-            aria-hidden
-          />
-          {displayCategoryName(c, t)}
-        </span>
-      ))}
-      {hasWorkHours && (
-        <span className={styles.legendItem}>
-          <span className={styles.legendBand} aria-hidden />
-          {t("today.legend.workHours")}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function EmptyHint() {
-  const { t } = useTranslation();
-  return <div className={styles.empty}>{t("common.empty")}</div>;
 }

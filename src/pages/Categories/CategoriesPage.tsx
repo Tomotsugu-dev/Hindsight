@@ -23,7 +23,8 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { displayCategoryName } from "../../utils/categoryName";
-import { AppList, DEFAULT_PALETTE } from "./parts";
+import { AppList } from "./parts";
+import { DEFAULT_PALETTE } from "./constants";
 import { PairingSection } from "./PairingSection";
 import styles from "./Categories.module.css";
 

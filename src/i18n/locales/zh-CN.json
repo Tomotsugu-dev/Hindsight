@@ -412,6 +412,12 @@
   },
   "aiSettings": {
     "title": "AI 设置",
+    "tabs": {
+      "engine": "引擎",
+      "general": "常规",
+      "prompt": "提示词",
+      "external": "云端 API"
+    },
     "engine": {
       "sectionTitle": "本地 AI 引擎",
       "sectionDesc": "Hindsight 自带 llama.cpp 推理引擎，在你机器上本地跑——截图不上传任何外部服务。",
@@ -448,6 +454,8 @@
         "testConnection": "测试连接",
         "testTooltipReady": "启动引擎（如未运行）并向本地 /v1/models 发请求验证",
         "testTooltipNotInstalled": "尚未安装",
+        "releaseVram": "释放显存",
+        "releaseVramTooltip": "停止引擎，立即释放显存。下次跑总结时会自动重启。",
         "openFolderTooltipInstalled": "在文件管理器打开安装目录",
         "openFolderTooltipNotInstalled": "尚未安装",
         "uninstallTooltipInstalled": "卸载本地 AI 引擎",
@@ -466,8 +474,18 @@
         "starting": "启动中…",
         "error": "出错",
         "connectedNoModels": "已连接（暂无模型加载）",
-        "connectedWithModels": "已连接，{{count}} 个模型"
+        "connectedWithModels": "已连接，{{count}} 个模型",
+        "idleCountdownSec": "{{sec}} 秒后自动释放显存",
+        "idleCountdownMin": "{{min}} 分 {{sec}} 秒后自动释放显存"
       }
+    },
+    "engineParams": {
+      "sectionTitle": "引擎参数（启动时）",
+      "batch": "批大小",
+      "slots": "并发路数",
+      "ctx": "上下文（每路）",
+      "vramLabel": "估算总占用",
+      "vramBreakdown": "（权重 {{weights}} + KV cache {{kv}} + 其它 ~2.0 · 按 {{params}}B 模型 + ctx {{ctx}}K × {{slots}} 路 估）"
     },
     "models": {
       "sectionTitle": "模型",
@@ -506,7 +524,7 @@
     "prompt": {
       "sectionTitle": "提示词",
       "sectionDesc": "告诉模型怎么写总结。三种语言各有内置默认；改完点保存生效，点重置回默认。",
-      "rowLabel": "System Prompt",
+      "rowLabel": "系统提示词",
       "hint": {
         "dirty": "有未保存的改动",
         "custom": "已使用自定义提示词",
@@ -540,9 +558,9 @@
     },
     "external": {
       "sectionTitle": "云端 API（可选）",
-      "sectionDesc": "段总结改用云端模型生成；截图永远不上传，单图描述仍由本地视觉模型完成。",
+      "sectionDesc": "时段总结改用云端模型生成，截图永远不上传，单图描述仍由本地视觉模型完成。",
       "enableLabel": "启用云端段总结",
-      "enableHint": "开启后，每段总结调下方配置的 API；step 1 单图描述仍走本地。",
+      "enableHint": "开启后，每段总结调下方配置的 API；分析截图仍在本地分析。",
       "providerLabel": "服务商",
       "provider": {
         "openai": "OpenAI",

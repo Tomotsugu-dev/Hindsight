@@ -8,21 +8,6 @@ import { displayAppName } from "../../utils/displayName";
 import { displayCategoryName } from "../../utils/categoryName";
 import styles from "./Categories.module.css";
 
-export const DEFAULT_PALETTE = [
-  "#a78bfa",
-  "#60a5fa",
-  "#34d399",
-  "#fbbf24",
-  "#fb7185",
-  "#94a3b8",
-  "#f97316",
-  "#3b82f6",
-  "#10b981",
-  "#d946ef",
-  "#06b6d4",
-  "#facc15",
-];
-
 export function AppList({ category }: { category: Category }) {
   const { t } = useTranslation();
   const { unassignApp, assignApp } = useCategories();

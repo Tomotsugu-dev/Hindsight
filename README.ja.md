@@ -39,22 +39,17 @@
 ## インターフェースプレビュー
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/今日総览.png" alt="Today Overview" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="700"><br/>
   <sub><i>今日の総括 · 24時間積み重ねグラフ + アプリランキング</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/月统计.png" alt="Monthly Statistics" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="700"><br/>
   <sub><i>月間統計 · 日別グラフ + 月間ランキング</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/应用分类.png" alt="App Classification" width="700"><br/>
-  <sub><i>アプリ分類 · カスタムカラーとアイコン、未分類アプリが一目瞭然</i></sub>
-</p>
-
-<p align="center">
-  <img src="./docs/intro_zh/imgs/多设备同步.png" alt="Multi-Device Sync" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync" width="700"><br/>
   <sub><i>マルチデバイス同期 · Google Driveを通じた複数デバイス間のデータ集約</i></sub>
 </p>
 
@@ -68,7 +63,7 @@
 
 ### macOS
 
-<--Placeholder-->
+`hindsight_x.y.z_aarch64.dmg` をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。
 
 > すべてのアクティビティデータとスクリーンショットはデフォルトでローカルに保存されます。Google Driveの同期を有効にした場合、アクティビティメタデータのみがアップロードされ、**スクリーンショットはアップロードされません**。
 

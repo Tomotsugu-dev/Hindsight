@@ -543,6 +543,9 @@ impl DaySummaryRunner {
         let system = build_system_prompt(ai);
         let user_text = build_user_prompt(ai, &ctx);
 
+        // 本地 step2 走自家引擎，需要 acquire 防止 watcher 在请求中途 stop；
+        // 云端 step2 (External) 不动 supervisor，不 acquire。
+        let _step2_inflight = step2.is_local().then(|| self.supervisor.acquire_inference());
         let (row, status_str): (SegmentSummaryRow, &'static str) =
             match step2.chat(&system, &user_text, &[]).await {
                 // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
@@ -709,9 +712,11 @@ impl DaySummaryRunner {
         )
         .await?;
 
+        let _inflight = self.supervisor.acquire_inference();
         let (desc, usage) = chat
             .chat_with_images(&describe_system, &describe_user, std::slice::from_ref(&data_uri))
             .await?;
+        drop(_inflight);
 
         // 覆盖落库
         ai_summaries::upsert_image_description(
@@ -896,6 +901,7 @@ impl DaySummaryRunner {
             let source_owned = source.to_string();
             let pool = self.pool.clone();
             let app = self.app.clone();
+            let supervisor = Arc::clone(&self.supervisor);
             let cancel = Arc::clone(&self.cancel);
             let img_path = meta.path.clone();
             let app_display = meta.app_display.clone();
@@ -927,6 +933,7 @@ impl DaySummaryRunner {
                 );
 
                 let single = std::slice::from_ref(&data_uri);
+                let _inflight = supervisor.acquire_inference();
                 let (desc, usage) =
                     match chat.chat_with_images(&describe_system, &describe_user, single).await {
                         Ok(r) => r,

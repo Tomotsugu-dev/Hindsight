@@ -26,6 +26,13 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+/// 引擎闲置多久没新请求 → 自动 stop 释放显存。
+/// 跑一段 step1+step2 大约 60-120s；阈值取 120s 让用户在跑总结之间稍稍歇会儿
+/// 也不会被释放，但跑完真闲下来 2 分钟就回收 GPU。
+const IDLE_THRESHOLD: Duration = Duration::from_secs(120);
+/// idle watcher 检查频率。
+const IDLE_TICK: Duration = Duration::from_secs(10);
+
 use crate::ai::binary;
 use crate::ai::platform::{self, Platform};
 use crate::error::{Error, Result};
@@ -66,6 +73,9 @@ pub struct EngineRuntimeStatus {
     pub port: Option<u16>,
     /// `Error` 时的可读错误（stderr 截短）；其它状态 `None`
     pub error: Option<String>,
+    /// `Running` 且无 in-flight 请求时，距离 idle watcher 自动 stop 还剩多少秒。
+    /// 有 in-flight 请求时为 `None`（"正忙"）；状态非 Running 也为 `None`。
+    pub idle_seconds_remaining: Option<u64>,
 }
 
 /// 启动 llama-server 时可选的命令行调参。
@@ -97,6 +107,10 @@ pub struct EngineSupervisor {
     /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout（含启动日志的副本）。
     /// Arc 让 spawn 出来的 reader task 能持有它而不锁 inner。
     logs: Arc<Mutex<VecDeque<String>>>,
+    /// 推理请求计数 + 最后一次使用时间——给 idle watcher 自动 stop 用。
+    /// 用 std sync mutex 而不是 tokio mutex：临界区只是 usize+Instant 赋值，几纳秒，
+    /// 同时让 [`InferenceGuard::drop`] 能同步访问（drop 不能 await tokio mutex）。
+    inflight_state: std::sync::Mutex<InflightState>,
 }
 
 const LOGS_RING_SIZE: usize = 500;
@@ -107,6 +121,44 @@ const STARTUP_LINES: usize = 200;
 struct Inner {
     state: EngineRuntimeStatus,
     child: Option<Child>,
+}
+
+/// in-flight 推理请求计数器 + 最后一次活跃时间戳。
+struct InflightState {
+    /// 当前持有 [`InferenceGuard`] 的请求数；> 0 时 watcher 不 stop 引擎。
+    count: usize,
+    /// 最后一次 acquire / release 的时刻。watcher 用 `elapsed()` 判断是否 idle 超阈。
+    last_used_at: Instant,
+}
+
+impl Default for InflightState {
+    fn default() -> Self {
+        Self { count: 0, last_used_at: Instant::now() }
+    }
+}
+
+/// 一次推理请求的 RAII 守护：在 `drop()` 时把 in-flight 计数减 1，并把
+/// `last_used_at` 推到当前时刻。配合 idle watcher 实现"跑完任务 N 秒无新请求
+/// → 自动 stop 引擎释放显存"。
+///
+/// 用法（必须在调 `chat.chat_*` **之前** acquire，跨 await 持有到请求返回）：
+/// ```ignore
+/// let _g = supervisor.acquire_inference();  // in-flight++
+/// chat.chat_with_images(...).await?;        // 真正发请求
+/// // _g 在此处 drop → in-flight--
+/// ```
+pub struct InferenceGuard {
+    sup: Arc<EngineSupervisor>,
+}
+
+impl Drop for InferenceGuard {
+    fn drop(&mut self) {
+        // std::sync::Mutex 的 lock 在毒化时也能恢复；poison 时仅记录不 panic
+        if let Ok(mut s) = self.sup.inflight_state.lock() {
+            s.count = s.count.saturating_sub(1);
+            s.last_used_at = Instant::now();
+        }
+    }
 }
 
 impl Default for EngineSupervisor {
@@ -121,12 +173,101 @@ impl EngineSupervisor {
             inner: Mutex::new(Inner::default()),
             startup_logs: Arc::new(Mutex::new(Vec::with_capacity(STARTUP_LINES))),
             logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
+            inflight_state: std::sync::Mutex::new(InflightState::default()),
         }
     }
 
-    /// 当前状态快照（前端用）。
+    /// 注册一次推理请求：in-flight +1 + last_used_at 推到现在。
+    /// 调用方应把返回的 guard 持有到请求结束（drop 时自动 -1）。
+    ///
+    /// `Arc<Self>` 的方法签名让 guard 持有 supervisor 的强引用，
+    /// 保证 guard 还在期间 supervisor 不会被释放。
+    pub fn acquire_inference(self: &Arc<Self>) -> InferenceGuard {
+        if let Ok(mut s) = self.inflight_state.lock() {
+            s.count += 1;
+            s.last_used_at = Instant::now();
+        }
+        InferenceGuard { sup: Arc::clone(self) }
+    }
+
+    /// 启动 idle watcher：每 [`IDLE_TICK`] 检查一次，引擎 Running + in-flight==0
+    /// + idle > [`IDLE_THRESHOLD`] 时自动 stop 释放显存。
+    ///
+    /// watcher 持 [`Weak`](std::sync::Weak) 引用——supervisor 被 drop 后 watcher 自然退出，
+    /// 不会泄漏 task。lib.rs 里 supervisor 创建后调一次即可，永久后台跑。
+    pub fn spawn_idle_watcher(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(IDLE_TICK);
+            // 第一次 tick 是立即触发，跳过它——避免刚启动就检查
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                let Some(sup) = weak.upgrade() else { break };
+                let _ = sup.maybe_idle_stop().await;
+            }
+        })
+    }
+
+    /// 返回距离下次 idle 触发还有多久（用户可观测）。
+    /// 引擎不在 Running / 还有 in-flight 时返回 None。
+    pub fn idle_eta(&self) -> Option<Duration> {
+        let s = self.inflight_state.lock().ok()?;
+        if s.count > 0 {
+            return None;
+        }
+        let elapsed = s.last_used_at.elapsed();
+        if elapsed >= IDLE_THRESHOLD {
+            Some(Duration::ZERO)
+        } else {
+            Some(IDLE_THRESHOLD - elapsed)
+        }
+    }
+
+    /// 检查当前是否满足 idle 释放条件，是则 stop 引擎。
+    /// 持 inner mutex 期间检查 in-flight + take child，保证 watcher 与 acquire 不抢同一窗口。
+    /// 返回 true 表示真的执行了一次 idle stop。
+    async fn maybe_idle_stop(&self) -> bool {
+        let child = {
+            let mut inner = self.inner.lock().await;
+            if inner.state.state != EngineState::Running {
+                return false;
+            }
+            // inflight 锁的临界区极短（usize 比较 + Instant.elapsed），不会因为
+            // 持着 inner 锁阻塞而拉长——nested lock 顺序：inner → inflight，
+            // 全程不反向，无死锁风险
+            let s = match self.inflight_state.lock() {
+                Ok(g) => g,
+                Err(_) => return false,
+            };
+            if s.count > 0 || s.last_used_at.elapsed() < IDLE_THRESHOLD {
+                return false;
+            }
+            drop(s);
+            inner.state = EngineRuntimeStatus::default();
+            inner.child.take()
+        };
+        if let Some(mut child) = child {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            log::info!(
+                "AI 引擎 idle 超过 {}s，已自动释放显存",
+                IDLE_THRESHOLD.as_secs()
+            );
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 当前状态快照（前端用）。Running 时附带 idle 倒计时，让前端能展示
+    /// "X 秒后自动释放显存"。
     pub async fn status(&self) -> EngineRuntimeStatus {
-        self.inner.lock().await.state.clone()
+        let mut s = self.inner.lock().await.state.clone();
+        if s.state == EngineState::Running {
+            s.idle_seconds_remaining = self.idle_eta().map(|d| d.as_secs());
+        }
+        s
     }
 
     /// 拿日志：启动头 N 行（保留区） + 最近 ring buffer，拼一起。
@@ -191,6 +332,7 @@ impl EngineSupervisor {
                     state: EngineState::Error,
                     port: None,
                     error: Some(msg.clone()),
+                    ..Default::default()
                 };
                 return Err(Error::Other(msg));
             }
@@ -212,6 +354,7 @@ impl EngineSupervisor {
                         state: EngineState::Error,
                         port: None,
                         error: Some(msg.clone()),
+                        ..Default::default()
                     };
                     return Err(Error::Io(e));
                 }
@@ -255,6 +398,7 @@ impl EngineSupervisor {
                 state: EngineState::Starting,
                 port: Some(port),
                 error: None,
+                ..Default::default()
             };
             inner.child = Some(child);
             port
@@ -272,7 +416,13 @@ impl EngineSupervisor {
                 state: EngineState::Running,
                 port: Some(port),
                 error: None,
+                ..Default::default()
             };
+            // 新一轮启动：把 inflight 计数清零 + last_used_at 推到现在。
+            // 不重置的话上一轮残留的旧 last_used 会让新启动立刻被 watcher 当成 idle 干掉。
+            if let Ok(mut s) = self.inflight_state.lock() {
+                *s = InflightState::default();
+            }
             Ok(port)
         } else {
             // /health 没等到 200——可能子进程已退出（缺模型 / 配置错），
@@ -286,6 +436,7 @@ impl EngineSupervisor {
                 state: EngineState::Error,
                 port: None,
                 error: Some(err_msg.clone()),
+                ..Default::default()
             };
             inner.child = None;
             Err(Error::Other(err_msg))

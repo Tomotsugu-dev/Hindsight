@@ -150,6 +150,9 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// hook 跟 Provider 同文件是有意为之——消费方一次 import 解决，dev 期 fast refresh
+// 在改动 Provider 时退化为整页刷新（state 文件极少改动，影响可接受）。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useUpdater() {
   const ctx = useContext(UpdaterContext);
   if (!ctx)

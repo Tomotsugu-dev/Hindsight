@@ -165,21 +165,12 @@ function CloudSyncCard() {
     }
   };
 
-  if (!settings) return null;
-
+  // 派生值放到早返回之前，确保所有 hook 调用顺序在每次渲染都一致（rules-of-hooks）。
   const signedIn = auth?.signedIn ?? false;
   const configured = auth?.configured ?? false;
-  // sync 报告 token 解密失败 / 凭证失效时，把"退出"换成"重新登录"
-  // —— 用户多半就是想刷新 token 而不是真的登出
-  const authExpired =
-    signedIn &&
-    !!sync?.lastError &&
-    (sync.lastError.includes("登录凭证失效") ||
-      sync.lastError.includes("aes decrypt") ||
-      sync.lastError.includes("crypto: aes"));
   // 用户改凭证后 auth.configured 可能没及时更新，所以 UI 也按本地 settings 算一遍
   const credsFilled = !!(
-    settings.googleClientId.trim() && settings.googleClientSecret.trim()
+    settings?.googleClientId.trim() && settings?.googleClientSecret.trim()
   );
   const canSignIn = configured || credsFilled;
 
@@ -189,6 +180,17 @@ function CloudSyncCard() {
       api.authStatus().then(setAuth).catch(() => {});
     }
   }, [credsFilled, configured, signedIn]);
+
+  if (!settings) return null;
+
+  // sync 报告 token 解密失败 / 凭证失效时，把"退出"换成"重新登录"
+  // —— 用户多半就是想刷新 token 而不是真的登出
+  const authExpired =
+    signedIn &&
+    !!sync?.lastError &&
+    (sync.lastError.includes("登录凭证失效") ||
+      sync.lastError.includes("aes decrypt") ||
+      sync.lastError.includes("crypto: aes"));
 
   return (
     <div

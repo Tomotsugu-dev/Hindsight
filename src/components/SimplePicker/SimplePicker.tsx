@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { usePicker } from "../../hooks/usePicker";
 import styles from "./SimplePicker.module.css";
 
 export interface SimplePickerOption<T extends string> {
@@ -17,6 +17,8 @@ interface SimplePickerProps<T extends string> {
 /**
  * 通用下拉选择器，跟 DevicePicker 视觉完全一致（去掉了 tile / 设备图标）。
  * 用 string-typed value 做精确匹配，泛型 T 让调用方拿到 onChange 的精确类型。
+ *
+ * 展开/外点关闭/Esc 关闭抽到 [usePicker] hook。
  */
 export function SimplePicker<T extends string>({
   value,
@@ -24,29 +26,15 @@ export function SimplePicker<T extends string>({
   onChange,
   disabled,
 }: SimplePickerProps<T>) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
+  const { open, wrapRef, toggle, close } = usePicker();
   const current = options.find((o) => o.value === value);
-
-  // 点外面关闭
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
       <button
         type="button"
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
-        onClick={() => !disabled && setOpen((v) => !v)}
+        onClick={() => !disabled && toggle()}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -56,11 +44,7 @@ export function SimplePicker<T extends string>({
         <span className={styles.labelStack}>
           <span className={styles.label}>{current?.label ?? ""}</span>
           {options.map((opt) => (
-            <span
-              key={opt.value}
-              className={styles.labelMeasure}
-              aria-hidden
-            >
+            <span key={opt.value} className={styles.labelMeasure} aria-hidden>
               {opt.label}
             </span>
           ))}
@@ -83,7 +67,7 @@ export function SimplePicker<T extends string>({
               }`}
               onClick={() => {
                 onChange(opt.value);
-                setOpen(false);
+                close();
               }}
               role="option"
               aria-selected={opt.value === value}

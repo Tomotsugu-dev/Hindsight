@@ -412,6 +412,12 @@
   },
   "aiSettings": {
     "title": "AI Settings",
+    "tabs": {
+      "engine": "Engine",
+      "general": "General",
+      "prompt": "Prompt",
+      "external": "Cloud API"
+    },
     "engine": {
       "sectionTitle": "Local AI engine",
       "sectionDesc": "Hindsight ships with the llama.cpp inference engine and runs everything locally — screenshots are never uploaded to any external service.",
@@ -448,6 +454,8 @@
         "testConnection": "Test connection",
         "testTooltipReady": "Start the engine (if not running) and verify by hitting the local /v1/models endpoint",
         "testTooltipNotInstalled": "Not installed",
+        "releaseVram": "Release VRAM",
+        "releaseVramTooltip": "Stop the engine and free GPU memory now. It will spawn again automatically on the next summary run.",
         "openFolderTooltipInstalled": "Reveal the install folder in the file manager",
         "openFolderTooltipNotInstalled": "Not installed",
         "uninstallTooltipInstalled": "Uninstall the local AI engine",
@@ -466,8 +474,18 @@
         "starting": "Starting…",
         "error": "Error",
         "connectedNoModels": "Connected (no models loaded)",
-        "connectedWithModels": "Connected — {{count}} model(s)"
+        "connectedWithModels": "Connected — {{count}} model(s)",
+        "idleCountdownSec": "Releases VRAM in {{sec}}s",
+        "idleCountdownMin": "Releases VRAM in {{min}}m {{sec}}s"
       }
+    },
+    "engineParams": {
+      "sectionTitle": "Engine parameters (on launch)",
+      "batch": "Batch size",
+      "slots": "Parallel slots",
+      "ctx": "Context (per slot)",
+      "vramLabel": "Estimated VRAM",
+      "vramBreakdown": "(weights {{weights}} + KV cache {{kv}} + ~2.0 overhead · for {{params}}B model + {{ctx}}K ctx × {{slots}} slot(s))"
     },
     "models": {
       "sectionTitle": "Models",

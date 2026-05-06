@@ -1,0 +1,186 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.headText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.titleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+/* —— info 图标 + hover 气泡 ——
+   hover / focus 在 .infoWrap 上显示 .infoTip；用 CSS 实现，零 JS。
+   .infoWrap 是 inline-flex 容器，用相对定位让气泡 absolutely 浮在它上方。 */
+.infoWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  cursor: help;
+  outline: none;
+  transition: color 140ms ease-out;
+}
+
+.infoWrap:hover,
+.infoWrap:focus-visible {
+  color: var(--color-accent);
+}
+
+.infoIcon {
+  display: block;
+}
+
+.infoTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  z-index: 10;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(28, 28, 36, 0.94);
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.20),
+    0 2px 4px rgba(0, 0, 0, 0.10);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms var(--ease-out);
+  white-space: normal;
+  text-align: left;
+}
+
+/* 小三角箭头 */
+.infoTip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(28, 28, 36, 0.94);
+}
+
+.infoWrap:hover .infoTip,
+.infoWrap:focus-visible .infoTip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.description {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.tone_primary {
+  background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+  color: var(--color-accent);
+}
+
+.tone_danger {
+  background: color-mix(in oklab, #ef4444 13%, transparent);
+  color: #ef4444;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  /* 不能 hidden —— 否则 row 内的 hover tooltip（labelHint）会被截断在 card 外。
+     row 内容是文字/控件，不会撑出 card 边框，所以 visible 不影响圆角观感。 */
+  overflow: visible;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+}
+
+/* —— 可折叠 Section ——
+   header 始终可见；card 默认收起（grid 0fr 高度 0 + 透明），hover 整个 section
+   或内部 focus（用户在 textarea 输入）时展开。展开走 grid-rows 0fr↔1fr 动画
+   = 自适应内容高度，不需要硬编 max-height。 */
+.section.collapsible .cardWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows 220ms var(--ease-out),
+    margin-top 220ms var(--ease-out),
+    opacity 180ms ease-out;
+}
+
+.section.collapsible:hover .cardWrap,
+.section.collapsible:focus-within .cardWrap {
+  grid-template-rows: 1fr;
+  /* header 跟 card 之间留 12px——展开时才出现，避免折叠态有空白 */
+  margin-top: 12px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 中间层：grid cell 的 min-height 默认是 max-content，把它压成 0 才能 0fr 真生效 */
+.cardInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 折叠 Section 的 header 带一个微弱的 hover 反馈，提示"我能展开" */
+.section.collapsible .header {
+  cursor: default;
+  transition: opacity 140ms ease-out;
+}
+
+.section.collapsible:not(:hover):not(:focus-within) .header {
+  opacity: 0.7;
+}

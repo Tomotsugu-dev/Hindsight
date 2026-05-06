@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
+import { logError } from "../../../lib/logger";
 import {
   AlertTriangle,
   Check,
@@ -105,7 +106,7 @@ export default function DailyTab() {
         setRows(m);
       })
       .catch((e) => {
-        if (!cancelled) console.error("getDaySummary 失败:", e);
+        if (!cancelled) logError("daily.getSummary", e);
       });
     return () => {
       cancelled = true;

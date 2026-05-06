@@ -1,0 +1,43 @@
+/* 公共 utility 类——`:global()` 让它们能跨 CSS Modules 边界使用。
+   设计原则：
+   - 只放真正在多处复用的视觉模式
+   - 不放业务语义类（card / chip / pill 等业务级别仍由各组件 module.css 拥有）
+   - 跟 tokens 配套，所有数值走 var(--*) */
+
+/* —— 焦点环：替代裸 outline:none 的 a11y 友好版 ——
+   两种风格：
+   - .focus-ring 用 outline 描边（默认 2px / accent / 2px offset）
+   - .focus-shadow 用 box-shadow 软光晕（适合输入框这类已有边框的元素） */
+:global(.focus-ring) {
+  outline: none;
+}
+:global(.focus-ring):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+:global(.focus-shadow) {
+  outline: none;
+}
+:global(.focus-shadow):focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+/* —— 按钮按压回弹 —— */
+:global(.btn-press) {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+:global(.btn-press):active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* —— 阴影预设（替代散在 module.css 里的多行 box-shadow） —— */
+:global(.shadow-sm) {
+  box-shadow: var(--shadow-sm);
+}
+:global(.shadow-md) {
+  box-shadow: var(--shadow-md);
+}
+:global(.shadow-lg) {
+  box-shadow: var(--shadow-lg);
+}

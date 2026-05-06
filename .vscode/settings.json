@@ -19,6 +19,9 @@
     ".python-version": true,
     "pyproject.toml": true,
     "uv.lock": true,
+    ".venv": true,
+    ".claude": true,
+    "latest.json": true,
     "LICENSE": true,
   },
   "search.exclude": {
@@ -35,6 +38,9 @@
     "**/.pytest_cache": true,
     "**/*.py": true,
     "uv.lock": true,
+    ".venv": true,
+    ".claude": true,
+    "latest.json": true,
   },
   "files.watcherExclude": {
     "**/node_modules/**": true,

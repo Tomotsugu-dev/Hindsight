@@ -135,7 +135,7 @@
   transition:
     border-color 160ms ease-out,
     background-color 160ms ease-out,
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms var(--ease-out),
     box-shadow 200ms ease-out;
 }
 
@@ -360,7 +360,7 @@
     var(--color-accent)
   );
   border-radius: 4px;
-  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 320ms var(--ease-out);
 }
 
 .statBarValue {

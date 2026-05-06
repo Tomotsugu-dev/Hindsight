@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, Layers } from "lucide-react";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { useMouseGlow } from "../../hooks/useMouseGlow";
+import { usePicker } from "../../hooks/usePicker";
 import styles from "./DevicePicker.module.css";
 
 export function DevicePicker() {
   const { t } = useTranslation();
   const { devices, selected, setSelected } = useDeviceFilter();
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const { open, wrapRef, toggle, close } = usePicker();
   const { ref: triggerRef } = useMouseGlow<HTMLButtonElement>();
 
   const showAllOption = devices.length >= 2;
@@ -21,25 +21,13 @@ export function DevicePicker() {
       ? t("components.devicePicker.all")
       : currentDevice?.name ?? t("components.devicePicker.thisDevice");
 
-  // 点外面关闭
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
-
   return (
     <div className={styles.wrap} ref={wrapRef}>
       <button
         ref={triggerRef}
         type="button"
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""} glow`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -63,7 +51,7 @@ export function DevicePicker() {
               checked={selected === "all"}
               onClick={() => {
                 setSelected("all");
-                setOpen(false);
+                close();
               }}
             />
           )}
@@ -77,7 +65,7 @@ export function DevicePicker() {
               checked={selected === d.id}
               onClick={() => {
                 setSelected(d.id);
-                setOpen(false);
+                close();
               }}
             />
           ))}

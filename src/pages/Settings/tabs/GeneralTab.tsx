@@ -3,15 +3,16 @@ import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
 import { Aperture, Clock, Rocket } from "lucide-react";
-import { Section } from "../components/Section";
-import { Row } from "../components/Row";
-import { Toggle } from "../components/Toggle";
-import { PathField } from "../components/PathField";
-import { Slider } from "../components/Slider";
-import { TimeRangeList } from "../components/TimeRangeList";
+import { Section } from "../../../components/FormLayout/Section";
+import { Row } from "../../../components/FormLayout/Row";
+import { Toggle } from "../../../components/FormControls/Toggle";
+import { PathField } from "../../../components/FormControls/PathField";
+import { Slider } from "../../../components/FormControls/Slider";
+import { TimeRangeList } from "../../../components/FormControls/TimeRangeList";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "../../../state/settings";
 import { api } from "../../../api/hindsight";
+import { logError } from "../../../lib/logger";
 
 export default function GeneralTab() {
   const { t } = useTranslation();
@@ -39,7 +40,7 @@ export default function GeneralTab() {
         update({ screenshotPath: picked });
       }
     } catch (e) {
-      console.error("打开目录选择失败:", e);
+      logError("general.pickScreenshotDir", e);
     }
   };
 
@@ -54,7 +55,7 @@ export default function GeneralTab() {
         setPendingDataRoot(picked);
       }
     } catch (e) {
-      console.error("打开目录选择失败:", e);
+      logError("general.pickDataDir", e);
     }
   };
 
@@ -64,7 +65,7 @@ export default function GeneralTab() {
       await api.setDataRoot(pendingDataRoot);
       setDataRoot(pendingDataRoot);
     } catch (e) {
-      console.error("保存数据路径失败:", e);
+      logError("general.saveDataRoot", e);
     }
     setPendingDataRoot(null);
   };

@@ -1,0 +1,155 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 20px;
+  min-height: 56px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowBlock {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.rowDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.labelLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+
+/* —— info 图标 + hover 气泡 ——
+   规格跟 Section 的 info 一致：14px 图标 / dark tooltip / 小三角 / 200ms 过渡 */
+.infoWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  cursor: help;
+  outline: none;
+  transition: color 140ms ease-out;
+}
+
+.infoWrap:hover,
+.infoWrap:focus-visible {
+  color: var(--color-accent);
+}
+
+.infoIcon {
+  display: block;
+}
+
+.infoTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  z-index: 10;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(28, 28, 36, 0.94);
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.20),
+    0 2px 4px rgba(0, 0, 0, 0.10);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms var(--ease-out);
+  white-space: pre-line;
+  text-align: left;
+}
+
+.infoTip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(28, 28, 36, 0.94);
+}
+
+.infoWrap:hover .infoTip,
+.infoWrap:focus-visible .infoTip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.description {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: -0.002em;
+}
+
+.control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowBlock .control {
+  width: 100%;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.tone_primary {
+  background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+  color: var(--color-accent);
+}
+
+.tone_danger {
+  background: color-mix(in oklab, #ef4444 13%, transparent);
+  color: #ef4444;
+}

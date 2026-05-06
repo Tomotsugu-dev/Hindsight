@@ -412,6 +412,12 @@
   },
   "aiSettings": {
     "title": "AI 設定",
+    "tabs": {
+      "engine": "エンジン",
+      "general": "一般",
+      "prompt": "プロンプト",
+      "external": "クラウド API"
+    },
     "engine": {
       "sectionTitle": "ローカル AI エンジン",
       "sectionDesc": "Hindsight には llama.cpp 推論エンジンが同梱されており、すべてローカルで実行されます。スクリーンショットが外部サービスへアップロードされることはありません。",
@@ -448,6 +454,8 @@
         "testConnection": "接続テスト",
         "testTooltipReady": "エンジンを起動 (未起動の場合) し、ローカルの /v1/models エンドポイントへリクエストして確認します",
         "testTooltipNotInstalled": "未インストール",
+        "releaseVram": "VRAM を解放",
+        "releaseVramTooltip": "エンジンを停止して VRAM をすぐに解放します。次の要約実行時に自動的に再起動します。",
         "openFolderTooltipInstalled": "インストール先のフォルダをファインダー / エクスプローラーで開く",
         "openFolderTooltipNotInstalled": "未インストール",
         "uninstallTooltipInstalled": "ローカル AI エンジンをアンインストール",
@@ -466,8 +474,18 @@
         "starting": "起動中…",
         "error": "エラー",
         "connectedNoModels": "接続済み (モデル未ロード)",
-        "connectedWithModels": "接続済み — モデル {{count}} 個"
+        "connectedWithModels": "接続済み — モデル {{count}} 個",
+        "idleCountdownSec": "{{sec}} 秒後に VRAM を解放",
+        "idleCountdownMin": "{{min}} 分 {{sec}} 秒後に VRAM を解放"
       }
+    },
+    "engineParams": {
+      "sectionTitle": "エンジン パラメータ（起動時）",
+      "batch": "バッチサイズ",
+      "slots": "並列スロット",
+      "ctx": "コンテキスト（スロットあたり）",
+      "vramLabel": "VRAM 推定",
+      "vramBreakdown": "（重み {{weights}} + KV cache {{kv}} + その他 ~2.0 ・ {{params}}B モデル + ctx {{ctx}}K × {{slots}} スロットで推定）"
     },
     "models": {
       "sectionTitle": "モデル",

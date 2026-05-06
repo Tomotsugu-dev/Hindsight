@@ -13,6 +13,7 @@ import { api, type AppGroup, type AppGroupMember } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { useCategories } from "../../state/categories";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
+import { logError } from "../../lib/logger";
 import { displayAppName } from "../../utils/displayName";
 import { AssignDropdown } from "./parts";
 import styles from "./Pairing.module.css";
@@ -69,7 +70,7 @@ export function PairingSection() {
       const list = await api.listAppGroups();
       setGroups(list);
     } catch (e) {
-      console.error("listAppGroups 失败:", e);
+      logError("pairing.listGroups", e);
       setGroups([]);
     }
   };
@@ -123,7 +124,7 @@ export function PairingSection() {
         void api
           .mergeAppGroup(cur.processName, target)
           .then(() => Promise.all([reload(), refreshCategories()]))
-          .catch((e) => console.error("merge 失败:", e));
+          .catch((e) => logError("pairing.merge", e));
       }
     };
     document.addEventListener("mousemove", onMove);
@@ -176,7 +177,7 @@ export function PairingSection() {
       await api.deleteAppGroup(groupId);
       await reload();
     } catch (e) {
-      console.error("删除行失败:", e);
+      logError("pairing.deleteRow", e);
     }
   };
 
@@ -191,7 +192,7 @@ export function PairingSection() {
       await api.createAppGroup(defaultName);
       await reload();
     } catch (e) {
-      console.error("创建行失败:", e);
+      logError("pairing.createRow", e);
     }
   };
 
@@ -200,7 +201,7 @@ export function PairingSection() {
       await api.unmergeAppGroup(processName);
       await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
-      console.error("unmerge 失败:", e);
+      logError("pairing.unmerge", e);
     }
   };
 
@@ -209,7 +210,7 @@ export function PairingSection() {
       await api.assignAppGroupCategory(groupId, categoryId);
       await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
-      console.error("assign category 失败:", e);
+      logError("pairing.assignCategory", e);
     }
   };
 
@@ -229,7 +230,7 @@ export function PairingSection() {
       await api.renameAppGroup(groupId, trimmed);
       await reload();
     } catch (e) {
-      console.error("rename 失败:", e);
+      logError("pairing.rename", e);
     } finally {
       setPendingNames((p) => {
         const cp = { ...p };

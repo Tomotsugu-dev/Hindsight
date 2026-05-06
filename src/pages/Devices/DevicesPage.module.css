@@ -310,7 +310,7 @@
 .setupWrap {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-rows 360ms var(--ease-out);
 }
 
 .setupWrapOpen {
@@ -323,8 +323,8 @@
   opacity: 0;
   transform: translateY(-6px);
   transition:
-    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 240ms var(--ease-out),
+    transform 360ms var(--ease-out);
 }
 
 .setupWrapOpen .setupInner {

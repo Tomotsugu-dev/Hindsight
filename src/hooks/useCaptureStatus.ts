@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type CaptureStatus } from "../api/hindsight";
+import { logError } from "../lib/logger";
 
 const POLL_MS = 5000;
 
@@ -28,7 +29,7 @@ export function useCaptureStatus() {
       else await api.startCapture();
       await refresh();
     } catch (e) {
-      console.error("切换采集状态失败:", e);
+      logError("capture.toggle", e);
     }
   }, [status, refresh]);
 

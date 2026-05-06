@@ -81,7 +81,7 @@
   /* 只圆顶角 — Apple 屏幕使用时间风 */
   border-radius: 4px 4px 0 0;
   overflow: hidden;
-  transition: filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: filter 180ms var(--ease-out);
 }
 
 .bar:hover {

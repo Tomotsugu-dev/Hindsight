@@ -21,6 +21,7 @@ import {
   SUMMARY_PROGRESS_EVENT,
   type SummaryProgress,
 } from "../api/hindsight";
+import { logWarn } from "../lib/logger";
 
 export interface DailyRunningSnapshot {
   /** 是否有 daily run 正在跑。按钮"停止"<->"开始"切换的根。 */
@@ -208,7 +209,7 @@ export async function cancelDailyGenerate(): Promise<void> {
   try {
     await api.cancelDaySummary();
   } catch (e) {
-    console.warn("cancel daily 失败:", e);
+    logWarn("dailySummary.cancel", e);
   }
 }
 

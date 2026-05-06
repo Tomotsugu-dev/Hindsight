@@ -47,11 +47,11 @@
   border-radius: 10px;
   border: 1px solid transparent;
   transition:
-    grid-template-columns 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    grid-template-columns 280ms var(--ease-out),
     background-color 140ms ease-out,
     border-color 140ms ease-out,
-    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
 }
 
 /* 仅当鼠标 hover 在「统一名」列上才整列展开 —— hover trigger / 设备 chip / 删除按钮都不触发。
@@ -246,7 +246,7 @@
 .devHeader {
   display: grid;
   grid-template-columns: var(--device-cols) 80px 160px 28px;
-  transition: grid-template-columns 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-columns 280ms var(--ease-out);
   gap: 12px;
   padding: 0 12px 8px;
   font-size: 10px;

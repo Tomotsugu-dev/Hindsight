@@ -65,7 +65,7 @@
   flex-direction: column-reverse;
   border-radius: 4px 4px 0 0;
   overflow: hidden;
-  transition: filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: filter 180ms var(--ease-out);
 }
 
 .bar:hover {

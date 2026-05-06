@@ -39,22 +39,17 @@
 ## Interface Preview
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/今日总览.png" alt="Today Overview" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="700"><br/>
   <sub><i>Today Overview · 24-hour stacked histogram + app ranking</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/月统计.png" alt="Monthly Statistics" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="700"><br/>
   <sub><i>Monthly Statistics · Daily histogram + monthly ranking</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/应用分类.png" alt="App Classification" width="700"><br/>
-  <sub><i>App Classification · Custom colors and icons, unclassified apps are easily visible</i></sub>
-</p>
-
-<p align="center">
-  <img src="./docs/intro_zh/imgs/多设备同步.png" alt="Multi-Device Sync" width="700"><br/>
+  <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync" width="700"><br/>
   <sub><i>Multi-Device Sync · Aggregate data across devices via Google Drive</i></sub>
 </p>
 
@@ -68,7 +63,7 @@ Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
 ### macOS
 
-<--Placeholder-->
+Download `hindsight_x.y.z_aarch64.dmg`, double-click to mount, then drag Hindsight into the Applications folder.
 
 > All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, **screenshots will not be uploaded**.
 
