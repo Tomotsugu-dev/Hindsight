@@ -467,10 +467,55 @@ fn extract_zip(archive: &Path, dest: &Path) -> Result<()> {
 }
 
 fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<()> {
+    // llama.cpp 的 macOS / Linux tar.gz 内部包了一层 `llama-<tag>/` 目录，
+    // 但 binary_relative_path 假设解压后是扁平布局（直接 dest/llama-server）。
+    // 先解到临时子目录，再判断是否需要剥掉单层 wrapper，把真正的内容平铺到 dest。
+    let temp = dest.join("__tar_extract_tmp");
+    let _ = std::fs::remove_dir_all(&temp);
+    std::fs::create_dir_all(&temp).map_err(Error::from)?;
+
     let file = std::fs::File::open(archive).map_err(Error::from)?;
     let gz = flate2::read::GzDecoder::new(file);
     let mut tar = tar::Archive::new(gz);
     // tar::Archive::unpack 自带防 .. 逃逸（默认 follow_symlinks(false)）
-    tar.unpack(dest).map_err(Error::from)?;
+    tar.unpack(&temp).map_err(Error::from)?;
+
+    // 收集 temp 顶层条目；只有一项且是目录 → 剥掉，把它的内容移到 dest
+    let mut top: Vec<std::fs::DirEntry> = std::fs::read_dir(&temp)
+        .map_err(Error::from)?
+        .filter_map(|e| e.ok())
+        .collect();
+    let strip_root = top.len() == 1
+        && top[0]
+            .file_type()
+            .map(|t| t.is_dir())
+            .unwrap_or(false);
+    let move_from = if strip_root {
+        let inner = top.remove(0).path();
+        std::fs::read_dir(&inner)
+            .map_err(Error::from)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect::<Vec<_>>()
+    } else {
+        top.into_iter().map(|e| e.path()).collect()
+    };
+    for src in move_from {
+        let name = match src.file_name() {
+            Some(n) => n.to_owned(),
+            None => continue,
+        };
+        let dst = dest.join(&name);
+        // 用户已经装过一次 → 同名文件存在，先删后 rename。rename 跨目录在同卷上是 O(1)。
+        if dst.exists() {
+            if dst.is_dir() {
+                let _ = std::fs::remove_dir_all(&dst);
+            } else {
+                let _ = std::fs::remove_file(&dst);
+            }
+        }
+        std::fs::rename(&src, &dst).map_err(Error::from)?;
+    }
+    let _ = std::fs::remove_dir_all(&temp);
     Ok(())
 }
