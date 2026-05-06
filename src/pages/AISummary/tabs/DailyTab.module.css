@@ -2,43 +2,28 @@
    外壳样式（.page / .title / .tabs）在 AISummaryPage.module.css。 */
 
 /* —— 顶部头：副标题 + 日期导航 + 主操作 —— */
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.headLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
+/* 副标题：单独一行，作为页面副标题 */
 .subtitle {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: -0.005em;
-  margin: 0;
+  margin: 0 0 12px;
 }
 
-.headRight {
-  display: inline-flex;
+/* header 一排：dateNav | 主按钮 | (auto-spacer) | exportBtn */
+.header {
+  display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-/* 日期导航：参照 Today 的 navBtn / dayPill */
+/* 日期导航：完全照搬 Today 页 navBtn / dayPill 风格（accent 描边 + glow 跟手） */
 .dateNav {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 8px;
+  gap: 6px;
 }
 
 .navBtn {
@@ -47,49 +32,57 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
   color: var(--text-muted);
   cursor: pointer;
   transition:
-    background-color 140ms ease-out,
-    color 140ms ease-out;
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .navBtn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-strong);
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .navBtn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .dayPill {
+  min-width: 64px;
   height: 26px;
-  padding: 0 12px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 6px;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition: border-color 140ms ease-out;
+  letter-spacing: -0.005em;
+  transition:
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.dayPill:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.08));
+.dayPillClickable {
+  cursor: pointer;
+}
+
+.dayPillClickable:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .dayPill:disabled {
   cursor: default;
-  opacity: 0.85;
 }
 
 /* 主按钮（开始 / 重新生成）= 蓝色实心 */
@@ -139,7 +132,66 @@
   background: color-mix(in oklab, #f59e0b 22%, transparent);
 }
 
-/* —— 顶部错误条 + 引擎冷启动提示 —— */
+/* 删除按钮 = 红色危险风；位置在 stopBtn / startBtn 之后，exportBtn 之前 */
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: color-mix(in oklab, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in oklab, #dc2626 28%, transparent);
+  color: #991b1b;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, #dc2626 16%, transparent);
+  border-color: color-mix(in oklab, #dc2626 42%, transparent);
+}
+
+.deleteBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 导出按钮 = 弱化样式，不抢主操作按钮风头；margin-left:auto 把它推到 headRight 最右 */
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: var(--text-strong);
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.exportBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.exportBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* —— 顶部错误条 + 成功条 + 引擎冷启动提示 —— */
 .errorBar {
   display: inline-flex;
   align-items: center;
@@ -151,6 +203,26 @@
   font-size: 12px;
   font-weight: 500;
   color: #991b1b;
+}
+
+/* 成功提示条：跟 errorBar 同款结构但绿色（导出 / 删除完成 3.5s 后自清） */
+.successBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, #16a34a 10%, transparent);
+  border: 1px solid color-mix(in oklab, #16a34a 28%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #15803d;
+  animation: successFadeIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes successFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .engineHint {
@@ -173,15 +245,19 @@
   gap: 10px;
 }
 
+/* 段卡片：外框风格对齐 Month 页面 .card —— 淡灰底 + 12px 圆角 + 三层阴影 */
 .card {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 9px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
 }
 
 .cardHead {

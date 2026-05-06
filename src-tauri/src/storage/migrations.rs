@@ -404,6 +404,69 @@ const AI_IMAGE_DESC_PERF_COLS_SQL: &str = r#"
     ALTER TABLE ai_image_descriptions ADD COLUMN completion_tokens INTEGER;
 "#;
 
+/// v21：给 ai_summaries / ai_image_descriptions 加 source 列，PK 含 source。
+///
+/// 拆分日报（source='daily'）和调试（source='debug'）数据：
+/// - 调试 tab 跑总结不再覆盖日报页同日数据
+/// - 调试 tab 删除按钮只删自己那一支
+/// - DailyTab 读 source='daily'，DebugTab 读 source='debug'
+///
+/// SQLite 不支持 ALTER PK，走经典 create-new + INSERT SELECT + drop + rename：
+/// 老行视为 'daily'（DEFAULT），用户保留所有日报历史。
+const AI_TABLES_ADD_SOURCE_SQL: &str = r#"
+    CREATE TABLE ai_summaries_new (
+      source        TEXT NOT NULL DEFAULT 'daily',
+      local_date    TEXT NOT NULL,
+      segment_idx   INTEGER NOT NULL,
+      label         TEXT NOT NULL,
+      start_hour    INTEGER NOT NULL,
+      end_hour      INTEGER NOT NULL,
+      content       TEXT NOT NULL,
+      model         TEXT NOT NULL,
+      status        TEXT NOT NULL,
+      error         TEXT,
+      generated_at  TEXT NOT NULL,
+      PRIMARY KEY (source, local_date, segment_idx)
+    );
+    INSERT INTO ai_summaries_new (
+      source, local_date, segment_idx, label, start_hour, end_hour,
+      content, model, status, error, generated_at
+    )
+    SELECT 'daily', local_date, segment_idx, label, start_hour, end_hour,
+           content, model, status, error, generated_at
+      FROM ai_summaries;
+    DROP TABLE ai_summaries;
+    ALTER TABLE ai_summaries_new RENAME TO ai_summaries;
+    CREATE INDEX IF NOT EXISTS idx_ai_summaries_date
+      ON ai_summaries(source, local_date);
+
+    CREATE TABLE ai_image_descriptions_new (
+      source            TEXT NOT NULL DEFAULT 'daily',
+      local_date        TEXT NOT NULL,
+      segment_idx       INTEGER NOT NULL,
+      image_index       INTEGER NOT NULL,
+      screenshot_path   TEXT NOT NULL,
+      description       TEXT NOT NULL,
+      model             TEXT NOT NULL,
+      generated_at      TEXT NOT NULL,
+      latency_ms        INTEGER,
+      prompt_tokens     INTEGER,
+      completion_tokens INTEGER,
+      PRIMARY KEY (source, local_date, segment_idx, image_index)
+    );
+    INSERT INTO ai_image_descriptions_new (
+      source, local_date, segment_idx, image_index, screenshot_path,
+      description, model, generated_at, latency_ms, prompt_tokens, completion_tokens
+    )
+    SELECT 'daily', local_date, segment_idx, image_index, screenshot_path,
+           description, model, generated_at, latency_ms, prompt_tokens, completion_tokens
+      FROM ai_image_descriptions;
+    DROP TABLE ai_image_descriptions;
+    ALTER TABLE ai_image_descriptions_new RENAME TO ai_image_descriptions;
+    CREATE INDEX IF NOT EXISTS idx_ai_image_desc_segment
+      ON ai_image_descriptions(source, local_date, segment_idx);
+"#;
+
 /// v19：逐图描述缓存表（Phase 1B-γ 两步生成）。
 ///
 /// 总结流程改成两步：
@@ -433,7 +496,7 @@ const AI_IMAGE_DESCRIPTIONS_TABLE_SQL: &str = r#"
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 10] = [
+    let extras: [&'static str; 11] = [
         CROSS_OS_CLEANUP_SQL,                    // v11
         V12_PLACEHOLDER,                         // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                     // v13
@@ -444,6 +507,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         AI_SUMMARIES_TABLE_SQL,                  // v18
         AI_IMAGE_DESCRIPTIONS_TABLE_SQL,         // v19
         AI_IMAGE_DESC_PERF_COLS_SQL,             // v20
+        AI_TABLES_ADD_SOURCE_SQL,                // v21
     ];
     pool.0
         .call(move |conn| {

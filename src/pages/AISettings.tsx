@@ -28,6 +28,7 @@ import { Row } from "./Settings/components/Row";
 import { Slider } from "./Settings/components/Slider";
 import { SegmentList } from "./Settings/components/SegmentList";
 import { CategoryChipMultiSelect } from "./Settings/components/CategoryChipMultiSelect";
+import { SimplePicker } from "../components/SimplePicker/SimplePicker";
 import {
   api,
   ENGINE_DOWNLOAD_EVENT,
@@ -90,6 +91,44 @@ export default function AISettings() {
           icon={Bot}
         >
           <ModelsSection />
+        </Section>
+
+        {/* 引擎参数（启动时）：跟调试 tab 同款 3 个 picker + 显存估算行，
+            但写的是 settings.ai「全局默认」，DailyTab 跑日报时引擎按这套启动。
+            改完不会立刻生效，避免打断当前在跑的引擎；下次冷启时吃新值。 */}
+        <Section
+          title="引擎参数（启动时）"
+          icon={Server}
+          description="改完不会立刻生效——下次引擎启动时（点测试连接 / 开始总结）才用新值。已在跑的引擎不会自动重启，避免打断当前任务。"
+        >
+          <div className={styles.engineParamRow}>
+            <SimplePicker<EngineBatchKey>
+              value={engineBatchToOption(ai.batchSize)}
+              options={ENGINE_BATCH_OPTIONS}
+              onChange={(next) =>
+                updateAi({ batchSize: engineOptionToBatch(next) })
+              }
+            />
+            <SimplePicker<EngineSlotsKey>
+              value={engineSlotsToOption(ai.parallelSlots)}
+              options={ENGINE_SLOTS_OPTIONS}
+              onChange={(next) =>
+                updateAi({ parallelSlots: engineOptionToSlots(next) })
+              }
+            />
+            <SimplePicker<EngineCtxKey>
+              value={engineCtxToOption(ai.ctxSize)}
+              options={ENGINE_CTX_OPTIONS}
+              onChange={(next) =>
+                updateAi({ ctxSize: engineOptionToCtx(next) })
+              }
+            />
+          </div>
+          <VramEstimateLine
+            modelName={ai.activeMain}
+            parallelSlots={ai.parallelSlots ?? 1}
+            ctxSize={ai.ctxSize ?? 8192}
+          />
         </Section>
 
         <Section
@@ -191,6 +230,119 @@ export default function AISettings() {
           </Row>
         </Section>
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+//  引擎参数 picker 选项 ——
+//  跟 DebugTab 同款语义（每 slot 的 ctx，--ctx-size 后端会乘 parallel_slots）；
+//  但这里写的是 settings.ai 全局值，DailyTab 跑日报时引擎按这套参数启动。
+// ────────────────────────────────────────────────────────────────────────
+
+type EngineBatchKey = "default" | "1024" | "2048" | "4096";
+const ENGINE_BATCH_OPTIONS: Array<{ value: EngineBatchKey; label: string }> = [
+  { value: "default", label: "Batch 512" },
+  { value: "1024", label: "Batch 1024" },
+  { value: "2048", label: "Batch 2048" },
+  { value: "4096", label: "Batch 4096" },
+];
+function engineBatchToOption(n: number | null): EngineBatchKey {
+  if (n === 1024) return "1024";
+  if (n === 2048) return "2048";
+  if (n === 4096) return "4096";
+  return "default";
+}
+function engineOptionToBatch(v: EngineBatchKey): number | null {
+  return v === "default" ? null : parseInt(v, 10);
+}
+
+type EngineSlotsKey = "1" | "2" | "4" | "8";
+const ENGINE_SLOTS_OPTIONS: Array<{ value: EngineSlotsKey; label: string }> = [
+  { value: "1", label: "并发 1 路" },
+  { value: "2", label: "并发 2 路" },
+  { value: "4", label: "并发 4 路" },
+  { value: "8", label: "并发 8 路" },
+];
+function engineSlotsToOption(n: number | null): EngineSlotsKey {
+  if (n != null && n >= 8) return "8";
+  if (n != null && n >= 4) return "4";
+  if (n != null && n >= 2) return "2";
+  return "1";
+}
+function engineOptionToSlots(v: EngineSlotsKey): number | null {
+  const n = parseInt(v, 10);
+  return n <= 1 ? null : n;
+}
+
+type EngineCtxKey = "default" | "16384" | "32768" | "65536";
+const ENGINE_CTX_OPTIONS: Array<{ value: EngineCtxKey; label: string }> = [
+  { value: "default", label: "ctx 8K/槽" },
+  { value: "16384", label: "ctx 16K/槽" },
+  { value: "32768", label: "ctx 32K/槽" },
+  { value: "65536", label: "ctx 64K/槽" },
+];
+function engineCtxToOption(n: number | null): EngineCtxKey {
+  if (n === 16384) return "16384";
+  if (n === 32768) return "32768";
+  if (n === 65536) return "65536";
+  return "default";
+}
+function engineOptionToCtx(v: EngineCtxKey): number | null {
+  return v === "default" ? null : parseInt(v, 10);
+}
+
+/** 估算当前引擎参数组合下的总 VRAM / RAM 占用（GB）。
+ *  跟 DebugTab 的 estimateVramGB 同步——参数量从 active_main 文件名抠 "NB"，
+ *  Q4 经验比例：weights ≈ B × 0.55 GB，kv ≈ B × 18 KB/token × ctx_total。
+ *  误差 ±20%，仅作 OOM 早期警告用。 */
+function estimateVramGB(
+  modelName: string,
+  parallelSlots: number,
+  ctxSize: number,
+): { totalGB: number; weightsGB: number; kvGB: number; params: number } {
+  const m = modelName.match(/(\d+(?:\.\d+)?)\s*B/i);
+  const params = m ? parseFloat(m[1]) : 4;
+  const weightsGB = params * 0.55;
+  const kvPerTokenKB = 18 * params;
+  const totalCtx = ctxSize * Math.max(1, parallelSlots);
+  const kvGB = (kvPerTokenKB * totalCtx) / 1024 / 1024;
+  const overheadGB = 2;
+  return {
+    totalGB: weightsGB + kvGB + overheadGB,
+    weightsGB,
+    kvGB,
+    params,
+  };
+}
+
+/** 估算行——三档配色：< 16 GB 绿、16-24 橙、> 24 红。
+ *  跟 DebugTab 的 VramEstimateLine 视觉一致；样式 class 也复用 DebugTab.module.css
+ *  的命名约定，但放在 AISettings.module.css 里独立一份。 */
+function VramEstimateLine({
+  modelName,
+  parallelSlots,
+  ctxSize,
+}: {
+  modelName: string;
+  parallelSlots: number;
+  ctxSize: number;
+}) {
+  if (!modelName.trim()) {
+    return null;
+  }
+  const est = estimateVramGB(modelName, parallelSlots, ctxSize);
+  let levelClass = styles.vramEstOk;
+  if (est.totalGB > 24) levelClass = styles.vramEstDanger;
+  else if (est.totalGB > 16) levelClass = styles.vramEstWarn;
+  return (
+    <div className={`${styles.vramEst} ${levelClass}`}>
+      <span className={styles.vramEstLabel}>估算总占用</span>
+      <span className={styles.vramEstValue}>~{est.totalGB.toFixed(1)} GB</span>
+      <span className={styles.vramEstBreakdown}>
+        （权重 {est.weightsGB.toFixed(1)} + KV cache {est.kvGB.toFixed(1)} + 其它 ~2.0 ·
+        按 {est.params}B 模型 + ctx {(ctxSize / 1024) | 0}K × {parallelSlots} 槽 估）
+      </span>
     </div>
   );
 }

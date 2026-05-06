@@ -67,6 +67,17 @@ pub struct AiConfig {
     /// 用户对内置 image describe prompt（step 1 单图描述）的覆盖；按语言分别存。
     /// 跟 [`prompt_overrides`] 同结构，互不干扰。
     pub image_describe_overrides: PromptOverrides,
+    /// 引擎启动级参数：`--batch-size` / `--ubatch-size`（取一致值）。
+    /// `None` = 不传，走 llama.cpp 默认 512。
+    /// 改值会让下次引擎启动用新参数；引擎已在跑时不会自动重启，需用户主动 stop。
+    pub batch_size: Option<u32>,
+    /// 引擎启动级参数：`-np N` 并行槽位数 + 后端 step 1 image describe 并发数。
+    /// `None` = 1（串行）。
+    pub parallel_slots: Option<u32>,
+    /// 引擎启动级参数：每 slot 的 ctx 上限（token）。
+    /// 实际 `--ctx-size = ctx_size × parallel_slots`，让每槽都拿到这个 budget。
+    /// `None` = 8K 默认。启动时按总量预占 KV cache。
+    pub ctx_size: Option<u32>,
 }
 
 /// 用户编辑过的 system prompt 覆盖文本，按语言分别独立存。
@@ -102,6 +113,9 @@ impl Default for AiConfig {
             prompt_language: "zh".to_string(),
             prompt_overrides: PromptOverrides::default(),
             image_describe_overrides: PromptOverrides::default(),
+            batch_size: None,
+            parallel_slots: None,
+            ctx_size: None,
         }
     }
 }
@@ -186,6 +200,14 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.max_images_per_segment = next.max_images_per_segment.clamp(1, 100_000);
     next.hash_threshold = next.hash_threshold.min(32);
     next.hash_window_minutes = next.hash_window_minutes.min(60);
+
+    // 引擎启动级参数 clamp（跟 AiOverrides 一致）：
+    // batch ≥ 32 是 llama-server 不接受过小值的安全下限
+    // ctx 上限给 256K（极限场景，超出基本任何卡都装不下，没必要再大）
+    // parallel_slots ≥ 1，给 32 上限避免误填出格的值
+    next.batch_size = next.batch_size.map(|b| b.clamp(32, 32_768));
+    next.parallel_slots = next.parallel_slots.map(|n| n.clamp(1, 32));
+    next.ctx_size = next.ctx_size.map(|c| c.clamp(512, 262_144));
 
     next.models_path = next.models_path.trim().to_string();
     next.active_main = next.active_main.trim().to_string();

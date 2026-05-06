@@ -81,6 +81,11 @@ pub struct EngineStartOverrides {
     /// `-np N`：llama-server 同时处理的并行槽位数；`None` = 1（单槽）。
     /// 配合 `summary.rs` 的 `buffer_unordered` 才能真正并发——只设 -np 不并发调用没用。
     pub parallel_slots: Option<u32>,
+    /// **每个 slot** 的 ctx 上限。`None` = [`DEFAULT_CTX_SIZE`]（8K）。
+    /// 实际传给 llama-server 的 `--ctx-size` 是 `ctx_size × parallel_slots`，
+    /// 让每个 slot 都拿到 user 选的 budget；llama.cpp 启动时按这个总量
+    /// 一次性 mmap KV cache（VRAM / RAM 直接吃掉，不是按需增长）。
+    pub ctx_size: Option<u32>,
 }
 
 /// llama-server 子进程的单例守护者。
@@ -255,8 +260,10 @@ impl EngineSupervisor {
             port
         };
 
-        // 第二段：不持锁等 health（持锁等会卡住其它 status 查询）
-        let healthy = poll_health(port, HEALTH_TIMEOUT).await;
+        // 第二段：不持锁等 health（持锁等会卡住其它 status 查询）。
+        // poll_health 每轮轮询前会检查 inner（state 还是不是 Starting / child 是否退出），
+        // 让 stop() 改 state 或子进程自己 OOM 死时能立刻 break，不必等满 90s 超时。
+        let healthy = poll_health(port, HEALTH_TIMEOUT, &self.inner).await;
 
         // 第三段：根据 health 结果定状态
         let mut inner = self.inner.lock().await;
@@ -341,7 +348,6 @@ fn build_command(
     let mut cmd = Command::new(bin);
     cmd.arg("--host").arg("127.0.0.1");
     cmd.arg("--port").arg(port.to_string());
-    cmd.arg("--ctx-size").arg(DEFAULT_CTX_SIZE.to_string());
     if let Some(m) = model_path {
         cmd.arg("-m").arg(m);
     }
@@ -358,8 +364,15 @@ fn build_command(
         cmd.arg("--batch-size").arg(b.to_string());
         cmd.arg("--ubatch-size").arg(b.to_string());
     }
-    if let Some(np) = overrides.parallel_slots {
-        let np = np.max(1);
+    // ctx-size + parallel slots 协同：llama-server 把 --ctx-size 平均分给
+    // np 个 slot（per-slot = ctx_size / np）。所以这里实际传的 --ctx-size
+    // 必须是 (per-slot 上限 × np)，让每个 slot 都拿到用户选的 budget。
+    // 否则 -np 4 时 user 看到的 8K base 会缩成每槽 2048，长 prompt 直接 400。
+    let np = overrides.parallel_slots.unwrap_or(1).max(1);
+    let per_slot_ctx = overrides.ctx_size.unwrap_or(DEFAULT_CTX_SIZE);
+    cmd.arg("--ctx-size")
+        .arg(per_slot_ctx.saturating_mul(np).to_string());
+    if np > 1 {
         cmd.arg("-np").arg(np.to_string());
     }
     // 截 stderr/stdout 用于失败时回放给用户；不让它们污染 Hindsight 自己的终端
@@ -375,7 +388,13 @@ fn build_command(
     cmd
 }
 
-async fn poll_health(port: u16, timeout: Duration) -> bool {
+/// 轮询 /health 等启动完成。每轮前先检查 inner：
+/// - state 不是 Starting（stop() 改成了 Stopped）→ 立刻 break，不再等
+/// - child 已退出（OOM / 配置错 fail-fast 等）→ 立刻 break，不死等满 timeout
+///
+/// 不加这两个 early-exit 时，子进程刚 spawn 就 OOM 死的话还要等 90s 超时；
+/// 用户点「停止」也要等 90s 才生效。
+async fn poll_health(port: u16, timeout: Duration, inner: &Mutex<Inner>) -> bool {
     let deadline = Instant::now() + timeout;
     let url = format!("http://127.0.0.1:{port}/health");
     let client = match reqwest::Client::builder()
@@ -386,6 +405,21 @@ async fn poll_health(port: u16, timeout: Duration) -> bool {
         Err(_) => return false,
     };
     while Instant::now() < deadline {
+        // early-exit：state 被外部 stop() 改 / child 已退出 → 不再轮询
+        {
+            let mut guard = inner.lock().await;
+            if guard.state.state != EngineState::Starting {
+                return false;
+            }
+            if let Some(child) = guard.child.as_mut() {
+                if let Ok(Some(_status)) = child.try_wait() {
+                    return false; // child 已死，没必要继续等 health
+                }
+            } else {
+                return false; // child 句柄被 take 走了（stop() 抢走了）
+            }
+        }
+
         if let Ok(r) = client.get(&url).send().await {
             if r.status().is_success() {
                 return true;

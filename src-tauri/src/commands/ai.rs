@@ -468,10 +468,13 @@ pub async fn generate_day_summary(
     force_refresh: bool,
     device_id: Option<String>,
     overrides: Option<AiOverrides>,
+    // "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据
+    source: Option<String>,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = device_filter_from_option(device_id);
+    let source = source.unwrap_or_else(|| "daily".to_string());
 
     cancel.0.store(false, Ordering::Relaxed);
     let runner = DaySummaryRunner::new(
@@ -482,11 +485,11 @@ pub async fn generate_day_summary(
     );
 
     if let Err(e) = runner
-        .run(parsed_date, device, force_refresh, overrides)
+        .run(&source, parsed_date, device, force_refresh, overrides)
         .await
     {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
-        let mut p = SummaryProgress::base(date.clone(), "error", 0);
+        let mut p = SummaryProgress::base(source.clone(), date.clone(), "error", 0);
         p.message = Some(e.to_string());
         let _ = app.emit(SUMMARY_PROGRESS_EVENT, &p);
         return Err(e.to_string());
@@ -505,10 +508,12 @@ pub async fn retry_summary_segment(
     segment_idx: u32,
     device_id: Option<String>,
     overrides: Option<AiOverrides>,
+    source: Option<String>,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = device_filter_from_option(device_id);
+    let source = source.unwrap_or_else(|| "daily".to_string());
 
     cancel.0.store(false, Ordering::Relaxed);
     let runner = DaySummaryRunner::new(
@@ -518,7 +523,7 @@ pub async fn retry_summary_segment(
         Arc::clone(&cancel.0),
     );
     runner
-        .run_one_segment_only(parsed_date, segment_idx, device, overrides)
+        .run_one_segment_only(&source, parsed_date, segment_idx, device, overrides)
         .await
         .map_err(|e| e.to_string())
 }
@@ -537,9 +542,11 @@ pub async fn retry_single_image_description(
     segment_idx: u32,
     image_index: u32,
     overrides: Option<AiOverrides>,
+    source: Option<String>,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let source = source.unwrap_or_else(|| "daily".to_string());
 
     let runner = DaySummaryRunner::new(
         (*pool).clone(),
@@ -548,7 +555,7 @@ pub async fn retry_single_image_description(
         Arc::clone(&cancel.0),
     );
     runner
-        .retry_one_image_description(parsed_date, segment_idx, image_index, overrides)
+        .retry_one_image_description(&source, parsed_date, segment_idx, image_index, overrides)
         .await
         .map_err(|e| e.to_string())
 }
@@ -567,8 +574,10 @@ pub async fn cancel_day_summary(cancel: State<'_, SummaryCancel>) -> Result<(), 
 pub async fn get_day_summary(
     pool: State<'_, DbPool>,
     date: String,
+    source: Option<String>,
 ) -> Result<Vec<SegmentSummaryRow>, String> {
-    ai_summaries::get_day(&pool, &date)
+    let src = source.unwrap_or_else(|| "daily".to_string());
+    ai_summaries::get_day(&pool, &src, &date)
         .await
         .map_err(|e| e.to_string())
 }
@@ -579,8 +588,10 @@ pub async fn get_day_summary(
 pub async fn clear_day_summary(
     pool: State<'_, DbPool>,
     date: String,
+    source: Option<String>,
 ) -> Result<(), String> {
-    ai_summaries::clear_day(&pool, &date)
+    let src = source.unwrap_or_else(|| "daily".to_string());
+    ai_summaries::clear_day(&pool, &src, &date)
         .await
         .map_err(|e| e.to_string())
 }
@@ -591,8 +602,10 @@ pub async fn get_segment_image_descriptions(
     pool: State<'_, DbPool>,
     date: String,
     segment_idx: u32,
+    source: Option<String>,
 ) -> Result<Vec<ImageDescriptionRow>, String> {
-    ai_summaries::get_segment_image_descriptions(&pool, &date, segment_idx)
+    let src = source.unwrap_or_else(|| "daily".to_string());
+    ai_summaries::get_segment_image_descriptions(&pool, &src, &date, segment_idx)
         .await
         .map_err(|e| e.to_string())
 }
@@ -602,8 +615,10 @@ pub async fn get_segment_image_descriptions(
 pub async fn get_day_image_descriptions(
     pool: State<'_, DbPool>,
     date: String,
+    source: Option<String>,
 ) -> Result<Vec<ImageDescriptionRow>, String> {
-    ai_summaries::get_day_image_descriptions(&pool, &date)
+    let src = source.unwrap_or_else(|| "daily".to_string());
+    ai_summaries::get_day_image_descriptions(&pool, &src, &date)
         .await
         .map_err(|e| e.to_string())
 }

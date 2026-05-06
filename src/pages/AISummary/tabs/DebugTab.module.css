@@ -148,6 +148,55 @@
   background: color-mix(in oklab, #f59e0b 22%, transparent);
 }
 
+/* 引擎参数 Section 内：3 个 picker 横向 inline 排，跟顶部 header 那排视觉一致；
+   Section 自带 padding，这里只控间距 */
+.engineParamRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 20px 8px;
+}
+
+/* picker 行下面的 VRAM 估算条 —— 提示用户当前组合大概要多少显存 */
+.vramEst {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 20px 14px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vramEstLabel {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vramEstValue {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.vramEstBreakdown {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* 三档颜色：< 16 GB 中性绿、16-24 GB 橙警告、> 24 GB 红危险 */
+.vramEstOk .vramEstValue {
+  color: #16a34a;
+}
+
+.vramEstWarn .vramEstValue {
+  color: #b45309;
+}
+
+.vramEstDanger .vramEstValue {
+  color: #dc2626;
+}
+
 /* picker + Info 图标的内联包装 —— 让图标紧贴 picker 右边 */
 .pickerWithInfo {
   display: inline-flex;

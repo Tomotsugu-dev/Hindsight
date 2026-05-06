@@ -199,6 +199,8 @@ export type SummaryPhase =
   | "error";
 
 export interface SummaryProgress {
+  /** "daily" / "debug"——前端两个 tab 各 listen 自己 source 的事件，避免串台 */
+  source: string;
   date: string;
   phase: SummaryPhase;
   segmentIdx: number | null;
@@ -241,10 +243,16 @@ export interface AiOverrides {
   /** llama-server `-np`（并行槽位数）+ 后端 step 1 image describe 并发数；
    *  两者同时生效才真正并行：-np 为 KV cache 槽预留，前端并发数决定同时发的请求。 */
   parallelSlots?: number;
+  /** 每个 slot 的 ctx 上限（token）。后端实际传给 llama-server 的 `--ctx-size`
+   *  是 `ctxSize × parallelSlots`，让每个 slot 都拿到这个 budget。
+   *  启动时按这个总量一次性吃 KV cache 显存（~30KB/token）。 */
+  ctxSize?: number;
 }
 
 /** ai_image_descriptions 表的一行——两步生成 step 1 的产物，给调试 tab 渲染。 */
 export interface ImageDescriptionRow {
+  /** "daily" / "debug" — 跟段总结的 source 同义 */
+  source: string;
   localDate: string;
   segmentIdx: number;
   /** 该段抽帧后的 0-based 顺序 */
@@ -269,6 +277,8 @@ export type SummarySegmentStatus = "ok" | "skipped_no_screenshots" | "error";
 
 /** ai_summaries 表的一行，前端拿来渲染 SegmentSummaryCard。 */
 export interface SegmentSummaryRow {
+  /** "daily"（DailyTab 写读）/ "debug"（DebugTab 写读）；PK 含 source */
+  source: string;
   localDate: string;
   segmentIdx: number;
   label: string;
@@ -323,6 +333,16 @@ export interface AiConfig {
   promptOverrides: PromptOverrides;
   /** 用户对内置 image describe prompt（step 1 单图描述）的覆盖；按语言独立。 */
   imageDescribeOverrides: PromptOverrides;
+  /** 引擎启动级参数：`--batch-size` / `--ubatch-size` 一致值。
+   *  null = 走 llama.cpp 默认 512；改值要 stop+start 引擎才生效。 */
+  batchSize: number | null;
+  /** 引擎启动级参数：`-np` 并行槽位数 + 后端 step 1 image describe 并发数。
+   *  null = 1（串行）。改值要重启引擎。 */
+  parallelSlots: number | null;
+  /** 引擎启动级参数：每 slot 的 ctx 上限（token）。
+   *  实际 `--ctx-size = ctxSize × parallelSlots`；启动时按总量预占 KV cache。
+   *  null = 8K 默认。 */
+  ctxSize: number | null;
 }
 
 export type PromptLanguage = "zh" | "en" | "ja";
@@ -524,12 +544,15 @@ export const api = {
     forceRefresh: boolean,
     deviceId: string | null,
     overrides: AiOverrides | null = null,
+    /** "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据 */
+    source: string = "daily",
   ) =>
     invoke<void>("generate_day_summary", {
       date,
       forceRefresh,
       deviceId,
       overrides,
+      source,
     }),
   /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
   retrySummarySegment: (
@@ -537,32 +560,42 @@ export const api = {
     segmentIdx: number,
     deviceId: string | null,
     overrides: AiOverrides | null = null,
+    source: string = "daily",
   ) =>
     invoke<void>("retry_summary_segment", {
       date,
       segmentIdx,
       deviceId,
       overrides,
+      source,
     }),
   /** 设取消标记——下一段循环开头会感知到然后早 return。
    *  已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。 */
   cancelDaySummary: () => invoke<void>("cancel_day_summary"),
   /** 拉某天已落库的总结。前端进页面调一次：有就直接渲染，没有就显示"开始总结"按钮。 */
-  getDaySummary: (date: string) =>
-    invoke<SegmentSummaryRow[]>("get_day_summary", { date }),
+  getDaySummary: (date: string, source: string = "daily") =>
+    invoke<SegmentSummaryRow[]>("get_day_summary", { date, source }),
   /** 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。 */
-  getSegmentImageDescriptions: (date: string, segmentIdx: number) =>
+  getSegmentImageDescriptions: (
+    date: string,
+    segmentIdx: number,
+    source: string = "daily",
+  ) =>
     invoke<ImageDescriptionRow[]>("get_segment_image_descriptions", {
       date,
       segmentIdx,
+      source,
     }),
   /** 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。 */
-  getDayImageDescriptions: (date: string) =>
-    invoke<ImageDescriptionRow[]>("get_day_image_descriptions", { date }),
+  getDayImageDescriptions: (date: string, source: string = "daily") =>
+    invoke<ImageDescriptionRow[]>("get_day_image_descriptions", {
+      date,
+      source,
+    }),
   /** 清当天所有 AI 产物：段总结 + 逐图描述。调试 tab 的「删除」按钮调，
    *  给用户在不重跑的情况下手动清历史。 */
-  clearDaySummary: (date: string) =>
-    invoke<void>("clear_day_summary", { date }),
+  clearDaySummary: (date: string, source: string = "daily") =>
+    invoke<void>("clear_day_summary", { date, source }),
   /** 重跑某段某张图的描述——调试 tab 行末"重跑"按钮用。
    *  不动段总结、其它图描述；期间走 SUMMARY_PROGRESS_EVENT 推一条 image_described。 */
   retrySingleImageDescription: (
@@ -570,11 +603,13 @@ export const api = {
     segmentIdx: number,
     imageIndex: number,
     overrides: AiOverrides | null = null,
+    source: string = "daily",
   ) =>
     invoke<void>("retry_single_image_description", {
       date,
       segmentIdx,
       imageIndex,
       overrides,
+      source,
     }),
 };

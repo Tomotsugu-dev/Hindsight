@@ -63,27 +63,21 @@ pub struct AiOverrides {
     pub batch_size: Option<u32>,
     /// llama-server `-np`：并行槽位数；配合 step 1 image describe 的并发跑。
     pub parallel_slots: Option<u32>,
+    /// **每个 slot** 的 ctx 上限。最终 `--ctx-size = ctx_size × parallel_slots`。
+    /// `None` = 8K 默认。改大让长 prompt（无限制档段总结）能装下，代价是
+    /// 启动时一次性占 ~30KB/token × ctx_size × np 的 KV cache。
+    pub ctx_size: Option<u32>,
 }
 
 impl AiOverrides {
-    /// 抽出 engine 启动级覆盖（batch_size / parallel_slots）——这两项不属于
-    /// AiConfig，而是直接灌给 llama-server 启动命令；调用方拿到后决定是否
-    /// stop + start_with_overrides 重启引擎。
-    pub(crate) fn engine_overrides(&self) -> EngineStartOverrides {
-        EngineStartOverrides {
-            batch_size: self.batch_size,
-            parallel_slots: self.parallel_slots,
-        }
-    }
-
     /// 这次调用是否需要重启引擎（任一启动级 override 非 None）。
+    /// 仅 debug 路径用——AiOverrides 显式带了 engine 字段时才是「调试覆盖」语义，
+    /// 触发跑前 stop+start with overrides，跑后再 stop 让默认日报回到 settings 默认。
+    /// daily 路径靠 settings.ai 直接做 ai.* 字段，没这层判断。
     pub(crate) fn needs_engine_restart(&self) -> bool {
-        self.batch_size.is_some() || self.parallel_slots.is_some()
-    }
-
-    /// 段内 step 1 图描述的并发数；None / Some(0) / Some(1) 都退化成串行。
-    pub(crate) fn parallel_slots_or_one(&self) -> usize {
-        self.parallel_slots.unwrap_or(1).max(1) as usize
+        self.batch_size.is_some()
+            || self.parallel_slots.is_some()
+            || self.ctx_size.is_some()
     }
 
     /// 把 override 应用到 settings.ai 上；clamp 到合法区间后返回。
@@ -117,6 +111,18 @@ impl AiOverrides {
                 _ => ai.image_describe_overrides.system_zh = v,
             }
         }
+        // 引擎启动级覆盖：debug 用户在调试 tab 选了值时把它合并进 ai.batch_size
+        // 等字段；daily 路径不传 AiOverrides 就走 settings.ai 默认值。
+        // 这样下游统一从 ai.* 取，不用区分两条路。
+        if let Some(v) = self.batch_size {
+            ai.batch_size = Some(v);
+        }
+        if let Some(v) = self.parallel_slots {
+            ai.parallel_slots = Some(v);
+        }
+        if let Some(v) = self.ctx_size {
+            ai.ctx_size = Some(v);
+        }
         ai
     }
 }
@@ -137,6 +143,9 @@ pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryProgress {
+    /// "daily" / "debug"——前端两个 tab 各自只 listen 自己 source 的事件，
+    /// 避免一个 tab 跑时另一个 tab 跟着刷数据。
+    pub source: String,
     pub date: String,
     pub phase: &'static str,
     pub segment_idx: Option<u32>,
@@ -166,8 +175,14 @@ pub struct SummaryProgress {
 
 impl SummaryProgress {
     /// 各 phase 字段大多都是 None，统一兜底构造器减少重复代码。
-    pub(crate) fn base(date: String, phase: &'static str, total_segments: u32) -> Self {
+    pub(crate) fn base(
+        source: String,
+        date: String,
+        phase: &'static str,
+        total_segments: u32,
+    ) -> Self {
         Self {
+            source,
             date,
             phase,
             segment_idx: None,
@@ -222,32 +237,31 @@ impl DaySummaryRunner {
     ///
     /// `force_refresh = true` 会先清空当天 ai_summaries 行，否则已有的段直接复用
     /// （前端在调命令前应该已经判断过是否需要重跑）。
+    /// `source` = "daily" / "debug" — DailyTab 跟 DebugTab 写各自命名空间互不污染。
     pub async fn run(
         &self,
+        source: &str,
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
         overrides: Option<AiOverrides>,
     ) -> Result<()> {
-        // 启动级 override 提前抽出来；apply_to 会消费 overrides 不能在那之后再读
-        let (engine_overrides, needs_restart, parallel) = match overrides.as_ref() {
-            Some(o) => (
-                o.engine_overrides(),
-                o.needs_engine_restart(),
-                o.parallel_slots_or_one(),
-            ),
-            None => (EngineStartOverrides::default(), false, 1usize),
-        };
+        // needs_restart：debug 路径（AiOverrides 显式带了 engine 覆盖）下才触发
+        // 「跑前 stop+start with overrides，跑后再 stop」；daily 路径靠 settings.ai
+        // 的 engine 字段，引擎按需 lazy spawn 不主动重启
+        let needs_restart = overrides
+            .as_ref()
+            .map(|o| o.needs_engine_restart())
+            .unwrap_or(false);
 
         let result = self
             .run_with_overrides_inner(
+                source,
                 local_date,
                 device,
                 force_refresh,
                 overrides,
-                engine_overrides,
                 needs_restart,
-                parallel,
             )
             .await;
 
@@ -262,21 +276,29 @@ impl DaySummaryRunner {
     #[allow(clippy::too_many_arguments)]
     async fn run_with_overrides_inner(
         &self,
+        source: &str,
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
         overrides: Option<AiOverrides>,
-        engine_overrides: EngineStartOverrides,
         needs_restart: bool,
-        parallel: usize,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         // overrides 只对本次调用生效，不写回 settings；settings 自己永远是用户在
-        // AI 设置里配的"全局值"，调试 tab 改的本地参数从这里进来
+        // AI 设置里配的"全局值"，调试 tab 改的本地参数从这里进来。
+        // apply_to 也会把 batch_size / parallel_slots / ctx_size 合并进 ai.*，
+        // 所以下面统一从 ai.* 取 engine_overrides + parallel，无需分两条路。
         let ai = match overrides {
             Some(o) => o.apply_to(cfg.ai.clone()),
             None => cfg.ai.clone(),
         };
+
+        let engine_overrides = EngineStartOverrides {
+            batch_size: ai.batch_size,
+            parallel_slots: ai.parallel_slots,
+            ctx_size: ai.ctx_size,
+        };
+        let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
 
         if ai.active_main.trim().is_empty() {
             return Err(Error::Other(
@@ -286,7 +308,7 @@ impl DaySummaryRunner {
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
         if force_refresh {
-            ai_summaries::clear_day(&self.pool, &date_str).await?;
+            ai_summaries::clear_day(&self.pool, source, &date_str).await?;
         }
 
         let total_segments = ai.segments.len() as u32;
@@ -300,7 +322,12 @@ impl DaySummaryRunner {
         // 启动引擎（如未启动），拿到端口；启动期间给前端一个进度提示
         let st = self.supervisor.status().await;
         if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(date_str.clone(), "engine_starting", total_segments);
+            let mut p = SummaryProgress::base(
+                source.to_string(),
+                date_str.clone(),
+                "engine_starting",
+                total_segments,
+            );
             p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
             self.emit(p);
         }
@@ -312,8 +339,12 @@ impl DaySummaryRunner {
 
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
-                let mut p =
-                    SummaryProgress::base(date_str.clone(), "cancelled", total_segments);
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.clone(),
+                    "cancelled",
+                    total_segments,
+                );
                 p.segment_idx = Some(idx as u32);
                 self.emit(p);
                 return Ok(());
@@ -324,6 +355,7 @@ impl DaySummaryRunner {
             }
 
             self.run_one_segment(
+                source,
                 &chat,
                 &ai,
                 &date_str,
@@ -339,7 +371,7 @@ impl DaySummaryRunner {
             .await?;
         }
 
-        let p = SummaryProgress::base(date_str, "all_done", total_segments);
+        let p = SummaryProgress::base(source.to_string(), date_str, "all_done", total_segments);
         self.emit(p);
         Ok(())
     }
@@ -361,6 +393,7 @@ impl DaySummaryRunner {
     #[allow(clippy::too_many_arguments)]
     async fn run_one_segment(
         &self,
+        source: &str,
         chat: &ChatClient,
         ai: &AiConfig,
         date_str: &str,
@@ -388,8 +421,12 @@ impl DaySummaryRunner {
 
         // 没截图的段直接 skipped 兜底
         if metas.is_empty() {
-            let mut p_started =
-                SummaryProgress::base(date_str.to_string(), "segment_started", total_segments);
+            let mut p_started = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "segment_started",
+                total_segments,
+            );
             p_started.segment_idx = Some(idx);
             p_started.images_total = Some(0);
             self.emit(p_started);
@@ -397,6 +434,7 @@ impl DaySummaryRunner {
             ai_summaries::upsert_segment(
                 &self.pool,
                 &SegmentSummaryRow {
+                    source: source.to_string(),
                     local_date: date_str.to_string(),
                     segment_idx: idx,
                     label: label.clone(),
@@ -411,8 +449,12 @@ impl DaySummaryRunner {
             )
             .await?;
 
-            let mut p_done =
-                SummaryProgress::base(date_str.to_string(), "segment_done", total_segments);
+            let mut p_done = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "segment_done",
+                total_segments,
+            );
             p_done.segment_idx = Some(idx);
             p_done.images_total = Some(0);
             p_done.content = Some(String::new());
@@ -425,10 +467,14 @@ impl DaySummaryRunner {
         let picked: Vec<ScreenshotMeta> = pick_frames(metas, max_images);
 
         // 段重跑前先清掉旧的逐图描述，避免新旧 image_index 错位
-        ai_summaries::clear_segment_descriptions(&self.pool, date_str, idx).await?;
+        ai_summaries::clear_segment_descriptions(&self.pool, source, date_str, idx).await?;
 
-        let mut p_started =
-            SummaryProgress::base(date_str.to_string(), "segment_started", total_segments);
+        let mut p_started = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "segment_started",
+            total_segments,
+        );
         p_started.segment_idx = Some(idx);
         p_started.images_total = Some(picked.len() as u32);
         self.emit(p_started);
@@ -454,6 +500,7 @@ impl DaySummaryRunner {
 
         let descriptions = self
             .describe_images(
+                source,
                 chat,
                 &picked,
                 ai.prompt_language.clone(),
@@ -468,8 +515,12 @@ impl DaySummaryRunner {
 
         // 整段开始前已检查过 cancel；step 1 跑完后再查一次，避免 step 2 白跑
         if self.cancel.load(Ordering::Relaxed) {
-            let mut p_cancel =
-                SummaryProgress::base(date_str.to_string(), "cancelled", total_segments);
+            let mut p_cancel = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "cancelled",
+                total_segments,
+            );
             p_cancel.segment_idx = Some(idx);
             self.emit(p_cancel);
             return Ok(());
@@ -492,6 +543,7 @@ impl DaySummaryRunner {
                 // （需要时未来加列）
                 Ok((content, _usage)) => (
                     SegmentSummaryRow {
+                        source: source.to_string(),
                         local_date: date_str.to_string(),
                         segment_idx: idx,
                         label: label.clone(),
@@ -507,6 +559,7 @@ impl DaySummaryRunner {
                 ),
                 Err(e) => (
                     SegmentSummaryRow {
+                        source: source.to_string(),
                         local_date: date_str.to_string(),
                         segment_idx: idx,
                         label: label.clone(),
@@ -524,8 +577,12 @@ impl DaySummaryRunner {
 
         ai_summaries::upsert_segment(&self.pool, &row).await?;
 
-        let mut p_done =
-            SummaryProgress::base(date_str.to_string(), "segment_done", total_segments);
+        let mut p_done = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "segment_done",
+            total_segments,
+        );
         p_done.segment_idx = Some(idx);
         p_done.images_total = Some(picked.len() as u32);
         p_done.content = Some(row.content.clone());
@@ -541,22 +598,23 @@ impl DaySummaryRunner {
     /// emit `image_described` 让前端实时刷新该行 UI。
     pub async fn retry_one_image_description(
         &self,
+        source: &str,
         local_date: NaiveDate,
         segment_idx: u32,
         image_index: u32,
         overrides: Option<AiOverrides>,
     ) -> Result<()> {
-        let (engine_overrides, needs_restart) = match overrides.as_ref() {
-            Some(o) => (o.engine_overrides(), o.needs_engine_restart()),
-            None => (EngineStartOverrides::default(), false),
-        };
+        let needs_restart = overrides
+            .as_ref()
+            .map(|o| o.needs_engine_restart())
+            .unwrap_or(false);
         let result = self
             .retry_one_image_inner(
+                source,
                 local_date,
                 segment_idx,
                 image_index,
                 overrides,
-                engine_overrides,
                 needs_restart,
             )
             .await;
@@ -568,17 +626,23 @@ impl DaySummaryRunner {
 
     async fn retry_one_image_inner(
         &self,
+        source: &str,
         local_date: NaiveDate,
         segment_idx: u32,
         image_index: u32,
         overrides: Option<AiOverrides>,
-        engine_overrides: EngineStartOverrides,
         needs_restart: bool,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = match overrides {
             Some(o) => o.apply_to(cfg.ai.clone()),
             None => cfg.ai.clone(),
+        };
+        // engine_overrides 同 run() 一样从合并后的 ai.* 取，daily / debug 共用
+        let engine_overrides = EngineStartOverrides {
+            batch_size: ai.batch_size,
+            parallel_slots: ai.parallel_slots,
+            ctx_size: ai.ctx_size,
         };
 
         if ai.active_main.trim().is_empty() {
@@ -593,6 +657,7 @@ impl DaySummaryRunner {
         // 拉该段该 image_index 的现有行（拿 screenshot_path）
         let existing = ai_summaries::get_segment_image_descriptions(
             &self.pool,
+            source,
             &date_str,
             segment_idx,
         )
@@ -645,6 +710,7 @@ impl DaySummaryRunner {
         ai_summaries::upsert_image_description(
             &self.pool,
             &ImageDescriptionRow {
+                source: source.to_string(),
                 local_date: date_str.clone(),
                 segment_idx,
                 image_index,
@@ -660,7 +726,12 @@ impl DaySummaryRunner {
         .await?;
 
         // emit 让前端刷新
-        let mut p = SummaryProgress::base(date_str, "image_described", total_segments);
+        let mut p = SummaryProgress::base(
+            source.to_string(),
+            date_str,
+            "image_described",
+            total_segments,
+        );
         p.segment_idx = Some(segment_idx);
         p.image_index = Some(image_index);
         p.image_path = Some(existing_row.screenshot_path);
@@ -676,29 +747,25 @@ impl DaySummaryRunner {
     #[allow(clippy::too_many_arguments)]
     pub async fn run_one_segment_only(
         &self,
+        source: &str,
         local_date: NaiveDate,
         segment_idx: u32,
         device: DeviceFilter,
         overrides: Option<AiOverrides>,
     ) -> Result<()> {
-        let (engine_overrides, needs_restart, parallel) = match overrides.as_ref() {
-            Some(o) => (
-                o.engine_overrides(),
-                o.needs_engine_restart(),
-                o.parallel_slots_or_one(),
-            ),
-            None => (EngineStartOverrides::default(), false, 1usize),
-        };
+        let needs_restart = overrides
+            .as_ref()
+            .map(|o| o.needs_engine_restart())
+            .unwrap_or(false);
 
         let result = self
             .run_one_segment_only_inner(
+                source,
                 local_date,
                 segment_idx,
                 device,
                 overrides,
-                engine_overrides,
                 needs_restart,
-                parallel,
             )
             .await;
         if needs_restart {
@@ -710,19 +777,24 @@ impl DaySummaryRunner {
     #[allow(clippy::too_many_arguments)]
     async fn run_one_segment_only_inner(
         &self,
+        source: &str,
         local_date: NaiveDate,
         segment_idx: u32,
         device: DeviceFilter,
         overrides: Option<AiOverrides>,
-        engine_overrides: EngineStartOverrides,
         needs_restart: bool,
-        parallel: usize,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = match overrides {
             Some(o) => o.apply_to(cfg.ai.clone()),
             None => cfg.ai.clone(),
         };
+        let engine_overrides = EngineStartOverrides {
+            batch_size: ai.batch_size,
+            parallel_slots: ai.parallel_slots,
+            ctx_size: ai.ctx_size,
+        };
+        let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
 
         if ai.active_main.trim().is_empty() {
             return Err(Error::Other(
@@ -747,6 +819,7 @@ impl DaySummaryRunner {
         let st = self.supervisor.status().await;
         if st.state != EngineState::Running {
             let mut p = SummaryProgress::base(
+                source.to_string(),
                 date_str.clone(),
                 "engine_starting",
                 ai.segments.len() as u32,
@@ -759,6 +832,7 @@ impl DaySummaryRunner {
         let max_images = ai.max_images_per_segment as usize;
 
         self.run_one_segment(
+            source,
             &chat,
             &ai,
             &date_str,
@@ -786,6 +860,7 @@ impl DaySummaryRunner {
     #[allow(clippy::too_many_arguments)]
     async fn describe_images(
         &self,
+        source: &str,
         chat: &ChatClient,
         picked: &[ScreenshotMeta],
         prompt_lang: String,
@@ -809,6 +884,7 @@ impl DaySummaryRunner {
             let describe_system = describe_system.to_string();
             let model = model.to_string();
             let date_str = date_str.to_string();
+            let source_owned = source.to_string();
             let pool = self.pool.clone();
             let app = self.app.clone();
             let cancel = Arc::clone(&self.cancel);
@@ -851,6 +927,7 @@ impl DaySummaryRunner {
                 ai_summaries::upsert_image_description(
                     &pool,
                     &ImageDescriptionRow {
+                        source: source_owned.clone(),
                         local_date: date_str.clone(),
                         segment_idx: idx,
                         image_index: i,
@@ -866,6 +943,7 @@ impl DaySummaryRunner {
                 .await?;
 
                 let mut p_img = SummaryProgress::base(
+                    source_owned.clone(),
                     date_str,
                     "image_described",
                     total_segments,

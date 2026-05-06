@@ -81,10 +81,10 @@ function optionToMaxImages(v: MaxImagesKey): number {
  *  改值会触发引擎 stop+start 重启；调试跑完无条件 stop，下次正常日报跑回到默认。 */
 type BatchKey = "default" | "1024" | "2048" | "4096";
 const BATCH_OPTIONS: Array<{ value: BatchKey; label: string }> = [
-  { value: "default", label: "默认 (512)" },
-  { value: "1024", label: "1024" },
-  { value: "2048", label: "2048" },
-  { value: "4096", label: "4096" },
+  { value: "default", label: "Batch 512" },
+  { value: "1024", label: "Batch 1024" },
+  { value: "2048", label: "Batch 2048" },
+  { value: "4096", label: "Batch 4096" },
 ];
 function batchToOption(n: number | null): BatchKey {
   if (n === 1024) return "1024";
@@ -101,10 +101,10 @@ function optionToBatch(v: BatchKey): number | null {
  *  两边一致才有效。"1" = 串行（历史行为）；> 1 = 并发同时跑 N 张图描述。 */
 type SlotsKey = "1" | "2" | "4" | "8";
 const SLOTS_OPTIONS: Array<{ value: SlotsKey; label: string }> = [
-  { value: "1", label: "1 (串行)" },
-  { value: "2", label: "2" },
-  { value: "4", label: "4" },
-  { value: "8", label: "8" },
+  { value: "1", label: "并发 1 路" },
+  { value: "2", label: "并发 2 路" },
+  { value: "4", label: "并发 4 路" },
+  { value: "8", label: "并发 8 路" },
 ];
 function slotsToOption(n: number): SlotsKey {
   if (n >= 8) return "8";
@@ -114,6 +114,57 @@ function slotsToOption(n: number): SlotsKey {
 }
 function optionToSlots(v: SlotsKey): number {
   return parseInt(v, 10);
+}
+
+/** 每 slot 的 ctx 上限（单位 token）。后端 `--ctx-size = ctxSize × slots`。
+ *  启动时按总量一次性吃 KV cache（~30KB / token）；选大了 5090 也只是几 GB，
+ *  CPU 用户保持「默认 (8K)」就行。 */
+type CtxKey = "default" | "16384" | "32768" | "65536";
+const CTX_OPTIONS: Array<{ value: CtxKey; label: string }> = [
+  { value: "default", label: "ctx 8K/槽" },
+  { value: "16384", label: "ctx 16K/槽" },
+  { value: "32768", label: "ctx 32K/槽" },
+  { value: "65536", label: "ctx 64K/槽" },
+];
+function ctxToOption(n: number | null): CtxKey {
+  if (n === 16384) return "16384";
+  if (n === 32768) return "32768";
+  if (n === 65536) return "65536";
+  return "default";
+}
+/** "default" → null（让 overrides.ctxSize 留空，后端走 8K 默认）；其它 → 数值 */
+function optionToCtx(v: CtxKey): number | null {
+  return v === "default" ? null : parseInt(v, 10);
+}
+
+/** 估算当前引擎参数组合下的总 VRAM / RAM 占用（GB）。
+ *
+ * 简化模型——从 active_main 文件名抠出 "NB" 参数量，按 Q4 量化粗算：
+ *   weights_GB    ≈ params × 0.55     （Q4_K_M 经验比例）
+ *   kv_GB         ≈ params × 18 KB/token × ctx_total
+ *   overhead_GB   ≈ 2.0               （vision encoder + workspace + activations）
+ *
+ * 误差 ±20%，用来给用户提前感知"这个组合是不是离 OOM 不远了"，
+ * 不是精确值。撞了上限引擎会 fail-fast 报 cudaMalloc OOM 兜底。 */
+function estimateVramGB(
+  modelName: string,
+  parallelSlots: number,
+  ctxSize: number,
+): { totalGB: number; weightsGB: number; kvGB: number; params: number } {
+  // 文件名里像 "Qwen2.5-VL-3B" / "Qwen3VL-8B" / "gemma-4-4b" 都能匹配
+  const m = modelName.match(/(\d+(?:\.\d+)?)\s*B/i);
+  const params = m ? parseFloat(m[1]) : 4; // 找不到就按 4B 兜底
+  const weightsGB = params * 0.55;
+  const kvPerTokenKB = 18 * params;
+  const totalCtx = ctxSize * Math.max(1, parallelSlots);
+  const kvGB = (kvPerTokenKB * totalCtx) / 1024 / 1024;
+  const overheadGB = 2;
+  return {
+    totalGB: weightsGB + kvGB + overheadGB,
+    weightsGB,
+    kvGB,
+    params,
+  };
 }
 
 const LOG_RING_SIZE = 200; // 防止整日跑事件流爆内存
@@ -253,6 +304,7 @@ export default function DebugTab() {
   /** 启动级 override：null = 不传给后端（走 llama.cpp 默认）；改值会触发引擎重启。 */
   const [debugBatchSize, setDebugBatchSize] = useState<number | null>(null);
   const [debugParallelSlots, setDebugParallelSlots] = useState(1);
+  const [debugCtxSize, setDebugCtxSize] = useState<number | null>(null);
   /** 调试 tab 局部 prompt 覆盖：默认值 = 当前 settings 的覆盖（非空）或内置默认。 */
   const [debugSysPrompt, setDebugSysPrompt] = useState("");
   const [debugImagePrompt, setDebugImagePrompt] = useState("");
@@ -322,8 +374,8 @@ export default function DebugTab() {
         console.error("getEngineStatus 失败:", e);
         return null;
       }),
-      api.getDayImageDescriptions(date).catch(() => [] as ImageDescriptionRow[]),
-      api.getDaySummary(date).catch(() => [] as SegmentSummaryRow[]),
+      api.getDayImageDescriptions(date, "debug").catch(() => [] as ImageDescriptionRow[]),
+      api.getDaySummary(date, "debug").catch(() => [] as SegmentSummaryRow[]),
     ]).then(([eng, ds, sums]) => {
       if (cancelled) return;
       setEngine(eng);
@@ -342,6 +394,9 @@ export default function DebugTab() {
   useEffect(() => {
     const p = listen<SummaryProgress>(SUMMARY_PROGRESS_EVENT, (ev) => {
       const ev_ = ev.payload;
+      // 只接 debug source 的事件——日报跑时这个 listener 也会被广播到，
+      // 不过滤会让调试 tab 看到 daily 数据
+      if (ev_.source !== "debug") return;
       if (ev_.date !== dateRef.current) return;
 
       // 不管 phase 都进 log（rolling）
@@ -367,6 +422,7 @@ export default function DebugTab() {
           // 实时往描述列表插一条 / 更新已有项
           if (ev_.segmentIdx == null || ev_.imageIndex == null) break;
           const row: ImageDescriptionRow = {
+            source: "debug",
             localDate: ev_.date,
             segmentIdx: ev_.segmentIdx,
             imageIndex: ev_.imageIndex,
@@ -401,6 +457,7 @@ export default function DebugTab() {
           const seg = segmentsRef.current[ev_.segmentIdx];
           if (!seg) break;
           const row: SegmentSummaryRow = {
+            source: "debug",
             localDate: ev_.date,
             segmentIdx: ev_.segmentIdx,
             label: seg.label,
@@ -481,8 +538,9 @@ export default function DebugTab() {
         // null / 1 → 不传，让后端走默认；非默认值才打包，触发 stop+start with overrides
         ...(debugBatchSize != null ? { batchSize: debugBatchSize } : {}),
         ...(debugParallelSlots > 1 ? { parallelSlots: debugParallelSlots } : {}),
+        ...(debugCtxSize != null ? { ctxSize: debugCtxSize } : {}),
       };
-      await api.generateDaySummary(date, true, null, overrides);
+      await api.generateDaySummary(date, true, null, overrides, "debug");
     } catch (e) {
       const msg = typeof e === "string" ? e : String(e);
       setTopError(msg);
@@ -637,7 +695,7 @@ export default function DebugTab() {
             )
               return;
             try {
-              await api.clearDaySummary(date);
+              await api.clearDaySummary(date, "debug");
               setDescs([]);
               setSummaries([]);
               setLogs([]);
@@ -726,28 +784,40 @@ export default function DebugTab() {
         </Row>
       </Section>
 
-      {/* —— 引擎参数（启动时）：改值会重启引擎，仅本调试窗口生效 —— */}
+      {/* —— 引擎参数（启动时）：改值会重启引擎，仅本调试窗口生效。
+          3 个 picker 自带类目前缀（"Batch 512"/"并发 4 路"/"ctx 16K/槽"）
+          直接 inline 排，跟顶部「日报 / 今天 / 30 张/段」那排同款。
+          末尾挂一行 KV cache 估算，让用户在点开始前就感知"这组合会不会 OOM"。 */}
       <Section
         title="引擎参数（启动时）"
         icon={Server}
         description="改完会先 stop 引擎、用新参数重启再跑；调试结束后无条件 stop 引擎，下次日报会以默认参数 lazy-start，不污染全局。"
       >
-        <Row label="Batch 大小">
+        <div className={styles.engineParamRow}>
           <SimplePicker<BatchKey>
             value={batchToOption(debugBatchSize)}
             options={BATCH_OPTIONS}
             onChange={(next) => setDebugBatchSize(optionToBatch(next))}
             disabled={generating}
           />
-        </Row>
-        <Row label="并发数量">
           <SimplePicker<SlotsKey>
             value={slotsToOption(debugParallelSlots)}
             options={SLOTS_OPTIONS}
             onChange={(next) => setDebugParallelSlots(optionToSlots(next))}
             disabled={generating}
           />
-        </Row>
+          <SimplePicker<CtxKey>
+            value={ctxToOption(debugCtxSize)}
+            options={CTX_OPTIONS}
+            onChange={(next) => setDebugCtxSize(optionToCtx(next))}
+            disabled={generating}
+          />
+        </div>
+        <VramEstimateLine
+          modelName={activeMain}
+          parallelSlots={debugParallelSlots}
+          ctxSize={debugCtxSize ?? 8192}
+        />
       </Section>
 
       {/* —— 错误条 / 冷启动提示 —— */}
@@ -869,7 +939,11 @@ export default function DebugTab() {
                         ...(debugParallelSlots > 1
                           ? { parallelSlots: debugParallelSlots }
                           : {}),
+                        ...(debugCtxSize != null
+                          ? { ctxSize: debugCtxSize }
+                          : {}),
                       },
+                      "debug",
                     );
                   } catch (e) {
                     setTopError(typeof e === "string" ? e : String(e));
@@ -1012,6 +1086,38 @@ export default function DebugTab() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 「引擎参数」Section 末尾的估算行——基于当前 picker 组合 + active model
+ *  文件名抠出的参数量，粗估总占用。颜色按风险分档：
+ *   < 16 GB 灰、16-24 橙、> 24 红（5090 32GB 留 ~8 GB margin 给系统 / encoder）
+ */
+function VramEstimateLine({
+  modelName,
+  parallelSlots,
+  ctxSize,
+}: {
+  modelName: string;
+  parallelSlots: number;
+  ctxSize: number;
+}) {
+  if (!modelName.trim()) {
+    return null;
+  }
+  const est = estimateVramGB(modelName, parallelSlots, ctxSize);
+  let levelClass = styles.vramEstOk;
+  if (est.totalGB > 24) levelClass = styles.vramEstDanger;
+  else if (est.totalGB > 16) levelClass = styles.vramEstWarn;
+  return (
+    <div className={`${styles.vramEst} ${levelClass}`}>
+      <span className={styles.vramEstLabel}>估算总占用</span>
+      <span className={styles.vramEstValue}>~{est.totalGB.toFixed(1)} GB</span>
+      <span className={styles.vramEstBreakdown}>
+        （权重 {est.weightsGB.toFixed(1)} + KV cache {est.kvGB.toFixed(1)} + 其它 ~2.0 ·
+        按 {est.params}B 模型 + ctx {(ctxSize / 1024) | 0}K × {parallelSlots} 槽 估）
+      </span>
     </div>
   );
 }

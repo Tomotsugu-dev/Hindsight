@@ -28,6 +28,9 @@ use crate::storage::DbPool;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentSummaryRow {
+    /// "daily"（日报页写入读取）/ "debug"（调试 tab 写入读取）。
+    /// PK 含 source 让两支独立，互不覆盖、互不擦除。
+    pub source: String,
     pub local_date: String,
     pub segment_idx: u32,
     pub label: String,
@@ -41,34 +44,41 @@ pub struct SegmentSummaryRow {
     pub generated_at: String,
 }
 
-/// 拿某天所有段的总结，按 segment_idx 升序。
-pub async fn get_day(pool: &DbPool, local_date: &str) -> Result<Vec<SegmentSummaryRow>> {
+/// 拿某天某 source 下所有段的总结，按 segment_idx 升序。
+/// `source` = "daily" / "debug" — 区分日报正式产物与调试沙盒产物。
+pub async fn get_day(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+) -> Result<Vec<SegmentSummaryRow>> {
+    let src = source.to_string();
     let date = local_date.to_string();
     let rows = pool
         .0
         .call(move |conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT local_date, segment_idx, label, start_hour, end_hour,
+                    "SELECT source, local_date, segment_idx, label, start_hour, end_hour,
                             content, model, status, error, generated_at
                        FROM ai_summaries
-                      WHERE local_date = ?1
+                      WHERE source = ?1 AND local_date = ?2
                       ORDER BY segment_idx ASC",
                 )
                 .db()?;
             let rows = stmt
-                .query_map([&date], |r| {
+                .query_map(rusqlite::params![src, date], |r| {
                     Ok(SegmentSummaryRow {
-                        local_date: r.get(0)?,
-                        segment_idx: r.get::<_, i64>(1)? as u32,
-                        label: r.get(2)?,
-                        start_hour: r.get::<_, i64>(3)? as u8,
-                        end_hour: r.get::<_, i64>(4)? as u8,
-                        content: r.get(5)?,
-                        model: r.get(6)?,
-                        status: r.get(7)?,
-                        error: r.get(8)?,
-                        generated_at: r.get(9)?,
+                        source: r.get(0)?,
+                        local_date: r.get(1)?,
+                        segment_idx: r.get::<_, i64>(2)? as u32,
+                        label: r.get(3)?,
+                        start_hour: r.get::<_, i64>(4)? as u8,
+                        end_hour: r.get::<_, i64>(5)? as u8,
+                        content: r.get(6)?,
+                        model: r.get(7)?,
+                        status: r.get(8)?,
+                        error: r.get(9)?,
+                        generated_at: r.get(10)?,
                     })
                 })
                 .db()?;
@@ -82,48 +92,8 @@ pub async fn get_day(pool: &DbPool, local_date: &str) -> Result<Vec<SegmentSumma
     Ok(rows)
 }
 
-/// 拿单段——`get_day` 的快速路径，前端"重试某段"后查一行用。
-#[allow(dead_code)]
-pub async fn get_segment(
-    pool: &DbPool,
-    local_date: &str,
-    segment_idx: u32,
-) -> Result<Option<SegmentSummaryRow>> {
-    let date = local_date.to_string();
-    let row = pool
-        .0
-        .call(move |conn| {
-            let r = conn
-                .query_row(
-                    "SELECT local_date, segment_idx, label, start_hour, end_hour,
-                            content, model, status, error, generated_at
-                       FROM ai_summaries
-                      WHERE local_date = ?1 AND segment_idx = ?2",
-                    rusqlite::params![date, segment_idx as i64],
-                    |r| {
-                        Ok(SegmentSummaryRow {
-                            local_date: r.get(0)?,
-                            segment_idx: r.get::<_, i64>(1)? as u32,
-                            label: r.get(2)?,
-                            start_hour: r.get::<_, i64>(3)? as u8,
-                            end_hour: r.get::<_, i64>(4)? as u8,
-                            content: r.get(5)?,
-                            model: r.get(6)?,
-                            status: r.get(7)?,
-                            error: r.get(8)?,
-                            generated_at: r.get(9)?,
-                        })
-                    },
-                )
-                .optional()
-                .db()?;
-            Ok(r)
-        })
-        .await?;
-    Ok(row)
-}
-
 /// 写入或覆盖一段。`generated_at` 自动用当前 UTC 时间填，调用方不用管。
+/// PK = (source, local_date, segment_idx)，所以 daily / debug 互不冲突。
 pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()> {
     let mut row = row.clone();
     if row.generated_at.is_empty() {
@@ -133,10 +103,10 @@ pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()
         .call(move |conn| {
             conn.execute(
                 "INSERT INTO ai_summaries(
-                     local_date, segment_idx, label, start_hour, end_hour,
+                     source, local_date, segment_idx, label, start_hour, end_hour,
                      content, model, status, error, generated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-                 ON CONFLICT(local_date, segment_idx) DO UPDATE SET
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                 ON CONFLICT(source, local_date, segment_idx) DO UPDATE SET
                      label        = excluded.label,
                      start_hour   = excluded.start_hour,
                      end_hour     = excluded.end_hour,
@@ -146,6 +116,7 @@ pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()
                      error        = excluded.error,
                      generated_at = excluded.generated_at",
                 rusqlite::params![
+                    row.source,
                     row.local_date,
                     row.segment_idx as i64,
                     row.label,
@@ -165,20 +136,20 @@ pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()
     Ok(())
 }
 
-/// 清空某天所有段总结——`force_refresh` 重新生成时先调，避免老段残留。
-/// 同时清掉 `ai_image_descriptions` 同日的所有行（两步生成的 step 1 产物）。
-pub async fn clear_day(pool: &DbPool, local_date: &str) -> Result<()> {
+/// 清空某 source 下某天所有段总结 + 同日逐图描述。`force_refresh` 时调。
+pub async fn clear_day(pool: &DbPool, source: &str, local_date: &str) -> Result<()> {
+    let src = source.to_string();
     let date = local_date.to_string();
     pool.0
         .call(move |conn| {
             conn.execute(
-                "DELETE FROM ai_summaries WHERE local_date = ?1",
-                [&date],
+                "DELETE FROM ai_summaries WHERE source = ?1 AND local_date = ?2",
+                rusqlite::params![src, date],
             )
             .db()?;
             conn.execute(
-                "DELETE FROM ai_image_descriptions WHERE local_date = ?1",
-                [&date],
+                "DELETE FROM ai_image_descriptions WHERE source = ?1 AND local_date = ?2",
+                rusqlite::params![src, date],
             )
             .db()?;
             Ok(())
@@ -187,19 +158,21 @@ pub async fn clear_day(pool: &DbPool, local_date: &str) -> Result<()> {
     Ok(())
 }
 
-/// 清掉某段所有逐图描述（段重跑时 step 1 开始前调，避免新旧 image_index 错位）。
+/// 清掉某 source 某段所有逐图描述（段重跑时 step 1 开始前调，避免新旧 image_index 错位）。
 pub async fn clear_segment_descriptions(
     pool: &DbPool,
+    source: &str,
     local_date: &str,
     segment_idx: u32,
 ) -> Result<()> {
+    let src = source.to_string();
     let date = local_date.to_string();
     pool.0
         .call(move |conn| {
             conn.execute(
                 "DELETE FROM ai_image_descriptions
-                  WHERE local_date = ?1 AND segment_idx = ?2",
-                rusqlite::params![date, segment_idx as i64],
+                  WHERE source = ?1 AND local_date = ?2 AND segment_idx = ?3",
+                rusqlite::params![src, date, segment_idx as i64],
             )
             .db()?;
             Ok(())
@@ -212,6 +185,8 @@ pub async fn clear_segment_descriptions(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageDescriptionRow {
+    /// "daily" / "debug" — 跟 SegmentSummaryRow.source 同义
+    pub source: String,
     pub local_date: String,
     pub segment_idx: u32,
     /// 该段抽帧后的 0-based 顺序
@@ -244,11 +219,11 @@ pub async fn upsert_image_description(
         .call(move |conn| {
             conn.execute(
                 "INSERT INTO ai_image_descriptions(
-                     local_date, segment_idx, image_index,
+                     source, local_date, segment_idx, image_index,
                      screenshot_path, description, model, generated_at,
                      latency_ms, prompt_tokens, completion_tokens)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-                 ON CONFLICT(local_date, segment_idx, image_index) DO UPDATE SET
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                 ON CONFLICT(source, local_date, segment_idx, image_index) DO UPDATE SET
                      screenshot_path   = excluded.screenshot_path,
                      description       = excluded.description,
                      model             = excluded.model,
@@ -257,6 +232,7 @@ pub async fn upsert_image_description(
                      prompt_tokens     = excluded.prompt_tokens,
                      completion_tokens = excluded.completion_tokens",
                 rusqlite::params![
+                    row.source,
                     row.local_date,
                     row.segment_idx as i64,
                     row.image_index as i64,
@@ -276,39 +252,42 @@ pub async fn upsert_image_description(
     Ok(())
 }
 
-/// 拉某段所有逐图描述，按 image_index 升序——给调试 tab 渲染列表。
+/// 拉某 source 某段所有逐图描述，按 image_index 升序——给调试 tab 渲染列表。
 pub async fn get_segment_image_descriptions(
     pool: &DbPool,
+    source: &str,
     local_date: &str,
     segment_idx: u32,
 ) -> Result<Vec<ImageDescriptionRow>> {
+    let src = source.to_string();
     let date = local_date.to_string();
     let rows = pool
         .0
         .call(move |conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT local_date, segment_idx, image_index,
+                    "SELECT source, local_date, segment_idx, image_index,
                             screenshot_path, description, model, generated_at,
                             latency_ms, prompt_tokens, completion_tokens
                        FROM ai_image_descriptions
-                      WHERE local_date = ?1 AND segment_idx = ?2
-                      ORDER BY image_index ASC /* perf-cols-v20 */",
+                      WHERE source = ?1 AND local_date = ?2 AND segment_idx = ?3
+                      ORDER BY image_index ASC",
                 )
                 .db()?;
             let it = stmt
-                .query_map(rusqlite::params![date, segment_idx as i64], |r| {
+                .query_map(rusqlite::params![src, date, segment_idx as i64], |r| {
                     Ok(ImageDescriptionRow {
-                        local_date: r.get(0)?,
-                        segment_idx: r.get::<_, i64>(1)? as u32,
-                        image_index: r.get::<_, i64>(2)? as u32,
-                        screenshot_path: r.get(3)?,
-                        description: r.get(4)?,
-                        model: r.get(5)?,
-                        generated_at: r.get(6)?,
-                        latency_ms: r.get::<_, Option<i64>>(7)?.map(|v| v as u64),
-                        prompt_tokens: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
-                        completion_tokens: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
+                        source: r.get(0)?,
+                        local_date: r.get(1)?,
+                        segment_idx: r.get::<_, i64>(2)? as u32,
+                        image_index: r.get::<_, i64>(3)? as u32,
+                        screenshot_path: r.get(4)?,
+                        description: r.get(5)?,
+                        model: r.get(6)?,
+                        generated_at: r.get(7)?,
+                        latency_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+                        prompt_tokens: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
+                        completion_tokens: r.get::<_, Option<i64>>(10)?.map(|v| v as u32),
                     })
                 })
                 .db()?;
@@ -322,38 +301,41 @@ pub async fn get_segment_image_descriptions(
     Ok(rows)
 }
 
-/// 拉某天所有段的逐图描述——调试 tab 一次性渲染整日时用。
+/// 拉某 source 某天所有段的逐图描述——调试 tab 一次性渲染整日时用。
 pub async fn get_day_image_descriptions(
     pool: &DbPool,
+    source: &str,
     local_date: &str,
 ) -> Result<Vec<ImageDescriptionRow>> {
+    let src = source.to_string();
     let date = local_date.to_string();
     let rows = pool
         .0
         .call(move |conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT local_date, segment_idx, image_index,
+                    "SELECT source, local_date, segment_idx, image_index,
                             screenshot_path, description, model, generated_at,
                             latency_ms, prompt_tokens, completion_tokens
                        FROM ai_image_descriptions
-                      WHERE local_date = ?1
+                      WHERE source = ?1 AND local_date = ?2
                       ORDER BY segment_idx ASC, image_index ASC",
                 )
                 .db()?;
             let it = stmt
-                .query_map([&date], |r| {
+                .query_map(rusqlite::params![src, date], |r| {
                     Ok(ImageDescriptionRow {
-                        local_date: r.get(0)?,
-                        segment_idx: r.get::<_, i64>(1)? as u32,
-                        image_index: r.get::<_, i64>(2)? as u32,
-                        screenshot_path: r.get(3)?,
-                        description: r.get(4)?,
-                        model: r.get(5)?,
-                        generated_at: r.get(6)?,
-                        latency_ms: r.get::<_, Option<i64>>(7)?.map(|v| v as u64),
-                        prompt_tokens: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
-                        completion_tokens: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
+                        source: r.get(0)?,
+                        local_date: r.get(1)?,
+                        segment_idx: r.get::<_, i64>(2)? as u32,
+                        image_index: r.get::<_, i64>(3)? as u32,
+                        screenshot_path: r.get(4)?,
+                        description: r.get(5)?,
+                        model: r.get(6)?,
+                        generated_at: r.get(7)?,
+                        latency_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+                        prompt_tokens: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
+                        completion_tokens: r.get::<_, Option<i64>>(10)?.map(|v| v as u32),
                     })
                 })
                 .db()?;
