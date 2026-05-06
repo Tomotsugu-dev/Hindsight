@@ -6,7 +6,7 @@
 <h1 align="center">Hindsight</h1>
 
 <p align="center">
-  <i>A local activity tracker for your computer — Track the apps you used throughout the day (with optional cloud sync)</i>
+  <i>Your computer's diary — it remembers every day for you.</i>
 </p>
 
 <p align="center">
@@ -28,29 +28,44 @@
 
 ## Key Features
 
-- 👁️ **Automatic Tracking** — Runs silently in the background, automatically detects and logs your app usage in real time
-- 📊 **Time Visualization** — View app usage patterns with hourly histograms and ranking leaderboards
-- 📸 **Screenshot Review** — Optional screen snapshots let you see exactly what you were doing at any time
-- 🏷️ **App Classification** — Create custom categories (e.g., "Work", "Entertainment", "Learning") and view statistics by category
-- ⏰ **Work Hours Settings** — Record only during your set work hours, protect your privacy outside work time
-- 🔒 **Privacy Protection** — Automatically detects sensitive content like login pages and password fields, skips screenshots to protect your privacy
-- ☁️ **Multi-Device Support** — Optional cloud sync to view aggregated data across multiple computers (screenshots remain local)
+- 📊 **See where your time goes** — Background auto-tracking with hourly histograms + app rankings; weekly / monthly aggregation; customizable categories ("Work / Entertainment / Learning")
+- 🤖 **AI auto-generated daily report** (new) — Local LLM reads your screenshots and writes a per-segment summary
+- ☁️ **Multi-device aggregation** — Optional Google Drive sync of activity data; view across multiple computers (screenshots stay local)
+- 🔒 **Local-first, privacy-first** — Data stays on your machine by default; records only during your set work hours; auto-skips screenshots of login / password pages
 
 ## Interface Preview
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="700"><br/>
-  <sub><i>Today Overview · 24-hour stacked histogram + app ranking</i></sub>
+  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
+  <sub><i><b>Today Overview</b> · 24-hour stacked histogram × app leaderboard — see where your day went and your work / study rhythm at a glance</i></sub>
 </p>
 
-<p align="center">
-  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="700"><br/>
-  <sub><i>Monthly Statistics · Daily histogram + monthly ranking</i></sub>
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/weekly.png" alt="Weekly Statistics"><br/>
+      <sub><i><b>Weekly Stats</b> · 7-day total-time bar comparison with weekly top-app ranking</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics"><br/>
+      <sub><i><b>Monthly Stats</b> · Daily bars × monthly ranking — see your long-term work rhythm</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary"><br/>
+      <sub><i><b>AI auto-daily-report</b> · Local LLM reads screenshots per time segment and outputs a paragraph-style summary; screenshots stay local</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync"><br/>
+      <sub><i><b>Multi-device aggregation</b> · Google Drive syncs activity metadata across machines; screenshots always stay local</i></sub>
+    </td>
+  </tr>
+</table>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync" width="700"><br/>
-  <sub><i>Multi-Device Sync · Aggregate data across devices via Google Drive</i></sub>
+  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI Assistant" width="800"><br/>
+  <sub><i><b>AI Assistant</b> 🚧 Coming soon · Ask your activity log in natural language: "How many hours did I code last week?" "When am I most easily distracted?"</i></sub>
 </p>
 
 ## Quick Start
@@ -61,9 +76,17 @@ Download the installer for your platform from [Releases](https://github.com/Tomo
 
 Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
+> ⚠️ **First launch will trigger "Windows protected your PC"** — the installer is not yet signed with an EV code-signing certificate, so SmartScreen will block it. Click "More info" → "Run anyway" to continue.
+
 ### macOS
 
 Download `hindsight_x.y.z_aarch64.dmg`, double-click to mount, then drag Hindsight into the Applications folder.
+
+> ⚠️ **First open will show "cannot verify developer" or "is damaged"** — the app has not yet been notarized with Apple, so macOS Gatekeeper blocks it. Run the following in Terminal to clear the quarantine flag, then open normally:
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/Hindsight.app"
+```
 
 > All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, **screenshots will not be uploaded**.
 
@@ -75,6 +98,17 @@ Download `hindsight_x.y.z_aarch64.dmg`, double-click to mount, then drag Hindsig
 - [ ] Generate work reports (daily, weekly, monthly)
 - [ ] Add screenshot encryption to protect privacy
 - [ ] Support for more platforms (Linux, mobile)
+
+## Tech Stack
+
+| Category | Technology |
+|---|---|
+| Desktop framework | [Tauri 2](https://tauri.app/) |
+| Frontend | React 19 · TypeScript · Vite |
+| Backend | Rust · Tokio · SQLite · reqwest |
+| AI inference | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI-compatible API |
+| Sync | Google Drive API |
+| Packaging / updater | NSIS · DMG · Tauri Updater |
 
 ## License
 

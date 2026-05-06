@@ -6,7 +6,7 @@
 <h1 align="center">Hindsight</h1>
 
 <p align="center">
-  <i>ローカルで実行されるコンピュータ活動記録ツール — 1日で使用したアプリを追跡（オプションでクラウド同期対応）</i>
+  <i>あなたのパソコンの日記 — 毎日を、代わりに覚えています。</i>
 </p>
 
 <p align="center">
@@ -28,44 +28,67 @@
 
 ## 主な機能
 
-- 👁️ **自動記録** — バックグラウンドで静かに実行され、使用しているアプリをリアルタイムで自動検出・記録します
-- 📊 **時間の可視化** — 時間帯別の積み重ねグラフとアプリ使用時間ランキングで使用パターンを表示
-- 📸 **スクリーンショットレビュー** — オプションのスクリーンショット機能で、その時何をしていたかを確認できます
-- 🏷️ **アプリ分類** — カスタム分類（「仕事」「娯楽」「学習」など）を作成し、分類別に統計情報を表示
-- ⏰ **作業時間設定** — 設定した作業時間中のみ記録し、仕事時間外はプライバシーを保護
-- 🔒 **プライバシー保護** — ログインページなどの機密コンテンツを自動検出し、スクリーンショットをスキップしてプライバシーを保護
-- ☁️ **マルチデバイス対応** — オプションのクラウド同期で複数のコンピュータ間でデータを集約（スクリーンショットはローカルに保存）
+- 📊 **時間の使い道が一目で** — バックグラウンドで自動記録、時間帯別の積み重ねグラフ + アプリランキング；週 / 月単位で集計；カスタム分類（「仕事 / 娯楽 / 学習」など）
+- 🤖 **AI 自動日報生成**（新機能）— ローカル LLM がスクリーンショットを読み取り、時間帯別の段落形式の総括を出力
+- ☁️ **マルチデバイス集約** — Google Drive で活動データを同期、複数のパソコンから一括閲覧（スクリーンショットは常にローカル保存）
+- 🔒 **完全ローカル・プライバシー優先** — データはデフォルトで本機のみ保存；設定した作業時間のみ記録；ログイン / パスワード画面のスクリーンショットを自動スキップ
 
 ## インターフェースプレビュー
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="700"><br/>
-  <sub><i>今日の総括 · 24時間積み重ねグラフ + アプリランキング</i></sub>
+  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
+  <sub><i><b>今日の総括</b> · 24時間積み重ねグラフ × アプリランキング、今日の時間の使い道と仕事 / 学習リズムを一目で把握</i></sub>
 </p>
 
-<p align="center">
-  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="700"><br/>
-  <sub><i>月間統計 · 日別グラフ + 月間ランキング</i></sub>
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/weekly.png" alt="Weekly Statistics"><br/>
+      <sub><i><b>週間統計</b> · 7日間の総時間を棒グラフで比較、週のよく使ったアプリランキング付き</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics"><br/>
+      <sub><i><b>月間統計</b> · 日別グラフ × 月間ランキング、長期的な作業リズムを把握</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary"><br/>
+      <sub><i><b>AI 自動日報</b> · ローカル LLM が時間帯別にスクリーンショットを読み取り、段落形式の総括を出力；スクリーンショットは常にローカル</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync"><br/>
+      <sub><i><b>マルチデバイス集約</b> · Google Drive で活動メタデータを同期、複数の端末から一括閲覧；スクリーンショットは常にローカル</i></sub>
+    </td>
+  </tr>
+</table>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync" width="700"><br/>
-  <sub><i>マルチデバイス同期 · Google Driveを通じた複数デバイス間のデータ集約</i></sub>
+  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI Assistant" width="800"><br/>
+  <sub><i><b>AI アシスタント</b> 🚧 近日公開 · 自然言語で活動記録に質問、「先週コードを何時間書いた？」「どの時間帯が一番集中力が散漫？」</i></sub>
 </p>
 
 ## クイックスタート
 
-[Releases](https://github.com/Tomotsugu-dev/Hindsight/releases)からお使いのプラットフォーム用のインストーラーをダウンロードしてインストールしてください。
+[Releases](https://github.com/Tomotsugu-dev/Hindsight/releases) からお使いのプラットフォーム用のインストーラーをダウンロードしてインストールしてください。
 
 ### Windows
 
 `hindsight_x.y.z_x64-setup.exe` をダウンロードしてダブルクリックでインストールできます。
 
+> ⚠️ **初回実行時に「WindowsによってPCが保護されました」と表示されます** — インストーラーはまだ EV コード署名証明書を取得していないため、SmartScreen にブロックされます。「詳細情報」→「実行」をクリックしてインストールを続行してください。
+
 ### macOS
 
 `hindsight_x.y.z_aarch64.dmg` をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。
 
-> すべてのアクティビティデータとスクリーンショットはデフォルトでローカルに保存されます。Google Driveの同期を有効にした場合、アクティビティメタデータのみがアップロードされ、**スクリーンショットはアップロードされません**。
+> ⚠️ **初回起動時に「開発元を確認できません」または「壊れている」と表示されます** — アプリはまだ Apple の公証を受けていないため、macOS Gatekeeper にブロックされます。ターミナルで以下のコマンドを実行して隔離フラグを解除すれば正常に開けます：
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/Hindsight.app"
+```
+
+> すべてのアクティビティデータとスクリーンショットはデフォルトでローカルに保存されます。Google Drive の同期を有効にした場合、アクティビティメタデータのみがアップロードされ、**スクリーンショットはアップロードされません**。
 
 ## 今後の計画
 
@@ -75,6 +98,17 @@
 - [ ] 作業レポートの生成（日報、週報、月報）
 - [ ] スクリーンショット暗号化機能の追加によるプライバシー保護
 - [ ] より多くのプラットフォーム対応（Linux、モバイル）
+
+## 技術スタック
+
+| カテゴリ | 技術 |
+|---|---|
+| デスクトップフレームワーク | [Tauri 2](https://tauri.app/) |
+| フロントエンド | React 19 · TypeScript · Vite |
+| バックエンド | Rust · Tokio · SQLite · reqwest |
+| AI 推論 | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI 互換 API |
+| 同期 | Google Drive API |
+| パッケージング / アップデート | NSIS · DMG · Tauri Updater |
 
 ## ライセンス
 
