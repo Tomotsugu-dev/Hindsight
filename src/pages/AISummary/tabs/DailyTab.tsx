@@ -21,6 +21,7 @@ import {
   type SegmentSummaryRow,
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
+import { resolveSegmentChip } from "../../../utils/segmentColor";
 import {
   cancelDailyGenerate,
   clearTopError,
@@ -471,12 +472,17 @@ interface SegmentCardProps {
 
 function SegmentCard({ seg, state, onRetry, retryDisabled }: SegmentCardProps) {
   const { t } = useTranslation();
-  // chip 颜色：用户配过 hex 就用，否则浅灰
-  const chipColor = seg.color || "#cbd5e1";
+  // chip 颜色：跟设置页 SegmentList 走同一份 fallback——配过 hex 用配置色，
+  // 没配则按段中点的色温自动渐变（早亮晚暗），保证两边视觉一致。
+  const { background: chipBg, isLight } = resolveSegmentChip(seg);
+  const chipFg = isLight ? "#3a3f55" : "#fff";
   return (
     <div className={styles.card}>
       <div className={styles.cardHead}>
-        <span className={styles.chip} style={{ background: chipColor }}>
+        <span
+          className={styles.chip}
+          style={{ background: chipBg, color: chipFg }}
+        >
           {seg.label}
         </span>
         <span className={styles.timeRange}>

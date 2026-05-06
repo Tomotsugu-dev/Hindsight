@@ -26,12 +26,14 @@ import {
   api,
   SUMMARY_PROGRESS_EVENT,
   type AiOverrides,
+  type AiSegment,
   type EngineStatus,
   type ImageDescriptionRow,
   type SegmentSummaryRow,
   type SummaryProgress,
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
+import { resolveSegmentChip } from "../../../utils/segmentColor";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { CategoryChipMultiSelect } from "../../Settings/components/CategoryChipMultiSelect";
 import { Row } from "../../Settings/components/Row";
@@ -940,7 +942,7 @@ export default function DebugTab() {
                 key={`${d.segmentIdx}-${d.imageIndex}`}
                 row={d}
                 segmentLabel={segments[d.segmentIdx]?.label}
-                segmentColor={segments[d.segmentIdx]?.color}
+                segment={segments[d.segmentIdx]}
                 onOpenError={setTopError}
                 onRetry={async () => {
                   if (generating) return;
@@ -1011,13 +1013,13 @@ export default function DebugTab() {
         ) : (
           <div className={styles.panelOpen}>
             {visibleSummaries.map((s) => {
-              // 段 chip 背景色：跟 DescItem 一样从 segment.color 取，没有则中性灰
+              // 段 chip 背景色：跟 DescItem / SegmentList / DailyTab 走同一份 fallback——
+              // 配过 hex 用配置色，没配则按段中点色温渐变（早亮晚暗）。
               const seg = segments[s.segmentIdx];
-              const chipBg =
-                seg?.color && seg.color.trim().length > 0
-                  ? seg.color
-                  : "#cbd5e1";
-              const chipColor = isLightHex(chipBg) ? "#3a3f55" : "#fff";
+              const { background: chipBg, isLight } = seg
+                ? resolveSegmentChip(seg)
+                : { background: "#cbd5e1", isLight: true };
+              const chipColor = isLight ? "#3a3f55" : "#fff";
               // 状态徽章：ok 绿 / error 红 / skipped 灰
               const statusClass =
                 s.status === "ok"
@@ -1245,14 +1247,14 @@ function EngineBar({ engine }: { engine: EngineStatus | null }) {
 function DescItem({
   row,
   segmentLabel,
-  segmentColor,
+  segment,
   onRetry,
   retryDisabled,
   onOpenError,
 }: {
   row: ImageDescriptionRow;
   segmentLabel?: string;
-  segmentColor?: string;
+  segment?: AiSegment;
   onRetry: () => void;
   retryDisabled: boolean;
   /** 打开图片失败时上报错误给父组件展示（顶部 errorBar） */
@@ -1260,12 +1262,12 @@ function DescItem({
 }) {
   const { t } = useTranslation();
   const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
-  // 段背景色优先用 user-config（segments[idx].color），空时回到中性灰
-  const chipBg = segmentColor && segmentColor.trim().length > 0
-    ? segmentColor
-    : "#cbd5e1";
-  // 简单 perceived luminance 决定文字明暗：浅底用深字，深底用白字
-  const chipColor = isLightHex(chipBg) ? "#3a3f55" : "#fff";
+  // chip 颜色：跟设置页 SegmentList / DailyTab 走同一份 fallback——配过 hex 用配置色，
+  // 没配则按段中点的色温自动渐变。settings 还没加载 (segment === undefined) 时退回中性灰。
+  const { background: chipBg, isLight } = segment
+    ? resolveSegmentChip(segment)
+    : { background: "#cbd5e1", isLight: true };
+  const chipColor = isLight ? "#3a3f55" : "#fff";
 
   // 耗时 / token 文本：null 时显示 "—"，让排版稳定
   const latencyStr = row.latencyMs != null ? `${row.latencyMs} ms` : "—";
@@ -1342,14 +1344,3 @@ function DescItem({
   );
 }
 
-/** 用 perceived luminance 判 hex 是不是浅色（chip 文字明暗用） */
-function isLightHex(hex: string): boolean {
-  const m = hex.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (!m) return true;
-  let h = m[1];
-  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
-}

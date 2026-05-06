@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AiSegment } from "../../../api/hindsight";
+import { resolveSegmentChip } from "../../../utils/segmentColor";
 import styles from "./SegmentList.module.css";
 
 interface Props {
@@ -17,63 +18,6 @@ interface DragState {
 }
 
 const TICKS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
-
-// —— 按"一天的色温"配色：深夜 → 黎明 → 上午 → 下午 → 黄昏 → 夜。
-//    全部走 pastel 区间（L 68-86），早亮晚暗在这个区间内渐变。 ——
-type HSL = { h: number; s: number; l: number };
-const COLOR_STOPS: Array<{ hour: number; hsl: HSL }> = [
-  { hour: 0, hsl: { h: 228, s: 50, l: 70 } }, // 深夜：柔蓝紫
-  { hour: 5, hsl: { h: 258, s: 55, l: 76 } }, // 黎明前：薰衣草
-  { hour: 7.5, hsl: { h: 28, s: 78, l: 86 } }, // 清晨：嫩桃（最亮）
-  { hour: 10.5, hsl: { h: 45, s: 75, l: 82 } }, // 上午：暖黄
-  { hour: 14, hsl: { h: 22, s: 65, l: 80 } }, // 午后：奶橘
-  { hour: 17, hsl: { h: 345, s: 62, l: 82 } }, // 黄昏：浅玫瑰
-  { hour: 20, hsl: { h: 275, s: 45, l: 76 } }, // 夜初：丁香紫
-  { hour: 23, hsl: { h: 228, s: 50, l: 68 } }, // 深夜：略深蓝紫
-  { hour: 24, hsl: { h: 228, s: 50, l: 70 } },
-];
-
-function lerpHue(a: number, b: number, t: number): number {
-  const diff = (((b - a + 540) % 360) - 180);
-  return (a + diff * t + 360) % 360;
-}
-
-function hourColor(h: number): HSL {
-  const clamped = Math.max(0, Math.min(24, h));
-  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
-    const a = COLOR_STOPS[i];
-    const b = COLOR_STOPS[i + 1];
-    if (clamped >= a.hour && clamped <= b.hour) {
-      const t = (clamped - a.hour) / (b.hour - a.hour);
-      return {
-        h: lerpHue(a.hsl.h, b.hsl.h, t),
-        s: a.hsl.s + (b.hsl.s - a.hsl.s) * t,
-        l: a.hsl.l + (b.hsl.l - a.hsl.l) * t,
-      };
-    }
-  }
-  return COLOR_STOPS[0].hsl;
-}
-
-function hslStr({ h, s, l }: HSL): string {
-  return `hsl(${h.toFixed(0)}, ${s.toFixed(0)}%, ${l.toFixed(0)}%)`;
-}
-
-/** L > 60 视作浅色，正文用深字；否则白字 */
-function isLightBg(hsl: HSL): boolean {
-  return hsl.l > 60;
-}
-
-/** 用 perceived luminance 判 hex 是不是浅色（用来选文字明暗） */
-function isLightHex(hex: string): boolean {
-  const m = hex.match(/^#([0-9a-f]{6})$/i);
-  if (!m) return true;
-  const r = parseInt(m[1].slice(0, 2), 16);
-  const g = parseInt(m[1].slice(2, 4), 16);
-  const b = parseInt(m[1].slice(4, 6), 16);
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return lum > 0.6;
-}
 
 /** 调色板：一排 pastel 预设，覆盖一天的色温区间。最后一项是"自动"（清空 color）。
  *  labelKey 指向 i18n 中 components.segmentList.swatches 下的子键。 */
@@ -283,11 +227,7 @@ export function SegmentList({ segments, onChange }: Props) {
           <div className={styles.off} />
 
           {sorted.map((s, i) => {
-            const mid = (s.startHour + s.endHour) / 2;
-            const hsl = hourColor(mid);
-            const customColor = s.color && s.color.trim().length > 0;
-            const bg = customColor ? s.color : hslStr(hsl);
-            const light = customColor ? isLightHex(s.color) : isLightBg(hsl);
+            const { background: bg, isLight: light } = resolveSegmentChip(s);
             const isEditing = editing?.index === i;
             return (
               <div
