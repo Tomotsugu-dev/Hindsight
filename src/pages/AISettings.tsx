@@ -14,7 +14,10 @@ import {
   Image as ImageIcon,
   Info,
   Loader2,
+  MessageSquareText,
   Play,
+  RotateCcw,
+  Save,
   Server,
   Square,
   Trash2,
@@ -36,8 +39,11 @@ import {
   type EngineStatus,
   type ModelDownloadProgress,
   type ModelEntry,
+  type PromptLanguage,
+  type PromptOverrides,
   type RecommendedModel,
 } from "../api/hindsight";
+import { DEFAULT_SYSTEM_PROMPTS, overrideKey } from "../lib/aiPrompts";
 import { useSettings } from "../state/settings";
 import styles from "./AISettings.module.css";
 
@@ -91,15 +97,40 @@ export default function AISettings() {
           icon={User}
           info="AI 总结时会带上这段，帮模型更懂你的工作内容与上下文。"
         >
-          <Row label="关于你（可选）" block>
-            <textarea
-              className={styles.textarea}
-              value={ai.userBrief}
-              onChange={(e) => updateAi({ userBrief: e.target.value })}
-              placeholder="例：我是做后端开发的，平时主要写 Rust 和 TypeScript；周末会做点游戏。"
-              rows={6}
-            />
-          </Row>
+          {/* hover 整个 Row（含 label）或 focus textarea 时才展开 textarea。
+              Row label 一直可见，避免折叠态用户看不出这块是什么。 */}
+          <div className={styles.briefHover}>
+            <Row label="关于你（可选）" block>
+              <div className={styles.briefCell}>
+                <textarea
+                  className={`${styles.textarea} ${styles.briefTextarea}`}
+                  value={ai.userBrief}
+                  onChange={(e) => updateAi({ userBrief: e.target.value })}
+                  placeholder="例：我是做后端开发的，平时主要写 Rust 和 TypeScript；周末会做点游戏。"
+                  rows={6}
+                />
+              </div>
+            </Row>
+          </div>
+        </Section>
+
+        <Section
+          title="提示词"
+          icon={MessageSquareText}
+          description="告诉模型怎么写总结。三种语言各有内置默认；改完点保存生效，点重置回默认。"
+        >
+          <PromptSection
+            language={ai.promptLanguage}
+            overrides={ai.promptOverrides}
+            onSaveOverride={(lang, text) =>
+              updateAi({
+                promptOverrides: {
+                  ...ai.promptOverrides,
+                  [overrideKey(lang)]: text,
+                },
+              })
+            }
+          />
         </Section>
 
         <Section
@@ -992,4 +1023,99 @@ function humanAccelLabel(platformId: string): string {
     default:
       return platformId;
   }
+}
+
+/**
+ * AI 提示词编辑器（Phase 1B-γ+）。
+ *
+ * 三种语言各独立维护一份覆盖：用户切语言时不会丢之前在别的语言写的覆盖。
+ * 编辑器有"未保存改动"指示——避免用户切语言 / 关页时无声丢失改动。
+ *
+ * 数据流：
+ *   props.overrides[langKey] 非空 → 走覆盖；否则展示内置默认（DEFAULT_SYSTEM_PROMPTS）
+ *   保存 → onSaveOverride(lang, text)；text="" 等价"删除覆盖"
+ *   重置 → 把 textarea 填回内置默认（不主动保存——给用户审一眼再决定要不要落库）
+ */
+function PromptSection({
+  language,
+  overrides,
+  onSaveOverride,
+}: {
+  /** 当前生效的语言；跟随应用全局 i18n 走（目前固定 zh，i18n 接入后会自动切换）。 */
+  language: PromptLanguage;
+  overrides: PromptOverrides;
+  onSaveOverride: (lang: PromptLanguage, text: string) => void;
+}) {
+  const persistedFor = (lang: PromptLanguage): string => {
+    const ov = overrides[overrideKey(lang)];
+    return ov.trim().length > 0 ? ov : DEFAULT_SYSTEM_PROMPTS[lang];
+  };
+
+  // textarea 草稿：language 变（i18n 切换）时同步重置成新语言的持久值
+  const [draft, setDraft] = useState<string>(() => persistedFor(language));
+  useEffect(() => {
+    setDraft(persistedFor(language));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  const persisted = persistedFor(language);
+  const isDirty = draft !== persisted;
+  const hasOverride = overrides[overrideKey(language)].trim().length > 0;
+
+  const handleReset = () => {
+    setDraft(DEFAULT_SYSTEM_PROMPTS[language]);
+  };
+
+  const handleSave = () => {
+    // draft 跟内置默认完全一致 → 存空字符串等价"删除覆盖"
+    const text = draft.trim() === DEFAULT_SYSTEM_PROMPTS[language].trim() ? "" : draft;
+    onSaveOverride(language, text);
+  };
+
+  return (
+    <div className={styles.promptWrap}>
+      <Row label="System Prompt" block>
+        {/* Row.control 默认是 row flex；用 promptStack 改成 column，
+            让 textarea 和按钮行各占一行而不是挤在同一行 */}
+        <div className={styles.promptStack}>
+          <textarea
+            className={styles.promptTextarea}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={14}
+            spellCheck={false}
+          />
+          <div className={styles.promptActions}>
+            <span className={styles.promptHint}>
+              {isDirty
+                ? "有未保存的改动"
+                : hasOverride
+                  ? "已使用自定义提示词"
+                  : "正在使用内置默认"}
+            </span>
+            <button
+              type="button"
+              className={styles.promptResetBtn}
+              onClick={handleReset}
+              disabled={draft === DEFAULT_SYSTEM_PROMPTS[language]}
+              title="把编辑器内容填回内置默认（要点保存才真正生效）"
+            >
+              <RotateCcw size={13} strokeWidth={2} />
+              重置默认
+            </button>
+            <button
+              type="button"
+              className={styles.promptSaveBtn}
+              onClick={handleSave}
+              disabled={!isDirty}
+              title="保存当前语言的覆盖"
+            >
+              <Save size={13} strokeWidth={2} />
+              保存
+            </button>
+          </div>
+        </div>
+      </Row>
+    </div>
+  );
 }

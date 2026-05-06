@@ -1,0 +1,335 @@
+/* AI 总结页（Phase 1B-γ）的样式。
+   设计基调对齐 Today / AISettings：白底卡片 + 浅边框 + 紧凑的 chip + 主色 accent 按钮。 */
+
+.page {
+  padding: 24px 32px 48px;
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* —— 顶部头：标题 + 日期导航 + 主操作 —— */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.headLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+}
+
+.headRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 日期导航：参照 Today 的 navBtn / dayPill */
+.dateNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+}
+
+.navBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.navBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.navBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dayPill {
+  height: 26px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 140ms ease-out;
+}
+
+.dayPill:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.08));
+}
+
+.dayPill:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+/* 主按钮（开始 / 重新生成）= 蓝色实心 */
+.startBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 140ms ease-out;
+}
+
+.startBtn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.startBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 停止按钮 = 琥珀色，提示"打断"语义 */
+.stopBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: color-mix(in oklab, #f59e0b 14%, transparent);
+  border: 1px solid color-mix(in oklab, #f59e0b 38%, transparent);
+  color: #b45309;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease-out;
+}
+
+.stopBtn:hover {
+  background: color-mix(in oklab, #f59e0b 22%, transparent);
+}
+
+/* —— 顶部错误条 + 引擎冷启动提示 —— */
+.errorBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in oklab, #dc2626 25%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #991b1b;
+}
+
+.engineHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 22%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+/* —— 段卡片列表 —— */
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* 段彩色 chip，等同于 SegmentList 段块的 mini 版 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c1c24; /* chip 背景多为浅 pastel，深字最稳 */
+  letter-spacing: -0.005em;
+}
+
+.timeRange {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* 状态徽章 —— 类似 AISettings 的 engineBadge 系列 */
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.statusEmpty {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+}
+
+.statusRunning {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+.statusOk {
+  background: color-mix(in oklab, #16a34a 16%, transparent);
+  color: #15803d;
+}
+
+.statusSkipped {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+}
+
+.statusError {
+  background: color-mix(in oklab, #dc2626 14%, transparent);
+  color: #991b1b;
+}
+
+/* 重试按钮 */
+.retryBtn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: var(--text-muted);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.retryBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+}
+
+.retryBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* —— 卡片正文 —— */
+.bodyText {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bodyMuted {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.bodyError {
+  font-size: 12px;
+  color: #991b1b;
+  background: color-mix(in oklab, #dc2626 6%, transparent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-word;
+}
+
+/* loader 旋转 —— 跨多个 statusBadge / engineHint 复用 */
+.spin {
+  animation: aiSummarySpin 1s linear infinite;
+}
+
+@keyframes aiSummarySpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

@@ -12,6 +12,9 @@ interface SectionProps {
    *  和 description 互斥使用——同时给的话 description 走标题下的常规位置，
    *  info 走 hover 气泡，两块文字并存。 */
   info?: string;
+  /** 默认收起、hover / 内部 focus 时才展开。给"次要 / 不常改"的 Section 用，
+   *  减少滚动条长度。展开走 grid-rows 0fr↔1fr 动画。 */
+  collapsible?: boolean;
   children: ReactNode;
 }
 
@@ -21,10 +24,13 @@ export function Section({
   icon: Icon,
   tone = "primary",
   info,
+  collapsible = false,
   children,
 }: SectionProps) {
   return (
-    <section className={styles.section}>
+    <section
+      className={`${styles.section} ${collapsible ? styles.collapsible : ""}`}
+    >
       <header className={styles.header}>
         {Icon ? (
           <div className={`${styles.icon} ${styles[`tone_${tone}`]}`}>
@@ -56,7 +62,16 @@ export function Section({
           ) : null}
         </div>
       </header>
-      <div className={styles.card}>{children}</div>
+      {/* collapsible 时外层 cardWrap 走 grid-rows trick；非 collapsible 直接渲 card */}
+      {collapsible ? (
+        <div className={styles.cardWrap}>
+          <div className={styles.cardInner}>
+            <div className={styles.card}>{children}</div>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.card}>{children}</div>
+      )}
     </section>
   );
 }

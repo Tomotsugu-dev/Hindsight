@@ -58,6 +58,27 @@ pub struct AiConfig {
     /// 当前选中的 mmproj GGUF 文件名（vision 模型必带）。
     /// 空字符串 = 没有 mmproj（纯文本模型）。
     pub active_mmproj: String,
+    /// AI 总结使用的提示词语言（决定模型出哪种语言的总结 + 默认提示词模板用哪套）。
+    /// 取值 "zh" / "en" / "ja"；非法值 sanitize 时回退到 "zh"。
+    pub prompt_language: String,
+    /// 用户对内置 system prompt 的覆盖；按语言分别存。
+    /// 某语言对应字段为空 = 用内置默认；非空 = 走覆盖。
+    pub prompt_overrides: PromptOverrides,
+}
+
+/// 用户编辑过的 system prompt 覆盖文本，按语言分别独立存。
+///
+/// 切换 `prompt_language` 不会丢覆盖：用户先在中文写过的覆盖，切到英文再切回中文还在。
+/// 若想恢复内置默认，把对应字段清空（"重置"按钮做的就是这件事）。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PromptOverrides {
+    /// 中文 system prompt 覆盖；空 = 用内置默认
+    pub system_zh: String,
+    /// 英文 system prompt 覆盖
+    pub system_en: String,
+    /// 日文 system prompt 覆盖
+    pub system_ja: String,
 }
 
 impl Default for AiConfig {
@@ -75,6 +96,8 @@ impl Default for AiConfig {
             models_path: String::new(),
             active_main: String::new(),
             active_mmproj: String::new(),
+            prompt_language: "zh".to_string(),
+            prompt_overrides: PromptOverrides::default(),
         }
     }
 }
@@ -161,6 +184,17 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.models_path = next.models_path.trim().to_string();
     next.active_main = next.active_main.trim().to_string();
     next.active_mmproj = next.active_mmproj.trim().to_string();
+
+    // prompt_language 限制取值；非法回退到 zh
+    next.prompt_language = match next.prompt_language.trim() {
+        "en" => "en".to_string(),
+        "ja" => "ja".to_string(),
+        _ => "zh".to_string(),
+    };
+    // 覆盖文本不 trim 中间空白（用户可能想保留缩进），仅去前后整体空白
+    next.prompt_overrides.system_zh = next.prompt_overrides.system_zh.trim().to_string();
+    next.prompt_overrides.system_en = next.prompt_overrides.system_en.trim().to_string();
+    next.prompt_overrides.system_ja = next.prompt_overrides.system_ja.trim().to_string();
 
     next
 }

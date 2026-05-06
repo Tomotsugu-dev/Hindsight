@@ -48,14 +48,14 @@ pub enum DeviceFilter {
 
 impl DeviceFilter {
     /// 给 SQL 拼上设备过滤条件（如果有的话）
-    fn sql_clause(&self) -> &'static str {
+    pub(crate) fn sql_clause(&self) -> &'static str {
         match self {
             DeviceFilter::All => "",
             DeviceFilter::Only(_) => " AND a.device_id = ? ",
         }
     }
 
-    fn extra_param(&self) -> Option<&String> {
+    pub(crate) fn extra_param(&self) -> Option<&String> {
         match self {
             DeviceFilter::All => None,
             DeviceFilter::Only(id) => Some(id),

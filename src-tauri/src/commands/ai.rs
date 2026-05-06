@@ -3,9 +3,11 @@
 //! 业务逻辑（如真正的 LLM 调用）会在 `crate::ai` 模块里实现，
 //! 这里只做参数校验 / 错误归类 / 返回对前端友好的形状。
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::NaiveDate;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -14,8 +16,24 @@ use crate::ai::binary::{self, DownloadPhase, EngineBinaryStatus};
 use crate::ai::models::{self, ModelEntry};
 use crate::ai::recommended::{Recommended, RECOMMENDED};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
+use crate::ai::summary::{DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::repo::ai_summaries::{self, SegmentSummaryRow};
+use crate::repo::reports::device_filter_from_option;
 use crate::repo::settings;
 use crate::storage::DbPool;
+
+/// AI 总结流程的取消信号——管 lib.rs `manage` 的全局单例。
+///
+/// 同一时刻只允许一个 generate_day_summary 在跑（前端 UI 不让重复点）；
+/// cancel_day_summary 把内部 AtomicBool 设 true，summary.rs 在每段循环检测到后
+/// 就停下来 Ok(()) 退出（不能中断已经在路上的单段 LLM 请求）。
+pub struct SummaryCancel(pub Arc<AtomicBool>);
+
+impl Default for SummaryCancel {
+    fn default() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+}
 
 /// `test_ai_endpoint` 的返回。
 ///
@@ -110,7 +128,7 @@ pub async fn test_ai_endpoint(
 /// 真正告诉用户"为啥连不上"的是 source chain 最深处的 io::Error
 /// （`Connection refused`、`os error 10061` 等）。这里把整条链拼起来，
 /// 并按 reqwest 提供的分类给一句开场白。
-fn fmt_send_err(e: reqwest::Error) -> String {
+pub(crate) fn fmt_send_err(e: reqwest::Error) -> String {
     let head = if e.is_timeout() {
         "请求超时"
     } else if e.is_connect() {
@@ -398,4 +416,105 @@ pub async fn open_engine_dir() -> Result<(), String> {
         .ok_or_else(|| "binary 路径无父目录".to_string())?;
     open::that(dir).map_err(|e| format!("打开目录失败：{e}"))?;
     Ok(())
+}
+
+// ─────────────────────────────────────────────────────────
+//  AI 总结（Phase 1B-γ）
+// ─────────────────────────────────────────────────────────
+
+/// 跑某天的全部段总结。
+///
+/// 命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）；
+/// 期间通过 [`SUMMARY_PROGRESS_EVENT`] 流式推进度，前端 listen 边跑边渲染。
+///
+/// 重复触发：前端 UI 应防重复点；后端不加锁，但启动前会 reset cancel 标记，
+/// 所以理论上后到的 generate 不会被前一次的 cancel 干掉。
+#[tauri::command]
+pub async fn generate_day_summary(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    cancel: State<'_, SummaryCancel>,
+    date: String,
+    force_refresh: bool,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let device = device_filter_from_option(device_id);
+
+    cancel.0.store(false, Ordering::Relaxed);
+    let runner = DaySummaryRunner::new(
+        (*pool).clone(),
+        Arc::clone(&supervisor),
+        app.clone(),
+        Arc::clone(&cancel.0),
+    );
+
+    if let Err(e) = runner.run(parsed_date, device, force_refresh).await {
+        // 顶层失败也 emit 一条 error，前端 UI 能 toast
+        let _ = app.emit(
+            SUMMARY_PROGRESS_EVENT,
+            &SummaryProgress {
+                date: date.clone(),
+                phase: "error",
+                segment_idx: None,
+                total_segments: 0,
+                images_total: None,
+                content: None,
+                status: None,
+                message: Some(e.to_string()),
+            },
+        );
+        return Err(e.to_string());
+    }
+    Ok(())
+}
+
+/// 单段重试——只重跑指定一段，不动其它段。复用 supervisor 已经在跑的 server。
+#[tauri::command]
+pub async fn retry_summary_segment(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    cancel: State<'_, SummaryCancel>,
+    date: String,
+    segment_idx: u32,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let device = device_filter_from_option(device_id);
+
+    cancel.0.store(false, Ordering::Relaxed);
+    let runner = DaySummaryRunner::new(
+        (*pool).clone(),
+        Arc::clone(&supervisor),
+        app,
+        Arc::clone(&cancel.0),
+    );
+    runner
+        .run_one_segment_only(parsed_date, segment_idx, device)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 设取消标记——下一段循环开头会感知到然后 Ok(()) 提早返回。
+/// 已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。
+#[tauri::command]
+pub async fn cancel_day_summary(cancel: State<'_, SummaryCancel>) -> Result<(), String> {
+    cancel.0.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+/// 拉某天已经落库的总结。前端进页面时调一次：有就直接渲染，没有就显示
+/// "点击生成"按钮。
+#[tauri::command]
+pub async fn get_day_summary(
+    pool: State<'_, DbPool>,
+    date: String,
+) -> Result<Vec<SegmentSummaryRow>, String> {
+    ai_summaries::get_day(&pool, &date)
+        .await
+        .map_err(|e| e.to_string())
 }

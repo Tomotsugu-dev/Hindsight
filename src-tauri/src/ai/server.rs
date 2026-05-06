@@ -32,8 +32,13 @@ use crate::error::{Error, Result};
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(90);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
-/// llama-server 上下文窗口大小。Vision 模型一段对话有图 + 文本，4K 起步。
-const DEFAULT_CTX_SIZE: u32 = 4096;
+/// llama-server 上下文窗口大小。
+///
+/// Vision 模型每张图被分成多个 patch，token 数比纯文本对话大很多：
+/// 768 px max_dim 下一张图 ~256 tokens × 12 张 = ~3000 tokens，加 system / user
+/// prompt 和输出空间 (max_tokens=768)，4K 容易超。8K 给足余量；GPU 上 KV cache
+/// 多用一倍 RAM 不痛——5090/Apple Silicon 都装得下，CPU fallback 也可接受。
+const DEFAULT_CTX_SIZE: u32 = 8192;
 
 /// 给前端展示的运行时状态。
 #[derive(Debug, Clone, Default, Serialize)]

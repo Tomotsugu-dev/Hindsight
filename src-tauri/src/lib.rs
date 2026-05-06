@@ -256,6 +256,9 @@ pub fn run() {
                 handle.manage(svc);
                 handle.manage(sync_engine);
                 handle.manage(engine_supervisor);
+                // AI 总结取消信号——单例，前端调 cancel_day_summary 设 true，
+                // summary.rs 每段循环检查；不能中断已在路上的 LLM 单段请求。
+                handle.manage(commands::ai::SummaryCancel::default());
             });
             Ok(())
         })
@@ -313,6 +316,10 @@ pub fn run() {
             commands::ai::list_recommended_models,
             commands::ai::download_model,
             commands::ai::set_active_model,
+            commands::ai::generate_day_summary,
+            commands::ai::retry_summary_segment,
+            commands::ai::cancel_day_summary,
+            commands::ai::get_day_summary,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")

@@ -8,7 +8,11 @@
 //! Phase 1B-γ：`llm`（chat completion）/ `prompt` / `image`。
 pub mod binary;
 pub mod config;
+pub mod image;
+pub mod llm;
 pub mod models;
 pub mod platform;
+pub mod prompt;
 pub mod recommended;
 pub mod server;
+pub mod summary;

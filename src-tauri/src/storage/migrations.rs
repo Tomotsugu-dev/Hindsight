@@ -366,10 +366,38 @@ const ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL: &str = r#"
       );
 "#;
 
+/// v18：AI 总结结果缓存表（Phase 1B-γ）。
+///
+/// 按 (local_date, segment_idx) 主键缓存每段的 LLM 输出，避免切日期 / 重启后重跑——
+/// vision 推理在 CPU 上 5 段 ~2-3 分钟，重算代价很大。
+///
+/// 字段语义：
+/// - segment_idx 是该段在 settings.ai.segments 数组里的下标，用户改段配置后旧总结仍能查到（label/start_hour/end_hour 都冗余存了）
+/// - model 存生成时用的 active_main 文件名；用户换模型后旧总结不擦，UI 可显示"由旧模型生成"
+/// - status 区分 ok / skipped_no_screenshots / error；error 行 content 为空，error 字段填 fmt_send_err 输出
+///
+/// 不进 sync_outbox：本地产物 + 模型差异大，跨设备同步无意义。
+const AI_SUMMARIES_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS ai_summaries (
+      local_date    TEXT NOT NULL,
+      segment_idx   INTEGER NOT NULL,
+      label         TEXT NOT NULL,
+      start_hour    INTEGER NOT NULL,
+      end_hour      INTEGER NOT NULL,
+      content       TEXT NOT NULL,
+      model         TEXT NOT NULL,
+      status        TEXT NOT NULL,
+      error         TEXT,
+      generated_at  TEXT NOT NULL,
+      PRIMARY KEY (local_date, segment_idx)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_summaries_date ON ai_summaries(local_date);
+"#;
+
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 7] = [
+    let extras: [&'static str; 8] = [
         CROSS_OS_CLEANUP_SQL,                    // v11
         V12_PLACEHOLDER,                         // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                     // v13
@@ -377,6 +405,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         APP_GROUPS_SQL,                          // v15
         ADD_CATEGORY_SORT_ORDER_SQL,             // v16
         ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL,     // v17
+        AI_SUMMARIES_TABLE_SQL,                  // v18
     ];
     pool.0
         .call(move |conn| {

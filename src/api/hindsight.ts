@@ -186,6 +186,52 @@ export interface EngineDownloadProgress {
 /** 后端 emit 进度事件用的事件名。前端 listen 它。 */
 export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 
+/** AI 总结进度事件（Phase 1B-γ）。 */
+export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
+
+export type SummaryPhase =
+  | "engine_starting"
+  | "segment_started"
+  | "segment_done"
+  | "all_done"
+  | "cancelled"
+  | "error";
+
+export interface SummaryProgress {
+  date: string;
+  phase: SummaryPhase;
+  segmentIdx: number | null;
+  totalSegments: number;
+  imagesTotal: number | null;
+  /** segment_done 时附该段总结正文（直接是 LLM 输出 markdown），其它阶段为 null */
+  content: string | null;
+  /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "error" */
+  status: SummarySegmentStatus | null;
+  /** error / engine_starting 时的提示文字 */
+  message: string | null;
+}
+
+/** 段总结落库状态。 */
+export type SummarySegmentStatus = "ok" | "skipped_no_screenshots" | "error";
+
+/** ai_summaries 表的一行，前端拿来渲染 SegmentSummaryCard。 */
+export interface SegmentSummaryRow {
+  localDate: string;
+  segmentIdx: number;
+  label: string;
+  startHour: number;
+  endHour: number;
+  /** LLM 输出的 markdown 段落；status != 'ok' 时是空串 */
+  content: string;
+  /** 生成时用的 active_main 文件名（换模型不擦旧总结） */
+  model: string;
+  status: SummarySegmentStatus;
+  /** status='error' 时的可读错误描述；其它状态 null */
+  error: string | null;
+  /** RFC3339 UTC 时间戳 */
+  generatedAt: string;
+}
+
 /** AI 子系统的所有用户配置；嵌进 Settings.ai。
  *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
 export interface AiConfig {
@@ -216,6 +262,21 @@ export interface AiConfig {
   activeMain: string;
   /** 当前选中的 mmproj GGUF 文件名（vision 模型必带）。空 = 没有。 */
   activeMmproj: string;
+  /** AI 总结使用的提示词语言："zh" / "en" / "ja"。
+   *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
+  promptLanguage: PromptLanguage;
+  /** 用户对内置 system prompt 的覆盖；按语言独立。
+   *  对应字段为空 = 用内置默认。 */
+  promptOverrides: PromptOverrides;
+}
+
+export type PromptLanguage = "zh" | "en" | "ja";
+
+export interface PromptOverrides {
+  /** 中文 system prompt 覆盖；空 = 用内置默认 */
+  systemZh: string;
+  systemEn: string;
+  systemJa: string;
 }
 
 export interface Settings {
@@ -396,4 +457,25 @@ export const api = {
    *  mmprojFile 传 null 表示没有（纯文本模型）。 */
   setActiveModel: (mainFile: string, mmprojFile: string | null) =>
     invoke<void>("set_active_model", { mainFile, mmprojFile }),
+  /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
+   *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
+   *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合。 */
+  generateDaySummary: (
+    date: string,
+    forceRefresh: boolean,
+    deviceId: string | null,
+  ) => invoke<void>("generate_day_summary", { date, forceRefresh, deviceId }),
+  /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
+  retrySummarySegment: (
+    date: string,
+    segmentIdx: number,
+    deviceId: string | null,
+  ) =>
+    invoke<void>("retry_summary_segment", { date, segmentIdx, deviceId }),
+  /** 设取消标记——下一段循环开头会感知到然后早 return。
+   *  已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。 */
+  cancelDaySummary: () => invoke<void>("cancel_day_summary"),
+  /** 拉某天已落库的总结。前端进页面调一次：有就直接渲染，没有就显示"开始总结"按钮。 */
+  getDaySummary: (date: string) =>
+    invoke<SegmentSummaryRow[]>("get_day_summary", { date }),
 };
