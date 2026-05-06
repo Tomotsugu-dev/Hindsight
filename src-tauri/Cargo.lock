@@ -1802,7 +1802,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hindsight"
-version = "0.4.1"
+version = "0.4.2-beta"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -1814,6 +1814,7 @@ dependencies = [
  "icns",
  "image 0.25.10",
  "keyring",
+ "libc",
  "log",
  "open",
  "plist",

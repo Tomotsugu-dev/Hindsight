@@ -1,6 +1,5 @@
 use crate::error::Result;
-use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::{DbPool, SqliteResultExt};
 
 const MIGRATIONS: &[&str] = &[
     // v1

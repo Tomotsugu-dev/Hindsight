@@ -1,21 +1,56 @@
-//! 防孤儿子进程：用 Windows Job Object 把所有 llama-server child 绑到 Hindsight 父进程上。
+//! 防孤儿子进程：把 llama-server child 绑到 Hindsight 父进程的生命周期上。
 //!
-//! Tauri 自带的 `RunEvent::Exit` 钩子只覆盖正常退出路径——`Ctrl+C` 杀 dev、panic、
-//! taskkill 外部杀的时候 hook 完全不触发，child 就被遗弃，VRAM 一直占着。
+//! - **Windows**：Job Object（[`win`] 子模块）—— 父进程持有 Job HANDLE，进程死
+//!   （panic / Ctrl+C / taskkill）→ OS 内核 close 最后一个 HANDLE → Job 关闭
+//!   → 内核同步杀光所有 Job 成员。覆盖所有死法。
+//! - **Linux**：[`prepare_command`] 在 child fork 后 / exec 前调
+//!   - `setpgid(0, 0)`：让 child 自己当 process group leader（独立 pgid）
+//!   - `prctl(PR_SET_PDEATHSIG, SIGKILL)`：父进程死 → 内核给本进程 SIGKILL。覆盖所有死法。
+//! - **macOS**：[`prepare_command`] 仅 `setpgid(0, 0)`。无 PR_SET_PDEATHSIG 等价物，
+//!   只能让 graceful exit（`RunEvent::Exit` 钩子调 `supervisor.stop()`）能 kill 干净；
+//!   Hindsight 被 SIGKILL 时 child 仍被遗留 → [`init_state`] 返回 [`JobInitState::Degraded`]。
 //!
-//! Job Object 是 OS 内核级别的「进程组」概念：父进程 spawn 出的 child 调
-//! `AssignProcessToJobObject` 加入 Job → Job 设了 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
-//! → 父进程死时 OS 自动 close Job 的最后一个 HANDLE（父进程持有的）→ Job 关闭
-//! → 内核同步杀光所有 Job 成员（child 们）。无视父进程怎么死。
+//! 用法（已嵌入 server.rs）：
+//! 1. 启动时调一次 [`init_global_job`]（在 `lib.rs::run` 里）
+//! 2. spawn llama-server 之前调 [`prepare_command(&mut cmd)`]（Linux/macOS 装 pre_exec 钩子）
+//! 3. spawn 之后调 [`assign_child_pid(pid)`]（Windows 把 child 加进 Job）
 //!
-//! 用法：
-//! 1. 启动时调一次 [`init_global_job`]（lib.rs setup）
-//! 2. 每次 spawn child 后立刻调 [`assign_child_pid`]（server.rs）
-//!
-//! Linux：可以用 `prctl(PR_SET_PDEATHSIG, SIGKILL)` 在 child fork 后；本文件留 no-op。
-//! macOS：无原生等价物，依赖 RunEvent::Exit 钩子；本文件留 no-op。
+//! [`init_state`] 返回当前保护状态，给前端 `engine_status` 命令做"保护降级"提示。
 
 use crate::error::{Error, Result};
+
+/// 子进程保护当前状态。`engine_status` 命令通过 [`init_state`] 拿到，
+/// 让前端能告诉用户"保护降级"或"保护正常"。
+#[derive(Debug, Clone)]
+pub enum JobInitState {
+    /// 还没调 [`init_global_job`]
+    NotInitialized,
+    /// 保护正常工作
+    Ok,
+    /// 保护降级；附原因（macOS 缺 prctl 时是预期降级；Windows Job 创建失败是异常降级）
+    Degraded(String),
+}
+
+/// 全局保护状态。`OnceLock` 但用 `set_or_replace` 模式：每次状态变化都覆盖。
+/// 因为只有 supervisor 启动 / spawn 路径会写，竞争极少。
+static JOB_STATE: std::sync::Mutex<Option<JobInitState>> = std::sync::Mutex::new(None);
+
+fn store_state(s: JobInitState) {
+    if let Ok(mut g) = JOB_STATE.lock() {
+        *g = Some(s);
+    }
+}
+
+/// 读当前保护状态。从未初始化时返回 [`JobInitState::NotInitialized`]。
+pub fn init_state() -> JobInitState {
+    JOB_STATE
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or(JobInitState::NotInitialized)
+}
+
+// ───────────────────────────── Windows: Job Object ─────────────────────────────
 
 #[cfg(target_os = "windows")]
 mod win {
@@ -74,7 +109,6 @@ mod win {
             // 加进去会让本进程也成为 Job 成员，行为依然正确，但 cargo tauri dev
             // 调试期间 panic 重启等场景多一重耦合，没必要。
 
-            // 不能 set——OnceLock 不允许，但这里是首次进所以一定没值
             JOB.set(JobHandle(job))
                 .map_err(|_| "Job 已被并发初始化".to_string())?;
             Ok(())
@@ -111,21 +145,132 @@ mod win {
 
 #[cfg(target_os = "windows")]
 pub fn init_global_job() -> Result<()> {
-    win::init().map_err(Error::Other)
+    match win::init() {
+        Ok(()) => {
+            store_state(JobInitState::Ok);
+            Ok(())
+        }
+        Err(e) => {
+            store_state(JobInitState::Degraded(format!(
+                "Windows Job 初始化失败：{e}（Hindsight 异常退出可能遗留 llama-server 子进程）"
+            )));
+            Err(Error::Other(e))
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn prepare_command(_cmd: &mut tokio::process::Command) -> Result<()> {
+    // Windows 走 post-spawn AssignProcessToJobObject 路径，spawn 前不需要装钩子
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
 pub fn assign_child_pid(pid: u32) -> Result<()> {
-    win::assign_pid(pid).map_err(Error::Other)
+    win::assign_pid(pid).map_err(|e| {
+        // 单进程级别失败：Job 本身可能仍正常工作，但本 child 漏接管。
+        // 让前端拿到 Degraded 状态去提示——比静默更安全
+        store_state(JobInitState::Degraded(format!(
+            "AssignProcessToJobObject pid={pid} 失败：{e}（该子进程未被 Job 接管）"
+        )));
+        Error::Other(e)
+    })
 }
 
-#[cfg(not(target_os = "windows"))]
+// ───────────────────────────── Linux: setpgid + PDEATHSIG ─────────────────────────────
+
+#[cfg(target_os = "linux")]
 pub fn init_global_job() -> Result<()> {
-    // Linux / macOS：留待后续；当前依赖 RunEvent::Exit 钩子在正常退出时收尸
+    // pre_exec 在 spawn 时装钩子，全局 init 阶段无需做 syscall；状态写 Ok
+    store_state(JobInitState::Ok);
     Ok(())
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
+pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: pre_exec 闭包在 fork 后 exec 前的 child 里跑，必须 async-signal-safe；
+    // setpgid 与 prctl 都是 async-signal-safe 的 syscall（POSIX 与 Linux 文档均明确）。
+    unsafe {
+        cmd.pre_exec(|| {
+            // 让 child 成为自己 pgid 的 leader——Hindsight 在 graceful exit 时
+            // 即使丢失 child handle 也能用 killpg(child_pid, SIGKILL) 收尸
+            if libc::setpgid(0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // 父进程死 → 内核给本进程 SIGKILL。无视父进程死法（panic / SIGKILL / SEGV）
+            if libc::prctl(
+                libc::PR_SET_PDEATHSIG,
+                libc::SIGKILL as libc::c_ulong,
+                0,
+                0,
+                0,
+            ) != 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub fn assign_child_pid(_pid: u32) -> Result<()> {
+    Ok(())
+}
+
+// ───────────────────────────── macOS: 仅 setpgid（无 PR_SET_PDEATHSIG 等价） ─────────────────────────────
+
+#[cfg(target_os = "macos")]
+pub fn init_global_job() -> Result<()> {
+    // macOS 缺乏 Linux 的 PR_SET_PDEATHSIG / Windows 的 Job Object 等价物：
+    // Hindsight 被 SIGKILL（强杀 / panic 不调 Drop）时 llama-server 子进程会被遗留。
+    // 状态明确标 Degraded 让前端给用户提示。
+    store_state(JobInitState::Degraded(
+        "macOS 不支持 PR_SET_PDEATHSIG，Hindsight 被强制杀死时 llama-server 子进程会被遗留；\
+         正常退出（关窗 / Cmd+Q）路径上由 RunEvent::Exit 钩子收尸"
+            .to_string(),
+    ));
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: setpgid 是 async-signal-safe 的 syscall
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setpgid(0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub fn assign_child_pid(_pid: u32) -> Result<()> {
+    Ok(())
+}
+
+// ───────────────────────────── 其它 unix（FreeBSD 等） ─────────────────────────────
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+pub fn init_global_job() -> Result<()> {
+    store_state(JobInitState::Degraded(
+        "当前平台未实现子进程保护；Hindsight 异常退出可能遗留 llama-server 子进程".to_string(),
+    ));
+    Ok(())
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+pub fn prepare_command(_cmd: &mut tokio::process::Command) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
 pub fn assign_child_pid(_pid: u32) -> Result<()> {
     Ok(())
 }

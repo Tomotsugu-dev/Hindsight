@@ -18,7 +18,7 @@ use std::sync::OnceLock;
 
 use crate::error::Result;
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 // 三份按语言分组的规则文件，编译时全嵌入二进制；运行时合并到同一 hashmap，
 // 跨语言查找统一（lowercase 完全相等）。社区贡献时按贡献者熟悉的语言文件加进去就行。
@@ -47,8 +47,15 @@ fn rules() -> &'static HashMap<String, String> {
             ("zh", BUILTIN_RULES_ZH),
             ("ja", BUILTIN_RULES_JA),
         ] {
-            let parsed: RawRules = serde_json::from_str(json)
-                .unwrap_or_else(|e| panic!("builtin_categories.{label}.json 解析失败：{e}"));
+            // 单语言文件解析失败时降级跳过：UI 仍能用其它两份语言；三份全失败
+            // 时返回空 map，等同"无内置分类"——比 panic 让整个 app 起不来好
+            let parsed: RawRules = match serde_json::from_str(json) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("builtin_categories.{label}.json 解析失败（跳过该语言）：{e}");
+                    continue;
+                }
+            };
             for rule in parsed.rules {
                 for name in rule.process_names {
                     // 后写覆盖：理论上不会冲突（每个名字落在一个 category）

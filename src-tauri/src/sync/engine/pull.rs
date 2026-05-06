@@ -16,7 +16,7 @@ use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
 };
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 /// 解析一个 JSON 数组到 `Vec<T>`，但保留**每行容错**：单行解析失败仅打 warn 跳过，
 /// 不让整文件因一行坏数据全废。`kind` 仅用于日志。
@@ -124,7 +124,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         return Ok(());
     }
 
-    let self_id = crate::device::self_id();
+    let self_id = crate::device::self_id()?;
     let local_os = crate::platform::local_os_id();
     let mut max_modified: Option<String> = None;
     let mut applied = 0u64;

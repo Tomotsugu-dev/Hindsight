@@ -96,20 +96,25 @@ fn write_atomic(path: &PathBuf, meta: &DeviceMeta) -> io::Result<()> {
     Ok(())
 }
 
-/// 获取当前设备的 UUID。必须在 `ensure_loaded()` 之后调用。
-pub fn self_id() -> &'static str {
-    &SELF_META
-        .get()
-        .expect("device::ensure_loaded() not called")
-        .device_id
-}
-
-/// 获取当前设备完整 meta。
-#[allow(dead_code)] // 公开 API，外部可调用
-pub fn self_meta() -> &'static DeviceMeta {
+/// 获取当前设备的 UUID。
+///
+/// 返回 `Err` 当且仅当 [`ensure_loaded`] 未被调用（理论上 `lib.rs::run` 启动期就调过，
+/// 所以运行期不该看到这条错误）；改 Result 后任何漏掉 ensure 的代码路径不再 panic。
+pub fn self_id() -> crate::error::Result<&'static str> {
     SELF_META
         .get()
-        .expect("device::ensure_loaded() not called")
+        .map(|m| m.device_id.as_str())
+        .ok_or_else(|| {
+            crate::error::Error::Other("device::ensure_loaded() 未调用".to_string())
+        })
+}
+
+/// 获取当前设备完整 meta。同 [`self_id`]：未初始化时返回 `Err`。
+#[allow(dead_code)] // 公开 API，外部可调用
+pub fn self_meta() -> crate::error::Result<&'static DeviceMeta> {
+    SELF_META.get().ok_or_else(|| {
+        crate::error::Error::Other("device::ensure_loaded() 未调用".to_string())
+    })
 }
 
 /// 用户改名 / 改颜色 / 改图标后写回 device.json。

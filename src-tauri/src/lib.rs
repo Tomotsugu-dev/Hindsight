@@ -3,7 +3,6 @@ mod ai;
 mod bootstrap;
 mod capture;
 mod commands;
-mod db;
 mod device;
 mod error;
 mod icons;
@@ -17,11 +16,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use ai::server::EngineSupervisor;
-use capture::CaptureService;
-use db::SqliteResultExt;
-use repo::{activities, devices, settings};
-use storage::{db_path, DbPool};
-use sync::engine::SyncEngine;
+use repo::{activities, settings};
+use storage::DbPool;
 use tauri::Manager;
 
 const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
@@ -138,126 +134,30 @@ pub fn run() {
             }
 
             tauri::async_runtime::block_on(async move {
-                // 0) 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
-                //    的窗口，焦点采集功能整个废掉，但不会报错（CG API 静默降级），所以
-                //    必须先在启动早期触发系统弹框请求权限。
-                //    阻塞调用：用户没决定前 macOS 不返回。授权后 TCC 在下次进程启动时缓存。
+                // 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
+                // 的窗口，焦点采集功能整个废掉，但不会报错（CG API 静默降级），所以
+                // 必须先在启动早期触发系统弹框请求权限。
+                // 阻塞调用：用户没决定前 macOS 不返回。授权后 TCC 在下次进程启动时缓存。
                 let perm = permissions::ensure_screen_recording();
                 log::info!("Screen Recording permission: {:?}", perm);
 
-                // 1) 启动级身份：必须在打开 DB 之前确定 device_id（device.json 在 DB 之外）
-                let dev_meta = device::ensure_loaded()
-                    .expect("加载设备身份")
-                    .clone();
-                log::info!("device_id: {}", dev_meta.device_id);
-
-                // 1b) 多账号：处理老安装升级 / sign-in 后未重启的延迟迁移；之后 db_path()
-                //     才知道开哪份 DB（hindsight.sqlite vs hindsight.<uid>.sqlite）。
-                let data_root = bootstrap::data_root();
-                if let Err(e) = account::migrate_legacy_db(&data_root).await {
-                    log::warn!("legacy DB 迁移失败（继续使用现有 DB）: {e}");
-                }
-                if let Some(uid) = account::active_uid() {
-                    log::info!("active_uid: {uid}");
-                }
-
-                // 2) 数据根 + DB
-                let path = db_path().expect("解析数据库路径");
-                log::info!("数据库路径: {}", path.display());
-
-                let pool = DbPool::open(&path).await.expect("打开数据库");
-                storage::migrations::run(&pool)
+                // 启动期失败需快速失败：device 身份 / DB / migrations 任一失败应用都跑不起来；
+                // expect 让用户立刻看到原因，而不是后续命令一连串报"未初始化"
+                let dev_meta = bootstrap::init_self_identity()
                     .await
-                    .expect("执行数据库迁移");
-
-                // 3) 把当前机器写进 devices 表（is_self=1）+ outbox
-                devices::upsert_self(
-                    &pool,
-                    dev_meta.device_id.clone(),
-                    dev_meta.display_name.clone(),
-                    dev_meta.color.clone(),
-                    dev_meta.icon.clone(),
-                    dev_meta.os.clone(),
-                )
-                .await
-                .expect("注册当前设备");
-
-                // 3b) v8 之前硬编码的 'local' device_id 改成真实 self id（幂等，对老数据一次性生效）
-                let self_id_for_fix = dev_meta.device_id.clone();
-                let _ = pool
-                    .0
-                    .call(move |conn| {
-                        let n = conn
-                            .execute(
-                                "UPDATE activities SET device_id = ?1 WHERE device_id = 'local'",
-                                rusqlite::params![self_id_for_fix],
-                            )
-                            .db()?;
-                        if n > 0 {
-                            log::info!("把 {} 条 v8 之前的历史活动 device_id 改为 self", n);
-                        }
-                        Ok(())
-                    })
-                    .await;
+                    .expect("加载设备身份失败");
+                let pool = bootstrap::init_database(&dev_meta)
+                    .await
+                    .expect("初始化数据库失败");
 
                 let cfg = settings::load(&pool).await.expect("读取设置");
                 MINIMIZE_TO_TRAY
                     .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
-                let svc = Arc::new(CaptureService::new(
-                    pool.clone(),
-                    cfg.capture_interval_seconds,
-                ));
-                svc.set_work_hours(cfg.work_hours_enabled, cfg.work_ranges.clone())
-                    .await;
-                svc.set_screenshot_config(
-                    cfg.capture_enabled,
-                    cfg.screenshot_path.clone(),
-                    1280,
-                    720,
-                    80,
-                )
-                .await;
-                svc.set_privacy_keywords(
-                    cfg.privacy_url_keywords.clone(),
-                    cfg.privacy_app_keywords.clone(),
-                )
-                .await;
-                svc.set_idle_threshold(cfg.idle_threshold_seconds).await;
-                if cfg.capture_enabled {
-                    svc.start().await;
-                }
-
+                let svc = bootstrap::init_capture_service(pool.clone(), &cfg).await;
                 spawn_cleanup_task(pool.clone());
-
-                // 一次性 backfill：把老用户已经在文件 cache 里、但 app_icons 表里没行的图标
-                // 灌进 DB + 入 outbox。否则这些"开启同步前提取过的图标"对端永远拉不到。
-                // 后台跑，不挡启动；已存在的会跳过，重复启动开销很低。
-                let pool_for_backfill = pool.clone();
-                tokio::spawn(async move {
-                    match repo::app_icons::backfill_db_from_cache_or_extract(&pool_for_backfill).await {
-                        Ok(n) if n > 0 => log::info!("icon backfill: 新增 {n} 行 app_icons"),
-                        Ok(_) => {}
-                        Err(e) => log::warn!("icon backfill 失败: {e}"),
-                    }
-                });
-
-                // builtin 分类 backfill：升级到带新规则的版本时，给老 DB 里 category_id IS NULL
-                // 的 group 自动归类（命中 chrome / code / wechat 等内置规则）。
-                // 用户手动归过类的不动；本次没命中的下次升级 JSON 加规则后还会再尝试。
-                let pool_for_cat_backfill = pool.clone();
-                tokio::spawn(async move {
-                    match repo::builtin_categories::backfill_builtin_categories(&pool_for_cat_backfill).await {
-                        Ok(n) if n > 0 => log::info!("builtin category backfill: 自动归类 {n} 个 app_group"),
-                        Ok(_) => {}
-                        Err(e) => log::warn!("builtin category backfill 失败: {e}"),
-                    }
-                });
-
-                // 4) 同步引擎：登录态由 engine 内部检查，未登录时所有循环都是 no-op；
-                //    所以可以无条件 start，登录后自动开始推
-                let sync_engine = Arc::new(SyncEngine::new(pool.clone()));
-                sync_engine.start().await;
+                bootstrap::spawn_backfill_tasks(pool.clone());
+                let sync_engine = bootstrap::init_sync_engine(pool.clone()).await;
 
                 handle.manage(pool);
                 handle.manage(svc);
@@ -267,21 +167,24 @@ pub fn run() {
                 let _watcher = engine_supervisor.spawn_idle_watcher();
                 handle.manage(engine_supervisor);
                 // AI 总结取消信号——单例，前端调 cancel_day_summary 设 true，
-                // summary.rs 每段循环检查；不能中断已在路上的 LLM 单段请求。
+                // summary_runner 每段循环检查；不能中断已在路上的 LLM 单段请求。
                 handle.manage(commands::ai::SummaryCancel::default());
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // --- capture: 焦点采集 ---
             commands::capture::start_capture,
             commands::capture::stop_capture,
             commands::capture::get_capture_status,
+            // --- data: 报表查询 ---
             commands::data::get_day_hours,
             commands::data::get_day_apps,
             commands::data::get_week_days,
             commands::data::get_week_apps,
             commands::data::get_month_days,
             commands::data::get_month_apps,
+            // --- categories: 分类管理 ---
             commands::categories::list_categories,
             commands::categories::create_category,
             commands::categories::update_category,
@@ -290,6 +193,7 @@ pub fn run() {
             commands::categories::assign_app_to_category,
             commands::categories::unassign_app,
             commands::categories::list_unclassified_apps,
+            // --- app_groups: 应用分组（多个进程合一组） ---
             commands::app_groups::list_app_groups,
             commands::app_groups::create_app_group,
             commands::app_groups::delete_app_group,
@@ -297,44 +201,55 @@ pub fn run() {
             commands::app_groups::unmerge_app_group,
             commands::app_groups::rename_app_group,
             commands::app_groups::assign_app_group_category,
+            // --- icons: 应用图标 ---
             commands::icons::get_app_icon,
+            // --- settings: 全局设置 ---
             commands::settings::get_settings,
             commands::settings::update_settings,
+            // --- storage: 存储 / 数据目录 ---
             commands::storage::get_storage_info,
             commands::storage::purge_activities,
             commands::storage::purge_screenshots,
             commands::storage::open_screenshots_dir,
             commands::storage::get_data_root,
             commands::storage::set_data_root,
+            // --- devices: 设备列表 ---
             commands::devices::list_devices,
             commands::devices::update_self_device,
+            // --- auth: Google OAuth ---
             commands::auth::auth_status,
             commands::auth::sign_in_with_google,
             commands::auth::sign_out,
             commands::auth::restart_app,
+            // --- sync: 云同步 ---
             commands::sync::sync_status,
             commands::sync::sync_now,
-            commands::ai::test_ai_endpoint,
-            commands::ai::get_engine_status,
-            commands::ai::download_binary,
-            commands::ai::delete_binary,
-            commands::ai::open_engine_dir,
-            commands::ai::get_engine_logs,
-            commands::ai::start_engine,
-            commands::ai::stop_engine,
-            commands::ai::list_local_models,
-            commands::ai::delete_model,
-            commands::ai::list_recommended_models,
-            commands::ai::download_model,
-            commands::ai::set_active_model,
-            commands::ai::generate_day_summary,
-            commands::ai::retry_summary_segment,
-            commands::ai::cancel_day_summary,
-            commands::ai::get_day_summary,
-            commands::ai::clear_day_summary,
-            commands::ai::get_segment_image_descriptions,
-            commands::ai::get_day_image_descriptions,
-            commands::ai::retry_single_image_description,
+            // --- ai: endpoint 测试 ---
+            commands::ai_endpoint::test_ai_endpoint,
+            // --- ai: 引擎运行时 ---
+            commands::ai_engine::get_engine_status,
+            commands::ai_engine::start_engine,
+            commands::ai_engine::stop_engine,
+            commands::ai_engine::set_active_model,
+            commands::ai_engine::get_engine_logs,
+            // --- ai: binary ---
+            commands::ai_binary::download_binary,
+            commands::ai_binary::delete_binary,
+            commands::ai_binary::open_engine_dir,
+            // --- ai: 模型管理 ---
+            commands::ai_models::list_local_models,
+            commands::ai_models::delete_model,
+            commands::ai_models::list_recommended_models,
+            commands::ai_models::download_model,
+            // --- ai: 总结 ---
+            commands::ai_summary::generate_day_summary,
+            commands::ai_summary::retry_summary_segment,
+            commands::ai_summary::cancel_day_summary,
+            commands::ai_summary::get_day_summary,
+            commands::ai_summary::clear_day_summary,
+            commands::ai_summary::get_segment_image_descriptions,
+            commands::ai_summary::get_day_image_descriptions,
+            commands::ai_summary::retry_single_image_description,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")

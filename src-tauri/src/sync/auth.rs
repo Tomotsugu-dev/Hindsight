@@ -26,7 +26,7 @@ use tokio::time::timeout;
 use crate::error::{Error, Result};
 use crate::repo::settings;
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 const KEYRING_SERVICE: &str = "Hindsight";
 const KEYRING_USER: &str = "auth_key_v1";

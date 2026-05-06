@@ -64,6 +64,18 @@ struct CurrentSession {
     last_extend_at: Instant,
 }
 
+/// CaptureService 的内部状态。
+///
+/// **锁粒度：每个字段一把独立的 `tokio::sync::Mutex`**——故意没合并成单一 Inner Mutex。
+/// 原因：`tick()` 单次执行可能花数百毫秒（截图 + DB 写 + 浏览器 URL 抓取），
+/// 合并成一把锁会让所有 setter（设置页改完调用的 `set_*`）和 `status()`
+/// 在 tick 期间都阻塞；分开锁后 setter 跟 tick 各自只在用到相关字段时短暂相遇。
+///
+/// **锁顺序约定：`work_hours / idle_threshold_secs` 互斥使用，再到 `current` 再到
+/// `interval_secs`**（参见 `tick()` 顺序）。`set_*` 方法仅取单把锁不嵌套，因此也安全。
+/// 任何新增字段或新增持锁路径需保持顺序，否则有死锁风险。
+///
+/// 临界区都极短（克隆配置 / 单赋值 / 取出 Option），不会因细粒度锁产生抖动。
 struct Inner {
     pool: DbPool,
     interval_secs: Mutex<u32>,

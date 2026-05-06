@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::error::Result;
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 pub(super) const MAX_ATTEMPTS: i64 = 10;
 const RETRY_BASE_SECS: i64 = 5;

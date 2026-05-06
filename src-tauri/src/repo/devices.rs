@@ -4,7 +4,7 @@ use serde::Serialize;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

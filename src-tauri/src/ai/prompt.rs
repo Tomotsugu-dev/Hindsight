@@ -29,37 +29,34 @@ const IMAGE_DESCRIBE_ZH: &str = include_str!("../../resources/prompts/image_desc
 const IMAGE_DESCRIBE_EN: &str = include_str!("../../resources/prompts/image_describe_en.md");
 const IMAGE_DESCRIBE_JA: &str = include_str!("../../resources/prompts/image_describe_ja.md");
 
+/// 三语 (zh/en/ja) 之间挑一个 —— 把分散在多处的 match 收敛进单一 helper。
+///
+/// `prompt_language` 在 sanitize 时已被钳到 "zh" / "en" / "ja"，本函数对其它值
+/// 兜底走 zh（与 sanitize 行为一致）。
+fn pick_lang<'a>(lang: &str, zh: &'a str, en: &'a str, ja: &'a str) -> &'a str {
+    match lang {
+        "en" => en,
+        "ja" => ja,
+        _ => zh,
+    }
+}
+
 /// 给定 settings.ai 选出当前生效的 system prompt 基础文本（不带 user_brief 后缀）。
 ///
-/// 优先级：用户覆盖（非空）→ 内置默认。`prompt_language` 在 sanitize 时已被钳到
-/// "zh" / "en" / "ja"，这里直接 match。
+/// 优先级：用户覆盖（非空）→ 内置默认。
 fn pick_system_base(ai: &AiConfig) -> &str {
-    match ai.prompt_language.as_str() {
-        "en" => {
-            let ov = ai.prompt_overrides.system_en.trim();
-            if !ov.is_empty() {
-                ov
-            } else {
-                PROMPT_EN
-            }
-        }
-        "ja" => {
-            let ov = ai.prompt_overrides.system_ja.trim();
-            if !ov.is_empty() {
-                ov
-            } else {
-                PROMPT_JA
-            }
-        }
-        // "zh" 兜底——sanitize 已保证非中英日的值都被正规化到 zh
-        _ => {
-            let ov = ai.prompt_overrides.system_zh.trim();
-            if !ov.is_empty() {
-                ov
-            } else {
-                PROMPT_ZH
-            }
-        }
+    let lang = ai.prompt_language.as_str();
+    let ov = pick_lang(
+        lang,
+        &ai.prompt_overrides.system_zh,
+        &ai.prompt_overrides.system_en,
+        &ai.prompt_overrides.system_ja,
+    )
+    .trim();
+    if !ov.is_empty() {
+        ov
+    } else {
+        pick_lang(lang, PROMPT_ZH, PROMPT_EN, PROMPT_JA)
     }
 }
 
@@ -89,19 +86,16 @@ pub struct SegmentContext<'a> {
 /// 也可暴露持久编辑入口。
 pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
     let lang = ai.prompt_language.as_str();
-    let user_override = match lang {
-        "en" => &ai.image_describe_overrides.system_en,
-        "ja" => &ai.image_describe_overrides.system_ja,
-        _ => &ai.image_describe_overrides.system_zh,
-    };
+    let user_override = pick_lang(
+        lang,
+        &ai.image_describe_overrides.system_zh,
+        &ai.image_describe_overrides.system_en,
+        &ai.image_describe_overrides.system_ja,
+    );
     let base = if !user_override.trim().is_empty() {
-        user_override.as_str()
+        user_override
     } else {
-        match lang {
-            "en" => IMAGE_DESCRIBE_EN,
-            "ja" => IMAGE_DESCRIBE_JA,
-            _ => IMAGE_DESCRIBE_ZH,
-        }
+        pick_lang(lang, IMAGE_DESCRIBE_ZH, IMAGE_DESCRIBE_EN, IMAGE_DESCRIBE_JA)
     };
     base.trim_end().to_string()
 }
@@ -148,11 +142,12 @@ pub fn build_system_prompt(ai: &AiConfig) -> String {
     let mut out = String::from(pick_system_base(ai).trim_end());
     let brief = ai.user_brief.trim();
     if !brief.is_empty() {
-        let label = match ai.prompt_language.as_str() {
-            "en" => "About the user: ",
-            "ja" => "ユーザーについて：",
-            _ => "关于用户：",
-        };
+        let label = pick_lang(
+            ai.prompt_language.as_str(),
+            "关于用户：",
+            "About the user: ",
+            "ユーザーについて：",
+        );
         out.push_str("\n\n");
         out.push_str(label);
         out.push_str(brief);

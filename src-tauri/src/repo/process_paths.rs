@@ -3,7 +3,7 @@ use chrono::{Local, Utc};
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result<()> {
     let p = process_name.to_string();

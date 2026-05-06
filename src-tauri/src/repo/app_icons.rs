@@ -12,7 +12,7 @@ use rusqlite::OptionalExtension;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::{db_path_dir, DbPool};
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 /// 文件 cache 路径：`<data_root>/icons/<sanitized>.png`。
 /// process_name 里的非 ASCII alnum/. /-/_ 字符替换成 `_`，避免文件名歧义。

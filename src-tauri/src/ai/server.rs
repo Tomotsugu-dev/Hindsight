@@ -11,6 +11,20 @@
 //!              Error    ←───── (kill / stop)
 //! ```
 //!
+//! ## 锁顺序约定
+//!
+//! 本模块持有两把锁：
+//! - `inner`：`tokio::sync::Mutex<Inner>` —— 守 state + child handle
+//! - `inflight_state`：`std::sync::Mutex<InflightState>` —— 守 in-flight 计数 + last_used_at
+//!
+//! **锁顺序：`inner` → `inflight_state`，禁止反向**。`maybe_idle_stop` 在持
+//! `inner` 时短暂取 `inflight_state`，符合此顺序；任何 acquire / release inflight
+//! 的调用点都必须在 `inner` 锁外完成（或确保不会回头取 `inner`）。
+//!
+//! `inflight_state` 用 `std::sync::Mutex` 而非 `tokio::sync::Mutex` 是为了让
+//! [`InferenceGuard::drop`] 能同步访问（drop 不能 await）；临界区只是 usize +
+//! Instant 赋值，几纳秒级别，不会因同步锁阻塞 runtime。
+//!
 //! Phase 1B-α 阶段没有模型，[`start`](EngineSupervisor::start) 接 `None` 调用时
 //! llama-server 会 fail-fast（缺 `-m` 参数），supervisor 把 stderr 包成可读错误
 //! 给前端展示。Phase 1B-β 加模型选择后，会真传入 model / mmproj 路径。
@@ -249,7 +263,7 @@ impl EngineSupervisor {
         };
         if let Some(mut child) = child {
             let _ = child.kill().await;
-            let _ = child.wait().await;
+            wait_child_with_timeout(&mut child).await;
             log::info!(
                 "AI 引擎 idle 超过 {}s，已自动释放显存",
                 IDLE_THRESHOLD.as_secs()
@@ -339,6 +353,11 @@ impl EngineSupervisor {
 
             let port = pick_free_port()?;
             let mut cmd = build_command(&bin_path, port, model_path, mmproj_path, &overrides);
+            // 装平台特定的 spawn 前钩子（Linux/macOS 设 setpgid + PDEATHSIG）；
+            // Windows 是 no-op，post-spawn 才装 Job
+            if let Err(e) = crate::ai::job_guard::prepare_command(&mut cmd) {
+                log::warn!("job_guard::prepare_command 失败（保护可能降级）: {e}");
+            }
             // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效
             log::info!(
                 "spawn llama-server with overrides: batch_size={:?} parallel_slots={:?}",
@@ -457,7 +476,7 @@ impl EngineSupervisor {
         };
         if let Some(mut child) = child {
             let _ = child.kill().await;
-            let _ = child.wait().await;
+            wait_child_with_timeout(&mut child).await;
         }
         Ok(())
     }
@@ -592,7 +611,7 @@ async fn resolve_failure(
     if killed {
         // 还活着但 hang——强制 kill
         let _ = child.kill().await;
-        let _ = child.wait().await;
+        wait_child_with_timeout(child).await;
         // 等 50ms 让 drain task 把残余 stderr 行写完
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -616,6 +635,25 @@ async fn resolve_failure(
             }
         }
         Err(e) => format!("无法读取子进程状态：{e}"),
+    }
+}
+
+/// 限时等子进程 wait()，避免子进程卡住把 idle watcher / stop() 调用栈吊死。
+///
+/// kill 信号已发送到内核层；child.wait() 主要等内核回收 PID，正常 ms 级返回。
+/// 超过 [`SHUTDOWN_WAIT_TIMEOUT`] 还没回 = 进程被 D 状态卡死或者僵尸表满了，
+/// 此时再等下去也意义不大，放弃等待让上层流程往下走。
+const SHUTDOWN_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+async fn wait_child_with_timeout(child: &mut Child) {
+    if tokio::time::timeout(SHUTDOWN_WAIT_TIMEOUT, child.wait())
+        .await
+        .is_err()
+    {
+        log::warn!(
+            "llama-server wait 超过 {}s 仍未退出，放弃等待（OS 应已收到 kill 信号自行清理）",
+            SHUTDOWN_WAIT_TIMEOUT.as_secs()
+        );
     }
 }
 

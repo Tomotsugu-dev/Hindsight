@@ -5,7 +5,7 @@ use crate::device;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 /// 创建一条新的会话记录。device_id = self；updated_at = captured_at；
 /// **不**写 outbox —— 用户明确要求只在会话结束 (seal) 时才推到云端。
@@ -21,7 +21,7 @@ pub async fn insert_new(
     let updated = ended.clone();
     let local_date = captured_at.format("%Y-%m-%d").to_string();
     let local_hour = captured_at.hour() as u8;
-    let device_id = device::self_id().to_string();
+    let device_id = device::self_id()?.to_string();
 
     let id = pool
         .0
@@ -57,7 +57,7 @@ pub async fn insert_new(
 pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local>) -> Result<()> {
     let ended = final_ended_at.to_rfc3339();
     let updated = Utc::now().to_rfc3339();
-    let device_id = device::self_id().to_string();
+    let device_id = device::self_id()?.to_string();
 
     pool.0
         .call(move |conn| {

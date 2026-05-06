@@ -18,14 +18,14 @@ pub async fn update_settings(
     svc: State<'_, Arc<CaptureService>>,
     patch: SettingsPatch,
 ) -> Result<Settings, String> {
-    let current = settings::load(&pool).await.map_err(|e| e.to_string())?;
+    let current = settings::load(&pool).await.map_err(String::from)?;
 
     let prev_enabled = current.capture_enabled;
     let prev_interval = current.capture_interval_seconds;
     let prev_autostart = current.auto_start;
 
     let next = settings::apply_patch(current, patch);
-    settings::save(&pool, &next).await.map_err(|e| e.to_string())?;
+    settings::save(&pool, &next).await.map_err(String::from)?;
 
     // 关闭按钮行为切换：同步给 close handler 读的 static，下次点 X 立即生效，
     // 不需要重启

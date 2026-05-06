@@ -7,7 +7,7 @@ use tauri::State;
 use crate::capture::CaptureService;
 use crate::repo::settings;
 use crate::storage::{db_path, DbPool};
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

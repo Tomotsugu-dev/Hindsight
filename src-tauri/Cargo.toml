@@ -1,6 +1,6 @@
 [package]
 name = "hindsight"
-version = "0.4.1"
+version = "0.4.2-beta"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -65,3 +65,7 @@ uiautomation = "0.24"
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1"
 icns = "0.3"
+
+# Unix（Linux + macOS）：子进程保护用 setpgid + （Linux）prctl PDEATHSIG
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

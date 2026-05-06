@@ -15,7 +15,7 @@ use rusqlite::types::ToSql;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 use crate::error::Result;
 use crate::repo::reports::DeviceFilter;
 use crate::storage::DbPool;

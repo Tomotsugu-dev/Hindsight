@@ -15,7 +15,7 @@ pub async fn sign_in_with_google(
     pool: State<'_, DbPool>,
     engine: State<'_, Arc<SyncEngine>>,
 ) -> Result<AuthState, String> {
-    let next = auth::sign_in_with_google(&pool).await.map_err(|e| e.to_string())?;
+    let next = auth::sign_in_with_google(&pool).await.map_err(String::from)?;
     // 登录成功 = 拿到新 token，旧的 "登录凭证失效" 错误立刻作废
     engine.clear_last_error().await;
     Ok(next)

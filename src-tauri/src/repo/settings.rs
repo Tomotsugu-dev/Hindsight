@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::ai::config::AiConfig;
 use crate::error::Result;
 use crate::storage::{db_path_dir, DbPool};
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 pub fn default_screenshot_path() -> String {
     db_path_dir()

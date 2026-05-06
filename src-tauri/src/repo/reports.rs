@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::error::Result;
 use crate::storage::DbPool;
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -452,11 +452,16 @@ fn month_range(month_offset: i32) -> (NaiveDate, NaiveDate) {
         month -= 12;
         year += 1;
     }
-    let first = NaiveDate::from_ymd_opt(year, month as u32, 1).unwrap();
+    // month 经上面 while 循环钳到 1..=12，year+1 / month+1 也都在 chrono 接受范围内
+    // 用 expect 而非 unwrap：将来若改循环边界，panic 信息能直接指明哪条违反了哪条不变量
+    let first = NaiveDate::from_ymd_opt(year, month as u32, 1)
+        .expect("month_range: year/month 应在 chrono 合法范围");
     let next = if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+        NaiveDate::from_ymd_opt(year + 1, 1, 1)
+            .expect("month_range: 跨年到 1 月")
     } else {
-        NaiveDate::from_ymd_opt(year, (month + 1) as u32, 1).unwrap()
+        NaiveDate::from_ymd_opt(year, (month + 1) as u32, 1)
+            .expect("month_range: month+1 应在 1..=12")
     };
     let last = next - Duration::days(1);
     (first, last)

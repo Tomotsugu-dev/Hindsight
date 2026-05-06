@@ -16,7 +16,7 @@ use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
 };
-use crate::db::SqliteResultExt;
+use crate::storage::SqliteResultExt;
 
 const PUSH_BATCH_SIZE: usize = 200;
 
@@ -64,7 +64,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         return Ok(());
     }
 
-    let self_id = crate::device::self_id();
+    let self_id = crate::device::self_id()?;
     let mut succeeded_ids: Vec<i64> = Vec::new();
     let mut failed_ids: Vec<i64> = Vec::new();
     let mut last_err: Option<String> = None;

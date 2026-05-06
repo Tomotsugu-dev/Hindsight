@@ -287,13 +287,21 @@ async fn remove_dir_all_retry(dir: &Path) -> Result<()> {
             }
         }
     }
-    let e = last_err.expect("循环里必须至少出错一次才会到这里");
-    Err(Error::Other(format!(
-        "remove_dir_all 失败（重试 {} 次仍被拒）: path={} err={e}（kind={:?}）",
-        BACKOFFS_MS.len() + 1,
-        dir.display(),
-        e.kind()
-    )))
+    // 走到这里说明所有重试都失败；理论上 last_err 必为 Some，但用 match 而非
+    // expect 避免未来逻辑修改后出现"早 return 但 last_err=None"的隐性 panic
+    match last_err {
+        Some(e) => Err(Error::Other(format!(
+            "remove_dir_all 失败（重试 {} 次仍被拒）: path={} err={e}（kind={:?}）",
+            BACKOFFS_MS.len() + 1,
+            dir.display(),
+            e.kind()
+        ))),
+        None => Err(Error::Other(format!(
+            "remove_dir_all 失败（重试 {} 次但无错误捕获）: path={}",
+            BACKOFFS_MS.len() + 1,
+            dir.display()
+        ))),
+    }
 }
 
 /// 删除当前平台的安装目录（NSIS 卸载向导可调；UI 卸载按钮也走这里）。
