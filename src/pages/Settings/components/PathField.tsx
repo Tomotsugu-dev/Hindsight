@@ -1,4 +1,5 @@
 import { FolderOpen } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import styles from "./PathField.module.css";
 
 interface PathFieldProps {
@@ -7,7 +8,7 @@ interface PathFieldProps {
   onPick?: () => void;
   /** 输入框是否只读（按钮仍可点） */
   readOnly?: boolean;
-  /** 按钮文字，默认 "选择" */
+  /** 按钮文字，默认走 i18n 中的 components.pathField.pickLabel */
   pickLabel?: string;
 }
 
@@ -16,8 +17,10 @@ export function PathField({
   onChange,
   onPick,
   readOnly,
-  pickLabel = "选择",
+  pickLabel,
 }: PathFieldProps) {
+  const { t } = useTranslation();
+  const label = pickLabel ?? t("components.pathField.pickLabel");
   return (
     <div className={styles.wrap}>
       <input
@@ -29,7 +32,7 @@ export function PathField({
       />
       <button type="button" className={styles.pick} onClick={onPick}>
         <FolderOpen size={14} strokeWidth={1.85} />
-        {pickLabel}
+        {label}
       </button>
     </div>
   );

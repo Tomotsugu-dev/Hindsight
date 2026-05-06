@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import styles from "./TimeField.module.css";
 
 interface TimeFieldProps {
@@ -17,6 +18,7 @@ function format(h: number, m: number): string {
 }
 
 export function TimeField({ value, onChange }: TimeFieldProps) {
+  const { t } = useTranslation();
   const [h, m] = parse(value);
   return (
     <div className={styles.wrap}>
@@ -24,17 +26,17 @@ export function TimeField({ value, onChange }: TimeFieldProps) {
         value={h}
         max={23}
         onChange={(next) => onChange(format(next, m))}
-        ariaLabel="小时"
+        ariaLabel={t("components.timeField.hourAria")}
       />
       <span className={styles.colon}>:</span>
       <SpinPart
         value={m}
         max={59}
         onChange={(next) => onChange(format(h, next))}
-        ariaLabel="分钟"
+        ariaLabel={t("components.timeField.minuteAria")}
       />
       <span className={styles.tooltip} role="tooltip">
-        滚轮 · 上下键 · 输入数字
+        {t("components.timeField.tooltip")}
       </span>
     </div>
   );

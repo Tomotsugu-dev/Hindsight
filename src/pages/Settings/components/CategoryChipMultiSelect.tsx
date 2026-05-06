@@ -43,11 +43,11 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
   };
 
   if (!loaded) {
-    return <div className={styles.loading}>加载分类…</div>;
+    return <div className={styles.loading}>{t("components.categoryChipMultiSelect.loading")}</div>;
   }
 
   if (categories.length === 0) {
-    return <div className={styles.empty}>还没有分类</div>;
+    return <div className={styles.empty}>{t("components.categoryChipMultiSelect.empty")}</div>;
   }
 
   return (
@@ -67,7 +67,11 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
             }}
             onClick={() => toggle(c.id)}
             aria-pressed={excluded}
-            title={excluded ? "已排除——点一下重新加入" : "点一下从分析中排除"}
+            title={
+              excluded
+                ? t("components.categoryChipMultiSelect.excludedTitle")
+                : t("components.categoryChipMultiSelect.includeTitle")
+            }
           >
             <Icon size={13} strokeWidth={2} />
             <span className={styles.name}>{displayCategoryName(c, t)}</span>

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { AiSegment } from "../../../api/hindsight";
 import styles from "./SegmentList.module.css";
 
@@ -74,16 +75,17 @@ function isLightHex(hex: string): boolean {
   return lum > 0.6;
 }
 
-/** 调色板：一排 pastel 预设，覆盖一天的色温区间。最后一项是"自动"（清空 color）。 */
-const SWATCHES: Array<{ hex: string; label: string }> = [
-  { hex: "#a3b6e8", label: "蓝" },
-  { hex: "#c2bdf3", label: "薰衣草" },
-  { hex: "#cda7e5", label: "丁香" },
-  { hex: "#f0b3c6", label: "玫瑰" },
-  { hex: "#f5b89e", label: "奶橘" },
-  { hex: "#fbcfb0", label: "浅桃" },
-  { hex: "#f6e2a3", label: "暖黄" },
-  { hex: "#a7d8c5", label: "薄荷" },
+/** 调色板：一排 pastel 预设，覆盖一天的色温区间。最后一项是"自动"（清空 color）。
+ *  labelKey 指向 i18n 中 components.segmentList.swatches 下的子键。 */
+const SWATCHES: Array<{ hex: string; labelKey: string }> = [
+  { hex: "#a3b6e8", labelKey: "blue" },
+  { hex: "#c2bdf3", labelKey: "lavender" },
+  { hex: "#cda7e5", labelKey: "lilac" },
+  { hex: "#f0b3c6", labelKey: "rose" },
+  { hex: "#f5b89e", labelKey: "creamOrange" },
+  { hex: "#fbcfb0", labelKey: "peach" },
+  { hex: "#f6e2a3", labelKey: "warmYellow" },
+  { hex: "#a7d8c5", labelKey: "mint" },
 ];
 
 function fmt(h: number): string {
@@ -92,6 +94,7 @@ function fmt(h: number): string {
 }
 
 export function SegmentList({ segments, onChange }: Props) {
+  const { t } = useTranslation();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   // 仅触发重渲染用，宽度真值通过 getBoundingClientRect 实时取
@@ -225,8 +228,9 @@ export function SegmentList({ segments, onChange }: Props) {
   };
 
   const addSegment = () => {
+    const newLabel = t("components.segmentList.newSegmentLabel");
     if (sorted.length === 0) {
-      onChange([{ label: "新段", startHour: 9, endHour: 12, color: "" }]);
+      onChange([{ label: newLabel, startHour: 9, endHour: 12, color: "" }]);
       return;
     }
     // 找最长可切（>=2h）的段，对半切
@@ -245,7 +249,7 @@ export function SegmentList({ segments, onChange }: Props) {
     const next = sorted.slice();
     next[bestI] = { ...seg, endHour: mid };
     next.splice(bestI + 1, 0, {
-      label: "新段",
+      label: newLabel,
       startHour: mid,
       endHour: seg.endHour,
       color: "",
@@ -344,7 +348,7 @@ export function SegmentList({ segments, onChange }: Props) {
           })}
 
           {sorted.length === 0 && (
-            <div className={styles.empty}>还没有段，点下面"添加段"开始</div>
+            <div className={styles.empty}>{t("components.segmentList.empty")}</div>
           )}
           </div>
 
@@ -355,7 +359,7 @@ export function SegmentList({ segments, onChange }: Props) {
                 onPointerDown={(e) =>
                   startDrag(e, { kind: "left-edge", index: -1 })
                 }
-                ariaLabel="活动起始时刻"
+                ariaLabel={t("components.segmentList.leftEdgeAria")}
               />
               {sorted.slice(0, -1).map((s, i) => (
                 <Handle
@@ -364,7 +368,7 @@ export function SegmentList({ segments, onChange }: Props) {
                   onPointerDown={(e) =>
                     startDrag(e, { kind: "between", index: i })
                   }
-                  ariaLabel="段间分隔"
+                  ariaLabel={t("components.segmentList.betweenAria")}
                 />
               ))}
               <Handle
@@ -372,7 +376,7 @@ export function SegmentList({ segments, onChange }: Props) {
                 onPointerDown={(e) =>
                   startDrag(e, { kind: "right-edge", index: -1 })
                 }
-                ariaLabel="活动结束时刻"
+                ariaLabel={t("components.segmentList.rightEdgeAria")}
               />
             </div>
           )}
@@ -395,11 +399,11 @@ export function SegmentList({ segments, onChange }: Props) {
                       e.stopPropagation();
                       removeAt(i);
                     }}
-                    aria-label="删除段"
+                    aria-label={t("components.segmentList.removeAria")}
                     title={
                       i + 1 < sorted.length
-                        ? "删除（范围并入右邻居）"
-                        : "删除（范围并入左邻居）"
+                        ? t("components.segmentList.removeMergeRight")
+                        : t("components.segmentList.removeMergeLeft")
                     }
                     tabIndex={visible ? 0 : -1}
                   >
@@ -461,6 +465,9 @@ export function SegmentList({ segments, onChange }: Props) {
                 const active =
                   sorted[pickerIndex].color.toLowerCase() ===
                   sw.hex.toLowerCase();
+                const swatchName = t(
+                  `components.segmentList.swatches.${sw.labelKey}`,
+                );
                 return (
                   <button
                     key={sw.hex}
@@ -468,8 +475,10 @@ export function SegmentList({ segments, onChange }: Props) {
                     className={`${styles.swatch} ${active ? styles.swatchOn : ""}`}
                     style={{ background: sw.hex }}
                     onClick={() => setColor(pickerIndex, sw.hex)}
-                    title={sw.label}
-                    aria-label={`配色 ${sw.label}`}
+                    title={swatchName}
+                    aria-label={t("components.segmentList.swatchAria", {
+                      name: swatchName,
+                    })}
                   />
                 );
               })}
@@ -479,9 +488,9 @@ export function SegmentList({ segments, onChange }: Props) {
                   sorted[pickerIndex].color === "" ? styles.swatchOn : ""
                 }`}
                 onClick={() => setColor(pickerIndex, "")}
-                title="跟随时段自动渐变"
+                title={t("components.segmentList.swatchAutoTitle")}
               >
-                自动
+                {t("components.segmentList.swatchAuto")}
               </button>
             </div>
           </div>
@@ -490,7 +499,7 @@ export function SegmentList({ segments, onChange }: Props) {
 
       <button type="button" className={styles.addBtn} onClick={addSegment}>
         <Plus size={14} strokeWidth={2} />
-        添加段
+        {t("components.segmentList.addBtn")}
       </button>
     </div>
   );

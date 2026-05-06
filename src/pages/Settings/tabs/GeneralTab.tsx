@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
 import { Aperture, Clock, Rocket } from "lucide-react";
@@ -13,6 +14,7 @@ import { useSettings } from "../../../state/settings";
 import { api } from "../../../api/hindsight";
 
 export default function GeneralTab() {
+  const { t } = useTranslation();
   const { settings, update } = useSettings();
   const [dataRoot, setDataRoot] = useState<string>("");
   const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
@@ -70,26 +72,24 @@ export default function GeneralTab() {
   return (
     <>
       <Section
-        title="采集"
-        description="定时记录焦点窗口和当时的屏幕截图，作为之后回看的依据。"
+        title={t("settings.general.capture.title")}
+        description={t("settings.general.capture.description")}
         icon={Aperture}
       >
-        <Row label="启用采集" description="关闭后停止记录窗口信息和截图。">
+        <Row
+          label={t("settings.general.capture.enableLabel")}
+          description={t("settings.general.capture.enableDescription")}
+        >
           <Toggle
             checked={settings.captureEnabled}
             onChange={(v) => update({ captureEnabled: v })}
           />
         </Row>
         <Row
-          label="采集间隔"
-          description="窗口信息和截图的采集频率。间隔越短，记录越精细，磁盘占用越大。"
+          label={t("settings.general.capture.intervalLabel")}
+          description={t("settings.general.capture.intervalDescription")}
           disabled={!settings.captureEnabled}
-          labelHint={
-            "截图触发时机：\n" +
-            "• 切换应用 → 立即截图\n" +
-            "• 浏览器切换 URL → 立即截图\n" +
-            "• 同一窗口停留满设定的间隔 → 截图"
-          }
+          labelHint={t("settings.general.capture.intervalHint")}
         >
           <Slider
             value={settings.captureIntervalSeconds}
@@ -97,18 +97,14 @@ export default function GeneralTab() {
             min={5}
             max={120}
             step={5}
-            suffix="秒"
+            suffix={t("common.units.seconds")}
           />
         </Row>
         <Row
-          label="挂机不计时"
-          description="鼠键长时间无操作时停止累计当前会话的时长，避免离开电脑后仍在记录使用时间。设为 0 = 永远算在用。"
+          label={t("settings.general.capture.idleLabel")}
+          description={t("settings.general.capture.idleDescription")}
           disabled={!settings.captureEnabled}
-          labelHint={
-            "判断依据是系统级的鼠标 / 键盘 / 触控板事件——\n" +
-            "看视频、长时间阅读不会触发。\n" +
-            "用户回来动鼠键后会自动开始新会话。"
-          }
+          labelHint={t("settings.general.capture.idleHint")}
         >
           <Slider
             value={Math.round(settings.idleThresholdSeconds / 60)}
@@ -116,10 +112,13 @@ export default function GeneralTab() {
             min={0}
             max={30}
             step={1}
-            suffix="分钟"
+            suffix={t("common.units.minutes")}
           />
         </Row>
-        <Row label="截图保存路径" disabled={!settings.captureEnabled}>
+        <Row
+          label={t("settings.general.capture.screenshotPathLabel")}
+          disabled={!settings.captureEnabled}
+        >
           <PathField
             value={settings.screenshotPath}
             onChange={(v) => update({ screenshotPath: v })}
@@ -127,25 +126,29 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
-          label="数据保存路径"
-          description="数据库与默认截图根目录所在位置。更改后需重启应用，旧数据需手动迁移。"
+          label={t("settings.general.capture.dataPathLabel")}
+          description={t("settings.general.capture.dataPathDescription")}
         >
           <PathField value={dataRoot} onPick={pickDataDir} readOnly />
         </Row>
       </Section>
 
       <Section
-        title="工作时段"
-        description="只在指定时段内采集，避免下班后还在记录。可设置多段。"
+        title={t("settings.general.workHours.title")}
+        description={t("settings.general.workHours.description")}
         icon={Clock}
       >
-        <Row label="启用工作时段">
+        <Row label={t("settings.general.workHours.enableLabel")}>
           <Toggle
             checked={settings.workHoursEnabled}
             onChange={(v) => update({ workHoursEnabled: v })}
           />
         </Row>
-        <Row label="时间段" disabled={!settings.workHoursEnabled} block>
+        <Row
+          label={t("settings.general.workHours.rangesLabel")}
+          disabled={!settings.workHoursEnabled}
+          block
+        >
           <TimeRangeList
             ranges={settings.workRanges}
             onChange={(v) => update({ workRanges: v })}
@@ -153,16 +156,19 @@ export default function GeneralTab() {
         </Row>
       </Section>
 
-      <Section title="启动行为" icon={Rocket}>
-        <Row label="开机自动启动" description="登录系统后由 Hindsight 自动运行。">
+      <Section title={t("settings.general.startup.title")} icon={Rocket}>
+        <Row
+          label={t("settings.general.startup.autoStartLabel")}
+          description={t("settings.general.startup.autoStartDescription")}
+        >
           <Toggle
             checked={settings.autoStart}
             onChange={(v) => update({ autoStart: v })}
           />
         </Row>
         <Row
-          label="启动时显示主窗口"
-          description="关闭则只在托盘待命，需要时手动唤起。"
+          label={t("settings.general.startup.showWindowLabel")}
+          description={t("settings.general.startup.showWindowDescription")}
           disabled={!settings.autoStart}
         >
           <Toggle
@@ -171,8 +177,12 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
-          label="关闭后最小化到右下角托盘"
-          description={`点窗口${isMacOS ? "左上角" : "右上角"} X 时隐藏到系统托盘，采集与同步继续在后台运行。关闭则点 X 直接退出应用。`}
+          label={t("settings.general.startup.minimizeToTrayLabel")}
+          description={
+            isMacOS
+              ? t("settings.general.startup.minimizeToTrayDescriptionMac")
+              : t("settings.general.startup.minimizeToTrayDescriptionWin")
+          }
         >
           <Toggle
             checked={settings.minimizeToTray}
@@ -183,10 +193,13 @@ export default function GeneralTab() {
 
       <ConfirmDialog
         open={pendingDataRoot !== null}
-        title="切换数据保存路径？"
-        message={`新路径：${pendingDataRoot ?? ""}\n\n保存后需要重启应用才会生效。\n\n旧目录的数据库与截图不会自动迁移——若想保留历史，请先手动把 ${dataRoot} 下的内容拷贝到新位置。`}
-        confirmLabel="保存"
-        cancelLabel="取消"
+        title={t("settings.general.dataRootDialog.title")}
+        message={t("settings.general.dataRootDialog.message", {
+          path: pendingDataRoot ?? "",
+          oldPath: dataRoot,
+        })}
+        confirmLabel={t("common.save")}
+        cancelLabel={t("common.cancel")}
         variant="primary"
         onConfirm={confirmDataRoot}
         onCancel={() => setPendingDataRoot(null)}

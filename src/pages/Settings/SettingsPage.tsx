@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import styles from "./SettingsPage.module.css";
 
+// tab 路由元数据；label 通过 t() 动态解析
 const TABS = [
-  { to: "", label: "常规", end: true },
-  { to: "data", label: "数据" },
-  { to: "privacy", label: "隐私" },
-  { to: "about", label: "关于" },
+  { to: "", labelKey: "settings.tabs.general", end: true },
+  { to: "data", labelKey: "settings.tabs.data" },
+  { to: "privacy", labelKey: "settings.tabs.privacy" },
+  { to: "about", labelKey: "settings.tabs.about" },
 ];
 
 interface PillStyle {
@@ -16,12 +18,14 @@ interface PillStyle {
 }
 
 export default function SettingsPage() {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
   const [pill, setPill] = useState<PillStyle>({ left: 0, width: 0, visible: false });
   const [animated, setAnimated] = useState(false);
 
-  /** 路由变化时测量当前激活 tab 的位置 */
+  /** 路由或语言变化时重新测量当前激活 tab 的位置
+   *  —— 切换语言会改 tab 文字宽度，必须重测，否则 pill 留在旧（中文）尺寸 */
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
@@ -37,7 +41,7 @@ export default function SettingsPage() {
       width: active.offsetWidth,
       visible: true,
     });
-  }, [location.pathname]);
+  }, [location.pathname, i18n.language]);
 
   /** 第一次定位完成后再开启过渡，避免初始从 0 滑过来 */
   useEffect(() => {
@@ -50,7 +54,7 @@ export default function SettingsPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>设置</h1>
+        <h1 className={styles.title}>{t("settings.pageTitle")}</h1>
       </header>
 
       <nav className={styles.tabs} role="tablist" ref={navRef}>
@@ -65,16 +69,16 @@ export default function SettingsPage() {
           aria-hidden
         />
 
-        {TABS.map((t) => (
+        {TABS.map((tab) => (
           <NavLink
-            key={t.label}
-            to={t.to}
-            end={t.end}
+            key={tab.labelKey}
+            to={tab.to}
+            end={tab.end}
             className={({ isActive }) =>
               `${styles.tab} ${isActive ? styles.tabActive : ""}`
             }
           >
-            {t.label}
+            {t(tab.labelKey)}
           </NavLink>
         ))}
       </nav>

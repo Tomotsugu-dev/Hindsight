@@ -7,6 +7,7 @@
     "minimize": "Minimize",
     "close": "Close",
     "empty": "No data yet",
+    "open": "Open",
     "duration": {
       "minutesShort": "{{count}} min",
       "hourMinute": "{{hours}}h {{minutes}}m",
@@ -15,6 +16,12 @@
       "hoursAndMinutesShort": "{{hours}}h {{minutes}}m",
       "tickMinutes": "{{count}}m",
       "tickHours": "{{count}}h"
+    },
+    "units": {
+      "seconds": "sec",
+      "minutes": "min",
+      "hours": "h",
+      "days": "days"
     }
   },
   "nav": {
@@ -69,6 +76,138 @@
         "zhCN": "简体中文",
         "en": "English"
       }
+    },
+    "general": {
+      "capture": {
+        "title": "Capture",
+        "description": "Periodically record the focused window and a screenshot, so you can review activity later.",
+        "enableLabel": "Enable capture",
+        "enableDescription": "When off, window info and screenshots stop being recorded.",
+        "intervalLabel": "Capture interval",
+        "intervalDescription": "How often window info and screenshots are captured. Shorter intervals give finer detail at higher disk cost.",
+        "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
+        "idleLabel": "Idle timeout",
+        "idleDescription": "Stop counting time on the current session after prolonged mouse/keyboard inactivity, so time isn't tracked while you're away. Set to 0 to never pause.",
+        "idleHint": "Detection uses system-level mouse / keyboard / trackpad events —\nwatching videos or reading without input won't trigger it.\nA new session starts automatically when activity resumes.",
+        "screenshotPathLabel": "Screenshots folder",
+        "dataPathLabel": "Data folder",
+        "dataPathDescription": "Location of the database and the default screenshots root. Changing requires a restart, and old data must be migrated manually."
+      },
+      "workHours": {
+        "title": "Work hours",
+        "description": "Only capture during the specified hours, so off-hours activity isn't recorded. Multiple ranges supported.",
+        "enableLabel": "Enable work hours",
+        "rangesLabel": "Ranges"
+      },
+      "startup": {
+        "title": "Startup behavior",
+        "autoStartLabel": "Launch on system startup",
+        "autoStartDescription": "Hindsight starts automatically after you log in.",
+        "showWindowLabel": "Show main window on startup",
+        "showWindowDescription": "When off, the app stays in the tray and you open it manually when needed.",
+        "minimizeToTrayLabel": "Minimize to tray on close",
+        "minimizeToTrayDescriptionMac": "Clicking the X in the top-left of the window hides it to the tray; capture and sync keep running in the background. When off, clicking X quits the app.",
+        "minimizeToTrayDescriptionWin": "Clicking the X in the top-right of the window hides it to the tray; capture and sync keep running in the background. When off, clicking X quits the app."
+      },
+      "dataRootDialog": {
+        "title": "Switch data folder?",
+        "message": "New path: {{path}}\n\nA restart is required for the change to take effect.\n\nThe database and screenshots in the old folder will not be migrated automatically — if you want to keep your history, copy the contents of {{oldPath}} to the new location first."
+      }
+    },
+    "data": {
+      "storage": {
+        "title": "Storage",
+        "description": "Screenshot retention and current usage. The database is never auto-cleaned.",
+        "retentionLabel": "Screenshot retention (days)",
+        "retentionDescription": "Expired screenshot files are deleted automatically (activity records are kept).",
+        "currentUsageLabel": "Current usage",
+        "currentUsageDescription": "Database {{db}} · Screenshots {{shots}}",
+        "modelsPathLabel": "AI models folder",
+        "modelsPathHint": "After changing the path, models in the old folder are not migrated — copy them over manually, or re-download them in the new location."
+      },
+      "manage": {
+        "title": "Data management",
+        "description": "Clean up unwanted data to free disk space.",
+        "purgeDbLabel": "Clear database",
+        "purgeDbDescription": "Delete all window activity records. Categories and settings are kept.",
+        "purgeDbOpenTitle": "Reveal database in file manager",
+        "purgeShotsLabel": "Clear screenshots",
+        "purgeShotsDescription": "Delete all saved screenshot files.",
+        "purgeShotsOpenTitle": "Open screenshots folder"
+      },
+      "purgeDialog": {
+        "dbTitle": "Clear database?",
+        "shotsTitle": "Clear screenshots?",
+        "dbMessage": "All window activity records will be deleted. Categories and settings are unaffected. This cannot be undone.",
+        "shotsMessage": "All saved screenshot files will be deleted. The corresponding screenshot references in the database will also be cleared. This cannot be undone."
+      }
+    },
+    "privacy": {
+      "browser": {
+        "title": "Browser filter",
+        "info": "Skip screenshots when the browser address bar URL contains any of these (case-insensitive).",
+        "rowLabel": "URL keywords",
+        "addLabel": "Add URL fragment",
+        "placeholder": "e.g. /login"
+      },
+      "app": {
+        "title": "App filter",
+        "info": "Skip screenshots when the app name or window title contains any of these (case-insensitive).",
+        "rowLabel": "Title / app keywords",
+        "addLabel": "Add app name",
+        "placeholder": "e.g. WeChat"
+      },
+      "scope": {
+        "title": "Scope",
+        "info": "When matched, only screenshots are skipped",
+        "noticePrefix": "Screenshot filtering is a local-only behavior, ",
+        "noticeEmph": "it does not affect screenshots already saved",
+        "noticeMiddle": ". To clear historical screenshots, go to ",
+        "noticeKbd": "Settings · Data · Clear screenshots",
+        "noticeSuffix": "."
+      },
+      "keywordEditor": {
+        "removeAria": "Remove {{keyword}}",
+        "removeTooltip": "Remove"
+      }
+    },
+    "about": {
+      "subtitle": "{{version}} · Tauri 2 + React",
+      "update": {
+        "title": "App updates",
+        "currentVersionLabel": "Current version",
+        "checkBtn": "Check for updates",
+        "checkingBtn": "Checking…",
+        "installingBtn": "Updating…",
+        "status": {
+          "checking": "Checking…",
+          "uptodate": "Up to date",
+          "installing": "Downloading and installing — the app will restart when done…",
+          "error": "Check failed: {{message}}"
+        },
+        "autoLabel": "Check for updates automatically",
+        "autoDescription": "When enabled, the app silently checks at startup at the frequency below and notifies you if a new version is available.",
+        "intervalLabel": "Frequency",
+        "intervals": {
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "onstartup": "Every time the app opens"
+        }
+      },
+      "info": {
+        "title": "Info",
+        "authorLabel": "Author",
+        "authorDescription": "Personal project, non-commercial",
+        "licenseLabel": "License"
+      },
+      "links": {
+        "title": "Links",
+        "repoLabel": "GitHub repository",
+        "repoLink": "View →",
+        "feedbackLabel": "Feedback & suggestions",
+        "feedbackLink": "Submit →"
+      }
     }
   },
   "components": {
@@ -79,6 +218,53 @@
     "appearancePicker": {
       "color": "Color",
       "icon": "Icon"
+    },
+    "slider": {
+      "valueAria": "Value"
+    },
+    "timeField": {
+      "hourAria": "Hour",
+      "minuteAria": "Minute",
+      "tooltip": "Scroll · Arrow keys · Type digits"
+    },
+    "timeRangeList": {
+      "empty": "No ranges set — capturing all day",
+      "to": "to",
+      "removeAria": "Delete range",
+      "addBtn": "Add range"
+    },
+    "pathField": {
+      "pickLabel": "Choose"
+    },
+    "categoryChipMultiSelect": {
+      "loading": "Loading categories…",
+      "empty": "No categories yet",
+      "excludedTitle": "Excluded — click to include again",
+      "includeTitle": "Click to exclude from analysis"
+    },
+    "segmentList": {
+      "empty": "No segments yet — click \"Add segment\" below to start",
+      "newSegmentLabel": "New segment",
+      "addBtn": "Add segment",
+      "leftEdgeAria": "Activity start",
+      "betweenAria": "Segment divider",
+      "rightEdgeAria": "Activity end",
+      "removeAria": "Delete segment",
+      "removeMergeRight": "Delete (merge range into right neighbor)",
+      "removeMergeLeft": "Delete (merge range into left neighbor)",
+      "swatchAria": "Color {{name}}",
+      "swatchAuto": "Auto",
+      "swatchAutoTitle": "Auto-gradient based on hour of day",
+      "swatches": {
+        "blue": "Blue",
+        "lavender": "Lavender",
+        "lilac": "Lilac",
+        "rose": "Rose",
+        "creamOrange": "Cream orange",
+        "peach": "Peach",
+        "warmYellow": "Warm yellow",
+        "mint": "Mint"
+      }
     }
   },
   "today": {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
@@ -28,6 +29,7 @@ function fmtBytes(n: number): string {
 type PurgeTarget = "db" | "shots";
 
 export default function DataTab() {
+  const { t } = useTranslation();
   const { settings, update } = useSettings();
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [confirm, setConfirm] = useState<PurgeTarget | null>(null);
@@ -102,13 +104,13 @@ export default function DataTab() {
   return (
     <>
       <Section
-        title="存储"
-        description="截图保留时长和当前占用情况；数据库永不自动清理。"
+        title={t("settings.data.storage.title")}
+        description={t("settings.data.storage.description")}
         icon={Database}
       >
         <Row
-          label="截图保留天数"
-          description="到期的截图文件将被自动删除（活动记录本身保留）。"
+          label={t("settings.data.storage.retentionLabel")}
+          description={t("settings.data.storage.retentionDescription")}
         >
           <Slider
             value={settings.retentionDays}
@@ -116,14 +118,17 @@ export default function DataTab() {
             min={1}
             max={120}
             step={1}
-            suffix="天"
+            suffix={t("common.units.days")}
           />
         </Row>
         <Row
-          label="当前占用"
+          label={t("settings.data.storage.currentUsageLabel")}
           description={
             storage
-              ? `数据库 ${fmtBytes(storage.dbBytes)} · 截图 ${fmtBytes(storage.screenshotsBytes)}`
+              ? t("settings.data.storage.currentUsageDescription", {
+                  db: fmtBytes(storage.dbBytes),
+                  shots: fmtBytes(storage.screenshotsBytes),
+                })
               : undefined
           }
           icon={PieChart}
@@ -135,8 +140,8 @@ export default function DataTab() {
           </span>
         </Row>
         <Row
-          label="AI 模型保存路径"
-          labelHint="切换路径后，旧目录里的模型不会自动迁移——要么手动拷过去，要么在新路径里重新下载。"
+          label={t("settings.data.storage.modelsPathLabel")}
+          labelHint={t("settings.data.storage.modelsPathHint")}
           icon={HardDrive}
         >
           <PathField
@@ -148,14 +153,14 @@ export default function DataTab() {
       </Section>
 
       <Section
-        title="数据管理"
-        description="清理不需要的数据，释放磁盘空间。"
+        title={t("settings.data.manage.title")}
+        description={t("settings.data.manage.description")}
         icon={AlertCircle}
         tone="danger"
       >
         <Row
-          label="清空数据库"
-          description="删除所有窗口活动记录，保留分类和设置。"
+          label={t("settings.data.manage.purgeDbLabel")}
+          description={t("settings.data.manage.purgeDbDescription")}
           icon={Database}
           tone="danger"
         >
@@ -163,22 +168,22 @@ export default function DataTab() {
             type="button"
             className={styles.openBtn}
             onClick={revealDb}
-            title="在文件管理器中显示数据库"
+            title={t("settings.data.manage.purgeDbOpenTitle")}
           >
             <FolderOpen size={14} strokeWidth={1.85} />
-            打开
+            {t("common.open")}
           </button>
           <button
             type="button"
             className={styles.dangerBtn}
             onClick={() => setConfirm("db")}
           >
-            删除
+            {t("common.delete")}
           </button>
         </Row>
         <Row
-          label="清空截图"
-          description="删除已保存的全部截图文件。"
+          label={t("settings.data.manage.purgeShotsLabel")}
+          description={t("settings.data.manage.purgeShotsDescription")}
           icon={ImageDown}
           tone="danger"
         >
@@ -186,31 +191,35 @@ export default function DataTab() {
             type="button"
             className={styles.openBtn}
             onClick={openShots}
-            title="打开截图保存文件夹"
+            title={t("settings.data.manage.purgeShotsOpenTitle")}
           >
             <FolderOpen size={14} strokeWidth={1.85} />
-            打开
+            {t("common.open")}
           </button>
           <button
             type="button"
             className={styles.dangerBtn}
             onClick={() => setConfirm("shots")}
           >
-            删除
+            {t("common.delete")}
           </button>
         </Row>
       </Section>
 
       <ConfirmDialog
         open={confirm !== null}
-        title={confirm === "db" ? "清空数据库？" : "清空截图？"}
+        title={
+          confirm === "db"
+            ? t("settings.data.purgeDialog.dbTitle")
+            : t("settings.data.purgeDialog.shotsTitle")
+        }
         message={
           confirm === "db"
-            ? "将删除所有窗口活动记录。分类和设置不会受影响。此操作无法撤销。"
-            : "将删除已保存的全部截图文件。数据库中对应的截图引用也会一并清除。此操作无法撤销。"
+            ? t("settings.data.purgeDialog.dbMessage")
+            : t("settings.data.purgeDialog.shotsMessage")
         }
-        confirmLabel="删除"
-        cancelLabel="取消"
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
         variant="danger"
         onConfirm={handleConfirm}
         onCancel={() => setConfirm(null)}

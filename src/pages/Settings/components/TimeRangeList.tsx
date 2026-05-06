@@ -1,4 +1,5 @@
 import { Plus, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { TimeField } from "./TimeField";
 import styles from "./TimeRangeList.module.css";
 
@@ -13,6 +14,7 @@ interface TimeRangeListProps {
 }
 
 export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
+  const { t } = useTranslation();
   const update = (index: number, patch: Partial<TimeRange>) => {
     const next = ranges.map((r, i) => (i === index ? { ...r, ...patch } : r));
     onChange(next);
@@ -29,7 +31,7 @@ export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
   return (
     <div className={styles.list}>
       {ranges.length === 0 ? (
-        <div className={styles.empty}>未设置任何时间段，全天采集</div>
+        <div className={styles.empty}>{t("components.timeRangeList.empty")}</div>
       ) : (
         ranges.map((range, i) => (
           <div key={i} className={styles.row}>
@@ -37,7 +39,7 @@ export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
               value={range.start}
               onChange={(v) => update(i, { start: v })}
             />
-            <span className={styles.dash}>至</span>
+            <span className={styles.dash}>{t("components.timeRangeList.to")}</span>
             <TimeField
               value={range.end}
               onChange={(v) => update(i, { end: v })}
@@ -46,7 +48,7 @@ export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
               type="button"
               className={styles.remove}
               onClick={() => remove(i)}
-              aria-label="删除时段"
+              aria-label={t("components.timeRangeList.removeAria")}
             >
               <X size={13} strokeWidth={2} />
             </button>
@@ -55,7 +57,7 @@ export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
       )}
       <button type="button" className={styles.add} onClick={add}>
         <Plus size={14} strokeWidth={2} />
-        添加时段
+        {t("components.timeRangeList.addBtn")}
       </button>
     </div>
   );

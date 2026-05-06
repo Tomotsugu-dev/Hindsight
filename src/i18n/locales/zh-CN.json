@@ -7,6 +7,7 @@
     "minimize": "最小化",
     "close": "关闭",
     "empty": "暂无数据",
+    "open": "打开",
     "duration": {
       "minutesShort": "{{count}} 分钟",
       "hourMinute": "{{hours}} 小时 {{minutes}} 分",
@@ -15,6 +16,12 @@
       "hoursAndMinutesShort": "{{hours}} 小时 {{minutes}} 分",
       "tickMinutes": "{{count}} 分",
       "tickHours": "{{count}} 小时"
+    },
+    "units": {
+      "seconds": "秒",
+      "minutes": "分钟",
+      "hours": "小时",
+      "days": "天"
     }
   },
   "nav": {
@@ -69,6 +76,138 @@
         "zhCN": "简体中文",
         "en": "English"
       }
+    },
+    "general": {
+      "capture": {
+        "title": "采集",
+        "description": "定时记录焦点窗口和当时的屏幕截图，作为之后回看的依据。",
+        "enableLabel": "启用采集",
+        "enableDescription": "关闭后停止记录窗口信息和截图。",
+        "intervalLabel": "采集间隔",
+        "intervalDescription": "窗口信息和截图的采集频率。间隔越短，记录越精细，磁盘占用越大。",
+        "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
+        "idleLabel": "挂机不计时",
+        "idleDescription": "鼠键长时间无操作时停止累计当前会话的时长，避免离开电脑后仍在记录使用时间。设为 0 = 永远算在用。",
+        "idleHint": "判断依据是系统级的鼠标 / 键盘 / 触控板事件——\n看视频、长时间阅读不会触发。\n用户回来动鼠键后会自动开始新会话。",
+        "screenshotPathLabel": "截图保存路径",
+        "dataPathLabel": "数据保存路径",
+        "dataPathDescription": "数据库与默认截图根目录所在位置。更改后需重启应用，旧数据需手动迁移。"
+      },
+      "workHours": {
+        "title": "工作时段",
+        "description": "只在指定时段内采集，避免下班后还在记录。可设置多段。",
+        "enableLabel": "启用工作时段",
+        "rangesLabel": "时间段"
+      },
+      "startup": {
+        "title": "启动行为",
+        "autoStartLabel": "开机自动启动",
+        "autoStartDescription": "登录系统后由 Hindsight 自动运行。",
+        "showWindowLabel": "启动时显示主窗口",
+        "showWindowDescription": "关闭则只在托盘待命，需要时手动唤起。",
+        "minimizeToTrayLabel": "关闭后最小化到右下角托盘",
+        "minimizeToTrayDescriptionMac": "点窗口左上角 X 时隐藏到系统托盘，采集与同步继续在后台运行。关闭则点 X 直接退出应用。",
+        "minimizeToTrayDescriptionWin": "点窗口右上角 X 时隐藏到系统托盘，采集与同步继续在后台运行。关闭则点 X 直接退出应用。"
+      },
+      "dataRootDialog": {
+        "title": "切换数据保存路径？",
+        "message": "新路径：{{path}}\n\n保存后需要重启应用才会生效。\n\n旧目录的数据库与截图不会自动迁移——若想保留历史，请先手动把 {{oldPath}} 下的内容拷贝到新位置。"
+      }
+    },
+    "data": {
+      "storage": {
+        "title": "存储",
+        "description": "截图保留时长和当前占用情况；数据库永不自动清理。",
+        "retentionLabel": "截图保留天数",
+        "retentionDescription": "到期的截图文件将被自动删除（活动记录本身保留）。",
+        "currentUsageLabel": "当前占用",
+        "currentUsageDescription": "数据库 {{db}} · 截图 {{shots}}",
+        "modelsPathLabel": "AI 模型保存路径",
+        "modelsPathHint": "切换路径后，旧目录里的模型不会自动迁移——要么手动拷过去，要么在新路径里重新下载。"
+      },
+      "manage": {
+        "title": "数据管理",
+        "description": "清理不需要的数据，释放磁盘空间。",
+        "purgeDbLabel": "清空数据库",
+        "purgeDbDescription": "删除所有窗口活动记录，保留分类和设置。",
+        "purgeDbOpenTitle": "在文件管理器中显示数据库",
+        "purgeShotsLabel": "清空截图",
+        "purgeShotsDescription": "删除已保存的全部截图文件。",
+        "purgeShotsOpenTitle": "打开截图保存文件夹"
+      },
+      "purgeDialog": {
+        "dbTitle": "清空数据库？",
+        "shotsTitle": "清空截图？",
+        "dbMessage": "将删除所有窗口活动记录。分类和设置不会受影响。此操作无法撤销。",
+        "shotsMessage": "将删除已保存的全部截图文件。数据库中对应的截图引用也会一并清除。此操作无法撤销。"
+      }
+    },
+    "privacy": {
+      "browser": {
+        "title": "浏览器过滤",
+        "info": "浏览器地址栏 URL 包含其中任意一条（忽略大小写）时跳过截图。",
+        "rowLabel": "URL 关键词",
+        "addLabel": "添加 URL 后缀",
+        "placeholder": "如 /login"
+      },
+      "app": {
+        "title": "应用过滤",
+        "info": "应用名或窗口标题包含其中任意一条（忽略大小写）时跳过截图。",
+        "rowLabel": "标题 / 应用关键词",
+        "addLabel": "添加应用名",
+        "placeholder": "如 微信"
+      },
+      "scope": {
+        "title": "作用范围",
+        "info": "命中过滤条件时只跳过截图",
+        "noticePrefix": "截图过滤是本地行为，",
+        "noticeEmph": "对已经存下来的历史截图无效",
+        "noticeMiddle": "；要清空历史截图请去 ",
+        "noticeKbd": "设置 · 数据 · 清空截图",
+        "noticeSuffix": "。"
+      },
+      "keywordEditor": {
+        "removeAria": "移除 {{keyword}}",
+        "removeTooltip": "移除"
+      }
+    },
+    "about": {
+      "subtitle": "{{version}} · Tauri 2 + React",
+      "update": {
+        "title": "应用更新",
+        "currentVersionLabel": "当前版本",
+        "checkBtn": "检查更新",
+        "checkingBtn": "检查中…",
+        "installingBtn": "更新中…",
+        "status": {
+          "checking": "正在检查…",
+          "uptodate": "已是最新版本",
+          "installing": "下载并安装中，完成后将自动重启…",
+          "error": "检查失败：{{message}}"
+        },
+        "autoLabel": "自动检查更新",
+        "autoDescription": "开启后，应用会按下面设定的频率在启动时静默检查一次，发现新版本会弹出提示。",
+        "intervalLabel": "检查频率",
+        "intervals": {
+          "daily": "每天",
+          "weekly": "每周",
+          "monthly": "每月",
+          "onstartup": "每次打开应用时"
+        }
+      },
+      "info": {
+        "title": "信息",
+        "authorLabel": "作者",
+        "authorDescription": "个人项目，非商用",
+        "licenseLabel": "许可证"
+      },
+      "links": {
+        "title": "链接",
+        "repoLabel": "GitHub 仓库",
+        "repoLink": "查看 →",
+        "feedbackLabel": "反馈与建议",
+        "feedbackLink": "提交 →"
+      }
     }
   },
   "components": {
@@ -79,6 +218,53 @@
     "appearancePicker": {
       "color": "颜色",
       "icon": "图标"
+    },
+    "slider": {
+      "valueAria": "数值"
+    },
+    "timeField": {
+      "hourAria": "小时",
+      "minuteAria": "分钟",
+      "tooltip": "滚轮 · 上下键 · 输入数字"
+    },
+    "timeRangeList": {
+      "empty": "未设置任何时间段，全天采集",
+      "to": "至",
+      "removeAria": "删除时段",
+      "addBtn": "添加时段"
+    },
+    "pathField": {
+      "pickLabel": "选择"
+    },
+    "categoryChipMultiSelect": {
+      "loading": "加载分类…",
+      "empty": "还没有分类",
+      "excludedTitle": "已排除——点一下重新加入",
+      "includeTitle": "点一下从分析中排除"
+    },
+    "segmentList": {
+      "empty": "还没有段，点下面 “添加段” 开始",
+      "newSegmentLabel": "新段",
+      "addBtn": "添加段",
+      "leftEdgeAria": "活动起始时刻",
+      "betweenAria": "段间分隔",
+      "rightEdgeAria": "活动结束时刻",
+      "removeAria": "删除段",
+      "removeMergeRight": "删除（范围并入右邻居）",
+      "removeMergeLeft": "删除（范围并入左邻居）",
+      "swatchAria": "配色 {{name}}",
+      "swatchAuto": "自动",
+      "swatchAutoTitle": "跟随时段自动渐变",
+      "swatches": {
+        "blue": "蓝",
+        "lavender": "薰衣草",
+        "lilac": "丁香",
+        "rose": "玫瑰",
+        "creamOrange": "奶橘",
+        "peach": "浅桃",
+        "warmYellow": "暖黄",
+        "mint": "薄荷"
+      }
     }
   },
   "today": {

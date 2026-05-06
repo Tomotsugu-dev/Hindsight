@@ -1,4 +1,5 @@
 import { useId, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import styles from "./Slider.module.css";
 
 interface SliderProps {
@@ -12,6 +13,7 @@ interface SliderProps {
 }
 
 export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderProps) {
+  const { t } = useTranslation();
   const id = useId();
   const percent = ((value - min) / (max - min)) * 100;
 
@@ -74,7 +76,7 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
-        aria-label="数值"
+        aria-label={t("components.slider.valueAria")}
         className={`${styles.valueBox} ${focused ? styles.valueBoxFocused : ""}`}
         onFocus={() => setFocused(true)}
         onBlur={() => {

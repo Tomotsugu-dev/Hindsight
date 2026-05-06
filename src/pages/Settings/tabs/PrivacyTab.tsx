@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { AppWindow, EyeOff, Globe, Plus, X } from "lucide-react";
 import { Section } from "../components/Section";
 import { Row } from "../components/Row";
@@ -20,6 +21,7 @@ function KeywordEditor({
   addLabel,
   placeholder,
 }: KeywordEditorProps) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,8 +68,10 @@ function KeywordEditor({
             type="button"
             className={styles.chipRemove}
             onClick={() => removeAt(idx)}
-            aria-label={`移除 ${kw}`}
-            title="移除"
+            aria-label={t("settings.privacy.keywordEditor.removeAria", {
+              keyword: kw,
+            })}
+            title={t("settings.privacy.keywordEditor.removeTooltip")}
           >
             <X size={10} strokeWidth={2.25} />
           </button>
@@ -100,6 +104,7 @@ function KeywordEditor({
 }
 
 export default function PrivacyTab() {
+  const { t } = useTranslation();
   const { settings, update } = useSettings();
   if (!settings) return null;
 
@@ -109,43 +114,50 @@ export default function PrivacyTab() {
   return (
     <>
       <Section
-        title="浏览器过滤"
-        info="浏览器地址栏 URL 包含其中任意一条（忽略大小写）时跳过截图。"
+        title={t("settings.privacy.browser.title")}
+        info={t("settings.privacy.browser.info")}
         icon={Globe}
       >
-        <Row label="URL 关键词" block>
+        <Row label={t("settings.privacy.browser.rowLabel")} block>
           <KeywordEditor
             value={urlList}
             onChange={(next) => update({ privacyUrlKeywords: next })}
-            addLabel="添加 URL 后缀"
-            placeholder="如 /login"
+            addLabel={t("settings.privacy.browser.addLabel")}
+            placeholder={t("settings.privacy.browser.placeholder")}
           />
         </Row>
       </Section>
 
       <Section
-        title="应用过滤"
-        info="应用名或窗口标题包含其中任意一条（忽略大小写）时跳过截图。"
+        title={t("settings.privacy.app.title")}
+        info={t("settings.privacy.app.info")}
         icon={AppWindow}
       >
-        <Row label="标题 / 应用关键词" block>
+        <Row label={t("settings.privacy.app.rowLabel")} block>
           <KeywordEditor
             value={appList}
             onChange={(next) => update({ privacyAppKeywords: next })}
-            addLabel="添加应用名"
-            placeholder="如 微信"
+            addLabel={t("settings.privacy.app.addLabel")}
+            placeholder={t("settings.privacy.app.placeholder")}
           />
         </Row>
       </Section>
 
-      <Section title="作用范围" info="命中过滤条件时只跳过截图" icon={EyeOff}>
+      <Section
+        title={t("settings.privacy.scope.title")}
+        info={t("settings.privacy.scope.info")}
+        icon={EyeOff}
+      >
         <p className={styles.notice}>
-          截图过滤是本地行为，
+          {t("settings.privacy.scope.noticePrefix")}
           <strong className={styles.attention}>
-            对已经存下来的历史截图无效
+            {t("settings.privacy.scope.noticeEmph")}
           </strong>
-          ；要清空历史截图请去
-          <span className={styles.kbd}>设置 · 数据 · 清空截图</span>。
+          {t("settings.privacy.scope.noticeMiddle")}
+          <span className={styles.kbd}>
+            {t("settings.privacy.scope.noticeKbd")}
+          </span>
+          {t("settings.privacy.scope.noticeSuffix")}
         </p>
       </Section>
     </>

@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   MessageSquare,
   RefreshCw,
@@ -26,12 +27,7 @@ const openExternal = (e: React.MouseEvent, url: string) => {
   void openUrl(url).catch(() => {});
 };
 
-const INTERVAL_OPTIONS: { value: "daily" | "weekly" | "monthly" | "onstartup"; label: string }[] = [
-  { value: "daily", label: "每天" },
-  { value: "weekly", label: "每周" },
-  { value: "monthly", label: "每月" },
-  { value: "onstartup", label: "每次打开应用时" },
-];
+type UpdateInterval = "daily" | "weekly" | "monthly" | "onstartup";
 
 /** GitHub Octocat 标记 —— lucide v0.300+ 移除了 brand icon，自己塞一个 */
 const GithubMark = forwardRef<SVGSVGElement, LucideProps>(
@@ -52,9 +48,24 @@ const GithubMark = forwardRef<SVGSVGElement, LucideProps>(
 GithubMark.displayName = "GithubMark";
 
 export default function AboutTab() {
+  const { t } = useTranslation();
   const [appVersion, setAppVersion] = useState<string>("");
   const { settings, update: updateSettings } = useSettings();
   const { phase, errorMsg, checkNow } = useUpdater();
+
+  // 频率下拉选项；label 跟随当前 locale
+  const intervalOptions = useMemo<{ value: UpdateInterval; label: string }[]>(
+    () => [
+      { value: "daily", label: t("settings.about.update.intervals.daily") },
+      { value: "weekly", label: t("settings.about.update.intervals.weekly") },
+      { value: "monthly", label: t("settings.about.update.intervals.monthly") },
+      {
+        value: "onstartup",
+        label: t("settings.about.update.intervals.onstartup"),
+      },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => {});
@@ -65,13 +76,13 @@ export default function AboutTab() {
   const checkBtnDisabled = phase === "checking" || phase === "installing";
   const statusText =
     phase === "checking"
-      ? "正在检查…"
+      ? t("settings.about.update.status.checking")
       : phase === "uptodate"
-        ? "已是最新版本"
+        ? t("settings.about.update.status.uptodate")
         : phase === "installing"
-          ? "下载并安装中，完成后将自动重启…"
+          ? t("settings.about.update.status.installing")
           : phase === "error"
-            ? `检查失败：${errorMsg}`
+            ? t("settings.about.update.status.error", { message: errorMsg })
             : undefined;
 
   return (
@@ -81,13 +92,18 @@ export default function AboutTab() {
         <div className={styles.heroText}>
           <div className={styles.appName}>Hindsight</div>
           <div className={styles.version}>
-            {appVersion || "0.1.0"} · Tauri 2 + React
+            {t("settings.about.subtitle", {
+              version: appVersion || "0.1.0",
+            })}
           </div>
         </div>
       </div>
 
-      <Section title="应用更新" icon={Sparkles}>
-        <Row label="当前版本" description={statusText}>
+      <Section title={t("settings.about.update.title")} icon={Sparkles}>
+        <Row
+          label={t("settings.about.update.currentVersionLabel")}
+          description={statusText}
+        >
           <span className={styles.value}>{appVersion || "—"}</span>
           <button
             type="button"
@@ -105,16 +121,16 @@ export default function AboutTab() {
               }
             />
             {phase === "checking"
-              ? "检查中…"
+              ? t("settings.about.update.checkingBtn")
               : phase === "installing"
-                ? "更新中…"
-                : "检查更新"}
+                ? t("settings.about.update.installingBtn")
+                : t("settings.about.update.checkBtn")}
           </button>
         </Row>
 
         <Row
-          label="自动检查更新"
-          description="开启后，应用会按下面设定的频率在启动时静默检查一次，发现新版本会弹出提示。"
+          label={t("settings.about.update.autoLabel")}
+          description={t("settings.about.update.autoDescription")}
         >
           <Toggle
             checked={settings.autoUpdateEnabled}
@@ -128,10 +144,10 @@ export default function AboutTab() {
           }`}
         >
           <div className={styles.collapsibleInner}>
-            <Row label="检查频率">
+            <Row label={t("settings.about.update.intervalLabel")}>
               <SimplePicker
                 value={settings.autoUpdateInterval}
-                options={INTERVAL_OPTIONS}
+                options={intervalOptions}
                 onChange={(v) =>
                   updateSettings({
                     autoUpdateInterval: v as Settings["autoUpdateInterval"],
@@ -143,32 +159,36 @@ export default function AboutTab() {
         </div>
       </Section>
 
-      <Section title="信息">
-        <Row label="作者" description="个人项目，非商用" icon={User}>
+      <Section title={t("settings.about.info.title")}>
+        <Row
+          label={t("settings.about.info.authorLabel")}
+          description={t("settings.about.info.authorDescription")}
+          icon={User}
+        >
           <span className={styles.value}>Tomotsugu-dev</span>
         </Row>
-        <Row label="许可证" icon={Scale}>
+        <Row label={t("settings.about.info.licenseLabel")} icon={Scale}>
           <span className={styles.value}>MIT</span>
         </Row>
       </Section>
 
-      <Section title="链接">
-        <Row label="GitHub 仓库" icon={GithubMark}>
+      <Section title={t("settings.about.links.title")}>
+        <Row label={t("settings.about.links.repoLabel")} icon={GithubMark}>
           <a
             href={REPO_URL}
             className={styles.link}
             onClick={(e) => openExternal(e, REPO_URL)}
           >
-            查看 →
+            {t("settings.about.links.repoLink")}
           </a>
         </Row>
-        <Row label="反馈与建议" icon={MessageSquare}>
+        <Row label={t("settings.about.links.feedbackLabel")} icon={MessageSquare}>
           <a
             href={ISSUES_URL}
             className={styles.link}
             onClick={(e) => openExternal(e, ISSUES_URL)}
           >
-            提交 →
+            {t("settings.about.links.feedbackLink")}
           </a>
         </Row>
       </Section>
