@@ -223,6 +223,12 @@ pub struct ImageDescriptionRow {
     /// 生成时用的 active_main 文件名
     pub model: String,
     pub generated_at: String,
+    /// 单张图调用 LLM 的总耗时（毫秒）；llama-server 没返 usage / 出错时为 None
+    pub latency_ms: Option<u64>,
+    /// LLM 响应里 usage.prompt_tokens；可能为 None（部分 server 版本不返）
+    pub prompt_tokens: Option<u32>,
+    /// LLM 响应里 usage.completion_tokens
+    pub completion_tokens: Option<u32>,
 }
 
 /// 写入或覆盖一张图的描述。`generated_at` 为空时自动填当前 UTC。
@@ -239,13 +245,17 @@ pub async fn upsert_image_description(
             conn.execute(
                 "INSERT INTO ai_image_descriptions(
                      local_date, segment_idx, image_index,
-                     screenshot_path, description, model, generated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                     screenshot_path, description, model, generated_at,
+                     latency_ms, prompt_tokens, completion_tokens)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(local_date, segment_idx, image_index) DO UPDATE SET
-                     screenshot_path = excluded.screenshot_path,
-                     description     = excluded.description,
-                     model           = excluded.model,
-                     generated_at    = excluded.generated_at",
+                     screenshot_path   = excluded.screenshot_path,
+                     description       = excluded.description,
+                     model             = excluded.model,
+                     generated_at      = excluded.generated_at,
+                     latency_ms        = excluded.latency_ms,
+                     prompt_tokens     = excluded.prompt_tokens,
+                     completion_tokens = excluded.completion_tokens",
                 rusqlite::params![
                     row.local_date,
                     row.segment_idx as i64,
@@ -254,6 +264,9 @@ pub async fn upsert_image_description(
                     row.description,
                     row.model,
                     row.generated_at,
+                    row.latency_ms.map(|v| v as i64),
+                    row.prompt_tokens.map(|v| v as i64),
+                    row.completion_tokens.map(|v| v as i64),
                 ],
             )
             .db()?;
@@ -276,10 +289,11 @@ pub async fn get_segment_image_descriptions(
             let mut stmt = conn
                 .prepare(
                     "SELECT local_date, segment_idx, image_index,
-                            screenshot_path, description, model, generated_at
+                            screenshot_path, description, model, generated_at,
+                            latency_ms, prompt_tokens, completion_tokens
                        FROM ai_image_descriptions
                       WHERE local_date = ?1 AND segment_idx = ?2
-                      ORDER BY image_index ASC",
+                      ORDER BY image_index ASC /* perf-cols-v20 */",
                 )
                 .db()?;
             let it = stmt
@@ -292,6 +306,9 @@ pub async fn get_segment_image_descriptions(
                         description: r.get(4)?,
                         model: r.get(5)?,
                         generated_at: r.get(6)?,
+                        latency_ms: r.get::<_, Option<i64>>(7)?.map(|v| v as u64),
+                        prompt_tokens: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+                        completion_tokens: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
                     })
                 })
                 .db()?;
@@ -317,7 +334,8 @@ pub async fn get_day_image_descriptions(
             let mut stmt = conn
                 .prepare(
                     "SELECT local_date, segment_idx, image_index,
-                            screenshot_path, description, model, generated_at
+                            screenshot_path, description, model, generated_at,
+                            latency_ms, prompt_tokens, completion_tokens
                        FROM ai_image_descriptions
                       WHERE local_date = ?1
                       ORDER BY segment_idx ASC, image_index ASC",
@@ -333,6 +351,9 @@ pub async fn get_day_image_descriptions(
                         description: r.get(4)?,
                         model: r.get(5)?,
                         generated_at: r.get(6)?,
+                        latency_ms: r.get::<_, Option<i64>>(7)?.map(|v| v as u64),
+                        prompt_tokens: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+                        completion_tokens: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
                     })
                 })
                 .db()?;

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { openPath } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
   Download,
+  Filter,
+  Image as ImageIcon,
   Loader2,
+  MessageSquareText,
   Play,
   RotateCcw,
   Square,
@@ -13,6 +17,7 @@ import {
 import {
   api,
   SUMMARY_PROGRESS_EVENT,
+  type AiOverrides,
   type EngineStatus,
   type ImageDescriptionRow,
   type SegmentSummaryRow,
@@ -20,6 +25,14 @@ import {
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
+import { CategoryChipMultiSelect } from "../../Settings/components/CategoryChipMultiSelect";
+import { Row } from "../../Settings/components/Row";
+import { Section } from "../../Settings/components/Section";
+import { Slider } from "../../Settings/components/Slider";
+import {
+  DEFAULT_IMAGE_DESCRIBE_PROMPTS,
+  DEFAULT_SYSTEM_PROMPTS,
+} from "../../../lib/aiPrompts";
 import styles from "./DebugTab.module.css";
 
 /** 事件流 log 单条。 */
@@ -37,6 +50,25 @@ const SCOPE_OPTIONS: Array<{ value: DebugScope; label: string }> = [
   { value: "weekly", label: "周报" },
   { value: "monthly", label: "月报" },
 ];
+
+/** 单段最大图片数选项。"max" 映射到 sanitize 上限 200；
+ *  绑到 settings.ai.maxImagesPerSegment 后由后端钳到 1..=200。 */
+type MaxImagesKey = "15" | "30" | "max";
+const MAX_IMAGES_OPTIONS: Array<{ value: MaxImagesKey; label: string }> = [
+  { value: "15", label: "15 张/段" },
+  { value: "30", label: "30 张/段" },
+  { value: "max", label: "无限制" },
+];
+
+function maxImagesToOption(n: number): MaxImagesKey {
+  if (n >= 200) return "max";
+  if (n >= 30) return "30";
+  return "15";
+}
+function optionToMaxImages(v: MaxImagesKey): number {
+  if (v === "max") return 200;
+  return parseInt(v, 10);
+}
 
 const LOG_RING_SIZE = 200; // 防止整日跑事件流爆内存
 
@@ -161,10 +193,56 @@ export default function DebugTab() {
   const [enginePhase, setEnginePhase] = useState<string | null>(null);
   const [topError, setTopError] = useState<string | null>(null);
 
+  /** 调试 tab 局部参数覆盖：初始从 settings.ai 拷贝，之后只在本 tab 改、不写 settings。
+   *  跑总结时打包成 AiOverrides 传给 generate_day_summary，命令本次跑生效，跑完不留痕。 */
+  const [debugMaxImages, setDebugMaxImages] = useState(30);
+  const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
+  const [debugHashThreshold, setDebugHashThreshold] = useState(5);
+  const [debugHashWindow, setDebugHashWindow] = useState(5);
+  /** 调试 tab 局部 prompt 覆盖：默认值 = 当前 settings 的覆盖（非空）或内置默认。 */
+  const [debugSysPrompt, setDebugSysPrompt] = useState("");
+  const [debugImagePrompt, setDebugImagePrompt] = useState("");
+
+  // settings 加载好后，把 ai 的几个字段拷成本地初值（只拷一次，之后不再跟 settings 同步）
+  const initedRef = useRef(false);
+  useEffect(() => {
+    if (initedRef.current || !settings) return;
+    initedRef.current = true;
+    setDebugMaxImages(settings.ai.maxImagesPerSegment);
+    setDebugExcluded(settings.ai.excludedCategories);
+    setDebugHashThreshold(settings.ai.hashThreshold);
+    setDebugHashWindow(settings.ai.hashWindowMinutes);
+    // prompt：优先用 settings 覆盖，否则用内置默认；保证 textarea 一打开就有真实文本
+    const lang = settings.ai.promptLanguage;
+    const sysOverride = settings.ai.promptOverrides[
+      lang === "en" ? "systemEn" : lang === "ja" ? "systemJa" : "systemZh"
+    ];
+    const imgOverride = settings.ai.imageDescribeOverrides?.[
+      lang === "en" ? "systemEn" : lang === "ja" ? "systemJa" : "systemZh"
+    ] ?? "";
+    setDebugSysPrompt(sysOverride.trim() || DEFAULT_SYSTEM_PROMPTS[lang]);
+    setDebugImagePrompt(imgOverride.trim() || DEFAULT_IMAGE_DESCRIBE_PROMPTS[lang]);
+  }, [settings]);
+
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [descs, setDescs] = useState<ImageDescriptionRow[]>([]);
   const [summaries, setSummaries] = useState<SegmentSummaryRow[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  /** llama-server 启动日志（GPU 加载情况、cuBLAS init 等）；点刷新拉一次 */
+  const [engineLogs, setEngineLogs] = useState<string[]>([]);
+  const [engineLogsBusy, setEngineLogsBusy] = useState(false);
+
+  const refreshEngineLogs = async () => {
+    setEngineLogsBusy(true);
+    try {
+      const lines = await api.getEngineLogs();
+      setEngineLogs(lines);
+    } catch (e) {
+      console.warn("getEngineLogs 失败:", e);
+    } finally {
+      setEngineLogsBusy(false);
+    }
+  };
 
   // 锚定日期：daily=当天，weekly=该周一，monthly=该月 1 号；
   // 周报 / 月报命令未来传这个值。daily 之外的 scope 现在 onStart 会被拦掉，
@@ -237,6 +315,9 @@ export default function DebugTab() {
             description: ev_.imageDescription ?? "",
             model: activeMainRef.current,
             generatedAt: new Date().toISOString(),
+            latencyMs: ev_.latencyMs,
+            promptTokens: ev_.promptTokens,
+            completionTokens: ev_.completionTokens,
           };
           setDescs((prev) => {
             const idx = prev.findIndex(
@@ -321,7 +402,24 @@ export default function DebugTab() {
     setTopError(null);
     try {
       // 调试模式 = force_refresh，清掉旧的重新跑一遍看完整流程
-      await api.generateDaySummary(date, true, null);
+      // 调试 tab 把本地参数打包成 overrides 传给后端，本次生效不写 settings。
+      // prompt 文本：跟内置默认一致 → 不传（让后端走默认逻辑）；不一致 → 传覆盖
+      const lang = settings?.ai.promptLanguage ?? "zh";
+      const sysPromptDefault = DEFAULT_SYSTEM_PROMPTS[lang];
+      const imgPromptDefault = DEFAULT_IMAGE_DESCRIBE_PROMPTS[lang];
+      const overrides: AiOverrides = {
+        excludedCategories: debugExcluded,
+        maxImagesPerSegment: debugMaxImages,
+        hashThreshold: debugHashThreshold,
+        hashWindowMinutes: debugHashWindow,
+        systemPrompt:
+          debugSysPrompt.trim() === sysPromptDefault.trim() ? "" : debugSysPrompt,
+        imageDescribePrompt:
+          debugImagePrompt.trim() === imgPromptDefault.trim()
+            ? ""
+            : debugImagePrompt,
+      };
+      await api.generateDaySummary(date, true, null, overrides);
     } catch (e) {
       const msg = typeof e === "string" ? e : String(e);
       setTopError(msg);
@@ -414,6 +512,15 @@ export default function DebugTab() {
           </button>
         </div>
 
+        {/* 图/段：3 档下拉，绑调试本地 state（不写 settings）。
+            "无限制" = 200；跑总结时打包进 overrides 传给后端，本次生效不留痕 */}
+        <SimplePicker<MaxImagesKey>
+          value={maxImagesToOption(debugMaxImages)}
+          options={MAX_IMAGES_OPTIONS}
+          onChange={(next) => setDebugMaxImages(optionToMaxImages(next))}
+          disabled={generating || !settings}
+        />
+
         {generating ? (
           <button
             type="button"
@@ -459,6 +566,71 @@ export default function DebugTab() {
       {/* —— 引擎状态条 —— */}
       <EngineBar engine={engine} />
 
+      {/* —— 调试参数：完全复用 AI 设置的 Section + Row 样式，
+          但绑定本地 state（不写全局 settings），跑总结时打包成 overrides 传后端 —— */}
+      <Section
+        title="过滤"
+        icon={Filter}
+        description="仅本调试窗口生效，不影响 AI 设置全局值。"
+      >
+        <Row
+          label="不分析这些分类"
+          labelHint={
+            "点击切换：\n" +
+            "• 彩色 + 分类图标 = 参与 AI 分析\n" +
+            "• 灰色空心 + 闭眼图标 = 已排除"
+          }
+          block
+        >
+          <CategoryChipMultiSelect
+            selectedIds={debugExcluded}
+            onChange={setDebugExcluded}
+          />
+        </Row>
+      </Section>
+
+      <Section
+        title="抽帧参数"
+        icon={ImageIcon}
+        description="一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。仅本调试窗口生效。"
+      >
+        <Row
+          label="相似度阈值"
+          labelHint={
+            "dHash 64 位汉明距离\n" +
+            "• 越小越严格（同一画面才算重复）\n" +
+            "• 5 通常合适\n" +
+            "• 0 = 像素级一致才去重\n" +
+            "（当前后端尚未启用 dHash 去重，留待 Phase 1C）"
+          }
+        >
+          <Slider
+            value={debugHashThreshold}
+            onChange={setDebugHashThreshold}
+            min={0}
+            max={32}
+            step={1}
+          />
+        </Row>
+        <Row
+          label="时间窗"
+          labelHint={
+            "只在窗口内的截图之间比相似度。\n" +
+            "避免把不同时间段的相似画面（如同一应用上午 / 下午）误合并。\n" +
+            "（当前后端尚未启用 dHash 去重，留待 Phase 1C）"
+          }
+        >
+          <Slider
+            value={debugHashWindow}
+            onChange={setDebugHashWindow}
+            min={0}
+            max={30}
+            step={1}
+            suffix="分钟"
+          />
+        </Row>
+      </Section>
+
       {/* —— 错误条 / 冷启动提示 —— */}
       {topError ? (
         <div className={styles.errorBar}>
@@ -481,47 +653,108 @@ export default function DebugTab() {
         </div>
       ) : null}
 
-      {/* —— Prompt 实际文本预览（折叠 - 待后端 preview 命令上线接活） —— */}
-      <div className={styles.panelWrap}>
-        <span className={styles.panelLabel}>Prompt 实际文本预览</span>
-        <div className={styles.panel}>
-          <p className={styles.promptSubLabel}>Image describe（step 1 system / user）</p>
-          <div className={styles.placeholder}>
-            待后端 <code>preview_summary_prompts</code> 命令上线后，这里会显示按当前
-            settings.ai.promptLanguage + user_brief 实际拼好的 system / user prompt 文本。
-          </div>
-          <p className={styles.promptSubLabel}>Segment summary（step 2 system / user）</p>
-          <div className={styles.placeholder}>
-            待后端命令上线。step 2 是纯文本调用，user prompt 包含本段所有 image_descriptions
-            展开 + top apps 列表。
-          </div>
-        </div>
+      {/* —— 图片描述提示词：独立 Section box；textarea 默认收起，hover 该卡片展开 —— */}
+      <div className={styles.promptCollapseWrap}>
+        <Section
+          title="图片描述提示词"
+          icon={MessageSquareText}
+          description="step 1 — 模型对每张截图独立生成描述时使用。改完直接生效（仅本调试窗口），不影响 AI 设置全局。"
+        >
+          <Row label="提示词" block>
+            <div className={styles.collapsibleWrap}>
+              <textarea
+                className={`${styles.debugPromptTextarea} ${styles.collapsibleTextarea}`}
+                value={debugImagePrompt}
+                onChange={(e) => setDebugImagePrompt(e.target.value)}
+                rows={8}
+                spellCheck={false}
+              />
+              <div className={styles.collapseFade} aria-hidden />
+            </div>
+          </Row>
+        </Section>
       </div>
 
-      {/* —— 逐图描述列表 —— */}
-      <div className={styles.descListWrap}>
-        <div className={styles.descListLabel}>
-          逐图描述
-          {visibleDescs.length > 0 ? (
-            <span style={{ color: "var(--text-faint)" }}>
-              · {visibleDescs.length} 条
-            </span>
-          ) : null}
-        </div>
+      {/* —— 时间段总结提示词：独立 Section box，跟上面互不影响 —— */}
+      <div className={styles.promptCollapseWrap}>
+        <Section
+          title="时间段总结提示词"
+          icon={MessageSquareText}
+          description="step 2 — 把所有图片描述 + 应用统计汇总成段总结时使用。改完直接生效（仅本调试窗口）。"
+        >
+          <Row label="提示词" block>
+            <div className={styles.collapsibleWrap}>
+              <textarea
+                className={`${styles.debugPromptTextarea} ${styles.collapsibleTextarea}`}
+                value={debugSysPrompt}
+                onChange={(e) => setDebugSysPrompt(e.target.value)}
+                rows={10}
+                spellCheck={false}
+              />
+              <div className={styles.collapseFade} aria-hidden />
+            </div>
+          </Row>
+        </Section>
+      </div>
+
+      {/* —— 逐图描述：包到 Section box，跟其他卡片视觉一致 —— */}
+      <Section
+        title="逐图描述"
+        icon={ImageIcon}
+        description={`step 1 产物——每张截图独立调 vision LLM 拿到的描述${
+          visibleDescs.length > 0 ? `，共 ${visibleDescs.length} 条` : ""
+        }。点文件名预览原图；点行末「重跑」用当前调试参数重新生成该图描述。`}
+      >
         {visibleDescs.length === 0 ? (
           <div className={styles.descListEmpty}>
             还没有数据。点上方「开始」让模型对每张截图生成描述。
           </div>
         ) : (
-          visibleDescs.map((d) => (
-            <DescItem
-              key={`${d.segmentIdx}-${d.imageIndex}`}
-              row={d}
-              segmentLabel={segments[d.segmentIdx]?.label}
-            />
-          ))
+          <div className={styles.descListInner}>
+            {visibleDescs.map((d) => (
+              <DescItem
+                key={`${d.segmentIdx}-${d.imageIndex}`}
+                row={d}
+                segmentLabel={segments[d.segmentIdx]?.label}
+                segmentColor={segments[d.segmentIdx]?.color}
+                onRetry={async () => {
+                  if (generating) return;
+                  try {
+                    await api.retrySingleImageDescription(
+                      date,
+                      d.segmentIdx,
+                      d.imageIndex,
+                      {
+                        excludedCategories: debugExcluded,
+                        maxImagesPerSegment: debugMaxImages,
+                        hashThreshold: debugHashThreshold,
+                        hashWindowMinutes: debugHashWindow,
+                        systemPrompt:
+                          debugSysPrompt.trim() ===
+                          (DEFAULT_SYSTEM_PROMPTS[
+                            settings?.ai.promptLanguage ?? "zh"
+                          ]?.trim() ?? "")
+                            ? ""
+                            : debugSysPrompt,
+                        imageDescribePrompt:
+                          debugImagePrompt.trim() ===
+                          (DEFAULT_IMAGE_DESCRIBE_PROMPTS[
+                            settings?.ai.promptLanguage ?? "zh"
+                          ]?.trim() ?? "")
+                            ? ""
+                            : debugImagePrompt,
+                      },
+                    );
+                  } catch (e) {
+                    setTopError(typeof e === "string" ? e : String(e));
+                  }
+                }}
+                retryDisabled={generating}
+              />
+            ))}
+          </div>
         )}
-      </div>
+      </Section>
 
       {/* —— 段总结 step 2 完整 user prompt（折叠 - 待后端 preview 命令） —— */}
       <div className={styles.panelWrap}>
@@ -583,6 +816,39 @@ export default function DebugTab() {
                     {entry.phase}
                   </span>
                   <span className={styles.logBody}>{entry.body}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* —— 引擎启动日志（llama-server stderr / stdout）——
+          诊断 GPU 加载情况：找 "offloaded XX/YY layers to GPU" / "cuBLAS init" 等行。 */}
+      <div className={styles.panelWrap}>
+        <span className={styles.panelLabel}>
+          引擎日志
+          <button
+            type="button"
+            className={styles.engineLogsRefreshBtn}
+            onClick={() => void refreshEngineLogs()}
+            disabled={engineLogsBusy}
+            title="拉取 llama-server 子进程最近的 stderr / stdout"
+          >
+            {engineLogsBusy ? "刷新中…" : "刷新"}
+          </button>
+        </span>
+        <div className={styles.panel}>
+          <div className={styles.logBox}>
+            {engineLogs.length === 0 ? (
+              <div className={styles.logEmpty}>
+                还没拉过日志。点上方"刷新"拉一次；引擎跑过总结后才有内容。
+                找 <code>offloaded XX/YY layers to GPU</code> 这种行可判断 GPU 是否在用。
+              </div>
+            ) : (
+              engineLogs.map((line, i) => (
+                <div key={i} className={styles.logLine}>
+                  <span className={styles.logBody}>{line}</span>
                 </div>
               ))
             )}
@@ -654,38 +920,70 @@ function EngineBar({ engine }: { engine: EngineStatus | null }) {
   );
 }
 
-/** 单条逐图描述项。耗时 / token / 单图重跑都是后端待补，UI 先留位置。 */
+/** 单条逐图描述项。
+ *  - 段标识背景色用 settings.ai.segments[idx].color（用户在「时段划分」里配的色）
+ *  - 文件名 click → openPath 用系统默认查看器预览原图
+ *  - 耗时 / token 来自 ai_image_descriptions 行 + image_described 事件
+ *  - 重跑按钮调 api.retrySingleImageDescription */
 function DescItem({
   row,
   segmentLabel,
+  segmentColor,
+  onRetry,
+  retryDisabled,
 }: {
   row: ImageDescriptionRow;
   segmentLabel?: string;
+  segmentColor?: string;
+  onRetry: () => void;
+  retryDisabled: boolean;
 }) {
   const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
+  // 段背景色优先用 user-config（segments[idx].color），空时回到中性灰
+  const chipBg = segmentColor && segmentColor.trim().length > 0
+    ? segmentColor
+    : "#cbd5e1";
+  // 简单 perceived luminance 决定文字明暗：浅底用深字，深底用白字
+  const chipColor = isLightHex(chipBg) ? "#3a3f55" : "#fff";
+
+  // 耗时 / token 文本：null 时显示 "—"，让排版稳定
+  const latencyStr = row.latencyMs != null ? `${row.latencyMs} ms` : "—";
+  const tokenStr =
+    row.promptTokens != null || row.completionTokens != null
+      ? `${row.promptTokens ?? "—"} / ${row.completionTokens ?? "—"} t`
+      : "— / — t";
+
   return (
     <div className={styles.descItem}>
       <div className={styles.descMeta}>
         <span
           className={styles.descIndex}
+          style={{ background: chipBg, color: chipColor }}
           title={`段 idx=${row.segmentIdx} · 图 idx=${row.imageIndex}（抽帧后顺序）`}
         >
           {segmentLabel ?? `段${row.segmentIdx}`} · 第 {row.imageIndex + 1} 张
         </span>
-        <span className={styles.descPath} title={row.screenshotPath}>
-          {fileName}
-        </span>
-        <span
-          className={styles.descStat}
-          title="耗时 / prompt token / completion token —— 待后端 v20 + ChatUsage 落地后填实"
+        <button
+          type="button"
+          className={styles.descPath}
+          title={`点击预览原图：${row.screenshotPath}`}
+          onClick={() => {
+            void openPath(row.screenshotPath).catch((e: unknown) =>
+              console.warn("openPath 失败:", e),
+            );
+          }}
         >
-          耗时 — · token —
+          {fileName}
+        </button>
+        <span className={styles.descStat} title="耗时 · prompt / completion tokens">
+          {latencyStr} · {tokenStr}
         </span>
         <button
           type="button"
           className={styles.retryImg}
-          disabled
-          title="待后端 retry_single_image_description 命令上线后启用"
+          onClick={onRetry}
+          disabled={retryDisabled}
+          title={retryDisabled ? "整轮总结进行中，等完成或停止后再重跑" : "用当前调试参数重新生成这张图的描述"}
         >
           <RotateCcw size={11} strokeWidth={2.2} />
           重跑
@@ -694,4 +992,16 @@ function DescItem({
       <div className={styles.descText}>{row.description || "(空)"}</div>
     </div>
   );
+}
+
+/** 用 perceived luminance 判 hex 是不是浅色（chip 文字明暗用） */
+function isLightHex(hex: string): boolean {
+  const m = hex.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return true;
+  let h = m[1];
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
 }

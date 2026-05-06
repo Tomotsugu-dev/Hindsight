@@ -80,14 +80,26 @@ pub struct SegmentContext<'a> {
     pub image_descriptions: &'a [String],
 }
 
-/// step 1（单张图描述）的 system prompt——按当前语言选内置默认。
-/// 用户暂时不能覆盖这个 prompt（只暴露段总结的 system prompt）；以后需要可在
-/// settings 里加 image_describe_overrides 字段，前端再加一块编辑器。
+/// step 1（单张图描述）的 system prompt——按当前语言选覆盖或内置默认。
+///
+/// 优先级：用户覆盖（`image_describe_overrides.system_<lang>` 非空）→ 内置默认。
+/// 调试 tab 通过 `AiOverrides.image_describe_prompt` 临时覆盖；用户在 AI 设置以后
+/// 也可暴露持久编辑入口。
 pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
-    let base = match ai.prompt_language.as_str() {
-        "en" => IMAGE_DESCRIBE_EN,
-        "ja" => IMAGE_DESCRIBE_JA,
-        _ => IMAGE_DESCRIBE_ZH,
+    let lang = ai.prompt_language.as_str();
+    let user_override = match lang {
+        "en" => &ai.image_describe_overrides.system_en,
+        "ja" => &ai.image_describe_overrides.system_ja,
+        _ => &ai.image_describe_overrides.system_zh,
+    };
+    let base = if !user_override.trim().is_empty() {
+        user_override.as_str()
+    } else {
+        match lang {
+            "en" => IMAGE_DESCRIBE_EN,
+            "ja" => IMAGE_DESCRIBE_JA,
+            _ => IMAGE_DESCRIBE_ZH,
+        }
     };
     let mut out = String::from(base.trim_end());
     let brief = ai.user_brief.trim();

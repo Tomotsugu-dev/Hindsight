@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::{NaiveDate, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
@@ -39,6 +39,62 @@ use crate::repo::ai_summaries::{
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
+
+/// 调试用：单次 generate 调用对 settings.ai 的局部覆盖（不写 settings 全局）。
+///
+/// 任意字段 `None` = 走 settings.ai 的值；`Some(_)` = 本次跑生效，不留痕。
+/// 数值字段会经过跟 sanitize 一样的 clamp（max_images 1..=200、hash_threshold ≤ 32、
+/// hash_window_minutes ≤ 60），保证 override 不会越界。
+///
+/// `system_prompt` / `image_describe_prompt` 是文本覆盖，会写到 ai.prompt_overrides /
+/// ai.image_describe_overrides 当前语言对应的字段——空字符串等价"清覆盖走默认"。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiOverrides {
+    pub excluded_categories: Option<Vec<String>>,
+    pub max_images_per_segment: Option<u32>,
+    pub hash_threshold: Option<u32>,
+    pub hash_window_minutes: Option<u32>,
+    /// step 2 段总结的 system prompt 覆盖文本（按当前语言写入 prompt_overrides）
+    pub system_prompt: Option<String>,
+    /// step 1 单图描述的 system prompt 覆盖文本（按当前语言写入 image_describe_overrides）
+    pub image_describe_prompt: Option<String>,
+}
+
+impl AiOverrides {
+    /// 把 override 应用到 settings.ai 上；clamp 到合法区间后返回。
+    fn apply_to(self, mut ai: AiConfig) -> AiConfig {
+        if let Some(v) = self.excluded_categories {
+            ai.excluded_categories = v;
+        }
+        if let Some(v) = self.max_images_per_segment {
+            ai.max_images_per_segment = v.clamp(1, 200);
+        }
+        if let Some(v) = self.hash_threshold {
+            ai.hash_threshold = v.min(32);
+        }
+        if let Some(v) = self.hash_window_minutes {
+            ai.hash_window_minutes = v.min(60);
+        }
+        // 文本 prompt 覆盖按当前 prompt_language 写到对应字段；空串等同 "走默认"
+        let lang = ai.prompt_language.clone();
+        if let Some(v) = self.system_prompt {
+            match lang.as_str() {
+                "en" => ai.prompt_overrides.system_en = v,
+                "ja" => ai.prompt_overrides.system_ja = v,
+                _ => ai.prompt_overrides.system_zh = v,
+            }
+        }
+        if let Some(v) = self.image_describe_prompt {
+            match lang.as_str() {
+                "en" => ai.image_describe_overrides.system_en = v,
+                "ja" => ai.image_describe_overrides.system_ja = v,
+                _ => ai.image_describe_overrides.system_zh = v,
+            }
+        }
+        ai
+    }
+}
 
 /// 前端 listen 这个事件名拿进度。
 /// 和 [`crate::commands::ai::PROGRESS_EVENT`] 平级，统一在 `ai://` 命名空间。
@@ -68,6 +124,12 @@ pub struct SummaryProgress {
     pub image_path: Option<String>,
     /// image_described 时附该图的描述文本
     pub image_description: Option<String>,
+    /// image_described 时附该图调用 LLM 的耗时（毫秒）
+    pub latency_ms: Option<u64>,
+    /// image_described 时附 prompt token 数（llama-server 不返时为 None）
+    pub prompt_tokens: Option<u32>,
+    /// image_described 时附 completion token 数
+    pub completion_tokens: Option<u32>,
     /// segment_done 时附该段总结，前端立刻渲染该段不等其它
     pub content: Option<String>,
     /// segment_done 时也会带上落库行的 status（ok / skipped_no_screenshots / error）
@@ -89,6 +151,9 @@ impl SummaryProgress {
             image_index: None,
             image_path: None,
             image_description: None,
+            latency_ms: None,
+            prompt_tokens: None,
+            completion_tokens: None,
             content: None,
             status: None,
             message: None,
@@ -100,9 +165,9 @@ impl SummaryProgress {
 /// 文字仍可读，token 数比原图少一半以上。
 const SUMMARY_IMAGE_MAX_DIM: u32 = 768;
 
-/// 一段图最多塞这么多张兜底——即便 settings.ai.max_images_per_segment 写了 30，
-/// 实际跑也会被 ctx 4096 撑爆，这里再卡一道。
-const HARD_IMAGES_CAP: u32 = 12;
+// HARD_IMAGES_CAP 已取消——一段图数量完全由 settings.ai.max_images_per_segment 决定
+// （sanitize 钳到 1..=200）。配多了 ctx 装不下时 LLM 会返 400，按段标 error，
+// 用户在调试 tab 能直接看到错误并调小值。
 
 pub struct DaySummaryRunner {
     pool: DbPool,
@@ -137,9 +202,15 @@ impl DaySummaryRunner {
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
+        overrides: Option<AiOverrides>,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
-        let ai = cfg.ai.clone();
+        // overrides 只对本次调用生效，不写回 settings；settings 自己永远是用户在
+        // AI 设置里配的"全局值"，调试 tab 改的本地参数从这里进来
+        let ai = match overrides {
+            Some(o) => o.apply_to(cfg.ai.clone()),
+            None => cfg.ai.clone(),
+        };
 
         if ai.active_main.trim().is_empty() {
             return Err(Error::Other(
@@ -164,8 +235,8 @@ impl DaySummaryRunner {
         let port = self.ensure_engine_running(&ai).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
 
-        // 单段图片上限：settings 配的值再卡 HARD_IMAGES_CAP
-        let max_images = (ai.max_images_per_segment as u32).min(HARD_IMAGES_CAP) as usize;
+        // 单段图片上限直接走 settings；用户调大撑爆 ctx 时 LLM 报 400，按段标 error
+        let max_images = ai.max_images_per_segment as usize;
 
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
@@ -327,11 +398,11 @@ impl DaySummaryRunner {
 
             // 单图调用 LLM；失败 log 跳过，不阻塞整段
             let single = std::slice::from_ref(&data_uri);
-            let desc = match chat
+            let (desc, usage) = match chat
                 .chat_with_images(&describe_system, &describe_user, single)
                 .await
             {
-                Ok(d) => d,
+                Ok(p) => p,
                 Err(e) => {
                     log::warn!("图描述失败 {img_path}: {e}");
                     continue;
@@ -349,6 +420,9 @@ impl DaySummaryRunner {
                     description: desc.clone(),
                     model: model.clone(),
                     generated_at: Utc::now().to_rfc3339(),
+                    latency_ms: Some(usage.latency_ms),
+                    prompt_tokens: usage.prompt_tokens,
+                    completion_tokens: usage.completion_tokens,
                 },
             )
             .await?;
@@ -363,6 +437,9 @@ impl DaySummaryRunner {
             p_img.image_index = Some(i as u32);
             p_img.image_path = Some(img_path.clone());
             p_img.image_description = Some(desc.clone());
+            p_img.latency_ms = Some(usage.latency_ms);
+            p_img.prompt_tokens = usage.prompt_tokens;
+            p_img.completion_tokens = usage.completion_tokens;
             self.emit(p_img);
 
             descriptions.push(desc);
@@ -381,7 +458,9 @@ impl DaySummaryRunner {
 
         let (row, status_str): (SegmentSummaryRow, &'static str) =
             match chat.chat_with_images(&system, &user_text, &[]).await {
-                Ok(content) => (
+                // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
+                // （需要时未来加列）
+                Ok((content, _usage)) => (
                     SegmentSummaryRow {
                         local_date: date_str.to_string(),
                         segment_idx: idx,
@@ -426,6 +505,107 @@ impl DaySummaryRunner {
         Ok(())
     }
 
+    /// 重新生成单张图的描述——调试 tab 的"重跑"按钮用。
+    ///
+    /// 不动段总结、其它图描述；只重写 ai_image_descriptions 一行。
+    /// emit `image_described` 让前端实时刷新该行 UI。
+    pub async fn retry_one_image_description(
+        &self,
+        local_date: NaiveDate,
+        segment_idx: u32,
+        image_index: u32,
+        overrides: Option<AiOverrides>,
+    ) -> Result<()> {
+        let cfg = settings_repo::load(&self.pool).await?;
+        let ai = match overrides {
+            Some(o) => o.apply_to(cfg.ai.clone()),
+            None => cfg.ai.clone(),
+        };
+
+        if ai.active_main.trim().is_empty() {
+            return Err(Error::Other(
+                "请先在「模型」选一个 vision 模型再生成总结".to_string(),
+            ));
+        }
+
+        let date_str = local_date.format("%Y-%m-%d").to_string();
+        let total_segments = ai.segments.len() as u32;
+
+        // 拉该段该 image_index 的现有行（拿 screenshot_path）
+        let existing = ai_summaries::get_segment_image_descriptions(
+            &self.pool,
+            &date_str,
+            segment_idx,
+        )
+        .await?;
+        let existing_row = existing
+            .into_iter()
+            .find(|r| r.image_index == image_index)
+            .ok_or_else(|| {
+                Error::Other(format!(
+                    "段 {} 第 {} 张图没有现有描述，先跑一次完整生成",
+                    segment_idx, image_index
+                ))
+            })?;
+
+        // 启引擎（如未启动）
+        let port = self.ensure_engine_running(&ai).await?;
+        let chat = ChatClient::new(port, ai.active_main.clone())?;
+
+        // 取段标签 / 时段
+        let seg = ai.segments.get(segment_idx as usize).ok_or_else(|| {
+            Error::Other(format!("段下标越界：{}", segment_idx))
+        })?;
+
+        let describe_system = build_image_describe_system_prompt(&ai);
+        let describe_user = build_image_describe_user_prompt(
+            &ai,
+            &seg.label,
+            seg.start_hour,
+            seg.end_hour,
+        );
+
+        let data_uri = to_data_uri(
+            Path::new(&existing_row.screenshot_path),
+            SUMMARY_IMAGE_MAX_DIM,
+        )
+        .await?;
+
+        let (desc, usage) = chat
+            .chat_with_images(&describe_system, &describe_user, std::slice::from_ref(&data_uri))
+            .await?;
+
+        // 覆盖落库
+        ai_summaries::upsert_image_description(
+            &self.pool,
+            &ImageDescriptionRow {
+                local_date: date_str.clone(),
+                segment_idx,
+                image_index,
+                screenshot_path: existing_row.screenshot_path.clone(),
+                description: desc.clone(),
+                model: ai.active_main.clone(),
+                generated_at: Utc::now().to_rfc3339(),
+                latency_ms: Some(usage.latency_ms),
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+            },
+        )
+        .await?;
+
+        // emit 让前端刷新
+        let mut p = SummaryProgress::base(date_str, "image_described", total_segments);
+        p.segment_idx = Some(segment_idx);
+        p.image_index = Some(image_index);
+        p.image_path = Some(existing_row.screenshot_path);
+        p.image_description = Some(desc);
+        p.latency_ms = Some(usage.latency_ms);
+        p.prompt_tokens = usage.prompt_tokens;
+        p.completion_tokens = usage.completion_tokens;
+        self.emit(p);
+        Ok(())
+    }
+
     /// "重试某段"专用：只跑指定一段，复用现有引擎。
     #[allow(clippy::too_many_arguments)]
     pub async fn run_one_segment_only(
@@ -433,9 +613,13 @@ impl DaySummaryRunner {
         local_date: NaiveDate,
         segment_idx: u32,
         device: DeviceFilter,
+        overrides: Option<AiOverrides>,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
-        let ai = cfg.ai.clone();
+        let ai = match overrides {
+            Some(o) => o.apply_to(cfg.ai.clone()),
+            None => cfg.ai.clone(),
+        };
 
         if ai.active_main.trim().is_empty() {
             return Err(Error::Other(
@@ -466,8 +650,7 @@ impl DaySummaryRunner {
         }
         let port = self.ensure_engine_running(&ai).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
-        let max_images =
-            (ai.max_images_per_segment as u32).min(HARD_IMAGES_CAP) as usize;
+        let max_images = ai.max_images_per_segment as usize;
 
         self.run_one_segment(
             &chat,

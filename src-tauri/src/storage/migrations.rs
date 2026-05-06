@@ -394,6 +394,16 @@ const AI_SUMMARIES_TABLE_SQL: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_ai_summaries_date ON ai_summaries(local_date);
 "#;
 
+/// v20：给 ai_image_descriptions 加性能采集列（Phase 1B-γ+ 调试 tab）。
+///
+/// 三列都允许 NULL —— 老行 backfill 不到这些数据；llama-server 偶尔不返 usage 时
+/// 也写 NULL，前端 UI 显示"—"兜底。
+const AI_IMAGE_DESC_PERF_COLS_SQL: &str = r#"
+    ALTER TABLE ai_image_descriptions ADD COLUMN latency_ms INTEGER;
+    ALTER TABLE ai_image_descriptions ADD COLUMN prompt_tokens INTEGER;
+    ALTER TABLE ai_image_descriptions ADD COLUMN completion_tokens INTEGER;
+"#;
+
 /// v19：逐图描述缓存表（Phase 1B-γ 两步生成）。
 ///
 /// 总结流程改成两步：
@@ -423,7 +433,7 @@ const AI_IMAGE_DESCRIPTIONS_TABLE_SQL: &str = r#"
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 9] = [
+    let extras: [&'static str; 10] = [
         CROSS_OS_CLEANUP_SQL,                    // v11
         V12_PLACEHOLDER,                         // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                     // v13
@@ -433,6 +443,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL,     // v17
         AI_SUMMARIES_TABLE_SQL,                  // v18
         AI_IMAGE_DESCRIPTIONS_TABLE_SQL,         // v19
+        AI_IMAGE_DESC_PERF_COLS_SQL,             // v20
     ];
     pool.0
         .call(move |conn| {

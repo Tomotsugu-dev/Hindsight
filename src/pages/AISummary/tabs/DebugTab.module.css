@@ -222,6 +222,87 @@
   font-weight: 600;
 }
 
+/* 调试 prompt textarea：跟 AISettings 的 .promptTextarea 同款（等宽字体 + 同尺寸）。
+   局部覆盖；改完发到 generateDaySummary overrides，不写 settings。 */
+.debugPromptTextarea {
+  width: 100%;
+  min-height: 160px;
+  max-height: 360px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-family:
+    ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.6;
+  color: var(--text-strong);
+  resize: vertical;
+  outline: none;
+  overflow-y: auto;
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.debugPromptTextarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+/* —— Prompt textarea hover 折叠：露一行 prompt 内容 + 底部 fade 渐隐，
+   暗示"还有更多 hover 看全"。Section header + Row label 一直可见。
+   .promptCollapseWrap 用 display: contents 不影响 Section 布局。 */
+.promptCollapseWrap {
+  display: contents;
+}
+
+/* textarea 外包一层，给 fade overlay 当定位锚 */
+.collapsibleWrap {
+  position: relative;
+  width: 100%;
+}
+
+.collapsibleTextarea {
+  /* 折叠态：max-height = 单行高度（line-height 1.6 × 12.5px ≈ 20 + padding 12*2 = 44） */
+  max-height: 44px;
+  min-height: 0;
+  /* 折叠态不让 textarea 自己 resize / 接受光标，避免点到改不了内容 */
+  resize: none;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    max-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    cursor 0ms;
+}
+
+.promptCollapseWrap:hover .collapsibleTextarea,
+.promptCollapseWrap:focus-within .collapsibleTextarea {
+  max-height: 360px;
+  resize: vertical;
+  overflow-y: auto;
+  cursor: text;
+}
+
+/* 折叠态：textarea 底部叠一个透明→白渐变，让露出的那一行文字下方虚化，
+   暗示"内容还有更多"。hover 时 opacity 0 隐去，textarea 完整显示。 */
+.collapseFade {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: 30px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 80%);
+  border-radius: 0 0 8px 8px;
+  transition: opacity 220ms ease-out;
+}
+
+.promptCollapseWrap:hover .collapseFade,
+.promptCollapseWrap:focus-within .collapseFade {
+  opacity: 0;
+}
+
 /* —— 顶部错误条 + cold-start hint —— */
 .errorBar {
   display: inline-flex;
@@ -323,19 +404,10 @@
 }
 
 /* —— 逐图描述列表 —— */
-.descListWrap {
+/* descListInner 是 Section 内部的列表容器（外面 Section.card 已经管 padding/边框） */
+.descListInner {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.descListLabel {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
@@ -374,20 +446,41 @@
   display: inline-flex;
   align-items: center;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 8px;
+  /* background / color 由内联 style 用 segment.color 覆盖；这里给个兜底 */
   background: rgba(0, 0, 0, 0.06);
   border-radius: 9px;
   font-weight: 600;
   color: var(--text-strong);
+  letter-spacing: -0.005em;
 }
 
+/* 文件名：button 样式但低调，hover 变 accent 提示可点（→ openPath 预览原图） */
 .descPath {
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
   font-size: 10px;
   color: var(--text-muted);
   font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   word-break: break-all;
-  flex: 1;
-  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.descPath:hover {
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  color: var(--color-accent);
+  text-decoration: underline;
 }
 
 .descStat {
@@ -520,6 +613,36 @@
   font-size: 12px;
   color: var(--text-muted);
   font-style: italic;
+}
+
+/* 引擎日志面板的"刷新"小按钮，跟在 label 后 */
+.engineLogsRefreshBtn {
+  margin-left: 8px;
+  height: 18px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.engineLogsRefreshBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+}
+
+.engineLogsRefreshBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .spin {

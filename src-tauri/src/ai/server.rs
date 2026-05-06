@@ -15,11 +15,14 @@
 //! llama-server 会 fail-fast（缺 `-m` 参数），supervisor 把 stderr 包成可读错误
 //! 给前端展示。Phase 1B-β 加模型选择后，会真传入 model / mmproj 路径。
 
+use std::collections::VecDeque;
 use std::net::TcpListener;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
@@ -68,7 +71,17 @@ pub struct EngineRuntimeStatus {
 /// llama-server 子进程的单例守护者。
 pub struct EngineSupervisor {
     inner: Mutex<Inner>,
+    /// 启动期间（前 STARTUP_LINES 行）保留下来的日志——cuBLAS init / offloaded
+    /// XX/YY layers to GPU 这种关键诊断信息在这里，不被后续 chat 日志冲掉。
+    startup_logs: Arc<Mutex<Vec<String>>>,
+    /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout（含启动日志的副本）。
+    /// Arc 让 spawn 出来的 reader task 能持有它而不锁 inner。
+    logs: Arc<Mutex<VecDeque<String>>>,
 }
+
+const LOGS_RING_SIZE: usize = 500;
+/// 启动日志保留行数——头 200 行（cuBLAS init、模型加载、layer offload 等都在这里）。
+const STARTUP_LINES: usize = 200;
 
 #[derive(Default)]
 struct Inner {
@@ -86,12 +99,31 @@ impl EngineSupervisor {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(Inner::default()),
+            startup_logs: Arc::new(Mutex::new(Vec::with_capacity(STARTUP_LINES))),
+            logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
         }
     }
 
     /// 当前状态快照（前端用）。
     pub async fn status(&self) -> EngineRuntimeStatus {
         self.inner.lock().await.state.clone()
+    }
+
+    /// 拿日志：启动头 N 行（保留区） + 最近 ring buffer，拼一起。
+    /// 前端调试 tab 用来看 llama-server 启动时的 GPU 加载日志。
+    pub async fn recent_logs(&self) -> Vec<String> {
+        let startup = self.startup_logs.lock().await.clone();
+        let ring = self.logs.lock().await;
+        let mut out = Vec::with_capacity(startup.len() + ring.len() + 1);
+        if !startup.is_empty() {
+            out.extend(startup);
+            out.push(format!(
+                "──── 上面是启动日志（保留前 {} 行），下面是最近滚动日志 ────",
+                STARTUP_LINES
+            ));
+        }
+        out.extend(ring.iter().cloned());
+        out
     }
 
     /// 启动 llama-server。
@@ -135,7 +167,7 @@ impl EngineSupervisor {
             let port = pick_free_port()?;
             let mut cmd = build_command(&bin_path, port, model_path, mmproj_path);
 
-            let child = match cmd.spawn() {
+            let mut child = match cmd.spawn() {
                 Ok(c) => c,
                 Err(e) => {
                     let msg = format!("spawn 失败：{e}");
@@ -147,6 +179,30 @@ impl EngineSupervisor {
                     return Err(Error::Io(e));
                 }
             };
+
+            // 启动前清空两份日志缓冲，让本次启动从空白开始
+            self.logs.lock().await.clear();
+            self.startup_logs.lock().await.clear();
+
+            // spawn 异步 task 消费 stderr / stdout：写一份到 ring buffer（持续滚动），
+            // 同时前 STARTUP_LINES 行额外写一份到 startup_logs（永久保留，不被冲掉）。
+            // 不消费的话 buffer 满会阻塞 llama-server。
+            if let Some(stderr) = child.stderr.take() {
+                spawn_drain_task(
+                    stderr,
+                    "stderr",
+                    Arc::clone(&self.logs),
+                    Arc::clone(&self.startup_logs),
+                );
+            }
+            if let Some(stdout) = child.stdout.take() {
+                spawn_drain_task(
+                    stdout,
+                    "stdout",
+                    Arc::clone(&self.logs),
+                    Arc::clone(&self.startup_logs),
+                );
+            }
 
             inner.state = EngineRuntimeStatus {
                 state: EngineState::Starting,
@@ -171,9 +227,9 @@ impl EngineSupervisor {
             Ok(port)
         } else {
             // /health 没等到 200——可能子进程已退出（缺模型 / 配置错），
-            // 也可能仍活着但 hang 住。两种情况都拿 stderr 包错误并清掉 child。
+            // 也可能仍活着但 hang 住。两种情况都从 logs ring 拿末尾几行作错误描述。
             let err_msg = if let Some(child) = inner.child.as_mut() {
-                resolve_failure(child).await
+                resolve_failure(child, &self.logs).await
             } else {
                 "child handle 丢失".to_string()
             };
@@ -287,25 +343,36 @@ async fn poll_health(port: u16, timeout: Duration) -> bool {
 }
 
 /// 启动失败时调，给前端可读的错误描述。
-///
-/// - 子进程已退出：截 stderr 末尾 ~300 字符返回（一般包含具体错因）
-/// - 子进程仍活着但 /health 不响应：先 kill 再返回 timeout 描述
-async fn resolve_failure(child: &mut Child) -> String {
-    match child.try_wait() {
-        Ok(Some(_status)) => drain_stderr(child).await,
+/// stderr 已被 [`spawn_drain_task`] 持续消费到 logs ring，这里直接读末尾几行。
+async fn resolve_failure(
+    child: &mut Child,
+    logs: &Arc<Mutex<VecDeque<String>>>,
+) -> String {
+    let exit_status = child.try_wait();
+    let killed = matches!(exit_status, Ok(None));
+    if killed {
+        // 还活着但 hang——强制 kill
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+        // 等 50ms 让 drain task 把残余 stderr 行写完
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let tail = log_tail(logs, 12).await;
+    match exit_status {
+        Ok(Some(_)) => {
+            if tail.is_empty() {
+                "子进程已退出但无日志输出".to_string()
+            } else {
+                format!("子进程退出；日志末尾：\n{tail}")
+            }
+        }
         Ok(None) => {
-            // 还活着但 hang——强制 kill
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            // 退出后 stderr 可能有信息
-            let stderr_tail = drain_stderr(child).await;
-            if stderr_tail.trim().is_empty() {
-                format!("启动 {}s 仍未响应 /health，已强制 kill", HEALTH_TIMEOUT.as_secs())
+            if tail.is_empty() {
+                format!("启动 {}s 未响应 /health，已强制 kill", HEALTH_TIMEOUT.as_secs())
             } else {
                 format!(
-                    "启动 {}s 未响应 /health，强制 kill；stderr 末尾：{}",
-                    HEALTH_TIMEOUT.as_secs(),
-                    stderr_tail
+                    "启动 {}s 未响应 /health，已强制 kill；日志末尾：\n{tail}",
+                    HEALTH_TIMEOUT.as_secs()
                 )
             }
         }
@@ -313,19 +380,57 @@ async fn resolve_failure(child: &mut Child) -> String {
     }
 }
 
-async fn drain_stderr(child: &mut Child) -> String {
-    use tokio::io::AsyncReadExt;
-    let Some(mut stderr) = child.stderr.take() else {
-        return String::new();
-    };
-    let mut buf = Vec::with_capacity(4096);
-    let _ = stderr.read_to_end(&mut buf).await;
-    let s = String::from_utf8_lossy(&buf);
-    let trimmed = s.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    // 只取末尾 300 字符——失败信息通常在末尾，开头是大量启动 log
-    let start = trimmed.len().saturating_sub(300);
-    trimmed[start..].to_string()
+/// 读 logs ring 末尾 N 行拼成多行字符串，给错误信息 / 调试 UI 用。
+async fn log_tail(logs: &Arc<Mutex<VecDeque<String>>>, n: usize) -> String {
+    let g = logs.lock().await;
+    let start = g.len().saturating_sub(n);
+    g.iter()
+        .skip(start)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// spawn 一个 tokio task，按行 drain stderr / stdout：
+/// - 每行都进 ring buffer（最近 LOGS_RING_SIZE 行，老的被淘汰）
+/// - 启动期间（startup_logs 还没满）的同一行也额外写一份进 startup_logs，永久保留
+///
+/// `tag` = "stderr" / "stdout"，给行前面带个前缀方便区分。
+fn spawn_drain_task<R>(
+    reader: R,
+    tag: &'static str,
+    ring: Arc<Mutex<VecDeque<String>>>,
+    startup: Arc<Mutex<Vec<String>>>,
+) where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(reader).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    let prefixed = format!("[{tag}] {line}");
+                    // 直接 eprintln 走 stderr，不依赖 log 框架——这样 dev console 一定能
+                    // 看到 llama-server 的所有输出（cuBLAS init / offloaded layers 等关键
+                    // 诊断信息）。要屏蔽就用 grep -v "[stderr]" 之类管道过滤。
+                    eprintln!("[llama-server] {prefixed}");
+                    // 启动日志保留区（前 STARTUP_LINES 行；满了不再写）
+                    {
+                        let mut s = startup.lock().await;
+                        if s.len() < STARTUP_LINES {
+                            s.push(prefixed.clone());
+                        }
+                    }
+                    // ring buffer
+                    let mut g = ring.lock().await;
+                    if g.len() >= LOGS_RING_SIZE {
+                        g.pop_front();
+                    }
+                    g.push_back(prefixed);
+                }
+                Ok(None) => break,    // EOF：子进程关闭了管道
+                Err(_) => break,      // 读错误：直接退出 task
+            }
+        }
+    });
 }

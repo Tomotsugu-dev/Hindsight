@@ -161,6 +161,23 @@ pub fn release_asset_name(p: Platform, tag: &str) -> String {
     }
 }
 
+/// CUDA 平台额外需要的 NVIDIA runtime zip 名（cudart / cublas / cublasLt 等）。
+///
+/// llama.cpp 把 CUDA runtime DLL 单独打到独立 zip，**不在主 binary zip 里**。
+/// 缺这些 DLL → `ggml-cuda.dll` 加载会静默失败 → 模型退回 CPU 跑。
+///
+/// 文件名里**不含 tag**（NVIDIA 提供的 runtime 跟 llama.cpp 版本无关），
+/// 但 GitHub release URL 仍然按 tag 路由，所以 URL 拼接时还要 tag。
+///
+/// 非 CUDA 平台返回 `None`：CPU / Metal / Linux 都没有这个需求。
+pub fn cuda_runtime_asset_name(p: Platform) -> Option<&'static str> {
+    match p {
+        Platform::WindowsX64Cuda12 => Some("cudart-llama-bin-win-cuda-12.4-x64.zip"),
+        Platform::WindowsX64Cuda13 => Some("cudart-llama-bin-win-cuda-13.1-x64.zip"),
+        _ => None,
+    }
+}
+
 /// 解压后 `llama-server` 可执行文件的相对路径。
 ///
 /// llama.cpp release 包内布局是**扁平的**——所有可执行文件 + 动态库
@@ -184,11 +201,12 @@ pub fn binary_relative_path(p: Platform) -> &'static str {
 pub fn estimated_bytes(p: Platform) -> u64 {
     const MB: u64 = 1024 * 1024;
     match p {
-        // CPU 包：~30MB（GGML + 几个动态库）
-        Platform::WindowsX64Cpu => 30 * MB,
-        // CUDA 包：~150MB（多了 cuBLAS / cuDNN 等 NVIDIA 运行时库）
-        Platform::WindowsX64Cuda12 => 150 * MB,
-        Platform::WindowsX64Cuda13 => 150 * MB,
+        // CPU 包：~16MB（GGML + 几个动态库）
+        Platform::WindowsX64Cpu => 16 * MB,
+        // CUDA 12.4：主 binary ~214MB + cudart runtime ~391MB ≈ 605MB
+        Platform::WindowsX64Cuda12 => 605 * MB,
+        // CUDA 13.1：主 binary ~135MB + cudart runtime ~384MB ≈ 520MB
+        Platform::WindowsX64Cuda13 => 520 * MB,
         // macOS / Linux：CPU 体积，~30MB
         Platform::MacOSArm64Metal => 30 * MB,
         Platform::MacOSX64 => 30 * MB,
@@ -252,6 +270,28 @@ mod tests {
         assert!(!binary_relative_path(Platform::MacOSArm64Metal).ends_with(".exe"));
         assert!(!binary_relative_path(Platform::MacOSX64).ends_with(".exe"));
         assert!(!binary_relative_path(Platform::LinuxX64Cpu).ends_with(".exe"));
+    }
+
+    #[test]
+    fn cuda_platforms_have_runtime_asset() {
+        assert_eq!(
+            cuda_runtime_asset_name(Platform::WindowsX64Cuda12),
+            Some("cudart-llama-bin-win-cuda-12.4-x64.zip")
+        );
+        assert_eq!(
+            cuda_runtime_asset_name(Platform::WindowsX64Cuda13),
+            Some("cudart-llama-bin-win-cuda-13.1-x64.zip")
+        );
+    }
+
+    #[test]
+    fn non_cuda_platforms_have_no_runtime_asset() {
+        for &p in ALL {
+            if matches!(p, Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13) {
+                continue;
+            }
+            assert_eq!(cuda_runtime_asset_name(p), None);
+        }
     }
 
     #[test]

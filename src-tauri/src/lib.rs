@@ -309,6 +309,7 @@ pub fn run() {
             commands::ai::download_binary,
             commands::ai::delete_binary,
             commands::ai::open_engine_dir,
+            commands::ai::get_engine_logs,
             commands::ai::start_engine,
             commands::ai::stop_engine,
             commands::ai::list_local_models,
@@ -322,6 +323,7 @@ pub fn run() {
             commands::ai::get_day_summary,
             commands::ai::get_segment_image_descriptions,
             commands::ai::get_day_image_descriptions,
+            commands::ai::retry_single_image_description,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")

@@ -18,7 +18,6 @@ import {
   RotateCcw,
   Save,
   Server,
-  Square,
   Trash2,
   User,
   XCircle,
@@ -282,16 +281,6 @@ function EngineSection() {
     }
   };
 
-  const onStopEngine = async () => {
-    setEngineBusy(true);
-    try {
-      await api.stopEngine();
-    } finally {
-      await refresh();
-      setEngineBusy(false);
-    }
-  };
-
   /** 「测试连接」合并按钮：start_engine → test_ai_endpoint → stop_engine。
    *
    *  无论之前引擎是否在跑，测完都 stop 释放 VRAM——纯诊断流程，不留下资源占用。
@@ -470,12 +459,7 @@ function EngineSection() {
       </div>
 
       {installed ? (
-        <EngineRuntimeRow
-          status={status}
-          busy={engineBusy}
-          testResult={testResult}
-          onStop={onStopEngine}
-        />
+        <EngineRuntimeRow status={status} testResult={testResult} />
       ) : null}
     </div>
   );
@@ -524,25 +508,22 @@ type RtTestResult =
   | { kind: "fail"; message: string };
 
 /**
- * 引擎运行时反馈行：状态徽章 + testResult 输出 + 「停止」按钮（仅 running 时）。
+ * 引擎运行时反馈行：状态徽章 + testResult 输出。
  *
- * 「测试连接」按钮已经合并到上方 engineActions（点了会自动 start 再 test），
- * 这里就不再重复"启动引擎 / 测试连接"控件，只展示结果反馈 + 提供手动停止
- * 释放 VRAM 的入口。
+ * 「测试连接」按钮已经合并到上方 engineActions（点了会 start → test → stop），
+ * 「停止」入口也移除——所有路径都自带停止：
+ *   - 测试连接：自带 stop
+ *   - AI 总结跑完：可在总结页用「停止」按钮中断
+ *   - 应用退出：钩子会 kill 子进程
  */
 function EngineRuntimeRow({
   status,
-  busy,
   testResult,
-  onStop,
 }: {
   status: EngineStatus;
-  busy: boolean;
   testResult: RtTestResult;
-  onStop: () => void;
 }) {
   const rt = status.runtime;
-  const isRunning = rt.state === "running";
   const isError = rt.state === "error";
 
   const badge =
@@ -554,27 +535,13 @@ function EngineRuntimeRow({
           ? { text: "出错", cls: styles.engineBadgeFail }
           : null;
 
-  // 没在跑、没在测、没出错——这一行就空了，干脆不渲染避免多一道空白
-  const hasContent =
-    isRunning || testResult.kind !== "idle" || badge !== null || isError;
+  // 没在测、没出错、状态条又能直接看 → 不渲染额外行，避免多一道空白
+  const hasContent = testResult.kind !== "idle" || badge !== null || isError;
   if (!hasContent) return null;
 
   return (
     <div className={styles.engineRuntime}>
       <div className={styles.engineRuntimeRow}>
-        {isRunning ? (
-          <button
-            type="button"
-            className={styles.engineStop}
-            onClick={onStop}
-            disabled={busy}
-            title="停止引擎释放 VRAM；下次「测试连接」会自动重启"
-          >
-            <Square size={14} strokeWidth={2} />
-            停止
-          </button>
-        ) : null}
-
         {testResult.kind === "ok" ? (
           <span
             className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusOk}`}

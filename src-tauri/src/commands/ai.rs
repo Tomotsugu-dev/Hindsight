@@ -16,7 +16,9 @@ use crate::ai::binary::{self, DownloadPhase, EngineBinaryStatus};
 use crate::ai::models::{self, ModelEntry};
 use crate::ai::recommended::{Recommended, RECOMMENDED};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
-use crate::ai::summary::{DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::ai::summary::{
+    AiOverrides, DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT,
+};
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, SegmentSummaryRow};
 use crate::repo::reports::device_filter_from_option;
 use crate::repo::settings;
@@ -382,8 +384,17 @@ const PROGRESS_EVENT: &str = "ai://engine-download-progress";
 /// 进度通过 [`PROGRESS_EVENT`] 事件流式推送给前端，命令本身在下载结束后才 resolve。
 /// 失败时返回错误字符串（前端 toast 展示）；同时事件流里**不会**再有 Done 信号，
 /// 调用方应同时监听命令返回值和 Done 事件，按更早到的那个判定。
+///
+/// 下载前会主动 stop 当前引擎实例——Windows 上 .exe 在运行时无法被覆盖 / 删除，
+/// 不停先就会让 download() 内部 `remove_dir_all` 失败。
 #[tauri::command]
-pub async fn download_binary(app: AppHandle) -> Result<(), String> {
+pub async fn download_binary(
+    app: AppHandle,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+) -> Result<(), String> {
+    if let Err(e) = supervisor.stop().await {
+        log::warn!("download_binary 前 stop 引擎失败（可能本就没跑）: {e}");
+    }
     let app_for_emit = app.clone();
     binary::download(move |phase, downloaded, total| {
         let payload = DownloadProgressPayload {
@@ -401,9 +412,25 @@ pub async fn download_binary(app: AppHandle) -> Result<(), String> {
 }
 
 /// 删除已安装的 binary（platform_dir 整个目录抹掉）。
+///
+/// 同样要先 stop 引擎，否则 Windows 锁住 .exe 删不掉。
 #[tauri::command]
-pub async fn delete_binary() -> Result<(), String> {
-    binary::delete().map_err(Into::into)
+pub async fn delete_binary(
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+) -> Result<(), String> {
+    if let Err(e) = supervisor.stop().await {
+        log::warn!("delete_binary 前 stop 引擎失败（可能本就没跑）: {e}");
+    }
+    binary::delete().await.map_err(Into::into)
+}
+
+/// 拿 llama-server 子进程最近 N 行 stderr/stdout（ring buffer 最大 500 行）。
+/// 调试 tab 用：看 GPU 加载日志（`offloaded XX/YY layers to GPU` / `cuBLAS init` 等）。
+#[tauri::command]
+pub async fn get_engine_logs(
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+) -> Result<Vec<String>, String> {
+    Ok(supervisor.recent_logs().await)
 }
 
 /// 在系统文件管理器里打开 binary 所在目录。
@@ -440,6 +467,7 @@ pub async fn generate_day_summary(
     date: String,
     force_refresh: bool,
     device_id: Option<String>,
+    overrides: Option<AiOverrides>,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
@@ -453,7 +481,10 @@ pub async fn generate_day_summary(
         Arc::clone(&cancel.0),
     );
 
-    if let Err(e) = runner.run(parsed_date, device, force_refresh).await {
+    if let Err(e) = runner
+        .run(parsed_date, device, force_refresh, overrides)
+        .await
+    {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
         let mut p = SummaryProgress::base(date.clone(), "error", 0);
         p.message = Some(e.to_string());
@@ -473,6 +504,7 @@ pub async fn retry_summary_segment(
     date: String,
     segment_idx: u32,
     device_id: Option<String>,
+    overrides: Option<AiOverrides>,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
@@ -486,7 +518,37 @@ pub async fn retry_summary_segment(
         Arc::clone(&cancel.0),
     );
     runner
-        .run_one_segment_only(parsed_date, segment_idx, device)
+        .run_one_segment_only(parsed_date, segment_idx, device, overrides)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 重跑单张图的描述——调试 tab 的"重跑"按钮调这个。
+///
+/// 不动段总结、其它图描述；只覆盖 ai_image_descriptions 一行。
+/// 期间走全局 SUMMARY_PROGRESS_EVENT 流的 `image_described` phase 推一条事件。
+#[tauri::command]
+pub async fn retry_single_image_description(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    cancel: State<'_, SummaryCancel>,
+    date: String,
+    segment_idx: u32,
+    image_index: u32,
+    overrides: Option<AiOverrides>,
+) -> Result<(), String> {
+    let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+
+    let runner = DaySummaryRunner::new(
+        (*pool).clone(),
+        Arc::clone(&supervisor),
+        app,
+        Arc::clone(&cancel.0),
+    );
+    runner
+        .retry_one_image_description(parsed_date, segment_idx, image_index, overrides)
         .await
         .map_err(|e| e.to_string())
 }

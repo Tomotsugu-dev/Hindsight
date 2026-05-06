@@ -75,18 +75,58 @@ pub fn binary_path() -> Result<PathBuf> {
 }
 
 /// 当前主机的 binary 是否已落到磁盘上。
+///
+/// CUDA 平台需要的不只是 `llama-server.exe` + `ggml-cuda.dll`，还要 NVIDIA 的
+/// runtime DLL（`cudart64_*.dll` / `cublas64_*.dll`）。runtime 缺失会导致
+/// `ggml-cuda.dll` 加载静默失败，模型退回 CPU 跑。所以 CUDA 平台额外要求
+/// 目录里存在任意版本的 `cudart64_*.dll`。
 pub fn is_installed(p: Platform) -> bool {
-    let path = match platform_dir(p) {
-        Ok(d) => d.join(platform::binary_relative_path(p)),
+    let dir = match platform_dir(p) {
+        Ok(d) => d,
         Err(_) => return false,
     };
-    path.exists()
+    if !dir.join(platform::binary_relative_path(p)).exists() {
+        return false;
+    }
+    if matches!(
+        p,
+        Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13
+    ) && !has_cudart_runtime(&dir)
+    {
+        return false;
+    }
+    true
+}
+
+/// 目录里是否能找到 NVIDIA cudart runtime DLL。
+///
+/// llama.cpp 主 zip 里有 `ggml-cuda.dll`，但 `cudart64_*.dll` 单独打成
+/// `cudart-llama-bin-win-cuda-X.Y-x64.zip` 由 [`download`] 解压进同一目录。
+/// 检测的是 `cudart64_` 前缀（版本号字段会变，比如 `cudart64_12.dll` /
+/// `cudart64_13.dll`），不锁死后缀版本。
+fn has_cudart_runtime(dir: &Path) -> bool {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    for entry in entries.flatten() {
+        if let Some(name) = entry.file_name().to_str() {
+            let lower = name.to_lowercase();
+            if lower.starts_with("cudart64_") && lower.ends_with(".dll") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// 下载 → 校验 → 解压 → 标版本。失败时清理临时文件。
 ///
+/// 对 CUDA 平台会按顺序下两个 zip（主 binary + NVIDIA cudart runtime），
+/// 解压到同一目录；进度按合计字节累计上报，前端只看到一条连续的进度条。
+///
 /// `progress` 在多个阶段被调用：
-/// - `Downloading`: `(downloaded_bytes, content_length)`，节流到每 ~120ms 一次
+/// - `Downloading`: `(已下字节累计, 合计 content_length)`，节流到每 ~120ms 一次
 /// - `Verifying` / `Extracting` / `Done`: `(0, None)` 单点信号
 ///
 /// 调用方拿到 `Done` 即知安装完成。
@@ -96,77 +136,172 @@ where
 {
     let p = platform::detect();
     let tag = platform::PINNED_TAG;
-    let asset = platform::release_asset_name(p, tag);
-    let url = format!(
-        "https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}"
-    );
+    let main_asset = platform::release_asset_name(p, tag);
+    let main_url = release_url(tag, &main_asset);
+
+    // 准备要下的 asset 列表：主 zip 必下；CUDA 平台再加一个 cudart runtime zip。
+    let mut assets: Vec<(String, String)> = vec![(main_asset.clone(), main_url)];
+    if let Some(cudart) = platform::cuda_runtime_asset_name(p) {
+        let url = release_url(tag, cudart);
+        assets.push((cudart.to_string(), url));
+    }
 
     // 清掉旧版本目录，避免新解压跟旧文件混在一起。
+    // Windows 上 stop() 返回到 OS 真正释放 .exe / .dll 文件锁有 ~几百 ms 的窗口期
+    // （内核 unmap image + Defender 实时扫描），所以 remove 用带退避的重试。
     let dir = platform_dir(p)?;
     if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(Error::from)?;
+        remove_dir_all_retry(&dir).await?;
     }
-    std::fs::create_dir_all(&dir).map_err(Error::from)?;
-    let temp_path = dir.join(format!("{asset}.partial"));
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        Error::Other(format!(
+            "create_dir_all 失败: path={} err={e}",
+            dir.display()
+        ))
+    })?;
 
-    // ── 下载 ─────────────────────────────────────────────
-    progress(DownloadPhase::Downloading, 0, None);
-    if let Err(e) = stream_download(&url, &temp_path, &mut progress).await {
-        let _ = std::fs::remove_file(&temp_path);
-        return Err(e);
+    // 提前 HEAD 拿合计大小，前端进度条总数才能正确累计。
+    let client = reqwest::Client::builder()
+        .timeout(DOWNLOAD_TIMEOUT)
+        .build()?;
+    let mut sizes: Vec<Option<u64>> = Vec::with_capacity(assets.len());
+    let mut combined_total: Option<u64> = Some(0);
+    for (_, url) in &assets {
+        let len = match client.head(url).send().await {
+            Ok(resp) => resp.content_length(),
+            Err(_) => None,
+        };
+        if let Some(l) = len {
+            if let Some(t) = combined_total.as_mut() {
+                *t += l;
+            }
+        } else {
+            combined_total = None;
+        }
+        sizes.push(len);
     }
 
-    // ── 校验（可选）─────────────────────────────────────
-    progress(DownloadPhase::Verifying, 0, None);
-    if let Some(expected) = platform::sha256(p, tag) {
-        let temp_clone = temp_path.clone();
-        let expected = expected.to_string();
-        let asset_clone = asset.clone();
-        let res = tokio::task::spawn_blocking(move || {
-            verify_sha256(&temp_clone, &expected, &asset_clone)
-        })
-        .await
-        .map_err(|e| Error::Other(format!("verify join: {e}")))?;
+    let mut total_downloaded: u64 = 0;
+    progress(DownloadPhase::Downloading, 0, combined_total);
+
+    for ((asset_name, url), size_hint) in assets.iter().zip(sizes.iter()) {
+        let temp_path = dir.join(format!("{asset_name}.partial"));
+
+        // ── 下载 ─────────────────────────────────────────
+        let base = total_downloaded;
+        let total_for_progress = combined_total;
+        let res = {
+            let mut wrapped = |_phase: DownloadPhase, d: u64, _t: Option<u64>| {
+                progress(DownloadPhase::Downloading, base + d, total_for_progress);
+            };
+            stream_download_with(&client, url, &temp_path, &mut wrapped).await
+        };
         if let Err(e) = res {
             let _ = std::fs::remove_file(&temp_path);
             return Err(e);
         }
-    } else {
-        log::warn!(
-            "ai engine sha256 未录入（platform={:?} tag={tag}），跳过校验",
-            p
-        );
-    }
+        total_downloaded = match size_hint {
+            Some(s) => base + s,
+            None => match std::fs::metadata(&temp_path) {
+                Ok(m) => base + m.len(),
+                Err(_) => base,
+            },
+        };
+        progress(DownloadPhase::Downloading, total_downloaded, combined_total);
 
-    // ── 解压 ─────────────────────────────────────────────
-    progress(DownloadPhase::Extracting, 0, None);
-    let temp_clone = temp_path.clone();
-    let dir_clone = dir.clone();
-    let asset_clone = asset.clone();
-    let res = tokio::task::spawn_blocking(move || {
-        extract_archive(&temp_clone, &asset_clone, &dir_clone)
-    })
-    .await
-    .map_err(|e| Error::Other(format!("extract join: {e}")))?;
-    if let Err(e) = res {
+        // ── 校验（可选）─────────────────────────────────
+        progress(DownloadPhase::Verifying, total_downloaded, combined_total);
+        if let Some(expected) = platform::sha256(p, tag) {
+            let temp_clone = temp_path.clone();
+            let expected = expected.to_string();
+            let asset_clone = asset_name.clone();
+            let res = tokio::task::spawn_blocking(move || {
+                verify_sha256(&temp_clone, &expected, &asset_clone)
+            })
+            .await
+            .map_err(|e| Error::Other(format!("verify join: {e}")))?;
+            if let Err(e) = res {
+                let _ = std::fs::remove_file(&temp_path);
+                return Err(e);
+            }
+        } else {
+            log::warn!(
+                "ai engine sha256 未录入（platform={p:?} tag={tag} asset={asset_name}），跳过校验"
+            );
+        }
+
+        // ── 解压 ─────────────────────────────────────────
+        progress(DownloadPhase::Extracting, total_downloaded, combined_total);
+        let temp_clone = temp_path.clone();
+        let dir_clone = dir.clone();
+        let asset_clone = asset_name.clone();
+        let res = tokio::task::spawn_blocking(move || {
+            extract_archive(&temp_clone, &asset_clone, &dir_clone)
+        })
+        .await
+        .map_err(|e| Error::Other(format!("extract join: {e}")))?;
+        if let Err(e) = res {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(e);
+        }
         let _ = std::fs::remove_file(&temp_path);
-        return Err(e);
     }
 
-    // 清理 temp + 写版本文件
-    let _ = std::fs::remove_file(&temp_path);
     write_installed_version(p, tag)?;
-
     progress(DownloadPhase::Done, 0, None);
     Ok(())
 }
 
+fn release_url(tag: &str, asset: &str) -> String {
+    format!("https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}")
+}
+
+/// 带退避重试的 `remove_dir_all`。
+///
+/// 触发场景：刚 `kill` llama-server 后立刻删目录，Windows 内核还没 unmap .exe / .dll
+/// 文件镜像，或者 Defender 仍在扫描，`remove_dir_all` 会回 PermissionDenied (os 5)。
+/// 实测 ~几百 ms 即可释放，所以退避序列 0.2s/0.5s/1s/2s/3s 共 ~7s。
+///
+/// 重试到底还失败就把最后一次错误带路径抛上去。
+async fn remove_dir_all_retry(dir: &Path) -> Result<()> {
+    const BACKOFFS_MS: [u64; 5] = [200, 500, 1000, 2000, 3000];
+    let mut last_err: Option<std::io::Error> = None;
+    for (attempt, delay_ms) in std::iter::once(0)
+        .chain(BACKOFFS_MS.iter().copied())
+        .enumerate()
+    {
+        if delay_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        }
+        match std::fs::remove_dir_all(dir) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                log::warn!(
+                    "remove_dir_all 第 {} 次失败: path={} kind={:?} err={e}",
+                    attempt + 1,
+                    dir.display(),
+                    e.kind()
+                );
+                last_err = Some(e);
+            }
+        }
+    }
+    let e = last_err.expect("循环里必须至少出错一次才会到这里");
+    Err(Error::Other(format!(
+        "remove_dir_all 失败（重试 {} 次仍被拒）: path={} err={e}（kind={:?}）",
+        BACKOFFS_MS.len() + 1,
+        dir.display(),
+        e.kind()
+    )))
+}
+
 /// 删除当前平台的安装目录（NSIS 卸载向导可调；UI 卸载按钮也走这里）。
-pub fn delete() -> Result<()> {
+pub async fn delete() -> Result<()> {
     let p = platform::detect();
     let dir = platform_dir(p)?;
     if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(Error::from)?;
+        remove_dir_all_retry(&dir).await?;
     }
     Ok(())
 }
@@ -175,16 +310,18 @@ pub fn delete() -> Result<()> {
 //  内部辅助
 // ─────────────────────────────────────────────────────────
 
-async fn stream_download<F>(url: &str, dest: &Path, progress: &mut F) -> Result<()>
+async fn stream_download_with<F>(
+    client: &reqwest::Client,
+    url: &str,
+    dest: &Path,
+    progress: &mut F,
+) -> Result<()>
 where
     F: FnMut(DownloadPhase, u64, Option<u64>) + Send,
 {
     use futures_util::StreamExt;
     use tokio::io::AsyncWriteExt;
 
-    let client = reqwest::Client::builder()
-        .timeout(DOWNLOAD_TIMEOUT)
-        .build()?;
     let resp = client.get(url).send().await?;
     if !resp.status().is_success() {
         return Err(Error::Other(format!(
@@ -195,7 +332,13 @@ where
     }
     let total = resp.content_length();
 
-    let mut file = tokio::fs::File::create(dest).await.map_err(Error::from)?;
+    let mut file = tokio::fs::File::create(dest).await.map_err(|e| {
+        Error::Other(format!(
+            "File::create 失败: path={} err={e}（kind={:?}）",
+            dest.display(),
+            e.kind()
+        ))
+    })?;
     let mut stream = resp.bytes_stream();
     let mut downloaded: u64 = 0;
     let mut last_emit = std::time::Instant::now();

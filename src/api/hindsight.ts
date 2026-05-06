@@ -210,12 +210,31 @@ export interface SummaryProgress {
   imagePath: string | null;
   /** image_described 时附该图的描述文本 */
   imageDescription: string | null;
+  /** image_described 时附调用耗时（ms） */
+  latencyMs: number | null;
+  /** image_described 时附 prompt token 数 */
+  promptTokens: number | null;
+  /** image_described 时附 completion token 数 */
+  completionTokens: number | null;
   /** segment_done 时附该段总结正文（直接是 LLM 输出 markdown），其它阶段为 null */
   content: string | null;
   /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "error" */
   status: SummarySegmentStatus | null;
   /** error / engine_starting 时的提示文字 */
   message: string | null;
+}
+
+/** 单次 generate 调用对 settings.ai 的局部覆盖（不写 settings 全局）。
+ *  调试 tab 用：跑总结时传这个 patch，跑完不留痕。 */
+export interface AiOverrides {
+  excludedCategories?: string[];
+  maxImagesPerSegment?: number;
+  hashThreshold?: number;
+  hashWindowMinutes?: number;
+  /** step 2 段总结的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
+  systemPrompt?: string;
+  /** step 1 单图描述的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
+  imageDescribePrompt?: string;
 }
 
 /** ai_image_descriptions 表的一行——两步生成 step 1 的产物，给调试 tab 渲染。 */
@@ -231,6 +250,12 @@ export interface ImageDescriptionRow {
   /** 生成时用的 active_main 文件名 */
   model: string;
   generatedAt: string;
+  /** 单张图调用 LLM 的总耗时（ms）；llama-server 没返时 null */
+  latencyMs: number | null;
+  /** 上下文 token 数；llama-server 没返时 null */
+  promptTokens: number | null;
+  /** 输出 token 数；同上 */
+  completionTokens: number | null;
 }
 
 /** 段总结落库状态。 */
@@ -287,9 +312,11 @@ export interface AiConfig {
   /** AI 总结使用的提示词语言："zh" / "en" / "ja"。
    *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
   promptLanguage: PromptLanguage;
-  /** 用户对内置 system prompt 的覆盖；按语言独立。
+  /** 用户对内置 system prompt（step 2 段总结）的覆盖；按语言独立。
    *  对应字段为空 = 用内置默认。 */
   promptOverrides: PromptOverrides;
+  /** 用户对内置 image describe prompt（step 1 单图描述）的覆盖；按语言独立。 */
+  imageDescribeOverrides: PromptOverrides;
 }
 
 export type PromptLanguage = "zh" | "en" | "ja";
@@ -455,6 +482,9 @@ export const api = {
   downloadBinary: () => invoke<void>("download_binary"),
   deleteBinary: () => invoke<void>("delete_binary"),
   openEngineDir: () => invoke<void>("open_engine_dir"),
+  /** 拿 llama-server 子进程最近 stderr/stdout（最多 500 行）。调试 tab 用，
+   *  看 GPU 加载日志。每次启动会清空 ring，所以拿到的是"本次启动以来"。 */
+  getEngineLogs: () => invoke<string[]>("get_engine_logs"),
   /** 启动 llama-server 子进程；返回监听端口。
    *  Phase 1B-α 不传模型，会因为缺模型 fail；Phase 1B-β 起会真传值。 */
   startEngine: () => invoke<number>("start_engine"),
@@ -481,19 +511,33 @@ export const api = {
     invoke<void>("set_active_model", { mainFile, mmprojFile }),
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
-   *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合。 */
+   *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；
+   *  overrides 是调试 tab 用的局部参数覆盖，传 null = 走 settings.ai 全局值。 */
   generateDaySummary: (
     date: string,
     forceRefresh: boolean,
     deviceId: string | null,
-  ) => invoke<void>("generate_day_summary", { date, forceRefresh, deviceId }),
+    overrides: AiOverrides | null = null,
+  ) =>
+    invoke<void>("generate_day_summary", {
+      date,
+      forceRefresh,
+      deviceId,
+      overrides,
+    }),
   /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
   retrySummarySegment: (
     date: string,
     segmentIdx: number,
     deviceId: string | null,
+    overrides: AiOverrides | null = null,
   ) =>
-    invoke<void>("retry_summary_segment", { date, segmentIdx, deviceId }),
+    invoke<void>("retry_summary_segment", {
+      date,
+      segmentIdx,
+      deviceId,
+      overrides,
+    }),
   /** 设取消标记——下一段循环开头会感知到然后早 return。
    *  已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。 */
   cancelDaySummary: () => invoke<void>("cancel_day_summary"),
@@ -509,4 +553,18 @@ export const api = {
   /** 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。 */
   getDayImageDescriptions: (date: string) =>
     invoke<ImageDescriptionRow[]>("get_day_image_descriptions", { date }),
+  /** 重跑某段某张图的描述——调试 tab 行末"重跑"按钮用。
+   *  不动段总结、其它图描述；期间走 SUMMARY_PROGRESS_EVENT 推一条 image_described。 */
+  retrySingleImageDescription: (
+    date: string,
+    segmentIdx: number,
+    imageIndex: number,
+    overrides: AiOverrides | null = null,
+  ) =>
+    invoke<void>("retry_single_image_description", {
+      date,
+      segmentIdx,
+      imageIndex,
+      overrides,
+    }),
 };

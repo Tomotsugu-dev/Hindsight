@@ -19,6 +19,7 @@
     ".python-version": true,
     "pyproject.toml": true,
     "uv.lock": true,
+    "LICENSE": true,
   },
   "search.exclude": {
     "**/node_modules": true,
