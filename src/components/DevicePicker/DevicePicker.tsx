@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, Layers } from "lucide-react";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
@@ -6,6 +7,7 @@ import { useMouseGlow } from "../../hooks/useMouseGlow";
 import styles from "./DevicePicker.module.css";
 
 export function DevicePicker() {
+  const { t } = useTranslation();
   const { devices, selected, setSelected } = useDeviceFilter();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -15,7 +17,9 @@ export function DevicePicker() {
   const currentDevice =
     selected === "all" ? null : devices.find((d) => d.id === selected) ?? null;
   const currentLabel =
-    selected === "all" ? "所有设备" : currentDevice?.name ?? "本机";
+    selected === "all"
+      ? t("components.devicePicker.all")
+      : currentDevice?.name ?? t("components.devicePicker.thisDevice");
 
   // 点外面关闭
   useEffect(() => {
@@ -54,7 +58,7 @@ export function DevicePicker() {
         <div className={styles.menu} role="listbox">
           {showAllOption && (
             <MenuItem
-              label="所有设备"
+              label={t("components.devicePicker.all")}
               tile={<DeviceTile device={null} all />}
               checked={selected === "all"}
               onClick={() => {
@@ -68,7 +72,7 @@ export function DevicePicker() {
             <MenuItem
               key={d.id}
               label={d.name}
-              hint={d.current ? "本机" : undefined}
+              hint={d.current ? t("components.devicePicker.thisDevice") : undefined}
               tile={<DeviceTile device={d} all={false} />}
               checked={selected === d.id}
               onClick={() => {

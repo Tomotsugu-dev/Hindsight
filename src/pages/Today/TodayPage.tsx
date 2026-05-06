@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
@@ -22,22 +23,8 @@ function parseHM(s: string): number {
   return h + (Number.isNaN(m) ? 0 : m / 60);
 }
 
-function fmtHM(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m} 分钟`;
-  return `${h} 小时 ${m} 分`;
-}
-
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function dayLabel(offset: number): string {
-  if (offset === 0) return "今天";
-  if (offset === -1) return "昨天";
-  if (offset < -1) return `${-offset} 天前`;
-  return `${offset} 天后`;
 }
 
 function dateForOffset(offset: number): Date {
@@ -47,11 +34,28 @@ function dateForOffset(offset: number): Date {
 }
 
 export default function TodayPage() {
+  const { t } = useTranslation();
   const [offset, setOffset] = useState(0);
   const { selectedDeviceId } = useDeviceFilter();
   const { get: getDay } = useDayCache(offset, selectedDeviceId);
   const { categories, getCategory } = useCategories();
   const { settings } = useSettings();
+
+  // 把分钟数格式化成本地化的时长文案 —— 依赖 i18n，因此放在组件内
+  const fmtHM = (min: number): string => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return t("today.duration.minutesShort", { count: m });
+    return t("today.duration.hourMinute", { hours: h, minutes: m });
+  };
+
+  // 日期切换 pill 的本地化文案
+  const dayLabel = (off: number): string => {
+    if (off === 0) return t("today.dayNav.today");
+    if (off === -1) return t("today.dayNav.yesterday");
+    if (off < -1) return t("today.dayNav.daysAgo", { count: -off });
+    return t("today.dayNav.daysLater", { count: off });
+  };
 
   const { hours, apps } = useMemo(() => getDay(offset), [getDay, offset]);
 
@@ -156,15 +160,18 @@ export default function TodayPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>今日总览</h1>
+        <h1 className={styles.title}>{t("today.title")}</h1>
         <p className={styles.meta}>
-          {fmtDate(dateForOffset(offset))} · 已采集 {fmtHM(totalMinutes)}
+          {t("today.meta", {
+            date: fmtDate(dateForOffset(offset)),
+            duration: fmtHM(totalMinutes),
+          })}
         </p>
       </header>
 
       <section className={styles.card}>
         <header className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>24 小时活动分布</h2>
+          <h2 className={styles.cardTitle}>{t("today.chart.title")}</h2>
 
           <div className={styles.headRight}>
             <DevicePicker />
@@ -176,8 +183,8 @@ export default function TodayPage() {
               className={`${styles.navBtn} glow`}
               onClick={() => commit(-1)}
               disabled={transitioning}
-              aria-label="前一天"
-              title="前一天"
+              aria-label={t("today.dayNav.prev")}
+              title={t("today.dayNav.prev")}
             >
               <ChevronLeft size={14} strokeWidth={1.75} />
             </button>
@@ -188,7 +195,7 @@ export default function TodayPage() {
               className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
               onClick={jumpToToday}
               disabled={offset === 0 || transitioning}
-              title={offset === 0 ? undefined : "回到今天"}
+              title={offset === 0 ? undefined : t("today.dayNav.backToToday")}
             >
               {dayLabel(offset)}
             </button>
@@ -199,8 +206,8 @@ export default function TodayPage() {
               className={`${styles.navBtn} glow`}
               onClick={() => commit(1)}
               disabled={!canGoForward || transitioning}
-              aria-label="后一天"
-              title="后一天"
+              aria-label={t("today.dayNav.next")}
+              title={t("today.dayNav.next")}
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
@@ -237,7 +244,7 @@ export default function TodayPage() {
       <div className={styles.ranks}>
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>最常用应用</h2>
+            <h2 className={styles.cardTitle}>{t("today.ranks.topApps")}</h2>
           </header>
           {appRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -250,7 +257,7 @@ export default function TodayPage() {
 
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>最常用分类</h2>
+            <h2 className={styles.cardTitle}>{t("today.ranks.topCategories")}</h2>
           </header>
           {categoryRanks.length > 0 ? (
             <div className={styles.rankBody}>
@@ -270,6 +277,7 @@ interface LegendProps {
 }
 
 function Legend({ hasWorkHours }: LegendProps) {
+  const { t } = useTranslation();
   const { categories } = useCategories();
   return (
     <div className={styles.legend}>
@@ -286,7 +294,7 @@ function Legend({ hasWorkHours }: LegendProps) {
       {hasWorkHours && (
         <span className={styles.legendItem}>
           <span className={styles.legendBand} aria-hidden />
-          工作时段
+          {t("today.legend.workHours")}
         </span>
       )}
     </div>
@@ -294,5 +302,6 @@ function Legend({ hasWorkHours }: LegendProps) {
 }
 
 function EmptyHint() {
-  return <div className={styles.empty}>暂无数据</div>;
+  const { t } = useTranslation();
+  return <div className={styles.empty}>{t("common.empty")}</div>;
 }

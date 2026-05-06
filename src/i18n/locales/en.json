@@ -5,7 +5,8 @@
     "confirm": "Confirm",
     "delete": "Delete",
     "minimize": "Minimize",
-    "close": "Close"
+    "close": "Close",
+    "empty": "No data yet"
   },
   "nav": {
     "groups": {
@@ -59,6 +60,43 @@
         "zhCN": "简体中文",
         "en": "English"
       }
+    }
+  },
+  "components": {
+    "devicePicker": {
+      "all": "All devices",
+      "thisDevice": "This device"
+    }
+  },
+  "today": {
+    "title": "Today",
+    "meta": "{{date}} · {{duration}} tracked",
+    "chart": {
+      "title": "24-hour activity",
+      "barTitle": "{{hour}}:00 — {{minutes}} min"
+    },
+    "dayNav": {
+      "prev": "Previous day",
+      "next": "Next day",
+      "backToToday": "Back to today",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "daysAgo": "{{count}} days ago",
+      "daysLater": "In {{count}} days"
+    },
+    "legend": {
+      "workHours": "Work hours"
+    },
+    "ranks": {
+      "topApps": "Top apps",
+      "topCategories": "Top categories"
+    },
+    "duration": {
+      "minutesShort": "{{count}} min",
+      "hourMinute": "{{hours}}h {{minutes}}m",
+      "minutesPlain": "{{count}} min",
+      "hoursPlain": "{{count}}h",
+      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m"
     }
   }
 }

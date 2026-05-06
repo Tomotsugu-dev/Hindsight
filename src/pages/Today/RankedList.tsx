@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import styles from "./RankedList.module.css";
 
 export interface RankedItem {
@@ -24,15 +25,19 @@ interface RankedListProps {
   totalMinutes?: number;
 }
 
-function fmtTime(minutes: number): string {
-  if (minutes < 60) return `${minutes} 分`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? `${h} 小时` : `${h}h ${m}m`;
-}
-
 export function RankedList({ items, totalMinutes }: RankedListProps) {
+  const { t } = useTranslation();
   const denom = totalMinutes ?? Math.max(...items.map((i) => i.minutes), 1);
+
+  // 排行行的时长格式化 —— 复用 today.duration.* 资源
+  const fmtTime = (minutes: number): string => {
+    if (minutes < 60) return t("today.duration.minutesPlain", { count: minutes });
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m === 0
+      ? t("today.duration.hoursPlain", { count: h })
+      : t("today.duration.hoursAndMinutesShort", { hours: h, minutes: m });
+  };
 
   return (
     <ol className={styles.list}>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import type { HourSlot } from "../../api/hindsight";
 import styles from "./HourlyChart.module.css";
@@ -27,6 +28,7 @@ function formatMinLabel(min: number): string {
 }
 
 export function HourlyChart({ hours, workHours, maxMinutes: externalMax }: HourlyChartProps) {
+  const { t } = useTranslation();
   const { getCategory } = useCategories();
   // 没传 maxMinutes 就按 hours 自己算：1h 起步，峰值超过就按 15min 步长向上对齐
   // —— 切日期时每个 slide 自带 maxMinutes，next-day chart 不会因为复用 current-day 的 max
@@ -91,6 +93,7 @@ export function HourlyChart({ hours, workHours, maxMinutes: externalMax }: Hourl
                 slot={slot}
                 maxMinutes={maxMinutes}
                 getCategory={getCategory}
+                t={t}
               />
             ))}
           </div>
@@ -117,10 +120,12 @@ function HourBar({
   slot,
   maxMinutes,
   getCategory,
+  t,
 }: {
   slot: HourSlot;
   maxMinutes: number;
   getCategory: (id: string) => { color: string } | null | undefined;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const total = slot.segments.reduce((s, x) => s + x.minutes, 0);
   const heightPct = Math.min((total / maxMinutes) * 100, 100);
@@ -131,7 +136,10 @@ function HourBar({
         style={{ height: `${heightPct}%` }}
         title={
           total > 0
-            ? `${String(slot.hour).padStart(2, "0")}:00 — ${total} 分`
+            ? t("today.chart.barTitle", {
+                hour: String(slot.hour).padStart(2, "0"),
+                minutes: total,
+              })
             : undefined
         }
       >
