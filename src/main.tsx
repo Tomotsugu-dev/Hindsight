@@ -7,6 +7,7 @@ import { DeviceFilterProvider } from "./state/deviceFilter";
 import { CategoriesProvider } from "./state/categories";
 import { SettingsProvider } from "./state/settings";
 import { UpdaterProvider } from "./state/updater";
+import "./i18n";
 import "./styles/global.css";
 
 // 把当前 OS 写到 body[data-platform]，CSS 据此区分 macOS / windows / linux 的 chrome 表现

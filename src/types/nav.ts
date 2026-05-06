@@ -5,8 +5,8 @@ export type NavGroup = "primary" | "ai" | "system";
 export interface NavItem {
   /** 路由路径 */
   path: string;
-  /** 显示标题 */
-  label: string;
+  /** i18n 翻译 key（在渲染时通过 t() 解析） */
+  labelKey: string;
   /** 图标组件 */
   icon: LucideIcon;
   /** 所属分组 */

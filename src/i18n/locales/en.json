@@ -1,0 +1,64 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "minimize": "Minimize",
+    "close": "Close"
+  },
+  "nav": {
+    "groups": {
+      "primary": "Overview",
+      "ai": "AI",
+      "system": "System"
+    },
+    "items": {
+      "today": "Today",
+      "week": "Weekly",
+      "month": "Monthly",
+      "aiSummary": "AI Summary",
+      "aiSettings": "AI Settings",
+      "categories": "App Categories",
+      "devices": "Cloud Sync",
+      "settings": "Settings"
+    }
+  },
+  "sidebar": {
+    "capture": {
+      "ok": "Capturing",
+      "idle": "Paused",
+      "error": "Capture error",
+      "resting": "Resting",
+      "stop": "Stop capture",
+      "toggleAria": "Toggle capture"
+    },
+    "sync": {
+      "connected": "Connected",
+      "signedOut": "Not signed in",
+      "aria": "Manage devices & cloud sync",
+      "title": "Devices / Cloud Sync"
+    }
+  },
+  "windowControls": {
+    "minimize": "Minimize",
+    "close": "Close"
+  },
+  "settings": {
+    "pageTitle": "Settings",
+    "tabs": {
+      "general": "General",
+      "data": "Data",
+      "privacy": "Privacy",
+      "about": "About"
+    },
+    "language": {
+      "sectionTitle": "语言 / Language",
+      "label": "Language",
+      "options": {
+        "zhCN": "简体中文",
+        "en": "English"
+      }
+    }
+  }
+}

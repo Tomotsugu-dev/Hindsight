@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import styles from "./ConfirmDialog.module.css";
 
 interface ConfirmDialogProps {
@@ -17,12 +18,16 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "确定",
-  cancelLabel = "取消",
+  confirmLabel,
+  cancelLabel,
   variant = "primary",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  // 默认值在调用方未传入时回落到通用 i18n 文案
+  const confirmText = confirmLabel ?? t("common.confirm");
+  const cancelText = cancelLabel ?? t("common.cancel");
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -50,7 +55,7 @@ export function ConfirmDialog({
         <p className={styles.message}>{message}</p>
         <div className={styles.actions}>
           <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
-            {cancelLabel}
+            {cancelText}
           </button>
           <button
             type="button"
@@ -58,7 +63,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             autoFocus
           >
-            {confirmLabel}
+            {confirmText}
           </button>
         </div>
       </div>

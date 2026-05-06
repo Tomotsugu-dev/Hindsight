@@ -21,13 +21,14 @@ export const ROUTES = {
   settings: "/settings",
 } as const;
 
+// 注：label 已改为 labelKey（i18n 翻译键），渲染时由组件通过 t() 解析
 export const NAV_ITEMS: NavItem[] = [
-  { path: ROUTES.today,      label: "今日总览", icon: LayoutDashboard, group: "primary", color: "#f97316", end: true },
-  { path: ROUTES.week,       label: "周统计",   icon: CalendarDays,    group: "primary", color: "#3b82f6" },
-  { path: ROUTES.month,      label: "月统计",   icon: CalendarRange,   group: "primary", color: "#8b5cf6" },
-  { path: ROUTES.aiSummary,  label: "AI 总结",  icon: Sparkles,        group: "ai",      color: "#d946ef", end: true },
-  { path: ROUTES.aiSettings, label: "AI 设置",  icon: BrainCircuit,    group: "ai",      color: "#a855f7" },
-  { path: ROUTES.categories, label: "应用分类", icon: Boxes,           group: "system",  color: "#0ea5e9" },
-  { path: ROUTES.devices,    label: "云同步",   icon: Cloud,           group: "system",  color: "#10b981" },
-  { path: ROUTES.settings,   label: "设置",     icon: Settings,        group: "system",  color: "#64748b" },
+  { path: ROUTES.today,      labelKey: "nav.items.today",      icon: LayoutDashboard, group: "primary", color: "#f97316", end: true },
+  { path: ROUTES.week,       labelKey: "nav.items.week",       icon: CalendarDays,    group: "primary", color: "#3b82f6" },
+  { path: ROUTES.month,      labelKey: "nav.items.month",      icon: CalendarRange,   group: "primary", color: "#8b5cf6" },
+  { path: ROUTES.aiSummary,  labelKey: "nav.items.aiSummary",  icon: Sparkles,        group: "ai",      color: "#d946ef", end: true },
+  { path: ROUTES.aiSettings, labelKey: "nav.items.aiSettings", icon: BrainCircuit,    group: "ai",      color: "#a855f7" },
+  { path: ROUTES.categories, labelKey: "nav.items.categories", icon: Boxes,           group: "system",  color: "#0ea5e9" },
+  { path: ROUTES.devices,    labelKey: "nav.items.devices",    icon: Cloud,           group: "system",  color: "#10b981" },
+  { path: ROUTES.settings,   labelKey: "nav.items.settings",   icon: Settings,        group: "system",  color: "#64748b" },
 ];

@@ -15,7 +15,7 @@
   gap: var(--space-2);
   height: 44px;
   padding: 0 var(--space-2);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-1);
   /* 拖动热区：双保险 */
   -webkit-app-region: drag;
   app-region: drag;
@@ -124,4 +124,70 @@
     width 360ms cubic-bezier(0.22, 1, 0.36, 1),
     left 360ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 220ms var(--ease-out);
+}
+
+/* —— Logo 下方独立一行的账户/同步入口（沿用 footer .row 同款样式） —— */
+.accountRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--space-3);
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
+  text-align: left;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.accountRow:hover {
+  background: var(--hover-bg);
+  color: var(--text-strong);
+}
+
+/* 图标居中容器：与 NavItem 同款 22x22，确保图标 X 起点和 nav 对齐 */
+.iconWrap {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: var(--label-opacity, 1);
+  transform: translateX(var(--label-translate, 0));
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.textOn {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.cloud {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition:
+    color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cloudOn {
+  opacity: 1;
+  color: var(--color-accent);
+  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-accent) 35%, transparent));
 }

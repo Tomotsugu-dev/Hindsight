@@ -183,6 +183,38 @@
   opacity: 0.5;
 }
 
+/* —— 语言行：双层切换容器（结构同 captureRow，但配色用默认） —— */
+
+.langRow {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 目标语言面：默认藏在下方 */
+.langFaceTarget {
+  transform: translateY(100%);
+  opacity: 0;
+  filter: blur(2px);
+}
+
+/* hover：当前语言滑出顶部，目标语言滑入 */
+.langRow:hover .faceDefault {
+  transform: translateY(-100%);
+  opacity: 0;
+  filter: blur(2px);
+}
+.langRow:hover .langFaceTarget {
+  transform: translateY(0);
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* 按下反馈 */
+.langRow:active {
+  transform: scale(0.985);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
 /* 系统级"减少动效"用户偏好 — 直接关闭过渡 */
 @media (prefers-reduced-motion: reduce) {
   .face {

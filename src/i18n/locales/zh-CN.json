@@ -1,0 +1,64 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确定",
+    "delete": "删除",
+    "minimize": "最小化",
+    "close": "关闭"
+  },
+  "nav": {
+    "groups": {
+      "primary": "概览",
+      "ai": "AI",
+      "system": "系统"
+    },
+    "items": {
+      "today": "今日总览",
+      "week": "周统计",
+      "month": "月统计",
+      "aiSummary": "AI 总结",
+      "aiSettings": "AI 设置",
+      "categories": "应用分类",
+      "devices": "云同步",
+      "settings": "设置"
+    }
+  },
+  "sidebar": {
+    "capture": {
+      "ok": "采集中",
+      "idle": "已暂停",
+      "error": "采集异常",
+      "resting": "休息中",
+      "stop": "停止采集",
+      "toggleAria": "点击切换采集状态"
+    },
+    "sync": {
+      "connected": "已连接",
+      "signedOut": "未登录",
+      "aria": "管理设备与云同步",
+      "title": "设备 / 云同步"
+    }
+  },
+  "windowControls": {
+    "minimize": "最小化",
+    "close": "关闭"
+  },
+  "settings": {
+    "pageTitle": "设置",
+    "tabs": {
+      "general": "常规",
+      "data": "数据",
+      "privacy": "隐私",
+      "about": "关于"
+    },
+    "language": {
+      "sectionTitle": "语言 / Language",
+      "label": "语言",
+      "options": {
+        "zhCN": "简体中文",
+        "en": "English"
+      }
+    }
+  }
+}

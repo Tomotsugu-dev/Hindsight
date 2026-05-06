@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Cloud, CloudOff, Coffee, Pause } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { ROUTES } from "../../config/nav";
-import { api, type AuthState } from "../../api/hindsight";
+import { useTranslation } from "react-i18next";
+import { ArrowRightLeft, Coffee, Globe, Pause } from "lucide-react";
 import { useSettings } from "../../state/settings";
+import { useLocale } from "../../i18n/useLocale";
 import styles from "./StatusFooter.module.css";
 
 type CaptureStatus = "ok" | "idle" | "error";
@@ -13,10 +12,11 @@ interface StatusFooterProps {
   onToggleCapture?: () => void;
 }
 
-const CAPTURE_TEXT: Record<CaptureStatus, string> = {
-  ok: "采集中",
-  idle: "已暂停",
-  error: "采集异常",
+// 采集状态文案 -> i18n key 映射
+const CAPTURE_TEXT_KEY: Record<CaptureStatus, string> = {
+  ok: "sidebar.capture.ok",
+  idle: "sidebar.capture.idle",
+  error: "sidebar.capture.error",
 };
 
 function parseHM(s: string): number {
@@ -29,28 +29,10 @@ export function StatusFooter({
   captureStatus = "ok",
   onToggleCapture,
 }: StatusFooterProps) {
-  const navigate = useNavigate();
   const { settings } = useSettings();
-  const [auth, setAuth] = useState<AuthState | null>(null);
+  const { t } = useTranslation();
   const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    const fetch = () => {
-      api
-        .authStatus()
-        .then(setAuth)
-        .catch(() => {});
-    };
-    fetch();
-    // 周期性刷新；窗口重新聚焦时也立刻刷一次（登录回到 app 后能秒变色）
-    const interval = window.setInterval(fetch, 60_000);
-    const onFocus = () => fetch();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, []);
+  const [locale, setLocale] = useLocale();
 
   // 每分钟 tick 一次，让"是否在工作时间"重新评估
   useEffect(() => {
@@ -73,9 +55,6 @@ export function StatusFooter({
     });
   }, [settings, tick]);
 
-  const signedIn = auth?.signedIn ?? false;
-  const syncLabel = signedIn ? auth?.email ?? "已连接" : "未登录";
-
   return (
     <div className={styles.footer}>
       <button
@@ -84,7 +63,7 @@ export function StatusFooter({
         }`}
         type="button"
         onClick={onToggleCapture}
-        aria-label="点击切换采集状态"
+        aria-label={t("sidebar.capture.toggleAria")}
       >
         <span className={styles.swap} aria-hidden>
           {/* 默认态：工作时间内 —— 采集中 */}
@@ -103,45 +82,49 @@ export function StatusFooter({
                 aria-hidden
               />
             )}
-            <span className={styles.text}>{CAPTURE_TEXT[captureStatus]}</span>
+            <span className={styles.text}>{t(CAPTURE_TEXT_KEY[captureStatus])}</span>
           </span>
 
           {/* 工作时间外：休息态 */}
           <span className={`${styles.face} ${styles.faceResting}`}>
             <Coffee size={12} strokeWidth={2} className={styles.restIcon} />
-            <span className={styles.text}>休息中</span>
+            <span className={styles.text}>{t("sidebar.capture.resting")}</span>
           </span>
 
           {/* hover 态 */}
           <span className={`${styles.face} ${styles.faceHover}`}>
             <Pause size={12} strokeWidth={2} className={styles.pauseIcon} />
-            <span className={styles.text}>停止采集</span>
+            <span className={styles.text}>{t("sidebar.capture.stop")}</span>
           </span>
         </span>
       </button>
 
       <button
-        className={styles.row}
+        className={`${styles.row} ${styles.langRow}`}
         type="button"
-        onClick={() => navigate(ROUTES.devices)}
-        aria-label="管理设备与云同步"
-        title="设备 / 云同步"
+        onClick={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")}
+        title={locale === "zh-CN" ? "Switch to English" : "切换为简体中文"}
       >
-        {signedIn ? (
-          <Cloud
-            size={14}
-            strokeWidth={1.75}
-            className={`${styles.cloud} ${styles.cloudOn}`}
-          />
-        ) : (
-          <CloudOff
-            size={14}
-            strokeWidth={1.75}
-            className={styles.cloud}
-          />
-        )}
-        <span className={`${styles.text} ${signedIn ? styles.textOn : ""}`}>
-          {syncLabel}
+        <span className={styles.swap} aria-hidden>
+          {/* 当前语言态 */}
+          <span className={`${styles.face} ${styles.faceDefault}`}>
+            <Globe size={14} strokeWidth={1.75} className={styles.cloud} />
+            <span className={styles.text}>
+              {locale === "zh-CN" ? "简体中文" : "English"}
+            </span>
+          </span>
+
+          {/* hover 态：目标语言 */}
+          <span className={`${styles.face} ${styles.langFaceTarget}`}>
+            <ArrowRightLeft
+              size={14}
+              strokeWidth={1.75}
+              className={styles.cloud}
+            />
+            <span className={styles.text}>
+              {locale === "zh-CN" ? "English" : "简体中文"}
+            </span>
+          </span>
         </span>
       </button>
     </div>
