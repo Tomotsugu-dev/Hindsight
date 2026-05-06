@@ -72,16 +72,15 @@ pub struct ModelEntry {
 
 /// 扫描模型目录，返回所有 `.gguf` 文件。目录不存在时返回空 `Vec`，
 /// 不当错误（用户首次进入还没下载是正常状态）。
-pub fn list_local(cfg: &AiConfig) -> Result<Vec<ModelEntry>> {
+pub async fn list_local(cfg: &AiConfig) -> Result<Vec<ModelEntry>> {
     let dir = root_dir(cfg);
-    if !dir.exists() {
+    if !tokio::fs::try_exists(&dir).await.map_err(Error::Io)? {
         return Ok(Vec::new());
     }
 
     let mut entries: Vec<ModelEntry> = Vec::new();
-    let read = std::fs::read_dir(&dir).map_err(Error::Io)?;
-    for item in read {
-        let item = item.map_err(Error::Io)?;
+    let mut read = tokio::fs::read_dir(&dir).await.map_err(Error::Io)?;
+    while let Some(item) = read.next_entry().await.map_err(Error::Io)? {
         let path = item.path();
         if !path.is_file() {
             continue;
@@ -93,7 +92,7 @@ pub fn list_local(cfg: &AiConfig) -> Result<Vec<ModelEntry>> {
         if !filename.to_ascii_lowercase().ends_with(".gguf") {
             continue;
         }
-        let size_bytes = item.metadata().map(|m| m.len()).unwrap_or(0);
+        let size_bytes = item.metadata().await.map(|m| m.len()).unwrap_or(0);
         entries.push(ModelEntry {
             filename: filename.to_string(),
             path: path.to_string_lossy().into_owned(),
@@ -111,15 +110,15 @@ pub fn list_local(cfg: &AiConfig) -> Result<Vec<ModelEntry>> {
 
 /// 删除单个 GGUF 文件。文件名必须是 [`list_local`] 返回的那种 basename，
 /// 不接受路径分隔符，避免传 `..` 跳出目录。
-pub fn delete(cfg: &AiConfig, filename: &str) -> Result<()> {
+pub async fn delete(cfg: &AiConfig, filename: &str) -> Result<()> {
     if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
         return Err(Error::InvalidInput("文件名不能包含路径分隔符或 .."));
     }
     let path = root_dir(cfg).join(filename);
-    if !path.exists() {
+    if !tokio::fs::try_exists(&path).await.map_err(Error::Io)? {
         return Ok(());
     }
-    std::fs::remove_file(&path).map_err(Error::Io)?;
+    tokio::fs::remove_file(&path).await.map_err(Error::Io)?;
     Ok(())
 }
 
@@ -147,13 +146,13 @@ where
     }
 
     let dir = root_dir(cfg);
-    std::fs::create_dir_all(&dir).map_err(Error::Io)?;
+    tokio::fs::create_dir_all(&dir).await.map_err(Error::Io)?;
     let dest = dir.join(file);
     let temp = dir.join(format!("{file}.partial"));
 
     // 已下：大小匹配则直接复用
-    if dest.exists() && expected_bytes > 0 {
-        if let Ok(meta) = std::fs::metadata(&dest) {
+    if expected_bytes > 0 {
+        if let Ok(meta) = tokio::fs::metadata(&dest).await {
             let actual = meta.len();
             // 容差 1% 或 1KB（取大者）：HF size metadata 偶尔有几字节差
             let tol = (expected_bytes / 100).max(1024);
@@ -165,22 +164,18 @@ where
     }
 
     // 清掉旧的 .partial（上次失败留下的）
-    if temp.exists() {
-        let _ = std::fs::remove_file(&temp);
-    }
+    let _ = tokio::fs::remove_file(&temp).await;
 
     let url = hf_url(repo, file);
     if let Err(e) = stream_to_file(&url, &temp, &mut progress).await {
-        let _ = std::fs::remove_file(&temp);
+        let _ = tokio::fs::remove_file(&temp).await;
         return Err(e);
     }
 
     // 落盘成功 → atomic rename 到最终路径
     // Windows 上 rename 不支持覆盖，先删 dest 如果在
-    if dest.exists() {
-        let _ = std::fs::remove_file(&dest);
-    }
-    std::fs::rename(&temp, &dest).map_err(Error::Io)?;
+    let _ = tokio::fs::remove_file(&dest).await;
+    tokio::fs::rename(&temp, &dest).await.map_err(Error::Io)?;
 
     Ok(dest)
 }

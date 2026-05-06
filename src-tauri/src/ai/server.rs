@@ -40,25 +40,29 @@ const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(500);
 /// 多用一倍 RAM 不痛——5090/Apple Silicon 都装得下，CPU fallback 也可接受。
 const DEFAULT_CTX_SIZE: u32 = 8192;
 
+/// 引擎进程的离散状态。
+///
+/// 序列化结果保持 `"stopped"` / `"starting"` / `"running"` / `"error"`，
+/// 与之前 `&'static str` 一致——前端 `EngineRuntimeStatus` 字面量联合类型不动。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EngineState {
+    #[default]
+    Stopped,
+    Starting,
+    Running,
+    Error,
+}
+
 /// 给前端展示的运行时状态。
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EngineRuntimeStatus {
-    /// "stopped" | "starting" | "running" | "error"
-    pub state: &'static str,
+    pub state: EngineState,
     /// `Running` 时的监听端口；其它状态 `None`
     pub port: Option<u16>,
     /// `Error` 时的可读错误（stderr 截短）；其它状态 `None`
     pub error: Option<String>,
-}
-
-impl EngineRuntimeStatus {
-    fn stopped() -> Self {
-        Self {
-            state: "stopped",
-            ..Default::default()
-        }
-    }
 }
 
 /// llama-server 子进程的单例守护者。
@@ -81,10 +85,7 @@ impl Default for EngineSupervisor {
 impl EngineSupervisor {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(Inner {
-                state: EngineRuntimeStatus::stopped(),
-                child: None,
-            }),
+            inner: Mutex::new(Inner::default()),
         }
     }
 
@@ -109,22 +110,22 @@ impl EngineSupervisor {
         let port = {
             let mut inner = self.inner.lock().await;
             match inner.state.state {
-                "running" => {
+                EngineState::Running => {
                     if let Some(p) = inner.state.port {
                         return Ok(p);
                     }
                 }
-                "starting" => {
+                EngineState::Starting => {
                     return Err(Error::Other("引擎已经在启动中".to_string()));
                 }
-                _ => {}
+                EngineState::Stopped | EngineState::Error => {}
             }
 
             let bin_path = binary::binary_path()?;
             if !bin_path.exists() {
                 let msg = "AI 引擎 binary 未安装，先去下载".to_string();
                 inner.state = EngineRuntimeStatus {
-                    state: "error",
+                    state: EngineState::Error,
                     port: None,
                     error: Some(msg.clone()),
                 };
@@ -139,7 +140,7 @@ impl EngineSupervisor {
                 Err(e) => {
                     let msg = format!("spawn 失败：{e}");
                     inner.state = EngineRuntimeStatus {
-                        state: "error",
+                        state: EngineState::Error,
                         port: None,
                         error: Some(msg.clone()),
                     };
@@ -148,7 +149,7 @@ impl EngineSupervisor {
             };
 
             inner.state = EngineRuntimeStatus {
-                state: "starting",
+                state: EngineState::Starting,
                 port: Some(port),
                 error: None,
             };
@@ -163,7 +164,7 @@ impl EngineSupervisor {
         let mut inner = self.inner.lock().await;
         if healthy {
             inner.state = EngineRuntimeStatus {
-                state: "running",
+                state: EngineState::Running,
                 port: Some(port),
                 error: None,
             };
@@ -177,7 +178,7 @@ impl EngineSupervisor {
                 "child handle 丢失".to_string()
             };
             inner.state = EngineRuntimeStatus {
-                state: "error",
+                state: EngineState::Error,
                 port: None,
                 error: Some(err_msg.clone()),
             };
@@ -188,13 +189,20 @@ impl EngineSupervisor {
 
     /// 停止子进程。kill + wait 收尸，状态切回 Stopped。
     /// 已经 Stopped 时是 no-op。
+    ///
+    /// 两段式：先持锁 take child + 置 stopped，立刻释放锁；再不持锁 kill/wait。
+    /// 子进程慢退出（数秒）时其它 status() 调用不会被 hold，避免与
+    /// `lib.rs` 的 `RunEvent::Exit` 钩子里 `block_on(stop())` 配合时死等。
     pub async fn stop(&self) -> Result<()> {
-        let mut inner = self.inner.lock().await;
-        if let Some(mut child) = inner.child.take() {
+        let child = {
+            let mut inner = self.inner.lock().await;
+            inner.state = EngineRuntimeStatus::default();
+            inner.child.take()
+        };
+        if let Some(mut child) = child {
             let _ = child.kill().await;
             let _ = child.wait().await;
         }
-        inner.state = EngineRuntimeStatus::stopped();
         Ok(())
     }
 }
