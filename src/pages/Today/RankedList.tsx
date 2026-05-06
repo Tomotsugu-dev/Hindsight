@@ -29,14 +29,14 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
   const { t } = useTranslation();
   const denom = totalMinutes ?? Math.max(...items.map((i) => i.minutes), 1);
 
-  // 排行行的时长格式化 —— 复用 today.duration.* 资源
+  // 排行行的时长格式化 —— 复用 common.duration.* 资源
   const fmtTime = (minutes: number): string => {
-    if (minutes < 60) return t("today.duration.minutesPlain", { count: minutes });
+    if (minutes < 60) return t("common.duration.minutesPlain", { count: minutes });
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return m === 0
-      ? t("today.duration.hoursPlain", { count: h })
-      : t("today.duration.hoursAndMinutesShort", { hours: h, minutes: m });
+      ? t("common.duration.hoursPlain", { count: h })
+      : t("common.duration.hoursAndMinutesShort", { hours: h, minutes: m });
   };
 
   return (

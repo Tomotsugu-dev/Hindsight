@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./DailyBarChart.module.css";
@@ -7,12 +8,6 @@ interface DailyBarChartProps {
   days: DaySummary[];
   /** 给每一根柱子返回 X 轴标签；返回 null 则不画 */
   xLabel?: (day: DaySummary, index: number) => string | null;
-}
-
-function fmtTickLabel(min: number): string {
-  if (min === 0) return "0";
-  if (min % 60 === 0) return `${min / 60}h`;
-  return `${min}m`;
 }
 
 /** 把 max 向上对齐到合理的整时刻度 */
@@ -26,6 +21,7 @@ function niceYMax(max: number): number {
 }
 
 export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
+  const { t } = useTranslation();
   const { getCategory } = useCategories();
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
   const maxTotal = Math.max(0, ...totals);
@@ -33,27 +29,46 @@ export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
 
   const yTicks = [yMax / 4, yMax / 2, (3 * yMax) / 4, yMax];
 
+  // Y 轴刻度文案 —— 整小时显示 h，否则 m
+  const fmtTickLabel = (min: number): string => {
+    if (min === 0) return "0";
+    if (min % 60 === 0) {
+      return t("common.duration.tickHours", { count: min / 60 });
+    }
+    return t("common.duration.tickMinutes", { count: min });
+  };
+
+  // 柱子 tooltip —— 月/日 + 时长
+  const fmtBarTitle = (day: DaySummary, total: number): string =>
+    t("week.chart.barTitle", {
+      date: t("week.shortDate", {
+        month: day.date.getMonth() + 1,
+        day: day.date.getDate(),
+      }),
+      duration: fmtTickLabel(total),
+    });
+
   return (
     <div className={styles.chart}>
       <div className={styles.plot}>
         <div className={styles.yAxis} aria-hidden>
-          {yTicks.map((t) => (
+          {yTicks.map((tick) => (
             <span
-              key={t}
+              key={tick}
               className={styles.yTick}
-              style={{ bottom: `${(t / yMax) * 100}%` }}
+              style={{ bottom: `${(tick / yMax) * 100}%` }}
             >
-              {fmtTickLabel(t)}
+              {fmtTickLabel(tick)}
             </span>
           ))}
         </div>
 
         <div className={styles.plotArea}>
-          {yTicks.map((t) => (
+          {yTicks.map((tick) => (
             <div
-              key={t}
+              key={tick}
               className={styles.gridLine}
-              style={{ bottom: `${(t / yMax) * 100}%` }}
+              style={{ bottom: `${(tick / yMax) * 100}%` }}
               aria-hidden
             />
           ))}
@@ -67,11 +82,7 @@ export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
                   <div
                     className={styles.bar}
                     style={{ height: `${heightPct}%` }}
-                    title={
-                      total > 0
-                        ? `${day.date.getMonth() + 1}/${day.date.getDate()} — ${fmtTickLabel(total)}`
-                        : undefined
-                    }
+                    title={total > 0 ? fmtBarTitle(day, total) : undefined}
                   >
                     {day.segments.map((seg) => {
                       const cat = getCategory(seg.categoryId);

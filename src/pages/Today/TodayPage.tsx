@@ -45,8 +45,8 @@ export default function TodayPage() {
   const fmtHM = (min: number): string => {
     const h = Math.floor(min / 60);
     const m = min % 60;
-    if (h === 0) return t("today.duration.minutesShort", { count: m });
-    return t("today.duration.hourMinute", { hours: h, minutes: m });
+    if (h === 0) return t("common.duration.minutesShort", { count: m });
+    return t("common.duration.hourMinute", { hours: h, minutes: m });
   };
 
   // 日期切换 pill 的本地化文案

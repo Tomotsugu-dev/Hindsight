@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
@@ -16,39 +17,51 @@ import styles from "./WeekPage.module.css";
 
 const SWIPE_DURATION = 420;
 
-function fmtHM(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m} 分`;
-  if (m === 0) return `${h} 小时`;
-  return `${h} 小时 ${m} 分`;
-}
-
-function fmtRange(days: DaySummary[]): string {
-  if (days.length === 0) return "";
-  const first = days[0].date;
-  const last = days[days.length - 1].date;
-  const sameMonth = first.getMonth() === last.getMonth();
-  if (sameMonth) {
-    return `${first.getMonth() + 1}月${first.getDate()}日 — ${last.getDate()}日`;
-  }
-  return `${first.getMonth() + 1}月${first.getDate()}日 — ${last.getMonth() + 1}月${last.getDate()}日`;
-}
-
-function weekLabel(offset: number): string {
-  if (offset === 0) return "本周";
-  if (offset === -1) return "上周";
-  if (offset < -1) return `${-offset} 周前`;
-  return `${offset} 周后`;
-}
-
 export default function WeekPage() {
+  const { t } = useTranslation();
   const [offset, setOffset] = useState(0);
   const { categories, getCategory } = useCategories();
   const { selectedDeviceId } = useDeviceFilter();
   const { get: getWeek } = useWeekCache(offset, selectedDeviceId);
 
   const { days, apps } = useMemo(() => getWeek(offset), [getWeek, offset]);
+
+  // 时长格式化 —— 复用 common.duration.* 资源
+  const fmtHM = (min: number): string => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return t("common.duration.minutesShort", { count: m });
+    return t("common.duration.hourMinute", { hours: h, minutes: m });
+  };
+
+  // 周日期范围文案
+  const fmtRange = (list: DaySummary[]): string => {
+    if (list.length === 0) return "";
+    const first = list[0].date;
+    const last = list[list.length - 1].date;
+    const sameMonth = first.getMonth() === last.getMonth();
+    if (sameMonth) {
+      return t("week.rangeSameMonth", {
+        month: first.getMonth() + 1,
+        startDay: first.getDate(),
+        endDay: last.getDate(),
+      });
+    }
+    return t("week.rangeCrossMonth", {
+      startMonth: first.getMonth() + 1,
+      startDay: first.getDate(),
+      endMonth: last.getMonth() + 1,
+      endDay: last.getDate(),
+    });
+  };
+
+  // 周切换 pill 的本地化文案
+  const weekLabel = (off: number): string => {
+    if (off === 0) return t("week.weekNav.thisWeek");
+    if (off === -1) return t("week.weekNav.lastWeek");
+    if (off < -1) return t("week.weekNav.weeksAgo", { count: -off });
+    return t("week.weekNav.weeksLater", { count: off });
+  };
 
   const totalMinutes = useMemo(
     () =>
@@ -145,15 +158,19 @@ export default function WeekPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>周统计</h1>
+        <h1 className={styles.title}>{t("week.title")}</h1>
         <p className={styles.meta}>
-          {fmtRange(days)} · 共 {fmtHM(totalMinutes)} · 日均 {fmtHM(Math.round(avgPerDay))}
+          {t("week.meta", {
+            range: fmtRange(days),
+            total: fmtHM(totalMinutes),
+            avg: fmtHM(Math.round(avgPerDay)),
+          })}
         </p>
       </header>
 
       <section className={styles.card}>
         <header className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>每日活动分布</h2>
+          <h2 className={styles.cardTitle}>{t("week.chart.title")}</h2>
 
           <div className={styles.headRight}>
             <DevicePicker />
@@ -165,8 +182,8 @@ export default function WeekPage() {
               className={`${styles.navBtn} glow`}
               onClick={() => commit(-1)}
               disabled={transitioning}
-              aria-label="前一周"
-              title="前一周"
+              aria-label={t("week.weekNav.prev")}
+              title={t("week.weekNav.prev")}
             >
               <ChevronLeft size={14} strokeWidth={1.75} />
             </button>
@@ -177,7 +194,7 @@ export default function WeekPage() {
               className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
               onClick={jumpToThis}
               disabled={offset === 0 || transitioning}
-              title={offset === 0 ? undefined : "回到本周"}
+              title={offset === 0 ? undefined : t("week.weekNav.backToThisWeek")}
             >
               {weekLabel(offset)}
             </button>
@@ -188,8 +205,8 @@ export default function WeekPage() {
               className={`${styles.navBtn} glow`}
               onClick={() => commit(1)}
               disabled={!canGoForward || transitioning}
-              aria-label="后一周"
-              title="后一周"
+              aria-label={t("week.weekNav.next")}
+              title={t("week.weekNav.next")}
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
@@ -220,7 +237,7 @@ export default function WeekPage() {
       <div className={styles.ranks}>
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>本周最常用应用</h2>
+            <h2 className={styles.cardTitle}>{t("week.ranks.topApps")}</h2>
           </header>
           {appRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -233,7 +250,7 @@ export default function WeekPage() {
 
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>本周最常用分类</h2>
+            <h2 className={styles.cardTitle}>{t("week.ranks.topCategories")}</h2>
           </header>
           {categoryRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -267,5 +284,6 @@ function Legend() {
 }
 
 function EmptyHint() {
-  return <div className={styles.empty}>暂无数据</div>;
+  const { t } = useTranslation();
+  return <div className={styles.empty}>{t("common.empty")}</div>;
 }

@@ -6,7 +6,16 @@
     "delete": "删除",
     "minimize": "最小化",
     "close": "关闭",
-    "empty": "暂无数据"
+    "empty": "暂无数据",
+    "duration": {
+      "minutesShort": "{{count}} 分钟",
+      "hourMinute": "{{hours}} 小时 {{minutes}} 分",
+      "minutesPlain": "{{count}} 分",
+      "hoursPlain": "{{count}} 小时",
+      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m",
+      "tickMinutes": "{{count}}m",
+      "tickHours": "{{count}}h"
+    }
   },
   "nav": {
     "groups": {
@@ -90,13 +99,39 @@
     "ranks": {
       "topApps": "最常用应用",
       "topCategories": "最常用分类"
-    },
-    "duration": {
-      "minutesShort": "{{count}} 分钟",
-      "hourMinute": "{{hours}} 小时 {{minutes}} 分",
-      "minutesPlain": "{{count}} 分",
-      "hoursPlain": "{{count}} 小时",
-      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m"
     }
+  },
+  "week": {
+    "title": "周统计",
+    "meta": "{{range}} · 共 {{total}} · 日均 {{avg}}",
+    "rangeSameMonth": "{{month}}月{{startDay}}日 — {{endDay}}日",
+    "rangeCrossMonth": "{{startMonth}}月{{startDay}}日 — {{endMonth}}月{{endDay}}日",
+    "chart": {
+      "title": "每日活动分布",
+      "barTitle": "{{date}} — {{duration}}"
+    },
+    "weekNav": {
+      "prev": "前一周",
+      "next": "后一周",
+      "backToThisWeek": "回到本周",
+      "thisWeek": "本周",
+      "lastWeek": "上周",
+      "weeksAgo": "{{count}} 周前",
+      "weeksLater": "{{count}} 周后"
+    },
+    "ranks": {
+      "topApps": "本周最常用应用",
+      "topCategories": "本周最常用分类"
+    },
+    "dow": {
+      "mon": "周一",
+      "tue": "周二",
+      "wed": "周三",
+      "thu": "周四",
+      "fri": "周五",
+      "sat": "周六",
+      "sun": "周日"
+    },
+    "shortDate": "{{month}}/{{day}}"
   }
 }

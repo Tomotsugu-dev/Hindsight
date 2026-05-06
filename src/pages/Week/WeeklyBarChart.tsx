@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeeklyBarChart.module.css";
@@ -6,28 +7,39 @@ interface WeeklyBarChartProps {
   days: DaySummary[];
 }
 
-const DOW = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-
-function fmtTotal(min: number): string {
-  if (min === 0) return "—";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
-
-function fmtDate(d: Date): string {
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
+// 周几标签的资源 key（按周一到周日顺序）
+const DOW_KEYS = [
+  "week.dow.mon",
+  "week.dow.tue",
+  "week.dow.wed",
+  "week.dow.thu",
+  "week.dow.fri",
+  "week.dow.sat",
+  "week.dow.sun",
+] as const;
 
 export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
+  const { t } = useTranslation();
   const { categories, getCategory } = useCategories();
   const order = new Map(categories.map((c, i) => [c.id, i]));
   const sortSegments = (segments: DaySummary["segments"]) =>
     [...segments].sort(
       (a, b) => (order.get(a.categoryId) ?? 99) - (order.get(b.categoryId) ?? 99),
     );
+
+  // 时长格式化 —— 复用 common.duration.* 资源；空值用占位符
+  const fmtTotal = (min: number): string => {
+    if (min === 0) return "—";
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return t("common.duration.tickMinutes", { count: m });
+    if (m === 0) return t("common.duration.tickHours", { count: h });
+    return t("common.duration.hoursAndMinutesShort", { hours: h, minutes: m });
+  };
+
+  // 月/日 短日期
+  const fmtDate = (d: Date): string =>
+    t("week.shortDate", { month: d.getMonth() + 1, day: d.getDate() });
 
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
   const maxTotal = Math.max(0, ...totals);
@@ -47,7 +59,7 @@ export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
             className={`${styles.row} ${isToday ? styles.rowToday : ""}`}
           >
             <div className={styles.label}>
-              <span className={styles.dow}>{DOW[i]}</span>
+              <span className={styles.dow}>{t(DOW_KEYS[i])}</span>
               <span className={styles.date}>{fmtDate(day.date)}</span>
             </div>
 

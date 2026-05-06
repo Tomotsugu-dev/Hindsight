@@ -6,7 +6,16 @@
     "delete": "Delete",
     "minimize": "Minimize",
     "close": "Close",
-    "empty": "No data yet"
+    "empty": "No data yet",
+    "duration": {
+      "minutesShort": "{{count}} min",
+      "hourMinute": "{{hours}}h {{minutes}}m",
+      "minutesPlain": "{{count}} min",
+      "hoursPlain": "{{count}}h",
+      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m",
+      "tickMinutes": "{{count}}m",
+      "tickHours": "{{count}}h"
+    }
   },
   "nav": {
     "groups": {
@@ -90,13 +99,39 @@
     "ranks": {
       "topApps": "Top apps",
       "topCategories": "Top categories"
-    },
-    "duration": {
-      "minutesShort": "{{count}} min",
-      "hourMinute": "{{hours}}h {{minutes}}m",
-      "minutesPlain": "{{count}} min",
-      "hoursPlain": "{{count}}h",
-      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m"
     }
+  },
+  "week": {
+    "title": "Weekly",
+    "meta": "{{range}} · {{total}} total · {{avg}} daily avg",
+    "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
+    "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
+    "chart": {
+      "title": "Daily activity",
+      "barTitle": "{{date}} — {{duration}}"
+    },
+    "weekNav": {
+      "prev": "Previous week",
+      "next": "Next week",
+      "backToThisWeek": "Back to this week",
+      "thisWeek": "This week",
+      "lastWeek": "Last week",
+      "weeksAgo": "{{count}} weeks ago",
+      "weeksLater": "In {{count}} weeks"
+    },
+    "ranks": {
+      "topApps": "Top apps this week",
+      "topCategories": "Top categories this week"
+    },
+    "dow": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    },
+    "shortDate": "{{month}}/{{day}}"
   }
 }
