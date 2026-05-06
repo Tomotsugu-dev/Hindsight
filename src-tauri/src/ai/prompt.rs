@@ -10,9 +10,8 @@
 //! 通过 `include_str!` 编译时嵌入二进制——零运行时开销，发布产物自带，无需额外
 //! 部署步骤。改 prompt 内容只动 `.md` 文件，不动 `.rs` 代码。
 //!
-//! 前端 [`src/lib/prompts/`] 维护一份对应的副本，给 UI 编辑器展示默认值 / 重置
-//! 回填用。前后端各自管自己的资源边界，**不**跨 crate 反向引用——保持模块边界
-//! 干净。同步靠 commit 时人眼 diff，未来必要时上 CI check。
+//! 前端通过 vite `?raw` 直接引用 `src-tauri/resources/prompts/` 下的同一份 `.md`
+//! 文件，没有副本——单一数据源，前后端共用。
 //!
 //! 用户在 [AISettings → 提示词] Section 里写的覆盖会落到
 //! `settings.ai.prompt_overrides.system_<lang>`；非空就走覆盖，空就走内置默认。
