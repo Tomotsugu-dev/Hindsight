@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRightLeft, Coffee, Globe, Pause } from "lucide-react";
 import { useSettings } from "../../state/settings";
-import { useLocale } from "../../i18n/useLocale";
+import { useLocale, type Locale } from "../../i18n/useLocale";
 import styles from "./StatusFooter.module.css";
 
 type CaptureStatus = "ok" | "idle" | "error";
@@ -18,6 +18,14 @@ const CAPTURE_TEXT_KEY: Record<CaptureStatus, string> = {
   idle: "sidebar.capture.idle",
   error: "sidebar.capture.error",
 };
+
+// 三个语言 option 的元信息（label 用各自语言的母语写法，避免再走 t()）
+// 顺序也是循环切换的顺序：点击 trigger → 跳到 next（zh-CN → en → ja → zh-CN）
+const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
+  { value: "zh-CN", label: "简体中文" },
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+];
 
 function parseHM(s: string): number {
   const [h, m] = s.split(":").map((p) => parseInt(p, 10));
@@ -54,6 +62,15 @@ export function StatusFooter({
       return h >= s && h < e;
     });
   }, [settings, tick]);
+
+  // 当前与下一种语言（cycle 顺序按 LOCALE_OPTIONS 数组）
+  const currentIdx = Math.max(
+    0,
+    LOCALE_OPTIONS.findIndex((o) => o.value === locale),
+  );
+  const currentOption = LOCALE_OPTIONS[currentIdx];
+  const nextOption =
+    LOCALE_OPTIONS[(currentIdx + 1) % LOCALE_OPTIONS.length];
 
   return (
     <div className={styles.footer}>
@@ -99,31 +116,25 @@ export function StatusFooter({
         </span>
       </button>
 
+      {/* 语言切换：点击循环到下一种语言（zh-CN → en → ja → zh-CN）；
+          hover 时上下 swap 显示目标语言名 */}
       <button
         className={`${styles.row} ${styles.langRow}`}
         type="button"
-        onClick={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")}
-        title={locale === "zh-CN" ? "Switch to English" : "切换为简体中文"}
+        onClick={() => setLocale(nextOption.value)}
+        title={`Switch to ${nextOption.label}`}
       >
         <span className={styles.swap} aria-hidden>
           {/* 当前语言态 */}
           <span className={`${styles.face} ${styles.faceDefault}`}>
             <Globe size={14} strokeWidth={1.75} className={styles.cloud} />
-            <span className={styles.text}>
-              {locale === "zh-CN" ? "简体中文" : "English"}
-            </span>
+            <span className={styles.text}>{currentOption.label}</span>
           </span>
 
-          {/* hover 态：目标语言 */}
+          {/* hover 态：目标语言（cycle 中下一种） */}
           <span className={`${styles.face} ${styles.langFaceTarget}`}>
-            <ArrowRightLeft
-              size={14}
-              strokeWidth={1.75}
-              className={styles.cloud}
-            />
-            <span className={styles.text}>
-              {locale === "zh-CN" ? "English" : "简体中文"}
-            </span>
+            <ArrowRightLeft size={14} strokeWidth={1.75} className={styles.cloud} />
+            <span className={styles.text}>{nextOption.label}</span>
           </span>
         </span>
       </button>

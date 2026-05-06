@@ -36,7 +36,7 @@
       "month": "Monthly",
       "aiSummary": "AI Summary",
       "aiSettings": "AI Settings",
-      "categories": "App Categories",
+      "categories": "Categories",
       "devices": "Cloud Sync",
       "settings": "Settings"
     }
@@ -84,14 +84,14 @@
         "enableLabel": "Enable capture",
         "enableDescription": "When off, window info and screenshots stop being recorded.",
         "intervalLabel": "Capture interval",
-        "intervalDescription": "How often window info and screenshots are captured. Shorter intervals give finer detail at higher disk cost.",
+        "intervalDescription": "How often window info and screenshots are captured.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
         "idleLabel": "Idle timeout",
-        "idleDescription": "Stop counting time on the current session after prolonged mouse/keyboard inactivity, so time isn't tracked while you're away. Set to 0 to never pause.",
-        "idleHint": "Detection uses system-level mouse / keyboard / trackpad events —\nwatching videos or reading without input won't trigger it.\nA new session starts automatically when activity resumes.",
+        "idleDescription": "Stop counting time after prolonged mouse/keyboard inactivity.",
+        "idleHint": "Detection uses system-level mouse / keyboard / trackpad events.\nSet to 0 to disable (never trigger).",
         "screenshotPathLabel": "Screenshots folder",
         "dataPathLabel": "Data folder",
-        "dataPathDescription": "Location of the database and the default screenshots root. Changing requires a restart, and old data must be migrated manually."
+        "dataPathHint": "Location of the database and the default screenshots root. Changing requires a restart, and old data must be migrated manually."
       },
       "workHours": {
         "title": "Work hours",
@@ -526,7 +526,7 @@
     },
     "filter": {
       "sectionTitle": "Filters",
-      "rowLabel": "Skip these categories",
+      "rowLabel": "Analyze these categories",
       "rowHint": "Click to toggle:\n• Colored + category icon = included in AI analysis\n• Gray outline + closed-eye icon = excluded"
     },
     "frame": {

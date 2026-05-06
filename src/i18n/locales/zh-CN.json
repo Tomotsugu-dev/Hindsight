@@ -84,14 +84,14 @@
         "enableLabel": "启用采集",
         "enableDescription": "关闭后停止记录窗口信息和截图。",
         "intervalLabel": "采集间隔",
-        "intervalDescription": "窗口信息和截图的采集频率。间隔越短，记录越精细，磁盘占用越大。",
+        "intervalDescription": "窗口信息和截图的采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
-        "idleLabel": "挂机不计时",
-        "idleDescription": "鼠键长时间无操作时停止累计当前会话的时长，避免离开电脑后仍在记录使用时间。设为 0 = 永远算在用。",
-        "idleHint": "判断依据是系统级的鼠标 / 键盘 / 触控板事件——\n看视频、长时间阅读不会触发。\n用户回来动鼠键后会自动开始新会话。",
+        "idleLabel": "闲置阈值",
+        "idleDescription": "鼠键长时间无操作时停止计时。",
+        "idleHint": "判断依据是系统级的鼠标 / 键盘 / 触控板事件。\n置为 0 相当于永远不触发。",
         "screenshotPathLabel": "截图保存路径",
         "dataPathLabel": "数据保存路径",
-        "dataPathDescription": "数据库与默认截图根目录所在位置。更改后需重启应用，旧数据需手动迁移。"
+        "dataPathHint": "数据库与默认截图根目录所在位置。更改后需重启应用，旧数据需手动迁移。"
       },
       "workHours": {
         "title": "工作时段",
@@ -526,7 +526,7 @@
     },
     "filter": {
       "sectionTitle": "过滤",
-      "rowLabel": "不分析这些分类",
+      "rowLabel": "分析这些分类",
       "rowHint": "点击切换：\n• 彩色 + 分类图标 = 参与 AI 分析\n• 灰色空心 + 闭眼图标 = 已排除"
     },
     "frame": {

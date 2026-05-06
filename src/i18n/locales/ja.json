@@ -1,0 +1,639 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "confirm": "OK",
+    "delete": "削除",
+    "minimize": "最小化",
+    "close": "閉じる",
+    "empty": "データがありません",
+    "open": "開く",
+    "duration": {
+      "minutesShort": "{{count}} 分",
+      "hourMinute": "{{hours}} 時間 {{minutes}} 分",
+      "minutesPlain": "{{count}} 分",
+      "hoursPlain": "{{count}} 時間",
+      "hoursAndMinutesShort": "{{hours}} 時間 {{minutes}} 分",
+      "tickMinutes": "{{count}} 分",
+      "tickHours": "{{count}} 時間"
+    },
+    "units": {
+      "seconds": "秒",
+      "minutes": "分",
+      "hours": "時間",
+      "days": "日"
+    }
+  },
+  "nav": {
+    "groups": {
+      "primary": "概要",
+      "ai": "AI",
+      "system": "システム"
+    },
+    "items": {
+      "today": "今日",
+      "week": "週次",
+      "month": "月次",
+      "aiSummary": "AI サマリー",
+      "aiSettings": "AI 設定",
+      "categories": "アプリ分類",
+      "devices": "同期",
+      "settings": "設定"
+    }
+  },
+  "sidebar": {
+    "capture": {
+      "ok": "記録中",
+      "idle": "一時停止中",
+      "error": "記録エラー",
+      "resting": "休憩中",
+      "stop": "記録を停止",
+      "toggleAria": "記録の開始 / 停止"
+    },
+    "sync": {
+      "connected": "接続済み",
+      "signedOut": "未ログイン",
+      "aria": "デバイスとクラウド同期を管理",
+      "title": "デバイス / クラウド同期"
+    }
+  },
+  "windowControls": {
+    "minimize": "最小化",
+    "close": "閉じる"
+  },
+  "settings": {
+    "pageTitle": "設定",
+    "tabs": {
+      "general": "一般",
+      "data": "データ",
+      "privacy": "プライバシー",
+      "about": "情報"
+    },
+    "language": {
+      "sectionTitle": "言語 / Language",
+      "label": "言語",
+      "options": {
+        "zhCN": "简体中文",
+        "en": "English"
+      }
+    },
+    "general": {
+      "capture": {
+        "title": "記録",
+        "description": "アクティブなウィンドウとスクリーンショットを定期的に記録し、後から振り返れるようにします。",
+        "enableLabel": "記録を有効化",
+        "enableDescription": "オフにするとウィンドウ情報とスクリーンショットの記録を停止します。",
+        "intervalLabel": "記録の間隔",
+        "intervalDescription": "ウィンドウ情報とスクリーンショットの記録頻度。間隔を短くすると詳細になりますが、ディスク使用量が増えます。",
+        "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",
+        "idleLabel": "アイドル時間",
+        "idleDescription": "マウス / キーボード操作が長時間ない場合、現在のセッションの計測を停止します。離席中の時間が記録されるのを防ぎます。0 にすると停止しません。",
+        "idleHint": "システム標準のマウス / キーボード / トラックパッドの入力で判定します。\n動画視聴や入力なしの読書では発火しません。\n操作を再開すると新しいセッションが自動で開始されます。",
+        "screenshotPathLabel": "スクリーンショットの保存先",
+        "dataPathLabel": "データの保存先",
+        "dataPathDescription": "データベースとスクリーンショットのデフォルトの保存場所です。変更には再起動が必要で、既存のデータは手動で移行する必要があります。"
+      },
+      "workHours": {
+        "title": "勤務時間",
+        "description": "指定した時間帯のみ記録を行い、勤務時間外の活動は記録しません。複数の時間帯に対応しています。",
+        "enableLabel": "勤務時間を有効化",
+        "rangesLabel": "時間帯"
+      },
+      "startup": {
+        "title": "起動時の動作",
+        "autoStartLabel": "システム起動時に自動起動",
+        "autoStartDescription": "ログイン後に Hindsight が自動的に起動します。",
+        "showWindowLabel": "起動時にメインウィンドウを表示",
+        "showWindowDescription": "オフにするとトレイに常駐し、必要なときに手動で開きます。",
+        "minimizeToTrayLabel": "閉じるときにトレイへ最小化",
+        "minimizeToTrayDescriptionMac": "ウィンドウ左上の X をクリックするとトレイに格納され、記録と同期はバックグラウンドで継続されます。オフの場合は X をクリックするとアプリが終了します。",
+        "minimizeToTrayDescriptionWin": "ウィンドウ右上の X をクリックするとトレイに格納され、記録と同期はバックグラウンドで継続されます。オフの場合は X をクリックするとアプリが終了します。"
+      },
+      "dataRootDialog": {
+        "title": "データの保存先を変更しますか?",
+        "message": "新しいパス: {{path}}\n\n変更を反映するにはアプリの再起動が必要です。\n\n旧フォルダのデータベースとスクリーンショットは自動で移行されません。履歴を残したい場合は、先に {{oldPath}} の中身を新しい場所へコピーしてください。"
+      }
+    },
+    "data": {
+      "storage": {
+        "title": "ストレージ",
+        "description": "スクリーンショットの保持期間と現在の使用量です。データベースは自動削除されません。",
+        "retentionLabel": "スクリーンショット保持日数",
+        "retentionDescription": "期限切れのスクリーンショットファイルは自動的に削除されます (アクティビティ記録は保持)。",
+        "currentUsageLabel": "現在の使用量",
+        "currentUsageDescription": "データベース {{db}} · スクリーンショット {{shots}}",
+        "modelsPathLabel": "AI モデルの保存先",
+        "modelsPathHint": "保存先を変更しても、旧フォルダ内のモデルは自動で移行されません。手動でコピーするか、新しいパスで再ダウンロードしてください。"
+      },
+      "manage": {
+        "title": "データ管理",
+        "description": "不要なデータを削除してディスク容量を解放します。",
+        "purgeDbLabel": "データベースを削除",
+        "purgeDbDescription": "すべてのウィンドウアクティビティ記録を削除します。分類と設定は保持されます。",
+        "purgeDbOpenTitle": "ファインダー / エクスプローラーでデータベースを表示",
+        "purgeShotsLabel": "スクリーンショットを削除",
+        "purgeShotsDescription": "保存されているすべてのスクリーンショットファイルを削除します。",
+        "purgeShotsOpenTitle": "スクリーンショットフォルダを開く"
+      },
+      "purgeDialog": {
+        "dbTitle": "データベースを削除しますか?",
+        "shotsTitle": "スクリーンショットを削除しますか?",
+        "dbMessage": "すべてのウィンドウアクティビティ記録が削除されます。分類と設定には影響しません。この操作は取り消せません。",
+        "shotsMessage": "保存されているすべてのスクリーンショットファイルが削除されます。データベース内の対応するスクリーンショット参照もあわせて削除されます。この操作は取り消せません。"
+      }
+    },
+    "privacy": {
+      "browser": {
+        "title": "ブラウザフィルター",
+        "info": "ブラウザのアドレスバーの URL に以下のいずれかが含まれる場合 (大文字小文字を区別しない)、スクリーンショットをスキップします。",
+        "rowLabel": "URL キーワード",
+        "addLabel": "URL の一部を追加",
+        "placeholder": "例: /login"
+      },
+      "app": {
+        "title": "アプリフィルター",
+        "info": "アプリ名やウィンドウタイトルに以下のいずれかが含まれる場合 (大文字小文字を区別しない)、スクリーンショットをスキップします。",
+        "rowLabel": "タイトル / アプリのキーワード",
+        "addLabel": "アプリ名を追加",
+        "placeholder": "例: LINE"
+      },
+      "scope": {
+        "title": "適用範囲",
+        "info": "条件に一致した場合、スキップされるのはスクリーンショットのみです",
+        "noticePrefix": "スクリーンショットのフィルタリングはローカル動作のため、",
+        "noticeEmph": "保存済みのスクリーンショットには適用されません",
+        "noticeMiddle": "。過去のスクリーンショットを削除するには ",
+        "noticeKbd": "設定 · データ · スクリーンショットを削除",
+        "noticeSuffix": " から行ってください。"
+      },
+      "keywordEditor": {
+        "removeAria": "{{keyword}} を削除",
+        "removeTooltip": "削除"
+      }
+    },
+    "about": {
+      "subtitle": "{{version}} · Tauri 2 + React",
+      "update": {
+        "title": "アプリのアップデート",
+        "currentVersionLabel": "現在のバージョン",
+        "checkBtn": "アップデートを確認",
+        "checkingBtn": "確認中…",
+        "installingBtn": "更新中…",
+        "status": {
+          "checking": "確認中…",
+          "uptodate": "最新です",
+          "installing": "ダウンロードしてインストール中。完了すると自動で再起動します…",
+          "error": "確認に失敗しました: {{message}}"
+        },
+        "autoLabel": "アップデートを自動で確認",
+        "autoDescription": "オンにすると、起動時に下記の頻度で静かに確認し、新しいバージョンが見つかると通知します。",
+        "intervalLabel": "確認頻度",
+        "intervals": {
+          "daily": "毎日",
+          "weekly": "毎週",
+          "monthly": "毎月",
+          "onstartup": "アプリを起動するたび"
+        }
+      },
+      "info": {
+        "title": "情報",
+        "authorLabel": "作者",
+        "authorDescription": "個人プロジェクト · 非商用",
+        "licenseLabel": "ライセンス"
+      },
+      "links": {
+        "title": "リンク",
+        "repoLabel": "GitHub リポジトリ",
+        "repoLink": "表示 →",
+        "feedbackLabel": "フィードバックと提案",
+        "feedbackLink": "送信 →"
+      }
+    }
+  },
+  "components": {
+    "devicePicker": {
+      "all": "すべてのデバイス",
+      "thisDevice": "このデバイス"
+    },
+    "appearancePicker": {
+      "color": "カラー",
+      "icon": "アイコン"
+    },
+    "slider": {
+      "valueAria": "値"
+    },
+    "timeField": {
+      "hourAria": "時",
+      "minuteAria": "分",
+      "tooltip": "ホイール · 矢印キー · 数字を入力"
+    },
+    "timeRangeList": {
+      "empty": "時間帯が未設定です。終日記録します。",
+      "to": "〜",
+      "removeAria": "時間帯を削除",
+      "addBtn": "時間帯を追加"
+    },
+    "pathField": {
+      "pickLabel": "選択"
+    },
+    "categoryChipMultiSelect": {
+      "loading": "分類を読み込み中…",
+      "empty": "分類はまだありません",
+      "excludedTitle": "除外中 — クリックで再度含める",
+      "includeTitle": "クリックで分析から除外"
+    },
+    "segmentList": {
+      "empty": "セグメントがまだありません。下の「セグメントを追加」をクリックして始めてください",
+      "newSegmentLabel": "新しいセグメント",
+      "addBtn": "セグメントを追加",
+      "leftEdgeAria": "アクティビティ開始時刻",
+      "betweenAria": "セグメントの区切り",
+      "rightEdgeAria": "アクティビティ終了時刻",
+      "removeAria": "セグメントを削除",
+      "removeMergeRight": "削除 (範囲を右隣にマージ)",
+      "removeMergeLeft": "削除 (範囲を左隣にマージ)",
+      "swatchAria": "カラー {{name}}",
+      "swatchAuto": "自動",
+      "swatchAutoTitle": "時間帯に応じて自動でグラデーション",
+      "swatches": {
+        "blue": "ブルー",
+        "lavender": "ラベンダー",
+        "lilac": "ライラック",
+        "rose": "ローズ",
+        "creamOrange": "クリームオレンジ",
+        "peach": "ピーチ",
+        "warmYellow": "ウォームイエロー",
+        "mint": "ミント"
+      }
+    }
+  },
+  "today": {
+    "title": "今日",
+    "meta": "{{date}} · 記録 {{duration}}",
+    "chart": {
+      "title": "24 時間のアクティビティ",
+      "barTitle": "{{hour}}:00 — {{minutes}} 分"
+    },
+    "dayNav": {
+      "prev": "前の日",
+      "next": "次の日",
+      "backToToday": "今日に戻る",
+      "today": "今日",
+      "yesterday": "昨日",
+      "daysAgo": "{{count}} 日前",
+      "daysLater": "{{count}} 日後"
+    },
+    "legend": {
+      "workHours": "勤務時間"
+    },
+    "ranks": {
+      "topApps": "よく使うアプリ",
+      "topCategories": "よく使う分類"
+    }
+  },
+  "week": {
+    "title": "週次",
+    "meta": "{{range}} · 合計 {{total}} · 1 日平均 {{avg}}",
+    "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
+    "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
+    "chart": {
+      "title": "毎日のアクティビティ",
+      "barTitle": "{{date}} — {{duration}}"
+    },
+    "weekNav": {
+      "prev": "前の週",
+      "next": "次の週",
+      "backToThisWeek": "今週に戻る",
+      "thisWeek": "今週",
+      "lastWeek": "先週",
+      "weeksAgo": "{{count}} 週間前",
+      "weeksLater": "{{count}} 週間後"
+    },
+    "ranks": {
+      "topApps": "今週よく使ったアプリ",
+      "topCategories": "今週よく使った分類"
+    },
+    "dow": {
+      "mon": "月",
+      "tue": "火",
+      "wed": "水",
+      "thu": "木",
+      "fri": "金",
+      "sat": "土",
+      "sun": "日"
+    },
+    "shortDate": "{{month}}/{{day}}"
+  },
+  "month": {
+    "title": "月次",
+    "meta": "{{month}} · 合計 {{total}} · 1 日平均 {{avg}}",
+    "monthLabel": "{{year}}年{{month}}",
+    "chart": {
+      "title": "毎日のアクティビティ"
+    },
+    "monthNav": {
+      "prev": "前の月",
+      "next": "次の月",
+      "backToThisMonth": "今月に戻る",
+      "thisMonth": "今月",
+      "lastMonth": "先月",
+      "monthsAgo": "{{count}} か月前",
+      "monthsLater": "{{count}} か月後"
+    },
+    "ranks": {
+      "topApps": "今月よく使ったアプリ",
+      "topCategories": "今月よく使った分類"
+    }
+  },
+  "categories": {
+    "title": "アプリ分類",
+    "intro": "プロセスをアクティビティ分類にまとめます。色、アイコン、名前、紐付けるアプリはすべてカスタマイズできます。",
+    "newCategory": "分類を追加",
+    "loading": "読み込み中…",
+    "defaults": {
+      "code": "コーディング",
+      "browse": "ブラウジング",
+      "talk": "コミュニケーション",
+      "design": "デザイン",
+      "fun": "エンタメ",
+      "other": "その他"
+    },
+    "list": {
+      "namePlaceholder": "分類名",
+      "renameTooltip": "ダブルクリックで名前を変更",
+      "dragHandleAria": "ドラッグして並べ替え",
+      "iconBtnAria": "外観を編集",
+      "iconBtnTitle": "色とアイコンを変更",
+      "createIconAria": "色とアイコンを選択",
+      "renameAria": "名前を変更",
+      "deleteAria": "分類を削除",
+      "confirm": "OK",
+      "cancel": "キャンセル"
+    },
+    "appList": {
+      "empty": "(紐付いているアプリはありません)",
+      "addPlaceholder": "例: chrome.exe",
+      "add": "アプリを追加",
+      "removeAria": "{{name}} を削除",
+      "removeTooltip": "削除"
+    },
+    "deleteDialog": {
+      "title": "分類を削除",
+      "message": "分類「{{name}}」を削除しますか? 紐付いているアプリは「その他」に戻ります。",
+      "confirm": "削除"
+    },
+    "pairing": {
+      "sectionTitle": "デバイス間でのアプリ紐付け",
+      "infoTipAria": "詳細",
+      "infoTipBody": "同じアプリでもシステムによってプロセス名が異なることがあります (macOS では「Code」、Windows では「Visual Studio Code」)。紐付けないと別アプリとして時間が計算され、分類もデバイスごとに設定する必要があります。紐付けると名前、分類、アイコン、合計時間が統一されます。",
+      "instructionPrefix": "デバイス列の中で ",
+      "instructionEmph": "縦方向にドラッグ",
+      "instructionSuffix": " して同じアプリを 1 行にまとめ、名前 / 分類 / 合計時間を統一します。",
+      "unassignedHint": "未割り当ての行は黄色でハイライトされます",
+      "loading": "読み込み中…",
+      "noDevices": "まだデバイスデータがありません。しばらく記録した後にもう一度確認してください。",
+      "header": {
+        "displayName": "表示名"
+      },
+      "chip": {
+        "unmergeTooltip": "このグループから外す"
+      },
+      "row": {
+        "deleteEmptyTooltip": "この空の行を削除",
+        "deleteEmptyAria": "この空の行を削除"
+      },
+      "newRow": "新しい行",
+      "newRowDefaultName": "新しい行 {{time}}"
+    },
+    "assign": {
+      "label": "割り当て",
+      "clear": "分類を解除"
+    }
+  },
+  "aiSettings": {
+    "title": "AI 設定",
+    "engine": {
+      "sectionTitle": "ローカル AI エンジン",
+      "sectionDesc": "Hindsight には llama.cpp 推論エンジンが同梱されており、すべてローカルで実行されます。スクリーンショットが外部サービスへアップロードされることはありません。",
+      "loading": "読み込み中…",
+      "installed": "インストール済み",
+      "notInstalled": "未インストール",
+      "versionAria": "バージョン {{version}}",
+      "versionStaleAria": "バージョン {{version}} (最新 {{latest}})",
+      "versionLabel": "バージョン {{version}}",
+      "versionStaleLabel": " · 最新 {{latest}}",
+      "versionUnknown": "?",
+      "detected": "{{accel}} を検出",
+      "accel": {
+        "cuda12": "CUDA 12.4",
+        "cuda13": "CUDA 13.1",
+        "winCpu": "CPU モード",
+        "macArm": "Apple Silicon · Metal",
+        "macIntel": "Intel Mac",
+        "linuxCpu": "Linux CPU"
+      },
+      "noCuda": {
+        "headline": "NVIDIA CUDA が検出されませんでした。",
+        "prefix": " ビジョン LLM を CPU で実行すると非常に低速です。先に",
+        "linkText": " NVIDIA から CUDA Toolkit をインストール",
+        "suffix": " することをおすすめします (≥ 12.4)。再起動後、Hindsight は自動的に GPU 対応版に切り替わります。"
+      },
+      "uninstallConfirm": "ローカル AI エンジンをアンインストールしますか? モデルファイルには影響しません。",
+      "actions": {
+        "downloading": "ダウンロード中…",
+        "updating": "更新中…",
+        "updateToLatest": "最新版に更新",
+        "redownload": "再ダウンロード",
+        "downloadEngine": "AI エンジンをダウンロード",
+        "testConnection": "接続テスト",
+        "testTooltipReady": "エンジンを起動 (未起動の場合) し、ローカルの /v1/models エンドポイントへリクエストして確認します",
+        "testTooltipNotInstalled": "未インストール",
+        "openFolderTooltipInstalled": "インストール先のフォルダをファインダー / エクスプローラーで開く",
+        "openFolderTooltipNotInstalled": "未インストール",
+        "uninstallTooltipInstalled": "ローカル AI エンジンをアンインストール",
+        "uninstallTooltipNotInstalled": "未インストール",
+        "uninstall": "アンインストール",
+        "approxSize": "約 {{size}} MB"
+      },
+      "progress": {
+        "downloading": "ダウンロード中… {{size}} MB",
+        "verifying": "検証中…",
+        "extracting": "展開中…",
+        "done": "✓ 完了"
+      },
+      "runtime": {
+        "running": "実行中 · ポート: {{port}}",
+        "starting": "起動中…",
+        "error": "エラー",
+        "connectedNoModels": "接続済み (モデル未ロード)",
+        "connectedWithModels": "接続済み — モデル {{count}} 個"
+      }
+    },
+    "models": {
+      "sectionTitle": "モデル",
+      "sectionDesc": "ローカル推論に使うビジョン LLM。GGUF ファイルは HuggingFace からダウンロードします。",
+      "card": {
+        "hfTooltipPrefix": "HuggingFace · ",
+        "hfTooltipAria": "HuggingFace {{repo}}",
+        "approxSize": "~{{size}} GB",
+        "download": "ダウンロード",
+        "downloading": "ダウンロード中…",
+        "inUse": "使用中",
+        "inUseTooltip": "クリックで無効化し「ダウンロード済み」に戻します (実行中のサーバーは停止します)",
+        "ready": "ダウンロード済み",
+        "readyTooltip": "クリックでこのモデルを有効化します (実行中のサーバーは停止し、新しいモデルを読み込むには手動で再起動してください)",
+        "uninstallTooltipInstalled": "ローカルファイルを削除 (main + mmproj)",
+        "uninstallTooltipNotInstalled": "未インストール",
+        "progressMain": "メイン重み",
+        "progressMmproj": "ビジョンプロジェクター",
+        "progressUnit": "MB",
+        "progressUnknownTotal": "?"
+      },
+      "uninstallConfirm": "{{name}} をアンインストールしますか? メイン重み{{extra}}を削除します。この操作は取り消せません。",
+      "uninstallConfirmExtra": " と mmproj プロジェクター",
+      "expand": {
+        "more": "他のモデルを表示 ({{count}})",
+        "collapse": "折りたたむ",
+        "busyTooltip": "ダウンロード完了後にのみ折りたためます"
+      }
+    },
+    "brief": {
+      "sectionTitle": "あなたについて",
+      "sectionInfo": "AI サマリーに含めて、あなたの仕事内容や状況をモデルが理解しやすくします。",
+      "rowLabel": "あなたについて (任意)",
+      "placeholder": "例: 私はバックエンド開発者で、普段は Rust と TypeScript を書いています。週末はゲーム制作を楽しんでいます。"
+    },
+    "prompt": {
+      "sectionTitle": "プロンプト",
+      "sectionDesc": "サマリーの書き方をモデルに伝えます。各言語に組み込みのデフォルトがあります。編集後は保存をクリックして反映、またはリセットでデフォルトに戻せます。",
+      "rowLabel": "システムプロンプト",
+      "hint": {
+        "dirty": "未保存の変更があります",
+        "custom": "カスタムプロンプトを使用中",
+        "default": "組み込みのデフォルトを使用中"
+      },
+      "actions": {
+        "reset": "デフォルトに戻す",
+        "resetTooltip": "エディタを組み込みのデフォルトで上書きします (適用するには保存をクリック)",
+        "save": "保存",
+        "saveTooltip": "現在の言語の上書きを保存"
+      }
+    },
+    "segments": {
+      "sectionTitle": "セグメント分割",
+      "sectionInfo": "AI はセグメント単位でサマリーを生成します。各セグメント内のスクリーンショットは類似度でサンプリングしてからモデルに送られます。",
+      "rowLabel": "セグメント"
+    },
+    "filter": {
+      "sectionTitle": "フィルター",
+      "rowLabel": "分析する分類",
+      "rowHint": "クリックで切り替え:\n• 色付き + 分類アイコン = AI 分析の対象\n• グレーの枠 + 閉じた目のアイコン = 除外"
+    },
+    "frame": {
+      "sectionTitle": "フレームサンプリング",
+      "sectionDesc": "スクリーンショットは時間とともに溜まります。先に類似度で重複を取り除き、残りをモデルに送ることで時間とトークンを節約します。",
+      "thresholdLabel": "類似度のしきい値",
+      "thresholdHint": "2 つのスクリーンショットを同一とみなす差分の許容量です。小さいほど厳格になります。0 にするとピクセル単位で完全一致のフレームのみを重複として扱い、分析から除外します。",
+      "windowLabel": "時間ウィンドウ",
+      "windowHint": "この時間幅の中で撮られたスクリーンショットだけを比較し、別の時間帯にある似たフレームが誤ってマージされるのを防ぎます。",
+      "windowSuffix": "分"
+    }
+  },
+  "devices": {
+    "title": "デバイス",
+    "meta": "このデバイスの名前と、他デバイスの同期状況を管理します。",
+    "sectionSelf": "このデバイス",
+    "sectionOthers": "他のデバイス",
+    "emptyOthers": "他のデバイスで同じアカウントにログインすると、ここに表示されます。",
+    "relative": {
+      "justNow": "たった今",
+      "minutesAgo": "{{count}} 分前",
+      "hoursAgo": "{{count}} 時間前",
+      "daysAgo": "{{count}} 日前"
+    },
+    "cloud": {
+      "state": {
+        "connected": "Google Drive に接続中",
+        "notSignedIn": "未接続",
+        "notConfigured": "未設定"
+      },
+      "desc": {
+        "signInPrompt": "Google アカウントでログインすると、Drive 経由でアクティビティデータを複数デバイス間で同期します。スクリーンショットはアップロードされません。",
+        "configurePrompt": "初回利用前に、Google Cloud Console で OAuth 認証情報を作成する必要があります (約 3 分)。"
+      },
+      "stats": {
+        "pending": "保留中 {{count}} 件",
+        "synced": "同期済み · {{when}}",
+        "waitingFirst": "初回同期を待機中",
+        "deadLetter": "· 失敗 {{count}} 件"
+      },
+      "editCreds": "認証情報を編集",
+      "actions": {
+        "syncNow": "今すぐ同期",
+        "syncing": "同期中…",
+        "syncNowTitle": "今すぐ同期",
+        "signOut": "ログアウト",
+        "signIn": "再ログイン",
+        "signOutTitle": "現在のアカウントからログアウト",
+        "reauthTitle": "認証情報の有効期限が切れました。再ログインでトークンを更新してください",
+        "signInWithGoogle": "Google でログイン",
+        "signingIn": "ブラウザを開いています…",
+        "configureOAuth": "OAuth を設定",
+        "restartApp": "アプリを再起動"
+      },
+      "restartHint": "新しいアカウントでログインしました。そのアカウントのローカルデータベースに切り替えるには、アプリを再起動してください。"
+    },
+    "errors": {
+      "credExpired": "認証情報の有効期限が切れました。再度ログインしてください。"
+    },
+    "setup": {
+      "header": "OAuth 認証情報の設定",
+      "collapse": "折りたたむ",
+      "step1": {
+        "title": "Google Drive API を有効化",
+        "bodyPrefix": "",
+        "cueEnable": "有効にする",
+        "bodySuffix": " ボタンをクリックします。",
+        "openLink": "Drive API を開く"
+      },
+      "step2": {
+        "title": "OAuth 同意画面を設定",
+        "bodyPrefix": "初回アクセス時はまず ",
+        "cueStart": "開始",
+        "bodyMiddle": " をクリック → 任意のアプリ名とメールアドレスを入力 → ユーザータイプを 外部 に設定 → 連絡先情報に再度メールアドレスを入力 → ",
+        "cueCreate": "作成",
+        "bodySuffix": " をクリックします。",
+        "openLink": "Audience を開く"
+      },
+      "step3": {
+        "title": "OAuth クライアントを作成",
+        "bodyPrefix": "左側の クライアント を開く → 上部の ",
+        "cueCreateClient": "+ クライアントを作成",
+        "bodySuffix": " をクリック → アプリケーションの種類で デスクトップアプリ を選択 → 名前は任意。クライアント ID とクライアントシークレットが表示されます。",
+        "openLink": "Clients を開く"
+      },
+      "step4": {
+        "title": "クライアント ID とクライアントシークレットを下に貼り付け",
+        "clientIdLabel": "クライアント ID",
+        "secretLabel": "クライアントシークレット",
+        "showSecret": "クライアントシークレットを表示",
+        "hideSecret": "クライアントシークレットを非表示",
+        "show": "表示",
+        "hide": "非表示"
+      }
+    },
+    "self": {
+      "tag": "このデバイス",
+      "lastActivity": "最終アクティビティ: {{when}}",
+      "todayCount": "今日の記録 {{count}} 件",
+      "appearanceAria": "外観を変更",
+      "appearanceTitle": "色とアイコンを変更",
+      "doubleClickToRename": "ダブルクリックで名前を変更",
+      "renameAria": "名前を変更",
+      "renameTitle": "名前を変更"
+    },
+    "other": {
+      "lastSync": "最終同期: {{when}}"
+    }
+  }
+}

@@ -127,7 +127,7 @@ export default function GeneralTab() {
         </Row>
         <Row
           label={t("settings.general.capture.dataPathLabel")}
-          description={t("settings.general.capture.dataPathDescription")}
+          labelHint={t("settings.general.capture.dataPathHint")}
         >
           <PathField value={dataRoot} onPick={pickDataDir} readOnly />
         </Row>
