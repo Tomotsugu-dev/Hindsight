@@ -298,12 +298,21 @@ export interface SegmentSummaryRow {
 /** AI 子系统的所有用户配置；嵌进 Settings.ai。
  *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
 export interface AiConfig {
-  /** OpenAI 兼容 base URL；本机 Ollama 默认 http://localhost:11434/v1 */
+  /** 外部云端 API base URL（OpenAI 兼容，不含 /chat/completions）。
+   *  仅在 externalEnabled = true 时生效。本地 step 1 不用这个。 */
   endpoint: string;
-  /** 模型 ID，例如 minicpm-v:8b */
+  /** 外部 API 的模型 ID，如 gpt-4o-mini / deepseek-chat。
+   *  仅在 externalEnabled = true 时生效。 */
   model: string;
-  /** 可选 Bearer token；Ollama 不用填 */
+  /** 外部 API 的 Bearer token；明文落 settings JSON。 */
   apiKey: string;
+  /** 是否启用云端 API 跑 step 2 段总结。
+   *  false = 全程本地；true = step 1 本地 vision，step 2 走 endpoint/model/apiKey。
+   *  截图永远只在 step 1 经手，不上云。 */
+  externalEnabled: boolean;
+  /** Provider 预设 ID："openai" / "deepseek" / "openrouter" / "together" / "groq" / "custom"。
+   *  仅控前端 Base URL / Model placeholder；后端只 sanitize。 */
+  externalProvider: string;
   /** 用户对自己的简短描述，AI 总结时拼进 system prompt */
   userBrief: string;
   /** 一天的时段划分（按 startHour 排序、相邻段共边） */

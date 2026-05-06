@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import styles from "./PlaceholderTab.module.css";
 
 /** 占位 tab 通用组件——给"周报 / 月报 / 对话"等还没实现的页面用。
@@ -9,10 +10,11 @@ export function PlaceholderTab({
   title: string;
   hint?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={styles.wrap}>
       <h2 className={styles.title}>{title}</h2>
-      <p className={styles.hint}>{hint ?? "功能开发中。"}</p>
+      <p className={styles.hint}>{hint ?? t("aiSummary.placeholder.hint")}</p>
     </div>
   );
 }

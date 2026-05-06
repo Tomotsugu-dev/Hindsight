@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { listen } from "@tauri-apps/api/event";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
@@ -51,20 +53,24 @@ interface LogEntry {
 /** 调试 tab 顶部的"调什么"——目前只有日报有真后端，周报 / 月报先占位。 */
 type DebugScope = "daily" | "weekly" | "monthly";
 
-const SCOPE_OPTIONS: Array<{ value: DebugScope; label: string }> = [
-  { value: "daily", label: "日报" },
-  { value: "weekly", label: "周报" },
-  { value: "monthly", label: "月报" },
-];
+function buildScopeOptions(t: TFunction): Array<{ value: DebugScope; label: string }> {
+  return [
+    { value: "daily", label: t("aiSummary.debug.scope.daily") },
+    { value: "weekly", label: t("aiSummary.debug.scope.weekly") },
+    { value: "monthly", label: t("aiSummary.debug.scope.monthly") },
+  ];
+}
 
 /** 单段最大图片数选项。"max" 映射到 sanitize 上限 100000，"无限制"等于把段内
  *  所有截图全送给 LLM——撑爆 ctx 时 LLM 会返 400 被段标 error，用户回头再调小。 */
 type MaxImagesKey = "15" | "30" | "max";
-const MAX_IMAGES_OPTIONS: Array<{ value: MaxImagesKey; label: string }> = [
-  { value: "15", label: "15 张/段" },
-  { value: "30", label: "30 张/段" },
-  { value: "max", label: "无限制" },
-];
+function buildMaxImagesOptions(t: TFunction): Array<{ value: MaxImagesKey; label: string }> {
+  return [
+    { value: "15", label: t("aiSummary.debug.pickerOptions.maxImages15") },
+    { value: "30", label: t("aiSummary.debug.pickerOptions.maxImages30") },
+    { value: "max", label: t("aiSummary.debug.pickerOptions.maxImagesUnlimited") },
+  ];
+}
 
 function maxImagesToOption(n: number): MaxImagesKey {
   // 1000 起算"无限制"——这种大值正常路径不会出现，只有用户主动选 max 才会写入
@@ -80,6 +86,7 @@ function optionToMaxImages(v: MaxImagesKey): number {
 /** llama-server `--batch-size` / `--ubatch-size`。"default" = 不传，走 llama.cpp 默认 512。
  *  改值会触发引擎 stop+start 重启；调试跑完无条件 stop，下次正常日报跑回到默认。 */
 type BatchKey = "default" | "1024" | "2048" | "4096";
+// Batch 选项纯英文 + 数字，所有语言都保持一致，无需走 t()
 const BATCH_OPTIONS: Array<{ value: BatchKey; label: string }> = [
   { value: "default", label: "Batch 512" },
   { value: "1024", label: "Batch 1024" },
@@ -100,12 +107,14 @@ function optionToBatch(v: BatchKey): number | null {
 /** 并发槽位数 = llama-server `-np` + 后端 step 1 image describe 并发数。
  *  两边一致才有效。"1" = 串行（历史行为）；> 1 = 并发同时跑 N 张图描述。 */
 type SlotsKey = "1" | "2" | "4" | "8";
-const SLOTS_OPTIONS: Array<{ value: SlotsKey; label: string }> = [
-  { value: "1", label: "并发 1 路" },
-  { value: "2", label: "并发 2 路" },
-  { value: "4", label: "并发 4 路" },
-  { value: "8", label: "并发 8 路" },
-];
+function buildSlotsOptions(t: TFunction): Array<{ value: SlotsKey; label: string }> {
+  return [
+    { value: "1", label: t("aiSummary.debug.pickerOptions.slots1") },
+    { value: "2", label: t("aiSummary.debug.pickerOptions.slots2") },
+    { value: "4", label: t("aiSummary.debug.pickerOptions.slots4") },
+    { value: "8", label: t("aiSummary.debug.pickerOptions.slots8") },
+  ];
+}
 function slotsToOption(n: number): SlotsKey {
   if (n >= 8) return "8";
   if (n >= 4) return "4";
@@ -120,12 +129,14 @@ function optionToSlots(v: SlotsKey): number {
  *  启动时按总量一次性吃 KV cache（~30KB / token）；选大了 5090 也只是几 GB，
  *  CPU 用户保持「默认 (8K)」就行。 */
 type CtxKey = "default" | "16384" | "32768" | "65536";
-const CTX_OPTIONS: Array<{ value: CtxKey; label: string }> = [
-  { value: "default", label: "ctx 8K/槽" },
-  { value: "16384", label: "ctx 16K/槽" },
-  { value: "32768", label: "ctx 32K/槽" },
-  { value: "65536", label: "ctx 64K/槽" },
-];
+function buildCtxOptions(t: TFunction): Array<{ value: CtxKey; label: string }> {
+  return [
+    { value: "default", label: t("aiSummary.debug.pickerOptions.ctxDefault") },
+    { value: "16384", label: t("aiSummary.debug.pickerOptions.ctx16k") },
+    { value: "32768", label: t("aiSummary.debug.pickerOptions.ctx32k") },
+    { value: "65536", label: t("aiSummary.debug.pickerOptions.ctx64k") },
+  ];
+}
 function ctxToOption(n: number | null): CtxKey {
   if (n === 16384) return "16384";
   if (n === 32768) return "32768";
@@ -199,22 +210,22 @@ function anchorDateStr(scope: DebugScope, offset: number): string {
 }
 
 /** 按 scope + offset 给 dayPill 显示的文案。 */
-function offsetLabel(scope: DebugScope, offset: number): string {
+function offsetLabel(scope: DebugScope, offset: number, t: TFunction): string {
   if (scope === "daily") {
-    if (offset === 0) return "今天";
-    if (offset === -1) return "昨天";
+    if (offset === 0) return t("aiSummary.debug.dateNav.today");
+    if (offset === -1) return t("aiSummary.debug.dateNav.yesterday");
     return anchorDateStr("daily", offset);
   }
   if (scope === "weekly") {
-    if (offset === 0) return "本周";
-    if (offset === -1) return "上周";
-    if (offset === -2) return "上上周";
-    return `${-offset} 周前`;
+    if (offset === 0) return t("aiSummary.debug.dateNav.thisWeek");
+    if (offset === -1) return t("aiSummary.debug.dateNav.lastWeek");
+    if (offset === -2) return t("aiSummary.debug.dateNav.weekBeforeLast");
+    return t("aiSummary.debug.dateNav.weeksAgo", { count: -offset });
   }
   // monthly
-  if (offset === 0) return "本月";
-  if (offset === -1) return "上月";
-  return `${-offset} 月前`;
+  if (offset === 0) return t("aiSummary.debug.dateNav.thisMonth");
+  if (offset === -1) return t("aiSummary.debug.dateNav.lastMonth");
+  return t("aiSummary.debug.dateNav.monthsAgo", { count: -offset });
 }
 
 /** platform_id 是 binary 变体路由 ID（"win-cuda-13.1-x64" 等），不是 OS 平台。
@@ -278,10 +289,20 @@ function fmtPhaseBody(p: SummaryProgress): string {
  *  - 耗时 / token（描述行右侧留 "—"）
  */
 export default function DebugTab() {
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
   const hasModel = activeMain.trim().length > 0;
+
+  // Picker 选项随语言变化而重建——i18next 切语言会让 t 引用变更，触发 useMemo 重算
+  const SCOPE_OPTIONS = useMemo(() => buildScopeOptions(t), [t]);
+  const MAX_IMAGES_OPTIONS = useMemo(() => buildMaxImagesOptions(t), [t]);
+  const SLOTS_OPTIONS = useMemo(() => buildSlotsOptions(t), [t]);
+  const CTX_OPTIONS = useMemo(() => buildCtxOptions(t), [t]);
+
+  // 工具：把 scope 翻译成"日报/周报/月报"对应文案，用于错误信息和占位
+  const scopeName = (s: DebugScope) => t(`aiSummary.debug.scope.${s}`);
 
   const [dayOffset, setDayOffset] = useState(0);
   /** 顶部"调什么"——日报 / 周报 / 月报；后两个先占位等后端实现 */
@@ -413,7 +434,7 @@ export default function DebugTab() {
 
       switch (ev_.phase) {
         case "engine_starting":
-          setEnginePhase(ev_.message ?? "加载模型中…");
+          setEnginePhase(ev_.message ?? tRef.current("aiSummary.debug.engineLoading"));
           break;
         case "segment_started":
           setEnginePhase(null);
@@ -490,7 +511,7 @@ export default function DebugTab() {
         case "error":
           setGenerating(false);
           setEnginePhase(null);
-          setTopError(ev_.message ?? "调试运行失败");
+          setTopError(ev_.message ?? tRef.current("aiSummary.debug.errors.runFailed"));
           break;
       }
     });
@@ -504,15 +525,18 @@ export default function DebugTab() {
   segmentsRef.current = segments;
   const activeMainRef = useRef(activeMain);
   activeMainRef.current = activeMain;
+  // listen 回调里要拿到最新的 t（切语言后才能用新语言显示），closure 里的 t 是旧的
+  const tRef = useRef(t);
+  tRef.current = t;
 
 
   const onStart = async () => {
     if (scope !== "daily") {
-      setTopError(`${scope === "weekly" ? "周报" : "月报"}调试待后端实现`);
+      setTopError(t("aiSummary.debug.errors.scopePending", { type: scopeName(scope) }));
       return;
     }
     if (!hasModel) {
-      setTopError("请先到 AI 设置 → 模型 选一个 vision 模型");
+      setTopError(t("aiSummary.debug.errors.noVisionModel"));
       return;
     }
     setGenerating(true);
@@ -604,9 +628,13 @@ export default function DebugTab() {
             className={`${styles.navBtn} glow`}
             onClick={() => setDayOffset((v) => v - 1)}
             disabled={generating}
-            aria-label={
-              scope === "daily" ? "前一天" : scope === "weekly" ? "上一周" : "上一月"
-            }
+            aria-label={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.prevDayAria"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.prevWeekAria"
+                  : "aiSummary.debug.dateNav.prevMonthAria",
+            )}
           >
             <ChevronLeft size={14} strokeWidth={1.75} />
           </button>
@@ -616,11 +644,15 @@ export default function DebugTab() {
             className={`${styles.dayPill} glow`}
             onClick={() => setDayOffset(0)}
             disabled={generating || dayOffset === 0}
-            title={
-              scope === "daily" ? "回到今天" : scope === "weekly" ? "回到本周" : "回到本月"
-            }
+            title={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.todayBack"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.thisWeekBack"
+                  : "aiSummary.debug.dateNav.thisMonthBack",
+            )}
           >
-            {offsetLabel(scope, dayOffset)}
+            {offsetLabel(scope, dayOffset, t)}
           </button>
           <button
             ref={nextBtnRef}
@@ -628,9 +660,13 @@ export default function DebugTab() {
             className={`${styles.navBtn} glow`}
             onClick={() => setDayOffset((v) => v + 1)}
             disabled={generating || dayOffset >= 0}
-            aria-label={
-              scope === "daily" ? "后一天" : scope === "weekly" ? "下一周" : "下一月"
-            }
+            aria-label={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.nextDayAria"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.nextWeekAria"
+                  : "aiSummary.debug.dateNav.nextMonthAria",
+            )}
           >
             <ChevronRight size={14} strokeWidth={1.75} />
           </button>
@@ -647,9 +683,9 @@ export default function DebugTab() {
           />
           <span
             className={styles.infoIconWrap}
-            title="每个时间段最多送多少张图给大模型，减少调试时间"
+            title={t("aiSummary.debug.maxImagesInfo.tooltip")}
             tabIndex={0}
-            aria-label="每段最多图数说明"
+            aria-label={t("aiSummary.debug.maxImagesInfo.aria")}
           >
             <Info size={13} strokeWidth={1.85} />
           </span>
@@ -662,7 +698,7 @@ export default function DebugTab() {
             onClick={() => void onStop()}
           >
             <Square size={14} strokeWidth={2} />
-            停止
+            {t("aiSummary.debug.actions.stop")}
           </button>
         ) : (
           <button
@@ -672,14 +708,14 @@ export default function DebugTab() {
             disabled={!hasModel || scope !== "daily"}
             title={
               scope !== "daily"
-                ? `${scope === "weekly" ? "周报" : "月报"}调试待后端实现`
+                ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
                 : hasModel
-                  ? "调试模式：跑当天全部段（清空已有结果重跑），逐图描述实时显示"
-                  : "请先到 AI 设置 → 模型 选一个模型"
+                  ? t("aiSummary.debug.actions.startTooltipReady")
+                  : t("aiSummary.debug.actions.startTooltipNoModel")
             }
           >
             <Play size={14} strokeWidth={2} />
-            开始
+            {t("aiSummary.debug.actions.start")}
           </button>
         )}
 
@@ -690,7 +726,7 @@ export default function DebugTab() {
             if (generating) return;
             if (
               !confirm(
-                `删除 ${date} 当天所有 AI 产物？（段总结 + 逐图描述都清空，操作不可撤销）`,
+                t("aiSummary.debug.actions.deleteConfirm", { date }),
               )
             )
               return;
@@ -706,10 +742,10 @@ export default function DebugTab() {
           disabled={
             generating || (descs.length === 0 && summaries.length === 0)
           }
-          title="清空当天 ai_summaries + ai_image_descriptions（不可撤销）"
+          title={t("aiSummary.debug.actions.deleteTooltip")}
         >
           <Trash2 size={13} strokeWidth={2} />
-          删除
+          {t("aiSummary.debug.actions.delete")}
         </button>
 
         <button
@@ -719,10 +755,10 @@ export default function DebugTab() {
           disabled={
             descs.length === 0 && summaries.length === 0 && logs.length === 0
           }
-          title="导出当前页所有调试数据为 JSON 文件"
+          title={t("aiSummary.debug.actions.exportTooltip")}
         >
           <Download size={13} strokeWidth={2} />
-          导出 JSON
+          {t("aiSummary.debug.actions.exportJson")}
         </button>
       </div>
 
@@ -732,17 +768,13 @@ export default function DebugTab() {
       {/* —— 调试参数：完全复用 AI 设置的 Section + Row 样式，
           但绑定本地 state（不写全局 settings），跑总结时打包成 overrides 传后端 —— */}
       <Section
-        title="过滤"
+        title={t("aiSummary.debug.filter.title")}
         icon={Filter}
-        description="仅本调试窗口生效，不影响 AI 设置全局值。"
+        description={t("aiSummary.debug.filter.description")}
       >
         <Row
-          label="分析这些分类"
-          labelHint={
-            "点击切换：\n" +
-            "• 彩色 + 分类图标 = 参与 AI 分析\n" +
-            "• 灰色空心 + 闭眼图标 = 已排除"
-          }
+          label={t("aiSummary.debug.filter.categoriesLabel")}
+          labelHint={t("aiSummary.debug.filter.categoriesHint")}
           block
         >
           <CategoryChipMultiSelect
@@ -753,13 +785,13 @@ export default function DebugTab() {
       </Section>
 
       <Section
-        title="抽帧参数"
+        title={t("aiSummary.debug.frame.title")}
         icon={ImageIcon}
-        description="一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。仅本调试窗口生效。"
+        description={t("aiSummary.debug.frame.description")}
       >
         <Row
-          label="相似度阈值"
-          labelHint="两张截图差异多少算同一张。越小越严格——设置为 0 就相当于两张图片的每个像素都一致才认为是重复的图片，不加入分析。"
+          label={t("aiSummary.debug.frame.hashThresholdLabel")}
+          labelHint={t("aiSummary.debug.frame.hashThresholdHint")}
         >
           <Slider
             value={debugHashThreshold}
@@ -770,8 +802,8 @@ export default function DebugTab() {
           />
         </Row>
         <Row
-          label="时间窗"
-          labelHint="只比这段时间内的截图，避免上下午相似画面被误合并。"
+          label={t("aiSummary.debug.frame.hashWindowLabel")}
+          labelHint={t("aiSummary.debug.frame.hashWindowHint")}
         >
           <Slider
             value={debugHashWindow}
@@ -779,7 +811,7 @@ export default function DebugTab() {
             min={0}
             max={30}
             step={1}
-            suffix="分钟"
+            suffix={t("aiSummary.debug.frame.hashWindowSuffix")}
           />
         </Row>
       </Section>
@@ -789,9 +821,9 @@ export default function DebugTab() {
           直接 inline 排，跟顶部「日报 / 今天 / 30 张/段」那排同款。
           末尾挂一行 KV cache 估算，让用户在点开始前就感知"这组合会不会 OOM"。 */}
       <Section
-        title="引擎参数（启动时）"
+        title={t("aiSummary.debug.engine.title")}
         icon={Server}
-        description="改完会先 stop 引擎、用新参数重启再跑；调试结束后无条件 stop 引擎，下次日报会以默认参数 lazy-start，不污染全局。"
+        description={t("aiSummary.debug.engine.description")}
       >
         <div className={styles.engineParamRow}>
           <SimplePicker<BatchKey>
@@ -837,19 +869,18 @@ export default function DebugTab() {
       {/* —— 非日报 scope 的占位 —— */}
       {scope !== "daily" ? (
         <div className={styles.placeholder}>
-          {scope === "weekly" ? "周报" : "月报"}调试待后端实现。
-          切回「日报」可以调试当前日报的两步生成流程（逐图描述 → 段总结）。
+          {t("aiSummary.debug.scopePlaceholder", { type: scopeName(scope) })}
         </div>
       ) : null}
 
       {/* —— 图片描述提示词：独立 Section box；textarea 默认收起，hover 该卡片展开 —— */}
       <div className={styles.promptCollapseWrap}>
         <Section
-          title="图片描述提示词"
+          title={t("aiSummary.debug.imagePrompt.title")}
           icon={MessageSquareText}
-          description="step 1 — 模型对每张截图独立生成描述时使用。改完直接生效（仅本调试窗口），不影响 AI 设置全局。"
+          description={t("aiSummary.debug.imagePrompt.description")}
         >
-          <Row label="提示词" block>
+          <Row label={t("aiSummary.debug.imagePrompt.label")} block>
             <div className={styles.collapsibleWrap}>
               <textarea
                 className={`${styles.debugPromptTextarea} ${styles.collapsibleTextarea}`}
@@ -867,11 +898,11 @@ export default function DebugTab() {
       {/* —— 时间段总结提示词：独立 Section box，跟上面互不影响 —— */}
       <div className={styles.promptCollapseWrap}>
         <Section
-          title="时间段总结提示词"
+          title={t("aiSummary.debug.segPrompt.title")}
           icon={MessageSquareText}
-          description="step 2 — 把所有图片描述 + 应用统计汇总成段总结时使用。改完直接生效（仅本调试窗口）。"
+          description={t("aiSummary.debug.segPrompt.description")}
         >
-          <Row label="提示词" block>
+          <Row label={t("aiSummary.debug.segPrompt.label")} block>
             <div className={styles.collapsibleWrap}>
               <textarea
                 className={`${styles.debugPromptTextarea} ${styles.collapsibleTextarea}`}
@@ -888,15 +919,19 @@ export default function DebugTab() {
 
       {/* —— 逐图描述：包到 Section box，跟其他卡片视觉一致 —— */}
       <Section
-        title="逐图描述"
+        title={t("aiSummary.debug.perImage.title")}
         icon={ImageIcon}
-        description={`step 1 产物——每张截图独立调 vision LLM 拿到的描述${
-          visibleDescs.length > 0 ? `，共 ${visibleDescs.length} 条` : ""
-        }。点文件名预览原图；点行末「重跑」用当前调试参数重新生成该图描述。`}
+        description={
+          t("aiSummary.debug.perImage.descriptionBase") +
+          (visibleDescs.length > 0
+            ? t("aiSummary.debug.perImage.countSuffix", { count: visibleDescs.length })
+            : "") +
+          t("aiSummary.debug.perImage.descriptionSuffix")
+        }
       >
         {visibleDescs.length === 0 ? (
           <div className={styles.descListEmpty}>
-            还没有数据。点上方「开始」让模型对每张截图生成描述。
+            {t("aiSummary.debug.perImage.empty")}
           </div>
         ) : (
           <div className={styles.descListInner}>
@@ -959,15 +994,19 @@ export default function DebugTab() {
 
       {/* —— 段总结结果：用 Section 跟「逐图描述」视觉对齐，常开 + 滚动 —— */}
       <Section
-        title="段总结结果"
+        title={t("aiSummary.debug.segments.title")}
         icon={Newspaper}
-        description={`step 2 产物——根据每张图的描述 + 应用统计汇总成的段总结${
-          visibleSummaries.length > 0 ? `，共 ${visibleSummaries.length} 段` : ""
-        }。`}
+        description={
+          t("aiSummary.debug.segments.descriptionBase") +
+          (visibleSummaries.length > 0
+            ? t("aiSummary.debug.segments.countSuffix", { count: visibleSummaries.length })
+            : "") +
+          t("aiSummary.debug.segments.descriptionSuffix")
+        }
       >
         {visibleSummaries.length === 0 ? (
           <div className={styles.summaryEmpty}>
-            还没有段总结结果。点上方「开始」让模型把段内描述聚合成一段总结。
+            {t("aiSummary.debug.segments.empty")}
           </div>
         ) : (
           <div className={styles.panelOpen}>
@@ -998,7 +1037,7 @@ export default function DebugTab() {
                     <span
                       className={styles.summaryChip}
                       style={{ background: chipBg, color: chipColor }}
-                      title={`段 idx=${s.segmentIdx}`}
+                      title={t("aiSummary.debug.segments.chipTitle", { idx: s.segmentIdx })}
                     >
                       {s.label}
                     </span>
@@ -1014,8 +1053,8 @@ export default function DebugTab() {
                   <div className={styles.summaryText}>
                     {s.content ||
                       (s.status === "skipped_no_screenshots"
-                        ? "(该段无截图)"
-                        : s.error || "(空)")}
+                        ? t("aiSummary.debug.segments.skippedFallback")
+                        : s.error || t("aiSummary.debug.segments.emptyFallback"))}
                   </div>
                 </div>
               );
@@ -1026,11 +1065,11 @@ export default function DebugTab() {
 
       {/* —— 实时事件流 —— */}
       <div className={styles.panelWrap}>
-        <span className={styles.panelLabel}>事件流（rolling 200 条）</span>
+        <span className={styles.panelLabel}>{t("aiSummary.debug.events.label")}</span>
         <div className={styles.panel}>
           <div className={styles.logBox}>
             {logs.length === 0 ? (
-              <div className={styles.logEmpty}>暂无事件。点开始后这里会滚动出现。</div>
+              <div className={styles.logEmpty}>{t("aiSummary.debug.events.empty")}</div>
             ) : (
               logs.map((entry, i) => (
                 <div key={i} className={styles.logLine}>
@@ -1058,23 +1097,26 @@ export default function DebugTab() {
           诊断 GPU 加载情况：找 "offloaded XX/YY layers to GPU" / "cuBLAS init" 等行。 */}
       <div className={styles.panelWrap}>
         <span className={styles.panelLabel}>
-          引擎日志
+          {t("aiSummary.debug.engineLogs.label")}
           <button
             type="button"
             className={styles.engineLogsRefreshBtn}
             onClick={() => void refreshEngineLogs()}
             disabled={engineLogsBusy}
-            title="拉取 llama-server 子进程最近的 stderr / stdout"
+            title={t("aiSummary.debug.engineLogs.refreshTooltip")}
           >
-            {engineLogsBusy ? "刷新中…" : "刷新"}
+            {engineLogsBusy
+              ? t("aiSummary.debug.engineLogs.refreshing")
+              : t("aiSummary.debug.engineLogs.refresh")}
           </button>
         </span>
         <div className={styles.panel}>
           <div className={styles.logBox}>
             {engineLogs.length === 0 ? (
               <div className={styles.logEmpty}>
-                还没拉过日志。点上方"刷新"拉一次；引擎跑过总结后才有内容。
-                找 <code>offloaded XX/YY layers to GPU</code> 这种行可判断 GPU 是否在用。
+                {t("aiSummary.debug.engineLogs.emptyPrefix")}
+                <code>offloaded XX/YY layers to GPU</code>
+                {t("aiSummary.debug.engineLogs.emptySuffix")}
               </div>
             ) : (
               engineLogs.map((line, i) => (
@@ -1103,6 +1145,7 @@ function VramEstimateLine({
   parallelSlots: number;
   ctxSize: number;
 }) {
+  const { t } = useTranslation();
   if (!modelName.trim()) {
     return null;
   }
@@ -1112,11 +1155,18 @@ function VramEstimateLine({
   else if (est.totalGB > 16) levelClass = styles.vramEstWarn;
   return (
     <div className={`${styles.vramEst} ${levelClass}`}>
-      <span className={styles.vramEstLabel}>估算总占用</span>
-      <span className={styles.vramEstValue}>~{est.totalGB.toFixed(1)} GB</span>
+      <span className={styles.vramEstLabel}>{t("aiSummary.debug.vram.label")}</span>
+      <span className={styles.vramEstValue}>
+        {t("aiSummary.debug.vram.value", { total: est.totalGB.toFixed(1) })}
+      </span>
       <span className={styles.vramEstBreakdown}>
-        （权重 {est.weightsGB.toFixed(1)} + KV cache {est.kvGB.toFixed(1)} + 其它 ~2.0 ·
-        按 {est.params}B 模型 + ctx {(ctxSize / 1024) | 0}K × {parallelSlots} 槽 估）
+        {t("aiSummary.debug.vram.breakdown", {
+          weights: est.weightsGB.toFixed(1),
+          kv: est.kvGB.toFixed(1),
+          params: est.params,
+          ctxK: (ctxSize / 1024) | 0,
+          slots: parallelSlots,
+        })}
       </span>
     </div>
   );
@@ -1124,11 +1174,12 @@ function VramEstimateLine({
 
 /** 引擎状态条：端口 / 模型 / ctx / 状态指示 dot。 */
 function EngineBar({ engine }: { engine: EngineStatus | null }) {
+  const { t } = useTranslation();
   if (!engine) {
     return (
       <div className={styles.engineBar}>
         <span className={styles.engineDot} />
-        <span>引擎状态加载中…</span>
+        <span>{t("aiSummary.debug.engineBar.loading")}</span>
       </div>
     );
   }
@@ -1143,40 +1194,43 @@ function EngineBar({ engine }: { engine: EngineStatus | null }) {
           : "";
   const versionStr = engine.installed
     ? engine.installedVersion ?? engine.currentPin
-    : "未安装";
+    : t("aiSummary.debug.engineBar.notInstalled");
   return (
     <div className={styles.engineBar}>
       <span className={`${styles.engineDot} ${dotClass}`} />
       <span>
-        端口：
+        {t("aiSummary.debug.engineBar.port")}
         <span className={styles.engineMetaStrong}>
           {rt.state === "running" && rt.port != null ? `:${rt.port}` : "—"}
         </span>
       </span>
       <span className={styles.engineSep}>·</span>
       <span>
-        llama.cpp 版本：
+        {t("aiSummary.debug.engineBar.version")}
         <span className={styles.engineMetaStrong}>{versionStr}</span>
       </span>
       <span className={styles.engineSep}>·</span>
       <span>
-        加速：
+        {t("aiSummary.debug.engineBar.accel")}
         <span
           className={styles.engineMetaStrong}
-          title={`binary 变体 ID: ${engine.platformId}`}
+          title={t("aiSummary.debug.engineBar.accelTitle", { id: engine.platformId })}
         >
           {humanAccelLabel(engine.platformId)}
         </span>
       </span>
       <span className={styles.engineSep}>·</span>
       <span>
-        状态：
+        {t("aiSummary.debug.engineBar.state")}
         <span className={styles.engineMetaStrong}>{rt.state}</span>
       </span>
       {rt.error ? (
         <>
           <span className={styles.engineSep}>·</span>
-          <span style={{ color: "#dc2626" }}>错误：{rt.error}</span>
+          <span style={{ color: "#dc2626" }}>
+            {t("aiSummary.debug.engineBar.error")}
+            {rt.error}
+          </span>
         </>
       ) : null}
     </div>
@@ -1204,6 +1258,7 @@ function DescItem({
   /** 打开图片失败时上报错误给父组件展示（顶部 errorBar） */
   onOpenError: (msg: string) => void;
 }) {
+  const { t } = useTranslation();
   const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
   // 段背景色优先用 user-config（segments[idx].color），空时回到中性灰
   const chipBg = segmentColor && segmentColor.trim().length > 0
@@ -1225,14 +1280,18 @@ function DescItem({
         <span
           className={styles.descIndex}
           style={{ background: chipBg, color: chipColor }}
-          title={`段 idx=${row.segmentIdx} · 图 idx=${row.imageIndex}（抽帧后顺序）`}
+          title={t("aiSummary.debug.perImage.chipTitle", {
+            seg: row.segmentIdx,
+            img: row.imageIndex,
+          })}
         >
-          {segmentLabel ?? `段${row.segmentIdx}`} · 第 {row.imageIndex + 1} 张
+          {segmentLabel ?? t("aiSummary.debug.perImage.segFallback", { idx: row.segmentIdx })}
+          {t("aiSummary.debug.perImage.imageNoSuffix", { n: row.imageIndex + 1 })}
         </span>
         <button
           type="button"
           className={styles.descPath}
-          title={`点击预览原图：${row.screenshotPath}`}
+          title={t("aiSummary.debug.perImage.pathTooltip", { path: row.screenshotPath })}
           onClick={() => {
             // 先试系统默认查看器；失败 fallback 到资源管理器选中文件
             // ——后者用 opener:default 自带的 allow-reveal-item-in-dir 权限，
@@ -1248,14 +1307,17 @@ function DescItem({
                 await revealItemInDir(row.screenshotPath);
               } catch (e2) {
                 const msg = e2 instanceof Error ? e2.message : String(e2);
-                onOpenError(`无法打开 / 定位图片：${msg}`);
+                onOpenError(t("aiSummary.debug.perImage.openImageError", { msg }));
               }
             })();
           }}
         >
           {fileName}
         </button>
-        <span className={styles.descStat} title="耗时 · prompt / completion tokens">
+        <span
+          className={styles.descStat}
+          title={t("aiSummary.debug.perImage.statTooltip")}
+        >
           {latencyStr} · {tokenStr}
         </span>
         <button
@@ -1263,13 +1325,19 @@ function DescItem({
           className={styles.retryImg}
           onClick={onRetry}
           disabled={retryDisabled}
-          title={retryDisabled ? "整轮总结进行中，等完成或停止后再重跑" : "用当前调试参数重新生成这张图的描述"}
+          title={
+            retryDisabled
+              ? t("aiSummary.debug.perImage.retryTooltipBusy")
+              : t("aiSummary.debug.perImage.retryTooltipReady")
+          }
         >
           <RotateCcw size={11} strokeWidth={2.2} />
-          重跑
+          {t("aiSummary.debug.perImage.retry")}
         </button>
       </div>
-      <div className={styles.descText}>{row.description || "(空)"}</div>
+      <div className={styles.descText}>
+        {row.description || t("aiSummary.debug.perImage.descEmpty")}
+      </div>
     </div>
   );
 }

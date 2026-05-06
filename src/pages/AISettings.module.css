@@ -1051,3 +1051,172 @@
     transform: translateX(500%);
   }
 }
+
+/* —— 云端 API（可选）section —— */
+
+/* 启用 toggle 切换时的高度过渡：grid-rows 0fr↔1fr trick，让里面 Row 们
+   按 max-content 自适应展开高度，不用硬编 max-height。
+   pointer-events / opacity 一并切，收起态阻止 tab 进入 input。 */
+.externalDetails {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.externalDetailsOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 中间层压 min-height: 0 才能 0fr 真生效；overflow: hidden 在收起过程中
+   截断溢出的 Row 内容，不让它在 0fr 容器外漏出来。 */
+.externalDetailsInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 文本输入框：跟 PathField 同款配色，让 base URL / API key / model 输入感观一致 */
+.externalInput {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
+  outline: none;
+  transition:
+    border-color 200ms ease-out,
+    background-color 200ms ease-out,
+    box-shadow 200ms ease-out;
+}
+
+.externalInput:focus {
+  background: #ffffff;
+  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
+}
+
+.externalInput::placeholder {
+  color: var(--text-faint);
+}
+
+/* API Key 行：input 占据剩余宽度 + 右侧眼睛按钮 */
+.externalKeyRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.externalEyeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 7px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease-out,
+    background-color 160ms ease-out;
+}
+
+.externalEyeBtn:hover {
+  color: var(--text-strong);
+  background: rgba(0, 0, 0, 0.075);
+}
+
+/* 测试连接行：按钮 + 状态文字横排 */
+.externalActionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding: 0 16px;
+}
+
+/* 蓝色实心：跟 .testBtn 同款，但稍微低调一点（高度短点、padding 小点） */
+.externalTestBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    filter 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.externalTestBtn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.externalTestBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.externalTestBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.externalTestOk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #15803d; /* green-700 */
+}
+
+.externalTestFail {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #991b1b; /* red-800 */
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* 隐私 hint：底部一条柔和文字，跟错误条不同的语气，是 informational */
+.externalPrivacyNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, transparent);
+  border-radius: 7px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.externalPrivacyNote svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent);
+}

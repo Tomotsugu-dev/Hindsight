@@ -537,6 +537,35 @@
       "windowLabel": "时间窗",
       "windowHint": "只比这段时间内的截图，避免上下午相似画面被误合并。",
       "windowSuffix": "分钟"
+    },
+    "external": {
+      "sectionTitle": "云端 API（可选）",
+      "sectionDesc": "段总结改用云端模型生成；截图永远不上传，单图描述仍由本地视觉模型完成。",
+      "enableLabel": "启用云端段总结",
+      "enableHint": "开启后，每段总结调下方配置的 API；step 1 单图描述仍走本地。",
+      "providerLabel": "服务商",
+      "provider": {
+        "openai": "OpenAI",
+        "deepseek": "DeepSeek",
+        "openrouter": "OpenRouter",
+        "together": "Together",
+        "groq": "Groq",
+        "custom": "自定义"
+      },
+      "baseUrlLabel": "Base URL",
+      "baseUrlPlaceholder": "https://api.openai.com/v1",
+      "apiKeyLabel": "API Key",
+      "apiKeyPlaceholder": "sk-...",
+      "apiKeyShow": "显示",
+      "apiKeyHide": "隐藏",
+      "modelLabel": "Model ID",
+      "testButton": "测试连接",
+      "testRunning": "正在测试…",
+      "testOk": "连接成功 · 拉到 {{count}} 个模型",
+      "testOkNoModels": "连接成功",
+      "testFail": "连接失败：{{message}}",
+      "missingFields": "请先填 Base URL 和 Model ID",
+      "privacyNote": "提示：开启后，应用名、分类、文字版图片描述会随每次段总结发送到云端 API；图片本身不上传。"
     }
   },
   "devices": {
@@ -634,6 +663,304 @@
     },
     "other": {
       "lastSync": "上次同步: {{when}}"
+    }
+  },
+  "aiSummary": {
+    "title": "AI 总结",
+    "tabs": {
+      "daily": "日报",
+      "week": "周报",
+      "month": "月报",
+      "chat": "对话",
+      "debug": "调试"
+    },
+    "placeholder": {
+      "hint": "功能开发中。"
+    },
+    "weekly": {
+      "title": "周报",
+      "hint": "一周的活动汇总；按日期 + 主题给出整周回顾。功能开发中。"
+    },
+    "monthly": {
+      "title": "月报",
+      "hint": "一个月的活动趋势 + 关键事件回顾。功能开发中。"
+    },
+    "daily": {
+      "subtitle": "按时段汇总当日截图 + 应用使用，本地 vision 模型生成",
+      "dateNav": {
+        "prevAria": "前一天",
+        "nextAria": "后一天",
+        "todayBack": "回到今天",
+        "today": "今天",
+        "yesterday": "昨天"
+      },
+      "actions": {
+        "stop": "停止",
+        "regenerate": "重新生成",
+        "start": "开始总结",
+        "startTooltip": "本地 vision 模型逐段分析；时长取决于硬件（GPU 数秒/段，CPU 数十秒/段）",
+        "regenerateTooltip": "重新生成会清掉本日所有段总结，重新跑一遍",
+        "noModelTooltip": "请先到 AI 设置 → 模型 选一个模型",
+        "delete": "删除",
+        "deleteTooltip": "清空当天 ai_summaries（source=daily）+ ai_image_descriptions（不可撤销）",
+        "deleteEmptyTooltip": "当天还没有日报数据可删除",
+        "deleteConfirm": "删除 {{date}} 当天日报数据？（段总结 + 逐图描述都清空，不影响调试 tab，操作不可撤销）",
+        "exportMarkdown": "导出为 Markdown",
+        "exportTooltip": "导出当前日期的所有段总结为 Markdown 文件",
+        "exportEmptyTooltip": "还没有任何段总结可导出",
+        "exportRunningTooltip": "总结进行中，等完成后再导出",
+        "retry": "重试",
+        "retryTooltip": "重新生成这一段",
+        "retryDisabledTooltip": "整轮总结进行中，等完成或停止后再重试"
+      },
+      "errors": {
+        "noVisionModel": "请先到 AI 设置 → 模型 选一个 vision 模型",
+        "generationFailed": "总结失败",
+        "unknown": "未知错误"
+      },
+      "engineLoading": "加载模型中…",
+      "toast": {
+        "exported": "已导出 {{filename}} 到「下载」文件夹"
+      },
+      "card": {
+        "badge": {
+          "empty": "未生成",
+          "ok": "已生成",
+          "skipped": "无截图",
+          "error": "失败",
+          "analyzing": "分析中 · {{done}} / {{total}} 张",
+          "analyzingNoTotal": "分析中…"
+        },
+        "body": {
+          "empty": "点上方「开始总结」生成本段内容。",
+          "analyzing": "正在让模型看截图… {{done}} / {{total}} 张已完成",
+          "analyzingNoTotal": "正在分析…",
+          "skipped": "这段时间没有截图（可能没用电脑 / 全在隐私名单 / 全在排除分类）。",
+          "errorLabel": "失败："
+        }
+      },
+      "export": {
+        "frontmatterTitle": "{{dateLabel}}日报",
+        "heading": "{{dateLabel}}日报 · {{date}}",
+        "intro": "由 Hindsight AI 生成 · {{summary}}",
+        "segmentsCount": "共 {{count}} 段",
+        "okCount": "{{count}} 已生成",
+        "skipCount": "{{count}} 跳过",
+        "errCount": "{{count}} 失败",
+        "pendingCount": "{{count}} 未生成",
+        "summaryJoin": " · ",
+        "statePending": "⏳ **未生成**",
+        "stateSkipped": "⚪ **跳过** — 这段时间没有截图",
+        "stateError": "❌ **失败**",
+        "stateEmptyContent": "_（空）_"
+      }
+    },
+    "chat": {
+      "subtitle": "跟 AI 聊聊你的活动数据 — 搜历史、查应用时长、反思一天。",
+      "mockBadge": "MOCK",
+      "clear": "清空",
+      "clearTooltip": "清空当前对话",
+      "empty": {
+        "title": "有什么想问的？",
+        "hint": "试试下面这些示例，或者直接在底下输入。"
+      },
+      "input": {
+        "placeholder": "问点什么…",
+        "sendAria": "发送",
+        "sendTooltip": "发送（Enter）"
+      },
+      "presets": {
+        "search": {
+          "label": "搜历史",
+          "q": "找那个 PairingSection 的 hover bug 是哪天调的"
+        },
+        "stat": {
+          "label": "查数据",
+          "q": "上周我在 Cursor 用了多久？"
+        },
+        "reflect": {
+          "label": "反思",
+          "q": "今天我专注度如何？给点反思建议"
+        }
+      },
+      "mock": {
+        "search": {
+          "intro": "在历史段总结里找到 3 处相关：",
+          "segLabelAfternoon": "下午",
+          "segLabelEvening": "晚",
+          "hit1Snippet": "在 Hindsight 项目里调 PairingSection 的 hover/glow 效果，反复试 grid template 固定列宽 vs minmax，最后用 :has(.nameCol:hover) 让整列展开。",
+          "hit2Snippet": "继续修 actionCol 左对齐 + padding-left 的问题。发现 1fr nameCol 会自动收缩抵消 padding，最终改 grid template 为固定 140px。",
+          "hit3Snippet": "第一次注意到 trigger 没对齐到同一条 X 线，怀疑是 grid 子像素计算或 flex justify-end 导致的。"
+        },
+        "stat": {
+          "intro": "上周 Cursor 共 12h 23m，按天分布：",
+          "sumPrefix": "合计 {{total}}",
+          "weekday1": "周一",
+          "weekday2": "周二",
+          "weekday3": "周三",
+          "weekday4": "周四",
+          "weekday5": "周五",
+          "weekday6": "周六",
+          "weekday7": "周日"
+        },
+        "reflect": {
+          "section1Title": "今日整体",
+          "section1Body": "深度专注约 4 小时（上午 + 下午各 2 小时），其余时间在切换 / 沟通。整体专注度尚可，但下午有约 40 分钟应用切换频次偏高（28 次/小时）。",
+          "section2Title": "亮点",
+          "section2Body": "下午 14:00–16:00 在 Cursor 持续 2 小时几乎无切换，是今天最 deep work 的一段。",
+          "section3Title": "改进建议",
+          "section3Body": "晚上 19:00 之后社交类应用占比 60%。可以考虑把这部分时间推后到睡前 30 分钟内集中处理，给晚饭后留一段连续工作或阅读时间。"
+        },
+        "fallback": {
+          "text": "（mock）这是一个示例回答。当前后端尚未接入，只识别几类关键词：\n• 搜历史 — 含「搜 / 找 / 什么时候 / hover / bug」\n• 查数据 — 含「多久 / 时长 / 花了」\n• 反思 — 含「反思 / 专注 / 今天 / 怎么样」"
+        }
+      }
+    },
+    "debug": {
+      "scope": {
+        "daily": "日报",
+        "weekly": "周报",
+        "monthly": "月报"
+      },
+      "pickerOptions": {
+        "maxImages15": "15 张/段",
+        "maxImages30": "30 张/段",
+        "maxImagesUnlimited": "无限制",
+        "slots1": "并发 1 路",
+        "slots2": "并发 2 路",
+        "slots4": "并发 4 路",
+        "slots8": "并发 8 路",
+        "ctxDefault": "ctx 8K/槽",
+        "ctx16k": "ctx 16K/槽",
+        "ctx32k": "ctx 32K/槽",
+        "ctx64k": "ctx 64K/槽"
+      },
+      "dateNav": {
+        "prevDayAria": "前一天",
+        "nextDayAria": "后一天",
+        "prevWeekAria": "上一周",
+        "nextWeekAria": "下一周",
+        "prevMonthAria": "上一月",
+        "nextMonthAria": "下一月",
+        "todayBack": "回到今天",
+        "thisWeekBack": "回到本周",
+        "thisMonthBack": "回到本月",
+        "today": "今天",
+        "yesterday": "昨天",
+        "thisWeek": "本周",
+        "lastWeek": "上周",
+        "weekBeforeLast": "上上周",
+        "weeksAgo": "{{count}} 周前",
+        "thisMonth": "本月",
+        "lastMonth": "上月",
+        "monthsAgo": "{{count}} 月前"
+      },
+      "maxImagesInfo": {
+        "tooltip": "每个时间段最多送多少张图给大模型，减少调试时间",
+        "aria": "每段最多图数说明"
+      },
+      "actions": {
+        "stop": "停止",
+        "start": "开始",
+        "startTooltipPending": "{{type}}调试待后端实现",
+        "startTooltipReady": "调试模式：跑当天全部段（清空已有结果重跑），逐图描述实时显示",
+        "startTooltipNoModel": "请先到 AI 设置 → 模型 选一个模型",
+        "delete": "删除",
+        "deleteTooltip": "清空当天 ai_summaries + ai_image_descriptions（不可撤销）",
+        "deleteConfirm": "删除 {{date}} 当天所有 AI 产物？（段总结 + 逐图描述都清空，操作不可撤销）",
+        "exportJson": "导出 JSON",
+        "exportTooltip": "导出当前页所有调试数据为 JSON 文件"
+      },
+      "filter": {
+        "title": "过滤",
+        "description": "仅本调试窗口生效，不影响 AI 设置全局值。",
+        "categoriesLabel": "分析这些分类",
+        "categoriesHint": "点击切换：\n• 彩色 + 分类图标 = 参与 AI 分析\n• 灰色空心 + 闭眼图标 = 已排除"
+      },
+      "frame": {
+        "title": "抽帧参数",
+        "description": "一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。仅本调试窗口生效。",
+        "hashThresholdLabel": "相似度阈值",
+        "hashThresholdHint": "两张截图差异多少算同一张。越小越严格——设置为 0 就相当于两张图片的每个像素都一致才认为是重复的图片，不加入分析。",
+        "hashWindowLabel": "时间窗",
+        "hashWindowHint": "只比这段时间内的截图，避免上下午相似画面被误合并。",
+        "hashWindowSuffix": "分钟"
+      },
+      "engine": {
+        "title": "引擎参数（启动时）",
+        "description": "改完会先 stop 引擎、用新参数重启再跑；调试结束后无条件 stop 引擎，下次日报会以默认参数 lazy-start，不污染全局。"
+      },
+      "vram": {
+        "label": "估算总占用",
+        "value": "~{{total}} GB",
+        "breakdown": "（权重 {{weights}} + KV cache {{kv}} + 其它 ~2.0 · 按 {{params}}B 模型 + ctx {{ctxK}}K × {{slots}} 槽 估）"
+      },
+      "errors": {
+        "scopePending": "{{type}}调试待后端实现",
+        "noVisionModel": "请先到 AI 设置 → 模型 选一个 vision 模型",
+        "runFailed": "调试运行失败"
+      },
+      "engineLoading": "加载模型中…",
+      "scopePlaceholder": "{{type}}调试待后端实现。切回「日报」可以调试当前日报的两步生成流程（逐图描述 → 段总结）。",
+      "imagePrompt": {
+        "title": "图片描述提示词",
+        "description": "step 1 — 模型对每张截图独立生成描述时使用。改完直接生效（仅本调试窗口），不影响 AI 设置全局。",
+        "label": "提示词"
+      },
+      "segPrompt": {
+        "title": "时间段总结提示词",
+        "description": "step 2 — 把所有图片描述 + 应用统计汇总成段总结时使用。改完直接生效（仅本调试窗口）。",
+        "label": "提示词"
+      },
+      "perImage": {
+        "title": "逐图描述",
+        "descriptionBase": "step 1 产物——每张截图独立调 vision LLM 拿到的描述",
+        "countSuffix": "，共 {{count}} 条",
+        "descriptionSuffix": "。点文件名预览原图；点行末「重跑」用当前调试参数重新生成该图描述。",
+        "empty": "还没有数据。点上方「开始」让模型对每张截图生成描述。",
+        "segFallback": "段{{idx}}",
+        "imageNoSuffix": " · 第 {{n}} 张",
+        "chipTitle": "段 idx={{seg}} · 图 idx={{img}}（抽帧后顺序）",
+        "pathTooltip": "点击预览原图：{{path}}",
+        "statTooltip": "耗时 · prompt / completion tokens",
+        "retry": "重跑",
+        "retryTooltipBusy": "整轮总结进行中，等完成或停止后再重跑",
+        "retryTooltipReady": "用当前调试参数重新生成这张图的描述",
+        "descEmpty": "(空)",
+        "openImageError": "无法打开 / 定位图片：{{msg}}"
+      },
+      "segments": {
+        "title": "段总结结果",
+        "descriptionBase": "step 2 产物——根据每张图的描述 + 应用统计汇总成的段总结",
+        "countSuffix": "，共 {{count}} 段",
+        "descriptionSuffix": "。",
+        "empty": "还没有段总结结果。点上方「开始」让模型把段内描述聚合成一段总结。",
+        "chipTitle": "段 idx={{idx}}",
+        "skippedFallback": "(该段无截图)",
+        "emptyFallback": "(空)"
+      },
+      "events": {
+        "label": "事件流（rolling 200 条）",
+        "empty": "暂无事件。点开始后这里会滚动出现。"
+      },
+      "engineLogs": {
+        "label": "引擎日志",
+        "refresh": "刷新",
+        "refreshing": "刷新中…",
+        "refreshTooltip": "拉取 llama-server 子进程最近的 stderr / stdout",
+        "emptyPrefix": "还没拉过日志。点上方\"刷新\"拉一次；引擎跑过总结后才有内容。找 ",
+        "emptySuffix": " 这种行可判断 GPU 是否在用。"
+      },
+      "engineBar": {
+        "loading": "引擎状态加载中…",
+        "notInstalled": "未安装",
+        "port": "端口：",
+        "version": "llama.cpp 版本：",
+        "accel": "加速：",
+        "state": "状态：",
+        "error": "错误：",
+        "accelTitle": "binary 变体 ID: {{id}}"
+      }
     }
   }
 }

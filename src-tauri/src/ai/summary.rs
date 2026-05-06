@@ -24,7 +24,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
 use crate::ai::image::{pick_frames, to_data_uri};
-use crate::ai::llm::ChatClient;
+use crate::ai::llm::{ChatClient, ExternalChatClient, Step2Chat};
 use crate::ai::models;
 use crate::ai::prompt::{
     build_image_describe_system_prompt, build_image_describe_user_prompt,
@@ -43,7 +43,7 @@ use crate::storage::DbPool;
 /// 调试用：单次 generate 调用对 settings.ai 的局部覆盖（不写 settings 全局）。
 ///
 /// 任意字段 `None` = 走 settings.ai 的值；`Some(_)` = 本次跑生效，不留痕。
-/// 数值字段会经过跟 sanitize 一样的 clamp（max_images 1..=200、hash_threshold ≤ 32、
+/// 数值字段会经过跟 sanitize 一样的 clamp（max_images 1..=100_000、hash_threshold ≤ 32、
 /// hash_window_minutes ≤ 60），保证 override 不会越界。
 ///
 /// `system_prompt` / `image_describe_prompt` 是文本覆盖，会写到 ai.prompt_overrides /
@@ -206,7 +206,7 @@ impl SummaryProgress {
 const SUMMARY_IMAGE_MAX_DIM: u32 = 768;
 
 // HARD_IMAGES_CAP 已取消——一段图数量完全由 settings.ai.max_images_per_segment 决定
-// （sanitize 钳到 1..=200）。配多了 ctx 装不下时 LLM 会返 400，按段标 error，
+// （sanitize 钳到 1..=100_000）。配多了 ctx 装不下时 LLM 会返 400，按段标 error，
 // 用户在调试 tab 能直接看到错误并调小值。
 
 pub struct DaySummaryRunner {
@@ -332,7 +332,8 @@ impl DaySummaryRunner {
             self.emit(p);
         }
         let port = self.ensure_engine_running(&ai, engine_overrides).await?;
-        let chat = ChatClient::new(port, ai.active_main.clone())?;
+        let step1 = ChatClient::new(port, ai.active_main.clone())?;
+        let step2 = build_step2(&ai, &step1)?;
 
         // 单段图片上限直接走 settings；用户调大撑爆 ctx 时 LLM 报 400，按段标 error
         let max_images = ai.max_images_per_segment as usize;
@@ -356,7 +357,8 @@ impl DaySummaryRunner {
 
             self.run_one_segment(
                 source,
-                &chat,
+                &step1,
+                &step2,
                 &ai,
                 &date_str,
                 idx as u32,
@@ -394,7 +396,8 @@ impl DaySummaryRunner {
     async fn run_one_segment(
         &self,
         source: &str,
-        chat: &ChatClient,
+        step1: &ChatClient,
+        step2: &Step2Chat,
         ai: &AiConfig,
         date_str: &str,
         idx: u32,
@@ -406,7 +409,10 @@ impl DaySummaryRunner {
         device: DeviceFilter,
         parallel: usize,
     ) -> Result<()> {
+        // step 1 落库的 model 永远是本地 vision 文件名；step 2 落库的 model
+        // 由 step2.model_label() 给出（本地 = active_main，外部 = 用户填的 ID）
         let model = ai.active_main.clone();
+        let step2_model = step2.model_label().to_string();
 
         // ────── 取数据 ──────
         let metas = list_segment_screenshots(
@@ -501,7 +507,7 @@ impl DaySummaryRunner {
         let descriptions = self
             .describe_images(
                 source,
-                chat,
+                step1,
                 &picked,
                 ai.prompt_language.clone(),
                 &describe_system,
@@ -538,9 +544,10 @@ impl DaySummaryRunner {
         let user_text = build_user_prompt(ai, &ctx);
 
         let (row, status_str): (SegmentSummaryRow, &'static str) =
-            match chat.chat_with_images(&system, &user_text, &[]).await {
+            match step2.chat(&system, &user_text, &[]).await {
                 // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
-                // （需要时未来加列）
+                // （需要时未来加列）。落库的 model 用 step2_model——本地是 GGUF 文件名，
+                // 外部是用户填的云端模型 ID（如 gpt-4o-mini）
                 Ok((content, _usage)) => (
                     SegmentSummaryRow {
                         source: source.to_string(),
@@ -550,7 +557,7 @@ impl DaySummaryRunner {
                         start_hour,
                         end_hour,
                         content,
-                        model,
+                        model: step2_model,
                         status: "ok".to_string(),
                         error: None,
                         generated_at: Utc::now().to_rfc3339(),
@@ -566,7 +573,7 @@ impl DaySummaryRunner {
                         start_hour,
                         end_hour,
                         content: String::new(),
-                        model,
+                        model: step2_model,
                         status: "error".to_string(),
                         error: Some(e.to_string()),
                         generated_at: Utc::now().to_rfc3339(),
@@ -828,12 +835,14 @@ impl DaySummaryRunner {
             self.emit(p);
         }
         let port = self.ensure_engine_running(&ai, engine_overrides).await?;
-        let chat = ChatClient::new(port, ai.active_main.clone())?;
+        let step1 = ChatClient::new(port, ai.active_main.clone())?;
+        let step2 = build_step2(&ai, &step1)?;
         let max_images = ai.max_images_per_segment as usize;
 
         self.run_one_segment(
             source,
-            &chat,
+            &step1,
+            &step2,
             &ai,
             &date_str,
             segment_idx,
@@ -861,7 +870,7 @@ impl DaySummaryRunner {
     async fn describe_images(
         &self,
         source: &str,
-        chat: &ChatClient,
+        step1: &ChatClient,
         picked: &[ScreenshotMeta],
         prompt_lang: String,
         describe_system: &str,
@@ -870,16 +879,16 @@ impl DaySummaryRunner {
         idx: u32,
         total_segments: u32,
         parallel: usize,
-    ) -> Result<Vec<String>> {
+    ) -> Result<Vec<(String, String)>> {
         use futures_util::StreamExt;
 
         // 把 per-image 工作打包成 owned async future，方便 buffer_unordered 调度。
         // 用 for + Vec 的方式预 spawn 而不是 iter().map(|| async move {})，
-        // 后者闭包会顺手捕获 `chat`/refs 为 borrow，整个 stream 跨线程时
+        // 后者闭包会顺手捕获 step1/refs 为 borrow，整个 stream 跨线程时
         // 报 `Send is not general enough`（Tauri command 要求 future 是 Send）。
         let mut work: Vec<_> = Vec::with_capacity(picked.len());
         for (i, meta) in picked.iter().enumerate() {
-            let chat = chat.clone();
+            let chat = step1.clone();
             let prompt_lang = prompt_lang.clone();
             let describe_system = describe_system.to_string();
             let model = model.to_string();
@@ -895,8 +904,11 @@ impl DaySummaryRunner {
 
             work.push(async move {
                 if cancel.load(Ordering::Relaxed) {
-                    return Ok::<Option<(u32, String)>, Error>(None);
+                    return Ok::<Option<(u32, String, String)>, Error>(None);
                 }
+
+                // 时间标签先解析（用 borrow），后面 img_path 还要 move 进 emit payload
+                let time_label = extract_time_label(&img_path);
 
                 let data_uri =
                     match to_data_uri(Path::new(&img_path), SUMMARY_IMAGE_MAX_DIM).await {
@@ -959,7 +971,7 @@ impl DaySummaryRunner {
                     log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
                 }
 
-                Ok::<Option<(u32, String)>, Error>(Some((i, desc)))
+                Ok::<Option<(u32, String, String)>, Error>(Some((i, time_label, desc)))
             });
         }
 
@@ -968,15 +980,15 @@ impl DaySummaryRunner {
             .collect()
             .await;
 
-        let mut pairs: Vec<(u32, String)> = Vec::with_capacity(picked.len());
+        let mut triples: Vec<(u32, String, String)> = Vec::with_capacity(picked.len());
         for r in results {
-            if let Some(pair) = r? {
-                pairs.push(pair);
+            if let Some(triple) = r? {
+                triples.push(triple);
             }
         }
         // buffer_unordered 完成顺序不可预期；按 image_index 排序后才能给 step 2 用
-        pairs.sort_by_key(|(i, _)| *i);
-        Ok(pairs.into_iter().map(|(_, d)| d).collect())
+        triples.sort_by_key(|(i, _, _)| *i);
+        Ok(triples.into_iter().map(|(_, t, d)| (t, d)).collect())
     }
 
     /// 引擎未启动就启动。返回当前监听端口。
@@ -1022,5 +1034,41 @@ impl DaySummaryRunner {
         self.supervisor
             .start_with_overrides(Some(main_path), mmproj_path, engine_overrides)
             .await
+    }
+}
+
+/// 从截图绝对路径里解析本地时间标签 `HH:MM`。
+///
+/// 文件名约定（capture/screenshot.rs:48 写入）：`HHMMSS_NNN.jpg`，按本机时区。
+/// 解析失败时回退到 "??:??"——不能让缺时间戳阻塞段总结。
+fn extract_time_label(screenshot_path: &str) -> String {
+    let stem = std::path::Path::new(screenshot_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    // 取下划线前部分 "HHMMSS"
+    let head = stem.split('_').next().unwrap_or("");
+    if head.len() == 6 && head.chars().all(|c| c.is_ascii_digit()) {
+        let hh = &head[0..2];
+        let mm = &head[2..4];
+        return format!("{hh}:{mm}");
+    }
+    "??:??".to_string()
+}
+
+/// 根据 settings.ai.external_enabled 构造 step 2 的 chat 路由。
+///
+/// - false：[`Step2Chat::Local`] 复用 step 1 的 [`ChatClient`]（同一引擎、同一端口）
+/// - true：[`Step2Chat::External`] 包一个新建的 [`ExternalChatClient`]，
+///   走用户填的 endpoint / model / api_key
+///
+/// 外部 client 构造失败（endpoint 空、model 空）会向上抛——这种情况说明用户
+/// 开了 toggle 但没填配置，让顶层错误条直接显示让他去填。
+fn build_step2(ai: &AiConfig, step1: &ChatClient) -> Result<Step2Chat> {
+    if ai.external_enabled {
+        let ext = ExternalChatClient::new(&ai.endpoint, ai.model.clone(), ai.api_key.clone())?;
+        Ok(Step2Chat::External(ext))
+    } else {
+        Ok(Step2Chat::Local(step1.clone()))
     }
 }

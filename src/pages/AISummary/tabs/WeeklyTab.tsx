@@ -1,10 +1,12 @@
+import { useTranslation } from "react-i18next";
 import { PlaceholderTab } from "./PlaceholderTab";
 
 export default function WeeklyTab() {
+  const { t } = useTranslation();
   return (
     <PlaceholderTab
-      title="周报"
-      hint="一周的活动汇总；按日期 + 主题给出整周回顾。功能开发中。"
+      title={t("aiSummary.weekly.title")}
+      hint={t("aiSummary.weekly.hint")}
     />
   );
 }

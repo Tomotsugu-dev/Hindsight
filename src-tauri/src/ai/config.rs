@@ -27,13 +27,22 @@ pub struct AiSegment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AiConfig {
-    /// OpenAI 兼容 base URL（不含 `/chat/completions` 路径片段）。
-    /// 默认指向本机 Ollama。
+    /// 外部云端 API 的 OpenAI 兼容 base URL（不含 `/chat/completions` 路径）。
+    /// 仅在 `external_enabled = true` 时生效；step 1 单图描述永远走本地，不用这个。
+    /// 默认空——前端要求用户主动选 provider 才填。
     pub endpoint: String,
-    /// 用户填的模型 ID（如 `minicpm-v:8b`）；空字符串 = 还没配置好
+    /// 外部 API 的模型 ID（如 `gpt-4o-mini` / `deepseek-chat`）；
+    /// 仅在 `external_enabled = true` 时生效。
     pub model: String,
-    /// 可选 Bearer token，Ollama 不需要
+    /// 外部 API 的 Bearer token；明文落 settings JSON。
     pub api_key: String,
+    /// 是否启用外部云端 API 跑 step 2 段总结。
+    /// false = 全程本地（默认）；true = step 1 本地 vision，step 2 走外部 API。
+    /// 截图本身在任何情况下都不上传——step 1 永远本地。
+    pub external_enabled: bool,
+    /// Provider 预设标识（"openai" / "deepseek" / "openrouter" / "together" / "groq" / "custom"）。
+    /// 后端只用来 sanitize；UI 用它决定 Base URL / Model 的 placeholder。
+    pub external_provider: String,
     /// 用户对自己的简短描述，AI 总结时拼进 system prompt
     pub user_brief: String,
     /// 一天的时段划分；UI 上是连续条
@@ -98,14 +107,16 @@ pub struct PromptOverrides {
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            endpoint: "http://localhost:11434/v1".to_string(),
+            endpoint: String::new(),
             model: String::new(),
             api_key: String::new(),
+            external_enabled: false,
+            external_provider: "openai".to_string(),
             user_brief: String::new(),
             segments: default_segments(),
             excluded_categories: vec!["other".to_string()],
             max_images_per_segment: 30,
-            hash_threshold: 5,
+            hash_threshold: 20,
             hash_window_minutes: 5,
             models_path: String::new(),
             active_main: String::new(),
@@ -171,6 +182,14 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.model = next.model.trim().to_string();
     next.api_key = next.api_key.trim().to_string();
     next.user_brief = next.user_brief.trim().to_string();
+
+    // external_provider：只接受预设值，非法回退到 "openai"
+    next.external_provider = match next.external_provider.trim() {
+        "openai" | "deepseek" | "openrouter" | "together" | "groq" | "custom" => {
+            next.external_provider.trim().to_string()
+        }
+        _ => "openai".to_string(),
+    };
 
     let valid_segments: Vec<AiSegment> = next
         .segments

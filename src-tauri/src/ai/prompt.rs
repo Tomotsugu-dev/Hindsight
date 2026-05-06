@@ -76,8 +76,10 @@ pub struct SegmentContext<'a> {
     pub end_hour: u8,
     /// (display_name, minutes, category_id) 三元组，按 minutes 降序
     pub top_apps: &'a [(String, u32, String)],
-    /// step 1 落库的每张图描述，按 image_index 升序
-    pub image_descriptions: &'a [String],
+    /// step 1 落库的每张图描述，按 image_index 升序：(time_label, description)。
+    /// time_label 是从截图文件名解析出的 `HH:MM` 本地时间，让 step 2 能按时间
+    /// 顺序串故事；解析失败时是 "??:??"。
+    pub image_descriptions: &'a [(String, String)],
 }
 
 /// step 1（单张图描述）的 system prompt——按当前语言选覆盖或内置默认。
@@ -186,11 +188,11 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
         out.push_str("\n（这段时间没有截图，仅基于上面的应用统计写一句话。）");
     } else {
         out.push_str(&format!(
-            "\n下面是该时段内 {} 张代表截图的逐一描述（已由 AI 看图后给出）：\n",
+            "\n下面是该时段内 {} 张代表截图的逐一描述（已由 AI 看图后给出，按时间先后排列，每行行首 [HH:MM] 是截图本地时间）：\n",
             ctx.image_descriptions.len(),
         ));
-        for (i, d) in ctx.image_descriptions.iter().enumerate() {
-            out.push_str(&format!("{}. {}\n", i + 1, d.trim()));
+        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
             "\n请综合这些描述和应用统计写段总结，不要简单复述上面任意一条。",
@@ -220,11 +222,11 @@ fn build_user_prompt_en(ctx: &SegmentContext) -> String {
         );
     } else {
         out.push_str(&format!(
-            "\nBelow are AI-generated descriptions of {} representative screenshots from this segment, in order:\n",
+            "\nBelow are AI-generated descriptions of {} representative screenshots from this segment, in chronological order. The leading [HH:MM] is the screenshot's local time:\n",
             ctx.image_descriptions.len(),
         ));
-        for (i, d) in ctx.image_descriptions.iter().enumerate() {
-            out.push_str(&format!("{}. {}\n", i + 1, d.trim()));
+        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
             "\nWrite a brief segment summary combining these descriptions and the app stats. \
@@ -255,11 +257,11 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
         );
     } else {
         out.push_str(&format!(
-            "\n以下はこの時間帯の代表的なスクリーンショット {} 枚に対する AI による個別の記述です：\n",
+            "\n以下はこの時間帯の代表的なスクリーンショット {} 枚に対する AI による個別の記述です（時系列順、行頭の [HH:MM] は撮影時刻）：\n",
             ctx.image_descriptions.len(),
         ));
-        for (i, d) in ctx.image_descriptions.iter().enumerate() {
-            out.push_str(&format!("{}. {}\n", i + 1, d.trim()));
+        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
             "\nこれらの記述とアプリ統計を組み合わせて時間帯の要約を書いてください。\

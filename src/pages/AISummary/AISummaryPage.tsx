@@ -1,14 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import styles from "./AISummaryPage.module.css";
 
 /** Tab 配置：5 个子路由对应 5 个 tab。结构和 SettingsPage 的 TABS 一致。 */
 const TABS = [
-  { to: "", label: "日报", end: true },
-  { to: "week", label: "周报" },
-  { to: "month", label: "月报" },
-  { to: "chat", label: "对话" },
-  { to: "debug", label: "调试" },
+  { to: "", labelKey: "aiSummary.tabs.daily", end: true },
+  { to: "week", labelKey: "aiSummary.tabs.week" },
+  { to: "month", labelKey: "aiSummary.tabs.month" },
+  { to: "chat", labelKey: "aiSummary.tabs.chat" },
+  { to: "debug", labelKey: "aiSummary.tabs.debug" },
 ];
 
 interface PillStyle {
@@ -24,6 +25,7 @@ interface PillStyle {
  * 子路由各自实现内容（DailyTab 是真主体，其它是占位）。
  */
 export default function AISummaryPage() {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
   const [pill, setPill] = useState<PillStyle>({
@@ -33,7 +35,8 @@ export default function AISummaryPage() {
   });
   const [animated, setAnimated] = useState(false);
 
-  /** 路由变化时重新测量当前激活 tab 的位置——跟 SettingsPage 完全一致 */
+  /** 路由或语言变化时重新测量当前激活 tab 的位置
+   *  —— 切换语言会改 tab 文字宽度，必须重测，否则 pill 留在旧（中文）尺寸 */
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
@@ -49,7 +52,7 @@ export default function AISummaryPage() {
       width: active.offsetWidth,
       visible: true,
     });
-  }, [location.pathname]);
+  }, [location.pathname, i18n.language]);
 
   /** 第一次定位完成后再开启过渡，避免初始从 0 滑过来 */
   useEffect(() => {
@@ -62,7 +65,7 @@ export default function AISummaryPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>AI 总结</h1>
+        <h1 className={styles.title}>{t("aiSummary.title")}</h1>
       </header>
 
       <nav className={styles.tabs} role="tablist" ref={navRef}>
@@ -77,16 +80,16 @@ export default function AISummaryPage() {
           aria-hidden
         />
 
-        {TABS.map((t) => (
+        {TABS.map((tab) => (
           <NavLink
-            key={t.label}
-            to={t.to}
-            end={t.end}
+            key={tab.labelKey}
+            to={tab.to}
+            end={tab.end}
             className={({ isActive }) =>
               `${styles.tab} ${isActive ? styles.tabActive : ""}`
             }
           >
-            {t.label}
+            {t(tab.labelKey)}
           </NavLink>
         ))}
       </nav>

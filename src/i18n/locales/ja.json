@@ -537,6 +537,35 @@
       "windowLabel": "時間ウィンドウ",
       "windowHint": "この時間幅の中で撮られたスクリーンショットだけを比較し、別の時間帯にある似たフレームが誤ってマージされるのを防ぎます。",
       "windowSuffix": "分"
+    },
+    "external": {
+      "sectionTitle": "クラウド API（任意）",
+      "sectionDesc": "時間帯の要約をクラウドモデルで生成します。スクリーンショット自体はアップロードされません。各画像の記述は引き続きローカルのビジョンモデルが行います。",
+      "enableLabel": "時間帯の要約をクラウドで生成",
+      "enableHint": "オンにすると、各時間帯の要約呼び出しは下記の API へ送られます。ステップ 1（画像ごとの記述）は引き続きローカルで実行されます。",
+      "providerLabel": "プロバイダー",
+      "provider": {
+        "openai": "OpenAI",
+        "deepseek": "DeepSeek",
+        "openrouter": "OpenRouter",
+        "together": "Together",
+        "groq": "Groq",
+        "custom": "カスタム"
+      },
+      "baseUrlLabel": "Base URL",
+      "baseUrlPlaceholder": "https://api.openai.com/v1",
+      "apiKeyLabel": "API キー",
+      "apiKeyPlaceholder": "sk-...",
+      "apiKeyShow": "表示",
+      "apiKeyHide": "非表示",
+      "modelLabel": "モデル ID",
+      "testButton": "接続テスト",
+      "testRunning": "テスト中…",
+      "testOk": "接続成功 · モデル {{count}} 件",
+      "testOkNoModels": "接続成功",
+      "testFail": "接続失敗：{{message}}",
+      "missingFields": "Base URL とモデル ID を入力してください",
+      "privacyNote": "ヒント：オンにすると、アプリ名・分類・画像の文字記述が各時間帯の要約呼び出しごとにクラウド API へ送信されます。画像本体はアップロードされません。"
     }
   },
   "devices": {
@@ -634,6 +663,304 @@
     },
     "other": {
       "lastSync": "最終同期: {{when}}"
+    }
+  },
+  "aiSummary": {
+    "title": "AI サマリー",
+    "tabs": {
+      "daily": "日次",
+      "week": "週次",
+      "month": "月次",
+      "chat": "チャット",
+      "debug": "デバッグ"
+    },
+    "placeholder": {
+      "hint": "開発中の機能です。"
+    },
+    "weekly": {
+      "title": "週次",
+      "hint": "1 週間のアクティビティ集計。日付 + テーマ別に振り返ります。開発中の機能です。"
+    },
+    "monthly": {
+      "title": "月次",
+      "hint": "1 か月のアクティビティ傾向と主なハイライト。開発中の機能です。"
+    },
+    "daily": {
+      "subtitle": "その日のスクリーンショットとアプリ使用状況を時間帯ごとに集計し、ローカルのビジョンモデルで生成します。",
+      "dateNav": {
+        "prevAria": "前の日",
+        "nextAria": "次の日",
+        "todayBack": "今日に戻る",
+        "today": "今日",
+        "yesterday": "昨日"
+      },
+      "actions": {
+        "stop": "停止",
+        "regenerate": "再生成",
+        "start": "サマリー開始",
+        "startTooltip": "ローカルのビジョンモデルが各時間帯を順に分析します。所要時間はハードウェアによって異なります（GPU で数秒/帯、CPU で数十秒/帯）。",
+        "regenerateTooltip": "再生成するとこの日の全時間帯のサマリーが消去され、もう一度実行されます。",
+        "noModelTooltip": "先に AI 設定 → モデル でモデルを選んでください。",
+        "delete": "削除",
+        "deleteTooltip": "この日の ai_summaries (source=daily) と ai_image_descriptions を消去します（取り消し不可）。",
+        "deleteEmptyTooltip": "この日にはまだ削除できる日次データがありません。",
+        "deleteConfirm": "{{date}} の日次レポートデータを削除しますか? 時間帯ごとのサマリーと画像ごとの記述がすべて消去されます。デバッグタブには影響しません。この操作は取り消せません。",
+        "exportMarkdown": "Markdown でエクスポート",
+        "exportTooltip": "現在の日付の全時間帯のサマリーを Markdown ファイルとしてエクスポートします。",
+        "exportEmptyTooltip": "エクスポートできる時間帯のサマリーがまだありません。",
+        "exportRunningTooltip": "サマリー生成中です。完了してからエクスポートしてください。",
+        "retry": "再試行",
+        "retryTooltip": "この時間帯を再生成",
+        "retryDisabledTooltip": "全体のサマリーが実行中です。完了または停止後に再試行してください。"
+      },
+      "errors": {
+        "noVisionModel": "先に AI 設定 → モデル でビジョンモデルを選んでください。",
+        "generationFailed": "サマリーに失敗しました",
+        "unknown": "不明なエラー"
+      },
+      "engineLoading": "モデルを読み込み中…",
+      "toast": {
+        "exported": "{{filename}} を「ダウンロード」フォルダにエクスポートしました。"
+      },
+      "card": {
+        "badge": {
+          "empty": "未生成",
+          "ok": "生成済み",
+          "skipped": "スクリーンショットなし",
+          "error": "失敗",
+          "analyzing": "分析中 · {{done}} / {{total}} 枚",
+          "analyzingNoTotal": "分析中…"
+        },
+        "body": {
+          "empty": "上の「サマリー開始」をクリックして、この時間帯の内容を生成してください。",
+          "analyzing": "モデルにスクリーンショットを送っています… {{done}} / {{total}} 枚完了",
+          "analyzingNoTotal": "分析中…",
+          "skipped": "この時間帯にはスクリーンショットがありません（PC を使っていない / すべてプライバシーリストに該当 / すべて除外カテゴリに該当）。",
+          "errorLabel": "失敗: "
+        }
+      },
+      "export": {
+        "frontmatterTitle": "日次レポート — {{dateLabel}}",
+        "heading": "日次レポート — {{dateLabel}} · {{date}}",
+        "intro": "Hindsight AI による生成 · {{summary}}",
+        "segmentsCount": "{{count}} 帯",
+        "okCount": "生成済み {{count}}",
+        "skipCount": "スキップ {{count}}",
+        "errCount": "失敗 {{count}}",
+        "pendingCount": "未生成 {{count}}",
+        "summaryJoin": " · ",
+        "statePending": "⏳ **未生成**",
+        "stateSkipped": "⚪ **スキップ** — この時間帯にはスクリーンショットがありません",
+        "stateError": "❌ **失敗**",
+        "stateEmptyContent": "_（空）_"
+      }
+    },
+    "chat": {
+      "subtitle": "AI とアクティビティについて話す — 履歴を検索、アプリ使用時間を確認、1 日を振り返る。",
+      "mockBadge": "MOCK",
+      "clear": "クリア",
+      "clearTooltip": "現在の会話をクリア",
+      "empty": {
+        "title": "何を聞きたいですか？",
+        "hint": "下のサンプルを試すか、下部から直接入力してください。"
+      },
+      "input": {
+        "placeholder": "何でもどうぞ…",
+        "sendAria": "送信",
+        "sendTooltip": "送信（Enter）"
+      },
+      "presets": {
+        "search": {
+          "label": "履歴を検索",
+          "q": "PairingSection の hover バグを直したのはいつだったか"
+        },
+        "stat": {
+          "label": "データ",
+          "q": "先週 Cursor をどれくらい使った？"
+        },
+        "reflect": {
+          "label": "振り返り",
+          "q": "今日の集中度はどうだった？振り返りをください"
+        }
+      },
+      "mock": {
+        "search": {
+          "intro": "過去の時間帯の要約から関連する 3 件が見つかりました：",
+          "segLabelAfternoon": "午後",
+          "segLabelEvening": "夜",
+          "hit1Snippet": "Hindsight プロジェクトで PairingSection の hover/glow 効果を調整。grid template の固定列幅と minmax を何度も試し、最終的に :has(.nameCol:hover) を使って列全体を展開させた。",
+          "hit2Snippet": "actionCol の左寄せと padding-left の問題を引き続き修正。1fr の nameCol が padding を相殺するように自動縮小していることに気づき、grid template を 140px の固定値に変更。",
+          "hit3Snippet": "trigger が同じ X 軸に揃っていないことに初めて気づき、grid のサブピクセル計算か flex justify-end が原因ではないかと疑った。"
+        },
+        "stat": {
+          "intro": "先週の Cursor は合計 12h 23m、曜日別の内訳：",
+          "sumPrefix": "合計 {{total}}",
+          "weekday1": "月",
+          "weekday2": "火",
+          "weekday3": "水",
+          "weekday4": "木",
+          "weekday5": "金",
+          "weekday6": "土",
+          "weekday7": "日"
+        },
+        "reflect": {
+          "section1Title": "今日の全体",
+          "section1Body": "深い集中は約 4 時間（午前 + 午後 各 2 時間）、それ以外は切り替えと連絡。集中度は概ね良好だが、午後の約 40 分はアプリ切り替えが多めだった（28 回/時）。",
+          "section2Title": "ハイライト",
+          "section2Body": "午後 14:00–16:00 は Cursor で 2 時間ほぼ切り替えなし。今日もっとも深く作業できた時間帯。",
+          "section3Title": "改善の提案",
+          "section3Body": "19:00 以降は SNS 系アプリが 60% を占めた。寝る前 30 分にまとめて確認するようにし、夕食後に連続した作業や読書の時間を確保するとよさそう。"
+        },
+        "fallback": {
+          "text": "（mock）これはサンプルの返答です。バックエンドはまだ接続されておらず、いくつかのキーワードのみを認識します：\n• 履歴検索 — 「検索 / 探す / いつ / hover / bug」\n• データ — 「どれくらい / 時間 / 使った」\n• 振り返り — 「振り返り / 集中 / 今日 / どうだった」"
+        }
+      }
+    },
+    "debug": {
+      "scope": {
+        "daily": "日次",
+        "weekly": "週次",
+        "monthly": "月次"
+      },
+      "pickerOptions": {
+        "maxImages15": "15 枚/区間",
+        "maxImages30": "30 枚/区間",
+        "maxImagesUnlimited": "無制限",
+        "slots1": "並列 1",
+        "slots2": "並列 2",
+        "slots4": "並列 4",
+        "slots8": "並列 8",
+        "ctxDefault": "ctx 8K/スロット",
+        "ctx16k": "ctx 16K/スロット",
+        "ctx32k": "ctx 32K/スロット",
+        "ctx64k": "ctx 64K/スロット"
+      },
+      "dateNav": {
+        "prevDayAria": "前の日",
+        "nextDayAria": "次の日",
+        "prevWeekAria": "前の週",
+        "nextWeekAria": "次の週",
+        "prevMonthAria": "前の月",
+        "nextMonthAria": "次の月",
+        "todayBack": "今日に戻る",
+        "thisWeekBack": "今週に戻る",
+        "thisMonthBack": "今月に戻る",
+        "today": "今日",
+        "yesterday": "昨日",
+        "thisWeek": "今週",
+        "lastWeek": "先週",
+        "weekBeforeLast": "先々週",
+        "weeksAgo": "{{count}} 週間前",
+        "thisMonth": "今月",
+        "lastMonth": "先月",
+        "monthsAgo": "{{count}} か月前"
+      },
+      "maxImagesInfo": {
+        "tooltip": "各時間帯にモデルへ送る最大画像数。少なくするとデバッグが速くなります。",
+        "aria": "区間あたりの最大画像数についての説明"
+      },
+      "actions": {
+        "stop": "停止",
+        "start": "実行",
+        "startTooltipPending": "{{type}}デバッグはバックエンド実装待ちです。",
+        "startTooltipReady": "デバッグモード：1 日の全時間帯を実行（既存結果を消去して再実行）、画像ごとの記述をリアルタイム表示。",
+        "startTooltipNoModel": "先に AI 設定 → モデル でモデルを選んでください。",
+        "delete": "削除",
+        "deleteTooltip": "この日の ai_summaries と ai_image_descriptions を消去します（取り消し不可）。",
+        "deleteConfirm": "{{date}} の AI 生成物をすべて削除しますか? 時間帯の要約と画像ごとの記述が消去されます。この操作は取り消せません。",
+        "exportJson": "JSON でエクスポート",
+        "exportTooltip": "このページのデバッグデータをすべて JSON ファイルとしてエクスポート。"
+      },
+      "filter": {
+        "title": "フィルター",
+        "description": "このデバッグウィンドウのみ有効。AI 設定のグローバル値には影響しません。",
+        "categoriesLabel": "分析するカテゴリ",
+        "categoriesHint": "クリックで切り替え：\n• カラー + カテゴリアイコン = AI 分析対象\n• グレー輪郭 + 閉じ目アイコン = 除外"
+      },
+      "frame": {
+        "title": "フレーム抽出",
+        "description": "時間帯にスクリーンショットが多い場合、まず類似度で重複除去してからモデルに送り、時間と token を節約します。このデバッグウィンドウのみ有効。",
+        "hashThresholdLabel": "類似度しきい値",
+        "hashThresholdHint": "2 枚のスクリーンショットがどれだけ違うかの判定基準。小さいほど厳密で、0 は全ピクセルが一致する場合のみ重複とみなします。",
+        "hashWindowLabel": "時間ウィンドウ",
+        "hashWindowHint": "この時間内のスクリーンショットだけを比較し、午前と午後の似た画面が誤って統合されるのを防ぎます。",
+        "hashWindowSuffix": "分"
+      },
+      "engine": {
+        "title": "エンジンパラメータ（起動時）",
+        "description": "変更するとエンジンを停止し、新しいパラメータで再起動してから実行します。デバッグ後はエンジンを無条件に停止し、次回の日次サマリーはデフォルト値で lazy-start するため、グローバル状態は汚されません。"
+      },
+      "vram": {
+        "label": "推定総使用量",
+        "value": "~{{total}} GB",
+        "breakdown": "（重み {{weights}} + KV cache {{kv}} + その他 ~2.0 · {{params}}B モデル + ctx {{ctxK}}K × {{slots}} スロット 推定）"
+      },
+      "errors": {
+        "scopePending": "{{type}}デバッグはバックエンド実装待ちです。",
+        "noVisionModel": "先に AI 設定 → モデル でビジョンモデルを選んでください。",
+        "runFailed": "デバッグ実行に失敗しました"
+      },
+      "engineLoading": "モデルを読み込み中…",
+      "scopePlaceholder": "{{type}}デバッグはバックエンド実装待ちです。「日次」に戻すと、日次サマリーの 2 段階生成フロー（画像ごとの記述 → 時間帯の要約）をデバッグできます。",
+      "imagePrompt": {
+        "title": "画像記述プロンプト",
+        "description": "step 1 — モデルが各スクリーンショットを個別に記述する際に使用。変更は即時反映（デバッグウィンドウのみ）、AI 設定のグローバル値には影響しません。",
+        "label": "プロンプト"
+      },
+      "segPrompt": {
+        "title": "時間帯要約プロンプト",
+        "description": "step 2 — 画像ごとの記述 + アプリ統計を時間帯の要約に集約する際に使用。変更は即時反映（デバッグウィンドウのみ）。",
+        "label": "プロンプト"
+      },
+      "perImage": {
+        "title": "画像ごとの記述",
+        "descriptionBase": "step 1 の出力 — 各スクリーンショットを vision LLM で個別に記述したもの",
+        "countSuffix": "、{{count}} 件",
+        "descriptionSuffix": "。ファイル名をクリックで原画プレビュー、行末の「再実行」で現在のデバッグパラメータを使ってその画像の記述を再生成。",
+        "empty": "まだデータがありません。上の「実行」をクリックすると、モデルが各スクリーンショットを記述します。",
+        "segFallback": "区間{{idx}}",
+        "imageNoSuffix": " · {{n}} 枚目",
+        "chipTitle": "区間 idx={{seg}} · 画像 idx={{img}}（重複除去後の順序）",
+        "pathTooltip": "クリックで原画プレビュー：{{path}}",
+        "statTooltip": "レイテンシ · prompt / completion tokens",
+        "retry": "再実行",
+        "retryTooltipBusy": "全体のサマリーが実行中です。完了または停止後に再実行してください。",
+        "retryTooltipReady": "現在のデバッグパラメータを使ってこの画像の記述を再生成。",
+        "descEmpty": "（空）",
+        "openImageError": "画像を開く / 場所を特定できません：{{msg}}"
+      },
+      "segments": {
+        "title": "時間帯の要約",
+        "descriptionBase": "step 2 の出力 — 画像ごとの記述 + アプリ統計から集約した時間帯の要約",
+        "countSuffix": "、{{count}} 帯",
+        "descriptionSuffix": "。",
+        "empty": "まだ時間帯の要約がありません。上の「実行」をクリックすると、モデルが時間帯内の記述を 1 つの要約に集約します。",
+        "chipTitle": "区間 idx={{idx}}",
+        "skippedFallback": "（この時間帯にはスクリーンショットなし）",
+        "emptyFallback": "（空）"
+      },
+      "events": {
+        "label": "イベントストリーム（rolling 200 件）",
+        "empty": "イベントはまだありません。実行をクリックすると、ここにスクロール表示されます。"
+      },
+      "engineLogs": {
+        "label": "エンジンログ",
+        "refresh": "更新",
+        "refreshing": "更新中…",
+        "refreshTooltip": "llama-server 子プロセスの最新の stderr / stdout を取得。",
+        "emptyPrefix": "まだログを取得していません。上の「更新」を押して取得してください。エンジンがサマリーを実行した後に内容が表示されます。",
+        "emptySuffix": " のような行で GPU が使われているかを判断できます。"
+      },
+      "engineBar": {
+        "loading": "エンジン状態を読み込み中…",
+        "notInstalled": "未インストール",
+        "port": "ポート：",
+        "version": "llama.cpp バージョン：",
+        "accel": "アクセラレーション：",
+        "state": "状態：",
+        "error": "エラー：",
+        "accelTitle": "バイナリバリアント ID: {{id}}"
+      }
     }
   }
 }
