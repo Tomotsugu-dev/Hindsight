@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { EyeOff } from "lucide-react";
 import { api, type Category } from "../../../api/hindsight";
 import { resolveCategoryIcon } from "../../../config/categoryIcons";
+import { displayCategoryName } from "../../../utils/categoryName";
 import styles from "./CategoryChipMultiSelect.module.css";
 
 interface Props {
@@ -10,6 +12,7 @@ interface Props {
 }
 
 export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -67,7 +70,7 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
             title={excluded ? "已排除——点一下重新加入" : "点一下从分析中排除"}
           >
             <Icon size={13} strokeWidth={2} />
-            <span className={styles.name}>{c.name}</span>
+            <span className={styles.name}>{displayCategoryName(c, t)}</span>
           </button>
         );
       })}

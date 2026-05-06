@@ -2,23 +2,63 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* 多设备场景：列总宽超过容器时横向滚动，单列不会被压缩 */
+  overflow-x: auto;
+  /* 给底部留出滚动条空间，避免滚动条压到内容 */
+  padding-bottom: 4px;
 }
 
-/* 所有列（设备 + 统一名）等分 1fr；操作列 auto。表头跟 row 共用。*/
+/* —— 自定义横向滚动条：永远可见的细条，让用户知道可以左右滑动 —— */
+.pairing::-webkit-scrollbar {
+  height: 10px;
+}
+
+.pairing::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 5px;
+}
+
+.pairing::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 5px;
+  transition: background-color 140ms ease-out;
+}
+
+.pairing::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* Firefox 滚动条样式（细 + 半透明拇指） */
+.pairing {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) rgba(0, 0, 0, 0.04);
+}
+
+/* device cols / 统一名 / 指派下拉 / 行末删除（28）。
+   统一名列默认窄 80px，鼠标 hover 整张表时展开到 240px（CSS transition）。
+   表头跟 row 共用同一套列模板。 */
 .row {
+  position: relative;
   display: grid;
-  /* device cols / unified name / 指派下拉 / 行末删除（仅空行有，但占位保持整列对齐）*/
-  grid-template-columns: var(--device-cols) 1fr auto auto;
+  grid-template-columns: var(--device-cols) 80px 160px 28px;
   align-items: center;
   gap: 12px;
   padding: 6px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
   transition:
+    grid-template-columns 280ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 140ms ease-out,
     border-color 140ms ease-out,
     box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 仅当鼠标 hover 在「统一名」列上才整列展开 —— hover trigger / 设备 chip / 删除按钮都不触发。
+   展开宽度与左侧设备列一致（160px）。用 :has() 让任意一行的 nameCol 被 hover 时同步展开整列。*/
+.pairing:has(.nameCol:hover) .row,
+.pairing:has(.nameCol:hover) .devHeader {
+  grid-template-columns: var(--device-cols) 160px 160px 28px;
 }
 
 /* zebra：相邻行底色错开一档，分块更清晰。先于 hover / hot 写，
@@ -196,14 +236,17 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  min-width: 64px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  /* trigger 整体右移 50px（actionCol 列宽 160 - trigger 宽 ~110 = 50px buffer），
+     让 trigger 离左侧 Display name 列文字有充分呼吸空间 */
+  padding-left: 50px;
 }
 
-/* 表头跟 row 用同一套列模板（含末尾删除占位列），对齐每个 column */
+/* 表头跟 row 用同一套列模板，hover 表格时同步展开统一名列 */
 .devHeader {
   display: grid;
-  grid-template-columns: var(--device-cols) 1fr auto auto;
+  grid-template-columns: var(--device-cols) 80px 160px 28px;
+  transition: grid-template-columns 280ms cubic-bezier(0.22, 1, 0.36, 1);
   gap: 12px;
   padding: 0 12px 8px;
   font-size: 10px;
@@ -227,13 +270,11 @@
   min-width: 64px;
 }
 
-/* 行末删除按钮所在列：固定宽度让 grid 对齐；非空行渲染空 div 占位 */
+/* 行末删除按钮所在列：固定 28px 宽（grid template 已分配） */
 .deleteCol {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  min-width: 28px;
 }
 
 .toolbar {

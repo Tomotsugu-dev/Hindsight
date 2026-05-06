@@ -164,6 +164,14 @@
     "intro": "Group processes into activity categories. Color, icon, name, and bound apps are all customizable.",
     "newCategory": "New category",
     "loading": "Loading…",
+    "defaults": {
+      "code": "Coding",
+      "browse": "Browsing",
+      "talk": "Social",
+      "design": "Design",
+      "fun": "Entertainment",
+      "other": "Other"
+    },
     "list": {
       "namePlaceholder": "Category name",
       "renameTooltip": "Double-click to rename",

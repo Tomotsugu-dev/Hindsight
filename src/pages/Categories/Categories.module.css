@@ -629,6 +629,8 @@
 .assignMenu {
   position: fixed;
   z-index: 9999;
+  /* 让菜单宽度按最长 option 自动撑开（trigger 是最小宽），避免短词 trigger 下长选项超框 */
+  width: max-content;
   padding: 4px;
   background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.08);

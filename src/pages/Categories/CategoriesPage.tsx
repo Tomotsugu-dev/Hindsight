@@ -22,6 +22,7 @@ import type { Category } from "../../api/hindsight";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
+import { displayCategoryName } from "../../utils/categoryName";
 import { AppList, DEFAULT_PALETTE } from "./parts";
 import { PairingSection } from "./PairingSection";
 import styles from "./Categories.module.css";
@@ -232,7 +233,7 @@ function CategoryRow({
               onDoubleClick={() => setEditingName(true)}
               title={t("categories.list.renameTooltip")}
             >
-              {category.name}
+              {displayCategoryName(category, t)}
             </span>
           )}
         </div>
@@ -266,7 +267,7 @@ function CategoryRow({
       <ConfirmDialog
         open={confirmOpen}
         title={t("categories.deleteDialog.title")}
-        message={t("categories.deleteDialog.message", { name: category.name })}
+        message={t("categories.deleteDialog.message", { name: displayCategoryName(category, t) })}
         confirmLabel={t("categories.deleteDialog.confirm")}
         variant="danger"
         onConfirm={onConfirmDelete}
@@ -392,6 +393,7 @@ function DraggableCategoryList({
   categories: Category[];
   onReorder: (orderedIds: string[]) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [drag, setDrag] = useState<{
     id: string;
     name: string;
@@ -570,7 +572,9 @@ function DraggableCategoryList({
             <span className={styles.catFlyIcon}>
               <FlyIcon size={20} strokeWidth={1.85} />
             </span>
-            <span className={styles.catFlyName}>{drag.name}</span>
+            <span className={styles.catFlyName}>
+              {displayCategoryName({ id: drag.id, name: drag.name }, t)}
+            </span>
           </div>,
           document.body,
         )}

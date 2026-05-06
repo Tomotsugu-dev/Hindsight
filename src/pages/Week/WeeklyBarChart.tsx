@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
+import { displayCategoryName } from "../../utils/categoryName";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeeklyBarChart.module.css";
 
@@ -77,7 +78,7 @@ export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
                           width: `${(seg.minutes / total) * 100}%`,
                           background: cat.color,
                         }}
-                        title={`${cat.name} · ${fmtTotal(seg.minutes)}`}
+                        title={`${displayCategoryName(cat, t)} · ${fmtTotal(seg.minutes)}`}
                       />
                     );
                   })}

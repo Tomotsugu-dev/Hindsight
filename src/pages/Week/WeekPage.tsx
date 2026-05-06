@@ -7,6 +7,7 @@ import { AppStack } from "../../components/AppStack/AppStack";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
+import { displayCategoryName } from "../../utils/categoryName";
 import { useWeekCache } from "../../hooks/useWeekCache";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { useMouseGlow } from "../../hooks/useMouseGlow";
@@ -98,7 +99,7 @@ export default function WeekPage() {
     return categories
       .map((c) => ({
         id: c.id,
-        name: c.name,
+        name: displayCategoryName(c, t),
         color: c.color,
         minutes: totals.get(c.id) ?? 0,
         extras: (
@@ -110,7 +111,7 @@ export default function WeekPage() {
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [days, apps, categories]);
+  }, [days, apps, categories, t]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return apps.map((a) => {
@@ -119,13 +120,13 @@ export default function WeekPage() {
       return {
         id: a.process,
         name: displayAppName(a.process),
-        subtitle: cat?.name,
+        subtitle: cat ? displayCategoryName(cat, t) : undefined,
         color,
         minutes: a.minutes,
         leading: <AppIcon processName={a.iconProcess} fallbackColor={color} />,
       };
     });
-  }, [apps, getCategory]);
+  }, [apps, getCategory, t]);
 
   // —— 滑动动画 ——
   const frameRef = useRef<HTMLDivElement>(null);
@@ -266,6 +267,7 @@ export default function WeekPage() {
 }
 
 function Legend() {
+  const { t } = useTranslation();
   const { categories } = useCategories();
   return (
     <div className={styles.legend}>
@@ -276,7 +278,7 @@ function Legend() {
             style={{ background: c.color }}
             aria-hidden
           />
-          {c.name}
+          {displayCategoryName(c, t)}
         </span>
       ))}
     </div>

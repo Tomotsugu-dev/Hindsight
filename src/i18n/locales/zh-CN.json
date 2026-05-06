@@ -164,6 +164,14 @@
     "intro": "不同进程归属到不同的活动类别。颜色、图标、名称、绑定应用都可自定义。",
     "newCategory": "新建分类",
     "loading": "加载中…",
+    "defaults": {
+      "code": "编程",
+      "browse": "浏览",
+      "talk": "社交",
+      "design": "设计",
+      "fun": "娱乐",
+      "other": "其他"
+    },
     "list": {
       "namePlaceholder": "分类名",
       "renameTooltip": "双击改名",

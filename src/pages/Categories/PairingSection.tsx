@@ -141,8 +141,11 @@ export function PairingSection() {
     return <div className={styles.toolbar}>{t("categories.pairing.noDevices")}</div>;
   }
 
-  // 所有列等宽 1fr；操作列 auto。
-  const deviceColsTemplate = sortedDevices.map(() => "1fr").join(" ");
+  // 设备列每个 minmax(160px, 1fr)：在容器够宽时弹性 1fr 分配；容器不够宽时
+  // 缩到最小 160px 后触发表格容器的横向滚动（多设备场景下窗口装不下也不挤压）
+  const deviceColsTemplate = sortedDevices
+    .map(() => "minmax(160px, 1fr)")
+    .join(" ");
   const cssVars = { "--device-cols": deviceColsTemplate } as CSSProperties;
 
   const startDrag = (

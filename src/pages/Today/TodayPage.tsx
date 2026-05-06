@@ -8,6 +8,7 @@ import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { AppStack } from "../../components/AppStack/AppStack";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { displayAppName } from "../../utils/displayName";
+import { displayCategoryName } from "../../utils/categoryName";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList, type RankedItem } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
@@ -99,7 +100,7 @@ export default function TodayPage() {
     return categories
       .map((c) => ({
         id: c.id,
-        name: c.name,
+        name: displayCategoryName(c, t),
         color: c.color,
         minutes: totals.get(c.id) ?? 0,
         extras: (
@@ -111,7 +112,7 @@ export default function TodayPage() {
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [hours, apps, categories]);
+  }, [hours, apps, categories, t]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return apps.map((a) => {
@@ -120,13 +121,13 @@ export default function TodayPage() {
       return {
         id: a.process,
         name: displayAppName(a.process),
-        subtitle: cat?.name,
+        subtitle: cat ? displayCategoryName(cat, t) : undefined,
         color,
         minutes: a.minutes,
         leading: <AppIcon processName={a.iconProcess} fallbackColor={color} />,
       };
     });
-  }, [apps, getCategory]);
+  }, [apps, getCategory, t]);
 
   // —— 滑动动画状态 ——
   const frameRef = useRef<HTMLDivElement>(null);
@@ -288,7 +289,7 @@ function Legend({ hasWorkHours }: LegendProps) {
             style={{ background: c.color }}
             aria-hidden
           />
-          {c.name}
+          {displayCategoryName(c, t)}
         </span>
       ))}
       {hasWorkHours && (

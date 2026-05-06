@@ -5,6 +5,7 @@ import { useCategories } from "../../state/categories";
 import type { Category } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { displayAppName } from "../../utils/displayName";
+import { displayCategoryName } from "../../utils/categoryName";
 import styles from "./Categories.module.css";
 
 export const DEFAULT_PALETTE = [
@@ -199,7 +200,7 @@ export function AssignDropdown({
         {current ? (
           <>
             <span className={styles.assignOptionDot} aria-hidden />
-            <span className={styles.assignBtnLabel}>{current.name}</span>
+            <span className={styles.assignBtnLabel}>{displayCategoryName(current, t)}</span>
           </>
         ) : (
           <>
@@ -217,7 +218,7 @@ export function AssignDropdown({
           style={{
             top: menuRect.top,
             left: menuRect.left,
-            width: menuRect.width,
+            minWidth: menuRect.width,
           }}
         >
           {allowClear && current && (
@@ -253,7 +254,7 @@ export function AssignDropdown({
                 }}
               >
                 <span className={styles.assignOptionDot} aria-hidden />
-                <span className={styles.assignOptionLabel}>{c.name}</span>
+                <span className={styles.assignOptionLabel}>{displayCategoryName(c, t)}</span>
               </button>
             );
           })}
