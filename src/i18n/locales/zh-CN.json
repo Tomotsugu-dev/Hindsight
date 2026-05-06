@@ -223,5 +223,102 @@
       "label": "指派",
       "clear": "取消分类"
     }
+  },
+  "devices": {
+    "title": "设备",
+    "meta": "管理本机名称，与其他设备的同步状态。",
+    "sectionSelf": "本机",
+    "sectionOthers": "其他设备",
+    "emptyOthers": "登录同账号后，其他设备会出现在这里。",
+    "relative": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    },
+    "cloud": {
+      "state": {
+        "connected": "已连接 Google Drive",
+        "notSignedIn": "未连接",
+        "notConfigured": "未配置"
+      },
+      "desc": {
+        "signInPrompt": "用 Google 账号登录，活动数据通过 Drive 在多设备间同步。截图不上传。",
+        "configurePrompt": "首次使用前需要在 Google Cloud Console 创建一个 OAuth 凭证（约 3 分钟）。"
+      },
+      "stats": {
+        "pending": "待发送 {{count}}",
+        "synced": "已同步 · {{when}}",
+        "waitingFirst": "等待首次同步",
+        "deadLetter": "· {{count}} 条失败"
+      },
+      "editCreds": "改凭证",
+      "actions": {
+        "syncNow": "立即同步",
+        "syncing": "同步中…",
+        "syncNowTitle": "立即同步",
+        "signOut": "退出",
+        "signIn": "重新登录",
+        "signOutTitle": "退出当前账号",
+        "reauthTitle": "凭证失效，重新登录刷新 token",
+        "signInWithGoogle": "用 Google 登录",
+        "signingIn": "浏览器中…",
+        "configureOAuth": "配置 OAuth",
+        "restartApp": "重启 app"
+      },
+      "restartHint": "已登录到新的账号，需要重启 app 才能切换到该账号的本地数据库。"
+    },
+    "errors": {
+      "credExpired": "登录凭证失效，请重新登录。"
+    },
+    "setup": {
+      "header": "OAuth 凭证设置",
+      "collapse": "收起",
+      "step1": {
+        "title": "启用 Google Drive API",
+        "bodyPrefix": "点击 ",
+        "cueEnable": "启用",
+        "bodySuffix": " 按钮。",
+        "openLink": "打开 Drive API"
+      },
+      "step2": {
+        "title": "配置 OAuth 同意页",
+        "bodyPrefix": "首次进入可能要先点击 ",
+        "cueStart": "开始",
+        "bodyMiddle": " 按钮 → 随意填写应用名称与邮箱 → 受众群体选择 外部 → 在联系信息里再次填写邮箱地址 → 点击 ",
+        "cueCreate": "创建",
+        "bodySuffix": " 按钮。",
+        "openLink": "打开 Audience"
+      },
+      "step3": {
+        "title": "创建 OAuth 客户端",
+        "bodyPrefix": "左侧 客户端 → 点击上方 ",
+        "cueCreateClient": "+创建新客户端",
+        "bodySuffix": " → 应用类型选择 桌面应用 → 名称随意，然后会显示 客户端 ID 与 客户端密钥。",
+        "openLink": "打开 Clients"
+      },
+      "step4": {
+        "title": "把 客户端 ID 和 客户端密钥 粘贴到下面",
+        "clientIdLabel": "客户端 ID",
+        "secretLabel": "客户端密钥",
+        "showSecret": "显示客户端密钥",
+        "hideSecret": "隐藏客户端密钥",
+        "show": "显示",
+        "hide": "隐藏"
+      }
+    },
+    "self": {
+      "tag": "本机",
+      "lastActivity": "上次活动: {{when}}",
+      "todayCount": "今日采集 {{count}} 条",
+      "appearanceAria": "改外观",
+      "appearanceTitle": "改颜色和图标",
+      "doubleClickToRename": "双击改名",
+      "renameAria": "改名",
+      "renameTitle": "改名"
+    },
+    "other": {
+      "lastSync": "上次同步: {{when}}"
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
   Cloud,
@@ -21,6 +22,7 @@ import { api, type AuthState, type SyncStatus } from "../../api/hindsight";
 import styles from "./DevicesPage.module.css";
 
 export default function DevicesPage() {
+  const { t } = useTranslation();
   const { devices, renameSelf, recolorSelf, reiconSelf } = useDeviceFilter();
   const self = devices.find((d) => d.current);
   const others = devices.filter((d) => !d.current);
@@ -28,14 +30,14 @@ export default function DevicesPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>设备</h1>
-        <p className={styles.meta}>管理本机名称，与其他设备的同步状态。</p>
+        <h1 className={styles.title}>{t("devices.title")}</h1>
+        <p className={styles.meta}>{t("devices.meta")}</p>
       </header>
 
       <CloudSyncCard />
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>本机</h2>
+        <h2 className={styles.sectionTitle}>{t("devices.sectionSelf")}</h2>
         {self && (
           <SelfRow
             device={self}
@@ -47,11 +49,9 @@ export default function DevicesPage() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>其他设备</h2>
+        <h2 className={styles.sectionTitle}>{t("devices.sectionOthers")}</h2>
         {others.length === 0 ? (
-          <div className={styles.empty}>
-            登录同账号后，其他设备会出现在这里。
-          </div>
+          <div className={styles.empty}>{t("devices.emptyOthers")}</div>
         ) : (
           others.map((d) => <OtherRow key={d.id} device={d} />)
         )}
@@ -60,17 +60,31 @@ export default function DevicesPage() {
   );
 }
 
-function fmtRelative(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "刚刚";
-  const diff = Date.now() - t;
-  if (diff < 60_000) return "刚刚";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return `${Math.floor(diff / 86_400_000)} 天前`;
+// 把时间戳格式化成相对时间（"刚刚"/"X 分钟前"/...），用 i18n 的 relative 命名空间
+function useFmtRelative() {
+  const { t } = useTranslation();
+  return (iso: string): string => {
+    const ts = new Date(iso).getTime();
+    if (Number.isNaN(ts)) return t("devices.relative.justNow");
+    const diff = Date.now() - ts;
+    if (diff < 60_000) return t("devices.relative.justNow");
+    if (diff < 3_600_000)
+      return t("devices.relative.minutesAgo", {
+        count: Math.floor(diff / 60_000),
+      });
+    if (diff < 86_400_000)
+      return t("devices.relative.hoursAgo", {
+        count: Math.floor(diff / 3_600_000),
+      });
+    return t("devices.relative.daysAgo", {
+      count: Math.floor(diff / 86_400_000),
+    });
+  };
 }
 
 function CloudSyncCard() {
+  const { t } = useTranslation();
+  const fmtRelative = useFmtRelative();
   const { settings, update } = useSettings();
   const { reload: reloadDevices } = useDeviceFilter();
   const [auth, setAuth] = useState<AuthState | null>(null);
@@ -197,17 +211,17 @@ function CloudSyncCard() {
         <div className={styles.syncBody}>
           <div className={styles.syncTitle}>
             {signedIn
-              ? "已连接 Google Drive"
+              ? t("devices.cloud.state.connected")
               : canSignIn
-                ? "未连接"
-                : "未配置"}
+                ? t("devices.cloud.state.notSignedIn")
+                : t("devices.cloud.state.notConfigured")}
           </div>
           <div className={styles.syncMeta}>
             {signedIn
               ? auth?.email ?? auth?.uid ?? ""
               : canSignIn
-                ? "用 Google 账号登录，活动数据通过 Drive 在多设备间同步。截图不上传。"
-                : "首次使用前需要在 Google Cloud Console 创建一个 OAuth 凭证（约 3 分钟）。"}
+                ? t("devices.cloud.desc.signInPrompt")
+                : t("devices.cloud.desc.configurePrompt")}
           </div>
           {signedIn && sync && (
             <div className={styles.syncStats}>
@@ -218,22 +232,26 @@ function CloudSyncCard() {
                     aria-hidden
                   />
                   <span className={styles.syncStatPending}>
-                    待发送 {sync.pending}
+                    {t("devices.cloud.stats.pending", { count: sync.pending })}
                   </span>
                 </>
               ) : sync.lastPushedAt ? (
                 <>
                   <span className={styles.syncDot} aria-hidden />
                   <span className={styles.syncStatOk}>
-                    已同步 · {fmtRelative(sync.lastPushedAt)}
+                    {t("devices.cloud.stats.synced", {
+                      when: fmtRelative(sync.lastPushedAt),
+                    })}
                   </span>
                 </>
               ) : (
-                <span>等待首次同步</span>
+                <span>{t("devices.cloud.stats.waitingFirst")}</span>
               )}
               {sync.deadLetter > 0 && (
                 <span className={styles.syncStatErr}>
-                  · {sync.deadLetter} 条失败
+                  {t("devices.cloud.stats.deadLetter", {
+                    count: sync.deadLetter,
+                  })}
                 </span>
               )}
             </div>
@@ -244,7 +262,7 @@ function CloudSyncCard() {
               className={styles.editCredsLink}
               onClick={() => setSetupOpen(true)}
             >
-              改凭证
+              {t("devices.cloud.editCreds")}
             </button>
           )}
         </div>
@@ -256,14 +274,16 @@ function CloudSyncCard() {
                 className={styles.smallBtn}
                 onClick={onSyncNow}
                 disabled={syncBusy}
-                title="立即同步"
+                title={t("devices.cloud.actions.syncNowTitle")}
               >
                 <RefreshCw
                   size={13}
                   strokeWidth={1.85}
                   className={syncBusy ? styles.spinning : ""}
                 />
-                {syncBusy ? "同步中…" : "立即同步"}
+                {syncBusy
+                  ? t("devices.cloud.actions.syncing")
+                  : t("devices.cloud.actions.syncNow")}
               </button>
               <button
                 type="button"
@@ -272,7 +292,11 @@ function CloudSyncCard() {
                 }`}
                 onClick={authExpired ? onSignIn : onSignOut}
                 disabled={busy}
-                title={authExpired ? "凭证失效，重新登录刷新 token" : "退出当前账号"}
+                title={
+                  authExpired
+                    ? t("devices.cloud.actions.reauthTitle")
+                    : t("devices.cloud.actions.signOutTitle")
+                }
               >
                 <span
                   className={styles.smallBtnFace}
@@ -280,7 +304,7 @@ function CloudSyncCard() {
                   aria-hidden={authExpired}
                 >
                   <LogOut size={13} strokeWidth={1.85} />
-                  退出
+                  {t("devices.cloud.actions.signOut")}
                 </span>
                 <span
                   className={styles.smallBtnFace}
@@ -288,7 +312,7 @@ function CloudSyncCard() {
                   aria-hidden={!authExpired}
                 >
                   <LogIn size={13} strokeWidth={1.85} />
-                  重新登录
+                  {t("devices.cloud.actions.signIn")}
                 </span>
               </button>
             </>
@@ -300,7 +324,9 @@ function CloudSyncCard() {
               disabled={busy}
             >
               <LogIn size={13} strokeWidth={2} />
-              {busy ? "浏览器中…" : "用 Google 登录"}
+              {busy
+                ? t("devices.cloud.actions.signingIn")
+                : t("devices.cloud.actions.signInWithGoogle")}
             </button>
           ) : (
             <button
@@ -309,7 +335,7 @@ function CloudSyncCard() {
               onClick={() => setSetupOpen(true)}
             >
               <Settings2 size={13} strokeWidth={2} />
-              配置 OAuth
+              {t("devices.cloud.actions.configureOAuth")}
             </button>
           )}
         </div>
@@ -335,11 +361,13 @@ function CloudSyncCard() {
 
       {error && <div className={styles.syncError}>{error}</div>}
       {!error && signedIn && sync?.lastError && (
-        <div className={styles.syncError}>{sync.lastError}</div>
+        <div className={styles.syncError}>
+          {authExpired ? t("devices.errors.credExpired") : sync.lastError}
+        </div>
       )}
       {auth?.requiresRestart && (
         <div className={styles.syncError}>
-          已登录到新的账号，需要重启 app 才能切换到该账号的本地数据库。
+          {t("devices.cloud.restartHint")}
           <button
             type="button"
             className={styles.smallBtn}
@@ -347,7 +375,7 @@ function CloudSyncCard() {
             onClick={() => api.restartApp().catch(() => {})}
           >
             <RefreshCw size={13} strokeWidth={1.85} />
-            重启 app
+            {t("devices.cloud.actions.restartApp")}
           </button>
         </div>
       )}
@@ -370,6 +398,7 @@ function SetupPanel({
   collapsible: boolean;
   onCollapse: () => void;
 }) {
+  const { t } = useTranslation();
   const [secretVisible, setSecretVisible] = useState(false);
   const open = (url: string) => {
     void openUrl(url).catch(() => {});
@@ -378,14 +407,14 @@ function SetupPanel({
     <div className={styles.setupPanel}>
       <div className={styles.setupHeader}>
         <Settings2 size={13} strokeWidth={2} />
-        <span>OAuth 凭证设置</span>
+        <span>{t("devices.setup.header")}</span>
         {collapsible && (
           <button
             type="button"
             className={styles.setupClose}
             onClick={onCollapse}
           >
-            收起
+            {t("devices.setup.collapse")}
           </button>
         )}
       </div>
@@ -393,9 +422,15 @@ function SetupPanel({
         <li>
           <span className={styles.stepNum}>1</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>启用 Google Drive API</div>
+            <div className={styles.stepTitle}>
+              {t("devices.setup.step1.title")}
+            </div>
             <div className={styles.stepDesc}>
-              点击 <span className={styles.cueBtn}>启用</span> 按钮。
+              {t("devices.setup.step1.bodyPrefix")}
+              <span className={styles.cueBtn}>
+                {t("devices.setup.step1.cueEnable")}
+              </span>
+              {t("devices.setup.step1.bodySuffix")}
             </div>
             <button
               type="button"
@@ -406,53 +441,71 @@ function SetupPanel({
                 )
               }
             >
-              打开 Drive API <ChevronRight size={13} strokeWidth={2.25} />
+              {t("devices.setup.step1.openLink")}{" "}
+              <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
         <li>
           <span className={styles.stepNum}>2</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>配置 OAuth 同意页</div>
+            <div className={styles.stepTitle}>
+              {t("devices.setup.step2.title")}
+            </div>
             <div className={styles.stepDesc}>
-              首次进入可能要先点击 <span className={styles.cueBtn}>开始</span>{" "}
-              按钮 → 随意填写应用名称与邮箱 → 受众群体选择 外部 →
-              在联系信息里再次填写邮箱地址 → 点击{" "}
-              <span className={styles.cueBtn}>创建</span> 按钮。
+              {t("devices.setup.step2.bodyPrefix")}
+              <span className={styles.cueBtn}>
+                {t("devices.setup.step2.cueStart")}
+              </span>
+              {t("devices.setup.step2.bodyMiddle")}
+              <span className={styles.cueBtn}>
+                {t("devices.setup.step2.cueCreate")}
+              </span>
+              {t("devices.setup.step2.bodySuffix")}
             </div>
             <button
               type="button"
               className={styles.stepBtn}
               onClick={() => open("https://console.cloud.google.com/auth/audience")}
             >
-              打开 Audience <ChevronRight size={13} strokeWidth={2.25} />
+              {t("devices.setup.step2.openLink")}{" "}
+              <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
         <li>
           <span className={styles.stepNum}>3</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>创建 OAuth 客户端</div>
+            <div className={styles.stepTitle}>
+              {t("devices.setup.step3.title")}
+            </div>
             <div className={styles.stepDesc}>
-              左侧 客户端 → 点击上方{" "}
-              <span className={styles.cueLink}>+创建新客户端</span> →
-              应用类型选择 桌面应用 → 名称随意，然后会显示 客户端 ID 与 客户端密钥。
+              {t("devices.setup.step3.bodyPrefix")}
+              <span className={styles.cueLink}>
+                {t("devices.setup.step3.cueCreateClient")}
+              </span>
+              {t("devices.setup.step3.bodySuffix")}
             </div>
             <button
               type="button"
               className={styles.stepBtn}
               onClick={() => open("https://console.cloud.google.com/auth/clients")}
             >
-              打开 Clients <ChevronRight size={13} strokeWidth={2.25} />
+              {t("devices.setup.step3.openLink")}{" "}
+              <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
         <li>
           <span className={styles.stepNum}>4</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>把 客户端 ID 和 客户端密钥 粘贴到下面</div>
+            <div className={styles.stepTitle}>
+              {t("devices.setup.step4.title")}
+            </div>
             <label className={styles.credField}>
-              <span className={styles.credLabel}>客户端 ID</span>
+              <span className={styles.credLabel}>
+                {t("devices.setup.step4.clientIdLabel")}
+              </span>
               <input
                 type="text"
                 className={styles.credInput}
@@ -464,7 +517,9 @@ function SetupPanel({
               />
             </label>
             <label className={styles.credField}>
-              <span className={styles.credLabel}>客户端密钥</span>
+              <span className={styles.credLabel}>
+                {t("devices.setup.step4.secretLabel")}
+              </span>
               <div className={styles.credInputWrap}>
                 <input
                   type={secretVisible ? "text" : "password"}
@@ -479,8 +534,16 @@ function SetupPanel({
                   type="button"
                   className={styles.credEyeBtn}
                   onClick={() => setSecretVisible((v) => !v)}
-                  aria-label={secretVisible ? "隐藏客户端密钥" : "显示客户端密钥"}
-                  title={secretVisible ? "隐藏" : "显示"}
+                  aria-label={
+                    secretVisible
+                      ? t("devices.setup.step4.hideSecret")
+                      : t("devices.setup.step4.showSecret")
+                  }
+                  title={
+                    secretVisible
+                      ? t("devices.setup.step4.hide")
+                      : t("devices.setup.step4.show")
+                  }
                   tabIndex={-1}
                 >
                   {secretVisible ? (
@@ -509,6 +572,7 @@ function SelfRow({
   onRecolor: (color: string) => void;
   onReicon: (icon: string) => void;
 }) {
+  const { t } = useTranslation();
   const { status } = useCaptureStatus();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(device.name);
@@ -543,7 +607,7 @@ function SelfRow({
   };
 
   const styleVar = { "--cat-color": device.color } as CSSProperties;
-  const lastSeen = status?.lastCaptureAt ? "刚刚" : "—";
+  const lastSeen = status?.lastCaptureAt ? t("devices.relative.justNow") : "—";
   const todayCount = status?.todayCount ?? 0;
 
   return (
@@ -553,8 +617,8 @@ function SelfRow({
           type="button"
           className={styles.deviceIconBtn}
           onClick={() => setPickerOpen((v) => !v)}
-          aria-label="改外观"
-          title="改颜色和图标"
+          aria-label={t("devices.self.appearanceAria")}
+          title={t("devices.self.appearanceTitle")}
         >
           <Icon size={28} strokeWidth={1.85} />
         </button>
@@ -591,17 +655,21 @@ function SelfRow({
             <span
               className={styles.deviceName}
               onDoubleClick={() => setEditing(true)}
-              title="双击改名"
+              title={t("devices.self.doubleClickToRename")}
             >
               {device.name}
             </span>
           )}
-          <span className={styles.tag}>本机</span>
+          <span className={styles.tag}>{t("devices.self.tag")}</span>
         </div>
         <div className={styles.metaRow}>
-          <span>上次活动: {lastSeen}</span>
+          <span>
+            {t("devices.self.lastActivity", { when: lastSeen })}
+          </span>
           <span className={styles.dotSep}>·</span>
-          <span>今日采集 {todayCount} 条</span>
+          <span>
+            {t("devices.self.todayCount", { count: todayCount })}
+          </span>
         </div>
       </div>
 
@@ -610,8 +678,8 @@ function SelfRow({
           type="button"
           className={styles.actionBtn}
           onClick={() => setEditing(true)}
-          aria-label="改名"
-          title="改名"
+          aria-label={t("devices.self.renameAria")}
+          title={t("devices.self.renameTitle")}
         >
           <Pencil size={14} strokeWidth={1.85} />
         </button>
@@ -621,6 +689,7 @@ function SelfRow({
 }
 
 function OtherRow({ device }: { device: Device }) {
+  const { t } = useTranslation();
   const Icon = resolveCategoryIcon(device.icon);
   const styleVar = { "--cat-color": device.color } as CSSProperties;
   return (
@@ -635,7 +704,7 @@ function OtherRow({ device }: { device: Device }) {
           <span className={styles.deviceName}>{device.name}</span>
         </div>
         <div className={styles.metaRow}>
-          <span>上次同步: —</span>
+          <span>{t("devices.other.lastSync", { when: "—" })}</span>
         </div>
       </div>
     </div>

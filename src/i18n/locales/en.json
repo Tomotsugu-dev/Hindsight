@@ -223,5 +223,102 @@
       "label": "Assign",
       "clear": "Clear category"
     }
+  },
+  "devices": {
+    "title": "Devices",
+    "meta": "Manage this device's name and the sync status of other devices.",
+    "sectionSelf": "This device",
+    "sectionOthers": "Other devices",
+    "emptyOthers": "Sign in with the same account on another device to see it here.",
+    "relative": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}} h ago",
+      "daysAgo": "{{count}} d ago"
+    },
+    "cloud": {
+      "state": {
+        "connected": "Connected to Google Drive",
+        "notSignedIn": "Not connected",
+        "notConfigured": "Not configured"
+      },
+      "desc": {
+        "signInPrompt": "Sign in with Google to sync activity data across devices via Drive. Screenshots are never uploaded.",
+        "configurePrompt": "Before first use, create an OAuth credential in Google Cloud Console (about 3 minutes)."
+      },
+      "stats": {
+        "pending": "{{count}} pending",
+        "synced": "Synced · {{when}}",
+        "waitingFirst": "Waiting for first sync",
+        "deadLetter": "· {{count}} failed"
+      },
+      "editCreds": "Edit credentials",
+      "actions": {
+        "syncNow": "Sync now",
+        "syncing": "Syncing…",
+        "syncNowTitle": "Sync now",
+        "signOut": "Sign out",
+        "signIn": "Sign in again",
+        "signOutTitle": "Sign out of this account",
+        "reauthTitle": "Credentials expired — sign in again to refresh the token",
+        "signInWithGoogle": "Sign in with Google",
+        "signingIn": "Opening browser…",
+        "configureOAuth": "Configure OAuth",
+        "restartApp": "Restart app"
+      },
+      "restartHint": "Signed in to a new account. Restart the app to switch to that account's local database."
+    },
+    "errors": {
+      "credExpired": "Credentials expired. Please sign in again."
+    },
+    "setup": {
+      "header": "OAuth credential setup",
+      "collapse": "Collapse",
+      "step1": {
+        "title": "Enable the Google Drive API",
+        "bodyPrefix": "Click the ",
+        "cueEnable": "Enable",
+        "bodySuffix": " button.",
+        "openLink": "Open Drive API"
+      },
+      "step2": {
+        "title": "Configure the OAuth consent screen",
+        "bodyPrefix": "On first visit, click ",
+        "cueStart": "Get started",
+        "bodyMiddle": " → fill in any app name and email → set Audience to External → enter your email again under contact info → click ",
+        "cueCreate": "Create",
+        "bodySuffix": ".",
+        "openLink": "Open Audience"
+      },
+      "step3": {
+        "title": "Create the OAuth client",
+        "bodyPrefix": "Open Clients on the left → click ",
+        "cueCreateClient": "+ Create client",
+        "bodySuffix": " at the top → pick Desktop app as the application type → use any name. The Client ID and Client Secret will then be shown.",
+        "openLink": "Open Clients"
+      },
+      "step4": {
+        "title": "Paste the Client ID and Client Secret below",
+        "clientIdLabel": "Client ID",
+        "secretLabel": "Client Secret",
+        "showSecret": "Show client secret",
+        "hideSecret": "Hide client secret",
+        "show": "Show",
+        "hide": "Hide"
+      }
+    },
+    "self": {
+      "tag": "This device",
+      "lastActivity": "Last activity: {{when}}",
+      "todayCount": "{{count}} captures today",
+      "appearanceAria": "Change appearance",
+      "appearanceTitle": "Change color and icon",
+      "doubleClickToRename": "Double-click to rename",
+      "renameAria": "Rename",
+      "renameTitle": "Rename"
+    },
+    "other": {
+      "lastSync": "Last synced: {{when}}"
+    }
   }
 }
