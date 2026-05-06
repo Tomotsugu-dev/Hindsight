@@ -14,24 +14,25 @@ use image::ImageFormat;
 
 use crate::error::{Error, Result};
 
-/// 等距下采样：从一组已经按时间排序的路径中取 `max` 张。
+/// 等距下采样：从一组已经按时间排序的元素中取 `max` 个。
 ///
 /// 行为：
 /// - `max == 0` → 返回空 Vec（调用方判断要不要给纯文本兜底）
-/// - `paths.len() <= max` → 全要，原样返回
-/// - 否则 → 等距索引 `i * len / max` 取 max 张
+/// - `items.len() <= max` → 全要，原样返回
+/// - 否则 → 等距索引 `i * len / max` 取 max 个
 ///
+/// 泛型化（`T: Clone`）支持 `Vec<String>` 路径和 `Vec<ScreenshotMeta>` 元数据两种调用。
 /// 不做 dedup：γ 阶段相邻相似帧也送 LLM，反正 vision 模型自己会忽略冗余。
 /// dHash 在 Phase 1C 加。
-pub fn pick_frames(paths: Vec<String>, max: usize) -> Vec<String> {
+pub fn pick_frames<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {
     if max == 0 {
         return Vec::new();
     }
-    let n = paths.len();
+    let n = items.len();
     if n <= max {
-        return paths;
+        return items;
     }
-    (0..max).map(|i| paths[i * n / max].clone()).collect()
+    (0..max).map(|i| items[i * n / max].clone()).collect()
 }
 
 /// 读截图文件 → JPEG bytes → base64 → data URI 字符串。

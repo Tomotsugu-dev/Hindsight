@@ -181,7 +181,9 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         .filter(|s| !s.is_empty())
         .collect();
 
-    next.max_images_per_segment = next.max_images_per_segment.clamp(1, 200);
+    // 上限抬到 10w 是给「无限制」档留路——真正撑爆 ctx 时 LLM 会返 400，
+    // 段标 status='error'，用户看到再调小就好；不在这层 silent 截断
+    next.max_images_per_segment = next.max_images_per_segment.clamp(1, 100_000);
     next.hash_threshold = next.hash_threshold.min(32);
     next.hash_window_minutes = next.hash_window_minutes.min(60);
 

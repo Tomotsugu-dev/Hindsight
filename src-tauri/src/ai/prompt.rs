@@ -101,45 +101,39 @@ pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
             _ => IMAGE_DESCRIBE_ZH,
         }
     };
-    let mut out = String::from(base.trim_end());
-    let brief = ai.user_brief.trim();
-    if !brief.is_empty() {
-        let label = match ai.prompt_language.as_str() {
-            "en" => "About the user: ",
-            "ja" => "ユーザーについて：",
-            _ => "关于用户：",
-        };
-        out.push_str("\n\n");
-        out.push_str(label);
-        out.push_str(brief);
-    }
-    out
+    base.trim_end().to_string()
 }
 
-/// step 1 的 user prompt——给当前段标签 + 时段范围作为弱锚点，告诉模型
-/// "这张图大致属于一天的哪个时段"。
+/// step 1 的 user prompt——只包含「这张截图来自的应用」上下文，让 LLM 看图前
+/// 就知道是哪个应用，描述更准（尤其对冷门 / 内部 / 自定义皮肤的应用）。
+///
+/// `category_name` 为 None 时省略括号部分。
+/// `app_display` 是 [`ScreenshotMeta::app_display`] —— 优先 app_groups.display_name，
+/// 落回 process_name。
+///
+/// 直接吃 `lang: &str`（值为 "en"/"ja"/其它=zh）而不吃 `&AiConfig`——并发循环里每个
+/// 闭包要 owned 数据，少一层 borrow 就少一道 lifetime。
 pub fn build_image_describe_user_prompt(
-    ai: &AiConfig,
-    segment_label: &str,
-    start_hour: u8,
-    end_hour: u8,
+    lang: &str,
+    app_display: &str,
+    category_name: Option<&str>,
 ) -> String {
-    match ai.prompt_language.as_str() {
-        "en" => format!(
-            "This screenshot was captured during the {} segment ({:02}:00–{:02}:00). \
-             Describe what the user is doing in 1-2 sentences.",
-            segment_label, start_hour, end_hour,
-        ),
-        "ja" => format!(
-            "このスクリーンショットは「{}」（{:02}:00–{:02}:00）の時間帯に撮影されました。\
-             ユーザーが何をしているかを 1〜2 文で記述してください。",
-            segment_label, start_hour, end_hour,
-        ),
-        _ => format!(
-            "这张截图是在「{}」时段（{:02}:00–{:02}:00）抓到的。\
-             用 1-2 句中文描述用户在做什么。",
-            segment_label, start_hour, end_hour,
-        ),
+    match lang {
+        "en" => match category_name {
+            Some(c) => format!("Screenshot is from {} (category: {})", app_display, c),
+            None => format!("Screenshot is from {}", app_display),
+        },
+        "ja" => match category_name {
+            Some(c) => format!(
+                "このスクリーンショットのアプリ：{}（分類：{}）",
+                app_display, c
+            ),
+            None => format!("このスクリーンショットのアプリ：{}", app_display),
+        },
+        _ => match category_name {
+            Some(c) => format!("这张截图来自 {}（分类：{}）", app_display, c),
+            None => format!("这张截图来自 {}", app_display),
+        },
     }
 }
 

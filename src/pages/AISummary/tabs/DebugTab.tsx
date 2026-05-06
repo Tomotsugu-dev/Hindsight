@@ -1,19 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Download,
   Filter,
   Image as ImageIcon,
+  Info,
   Loader2,
   MessageSquareText,
+  Newspaper,
   Play,
   RotateCcw,
   Server,
   Square,
+  Trash2,
 } from "lucide-react";
 import {
   api,
@@ -52,8 +57,8 @@ const SCOPE_OPTIONS: Array<{ value: DebugScope; label: string }> = [
   { value: "monthly", label: "月报" },
 ];
 
-/** 单段最大图片数选项。"max" 映射到 sanitize 上限 200；
- *  绑到 settings.ai.maxImagesPerSegment 后由后端钳到 1..=200。 */
+/** 单段最大图片数选项。"max" 映射到 sanitize 上限 100000，"无限制"等于把段内
+ *  所有截图全送给 LLM——撑爆 ctx 时 LLM 会返 400 被段标 error，用户回头再调小。 */
 type MaxImagesKey = "15" | "30" | "max";
 const MAX_IMAGES_OPTIONS: Array<{ value: MaxImagesKey; label: string }> = [
   { value: "15", label: "15 张/段" },
@@ -62,12 +67,13 @@ const MAX_IMAGES_OPTIONS: Array<{ value: MaxImagesKey; label: string }> = [
 ];
 
 function maxImagesToOption(n: number): MaxImagesKey {
-  if (n >= 200) return "max";
+  // 1000 起算"无限制"——这种大值正常路径不会出现，只有用户主动选 max 才会写入
+  if (n >= 1000) return "max";
   if (n >= 30) return "30";
   return "15";
 }
 function optionToMaxImages(v: MaxImagesKey): number {
-  if (v === "max") return 200;
+  if (v === "max") return 100_000;
   return parseInt(v, 10);
 }
 
@@ -230,6 +236,11 @@ export default function DebugTab() {
   /** 顶部"调什么"——日报 / 周报 / 月报；后两个先占位等后端实现 */
   const [scope, setScope] = useState<DebugScope>("daily");
   const [generating, setGenerating] = useState(false);
+
+  // 鼠标接近发光特效：跟 Today / DailyTab 同款
+  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
+  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
   const [enginePhase, setEnginePhase] = useState<string | null>(null);
   const [topError, setTopError] = useState<string | null>(null);
 
@@ -251,7 +262,12 @@ export default function DebugTab() {
   useEffect(() => {
     if (initedRef.current || !settings) return;
     initedRef.current = true;
-    setDebugMaxImages(settings.ai.maxImagesPerSegment);
+    // 通过 picker 选项 round-trip 把 state snap 到 {15, 30, 100000} 之一——
+    // 否则 settings.ai.maxImagesPerSegment 是 100 时 picker 会显示「30 张/段」
+    // 但下发还是 100，用户感觉「我选 30 没生效」
+    setDebugMaxImages(
+      optionToMaxImages(maxImagesToOption(settings.ai.maxImagesPerSegment)),
+    );
     setDebugExcluded(settings.ai.excludedCategories);
     setDebugHashThreshold(settings.ai.hashThreshold);
     setDebugHashWindow(settings.ai.hashWindowMinutes);
@@ -432,6 +448,7 @@ export default function DebugTab() {
   const activeMainRef = useRef(activeMain);
   activeMainRef.current = activeMain;
 
+
   const onStart = async () => {
     if (scope !== "daily") {
       setTopError(`${scope === "weekly" ? "周报" : "月报"}调试待后端实现`);
@@ -524,19 +541,21 @@ export default function DebugTab() {
 
         <div className={styles.dateNav}>
           <button
+            ref={prevBtnRef}
             type="button"
-            className={styles.navBtn}
+            className={`${styles.navBtn} glow`}
             onClick={() => setDayOffset((v) => v - 1)}
             disabled={generating}
             aria-label={
               scope === "daily" ? "前一天" : scope === "weekly" ? "上一周" : "上一月"
             }
           >
-            <ChevronLeft size={16} strokeWidth={2.2} />
+            <ChevronLeft size={14} strokeWidth={1.75} />
           </button>
           <button
+            ref={pillRef}
             type="button"
-            className={styles.dayPill}
+            className={`${styles.dayPill} glow`}
             onClick={() => setDayOffset(0)}
             disabled={generating || dayOffset === 0}
             title={
@@ -546,26 +565,37 @@ export default function DebugTab() {
             {offsetLabel(scope, dayOffset)}
           </button>
           <button
+            ref={nextBtnRef}
             type="button"
-            className={styles.navBtn}
+            className={`${styles.navBtn} glow`}
             onClick={() => setDayOffset((v) => v + 1)}
             disabled={generating || dayOffset >= 0}
             aria-label={
               scope === "daily" ? "后一天" : scope === "weekly" ? "下一周" : "下一月"
             }
           >
-            <ChevronRight size={16} strokeWidth={2.2} />
+            <ChevronRight size={14} strokeWidth={1.75} />
           </button>
         </div>
 
         {/* 图/段：3 档下拉，绑调试本地 state（不写 settings）。
-            "无限制" = 200；跑总结时打包进 overrides 传给后端，本次生效不留痕 */}
-        <SimplePicker<MaxImagesKey>
-          value={maxImagesToOption(debugMaxImages)}
-          options={MAX_IMAGES_OPTIONS}
-          onChange={(next) => setDebugMaxImages(optionToMaxImages(next))}
-          disabled={generating || !settings}
-        />
+            "无限制" = 100000；跑总结时打包进 overrides 传给后端，本次生效不留痕 */}
+        <span className={styles.pickerWithInfo}>
+          <SimplePicker<MaxImagesKey>
+            value={maxImagesToOption(debugMaxImages)}
+            options={MAX_IMAGES_OPTIONS}
+            onChange={(next) => setDebugMaxImages(optionToMaxImages(next))}
+            disabled={generating || !settings}
+          />
+          <span
+            className={styles.infoIconWrap}
+            title="每个时间段最多送多少张图给大模型，减少调试时间"
+            tabIndex={0}
+            aria-label="每段最多图数说明"
+          >
+            <Info size={13} strokeWidth={1.85} />
+          </span>
+        </span>
 
         {generating ? (
           <button
@@ -597,6 +627,35 @@ export default function DebugTab() {
 
         <button
           type="button"
+          className={styles.deleteBtn}
+          onClick={async () => {
+            if (generating) return;
+            if (
+              !confirm(
+                `删除 ${date} 当天所有 AI 产物？（段总结 + 逐图描述都清空，操作不可撤销）`,
+              )
+            )
+              return;
+            try {
+              await api.clearDaySummary(date);
+              setDescs([]);
+              setSummaries([]);
+              setLogs([]);
+            } catch (e) {
+              setTopError(typeof e === "string" ? e : String(e));
+            }
+          }}
+          disabled={
+            generating || (descs.length === 0 && summaries.length === 0)
+          }
+          title="清空当天 ai_summaries + ai_image_descriptions（不可撤销）"
+        >
+          <Trash2 size={13} strokeWidth={2} />
+          删除
+        </button>
+
+        <button
+          type="button"
           className={styles.exportBtn}
           onClick={onExport}
           disabled={
@@ -620,7 +679,7 @@ export default function DebugTab() {
         description="仅本调试窗口生效，不影响 AI 设置全局值。"
       >
         <Row
-          label="不分析这些分类"
+          label="分析这些分类"
           labelHint={
             "点击切换：\n" +
             "• 彩色 + 分类图标 = 参与 AI 分析\n" +
@@ -777,6 +836,7 @@ export default function DebugTab() {
                 row={d}
                 segmentLabel={segments[d.segmentIdx]?.label}
                 segmentColor={segments[d.segmentIdx]?.color}
+                onOpenError={setTopError}
                 onRetry={async () => {
                   if (generating) return;
                   try {
@@ -822,42 +882,73 @@ export default function DebugTab() {
         )}
       </Section>
 
-      {/* —— 段总结 step 2 完整 user prompt（折叠 - 待后端 preview 命令） —— */}
-      <div className={styles.panelWrap}>
-        <span className={styles.panelLabel}>段总结 step 2 完整 user prompt</span>
-        <div className={styles.panel}>
-          <div className={styles.placeholder}>
-            待后端 <code>preview_summary_prompts</code>{" "}
-            命令上线后，这里展示当前段实际发出去的 step 2 user prompt
-            （含描述列表逐条展开 + top apps + 时段元数据）。
-          </div>
-        </div>
-      </div>
 
-      {/* —— 段总结结果 —— */}
-      <div className={styles.panelWrap}>
-        <span className={styles.panelLabel}>段总结结果</span>
-        <div className={styles.panel}>
-          {visibleSummaries.length === 0 ? (
-            <div className={styles.summaryEmpty}>还没有段总结结果。</div>
-          ) : (
-            visibleSummaries.map((s) => (
-              <div key={s.segmentIdx} className={styles.summaryBox}>
-                <span className={styles.summaryLabel}>
-                  #{s.segmentIdx} {s.label}（{String(s.startHour).padStart(2, "0")}–
-                  {String(s.endHour).padStart(2, "0")}）· {s.status}
-                </span>
-                <div className={styles.summaryText}>
-                  {s.content ||
-                    (s.status === "skipped_no_screenshots"
-                      ? "(该段无截图)"
-                      : s.error || "(空)")}
+      {/* —— 段总结结果：用 Section 跟「逐图描述」视觉对齐，常开 + 滚动 —— */}
+      <Section
+        title="段总结结果"
+        icon={Newspaper}
+        description={`step 2 产物——根据每张图的描述 + 应用统计汇总成的段总结${
+          visibleSummaries.length > 0 ? `，共 ${visibleSummaries.length} 段` : ""
+        }。`}
+      >
+        {visibleSummaries.length === 0 ? (
+          <div className={styles.summaryEmpty}>
+            还没有段总结结果。点上方「开始」让模型把段内描述聚合成一段总结。
+          </div>
+        ) : (
+          <div className={styles.panelOpen}>
+            {visibleSummaries.map((s) => {
+              // 段 chip 背景色：跟 DescItem 一样从 segment.color 取，没有则中性灰
+              const seg = segments[s.segmentIdx];
+              const chipBg =
+                seg?.color && seg.color.trim().length > 0
+                  ? seg.color
+                  : "#cbd5e1";
+              const chipColor = isLightHex(chipBg) ? "#3a3f55" : "#fff";
+              // 状态徽章：ok 绿 / error 红 / skipped 灰
+              const statusClass =
+                s.status === "ok"
+                  ? styles.summaryStatusOk
+                  : s.status === "skipped_no_screenshots"
+                    ? styles.summaryStatusSkipped
+                    : styles.summaryStatusError;
+              const statusText =
+                s.status === "ok"
+                  ? "ok"
+                  : s.status === "skipped_no_screenshots"
+                    ? "skipped"
+                    : "error";
+              return (
+                <div key={s.segmentIdx} className={styles.summaryBox}>
+                  <div className={styles.summaryHead}>
+                    <span
+                      className={styles.summaryChip}
+                      style={{ background: chipBg, color: chipColor }}
+                      title={`段 idx=${s.segmentIdx}`}
+                    >
+                      {s.label}
+                    </span>
+                    <span className={styles.summaryTimeRange}>
+                      <Clock size={12} strokeWidth={2.2} />
+                      {String(s.startHour).padStart(2, "0")}:00 –{" "}
+                      {String(s.endHour).padStart(2, "0")}:00
+                    </span>
+                    <span className={`${styles.summaryStatus} ${statusClass}`}>
+                      {statusText}
+                    </span>
+                  </div>
+                  <div className={styles.summaryText}>
+                    {s.content ||
+                      (s.status === "skipped_no_screenshots"
+                        ? "(该段无截图)"
+                        : s.error || "(空)")}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
 
       {/* —— 实时事件流 —— */}
       <div className={styles.panelWrap}>
@@ -997,12 +1088,15 @@ function DescItem({
   segmentColor,
   onRetry,
   retryDisabled,
+  onOpenError,
 }: {
   row: ImageDescriptionRow;
   segmentLabel?: string;
   segmentColor?: string;
   onRetry: () => void;
   retryDisabled: boolean;
+  /** 打开图片失败时上报错误给父组件展示（顶部 errorBar） */
+  onOpenError: (msg: string) => void;
 }) {
   const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
   // 段背景色优先用 user-config（segments[idx].color），空时回到中性灰
@@ -1034,9 +1128,23 @@ function DescItem({
           className={styles.descPath}
           title={`点击预览原图：${row.screenshotPath}`}
           onClick={() => {
-            void openPath(row.screenshotPath).catch((e: unknown) =>
-              console.warn("openPath 失败:", e),
-            );
+            // 先试系统默认查看器；失败 fallback 到资源管理器选中文件
+            // ——后者用 opener:default 自带的 allow-reveal-item-in-dir 权限，
+            // 不依赖 capability 是否新加了 allow-open-path
+            void (async () => {
+              try {
+                await openPath(row.screenshotPath);
+                return;
+              } catch (e) {
+                console.warn("openPath 失败，fallback 到 reveal:", e);
+              }
+              try {
+                await revealItemInDir(row.screenshotPath);
+              } catch (e2) {
+                const msg = e2 instanceof Error ? e2.message : String(e2);
+                onOpenError(`无法打开 / 定位图片：${msg}`);
+              }
+            })();
           }}
         >
           {fileName}

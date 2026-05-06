@@ -9,6 +9,7 @@
 pub mod binary;
 pub mod config;
 pub mod image;
+pub mod job_guard;
 pub mod llm;
 pub mod models;
 pub mod platform;

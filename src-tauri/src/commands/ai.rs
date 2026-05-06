@@ -573,6 +573,18 @@ pub async fn get_day_summary(
         .map_err(|e| e.to_string())
 }
 
+/// 删除某天的全部 AI 产物——同时清 `ai_summaries` 段总结 + `ai_image_descriptions`
+/// 逐图描述。调试 tab 的「删除」按钮用，给用户在不重跑的情况下手动清当天历史。
+#[tauri::command]
+pub async fn clear_day_summary(
+    pool: State<'_, DbPool>,
+    date: String,
+) -> Result<(), String> {
+    ai_summaries::clear_day(&pool, &date)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。
 #[tauri::command]
 pub async fn get_segment_image_descriptions(

@@ -40,6 +40,13 @@ pub fn run() {
     )
     .try_init();
 
+    // 防孤儿子进程：Windows Job Object 把所有 spawn 出来的 child 绑到本进程上，
+    // Hindsight 死（panic / Ctrl+C / taskkill）→ OS 内核同步杀光所有 child，
+    // 不再依赖 RunEvent::Exit 钩子。Linux / macOS 是 no-op。
+    if let Err(e) = ai::job_guard::init_global_job() {
+        log::warn!("init Windows Job Object 失败（孤儿防护退化为仅 Exit hook）: {e}");
+    }
+
     // AI 引擎子进程守护者：lazy spawn，app 退出时 stop
     let engine_supervisor = Arc::new(EngineSupervisor::new());
     let engine_for_exit = engine_supervisor.clone();
@@ -321,6 +328,7 @@ pub fn run() {
             commands::ai::retry_summary_segment,
             commands::ai::cancel_day_summary,
             commands::ai::get_day_summary,
+            commands::ai::clear_day_summary,
             commands::ai::get_segment_image_descriptions,
             commands::ai::get_day_image_descriptions,
             commands::ai::retry_single_image_description,

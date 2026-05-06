@@ -148,6 +148,61 @@
   background: color-mix(in oklab, #f59e0b 22%, transparent);
 }
 
+/* picker + Info 图标的内联包装 —— 让图标紧贴 picker 右边 */
+.pickerWithInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.infoIconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  cursor: help;
+  outline: none;
+  transition: color 140ms ease-out, background-color 140ms ease-out;
+}
+
+.infoIconWrap:hover,
+.infoIconWrap:focus-visible {
+  color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+/* 删除按钮：红色危险风；放在 stopBtn / startBtn 之后、exportBtn 之前 */
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: color-mix(in oklab, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in oklab, #dc2626 28%, transparent);
+  color: #991b1b;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, #dc2626 16%, transparent);
+  border-color: color-mix(in oklab, #dc2626 42%, transparent);
+}
+
+.deleteBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .exportBtn {
   margin-left: auto;
   display: inline-flex;
@@ -272,7 +327,7 @@
   overflow: hidden;
   cursor: pointer;
   transition:
-    max-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 1200ms cubic-bezier(0.22, 1, 0.36, 1),
     cursor 0ms;
 }
 
@@ -295,7 +350,7 @@
   pointer-events: none;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 80%);
   border-radius: 0 0 8px 8px;
-  transition: opacity 220ms ease-out;
+  transition: opacity 900ms ease-out;
 }
 
 .promptCollapseWrap:hover .collapseFade,
@@ -369,6 +424,18 @@
   overflow-y: auto;
 }
 
+/* 常开版本：本来就有 480px 高 + 滚动，不依赖 hover——给 段总结结果 用，
+   跟「逐图描述」列表的体验一致。 */
+.panelOpen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 /* —— Prompt 预览的小子标题 + 等宽 pre 块 —— */
 .promptSubLabel {
   font-size: 11px;
@@ -403,12 +470,18 @@
   line-height: 1.6;
 }
 
+
 /* —— 逐图描述列表 —— */
-/* descListInner 是 Section 内部的列表容器（外面 Section.card 已经管 padding/边框） */
+/* descListInner 是 Section 内部的列表容器（外面 Section.card 已经管 padding/边框）
+   只显示前 ~5 条；超出部分用鼠标滚轮在 box 内滚动，避免页面被几十条描述撑长 */
 .descListInner {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+  /* 给滚动条留点呼吸，跟 chrome 默认贴边视觉拉开一点 */
+  padding-right: 4px;
 }
 
 .descListEmpty {
@@ -583,36 +656,93 @@
   min-width: 0;
 }
 
-/* —— 段总结结果 —— */
+/* —— 段总结结果：head 行（chip + 时间范围 + 状态徽章）+ 正文，跟日报 SegmentCard 对齐 —— */
 .summaryBox {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 12px 14px;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
 }
 
-.summaryLabel {
+.summaryHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* 段彩色 chip：跟 DailyTab .chip 同款（高 22 / 5px 圆角 / 背景由内联 style 覆盖） */
+.summaryChip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c1c24;
+  letter-spacing: -0.005em;
+}
+
+.summaryTimeRange {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* 状态徽章：跟 DailyTab .statusBadge 同款 */
+.summaryStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9px;
   font-size: 11px;
   font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.summaryStatusOk {
+  background: color-mix(in oklab, #16a34a 16%, transparent);
+  color: #15803d;
+}
+
+.summaryStatusError {
+  background: color-mix(in oklab, #dc2626 14%, transparent);
+  color: #991b1b;
+}
+
+.summaryStatusSkipped {
+  background: rgba(0, 0, 0, 0.05);
   color: var(--text-muted);
-  letter-spacing: 0.02em;
 }
 
 .summaryText {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.65;
   color: var(--text-strong);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
+/* 空状态：跟 .descListEmpty 同款（虚线框 + 居中提示），不再裸露文字 */
 .summaryEmpty {
   font-size: 12px;
   color: var(--text-muted);
   font-style: italic;
+  padding: 18px 12px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
 }
 
 /* 引擎日志面板的"刷新"小按钮，跟在 label 后 */

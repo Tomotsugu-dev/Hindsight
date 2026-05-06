@@ -984,13 +984,11 @@ function RecommendedCard({
       {busy && activeProgress ? (
         <div className={styles.engineProgressWrap}>
           <div className={styles.engineProgressBar}>
+            {/* 跟引擎下载条同款：固定 20% 宽 + indeterminate 动画来回滑动；
+                百分比不靠谱（后端 main + mmproj 切换时 downloaded/total 会跳），
+                文字显示已下 MB 让用户看到在涨。 */}
             <div
-              className={styles.engineProgressFill}
-              style={{
-                width: activeProgress.total
-                  ? `${(activeProgress.downloaded / activeProgress.total) * 100}%`
-                  : "10%",
-              }}
+              className={`${styles.engineProgressFill} ${styles.engineProgressFillIndeterminate}`}
             />
           </div>
           <div className={styles.engineProgressText}>

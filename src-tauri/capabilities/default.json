@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "opener:allow-open-path",
     "os:default",
     "dialog:allow-open",
     "autostart:allow-enable",

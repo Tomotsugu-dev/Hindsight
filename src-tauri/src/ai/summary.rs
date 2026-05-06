@@ -34,7 +34,7 @@ use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{
     self, list_segment_screenshots, list_segment_top_apps, ImageDescriptionRow,
-    SegmentSummaryRow,
+    ScreenshotMeta, SegmentSummaryRow,
 };
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
@@ -92,7 +92,8 @@ impl AiOverrides {
             ai.excluded_categories = v;
         }
         if let Some(v) = self.max_images_per_segment {
-            ai.max_images_per_segment = v.clamp(1, 200);
+            // 跟 config.rs sanitize 上限保持一致：10w，让「无限制」档真正不截断
+            ai.max_images_per_segment = v.clamp(1, 100_000);
         }
         if let Some(v) = self.hash_threshold {
             ai.hash_threshold = v.min(32);
@@ -375,7 +376,7 @@ impl DaySummaryRunner {
         let model = ai.active_main.clone();
 
         // ────── 取数据 ──────
-        let paths = list_segment_screenshots(
+        let metas = list_segment_screenshots(
             &self.pool,
             date_str,
             start_hour,
@@ -386,7 +387,7 @@ impl DaySummaryRunner {
         .await?;
 
         // 没截图的段直接 skipped 兜底
-        if paths.is_empty() {
+        if metas.is_empty() {
             let mut p_started =
                 SummaryProgress::base(date_str.to_string(), "segment_started", total_segments);
             p_started.segment_idx = Some(idx);
@@ -421,7 +422,7 @@ impl DaySummaryRunner {
         }
 
         // 等距抽帧
-        let picked = pick_frames(paths, max_images);
+        let picked: Vec<ScreenshotMeta> = pick_frames(metas, max_images);
 
         // 段重跑前先清掉旧的逐图描述，避免新旧 image_index 错位
         ai_summaries::clear_segment_descriptions(&self.pool, date_str, idx).await?;
@@ -448,16 +449,15 @@ impl DaySummaryRunner {
         // parallel == 1：串行，跟历史行为一致；> 1：用 buffer_unordered 并发
         // N 路 chat，配合 llama-server `-np N` 才能真正吃到并行算力。
         // 结果按 image_index 排序（buffer_unordered 完成顺序不固定）后传给 step 2。
+        // user prompt 在 describe_images 内 per-image 现拼，每张图带上自己的应用名 / 分类。
         let describe_system = build_image_describe_system_prompt(ai);
-        let describe_user =
-            build_image_describe_user_prompt(ai, &label, start_hour, end_hour);
 
         let descriptions = self
             .describe_images(
                 chat,
                 &picked,
+                ai.prompt_language.clone(),
                 &describe_system,
-                &describe_user,
                 &model,
                 date_str,
                 idx,
@@ -614,17 +614,21 @@ impl DaySummaryRunner {
         let port = self.ensure_engine_running(&ai, engine_overrides).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
 
-        // 取段标签 / 时段
-        let seg = ai.segments.get(segment_idx as usize).ok_or_else(|| {
-            Error::Other(format!("段下标越界：{}", segment_idx))
-        })?;
+        // 反查这张图的 app/category 元数据；查不到就兜底用 path 当 app 名继续跑
+        // —— 不能因为元数据丢失阻塞重跑，prompt 即使没分类也能正常工作。
+        let meta = ai_summaries::get_screenshot_meta(&self.pool, &existing_row.screenshot_path)
+            .await?
+            .unwrap_or_else(|| ScreenshotMeta {
+                path: existing_row.screenshot_path.clone(),
+                app_display: existing_row.screenshot_path.clone(),
+                category_name: None,
+            });
 
         let describe_system = build_image_describe_system_prompt(&ai);
         let describe_user = build_image_describe_user_prompt(
-            &ai,
-            &seg.label,
-            seg.start_hour,
-            seg.end_hour,
+            &ai.prompt_language,
+            &meta.app_display,
+            meta.category_name.as_deref(),
         );
 
         let data_uri = to_data_uri(
@@ -783,9 +787,9 @@ impl DaySummaryRunner {
     async fn describe_images(
         &self,
         chat: &ChatClient,
-        picked: &[String],
+        picked: &[ScreenshotMeta],
+        prompt_lang: String,
         describe_system: &str,
-        describe_user: &str,
         model: &str,
         date_str: &str,
         idx: u32,
@@ -799,16 +803,18 @@ impl DaySummaryRunner {
         // 后者闭包会顺手捕获 `chat`/refs 为 borrow，整个 stream 跨线程时
         // 报 `Send is not general enough`（Tauri command 要求 future 是 Send）。
         let mut work: Vec<_> = Vec::with_capacity(picked.len());
-        for (i, img_path) in picked.iter().enumerate() {
+        for (i, meta) in picked.iter().enumerate() {
             let chat = chat.clone();
+            let prompt_lang = prompt_lang.clone();
             let describe_system = describe_system.to_string();
-            let describe_user = describe_user.to_string();
             let model = model.to_string();
             let date_str = date_str.to_string();
             let pool = self.pool.clone();
             let app = self.app.clone();
             let cancel = Arc::clone(&self.cancel);
-            let img_path = img_path.clone();
+            let img_path = meta.path.clone();
+            let app_display = meta.app_display.clone();
+            let category_name = meta.category_name.clone();
             let i = i as u32;
 
             work.push(async move {
@@ -825,10 +831,13 @@ impl DaySummaryRunner {
                         }
                     };
 
-                // 调试：打印每张图 chat 的 START / END，跟时间戳。如果真在并发，
-                // log 里会看到 N 条 START 紧贴着出现，而不是「START → END → START → END」交替。
-                let chat_t0 = std::time::Instant::now();
-                log::info!("[describe] START seg={} img={} path={}", idx, i, img_path);
+                // per-image 现拼 user prompt：每张图带上自己的应用名（+ 分类）
+                let describe_user = build_image_describe_user_prompt(
+                    &prompt_lang,
+                    &app_display,
+                    category_name.as_deref(),
+                );
+
                 let single = std::slice::from_ref(&data_uri);
                 let (desc, usage) =
                     match chat.chat_with_images(&describe_system, &describe_user, single).await {
@@ -838,12 +847,6 @@ impl DaySummaryRunner {
                             return Ok(None);
                         }
                     };
-                log::info!(
-                    "[describe] END   seg={} img={} took={}ms",
-                    idx,
-                    i,
-                    chat_t0.elapsed().as_millis()
-                );
 
                 ai_summaries::upsert_image_description(
                     &pool,

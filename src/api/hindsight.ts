@@ -559,6 +559,10 @@ export const api = {
   /** 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。 */
   getDayImageDescriptions: (date: string) =>
     invoke<ImageDescriptionRow[]>("get_day_image_descriptions", { date }),
+  /** 清当天所有 AI 产物：段总结 + 逐图描述。调试 tab 的「删除」按钮调，
+   *  给用户在不重跑的情况下手动清历史。 */
+  clearDaySummary: (date: string) =>
+    invoke<void>("clear_day_summary", { date }),
   /** 重跑某段某张图的描述——调试 tab 行末"重跑"按钮用。
    *  不动段总结、其它图描述；期间走 SUMMARY_PROGRESS_EVENT 推一条 image_described。 */
   retrySingleImageDescription: (

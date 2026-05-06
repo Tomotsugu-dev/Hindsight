@@ -367,14 +367,27 @@ pub async fn get_day_image_descriptions(
     Ok(rows)
 }
 
-/// 拉某天某段（`[start_hour, end_hour)`）的截图路径，按时间排序。
+/// 一张截图的元数据——用来给 step 1 单图描述 prompt 灌入「这张截图来自的应用 + 分类」。
+///
+/// 来源全是已有数据：activities.process_name → app_group_members → app_groups（拿 display_name）→ categories（拿 name）。
+/// 用户没建 app_group 时 `app_display` 兜底为 process_name；没分配 category 时 `category_name` 为 None。
+#[derive(Debug, Clone)]
+pub struct ScreenshotMeta {
+    pub path: String,
+    /// COALESCE(g.display_name, a.process_name)
+    pub app_display: String,
+    /// 来自 categories.name；NULL → None
+    pub category_name: Option<String>,
+}
+
+/// 拉某天某段（`[start_hour, end_hour)`）的截图列表（含应用元数据），按时间排序。
 ///
 /// 过滤：
 /// - `screenshot_path IS NOT NULL` 跳过没截图的活动
 /// - `excluded_categories` 里的分类不参与（如用户排除 'other' 不分析）
 /// - `device` 复用 reports.rs 的 DeviceFilter 模式
 ///
-/// 返回的字符串是 activities.screenshot_path 字段的原值——可能是绝对路径，也可能是
+/// 返回的 `path` 是 activities.screenshot_path 字段原值——可能是绝对路径，也可能是
 /// 相对 data_root 的相对路径，由 capture 写入时决定。调用方负责拼绝对路径再读盘。
 pub async fn list_segment_screenshots(
     pool: &DbPool,
@@ -383,7 +396,7 @@ pub async fn list_segment_screenshots(
     end_hour: u8,
     excluded_categories: &[String],
     device: DeviceFilter,
-) -> Result<Vec<String>> {
+) -> Result<Vec<ScreenshotMeta>> {
     let date = local_date.to_string();
     let excluded: Vec<String> = excluded_categories.to_vec();
     let dev = device.clone();
@@ -398,7 +411,9 @@ pub async fn list_segment_screenshots(
                 format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
             };
             let sql = format!(
-                "SELECT a.screenshot_path
+                "SELECT a.screenshot_path,
+                        COALESCE(g.display_name, a.process_name) AS app_display,
+                        c.name AS category_name
                    FROM activities a
               LEFT JOIN app_group_members gm
                      ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
@@ -431,7 +446,13 @@ pub async fn list_segment_screenshots(
             }
             let mut stmt = conn.prepare(&sql).db()?;
             let it = stmt
-                .query_map(params.as_slice(), |r| r.get::<_, String>(0))
+                .query_map(params.as_slice(), |r| {
+                    Ok(ScreenshotMeta {
+                        path: r.get::<_, String>(0)?,
+                        app_display: r.get::<_, String>(1)?,
+                        category_name: r.get::<_, Option<String>>(2)?,
+                    })
+                })
                 .db()?;
             let mut out = Vec::new();
             for row in it {
@@ -441,6 +462,49 @@ pub async fn list_segment_screenshots(
         })
         .await?;
     Ok(rows)
+}
+
+/// 反查：给定一个 screenshot_path，查 activities 拿对应的应用元数据。
+///
+/// 给 retry_one_image_description 用——重跑单张图时只有 ai_image_descriptions 行
+/// （含 path）能拿到，需要从 activities 反查 app/category 才能重建 prompt。
+///
+/// 返回 None 时表示：
+/// - 该 path 对应的 activities 行已被删除（理论极少）
+/// - 或者 path 写入时跟当前活动行不一致（不应发生）
+///
+/// 调用方应兜底用 path 当 app 名继续跑，不能让重跑因元数据丢失而失败。
+pub async fn get_screenshot_meta(pool: &DbPool, path: &str) -> Result<Option<ScreenshotMeta>> {
+    let path_owned = path.to_string();
+    let row = pool
+        .0
+        .call(move |conn| {
+            let sql = "SELECT a.screenshot_path,
+                              COALESCE(g.display_name, a.process_name) AS app_display,
+                              c.name AS category_name
+                         FROM activities a
+                    LEFT JOIN app_group_members gm
+                           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                    LEFT JOIN app_groups g
+                           ON g.id = gm.group_id AND g.deleted_at IS NULL
+                    LEFT JOIN categories c
+                           ON c.id = g.category_id AND c.deleted_at IS NULL
+                        WHERE a.screenshot_path = ?
+                        LIMIT 1";
+            let row = conn
+                .query_row(sql, [&path_owned], |r| {
+                    Ok(ScreenshotMeta {
+                        path: r.get::<_, String>(0)?,
+                        app_display: r.get::<_, String>(1)?,
+                        category_name: r.get::<_, Option<String>>(2)?,
+                    })
+                })
+                .optional()
+                .db()?;
+            Ok(row)
+        })
+        .await?;
+    Ok(row)
 }
 
 /// 拉某天某段使用最多的应用（display_name, minutes, category_id），按 minutes 降序。

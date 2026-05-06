@@ -212,6 +212,16 @@ impl EngineSupervisor {
                 }
             };
 
+            // 把 child 加到全局 Job Object —— Hindsight 进程死时 OS 内核会同步杀光
+            // 所有 Job 成员，无视父进程怎么死（panic / Ctrl+C / taskkill）。
+            // assign 失败不阻塞启动，只 log 警告退化到原 Exit hook 路径。
+            // Linux / macOS 上 assign_child_pid 是 no-op。
+            if let Some(pid) = child.id() {
+                if let Err(e) = crate::ai::job_guard::assign_child_pid(pid) {
+                    log::warn!("AssignProcessToJobObject pid={pid} 失败: {e}");
+                }
+            }
+
             // 启动前清空两份日志缓冲，让本次启动从空白开始
             self.logs.lock().await.clear();
             self.startup_logs.lock().await.clear();
