@@ -32,6 +32,7 @@ pub struct ChatUsage {
 const CHAT_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// llama-server 的 chat 客户端。
+#[derive(Clone)]
 pub struct ChatClient {
     base_url: String,
     /// 模型名——llama-server 不强求是真实文件名，可填 "default" / 任意字符串

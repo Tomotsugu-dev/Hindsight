@@ -112,10 +112,10 @@
   opacity: 0;
   pointer-events: none;
   transition:
-    max-height 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-width 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease-out;
+    max-height 1200ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 1200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-width 1200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 900ms ease-out;
 }
 
 .briefHover:hover .briefTextarea,
@@ -155,8 +155,8 @@
   overflow: hidden;
   pointer-events: none;
   transition:
-    max-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease-out;
+    max-height 1200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 900ms ease-out;
 }
 
 .promptWrap:hover .promptStack,
@@ -976,6 +976,13 @@
   background: var(--color-accent);
   border-radius: 2px;
   transition: width 200ms ease-out;
+}
+
+/* 不定动画样式：固定 20% 宽，靠 keyframe translateX 来回滑动。
+   写在同一 module 里 animation 才能引用到 hash 化后的 keyframe 名。 */
+.engineProgressFillIndeterminate {
+  width: 20%;
+  animation: indeterminate 1.4s infinite ease-in-out;
 }
 
 .engineProgressText {

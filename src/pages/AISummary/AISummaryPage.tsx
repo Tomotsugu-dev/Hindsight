@@ -33,7 +33,7 @@ export default function AISummaryPage() {
   });
   const [animated, setAnimated] = useState(false);
 
-  /** 路由变化时测量当前激活 tab 的位置 */
+  /** 路由变化时重新测量当前激活 tab 的位置——跟 SettingsPage 完全一致 */
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;

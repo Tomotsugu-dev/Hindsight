@@ -13,6 +13,8 @@ export interface NavItem {
   group: NavGroup;
   /** 图标主题色（任意 CSS color） */
   color: string;
-  /** NavLink end 匹配；用于路径会被其他子路由前缀命中的项（如 / 与 /ai） */
+  /** NavLink end 匹配；用于路径会被其他子路由前缀命中的项（如 /） */
   end?: boolean;
+  /** 这些路径前缀算"不属于本项"；用于 /ai 想匹配 /ai/week 等子页但要排除 /ai/settings */
+  excludePaths?: string[];
 }

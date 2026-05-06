@@ -156,6 +156,7 @@ export function Sidebar() {
                     Icon={item.icon}
                     color={item.color}
                     end={item.end}
+                    excludePaths={item.excludePaths}
                   />
                 ))}
               </div>

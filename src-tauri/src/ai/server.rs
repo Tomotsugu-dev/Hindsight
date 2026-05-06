@@ -68,6 +68,21 @@ pub struct EngineRuntimeStatus {
     pub error: Option<String>,
 }
 
+/// 启动 llama-server 时可选的命令行调参。
+///
+/// 调试 tab 用：调一次跑一次的 batch / 并发槽位，不进 settings.ai 全局，每次
+/// 调试 generate 之前先 stop + start with overrides，跑完再 stop 让下次正常
+/// 日报 lazy start 时回到默认值。
+#[derive(Debug, Clone, Default)]
+pub struct EngineStartOverrides {
+    /// 同时设 `--batch-size N --ubatch-size N`。`None` = 用 llama.cpp 默认（512）。
+    /// 加大能提升 prompt eval 速度，代价是 KV cache 高水位 ↑（5090 32GB 装得下 4096）。
+    pub batch_size: Option<u32>,
+    /// `-np N`：llama-server 同时处理的并行槽位数；`None` = 1（单槽）。
+    /// 配合 `summary.rs` 的 `buffer_unordered` 才能真正并发——只设 -np 不并发调用没用。
+    pub parallel_slots: Option<u32>,
+}
+
 /// llama-server 子进程的单例守护者。
 pub struct EngineSupervisor {
     inner: Mutex<Inner>,
@@ -138,6 +153,17 @@ impl EngineSupervisor {
         model_path: Option<PathBuf>,
         mmproj_path: Option<PathBuf>,
     ) -> Result<u16> {
+        self.start_with_overrides(model_path, mmproj_path, EngineStartOverrides::default())
+            .await
+    }
+
+    /// 跟 [`start`] 一样，但允许调试 tab 临时覆盖 batch_size / parallel_slots。
+    pub async fn start_with_overrides(
+        &self,
+        model_path: Option<PathBuf>,
+        mmproj_path: Option<PathBuf>,
+        overrides: EngineStartOverrides,
+    ) -> Result<u16> {
         // 第一段：占锁、预检、置 starting、spawn、释放锁
         let port = {
             let mut inner = self.inner.lock().await;
@@ -165,7 +191,13 @@ impl EngineSupervisor {
             }
 
             let port = pick_free_port()?;
-            let mut cmd = build_command(&bin_path, port, model_path, mmproj_path);
+            let mut cmd = build_command(&bin_path, port, model_path, mmproj_path, &overrides);
+            // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效
+            log::info!(
+                "spawn llama-server with overrides: batch_size={:?} parallel_slots={:?}",
+                overrides.batch_size,
+                overrides.parallel_slots
+            );
 
             let mut child = match cmd.spawn() {
                 Ok(c) => c,
@@ -294,6 +326,7 @@ fn build_command(
     port: u16,
     model_path: Option<PathBuf>,
     mmproj_path: Option<PathBuf>,
+    overrides: &EngineStartOverrides,
 ) -> Command {
     let mut cmd = Command::new(bin);
     cmd.arg("--host").arg("127.0.0.1");
@@ -307,6 +340,17 @@ fn build_command(
     }
     if let Some(n) = gpu_layers_for(platform::detect()) {
         cmd.arg("-ngl").arg(n.to_string());
+    }
+    // batch / ubatch：同时设两值保持 logical=physical batch 一致，
+    // 用户能预测显存占用；不像 llama.cpp 默认 batch=2048 / ubatch=512 拉开两倍。
+    if let Some(b) = overrides.batch_size {
+        let b = b.max(32); // llama-server 拒绝过小的 batch；32 是安全下限
+        cmd.arg("--batch-size").arg(b.to_string());
+        cmd.arg("--ubatch-size").arg(b.to_string());
+    }
+    if let Some(np) = overrides.parallel_slots {
+        let np = np.max(1);
+        cmd.arg("-np").arg(np.to_string());
     }
     // 截 stderr/stdout 用于失败时回放给用户；不让它们污染 Hindsight 自己的终端
     cmd.stderr(std::process::Stdio::piped());

@@ -30,7 +30,7 @@ use crate::ai::prompt::{
     build_image_describe_system_prompt, build_image_describe_user_prompt,
     build_system_prompt, build_user_prompt, SegmentContext,
 };
-use crate::ai::server::{EngineState, EngineSupervisor};
+use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{
     self, list_segment_screenshots, list_segment_top_apps, ImageDescriptionRow,
@@ -59,9 +59,33 @@ pub struct AiOverrides {
     pub system_prompt: Option<String>,
     /// step 1 单图描述的 system prompt 覆盖文本（按当前语言写入 image_describe_overrides）
     pub image_describe_prompt: Option<String>,
+    /// llama-server `--batch-size` / `--ubatch-size`（取一致值）；调试用，不进 settings。
+    pub batch_size: Option<u32>,
+    /// llama-server `-np`：并行槽位数；配合 step 1 image describe 的并发跑。
+    pub parallel_slots: Option<u32>,
 }
 
 impl AiOverrides {
+    /// 抽出 engine 启动级覆盖（batch_size / parallel_slots）——这两项不属于
+    /// AiConfig，而是直接灌给 llama-server 启动命令；调用方拿到后决定是否
+    /// stop + start_with_overrides 重启引擎。
+    pub(crate) fn engine_overrides(&self) -> EngineStartOverrides {
+        EngineStartOverrides {
+            batch_size: self.batch_size,
+            parallel_slots: self.parallel_slots,
+        }
+    }
+
+    /// 这次调用是否需要重启引擎（任一启动级 override 非 None）。
+    pub(crate) fn needs_engine_restart(&self) -> bool {
+        self.batch_size.is_some() || self.parallel_slots.is_some()
+    }
+
+    /// 段内 step 1 图描述的并发数；None / Some(0) / Some(1) 都退化成串行。
+    pub(crate) fn parallel_slots_or_one(&self) -> usize {
+        self.parallel_slots.unwrap_or(1).max(1) as usize
+    }
+
     /// 把 override 应用到 settings.ai 上；clamp 到合法区间后返回。
     fn apply_to(self, mut ai: AiConfig) -> AiConfig {
         if let Some(v) = self.excluded_categories {
@@ -204,6 +228,47 @@ impl DaySummaryRunner {
         force_refresh: bool,
         overrides: Option<AiOverrides>,
     ) -> Result<()> {
+        // 启动级 override 提前抽出来；apply_to 会消费 overrides 不能在那之后再读
+        let (engine_overrides, needs_restart, parallel) = match overrides.as_ref() {
+            Some(o) => (
+                o.engine_overrides(),
+                o.needs_engine_restart(),
+                o.parallel_slots_or_one(),
+            ),
+            None => (EngineStartOverrides::default(), false, 1usize),
+        };
+
+        let result = self
+            .run_with_overrides_inner(
+                local_date,
+                device,
+                force_refresh,
+                overrides,
+                engine_overrides,
+                needs_restart,
+                parallel,
+            )
+            .await;
+
+        // 调试用 override 跑完无条件 stop 引擎——保证下次正常日报跑会以默认参数
+        // lazy start，不让调试值污染后续会话
+        if needs_restart {
+            let _ = self.supervisor.stop().await;
+        }
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_with_overrides_inner(
+        &self,
+        local_date: NaiveDate,
+        device: DeviceFilter,
+        force_refresh: bool,
+        overrides: Option<AiOverrides>,
+        engine_overrides: EngineStartOverrides,
+        needs_restart: bool,
+        parallel: usize,
+    ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         // overrides 只对本次调用生效，不写回 settings；settings 自己永远是用户在
         // AI 设置里配的"全局值"，调试 tab 改的本地参数从这里进来
@@ -225,6 +290,12 @@ impl DaySummaryRunner {
 
         let total_segments = ai.segments.len() as u32;
 
+        // 调试 override 触发的强制重启：先 stop 把现役 llama-server 收掉，
+        // 再 ensure_engine_running 走启动分支，把 batch / -np 灌进去
+        if needs_restart {
+            let _ = self.supervisor.stop().await;
+        }
+
         // 启动引擎（如未启动），拿到端口；启动期间给前端一个进度提示
         let st = self.supervisor.status().await;
         if st.state != EngineState::Running {
@@ -232,7 +303,7 @@ impl DaySummaryRunner {
             p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
             self.emit(p);
         }
-        let port = self.ensure_engine_running(&ai).await?;
+        let port = self.ensure_engine_running(&ai, engine_overrides).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
 
         // 单段图片上限直接走 settings；用户调大撑爆 ctx 时 LLM 报 400，按段标 error
@@ -262,6 +333,7 @@ impl DaySummaryRunner {
                 seg.end_hour,
                 max_images,
                 device.clone(),
+                parallel,
             )
             .await?;
         }
@@ -298,6 +370,7 @@ impl DaySummaryRunner {
         end_hour: u8,
         max_images: usize,
         device: DeviceFilter,
+        parallel: usize,
     ) -> Result<()> {
         let model = ai.active_main.clone();
 
@@ -372,77 +445,34 @@ impl DaySummaryRunner {
         .unwrap_or_default();
 
         // ────── step 1：逐图描述 ──────
+        // parallel == 1：串行，跟历史行为一致；> 1：用 buffer_unordered 并发
+        // N 路 chat，配合 llama-server `-np N` 才能真正吃到并行算力。
+        // 结果按 image_index 排序（buffer_unordered 完成顺序不固定）后传给 step 2。
         let describe_system = build_image_describe_system_prompt(ai);
         let describe_user =
             build_image_describe_user_prompt(ai, &label, start_hour, end_hour);
-        let mut descriptions: Vec<String> = Vec::with_capacity(picked.len());
 
-        for (i, img_path) in picked.iter().enumerate() {
-            // 提早响应取消（不打断已在路上的 chat，下一张不开始）
-            if self.cancel.load(Ordering::Relaxed) {
-                let mut p_cancel =
-                    SummaryProgress::base(date_str.to_string(), "cancelled", total_segments);
-                p_cancel.segment_idx = Some(idx);
-                self.emit(p_cancel);
-                return Ok(());
-            }
-
-            // 单张转 data URI；坏文件跳过
-            let data_uri = match to_data_uri(Path::new(img_path), SUMMARY_IMAGE_MAX_DIM).await {
-                Ok(u) => u,
-                Err(e) => {
-                    log::warn!("跳过坏截图 {img_path}: {e}");
-                    continue;
-                }
-            };
-
-            // 单图调用 LLM；失败 log 跳过，不阻塞整段
-            let single = std::slice::from_ref(&data_uri);
-            let (desc, usage) = match chat
-                .chat_with_images(&describe_system, &describe_user, single)
-                .await
-            {
-                Ok(p) => p,
-                Err(e) => {
-                    log::warn!("图描述失败 {img_path}: {e}");
-                    continue;
-                }
-            };
-
-            // 落库
-            ai_summaries::upsert_image_description(
-                &self.pool,
-                &ImageDescriptionRow {
-                    local_date: date_str.to_string(),
-                    segment_idx: idx,
-                    image_index: i as u32,
-                    screenshot_path: img_path.clone(),
-                    description: desc.clone(),
-                    model: model.clone(),
-                    generated_at: Utc::now().to_rfc3339(),
-                    latency_ms: Some(usage.latency_ms),
-                    prompt_tokens: usage.prompt_tokens,
-                    completion_tokens: usage.completion_tokens,
-                },
+        let descriptions = self
+            .describe_images(
+                chat,
+                &picked,
+                &describe_system,
+                &describe_user,
+                &model,
+                date_str,
+                idx,
+                total_segments,
+                parallel.max(1),
             )
             .await?;
 
-            // emit 给前端调试 tab 实时渲染
-            let mut p_img = SummaryProgress::base(
-                date_str.to_string(),
-                "image_described",
-                total_segments,
-            );
-            p_img.segment_idx = Some(idx);
-            p_img.image_index = Some(i as u32);
-            p_img.image_path = Some(img_path.clone());
-            p_img.image_description = Some(desc.clone());
-            p_img.latency_ms = Some(usage.latency_ms);
-            p_img.prompt_tokens = usage.prompt_tokens;
-            p_img.completion_tokens = usage.completion_tokens;
-            self.emit(p_img);
-
-            descriptions.push(desc);
+        // 整段开始前已检查过 cancel；step 1 跑完后再查一次，避免 step 2 白跑
+        if self.cancel.load(Ordering::Relaxed) {
+            let mut p_cancel =
+                SummaryProgress::base(date_str.to_string(), "cancelled", total_segments);
+            p_cancel.segment_idx = Some(idx);
+            self.emit(p_cancel);
+            return Ok(());
         }
 
         // ────── step 2：段总结（纯文本调用，不再传图） ──────
@@ -516,6 +546,35 @@ impl DaySummaryRunner {
         image_index: u32,
         overrides: Option<AiOverrides>,
     ) -> Result<()> {
+        let (engine_overrides, needs_restart) = match overrides.as_ref() {
+            Some(o) => (o.engine_overrides(), o.needs_engine_restart()),
+            None => (EngineStartOverrides::default(), false),
+        };
+        let result = self
+            .retry_one_image_inner(
+                local_date,
+                segment_idx,
+                image_index,
+                overrides,
+                engine_overrides,
+                needs_restart,
+            )
+            .await;
+        if needs_restart {
+            let _ = self.supervisor.stop().await;
+        }
+        result
+    }
+
+    async fn retry_one_image_inner(
+        &self,
+        local_date: NaiveDate,
+        segment_idx: u32,
+        image_index: u32,
+        overrides: Option<AiOverrides>,
+        engine_overrides: EngineStartOverrides,
+        needs_restart: bool,
+    ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = match overrides {
             Some(o) => o.apply_to(cfg.ai.clone()),
@@ -548,8 +607,11 @@ impl DaySummaryRunner {
                 ))
             })?;
 
+        if needs_restart {
+            let _ = self.supervisor.stop().await;
+        }
         // 启引擎（如未启动）
-        let port = self.ensure_engine_running(&ai).await?;
+        let port = self.ensure_engine_running(&ai, engine_overrides).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
 
         // 取段标签 / 时段
@@ -615,6 +677,43 @@ impl DaySummaryRunner {
         device: DeviceFilter,
         overrides: Option<AiOverrides>,
     ) -> Result<()> {
+        let (engine_overrides, needs_restart, parallel) = match overrides.as_ref() {
+            Some(o) => (
+                o.engine_overrides(),
+                o.needs_engine_restart(),
+                o.parallel_slots_or_one(),
+            ),
+            None => (EngineStartOverrides::default(), false, 1usize),
+        };
+
+        let result = self
+            .run_one_segment_only_inner(
+                local_date,
+                segment_idx,
+                device,
+                overrides,
+                engine_overrides,
+                needs_restart,
+                parallel,
+            )
+            .await;
+        if needs_restart {
+            let _ = self.supervisor.stop().await;
+        }
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_one_segment_only_inner(
+        &self,
+        local_date: NaiveDate,
+        segment_idx: u32,
+        device: DeviceFilter,
+        overrides: Option<AiOverrides>,
+        engine_overrides: EngineStartOverrides,
+        needs_restart: bool,
+        parallel: usize,
+    ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = match overrides {
             Some(o) => o.apply_to(cfg.ai.clone()),
@@ -638,6 +737,9 @@ impl DaySummaryRunner {
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
 
+        if needs_restart {
+            let _ = self.supervisor.stop().await;
+        }
         let st = self.supervisor.status().await;
         if st.state != EngineState::Running {
             let mut p = SummaryProgress::base(
@@ -648,7 +750,7 @@ impl DaySummaryRunner {
             p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
             self.emit(p);
         }
-        let port = self.ensure_engine_running(&ai).await?;
+        let port = self.ensure_engine_running(&ai, engine_overrides).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
         let max_images = ai.max_images_per_segment as usize;
 
@@ -663,14 +765,152 @@ impl DaySummaryRunner {
             seg.end_hour,
             max_images,
             device,
+            parallel,
         )
         .await
+    }
+
+    /// step 1 的图描述编排：可串行可并发。
+    ///
+    /// `parallel` 决定同时跑多少张图——为了真正并发，llama-server 那边
+    /// `-np N` 也得开（`AiOverrides.parallel_slots` 一并传）；只开这边并发
+    /// 不传 `-np` 的话 llama.cpp 内部还是排队，速度不变。
+    ///
+    /// 错误分两类：
+    /// - DB 写入失败（任意一张图）→ `?` 抛上去，整段失败
+    /// - data_uri / chat 失败 → log + 跳过该张，不阻塞其它
+    #[allow(clippy::too_many_arguments)]
+    async fn describe_images(
+        &self,
+        chat: &ChatClient,
+        picked: &[String],
+        describe_system: &str,
+        describe_user: &str,
+        model: &str,
+        date_str: &str,
+        idx: u32,
+        total_segments: u32,
+        parallel: usize,
+    ) -> Result<Vec<String>> {
+        use futures_util::StreamExt;
+
+        // 把 per-image 工作打包成 owned async future，方便 buffer_unordered 调度。
+        // 用 for + Vec 的方式预 spawn 而不是 iter().map(|| async move {})，
+        // 后者闭包会顺手捕获 `chat`/refs 为 borrow，整个 stream 跨线程时
+        // 报 `Send is not general enough`（Tauri command 要求 future 是 Send）。
+        let mut work: Vec<_> = Vec::with_capacity(picked.len());
+        for (i, img_path) in picked.iter().enumerate() {
+            let chat = chat.clone();
+            let describe_system = describe_system.to_string();
+            let describe_user = describe_user.to_string();
+            let model = model.to_string();
+            let date_str = date_str.to_string();
+            let pool = self.pool.clone();
+            let app = self.app.clone();
+            let cancel = Arc::clone(&self.cancel);
+            let img_path = img_path.clone();
+            let i = i as u32;
+
+            work.push(async move {
+                if cancel.load(Ordering::Relaxed) {
+                    return Ok::<Option<(u32, String)>, Error>(None);
+                }
+
+                let data_uri =
+                    match to_data_uri(Path::new(&img_path), SUMMARY_IMAGE_MAX_DIM).await {
+                        Ok(u) => u,
+                        Err(e) => {
+                            log::warn!("跳过坏截图 {img_path}: {e}");
+                            return Ok(None);
+                        }
+                    };
+
+                // 调试：打印每张图 chat 的 START / END，跟时间戳。如果真在并发，
+                // log 里会看到 N 条 START 紧贴着出现，而不是「START → END → START → END」交替。
+                let chat_t0 = std::time::Instant::now();
+                log::info!("[describe] START seg={} img={} path={}", idx, i, img_path);
+                let single = std::slice::from_ref(&data_uri);
+                let (desc, usage) =
+                    match chat.chat_with_images(&describe_system, &describe_user, single).await {
+                        Ok(r) => r,
+                        Err(e) => {
+                            log::warn!("图描述失败 {img_path}: {e}");
+                            return Ok(None);
+                        }
+                    };
+                log::info!(
+                    "[describe] END   seg={} img={} took={}ms",
+                    idx,
+                    i,
+                    chat_t0.elapsed().as_millis()
+                );
+
+                ai_summaries::upsert_image_description(
+                    &pool,
+                    &ImageDescriptionRow {
+                        local_date: date_str.clone(),
+                        segment_idx: idx,
+                        image_index: i,
+                        screenshot_path: img_path.clone(),
+                        description: desc.clone(),
+                        model: model.clone(),
+                        generated_at: Utc::now().to_rfc3339(),
+                        latency_ms: Some(usage.latency_ms),
+                        prompt_tokens: usage.prompt_tokens,
+                        completion_tokens: usage.completion_tokens,
+                    },
+                )
+                .await?;
+
+                let mut p_img = SummaryProgress::base(
+                    date_str,
+                    "image_described",
+                    total_segments,
+                );
+                p_img.segment_idx = Some(idx);
+                p_img.image_index = Some(i);
+                p_img.image_path = Some(img_path);
+                p_img.image_description = Some(desc.clone());
+                p_img.latency_ms = Some(usage.latency_ms);
+                p_img.prompt_tokens = usage.prompt_tokens;
+                p_img.completion_tokens = usage.completion_tokens;
+                if let Err(e) = app.emit(SUMMARY_PROGRESS_EVENT, &p_img) {
+                    log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
+                }
+
+                Ok::<Option<(u32, String)>, Error>(Some((i, desc)))
+            });
+        }
+
+        let results: Vec<_> = futures_util::stream::iter(work)
+            .buffer_unordered(parallel)
+            .collect()
+            .await;
+
+        let mut pairs: Vec<(u32, String)> = Vec::with_capacity(picked.len());
+        for r in results {
+            if let Some(pair) = r? {
+                pairs.push(pair);
+            }
+        }
+        // buffer_unordered 完成顺序不可预期；按 image_index 排序后才能给 step 2 用
+        pairs.sort_by_key(|(i, _)| *i);
+        Ok(pairs.into_iter().map(|(_, d)| d).collect())
     }
 
     /// 引擎未启动就启动。返回当前监听端口。
     /// 复制了 `commands::ai::start_engine` 里的路径组装逻辑，因为那里是
     /// `#[tauri::command]` 不能直接调用。
-    async fn ensure_engine_running(&self, ai: &AiConfig) -> Result<u16> {
+    ///
+    /// `engine_overrides` 在调用方决定要不要重启 / 用什么参数启动；这里只负责：
+    /// 引擎已 Running 就返回端口，否则按 overrides 启动。如果调用方想改 batch
+    /// / parallel_slots，应在调本函数前主动 `supervisor.stop()` 一下，让本函
+    /// 数走启动分支并带着 overrides 上去。
+    async fn ensure_engine_running(
+        &self,
+        ai: &AiConfig,
+        engine_overrides: EngineStartOverrides,
+    ) -> Result<u16> {
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
@@ -698,6 +938,8 @@ impl DaySummaryRunner {
             }
             Some(p)
         };
-        self.supervisor.start(Some(main_path), mmproj_path).await
+        self.supervisor
+            .start_with_overrides(Some(main_path), mmproj_path, engine_overrides)
+            .await
     }
 }

@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   Play,
   RotateCcw,
+  Server,
   Square,
 } from "lucide-react";
 import {
@@ -67,6 +68,45 @@ function maxImagesToOption(n: number): MaxImagesKey {
 }
 function optionToMaxImages(v: MaxImagesKey): number {
   if (v === "max") return 200;
+  return parseInt(v, 10);
+}
+
+/** llama-server `--batch-size` / `--ubatch-size`。"default" = 不传，走 llama.cpp 默认 512。
+ *  改值会触发引擎 stop+start 重启；调试跑完无条件 stop，下次正常日报跑回到默认。 */
+type BatchKey = "default" | "1024" | "2048" | "4096";
+const BATCH_OPTIONS: Array<{ value: BatchKey; label: string }> = [
+  { value: "default", label: "默认 (512)" },
+  { value: "1024", label: "1024" },
+  { value: "2048", label: "2048" },
+  { value: "4096", label: "4096" },
+];
+function batchToOption(n: number | null): BatchKey {
+  if (n === 1024) return "1024";
+  if (n === 2048) return "2048";
+  if (n === 4096) return "4096";
+  return "default";
+}
+/** "default" → null（让 overrides.batchSize 留空，后端走默认）；其它 → 数值 */
+function optionToBatch(v: BatchKey): number | null {
+  return v === "default" ? null : parseInt(v, 10);
+}
+
+/** 并发槽位数 = llama-server `-np` + 后端 step 1 image describe 并发数。
+ *  两边一致才有效。"1" = 串行（历史行为）；> 1 = 并发同时跑 N 张图描述。 */
+type SlotsKey = "1" | "2" | "4" | "8";
+const SLOTS_OPTIONS: Array<{ value: SlotsKey; label: string }> = [
+  { value: "1", label: "1 (串行)" },
+  { value: "2", label: "2" },
+  { value: "4", label: "4" },
+  { value: "8", label: "8" },
+];
+function slotsToOption(n: number): SlotsKey {
+  if (n >= 8) return "8";
+  if (n >= 4) return "4";
+  if (n >= 2) return "2";
+  return "1";
+}
+function optionToSlots(v: SlotsKey): number {
   return parseInt(v, 10);
 }
 
@@ -199,6 +239,9 @@ export default function DebugTab() {
   const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
   const [debugHashThreshold, setDebugHashThreshold] = useState(5);
   const [debugHashWindow, setDebugHashWindow] = useState(5);
+  /** 启动级 override：null = 不传给后端（走 llama.cpp 默认）；改值会触发引擎重启。 */
+  const [debugBatchSize, setDebugBatchSize] = useState<number | null>(null);
+  const [debugParallelSlots, setDebugParallelSlots] = useState(1);
   /** 调试 tab 局部 prompt 覆盖：默认值 = 当前 settings 的覆盖（非空）或内置默认。 */
   const [debugSysPrompt, setDebugSysPrompt] = useState("");
   const [debugImagePrompt, setDebugImagePrompt] = useState("");
@@ -418,6 +461,9 @@ export default function DebugTab() {
           debugImagePrompt.trim() === imgPromptDefault.trim()
             ? ""
             : debugImagePrompt,
+        // null / 1 → 不传，让后端走默认；非默认值才打包，触发 stop+start with overrides
+        ...(debugBatchSize != null ? { batchSize: debugBatchSize } : {}),
+        ...(debugParallelSlots > 1 ? { parallelSlots: debugParallelSlots } : {}),
       };
       await api.generateDaySummary(date, true, null, overrides);
     } catch (e) {
@@ -596,13 +642,7 @@ export default function DebugTab() {
       >
         <Row
           label="相似度阈值"
-          labelHint={
-            "dHash 64 位汉明距离\n" +
-            "• 越小越严格（同一画面才算重复）\n" +
-            "• 5 通常合适\n" +
-            "• 0 = 像素级一致才去重\n" +
-            "（当前后端尚未启用 dHash 去重，留待 Phase 1C）"
-          }
+          labelHint="两张截图差异多少算同一张。越小越严格——设置为 0 就相当于两张图片的每个像素都一致才认为是重复的图片，不加入分析。"
         >
           <Slider
             value={debugHashThreshold}
@@ -614,11 +654,7 @@ export default function DebugTab() {
         </Row>
         <Row
           label="时间窗"
-          labelHint={
-            "只在窗口内的截图之间比相似度。\n" +
-            "避免把不同时间段的相似画面（如同一应用上午 / 下午）误合并。\n" +
-            "（当前后端尚未启用 dHash 去重，留待 Phase 1C）"
-          }
+          labelHint="只比这段时间内的截图，避免上下午相似画面被误合并。"
         >
           <Slider
             value={debugHashWindow}
@@ -627,6 +663,30 @@ export default function DebugTab() {
             max={30}
             step={1}
             suffix="分钟"
+          />
+        </Row>
+      </Section>
+
+      {/* —— 引擎参数（启动时）：改值会重启引擎，仅本调试窗口生效 —— */}
+      <Section
+        title="引擎参数（启动时）"
+        icon={Server}
+        description="改完会先 stop 引擎、用新参数重启再跑；调试结束后无条件 stop 引擎，下次日报会以默认参数 lazy-start，不污染全局。"
+      >
+        <Row label="Batch 大小">
+          <SimplePicker<BatchKey>
+            value={batchToOption(debugBatchSize)}
+            options={BATCH_OPTIONS}
+            onChange={(next) => setDebugBatchSize(optionToBatch(next))}
+            disabled={generating}
+          />
+        </Row>
+        <Row label="并发数量">
+          <SimplePicker<SlotsKey>
+            value={slotsToOption(debugParallelSlots)}
+            options={SLOTS_OPTIONS}
+            onChange={(next) => setDebugParallelSlots(optionToSlots(next))}
+            disabled={generating}
           />
         </Row>
       </Section>
@@ -743,6 +803,12 @@ export default function DebugTab() {
                           ]?.trim() ?? "")
                             ? ""
                             : debugImagePrompt,
+                        ...(debugBatchSize != null
+                          ? { batchSize: debugBatchSize }
+                          : {}),
+                        ...(debugParallelSlots > 1
+                          ? { parallelSlots: debugParallelSlots }
+                          : {}),
                       },
                     );
                   } catch (e) {

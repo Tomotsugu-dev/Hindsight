@@ -235,6 +235,12 @@ export interface AiOverrides {
   systemPrompt?: string;
   /** step 1 单图描述的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
   imageDescribePrompt?: string;
+  /** llama-server `--batch-size` / `--ubatch-size`（取一致值）；
+   *  改值会触发引擎 stop+start with overrides，调试跑完再 stop 让下次默认重启。 */
+  batchSize?: number;
+  /** llama-server `-np`（并行槽位数）+ 后端 step 1 image describe 并发数；
+   *  两者同时生效才真正并行：-np 为 KV cache 槽预留，前端并发数决定同时发的请求。 */
+  parallelSlots?: number;
 }
 
 /** ai_image_descriptions 表的一行——两步生成 step 1 的产物，给调试 tab 渲染。 */
