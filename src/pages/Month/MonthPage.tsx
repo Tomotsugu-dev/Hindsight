@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
@@ -16,38 +17,46 @@ import styles from "./MonthPage.module.css";
 
 const SWIPE_DURATION = 420;
 
-function fmtHM(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m} 分`;
-  if (m === 0) return `${h} 小时`;
-  return `${h} 小时 ${m} 分`;
-}
-
-function monthLabel(offset: number): string {
-  if (offset === 0) return "本月";
-  if (offset === -1) return "上月";
-  if (offset < -1) return `${-offset} 月前`;
-  return `${offset} 月后`;
-}
-
-function fmtMonth(days: DaySummary[], offset: number): string {
-  if (days.length > 0) {
-    const d = days[0].date;
-    return `${d.getFullYear()}年${d.getMonth() + 1}月`;
-  }
-  const today = new Date();
-  const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  return `${d.getFullYear()}年${d.getMonth() + 1}月`;
-}
-
 export default function MonthPage() {
+  const { t, i18n } = useTranslation();
   const [offset, setOffset] = useState(0);
   const { categories, getCategory } = useCategories();
   const { selectedDeviceId } = useDeviceFilter();
   const { get: getMonth } = useMonthCache(offset, selectedDeviceId);
 
   const { days, apps } = useMemo(() => getMonth(offset), [getMonth, offset]);
+
+  // 时长格式化 —— 复用 common.duration.* 资源
+  const fmtHM = (min: number): string => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return t("common.duration.minutesShort", { count: m });
+    return t("common.duration.hourMinute", { hours: h, minutes: m });
+  };
+
+  // 月份显示文案：中文取数字 1-12，英文取本地化月份名（如 "May"）
+  const fmtMonth = (list: DaySummary[], off: number): string => {
+    const base =
+      list.length > 0
+        ? list[0].date
+        : new Date(new Date().getFullYear(), new Date().getMonth() + off, 1);
+    const isZh = i18n.language.startsWith("zh");
+    const monthText = isZh
+      ? String(base.getMonth() + 1)
+      : new Intl.DateTimeFormat(i18n.language, { month: "long" }).format(base);
+    return t("month.monthLabel", {
+      year: base.getFullYear(),
+      month: monthText,
+    });
+  };
+
+  // 月切换 pill 的本地化文案
+  const monthPillLabel = (off: number): string => {
+    if (off === 0) return t("month.monthNav.thisMonth");
+    if (off === -1) return t("month.monthNav.lastMonth");
+    if (off < -1) return t("month.monthNav.monthsAgo", { count: -off });
+    return t("month.monthNav.monthsLater", { count: off });
+  };
 
   const totalMinutes = useMemo(
     () =>
@@ -154,15 +163,19 @@ export default function MonthPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>月统计</h1>
+        <h1 className={styles.title}>{t("month.title")}</h1>
         <p className={styles.meta}>
-          {fmtMonth(days, offset)} · 共 {fmtHM(totalMinutes)} · 日均 {fmtHM(Math.round(avgPerDay))}
+          {t("month.meta", {
+            month: fmtMonth(days, offset),
+            total: fmtHM(totalMinutes),
+            avg: fmtHM(Math.round(avgPerDay)),
+          })}
         </p>
       </header>
 
       <section className={styles.card}>
         <header className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>每日活动分布</h2>
+          <h2 className={styles.cardTitle}>{t("month.chart.title")}</h2>
 
           <div className={styles.headRight}>
             <DevicePicker />
@@ -174,8 +187,8 @@ export default function MonthPage() {
               className={`${styles.navBtn} glow`}
               onClick={() => commit(-1)}
               disabled={transitioning}
-              aria-label="前一月"
-              title="前一月"
+              aria-label={t("month.monthNav.prev")}
+              title={t("month.monthNav.prev")}
             >
               <ChevronLeft size={14} strokeWidth={1.75} />
             </button>
@@ -186,9 +199,9 @@ export default function MonthPage() {
               className={`${styles.dayPill} ${offset !== 0 ? styles.dayPillClickable : ""} glow`}
               onClick={jumpToThis}
               disabled={offset === 0 || transitioning}
-              title={offset === 0 ? undefined : "回到本月"}
+              title={offset === 0 ? undefined : t("month.monthNav.backToThisMonth")}
             >
-              {monthLabel(offset)}
+              {monthPillLabel(offset)}
             </button>
 
             <button
@@ -197,8 +210,8 @@ export default function MonthPage() {
               className={`${styles.navBtn} glow`}
               onClick={() => commit(1)}
               disabled={!canGoForward || transitioning}
-              aria-label="后一月"
-              title="后一月"
+              aria-label={t("month.monthNav.next")}
+              title={t("month.monthNav.next")}
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
@@ -231,7 +244,7 @@ export default function MonthPage() {
       <div className={styles.ranks}>
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>本月最常用应用</h2>
+            <h2 className={styles.cardTitle}>{t("month.ranks.topApps")}</h2>
           </header>
           {appRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -244,7 +257,7 @@ export default function MonthPage() {
 
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>本月最常用分类</h2>
+            <h2 className={styles.cardTitle}>{t("month.ranks.topCategories")}</h2>
           </header>
           {categoryRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -278,5 +291,6 @@ function Legend() {
 }
 
 function EmptyHint() {
-  return <div className={styles.empty}>暂无数据</div>;
+  const { t } = useTranslation();
+  return <div className={styles.empty}>{t("common.empty")}</div>;
 }
