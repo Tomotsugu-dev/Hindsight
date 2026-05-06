@@ -1,16 +1,7 @@
-/* AI 总结页（Phase 1B-γ）的样式。
-   设计基调对齐 Today / AISettings：白底卡片 + 浅边框 + 紧凑的 chip + 主色 accent 按钮。 */
+/* 日报 tab 内部样式：日期导航 + 主操作 + 错误条 + 引擎冷启动 + 段卡片列表。
+   外壳样式（.page / .title / .tabs）在 AISummaryPage.module.css。 */
 
-.page {
-  padding: 24px 32px 48px;
-  max-width: 880px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-/* —— 顶部头：标题 + 日期导航 + 主操作 —— */
+/* —— 顶部头：副标题 + 日期导航 + 主操作 —— */
 .header {
   display: flex;
   align-items: flex-start;
@@ -26,19 +17,12 @@
   min-width: 0;
 }
 
-.title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.012em;
-  color: var(--text-strong);
-  margin: 0;
-}
-
 .subtitle {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: -0.005em;
+  margin: 0;
 }
 
 .headRight {
@@ -216,7 +200,7 @@
   border-radius: 5px;
   font-size: 12px;
   font-weight: 600;
-  color: #1c1c24; /* chip 背景多为浅 pastel，深字最稳 */
+  color: #1c1c24;
   letter-spacing: -0.005em;
 }
 
@@ -231,7 +215,6 @@
   letter-spacing: 0.01em;
 }
 
-/* 状态徽章 —— 类似 AISettings 的 engineBadge 系列 */
 .statusBadge {
   display: inline-flex;
   align-items: center;
@@ -268,7 +251,6 @@
   color: #991b1b;
 }
 
-/* 重试按钮 */
 .retryBtn {
   margin-left: auto;
   display: inline-flex;
@@ -300,7 +282,6 @@
   cursor: not-allowed;
 }
 
-/* —— 卡片正文 —— */
 .bodyText {
   font-size: 13.5px;
   line-height: 1.65;
@@ -324,12 +305,11 @@
   word-break: break-word;
 }
 
-/* loader 旋转 —— 跨多个 statusBadge / engineHint 复用 */
 .spin {
-  animation: aiSummarySpin 1s linear infinite;
+  animation: dailyTabSpin 1s linear infinite;
 }
 
-@keyframes aiSummarySpin {
+@keyframes dailyTabSpin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }

@@ -26,11 +26,15 @@ use crate::ai::config::AiConfig;
 use crate::ai::image::{pick_frames, to_data_uri};
 use crate::ai::llm::ChatClient;
 use crate::ai::models;
-use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
-use crate::ai::server::EngineSupervisor;
+use crate::ai::prompt::{
+    build_image_describe_system_prompt, build_image_describe_user_prompt,
+    build_system_prompt, build_user_prompt, SegmentContext,
+};
+use crate::ai::server::{EngineState, EngineSupervisor};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{
-    self, list_segment_screenshots, list_segment_top_apps, SegmentSummaryRow,
+    self, list_segment_screenshots, list_segment_top_apps, ImageDescriptionRow,
+    SegmentSummaryRow,
 };
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
@@ -41,16 +45,29 @@ use crate::storage::DbPool;
 pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
 
 /// 进度事件 payload。前端按 `phase` 分发渲染。
+///
+/// phase 取值：
+/// - `engine_starting`：引擎冷启动中（首次加载模型 30-90s）
+/// - `segment_started`：段进入 step 1（逐图描述）；imagesTotal 给图数
+/// - `image_described`：单张图描述完成；image_index / image_path / image_description 一起带过来，
+///   前端调试 tab 实时往面板里塞条目，不必等整段完成
+/// - `segment_done`：段进入完成态（含 ok / skipped / error）；content 是段总结
+/// - `all_done` / `cancelled` / `error`：整轮收尾
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryProgress {
     pub date: String,
-    /// engine_starting | segment_started | segment_done | all_done | cancelled | error
     pub phase: &'static str,
     pub segment_idx: Option<u32>,
     pub total_segments: u32,
     /// 段开跑时给前端 "12 张图待分析" 的提示
     pub images_total: Option<u32>,
+    /// image_described 时该图在段内的下标（0-based）
+    pub image_index: Option<u32>,
+    /// image_described 时附该图绝对路径（前端可以用来显示缩略图）
+    pub image_path: Option<String>,
+    /// image_described 时附该图的描述文本
+    pub image_description: Option<String>,
     /// segment_done 时附该段总结，前端立刻渲染该段不等其它
     pub content: Option<String>,
     /// segment_done 时也会带上落库行的 status（ok / skipped_no_screenshots / error）
@@ -58,6 +75,25 @@ pub struct SummaryProgress {
     pub status: Option<&'static str>,
     /// error 段的可读错误；error phase 也用这个携带顶层错误描述
     pub message: Option<String>,
+}
+
+impl SummaryProgress {
+    /// 各 phase 字段大多都是 None，统一兜底构造器减少重复代码。
+    pub(crate) fn base(date: String, phase: &'static str, total_segments: u32) -> Self {
+        Self {
+            date,
+            phase,
+            segment_idx: None,
+            total_segments,
+            images_total: None,
+            image_index: None,
+            image_path: None,
+            image_description: None,
+            content: None,
+            status: None,
+            message: None,
+        }
+    }
 }
 
 /// 总结 LLM 输出时给段加的图片缩放上限——长边 768 px 是 vision LLM 的常见甜点：
@@ -120,17 +156,10 @@ impl DaySummaryRunner {
 
         // 启动引擎（如未启动），拿到端口；启动期间给前端一个进度提示
         let st = self.supervisor.status().await;
-        if st.state != "running" {
-            self.emit(SummaryProgress {
-                date: date_str.clone(),
-                phase: "engine_starting",
-                segment_idx: None,
-                total_segments,
-                images_total: None,
-                content: None,
-                status: None,
-                message: Some("加载模型中（首次约 30-90 秒）…".to_string()),
-            });
+        if st.state != EngineState::Running {
+            let mut p = SummaryProgress::base(date_str.clone(), "engine_starting", total_segments);
+            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            self.emit(p);
         }
         let port = self.ensure_engine_running(&ai).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
@@ -140,16 +169,10 @@ impl DaySummaryRunner {
 
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
-                self.emit(SummaryProgress {
-                    date: date_str.clone(),
-                    phase: "cancelled",
-                    segment_idx: Some(idx as u32),
-                    total_segments,
-                    images_total: None,
-                    content: None,
-                    status: None,
-                    message: None,
-                });
+                let mut p =
+                    SummaryProgress::base(date_str.clone(), "cancelled", total_segments);
+                p.segment_idx = Some(idx as u32);
+                self.emit(p);
                 return Ok(());
             }
             // 防御：sanitize 已确保 start < end，这里只是兜底
@@ -172,16 +195,8 @@ impl DaySummaryRunner {
             .await?;
         }
 
-        self.emit(SummaryProgress {
-            date: date_str,
-            phase: "all_done",
-            segment_idx: None,
-            total_segments,
-            images_total: None,
-            content: None,
-            status: None,
-            message: None,
-        });
+        let p = SummaryProgress::base(date_str, "all_done", total_segments);
+        self.emit(p);
         Ok(())
     }
 
@@ -191,8 +206,14 @@ impl DaySummaryRunner {
         }
     }
 
-    /// 跑单段，把结果落库（无论 ok / skipped / error 都写一行）+ emit 进度事件。
-    /// 上层错误（DB 操作）会向上抛；段内 LLM 错误会被捕获写成 status='error' 而不抛。
+    /// 跑单段——两步生成：
+    ///   step 1：每张抽帧后的截图独立调 vision LLM 拿到一段描述 → 落 ai_image_descriptions
+    ///   step 2：把所有描述 + top_apps 拼成纯文本，再调 LLM 写段总结 → 落 ai_summaries
+    ///
+    /// 落库语义：
+    /// - DB 写操作错误（IO 等）向上抛
+    /// - 单张图描述失败：log 跳过，不阻塞整段（多张图缺一两张可以接受）
+    /// - 段总结调用失败：写一行 ai_summaries 行 status='error'，不抛
     #[allow(clippy::too_many_arguments)]
     async fn run_one_segment(
         &self,
@@ -209,7 +230,7 @@ impl DaySummaryRunner {
     ) -> Result<()> {
         let model = ai.active_main.clone();
 
-        // 拉段内截图路径 + top apps
+        // ────── 取数据 ──────
         let paths = list_segment_screenshots(
             &self.pool,
             date_str,
@@ -222,16 +243,12 @@ impl DaySummaryRunner {
 
         // 没截图的段直接 skipped 兜底
         if paths.is_empty() {
-            self.emit(SummaryProgress {
-                date: date_str.to_string(),
-                phase: "segment_started",
-                segment_idx: Some(idx),
-                total_segments,
-                images_total: Some(0),
-                content: None,
-                status: None,
-                message: None,
-            });
+            let mut p_started =
+                SummaryProgress::base(date_str.to_string(), "segment_started", total_segments);
+            p_started.segment_idx = Some(idx);
+            p_started.images_total = Some(0);
+            self.emit(p_started);
+
             ai_summaries::upsert_segment(
                 &self.pool,
                 &SegmentSummaryRow {
@@ -248,40 +265,28 @@ impl DaySummaryRunner {
                 },
             )
             .await?;
-            self.emit(SummaryProgress {
-                date: date_str.to_string(),
-                phase: "segment_done",
-                segment_idx: Some(idx),
-                total_segments,
-                images_total: Some(0),
-                content: Some(String::new()),
-                status: Some("skipped_no_screenshots"),
-                message: None,
-            });
+
+            let mut p_done =
+                SummaryProgress::base(date_str.to_string(), "segment_done", total_segments);
+            p_done.segment_idx = Some(idx);
+            p_done.images_total = Some(0);
+            p_done.content = Some(String::new());
+            p_done.status = Some("skipped_no_screenshots");
+            self.emit(p_done);
             return Ok(());
         }
 
         // 等距抽帧
         let picked = pick_frames(paths, max_images);
-        self.emit(SummaryProgress {
-            date: date_str.to_string(),
-            phase: "segment_started",
-            segment_idx: Some(idx),
-            total_segments,
-            images_total: Some(picked.len() as u32),
-            content: None,
-            status: None,
-            message: None,
-        });
 
-        // 每张转 data URI；个别坏文件 log 一下跳过，不致命
-        let mut data_uris: Vec<String> = Vec::with_capacity(picked.len());
-        for p in &picked {
-            match to_data_uri(Path::new(p), SUMMARY_IMAGE_MAX_DIM).await {
-                Ok(uri) => data_uris.push(uri),
-                Err(e) => log::warn!("跳过坏截图 {p}: {e}"),
-            }
-        }
+        // 段重跑前先清掉旧的逐图描述，避免新旧 image_index 错位
+        ai_summaries::clear_segment_descriptions(&self.pool, date_str, idx).await?;
+
+        let mut p_started =
+            SummaryProgress::base(date_str.to_string(), "segment_started", total_segments);
+        p_started.segment_idx = Some(idx);
+        p_started.images_total = Some(picked.len() as u32);
+        self.emit(p_started);
 
         let top_apps = list_segment_top_apps(
             &self.pool,
@@ -295,18 +300,87 @@ impl DaySummaryRunner {
         .await
         .unwrap_or_default();
 
+        // ────── step 1：逐图描述 ──────
+        let describe_system = build_image_describe_system_prompt(ai);
+        let describe_user =
+            build_image_describe_user_prompt(ai, &label, start_hour, end_hour);
+        let mut descriptions: Vec<String> = Vec::with_capacity(picked.len());
+
+        for (i, img_path) in picked.iter().enumerate() {
+            // 提早响应取消（不打断已在路上的 chat，下一张不开始）
+            if self.cancel.load(Ordering::Relaxed) {
+                let mut p_cancel =
+                    SummaryProgress::base(date_str.to_string(), "cancelled", total_segments);
+                p_cancel.segment_idx = Some(idx);
+                self.emit(p_cancel);
+                return Ok(());
+            }
+
+            // 单张转 data URI；坏文件跳过
+            let data_uri = match to_data_uri(Path::new(img_path), SUMMARY_IMAGE_MAX_DIM).await {
+                Ok(u) => u,
+                Err(e) => {
+                    log::warn!("跳过坏截图 {img_path}: {e}");
+                    continue;
+                }
+            };
+
+            // 单图调用 LLM；失败 log 跳过，不阻塞整段
+            let single = std::slice::from_ref(&data_uri);
+            let desc = match chat
+                .chat_with_images(&describe_system, &describe_user, single)
+                .await
+            {
+                Ok(d) => d,
+                Err(e) => {
+                    log::warn!("图描述失败 {img_path}: {e}");
+                    continue;
+                }
+            };
+
+            // 落库
+            ai_summaries::upsert_image_description(
+                &self.pool,
+                &ImageDescriptionRow {
+                    local_date: date_str.to_string(),
+                    segment_idx: idx,
+                    image_index: i as u32,
+                    screenshot_path: img_path.clone(),
+                    description: desc.clone(),
+                    model: model.clone(),
+                    generated_at: Utc::now().to_rfc3339(),
+                },
+            )
+            .await?;
+
+            // emit 给前端调试 tab 实时渲染
+            let mut p_img = SummaryProgress::base(
+                date_str.to_string(),
+                "image_described",
+                total_segments,
+            );
+            p_img.segment_idx = Some(idx);
+            p_img.image_index = Some(i as u32);
+            p_img.image_path = Some(img_path.clone());
+            p_img.image_description = Some(desc.clone());
+            self.emit(p_img);
+
+            descriptions.push(desc);
+        }
+
+        // ────── step 2：段总结（纯文本调用，不再传图） ──────
         let ctx = SegmentContext {
             label: &label,
             start_hour,
             end_hour,
             top_apps: &top_apps,
-            image_count: data_uris.len(),
+            image_descriptions: &descriptions,
         };
         let system = build_system_prompt(ai);
         let user_text = build_user_prompt(ai, &ctx);
 
         let (row, status_str): (SegmentSummaryRow, &'static str) =
-            match chat.chat_with_images(&system, &user_text, &data_uris).await {
+            match chat.chat_with_images(&system, &user_text, &[]).await {
                 Ok(content) => (
                     SegmentSummaryRow {
                         local_date: date_str.to_string(),
@@ -340,16 +414,15 @@ impl DaySummaryRunner {
             };
 
         ai_summaries::upsert_segment(&self.pool, &row).await?;
-        self.emit(SummaryProgress {
-            date: date_str.to_string(),
-            phase: "segment_done",
-            segment_idx: Some(idx),
-            total_segments,
-            images_total: Some(data_uris.len() as u32),
-            content: Some(row.content.clone()),
-            status: Some(status_str),
-            message: row.error.clone(),
-        });
+
+        let mut p_done =
+            SummaryProgress::base(date_str.to_string(), "segment_done", total_segments);
+        p_done.segment_idx = Some(idx);
+        p_done.images_total = Some(picked.len() as u32);
+        p_done.content = Some(row.content.clone());
+        p_done.status = Some(status_str);
+        p_done.message = row.error.clone();
+        self.emit(p_done);
         Ok(())
     }
 
@@ -382,17 +455,14 @@ impl DaySummaryRunner {
         let date_str = local_date.format("%Y-%m-%d").to_string();
 
         let st = self.supervisor.status().await;
-        if st.state != "running" {
-            self.emit(SummaryProgress {
-                date: date_str.clone(),
-                phase: "engine_starting",
-                segment_idx: None,
-                total_segments: ai.segments.len() as u32,
-                images_total: None,
-                content: None,
-                status: None,
-                message: Some("加载模型中（首次约 30-90 秒）…".to_string()),
-            });
+        if st.state != EngineState::Running {
+            let mut p = SummaryProgress::base(
+                date_str.clone(),
+                "engine_starting",
+                ai.segments.len() as u32,
+            );
+            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            self.emit(p);
         }
         let port = self.ensure_engine_running(&ai).await?;
         let chat = ChatClient::new(port, ai.active_main.clone())?;
@@ -419,7 +489,7 @@ impl DaySummaryRunner {
     /// `#[tauri::command]` 不能直接调用。
     async fn ensure_engine_running(&self, ai: &AiConfig) -> Result<u16> {
         let st = self.supervisor.status().await;
-        if st.state == "running" {
+        if st.state == EngineState::Running {
             if let Some(p) = st.port {
                 return Ok(p);
             }

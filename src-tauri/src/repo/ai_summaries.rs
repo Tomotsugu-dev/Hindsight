@@ -165,7 +165,8 @@ pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()
     Ok(())
 }
 
-/// 清空某天所有段——`force_refresh` 重新生成时先调，避免老段残留。
+/// 清空某天所有段总结——`force_refresh` 重新生成时先调，避免老段残留。
+/// 同时清掉 `ai_image_descriptions` 同日的所有行（两步生成的 step 1 产物）。
 pub async fn clear_day(pool: &DbPool, local_date: &str) -> Result<()> {
     let date = local_date.to_string();
     pool.0
@@ -175,10 +176,174 @@ pub async fn clear_day(pool: &DbPool, local_date: &str) -> Result<()> {
                 [&date],
             )
             .db()?;
+            conn.execute(
+                "DELETE FROM ai_image_descriptions WHERE local_date = ?1",
+                [&date],
+            )
+            .db()?;
             Ok(())
         })
         .await?;
     Ok(())
+}
+
+/// 清掉某段所有逐图描述（段重跑时 step 1 开始前调，避免新旧 image_index 错位）。
+pub async fn clear_segment_descriptions(
+    pool: &DbPool,
+    local_date: &str,
+    segment_idx: u32,
+) -> Result<()> {
+    let date = local_date.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "DELETE FROM ai_image_descriptions
+                  WHERE local_date = ?1 AND segment_idx = ?2",
+                rusqlite::params![date, segment_idx as i64],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// 单张图的描述行（DB <-> 前端共用）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageDescriptionRow {
+    pub local_date: String,
+    pub segment_idx: u32,
+    /// 该段抽帧后的 0-based 顺序
+    pub image_index: u32,
+    /// 截图绝对路径
+    pub screenshot_path: String,
+    /// LLM 输出的描述文本
+    pub description: String,
+    /// 生成时用的 active_main 文件名
+    pub model: String,
+    pub generated_at: String,
+}
+
+/// 写入或覆盖一张图的描述。`generated_at` 为空时自动填当前 UTC。
+pub async fn upsert_image_description(
+    pool: &DbPool,
+    row: &ImageDescriptionRow,
+) -> Result<()> {
+    let mut row = row.clone();
+    if row.generated_at.is_empty() {
+        row.generated_at = Utc::now().to_rfc3339();
+    }
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "INSERT INTO ai_image_descriptions(
+                     local_date, segment_idx, image_index,
+                     screenshot_path, description, model, generated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(local_date, segment_idx, image_index) DO UPDATE SET
+                     screenshot_path = excluded.screenshot_path,
+                     description     = excluded.description,
+                     model           = excluded.model,
+                     generated_at    = excluded.generated_at",
+                rusqlite::params![
+                    row.local_date,
+                    row.segment_idx as i64,
+                    row.image_index as i64,
+                    row.screenshot_path,
+                    row.description,
+                    row.model,
+                    row.generated_at,
+                ],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// 拉某段所有逐图描述，按 image_index 升序——给调试 tab 渲染列表。
+pub async fn get_segment_image_descriptions(
+    pool: &DbPool,
+    local_date: &str,
+    segment_idx: u32,
+) -> Result<Vec<ImageDescriptionRow>> {
+    let date = local_date.to_string();
+    let rows = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT local_date, segment_idx, image_index,
+                            screenshot_path, description, model, generated_at
+                       FROM ai_image_descriptions
+                      WHERE local_date = ?1 AND segment_idx = ?2
+                      ORDER BY image_index ASC",
+                )
+                .db()?;
+            let it = stmt
+                .query_map(rusqlite::params![date, segment_idx as i64], |r| {
+                    Ok(ImageDescriptionRow {
+                        local_date: r.get(0)?,
+                        segment_idx: r.get::<_, i64>(1)? as u32,
+                        image_index: r.get::<_, i64>(2)? as u32,
+                        screenshot_path: r.get(3)?,
+                        description: r.get(4)?,
+                        model: r.get(5)?,
+                        generated_at: r.get(6)?,
+                    })
+                })
+                .db()?;
+            let mut out = Vec::new();
+            for row in it {
+                out.push(row.db()?);
+            }
+            Ok(out)
+        })
+        .await?;
+    Ok(rows)
+}
+
+/// 拉某天所有段的逐图描述——调试 tab 一次性渲染整日时用。
+pub async fn get_day_image_descriptions(
+    pool: &DbPool,
+    local_date: &str,
+) -> Result<Vec<ImageDescriptionRow>> {
+    let date = local_date.to_string();
+    let rows = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT local_date, segment_idx, image_index,
+                            screenshot_path, description, model, generated_at
+                       FROM ai_image_descriptions
+                      WHERE local_date = ?1
+                      ORDER BY segment_idx ASC, image_index ASC",
+                )
+                .db()?;
+            let it = stmt
+                .query_map([&date], |r| {
+                    Ok(ImageDescriptionRow {
+                        local_date: r.get(0)?,
+                        segment_idx: r.get::<_, i64>(1)? as u32,
+                        image_index: r.get::<_, i64>(2)? as u32,
+                        screenshot_path: r.get(3)?,
+                        description: r.get(4)?,
+                        model: r.get(5)?,
+                        generated_at: r.get(6)?,
+                    })
+                })
+                .db()?;
+            let mut out = Vec::new();
+            for row in it {
+                out.push(row.db()?);
+            }
+            Ok(out)
+        })
+        .await?;
+    Ok(rows)
 }
 
 /// 拉某天某段（`[start_hour, end_hour)`）的截图路径，按时间排序。

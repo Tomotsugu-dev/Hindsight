@@ -4,7 +4,12 @@ import { ROUTES } from "./config/nav";
 import Today from "./pages/Today/TodayPage";
 import Week from "./pages/Week/WeekPage";
 import Month from "./pages/Month/MonthPage";
-import AISummary from "./pages/AISummary";
+import AISummaryPage from "./pages/AISummary/AISummaryPage";
+import DailyTab from "./pages/AISummary/tabs/DailyTab";
+import WeeklyTab from "./pages/AISummary/tabs/WeeklyTab";
+import MonthlyTab from "./pages/AISummary/tabs/MonthlyTab";
+import ChatTab from "./pages/AISummary/tabs/ChatTab";
+import DebugTab from "./pages/AISummary/tabs/DebugTab";
 import AISettings from "./pages/AISettings";
 import Devices from "./pages/Devices/DevicesPage";
 import CategoriesPage from "./pages/Categories/CategoriesPage";
@@ -21,7 +26,13 @@ function App() {
         <Route path={ROUTES.today} element={<Today />} />
         <Route path={ROUTES.week} element={<Week />} />
         <Route path={ROUTES.month} element={<Month />} />
-        <Route path={ROUTES.aiSummary} element={<AISummary />} />
+        <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
+          <Route index element={<DailyTab />} />
+          <Route path="week" element={<WeeklyTab />} />
+          <Route path="month" element={<MonthlyTab />} />
+          <Route path="chat" element={<ChatTab />} />
+          <Route path="debug" element={<DebugTab />} />
+        </Route>
         <Route path={ROUTES.aiSettings} element={<AISettings />} />
         <Route path={ROUTES.devices} element={<Devices />} />
         <Route path={ROUTES.categories} element={<CategoriesPage />} />

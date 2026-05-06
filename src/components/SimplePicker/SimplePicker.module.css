@@ -8,7 +8,11 @@
 .trigger {
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 7px;
+  /* 短标签（如 "日报"/"周报"/"月报" 只有 2 字）下整体太窄；100px 让所有用例
+     视觉宽度接近 Today 页 DevicePicker（设备名通常 3-4 字） */
+  min-width: 100px;
   padding: 4px 7px 4px 10px;
   border-radius: 8px;
   border: 1px solid

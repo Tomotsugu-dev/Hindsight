@@ -12,9 +12,9 @@
       "hourMinute": "{{hours}} 小时 {{minutes}} 分",
       "minutesPlain": "{{count}} 分",
       "hoursPlain": "{{count}} 小时",
-      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m",
-      "tickMinutes": "{{count}}m",
-      "tickHours": "{{count}}h"
+      "hoursAndMinutesShort": "{{hours}} 小时 {{minutes}} 分",
+      "tickMinutes": "{{count}} 分",
+      "tickHours": "{{count}} 小时"
     }
   },
   "nav": {
@@ -133,5 +133,26 @@
       "sun": "周日"
     },
     "shortDate": "{{month}}/{{day}}"
+  },
+  "month": {
+    "title": "月统计",
+    "meta": "{{month}} · 共 {{total}} · 日均 {{avg}}",
+    "monthLabel": "{{year}}年{{month}}月",
+    "chart": {
+      "title": "每日活动分布"
+    },
+    "monthNav": {
+      "prev": "前一月",
+      "next": "后一月",
+      "backToThisMonth": "回到本月",
+      "thisMonth": "本月",
+      "lastMonth": "上月",
+      "monthsAgo": "{{count}} 月前",
+      "monthsLater": "{{count}} 月后"
+    },
+    "ranks": {
+      "topApps": "本月最常用应用",
+      "topCategories": "本月最常用分类"
+    }
   }
 }

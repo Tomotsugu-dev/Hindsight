@@ -17,7 +17,7 @@ use crate::ai::models::{self, ModelEntry};
 use crate::ai::recommended::{Recommended, RECOMMENDED};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
 use crate::ai::summary::{DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT};
-use crate::repo::ai_summaries::{self, SegmentSummaryRow};
+use crate::repo::ai_summaries::{self, ImageDescriptionRow, SegmentSummaryRow};
 use crate::repo::reports::device_filter_from_option;
 use crate::repo::settings;
 use crate::storage::DbPool;
@@ -269,7 +269,7 @@ pub async fn list_local_models(
     pool: State<'_, DbPool>,
 ) -> Result<Vec<ModelEntry>, String> {
     let cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
-    models::list_local(&cfg.ai).map_err(Into::into)
+    models::list_local(&cfg.ai).await.map_err(Into::into)
 }
 
 /// 删除一个本地 GGUF 文件。`filename` 必须是文件名（不含路径），后端
@@ -283,7 +283,9 @@ pub async fn delete_model(
     filename: String,
 ) -> Result<(), String> {
     let mut cfg = settings::load(&pool).await.map_err(|e| e.to_string())?;
-    models::delete(&cfg.ai, &filename).map_err(|e| e.to_string())?;
+    models::delete(&cfg.ai, &filename)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut dirty = false;
     if cfg.ai.active_main == filename {
@@ -453,19 +455,9 @@ pub async fn generate_day_summary(
 
     if let Err(e) = runner.run(parsed_date, device, force_refresh).await {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
-        let _ = app.emit(
-            SUMMARY_PROGRESS_EVENT,
-            &SummaryProgress {
-                date: date.clone(),
-                phase: "error",
-                segment_idx: None,
-                total_segments: 0,
-                images_total: None,
-                content: None,
-                status: None,
-                message: Some(e.to_string()),
-            },
-        );
+        let mut p = SummaryProgress::base(date.clone(), "error", 0);
+        p.message = Some(e.to_string());
+        let _ = app.emit(SUMMARY_PROGRESS_EVENT, &p);
         return Err(e.to_string());
     }
     Ok(())
@@ -515,6 +507,29 @@ pub async fn get_day_summary(
     date: String,
 ) -> Result<Vec<SegmentSummaryRow>, String> {
     ai_summaries::get_day(&pool, &date)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。
+#[tauri::command]
+pub async fn get_segment_image_descriptions(
+    pool: State<'_, DbPool>,
+    date: String,
+    segment_idx: u32,
+) -> Result<Vec<ImageDescriptionRow>, String> {
+    ai_summaries::get_segment_image_descriptions(&pool, &date, segment_idx)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。
+#[tauri::command]
+pub async fn get_day_image_descriptions(
+    pool: State<'_, DbPool>,
+    date: String,
+) -> Result<Vec<ImageDescriptionRow>, String> {
+    ai_summaries::get_day_image_descriptions(&pool, &date)
         .await
         .map_err(|e| e.to_string())
 }

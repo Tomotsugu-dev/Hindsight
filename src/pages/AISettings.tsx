@@ -15,7 +15,6 @@ import {
   Info,
   Loader2,
   MessageSquareText,
-  Play,
   RotateCcw,
   Save,
   Server,
@@ -283,21 +282,6 @@ function EngineSection() {
     }
   };
 
-  const onStartEngine = async () => {
-    setEngineBusy(true);
-    setTestResult({ kind: "idle" });
-    try {
-      await api.startEngine();
-    } catch (e) {
-      // start 失败时 supervisor 已经把状态置成 error 并写了 lastError；
-      // 我们只需 refresh 把 runtime.error 拉回来给 UI
-      console.warn("start_engine 失败：", e);
-    } finally {
-      await refresh();
-      setEngineBusy(false);
-    }
-  };
-
   const onStopEngine = async () => {
     setEngineBusy(true);
     try {
@@ -308,13 +292,19 @@ function EngineSection() {
     }
   };
 
+  /** 「测试连接」合并按钮：start_engine → test_ai_endpoint → stop_engine。
+   *
+   *  无论之前引擎是否在跑，测完都 stop 释放 VRAM——纯诊断流程，不留下资源占用。
+   *  实际跑总结时 summary.rs 会 lazy spawn，不依赖这里启动的实例。
+   *
+   *  start 是异步等 90s health；中间过程 testResult.kind="running" 给 UI 反馈。 */
   const onTestLocal = async () => {
-    if (!status?.runtime.port) return;
+    setEngineBusy(true);
     setTestResult({ kind: "running" });
     try {
-      const r = await api.testAiEndpoint(
-        `http://127.0.0.1:${status.runtime.port}/v1`,
-      );
+      const port = await api.startEngine();
+      await refresh();
+      const r = await api.testAiEndpoint(`http://127.0.0.1:${port}/v1`);
       if (r.ok) setTestResult({ kind: "ok", models: r.models });
       else setTestResult({ kind: "fail", message: r.message });
     } catch (e) {
@@ -322,6 +312,15 @@ function EngineSection() {
         kind: "fail",
         message: e instanceof Error ? e.message : String(e),
       });
+    } finally {
+      // 测完无脑 stop，释放 VRAM；stop 失败仅 log 不影响 testResult
+      try {
+        await api.stopEngine();
+      } catch (e) {
+        console.warn("test 后 stop 失败:", e);
+      }
+      await refresh();
+      setEngineBusy(false);
     }
   };
 
@@ -423,6 +422,24 @@ function EngineSection() {
                 : "下载 AI 引擎"}
           </span>
         </button>
+        {/* 「测试连接」合并按钮：未启动 → 先 start_engine → 再 test_ai_endpoint。
+            放「重新下载」右边；testResult 状态展示在下方 EngineRuntimeRow 区域。 */}
+        <button
+          type="button"
+          className={styles.engineTest}
+          onClick={() => void onTestLocal()}
+          disabled={busy || !installed || engineBusy}
+          title={
+            installed
+              ? "启动引擎（如未运行）并向本地 /v1/models 发请求验证"
+              : "尚未安装"
+          }
+        >
+          {engineBusy ? (
+            <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
+          ) : null}
+          测试连接
+        </button>
         {!busy ? (
           <span className={styles.engineSize}>
             约 {Math.round(status.estimatedBytes / 1024 / 1024)} MB
@@ -457,9 +474,7 @@ function EngineSection() {
           status={status}
           busy={engineBusy}
           testResult={testResult}
-          onStart={onStartEngine}
           onStop={onStopEngine}
-          onTest={onTestLocal}
         />
       ) : null}
     </div>
@@ -509,45 +524,40 @@ type RtTestResult =
   | { kind: "fail"; message: string };
 
 /**
- * 引擎运行时控制行（Phase 1B-α）。
+ * 引擎运行时反馈行：状态徽章 + testResult 输出 + 「停止」按钮（仅 running 时）。
  *
- * 只在 binary 已安装时渲染——未安装根本没什么可控的。
- * 三个状态对应不同 badge + 不同主操作按钮：
- *   stopped  → [▶ 启动引擎]
- *   starting → [⏳ 启动中…] disabled
- *   running  → [⬛ 停止]
- *   error    → [▶ 重试启动]，下方挂错误详情
- *
- * 旁边的"测试连接"按钮只在 running 时可点。
+ * 「测试连接」按钮已经合并到上方 engineActions（点了会自动 start 再 test），
+ * 这里就不再重复"启动引擎 / 测试连接"控件，只展示结果反馈 + 提供手动停止
+ * 释放 VRAM 的入口。
  */
 function EngineRuntimeRow({
   status,
   busy,
   testResult,
-  onStart,
   onStop,
-  onTest,
 }: {
   status: EngineStatus;
   busy: boolean;
   testResult: RtTestResult;
-  onStart: () => void;
   onStop: () => void;
-  onTest: () => void;
 }) {
   const rt = status.runtime;
   const isRunning = rt.state === "running";
-  const isStarting = rt.state === "starting";
   const isError = rt.state === "error";
 
-  // stopped / starting 时隐藏 badge——按钮文字已经把信息说清楚了，再挂一个 badge 是冗余。
-  // running 时 badge 带端口号（按钮没说），error 时 badge 给视觉强提示。
   const badge =
     rt.state === "running"
       ? { text: `已运行 · 端口：${rt.port}`, cls: styles.engineBadgeOk }
-      : rt.state === "error"
-        ? { text: "出错", cls: styles.engineBadgeFail }
-        : null;
+      : rt.state === "starting"
+        ? { text: "启动中…", cls: styles.engineBadgeWarn }
+        : rt.state === "error"
+          ? { text: "出错", cls: styles.engineBadgeFail }
+          : null;
+
+  // 没在跑、没在测、没出错——这一行就空了，干脆不渲染避免多一道空白
+  const hasContent =
+    isRunning || testResult.kind !== "idle" || badge !== null || isError;
+  if (!hasContent) return null;
 
   return (
     <div className={styles.engineRuntime}>
@@ -558,38 +568,12 @@ function EngineRuntimeRow({
             className={styles.engineStop}
             onClick={onStop}
             disabled={busy}
+            title="停止引擎释放 VRAM；下次「测试连接」会自动重启"
           >
             <Square size={14} strokeWidth={2} />
             停止
           </button>
-        ) : (
-          <button
-            type="button"
-            className={styles.engineStart}
-            onClick={onStart}
-            disabled={busy || isStarting}
-          >
-            {isStarting ? (
-              <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-            ) : (
-              <Play size={14} strokeWidth={2} />
-            )}
-            {isStarting ? "启动中…" : isError ? "重试启动" : "启动引擎"}
-          </button>
-        )}
-
-        <button
-          type="button"
-          className={styles.engineTest}
-          onClick={onTest}
-          disabled={!isRunning || testResult.kind === "running"}
-          title={isRunning ? "向本地引擎打 GET /v1/models" : "引擎未启动"}
-        >
-          {testResult.kind === "running" ? (
-            <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-          ) : null}
-          测试连接
-        </button>
+        ) : null}
 
         {testResult.kind === "ok" ? (
           <span

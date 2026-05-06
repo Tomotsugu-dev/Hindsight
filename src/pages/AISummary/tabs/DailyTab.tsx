@@ -17,9 +17,9 @@ import {
   type AiSegment,
   type SegmentSummaryRow,
   type SummaryProgress,
-} from "../api/hindsight";
-import { useSettings } from "../state/settings";
-import styles from "./AISummary.module.css";
+} from "../../../api/hindsight";
+import { useSettings } from "../../../state/settings";
+import styles from "./DailyTab.module.css";
 
 /** 段卡片在 UI 里的展示状态——由 ai_summaries 行 + 当前 in-flight 进度推导。 */
 type CardState =
@@ -46,20 +46,20 @@ function offsetLabel(dayOffset: number): string {
   return offsetToDateStr(dayOffset);
 }
 
-export default function AISummary() {
+/**
+ * 日报 tab：当前一天的活动按段汇总 + 渐次出文。
+ *
+ * 进度通过 listen `ai://summary-progress` 流式更新；状态机：
+ *   empty → running → (ok | skipped | error)
+ */
+export default function DailyTab() {
   const { settings } = useSettings();
   const [dayOffset, setDayOffset] = useState(0);
-  /** 服务端返回的当天落库行；map<segmentIdx, row> 方便覆盖更新 */
   const [rows, setRows] = useState<Map<number, SegmentSummaryRow>>(new Map());
-  /** 当前段下标——in-flight 时该段卡显示 spinner */
   const [runningIdx, setRunningIdx] = useState<number | null>(null);
-  /** 该段的图片总数提示 */
   const [runningImages, setRunningImages] = useState<number | null>(null);
-  /** 整轮 generate 在飞 → 顶部主按钮变 "停止" + 锁日期切换 */
   const [generating, setGenerating] = useState(false);
-  /** 引擎冷启动阶段提示 */
   const [enginePhase, setEnginePhase] = useState<string | null>(null);
-  /** 顶层失败（如未选模型）的 toast */
   const [topError, setTopError] = useState<string | null>(null);
 
   const date = useMemo(() => offsetToDateStr(dayOffset), [dayOffset]);
@@ -91,9 +91,14 @@ export default function AISummary() {
     };
   }, [date]);
 
-  // listen 全局进度事件——按 date 过滤，避免跨日期串场
+  // 用 ref 让 listen 闭包读到最新值（避免重新挂监听）
+  const segmentsRef = useRef<AiSegment[]>(segments);
+  segmentsRef.current = segments;
+  const activeMainRef = useRef(activeMain);
+  activeMainRef.current = activeMain;
   const dateRef = useRef(date);
   dateRef.current = date;
+
   useEffect(() => {
     const p = listen<SummaryProgress>(SUMMARY_PROGRESS_EVENT, (ev) => {
       const ev_ = ev.payload;
@@ -110,7 +115,6 @@ export default function AISummary() {
           setRunningImages(ev_.imagesTotal);
           break;
         case "segment_done": {
-          // 用 progress payload 直接构造一行 row 覆盖到 map（避免再多调 getDaySummary）
           if (ev_.segmentIdx == null || !ev_.status) break;
           const seg = segmentsRef.current[ev_.segmentIdx];
           if (!seg) break;
@@ -136,11 +140,6 @@ export default function AISummary() {
           break;
         }
         case "all_done":
-          setRunningIdx(null);
-          setRunningImages(null);
-          setEnginePhase(null);
-          setGenerating(false);
-          break;
         case "cancelled":
           setRunningIdx(null);
           setRunningImages(null);
@@ -159,14 +158,7 @@ export default function AISummary() {
     return () => {
       void p.then((unlisten) => unlisten());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 一次性挂；通过 ref 拿最新 segments / activeMain
-
-  // 用 ref 让 listen 闭包读到最新值（避免重新挂监听）
-  const segmentsRef = useRef<AiSegment[]>(segments);
-  segmentsRef.current = segments;
-  const activeMainRef = useRef(activeMain);
-  activeMainRef.current = activeMain;
+  }, []);
 
   const onGenerate = async (forceRefresh: boolean) => {
     if (!hasModel) {
@@ -177,8 +169,6 @@ export default function AISummary() {
     setTopError(null);
     try {
       await api.generateDaySummary(date, forceRefresh, null);
-      // 命令 resolve = 全部段完成；事件流里 all_done 会把 generating 置 false。
-      // 这里不动 generating，避免抢在 all_done 事件之前。
     } catch (e) {
       const msg = typeof e === "string" ? e : String(e);
       setTopError(msg);
@@ -199,7 +189,7 @@ export default function AISummary() {
       setTopError("请先到 AI 设置 → 模型 选一个 vision 模型");
       return;
     }
-    if (generating) return; // 整轮在跑就不让单段重试
+    if (generating) return;
     setGenerating(true);
     setTopError(null);
     try {
@@ -208,8 +198,6 @@ export default function AISummary() {
       const msg = typeof e === "string" ? e : String(e);
       setTopError(msg);
     } finally {
-      // 单段也走 segment_done → 我们手动收 generating
-      // 但 retry 没有 all_done 事件，命令 resolve 时直接收尾
       setGenerating(false);
     }
   };
@@ -222,10 +210,9 @@ export default function AISummary() {
       : "开始总结";
 
   return (
-    <div className={styles.page}>
+    <>
       <header className={styles.header}>
         <div className={styles.headLeft}>
-          <h1 className={styles.title}>AI 总结</h1>
           <span className={styles.subtitle}>
             按时段汇总当日截图 + 应用使用，本地 vision 模型生成
           </span>
@@ -298,7 +285,6 @@ export default function AISummary() {
         </div>
       </header>
 
-      {/* 顶部错误条 */}
       {topError ? (
         <div className={styles.errorBar}>
           <AlertTriangle size={14} strokeWidth={2.2} />
@@ -306,7 +292,6 @@ export default function AISummary() {
         </div>
       ) : null}
 
-      {/* 引擎冷启动状态 */}
       {enginePhase ? (
         <div className={styles.engineHint}>
           <Loader2 size={14} className={styles.spin} />
@@ -339,7 +324,7 @@ export default function AISummary() {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -438,4 +423,3 @@ function CardBody({ state }: { state: CardState }) {
       );
   }
 }
-

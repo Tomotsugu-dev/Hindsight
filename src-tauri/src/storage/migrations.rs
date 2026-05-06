@@ -394,10 +394,36 @@ const AI_SUMMARIES_TABLE_SQL: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_ai_summaries_date ON ai_summaries(local_date);
 "#;
 
+/// v19：逐图描述缓存表（Phase 1B-γ 两步生成）。
+///
+/// 总结流程改成两步：
+///   step 1：每张抽帧后的截图独立送 vision LLM 拿到一段描述（多模态调用）
+///   step 2：把同段所有描述 + 应用统计拼成纯文本，再送 LLM 写段总结（文本调用）
+///
+/// 这张表存 step 1 的产物：每张图的描述。前端调试 tab 可以拉来看模型对每张图怎么读，
+/// 也方便 step 2 重跑时不用再让模型看图（直接用已有描述节省时间 / token）。
+///
+/// 主键 (local_date, segment_idx, image_index)；image_index 是抽帧后的 0-based 顺序。
+/// 段重跑时整段先 DELETE 再 INSERT，避免新旧抽帧序串场。
+const AI_IMAGE_DESCRIPTIONS_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS ai_image_descriptions (
+      local_date      TEXT NOT NULL,
+      segment_idx     INTEGER NOT NULL,
+      image_index     INTEGER NOT NULL,
+      screenshot_path TEXT NOT NULL,
+      description     TEXT NOT NULL,
+      model           TEXT NOT NULL,
+      generated_at    TEXT NOT NULL,
+      PRIMARY KEY (local_date, segment_idx, image_index)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_image_desc_segment
+      ON ai_image_descriptions(local_date, segment_idx);
+"#;
+
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 8] = [
+    let extras: [&'static str; 9] = [
         CROSS_OS_CLEANUP_SQL,                    // v11
         V12_PLACEHOLDER,                         // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                     // v13
@@ -406,6 +432,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         ADD_CATEGORY_SORT_ORDER_SQL,             // v16
         ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL,     // v17
         AI_SUMMARIES_TABLE_SQL,                  // v18
+        AI_IMAGE_DESCRIPTIONS_TABLE_SQL,         // v19
     ];
     pool.0
         .call(move |conn| {

@@ -24,6 +24,11 @@ const PROMPT_ZH: &str = include_str!("../../resources/prompts/system_zh.md");
 const PROMPT_EN: &str = include_str!("../../resources/prompts/system_en.md");
 const PROMPT_JA: &str = include_str!("../../resources/prompts/system_ja.md");
 
+// 两步生成 step 1：单张截图的描述 prompt（vision 调用）
+const IMAGE_DESCRIBE_ZH: &str = include_str!("../../resources/prompts/image_describe_zh.md");
+const IMAGE_DESCRIBE_EN: &str = include_str!("../../resources/prompts/image_describe_en.md");
+const IMAGE_DESCRIBE_JA: &str = include_str!("../../resources/prompts/image_describe_ja.md");
+
 /// 给定 settings.ai 选出当前生效的 system prompt 基础文本（不带 user_brief 后缀）。
 ///
 /// 优先级：用户覆盖（非空）→ 内置默认。`prompt_language` 在 sanitize 时已被钳到
@@ -58,18 +63,72 @@ fn pick_system_base(ai: &AiConfig) -> &str {
     }
 }
 
-/// 单段送 AI 时的上下文。
+/// 单段送 AI 时的上下文（step 2 段总结用）。
 ///
-/// `top_apps` 是该段内按使用时长排序的应用列表，前若干项；用来给模型一个
-/// "用户在干什么"的锚点，避免模型只看截图猜半天。
+/// 两步生成下，step 2 是纯文本调用——把 step 1 拿到的每张图描述拼进 user prompt，
+/// 不再传图片本身（节省 token + 让 LLM 专注做"汇总"而不是再看图）。
+///
+/// `top_apps` 是该段内按使用时长排序的应用列表，前若干项；
+/// `image_descriptions` 是 step 1 输出的每张图描述（按抽帧顺序）。
 pub struct SegmentContext<'a> {
     pub label: &'a str,
     pub start_hour: u8,
     pub end_hour: u8,
     /// (display_name, minutes, category_id) 三元组，按 minutes 降序
     pub top_apps: &'a [(String, u32, String)],
-    /// 该段实际送给模型的截图张数（抽帧后）
-    pub image_count: usize,
+    /// step 1 落库的每张图描述，按 image_index 升序
+    pub image_descriptions: &'a [String],
+}
+
+/// step 1（单张图描述）的 system prompt——按当前语言选内置默认。
+/// 用户暂时不能覆盖这个 prompt（只暴露段总结的 system prompt）；以后需要可在
+/// settings 里加 image_describe_overrides 字段，前端再加一块编辑器。
+pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
+    let base = match ai.prompt_language.as_str() {
+        "en" => IMAGE_DESCRIBE_EN,
+        "ja" => IMAGE_DESCRIBE_JA,
+        _ => IMAGE_DESCRIBE_ZH,
+    };
+    let mut out = String::from(base.trim_end());
+    let brief = ai.user_brief.trim();
+    if !brief.is_empty() {
+        let label = match ai.prompt_language.as_str() {
+            "en" => "About the user: ",
+            "ja" => "ユーザーについて：",
+            _ => "关于用户：",
+        };
+        out.push_str("\n\n");
+        out.push_str(label);
+        out.push_str(brief);
+    }
+    out
+}
+
+/// step 1 的 user prompt——给当前段标签 + 时段范围作为弱锚点，告诉模型
+/// "这张图大致属于一天的哪个时段"。
+pub fn build_image_describe_user_prompt(
+    ai: &AiConfig,
+    segment_label: &str,
+    start_hour: u8,
+    end_hour: u8,
+) -> String {
+    match ai.prompt_language.as_str() {
+        "en" => format!(
+            "This screenshot was captured during the {} segment ({:02}:00–{:02}:00). \
+             Describe what the user is doing in 1-2 sentences.",
+            segment_label, start_hour, end_hour,
+        ),
+        "ja" => format!(
+            "このスクリーンショットは「{}」（{:02}:00–{:02}:00）の時間帯に撮影されました。\
+             ユーザーが何をしているかを 1〜2 文で記述してください。",
+            segment_label, start_hour, end_hour,
+        ),
+        _ => format!(
+            "这张截图是在「{}」时段（{:02}:00–{:02}:00）抓到的。\
+             用 1-2 句中文描述用户在做什么。",
+            segment_label, start_hour, end_hour,
+        ),
+    }
 }
 
 /// 组装当次调用的完整 system prompt：
@@ -117,13 +176,19 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
             out.push_str(&format!("- {}（{} 分钟 · {}）\n", name, minutes, category));
         }
     }
-    if ctx.image_count == 0 {
+    if ctx.image_descriptions.is_empty() {
         out.push_str("\n（这段时间没有截图，仅基于上面的应用统计写一句话。）");
     } else {
         out.push_str(&format!(
-            "\n下面是该时段内 {} 张代表截图，请综合截图内容和应用统计给出总结。",
-            ctx.image_count,
+            "\n下面是该时段内 {} 张代表截图的逐一描述（已由 AI 看图后给出）：\n",
+            ctx.image_descriptions.len(),
         ));
+        for (i, d) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. {}\n", i + 1, d.trim()));
+        }
+        out.push_str(
+            "\n请综合这些描述和应用统计写段总结，不要简单复述上面任意一条。",
+        );
     }
     out
 }
@@ -143,15 +208,22 @@ fn build_user_prompt_en(ctx: &SegmentContext) -> String {
             ));
         }
     }
-    if ctx.image_count == 0 {
+    if ctx.image_descriptions.is_empty() {
         out.push_str(
             "\n(No screenshots for this segment — write one short sentence based on the app stats above.)",
         );
     } else {
         out.push_str(&format!(
-            "\nBelow are {} representative screenshots from this segment. Combine them with the app stats and write a brief summary.",
-            ctx.image_count,
+            "\nBelow are AI-generated descriptions of {} representative screenshots from this segment, in order:\n",
+            ctx.image_descriptions.len(),
         ));
+        for (i, d) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. {}\n", i + 1, d.trim()));
+        }
+        out.push_str(
+            "\nWrite a brief segment summary combining these descriptions and the app stats. \
+             Don't just restate any single line.",
+        );
     }
     out
 }
@@ -171,15 +243,22 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
             ));
         }
     }
-    if ctx.image_count == 0 {
+    if ctx.image_descriptions.is_empty() {
         out.push_str(
             "\n（この時間帯のスクリーンショットがありません。上記のアプリ統計のみに基づいて一文で書いてください。）",
         );
     } else {
         out.push_str(&format!(
-            "\n以下はこの時間帯の代表的なスクリーンショット {} 枚です。スクリーンショットの内容とアプリ統計を組み合わせて要約してください。",
-            ctx.image_count,
+            "\n以下はこの時間帯の代表的なスクリーンショット {} 枚に対する AI による個別の記述です：\n",
+            ctx.image_descriptions.len(),
         ));
+        for (i, d) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. {}\n", i + 1, d.trim()));
+        }
+        out.push_str(
+            "\nこれらの記述とアプリ統計を組み合わせて時間帯の要約を書いてください。\
+             どれか 1 行をそのまま繰り返さないでください。",
+        );
     }
     out
 }

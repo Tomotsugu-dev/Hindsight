@@ -320,6 +320,8 @@ pub fn run() {
             commands::ai::retry_summary_segment,
             commands::ai::cancel_day_summary,
             commands::ai::get_day_summary,
+            commands::ai::get_segment_image_descriptions,
+            commands::ai::get_day_image_descriptions,
         ])
         .build(tauri::generate_context!())
         .expect("启动 Tauri 应用失败")

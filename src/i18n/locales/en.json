@@ -133,5 +133,26 @@
       "sun": "Sun"
     },
     "shortDate": "{{month}}/{{day}}"
+  },
+  "month": {
+    "title": "Monthly",
+    "meta": "{{month}} · {{total}} total · {{avg}} daily avg",
+    "monthLabel": "{{month}} {{year}}",
+    "chart": {
+      "title": "Daily activity"
+    },
+    "monthNav": {
+      "prev": "Previous month",
+      "next": "Next month",
+      "backToThisMonth": "Back to this month",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "monthsAgo": "{{count}} months ago",
+      "monthsLater": "In {{count}} months"
+    },
+    "ranks": {
+      "topApps": "Top apps this month",
+      "topCategories": "Top categories this month"
+    }
   }
 }

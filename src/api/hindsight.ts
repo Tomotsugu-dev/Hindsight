@@ -192,6 +192,7 @@ export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 export type SummaryPhase =
   | "engine_starting"
   | "segment_started"
+  | "image_described"
   | "segment_done"
   | "all_done"
   | "cancelled"
@@ -203,12 +204,33 @@ export interface SummaryProgress {
   segmentIdx: number | null;
   totalSegments: number;
   imagesTotal: number | null;
+  /** image_described 时该图在段内的下标（0-based） */
+  imageIndex: number | null;
+  /** image_described 时附该图绝对路径 */
+  imagePath: string | null;
+  /** image_described 时附该图的描述文本 */
+  imageDescription: string | null;
   /** segment_done 时附该段总结正文（直接是 LLM 输出 markdown），其它阶段为 null */
   content: string | null;
   /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "error" */
   status: SummarySegmentStatus | null;
   /** error / engine_starting 时的提示文字 */
   message: string | null;
+}
+
+/** ai_image_descriptions 表的一行——两步生成 step 1 的产物，给调试 tab 渲染。 */
+export interface ImageDescriptionRow {
+  localDate: string;
+  segmentIdx: number;
+  /** 该段抽帧后的 0-based 顺序 */
+  imageIndex: number;
+  /** 截图绝对路径 */
+  screenshotPath: string;
+  /** LLM 输出的描述文本 */
+  description: string;
+  /** 生成时用的 active_main 文件名 */
+  model: string;
+  generatedAt: string;
 }
 
 /** 段总结落库状态。 */
@@ -478,4 +500,13 @@ export const api = {
   /** 拉某天已落库的总结。前端进页面调一次：有就直接渲染，没有就显示"开始总结"按钮。 */
   getDaySummary: (date: string) =>
     invoke<SegmentSummaryRow[]>("get_day_summary", { date }),
+  /** 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。 */
+  getSegmentImageDescriptions: (date: string, segmentIdx: number) =>
+    invoke<ImageDescriptionRow[]>("get_segment_image_descriptions", {
+      date,
+      segmentIdx,
+    }),
+  /** 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。 */
+  getDayImageDescriptions: (date: string) =>
+    invoke<ImageDescriptionRow[]>("get_day_image_descriptions", { date }),
 };
