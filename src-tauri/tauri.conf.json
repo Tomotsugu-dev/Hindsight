@@ -56,7 +56,10 @@
       }
     },
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "Developer ID Application: Youyan Xu (HJ2YT95D35)",
+      "providerShortName": "HJ2YT95D35",
+      "entitlements": "entitlements.plist",
+      "minimumSystemVersion": "11.0"
     }
   }
 }

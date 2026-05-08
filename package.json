@@ -13,7 +13,8 @@
     "format:check": "prettier --check src",
     "preview": "vite preview",
     "tauri": "tauri",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "tauri:build:mac": "set -a; . ./.env.local; set +a; tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Hardened Runtime 必开（notarize 强制要求）；Tauri build 走 Developer ID
+       签名时会自动加 hardened runtime flag。下面这两条是 Hindsight 特定需求。 -->
+
+  <!-- 让从 app bundle 加载的非签名 dylib 能跑：
+       llama-server 自带的 GGML / Metal / vendor dylib 不是 Apple 签的，
+       默认 hardened runtime 会拒。关掉 library validation 才能加载。 -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- 允许 JIT 写 + 执行同一片内存：
+       llama.cpp 在 Metal 后端会动态生成 GPU shader bytecode，需要这条。
+       不加会报 "EXC_BAD_ACCESS" / Metal kernel build 失败。 -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>
