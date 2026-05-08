@@ -39,11 +39,10 @@
   transform: translateY(0);
 }
 
-/* pill 本身：恢复 pointer-events 让它可点；TabNav 自带 24px 底外边距在浮动
-   场景下没用，归零；加一层"漂浮按钮"实体感（白底 + tint + 高光 + 阴影）。
-   只通过 .floatingTabs 后代选择器命中，不影响共享的 TabNav 在其它场景的样式。 */
+/* pill 本身：TabNav 自带 24px 底外边距在浮动场景下没用，归零；加一层"漂浮按钮"实体感
+   （白底 + tint + 高光 + 阴影）。只通过 .floatingTabs 后代选择器命中，不影响共享的
+   TabNav 在其它场景的样式。 */
 .floatingTabs nav {
-  pointer-events: auto;
   margin-bottom: 0;
   background-color: var(--surface-card);
   background-image: linear-gradient(rgba(0, 0, 0, 0.045), rgba(0, 0, 0, 0.045));
@@ -51,4 +50,11 @@
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 4px 14px rgba(20, 20, 40, 0.08),
     0 1px 3px rgba(20, 20, 40, 0.05);
+}
+
+/* 恢复 pointer-events 只在 visible 状态：CSS 规则上子元素 pointer-events: auto
+   会覆盖父元素的 none，导致 opacity: 0 时不可见但仍拦截顶部中央的点击。
+   把 auto 限到 .floatingTabsVisible，让隐藏态的 pill 真正不挡事件。 */
+.floatingTabsVisible nav {
+  pointer-events: auto;
 }
