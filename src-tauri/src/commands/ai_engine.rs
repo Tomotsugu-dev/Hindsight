@@ -10,6 +10,7 @@ use tauri::State;
 
 use crate::ai::binary::{self, EngineBinaryStatus};
 use crate::ai::job_guard::{self, JobInitState};
+use crate::ai::platform::{self, VramInfo};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
 use crate::repo::settings;
 use crate::storage::DbPool;
@@ -28,9 +29,14 @@ pub struct EngineStatusResp {
     /// - `None` —— 保护正常工作
     /// - `Some(reason)` —— 已降级，附中文原因供前端展示
     pub protection_degraded: Option<String>,
+    /// 系统 VRAM 信息（NVIDIA discrete 或 Apple Silicon unified × 0.7）。
+    /// `None` = CPU-only 机器或探测失败——前端按"未检测到独立显存"处理。
+    /// 由 [`platform::detect_total_vram_gb`] 提供，OnceLock 全局缓存，
+    /// 每次轮询都直接命中缓存（首次约 100-500ms）。
+    pub system_vram: Option<VramInfo>,
 }
 
-/// 查询引擎当前状态：binary 是否已安装 + server 是否在跑 + 子进程保护是否正常。
+/// 查询引擎当前状态：binary 是否已安装 + server 是否在跑 + 子进程保护是否正常 + 系统 VRAM。
 #[tauri::command]
 pub async fn get_engine_status(
     supervisor: State<'_, Arc<EngineSupervisor>>,
@@ -42,10 +48,12 @@ pub async fn get_engine_status(
         JobInitState::NotInitialized => Some("子进程保护未初始化（启动顺序异常）".to_string()),
         JobInitState::Degraded(reason) => Some(reason),
     };
+    let system_vram = platform::detect_total_vram_gb();
     Ok(EngineStatusResp {
         binary,
         runtime,
         protection_degraded,
+        system_vram,
     })
 }
 

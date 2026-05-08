@@ -23,6 +23,8 @@
 
 use std::sync::OnceLock;
 
+use serde::Serialize;
+
 /// Hindsight 当前 PIN 的 llama.cpp 版本。
 ///
 /// 升级流程：换这里的常量 + 同步 [`sha256`] 表 + 跑端到端冒烟测试。
@@ -228,6 +230,88 @@ pub fn sha256(p: Platform, tag: &str) -> Option<&'static str> {
     // 待办（owner: 引擎子系统）：PIN tag 稳定后跑一次实际下载抓 sha256 填进来；
     // 此前每次升级 [`PINNED_TAG`] 都要同步更新这里，否则用户拿到的 binary 完全无完整性保证。
     let _ = (p, tag);
+    None
+}
+
+// ───────────── 系统 VRAM 探测 ─────────────
+
+/// 系统总显存信息。前端用来跟 `estimateVramGB` 对比给用户 OOM 风险红绿灯。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VramInfo {
+    /// 系统总量（GB）——按字面值，不打折。
+    /// - discrete: nvidia-smi 报的 memory.total
+    /// - unified: 整台机器的物理 RAM
+    ///
+    /// 前端展示这个原始数字（用户看到的就是机器实际配置）；做 OOM 判断 / 推荐参数时
+    /// 由前端 helper `effectiveVramGB(vi)` 按 source 折算（unified 留 30% 给系统 + 其它进程）。
+    pub total_gb: f64,
+    /// "discrete" = NVIDIA 独立显存；"unified" = Apple Silicon 统一内存。
+    pub source: &'static str,
+}
+
+/// 全局缓存：第一次调跑命令（约 100-500ms 首次开销），之后直接返。
+/// 用 `OnceLock<Option<VramInfo>>`——CPU-only 机器探测返 `None`
+/// 时也会被缓存进 OnceLock 的初始化值，避免反复尝试 spawn `nvidia-smi`。
+static VRAM_CACHE: OnceLock<Option<VramInfo>> = OnceLock::new();
+
+/// 拉系统 VRAM 信息。CPU-only 机器或探测失败 → 返 `None`，前端按"未检测到独立显存"处理。
+///
+/// 缓存哲学：换显卡需重启 app 才能拿新值——可接受 trade-off，避免每次轮询都 spawn `nvidia-smi`。
+pub fn detect_total_vram_gb() -> Option<VramInfo> {
+    VRAM_CACHE.get_or_init(detect_vram_uncached).clone()
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+fn detect_vram_uncached() -> Option<VramInfo> {
+    use std::process::Command;
+    let mut cmd = Command::new("nvidia-smi");
+    cmd.args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"]);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW，避免 detect 时弹一个黑控制台窗
+        cmd.creation_flags(0x0800_0000);
+    }
+
+    let output = cmd.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    // 输出形如 "24576\n"——取第一个非空行 trim 解 u64（单位 MB）
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mb: u64 = stdout.lines().next()?.trim().parse().ok()?;
+    Some(VramInfo {
+        total_gb: mb as f64 / 1024.0,
+        source: "discrete",
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn detect_vram_uncached() -> Option<VramInfo> {
+    use std::process::Command;
+    let output = Command::new("sysctl")
+        .args(["-n", "hw.memsize"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let bytes: u64 = stdout.trim().parse().ok()?;
+    let total_ram_gb = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    // 报字面值——用户看到的就是机器实际配置（24GB 就是 24GB）。
+    // OOM 判断 / 推荐参数那边由前端 `effectiveVramGB(vi)` helper 按 source 折算
+    // （unified 留 30% 给系统 + 其它进程）。
+    Some(VramInfo {
+        total_gb: total_ram_gb,
+        source: "unified",
+    })
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+fn detect_vram_uncached() -> Option<VramInfo> {
     None
 }
 
