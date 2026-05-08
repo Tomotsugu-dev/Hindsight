@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { TabNav, type TabDef } from "../../components/TabNav/TabNav";
+import { type TabDef } from "../../components/TabNav/TabNav";
+import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
 import { DebugStateProvider } from "./DebugStateContext";
 import styles from "./AISummaryPage.module.css";
 
@@ -35,7 +36,8 @@ export default function AISummaryPage() {
         <h1 className={styles.title}>{t("aiSummary.title")}</h1>
       </header>
 
-      <TabNav groups={TAB_GROUPS} ariaLabel={t("aiSummary.title")} />
+      {/* FloatingTabNav：滚出视口顶端时让 pill 在视口顶部浮动居中显示。 */}
+      <FloatingTabNav groups={TAB_GROUPS} ariaLabel={t("aiSummary.title")} />
 
       <section className={styles.tabContent}>
         <DebugStateProvider>

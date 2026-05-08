@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { TabNav, type TabDef } from "../../components/TabNav/TabNav";
+import { type TabDef } from "../../components/TabNav/TabNav";
+import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
 import styles from "./AISettingsPage.module.css";
 
 /** 4 个子路由对应 4 个 tab：引擎 / 常规 / 提示词 / 云端 API
@@ -24,7 +25,7 @@ export default function AISettingsPage() {
         <h1 className={styles.title}>{t("aiSettings.title")}</h1>
       </header>
 
-      <TabNav tabs={TABS} ariaLabel={t("aiSettings.title")} />
+      <FloatingTabNav tabs={TABS} ariaLabel={t("aiSettings.title")} />
 
       <Outlet />
     </div>

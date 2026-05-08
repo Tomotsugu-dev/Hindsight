@@ -1,0 +1,54 @@
+/* 浮动 TabNav 副本——配合 [FloatingTabNav.tsx](./FloatingTabNav.tsx) 使用。
+ *
+ * 行为：
+ *   - 平时 opacity 0 + translateY -10px + pointer-events: none，看不见也不可点
+ *   - 原 TabNav 滚出视口顶端 → 添加 .floatingTabsVisible → 淡入 + 复位
+ *   - wrapper 全透明：只有内部 pill 胶囊 (TabNav 的 .tabs) 有视觉，pill 外
+ *     pointer-events: none，让点击穿透到下方内容
+ *
+ * 视觉：
+ *   - pill 本身在浮动场景下覆盖共享 TabNav 的样式：
+ *     · 不透明白底 + 4.5% 黑色 tint 叠加（外观跟 TabNav 默认浅灰同色调，
+ *       但底色 100% 不透——避免滚动内容从 pill 下面透出来）
+ *     · 顶部 1px 内嵌高光 + 中等下阴影 → 制造"凸起漂浮"的视觉
+ *
+ * 层级：
+ *   - z-index 6：高于 AppLayout dragStrip(z=5) / 顶部模糊条带(z=3) / 侧栏(z=4)
+ *   - app-region: no-drag：防止 Windows 自定义拖动条把 pill 上的点击当窗口拖动 */
+
+.floatingTabs {
+  position: fixed;
+  top: 16px;
+  left: var(--sb-current-width, 0);
+  right: 0;
+  z-index: 6;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition:
+    opacity 220ms cubic-bezier(0.2, 0, 0.2, 1),
+    transform 220ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.floatingTabsVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* pill 本身：恢复 pointer-events 让它可点；TabNav 自带 24px 底外边距在浮动
+   场景下没用，归零；加一层"漂浮按钮"实体感（白底 + tint + 高光 + 阴影）。
+   只通过 .floatingTabs 后代选择器命中，不影响共享的 TabNav 在其它场景的样式。 */
+.floatingTabs nav {
+  pointer-events: auto;
+  margin-bottom: 0;
+  background-color: var(--surface-card);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.045), rgba(0, 0, 0, 0.045));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 4px 14px rgba(20, 20, 40, 0.08),
+    0 1px 3px rgba(20, 20, 40, 0.05);
+}
