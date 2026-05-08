@@ -1,6 +1,14 @@
+import { useLayoutEffect, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { usePicker } from "../../hooks/usePicker";
 import styles from "./SimplePicker.module.css";
+
+/** 菜单展开方向：下拉默认向下，靠近视口底时自动翻向上。 */
+type MenuDirection = "down" | "up";
+/** 单条 .item 高度 32 + 4px 上下 padding 估算；6px 是 trigger 到菜单的 gap。 */
+const ITEM_HEIGHT = 32;
+const MENU_PADDING = 8;
+const TRIGGER_GAP = 6;
 
 export interface SimplePickerOption<T extends string> {
   value: T;
@@ -28,6 +36,20 @@ export function SimplePicker<T extends string>({
 }: SimplePickerProps<T>) {
   const { open, wrapRef, toggle, close } = usePicker();
   const current = options.find((o) => o.value === value);
+  const [direction, setDirection] = useState<MenuDirection>("down");
+
+  // 打开时按 trigger 在视口里的位置 + 估算菜单高度，决定向下还是向上展开。
+  // 避免窗口最大 720px 高度下，靠底的 picker（如 EngineTab 的 ctxSize）下拉
+  // 撑出窗口被裁。useLayoutEffect 在 paint 前定方向，避免一帧闪现。
+  useLayoutEffect(() => {
+    if (!open || !wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const estMenuHeight = options.length * ITEM_HEIGHT + MENU_PADDING + TRIGGER_GAP;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    // 下方装得下 → 下拉；下方不够但上方更宽敞 → 上拉
+    setDirection(spaceBelow >= estMenuHeight || spaceBelow >= spaceAbove ? "down" : "up");
+  }, [open, options.length, wrapRef]);
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
@@ -57,7 +79,7 @@ export function SimplePicker<T extends string>({
       </button>
 
       {open && (
-        <div className={styles.menu} role="listbox">
+        <div className={styles.menu} role="listbox" data-direction={direction}>
           {options.map((opt) => (
             <button
               key={opt.value}
