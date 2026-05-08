@@ -66,9 +66,6 @@ pub enum Error {
     OAuthSetup(String),
 
     // ───────────── 凭证安全 ─────────────
-    #[error("keyring: {0}")]
-    Keyring(String),
-
     #[error("crypto: {0}")]
     Crypto(&'static str),
 
@@ -148,6 +145,13 @@ pub enum Error {
         stage: &'static str,
         details: String,
     },
+
+    /// 模型下载被用户主动取消（点暂停）。**不是 fatal**——`.partial` 文件保留，
+    /// 下次再调 `download_from_hf` 同 file 名时走 Range 续传。
+    /// caller（download_model command）应把这条单独 catch，让前端表达成"已暂停"
+    /// 而非"下载失败"。
+    #[error("download cancelled: {0}")]
+    DownloadCancelled(String),
 
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]

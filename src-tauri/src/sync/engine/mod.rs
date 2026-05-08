@@ -40,7 +40,7 @@ pub(super) fn format_sync_error(e: &Error) -> String {
         Error::Crypto(_) => ERR_PREFIX_CRED_EXPIRED,
         // scope 不足：当前 token 没 drive.appdata 权限，必须重新走同意页
         Error::DriveScopeInsufficient => ERR_PREFIX_CRED_EXPIRED,
-        // 其它：keyring 临时读失败、网络超时、Drive 5xx、refresh 端点 5xx 等。
+        // 其它：网络超时、Drive 5xx、refresh 端点 5xx 等。
         // 后台 30s tick 会自动重试，UI 不必催用户重新登录。
         _ => ERR_PREFIX_TRANSIENT,
     };

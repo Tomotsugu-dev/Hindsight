@@ -26,7 +26,8 @@ pub async fn sign_in_with_google(
     Ok(next)
 }
 
-/// 退出登录：删 DB 里的 auth_state + 清 keyring 里的 refresh_token。
+/// 退出登录：清 DB 里的 auth_state（refresh_token_enc / access_token / expires_at 全置 NULL）。
+/// 派生 key 方案下 key 不持久化，无需另删 keyring。
 /// 多账号场景：同时清掉 active_user.json 让下次启动不再绑定该 uid。
 #[tauri::command]
 pub async fn sign_out(pool: State<'_, DbPool>) -> Result<(), String> {

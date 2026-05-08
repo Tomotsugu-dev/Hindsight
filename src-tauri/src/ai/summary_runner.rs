@@ -39,6 +39,15 @@ use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
 
+/// AI summary pipeline 里的两个阶段——决定加载哪份模型 + 用哪套 batch / -np / ctx。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Step {
+    /// step 1：单图描述（多图并发跑）。模型走 `effective_describe_main`。
+    Describe,
+    /// step 2：段总结（基于 step 1 的描述拼上下文跑纯文本）。模型走 `effective_summary_main`。
+    Summary,
+}
+
 /// 单点入口：跑一天的 AI 总结。lib.rs 通过 `app.manage` 不直接管它，
 /// 而是命令体里临时构造（生命周期跟随单次调用）。
 pub struct DaySummaryRunner {
@@ -155,9 +164,15 @@ impl DaySummaryRunner {
         // step 1 图描述并发数 = describe 阶段的 -np（多图同时跑）
         let parallel = ai.describe_parallel_slots_effective().unwrap_or(1).max(1) as usize;
 
-        if ai.active_main.trim().is_empty() {
+        // step 1 必须有本地 vision 模型；step 2 要么有本地模型，要么 external_enabled 走云端
+        if ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」选一个 vision 模型再生成总结",
+                "请先在「模型」给图描述选一个 vision 模型再生成总结",
+            ));
+        }
+        if !ai.external_enabled && ai.effective_summary_main().trim().is_empty() {
+            return Err(Error::InvalidInput(
+                "请先在「模型」给段总结选一个模型，或在「云端 API」启用云端总结",
             ));
         }
 
@@ -201,11 +216,12 @@ impl DaySummaryRunner {
                 self.emit(p);
             }
             let port = self
-                .ensure_engine_running(&ai, describe_overrides.clone())
+                .ensure_engine_running(&ai, Step::Describe, describe_overrides.clone())
                 .await?;
-            let step1 = ChatClient::new(port, ai.active_main.clone())?;
-            // step2 client 在 phase 1 不会调用，但 run_one_segment 签名要求传——构造一份占位的
-            let step2_phase1 = build_step2(&ai, &step1)?;
+            let step1 = ChatClient::new(port, ai.effective_describe_main().to_string())?;
+            // step2 client 在 phase 1 不会调用，但 run_one_segment 签名要求传——构造一份占位的；
+            // 标签随便给（phase 1 里不会落库 step2 行）
+            let step2_phase1 = build_step2(&ai, port, ai.effective_describe_main())?;
             let max_images = ai.max_images_per_segment as usize;
             for (idx, seg) in ai.segments.iter().enumerate() {
                 if self.cancel.load(Ordering::Relaxed) {
@@ -245,10 +261,13 @@ impl DaySummaryRunner {
 
         // —— Phase 2: 全段段总结 ——
         if run_phase2 {
-            // 短路优化：两套配置完全相同时，phase 1 已用合适参数启动，不重启
-            let need_restart_for_phase2 = run_phase1 && describe_overrides != summary_overrides;
+            // 短路优化：两套配置 + 模型文件都相同时，phase 1 那个 server 直接复用，不重启
+            let models_differ = ai.effective_describe_main() != ai.effective_summary_main()
+                || ai.effective_describe_mmproj() != ai.effective_summary_mmproj();
+            let need_restart_for_phase2 =
+                run_phase1 && (describe_overrides != summary_overrides || models_differ);
             let port = if need_restart_for_phase2 {
-                let (main_path, mmproj_path) = self.resolve_model_paths(&ai)?;
+                let (main_path, mmproj_path) = self.resolve_model_paths_for(&ai, Step::Summary)?;
                 self.supervisor
                     .restart_with_overrides(Some(main_path), mmproj_path, summary_overrides.clone())
                     .await?
@@ -260,7 +279,7 @@ impl DaySummaryRunner {
                     .port
                     .ok_or_else(|| Error::EngineStart("phase 1 后 supervisor 没 port".into()))?
             } else {
-                // 纯 step2_only 路径：直接用 summary_overrides 启动
+                // 纯 step2_only 路径：直接用 summary_overrides 启动 + 加载 summary 模型
                 let st = self.supervisor.status().await;
                 if st.state != EngineState::Running {
                     let mut p = SummaryProgress::base(
@@ -272,11 +291,13 @@ impl DaySummaryRunner {
                     p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
                     self.emit(p);
                 }
-                self.ensure_engine_running(&ai, summary_overrides.clone())
+                self.ensure_engine_running(&ai, Step::Summary, summary_overrides.clone())
                     .await?
             };
-            let step1 = ChatClient::new(port, ai.active_main.clone())?;
-            let step2 = build_step2(&ai, &step1)?;
+            // step1 client 在 phase 2 不会调用，但 run_one_segment 签名要求传——构造一份占位的；
+            // 标签给 summary 模型避免落库错配
+            let step1 = ChatClient::new(port, ai.effective_summary_main().to_string())?;
+            let step2 = build_step2(&ai, port, ai.effective_summary_main())?;
             let max_images = ai.max_images_per_segment as usize;
             for (idx, seg) in ai.segments.iter().enumerate() {
                 if self.cancel.load(Ordering::Relaxed) {
@@ -373,9 +394,9 @@ impl DaySummaryRunner {
                 .await;
         }
 
-        // step 1 落库的 model 永远是本地 vision 文件名；step 2 落库的 model
-        // 由 step2.model_label() 给出（本地 = active_main，外部 = 用户填的 ID）
-        let model = ai.active_main.clone();
+        // step 1 落库的 model 是 describe 阶段实际加载的 GGUF 文件名；step 2 落库的 model
+        // 由 step2.model_label() 给出（本地 = effective_summary_main，外部 = 用户填的 ID）
+        let model = ai.effective_describe_main().to_string();
         let step2_model = step2.model_label().to_string();
 
         // ────── 取数据 ──────
@@ -554,7 +575,8 @@ impl DaySummaryRunner {
         end_hour: u8,
         device: DeviceFilter,
     ) -> Result<()> {
-        let model = ai.active_main.clone();
+        // step2_only 路径里 step 1 描述早就落过库，model 字段只用于 skipped 兜底行
+        let model = ai.effective_describe_main().to_string();
         let step2_model = step2.model_label().to_string();
 
         let stored =
@@ -705,9 +727,9 @@ impl DaySummaryRunner {
             ctx_size: ai.ctx_size,
         };
 
-        if ai.active_main.trim().is_empty() {
+        if ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」选一个 vision 模型再生成总结",
+                "请先在「模型」给图描述选一个 vision 模型再调试",
             ));
         }
 
@@ -735,9 +757,11 @@ impl DaySummaryRunner {
         if needs_restart {
             let _ = self.supervisor.stop().await;
         }
-        // 启引擎（如未启动）
-        let port = self.ensure_engine_running(&ai, engine_overrides).await?;
-        let chat = ChatClient::new(port, ai.active_main.clone())?;
+        // 启引擎（如未启动）——单图调试只走 step 1，加载 describe 模型
+        let port = self
+            .ensure_engine_running(&ai, Step::Describe, engine_overrides)
+            .await?;
+        let chat = ChatClient::new(port, ai.effective_describe_main().to_string())?;
 
         // 反查这张图的 app/category 元数据；查不到就兜底用 path 当 app 名继续跑
         // —— 不能因为元数据丢失阻塞重跑，prompt 即使没分类也能正常工作。
@@ -782,7 +806,7 @@ impl DaySummaryRunner {
                 image_index,
                 screenshot_path: existing_row.screenshot_path.clone(),
                 description: desc.clone(),
-                model: ai.active_main.clone(),
+                model: ai.effective_describe_main().to_string(),
                 generated_at: Utc::now().to_rfc3339(),
                 latency_ms: Some(usage.latency_ms),
                 prompt_tokens: usage.prompt_tokens,
@@ -861,9 +885,9 @@ impl DaySummaryRunner {
         };
         let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
 
-        if ai.active_main.trim().is_empty() {
+        if ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」选一个 vision 模型再生成总结",
+                "请先在「模型」给图描述选一个 vision 模型再生成总结",
             ));
         }
 
@@ -892,9 +916,14 @@ impl DaySummaryRunner {
             p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
             self.emit(p);
         }
-        let port = self.ensure_engine_running(&ai, engine_overrides).await?;
-        let step1 = ChatClient::new(port, ai.active_main.clone())?;
-        let step2 = build_step2(&ai, &step1)?;
+        // 单段重试只起一个引擎实例；如果用户给 step1/step2 配了不同模型，本路径用
+        // describe 模型（vision 能力）跑完整段——step 2 是纯文本任务，vision 模型也能跑。
+        // 想要严格 step 2 用 summary 模型，去 daily 路径重跑当天即可。
+        let port = self
+            .ensure_engine_running(&ai, Step::Describe, engine_overrides)
+            .await?;
+        let step1 = ChatClient::new(port, ai.effective_describe_main().to_string())?;
+        let step2 = build_step2(&ai, port, ai.effective_describe_main())?;
         let max_images = ai.max_images_per_segment as usize;
 
         // 单段重试是「重新生成段总结」语义，永远走完整 step1+step2 流程
@@ -918,15 +947,16 @@ impl DaySummaryRunner {
         .await
     }
 
-    /// 引擎未启动就启动。返回当前监听端口。
+    /// 引擎未启动就启动；返回当前监听端口。
     ///
-    /// `engine_overrides` 在调用方决定要不要重启 / 用什么参数启动；这里只负责：
-    /// 引擎已 Running 就返回端口，否则按 overrides 启动。如果调用方想改 batch
-    /// / parallel_slots，应在调本函数前主动 `supervisor.stop()` 一下，让本函
-    /// 数走启动分支并带着 overrides 上去。
+    /// `step` 决定加载哪份模型（describe vs summary，两套各自有 effective fallback
+    /// 到 `active_main`）。`engine_overrides` 是该 step 的 batch/-np/ctx 参数；
+    /// 调用方在调本函数前应主动 `supervisor.stop()` 触发重启，否则已 Running 时
+    /// 直接返回端口、参数不变。
     async fn ensure_engine_running(
         &self,
         ai: &AiConfig,
+        step: Step,
         engine_overrides: EngineStartOverrides,
     ) -> Result<u16> {
         let st = self.supervisor.status().await;
@@ -935,32 +965,43 @@ impl DaySummaryRunner {
                 return Ok(p);
             }
         }
-        let (main_path, mmproj_path) = self.resolve_model_paths(ai)?;
+        let (main_path, mmproj_path) = self.resolve_model_paths_for(ai, step)?;
         self.supervisor
             .start_with_overrides(Some(main_path), mmproj_path, engine_overrides)
             .await
     }
 
-    /// 把 ai.active_main / ai.active_mmproj 解析成磁盘路径，找不到就抛
-    /// `ModelFileMissing`。给 `ensure_engine_running` 和 Phase 2 的
-    /// `restart_with_overrides` 复用。
-    fn resolve_model_paths(&self, ai: &AiConfig) -> Result<(PathBuf, Option<PathBuf>)> {
+    /// 按 step（describe / summary）解析当前 step 实际要加载的 GGUF 路径。
+    /// 文件不存在抛 `ModelFileMissing`，给上层把错误条直接展示给用户。
+    fn resolve_model_paths_for(
+        &self,
+        ai: &AiConfig,
+        step: Step,
+    ) -> Result<(PathBuf, Option<PathBuf>)> {
+        let main_name = match step {
+            Step::Describe => ai.effective_describe_main(),
+            Step::Summary => ai.effective_summary_main(),
+        };
+        let mmproj_name = match step {
+            Step::Describe => ai.effective_describe_mmproj(),
+            Step::Summary => ai.effective_summary_mmproj(),
+        };
         let models_dir = models::root_dir(ai);
-        let main_path: PathBuf = models_dir.join(&ai.active_main);
+        let main_path: PathBuf = models_dir.join(main_name);
         if !main_path.exists() {
             return Err(Error::ModelFileMissing(format!(
                 "{}（可能被删除或路径变了）",
-                ai.active_main
+                main_name
             )));
         }
-        let mmproj_path = if ai.active_mmproj.trim().is_empty() {
+        let mmproj_path = if mmproj_name.trim().is_empty() {
             None
         } else {
-            let p = models_dir.join(&ai.active_mmproj);
+            let p = models_dir.join(mmproj_name);
             if !p.exists() {
                 return Err(Error::ModelFileMissing(format!(
                     "vision 投影 {}",
-                    ai.active_mmproj
+                    mmproj_name
                 )));
             }
             Some(p)

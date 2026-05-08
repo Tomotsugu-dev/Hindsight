@@ -103,7 +103,7 @@ pub async fn stop_engine(supervisor: State<'_, Arc<EngineSupervisor>>) -> Result
     supervisor.stop().await.map_err(String::from)
 }
 
-/// 切换 / 设置当前在用的模型。
+/// 切换 / 设置当前在用的模型（旧版单一字段；新代码请用 [`set_step_model`]）。
 ///
 /// 写 settings 后顺手 stop 在跑的 server——下次用户点"启动引擎"会带新模型重起。
 /// 不在这里自动 start，因为 start 可能 90s 才返回，命令调用方等不动；让用户主动触发更可控。
@@ -120,6 +120,42 @@ pub async fn set_active_model(
     settings::save(&pool, &cfg).await.map_err(String::from)?;
 
     // 切了模型，旧 server 跑的就是旧模型，停掉等用户手动重启
+    let _ = supervisor.stop().await;
+    Ok(())
+}
+
+/// 单独设置 step 1（图描述）或 step 2（段总结）的模型；其它 step 不动。
+///
+/// `step` 取 `"describe"` / `"summary"`；`main_file` 空字符串 = 清掉该 step 的覆盖
+/// （随后该 step fallback 到 `active_main`）。同时 stop 在跑的 server，下次跑总结
+/// 时按新模型 lazy spawn。
+#[tauri::command]
+pub async fn set_step_model(
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    step: String,
+    main_file: String,
+    mmproj_file: Option<String>,
+) -> Result<(), String> {
+    let mut cfg = settings::load(&pool).await.map_err(String::from)?;
+    let main = main_file.trim().to_string();
+    let mmproj = mmproj_file.unwrap_or_default().trim().to_string();
+    match step.as_str() {
+        "describe" => {
+            cfg.ai.describe_main = main;
+            cfg.ai.describe_mmproj = mmproj;
+        }
+        "summary" => {
+            cfg.ai.summary_main = main;
+            cfg.ai.summary_mmproj = mmproj;
+        }
+        other => {
+            return Err(format!(
+                "set_step_model: 未知 step {other}（仅支持 describe / summary）"
+            ));
+        }
+    }
+    settings::save(&pool, &cfg).await.map_err(String::from)?;
     let _ = supervisor.stop().await;
     Ok(())
 }

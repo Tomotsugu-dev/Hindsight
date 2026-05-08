@@ -358,17 +358,30 @@ impl EngineSupervisor {
             }
 
             let port = pick_free_port()?;
+            // 在 build_command 消费 path 之前抽出文件名给 log 用——验证 step 间确实加载不同模型
+            let main_name = model_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "<none>".to_string());
+            let mmproj_name = mmproj_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "<none>".to_string());
             let mut cmd = build_command(&bin_path, port, model_path, mmproj_path, &overrides);
             // 装平台特定的 spawn 前钩子（Linux/macOS 设 setpgid + PDEATHSIG）；
             // Windows 是 no-op，post-spawn 才装 Job
             if let Err(e) = crate::ai::job_guard::prepare_command(&mut cmd) {
                 log::warn!("job_guard::prepare_command 失败（保护可能降级）: {e}");
             }
-            // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效
+            // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效，
+            // 同时打 main / mmproj 文件名验证 step 1/2 切换时确实加载了不同模型
             log::info!(
-                "spawn llama-server with overrides: batch_size={:?} parallel_slots={:?}",
+                "spawn llama-server: main={main_name} mmproj={mmproj_name} batch_size={:?} parallel_slots={:?} ctx_size={:?}",
                 overrides.batch_size,
-                overrides.parallel_slots
+                overrides.parallel_slots,
+                overrides.ctx_size,
             );
 
             let mut child = match cmd.spawn() {

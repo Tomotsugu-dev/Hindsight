@@ -1,19 +1,63 @@
-//! AI 模型（GGUF）的目录路由 + 扫描 + 删除（Phase 1B-β β.1）。
+//! AI 模型（GGUF）的目录路由 + 扫描 + 删除 + HF 下载（含暂停 / 续传）。
 //!
 //! - [`default_root_dir`] / [`root_dir`]：路径解析，跟用户在 设置→数据 里
 //!   配的 `ai.models_path` 联动
 //! - [`list_local`]：扫描目录拿到 `.gguf` 文件清单（main + mmproj 平等列）
+//! - [`list_partials`]：扫描 `<file>.partial` 半成品 + 已下字节数，给 UI 渲染"继续"
 //! - [`delete`]：删一个文件
-//!
-//! HF 下载在 β.2 加；模型选中 + 跟 supervisor 联动在 β.3。
+//! - [`download_from_hf`]：流式下载，断点续传，可被外部 cancel 优雅暂停（保留 .partial）
+//! - [`set_cancel`] / [`is_cancelled`] / [`clear_cancel`]：给 [`download_from_hf`] 配套
+//!   的 cancel signal，前端 invoke `cancel_model_download` 时翻 flag
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
 use crate::ai::config::AiConfig;
 use crate::error::{Error, Result};
+
+/// 全局 cancel signal map：文件名 → AtomicBool。
+///
+/// 前端 invoke `cancel_model_download(file)` 时翻这个 flag；
+/// [`download_from_hf`] 每写一个 chunk 后检查，true 时优雅退出（保留 .partial）。
+/// 下载结束（成功 / 失败 / 取消）后调 [`clear_cancel`] 移除条目。
+fn cancel_map() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+    static MAP: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 注册某文件的 cancel signal。重复注册时返回旧的 flag（让旧任务也能走 cancel 路径）。
+fn register_cancel(file: &str) -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    cancel_map()
+        .lock()
+        .expect("cancel_map mutex poisoned")
+        .insert(file.to_string(), Arc::clone(&flag));
+    flag
+}
+
+/// 给指定文件翻 cancel flag。文件没在下载时静默返回（前端可能在文件下完后才点取消）。
+pub fn set_cancel(file: &str) {
+    if let Some(flag) = cancel_map()
+        .lock()
+        .expect("cancel_map mutex poisoned")
+        .get(file)
+    {
+        flag.store(true, Ordering::Relaxed);
+    }
+}
+
+/// 下载结束（成功 / 失败 / 取消）后清掉 map 里的条目。
+fn clear_cancel(file: &str) {
+    cancel_map()
+        .lock()
+        .expect("cancel_map mutex poisoned")
+        .remove(file);
+}
 
 /// HF 模型下载超时：1h（Qwen2.5-VL-7B 体积较大，慢网下载需要时间）
 const HF_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
@@ -122,33 +166,83 @@ pub async fn delete(cfg: &AiConfig, filename: &str) -> Result<()> {
     Ok(())
 }
 
+/// 半成品下载条目——给前端渲染"继续"按钮 + 已下进度。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PartialEntry {
+    /// 目标文件名（不含 `.partial` 后缀）
+    pub filename: String,
+    /// 已下字节数（即 `<file>.partial` 当前大小）
+    pub downloaded_bytes: u64,
+}
+
+/// 扫描模型目录，返回所有 `<file>.gguf.partial` 半成品的 (target_filename, size)。
+/// 用 `<file>.partial` 后缀识别——[`download_from_hf`] 落盘前一直在写这个名字。
+pub async fn list_partials(cfg: &AiConfig) -> Result<Vec<PartialEntry>> {
+    let dir = root_dir(cfg);
+    if !tokio::fs::try_exists(&dir).await.map_err(Error::Io)? {
+        return Ok(Vec::new());
+    }
+    let mut out: Vec<PartialEntry> = Vec::new();
+    let mut read = tokio::fs::read_dir(&dir).await.map_err(Error::Io)?;
+    while let Some(item) = read.next_entry().await.map_err(Error::Io)? {
+        let path = item.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(filename) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some(target) = filename.strip_suffix(".partial") else {
+            continue;
+        };
+        let downloaded_bytes = item.metadata().await.map(|m| m.len()).unwrap_or(0);
+        out.push(PartialEntry {
+            filename: target.to_string(),
+            downloaded_bytes,
+        });
+    }
+    out.sort_by(|a, b| a.filename.cmp(&b.filename));
+    Ok(out)
+}
+
 /// 从 HuggingFace 流式下载一个文件到 [`root_dir`] 下面。
 ///
-/// - 文件名必须是 basename，禁路径分隔符（防穿目录）
+/// - HF URL 用 `repo` + `hf_file` 构造（直链 `/resolve/main/`）
+/// - **落盘文件名**用 `save_as`（不指定时回落到 `hf_file`）——多个推荐 rec 的 mmproj
+///   在 HF 上常常同名（unsloth 系列都是 `mmproj-F16.gguf`），落盘必须给唯一名，
+///   不然不同 rec 的 mmproj 会互相覆盖
 /// - 已存在 + 大小匹配 `expected_bytes`（容差 1% 或 1KB）→ 视作"已下"，直接返回
-/// - 写到 `<file>.partial`，下载完 rename 到 `<file>`，避免半成品被当真
-/// - 失败时清理 `.partial`
+/// - `<save_as>.partial` 已存在 → 发 `Range: bytes=N-` 续传
+/// - 中途被 [`set_cancel`] 翻 flag → 保留 `.partial`，返回 `Error::DownloadCancelled`
+/// - 真失败（网络中断等） → **保留** `.partial` 让用户下次续传
+/// - 完成后 atomic rename 到 `<save_as>`
 ///
-/// `progress` 在下载阶段被节流（~120ms 一帧）回调，参数是
-/// `(downloaded_bytes, content_length_or_None)`。
+/// cancel signal map 用 `save_as` 作 key（前端按相同名字调 cancel_model_download）。
+/// progress 回调里 emit 的 file 字段也应该用 `save_as`，让前端能按落盘名索引。
 pub async fn download_from_hf<F>(
     cfg: &AiConfig,
     repo: &str,
-    file: &str,
+    hf_file: &str,
+    save_as: Option<&str>,
     expected_bytes: u64,
     mut progress: F,
 ) -> Result<PathBuf>
 where
     F: FnMut(u64, Option<u64>) + Send,
 {
-    if file.contains('/') || file.contains('\\') || file.contains("..") {
-        return Err(Error::InvalidInput("文件名不能包含路径分隔符或 .."));
+    if hf_file.contains('/') || hf_file.contains('\\') || hf_file.contains("..") {
+        return Err(Error::InvalidInput("HF 文件名不能包含路径分隔符或 .."));
+    }
+    let local_name = save_as.unwrap_or(hf_file);
+    if local_name.contains('/') || local_name.contains('\\') || local_name.contains("..") {
+        return Err(Error::InvalidInput("save_as 文件名不能包含路径分隔符或 .."));
     }
 
     let dir = root_dir(cfg);
     tokio::fs::create_dir_all(&dir).await.map_err(Error::Io)?;
-    let dest = dir.join(file);
-    let temp = dir.join(format!("{file}.partial"));
+    let dest = dir.join(local_name);
+    let temp = dir.join(format!("{local_name}.partial"));
 
     // 已下：大小匹配则直接复用
     if expected_bytes > 0 {
@@ -163,24 +257,47 @@ where
         }
     }
 
-    // 清掉旧的 .partial（上次失败留下的）
-    let _ = tokio::fs::remove_file(&temp).await;
+    // 检测半成品续传：partial 存在 + 已下字节数 > 0 → Range request 续
+    let resume_from = match tokio::fs::metadata(&temp).await {
+        Ok(m) if m.len() > 0 => Some(m.len()),
+        _ => None,
+    };
 
-    let url = hf_url(repo, file);
-    if let Err(e) = stream_to_file(&url, &temp, &mut progress).await {
-        let _ = tokio::fs::remove_file(&temp).await;
-        return Err(e);
+    // 注册 cancel signal——下面循环每写一个 chunk 检查一次。key 用 save_as，
+    // 因为前端 cancel 命令传的是落盘名（progress event 也按落盘名 emit）
+    let cancel = register_cancel(local_name);
+
+    let url = hf_url(repo, hf_file);
+    let result = stream_to_file(&url, &temp, resume_from, &cancel, &mut progress).await;
+    clear_cancel(local_name);
+
+    match result {
+        Ok(()) => {
+            // 落盘成功 → atomic rename 到最终路径
+            // Windows 上 rename 不支持覆盖，先删 dest 如果在
+            let _ = tokio::fs::remove_file(&dest).await;
+            tokio::fs::rename(&temp, &dest).await.map_err(Error::Io)?;
+            Ok(dest)
+        }
+        Err(Error::DownloadCancelled(_)) => {
+            Err(Error::DownloadCancelled(local_name.to_string()))
+        }
+        Err(e) => Err(e),
     }
-
-    // 落盘成功 → atomic rename 到最终路径
-    // Windows 上 rename 不支持覆盖，先删 dest 如果在
-    let _ = tokio::fs::remove_file(&dest).await;
-    tokio::fs::rename(&temp, &dest).await.map_err(Error::Io)?;
-
-    Ok(dest)
 }
 
-async fn stream_to_file<F>(url: &str, dest: &Path, progress: &mut F) -> Result<()>
+/// 流式下载到 dest 文件，支持续传 + cancel。
+///
+/// - `resume_from = Some(N)` 时发 `Range: bytes=N-`，文件以 append 模式打开；
+///   服务器不接受 Range（返 200）则当作从头下，文件改成 truncate 重写
+/// - `cancel` flag 在每个 chunk 写完后检查，true 时早 return [`Error::DownloadCancelled`]
+async fn stream_to_file<F>(
+    url: &str,
+    dest: &Path,
+    resume_from: Option<u64>,
+    cancel: &Arc<AtomicBool>,
+    progress: &mut F,
+) -> Result<()>
 where
     F: FnMut(u64, Option<u64>) + Send,
 {
@@ -190,21 +307,52 @@ where
     let client = reqwest::Client::builder()
         .timeout(HF_DOWNLOAD_TIMEOUT)
         .build()?;
-    let resp = client.get(url).send().await?;
+    let mut req = client.get(url);
+    if let Some(n) = resume_from {
+        req = req.header("Range", format!("bytes={n}-"));
+    }
+    let resp = req.send().await?;
     if !resp.status().is_success() {
         return Err(Error::Other(format!(
             "下载失败：HTTP {} {url}",
             resp.status()
         )));
     }
-    let total = resp.content_length();
-    let mut file = tokio::fs::File::create(dest).await.map_err(Error::Io)?;
+
+    // 服务器是否真的接受了 Range：206 Partial Content + Content-Range header
+    let server_resumed = resp.status().as_u16() == 206;
+    let mut downloaded: u64 = if server_resumed {
+        resume_from.unwrap_or(0)
+    } else {
+        // 服务器返 200，意味着不支持 Range（或我们没发 Range）→ 从头写
+        0
+    };
+    // total 算上断点之前的字节：206 时 content_length 是剩余，得加上 resume_from
+    let total = resp
+        .content_length()
+        .map(|cl| if server_resumed { cl + downloaded } else { cl });
+
+    let mut file = if server_resumed {
+        // append 模式
+        tokio::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(dest)
+            .await
+            .map_err(Error::Io)?
+    } else {
+        // truncate 重写——上次的 partial 作废
+        tokio::fs::File::create(dest).await.map_err(Error::Io)?
+    };
     let mut stream = resp.bytes_stream();
-    let mut downloaded: u64 = 0;
     let mut last_emit = Instant::now();
-    progress(0, total);
+    progress(downloaded, total);
 
     while let Some(chunk) = stream.next().await {
+        if cancel.load(Ordering::Relaxed) {
+            file.flush().await.map_err(Error::Io)?;
+            return Err(Error::DownloadCancelled(String::new()));
+        }
         let chunk = chunk?;
         file.write_all(&chunk).await.map_err(Error::Io)?;
         downloaded += chunk.len() as u64;

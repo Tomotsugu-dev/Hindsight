@@ -17,6 +17,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
 tauri-plugin-os = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -40,7 +41,6 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 
 # Phase 2 - 云同步认证
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-keyring = "3"
 aes-gcm = "0.10"
 rand = "0.8"
 sha2 = "0.10"
@@ -58,7 +58,7 @@ flate2 = "1"
 futures-util = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi"] }
+winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi", "winreg", "winnt"] }
 # UI Automation：从浏览器地址栏抠 URL，给隐私过滤用
 uiautomation = "0.24"
 

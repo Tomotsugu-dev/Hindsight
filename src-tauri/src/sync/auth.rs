@@ -8,7 +8,27 @@
 //! 5. 用 code + code_verifier 调 https://oauth2.googleapis.com/token
 //!    → 拿 access_token + refresh_token + id_token
 //! 6. 解 id_token JWT 拿 sub（用户的 Google 唯一 ID）+ email
-//! 7. 生成 32 字节 AES key 存 OS keyring；用此 key 加密 refresh_token，密文落 auth_state 表
+//! 7. 用「机器 ID + 用户 home 路径」派生 32 字节 AES key 加密 refresh_token，密文落 auth_state 表
+//!
+//! ## 加密 key 的派生（不依赖 OS keyring）
+//!
+//! 历史：v0.4.4 之前 AES key 存在 OS keyring（Windows Credential Manager / macOS Keychain）。
+//! 但实测 Credential Manager 条目会因为 OS / 安全软件 / 自动更新等不可控原因消失，
+//! macOS Keychain 在 ad-hoc 签名换身份时也读不出来——key 一丢，DB 里的 enc 永远解不开，
+//! 用户被迫重新登录。
+//!
+//! 现在改成每次现算：`SHA256("hindsight-auth-v1" || machine_id || user_home)`。
+//! - `machine_id`：Windows 注册表 `MachineGuid` / macOS `IOPlatformUUID` / Linux `/etc/machine-id`，
+//!   重装系统才变；OS 服务 / 安全软件碰不到。
+//! - `user_home`：[`dirs::home_dir`]，删用户账号才变。
+//!
+//! 安全权衡：把 DB 文件搬到别的机器仍然解不开（machine_id 不一样），
+//! 同机器另一个用户也读不出（home 路径不一样）。仅在「攻击者已经能登录该用户、
+//! 能读 APPDATA」的场景下能解密——但这个层面攻击者本来就能直接读 cookie /
+//! 浏览器密码 / 一切，不靠这一层加密防。
+//!
+//! 迁移：从老 keyring 方案升级上来的旧 enc 用新 key 解不开 → [`refresh_and_persist`]
+//! 自动清 `auth_state`，UI 自然回到「未登录」，用户重登一次后此后永不再丢。
 
 use std::time::Duration;
 
@@ -28,10 +48,10 @@ use crate::repo::settings;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-const KEYRING_SERVICE: &str = "Hindsight";
-const KEYRING_USER: &str = "auth_key_v1";
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
 const OAUTH_TIMEOUT_SECS: u64 = 180;
+/// AES key 派生的域分隔常量。改这个值会让所有用户被踢出登录（紧急 key rotation 用）。
+const KEY_DERIVATION_SALT: &[u8] = b"hindsight-auth-v1";
 
 /// OAuth 登录状态对外快照（前端「设备」页面 + auth 命令读）。
 #[derive(Debug, Clone, Serialize)]
@@ -48,7 +68,7 @@ pub struct AuthState {
     pub requires_restart: bool,
 }
 
-/// 拉当前登录状态（不联网，只查 DB / keyring）。
+/// 拉当前登录状态（不联网，只查 DB）。
 pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
     let cfg = settings::load(pool).await.unwrap_or_default();
     let configured =
@@ -134,7 +154,7 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
         .ok_or(Error::OAuthMissingRefreshToken)?;
 
     // 7) 加密存储
-    let key = ensure_keyring_key()?;
+    let key = derive_master_key()?;
     let enc = aes_encrypt(&key, refresh_token.as_bytes())?;
 
     let access = google.access_token.clone();
@@ -210,7 +230,7 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
 /// 拉一个仍然有效的 access_token：
 /// - 没登录 → `Error::NotSignedIn`
 /// - 当前未过期 → 直接返回
-/// - 已过期 → 用 keyring 里的 refresh_token 续一个，写回 DB 再返回
+/// - 已过期 → 用 DB 里的 refresh_token_enc 解出 refresh_token 调 Google 续一个，写回 DB 再返回
 ///
 /// 同时返回当前 uid，方便上层路由。
 ///
@@ -278,8 +298,25 @@ async fn read_auth_state(pool: &DbPool) -> Result<(String, Vec<u8>, String, Stri
 
 async fn refresh_and_persist(pool: &DbPool, uid: String, rt_enc: &[u8]) -> Result<TokenInfo> {
     let (client_id, client_secret) = load_creds(pool).await?;
-    let key = ensure_keyring_key()?;
-    let rt_bytes = aes_decrypt(&key, rt_enc)?;
+    let key = derive_master_key()?;
+    // 解密失败的两种主要场景：
+    //   1. 旧 keyring 方案的遗留 enc——v0.4.4 之前用 OS keyring 里随机 key 加密，
+    //      升级到派生 key 方案后这种密文必然解不开，需要用户重登一次完成迁移。
+    //   2. machine_id / home 路径变了（极罕见，重装系统 / 改用户名才会）。
+    // 两种都是同一个恢复动作：清 auth_state 让 UI 回到「未登录」，让用户重登。
+    // 返回 NotSignedIn 而非 Crypto，避免 sync engine 把它包成 [CRED_EXPIRED] 错误条幅。
+    let rt_bytes = match aes_decrypt(&key, rt_enc) {
+        Ok(b) => b,
+        Err(Error::Crypto(_)) => {
+            log::warn!(
+                "refresh_token 解密失败（多半 keyring → 派生 key 方案迁移），\
+                 自动清 auth_state 让 UI 回到未登录"
+            );
+            clear_auth_state(pool).await?;
+            return Err(Error::NotSignedIn);
+        }
+        Err(e) => return Err(e),
+    };
     let refresh_token =
         String::from_utf8(rt_bytes).map_err(|_| Error::Crypto("refresh_token utf-8 decode"))?;
 
@@ -386,8 +423,16 @@ async fn refresh_with_google(
     }
 }
 
-/// 退出登录：清 DB auth_state + keyring refresh_token + active_user.json。
+/// 退出登录：清 DB `auth_state`。
+///
+/// 派生 key 方案下不需要也无法"删 key"——key 是从 machine_id + home 现算的，
+/// 不在任何地方持久化。清掉 DB 里的 `refresh_token_enc` 就等于"忘记"凭证。
 pub async fn sign_out(pool: &DbPool) -> Result<()> {
+    clear_auth_state(pool).await
+}
+
+/// 清空 `auth_state` 表的所有 token 字段。给 [`sign_out`] 跟解密失败时的自动恢复共用。
+async fn clear_auth_state(pool: &DbPool) -> Result<()> {
     pool.0
         .call(|conn| {
             conn.execute(
@@ -400,10 +445,6 @@ pub async fn sign_out(pool: &DbPool) -> Result<()> {
             Ok(())
         })
         .await?;
-    // 清掉 keyring 里的 key（让密文也读不出来，等于真正"忘记"）
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
-        let _ = entry.delete_credential();
-    }
     Ok(())
 }
 
@@ -592,48 +633,161 @@ async fn exchange_code(
     Ok(resp.json::<GoogleTokenResp>().await?)
 }
 
-// ───────────── 内部：keyring + AES-GCM ─────────────
+// ───────────── 内部：派生 key + AES-GCM ─────────────
 
-/// 拿到 OS keyring 里的 32 字节 AES key；没有就生成并落盘。
+/// 派生 32 字节 AES key：`SHA256(salt || machine_id || user_home)`。
 ///
-/// 关键：必须区分"条目不存在"和"读 keyring 失败"。
-/// 之前的实现凡是 Err 都 fall through 去生成新 key 覆盖，
-/// 导致 Windows 凭据管理器一过性读失败时把旧 key 干掉，
-/// 数据库里加密过的 refresh_token 再也解不开 → 被迫重新登录。
-fn ensure_keyring_key() -> Result<[u8; 32]> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-        .map_err(|e| Error::Keyring(format!("open: {e}")))?;
+/// 每次都现算，不持久化在任何 OS keyring / Keychain / 文件里。三个输入：
+/// - `salt` = [`KEY_DERIVATION_SALT`]：域分隔常量
+/// - `machine_id`：平台特定的稳定标识符（重装系统才变）
+/// - `user_home`：[`dirs::home_dir`]，删用户账号才变
+///
+/// 见模块顶部说明的「为什么不再用 keyring」段落。
+fn derive_master_key() -> Result<[u8; 32]> {
+    let machine = read_machine_id()?;
+    let user = read_user_home_bytes();
+    let mut hasher = Sha256::new();
+    hasher.update(KEY_DERIVATION_SALT);
+    hasher.update(b"|machine|");
+    hasher.update(&machine);
+    hasher.update(b"|user|");
+    hasher.update(&user);
+    let result = hasher.finalize();
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&result);
+    Ok(k)
+}
 
-    match entry.get_password() {
-        Ok(s) => {
-            let bytes = general_purpose::STANDARD
-                .decode(s.as_bytes())
-                .map_err(|_| Error::Keyring("auth key base64 decode failed".into()))?;
-            if bytes.len() != 32 {
-                return Err(Error::Keyring(format!(
-                    "auth key length = {}, expected 32",
-                    bytes.len()
-                )));
+/// 用户身份：home 目录路径的 utf-8 字节。
+/// Windows: `C:\Users\xxx`；macOS: `/Users/xxx`；Linux: `/home/xxx`。
+/// 删 / 改用户账号才会变；HOME 临时被覆盖也无所谓——`dirs::home_dir` 在 Windows
+/// 走 `KNOWNFOLDERID_Profile` SHGetKnownFolderPath，不依赖环境变量。
+fn read_user_home_bytes() -> Vec<u8> {
+    dirs::home_dir()
+        .map(|p| {
+            p.into_os_string()
+                .to_string_lossy()
+                .into_owned()
+                .into_bytes()
+        })
+        .unwrap_or_default()
+}
+
+/// Windows 实现：读注册表 `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`。
+/// 该值在 Windows 安装时一次性生成，重装系统才变；任何用户都可读，OS 服务不会清。
+#[cfg(target_os = "windows")]
+fn read_machine_id() -> Result<Vec<u8>> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::shared::minwindef::HKEY;
+    use winapi::um::winnt::{KEY_READ, KEY_WOW64_64KEY, REG_SZ};
+    use winapi::um::winreg::{RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY_LOCAL_MACHINE};
+
+    fn to_wide(s: &str) -> Vec<u16> {
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+
+    // SAFETY: 全部 winapi 入口都按 MSDN 文档传参；buf 长度足够 GUID 字符串（38 + null）。
+    unsafe {
+        let subkey = to_wide("SOFTWARE\\Microsoft\\Cryptography");
+        let value = to_wide("MachineGuid");
+        let mut hkey: HKEY = std::ptr::null_mut();
+        // KEY_WOW64_64KEY：32 位进程跑在 64 位 Windows 时强制读 64 位视图，
+        // 否则被 WOW64 重定向到 SOFTWARE\WOW6432Node 拿不到 MachineGuid
+        let r = RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            subkey.as_ptr(),
+            0,
+            KEY_READ | KEY_WOW64_64KEY,
+            &mut hkey,
+        );
+        if r != 0 {
+            return Err(Error::Other(format!(
+                "RegOpenKeyExW HKLM\\SOFTWARE\\Microsoft\\Cryptography failed: {r}"
+            )));
+        }
+        let mut buf = [0u16; 128];
+        let mut size: u32 = std::mem::size_of_val(&buf) as u32;
+        let mut ty: u32 = 0;
+        let r = RegQueryValueExW(
+            hkey,
+            value.as_ptr(),
+            std::ptr::null_mut(),
+            &mut ty,
+            buf.as_mut_ptr() as *mut u8,
+            &mut size,
+        );
+        RegCloseKey(hkey);
+        if r != 0 {
+            return Err(Error::Other(format!(
+                "RegQueryValueExW MachineGuid failed: {r}"
+            )));
+        }
+        if ty != REG_SZ {
+            return Err(Error::Other(format!(
+                "MachineGuid 注册表值类型 {ty}，期望 REG_SZ"
+            )));
+        }
+        // size 是字节数，含尾部 null。换算成 u16 数量并去掉 null。
+        let chars = (size as usize / 2).saturating_sub(1);
+        let s = String::from_utf16_lossy(&buf[..chars]);
+        Ok(s.into_bytes())
+    }
+}
+
+/// macOS 实现：从 IOKit 注册表读 `IOPlatformUUID`（板载唯一标识，主板换才变）。
+/// 命令行 `ioreg -d2 -c IOPlatformExpertDevice` 是 Apple 自带的工具，每台 macOS 都有；
+/// 不引第三方 IOKit binding crate，shell 解析最简单。
+#[cfg(target_os = "macos")]
+fn read_machine_id() -> Result<Vec<u8>> {
+    let out = std::process::Command::new("ioreg")
+        .args(["-d2", "-c", "IOPlatformExpertDevice"])
+        .output()
+        .map_err(|e| Error::Other(format!("spawn ioreg failed: {e}")))?;
+    if !out.status.success() {
+        return Err(Error::Other(format!(
+            "ioreg exited with status {:?}",
+            out.status.code()
+        )));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // 行格式：`    "IOPlatformUUID" = "ABC-123-..."`
+    for line in stdout.lines() {
+        if !line.contains("IOPlatformUUID") {
+            continue;
+        }
+        // 第 4 个 `"` 切分 → 取 UUID 子串
+        let parts: Vec<&str> = line.split('"').collect();
+        if parts.len() >= 4 {
+            let uuid = parts[3].trim();
+            if !uuid.is_empty() {
+                return Ok(uuid.as_bytes().to_vec());
             }
-            let mut k = [0u8; 32];
-            k.copy_from_slice(&bytes);
-            Ok(k)
-        }
-        Err(keyring::Error::NoEntry) => {
-            // 真没有 → 生成新的并写入
-            let mut k = [0u8; 32];
-            OsRng.fill_bytes(&mut k);
-            entry
-                .set_password(&general_purpose::STANDARD.encode(k))
-                .map_err(|e| Error::Keyring(format!("write: {e}")))?;
-            Ok(k)
-        }
-        Err(e) => {
-            // 其它错（凭据管理器抽风、权限、平台一过性问题）→ 直接报错，
-            // 绝对不能覆盖既有 key，否则旧密文就解不开了
-            Err(Error::Keyring(format!("read: {e}")))
         }
     }
+    Err(Error::Other(
+        "ioreg 输出里没找到 IOPlatformUUID".to_string(),
+    ))
+}
+
+/// Linux 实现：systemd 风格的 `/etc/machine-id`，无 systemd 的退化到 dbus 同款。
+#[cfg(target_os = "linux")]
+fn read_machine_id() -> Result<Vec<u8>> {
+    std::fs::read_to_string("/etc/machine-id")
+        .or_else(|_| std::fs::read_to_string("/var/lib/dbus/machine-id"))
+        .map(|s| s.trim().as_bytes().to_vec())
+        .map_err(|e| Error::Other(format!("read machine-id failed: {e}")))
+}
+
+/// 其它 unix（FreeBSD 等）：`/etc/machine-id` 走通就用，否则报错。
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+fn read_machine_id() -> Result<Vec<u8>> {
+    std::fs::read_to_string("/etc/machine-id")
+        .map(|s| s.trim().as_bytes().to_vec())
+        .map_err(|e| Error::Other(format!("read /etc/machine-id failed: {e}")))
 }
 
 fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -653,8 +807,8 @@ fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// AES-256-GCM 解密。`ciphertext` 头 12 字节是 nonce，剩下是 ciphertext+tag。
-/// `key` 来自 keyring 里持久化的 32 字节随机值（[`ensure_keyring_key`]）。
-pub fn aes_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
+/// `key` 来自 [`derive_master_key`]——同一个 (machine_id, user_home) 组合永远给同一把 key。
+fn aes_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
     if ciphertext.len() < 13 {
         return Err(Error::Crypto("ciphertext too short"));
     }

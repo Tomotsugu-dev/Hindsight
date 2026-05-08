@@ -53,6 +53,7 @@ __pycache__/
 pyproject.toml
 uv.lock
 .venv/
+similarity-poc/
 
 # Claude
 .claude/

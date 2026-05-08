@@ -63,10 +63,31 @@ pub struct AiConfig {
     pub models_path: String,
     /// 当前选中的主权重 GGUF 文件名（在 `models_path` 目录下）。
     /// 空字符串 = 还没选模型；`start_engine` 会拒绝启动，让用户先去选。
+    ///
+    /// 历史遗留字段，扮演 step 1/2 各自字段的 fallback：当 `describe_main` /
+    /// `summary_main` 为空时降级用本字段。读取时统一走
+    /// [`Self::effective_describe_main`] / [`Self::effective_summary_main`]，
+    /// 不要直接读。
     pub active_main: String,
     /// 当前选中的 mmproj GGUF 文件名（vision 模型必带）。
     /// 空字符串 = 没有 mmproj（纯文本模型）。
+    /// fallback 语义同 [`Self::active_main`]——读取走 effective 方法。
     pub active_mmproj: String,
+    /// step 1 图描述用的主权重 GGUF；空 = 降级到 [`Self::active_main`]。
+    /// 用 [`Self::effective_describe_main`] 读取。
+    #[serde(default)]
+    pub describe_main: String,
+    /// step 1 图描述用的 mmproj GGUF；空 = 降级到 [`Self::active_mmproj`]。
+    #[serde(default)]
+    pub describe_mmproj: String,
+    /// step 2 段总结用的主权重 GGUF；空 = 降级到 [`Self::active_main`]。
+    /// 段总结一般是纯文本任务，可挑更小或纯文本模型节省 VRAM。
+    #[serde(default)]
+    pub summary_main: String,
+    /// step 2 段总结用的 mmproj GGUF；空 = 降级到 [`Self::active_mmproj`]。
+    /// 一般纯文本模型这个留空即可。
+    #[serde(default)]
+    pub summary_mmproj: String,
     /// AI 总结使用的提示词语言（决定模型出哪种语言的总结 + 默认提示词模板用哪套）。
     /// 取值 "zh" / "en" / "ja"；非法值 sanitize 时回退到 "zh"。
     pub prompt_language: String,
@@ -135,6 +156,39 @@ impl AiConfig {
     pub fn summary_ctx_size_effective(&self) -> Option<u32> {
         self.summary_ctx_size.or(self.ctx_size)
     }
+
+    /// step 1 主权重文件名（去前后空白后非空）；空 → fallback 到 `active_main`。
+    pub fn effective_describe_main(&self) -> &str {
+        if self.describe_main.trim().is_empty() {
+            self.active_main.as_str()
+        } else {
+            self.describe_main.as_str()
+        }
+    }
+    /// step 1 mmproj 文件名；空 → fallback 到 `active_mmproj`。
+    pub fn effective_describe_mmproj(&self) -> &str {
+        if self.describe_mmproj.trim().is_empty() {
+            self.active_mmproj.as_str()
+        } else {
+            self.describe_mmproj.as_str()
+        }
+    }
+    /// step 2 主权重文件名；空 → fallback 到 `active_main`。
+    pub fn effective_summary_main(&self) -> &str {
+        if self.summary_main.trim().is_empty() {
+            self.active_main.as_str()
+        } else {
+            self.summary_main.as_str()
+        }
+    }
+    /// step 2 mmproj 文件名；空 → fallback 到 `active_mmproj`。
+    pub fn effective_summary_mmproj(&self) -> &str {
+        if self.summary_mmproj.trim().is_empty() {
+            self.active_mmproj.as_str()
+        } else {
+            self.summary_mmproj.as_str()
+        }
+    }
 }
 
 /// 用户编辑过的 system prompt 覆盖文本，按语言分别独立存。
@@ -163,12 +217,16 @@ impl Default for AiConfig {
             user_brief: String::new(),
             segments: default_segments(),
             excluded_categories: vec!["other".to_string()],
-            max_images_per_segment: 30,
+            max_images_per_segment: 5000,
             hash_threshold: 20,
             hash_window_minutes: 5,
             models_path: String::new(),
             active_main: String::new(),
             active_mmproj: String::new(),
+            describe_main: String::new(),
+            describe_mmproj: String::new(),
+            summary_main: String::new(),
+            summary_mmproj: String::new(),
             prompt_language: "zh".to_string(),
             prompt_overrides: PromptOverrides::default(),
             image_describe_overrides: PromptOverrides::default(),
@@ -291,6 +349,10 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.models_path = next.models_path.trim().to_string();
     next.active_main = next.active_main.trim().to_string();
     next.active_mmproj = next.active_mmproj.trim().to_string();
+    next.describe_main = next.describe_main.trim().to_string();
+    next.describe_mmproj = next.describe_mmproj.trim().to_string();
+    next.summary_main = next.summary_main.trim().to_string();
+    next.summary_mmproj = next.summary_mmproj.trim().to_string();
 
     // prompt_language 限制取值；非法回退到 zh
     next.prompt_language = match next.prompt_language.trim() {

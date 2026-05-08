@@ -1,0 +1,203 @@
+{
+  "_comment": [
+    "Hindsight 推荐 vision LLM 列表。代码读入但不展示这个 _comment 字段。",
+    "",
+    "字段说明：",
+    "  displayName  给用户看的简短名（前端推荐卡片标题）",
+    "  repo         HuggingFace 仓库 ID，形如 ggml-org/Qwen2.5-VL-3B-Instruct-GGUF",
+    "  mainFile     主权重 GGUF 文件名（不带路径）",
+    "  mainBytes    主权重字节数（HF 文件元数据，前端显示「约 X.X GB」用，下载层做 ±1% 容差比对）",
+    "  mmprojFile   vision 投影文件；纯文本模型省略此字段（或填 null）",
+    "  mmprojBytes  vision 投影字节数；mmprojFile 缺失时无意义",
+    "  logoUrl      品牌 logo 直链（HF org 头像）；按原始作者 (Qwen / Google / zai-org) 选，不是镜像维护者；省略时前端 fallback 到首字母占位",
+    "  vision       是否支持图像输入；true = 能跑 step 1 (图描述)，false = 仅 step 2 (段总结)。",
+    "               跟 mmprojFile 是否存在【没有】因果关系——某些 GGUF 仓库附带 mmproj 但模型本身不支持图像，加载会失败。",
+    "               按原始模型卡 + llama.cpp 实测显式标定。",
+    "  brand        品牌标识；前端按这个分组筛选 (Qwen / Google / DeepSeek / OpenAI / Z.AI)。空串 = 不参与品牌筛选。",
+    "",
+    "增 / 减项流程：",
+    "  1. HF 仓库上手动验证文件名 + 大小（点 Files and versions）",
+    "  2. 验证 llama.cpp `llama-server` 实际能加载 + 推理",
+    "  3. 改这份 JSON 即可，无需改 Rust 源码（启动时解析）",
+    "",
+    "排序按「轻 → 重」，第一项最适合首次试用。"
+  ],
+  "models": [
+    {
+      "displayName": "Qwen3 0.6B (Q4_K_M)",
+      "repo": "unsloth/Qwen3-0.6B-GGUF",
+      "mainFile": "Qwen3-0.6B-Q4_K_M.gguf",
+      "mainBytes": 396705472,
+      "mmprojFile": null,
+      "mmprojBytes": 0,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": false,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "Qwen3.5 4B (Q4_K_M)",
+      "repo": "unsloth/Qwen3.5-4B-GGUF",
+      "mainFile": "Qwen3.5-4B-Q4_K_M.gguf",
+      "mainBytes": 2740937888,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 672423616,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": true,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "Gemma 4 E2B-it (Q4_K_M)",
+      "repo": "unsloth/gemma-4-E2B-it-GGUF",
+      "mainFile": "gemma-4-E2B-it-Q4_K_M.gguf",
+      "mainBytes": 3106736256,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 985654080,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/5dd96eb166059660ed1ee413/WtA3YYitedOr9n02eHfJe.png",
+      "vision": true,
+      "brand": "Google"
+    },
+    {
+      "displayName": "DeepSeek R1 Distill Qwen 7B (Q4_K_M)",
+      "repo": "unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF",
+      "mainFile": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      "mainBytes": 4683073248,
+      "mmprojFile": null,
+      "mmprojBytes": 0,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/6538815d1bdb3c40db94fbfa/xMBly9PUMphrFVMxLX4kq.png",
+      "vision": false,
+      "brand": "DeepSeek"
+    },
+    {
+      "displayName": "Qwen2.5-VL 7B Abliterated (Q4_K_M)",
+      "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF",
+      "mainFile": "Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf",
+      "mainBytes": 4683073952,
+      "mmprojFile": "Qwen2.5-VL-7B-Instruct-abliterated.mmproj-f16.gguf",
+      "mmprojBytes": 1354162912,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": true,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "Qwen3 8B (Q4_K_M)",
+      "repo": "unsloth/Qwen3-8B-GGUF",
+      "mainFile": "Qwen3-8B-Q4_K_M.gguf",
+      "mainBytes": 5027784512,
+      "mmprojFile": null,
+      "mmprojBytes": 0,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": false,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "Gemma 4 E4B-it (Q4_K_M)",
+      "repo": "unsloth/gemma-4-E4B-it-GGUF",
+      "mainFile": "gemma-4-E4B-it-Q4_K_M.gguf",
+      "mainBytes": 4977169568,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 990372672,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/5dd96eb166059660ed1ee413/WtA3YYitedOr9n02eHfJe.png",
+      "vision": true,
+      "brand": "Google"
+    },
+    {
+      "displayName": "Qwen3-VL 8B Instruct (Q4_K_M)",
+      "repo": "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+      "mainFile": "Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
+      "mainBytes": 5027785568,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 1159030336,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": true,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "Qwen3.5 9B (Q4_K_M)",
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "mainFile": "Qwen3.5-9B-Q4_K_M.gguf",
+      "mainBytes": 5680522464,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 918166080,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": true,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "GLM-4.6V-Flash (Q4_K_M)",
+      "repo": "unsloth/GLM-4.6V-Flash-GGUF",
+      "mainFile": "GLM-4.6V-Flash-Q4_K_M.gguf",
+      "mainBytes": 6166578784,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 1786960000,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/62dc173789b4cf157d36ebee/i_pxzM2ZDo3Ub-BEgIkE9.png",
+      "vision": true,
+      "brand": "Z.AI"
+    },
+    {
+      "displayName": "DeepSeek R1 Distill Qwen 14B (Q4_K_M)",
+      "repo": "unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF",
+      "mainFile": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
+      "mainBytes": 8988109984,
+      "mmprojFile": null,
+      "mmprojBytes": 0,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/6538815d1bdb3c40db94fbfa/xMBly9PUMphrFVMxLX4kq.png",
+      "vision": false,
+      "brand": "DeepSeek"
+    },
+    {
+      "displayName": "gpt-oss 20B (Q4_K_M)",
+      "repo": "unsloth/gpt-oss-20b-GGUF",
+      "mainFile": "gpt-oss-20b-Q4_K_M.gguf",
+      "mainBytes": 11624759488,
+      "mmprojFile": null,
+      "mmprojBytes": 0,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/68783facef79a05727260de3/UPX5RQxiPGA-ZbBmArIKq.png",
+      "vision": false,
+      "brand": "OpenAI"
+    },
+    {
+      "displayName": "Gemma 3 27B-it (Q4_K_M)",
+      "repo": "unsloth/gemma-3-27b-it-GGUF",
+      "mainFile": "gemma-3-27b-it-Q4_K_M.gguf",
+      "mainBytes": 16546688736,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 857739392,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/5dd96eb166059660ed1ee413/WtA3YYitedOr9n02eHfJe.png",
+      "vision": true,
+      "brand": "Google"
+    },
+    {
+      "displayName": "Qwen3.5 27B (Q4_K_M)",
+      "repo": "unsloth/Qwen3.5-27B-GGUF",
+      "mainFile": "Qwen3.5-27B-Q4_K_M.gguf",
+      "mainBytes": 16740812704,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 927607040,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": true,
+      "brand": "Qwen"
+    },
+    {
+      "displayName": "Gemma 4 26B-A4B-it (UD-Q4_K_M)",
+      "repo": "unsloth/gemma-4-26B-A4B-it-GGUF",
+      "mainFile": "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf",
+      "mainBytes": 16947539744,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 1193058784,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/5dd96eb166059660ed1ee413/WtA3YYitedOr9n02eHfJe.png",
+      "vision": true,
+      "brand": "Google"
+    },
+    {
+      "displayName": "Qwen3.6 35B-A3B (UD-Q4_K_M)",
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "mainFile": "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+      "mainBytes": 22134528992,
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojBytes": 899283680,
+      "logoUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/620760a26e3b7210c2ff1943/-s1gyJfvbE1RgO5iBeNOi.png",
+      "vision": true,
+      "brand": "Qwen"
+    }
+  ]
+}

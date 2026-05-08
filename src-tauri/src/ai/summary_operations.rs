@@ -352,18 +352,27 @@ pub(crate) fn extract_time_label(screenshot_path: &str) -> String {
 
 /// 根据 settings.ai.external_enabled 构造 step 2 的 chat 路由。
 ///
-/// - false：[`Step2Chat::Local`] 复用 step 1 的 [`ChatClient`]（同一引擎、同一端口）
+/// - false：[`Step2Chat::Local`]——本地端口；`local_model_label` 是当前引擎实际加载的
+///   GGUF 文件名（即 `effective_summary_main`，跟 step 1 可能不同），用作
+///   `model_label()` 落库 + chat completions 请求的 model 字段
 /// - true：[`Step2Chat::External`] 包一个新建的 [`ExternalChatClient`]，
 ///   走用户填的 endpoint / model / api_key
 ///
 /// 外部 client 构造失败（endpoint 空、model 空）会向上抛——这种情况说明用户
 /// 开了 toggle 但没填配置，让顶层错误条直接显示让他去填。
-pub(crate) fn build_step2(ai: &AiConfig, step1: &ChatClient) -> Result<Step2Chat> {
+pub(crate) fn build_step2(
+    ai: &AiConfig,
+    local_port: u16,
+    local_model_label: &str,
+) -> Result<Step2Chat> {
     if ai.external_enabled {
         let ext = ExternalChatClient::new(&ai.endpoint, ai.model.clone(), ai.api_key.clone())?;
         Ok(Step2Chat::External(ext))
     } else {
-        Ok(Step2Chat::Local(step1.clone()))
+        Ok(Step2Chat::Local(ChatClient::new(
+            local_port,
+            local_model_label,
+        )?))
     }
 }
 

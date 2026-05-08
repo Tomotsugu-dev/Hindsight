@@ -5,8 +5,8 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::ai::models::{self, ModelEntry};
-use crate::ai::recommended::{Recommended, RECOMMENDED};
+use crate::ai::models::{self, ModelEntry, PartialEntry};
+use crate::ai::recommended::{recommended, Recommended};
 use crate::repo::settings;
 use crate::storage::DbPool;
 
@@ -31,13 +31,18 @@ pub async fn delete_model(pool: State<'_, DbPool>, filename: String) -> Result<(
         .map_err(String::from)?;
 
     let mut dirty = false;
-    if cfg.ai.active_main == filename {
-        cfg.ai.active_main.clear();
-        dirty = true;
-    }
-    if cfg.ai.active_mmproj == filename {
-        cfg.ai.active_mmproj.clear();
-        dirty = true;
+    for slot in [
+        &mut cfg.ai.active_main,
+        &mut cfg.ai.active_mmproj,
+        &mut cfg.ai.describe_main,
+        &mut cfg.ai.describe_mmproj,
+        &mut cfg.ai.summary_main,
+        &mut cfg.ai.summary_mmproj,
+    ] {
+        if *slot == filename {
+            slot.clear();
+            dirty = true;
+        }
     }
     if dirty {
         settings::save(&pool, &cfg).await.map_err(String::from)?;
@@ -49,7 +54,7 @@ pub async fn delete_model(pool: State<'_, DbPool>, filename: String) -> Result<(
 /// 静态数据，不查 DB / 网络。
 #[tauri::command]
 pub async fn list_recommended_models() -> Result<Vec<Recommended>, String> {
-    Ok(RECOMMENDED.to_vec())
+    Ok(recommended().to_vec())
 }
 
 /// 下载 GGUF 时进度事件 payload。前端 listen 这条事件名拿到。
@@ -81,15 +86,22 @@ pub async fn download_model(
     pool: State<'_, DbPool>,
     repo: String,
     file: String,
+    save_as: Option<String>,
     expected_bytes: u64,
 ) -> Result<String, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     let app_for_emit = app.clone();
-    let file_for_emit = file.clone();
+    // emit 用的是落盘名——前端按相同名字索引 progress / 调 cancel
+    let local_name = save_as
+        .as_deref()
+        .map(str::to_string)
+        .unwrap_or_else(|| file.clone());
+    let file_for_emit = local_name.clone();
     let path = models::download_from_hf(
         &cfg.ai,
         &repo,
         &file,
+        save_as.as_deref(),
         expected_bytes,
         move |downloaded, total| {
             let payload = ModelDownloadProgressPayload {
@@ -105,4 +117,24 @@ pub async fn download_model(
     .await
     .map_err(String::from)?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+/// 暂停某个正在进行中的下载——翻 cancel flag。`<file>.partial` 被保留，
+/// 用户下次再调 `download_model` 同 file 名时会走 Range 续传。
+///
+/// 文件没在下载（或已经下完）时静默成功（idempotent）。前端不需要预先判断。
+#[tauri::command]
+pub async fn cancel_model_download(file: String) -> Result<(), String> {
+    models::set_cancel(&file);
+    Ok(())
+}
+
+/// 列扫描模型目录里所有 `<file>.partial` 半成品——给前端渲染"继续"按钮 + 当前进度。
+/// 目录不存在或没有 partial 时返回 `[]`，不当错误。
+#[tauri::command]
+pub async fn list_partial_downloads(
+    pool: State<'_, DbPool>,
+) -> Result<Vec<PartialEntry>, String> {
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    models::list_partials(&cfg.ai).await.map_err(String::from)
 }

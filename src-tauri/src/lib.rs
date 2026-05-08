@@ -50,6 +50,16 @@ pub fn run() {
     let engine_for_exit = engine_supervisor.clone();
 
     tauri::Builder::default()
+        // 单实例守门：第二个进程一启动就把现有窗口拉到前台再自己退出。
+        // 必须在 .setup 之前的最前面注册——后续 plugin / setup 都默认假设
+        // "整个进程内 capture / DB / sync 单例运行"。
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
@@ -164,6 +174,7 @@ pub fn run() {
             commands::ai_engine::start_engine,
             commands::ai_engine::stop_engine,
             commands::ai_engine::set_active_model,
+            commands::ai_engine::set_step_model,
             commands::ai_engine::get_engine_logs,
             // --- ai: binary ---
             commands::ai_binary::download_binary,
@@ -174,6 +185,8 @@ pub fn run() {
             commands::ai_models::delete_model,
             commands::ai_models::list_recommended_models,
             commands::ai_models::download_model,
+            commands::ai_models::cancel_model_download,
+            commands::ai_models::list_partial_downloads,
             // --- ai: 总结 ---
             commands::ai_summary::generate_day_summary,
             commands::ai_summary::retry_summary_segment,

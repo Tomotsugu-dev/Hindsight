@@ -1,84 +1,82 @@
-//! Hindsight 自带的推荐 vision LLM 表（Phase 1B-β β.1）。
+//! Hindsight 自带的推荐 vision LLM 表。
 //!
-//! 用户进 AI 设置页时拿这张表渲染推荐卡片。每条记录至少有 main 文件；
-//! vision 模型还会有 mmproj 文件——`Recommended::mmproj` 为 `Some` 表示
-//! 必须连带下载。
+//! ## 数据 vs 代码
 //!
-//! 升级 / 增减项的流程：
-//! 1. 先在 HuggingFace 找到对应 GGUF repo（推荐 ggml-org 官方维护的）
-//! 2. 验证 llama-server 能加载（startup log 没 unsupported / failed）
-//! 3. 用浏览器访问 HF 文件页获取 size_bytes（HF 在 file metadata 显示）
-//! 4. 把 size 填进来后跑一次端到端冒烟，确保下载 + 加载 + 推理 OK
+//! 列表本身放在 [`src-tauri/resources/recommended-models.json`]（编译时 `include_str!`
+//! 嵌入二进制，发布产物零外部文件依赖）。本文件只负责：
+//!   - 定义跟前端共用的 [`Recommended`] 结构（`#[serde(rename_all = "camelCase")]` 跟 JSON 对齐）
+//!   - 启动时解析一次 JSON 缓存进 `OnceLock`，后续 [`recommended`] 调用直接返回切片
+//!
+//! 解析失败不致命：log 一条 error + 返回空切片。前端会看到「推荐区为空」，
+//! 用户可以走「自定义 HF 仓库」表单或推荐卡之外的本地导入路径，不影响核心采集。
+//!
+//! ## 增 / 减项流程
+//!
+//! 改 [`recommended-models.json`]（不动 .rs），重新打包发布即可。
 
-use serde::Serialize;
+use std::sync::OnceLock;
 
-/// 推荐模型。`main_file` 是聊天主权重；`mmproj` 是 vision 投影
-/// （仅 vision 模型有）。两个文件都从 `<repo>` 取直链。
-#[derive(Debug, Clone, Serialize)]
+use serde::{Deserialize, Serialize};
+
+/// 推荐模型。`mainFile` 是聊天主权重；`mmprojFile` 是 vision 投影
+/// （仅 vision 模型有，纯文本模型为 None）。两个文件都从 [`Recommended::repo`] 取直链。
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recommended {
     /// 给用户看的简短名，如 "Qwen2.5-VL 3B (Q4_K)"
-    pub display_name: &'static str,
+    pub display_name: String,
     /// HuggingFace 仓库 ID，形如 `ggml-org/Qwen2.5-VL-3B-Instruct-GGUF`
-    pub repo: &'static str,
+    pub repo: String,
     /// 主权重 GGUF 文件名（不带路径）
-    pub main_file: &'static str,
+    pub main_file: String,
     /// 主权重字节数，前端展示 "约 1.9 GB" 用
     pub main_bytes: u64,
     /// vision 投影文件；纯文本模型为 `None`
-    pub mmproj_file: Option<&'static str>,
+    #[serde(default)]
+    pub mmproj_file: Option<String>,
     /// vision 投影字节数；`mmproj_file = None` 时无意义，填 0 即可
+    #[serde(default)]
     pub mmproj_bytes: u64,
+    /// 模型品牌 logo URL（HF org 头像直链）；`None` 时前端 fallback 到首字母占位。
+    /// 跟 `repo` 不同——`repo` 可能是镜像维护者（unsloth），logo 反映的是原作者品牌（Qwen / Google / zai-org）。
+    #[serde(default)]
+    pub logo_url: Option<String>,
+    /// 是否支持 vision 输入（图描述 / step 1 任务）。
+    ///
+    /// 跟"有没有 mmproj 文件"**不是同一回事**——某些镜像仓库附带 mmproj 文件但模型架构本身
+    /// 不支持图像，加载会失败。本字段由维护者按"原始模型卡 + llama.cpp 实测能否处理图片"
+    /// 显式标定，不要靠文件名 / mmproj 存在性自动推断。
+    /// `false` = 纯文本，前端会禁用 step 1 toggle；`true` = 兼容图描述 + 段总结。
+    #[serde(default)]
+    pub vision: bool,
+    /// 品牌标识——前端按这个值分组筛选，避免靠 displayName / logoUrl 字符串硬匹配。
+    /// 可选值：Qwen / Google / DeepSeek / OpenAI / Z.AI（由 JSON 维护者显式填）。
+    /// 空串 = 不参与品牌筛选（旧 JSON 兼容）。
+    #[serde(default)]
+    pub brand: String,
 }
 
-/// Hindsight 推荐的 vision LLM 列表。
-///
-/// 收录原则：
-/// 1. llama.cpp 主线（master）支持，不需要 fork
-/// 2. HuggingFace 上有官方维护的 GGUF（ggml-org / Qwen / unsloth 优先）
-/// 3. 文件名 + 字节数已经手工核对过，下载链接稳定
-///
-/// 排序按"轻 → 重"，第一项最适合首次试用（CPU 也能跑顺）。
-/// 字节数 = HF 文件元数据，可能有 ±1% 偏差，下载层用容差比对判已存在。
-///
-/// 升级 / 增减项流程：
-/// 1. HF 仓库上手动验证文件名和大小（点 Files and versions）
-/// 2. 验证 llama.cpp `llama-server` 实际能加载 + 推理
-/// 3. 改这张表 + 重新 build
-pub const RECOMMENDED: &[Recommended] = &[
-    // 由轻到重；用户首次试用建议从第一个开始
-    Recommended {
-        display_name: "Qwen3-VL 4B (Q4_K_M)",
-        repo: "Qwen/Qwen3-VL-4B-Instruct-GGUF",
-        main_file: "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
-        main_bytes: 2_500_000_000,
-        mmproj_file: Some("mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf"),
-        mmproj_bytes: 454_000_000,
-    },
-    Recommended {
-        display_name: "Gemma 4 E2B-it (Q8_0)",
-        repo: "ggml-org/gemma-4-E2B-it-GGUF",
-        main_file: "gemma-4-E2B-it-Q8_0.gguf",
-        main_bytes: 4_970_000_000,
-        mmproj_file: Some("mmproj-gemma-4-E2B-it-Q8_0.gguf"),
-        mmproj_bytes: 557_000_000,
-    },
-    Recommended {
-        display_name: "Gemma 4 E4B-it (Q4_K_M)",
-        repo: "ggml-org/gemma-4-E4B-it-GGUF",
-        main_file: "gemma-4-E4B-it-Q4_K_M.gguf",
-        main_bytes: 5_340_000_000,
-        mmproj_file: Some("mmproj-gemma-4-E4B-it-Q8_0.gguf"),
-        mmproj_bytes: 560_000_000,
-    },
-    Recommended {
-        // 用户原本要 Qwen3.5-9B，但 Qwen 3.5 没出 VL 版本——
-        // 替换成 Qwen3-VL-8B，是当前能看图的最大 Qwen，体量接近
-        display_name: "Qwen3-VL 8B (Q4_K_M)",
-        repo: "Qwen/Qwen3-VL-8B-Instruct-GGUF",
-        main_file: "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
-        main_bytes: 5_030_000_000,
-        mmproj_file: Some("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"),
-        mmproj_bytes: 752_000_000,
-    },
-];
+#[derive(Debug, Deserialize)]
+struct RecommendedRoot {
+    models: Vec<Recommended>,
+}
+
+/// 数据来源：编译时嵌入的 JSON，运行时不需要外部文件。
+const RECOMMENDED_JSON: &str = include_str!("../../resources/recommended-models.json");
+
+/// 拿当前推荐模型列表（启动后固定不变；首次调用时解析 JSON 缓存）。
+/// 解析失败 log 一条 error 后返回空切片，让前端推荐区空着——核心功能不受影响。
+pub fn recommended() -> &'static [Recommended] {
+    static CACHE: OnceLock<Vec<Recommended>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| match serde_json::from_str::<RecommendedRoot>(RECOMMENDED_JSON) {
+            Ok(root) => root.models,
+            Err(e) => {
+                log::error!(
+                    "recommended-models.json 解析失败：{e}（推荐区将为空，用户仍可走自定义 HF / 本地导入）"
+                );
+                Vec::new()
+            }
+        })
+        .as_slice()
+}
