@@ -28,13 +28,28 @@ pub struct AiOverrides {
     /// step 1 单图描述的 system prompt 覆盖文本（按当前语言写入 image_describe_overrides）
     pub image_describe_prompt: Option<String>,
     /// llama-server `--batch-size` / `--ubatch-size`（取一致值）；调试用，不进 settings。
+    /// 双套参数语义：旧字段是 fallback——`describe_*` / `summary_*` 未传时降级使用。
     pub batch_size: Option<u32>,
-    /// llama-server `-np`：并行槽位数；配合 step 1 image describe 的并发跑。
+    /// llama-server `-np`：并行槽位数。详见 [`Self::batch_size`] 关于 fallback 语义。
     pub parallel_slots: Option<u32>,
     /// **每个 slot** 的 ctx 上限。最终 `--ctx-size = ctx_size × parallel_slots`。
-    /// `None` = 8K 默认。改大让长 prompt（无限制档段总结）能装下，代价是
-    /// 启动时一次性占 ~30KB/token × ctx_size × np 的 KV cache。
+    /// 详见 [`Self::batch_size`] 关于 fallback 语义。
     pub ctx_size: Option<u32>,
+
+    /// 图描述阶段的 batch；`None` = fallback 到 [`Self::batch_size`]。
+    pub describe_batch_size: Option<u32>,
+    /// 图描述阶段的 `-np`；`None` = fallback 到 [`Self::parallel_slots`]。
+    pub describe_parallel_slots: Option<u32>,
+    /// 图描述阶段的每槽 ctx；`None` = fallback 到 [`Self::ctx_size`]。
+    pub describe_ctx_size: Option<u32>,
+
+    /// 段总结阶段的 batch；`None` = fallback 到 [`Self::batch_size`]。
+    pub summary_batch_size: Option<u32>,
+    /// 段总结阶段的 `-np`（推荐恒为 1）；`None` = fallback 到 [`Self::parallel_slots`]。
+    pub summary_parallel_slots: Option<u32>,
+    /// 段总结阶段的每槽 ctx；`None` = fallback 到 [`Self::ctx_size`]。
+    pub summary_ctx_size: Option<u32>,
+
     /// 本次跑是否走云端段总结（step 2）。`Some(true)` = 强制走 ExternalChatClient，
     /// `Some(false)` = 强制本地，`None` = 沿用 settings.ai.external_enabled。
     /// endpoint / model / api_key 永远沿用 settings 全局值——这里只决定路径。
@@ -47,7 +62,15 @@ impl AiOverrides {
     /// 触发跑前 stop+start with overrides，跑后再 stop 让默认日报回到 settings 默认。
     /// daily 路径靠 settings.ai 直接做 ai.* 字段，没这层判断。
     pub(crate) fn needs_engine_restart(&self) -> bool {
-        self.batch_size.is_some() || self.parallel_slots.is_some() || self.ctx_size.is_some()
+        self.batch_size.is_some()
+            || self.parallel_slots.is_some()
+            || self.ctx_size.is_some()
+            || self.describe_batch_size.is_some()
+            || self.describe_parallel_slots.is_some()
+            || self.describe_ctx_size.is_some()
+            || self.summary_batch_size.is_some()
+            || self.summary_parallel_slots.is_some()
+            || self.summary_ctx_size.is_some()
     }
 
     /// 把 override 应用到一份 `AiConfig` 上，返回合并后的新值（不就地改原值）。
@@ -94,6 +117,24 @@ impl AiOverrides {
         }
         if let Some(v) = self.ctx_size {
             ai.ctx_size = Some(v);
+        }
+        if let Some(v) = self.describe_batch_size {
+            ai.describe_batch_size = Some(v);
+        }
+        if let Some(v) = self.describe_parallel_slots {
+            ai.describe_parallel_slots = Some(v);
+        }
+        if let Some(v) = self.describe_ctx_size {
+            ai.describe_ctx_size = Some(v);
+        }
+        if let Some(v) = self.summary_batch_size {
+            ai.summary_batch_size = Some(v);
+        }
+        if let Some(v) = self.summary_parallel_slots {
+            ai.summary_parallel_slots = Some(v);
+        }
+        if let Some(v) = self.summary_ctx_size {
+            ai.summary_ctx_size = Some(v);
         }
         // 云端段总结路径开关：Debug tab 的「云端 API」section toggle 触发；
         // build_step2() 看 ai.external_enabled 决定 Local vs External。

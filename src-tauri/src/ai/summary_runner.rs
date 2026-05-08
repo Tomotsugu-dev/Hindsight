@@ -139,12 +139,21 @@ impl DaySummaryRunner {
             None => cfg.ai.clone(),
         };
 
-        let engine_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size,
-            parallel_slots: ai.parallel_slots,
-            ctx_size: ai.ctx_size,
+        // 双套引擎参数：图描述阶段（slots 高、ctx 中）和段总结阶段（slots=1、ctx 高）
+        // 各有自己的一组 EngineStartOverrides。新字段未设时通过 *_effective 自动 fallback
+        // 到旧的全局 batch_size / parallel_slots / ctx_size，旧 settings JSON 不需要 migration。
+        let describe_overrides = EngineStartOverrides {
+            batch_size: ai.describe_batch_size_effective(),
+            parallel_slots: ai.describe_parallel_slots_effective(),
+            ctx_size: ai.describe_ctx_size_effective(),
         };
-        let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
+        let summary_overrides = EngineStartOverrides {
+            batch_size: ai.summary_batch_size_effective(),
+            parallel_slots: ai.summary_parallel_slots_effective(),
+            ctx_size: ai.summary_ctx_size_effective(),
+        };
+        // step 1 图描述并发数 = describe 阶段的 -np（多图同时跑）
+        let parallel = ai.describe_parallel_slots_effective().unwrap_or(1).max(1) as usize;
 
         if ai.active_main.trim().is_empty() {
             return Err(Error::InvalidInput(
@@ -171,60 +180,138 @@ impl DaySummaryRunner {
             let _ = self.supervisor.stop().await;
         }
 
-        // 启动引擎（如未启动），拿到端口；启动期间给前端一个进度提示
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.clone(),
-                "engine_starting",
-                total_segments,
-            );
-            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
-            self.emit(p);
-        }
-        let port = self.ensure_engine_running(&ai, engine_overrides).await?;
-        let step1 = ChatClient::new(port, ai.active_main.clone())?;
-        let step2 = build_step2(&ai, &step1)?;
+        // 决定阶段执行计划：
+        //   step1_only=true → 只 phase 1（用 describe_overrides）
+        //   step2_only=true → 只 phase 2（直接用 summary_overrides 启动）
+        //   都 false（daily 路径） → phase 1 → restart → phase 2
+        let run_phase1 = !step2_only;
+        let run_phase2 = !step1_only;
 
-        // 单段图片上限直接走 settings；用户调大撑爆 ctx 时 LLM 报 400，按段标 error
-        let max_images = ai.max_images_per_segment as usize;
-
-        for (idx, seg) in ai.segments.iter().enumerate() {
-            if self.cancel.load(Ordering::Relaxed) {
+        // —— Phase 1: 全段图描述 ——
+        if run_phase1 {
+            let st = self.supervisor.status().await;
+            if st.state != EngineState::Running {
                 let mut p = SummaryProgress::base(
                     source.to_string(),
                     date_str.clone(),
-                    "cancelled",
+                    "engine_starting",
                     total_segments,
                 );
-                p.segment_idx = Some(idx as u32);
+                p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
                 self.emit(p);
-                return Ok(());
             }
-            // 防御：sanitize 已确保 start < end，这里只是兜底
-            if seg.end_hour <= seg.start_hour {
-                continue;
+            let port = self
+                .ensure_engine_running(&ai, describe_overrides.clone())
+                .await?;
+            let step1 = ChatClient::new(port, ai.active_main.clone())?;
+            // step2 client 在 phase 1 不会调用，但 run_one_segment 签名要求传——构造一份占位的
+            let step2_phase1 = build_step2(&ai, &step1)?;
+            let max_images = ai.max_images_per_segment as usize;
+            for (idx, seg) in ai.segments.iter().enumerate() {
+                if self.cancel.load(Ordering::Relaxed) {
+                    let mut p = SummaryProgress::base(
+                        source.to_string(),
+                        date_str.clone(),
+                        "cancelled",
+                        total_segments,
+                    );
+                    p.segment_idx = Some(idx as u32);
+                    self.emit(p);
+                    return Ok(());
+                }
+                if seg.end_hour <= seg.start_hour {
+                    continue;
+                }
+                self.run_one_segment(
+                    source,
+                    &step1,
+                    &step2_phase1,
+                    &ai,
+                    &date_str,
+                    idx as u32,
+                    total_segments,
+                    seg.label.clone(),
+                    seg.start_hour,
+                    seg.end_hour,
+                    max_images,
+                    device.clone(),
+                    parallel,
+                    /* step1_only */ true,
+                    /* step2_only */ false,
+                )
+                .await?;
             }
+        }
 
-            self.run_one_segment(
-                source,
-                &step1,
-                &step2,
-                &ai,
-                &date_str,
-                idx as u32,
-                total_segments,
-                seg.label.clone(),
-                seg.start_hour,
-                seg.end_hour,
-                max_images,
-                device.clone(),
-                parallel,
-                step1_only,
-                step2_only,
-            )
-            .await?;
+        // —— Phase 2: 全段段总结 ——
+        if run_phase2 {
+            // 短路优化：两套配置完全相同时，phase 1 已用合适参数启动，不重启
+            let need_restart_for_phase2 = run_phase1 && describe_overrides != summary_overrides;
+            let port = if need_restart_for_phase2 {
+                let (main_path, mmproj_path) = self.resolve_model_paths(&ai)?;
+                self.supervisor
+                    .restart_with_overrides(Some(main_path), mmproj_path, summary_overrides.clone())
+                    .await?
+            } else if run_phase1 {
+                // 复用 phase 1 那个 server——port 还在 supervisor 里
+                self.supervisor
+                    .status()
+                    .await
+                    .port
+                    .ok_or_else(|| Error::EngineStart("phase 1 后 supervisor 没 port".into()))?
+            } else {
+                // 纯 step2_only 路径：直接用 summary_overrides 启动
+                let st = self.supervisor.status().await;
+                if st.state != EngineState::Running {
+                    let mut p = SummaryProgress::base(
+                        source.to_string(),
+                        date_str.clone(),
+                        "engine_starting",
+                        total_segments,
+                    );
+                    p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+                    self.emit(p);
+                }
+                self.ensure_engine_running(&ai, summary_overrides.clone())
+                    .await?
+            };
+            let step1 = ChatClient::new(port, ai.active_main.clone())?;
+            let step2 = build_step2(&ai, &step1)?;
+            let max_images = ai.max_images_per_segment as usize;
+            for (idx, seg) in ai.segments.iter().enumerate() {
+                if self.cancel.load(Ordering::Relaxed) {
+                    let mut p = SummaryProgress::base(
+                        source.to_string(),
+                        date_str.clone(),
+                        "cancelled",
+                        total_segments,
+                    );
+                    p.segment_idx = Some(idx as u32);
+                    self.emit(p);
+                    return Ok(());
+                }
+                if seg.end_hour <= seg.start_hour {
+                    continue;
+                }
+                self.run_one_segment(
+                    source,
+                    &step1,
+                    &step2,
+                    &ai,
+                    &date_str,
+                    idx as u32,
+                    total_segments,
+                    seg.label.clone(),
+                    seg.start_hour,
+                    seg.end_hour,
+                    max_images,
+                    device.clone(),
+                    parallel,
+                    /* step1_only */ false,
+                    /* step2_only */ true,
+                )
+                .await?;
+            }
         }
 
         let p = SummaryProgress::base(source.to_string(), date_str, "all_done", total_segments);
@@ -848,7 +935,16 @@ impl DaySummaryRunner {
                 return Ok(p);
             }
         }
+        let (main_path, mmproj_path) = self.resolve_model_paths(ai)?;
+        self.supervisor
+            .start_with_overrides(Some(main_path), mmproj_path, engine_overrides)
+            .await
+    }
 
+    /// 把 ai.active_main / ai.active_mmproj 解析成磁盘路径，找不到就抛
+    /// `ModelFileMissing`。给 `ensure_engine_running` 和 Phase 2 的
+    /// `restart_with_overrides` 复用。
+    fn resolve_model_paths(&self, ai: &AiConfig) -> Result<(PathBuf, Option<PathBuf>)> {
         let models_dir = models::root_dir(ai);
         let main_path: PathBuf = models_dir.join(&ai.active_main);
         if !main_path.exists() {
@@ -869,8 +965,6 @@ impl DaySummaryRunner {
             }
             Some(p)
         };
-        self.supervisor
-            .start_with_overrides(Some(main_path), mmproj_path, engine_overrides)
-            .await
+        Ok((main_path, mmproj_path))
     }
 }
