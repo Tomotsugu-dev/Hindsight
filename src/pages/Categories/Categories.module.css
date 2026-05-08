@@ -56,6 +56,9 @@
   align-items: center;
   vertical-align: middle;
   margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-faint);
   cursor: help;
   outline: none;

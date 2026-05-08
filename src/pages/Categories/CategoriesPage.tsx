@@ -76,16 +76,16 @@ export default function CategoriesPage() {
         <div className={styles.headerText}>
           <h2 className={styles.title} style={{ fontSize: 18 }}>
             {t("categories.pairing.sectionTitle")}
-            <span
+            <button
+              type="button"
               className={styles.infoTip}
-              tabIndex={0}
               aria-label={t("categories.pairing.infoTipAria")}
             >
               <Info size={14} strokeWidth={2.25} />
               <span className={styles.infoTipBody} role="tooltip">
                 {t("categories.pairing.infoTipBody")}
               </span>
-            </span>
+            </button>
           </h2>
           <p className={styles.meta}>
             {t("categories.pairing.instructionPrefix")}
@@ -231,7 +231,15 @@ function CategoryRow({
           ) : (
             <span
               className={styles.catName}
+              role="button"
+              tabIndex={0}
               onDoubleClick={() => setEditingName(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setEditingName(true);
+                }
+              }}
               title={t("categories.list.renameTooltip")}
             >
               {displayCategoryName(category, t)}

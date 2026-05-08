@@ -293,6 +293,8 @@ export function PairingSection() {
               const isDraggingThis =
                 drag !== null && drag.processName === member.processName;
               return (
+                // 拖拽天然没有键盘等效（要在 dev 网格里拖到另一格），保留鼠标交互
+                // eslint-disable-next-line jsx-a11y/no-static-element-interactions
                 <div
                   key={dev.id}
                   className={styles.devCol}

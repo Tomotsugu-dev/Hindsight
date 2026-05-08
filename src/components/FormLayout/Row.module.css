@@ -59,6 +59,9 @@
   justify-content: center;
   width: 18px;
   height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
   cursor: help;
   outline: none;

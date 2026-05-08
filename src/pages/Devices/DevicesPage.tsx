@@ -105,12 +105,14 @@ function CloudSyncCard() {
   }, []);
 
   // 没填凭证 → 默认展开设置面板；填好且未登录 → 收起
+  // 仅订阅 configured / signedIn 两个字段的变化，整个 auth 对象引用变更不应触发
   useEffect(() => {
     if (auth && !auth.signedIn) {
       setSetupOpen(!auth.configured);
     } else if (auth?.signedIn) {
       setSetupOpen(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth?.configured, auth?.signedIn]);
 
   const refreshAuth = () => {
@@ -668,7 +670,15 @@ function SelfRow({
           ) : (
             <span
               className={styles.deviceName}
+              role="button"
+              tabIndex={0}
               onDoubleClick={() => setEditing(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setEditing(true);
+                }
+              }}
               title={t("devices.self.doubleClickToRename")}
             >
               {device.name}

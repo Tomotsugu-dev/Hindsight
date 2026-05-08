@@ -45,9 +45,9 @@ export function Section({
           <div className={styles.titleRow}>
             <h2 className={styles.title}>{title}</h2>
             {info ? (
-              <span
+              <button
+                type="button"
                 className={styles.infoWrap}
-                tabIndex={0}
                 aria-label={info}
               >
                 <Info
@@ -58,7 +58,7 @@ export function Section({
                 <span className={styles.infoTip} role="tooltip">
                   {info}
                 </span>
-              </span>
+              </button>
             ) : null}
           </div>
           {description ? (

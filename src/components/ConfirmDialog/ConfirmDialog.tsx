@@ -41,7 +41,13 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return createPortal(
-    <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
+    <div
+      className={styles.backdrop}
+      onMouseDown={onCancel}
+      role="presentation"
+    >
+      {/* role="alertdialog" 已是 interactive role，但 ESLint plugin 仍按 div 默认判定 */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className={styles.dialog}
         role="alertdialog"
@@ -61,6 +67,8 @@ export function ConfirmDialog({
             type="button"
             className={`${styles.btn} ${variant === "danger" ? styles.btnDanger : styles.btnConfirm}`}
             onClick={onConfirm}
+            // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践（屏幕阅读器、键盘 user 都期望）
+            // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
             {confirmText}

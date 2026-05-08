@@ -233,12 +233,21 @@ export function SegmentList({ segments, onChange }: Props) {
               <div
                 key={i}
                 className={styles.segment}
+                role="button"
+                tabIndex={0}
                 onMouseEnter={() => enterSegment(i)}
                 onMouseLeave={leaveSegment}
                 onClick={() => {
                   // 自己已经在 editing 不要再处理；其它情况点段块 = 仅开 picker 改色
                   if (editing?.index === i) return;
                   openPicker(i);
+                }}
+                onKeyDown={(e) => {
+                  if (editing?.index === i) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openPicker(i);
+                  }
                 }}
                 style={
                   {
@@ -256,6 +265,8 @@ export function SegmentList({ segments, onChange }: Props) {
                 {isEditing ? (
                   <input
                     className={styles.editInput}
+                    // 编辑模式刚展开就让光标进 input 是用户预期，键盘 user 也希望立刻能输入
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                     value={editing!.value}
                     onChange={(e) =>
@@ -275,6 +286,13 @@ export function SegmentList({ segments, onChange }: Props) {
                       onClick={(e) => {
                         e.stopPropagation();
                         openEditor(i);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openEditor(i);
+                        }
                       }}
                       role="button"
                       tabIndex={0}
@@ -385,10 +403,12 @@ export function SegmentList({ segments, onChange }: Props) {
 
         {/* 调色板浮层：editing 或 picker 模式时，浮在条下方一排预设色 + "自动" */}
         {pickerIndex != null && sorted[pickerIndex] && (
+          // mousedown 阻止默认，防止点 swatch 时 input 先 blur 把 editing 关掉
+          // 同时让 popover 不冒泡触发段 onClick / outside-click 关闭
+          // 仅作为事件容器，内部 swatch 按钮才是真正的交互目标
+          // eslint-disable-next-line jsx-a11y/no-static-element-interactions
           <div
             className={styles.swatchLayer}
-            // mousedown 阻止默认，防止点 swatch 时 input 先 blur 把 editing 关掉
-            // 同时让 popover 不冒泡触发段 onClick / outside-click 关闭
             onMouseDown={(e) => e.preventDefault()}
           >
             <div

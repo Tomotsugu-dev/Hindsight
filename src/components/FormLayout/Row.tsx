@@ -42,9 +42,9 @@ export function Row({
           <span className={styles.labelLine}>
             <span className={styles.label}>{label}</span>
             {labelHint ? (
-              <span
+              <button
+                type="button"
                 className={styles.infoWrap}
-                tabIndex={0}
                 aria-label={labelHint}
               >
                 <Info
@@ -55,7 +55,7 @@ export function Row({
                 <span className={styles.infoTip} role="tooltip">
                   {labelHint}
                 </span>
-              </span>
+              </button>
             ) : null}
           </span>
           {description ? (
