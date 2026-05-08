@@ -289,6 +289,9 @@
     "ranks": {
       "topApps": "最常用应用",
       "topCategories": "最常用分类"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
     }
   },
   "week": {
@@ -312,6 +315,9 @@
     "ranks": {
       "topApps": "本周最常用应用",
       "topCategories": "本周最常用分类"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     },
     "dow": {
       "mon": "周一",
@@ -343,6 +349,9 @@
     "ranks": {
       "topApps": "本月最常用应用",
       "topCategories": "本月最常用分类"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     }
   },
   "categories": {
@@ -479,13 +488,24 @@
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒后自动释放显存"
       }
     },
+    "describeParams": {
+      "sectionTitle": "图描述参数"
+    },
+    "summaryParams": {
+      "sectionTitle": "段总结参数"
+    },
     "engineParams": {
       "sectionTitle": "引擎参数（启动时）",
       "batch": "批大小",
       "slots": "并发路数",
       "ctx": "上下文（每路）",
       "vramLabel": "估算总占用",
-      "vramBreakdown": "（权重 {{weights}} + KV cache {{kv}} + 其它 ~2.0 · 按 {{params}}B 模型 + ctx {{ctx}}K × {{slots}} 路 估）"
+      "vramBreakdown": "（权重 {{weights}} + KV cache {{kv}} + 其它 ~2.0 · 按 {{params}}B 模型 + ctx {{ctx}}K × {{slots}} 路 估）",
+      "vramSystemDiscrete": "系统 VRAM：{{total}} GB",
+      "vramSystemUnified": "Apple 统一内存 = {{total}} GB",
+      "applyRecommended": "应用推荐",
+      "recommendedAlreadyApplied": "已是推荐值",
+      "recommendedHint": "推荐：slots {{slots}} · ctx {{ctx}} · batch {{batch}}"
     },
     "models": {
       "sectionTitle": "模型",
@@ -931,10 +951,11 @@
         "title": "引擎参数（启动时）",
         "description": "改完会先 stop 引擎、用新参数重启再跑；调试结束后无条件 stop 引擎，下次日报会以默认参数 lazy-start，不污染全局。"
       },
-      "vram": {
-        "label": "估算总占用",
-        "value": "~{{total}} GB",
-        "breakdown": "（权重 {{weights}} + KV cache {{kv}} + 其它 ~2.0 · 按 {{params}}B 模型 + ctx {{ctxK}}K × {{slots}} 槽 估）"
+      "describeEngine": {
+        "title": "图描述参数"
+      },
+      "summaryEngine": {
+        "title": "段总结参数"
       },
       "errors": {
         "scopePending": "{{type}}调试待后端实现",

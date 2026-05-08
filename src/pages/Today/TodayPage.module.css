@@ -58,6 +58,16 @@
   margin: 0;
 }
 
+/* 选中态显示在排行卡标题旁的纯文字时段标签，如 "14:00–14:59"。
+   清除筛选靠点同一根柱子（toggle），不是点这个文字。 */
+.selectionLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
 /* 排行两栏 */
 .ranks {
   display: grid;

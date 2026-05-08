@@ -73,10 +73,14 @@
   transform: rotate(180deg);
 }
 
-/* —— 下拉菜单 —— */
+/* —— 下拉菜单 ——
+   `data-direction` 由 SimplePicker 在打开时按视口余量决定：
+     - "down"（默认）→ 锚在 trigger 下沿（top: 100% + gap）
+     - "up"          → 锚在 trigger 上沿（bottom: 100% + gap），用于靠近窗口底部
+                       的 picker（如 EngineTab 上下文 / 槽位选择），避免菜单
+                       撑出 720 高度被裁。 */
 .menu {
   position: absolute;
-  top: calc(100% + 6px);
   left: 0;
   right: 0;
   z-index: 50;
@@ -88,14 +92,37 @@
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 4px 12px rgba(20, 20, 40, 0.08),
     0 12px 28px rgba(20, 20, 40, 0.1);
-  animation: menuIn 200ms var(--ease-out);
-  transform-origin: top center;
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease-out);
 }
 
-@keyframes menuIn {
+.menu[data-direction="down"] {
+  top: calc(100% + 6px);
+  transform-origin: top center;
+  animation-name: menuInDown;
+}
+
+.menu[data-direction="up"] {
+  bottom: calc(100% + 6px);
+  transform-origin: bottom center;
+  animation-name: menuInUp;
+}
+
+@keyframes menuInDown {
   from {
     opacity: 0;
     transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes menuInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
   }
   to {
     opacity: 1;

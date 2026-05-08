@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
@@ -6,6 +6,8 @@ import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
 import { PeriodLegend } from "../../components/PeriodLegend/PeriodLegend";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { useWeekCache } from "../../hooks/useWeekCache";
+import { useSelectedDayApps } from "../../hooks/useSelectedDayApps";
+import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
@@ -14,6 +16,16 @@ import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList } from "../Today/RankedList";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeekPage.module.css";
+
+/** 把 days[i].date 折算成相对今天的 dayOffset（0=今天，-1=昨天）。
+ *  用 startOfDay 做差，避免时区/夏令时错位一格。 */
+function dayOffsetForDate(date: Date): number {
+  const a = new Date(date);
+  a.setHours(0, 0, 0, 0);
+  const b = new Date();
+  b.setHours(0, 0, 0, 0);
+  return Math.round((a.getTime() - b.getTime()) / 86400000);
+}
 
 export default function WeekPage() {
   const { t } = useTranslation();
@@ -69,7 +81,37 @@ export default function WeekPage() {
   );
   const avgPerDay = activeDays > 0 ? totalMinutes / activeDays : 0;
 
-  const { categoryRanks, appRanks } = usePeriodRankings(days, apps);
+  // 点某天 → 该 day index 高亮，其它淡化；toggle
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  useEffect(() => {
+    setSelectedIndex(null);
+  }, [offset, selectedDeviceId]);
+  const handleDayClick = (i: number) =>
+    setSelectedIndex((prev) => (prev === i ? null : i));
+  useClickOutsideBars(selectedIndex !== null, () => setSelectedIndex(null));
+
+  const selectedDay = selectedIndex !== null ? days[selectedIndex] : null;
+  const selectedDayOffset = selectedDay ? dayOffsetForDate(selectedDay.date) : null;
+  const dayApps = useSelectedDayApps(selectedDayOffset, selectedDeviceId);
+
+  const segmentsForRanks = useMemo(
+    () =>
+      selectedIndex === null || !days[selectedIndex] ? days : [days[selectedIndex]],
+    [days, selectedIndex],
+  );
+  const appsForRanks = useMemo(
+    () => (selectedIndex === null ? apps : (dayApps.apps ?? apps)),
+    [selectedIndex, apps, dayApps.apps],
+  );
+  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks);
+
+  const selectionLabel =
+    selectedDay !== null
+      ? t("week.selection.label", {
+          month: selectedDay.date.getMonth() + 1,
+          day: selectedDay.date.getDate(),
+        })
+      : null;
 
   return (
     <div className={styles.page}>
@@ -102,7 +144,12 @@ export default function WeekPage() {
         footer={<PeriodLegend />}
         slides={[
           <WeeklyBarChart key="prev" days={getWeek(offset - 1).days} />,
-          <WeeklyBarChart key="current" days={days} />,
+          <WeeklyBarChart
+            key="current"
+            days={days}
+            selectedIndex={selectedIndex}
+            onIndexClick={handleDayClick}
+          />,
           <WeeklyBarChart key="next" days={getWeek(offset + 1).days} />,
         ]}
       />
@@ -111,6 +158,9 @@ export default function WeekPage() {
         <section className={styles.card}>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{t("week.ranks.topApps")}</h2>
+            {selectionLabel && (
+              <span className={styles.selectionLabel}>{selectionLabel}</span>
+            )}
           </header>
           {appRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -124,6 +174,9 @@ export default function WeekPage() {
         <section className={styles.card}>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{t("week.ranks.topCategories")}</h2>
+            {selectionLabel && (
+              <span className={styles.selectionLabel}>{selectionLabel}</span>
+            )}
           </header>
           {categoryRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>

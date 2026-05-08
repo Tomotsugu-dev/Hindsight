@@ -289,6 +289,9 @@
     "ranks": {
       "topApps": "よく使うアプリ",
       "topCategories": "よく使う分類"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
     }
   },
   "week": {
@@ -308,6 +311,9 @@
       "lastWeek": "先週",
       "weeksAgo": "{{count}} 週間前",
       "weeksLater": "{{count}} 週間後"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     },
     "ranks": {
       "topApps": "今週よく使ったアプリ",
@@ -343,6 +349,9 @@
     "ranks": {
       "topApps": "今月よく使ったアプリ",
       "topCategories": "今月よく使った分類"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     }
   },
   "categories": {
@@ -479,13 +488,24 @@
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒後に VRAM を解放"
       }
     },
+    "describeParams": {
+      "sectionTitle": "画像説明パラメータ"
+    },
+    "summaryParams": {
+      "sectionTitle": "セグメント要約パラメータ"
+    },
     "engineParams": {
       "sectionTitle": "エンジン パラメータ（起動時）",
       "batch": "バッチサイズ",
       "slots": "並列スロット",
       "ctx": "コンテキスト（スロットあたり）",
       "vramLabel": "VRAM 推定",
-      "vramBreakdown": "（重み {{weights}} + KV cache {{kv}} + その他 ~2.0 ・ {{params}}B モデル + ctx {{ctx}}K × {{slots}} スロットで推定）"
+      "vramBreakdown": "（重み {{weights}} + KV cache {{kv}} + その他 ~2.0 ・ {{params}}B モデル + ctx {{ctx}}K × {{slots}} スロットで推定）",
+      "vramSystemDiscrete": "システム VRAM：{{total}} GB",
+      "vramSystemUnified": "Apple ユニファイドメモリ = {{total}} GB",
+      "applyRecommended": "推奨を適用",
+      "recommendedAlreadyApplied": "推奨済み",
+      "recommendedHint": "推奨：slots {{slots}} · ctx {{ctx}} · batch {{batch}}"
     },
     "models": {
       "sectionTitle": "モデル",
@@ -931,10 +951,11 @@
         "title": "エンジンパラメータ（起動時）",
         "description": "変更するとエンジンを停止し、新しいパラメータで再起動してから実行します。デバッグ後はエンジンを無条件に停止し、次回の日次サマリーはデフォルト値で lazy-start するため、グローバル状態は汚されません。"
       },
-      "vram": {
-        "label": "推定総使用量",
-        "value": "~{{total}} GB",
-        "breakdown": "（重み {{weights}} + KV cache {{kv}} + その他 ~2.0 · {{params}}B モデル + ctx {{ctxK}}K × {{slots}} スロット 推定）"
+      "describeEngine": {
+        "title": "画像説明パラメータ"
+      },
+      "summaryEngine": {
+        "title": "セグメント要約パラメータ"
       },
       "errors": {
         "scopePending": "{{type}}デバッグはバックエンド実装待ちです。",

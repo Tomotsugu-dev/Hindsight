@@ -97,7 +97,7 @@ pub struct EngineRuntimeStatus {
 /// 调试 tab 用：调一次跑一次的 batch / 并发槽位，不进 settings.ai 全局，每次
 /// 调试 generate 之前先 stop + start with overrides，跑完再 stop 让下次正常
 /// 日报 lazy start 时回到默认值。
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EngineStartOverrides {
     /// 同时设 `--batch-size N --ubatch-size N`。`None` = 用 llama.cpp 默认（512）。
     /// 加大能提升 prompt eval 速度，代价是 KV cache 高水位 ↑（5090 32GB 装得下 4096）。
@@ -466,6 +466,20 @@ impl EngineSupervisor {
             inner.child = None;
             Err(Error::EngineStart(err_msg))
         }
+    }
+
+    /// 停止当前引擎，再用新 overrides 启动一个——给"两阶段不同参数"的 runner 用。
+    /// 内部串行：`stop()` → `start_with_overrides()`。
+    /// 失败语义：stop 失败立刻返回错误（不再启动）；start 失败时引擎已是 Stopped 状态。
+    pub async fn restart_with_overrides(
+        &self,
+        model_path: Option<PathBuf>,
+        mmproj_path: Option<PathBuf>,
+        overrides: EngineStartOverrides,
+    ) -> Result<u16> {
+        self.stop().await?;
+        self.start_with_overrides(model_path, mmproj_path, overrides)
+            .await
     }
 
     /// 停止子进程。kill + wait 收尸，状态切回 Stopped。

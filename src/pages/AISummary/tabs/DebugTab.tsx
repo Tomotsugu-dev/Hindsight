@@ -68,36 +68,6 @@ function buildScopeOptions(t: TFunction): Array<{ value: DebugScope; label: stri
   ];
 }
 
-/** 估算当前引擎参数组合下的总 VRAM / RAM 占用（GB）。
- *
- * 简化模型——从 active_main 文件名抠出 "NB" 参数量，按 Q4 量化粗算：
- *   weights_GB    ≈ params × 0.55     （Q4_K_M 经验比例）
- *   kv_GB         ≈ params × 18 KB/token × ctx_total
- *   overhead_GB   ≈ 2.0               （vision encoder + workspace + activations）
- *
- * 误差 ±20%，用来给用户提前感知"这个组合是不是离 OOM 不远了"，
- * 不是精确值。撞了上限引擎会 fail-fast 报 cudaMalloc OOM 兜底。 */
-function estimateVramGB(
-  modelName: string,
-  parallelSlots: number,
-  ctxSize: number,
-): { totalGB: number; weightsGB: number; kvGB: number; params: number } {
-  // 文件名里像 "Qwen2.5-VL-3B" / "Qwen3VL-8B" / "gemma-4-4b" 都能匹配
-  const m = modelName.match(/(\d+(?:\.\d+)?)\s*B/i);
-  const params = m ? parseFloat(m[1]) : 4; // 找不到就按 4B 兜底
-  const weightsGB = params * 0.55;
-  const kvPerTokenKB = 18 * params;
-  const totalCtx = ctxSize * Math.max(1, parallelSlots);
-  const kvGB = (kvPerTokenKB * totalCtx) / 1024 / 1024;
-  const overheadGB = 2;
-  return {
-    totalGB: weightsGB + kvGB + overheadGB,
-    weightsGB,
-    kvGB,
-    params,
-  };
-}
-
 const LOG_RING_SIZE = 200; // 防止整日跑事件流爆内存
 
 function fmtLocalDate(d: Date): string {
@@ -241,9 +211,12 @@ export default function DebugTab() {
     debugExcluded,
     debugHashThreshold,
     debugHashWindow,
-    debugBatchSize,
-    debugParallelSlots,
-    debugCtxSize,
+    debugDescribeBatchSize,
+    debugDescribeParallelSlots,
+    debugDescribeCtxSize,
+    debugSummaryBatchSize,
+    debugSummaryParallelSlots,
+    debugSummaryCtxSize,
     debugSysPrompt,
     setDebugSysPrompt,
     debugImagePrompt,
@@ -459,10 +432,14 @@ export default function DebugTab() {
           debugImagePrompt.trim() === imgPromptDefault.trim()
             ? ""
             : debugImagePrompt,
-        // null / 1 → 不传，让后端走默认；非默认值才打包，触发 stop+start with overrides
-        ...(debugBatchSize != null ? { batchSize: debugBatchSize } : {}),
-        ...(debugParallelSlots > 1 ? { parallelSlots: debugParallelSlots } : {}),
-        ...(debugCtxSize != null ? { ctxSize: debugCtxSize } : {}),
+        // 双套引擎参数——null / 1 = 不传，让后端 fallback 到 settings.ai 默认；
+        // 非默认值才打包到对应的 describe* / summary* 字段，触发 stop+start with overrides
+        ...(debugDescribeBatchSize != null ? { describeBatchSize: debugDescribeBatchSize } : {}),
+        ...(debugDescribeParallelSlots > 1 ? { describeParallelSlots: debugDescribeParallelSlots } : {}),
+        ...(debugDescribeCtxSize != null ? { describeCtxSize: debugDescribeCtxSize } : {}),
+        ...(debugSummaryBatchSize != null ? { summaryBatchSize: debugSummaryBatchSize } : {}),
+        ...(debugSummaryParallelSlots > 1 ? { summaryParallelSlots: debugSummaryParallelSlots } : {}),
+        ...(debugSummaryCtxSize != null ? { summaryCtxSize: debugSummaryCtxSize } : {}),
         // 跟 settings 全局值不同才传——一致的话留 undefined 让后端走 settings.ai.externalEnabled
         ...(debugExternalEnabled !== (settings?.ai.externalEnabled ?? false)
           ? { externalEnabled: debugExternalEnabled }
@@ -887,14 +864,23 @@ export default function DebugTab() {
                           ]?.trim() ?? "")
                             ? ""
                             : debugImagePrompt,
-                        ...(debugBatchSize != null
-                          ? { batchSize: debugBatchSize }
+                        ...(debugDescribeBatchSize != null
+                          ? { describeBatchSize: debugDescribeBatchSize }
                           : {}),
-                        ...(debugParallelSlots > 1
-                          ? { parallelSlots: debugParallelSlots }
+                        ...(debugDescribeParallelSlots > 1
+                          ? { describeParallelSlots: debugDescribeParallelSlots }
                           : {}),
-                        ...(debugCtxSize != null
-                          ? { ctxSize: debugCtxSize }
+                        ...(debugDescribeCtxSize != null
+                          ? { describeCtxSize: debugDescribeCtxSize }
+                          : {}),
+                        ...(debugSummaryBatchSize != null
+                          ? { summaryBatchSize: debugSummaryBatchSize }
+                          : {}),
+                        ...(debugSummaryParallelSlots > 1
+                          ? { summaryParallelSlots: debugSummaryParallelSlots }
+                          : {}),
+                        ...(debugSummaryCtxSize != null
+                          ? { summaryCtxSize: debugSummaryCtxSize }
                           : {}),
                       },
                       "debug",
@@ -1099,46 +1085,6 @@ export default function DebugTab() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** 「引擎参数」Section 末尾的估算行——基于当前 picker 组合 + active model
- *  文件名抠出的参数量，粗估总占用。颜色按风险分档：
- *   < 16 GB 灰、16-24 橙、> 24 红（5090 32GB 留 ~8 GB margin 给系统 / encoder）
- */
-export function VramEstimateLine({
-  modelName,
-  parallelSlots,
-  ctxSize,
-}: {
-  modelName: string;
-  parallelSlots: number;
-  ctxSize: number;
-}) {
-  const { t } = useTranslation();
-  if (!modelName.trim()) {
-    return null;
-  }
-  const est = estimateVramGB(modelName, parallelSlots, ctxSize);
-  let levelClass = styles.vramEstOk;
-  if (est.totalGB > 24) levelClass = styles.vramEstDanger;
-  else if (est.totalGB > 16) levelClass = styles.vramEstWarn;
-  return (
-    <div className={`${styles.vramEst} ${levelClass}`}>
-      <span className={styles.vramEstLabel}>{t("aiSummary.debug.vram.label")}</span>
-      <span className={styles.vramEstValue}>
-        {t("aiSummary.debug.vram.value", { total: est.totalGB.toFixed(1) })}
-      </span>
-      <span className={styles.vramEstBreakdown}>
-        {t("aiSummary.debug.vram.breakdown", {
-          weights: est.weightsGB.toFixed(1),
-          kv: est.kvGB.toFixed(1),
-          params: est.params,
-          ctxK: (ctxSize / 1024) | 0,
-          slots: parallelSlots,
-        })}
-      </span>
     </div>
   );
 }

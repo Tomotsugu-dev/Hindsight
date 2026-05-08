@@ -134,9 +134,25 @@ export interface EngineRuntimeStatus {
   idleSecondsRemaining: number | null;
 }
 
-/** binary + runtime 合并；getEngineStatus 返回这个 */
+/** 系统 VRAM 信息来源——前端按此切换文案。 */
+export type VramSource = "discrete" | "unified";
+
+/** 系统总显存信息。
+ *  - `discrete` = NVIDIA 独立显存（nvidia-smi 报值）
+ *  - `unified`  = Apple Silicon 统一内存 × 0.7（业界惯例可用比例）
+ *  CPU-only 机器 / 探测失败时整个对象为 null。 */
+export interface VramInfo {
+  totalGb: number;
+  source: VramSource;
+}
+
+/** binary + runtime + 子进程保护 + 系统 VRAM 合并；getEngineStatus 返回这个 */
 export interface EngineStatus extends EngineBinaryStatus {
   runtime: EngineRuntimeStatus;
+  /** 子进程保护降级原因；null = 保护正常 */
+  protectionDegraded: string | null;
+  /** 系统 VRAM；null = 未检测到（CPU-only 机器或 nvidia-smi 不存在） */
+  systemVram: VramInfo | null;
 }
 
 /** 本地磁盘上的 GGUF 文件条目（可能是主权重，也可能是 mmproj）。 */
@@ -239,16 +255,25 @@ export interface AiOverrides {
   systemPrompt?: string;
   /** step 1 单图描述的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
   imageDescribePrompt?: string;
-  /** llama-server `--batch-size` / `--ubatch-size`（取一致值）；
-   *  改值会触发引擎 stop+start with overrides，调试跑完再 stop 让下次默认重启。 */
+  /** llama-server `--batch-size` / `--ubatch-size`（取一致值）。
+   *  双套参数语义：旧字段是 fallback——`describe*` / `summary*` 未设时降级使用。 */
   batchSize?: number;
-  /** llama-server `-np`（并行槽位数）+ 后端 step 1 image describe 并发数；
-   *  两者同时生效才真正并行：-np 为 KV cache 槽预留，前端并发数决定同时发的请求。 */
+  /** llama-server `-np`（并行槽位数）。详见 [batchSize] 关于 fallback 语义。 */
   parallelSlots?: number;
-  /** 每个 slot 的 ctx 上限（token）。后端实际传给 llama-server 的 `--ctx-size`
-   *  是 `ctxSize × parallelSlots`，让每个 slot 都拿到这个 budget。
-   *  启动时按这个总量一次性吃 KV cache 显存（~30KB/token）。 */
+  /** 每个 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
   ctxSize?: number;
+  /** 图描述阶段的 batch；`undefined` = fallback 到 [batchSize]。 */
+  describeBatchSize?: number;
+  /** 图描述阶段的 `-np`；`undefined` = fallback 到 [parallelSlots]。 */
+  describeParallelSlots?: number;
+  /** 图描述阶段的每槽 ctx；`undefined` = fallback 到 [ctxSize]。 */
+  describeCtxSize?: number;
+  /** 段总结阶段的 batch；`undefined` = fallback 到 [batchSize]。 */
+  summaryBatchSize?: number;
+  /** 段总结阶段的 `-np`（推荐恒为 1）；`undefined` = fallback 到 [parallelSlots]。 */
+  summaryParallelSlots?: number;
+  /** 段总结阶段的每槽 ctx；`undefined` = fallback 到 [ctxSize]。 */
+  summaryCtxSize?: number;
   /** 本次跑段总结走云端 (true) 还是本地 (false)。`undefined` = 沿用 settings.ai.externalEnabled。
    *  endpoint / model / apiKey 永远沿用 settings 全局值——这里只控制路径选择。 */
   externalEnabled?: boolean;
@@ -348,15 +373,29 @@ export interface AiConfig {
   /** 用户对内置 image describe prompt（step 1 单图描述）的覆盖；按语言独立。 */
   imageDescribeOverrides: PromptOverrides;
   /** 引擎启动级参数：`--batch-size` / `--ubatch-size` 一致值。
-   *  null = 走 llama.cpp 默认 512；改值要 stop+start 引擎才生效。 */
+   *  双套参数语义：这三个旧字段（batchSize/parallelSlots/ctxSize）现在是 fallback——
+   *  对应的 describe* / summary* 字段未填时降级使用。详见 describeBatchSize 等。 */
   batchSize: number | null;
-  /** 引擎启动级参数：`-np` 并行槽位数 + 后端 step 1 image describe 并发数。
-   *  null = 1（串行）。改值要重启引擎。 */
+  /** 引擎启动级参数：`-np` 并行槽位数。详见 [batchSize] 关于 fallback 语义。 */
   parallelSlots: number | null;
-  /** 引擎启动级参数：每 slot 的 ctx 上限（token）。
-   *  实际 `--ctx-size = ctxSize × parallelSlots`；启动时按总量预占 KV cache。
-   *  null = 8K 默认。 */
+  /** 引擎启动级参数：每 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
   ctxSize: number | null;
+
+  /** 图描述阶段（step 1，多图并行）的 batch；null = fallback 到 [batchSize]。 */
+  describeBatchSize: number | null;
+  /** 图描述阶段的 `-np` 并行槽数；null = fallback 到 [parallelSlots]。
+   *  双套参数的关键差异点——describe 默认推荐高 slots（多图并行）。 */
+  describeParallelSlots: number | null;
+  /** 图描述阶段的每槽 ctx；null = fallback 到 [ctxSize]。 */
+  describeCtxSize: number | null;
+  /** 段总结阶段（step 2，单段串行）的 batch；null = fallback 到 [batchSize]。 */
+  summaryBatchSize: number | null;
+  /** 段总结阶段的 `-np`；null = fallback 到 [parallelSlots]。
+   *  推荐恒为 1，给 ctx 让出预算。 */
+  summaryParallelSlots: number | null;
+  /** 段总结阶段的每槽 ctx；null = fallback 到 [ctxSize]。
+   *  双套参数的关键差异点——summary 默认推荐高 ctx（容纳多图描述聚合）。 */
+  summaryCtxSize: number | null;
 }
 
 export type PromptLanguage = "zh" | "en" | "ja";
@@ -450,6 +489,13 @@ export const api = {
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_day_apps", { dayOffset, limit, deviceId }),
+  getHourApps: (
+    dayOffset: number,
+    hour: number,
+    limit?: number,
+    deviceId?: string,
+  ) =>
+    invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
   getWeekDays: (weekOffset: number, deviceId?: string) =>
     invoke<DaySummaryDto[]>("get_week_days", { weekOffset, deviceId }),
   getWeekApps: (weekOffset: number, limit?: number, deviceId?: string) =>

@@ -112,6 +112,7 @@ pub fn run() {
             // --- data: 报表查询 ---
             commands::data::get_day_hours,
             commands::data::get_day_apps,
+            commands::data::get_hour_apps,
             commands::data::get_week_days,
             commands::data::get_week_apps,
             commands::data::get_month_days,

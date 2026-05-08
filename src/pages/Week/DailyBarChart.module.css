@@ -49,6 +49,7 @@
   gap: 6px;
 }
 
+/* column 是个 <button>，重置浏览器默认外观；非交互态退化成纯展示。 */
 .column {
   flex: 1;
   height: 100%;
@@ -56,6 +57,18 @@
   align-items: flex-end;
   justify-content: center;
   min-width: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.column:disabled {
+  cursor: default;
 }
 
 .bar {
@@ -65,11 +78,21 @@
   flex-direction: column-reverse;
   border-radius: 4px 4px 0 0;
   overflow: hidden;
-  transition: filter 180ms var(--ease-out);
+  transition:
+    filter 180ms var(--ease-out),
+    opacity 180ms var(--ease-out);
 }
 
-.bar:hover {
+.column:not(:disabled):hover .bar {
   filter: brightness(1.06) saturate(1.05);
+}
+
+.bar[data-selected="true"] {
+  filter: brightness(1.1) saturate(1.08);
+}
+.bar[data-dimmed="true"] {
+  opacity: 0.32;
+  filter: saturate(0.6);
 }
 
 .segment {

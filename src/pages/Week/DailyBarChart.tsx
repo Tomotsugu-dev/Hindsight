@@ -8,6 +8,10 @@ interface DailyBarChartProps {
   days: DaySummary[];
   /** 给每一根柱子返回 X 轴标签；返回 null 则不画 */
   xLabel?: (day: DaySummary, index: number) => string | null;
+  /** 选中的日期 index；null = 没选中。 */
+  selectedIndex?: number | null;
+  /** 点击触发；不传 → 柱子非交互（PeriodCard prev/next 静态副本用）。 */
+  onIndexClick?: (index: number) => void;
 }
 
 /** 把 max 向上对齐到合理的整时刻度 */
@@ -20,7 +24,12 @@ function niceYMax(max: number): number {
   return Math.ceil(max / 120) * 120;
 }
 
-export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
+export function DailyBarChart({
+  days,
+  xLabel,
+  selectedIndex = null,
+  onIndexClick,
+}: DailyBarChartProps) {
   const { t } = useTranslation();
   const { getCategory } = useCategories();
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
@@ -77,12 +86,26 @@ export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
             {days.map((day, i) => {
               const total = day.segments.reduce((s, x) => s + x.minutes, 0);
               const heightPct = (total / yMax) * 100;
+              const interactive = !!onIndexClick;
+              const selected = selectedIndex === i;
+              const dimmed = selectedIndex !== null && selectedIndex !== i;
               return (
-                <div key={i} className={styles.column}>
+                <button
+                  type="button"
+                  key={i}
+                  className={styles.column}
+                  onClick={interactive ? () => onIndexClick?.(i) : undefined}
+                  disabled={!interactive}
+                  data-bar-button=""
+                  data-selected={selected || undefined}
+                  data-dimmed={dimmed || undefined}
+                  aria-label={total > 0 ? fmtBarTitle(day, total) : undefined}
+                >
                   <div
                     className={styles.bar}
                     style={{ height: `${heightPct}%` }}
-                    title={total > 0 ? fmtBarTitle(day, total) : undefined}
+                    data-selected={selected || undefined}
+                    data-dimmed={dimmed || undefined}
                   >
                     {day.segments.map((seg) => {
                       const cat = getCategory(seg.categoryId);
@@ -99,7 +122,7 @@ export function DailyBarChart({ days, xLabel }: DailyBarChartProps) {
                       );
                     })}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

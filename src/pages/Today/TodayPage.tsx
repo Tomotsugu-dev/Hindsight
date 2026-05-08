@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
@@ -9,6 +9,8 @@ import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList } from "./RankedList";
 import { useDayCache } from "../../hooks/useDayCache";
+import { useHourApps } from "../../hooks/useHourApps";
+import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
@@ -50,6 +52,20 @@ export default function TodayPage() {
 
   const { hours, apps } = useMemo(() => getDay(offset), [getDay, offset]);
 
+  // 点柱子→选中那个小时；再点同一柱子取消（toggle）。
+  // offset / device 切换时自动清，避免上一段选择跨日生效。
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  useEffect(() => {
+    setSelectedHour(null);
+  }, [offset, selectedDeviceId]);
+  const handleHourClick = (h: number) =>
+    setSelectedHour((prev) => (prev === h ? null : h));
+  // 点页面任何非柱子区域 → 清除选中
+  useClickOutsideBars(selectedHour !== null, () => setSelectedHour(null));
+
+  // 选中小时时拉该小时的 top apps；未选中 → null/不请求
+  const hourApps = useHourApps(offset, selectedHour, selectedDeviceId);
+
   const workRanges: WorkRange[] | null = useMemo(() => {
     if (!settings?.workHoursEnabled) return null;
     if (!settings.workRanges.length) return null;
@@ -68,7 +84,26 @@ export default function TodayPage() {
     [hours],
   );
 
-  const { categoryRanks, appRanks } = usePeriodRankings(hours, apps);
+  // 选中小时时：categories segments 只用该小时；apps 用 hourApps（loading 时退到全日 apps，避免列表瞬空）
+  const segmentsForRanks = useMemo(
+    () => (selectedHour === null ? hours : hours.filter((h) => h.hour === selectedHour)),
+    [hours, selectedHour],
+  );
+  const appsForRanks = useMemo(
+    () => (selectedHour === null ? apps : (hourApps.apps ?? apps)),
+    [selectedHour, apps, hourApps.apps],
+  );
+  const { categoryRanks, appRanks } = usePeriodRankings(
+    segmentsForRanks,
+    appsForRanks,
+  );
+
+  const selectionLabel =
+    selectedHour !== null
+      ? t("today.selection.label", {
+          hour: String(selectedHour).padStart(2, "0"),
+        })
+      : null;
 
   return (
     <div className={styles.page}>
@@ -103,8 +138,15 @@ export default function TodayPage() {
           />
         }
         slides={[
+          // prev/next 是 PeriodCard 的滑动副本，不参与点击；只 current 接 onHourClick
           <HourlyChart key="prev" hours={getDay(offset - 1).hours} workHours={workRanges} />,
-          <HourlyChart key="current" hours={hours} workHours={workRanges} />,
+          <HourlyChart
+            key="current"
+            hours={hours}
+            workHours={workRanges}
+            selectedHour={selectedHour}
+            onHourClick={handleHourClick}
+          />,
           <HourlyChart key="next" hours={getDay(offset + 1).hours} workHours={workRanges} />,
         ]}
       />
@@ -113,6 +155,9 @@ export default function TodayPage() {
         <section className={styles.card}>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{t("today.ranks.topApps")}</h2>
+            {selectionLabel && (
+              <span className={styles.selectionLabel}>{selectionLabel}</span>
+            )}
           </header>
           {appRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -126,6 +171,9 @@ export default function TodayPage() {
         <section className={styles.card}>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{t("today.ranks.topCategories")}</h2>
+            {selectionLabel && (
+              <span className={styles.selectionLabel}>{selectionLabel}</span>
+            )}
           </header>
           {categoryRanks.length > 0 ? (
             <div className={styles.rankBody}>

@@ -252,6 +252,78 @@ pub async fn day_apps(
         .collect())
 }
 
+/// 拉某日特定小时（local_hour = ?）的 top 应用列表，逻辑同 [`day_apps`]——
+/// 多 `AND a.local_hour = ?` 一条过滤。给前端"点小时柱子→排行筛选到该小时"用。
+pub async fn day_hour_apps(
+    pool: &DbPool,
+    day_offset: i32,
+    hour: i32,
+    limit: u32,
+    device: DeviceFilter,
+) -> Result<Vec<AppUsage>> {
+    let target = Local::now() + Duration::days(day_offset as i64);
+    let date = target.format("%Y-%m-%d").to_string();
+
+    let rows: Vec<(String, String, String, i64)> = pool
+        .0
+        .call(move |conn| {
+            // 跟 day_apps 同 SQL，多了 `AND a.local_hour = ?`
+            let sql = format!(
+                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                        COALESCE(c.id, 'other')                         AS cat,
+                        MIN(a.process_name)                             AS icon_process,
+                        SUM(a.duration_secs)                            AS total
+                 FROM activities a
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 LEFT JOIN categories c
+                   ON c.id = g.category_id AND c.deleted_at IS NULL
+                 WHERE a.local_date = ? AND a.local_hour = ? {}
+                 GROUP BY COALESCE(g.id, a.process_name)
+                 ORDER BY total DESC
+                 LIMIT ?",
+                device.sql_clause()
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&date);
+            params.push(&hour);
+            if let Some(extra) = device.extra_param() {
+                params.push(extra);
+            }
+            params.push(&limit);
+            let mut stmt = conn.prepare(&sql).db()?;
+            let it = stmt
+                .query_map(params.as_slice(), |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
+                    ))
+                })
+                .db()?;
+            let mut out = Vec::new();
+            for r in it {
+                out.push(r.db()?);
+            }
+            Ok(out)
+        })
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(process, cat, icon_process, secs)| AppUsage {
+            process,
+            category_id: cat,
+            minutes: ((secs as f64 / 60.0).round() as u32),
+            icon_process,
+        })
+        .filter(|a| a.minutes > 0)
+        .collect())
+}
+
 /// 拉某周 7 天每天的分类时长分布。`week_offset = 0` 是本周（周一开始）。
 pub async fn week_days(
     pool: &DbPool,

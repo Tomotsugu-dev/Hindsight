@@ -79,14 +79,62 @@ pub struct AiConfig {
     /// 引擎启动级参数：`--batch-size` / `--ubatch-size`（取一致值）。
     /// `None` = 不传，走 llama.cpp 默认 512。
     /// 改值会让下次引擎启动用新参数；引擎已在跑时不会自动重启，需用户主动 stop。
+    ///
+    /// 双套参数语义：这三个旧字段（`batch_size` / `parallel_slots` / `ctx_size`）
+    /// 现在是 fallback——当对应的 `describe_*` / `summary_*` 字段为 `None` 时降级使用。
+    /// 通过 [`Self::describe_batch_size_effective`] 等 getter 取值，调用方不要直接读字段。
     pub batch_size: Option<u32>,
     /// 引擎启动级参数：`-np N` 并行槽位数 + 后端 step 1 image describe 并发数。
-    /// `None` = 1（串行）。
+    /// `None` = 1（串行）。详见 [`Self::batch_size`] 关于 fallback 语义。
     pub parallel_slots: Option<u32>,
     /// 引擎启动级参数：每 slot 的 ctx 上限（token）。
     /// 实际 `--ctx-size = ctx_size × parallel_slots`，让每槽都拿到这个 budget。
-    /// `None` = 8K 默认。启动时按总量预占 KV cache。
+    /// `None` = 8K 默认。详见 [`Self::batch_size`] 关于 fallback 语义。
     pub ctx_size: Option<u32>,
+
+    /// 图描述阶段（step 1，多图并行）的 batch 参数；`None` = fallback 到 [`Self::batch_size`]。
+    pub describe_batch_size: Option<u32>,
+    /// 图描述阶段的 `-np` 并行槽数；`None` = fallback 到 [`Self::parallel_slots`]。
+    /// 这是双套参数的关键差异点——describe 默认推荐高 slots（多图并行）。
+    pub describe_parallel_slots: Option<u32>,
+    /// 图描述阶段的每槽 ctx；`None` = fallback 到 [`Self::ctx_size`]。
+    pub describe_ctx_size: Option<u32>,
+
+    /// 段总结阶段（step 2，单段串行）的 batch 参数；`None` = fallback 到 [`Self::batch_size`]。
+    pub summary_batch_size: Option<u32>,
+    /// 段总结阶段的 `-np`；`None` = fallback 到 [`Self::parallel_slots`]。
+    /// 段总结无并行需求，推荐恒为 1，给 ctx 让出预算。
+    pub summary_parallel_slots: Option<u32>,
+    /// 段总结阶段的每槽 ctx；`None` = fallback 到 [`Self::ctx_size`]。
+    /// 这是双套参数的关键差异点——summary 默认推荐高 ctx（容纳多图描述聚合）。
+    pub summary_ctx_size: Option<u32>,
+}
+
+impl AiConfig {
+    /// 取图描述阶段的 batch；新字段优先，未设则 fallback 到全局 `batch_size`。
+    pub fn describe_batch_size_effective(&self) -> Option<u32> {
+        self.describe_batch_size.or(self.batch_size)
+    }
+    /// 取图描述阶段的 slots；同上 fallback。
+    pub fn describe_parallel_slots_effective(&self) -> Option<u32> {
+        self.describe_parallel_slots.or(self.parallel_slots)
+    }
+    /// 取图描述阶段的 ctx；同上 fallback。
+    pub fn describe_ctx_size_effective(&self) -> Option<u32> {
+        self.describe_ctx_size.or(self.ctx_size)
+    }
+    /// 取段总结阶段的 batch；同上 fallback。
+    pub fn summary_batch_size_effective(&self) -> Option<u32> {
+        self.summary_batch_size.or(self.batch_size)
+    }
+    /// 取段总结阶段的 slots；同上 fallback。
+    pub fn summary_parallel_slots_effective(&self) -> Option<u32> {
+        self.summary_parallel_slots.or(self.parallel_slots)
+    }
+    /// 取段总结阶段的 ctx；同上 fallback。
+    pub fn summary_ctx_size_effective(&self) -> Option<u32> {
+        self.summary_ctx_size.or(self.ctx_size)
+    }
 }
 
 /// 用户编辑过的 system prompt 覆盖文本，按语言分别独立存。
@@ -127,6 +175,12 @@ impl Default for AiConfig {
             batch_size: None,
             parallel_slots: None,
             ctx_size: None,
+            describe_batch_size: None,
+            describe_parallel_slots: None,
+            describe_ctx_size: None,
+            summary_batch_size: None,
+            summary_parallel_slots: None,
+            summary_ctx_size: None,
         }
     }
 }
@@ -227,6 +281,12 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.batch_size = next.batch_size.map(|b| b.clamp(32, 32_768));
     next.parallel_slots = next.parallel_slots.map(|n| n.clamp(1, 32));
     next.ctx_size = next.ctx_size.map(|c| c.clamp(512, 262_144));
+    next.describe_batch_size = next.describe_batch_size.map(|b| b.clamp(32, 32_768));
+    next.describe_parallel_slots = next.describe_parallel_slots.map(|n| n.clamp(1, 32));
+    next.describe_ctx_size = next.describe_ctx_size.map(|c| c.clamp(512, 262_144));
+    next.summary_batch_size = next.summary_batch_size.map(|b| b.clamp(32, 32_768));
+    next.summary_parallel_slots = next.summary_parallel_slots.map(|n| n.clamp(1, 32));
+    next.summary_ctx_size = next.summary_ctx_size.map(|c| c.clamp(512, 262_144));
 
     next.models_path = next.models_path.trim().to_string();
     next.active_main = next.active_main.trim().to_string();

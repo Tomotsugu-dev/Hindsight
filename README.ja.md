@@ -108,7 +108,6 @@ sudo xattr -rd com.apple.quarantine "/Applications/Hindsight.app"
 | バックエンド | Rust · Tokio · SQLite · reqwest |
 | AI 推論 | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI 互換 API |
 | 同期 | Google Drive API |
-| パッケージング / アップデート | NSIS · DMG · Tauri Updater |
 
 ## ライセンス
 

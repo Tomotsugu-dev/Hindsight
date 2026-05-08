@@ -1,55 +1,143 @@
+# 推 v* tag → 自动出 macOS（通用：Intel + Apple Silicon）+ Windows 双平台 release。
+#
+# 触发：
+#   git tag v0.4.5-beta && git push origin v0.4.5-beta
+#   或在 GitHub Actions 页手动 run（workflow_dispatch）
+#
+# 产物：同一个 release tag 下：
+#   - hindsight_X.Y.Z_universal.dmg            （macOS 通用）
+#   - hindsight_X.Y.Z_universal.app.tar.gz     （macOS updater 包）
+#   - hindsight_X.Y.Z_universal.app.tar.gz.sig
+#   - hindsight_X.Y.Z_x64-setup.exe            （Windows）
+#   - hindsight_X.Y.Z_x64-setup.exe.sig
+#   - latest.json                              （updater manifest，自动合并 platforms）
+
 name: Release
 
-# 不再监听 tag push —— 本地 `npm run release` 已经会推 tag 并直接发布，
-# 让 CI 也跑会重复编译。需要 CI build 的话从 Actions 页手动 Run workflow。
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v0.4.5-beta). Must match package.json/Cargo.toml/tauri.conf.json version."
+        required: true
 
 permissions:
-  contents: write # 需要写 GitHub Release
+  # tauri-action 创建 GitHub Release + 上传产物需要写权限
+  contents: write
 
 jobs:
-  build-windows:
-    name: Build Windows (.exe)
-    runs-on: windows-latest
+  release:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      # Mac 失败时仍尽量出 Win 版本——不同平台彼此独立
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-14
+            args: "--target universal-apple-darwin"
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Setup Rust toolchain
+      - name: Install Rust (macOS universal needs both arches)
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust deps
-        uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          targets: ${{ matrix.platform == 'macos-14' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install frontend deps
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          key: ${{ matrix.platform }}
+
+      # macOS：把 Developer ID Application .p12 导入临时 keychain。
+      # 用临时 keychain 而非 default 是为了 CI 隔离——run 结束随机 cleanup。
+      - name: Import Apple Developer ID cert
+        if: matrix.platform == 'macos-14'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          rm "$RUNNER_TEMP/cert.p12"
+
+          # 让 codesign 不弹密码框访问私钥
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # 加进搜索路径，并设为 default（tauri/codesign 默认查 default keychain）
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          # sanity check
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Install npm deps
         run: npm ci
 
-      - name: Build & upload to Release
+      # 读 docs/release-notes/<tag>.md 当 release body + 应用内"检查更新"对话框文案
+      - name: Read release notes
+        id: notes
+        shell: bash
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          NOTES_FILE="docs/release-notes/${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            {
+              echo 'body<<RELEASE_NOTES_EOF'
+              cat "$NOTES_FILE"
+              echo 'RELEASE_NOTES_EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::$NOTES_FILE 不存在，release body 用占位字符串"
+            echo "body=Hindsight ${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & upload via tauri-action
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri Updater：tauri-action 检测到下面两个变量后会自动签名 NSIS .exe
-          # 并生成 latest.json 一起上传到 Release，App 内 check() 即可拉到。
-          # 私钥本地生成（npx @tauri-apps/cli signer generate），保存到 GitHub
-          # Repository Secrets，密码为空就只填 KEY 不填 PASSWORD。
+          # Tauri updater 的 minisign 私钥——签 .app.tar.gz / setup.exe 让 updater 验证
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple notarization（仅 macOS job 用得到，Win job 看到也无害）
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Hindsight ${{ github.ref_name }}"
-          releaseBody: |
-            从下方资源中下载安装包：
-            - `hindsight_x.y.z_x64-setup.exe` — Windows 安装器
-          releaseDraft: true
-          prerelease: false
+          tagName: ${{ steps.notes.outputs.tag }}
+          releaseName: "Hindsight ${{ steps.notes.outputs.tag }}"
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          # tag 含 -beta / -rc / -alpha 自动标 prerelease；正式版走稳定通道
+          prerelease: ${{ contains(steps.notes.outputs.tag, '-beta') || contains(steps.notes.outputs.tag, '-rc') || contains(steps.notes.outputs.tag, '-alpha') }}
+          args: ${{ matrix.args }}
+          # createUpdaterArtifacts: true 已在 tauri.conf.json 里设置，
+          # tauri-action 会自动合成跨平台 latest.json 上传到 release
           includeUpdaterJson: true

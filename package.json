@@ -1,7 +1,7 @@
 {
   "name": "hindsight",
   "private": true,
-  "version": "0.4.4-beta",
+  "version": "0.4.5-beta",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "format:check": "prettier --check src",
     "preview": "vite preview",
     "tauri": "tauri",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "tauri:build:mac": "set -a; . ./.env.local; set +a; tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
