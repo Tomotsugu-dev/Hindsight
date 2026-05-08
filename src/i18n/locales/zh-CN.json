@@ -289,6 +289,9 @@
     "ranks": {
       "topApps": "最常用应用",
       "topCategories": "最常用分类"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
     }
   },
   "week": {
@@ -312,6 +315,9 @@
     "ranks": {
       "topApps": "本周最常用应用",
       "topCategories": "本周最常用分类"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     },
     "dow": {
       "mon": "周一",
@@ -343,6 +349,9 @@
     "ranks": {
       "topApps": "本月最常用应用",
       "topCategories": "本月最常用分类"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     }
   },
   "categories": {

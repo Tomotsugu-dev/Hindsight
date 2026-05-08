@@ -289,6 +289,9 @@
     "ranks": {
       "topApps": "Top apps",
       "topCategories": "Top categories"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
     }
   },
   "week": {
@@ -308,6 +311,9 @@
       "lastWeek": "Last week",
       "weeksAgo": "{{count}} weeks ago",
       "weeksLater": "In {{count}} weeks"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     },
     "ranks": {
       "topApps": "Top apps this week",
@@ -343,6 +349,9 @@
     "ranks": {
       "topApps": "Top apps this month",
       "topCategories": "Top categories this month"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     }
   },
   "categories": {

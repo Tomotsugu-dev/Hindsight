@@ -289,6 +289,9 @@
     "ranks": {
       "topApps": "よく使うアプリ",
       "topCategories": "よく使う分類"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
     }
   },
   "week": {
@@ -308,6 +311,9 @@
       "lastWeek": "先週",
       "weeksAgo": "{{count}} 週間前",
       "weeksLater": "{{count}} 週間後"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     },
     "ranks": {
       "topApps": "今週よく使ったアプリ",
@@ -343,6 +349,9 @@
     "ranks": {
       "topApps": "今月よく使ったアプリ",
       "topCategories": "今月よく使った分類"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
     }
   },
   "categories": {

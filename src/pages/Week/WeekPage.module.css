@@ -63,3 +63,12 @@
   gap: 16px;
   align-items: stretch;
 }
+
+/* 选中某天后标题旁的纯文字时段标签，例 "5/12"。 */
+.selectionLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}

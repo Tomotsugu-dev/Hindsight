@@ -11,11 +11,33 @@
   height: 32px;
   padding: 0 18px;
   border-radius: 6px;
-  transition: background-color 180ms var(--ease-out);
+  transition:
+    background-color 180ms var(--ease-out),
+    opacity 180ms var(--ease-out),
+    filter 180ms var(--ease-out);
+  /* button 重置 */
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.row:disabled {
+  cursor: default;
 }
 
-.row:hover {
+.row:not(:disabled):hover {
   background: rgba(0, 0, 0, 0.025);
+}
+
+.row[data-selected="true"] {
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+.row[data-dimmed="true"] {
+  opacity: 0.42;
+  filter: saturate(0.65);
 }
 
 .rowToday {

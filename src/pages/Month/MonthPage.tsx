@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
@@ -6,6 +6,8 @@ import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
 import { PeriodLegend } from "../../components/PeriodLegend/PeriodLegend";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { useMonthCache } from "../../hooks/useMonthCache";
+import { useSelectedDayApps } from "../../hooks/useSelectedDayApps";
+import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
@@ -14,6 +16,15 @@ import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList } from "../Today/RankedList";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./MonthPage.module.css";
+
+/** 见 WeekPage 同名函数：days[i].date → 相对今天的 dayOffset。 */
+function dayOffsetForDate(date: Date): number {
+  const a = new Date(date);
+  a.setHours(0, 0, 0, 0);
+  const b = new Date();
+  b.setHours(0, 0, 0, 0);
+  return Math.round((a.getTime() - b.getTime()) / 86400000);
+}
 
 export default function MonthPage() {
   const { t, i18n } = useTranslation();
@@ -64,7 +75,37 @@ export default function MonthPage() {
   );
   const avgPerDay = activeDays > 0 ? totalMinutes / activeDays : 0;
 
-  const { categoryRanks, appRanks } = usePeriodRankings(days, apps);
+  // 点某天 → 高亮 + 筛排行；toggle；offset / device 切换时清
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  useEffect(() => {
+    setSelectedIndex(null);
+  }, [offset, selectedDeviceId]);
+  const handleDayClick = (i: number) =>
+    setSelectedIndex((prev) => (prev === i ? null : i));
+  useClickOutsideBars(selectedIndex !== null, () => setSelectedIndex(null));
+
+  const selectedDay = selectedIndex !== null ? days[selectedIndex] : null;
+  const selectedDayOffset = selectedDay ? dayOffsetForDate(selectedDay.date) : null;
+  const dayApps = useSelectedDayApps(selectedDayOffset, selectedDeviceId);
+
+  const segmentsForRanks = useMemo(
+    () =>
+      selectedIndex === null || !days[selectedIndex] ? days : [days[selectedIndex]],
+    [days, selectedIndex],
+  );
+  const appsForRanks = useMemo(
+    () => (selectedIndex === null ? apps : (dayApps.apps ?? apps)),
+    [selectedIndex, apps, dayApps.apps],
+  );
+  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks);
+
+  const selectionLabel =
+    selectedDay !== null
+      ? t("month.selection.label", {
+          month: selectedDay.date.getMonth() + 1,
+          day: selectedDay.date.getDate(),
+        })
+      : null;
 
   /** 月度 X 轴：每周一标一次（每 7 天）+ 月底最后一天 */
   const buildXLabel =
@@ -120,6 +161,8 @@ export default function MonthPage() {
             key="current"
             days={slideDaysList[1]}
             xLabel={buildXLabel(slideDaysList[1])}
+            selectedIndex={selectedIndex}
+            onIndexClick={handleDayClick}
           />,
           <DailyBarChart
             key="next"
@@ -133,6 +176,9 @@ export default function MonthPage() {
         <section className={styles.card}>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{t("month.ranks.topApps")}</h2>
+            {selectionLabel && (
+              <span className={styles.selectionLabel}>{selectionLabel}</span>
+            )}
           </header>
           {appRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
@@ -146,6 +192,9 @@ export default function MonthPage() {
         <section className={styles.card}>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{t("month.ranks.topCategories")}</h2>
+            {selectionLabel && (
+              <span className={styles.selectionLabel}>{selectionLabel}</span>
+            )}
           </header>
           {categoryRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>

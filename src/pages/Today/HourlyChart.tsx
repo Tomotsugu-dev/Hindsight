@@ -14,6 +14,10 @@ interface HourlyChartProps {
   workHours: WorkRange[] | null;
   /** Y 轴最大值（分钟）。不传则按 hours 自动算（1h 起步，超过则按 15min 一档向上）。*/
   maxMinutes?: number;
+  /** 当前选中的小时；null = 没选中（全部柱子正常态）。 */
+  selectedHour?: number | null;
+  /** 点击柱子触发；不传 → 柱子非交互（用于 PeriodCard 的 prev/next 静态副本）。 */
+  onHourClick?: (hour: number) => void;
 }
 
 /** X 轴标签 */
@@ -27,7 +31,13 @@ function formatMinLabel(min: number): string {
   return `${parseFloat((min / 60).toFixed(2))}h`;
 }
 
-export function HourlyChart({ hours, workHours, maxMinutes: externalMax }: HourlyChartProps) {
+export function HourlyChart({
+  hours,
+  workHours,
+  maxMinutes: externalMax,
+  selectedHour = null,
+  onHourClick,
+}: HourlyChartProps) {
   const { t } = useTranslation();
   const { getCategory } = useCategories();
   // 没传 maxMinutes 就按 hours 自己算：1h 起步，峰值超过就按 15min 步长向上对齐
@@ -94,6 +104,9 @@ export function HourlyChart({ hours, workHours, maxMinutes: externalMax }: Hourl
                 maxMinutes={maxMinutes}
                 getCategory={getCategory}
                 t={t}
+                selected={selectedHour === slot.hour}
+                dimmed={selectedHour !== null && selectedHour !== slot.hour}
+                onClick={onHourClick}
               />
             ))}
           </div>
@@ -121,27 +134,42 @@ function HourBar({
   maxMinutes,
   getCategory,
   t,
+  selected,
+  dimmed,
+  onClick,
 }: {
   slot: HourSlot;
   maxMinutes: number;
   getCategory: (id: string) => { color: string } | null | undefined;
   t: (key: string, options?: Record<string, unknown>) => string;
+  selected: boolean;
+  dimmed: boolean;
+  onClick?: (hour: number) => void;
 }) {
   const total = slot.segments.reduce((s, x) => s + x.minutes, 0);
   const heightPct = Math.min((total / maxMinutes) * 100, 100);
+  const interactive = !!onClick;
+  // 整列都可点（不只柱子的高度内），点空槽位也能选中那个小时——和"hit area
+  // 限制在 bar 高度内会让点低柱难"的常见 UX 痛点对齐
   return (
-    <div className={styles.column}>
+    <button
+      type="button"
+      className={styles.column}
+      onClick={interactive ? () => onClick?.(slot.hour) : undefined}
+      disabled={!interactive}
+      data-bar-button=""
+      data-selected={selected || undefined}
+      data-dimmed={dimmed || undefined}
+      aria-label={t("today.chart.barTitle", {
+        hour: String(slot.hour).padStart(2, "0"),
+        minutes: total,
+      })}
+    >
       <div
         className={styles.bar}
         style={{ height: `${heightPct}%` }}
-        title={
-          total > 0
-            ? t("today.chart.barTitle", {
-                hour: String(slot.hour).padStart(2, "0"),
-                minutes: total,
-              })
-            : undefined
-        }
+        data-selected={selected || undefined}
+        data-dimmed={dimmed || undefined}
       >
         {total > 0 &&
           slot.segments.map((seg) => {
@@ -159,6 +187,6 @@ function HourBar({
             );
           })}
       </div>
-    </div>
+    </button>
   );
 }

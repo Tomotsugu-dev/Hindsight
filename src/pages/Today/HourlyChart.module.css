@@ -66,12 +66,27 @@
   gap: 6px;
 }
 
+/* column 是个 <button>，重置浏览器默认外观；交互态 disabled 时退化成 div */
 .column {
   flex: 1;
   height: 100%;
   display: flex;
   align-items: flex-end;
   min-width: 0;
+  /* 重置 button 默认 */
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  /* 整列点击命中（含 0 分钟空白处） */
+  appearance: none;
+  -webkit-appearance: none;
+}
+.column:disabled {
+  cursor: default;
 }
 
 .bar {
@@ -81,11 +96,24 @@
   /* 只圆顶角 — Apple 屏幕使用时间风 */
   border-radius: 4px 4px 0 0;
   overflow: hidden;
-  transition: filter 180ms var(--ease-out);
+  transition:
+    filter 180ms var(--ease-out),
+    opacity 180ms var(--ease-out);
 }
 
-.bar:hover {
+.column:not(:disabled):hover .bar {
   filter: brightness(1.06) saturate(1.05);
+}
+
+/* 选中态：柱子稍亮，让用户清楚哪个被点了。 */
+.bar[data-selected="true"] {
+  filter: brightness(1.1) saturate(1.08);
+}
+
+/* 淡化态：选中其它柱子时，本柱子被衬托——降饱和 + 半透明。 */
+.bar[data-dimmed="true"] {
+  opacity: 0.32;
+  filter: saturate(0.6);
 }
 
 .segment {

@@ -39,6 +39,27 @@ pub async fn get_day_apps(
     .map_err(Into::into)
 }
 
+/// 拉某天某小时（local_hour = ?）的 top 应用列表，给「日」页面"点小时柱子→筛选"用。
+/// `hour` 在 0..=23；其它行为同 [`get_day_apps`]。
+#[tauri::command]
+pub async fn get_hour_apps(
+    pool: State<'_, DbPool>,
+    day_offset: i32,
+    hour: i32,
+    limit: Option<u32>,
+    device_id: Option<String>,
+) -> Result<Vec<AppUsage>, String> {
+    reports::day_hour_apps(
+        &pool,
+        day_offset,
+        hour,
+        limit.unwrap_or(10),
+        device_filter_from_option(device_id),
+    )
+    .await
+    .map_err(Into::into)
+}
+
 /// 拉某周 7 天的逐日汇总（每天一条）。`week_offset = 0` 本周。
 #[tauri::command]
 pub async fn get_week_days(

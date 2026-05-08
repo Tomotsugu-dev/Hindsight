@@ -450,6 +450,13 @@ export const api = {
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_day_apps", { dayOffset, limit, deviceId }),
+  getHourApps: (
+    dayOffset: number,
+    hour: number,
+    limit?: number,
+    deviceId?: string,
+  ) =>
+    invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
   getWeekDays: (weekOffset: number, deviceId?: string) =>
     invoke<DaySummaryDto[]>("get_week_days", { weekOffset, deviceId }),
   getWeekApps: (weekOffset: number, limit?: number, deviceId?: string) =>

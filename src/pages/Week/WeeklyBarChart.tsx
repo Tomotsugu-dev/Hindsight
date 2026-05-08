@@ -6,6 +6,10 @@ import styles from "./WeeklyBarChart.module.css";
 
 interface WeeklyBarChartProps {
   days: DaySummary[];
+  /** 选中的日期 index（0..days.length-1）；null = 没选中。 */
+  selectedIndex?: number | null;
+  /** 点击触发；不传 → 行非交互（PeriodCard prev/next 静态副本用）。 */
+  onIndexClick?: (index: number) => void;
 }
 
 // 周几标签的资源 key（按周一到周日顺序）
@@ -19,7 +23,11 @@ const DOW_KEYS = [
   "week.dow.sun",
 ] as const;
 
-export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
+export function WeeklyBarChart({
+  days,
+  selectedIndex = null,
+  onIndexClick,
+}: WeeklyBarChartProps) {
   const { t } = useTranslation();
   const { categories, getCategory } = useCategories();
   const order = new Map(categories.map((c, i) => [c.id, i]));
@@ -47,17 +55,26 @@ export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const interactive = !!onIndexClick;
   return (
     <div className={styles.chart}>
       {days.map((day, i) => {
         const total = totals[i];
         const widthPct = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
         const isToday = day.date.toDateString() === today.toDateString();
+        const selected = selectedIndex === i;
+        const dimmed = selectedIndex !== null && selectedIndex !== i;
 
         return (
-          <div
+          <button
+            type="button"
             key={i}
             className={`${styles.row} ${isToday ? styles.rowToday : ""}`}
+            onClick={interactive ? () => onIndexClick?.(i) : undefined}
+            disabled={!interactive}
+            data-bar-button=""
+            data-selected={selected || undefined}
+            data-dimmed={dimmed || undefined}
           >
             <div className={styles.label}>
               <span className={styles.dow}>{t(DOW_KEYS[i])}</span>
@@ -89,7 +106,7 @@ export function WeeklyBarChart({ days }: WeeklyBarChartProps) {
             <div className={`${styles.total} ${total === 0 ? styles.totalEmpty : ""}`}>
               {fmtTotal(total)}
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
