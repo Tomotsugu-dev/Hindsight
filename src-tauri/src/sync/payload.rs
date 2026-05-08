@@ -14,6 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
+/// 同步用的 categories 行 JSON 结构。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CategoryPayload {
@@ -29,6 +30,7 @@ pub struct CategoryPayload {
     pub deleted_at: Option<String>,
 }
 
+/// app_categories 行的 JSON 形式（process_name → category_id 的 derived view）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppCategoryPayload {
@@ -38,6 +40,7 @@ pub struct AppCategoryPayload {
     pub deleted_at: Option<String>,
 }
 
+/// process_paths 行的 JSON 形式（process_name → exe 路径），跨设备同步本机 exe 位置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessPathPayload {
@@ -47,6 +50,7 @@ pub struct ProcessPathPayload {
     pub updated_at: String,
 }
 
+/// app_icons 行的 JSON 形式（PNG 字节 base64 编码后塞进 JSON）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppIconPayload {
@@ -57,6 +61,7 @@ pub struct AppIconPayload {
     pub deleted_at: Option<String>,
 }
 
+/// app_groups 行的 JSON 形式（组主体：display_name + category_id）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppGroupPayload {
@@ -67,6 +72,7 @@ pub struct AppGroupPayload {
     pub deleted_at: Option<String>,
 }
 
+/// app_group_members 行的 JSON 形式（process_name → group_id）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppGroupMemberPayload {
@@ -76,6 +82,7 @@ pub struct AppGroupMemberPayload {
     pub deleted_at: Option<String>,
 }
 
+/// activities 行的 JSON 形式（一段焦点会话）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityPayload {
@@ -91,6 +98,7 @@ pub struct ActivityPayload {
     pub updated_at: String,
 }
 
+/// devices 行的 JSON 形式（device.json 同步过来的设备元数据）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceMetaPayload {

@@ -13,9 +13,7 @@ use crate::storage::DbPool;
 /// 列当前 settings 配的模型目录里所有 `.gguf` 文件。
 /// 目录不存在或为空都返回 `[]`，不当错误。
 #[tauri::command]
-pub async fn list_local_models(
-    pool: State<'_, DbPool>,
-) -> Result<Vec<ModelEntry>, String> {
+pub async fn list_local_models(pool: State<'_, DbPool>) -> Result<Vec<ModelEntry>, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     models::list_local(&cfg.ai).await.map_err(String::from)
 }
@@ -26,10 +24,7 @@ pub async fn list_local_models(
 /// 顺手清理：被删文件如果是当前 active_main / active_mmproj，把 settings
 /// 里那项清掉——下次 `start_engine` 才不会拿一个不存在的文件名报错。
 #[tauri::command]
-pub async fn delete_model(
-    pool: State<'_, DbPool>,
-    filename: String,
-) -> Result<(), String> {
+pub async fn delete_model(pool: State<'_, DbPool>, filename: String) -> Result<(), String> {
     let mut cfg = settings::load(&pool).await.map_err(String::from)?;
     models::delete(&cfg.ai, &filename)
         .await

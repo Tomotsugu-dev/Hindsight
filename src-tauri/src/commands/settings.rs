@@ -6,11 +6,17 @@ use crate::capture::CaptureService;
 use crate::repo::settings::{self, Settings, SettingsPatch};
 use crate::storage::DbPool;
 
+/// 拉当前 Settings 全集——前端「设置」页面进去时调一次。
 #[tauri::command]
 pub async fn get_settings(pool: State<'_, DbPool>) -> Result<Settings, String> {
     settings::load(&pool).await.map_err(Into::into)
 }
 
+/// 应用 patch 更新部分 settings 字段。
+///
+/// 副作用：把 capture 相关字段同步给 `CaptureService`（间隔 / 工作时段 / 隐私关键词
+/// / 挂机阈值 / 截图配置），把 minimize_to_tray 同步给 close handler 静态变量，
+/// 把 auto_start 切到操作系统的开机自启。所有变更立刻生效，不需要重启。
 #[tauri::command]
 pub async fn update_settings(
     app: AppHandle,
@@ -29,8 +35,7 @@ pub async fn update_settings(
 
     // 关闭按钮行为切换：同步给 close handler 读的 static，下次点 X 立即生效，
     // 不需要重启
-    crate::MINIMIZE_TO_TRAY
-        .store(next.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
+    crate::MINIMIZE_TO_TRAY.store(next.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
     if next.capture_enabled != prev_enabled {
         if next.capture_enabled {

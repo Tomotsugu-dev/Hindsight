@@ -147,7 +147,10 @@ struct InflightState {
 
 impl Default for InflightState {
     fn default() -> Self {
-        Self { count: 0, last_used_at: Instant::now() }
+        Self {
+            count: 0,
+            last_used_at: Instant::now(),
+        }
     }
 }
 
@@ -182,6 +185,7 @@ impl Default for EngineSupervisor {
 }
 
 impl EngineSupervisor {
+    /// 创建一个 Stopped 状态的 supervisor。lib.rs 里 `Arc::new` 后通过 `app.manage` 注册。
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(Inner::default()),
@@ -201,7 +205,9 @@ impl EngineSupervisor {
             s.count += 1;
             s.last_used_at = Instant::now();
         }
-        InferenceGuard { sup: Arc::clone(self) }
+        InferenceGuard {
+            sup: Arc::clone(self),
+        }
     }
 
     /// 启动 idle watcher：每 [`IDLE_TICK`] 检查一次，引擎 Running + in-flight==0
@@ -334,7 +340,7 @@ impl EngineSupervisor {
                     }
                 }
                 EngineState::Starting => {
-                    return Err(Error::Other("引擎已经在启动中".to_string()));
+                    return Err(Error::EngineBusy);
                 }
                 EngineState::Stopped | EngineState::Error => {}
             }
@@ -348,7 +354,7 @@ impl EngineSupervisor {
                     error: Some(msg.clone()),
                     ..Default::default()
                 };
-                return Err(Error::Other(msg));
+                return Err(Error::EngineStart(msg));
             }
 
             let port = pick_free_port()?;
@@ -458,7 +464,7 @@ impl EngineSupervisor {
                 ..Default::default()
             };
             inner.child = None;
-            Err(Error::Other(err_msg))
+            Err(Error::EngineStart(err_msg))
         }
     }
 
@@ -602,10 +608,7 @@ async fn poll_health(port: u16, timeout: Duration, inner: &Mutex<Inner>) -> bool
 
 /// 启动失败时调，给前端可读的错误描述。
 /// stderr 已被 [`spawn_drain_task`] 持续消费到 logs ring，这里直接读末尾几行。
-async fn resolve_failure(
-    child: &mut Child,
-    logs: &Arc<Mutex<VecDeque<String>>>,
-) -> String {
+async fn resolve_failure(child: &mut Child, logs: &Arc<Mutex<VecDeque<String>>>) -> String {
     let exit_status = child.try_wait();
     let killed = matches!(exit_status, Ok(None));
     if killed {
@@ -626,7 +629,10 @@ async fn resolve_failure(
         }
         Ok(None) => {
             if tail.is_empty() {
-                format!("启动 {}s 未响应 /health，已强制 kill", HEALTH_TIMEOUT.as_secs())
+                format!(
+                    "启动 {}s 未响应 /health，已强制 kill",
+                    HEALTH_TIMEOUT.as_secs()
+                )
             } else {
                 format!(
                     "启动 {}s 未响应 /health，已强制 kill；日志末尾：\n{tail}",
@@ -661,11 +667,7 @@ async fn wait_child_with_timeout(child: &mut Child) {
 async fn log_tail(logs: &Arc<Mutex<VecDeque<String>>>, n: usize) -> String {
     let g = logs.lock().await;
     let start = g.len().saturating_sub(n);
-    g.iter()
-        .skip(start)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("\n")
+    g.iter().skip(start).cloned().collect::<Vec<_>>().join("\n")
 }
 
 /// spawn 一个 tokio task，按行 drain stderr / stdout：
@@ -705,8 +707,8 @@ fn spawn_drain_task<R>(
                     }
                     g.push_back(prefixed);
                 }
-                Ok(None) => break,    // EOF：子进程关闭了管道
-                Err(_) => break,      // 读错误：直接退出 task
+                Ok(None) => break, // EOF：子进程关闭了管道
+                Err(_) => break,   // 读错误：直接退出 task
             }
         }
     });

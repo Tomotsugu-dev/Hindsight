@@ -14,12 +14,17 @@ use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 5;
 
+/// 采集服务对前端的运行时状态快照。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureStatus {
+    /// 后台采集 task 是否在跑
     pub running: bool,
+    /// 今日 activities 表行数
     pub today_count: u32,
+    /// 最近一次采集成功的 RFC3339 时间；从未采集 None
     pub last_capture_at: Option<String>,
+    /// 最近一次 tick 失败的错误描述；成功后清空
     pub last_error: Option<String>,
 }
 
@@ -94,11 +99,14 @@ struct Inner {
     current: Mutex<Option<CurrentSession>>,
 }
 
+/// 焦点采集服务的对外句柄。`Arc<Inner>` 让多个 setter / 后台 tick task 共享内部状态。
 pub struct CaptureService {
     inner: Arc<Inner>,
 }
 
 impl CaptureService {
+    /// 创建采集服务。`interval_secs` 是同一焦点持续多少秒后强制补一张截图，
+    /// 启动后由 `set_interval` 跟 settings 同步。
     pub fn new(pool: DbPool, interval_secs: u32) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -119,6 +127,8 @@ impl CaptureService {
         }
     }
 
+    /// 配置截图相关参数：启用 / 目录 / 缩放分辨率 / JPEG 质量。
+    /// settings 改完后由 commands 层调一次同步。
     pub async fn set_screenshot_config(
         &self,
         enabled: bool,
@@ -137,6 +147,7 @@ impl CaptureService {
         };
     }
 
+    /// 启动后台采集 task。已在跑时是 no-op。
     pub async fn start(&self) {
         let mut h = self.inner.handle.lock().await;
         if h.is_some() {
@@ -155,6 +166,7 @@ impl CaptureService {
         }));
     }
 
+    /// 停止后台采集 task。同时 seal 当前会话写入 outbox，避免数据丢失。
     pub async fn stop(&self) {
         let mut h = self.inner.handle.lock().await;
         if let Some(handle) = h.take() {
@@ -177,15 +189,18 @@ impl CaptureService {
         *self.inner.current.lock().await = None;
     }
 
+    /// 后台采集 task 是否在跑。
     pub async fn is_running(&self) -> bool {
         self.inner.handle.lock().await.is_some()
     }
 
+    /// 更新同焦点强制截图间隔（秒）；clamp 到 1..=600。
     pub async fn set_interval(&self, secs: u32) {
         let secs = secs.clamp(1, 600);
         *self.inner.interval_secs.lock().await = secs;
     }
 
+    /// 更新工作时段：`enabled=false` 表示 24 小时全采集，`true + ranges` 限时段内采集。
     pub async fn set_work_hours(&self, enabled: bool, ranges: Vec<TimeRange>) {
         let mut state = self.inner.work_hours.lock().await;
         *state = WorkHoursState { enabled, ranges };
@@ -202,10 +217,9 @@ impl CaptureService {
         *self.inner.privacy_app_keywords.lock().await = app_keywords;
     }
 
+    /// 拉当前运行时状态（today_count 实时查 DB；其它字段从内存读）。
     pub async fn status(&self) -> CaptureStatus {
-        let today_count = activities::today_count(&self.inner.pool)
-            .await
-            .unwrap_or(0);
+        let today_count = activities::today_count(&self.inner.pool).await.unwrap_or(0);
         CaptureStatus {
             running: self.is_running().await,
             today_count,
@@ -259,13 +273,8 @@ async fn tick(inner: &Inner) -> Result<()> {
                 if let Some(prev) = cur_lock.take() {
                     drop(cur_lock);
                     let real_end = Local::now() - Duration::seconds(idle as i64);
-                    if let Err(e) =
-                        activities::seal_session(&inner.pool, prev.id, real_end).await
-                    {
-                        log::warn!(
-                            "seal_session 失败 (用户挂机 {idle}s, id={}): {e}",
-                            prev.id
-                        );
+                    if let Err(e) = activities::seal_session(&inner.pool, prev.id, real_end).await {
+                        log::warn!("seal_session 失败 (用户挂机 {idle}s, id={}): {e}", prev.id);
                     }
                 }
                 return Ok(());
@@ -315,8 +324,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         //   1) 焦点切换（不同 app / 不同 url）—— 立即截图
         //   2) 同一焦点停留满 interval_secs —— 周期性补一张图，让长时间停留也有时间序列
         Some(cur) => {
-            cur.focus != new_focus
-                || cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs
+            cur.focus != new_focus || cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs
         }
     };
 

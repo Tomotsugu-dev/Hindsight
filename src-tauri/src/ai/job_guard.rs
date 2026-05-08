@@ -78,6 +78,7 @@ mod win {
     /// 进程生命周期内只持有一份 Job HANDLE；进程死 → OS 自动 close → Job 关闭 → child 全死
     static JOB: OnceLock<JobHandle> = OnceLock::new();
 
+    /// 创建 Job Object 并设 KILL_ON_JOB_CLOSE。幂等：已初始化时立刻返回 Ok。
     pub fn init() -> Result<(), String> {
         if JOB.get().is_some() {
             return Ok(());
@@ -115,6 +116,7 @@ mod win {
         }
     }
 
+    /// 把指定 pid 加入全局 Job。Job 未初始化时返回 Err。
     pub fn assign_pid(pid: u32) -> Result<(), String> {
         let job = match JOB.get() {
             Some(j) => j.0,
@@ -143,6 +145,8 @@ mod win {
     }
 }
 
+/// 启动期调一次：初始化全局子进程保护。失败时把状态写为 `Degraded(reason)`
+/// 让前端 `engine_status` 命令能给用户提示。
 #[cfg(target_os = "windows")]
 pub fn init_global_job() -> Result<()> {
     match win::init() {
@@ -159,12 +163,16 @@ pub fn init_global_job() -> Result<()> {
     }
 }
 
+/// 在 spawn child 之前调用，给 Command 装 pre_exec 钩子（unix）或 no-op（windows）。
+/// Windows 走 post-spawn 的 [`assign_child_pid`] 路径。
 #[cfg(target_os = "windows")]
 pub fn prepare_command(_cmd: &mut tokio::process::Command) -> Result<()> {
     // Windows 走 post-spawn AssignProcessToJobObject 路径，spawn 前不需要装钩子
     Ok(())
 }
 
+/// 在 spawn 之后立刻调用，把 child pid 加入全局 Job（windows）或 no-op（unix，pre_exec 已处理）。
+/// 失败时把状态切到 Degraded 让前端能感知。
 #[cfg(target_os = "windows")]
 pub fn assign_child_pid(pid: u32) -> Result<()> {
     win::assign_pid(pid).map_err(|e| {
@@ -179,6 +187,7 @@ pub fn assign_child_pid(pid: u32) -> Result<()> {
 
 // ───────────────────────────── Linux: setpgid + PDEATHSIG ─────────────────────────────
 
+/// Linux 实现：pre_exec 时装 setpgid + PDEATHSIG，无需全局 init syscall。
 #[cfg(target_os = "linux")]
 pub fn init_global_job() -> Result<()> {
     // pre_exec 在 spawn 时装钩子，全局 init 阶段无需做 syscall；状态写 Ok
@@ -186,6 +195,8 @@ pub fn init_global_job() -> Result<()> {
     Ok(())
 }
 
+/// Linux 实现：装 pre_exec 钩子 setpgid + PR_SET_PDEATHSIG=SIGKILL。
+/// 父进程死时内核同步杀子；graceful exit 时 supervisor 也能 killpg 收尸。
 #[cfg(target_os = "linux")]
 pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
     use std::os::unix::process::CommandExt;
@@ -215,6 +226,7 @@ pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
     Ok(())
 }
 
+/// Linux 实现：no-op，pre_exec 已搞定保护。
 #[cfg(target_os = "linux")]
 pub fn assign_child_pid(_pid: u32) -> Result<()> {
     Ok(())
@@ -222,6 +234,7 @@ pub fn assign_child_pid(_pid: u32) -> Result<()> {
 
 // ───────────────────────────── macOS: 仅 setpgid（无 PR_SET_PDEATHSIG 等价） ─────────────────────────────
 
+/// macOS 实现：缺 prctl 等价物，预期降级；初始化即把状态写为 Degraded 让 UI 提示。
 #[cfg(target_os = "macos")]
 pub fn init_global_job() -> Result<()> {
     // macOS 缺乏 Linux 的 PR_SET_PDEATHSIG / Windows 的 Job Object 等价物：
@@ -235,6 +248,7 @@ pub fn init_global_job() -> Result<()> {
     Ok(())
 }
 
+/// macOS 实现：仅 setpgid，让 supervisor.stop() 能 killpg 收尸。
 #[cfg(target_os = "macos")]
 pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
     use std::os::unix::process::CommandExt;
@@ -250,6 +264,7 @@ pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
     Ok(())
 }
 
+/// macOS 实现：no-op。
 #[cfg(target_os = "macos")]
 pub fn assign_child_pid(_pid: u32) -> Result<()> {
     Ok(())
@@ -257,6 +272,7 @@ pub fn assign_child_pid(_pid: u32) -> Result<()> {
 
 // ───────────────────────────── 其它 unix（FreeBSD 等） ─────────────────────────────
 
+/// 其它 unix（FreeBSD / OpenBSD 等）：未实现，状态写 Degraded。
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
 pub fn init_global_job() -> Result<()> {
     store_state(JobInitState::Degraded(
@@ -265,11 +281,13 @@ pub fn init_global_job() -> Result<()> {
     Ok(())
 }
 
+/// 其它 unix：no-op。
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
 pub fn prepare_command(_cmd: &mut tokio::process::Command) -> Result<()> {
     Ok(())
 }
 
+/// 其它 unix：no-op。
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
 pub fn assign_child_pid(_pid: u32) -> Result<()> {
     Ok(())

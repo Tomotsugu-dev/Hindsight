@@ -1,3 +1,8 @@
+//! `activities` 表的 repo 层：插入新会话、seal 会话写 outbox、清理过期截图。
+//!
+//! 一条 activities 行 = 一段连续焦点会话（同一应用 / 同一 URL）。
+//! 焦点切换时旧的 seal（写 outbox 推送），开新的（插入但不推 outbox，避免心跳级噪声）。
+
 use chrono::{DateTime, Duration, Local, TimeZone, Timelike, Utc};
 
 use crate::capture::WindowInfo;
@@ -62,6 +67,9 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
     pool.0
         .call(move |conn| {
             // 取整行做 outbox payload 用
+            // 9 字段元组：rusqlite query_row 的天然形状（每列对应一个）。
+            // 抽 type alias 反而把字段语义信息隐藏到别的文件，可读性更差
+            #[allow(clippy::type_complexity)]
             let row: Option<(
                 String,
                 String,
@@ -100,9 +108,16 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
             };
 
             // 重算 duration
+            // 解析失败时回退 epoch 0 当 fallback；timestamp_opt(0, 0) 是 chrono
+            // 静态有效值（不变量保证），unwrap 在此安全
             let started = DateTime::parse_from_rfc3339(&started_at)
                 .map(|dt| dt.with_timezone(&Local))
-                .unwrap_or_else(|_| Local.timestamp_opt(0, 0).unwrap());
+                .unwrap_or_else(|_| {
+                    Local
+                        .timestamp_opt(0, 0)
+                        .single()
+                        .expect("epoch 0 在 chrono 中固定有效")
+                });
             let ended_dt = DateTime::parse_from_rfc3339(&ended)
                 .map(|dt| dt.with_timezone(&Local))
                 .unwrap_or_else(|_| Local::now());
@@ -164,7 +179,9 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
                 )
                 .db()?;
             let rows = stmt
-                .query_map([&cutoff], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
+                .query_map([&cutoff], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                })
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
@@ -199,8 +216,7 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
                 );
                 let params: Vec<&dyn rusqlite::ToSql> =
                     ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
-                conn.execute(&sql, params.as_slice())
-                    .db()?;
+                conn.execute(&sql, params.as_slice()).db()?;
                 Ok(())
             })
             .await?;
@@ -209,6 +225,7 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
     Ok(deleted_files)
 }
 
+/// 统计今天 activities 表的行数（按本机时区的 local_date 过滤）。给前端 status 指示器用。
 pub async fn today_count(pool: &DbPool) -> Result<u32> {
     let today = Local::now().format("%Y-%m-%d").to_string();
     let count = pool
@@ -217,9 +234,7 @@ pub async fn today_count(pool: &DbPool) -> Result<u32> {
             let mut stmt = conn
                 .prepare_cached("SELECT COUNT(*) FROM activities WHERE local_date = ?")
                 .db()?;
-            let n: i64 = stmt
-                .query_row([&today], |r| r.get(0))
-                .db()?;
+            let n: i64 = stmt.query_row([&today], |r| r.get(0)).db()?;
             Ok(n as u32)
         })
         .await?;

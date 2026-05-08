@@ -39,9 +39,7 @@ pub async fn get_engine_status(
     let runtime = supervisor.status().await;
     let protection_degraded = match job_guard::init_state() {
         JobInitState::Ok => None,
-        JobInitState::NotInitialized => {
-            Some("子进程保护未初始化（启动顺序异常）".to_string())
-        }
+        JobInitState::NotInitialized => Some("子进程保护未初始化（启动顺序异常）".to_string()),
         JobInitState::Degraded(reason) => Some(reason),
     };
     Ok(EngineStatusResp {
@@ -63,9 +61,7 @@ pub async fn start_engine(
 ) -> Result<u16, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     if cfg.ai.active_main.trim().is_empty() {
-        return Err(
-            "请先在「模型」里下载并使用一个模型，再启动引擎".to_string(),
-        );
+        return Err("请先在「模型」里下载并使用一个模型，再启动引擎".to_string());
     }
     let models_dir = crate::ai::models::root_dir(&cfg.ai);
     let main_path = models_dir.join(&cfg.ai.active_main);
@@ -95,9 +91,7 @@ pub async fn start_engine(
 
 /// 停掉子进程（如果在跑）。
 #[tauri::command]
-pub async fn stop_engine(
-    supervisor: State<'_, Arc<EngineSupervisor>>,
-) -> Result<(), String> {
+pub async fn stop_engine(supervisor: State<'_, Arc<EngineSupervisor>>) -> Result<(), String> {
     supervisor.stop().await.map_err(String::from)
 }
 

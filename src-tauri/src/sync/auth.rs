@@ -33,6 +33,7 @@ const KEYRING_USER: &str = "auth_key_v1";
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
 const OAUTH_TIMEOUT_SECS: u64 = 180;
 
+/// OAuth 登录状态对外快照（前端「设备」页面 + auth 命令读）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthState {
@@ -47,6 +48,7 @@ pub struct AuthState {
     pub requires_restart: bool,
 }
 
+/// 拉当前登录状态（不联网，只查 DB / keyring）。
 pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
     let cfg = settings::load(pool).await.unwrap_or_default();
     let configured =
@@ -56,16 +58,12 @@ pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
         .0
         .call(|conn| {
             let r = conn
-                .query_row(
-                    "SELECT uid, email FROM auth_state WHERE id = 1",
-                    [],
-                    |r| {
-                        Ok((
-                            r.get::<_, Option<String>>(0)?.unwrap_or_default(),
-                            r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                        ))
-                    },
-                )
+                .query_row("SELECT uid, email FROM auth_state WHERE id = 1", [], |r| {
+                    Ok((
+                        r.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                        r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                    ))
+                })
                 .ok();
             Ok(r)
         })
@@ -75,11 +73,7 @@ pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
     Ok(AuthState {
         signed_in,
         uid: if uid.is_empty() { None } else { Some(uid) },
-        email: if email.is_empty() {
-            None
-        } else {
-            Some(email)
-        },
+        email: if email.is_empty() { None } else { Some(email) },
         configured,
         requires_restart: false,
     })
@@ -111,10 +105,12 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
     }
 
     // 4) 等回调（最多 OAUTH_TIMEOUT_SECS 秒）
-    let code_state =
-        timeout(Duration::from_secs(OAUTH_TIMEOUT_SECS), accept_callback(listener))
-            .await
-            .map_err(|_| Error::OAuthTimeout)??;
+    let code_state = timeout(
+        Duration::from_secs(OAUTH_TIMEOUT_SECS),
+        accept_callback(listener),
+    )
+    .await
+    .map_err(|_| Error::OAuthTimeout)??;
     if code_state.state != state {
         return Err(Error::OAuthStateMismatch);
     }
@@ -133,7 +129,9 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
     let (uid, email) = decode_id_token(google.id_token.as_deref().unwrap_or(""))
         .ok_or(Error::OAuthIdTokenInvalid("missing sub claim"))?;
 
-    let refresh_token = google.refresh_token.ok_or(Error::OAuthMissingRefreshToken)?;
+    let refresh_token = google
+        .refresh_token
+        .ok_or(Error::OAuthMissingRefreshToken)?;
 
     // 7) 加密存储
     let key = ensure_keyring_key()?;
@@ -154,7 +152,10 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
     let switching = matches!(&prev_active, Some(prev) if prev != &uid);
 
     if switching {
-        log::info!("Google 登录到不同账号：{:?} -> {uid}，需要重启", prev_active);
+        log::info!(
+            "Google 登录到不同账号：{:?} -> {uid}，需要重启",
+            prev_active
+        );
         // 旧 DB 里的 auth_state 清掉，立刻停止后台 sync 推到旧 Drive
         pool.0
             .call(|conn| {
@@ -206,6 +207,11 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
 }
 
 /// 拿到一个有效的 Google access_token，过期就用 refresh_token 自动续。
+/// 拉一个仍然有效的 access_token：
+/// - 没登录 → `Error::NotSignedIn`
+/// - 当前未过期 → 直接返回
+/// - 已过期 → 用 keyring 里的 refresh_token 续一个，写回 DB 再返回
+///
 /// 同时返回当前 uid，方便上层路由。
 ///
 /// 缓冲取 10 分钟：本地 expires_at 还剩 ≤10min 就提前续。原来 5 min 在
@@ -240,10 +246,15 @@ pub async fn force_refresh(pool: &DbPool) -> Result<TokenInfo> {
     refresh_and_persist(pool, uid, &rt_enc).await
 }
 
-async fn read_auth_state(
-    pool: &DbPool,
-) -> Result<(String, Vec<u8>, String, String)> {
-    let row: Option<(Option<String>, Option<Vec<u8>>, Option<String>, Option<String>)> = pool
+async fn read_auth_state(pool: &DbPool) -> Result<(String, Vec<u8>, String, String)> {
+    // 4 字段元组对应 auth_state 表 4 列；抽 type alias 反而要看两处才知道字段含义
+    #[allow(clippy::type_complexity)]
+    let row: Option<(
+        Option<String>,
+        Option<Vec<u8>>,
+        Option<String>,
+        Option<String>,
+    )> = pool
         .0
         .call(|conn| {
             Ok(conn
@@ -265,11 +276,7 @@ async fn read_auth_state(
     }
 }
 
-async fn refresh_and_persist(
-    pool: &DbPool,
-    uid: String,
-    rt_enc: &[u8],
-) -> Result<TokenInfo> {
+async fn refresh_and_persist(pool: &DbPool, uid: String, rt_enc: &[u8]) -> Result<TokenInfo> {
     let (client_id, client_secret) = load_creds(pool).await?;
     let key = ensure_keyring_key()?;
     let rt_bytes = aes_decrypt(&key, rt_enc)?;
@@ -299,6 +306,7 @@ async fn refresh_and_persist(
     })
 }
 
+/// [`ensure_valid_token`] 的返回，包含当前 uid + 有效的 access_token。
 #[derive(Debug, Clone)]
 pub struct TokenInfo {
     /// 当前登录用户的 Google sub（id_token 解出来的）；将来 purge_cloud_data 等命令会用到
@@ -378,6 +386,7 @@ async fn refresh_with_google(
     }
 }
 
+/// 退出登录：清 DB auth_state + keyring refresh_token + active_user.json。
 pub async fn sign_out(pool: &DbPool) -> Result<()> {
     pool.0
         .call(|conn| {
@@ -498,7 +507,7 @@ async fn accept_callback(listener: TcpListener) -> Result<CodeState> {
     let first = req.lines().next().unwrap_or("");
     // GET /callback?code=...&state=... HTTP/1.1
     let path = first.split_whitespace().nth(1).unwrap_or("");
-    let query = path.splitn(2, '?').nth(1).unwrap_or("");
+    let query = path.split_once('?').map(|x| x.1).unwrap_or("");
     let mut code = String::new();
     let mut state = String::new();
     let mut error: Option<String> = None;
@@ -574,7 +583,11 @@ async fn exchange_code(
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::OAuthHttp { endpoint: "token", status, body });
+        return Err(Error::OAuthHttp {
+            endpoint: "token",
+            status,
+            body,
+        });
     }
     Ok(resp.json::<GoogleTokenResp>().await?)
 }
@@ -639,6 +652,8 @@ fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// AES-256-GCM 解密。`ciphertext` 头 12 字节是 nonce，剩下是 ciphertext+tag。
+/// `key` 来自 keyring 里持久化的 32 字节随机值（[`ensure_keyring_key`]）。
 pub fn aes_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
     if ciphertext.len() < 13 {
         return Err(Error::Crypto("ciphertext too short"));

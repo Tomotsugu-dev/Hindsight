@@ -6,15 +6,22 @@ use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
+/// 设备表的一行（前端「设备」页面渲染用）。包含本机和同步看到的远端设备。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceRow {
+    /// UUID（device.json 里写死的 self id 或同步过来的远端 id）
     pub device_id: String,
     pub display_name: String,
+    /// hex `#rrggbb`，UI 头像底色
     pub color: String,
+    /// 图标 ID（前端 lucide-react 映射）
     pub icon: String,
+    /// 操作系统标识（"win" / "mac" / "linux"），跨设备同步过来的可空
     pub os: Option<String>,
+    /// 最后一次看到该设备活动（活动行的 max(updated_at)）；从未活动 None
     pub last_seen_at: Option<String>,
+    /// 是否当前机器
     pub is_self: bool,
 }
 

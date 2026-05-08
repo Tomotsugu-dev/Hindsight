@@ -20,15 +20,21 @@ use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
+/// 应用组的对外快照（包含成员 + category_id + display_name）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppGroup {
+    /// group_id（首次出现时等于该 process_name；后续 merge 后保持不变）
     pub id: String,
+    /// 用户可见的展示名（如 "Visual Studio Code"）
     pub display_name: String,
+    /// 该组的分类（None = 未分类）
     pub category_id: Option<String>,
+    /// 组内成员（process_name + 时长 + 最后出现设备）
     pub members: Vec<AppGroupMember>,
 }
 
+/// 组内单个 process_name 成员的详情。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppGroupMember {
@@ -91,10 +97,10 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
             let mit = mstmt
                 .query_map([], |r| {
                     Ok((
-                        r.get::<_, String>(0)?,                 // process_name
-                        r.get::<_, String>(1)?,                 // group_id
-                        r.get::<_, i64>(2)?,                    // recent_secs
-                        r.get::<_, Option<String>>(3)?,         // last_device_id
+                        r.get::<_, String>(0)?,         // process_name
+                        r.get::<_, String>(1)?,         // group_id
+                        r.get::<_, i64>(2)?,            // recent_secs
+                        r.get::<_, Option<String>>(3)?, // last_device_id
                     ))
                 })
                 .db()?;
@@ -476,8 +482,11 @@ pub async fn group_id_for(pool: &DbPool, process_name: &str) -> Result<Option<St
 }
 
 /// capture 流程会用到：保证某个 process_name 有 (active) 组 + 成员关系。幂等。
-/// 不写 outbox（如果是新创建，update_at 会用现在时间，sync 会自然 push 出去）。
-/// 实际上为了 sync 完整，新建时也得入 outbox —— TODO 用代码而非 trigger 控制。
+/// 不写 outbox（如果是新创建，updated_at 会用现在时间，sync 会自然 push 出去）。
+///
+/// **设计取舍**：理论上为 sync 完整性应该这里也入 outbox，目前依赖 trigger（DB 层）兜底。
+/// 改进路径：把入 outbox 挪到 Rust 代码里，删 trigger，统一所有写入路径走显式 enqueue。
+/// 当前 trigger 已稳定运行，重构优先级低，等 sync 一致性出问题时再做。
 pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
     let p = process_name.to_string();
     if p.is_empty() || p == "Unknown" {

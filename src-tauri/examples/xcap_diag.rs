@@ -43,7 +43,7 @@ fn main() {
     let mut sys = System::new();
     let pids: Vec<Pid> = windows
         .iter()
-        .filter_map(|w| w.pid().ok().map(|p| Pid::from_u32(p as u32)))
+        .filter_map(|w| w.pid().ok().map(Pid::from_u32))
         .collect();
     if !pids.is_empty() {
         sys.refresh_processes_specifics(
@@ -61,7 +61,7 @@ fn main() {
         let on_screen = w.is_minimized().map(|m| !m).unwrap_or(false);
 
         let exe = if pid > 0 {
-            sys.process(Pid::from_u32(pid as u32))
+            sys.process(Pid::from_u32(pid))
                 .map(|p| {
                     p.exe()
                         .map(|p| p.to_string_lossy().to_string())

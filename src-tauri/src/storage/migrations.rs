@@ -492,21 +492,23 @@ const AI_IMAGE_DESCRIPTIONS_TABLE_SQL: &str = r#"
       ON ai_image_descriptions(local_date, segment_idx);
 "#;
 
+/// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
+/// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
     let extras: [&'static str; 11] = [
-        CROSS_OS_CLEANUP_SQL,                    // v11
-        V12_PLACEHOLDER,                         // v12（occupied，no-op）
-        BACKFILL_OUTBOX_SQL,                     // v13
-        APP_ICONS_TABLE_SQL,                     // v14
-        APP_GROUPS_SQL,                          // v15
-        ADD_CATEGORY_SORT_ORDER_SQL,             // v16
-        ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL,     // v17
-        AI_SUMMARIES_TABLE_SQL,                  // v18
-        AI_IMAGE_DESCRIPTIONS_TABLE_SQL,         // v19
-        AI_IMAGE_DESC_PERF_COLS_SQL,             // v20
-        AI_TABLES_ADD_SOURCE_SQL,                // v21
+        CROSS_OS_CLEANUP_SQL,                // v11
+        V12_PLACEHOLDER,                     // v12（occupied，no-op）
+        BACKFILL_OUTBOX_SQL,                 // v13
+        APP_ICONS_TABLE_SQL,                 // v14
+        APP_GROUPS_SQL,                      // v15
+        ADD_CATEGORY_SORT_ORDER_SQL,         // v16
+        ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL, // v17
+        AI_SUMMARIES_TABLE_SQL,              // v18
+        AI_IMAGE_DESCRIPTIONS_TABLE_SQL,     // v19
+        AI_IMAGE_DESC_PERF_COLS_SQL,         // v20
+        AI_TABLES_ADD_SOURCE_SQL,            // v21
     ];
     pool.0
         .call(move |conn| {
@@ -535,8 +537,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
                     extras[idx - static_count]
                 };
                 if !sql.trim().is_empty() {
-                    conn.execute_batch(sql)
-                        .db()?;
+                    conn.execute_batch(sql).db()?;
                 }
                 conn.execute(
                     "INSERT INTO schema_version VALUES (?)",

@@ -70,8 +70,7 @@ fn write_file(body: &ActiveUserFile) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let s = serde_json::to_string_pretty(body)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let s = serde_json::to_string_pretty(body).map_err(|e| io::Error::other(e.to_string()))?;
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, s)?;
     fs::rename(&tmp, &path)?;
@@ -115,9 +114,8 @@ pub async fn migrate_legacy_db(data_root: &Path) -> Result<()> {
     let body = read_file();
 
     // Step 1: 老安装升级路径——active_user.json 完全没写过 + 老 DB 存在
-    let needs_legacy_owner_init = body.uid.is_none()
-        && body.legacy_owner.is_none()
-        && legacy.exists();
+    let needs_legacy_owner_init =
+        body.uid.is_none() && body.legacy_owner.is_none() && legacy.exists();
     if needs_legacy_owner_init {
         if let Some(uid) = peek_auth_state_uid(&legacy).await {
             set_active_uid(Some(&uid))?;

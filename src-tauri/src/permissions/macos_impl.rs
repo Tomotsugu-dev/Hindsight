@@ -13,6 +13,9 @@ extern "C" {
     fn CGRequestScreenCaptureAccess() -> bool;
 }
 
+/// macOS 实现：先 `CGPreflightScreenCaptureAccess` preflight，没拿到再调
+/// `CGRequestScreenCaptureAccess` 触发系统弹框（同步阻塞直到用户决定）。
+/// `granted` 后续 spawn 的 xcap 才能拿其它进程的窗口标题。
 pub fn ensure_screen_recording() -> ScreenRecordingState {
     if unsafe { CGPreflightScreenCaptureAccess() } {
         return ScreenRecordingState::Granted;

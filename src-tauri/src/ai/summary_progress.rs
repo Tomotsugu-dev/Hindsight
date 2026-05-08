@@ -1,7 +1,7 @@
 //! AI 总结流程的进度事件 payload。
 //!
 //! 前端 `listen("ai://summary-progress", …)` 拿进度，按 `phase` 字段分发渲染。
-//! 该结构体 / 常量从原 `summary.rs` 拎出，与 [`crate::commands::ai::PROGRESS_EVENT`]
+//! 该结构体 / 常量从原 `summary.rs` 拎出，与 [`crate::commands::ai_binary::ENGINE_DOWNLOAD_PROGRESS_EVENT`]
 //! 平级，统一在 `ai://` 命名空间。
 
 use serde::Serialize;

@@ -41,19 +41,23 @@ pub fn pick_frames<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {
 /// - `0` → 不缩放，直接读原盘字节做 base64（最快路径，截图本来就 fit 过）
 /// - `> 0` → 解码 + 长边缩到 max_dim 像素 + 重新 JPEG 编码（默认质量 75）
 ///
-/// 失败统一映射成 `Error::Other`，让 summary.rs 的循环能 continue 跳过坏文件
-/// 而不是一段卡死。
+/// 失败统一映射成 `Error::ImageProcessing`，让 summary.rs 的循环能 continue
+/// 跳过坏文件而不是一段卡死。`stage` 标记是哪一步出错（read / decode / encode / spawn_blocking）。
 pub async fn to_data_uri(path: &Path, max_dim: u32) -> Result<String> {
     let path = path.to_path_buf();
     // image crate 是同步阻塞 API，放 spawn_blocking 不堵 tokio runtime
     let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
         if max_dim == 0 {
-            return std::fs::read(&path)
-                .map_err(|e| Error::Other(format!("读截图失败 {}: {e}", path.display())));
+            return std::fs::read(&path).map_err(|e| Error::ImageProcessing {
+                stage: "read",
+                details: format!("path={} err={e}", path.display()),
+            });
         }
 
-        let img = image::open(&path)
-            .map_err(|e| Error::Other(format!("解码截图失败 {}: {e}", path.display())))?;
+        let img = image::open(&path).map_err(|e| Error::ImageProcessing {
+            stage: "decode",
+            details: format!("path={} err={e}", path.display()),
+        })?;
 
         let (w, h) = (img.width(), img.height());
         let img = if w.max(h) > max_dim {
@@ -66,11 +70,17 @@ pub async fn to_data_uri(path: &Path, max_dim: u32) -> Result<String> {
 
         let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
         img.write_to(&mut Cursor::new(&mut buf), ImageFormat::Jpeg)
-            .map_err(|e| Error::Other(format!("编码 JPEG 失败：{e}")))?;
+            .map_err(|e| Error::ImageProcessing {
+                stage: "encode",
+                details: format!("jpeg: {e}"),
+            })?;
         Ok(buf)
     })
     .await
-    .map_err(|e| Error::Other(format!("spawn_blocking 失败：{e}")))??;
+    .map_err(|e| Error::ImageProcessing {
+        stage: "spawn_blocking",
+        details: e.to_string(),
+    })??;
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:image/jpeg;base64,{}", b64))

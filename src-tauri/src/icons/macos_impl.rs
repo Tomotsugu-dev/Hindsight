@@ -2,6 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::error::Result;
 
+/// macOS 实现：找到 exe 所在 .app bundle → 读 Info.plist 拿 CFBundleIconFile →
+/// 解码 .icns 取最大变体编码 PNG。bundle 找不到返回 `Ok(None)`。
 pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     let bundle = match find_bundle(exe_path) {
         Some(b) => b,

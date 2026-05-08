@@ -5,6 +5,9 @@ use image::{codecs::jpeg::JpegEncoder, DynamicImage, ExtendedColorType, ImageEnc
 
 use crate::error::{Error, Result};
 
+/// 截当前激活窗口 → 缩放到 `max_width × max_height`（保持比例 + letterbox 透明）→
+/// JPEG 编码 → 写到 `dir/<HHMMSS_NNN>.jpg`。返回写入的绝对路径。
+/// 同步图像处理放在 `spawn_blocking` 里跑，不堵 Tokio runtime。
 pub async fn capture_active_window(
     dir: PathBuf,
     max_width: u32,

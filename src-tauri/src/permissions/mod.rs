@@ -12,6 +12,7 @@ mod macos_impl;
 mod windows_impl;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod stub_impl {
+    /// 其它 unix 平台 stub：默认 Granted，调用方按已授权处理。
     pub fn ensure_screen_recording() -> super::ScreenRecordingState {
         super::ScreenRecordingState::Granted
     }
@@ -19,11 +20,12 @@ mod stub_impl {
 
 #[cfg(target_os = "macos")]
 use macos_impl as imp;
-#[cfg(target_os = "windows")]
-use windows_impl as imp;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use stub_impl as imp;
+#[cfg(target_os = "windows")]
+use windows_impl as imp;
 
+/// macOS Screen Recording 权限的当前状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScreenRecordingState {
     /// 已授权，xcap / 截屏可以工作

@@ -8,14 +8,21 @@
 //! 为什么把它从 auth.rs 拆出来：原文件 600+ 行，一半是这页 HTML 字面量，
 //! 把 OAuth 流程逻辑挤在底下不容易找。
 
+/// 把字符串里的 HTML 特殊字符 (`& < >`) 转义成实体，防止注入到 [`render`] 出来的页面里。
 pub fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
 }
 
+/// 生成 OAuth 回调成功 / 失败页 HTML。
+/// 浏览器在 OAuth 跳回 loopback 时显示这一页（成功后用户手动关页面，或 5 秒后自动关）。
 pub fn render(success: bool, message: &str) -> String {
-    let title = if success { "登录成功" } else { "登录失败" };
+    let title = if success {
+        "登录成功"
+    } else {
+        "登录失败"
+    };
     let (icon_color, icon_bg) = if success {
         ("#6c5ce7", "rgba(108, 92, 231, 0.13)")
     } else {

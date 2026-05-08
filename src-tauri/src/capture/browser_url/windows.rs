@@ -38,7 +38,9 @@ fn get_url_via_uiautomation() -> Option<String> {
     }
 
     let automation = UIAutomation::new().ok()?;
-    let window_element = automation.element_from_handle(Handle::from(hwnd_raw)).ok()?;
+    let window_element = automation
+        .element_from_handle(Handle::from(hwnd_raw))
+        .ok()?;
 
     // 任何 Edit / Document 控件的 value 第一个能解析成 URL 的就用——见文件头注释里的设计说明。
     let try_extract = |elem: &uiautomation::UIElement| -> Option<String> {

@@ -10,13 +10,13 @@ use super::io::{self, OutboxRow};
 use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
+use crate::storage::SqliteResultExt;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
 };
-use crate::storage::SqliteResultExt;
 
 const PUSH_BATCH_SIZE: usize = 200;
 
@@ -42,7 +42,12 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
             return Ok(());
         }
         Err(e) => {
-            log::warn!("sync push 拿不到有效 token: {e}");
+            // 默认日志级别只记概述：避免把 OAuth body / 错误链里可能携带的
+            // 用户邮箱 / account id / OAuth body 落到日志文件；
+            // 错误分类后的 status 字符串已经带 [CRED_EXPIRED] / [TRANSIENT] 前缀，
+            // UI 可读且不含原始 raw。排查时用 RUST_LOG=hindsight=debug 看 detail
+            log::warn!("sync push 拿不到有效 token（详情见 status）");
+            log::debug!("token error detail: {e}");
             inner.status.write().await.last_error = Some(format_sync_error(&e));
             return Ok(());
         }
@@ -125,8 +130,11 @@ fn group_outbox(rows: &[OutboxRow]) -> HashMap<DirtyKey, Vec<i64>> {
         let key = match row.entity.as_str() {
             "activity" => match serde_json::from_str::<Value>(&row.payload)
                 .ok()
-                .and_then(|p| p.get("localDate").and_then(|v| v.as_str()).map(String::from))
-            {
+                .and_then(|p| {
+                    p.get("localDate")
+                        .and_then(|v| v.as_str())
+                        .map(String::from)
+                }) {
                 Some(d) => DirtyKey::ActivityDay(d),
                 None => {
                     log::warn!("outbox row {} 是 activity 但 payload 缺 localDate", row.id);

@@ -7,6 +7,8 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// 当前设备身份（device.json 里持久化的字段）。安装级别身份，不随数据走：
+/// 把 DB 拷到另一台机器时不会带走 device_id。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceMeta {
     pub device_id: String,
@@ -32,11 +34,7 @@ fn default_icon() -> String {
 /// 启动级身份：在 bootstrap.json 同级目录存 device.json，与数据 DB 物理分离。
 /// 把 DB 拷到另一台机器时不会带走 device_id —— device_id 必须随安装走，不随数据走。
 fn device_file() -> Option<PathBuf> {
-    Some(
-        dirs::config_dir()?
-            .join("Hindsight")
-            .join("device.json"),
-    )
+    Some(dirs::config_dir()?.join("Hindsight").join("device.json"))
 }
 
 static SELF_META: OnceLock<DeviceMeta> = OnceLock::new();
@@ -47,9 +45,8 @@ pub fn ensure_loaded() -> io::Result<&'static DeviceMeta> {
         return Ok(m);
     }
 
-    let path = device_file().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "找不到系统配置目录")
-    })?;
+    let path = device_file()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "找不到系统配置目录"))?;
 
     let meta = match fs::read_to_string(&path) {
         Ok(s) => match serde_json::from_str::<DeviceMeta>(&s) {
@@ -70,7 +67,9 @@ pub fn ensure_loaded() -> io::Result<&'static DeviceMeta> {
     };
 
     let _ = SELF_META.set(meta);
-    Ok(SELF_META.get().expect("just set"))
+    // OnceLock 刚 set 完立刻 get：上一行 `set` 即使被并发线程抢走，本线程
+    // get 拿到的也是已写入的值；invariant 在 OnceLock 类型上由 std 保证
+    Ok(SELF_META.get().expect("OnceLock 刚 set，必有值"))
 }
 
 fn generate_default() -> DeviceMeta {
@@ -89,8 +88,7 @@ fn write_atomic(path: &PathBuf, meta: &DeviceMeta) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let tmp = path.with_extension("json.tmp");
-    let s = serde_json::to_string_pretty(meta)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let s = serde_json::to_string_pretty(meta).map_err(|e| io::Error::other(e.to_string()))?;
     fs::write(&tmp, s)?;
     fs::rename(&tmp, path)?;
     Ok(())
@@ -104,24 +102,26 @@ pub fn self_id() -> crate::error::Result<&'static str> {
     SELF_META
         .get()
         .map(|m| m.device_id.as_str())
-        .ok_or_else(|| {
-            crate::error::Error::Other("device::ensure_loaded() 未调用".to_string())
-        })
+        .ok_or_else(|| crate::error::Error::Other("device::ensure_loaded() 未调用".to_string()))
 }
 
 /// 获取当前设备完整 meta。同 [`self_id`]：未初始化时返回 `Err`。
 #[allow(dead_code)] // 公开 API，外部可调用
 pub fn self_meta() -> crate::error::Result<&'static DeviceMeta> {
-    SELF_META.get().ok_or_else(|| {
-        crate::error::Error::Other("device::ensure_loaded() 未调用".to_string())
-    })
+    SELF_META
+        .get()
+        .ok_or_else(|| crate::error::Error::Other("device::ensure_loaded() 未调用".to_string()))
 }
 
 /// 用户改名 / 改颜色 / 改图标后写回 device.json。
-pub fn update_self(name: Option<String>, color: Option<String>, icon: Option<String>) -> io::Result<DeviceMeta> {
+pub fn update_self(
+    name: Option<String>,
+    color: Option<String>,
+    icon: Option<String>,
+) -> io::Result<DeviceMeta> {
     let current = SELF_META
         .get()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "device 尚未初始化"))?;
+        .ok_or_else(|| io::Error::other("device 尚未初始化"))?;
 
     let next = DeviceMeta {
         device_id: current.device_id.clone(),
@@ -132,9 +132,8 @@ pub fn update_self(name: Option<String>, color: Option<String>, icon: Option<Str
         created_at: current.created_at.clone(),
     };
 
-    let path = device_file().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "找不到系统配置目录")
-    })?;
+    let path = device_file()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "找不到系统配置目录"))?;
     write_atomic(&path, &next)?;
 
     // OnceLock 不支持原地替换；这里只更新文件，进程内的 self_meta 直到下次冷启动才反映新值。

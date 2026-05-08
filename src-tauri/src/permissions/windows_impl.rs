@@ -3,6 +3,7 @@
 
 use super::ScreenRecordingState;
 
+/// Windows 实现：直接返回 Granted（系统无 Screen Recording 权限模型）。
 pub fn ensure_screen_recording() -> ScreenRecordingState {
     ScreenRecordingState::Granted
 }

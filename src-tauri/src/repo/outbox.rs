@@ -11,6 +11,7 @@ pub enum OutboxOp {
 }
 
 impl OutboxOp {
+    /// 序列化成 outbox 表里 `op` 字段的字符串。
     pub fn as_str(self) -> &'static str {
         match self {
             OutboxOp::Upsert => "upsert",
@@ -33,6 +34,7 @@ pub enum OutboxEntity {
 }
 
 impl OutboxEntity {
+    /// 序列化成 outbox 表 `entity` 字段的字符串，对应 Drive 上的文件 kind。
     pub fn as_str(self) -> &'static str {
         match self {
             OutboxEntity::Activity => "activity",

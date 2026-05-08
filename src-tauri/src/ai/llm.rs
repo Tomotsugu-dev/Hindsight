@@ -52,7 +52,7 @@ impl ChatClient {
         let http = Client::builder()
             .timeout(CHAT_TIMEOUT)
             .build()
-            .map_err(|e| Error::Other(format!("HTTP 客户端构造失败：{e}")))?;
+            .map_err(|e| Error::LlmResponse(format!("HTTP 客户端构造失败：{e}")))?;
         Ok(Self {
             base_url: format!("http://127.0.0.1:{}/v1", port),
             model: model.into(),
@@ -106,15 +106,15 @@ impl ExternalChatClient {
     pub fn new(endpoint: &str, model: String, api_key: String) -> Result<Self> {
         let base_url = endpoint.trim().trim_end_matches('/').to_string();
         if base_url.is_empty() {
-            return Err(Error::Other("云端 API 地址为空".into()));
+            return Err(Error::InvalidInput("云端 API 地址为空"));
         }
         if model.trim().is_empty() {
-            return Err(Error::Other("云端模型 ID 为空".into()));
+            return Err(Error::InvalidInput("云端模型 ID 为空"));
         }
         let http = Client::builder()
             .timeout(EXTERNAL_CHAT_TIMEOUT)
             .build()
-            .map_err(|e| Error::Other(format!("HTTP 客户端构造失败：{e}")))?;
+            .map_err(|e| Error::LlmResponse(format!("HTTP 客户端构造失败：{e}")))?;
         Ok(Self {
             base_url,
             model,
@@ -123,6 +123,8 @@ impl ExternalChatClient {
         })
     }
 
+    /// 发一条纯文本 chat 请求（step 2 段总结专用）。
+    /// 拒绝任何 `image_data_uris` 非空的调用——本设计里截图永远不上云。
     pub async fn chat_text(
         &self,
         system: &str,
@@ -131,8 +133,8 @@ impl ExternalChatClient {
     ) -> Result<(String, ChatUsage)> {
         // 防御：本设计里外部 API 只跑 step 2 纯文本；任何带图调用都是路由 bug。
         if !image_data_uris.is_empty() {
-            return Err(Error::Other(
-                "云端 API 不接受图片：step 1 必须走本地 vision 模型".into(),
+            return Err(Error::InvalidInput(
+                "云端 API 不接受图片：step 1 必须走本地 vision 模型",
             ));
         }
         let url = format!("{}/chat/completions", self.base_url);
@@ -230,7 +232,10 @@ fn build_chat_body(
 /// 已经带好 body / 鉴权头的 RequestBuilder → 发出去 → 解析 ChatResp。
 ///
 /// `t0` 在调用方记录，用来算 latency。失败统一映射为 `Error::Other` + 人类可读字符串。
-async fn post_chat_completions(req: RequestBuilder, body: serde_json::Value) -> Result<(String, ChatUsage)> {
+async fn post_chat_completions(
+    req: RequestBuilder,
+    body: serde_json::Value,
+) -> Result<(String, ChatUsage)> {
     let t0 = Instant::now();
     send_and_parse(req.json(&body), t0).await
 }
@@ -239,7 +244,7 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
     let resp = req
         .send()
         .await
-        .map_err(|e| Error::Other(crate::commands::ai::fmt_send_err(e)))?;
+        .map_err(|e| Error::LlmResponse(crate::commands::ai::fmt_send_err(e)))?;
 
     let status = resp.status();
     if !status.is_success() {
@@ -250,13 +255,13 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
             .chars()
             .take(200)
             .collect();
-        return Err(Error::Other(format!("服务返回 {status}：{preview}")));
+        return Err(Error::LlmResponse(format!("服务返回 {status}：{preview}")));
     }
 
     let parsed: ChatResp = resp
         .json()
         .await
-        .map_err(|e| Error::Other(format!("响应不是 OpenAI 兼容格式：{e}")))?;
+        .map_err(|e| Error::LlmResponse(format!("响应不是 OpenAI 兼容格式：{e}")))?;
 
     let usage = ChatUsage {
         latency_ms: t0.elapsed().as_millis() as u64,
@@ -274,7 +279,7 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
         .to_string();
 
     if content.is_empty() {
-        return Err(Error::Other("模型返回为空".to_string()));
+        return Err(Error::LlmResponse("模型返回为空".to_string()));
     }
     Ok((content, usage))
 }

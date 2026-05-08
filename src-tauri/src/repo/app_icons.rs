@@ -11,8 +11,8 @@ use rusqlite::OptionalExtension;
 
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::{db_path_dir, DbPool};
 use crate::storage::SqliteResultExt;
+use crate::storage::{db_path_dir, DbPool};
 
 /// 文件 cache 路径：`<data_root>/icons/<sanitized>.png`。
 /// process_name 里的非 ASCII alnum/. /-/_ 字符替换成 `_`，避免文件名歧义。
@@ -68,14 +68,7 @@ pub async fn upsert_local(pool: &DbPool, process_name: &str, icon_png: &[u8]) ->
             // outbox payload 用不到 BLOB 内容，build 时会重新去 DB 查 —— 这里只放 process_name
             // 让 group_outbox 能定位到 (DirtyKey::AppIcons)。
             let payload = serde_json::json!({ "processName": p }).to_string();
-            enqueue(
-                conn,
-                OutboxOp::Upsert,
-                OutboxEntity::AppIcon,
-                &p,
-                &payload,
-            )
-            .db()?;
+            enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppIcon, &p, &payload).db()?;
             Ok(())
         })
         .await?;
@@ -101,9 +94,7 @@ pub async fn backfill_db_from_cache_or_extract(pool: &DbPool) -> Result<usize> {
             let mut stmt = conn
                 .prepare("SELECT process_name FROM process_paths")
                 .db()?;
-            let rows = stmt
-                .query_map([], |r| r.get::<_, String>(0))
-                .db()?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0)).db()?;
             let mut out = Vec::new();
             for r in rows {
                 out.push(r.db()?);

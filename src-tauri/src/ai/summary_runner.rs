@@ -23,9 +23,7 @@ use crate::ai::config::AiConfig;
 use crate::ai::image::{pick_frames, to_data_uri};
 use crate::ai::llm::ChatClient;
 use crate::ai::models;
-use crate::ai::prompt::{
-    build_image_describe_system_prompt, build_image_describe_user_prompt,
-};
+use crate::ai::prompt::{build_image_describe_system_prompt, build_image_describe_user_prompt};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
     build_step2, describe_images, extract_time_label, summarize_segment, upsert_skipped_segment,
@@ -41,6 +39,8 @@ use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
 
+/// 单点入口：跑一天的 AI 总结。lib.rs 通过 `app.manage` 不直接管它，
+/// 而是命令体里临时构造（生命周期跟随单次调用）。
 pub struct DaySummaryRunner {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
@@ -51,6 +51,8 @@ pub struct DaySummaryRunner {
 }
 
 impl DaySummaryRunner {
+    /// 由命令体临时构造（不进 Tauri State）：每次跑一次总结时新建一份。
+    /// `cancel` 来自全局 `SummaryCancel` 单例，前端调 cancel_day_summary 时被设 true。
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
@@ -70,6 +72,9 @@ impl DaySummaryRunner {
     /// `force_refresh = true` 会先清空当天 ai_summaries 行，否则已有的段直接复用
     /// （前端在调命令前应该已经判断过是否需要重跑）。
     /// `source` = "daily" / "debug" — DailyTab 跟 DebugTab 写各自命名空间互不污染。
+    // 8 个参数对应 8 个调用方语义（日期 / 设备 / 强刷 / overrides / source 命名空间 /
+    // step1_only / step2_only），拆 struct 反而把命令边界 schema 嵌一层
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         &self,
         source: &str,
@@ -142,8 +147,8 @@ impl DaySummaryRunner {
         let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
 
         if ai.active_main.trim().is_empty() {
-            return Err(Error::Other(
-                "请先在「模型」选一个 vision 模型再生成总结".to_string(),
+            return Err(Error::InvalidInput(
+                "请先在「模型」选一个 vision 模型再生成总结",
             ));
         }
 
@@ -310,14 +315,7 @@ impl DaySummaryRunner {
             self.emit(p_started);
 
             upsert_skipped_segment(
-                &self.pool,
-                source,
-                date_str,
-                idx,
-                &label,
-                start_hour,
-                end_hour,
-                model,
+                &self.pool, source, date_str, idx, &label, start_hour, end_hour, model,
             )
             .await?;
 
@@ -473,8 +471,7 @@ impl DaySummaryRunner {
         let step2_model = step2.model_label().to_string();
 
         let stored =
-            ai_summaries::get_segment_image_descriptions(&self.pool, source, date_str, idx)
-                .await?;
+            ai_summaries::get_segment_image_descriptions(&self.pool, source, date_str, idx).await?;
 
         let mut p_started = SummaryProgress::base(
             source.to_string(),
@@ -488,14 +485,7 @@ impl DaySummaryRunner {
 
         if stored.is_empty() {
             upsert_skipped_segment(
-                &self.pool,
-                source,
-                date_str,
-                idx,
-                &label,
-                start_hour,
-                end_hour,
-                model,
+                &self.pool, source, date_str, idx, &label, start_hour, end_hour, model,
             )
             .await?;
             let mut p_done = SummaryProgress::base(
@@ -629,8 +619,8 @@ impl DaySummaryRunner {
         };
 
         if ai.active_main.trim().is_empty() {
-            return Err(Error::Other(
-                "请先在「模型」选一个 vision 模型再生成总结".to_string(),
+            return Err(Error::InvalidInput(
+                "请先在「模型」选一个 vision 模型再生成总结",
             ));
         }
 
@@ -649,7 +639,7 @@ impl DaySummaryRunner {
             .into_iter()
             .find(|r| r.image_index == image_index)
             .ok_or_else(|| {
-                Error::Other(format!(
+                Error::InvalidInputDyn(format!(
                     "段 {} 第 {} 张图没有现有描述，先跑一次完整生成",
                     segment_idx, image_index
                 ))
@@ -687,7 +677,11 @@ impl DaySummaryRunner {
 
         let _inflight = self.supervisor.acquire_inference();
         let (desc, usage) = chat
-            .chat_with_images(&describe_system, &describe_user, std::slice::from_ref(&data_uri))
+            .chat_with_images(
+                &describe_system,
+                &describe_user,
+                std::slice::from_ref(&data_uri),
+            )
             .await?;
         drop(_inflight);
 
@@ -781,8 +775,8 @@ impl DaySummaryRunner {
         let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
 
         if ai.active_main.trim().is_empty() {
-            return Err(Error::Other(
-                "请先在「模型」选一个 vision 模型再生成总结".to_string(),
+            return Err(Error::InvalidInput(
+                "请先在「模型」选一个 vision 模型再生成总结",
             ));
         }
 
@@ -790,9 +784,9 @@ impl DaySummaryRunner {
             .segments
             .get(segment_idx as usize)
             .cloned()
-            .ok_or_else(|| Error::Other(format!("段下标越界：{}", segment_idx)))?;
+            .ok_or_else(|| Error::InvalidInputDyn(format!("段下标越界：{}", segment_idx)))?;
         if seg.end_hour <= seg.start_hour {
-            return Err(Error::Other("段时间范围非法".into()));
+            return Err(Error::InvalidInput("段时间范围非法"));
         }
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
@@ -858,8 +852,8 @@ impl DaySummaryRunner {
         let models_dir = models::root_dir(ai);
         let main_path: PathBuf = models_dir.join(&ai.active_main);
         if !main_path.exists() {
-            return Err(Error::Other(format!(
-                "选中的主权重文件不存在：{}（可能被删除或路径变了）",
+            return Err(Error::ModelFileMissing(format!(
+                "{}（可能被删除或路径变了）",
                 ai.active_main
             )));
         }
@@ -868,8 +862,8 @@ impl DaySummaryRunner {
         } else {
             let p = models_dir.join(&ai.active_mmproj);
             if !p.exists() {
-                return Err(Error::Other(format!(
-                    "选中的 vision 投影文件不存在：{}",
+                return Err(Error::ModelFileMissing(format!(
+                    "vision 投影 {}",
                     ai.active_mmproj
                 )));
             }

@@ -1,0 +1,6 @@
+# 钉项目用的 Rust toolchain：CI 与开发者本地环境保持一致。
+# 升级 toolchain 时同步改这一行 + 跑一次 `cargo clippy --all-targets -- -D warnings` 验证无新 lint。
+[toolchain]
+channel = "stable"
+profile = "default"
+components = ["rustfmt", "clippy"]

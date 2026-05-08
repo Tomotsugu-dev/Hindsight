@@ -70,7 +70,9 @@ fn rules() -> &'static HashMap<String, String> {
 /// 看 process_name 是否命中内置规则。命中返回 category_id（&'static str），未命中 None。
 /// 大小写不敏感（"Chrome.exe" 跟 "chrome.exe" 等价）。
 pub fn match_builtin_category(process_name: &str) -> Option<&'static str> {
-    rules().get(&process_name.to_lowercase()).map(|s| s.as_str())
+    rules()
+        .get(&process_name.to_lowercase())
+        .map(|s| s.as_str())
 }
 
 /// 启动时跑一次：扫所有 category_id IS NULL 且未删除的 app_group，
@@ -96,9 +98,7 @@ pub async fn backfill_builtin_categories(pool: &DbPool) -> Result<u64> {
                 )
                 .db()?;
             let rows: Vec<(String, String)> = stmt
-                .query_map([], |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-                })
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
                 .db()?
                 .filter_map(|r| r.ok())
                 .collect();

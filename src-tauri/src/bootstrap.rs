@@ -15,14 +15,16 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use tauri::{App, AppHandle, Manager};
+
 use crate::capture::CaptureService;
-use crate::storage::SqliteResultExt;
 use crate::device::{self, DeviceMeta};
 use crate::repo::devices;
 use crate::repo::settings::Settings;
+use crate::storage::SqliteResultExt;
 use crate::storage::{db_path, DbPool};
 use crate::sync::engine::SyncEngine;
-use crate::{account, storage};
+use crate::{account, platform, storage};
 
 #[derive(Default, Serialize, Deserialize)]
 struct BootstrapFile {
@@ -33,11 +35,7 @@ struct BootstrapFile {
 /// 启动级配置文件位置：%APPDATA%/Hindsight/bootstrap.json （Windows）
 /// 它存放的是"DB 应该开在哪里"这种 chicken-and-egg 的信息——在打开 DB 之前就要读到。
 fn config_file() -> Option<PathBuf> {
-    Some(
-        dirs::config_dir()?
-            .join("Hindsight")
-            .join("bootstrap.json"),
-    )
+    Some(dirs::config_dir()?.join("Hindsight").join("bootstrap.json"))
 }
 
 /// 系统默认数据目录：%APPDATA%/Hindsight 等
@@ -76,8 +74,7 @@ pub fn set_data_root(path: &str) -> io::Result<()> {
     let body = BootstrapFile {
         data_path: Some(path.to_string()),
     };
-    let s = serde_json::to_string_pretty(&body)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let s = serde_json::to_string_pretty(&body).map_err(|e| io::Error::other(e.to_string()))?;
     fs::write(&cfg, s)
 }
 
@@ -176,6 +173,101 @@ pub async fn init_sync_engine(pool: DbPool) -> Arc<SyncEngine> {
     let sync_engine = Arc::new(SyncEngine::new(pool));
     sync_engine.start().await;
     sync_engine
+}
+
+/// 安装系统托盘 + 主窗口的 close handler。
+///
+/// 抽出来是为了让 `lib.rs::run` 的 setup 闭包瘦身：托盘的 builder 链 + close
+/// 行为切换是稳定的"一次性安装"逻辑，跟启动数据流编排关系不大。
+///
+/// 关闭按钮行为：默认 X = 隐藏到托盘，用户在「设置 → 常规」可改成真正退出
+/// （[`crate::MINIMIZE_TO_TRAY`] 控制，settings 改完 store 同步给这里读）。
+/// 真正的"退出"在托盘右键菜单。
+pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
+    let handle = app.handle().clone();
+
+    if let Some(main_window) = handle.get_webview_window("main") {
+        platform::apply_window_tweaks(&main_window);
+
+        let win_for_close = main_window.clone();
+        main_window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) {
+                    api.prevent_close();
+                    let _ = win_for_close.hide();
+                }
+            }
+        });
+    }
+
+    install_tray_icon(app)
+}
+
+/// 系统托盘：图标用主窗口同款。左键单击 toggle 显示 / 隐藏；
+/// 右键 / 菜单提供"显示主窗口" + "退出"。退出走 app.exit(0)。
+fn install_tray_icon(app: &mut App) -> tauri::Result<()> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder};
+    use tauri::tray::TrayIconBuilder;
+
+    let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+    let menu = MenuBuilder::new(app)
+        .item(&show_item)
+        .separator()
+        .item(&quit_item)
+        .build()?;
+
+    let _tray = TrayIconBuilder::with_id("hindsight-tray")
+        // 启动期失败需快速失败：Tauri 总会带默认窗口图标，缺失意味着打包资源错误
+        .icon(
+            app.default_window_icon()
+                .cloned()
+                .expect("default_window_icon 必存在（Tauri 资源缺失）"),
+        )
+        .tooltip("Hindsight")
+        .menu(&menu)
+        // 左键不弹菜单（留给 toggle 显隐）；菜单只在右键 / macOS 上 showMenu 时弹
+        .show_menu_on_left_click(false)
+        .on_menu_event(handle_tray_menu_event)
+        .on_tray_icon_event(handle_tray_icon_event)
+        .build(app)?;
+    Ok(())
+}
+
+fn handle_tray_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
+    match event.id.as_ref() {
+        "show" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
+
+fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: tauri::tray::TrayIconEvent) {
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+    if let TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+    } = event
+    {
+        let app = tray.app_handle();
+        if let Some(w) = app.get_webview_window("main") {
+            match w.is_visible() {
+                Ok(true) => {
+                    let _ = w.hide();
+                }
+                _ => {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+        }
+    }
 }
 
 /// 后台 backfill 任务：图标 + 内置分类。两个任务都自带"已存在则跳过"，

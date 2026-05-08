@@ -23,10 +23,10 @@ pub fn should_skip_screenshot(
             }
         }
     }
-    if !app_keywords.is_empty() {
-        if matches_any(app_name, app_keywords) || matches_any(title, app_keywords) {
-            return true;
-        }
+    if !app_keywords.is_empty()
+        && (matches_any(app_name, app_keywords) || matches_any(title, app_keywords))
+    {
+        return true;
     }
     false
 }
@@ -139,13 +139,7 @@ mod tests {
     #[test]
     fn 关键词前后空白被吃掉() {
         let app_kw = s(&["  微信  "]);
-        assert!(should_skip_screenshot(
-            "微信",
-            "x",
-            None,
-            &[],
-            &app_kw,
-        ));
+        assert!(should_skip_screenshot("微信", "x", None, &[], &app_kw,));
     }
 
     #[test]

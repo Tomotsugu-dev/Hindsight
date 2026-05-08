@@ -15,10 +15,10 @@
 //! 那一路在 `privacy::should_skip_screenshot` 里会自动跳过，不影响 app/标题
 //! 关键词匹配。
 
-#[cfg(target_os = "windows")]
-mod windows;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod stub {
     pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
@@ -26,12 +26,12 @@ mod stub {
     }
 }
 
-#[cfg(target_os = "windows")]
-use windows as imp;
 #[cfg(target_os = "macos")]
 use macos as imp;
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 use stub as imp;
+#[cfg(target_os = "windows")]
+use windows as imp;
 
 /// 该应用是不是浏览器（基于进程名 / app_name 粗判）。
 /// 非浏览器就不要花平台调用的钱。

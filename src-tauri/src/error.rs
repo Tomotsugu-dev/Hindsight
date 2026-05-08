@@ -105,10 +105,49 @@ pub enum Error {
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
 
+    /// 动态消息版的 InvalidInput —— 段下标越界 / 段时间范围非法 / 模型名带分隔符等
+    /// 取 String 而非 &'static str：消息里要带运行期值（"段下标越界：5"）
+    #[error("invalid input: {0}")]
+    InvalidInputDyn(String),
+
     /// sync_now 跑完了但 push/pull 内部记下了 last_error（多半是 token 不可用）。
     /// 用 String 因为这里聚合的是「内部 push/pull 各自塞回 status 的人类可读信息」，不需要 caller match。
     #[error("sync incomplete: {0}")]
     SyncIncomplete(String),
+
+    // ───────────── AI 引擎相关 ─────────────
+    /// llama.cpp binary 下载 / 校验 / 解压失败。`stage` 用静态字符串区分阶段
+    /// （"download" / "verify" / "extract" / "cleanup"），让 caller 能 match 重试策略。
+    /// 字段名用 `details` 避免被 thiserror 当成 `#[source]` 处理（String 不 impl StdError）
+    #[error("engine binary {stage}: {details}")]
+    EngineBinary {
+        stage: &'static str,
+        details: String,
+    },
+
+    /// 选中的 GGUF 文件（active_main / active_mmproj）在磁盘上找不到。
+    /// caller 一般会引导用户去重新选模型
+    #[error("model file missing: {0}")]
+    ModelFileMissing(String),
+
+    /// llama-server 启动 / health 检查 / 端口冲突等
+    #[error("engine start: {0}")]
+    EngineStart(String),
+
+    /// llama-server 已经在 Starting 状态，不允许并发启动
+    #[error("engine already starting")]
+    EngineBusy,
+
+    /// LLM HTTP 响应解析失败 / 状态码非 2xx / 内容为空。caller 一般标 status='error'
+    #[error("llm response: {0}")]
+    LlmResponse(String),
+
+    /// 截图缩放 / 编码 / 读取失败。`stage` = "read" / "decode" / "encode" / "spawn_blocking"
+    #[error("image processing {stage}: {details}")]
+    ImageProcessing {
+        stage: &'static str,
+        details: String,
+    },
 
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]

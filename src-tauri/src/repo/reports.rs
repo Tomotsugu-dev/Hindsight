@@ -1,3 +1,8 @@
+//! 报表层：按日 / 周 / 月聚合 activities 表，输出给前端 dashboard 的查询函数。
+//!
+//! 每个 `<scope>_<dim>` 函数（`day_hours` / `day_apps` / `week_days` / ...）输出固定
+//! 形状的 Vec，前端拿到直接渲染。所有查询走 [`DeviceFilter`] 控制单设备 vs 全设备聚合。
+
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike};
 use rusqlite::ToSql;
 use serde::Serialize;
@@ -6,27 +11,37 @@ use crate::error::Result;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
+/// 一小时内某分类的累计分钟数。是 [`HourSlot`] / [`DaySummary`] 的 segment 元素。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HourSegment {
+    /// 分类 ID（'other' / 用户自定义 ID 等）
     pub category_id: String,
+    /// 该分类在该小时累计分钟数；多设备聚合时可超 60
     pub minutes: u32,
 }
 
+/// 单小时的分类时长分布（一个 [`HourSlot`] 对应 24 小时柱状图的一根柱子）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HourSlot {
+    /// 0..=23
     pub hour: u8,
+    /// 该小时按分类切分的分钟数（按 minutes 降序），空 segments 表示该小时无活动
     pub segments: Vec<HourSegment>,
 }
 
+/// 单日的分类时长分布。给「周 / 月」页面的逐日热力图用。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DaySummary {
+    /// 日期 `YYYY-MM-DD`
     pub date: String,
+    /// 该日按分类切分的分钟数
     pub segments: Vec<HourSegment>,
 }
 
+/// 单个应用的累计使用情况（top apps 列表的一行）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppUsage {
@@ -55,6 +70,7 @@ impl DeviceFilter {
         }
     }
 
+    /// 配合 [`DeviceFilter::sql_clause`] 给 prepared statement 提供额外参数（如有）。
     pub(crate) fn extra_param(&self) -> Option<&String> {
         match self {
             DeviceFilter::All => None,
@@ -63,6 +79,8 @@ impl DeviceFilter {
     }
 }
 
+/// 把 Tauri 命令传过来的 `Option<String>` 设备过滤参数规整成 [`DeviceFilter`]。
+/// `None` / 空串 / 全空白 → All；非空字符串 → Only。
 pub fn device_filter_from_option(id: Option<String>) -> DeviceFilter {
     match id {
         None => DeviceFilter::All,
@@ -71,6 +89,7 @@ pub fn device_filter_from_option(id: Option<String>) -> DeviceFilter {
     }
 }
 
+/// 拉某日 24 小时的分类时长分布。`day_offset = 0` 今天，-1 昨天。
 pub async fn day_hours(
     pool: &DbPool,
     day_offset: i32,
@@ -102,9 +121,7 @@ pub async fn day_hours(
             if let Some(extra) = device.extra_param() {
                 params.push(extra);
             }
-            let mut stmt = conn
-                .prepare(&sql)
-                .db()?;
+            let mut stmt = conn.prepare(&sql).db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -148,7 +165,8 @@ pub async fn day_hours(
                 })
                 .filter(|s| s.minutes > 0)
                 .collect();
-            segs.sort_by(|a, b| b.minutes.cmp(&a.minutes));
+            // 降序排列：sort_by_key 用 Reverse(...) 实现 desc
+            segs.sort_by_key(|s| std::cmp::Reverse(s.minutes));
             HourSlot {
                 hour: h,
                 segments: segs,
@@ -159,6 +177,8 @@ pub async fn day_hours(
     Ok(slots)
 }
 
+/// 拉某日的 top 应用列表（按使用时长降序），同组的 process 已合并成一行。
+/// `limit` 控制返回行数。
 pub async fn day_apps(
     pool: &DbPool,
     day_offset: i32,
@@ -201,9 +221,7 @@ pub async fn day_apps(
                 params.push(extra);
             }
             params.push(&limit);
-            let mut stmt = conn
-                .prepare(&sql)
-                .db()?;
+            let mut stmt = conn.prepare(&sql).db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -234,6 +252,7 @@ pub async fn day_apps(
         .collect())
 }
 
+/// 拉某周 7 天每天的分类时长分布。`week_offset = 0` 是本周（周一开始）。
 pub async fn week_days(
     pool: &DbPool,
     week_offset: i32,
@@ -243,6 +262,7 @@ pub async fn week_days(
     days_in_range(pool, monday, sunday, device).await
 }
 
+/// 拉某周的 top 应用聚合（跨 7 天总时长降序），按组合并。
 pub async fn week_apps(
     pool: &DbPool,
     week_offset: i32,
@@ -253,6 +273,7 @@ pub async fn week_apps(
     apps_in_range(pool, monday, sunday, limit, device).await
 }
 
+/// 拉某月每日的分类时长分布（28~31 行）。`month_offset = 0` 是本月。
 pub async fn month_days(
     pool: &DbPool,
     month_offset: i32,
@@ -262,6 +283,7 @@ pub async fn month_days(
     days_in_range(pool, first, last, device).await
 }
 
+/// 拉某月的 top 应用聚合（跨整月总时长降序），按组合并。
 pub async fn month_apps(
     pool: &DbPool,
     month_offset: i32,
@@ -306,9 +328,7 @@ async fn days_in_range(
             if let Some(extra) = device.extra_param() {
                 params.push(extra);
             }
-            let mut stmt = conn
-                .prepare(&sql)
-                .db()?;
+            let mut stmt = conn.prepare(&sql).db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -329,7 +349,7 @@ async fn days_in_range(
     let mut buckets: std::collections::HashMap<String, std::collections::HashMap<String, u32>> =
         std::collections::HashMap::new();
     for (date, cat, secs) in rows {
-        let minutes = ((secs as f64 / 60.0).round() as u32).max(0);
+        let minutes = (secs as f64 / 60.0).round() as u32;
         if minutes == 0 {
             continue;
         }
@@ -349,12 +369,13 @@ async fn days_in_range(
                 minutes,
             })
             .collect();
-        segs.sort_by(|a, b| b.minutes.cmp(&a.minutes));
+        // 降序：见上面同模式注释
+        segs.sort_by_key(|s| std::cmp::Reverse(s.minutes));
         out.push(DaySummary {
             date: key,
             segments: segs,
         });
-        cur = cur + Duration::days(1);
+        cur += Duration::days(1);
     }
 
     Ok(out)
@@ -399,9 +420,7 @@ async fn apps_in_range(
                 params.push(extra);
             }
             params.push(&limit);
-            let mut stmt = conn
-                .prepare(&sql)
-                .db()?;
+            let mut stmt = conn.prepare(&sql).db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok((
@@ -457,8 +476,7 @@ fn month_range(month_offset: i32) -> (NaiveDate, NaiveDate) {
     let first = NaiveDate::from_ymd_opt(year, month as u32, 1)
         .expect("month_range: year/month 应在 chrono 合法范围");
     let next = if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1)
-            .expect("month_range: 跨年到 1 月")
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).expect("month_range: 跨年到 1 月")
     } else {
         NaiveDate::from_ymd_opt(year, (month + 1) as u32, 1)
             .expect("month_range: month+1 应在 1..=12")

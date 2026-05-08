@@ -7,6 +7,8 @@ use crate::error::Result;
 
 const ICON_SIZE: i32 = 48;
 
+/// Windows 实现：用 ExtractIconExW 拿 exe 关联的最大尺寸图标，DC + GDI 渲染到位图后编码 PNG。
+/// 文件不存在或无图标都返回 `Ok(None)`。
 pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     if !exe_path.exists() {
         return Ok(None);
@@ -18,9 +20,8 @@ unsafe fn extract_inner(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     use winapi::shared::windef::{HBITMAP, HDC};
     use winapi::um::shellapi::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
     use winapi::um::wingdi::{
-        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
-        GetDIBits, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
-        SRCCOPY,
+        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits,
+        SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, SRCCOPY,
     };
     use winapi::um::winuser::{DestroyIcon, DrawIconEx, GetDC, ReleaseDC};
     const DI_NORMAL: u32 = 0x0003;
@@ -66,7 +67,17 @@ unsafe fn extract_inner(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     let old_bmp = SelectObject(mem_dc, bmp as *mut _);
 
     // CreateCompatibleBitmap 的内容未定义，先铺一层
-    let _ = BitBlt(mem_dc, 0, 0, ICON_SIZE, ICON_SIZE, std::ptr::null_mut(), 0, 0, SRCCOPY);
+    let _ = BitBlt(
+        mem_dc,
+        0,
+        0,
+        ICON_SIZE,
+        ICON_SIZE,
+        std::ptr::null_mut(),
+        0,
+        0,
+        SRCCOPY,
+    );
 
     let drew = DrawIconEx(
         mem_dc,
@@ -125,10 +136,9 @@ unsafe fn extract_inner(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     }
 
     let img: ImageBuffer<Rgba<u8>, Vec<u8>> =
-        ImageBuffer::from_raw(ICON_SIZE as u32, ICON_SIZE as u32, pixels)
-            .ok_or(crate::error::Error::Capture(
-                "icon: PNG buffer 构造失败".into(),
-            ))?;
+        ImageBuffer::from_raw(ICON_SIZE as u32, ICON_SIZE as u32, pixels).ok_or(
+            crate::error::Error::Capture("icon: PNG buffer 构造失败".into()),
+        )?;
 
     let mut out = std::io::Cursor::new(Vec::new());
     img.write_to(&mut out, image::ImageFormat::Png)

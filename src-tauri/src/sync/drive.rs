@@ -17,6 +17,7 @@ use crate::error::{Error, Result};
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
+/// Drive 文件元数据（id + name + 修改时间），不含文件内容。
 #[derive(Debug, Clone)]
 pub struct FileMeta {
     pub id: String,
@@ -163,12 +164,7 @@ pub async fn upsert_by_name(token: &str, name: &str, content: &[u8]) -> Result<S
 
 async fn create_multipart(token: &str, name: &str, content: &[u8]) -> Result<String> {
     // multipart/related 边界
-    let boundary = format!(
-        "hindsight_{}",
-        rand::thread_rng()
-            .gen::<u128>()
-            .to_string()
-    );
+    let boundary = format!("hindsight_{}", rand::thread_rng().gen::<u128>());
     let metadata = json!({
         "name": name,
         "parents": ["appDataFolder"],
@@ -259,5 +255,9 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
         // 显式 variant，让上层 push/pull 能 match 然后归类成"需要重新登录"
         return Error::DriveScopeInsufficient;
     }
-    Error::DriveHttp { stage, status, body }
+    Error::DriveHttp {
+        stage,
+        status,
+        body,
+    }
 }

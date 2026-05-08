@@ -24,9 +24,7 @@ use crate::ai::prompt::{
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::Result;
-use crate::repo::ai_summaries::{
-    self, ImageDescriptionRow, ScreenshotMeta, SegmentSummaryRow,
-};
+use crate::repo::ai_summaries::{self, ImageDescriptionRow, ScreenshotMeta, SegmentSummaryRow};
 use crate::storage::DbPool;
 
 /// 总结 LLM 输出时给段加的图片缩放上限——长边 768 px 是 vision LLM 的常见甜点：

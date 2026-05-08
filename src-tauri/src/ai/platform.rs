@@ -185,12 +185,10 @@ pub fn cuda_runtime_asset_name(p: Platform) -> Option<&'static str> {
 /// 所以 path = 直接文件名。可执行文件依赖同目录的 `.dll` / `.so` / `.dylib`。
 pub fn binary_relative_path(p: Platform) -> &'static str {
     match p {
-        Platform::WindowsX64Cpu
-        | Platform::WindowsX64Cuda12
-        | Platform::WindowsX64Cuda13 => "llama-server.exe",
-        Platform::MacOSArm64Metal | Platform::MacOSX64 | Platform::LinuxX64Cpu => {
-            "llama-server"
+        Platform::WindowsX64Cpu | Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 => {
+            "llama-server.exe"
         }
+        Platform::MacOSArm64Metal | Platform::MacOSX64 | Platform::LinuxX64Cpu => "llama-server",
     }
 }
 
@@ -221,7 +219,9 @@ pub fn estimated_bytes(p: Platform) -> u64 {
 /// 录入步骤：升级 [`PINNED_TAG`] 时跑一次实际下载，
 /// `Get-FileHash <file> -Algorithm SHA256`，把所有变体填进来。
 pub fn sha256(p: Platform, tag: &str) -> Option<&'static str> {
-    // TODO(α.3 之前)：PIN tag 选定后填入实际 sha256。
+    // 当前阶段所有平台返回 None = 跳过 sha256 校验。
+    // 待办（owner: 引擎子系统）：PIN tag 稳定后跑一次实际下载抓 sha256 填进来；
+    // 此前每次升级 [`PINNED_TAG`] 都要同步更新这里，否则用户拿到的 binary 完全无完整性保证。
     let _ = (p, tag);
     None
 }

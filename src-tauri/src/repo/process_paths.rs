@@ -1,3 +1,9 @@
+//! `process_paths` 表：从 process_name 到 exe 绝对路径的映射。
+//! 用于本机图标提取（GDI / plist 需要 exe 路径）+ 调试。
+//!
+//! capture 路径每次见到一个进程时调用 [`upsert`] 把当前 exe 路径登记。
+//! 路径没变时不写 outbox（高频心跳级噪声过滤）。
+
 use chrono::{Local, Utc};
 
 use crate::error::Result;
@@ -5,6 +11,8 @@ use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
+/// 登记 / 更新某 process_name 对应的 exe 路径。
+/// 路径未变时仅刷 seen_at，不写 outbox。
 pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result<()> {
     let p = process_name.to_string();
     let e = exe_path.to_string();
@@ -61,6 +69,7 @@ pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result
     Ok(())
 }
 
+/// 查某 process_name 当前的 exe 路径；表里没有返回 None。
 pub async fn get_path(pool: &DbPool, process_name: &str) -> Result<Option<String>> {
     let p = process_name.to_string();
     let path = pool

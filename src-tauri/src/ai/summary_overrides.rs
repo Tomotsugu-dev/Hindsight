@@ -14,6 +14,8 @@ use serde::Deserialize;
 
 use crate::ai::config::AiConfig;
 
+/// 调试覆盖参数。从 generate_day_summary / retry_one_image_description 等命令的
+/// `overrides` 字段反序列化进来；详见模块顶部说明。
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiOverrides {
@@ -45,9 +47,7 @@ impl AiOverrides {
     /// 触发跑前 stop+start with overrides，跑后再 stop 让默认日报回到 settings 默认。
     /// daily 路径靠 settings.ai 直接做 ai.* 字段，没这层判断。
     pub(crate) fn needs_engine_restart(&self) -> bool {
-        self.batch_size.is_some()
-            || self.parallel_slots.is_some()
-            || self.ctx_size.is_some()
+        self.batch_size.is_some() || self.parallel_slots.is_some() || self.ctx_size.is_some()
     }
 
     /// 把 override 应用到一份 `AiConfig` 上，返回合并后的新值（不就地改原值）。
@@ -113,7 +113,10 @@ mod tests {
         let base = AiConfig::default();
         let original = base.clone();
         let merged = AiOverrides::default().with_overrides(base);
-        assert_eq!(merged.max_images_per_segment, original.max_images_per_segment);
+        assert_eq!(
+            merged.max_images_per_segment,
+            original.max_images_per_segment
+        );
         assert_eq!(merged.hash_threshold, original.hash_threshold);
         assert_eq!(merged.hash_window_minutes, original.hash_window_minutes);
         assert_eq!(merged.batch_size, original.batch_size);

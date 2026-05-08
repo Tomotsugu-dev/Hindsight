@@ -15,10 +15,10 @@ use rusqlite::types::ToSql;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
-use crate::storage::SqliteResultExt;
 use crate::error::Result;
 use crate::repo::reports::DeviceFilter;
 use crate::storage::DbPool;
+use crate::storage::SqliteResultExt;
 
 /// 单段总结的一行（DB <-> 前端共用）。
 ///
@@ -160,11 +160,7 @@ pub async fn clear_day(pool: &DbPool, source: &str, local_date: &str) -> Result<
 
 /// 只清当天段总结，**不**动逐图描述（step 1 产物）。
 /// step2-only 路径调：用户想用已有 image descriptions 重跑段总结，必须保留 step 1 数据。
-pub async fn clear_day_summaries_only(
-    pool: &DbPool,
-    source: &str,
-    local_date: &str,
-) -> Result<()> {
+pub async fn clear_day_summaries_only(pool: &DbPool, source: &str, local_date: &str) -> Result<()> {
     let src = source.to_string();
     let date = local_date.to_string();
     pool.0
@@ -251,10 +247,7 @@ pub struct ImageDescriptionRow {
 }
 
 /// 写入或覆盖一张图的描述。`generated_at` 为空时自动填当前 UTC。
-pub async fn upsert_image_description(
-    pool: &DbPool,
-    row: &ImageDescriptionRow,
-) -> Result<()> {
+pub async fn upsert_image_description(pool: &DbPool, row: &ImageDescriptionRow) -> Result<()> {
     let mut row = row.clone();
     if row.generated_at.is_empty() {
         row.generated_at = Utc::now().to_rfc3339();

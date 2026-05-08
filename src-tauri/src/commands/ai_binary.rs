@@ -1,6 +1,6 @@
 //! 本地 llama-server binary 的下载 / 删除 / 打开目录命令（Phase 1B-α）。
 //!
-//! `download_binary` 触发后通过 [`PROGRESS_EVENT`] 流式推送进度给前端；
+//! `download_binary` 触发后通过 [`ENGINE_DOWNLOAD_PROGRESS_EVENT`] 流式推送进度给前端；
 //! 命令本身在下载完成（或失败）后才 resolve。
 //! 整目录覆盖删除前都会主动 stop 引擎，避免 Windows 锁文件。
 
@@ -23,11 +23,11 @@ struct DownloadProgressPayload {
     total: Option<u64>,
 }
 
-const PROGRESS_EVENT: &str = "ai://engine-download-progress";
+const ENGINE_DOWNLOAD_PROGRESS_EVENT: &str = "ai://engine-download-progress";
 
 /// 触发 llama-server binary 下载。
 ///
-/// 进度通过 [`PROGRESS_EVENT`] 事件流式推送给前端，命令本身在下载结束后才 resolve。
+/// 进度通过 [`ENGINE_DOWNLOAD_PROGRESS_EVENT`] 事件流式推送给前端，命令本身在下载结束后才 resolve。
 /// 失败时返回错误字符串（前端 toast 展示）；同时事件流里**不会**再有 Done 信号，
 /// 调用方应同时监听命令返回值和 Done 事件，按更早到的那个判定。
 ///
@@ -48,9 +48,9 @@ pub async fn download_binary(
             downloaded,
             total,
         };
-        if let Err(e) = app_for_emit.emit(PROGRESS_EVENT, &payload) {
+        if let Err(e) = app_for_emit.emit(ENGINE_DOWNLOAD_PROGRESS_EVENT, &payload) {
             // emit 失败不致命，后端仍继续干活；只是前端会丢这一帧进度
-            log::warn!("emit {PROGRESS_EVENT} 失败: {e}");
+            log::warn!("emit {ENGINE_DOWNLOAD_PROGRESS_EVENT} 失败: {e}");
         }
     })
     .await
@@ -61,9 +61,7 @@ pub async fn download_binary(
 ///
 /// 同样要先 stop 引擎，否则 Windows 锁住 .exe 删不掉。
 #[tauri::command]
-pub async fn delete_binary(
-    supervisor: State<'_, Arc<EngineSupervisor>>,
-) -> Result<(), String> {
+pub async fn delete_binary(supervisor: State<'_, Arc<EngineSupervisor>>) -> Result<(), String> {
     if let Err(e) = supervisor.stop().await {
         log::warn!("delete_binary 前 stop 引擎失败（可能本就没跑）: {e}");
     }

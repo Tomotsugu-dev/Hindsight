@@ -63,8 +63,7 @@ pub(super) async fn delete_outbox_rows(pool: &DbPool, ids: &[i64]) -> Result<()>
             let sql = format!("DELETE FROM sync_outbox WHERE id IN ({placeholders})");
             let params: Vec<&dyn rusqlite::ToSql> =
                 ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
-            conn.execute(&sql, params.as_slice())
-                .db()?;
+            conn.execute(&sql, params.as_slice()).db()?;
             Ok(())
         })
         .await?;
@@ -81,18 +80,15 @@ pub(super) async fn bump_outbox_retry(pool: &DbPool, ids: &[i64], err: &str) -> 
         .call(move |conn| {
             for id in &ids {
                 let attempts: i64 = conn
-                    .query_row(
-                        "SELECT attempts FROM sync_outbox WHERE id = ?",
-                        [id],
-                        |r| r.get(0),
-                    )
+                    .query_row("SELECT attempts FROM sync_outbox WHERE id = ?", [id], |r| {
+                        r.get(0)
+                    })
                     .unwrap_or(0);
                 let next_attempt = attempts + 1;
                 let backoff = (RETRY_BASE_SECS << next_attempt.min(12) as u32).min(RETRY_MAX_SECS);
                 let jitter: i64 = rand::thread_rng().gen_range(0..30);
                 let delay = backoff + jitter;
-                let next_at =
-                    (chrono::Utc::now() + chrono::Duration::seconds(delay)).to_rfc3339();
+                let next_at = (chrono::Utc::now() + chrono::Duration::seconds(delay)).to_rfc3339();
                 conn.execute(
                     "UPDATE sync_outbox
                      SET attempts = attempts + 1, last_error = ?, next_retry_at = ?

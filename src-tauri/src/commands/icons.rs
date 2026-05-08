@@ -5,23 +5,35 @@ use crate::repo::app_icons::{icon_cache_path, write_cache_file};
 use crate::repo::{app_icons, process_paths};
 use crate::storage::DbPool;
 
+/// 拉某 process_name 的图标，返回 `data:image/png;base64,...` URI。
+///
+/// 三层 fallback：
+/// 1. 文件 cache（icons/<sanitized>.png）
+/// 2. DB blob（同步过来的图标）—— 命中后回填文件 cache
+/// 3. 本机 exe 提取（GDI / plist）—— 提取后写 DB + outbox 给其它设备
+///
+/// 全部落空返回 None，前端显示默认图标。
 #[tauri::command]
 pub async fn get_app_icon(
     pool: State<'_, DbPool>,
     process_name: String,
 ) -> Result<Option<String>, String> {
-    let cache_path = icon_cache_path(&process_name).map_err(|e| e.to_string())?;
+    let cache_path = icon_cache_path(&process_name).map_err(String::from)?;
 
     // 1) 文件 cache
     if cache_path.exists() {
-        return Ok(Some(read_as_data_url(&cache_path).map_err(|e| e.to_string())?));
+        return Ok(Some(
+            read_as_data_url(&cache_path)
+                .await
+                .map_err(|e| e.to_string())?,
+        ));
     }
 
     // 2) DB BLOB —— 同步过来的图标走这里。Win 上传的 chrome.exe 字节，Mac 拉到本地后
     //    没有可执行文件可提取，直接读 app_icons 表的 BLOB 就能渲染。
     if let Some(bytes) = app_icons::get_blob(&pool, &process_name)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(String::from)?
     {
         write_cache_file(&cache_path, &bytes);
         return Ok(Some(format!(
@@ -33,7 +45,7 @@ pub async fn get_app_icon(
     // 3) 本机 exe 提取（仅当 process_paths 里有可执行文件路径才能走通）
     let exe_path = match process_paths::get_path(&pool, &process_name)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(String::from)?
     {
         Some(p) => p,
         None => return Ok(None),
@@ -63,7 +75,7 @@ pub async fn get_app_icon(
     )))
 }
 
-fn read_as_data_url(path: &std::path::Path) -> std::io::Result<String> {
-    let bytes = std::fs::read(path)?;
+async fn read_as_data_url(path: &std::path::Path) -> std::io::Result<String> {
+    let bytes = tokio::fs::read(path).await?;
     Ok(format!("data:image/png;base64,{}", BASE64.encode(&bytes)))
 }

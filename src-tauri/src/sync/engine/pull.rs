@@ -10,19 +10,19 @@ use super::io;
 use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
+use crate::storage::SqliteResultExt;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
 };
-use crate::storage::SqliteResultExt;
 
 /// 解析一个 JSON 数组到 `Vec<T>`，但保留**每行容错**：单行解析失败仅打 warn 跳过，
 /// 不让整文件因一行坏数据全废。`kind` 仅用于日志。
 fn parse_rows<T: serde::de::DeserializeOwned>(kind: &'static str, body: &[u8]) -> Result<Vec<T>> {
-    let arr: Vec<Value> = serde_json::from_slice(body)
-        .map_err(|e| Error::SyncParse { kind, source: e })?;
+    let arr: Vec<Value> =
+        serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind, source: e })?;
     let mut out = Vec::with_capacity(arr.len());
     for (idx, v) in arr.into_iter().enumerate() {
         match serde_json::from_value::<T>(v) {
@@ -104,7 +104,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         Ok(t) => t,
         Err(Error::NotSignedIn) => return Ok(()),
         Err(e) => {
-            log::warn!("sync pull 拿不到有效 token: {e}");
+            // 同 push.rs 同名分支：warn 只写概述，detail 走 debug，避免 OAuth body
+            // 里的 PII 落进 info 级日志文件；status 走 [CRED_EXPIRED]/[TRANSIENT] 分类
+            log::warn!("sync pull 拿不到有效 token（详情见 status）");
+            log::debug!("token error detail: {e}");
             inner.status.write().await.last_error = Some(format_sync_error(&e));
             return Ok(());
         }
@@ -135,7 +138,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     // 否则一台陌生设备首次出现时，我们读 devices.os 是空的，没法做跨 OS 过滤。
     for f in &files {
         // 比较 modifiedTime 用字符串字典序就够（RFC3339 都是 ISO 8601）
-        if max_modified.as_ref().map_or(true, |c| f.modified_time.as_str() > c.as_str()) {
+        if max_modified
+            .as_ref()
+            .is_none_or(|c| f.modified_time.as_str() > c.as_str())
+        {
             max_modified = Some(f.modified_time.clone());
         }
 
@@ -408,7 +414,12 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
                        category_id = excluded.category_id,
                        updated_at = excluded.updated_at,
                        deleted_at = excluded.deleted_at",
-                    rusqlite::params![row.process_name, row.category_id, row.updated_at, row.deleted_at],
+                    rusqlite::params![
+                        row.process_name,
+                        row.category_id,
+                        row.updated_at,
+                        row.deleted_at
+                    ],
                 )
                 .db()?;
                 Ok(())
@@ -636,7 +647,12 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
                        group_id   = excluded.group_id,
                        updated_at = excluded.updated_at,
                        deleted_at = excluded.deleted_at",
-                    rusqlite::params![row.process_name, row.group_id, row.updated_at, row.deleted_at],
+                    rusqlite::params![
+                        row.process_name,
+                        row.group_id,
+                        row.updated_at,
+                        row.deleted_at
+                    ],
                 )
                 .db()?;
                 Ok(())
@@ -648,9 +664,13 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
 
 async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
     // device meta 是单对象，不是数组。空对象当作"还没数据"，跳过。
-    let parsed: Value = serde_json::from_slice(body)
-        .map_err(|e| Error::SyncParse { kind: "device_meta", source: e })?;
-    let Value::Object(_) = parsed else { return Ok(()) };
+    let parsed: Value = serde_json::from_slice(body).map_err(|e| Error::SyncParse {
+        kind: "device_meta",
+        source: e,
+    })?;
+    let Value::Object(_) = parsed else {
+        return Ok(());
+    };
     let row: DeviceMetaPayload = match serde_json::from_value(parsed) {
         Ok(r) => r,
         Err(e) => {
@@ -731,9 +751,17 @@ async fn upsert_remote_activity(
                            device_id, remote_id, updated_at, origin
                          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote')",
                         rusqlite::params![
-                            started_at, ended_at, duration_secs, local_date, local_hour,
-                            process_name, window_title, category_id,
-                            device_id, remote_id, updated_at,
+                            started_at,
+                            ended_at,
+                            duration_secs,
+                            local_date,
+                            local_hour,
+                            process_name,
+                            window_title,
+                            category_id,
+                            device_id,
+                            remote_id,
+                            updated_at,
                         ],
                     )
                     .db()?;
@@ -748,10 +776,16 @@ async fn upsert_remote_activity(
                                updated_at = ?
                              WHERE id = ?",
                             rusqlite::params![
-                                started_at, ended_at, duration_secs,
-                                local_date, local_hour,
-                                process_name, window_title, category_id,
-                                updated_at, id,
+                                started_at,
+                                ended_at,
+                                duration_secs,
+                                local_date,
+                                local_hour,
+                                process_name,
+                                window_title,
+                                category_id,
+                                updated_at,
+                                id,
                             ],
                         )
                         .db()?;

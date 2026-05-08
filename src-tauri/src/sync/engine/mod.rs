@@ -31,8 +31,11 @@ pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 pub(super) fn format_sync_error(e: &Error) -> String {
     let prefix = match e {
         // refresh_token 真的失效（用户在 myaccount.google.com 撤销 / token 过期 6 个月）
-        Error::OAuthHttp { endpoint: "refresh", status, .. }
-            if *status == 400 || *status == 401 => ERR_PREFIX_CRED_EXPIRED,
+        Error::OAuthHttp {
+            endpoint: "refresh",
+            status,
+            ..
+        } if *status == 400 || *status == 401 => ERR_PREFIX_CRED_EXPIRED,
         // AES 解不开：本地密钥 / 密文已损坏，重新登录是唯一出路
         Error::Crypto(_) => ERR_PREFIX_CRED_EXPIRED,
         // scope 不足：当前 token 没 drive.appdata 权限，必须重新走同意页
@@ -59,7 +62,11 @@ where
     Fut: Future<Output = Result<T>>,
 {
     match op(token.access_token.clone()).await {
-        Err(Error::DriveHttp { status: 401, stage, body }) => {
+        Err(Error::DriveHttp {
+            status: 401,
+            stage,
+            body,
+        }) => {
             log::info!("drive {stage} 返回 401，强制刷新 access_token 后重试");
             log::debug!("drive 401 body: {body}");
             *token = auth::force_refresh(pool).await?;
@@ -72,14 +79,21 @@ where
 const PUSH_INTERVAL_SECS: u64 = 30;
 const PULL_INTERVAL_SECS: i64 = 60;
 
+/// 同步引擎当前状态的对外快照（前端「设备」页面读）。
 #[derive(Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
+    /// 后台 push/pull 循环是否在跑
     pub running: bool,
+    /// 最近一次 push 成功的 RFC3339 时间
     pub last_pushed_at: Option<String>,
+    /// 最近一次 pull 成功的 RFC3339 时间
     pub last_pulled_at: Option<String>,
+    /// 最近一次失败原因（成功后清空）；token 失效会落到这里
     pub last_error: Option<String>,
+    /// outbox 待推送行数（含 dead_letter）
     pub pending: u64,
+    /// attempts > 10 的死信行数；UI 单独红色提示
     pub dead_letter: u64,
 }
 
@@ -90,11 +104,13 @@ pub(super) struct Inner {
     pub(super) status: RwLock<SyncStatus>,
 }
 
+/// 同步引擎对外句柄。一个进程一份；`app.manage(Arc::new(SyncEngine::new))` 注册。
 pub struct SyncEngine {
     inner: Arc<Inner>,
 }
 
 impl SyncEngine {
+    /// 创建（不自动 start）。需要外层调一次 [`SyncEngine::start`] 才会跑后台循环。
     pub fn new(pool: DbPool) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -105,6 +121,7 @@ impl SyncEngine {
         }
     }
 
+    /// 启动后台 push/pull 循环。已在跑时 no-op。未登录时循环内每次都 silently 跳过。
     pub async fn start(&self) {
         let mut h = self.inner.handle.lock().await;
         if h.is_some() {
@@ -127,6 +144,7 @@ impl SyncEngine {
         }
     }
 
+    /// 后台循环是否在跑（仅看 task handle，未登录时也算 running）。
     pub async fn is_running(&self) -> bool {
         self.inner.handle.lock().await.is_some()
     }
@@ -137,6 +155,7 @@ impl SyncEngine {
         self.inner.status.write().await.last_error = None;
     }
 
+    /// 拉一份快照（含 outbox 行数实时查询）给前端 sync_status 命令用。
     pub async fn status(&self) -> SyncStatus {
         let mut s = self.inner.status.read().await.clone();
         s.running = self.is_running().await;

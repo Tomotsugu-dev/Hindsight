@@ -1,10 +1,15 @@
+//! 报表查询 Tauri 命令——给前端「日 / 周 / 月」页面用。
+//!
+//! 全部命令薄壳：参数适配 + 错误转换；真实 SQL 在 [`crate::repo::reports`]。
+//! `device_id = None` 表示"所有设备聚合"，传字符串则按 device 过滤。
+
 use tauri::State;
 
-use crate::repo::reports::{
-    self, device_filter_from_option, AppUsage, DaySummary, HourSlot,
-};
+use crate::repo::reports::{self, device_filter_from_option, AppUsage, DaySummary, HourSlot};
 use crate::storage::DbPool;
 
+/// 拉某天 24 小时的使用时长分布（每小时一条），给「日」页面顶部柱状图用。
+/// `day_offset = 0` 是今天，-1 是昨天，依此类推。
 #[tauri::command]
 pub async fn get_day_hours(
     pool: State<'_, DbPool>,
@@ -16,6 +21,7 @@ pub async fn get_day_hours(
         .map_err(Into::into)
 }
 
+/// 拉某天的 top 应用列表（按使用时长降序），`limit` 默认 10。
 #[tauri::command]
 pub async fn get_day_apps(
     pool: State<'_, DbPool>,
@@ -33,6 +39,7 @@ pub async fn get_day_apps(
     .map_err(Into::into)
 }
 
+/// 拉某周 7 天的逐日汇总（每天一条）。`week_offset = 0` 本周。
 #[tauri::command]
 pub async fn get_week_days(
     pool: State<'_, DbPool>,
@@ -44,6 +51,7 @@ pub async fn get_week_days(
         .map_err(Into::into)
 }
 
+/// 拉某周的 top 应用聚合，跨 7 天汇总。
 #[tauri::command]
 pub async fn get_week_apps(
     pool: State<'_, DbPool>,
@@ -61,6 +69,7 @@ pub async fn get_week_apps(
     .map_err(Into::into)
 }
 
+/// 拉某月每天的汇总（30 / 31 条），给「月」页面热力图用。
 #[tauri::command]
 pub async fn get_month_days(
     pool: State<'_, DbPool>,
@@ -72,6 +81,7 @@ pub async fn get_month_days(
         .map_err(Into::into)
 }
 
+/// 拉某月的 top 应用聚合，跨整月汇总。
 #[tauri::command]
 pub async fn get_month_apps(
     pool: State<'_, DbPool>,

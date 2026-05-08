@@ -11,9 +11,7 @@ use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::server::EngineSupervisor;
-use crate::ai::summary::{
-    AiOverrides, DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT,
-};
+use crate::ai::summary::{AiOverrides, DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, SegmentSummaryRow};
 use crate::repo::reports::device_filter_from_option;
 use crate::storage::DbPool;
@@ -38,6 +36,9 @@ impl Default for SummaryCancel {
 ///
 /// 重复触发：前端 UI 应防重复点；后端不加锁，但启动前会 reset cancel 标记，
 /// 所以理论上后到的 generate 不会被前一次的 cancel 干掉。
+// Tauri 命令 State 注入 + 前端 payload 字段一起算，参数数 > 7 是常态；
+// 拆 struct 反而让命令参数 schema 变嵌套，前端 invoke 调用更冗长
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn generate_day_summary(
     app: AppHandle,
@@ -72,7 +73,15 @@ pub async fn generate_day_summary(
     );
 
     if let Err(e) = runner
-        .run(&source, parsed_date, device, force_refresh, overrides, step1_only, step2_only)
+        .run(
+            &source,
+            parsed_date,
+            device,
+            force_refresh,
+            overrides,
+            step1_only,
+            step2_only,
+        )
         .await
     {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
@@ -85,6 +94,7 @@ pub async fn generate_day_summary(
 }
 
 /// 单段重试——只重跑指定一段，不动其它段。复用 supervisor 已经在跑的 server。
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn retry_summary_segment(
     app: AppHandle,
@@ -119,6 +129,7 @@ pub async fn retry_summary_segment(
 ///
 /// 不动段总结、其它图描述；只覆盖 ai_image_descriptions 一行。
 /// 期间走全局 SUMMARY_PROGRESS_EVENT 流的 `image_described` phase 推一条事件。
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn retry_single_image_description(
     app: AppHandle,

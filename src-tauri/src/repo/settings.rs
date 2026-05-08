@@ -1,23 +1,34 @@
+//! 全局设置（settings_store 表，单行 JSON BLOB）的 repo 层。
+//!
+//! 用整 JSON 而不是逐字段建列：字段加得很快，迁移成本要等于 0。
+//! 反序列化失败 / 字段缺失 → 走 `Default`；新加字段时只需给 default 值。
+
 use serde::{Deserialize, Serialize};
 
 use crate::ai::config::AiConfig;
 use crate::error::Result;
-use crate::storage::{db_path_dir, DbPool};
 use crate::storage::SqliteResultExt;
+use crate::storage::{db_path_dir, DbPool};
 
+/// 系统默认截图目录：`<data_root>/screenshots`。
+/// 用户在「设置 → 数据」可改成大硬盘上的目录。
 pub fn default_screenshot_path() -> String {
     db_path_dir()
         .map(|p| p.join("screenshots").to_string_lossy().to_string())
         .unwrap_or_else(|_| String::new())
 }
 
+/// 工作时段的一段时间（HH:MM-HH:MM）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimeRange {
+    /// 起始时刻 `HH:MM`
     pub start: String,
+    /// 结束时刻 `HH:MM`；允许跨午夜（end < start 时表示"到次日"）
     pub end: String,
 }
 
+/// 全局设置主结构。整组 JSON 落 settings_store 单行；前端读 `get_settings` 拿全集。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -103,6 +114,8 @@ pub fn default_privacy_url_keywords() -> Vec<String> {
     .collect()
 }
 
+/// 增量更新 settings 的 patch。每个字段 None 表示保持当前值。
+/// 结构镜像 [`Settings`]，前端在 update_settings 命令里只传要改的子集。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsPatch {
@@ -127,6 +140,8 @@ pub struct SettingsPatch {
     pub ai: Option<AiConfig>,
 }
 
+/// 读 settings_store 单行 + 反序列化。
+/// 缺字段 / JSON 损坏走 `Settings::default()`；空截图路径自动填默认值并写回。
 pub async fn load(pool: &DbPool) -> Result<Settings> {
     let data: String = pool
         .0
@@ -162,6 +177,7 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
     Ok(settings)
 }
 
+/// 整组覆盖 settings_store。调用方应先 [`load`] 再传 patch 后的完整 [`Settings`]。
 pub async fn save(pool: &DbPool, settings: &Settings) -> Result<()> {
     let data = serde_json::to_string(settings)?;
     pool.0
@@ -177,6 +193,8 @@ pub async fn save(pool: &DbPool, settings: &Settings) -> Result<()> {
     Ok(())
 }
 
+/// 把 [`SettingsPatch`] 应用到当前 [`Settings`] 上，输出合并结果。
+/// 各字段都做合理 clamp / sanitize（如 capture_interval 钳到 1..=600，retention 钳到 1..=365）。
 pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
     Settings {
         capture_enabled: patch.capture_enabled.unwrap_or(current.capture_enabled),
@@ -222,9 +240,7 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .privacy_app_keywords
             .map(sanitize_keywords)
             .unwrap_or(current.privacy_app_keywords),
-        minimize_to_tray: patch
-            .minimize_to_tray
-            .unwrap_or(current.minimize_to_tray),
+        minimize_to_tray: patch.minimize_to_tray.unwrap_or(current.minimize_to_tray),
         auto_update_enabled: patch
             .auto_update_enabled
             .unwrap_or(current.auto_update_enabled),

@@ -1,3 +1,8 @@
+//! 分类表的 repo 层：CRUD + 同步 outbox 入队 + cascade 删除。
+//!
+//! 所有写入都同步入 outbox 走 push 路径，保证跨设备 LWW；
+//! 内置分类（builtin=1）拒绝删除（必须给所有未分类的 app 一个落点）。
+
 use chrono::Utc;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -7,17 +12,25 @@ use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
+/// 分类（DB 行 + 该分类下的 app process_name 列表，用于前端渲染）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Category {
+    /// 分类 ID（内置分类是 'work' / 'play' 等短词；用户建的是 UUID）
     pub id: String,
+    /// 显示名
     pub name: String,
+    /// hex 颜色 `#rrggbb`
     pub color: String,
+    /// 图标 ID（前端用来 map 到 lucide-react 图标）
     pub icon: String,
+    /// 是否内置分类（不可删除）
     pub builtin: bool,
+    /// 当前归到该分类下的 process_name 列表（按字母序）
     pub apps: Vec<String>,
 }
 
+/// 新建分类时前端传过来的字段（不含 id —— 后端生成 UUID）。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CategoryInput {
@@ -26,6 +39,7 @@ pub struct CategoryInput {
     pub icon: String,
 }
 
+/// 更新分类时的 patch：每个字段 `None` 表示不动。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CategoryPatch {
@@ -34,15 +48,30 @@ pub struct CategoryPatch {
     pub icon: Option<String>,
 }
 
+/// 未归类应用的一行——给「分类」页面"待归类"卡片用。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnclassifiedApp {
     pub process_name: String,
+    /// 最近 N 天累计使用分钟数
     pub minutes: u32,
+    /// 最近一次出现的 RFC3339 时间
     pub last_seen_at: String,
 }
 
-fn category_payload(id: &str, name: &str, color: &str, icon: &str, builtin: bool, sort_order: i64, updated_at: &str, deleted_at: Option<&str>) -> String {
+// 拼 outbox payload 是 fan-in 8 个字段的 helper，参数数 = 表列数；
+// 拆 struct 后调用方反而要先 build 一遍，纯增加噪声
+#[allow(clippy::too_many_arguments)]
+fn category_payload(
+    id: &str,
+    name: &str,
+    color: &str,
+    icon: &str,
+    builtin: bool,
+    sort_order: i64,
+    updated_at: &str,
+    deleted_at: Option<&str>,
+) -> String {
     serde_json::json!({
         "id": id,
         "name": name,
@@ -56,7 +85,12 @@ fn category_payload(id: &str, name: &str, color: &str, icon: &str, builtin: bool
     .to_string()
 }
 
-fn app_category_payload(process_name: &str, category_id: &str, updated_at: &str, deleted_at: Option<&str>) -> String {
+fn app_category_payload(
+    process_name: &str,
+    category_id: &str,
+    updated_at: &str,
+    deleted_at: Option<&str>,
+) -> String {
     serde_json::json!({
         "processName": process_name,
         "categoryId": category_id,
@@ -66,6 +100,7 @@ fn app_category_payload(process_name: &str, category_id: &str, updated_at: &str,
     .to_string()
 }
 
+/// 列所有 active 分类（按 sort_order 升序），每条带它当前归类的 process_name 列表。
 pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
     let cats = pool
         .0
@@ -91,8 +126,7 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                 .db()?;
             let mut cats: Vec<(String, String, String, String, bool, Vec<String>)> = Vec::new();
             for r in cat_rows {
-                let (id, name, color, icon, builtin) =
-                    r.db()?;
+                let (id, name, color, icon, builtin) = r.db()?;
                 cats.push((id, name, color, icon, builtin, Vec::new()));
             }
 
@@ -104,9 +138,7 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                 )
                 .db()?;
             let map_rows = stmt2
-                .query_map([], |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-                })
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
                 .db()?;
             for r in map_rows {
                 let (process, cat_id) = r.db()?;
@@ -131,6 +163,8 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
         .collect())
 }
 
+/// 新建分类：UUID + 排到末尾 + 同步入 outbox。
+/// 名字 / 颜色 trim 后空字符串拒绝（`Error::InvalidInput`）。
 pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     let id = uuid::Uuid::new_v4().to_string();
     let id_clone = id.clone();
@@ -143,7 +177,11 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     if color.is_empty() {
         return Err(Error::InvalidInput("颜色不能为空"));
     }
-    let final_icon = if icon.is_empty() { "Tag".to_string() } else { icon };
+    let final_icon = if icon.is_empty() {
+        "Tag".to_string()
+    } else {
+        icon
+    };
     let n = name.clone();
     let c = color.clone();
     let i = final_icon.clone();
@@ -184,6 +222,8 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     })
 }
 
+/// 更新分类的 name / color / icon。patch 中为 None 或空字符串的字段保持不变。
+/// 内置分类也允许 update（仅改外观，不改 id / builtin 标志）。
 pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()> {
     let id = id.to_string();
     let updated = Utc::now().to_rfc3339();
@@ -227,9 +267,24 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
             )
             .db()?;
 
-            let payload = category_payload(&id, &next_name, &next_color, &next_icon, builtin_i != 0, cur_sort, &updated, None);
-            enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload)
-                .db()?;
+            let payload = category_payload(
+                &id,
+                &next_name,
+                &next_color,
+                &next_icon,
+                builtin_i != 0,
+                cur_sort,
+                &updated,
+                None,
+            );
+            enqueue(
+                conn,
+                OutboxOp::Upsert,
+                OutboxEntity::Category,
+                &id,
+                &payload,
+            )
+            .db()?;
 
             Ok(())
         })
@@ -267,10 +322,17 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
                     rusqlite::params![next_sort, now, id],
                 )
                 .db()?;
-                let payload =
-                    category_payload(id, &name, &color, &icon, builtin_i != 0, next_sort, &now, None);
-                enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, id, &payload)
-                    .db()?;
+                let payload = category_payload(
+                    id,
+                    &name,
+                    &color,
+                    &icon,
+                    builtin_i != 0,
+                    next_sort,
+                    &now,
+                    None,
+                );
+                enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, id, &payload).db()?;
             }
             Ok(())
         })
@@ -278,6 +340,9 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+/// 软删分类。内置分类拒绝（返回 `Error::InvalidInput`）。
+/// 删除后通过 [`cascade_category_deletion`] 把所有指向该分类的 app_categories 行 +
+/// app_groups.category_id 引用一起清掉。
 pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     let id = id.to_string();
     let now = Utc::now().to_rfc3339();
@@ -307,9 +372,24 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
             )
             .db()?;
 
-            let cat_payload = category_payload(&id, &name, &color, &icon, builtin_i != 0, sort_order, &now, Some(&now));
-            enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &cat_payload)
-                .db()?;
+            let cat_payload = category_payload(
+                &id,
+                &name,
+                &color,
+                &icon,
+                builtin_i != 0,
+                sort_order,
+                &now,
+                Some(&now),
+            );
+            enqueue(
+                conn,
+                OutboxOp::Upsert,
+                OutboxEntity::Category,
+                &id,
+                &cat_payload,
+            )
+            .db()?;
 
             cascade_category_deletion(conn, &id, &now)?;
 
@@ -349,7 +429,13 @@ pub fn cascade_category_deletion(
             rusqlite::params![now, p],
         )?;
         let payload = app_category_payload(p, category_id, now, Some(now));
-        enqueue(conn, OutboxOp::Upsert, OutboxEntity::AppCategory, p, &payload)?;
+        enqueue(
+            conn,
+            OutboxOp::Upsert,
+            OutboxEntity::AppCategory,
+            p,
+            &payload,
+        )?;
     }
 
     // 2) app_groups：取出受影响的 group id 再清空 category_id + 入 outbox。
@@ -393,6 +479,8 @@ pub async fn unassign_app(pool: &DbPool, process_name: &str) -> Result<()> {
     crate::repo::app_groups::assign_category_for_process(pool, process_name, None).await
 }
 
+/// 列最近 `days_back` 天里活动过、但没归到任何 active 分类的 process_name。
+/// 双 LEFT JOIN 防御 cascade 失误：mapping 指向已删分类的也算未分类。
 pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<UnclassifiedApp>> {
     let days = days_back.max(1) as i64;
     let rows = pool

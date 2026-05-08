@@ -3,6 +3,7 @@ use sysinfo::{Pid, System};
 
 use crate::error::{Error, Result};
 
+/// 当前焦点窗口的元信息（用于判断是否切焦点 / 写 activities 行）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowInfo {
@@ -11,6 +12,8 @@ pub struct WindowInfo {
     pub app_path: Option<String>,
 }
 
+/// 拉当前焦点窗口的 [`WindowInfo`]。取不到（屏幕权限缺失 / 没有窗口在前 等）
+/// 返回 `Err`，调用方 log debug 跳过本次 tick。
 pub fn current_window() -> Result<WindowInfo> {
     let windows = xcap::Window::all().map_err(|e| Error::Capture(e.to_string()))?;
     let focused = windows
@@ -23,11 +26,7 @@ pub fn current_window() -> Result<WindowInfo> {
     let title = focused.title().unwrap_or_default().to_string();
     let pid = focused.pid().unwrap_or(0);
 
-    let app_path = if pid > 0 {
-        resolve_exe_path(pid as u32)
-    } else {
-        None
-    };
+    let app_path = if pid > 0 { resolve_exe_path(pid) } else { None };
 
     Ok(WindowInfo {
         app_name,
@@ -40,7 +39,7 @@ pub fn current_window() -> Result<WindowInfo> {
 /// 取最后一段斜杠后的内容作为真正的进程名。
 fn basename(s: &str) -> String {
     let trimmed = s.trim();
-    if let Some(idx) = trimmed.rfind(|c| c == '\\' || c == '/') {
+    if let Some(idx) = trimmed.rfind(['\\', '/']) {
         trimmed[idx + 1..].to_string()
     } else {
         trimmed.to_string()

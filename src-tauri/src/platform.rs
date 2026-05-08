@@ -32,6 +32,7 @@ pub fn local_os_id() -> &'static str {
 /// 避免 transparent + decorations:false 的矩形阴影和 CSS 圆角卡片产生四角 halo。
 /// Windows 10 上调用失败（HRESULT != S_OK）但不会崩，静默忽略。
 /// 其它平台：no-op。
+/// 应用 Windows 系统的窗口外观调整（DWM 圆角阴影）。
 #[cfg(target_os = "windows")]
 pub fn apply_window_tweaks(window: &tauri::WebviewWindow) {
     use winapi::shared::windef::HWND;
@@ -59,6 +60,7 @@ pub fn apply_window_tweaks(window: &tauri::WebviewWindow) {
     }
 }
 
+/// 非 Windows 平台：no-op（macOS 走系统默认外观，Linux 没有特殊需求）。
 #[cfg(not(target_os = "windows"))]
 pub fn apply_window_tweaks(_window: &tauri::WebviewWindow) {}
 
@@ -76,8 +78,7 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     use tauri::Manager;
     match event {
         tauri::RunEvent::ExitRequested { api, code, .. } => {
-            if code.is_none()
-                && crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed)
+            if code.is_none() && crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed)
             {
                 api.prevent_exit();
             }
@@ -97,6 +98,7 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     }
 }
 
+/// 非 macOS 平台：no-op（Reopen 仅 macOS Dock 概念）。
 #[cfg(not(target_os = "macos"))]
 pub fn handle_run_event(_app: &tauri::AppHandle, _event: tauri::RunEvent) {}
 
@@ -121,9 +123,8 @@ pub fn idle_secs() -> u64 {
     extern "C" {
         fn CGEventSourceSecondsSinceLastEventType(state: c_int, event_type: u32) -> f64;
     }
-    let s = unsafe {
-        CGEventSourceSecondsSinceLastEventType(COMBINED_SESSION_STATE, ANY_INPUT_EVENT)
-    };
+    let s =
+        unsafe { CGEventSourceSecondsSinceLastEventType(COMBINED_SESSION_STATE, ANY_INPUT_EVENT) };
     if s.is_finite() && s >= 0.0 {
         s as u64
     } else {
@@ -131,6 +132,7 @@ pub fn idle_secs() -> u64 {
     }
 }
 
+/// Windows 实现：用 `GetLastInputInfo` 拿距离上次鼠键输入的毫秒数。
 #[cfg(target_os = "windows")]
 pub fn idle_secs() -> u64 {
     use winapi::um::winuser::{GetLastInputInfo, LASTINPUTINFO};
@@ -152,6 +154,7 @@ pub fn idle_secs() -> u64 {
     }
 }
 
+/// 其它平台（Linux 等）实现：返回 0，等同"用户永远活跃"，不影响其它功能。
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn idle_secs() -> u64 {
     0

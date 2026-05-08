@@ -55,6 +55,7 @@ pub enum DownloadPhase {
     Done,
 }
 
+/// 拉当前主机对应的 binary 安装状态。不联网，纯本地文件系统检查。
 pub fn status() -> Result<EngineBinaryStatus> {
     let p = platform::detect();
     let tag = platform::PINNED_TAG;
@@ -88,10 +89,8 @@ pub fn is_installed(p: Platform) -> bool {
     if !dir.join(platform::binary_relative_path(p)).exists() {
         return false;
     }
-    if matches!(
-        p,
-        Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13
-    ) && !has_cudart_runtime(&dir)
+    if matches!(p, Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13)
+        && !has_cudart_runtime(&dir)
     {
         return false;
     }
@@ -153,11 +152,9 @@ where
     if dir.exists() {
         remove_dir_all_retry(&dir).await?;
     }
-    std::fs::create_dir_all(&dir).map_err(|e| {
-        Error::Other(format!(
-            "create_dir_all 失败: path={} err={e}",
-            dir.display()
-        ))
+    std::fs::create_dir_all(&dir).map_err(|e| Error::EngineBinary {
+        stage: "mkdir",
+        details: format!("path={} err={e}", dir.display()),
     })?;
 
     // 提前 HEAD 拿合计大小，前端进度条总数才能正确累计。
@@ -219,7 +216,10 @@ where
                 verify_sha256(&temp_clone, &expected, &asset_clone)
             })
             .await
-            .map_err(|e| Error::Other(format!("verify join: {e}")))?;
+            .map_err(|e| Error::EngineBinary {
+                stage: "verify",
+                details: format!("join: {e}"),
+            })?;
             if let Err(e) = res {
                 let _ = std::fs::remove_file(&temp_path);
                 return Err(e);
@@ -239,7 +239,10 @@ where
             extract_archive(&temp_clone, &asset_clone, &dir_clone)
         })
         .await
-        .map_err(|e| Error::Other(format!("extract join: {e}")))?;
+        .map_err(|e| Error::EngineBinary {
+            stage: "extract",
+            details: format!("join: {e}"),
+        })?;
         if let Err(e) = res {
             let _ = std::fs::remove_file(&temp_path);
             return Err(e);
@@ -290,17 +293,23 @@ async fn remove_dir_all_retry(dir: &Path) -> Result<()> {
     // 走到这里说明所有重试都失败；理论上 last_err 必为 Some，但用 match 而非
     // expect 避免未来逻辑修改后出现"早 return 但 last_err=None"的隐性 panic
     match last_err {
-        Some(e) => Err(Error::Other(format!(
-            "remove_dir_all 失败（重试 {} 次仍被拒）: path={} err={e}（kind={:?}）",
-            BACKOFFS_MS.len() + 1,
-            dir.display(),
-            e.kind()
-        ))),
-        None => Err(Error::Other(format!(
-            "remove_dir_all 失败（重试 {} 次但无错误捕获）: path={}",
-            BACKOFFS_MS.len() + 1,
-            dir.display()
-        ))),
+        Some(e) => Err(Error::EngineBinary {
+            stage: "cleanup",
+            details: format!(
+                "remove_dir_all 失败（重试 {} 次仍被拒）: path={} err={e}（kind={:?}）",
+                BACKOFFS_MS.len() + 1,
+                dir.display(),
+                e.kind()
+            ),
+        }),
+        None => Err(Error::EngineBinary {
+            stage: "cleanup",
+            details: format!(
+                "remove_dir_all 失败（重试 {} 次但无错误捕获）: path={}",
+                BACKOFFS_MS.len() + 1,
+                dir.display()
+            ),
+        }),
     }
 }
 
@@ -332,21 +341,23 @@ where
 
     let resp = client.get(url).send().await?;
     if !resp.status().is_success() {
-        return Err(Error::Other(format!(
-            "下载失败：HTTP {} {}",
-            resp.status(),
-            url
-        )));
+        return Err(Error::EngineBinary {
+            stage: "download",
+            details: format!("HTTP {} {}", resp.status(), url),
+        });
     }
     let total = resp.content_length();
 
-    let mut file = tokio::fs::File::create(dest).await.map_err(|e| {
-        Error::Other(format!(
-            "File::create 失败: path={} err={e}（kind={:?}）",
-            dest.display(),
-            e.kind()
-        ))
-    })?;
+    let mut file = tokio::fs::File::create(dest)
+        .await
+        .map_err(|e| Error::EngineBinary {
+            stage: "download",
+            details: format!(
+                "File::create 失败: path={} err={e}（kind={:?}）",
+                dest.display(),
+                e.kind()
+            ),
+        })?;
     let mut stream = resp.bytes_stream();
     let mut downloaded: u64 = 0;
     let mut last_emit = std::time::Instant::now();
@@ -414,9 +425,10 @@ fn verify_sha256(path: &Path, expected: &str, asset: &str) -> Result<()> {
     if actual.eq_ignore_ascii_case(expected) {
         Ok(())
     } else {
-        Err(Error::Other(format!(
-            "{asset} sha256 不匹配：期望 {expected}，实际 {actual}"
-        )))
+        Err(Error::EngineBinary {
+            stage: "verify",
+            details: format!("{asset} sha256 不匹配：期望 {expected}，实际 {actual}"),
+        })
     }
 }
 
@@ -431,19 +443,25 @@ fn extract_archive(archive: &Path, asset_name: &str, dest: &Path) -> Result<()> 
     } else if asset_name.ends_with(".tar.gz") || asset_name.ends_with(".tgz") {
         extract_tar_gz(archive, dest)
     } else {
-        Err(Error::Other(format!("不识别的压缩格式：{asset_name}")))
+        Err(Error::EngineBinary {
+            stage: "extract",
+            details: format!("不识别的压缩格式：{asset_name}"),
+        })
     }
 }
 
 fn extract_zip(archive: &Path, dest: &Path) -> Result<()> {
     let file = std::fs::File::open(archive).map_err(Error::from)?;
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|e| Error::Other(format!("zip open: {e}")))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| Error::EngineBinary {
+        stage: "extract",
+        details: format!("zip open: {e}"),
+    })?;
 
     for i in 0..zip.len() {
-        let mut entry = zip
-            .by_index(i)
-            .map_err(|e| Error::Other(format!("zip entry {i}: {e}")))?;
+        let mut entry = zip.by_index(i).map_err(|e| Error::EngineBinary {
+            stage: "extract",
+            details: format!("zip entry {i}: {e}"),
+        })?;
         // enclosed_name 防 .. 路径逃逸；不安全条目直接跳过
         let outpath = match entry.enclosed_name() {
             Some(p) => dest.join(p),
@@ -493,11 +511,7 @@ fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<()> {
         .map_err(Error::from)?
         .filter_map(|e| e.ok())
         .collect();
-    let strip_root = top.len() == 1
-        && top[0]
-            .file_type()
-            .map(|t| t.is_dir())
-            .unwrap_or(false);
+    let strip_root = top.len() == 1 && top[0].file_type().map(|t| t.is_dir()).unwrap_or(false);
     let move_from = if strip_root {
         let inner = top.remove(0).path();
         std::fs::read_dir(&inner)

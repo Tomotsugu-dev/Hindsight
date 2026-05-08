@@ -95,7 +95,12 @@ pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
     let base = if !user_override.trim().is_empty() {
         user_override
     } else {
-        pick_lang(lang, IMAGE_DESCRIBE_ZH, IMAGE_DESCRIBE_EN, IMAGE_DESCRIBE_JA)
+        pick_lang(
+            lang,
+            IMAGE_DESCRIBE_ZH,
+            IMAGE_DESCRIBE_EN,
+            IMAGE_DESCRIBE_JA,
+        )
     };
     base.trim_end().to_string()
 }
@@ -189,9 +194,7 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
         for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
-        out.push_str(
-            "\n请综合这些描述和应用统计写段总结，不要简单复述上面任意一条。",
-        );
+        out.push_str("\n请综合这些描述和应用统计写段总结，不要简单复述上面任意一条。");
     }
     out
 }
@@ -205,10 +208,7 @@ fn build_user_prompt_en(ctx: &SegmentContext) -> String {
     if !ctx.top_apps.is_empty() {
         out.push_str("Top apps used:\n");
         for (name, minutes, category) in ctx.top_apps.iter().take(8) {
-            out.push_str(&format!(
-                "- {} ({} min · {})\n",
-                name, minutes, category
-            ));
+            out.push_str(&format!("- {} ({} min · {})\n", name, minutes, category));
         }
     }
     if ctx.image_descriptions.is_empty() {
@@ -240,10 +240,7 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
     if !ctx.top_apps.is_empty() {
         out.push_str("最も使用されたアプリ：\n");
         for (name, minutes, category) in ctx.top_apps.iter().take(8) {
-            out.push_str(&format!(
-                "- {}（{} 分 · {}）\n",
-                name, minutes, category
-            ));
+            out.push_str(&format!("- {}（{} 分 · {}）\n", name, minutes, category));
         }
     }
     if ctx.image_descriptions.is_empty() {

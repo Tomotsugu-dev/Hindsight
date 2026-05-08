@@ -27,6 +27,8 @@ const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
 /// update 后写一次。close handler 在 window 事件回调里读，避免每次点 X 都查 DB。
 pub static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(true);
 
+/// 应用主入口。`main.rs` 唯一调用的函数。
+/// 跑 env_logger 初始化、子进程保护、Tauri builder + setup + invoke_handler，最后 block 在 Tauri 主循环。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 默认开 hindsight=info（用户可用 RUST_LOG 覆盖）。隐私命中 / 同步错误 / 启动信息
@@ -60,78 +62,8 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
 
-            if let Some(main_window) = handle.get_webview_window("main") {
-                platform::apply_window_tweaks(&main_window);
-
-                // 点窗口右上角 X 的行为：默认隐藏到托盘（不退出进程，避免采集中断），
-                // 用户可在「设置 → 常规 → 关闭后最小化到托盘」关掉这个行为，关掉后 X
-                // 就是真正退出。真正的"退出"在托盘右键菜单里。
-                let win_for_close = main_window.clone();
-                main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        if MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) {
-                            api.prevent_close();
-                            let _ = win_for_close.hide();
-                        }
-                    }
-                });
-            }
-
-            // 系统托盘：图标用主窗口同款。左键单击 toggle 显示 / 隐藏；
-            // 右键 / 菜单提供"显示主窗口" + "退出"。退出走 app.exit(0)。
-            {
-                use tauri::menu::{MenuBuilder, MenuItemBuilder};
-                use tauri::tray::{
-                    MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent,
-                };
-
-                let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
-                let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
-                let menu = MenuBuilder::new(app)
-                    .item(&show_item)
-                    .separator()
-                    .item(&quit_item)
-                    .build()?;
-
-                let _tray = TrayIconBuilder::with_id("hindsight-tray")
-                    .icon(app.default_window_icon().cloned().unwrap())
-                    .tooltip("Hindsight")
-                    .menu(&menu)
-                    // 左键不弹菜单（留给 toggle 显隐）；菜单只在右键 / macOS 上 showMenu 时弹
-                    .show_menu_on_left_click(false)
-                    .on_menu_event(|app, event| match event.id.as_ref() {
-                        "show" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        }
-                        "quit" => app.exit(0),
-                        _ => {}
-                    })
-                    .on_tray_icon_event(|tray, event| {
-                        if let TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            button_state: MouseButtonState::Up,
-                            ..
-                        } = event
-                        {
-                            let app = tray.app_handle();
-                            if let Some(w) = app.get_webview_window("main") {
-                                match w.is_visible() {
-                                    Ok(true) => {
-                                        let _ = w.hide();
-                                    }
-                                    _ => {
-                                        let _ = w.show();
-                                        let _ = w.set_focus();
-                                    }
-                                }
-                            }
-                        }
-                    })
-                    .build(app)?;
-            }
+            // 托盘 + 关闭行为：稳定的一次性安装逻辑，挪到 bootstrap 里
+            bootstrap::install_tray_and_window(app)?;
 
             tauri::async_runtime::block_on(async move {
                 // 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
@@ -254,6 +186,8 @@ pub fn run() {
             commands::ai_summary::retry_single_image_description,
         ])
         .build(tauri::generate_context!())
+        // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime
+        // 自身无法初始化（资源缺失 / capabilities 配置错），应用无法运行
         .expect("启动 Tauri 应用失败")
         .run(move |app, event| {
             // app 真正退出前等 llama-server 子进程收尸——避免遗留孤儿进程
@@ -273,7 +207,8 @@ fn spawn_cleanup_task(pool: DbPool) {
         loop {
             match settings::load(&pool).await {
                 Ok(cfg) => {
-                    match activities::delete_screenshots_older_than(&pool, cfg.retention_days).await {
+                    match activities::delete_screenshots_older_than(&pool, cfg.retention_days).await
+                    {
                         Ok(n) if n > 0 => log::info!("清理了 {n} 张过期截图"),
                         Ok(_) => {}
                         Err(e) => log::warn!("清理过期截图失败: {e}"),
