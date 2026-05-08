@@ -1,7 +1,7 @@
 {
   "name": "hindsight",
   "private": true,
-  "version": "0.4.5-beta",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
