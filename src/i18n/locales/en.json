@@ -488,13 +488,24 @@
         "idleCountdownMin": "Releases VRAM in {{min}}m {{sec}}s"
       }
     },
+    "describeParams": {
+      "sectionTitle": "Image describe params"
+    },
+    "summaryParams": {
+      "sectionTitle": "Segment summary params"
+    },
     "engineParams": {
       "sectionTitle": "Engine parameters (on launch)",
       "batch": "Batch size",
       "slots": "Parallel slots",
       "ctx": "Context (per slot)",
       "vramLabel": "Estimated VRAM",
-      "vramBreakdown": "(weights {{weights}} + KV cache {{kv}} + ~2.0 overhead · for {{params}}B model + {{ctx}}K ctx × {{slots}} slot(s))"
+      "vramBreakdown": "(weights {{weights}} + KV cache {{kv}} + ~2.0 overhead · for {{params}}B model + {{ctx}}K ctx × {{slots}} slot(s))",
+      "vramSystemDiscrete": "System VRAM: {{total}} GB",
+      "vramSystemUnified": "Apple unified memory = {{total}} GB",
+      "applyRecommended": "Apply recommended",
+      "recommendedAlreadyApplied": "Already recommended",
+      "recommendedHint": "Recommended: slots {{slots}} · ctx {{ctx}} · batch {{batch}}"
     },
     "models": {
       "sectionTitle": "Models",
@@ -940,10 +951,11 @@
         "title": "Engine parameters (startup)",
         "description": "Changing these stops the engine, restarts with the new parameters, then runs. After debug runs the engine is stopped unconditionally — the next daily summary will lazy-start with defaults, so global state isn't polluted."
       },
-      "vram": {
-        "label": "Estimated total usage",
-        "value": "~{{total}} GB",
-        "breakdown": "(weights {{weights}} + KV cache {{kv}} + other ~2.0 · estimated for a {{params}}B model + ctx {{ctxK}}K × {{slots}} slots)"
+      "describeEngine": {
+        "title": "Image describe params"
+      },
+      "summaryEngine": {
+        "title": "Segment summary params"
       },
       "errors": {
         "scopePending": "{{type}} debug pending backend implementation.",

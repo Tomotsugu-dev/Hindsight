@@ -30,15 +30,24 @@ interface DebugState {
   setDebugHashThreshold: (v: number) => void;
   debugHashWindow: number;
   setDebugHashWindow: (v: number) => void;
-  /** llama-server `--batch-size` / `--ubatch-size`；null = 走 llama.cpp 默认 */
-  debugBatchSize: number | null;
-  setDebugBatchSize: (v: number | null) => void;
-  /** llama-server `-np` 并行槽位 */
-  debugParallelSlots: number;
-  setDebugParallelSlots: (v: number) => void;
-  /** 每槽 ctx 上限；null = 8K 默认 */
-  debugCtxSize: number | null;
-  setDebugCtxSize: (v: number | null) => void;
+  /** 图描述阶段（step 1）batch；null = fallback 到默认 */
+  debugDescribeBatchSize: number | null;
+  setDebugDescribeBatchSize: (v: number | null) => void;
+  /** 图描述阶段 -np（并行槽位） */
+  debugDescribeParallelSlots: number;
+  setDebugDescribeParallelSlots: (v: number) => void;
+  /** 图描述阶段每槽 ctx；null = 8K 默认 */
+  debugDescribeCtxSize: number | null;
+  setDebugDescribeCtxSize: (v: number | null) => void;
+  /** 段总结阶段（step 2）batch；null = fallback 到默认 */
+  debugSummaryBatchSize: number | null;
+  setDebugSummaryBatchSize: (v: number | null) => void;
+  /** 段总结阶段 -np（推荐恒为 1） */
+  debugSummaryParallelSlots: number;
+  setDebugSummaryParallelSlots: (v: number) => void;
+  /** 段总结阶段每槽 ctx；null = 8K 默认 */
+  debugSummaryCtxSize: number | null;
+  setDebugSummaryCtxSize: (v: number | null) => void;
   /** step 2 段总结 system prompt 文本 */
   debugSysPrompt: string;
   setDebugSysPrompt: (v: string) => void;
@@ -59,9 +68,12 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
   const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
   const [debugHashThreshold, setDebugHashThreshold] = useState(5);
   const [debugHashWindow, setDebugHashWindow] = useState(5);
-  const [debugBatchSize, setDebugBatchSize] = useState<number | null>(null);
-  const [debugParallelSlots, setDebugParallelSlots] = useState(1);
-  const [debugCtxSize, setDebugCtxSize] = useState<number | null>(null);
+  const [debugDescribeBatchSize, setDebugDescribeBatchSize] = useState<number | null>(null);
+  const [debugDescribeParallelSlots, setDebugDescribeParallelSlots] = useState(1);
+  const [debugDescribeCtxSize, setDebugDescribeCtxSize] = useState<number | null>(null);
+  const [debugSummaryBatchSize, setDebugSummaryBatchSize] = useState<number | null>(null);
+  const [debugSummaryParallelSlots, setDebugSummaryParallelSlots] = useState(1);
+  const [debugSummaryCtxSize, setDebugSummaryCtxSize] = useState<number | null>(null);
   const [debugSysPrompt, setDebugSysPrompt] = useState("");
   const [debugImagePrompt, setDebugImagePrompt] = useState("");
   const [debugExternalEnabled, setDebugExternalEnabled] = useState(false);
@@ -79,9 +91,25 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     setDebugExcluded(settings.ai.excludedCategories);
     setDebugHashThreshold(settings.ai.hashThreshold);
     setDebugHashWindow(settings.ai.hashWindowMinutes);
-    setDebugBatchSize(settings.ai.batchSize ?? null);
-    setDebugParallelSlots(settings.ai.parallelSlots ?? 1);
-    setDebugCtxSize(settings.ai.ctxSize ?? null);
+    // 双套调试参数初值——优先用新字段，未设则 fallback 到旧全局字段
+    setDebugDescribeBatchSize(
+      settings.ai.describeBatchSize ?? settings.ai.batchSize ?? null,
+    );
+    setDebugDescribeParallelSlots(
+      settings.ai.describeParallelSlots ?? settings.ai.parallelSlots ?? 1,
+    );
+    setDebugDescribeCtxSize(
+      settings.ai.describeCtxSize ?? settings.ai.ctxSize ?? null,
+    );
+    setDebugSummaryBatchSize(
+      settings.ai.summaryBatchSize ?? settings.ai.batchSize ?? null,
+    );
+    setDebugSummaryParallelSlots(
+      settings.ai.summaryParallelSlots ?? settings.ai.parallelSlots ?? 1,
+    );
+    setDebugSummaryCtxSize(
+      settings.ai.summaryCtxSize ?? settings.ai.ctxSize ?? null,
+    );
     // prompt：settings 覆盖优先，否则内置默认；保证 textarea 一打开就有真实文本
     const lang = settings.ai.promptLanguage;
     const sysOverride = settings.ai.promptOverrides[
@@ -104,12 +132,18 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     setDebugHashThreshold,
     debugHashWindow,
     setDebugHashWindow,
-    debugBatchSize,
-    setDebugBatchSize,
-    debugParallelSlots,
-    setDebugParallelSlots,
-    debugCtxSize,
-    setDebugCtxSize,
+    debugDescribeBatchSize,
+    setDebugDescribeBatchSize,
+    debugDescribeParallelSlots,
+    setDebugDescribeParallelSlots,
+    debugDescribeCtxSize,
+    setDebugDescribeCtxSize,
+    debugSummaryBatchSize,
+    setDebugSummaryBatchSize,
+    debugSummaryParallelSlots,
+    setDebugSummaryParallelSlots,
+    debugSummaryCtxSize,
+    setDebugSummaryCtxSize,
     debugSysPrompt,
     setDebugSysPrompt,
     debugImagePrompt,

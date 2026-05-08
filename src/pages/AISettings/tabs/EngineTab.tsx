@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -39,6 +39,8 @@ import {
   engineOptionToSlots,
   engineSlotsToOption,
   humanAccelLabel,
+  isRecommendedApplied,
+  recommendEngineParams,
 } from "../shared/engineParams";
 import { VramEstimateLine } from "../shared/VramEstimate";
 import { ModelsSection } from "../shared/ModelsSection";
@@ -54,7 +56,86 @@ type TestResult =
 export default function EngineTab() {
   const { t } = useTranslation();
   const { ai, updateAi } = useAiSettings();
+  // mount 时拉一次：systemVram + platformId 给"应用推荐"算法用。
+  // 后端 OnceLock 缓存，重复调几乎零成本；不参与 EngineSection 自己的 5s 轮询
+  const [hwSnapshot, setHwSnapshot] = useState<{
+    systemVram: EngineStatus["systemVram"];
+    platformId: string | undefined;
+  }>({ systemVram: null, platformId: undefined });
+  useEffect(() => {
+    api
+      .getEngineStatus()
+      .then((s) =>
+        setHwSnapshot({ systemVram: s.systemVram, platformId: s.platformId }),
+      )
+      .catch((e) => logError("engine.getStatus.hwSnapshot", e));
+  }, []);
+
+  // 双套推荐参数：图描述（slots 优先）/ 段总结（ctx 优先）
+  const recommendDescribe = useMemo(() => {
+    if (!ai) return null;
+    return recommendEngineParams(
+      hwSnapshot.systemVram,
+      ai.activeMain,
+      hwSnapshot.platformId,
+      "describe",
+    );
+  }, [ai, hwSnapshot]);
+  const recommendSummary = useMemo(() => {
+    if (!ai) return null;
+    return recommendEngineParams(
+      hwSnapshot.systemVram,
+      ai.activeMain,
+      hwSnapshot.platformId,
+      "summary",
+    );
+  }, [ai, hwSnapshot]);
+
+  // 「已是推荐值」判断各自针对自己那套字段——picker 显示的是 effective 值
+  // （new 字段 ?? old 字段），所以比较时也用同一逻辑
+  const describeApplied =
+    recommendDescribe != null &&
+    ai != null &&
+    isRecommendedApplied(recommendDescribe, {
+      batchSize: ai.describeBatchSize ?? ai.batchSize,
+      parallelSlots: ai.describeParallelSlots ?? ai.parallelSlots,
+      ctxSize: ai.describeCtxSize ?? ai.ctxSize,
+    });
+  const summaryApplied =
+    recommendSummary != null &&
+    ai != null &&
+    isRecommendedApplied(recommendSummary, {
+      batchSize: ai.summaryBatchSize ?? ai.batchSize,
+      parallelSlots: ai.summaryParallelSlots ?? ai.parallelSlots,
+      ctxSize: ai.summaryCtxSize ?? ai.ctxSize,
+    });
+
+  const handleApplyDescribe = () => {
+    if (!recommendDescribe) return;
+    updateAi({
+      describeBatchSize: recommendDescribe.batchSize,
+      describeParallelSlots: recommendDescribe.parallelSlots,
+      describeCtxSize: recommendDescribe.ctxSize,
+    });
+  };
+  const handleApplySummary = () => {
+    if (!recommendSummary) return;
+    updateAi({
+      summaryBatchSize: recommendSummary.batchSize,
+      summaryParallelSlots: recommendSummary.parallelSlots,
+      summaryCtxSize: recommendSummary.ctxSize,
+    });
+  };
+
   if (!ai) return null;
+
+  // picker 显示用 effective 值（描述阶段未填的字段降级到旧全局字段）
+  const describeBatch = ai.describeBatchSize ?? ai.batchSize;
+  const describeSlots = ai.describeParallelSlots ?? ai.parallelSlots;
+  const describeCtx = ai.describeCtxSize ?? ai.ctxSize;
+  const summaryBatch = ai.summaryBatchSize ?? ai.batchSize;
+  const summarySlots = ai.summaryParallelSlots ?? ai.parallelSlots;
+  const summaryCtx = ai.summaryCtxSize ?? ai.ctxSize;
 
   return (
     <div className={styles.content}>
@@ -76,35 +157,91 @@ export default function EngineTab() {
         <ModelsSection />
       </Section>
 
-      {/* 引擎参数（启动时）：3 个 picker 各自一行，下面挂 VRAM 估算。
-          每行用 Row 包一下，picker 外的中文 label 解释参数语义；picker 内只放纯数值。
-          settings.ai 写的是"全局默认"，DailyTab 跑日报时引擎按这套启动。 */}
-      <Section title={t("aiSettings.engineParams.sectionTitle")} icon={Server}>
+      {/* 引擎参数双套——图描述（slots 优先）+ 段总结（ctx 优先）。
+          两阶段串行执行：日报跑 step 1 用 describe 配置，跑完 stop+start 切到
+          summary 配置跑 step 2。新字段 null 时降级到旧全局 batchSize/parallelSlots/
+          ctxSize（兼容老 settings JSON），所以两个 Section picker 可能展示同一个值。 */}
+      <Section
+        title={t("aiSettings.describeParams.sectionTitle")}
+        icon={Server}
+      >
         <Row label={t("aiSettings.engineParams.batch")}>
           <SimplePicker<EngineBatchKey>
-            value={engineBatchToOption(ai.batchSize)}
+            value={engineBatchToOption(describeBatch)}
             options={ENGINE_BATCH_OPTIONS}
-            onChange={(next) => updateAi({ batchSize: engineOptionToBatch(next) })}
+            onChange={(next) =>
+              updateAi({ describeBatchSize: engineOptionToBatch(next) })
+            }
           />
         </Row>
         <Row label={t("aiSettings.engineParams.slots")}>
           <SimplePicker<EngineSlotsKey>
-            value={engineSlotsToOption(ai.parallelSlots)}
+            value={engineSlotsToOption(describeSlots)}
             options={ENGINE_SLOTS_OPTIONS}
-            onChange={(next) => updateAi({ parallelSlots: engineOptionToSlots(next) })}
+            onChange={(next) =>
+              updateAi({ describeParallelSlots: engineOptionToSlots(next) })
+            }
           />
         </Row>
         <Row label={t("aiSettings.engineParams.ctx")}>
           <SimplePicker<EngineCtxKey>
-            value={engineCtxToOption(ai.ctxSize)}
+            value={engineCtxToOption(describeCtx)}
             options={ENGINE_CTX_OPTIONS}
-            onChange={(next) => updateAi({ ctxSize: engineOptionToCtx(next) })}
+            onChange={(next) =>
+              updateAi({ describeCtxSize: engineOptionToCtx(next) })
+            }
           />
         </Row>
         <VramEstimateLine
           modelName={ai.activeMain}
-          parallelSlots={ai.parallelSlots ?? 1}
-          ctxSize={ai.ctxSize ?? 8192}
+          parallelSlots={describeSlots ?? 1}
+          ctxSize={describeCtx ?? 8192}
+          systemVram={hwSnapshot.systemVram}
+          recommended={recommendDescribe}
+          recommendedApplied={describeApplied}
+          onApplyRecommended={handleApplyDescribe}
+        />
+      </Section>
+
+      <Section
+        title={t("aiSettings.summaryParams.sectionTitle")}
+        icon={Server}
+      >
+        <Row label={t("aiSettings.engineParams.batch")}>
+          <SimplePicker<EngineBatchKey>
+            value={engineBatchToOption(summaryBatch)}
+            options={ENGINE_BATCH_OPTIONS}
+            onChange={(next) =>
+              updateAi({ summaryBatchSize: engineOptionToBatch(next) })
+            }
+          />
+        </Row>
+        <Row label={t("aiSettings.engineParams.slots")}>
+          <SimplePicker<EngineSlotsKey>
+            value={engineSlotsToOption(summarySlots)}
+            options={ENGINE_SLOTS_OPTIONS}
+            onChange={(next) =>
+              updateAi({ summaryParallelSlots: engineOptionToSlots(next) })
+            }
+          />
+        </Row>
+        <Row label={t("aiSettings.engineParams.ctx")}>
+          <SimplePicker<EngineCtxKey>
+            value={engineCtxToOption(summaryCtx)}
+            options={ENGINE_CTX_OPTIONS}
+            onChange={(next) =>
+              updateAi({ summaryCtxSize: engineOptionToCtx(next) })
+            }
+          />
+        </Row>
+        <VramEstimateLine
+          modelName={ai.activeMain}
+          parallelSlots={summarySlots ?? 1}
+          ctxSize={summaryCtx ?? 8192}
+          systemVram={hwSnapshot.systemVram}
+          recommended={recommendSummary}
+          recommendedApplied={summaryApplied}
+          onApplyRecommended={handleApplySummary}
         />
       </Section>
     </div>

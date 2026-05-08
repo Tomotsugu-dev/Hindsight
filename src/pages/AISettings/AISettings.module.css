@@ -463,15 +463,80 @@
   /* 下载按钮左对齐"未安装"badge，跟 engineHead 同一垂直线 */
 }
 
-/* picker 行下面的 VRAM 估算条 —— 跟 DebugTab 同款配色 */
+/* picker 行下面的 VRAM 估算块——两行布局：
+   1) 估算占用 + 拆分细节
+   2) 系统 VRAM 总量 + 风险标签（仅当 systemVram 存在时） */
 .vramEst {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 20px 14px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vramEstRow {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 6px 10px;
-  padding: 8px 20px 14px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+}
+
+.vramSystemSource {
+  color: var(--text-muted);
+}
+
+/* "应用推荐" 按钮——挂在第一行右端（margin-left: auto 推到最右）。
+   accent 色胶囊 + Sparkles，悬停时柔和渐变阴影；推荐细节（slots/ctx/batch）
+   走 native title，不再单独占一行避免视觉噪声。 */
+.vramRecommendBtn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 12px 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04);
+  transition:
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    transform 80ms var(--ease-out);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.vramRecommendBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 32%, transparent);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 2px 6px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.vramRecommendBtn:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04);
+}
+
+.vramRecommendBtn:disabled {
+  cursor: default;
+  color: var(--text-faint);
+  background: rgba(0, 0, 0, 0.025);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: none;
 }
 
 .vramEstLabel {
@@ -487,6 +552,33 @@
 .vramEstBreakdown {
   color: var(--text-faint);
   font-weight: 400;
+}
+
+/* Info icon —— 把权重 / KV / ctx / slots 拆分细节折进 native title tooltip
+   保持第一行只有"估算总占用 ~14.3 GB ⓘ"三件物件，视觉清爽。
+   是个 <button>，重置浏览器默认外观。 */
+.vramEstInfo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: help;
+  font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: color 140ms var(--ease-out), background 140ms var(--ease-out);
+}
+.vramEstInfo:hover,
+.vramEstInfo:focus-visible {
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.05);
+  outline: none;
 }
 
 /* 三档颜色：< 16 GB 绿、16-24 GB 橙警告、> 24 GB 红危险（跟 DebugTab 一致）*/
