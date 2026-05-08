@@ -1,29 +1,29 @@
-// 一键发版：本地 build + 签名 + 上传到 GitHub Release，跳过 CI 编译。
+// 一键发版（CI 路径）：本地只做"校验 → push tag"，
+// 真正的 build / sign / notarize / 上传 由 .github/workflows/release.yml 在
+// GitHub Actions 上跑（macOS + Windows 双平台并行）。
 //
 // 用法：
 //   1. 改 package.json / Cargo.toml / tauri.conf.json 的 version 为目标版本号
-//   2. git commit -m "Bump version to X.Y.Z" && git push
-//   3. npm run release
-//
-// 前置条件：
-//   - 私钥在 ~/.tauri/hindsight_updater.key （首次跑 npx tauri signer generate 生成）
-//   - 已装 GitHub CLI（gh）并登录（gh auth login）
-//   - 当前分支是 main，working tree 干净
+//   2. 写 docs/release-notes/v<version>.md（应用内"检查更新"对话框 + GitHub Release body 都用它）
+//   3. git commit -m "Bump version to X.Y.Z" && git push
+//   4. npm run release
 //
 // 脚本会：
 //   - 校验干净的 main 分支
-//   - 用环境变量 TAURI_SIGNING_PRIVATE_KEY 跑 npm run tauri build
-//   - 生成 latest.json（updater 用的 manifest）
-//   - 推 v<version> tag
-//   - gh release create 上传 setup.exe + .sig + latest.json
+//   - 校验三处 version 一致
+//   - 校验 release notes 文件存在
+//   - tag 不能已存在
+//   - push v<version> tag → 触发 .github/workflows/release.yml
+//
+// 如果 CI 失败（比如 Apple notarize 间歇 502），可以在 Actions 页"Re-run all jobs"
+// 重跑同一 tag。
+
 import { execSync, spawnSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 
 const REPO = "Tomotsugu-dev/Hindsight";
-const KEY_FILE = path.join(os.homedir(), ".tauri", "hindsight_updater.key");
 
 function run(cmd, opts = {}) {
   console.log(`\n> ${cmd}`);
@@ -39,125 +39,66 @@ function fail(msg) {
   process.exit(1);
 }
 
-async function main() {
-  // —— 1. 环境检查 ——
-  if (!existsSync(KEY_FILE))
-    fail(`Signing key missing: ${KEY_FILE}\n  生成：npx @tauri-apps/cli signer generate -w ${KEY_FILE}`);
+async function readVersionFromPkg(file) {
+  const content = await readFile(file, "utf-8");
+  if (file.endsWith(".json")) {
+    return JSON.parse(content).version;
+  }
+  // Cargo.toml: 抠 [package] 段下第一个 version = "..."
+  const m = content.match(/^\s*\[package\][^\[]*?^\s*version\s*=\s*"([^"]+)"/ms);
+  return m?.[1];
+}
 
+async function main() {
+  // —— 1. 干净 main 分支 ——
   const status = capture("git status --porcelain").trim();
   if (status) fail(`Working tree not clean:\n${status}`);
 
   const branch = capture("git branch --show-current").trim();
   if (branch !== "main") fail(`Not on main (current: ${branch})`);
 
-  // —— 2. 读版本号 ——
-  const pkg = JSON.parse(await readFile("package.json", "utf-8"));
-  const version = pkg.version;
+  // —— 2. 三处版本号一致 ——
+  const pkgVer = await readVersionFromPkg("package.json");
+  const cargoVer = await readVersionFromPkg("src-tauri/Cargo.toml");
+  const tauriVer = await readVersionFromPkg("src-tauri/tauri.conf.json");
+
+  if (pkgVer !== cargoVer || pkgVer !== tauriVer) {
+    fail(
+      `Version mismatch:\n  package.json = ${pkgVer}\n  Cargo.toml   = ${cargoVer}\n  tauri.conf.json = ${tauriVer}`,
+    );
+  }
+  const version = pkgVer;
   const tag = `v${version}`;
   console.log(`\n=== Releasing ${tag} ===`);
 
-  // —— 3. tag 不能已存在 ——
+  // —— 3. release notes 必须存在 ——
+  const notesPath = path.join("docs", "release-notes", `${tag}.md`);
+  if (!existsSync(notesPath)) {
+    fail(
+      `Missing ${notesPath}\n  CI 会读这个文件填进 GitHub Release body 和应用内"检查更新"对话框，\n  没有就发了等于用户看不到 changelog。先写完再 release。`,
+    );
+  }
+
+  // —— 4. tag 不能已存在 ——
   const localTag = spawnSync("git", ["rev-parse", "--verify", tag], {
     stdio: "ignore",
   });
-  if (localTag.status === 0)
-    fail(`Tag ${tag} already exists locally. Bump version (package.json + Cargo.toml + tauri.conf.json) first.`);
-
-  // —— 4. push main 最新 ——
-  run("git push origin main");
-
-  // —— 5. 加载私钥 ——
-  const privateKey = (await readFile(KEY_FILE, "utf-8")).trim();
-
-  // —— 6. 本地 build ——
-  // 把签名密钥通过 env 传给 tauri build；TAURI_SIGNING_PRIVATE_KEY_PASSWORD 留空（密钥无密码）
-  run("npm run tauri build", {
-    env: {
-      ...process.env,
-      TAURI_SIGNING_PRIVATE_KEY: privateKey,
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: "",
-    },
-  });
-
-  // —— 7. 检查产物 ——
-  const bundleDir = "src-tauri/target/release/bundle/nsis";
-  const exeName = `hindsight_${version}_x64-setup.exe`;
-  const sigName = `${exeName}.sig`;
-  const exePath = path.join(bundleDir, exeName);
-  const sigPath = path.join(bundleDir, sigName);
-
-  if (!existsSync(exePath)) fail(`Missing: ${exePath}`);
-  if (!existsSync(sigPath))
-    fail(`Missing signature: ${sigPath}\n  TAURI_SIGNING_PRIVATE_KEY 没生效；检查 ~/.tauri/hindsight_updater.key 是否完整`);
-
-  // —— 8. release notes ——
-  // 按版本归档：docs/release-notes/v<version>.md。
-  // 同时用作两处：
-  //   - latest.json 的 notes 字段（应用内"检查更新"对话框里显示给用户看）
-  //   - gh release create 的 --notes-file（GitHub Release body）
-  // 文件不存在则降级到自动生成（少版本 metadata 也比 broken 好）
-  const notesPath = path.join("docs", "release-notes", `${tag}.md`);
-  let releaseNotes = `Hindsight ${tag}`;
-  if (existsSync(notesPath)) {
-    releaseNotes = (await readFile(notesPath, "utf-8")).trim();
-  } else {
-    console.warn(`⚠ ${notesPath} 不存在，notes 用占位字符串`);
+  if (localTag.status === 0) {
+    fail(`Tag ${tag} already exists locally. Bump version first.`);
   }
 
-  // —— 9. 生成 latest.json（Tauri Updater 的 manifest）——
-  // macOS 占位：当前没付 Apple Developer，没法签名 .app.tar.gz 让 updater 真做静默替换。
-  // 但仍要列在 platforms 里，否则 macOS 端 check() 找不到对应平台 key 会返回 null
-  // （= "已是最新版"），用户永远收不到新版通知。
-  // - url 指向 release tag 页面（前端 useUpdater 在 macOS 分支调 openUrl 跳浏览器）
-  // - signature 复用 Windows 的真实签名当 dummy；check() 阶段 Tauri 不验证 signature
-  //   内容，只在 downloadAndInstall 时才用——而 macOS 端我们根本不调 downloadAndInstall
-  const sig = (await readFile(sigPath, "utf-8")).trim();
-  const tagPageUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
-  const latestJson = {
-    version,
-    notes: releaseNotes,
-    pub_date: new Date().toISOString(),
-    platforms: {
-      "windows-x86_64": {
-        signature: sig,
-        url: `https://github.com/${REPO}/releases/download/${tag}/${exeName}`,
-      },
-      "darwin-x86_64": {
-        signature: sig,
-        url: tagPageUrl,
-      },
-      "darwin-aarch64": {
-        signature: sig,
-        url: tagPageUrl,
-      },
-    },
-  };
-  const latestPath = "latest.json";
-  await writeFile(latestPath, JSON.stringify(latestJson, null, 2));
-  console.log(`Generated ${latestPath}`);
+  // —— 5. push 最新 main ——
+  run("git push origin main");
 
-  // —— 10. tag + push ——
+  // —— 6. 创建并 push tag → 触发 CI ——
   run(`git tag ${tag}`);
   run(`git push origin ${tag}`);
 
-  // —— 11. 创建 release + 上传 ——
-  // 用 docs/release-notes/<tag>.md 当 release body（跟应用内对话框是同一份）；
-  // 不存在则降级到 --generate-notes
-  const notesArg = existsSync(notesPath)
-    ? `--notes-file "${notesPath}"`
-    : `--generate-notes`;
-  const ghCmd = [
-    `gh release create ${tag}`,
-    `"${exePath}"`,
-    `"${sigPath}"`,
-    `${latestPath}`,
-    `--title "Hindsight ${tag}"`,
-    notesArg,
-  ].join(" ");
-  run(ghCmd);
-
-  console.log(`\n✓ Released ${tag}`);
+  console.log(`\n✓ Pushed ${tag}. CI 已开始构建：`);
+  console.log(`  https://github.com/${REPO}/actions`);
+  console.log(`\n  ~6-10 分钟后产物会出现在：`);
   console.log(`  https://github.com/${REPO}/releases/tag/${tag}`);
+  console.log(`\n  如果 CI 失败，去 Actions 页 "Re-run all jobs" 重试同一 tag。`);
 }
 
 main().catch((e) => {
