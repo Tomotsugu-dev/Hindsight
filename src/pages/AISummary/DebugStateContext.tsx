@@ -125,6 +125,9 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Provider + 配套 hook 同文件是 React Context 的标准布局；为消除 Vite Fast Refresh
+// 对"组件 + 非组件"混合导出的告警，单独抑制这一行。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useDebugState(): DebugState {
   const ctx = useContext(DebugStateContext);
   if (!ctx) {

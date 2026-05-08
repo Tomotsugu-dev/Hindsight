@@ -17,7 +17,7 @@
 //!
 //! [`init_state`] 返回当前保护状态，给前端 `engine_status` 命令做"保护降级"提示。
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 /// 子进程保护当前状态。`engine_status` 命令通过 [`init_state`] 拿到，
 /// 让前端能告诉用户"保护降级"或"保护正常"。
@@ -25,7 +25,11 @@ use crate::error::{Error, Result};
 pub enum JobInitState {
     /// 还没调 [`init_global_job`]
     NotInitialized,
-    /// 保护正常工作
+    /// 保护正常工作。仅 Windows / Linux 路径会构造此变体；macOS 永远走
+    /// `Degraded` 分支（缺 PR_SET_PDEATHSIG 等价物），所以编译到 macOS 时
+    /// 此变体在 lib 里"never constructed"——但 [`commands::ai_engine`] 的
+    /// 全平台 match 仍要枚举它，因此不能 cfg-gate 掉，只能 allow。
+    #[allow(dead_code)]
     Ok,
     /// 保护降级；附原因（macOS 缺 prctl 时是预期降级；Windows Job 创建失败是异常降级）
     Degraded(String),
@@ -158,7 +162,9 @@ pub fn init_global_job() -> Result<()> {
             store_state(JobInitState::Degraded(format!(
                 "Windows Job 初始化失败：{e}（Hindsight 异常退出可能遗留 llama-server 子进程）"
             )));
-            Err(Error::Other(e))
+            // 用全路径 `crate::error::Error::Other` 而非 `use Error;`：
+            // Error 仅在 Windows 路径用，写 use 会让 macOS / Linux 编译报 unused_import
+            Err(crate::error::Error::Other(e))
         }
     }
 }
@@ -181,7 +187,7 @@ pub fn assign_child_pid(pid: u32) -> Result<()> {
         store_state(JobInitState::Degraded(format!(
             "AssignProcessToJobObject pid={pid} 失败：{e}（该子进程未被 Job 接管）"
         )));
-        Error::Other(e)
+        crate::error::Error::Other(e)
     })
 }
 
@@ -199,9 +205,9 @@ pub fn init_global_job() -> Result<()> {
 /// 父进程死时内核同步杀子；graceful exit 时 supervisor 也能 killpg 收尸。
 #[cfg(target_os = "linux")]
 pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
-    use std::os::unix::process::CommandExt;
     // SAFETY: pre_exec 闭包在 fork 后 exec 前的 child 里跑，必须 async-signal-safe；
     // setpgid 与 prctl 都是 async-signal-safe 的 syscall（POSIX 与 Linux 文档均明确）。
+    // 注：tokio::process::Command 的 `pre_exec` 是 inherent method，无需 `use std::os::unix::process::CommandExt`。
     unsafe {
         cmd.pre_exec(|| {
             // 让 child 成为自己 pgid 的 leader——Hindsight 在 graceful exit 时
@@ -251,8 +257,8 @@ pub fn init_global_job() -> Result<()> {
 /// macOS 实现：仅 setpgid，让 supervisor.stop() 能 killpg 收尸。
 #[cfg(target_os = "macos")]
 pub fn prepare_command(cmd: &mut tokio::process::Command) -> Result<()> {
-    use std::os::unix::process::CommandExt;
-    // SAFETY: setpgid 是 async-signal-safe 的 syscall
+    // SAFETY: setpgid 是 async-signal-safe 的 syscall。
+    // 注：tokio::process::Command 的 `pre_exec` 是 inherent method，无需 `use std::os::unix::process::CommandExt`。
     unsafe {
         cmd.pre_exec(|| {
             if libc::setpgid(0, 0) != 0 {

@@ -2,8 +2,9 @@
 //
 // 含 4 个 Section：过滤分类 / 抽帧参数 / 引擎参数 / 云端 API。
 // state 来自 DebugStateContext，跟 DebugTab 共享同一份；用户在这里改值、
-// 切到「调试」tab 跑总结。helper functions（picker 选项映射、VramEstimateLine）
-// 跟 DebugTab 共用 [DebugTab.tsx](./DebugTab.tsx) 的 export。
+// 切到「调试」tab 跑总结。picker 选项映射来自纯 TS 工具文件
+// [debugTabOptions.ts](./debugTabOptions.ts)；VramEstimateLine 这个组件
+// 还留在 DebugTab.tsx。
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,11 +27,11 @@ import {
   optionToBatch,
   optionToCtx,
   optionToSlots,
-  VramEstimateLine,
   type BatchKey,
   type CtxKey,
   type SlotsKey,
-} from "./DebugTab";
+} from "./debugTabOptions";
+import { VramEstimateLine } from "./DebugTab";
 import styles from "./DebugTab.module.css";
 
 export default function DebugSettingsTab() {

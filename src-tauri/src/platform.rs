@@ -77,21 +77,21 @@ pub fn apply_window_tweaks(_window: &tauri::WebviewWindow) {}
 pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     use tauri::Manager;
     match event {
-        tauri::RunEvent::ExitRequested { api, code, .. } => {
-            if code.is_none() && crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed)
-            {
-                api.prevent_exit();
-            }
+        // code: None 表示用户触发的退出（关窗 / Cmd+Q）；非 None 是 app.exit(code)，
+        // 后者是程序主动退出，不阻拦。配合 MINIMIZE_TO_TRAY 才把窗关变成最小化到托盘。
+        tauri::RunEvent::ExitRequested {
+            api, code: None, ..
+        } if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) => {
+            api.prevent_exit();
         }
+        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）：所有窗口都隐藏时把主窗调出来
         tauri::RunEvent::Reopen {
-            has_visible_windows,
+            has_visible_windows: false,
             ..
         } => {
-            if !has_visible_windows {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
             }
         }
         _ => {}

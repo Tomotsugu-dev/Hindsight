@@ -126,6 +126,11 @@ fn detect_cuda_version() -> Option<(u32, u32)> {
 ///
 /// 拆出来当独立函数方便单测——`detect_cuda_version` 拿 nvidia-smi 跑出来的
 /// 字符串塞进来。
+///
+/// `#[allow(dead_code)]`：macOS 的 `detect_cuda_version` 直接返回 `None`，
+/// lib 编译里没人调；只有 `#[cfg(test)]` 里的单测会用。Linux / Windows 上
+/// `detect_cuda_version` 真的会调它，allow 在那两个平台无影响。
+#[allow(dead_code)]
 fn parse_cuda_version(text: &str) -> Option<(u32, u32)> {
     let key = "CUDA Version:";
     let idx = text.find(key)?;

@@ -945,12 +945,12 @@
       "scopePlaceholder": "{{type}} debug pending backend implementation. Switch back to \"Daily\" to debug the two-step daily flow (per-image descriptions → segment summary).",
       "imagePrompt": {
         "title": "Per-image describe prompt",
-        "description": "step 1 — used when the model describes each screenshot independently. Changes apply immediately (debug window only); does not affect global AI Settings.",
+        "description": "Used when the model describes each screenshot independently. Changes apply to this window only.",
         "label": "Prompt"
       },
       "segPrompt": {
         "title": "Segment summary prompt",
-        "description": "step 2 — used when aggregating per-image descriptions + app stats into a segment summary. Changes apply immediately (debug window only).",
+        "description": "Used when aggregating per-image descriptions + app stats into a segment summary. Changes apply to this window only.",
         "label": "Prompt"
       },
       "cloudApi": {
