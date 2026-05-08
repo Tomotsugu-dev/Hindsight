@@ -13,6 +13,24 @@
   app-region: no-drag;
 }
 
+/* 分组容器：让组内 tab 之间保持原 gap，跨组才插入 divider */
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 跨组分隔竖线：1px 浅灰，左右内边距让它跟 tab 视觉气口一致。
+   语义上是"装饰元素"——aria-hidden，不进 nav 朗读流。 */
+.divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
 .tab {
   position: relative;
   z-index: 1;

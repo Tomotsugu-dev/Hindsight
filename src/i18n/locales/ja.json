@@ -631,7 +631,8 @@
       "restartHint": "新しいアカウントでログインしました。そのアカウントのローカルデータベースに切り替えるには、アプリを再起動してください。"
     },
     "errors": {
-      "credExpired": "認証情報の有効期限が切れました。再度ログインしてください。"
+      "credExpired": "認証情報の有効期限が切れました。再度ログインしてください。",
+      "transient": "同期に一時的な問題が発生しました。自動的に再試行します…"
     },
     "setup": {
       "header": "OAuth 認証情報の設定",
@@ -690,7 +691,8 @@
       "week": "週次",
       "month": "月次",
       "chat": "チャット",
-      "debug": "デバッグ"
+      "debug": "デバッグ",
+      "debugSettings": "デバッグ設定"
     },
     "placeholder": {
       "hint": "開発中の機能です。"
@@ -879,12 +881,33 @@
       },
       "actions": {
         "stop": "停止",
-        "start": "実行",
+        "start": "再生成",
+        "startInfo": "この日の画像説明と時間帯サマリーを再生成します。",
+        "startInfoAria": "再生成範囲の説明",
+        "describeOnly": "画像説明のみ生成",
+        "describeOnlyInfo": "step 1 のみ実行：当日の画像ごとの説明を生成（時間帯サマリーは作成しません）。",
+        "describeOnlyAria": "画像説明のみ生成（時間帯サマリーをスキップ）",
+        "summarizeOnly": "時間帯サマリーのみ生成",
+        "summarizeOnlyInfo": "step 2 のみ実行：既存の画像説明から時間帯サマリーを再構築します。step 1 のデータがない時間帯はスキップ扱いになります。",
+        "summarizeOnlyAria": "時間帯サマリーのみ生成（画像説明をスキップ）",
+        "clearDescriptions": "削除",
+        "clearDescriptionsTooltip": "この日のすべての画像説明を消去します（時間帯サマリーは保持、取り消し不可）。",
+        "clearDescriptionsConfirm": "{{date}} のすべての画像説明を削除しますか? 時間帯サマリーは保持されます。この操作は取り消せません。",
+        "clearSummaries": "削除",
+        "clearSummariesTooltip": "この日のすべての時間帯サマリーを消去します（画像説明は保持、取り消し不可）。",
+        "clearSummariesConfirm": "{{date}} のすべての時間帯サマリーを削除しますか? 画像説明は保持されます。この操作は取り消せません。",
+        "exportDescriptionsMd": "Markdown 出力",
+        "exportDescriptionsMdTooltip": "この日のすべての画像説明を Markdown ファイルとしてエクスポート。",
+        "exportDescriptionsMdEmptyTooltip": "エクスポートできる画像説明がまだありません。",
+        "exportSummariesMd": "Markdown 出力",
+        "exportSummariesMdTooltip": "この日のすべての時間帯サマリーを Markdown ファイルとしてエクスポート。",
+        "exportSummariesMdEmptyTooltip": "エクスポートできる時間帯サマリーがまだありません。",
         "startTooltipPending": "{{type}}デバッグはバックエンド実装待ちです。",
         "startTooltipReady": "デバッグモード：1 日の全時間帯を実行（既存結果を消去して再実行）、画像ごとの記述をリアルタイム表示。",
         "startTooltipNoModel": "先に AI 設定 → モデル でモデルを選んでください。",
-        "delete": "削除",
-        "deleteTooltip": "この日の ai_summaries と ai_image_descriptions を消去します（取り消し不可）。",
+        "delete": "すべて削除",
+        "deleteTooltip": "この日のすべての画像説明と時間帯サマリーを消去します（取り消し不可）。",
+        "deleteInfoAria": "削除範囲の説明",
         "deleteConfirm": "{{date}} の AI 生成物をすべて削除しますか? 時間帯の要約と画像ごとの記述が消去されます。この操作は取り消せません。",
         "exportJson": "JSON でエクスポート",
         "exportTooltip": "このページのデバッグデータをすべて JSON ファイルとしてエクスポート。"
@@ -930,6 +953,16 @@
         "description": "step 2 — 画像ごとの記述 + アプリ統計を時間帯の要約に集約する際に使用。変更は即時反映（デバッグウィンドウのみ）。",
         "label": "プロンプト"
       },
+      "cloudApi": {
+        "title": "クラウド API",
+        "description": "今回の実行で時間帯サマリー（step 2）をクラウドモデルで生成します。endpoint / モデル / API Key は AI 設定の全体値を使用し、本トグルは経路のみを切り替えます。",
+        "enableLabel": "クラウドサマリーを有効化",
+        "enableHint": "オフでローカル step 2。クラウド認証情報は AI 設定 → クラウド API で設定。"
+      },
+      "subTabs": {
+        "main": "デバッグビュー",
+        "settings": "デバッグ設定"
+      },
       "perImage": {
         "title": "画像ごとの記述",
         "descriptionBase": "step 1 の出力 — 各スクリーンショットを vision LLM で個別に記述したもの",
@@ -939,6 +972,7 @@
         "segFallback": "区間{{idx}}",
         "imageNoSuffix": " · {{n}} 枚目",
         "chipTitle": "区間 idx={{seg}} · 画像 idx={{img}}（重複除去後の順序）",
+        "captureTimeTooltip": "キャプチャ時刻 {{time}}",
         "pathTooltip": "クリックで原画プレビュー：{{path}}",
         "statTooltip": "レイテンシ · prompt / completion tokens",
         "retry": "再実行",

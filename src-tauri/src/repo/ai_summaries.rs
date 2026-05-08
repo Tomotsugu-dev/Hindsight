@@ -158,6 +158,50 @@ pub async fn clear_day(pool: &DbPool, source: &str, local_date: &str) -> Result<
     Ok(())
 }
 
+/// 只清当天段总结，**不**动逐图描述（step 1 产物）。
+/// step2-only 路径调：用户想用已有 image descriptions 重跑段总结，必须保留 step 1 数据。
+pub async fn clear_day_summaries_only(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+) -> Result<()> {
+    let src = source.to_string();
+    let date = local_date.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "DELETE FROM ai_summaries WHERE source = ?1 AND local_date = ?2",
+                rusqlite::params![src, date],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// 只清当天逐图描述，**不**动段总结。
+/// 调试 tab 的「逐图描述」Section 删除按钮用——用户想清掉现有描述重跑 step 1，但不想动段总结。
+pub async fn clear_day_image_descriptions_only(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+) -> Result<()> {
+    let src = source.to_string();
+    let date = local_date.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "DELETE FROM ai_image_descriptions WHERE source = ?1 AND local_date = ?2",
+                rusqlite::params![src, date],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// 清掉某 source 某段所有逐图描述（段重跑时 step 1 开始前调，避免新旧 image_index 错位）。
 pub async fn clear_segment_descriptions(
     pool: &DbPool,

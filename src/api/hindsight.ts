@@ -249,6 +249,9 @@ export interface AiOverrides {
    *  是 `ctxSize × parallelSlots`，让每个 slot 都拿到这个 budget。
    *  启动时按这个总量一次性吃 KV cache 显存（~30KB/token）。 */
   ctxSize?: number;
+  /** 本次跑段总结走云端 (true) 还是本地 (false)。`undefined` = 沿用 settings.ai.externalEnabled。
+   *  endpoint / model / apiKey 永远沿用 settings 全局值——这里只控制路径选择。 */
+  externalEnabled?: boolean;
 }
 
 /** ai_image_descriptions 表的一行——两步生成 step 1 的产物，给调试 tab 渲染。 */
@@ -557,6 +560,13 @@ export const api = {
     overrides: AiOverrides | null = null,
     /** "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据 */
     source: string = "daily",
+    /** true = 只跑 step 1（逐图描述），跳过 step 2（段总结）。
+     *  调试 tab「仅生成图片描述」按钮用；默认 false 走完整流程。 */
+    step1Only: boolean = false,
+    /** true = 跳过 step 1，从 DB 读已存的图片描述跑 step 2。
+     *  调试 tab「仅生成段总结」按钮用；默认 false 走完整流程。
+     *  与 step1Only 互斥（前端不应同时传 true）。 */
+    step2Only: boolean = false,
   ) =>
     invoke<void>("generate_day_summary", {
       date,
@@ -564,6 +574,8 @@ export const api = {
       deviceId,
       overrides,
       source,
+      step1Only,
+      step2Only,
     }),
   /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
   retrySummarySegment: (
@@ -607,6 +619,12 @@ export const api = {
    *  给用户在不重跑的情况下手动清历史。 */
   clearDaySummary: (date: string, source: string = "daily") =>
     invoke<void>("clear_day_summary", { date, source }),
+  /** 只删当天逐图描述（不动段总结）。调试 tab「逐图描述」Section 删除按钮用。 */
+  clearDayImageDescriptions: (date: string, source: string = "daily") =>
+    invoke<void>("clear_day_image_descriptions", { date, source }),
+  /** 只删当天段总结（不动逐图描述）。调试 tab「段总结结果」Section 删除按钮用。 */
+  clearDaySegmentSummaries: (date: string, source: string = "daily") =>
+    invoke<void>("clear_day_segment_summaries", { date, source }),
   /** 重跑某段某张图的描述——调试 tab 行末"重跑"按钮用。
    *  不动段总结、其它图描述；期间走 SUMMARY_PROGRESS_EVENT 推一条 image_described。 */
   retrySingleImageDescription: (

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::io::{self, OutboxRow};
-use super::Inner;
+use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
@@ -34,7 +34,7 @@ enum DirtyKey {
 }
 
 pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
-    let token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
+    let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
         // NotSignedIn 是预期状态，不当错误显示；其它（续期失败 / refresh_token 失效）让用户看见
         Err(Error::NotSignedIn) => {
@@ -42,10 +42,8 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
             return Ok(());
         }
         Err(e) => {
-            let raw = e.to_string();
-            log::warn!("sync push 拿不到有效 token: {raw}");
-            inner.status.write().await.last_error =
-                Some(format!("登录凭证失效（{raw}），请尝试重新登录"));
+            log::warn!("sync push 拿不到有效 token: {e}");
+            inner.status.write().await.last_error = Some(format_sync_error(&e));
             return Ok(());
         }
     };
@@ -67,7 +65,8 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     let self_id = crate::device::self_id()?;
     let mut succeeded_ids: Vec<i64> = Vec::new();
     let mut failed_ids: Vec<i64> = Vec::new();
-    let mut last_err: Option<String> = None;
+    let mut last_err_raw: Option<crate::error::Error> = None;
+    let mut last_err_str: Option<String> = None;
 
     for (key, ids) in groups {
         let name = file_name_for(self_id, &key);
@@ -76,16 +75,24 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
             Err(e) => {
                 log::warn!("生成 {} 内容失败: {e}", name);
                 failed_ids.extend(&ids);
-                last_err = Some(e.to_string());
+                last_err_str = Some(e.to_string());
+                last_err_raw = Some(e);
                 continue;
             }
         };
-        match drive::upsert_by_name(&token.access_token, &name, &content).await {
+        let upsert_res = with_token_retry(&inner.pool, &mut token, |tok| {
+            let name = name.clone();
+            let content = content.clone();
+            async move { drive::upsert_by_name(&tok, &name, &content).await }
+        })
+        .await;
+        match upsert_res {
             Ok(_) => succeeded_ids.extend(&ids),
             Err(e) => {
                 log::warn!("上传 {} 失败: {e}", name);
                 failed_ids.extend(&ids);
-                last_err = Some(e.to_string());
+                last_err_str = Some(e.to_string());
+                last_err_raw = Some(e);
             }
         }
     }
@@ -98,11 +105,13 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     }
 
     if !failed_ids.is_empty() {
-        let err = last_err.clone().unwrap_or_else(|| "未知错误".into());
-        io::bump_outbox_retry(&inner.pool, &failed_ids, &err).await?;
-        inner.status.write().await.last_error = last_err.clone();
+        let err_str = last_err_str.clone().unwrap_or_else(|| "未知错误".into());
+        io::bump_outbox_retry(&inner.pool, &failed_ids, &err_str).await?;
+        if let Some(ref e) = last_err_raw {
+            inner.status.write().await.last_error = Some(format_sync_error(e));
+        }
         return Err(Error::SyncIncomplete(
-            last_err.unwrap_or_else(|| "push 失败".into()),
+            last_err_str.unwrap_or_else(|| "push 失败".into()),
         ));
     }
 

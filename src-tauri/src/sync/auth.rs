@@ -207,7 +207,42 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
 
 /// 拿到一个有效的 Google access_token，过期就用 refresh_token 自动续。
 /// 同时返回当前 uid，方便上层路由。
+///
+/// 缓冲取 10 分钟：本地 expires_at 还剩 ≤10min 就提前续。原来 5 min 在
+/// 笔记本盖盖醒来 / 系统时钟漂移的情况下不够用——access_token 在本地"还有效"
+/// 时，Google 端可能已经把它拒了（401），用户被迫重新登录。
 pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
+    let (uid, rt_enc, access, expires_at) = read_auth_state(pool).await?;
+
+    // 还在有效期 + 10 分钟以上缓冲 → 直接复用
+    if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(&expires_at) {
+        let now = chrono::Utc::now();
+        let exp_utc = exp.with_timezone(&chrono::Utc);
+        if exp_utc - now > chrono::Duration::minutes(10) {
+            return Ok(TokenInfo {
+                uid,
+                access_token: access,
+            });
+        }
+    }
+
+    log::debug!("access_token 即将过期或已过期，调 oauth2 端点续期…");
+    refresh_and_persist(pool, uid, &rt_enc).await
+}
+
+/// 强制走 refresh 端点拿一份新的 access_token，不看本地 expires_at。
+///
+/// 给 Drive 在本地"未过期"但服务端返回 401 的场景用——典型情况：机器睡眠
+/// 醒来、Google 端令牌轮换。调用方拿到新 token 后再重试一次 Drive 请求。
+pub async fn force_refresh(pool: &DbPool) -> Result<TokenInfo> {
+    let (uid, rt_enc, _access, _expires_at) = read_auth_state(pool).await?;
+    log::info!("force_refresh：放弃当前 access_token，强制重新申请");
+    refresh_and_persist(pool, uid, &rt_enc).await
+}
+
+async fn read_auth_state(
+    pool: &DbPool,
+) -> Result<(String, Vec<u8>, String, String)> {
     let row: Option<(Option<String>, Option<Vec<u8>>, Option<String>, Option<String>)> = pool
         .0
         .call(|conn| {
@@ -222,41 +257,36 @@ pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
         })
         .await?;
 
-    let Some((Some(uid), Some(rt_enc), Some(access), Some(expires_at))) = row else {
-        return Err(Error::NotSignedIn);
-    };
-
-    // 还在有效期 + 5 分钟以上缓冲 → 直接复用
-    if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(&expires_at) {
-        let now = chrono::Utc::now();
-        let exp_utc = exp.with_timezone(&chrono::Utc);
-        if exp_utc - now > chrono::Duration::minutes(5) {
-            return Ok(TokenInfo {
-                uid,
-                access_token: access,
-            });
+    match row {
+        Some((Some(uid), Some(rt_enc), Some(access), Some(expires_at))) => {
+            Ok((uid, rt_enc, access, expires_at))
         }
+        _ => Err(Error::NotSignedIn),
     }
+}
 
-    // 续期
+async fn refresh_and_persist(
+    pool: &DbPool,
+    uid: String,
+    rt_enc: &[u8],
+) -> Result<TokenInfo> {
     let (client_id, client_secret) = load_creds(pool).await?;
     let key = ensure_keyring_key()?;
-    let rt_bytes = aes_decrypt(&key, &rt_enc)?;
+    let rt_bytes = aes_decrypt(&key, rt_enc)?;
     let refresh_token =
         String::from_utf8(rt_bytes).map_err(|_| Error::Crypto("refresh_token utf-8 decode"))?;
 
-    log::debug!("access_token 已过期，调 oauth2 端点续期…");
     let fresh = refresh_with_google(&client_id, &client_secret, &refresh_token).await?;
 
     let new_access = fresh.access_token.clone();
-    let new_expires = (chrono::Utc::now() + chrono::Duration::seconds(fresh.expires_in)).to_rfc3339();
+    let new_expires =
+        (chrono::Utc::now() + chrono::Duration::seconds(fresh.expires_in)).to_rfc3339();
     let new_access_db = new_access.clone();
-    let new_expires_db = new_expires.clone();
     pool.0
         .call(move |conn| {
             conn.execute(
                 "UPDATE auth_state SET access_token = ?1, expires_at = ?2 WHERE id = 1",
-                rusqlite::params![new_access_db, new_expires_db],
+                rusqlite::params![new_access_db, new_expires],
             )
             .db()?;
             Ok(())
@@ -288,24 +318,64 @@ async fn refresh_with_google(
     client_secret: &str,
     refresh_token: &str,
 ) -> Result<GoogleRefreshResp> {
+    // 网络抖动 / Google 端 5xx 是临时错误：指数退避重试 2 次。
+    // 4xx（401/400）是 refresh_token 真的失效——立刻返回，重试无意义。
+    const BACKOFFS_MS: [u64; 2] = [500, 2000];
+
     let client = reqwest::Client::new();
-    let resp = client
-        .post("https://oauth2.googleapis.com/token")
-        .form(&[
-            ("client_id", client_id),
-            ("client_secret", client_secret),
-            ("refresh_token", refresh_token),
-            ("grant_type", "refresh_token"),
-        ])
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        let status = resp.status().as_u16();
-        let body = resp.text().await.unwrap_or_default();
-        // 401/400 多半是 refresh_token 失效（用户在 myaccount.google.com 撤销了授权）
-        return Err(Error::OAuthHttp { endpoint: "refresh", status, body });
+    let mut attempt = 0usize;
+    loop {
+        let send_res = client
+            .post("https://oauth2.googleapis.com/token")
+            .form(&[
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("refresh_token", refresh_token),
+                ("grant_type", "refresh_token"),
+            ])
+            .send()
+            .await;
+
+        match send_res {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    return Ok(resp.json::<GoogleRefreshResp>().await?);
+                }
+                if status.is_server_error() && attempt < BACKOFFS_MS.len() {
+                    log::warn!(
+                        "refresh 端点返回 {}，{}ms 后重试（第 {} 次）",
+                        status.as_u16(),
+                        BACKOFFS_MS[attempt],
+                        attempt + 1
+                    );
+                    tokio::time::sleep(Duration::from_millis(BACKOFFS_MS[attempt])).await;
+                    attempt += 1;
+                    continue;
+                }
+                let body = resp.text().await.unwrap_or_default();
+                // 401/400 多半是 refresh_token 失效（用户在 myaccount.google.com 撤销了授权）
+                return Err(Error::OAuthHttp {
+                    endpoint: "refresh",
+                    status: status.as_u16(),
+                    body,
+                });
+            }
+            Err(e) => {
+                if attempt < BACKOFFS_MS.len() {
+                    log::warn!(
+                        "refresh 端点网络错误：{e}，{}ms 后重试（第 {} 次）",
+                        BACKOFFS_MS[attempt],
+                        attempt + 1
+                    );
+                    tokio::time::sleep(Duration::from_millis(BACKOFFS_MS[attempt])).await;
+                    attempt += 1;
+                    continue;
+                }
+                return Err(Error::from(e));
+            }
+        }
     }
-    Ok(resp.json::<GoogleRefreshResp>().await?)
 }
 
 pub async fn sign_out(pool: &DbPool) -> Result<()> {

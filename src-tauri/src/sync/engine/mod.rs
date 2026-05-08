@@ -8,6 +8,7 @@ mod io;
 mod pull;
 mod push;
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,8 +17,57 @@ use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::storage::DbPool;
+use crate::sync::auth::{self, TokenInfo};
+
+/// `last_error` 前缀：分类后端写进 status 的同步错误，让前端能稳定判别
+/// "需要重新登录" vs "暂时失败"，不再依赖中文本地化字符串匹配。
+pub(super) const ERR_PREFIX_CRED_EXPIRED: &str = "[CRED_EXPIRED] ";
+pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
+
+/// 把同步过程产生的 Error 归类成"需要用户介入" vs "等下个 tick 自动重试就行"，
+/// 然后加上稳定前缀给前端识别。原文 e.to_string() 拼在前缀后面，UI 显示时去前缀。
+pub(super) fn format_sync_error(e: &Error) -> String {
+    let prefix = match e {
+        // refresh_token 真的失效（用户在 myaccount.google.com 撤销 / token 过期 6 个月）
+        Error::OAuthHttp { endpoint: "refresh", status, .. }
+            if *status == 400 || *status == 401 => ERR_PREFIX_CRED_EXPIRED,
+        // AES 解不开：本地密钥 / 密文已损坏，重新登录是唯一出路
+        Error::Crypto(_) => ERR_PREFIX_CRED_EXPIRED,
+        // scope 不足：当前 token 没 drive.appdata 权限，必须重新走同意页
+        Error::DriveScopeInsufficient => ERR_PREFIX_CRED_EXPIRED,
+        // 其它：keyring 临时读失败、网络超时、Drive 5xx、refresh 端点 5xx 等。
+        // 后台 30s tick 会自动重试，UI 不必催用户重新登录。
+        _ => ERR_PREFIX_TRANSIENT,
+    };
+    format!("{prefix}{e}")
+}
+
+/// 包一次 Drive 调用：如果返回 401，强制刷新 access_token 后重试一次。
+///
+/// 原因：`auth::ensure_valid_token` 只看本地 `expires_at`，但 Google 端可能
+/// 因机器睡眠醒来 / 时钟漂移 / 服务端轮换在到期前就拒收 access_token。
+/// 此时单纯刷一次 token 就能恢复，不应让用户重新登录整个 OAuth 流程。
+pub(super) async fn with_token_retry<F, Fut, T>(
+    pool: &DbPool,
+    token: &mut TokenInfo,
+    mut op: F,
+) -> Result<T>
+where
+    F: FnMut(String) -> Fut,
+    Fut: Future<Output = Result<T>>,
+{
+    match op(token.access_token.clone()).await {
+        Err(Error::DriveHttp { status: 401, stage, body }) => {
+            log::info!("drive {stage} 返回 401，强制刷新 access_token 后重试");
+            log::debug!("drive 401 body: {body}");
+            *token = auth::force_refresh(pool).await?;
+            op(token.access_token.clone()).await
+        }
+        other => other,
+    }
+}
 
 const PUSH_INTERVAL_SECS: u64 = 30;
 const PULL_INTERVAL_SECS: i64 = 60;
@@ -115,7 +165,11 @@ async fn run_loop(inner: Arc<Inner>) {
     loop {
         if let Err(e) = push::flush_push(&inner).await {
             log::warn!("sync push 失败: {e}");
-            inner.status.write().await.last_error = Some(e.to_string());
+            // SyncIncomplete 表示 push 内部已经把分类好的字符串写进 status.last_error 了；
+            // 这里如果用 format_sync_error 再覆盖一次，会拿不到 inner cause，全归 [TRANSIENT]。
+            if !matches!(e, Error::SyncIncomplete(_)) {
+                inner.status.write().await.last_error = Some(format_sync_error(&e));
+            }
         }
 
         let now = Utc::now();
@@ -126,7 +180,9 @@ async fn run_loop(inner: Arc<Inner>) {
         if should_pull {
             if let Err(e) = pull::flush_pull(&inner).await {
                 log::warn!("sync pull 失败: {e}");
-                inner.status.write().await.last_error = Some(e.to_string());
+                if !matches!(e, Error::SyncIncomplete(_)) {
+                    inner.status.write().await.last_error = Some(format_sync_error(&e));
+                }
             }
             last_pull = Some(now);
         }

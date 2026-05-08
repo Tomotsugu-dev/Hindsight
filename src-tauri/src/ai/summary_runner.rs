@@ -28,7 +28,8 @@ use crate::ai::prompt::{
 };
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
-    build_step2, describe_images, summarize_segment, upsert_skipped_segment, SUMMARY_IMAGE_MAX_DIM,
+    build_step2, describe_images, extract_time_label, summarize_segment, upsert_skipped_segment,
+    SUMMARY_IMAGE_MAX_DIM,
 };
 use crate::ai::summary_overrides::AiOverrides;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
@@ -76,6 +77,11 @@ impl DaySummaryRunner {
         device: DeviceFilter,
         force_refresh: bool,
         overrides: Option<AiOverrides>,
+        // step1_only：调试 tab 「仅生成图片描述」触发，跳过 step 2（段总结）。
+        // step2_only：调试 tab 「仅生成段总结」触发，跳过 step 1（直接读 DB 中已存的图描述）。
+        // 互斥；都为 true 时 step1_only 优先（前端不应同时传，但兜底防御）。daily 路径都 false。
+        step1_only: bool,
+        step2_only: bool,
     ) -> Result<()> {
         // needs_restart：debug 路径（AiOverrides 显式带了 engine 覆盖）下才触发
         // 「跑前 stop+start with overrides，跑后再 stop」；daily 路径靠 settings.ai
@@ -93,6 +99,8 @@ impl DaySummaryRunner {
                 force_refresh,
                 overrides,
                 needs_restart,
+                step1_only,
+                step2_only,
             )
             .await;
 
@@ -113,6 +121,8 @@ impl DaySummaryRunner {
         force_refresh: bool,
         overrides: Option<AiOverrides>,
         needs_restart: bool,
+        step1_only: bool,
+        step2_only: bool,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
         // overrides 只对本次调用生效，不写回 settings；settings 自己永远是用户在
@@ -139,7 +149,13 @@ impl DaySummaryRunner {
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
         if force_refresh {
-            ai_summaries::clear_day(&self.pool, source, &date_str).await?;
+            // step2_only：只能清段总结，逐图描述要保留给 step 2 用——否则 force_refresh
+            // 一刀切把 step 1 数据也删了，run_one_segment_step2_only 拿到空数据全段 skipped。
+            if step2_only {
+                ai_summaries::clear_day_summaries_only(&self.pool, source, &date_str).await?;
+            } else {
+                ai_summaries::clear_day(&self.pool, source, &date_str).await?;
+            }
         }
 
         let total_segments = ai.segments.len() as u32;
@@ -200,6 +216,8 @@ impl DaySummaryRunner {
                 max_images,
                 device.clone(),
                 parallel,
+                step1_only,
+                step2_only,
             )
             .await?;
         }
@@ -239,7 +257,30 @@ impl DaySummaryRunner {
         max_images: usize,
         device: DeviceFilter,
         parallel: usize,
+        // step1_only=true 时跳过段总结那一步——前端调试 tab「仅生成图片描述」按钮触发，
+        // 用户单独看 step 1 输出效果时不浪费时间在 step 2 上。
+        step1_only: bool,
+        // step2_only=true 时跳过逐图描述：从 DB 读出已存的 image descriptions 直接喂给 step 2。
+        // 前端调试 tab「仅生成段总结」按钮触发；该段没存 step 1 数据时按 skipped 兜底。
+        step2_only: bool,
     ) -> Result<()> {
+        if step2_only {
+            return self
+                .run_one_segment_step2_only(
+                    source,
+                    step2,
+                    ai,
+                    date_str,
+                    idx,
+                    total_segments,
+                    label,
+                    start_hour,
+                    end_hour,
+                    device,
+                )
+                .await;
+        }
+
         // step 1 落库的 model 永远是本地 vision 文件名；step 2 落库的 model
         // 由 step2.model_label() 给出（本地 = active_main，外部 = 用户填的 ID）
         let model = ai.active_main.clone();
@@ -360,6 +401,24 @@ impl DaySummaryRunner {
             return Ok(());
         }
 
+        // step1_only：跳过 step 2 的段总结，直接 emit 一条 segment_done 让前端结束 loading。
+        // status 用 "ok"——逐图描述都已落库，对前端来说本段已完成。content 留空（没段总结正文）。
+        // 不写 ai_summaries 行：避免后续 daily 跑用户期待"重新跑段总结"时被旧空 row 挡住。
+        if step1_only {
+            let mut p_done = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "segment_done",
+                total_segments,
+            );
+            p_done.segment_idx = Some(idx);
+            p_done.images_total = Some(picked.len() as u32);
+            p_done.content = Some(String::new());
+            p_done.status = Some("ok");
+            self.emit(p_done);
+            return Ok(());
+        }
+
         // ────── step 2：段总结（纯文本调用，不再传图） ──────
         let (row, status_str) = summarize_segment(
             &self.pool,
@@ -386,6 +445,129 @@ impl DaySummaryRunner {
         );
         p_done.segment_idx = Some(idx);
         p_done.images_total = Some(picked.len() as u32);
+        p_done.content = Some(row.content.clone());
+        p_done.status = Some(status_str);
+        p_done.message = row.error.clone();
+        self.emit(p_done);
+        Ok(())
+    }
+
+    /// step2-only 路径：跳过逐图描述，从 DB 读出已存的 image descriptions 直接喂 step 2。
+    /// 没存数据 → 按 skipped 兜底（跟 step1 路径下"没截图"语义对齐）。
+    /// 用户调试段总结 prompt 时反复调，避免每次都重跑昂贵的 vision 描述。
+    #[allow(clippy::too_many_arguments)]
+    async fn run_one_segment_step2_only(
+        &self,
+        source: &str,
+        step2: &crate::ai::llm::Step2Chat,
+        ai: &AiConfig,
+        date_str: &str,
+        idx: u32,
+        total_segments: u32,
+        label: String,
+        start_hour: u8,
+        end_hour: u8,
+        device: DeviceFilter,
+    ) -> Result<()> {
+        let model = ai.active_main.clone();
+        let step2_model = step2.model_label().to_string();
+
+        let stored =
+            ai_summaries::get_segment_image_descriptions(&self.pool, source, date_str, idx)
+                .await?;
+
+        let mut p_started = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "segment_started",
+            total_segments,
+        );
+        p_started.segment_idx = Some(idx);
+        p_started.images_total = Some(stored.len() as u32);
+        self.emit(p_started);
+
+        if stored.is_empty() {
+            upsert_skipped_segment(
+                &self.pool,
+                source,
+                date_str,
+                idx,
+                &label,
+                start_hour,
+                end_hour,
+                model,
+            )
+            .await?;
+            let mut p_done = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "segment_done",
+                total_segments,
+            );
+            p_done.segment_idx = Some(idx);
+            p_done.images_total = Some(0);
+            p_done.content = Some(String::new());
+            p_done.status = Some("skipped_no_screenshots");
+            self.emit(p_done);
+            return Ok(());
+        }
+
+        if self.cancel.load(Ordering::Relaxed) {
+            let mut p_cancel = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "cancelled",
+                total_segments,
+            );
+            p_cancel.segment_idx = Some(idx);
+            self.emit(p_cancel);
+            return Ok(());
+        }
+
+        // ImageDescriptionRow → (time_label, description)：跟 step1 路径喂给 summarize_segment
+        // 的格式对齐（time_label 从截图文件名解析 HH:MM）
+        let descriptions: Vec<(String, String)> = stored
+            .into_iter()
+            .map(|r| (extract_time_label(&r.screenshot_path), r.description))
+            .collect();
+
+        let top_apps = list_segment_top_apps(
+            &self.pool,
+            date_str,
+            start_hour,
+            end_hour,
+            &ai.excluded_categories,
+            device,
+            8,
+        )
+        .await
+        .unwrap_or_default();
+
+        let (row, status_str) = summarize_segment(
+            &self.pool,
+            step2,
+            &self.supervisor,
+            ai,
+            source,
+            date_str,
+            &label,
+            start_hour,
+            end_hour,
+            idx,
+            &descriptions,
+            &top_apps,
+            step2_model,
+        )
+        .await?;
+
+        let mut p_done = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "segment_done",
+            total_segments,
+        );
+        p_done.segment_idx = Some(idx);
+        p_done.images_total = Some(descriptions.len() as u32);
         p_done.content = Some(row.content.clone());
         p_done.status = Some(status_str);
         p_done.message = row.error.clone();
@@ -634,6 +816,7 @@ impl DaySummaryRunner {
         let step2 = build_step2(&ai, &step1)?;
         let max_images = ai.max_images_per_segment as usize;
 
+        // 单段重试是「重新生成段总结」语义，永远走完整 step1+step2 流程
         self.run_one_segment(
             source,
             &step1,
@@ -648,6 +831,8 @@ impl DaySummaryRunner {
             max_images,
             device,
             parallel,
+            false,
+            false,
         )
         .await
     }

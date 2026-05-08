@@ -631,7 +631,8 @@
       "restartHint": "Signed in to a new account. Restart the app to switch to that account's local database."
     },
     "errors": {
-      "credExpired": "Credentials expired. Please sign in again."
+      "credExpired": "Credentials expired. Please sign in again.",
+      "transient": "Sync hit a transient error; retrying automatically…"
     },
     "setup": {
       "header": "OAuth credential setup",
@@ -690,7 +691,8 @@
       "week": "Weekly",
       "month": "Monthly",
       "chat": "Chat",
-      "debug": "Debug"
+      "debug": "Debug",
+      "debugSettings": "Debug Settings"
     },
     "placeholder": {
       "hint": "Feature in development."
@@ -879,12 +881,33 @@
       },
       "actions": {
         "stop": "Stop",
-        "start": "Run",
+        "start": "Regenerate",
+        "startInfo": "Regenerate image descriptions & segment summaries for this day.",
+        "startInfoAria": "Regenerate scope info",
+        "describeOnly": "Generate descriptions only",
+        "describeOnlyInfo": "Step 1 only: per-image vision descriptions for today, segment summaries are skipped.",
+        "describeOnlyAria": "Generate image descriptions only (skip segment summaries)",
+        "summarizeOnly": "Generate summaries only",
+        "summarizeOnlyInfo": "Step 2 only: rebuild segment summaries from existing image descriptions. Segments with no step-1 data are marked skipped.",
+        "summarizeOnlyAria": "Generate segment summaries only (skip image descriptions)",
+        "clearDescriptions": "Delete",
+        "clearDescriptionsTooltip": "Clear all image descriptions for this day (segment summaries kept, cannot be undone).",
+        "clearDescriptionsConfirm": "Delete all image descriptions for {{date}}? Segment summaries will be kept. This cannot be undone.",
+        "clearSummaries": "Delete",
+        "clearSummariesTooltip": "Clear all segment summaries for this day (image descriptions kept, cannot be undone).",
+        "clearSummariesConfirm": "Delete all segment summaries for {{date}}? Image descriptions will be kept. This cannot be undone.",
+        "exportDescriptionsMd": "Export Markdown",
+        "exportDescriptionsMdTooltip": "Export all image descriptions for this day as a Markdown file.",
+        "exportDescriptionsMdEmptyTooltip": "No image descriptions to export yet.",
+        "exportSummariesMd": "Export Markdown",
+        "exportSummariesMdTooltip": "Export all segment summaries for this day as a Markdown file.",
+        "exportSummariesMdEmptyTooltip": "No segment summaries to export yet.",
         "startTooltipPending": "{{type}} debug pending backend implementation.",
         "startTooltipReady": "Debug mode: re-runs every segment for the day (clears existing results), per-image descriptions stream live.",
         "startTooltipNoModel": "Pick a model in AI Settings → Models first.",
-        "delete": "Delete",
-        "deleteTooltip": "Clear ai_summaries + ai_image_descriptions for this day (cannot be undone).",
+        "delete": "Delete all",
+        "deleteTooltip": "Clear all image descriptions + segment summaries for this day (cannot be undone).",
+        "deleteInfoAria": "Delete scope info",
         "deleteConfirm": "Delete all AI artifacts for {{date}}? Segment summaries and per-image descriptions will be cleared. This cannot be undone.",
         "exportJson": "Export JSON",
         "exportTooltip": "Export all debug data on this page as a JSON file."
@@ -930,6 +953,16 @@
         "description": "step 2 — used when aggregating per-image descriptions + app stats into a segment summary. Changes apply immediately (debug window only).",
         "label": "Prompt"
       },
+      "cloudApi": {
+        "title": "Cloud API",
+        "description": "Run segment summaries (step 2) through a cloud model for this run. Endpoint / model / API key are inherited from AI Settings; this toggle only switches the path.",
+        "enableLabel": "Enable cloud summaries",
+        "enableHint": "Turn off to use local step 2. Configure cloud credentials in AI Settings → Cloud API."
+      },
+      "subTabs": {
+        "main": "Debug view",
+        "settings": "Debug settings"
+      },
       "perImage": {
         "title": "Per-image descriptions",
         "descriptionBase": "step 1 output — each screenshot gets an independent description from the vision LLM",
@@ -939,6 +972,7 @@
         "segFallback": "Seg {{idx}}",
         "imageNoSuffix": " · #{{n}}",
         "chipTitle": "Segment idx={{seg}} · image idx={{img}} (post-deduplicate order)",
+        "captureTimeTooltip": "Captured at {{time}}",
         "pathTooltip": "Click to preview original: {{path}}",
         "statTooltip": "latency · prompt / completion tokens",
         "retry": "Rerun",

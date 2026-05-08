@@ -16,6 +16,17 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Section 级别的主操作按钮位（如「仅生成」），margin-left:auto 推到 header 最右、
+   跟标题基线大致对齐。Section 的 .header 是 align-items: center，所以按钮自动垂直居中。 */
+.headerAction {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .titleRow {

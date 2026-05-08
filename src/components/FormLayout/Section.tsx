@@ -15,6 +15,9 @@ interface SectionProps {
   /** 默认收起、hover / 内部 focus 时才展开。给"次要 / 不常改"的 Section 用，
    *  减少滚动条长度。展开走 grid-rows 0fr↔1fr 动画。 */
   collapsible?: boolean;
+  /** Section 标题行最右侧的 action slot——给 Section 级别的"主操作"按钮用
+   *  （例如「仅生成」、「全部清空」）。CSS 把它推到 header 行最右、跟标题对齐。 */
+  headerAction?: ReactNode;
   children: ReactNode;
 }
 
@@ -25,6 +28,7 @@ export function Section({
   tone = "primary",
   info,
   collapsible = false,
+  headerAction,
   children,
 }: SectionProps) {
   return (
@@ -61,6 +65,9 @@ export function Section({
             <p className={styles.description}>{description}</p>
           ) : null}
         </div>
+        {headerAction ? (
+          <div className={styles.headerAction}>{headerAction}</div>
+        ) : null}
       </header>
       {/* collapsible 时外层 cardWrap 走 grid-rows trick；非 collapsible 直接渲 card */}
       {collapsible ? (

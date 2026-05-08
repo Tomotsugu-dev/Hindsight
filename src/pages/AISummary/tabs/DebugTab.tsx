@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Clock,
   Download,
-  Filter,
   Image as ImageIcon,
   Info,
   Loader2,
@@ -18,7 +17,6 @@ import {
   Newspaper,
   Play,
   RotateCcw,
-  Server,
   Square,
   Trash2,
 } from "lucide-react";
@@ -33,12 +31,12 @@ import {
   type SummaryProgress,
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
+import { useDebugState } from "../DebugStateContext";
 import { resolveSegmentChip } from "../../../utils/segmentColor";
+import { extractScreenshotTime } from "../../../utils/screenshotTime";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
-import { CategoryChipMultiSelect } from "../../../components/FormControls/CategoryChipMultiSelect";
 import { Row } from "../../../components/FormLayout/Row";
 import { Section } from "../../../components/FormLayout/Section";
-import { Slider } from "../../../components/FormControls/Slider";
 import {
   DEFAULT_IMAGE_DESCRIBE_PROMPTS,
   DEFAULT_SYSTEM_PROMPTS,
@@ -66,8 +64,8 @@ function buildScopeOptions(t: TFunction): Array<{ value: DebugScope; label: stri
 
 /** 单段最大图片数选项。"max" 映射到 sanitize 上限 100000，"无限制"等于把段内
  *  所有截图全送给 LLM——撑爆 ctx 时 LLM 会返 400 被段标 error，用户回头再调小。 */
-type MaxImagesKey = "15" | "30" | "max";
-function buildMaxImagesOptions(t: TFunction): Array<{ value: MaxImagesKey; label: string }> {
+export type MaxImagesKey = "15" | "30" | "max";
+export function buildMaxImagesOptions(t: TFunction): Array<{ value: MaxImagesKey; label: string }> {
   return [
     { value: "15", label: t("aiSummary.debug.pickerOptions.maxImages15") },
     { value: "30", label: t("aiSummary.debug.pickerOptions.maxImages30") },
@@ -75,42 +73,42 @@ function buildMaxImagesOptions(t: TFunction): Array<{ value: MaxImagesKey; label
   ];
 }
 
-function maxImagesToOption(n: number): MaxImagesKey {
+export function maxImagesToOption(n: number): MaxImagesKey {
   // 1000 起算"无限制"——这种大值正常路径不会出现，只有用户主动选 max 才会写入
   if (n >= 1000) return "max";
   if (n >= 30) return "30";
   return "15";
 }
-function optionToMaxImages(v: MaxImagesKey): number {
+export function optionToMaxImages(v: MaxImagesKey): number {
   if (v === "max") return 100_000;
   return parseInt(v, 10);
 }
 
 /** llama-server `--batch-size` / `--ubatch-size`。"default" = 不传，走 llama.cpp 默认 512。
  *  改值会触发引擎 stop+start 重启；调试跑完无条件 stop，下次正常日报跑回到默认。 */
-type BatchKey = "default" | "1024" | "2048" | "4096";
+export type BatchKey = "default" | "1024" | "2048" | "4096";
 // Batch 选项纯英文 + 数字，所有语言都保持一致，无需走 t()
-const BATCH_OPTIONS: Array<{ value: BatchKey; label: string }> = [
+export const BATCH_OPTIONS: Array<{ value: BatchKey; label: string }> = [
   { value: "default", label: "Batch 512" },
   { value: "1024", label: "Batch 1024" },
   { value: "2048", label: "Batch 2048" },
   { value: "4096", label: "Batch 4096" },
 ];
-function batchToOption(n: number | null): BatchKey {
+export function batchToOption(n: number | null): BatchKey {
   if (n === 1024) return "1024";
   if (n === 2048) return "2048";
   if (n === 4096) return "4096";
   return "default";
 }
 /** "default" → null（让 overrides.batchSize 留空，后端走默认）；其它 → 数值 */
-function optionToBatch(v: BatchKey): number | null {
+export function optionToBatch(v: BatchKey): number | null {
   return v === "default" ? null : parseInt(v, 10);
 }
 
 /** 并发槽位数 = llama-server `-np` + 后端 step 1 image describe 并发数。
  *  两边一致才有效。"1" = 串行（历史行为）；> 1 = 并发同时跑 N 张图描述。 */
-type SlotsKey = "1" | "2" | "4" | "8";
-function buildSlotsOptions(t: TFunction): Array<{ value: SlotsKey; label: string }> {
+export type SlotsKey = "1" | "2" | "4" | "8";
+export function buildSlotsOptions(t: TFunction): Array<{ value: SlotsKey; label: string }> {
   return [
     { value: "1", label: t("aiSummary.debug.pickerOptions.slots1") },
     { value: "2", label: t("aiSummary.debug.pickerOptions.slots2") },
@@ -118,21 +116,21 @@ function buildSlotsOptions(t: TFunction): Array<{ value: SlotsKey; label: string
     { value: "8", label: t("aiSummary.debug.pickerOptions.slots8") },
   ];
 }
-function slotsToOption(n: number): SlotsKey {
+export function slotsToOption(n: number): SlotsKey {
   if (n >= 8) return "8";
   if (n >= 4) return "4";
   if (n >= 2) return "2";
   return "1";
 }
-function optionToSlots(v: SlotsKey): number {
+export function optionToSlots(v: SlotsKey): number {
   return parseInt(v, 10);
 }
 
 /** 每 slot 的 ctx 上限（单位 token）。后端 `--ctx-size = ctxSize × slots`。
  *  启动时按总量一次性吃 KV cache（~30KB / token）；选大了 5090 也只是几 GB，
  *  CPU 用户保持「默认 (8K)」就行。 */
-type CtxKey = "default" | "16384" | "32768" | "65536";
-function buildCtxOptions(t: TFunction): Array<{ value: CtxKey; label: string }> {
+export type CtxKey = "default" | "16384" | "32768" | "65536";
+export function buildCtxOptions(t: TFunction): Array<{ value: CtxKey; label: string }> {
   return [
     { value: "default", label: t("aiSummary.debug.pickerOptions.ctxDefault") },
     { value: "16384", label: t("aiSummary.debug.pickerOptions.ctx16k") },
@@ -140,14 +138,14 @@ function buildCtxOptions(t: TFunction): Array<{ value: CtxKey; label: string }> 
     { value: "65536", label: t("aiSummary.debug.pickerOptions.ctx64k") },
   ];
 }
-function ctxToOption(n: number | null): CtxKey {
+export function ctxToOption(n: number | null): CtxKey {
   if (n === 16384) return "16384";
   if (n === 32768) return "32768";
   if (n === 65536) return "65536";
   return "default";
 }
 /** "default" → null（让 overrides.ctxSize 留空，后端走 8K 默认）；其它 → 数值 */
-function optionToCtx(v: CtxKey): number | null {
+export function optionToCtx(v: CtxKey): number | null {
   return v === "default" ? null : parseInt(v, 10);
 }
 
@@ -301,8 +299,6 @@ export default function DebugTab() {
   // Picker 选项随语言变化而重建——i18next 切语言会让 t 引用变更，触发 useMemo 重算
   const SCOPE_OPTIONS = useMemo(() => buildScopeOptions(t), [t]);
   const MAX_IMAGES_OPTIONS = useMemo(() => buildMaxImagesOptions(t), [t]);
-  const SLOTS_OPTIONS = useMemo(() => buildSlotsOptions(t), [t]);
-  const CTX_OPTIONS = useMemo(() => buildCtxOptions(t), [t]);
 
   // 工具：把 scope 翻译成"日报/周报/月报"对应文案，用于错误信息和占位
   const scopeName = (s: DebugScope) => t(`aiSummary.debug.scope.${s}`);
@@ -319,45 +315,22 @@ export default function DebugTab() {
   const [enginePhase, setEnginePhase] = useState<string | null>(null);
   const [topError, setTopError] = useState<string | null>(null);
 
-  /** 调试 tab 局部参数覆盖：初始从 settings.ai 拷贝，之后只在本 tab 改、不写 settings。
-   *  跑总结时打包成 AiOverrides 传给 generate_day_summary，命令本次跑生效，跑完不留痕。 */
-  const [debugMaxImages, setDebugMaxImages] = useState(30);
-  const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
-  const [debugHashThreshold, setDebugHashThreshold] = useState(5);
-  const [debugHashWindow, setDebugHashWindow] = useState(5);
-  /** 启动级 override：null = 不传给后端（走 llama.cpp 默认）；改值会触发引擎重启。 */
-  const [debugBatchSize, setDebugBatchSize] = useState<number | null>(null);
-  const [debugParallelSlots, setDebugParallelSlots] = useState(1);
-  const [debugCtxSize, setDebugCtxSize] = useState<number | null>(null);
-  /** 调试 tab 局部 prompt 覆盖：默认值 = 当前 settings 的覆盖（非空）或内置默认。 */
-  const [debugSysPrompt, setDebugSysPrompt] = useState("");
-  const [debugImagePrompt, setDebugImagePrompt] = useState("");
-
-  // settings 加载好后，把 ai 的几个字段拷成本地初值（只拷一次，之后不再跟 settings 同步）
-  const initedRef = useRef(false);
-  useEffect(() => {
-    if (initedRef.current || !settings) return;
-    initedRef.current = true;
-    // 通过 picker 选项 round-trip 把 state snap 到 {15, 30, 100000} 之一——
-    // 否则 settings.ai.maxImagesPerSegment 是 100 时 picker 会显示「30 张/段」
-    // 但下发还是 100，用户感觉「我选 30 没生效」
-    setDebugMaxImages(
-      optionToMaxImages(maxImagesToOption(settings.ai.maxImagesPerSegment)),
-    );
-    setDebugExcluded(settings.ai.excludedCategories);
-    setDebugHashThreshold(settings.ai.hashThreshold);
-    setDebugHashWindow(settings.ai.hashWindowMinutes);
-    // prompt：优先用 settings 覆盖，否则用内置默认；保证 textarea 一打开就有真实文本
-    const lang = settings.ai.promptLanguage;
-    const sysOverride = settings.ai.promptOverrides[
-      lang === "en" ? "systemEn" : lang === "ja" ? "systemJa" : "systemZh"
-    ];
-    const imgOverride = settings.ai.imageDescribeOverrides?.[
-      lang === "en" ? "systemEn" : lang === "ja" ? "systemJa" : "systemZh"
-    ] ?? "";
-    setDebugSysPrompt(sysOverride.trim() || DEFAULT_SYSTEM_PROMPTS[lang]);
-    setDebugImagePrompt(imgOverride.trim() || DEFAULT_IMAGE_DESCRIBE_PROMPTS[lang]);
-  }, [settings]);
+  // 调试参数 state 来自 Context，跟 DebugSettingsTab 共享同一份。
+  const {
+    debugMaxImages,
+    setDebugMaxImages,
+    debugExcluded,
+    debugHashThreshold,
+    debugHashWindow,
+    debugBatchSize,
+    debugParallelSlots,
+    debugCtxSize,
+    debugSysPrompt,
+    setDebugSysPrompt,
+    debugImagePrompt,
+    setDebugImagePrompt,
+    debugExternalEnabled,
+  } = useDebugState();
 
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [descs, setDescs] = useState<ImageDescriptionRow[]>([]);
@@ -533,7 +506,13 @@ export default function DebugTab() {
   tRef.current = t;
 
 
-  const onStart = async () => {
+  /** 跑 debug 总结。
+   *  - mode="full"（默认）：完整 step1+step2
+   *  - mode="step1"：只逐图描述（「逐图描述」Section header 按钮触发）
+   *  - mode="step2"：只段总结（「段总结结果」Section header 按钮触发，从 DB 读已存图描述） */
+  const onStart = async (mode: "full" | "step1" | "step2" = "full") => {
+    const step1Only = mode === "step1";
+    const step2Only = mode === "step2";
     if (scope !== "daily") {
       setTopError(t("aiSummary.debug.errors.scopePending", { type: scopeName(scope) }));
       return;
@@ -566,8 +545,12 @@ export default function DebugTab() {
         ...(debugBatchSize != null ? { batchSize: debugBatchSize } : {}),
         ...(debugParallelSlots > 1 ? { parallelSlots: debugParallelSlots } : {}),
         ...(debugCtxSize != null ? { ctxSize: debugCtxSize } : {}),
+        // 跟 settings 全局值不同才传——一致的话留 undefined 让后端走 settings.ai.externalEnabled
+        ...(debugExternalEnabled !== (settings?.ai.externalEnabled ?? false)
+          ? { externalEnabled: debugExternalEnabled }
+          : {}),
       };
-      await api.generateDaySummary(date, true, null, overrides, "debug");
+      await api.generateDaySummary(date, true, null, overrides, "debug", step1Only, step2Only);
     } catch (e) {
       const msg = typeof e === "string" ? e : String(e);
       setTopError(msg);
@@ -583,26 +566,104 @@ export default function DebugTab() {
     }
   };
 
-  const onExport = () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      date,
-      activeModel: activeMain,
-      engine,
-      segments,
-      summaries,
-      imageDescriptions: descs,
-      logs,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
+  /** 把 markdown 文本以 .md 文件下载——浏览器原生 download，落到系统 Downloads 目录。 */
+  const downloadMarkdown = (md: string, filename: string) => {
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `hindsight-debug-${date}.json`;
+    a.download = filename;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    URL.revokeObjectURL(url);
+  };
+
+  /** 导出当天所有逐图描述：每段一个 H2，段内每张图按时间标签 + 文件名 + 描述正文。 */
+  const onExportDescriptionsMd = () => {
+    if (descs.length === 0) return;
+    // 按 segmentIdx → imageIndex 分组排序
+    const bySeg = new Map<number, ImageDescriptionRow[]>();
+    descs.forEach((d) => {
+      const arr = bySeg.get(d.segmentIdx) ?? [];
+      arr.push(d);
+      bySeg.set(d.segmentIdx, arr);
+    });
+    bySeg.forEach((arr) => arr.sort((a, b) => a.imageIndex - b.imageIndex));
+
+    const lines: string[] = ["---"];
+    lines.push(`title: Hindsight image descriptions · ${date}`);
+    lines.push(`date: ${date}`);
+    lines.push(`source: debug`);
+    lines.push(`count: ${descs.length}`);
+    lines.push("---", "");
+    lines.push(`# Image descriptions · ${date}`, "");
+
+    const sortedSegs = Array.from(bySeg.keys()).sort((a, b) => a - b);
+    sortedSegs.forEach((segIdx, i) => {
+      const seg = segments[segIdx];
+      const label =
+        seg?.label ?? t("aiSummary.debug.perImage.segFallback", { idx: segIdx });
+      const range = seg
+        ? ` · ${String(seg.startHour).padStart(2, "0")}:00 – ${String(seg.endHour).padStart(2, "0")}:00`
+        : "";
+      lines.push(`## ${label}${range}`, "");
+      const items = bySeg.get(segIdx)!;
+      items.forEach((row) => {
+        const time = extractScreenshotTime(row.screenshotPath);
+        const file = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
+        lines.push(`### ${time} · \`${file}\``, "");
+        lines.push(row.description.trim() || "(empty)", "");
+      });
+      if (i < sortedSegs.length - 1) lines.push("---", "");
+    });
+
+    downloadMarkdown(lines.join("\n"), `hindsight-debug-descriptions-${date}.md`);
+  };
+
+  /** 导出当天所有段总结：跟 DailyTab 的导出格式对齐——frontmatter + 每段 H2 + 正文。 */
+  const onExportSummariesMd = () => {
+    if (summaries.length === 0) return;
+    const sorted = [...summaries].sort((a, b) => a.segmentIdx - b.segmentIdx);
+    let okCount = 0,
+      skipCount = 0,
+      errCount = 0;
+    let modelName = "";
+    let latestGeneratedAt = "";
+    sorted.forEach((row) => {
+      if (row.status === "ok") okCount += 1;
+      else if (row.status === "skipped_no_screenshots") skipCount += 1;
+      else errCount += 1;
+      if (row.model) modelName = row.model;
+      if (row.generatedAt && (!latestGeneratedAt || row.generatedAt > latestGeneratedAt)) {
+        latestGeneratedAt = row.generatedAt;
+      }
+    });
+
+    const lines: string[] = ["---"];
+    lines.push(`title: Hindsight segment summaries · ${date}`);
+    lines.push(`date: ${date}`);
+    lines.push(`source: debug`);
+    if (latestGeneratedAt) lines.push(`generated_at: ${latestGeneratedAt}`);
+    if (modelName) lines.push(`model: ${modelName}`);
+    lines.push(`segments: ${sorted.length}`);
+    lines.push(`status: ${okCount} ok / ${skipCount} skipped / ${errCount} error`);
+    lines.push("---", "");
+    lines.push(`# Segment summaries · ${date}`, "");
+
+    sorted.forEach((row, i) => {
+      const range = `${String(row.startHour).padStart(2, "0")}:00 – ${String(row.endHour).padStart(2, "0")}:00`;
+      lines.push(`## ${row.label} · ${range}`, "");
+      if (row.status === "ok") {
+        lines.push(row.content?.trim() || "(empty)", "");
+      } else if (row.status === "skipped_no_screenshots") {
+        lines.push("_skipped (no screenshots in this segment)_", "");
+      } else {
+        lines.push("_error_", "");
+        if (row.error) lines.push(`> ${row.error.replace(/\n/g, "\n> ")}`, "");
+      }
+      if (i < sorted.length - 1) lines.push("---", "");
+    });
+
+    downloadMarkdown(lines.join("\n"), `hindsight-debug-summaries-${date}.md`);
   };
 
   // 周报 / 月报后端没实现，描述列表和总结都按 scope 切：非 daily 时清空显示
@@ -611,7 +672,8 @@ export default function DebugTab() {
 
   return (
     <div className={styles.wrap}>
-      {/* —— 顶部控件行：报告类型 → 日期 → 开始 → 导出 —— */}
+      {/* —— 顶部主行：报告范围 → 日期 → (右端) 重新生成 ——
+          按"主操作"原则放在最显眼的第一行；参数 / 删除 / 导出走下方次行避免抢视线。 */}
       <div className={styles.header}>
         {/* 调试范围下拉：日报 / 周报 / 月报。样式与 Today 页 DevicePicker 一致。 */}
         <SimplePicker<DebugScope>
@@ -675,8 +737,8 @@ export default function DebugTab() {
           </button>
         </div>
 
-        {/* 图/段：3 档下拉，绑调试本地 state（不写 settings）。
-            "无限制" = 100000；跑总结时打包进 overrides 传给后端，本次生效不留痕 */}
+        {/* 图/段下拉：跟 scope / 日期导航在同行，作为日报参数的一部分。
+            "无限制" = 100000；跑总结时打包进 overrides 传给后端，本次生效不留痕。 */}
         <span className={styles.pickerWithInfo}>
           <SimplePicker<MaxImagesKey>
             value={maxImagesToOption(debugMaxImages)}
@@ -694,6 +756,8 @@ export default function DebugTab() {
           </span>
         </span>
 
+        {/* start / stop 放主行最右端：CSS margin-left:auto 推到行尾，"主操作"按钮放第一行
+            最显眼位置。按钮文案缩短为"重新生成"避免在 960px 窗口里换行，旁边 Info icon hover 看完整说明。 */}
         {generating ? (
           <button
             type="button"
@@ -704,156 +768,38 @@ export default function DebugTab() {
             {t("aiSummary.debug.actions.stop")}
           </button>
         ) : (
-          <button
-            type="button"
-            className={styles.startBtn}
-            onClick={() => void onStart()}
-            disabled={!hasModel || scope !== "daily"}
-            title={
-              scope !== "daily"
-                ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
-                : hasModel
-                  ? t("aiSummary.debug.actions.startTooltipReady")
-                  : t("aiSummary.debug.actions.startTooltipNoModel")
-            }
-          >
-            <Play size={14} strokeWidth={2} />
-            {t("aiSummary.debug.actions.start")}
-          </button>
+          <>
+            <button
+              type="button"
+              className={styles.startBtn}
+              onClick={() => void onStart()}
+              disabled={!hasModel || scope !== "daily"}
+              title={
+                scope !== "daily"
+                  ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
+                  : hasModel
+                    ? t("aiSummary.debug.actions.startTooltipReady")
+                    : t("aiSummary.debug.actions.startTooltipNoModel")
+              }
+            >
+              <Play size={14} strokeWidth={2} />
+              {t("aiSummary.debug.actions.start")}
+            </button>
+            <span
+              className={styles.infoIconWrap}
+              title={t("aiSummary.debug.actions.startInfo")}
+              tabIndex={0}
+              aria-label={t("aiSummary.debug.actions.startInfoAria")}
+            >
+              <Info size={13} strokeWidth={1.85} />
+            </span>
+          </>
         )}
-
-        <button
-          type="button"
-          className={styles.deleteBtn}
-          onClick={async () => {
-            if (generating) return;
-            if (
-              !confirm(
-                t("aiSummary.debug.actions.deleteConfirm", { date }),
-              )
-            )
-              return;
-            try {
-              await api.clearDaySummary(date, "debug");
-              setDescs([]);
-              setSummaries([]);
-              setLogs([]);
-            } catch (e) {
-              setTopError(typeof e === "string" ? e : String(e));
-            }
-          }}
-          disabled={
-            generating || (descs.length === 0 && summaries.length === 0)
-          }
-          title={t("aiSummary.debug.actions.deleteTooltip")}
-        >
-          <Trash2 size={13} strokeWidth={2} />
-          {t("aiSummary.debug.actions.delete")}
-        </button>
-
-        <button
-          type="button"
-          className={styles.exportBtn}
-          onClick={onExport}
-          disabled={
-            descs.length === 0 && summaries.length === 0 && logs.length === 0
-          }
-          title={t("aiSummary.debug.actions.exportTooltip")}
-        >
-          <Download size={13} strokeWidth={2} />
-          {t("aiSummary.debug.actions.exportJson")}
-        </button>
       </div>
+
 
       {/* —— 引擎状态条 —— */}
       <EngineBar engine={engine} />
-
-      {/* —— 调试参数：完全复用 AI 设置的 Section + Row 样式，
-          但绑定本地 state（不写全局 settings），跑总结时打包成 overrides 传后端 —— */}
-      <Section
-        title={t("aiSummary.debug.filter.title")}
-        icon={Filter}
-        description={t("aiSummary.debug.filter.description")}
-      >
-        <Row
-          label={t("aiSummary.debug.filter.categoriesLabel")}
-          labelHint={t("aiSummary.debug.filter.categoriesHint")}
-          block
-        >
-          <CategoryChipMultiSelect
-            selectedIds={debugExcluded}
-            onChange={setDebugExcluded}
-          />
-        </Row>
-      </Section>
-
-      <Section
-        title={t("aiSummary.debug.frame.title")}
-        icon={ImageIcon}
-        description={t("aiSummary.debug.frame.description")}
-      >
-        <Row
-          label={t("aiSummary.debug.frame.hashThresholdLabel")}
-          labelHint={t("aiSummary.debug.frame.hashThresholdHint")}
-        >
-          <Slider
-            value={debugHashThreshold}
-            onChange={setDebugHashThreshold}
-            min={0}
-            max={32}
-            step={1}
-          />
-        </Row>
-        <Row
-          label={t("aiSummary.debug.frame.hashWindowLabel")}
-          labelHint={t("aiSummary.debug.frame.hashWindowHint")}
-        >
-          <Slider
-            value={debugHashWindow}
-            onChange={setDebugHashWindow}
-            min={0}
-            max={30}
-            step={1}
-            suffix={t("aiSummary.debug.frame.hashWindowSuffix")}
-          />
-        </Row>
-      </Section>
-
-      {/* —— 引擎参数（启动时）：改值会重启引擎，仅本调试窗口生效。
-          3 个 picker 自带类目前缀（"Batch 512"/"并发 4 路"/"ctx 16K/槽"）
-          直接 inline 排，跟顶部「日报 / 今天 / 30 张/段」那排同款。
-          末尾挂一行 KV cache 估算，让用户在点开始前就感知"这组合会不会 OOM"。 */}
-      <Section
-        title={t("aiSummary.debug.engine.title")}
-        icon={Server}
-        description={t("aiSummary.debug.engine.description")}
-      >
-        <div className={styles.engineParamRow}>
-          <SimplePicker<BatchKey>
-            value={batchToOption(debugBatchSize)}
-            options={BATCH_OPTIONS}
-            onChange={(next) => setDebugBatchSize(optionToBatch(next))}
-            disabled={generating}
-          />
-          <SimplePicker<SlotsKey>
-            value={slotsToOption(debugParallelSlots)}
-            options={SLOTS_OPTIONS}
-            onChange={(next) => setDebugParallelSlots(optionToSlots(next))}
-            disabled={generating}
-          />
-          <SimplePicker<CtxKey>
-            value={ctxToOption(debugCtxSize)}
-            options={CTX_OPTIONS}
-            onChange={(next) => setDebugCtxSize(optionToCtx(next))}
-            disabled={generating}
-          />
-        </div>
-        <VramEstimateLine
-          modelName={activeMain}
-          parallelSlots={debugParallelSlots}
-          ctxSize={debugCtxSize ?? 8192}
-        />
-      </Section>
 
       {/* —— 错误条 / 冷启动提示 —— */}
       {topError ? (
@@ -920,16 +866,68 @@ export default function DebugTab() {
         </Section>
       </div>
 
-      {/* —— 逐图描述：包到 Section box，跟其他卡片视觉一致 —— */}
+      {/* —— 逐图描述：包到 Section box，跟其他卡片视觉一致。
+          headerAction：「仅生成图片描述」(只跑 step 1) + 「删除」(只清当天图片描述)。 */}
       <Section
         title={t("aiSummary.debug.perImage.title")}
         icon={ImageIcon}
-        description={
-          t("aiSummary.debug.perImage.descriptionBase") +
-          (visibleDescs.length > 0
-            ? t("aiSummary.debug.perImage.countSuffix", { count: visibleDescs.length })
-            : "") +
-          t("aiSummary.debug.perImage.descriptionSuffix")
+        headerAction={
+          <>
+            <button
+              type="button"
+              className={styles.startBtn}
+              onClick={() => void onStart("step1")}
+              disabled={generating || !hasModel || scope !== "daily"}
+              title={
+                scope !== "daily"
+                  ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
+                  : hasModel
+                    ? t("aiSummary.debug.actions.describeOnlyInfo")
+                    : t("aiSummary.debug.actions.startTooltipNoModel")
+              }
+            >
+              <Play size={13} strokeWidth={2} />
+              {t("aiSummary.debug.actions.describeOnly")}
+            </button>
+            <button
+              type="button"
+              className={styles.deleteBtn}
+              onClick={async () => {
+                if (generating) return;
+                if (
+                  !confirm(
+                    t("aiSummary.debug.actions.clearDescriptionsConfirm", { date }),
+                  )
+                )
+                  return;
+                try {
+                  await api.clearDayImageDescriptions(date, "debug");
+                  setDescs([]);
+                } catch (e) {
+                  setTopError(typeof e === "string" ? e : String(e));
+                }
+              }}
+              disabled={generating || descs.length === 0}
+              title={t("aiSummary.debug.actions.clearDescriptionsTooltip")}
+            >
+              <Trash2 size={13} strokeWidth={2} />
+              {t("aiSummary.debug.actions.clearDescriptions")}
+            </button>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={onExportDescriptionsMd}
+              disabled={descs.length === 0}
+              title={
+                descs.length === 0
+                  ? t("aiSummary.debug.actions.exportDescriptionsMdEmptyTooltip")
+                  : t("aiSummary.debug.actions.exportDescriptionsMdTooltip")
+              }
+            >
+              <Download size={13} strokeWidth={2} />
+              {t("aiSummary.debug.actions.exportDescriptionsMd")}
+            </button>
+          </>
         }
       >
         {visibleDescs.length === 0 ? (
@@ -995,16 +993,68 @@ export default function DebugTab() {
       </Section>
 
 
-      {/* —— 段总结结果：用 Section 跟「逐图描述」视觉对齐，常开 + 滚动 —— */}
+      {/* —— 段总结结果：用 Section 跟「逐图描述」视觉对齐，常开 + 滚动。
+          headerAction：「仅生成段总结」(跳过 step 1 用 DB 已存描述跑 step 2) + 「删除」(只清段总结)。 */}
       <Section
         title={t("aiSummary.debug.segments.title")}
         icon={Newspaper}
-        description={
-          t("aiSummary.debug.segments.descriptionBase") +
-          (visibleSummaries.length > 0
-            ? t("aiSummary.debug.segments.countSuffix", { count: visibleSummaries.length })
-            : "") +
-          t("aiSummary.debug.segments.descriptionSuffix")
+        headerAction={
+          <>
+            <button
+              type="button"
+              className={styles.startBtn}
+              onClick={() => void onStart("step2")}
+              disabled={generating || !hasModel || scope !== "daily"}
+              title={
+                scope !== "daily"
+                  ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
+                  : hasModel
+                    ? t("aiSummary.debug.actions.summarizeOnlyInfo")
+                    : t("aiSummary.debug.actions.startTooltipNoModel")
+              }
+            >
+              <Play size={13} strokeWidth={2} />
+              {t("aiSummary.debug.actions.summarizeOnly")}
+            </button>
+            <button
+              type="button"
+              className={styles.deleteBtn}
+              onClick={async () => {
+                if (generating) return;
+                if (
+                  !confirm(
+                    t("aiSummary.debug.actions.clearSummariesConfirm", { date }),
+                  )
+                )
+                  return;
+                try {
+                  await api.clearDaySegmentSummaries(date, "debug");
+                  setSummaries([]);
+                } catch (e) {
+                  setTopError(typeof e === "string" ? e : String(e));
+                }
+              }}
+              disabled={generating || summaries.length === 0}
+              title={t("aiSummary.debug.actions.clearSummariesTooltip")}
+            >
+              <Trash2 size={13} strokeWidth={2} />
+              {t("aiSummary.debug.actions.clearSummaries")}
+            </button>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={onExportSummariesMd}
+              disabled={summaries.length === 0}
+              title={
+                summaries.length === 0
+                  ? t("aiSummary.debug.actions.exportSummariesMdEmptyTooltip")
+                  : t("aiSummary.debug.actions.exportSummariesMdTooltip")
+              }
+            >
+              <Download size={13} strokeWidth={2} />
+              {t("aiSummary.debug.actions.exportSummariesMd")}
+            </button>
+          </>
         }
       >
         {visibleSummaries.length === 0 ? (
@@ -1139,7 +1189,7 @@ export default function DebugTab() {
  *  文件名抠出的参数量，粗估总占用。颜色按风险分档：
  *   < 16 GB 灰、16-24 橙、> 24 红（5090 32GB 留 ~8 GB margin 给系统 / encoder）
  */
-function VramEstimateLine({
+export function VramEstimateLine({
   modelName,
   parallelSlots,
   ctxSize,
@@ -1263,6 +1313,8 @@ function DescItem({
 }) {
   const { t } = useTranslation();
   const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
+  // 截图时间（HH:MM）：直接从文件名解析（capture 写入约定 HHMMSS_NNN.jpg）
+  const captureTime = extractScreenshotTime(row.screenshotPath);
   // chip 颜色：跟设置页 SegmentList / DailyTab 走同一份 fallback——配过 hex 用配置色，
   // 没配则按段中点的色温自动渐变。settings 还没加载 (segment === undefined) 时退回中性灰。
   const { background: chipBg, isLight } = segment
@@ -1290,6 +1342,13 @@ function DescItem({
         >
           {segmentLabel ?? t("aiSummary.debug.perImage.segFallback", { idx: row.segmentIdx })}
           {t("aiSummary.debug.perImage.imageNoSuffix", { n: row.imageIndex + 1 })}
+        </span>
+        <span
+          className={styles.descTime}
+          title={t("aiSummary.debug.perImage.captureTimeTooltip", { time: captureTime })}
+        >
+          <Clock size={11} strokeWidth={2.2} />
+          {captureTime}
         </span>
         <button
           type="button"

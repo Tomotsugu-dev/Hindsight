@@ -22,7 +22,11 @@ export interface TabDef {
 }
 
 interface TabNavProps {
-  tabs: TabDef[];
+  /** 单组 tab（向后兼容）。groups 优先，传了它就忽略 tabs。 */
+  tabs?: TabDef[];
+  /** 多组 tab：组之间渲染一条竖线分隔，暗示视觉/语义分组。
+   *  例：AISummary 的 [[日报, 周报, 月报], [对话], [调试, 调试设置]] */
+  groups?: TabDef[][];
   /** 用于 nav 的 aria-label（无障碍） */
   ariaLabel?: string;
 }
@@ -33,7 +37,9 @@ interface PillStyle {
   visible: boolean;
 }
 
-export function TabNav({ tabs, ariaLabel }: TabNavProps) {
+export function TabNav({ tabs, groups, ariaLabel }: TabNavProps) {
+  // 内部统一成"组"形式：传 groups 用它；只传 tabs 包成单组数组
+  const tabGroups: TabDef[][] = groups ?? (tabs ? [tabs] : []);
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
@@ -80,17 +86,22 @@ export function TabNav({ tabs, ariaLabel }: TabNavProps) {
         aria-hidden
       />
 
-      {tabs.map((tab) => (
-        <NavLink
-          key={tab.labelKey}
-          to={tab.to}
-          end={tab.end}
-          className={({ isActive }) =>
-            `${styles.tab} ${isActive ? styles.tabActive : ""}`
-          }
-        >
-          {t(tab.labelKey)}
-        </NavLink>
+      {tabGroups.map((group, gi) => (
+        <span key={gi} className={styles.group}>
+          {gi > 0 ? <span className={styles.divider} aria-hidden /> : null}
+          {group.map((tab) => (
+            <NavLink
+              key={tab.labelKey}
+              to={tab.to}
+              end={tab.end}
+              className={({ isActive }) =>
+                `${styles.tab} ${isActive ? styles.tabActive : ""}`
+              }
+            >
+              {t(tab.labelKey)}
+            </NavLink>
+          ))}
+        </span>
       ))}
     </nav>
   );

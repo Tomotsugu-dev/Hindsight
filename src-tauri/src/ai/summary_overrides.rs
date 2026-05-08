@@ -33,6 +33,10 @@ pub struct AiOverrides {
     /// `None` = 8K 默认。改大让长 prompt（无限制档段总结）能装下，代价是
     /// 启动时一次性占 ~30KB/token × ctx_size × np 的 KV cache。
     pub ctx_size: Option<u32>,
+    /// 本次跑是否走云端段总结（step 2）。`Some(true)` = 强制走 ExternalChatClient，
+    /// `Some(false)` = 强制本地，`None` = 沿用 settings.ai.external_enabled。
+    /// endpoint / model / api_key 永远沿用 settings 全局值——这里只决定路径。
+    pub external_enabled: Option<bool>,
 }
 
 impl AiOverrides {
@@ -90,6 +94,11 @@ impl AiOverrides {
         }
         if let Some(v) = self.ctx_size {
             ai.ctx_size = Some(v);
+        }
+        // 云端段总结路径开关：Debug tab 的「云端 API」section toggle 触发；
+        // build_step2() 看 ai.external_enabled 决定 Local vs External。
+        if let Some(v) = self.external_enabled {
+            ai.external_enabled = v;
         }
         ai
     }

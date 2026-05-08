@@ -256,13 +256,8 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
     let status = resp.status().as_u16();
     let body = resp.text().await.unwrap_or_default();
     if status == 403 && body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT") {
-        // 这条留 Other 当兜底，因为给用户的提示是定向「请重登」，不需要程序 match 处理
-        return Error::Other(
-            "Drive 权限不足：你的登录 token 没有 drive.appdata 权限\
-             （多半是 scope 升级前登的）。请在设备页点【退出】再重新【用 Google 登录】，\
-             同意页会重新要求 Drive 权限。"
-                .into(),
-        );
+        // 显式 variant，让上层 push/pull 能 match 然后归类成"需要重新登录"
+        return Error::DriveScopeInsufficient;
     }
     Error::DriveHttp { stage, status, body }
 }

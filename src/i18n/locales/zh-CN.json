@@ -631,7 +631,8 @@
       "restartHint": "已登录到新的账号，需要重启 app 才能切换到该账号的本地数据库。"
     },
     "errors": {
-      "credExpired": "登录凭证失效，请重新登录。"
+      "credExpired": "登录凭证失效，请重新登录。",
+      "transient": "同步暂时失败，正在自动重试…"
     },
     "setup": {
       "header": "OAuth 凭证设置",
@@ -690,7 +691,8 @@
       "week": "周报",
       "month": "月报",
       "chat": "对话",
-      "debug": "调试"
+      "debug": "调试",
+      "debugSettings": "调试设置"
     },
     "placeholder": {
       "hint": "功能开发中。"
@@ -879,12 +881,33 @@
       },
       "actions": {
         "stop": "停止",
-        "start": "开始",
+        "start": "重新生成",
+        "startInfo": "重新生成当天的图片描述与时段总结",
+        "startInfoAria": "重新生成范围说明",
+        "describeOnly": "仅生成图片描述",
+        "describeOnlyInfo": "只跑 step 1：当天每张截图各调一次 vision LLM 拿描述，不做时段总结",
+        "describeOnlyAria": "仅生成图片描述（跳过时段总结）",
+        "summarizeOnly": "仅生成段总结",
+        "summarizeOnlyInfo": "只跑 step 2：用已存的图片描述拼出段总结。前提是 step 1 已经跑过，否则按段标 skipped",
+        "summarizeOnlyAria": "仅生成段总结（跳过逐图描述）",
+        "clearDescriptions": "删除",
+        "clearDescriptionsTooltip": "清空当天所有图片描述（不动段总结，不可撤销）",
+        "clearDescriptionsConfirm": "删除 {{date}} 当天所有图片描述？（段总结保留，操作不可撤销）",
+        "clearSummaries": "删除",
+        "clearSummariesTooltip": "清空当天所有段总结（不动图片描述，不可撤销）",
+        "clearSummariesConfirm": "删除 {{date}} 当天所有段总结？（图片描述保留，操作不可撤销）",
+        "exportDescriptionsMd": "导出 Markdown",
+        "exportDescriptionsMdTooltip": "把当天所有图片描述导出成 Markdown 文件",
+        "exportDescriptionsMdEmptyTooltip": "还没有图片描述可导出",
+        "exportSummariesMd": "导出 Markdown",
+        "exportSummariesMdTooltip": "把当天所有段总结导出成 Markdown 文件",
+        "exportSummariesMdEmptyTooltip": "还没有段总结可导出",
         "startTooltipPending": "{{type}}调试待后端实现",
         "startTooltipReady": "调试模式：跑当天全部段（清空已有结果重跑），逐图描述实时显示",
         "startTooltipNoModel": "请先到 AI 设置 → 模型 选一个模型",
-        "delete": "删除",
-        "deleteTooltip": "清空当天 ai_summaries + ai_image_descriptions（不可撤销）",
+        "delete": "删除所有",
+        "deleteTooltip": "清空当天的所有图片描述 + 时段总结（不可撤销）",
+        "deleteInfoAria": "删除范围说明",
         "deleteConfirm": "删除 {{date}} 当天所有 AI 产物？（段总结 + 逐图描述都清空，操作不可撤销）",
         "exportJson": "导出 JSON",
         "exportTooltip": "导出当前页所有调试数据为 JSON 文件"
@@ -930,6 +953,16 @@
         "description": "step 2 — 把所有图片描述 + 应用统计汇总成段总结时使用。改完直接生效（仅本调试窗口）。",
         "label": "提示词"
       },
+      "cloudApi": {
+        "title": "云端 API",
+        "description": "本次跑用云端模型生成段总结（step 2）。endpoint / 模型 / API Key 沿用 AI 设置里的全局值，本开关只决定路径。",
+        "enableLabel": "启用云端段总结",
+        "enableHint": "关掉就走本地 step 2；云端凭证去 AI 设置 → 云端 API 里配。"
+      },
+      "subTabs": {
+        "main": "调试视图",
+        "settings": "调试设置"
+      },
       "perImage": {
         "title": "逐图描述",
         "descriptionBase": "step 1 产物——每张截图独立调 vision LLM 拿到的描述",
@@ -939,6 +972,7 @@
         "segFallback": "段{{idx}}",
         "imageNoSuffix": " · 第 {{n}} 张",
         "chipTitle": "段 idx={{seg}} · 图 idx={{img}}（抽帧后顺序）",
+        "captureTimeTooltip": "截图时间 {{time}}",
         "pathTooltip": "点击预览原图：{{path}}",
         "statTooltip": "耗时 · prompt / completion tokens",
         "retry": "重跑",

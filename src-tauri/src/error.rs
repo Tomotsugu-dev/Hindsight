@@ -81,6 +81,13 @@ pub enum Error {
         body: String,
     },
 
+    /// Drive 返回 403 + ACCESS_TOKEN_SCOPE_INSUFFICIENT：
+    /// 当前 token 没有 drive.appdata 权限（多半是 scope 升级前登的旧账号），
+    /// 必须让用户重新【用 Google 登录】走一次同意页。和普通 401 不同，
+    /// 单纯刷新 access_token 解决不了。
+    #[error("drive scope insufficient：当前登录缺少 drive.appdata 权限，请重新【用 Google 登录】")]
+    DriveScopeInsufficient,
+
     // ───────────── 同步合并阶段 ─────────────
     /// 远端 JSON payload 解析失败（categories.json / app_groups.json 等）
     #[error("sync parse {kind} JSON: {source}")]

@@ -183,14 +183,22 @@ function CloudSyncCard() {
 
   if (!settings) return null;
 
-  // sync 报告 token 解密失败 / 凭证失效时，把"退出"换成"重新登录"
-  // —— 用户多半就是想刷新 token 而不是真的登出
+  // 后端 last_error 用稳定前缀分类：
+  //   [CRED_EXPIRED] —— refresh_token 真失效 / AES 密文解不开 / scope 不足，必须用户重登
+  //   [TRANSIENT]    —— 网络抖动 / Drive 5xx / keyring 临时读失败，下个 30s tick 自动重试
+  // 只有 CRED_EXPIRED 才把"退出"换成"重新登录"，避免一个网络抖动就催用户重登。
   const authExpired =
     signedIn &&
     !!sync?.lastError &&
-    (sync.lastError.includes("登录凭证失效") ||
-      sync.lastError.includes("aes decrypt") ||
-      sync.lastError.includes("crypto: aes"));
+    sync.lastError.startsWith("[CRED_EXPIRED]");
+  const transientError =
+    signedIn &&
+    !!sync?.lastError &&
+    sync.lastError.startsWith("[TRANSIENT]");
+  const lastErrorDisplay = sync?.lastError?.replace(
+    /^\[(?:CRED_EXPIRED|TRANSIENT)\]\s*/,
+    "",
+  );
 
   return (
     <div
@@ -364,7 +372,11 @@ function CloudSyncCard() {
       {error && <div className={styles.syncError}>{error}</div>}
       {!error && signedIn && sync?.lastError && (
         <div className={styles.syncError}>
-          {authExpired ? t("devices.errors.credExpired") : sync.lastError}
+          {authExpired
+            ? t("devices.errors.credExpired")
+            : transientError
+              ? t("devices.errors.transient")
+              : lastErrorDisplay}
         </div>
       )}
       {auth?.requiresRestart && (

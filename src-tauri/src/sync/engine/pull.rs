@@ -7,7 +7,7 @@ use chrono::Utc;
 use serde_json::Value;
 
 use super::io;
-use super::Inner;
+use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
@@ -100,14 +100,12 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
 }
 
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
-    let token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
+    let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
         Err(Error::NotSignedIn) => return Ok(()),
         Err(e) => {
-            let raw = e.to_string();
-            log::warn!("sync pull 拿不到有效 token: {raw}");
-            inner.status.write().await.last_error =
-                Some(format!("登录凭证失效（{raw}），请尝试重新登录"));
+            log::warn!("sync pull 拿不到有效 token: {e}");
+            inner.status.write().await.last_error = Some(format_sync_error(&e));
             return Ok(());
         }
     };
@@ -119,7 +117,11 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         cursor.clone()
     };
 
-    let files = drive::list_appdata_files(&token.access_token, &cursor_q).await?;
+    let files = with_token_retry(&inner.pool, &mut token, |tok| {
+        let cursor_q = cursor_q.clone();
+        async move { drive::list_appdata_files(&tok, &cursor_q).await }
+    })
+    .await?;
     if files.is_empty() {
         return Ok(());
     }
@@ -147,7 +149,12 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         if device_id == self_id {
             continue;
         }
-        let body = match drive::download(&token.access_token, &f.id).await {
+        let body = match with_token_retry(&inner.pool, &mut token, |tok| {
+            let id = f.id.clone();
+            async move { drive::download(&tok, &id).await }
+        })
+        .await
+        {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("下载 {} 失败: {e}", f.name);
@@ -206,7 +213,12 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
         }
 
-        let body = match drive::download(&token.access_token, &f.id).await {
+        let body = match with_token_retry(&inner.pool, &mut token, |tok| {
+            let id = f.id.clone();
+            async move { drive::download(&tok, &id).await }
+        })
+        .await
+        {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("下载 {} 失败: {e}", f.name);

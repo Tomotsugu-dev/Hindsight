@@ -50,11 +50,18 @@ pub async fn generate_day_summary(
     overrides: Option<AiOverrides>,
     // "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据
     source: Option<String>,
+    // step1_only=true：跳过 step 2 段总结。「仅生成图片描述」按钮触发。
+    // step2_only=true：跳过 step 1，从 DB 读已存图描述跑 step 2。「仅生成段总结」按钮触发。
+    // 互斥；默认都 false，daily 路径走完整 step1+step2。
+    step1_only: Option<bool>,
+    step2_only: Option<bool>,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = device_filter_from_option(device_id);
     let source = source.unwrap_or_else(|| "daily".to_string());
+    let step1_only = step1_only.unwrap_or(false);
+    let step2_only = step2_only.unwrap_or(false);
 
     cancel.0.store(false, Ordering::Relaxed);
     let runner = DaySummaryRunner::new(
@@ -65,7 +72,7 @@ pub async fn generate_day_summary(
     );
 
     if let Err(e) = runner
-        .run(&source, parsed_date, device, force_refresh, overrides)
+        .run(&source, parsed_date, device, force_refresh, overrides, step1_only, step2_only)
         .await
     {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
@@ -163,7 +170,7 @@ pub async fn get_day_summary(
 }
 
 /// 删除某天的全部 AI 产物——同时清 `ai_summaries` 段总结 + `ai_image_descriptions`
-/// 逐图描述。调试 tab 的「删除」按钮用，给用户在不重跑的情况下手动清当天历史。
+/// 逐图描述。DailyTab 删除按钮用。
 #[tauri::command]
 pub async fn clear_day_summary(
     pool: State<'_, DbPool>,
@@ -172,6 +179,34 @@ pub async fn clear_day_summary(
 ) -> Result<(), String> {
     let src = source.unwrap_or_else(|| "daily".to_string());
     ai_summaries::clear_day(&pool, &src, &date)
+        .await
+        .map_err(String::from)
+}
+
+/// 只删某天的逐图描述，**不**动段总结。
+/// 调试 tab「逐图描述」Section header 删除按钮用。
+#[tauri::command]
+pub async fn clear_day_image_descriptions(
+    pool: State<'_, DbPool>,
+    date: String,
+    source: Option<String>,
+) -> Result<(), String> {
+    let src = source.unwrap_or_else(|| "daily".to_string());
+    ai_summaries::clear_day_image_descriptions_only(&pool, &src, &date)
+        .await
+        .map_err(String::from)
+}
+
+/// 只删某天的段总结，**不**动逐图描述。
+/// 调试 tab「段总结结果」Section header 删除按钮用。
+#[tauri::command]
+pub async fn clear_day_segment_summaries(
+    pool: State<'_, DbPool>,
+    date: String,
+    source: Option<String>,
+) -> Result<(), String> {
+    let src = source.unwrap_or_else(|| "daily".to_string());
+    ai_summaries::clear_day_summaries_only(&pool, &src, &date)
         .await
         .map_err(String::from)
 }

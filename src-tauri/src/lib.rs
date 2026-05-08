@@ -247,6 +247,8 @@ pub fn run() {
             commands::ai_summary::cancel_day_summary,
             commands::ai_summary::get_day_summary,
             commands::ai_summary::clear_day_summary,
+            commands::ai_summary::clear_day_image_descriptions,
+            commands::ai_summary::clear_day_segment_summaries,
             commands::ai_summary::get_segment_image_descriptions,
             commands::ai_summary::get_day_image_descriptions,
             commands::ai_summary::retry_single_image_description,
