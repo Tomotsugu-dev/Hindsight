@@ -22,6 +22,7 @@ import {
   type SegmentSummaryRow,
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
+import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { resolveSegmentChip } from "../../../utils/segmentColor";
 import {
   cancelDailyGenerate,
@@ -73,6 +74,7 @@ export default function DailyTab() {
   );
   // 导出 / 删除等操作完成后短暂显示的成功提示，3s 后自清
   const [topNotice, setTopNotice] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // 鼠标接近发光特效：Today 页同款，让日期导航更"活"
   const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
@@ -82,7 +84,15 @@ export default function DailyTab() {
   const date = useMemo(() => offsetToDateStr(dayOffset), [dayOffset]);
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
-  const hasModel = activeMain.trim().length > 0;
+  // hasModel 跟后端 summary_runner 的 check 对齐：
+  //   step 1（图描述）必须有本地 vision 模型 → describeMain 或 activeMain 非空
+  //   step 2（段总结）要么有本地 summary 模型，要么 external_enabled 走云端
+  const describeMain = settings?.ai.describeMain || activeMain;
+  const summaryMain = settings?.ai.summaryMain || activeMain;
+  const externalEnabled = settings?.ai.externalEnabled ?? false;
+  const hasModel =
+    describeMain.trim().length > 0 &&
+    (externalEnabled || summaryMain.trim().length > 0);
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
   // 依赖 t，所以在组件里定义，跟随 i18n.language 自动重渲。
@@ -368,21 +378,9 @@ export default function DailyTab() {
         <button
           type="button"
           className={styles.deleteBtn}
-          onClick={async () => {
+          onClick={() => {
             if (generating) return;
-            if (
-              !confirm(
-                t("aiSummary.daily.actions.deleteConfirm", { date }),
-              )
-            )
-              return;
-            try {
-              await api.clearDaySummary(date, "daily");
-              setRows(new Map());
-              clearTopError();
-            } catch (e) {
-              setTopError(typeof e === "string" ? e : String(e));
-            }
+            setConfirmingDelete(true);
           }}
           disabled={generating || !hasAnyRow}
           title={
@@ -460,6 +458,23 @@ export default function DailyTab() {
           );
         })}
       </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t("aiSummary.daily.actions.deleteConfirmTitle", { date })}
+        message={t("aiSummary.daily.actions.deleteConfirmMessage")}
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmingDelete(false);
+          try {
+            await api.clearDaySummary(date, "daily");
+            setRows(new Map());
+            clearTopError();
+          } catch (e) {
+            setTopError(typeof e === "string" ? e : String(e));
+          }
+        }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </>
   );
 }

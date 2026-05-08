@@ -423,6 +423,7 @@
     "title": "AI 设置",
     "tabs": {
       "engine": "引擎",
+      "models": "模型",
       "general": "常规",
       "prompt": "提示词",
       "external": "云端 API"
@@ -454,6 +455,8 @@
         "suffix": "（≥ 12.4），重启 Hindsight 后会自动切到 GPU 加速变体。"
       },
       "uninstallConfirm": "卸载本地 AI 引擎？模型文件不受影响。",
+      "uninstallConfirmTitle": "卸载本地 AI 引擎？",
+      "uninstallConfirmMessage": "模型文件不受影响。",
       "actions": {
         "downloading": "下载中…",
         "updating": "更新中…",
@@ -510,16 +513,49 @@
     "models": {
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 vision LLM；GGUF 文件下载自 HuggingFace。",
+      "toolbar": {
+        "capAll": "所有",
+        "capVision": "Vision",
+        "capText": "纯文本",
+        "statusAll": "所有",
+        "statusInstalled": "已下载",
+        "statusNotInstalled": "未下载",
+        "brandAll": "所有",
+        "sortDefault": "默认顺序",
+        "sortSizeAsc": "体积 ↑",
+        "sortSizeDesc": "体积 ↓",
+        "sortName": "名称 A-Z"
+      },
+      "cloud": {
+        "cardTitle": "云端 · {{provider}}",
+        "modelUnset": "（未填模型）",
+        "step2Tooltip": "Step 2（段总结）当前路由到云端 API。要改 endpoint / 模型，去「云端 API」tab 编辑。"
+      },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
         "hfTooltipAria": "HuggingFace {{repo}}",
         "approxSize": "~{{size}} GB",
         "download": "下载",
         "downloading": "下载中…",
-        "inUse": "使用中",
-        "inUseTooltip": "点击取消激活，切回'已下载'状态（会停掉在跑的 server）",
-        "ready": "已下载",
-        "readyTooltip": "点击启用此模型（会停掉在跑的 server，等手动重启加载新模型）",
+        "pause": "暂停",
+        "pauseTooltip": "暂停当前下载。已下字节保留，下次「继续」从断点接着下。",
+        "resume": "继续",
+        "resumeTooltip": "从已下的 {{size}} MB 继续。",
+        "visionLabel": "vision",
+        "visionTooltip": "支持图像输入——能跑 step 1（图描述）和 step 2（段总结）。",
+        "textOnlyLabel": "纯文本",
+        "textOnlyTooltip": "纯文本模型——能跑 step 2（段总结），不能跑 step 1。",
+        "capImage": "支持图像输入",
+        "capImageTooltip": "能处理图像输入，可用于 step 1（图描述）。",
+        "capText": "支持文本生成",
+        "capTextTooltip": "能生成文本，可用于 step 2（段总结）。",
+        "step1": "Vision",
+        "step1ToggleOnTooltip": "把这个模型设为 vision 步骤（step 1：图描述）使用。会替换之前的选择。",
+        "step1ToggleOffTooltip": "点击取消 vision 步骤（会回退到旧版 active 模型）。",
+        "step1DisabledTooltip": "纯文本模型不能跑图描述步骤（需要 vision 能力）。",
+        "step2": "Text",
+        "step2ToggleOnTooltip": "把这个模型设为 text 步骤（step 2：段总结）使用。会替换之前的选择。",
+        "step2ToggleOffTooltip": "点击取消 text 步骤（会回退到旧版 active 模型）。",
         "uninstallTooltipInstalled": "删除本地文件（main + mmproj）",
         "uninstallTooltipNotInstalled": "尚未安装",
         "progressMain": "主权重",
@@ -528,11 +564,25 @@
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "卸载 {{name}}？将删除 main 权重{{extra}}两个文件，无法撤销。",
+      "uninstallConfirmTitle": "卸载 {{name}}？",
+      "uninstallConfirmMessage": "将删除 main 权重{{extra}}文件，操作无法撤销。",
       "uninstallConfirmExtra": " + mmproj 投影",
       "expand": {
         "more": "查看更多模型 ({{count}})",
         "collapse": "收起",
         "busyTooltip": "下载完成后才能折叠"
+      },
+      "custom": {
+        "expand": "自定义 HuggingFace 模型",
+        "collapse": "收起自定义表单",
+        "hint": "从任意 HuggingFace 仓库下载 GGUF 文件。文件必须能被 llama.cpp 加载；mmproj 字段仅 vision 模型需要。",
+        "repoLabel": "仓库",
+        "repoPlaceholder": "例：bartowski/Llama-3.2-11B-Vision-Instruct-GGUF",
+        "mainFileLabel": "主权重文件",
+        "mainFilePlaceholder": "例：Llama-3.2-11B-Vision-Instruct-Q4_K_M.gguf",
+        "mmprojFileLabel": "mmproj 文件（可选，仅 vision 模型需要）",
+        "mmprojFilePlaceholder": "例：mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
+        "errorRequired": "仓库和主权重文件不能为空。"
       }
     },
     "brief": {
@@ -574,7 +624,9 @@
       "thresholdHint": "两张截图差异多少算同一张。越小越严格——设置为 0 就相当于两张图片的每个像素都一致才认为是重复的图片，不加入分析。",
       "windowLabel": "时间窗",
       "windowHint": "只比这段时间内的截图，避免上下午相似画面被误合并。",
-      "windowSuffix": "分钟"
+      "windowSuffix": "分钟",
+      "maxImagesLabel": "单段最多张数",
+      "maxImagesHint": "去重后单个时段送 AI 分析的截图上限。Step 1（图描述）是每张图都跑一次 vision LLM，数值越大该段处理时长越长。默认 30；想覆盖长段更全可以拉高。"
     },
     "external": {
       "sectionTitle": "云端 API（可选）",
@@ -711,8 +763,7 @@
       "week": "周报",
       "month": "月报",
       "chat": "对话",
-      "debug": "调试",
-      "debugSettings": "调试设置"
+      "debug": "调试"
     },
     "placeholder": {
       "hint": "功能开发中。"
@@ -745,6 +796,8 @@
         "deleteTooltip": "清空当天 ai_summaries（source=daily）+ ai_image_descriptions（不可撤销）",
         "deleteEmptyTooltip": "当天还没有日报数据可删除",
         "deleteConfirm": "删除 {{date}} 当天日报数据？（段总结 + 逐图描述都清空，不影响调试 tab，操作不可撤销）",
+        "deleteConfirmTitle": "删除 {{date}} 当天日报数据？",
+        "deleteConfirmMessage": "段总结 + 逐图描述都会清空，不影响调试 tab，操作不可撤销。",
         "exportMarkdown": "导出为 Markdown",
         "exportTooltip": "导出当前日期的所有段总结为 Markdown 文件",
         "exportEmptyTooltip": "还没有任何段总结可导出",
@@ -913,9 +966,13 @@
         "clearDescriptions": "删除",
         "clearDescriptionsTooltip": "清空当天所有图片描述（不动段总结，不可撤销）",
         "clearDescriptionsConfirm": "删除 {{date}} 当天所有图片描述？（段总结保留，操作不可撤销）",
+        "clearDescriptionsConfirmTitle": "删除 {{date}} 当天所有图片描述？",
+        "clearDescriptionsConfirmMessage": "段总结保留，操作不可撤销。",
         "clearSummaries": "删除",
         "clearSummariesTooltip": "清空当天所有段总结（不动图片描述，不可撤销）",
         "clearSummariesConfirm": "删除 {{date}} 当天所有段总结？（图片描述保留，操作不可撤销）",
+        "clearSummariesConfirmTitle": "删除 {{date}} 当天所有段总结？",
+        "clearSummariesConfirmMessage": "图片描述保留，操作不可撤销。",
         "exportDescriptionsMd": "导出 Markdown",
         "exportDescriptionsMdTooltip": "把当天所有图片描述导出成 Markdown 文件",
         "exportDescriptionsMdEmptyTooltip": "还没有图片描述可导出",

@@ -22,6 +22,7 @@ import {
   MODEL_DOWNLOAD_EVENT,
   type ModelDownloadProgress,
 } from "../api/hindsight";
+import { logError } from "../lib/logger";
 
 type ProgressMap = Readonly<Record<string, ModelDownloadProgress>>;
 
@@ -32,6 +33,10 @@ let progressSnap: ProgressMap = Object.freeze({});
 // 在跑的下载请求；key = 文件名（跟 progress 同 key）。
 const inflight: Map<string, Promise<string>> = new Map();
 let inflightSnap: ReadonlySet<string> = Object.freeze(new Set<string>());
+
+// 半成品文件 + 已下字节数（来自 list_partial_downloads）。决定 UI 是否给某文件渲染
+// "继续"按钮——partial 存在且不在 inflight = 已暂停 / 等续传。
+let partialSnap: Readonly<Record<string, number>> = Object.freeze({});
 
 const listeners = new Set<() => void>();
 
@@ -73,6 +78,36 @@ export function getInflightSnapshot(): ReadonlySet<string> {
   return inflightSnap;
 }
 
+/** 半成品快照：file → 已下字节数。判断是否处于"已暂停"状态用 `!inflightSnap.has(f) && f in partialSnap`。 */
+export function getPartialSnapshot(): Readonly<Record<string, number>> {
+  return partialSnap;
+}
+
+/** 拉一次 list_partial_downloads，把结果同步到 partialSnap。
+ *  下载失败 / 暂停后 / 卸载后等场景调用，让 UI 刷新"是否还有 partial 在那"。
+ *  失败仅 log，不抛——partial 列表是辅助 UI，拿不到不影响主流程。 */
+export async function refreshPartials(): Promise<void> {
+  try {
+    const list = await api.listPartialDownloads();
+    const next: Record<string, number> = {};
+    for (const p of list) next[p.filename] = p.downloadedBytes;
+    partialSnap = Object.freeze(next);
+    notify();
+  } catch (e) {
+    logError("modelDownloads.refreshPartials", e);
+  }
+}
+
+/** 暂停某文件下载——后端 cancel 命令翻 flag，inflight promise 会以
+ *  "download cancelled:" 前缀的错误 reject；本函数不等待，立即返回。 */
+export async function cancelModelDownload(file: string): Promise<void> {
+  try {
+    await api.cancelModelDownload(file);
+  } catch (e) {
+    logError("modelDownloads.cancel", e);
+  }
+}
+
 /** 下载完成（成功或失败）后清掉该文件的进度条。 */
 export function clearModelDownloadProgress(file: string): void {
   if (file in progressSnap) {
@@ -84,7 +119,11 @@ export function clearModelDownloadProgress(file: string): void {
 }
 
 /**
- * 下载某文件；同名文件已经在跑时复用现有 promise。
+ * 下载某文件；同名（按 saveAs / file）已经在跑时复用现有 promise。
+ *
+ * `saveAs` 用于让落盘文件名跟 HF URL 上的文件名解耦——多个 rec 的 mmproj 在 HF 上
+ * 常常同名（比如 unsloth 系列都是 mmproj-F16.gguf），落盘必须用 rec-aware 的唯一名。
+ * inflight key / progress event / cancel 都按 saveAs 索引。
  *
  * 进度通过 [`subscribeModelDownloads`] 拉取的 progressSnap 表达——这里只负责
  * 发起 / 复用 invoke，不直接处理进度。
@@ -93,19 +132,24 @@ export function downloadModelDedup(
   repo: string,
   file: string,
   expectedBytes: number,
+  saveAs?: string,
 ): Promise<string> {
   ensureListener();
-  const existing = inflight.get(file);
+  const key = saveAs ?? file;
+  const existing = inflight.get(key);
   if (existing) return existing;
 
   const p = api
-    .downloadModel(repo, file, expectedBytes)
+    .downloadModel(repo, file, expectedBytes, saveAs)
     .finally(() => {
-      inflight.delete(file);
+      inflight.delete(key);
       refreshInflight();
+      // 下载收尾（成功 / 失败 / 取消）都刷一遍 partial：成功时 partial 已被 rename 走，
+      // partialSnap 该文件条目消失；取消 / 失败时 partial 还在，UI 应进入"已暂停"状态
+      void refreshPartials();
       notify();
     });
-  inflight.set(file, p);
+  inflight.set(key, p);
   refreshInflight();
   notify();
   return p;

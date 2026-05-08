@@ -28,16 +28,20 @@ export function engineOptionToBatch(v: EngineBatchKey): number | null {
   return v === "default" ? null : parseInt(v, 10);
 }
 
-export type EngineSlotsKey = "1" | "2" | "4" | "8";
+export type EngineSlotsKey = "1" | "2" | "4" | "8" | "16" | "32";
 
 export const ENGINE_SLOTS_OPTIONS: Array<{ value: EngineSlotsKey; label: string }> = [
   { value: "1", label: "1" },
   { value: "2", label: "2" },
   { value: "4", label: "4" },
   { value: "8", label: "8" },
+  { value: "16", label: "16" },
+  { value: "32", label: "32" },
 ];
 
 export function engineSlotsToOption(n: number | null): EngineSlotsKey {
+  if (n != null && n >= 32) return "32";
+  if (n != null && n >= 16) return "16";
   if (n != null && n >= 8) return "8";
   if (n != null && n >= 4) return "4";
   if (n != null && n >= 2) return "2";
@@ -49,19 +53,26 @@ export function engineOptionToSlots(v: EngineSlotsKey): number | null {
   return n <= 1 ? null : n;
 }
 
-export type EngineCtxKey = "default" | "16384" | "32768" | "65536";
+export type EngineCtxKey =
+  | "default"
+  | "16384"
+  | "32768"
+  | "65536"
+  | "131072";
 
 export const ENGINE_CTX_OPTIONS: Array<{ value: EngineCtxKey; label: string }> = [
   { value: "default", label: "8K" },
   { value: "16384", label: "16K" },
   { value: "32768", label: "32K" },
   { value: "65536", label: "64K" },
+  { value: "131072", label: "128K" },
 ];
 
 export function engineCtxToOption(n: number | null): EngineCtxKey {
   if (n === 16384) return "16384";
   if (n === 32768) return "32768";
   if (n === 65536) return "65536";
+  if (n === 131072) return "131072";
   return "default";
 }
 
@@ -186,8 +197,9 @@ export function recommendEngineParams(
     };
   }
 
-  // 网格搜索：summary 模式只考虑 slots=1；describe 模式 slots 权重更高
-  const SLOTS = mode === "summary" ? [1] : [8, 4, 2, 1];
+  // 网格搜索：summary 模式只考虑 slots=1；describe 模式 slots 权重更高，
+  // 32/16 给大显存场景留路（5090 32GB 跑小模型可以堆高并发吃满算力）
+  const SLOTS = mode === "summary" ? [1] : [32, 16, 8, 4, 2, 1];
   const CTXES = [65536, 32768, 16384, 8192];
   // describe: slots 优先（权重 1.0），ctx 中等（0.4）；summary: slots 锁 1，仅 ctx 起作用
   const ctxWeight = mode === "summary" ? 1.0 : 0.4;
@@ -225,7 +237,12 @@ export function recommendEngineParams(
 }
 
 /** 推荐参数跟当前 settings 三个字段对比是否完全相同，决定按钮 disabled 与否。
- *  `null` 等价比较——`batchSize: null` 跟 `settings.ai.batchSize` 都是 null 时算相同。 */
+ *
+ *  关键：null 跟 llama.cpp 默认值（batch=512 / ctx=8192 / slots=1）等价比较——
+ *  `handleApply*` 写入时把 null 转成显式默认值（避免 effective getter fallback 到
+ *  旧全局字段），这里比较时也得把 null 当成等价。否则按了推荐之后 picker 一切对，
+ *  但 isRecommendedApplied 永远 false，按钮永远不 disable，看起来像"按了没用"。
+ */
 export function isRecommendedApplied(
   recommended: RecommendedEngineParams,
   current: {
@@ -234,13 +251,14 @@ export function isRecommendedApplied(
     ctxSize: number | null;
   },
 ): boolean {
-  // parallelSlots 在推荐里恒为 number（1..8），settings 里 null 等价于 1
-  const currentSlots = current.parallelSlots ?? 1;
-  return (
-    recommended.batchSize === current.batchSize &&
-    recommended.parallelSlots === currentSlots &&
-    recommended.ctxSize === current.ctxSize
-  );
+  // 把 null 归一化到显式默认值后再比较——两端语义对齐
+  const recBatch = recommended.batchSize ?? 512;
+  const recSlots = recommended.parallelSlots; // 推荐里恒 number
+  const recCtx = recommended.ctxSize ?? 8192;
+  const curBatch = current.batchSize ?? 512;
+  const curSlots = current.parallelSlots ?? 1;
+  const curCtx = current.ctxSize ?? 8192;
+  return recBatch === curBatch && recSlots === curSlots && recCtx === curCtx;
 }
 
 /** 平台变体 ID → 人话加速类型标签 */

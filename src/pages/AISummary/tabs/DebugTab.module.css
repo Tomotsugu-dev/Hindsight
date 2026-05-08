@@ -261,6 +261,9 @@
   justify-content: center;
   width: 18px;
   height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: 50%;
   color: var(--text-faint);
   cursor: help;

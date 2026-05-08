@@ -352,6 +352,9 @@
   justify-content: center;
   width: 16px;
   height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-faint);
   cursor: help;
   outline: none;
@@ -436,6 +439,10 @@
 }
 
 .engineWarningLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   color: #b45309;
   text-decoration: underline;
   cursor: pointer;
@@ -642,6 +649,46 @@
   padding: 16px 20px;
 }
 
+/* 模型 tab 顶部 toolbar：3 个筛选 picker 左对齐 + 1 个排序 picker 右对齐。
+   gap: 8px 跟 .engineActions 同；wrap 让窄屏自动换行；spacer 用 flex:1 把排序推到右边 */
+.modelsToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.modelsToolbarSpacer {
+  flex: 1;
+}
+
+/* 每个 picker 前面贴一个 14px 浅灰 icon 当语义提示——cpu/磁盘/标签/排序箭头分别表示
+   能力 / 状态 / 品牌 / 排序四类。icon 跟 picker 共一个 wrapper，避免 toolbar 主轴 gap
+   把 icon 推开 picker。 */
+.modelsToolbarItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelsToolbarIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* 云端模型卡——external_enabled 时模型列表第一行的特殊卡片，跟普通推荐卡同一容器，
+   但用偏蓝调底色 + 蓝描边把它跟"本地"区分开。不可点、不参与筛选/排序。 */
+.modelCardCloud {
+  background: color-mix(in oklab, #3b82f6 6%, rgba(0, 0, 0, 0.02));
+  border-color: color-mix(in oklab, #3b82f6 26%, rgba(0, 0, 0, 0.06));
+}
+
+.modelCardCloudIcon {
+  color: #1d4ed8;
+  flex-shrink: 0;
+}
+
 .modelList {
   display: flex;
   flex-direction: column;
@@ -672,6 +719,18 @@
   gap: 8px;
   min-width: 0;
   flex: 1;
+}
+
+/* 品牌 logo：HF org 头像直链；圆角方形 + 浅描边，跟卡片背景拉开。
+   img 加载失败时 onError 会把 display:none，所以这里没占位行为——简单。 */
+.modelCardLogo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .modelCardRight {
@@ -759,13 +818,86 @@
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
 
-/* 主按钮槽位（下载 / 已下载 / 使用中）等宽兜底——防字体宽度差导致
-   各状态卡片的 action 列对不齐。统一 min-width，"下载中…" 4 字态
-   也不被压缩 */
-.modelCardRight .testBtn,
-.modelCardRight .modelActivePill,
-.modelCardRight .modelReadyBtn {
-  min-width: 110px;
+/* 模型卡右侧的下载按钮收窄：默认 .testBtn 是引擎下载用的大按钮 (min-width 110/padding 24)，
+   推荐卡列表里同时挤了 [下载] [step1] [step2] [卸载] 多枚按钮，下载按钮收紧到刚好包住
+   "下载中…" 文字，给 step toggle 留位 */
+.modelCardRight .testBtn {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+/* 能力 chip：贴在模型名旁的 vision / text-only 标签，icon-only 紧凑形态。
+   仅展示用，不可点；hover 时通过 title / aria-label 解释含义。
+   颜色按能力区分：vision 走主色调蓝，text-only 走中性灰。 */
+.modelCapChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.modelCapChipVision {
+  background: color-mix(in oklab, #3b82f6 11%, transparent);
+  border: 1px solid color-mix(in oklab, #3b82f6 26%, transparent);
+  color: #1d4ed8;
+}
+
+.modelCapChipText {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--text-muted);
+}
+
+/* step 1 / step 2 toggle——精致小尺寸，跟左边能力 chip 视觉同一族（高度 26 vs chip 20，
+   都是圆角 6 + 浅描边的"小标签"质感）。
+   未激活：浅灰 outline + 主色 hover 提示可点；激活：绿底浅描边 + ✓ icon。 */
+.modelStepToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: var(--text-muted);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.modelStepToggle:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 32%, transparent);
+  color: var(--color-accent);
+}
+
+.modelStepToggleActive {
+  background: color-mix(in oklab, #16a34a 14%, transparent);
+  border-color: color-mix(in oklab, #16a34a 42%, transparent);
+  color: #15803d;
+}
+
+.modelStepToggleActive:hover:not(:disabled) {
+  background: color-mix(in oklab, #16a34a 20%, transparent);
+  border-color: color-mix(in oklab, #16a34a 56%, transparent);
+  color: #15803d;
+}
+
+.modelStepToggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .modelCardName {
@@ -852,6 +984,45 @@
 
 .modelExpandChevronOpen {
   transform: rotate(180deg);
+}
+
+/* —— 自定义 HF 仓库下载表单 —— */
+.modelCustomCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 9px;
+}
+
+.modelCustomHint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+
+.modelCustomField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modelCustomLabel {
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.modelCustomActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 /* —— 引擎运行时控制行（Phase 1B-α） —— */

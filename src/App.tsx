@@ -14,9 +14,9 @@ import WeeklyTab from "./pages/AISummary/tabs/WeeklyTab";
 import MonthlyTab from "./pages/AISummary/tabs/MonthlyTab";
 import ChatTab from "./pages/AISummary/tabs/ChatTab";
 import DebugTab from "./pages/AISummary/tabs/DebugTab";
-import DebugSettingsTab from "./pages/AISummary/tabs/DebugSettingsTab";
 import AISettingsPage from "./pages/AISettings/AISettingsPage";
 import EngineTab from "./pages/AISettings/tabs/EngineTab";
+import ModelsTab from "./pages/AISettings/tabs/ModelsTab";
 import AiGeneralTab from "./pages/AISettings/tabs/GeneralTab";
 import PromptTab from "./pages/AISettings/tabs/PromptTab";
 import ExternalApiTab from "./pages/AISettings/tabs/ExternalApiTab";
@@ -61,10 +61,10 @@ function App() {
           <Route path="month" element={<MonthlyTab />} />
           <Route path="chat" element={<ChatTab />} />
           <Route path="debug" element={<DebugTab />} />
-          <Route path="debug-settings" element={<DebugSettingsTab />} />
         </Route>
         <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
           <Route index element={<EngineTab />} />
+          <Route path="models" element={<ModelsTab />} />
           <Route path="general" element={<AiGeneralTab />} />
           <Route path="prompt" element={<PromptTab />} />
           <Route path="external" element={<ExternalApiTab />} />

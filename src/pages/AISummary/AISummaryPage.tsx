@@ -8,7 +8,7 @@ import styles from "./AISummaryPage.module.css";
 /** Tab 配置：分 3 组用竖线分隔，视觉上区分语义不同的 tab：
  *  - 时间维度报告：日报 / 周报 / 月报
  *  - 对话
- *  - 调试一组：跑总结的「调试」 + 它的参数面板「调试设置」（共享 DebugStateProvider state）
+ *  - 调试（跑总结 + 看结果；旧版"调试设置"已删，参数现在直接走 AI 设置主页）
  */
 const TAB_GROUPS: TabDef[][] = [
   [
@@ -17,15 +17,12 @@ const TAB_GROUPS: TabDef[][] = [
     { to: "month", labelKey: "aiSummary.tabs.month" },
   ],
   [{ to: "chat", labelKey: "aiSummary.tabs.chat" }],
-  [
-    { to: "debug", labelKey: "aiSummary.tabs.debug" },
-    { to: "debug-settings", labelKey: "aiSummary.tabs.debugSettings" },
-  ],
+  [{ to: "debug", labelKey: "aiSummary.tabs.debug" }],
 ];
 
 /**
- * AI 总结页外壳：标题 + 6 个 tab + Outlet。
- * DebugStateProvider 包 Outlet：DebugTab 和 DebugSettingsTab 共享一份调试参数 state。
+ * AI 总结页外壳：标题 + 5 个 tab + Outlet。
+ * DebugStateProvider 仍保留——DebugTab 自己用 debug 参数 state（之前由 settings tab 写入）。
  */
 export default function AISummaryPage() {
   const { t } = useTranslation();

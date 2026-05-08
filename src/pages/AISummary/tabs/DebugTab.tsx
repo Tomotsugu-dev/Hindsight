@@ -37,6 +37,7 @@ import { extractScreenshotTime } from "../../../utils/screenshotTime";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { Row } from "../../../components/FormLayout/Row";
 import { Section } from "../../../components/FormLayout/Section";
+import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import {
   DEFAULT_IMAGE_DESCRIBE_PROMPTS,
   DEFAULT_SYSTEM_PROMPTS,
@@ -183,7 +184,14 @@ export default function DebugTab() {
   const { settings } = useSettings();
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
-  const hasModel = activeMain.trim().length > 0;
+  // hasModel 跟 DailyTab + 后端 summary_runner check 对齐：step 1 必须本地 vision，
+  // step 2 走本地 summary 或 external 云端
+  const describeMain = settings?.ai.describeMain || activeMain;
+  const summaryMain = settings?.ai.summaryMain || activeMain;
+  const externalEnabled = settings?.ai.externalEnabled ?? false;
+  const hasModel =
+    describeMain.trim().length > 0 &&
+    (externalEnabled || summaryMain.trim().length > 0);
 
   // Picker 选项随语言变化而重建——i18next 切语言会让 t 引用变更，触发 useMemo 重算
   const SCOPE_OPTIONS = useMemo(() => buildScopeOptions(t), [t]);
@@ -231,6 +239,10 @@ export default function DebugTab() {
   /** llama-server 启动日志（GPU 加载情况、cuBLAS init 等）；点刷新拉一次 */
   const [engineLogs, setEngineLogs] = useState<string[]>([]);
   const [engineLogsBusy, setEngineLogsBusy] = useState(false);
+  // 共用一个 ConfirmDialog 实例：state 区分"清描述"还是"清段总结"，title/message 跟着分支
+  const [confirmingClear, setConfirmingClear] = useState<
+    "descs" | "summaries" | null
+  >(null);
 
   const refreshEngineLogs = async () => {
     setEngineLogsBusy(true);
@@ -566,6 +578,7 @@ export default function DebugTab() {
   const visibleSummaries = scope === "daily" ? summaries : [];
 
   return (
+    <>
     <div className={styles.wrap}>
       {/* —— 顶部主行：报告范围 → 日期 → (右端) 重新生成 ——
           按"主操作"原则放在最显眼的第一行；参数 / 删除 / 导出走下方次行避免抢视线。 */}
@@ -641,14 +654,14 @@ export default function DebugTab() {
             onChange={(next) => setDebugMaxImages(optionToMaxImages(next))}
             disabled={generating || !settings}
           />
-          <span
+          <button
+            type="button"
             className={styles.infoIconWrap}
             title={t("aiSummary.debug.maxImagesInfo.tooltip")}
-            tabIndex={0}
             aria-label={t("aiSummary.debug.maxImagesInfo.aria")}
           >
             <Info size={13} strokeWidth={1.85} />
-          </span>
+          </button>
         </span>
 
         {/* start / stop 放主行最右端：CSS margin-left:auto 推到行尾，"主操作"按钮放第一行
@@ -680,14 +693,14 @@ export default function DebugTab() {
               <Play size={14} strokeWidth={2} />
               {t("aiSummary.debug.actions.start")}
             </button>
-            <span
+            <button
+              type="button"
               className={styles.infoIconWrap}
               title={t("aiSummary.debug.actions.startInfo")}
-              tabIndex={0}
               aria-label={t("aiSummary.debug.actions.startInfoAria")}
             >
               <Info size={13} strokeWidth={1.85} />
-            </span>
+            </button>
           </>
         )}
       </div>
@@ -787,20 +800,9 @@ export default function DebugTab() {
             <button
               type="button"
               className={styles.deleteBtn}
-              onClick={async () => {
+              onClick={() => {
                 if (generating) return;
-                if (
-                  !confirm(
-                    t("aiSummary.debug.actions.clearDescriptionsConfirm", { date }),
-                  )
-                )
-                  return;
-                try {
-                  await api.clearDayImageDescriptions(date, "debug");
-                  setDescs([]);
-                } catch (e) {
-                  setTopError(typeof e === "string" ? e : String(e));
-                }
+                setConfirmingClear("descs");
               }}
               disabled={generating || descs.length === 0}
               title={t("aiSummary.debug.actions.clearDescriptionsTooltip")}
@@ -923,20 +925,9 @@ export default function DebugTab() {
             <button
               type="button"
               className={styles.deleteBtn}
-              onClick={async () => {
+              onClick={() => {
                 if (generating) return;
-                if (
-                  !confirm(
-                    t("aiSummary.debug.actions.clearSummariesConfirm", { date }),
-                  )
-                )
-                  return;
-                try {
-                  await api.clearDaySegmentSummaries(date, "debug");
-                  setSummaries([]);
-                } catch (e) {
-                  setTopError(typeof e === "string" ? e : String(e));
-                }
+                setConfirmingClear("summaries");
               }}
               disabled={generating || summaries.length === 0}
               title={t("aiSummary.debug.actions.clearSummariesTooltip")}
@@ -1086,6 +1077,37 @@ export default function DebugTab() {
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={confirmingClear != null}
+      title={
+        confirmingClear === "descs"
+          ? t("aiSummary.debug.actions.clearDescriptionsConfirmTitle", { date })
+          : t("aiSummary.debug.actions.clearSummariesConfirmTitle", { date })
+      }
+      message={
+        confirmingClear === "descs"
+          ? t("aiSummary.debug.actions.clearDescriptionsConfirmMessage")
+          : t("aiSummary.debug.actions.clearSummariesConfirmMessage")
+      }
+      variant="danger"
+      onConfirm={async () => {
+        const kind = confirmingClear;
+        setConfirmingClear(null);
+        try {
+          if (kind === "descs") {
+            await api.clearDayImageDescriptions(date, "debug");
+            setDescs([]);
+          } else if (kind === "summaries") {
+            await api.clearDaySegmentSummaries(date, "debug");
+            setSummaries([]);
+          }
+        } catch (e) {
+          setTopError(typeof e === "string" ? e : String(e));
+        }
+      }}
+      onCancel={() => setConfirmingClear(null)}
+    />
+    </>
   );
 }
 

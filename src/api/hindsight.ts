@@ -176,6 +176,14 @@ export interface RecommendedModel {
   mainBytes: number;
   mmprojFile: string | null;
   mmprojBytes: number;
+  /** 品牌 logo URL（HF org 头像直链）；缺失时前端 fallback 到首字母占位。 */
+  logoUrl: string | null;
+  /** 是否支持 vision 输入。false = 纯文本模型，step 1 toggle 会被禁用。
+   *  跟"有没有 mmproj 文件"不是同一回事——由 JSON 维护者按实测显式标定。 */
+  vision: boolean;
+  /** 品牌标识——前端按这个分组筛选 (Qwen / Google / DeepSeek / OpenAI / Z.AI)；
+   *  空串 = 该模型不参与品牌筛选。 */
+  brand: string;
 }
 
 /** 下载 GGUF 时的进度事件 payload。`file` 字段标识哪个文件（main / mmproj）。 */
@@ -183,6 +191,13 @@ export interface ModelDownloadProgress {
   file: string;
   downloaded: number;
   total: number | null;
+}
+
+/** 半成品下载条目——给前端渲染"继续"按钮 + 当前已下进度。
+ *  `downloadedBytes` 来自 `<file>.partial` 文件大小；`total` 没存（运行时才知道）。 */
+export interface PartialDownload {
+  filename: string;
+  downloadedBytes: number;
 }
 
 /** 模型下载进度事件名。前端 listen 这个。 */
@@ -359,11 +374,19 @@ export interface AiConfig {
    *  空字符串 = 走默认 `<data_root>/ai/models/`；后端 settings load 启动时
    *  会把空值填成实际默认路径，所以前端拿到的总是非空字符串。 */
   modelsPath: string;
-  /** 当前选中的主权重 GGUF 文件名（在 `modelsPath` 目录下）。
-   *  空 = 还没选；启动引擎会拒绝。 */
+  /** 当前选中的主权重 GGUF 文件名（旧版字段；新代码读 `describeMain` / `summaryMain` 的
+   *  effective 值，本字段当 fallback 用）。空 = 还没选；启动引擎会拒绝。 */
   activeMain: string;
-  /** 当前选中的 mmproj GGUF 文件名（vision 模型必带）。空 = 没有。 */
+  /** 当前选中的 mmproj GGUF 文件名（fallback 同上）。空 = 没有。 */
   activeMmproj: string;
+  /** step 1（图描述）专用主权重；空 = fallback 到 `activeMain`。 */
+  describeMain: string;
+  /** step 1 专用 mmproj；空 = fallback 到 `activeMmproj`。 */
+  describeMmproj: string;
+  /** step 2（段总结）专用主权重；空 = fallback 到 `activeMain`。 */
+  summaryMain: string;
+  /** step 2 专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
+  summaryMmproj: string;
   /** AI 总结使用的提示词语言："zh" / "en" / "ja"。
    *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
   promptLanguage: PromptLanguage;
@@ -586,15 +609,47 @@ export const api = {
     invoke<RecommendedModel[]>("list_recommended_models"),
   /** 从 HuggingFace 下载一个 GGUF 文件到 settings.ai.modelsPath。
    *  进度通过 listen(MODEL_DOWNLOAD_EVENT, ...) 拿。
-   *  Promise resolve = 整个文件下载完毕；reject = 任何阶段失败。
+   *  Promise resolve = 整个文件下载完毕；reject = 任何阶段失败（含被 cancel——
+   *  错误字符串以 "download cancelled:" 前缀标识，前端可据此区分"暂停"和"真失败"）。
+   *  已存在 .partial 时后端会自动发 Range request 续传，调用方无需感知。
+   *
+   *  `saveAs` 让落盘文件名跟 HF URL 上的文件名解耦——多个 rec 的 mmproj 在 HF 上常常
+   *  同名（比如 unsloth 系列都是 mmproj-F16.gguf），前端按 `<mainStem>__<hfName>` 起独立
+   *  名字落盘，避免互相覆盖。不传则跟 file 一样。progress event / cancel 都按 saveAs 索引。
    *  返回值是落盘后的完整路径。 */
-  downloadModel: (repo: string, file: string, expectedBytes: number) =>
-    invoke<string>("download_model", { repo, file, expectedBytes }),
-  /** 切换 / 设置当前在用的模型。写 settings 后会把在跑的 server 停掉，
-   *  让用户主动点"启动引擎"按新模型重起。
+  downloadModel: (
+    repo: string,
+    file: string,
+    expectedBytes: number,
+    saveAs?: string | null,
+  ) =>
+    invoke<string>("download_model", {
+      repo,
+      file,
+      saveAs: saveAs ?? null,
+      expectedBytes,
+    }),
+  /** 暂停某个进行中的下载——翻 cancel flag。`<file>.partial` 保留，下次再调
+   *  downloadModel 同 file 名时会续传。文件没在下载时静默成功（idempotent）。 */
+  cancelModelDownload: (file: string) =>
+    invoke<void>("cancel_model_download", { file }),
+  /** 列扫所有 `<file>.partial` 半成品；用于渲染"继续"按钮 + 已下进度。
+   *  目录不存在或没有 partial 时返回 `[]`。 */
+  listPartialDownloads: () =>
+    invoke<PartialDownload[]>("list_partial_downloads"),
+  /** 切换 / 设置当前在用的模型（旧版 API；新代码请用 setStepModel）。写 settings 后会把
+   *  在跑的 server 停掉，让用户主动点"启动引擎"按新模型重起。
    *  mmprojFile 传 null 表示没有（纯文本模型）。 */
   setActiveModel: (mainFile: string, mmprojFile: string | null) =>
     invoke<void>("set_active_model", { mainFile, mmprojFile }),
+  /** 单独设置 step 1（图描述）或 step 2（段总结）的模型；其它 step 不动。
+   *  step 取 "describe" / "summary"；mainFile 空字符串 = 清掉该 step 的覆盖（fallback
+   *  到 activeMain）。同时会 stop 在跑的 server。 */
+  setStepModel: (
+    step: "describe" | "summary",
+    mainFile: string,
+    mmprojFile: string | null,
+  ) => invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；

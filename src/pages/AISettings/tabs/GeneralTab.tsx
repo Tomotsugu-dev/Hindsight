@@ -76,6 +76,18 @@ export default function GeneralTab() {
             suffix={t("aiSettings.frame.windowSuffix")}
           />
         </Row>
+        <Row
+          label={t("aiSettings.frame.maxImagesLabel")}
+          labelHint={t("aiSettings.frame.maxImagesHint")}
+        >
+          <Slider
+            value={ai.maxImagesPerSegment}
+            onChange={(v) => updateAi({ maxImagesPerSegment: v })}
+            min={1}
+            max={5000}
+            step={10}
+          />
+        </Row>
       </Section>
     </div>
   );

@@ -4,7 +4,6 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
-  Bot,
   Check,
   Download,
   FolderOpen,
@@ -18,6 +17,7 @@ import {
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
+import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import {
   api,
   ENGINE_DOWNLOAD_EVENT,
@@ -43,7 +43,6 @@ import {
   recommendEngineParams,
 } from "../shared/engineParams";
 import { VramEstimateLine } from "../shared/VramEstimate";
-import { ModelsSection } from "../shared/ModelsSection";
 import { logError, logWarn } from "../../../lib/logger";
 import styles from "../AISettings.module.css";
 
@@ -71,12 +70,15 @@ export default function EngineTab() {
       .catch((e) => logError("engine.getStatus.hwSnapshot", e));
   }, []);
 
-  // 双套推荐参数：图描述（slots 优先）/ 段总结（ctx 优先）
+  // 双套推荐参数：图描述（slots 优先）/ 段总结（ctx 优先）。
+  // 模型名各自走 step 专用字段（describeMain / summaryMain），fallback 到旧 activeMain。
+  // 否则用户只设了 step-specific 模型时 activeMain 为空，recommendEngineParams 找不到
+  // 模型 spec 返回 null，「应用推荐」按钮不渲染。
   const recommendDescribe = useMemo(() => {
     if (!ai) return null;
     return recommendEngineParams(
       hwSnapshot.systemVram,
-      ai.activeMain,
+      ai.describeMain || ai.activeMain,
       hwSnapshot.platformId,
       "describe",
     );
@@ -85,7 +87,7 @@ export default function EngineTab() {
     if (!ai) return null;
     return recommendEngineParams(
       hwSnapshot.systemVram,
-      ai.activeMain,
+      ai.summaryMain || ai.activeMain,
       hwSnapshot.platformId,
       "summary",
     );
@@ -110,20 +112,24 @@ export default function EngineTab() {
       ctxSize: ai.summaryCtxSize ?? ai.ctxSize,
     });
 
+  // 推荐里的 null 表示"用 llama.cpp 默认值"（batch=512 / ctx=8192）。
+  // 但 effective getter 是 `describeBatchSize ?? batchSize`——describeBatchSize=null
+  // 会 fallback 到旧的全局 ai.batchSize（用户之前手设的值）。结果就是按了推荐没生效。
+  // 这里把 null 转显式默认值，让 effective 直接读 step-specific 字段，不再 fallback。
   const handleApplyDescribe = () => {
     if (!recommendDescribe) return;
     updateAi({
-      describeBatchSize: recommendDescribe.batchSize,
+      describeBatchSize: recommendDescribe.batchSize ?? 512,
       describeParallelSlots: recommendDescribe.parallelSlots,
-      describeCtxSize: recommendDescribe.ctxSize,
+      describeCtxSize: recommendDescribe.ctxSize ?? 8192,
     });
   };
   const handleApplySummary = () => {
     if (!recommendSummary) return;
     updateAi({
-      summaryBatchSize: recommendSummary.batchSize,
+      summaryBatchSize: recommendSummary.batchSize ?? 512,
       summaryParallelSlots: recommendSummary.parallelSlots,
-      summaryCtxSize: recommendSummary.ctxSize,
+      summaryCtxSize: recommendSummary.ctxSize ?? 8192,
     });
   };
 
@@ -145,16 +151,6 @@ export default function EngineTab() {
         icon={Server}
       >
         <EngineSection />
-      </Section>
-
-      {/* 模型管理：原本独立 ModelsTab，现合并到引擎 tab 下——"运行时环境"集中在一处
-          （引擎 + 模型 + 启动参数），减少 tab 数量。 */}
-      <Section
-        title={t("aiSettings.models.sectionTitle")}
-        description={t("aiSettings.models.sectionDesc")}
-        icon={Bot}
-      >
-        <ModelsSection />
       </Section>
 
       {/* 引擎参数双套——图描述（slots 优先）+ 段总结（ctx 优先）。
@@ -193,7 +189,7 @@ export default function EngineTab() {
           />
         </Row>
         <VramEstimateLine
-          modelName={ai.activeMain}
+          modelName={ai.describeMain || ai.activeMain}
           parallelSlots={describeSlots ?? 1}
           ctxSize={describeCtx ?? 8192}
           systemVram={hwSnapshot.systemVram}
@@ -235,7 +231,7 @@ export default function EngineTab() {
           />
         </Row>
         <VramEstimateLine
-          modelName={ai.activeMain}
+          modelName={ai.summaryMain || ai.activeMain}
           parallelSlots={summarySlots ?? 1}
           ctxSize={summaryCtx ?? 8192}
           systemVram={hwSnapshot.systemVram}
@@ -264,6 +260,7 @@ function EngineSection() {
   // 启动 / 停止 / 测试 三个动作的 in-flight 状态
   const [engineBusy, setEngineBusy] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>({ kind: "idle" });
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const refresh = async () => {
     try {
@@ -311,8 +308,12 @@ function EngineSection() {
     }
   };
 
-  const onDelete = async () => {
-    if (!confirm(t("aiSettings.engine.uninstallConfirm"))) return;
+  const onDelete = () => {
+    setConfirmingDelete(true);
+  };
+
+  const doDelete = async () => {
+    setConfirmingDelete(false);
     setBusy(true);
     setError(null);
     try {
@@ -399,6 +400,7 @@ function EngineSection() {
   const versionDisplay = version ?? t("aiSettings.engine.versionUnknown");
 
   return (
+    <>
     <div className={styles.engineCard}>
       <div className={styles.engineHead}>
         <span
@@ -412,9 +414,9 @@ function EngineSection() {
         </span>
         <span className={styles.engineMeta}>
           llama.cpp
-          <span
+          <button
+            type="button"
             className={styles.engineInfoWrap}
-            tabIndex={0}
             aria-label={
               stale
                 ? t("aiSettings.engine.versionStaleAria", {
@@ -433,7 +435,7 @@ function EngineSection() {
                   })
                 : ""}
             </span>
-          </span>
+          </button>
           <span className={styles.engineMetaSep}>·</span>
           {t("aiSettings.engine.detected", { accel: accelLabel })}
         </span>
@@ -446,16 +448,15 @@ function EngineSection() {
             <strong>{t("aiSettings.engine.noCuda.headline")}</strong>
             <span>
               {t("aiSettings.engine.noCuda.prefix")}
-              <a
+              <button
+                type="button"
                 className={styles.engineWarningLink}
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  void openUrl("https://developer.nvidia.com/cuda-downloads");
-                }}
+                onClick={() =>
+                  void openUrl("https://developer.nvidia.com/cuda-downloads")
+                }
               >
                 {t("aiSettings.engine.noCuda.linkText")}
-              </a>
+              </button>
               {t("aiSettings.engine.noCuda.suffix")}
             </span>
           </div>
@@ -537,7 +538,7 @@ function EngineSection() {
         <button
           type="button"
           className={styles.engineUninstall}
-          onClick={() => void onDelete()}
+          onClick={onDelete}
           disabled={busy || !installed}
           title={
             installed
@@ -552,6 +553,15 @@ function EngineSection() {
 
       {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
     </div>
+    <ConfirmDialog
+      open={confirmingDelete}
+      title={t("aiSettings.engine.uninstallConfirmTitle")}
+      message={t("aiSettings.engine.uninstallConfirmMessage")}
+      variant="danger"
+      onConfirm={() => void doDelete()}
+      onCancel={() => setConfirmingDelete(false)}
+    />
+    </>
   );
 }
 

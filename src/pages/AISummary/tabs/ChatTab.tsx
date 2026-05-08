@@ -276,6 +276,8 @@ export default function ChatTab() {
           placeholder={t("aiSummary.chat.input.placeholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          // 进入聊天 tab 即可输入是用户预期，键盘 user 同样受益
+          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
         <button

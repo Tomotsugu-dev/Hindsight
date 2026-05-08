@@ -423,6 +423,7 @@
     "title": "AI 設定",
     "tabs": {
       "engine": "エンジン",
+      "models": "モデル",
       "general": "一般",
       "prompt": "プロンプト",
       "external": "クラウド API"
@@ -454,6 +455,8 @@
         "suffix": " することをおすすめします (≥ 12.4)。再起動後、Hindsight は自動的に GPU 対応版に切り替わります。"
       },
       "uninstallConfirm": "ローカル AI エンジンをアンインストールしますか? モデルファイルには影響しません。",
+      "uninstallConfirmTitle": "ローカル AI エンジンをアンインストールしますか?",
+      "uninstallConfirmMessage": "モデルファイルには影響しません。",
       "actions": {
         "downloading": "ダウンロード中…",
         "updating": "更新中…",
@@ -510,16 +513,49 @@
     "models": {
       "sectionTitle": "モデル",
       "sectionDesc": "ローカル推論に使うビジョン LLM。GGUF ファイルは HuggingFace からダウンロードします。",
+      "toolbar": {
+        "capAll": "すべて",
+        "capVision": "Vision",
+        "capText": "テキスト",
+        "statusAll": "すべて",
+        "statusInstalled": "ダウンロード済み",
+        "statusNotInstalled": "未ダウンロード",
+        "brandAll": "すべて",
+        "sortDefault": "デフォルト順",
+        "sortSizeAsc": "サイズ ↑",
+        "sortSizeDesc": "サイズ ↓",
+        "sortName": "名前 A-Z"
+      },
+      "cloud": {
+        "cardTitle": "クラウド · {{provider}}",
+        "modelUnset": "(モデル未設定)",
+        "step2Tooltip": "Step 2 (セグメント要約) はクラウド API にルーティングされています。エンドポイント / モデルの編集は「クラウド API」タブで行ってください。"
+      },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
         "hfTooltipAria": "HuggingFace {{repo}}",
         "approxSize": "~{{size}} GB",
         "download": "ダウンロード",
         "downloading": "ダウンロード中…",
-        "inUse": "使用中",
-        "inUseTooltip": "クリックで無効化し「ダウンロード済み」に戻します (実行中のサーバーは停止します)",
-        "ready": "ダウンロード済み",
-        "readyTooltip": "クリックでこのモデルを有効化します (実行中のサーバーは停止し、新しいモデルを読み込むには手動で再起動してください)",
+        "pause": "一時停止",
+        "pauseTooltip": "現在のダウンロードを一時停止します。ダウンロード済みバイトは保持され、「再開」で続きからダウンロードします。",
+        "resume": "再開",
+        "resumeTooltip": "ダウンロード済み {{size}} MB から再開します。",
+        "visionLabel": "vision",
+        "visionTooltip": "画像入力に対応——step 1 (画像説明) と step 2 (セグメント要約) の両方を実行できます。",
+        "textOnlyLabel": "テキスト",
+        "textOnlyTooltip": "テキスト専用モデル——step 2 (セグメント要約) は実行できますが、step 1 はできません。",
+        "capImage": "画像入力対応",
+        "capImageTooltip": "画像入力に対応——step 1 (画像説明) で利用できます。",
+        "capText": "テキスト生成対応",
+        "capTextTooltip": "テキスト生成に対応——step 2 (セグメント要約) で利用できます。",
+        "step1": "Vision",
+        "step1ToggleOnTooltip": "このモデルを vision ステップ (step 1: 画像説明) に割り当てます。前の選択を置き換えます。",
+        "step1ToggleOffTooltip": "クリックで vision ステップを解除 (旧 active モデルにフォールバック)。",
+        "step1DisabledTooltip": "テキスト専用モデルは画像説明ステップを実行できません (vision 能力が必要)。",
+        "step2": "Text",
+        "step2ToggleOnTooltip": "このモデルを text ステップ (step 2: セグメント要約) に割り当てます。前の選択を置き換えます。",
+        "step2ToggleOffTooltip": "クリックで text ステップを解除 (旧 active モデルにフォールバック)。",
         "uninstallTooltipInstalled": "ローカルファイルを削除 (main + mmproj)",
         "uninstallTooltipNotInstalled": "未インストール",
         "progressMain": "メイン重み",
@@ -528,11 +564,25 @@
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "{{name}} をアンインストールしますか? メイン重み{{extra}}を削除します。この操作は取り消せません。",
+      "uninstallConfirmTitle": "{{name}} をアンインストールしますか?",
+      "uninstallConfirmMessage": "メイン重み{{extra}}を削除します。この操作は取り消せません。",
       "uninstallConfirmExtra": " と mmproj プロジェクター",
       "expand": {
         "more": "他のモデルを表示 ({{count}})",
         "collapse": "折りたたむ",
         "busyTooltip": "ダウンロード完了後にのみ折りたためます"
+      },
+      "custom": {
+        "expand": "カスタム HuggingFace モデル",
+        "collapse": "カスタムフォームを折りたたむ",
+        "hint": "任意の HuggingFace リポジトリから GGUF ファイルをダウンロードします。ファイルは llama.cpp で読み込み可能である必要があります。mmproj フィールドはビジョンモデルでのみ必要です。",
+        "repoLabel": "リポジトリ",
+        "repoPlaceholder": "例: bartowski/Llama-3.2-11B-Vision-Instruct-GGUF",
+        "mainFileLabel": "メイン重みファイル",
+        "mainFilePlaceholder": "例: Llama-3.2-11B-Vision-Instruct-Q4_K_M.gguf",
+        "mmprojFileLabel": "mmproj ファイル (任意、ビジョンモデルのみ)",
+        "mmprojFilePlaceholder": "例: mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
+        "errorRequired": "リポジトリとメイン重みファイルは必須です。"
       }
     },
     "brief": {
@@ -574,7 +624,9 @@
       "thresholdHint": "2 つのスクリーンショットを同一とみなす差分の許容量です。小さいほど厳格になります。0 にするとピクセル単位で完全一致のフレームのみを重複として扱い、分析から除外します。",
       "windowLabel": "時間ウィンドウ",
       "windowHint": "この時間幅の中で撮られたスクリーンショットだけを比較し、別の時間帯にある似たフレームが誤ってマージされるのを防ぎます。",
-      "windowSuffix": "分"
+      "windowSuffix": "分",
+      "maxImagesLabel": "セグメントあたりの最大枚数",
+      "maxImagesHint": "重複排除後にセグメントごとに AI へ送る上限枚数。Step 1 (画像説明) は 1 枚ずつ vision LLM を呼ぶため、値が大きいほどそのセグメントの処理時間が直接伸びます。デフォルト 30。長いセグメントをよりカバーしたい場合は上げてください。"
     },
     "external": {
       "sectionTitle": "クラウド API（任意）",
@@ -711,8 +763,7 @@
       "week": "週次",
       "month": "月次",
       "chat": "チャット",
-      "debug": "デバッグ",
-      "debugSettings": "デバッグ設定"
+      "debug": "デバッグ"
     },
     "placeholder": {
       "hint": "開発中の機能です。"
@@ -745,6 +796,8 @@
         "deleteTooltip": "この日の ai_summaries (source=daily) と ai_image_descriptions を消去します（取り消し不可）。",
         "deleteEmptyTooltip": "この日にはまだ削除できる日次データがありません。",
         "deleteConfirm": "{{date}} の日次レポートデータを削除しますか? 時間帯ごとのサマリーと画像ごとの記述がすべて消去されます。デバッグタブには影響しません。この操作は取り消せません。",
+        "deleteConfirmTitle": "{{date}} の日次レポートデータを削除しますか?",
+        "deleteConfirmMessage": "時間帯ごとのサマリーと画像ごとの記述がすべて消去されます。デバッグタブには影響しません。この操作は取り消せません。",
         "exportMarkdown": "Markdown でエクスポート",
         "exportTooltip": "現在の日付の全時間帯のサマリーを Markdown ファイルとしてエクスポートします。",
         "exportEmptyTooltip": "エクスポートできる時間帯のサマリーがまだありません。",
@@ -913,9 +966,13 @@
         "clearDescriptions": "削除",
         "clearDescriptionsTooltip": "この日のすべての画像説明を消去します（時間帯サマリーは保持、取り消し不可）。",
         "clearDescriptionsConfirm": "{{date}} のすべての画像説明を削除しますか? 時間帯サマリーは保持されます。この操作は取り消せません。",
+        "clearDescriptionsConfirmTitle": "{{date}} のすべての画像説明を削除しますか?",
+        "clearDescriptionsConfirmMessage": "時間帯サマリーは保持されます。この操作は取り消せません。",
         "clearSummaries": "削除",
         "clearSummariesTooltip": "この日のすべての時間帯サマリーを消去します（画像説明は保持、取り消し不可）。",
         "clearSummariesConfirm": "{{date}} のすべての時間帯サマリーを削除しますか? 画像説明は保持されます。この操作は取り消せません。",
+        "clearSummariesConfirmTitle": "{{date}} のすべての時間帯サマリーを削除しますか?",
+        "clearSummariesConfirmMessage": "画像説明は保持されます。この操作は取り消せません。",
         "exportDescriptionsMd": "Markdown 出力",
         "exportDescriptionsMdTooltip": "この日のすべての画像説明を Markdown ファイルとしてエクスポート。",
         "exportDescriptionsMdEmptyTooltip": "エクスポートできる画像説明がまだありません。",

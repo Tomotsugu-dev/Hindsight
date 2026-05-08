@@ -423,6 +423,7 @@
     "title": "AI Settings",
     "tabs": {
       "engine": "Engine",
+      "models": "Models",
       "general": "General",
       "prompt": "Prompt",
       "external": "Cloud API"
@@ -454,6 +455,8 @@
         "suffix": " (≥ 12.4) first; Hindsight will automatically switch to the GPU-accelerated variant after a restart."
       },
       "uninstallConfirm": "Uninstall the local AI engine? Model files will not be affected.",
+      "uninstallConfirmTitle": "Uninstall the local AI engine?",
+      "uninstallConfirmMessage": "Model files will not be affected.",
       "actions": {
         "downloading": "Downloading…",
         "updating": "Updating…",
@@ -510,16 +513,49 @@
     "models": {
       "sectionTitle": "Models",
       "sectionDesc": "Vision LLM used for local inference; GGUF files are downloaded from HuggingFace.",
+      "toolbar": {
+        "capAll": "All",
+        "capVision": "Vision",
+        "capText": "Text only",
+        "statusAll": "All",
+        "statusInstalled": "Downloaded",
+        "statusNotInstalled": "Not downloaded",
+        "brandAll": "All",
+        "sortDefault": "Default order",
+        "sortSizeAsc": "Size ↑",
+        "sortSizeDesc": "Size ↓",
+        "sortName": "Name A-Z"
+      },
+      "cloud": {
+        "cardTitle": "Cloud · {{provider}}",
+        "modelUnset": "(model not set)",
+        "step2Tooltip": "Step 2 (segment summary) is routed to the cloud API. Edit endpoint / model in the Cloud API tab."
+      },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
         "hfTooltipAria": "HuggingFace {{repo}}",
         "approxSize": "~{{size}} GB",
         "download": "Download",
         "downloading": "Downloading…",
-        "inUse": "In use",
-        "inUseTooltip": "Click to deactivate and return to 'Downloaded' (the running server will be stopped)",
-        "ready": "Downloaded",
-        "readyTooltip": "Click to activate this model (the running server will be stopped; restart manually to load the new model)",
+        "pause": "Pause",
+        "pauseTooltip": "Pause the current download. Partial bytes are kept; resume later picks up where you left off.",
+        "resume": "Resume",
+        "resumeTooltip": "Resume from {{size}} MB already downloaded.",
+        "visionLabel": "vision",
+        "visionTooltip": "Supports image input — can run step 1 (image describe) and step 2 (segment summary).",
+        "textOnlyLabel": "text only",
+        "textOnlyTooltip": "Text-only model — can run step 2 (segment summary) but not step 1.",
+        "capImage": "Image input",
+        "capImageTooltip": "Supports image input — eligible for step 1 (image describe).",
+        "capText": "Text output",
+        "capTextTooltip": "Supports text generation — eligible for step 2 (segment summary).",
+        "step1": "Vision",
+        "step1ToggleOnTooltip": "Use this model for the vision step (step 1: image describe). Replaces the previous selection.",
+        "step1ToggleOffTooltip": "Click to clear the vision step (will fall back to the legacy active model).",
+        "step1DisabledTooltip": "This model has no vision capability — can't run the image describe step.",
+        "step2": "Text",
+        "step2ToggleOnTooltip": "Use this model for the text step (step 2: segment summary). Replaces the previous selection.",
+        "step2ToggleOffTooltip": "Click to clear the text step (will fall back to the legacy active model).",
         "uninstallTooltipInstalled": "Delete local files (main + mmproj)",
         "uninstallTooltipNotInstalled": "Not installed",
         "progressMain": "main weights",
@@ -528,11 +564,25 @@
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "Uninstall {{name}}? This will delete the main weights{{extra}} — cannot be undone.",
+      "uninstallConfirmTitle": "Uninstall {{name}}?",
+      "uninstallConfirmMessage": "This will delete the main weights{{extra}}. The action cannot be undone.",
       "uninstallConfirmExtra": " and the mmproj projector",
       "expand": {
         "more": "Show more models ({{count}})",
         "collapse": "Collapse",
         "busyTooltip": "Can collapse only after downloads finish"
+      },
+      "custom": {
+        "expand": "Custom HuggingFace model",
+        "collapse": "Collapse custom model form",
+        "hint": "Download any GGUF file from a HuggingFace repo. The file must be loadable by llama.cpp; the mmproj field is only needed for vision models.",
+        "repoLabel": "Repository",
+        "repoPlaceholder": "e.g. bartowski/Llama-3.2-11B-Vision-Instruct-GGUF",
+        "mainFileLabel": "Main weights file",
+        "mainFilePlaceholder": "e.g. Llama-3.2-11B-Vision-Instruct-Q4_K_M.gguf",
+        "mmprojFileLabel": "mmproj file (optional, vision models only)",
+        "mmprojFilePlaceholder": "e.g. mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
+        "errorRequired": "Repository and main weights file are required."
       }
     },
     "brief": {
@@ -574,7 +624,9 @@
       "thresholdHint": "How different two screenshots can be and still count as the same. Lower is stricter — set to 0 to only treat pixel-identical frames as duplicates and exclude them from analysis.",
       "windowLabel": "Time window",
       "windowHint": "Only compare screenshots taken within this window, so similar frames from different parts of the day don't get merged.",
-      "windowSuffix": "min"
+      "windowSuffix": "min",
+      "maxImagesLabel": "Max images per segment",
+      "maxImagesHint": "Cap on screenshots sampled per segment after deduplication. Step 1 (vision describe) runs once per image, so high values directly add segment processing time. Default 30; raise if you want more coverage of long segments."
     },
     "external": {
       "sectionTitle": "Cloud API (optional)",
@@ -711,8 +763,7 @@
       "week": "Weekly",
       "month": "Monthly",
       "chat": "Chat",
-      "debug": "Debug",
-      "debugSettings": "Debug Settings"
+      "debug": "Debug"
     },
     "placeholder": {
       "hint": "Feature in development."
@@ -745,6 +796,8 @@
         "deleteTooltip": "Clear ai_summaries (source=daily) and ai_image_descriptions for this day (cannot be undone).",
         "deleteEmptyTooltip": "No daily data yet to delete.",
         "deleteConfirm": "Delete daily report data for {{date}}? Segment summaries and per-image descriptions will be cleared. The Debug tab is unaffected. This cannot be undone.",
+        "deleteConfirmTitle": "Delete daily report data for {{date}}?",
+        "deleteConfirmMessage": "Segment summaries and per-image descriptions will be cleared. The Debug tab is unaffected. This cannot be undone.",
         "exportMarkdown": "Export Markdown",
         "exportTooltip": "Export all segment summaries for the current date as a Markdown file.",
         "exportEmptyTooltip": "No segment summaries to export yet.",
@@ -913,9 +966,13 @@
         "clearDescriptions": "Delete",
         "clearDescriptionsTooltip": "Clear all image descriptions for this day (segment summaries kept, cannot be undone).",
         "clearDescriptionsConfirm": "Delete all image descriptions for {{date}}? Segment summaries will be kept. This cannot be undone.",
+        "clearDescriptionsConfirmTitle": "Delete all image descriptions for {{date}}?",
+        "clearDescriptionsConfirmMessage": "Segment summaries will be kept. This cannot be undone.",
         "clearSummaries": "Delete",
         "clearSummariesTooltip": "Clear all segment summaries for this day (image descriptions kept, cannot be undone).",
         "clearSummariesConfirm": "Delete all segment summaries for {{date}}? Image descriptions will be kept. This cannot be undone.",
+        "clearSummariesConfirmTitle": "Delete all segment summaries for {{date}}?",
+        "clearSummariesConfirmMessage": "Image descriptions will be kept. This cannot be undone.",
         "exportDescriptionsMd": "Export Markdown",
         "exportDescriptionsMdTooltip": "Export all image descriptions for this day as a Markdown file.",
         "exportDescriptionsMdEmptyTooltip": "No image descriptions to export yet.",
