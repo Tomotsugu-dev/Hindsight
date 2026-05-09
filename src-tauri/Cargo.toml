@@ -1,8 +1,8 @@
 [package]
 name = "hindsight"
 version = "0.5.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Privacy-first activity tracking and AI summaries for desktop"
+authors = ["Tomotsugu-dev <heroburnning@gmail.com>"]
 edition = "2021"
 
 [lib]
@@ -69,3 +69,18 @@ icns = "0.3"
 # Unix（Linux + macOS）：子进程保护用 setpgid + （Linux）prctl PDEATHSIG
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# CI / 本地开发期 lint。新成员加进来时 clippy 即报，不再依赖手动审计。
+# 不开 needless_pass_by_value：Tauri callback 强制按值签名（MenuEvent / TrayIconEvent）、
+# Tauri 命令参数惯例用 String（避免 lifetime 噪音），开了也是噪声多于收益。
+[lints.clippy]
+ptr_arg = "warn"
+
+# 发布构建瘦身：lto + opt=z + 单 codegen unit + strip + abort，
+# 比默认 release 小 ~15-20%。panic=abort 失效 catch_unwind（项目未用）。
+[profile.release]
+lto = true
+opt-level = "z"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

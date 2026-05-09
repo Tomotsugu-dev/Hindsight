@@ -92,6 +92,11 @@ pub fn set_data_root(path: String) -> Result<(), String> {
     if trimmed.is_empty() {
         return Err("路径不能为空".into());
     }
+    // 拒绝相对路径——下次启动 dirs::data_dir() fallback 不会触发，
+    // 进程会从 cwd 解析这个相对路径，对用户极反直觉
+    if !std::path::Path::new(trimmed).is_absolute() {
+        return Err("数据目录必须是绝对路径".into());
+    }
     crate::bootstrap::set_data_root(trimmed).map_err(|e| e.to_string())
 }
 

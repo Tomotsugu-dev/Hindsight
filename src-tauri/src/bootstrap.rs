@@ -32,8 +32,11 @@ struct BootstrapFile {
     data_path: Option<String>,
 }
 
-/// 启动级配置文件位置：%APPDATA%/Hindsight/bootstrap.json （Windows）
-/// 它存放的是"DB 应该开在哪里"这种 chicken-and-egg 的信息——在打开 DB 之前就要读到。
+/// 启动级配置：`dirs::config_dir() / Hindsight / bootstrap.json`
+///   Windows: `%APPDATA%\Hindsight\bootstrap.json`
+///   macOS:   `~/Library/Application Support/Hindsight/bootstrap.json`
+///   Linux:   `~/.config/Hindsight/bootstrap.json`
+/// 存放的是"DB 应该开在哪里"这种 chicken-and-egg 的信息——在打开 DB 之前就要读到。
 fn config_file() -> Option<PathBuf> {
     Some(dirs::config_dir()?.join("Hindsight").join("bootstrap.json"))
 }

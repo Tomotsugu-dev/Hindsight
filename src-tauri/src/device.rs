@@ -1,6 +1,6 @@
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use chrono::Utc;
@@ -83,7 +83,7 @@ fn generate_default() -> DeviceMeta {
     }
 }
 
-fn write_atomic(path: &PathBuf, meta: &DeviceMeta) -> io::Result<()> {
+fn write_atomic(path: &Path, meta: &DeviceMeta) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
