@@ -92,6 +92,35 @@ pub async fn get_day(
     Ok(rows)
 }
 
+/// 拿某段已落库的 status；没行返回 None。给 Phase 2 step2_only 看到空 stored 时
+/// 区分"真空截图"（Phase 1 已写 skipped）跟"step 1 全失败"（Phase 1 已写 error）用。
+pub async fn get_segment_status(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+    segment_idx: u32,
+) -> Result<Option<String>> {
+    let src = source.to_string();
+    let date = local_date.to_string();
+    let row = pool
+        .0
+        .call(move |conn| {
+            let row = conn
+                .query_row(
+                    "SELECT status FROM ai_summaries
+                       WHERE source = ?1 AND local_date = ?2 AND segment_idx = ?3
+                       LIMIT 1",
+                    rusqlite::params![src, date, segment_idx as i64],
+                    |r| r.get::<_, String>(0),
+                )
+                .optional()
+                .db()?;
+            Ok(row)
+        })
+        .await?;
+    Ok(row)
+}
+
 /// 写入或覆盖一段。`generated_at` 自动用当前 UTC 时间填，调用方不用管。
 /// PK = (source, local_date, segment_idx)，所以 daily / debug 互不冲突。
 pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()> {

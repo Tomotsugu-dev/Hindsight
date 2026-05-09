@@ -492,12 +492,35 @@ const AI_IMAGE_DESCRIPTIONS_TABLE_SQL: &str = r#"
       ON ai_image_descriptions(local_date, segment_idx);
 "#;
 
+/// v22：截图 embedding 缓存表（Phase 1C — 相似度去重）。
+///
+/// 总结时算 MobileNet 576-dim 向量做余弦阈值去重；首次跑算 + 写表，后续命中即取，
+/// 5x 加速大日全段重跑。
+///
+/// 复合主键 `(screenshot_path, model_id)` —— 将来要 swap 到 DINOv2 或别的 backbone
+/// 时换 model_id 即可，旧行自然失效不冲突；不需要单独写迁移擦旧 embedding。
+///
+/// embedding BLOB = `f32 × dim` 的 little-endian raw bytes（4 字节/float × 576 = 2304 B）。
+/// 序列化用 `bytemuck::cast_slice` / `f32::to_le_bytes`，反序列化用 `f32::from_le_bytes`。
+const SCREENSHOT_EMBEDDINGS_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS screenshot_embeddings (
+        screenshot_path TEXT NOT NULL,
+        model_id        TEXT NOT NULL,
+        dim             INTEGER NOT NULL,
+        embedding       BLOB NOT NULL,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (screenshot_path, model_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_screenshot_embeddings_path
+        ON screenshot_embeddings (screenshot_path);
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 11] = [
+    let extras: [&'static str; 12] = [
         CROSS_OS_CLEANUP_SQL,                // v11
         V12_PLACEHOLDER,                     // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                 // v13
@@ -509,6 +532,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         AI_IMAGE_DESCRIPTIONS_TABLE_SQL,     // v19
         AI_IMAGE_DESC_PERF_COLS_SQL,         // v20
         AI_TABLES_ADD_SOURCE_SQL,            // v21
+        SCREENSHOT_EMBEDDINGS_SQL,           // v22
     ];
     pool.0
         .call(move |conn| {

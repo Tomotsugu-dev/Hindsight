@@ -52,28 +52,17 @@ export default function GeneralTab() {
         description={t("aiSettings.frame.sectionDesc")}
       >
         <Row
-          label={t("aiSettings.frame.thresholdLabel")}
-          labelHint={t("aiSettings.frame.thresholdHint")}
+          label={t("aiSettings.frame.dedupThresholdLabel")}
+          labelHint={t("aiSettings.frame.dedupThresholdHint")}
         >
+          {/* 后端存 0.70..=0.99，UI 用 70..=99 整数百分比，存取时 × 100 / ÷ 100 */}
           <Slider
-            value={ai.hashThreshold}
-            onChange={(v) => updateAi({ hashThreshold: v })}
-            min={0}
-            max={32}
+            value={Math.round(ai.dedupThreshold * 100)}
+            onChange={(v) => updateAi({ dedupThreshold: v / 100 })}
+            min={70}
+            max={99}
             step={1}
-          />
-        </Row>
-        <Row
-          label={t("aiSettings.frame.windowLabel")}
-          labelHint={t("aiSettings.frame.windowHint")}
-        >
-          <Slider
-            value={ai.hashWindowMinutes}
-            onChange={(v) => updateAi({ hashWindowMinutes: v })}
-            min={0}
-            max={30}
-            step={1}
-            suffix={t("aiSettings.frame.windowSuffix")}
+            suffix="%"
           />
         </Row>
         <Row

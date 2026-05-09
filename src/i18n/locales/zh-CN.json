@@ -620,13 +620,10 @@
     "frame": {
       "sectionTitle": "抽帧参数",
       "sectionDesc": "一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。",
-      "thresholdLabel": "相似度阈值",
-      "thresholdHint": "两张截图差异多少算同一张。越小越严格——设置为 0 就相当于两张图片的每个像素都一致才认为是重复的图片，不加入分析。",
-      "windowLabel": "时间窗",
-      "windowHint": "只比这段时间内的截图，避免上下午相似画面被误合并。",
-      "windowSuffix": "分钟",
+      "dedupThresholdLabel": "相似度去重阈值",
+      "dedupThresholdHint": "两张截图的余弦相似度 ≥ 阈值时合并为同一张。值越大越保守（保留更多）；值越小越激进（合并更多，可能误删）。默认 95% 在实测数据上去重率约 70%。",
       "maxImagesLabel": "单段最多张数",
-      "maxImagesHint": "去重后单个时段送 AI 分析的截图上限。Step 1（图描述）是每张图都跑一次 vision LLM，数值越大该段处理时长越长。默认 30；想覆盖长段更全可以拉高。"
+      "maxImagesHint": "去重后单个时段送 AI 分析的截图上限。Step 1（图描述）是每张图都跑一次 vision LLM，数值越大该段处理时长越长。默认 1024；想覆盖长段更全可以拉高。"
     },
     "external": {
       "sectionTitle": "云端 API（可选）",
@@ -804,7 +801,8 @@
         "exportRunningTooltip": "总结进行中，等完成后再导出",
         "retry": "重试",
         "retryTooltip": "重新生成这一段",
-        "retryDisabledTooltip": "整轮总结进行中，等完成或停止后再重试"
+        "retryDisabledTooltip": "整轮总结进行中，等完成或停止后再重试",
+        "dismissError": "关闭"
       },
       "errors": {
         "noVisionModel": "请先到 AI 设置 → 模型 选一个 vision 模型",
@@ -812,6 +810,7 @@
         "unknown": "未知错误"
       },
       "engineLoading": "加载模型中…",
+      "dedupRunning": "相似度去重中…（{{count}} 张）",
       "toast": {
         "exported": "已导出 {{filename}} 到「下载」文件夹"
       },
@@ -822,12 +821,15 @@
           "skipped": "无截图",
           "error": "失败",
           "analyzing": "分析中 · {{done}} / {{total}} 张",
-          "analyzingNoTotal": "分析中…"
+          "analyzingNoTotal": "分析中…",
+          "summarizing": "生成段总结中…"
         },
         "body": {
           "empty": "点上方「开始总结」生成本段内容。",
           "analyzing": "正在让模型看截图… {{done}} / {{total}} 张已完成",
           "analyzingNoTotal": "正在分析…",
+          "summarizing": "图描述完成（{{count}} 张），正在让模型生成段总结…",
+          "summarizingNoTotal": "正在生成段总结…",
           "skipped": "这段时间没有截图（可能没用电脑 / 全在隐私名单 / 全在排除分类）。",
           "errorLabel": "失败："
         }
@@ -998,11 +1000,8 @@
       "frame": {
         "title": "抽帧参数",
         "description": "一段时间内截图很多，先按相似度去重再选送给模型，省时省 token。仅本调试窗口生效。",
-        "hashThresholdLabel": "相似度阈值",
-        "hashThresholdHint": "两张截图差异多少算同一张。越小越严格——设置为 0 就相当于两张图片的每个像素都一致才认为是重复的图片，不加入分析。",
-        "hashWindowLabel": "时间窗",
-        "hashWindowHint": "只比这段时间内的截图，避免上下午相似画面被误合并。",
-        "hashWindowSuffix": "分钟"
+        "dedupThresholdLabel": "相似度去重阈值",
+        "dedupThresholdHint": "两张截图的余弦相似度 ≥ 阈值时合并为同一张。值越大越保守（保留更多）；值越小越激进（合并更多，可能误删）。默认 95% 在实测数据上去重率约 70%。"
       },
       "engine": {
         "title": "引擎参数（启动时）",
@@ -1020,6 +1019,7 @@
         "runFailed": "调试运行失败"
       },
       "engineLoading": "加载模型中…",
+      "dedupRunning": "相似度去重中…（{{count}} 张）",
       "scopePlaceholder": "{{type}}调试待后端实现。切回「日报」可以调试当前日报的两步生成流程（逐图描述 → 段总结）。",
       "imagePrompt": {
         "title": "图片描述提示词",

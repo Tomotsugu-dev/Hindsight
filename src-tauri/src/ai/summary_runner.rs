@@ -20,6 +20,8 @@ use chrono::{NaiveDate, Utc};
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
+use crate::ai::dedup;
+use crate::ai::embedding;
 use crate::ai::image::{pick_frames, to_data_uri};
 use crate::ai::llm::ChatClient;
 use crate::ai::models;
@@ -35,6 +37,7 @@ use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{
     self, list_segment_screenshots, list_segment_top_apps, ImageDescriptionRow, ScreenshotMeta,
 };
+use crate::repo::embeddings as embeddings_repo;
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
@@ -195,144 +198,88 @@ impl DaySummaryRunner {
             let _ = self.supervisor.stop().await;
         }
 
-        // 决定阶段执行计划：
-        //   step1_only=true → 只 phase 1（用 describe_overrides）
-        //   step2_only=true → 只 phase 2（直接用 summary_overrides 启动）
-        //   都 false（daily 路径） → phase 1 → restart → phase 2
-        let run_phase1 = !step2_only;
-        let run_phase2 = !step1_only;
+        // 决定执行计划：
+        //   step1_only=true  → 调试 tab「仅生成图片描述」：所有段批量跑 step 1，phased
+        //   step2_only=true  → 调试 tab「仅生成段总结」：所有段从 DB 读描述跑 step 2，phased
+        //   都 false（daily 路径） → **段间流水线**：每段 step 1 跑完立刻跑 step 2 →
+        //                            前端立刻看到该段总结，不用等满整轮 phase 1。
+        //                            代价：step 1/2 用不同模型时每段两次 server restart。
 
-        // —— Phase 1: 全段图描述 ——
-        if run_phase1 {
-            let st = self.supervisor.status().await;
-            if st.state != EngineState::Running {
-                let mut p = SummaryProgress::base(
-                    source.to_string(),
-                    date_str.clone(),
-                    "engine_starting",
-                    total_segments,
-                );
-                p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
-                self.emit(p);
-            }
-            let port = self
-                .ensure_engine_running(&ai, Step::Describe, describe_overrides.clone())
-                .await?;
-            let step1 = ChatClient::new(port, ai.effective_describe_main().to_string())?;
-            // step2 client 在 phase 1 不会调用，但 run_one_segment 签名要求传——构造一份占位的；
-            // 标签随便给（phase 1 里不会落库 step2 行）
-            let step2_phase1 = build_step2(&ai, port, ai.effective_describe_main())?;
-            let max_images = ai.max_images_per_segment as usize;
-            for (idx, seg) in ai.segments.iter().enumerate() {
-                if self.cancel.load(Ordering::Relaxed) {
-                    let mut p = SummaryProgress::base(
-                        source.to_string(),
-                        date_str.clone(),
-                        "cancelled",
-                        total_segments,
-                    );
-                    p.segment_idx = Some(idx as u32);
-                    self.emit(p);
-                    return Ok(());
-                }
-                if seg.end_hour <= seg.start_hour {
-                    continue;
-                }
-                self.run_one_segment(
-                    source,
-                    &step1,
-                    &step2_phase1,
-                    &ai,
-                    &date_str,
-                    idx as u32,
-                    total_segments,
-                    seg.label.clone(),
-                    seg.start_hour,
-                    seg.end_hour,
-                    max_images,
-                    device.clone(),
-                    parallel,
-                    /* step1_only */ true,
-                    /* step2_only */ false,
-                )
-                .await?;
-            }
-        }
+        let max_images = ai.max_images_per_segment as usize;
+        // 是否需要 per-segment swap：**只看 main / mmproj 文件**——GGUF 切换没法热更，
+        // 必须 stop+start。ctx_size / batch / np 不一致**不**触发 swap，因为同 main 时
+        // 我们用合并 overrides（取 max）启动单 server，让 step 1 享用更宽松的 ctx +
+        // step 2 享用更多 slot，两边都不亏。这样用户配 step1 ctx=8K + step2 ctx=64K
+        // 这种合理组合不再被推到慢路径。
+        let models_differ = ai.effective_describe_main() != ai.effective_summary_main()
+            || ai.effective_describe_mmproj() != ai.effective_summary_mmproj();
 
-        // —— Phase 2: 全段段总结 ——
-        if run_phase2 {
-            // 短路优化：两套配置 + 模型文件都相同时，phase 1 那个 server 直接复用，不重启
-            let models_differ = ai.effective_describe_main() != ai.effective_summary_main()
-                || ai.effective_describe_mmproj() != ai.effective_summary_mmproj();
-            let need_restart_for_phase2 =
-                run_phase1 && (describe_overrides != summary_overrides || models_differ);
-            let port = if need_restart_for_phase2 {
-                let (main_path, mmproj_path) = self.resolve_model_paths_for(&ai, Step::Summary)?;
-                self.supervisor
-                    .restart_with_overrides(Some(main_path), mmproj_path, summary_overrides.clone())
-                    .await?
-            } else if run_phase1 {
-                // 复用 phase 1 那个 server——port 还在 supervisor 里
-                self.supervisor
-                    .status()
-                    .await
-                    .port
-                    .ok_or_else(|| Error::EngineStart("phase 1 后 supervisor 没 port".into()))?
-            } else {
-                // 纯 step2_only 路径：直接用 summary_overrides 启动 + 加载 summary 模型
-                let st = self.supervisor.status().await;
-                if st.state != EngineState::Running {
-                    let mut p = SummaryProgress::base(
-                        source.to_string(),
-                        date_str.clone(),
-                        "engine_starting",
-                        total_segments,
-                    );
-                    p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
-                    self.emit(p);
-                }
-                self.ensure_engine_running(&ai, Step::Summary, summary_overrides.clone())
-                    .await?
-            };
-            // step1 client 在 phase 2 不会调用，但 run_one_segment 签名要求传——构造一份占位的；
-            // 标签给 summary 模型避免落库错配
-            let step1 = ChatClient::new(port, ai.effective_summary_main().to_string())?;
-            let step2 = build_step2(&ai, port, ai.effective_summary_main())?;
-            let max_images = ai.max_images_per_segment as usize;
-            for (idx, seg) in ai.segments.iter().enumerate() {
-                if self.cancel.load(Ordering::Relaxed) {
-                    let mut p = SummaryProgress::base(
-                        source.to_string(),
-                        date_str.clone(),
-                        "cancelled",
-                        total_segments,
-                    );
-                    p.segment_idx = Some(idx as u32);
-                    self.emit(p);
-                    return Ok(());
-                }
-                if seg.end_hour <= seg.start_hour {
-                    continue;
-                }
-                self.run_one_segment(
-                    source,
-                    &step1,
-                    &step2,
-                    &ai,
-                    &date_str,
-                    idx as u32,
-                    total_segments,
-                    seg.label.clone(),
-                    seg.start_hour,
-                    seg.end_hour,
-                    max_images,
-                    device.clone(),
-                    parallel,
-                    /* step1_only */ false,
-                    /* step2_only */ true,
-                )
-                .await?;
-            }
+        if step1_only {
+            // —— 调试 tab：只跑全段 step 1 ——
+            self.run_phase_step1_all_segments(
+                source,
+                &date_str,
+                &ai,
+                describe_overrides.clone(),
+                force_refresh,
+                total_segments,
+                max_images,
+                device.clone(),
+                parallel,
+            )
+            .await?;
+        } else if step2_only {
+            // —— 调试 tab：只跑全段 step 2（从 DB 读已存描述）——
+            self.run_phase_step2_all_segments(
+                source,
+                &date_str,
+                &ai,
+                summary_overrides.clone(),
+                force_refresh,
+                total_segments,
+                max_images,
+                device.clone(),
+                parallel,
+            )
+            .await?;
+        } else if !models_differ {
+            // —— Daily 流水线（单引擎）：main + mmproj 相同 ——
+            // 取 describe / summary overrides 的并集（每项 max）一次启动 server，
+            // 跑完所有段。ctx / batch / np 差异在这里被合并掉，无 swap 浪费。
+            let merged = describe_overrides.merge_max(&summary_overrides);
+            log::info!(
+                "[engine-plan] interleaved_single: merged overrides batch={:?} -np={:?} ctx={:?}",
+                merged.batch_size, merged.parallel_slots, merged.ctx_size,
+            );
+            self.run_interleaved_single_engine(
+                source,
+                &date_str,
+                &ai,
+                merged,
+                force_refresh,
+                total_segments,
+                max_images,
+                device.clone(),
+                parallel,
+            )
+            .await?;
+        } else {
+            // —— Daily 流水线（双引擎）：main / mmproj 不同 ——
+            // 每段 swap 两次 server。慢但 UX 好：每段 step 2 跑完前端立刻看到该段总结。
+            log::info!("[engine-plan] interleaved_swap_per_segment: main/mmproj 不同需要 swap");
+            self.run_interleaved_swap_per_segment(
+                source,
+                &date_str,
+                &ai,
+                describe_overrides.clone(),
+                summary_overrides.clone(),
+                force_refresh,
+                total_segments,
+                max_images,
+                device.clone(),
+                parallel,
+            )
+            .await?;
         }
 
         let p = SummaryProgress::base(source.to_string(), date_str, "all_done", total_segments);
@@ -344,6 +291,403 @@ impl DaySummaryRunner {
         if let Err(e) = self.app.emit(SUMMARY_PROGRESS_EVENT, &payload) {
             log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
         }
+    }
+
+    /// 调试 tab「仅生成图片描述」：所有段批量跑 step 1，phased。
+    ///
+    /// 单一 server 加载 describe 模型，循环每段调 `run_one_segment(step1_only=true)`。
+    /// 每段 emit `phase="step1_done"`（不写 ai_summaries），成败由该段内部 step 1 全失败兜底处理。
+    #[allow(clippy::too_many_arguments)]
+    async fn run_phase_step1_all_segments(
+        &self,
+        source: &str,
+        date_str: &str,
+        ai: &AiConfig,
+        describe_overrides: EngineStartOverrides,
+        force_refresh: bool,
+        total_segments: u32,
+        max_images: usize,
+        device: DeviceFilter,
+        parallel: usize,
+    ) -> Result<()> {
+        let st = self.supervisor.status().await;
+        if st.state != EngineState::Running {
+            let mut p = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "engine_starting",
+                total_segments,
+            );
+            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            self.emit(p);
+        }
+        let port = self
+            .ensure_engine_running(ai, Step::Describe, describe_overrides)
+            .await?;
+        let step1 = ChatClient::new(
+            port,
+            ai.effective_describe_main().to_string(),
+            ai.describe_max_tokens(),
+        )?;
+        // step2 client 在 step1_only 路径不会被调用——构造一份占位的让 run_one_segment 签名能通过
+        let step2_placeholder = build_step2(ai, port, ai.effective_describe_main())?;
+        for (idx, seg) in ai.segments.iter().enumerate() {
+            if self.cancel.load(Ordering::Relaxed) {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "cancelled",
+                    total_segments,
+                );
+                p.segment_idx = Some(idx as u32);
+                self.emit(p);
+                return Ok(());
+            }
+            if seg.end_hour <= seg.start_hour {
+                continue;
+            }
+            // C1：force_refresh=false 时已生成的段 (status=ok) 跳过——之前注释承诺
+            // "已有的段直接复用"但代码没实现，导致每次跑都重写 ok 段
+            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+                continue;
+            }
+            self.run_one_segment(
+                source,
+                &step1,
+                &step2_placeholder,
+                ai,
+                date_str,
+                idx as u32,
+                total_segments,
+                seg.label.clone(),
+                seg.start_hour,
+                seg.end_hour,
+                max_images,
+                device.clone(),
+                parallel,
+                /* step1_only */ true,
+                /* step2_only */ false,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// 调试 tab「仅生成段总结」：所有段从 DB 读已存的图描述跑 step 2，phased。
+    /// 用 summary_overrides + summary 模型启动单一 server。
+    #[allow(clippy::too_many_arguments)]
+    async fn run_phase_step2_all_segments(
+        &self,
+        source: &str,
+        date_str: &str,
+        ai: &AiConfig,
+        summary_overrides: EngineStartOverrides,
+        force_refresh: bool,
+        total_segments: u32,
+        max_images: usize,
+        device: DeviceFilter,
+        parallel: usize,
+    ) -> Result<()> {
+        let st = self.supervisor.status().await;
+        if st.state != EngineState::Running {
+            let mut p = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "engine_starting",
+                total_segments,
+            );
+            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            self.emit(p);
+        }
+        let port = self
+            .ensure_engine_running(ai, Step::Summary, summary_overrides)
+            .await?;
+        let step1_placeholder = ChatClient::new(
+            port,
+            ai.effective_summary_main().to_string(),
+            ai.summary_max_tokens(),
+        )?;
+        let step2 = build_step2(ai, port, ai.effective_summary_main())?;
+        for (idx, seg) in ai.segments.iter().enumerate() {
+            if self.cancel.load(Ordering::Relaxed) {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "cancelled",
+                    total_segments,
+                );
+                p.segment_idx = Some(idx as u32);
+                self.emit(p);
+                return Ok(());
+            }
+            if seg.end_hour <= seg.start_hour {
+                continue;
+            }
+            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+                continue;
+            }
+            self.run_one_segment(
+                source,
+                &step1_placeholder,
+                &step2,
+                ai,
+                date_str,
+                idx as u32,
+                total_segments,
+                seg.label.clone(),
+                seg.start_hour,
+                seg.end_hour,
+                max_images,
+                device.clone(),
+                parallel,
+                /* step1_only */ false,
+                /* step2_only */ true,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// 该段是否已生成且 status="ok"——给 force_refresh=false 跳过逻辑用。
+    /// 任意非 ok 状态（None / "error" / "skipped_no_screenshots"）都返 false 让段重跑。
+    async fn segment_already_ok(
+        &self,
+        source: &str,
+        date_str: &str,
+        segment_idx: u32,
+    ) -> Result<bool> {
+        let status = ai_summaries::get_segment_status(&self.pool, source, date_str, segment_idx)
+            .await?;
+        Ok(status.as_deref() == Some("ok"))
+    }
+
+    /// Daily 流水线 —— 单引擎模式：describe / summary 模型 + overrides 完全相同时，
+    /// 单 server 跑全段，每段两步连跑（run_one_segment 的双 false 路径）。
+    ///
+    /// 这是 daily 跑得最快的情况——没有 server restart 开销。前端在每段 step 2
+    /// 跑完后立刻收到 `segment_done` + 真 row 写入 ai_summaries。
+    #[allow(clippy::too_many_arguments)]
+    async fn run_interleaved_single_engine(
+        &self,
+        source: &str,
+        date_str: &str,
+        ai: &AiConfig,
+        engine_overrides: EngineStartOverrides,
+        force_refresh: bool,
+        total_segments: u32,
+        max_images: usize,
+        device: DeviceFilter,
+        parallel: usize,
+    ) -> Result<()> {
+        let st = self.supervisor.status().await;
+        if st.state != EngineState::Running {
+            let mut p = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "engine_starting",
+                total_segments,
+            );
+            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            self.emit(p);
+        }
+        let port = self
+            .ensure_engine_running(ai, Step::Describe, engine_overrides)
+            .await?;
+        let step1 = ChatClient::new(
+            port,
+            ai.effective_describe_main().to_string(),
+            ai.describe_max_tokens(),
+        )?;
+        let step2 = build_step2(ai, port, ai.effective_summary_main())?;
+        for (idx, seg) in ai.segments.iter().enumerate() {
+            if self.cancel.load(Ordering::Relaxed) {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "cancelled",
+                    total_segments,
+                );
+                p.segment_idx = Some(idx as u32);
+                self.emit(p);
+                return Ok(());
+            }
+            if seg.end_hour <= seg.start_hour {
+                continue;
+            }
+            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+                continue;
+            }
+            self.run_one_segment(
+                source,
+                &step1,
+                &step2,
+                ai,
+                date_str,
+                idx as u32,
+                total_segments,
+                seg.label.clone(),
+                seg.start_hour,
+                seg.end_hour,
+                max_images,
+                device.clone(),
+                parallel,
+                /* step1_only */ false,
+                /* step2_only */ false,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Daily 流水线 —— 段间双 swap 模式：describe / summary 模型不同时，每段两次重启 server：
+    ///   段 0 step 1（describe model）→ restart → 段 0 step 2（summary model）→ restart →
+    ///   段 1 step 1（describe model）→ restart → 段 1 step 2 → ...
+    ///
+    /// 慢（每段两次 model load × N 段），但 UX 立竿见影：每段 step 2 跑完前端立刻看到段总结。
+    /// 用户接受这个开销换 UX——尤其本地 GGUF 加载 30-90s × 5 段 × 2 = 5-15 分钟额外开销。
+    #[allow(clippy::too_many_arguments)]
+    async fn run_interleaved_swap_per_segment(
+        &self,
+        source: &str,
+        date_str: &str,
+        ai: &AiConfig,
+        describe_overrides: EngineStartOverrides,
+        summary_overrides: EngineStartOverrides,
+        force_refresh: bool,
+        total_segments: u32,
+        max_images: usize,
+        device: DeviceFilter,
+        parallel: usize,
+    ) -> Result<()> {
+        for (idx, seg) in ai.segments.iter().enumerate() {
+            if self.cancel.load(Ordering::Relaxed) {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "cancelled",
+                    total_segments,
+                );
+                p.segment_idx = Some(idx as u32);
+                self.emit(p);
+                return Ok(());
+            }
+            if seg.end_hour <= seg.start_hour {
+                continue;
+            }
+            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+                continue;
+            }
+
+            // ── step 1：load describe model ──
+            // 每段都 emit engine_starting 让前端知道在 swap（5-15 分钟级总等待）
+            let mut p_load_d = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "engine_starting",
+                total_segments,
+            );
+            p_load_d.segment_idx = Some(idx as u32);
+            p_load_d.message = Some("加载图描述模型中…".to_string());
+            self.emit(p_load_d);
+            let (main_d, mmproj_d) = self.resolve_model_paths_for(ai, Step::Describe)?;
+            let port_d = self
+                .supervisor
+                .restart_with_overrides(Some(main_d), mmproj_d, describe_overrides.clone())
+                .await?;
+            let step1 = ChatClient::new(
+                port_d,
+                ai.effective_describe_main().to_string(),
+                ai.describe_max_tokens(),
+            )?;
+            // step2 占位——不会调用（step1_only=true）
+            let step2_placeholder = build_step2(ai, port_d, ai.effective_describe_main())?;
+            self.run_one_segment(
+                source,
+                &step1,
+                &step2_placeholder,
+                ai,
+                date_str,
+                idx as u32,
+                total_segments,
+                seg.label.clone(),
+                seg.start_hour,
+                seg.end_hour,
+                max_images,
+                device.clone(),
+                parallel,
+                /* step1_only */ true,
+                /* step2_only */ false,
+            )
+            .await?;
+
+            // step 1 跑完检查取消：避免白白 swap 加载 summary 模型
+            if self.cancel.load(Ordering::Relaxed) {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "cancelled",
+                    total_segments,
+                );
+                p.segment_idx = Some(idx as u32);
+                self.emit(p);
+                return Ok(());
+            }
+
+            // A1：step 1 全失败兜底已经写了 ai_summaries error 行 + emit segment_done error。
+            // 这种情况下没必要继续 swap 加载 summary 模型再让 step2_only 看到空 stored 重 emit 一遍——
+            // 直接进下一段。注：metas 真空情况 run_one_segment 里走 skipped 路径写的是
+            // status="skipped_no_screenshots"，也跳过没有意义（一致返还）。
+            let seg_status =
+                ai_summaries::get_segment_status(&self.pool, source, date_str, idx as u32).await?;
+            if matches!(seg_status.as_deref(), Some("error" | "skipped_no_screenshots")) {
+                log::info!(
+                    "swap_per_segment: 段 {idx} step 1 后 status={:?}，跳过 step 2 swap",
+                    seg_status
+                );
+                continue;
+            }
+
+            // ── step 2：swap to summary model ──
+            let mut p_load_s = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "engine_starting",
+                total_segments,
+            );
+            p_load_s.segment_idx = Some(idx as u32);
+            p_load_s.message = Some("加载段总结模型中…".to_string());
+            self.emit(p_load_s);
+            let (main_s, mmproj_s) = self.resolve_model_paths_for(ai, Step::Summary)?;
+            let port_s = self
+                .supervisor
+                .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone())
+                .await?;
+            let step1_placeholder = ChatClient::new(
+                port_s,
+                ai.effective_summary_main().to_string(),
+                ai.summary_max_tokens(),
+            )?;
+            let step2 = build_step2(ai, port_s, ai.effective_summary_main())?;
+            self.run_one_segment(
+                source,
+                &step1_placeholder,
+                &step2,
+                ai,
+                date_str,
+                idx as u32,
+                total_segments,
+                seg.label.clone(),
+                seg.start_hour,
+                seg.end_hour,
+                max_images,
+                device.clone(),
+                parallel,
+                /* step1_only */ false,
+                /* step2_only */ true,
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     /// 跑单段——两步生成：
@@ -441,6 +785,23 @@ impl DaySummaryRunner {
             return Ok(());
         }
 
+        // ────── 相似度去重（Phase 1C） ──────
+        // pick_frames 之前先按 MobileNet embedding 余弦阈值砍冗余画面：
+        // 实测 0.95 阈值 ~70% 去重率，step 1 vision LLM 工作量直接降 3 倍。
+        // 段间天然隔离（caller 是按段切的循环），不需要时间窗参数。
+        // emit 一条 hint 让前端显示 "embedding 去重中…"——首次跑大段需要 N×5ms，
+        // 一两千张 5-10s 不算瞬时
+        let mut p_dedup = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "dedup_running",
+            total_segments,
+        );
+        p_dedup.segment_idx = Some(idx);
+        p_dedup.images_total = Some(metas.len() as u32);
+        self.emit(p_dedup);
+        let metas = self.dedup_segment_metas(metas, ai.dedup_threshold).await?;
+
         // 等距抽帧
         let picked: Vec<ScreenshotMeta> = pick_frames(metas, max_images);
 
@@ -507,10 +868,31 @@ impl DaySummaryRunner {
             return Ok(());
         }
 
-        // step1_only：跳过 step 2 的段总结，直接 emit 一条 segment_done 让前端结束 loading。
-        // status 用 "ok"——逐图描述都已落库，对前端来说本段已完成。content 留空（没段总结正文）。
-        // 不写 ai_summaries 行：避免后续 daily 跑用户期待"重新跑段总结"时被旧空 row 挡住。
-        if step1_only {
+        // step 1 全失败兜底：本段有 N 张待分析的图但一条描述都没拿到（典型场景：
+        // llama-server 没起来 / 端口连不上，每张图都在 describe_images 里 silent skip）。
+        // 必须放在 step1_only 早 return 之前——daily Phase 1 走的就是 step1_only=true，
+        // 不挡在这里 Phase 2 会看到空 stored 然后凑空总结假成功。
+        if !picked.is_empty() && descriptions.is_empty() {
+            let err_msg = format!(
+                "step 1 全失败：{} 张图描述都没拿到（多半是 llama-server 没起来 / 端口拒绝；调试 tab → 引擎日志 排查）",
+                picked.len()
+            );
+            log::warn!("段 {idx} {err_msg}");
+            let now = Utc::now().to_rfc3339();
+            let row = crate::repo::ai_summaries::SegmentSummaryRow {
+                source: source.to_string(),
+                local_date: date_str.to_string(),
+                segment_idx: idx,
+                label: label.clone(),
+                start_hour,
+                end_hour,
+                content: String::new(),
+                model: ai.effective_describe_main().to_string(),
+                status: "error".to_string(),
+                error: Some(err_msg.clone()),
+                generated_at: now,
+            };
+            ai_summaries::upsert_segment(&self.pool, &row).await?;
             let mut p_done = SummaryProgress::base(
                 source.to_string(),
                 date_str.to_string(),
@@ -520,12 +902,41 @@ impl DaySummaryRunner {
             p_done.segment_idx = Some(idx);
             p_done.images_total = Some(picked.len() as u32);
             p_done.content = Some(String::new());
-            p_done.status = Some("ok");
+            p_done.status = Some("error");
+            p_done.message = Some(err_msg);
+            self.emit(p_done);
+            return Ok(());
+        }
+
+        // step1_only：跳过 step 2 的段总结。emit 一条 step1_done（**不是** segment_done）
+        // 让前端知道 step 1 完了，但**不**把 row badge 切到"已生成"——只有 Phase 2 真跑完
+        // 段总结后才发 segment_done 把 row 写进 ai_summaries。
+        // 不写 ai_summaries 行：避免后续 daily Phase 2 期待"重新跑段总结"时被旧空 row 挡住。
+        if step1_only {
+            let mut p_done = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "step1_done",
+                total_segments,
+            );
+            p_done.segment_idx = Some(idx);
+            p_done.images_total = Some(picked.len() as u32);
             self.emit(p_done);
             return Ok(());
         }
 
         // ────── step 2：段总结（纯文本调用，不再传图） ──────
+        // emit `summarizing` 让前端段卡片把 body 文案从"正在让模型看截图"切到"生成段总结中"。
+        // step 2 是单次 chat 没有进度条，前端只显示 spinner + "生成段总结中…" 直到 segment_done。
+        let mut p_sum = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "summarizing",
+            total_segments,
+        );
+        p_sum.segment_idx = Some(idx);
+        p_sum.images_total = Some(picked.len() as u32);
+        self.emit(p_sum);
         let (row, status_str) = summarize_segment(
             &self.pool,
             step2,
@@ -559,8 +970,10 @@ impl DaySummaryRunner {
     }
 
     /// step2-only 路径：跳过逐图描述，从 DB 读出已存的 image descriptions 直接喂 step 2。
-    /// 没存数据 → 按 skipped 兜底（跟 step1 路径下"没截图"语义对齐）。
-    /// 用户调试段总结 prompt 时反复调，避免每次都重跑昂贵的 vision 描述。
+    ///
+    /// 空 stored 处理：在 daily 双 phase 流程里，Phase 1 已经为本段写过 ai_summaries 行
+    /// （metas 真空 → skipped；step 1 全失败 → error），这里**不**重写表，只 emit
+    /// segment_done 携带现有行的 status，让前端拿到一致状态。
     #[allow(clippy::too_many_arguments)]
     async fn run_one_segment_step2_only(
         &self,
@@ -582,21 +995,41 @@ impl DaySummaryRunner {
         let stored =
             ai_summaries::get_segment_image_descriptions(&self.pool, source, date_str, idx).await?;
 
-        let mut p_started = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
-            "segment_started",
-            total_segments,
-        );
-        p_started.segment_idx = Some(idx);
-        p_started.images_total = Some(stored.len() as u32);
-        self.emit(p_started);
+        // **不** emit segment_started——swap_per_segment 流程里上一步 step 1 已经发过
+        // segment_started + image_described × N + step1_done。如果这里再 emit segment_started
+        // 会让前端 runningStage 从 "summarizing" 重置到 "describing 0/0"，UI 闪一下。
+        // debug step2_only 单跑时 summarizing emit 会自带 runningIdx，前端段卡片仍能切 running。
 
         if stored.is_empty() {
-            upsert_skipped_segment(
-                &self.pool, source, date_str, idx, &label, start_hour, end_hour, model,
-            )
-            .await?;
+            // Phase 1 已为本段写好 row（真空 → skipped；step 1 全失败 → error）→ 读现有
+            // status 反映给前端，不重写表保留 Phase 1 真相。现有行缺失（用户单跑 step2_only
+            // 但 Phase 1 没跑过）→ 写一条 error 行提示。单次查询 + Option match，避免双查。
+            let existing =
+                ai_summaries::get_segment_status(&self.pool, source, date_str, idx).await?;
+            let status_static: &'static str = match existing.as_deref() {
+                Some("ok") => "ok",
+                Some("skipped_no_screenshots") => "skipped_no_screenshots",
+                Some(_) => "error",
+                None => {
+                    // 没行——写一条提示 error 让前端看到
+                    let err_msg = "段总结失败：找不到逐图描述（先跑一次 step 1，或检查日期是否对得上）".to_string();
+                    let row = crate::repo::ai_summaries::SegmentSummaryRow {
+                        source: source.to_string(),
+                        local_date: date_str.to_string(),
+                        segment_idx: idx,
+                        label: label.clone(),
+                        start_hour,
+                        end_hour,
+                        content: String::new(),
+                        model,
+                        status: "error".to_string(),
+                        error: Some(err_msg),
+                        generated_at: Utc::now().to_rfc3339(),
+                    };
+                    ai_summaries::upsert_segment(&self.pool, &row).await?;
+                    "error"
+                }
+            };
             let mut p_done = SummaryProgress::base(
                 source.to_string(),
                 date_str.to_string(),
@@ -606,7 +1039,7 @@ impl DaySummaryRunner {
             p_done.segment_idx = Some(idx);
             p_done.images_total = Some(0);
             p_done.content = Some(String::new());
-            p_done.status = Some("skipped_no_screenshots");
+            p_done.status = Some(status_static);
             self.emit(p_done);
             return Ok(());
         }
@@ -642,6 +1075,16 @@ impl DaySummaryRunner {
         .await
         .unwrap_or_default();
 
+        // 同 run_one_segment：emit summarizing 让前端切到"生成段总结中"文案
+        let mut p_sum = SummaryProgress::base(
+            source.to_string(),
+            date_str.to_string(),
+            "summarizing",
+            total_segments,
+        );
+        p_sum.segment_idx = Some(idx);
+        p_sum.images_total = Some(descriptions.len() as u32);
+        self.emit(p_sum);
         let (row, status_str) = summarize_segment(
             &self.pool,
             step2,
@@ -761,7 +1204,11 @@ impl DaySummaryRunner {
         let port = self
             .ensure_engine_running(&ai, Step::Describe, engine_overrides)
             .await?;
-        let chat = ChatClient::new(port, ai.effective_describe_main().to_string())?;
+        let chat = ChatClient::new(
+            port,
+            ai.effective_describe_main().to_string(),
+            ai.describe_max_tokens(),
+        )?;
 
         // 反查这张图的 app/category 元数据；查不到就兜底用 path 当 app 名继续跑
         // —— 不能因为元数据丢失阻塞重跑，prompt 即使没分类也能正常工作。
@@ -922,7 +1369,11 @@ impl DaySummaryRunner {
         let port = self
             .ensure_engine_running(&ai, Step::Describe, engine_overrides)
             .await?;
-        let step1 = ChatClient::new(port, ai.effective_describe_main().to_string())?;
+        let step1 = ChatClient::new(
+            port,
+            ai.effective_describe_main().to_string(),
+            ai.describe_max_tokens(),
+        )?;
         let step2 = build_step2(&ai, port, ai.effective_describe_main())?;
         let max_images = ai.max_images_per_segment as usize;
 
@@ -945,6 +1396,89 @@ impl DaySummaryRunner {
             false,
         )
         .await
+    }
+
+    /// 段内截图按 MobileNet embedding 余弦阈值贪心去重。
+    ///
+    /// DB 缓存优先（[`screenshot_embeddings`] 表）：命中即取，缺失批量算 + 写表。
+    /// embedding 失败兜底为 "跳过去重，原样返回"——dedup 只是提速优化，失败不应让段总结挂掉，
+    /// 顶多让 step 1 多跑几张冗余图。
+    ///
+    /// `threshold` 取 0.70..=0.99，已在 [`crate::ai::config::sanitize`] 钳过。
+    async fn dedup_segment_metas(
+        &self,
+        metas: Vec<ScreenshotMeta>,
+        threshold: f32,
+    ) -> Result<Vec<ScreenshotMeta>> {
+        if metas.len() < 2 {
+            return Ok(metas);
+        }
+        let paths: Vec<String> = metas.iter().map(|m| m.path.clone()).collect();
+        let embeddings = match self.load_or_compute_embeddings(&paths).await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("dedup 跳过：embedding 失败 ({e}) — 原样返回 {} 张", metas.len());
+                return Ok(metas);
+            }
+        };
+        let before = metas.len();
+        let kept = dedup::dedup_by_embedding(metas, &embeddings, threshold);
+        let dropped = before.saturating_sub(kept.len());
+        if before > 0 {
+            log::info!(
+                "dedup: {before} → {} (drop {} = {:.1}%, threshold={:.2})",
+                kept.len(),
+                dropped,
+                100.0 * dropped as f32 / before as f32,
+                threshold,
+            );
+        }
+        Ok(kept)
+    }
+
+    /// DB 缓存优先批量取 embedding；缺失的现算并写表。
+    /// 返回的向量与 `paths` 一一对齐，长度相等。
+    async fn load_or_compute_embeddings(&self, paths: &[String]) -> Result<Vec<Vec<f32>>> {
+        let cached = embeddings_repo::get_batch(&self.pool, paths, embedding::MODEL_ID).await?;
+        let missing: Vec<PathBuf> = paths
+            .iter()
+            .filter(|p| !cached.contains_key(*p))
+            .map(PathBuf::from)
+            .collect();
+        log::info!(
+            "embedding cache: hit={}, miss={} (model_id={})",
+            cached.len(),
+            missing.len(),
+            embedding::MODEL_ID,
+        );
+
+        // 缺失的批量算 + 写表
+        let mut newly_computed: std::collections::HashMap<String, Vec<f32>> =
+            std::collections::HashMap::new();
+        if !missing.is_empty() {
+            let new_embs = embedding::compute_batch(&missing).await?;
+            let mut rows: Vec<(String, &'static str, Vec<f32>)> = Vec::with_capacity(missing.len());
+            for (p, e) in missing.iter().zip(new_embs.iter()) {
+                let key = p.to_string_lossy().into_owned();
+                newly_computed.insert(key.clone(), e.clone());
+                rows.push((key, embedding::MODEL_ID, e.clone()));
+            }
+            if let Err(e) = embeddings_repo::upsert_batch(&self.pool, rows).await {
+                log::warn!("embedding 写表失败（不影响本次去重）：{e}");
+            }
+        }
+
+        // 按 paths 顺序拼对齐数组
+        let mut out = Vec::with_capacity(paths.len());
+        for p in paths {
+            let v = cached
+                .get(p)
+                .or_else(|| newly_computed.get(p))
+                .cloned()
+                .ok_or_else(|| Error::EmbeddingFailed(format!("missing embedding for {p}")))?;
+            out.push(v);
+        }
+        Ok(out)
     }
 
     /// 引擎未启动就启动；返回当前监听端口。

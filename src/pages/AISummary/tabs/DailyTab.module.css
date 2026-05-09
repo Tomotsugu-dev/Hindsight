@@ -205,6 +205,28 @@
   color: #991b1b;
 }
 
+/* 错误条上的关闭按钮 X：让用户能主动 dismiss 旧错误，不被它一直挡视线 */
+.errorClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #991b1b;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 120ms var(--ease-out), background 120ms var(--ease-out);
+}
+.errorClose:hover {
+  opacity: 1;
+  background: color-mix(in oklab, #dc2626 12%, transparent);
+}
+
 /* 成功提示条：跟 errorBar 同款结构但绿色（导出 / 删除完成 3.5s 后自清） */
 .successBar {
   display: inline-flex;

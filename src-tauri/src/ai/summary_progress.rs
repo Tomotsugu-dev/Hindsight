@@ -13,9 +13,15 @@ pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
 ///
 /// phase 取值：
 /// - `engine_starting`：引擎冷启动中（首次加载模型 30-90s）
-/// - `segment_started`：段进入 step 1（逐图描述）；imagesTotal 给图数
+/// - `dedup_running`：MobileNet embedding 余弦去重中（首次跑全段 5-10s/千张）；
+///   `images_total` 是去重前段内总图数，给前端展示"段 X：N 张相似度去重中…"
+/// - `segment_started`：段进入 step 1（逐图描述）；imagesTotal 给去重 + 抽帧后实际送 LLM 的图数
 /// - `image_described`：单张图描述完成；image_index / image_path / image_description 一起带过来，
 ///   前端调试 tab 实时往面板里塞条目，不必等整段完成
+/// - `step1_done`：daily Phase 1 单段图描述全部跑完，但**还没**做段总结；前端**不**应据此
+///   把段 row 切到"已生成"——只有 `segment_done` + status=ok 才算真完成。其它 status 等同段失败。
+/// - `summarizing`：step 1 跑完，正在跑 step 2 段总结（单次 chat 无进度条）；前端段卡片
+///   body 文案从"正在让模型看截图"切到"生成段总结中…"，spinner 持续到 `segment_done`
 /// - `segment_done`：段进入完成态（含 ok / skipped / error）；content 是段总结
 /// - `all_done` / `cancelled` / `error`：整轮收尾
 #[derive(Debug, Clone, Serialize)]

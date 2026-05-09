@@ -75,6 +75,11 @@ pub fn run() {
             // 托盘 + 关闭行为：稳定的一次性安装逻辑，挪到 bootstrap 里
             bootstrap::install_tray_and_window(app)?;
 
+            // ort load-dynamic 找 onnxruntime DLL 用：prod 包指向 resource_dir 里的副本，
+            // dev 模式 build.rs 已把 DLL 复制到 target/<profile>/ 命中默认路径。
+            // 必须在 embedding::compute_batch 第一次调用前完成。
+            crate::ai::embedding::init_dylib_path(&handle);
+
             tauri::async_runtime::block_on(async move {
                 // 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
                 // 的窗口，焦点采集功能整个废掉，但不会报错（CG API 静默降级），所以

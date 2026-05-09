@@ -30,6 +30,12 @@ test_screenshots/
 *.pem
 *.p12
 
+# onnxruntime 动态库（~30 MB）：开发者跑 src-tauri/scripts/fetch-onnxruntime.* 拉取
+src-tauri/resources/runtime/*.dll
+src-tauri/resources/runtime/*.so
+src-tauri/resources/runtime/*.so.*
+src-tauri/resources/runtime/*.dylib
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

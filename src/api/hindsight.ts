@@ -224,8 +224,11 @@ export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 
 export type SummaryPhase =
   | "engine_starting"
+  | "dedup_running"
   | "segment_started"
   | "image_described"
+  | "step1_done"
+  | "summarizing"
   | "segment_done"
   | "all_done"
   | "cancelled"
@@ -264,8 +267,8 @@ export interface SummaryProgress {
 export interface AiOverrides {
   excludedCategories?: string[];
   maxImagesPerSegment?: number;
-  hashThreshold?: number;
-  hashWindowMinutes?: number;
+  /** 段内余弦阈值去重；范围 0.70..=0.99。详见 [AiConfig.dedupThreshold]。 */
+  dedupThreshold?: number;
   /** step 2 段总结的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
   systemPrompt?: string;
   /** step 1 单图描述的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
@@ -366,10 +369,10 @@ export interface AiConfig {
   excludedCategories: string[];
   /** 单段送 AI 的截图上限 */
   maxImagesPerSegment: number;
-  /** dHash 64bit 汉明距离阈值（去重） */
-  hashThreshold: number;
-  /** 哈希聚类时间窗（分钟）；只在窗内的截图之间比相似度 */
-  hashWindowMinutes: number;
+  /** 截图相似度去重阈值（余弦），段内贪心去重；step 1 vision LLM 之前砍冗余画面。
+   *  范围 0.70..=0.99；默认 0.95（POC 验证 ~70% 去重率，肉眼无误删）。
+   *  越严越保守（接近 1）；越松越激进，可能误删。 */
+  dedupThreshold: number;
   /** 模型（GGUF）保存路径。
    *  空字符串 = 走默认 `<data_root>/ai/models/`；后端 settings load 启动时
    *  会把空值填成实际默认路径，所以前端拿到的总是非空字符串。 */

@@ -42,13 +42,18 @@ pub struct ChatClient {
     /// 模型名——llama-server 不强求是真实文件名，可填 "default" / 任意字符串
     /// 都行；这里就拿 active_main 文件名当 ID 方便调试日志区分
     model: String,
+    /// 单次响应 max_tokens 上限。caller 按用户配的 ctx_size_per_slot / 2 算
+    /// （给 prompt 留另一半）；ctx=8K → 4K，ctx=64K → 32K。
+    max_tokens: u32,
     http: Client,
 }
 
 impl ChatClient {
     /// `port` 来自 [`crate::ai::server::EngineSupervisor::status()`] 返回的端口；
-    /// `model` 直接传 `settings.ai.active_main`（含 .gguf 后缀也行）。
-    pub fn new(port: u16, model: impl Into<String>) -> Result<Self> {
+    /// `model` 直接传 `settings.ai.active_main`（含 .gguf 后缀也行）；
+    /// `max_tokens` 由 caller 按 effective ctx_size 折半算，让用户的"上下文（每路）64K"
+    /// 设置真能反映到单次响应能写多长。
+    pub fn new(port: u16, model: impl Into<String>, max_tokens: u32) -> Result<Self> {
         let http = Client::builder()
             .timeout(CHAT_TIMEOUT)
             .build()
@@ -56,6 +61,7 @@ impl ChatClient {
         Ok(Self {
             base_url: format!("http://127.0.0.1:{}/v1", port),
             model: model.into(),
+            max_tokens: max_tokens.max(512), // 不让 caller 算出过小的 max_tokens 让所有响应都被截断
             http,
         })
     }
@@ -80,7 +86,7 @@ impl ChatClient {
         image_data_uris: &[String],
     ) -> Result<(String, ChatUsage)> {
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, image_data_uris);
+        let body = build_chat_body(&self.model, system, user_text, image_data_uris, self.max_tokens);
         post_chat_completions(self.http.post(&url), body).await
     }
 }
@@ -96,6 +102,8 @@ pub struct ExternalChatClient {
     base_url: String,
     model: String,
     api_key: String,
+    /// 同 [`ChatClient::max_tokens`]——caller 按 effective ctx_size 折半算
+    max_tokens: u32,
     http: Client,
 }
 
@@ -103,7 +111,7 @@ impl ExternalChatClient {
     /// `endpoint` 是用户填的 base URL（如 `https://api.openai.com/v1`），
     /// 末尾的 `/` 会被去掉；`model` 是模型 ID（如 `gpt-4o-mini`）；
     /// `api_key` 空字符串视为无鉴权（custom endpoint 可能不需要 key）。
-    pub fn new(endpoint: &str, model: String, api_key: String) -> Result<Self> {
+    pub fn new(endpoint: &str, model: String, api_key: String, max_tokens: u32) -> Result<Self> {
         let base_url = endpoint.trim().trim_end_matches('/').to_string();
         if base_url.is_empty() {
             return Err(Error::InvalidInput("云端 API 地址为空"));
@@ -119,6 +127,7 @@ impl ExternalChatClient {
             base_url,
             model,
             api_key,
+            max_tokens: max_tokens.max(512),
             http,
         })
     }
@@ -138,7 +147,7 @@ impl ExternalChatClient {
             ));
         }
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, &[]);
+        let body = build_chat_body(&self.model, system, user_text, &[], self.max_tokens);
         let mut req = self.http.post(&url).json(&body);
         // custom endpoint 可能不要 key；空串视为无鉴权
         if !self.api_key.trim().is_empty() {
@@ -194,11 +203,14 @@ impl Step2Chat {
 ///
 /// `image_data_uris` 非空时 user content 走数组形式（text + image_url），
 /// 空时走纯字符串——兼容部分 provider（如 DeepSeek）对纯文本只接受字符串。
+///
+/// `max_tokens` 由 caller 按用户配的 ctx_size 折半给（详见函数体注释）。
 fn build_chat_body(
     model: &str,
     system: &str,
     user_text: &str,
     image_data_uris: &[String],
+    max_tokens: u32,
 ) -> serde_json::Value {
     let user_content = if image_data_uris.is_empty() {
         json!(user_text)
@@ -221,9 +233,11 @@ fn build_chat_body(
             { "role": "user",   "content": user_content },
         ],
         "stream": false,
-        // 让模型有充足空间写段落；本地 ctx 4096 留 ~2k 给输入图文，
-        // 云端模型 ctx 都很大不卡这个上限
-        "max_tokens": 768,
+        // max_tokens 跟用户配的 ctx_size 联动（caller 按 ctx_size/2 算，给 prompt 留另一半）：
+        // - ctx=8K → max_tokens 4K（普通 instruct 模型也用得完只是不会真生成那么多）
+        // - ctx=64K → max_tokens 32K（reasoning 模型思考链 + 答案都有空间）
+        // 写死小值（768 / 4096）让 reasoning 模型一律 length 截断 content 空。
+        "max_tokens": max_tokens,
         // 0.4 偏稳定，避免空话 / 重复
         "temperature": 0.4,
     })
@@ -269,23 +283,71 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
         completion_tokens: parsed.usage.as_ref().map(|u| u.completion_tokens),
     };
 
-    let content = parsed
-        .choices
-        .into_iter()
-        .next()
+    let first_choice = parsed.choices.into_iter().next();
+    let finish_reason = first_choice
+        .as_ref()
+        .and_then(|c| c.finish_reason.clone())
+        .unwrap_or_else(|| "<none>".to_string());
+    let reasoning_chars = first_choice
+        .as_ref()
+        .and_then(|c| c.message.reasoning_content.as_ref())
+        .map(|s| s.chars().count())
+        .unwrap_or(0);
+    let content = first_choice
         .map(|c| c.message.content)
         .unwrap_or_default()
         .trim()
         .to_string();
 
+    // 标记 [chat-result] 让用户能 grep 出每次 chat 的关键指标——
+    // 0 token 输出 + finish_reason=stop = prompt 一进模型就吐 EOS（chat template /
+    // mmproj 错配 / 模型不兼容典型征兆）；length = 撞 max_tokens；
+    // reasoning_chars > 0 = reasoning 模型思考链占了大头
+    log::info!(
+        "[chat-result] latency={}ms prompt_tokens={:?} completion_tokens={:?} finish_reason={} content_chars={} reasoning_chars={}",
+        usage.latency_ms,
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        finish_reason,
+        content.chars().count(),
+        reasoning_chars,
+    );
+
     if content.is_empty() {
-        return Err(Error::LlmResponse("模型返回为空".to_string()));
+        // 区分两种"内容为空"的场景，用不一样的错误描述——用户能直接看出怎么修：
+        // 1. reasoning 模型思考链占满 max_tokens（reasoning_chars > 0）→ 提示加大 max_tokens
+        //    或换非 reasoning 模型
+        // 2. 模型主动 EOS（finish_reason=stop, completion_tokens=0）→ chat template /
+        //    mmproj 错配 / 模型不兼容
+        let hint = if reasoning_chars > 0 {
+            format!(
+                "（看起来是 reasoning 模型——思考链 {} 字耗光 max_tokens={:?}，正式回答没机会输出。换 Gemma 4 / Qwen3 0.6B 这种非 reasoning 文本模型再试，或在调试 tab 里加大 ctxSize）",
+                reasoning_chars, usage.completion_tokens,
+            )
+        } else if finish_reason == "stop" && usage.completion_tokens == Some(0) {
+            "（模型 prompt 一进去就 EOS——多半是 chat template / mmproj 错配，看 [engine-spawn] 日志确认 mmproj 是否对得上选的模型）".to_string()
+        } else if finish_reason == "length"
+            && usage.completion_tokens.is_some_and(|n| n > 0)
+        {
+            // 老版 llama-server (< b4500) 不返 reasoning_content 字段，DeepSeek R1 / Qwen3 thinking
+            // 模型的思考链整段塞 content；撞 max_tokens 时被截断，content 末段格式损坏后被
+            // .trim() 处理也可能为空。reasoning_chars=0 但 completion_tokens > 0 就是这种情况。
+            format!(
+                "（模型生成了 {:?} token 但 content 仍为空——可能用的是 reasoning 模型 + 老版 llama-server 不会拆分 reasoning_content；或思考链塞满 max_tokens 没机会输出正式答案。换 Gemma 4 / Qwen3 0.6B 等非 reasoning 模型，或升级 llama-server 到 b4500+ 让思考链单独走 reasoning_content 字段）",
+                usage.completion_tokens,
+            )
+        } else {
+            String::new()
+        };
+        return Err(Error::LlmResponse(format!(
+            "模型返回为空（finish_reason={}, prompt_tokens={:?}, completion_tokens={:?}）{}",
+            finish_reason, usage.prompt_tokens, usage.completion_tokens, hint,
+        )));
     }
     Ok((content, usage))
 }
 
-/// 取 OpenAI 响应里 `choices[0].message.content` 和 `usage`。其它字段（finish_reason）
-/// 不关心，serde 自动忽略。
+/// 取 OpenAI 响应里 `choices[0].message.content` 和 `usage`。
 #[derive(Debug, Deserialize)]
 struct ChatResp {
     choices: Vec<ChatChoice>,
@@ -302,6 +364,11 @@ struct ChatUsageRaw {
 #[derive(Debug, Deserialize)]
 struct ChatChoice {
     message: ChatMessage,
+    /// "stop" / "length" / "tool_calls" 等；模型主动 EOS 是 "stop"，
+    /// completion_tokens=0 + finish_reason="stop" 说明 prompt 一进去模型就吐 EOS
+    /// （chat template / mmproj 错配 / 模型不兼容长上下文等典型场景）。
+    #[serde(default)]
+    finish_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -309,4 +376,9 @@ struct ChatMessage {
     #[allow(dead_code)]
     role: String,
     content: String,
+    /// 新版 llama-server (>= b4500) 跟 OpenAI 兼容 reasoning 模型 (DeepSeek R1 /
+    /// Qwen3 thinking) 都会把思考链放这里，正式回答留在 `content`。
+    /// 思考链占满 max_tokens 时 content 为空、reasoning_content 非空——典型征兆。
+    #[serde(default)]
+    reasoning_content: Option<String>,
 }

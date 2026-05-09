@@ -1,8 +1,8 @@
 //! 调试用：单次 generate 调用对 settings.ai 的局部覆盖（不写 settings 全局）。
 //!
 //! 任意字段 `None` = 走 settings.ai 的值；`Some(_)` = 本次跑生效，不留痕。
-//! 数值字段会经过跟 sanitize 一样的 clamp（max_images 1..=100_000、hash_threshold ≤ 32、
-//! hash_window_minutes ≤ 60），保证 override 不会越界。
+//! 数值字段会经过跟 sanitize 一样的 clamp（max_images 1..=100_000、
+//! dedup_threshold 0.70..=0.99），保证 override 不会越界。
 //!
 //! `system_prompt` / `image_describe_prompt` 是文本覆盖，会写到 ai.prompt_overrides /
 //! ai.image_describe_overrides 当前语言对应的字段——空字符串等价"清覆盖走默认"。
@@ -21,8 +21,8 @@ use crate::ai::config::AiConfig;
 pub struct AiOverrides {
     pub excluded_categories: Option<Vec<String>>,
     pub max_images_per_segment: Option<u32>,
-    pub hash_threshold: Option<u32>,
-    pub hash_window_minutes: Option<u32>,
+    /// 余弦阈值去重（段内）；范围 0.70..=0.99；详见 [`AiConfig::dedup_threshold`]。
+    pub dedup_threshold: Option<f32>,
     /// step 2 段总结的 system prompt 覆盖文本（按当前语言写入 prompt_overrides）
     pub system_prompt: Option<String>,
     /// step 1 单图描述的 system prompt 覆盖文本（按当前语言写入 image_describe_overrides）
@@ -84,11 +84,8 @@ impl AiOverrides {
             // 跟 config.rs sanitize 上限保持一致：10w，让「无限制」档真正不截断
             ai.max_images_per_segment = v.clamp(1, 100_000);
         }
-        if let Some(v) = self.hash_threshold {
-            ai.hash_threshold = v.min(32);
-        }
-        if let Some(v) = self.hash_window_minutes {
-            ai.hash_window_minutes = v.min(60);
+        if let Some(v) = self.dedup_threshold {
+            ai.dedup_threshold = v.clamp(0.70, 0.99);
         }
         // 文本 prompt 覆盖按当前 prompt_language 写到对应字段；空串等同 "走默认"
         let lang = ai.prompt_language.clone();
@@ -158,8 +155,7 @@ mod tests {
             merged.max_images_per_segment,
             original.max_images_per_segment
         );
-        assert_eq!(merged.hash_threshold, original.hash_threshold);
-        assert_eq!(merged.hash_window_minutes, original.hash_window_minutes);
+        assert!((merged.dedup_threshold - original.dedup_threshold).abs() < 1e-6);
         assert_eq!(merged.batch_size, original.batch_size);
         assert_eq!(merged.parallel_slots, original.parallel_slots);
         assert_eq!(merged.ctx_size, original.ctx_size);
@@ -170,7 +166,7 @@ mod tests {
         let base = AiConfig::default();
         let merged = AiOverrides {
             max_images_per_segment: Some(50),
-            hash_threshold: Some(8),
+            dedup_threshold: Some(0.90),
             batch_size: Some(2048),
             parallel_slots: Some(4),
             ctx_size: Some(16384),
@@ -178,10 +174,27 @@ mod tests {
         }
         .with_overrides(base);
         assert_eq!(merged.max_images_per_segment, 50);
-        assert_eq!(merged.hash_threshold, 8);
+        assert!((merged.dedup_threshold - 0.90).abs() < 1e-6);
         assert_eq!(merged.batch_size, Some(2048));
         assert_eq!(merged.parallel_slots, Some(4));
         assert_eq!(merged.ctx_size, Some(16384));
+    }
+
+    #[test]
+    fn dedup_threshold_clamp() {
+        let merged = AiOverrides {
+            dedup_threshold: Some(0.5), // 低于下界
+            ..Default::default()
+        }
+        .with_overrides(AiConfig::default());
+        assert!((merged.dedup_threshold - 0.70).abs() < 1e-6);
+
+        let merged = AiOverrides {
+            dedup_threshold: Some(1.5), // 高于上界
+            ..Default::default()
+        }
+        .with_overrides(AiConfig::default());
+        assert!((merged.dedup_threshold - 0.99).abs() < 1e-6);
     }
 
     #[test]

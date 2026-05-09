@@ -146,6 +146,11 @@ pub enum Error {
         details: String,
     },
 
+    /// MobileNet embedding 推理失败（session init / 预处理 / 推理 / 取输出任一阶段）。
+    /// caller（summary_runner）应让整段标 error 而非静默吞——dedup 失败 = 段总结不可靠。
+    #[error("embedding failed: {0}")]
+    EmbeddingFailed(String),
+
     /// 模型下载被用户主动取消（点暂停）。**不是 fatal**——`.partial` 文件保留，
     /// 下次再调 `download_from_hf` 同 file 名时走 Range 续传。
     /// caller（download_model command）应把这条单独 catch，让前端表达成"已暂停"

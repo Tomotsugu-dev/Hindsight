@@ -1,0 +1,8 @@
+本目录存放 onnxruntime 动态库。
+跑 `pwsh src-tauri/scripts/fetch-onnxruntime.ps1`（Windows） /
+`bash src-tauri/scripts/fetch-onnxruntime.sh`（macOS/Linux） 自动下载。
+
+build.rs 在 cargo build 时把库复制到 target/<profile>/，让 dev 期 ort load-dynamic
+能找到；Tauri 打包时由 bundle.resources 把这里的库放到 app dir 旁边。
+
+文件本身用 `.gitignore` 排除——库文件 ~30 MB，不进 git。

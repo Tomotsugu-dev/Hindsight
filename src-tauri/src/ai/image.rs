@@ -1,10 +1,10 @@
-//! 段内截图选帧 + base64 编码（Phase 1B-γ）。
+//! 段内截图选帧 + base64 编码。
 //!
 //! - [`pick_frames`] 给一组按时间排序的截图路径，等距下采样到 `max` 张
 //! - [`to_data_uri`] 读盘 → 可选 resize → JPEG → base64 → `data:image/jpeg;base64,...`
 //!
-//! Phase 1B-γ 阶段不做 dHash 去重；这块留给 Phase 1C（用 settings.ai.hash_threshold
-//! / hash_window_minutes 做时间窗内汉明距离聚类）。当前实现是最简单的等距时间采样。
+//! 截图相似度去重在 Phase 1C 引入（[`crate::ai::dedup`] + [`crate::ai::embedding`]），
+//! 在 `pick_frames` 之前跑。本模块保持纯采样 + 编码职责，不感知 embedding。
 
 use std::io::Cursor;
 use std::path::Path;
@@ -22,8 +22,8 @@ use crate::error::{Error, Result};
 /// - 否则 → 等距索引 `i * len / max` 取 max 个
 ///
 /// 泛型化（`T: Clone`）支持 `Vec<String>` 路径和 `Vec<ScreenshotMeta>` 元数据两种调用。
-/// 不做 dedup：γ 阶段相邻相似帧也送 LLM，反正 vision 模型自己会忽略冗余。
-/// dHash 在 Phase 1C 加。
+/// 调用方应在本函数前先调 [`crate::ai::dedup::dedup_by_embedding`] 砍冗余画面，
+/// 这里只负责"段内随时间均匀分布"。
 pub fn pick_frames<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {
     if max == 0 {
         return Vec::new();

@@ -325,7 +325,15 @@ pub(crate) async fn summarize_segment(
             ),
         };
 
-    ai_summaries::upsert_segment(pool, &row).await?;
+    // upsert 失败不让整轮 daily 抛飞——磁盘满 / DB lock 时 row 写不进去也得让上层
+    // emit segment_done 把当前 row 推给前端（至少能看到红色 error badge + 错误描述）。
+    // 老逻辑 .await? 会 propagate，让后续段连 emit 都发不出，前端整页空白。
+    if let Err(e) = ai_summaries::upsert_segment(pool, &row).await {
+        log::error!(
+            "ai_summaries upsert 失败（段 {} status={}）：{e}",
+            row.segment_idx, row.status,
+        );
+    }
     Ok((row, status_str))
 }
 
@@ -365,13 +373,20 @@ pub(crate) fn build_step2(
     local_port: u16,
     local_model_label: &str,
 ) -> Result<Step2Chat> {
+    let max_tokens = ai.summary_max_tokens();
     if ai.external_enabled {
-        let ext = ExternalChatClient::new(&ai.endpoint, ai.model.clone(), ai.api_key.clone())?;
+        let ext = ExternalChatClient::new(
+            &ai.endpoint,
+            ai.model.clone(),
+            ai.api_key.clone(),
+            max_tokens,
+        )?;
         Ok(Step2Chat::External(ext))
     } else {
         Ok(Step2Chat::Local(ChatClient::new(
             local_port,
             local_model_label,
+            max_tokens,
         )?))
     }
 }

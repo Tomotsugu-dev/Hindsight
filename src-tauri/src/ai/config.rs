@@ -51,10 +51,10 @@ pub struct AiConfig {
     pub excluded_categories: Vec<String>,
     /// 单段送 AI 的截图上限
     pub max_images_per_segment: u32,
-    /// dHash 64bit 汉明距离阈值，用于截图去重
-    pub hash_threshold: u32,
-    /// 哈希聚类时间窗（分钟）；只在窗内的截图之间比相似度
-    pub hash_window_minutes: u32,
+    /// 截图相似度去重阈值（余弦），段内贪心去重；step 1 vision LLM 之前砍冗余画面。
+    /// 范围 0.70..=0.99；默认 0.95（POC 验证：~70% 去重率，肉眼无误删）。
+    /// 越严越保守（接近 1）；越松越激进，可能误删。
+    pub dedup_threshold: f32,
     /// 模型（GGUF 文件）保存路径。
     ///
     /// 空字符串 = 走 [`crate::ai::models::default_root_dir`]（`<data_root>/ai/models/`）；
@@ -165,9 +165,17 @@ impl AiConfig {
             self.describe_main.as_str()
         }
     }
-    /// step 1 mmproj 文件名；空 → fallback 到 `active_mmproj`。
+    /// step 1 mmproj 文件名。
+    ///
+    /// **mmproj 跟 main 配套 fallback**：`describe_main` 显式设了，mmproj 就只看
+    /// `describe_mmproj`（空 = 该模型不需要 mmproj，纯文本模型）；只有 `describe_main`
+    /// 也 fallback 到 `active_main` 时，mmproj 才 fallback 到 `active_mmproj`。
+    ///
+    /// 旧实现 mmproj 单独 fallback——会让"文本模型 step + 历史 active 是 vision"的组合
+    /// 错把 vision mmproj 强加到文本模型上，llama-server 加载后 token embedding 错位，
+    /// 推理首 token 即 EOS（"模型返回为空"）。
     pub fn effective_describe_mmproj(&self) -> &str {
-        if self.describe_mmproj.trim().is_empty() {
+        if self.describe_main.trim().is_empty() {
             self.active_mmproj.as_str()
         } else {
             self.describe_mmproj.as_str()
@@ -181,13 +189,28 @@ impl AiConfig {
             self.summary_main.as_str()
         }
     }
-    /// step 2 mmproj 文件名；空 → fallback 到 `active_mmproj`。
+    /// step 2 mmproj 文件名。配套 fallback 规则同 [`Self::effective_describe_mmproj`]。
     pub fn effective_summary_mmproj(&self) -> &str {
-        if self.summary_mmproj.trim().is_empty() {
+        if self.summary_main.trim().is_empty() {
             self.active_mmproj.as_str()
         } else {
             self.summary_mmproj.as_str()
         }
+    }
+
+    /// step 1 单次响应 max_tokens：让用户配的 ctx_size 能反映到响应能写多长。
+    /// 取 effective ctx 的一半（给 prompt 留另一半）；不够 1024 也给 1024 兜底
+    /// 避免短输出被截。
+    pub fn describe_max_tokens(&self) -> u32 {
+        let ctx = self.describe_ctx_size_effective().unwrap_or(8192);
+        (ctx / 2).max(1024)
+    }
+
+    /// step 2 单次响应 max_tokens。同 [`Self::describe_max_tokens`] 策略，
+    /// 但下界 2048（给 reasoning 模型思考链最低保障）。
+    pub fn summary_max_tokens(&self) -> u32 {
+        let ctx = self.summary_ctx_size_effective().unwrap_or(8192);
+        (ctx / 2).max(2048)
     }
 }
 
@@ -217,9 +240,8 @@ impl Default for AiConfig {
             user_brief: String::new(),
             segments: default_segments(),
             excluded_categories: vec!["other".to_string()],
-            max_images_per_segment: 5000,
-            hash_threshold: 20,
-            hash_window_minutes: 5,
+            max_images_per_segment: 1024,
+            dedup_threshold: 0.95,
             models_path: String::new(),
             active_main: String::new(),
             active_mmproj: String::new(),
@@ -329,8 +351,7 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     // 上限抬到 10w 是给「无限制」档留路——真正撑爆 ctx 时 LLM 会返 400，
     // 段标 status='error'，用户看到再调小就好；不在这层 silent 截断
     next.max_images_per_segment = next.max_images_per_segment.clamp(1, 100_000);
-    next.hash_threshold = next.hash_threshold.min(32);
-    next.hash_window_minutes = next.hash_window_minutes.min(60);
+    next.dedup_threshold = next.dedup_threshold.clamp(0.70, 0.99);
 
     // 引擎启动级参数 clamp（跟 AiOverrides 一致）：
     // batch ≥ 32 是 llama-server 不接受过小值的安全下限

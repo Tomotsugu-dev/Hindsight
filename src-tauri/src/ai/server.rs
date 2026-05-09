@@ -112,6 +112,31 @@ pub struct EngineStartOverrides {
     pub ctx_size: Option<u32>,
 }
 
+impl EngineStartOverrides {
+    /// 合并两套 overrides 的"最大值"——给同 main 模型跑双 step（describe + summary）
+    /// 的单引擎模式用：每项取 self / other 较大值，None 视为"不在乎"（另一边的值胜出）。
+    ///
+    /// 用例：step 1 配 ctx=8K + np=4，step 2 配 ctx=64K + np=1。合并后 ctx=64K + np=4，
+    /// 让 step 1 享用大 ctx（无害）+ step 2 享用多 slot（也无害——step 2 只跑一段一段，
+    /// 多余 slot 不用就行）。
+    pub fn merge_max(&self, other: &Self) -> Self {
+        Self {
+            batch_size: max_opt(self.batch_size, other.batch_size),
+            parallel_slots: max_opt(self.parallel_slots, other.parallel_slots),
+            ctx_size: max_opt(self.ctx_size, other.ctx_size),
+        }
+    }
+}
+
+/// 一边 Some 一边 None 取 Some；都 Some 取较大；都 None 仍 None。
+fn max_opt(a: Option<u32>, b: Option<u32>) -> Option<u32> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x.max(y)),
+        (Some(x), None) | (None, Some(x)) => Some(x),
+        (None, None) => None,
+    }
+}
+
 /// llama-server 子进程的单例守护者。
 pub struct EngineSupervisor {
     inner: Mutex<Inner>,
@@ -376,9 +401,12 @@ impl EngineSupervisor {
                 log::warn!("job_guard::prepare_command 失败（保护可能降级）: {e}");
             }
             // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效，
-            // 同时打 main / mmproj 文件名验证 step 1/2 切换时确实加载了不同模型
+            // 同时打 main / mmproj 文件名验证 step 1/2 切换时确实加载了不同模型。
+            // 标记 [engine-spawn] 让用户在长 log 里 grep 能直接定位。mmproj=<none> 表示
+            // 此次启动**没**带 vision projection（应该是文本模型 step 2 的预期行为）；
+            // 文本模型这里仍带着某个 *-mmproj.gguf 说明 effective_summary_mmproj fallback 出 bug。
             log::info!(
-                "spawn llama-server: main={main_name} mmproj={mmproj_name} batch_size={:?} parallel_slots={:?} ctx_size={:?}",
+                "[engine-spawn] port={port} main={main_name} mmproj={mmproj_name} batch={:?} -np={:?} ctx_per_slot={:?}",
                 overrides.batch_size,
                 overrides.parallel_slots,
                 overrides.ctx_size,

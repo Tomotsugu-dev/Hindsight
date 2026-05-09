@@ -217,8 +217,7 @@ export default function DebugTab() {
     debugMaxImages,
     setDebugMaxImages,
     debugExcluded,
-    debugHashThreshold,
-    debugHashWindow,
+    debugDedupThreshold,
     debugDescribeBatchSize,
     debugDescribeParallelSlots,
     debugDescribeCtxSize,
@@ -315,6 +314,13 @@ export default function DebugTab() {
       switch (ev_.phase) {
         case "engine_starting":
           setEnginePhase(ev_.message ?? tRef.current("aiSummary.debug.engineLoading"));
+          break;
+        case "dedup_running":
+          setEnginePhase(
+            tRef.current("aiSummary.debug.dedupRunning", {
+              count: ev_.imagesTotal ?? 0,
+            }),
+          );
           break;
         case "segment_started":
           setEnginePhase(null);
@@ -436,8 +442,7 @@ export default function DebugTab() {
       const overrides: AiOverrides = {
         excludedCategories: debugExcluded,
         maxImagesPerSegment: debugMaxImages,
-        hashThreshold: debugHashThreshold,
-        hashWindowMinutes: debugHashWindow,
+        dedupThreshold: debugDedupThreshold,
         systemPrompt:
           debugSysPrompt.trim() === sysPromptDefault.trim() ? "" : debugSysPrompt,
         imageDescribePrompt:
@@ -850,8 +855,7 @@ export default function DebugTab() {
                       {
                         excludedCategories: debugExcluded,
                         maxImagesPerSegment: debugMaxImages,
-                        hashThreshold: debugHashThreshold,
-                        hashWindowMinutes: debugHashWindow,
+                        dedupThreshold: debugDedupThreshold,
                         systemPrompt:
                           debugSysPrompt.trim() ===
                           (DEFAULT_SYSTEM_PROMPTS[

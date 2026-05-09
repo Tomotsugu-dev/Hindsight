@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   api,
@@ -39,7 +40,8 @@ import styles from "./DailyTab.module.css";
 /** 段卡片在 UI 里的展示状态——由 ai_summaries 行 + 当前 in-flight 进度推导。 */
 type CardState =
   | { kind: "empty" } // 还没生成 / 还没轮到
-  | { kind: "running"; imagesTotal: number | null; imagesDone: number } // 段开跑中
+  | { kind: "running"; imagesTotal: number | null; imagesDone: number } // 段 step 1 跑中
+  | { kind: "summarizing"; imagesTotal: number | null } // 段 step 2 段总结跑中
   | { kind: "ok"; row: SegmentSummaryRow }
   | { kind: "skipped"; row: SegmentSummaryRow }
   | { kind: "error"; row: SegmentSummaryRow };
@@ -116,7 +118,13 @@ export default function DailyTab() {
         setRows(m);
       })
       .catch((e) => {
-        if (!cancelled) logError("daily.getSummary", e);
+        if (cancelled) return;
+        logError("daily.getSummary", e);
+        // 旧实现只 logError，前端页空白用户没线索；现在把错误显式推顶：
+        // 进页就 fetch 不到说明 DB 出问题了或后端 command 挂了——不该让用户对着
+        // 一片空白干瞪眼。setTopError 让 DailyTab 顶部红条显示错误，用户能立刻
+        // 知道是"读 DB 失败"而不是"还没生成"。
+        setTopError(typeof e === "string" ? e : String(e));
       });
     return () => {
       cancelled = true;
@@ -166,6 +174,9 @@ export default function DailyTab() {
       setTopError(t("aiSummary.daily.errors.noVisionModel"));
       return;
     }
+    // 重新点开始/再生成时主动清旧错误条——否则用户上一轮失败留着的红条
+    // 跟新一轮的进度提示混在一起容易误以为新一轮也失败了
+    clearTopError();
     try {
       await startDailyGenerate(date, forceRefresh);
     } catch {
@@ -183,6 +194,7 @@ export default function DailyTab() {
       return;
     }
     if (runSnap.generating) return;
+    clearTopError();
     try {
       await retryDailySegment(date, segmentIdx);
     } catch {
@@ -197,6 +209,7 @@ export default function DailyTab() {
   const runningIdx = isRunningHere ? runSnap.runningIdx : null;
   const runningImages = isRunningHere ? runSnap.runningImages : null;
   const runningDone = isRunningHere ? runSnap.runningDone : 0;
+  const runningStage = isRunningHere ? runSnap.runningStage : "describing";
   const enginePhase = isRunningHere ? runSnap.enginePhase : null;
   const topError = runSnap.topError;
   const generating = isRunningHere;
@@ -416,6 +429,15 @@ export default function DailyTab() {
         <div className={styles.errorBar}>
           <AlertTriangle size={14} strokeWidth={2.2} />
           <span>{topError}</span>
+          <button
+            type="button"
+            className={styles.errorClose}
+            onClick={clearTopError}
+            aria-label={t("aiSummary.daily.actions.dismissError")}
+            title={t("aiSummary.daily.actions.dismissError")}
+          >
+            <X size={12} strokeWidth={2.4} />
+          </button>
         </div>
       ) : null}
 
@@ -438,7 +460,9 @@ export default function DailyTab() {
           const row = rows.get(idx);
           const isRunning = runningIdx === idx;
           const state: CardState = isRunning
-            ? { kind: "running", imagesTotal: runningImages, imagesDone: runningDone }
+            ? runningStage === "summarizing"
+              ? { kind: "summarizing", imagesTotal: runningImages }
+              : { kind: "running", imagesTotal: runningImages, imagesDone: runningDone }
             : !row
               ? { kind: "empty" }
               : row.status === "ok"
@@ -550,6 +574,13 @@ function CardStatusBadge({ state }: { state: CardState }) {
             : t("aiSummary.daily.card.badge.analyzingNoTotal")}
         </span>
       );
+    case "summarizing":
+      return (
+        <span className={`${styles.statusBadge} ${styles.statusRunning}`}>
+          <Loader2 size={11} className={styles.spin} />
+          {t("aiSummary.daily.card.badge.summarizing")}
+        </span>
+      );
     case "ok":
       return (
         <span className={`${styles.statusBadge} ${styles.statusOk}`}>
@@ -589,6 +620,16 @@ function CardBody({ state }: { state: CardState }) {
                 total: state.imagesTotal,
               })
             : t("aiSummary.daily.card.body.analyzingNoTotal")}
+        </div>
+      );
+    case "summarizing":
+      return (
+        <div className={styles.bodyMuted}>
+          {state.imagesTotal != null && state.imagesTotal > 0
+            ? t("aiSummary.daily.card.body.summarizing", {
+                count: state.imagesTotal,
+              })
+            : t("aiSummary.daily.card.body.summarizingNoTotal")}
         </div>
       );
     case "ok":

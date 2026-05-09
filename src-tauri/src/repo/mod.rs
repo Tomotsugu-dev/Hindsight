@@ -5,6 +5,7 @@ pub mod app_icons;
 pub mod builtin_categories;
 pub mod categories;
 pub mod devices;
+pub mod embeddings;
 pub mod outbox;
 pub mod process_paths;
 pub mod reports;

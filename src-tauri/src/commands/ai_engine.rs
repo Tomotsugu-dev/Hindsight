@@ -59,8 +59,12 @@ pub async fn get_engine_status(
 
 /// 启动 llama-server 子进程。
 ///
-/// 读 `settings.ai.active_main` / `active_mmproj` 决定加载哪个模型。
-/// 没选模型时直接拒绝启动——比让 server 起空跑然后 `/v1/models` 返空
+/// 加载 step 1（图描述）的 vision 模型——`effective_describe_main()` 优先读
+/// `describe_main`，空则 fallback 到老的 `active_main`。手动启动按钮一般是给
+/// daily / debug 跑前预热引擎用，加载 vision 模型最通用（既能跑 step 1 又能
+/// 跑 step 2 纯文本任务）。
+///
+/// 没选任何模型时直接拒绝启动——比让 server 起空跑然后 `/v1/models` 返空
 /// 列表友好（用户能立刻知道要先去选）。
 #[tauri::command]
 pub async fn start_engine(
@@ -68,26 +72,24 @@ pub async fn start_engine(
     supervisor: State<'_, Arc<EngineSupervisor>>,
 ) -> Result<u16, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
-    if cfg.ai.active_main.trim().is_empty() {
-        return Err("请先在「模型」里下载并使用一个模型，再启动引擎".to_string());
+    let main_name = cfg.ai.effective_describe_main();
+    if main_name.trim().is_empty() {
+        return Err("请先在「模型」里给图描述（step 1）选一个模型，再启动引擎".to_string());
     }
     let models_dir = crate::ai::models::root_dir(&cfg.ai);
-    let main_path = models_dir.join(&cfg.ai.active_main);
+    let main_path = models_dir.join(main_name);
     if !main_path.exists() {
         return Err(format!(
-            "选中的主权重不存在：{}（可能被删除或路径变了）",
-            cfg.ai.active_main
+            "选中的主权重不存在：{main_name}（可能被删除或路径变了）"
         ));
     }
-    let mmproj_path = if cfg.ai.active_mmproj.trim().is_empty() {
+    let mmproj_name = cfg.ai.effective_describe_mmproj();
+    let mmproj_path = if mmproj_name.trim().is_empty() {
         None
     } else {
-        let p = models_dir.join(&cfg.ai.active_mmproj);
+        let p = models_dir.join(mmproj_name);
         if !p.exists() {
-            return Err(format!(
-                "选中的 vision 投影文件不存在：{}",
-                cfg.ai.active_mmproj
-            ));
+            return Err(format!("选中的 vision 投影文件不存在：{mmproj_name}"));
         }
         Some(p)
     };

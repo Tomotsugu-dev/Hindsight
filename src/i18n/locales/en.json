@@ -620,13 +620,10 @@
     "frame": {
       "sectionTitle": "Frame sampling",
       "sectionDesc": "Screenshots can pile up over time — deduplicate by similarity first, then send the rest to the model to save time and tokens.",
-      "thresholdLabel": "Similarity threshold",
-      "thresholdHint": "How different two screenshots can be and still count as the same. Lower is stricter — set to 0 to only treat pixel-identical frames as duplicates and exclude them from analysis.",
-      "windowLabel": "Time window",
-      "windowHint": "Only compare screenshots taken within this window, so similar frames from different parts of the day don't get merged.",
-      "windowSuffix": "min",
+      "dedupThresholdLabel": "Dedup similarity threshold",
+      "dedupThresholdHint": "Merge two screenshots when their cosine similarity ≥ threshold. Higher = more conservative (keep more); lower = more aggressive (merge more, may drop frames you wanted). Default 95% drops ~70% on real-world data.",
       "maxImagesLabel": "Max images per segment",
-      "maxImagesHint": "Cap on screenshots sampled per segment after deduplication. Step 1 (vision describe) runs once per image, so high values directly add segment processing time. Default 30; raise if you want more coverage of long segments."
+      "maxImagesHint": "Cap on screenshots sampled per segment after deduplication. Step 1 (vision describe) runs once per image, so high values directly add segment processing time. Default 1024; raise if you want more coverage of long segments."
     },
     "external": {
       "sectionTitle": "Cloud API (optional)",
@@ -804,7 +801,8 @@
         "exportRunningTooltip": "Summary in progress — wait until it finishes before exporting.",
         "retry": "Retry",
         "retryTooltip": "Regenerate this segment",
-        "retryDisabledTooltip": "Whole-day summary is running; wait until it finishes or is stopped before retrying."
+        "retryDisabledTooltip": "Whole-day summary is running; wait until it finishes or is stopped before retrying.",
+        "dismissError": "Dismiss"
       },
       "errors": {
         "noVisionModel": "Pick a vision model in AI Settings → Models first.",
@@ -812,6 +810,7 @@
         "unknown": "Unknown error"
       },
       "engineLoading": "Loading model…",
+      "dedupRunning": "Deduplicating similar screenshots… ({{count}})",
       "toast": {
         "exported": "Exported {{filename}} to your Downloads folder."
       },
@@ -822,12 +821,15 @@
           "skipped": "No screenshots",
           "error": "Failed",
           "analyzing": "Analyzing · {{done}} / {{total}} screenshots",
-          "analyzingNoTotal": "Analyzing…"
+          "analyzingNoTotal": "Analyzing…",
+          "summarizing": "Writing segment summary…"
         },
         "body": {
           "empty": "Click \"Start summary\" above to generate this segment.",
           "analyzing": "Sending screenshots to the model… {{done}} / {{total}} done",
           "analyzingNoTotal": "Analyzing…",
+          "summarizing": "Image descriptions done ({{count}}); model is now writing the segment summary…",
+          "summarizingNoTotal": "Writing segment summary…",
           "skipped": "No screenshots in this time range (computer was off / everything was on the privacy list / everything was in excluded categories).",
           "errorLabel": "Failed: "
         }
@@ -998,11 +1000,8 @@
       "frame": {
         "title": "Frame sampling",
         "description": "Many screenshots in a segment — first deduplicate by similarity, then send to the model to save time and tokens. Applies only to this debug window.",
-        "hashThresholdLabel": "Similarity threshold",
-        "hashThresholdHint": "How different two screenshots must be to count as distinct. Lower is stricter — 0 means every pixel must match for them to be treated as duplicates.",
-        "hashWindowLabel": "Time window",
-        "hashWindowHint": "Only compare screenshots within this window, so similar morning/afternoon scenes aren't merged by mistake.",
-        "hashWindowSuffix": "min"
+        "dedupThresholdLabel": "Dedup similarity threshold",
+        "dedupThresholdHint": "Merge two screenshots when their cosine similarity ≥ threshold. Higher = more conservative (keep more); lower = more aggressive (merge more, may drop frames you wanted). Default 95% drops ~70% on real-world data."
       },
       "engine": {
         "title": "Engine parameters (startup)",
@@ -1020,6 +1019,7 @@
         "runFailed": "Debug run failed"
       },
       "engineLoading": "Loading model…",
+      "dedupRunning": "Deduplicating similar screenshots… ({{count}})",
       "scopePlaceholder": "{{type}} debug pending backend implementation. Switch back to \"Daily\" to debug the two-step daily flow (per-image descriptions → segment summary).",
       "imagePrompt": {
         "title": "Per-image describe prompt",

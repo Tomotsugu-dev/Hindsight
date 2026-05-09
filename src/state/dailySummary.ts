@@ -23,6 +23,11 @@ import {
 } from "../api/hindsight";
 import { logWarn } from "../lib/logger";
 
+/** 段在跑时具体处于哪个子阶段——决定段卡片 body 文案。
+ *  - "describing"：step 1 逐图描述（badge / body 显示 N/M 张进度）
+ *  - "summarizing"：step 2 段总结（spinner + "生成段总结中…"，无进度数字） */
+export type RunningStage = "describing" | "summarizing";
+
 export interface DailyRunningSnapshot {
   /** 是否有 daily run 正在跑。按钮"停止"<->"开始"切换的根。 */
   generating: boolean;
@@ -36,6 +41,9 @@ export interface DailyRunningSnapshot {
   /** 当前段已完成的逐图描述数（image_described 累加）。
    *  segment_started 时清零、新段开跑也清零；用来给 UI 渲染 "X / Y 张"。 */
   runningDone: number;
+  /** 段子阶段——只在 runningIdx 非 null 时有意义。
+   *  "describing" 默认；step 2 chat 开始时切到 "summarizing"。 */
+  runningStage: RunningStage;
   /** 引擎冷启动提示文案；非 null 时段卡上方会显示一行 hint。 */
   enginePhase: string | null;
   /** 顶层错误（all_done / segment_done 不算）；null = 无错。
@@ -49,6 +57,7 @@ const EMPTY_SNAP: DailyRunningSnapshot = Object.freeze({
   runningIdx: null,
   runningImages: null,
   runningDone: 0,
+  runningStage: "describing" as RunningStage,
   enginePhase: null,
   topError: null,
 });
@@ -82,6 +91,26 @@ function ensureListener(): void {
         });
         notify();
         break;
+      case "dedup_running":
+        // 段内 MobileNet embedding 去重；前端复用 enginePhase 文案位置展示 hint。
+        // imagesTotal 是去重前段内总图数，提示"段 N：M 张相似度去重中…"。
+        // **同时**初始化 runningImages / runningDone / runningStage——dedup_running 是段循环
+        // 的最早事件（在 segment_started 之前）。不初始化的话段卡片会从前段残留的状态切到
+        // "分析中 X/null 张"显示乱数据；后续 segment_started 才纠正。
+        snap = Object.freeze({
+          ...snap,
+          generating: true,
+          runningDate: p.date,
+          runningIdx: p.segmentIdx ?? null,
+          runningImages: p.imagesTotal ?? null,
+          runningDone: 0,
+          runningStage: "describing",
+          enginePhase: i18next.t("aiSummary.daily.dedupRunning", {
+            count: p.imagesTotal ?? 0,
+          }),
+        });
+        notify();
+        break;
       case "segment_started":
         snap = Object.freeze({
           ...snap,
@@ -91,6 +120,7 @@ function ensureListener(): void {
           runningIdx: p.segmentIdx ?? null,
           runningImages: p.imagesTotal ?? null,
           runningDone: 0,
+          runningStage: "describing",
         });
         notify();
         break;
@@ -103,6 +133,31 @@ function ensureListener(): void {
         });
         notify();
         break;
+      case "step1_done":
+        // 段 step 1 跑完，还没出段总结——**保持** runningIdx 让段卡片继续显示在跑状态，
+        // 切 runningStage 到 "summarizing" 让 body 文案变成"生成段总结中…"。
+        // 之前清 runningIdx 让卡片掉回 empty 显示"点开始总结"——swap_per_segment 模式下
+        // 加载 summary 模型 30-90 秒期间一直显示这个，体验崩。
+        snap = Object.freeze({
+          ...snap,
+          runningStage: "summarizing",
+        });
+        notify();
+        break;
+      case "summarizing":
+        // step 2 段总结开始。保持 runningIdx + runningImages 不变（让 badge 知道是哪段）；
+        // 切 runningStage 让 UI body 文案从"看截图…"换成"生成段总结中…"。
+        // **同时**清 enginePhase——swap_per_segment 模式下上一步是 engine_starting "加载段总结模型中"，
+        // summarizing 到达说明加载完了 chat 已开始，文案不该还显示"加载中"。
+        snap = Object.freeze({
+          ...snap,
+          runningIdx: p.segmentIdx ?? snap.runningIdx,
+          runningImages: p.imagesTotal ?? snap.runningImages,
+          runningStage: "summarizing",
+          enginePhase: null,
+        });
+        notify();
+        break;
       case "segment_done":
         // segment_done 不变 generating（后面可能还有段要跑）；只清 runningIdx。
         // 派发给当前 mount 的 DailyTab 让它 setRows 落库这一段。
@@ -112,6 +167,7 @@ function ensureListener(): void {
           runningIdx: null,
           runningImages: null,
           runningDone: 0,
+          runningStage: "describing",
         });
         notify();
         break;

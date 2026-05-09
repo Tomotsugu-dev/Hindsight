@@ -26,10 +26,9 @@ interface DebugState {
   setDebugMaxImages: (v: number) => void;
   debugExcluded: string[];
   setDebugExcluded: (v: string[]) => void;
-  debugHashThreshold: number;
-  setDebugHashThreshold: (v: number) => void;
-  debugHashWindow: number;
-  setDebugHashWindow: (v: number) => void;
+  /** 段内余弦阈值去重（0.70..=0.99）；默认 0.95 */
+  debugDedupThreshold: number;
+  setDebugDedupThreshold: (v: number) => void;
   /** 图描述阶段（step 1）batch；null = fallback 到默认 */
   debugDescribeBatchSize: number | null;
   setDebugDescribeBatchSize: (v: number | null) => void;
@@ -66,8 +65,7 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
 
   const [debugMaxImages, setDebugMaxImages] = useState(30);
   const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
-  const [debugHashThreshold, setDebugHashThreshold] = useState(5);
-  const [debugHashWindow, setDebugHashWindow] = useState(5);
+  const [debugDedupThreshold, setDebugDedupThreshold] = useState(0.95);
   const [debugDescribeBatchSize, setDebugDescribeBatchSize] = useState<number | null>(null);
   const [debugDescribeParallelSlots, setDebugDescribeParallelSlots] = useState(1);
   const [debugDescribeCtxSize, setDebugDescribeCtxSize] = useState<number | null>(null);
@@ -89,8 +87,7 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     const m = settings.ai.maxImagesPerSegment;
     setDebugMaxImages(m >= 1000 ? 100_000 : m >= 30 ? 30 : 15);
     setDebugExcluded(settings.ai.excludedCategories);
-    setDebugHashThreshold(settings.ai.hashThreshold);
-    setDebugHashWindow(settings.ai.hashWindowMinutes);
+    setDebugDedupThreshold(settings.ai.dedupThreshold);
     // 双套调试参数初值——优先用新字段，未设则 fallback 到旧全局字段
     setDebugDescribeBatchSize(
       settings.ai.describeBatchSize ?? settings.ai.batchSize ?? null,
@@ -128,10 +125,8 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     setDebugMaxImages,
     debugExcluded,
     setDebugExcluded,
-    debugHashThreshold,
-    setDebugHashThreshold,
-    debugHashWindow,
-    setDebugHashWindow,
+    debugDedupThreshold,
+    setDebugDedupThreshold,
     debugDescribeBatchSize,
     setDebugDescribeBatchSize,
     debugDescribeParallelSlots,
