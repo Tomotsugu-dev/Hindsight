@@ -146,9 +146,23 @@ export interface VramInfo {
   source: VramSource;
 }
 
-/** binary + runtime + 子进程保护 + 系统 VRAM 合并；getEngineStatus 返回这个 */
+/** ONNX Runtime 推理库（embedding 用）安装状态。跟 EngineBinary 是 AI 引擎的两半。 */
+export interface EmbeddingRuntimeStatus {
+  /** dylib 文件是否已落到磁盘 */
+  installed: boolean;
+  /** 已安装版本（来自版本标记文件）；未装为 null */
+  installedVersion: string | null;
+  /** Hindsight 当前 PIN 的 onnxruntime 版本 */
+  currentPin: string;
+  /** 估算下载体积（字节） */
+  estimatedBytes: number;
+}
+
+/** binary + onnxruntime + runtime + 子进程保护 + 系统 VRAM 合并；getEngineStatus 返回这个 */
 export interface EngineStatus extends EngineBinaryStatus {
   runtime: EngineRuntimeStatus;
+  /** onnxruntime 推理库安装状态——跟 binary 是一对，任一未装都视作"AI 引擎未就绪"。 */
+  embeddingRuntime: EmbeddingRuntimeStatus;
   /** 子进程保护降级原因；null = 保护正常 */
   protectionDegraded: string | null;
   /** 系统 VRAM；null = 未检测到（CPU-only 机器或 nvidia-smi 不存在） */
@@ -210,10 +224,16 @@ export type EngineDownloadPhase =
   | "extracting"
   | "done";
 
+/** 下载阶段：`engine` = llama.cpp binary、`runtime` = onnxruntime dylib。
+ *  download_binary 命令把两阶段串联跑，前端按这个字段切换提示文字
+ *  ("下载 AI 引擎中…" / "下载推理库中…")。 */
+export type EngineDownloadStage = "engine" | "runtime";
+
 export interface EngineDownloadProgress {
   phase: EngineDownloadPhase;
   downloaded: number;
   total: number | null;
+  stage: EngineDownloadStage;
 }
 
 /** 后端 emit 进度事件用的事件名。前端 listen 它。 */

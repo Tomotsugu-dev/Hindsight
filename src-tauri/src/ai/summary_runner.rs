@@ -206,13 +206,11 @@ impl DaySummaryRunner {
         //                            代价：step 1/2 用不同模型时每段两次 server restart。
 
         let max_images = ai.max_images_per_segment as usize;
-        // 是否需要 per-segment swap：**只看 main / mmproj 文件**——GGUF 切换没法热更，
-        // 必须 stop+start。ctx_size / batch / np 不一致**不**触发 swap，因为同 main 时
-        // 我们用合并 overrides（取 max）启动单 server，让 step 1 享用更宽松的 ctx +
-        // step 2 享用更多 slot，两边都不亏。这样用户配 step1 ctx=8K + step2 ctx=64K
-        // 这种合理组合不再被推到慢路径。
-        let models_differ = ai.effective_describe_main() != ai.effective_summary_main()
-            || ai.effective_describe_mmproj() != ai.effective_summary_mmproj();
+        // Daily 路径统一走 swap_per_segment：每段 step1→step2 中间 stop+start 切参数。
+        // 无论 main/mmproj 是否一致，describe / summary 各自的 ctx × parallel 配置都会被
+        // 独立采纳，不再合并 overrides——同 main 时 merge_max 会把 ctx 和 slots 都拉到最坏
+        // 组合（如 8K×4 + 64K×1 → 64K×4），KV cache 直接爆 GPU/统一内存。
+        // 代价：每段两次 model reload；同模型时也是同一文件 unload/reload，不可避免。
 
         if step1_only {
             // —— 调试 tab：只跑全段 step 1 ——
@@ -242,31 +240,11 @@ impl DaySummaryRunner {
                 parallel,
             )
             .await?;
-        } else if !models_differ {
-            // —— Daily 流水线（单引擎）：main + mmproj 相同 ——
-            // 取 describe / summary overrides 的并集（每项 max）一次启动 server，
-            // 跑完所有段。ctx / batch / np 差异在这里被合并掉，无 swap 浪费。
-            let merged = describe_overrides.merge_max(&summary_overrides);
-            log::info!(
-                "[engine-plan] interleaved_single: merged overrides batch={:?} -np={:?} ctx={:?}",
-                merged.batch_size, merged.parallel_slots, merged.ctx_size,
-            );
-            self.run_interleaved_single_engine(
-                source,
-                &date_str,
-                &ai,
-                merged,
-                force_refresh,
-                total_segments,
-                max_images,
-                device.clone(),
-                parallel,
-            )
-            .await?;
         } else {
-            // —— Daily 流水线（双引擎）：main / mmproj 不同 ——
-            // 每段 swap 两次 server。慢但 UX 好：每段 step 2 跑完前端立刻看到该段总结。
-            log::info!("[engine-plan] interleaved_swap_per_segment: main/mmproj 不同需要 swap");
+            // —— Daily 流水线：每段 swap 两次 server，分别套用 describe / summary 参数。
+            // 慢但 UX 好：每段 step 2 跑完前端立刻看到该段总结；且每个 phase 的 KV cache
+            // 严格按当前 phase 配置预分配，不会因合并参数 OOM。
+            log::info!("[engine-plan] interleaved_swap_per_segment: 每段切 describe/summary 参数");
             self.run_interleaved_swap_per_segment(
                 source,
                 &date_str,
@@ -348,7 +326,11 @@ impl DaySummaryRunner {
             }
             // C1：force_refresh=false 时已生成的段 (status=ok) 跳过——之前注释承诺
             // "已有的段直接复用"但代码没实现，导致每次跑都重写 ok 段
-            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+            if !force_refresh
+                && self
+                    .segment_already_ok(source, date_str, idx as u32)
+                    .await?
+            {
                 continue;
             }
             self.run_one_segment(
@@ -423,7 +405,11 @@ impl DaySummaryRunner {
             if seg.end_hour <= seg.start_hour {
                 continue;
             }
-            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+            if !force_refresh
+                && self
+                    .segment_already_ok(source, date_str, idx as u32)
+                    .await?
+            {
                 continue;
             }
             self.run_one_segment(
@@ -456,95 +442,20 @@ impl DaySummaryRunner {
         date_str: &str,
         segment_idx: u32,
     ) -> Result<bool> {
-        let status = ai_summaries::get_segment_status(&self.pool, source, date_str, segment_idx)
-            .await?;
+        let status =
+            ai_summaries::get_segment_status(&self.pool, source, date_str, segment_idx).await?;
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// Daily 流水线 —— 单引擎模式：describe / summary 模型 + overrides 完全相同时，
-    /// 单 server 跑全段，每段两步连跑（run_one_segment 的双 false 路径）。
+    /// Daily 流水线 —— 段间双 swap 模式（唯一 daily 路径）：每段 step1→step2 中间
+    /// stop+start 切 describe / summary 各自的引擎参数（ctx / parallel / batch）：
+    ///   段 0 step 1（describe params）→ restart → 段 0 step 2（summary params）→ restart →
+    ///   段 1 step 1 → ...
     ///
-    /// 这是 daily 跑得最快的情况——没有 server restart 开销。前端在每段 step 2
-    /// 跑完后立刻收到 `segment_done` + 真 row 写入 ai_summaries。
-    #[allow(clippy::too_many_arguments)]
-    async fn run_interleaved_single_engine(
-        &self,
-        source: &str,
-        date_str: &str,
-        ai: &AiConfig,
-        engine_overrides: EngineStartOverrides,
-        force_refresh: bool,
-        total_segments: u32,
-        max_images: usize,
-        device: DeviceFilter,
-        parallel: usize,
-    ) -> Result<()> {
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
-            self.emit(p);
-        }
-        let port = self
-            .ensure_engine_running(ai, Step::Describe, engine_overrides)
-            .await?;
-        let step1 = ChatClient::new(
-            port,
-            ai.effective_describe_main().to_string(),
-            ai.describe_max_tokens(),
-        )?;
-        let step2 = build_step2(ai, port, ai.effective_summary_main())?;
-        for (idx, seg) in ai.segments.iter().enumerate() {
-            if self.cancel.load(Ordering::Relaxed) {
-                let mut p = SummaryProgress::base(
-                    source.to_string(),
-                    date_str.to_string(),
-                    "cancelled",
-                    total_segments,
-                );
-                p.segment_idx = Some(idx as u32);
-                self.emit(p);
-                return Ok(());
-            }
-            if seg.end_hour <= seg.start_hour {
-                continue;
-            }
-            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
-                continue;
-            }
-            self.run_one_segment(
-                source,
-                &step1,
-                &step2,
-                ai,
-                date_str,
-                idx as u32,
-                total_segments,
-                seg.label.clone(),
-                seg.start_hour,
-                seg.end_hour,
-                max_images,
-                device.clone(),
-                parallel,
-                /* step1_only */ false,
-                /* step2_only */ false,
-            )
-            .await?;
-        }
-        Ok(())
-    }
-
-    /// Daily 流水线 —— 段间双 swap 模式：describe / summary 模型不同时，每段两次重启 server：
-    ///   段 0 step 1（describe model）→ restart → 段 0 step 2（summary model）→ restart →
-    ///   段 1 step 1（describe model）→ restart → 段 1 step 2 → ...
-    ///
-    /// 慢（每段两次 model load × N 段），但 UX 立竿见影：每段 step 2 跑完前端立刻看到段总结。
-    /// 用户接受这个开销换 UX——尤其本地 GGUF 加载 30-90s × 5 段 × 2 = 5-15 分钟额外开销。
+    /// 即便 main / mmproj 完全相同也走这条：因为合并 overrides 会把 ctx 和 slots 同时
+    /// 拉到最坏组合（如 8K×4 + 64K×1 → 64K×4），KV cache 直接吃爆 GPU/统一内存。
+    /// 慢（每段两次 model load × N 段），但 UX 立竿见影：每段 step 2 跑完前端立刻看到
+    /// 段总结。本地 GGUF 加载 30-90s × N 段 × 2 = 5-15 分钟额外开销，用户接受。
     #[allow(clippy::too_many_arguments)]
     async fn run_interleaved_swap_per_segment(
         &self,
@@ -574,7 +485,11 @@ impl DaySummaryRunner {
             if seg.end_hour <= seg.start_hour {
                 continue;
             }
-            if !force_refresh && self.segment_already_ok(source, date_str, idx as u32).await? {
+            if !force_refresh
+                && self
+                    .segment_already_ok(source, date_str, idx as u32)
+                    .await?
+            {
                 continue;
             }
 
@@ -639,7 +554,10 @@ impl DaySummaryRunner {
             // status="skipped_no_screenshots"，也跳过没有意义（一致返还）。
             let seg_status =
                 ai_summaries::get_segment_status(&self.pool, source, date_str, idx as u32).await?;
-            if matches!(seg_status.as_deref(), Some("error" | "skipped_no_screenshots")) {
+            if matches!(
+                seg_status.as_deref(),
+                Some("error" | "skipped_no_screenshots")
+            ) {
                 log::info!(
                     "swap_per_segment: 段 {idx} step 1 后 status={:?}，跳过 step 2 swap",
                     seg_status
@@ -1012,7 +930,9 @@ impl DaySummaryRunner {
                 Some(_) => "error",
                 None => {
                     // 没行——写一条提示 error 让前端看到
-                    let err_msg = "段总结失败：找不到逐图描述（先跑一次 step 1，或检查日期是否对得上）".to_string();
+                    let err_msg =
+                        "段总结失败：找不到逐图描述（先跑一次 step 1，或检查日期是否对得上）"
+                            .to_string();
                     let row = crate::repo::ai_summaries::SegmentSummaryRow {
                         source: source.to_string(),
                         local_date: date_str.to_string(),
@@ -1417,7 +1337,10 @@ impl DaySummaryRunner {
         let embeddings = match self.load_or_compute_embeddings(&paths).await {
             Ok(v) => v,
             Err(e) => {
-                log::warn!("dedup 跳过：embedding 失败 ({e}) — 原样返回 {} 张", metas.len());
+                log::warn!(
+                    "dedup 跳过：embedding 失败 ({e}) — 原样返回 {} 张",
+                    metas.len()
+                );
                 return Ok(metas);
             }
         };

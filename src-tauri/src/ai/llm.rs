@@ -26,10 +26,11 @@ pub struct ChatUsage {
     pub completion_tokens: Option<u32>,
 }
 
-/// 本地 llama-server 单段推理超时。GPU（CUDA / Metal）上一段几秒就完，但 CPU
-/// fallback 上一段 30 张图能要 60-120s，统一给到 180s 留宽裕；比 supervisor
-/// 健康检查 (90s) 长，避免引擎刚 ready 就被 chat 超时打回。
-const CHAT_TIMEOUT: Duration = Duration::from_secs(180);
+/// 本地 llama-server 单段推理超时。
+/// 段总结路径单段可能拼 26 张图描述聚合（5K-15K input token）+ 几千 token 输出，
+/// Apple Silicon Metal 跑 4B Q4 模型实测分钟级别——给到 600s 容忍长 prompt 长输出。
+/// 比 supervisor 健康检查 (90s) 长，避免引擎刚 ready 就被 chat 超时打回。
+const CHAT_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// 外部 API（OpenAI / DeepSeek / OpenRouter…）超时。
 /// 云端文本聊天一般 5-30s 完，给 90s 容忍偶发慢响应 + 网络抖动。
@@ -86,7 +87,13 @@ impl ChatClient {
         image_data_uris: &[String],
     ) -> Result<(String, ChatUsage)> {
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, image_data_uris, self.max_tokens);
+        let body = build_chat_body(
+            &self.model,
+            system,
+            user_text,
+            image_data_uris,
+            self.max_tokens,
+        );
         post_chat_completions(self.http.post(&url), body).await
     }
 }
@@ -326,9 +333,7 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
             )
         } else if finish_reason == "stop" && usage.completion_tokens == Some(0) {
             "（模型 prompt 一进去就 EOS——多半是 chat template / mmproj 错配，看 [engine-spawn] 日志确认 mmproj 是否对得上选的模型）".to_string()
-        } else if finish_reason == "length"
-            && usage.completion_tokens.is_some_and(|n| n > 0)
-        {
+        } else if finish_reason == "length" && usage.completion_tokens.is_some_and(|n| n > 0) {
             // 老版 llama-server (< b4500) 不返 reasoning_content 字段，DeepSeek R1 / Qwen3 thinking
             // 模型的思考链整段塞 content；撞 max_tokens 时被截断，content 末段格式损坏后被
             // .trim() 处理也可能为空。reasoning_chars=0 但 completion_tokens > 0 就是这种情况。

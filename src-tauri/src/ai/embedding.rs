@@ -31,14 +31,13 @@ use ndarray::Array4;
 use ort::session::Session;
 use ort::value::TensorRef;
 use rayon::prelude::*;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::error::{Error, Result};
 
 /// 编译时嵌入的 ONNX 模型权重（~3.5 MB）。运行时从 in-memory bytes 起 session，
 /// 不读盘，方便单文件 ship。
-const MOBILENET_ONNX: &[u8] =
-    include_bytes!("../../resources/models/mobilenet_v3_small.onnx");
+const MOBILENET_ONNX: &[u8] = include_bytes!("../../resources/models/mobilenet_v3_small.onnx");
 
 /// 模型标识——跟 DB `screenshot_embeddings.model_id` 字段对齐。
 /// 切到 DINOv2 / 其他 backbone 时改这个值；旧 embedding 行 (path, 旧id) 自然失效。
@@ -61,51 +60,54 @@ const IMAGENET_STD: [f32; 3] = [0.229, 0.224, 0.225];
 /// 用 Mutex 而非 RwLock —— `Session::run` 要求 `&mut self`。
 static SESSION: OnceLock<Mutex<Session>> = OnceLock::new();
 
-/// 启动时调用：把 onnxruntime DLL 的绝对路径塞进 `ORT_DYLIB_PATH`，让 load-dynamic
-/// 在 Tauri prod 包里也能定位到 `<install>/resources/runtime/onnxruntime.dll`。
+/// 启动时调用：把 lazy-download 落盘的 onnxruntime dylib 塞进 `ORT_DYLIB_PATH`，
+/// 让 ort 的 load-dynamic feature 在 dlopen 时定位到正确路径。
 ///
-/// 不传 → ort 默认按 "next-to-exe" 搜（dev 模式 `build.rs` 把 DLL 复制到
-/// `target/<profile>/`，正好命中默认路径，所以 dev 模式调不调本函数都行）。
+/// 路径来自 [`super::embedding_runtime::dylib_path`]，对应 `<data_root>/ai/runtime/`
+/// 下的 dylib——dev 和 prod 行为一致，都靠首次跑 AI 总结时下载。
 ///
-/// 失败仅打 warn，不中断启动——session 真的起不来时会在 [`get_session`] 抛
-/// `EmbeddingFailed`，让总结整段标 error；不影响 capture / 报表等其他子系统。
-pub fn init_dylib_path(handle: &AppHandle) {
-    let libname: &str = if cfg!(target_os = "windows") {
-        "onnxruntime.dll"
-    } else if cfg!(target_os = "macos") {
-        "libonnxruntime.dylib"
+/// 文件不存在 → 不设环境变量、log info 提示。`get_session` 第一次调用会失败，
+/// `compute_batch` 把它映射到 [`Error::EmbeddingRuntimeMissing`]，前端弹框引导下载。
+///
+/// 参数 `_handle` 保留是为了不动 lib.rs::setup 调用方签名；后续 cleanup 可以删。
+pub fn init_dylib_path(_handle: &AppHandle) {
+    let path = match super::embedding_runtime::dylib_path() {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("init_dylib_path: 算 dylib 路径失败: {e}");
+            return;
+        }
+    };
+    if path.exists() {
+        std::env::set_var("ORT_DYLIB_PATH", &path);
+        log::info!("ORT_DYLIB_PATH = {}", path.display());
     } else {
-        "libonnxruntime.so"
-    };
-    // resource_dir 在 Windows = <install>\resources，macOS = ...Contents/Resources，
-    // Linux = /usr/lib/<app>/resources；下面拼 runtime/ 子目录跟 build.rs / bundle 配置一致
-    let Ok(res_dir) = handle.path().resource_dir() else {
-        log::warn!("init_dylib_path: resource_dir 失败，ort 走默认 next-to-exe 搜索");
-        return;
-    };
-    let candidate = res_dir.join("resources").join("runtime").join(libname);
-    if candidate.exists() {
-        std::env::set_var("ORT_DYLIB_PATH", &candidate);
-        log::info!("ORT_DYLIB_PATH = {}", candidate.display());
-        return;
+        log::info!(
+            "onnxruntime 未安装（{}）；首次跑 AI 总结时会引导下载",
+            path.display()
+        );
     }
-    // dev 模式 resource_dir 不指向 src-tauri/resources（指向 target/debug/...），找不到
-    // 是常态——build.rs 已把 DLL 复制到 target/<profile>/，ort 默认搜索能命中。
-    log::info!(
-        "init_dylib_path: {} 不存在，走 ort 默认 next-to-exe 搜索（dev 模式正常）",
-        candidate.display()
-    );
 }
 
 /// 拿到 session 引用（首次调用时初始化）。
+///
+/// session builder 失败的最常见原因是 ort 的 load-dynamic 找不到 onnxruntime dylib
+/// （用户还没下推理库）。这里把那种情况映射成 [`Error::EmbeddingRuntimeMissing`]，
+/// 让 `compute_batch` 的调用方（生成日报命令链路）能 match 到这条明确错误，
+/// 前端再弹框引导用户下载，而不是显示一坨 dlopen 内部错。
 fn get_session() -> Result<&'static Mutex<Session>> {
     if let Some(s) = SESSION.get() {
         return Ok(s);
     }
+    if !super::embedding_runtime::is_installed().unwrap_or(false) {
+        return Err(Error::EmbeddingRuntimeMissing);
+    }
     let session = Session::builder()
-        .map_err(|e| Error::EmbeddingFailed(format!("session builder: {e}")))?
-        .commit_from_memory(MOBILENET_ONNX)
-        .map_err(|e| Error::EmbeddingFailed(format!("commit_from_memory: {e}")))?;
+        .and_then(|b| b.commit_from_memory(MOBILENET_ONNX))
+        .map_err(|e| {
+            log::warn!("ort session 创建失败（推测 dylib 加载问题）: {e}");
+            Error::EmbeddingRuntimeMissing
+        })?;
     // 多线程 race 时只有第一个赢家的 session 存活，其它的被 drop 掉
     let _ = SESSION.set(Mutex::new(session));
     Ok(SESSION.get().expect("session just set"))
@@ -186,19 +188,15 @@ fn preprocess_batch(paths: &[PathBuf]) -> Result<Array4<f32>> {
     for chunk in chunks {
         flat.extend_from_slice(&chunk);
     }
-    Array4::from_shape_vec(
-        (n, 3, CROP_SIZE as usize, CROP_SIZE as usize),
-        flat,
-    )
-    .map_err(|e| Error::EmbeddingFailed(format!("from_shape_vec: {e}")))
+    Array4::from_shape_vec((n, 3, CROP_SIZE as usize, CROP_SIZE as usize), flat)
+        .map_err(|e| Error::EmbeddingFailed(format!("from_shape_vec: {e}")))
 }
 
 /// 单图预处理：load → resize → center crop → normalize → 返回 3×H×W flat f32（CHW 顺序）。
 /// 长度恒为 3 × CROP_SIZE × CROP_SIZE = 3 × 224 × 224 = 150528。
 fn preprocess_one(path: &Path) -> Result<Vec<f32>> {
-    let img = image::open(path).map_err(|e| {
-        Error::EmbeddingFailed(format!("open image {}: {e}", path.display()))
-    })?;
+    let img = image::open(path)
+        .map_err(|e| Error::EmbeddingFailed(format!("open image {}: {e}", path.display())))?;
     let img = img.to_rgb8();
     let (w, h) = (img.width(), img.height());
 

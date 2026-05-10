@@ -376,11 +376,15 @@ function EngineSection() {
     return <div className={styles.engineCard}>{t("aiSettings.engine.loading")}</div>;
   }
 
-  const installed = status.installed;
+  // "AI 引擎"是 binary + onnxruntime runtime 一对——两者都装才算 installed。
+  // 任一缺失都按"未安装"处理（下载按钮 + 缺失 badge）。
+  const binaryInstalled = status.installed;
+  const runtimeInstalled = status.embeddingRuntime.installed;
+  const installed = binaryInstalled && runtimeInstalled;
   const accelLabel = humanAccelLabel(status.platformId, t);
-  const version = installed ? status.installedVersion : status.currentPin;
+  const version = binaryInstalled ? status.installedVersion : status.currentPin;
   const stale =
-    installed &&
+    binaryInstalled &&
     status.installedVersion !== null &&
     status.installedVersion !== status.currentPin;
   // Windows 但 CUDA 未检测到：建议先装 NVIDIA CUDA
@@ -436,6 +440,15 @@ function EngineSection() {
                 : ""}
             </span>
           </button>
+          <span className={styles.engineMetaSep}>·</span>
+          {/* 推理库（onnxruntime）小标签——已装时显示版本，未装时显示"待下载" */}
+          {runtimeInstalled
+            ? t("aiSettings.engine.runtimeBadge", {
+                version:
+                  status.embeddingRuntime.installedVersion ??
+                  status.embeddingRuntime.currentPin,
+              })
+            : t("aiSettings.engine.runtimeBadgeMissing")}
           <span className={styles.engineMetaSep}>·</span>
           {t("aiSettings.engine.detected", { accel: accelLabel })}
         </span>
@@ -569,9 +582,16 @@ function EngineProgress({ progress }: { progress: EngineDownloadProgress }) {
   const { t } = useTranslation();
   // 取整 + 单调递增显示：消除小数频繁跳动，并守住「数字只能涨不能退」。
   // 用 ref 不触发额外 render；新值 ≤ 当前 max 就保持显示老值。
+  // 注意：每个 stage（engine / runtime）独立计 maxMb，切换阶段时 ref 应重置；
+  // 用 stage 当 key 在父级渲染时帮我们做这件事——这里只在同 stage 内累计。
   const maxMbRef = useRef(0);
   const currentMb = Math.round(progress.downloaded / 1024 / 1024);
   if (currentMb > maxMbRef.current) maxMbRef.current = currentMb;
+  // 阶段文案前缀：engine 时 "下载 AI 引擎中…"、runtime 时 "下载推理库中…"
+  const stageKey =
+    progress.stage === "runtime"
+      ? "aiSettings.engine.progress.stageRuntime"
+      : "aiSettings.engine.progress.stageEngine";
   if (progress.phase === "downloading") {
     return (
       <div className={styles.engineProgressWrap}>
@@ -581,6 +601,7 @@ function EngineProgress({ progress }: { progress: EngineDownloadProgress }) {
           />
         </div>
         <div className={styles.engineProgressText}>
+          {t(stageKey)} ·{" "}
           {t("aiSettings.engine.progress.downloading", {
             size: maxMbRef.current,
           })}
@@ -595,7 +616,11 @@ function EngineProgress({ progress }: { progress: EngineDownloadProgress }) {
       : progress.phase === "extracting"
         ? t("aiSettings.engine.progress.extracting")
         : t("aiSettings.engine.progress.done");
-  return <div className={styles.engineProgressText}>{label}</div>;
+  return (
+    <div className={styles.engineProgressText}>
+      {t(stageKey)} · {label}
+    </div>
+  );
 }
 
 /** 把秒数格式化成"X 分 Y 秒后释放显存" / "Y 秒后释放显存"。i18n 三语共用。 */

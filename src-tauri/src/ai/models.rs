@@ -279,9 +279,7 @@ where
             tokio::fs::rename(&temp, &dest).await.map_err(Error::Io)?;
             Ok(dest)
         }
-        Err(Error::DownloadCancelled(_)) => {
-            Err(Error::DownloadCancelled(local_name.to_string()))
-        }
+        Err(Error::DownloadCancelled(_)) => Err(Error::DownloadCancelled(local_name.to_string())),
         Err(e) => Err(e),
     }
 }

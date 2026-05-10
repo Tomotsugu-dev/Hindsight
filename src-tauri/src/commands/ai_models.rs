@@ -132,9 +132,7 @@ pub async fn cancel_model_download(file: String) -> Result<(), String> {
 /// 列扫描模型目录里所有 `<file>.partial` 半成品——给前端渲染"继续"按钮 + 当前进度。
 /// 目录不存在或没有 partial 时返回 `[]`，不当错误。
 #[tauri::command]
-pub async fn list_partial_downloads(
-    pool: State<'_, DbPool>,
-) -> Result<Vec<PartialEntry>, String> {
+pub async fn list_partial_downloads(pool: State<'_, DbPool>) -> Result<Vec<PartialEntry>, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     models::list_partials(&cfg.ai).await.map_err(String::from)
 }

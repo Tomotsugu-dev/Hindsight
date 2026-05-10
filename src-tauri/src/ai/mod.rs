@@ -17,6 +17,7 @@ pub mod binary;
 pub mod config;
 pub mod dedup;
 pub mod embedding;
+pub mod embedding_runtime;
 pub mod image;
 pub mod job_guard;
 pub mod llm;

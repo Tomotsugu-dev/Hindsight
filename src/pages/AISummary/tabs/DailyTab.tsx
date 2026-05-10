@@ -171,6 +171,40 @@ export default function DailyTab() {
     });
   }, []);
 
+  // AI 引擎缺失时的延后动作——保存用户原本要做的"生成日报 / 重试段"，
+  // 待 ConfirmDialog 确认 + downloadBinary 跑完后再执行。null = 没有 pending。
+  const [pendingAfterDownload, setPendingAfterDownload] =
+    useState<null | (() => Promise<void>)>(null);
+
+  /** 检查 AI 引擎（binary + onnxruntime）是否齐全；齐 → 直接跑 action；
+   *  缺 → 保存 action、弹 ConfirmDialog 引导下载，confirm 后下完再续上。 */
+  const requireEngineThen = async (action: () => Promise<void>) => {
+    try {
+      const status = await api.getEngineStatus();
+      if (!status.installed || !status.embeddingRuntime.installed) {
+        // useState setter 接函数会被当成"updater"立即调用——用 () => fn 包一层
+        setPendingAfterDownload(() => action);
+        return;
+      }
+    } catch (e) {
+      // getEngineStatus 失败 → 保守起见直接 fallthrough 跑 action，让原来的错处理生效
+      logError("DailyTab.requireEngineThen.status", e);
+    }
+    await action();
+  };
+
+  const onConfirmDownloadAi = async () => {
+    const action = pendingAfterDownload;
+    setPendingAfterDownload(null);
+    if (!action) return;
+    try {
+      await api.downloadBinary();
+      await action();
+    } catch (e) {
+      setTopError(typeof e === "string" ? e : String(e));
+    }
+  };
+
   const onGenerate = async (forceRefresh: boolean) => {
     if (!hasModel) {
       setTopError(t("aiSummary.daily.errors.noVisionModel"));
@@ -179,11 +213,13 @@ export default function DailyTab() {
     // 重新点开始/再生成时主动清旧错误条——否则用户上一轮失败留着的红条
     // 跟新一轮的进度提示混在一起容易误以为新一轮也失败了
     clearTopError();
-    try {
-      await startDailyGenerate(date, forceRefresh);
-    } catch {
-      // store 已经设过 topError；这里不再重复处理
-    }
+    await requireEngineThen(async () => {
+      try {
+        await startDailyGenerate(date, forceRefresh);
+      } catch {
+        // store 已经设过 topError；这里不再重复处理
+      }
+    });
   };
 
   const onCancel = async () => {
@@ -197,11 +233,13 @@ export default function DailyTab() {
     }
     if (runSnap.generating) return;
     clearTopError();
-    try {
-      await retryDailySegment(date, segmentIdx);
-    } catch {
-      // store 已经设过 topError
-    }
+    await requireEngineThen(async () => {
+      try {
+        await retryDailySegment(date, segmentIdx);
+      } catch {
+        // store 已经设过 topError
+      }
+    });
   };
 
   // 是否在跑 = store 标 generating + 跑的日期跟当前 view 日期一致；
@@ -514,6 +552,15 @@ export default function DailyTab() {
           }
         }}
         onCancel={() => setConfirmingDelete(false)}
+      />
+      <ConfirmDialog
+        open={pendingAfterDownload !== null}
+        title={t("aiSummary.daily.runtimeMissing.title")}
+        message={t("aiSummary.daily.runtimeMissing.message")}
+        confirmLabel={t("aiSummary.daily.runtimeMissing.confirm")}
+        cancelLabel={t("aiSummary.daily.runtimeMissing.cancel")}
+        onConfirm={() => void onConfirmDownloadAi()}
+        onCancel={() => setPendingAfterDownload(null)}
       />
     </>
   );

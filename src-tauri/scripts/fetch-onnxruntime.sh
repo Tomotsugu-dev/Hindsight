@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# 一次性脚本：下载 onnxruntime 1.22.x 预编译动态库到 resources/runtime/。
-# 跑一次即可。文件 ~30 MB，不进 git。
+# [离线兜底脚本] 下载 onnxruntime 1.22.x 预编译动态库到 resources/runtime/。
+#
+# **日常开发不需要跑这个脚本**——运行期会自动从 GitHub release 下载到
+# `<data_root>/ai/runtime/`，跟 llama.cpp binary 同款 lazy-fetch。本脚本仅
+# 用于离线 / 受限网络环境下的预拉取（拉完后还需要手动复制到 data_root，
+# 此脚本默认放到 src-tauri/resources/runtime/ 是给老 build.rs 用的，已废弃）。
 #
 # 用法：bash src-tauri/scripts/fetch-onnxruntime.sh
 

@@ -475,7 +475,11 @@
         "uninstall": "アンインストール",
         "approxSize": "約 {{size}} MB"
       },
+      "runtimeBadge": "ランタイム v{{version}}",
+      "runtimeBadgeMissing": "ランタイム未インストール",
       "progress": {
+        "stageEngine": "AI エンジン",
+        "stageRuntime": "ランタイム",
         "downloading": "ダウンロード中… {{size}} MB",
         "verifying": "検証中…",
         "extracting": "展開中…",
@@ -775,6 +779,12 @@
     },
     "daily": {
       "subtitle": "その日のスクリーンショットとアプリ使用状況を時間帯ごとに集計し、ローカルのビジョンモデルで生成します。",
+      "runtimeMissing": {
+        "title": "AI エンジンが未インストール",
+        "message": "スクリーンショットの重複除去には画像埋め込みモデルが必要です。ビジョン エンジンと合わせて約 80 MB をダウンロードします。完了後、生成が自動的に続行します。",
+        "confirm": "ダウンロードして続行",
+        "cancel": "キャンセル"
+      },
       "dateNav": {
         "prevAria": "前の日",
         "nextAria": "次の日",
@@ -1081,6 +1091,9 @@
         "refresh": "更新",
         "refreshing": "更新中…",
         "refreshTooltip": "llama-server 子プロセスの最新の stderr / stdout を取得。",
+        "copy": "コピー",
+        "copied": "コピー済み",
+        "copyTooltip": "全ログをクリップボードにコピー。",
         "emptyPrefix": "まだログを取得していません。上の「更新」を押して取得してください。エンジンがサマリーを実行した後に内容が表示されます。",
         "emptySuffix": " のような行で GPU が使われているかを判断できます。"
       },

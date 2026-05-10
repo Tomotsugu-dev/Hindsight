@@ -242,6 +242,7 @@ export default function DebugTab() {
   /** llama-server 启动日志（GPU 加载情况、cuBLAS init 等）；点刷新拉一次 */
   const [engineLogs, setEngineLogs] = useState<string[]>([]);
   const [engineLogsBusy, setEngineLogsBusy] = useState(false);
+  const [engineLogsCopied, setEngineLogsCopied] = useState(false);
   // 共用一个 ConfirmDialog 实例：state 区分"清描述"还是"清段总结"，title/message 跟着分支
   const [confirmingClear, setConfirmingClear] = useState<
     "descs" | "summaries" | null
@@ -256,6 +257,17 @@ export default function DebugTab() {
       logWarn("debug.getEngineLogs", e);
     } finally {
       setEngineLogsBusy(false);
+    }
+  };
+
+  const copyEngineLogs = async () => {
+    if (engineLogs.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(engineLogs.join("\n"));
+      setEngineLogsCopied(true);
+      setTimeout(() => setEngineLogsCopied(false), 1500);
+    } catch (e) {
+      logWarn("debug.copyEngineLogs", e);
     }
   };
 
@@ -1094,6 +1106,17 @@ export default function DebugTab() {
             {engineLogsBusy
               ? t("aiSummary.debug.engineLogs.refreshing")
               : t("aiSummary.debug.engineLogs.refresh")}
+          </button>
+          <button
+            type="button"
+            className={styles.engineLogsRefreshBtn}
+            onClick={() => void copyEngineLogs()}
+            disabled={engineLogs.length === 0}
+            title={t("aiSummary.debug.engineLogs.copyTooltip")}
+          >
+            {engineLogsCopied
+              ? t("aiSummary.debug.engineLogs.copied")
+              : t("aiSummary.debug.engineLogs.copy")}
           </button>
         </span>
         <div className={styles.panel}>

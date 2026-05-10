@@ -50,7 +50,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/runtime/*"],
     "windows": {
       "nsis": {
         "installerHooks": "nsis/installer_hooks.nsh"

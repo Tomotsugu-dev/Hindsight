@@ -9,6 +9,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::ai::binary::{self, EngineBinaryStatus};
+use crate::ai::embedding_runtime::{self, RuntimeStatus};
 use crate::ai::job_guard::{self, JobInitState};
 use crate::ai::platform::{self, VramInfo};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
@@ -25,6 +26,9 @@ pub struct EngineStatusResp {
     #[serde(flatten)]
     pub binary: EngineBinaryStatus,
     pub runtime: EngineRuntimeStatus,
+    /// onnxruntime 推理库（embedding 用）安装状态。跟 `binary` 是 AI 引擎的两半，
+    /// 任一未装都视作"AI 引擎未就绪"——`download_binary` 一次性下两份。
+    pub embedding_runtime: RuntimeStatus,
     /// 当前子进程保护状态：
     /// - `None` —— 保护正常工作
     /// - `Some(reason)` —— 已降级，附中文原因供前端展示
@@ -36,12 +40,14 @@ pub struct EngineStatusResp {
     pub system_vram: Option<VramInfo>,
 }
 
-/// 查询引擎当前状态：binary 是否已安装 + server 是否在跑 + 子进程保护是否正常 + 系统 VRAM。
+/// 查询引擎当前状态：binary 是否已安装 + onnxruntime 是否已安装 +
+/// server 是否在跑 + 子进程保护是否正常 + 系统 VRAM。
 #[tauri::command]
 pub async fn get_engine_status(
     supervisor: State<'_, Arc<EngineSupervisor>>,
 ) -> Result<EngineStatusResp, String> {
     let binary = binary::status().map_err(String::from)?;
+    let embedding_runtime = embedding_runtime::status().map_err(String::from)?;
     let runtime = supervisor.status().await;
     let protection_degraded = match job_guard::init_state() {
         JobInitState::Ok => None,
@@ -52,6 +58,7 @@ pub async fn get_engine_status(
     Ok(EngineStatusResp {
         binary,
         runtime,
+        embedding_runtime,
         protection_degraded,
         system_vram,
     })

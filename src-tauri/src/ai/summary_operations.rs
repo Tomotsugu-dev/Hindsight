@@ -331,7 +331,8 @@ pub(crate) async fn summarize_segment(
     if let Err(e) = ai_summaries::upsert_segment(pool, &row).await {
         log::error!(
             "ai_summaries upsert 失败（段 {} status={}）：{e}",
-            row.segment_idx, row.status,
+            row.segment_idx,
+            row.status,
         );
     }
     Ok((row, status_str))

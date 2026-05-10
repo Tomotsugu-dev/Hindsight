@@ -131,6 +131,12 @@ pub enum Error {
     #[error("engine start: {0}")]
     EngineStart(String),
 
+    /// onnxruntime 动态库未安装——`embedding::compute_batch` 第一次调用时
+    /// dlopen 失败的"明确分类"错误。caller（生成日报命令）应该把这条往
+    /// 上抛到前端，前端弹框引导用户先下载推理库。
+    #[error("embedding runtime missing")]
+    EmbeddingRuntimeMissing,
+
     /// llama-server 已经在 Starting 状态，不允许并发启动
     #[error("engine already starting")]
     EngineBusy,

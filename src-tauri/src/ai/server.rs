@@ -112,31 +112,6 @@ pub struct EngineStartOverrides {
     pub ctx_size: Option<u32>,
 }
 
-impl EngineStartOverrides {
-    /// 合并两套 overrides 的"最大值"——给同 main 模型跑双 step（describe + summary）
-    /// 的单引擎模式用：每项取 self / other 较大值，None 视为"不在乎"（另一边的值胜出）。
-    ///
-    /// 用例：step 1 配 ctx=8K + np=4，step 2 配 ctx=64K + np=1。合并后 ctx=64K + np=4，
-    /// 让 step 1 享用大 ctx（无害）+ step 2 享用多 slot（也无害——step 2 只跑一段一段，
-    /// 多余 slot 不用就行）。
-    pub fn merge_max(&self, other: &Self) -> Self {
-        Self {
-            batch_size: max_opt(self.batch_size, other.batch_size),
-            parallel_slots: max_opt(self.parallel_slots, other.parallel_slots),
-            ctx_size: max_opt(self.ctx_size, other.ctx_size),
-        }
-    }
-}
-
-/// 一边 Some 一边 None 取 Some；都 Some 取较大；都 None 仍 None。
-fn max_opt(a: Option<u32>, b: Option<u32>) -> Option<u32> {
-    match (a, b) {
-        (Some(x), Some(y)) => Some(x.max(y)),
-        (Some(x), None) | (None, Some(x)) => Some(x),
-        (None, None) => None,
-    }
-}
-
 /// llama-server 子进程的单例守护者。
 pub struct EngineSupervisor {
     inner: Mutex<Inner>,
@@ -603,9 +578,18 @@ fn build_command(
     let per_slot_ctx = overrides.ctx_size.unwrap_or(DEFAULT_CTX_SIZE);
     cmd.arg("--ctx-size")
         .arg(per_slot_ctx.saturating_mul(np).to_string());
-    if np > 1 {
-        cmd.arg("-np").arg(np.to_string());
-    }
+    // 总是显式传 -np，哪怕是 1。不传时 llama-server auto-fallback 到 4 slot，
+    // 让用户的"段总结 single slot"配置失效——summary phase 也起 4 槽，浪费 KV 预算 +
+    // 让 checkpoint 池跨 slot 翻 4 倍。
+    cmd.arg("-np").arg(np.to_string());
+    // 关掉 llama.cpp 新版默认开的 prompt cache：8 GB 上限，纯吃显存（日报场景每段
+    // prompt 都不同，命中率几乎为 0）。
+    cmd.arg("--cache-ram").arg("0");
+    // 关掉 context checkpoints：每个 50 MiB × max 32 个 × N slots 持续累积——大模型 +
+    // 多 slot 时能堆出 GB 级开销，导致段总结生成途中 server 崩
+    // （"connection closed before message completed"）。我们没复用 prompt prefix 的
+    // 场景，关掉无副作用。
+    cmd.arg("--ctx-checkpoints").arg("0");
     // 截 stderr/stdout 用于失败时回放给用户；不让它们污染 Hindsight 自己的终端
     cmd.stderr(std::process::Stdio::piped());
     cmd.stdout(std::process::Stdio::piped());

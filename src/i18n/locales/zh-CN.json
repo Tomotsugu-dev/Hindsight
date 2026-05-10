@@ -476,11 +476,15 @@
         "approxSize": "约 {{size}} MB"
       },
       "progress": {
+        "stageEngine": "AI 引擎",
+        "stageRuntime": "推理库",
         "downloading": "下载中… {{size}} MB",
         "verifying": "校验中…",
         "extracting": "解压中…",
         "done": "✓ 完成"
       },
+      "runtimeBadge": "推理库 v{{version}}",
+      "runtimeBadgeMissing": "推理库未装",
       "runtime": {
         "running": "已运行 · 端口：{{port}}",
         "starting": "启动中…",
@@ -775,6 +779,12 @@
     },
     "daily": {
       "subtitle": "按时段汇总当日截图 + 应用使用，本地 vision 模型生成",
+      "runtimeMissing": {
+        "title": "需要先下载 AI 引擎",
+        "message": "图像嵌入模型用于截图相似度去重，跟 vision 引擎一起下载约 ~80 MB。下载完会自动续上生成。",
+        "confirm": "下载并继续",
+        "cancel": "取消"
+      },
       "dateNav": {
         "prevAria": "前一天",
         "nextAria": "后一天",
@@ -1081,6 +1091,9 @@
         "refresh": "刷新",
         "refreshing": "刷新中…",
         "refreshTooltip": "拉取 llama-server 子进程最近的 stderr / stdout",
+        "copy": "复制",
+        "copied": "已复制",
+        "copyTooltip": "复制全部日志到剪贴板",
         "emptyPrefix": "还没拉过日志。点上方\"刷新\"拉一次；引擎跑过总结后才有内容。找 ",
         "emptySuffix": " 这种行可判断 GPU 是否在用。"
       },
