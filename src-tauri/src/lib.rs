@@ -161,6 +161,7 @@ pub fn run() {
             commands::storage::open_screenshots_dir,
             commands::storage::get_data_root,
             commands::storage::set_data_root,
+            commands::storage::write_text_file,
             // --- devices: 设备列表 ---
             commands::devices::list_devices,
             commands::devices::update_self_device,

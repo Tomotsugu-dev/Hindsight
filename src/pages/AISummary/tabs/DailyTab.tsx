@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import { logError } from "../../../lib/logger";
 import {
@@ -228,7 +230,7 @@ export default function DailyTab() {
    *  含 YAML frontmatter（date / generated_at / model / 状态汇总）+ 顶部总览
    *  + 每段状态徽章 + 段间 --- 分隔，方便贴 Notion / Obsidian / GitHub 渲染。
    *  导出文本本身随当前 i18n 语言生成。 */
-  const onExportMarkdown = () => {
+  const onExportMarkdown = async () => {
     // 状态计数
     let okCount = 0;
     let skipCount = 0;
@@ -302,17 +304,31 @@ export default function DailyTab() {
     });
 
     const md = lines.join("\n");
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
     const filename = `hindsight-daily-${date}.md`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    // 提示用户文件位置（浏览器下载，落到系统 Downloads 目录）
-    setTopNotice(t("aiSummary.daily.toast.exported", { filename }));
-    setTimeout(() => setTopNotice(null), 3500);
+
+    // Tauri webview 不可靠支持浏览器原生 `<a download>`——改用 Tauri save dialog
+    // 让用户选位置 + 后端 std::fs 写文件 + 顶部绿色 successBar 显示落盘绝对路径。
+    let chosenPath: string | null = null;
+    try {
+      chosenPath = await save({
+        title: t("aiSummary.daily.actions.exportMarkdown"),
+        defaultPath: filename,
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+    } catch (e) {
+      setTopError(typeof e === "string" ? e : String(e));
+      return;
+    }
+    if (!chosenPath) return; // 用户取消
+    try {
+      await invoke("write_text_file", { path: chosenPath, content: md });
+      setTopNotice(t("aiSummary.daily.toast.exported", { filename: chosenPath }));
+      setTimeout(() => setTopNotice(null), 3500);
+    } catch (e) {
+      setTopError(
+        typeof e === "string" ? e : `${t("aiSummary.daily.errors.unknown")}：${String(e)}`,
+      );
+    }
   };
 
   return (
@@ -410,7 +426,7 @@ export default function DailyTab() {
         <button
           type="button"
           className={styles.exportBtn}
-          onClick={onExportMarkdown}
+          onClick={() => void onExportMarkdown()}
           disabled={generating || !hasAnyRow}
           title={
             !hasAnyRow

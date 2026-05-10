@@ -199,3 +199,21 @@ fn dir_size(path: &Path) -> u64 {
     }
     total
 }
+
+/// 把任意文本写到指定绝对路径。前端导出 markdown / json 文件时调——
+/// Tauri webview 不支持浏览器原生 `<a download>` 自动落盘（点了静默失败 / 用户找不到文件），
+/// 必须由后端调 std::fs 写。
+///
+/// 路径校验：拒绝相对路径（避免相对当前进程 cwd 落到诡异位置）；不限制目标目录
+/// （前端通过 Tauri save dialog 拿到路径，已是用户主动选的）。
+#[tauri::command]
+pub async fn write_text_file(path: String, content: String) -> Result<(), String> {
+    let p = std::path::PathBuf::from(&path);
+    if !p.is_absolute() {
+        return Err(format!("路径必须是绝对路径：{path}"));
+    }
+    tokio::task::spawn_blocking(move || std::fs::write(&p, content))
+        .await
+        .map_err(|e| format!("spawn_blocking 失败：{e}"))?
+        .map_err(|e| format!("写文件失败 {path}：{e}"))
+}

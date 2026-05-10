@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { save } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import {
@@ -211,6 +213,8 @@ export default function DebugTab() {
   const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
   const [enginePhase, setEnginePhase] = useState<string | null>(null);
   const [topError, setTopError] = useState<string | null>(null);
+  /** 成功提示（绿色 successBar）：导出 markdown 落盘后短暂显示，3.5s 自清。 */
+  const [topNotice, setTopNotice] = useState<string | null>(null);
 
   // 调试参数 state 来自 Context，跟 DebugSettingsTab 共享同一份。
   const {
@@ -478,15 +482,40 @@ export default function DebugTab() {
     }
   };
 
-  /** 把 markdown 文本以 .md 文件下载——浏览器原生 download，落到系统 Downloads 目录。 */
-  const downloadMarkdown = (md: string, filename: string) => {
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  /** 把 markdown 文本写到用户选的路径。
+   *
+   *  Tauri webview 不可靠支持浏览器原生 `<a download>`——点了静默失败 / 用户找不到文件去哪。
+   *  改用 Tauri save dialog 让用户主动选位置 + 后端 std::fs 写文件 + 顶部绿色成功条
+   *  显示落盘绝对路径（3.5s 自清，跟 Daily 同款 UX）。
+   *
+   *  失败时：用户取消 dialog → 静默 return（不报错）；后端写失败 → setTopError。 */
+  const downloadMarkdown = async (md: string, filename: string) => {
+    let chosenPath: string | null = null;
+    try {
+      chosenPath = await save({
+        title: t("aiSummary.debug.actions.exportSaveTitle"),
+        defaultPath: filename,
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+    } catch (e) {
+      setTopError(typeof e === "string" ? e : String(e));
+      return;
+    }
+    if (!chosenPath) return; // 用户取消
+    try {
+      await invoke("write_text_file", { path: chosenPath, content: md });
+      setTopNotice(
+        t("aiSummary.debug.actions.exportSavedAt", { path: chosenPath }),
+      );
+      // successBar 3.5s 自清——给用户看清楚但不挡视线
+      setTimeout(() => setTopNotice(null), 3500);
+    } catch (e) {
+      setTopError(
+        t("aiSummary.debug.actions.exportFailed", {
+          err: typeof e === "string" ? e : String(e),
+        }),
+      );
+    }
   };
 
   /** 导出当天所有逐图描述：每段一个 H2，段内每张图按时间标签 + 文件名 + 描述正文。 */
@@ -528,7 +557,7 @@ export default function DebugTab() {
       if (i < sortedSegs.length - 1) lines.push("---", "");
     });
 
-    downloadMarkdown(lines.join("\n"), `hindsight-debug-descriptions-${date}.md`);
+    void downloadMarkdown(lines.join("\n"), `hindsight-debug-descriptions-${date}.md`);
   };
 
   /** 导出当天所有段总结：跟 DailyTab 的导出格式对齐——frontmatter + 每段 H2 + 正文。 */
@@ -575,7 +604,7 @@ export default function DebugTab() {
       if (i < sorted.length - 1) lines.push("---", "");
     });
 
-    downloadMarkdown(lines.join("\n"), `hindsight-debug-summaries-${date}.md`);
+    void downloadMarkdown(lines.join("\n"), `hindsight-debug-summaries-${date}.md`);
   };
 
   // 周报 / 月报后端没实现，描述列表和总结都按 scope 切：非 daily 时清空显示
@@ -714,11 +743,16 @@ export default function DebugTab() {
       {/* —— 引擎状态条 —— */}
       <EngineBar engine={engine} />
 
-      {/* —— 错误条 / 冷启动提示 —— */}
+      {/* —— 错误条 / 成功条 / 冷启动提示 —— */}
       {topError ? (
         <div className={styles.errorBar}>
           <AlertTriangle size={14} strokeWidth={2.2} />
           <span>{topError}</span>
+        </div>
+      ) : null}
+      {topNotice ? (
+        <div className={styles.successBar}>
+          <span>{topNotice}</span>
         </div>
       ) : null}
       {enginePhase ? (

@@ -476,6 +476,26 @@
   word-break: break-word;
 }
 
+/* 成功提示条：跟 errorBar 同款结构但绿色（导出 markdown 完成 3.5s 后自清） */
+.successBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: color-mix(in oklab, #16a34a 10%, transparent);
+  border: 1px solid color-mix(in oklab, #16a34a 28%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #15803d;
+  word-break: break-word;
+  animation: debugSuccessFadeIn 200ms var(--ease-out);
+}
+@keyframes debugSuccessFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .engineHint {
   display: inline-flex;
   align-items: center;
