@@ -6,7 +6,7 @@
 <h1 align="center">Hindsight</h1>
 
 <p align="center">
-  <i>你的电脑日记 — 它替你记得每一天。</i>
+  <i>Your computer's diary — it remembers every day for you.</i>
 </p>
 
 <p align="center">
@@ -26,101 +26,101 @@
 
 ---
 
-## 为什么是 Hindsight
+## Why Hindsight
 
-你是不是也常常凌晨合上电脑，感觉自己「忙了一整天」，却说不上今天到底做成了什么？前阵子我想找个时间追踪工具来解决这个问题，市面上挑了一圈都没用下去：
+Have you ever closed the laptop at midnight feeling like you "worked all day" but couldn't say what you actually got done? A while back I went hunting for a tracker to fix exactly that. Tried a bunch — none of them stuck:
 
-- **ActivityWatch** — 开源、隐私优先，功能上挑不出毛病。但实话讲，它的界面没什么吸引力，装完打开看过一次，之后就再没点开过。
-- **WorkReview 这类工具** — 我想要两件事同时满足：一是能跨设备汇总，二是像 iPhone「屏幕使用时间」那样按小时缩放的时间轴，让我直接看到「下午 3 点我在干嘛」。桌面端没有一款做到让我满意。
-- **Toggl / RescueTime / 各种付费 SaaS** — 这些本质上是给团队和 HR 算「计费工时」用的：仪表盘信息密集，流程围着项目打标签转，数据还要传到对方的云。我要的是「自己跟自己复盘」，方向完全对不上。
+- **ActivityWatch** — open-source, privacy-first, technically ticks all the right boxes. Honest take: the UI just doesn't pull me in. I'd install it, look at it once, never open it again.
+- **WorkReview-style apps** — couldn't find one with both (a) cross-device visibility and (b) an hourly timeline like iPhone's Screen Time. I really wanted that "what was I doing at 3pm" zoomable view for desktop, and nothing had it the way I wanted.
+- **Toggl / RescueTime / paid SaaS** — these feel built for teams and HR-style "billable hours" tracking. The dashboards are dense, the flow is project-tagging-first, and the data lives on someone else's servers. Wrong tool for "personal awareness."
 
-为了解决以上这些问题，Hindsight 应运而生。
+To fix exactly these gaps, I built Hindsight.
 
-## 主要功能
+## Key Features
 
-- 📊 **看清时间花在哪** — 后台自动记录，分时段柱状图 + 应用排行；按周 / 月汇总；可自定义分类（"工作 / 娱乐 / 学习"）
-- 🤖 **AI 自动写日报**（新）— 本地 LLM 读你的截图，按时段写出段落式总结
-- ☁️ **多设备汇总** — 可选 Google Drive 同步活动数据，多台电脑一处查看（截图始终留在本地）
-- 🔒 **完全本地、隐私优先** — 数据默认仅存本机；只在设定的工作时段记录；自动跳过登录 / 密码页截图
+- 📊 **See where your time goes** — Background auto-tracking with hourly histograms + app rankings; weekly / monthly aggregation; customizable categories ("Work / Entertainment / Learning")
+- 🤖 **AI auto-generated daily report** (new) — Local LLM reads your screenshots and writes a per-segment summary
+- ☁️ **Multi-device aggregation** — Optional Google Drive sync of activity data; view across multiple computers (screenshots stay local)
+- 🔒 **Local-first, privacy-first** — Data stays on your machine by default; records only during your set work hours; auto-skips screenshots of login / password pages
 
-## 界面预览
+## Interface Preview
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/df92b5b8-137a-4432-9226-2d063d402664" controls muted autoplay loop playsinline width="800"></video><br/>
-  <sub><i><b>软件预览</b> · 30 秒看清 Hindsight 的核心交互</i></sub>
+  <video src="https://github.com/user-attachments/assets/68001c5d-f602-40de-8965-b9f46547da39" controls muted autoplay loop playsinline width="800"></video><br/>
+  <sub><i><b>App preview</b> · Hindsight's core interactions in 30 seconds</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/today.png" alt="今日总览" width="800"><br/>
-  <sub><i><b>今日总览</b> · 24 小时分时段堆叠图 × 应用排行榜，一眼看清今天的时间去向，工作学习节奏</i></sub>
+  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
+  <sub><i><b>Today Overview</b> · 24-hour stacked histogram × app leaderboard — see where your day went and your work / study rhythm at a glance</i></sub>
 </p>
 
 <table align="center">
   <tr>
     <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/weekly.png" alt="周统计"><br/>
-      <sub><i><b>周统计</b> · 7 天总时长柱状对比，配本周高频应用排行</i></sub>
+      <img src="./docs/intro_zh/imgs/weekly.png" alt="Weekly Statistics"><br/>
+      <sub><i><b>Weekly Stats</b> · 7-day total-time bar comparison with weekly top-app ranking</i></sub>
     </td>
     <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/monthly.png" alt="月统计"><br/>
-      <sub><i><b>月统计</b> · 每日柱状 × 月度排行，看清长期工作节奏</i></sub>
+      <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics"><br/>
+      <sub><i><b>Monthly Stats</b> · Daily bars × monthly ranking — see your long-term work rhythm</i></sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI 总结"><br/>
-      <sub><i><b>AI 自动写日报</b> · 本地 LLM 按时段看截图，输出段落式总结；截图始终本地</i></sub>
+      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary"><br/>
+      <sub><i><b>AI auto-daily-report</b> · Local LLM reads screenshots per time segment and outputs a paragraph-style summary; screenshots stay local</i></sub>
     </td>
     <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="多设备同步"><br/>
-      <sub><i><b>多设备汇总</b> · Google Drive 同步活动元数据，多台设备一处查看；截图始终本地</i></sub>
+      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync"><br/>
+      <sub><i><b>Multi-device aggregation</b> · Google Drive syncs activity metadata across machines; screenshots always stay local</i></sub>
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI 助手" width="800"><br/>
-  <sub><i><b>AI 助手</b> 🚧 即将上线 · 用自然语言对你的活动记录提问，"上周我写代码用了多少小时？""我什么时段最容易分心？"</i></sub>
+  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI Assistant" width="800"><br/>
+  <sub><i><b>AI Assistant</b> 🚧 Coming soon · Ask your activity log in natural language: "How many hours did I code last week?" "When am I most easily distracted?"</i></sub>
 </p>
 
-## 快速开始
+## Quick Start
 
-从 [Releases](https://github.com/Tomotsugu-dev/Hindsight/releases) 下载对应平台的安装包并安装。
+Download the installer for your platform from [Releases](https://github.com/Tomotsugu-dev/Hindsight/releases) and install it.
 
 ### Windows
 
-下载 `hindsight_x.y.z_x64-setup.exe`，双击安装即可。
+Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
-> ⚠️ **首次运行会弹出「Windows 已保护你的电脑」** — 安装包尚未购买 EV 代码签名证书，会被 SmartScreen 拦下。点击「更多信息」→「仍要运行」即可继续安装。
+> ⚠️ **First launch will trigger "Windows protected your PC"** — the installer is not yet signed with an EV code-signing certificate, so SmartScreen will block it. Click "More info" → "Run anyway" to continue.
 
-### MacOS
+### macOS
 
-下载 `hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel 通用二进制），双击挂载后将 Hindsight 拖入「应用程序」即可正常打开——应用已接入 Apple 开发者证书签名 + 公证，不会再触发 Gatekeeper 警告。
+Download `hindsight_x.y.z_universal.dmg` (Apple Silicon + Intel universal binary), double-click to mount, then drag Hindsight into the Applications folder. The app is signed with an Apple Developer certificate and notarized, so it opens normally without any Gatekeeper warning.
 
-> 所有活动数据 / 截图默认仅存本地。如果开启 Google Drive 同步，只会上传活动元数据，**不会上传截图**。
+> All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, **screenshots will not be uploaded**.
 
-## 未来计划
+## Future Roadmap
 
-- [x] 自动识别常用应用并分类，用户可调整分类结果
-- [x] 支持自动更新
-- [x] 加入 AI 分析功能（分析日概览、周概览、月概览），根据截图内容更精确地识别用户的工作内容
-- [ ] 支持生成工作报告（日报、周报、月报）
-- [ ] 加入图片加密功能，保护截图隐私
-- [ ] 支持更多平台（Linux、移动端）
+- [x] Auto-identify and categorize frequently-used apps, with user adjustment capability
+- [x] Support for auto-updates
+- [x] AI analysis features (analyze daily, weekly, and monthly overviews, identify work content more accurately based on screenshot content)
+- [ ] Generate work reports (daily, weekly, monthly)
+- [ ] Add screenshot encryption to protect privacy
+- [ ] Support for more platforms (Linux, mobile)
 
-## 技术栈
+## Tech Stack
 
-| 类别 | 技术 |
+| Category | Technology |
 |---|---|
-| 桌面框架 | [Tauri 2](https://tauri.app/) |
-| 前端 | React 19 · TypeScript · Vite |
-| 后端 | Rust · Tokio · SQLite · reqwest |
-| AI 推理 | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI 兼容 API |
-| 同步 | Google Drive API |
+| Desktop framework | [Tauri 2](https://tauri.app/) |
+| Frontend | React 19 · TypeScript · Vite |
+| Backend | Rust · Tokio · SQLite · reqwest |
+| AI inference | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI-compatible API |
+| Sync | Google Drive API |
 
 ## License
 
 <p align="center">
-  本项目基于 <a href="LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
+  This project is open source under the <a href="LICENSE"><b>MIT License</b></a>. Feel free to use, modify, and distribute.<br/>
   <sub>© 2026 Hindsight contributors</sub>
 </p>
