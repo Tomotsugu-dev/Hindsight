@@ -10,12 +10,8 @@ import {
 } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { platform } from "@tauri-apps/plugin-os";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConfirmDialog } from "../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "./settings";
-
-const RELEASES_URL = "https://github.com/Tomotsugu-dev/Hindsight/releases";
 
 export type UpdatePhase =
   | "idle"
@@ -57,13 +53,8 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [isMacOS, setIsMacOS] = useState(false);
   // 启动 auto-check 只跑一次，跨 strict-mode 双 mount / settings 多次刷新都不重复
   const startupRanRef = useRef(false);
-
-  useEffect(() => {
-    setIsMacOS(platform() === "macos");
-  }, []);
 
   const checkNow = useCallback(async () => {
     setPhase("checking");
@@ -107,11 +98,6 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
     const upd = pendingUpdate;
     if (!upd) return;
     setPendingUpdate(null);
-    if (isMacOS) {
-      // macOS 没付 Apple Developer，应用内静默替换会破 codesign，跳浏览器
-      await openUrl(`${RELEASES_URL}/tag/v${upd.version}`);
-      return;
-    }
     setPhase("installing");
     try {
       await upd.downloadAndInstall();
@@ -120,7 +106,7 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       setPhase("error");
       setErrorMsg(e instanceof Error ? e.message : String(e));
     }
-  }, [pendingUpdate, isMacOS]);
+  }, [pendingUpdate]);
 
   const dismiss = useCallback(() => setPendingUpdate(null), []);
 
@@ -135,12 +121,8 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       <ConfirmDialog
         open={pendingUpdate !== null}
         title={`发现新版本 v${pendingUpdate?.version ?? ""}`}
-        message={
-          isMacOS
-            ? `点击"前往下载"将打开浏览器到 GitHub Releases 页，请手动下载新版 .dmg 安装。\n\n更新说明：\n${pendingUpdate?.body || "（无）"}`
-            : `点击"现在更新"将下载并自动安装新版本，完成后应用会重启。\n\n更新说明：\n${pendingUpdate?.body || "（无）"}`
-        }
-        confirmLabel={isMacOS ? "前往下载" : "现在更新"}
+        message={`点击"现在更新"将下载并自动安装新版本，完成后应用会重启。\n\n更新说明：\n${pendingUpdate?.body || "（无）"}`}
+        confirmLabel="现在更新"
         cancelLabel="稍后"
         variant="primary"
         onConfirm={confirmInstall}
