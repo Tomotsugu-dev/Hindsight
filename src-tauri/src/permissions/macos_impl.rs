@@ -13,16 +13,41 @@ extern "C" {
     fn CGRequestScreenCaptureAccess() -> bool;
 }
 
-/// macOS 实现：先 `CGPreflightScreenCaptureAccess` preflight，没拿到再调
-/// `CGRequestScreenCaptureAccess` 触发系统弹框（同步阻塞直到用户决定）。
-/// `granted` 后续 spawn 的 xcap 才能拿其它进程的窗口标题。
+/// 标记文件：表明已经向用户弹过一次 CGRequestScreenCaptureAccess 系统对话框。
+/// 落在 `<data_root>/.screen_recording_requested`，跨升级保留，跨用户隔离（数据
+/// 目录已经是 per-user 的）。删除该文件即可让下次启动重新弹框。
+const REQUESTED_MARKER_FILE: &str = ".screen_recording_requested";
+
+/// macOS 实现：先 `CGPreflightScreenCaptureAccess` preflight 查权限。
+///
+/// preflight=false 时分两种处理：
+/// - 标记文件**不存在**（第一次启动）→ 调 `CGRequestScreenCaptureAccess` 弹一次
+///   系统对话框，写下标记
+/// - 标记文件**已存在** → 跳过弹框，返回 `NotGranted` 让 UI 提示用户去系统设置授权
+///
+/// 这样规避了 macOS 15 (Sequoia) 上 `CGPreflightScreenCaptureAccess` 在已授权
+/// 状态下偶尔返回 false 的诡异行为——之前那个 bug 表现是用户已授权了系统弹框还
+/// 每次启动都跳出来。
 pub fn ensure_screen_recording() -> ScreenRecordingState {
     if unsafe { CGPreflightScreenCaptureAccess() } {
         return ScreenRecordingState::Granted;
     }
-    // preflight=false 包含两种状态（Denied / NotDetermined），CG API 没法区分。
-    // 这里直接调 Request：NotDetermined 会弹框；Denied 会无声打开系统设置。
+
+    let marker = crate::bootstrap::data_root().join(REQUESTED_MARKER_FILE);
+    if marker.exists() {
+        log::warn!(
+            "Screen Recording preflight=false 但已请求过；跳过系统弹框（去系统设置 → 隐私与安全性 手动授权）"
+        );
+        return ScreenRecordingState::NotGranted;
+    }
+
+    // 第一次启动：弹框，同步阻塞直到用户决定
     let granted = unsafe { CGRequestScreenCaptureAccess() };
+    if let Some(parent) = marker.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&marker, b"1");
+
     if granted {
         ScreenRecordingState::Granted
     } else {
