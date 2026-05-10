@@ -36,6 +36,9 @@ src-tauri/resources/runtime/*.so
 src-tauri/resources/runtime/*.so.*
 src-tauri/resources/runtime/*.dylib
 
+# README 软件预览 GIF（~62 MB）：体积太大不进 git，走 GitHub release assets / CDN
+docs/intro_zh/imgs/Hindsight.gif
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -36,6 +36,11 @@
 ## Interface Preview
 
 <p align="center">
+  <img src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.5.2/Hindsight.gif" alt="Hindsight preview" width="800"><br/>
+  <sub><i><b>App preview</b> · Hindsight's core interactions in 30 seconds</i></sub>
+</p>
+
+<p align="center">
   <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
   <sub><i><b>Today Overview</b> · 24-hour stacked histogram × app leaderboard — see where your day went and your work / study rhythm at a glance</i></sub>
 </p>

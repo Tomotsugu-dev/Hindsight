@@ -36,6 +36,11 @@
 ## 界面预览
 
 <p align="center">
+  <img src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.5.2/Hindsight.gif" alt="Hindsight 软件预览" width="800"><br/>
+  <sub><i><b>软件预览</b> · 30 秒看清 Hindsight 的核心交互</i></sub>
+</p>
+
+<p align="center">
   <img src="./docs/intro_zh/imgs/today.png" alt="今日总览" width="800"><br/>
   <sub><i><b>今日总览</b> · 24 小时分时段堆叠图 × 应用排行榜，一眼看清今天的时间去向，工作学习节奏</i></sub>
 </p>

@@ -36,6 +36,11 @@
 ## インターフェースプレビュー
 
 <p align="center">
+  <img src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.5.2/Hindsight.gif" alt="Hindsight プレビュー" width="800"><br/>
+  <sub><i><b>アプリプレビュー</b> · Hindsight の主要な操作を 30 秒で</i></sub>
+</p>
+
+<p align="center">
   <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
   <sub><i><b>今日の総括</b> · 24時間積み重ねグラフ × アプリランキング、今日の時間の使い道と仕事 / 学習リズムを一目で把握</i></sub>
 </p>
