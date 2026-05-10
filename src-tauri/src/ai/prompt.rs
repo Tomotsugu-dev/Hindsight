@@ -29,6 +29,11 @@ const IMAGE_DESCRIBE_ZH: &str = include_str!("../../resources/prompts/image_desc
 const IMAGE_DESCRIBE_EN: &str = include_str!("../../resources/prompts/image_describe_en.md");
 const IMAGE_DESCRIBE_JA: &str = include_str!("../../resources/prompts/image_describe_ja.md");
 
+// 周报 system prompt（基于一周内日报全文做整周回顾）
+const WEEKLY_ZH: &str = include_str!("../../resources/prompts/weekly_zh.md");
+const WEEKLY_EN: &str = include_str!("../../resources/prompts/weekly_en.md");
+const WEEKLY_JA: &str = include_str!("../../resources/prompts/weekly_ja.md");
+
 /// 三语 (zh/en/ja) 之间挑一个 —— 把分散在多处的 match 收敛进单一 helper。
 ///
 /// `prompt_language` 在 sanitize 时已被钳到 "zh" / "en" / "ja"，本函数对其它值
@@ -261,4 +266,156 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
         );
     }
     out
+}
+
+// ───────────────────────────── 周报 ─────────────────────────────
+
+/// 周报送 LLM 时的上下文（单步纯文本调用）。
+///
+/// 周报跟段总结的关键差异：上游已经是文字（每天的日报全文），不再过 vision，
+/// 因此 step 1 完全跳过；本结构体只承载一周日维度的纯文本。
+pub struct WeeklyContext<'a> {
+    /// 周一（YYYY-MM-DD）
+    pub week_start: &'a str,
+    /// 周日（YYYY-MM-DD）
+    pub week_end: &'a str,
+    /// 按日期升序的每日条目：(date_str "YYYY-MM-DD", weekday_short, day_text)。
+    /// `day_text` 是当日所有 daily 段总结按时段顺序拼好的全文（缺失 / skipped 段
+    /// 不进入 day_text）；当天无任何可用日报时调用方应跳过这一项不传进来。
+    /// `weekday_short` 是按当前 prompt 语言写的星期简写（"周一" / "Mon" / "月"）。
+    pub days: &'a [(String, String, String)],
+}
+
+/// 周报 system prompt：选语言 → 走用户覆盖 / 内置默认 → 拼用户简介。
+///
+/// 复用 daily 段总结那套 [`AiConfig::user_brief`] / [`PromptOverrides`] 字段——
+/// 用户在 AI 设置里写过的"关于我"既影响日报也影响周报，不必再设一份。
+/// MVP 不暴露 weekly 专属覆盖；未来需要时再扩 `weekly_overrides` 字段。
+pub fn build_weekly_system_prompt(ai: &AiConfig) -> String {
+    let lang = ai.prompt_language.as_str();
+    let base = pick_lang(lang, WEEKLY_ZH, WEEKLY_EN, WEEKLY_JA);
+    let mut out = String::from(base.trim_end());
+    let brief = ai.user_brief.trim();
+    if !brief.is_empty() {
+        let label = pick_lang(lang, "关于用户：", "About the user: ", "ユーザーについて：");
+        out.push_str("\n\n");
+        out.push_str(label);
+        out.push_str(brief);
+    }
+    out
+}
+
+/// 周报 user prompt：把一周内每天的日报全文按日期顺序拼起来。
+pub fn build_weekly_user_prompt(ai: &AiConfig, ctx: &WeeklyContext) -> String {
+    match ai.prompt_language.as_str() {
+        "en" => build_weekly_user_prompt_en(ctx),
+        "ja" => build_weekly_user_prompt_ja(ctx),
+        _ => build_weekly_user_prompt_zh(ctx),
+    }
+}
+
+fn build_weekly_user_prompt_zh(ctx: &WeeklyContext) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("本周范围：{} – {}\n\n", ctx.week_start, ctx.week_end));
+    if ctx.days.is_empty() {
+        out.push_str("（这一周还没有任何日报数据，请基于这一点说明无法生成周报。）");
+        return out;
+    }
+    out.push_str(&format!(
+        "下面是本周 {} 天的日报全文（按日期顺序排列；未列出的日期当天没有数据）：\n\n",
+        ctx.days.len(),
+    ));
+    for (date, weekday, body) in ctx.days.iter() {
+        out.push_str(&format!("【{} {}】\n", date, weekday));
+        out.push_str(body.trim());
+        out.push_str("\n\n");
+    }
+    out.push_str("请综合这一周的日报内容写一段整周回顾，不要按天复述。");
+    out
+}
+
+fn build_weekly_user_prompt_en(ctx: &WeeklyContext) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "Week range: {} – {}\n\n",
+        ctx.week_start, ctx.week_end
+    ));
+    if ctx.days.is_empty() {
+        out.push_str(
+            "(There is no daily report data for this week. Please state this and stop.)",
+        );
+        return out;
+    }
+    out.push_str(&format!(
+        "Below are the full daily reports for {} days of this week, in chronological order. Days not listed had no data.\n\n",
+        ctx.days.len(),
+    ));
+    for (date, weekday, body) in ctx.days.iter() {
+        out.push_str(&format!("[{} {}]\n", date, weekday));
+        out.push_str(body.trim());
+        out.push_str("\n\n");
+    }
+    out.push_str(
+        "Synthesize the week into a single review paragraph. Do not retell day by day.",
+    );
+    out
+}
+
+fn build_weekly_user_prompt_ja(ctx: &WeeklyContext) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "今週の範囲：{} – {}\n\n",
+        ctx.week_start, ctx.week_end
+    ));
+    if ctx.days.is_empty() {
+        out.push_str(
+            "（今週は日報データが一切ありません。その旨を述べて終了してください。）",
+        );
+        return out;
+    }
+    out.push_str(&format!(
+        "以下は今週 {} 日分の日報本文です（日付順、記載のない日はデータなし）：\n\n",
+        ctx.days.len(),
+    ));
+    for (date, weekday, body) in ctx.days.iter() {
+        out.push_str(&format!("【{} {}】\n", date, weekday));
+        out.push_str(body.trim());
+        out.push_str("\n\n");
+    }
+    out.push_str("これらを総合して一週間のレビュー段落を 1 つ書いてください。日ごとに繰り返さないでください。");
+    out
+}
+
+/// 给定本地日期返回当前 prompt 语言对应的星期简写——周报 user prompt 用。
+pub fn weekday_short(lang: &str, weekday: chrono::Weekday) -> &'static str {
+    use chrono::Weekday::*;
+    match lang {
+        "en" => match weekday {
+            Mon => "Mon",
+            Tue => "Tue",
+            Wed => "Wed",
+            Thu => "Thu",
+            Fri => "Fri",
+            Sat => "Sat",
+            Sun => "Sun",
+        },
+        "ja" => match weekday {
+            Mon => "月",
+            Tue => "火",
+            Wed => "水",
+            Thu => "木",
+            Fri => "金",
+            Sat => "土",
+            Sun => "日",
+        },
+        _ => match weekday {
+            Mon => "周一",
+            Tue => "周二",
+            Wed => "周三",
+            Thu => "周四",
+            Fri => "周五",
+            Sat => "周六",
+            Sun => "周日",
+        },
+    }
 }

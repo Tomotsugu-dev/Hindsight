@@ -771,7 +771,63 @@
     },
     "weekly": {
       "title": "Weekly",
-      "hint": "Weekly activity rollup with date + theme breakdown. Feature in development."
+      "hint": "Weekly activity rollup with date + theme breakdown.",
+      "subtitle": "Synthesize this week's daily reports into a single weekly review",
+      "weekNav": {
+        "prevAria": "Previous week",
+        "nextAria": "Next week",
+        "thisWeek": "This week",
+        "lastWeek": "Last week",
+        "thisWeekBack": "Back to this week"
+      },
+      "actions": {
+        "stop": "Stop",
+        "regenerate": "Regenerate",
+        "start": "Generate",
+        "startTooltip": "Builds a weekly review from this week's existing daily reports — no screenshots, much faster than daily",
+        "regenerateTooltip": "Regenerating will clear and replace this week's weekly report",
+        "noModelTooltip": "Pick a summary model in AI Settings → Models, or enable Cloud API",
+        "delete": "Delete",
+        "deleteTooltip": "Clear this week's weekly report (does not affect daily reports)",
+        "deleteEmptyTooltip": "No weekly report yet to delete",
+        "deleteConfirmTitle": "Delete the weekly report for {{weekStart}}?",
+        "deleteConfirmMessage": "The weekly report content will be cleared. Daily reports are unaffected. This cannot be undone.",
+        "exportMarkdown": "Export as Markdown",
+        "exportTooltip": "Export the current weekly report as a Markdown file",
+        "exportEmptyTooltip": "No weekly report to export yet",
+        "exportRunningTooltip": "Weekly report is generating; export after it finishes",
+        "dismissError": "Dismiss"
+      },
+      "errors": {
+        "noSummaryModel": "Pick a summary model in AI Settings → Models, or enable Cloud API",
+        "generationFailed": "Weekly report generation failed",
+        "unknown": "Unknown error"
+      },
+      "engineLoading": "Loading model…",
+      "toast": {
+        "exported": "Exported to {{filename}}"
+      },
+      "card": {
+        "badge": {
+          "empty": "Not generated",
+          "ok": "Generated",
+          "error": "Failed",
+          "engineStarting": "Loading model…",
+          "summarizing": "Generating…"
+        },
+        "body": {
+          "empty": "Click \"Generate\" above to synthesize a weekly review from this week's daily reports.",
+          "engineStarting": "Loading model — about 30-90s for the first run…",
+          "summarizing": "The model is synthesizing this week's daily reports into a weekly review…",
+          "errorLabel": "Failed: "
+        }
+      },
+      "export": {
+        "frontmatterTitle": "Weekly {{weekStart}} ~ {{weekEnd}}",
+        "heading": "Weekly · {{weekStart}} ~ {{weekEnd}}",
+        "stateError": "❌ **Failed**",
+        "stateEmptyContent": "_(empty)_"
+      }
     },
     "monthly": {
       "title": "Monthly",

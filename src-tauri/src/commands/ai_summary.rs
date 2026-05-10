@@ -7,11 +7,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use chrono::NaiveDate;
+use chrono::{Datelike, Duration, NaiveDate};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::server::EngineSupervisor;
-use crate::ai::summary::{AiOverrides, DaySummaryRunner, SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::ai::summary::{
+    AiOverrides, DaySummaryRunner, SummaryProgress, WeekSummaryRunner, SUMMARY_PROGRESS_EVENT,
+    WEEKLY_SOURCE,
+};
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, SegmentSummaryRow};
 use crate::repo::reports::device_filter_from_option;
 use crate::storage::DbPool;
@@ -245,6 +248,92 @@ pub async fn get_day_image_descriptions(
 ) -> Result<Vec<ImageDescriptionRow>, String> {
     let src = source.unwrap_or_else(|| "daily".to_string());
     ai_summaries::get_day_image_descriptions(&pool, &src, &date)
+        .await
+        .map_err(String::from)
+}
+
+// ───────────────────────────── weekly ─────────────────────────────
+//
+// 周报路径跟 daily 完全独立：单步纯文本 LLM 调用，不过 vision，不切段。
+// 命令体只做参数校验 + 周一对齐 + 错误归类，编排在 [`WeekSummaryRunner`]。
+// 取消信号跟 daily **共用**全局 `SummaryCancel`——`cancel_day_summary` 会同时取消
+// 在跑的 weekly。前端 UI 保证两个 tab 不并发触发，简化心智模型。
+
+/// 把任意"该周内的某天"对齐到当周周一。
+/// 前端传 `weekStart` 应当本身就是周一字符串，但兼容性兜底（用户后续可能从月历跳转传任意日）。
+fn align_to_monday(date: NaiveDate) -> NaiveDate {
+    let dow = date.weekday().num_days_from_monday() as i64;
+    date - Duration::days(dow)
+}
+
+/// 跑某一周的周报。
+///
+/// `week_start` 推荐传周一日期 "YYYY-MM-DD"；不是周一时后端自动对齐到当周周一。
+/// 命令本体异步等到 LLM 调用完毕（含 DB 写入）才 resolve；期间通过
+/// [`SUMMARY_PROGRESS_EVENT`] 流式推 `engine_starting` / `summarizing` /
+/// `segment_done` / `all_done` / `error`，前端按 source="weekly" 过滤接收。
+#[tauri::command]
+pub async fn generate_week_summary(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    cancel: State<'_, SummaryCancel>,
+    week_start: String,
+    force_refresh: bool,
+) -> Result<(), String> {
+    let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let monday = align_to_monday(parsed_date);
+    let monday_str = monday.format("%Y-%m-%d").to_string();
+
+    cancel.0.store(false, Ordering::Relaxed);
+    let runner = WeekSummaryRunner::new(
+        (*pool).clone(),
+        Arc::clone(&supervisor),
+        app.clone(),
+        Arc::clone(&cancel.0),
+    );
+
+    if let Err(e) = runner.run(monday, force_refresh).await {
+        // 顶层失败也 emit 一条 error 让前端 toast——和 daily 同款 UX
+        let mut p = SummaryProgress::base(WEEKLY_SOURCE.to_string(), monday_str.clone(), "error", 1);
+        p.message = Some(e.to_string());
+        let _ = app.emit(SUMMARY_PROGRESS_EVENT, &p);
+        return Err(e.to_string());
+    }
+    Ok(())
+}
+
+/// 拉某周已落库的周报行（最多一行）。前端进周报 tab 时调一次。
+/// `week_start` 不是周一时自动对齐。
+#[tauri::command]
+pub async fn get_week_summary(
+    pool: State<'_, DbPool>,
+    week_start: String,
+) -> Result<Option<SegmentSummaryRow>, String> {
+    let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let monday = align_to_monday(parsed_date);
+    let monday_str = monday.format("%Y-%m-%d").to_string();
+    let rows = ai_summaries::get_day(&pool, WEEKLY_SOURCE, &monday_str)
+        .await
+        .map_err(String::from)?;
+    Ok(rows.into_iter().next())
+}
+
+/// 删除某周已落库的周报行。前端"删除"按钮调。
+#[tauri::command]
+pub async fn clear_week_summary(
+    pool: State<'_, DbPool>,
+    week_start: String,
+) -> Result<(), String> {
+    let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let monday = align_to_monday(parsed_date);
+    let monday_str = monday.format("%Y-%m-%d").to_string();
+    // 周报只占 ai_summaries 一行（segment_idx=0），用 clear_day_summaries_only
+    // 不动 ai_image_descriptions（weekly 本来就没写过那张表）。
+    ai_summaries::clear_day_summaries_only(&pool, WEEKLY_SOURCE, &monday_str)
         .await
         .map_err(String::from)
 }

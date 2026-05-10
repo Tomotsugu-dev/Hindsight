@@ -771,7 +771,63 @@
     },
     "weekly": {
       "title": "周报",
-      "hint": "一周的活动汇总；按日期 + 主题给出整周回顾。功能开发中。"
+      "hint": "一周的活动汇总；按日期 + 主题给出整周回顾。",
+      "subtitle": "基于本周已生成的日报内容，整合成一段整周回顾",
+      "weekNav": {
+        "prevAria": "上一周",
+        "nextAria": "下一周",
+        "thisWeek": "本周",
+        "lastWeek": "上周",
+        "thisWeekBack": "回到本周"
+      },
+      "actions": {
+        "stop": "停止",
+        "regenerate": "重新生成",
+        "start": "开始总结",
+        "startTooltip": "基于本周已生成的日报合成整周回顾，无需再读截图，速度比日报快得多",
+        "regenerateTooltip": "重新生成会清掉本周周报，重新跑一遍",
+        "noModelTooltip": "请先到 AI 设置 → 模型 给段总结选一个模型，或在云端 API 启用云端总结",
+        "delete": "删除",
+        "deleteTooltip": "清空本周周报数据（不影响日报）",
+        "deleteEmptyTooltip": "本周还没有周报数据可删除",
+        "deleteConfirmTitle": "删除 {{weekStart}} 那一周的周报？",
+        "deleteConfirmMessage": "周报内容会被清空，不影响日报，操作不可撤销。",
+        "exportMarkdown": "导出为 Markdown",
+        "exportTooltip": "导出本周周报为 Markdown 文件",
+        "exportEmptyTooltip": "还没有周报内容可导出",
+        "exportRunningTooltip": "周报生成中，等完成后再导出",
+        "dismissError": "关闭"
+      },
+      "errors": {
+        "noSummaryModel": "请先到 AI 设置 → 模型 给段总结选一个模型，或启用云端 API",
+        "generationFailed": "周报生成失败",
+        "unknown": "未知错误"
+      },
+      "engineLoading": "加载模型中…",
+      "toast": {
+        "exported": "已导出 {{filename}}"
+      },
+      "card": {
+        "badge": {
+          "empty": "未生成",
+          "ok": "已生成",
+          "error": "失败",
+          "engineStarting": "加载模型中…",
+          "summarizing": "生成中…"
+        },
+        "body": {
+          "empty": "点上方「开始总结」基于本周日报合成整周回顾。",
+          "engineStarting": "正在加载模型，首次约 30-90 秒…",
+          "summarizing": "正在让模型综合本周日报生成整周回顾…",
+          "errorLabel": "失败："
+        }
+      },
+      "export": {
+        "frontmatterTitle": "周报 {{weekStart}} ~ {{weekEnd}}",
+        "heading": "周报 · {{weekStart}} ~ {{weekEnd}}",
+        "stateError": "❌ **失败**",
+        "stateEmptyContent": "_（空）_"
+      }
     },
     "monthly": {
       "title": "月报",

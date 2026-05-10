@@ -10,3 +10,4 @@
 pub use crate::ai::summary_overrides::AiOverrides;
 pub use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 pub use crate::ai::summary_runner::DaySummaryRunner;
+pub use crate::ai::weekly_runner::{WeekSummaryRunner, WEEKLY_SOURCE};

@@ -92,6 +92,59 @@ pub async fn get_day(
     Ok(rows)
 }
 
+/// 拿某 source 在 [start_date, end_date] 闭区间内、按 (local_date, segment_idx) 升序的所有段。
+///
+/// 周报路径用：`get_range(pool, "daily", monday, sunday)` 拿到一周内所有日报段；
+/// 调用方按 local_date group + 拼成日维度文本送给 LLM。日期字符串格式 "YYYY-MM-DD"
+/// 跟 [`SegmentSummaryRow::local_date`] 一致，SQLite 文本比较即可正确排序。
+pub async fn get_range(
+    pool: &DbPool,
+    source: &str,
+    start_date: &str,
+    end_date: &str,
+) -> Result<Vec<SegmentSummaryRow>> {
+    let src = source.to_string();
+    let start = start_date.to_string();
+    let end = end_date.to_string();
+    let rows = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT source, local_date, segment_idx, label, start_hour, end_hour,
+                            content, model, status, error, generated_at
+                       FROM ai_summaries
+                      WHERE source = ?1 AND local_date >= ?2 AND local_date <= ?3
+                      ORDER BY local_date ASC, segment_idx ASC",
+                )
+                .db()?;
+            let rows = stmt
+                .query_map(rusqlite::params![src, start, end], |r| {
+                    Ok(SegmentSummaryRow {
+                        source: r.get(0)?,
+                        local_date: r.get(1)?,
+                        segment_idx: r.get::<_, i64>(2)? as u32,
+                        label: r.get(3)?,
+                        start_hour: r.get::<_, i64>(4)? as u8,
+                        end_hour: r.get::<_, i64>(5)? as u8,
+                        content: r.get(6)?,
+                        model: r.get(7)?,
+                        status: r.get(8)?,
+                        error: r.get(9)?,
+                        generated_at: r.get(10)?,
+                    })
+                })
+                .db()?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row.db()?);
+            }
+            Ok(out)
+        })
+        .await?;
+    Ok(rows)
+}
+
 /// 拿某段已落库的 status；没行返回 None。给 Phase 2 step2_only 看到空 stored 时
 /// 区分"真空截图"（Phase 1 已写 skipped）跟"step 1 全失败"（Phase 1 已写 error）用。
 pub async fn get_segment_status(

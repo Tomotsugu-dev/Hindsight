@@ -722,6 +722,17 @@ export const api = {
   /** 拉某天已落库的总结。前端进页面调一次：有就直接渲染，没有就显示"开始总结"按钮。 */
   getDaySummary: (date: string, source: string = "daily") =>
     invoke<SegmentSummaryRow[]>("get_day_summary", { date, source }),
+  /** 跑某周的周报。命令本体异步等到 LLM 调用完毕（含 DB 写入）才 resolve；
+   *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度（按 source="weekly" 过滤）。
+   *  weekStart 推荐传周一日期 "YYYY-MM-DD"；不是周一时后端自动对齐到当周周一。 */
+  generateWeekSummary: (weekStart: string, forceRefresh: boolean) =>
+    invoke<void>("generate_week_summary", { weekStart, forceRefresh }),
+  /** 拉某周已落库的周报；该周无生成时返回 null。weekStart 不是周一时自动对齐。 */
+  getWeekSummary: (weekStart: string) =>
+    invoke<SegmentSummaryRow | null>("get_week_summary", { weekStart }),
+  /** 删除某周已生成的周报行。weekStart 不是周一时自动对齐。 */
+  clearWeekSummary: (weekStart: string) =>
+    invoke<void>("clear_week_summary", { weekStart }),
   /** 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。 */
   getSegmentImageDescriptions: (
     date: string,

@@ -771,7 +771,63 @@
     },
     "weekly": {
       "title": "週次",
-      "hint": "1 週間のアクティビティ集計。日付 + テーマ別に振り返ります。開発中の機能です。"
+      "hint": "1 週間のアクティビティ集計。日付 + テーマ別に振り返ります。",
+      "subtitle": "今週の既存日報を統合し、1 週間の振り返りを生成します",
+      "weekNav": {
+        "prevAria": "前週",
+        "nextAria": "翌週",
+        "thisWeek": "今週",
+        "lastWeek": "先週",
+        "thisWeekBack": "今週へ戻る"
+      },
+      "actions": {
+        "stop": "停止",
+        "regenerate": "再生成",
+        "start": "生成開始",
+        "startTooltip": "今週の既存日報を統合して週次レビューを作成します。スクリーンショットを再読み込みせず、日報より高速です",
+        "regenerateTooltip": "再生成すると今週の週報が置き換えられます",
+        "noModelTooltip": "AI 設定 → モデル で要約モデルを選択するか、クラウド API を有効化してください",
+        "delete": "削除",
+        "deleteTooltip": "今週の週報データをクリアします（日報には影響しません）",
+        "deleteEmptyTooltip": "削除できる週報はまだありません",
+        "deleteConfirmTitle": "{{weekStart}} の週の週報を削除しますか？",
+        "deleteConfirmMessage": "週報の内容がクリアされます。日報には影響しません。元に戻せません。",
+        "exportMarkdown": "Markdown でエクスポート",
+        "exportTooltip": "現在の週報を Markdown ファイルとしてエクスポート",
+        "exportEmptyTooltip": "エクスポートできる週報がまだありません",
+        "exportRunningTooltip": "週報を生成中です。完了後にエクスポートしてください",
+        "dismissError": "閉じる"
+      },
+      "errors": {
+        "noSummaryModel": "AI 設定 → モデル で要約モデルを選択するか、クラウド API を有効化してください",
+        "generationFailed": "週報の生成に失敗しました",
+        "unknown": "不明なエラー"
+      },
+      "engineLoading": "モデルを読み込み中…",
+      "toast": {
+        "exported": "{{filename}} にエクスポートしました"
+      },
+      "card": {
+        "badge": {
+          "empty": "未生成",
+          "ok": "生成済み",
+          "error": "失敗",
+          "engineStarting": "モデル読み込み中…",
+          "summarizing": "生成中…"
+        },
+        "body": {
+          "empty": "上の「生成開始」をクリックして、今週の日報から週次レビューを作成してください。",
+          "engineStarting": "モデル読み込み中（初回約 30〜90 秒）…",
+          "summarizing": "今週の日報を統合して週次レビューを生成しています…",
+          "errorLabel": "失敗："
+        }
+      },
+      "export": {
+        "frontmatterTitle": "週報 {{weekStart}} ~ {{weekEnd}}",
+        "heading": "週報 · {{weekStart}} ~ {{weekEnd}}",
+        "stateError": "❌ **失敗**",
+        "stateEmptyContent": "_（空）_"
+      }
     },
     "monthly": {
       "title": "月次",

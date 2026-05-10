@@ -1,0 +1,355 @@
+/* 周报 tab 内部样式：周导航 + 主操作 + 错误条 + 引擎冷启动 + 单卡片。
+   外壳样式（.page / .title / .tabs）在 AISummaryPage.module.css。
+   尽量复用 DailyTab.module.css 的视觉语言（按钮配色、卡片阴影），但布局上更简单：
+   只有一个总结卡片，没有段列表。 */
+
+.subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+  margin: 0 0 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.weekNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.navBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
+}
+
+.navBtn:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 周 pill 比 day pill 宽——要塞 "MM-DD ~ MM-DD" */
+.weekPill {
+  min-width: 130px;
+  height: 26px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  transition:
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
+}
+
+.weekPillClickable {
+  cursor: pointer;
+}
+
+.weekPillClickable:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.weekPill:disabled {
+  cursor: default;
+}
+
+.startBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 140ms ease-out;
+}
+
+.startBtn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.startBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stopBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: color-mix(in oklab, #f59e0b 14%, transparent);
+  border: 1px solid color-mix(in oklab, #f59e0b 38%, transparent);
+  color: #b45309;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease-out;
+}
+
+.stopBtn:hover {
+  background: color-mix(in oklab, #f59e0b 22%, transparent);
+}
+
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: color-mix(in oklab, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in oklab, #dc2626 28%, transparent);
+  color: #991b1b;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, #dc2626 16%, transparent);
+  border-color: color-mix(in oklab, #dc2626 42%, transparent);
+}
+
+.deleteBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: var(--text-strong);
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.exportBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.exportBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.errorBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in oklab, #dc2626 25%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #991b1b;
+}
+
+.errorClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #991b1b;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 120ms var(--ease-out), background 120ms var(--ease-out);
+}
+
+.errorClose:hover {
+  opacity: 1;
+  background: color-mix(in oklab, #dc2626 12%, transparent);
+}
+
+.successBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, #16a34a 10%, transparent);
+  border: 1px solid color-mix(in oklab, #16a34a 28%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #15803d;
+  animation: weeklyTabSuccessIn 200ms var(--ease-out);
+}
+
+@keyframes weeklyTabSuccessIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.engineHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 22%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+/* —— 周报卡片：单一文本卡，比段卡更宽松的内边距 —— */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.weekRange {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.statusEmpty {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+}
+
+.statusRunning {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+.statusOk {
+  background: color-mix(in oklab, #16a34a 16%, transparent);
+  color: #15803d;
+}
+
+.statusError {
+  background: color-mix(in oklab, #dc2626 14%, transparent);
+  color: #991b1b;
+}
+
+.bodyText {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bodyMuted {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.bodyError {
+  font-size: 12.5px;
+  color: #991b1b;
+  background: color-mix(in oklab, #dc2626 6%, transparent);
+  border-radius: 6px;
+  padding: 10px 12px;
+  word-break: break-word;
+}
+
+.bodyError strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.spin {
+  animation: weeklyTabSpin 1s linear infinite;
+}
+
+@keyframes weeklyTabSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
