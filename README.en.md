@@ -36,7 +36,7 @@
 ## Interface Preview
 
 <p align="center">
-  <img src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.5.2/Hindsight.gif" alt="Hindsight preview" width="800"><br/>
+  <video src="https://github.com/user-attachments/assets/68001c5d-f602-40de-8965-b9f46547da39" controls muted autoplay loop playsinline width="800"></video><br/>
   <sub><i><b>App preview</b> · Hindsight's core interactions in 30 seconds</i></sub>
 </p>
 
@@ -85,13 +85,7 @@ Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
 ### macOS
 
-Download `hindsight_x.y.z_aarch64.dmg`, double-click to mount, then drag Hindsight into the Applications folder.
-
-> ⚠️ **First open will show "cannot verify developer" or "is damaged"** — the app has not yet been notarized with Apple, so macOS Gatekeeper blocks it. Run the following in Terminal to clear the quarantine flag, then open normally:
-
-```bash
-sudo xattr -rd com.apple.quarantine "/Applications/Hindsight.app"
-```
+Download `hindsight_x.y.z_universal.dmg` (Apple Silicon + Intel universal binary), double-click to mount, then drag Hindsight into the Applications folder. The app is signed with an Apple Developer certificate and notarized, so it opens normally without any Gatekeeper warning.
 
 > All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, **screenshots will not be uploaded**.
 

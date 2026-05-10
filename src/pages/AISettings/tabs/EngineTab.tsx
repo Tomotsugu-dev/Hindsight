@@ -166,7 +166,7 @@ export default function EngineTab() {
             value={engineBatchToOption(describeBatch)}
             options={ENGINE_BATCH_OPTIONS}
             onChange={(next) =>
-              updateAi({ describeBatchSize: engineOptionToBatch(next) })
+              updateAi({ describeBatchSize: engineOptionToBatch(next) ?? 512 })
             }
           />
         </Row>
@@ -175,7 +175,7 @@ export default function EngineTab() {
             value={engineSlotsToOption(describeSlots)}
             options={ENGINE_SLOTS_OPTIONS}
             onChange={(next) =>
-              updateAi({ describeParallelSlots: engineOptionToSlots(next) })
+              updateAi({ describeParallelSlots: engineOptionToSlots(next) ?? 1 })
             }
           />
         </Row>
@@ -184,7 +184,7 @@ export default function EngineTab() {
             value={engineCtxToOption(describeCtx)}
             options={ENGINE_CTX_OPTIONS}
             onChange={(next) =>
-              updateAi({ describeCtxSize: engineOptionToCtx(next) })
+              updateAi({ describeCtxSize: engineOptionToCtx(next) ?? 8192 })
             }
           />
         </Row>
@@ -208,7 +208,7 @@ export default function EngineTab() {
             value={engineBatchToOption(summaryBatch)}
             options={ENGINE_BATCH_OPTIONS}
             onChange={(next) =>
-              updateAi({ summaryBatchSize: engineOptionToBatch(next) })
+              updateAi({ summaryBatchSize: engineOptionToBatch(next) ?? 512 })
             }
           />
         </Row>
@@ -217,7 +217,7 @@ export default function EngineTab() {
             value={engineSlotsToOption(summarySlots)}
             options={ENGINE_SLOTS_OPTIONS}
             onChange={(next) =>
-              updateAi({ summaryParallelSlots: engineOptionToSlots(next) })
+              updateAi({ summaryParallelSlots: engineOptionToSlots(next) ?? 1 })
             }
           />
         </Row>
@@ -226,7 +226,7 @@ export default function EngineTab() {
             value={engineCtxToOption(summaryCtx)}
             options={ENGINE_CTX_OPTIONS}
             onChange={(next) =>
-              updateAi({ summaryCtxSize: engineOptionToCtx(next) })
+              updateAi({ summaryCtxSize: engineOptionToCtx(next) ?? 8192 })
             }
           />
         </Row>

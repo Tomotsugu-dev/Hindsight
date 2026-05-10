@@ -36,7 +36,7 @@
 ## 界面预览
 
 <p align="center">
-  <img src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.5.2/Hindsight.gif" alt="Hindsight 软件预览" width="800"><br/>
+  <video src="https://github.com/user-attachments/assets/df92b5b8-137a-4432-9226-2d063d402664" controls muted autoplay loop playsinline width="800"></video><br/>
   <sub><i><b>软件预览</b> · 30 秒看清 Hindsight 的核心交互</i></sub>
 </p>
 
@@ -85,13 +85,7 @@
 
 ### MacOS
 
-下载 `hindsight_x.y.z_aarch64.dmg`，双击挂载后将 Hindsight 拖入「应用程序」。
-
-> ⚠️ **首次打开会提示「无法验证开发者」或「已损坏」** — 应用尚未接入 Apple 公证流程，会被 macOS Gatekeeper 拦下。在终端执行以下命令清除隔离标记后即可正常打开：
-
-```bash
-sudo xattr -rd com.apple.quarantine "/Applications/Hindsight.app"
-```
+下载 `hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel 通用二进制），双击挂载后将 Hindsight 拖入「应用程序」即可正常打开——应用已接入 Apple 开发者证书签名 + 公证，不会再触发 Gatekeeper 警告。
 
 > 所有活动数据 / 截图默认仅存本地。如果开启 Google Drive 同步，只会上传活动元数据，**不会上传截图**。
 

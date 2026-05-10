@@ -143,5 +143,15 @@
 
 .collapsibleOpen .collapsibleInner {
   opacity: 1;
+  /* 折叠动画跑完（280ms）后把 overflow 切回 visible，
+     让 SimplePicker 下拉菜单不被父级 clip。
+     overflow 不是可过渡属性，用 animation 延迟切。 */
+  animation: collapsibleRevealOverflow 0s linear 280ms forwards;
+}
+
+@keyframes collapsibleRevealOverflow {
+  to {
+    overflow: visible;
+  }
 }
 

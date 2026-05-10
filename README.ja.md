@@ -36,7 +36,7 @@
 ## インターフェースプレビュー
 
 <p align="center">
-  <img src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.5.2/Hindsight.gif" alt="Hindsight プレビュー" width="800"><br/>
+  <video src="https://github.com/user-attachments/assets/68001c5d-f602-40de-8965-b9f46547da39" controls muted autoplay loop playsinline width="800"></video><br/>
   <sub><i><b>アプリプレビュー</b> · Hindsight の主要な操作を 30 秒で</i></sub>
 </p>
 
@@ -85,13 +85,7 @@
 
 ### macOS
 
-`hindsight_x.y.z_aarch64.dmg` をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。
-
-> ⚠️ **初回起動時に「開発元を確認できません」または「壊れている」と表示されます** — アプリはまだ Apple の公証を受けていないため、macOS Gatekeeper にブロックされます。ターミナルで以下のコマンドを実行して隔離フラグを解除すれば正常に開けます：
-
-```bash
-sudo xattr -rd com.apple.quarantine "/Applications/Hindsight.app"
-```
+`hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel ユニバーサルバイナリ）をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。Apple Developer 証明書による署名と公証済みのため、Gatekeeper の警告なしでそのまま開けます。
 
 > すべてのアクティビティデータとスクリーンショットはデフォルトでローカルに保存されます。Google Drive の同期を有効にした場合、アクティビティメタデータのみがアップロードされ、**スクリーンショットはアップロードされません**。
 
