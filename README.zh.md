@@ -55,32 +55,14 @@
   <sub><i><b>今日总览</b> · 24 小时分时段堆叠图 × 应用排行榜，一眼看清今天的时间去向，工作学习节奏</i></sub>
 </p>
 
-<table align="center">
-  <tr>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/weekly.png" alt="周统计"><br/>
-      <sub><i><b>周统计</b> · 7 天总时长柱状对比，配本周高频应用排行</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/monthly.png" alt="月统计"><br/>
-      <sub><i><b>月统计</b> · 每日柱状 × 月度排行，看清长期工作节奏</i></sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI 总结"><br/>
-      <sub><i><b>AI 自动写日报</b> · 本地 LLM 按时段看截图，输出段落式总结；截图始终本地</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="多设备同步"><br/>
-      <sub><i><b>多设备汇总</b> · Google Drive 同步活动元数据，多台设备一处查看；截图始终本地</i></sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="./docs/intro_zh/imgs/monthly.png" alt="月统计" width="800"><br/>
+  <sub><i><b>月统计</b> · 每日柱状 × 月度排行，看清长期工作节奏</i></sub>
+</p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI 助手" width="800"><br/>
-  <sub><i><b>AI 助手</b> 🚧 即将上线 · 用自然语言对你的活动记录提问，"上周我写代码用了多少小时？""我什么时段最容易分心？"</i></sub>
+  <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
+  <sub><i><b>AI 自动写日报</b> · 本地 LLM 按时段看截图，输出段落式总结；截图始终本地</i></sub>
 </p>
 
 ## 快速开始
@@ -98,15 +80,6 @@
 下载 `hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel 通用二进制），双击挂载后将 Hindsight 拖入「应用程序」即可正常打开——应用已接入 Apple 开发者证书签名 + 公证，不会再触发 Gatekeeper 警告。
 
 > 所有活动数据 / 截图默认仅存本地。如果开启 Google Drive 同步，只会上传活动元数据，**不会上传截图**。
-
-## 未来计划
-
-- [x] 自动识别常用应用并分类，用户可调整分类结果
-- [x] 支持自动更新
-- [x] 加入 AI 分析功能（分析日概览、周概览、月概览），根据截图内容更精确地识别用户的工作内容
-- [ ] 支持生成工作报告（日报、周报、月报）
-- [ ] 加入图片加密功能，保护截图隐私
-- [ ] 支持更多平台（Linux、移动端）
 
 ## 技术栈
 

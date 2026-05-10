@@ -51,36 +51,18 @@ To fix exactly these gaps, I built Hindsight.
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
+  <img src="./docs/intro_en/imgs/today.png" alt="Today Overview" width="800"><br/>
   <sub><i><b>Today Overview</b> · 24-hour stacked histogram × app leaderboard — see where your day went and your work / study rhythm at a glance</i></sub>
 </p>
 
-<table align="center">
-  <tr>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/weekly.png" alt="Weekly Statistics"><br/>
-      <sub><i><b>Weekly Stats</b> · 7-day total-time bar comparison with weekly top-app ranking</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics"><br/>
-      <sub><i><b>Monthly Stats</b> · Daily bars × monthly ranking — see your long-term work rhythm</i></sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary"><br/>
-      <sub><i><b>AI auto-daily-report</b> · Local LLM reads screenshots per time segment and outputs a paragraph-style summary; screenshots stay local</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync"><br/>
-      <sub><i><b>Multi-device aggregation</b> · Google Drive syncs activity metadata across machines; screenshots always stay local</i></sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="./docs/intro_en/imgs/monthly.png" alt="Monthly Statistics" width="800"><br/>
+  <sub><i><b>Monthly Stats</b> · Daily bars × monthly ranking — see your long-term work rhythm</i></sub>
+</p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI Assistant" width="800"><br/>
-  <sub><i><b>AI Assistant</b> 🚧 Coming soon · Ask your activity log in natural language: "How many hours did I code last week?" "When am I most easily distracted?"</i></sub>
+  <img src="./docs/intro_en/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
+  <sub><i><b>AI auto-daily-report</b> · Local LLM reads screenshots per time segment and outputs a paragraph-style summary; screenshots stay local</i></sub>
 </p>
 
 ## Quick Start
@@ -98,15 +80,6 @@ Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 Download `hindsight_x.y.z_universal.dmg` (Apple Silicon + Intel universal binary), double-click to mount, then drag Hindsight into the Applications folder. The app is signed with an Apple Developer certificate and notarized, so it opens normally without any Gatekeeper warning.
 
 > All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, **screenshots will not be uploaded**.
-
-## Future Roadmap
-
-- [x] Auto-identify and categorize frequently-used apps, with user adjustment capability
-- [x] Support for auto-updates
-- [x] AI analysis features (analyze daily, weekly, and monthly overviews, identify work content more accurately based on screenshot content)
-- [ ] Generate work reports (daily, weekly, monthly)
-- [ ] Add screenshot encryption to protect privacy
-- [ ] Support for more platforms (Linux, mobile)
 
 ## Tech Stack
 

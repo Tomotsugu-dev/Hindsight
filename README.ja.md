@@ -55,32 +55,14 @@
   <sub><i><b>今日の総括</b> · 24時間積み重ねグラフ × アプリランキング、今日の時間の使い道と仕事 / 学習リズムを一目で把握</i></sub>
 </p>
 
-<table align="center">
-  <tr>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/weekly.png" alt="Weekly Statistics"><br/>
-      <sub><i><b>週間統計</b> · 7日間の総時間を棒グラフで比較、週のよく使ったアプリランキング付き</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics"><br/>
-      <sub><i><b>月間統計</b> · 日別グラフ × 月間ランキング、長期的な作業リズムを把握</i></sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary"><br/>
-      <sub><i><b>AI 自動日報</b> · ローカル LLM が時間帯別にスクリーンショットを読み取り、段落形式の総括を出力；スクリーンショットは常にローカル</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-Device Sync"><br/>
-      <sub><i><b>マルチデバイス集約</b> · Google Drive で活動メタデータを同期、複数の端末から一括閲覧；スクリーンショットは常にローカル</i></sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="800"><br/>
+  <sub><i><b>月間統計</b> · 日別グラフ × 月間ランキング、長期的な作業リズムを把握</i></sub>
+</p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI Assistant" width="800"><br/>
-  <sub><i><b>AI アシスタント</b> 🚧 近日公開 · 自然言語で活動記録に質問、「先週コードを何時間書いた？」「どの時間帯が一番集中力が散漫？」</i></sub>
+  <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
+  <sub><i><b>AI 自動日報</b> · ローカル LLM が時間帯別にスクリーンショットを読み取り、段落形式の総括を出力；スクリーンショットは常にローカル</i></sub>
 </p>
 
 ## クイックスタート
@@ -98,15 +80,6 @@
 `hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel ユニバーサルバイナリ）をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。Apple Developer 証明書による署名と公証済みのため、Gatekeeper の警告なしでそのまま開けます。
 
 > すべてのアクティビティデータとスクリーンショットはデフォルトでローカルに保存されます。Google Drive の同期を有効にした場合、アクティビティメタデータのみがアップロードされ、**スクリーンショットはアップロードされません**。
-
-## 今後の計画
-
-- [x] 頻繁に使用されるアプリを自動認識・分類し、ユーザーが調整可能
-- [x] オンラインアップデートのサポート
-- [x] AI分析機能（日次、週次、月次概要の分析、スクリーンショット内容に基づいた作業内容の正確な識別）
-- [ ] 作業レポートの生成（日報、週報、月報）
-- [ ] スクリーンショット暗号化機能の追加によるプライバシー保護
-- [ ] より多くのプラットフォーム対応（Linux、モバイル）
 
 ## 技術スタック
 
