@@ -23,20 +23,32 @@ pub fn current_window() -> Result<WindowInfo> {
     let windows = xcap::Window::all().map_err(|e| Error::Capture(e.to_string()))?;
 
     #[cfg(target_os = "macos")]
-    let focused = {
+    let (focused, diag_nswks_pid) = {
         let target_pid = macos_frontmost_pid();
-        match target_pid {
+        let focused = match target_pid {
             Some(p) => windows
                 .iter()
                 .find(|w| w.pid().ok() == Some(p))
-                .ok_or_else(|| Error::Capture(format!("找不到 PID={} 的窗口", p)))?,
+                .ok_or_else(|| {
+                    macos_log_focus_decision(
+                        Some(p),
+                        "<no-xcap-window-for-pid>",
+                        0,
+                        "",
+                    );
+                    Error::Capture(format!("找不到 PID={} 的窗口", p))
+                })?,
             // NSWorkspace 拿不到（极少见，比如登录窗口 / Screen Recording 权限缺失）→
             // 落到 xcap 自带 heuristic 兜底，至少不直接挂
             None => windows
                 .iter()
                 .find(|w| w.is_focused().unwrap_or(false))
-                .ok_or_else(|| Error::Capture("没有焦点窗口".into()))?,
-        }
+                .ok_or_else(|| {
+                    macos_log_focus_decision(None, "<nothing-focused>", 0, "");
+                    Error::Capture("没有焦点窗口".into())
+                })?,
+        };
+        (focused, target_pid)
     };
     #[cfg(not(target_os = "macos"))]
     let focused = windows
@@ -49,6 +61,9 @@ pub fn current_window() -> Result<WindowInfo> {
     let title = focused.title().unwrap_or_default().to_string();
     let pid = focused.pid().unwrap_or(0);
 
+    #[cfg(target_os = "macos")]
+    macos_log_focus_decision(diag_nswks_pid, &app_name, pid, &title);
+
     let app_path = if pid > 0 { resolve_exe_path(pid) } else { None };
 
     Ok(WindowInfo {
@@ -56,6 +71,30 @@ pub fn current_window() -> Result<WindowInfo> {
         title,
         app_path,
     })
+}
+
+/// 调试用：把每次焦点采集决定写一行到 `<data_root>/focus-debug.log`。
+/// 排查"为什么 macOS 多屏下时间总是被算到 Hindsight 自己"专用，**v0.5.7-beta
+/// 之后会下线**。文件无大小限制，用户做完测试后自行删除。
+///
+/// 格式：`HH:MM:SS | nswks_pid=<NSWorkspace 报的最前 app PID> | resolved=<app>/<pid> | title=<...>`
+#[cfg(target_os = "macos")]
+fn macos_log_focus_decision(nswks_pid: Option<u32>, app: &str, pid: u32, title: &str) {
+    use std::io::Write;
+    let path = crate::bootstrap::data_root().join("focus-debug.log");
+    let now = chrono::Local::now().format("%H:%M:%S");
+    let title_trim: String = title.chars().take(80).collect();
+    let line = format!(
+        "{} | nswks_pid={:?} | resolved={}/{} | title={}\n",
+        now, nswks_pid, app, pid, title_trim,
+    );
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = f.write_all(line.as_bytes());
+    }
 }
 
 /// 调用 `NSWorkspace.sharedWorkspace().frontmostApplication()` 拿系统层"最前"
