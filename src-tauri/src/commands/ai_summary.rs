@@ -12,8 +12,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary::{
-    AiOverrides, DaySummaryRunner, SummaryProgress, WeekSummaryRunner, SUMMARY_PROGRESS_EVENT,
-    WEEKLY_SOURCE,
+    precheck_week, AiOverrides, DaySummaryRunner, SummaryProgress, WeekPrecheckResp,
+    WeekSummaryRunner, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,
 };
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, SegmentSummaryRow};
 use crate::repo::reports::device_filter_from_option;
@@ -272,6 +272,14 @@ fn align_to_monday(date: NaiveDate) -> NaiveDate {
 /// 命令本体异步等到 LLM 调用完毕（含 DB 写入）才 resolve；期间通过
 /// [`SUMMARY_PROGRESS_EVENT`] 流式推 `engine_starting` / `summarizing` /
 /// `segment_done` / `all_done` / `error`，前端按 source="weekly" 过滤接收。
+///
+/// `allow_missing_days`:
+/// - false = 老行为：缺日报就 error 早返回。
+/// - true = 前端已展示"部分/整周日报缺失"确认弹框且用户选了"继续生成"：
+///   - 部分缺：用当日 top apps 顶替进入 prompt
+///   - 整周缺但有 activity：仅基于整周 + 每日 top apps 做简化分析
+///
+/// Tauri 命令参数不支持 doc 注释或 `#[serde(default)]`，前端必须显式传布尔值。
 #[tauri::command]
 pub async fn generate_week_summary(
     app: AppHandle,
@@ -280,6 +288,7 @@ pub async fn generate_week_summary(
     cancel: State<'_, SummaryCancel>,
     week_start: String,
     force_refresh: bool,
+    allow_missing_days: bool,
 ) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
@@ -294,7 +303,7 @@ pub async fn generate_week_summary(
         Arc::clone(&cancel.0),
     );
 
-    if let Err(e) = runner.run(monday, force_refresh).await {
+    if let Err(e) = runner.run(monday, force_refresh, allow_missing_days).await {
         // 顶层失败也 emit 一条 error 让前端 toast——和 daily 同款 UX
         let mut p = SummaryProgress::base(WEEKLY_SOURCE.to_string(), monday_str.clone(), "error", 1);
         p.message = Some(e.to_string());
@@ -302,6 +311,25 @@ pub async fn generate_week_summary(
         return Err(e.to_string());
     }
     Ok(())
+}
+
+/// 周报生成前预览：返回该周 7 天每天的"是否有日报 / 是否有活动"。
+///
+/// 前端"点击生成"时先调这个：
+/// - 全 7 天都有日报 → 直接 generate_week_summary
+/// - 部分天缺日报 → 弹"部分日期没有日报"确认，用户同意后再 generate_week_summary(allow_missing_days=true)
+/// - 整周都没日报 → 弹"本周还没有任何日报"确认（含 days_activity_only 提示），同上
+///
+/// `week_start` 不是周一时自动对齐到当周周一。
+#[tauri::command]
+pub async fn precheck_week_summary(
+    pool: State<'_, DbPool>,
+    week_start: String,
+) -> Result<WeekPrecheckResp, String> {
+    let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
+        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
+    let monday = align_to_monday(parsed_date);
+    precheck_week(&pool, monday).await.map_err(String::from)
 }
 
 /// 拉某周已落库的周报行（最多一行）。前端进周报 tab 时调一次。

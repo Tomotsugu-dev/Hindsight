@@ -11,13 +11,19 @@
 //!
 //! 校验链：
 //! 1. 必须有可用的 step2 模型（本地 summary main 非空 或 external_enabled=true）
-//! 2. 这一周内必须至少有一天的 daily 段总结落库（`status = ok`）；否则直接写
-//!    `status = error` 行，让前端展示"先去补日报"提示
+//! 2. 严格模式（`allow_missing_days=false`）下：这一周内必须至少有一天的 daily
+//!    段总结落库（`status = ok`），否则直接写 `status = error` 行让前端引导。
+//!    宽松模式（前端 precheck → 用户在确认弹框点了"继续生成"）下：缺日报的天
+//!    用当日 top apps 顶替进 prompt；整周无日报也允许跑——这时仅基于 weekly +
+//!    每日 top apps 做简化分析。只有 days 和 top_apps **同时为空**时才视为
+//!    "本周没用过电脑"写 error 兜底。
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::{Datelike, Duration, NaiveDate, Utc};
+use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::models;
@@ -29,6 +35,7 @@ use crate::ai::summary_operations::build_step2;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
+use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
 
@@ -69,7 +76,16 @@ impl WeekSummaryRunner {
     ///
     /// `week_start` 必须是周一（调用方负责传对——`commands` 层会把任意日期对齐到周一）。
     /// `force_refresh = true` 时无视已有行直接重跑；false 且已有 ok 行时直接 `Ok(())` 早返回。
-    pub async fn run(&self, week_start: NaiveDate, force_refresh: bool) -> Result<()> {
+    /// `allow_missing_days = true` 时：
+    ///   - 部分日缺日报：用当日 top apps 文本顶替进入 prompt
+    ///   - 整周无日报但有 activity：仅基于整周 + 每日 top apps 做简化分析
+    ///   不再因"日报缺失"早 return error。
+    pub async fn run(
+        &self,
+        week_start: NaiveDate,
+        force_refresh: bool,
+        allow_missing_days: bool,
+    ) -> Result<()> {
         let week_end = week_start + Duration::days(6);
         let week_key = week_start.format("%Y-%m-%d").to_string();
         let end_key = week_end.format("%Y-%m-%d").to_string();
@@ -98,10 +114,11 @@ impl WeekSummaryRunner {
         let daily_rows =
             ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
         let lang = ai.prompt_language.as_str().to_string();
-        let days = group_days(&daily_rows, week_start, week_end, &lang);
+        let mut days = group_days(&daily_rows, week_start, week_end, &lang);
 
-        // 没有任何 ok 段 → 写一条 error 行 + 提示用户先补日报
-        if days.is_empty() {
+        // 严格模式（前端没确认 allow）下：整周无日报 = 老行为，写 error 行让前端引导
+        // 用户先补日报。宽松模式继续往下走——通过补缺失日 fallback / 简化分析兜底。
+        if days.is_empty() && !allow_missing_days {
             let row = SegmentSummaryRow {
                 source: WEEKLY_SOURCE.to_string(),
                 local_date: week_key.clone(),
@@ -120,6 +137,90 @@ impl WeekSummaryRunner {
             ai_summaries::upsert_segment(&self.pool, &row).await?;
             // emit 一条 segment_done 让前端 store 写入这一行（status=error），
             // 紧接着 all_done 收尾——避免前端按钮一直转
+            let mut p = SummaryProgress::base(
+                WEEKLY_SOURCE.to_string(),
+                week_key.clone(),
+                "segment_done",
+                1,
+            );
+            p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
+            p.status = Some("error");
+            p.message = row.error.clone();
+            self.emit(p);
+            self.emit_phase("all_done", &week_key, None, None);
+            return Ok(());
+        }
+
+        // 宽松模式：缺日报的天用当日 top apps 文本顶替——还是缺数据的天（既没日报
+        // 也没 activity）直接不进 prompt，让 LLM 视为"未使用电脑"。
+        if allow_missing_days {
+            let present_dates: HashSet<String> =
+                days.iter().map(|(d, _, _)| d.clone()).collect();
+            let mut day = week_start;
+            while day <= week_end {
+                let day_str = day.format("%Y-%m-%d").to_string();
+                if !present_dates.contains(&day_str) {
+                    let day_apps = ai_summaries::list_range_top_apps(
+                        &self.pool,
+                        &day_str,
+                        &day_str,
+                        &ai.excluded_categories,
+                        DeviceFilter::All,
+                        8,
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        log::warn!("拉缺失日 top apps 失败（{}）：{e}", day_str);
+                        Vec::new()
+                    });
+                    if !day_apps.is_empty() {
+                        let text = format_missing_day_fallback(&lang, &day_apps);
+                        let weekday = weekday_short(&lang, day.weekday());
+                        days.push((day_str, weekday.to_string(), text));
+                    }
+                }
+                day += Duration::days(1);
+            }
+            days.sort_by(|a, b| a.0.cmp(&b.0));
+        }
+
+        // 整周 top apps：跟 daily 段总结同语义（excluded_categories 过滤、按组合并），
+        // 但跨 7 天聚合。device 用 All——周报当前没暴露设备维度，跟现有"多设备聚合"一致。
+        // 查询失败不让整轮报错——top_apps 只是辅助信号，丢了就让 LLM 只看日报全文。
+        // 提到引擎启动前查：宽松模式下没 activity 也要早 fail，省得白等模型加载。
+        let top_apps = ai_summaries::list_range_top_apps(
+            &self.pool,
+            &week_key,
+            &end_key,
+            &ai.excluded_categories,
+            DeviceFilter::All,
+            8,
+        )
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!("拉一周 top apps 失败（{}~{}）：{e}", week_key, end_key);
+            Vec::new()
+        });
+
+        // 宽松模式终极兜底：日报也空 + 整周 top_apps 也空 = 本周根本没用电脑，没东西可写
+        if allow_missing_days && days.is_empty() && top_apps.is_empty() {
+            let row = SegmentSummaryRow {
+                source: WEEKLY_SOURCE.to_string(),
+                local_date: week_key.clone(),
+                segment_idx: WEEKLY_SEGMENT_IDX,
+                label: weekly_label(&week_key, &end_key),
+                start_hour: 0,
+                end_hour: 0,
+                content: String::new(),
+                model: String::new(),
+                status: "error".to_string(),
+                error: Some(
+                    "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。"
+                        .to_string(),
+                ),
+                generated_at: Utc::now().to_rfc3339(),
+            };
+            ai_summaries::upsert_segment(&self.pool, &row).await?;
             let mut p = SummaryProgress::base(
                 WEEKLY_SOURCE.to_string(),
                 week_key.clone(),
@@ -169,6 +270,7 @@ impl WeekSummaryRunner {
             week_start: &week_key,
             week_end: &end_key,
             days: &days,
+            top_apps: &top_apps,
         };
         let system = build_weekly_system_prompt(&ai);
         let user_text = build_weekly_user_prompt(&ai, &ctx);
@@ -375,4 +477,147 @@ fn group_days(
 /// 知道是 weekly 行就按"周"渲染，不会跟时段标签混。
 fn weekly_label(week_start: &str, week_end: &str) -> String {
     format!("{} ~ {}", week_start, week_end)
+}
+
+/// 当某天没日报但有活动数据时，把当日 top apps 列表拼成一段"代日报"文本。
+///
+/// 拼装格式：第一行打 marker 标签让 LLM 一眼识别"这天没日报、只有应用统计"；
+/// 余下是跟段总结 user prompt 同款的应用列表。三语都遵守同样的 marker 结构，
+/// weekly_*.md 里有对应说明告诉模型遇到 marker 时怎么处理。
+fn format_missing_day_fallback(
+    lang: &str,
+    day_apps: &[(String, u32, String)],
+) -> String {
+    let (marker, header) = match lang {
+        "en" => (
+            "[No daily report; app stats only]",
+            "Top apps used:",
+        ),
+        "ja" => (
+            "[この日は日報なし、アプリ統計のみ]",
+            "最も使用されたアプリ：",
+        ),
+        _ => (
+            "[当日无日报，仅应用统计]",
+            "使用最多的应用：",
+        ),
+    };
+    let mut out = String::new();
+    out.push_str(marker);
+    out.push('\n');
+    out.push_str(header);
+    out.push('\n');
+    for (name, minutes, category) in day_apps.iter().take(8) {
+        match lang {
+            "en" => out.push_str(&format!("- {} ({} min · {})\n", name, minutes, category)),
+            "ja" => out.push_str(&format!("- {}（{} 分 · {}）\n", name, minutes, category)),
+            _ => out.push_str(&format!("- {}（{} 分钟 · {}）\n", name, minutes, category)),
+        }
+    }
+    out
+}
+
+/// precheck 返回项——一天的元数据（前端弹框显示用）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeekPrecheckDay {
+    /// "YYYY-MM-DD"
+    pub date: String,
+    /// 按当前 prompt 语言写的星期简写（"周一" / "Mon" / "月"）
+    pub weekday: String,
+    /// 该日是否有 daily ok 段总结（status='ok' 且 content 非空）
+    pub has_daily: bool,
+    /// 该日是否有 activity 记录（活动表非空 + 过滤掉 excluded_categories 后仍有内容）
+    pub has_activity: bool,
+}
+
+/// precheck 命令的返回 payload——把一周 7 天拆成"有日报 / 仅活动 / 完全空"三档。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeekPrecheckResp {
+    /// 一周 7 天，按周一到周日顺序
+    pub days: Vec<WeekPrecheckDay>,
+    /// 7 天里有几天有 daily ok 段总结
+    pub days_with_daily: u32,
+    /// 7 天里有几天 has_activity = true 但 has_daily = false（前端"用活动统计替代"备选项）
+    pub days_activity_only: u32,
+}
+
+/// 给前端"点击生成前预览"用的查询：拿这周 7 天的日报 / 活动覆盖情况。
+///
+/// 不依赖 [`WeekSummaryRunner`]，纯函数形式——前端可以单独 invoke 而无需触发任何
+/// 引擎 / 模型加载，是"生成前确认"流程的支点。
+pub async fn precheck_week(
+    pool: &DbPool,
+    week_start: NaiveDate,
+) -> Result<WeekPrecheckResp> {
+    let week_end = week_start + Duration::days(6);
+    let week_key = week_start.format("%Y-%m-%d").to_string();
+    let end_key = week_end.format("%Y-%m-%d").to_string();
+
+    let cfg = settings_repo::load(pool).await?;
+    let ai = cfg.ai.clone();
+    let lang = ai.prompt_language.as_str().to_string();
+
+    let daily_rows = ai_summaries::get_range(pool, "daily", &week_key, &end_key).await?;
+    let present_daily: HashSet<String> = daily_rows
+        .iter()
+        .filter(|r| r.status == "ok" && !r.content.trim().is_empty())
+        .map(|r| r.local_date.clone())
+        .collect();
+
+    let mut days_out: Vec<WeekPrecheckDay> = Vec::with_capacity(7);
+    let mut days_with_daily: u32 = 0;
+    let mut days_activity_only: u32 = 0;
+
+    let mut day = week_start;
+    while day <= week_end {
+        let day_str = day.format("%Y-%m-%d").to_string();
+        let has_daily = present_daily.contains(&day_str);
+
+        // 查当日 top apps：哪怕只有 1 条 → has_activity = true
+        // 失败不抛——单日 fallback 失败时按"没活动"处理，前端流程不卡
+        let has_activity = if has_daily {
+            // 有日报就视作有活动，跳过当日 top_apps 查询省时
+            true
+        } else {
+            match ai_summaries::list_range_top_apps(
+                pool,
+                &day_str,
+                &day_str,
+                &ai.excluded_categories,
+                DeviceFilter::All,
+                1,
+            )
+            .await
+            {
+                Ok(rows) => !rows.is_empty(),
+                Err(e) => {
+                    log::warn!("precheck_week 查 top apps 失败（{}）：{e}", day_str);
+                    false
+                }
+            }
+        };
+
+        if has_daily {
+            days_with_daily += 1;
+        } else if has_activity {
+            days_activity_only += 1;
+        }
+
+        days_out.push(WeekPrecheckDay {
+            date: day_str,
+            weekday: weekday_short(&lang, day.weekday()).to_string(),
+            has_daily,
+            has_activity,
+        });
+
+        day += Duration::days(1);
+    }
+
+    Ok(WeekPrecheckResp {
+        days: days_out,
+        days_with_daily,
+        days_activity_only,
+    })
 }

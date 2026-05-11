@@ -163,6 +163,7 @@ export function setTopError(msg: string): void {
 export async function startWeeklyGenerate(
   weekStart: string,
   forceRefresh: boolean,
+  allowMissingDays: boolean = false,
 ): Promise<void> {
   ensureListener();
   snap = Object.freeze({
@@ -173,7 +174,7 @@ export async function startWeeklyGenerate(
   });
   notify();
   try {
-    await api.generateWeekSummary(weekStart, forceRefresh);
+    await api.generateWeekSummary(weekStart, forceRefresh, allowMissingDays);
     // generateWeekSummary 在 all_done 后 resolve；事件流已经把 generating 置回 false
   } catch (e) {
     setTopError(typeof e === "string" ? e : String(e));

@@ -208,6 +208,7 @@ pub fn run() {
             commands::ai_summary::generate_week_summary,
             commands::ai_summary::get_week_summary,
             commands::ai_summary::clear_week_summary,
+            commands::ai_summary::precheck_week_summary,
         ])
         .build(tauri::generate_context!())
         // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime

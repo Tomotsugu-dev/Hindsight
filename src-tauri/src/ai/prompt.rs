@@ -284,6 +284,10 @@ pub struct WeeklyContext<'a> {
     /// 不进入 day_text）；当天无任何可用日报时调用方应跳过这一项不传进来。
     /// `weekday_short` 是按当前 prompt 语言写的星期简写（"周一" / "Mon" / "月"）。
     pub days: &'a [(String, String, String)],
+    /// 跨整周的 top apps：(display_name, minutes, category_id) 按 minutes 降序。
+    /// 跟 daily 段总结的 `SegmentContext.top_apps` 同语义——给 LLM 一个一周内
+    /// "用户主要在干什么"的弱信号，不必从日报全文里反推。
+    pub top_apps: &'a [(String, u32, String)],
 }
 
 /// 周报 system prompt：选语言 → 走用户覆盖 / 内置默认 → 拼用户简介。
@@ -317,8 +321,25 @@ pub fn build_weekly_user_prompt(ai: &AiConfig, ctx: &WeeklyContext) -> String {
 fn build_weekly_user_prompt_zh(ctx: &WeeklyContext) -> String {
     let mut out = String::new();
     out.push_str(&format!("本周范围：{} – {}\n\n", ctx.week_start, ctx.week_end));
+    // 完全没数据：让 LLM 直说无法生成。后端有兜底分支基本走不到这里，
+    // 但留着保险——避免 LLM 在零数据上幻觉。
+    if ctx.days.is_empty() && ctx.top_apps.is_empty() {
+        out.push_str("（这一周还没有任何日报数据，也没有应用使用记录，请基于这一点说明无法生成周报。）");
+        return out;
+    }
+    if !ctx.top_apps.is_empty() {
+        out.push_str("本周使用最多的应用：\n");
+        for (name, minutes, category) in ctx.top_apps.iter().take(8) {
+            out.push_str(&format!("- {}（{} 分钟 · {}）\n", name, minutes, category));
+        }
+        out.push('\n');
+    }
+    // 仅应用统计 / 无日报：让 LLM 在应用统计上做简化回顾，不要凭空补具体动作或剧情。
+    // 跟 weekly_*.md 的 marker 说明配合，保证两个分支的语气一致。
     if ctx.days.is_empty() {
-        out.push_str("（这一周还没有任何日报数据，请基于这一点说明无法生成周报。）");
+        out.push_str(
+            "本周没有任何日报，仅根据上面的应用统计写一段简短的整周回顾——只描述大致用了哪些应用、各占多少时间，不要凭空补具体动作、剧情或情境。",
+        );
         return out;
     }
     out.push_str(&format!(
@@ -330,7 +351,7 @@ fn build_weekly_user_prompt_zh(ctx: &WeeklyContext) -> String {
         out.push_str(body.trim());
         out.push_str("\n\n");
     }
-    out.push_str("请综合这一周的日报内容写一段整周回顾，不要按天复述。");
+    out.push_str("请综合这一周的应用统计和日报内容写一段整周回顾，不要按天复述。");
     out
 }
 
@@ -340,9 +361,22 @@ fn build_weekly_user_prompt_en(ctx: &WeeklyContext) -> String {
         "Week range: {} – {}\n\n",
         ctx.week_start, ctx.week_end
     ));
+    if ctx.days.is_empty() && ctx.top_apps.is_empty() {
+        out.push_str(
+            "(There is no daily report data for this week, nor any app usage records. Please state this and stop.)",
+        );
+        return out;
+    }
+    if !ctx.top_apps.is_empty() {
+        out.push_str("Top apps used this week:\n");
+        for (name, minutes, category) in ctx.top_apps.iter().take(8) {
+            out.push_str(&format!("- {} ({} min · {})\n", name, minutes, category));
+        }
+        out.push('\n');
+    }
     if ctx.days.is_empty() {
         out.push_str(
-            "(There is no daily report data for this week. Please state this and stop.)",
+            "No daily reports for this week. Write a short weekly review based only on the app stats above — only describe roughly which apps were used and how the time was split, do not invent specific actions, storylines, or scenes.",
         );
         return out;
     }
@@ -356,7 +390,7 @@ fn build_weekly_user_prompt_en(ctx: &WeeklyContext) -> String {
         out.push_str("\n\n");
     }
     out.push_str(
-        "Synthesize the week into a single review paragraph. Do not retell day by day.",
+        "Synthesize the week into a single review paragraph, combining the app stats and daily reports. Do not retell day by day.",
     );
     out
 }
@@ -367,9 +401,22 @@ fn build_weekly_user_prompt_ja(ctx: &WeeklyContext) -> String {
         "今週の範囲：{} – {}\n\n",
         ctx.week_start, ctx.week_end
     ));
+    if ctx.days.is_empty() && ctx.top_apps.is_empty() {
+        out.push_str(
+            "（今週は日報データもアプリ使用記録も一切ありません。その旨を述べて終了してください。）",
+        );
+        return out;
+    }
+    if !ctx.top_apps.is_empty() {
+        out.push_str("今週最も使用されたアプリ：\n");
+        for (name, minutes, category) in ctx.top_apps.iter().take(8) {
+            out.push_str(&format!("- {}（{} 分 · {}）\n", name, minutes, category));
+        }
+        out.push('\n');
+    }
     if ctx.days.is_empty() {
         out.push_str(
-            "（今週は日報データが一切ありません。その旨を述べて終了してください。）",
+            "今週は日報が一切ありません。上記のアプリ統計のみに基づき、一週間の短いレビューを書いてください——どのアプリをどれくらいの時間使ったかの大まかな描写のみ。具体的な動作、ストーリー、シーンを捏造しないでください。",
         );
         return out;
     }
@@ -382,7 +429,7 @@ fn build_weekly_user_prompt_ja(ctx: &WeeklyContext) -> String {
         out.push_str(body.trim());
         out.push_str("\n\n");
     }
-    out.push_str("これらを総合して一週間のレビュー段落を 1 つ書いてください。日ごとに繰り返さないでください。");
+    out.push_str("アプリ統計と日報を組み合わせ、一週間のレビュー段落を 1 つ書いてください。日ごとに繰り返さないでください。");
     out
 }
 

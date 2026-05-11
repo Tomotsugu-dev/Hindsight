@@ -242,6 +242,28 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 /** AI 总结进度事件（Phase 1B-γ）。 */
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 
+/** 周报 precheck 返回的"某天"元数据。 */
+export interface WeekPrecheckDay {
+  /** "YYYY-MM-DD" */
+  date: string;
+  /** 按当前 prompt 语言写的星期简写（"周一" / "Mon" / "月"） */
+  weekday: string;
+  /** 该日是否有 daily ok 段总结 */
+  hasDaily: boolean;
+  /** 该日是否有活动记录（过滤掉 excluded_categories 后） */
+  hasActivity: boolean;
+}
+
+/** 周报 precheck 返回 payload。 */
+export interface WeekPrecheckResp {
+  /** 一周 7 天，按周一到周日顺序 */
+  days: WeekPrecheckDay[];
+  /** 7 天里有几天有 daily ok 段总结 */
+  daysWithDaily: number;
+  /** 7 天里有几天 hasActivity = true 但 hasDaily = false */
+  daysActivityOnly: number;
+}
+
 export type SummaryPhase =
   | "engine_starting"
   | "dedup_running"
@@ -726,9 +748,27 @@ export const api = {
     invoke<SegmentSummaryRow[]>("get_day_summary", { date, source }),
   /** 跑某周的周报。命令本体异步等到 LLM 调用完毕（含 DB 写入）才 resolve；
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度（按 source="weekly" 过滤）。
-   *  weekStart 推荐传周一日期 "YYYY-MM-DD"；不是周一时后端自动对齐到当周周一。 */
-  generateWeekSummary: (weekStart: string, forceRefresh: boolean) =>
-    invoke<void>("generate_week_summary", { weekStart, forceRefresh }),
+   *  weekStart 推荐传周一日期 "YYYY-MM-DD"；不是周一时后端自动对齐到当周周一。
+   *
+   *  allowMissingDays:
+   *   - false（默认）= 严格模式：本周一天日报都没有时后端写 error 行让前端引导用户先补日报
+   *   - true = 宽松模式：前端已通过 precheckWeekSummary 检测到缺失日并用确认弹框跟用户
+   *     确认过——缺失天用当日 top apps 顶替进 prompt，整周缺失但有 activity 时仅基于
+   *     整周 + 每日 top apps 做简化分析。 */
+  generateWeekSummary: (
+    weekStart: string,
+    forceRefresh: boolean,
+    allowMissingDays: boolean = false,
+  ) =>
+    invoke<void>("generate_week_summary", {
+      weekStart,
+      forceRefresh,
+      allowMissingDays,
+    }),
+  /** 周报生成前预览：返回该周 7 天每天的"是否有日报 / 是否有活动"。
+   *  前端点击生成时调一次，根据结果决定要不要弹"日报缺失"确认弹框。 */
+  precheckWeekSummary: (weekStart: string) =>
+    invoke<WeekPrecheckResp>("precheck_week_summary", { weekStart }),
   /** 拉某周已落库的周报；该周无生成时返回 null。weekStart 不是周一时自动对齐。 */
   getWeekSummary: (weekStart: string) =>
     invoke<SegmentSummaryRow | null>("get_week_summary", { weekStart }),

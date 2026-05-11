@@ -805,6 +805,18 @@
         "generationFailed": "周报生成失败",
         "unknown": "未知错误"
       },
+      "confirm": {
+        "continueAnyway": "继续生成",
+        "partialMissing": {
+          "title": "部分日期没有日报",
+          "message": "本周有 {{count}} 天还没有生成日报：{{dates}}。如果继续，缺失日将仅使用当日应用统计代替日报；其余天仍正常使用日报。是否继续？"
+        },
+        "fullMissing": {
+          "title": "本周还没有任何日报",
+          "message": "本周 7 天都没有日报，但其中 {{activityCount}} 天有应用使用记录可参考。继续生成只能根据应用统计做一份简化的整周回顾，质量会明显低于有日报的情况。是否继续？",
+          "messageNoActivity": "本周 7 天都没有日报，也没有任何应用使用记录。继续生成大概率会失败。是否仍要尝试？"
+        }
+      },
       "engineLoading": "加载模型中…",
       "toast": {
         "exported": "已导出 {{filename}}"

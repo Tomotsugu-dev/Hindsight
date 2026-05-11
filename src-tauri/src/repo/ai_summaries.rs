@@ -689,3 +689,81 @@ pub async fn list_segment_top_apps(
         .await?;
     Ok(rows)
 }
+
+/// 拉某段日期范围内（含两端）使用最多的应用（display_name, minutes, category_id），按 minutes 降序。
+///
+/// 跟 [`list_segment_top_apps`] 的区别仅在 WHERE：按日期范围而非"某天某小时窗口"；
+/// 周报 step2 用这个拼 user prompt，给 LLM 一份整周 top apps 切片。
+pub async fn list_range_top_apps(
+    pool: &DbPool,
+    start_date: &str,
+    end_date: &str,
+    excluded_categories: &[String],
+    device: DeviceFilter,
+    limit: u32,
+) -> Result<Vec<(String, u32, String)>> {
+    let from = start_date.to_string();
+    let to = end_date.to_string();
+    let excluded: Vec<String> = excluded_categories.to_vec();
+    let dev = device.clone();
+    let rows = pool
+        .0
+        .call(move |conn| {
+            let placeholders = if excluded.is_empty() {
+                String::new()
+            } else {
+                let marks = vec!["?"; excluded.len()].join(",");
+                format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
+            };
+            let sql = format!(
+                "SELECT COALESCE(g.display_name, a.process_name) AS name,
+                        SUM(a.duration_secs) AS secs,
+                        COALESCE(c.id, 'other') AS cat
+                   FROM activities a
+              LEFT JOIN app_group_members gm
+                     ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+              LEFT JOIN app_groups g
+                     ON g.id = gm.group_id AND g.deleted_at IS NULL
+              LEFT JOIN categories c
+                     ON c.id = g.category_id AND c.deleted_at IS NULL
+                  WHERE a.local_date >= ?
+                    AND a.local_date <= ?
+                    {}
+                    {}
+                  GROUP BY name, cat
+                  ORDER BY secs DESC
+                  LIMIT ?",
+                placeholders,
+                dev.sql_clause(),
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&from);
+            params.push(&to);
+            for cat in &excluded {
+                params.push(cat);
+            }
+            if let Some(extra) = dev.extra_param() {
+                params.push(extra);
+            }
+            let lim = limit as i64;
+            params.push(&lim);
+            let mut stmt = conn.prepare(&sql).db()?;
+            let it = stmt
+                .query_map(params.as_slice(), |r| {
+                    let name: String = r.get(0)?;
+                    let secs: i64 = r.get(1)?;
+                    let cat: String = r.get(2)?;
+                    Ok((name, secs, cat))
+                })
+                .db()?;
+            let mut out = Vec::new();
+            for row in it {
+                let (name, secs, cat) = row.db()?;
+                let minutes = (secs / 60).max(0) as u32;
+                out.push((name, minutes, cat));
+            }
+            Ok(out)
+        })
+        .await?;
+    Ok(rows)
+}

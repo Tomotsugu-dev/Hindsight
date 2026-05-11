@@ -30,7 +30,12 @@ import {
   subscribeWeeklyDone,
   subscribeWeeklySummary,
 } from "../../../state/weeklySummary";
-import { api, type SegmentSummaryRow } from "../../../api/hindsight";
+import {
+  api,
+  type SegmentSummaryRow,
+  type WeekPrecheckDay,
+  type WeekPrecheckResp,
+} from "../../../api/hindsight";
 import styles from "./WeeklyTab.module.css";
 
 /** 把 weekOffset (0=本周 / -1=上周 / ...) 转成 [周一, 周日] 两个 "YYYY-MM-DD"。 */
@@ -70,8 +75,11 @@ type CardState =
  * 跟 DailyTab 同款架构（顶部头 + 错误条 + 卡片）但是简化：
  * - 没有"段"列表，只渲染一个总结卡片
  * - 进度只看 stage（engine_starting / summarizing），无 N/M 张这种细粒度
- * - 失败原因常见两类：模型未配置 + "本周还没有任何日报"——后者由后端写 error 行，
- *   前端按错误展示，引导用户先去补日报
+ * - 点击「开始/重新生成」时先调 [`api.precheckWeekSummary`] 看本周日报覆盖情况：
+ *   全有 → 直接生成；部分 / 整周缺 → 弹 ConfirmDialog 让用户选"继续生成"，
+ *   确认后以 `allowMissingDays=true` 跑后端（缺日报的天用当日 top apps 顶替进 prompt）
+ * - 失败原因常见两类：模型未配置 + "本周完全没数据"——后者由后端写 error 行，
+ *   前端按错误展示
  */
 export default function WeeklyTab() {
   const { t } = useTranslation();
@@ -80,6 +88,15 @@ export default function WeeklyTab() {
   const [row, setRow] = useState<SegmentSummaryRow | null>(null);
   const [topNotice, setTopNotice] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /** 点击生成后 precheck 检出缺失日，弹"是否继续"确认前的待办上下文。
+   *  null = 无弹框；非 null = ConfirmDialog 打开中。
+   *  forceRefresh 透传给确认后真正发起的 generate 调用，保证语义一致。 */
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    kind: "partial" | "full";
+    missingDays: WeekPrecheckDay[];
+    activityOnlyCount: number;
+    forceRefresh: boolean;
+  } | null>(null);
 
   const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
   const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
@@ -99,6 +116,12 @@ export default function WeeklyTab() {
     getWeeklyRunningSnapshot,
     getWeeklyRunningSnapshot,
   );
+
+  // 切周时清掉缺失日确认弹框——避免用户在 A 周点生成、弹框出现、切到 B 周后点
+  // "继续生成"误用 A 周的缺失日列表跑 B 周的现象
+  useEffect(() => {
+    setPendingConfirm(null);
+  }, [monday]);
 
   // 切周 / 进页：拉一次落库行
   useEffect(() => {
@@ -141,12 +164,60 @@ export default function WeeklyTab() {
       return;
     }
     clearTopError();
+
+    // precheck 先看缺日报情况——失败不阻塞，按"没问题"走兜底（后端严格模式仍会写
+    // error 行，前端能看到提示）
+    let precheck: WeekPrecheckResp;
     try {
-      await startWeeklyGenerate(monday, forceRefresh);
+      precheck = await api.precheckWeekSummary(monday);
+    } catch (e) {
+      logError("weekly.precheck", e);
+      // 直接走严格生成；后端日报为空就 error 行兜底
+      try {
+        await startWeeklyGenerate(monday, forceRefresh);
+      } catch {
+        /* store 已设过 topError */
+      }
+      return;
+    }
+
+    const missingDays = precheck.days.filter((d) => !d.hasDaily);
+
+    // 全有 → 直接生成
+    if (missingDays.length === 0) {
+      try {
+        await startWeeklyGenerate(monday, forceRefresh);
+      } catch {
+        /* store 已设过 topError */
+      }
+      return;
+    }
+
+    // 整周缺 vs 部分缺：弹对应确认框
+    setPendingConfirm({
+      kind: precheck.daysWithDaily === 0 ? "full" : "partial",
+      missingDays,
+      activityOnlyCount: precheck.daysActivityOnly,
+      forceRefresh,
+    });
+  };
+
+  /** 用户在缺失日确认弹框点"继续生成"——以 allowMissingDays=true 跑后端。 */
+  const onConfirmMissing = async () => {
+    if (!pendingConfirm) return;
+    const force = pendingConfirm.forceRefresh;
+    setPendingConfirm(null);
+    try {
+      await startWeeklyGenerate(monday, force, true);
     } catch {
-      // store 已设过 topError
+      /* store 已设过 topError */
     }
   };
+
+  /** 把缺失日数组拼成 "MM-DD 周三, MM-DD 周四" 形式给 ConfirmDialog message。
+   *  weekday 由后端按当前 prompt 语言生成；分隔符用 ASCII 逗号兼容三语。 */
+  const formatMissingDates = (days: WeekPrecheckDay[]): string =>
+    days.map((d) => `${toShortDate(d.date)} ${d.weekday}`).join(", ");
 
   const onCancel = async () => {
     await cancelWeeklyGenerate();
@@ -410,6 +481,32 @@ export default function WeeklyTab() {
           }
         }}
         onCancel={() => setConfirmingDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingConfirm != null}
+        title={
+          pendingConfirm?.kind === "full"
+            ? t("aiSummary.weekly.confirm.fullMissing.title")
+            : t("aiSummary.weekly.confirm.partialMissing.title")
+        }
+        message={
+          pendingConfirm == null
+            ? ""
+            : pendingConfirm.kind === "full"
+              ? pendingConfirm.activityOnlyCount > 0
+                ? t("aiSummary.weekly.confirm.fullMissing.message", {
+                    activityCount: pendingConfirm.activityOnlyCount,
+                  })
+                : t("aiSummary.weekly.confirm.fullMissing.messageNoActivity")
+              : t("aiSummary.weekly.confirm.partialMissing.message", {
+                  count: pendingConfirm.missingDays.length,
+                  dates: formatMissingDates(pendingConfirm.missingDays),
+                })
+        }
+        confirmLabel={t("aiSummary.weekly.confirm.continueAnyway")}
+        onConfirm={() => void onConfirmMissing()}
+        onCancel={() => setPendingConfirm(null)}
       />
     </>
   );

@@ -805,6 +805,18 @@
         "generationFailed": "Weekly report generation failed",
         "unknown": "Unknown error"
       },
+      "confirm": {
+        "continueAnyway": "Generate anyway",
+        "partialMissing": {
+          "title": "Some days don't have a daily report",
+          "message": "{{count}} day(s) this week have no daily report: {{dates}}. If you continue, those days will use only their app stats in place of a daily report; the rest will still use the daily reports as usual. Continue?"
+        },
+        "fullMissing": {
+          "title": "No daily reports for this week",
+          "message": "None of the 7 days this week has a daily report, but {{activityCount}} of them have app usage records to work from. Generating will only produce a simplified weekly review based on app stats — noticeably lower quality than with daily reports. Continue?",
+          "messageNoActivity": "None of the 7 days this week has a daily report, and there are no app usage records either. Generation will very likely fail. Try anyway?"
+        }
+      },
       "engineLoading": "Loading model…",
       "toast": {
         "exported": "Exported to {{filename}}"
