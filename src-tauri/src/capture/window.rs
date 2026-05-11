@@ -15,10 +15,11 @@ pub struct WindowInfo {
 /// 拉当前焦点窗口的 [`WindowInfo`]。取不到（屏幕权限缺失 / 没有窗口在前 等）
 /// 返回 `Err`，调用方 log debug 跳过本次 tick。
 ///
-/// macOS 多屏场景下 xcap 的 `is_focused()` 不可靠——它常把 Hindsight 自己挑出来，
-/// 因为 Cocoa 层各屏都有自己的 "main window" 概念，xcap 遍历返回的顺序里
-/// Hindsight 可能排在前。改成先用 `NSWorkspace.frontmostApplication` 拿到系统
-/// 真正的 frontmost PID，再用它 filter xcap 窗口列表拿标题。
+/// macOS 走 `NSWorkspace.frontmostApplication` 拿 app 元数据——xcap 在多屏 / 多
+/// Space 下窗口枚举不全（v0.5.61 诊断版实测：副屏 Hindsight 状态下，主屏 Chrome
+/// 的窗口完全不在 `xcap::Window::all()` 里），导致 PID-match 失败 → tick 跳过 →
+/// 上一个 Hindsight session 一直挂着不结束 → 所有时间被错记到 Hindsight。
+/// 现在 macOS 完全跳过 xcap 拿 app 归属，title 还是 best-effort 从 xcap 拿。
 pub fn current_window() -> Result<WindowInfo> {
     // macOS 走 NSWorkspace 直接拿前台 app 的元数据——xcap 在多屏 / 多 Space 下
     // 窗口枚举不全（v0.5.61 诊断版实测：副屏 Hindsight 的状态下，主屏 Chrome 的
