@@ -86,9 +86,7 @@
   display: flex;
   border-radius: 999px;
   overflow: hidden;
-  transition:
-    width 380ms var(--ease-out),
-    filter 180ms var(--ease-out);
+  transition: filter 180ms var(--ease-out);
 }
 
 .row:hover .bar {
