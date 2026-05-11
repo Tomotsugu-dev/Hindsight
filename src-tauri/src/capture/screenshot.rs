@@ -56,6 +56,13 @@ fn capture_blocking(
 /// 拿当前前台 app 的截图：优先窗口，拿不到（macOS 多屏下 xcap 经常看不到主屏
 /// app 的窗口）就回退到"主显示器"整屏；都不行返 None。
 fn grab_focused_image() -> Option<image::RgbaImage> {
+    // Sequoia "重确认录屏权限"窗口期间 preflight=false——直接 silent-skip 本次，避免
+    // xcap 调 CG API 触发 OS 主动弹"打开系统设置 / 拒绝"对话框骚扰用户。
+    // preflight 一恢复 true（用户点过设置 / 周期结束）就自动续上采集。
+    if !crate::permissions::screen_recording_granted() {
+        return None;
+    }
+
     // macOS 走 NSWorkspace 系统 API 拿真正的前台 app PID；其它平台 PID 拿不到也无所谓，
     // 走 xcap heuristic 找 focused 窗口。
     #[cfg(target_os = "macos")]
@@ -76,15 +83,25 @@ fn grab_focused_image() -> Option<image::RgbaImage> {
         }
     }
 
-    // macOS 回退：xcap 看不到主屏的窗口（多屏 / 多 Space 已知问题）→ 截"主显示器"
-    // 整屏。`is_primary()` 在 macOS 上跟着 menubar 走，通常就是用户当前在用的那块屏。
+    // macOS 回退：xcap 看不到主屏的窗口（多屏 / 多 Space 已知问题）→ 截"键盘焦点
+    // 所在屏"整屏。用 `NSScreen.mainScreen` 拿到当前键盘焦点屏的 CGDirectDisplayID,
+    // 跟 xcap monitor.id() 对一下，找到对应那块屏再截。
+    //
+    // 不能用 `is_primary()` —— 那是 `CGDisplayIsMain`，等于"用户在系统设置里硬指的
+    // 主屏"，跟当前焦点屏经常对不上（用户把 Hindsight 放配置主屏、自己在副屏工作 →
+    // 之前 fallback 截到 Hindsight 那屏，画面只剩桌面）。
     #[cfg(target_os = "macos")]
     {
-        if let Ok(monitors) = xcap::Monitor::all() {
-            if let Some(m) = monitors.iter().find(|m| m.is_primary().unwrap_or(false)) {
-                match m.capture_image() {
-                    Ok(img) => return Some(img),
-                    Err(e) => log::debug!("主显示器整屏截图失败: {e}"),
+        if let Some(focus_display_id) = macos_focused_display_id() {
+            if let Ok(monitors) = xcap::Monitor::all() {
+                if let Some(m) = monitors
+                    .iter()
+                    .find(|m| m.id().ok() == Some(focus_display_id))
+                {
+                    match m.capture_image() {
+                        Ok(img) => return Some(img),
+                        Err(e) => log::debug!("焦点屏整屏截图失败: {e}"),
+                    }
                 }
             }
         }
@@ -102,6 +119,24 @@ fn macos_frontmost_pid() -> Option<u32> {
     let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
     let pid = app.processIdentifier();
     if pid > 0 { Some(pid as u32) } else { None }
+}
+
+/// 拿"键盘焦点所在屏"的 CGDirectDisplayID——`NSScreen.mainScreen` 就是当前焦点屏，
+/// 它的 `deviceDescription[@"NSScreenNumber"]` 里存着对应 CGDisplay id。
+/// 用来跟 `xcap::Monitor.id()` 对齐，**不依赖** `is_primary()`（那是用户系统设置里
+/// 硬指的主屏，跟当前焦点位置不一定对得上）。
+#[cfg(target_os = "macos")]
+fn macos_focused_display_id() -> Option<u32> {
+    use objc2_app_kit::NSScreen;
+    use objc2_foundation::{NSNumber, NSString};
+
+    let mtm = objc2_foundation::MainThreadMarker::new()?;
+    let screen = NSScreen::mainScreen(mtm)?;
+    let dict = screen.deviceDescription();
+    let key = NSString::from_str("NSScreenNumber");
+    let value = dict.objectForKey(&key)?;
+    let num: &NSNumber = value.downcast_ref()?;
+    Some(num.unsignedIntValue())
 }
 
 /// 整窗保留：等比缩放使其装入 max_w × max_h，超过任一上限才缩，否则保持原始尺寸。

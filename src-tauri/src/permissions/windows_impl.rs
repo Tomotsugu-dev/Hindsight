@@ -7,3 +7,8 @@ use super::ScreenRecordingState;
 pub fn ensure_screen_recording() -> ScreenRecordingState {
     ScreenRecordingState::Granted
 }
+
+/// Windows 上永远返 true（无权限模型）。
+pub fn screen_recording_granted() -> bool {
+    true
+}

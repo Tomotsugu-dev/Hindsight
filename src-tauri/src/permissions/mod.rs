@@ -16,6 +16,9 @@ mod stub_impl {
     pub fn ensure_screen_recording() -> super::ScreenRecordingState {
         super::ScreenRecordingState::Granted
     }
+    pub fn screen_recording_granted() -> bool {
+        true
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -44,4 +47,13 @@ pub enum ScreenRecordingState {
 /// 返回值 = 当前最终的状态。
 pub fn ensure_screen_recording() -> ScreenRecordingState {
     imp::ensure_screen_recording()
+}
+
+/// 纯 preflight 查询——每个 capture tick 调一次，决定要不要 silent-skip。
+/// macOS Sequoia 在"周期性重确认录屏权限"窗口期间会把 preflight 翻成 false，这时再
+/// 调 xcap 会触发 OS 主动弹"打开系统设置 / 拒绝"对话框；提前发现 false 直接跳过本次，
+/// 避开弹框骚扰用户。窗口期一结束 preflight 会恢复 true，采集自动续上。
+/// Windows / 其它平台一直返 true（系统层面无此概念）。
+pub fn screen_recording_granted() -> bool {
+    imp::screen_recording_granted()
 }

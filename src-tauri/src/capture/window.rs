@@ -83,14 +83,20 @@ fn macos_resolve_focused_window() -> Option<WindowInfo> {
         .map(|s| s.to_string());
 
     // title 是 nice-to-have——xcap 多屏下经常拿不到主屏 app 的窗口，那就空着
-    let title = xcap::Window::all()
-        .ok()
-        .and_then(|ws| {
-            ws.into_iter()
-                .find(|w| w.pid().ok() == Some(pid))
-                .and_then(|w| w.title().ok())
-        })
-        .unwrap_or_default();
+    // Sequoia "重确认录屏权限"窗口期间 preflight=false，调 xcap 会被 OS 拦下弹框；
+    // 这种状态下直接放弃 title 查询不调任何 TCC API，等 preflight 恢复后再续上
+    let title = if crate::permissions::screen_recording_granted() {
+        xcap::Window::all()
+            .ok()
+            .and_then(|ws| {
+                ws.into_iter()
+                    .find(|w| w.pid().ok() == Some(pid))
+                    .and_then(|w| w.title().ok())
+            })
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
 
     Some(WindowInfo {
         app_name: basename(&app_name),
