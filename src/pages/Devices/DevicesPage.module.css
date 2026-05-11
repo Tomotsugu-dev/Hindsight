@@ -273,6 +273,23 @@
   cursor: not-allowed;
 }
 
+/* auth 状态还没拿到时占位——尺寸跟 .smallBtn 同高，宽度按 "Sync Now" 文案估的。
+   静态淡灰底 + 轻 pulse 动画，避免渲染出错误的 connectBtn(蓝)/smallBtn(灰) 然后秒切。 */
+.syncActionsSkeleton {
+  display: inline-block;
+  height: 28px;
+  width: 96px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 7px;
+  animation: syncActionsSkeletonPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes syncActionsSkeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .syncError {
   padding: 10px 12px;
   background: rgba(239, 68, 68, 0.08);

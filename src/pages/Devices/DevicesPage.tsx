@@ -279,7 +279,14 @@ function CloudSyncCard() {
           )}
         </div>
         <div className={styles.syncActions}>
-          {signedIn ? (
+          {auth == null ? (
+            // auth 状态还没拿到——别渲染 connectBtn(蓝) 然后秒切到 smallBtn(灰)，
+            // 改成同尺寸 skeleton 占位，等 authStatus resolve 完再 swap
+            <div
+              className={styles.syncActionsSkeleton}
+              aria-hidden="true"
+            />
+          ) : signedIn ? (
             <>
               <button
                 type="button"
