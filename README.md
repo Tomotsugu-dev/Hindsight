@@ -36,18 +36,13 @@ Have you ever closed the laptop at midnight feeling like you "worked all day" bu
 
 To fix exactly these gaps, I built Hindsight.
 
-## Key Features
-
-- 📊 **See where your time goes** — Background auto-tracking with hourly histograms + app rankings; weekly / monthly aggregation; customizable categories ("Work / Entertainment / Learning")
-- 🤖 **AI auto-generated daily report** (new) — Local LLM reads your screenshots and writes a per-segment summary
-- ☁️ **Multi-device aggregation** — Optional Google Drive sync of activity data; view across multiple computers (screenshots stay local)
-- 🔒 **Local-first, privacy-first** — Data stays on your machine by default; records only during your set work hours; auto-skips screenshots of login / password pages
-
 ## Interface Preview
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/68001c5d-f602-40de-8965-b9f46547da39" controls muted autoplay loop playsinline width="800"></video><br/>
-  <sub><i><b>App preview</b> · Hindsight's core interactions in 30 seconds</i></sub>
+  <video src="https://github.com/user-attachments/assets/68001c5d-f602-40de-8965-b9f46547da39" controls muted autoplay loop playsinline width="800"></video>
+</p>
+<p align="center">
+  <sub><i><b>App preview</b> · Hindsight's core interactions in 1 minute</i></sub>
 </p>
 
 <p align="center">
@@ -64,6 +59,13 @@ To fix exactly these gaps, I built Hindsight.
   <img src="./docs/intro_en/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
   <sub><i><b>AI auto-daily-report</b> · Local LLM reads screenshots per time segment and outputs a paragraph-style summary; screenshots stay local</i></sub>
 </p>
+
+## Key Features
+
+- 📊 **See where your time goes** — Background auto-tracking with hourly histograms + app rankings; weekly / monthly aggregation; customizable categories ("Work / Entertainment / Learning")
+- 🤖 **AI auto-generated daily report** (new) — Local LLM reads your screenshots and writes a per-segment summary
+- ☁️ **Multi-device aggregation** — Optional Google Drive sync of activity data; view across multiple computers (screenshots stay local)
+- 🔒 **Local-first, privacy-first** — Data stays on your machine by default; records only during your set work hours; auto-skips screenshots of login / password pages
 
 ## Quick Start
 

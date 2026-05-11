@@ -36,18 +36,13 @@
 
 为了解决以上这些问题，Hindsight 应运而生。
 
-## 主要功能
-
-- 📊 **看清时间花在哪** — 后台自动记录，分时段柱状图 + 应用排行；按周 / 月汇总；可自定义分类（"工作 / 娱乐 / 学习"）
-- 🤖 **AI 自动写日报**（新）— 本地 LLM 读你的截图，按时段写出段落式总结
-- ☁️ **多设备汇总** — 可选 Google Drive 同步活动数据，多台电脑一处查看（截图始终留在本地）
-- 🔒 **完全本地、隐私优先** — 数据默认仅存本机；只在设定的工作时段记录；自动跳过登录 / 密码页截图
-
 ## 界面预览
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/df92b5b8-137a-4432-9226-2d063d402664" controls muted autoplay loop playsinline width="800"></video><br/>
-  <sub><i><b>软件预览</b> · 30 秒看清 Hindsight 的核心交互</i></sub>
+  <video src="https://github.com/user-attachments/assets/df92b5b8-137a-4432-9226-2d063d402664" controls muted autoplay loop playsinline width="800"></video>
+</p>
+<p align="center">
+  <sub><i><b>软件预览</b> · 1 分钟看清 Hindsight 的核心交互</i></sub>
 </p>
 
 <p align="center">
@@ -64,6 +59,13 @@
   <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
   <sub><i><b>AI 自动写日报</b> · 本地 LLM 按时段看截图，输出段落式总结；截图始终本地</i></sub>
 </p>
+
+## 主要功能
+
+- 📊 **看清时间花在哪** — 后台自动记录，分时段柱状图 + 应用排行；按周 / 月汇总；可自定义分类（"工作 / 娱乐 / 学习"）
+- 🤖 **AI 自动写日报**（新）— 本地 LLM 读你的截图，按时段写出段落式总结
+- ☁️ **多设备汇总** — 可选 Google Drive 同步活动数据，多台电脑一处查看（截图始终留在本地）
+- 🔒 **完全本地、隐私优先** — 数据默认仅存本机；只在设定的工作时段记录；自动跳过登录 / 密码页截图
 
 ## 快速开始
 
