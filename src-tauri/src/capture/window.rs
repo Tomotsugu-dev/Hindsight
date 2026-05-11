@@ -14,8 +14,31 @@ pub struct WindowInfo {
 
 /// 拉当前焦点窗口的 [`WindowInfo`]。取不到（屏幕权限缺失 / 没有窗口在前 等）
 /// 返回 `Err`，调用方 log debug 跳过本次 tick。
+///
+/// macOS 多屏场景下 xcap 的 `is_focused()` 不可靠——它常把 Hindsight 自己挑出来，
+/// 因为 Cocoa 层各屏都有自己的 "main window" 概念，xcap 遍历返回的顺序里
+/// Hindsight 可能排在前。改成先用 `NSWorkspace.frontmostApplication` 拿到系统
+/// 真正的 frontmost PID，再用它 filter xcap 窗口列表拿标题。
 pub fn current_window() -> Result<WindowInfo> {
     let windows = xcap::Window::all().map_err(|e| Error::Capture(e.to_string()))?;
+
+    #[cfg(target_os = "macos")]
+    let focused = {
+        let target_pid = macos_frontmost_pid();
+        match target_pid {
+            Some(p) => windows
+                .iter()
+                .find(|w| w.pid().ok() == Some(p))
+                .ok_or_else(|| Error::Capture(format!("找不到 PID={} 的窗口", p)))?,
+            // NSWorkspace 拿不到（极少见，比如登录窗口 / Screen Recording 权限缺失）→
+            // 落到 xcap 自带 heuristic 兜底，至少不直接挂
+            None => windows
+                .iter()
+                .find(|w| w.is_focused().unwrap_or(false))
+                .ok_or_else(|| Error::Capture("没有焦点窗口".into()))?,
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
     let focused = windows
         .iter()
         .find(|w| w.is_focused().unwrap_or(false))
@@ -33,6 +56,19 @@ pub fn current_window() -> Result<WindowInfo> {
         title,
         app_path,
     })
+}
+
+/// 调用 `NSWorkspace.sharedWorkspace().frontmostApplication()` 拿系统层"最前"
+/// app 的 PID。返回 None 表示当前没有 frontmost（罕见——锁屏 / 登录窗 等）。
+/// 不抛错——拿不到时上层落回 xcap heuristic。
+#[cfg(target_os = "macos")]
+fn macos_frontmost_pid() -> Option<u32> {
+    use objc2_app_kit::NSWorkspace;
+    // sharedWorkspace 永远返非空；frontmostApplication 在极个别状态下返 nil
+    let workspace = NSWorkspace::sharedWorkspace();
+    let app = workspace.frontmostApplication()?;
+    let pid = app.processIdentifier();
+    if pid > 0 { Some(pid as u32) } else { None }
 }
 
 /// xcap 在某些情况下（特别是 UWP 应用）会把完整路径塞进 app_name。
