@@ -56,12 +56,10 @@ fn capture_blocking(
 /// 拿当前前台 app 的截图：优先窗口，拿不到（macOS 多屏下 xcap 经常看不到主屏
 /// app 的窗口）就回退到"主显示器"整屏；都不行返 None。
 fn grab_focused_image() -> Option<image::RgbaImage> {
-    // Sequoia "重确认录屏权限"窗口期间 preflight=false——直接 silent-skip 本次，避免
-    // xcap 调 CG API 触发 OS 主动弹"打开系统设置 / 拒绝"对话框骚扰用户。
-    // preflight 一恢复 true（用户点过设置 / 周期结束）就自动续上采集。
-    if !crate::permissions::screen_recording_granted() {
-        return None;
-    }
+    // v0.6.1 试过在这里加 `screen_recording_granted()` gate 做 silent-skip 避免
+    // Sequoia 重确认弹框；但实测 Sequoia 上 `CGPreflightScreenCaptureAccess` 在已
+    // 授权状态下长期返 false，gate 一开就完全不采集。回退：照常调 xcap，OS 偶尔
+    // 弹"打开系统设置 / 拒绝"忍着——这是 Apple 给的烂选择题里的功能正常那个。
 
     // macOS 走 NSWorkspace 系统 API 拿真正的前台 app PID；其它平台 PID 拿不到也无所谓，
     // 走 xcap heuristic 找 focused 窗口。

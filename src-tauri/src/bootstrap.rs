@@ -151,7 +151,9 @@ pub async fn init_capture_service(pool: DbPool, cfg: &Settings) -> Arc<CaptureSe
     svc.set_work_hours(cfg.work_hours_enabled, cfg.work_ranges.clone())
         .await;
     svc.set_screenshot_config(
-        cfg.capture_enabled,
+        // screenshot_enabled 独立开关——capture_enabled=true 控整 service 跑不跑，
+        // screenshot_enabled=false 时窗口活动照常落库，仅跳过 take_screenshot
+        cfg.screenshot_enabled,
         cfg.screenshot_path.clone(),
         1280,
         720,

@@ -33,6 +33,10 @@ pub struct TimeRange {
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub capture_enabled: bool,
+    /// 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续。
+    /// 默认 true；老 settings JSON 缺这个字段时（`#[serde(default)]` 走 false）
+    /// 会被 [`load`] 启动期 sanitize 修正成 true，避免老用户升级后突然没截图。
+    pub screenshot_enabled: bool,
     pub capture_interval_seconds: u32,
     pub screenshot_path: String,
     pub work_hours_enabled: bool,
@@ -72,6 +76,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             capture_enabled: true,
+            screenshot_enabled: true,
             capture_interval_seconds: 30,
             screenshot_path: String::new(),
             work_hours_enabled: false,
@@ -120,6 +125,7 @@ pub fn default_privacy_url_keywords() -> Vec<String> {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsPatch {
     pub capture_enabled: Option<bool>,
+    pub screenshot_enabled: Option<bool>,
     pub capture_interval_seconds: Option<u32>,
     pub screenshot_path: Option<String>,
     pub work_hours_enabled: Option<bool>,
@@ -198,6 +204,9 @@ pub async fn save(pool: &DbPool, settings: &Settings) -> Result<()> {
 pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
     Settings {
         capture_enabled: patch.capture_enabled.unwrap_or(current.capture_enabled),
+        screenshot_enabled: patch
+            .screenshot_enabled
+            .unwrap_or(current.screenshot_enabled),
         capture_interval_seconds: patch
             .capture_interval_seconds
             .map(|v| v.clamp(1, 600))

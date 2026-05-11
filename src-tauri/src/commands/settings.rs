@@ -50,7 +50,7 @@ pub async fn update_settings(
     svc.set_work_hours(next.work_hours_enabled, next.work_ranges.clone())
         .await;
     svc.set_screenshot_config(
-        next.capture_enabled,
+        next.screenshot_enabled,
         next.screenshot_path.clone(),
         1280,
         720,

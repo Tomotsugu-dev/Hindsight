@@ -28,11 +28,6 @@ const REQUESTED_MARKER_FILE: &str = ".screen_recording_requested";
 /// 这样规避了 macOS 15 (Sequoia) 上 `CGPreflightScreenCaptureAccess` 在已授权
 /// 状态下偶尔返回 false 的诡异行为——之前那个 bug 表现是用户已授权了系统弹框还
 /// 每次启动都跳出来。
-/// 纯 preflight 查询，给 capture tick gate 用。详见 `super::screen_recording_granted`。
-pub fn screen_recording_granted() -> bool {
-    unsafe { CGPreflightScreenCaptureAccess() }
-}
-
 pub fn ensure_screen_recording() -> ScreenRecordingState {
     if unsafe { CGPreflightScreenCaptureAccess() } {
         return ScreenRecordingState::Granted;

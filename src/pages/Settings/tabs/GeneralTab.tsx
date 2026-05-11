@@ -87,6 +87,16 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
+          label={t("settings.general.capture.screenshotEnableLabel")}
+          description={t("settings.general.capture.screenshotEnableDescription")}
+          disabled={!settings.captureEnabled}
+        >
+          <Toggle
+            checked={settings.screenshotEnabled}
+            onChange={(v) => update({ screenshotEnabled: v })}
+          />
+        </Row>
+        <Row
           label={t("settings.general.capture.intervalLabel")}
           description={t("settings.general.capture.intervalDescription")}
           disabled={!settings.captureEnabled}

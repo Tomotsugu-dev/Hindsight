@@ -455,6 +455,8 @@ export interface PromptOverrides {
 
 export interface Settings {
   captureEnabled: boolean;
+  /** 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续 */
+  screenshotEnabled: boolean;
   captureIntervalSeconds: number;
   screenshotPath: string;
   workHoursEnabled: boolean;
