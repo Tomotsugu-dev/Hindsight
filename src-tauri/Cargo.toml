@@ -66,6 +66,7 @@ ndarray = "0.16"
 # 并行 image preprocess：JPEG 解码 + resize + normalize 占大头，单线程跑 5-10s/几百张，
 # 8 核并行后 1-2s 搞定。仅在 ai::embedding 用，不污染其它 hot path。
 rayon = "1"
+sys-locale = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi", "winreg", "winnt"] }

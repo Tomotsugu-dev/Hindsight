@@ -28,18 +28,9 @@ fn capture_blocking(
     max_height: u32,
     jpeg_quality: u8,
 ) -> Result<Option<String>> {
-    let windows = xcap::Window::all().map_err(|e| Error::Capture(e.to_string()))?;
-    let focused = match windows.iter().find(|w| w.is_focused().unwrap_or(false)) {
-        Some(w) => w,
+    let rgba = match grab_focused_image() {
+        Some(img) => img,
         None => return Ok(None),
-    };
-
-    let rgba = match focused.capture_image() {
-        Ok(img) => img,
-        Err(e) => {
-            log::debug!("截图失败: {e}");
-            return Ok(None);
-        }
     };
 
     let img = DynamicImage::ImageRgba8(rgba);
@@ -60,6 +51,57 @@ fn capture_blocking(
         .map_err(|e| Error::Capture(format!("jpeg encode: {e}")))?;
 
     Ok(Some(target.to_string_lossy().to_string()))
+}
+
+/// 拿当前前台 app 的截图：优先窗口，拿不到（macOS 多屏下 xcap 经常看不到主屏
+/// app 的窗口）就回退到"主显示器"整屏；都不行返 None。
+fn grab_focused_image() -> Option<image::RgbaImage> {
+    // macOS 走 NSWorkspace 系统 API 拿真正的前台 app PID；其它平台 PID 拿不到也无所谓，
+    // 走 xcap heuristic 找 focused 窗口。
+    #[cfg(target_os = "macos")]
+    let frontmost_pid = macos_frontmost_pid();
+    #[cfg(not(target_os = "macos"))]
+    let frontmost_pid: Option<u32> = None;
+
+    if let Ok(windows) = xcap::Window::all() {
+        let focused = windows.iter().find(|w| match frontmost_pid {
+            Some(p) => w.pid().ok() == Some(p),
+            None => w.is_focused().unwrap_or(false),
+        });
+        if let Some(w) = focused {
+            match w.capture_image() {
+                Ok(img) => return Some(img),
+                Err(e) => log::debug!("窗口截图失败: {e}"),
+            }
+        }
+    }
+
+    // macOS 回退：xcap 看不到主屏的窗口（多屏 / 多 Space 已知问题）→ 截"主显示器"
+    // 整屏。`is_primary()` 在 macOS 上跟着 menubar 走，通常就是用户当前在用的那块屏。
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(monitors) = xcap::Monitor::all() {
+            if let Some(m) = monitors.iter().find(|m| m.is_primary().unwrap_or(false)) {
+                match m.capture_image() {
+                    Ok(img) => return Some(img),
+                    Err(e) => log::debug!("主显示器整屏截图失败: {e}"),
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 调 `NSWorkspace.frontmostApplication()` 拿系统层最前 app 的 PID。
+/// 跟 [`crate::capture::window`] 那个同名函数功能一样，只是这里不想拉跨模块依赖
+/// 就再写一份；3 行实现，复制成本远低于多套一层 pub 接口。
+#[cfg(target_os = "macos")]
+fn macos_frontmost_pid() -> Option<u32> {
+    use objc2_app_kit::NSWorkspace;
+    let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+    let pid = app.processIdentifier();
+    if pid > 0 { Some(pid as u32) } else { None }
 }
 
 /// 整窗保留：等比缩放使其装入 max_w × max_h，超过任一上限才缩，否则保持原始尺寸。

@@ -231,6 +231,7 @@ pub struct PromptOverrides {
 
 impl Default for AiConfig {
     fn default() -> Self {
+        let lang = detect_default_lang();
         Self {
             endpoint: String::new(),
             model: String::new(),
@@ -238,7 +239,7 @@ impl Default for AiConfig {
             external_enabled: false,
             external_provider: "openai".to_string(),
             user_brief: String::new(),
-            segments: default_segments(),
+            segments: default_segments_for(lang),
             excluded_categories: vec!["other".to_string()],
             max_images_per_segment: 1024,
             dedup_threshold: 0.95,
@@ -249,7 +250,7 @@ impl Default for AiConfig {
             describe_mmproj: String::new(),
             summary_main: String::new(),
             summary_mmproj: String::new(),
-            prompt_language: "zh".to_string(),
+            prompt_language: lang.to_string(),
             prompt_overrides: PromptOverrides::default(),
             image_describe_overrides: PromptOverrides::default(),
             batch_size: None,
@@ -265,41 +266,43 @@ impl Default for AiConfig {
     }
 }
 
-/// 默认 5 段，覆盖整 24 小时：
-/// 深夜 00-06 / 早上 06-09 / 上午 09-12 / 下午 12-18 / 晚上 18-24
-pub fn default_segments() -> Vec<AiSegment> {
-    vec![
-        AiSegment {
-            label: "深夜".to_string(),
-            start_hour: 0,
-            end_hour: 6,
+/// 默认 5 段，覆盖整 24 小时（00-06 / 06-09 / 09-12 / 12-18 / 18-24）；
+/// 标签按用户语言取一套。新装首启时通过 [`detect_default_lang`] 拿系统 locale。
+pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
+    let labels: [&str; 5] = match lang {
+        "en" => ["Late Night", "Early Morning", "Morning", "Afternoon", "Evening"],
+        "ja" => ["深夜", "早朝", "午前", "午後", "夜"],
+        _ => ["深夜", "早上", "上午", "下午", "晚上"],
+    };
+    let ranges: [(u8, u8); 5] = [(0, 6), (6, 9), (9, 12), (12, 18), (18, 24)];
+    labels
+        .into_iter()
+        .zip(ranges)
+        .map(|(label, (start_hour, end_hour))| AiSegment {
+            label: label.to_string(),
+            start_hour,
+            end_hour,
             color: String::new(),
-        },
-        AiSegment {
-            label: "早上".to_string(),
-            start_hour: 6,
-            end_hour: 9,
-            color: String::new(),
-        },
-        AiSegment {
-            label: "上午".to_string(),
-            start_hour: 9,
-            end_hour: 12,
-            color: String::new(),
-        },
-        AiSegment {
-            label: "下午".to_string(),
-            start_hour: 12,
-            end_hour: 18,
-            color: String::new(),
-        },
-        AiSegment {
-            label: "晚上".to_string(),
-            start_hour: 18,
-            end_hour: 24,
-            color: String::new(),
-        },
-    ]
+        })
+        .collect()
+}
+
+/// 从系统 locale 推默认 prompt 语言：`zh-*` → "zh"、`ja-*` → "ja"、其它 → "en"。
+/// 仅在首次安装 `AiConfig::default()` 时调一次；用户后续在 UI 改了再不动。
+pub fn detect_default_lang() -> &'static str {
+    match sys_locale::get_locale() {
+        Some(loc) => {
+            let l = loc.to_ascii_lowercase();
+            if l.starts_with("zh") {
+                "zh"
+            } else if l.starts_with("ja") {
+                "ja"
+            } else {
+                "en"
+            }
+        }
+        None => "en",
+    }
 }
 
 /// 把用户提交的 AiConfig 钳到合法范围。
