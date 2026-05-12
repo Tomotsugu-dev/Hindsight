@@ -7,10 +7,16 @@
   NSAppleEventsUsageDescription：第一次 osascript 控制 Chrome / Safari 时弹出
   "自动化"权限对话框，文案就来自这里。10.14+ 必填，否则系统直接拒绝调用。
   仅用于隐私过滤（看当前标签 URL 决定是否截图），URL 不出本机。
+
+  NSScreenCaptureUsageDescription：ScreenCaptureKit 在 macOS 14+ 首次调用
+  SCShareableContent 时弹出"录屏"权限对话框，文案来自这里。仅用于截图焦点
+  app 窗口给本地 AI 总结看，截图始终留在用户机器，永远不上传。
 -->
 <plist version="1.0">
 <dict>
     <key>NSAppleEventsUsageDescription</key>
     <string>Hindsight needs to read the current tab URL from your browser to apply privacy filters (skip screenshots on banking / login pages). URLs are evaluated locally and never leave your device.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Hindsight captures your focused app window so the local AI can summarize what you've been working on. Screenshots stay on your device and are never uploaded.</string>
 </dict>
 </plist>

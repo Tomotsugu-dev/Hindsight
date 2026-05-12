@@ -79,7 +79,8 @@ impl WeekSummaryRunner {
     /// `allow_missing_days = true` 时：
     ///   - 部分日缺日报：用当日 top apps 文本顶替进入 prompt
     ///   - 整周无日报但有 activity：仅基于整周 + 每日 top apps 做简化分析
-    ///   不再因"日报缺失"早 return error。
+    ///
+    /// 不再因"日报缺失"早 return error。
     pub async fn run(
         &self,
         week_start: NaiveDate,
