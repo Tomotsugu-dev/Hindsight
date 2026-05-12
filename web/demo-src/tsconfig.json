@@ -1,0 +1,18 @@
+// TypeScript config for the embeddable web demo.
+//
+// 跟主 tsconfig 物理分离 —— 主 Tauri build 不再 type-check demo 文件，
+// VS Code 在 web/demo-src/ 下打开任何 .ts/.tsx 会自动用这份配置。
+//
+// @app/* 别名 → src/* （跟 vite.config.demo.ts resolve.alias 对齐）
+//
+// 用法：
+//   npx tsc --noEmit -p web/demo-src/tsconfig.json   独立校验 demo 类型
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@app/*": ["../../src/*"]
+    }
+  },
+  "include": ["."]
+}
