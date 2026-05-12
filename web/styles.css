@@ -1,0 +1,1031 @@
+/* ============================================
+   Hindsight Landing - 中文版
+   亮色暖调 · 基于 logo 橙→紫渐变
+   ============================================ */
+
+:root {
+  /* 配色 */
+  --bg: #ffffff;
+  --bg-warm: #faf8f5;
+  --text: #1a1a1a;
+  --text-mute: #6b6b6b;
+  --text-faded: #a0a0a0;
+  --accent: #f88b5c;
+  --accent-hover: #e5764a;
+  --accent-2: #b47ce6;
+  --border: #e8e5e0;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12);
+  --shadow-cta: 0 4px 12px rgba(248, 139, 92, 0.30);
+
+  /* 渐变 */
+  --gradient: linear-gradient(135deg, #f88b5c 0%, #ff7b9c 50%, #b47ce6 100%);
+  --gradient-soft: linear-gradient(180deg, #fff8f2 0%, #ffffff 100%);
+
+  /* 字体 */
+  --font-cn: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui,
+    -apple-system, sans-serif;
+  --font-en: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+
+  /* 圆角 */
+  --r-btn: 12px;
+  --r-card: 16px;
+  --r-img: 14px;
+
+  /* 动画 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --trans-fast: 150ms var(--ease-out);
+  --trans-base: 250ms var(--ease-out);
+}
+
+/* ============================================
+   Reset & Base
+   ============================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-cn);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--trans-fast);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+ul {
+  list-style: none;
+}
+
+/* ============================================
+   Layout helpers
+   ============================================ */
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.container.narrow {
+  max-width: 800px;
+}
+
+/* ============================================
+   Typography
+   ============================================ */
+
+/* 流式字号 —— clamp(min, preferred, max)，让所有屏幕宽度都能顺滑过渡，
+   不在断点处突变。preferred = X vw 跟随视口宽度。 */
+.display {
+  font-family: var(--font-en);
+  /* 加大到 88px，更有视觉冲击 —— 跟 Linear / Stripe hero 标题尺寸一致 */
+  font-size: clamp(48px, 6.2vw, 88px);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* 跟下方副标题留足呼吸感 */
+  margin-bottom: 28px;
+  /* padding-bottom 让 background-clip:text 在 g/j 下伸时不被自身行盒裁切 */
+  padding-bottom: 0.05em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.section-title {
+  font-size: clamp(28px, 3.2vw, 42px);
+  line-height: 1.15;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: clamp(36px, 4.5vw, 56px);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: clamp(18px, 1.8vw, 22px);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.intro,
+.lead {
+  font-size: clamp(15px, 1.4vw, 17px);
+  line-height: 1.7;
+  color: var(--text-mute);
+  margin-bottom: 32px;
+}
+
+.lead {
+  margin-bottom: 32px;
+}
+
+.caption {
+  font-size: 14px;
+  color: var(--text-mute);
+  text-align: center;
+  margin-top: 16px;
+}
+
+.eyebrow {
+  font-family: var(--font-en);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.trust {
+  font-size: 13px;
+  color: var(--text-faded);
+  margin-top: 20px;
+}
+
+.muted {
+  color: var(--text-mute);
+  font-size: 13px;
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--r-btn);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--trans-base);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn-sm {
+  font-size: 14px;
+  padding: 8px 18px;
+}
+
+.btn-lg {
+  font-size: 16px;
+  padding: 14px 28px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-cta);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  border-color: var(--text-mute);
+  background: var(--bg-warm);
+}
+
+/* HTML hidden 属性优先 —— .btn-platform 的 display: inline-flex
+   类规则会覆盖默认 display: none，必须显式给 [hidden] 高优先级 */
+[hidden] {
+  display: none !important;
+}
+
+/* 平台下载按钮 —— 图标 + 两行文字，Windows / macOS 同款外观，仅图标区分 */
+.btn-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: all var(--trans-base);
+  border: 0;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-platform:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-cta);
+}
+
+.btn-platform-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.btn-platform-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.btn-platform-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.btn-platform-meta {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.78;
+  font-family: var(--font-en);
+  margin-top: 2px;
+}
+
+/* Final CTA 卡片内的平台按钮（白底 → 反色） */
+.btn-platform-light {
+  background: white;
+  color: var(--accent-hover);
+}
+
+.btn-platform-light:hover {
+  background: #fff5ee;
+  color: var(--accent-hover);
+}
+
+.cta-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.trust-link {
+  color: var(--text-mute);
+  font-weight: 500;
+  transition: color var(--trans-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trust-link:hover {
+  color: var(--accent);
+}
+
+/* GitHub Octocat 图标 */
+.trust-gh {
+  color: var(--text-mute);
+  transition: color var(--trans-fast);
+}
+
+.trust-link:hover .trust-gh {
+  color: var(--text);
+}
+
+
+/* ============================================
+   Nav
+   ============================================ */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid rgba(232, 229, 224, 0.5);
+}
+
+.nav-inner {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Nav 左半区：logo + section 跳转锚点（为什么 / 演示）*/
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.nav-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.nav-name {
+  font-family: var(--font-en);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Section 跳转锚点（为什么 / 演示） */
+.nav-anchors {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-anchor {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-mute);
+  transition: color var(--trans-fast);
+  position: relative;
+}
+
+.nav-anchor::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width var(--trans-fast);
+}
+
+.nav-anchor:hover {
+  color: var(--text);
+}
+
+.nav-anchor:hover::after {
+  width: 100%;
+}
+
+.lang-switch {
+  font-size: 13px;
+  color: var(--text-faded);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lang-icon {
+  color: var(--text-mute);
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.lang-active {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.lang-switch a {
+  color: var(--text-mute);
+}
+
+.lang-switch a:hover {
+  color: var(--accent);
+}
+
+.lang-sep {
+  opacity: 0.5;
+}
+
+.nav-github {
+  display: flex;
+  align-items: center;
+  color: var(--text-mute);
+  transition: color var(--trans-fast);
+}
+
+.nav-github:hover {
+  color: var(--text);
+}
+
+/* ============================================
+   Hero
+   ============================================ */
+
+.hero {
+  position: relative;
+  padding: 80px 0 100px;
+  background: var(--gradient-soft);
+  overflow: hidden;
+}
+
+/* Hero 用独立加宽 container —— 1440px，让 iframe 有桌面级宽度
+   其它 section 仍用全局 .container (1200px) */
+.hero > .container {
+  max-width: 1440px;
+}
+
+.hero-grid {
+  display: grid;
+  /* 默认 (≥ 1280px)：1 : 2.4 → iframe 占 ~72% ≈ 980px@1440 viewport
+     gap 用 clamp 跟随宽度收缩 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr);
+  gap: clamp(32px, 4vw, 56px);
+  align-items: center;
+}
+
+.hero-text {
+  max-width: 440px;
+}
+
+.hero-visual {
+  position: relative;
+}
+
+/* 双色渐变光晕：橙 + 紫错位，比单色更有空间感 */
+.hero-blob {
+  position: absolute;
+  inset: -15% -15% -15% 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hero-blob::before,
+.hero-blob::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+}
+
+.hero-blob::before {
+  width: 65%;
+  height: 65%;
+  top: -10%;
+  right: -10%;
+  background: #f88b5c;
+  opacity: 0.32;
+}
+
+.hero-blob::after {
+  width: 55%;
+  height: 55%;
+  bottom: -10%;
+  left: 5%;
+  background: #b47ce6;
+  opacity: 0.28;
+}
+
+/* Hero iframe —— 真应用 demo 嵌入；首屏即加载
+   宽高比 16:11 接近真实桌面窗口，给应用 sidebar + 主面板足够呼吸空间 */
+.hero-demo-frame {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  border: 1px solid #e8e5e0;
+  border-radius: var(--r-img);
+  background: white;
+  display: block;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 16px rgba(0, 0, 0, 0.06),
+    0 24px 48px rgba(0, 0, 0, 0.10),
+    0 48px 96px -20px rgba(248, 139, 92, 0.28),
+    0 72px 144px -32px rgba(180, 124, 230, 0.20);
+}
+
+@media (max-width: 900px) {
+  .hero-demo-frame {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+/* ============================================
+   Why Hindsight
+   ============================================ */
+
+.why {
+  padding: 100px 0;
+}
+
+.why .section-title {
+  text-align: left;
+  margin-bottom: 32px;
+}
+
+.why-list {
+  margin: 32px 0 32px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.why-list li {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-mute);
+  padding-left: 24px;
+  position: relative;
+}
+
+.why-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gradient);
+}
+
+.why-list strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.why-closing {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 16px;
+}
+
+/* ============================================
+   Demo (video)
+   ============================================ */
+
+.demo {
+  padding: 80px 0 100px;
+  background: var(--bg-warm);
+}
+
+.video-frame {
+  max-width: 960px;
+  margin: 0 auto;
+  border-radius: var(--r-img);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: black;
+}
+
+.video-frame video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.demo .caption {
+  margin-top: 20px;
+}
+
+/* ============================================
+   Features
+   ============================================ */
+
+.features {
+  padding: 100px 0;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.feature-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 32px 28px;
+  transition: transform var(--trans-base), box-shadow var(--trans-base),
+    border-color var(--trans-base);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(248, 139, 92, 0.3);
+}
+
+.feature-icon {
+  font-size: 36px;
+  margin-bottom: 16px;
+  display: inline-block;
+}
+
+.feature-card h3 {
+  font-size: 22px;
+  margin-bottom: 10px;
+}
+
+.feature-card p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-mute);
+}
+
+/* ============================================
+   Showcase
+   ============================================ */
+
+.showcase {
+  padding: 100px 0;
+  background: var(--bg-warm);
+}
+
+.showcase-item {
+  text-align: center;
+  margin-bottom: 96px;
+}
+
+.showcase-item:last-child {
+  margin-bottom: 0;
+}
+
+.showcase-item h2 {
+  font-size: clamp(24px, 2.8vw, 36px);
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.showcase-item .caption {
+  max-width: 640px;
+  margin: 0 auto 32px;
+  font-size: 16px;
+}
+
+.screenshot-large {
+  max-width: 1000px;
+  margin: 0 auto;
+  border-radius: var(--r-img);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
+
+.screenshot-large img {
+  width: 100%;
+  display: block;
+}
+
+/* ============================================
+   Final CTA
+   ============================================ */
+
+.final-cta {
+  padding: 100px 0;
+}
+
+.cta-card {
+  background: var(--gradient);
+  border-radius: 24px;
+  padding: clamp(40px, 5vw, 72px) clamp(24px, 4vw, 48px);
+  text-align: center;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(248, 139, 92, 0.25);
+}
+
+.cta-card h2 {
+  font-size: clamp(28px, 3.4vw, 44px);
+  line-height: 1.15;
+  margin-bottom: 12px;
+  color: white;
+}
+
+.cta-card p {
+  font-size: clamp(15px, 1.4vw, 18px);
+  margin-bottom: 32px;
+  opacity: 0.92;
+}
+
+.cta-card .cta-group {
+  justify-content: center;
+}
+
+.cta-card .btn-primary {
+  background: white;
+  color: var(--accent-hover);
+}
+
+.cta-card .btn-primary:hover {
+  background: #fff5ee;
+  transform: translateY(-1px);
+}
+
+.cta-card .btn-ghost {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: white;
+}
+
+.cta-card .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+}
+
+/* ============================================
+   Footer
+   ============================================ */
+
+.footer {
+  background: var(--bg-warm);
+  padding: 64px 0 32px;
+  border-top: 1px solid var(--border);
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: clamp(32px, 4vw, 48px);
+  margin-bottom: 48px;
+}
+
+.footer-brand {
+  max-width: 320px;
+}
+
+.footer-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.footer-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.footer-brand h3 {
+  font-family: var(--font-en);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.footer-brand p {
+  font-size: 14px;
+  color: var(--text-mute);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.footer-col h4 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.footer-col ul {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footer-col a {
+  font-size: 14px;
+  color: var(--text-mute);
+}
+
+.footer-col a:hover {
+  color: var(--accent);
+}
+
+.footer-bottom {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faded);
+}
+
+.footer-bottom a {
+  color: var(--text-mute);
+}
+
+.footer-bottom a:hover {
+  color: var(--accent);
+}
+
+/* ============================================
+   Responsive —— 多档断点
+   - 1100-1280px：中等屏（小笔记本 / 大平板横屏）—— hero 比例放宽给文字
+   - 900-1099px：平板 —— hero 仍侧排但更紧
+   - <= 900px：手机 / 小平板 —— 全部垂直堆叠
+   - <= 500px：小屏手机 —— 字号再降一档
+   ============================================ */
+
+/* 中等屏：hero 文字需要更多空间，iframe 仍占主导 */
+@media (max-width: 1280px) {
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr);
+  }
+}
+
+@media (max-width: 1100px) {
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 40px;
+  }
+  .hero-text {
+    max-width: 420px;
+  }
+  /* Footer 4 列在中等屏会挤，改成 brand 行 + 3 列子菜单 */
+  .footer-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .footer-brand {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .container {
+    padding: 0 20px;
+  }
+
+  /* Typography 缩小 */
+  .display {
+    font-size: 48px;
+  }
+
+  .section-title {
+    font-size: 32px;
+    margin-bottom: 40px;
+  }
+
+  .subtitle {
+    font-size: 19px;
+  }
+
+  /* Nav 简化：窄屏只保留 logo + 下载按钮 */
+  .lang-switch {
+    display: none;
+  }
+
+  .nav-github {
+    display: none;
+  }
+
+  .nav-anchors {
+    display: none;
+  }
+
+  /* Hero 改成纵向 */
+  .hero {
+    padding: 56px 0 72px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .hero-text {
+    max-width: none;
+    text-align: center;
+  }
+
+  .hero-text .cta-group {
+    justify-content: center;
+  }
+
+  /* Features 1 列 */
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-card {
+    padding: 28px 24px;
+  }
+
+  /* Section padding 缩小 */
+  .why,
+  .features,
+  .showcase,
+  .final-cta {
+    padding: 64px 0;
+  }
+
+  .demo {
+    padding: 56px 0 72px;
+  }
+
+  .showcase-item {
+    margin-bottom: 64px;
+  }
+
+  .showcase-item h2 {
+    font-size: 28px;
+  }
+
+  /* Final CTA 卡片 */
+  .cta-card {
+    padding: 48px 24px;
+  }
+
+  .cta-card h2 {
+    font-size: 32px;
+  }
+
+  .cta-card p {
+    font-size: 16px;
+  }
+
+  /* Footer 1 列 */
+  .footer-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  /* CTA group 移动端按钮变全宽 */
+  .cta-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cta-group .btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 500px) {
+  .display {
+    font-size: 40px;
+  }
+
+  .section-title {
+    font-size: 26px;
+  }
+
+  .why .section-title {
+    font-size: 28px;
+  }
+}

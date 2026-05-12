@@ -1,0 +1,1 @@
+async function o(n){return console.warn("[demo] save() 在 demo 模式下返回 null，不会真打开保存对话框"),n?.defaultPath??null}async function e(n){return console.warn("[demo] open() 在 demo 模式下返回 null"),null}export{e as o,o as s};

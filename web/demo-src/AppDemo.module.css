@@ -1,0 +1,64 @@
+/* Demo 布局 —— 简化版 AppLayout
+   不需要 OS chrome / dragStrip / WindowControls（iframe 内不需要）
+   保留 Sidebar 在左 + 主 content 在右的两栏结构 */
+
+.shell {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+  --sb-current-width: var(--sidebar-width);
+}
+
+.content {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--sb-current-width);
+  right: 0;
+  overflow: auto;
+  background: var(--surface-card);
+  scrollbar-width: none;
+}
+
+.content::-webkit-scrollbar {
+  display: none;
+}
+
+/* 上下高斯模糊条带 —— 滚动时文字柔化 */
+.shell::before,
+.shell::after {
+  content: "";
+  position: absolute;
+  left: var(--sb-current-width);
+  right: 0;
+  height: 32px;
+  z-index: 3;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.shell::before {
+  top: 0;
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+
+.shell::after {
+  bottom: 0;
+  mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+}
+
+.sidebarHost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sb-current-width);
+  overflow: hidden;
+  z-index: 4;
+  filter: drop-shadow(8px 0 18px rgba(20, 20, 40, 0.06));
+}

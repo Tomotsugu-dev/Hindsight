@@ -1,0 +1,1 @@
+async function e(n){try{window.open(n,"_blank","noopener,noreferrer")}catch{console.warn("[demo] openUrl failed:",n)}}async function o(n){console.warn("[demo] openPath() 在 demo 模式下不可用")}async function a(n){console.warn("[demo] revealItemInDir() 在 demo 模式下不可用")}export{e as a,o,a as r};
