@@ -76,7 +76,10 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             capture_enabled: true,
-            screenshot_enabled: true,
+            // 默认关：截图涉及隐私 + Apple TCC 弹框 + 多屏多 Space 的边界 case，
+            // 设计上"explicitly opt-in"——用户去 设置 → 通用 → 启用截图 主动开。
+            // v23 migration 同步把存量用户的 screenshotEnabled 也重置成 false。
+            screenshot_enabled: false,
             capture_interval_seconds: 30,
             screenshot_path: String::new(),
             work_hours_enabled: false,

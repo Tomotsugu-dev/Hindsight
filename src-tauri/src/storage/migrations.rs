@@ -515,12 +515,30 @@ const SCREENSHOT_EMBEDDINGS_SQL: &str = r#"
         ON screenshot_embeddings (screenshot_path);
 "#;
 
+/// v23：把所有 settings_store 行的 `screenshotEnabled` 重置为 false。
+///
+/// 背景：截图功能从 v0.5.7 → v0.6.5 一路踩了多屏 / 多 Space / Sequoia TCC 弹框 /
+/// xcap 失效 / Finder 黑屏等一长串问题。v0.6.6 起改成"用户主动 opt-in"，所有用户
+/// （新装 + 升级）首次进 v0.6.6 都从截图关闭状态开始；要继续用截图，去
+/// 设置 → 通用 → 启用截图 手动打开。
+///
+/// 用 `json_set` 直接 patch settings JSON：
+/// - 字段不存在（pre-v0.6.2 老用户）→ 写入 false
+/// - 字段存在（v0.6.2-v0.6.5 用户，无论原值 true 还是 false）→ 覆盖为 false
+///
+/// 用户进入 v0.6.6 后改回 true，下次启动 v23 已 in schema_version 不会再跑。
+const RESET_SCREENSHOT_ENABLED_TO_FALSE_SQL: &str = r#"
+    UPDATE settings_store
+    SET data = json_set(data, '$.screenshotEnabled', json('false'))
+    WHERE id = 1;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 12] = [
+    let extras: [&'static str; 13] = [
         CROSS_OS_CLEANUP_SQL,                // v11
         V12_PLACEHOLDER,                     // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                 // v13
@@ -533,6 +551,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         AI_IMAGE_DESC_PERF_COLS_SQL,         // v20
         AI_TABLES_ADD_SOURCE_SQL,            // v21
         SCREENSHOT_EMBEDDINGS_SQL,           // v22
+        RESET_SCREENSHOT_ENABLED_TO_FALSE_SQL, // v23
     ];
     pool.0
         .call(move |conn| {
