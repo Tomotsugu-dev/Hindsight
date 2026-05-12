@@ -126,7 +126,7 @@ pub async fn init_database(dev_meta: &DeviceMeta) -> crate::error::Result<DbPool
 
     // v8 之前硬编码的 'local' device_id 改成真实 self id（幂等，对老数据一次性生效）
     let self_id_for_fix = dev_meta.device_id.clone();
-    let _ = pool
+    let migration = pool
         .0
         .call(move |conn| {
             let n = conn
@@ -141,6 +141,11 @@ pub async fn init_database(dev_meta: &DeviceMeta) -> crate::error::Result<DbPool
             Ok(())
         })
         .await;
+    if let Err(e) = migration {
+        // 这次 migration 是 best-effort——失败不阻塞启动，但要留痕。失败后下次启动
+        // 还会再跑（条件不变 + 没成功改过的行还在），所以是幂等的，长期收敛。
+        log::warn!("v8 device_id migration 失败（下次启动会重试）: {e}");
+    }
     Ok(pool)
 }
 

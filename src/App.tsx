@@ -1,32 +1,37 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
 import { useSettings } from "./state/settings";
 import type { PromptLanguage } from "./api/hindsight";
-import Today from "./pages/Today/TodayPage";
-import Week from "./pages/Week/WeekPage";
-import Month from "./pages/Month/MonthPage";
-import AISummaryPage from "./pages/AISummary/AISummaryPage";
-import DailyTab from "./pages/AISummary/tabs/DailyTab";
-import WeeklyTab from "./pages/AISummary/tabs/WeeklyTab";
-import MonthlyTab from "./pages/AISummary/tabs/MonthlyTab";
-import ChatTab from "./pages/AISummary/tabs/ChatTab";
-import DebugTab from "./pages/AISummary/tabs/DebugTab";
-import AISettingsPage from "./pages/AISettings/AISettingsPage";
-import EngineTab from "./pages/AISettings/tabs/EngineTab";
-import ModelsTab from "./pages/AISettings/tabs/ModelsTab";
-import AiGeneralTab from "./pages/AISettings/tabs/GeneralTab";
-import PromptTab from "./pages/AISettings/tabs/PromptTab";
-import ExternalApiTab from "./pages/AISettings/tabs/ExternalApiTab";
-import Devices from "./pages/Devices/DevicesPage";
-import CategoriesPage from "./pages/Categories/CategoriesPage";
-import SettingsPage from "./pages/Settings/SettingsPage";
-import GeneralTab from "./pages/Settings/tabs/GeneralTab";
-import DataTab from "./pages/Settings/tabs/DataTab";
-import PrivacyTab from "./pages/Settings/tabs/PrivacyTab";
-import AboutTab from "./pages/Settings/tabs/AboutTab";
+
+// 代码拆分：所有 page / tab 都走 `React.lazy`，Vite 给每个组件出独立 chunk。
+// 首屏只加载 sidebar / layout / `i18n` 这些必备的东西；切到某个 tab 时按需 fetch。
+// 同一 page 内 tab 之间切换有可能闪一下 fallback，但每个 chunk 都很小，浏览器
+// HTTP/2 多路复用下基本看不到。
+const Today = lazy(() => import("./pages/Today/TodayPage"));
+const Week = lazy(() => import("./pages/Week/WeekPage"));
+const Month = lazy(() => import("./pages/Month/MonthPage"));
+const AISummaryPage = lazy(() => import("./pages/AISummary/AISummaryPage"));
+const DailyTab = lazy(() => import("./pages/AISummary/tabs/DailyTab"));
+const WeeklyTab = lazy(() => import("./pages/AISummary/tabs/WeeklyTab"));
+const MonthlyTab = lazy(() => import("./pages/AISummary/tabs/MonthlyTab"));
+const ChatTab = lazy(() => import("./pages/AISummary/tabs/ChatTab"));
+const DebugTab = lazy(() => import("./pages/AISummary/tabs/DebugTab"));
+const AISettingsPage = lazy(() => import("./pages/AISettings/AISettingsPage"));
+const EngineTab = lazy(() => import("./pages/AISettings/tabs/EngineTab"));
+const ModelsTab = lazy(() => import("./pages/AISettings/tabs/ModelsTab"));
+const AiGeneralTab = lazy(() => import("./pages/AISettings/tabs/GeneralTab"));
+const PromptTab = lazy(() => import("./pages/AISettings/tabs/PromptTab"));
+const ExternalApiTab = lazy(() => import("./pages/AISettings/tabs/ExternalApiTab"));
+const Devices = lazy(() => import("./pages/Devices/DevicesPage"));
+const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
+const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
+const GeneralTab = lazy(() => import("./pages/Settings/tabs/GeneralTab"));
+const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
+const PrivacyTab = lazy(() => import("./pages/Settings/tabs/PrivacyTab"));
+const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
 
 /** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/en/ja）。 */
 function i18nToPromptLang(lang: string): PromptLanguage {
@@ -50,35 +55,40 @@ function App() {
   }, [i18n.language, settings, update]);
 
   return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route path={ROUTES.today} element={<Today />} />
-        <Route path={ROUTES.week} element={<Week />} />
-        <Route path={ROUTES.month} element={<Month />} />
-        <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
-          <Route index element={<DailyTab />} />
-          <Route path="week" element={<WeeklyTab />} />
-          <Route path="month" element={<MonthlyTab />} />
-          <Route path="chat" element={<ChatTab />} />
-          <Route path="debug" element={<DebugTab />} />
+    // Suspense fallback 故意保持空 —— page chunk 通常 < 50KB，本地加载几十毫秒级，
+    // 闪 spinner 反而扰人。如果将来某个 page 体积涨到肉眼可感的程度（数百 KB+），
+    // 再换成全屏 skeleton / spinner。
+    <Suspense fallback={<></>}>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path={ROUTES.today} element={<Today />} />
+          <Route path={ROUTES.week} element={<Week />} />
+          <Route path={ROUTES.month} element={<Month />} />
+          <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
+            <Route index element={<DailyTab />} />
+            <Route path="week" element={<WeeklyTab />} />
+            <Route path="month" element={<MonthlyTab />} />
+            <Route path="chat" element={<ChatTab />} />
+            <Route path="debug" element={<DebugTab />} />
+          </Route>
+          <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
+            <Route index element={<EngineTab />} />
+            <Route path="models" element={<ModelsTab />} />
+            <Route path="general" element={<AiGeneralTab />} />
+            <Route path="prompt" element={<PromptTab />} />
+            <Route path="external" element={<ExternalApiTab />} />
+          </Route>
+          <Route path={ROUTES.devices} element={<Devices />} />
+          <Route path={ROUTES.categories} element={<CategoriesPage />} />
+          <Route path={ROUTES.settings} element={<SettingsPage />}>
+            <Route index element={<GeneralTab />} />
+            <Route path="data" element={<DataTab />} />
+            <Route path="privacy" element={<PrivacyTab />} />
+            <Route path="about" element={<AboutTab />} />
+          </Route>
         </Route>
-        <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
-          <Route index element={<EngineTab />} />
-          <Route path="models" element={<ModelsTab />} />
-          <Route path="general" element={<AiGeneralTab />} />
-          <Route path="prompt" element={<PromptTab />} />
-          <Route path="external" element={<ExternalApiTab />} />
-        </Route>
-        <Route path={ROUTES.devices} element={<Devices />} />
-        <Route path={ROUTES.categories} element={<CategoriesPage />} />
-        <Route path={ROUTES.settings} element={<SettingsPage />}>
-          <Route index element={<GeneralTab />} />
-          <Route path="data" element={<DataTab />} />
-          <Route path="privacy" element={<PrivacyTab />} />
-          <Route path="about" element={<AboutTab />} />
-        </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 

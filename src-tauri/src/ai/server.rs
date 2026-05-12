@@ -728,9 +728,12 @@ fn spawn_drain_task<R>(
             match lines.next_line().await {
                 Ok(Some(line)) => {
                     let prefixed = format!("[{tag}] {line}");
-                    // 直接 eprintln 走 stderr，不依赖 log 框架——这样 dev console 一定能
-                    // 看到 llama-server 的所有输出（cuBLAS init / offloaded layers 等关键
-                    // 诊断信息）。要屏蔽就用 grep -v "[stderr]" 之类管道过滤。
+                    // llama-server 的 stderr / stdout 转发到 log 框架。release 时跟
+                    // `env_logger` 的 RUST_LOG 过滤一致；dev 模式（debug_assertions）
+                    // 再额外 eprintln 一份到 console，确保 cuBLAS init / offloaded
+                    // layers 这种启动诊断信息一定能在终端看到。
+                    log::info!("[llama-server] {prefixed}");
+                    #[cfg(debug_assertions)]
                     eprintln!("[llama-server] {prefixed}");
                     // 启动日志保留区（前 STARTUP_LINES 行；满了不再写）
                     {

@@ -13,9 +13,17 @@ pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     if !exe_path.exists() {
         return Ok(None);
     }
+    // SAFETY: `extract_inner` 内全部走 Win32 公开 API（Shell32 / GDI32 / User32），
+    // 调用前先 zero-init 结构体、正确设 cbSize，调用后所有 GDI 句柄（HICON / HBITMAP
+    // / HDC）都通过 DestroyIcon / DeleteObject / DeleteDC / ReleaseDC 配对释放。
     unsafe { extract_inner(exe_path) }
 }
 
+/// # Safety
+///
+/// 调用方必须保证 `exe_path` 当前存在（前置检查已在 [`extract_png`] 完成）。
+/// 函数内每个分配出的 Windows 资源（HICON / HBITMAP / HDC）都在所有 early-return
+/// 路径上正确释放，无泄漏 / double-free 风险。
 unsafe fn extract_inner(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     use winapi::shared::windef::{HBITMAP, HDC};
     use winapi::um::shellapi::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};

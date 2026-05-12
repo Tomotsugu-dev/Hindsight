@@ -219,7 +219,12 @@ impl CaptureService {
 
     /// 拉当前运行时状态（today_count 实时查 DB；其它字段从内存读）。
     pub async fn status(&self) -> CaptureStatus {
-        let today_count = activities::today_count(&self.inner.pool).await.unwrap_or(0);
+        let today_count = activities::today_count(&self.inner.pool)
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!("today_count 查询失败: {e}");
+                0
+            });
         CaptureStatus {
             running: self.is_running().await,
             today_count,

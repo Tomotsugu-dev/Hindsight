@@ -123,6 +123,8 @@ pub fn idle_secs() -> u64 {
     extern "C" {
         fn CGEventSourceSecondsSinceLastEventType(state: c_int, event_type: u32) -> f64;
     }
+    // SAFETY: CoreGraphics 公开 C API（CoreGraphics.framework），任意线程可调；
+    // 返 f64 秒数，无指针 / 引用计数。无效输入返 -1.0 / NaN，下面 finite + 非负检查兜底。
     let s =
         unsafe { CGEventSourceSecondsSinceLastEventType(COMBINED_SESSION_STATE, ANY_INPUT_EVENT) };
     if s.is_finite() && s >= 0.0 {
@@ -139,6 +141,8 @@ pub fn idle_secs() -> u64 {
     extern "system" {
         fn GetTickCount() -> u32;
     }
+    // SAFETY: Win32 公开 API；`LASTINPUTINFO` 是栈上 POD，cbSize 已正确设置；
+    // `GetTickCount` 无参数。失败时（返 0）已 early return。
     unsafe {
         let mut info = LASTINPUTINFO {
             cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
@@ -154,7 +158,14 @@ pub fn idle_secs() -> u64 {
     }
 }
 
-/// 其它平台（Linux 等）实现：返回 0，等同"用户永远活跃"，不影响其它功能。
+/// Linux / 其它 Unix 平台：暂不实现，统一返 0（用户视作永远活跃）。
+///
+/// 真正实现需要分 X11 / Wayland 两条路：
+/// - X11：`XScreenSaverQueryInfo`（libXss），一个 API 搞定
+/// - Wayland：`ext-idle-notify-v1` Wayland 协议（需要 portal / compositor 支持）
+///
+/// 当前留 stub 是产品决策——Linux 用户量小、跨发行版桌面差异大；返 0 不会触发挂机
+/// 检测，但**不会破坏其它任何功能**（capture interval / privacy filter 等都正常）。
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn idle_secs() -> u64 {
     0
