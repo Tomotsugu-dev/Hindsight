@@ -1,0 +1,41 @@
+/* 模式切换 segment control：紧凑两段，跟 dayPill / navBtn 视觉对齐 */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+  letter-spacing: -0.005em;
+}
+
+.opt:hover:not([aria-selected="true"]) {
+  color: var(--text-strong);
+}
+
+.optActive {
+  background: #fff;
+  color: var(--color-accent);
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.06),
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+}

@@ -845,7 +845,642 @@
     },
     "monthly": {
       "title": "月次",
-      "hint": "1 か月のアクティビティ傾向と主なハイライト。開発中の機能です。"
+      "hint": "AI 月次レポートは開発中。「クイックテンプレート」に切り替えて当月の活動統計を確認できます。"
+    },
+    "modeToggle": {
+      "ariaLabel": "サマリー生成方法",
+      "ai": "AI サマリー",
+      "quick": "クイックテンプレート",
+      "aiTooltip": "ローカル / クラウドの LLM がスクリーンショットを読んで時間帯ごとに要約します。品質は高いですがハードウェアと設定が必要です。",
+      "quickTooltip": "活動統計から固定テンプレートを埋めて即座に表示。ハードウェア不要です。"
+    },
+    "quick": {
+      "loading": "読み込み中…",
+      "empty": "この期間にはアクティビティが記録されていません。",
+      "listSep": "、",
+      "categoryOther": "その他",
+      "subtitle": {
+        "day": "当日の活動統計から自動的に埋めた簡潔なまとめ。LLM 不要です。",
+        "week": "今週の活動統計から自動的に埋めた簡潔なまとめ。LLM 不要です。",
+        "month": "今月の活動統計から自動的に埋めた簡潔なまとめ。LLM 不要です。"
+      },
+      "nav": {
+        "day": {
+          "prevAria": "前日",
+          "nextAria": "翌日",
+          "today": "今日",
+          "yesterday": "昨日",
+          "todayBack": "今日に戻る"
+        },
+        "week": {
+          "prevAria": "前の週",
+          "nextAria": "次の週",
+          "thisWeek": "今週",
+          "lastWeek": "先週",
+          "thisWeekBack": "今週に戻る"
+        },
+        "month": {
+          "prevAria": "前の月",
+          "nextAria": "次の月",
+          "thisMonth": "今月",
+          "lastMonth": "先月",
+          "thisMonthBack": "今月に戻る"
+        }
+      },
+      "actions": {
+        "exportMarkdown": "Markdown としてエクスポート",
+        "exportTooltip": "現在のクイックサマリーをエクスポート",
+        "exportEmptyTooltip": "エクスポートできる内容がありません",
+        "dismissError": "閉じる"
+      },
+      "errors": {
+        "empty": "エクスポートできる内容がありません。"
+      },
+      "toast": {
+        "exported": "{{filename}} にエクスポートしました"
+      },
+      "sections": {
+        "overview": "概要",
+        "topApps": "アプリランキング",
+        "categories": "カテゴリ分布",
+        "dailySeries": "日別の時間"
+      },
+      "analysis": {
+        "title": "スマート分析",
+        "footnote": "注：基本テンプレートから生成しています。AI モデルを設定すると、より詳細な分析が利用できます。",
+        "appsJoin": "、",
+        "appEntry": "{{name}}（{{duration}}）",
+        "headings": {
+          "workOverview": "作業内容の概要",
+          "timePattern": "時間の流れ",
+          "categoryBreakdown": "カテゴリ構成",
+          "highlights": "ハイライト",
+          "focus": "集中度",
+          "efficiency": "効率の評価",
+          "suggestion": "改善提案",
+          "summary": "本日のまとめ"
+        },
+        "factsJoin": " ",
+        "day": {
+          "workOverview": {
+            "categoryLed": "今日のメインは「{{category}}」系アプリ（約 {{pct}}）。コア利用：{{apps}}。",
+            "normal": "今日は主に {{apps}} を中心に進め、メインの流れは比較的明確でした。",
+            "single": "今日はほぼ {{topApp}} 一本に集中しており、メインの流れがとてもシンプルです。",
+            "empty": "今日は突出したメインアプリがありませんでした。"
+          },
+          "timePattern": {
+            "eveningHeavy": {
+              "v1": "今日は夜に時間が集中しています（{{eveningMinutes}}、約 {{eveningPct}}）。ピークは {{peak}} 前後。",
+              "v2": "夜が今日の主な時間帯：{{eveningMinutes}}（{{eveningPct}}）、ピークは {{peak}}。"
+            },
+            "morningHeavy": {
+              "v1": "今日は午前の比重が大きく（{{morningMinutes}}）、午後は約 {{afternoonMinutes}}。ピークは {{peak}}。",
+              "v2": "「午前型」の一日：午前 {{morningMinutes}}、午後 {{afternoonMinutes}}、もっとも忙しい時間は {{peak}} です。"
+            },
+            "afternoonHeavy": {
+              "v1": "今日は午後が中心（{{afternoonMinutes}}）、午前は約 {{morningMinutes}}。ピークは {{peak}}。",
+              "v2": "今日は午後型：午後 {{afternoonMinutes}}、午前 {{morningMinutes}}、ピークは {{peak}}。"
+            },
+            "lateNight": {
+              "v1": "今日は深夜帯の記録が多めです（{{nightMinutes}}、約 {{nightPct}}）。夜またぎのリズムです。",
+              "v2": "深夜帯に {{nightMinutes}}（約 {{nightPct}}）。やや夜型の一日でした。"
+            },
+            "sparse": {
+              "v1": "今日のアクティブ時間は {{activeHours}} 時間のみ。ピークは {{peak}} 前後（{{peakMinutes}}）。",
+              "v2": "時間が分散しており、{{activeHours}} 時間のみ活動。最忙でも {{peak}} の {{peakMinutes}}。"
+            },
+            "balanced": {
+              "v1": "今日は {{activeHours}} 時間にわたってバランスよく分布。ピークは {{peak}}。",
+              "v2": "一日を通じて均等に分布：{{activeHours}} 時間活動、中心は {{peak}} あたり。"
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "今日はほぼ全時間が「{{cat}}」系（{{minutes}}、約 {{pct}}）。主力アプリは {{apps}}。",
+              "v2": "「{{cat}}」一強の日：{{minutes}}（{{pct}}）、コアは {{apps}}。"
+            },
+            "twoCategories": {
+              "v1": "「{{cat1}}」系 計 {{min1}}（{{pct1}}）、主に {{apps1}}；「{{cat2}}」系 計 {{min2}}（{{pct2}}）、主に {{apps2}}。",
+              "v2": "今日は 2 カテゴリ中心：「{{cat1}}」{{min1}}（{{pct1}}、{{apps1}}）と「{{cat2}}」{{min2}}（{{pct2}}、{{apps2}}）。"
+            },
+            "threeCategories": {
+              "v1": "今日は 3 カテゴリに分布：「{{cat1}}」{{min1}}（{{pct1}}、主力 {{apps1}}）、「{{cat2}}」{{min2}}（{{pct2}}）、「{{cat3}}」{{min3}}（{{pct3}}）。",
+              "v2": "幅広い分布：「{{cat1}}」{{pct1}}（{{min1}}、{{apps1}}）、「{{cat2}}」{{pct2}}（{{min2}}）、「{{cat3}}」{{pct3}}（{{min3}}）。"
+            }
+          },
+          "highlights": {
+            "topGap": {
+              "v1": "Top アプリ {{top1}}（{{top1Min}}）は 2 位 {{top2}}（{{top2Min}}）を大きく引き離し、メイン感が強い一日でした。",
+              "v2": "{{top1}}（{{top1Min}}）は {{top2}}（{{top2Min}}）の 2 倍以上で、メインの流れが明確。"
+            },
+            "topShareHigh": {
+              "v1": "{{app}} 1 つで今日の {{pct}} を占めており、集中度が非常に高めです。",
+              "v2": "「{{app}}」が今日の {{pct}} を吸収、ほぼ一極集中。"
+            },
+            "peakHourHigh": {
+              "v1": "{{hour}}:00–{{nextHour}}:00 の 1 時間が単独で {{peakMinutes}}（約 {{peakPct}}）を担い、明確なピーク。",
+              "v2": "今日の {{peakPct}} は {{hour}} の 1 時間に集中（{{peakMinutes}}）。"
+            },
+            "nightPresence": {
+              "v1": "深夜帯にも {{nightMinutes}} の記録あり。深夜作業や時差作業の可能性。",
+              "v2": "深夜帯に {{nightMinutes}}。睡眠時間に注意しましょう。"
+            },
+            "broadSpread": {
+              "v1": "Top アプリは {{topPct}} のみ、{{categoryCount}} カテゴリに分散した「広く浅く」の一日。",
+              "v2": "今日は明確なメインがなく（Top {{topPct}}）、{{categoryCount}} カテゴリをカバー。"
+            },
+            "none": "今日は特に目立つ異常はなく、安定した一日でした。"
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top アプリ {{app}} が {{topPct}}、カテゴリは {{categoryCount}} つのみ。集中度が非常に高めです。",
+              "v2": "今日の集中度は良好：{{app}} が {{topPct}}、カテゴリ {{categoryCount}} 個以内。"
+            },
+            "goodFocus": {
+              "v1": "Top アプリ {{app}} が {{topPct}}、{{categoryCount}} カテゴリ。まずまずの集中度。",
+              "v2": "{{app}} が今日のメイン（{{topPct}}）、{{categoryCount}} カテゴリをカバー。"
+            },
+            "moderate": {
+              "v1": "Top アプリは {{topPct}}、{{categoryCount}} カテゴリで、ある程度のマルチタスクあり。",
+              "v2": "今日の集中度は普通：メイン {{topPct}}、{{categoryCount}} カテゴリ。"
+            },
+            "fragmented": {
+              "v1": "Top アプリは {{topPct}} のみ、{{categoryCount}} カテゴリに分散。注意散漫気味。",
+              "v2": "今日は切り替えが多く、メイン {{topPct}}、{{categoryCount}} カテゴリに分散。"
+            },
+            "tooShort": {
+              "v1": "今日のデータは少なめ（Top {{topPct}}、{{categoryCount}} カテゴリ）。集中度の評価は参考程度。",
+              "v2": "今日の記録は短く、集中度の判定はあてになりません。"
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "主要アプリ {{app}} の比率は約 {{pct}} で、集中度が高くメインの流れが安定しています。",
+              "v2": "今日は {{app}} が明確なメイン（約 {{pct}}）。集中度は高め。"
+            },
+            "steady": {
+              "v1": "今日のペースは比較的安定しており、マルチタスクの比率も適度です。",
+              "v2": "今日は分布が均等で、明確な偏りはありません。",
+              "v3": "時間配分が安定しており、ペースも一定でした。"
+            },
+            "balanced": {
+              "v1": "作業系 約 {{workPct}}、娯楽系 約 {{funPct}} で、バランスのとれた一日でした。",
+              "v2": "今日は作業と娯楽がそれぞれ約 {{workPct}} / {{funPct}}。バランス良好。"
+            },
+            "funHeavy": {
+              "v1": "娯楽系の比率は約 {{pct}}、主に {{apps}} に時間が使われました。",
+              "v2": "今日は娯楽が多め（約 {{pct}}）、{{apps}} が中心。"
+            },
+            "scattered": {
+              "v1": "今日はアプリの切り替えが多く、全体的に集中度がやや低めかもしれません。",
+              "v2": "今日は活動が分散しており、明確なメインアプリがありません。"
+            },
+            "light": {
+              "v1": "今日はパソコンの使用時間が少なく、記録された活動も限定的です。",
+              "v2": "今日は記録が短く、判断材料が少なめです。"
+            },
+            "funAppsFallback": "いくつかの娯楽系アプリ"
+          },
+          "suggestion": {
+            "nightHeavy": {
+              "v1": "深夜帯に約 {{minutes}} の記録があります。生活リズムに留意し、必要に応じて夜間の作業量を調整しましょう。",
+              "v2": "深夜に {{minutes}}。少し前倒しして睡眠の余裕を確保しましょう。"
+            },
+            "funHeavy": {
+              "v1": "今日は娯楽系の比率が高め（約 {{pct}}）。重要タスクのためにより集中した時間枠を確保しましょう。",
+              "v2": "娯楽が {{pct}} を占めました。重要タスクのために集中ブロックを 1 つ確保しましょう。"
+            },
+            "eveningHeavy": {
+              "v1": "今日の活動は夜に集中しています。コアなタスクは可能な限り日中に前倒しし、夜は休息時間を確保するのがおすすめです。",
+              "v2": "今日は夜に偏り。次回は午後に前倒しして、夜は休息に充てましょう。"
+            },
+            "scattered": {
+              "v1": "もっとも重要なタスクのために連続した時間枠を確保し、切り替えを減らしましょう。",
+              "v2": "今日は切り替えが多めでした。次は「1 ブロック 1 タスク」のリストを先に作ってから着手しましょう。"
+            },
+            "short": {
+              "v1": "今日は連続して使える時間枠が短かったので、優先度の高いタスクを先に処理しましょう。",
+              "v2": "連続時間が短い日でした。限られた時間は優先度の高い作業に集中させましょう。"
+            },
+            "workIntense": {
+              "v1": "今日は作業系の負荷が高め。明日は休息や回復の時間を予定に入れましょう。",
+              "v2": "高密度な一日。連日の消耗を避けるため、回復時間を確保しましょう。"
+            },
+            "default": {
+              "v1": "全体的に良いペースです。この調子を保ちましょう。",
+              "v2": "ペースは悪くありません。次はもう少し具体的な小目標を設定してみましょう。",
+              "v3": "今日は全体的に安定。1 つの方向を選んで少し深掘りするのもよいでしょう。"
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "今日は作業量が充実しており、かなりの成果が積み上がっています。",
+              "v2": "高い投入量の一日。生産的に時間を使えました。"
+            },
+            "heavyWork": {
+              "v1": "今日は作業系で高密度に推進。引き締まったペースでした。",
+              "v2": "典型的なワークデイ：締まったペースと確かな成果。"
+            },
+            "balanced": {
+              "v1": "今日は安定して進められ、よい成果が積み上がりました。",
+              "v2": "今日は順調に推進し、心地よいペースでした。",
+              "v3": "適度な作業量の一日で、進捗もそれなり。"
+            },
+            "balancedWithCategory": {
+              "v1": "「{{category}}」を中心に安定して進められた一日でした。",
+              "v2": "「{{category}}」を軸に着実に進めた一日。"
+            },
+            "light": {
+              "v1": "今日はゆったりめのペースでした。残り時間で重点投入を補えます。",
+              "v2": "ゆったり目の一日。重要事項に時間を割けばより充実するでしょう。"
+            },
+            "lightFun": {
+              "v1": "今日は娯楽中心で、リラックスしたペースでした。",
+              "v2": "リラックス型の一日で、娯楽の比重が大きめでした。"
+            },
+            "minimal": "今日はパソコンの使用が少なく、他の活動に時間を割いていた可能性があります。"
+          }
+        },
+        "week": {
+          "workOverview": {
+            "categoryLed": "今週のメインは「{{category}}」系アプリ（約 {{pct}}）。コア利用：{{apps}}、活動日 {{activeDays}} 日。",
+            "normal": "今週は主に {{apps}} を中心に進め、{{activeDays}} 日のアクティブ日をカバーしました。"
+          },
+          "timePattern": {
+            "weekdayDominant": {
+              "v1": "今週は平日（月〜金）が約 {{pct}} を占めました。ピークは {{peak}}（{{peakMinutes}}）。",
+              "v2": "今週はほぼ平日に活動が集中（{{pct}}）。ピーク日は {{peak}}（{{peakMinutes}}）。"
+            },
+            "weekendDominant": {
+              "v1": "今週は週末の比重が大きめ（約 {{pct}}）。ピーク日は {{peak}}（{{peakMinutes}}）。",
+              "v2": "週末が今週の {{pct}} を担当。{{peak}} がピーク（{{peakMinutes}}）。"
+            },
+            "volatile": {
+              "v1": "今週は日ごとのばらつきが大きく、{{peak}} は {{peakMinutes}}、対して {{low}} は {{lowMinutes}}。",
+              "v2": "今週はリズムの起伏が目立つ：ピーク {{peak}}（{{peakMinutes}}）と谷 {{low}}（{{lowMinutes}}）。"
+            },
+            "consistent": {
+              "v1": "今週は {{activeDays}} 日にわたり均等に分布。ピーク日は {{peak}}（{{peakMinutes}}）。",
+              "v2": "今週は安定した分布（{{activeDays}} 日活動）。ピークは {{peak}}（{{peakMinutes}}）。"
+            },
+            "balanced": {
+              "v1": "今週は {{activeDays}} 日のアクティブ日を、全体的にバランスよくカバー。",
+              "v2": "今週は {{activeDays}} 日にわたって全体的に均一に分布。"
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "今週はほぼ全時間が「{{cat}}」（{{minutes}}、約 {{pct}}）。主力アプリは {{apps}}。",
+              "v2": "「{{cat}}」一強の週：{{minutes}}（{{pct}}）、コアは {{apps}}。"
+            },
+            "twoCategories": {
+              "v1": "「{{cat1}}」系 計 {{min1}}（{{pct1}}）、主に {{apps1}}；「{{cat2}}」系 計 {{min2}}（{{pct2}}）、主に {{apps2}}。",
+              "v2": "今週は 2 カテゴリ中心：「{{cat1}}」{{min1}}（{{pct1}}、{{apps1}}）と「{{cat2}}」{{min2}}（{{pct2}}、{{apps2}}）。"
+            },
+            "threeCategories": {
+              "v1": "今週は 3 カテゴリに分布：「{{cat1}}」{{min1}}（{{pct1}}、主力 {{apps1}}）、「{{cat2}}」{{min2}}（{{pct2}}）、「{{cat3}}」{{min3}}（{{pct3}}）。",
+              "v2": "幅広い分布：「{{cat1}}」{{pct1}}（{{min1}}、{{apps1}}）、「{{cat2}}」{{pct2}}（{{min2}}）、「{{cat3}}」{{pct3}}（{{min3}}）。"
+            }
+          },
+          "highlights": {
+            "peakDayHigh": {
+              "v1": "{{weekday}} だけで今週 {{peakMinutes}}（約 {{peakPct}}）を担い、明確なピーク日。",
+              "v2": "今週の {{peakPct}} は {{weekday}}（{{peakMinutes}}）に集中。"
+            },
+            "weekendOff": {
+              "v1": "今週は週末の記録がゼロ。平日に合計 {{weekdayMinutes}}。",
+              "v2": "週末完全オフ。{{weekdayMinutes}} はすべて平日に集中。"
+            },
+            "weekendMain": {
+              "v1": "週末が {{weekendMinutes}}（{{weekendPct}}）を担い、平日より目立つ存在。",
+              "v2": "今週は週末が主役（{{weekendMinutes}}、{{weekendPct}}）。"
+            },
+            "topShareHigh": {
+              "v1": "{{app}} 1 つで今週 {{pct}} を占め、集中度が非常に高め。",
+              "v2": "「{{app}}」が今週の {{pct}} を吸収、ほぼ一極集中。"
+            },
+            "fullAttendance": {
+              "v1": "今週は 7 日すべて記録あり、フル出席。",
+              "v2": "毎日記録ありの完全出席週。"
+            },
+            "none": "今週は特に目立つ異常はなく、安定した週でした。"
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top アプリ {{app}} が {{topPct}}、カテゴリは {{categoryCount}} つのみ、{{activeDays}} 日活動。集中度が非常に高め。",
+              "v2": "今週の集中度は良好：{{app}} が {{topPct}}、{{categoryCount}} カテゴリ以内、{{activeDays}} 日活動。"
+            },
+            "goodFocus": {
+              "v1": "Top アプリ {{app}} が {{topPct}}、{{categoryCount}} カテゴリ、{{activeDays}} 日活動。まずまずの集中度。",
+              "v2": "{{app}} が今週のメイン（{{topPct}}）、{{categoryCount}} カテゴリをカバー。"
+            },
+            "moderate": {
+              "v1": "Top アプリは {{topPct}}、{{categoryCount}} カテゴリで、ある程度のマルチタスクあり。",
+              "v2": "今週の集中度は普通：メイン {{topPct}}、{{categoryCount}} カテゴリ。"
+            },
+            "fragmented": {
+              "v1": "Top アプリは {{topPct}} のみ、{{categoryCount}} カテゴリに分散。注意散漫気味。",
+              "v2": "今週は切り替えが多く、メイン {{topPct}}、{{categoryCount}} カテゴリに分散。"
+            },
+            "tooShort": {
+              "v1": "今週のデータは少なめ（Top {{topPct}}、{{categoryCount}} カテゴリ）。集中度の評価は参考程度。",
+              "v2": "今週の記録は短く、集中度の判定はあてになりません。"
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "主要アプリ {{app}} の比率は約 {{pct}} で、週を通じてメインの流れが明確、集中度が高いです。",
+              "v2": "「{{app}}」が今週の明確なメイン（約 {{pct}}）。"
+            },
+            "steady": {
+              "v1": "今週のペースは比較的安定しており、マルチタスク比率も適度です。",
+              "v2": "今週は分布が均等で、明確な偏りはありません。",
+              "v3": "時間配分が安定し、全体ペースは一定でした。"
+            },
+            "balanced": {
+              "v1": "作業系 約 {{workPct}}、娯楽系 約 {{funPct}} で、バランスのとれた週でした。",
+              "v2": "今週は作業と娯楽がそれぞれ約 {{workPct}} / {{funPct}}。"
+            },
+            "funHeavy": {
+              "v1": "今週は娯楽系の比率が約 {{pct}}、作業系より明確に高めです。",
+              "v2": "今週は娯楽が {{pct}}。作業系を上回るカテゴリでした。"
+            },
+            "volatile": {
+              "v1": "今週は日ごとの時間差が大きく、ペースの揺らぎが目立ちます。",
+              "v2": "今週は起伏が大きく、強い日と軽い日が混在。"
+            },
+            "scattered": {
+              "v1": "今週はアプリ切り替えが頻繁で、集中度に改善余地があります。",
+              "v2": "今週は突出したメインアプリがなく、時間が分散気味。"
+            },
+            "light": {
+              "v1": "今週は全体的な使用時間が少なめで、記録された活動も限定的です。",
+              "v2": "今週は記録が短め。判断材料が少なめです。"
+            }
+          },
+          "suggestion": {
+            "sparse": {
+              "v1": "今週は {{activeDays}} 日しか記録がありません。一定のリズムを作るとよいでしょう。",
+              "v2": "今週は空白日が多め（{{activeDays}} 日のみ）。毎日の固定ブロックを試してみましょう。"
+            },
+            "funHeavy": {
+              "v1": "今週は娯楽系の比率が約 {{pct}} と高め。集中タスクの時間を増やしましょう。",
+              "v2": "娯楽が今週 {{pct}}。来週は集中時間をもう少し確保しましょう。"
+            },
+            "volatile": {
+              "v1": "日々の作業量を平準化し、特定日への過度な負荷を避けましょう。",
+              "v2": "今週は起伏大。来週は毎日の「最低投入」目標を決めてみましょう。"
+            },
+            "scattered": {
+              "v1": "毎日の重点タスクを決めて、メインアプリにまとまった時間を割り当てましょう。",
+              "v2": "来週は固定の重点を 2〜3 個に絞って集中投入しましょう。"
+            },
+            "solidPace": {
+              "v1": "今週は安定したペースで広くカバーできています。この調子を保ちましょう。",
+              "v2": "良いリズムでした。来週は少し深めの目標に挑戦してみましょう。"
+            },
+            "default": {
+              "v1": "来週は 1〜2 個の重点方向を決めて、メインの流れをよりはっきりさせましょう。",
+              "v2": "来週は毎日「もっとも重要なこと」を一文で書き出してみましょう。",
+              "v3": "今週は全体的に良好。1 方向を選んで少し深掘りしてみましょう。"
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "今週は作業量が充実し、週全体で十分な成果が出ています。",
+              "v2": "高い投入量の週。時間を非常によく活かせました。"
+            },
+            "heavyWithCategory": {
+              "v1": "今週は「{{category}}」を中心に推進し、確かな積み上げになりました。",
+              "v2": "「{{category}}」を軸に密度の高い週でした。"
+            },
+            "balanced": {
+              "v1": "今週は安定して進められ、良いペースでした。",
+              "v2": "今週は順調に推進、心地よいリズムでした。",
+              "v3": "適度な作業量で、それなりの進捗が出た週。"
+            },
+            "light": {
+              "v1": "今週はゆったりめのペースで、必要に応じて重点投入を増やせます。",
+              "v2": "緩やかな週。重要事項に時間を充てるとより充実するでしょう。"
+            },
+            "lightFun": {
+              "v1": "今週は娯楽中心で、全体的にリラックスしたペースでした。",
+              "v2": "娯楽が中心のリラックスした週。"
+            },
+            "minimal": "今週はパソコン参加が少なめでした。空白日がないか確認してみましょう。"
+          }
+        },
+        "month": {
+          "workOverview": {
+            "categoryLed": "今月のメインは「{{category}}」系アプリ（約 {{pct}}）。コア利用：{{apps}}。{{totalDays}} 日のうち {{activeDays}} 日に記録がありました。",
+            "normal": "今月は主に {{apps}} を中心に進め、{{totalDays}} 日のうち {{activeDays}} 日に記録がありました。"
+          },
+          "timePattern": {
+            "firstHalfHeavy": {
+              "v1": "今月は前半に偏り（約 {{pct}}）。ピーク日は {{peakDate}}（{{peakMinutes}}）。",
+              "v2": "前半が今月の {{pct}} を担当。{{peakDate}} がピーク（{{peakMinutes}}）。"
+            },
+            "secondHalfHeavy": {
+              "v1": "今月は後半に偏り（約 {{pct}}）。ピーク日は {{peakDate}}（{{peakMinutes}}）。",
+              "v2": "後半が今月の {{pct}} を担当。{{peakDate}} がピーク（{{peakMinutes}}）。"
+            },
+            "volatile": {
+              "v1": "今月は日ごとのばらつきが大きく、{{peakDate}} は {{peakMinutes}}、対して {{lowDate}} は {{lowMinutes}}。",
+              "v2": "今月は起伏が目立つ：ピーク {{peakDate}}（{{peakMinutes}}）と谷 {{lowDate}}（{{lowMinutes}}）。"
+            },
+            "consistent": {
+              "v1": "今月は {{activeDays}} 日にわたり均等に分布。ピーク日は {{peakDate}}（{{peakMinutes}}）。",
+              "v2": "{{activeDays}} 日に安定的に分布した月。ピークは {{peakDate}}（{{peakMinutes}}）。"
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "今月はほぼ全時間が「{{cat}}」（{{minutes}}、約 {{pct}}）。主力アプリは {{apps}}。",
+              "v2": "「{{cat}}」一強の月：{{minutes}}（{{pct}}）、コアは {{apps}}。"
+            },
+            "twoCategories": {
+              "v1": "「{{cat1}}」系 計 {{min1}}（{{pct1}}）、主に {{apps1}}；「{{cat2}}」系 計 {{min2}}（{{pct2}}）、主に {{apps2}}。",
+              "v2": "今月は 2 カテゴリ中心：「{{cat1}}」{{min1}}（{{pct1}}、{{apps1}}）と「{{cat2}}」{{min2}}（{{pct2}}、{{apps2}}）。"
+            },
+            "threeCategories": {
+              "v1": "今月は 3 カテゴリに分布：「{{cat1}}」{{min1}}（{{pct1}}、主力 {{apps1}}）、「{{cat2}}」{{min2}}（{{pct2}}）、「{{cat3}}」{{min3}}（{{pct3}}）。",
+              "v2": "幅広い分布：「{{cat1}}」{{pct1}}（{{min1}}、{{apps1}}）、「{{cat2}}」{{pct2}}（{{min2}}）、「{{cat3}}」{{pct3}}（{{min3}}）。"
+            }
+          },
+          "highlights": {
+            "peakDayHigh": {
+              "v1": "{{peakDate}} だけで今月 {{peakMinutes}}（約 {{peakPct}}）を担い、明確なピーク日。",
+              "v2": "今月の {{peakPct}} は {{peakDate}}（{{peakMinutes}}）に集中。"
+            },
+            "fullCoverage": {
+              "v1": "{{totalDays}} 日のうち {{activeDays}} 日に記録あり、ほぼフル出席。",
+              "v2": "ほぼフル出席の月：{{totalDays}} 日中 {{activeDays}} 日に記録。"
+            },
+            "topShareHigh": {
+              "v1": "{{app}} 1 つで今月 {{pct}} を占め、集中度が非常に高め。",
+              "v2": "「{{app}}」が今月の {{pct}} を吸収、ほぼ一極集中。"
+            },
+            "broadSpread": {
+              "v1": "{{activeDays}} 日活動、{{categoryCount}} カテゴリをカバー、幅広い活動範囲。",
+              "v2": "今月は幅広く：{{activeDays}} 日活動、{{categoryCount}} カテゴリ。"
+            },
+            "none": "今月は特に目立つ異常はなく、安定した一月でした。"
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top アプリ {{app}} が {{topPct}}、カテゴリは {{categoryCount}} つのみ、{{activeDays}} 日活動。集中度が非常に高め。",
+              "v2": "今月の集中度は良好：{{app}} が {{topPct}}、{{categoryCount}} カテゴリ以内、{{activeDays}} 日活動。"
+            },
+            "goodFocus": {
+              "v1": "Top アプリ {{app}} が {{topPct}}、{{categoryCount}} カテゴリ、{{activeDays}} 日活動。まずまずの集中度。",
+              "v2": "{{app}} が今月のメイン（{{topPct}}）、{{categoryCount}} カテゴリをカバー。"
+            },
+            "moderate": {
+              "v1": "Top アプリは {{topPct}}、{{categoryCount}} カテゴリで、ある程度のマルチタスクあり。",
+              "v2": "今月の集中度は普通：メイン {{topPct}}、{{categoryCount}} カテゴリ。"
+            },
+            "fragmented": {
+              "v1": "Top アプリは {{topPct}} のみ、{{categoryCount}} カテゴリに分散。注意散漫気味。",
+              "v2": "今月は切り替えが多く、メイン {{topPct}}、{{categoryCount}} カテゴリに分散。"
+            },
+            "tooShort": {
+              "v1": "今月のデータは少なめ（Top {{topPct}}、{{categoryCount}} カテゴリ）。集中度の評価は参考程度。",
+              "v2": "今月の記録は短く、集中度の判定はあてになりません。"
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "主要アプリ {{app}} の比率は約 {{pct}} で、今月を通じてメインの流れが明確、集中度が高いです。",
+              "v2": "「{{app}}」が今月の明確なメイン（約 {{pct}}）。"
+            },
+            "steady": {
+              "v1": "今月の全体的なペースは安定しており、メインの流れが継続しています。",
+              "v2": "今月は分布が均等で、全体ペースは一定。",
+              "v3": "時間配分が安定し、メインの流れが継続。"
+            },
+            "balanced": {
+              "v1": "作業系 約 {{workPct}}、娯楽系 約 {{funPct}} で、バランスのとれた月でした。",
+              "v2": "今月は作業と娯楽がそれぞれ約 {{workPct}} / {{funPct}}。"
+            },
+            "funHeavy": {
+              "v1": "今月は娯楽系の比率が約 {{pct}}、作業系より明確に高めです。",
+              "v2": "今月は娯楽が主導カテゴリ（{{pct}}）。"
+            },
+            "volatile": {
+              "v1": "今月は日ごとの差が大きく、ペースの揺らぎが目立ちます。",
+              "v2": "今月は起伏が大きく、強い日と軽い日が混在。"
+            },
+            "scattered": {
+              "v1": "今月はアプリ切り替えが多く、メインの流れがやや分散しています。",
+              "v2": "今月は突出したメインアプリがなく、時間が広く分散。"
+            },
+            "sparse": {
+              "v1": "今月は記録のある日が {{pct}} のみで、全体的に連続性が低いです。",
+              "v2": "今月のカバー率は低め（{{pct}}）。データはまばらです。"
+            }
+          },
+          "suggestion": {
+            "sparse": {
+              "v1": "今月は空白日が多めです。より規則的な使用リズムを作るとよいでしょう。",
+              "v2": "今月は空白日が多め。来月は毎日の固定ブロックを試してみましょう。"
+            },
+            "funHeavy": {
+              "v1": "今月は娯楽系の比率が約 {{pct}} と高め。重点投入の時間を増やしましょう。",
+              "v2": "娯楽が今月 {{pct}}。来月は集中ブロックを多めに確保しましょう。"
+            },
+            "volatile": {
+              "v1": "月内の作業量をより均等に配分し、特定日への偏りを減らしましょう。",
+              "v2": "今月は起伏大。来月は毎日の「最低投入」目標を決めてみましょう。"
+            },
+            "scattered": {
+              "v1": "今月の重点を決め、優先プロジェクトに安定した時間枠を割り当てましょう。",
+              "v2": "来月は固定の重点を 2〜3 個に絞って集中投入しましょう。"
+            },
+            "solidPace": {
+              "v1": "今月は安定したペースとカバー率の高さを維持できました。深い集中目標の追加も検討できます。",
+              "v2": "今月は良いリズムとカバー率。来月は深めの目標に挑戦してみましょう。"
+            },
+            "default": {
+              "v1": "来月は 1〜2 個の重点目標を決めて、メインの流れをより焦点化させましょう。",
+              "v2": "来月は毎日「もっとも重要なこと」を一文で書き出してみましょう。",
+              "v3": "今月は全体的に良好。1 方向を選んで少し深掘りしてみましょう。"
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "今月は作業量が充実し、月全体で十分な蓄積ができました。",
+              "v2": "高い投入量の月。時間を非常によく活かせました。"
+            },
+            "heavyWithCategory": {
+              "v1": "今月は「{{category}}」を中心に推進し、確かな積み上げになりました。",
+              "v2": "「{{category}}」を軸に密度の高い月でした。"
+            },
+            "balanced": {
+              "v1": "今月はペースが安定し、全体としてよい前進でした。",
+              "v2": "今月は順調に推進、心地よいリズムでした。",
+              "v3": "適度な作業量で、それなりの進捗が出た月。"
+            },
+            "light": {
+              "v1": "今月はゆったりめのペースで、状況に応じて重点投入を増やせます。",
+              "v2": "緩やかな月。重要事項に時間を充てるとより充実するでしょう。"
+            },
+            "lightFun": {
+              "v1": "今月は娯楽中心で、全体的にリラックスしたペースでした。",
+              "v2": "娯楽が中心のリラックスした月。"
+            },
+            "minimal": "今月のパソコン参加は限定的でした。"
+          }
+        }
+      },
+      "weekday": {
+        "0": "月",
+        "1": "火",
+        "2": "水",
+        "3": "木",
+        "4": "金",
+        "5": "土",
+        "6": "日"
+      },
+      "duration": {
+        "minutes": "{{count}} 分",
+        "hours": "{{count}} 時間",
+        "hoursMinutes": "{{hours}} 時間 {{minutes}} 分"
+      },
+      "day": {
+        "overview": "{{date}} は合計 {{total}} のパソコン活動を記録し、{{activeHours}} 時間にわたって活動、{{apps}} 個の主要アプリを使用しました。",
+        "peak": "もっとも集中していた時間帯は {{hour}}:00 – {{nextHour}}:00 で、計 {{minutes}} です。",
+        "distribution": "時間帯の内訳：{{parts}}。",
+        "partTpl": "{{label}} {{minutes}}（{{percent}}）",
+        "parts": {
+          "night": "深夜",
+          "morning": "午前",
+          "afternoon": "午後",
+          "evening": "夜"
+        }
+      },
+      "week": {
+        "overview": "{{weekStart}} ~ {{weekEnd}} の週は合計 {{total}} のアクティビティを記録し、{{activeDays}} 日活動、活動日 1 日あたり平均 {{avg}} でした。",
+        "peak": "もっとも忙しかったのは {{date}}（{{weekday}}）で、計 {{minutes}} です。"
+      },
+      "month": {
+        "overview": "{{monthStart}} ~ {{monthEnd}}（計 {{totalDays}} 日）は合計 {{total}} のパソコン活動を記録し、{{activeDays}} 日活動、活動日 1 日あたり平均 {{avg}} でした。",
+        "peak": "もっとも忙しかった日は {{date}}（{{weekday}}）で、計 {{minutes}} です。",
+        "quiet": "もっとも軽かった日は {{date}}（{{weekday}}）で、わずか {{minutes}} でした。"
+      },
+      "export": {
+        "day": {
+          "frontmatterTitle": "{{date}} クイック日次レポート",
+          "heading": "{{date}} クイック日次レポート"
+        },
+        "week": {
+          "frontmatterTitle": "クイック週次レポート {{weekStart}} ~ {{weekEnd}}",
+          "heading": "クイック週次レポート · {{weekStart}} ~ {{weekEnd}}"
+        },
+        "month": {
+          "frontmatterTitle": "クイック月次レポート {{monthStart}} ~ {{monthEnd}}",
+          "heading": "クイック月次レポート · {{monthStart}} ~ {{monthEnd}}"
+        }
+      }
     },
     "daily": {
       "subtitle": "その日のスクリーンショットとアプリ使用状況を時間帯ごとに集計し、ローカルのビジョンモデルで生成します。",

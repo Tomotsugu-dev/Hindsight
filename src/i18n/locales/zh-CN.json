@@ -845,7 +845,642 @@
     },
     "monthly": {
       "title": "月报",
-      "hint": "一个月的活动趋势 + 关键事件回顾。功能开发中。"
+      "hint": "AI 月报功能开发中；可切到「快速模板」查看本月活动统计。"
+    },
+    "modeToggle": {
+      "ariaLabel": "总结生成方式",
+      "ai": "AI 总结",
+      "quick": "快速模板",
+      "aiTooltip": "本地或云端大模型读截图 + 段总结，质量更高但需要硬件 / 配置",
+      "quickTooltip": "基于活动统计的固定模板填空，瞬时返回，无硬件门槛"
+    },
+    "quick": {
+      "loading": "加载中…",
+      "empty": "这段时间没有记录到活动。",
+      "listSep": "，",
+      "categoryOther": "其他",
+      "subtitle": {
+        "day": "基于当日活动统计自动填出的简明回顾，无需大模型。",
+        "week": "基于本周活动统计自动填出的简明回顾，无需大模型。",
+        "month": "基于本月活动统计自动填出的简明回顾，无需大模型。"
+      },
+      "nav": {
+        "day": {
+          "prevAria": "前一天",
+          "nextAria": "后一天",
+          "today": "今天",
+          "yesterday": "昨天",
+          "todayBack": "回到今天"
+        },
+        "week": {
+          "prevAria": "上一周",
+          "nextAria": "下一周",
+          "thisWeek": "本周",
+          "lastWeek": "上周",
+          "thisWeekBack": "回到本周"
+        },
+        "month": {
+          "prevAria": "上一月",
+          "nextAria": "下一月",
+          "thisMonth": "本月",
+          "lastMonth": "上月",
+          "thisMonthBack": "回到本月"
+        }
+      },
+      "actions": {
+        "exportMarkdown": "导出为 Markdown",
+        "exportTooltip": "导出当前时间维度的快速总结",
+        "exportEmptyTooltip": "没有可导出的内容",
+        "dismissError": "关闭"
+      },
+      "errors": {
+        "empty": "没有可导出的内容"
+      },
+      "toast": {
+        "exported": "已导出 {{filename}}"
+      },
+      "sections": {
+        "overview": "总览",
+        "topApps": "应用排行",
+        "categories": "分类分布",
+        "dailySeries": "每日时长"
+      },
+      "analysis": {
+        "title": "智能分析",
+        "footnote": "注：由基础模板生成。配置 AI 模型后可获得更深入的智能分析。",
+        "appsJoin": "、",
+        "appEntry": "{{name}}（{{duration}}）",
+        "headings": {
+          "workOverview": "工作内容概述",
+          "timePattern": "时间节奏",
+          "categoryBreakdown": "分类构成",
+          "highlights": "亮点观察",
+          "focus": "专注度",
+          "efficiency": "效率评估",
+          "suggestion": "改进建议",
+          "summary": "今日小结"
+        },
+        "factsJoin": " ",
+        "day": {
+          "workOverview": {
+            "categoryLed": "今日主线是「{{category}}」类应用（约占 {{pct}}），核心使用：{{apps}}。",
+            "normal": "今日主要围绕 {{apps}} 推进，整体主线较为清晰。",
+            "single": "今日几乎专注在 {{topApp}} 这一个应用上，主线非常单一。",
+            "empty": "今日没有特别突出的主线应用。"
+          },
+          "timePattern": {
+            "eveningHeavy": {
+              "v1": "今日时间高度集中在晚上（{{eveningMinutes}}，约 {{eveningPct}}），峰值出现在 {{peak}} 前后。",
+              "v2": "晚上是今日的主要发力时段，累计 {{eveningMinutes}}，占整日 {{eveningPct}}，峰值约在 {{peak}}。"
+            },
+            "morningHeavy": {
+              "v1": "今日上午投入较多（{{morningMinutes}}），下午约 {{afternoonMinutes}}，峰值出现在 {{peak}}。",
+              "v2": "今日属于「上午型」节奏：上午 {{morningMinutes}}，下午 {{afternoonMinutes}}，最忙的是 {{peak}} 这一小时。"
+            },
+            "afternoonHeavy": {
+              "v1": "今日下午是主要发力时段（{{afternoonMinutes}}），上午约 {{morningMinutes}}，峰值在 {{peak}}。",
+              "v2": "今日重心在下午（{{afternoonMinutes}}），上午则较轻（{{morningMinutes}}），高峰落在 {{peak}}。"
+            },
+            "lateNight": {
+              "v1": "今日凌晨时段记录较多（{{nightMinutes}}，约 {{nightPct}}），属于跨夜节奏。",
+              "v2": "今日有 {{nightMinutes}} 落在凌晨（约 {{nightPct}}），整体偏夜猫子作息。"
+            },
+            "sparse": {
+              "v1": "今日活跃时间仅 {{activeHours}} 小时，峰值在 {{peak}} 前后（{{peakMinutes}}）。",
+              "v2": "今日时间分布比较稀疏，活跃 {{activeHours}} 小时，最忙的小时（{{peak}}）也只有 {{peakMinutes}}。"
+            },
+            "balanced": {
+              "v1": "今日时间分布较均衡，覆盖 {{activeHours}} 个活跃小时，峰值出现在 {{peak}}。",
+              "v2": "全天分布比较均匀，活跃 {{activeHours}} 小时，重心稍在 {{peak}} 一带。"
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "几乎全部时间花在「{{cat}}」类应用上（{{minutes}}，约 {{pct}}），主力应用是 {{apps}}。",
+              "v2": "「{{cat}}」类一枝独秀，共 {{minutes}}（{{pct}}），主要在 {{apps}}。"
+            },
+            "twoCategories": {
+              "v1": "「{{cat1}}」类共 {{min1}}（{{pct1}}），主要在 {{apps1}}；「{{cat2}}」类共 {{min2}}（{{pct2}}），主要在 {{apps2}}。",
+              "v2": "今日主要分布在两类：「{{cat1}}」{{min1}}（{{pct1}}，{{apps1}}）与「{{cat2}}」{{min2}}（{{pct2}}，{{apps2}}）。"
+            },
+            "threeCategories": {
+              "v1": "今日时间分布在三类：「{{cat1}}」{{min1}}（{{pct1}}，主力 {{apps1}}）、「{{cat2}}」{{min2}}（{{pct2}}）、「{{cat3}}」{{min3}}（{{pct3}}）。",
+              "v2": "今日跨类较广：「{{cat1}}」占 {{pct1}}（{{min1}}，{{apps1}}）、「{{cat2}}」占 {{pct2}}（{{min2}}）、「{{cat3}}」占 {{pct3}}（{{min3}}）。"
+            }
+          },
+          "highlights": {
+            "topGap": {
+              "v1": "Top 应用 {{top1}}（{{top1Min}}）比第二位 {{top2}}（{{top2Min}}）拉开明显距离，主线感很强。",
+              "v2": "{{top1}}（{{top1Min}}）几乎是 {{top2}}（{{top2Min}}）的两倍以上，今日主线很清晰。"
+            },
+            "topShareHigh": {
+              "v1": "{{app}} 一个应用就占了今日 {{pct}}，集中度少见。",
+              "v2": "「{{app}}」吃掉了今日 {{pct}} 的时间，几乎一枝独秀。"
+            },
+            "peakHourHigh": {
+              "v1": "{{hour}}:00–{{nextHour}}:00 这一小时单独承担了 {{peakMinutes}}（约 {{peakPct}}），是明显的高峰。",
+              "v2": "今日 {{peakPct}} 的时间都集中在 {{hour}} 这一小时（{{peakMinutes}}）。"
+            },
+            "nightPresence": {
+              "v1": "凌晨时段有 {{nightMinutes}} 记录，可能是熬夜或跨时区工作。",
+              "v2": "深夜时段也记录了 {{nightMinutes}}，注意一下睡眠时间。"
+            },
+            "broadSpread": {
+              "v1": "Top 应用只占 {{topPct}}，今日活动散布在 {{categoryCount}} 个分类，属于「广而散」的一天。",
+              "v2": "今日没有强势主线（Top 仅 {{topPct}}），但覆盖了 {{categoryCount}} 个分类，涉猎较广。"
+            },
+            "none": "今日没有特别突出的异常点，整体平稳。"
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top 应用 {{app}} 占 {{topPct}}，仅跨 {{categoryCount}} 个分类，专注度很高。",
+              "v2": "今日专注度优秀：{{app}} 占 {{topPct}}，分类集中在 {{categoryCount}} 个之内。"
+            },
+            "goodFocus": {
+              "v1": "Top 应用 {{app}} 占 {{topPct}}，跨 {{categoryCount}} 个分类，专注度不错。",
+              "v2": "{{app}} 是今日主线（{{topPct}}），覆盖 {{categoryCount}} 个分类，专注度尚可。"
+            },
+            "moderate": {
+              "v1": "Top 应用占 {{topPct}}，跨 {{categoryCount}} 个分类，存在一定多任务切换。",
+              "v2": "今日专注度中等：主线占 {{topPct}}，跨 {{categoryCount}} 类。"
+            },
+            "fragmented": {
+              "v1": "Top 应用仅 {{topPct}}，跨 {{categoryCount}} 个分类，注意力较分散。",
+              "v2": "今日切换频繁：主应用占比仅 {{topPct}}，时间分散在 {{categoryCount}} 个分类。"
+            },
+            "tooShort": {
+              "v1": "今日数据较少（Top {{topPct}}，{{categoryCount}} 类），不足以稳定评估专注度。",
+              "v2": "今日记录较短，专注度判断不太可靠。"
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "主应用 {{app}} 占比约 {{pct}}，专注度较高，主线稳定。",
+              "v2": "「{{app}}」是今日绝对主线（约 {{pct}}），专注度不错。"
+            },
+            "steady": {
+              "v1": "今日节奏比较平稳，多任务比例适中。",
+              "v2": "今日工作分布均衡，未出现明显的集中或分散。",
+              "v3": "今日时间分配较为稳定，整体节奏平稳。"
+            },
+            "balanced": {
+              "v1": "工作类约 {{workPct}}，娱乐类约 {{funPct}}，整体节奏比较均衡。",
+              "v2": "今日工作与娱乐各占约 {{workPct}} / {{funPct}}，平衡感不错。"
+            },
+            "funHeavy": {
+              "v1": "娱乐类占比约 {{pct}}，主要花在 {{apps}}。",
+              "v2": "今日娱乐类时间偏多（约 {{pct}}），主要消耗在 {{apps}}。"
+            },
+            "scattered": {
+              "v1": "今日应用切换较为频繁，整体专注度偏低。",
+              "v2": "今日活动比较分散，没有明显的主线应用。"
+            },
+            "light": {
+              "v1": "今日电脑使用较少，记录的活动比较有限。",
+              "v2": "今日记录较短，难以做更深入的判断。"
+            },
+            "funAppsFallback": "几款娱乐类应用"
+          },
+          "suggestion": {
+            "nightHeavy": {
+              "v1": "凌晨时段记录约 {{minutes}}，建议关注作息节奏，必要时调整深夜工作量。",
+              "v2": "凌晨累计 {{minutes}}，可以适当往前调整，给睡眠留出余量。"
+            },
+            "funHeavy": {
+              "v1": "今日娱乐类占比偏高（约 {{pct}}），可考虑给重点任务预留更专注的时段。",
+              "v2": "娱乐占比达到 {{pct}}，可以试着把一段集中时间留给重要任务。"
+            },
+            "eveningHeavy": {
+              "v1": "今日活动集中在晚上，建议把核心任务尽量提前到白天，给晚上留出休息时间。",
+              "v2": "晚上承担了今日大部分时间，下次可以尝试把一些任务前置到下午，让晚上更轻松。"
+            },
+            "scattered": {
+              "v1": "建议为最重要的任务预留更完整的连续时段，减少中途切换。",
+              "v2": "今日切换较频繁，下次不妨先列一个「一段一事」清单，再开工。"
+            },
+            "short": {
+              "v1": "今日连续可用时段较短，可以先处理高优先级任务。",
+              "v2": "今日连续时间不长，建议把零碎时段集中给最紧要的事。"
+            },
+            "workIntense": {
+              "v1": "今日工作类投入很高，明日可以安排一些放松或恢复时间。",
+              "v2": "今日工作密度大，记得给身体留出恢复空间，避免连日透支。"
+            },
+            "default": {
+              "v1": "整体节奏不错，继续保持。",
+              "v2": "节奏拿捏得还可以，下次可以试着设定一个更具体的小目标。",
+              "v3": "今日各方面都比较平稳，可以考虑挑选一个方向小幅加深。"
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "今日工作量饱满，已经积累了相当产出。",
+              "v2": "今日整体投入很足，是高产出的一天。"
+            },
+            "heavyWork": {
+              "v1": "今日工作类高强度推进，整体节奏紧凑。",
+              "v2": "今日是典型的工作日：节奏紧、产出实。"
+            },
+            "balanced": {
+              "v1": "今日保持稳定推进，整体节奏良好。",
+              "v2": "今日整体推进顺利，节奏比较舒服。",
+              "v3": "今日工作量适中，已经积累了不错的进展。"
+            },
+            "balancedWithCategory": {
+              "v1": "今日以「{{category}}」为主稳定推进，节奏良好。",
+              "v2": "今日围绕「{{category}}」稳步推进，整体感觉不错。"
+            },
+            "light": {
+              "v1": "今日节奏比较轻松，可在剩余时间补充一些重点投入。",
+              "v2": "今日节奏较缓，给重要的事留点专门时间会更充实。"
+            },
+            "lightFun": {
+              "v1": "今日以娱乐为主，节奏比较放松。",
+              "v2": "今日是个放松型的日子，娱乐时间占了大头。"
+            },
+            "minimal": "今日电脑参与较少，可能更多时间用在了别的事情上。"
+          }
+        },
+        "week": {
+          "workOverview": {
+            "categoryLed": "本周主线是「{{category}}」类应用（约占 {{pct}}），核心使用：{{apps}}，共 {{activeDays}} 个活跃日。",
+            "normal": "本周主要围绕 {{apps}} 推进，共 {{activeDays}} 个活跃日。"
+          },
+          "timePattern": {
+            "weekdayDominant": {
+              "v1": "本周工作日（周一到周五）承担了约 {{pct}} 的时间，最忙的是 {{peak}}（{{peakMinutes}}）。",
+              "v2": "本周时间几乎都落在工作日（{{pct}}），周末相对轻；高峰落在 {{peak}}（{{peakMinutes}}）。"
+            },
+            "weekendDominant": {
+              "v1": "本周周末时间偏多（约 {{pct}}），最忙的一天是 {{peak}}（{{peakMinutes}}）。",
+              "v2": "周末贡献了本周 {{pct}} 的时间，{{peak}} 是高峰日（{{peakMinutes}}）。"
+            },
+            "volatile": {
+              "v1": "本周日与日波动较大，高峰是 {{peak}}（{{peakMinutes}}），最轻是 {{low}}（{{lowMinutes}}）。",
+              "v2": "本周节奏起伏明显：{{peak}} 达到 {{peakMinutes}}，而 {{low}} 只有 {{lowMinutes}}。"
+            },
+            "consistent": {
+              "v1": "本周 {{activeDays}} 天分布较均衡，最忙的一天是 {{peak}}（{{peakMinutes}}）。",
+              "v2": "本周节奏比较稳，{{activeDays}} 天日均接近；峰值在 {{peak}}（{{peakMinutes}}）。"
+            },
+            "balanced": {
+              "v1": "本周覆盖 {{activeDays}} 个活跃日，整体分布较为均衡。",
+              "v2": "本周整体分布较为均匀，活跃日 {{activeDays}} 天覆盖全周。"
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "本周几乎全部时间都给了「{{cat}}」类（{{minutes}}，约 {{pct}}），主力应用 {{apps}}。",
+              "v2": "「{{cat}}」类一枝独秀，全周 {{minutes}}（{{pct}}），核心在 {{apps}}。"
+            },
+            "twoCategories": {
+              "v1": "「{{cat1}}」类共 {{min1}}（{{pct1}}），主要在 {{apps1}}；「{{cat2}}」类共 {{min2}}（{{pct2}}），主要在 {{apps2}}。",
+              "v2": "本周主要分布在两类：「{{cat1}}」{{min1}}（{{pct1}}，{{apps1}}）与「{{cat2}}」{{min2}}（{{pct2}}，{{apps2}}）。"
+            },
+            "threeCategories": {
+              "v1": "本周时间分布在三类：「{{cat1}}」{{min1}}（{{pct1}}，主力 {{apps1}}）、「{{cat2}}」{{min2}}（{{pct2}}）、「{{cat3}}」{{min3}}（{{pct3}}）。",
+              "v2": "本周跨类较广：「{{cat1}}」{{pct1}}（{{min1}}，{{apps1}}）、「{{cat2}}」{{pct2}}（{{min2}}）、「{{cat3}}」{{pct3}}（{{min3}}）。"
+            }
+          },
+          "highlights": {
+            "peakDayHigh": {
+              "v1": "{{weekday}} 单独承担了本周 {{peakMinutes}}（约 {{peakPct}}），是明显的高峰日。",
+              "v2": "本周 {{peakPct}} 的时间都集中在 {{weekday}}（{{peakMinutes}}）。"
+            },
+            "weekendOff": {
+              "v1": "本周完全没有周末记录，工作日累计 {{weekdayMinutes}}。",
+              "v2": "本周周末归零，所有 {{weekdayMinutes}} 都在工作日。"
+            },
+            "weekendMain": {
+              "v1": "本周周末贡献了 {{weekendMinutes}}（{{weekendPct}}），比工作日还突出。",
+              "v2": "周末是本周主力时段（{{weekendMinutes}}，{{weekendPct}}）。"
+            },
+            "topShareHigh": {
+              "v1": "{{app}} 一个应用就占了本周 {{pct}}，集中度极高。",
+              "v2": "「{{app}}」吃掉了本周 {{pct}} 的时间，几乎一枝独秀。"
+            },
+            "fullAttendance": {
+              "v1": "本周 7 天每天都有记录，连续度满分。",
+              "v2": "全勤一周，每天都有上机记录。"
+            },
+            "none": "本周没有特别突出的异常点，整体平稳。"
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top 应用 {{app}} 占 {{topPct}}，仅跨 {{categoryCount}} 个分类，活跃 {{activeDays}} 天，专注度很高。",
+              "v2": "本周专注度优秀：{{app}} 占 {{topPct}}，{{categoryCount}} 个分类内，{{activeDays}} 天活跃。"
+            },
+            "goodFocus": {
+              "v1": "Top 应用 {{app}} 占 {{topPct}}，跨 {{categoryCount}} 个分类，活跃 {{activeDays}} 天，专注度不错。",
+              "v2": "{{app}} 是本周主线（{{topPct}}），覆盖 {{categoryCount}} 个分类，专注度尚可。"
+            },
+            "moderate": {
+              "v1": "Top 应用占 {{topPct}}，跨 {{categoryCount}} 个分类，存在一定多任务切换。",
+              "v2": "本周专注度中等：主线占 {{topPct}}，跨 {{categoryCount}} 类。"
+            },
+            "fragmented": {
+              "v1": "Top 应用仅 {{topPct}}，跨 {{categoryCount}} 个分类，注意力较分散。",
+              "v2": "本周切换频繁：主应用占比仅 {{topPct}}，时间分散在 {{categoryCount}} 个分类。"
+            },
+            "tooShort": {
+              "v1": "本周数据较少（Top {{topPct}}，{{categoryCount}} 类），不足以稳定评估专注度。",
+              "v2": "本周记录较短，专注度判断不太可靠。"
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "主应用 {{app}} 占比约 {{pct}}，整周主线明确、专注度较高。",
+              "v2": "「{{app}}」是本周绝对主线（约 {{pct}}），主线感强。"
+            },
+            "steady": {
+              "v1": "本周节奏比较平稳，多任务比例适中。",
+              "v2": "本周工作分布均衡，没出现明显的集中或分散。",
+              "v3": "本周时间分配较稳定，整体节奏平稳。"
+            },
+            "balanced": {
+              "v1": "工作类约 {{workPct}}，娱乐类约 {{funPct}}，整周比例均衡。",
+              "v2": "本周工作与娱乐各占约 {{workPct}} / {{funPct}}，张弛有度。"
+            },
+            "funHeavy": {
+              "v1": "本周娱乐类占比约 {{pct}}，明显高于工作类。",
+              "v2": "本周娱乐类占了 {{pct}}，比工作类还要高。"
+            },
+            "volatile": {
+              "v1": "本周日与日之间时长差异较大，节奏波动明显。",
+              "v2": "本周起伏比较大，有几天偏高、有几天偏低。"
+            },
+            "scattered": {
+              "v1": "本周应用切换较频繁，专注度有待提升。",
+              "v2": "本周没有特别突出的主线应用，时间相对分散。"
+            },
+            "light": {
+              "v1": "本周整体使用较少，记录的活动有限。",
+              "v2": "本周记录较少，可参考的信号不多。"
+            }
+          },
+          "suggestion": {
+            "sparse": {
+              "v1": "本周只有 {{activeDays}} 天有记录，可以补一些规律性的工作或学习节奏。",
+              "v2": "本周空白日较多（仅 {{activeDays}} 天活跃），可以尝试每天固定一段时间。"
+            },
+            "funHeavy": {
+              "v1": "本周娱乐类占比偏高（约 {{pct}}），可适当增加专注任务的时间。",
+              "v2": "娱乐占了本周 {{pct}}，下周可以预留更多专注时段。"
+            },
+            "volatile": {
+              "v1": "建议拉平日与日之间的工作量，避免单日过度透支。",
+              "v2": "本周波动较大，下周不妨先定一个每日「最低投入」目标。"
+            },
+            "scattered": {
+              "v1": "建议确认每天的重点任务，给主线应用预留更多连续时段。",
+              "v2": "下周可以挑 2-3 个固定主线，集中投入。"
+            },
+            "solidPace": {
+              "v1": "本周节奏稳定、覆盖全面，继续保持。",
+              "v2": "本周节奏拿捏得好，下周可以挑战一个稍微更深的目标。"
+            },
+            "default": {
+              "v1": "可以为下周设定 1-2 个重点方向，让主线更清晰。",
+              "v2": "下周不妨试着每天写一句「最重要的事」。",
+              "v3": "本周整体不错，可以挑一个方向小幅加深。"
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "本周工作量饱满，整周产出可观。",
+              "v2": "本周是高产出的一周，时间使用很充实。"
+            },
+            "heavyWithCategory": {
+              "v1": "本周以「{{category}}」为主推进，积累相当扎实。",
+              "v2": "本周围绕「{{category}}」深耕，整体积累很扎实。"
+            },
+            "balanced": {
+              "v1": "本周保持了稳定推进，节奏较好。",
+              "v2": "本周整体推进顺利，节奏舒适。",
+              "v3": "本周工作量适中，已经积累了不错的进展。"
+            },
+            "light": {
+              "v1": "本周节奏轻松，可适当增加重点投入。",
+              "v2": "本周节奏较缓，给重要事项留点专门时间会更充实。"
+            },
+            "lightFun": {
+              "v1": "本周以娱乐为主，整体比较放松。",
+              "v2": "本周是放松型的一周，娱乐时间占主导。"
+            },
+            "minimal": "本周电脑参与较少，建议看下是否有断点。"
+          }
+        },
+        "month": {
+          "workOverview": {
+            "categoryLed": "本月主线是「{{category}}」类应用（约占 {{pct}}），核心使用：{{apps}}；{{totalDays}} 天中有 {{activeDays}} 天有记录。",
+            "normal": "本月主要围绕 {{apps}} 推进；{{totalDays}} 天中有 {{activeDays}} 天有记录。"
+          },
+          "timePattern": {
+            "firstHalfHeavy": {
+              "v1": "本月上半月偏重（约 {{pct}}），最忙的一天是 {{peakDate}}（{{peakMinutes}}）。",
+              "v2": "本月前半段承担了 {{pct}} 的时间，{{peakDate}} 是峰值日（{{peakMinutes}}）。"
+            },
+            "secondHalfHeavy": {
+              "v1": "本月下半月偏重（约 {{pct}}），最忙的一天是 {{peakDate}}（{{peakMinutes}}）。",
+              "v2": "本月后半段贡献了 {{pct}} 的时间，{{peakDate}} 是峰值日（{{peakMinutes}}）。"
+            },
+            "volatile": {
+              "v1": "本月日间波动较大，{{peakDate}} 达到 {{peakMinutes}}，而 {{lowDate}} 只有 {{lowMinutes}}。",
+              "v2": "本月节奏起伏明显：高峰是 {{peakDate}}（{{peakMinutes}}），低谷是 {{lowDate}}（{{lowMinutes}}）。"
+            },
+            "consistent": {
+              "v1": "本月活跃 {{activeDays}} 天，节奏较为均匀，最忙的一天是 {{peakDate}}（{{peakMinutes}}）。",
+              "v2": "本月 {{activeDays}} 天分布较稳，峰值落在 {{peakDate}}（{{peakMinutes}}）。"
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "本月几乎全部时间花在「{{cat}}」类（{{minutes}}，约 {{pct}}），主力应用 {{apps}}。",
+              "v2": "「{{cat}}」类一枝独秀，全月 {{minutes}}（{{pct}}），核心在 {{apps}}。"
+            },
+            "twoCategories": {
+              "v1": "「{{cat1}}」类共 {{min1}}（{{pct1}}），主要在 {{apps1}}；「{{cat2}}」类共 {{min2}}（{{pct2}}），主要在 {{apps2}}。",
+              "v2": "本月主要分布在两类：「{{cat1}}」{{min1}}（{{pct1}}，{{apps1}}）与「{{cat2}}」{{min2}}（{{pct2}}，{{apps2}}）。"
+            },
+            "threeCategories": {
+              "v1": "本月时间分布在三类：「{{cat1}}」{{min1}}（{{pct1}}，主力 {{apps1}}）、「{{cat2}}」{{min2}}（{{pct2}}）、「{{cat3}}」{{min3}}（{{pct3}}）。",
+              "v2": "本月跨类较广：「{{cat1}}」{{pct1}}（{{min1}}，{{apps1}}）、「{{cat2}}」{{pct2}}（{{min2}}）、「{{cat3}}」{{pct3}}（{{min3}}）。"
+            }
+          },
+          "highlights": {
+            "peakDayHigh": {
+              "v1": "{{peakDate}} 单独承担了本月 {{peakMinutes}}（约 {{peakPct}}），是明显的高峰日。",
+              "v2": "本月 {{peakPct}} 的时间都集中在 {{peakDate}}（{{peakMinutes}}）。"
+            },
+            "fullCoverage": {
+              "v1": "本月 {{totalDays}} 天里有 {{activeDays}} 天有记录，连续度很高。",
+              "v2": "几乎全勤的一月：{{totalDays}} 天里 {{activeDays}} 天有上机记录。"
+            },
+            "topShareHigh": {
+              "v1": "{{app}} 一个应用就占了本月 {{pct}}，集中度极高。",
+              "v2": "「{{app}}」吃掉了本月 {{pct}} 的时间，几乎一枝独秀。"
+            },
+            "broadSpread": {
+              "v1": "本月活跃 {{activeDays}} 天且涉猎 {{categoryCount}} 个分类，涉猎面较广。",
+              "v2": "本月覆盖广：{{activeDays}} 天活跃，跨 {{categoryCount}} 个分类。"
+            },
+            "none": "本月没有特别突出的异常点，整体平稳。"
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top 应用 {{app}} 占 {{topPct}}，仅跨 {{categoryCount}} 个分类，活跃 {{activeDays}} 天，专注度很高。",
+              "v2": "本月专注度优秀：{{app}} 占 {{topPct}}，{{categoryCount}} 个分类内，{{activeDays}} 天活跃。"
+            },
+            "goodFocus": {
+              "v1": "Top 应用 {{app}} 占 {{topPct}}，跨 {{categoryCount}} 个分类，活跃 {{activeDays}} 天，专注度不错。",
+              "v2": "{{app}} 是本月主线（{{topPct}}），覆盖 {{categoryCount}} 个分类，专注度尚可。"
+            },
+            "moderate": {
+              "v1": "Top 应用占 {{topPct}}，跨 {{categoryCount}} 个分类，存在一定多任务切换。",
+              "v2": "本月专注度中等：主线占 {{topPct}}，跨 {{categoryCount}} 类。"
+            },
+            "fragmented": {
+              "v1": "Top 应用仅 {{topPct}}，跨 {{categoryCount}} 个分类，注意力较分散。",
+              "v2": "本月切换频繁：主应用占比仅 {{topPct}}，时间分散在 {{categoryCount}} 个分类。"
+            },
+            "tooShort": {
+              "v1": "本月数据较少（Top {{topPct}}，{{categoryCount}} 类），不足以稳定评估专注度。",
+              "v2": "本月记录较短，专注度判断不太可靠。"
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "主应用 {{app}} 占比约 {{pct}}，全月主线清晰、专注度高。",
+              "v2": "「{{app}}」是本月绝对主线（约 {{pct}}），主线感强。"
+            },
+            "steady": {
+              "v1": "本月整体节奏稳定，工作主线持续推进。",
+              "v2": "本月分布较均衡，整体节奏平稳。",
+              "v3": "本月时间分配稳定，主线持续推进。"
+            },
+            "balanced": {
+              "v1": "工作类约 {{workPct}}，娱乐类约 {{funPct}}，整月比例均衡。",
+              "v2": "本月工作与娱乐各占约 {{workPct}} / {{funPct}}，平衡感不错。"
+            },
+            "funHeavy": {
+              "v1": "本月娱乐类占比约 {{pct}}，明显高于工作类。",
+              "v2": "本月娱乐类占了 {{pct}}，是主导分类。"
+            },
+            "volatile": {
+              "v1": "本月不同天的时长差异较大，节奏波动明显。",
+              "v2": "本月起伏较大，有几天偏高、有几天偏低。"
+            },
+            "scattered": {
+              "v1": "本月应用切换较多，主线相对分散。",
+              "v2": "本月没有特别突出的主线应用，时间分布较广。"
+            },
+            "sparse": {
+              "v1": "本月只有 {{pct}} 的天数有记录，整体使用并不连续。",
+              "v2": "本月活跃覆盖率较低（{{pct}}），数据较稀疏。"
+            }
+          },
+          "suggestion": {
+            "sparse": {
+              "v1": "本月有不少天没有记录，可以补一些更规律的使用节奏。",
+              "v2": "本月空白日较多，下月可以试着每天固定一段时间。"
+            },
+            "funHeavy": {
+              "v1": "本月娱乐类占比偏高（约 {{pct}}），可适当增加重点投入。",
+              "v2": "本月娱乐占 {{pct}}，下月可以预留更多专注时段。"
+            },
+            "volatile": {
+              "v1": "建议把月内工作量分配得更平均，减少单日透支。",
+              "v2": "本月波动较大，下月不妨先定一个每日「最低投入」目标。"
+            },
+            "scattered": {
+              "v1": "建议确认每月主线，给重点项目预留更稳定的时段。",
+              "v2": "下月可以挑 2-3 个固定主线，集中投入。"
+            },
+            "solidPace": {
+              "v1": "本月节奏稳定且覆盖率高，可以考虑增加深度专注的小目标。",
+              "v2": "本月覆盖很全且稳定，下月可以挑战一个稍微更深的目标。"
+            },
+            "default": {
+              "v1": "可以为下月设定 1-2 个重点目标，让主线更聚焦。",
+              "v2": "下月不妨试着每天写一句「最重要的事」。",
+              "v3": "本月整体不错，可以挑一个方向小幅加深。"
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "本月工作量饱满，整月积累可观。",
+              "v2": "本月是高产出的一月，时间使用很充实。"
+            },
+            "heavyWithCategory": {
+              "v1": "本月以「{{category}}」为主推进，积累相当扎实。",
+              "v2": "本月围绕「{{category}}」深耕，整体积累很扎实。"
+            },
+            "balanced": {
+              "v1": "本月节奏稳定，整体推进良好。",
+              "v2": "本月整体推进顺利，节奏舒适。",
+              "v3": "本月工作量适中，已经积累了不错的进展。"
+            },
+            "light": {
+              "v1": "本月节奏轻松，可视情况增加重点投入。",
+              "v2": "本月节奏较缓，给重要事项留点专门时间会更充实。"
+            },
+            "lightFun": {
+              "v1": "本月以娱乐为主，整体节奏较为放松。",
+              "v2": "本月是放松型的一月，娱乐时间占主导。"
+            },
+            "minimal": "本月电脑参与较少。"
+          }
+        }
+      },
+      "weekday": {
+        "0": "周一",
+        "1": "周二",
+        "2": "周三",
+        "3": "周四",
+        "4": "周五",
+        "5": "周六",
+        "6": "周日"
+      },
+      "duration": {
+        "minutes": "{{count}} 分钟",
+        "hours": "{{count}} 小时",
+        "hoursMinutes": "{{hours}} 小时 {{minutes}} 分钟"
+      },
+      "day": {
+        "overview": "{{date}} 这一天你共记录了 {{total}} 的电脑活动，覆盖 {{activeHours}} 个活跃小时，涉及 {{apps}} 个常用应用。",
+        "peak": "时长最集中的是 {{hour}}:00 – {{nextHour}}:00 这一小时，共 {{minutes}}。",
+        "distribution": "时间分布：{{parts}}。",
+        "partTpl": "{{label}} {{minutes}}（{{percent}}）",
+        "parts": {
+          "night": "凌晨",
+          "morning": "上午",
+          "afternoon": "下午",
+          "evening": "晚上"
+        }
+      },
+      "week": {
+        "overview": "{{weekStart}} ~ {{weekEnd}} 这一周共记录 {{total}} 的活动，覆盖 {{activeDays}} 天，平均每个活跃日约 {{avg}}。",
+        "peak": "最忙的是 {{date}}（{{weekday}}），当天共 {{minutes}}。"
+      },
+      "month": {
+        "overview": "{{monthStart}} ~ {{monthEnd}}（共 {{totalDays}} 天）这个月你共记录 {{total}} 的电脑活动，覆盖 {{activeDays}} 个活跃日，平均每个活跃日约 {{avg}}。",
+        "peak": "最忙的一天是 {{date}}（{{weekday}}），共 {{minutes}}。",
+        "quiet": "最轻松的一天是 {{date}}（{{weekday}}），仅 {{minutes}}。"
+      },
+      "export": {
+        "day": {
+          "frontmatterTitle": "{{date}} 快速日报",
+          "heading": "{{date}} 快速日报"
+        },
+        "week": {
+          "frontmatterTitle": "快速周报 {{weekStart}} ~ {{weekEnd}}",
+          "heading": "快速周报 · {{weekStart}} ~ {{weekEnd}}"
+        },
+        "month": {
+          "frontmatterTitle": "快速月报 {{monthStart}} ~ {{monthEnd}}",
+          "heading": "快速月报 · {{monthStart}} ~ {{monthEnd}}"
+        }
+      }
     },
     "daily": {
       "subtitle": "按时段汇总当日截图 + 应用使用，本地 vision 模型生成",

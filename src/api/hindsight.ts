@@ -91,6 +91,93 @@ export interface TimeRange {
   end: string;
 }
 
+/** 快速模板总结的统计单元（top app 列表行 / 分类占比行 共用）。 */
+export interface QuickUsageEntry {
+  /** 显示名：app 是组的 displayName；category 是 categoryId（前端用 useCategories 拼 name） */
+  key: string;
+  minutes: number;
+  /** 占总时长比例 0..=1；分类行用，应用行也填，前端可选不渲染 */
+  percent: number;
+  /** 仅 top apps 用：分类 id；其它场景空串 */
+  categoryId: string;
+  /** 仅 top apps 用：AppIcon 查图标用的代表 process_name；其它场景空串 */
+  iconProcess: string;
+}
+
+/** 一天里的时段桶：night(0–5) / morning(6–11) / afternoon(12–17) / evening(18–23)。 */
+export interface QuickDayPart {
+  /** "night" / "morning" / "afternoon" / "evening" */
+  key: string;
+  minutes: number;
+  percent: number;
+}
+
+/** 周/月报里"最忙/最闲那天"的指针。 */
+export interface QuickPeakDay {
+  /** "YYYY-MM-DD" */
+  date: string;
+  minutes: number;
+  /** 0..=6 周一起算（跟 chrono::Weekday::num_days_from_monday 对齐） */
+  weekday: number;
+}
+
+/** 周/月报里逐日时长（按日期升序）。 */
+export interface QuickDailyPoint {
+  date: string;
+  minutes: number;
+}
+
+/** 日报维度的快速模板数据。 */
+export interface QuickDaySummary {
+  /** "YYYY-MM-DD" */
+  date: string;
+  totalMinutes: number;
+  /** 0..=24 */
+  activeHours: number;
+  /** 0..=23；totalMinutes=0 时为 null */
+  peakHour: number | null;
+  peakHourMinutes: number;
+  dayParts: QuickDayPart[];
+  topApps: QuickUsageEntry[];
+  categories: QuickUsageEntry[];
+}
+
+/** 周报维度。 */
+export interface QuickWeekSummary {
+  /** 周一日期 "YYYY-MM-DD" */
+  weekStart: string;
+  /** 周日日期 "YYYY-MM-DD" */
+  weekEnd: string;
+  totalMinutes: number;
+  /** 7 天里有活动的天数 */
+  activeDays: number;
+  /** 日均（基于 activeDays；activeDays=0 时为 0） */
+  dailyAverageMinutes: number;
+  peakDay: QuickPeakDay | null;
+  dailySeries: QuickDailyPoint[];
+  topApps: QuickUsageEntry[];
+  categories: QuickUsageEntry[];
+}
+
+/** 月报维度。 */
+export interface QuickMonthSummary {
+  /** 月份的第一天 "YYYY-MM-DD" */
+  monthStart: string;
+  /** 月份的最后一天 "YYYY-MM-DD" */
+  monthEnd: string;
+  /** 月内总天数（28-31） */
+  totalDays: number;
+  totalMinutes: number;
+  activeDays: number;
+  dailyAverageMinutes: number;
+  peakDay: QuickPeakDay | null;
+  /** 月内时长最低那天；仅 activeDays >= 2 时返回 */
+  quietDay: QuickPeakDay | null;
+  dailySeries: QuickDailyPoint[];
+  topApps: QuickUsageEntry[];
+  categories: QuickUsageEntry[];
+}
+
 export interface AiSegment {
   label: string;
   /** 0..=23 */
@@ -218,11 +305,7 @@ export interface PartialDownload {
 export const MODEL_DOWNLOAD_EVENT = "ai://model-download-progress";
 
 /** 下载进度阶段。`downloaded` / `total` 只在 downloading 阶段有意义。 */
-export type EngineDownloadPhase =
-  | "downloading"
-  | "verifying"
-  | "extracting"
-  | "done";
+export type EngineDownloadPhase = "downloading" | "verifying" | "extracting" | "done";
 
 /** 下载阶段：`engine` = llama.cpp binary、`runtime` = onnxruntime dylib。
  *  download_binary 命令把两阶段串联跑，前端按这个字段切换提示文字
@@ -559,12 +642,7 @@ export const api = {
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_day_apps", { dayOffset, limit, deviceId }),
-  getHourApps: (
-    dayOffset: number,
-    hour: number,
-    limit?: number,
-    deviceId?: string,
-  ) =>
+  getHourApps: (dayOffset: number, hour: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
   getWeekDays: (weekOffset: number, deviceId?: string) =>
     invoke<DaySummaryDto[]>("get_week_days", { weekOffset, deviceId }),
@@ -574,29 +652,33 @@ export const api = {
     invoke<DaySummaryDto[]>("get_month_days", { monthOffset, deviceId }),
   getMonthApps: (monthOffset: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_month_apps", { monthOffset, limit, deviceId }),
+  /** 拉某天的快速模板总结（纯 SQL 聚合，不调 LLM；瞬时返回）。
+   *  跟 AI 总结互补，给没有本地大模型硬件的用户用。 */
+  getQuickDaySummary: (dayOffset: number, deviceId?: string) =>
+    invoke<QuickDaySummary>("get_quick_day_summary", { dayOffset, deviceId }),
+  /** 拉某周的快速模板总结。weekOffset = 0 本周，-1 上周。 */
+  getQuickWeekSummary: (weekOffset: number, deviceId?: string) =>
+    invoke<QuickWeekSummary>("get_quick_week_summary", { weekOffset, deviceId }),
+  /** 拉某月的快速模板总结。monthOffset = 0 本月，-1 上月。 */
+  getQuickMonthSummary: (monthOffset: number, deviceId?: string) =>
+    invoke<QuickMonthSummary>("get_quick_month_summary", { monthOffset, deviceId }),
   listCategories: () => invoke<Category[]>("list_categories"),
-  createCategory: (input: CategoryInput) =>
-    invoke<Category>("create_category", { input }),
+  createCategory: (input: CategoryInput) => invoke<Category>("create_category", { input }),
   updateCategory: (id: string, patch: CategoryPatch) =>
     invoke<void>("update_category", { id, patch }),
   deleteCategory: (id: string) => invoke<void>("delete_category", { id }),
-  reorderCategories: (orderedIds: string[]) =>
-    invoke<void>("reorder_categories", { orderedIds }),
+  reorderCategories: (orderedIds: string[]) => invoke<void>("reorder_categories", { orderedIds }),
   assignApp: (processName: string, categoryId: string) =>
     invoke<void>("assign_app_to_category", { processName, categoryId }),
-  unassignApp: (processName: string) =>
-    invoke<void>("unassign_app", { processName }),
+  unassignApp: (processName: string) => invoke<void>("unassign_app", { processName }),
   listUnclassifiedApps: (daysBack?: number) =>
     invoke<UnclassifiedApp[]>("list_unclassified_apps", { daysBack }),
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
-  createAppGroup: (displayName: string) =>
-    invoke<string>("create_app_group", { displayName }),
-  deleteAppGroup: (groupId: string) =>
-    invoke<void>("delete_app_group", { groupId }),
+  createAppGroup: (displayName: string) => invoke<string>("create_app_group", { displayName }),
+  deleteAppGroup: (groupId: string) => invoke<void>("delete_app_group", { groupId }),
   mergeAppGroup: (processName: string, targetGroupId: string) =>
     invoke<void>("merge_app_group", { processName, targetGroupId }),
-  unmergeAppGroup: (processName: string) =>
-    invoke<void>("unmerge_app_group", { processName }),
+  unmergeAppGroup: (processName: string) => invoke<void>("unmerge_app_group", { processName }),
   renameAppGroup: (groupId: string, displayName: string) =>
     invoke<void>("rename_app_group", { groupId, displayName }),
   assignAppGroupCategory: (groupId: string, categoryId: string | null) =>
@@ -604,11 +686,9 @@ export const api = {
   startCapture: () => invoke<void>("start_capture"),
   stopCapture: () => invoke<void>("stop_capture"),
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),
-  getAppIcon: (processName: string) =>
-    invoke<string | null>("get_app_icon", { processName }),
+  getAppIcon: (processName: string) => invoke<string | null>("get_app_icon", { processName }),
   getSettings: () => invoke<Settings>("get_settings"),
-  updateSettings: (patch: SettingsPatch) =>
-    invoke<Settings>("update_settings", { patch }),
+  updateSettings: (patch: SettingsPatch) => invoke<Settings>("update_settings", { patch }),
   getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
   purgeActivities: () => invoke<void>("purge_activities"),
   purgeScreenshots: () => invoke<void>("purge_screenshots"),
@@ -616,11 +696,8 @@ export const api = {
   getDataRoot: () => invoke<string>("get_data_root"),
   setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),
   listDevices: () => invoke<DeviceRow[]>("list_devices"),
-  updateSelfDevice: (
-    name?: string,
-    color?: string,
-    icon?: string,
-  ) => invoke<DeviceRow>("update_self_device", { name, color, icon }),
+  updateSelfDevice: (name?: string, color?: string, icon?: string) =>
+    invoke<DeviceRow>("update_self_device", { name, color, icon }),
   authStatus: () => invoke<AuthState>("auth_status"),
   signInWithGoogle: () => invoke<AuthState>("sign_in_with_google"),
   signOut: () => invoke<void>("sign_out"),
@@ -649,11 +726,9 @@ export const api = {
    *  目录不存在或为空都返回 []，不抛错。 */
   listLocalModels: () => invoke<ModelEntry[]>("list_local_models"),
   /** 删除一个本地 GGUF。filename 必须是 basename（不含路径分隔符）。 */
-  deleteModel: (filename: string) =>
-    invoke<void>("delete_model", { filename }),
+  deleteModel: (filename: string) => invoke<void>("delete_model", { filename }),
   /** Hindsight 内置推荐表，前端拿来渲染推荐卡片。静态数据。 */
-  listRecommendedModels: () =>
-    invoke<RecommendedModel[]>("list_recommended_models"),
+  listRecommendedModels: () => invoke<RecommendedModel[]>("list_recommended_models"),
   /** 从 HuggingFace 下载一个 GGUF 文件到 settings.ai.modelsPath。
    *  进度通过 listen(MODEL_DOWNLOAD_EVENT, ...) 拿。
    *  Promise resolve = 整个文件下载完毕；reject = 任何阶段失败（含被 cancel——
@@ -664,12 +739,7 @@ export const api = {
    *  同名（比如 unsloth 系列都是 mmproj-F16.gguf），前端按 `<mainStem>__<hfName>` 起独立
    *  名字落盘，避免互相覆盖。不传则跟 file 一样。progress event / cancel 都按 saveAs 索引。
    *  返回值是落盘后的完整路径。 */
-  downloadModel: (
-    repo: string,
-    file: string,
-    expectedBytes: number,
-    saveAs?: string | null,
-  ) =>
+  downloadModel: (repo: string, file: string, expectedBytes: number, saveAs?: string | null) =>
     invoke<string>("download_model", {
       repo,
       file,
@@ -678,12 +748,10 @@ export const api = {
     }),
   /** 暂停某个进行中的下载——翻 cancel flag。`<file>.partial` 保留，下次再调
    *  downloadModel 同 file 名时会续传。文件没在下载时静默成功（idempotent）。 */
-  cancelModelDownload: (file: string) =>
-    invoke<void>("cancel_model_download", { file }),
+  cancelModelDownload: (file: string) => invoke<void>("cancel_model_download", { file }),
   /** 列扫所有 `<file>.partial` 半成品；用于渲染"继续"按钮 + 已下进度。
    *  目录不存在或没有 partial 时返回 `[]`。 */
-  listPartialDownloads: () =>
-    invoke<PartialDownload[]>("list_partial_downloads"),
+  listPartialDownloads: () => invoke<PartialDownload[]>("list_partial_downloads"),
   /** 切换 / 设置当前在用的模型（旧版 API；新代码请用 setStepModel）。写 settings 后会把
    *  在跑的 server 停掉，让用户主动点"启动引擎"按新模型重起。
    *  mmprojFile 传 null 表示没有（纯文本模型）。 */
@@ -692,11 +760,8 @@ export const api = {
   /** 单独设置 step 1（图描述）或 step 2（段总结）的模型；其它 step 不动。
    *  step 取 "describe" / "summary"；mainFile 空字符串 = 清掉该 step 的覆盖（fallback
    *  到 activeMain）。同时会 stop 在跑的 server。 */
-  setStepModel: (
-    step: "describe" | "summary",
-    mainFile: string,
-    mmprojFile: string | null,
-  ) => invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
+  setStepModel: (step: "describe" | "summary", mainFile: string, mmprojFile: string | null) =>
+    invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；
@@ -773,14 +838,9 @@ export const api = {
   getWeekSummary: (weekStart: string) =>
     invoke<SegmentSummaryRow | null>("get_week_summary", { weekStart }),
   /** 删除某周已生成的周报行。weekStart 不是周一时自动对齐。 */
-  clearWeekSummary: (weekStart: string) =>
-    invoke<void>("clear_week_summary", { weekStart }),
+  clearWeekSummary: (weekStart: string) => invoke<void>("clear_week_summary", { weekStart }),
   /** 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。 */
-  getSegmentImageDescriptions: (
-    date: string,
-    segmentIdx: number,
-    source: string = "daily",
-  ) =>
+  getSegmentImageDescriptions: (date: string, segmentIdx: number, source: string = "daily") =>
     invoke<ImageDescriptionRow[]>("get_segment_image_descriptions", {
       date,
       segmentIdx,

@@ -8,6 +8,7 @@ mod error;
 mod icons;
 mod permissions;
 mod platform;
+mod quick_summary;
 mod repo;
 mod storage;
 mod sync;
@@ -132,6 +133,10 @@ pub fn run() {
             commands::data::get_week_apps,
             commands::data::get_month_days,
             commands::data::get_month_apps,
+            // --- quick_summary: 模板填空总结（无 LLM 依赖）---
+            commands::quick_summary::get_quick_day_summary,
+            commands::quick_summary::get_quick_week_summary,
+            commands::quick_summary::get_quick_month_summary,
             // --- categories: 分类管理 ---
             commands::categories::list_categories,
             commands::categories::create_category,

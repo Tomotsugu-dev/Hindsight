@@ -30,6 +30,8 @@ import {
   subscribeWeeklyDone,
   subscribeWeeklySummary,
 } from "../../../state/weeklySummary";
+import { SummaryModeToggle, type SummaryMode } from "../components/SummaryModeToggle";
+import { QuickSummaryView } from "./QuickSummaryView";
 import {
   api,
   type SegmentSummaryRow,
@@ -84,6 +86,7 @@ type CardState =
 export default function WeeklyTab() {
   const { t } = useTranslation();
   const { settings } = useSettings();
+  const [mode, setMode] = useState<SummaryMode>("ai");
   const [weekOffset, setWeekOffset] = useState(0);
   const [row, setRow] = useState<SegmentSummaryRow | null>(null);
   const [topNotice, setTopNotice] = useState<string | null>(null);
@@ -314,8 +317,18 @@ export default function WeeklyTab() {
     }
   };
 
+  if (mode === "quick") {
+    return (
+      <>
+        <SummaryModeToggle mode={mode} onChange={setMode} />
+        <QuickSummaryView scope="week" />
+      </>
+    );
+  }
+
   return (
     <>
+      <SummaryModeToggle mode={mode} onChange={setMode} />
       <p className={styles.subtitle}>{t("aiSummary.weekly.subtitle")}</p>
 
       <header className={styles.header}>
@@ -336,11 +349,7 @@ export default function WeeklyTab() {
             className={`${styles.weekPill} ${weekOffset !== 0 ? styles.weekPillClickable : ""} glow`}
             onClick={() => setWeekOffset(0)}
             disabled={generating || weekOffset === 0}
-            title={
-              weekOffset === 0
-                ? undefined
-                : t("aiSummary.weekly.weekNav.thisWeekBack")
-            }
+            title={weekOffset === 0 ? undefined : t("aiSummary.weekly.weekNav.thisWeekBack")}
           >
             {weekLabel(weekOffset)}
           </button>
@@ -357,11 +366,7 @@ export default function WeeklyTab() {
         </div>
 
         {generating ? (
-          <button
-            type="button"
-            className={styles.stopBtn}
-            onClick={() => void onCancel()}
-          >
+          <button type="button" className={styles.stopBtn} onClick={() => void onCancel()}>
             <Square size={14} strokeWidth={2} />
             {mainBtnLabel}
           </button>
@@ -379,11 +384,7 @@ export default function WeeklyTab() {
                 : t("aiSummary.weekly.actions.noModelTooltip")
             }
           >
-            {hasOk ? (
-              <RefreshCcw size={14} strokeWidth={2} />
-            ) : (
-              <Play size={14} strokeWidth={2} />
-            )}
+            {hasOk ? <RefreshCcw size={14} strokeWidth={2} /> : <Play size={14} strokeWidth={2} />}
             {mainBtnLabel}
           </button>
         )}
@@ -549,11 +550,7 @@ function CardBody({ state }: { state: CardState }) {
   const { t } = useTranslation();
   switch (state.kind) {
     case "empty":
-      return (
-        <div className={styles.bodyMuted}>
-          {t("aiSummary.weekly.card.body.empty")}
-        </div>
-      );
+      return <div className={styles.bodyMuted}>{t("aiSummary.weekly.card.body.empty")}</div>;
     case "running":
       return (
         <div className={styles.bodyMuted}>

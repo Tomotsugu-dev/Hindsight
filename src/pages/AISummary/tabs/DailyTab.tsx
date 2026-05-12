@@ -19,11 +19,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  api,
-  type AiSegment,
-  type SegmentSummaryRow,
-} from "../../../api/hindsight";
+import { api, type AiSegment, type SegmentSummaryRow } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { resolveSegmentChip } from "../../../utils/segmentColor";
@@ -37,6 +33,8 @@ import {
   subscribeDailySummary,
   subscribeSegmentDone,
 } from "../../../state/dailySummary";
+import { SummaryModeToggle, type SummaryMode } from "../components/SummaryModeToggle";
+import { QuickSummaryView } from "./QuickSummaryView";
 import styles from "./DailyTab.module.css";
 
 /** 段卡片在 UI 里的展示状态——由 ai_summaries 行 + 当前 in-flight 进度推导。 */
@@ -67,6 +65,7 @@ function offsetToDateStr(dayOffset: number): string {
 export default function DailyTab() {
   const { t } = useTranslation();
   const { settings } = useSettings();
+  const [mode, setMode] = useState<SummaryMode>("ai");
   const [dayOffset, setDayOffset] = useState(0);
   const [rows, setRows] = useState<Map<number, SegmentSummaryRow>>(new Map());
   // 在跑状态全部从 module-level store 读，组件 unmount 不丢；切走再回来按钮、
@@ -95,8 +94,7 @@ export default function DailyTab() {
   const summaryMain = settings?.ai.summaryMain || activeMain;
   const externalEnabled = settings?.ai.externalEnabled ?? false;
   const hasModel =
-    describeMain.trim().length > 0 &&
-    (externalEnabled || summaryMain.trim().length > 0);
+    describeMain.trim().length > 0 && (externalEnabled || summaryMain.trim().length > 0);
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
   // 依赖 t，所以在组件里定义，跟随 i18n.language 自动重渲。
@@ -173,8 +171,9 @@ export default function DailyTab() {
 
   // AI 引擎缺失时的延后动作——保存用户原本要做的"生成日报 / 重试段"，
   // 待 ConfirmDialog 确认 + downloadBinary 跑完后再执行。null = 没有 pending。
-  const [pendingAfterDownload, setPendingAfterDownload] =
-    useState<null | (() => Promise<void>)>(null);
+  const [pendingAfterDownload, setPendingAfterDownload] = useState<null | (() => Promise<void>)>(
+    null,
+  );
 
   /** 检查 AI 引擎（binary + onnxruntime）是否齐全；齐 → 直接跑 action；
    *  缺 → 保存 action、弹 ConfirmDialog 引导下载，confirm 后下完再续上。 */
@@ -244,8 +243,7 @@ export default function DailyTab() {
 
   // 是否在跑 = store 标 generating + 跑的日期跟当前 view 日期一致；
   // 切到别的日期看时按钮回到"开始总结"，不该被另一天的 run 拖累
-  const isRunningHere =
-    runSnap.generating && runSnap.runningDate === date;
+  const isRunningHere = runSnap.generating && runSnap.runningDate === date;
   const runningIdx = isRunningHere ? runSnap.runningIdx : null;
   const runningImages = isRunningHere ? runSnap.runningImages : null;
   const runningDone = isRunningHere ? runSnap.runningDone : 0;
@@ -310,7 +308,9 @@ export default function DailyTab() {
     if (latestGeneratedAt) lines.push(`generated_at: ${latestGeneratedAt}`);
     if (modelName) lines.push(`model: ${modelName}`);
     lines.push(`segments: ${segments.length}`);
-    lines.push(`status: ${okCount} ok / ${skipCount} skipped / ${errCount} error / ${pendingCount} pending`);
+    lines.push(
+      `status: ${okCount} ok / ${skipCount} skipped / ${errCount} error / ${pendingCount} pending`,
+    );
     lines.push("---", "");
 
     // 标题 + 总览
@@ -332,7 +332,10 @@ export default function DailyTab() {
         lines.push(t("aiSummary.daily.export.stateSkipped"), "");
       } else {
         lines.push(t("aiSummary.daily.export.stateError"), "");
-        lines.push(`> ${(row.error || t("aiSummary.daily.errors.unknown")).replace(/\n/g, "\n> ")}`, "");
+        lines.push(
+          `> ${(row.error || t("aiSummary.daily.errors.unknown")).replace(/\n/g, "\n> ")}`,
+          "",
+        );
       }
 
       // 段间分隔（最后一段不加）
@@ -369,8 +372,18 @@ export default function DailyTab() {
     }
   };
 
+  if (mode === "quick") {
+    return (
+      <>
+        <SummaryModeToggle mode={mode} onChange={setMode} />
+        <QuickSummaryView scope="day" />
+      </>
+    );
+  }
+
   return (
     <>
+      <SummaryModeToggle mode={mode} onChange={setMode} />
       <p className={styles.subtitle}>{t("aiSummary.daily.subtitle")}</p>
 
       <header className={styles.header}>
@@ -410,11 +423,7 @@ export default function DailyTab() {
 
         {/* 主操作按钮：紧跟日期导航 */}
         {generating ? (
-          <button
-            type="button"
-            className={styles.stopBtn}
-            onClick={() => void onCancel()}
-          >
+          <button type="button" className={styles.stopBtn} onClick={() => void onCancel()}>
             <Square size={14} strokeWidth={2} />
             {mainBtnLabel}
           </button>
@@ -582,16 +591,12 @@ function SegmentCard({ seg, state, onRetry, retryDisabled }: SegmentCardProps) {
   return (
     <div className={styles.card}>
       <div className={styles.cardHead}>
-        <span
-          className={styles.chip}
-          style={{ background: chipBg, color: chipFg }}
-        >
+        <span className={styles.chip} style={{ background: chipBg, color: chipFg }}>
           {seg.label}
         </span>
         <span className={styles.timeRange}>
           <Clock size={12} strokeWidth={2.2} />
-          {String(seg.startHour).padStart(2, "0")}:00 –{" "}
-          {String(seg.endHour).padStart(2, "0")}:00
+          {String(seg.startHour).padStart(2, "0")}:00 – {String(seg.endHour).padStart(2, "0")}:00
         </span>
         <CardStatusBadge state={state} />
         {state.kind === "error" || state.kind === "ok" ? (
@@ -669,11 +674,7 @@ function CardBody({ state }: { state: CardState }) {
   const { t } = useTranslation();
   switch (state.kind) {
     case "empty":
-      return (
-        <div className={styles.bodyMuted}>
-          {t("aiSummary.daily.card.body.empty")}
-        </div>
-      );
+      return <div className={styles.bodyMuted}>{t("aiSummary.daily.card.body.empty")}</div>;
     case "running":
       return (
         <div className={styles.bodyMuted}>
@@ -698,11 +699,7 @@ function CardBody({ state }: { state: CardState }) {
     case "ok":
       return <div className={styles.bodyText}>{state.row.content}</div>;
     case "skipped":
-      return (
-        <div className={styles.bodyMuted}>
-          {t("aiSummary.daily.card.body.skipped")}
-        </div>
-      );
+      return <div className={styles.bodyMuted}>{t("aiSummary.daily.card.body.skipped")}</div>;
     case "error":
       return (
         <div className={styles.bodyError}>

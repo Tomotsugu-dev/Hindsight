@@ -845,7 +845,642 @@
     },
     "monthly": {
       "title": "Monthly",
-      "hint": "Monthly activity trends and highlights. Feature in development."
+      "hint": "AI monthly summary is still under development; switch to \"Quick template\" to see this month's activity stats."
+    },
+    "modeToggle": {
+      "ariaLabel": "Summary generation method",
+      "ai": "AI summary",
+      "quick": "Quick template",
+      "aiTooltip": "Local or cloud LLM reads screenshots and writes segment summaries — higher quality, but needs hardware / config",
+      "quickTooltip": "Fixed templates filled from activity stats — instant, no hardware required"
+    },
+    "quick": {
+      "loading": "Loading…",
+      "empty": "No recorded activity in this range.",
+      "listSep": ", ",
+      "categoryOther": "Other",
+      "subtitle": {
+        "day": "An auto-filled summary of today's activity stats — no LLM required.",
+        "week": "An auto-filled summary of this week's activity stats — no LLM required.",
+        "month": "An auto-filled summary of this month's activity stats — no LLM required."
+      },
+      "nav": {
+        "day": {
+          "prevAria": "Previous day",
+          "nextAria": "Next day",
+          "today": "Today",
+          "yesterday": "Yesterday",
+          "todayBack": "Back to today"
+        },
+        "week": {
+          "prevAria": "Previous week",
+          "nextAria": "Next week",
+          "thisWeek": "This week",
+          "lastWeek": "Last week",
+          "thisWeekBack": "Back to this week"
+        },
+        "month": {
+          "prevAria": "Previous month",
+          "nextAria": "Next month",
+          "thisMonth": "This month",
+          "lastMonth": "Last month",
+          "thisMonthBack": "Back to this month"
+        }
+      },
+      "actions": {
+        "exportMarkdown": "Export as Markdown",
+        "exportTooltip": "Export the current quick summary",
+        "exportEmptyTooltip": "Nothing to export yet",
+        "dismissError": "Dismiss"
+      },
+      "errors": {
+        "empty": "Nothing to export."
+      },
+      "toast": {
+        "exported": "Exported to {{filename}}"
+      },
+      "sections": {
+        "overview": "Overview",
+        "topApps": "Top apps",
+        "categories": "Category breakdown",
+        "dailySeries": "Daily activity"
+      },
+      "analysis": {
+        "title": "Smart analysis",
+        "footnote": "Note: generated from a basic template. Configure an AI model to unlock deeper insights.",
+        "appsJoin": ", ",
+        "appEntry": "{{name}} ({{duration}})",
+        "headings": {
+          "workOverview": "Work overview",
+          "timePattern": "Time pattern",
+          "categoryBreakdown": "Category breakdown",
+          "highlights": "Highlights",
+          "focus": "Focus level",
+          "efficiency": "Efficiency review",
+          "suggestion": "Suggestions",
+          "summary": "Wrap-up"
+        },
+        "factsJoin": " ",
+        "day": {
+          "workOverview": {
+            "categoryLed": "Today's main thread was \"{{category}}\" apps (~{{pct}}), with core usage on {{apps}}.",
+            "normal": "Today mostly revolved around {{apps}}, with a fairly clear main thread.",
+            "single": "Today was almost entirely focused on a single app: {{topApp}}.",
+            "empty": "No standout primary app today."
+          },
+          "timePattern": {
+            "eveningHeavy": {
+              "v1": "Most of today's time landed in the evening ({{eveningMinutes}}, ~{{eveningPct}}), peaking around {{peak}}.",
+              "v2": "The evening did the heavy lifting today: {{eveningMinutes}} (~{{eveningPct}} of the day), peak hour around {{peak}}."
+            },
+            "morningHeavy": {
+              "v1": "Mornings drove most of today ({{morningMinutes}}), versus {{afternoonMinutes}} in the afternoon; peak hour {{peak}}.",
+              "v2": "A morning-leaning day: {{morningMinutes}} before noon, {{afternoonMinutes}} in the afternoon, with the busiest hour at {{peak}}."
+            },
+            "afternoonHeavy": {
+              "v1": "Afternoons drove most of today ({{afternoonMinutes}}), versus {{morningMinutes}} in the morning; peak {{peak}}.",
+              "v2": "An afternoon-leaning day: {{afternoonMinutes}} after noon, only {{morningMinutes}} before; peak hour {{peak}}."
+            },
+            "lateNight": {
+              "v1": "A notable late-night chunk ({{nightMinutes}}, ~{{nightPct}}) — across-midnight cadence.",
+              "v2": "{{nightMinutes}} of activity fell in late-night hours (~{{nightPct}}) — a night-owl pattern."
+            },
+            "sparse": {
+              "v1": "Only {{activeHours}} active hour(s) today, peak around {{peak}} ({{peakMinutes}}).",
+              "v2": "Time was spread thin: {{activeHours}} active hours, with the busiest hour ({{peak}}) at only {{peakMinutes}}."
+            },
+            "balanced": {
+              "v1": "Today's time was fairly evenly distributed across {{activeHours}} active hours, peaking at {{peak}}.",
+              "v2": "An evenly spread day: {{activeHours}} active hours, with the center of gravity around {{peak}}."
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "Almost all of today's time went to \"{{cat}}\" apps ({{minutes}}, ~{{pct}}), led by {{apps}}.",
+              "v2": "\"{{cat}}\" dominated today — {{minutes}} ({{pct}}), mainly on {{apps}}."
+            },
+            "twoCategories": {
+              "v1": "\"{{cat1}}\" totaled {{min1}} ({{pct1}}), mostly on {{apps1}}; \"{{cat2}}\" totaled {{min2}} ({{pct2}}), mostly on {{apps2}}.",
+              "v2": "Time split between two categories today: \"{{cat1}}\" {{min1}} ({{pct1}}, {{apps1}}) and \"{{cat2}}\" {{min2}} ({{pct2}}, {{apps2}})."
+            },
+            "threeCategories": {
+              "v1": "Today's time spanned three categories: \"{{cat1}}\" {{min1}} ({{pct1}}, led by {{apps1}}), \"{{cat2}}\" {{min2}} ({{pct2}}), and \"{{cat3}}\" {{min3}} ({{pct3}}).",
+              "v2": "A broader split today: \"{{cat1}}\" {{pct1}} ({{min1}}, {{apps1}}), \"{{cat2}}\" {{pct2}} ({{min2}}), \"{{cat3}}\" {{pct3}} ({{min3}})."
+            }
+          },
+          "highlights": {
+            "topGap": {
+              "v1": "Top app {{top1}} ({{top1Min}}) pulled well ahead of {{top2}} ({{top2Min}}) — a clear lead today.",
+              "v2": "{{top1}} ({{top1Min}}) was more than 2× the runner-up {{top2}} ({{top2Min}}); strong main thread."
+            },
+            "topShareHigh": {
+              "v1": "{{app}} alone took {{pct}} of today — unusually concentrated.",
+              "v2": "\"{{app}}\" absorbed {{pct}} of today's time — near-monopoly."
+            },
+            "peakHourHigh": {
+              "v1": "The hour {{hour}}:00–{{nextHour}}:00 alone carried {{peakMinutes}} (~{{peakPct}}) — a clear peak.",
+              "v2": "{{peakPct}} of today's time concentrated in the single hour {{hour}} ({{peakMinutes}})."
+            },
+            "nightPresence": {
+              "v1": "{{nightMinutes}} logged in late-night hours — possibly late work or crossing time zones.",
+              "v2": "Late-night chunk of {{nightMinutes}} — watch the sleep schedule."
+            },
+            "broadSpread": {
+              "v1": "Top app at only {{topPct}}, activity spread across {{categoryCount}} categories — a wide-but-thin day.",
+              "v2": "No dominant lead today (top {{topPct}}), but you covered {{categoryCount}} categories — broad scope."
+            },
+            "none": "Nothing particularly unusual today — it was a steady day."
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top app {{app}} took {{topPct}}, across only {{categoryCount}} categories — strong focus.",
+              "v2": "High focus today: {{app}} at {{topPct}}, kept within {{categoryCount}} categories."
+            },
+            "goodFocus": {
+              "v1": "Top app {{app}} took {{topPct}} across {{categoryCount}} categories — reasonable focus.",
+              "v2": "{{app}} was today's main thread ({{topPct}}), spread over {{categoryCount}} categories."
+            },
+            "moderate": {
+              "v1": "Top app at {{topPct}} across {{categoryCount}} categories — some multitasking.",
+              "v2": "Moderate focus: main thread at {{topPct}}, across {{categoryCount}} categories."
+            },
+            "fragmented": {
+              "v1": "Top app at only {{topPct}} across {{categoryCount}} categories — attention was scattered.",
+              "v2": "A lot of switching today: lead app only {{topPct}}, time spread across {{categoryCount}} categories."
+            },
+            "tooShort": {
+              "v1": "Limited data today (top {{topPct}}, {{categoryCount}} categories) — focus level isn't reliable.",
+              "v2": "Short record today; focus assessment isn't very reliable."
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "Top app {{app}} took about {{pct}} of the time — strong focus on a single thread.",
+              "v2": "{{app}} was clearly today's main thread (~{{pct}}); focus level looks high."
+            },
+            "steady": {
+              "v1": "Today's pace looks steady, with a balanced mix of tasks.",
+              "v2": "Workload was evenly distributed today, with no obvious concentration or scatter.",
+              "v3": "Time allocation was fairly stable today; pace held steady."
+            },
+            "balanced": {
+              "v1": "About {{workPct}} on work apps and {{funPct}} on fun apps — a fairly balanced split.",
+              "v2": "Work and fun split roughly {{workPct}} / {{funPct}} today — nicely balanced."
+            },
+            "funHeavy": {
+              "v1": "Fun apps took about {{pct}} today, mainly spent on {{apps}}.",
+              "v2": "Today leaned toward entertainment (~{{pct}}), mostly on {{apps}}."
+            },
+            "scattered": {
+              "v1": "Lots of app switching today; overall focus may be diluted.",
+              "v2": "Activity was spread across many apps today, with no clear lead."
+            },
+            "light": {
+              "v1": "Limited computer time today; not much to analyze.",
+              "v2": "Short record today; not many signals to go on."
+            },
+            "funAppsFallback": "a few entertainment apps"
+          },
+          "suggestion": {
+            "nightHeavy": {
+              "v1": "About {{minutes}} were logged late at night — consider rebalancing your sleep schedule.",
+              "v2": "{{minutes}} fell in late-night hours; try shifting some of it earlier to protect sleep."
+            },
+            "funHeavy": {
+              "v1": "Fun apps took {{pct}} of today — consider reserving more focused time for priority work.",
+              "v2": "Entertainment took {{pct}} today; try carving out one focused block for the important tasks."
+            },
+            "eveningHeavy": {
+              "v1": "Activity skewed heavily toward the evening — try shifting core tasks earlier so the evening can wind down.",
+              "v2": "The evening absorbed most of today; next time try moving some tasks into the afternoon."
+            },
+            "scattered": {
+              "v1": "Block off larger uninterrupted slots for your most important task to reduce context switching.",
+              "v2": "Lots of switching today — try listing \"one block, one task\" before starting next time."
+            },
+            "short": {
+              "v1": "Your continuous available time was short today — prioritize higher-value tasks first.",
+              "v2": "Short stretches today; aim the limited slots at the highest-priority work."
+            },
+            "workIntense": {
+              "v1": "Work-app load was very high today; consider scheduling some recovery time tomorrow.",
+              "v2": "Intense workday — make sure to leave room to recover tomorrow."
+            },
+            "default": {
+              "v1": "Solid overall pace — keep it up.",
+              "v2": "Pace looks decent; consider setting a slightly more specific micro-goal next.",
+              "v3": "Things look steady today; pick one direction to deepen a little next."
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "A full and productive day — solid output overall.",
+              "v2": "A high-output day — time was used well."
+            },
+            "heavyWork": {
+              "v1": "A heavy work-focused day — tight, productive pace.",
+              "v2": "A classic workday: tight pace, real output."
+            },
+            "balanced": {
+              "v1": "Today moved forward steadily with a respectable amount of output.",
+              "v2": "Progress came smoothly today — comfortable pace.",
+              "v3": "Moderate workload today, with decent progress."
+            },
+            "balancedWithCategory": {
+              "v1": "A steady day led by \"{{category}}\" — good pace.",
+              "v2": "Steady progress around \"{{category}}\" today — felt solid."
+            },
+            "light": {
+              "v1": "A relatively light day — there's room for a focused push if needed.",
+              "v2": "A slow-paced day; dedicating time to one priority would round it out."
+            },
+            "lightFun": {
+              "v1": "A relaxed day leaning toward entertainment.",
+              "v2": "A chill day with entertainment in the lead."
+            },
+            "minimal": "Very little computer activity today — likely spent elsewhere."
+          }
+        },
+        "week": {
+          "workOverview": {
+            "categoryLed": "This week's main thread was \"{{category}}\" apps (~{{pct}}), with core usage on {{apps}}, across {{activeDays}} active days.",
+            "normal": "This week mainly revolved around {{apps}}, across {{activeDays}} active days."
+          },
+          "timePattern": {
+            "weekdayDominant": {
+              "v1": "Weekdays carried about {{pct}} of this week's time; the busiest day was {{peak}} ({{peakMinutes}}).",
+              "v2": "Almost all activity landed on weekdays ({{pct}}); peak day {{peak}} ({{peakMinutes}})."
+            },
+            "weekendDominant": {
+              "v1": "The weekend pulled about {{pct}} of this week's time; the busiest day was {{peak}} ({{peakMinutes}}).",
+              "v2": "Weekend contributed {{pct}} of the week, with {{peak}} as the peak day ({{peakMinutes}})."
+            },
+            "volatile": {
+              "v1": "Big day-to-day swings this week: {{peak}} hit {{peakMinutes}}, while {{low}} was only {{lowMinutes}}.",
+              "v2": "Uneven pace this week — peak {{peak}} ({{peakMinutes}}) vs. low {{low}} ({{lowMinutes}})."
+            },
+            "consistent": {
+              "v1": "{{activeDays}} active days this week with fairly even distribution; busiest day {{peak}} ({{peakMinutes}}).",
+              "v2": "A steady week across {{activeDays}} active days; peak day {{peak}} ({{peakMinutes}})."
+            },
+            "balanced": {
+              "v1": "{{activeDays}} active days this week, with a generally balanced distribution.",
+              "v2": "Activity was spread fairly evenly across {{activeDays}} active days this week."
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "Almost all of this week's time went to \"{{cat}}\" ({{minutes}}, ~{{pct}}), led by {{apps}}.",
+              "v2": "\"{{cat}}\" dominated this week — {{minutes}} ({{pct}}), mainly on {{apps}}."
+            },
+            "twoCategories": {
+              "v1": "\"{{cat1}}\" totaled {{min1}} ({{pct1}}), mostly on {{apps1}}; \"{{cat2}}\" totaled {{min2}} ({{pct2}}), mostly on {{apps2}}.",
+              "v2": "Time split between two categories: \"{{cat1}}\" {{min1}} ({{pct1}}, {{apps1}}) and \"{{cat2}}\" {{min2}} ({{pct2}}, {{apps2}})."
+            },
+            "threeCategories": {
+              "v1": "This week's time spanned three categories: \"{{cat1}}\" {{min1}} ({{pct1}}, led by {{apps1}}), \"{{cat2}}\" {{min2}} ({{pct2}}), and \"{{cat3}}\" {{min3}} ({{pct3}}).",
+              "v2": "A broader split this week: \"{{cat1}}\" {{pct1}} ({{min1}}, {{apps1}}), \"{{cat2}}\" {{pct2}} ({{min2}}), \"{{cat3}}\" {{pct3}} ({{min3}})."
+            }
+          },
+          "highlights": {
+            "peakDayHigh": {
+              "v1": "{{weekday}} alone carried {{peakMinutes}} (~{{peakPct}}) — a clear peak day.",
+              "v2": "{{peakPct}} of the week landed on {{weekday}} ({{peakMinutes}})."
+            },
+            "weekendOff": {
+              "v1": "Zero weekend activity this week — all {{weekdayMinutes}} happened on weekdays.",
+              "v2": "Weekend was completely off; weekdays carried all {{weekdayMinutes}}."
+            },
+            "weekendMain": {
+              "v1": "The weekend contributed {{weekendMinutes}} ({{weekendPct}}) — more prominent than weekdays.",
+              "v2": "Weekend was this week's main slot ({{weekendMinutes}}, {{weekendPct}})."
+            },
+            "topShareHigh": {
+              "v1": "{{app}} alone took {{pct}} of the week — heavily concentrated.",
+              "v2": "\"{{app}}\" absorbed {{pct}} of the week — near-monopoly."
+            },
+            "fullAttendance": {
+              "v1": "Recorded activity on all 7 days — perfect attendance.",
+              "v2": "Full-attendance week with activity logged every day."
+            },
+            "none": "Nothing particularly unusual this week — a steady stretch."
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top app {{app}} at {{topPct}}, only {{categoryCount}} categories, {{activeDays}} active days — high focus.",
+              "v2": "Strong focus this week: {{app}} at {{topPct}}, within {{categoryCount}} categories across {{activeDays}} days."
+            },
+            "goodFocus": {
+              "v1": "Top app {{app}} at {{topPct}} across {{categoryCount}} categories, {{activeDays}} active days — reasonable focus.",
+              "v2": "{{app}} was the week's main thread ({{topPct}}), across {{categoryCount}} categories."
+            },
+            "moderate": {
+              "v1": "Top app at {{topPct}} across {{categoryCount}} categories — some multitasking.",
+              "v2": "Moderate focus: main thread at {{topPct}}, {{categoryCount}} categories."
+            },
+            "fragmented": {
+              "v1": "Top app at only {{topPct}} across {{categoryCount}} categories — attention was scattered.",
+              "v2": "A lot of switching this week: lead at {{topPct}}, spread across {{categoryCount}} categories."
+            },
+            "tooShort": {
+              "v1": "Limited data this week (top {{topPct}}, {{categoryCount}} categories) — focus level isn't reliable.",
+              "v2": "Short record this week; focus assessment isn't very reliable."
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "Top app {{app}} took about {{pct}} of the week — a clear, focused main thread.",
+              "v2": "{{app}} was clearly the week's main thread (~{{pct}})."
+            },
+            "steady": {
+              "v1": "This week's pace was steady, with a balanced mix of tasks.",
+              "v2": "Workload was evenly distributed this week, with no clear peak or trough.",
+              "v3": "Time allocation was stable this week; pace held steady."
+            },
+            "balanced": {
+              "v1": "About {{workPct}} on work apps and {{funPct}} on fun apps — a fairly balanced week.",
+              "v2": "Work and fun split roughly {{workPct}} / {{funPct}} this week."
+            },
+            "funHeavy": {
+              "v1": "Fun apps took about {{pct}} this week — noticeably above work apps.",
+              "v2": "Entertainment took {{pct}} this week — above work apps overall."
+            },
+            "volatile": {
+              "v1": "Daily totals varied a lot this week — pace was uneven.",
+              "v2": "Pace swung quite a bit this week — heavy on some days, light on others."
+            },
+            "scattered": {
+              "v1": "Lots of app switching this week — focus could improve.",
+              "v2": "No clear lead app this week — time was spread thin."
+            },
+            "light": {
+              "v1": "Limited overall activity this week.",
+              "v2": "Short record this week; signals are limited."
+            }
+          },
+          "suggestion": {
+            "sparse": {
+              "v1": "Only {{activeDays}} active day(s) this week — consider adding more regular work/study cadence.",
+              "v2": "Lots of gap days this week (only {{activeDays}} active); try a fixed block daily."
+            },
+            "funHeavy": {
+              "v1": "Fun apps took {{pct}} this week — consider adding more focused work time.",
+              "v2": "Entertainment took {{pct}}; reserve more focused slots next week."
+            },
+            "volatile": {
+              "v1": "Try to smooth out the workload across days to avoid overloading a single day.",
+              "v2": "Big swings this week; consider setting a daily \"minimum input\" target next week."
+            },
+            "scattered": {
+              "v1": "Pin a clear daily priority and give your main app larger uninterrupted blocks.",
+              "v2": "Pick 2-3 fixed focuses next week and concentrate time on them."
+            },
+            "solidPace": {
+              "v1": "Steady, consistent pace this week — keep it up.",
+              "v2": "Nice cadence this week — try a slightly deeper goal next week."
+            },
+            "default": {
+              "v1": "Pick 1-2 focus areas for next week to sharpen the main thread.",
+              "v2": "Try writing down a daily \"most important thing\" next week.",
+              "v3": "Decent week overall; pick one direction to push slightly deeper."
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "A full week with strong output.",
+              "v2": "A high-output week — time was used very well."
+            },
+            "heavyWithCategory": {
+              "v1": "A solid week led by \"{{category}}\" — meaningful accumulation.",
+              "v2": "A productive week centered on \"{{category}}\"."
+            },
+            "balanced": {
+              "v1": "A solid, steadily-paced week.",
+              "v2": "Smooth progress across the week — comfortable pace.",
+              "v3": "Moderate workload with decent progress this week."
+            },
+            "light": {
+              "v1": "A light week — room to add some focused work.",
+              "v2": "Slow-paced week; dedicating time to one priority would round it out."
+            },
+            "lightFun": {
+              "v1": "A relaxed week leaning toward entertainment.",
+              "v2": "A chill week with entertainment in the lead."
+            },
+            "minimal": "Very limited computer activity this week — check for missed days."
+          }
+        },
+        "month": {
+          "workOverview": {
+            "categoryLed": "This month's main thread was \"{{category}}\" apps (~{{pct}}), with core usage on {{apps}}; activity on {{activeDays}} of {{totalDays}} days.",
+            "normal": "This month mainly revolved around {{apps}}; activity on {{activeDays}} of {{totalDays}} days."
+          },
+          "timePattern": {
+            "firstHalfHeavy": {
+              "v1": "The first half of the month did the heavy lifting (~{{pct}}); peak day was {{peakDate}} ({{peakMinutes}}).",
+              "v2": "The early half carried {{pct}} of this month; {{peakDate}} was the peak ({{peakMinutes}})."
+            },
+            "secondHalfHeavy": {
+              "v1": "The second half of the month did the heavy lifting (~{{pct}}); peak day was {{peakDate}} ({{peakMinutes}}).",
+              "v2": "The later half contributed {{pct}} of this month; {{peakDate}} was the peak ({{peakMinutes}})."
+            },
+            "volatile": {
+              "v1": "Big day-to-day swings this month: {{peakDate}} hit {{peakMinutes}}, while {{lowDate}} was only {{lowMinutes}}.",
+              "v2": "Uneven pace this month — peak {{peakDate}} ({{peakMinutes}}) vs. low {{lowDate}} ({{lowMinutes}})."
+            },
+            "consistent": {
+              "v1": "{{activeDays}} active days with fairly even distribution; busiest day {{peakDate}} ({{peakMinutes}}).",
+              "v2": "Steady distribution across {{activeDays}} active days this month; peak {{peakDate}} ({{peakMinutes}})."
+            }
+          },
+          "categoryBreakdown": {
+            "singleDominant": {
+              "v1": "Almost all of this month's time went to \"{{cat}}\" ({{minutes}}, ~{{pct}}), led by {{apps}}.",
+              "v2": "\"{{cat}}\" dominated this month — {{minutes}} ({{pct}}), mainly on {{apps}}."
+            },
+            "twoCategories": {
+              "v1": "\"{{cat1}}\" totaled {{min1}} ({{pct1}}), mostly on {{apps1}}; \"{{cat2}}\" totaled {{min2}} ({{pct2}}), mostly on {{apps2}}.",
+              "v2": "Time split between two categories: \"{{cat1}}\" {{min1}} ({{pct1}}, {{apps1}}) and \"{{cat2}}\" {{min2}} ({{pct2}}, {{apps2}})."
+            },
+            "threeCategories": {
+              "v1": "This month's time spanned three categories: \"{{cat1}}\" {{min1}} ({{pct1}}, led by {{apps1}}), \"{{cat2}}\" {{min2}} ({{pct2}}), and \"{{cat3}}\" {{min3}} ({{pct3}}).",
+              "v2": "A broader split this month: \"{{cat1}}\" {{pct1}} ({{min1}}, {{apps1}}), \"{{cat2}}\" {{pct2}} ({{min2}}), \"{{cat3}}\" {{pct3}} ({{min3}})."
+            }
+          },
+          "highlights": {
+            "peakDayHigh": {
+              "v1": "{{peakDate}} alone carried {{peakMinutes}} (~{{peakPct}}) — a clear peak day.",
+              "v2": "{{peakPct}} of the month concentrated on {{peakDate}} ({{peakMinutes}})."
+            },
+            "fullCoverage": {
+              "v1": "{{activeDays}} of {{totalDays}} days had activity — near-perfect attendance.",
+              "v2": "Almost full month: {{activeDays}} of {{totalDays}} days logged."
+            },
+            "topShareHigh": {
+              "v1": "{{app}} alone took {{pct}} of the month — heavily concentrated.",
+              "v2": "\"{{app}}\" absorbed {{pct}} of the month — near-monopoly."
+            },
+            "broadSpread": {
+              "v1": "{{activeDays}} active days across {{categoryCount}} categories — wide-ranging scope.",
+              "v2": "Broad coverage this month: {{activeDays}} active days, {{categoryCount}} categories."
+            },
+            "none": "Nothing particularly unusual this month — a steady stretch."
+          },
+          "focus": {
+            "highFocus": {
+              "v1": "Top app {{app}} at {{topPct}}, only {{categoryCount}} categories, {{activeDays}} active days — high focus.",
+              "v2": "Strong focus this month: {{app}} at {{topPct}}, within {{categoryCount}} categories across {{activeDays}} days."
+            },
+            "goodFocus": {
+              "v1": "Top app {{app}} at {{topPct}} across {{categoryCount}} categories, {{activeDays}} active days — reasonable focus.",
+              "v2": "{{app}} was the month's main thread ({{topPct}}), across {{categoryCount}} categories."
+            },
+            "moderate": {
+              "v1": "Top app at {{topPct}} across {{categoryCount}} categories — some multitasking.",
+              "v2": "Moderate focus: main thread at {{topPct}}, {{categoryCount}} categories."
+            },
+            "fragmented": {
+              "v1": "Top app at only {{topPct}} across {{categoryCount}} categories — attention was scattered.",
+              "v2": "A lot of switching this month: lead at {{topPct}}, spread across {{categoryCount}} categories."
+            },
+            "tooShort": {
+              "v1": "Limited data this month (top {{topPct}}, {{categoryCount}} categories) — focus level isn't reliable.",
+              "v2": "Short record this month; focus assessment isn't very reliable."
+            }
+          },
+          "efficiency": {
+            "focused": {
+              "v1": "Top app {{app}} took about {{pct}} of the month — a strong, focused main thread.",
+              "v2": "{{app}} was clearly the month's main thread (~{{pct}})."
+            },
+            "steady": {
+              "v1": "The overall pace this month was steady; the main thread kept moving.",
+              "v2": "Distribution was balanced this month; overall pace was steady.",
+              "v3": "Stable time allocation this month; the main thread kept progressing."
+            },
+            "balanced": {
+              "v1": "About {{workPct}} on work apps and {{funPct}} on fun apps — a fairly balanced month.",
+              "v2": "Work and fun split roughly {{workPct}} / {{funPct}} this month."
+            },
+            "funHeavy": {
+              "v1": "Fun apps took about {{pct}} this month — noticeably above work apps.",
+              "v2": "Entertainment was the lead category this month ({{pct}})."
+            },
+            "volatile": {
+              "v1": "Daily totals varied widely this month — pace was uneven.",
+              "v2": "Big variability this month — some days strong, others quiet."
+            },
+            "scattered": {
+              "v1": "Lots of app switching this month — the main thread was diffuse.",
+              "v2": "No standout lead app this month — time was spread broadly."
+            },
+            "sparse": {
+              "v1": "Only {{pct}} of days had records this month — coverage is sparse.",
+              "v2": "Coverage was thin this month ({{pct}} of days); data is limited."
+            }
+          },
+          "suggestion": {
+            "sparse": {
+              "v1": "Several gap days this month — consider building a more regular cadence.",
+              "v2": "Lots of empty days this month; try a small fixed block each day next month."
+            },
+            "funHeavy": {
+              "v1": "Fun apps took {{pct}} this month — consider adding more focused investment.",
+              "v2": "Entertainment took {{pct}}; reserve more focused time next month."
+            },
+            "volatile": {
+              "v1": "Spread workload more evenly across days to avoid single-day overload.",
+              "v2": "Big swings this month; consider setting a daily \"minimum input\" target next month."
+            },
+            "scattered": {
+              "v1": "Pin a clear monthly priority and reserve stable blocks for it.",
+              "v2": "Pick 2-3 fixed monthly focuses and concentrate time on them."
+            },
+            "solidPace": {
+              "v1": "Consistent pace and broad coverage this month — consider stretching a deep-focus goal next.",
+              "v2": "Good cadence and coverage this month — try a deeper goal next."
+            },
+            "default": {
+              "v1": "Pick 1-2 priorities for next month to tighten the main thread.",
+              "v2": "Try writing down a daily \"most important thing\" next month.",
+              "v3": "Decent month overall; pick one direction to deepen slightly."
+            }
+          },
+          "summary": {
+            "heavy": {
+              "v1": "A productive month with strong cumulative output.",
+              "v2": "A high-output month — time was used very well."
+            },
+            "heavyWithCategory": {
+              "v1": "A productive month led by \"{{category}}\" — strong accumulation.",
+              "v2": "A productive month centered on \"{{category}}\"."
+            },
+            "balanced": {
+              "v1": "A steady month with good overall progress.",
+              "v2": "Smooth progress this month — comfortable pace.",
+              "v3": "Moderate workload with decent progress this month."
+            },
+            "light": {
+              "v1": "A lighter month — add focused investment as needed.",
+              "v2": "Slow-paced month; dedicating time to one priority would help."
+            },
+            "lightFun": {
+              "v1": "A relaxed month leaning toward entertainment.",
+              "v2": "A chill month with entertainment in the lead."
+            },
+            "minimal": "Very limited computer activity this month."
+          }
+        }
+      },
+      "weekday": {
+        "0": "Mon",
+        "1": "Tue",
+        "2": "Wed",
+        "3": "Thu",
+        "4": "Fri",
+        "5": "Sat",
+        "6": "Sun"
+      },
+      "duration": {
+        "minutes": "{{count}} min",
+        "hours": "{{count}} h",
+        "hoursMinutes": "{{hours}} h {{minutes}} min"
+      },
+      "day": {
+        "overview": "On {{date}} you logged {{total}} of computer activity across {{activeHours}} active hours, spanning {{apps}} top apps.",
+        "peak": "The busiest hour was {{hour}}:00 – {{nextHour}}:00 with {{minutes}}.",
+        "distribution": "Time distribution: {{parts}}.",
+        "partTpl": "{{label}} {{minutes}} ({{percent}})",
+        "parts": {
+          "night": "Late night",
+          "morning": "Morning",
+          "afternoon": "Afternoon",
+          "evening": "Evening"
+        }
+      },
+      "week": {
+        "overview": "From {{weekStart}} to {{weekEnd}} you logged {{total}} of activity across {{activeDays}} active days, averaging {{avg}} per active day.",
+        "peak": "The busiest day was {{date}} ({{weekday}}) with {{minutes}}."
+      },
+      "month": {
+        "overview": "From {{monthStart}} to {{monthEnd}} ({{totalDays}} days) you logged {{total}} of activity across {{activeDays}} active days, averaging {{avg}} per active day.",
+        "peak": "Your busiest day was {{date}} ({{weekday}}) with {{minutes}}.",
+        "quiet": "Your lightest day was {{date}} ({{weekday}}) with only {{minutes}}."
+      },
+      "export": {
+        "day": {
+          "frontmatterTitle": "Quick daily summary for {{date}}",
+          "heading": "Quick daily summary · {{date}}"
+        },
+        "week": {
+          "frontmatterTitle": "Quick weekly summary {{weekStart}} ~ {{weekEnd}}",
+          "heading": "Quick weekly summary · {{weekStart}} ~ {{weekEnd}}"
+        },
+        "month": {
+          "frontmatterTitle": "Quick monthly summary {{monthStart}} ~ {{monthEnd}}",
+          "heading": "Quick monthly summary · {{monthStart}} ~ {{monthEnd}}"
+        }
+      }
     },
     "daily": {
       "subtitle": "Per-segment rollup of today's screenshots and app usage, generated by a local vision model.",

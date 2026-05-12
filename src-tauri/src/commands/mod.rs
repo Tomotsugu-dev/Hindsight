@@ -11,6 +11,7 @@ pub mod categories;
 pub mod data;
 pub mod devices;
 pub mod icons;
+pub mod quick_summary;
 pub mod settings;
 pub mod storage;
 pub mod sync;
