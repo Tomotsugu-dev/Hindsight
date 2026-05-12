@@ -40,10 +40,20 @@ pub fn capture_focused_window(frontmost_pid: u32) -> Result<RgbaImage> {
 
     // 2. 在 windows 列表里挑 PID 匹配、屏上可见的；同 app 多窗时取最大那个
     //    （主窗口启发式——配置面板 / utility panel 通常较小）
+    //
+    // `window_layer() == 0` 过滤至关重要：Apple 的 NSWindow level 体系里
+    //   - 0           = kCGNormalWindowLevel，普通应用窗口
+    //   - 负数 / 大正数 = 桌面图标窗口 / dock / menubar / 屏保 / 系统模态等
+    // Finder 同时拥有"文件浏览器窗口（layer=0）"和"桌面图标窗口（layer 极大负数、
+    // 全屏尺寸）"——不加这条过滤的话 `max_by(area)` 永远挑桌面窗口，但
+    // `SCContentFilter::with_window()` 底层走 `desktop_independent_window`，
+    // 把桌面窗口塞给一个专门排除桌面的 filter，渲出来必是黑屏。其它 app
+    // （Chrome / Slack 等）的主窗口也都是 layer=0，这条过滤对它们无影响。
     let windows = content.windows();
     let target = windows
         .iter()
         .filter(|w| w.is_on_screen())
+        .filter(|w| w.window_layer() == 0)
         .filter(|w| {
             w.owning_application()
                 .map(|app| app.process_id() == frontmost_pid as i32)
@@ -54,7 +64,7 @@ pub fn capture_focused_window(frontmost_pid: u32) -> Result<RgbaImage> {
             let area_b = b.frame().width * b.frame().height;
             area_a.partial_cmp(&area_b).unwrap_or(std::cmp::Ordering::Equal)
         })
-        .ok_or_else(|| Error::Capture(format!("no SCWindow for pid {frontmost_pid}")))?;
+        .ok_or_else(|| Error::Capture(format!("no normal SCWindow for pid {frontmost_pid}")))?;
 
     // 3. SCContentFilter 圈定那一个窗口（with_window 内部走
     //    sc_content_filter_create_with_desktop_independent_window，得到的是
