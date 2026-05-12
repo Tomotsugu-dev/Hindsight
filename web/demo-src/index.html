@@ -24,6 +24,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 在主 bundle 加载前根据 ?lang= 设置 demo UI 语言（i18n 启动时从 localStorage 读）
+      (function () {
+        try {
+          var lng = new URLSearchParams(location.search).get("lang");
+          if (lng === "en" || lng === "ja" || lng === "zh-CN") {
+            localStorage.setItem("hindsight.locale", lng);
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="./main-demo.tsx"></script>
   </body>
 </html>

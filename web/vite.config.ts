@@ -39,6 +39,17 @@ export default defineConfig({
 
   resolve: {
     alias: [
+      // Demo 专属：周报 / 月报 tab 替换成只展示 Quick 模板的薄包装（AI 总结仅在日报展示）。
+      // 必须放在 @app 通配之前——Vite alias 首次匹配后不再处理。
+      {
+        find: "@app/pages/AISummary/tabs/WeeklyTab",
+        replacement: path.resolve(demoSrc, "tabs-override/WeeklyTab.tsx"),
+      },
+      {
+        find: "@app/pages/AISummary/tabs/MonthlyTab",
+        replacement: path.resolve(demoSrc, "tabs-override/MonthlyTab.tsx"),
+      },
+
       // @app/ → 主仓库 src/，让 demo 干净地 import 主应用代码
       { find: "@app", replacement: mainSrc },
 
@@ -59,6 +70,7 @@ export default defineConfig({
         find: /^.*\/api\/hindsight$/,
         replacement: path.resolve(demoSrc, "api-mock.ts"),
       },
+
     ],
   },
 

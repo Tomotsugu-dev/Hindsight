@@ -22,6 +22,12 @@ import type {
   ImageDescriptionRow,
   ModelEntry,
   PartialDownload,
+  QuickDayPart,
+  QuickDaySummary,
+  QuickMonthSummary,
+  QuickPeakDay,
+  QuickUsageEntry,
+  QuickWeekSummary,
   RecommendedModel,
   SegmentSummaryRow,
   Settings,
@@ -146,8 +152,17 @@ function persist() {
 }
 
 function todayStr(): string {
-  const d = new Date();
+  return ymd(new Date());
+}
+
+function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isoDateOffset(dayOffset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  return ymd(d);
 }
 
 
@@ -326,6 +341,251 @@ export const api = {
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
     return limit ? sorted.slice(0, limit) : sorted;
+  },
+
+  // ─── 快速模板总结（无 LLM 依赖，纯聚合）─────
+  getQuickDaySummary: async (
+    dayOffset: number,
+    deviceId?: string,
+  ): Promise<QuickDaySummary> => {
+    const day = mockDayFor(dayOffset, deviceId);
+    const date = isoDateOffset(dayOffset);
+
+    // 按小时聚合 → 找峰值小时 + 活跃小时数
+    let peakHour = 0;
+    let peakHourMinutes = 0;
+    let activeHours = 0;
+    let totalMinutes = 0;
+    const hourTotals = new Array(24).fill(0);
+    for (const slot of day.hours) {
+      const hm = slot.segments.reduce((s, x) => s + x.minutes, 0);
+      hourTotals[slot.hour] = hm;
+      totalMinutes += hm;
+      if (hm > 0) activeHours += 1;
+      if (hm > peakHourMinutes) {
+        peakHourMinutes = hm;
+        peakHour = slot.hour;
+      }
+    }
+
+    // 时段桶：night(0–5) / morning(6–11) / afternoon(12–17) / evening(18–23)
+    const buckets: Record<string, number> = {
+      night: 0,
+      morning: 0,
+      afternoon: 0,
+      evening: 0,
+    };
+    for (let h = 0; h < 24; h++) {
+      const bucket = h < 6 ? "night" : h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+      buckets[bucket] += hourTotals[h];
+    }
+    const dayParts: QuickDayPart[] = (["night", "morning", "afternoon", "evening"] as const).map(
+      (key) => ({
+        key,
+        minutes: buckets[key],
+        percent: totalMinutes > 0 ? buckets[key] / totalMinutes : 0,
+      }),
+    );
+
+    // top apps
+    const topApps: QuickUsageEntry[] = day.apps.slice(0, 10).map((a) => ({
+      key: a.process,
+      minutes: a.minutes,
+      percent: totalMinutes > 0 ? a.minutes / totalMinutes : 0,
+      categoryId: a.categoryId,
+      iconProcess: a.iconProcess,
+    }));
+
+    // 分类聚合
+    const catMap = new Map<string, number>();
+    for (const a of day.apps) {
+      catMap.set(a.categoryId, (catMap.get(a.categoryId) ?? 0) + a.minutes);
+    }
+    const categories: QuickUsageEntry[] = Array.from(catMap.entries())
+      .map(([categoryId, minutes]) => ({
+        key: categoryId,
+        minutes,
+        percent: totalMinutes > 0 ? minutes / totalMinutes : 0,
+        categoryId: "",
+        iconProcess: "",
+      }))
+      .sort((a, b) => b.minutes - a.minutes);
+
+    return {
+      date,
+      totalMinutes,
+      activeHours,
+      peakHour: totalMinutes > 0 ? peakHour : null,
+      peakHourMinutes,
+      dayParts,
+      topApps,
+      categories,
+    };
+  },
+
+  getQuickWeekSummary: async (
+    weekOffset: number,
+    deviceId?: string,
+  ): Promise<QuickWeekSummary> => {
+    const today = new Date();
+    const dow = today.getDay() || 7;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dow - 1) + weekOffset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const dailySeries: { date: string; minutes: number }[] = [];
+    const appMap = new Map<string, QuickUsageEntry>();
+    const catMap = new Map<string, number>();
+    let totalMinutes = 0;
+    let activeDays = 0;
+    let peakDay: QuickPeakDay | null = null;
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const offset = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
+      const dayMinutes =
+        offset > 0
+          ? 0
+          : mockDayFor(offset, deviceId).apps.reduce((s, a) => s + a.minutes, 0);
+      const isoDate = ymd(d);
+      dailySeries.push({ date: isoDate, minutes: dayMinutes });
+      if (dayMinutes > 0) {
+        activeDays += 1;
+        totalMinutes += dayMinutes;
+        if (!peakDay || dayMinutes > peakDay.minutes) {
+          peakDay = { date: isoDate, minutes: dayMinutes, weekday: i };
+        }
+        if (offset <= 0) {
+          const day = mockDayFor(offset, deviceId);
+          for (const a of day.apps) {
+            const cur = appMap.get(a.process);
+            if (cur) cur.minutes += a.minutes;
+            else
+              appMap.set(a.process, {
+                key: a.process,
+                minutes: a.minutes,
+                percent: 0,
+                categoryId: a.categoryId,
+                iconProcess: a.iconProcess,
+              });
+            catMap.set(a.categoryId, (catMap.get(a.categoryId) ?? 0) + a.minutes);
+          }
+        }
+      }
+    }
+
+    const topApps = Array.from(appMap.values())
+      .map((e) => ({ ...e, percent: totalMinutes > 0 ? e.minutes / totalMinutes : 0 }))
+      .sort((a, b) => b.minutes - a.minutes)
+      .slice(0, 10);
+    const categories = Array.from(catMap.entries())
+      .map(([categoryId, minutes]) => ({
+        key: categoryId,
+        minutes,
+        percent: totalMinutes > 0 ? minutes / totalMinutes : 0,
+        categoryId: "",
+        iconProcess: "",
+      }))
+      .sort((a, b) => b.minutes - a.minutes);
+
+    return {
+      weekStart: ymd(monday),
+      weekEnd: ymd(sunday),
+      totalMinutes,
+      activeDays,
+      dailyAverageMinutes: activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0,
+      peakDay,
+      dailySeries,
+      topApps,
+      categories,
+    };
+  },
+
+  getQuickMonthSummary: async (
+    monthOffset: number,
+    deviceId?: string,
+  ): Promise<QuickMonthSummary> => {
+    const today = new Date();
+    const target = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    const totalDays = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+
+    const dailySeries: { date: string; minutes: number }[] = [];
+    const appMap = new Map<string, QuickUsageEntry>();
+    const catMap = new Map<string, number>();
+    let totalMinutes = 0;
+    let activeDays = 0;
+    let peakDay: QuickPeakDay | null = null;
+    let quietDay: QuickPeakDay | null = null;
+
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(target);
+      d.setDate(1 + i);
+      const offset = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
+      const isoDate = ymd(d);
+      const wd = (d.getDay() + 6) % 7;
+      let dayMinutes = 0;
+      if (offset <= 0) {
+        const day = mockDayFor(offset, deviceId);
+        dayMinutes = day.apps.reduce((s, a) => s + a.minutes, 0);
+        if (dayMinutes > 0) {
+          for (const a of day.apps) {
+            const cur = appMap.get(a.process);
+            if (cur) cur.minutes += a.minutes;
+            else
+              appMap.set(a.process, {
+                key: a.process,
+                minutes: a.minutes,
+                percent: 0,
+                categoryId: a.categoryId,
+                iconProcess: a.iconProcess,
+              });
+            catMap.set(a.categoryId, (catMap.get(a.categoryId) ?? 0) + a.minutes);
+          }
+        }
+      }
+      dailySeries.push({ date: isoDate, minutes: dayMinutes });
+      if (dayMinutes > 0) {
+        activeDays += 1;
+        totalMinutes += dayMinutes;
+        if (!peakDay || dayMinutes > peakDay.minutes) {
+          peakDay = { date: isoDate, minutes: dayMinutes, weekday: wd };
+        }
+        if (!quietDay || dayMinutes < quietDay.minutes) {
+          quietDay = { date: isoDate, minutes: dayMinutes, weekday: wd };
+        }
+      }
+    }
+
+    const topApps = Array.from(appMap.values())
+      .map((e) => ({ ...e, percent: totalMinutes > 0 ? e.minutes / totalMinutes : 0 }))
+      .sort((a, b) => b.minutes - a.minutes)
+      .slice(0, 10);
+    const categories = Array.from(catMap.entries())
+      .map(([categoryId, minutes]) => ({
+        key: categoryId,
+        minutes,
+        percent: totalMinutes > 0 ? minutes / totalMinutes : 0,
+        categoryId: "",
+        iconProcess: "",
+      }))
+      .sort((a, b) => b.minutes - a.minutes);
+
+    return {
+      monthStart: ymd(target),
+      monthEnd: ymd(new Date(target.getFullYear(), target.getMonth(), totalDays)),
+      totalDays,
+      totalMinutes,
+      activeDays,
+      dailyAverageMinutes: activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0,
+      peakDay,
+      // 月内只有 1 个有数据的日子时 quietDay = peakDay 没意义，按合约置 null
+      quietDay: activeDays >= 2 ? quietDay : null,
+      dailySeries,
+      topApps,
+      categories,
+    };
   },
 
   // ─── 分类 ──────────────────────────────────
