@@ -1,1 +1,0 @@
-import{j as s}from"./index-DWJT-qXZ.js";const l="_toggle_13y5t_1",a="_on_13y5t_19",g="_thumb_13y5t_28",o={toggle:l,on:a,thumb:g};function m({checked:t,onChange:n,ariaLabel:e}){return s.jsx("button",{type:"button",role:"switch","aria-checked":t,"aria-label":e,className:`${o.toggle} ${t?o.on:""}`,onClick:()=>n(!t),children:s.jsx("span",{className:o.thumb})})}export{m as T};
