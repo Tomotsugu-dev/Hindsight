@@ -53,12 +53,7 @@ export function engineOptionToSlots(v: EngineSlotsKey): number | null {
   return n <= 1 ? null : n;
 }
 
-export type EngineCtxKey =
-  | "default"
-  | "16384"
-  | "32768"
-  | "65536"
-  | "131072";
+export type EngineCtxKey = "default" | "16384" | "32768" | "65536" | "131072";
 
 export const ENGINE_CTX_OPTIONS: Array<{ value: EngineCtxKey; label: string }> = [
   { value: "default", label: "8K" },
@@ -262,15 +257,14 @@ export function isRecommendedApplied(
 }
 
 /** 平台变体 ID → 人话加速类型标签 */
-export function humanAccelLabel(
-  platformId: string,
-  t: (key: string) => string,
-): string {
+export function humanAccelLabel(platformId: string, t: (key: string) => string): string {
   switch (platformId) {
     case "win-cuda-12.4-x64":
       return t("aiSettings.engine.accel.cuda12");
     case "win-cuda-13.1-x64":
       return t("aiSettings.engine.accel.cuda13");
+    case "win-vulkan-x64":
+      return t("aiSettings.engine.accel.vulkan");
     case "win-cpu-x64":
       return t("aiSettings.engine.accel.winCpu");
     case "macos-arm64":

@@ -245,7 +245,27 @@ export interface EmbeddingRuntimeStatus {
   estimatedBytes: number;
 }
 
-/** binary + onnxruntime + runtime + 子进程保护 + 系统 VRAM 合并；getEngineStatus 返回这个 */
+/** 用户在 AI 设置 → 引擎页选择的 backend 偏好。
+ *  - `"auto"`（默认）：让 Hindsight 自动按 CUDA → Vulkan → CPU 三档挑最强可用
+ *  - `"cuda"`：强制 NVIDIA CUDA；系统没装 N 卡驱动时安全回退到 CPU
+ *  - `"vulkan"`：强制 Vulkan（A 卡 / Intel / 老 N 卡通用 fallback）
+ *  - `"cpu"`：强制 CPU */
+export type BackendChoice = "auto" | "cuda" | "vulkan" | "cpu";
+
+/** 当前主机三档 backend 是否能跑——前端下拉框拿来决定哪些选项要灰掉。
+ *  macOS / Linux 上整个对象意义不大（那里只有一个 backend 可选），前端按 Windows 路由
+ *  才渲染 backend 下拉。 */
+export interface BackendCapabilities {
+  /** 检测到 N 卡驱动且 CUDA Version >= 12.4 */
+  cuda: boolean;
+  /** 检测到任意 Vulkan ICD 注册（A/N/I 卡装了驱动都会有） */
+  vulkan: boolean;
+  /** CPU 永远可用；保留字段让前端结构对称 */
+  cpu: boolean;
+}
+
+/** binary + onnxruntime + runtime + 子进程保护 + 系统 VRAM + backend 偏好/能力；
+ *  getEngineStatus 返回这个 */
 export interface EngineStatus extends EngineBinaryStatus {
   runtime: EngineRuntimeStatus;
   /** onnxruntime 推理库安装状态——跟 binary 是一对，任一未装都视作"AI 引擎未就绪"。 */
@@ -254,6 +274,10 @@ export interface EngineStatus extends EngineBinaryStatus {
   protectionDegraded: string | null;
   /** 系统 VRAM；null = 未检测到（CPU-only 机器或 nvidia-smi 不存在） */
   systemVram: VramInfo | null;
+  /** 三档 backend 可用性快照 */
+  backendCapabilities: BackendCapabilities;
+  /** 当前用户选择的 backend 偏好；前端下拉框回显选中态用 */
+  backendChoice: BackendChoice;
 }
 
 /** 本地磁盘上的 GGUF 文件条目（可能是主权重，也可能是 mmproj）。 */
@@ -547,6 +571,10 @@ export interface AiConfig {
   /** 段总结阶段的每槽 ctx；null = fallback 到 [ctxSize]。
    *  双套参数的关键差异点——summary 默认推荐高 ctx（容纳多图描述聚合）。 */
   summaryCtxSize: number | null;
+  /** 用户在 AI 设置 → 引擎页选择的 backend 偏好。
+   *  改值通过 [`api.setBackendChoice`] 持久化 + 同步到后端 platform 模块；
+   *  本字段在 settings 读路径上是只读的（前端不应直接 update settings.ai.backendChoice）。 */
+  backendChoice: BackendChoice;
 }
 
 export type PromptLanguage = "zh" | "en" | "ja";
@@ -762,6 +790,12 @@ export const api = {
    *  到 activeMain）。同时会 stop 在跑的 server。 */
   setStepModel: (step: "describe" | "summary", mainFile: string, mmprojFile: string | null) =>
     invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
+  /** 切换 backend 偏好——写 settings + 同步到后端 platform 模块全局原子状态。
+   *  写完之后下一次 getEngineStatus 会反映新值，但已经下到磁盘的旧 backend binary
+   *  **不会自动删**（每个 backend 有独立 platform_dir，多份共存不冲突，切回去零等待）。
+   *  前端 EngineTab 在确认弹窗里负责串联：`setBackendChoice → 按需 downloadBinary`。
+   *  顺手 stop 在跑的 server（旧 binary 已经被换走）。 */
+  setBackendChoice: (choice: BackendChoice) => invoke<void>("set_backend_choice", { choice }),
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；

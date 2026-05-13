@@ -21,9 +21,11 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import {
   api,
   ENGINE_DOWNLOAD_EVENT,
+  type BackendChoice,
   type EngineDownloadProgress,
   type EngineStatus,
 } from "../../../api/hindsight";
+import { type SimplePickerOption } from "../../../components/SimplePicker/SimplePicker";
 import { useAiSettings } from "../shared/useAiSettings";
 import {
   ENGINE_BATCH_OPTIONS,
@@ -64,9 +66,7 @@ export default function EngineTab() {
   useEffect(() => {
     api
       .getEngineStatus()
-      .then((s) =>
-        setHwSnapshot({ systemVram: s.systemVram, platformId: s.platformId }),
-      )
+      .then((s) => setHwSnapshot({ systemVram: s.systemVram, platformId: s.platformId }))
       .catch((e) => logError("engine.getStatus.hwSnapshot", e));
   }, []);
 
@@ -157,35 +157,26 @@ export default function EngineTab() {
           两阶段串行执行：日报跑 step 1 用 describe 配置，跑完 stop+start 切到
           summary 配置跑 step 2。新字段 null 时降级到旧全局 batchSize/parallelSlots/
           ctxSize（兼容老 settings JSON），所以两个 Section picker 可能展示同一个值。 */}
-      <Section
-        title={t("aiSettings.describeParams.sectionTitle")}
-        icon={Server}
-      >
+      <Section title={t("aiSettings.describeParams.sectionTitle")} icon={Server}>
         <Row label={t("aiSettings.engineParams.batch")}>
           <SimplePicker<EngineBatchKey>
             value={engineBatchToOption(describeBatch)}
             options={ENGINE_BATCH_OPTIONS}
-            onChange={(next) =>
-              updateAi({ describeBatchSize: engineOptionToBatch(next) ?? 512 })
-            }
+            onChange={(next) => updateAi({ describeBatchSize: engineOptionToBatch(next) ?? 512 })}
           />
         </Row>
         <Row label={t("aiSettings.engineParams.slots")}>
           <SimplePicker<EngineSlotsKey>
             value={engineSlotsToOption(describeSlots)}
             options={ENGINE_SLOTS_OPTIONS}
-            onChange={(next) =>
-              updateAi({ describeParallelSlots: engineOptionToSlots(next) ?? 1 })
-            }
+            onChange={(next) => updateAi({ describeParallelSlots: engineOptionToSlots(next) ?? 1 })}
           />
         </Row>
         <Row label={t("aiSettings.engineParams.ctx")}>
           <SimplePicker<EngineCtxKey>
             value={engineCtxToOption(describeCtx)}
             options={ENGINE_CTX_OPTIONS}
-            onChange={(next) =>
-              updateAi({ describeCtxSize: engineOptionToCtx(next) ?? 8192 })
-            }
+            onChange={(next) => updateAi({ describeCtxSize: engineOptionToCtx(next) ?? 8192 })}
           />
         </Row>
         <VramEstimateLine
@@ -199,35 +190,26 @@ export default function EngineTab() {
         />
       </Section>
 
-      <Section
-        title={t("aiSettings.summaryParams.sectionTitle")}
-        icon={Server}
-      >
+      <Section title={t("aiSettings.summaryParams.sectionTitle")} icon={Server}>
         <Row label={t("aiSettings.engineParams.batch")}>
           <SimplePicker<EngineBatchKey>
             value={engineBatchToOption(summaryBatch)}
             options={ENGINE_BATCH_OPTIONS}
-            onChange={(next) =>
-              updateAi({ summaryBatchSize: engineOptionToBatch(next) ?? 512 })
-            }
+            onChange={(next) => updateAi({ summaryBatchSize: engineOptionToBatch(next) ?? 512 })}
           />
         </Row>
         <Row label={t("aiSettings.engineParams.slots")}>
           <SimplePicker<EngineSlotsKey>
             value={engineSlotsToOption(summarySlots)}
             options={ENGINE_SLOTS_OPTIONS}
-            onChange={(next) =>
-              updateAi({ summaryParallelSlots: engineOptionToSlots(next) ?? 1 })
-            }
+            onChange={(next) => updateAi({ summaryParallelSlots: engineOptionToSlots(next) ?? 1 })}
           />
         </Row>
         <Row label={t("aiSettings.engineParams.ctx")}>
           <SimplePicker<EngineCtxKey>
             value={engineCtxToOption(summaryCtx)}
             options={ENGINE_CTX_OPTIONS}
-            onChange={(next) =>
-              updateAi({ summaryCtxSize: engineOptionToCtx(next) ?? 8192 })
-            }
+            onChange={(next) => updateAi({ summaryCtxSize: engineOptionToCtx(next) ?? 8192 })}
           />
         </Row>
         <VramEstimateLine
@@ -261,6 +243,9 @@ function EngineSection() {
   const [engineBusy, setEngineBusy] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>({ kind: "idle" });
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // 用户点了下拉但还没确认切换时暂存的目标 backend——非 null 时 ConfirmDialog 打开。
+  // 每个 backend 有自己独立的 platform_dir，切换不会自动删旧目录（重复切回去零等待）。
+  const [pendingBackend, setPendingBackend] = useState<BackendChoice | null>(null);
 
   const refresh = async () => {
     try {
@@ -272,9 +257,8 @@ function EngineSection() {
 
   useEffect(() => {
     void refresh();
-    const p = listen<EngineDownloadProgress>(
-      ENGINE_DOWNLOAD_EVENT,
-      (ev) => setProgress(ev.payload),
+    const p = listen<EngineDownloadProgress>(ENGINE_DOWNLOAD_EVENT, (ev) =>
+      setProgress(ev.payload),
     );
     return () => {
       void p.then((unlisten) => unlisten());
@@ -372,6 +356,42 @@ function EngineSection() {
     }
   };
 
+  /** 用户在下拉框选了新 backend——弹确认框，等用户点"继续"再真切。 */
+  const onBackendChange = (next: BackendChoice) => {
+    if (!status || next === status.backendChoice) return;
+    setPendingBackend(next);
+  };
+
+  /** 用户确认切换——写偏好 + 视新 backend 安装情况触发下载。
+   *  不动旧 backend 目录（每个 backend 有独立 platform_dir，多份共存不冲突，
+   *  来回切的时候避免重复下载）。 */
+  const doBackendSwitch = async () => {
+    if (!pendingBackend) return;
+    const target = pendingBackend;
+    setPendingBackend(null);
+    setBusy(true);
+    setError(null);
+    setProgress(null);
+    try {
+      await api.setBackendChoice(target);
+      // 立刻拉一次 status：platformId 跟着新偏好改变，installed 也按新 backend 目录判断
+      const s = await api.getEngineStatus();
+      setStatus(s);
+      // 新 backend 没装过就自动触发下载；之前装过的话什么都不做（用户切回去也零等待）
+      if (!s.installed || !s.embeddingRuntime.installed) {
+        await api.downloadBinary();
+        await refresh();
+        setTimeout(() => setProgress(null), 800);
+      }
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+      setProgress(null);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!status) {
     return <div className={styles.engineCard}>{t("aiSettings.engine.loading")}</div>;
   }
@@ -387,8 +407,47 @@ function EngineSection() {
     binaryInstalled &&
     status.installedVersion !== null &&
     status.installedVersion !== status.currentPin;
-  // Windows 但 CUDA 未检测到：建议先装 NVIDIA CUDA
-  const noCudaWarning = status.platformId === "win-cpu-x64";
+  // 仅在「自动模式 + 系统也没 Vulkan」下退化到 CPU 时才提示装 CUDA——
+  // 用户自己手选 CPU 是有意为之的，不该再弹"建议装 CUDA"反 UX。
+  const noCudaWarning =
+    status.platformId === "win-cpu-x64" &&
+    status.backendChoice === "auto" &&
+    !status.backendCapabilities.vulkan;
+
+  // backend 下拉框选项：四档固定顺序 auto / cuda / vulkan / cpu。
+  // **全部可选**——硬件探测（reg query Vulkan ICD / nvidia-smi）不能 100% 覆盖
+  // 边缘场景（如 NVIDIA 驱动只注册了 OpenGL ICD 但 Vulkan loader 仍能找到 driver），
+  // 强制灰禁会误把能跑的用户挡在外面。所以"检测不到"只在副标签 note 里提示，
+  // 真选了就让 ConfirmDialog 警告 + 下载 + 真启动失败时把错误显示给用户判断。
+  // Windows 之外的 OS 由调用方决定不渲染整个下拉。
+  const caps = status.backendCapabilities;
+  const backendOptions: SimplePickerOption<BackendChoice>[] = [
+    { value: "auto", label: t("aiSettings.engine.backend.auto") },
+    {
+      value: "cuda",
+      label: t("aiSettings.engine.backend.cuda"),
+      note: caps.cuda ? undefined : t("aiSettings.engine.backend.notDetected"),
+      title: caps.cuda ? undefined : t("aiSettings.engine.backend.cudaUnavailable"),
+    },
+    {
+      value: "vulkan",
+      label: t("aiSettings.engine.backend.vulkan"),
+      note: caps.vulkan ? undefined : t("aiSettings.engine.backend.notDetected"),
+      title: caps.vulkan ? undefined : t("aiSettings.engine.backend.vulkanUnavailable"),
+    },
+    { value: "cpu", label: t("aiSettings.engine.backend.cpu") },
+  ];
+
+  // 只在 Windows 路由下渲染 backend 下拉——macOS 走 Metal、Linux 占位 CPU，
+  // 都只有一种 backend 可选，下拉没意义。platformId 以 "win-" 开头即认为是 Windows 路由。
+  const showBackendPicker = status.platformId.startsWith("win-");
+
+  // 切换确认弹窗用：把目标 backend 的人话名 + 是否可用警告拼进 message
+  const pendingBackendLabel = pendingBackend
+    ? t(`aiSettings.engine.backend.${pendingBackend}`)
+    : "";
+  const pendingBackendUnavailable =
+    (pendingBackend === "cuda" && !caps.cuda) || (pendingBackend === "vulkan" && !caps.vulkan);
 
   // 下载按钮的当前文案：busy / 已装 / stale / 全新 四态
   const downloadBtnLabel = busy
@@ -405,175 +464,198 @@ function EngineSection() {
 
   return (
     <>
-    <div className={styles.engineCard}>
-      <div className={styles.engineHead}>
-        <span
-          className={`${styles.engineBadge} ${
-            installed ? styles.engineBadgeOk : styles.engineBadgeWarn
-          }`}
-        >
-          {installed
-            ? t("aiSettings.engine.installed")
-            : t("aiSettings.engine.notInstalled")}
-        </span>
-        <span className={styles.engineMeta}>
-          llama.cpp
+      <div className={styles.engineCard}>
+        <div className={styles.engineHead}>
+          <span
+            className={`${styles.engineBadge} ${
+              installed ? styles.engineBadgeOk : styles.engineBadgeWarn
+            }`}
+          >
+            {installed ? t("aiSettings.engine.installed") : t("aiSettings.engine.notInstalled")}
+          </span>
+          <span className={styles.engineMeta}>
+            llama.cpp
+            <button
+              type="button"
+              className={styles.engineInfoWrap}
+              aria-label={
+                stale
+                  ? t("aiSettings.engine.versionStaleAria", {
+                      version: versionDisplay,
+                      latest: status.currentPin,
+                    })
+                  : t("aiSettings.engine.versionAria", { version: versionDisplay })
+              }
+            >
+              <Info size={12} strokeWidth={2.2} className={styles.engineInfoIcon} />
+              <span className={styles.engineInfoTip} role="tooltip">
+                {t("aiSettings.engine.versionLabel", { version: versionDisplay })}
+                {stale
+                  ? t("aiSettings.engine.versionStaleLabel", {
+                      latest: status.currentPin,
+                    })
+                  : ""}
+              </span>
+            </button>
+            <span className={styles.engineMetaSep}>·</span>
+            {/* 推理库（onnxruntime）小标签——已装时显示版本，未装时显示"待下载" */}
+            {runtimeInstalled
+              ? t("aiSettings.engine.runtimeBadge", {
+                  version:
+                    status.embeddingRuntime.installedVersion ?? status.embeddingRuntime.currentPin,
+                })
+              : t("aiSettings.engine.runtimeBadgeMissing")}
+            <span className={styles.engineMetaSep}>·</span>
+            {t("aiSettings.engine.detected", { accel: accelLabel })}
+          </span>
+        </div>
+
+        {showBackendPicker ? (
+          <div className={styles.engineBackendRow}>
+            <span className={styles.engineBackendLabel}>
+              {t("aiSettings.engine.backend.label")}
+            </span>
+            <SimplePicker<BackendChoice>
+              value={status.backendChoice}
+              options={backendOptions}
+              onChange={onBackendChange}
+              disabled={busy}
+            />
+            <span className={styles.engineBackendHint}>{t("aiSettings.engine.backend.hint")}</span>
+          </div>
+        ) : null}
+
+        {noCudaWarning ? (
+          <div className={styles.engineWarning}>
+            <AlertTriangle size={14} strokeWidth={2.2} />
+            <div className={styles.engineWarningBody}>
+              <strong>{t("aiSettings.engine.noCuda.headline")}</strong>
+              <span>
+                {t("aiSettings.engine.noCuda.prefix")}
+                <button
+                  type="button"
+                  className={styles.engineWarningLink}
+                  onClick={() => void openUrl("https://developer.nvidia.com/cuda-downloads")}
+                >
+                  {t("aiSettings.engine.noCuda.linkText")}
+                </button>
+                {t("aiSettings.engine.noCuda.suffix")}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {error ? <div className={styles.engineError}>{error}</div> : null}
+
+        {progress ? <EngineProgress progress={progress} /> : null}
+
+        <div className={styles.engineActions}>
           <button
             type="button"
-            className={styles.engineInfoWrap}
-            aria-label={
-              stale
-                ? t("aiSettings.engine.versionStaleAria", {
-                    version: versionDisplay,
-                    latest: status.currentPin,
-                  })
-                : t("aiSettings.engine.versionAria", { version: versionDisplay })
+            className={styles.testBtn}
+            onClick={() => void onDownload()}
+            disabled={busy}
+          >
+            {busy ? (
+              <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
+            ) : (
+              <Download size={16} strokeWidth={2.2} />
+            )}
+            <span>{downloadBtnLabel}</span>
+          </button>
+          {/* 「测试连接」合并按钮：未启动 → 先 start_engine → 再 test_ai_endpoint */}
+          <button
+            type="button"
+            className={styles.engineTest}
+            onClick={() => void onTestLocal()}
+            disabled={busy || !installed || engineBusy}
+            title={
+              installed
+                ? t("aiSettings.engine.actions.testTooltipReady")
+                : t("aiSettings.engine.actions.testTooltipNotInstalled")
             }
           >
-            <Info size={12} strokeWidth={2.2} className={styles.engineInfoIcon} />
-            <span className={styles.engineInfoTip} role="tooltip">
-              {t("aiSettings.engine.versionLabel", { version: versionDisplay })}
-              {stale
-                ? t("aiSettings.engine.versionStaleLabel", {
-                    latest: status.currentPin,
-                  })
-                : ""}
-            </span>
+            {engineBusy ? <Loader2 size={14} strokeWidth={2} className={styles.testSpin} /> : null}
+            {t("aiSettings.engine.actions.testConnection")}
           </button>
-          <span className={styles.engineMetaSep}>·</span>
-          {/* 推理库（onnxruntime）小标签——已装时显示版本，未装时显示"待下载" */}
-          {runtimeInstalled
-            ? t("aiSettings.engine.runtimeBadge", {
-                version:
-                  status.embeddingRuntime.installedVersion ??
-                  status.embeddingRuntime.currentPin,
-              })
-            : t("aiSettings.engine.runtimeBadgeMissing")}
-          <span className={styles.engineMetaSep}>·</span>
-          {t("aiSettings.engine.detected", { accel: accelLabel })}
-        </span>
-      </div>
-
-      {noCudaWarning ? (
-        <div className={styles.engineWarning}>
-          <AlertTriangle size={14} strokeWidth={2.2} />
-          <div className={styles.engineWarningBody}>
-            <strong>{t("aiSettings.engine.noCuda.headline")}</strong>
-            <span>
-              {t("aiSettings.engine.noCuda.prefix")}
-              <button
-                type="button"
-                className={styles.engineWarningLink}
-                onClick={() =>
-                  void openUrl("https://developer.nvidia.com/cuda-downloads")
-                }
-              >
-                {t("aiSettings.engine.noCuda.linkText")}
-              </button>
-              {t("aiSettings.engine.noCuda.suffix")}
-            </span>
-          </div>
-        </div>
-      ) : null}
-
-      {error ? <div className={styles.engineError}>{error}</div> : null}
-
-      {progress ? <EngineProgress progress={progress} /> : null}
-
-      <div className={styles.engineActions}>
-        <button
-          type="button"
-          className={styles.testBtn}
-          onClick={() => void onDownload()}
-          disabled={busy}
-        >
-          {busy ? (
-            <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
-          ) : (
-            <Download size={16} strokeWidth={2.2} />
-          )}
-          <span>{downloadBtnLabel}</span>
-        </button>
-        {/* 「测试连接」合并按钮：未启动 → 先 start_engine → 再 test_ai_endpoint */}
-        <button
-          type="button"
-          className={styles.engineTest}
-          onClick={() => void onTestLocal()}
-          disabled={busy || !installed || engineBusy}
-          title={
-            installed
-              ? t("aiSettings.engine.actions.testTooltipReady")
-              : t("aiSettings.engine.actions.testTooltipNotInstalled")
-          }
-        >
-          {engineBusy ? (
-            <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-          ) : null}
-          {t("aiSettings.engine.actions.testConnection")}
-        </button>
-        {/* 引擎在跑时才显示「释放显存」：手动停掉 server，下次跑总结会 lazy spawn 自动起。
+          {/* 引擎在跑时才显示「释放显存」：手动停掉 server，下次跑总结会 lazy spawn 自动起。
             disabled 时不显示——避免用户在引擎本来就没跑时点了一脸懵。 */}
-        {status.runtime.state === "running" ? (
+          {status.runtime.state === "running" ? (
+            <button
+              type="button"
+              className={styles.engineFolderBtn}
+              onClick={() => void onReleaseVram()}
+              disabled={engineBusy}
+              title={t("aiSettings.engine.actions.releaseVramTooltip")}
+            >
+              <PowerOff size={14} strokeWidth={1.85} />
+              {t("aiSettings.engine.actions.releaseVram")}
+            </button>
+          ) : null}
+          {/* busy 时用 visibility:hidden 保住占位，避免后面的「打开」「卸载」按钮往左跳 */}
+          <span className={styles.engineSize} style={busy ? { visibility: "hidden" } : undefined}>
+            {t("aiSettings.engine.actions.approxSize", {
+              size: Math.round(status.estimatedBytes / 1024 / 1024),
+            })}
+          </span>
           <button
             type="button"
             className={styles.engineFolderBtn}
-            onClick={() => void onReleaseVram()}
-            disabled={engineBusy}
-            title={t("aiSettings.engine.actions.releaseVramTooltip")}
+            onClick={() => void api.openEngineDir().catch((e) => logError("engine.openDir", e))}
+            disabled={busy || !installed}
+            title={
+              installed
+                ? t("aiSettings.engine.actions.openFolderTooltipInstalled")
+                : t("aiSettings.engine.actions.openFolderTooltipNotInstalled")
+            }
           >
-            <PowerOff size={14} strokeWidth={1.85} />
-            {t("aiSettings.engine.actions.releaseVram")}
+            <FolderOpen size={14} strokeWidth={1.85} />
+            {t("common.open")}
           </button>
-        ) : null}
-        {/* busy 时用 visibility:hidden 保住占位，避免后面的「打开」「卸载」按钮往左跳 */}
-        <span
-          className={styles.engineSize}
-          style={busy ? { visibility: "hidden" } : undefined}
-        >
-          {t("aiSettings.engine.actions.approxSize", {
-            size: Math.round(status.estimatedBytes / 1024 / 1024),
-          })}
-        </span>
-        <button
-          type="button"
-          className={styles.engineFolderBtn}
-          onClick={() => void api.openEngineDir().catch((e) => logError("engine.openDir", e))}
-          disabled={busy || !installed}
-          title={
-            installed
-              ? t("aiSettings.engine.actions.openFolderTooltipInstalled")
-              : t("aiSettings.engine.actions.openFolderTooltipNotInstalled")
-          }
-        >
-          <FolderOpen size={14} strokeWidth={1.85} />
-          {t("common.open")}
-        </button>
-        <button
-          type="button"
-          className={styles.engineUninstall}
-          onClick={onDelete}
-          disabled={busy || !installed}
-          title={
-            installed
-              ? t("aiSettings.engine.actions.uninstallTooltipInstalled")
-              : t("aiSettings.engine.actions.uninstallTooltipNotInstalled")
-          }
-        >
-          <Trash2 size={14} strokeWidth={1.85} />
-          {t("aiSettings.engine.actions.uninstall")}
-        </button>
-      </div>
+          <button
+            type="button"
+            className={styles.engineUninstall}
+            onClick={onDelete}
+            disabled={busy || !installed}
+            title={
+              installed
+                ? t("aiSettings.engine.actions.uninstallTooltipInstalled")
+                : t("aiSettings.engine.actions.uninstallTooltipNotInstalled")
+            }
+          >
+            <Trash2 size={14} strokeWidth={1.85} />
+            {t("aiSettings.engine.actions.uninstall")}
+          </button>
+        </div>
 
-      {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
-    </div>
-    <ConfirmDialog
-      open={confirmingDelete}
-      title={t("aiSettings.engine.uninstallConfirmTitle")}
-      message={t("aiSettings.engine.uninstallConfirmMessage")}
-      variant="danger"
-      onConfirm={() => void doDelete()}
-      onCancel={() => setConfirmingDelete(false)}
-    />
+        {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
+      </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t("aiSettings.engine.uninstallConfirmTitle")}
+        message={t("aiSettings.engine.uninstallConfirmMessage")}
+        variant="danger"
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmingDelete(false)}
+      />
+      <ConfirmDialog
+        open={pendingBackend !== null}
+        title={t("aiSettings.engine.backend.switchTitle", {
+          backend: pendingBackendLabel,
+        })}
+        message={
+          pendingBackendUnavailable
+            ? t("aiSettings.engine.backend.switchMessageUnavailable", {
+                backend: pendingBackendLabel,
+              })
+            : t("aiSettings.engine.backend.switchMessage", {
+                backend: pendingBackendLabel,
+              })
+        }
+        variant={pendingBackendUnavailable ? "danger" : undefined}
+        onConfirm={() => void doBackendSwitch()}
+        onCancel={() => setPendingBackend(null)}
+      />
     </>
   );
 }
@@ -686,9 +768,7 @@ function EngineRuntimeRow({
     <div className={styles.engineRuntime}>
       <div className={styles.engineRuntimeRow}>
         {testResult.kind === "ok" ? (
-          <span
-            className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusOk}`}
-          >
+          <span className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusOk}`}>
             <Check size={14} strokeWidth={2.2} />
             {testResult.models.length === 0
               ? t("aiSettings.engine.runtime.connectedNoModels")
@@ -698,30 +778,22 @@ function EngineRuntimeRow({
           </span>
         ) : null}
         {testResult.kind === "fail" ? (
-          <span
-            className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusFail}`}
-          >
+          <span className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusFail}`}>
             <XCircle size={14} strokeWidth={2.2} />
             {testResult.message}
           </span>
         ) : null}
 
-        {idleHint ? (
-          <span className={styles.engineIdleHint}>{idleHint}</span>
-        ) : null}
+        {idleHint ? <span className={styles.engineIdleHint}>{idleHint}</span> : null}
 
         {badge ? (
-          <span
-            className={`${styles.engineBadge} ${badge.cls} ${styles.engineRuntimeBadgeRight}`}
-          >
+          <span className={`${styles.engineBadge} ${badge.cls} ${styles.engineRuntimeBadgeRight}`}>
             {badge.text}
           </span>
         ) : null}
       </div>
 
-      {isError && rt.error ? (
-        <div className={styles.engineRuntimeError}>{rt.error}</div>
-      ) : null}
+      {isError && rt.error ? <div className={styles.engineRuntimeError}>{rt.error}</div> : null}
     </div>
   );
 }

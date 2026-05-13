@@ -11,7 +11,7 @@ use tauri::State;
 use crate::ai::binary::{self, EngineBinaryStatus};
 use crate::ai::embedding_runtime::{self, RuntimeStatus};
 use crate::ai::job_guard::{self, JobInitState};
-use crate::ai::platform::{self, VramInfo};
+use crate::ai::platform::{self, BackendCapabilities, BackendChoice, VramInfo};
 use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
 use crate::repo::settings;
 use crate::storage::DbPool;
@@ -35,15 +35,23 @@ pub struct EngineStatusResp {
     pub protection_degraded: Option<String>,
     /// 系统 VRAM 信息（NVIDIA discrete 或 Apple Silicon unified × 0.7）。
     /// `None` = CPU-only 机器或探测失败——前端按"未检测到独立显存"处理。
-    /// 由 [`platform::detect_total_vram_gb`] 提供，OnceLock 全局缓存，
+    /// 由 [`platform::detect_total_vram_gb`] 提供,OnceLock 全局缓存,
     /// 每次轮询都直接命中缓存（首次约 100-500ms）。
     pub system_vram: Option<VramInfo>,
+    /// 系统三档 backend 的可用性（`{cuda, vulkan, cpu}`）——给前端 EngineTab
+    /// 的下拉框判断哪些选项要灰掉。macOS / Linux 上三档全 false 即可，
+    /// 前端那边只在 Windows 路由下渲染 backend 下拉。
+    pub backend_capabilities: BackendCapabilities,
+    /// 当前用户选择的 backend 偏好,前端下拉框回显选中态用。
+    /// 取值跟 [`BackendChoice::as_str`] 一致："auto" / "cuda" / "vulkan" / "cpu"。
+    pub backend_choice: String,
 }
 
 /// 查询引擎当前状态：binary 是否已安装 + onnxruntime 是否已安装 +
-/// server 是否在跑 + 子进程保护是否正常 + 系统 VRAM。
+/// server 是否在跑 + 子进程保护是否正常 + 系统 VRAM + 三档 backend 可用性 + 用户偏好。
 #[tauri::command]
 pub async fn get_engine_status(
+    pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
 ) -> Result<EngineStatusResp, String> {
     let binary = binary::status().map_err(String::from)?;
@@ -55,13 +63,49 @@ pub async fn get_engine_status(
         JobInitState::Degraded(reason) => Some(reason),
     };
     let system_vram = platform::detect_total_vram_gb();
+    let backend_capabilities = platform::detect_backend_capabilities();
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
     Ok(EngineStatusResp {
         binary,
         runtime,
         embedding_runtime,
         protection_degraded,
         system_vram,
+        backend_capabilities,
+        backend_choice: cfg.ai.backend_choice,
     })
+}
+
+/// 切换 backend 偏好——写 settings + 同步到 platform 模块全局原子状态。
+///
+/// 写完之后下次任何 `platform::detect()` 调用都会反映新偏好，但已经下载到磁盘的
+/// 旧 backend binary **不会自动删**（每个 backend 有独立 platform_dir，多份共存不冲突，
+/// 切回去零等待）。前端 EngineTab 在确认弹窗里负责串联：
+/// `set_backend_choice → 按需 download_binary`。
+///
+/// `choice` 接受 "auto" / "cuda" / "vulkan" / "cpu"；未知值由 [`BackendChoice::from_str`]
+/// 静默回退到 "auto"。
+#[tauri::command]
+pub async fn set_backend_choice(
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    choice: String,
+) -> Result<(), String> {
+    // 命令体自己 sanitize：`settings::save` 不调 ai::config::sanitize（那条路径只有
+    // `update_settings` 命令走），所以这里如果直接落原始入参，DB 会真的存 "garbage"
+    // 之类非法值，前端 SimplePicker 找不到匹配 option 就显示空 label。
+    // 这里把入参先经 [`BackendChoice::from_str`] 钳到合法枚举值再 [`as_str`] 拿回字符串落库。
+    let parsed = BackendChoice::from_str(&choice);
+    let mut cfg = settings::load(&pool).await.map_err(String::from)?;
+    cfg.ai.backend_choice = parsed.as_str().to_string();
+    settings::save(&pool, &cfg).await.map_err(String::from)?;
+
+    // 同步到 platform 模块的全局原子状态——下次 `platform::detect()` 立刻反映新偏好
+    platform::set_user_preference(parsed);
+
+    // backend 换了 = 当前在跑的 server 跑的是旧 binary，停掉等用户主动重启
+    let _ = supervisor.stop().await;
+    Ok(())
 }
 
 /// 启动 llama-server 子进程。

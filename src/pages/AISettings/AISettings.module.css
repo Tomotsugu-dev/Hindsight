@@ -119,8 +119,7 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   font-size: 12.5px;
-  font-family:
-    ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   line-height: 1.6;
   color: var(--text-strong);
   resize: vertical;
@@ -386,8 +385,8 @@
   background: rgba(28, 28, 36, 0.94);
   border-radius: 6px;
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.20),
-    0 2px 4px rgba(0, 0, 0, 0.10);
+    0 4px 12px -2px rgba(0, 0, 0, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.1);
   opacity: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
@@ -413,6 +412,34 @@
 .engineInfoWrap:focus-visible .engineInfoTip {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* —— backend 选择行（CUDA / Vulkan / CPU 切换下拉）——
+   视觉上跟 engineHead 一脉相承，留淡边界让"加速方式 + 下拉 + 副提示" 是
+   一组紧凑的横排控件。下拉本体继续走 SimplePicker 默认样式。 */
+.engineBackendRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.06);
+}
+
+.engineBackendLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  flex-shrink: 0;
+}
+
+.engineBackendHint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+  flex: 1 1 auto;
+  line-height: 1.4;
 }
 
 /* CUDA 缺失警告条 */
@@ -579,7 +606,9 @@
   font: inherit;
   appearance: none;
   -webkit-appearance: none;
-  transition: color 140ms var(--ease-out), background 140ms var(--ease-out);
+  transition:
+    color 140ms var(--ease-out),
+    background 140ms var(--ease-out);
 }
 .vramEstInfo:hover,
 .vramEstInfo:focus-visible {

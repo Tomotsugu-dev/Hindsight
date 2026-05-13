@@ -394,6 +394,7 @@ fn platform_id(p: Platform) -> &'static str {
         Platform::WindowsX64Cpu => "win-cpu-x64",
         Platform::WindowsX64Cuda12 => "win-cuda-12.4-x64",
         Platform::WindowsX64Cuda13 => "win-cuda-13.1-x64",
+        Platform::WindowsX64Vulkan => "win-vulkan-x64",
         Platform::MacOSArm64Metal => "macos-arm64",
         Platform::MacOSX64 => "macos-x64",
         Platform::LinuxX64Cpu => "ubuntu-x64",

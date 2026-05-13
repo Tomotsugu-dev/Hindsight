@@ -159,9 +159,10 @@ fn asset_name(p: Platform) -> Result<&'static str> {
     Ok(match p {
         Platform::MacOSArm64Metal => "onnxruntime-osx-arm64-1.22.0.tgz",
         Platform::MacOSX64 => "onnxruntime-osx-x86_64-1.22.0.tgz",
-        Platform::WindowsX64Cpu | Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 => {
-            "onnxruntime-win-x64-1.22.0.zip"
-        }
+        Platform::WindowsX64Cpu
+        | Platform::WindowsX64Cuda12
+        | Platform::WindowsX64Cuda13
+        | Platform::WindowsX64Vulkan => "onnxruntime-win-x64-1.22.0.zip",
         Platform::LinuxX64Cpu => "onnxruntime-linux-x64-1.22.0.tgz",
     })
 }

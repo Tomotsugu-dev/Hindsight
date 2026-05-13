@@ -533,11 +533,13 @@ fn pick_free_port() -> Result<u16> {
     Ok(port)
 }
 
-/// 根据 platform 决定 `-ngl`（GPU layer 数）：CUDA / Metal binary 全 offload，
+/// 根据 platform 决定 `-ngl`（GPU layer 数）：CUDA / Vulkan / Metal binary 全 offload，
 /// CPU binary 不传。
 fn gpu_layers_for(p: Platform) -> Option<u32> {
     match p {
-        Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 => Some(99),
+        Platform::WindowsX64Cuda12
+        | Platform::WindowsX64Cuda13
+        | Platform::WindowsX64Vulkan => Some(99),
         Platform::MacOSArm64Metal => Some(99),
         // CPU binary 不支持 -ngl
         Platform::WindowsX64Cpu | Platform::MacOSX64 | Platform::LinuxX64Cpu => None,

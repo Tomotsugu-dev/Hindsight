@@ -37,6 +37,14 @@ pub async fn update_settings(
     // 不需要重启
     crate::MINIMIZE_TO_TRAY.store(next.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
+    // AI backend 偏好也同步到 platform 模块的全局原子状态——
+    // 正常路径走 `set_backend_choice` 命令，但前端若不走 backend picker 而是直接
+    // 用 `updateSettings({ ai: {...} })` 一次性 patch（含 backendChoice）也要覆盖到，
+    // 否则 settings DB 改了但 `platform::detect()` 还看旧偏好，下次重启才生效。
+    crate::ai::platform::set_user_preference(
+        crate::ai::platform::BackendChoice::from_str(&next.ai.backend_choice),
+    );
+
     if next.capture_enabled != prev_enabled {
         if next.capture_enabled {
             svc.start().await;

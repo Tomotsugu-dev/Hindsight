@@ -8,19 +8,29 @@
 //!   - `llama-b9025-bin-macos-x64.tar.gz`
 //!   - `llama-b9025-bin-ubuntu-x64.tar.gz`
 //!
-//! Windows CUDA 变体由用户驱动决定（不是我们装 CUDA，是检测他装的）：
+//! Windows backend 路由（按 [`BackendChoice`] 偏好决定，缺省 `Auto` 走自动检测）：
+//! - **Auto**：CUDA → Vulkan → CPU 三档优先级，挑系统能跑的最强
+//! - **Cuda**：强制 CUDA；系统没装 N 卡驱动则退回 CPU
+//! - **Vulkan**：强制 Vulkan（A 卡 / Intel / 老 N 卡通用 fallback）
+//! - **Cpu**：强制 CPU
+//!
+//! CUDA 由用户驱动决定（不是我们装 CUDA，是检测他装的）：
 //! - `nvidia-smi` 默认输出包含 `CUDA Version: X.Y`，那是当前驱动支持的最高 CUDA
 //! - >= 13.1 → 选 `cuda-13.1` binary
 //! - >= 12.4 但 < 13.1 → 选 `cuda-12.4` binary
-//! - 没装驱动或太老 → CPU
+//! - 没装驱动或太老 → 没 CUDA
+//!
+//! Vulkan 由用户显卡驱动决定：检测注册表 `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`
+//! 是否有 ICD 注册——A/N/I 卡装了驱动都会有；命中 = Vulkan 能跑。
 //!
 //! macOS：Apple Silicon 内建 Metal，Intel Mac 用 x64 binary（也支持 Metal，
-//! Metal 是 OS framework）；不需要 GPU 检测。
+//! Metal 是 OS framework）；不需要 GPU 检测，[`BackendChoice`] 偏好被忽略。
 //!
 //! Linux：v1 不主动支持 Linux——只留 CPU 占位变体让 enum 完整。
 //! Linux 上 llama.cpp 官方未发 CUDA binary，要 GPU 加速用户得自编。
 //! 等 v2 真要支持 Linux 时再决定走 Vulkan / 自编 CUDA / 别的。
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
 use serde::Serialize;
@@ -34,8 +44,8 @@ pub const PINNED_TAG: &str = "b9025";
 
 /// 当前机器对应哪个 llama-server binary 变体。
 ///
-/// 注意 CUDA 由用户系统提供，Hindsight 不安装、不打包 CUDA runtime。
-/// 我们做的事仅限于"检测用户驱动 → 挑匹配的 llama.cpp CUDA binary"。
+/// 注意 CUDA / Vulkan 都由用户系统提供，Hindsight 不安装、不打包对应 runtime。
+/// 我们做的事仅限于"检测用户驱动 → 挑匹配的 llama.cpp binary"。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Platform {
     WindowsX64Cpu,
@@ -43,6 +53,8 @@ pub enum Platform {
     WindowsX64Cuda12,
     /// driver 支持的最高 CUDA >= 13.1
     WindowsX64Cuda13,
+    /// Vulkan backend——A 卡 / Intel / 没装 CUDA 的 N 卡通用 fallback
+    WindowsX64Vulkan,
     /// Apple Silicon——内建 Metal
     MacOSArm64Metal,
     /// Intel Mac——binary 自带 Metal 支持（如硬件允许），无需检测
@@ -51,21 +63,122 @@ pub enum Platform {
     LinuxX64Cpu,
 }
 
-/// 检测当前主机最合适的变体。
+/// 用户在 AI 设置 → 引擎页选择的 backend 偏好。
 ///
-/// 结果做缓存——首次调用会跑一次 `nvidia-smi` 探测 CUDA 版本，之后直接读缓存。
-/// 用户即便在运行时插拔 GPU / 装驱动也不会重新探测，但这种情况极罕见，重启 app 即可。
-pub fn detect() -> Platform {
-    static DETECTED: OnceLock<Platform> = OnceLock::new();
-    *DETECTED.get_or_init(detect_uncached)
+/// `Auto` = 让 Hindsight 自动按"CUDA → Vulkan → CPU"挑最强可用；其它三档强制使用对应 backend。
+/// 偏好选了 `Cuda` 但系统没装 N 卡驱动，会安全回退到 CPU（不会让下载 / 启动死循环失败）。
+/// Vulkan 偏好不做回退——前端 UI 会把"系统不支持 Vulkan"的选项灰掉，理论上用户碰不到。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum BackendChoice {
+    Auto = 0,
+    Cuda = 1,
+    Vulkan = 2,
+    Cpu = 3,
 }
 
-fn detect_uncached() -> Platform {
+impl BackendChoice {
+    /// 从 settings 里的 `"auto" / "cuda" / "vulkan" / "cpu"` 字符串映射。
+    /// 任何未知值统一回退到 `Auto`——前端按下拉枚举只会送回这四个之一。
+    pub fn from_str(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "cuda" => Self::Cuda,
+            "vulkan" => Self::Vulkan,
+            "cpu" => Self::Cpu,
+            _ => Self::Auto,
+        }
+    }
+
+    /// 反过来给 settings sanitize / 前端展示用的小写字符串。
+    /// `commands::ai_engine::set_backend_choice` 走 `from_str(...).as_str()` 钳到合法枚举值再落库，
+    /// 避免前端送了 "garbage" 之类非法字符串直接进 DB。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Cuda => "cuda",
+            Self::Vulkan => "vulkan",
+            Self::Cpu => "cpu",
+        }
+    }
+}
+
+/// 用户偏好的全局缓存——bootstrap 启动期 + `commands::ai_engine::set_backend_choice`
+/// 触发更新。`detect()` 每次都直接 load 这个 atomic，让用户切了下拉框立刻生效（不像
+/// `auto_detect_cached()` 那样在 OnceLock 里固化）。
+///
+/// 默认 0 = Auto；用 AtomicU8 + repr(u8) enum 走 store/load 是 lock-free 的最简方式。
+static USER_PREFERENCE: AtomicU8 = AtomicU8::new(0);
+
+/// bootstrap / commands 调用——把用户在 settings 里选的偏好同步到全局原子状态。
+/// 调完之后，下一次任何代码读 [`detect()`] 都会反映新偏好。
+pub fn set_user_preference(choice: BackendChoice) {
+    USER_PREFERENCE.store(choice as u8, Ordering::Relaxed);
+}
+
+/// 反查当前用户偏好（前端 EngineTab 拿来回显下拉框选中态）。
+pub fn user_preference() -> BackendChoice {
+    match USER_PREFERENCE.load(Ordering::Relaxed) {
+        1 => BackendChoice::Cuda,
+        2 => BackendChoice::Vulkan,
+        3 => BackendChoice::Cpu,
+        _ => BackendChoice::Auto,
+    }
+}
+
+/// 系统三档 backend 的可用性快照——给前端 EngineTab 判断下拉框里哪些项要灰掉。
+///
+/// macOS / Linux 上这三个字段意义不大（那里只有一个 backend 选项），前端不渲染下拉。
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackendCapabilities {
+    /// 检测到 N 卡驱动且 CUDA Version >= 12.4
+    pub cuda: bool,
+    /// 检测到任意 Vulkan ICD 注册（A/N/I 卡装了驱动都会有）
+    pub vulkan: bool,
+    /// CPU 永远可用；保留字段让前端结构对称，不用做特判
+    pub cpu: bool,
+}
+
+/// 检测当前主机三档 backend 各自能不能跑。
+///
+/// 整体走的是已经被 [`detect_cuda_version`] / [`detect_vulkan_available`] 各自 OnceLock
+/// 缓存的子探测函数，重复调几乎零开销；macOS / Linux 直接返回全 false（CUDA + Vulkan
+/// 在 v1 路由里只对 Windows 生效）。
+pub fn detect_backend_capabilities() -> BackendCapabilities {
+    if std::env::consts::OS != "windows" {
+        return BackendCapabilities {
+            cuda: false,
+            vulkan: false,
+            cpu: true,
+        };
+    }
+    let cuda = matches!(detect_cuda_version_cached(), Some(v) if v >= (12, 4));
+    BackendCapabilities {
+        cuda,
+        vulkan: detect_vulkan_available_cached(),
+        cpu: true,
+    }
+}
+
+/// 决定当前该用哪个 binary 变体——先看用户偏好，再走自动检测。
+///
+/// 行为：
+/// - macOS / Linux：偏好被忽略（那里只有一个 backend 可选），直接按 OS / arch 路由
+/// - Windows + `BackendChoice::Auto`：CUDA → Vulkan → CPU 三档优先级
+/// - Windows + `Cuda`：跟 Vulkan 路径对称——直接选 CUDA binary（按检测到的版本挑 12 / 13；
+///   探不到时假定较新的 Cuda13 让用户得到明确的启动失败信号）。**不静默 fallback CPU**：
+///   用户在 UI 上明确选了 CUDA（哪怕带 danger 警告也点了"继续"），就应该真去下 CUDA binary；
+///   硬件不支持时让 llama-server 启动报错给前端展示，比"为什么显存没占用"友好
+/// - Windows + `Vulkan`：直接选 [`Platform::WindowsX64Vulkan`]（同上，不 fallback）
+/// - Windows + `Cpu`：直接选 [`Platform::WindowsX64Cpu`]
+///
+/// 不缓存最终结果：偏好可以热切，每次都读一次 atomic + 走子探测的 OnceLock 缓存。
+pub fn detect() -> Platform {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
     match (os, arch) {
-        ("windows", "x86_64") => detect_windows_x64(),
+        ("windows", "x86_64") => detect_windows_x64(user_preference()),
         ("macos", "aarch64") => Platform::MacOSArm64Metal,
         ("macos", _) => Platform::MacOSX64,
         ("linux", _) => Platform::LinuxX64Cpu,
@@ -75,13 +188,57 @@ fn detect_uncached() -> Platform {
     }
 }
 
-fn detect_windows_x64() -> Platform {
-    match detect_cuda_version() {
+fn detect_windows_x64(prefer: BackendChoice) -> Platform {
+    match prefer {
+        BackendChoice::Cuda => pick_cuda_forced(),
+        BackendChoice::Vulkan => Platform::WindowsX64Vulkan,
+        BackendChoice::Cpu => Platform::WindowsX64Cpu,
+        BackendChoice::Auto => {
+            // Auto 模式：先尝试 CUDA，再 Vulkan，最后 CPU 兜底
+            if let Some(p) = pick_cuda_auto() {
+                return p;
+            }
+            if detect_vulkan_available_cached() {
+                return Platform::WindowsX64Vulkan;
+            }
+            Platform::WindowsX64Cpu
+        }
+    }
+}
+
+/// `BackendChoice::Cuda` 偏好路径：用户硬选了 CUDA，按检测到的版本挑 binary；
+/// 探不到 / 版本太老时仍下 Cuda13 binary，让 llama-server 启动报错给用户清晰信号——
+/// **不静默 fallback 到 CPU**，跟 Vulkan 偏好路径对称（前端 UI 已经 ConfirmDialog
+/// 用 danger 警告过"硬件未检测到，可能启动失败"了）。
+fn pick_cuda_forced() -> Platform {
+    match detect_cuda_version_cached() {
         Some(v) if v >= (13, 1) => Platform::WindowsX64Cuda13,
         Some(v) if v >= (12, 4) => Platform::WindowsX64Cuda12,
-        // 检测到 CUDA 但版本太老（< 12.4）→ 继续用 CPU；llama.cpp 没发更老的 CUDA binary
-        _ => Platform::WindowsX64Cpu,
+        _ => Platform::WindowsX64Cuda13,
     }
+}
+
+/// `BackendChoice::Auto` 路径下的 CUDA 优先尝试。
+/// 只有明确检测到 ≥ 12.4 的 CUDA 才返回 Some；否则交给上层走 Vulkan → CPU。
+fn pick_cuda_auto() -> Option<Platform> {
+    match detect_cuda_version_cached() {
+        Some(v) if v >= (13, 1) => Some(Platform::WindowsX64Cuda13),
+        Some(v) if v >= (12, 4) => Some(Platform::WindowsX64Cuda12),
+        _ => None,
+    }
+}
+
+/// CUDA 版本探测的 OnceLock 缓存——首次调跑 `nvidia-smi`（~100ms），之后命中缓存零开销。
+/// 偏好 Cuda / Auto 都共享这一份缓存。
+fn detect_cuda_version_cached() -> Option<(u32, u32)> {
+    static CACHE: OnceLock<Option<(u32, u32)>> = OnceLock::new();
+    *CACHE.get_or_init(detect_cuda_version)
+}
+
+/// Vulkan 可用性探测的 OnceLock 缓存——首次调跑 `reg query`（~50ms），之后命中缓存。
+fn detect_vulkan_available_cached() -> bool {
+    static CACHE: OnceLock<bool> = OnceLock::new();
+    *CACHE.get_or_init(detect_vulkan_available)
 }
 
 /// 探测 driver 支持的最高 CUDA 版本。
@@ -124,6 +281,43 @@ fn detect_cuda_version() -> Option<(u32, u32)> {
     None
 }
 
+/// 探测系统是否注册了任何 Vulkan ICD（Installable Client Driver）。
+///
+/// Windows 上 A/N/I 卡的图形驱动安装时都会在 `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`
+/// 注册一个指向 ICD JSON 文件的值。这条键存在并有子值 = 用户机器装了至少一个能跑
+/// Vulkan 的显卡驱动。
+///
+/// 用子进程 `reg query` 而非引入 winreg crate——跟现有 [`detect_cuda_version`] 走
+/// `nvidia-smi` 子进程是一致的风格，且不增加依赖。子进程开销约 50ms，调用方应通过
+/// [`detect_vulkan_available_cached`] 拿。
+///
+/// `reg query` 输出无值时 status 仍 success，但 stdout 里只有空行 + END。所以判断
+/// 标准是：status.success() **且** stdout 中含至少一个 REG_DWORD 值（值名是 ICD JSON 路径，
+/// 数据 = 0 表示 enabled）；REG_SZ 罕见但有些驱动也会用，一并 contains 检查。
+#[cfg(target_os = "windows")]
+fn detect_vulkan_available() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    let output = Command::new("reg")
+        .args(["query", r"HKLM\SOFTWARE\Khronos\Vulkan\Drivers"])
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .output();
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+    // REG_SZ 是 ICD JSON 路径的值类型；含这串 = 至少注册了一个驱动
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.contains("REG_SZ") || stdout.contains("REG_DWORD")
+}
+
+#[cfg(not(target_os = "windows"))]
+fn detect_vulkan_available() -> bool {
+    // v1 只在 Windows 上路由 Vulkan binary（macOS 走 Metal，Linux 不主动支持）
+    false
+}
+
 /// 从任意文本里解出 `CUDA Version: X.Y`。
 ///
 /// 拆出来当独立函数方便单测——`detect_cuda_version` 拿 nvidia-smi 跑出来的
@@ -162,6 +356,7 @@ pub fn release_asset_name(p: Platform, tag: &str) -> String {
         Platform::WindowsX64Cpu => format!("llama-{tag}-bin-win-cpu-x64.zip"),
         Platform::WindowsX64Cuda12 => format!("llama-{tag}-bin-win-cuda-12.4-x64.zip"),
         Platform::WindowsX64Cuda13 => format!("llama-{tag}-bin-win-cuda-13.1-x64.zip"),
+        Platform::WindowsX64Vulkan => format!("llama-{tag}-bin-win-vulkan-x64.zip"),
         Platform::MacOSArm64Metal => format!("llama-{tag}-bin-macos-arm64.tar.gz"),
         Platform::MacOSX64 => format!("llama-{tag}-bin-macos-x64.tar.gz"),
         Platform::LinuxX64Cpu => format!("llama-{tag}-bin-ubuntu-x64.tar.gz"),
@@ -192,9 +387,10 @@ pub fn cuda_runtime_asset_name(p: Platform) -> Option<&'static str> {
 /// 所以 path = 直接文件名。可执行文件依赖同目录的 `.dll` / `.so` / `.dylib`。
 pub fn binary_relative_path(p: Platform) -> &'static str {
     match p {
-        Platform::WindowsX64Cpu | Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 => {
-            "llama-server.exe"
-        }
+        Platform::WindowsX64Cpu
+        | Platform::WindowsX64Cuda12
+        | Platform::WindowsX64Cuda13
+        | Platform::WindowsX64Vulkan => "llama-server.exe",
         Platform::MacOSArm64Metal | Platform::MacOSX64 | Platform::LinuxX64Cpu => "llama-server",
     }
 }
@@ -212,6 +408,8 @@ pub fn estimated_bytes(p: Platform) -> u64 {
         Platform::WindowsX64Cuda12 => 605 * MB,
         // CUDA 13.1：主 binary ~135MB + cudart runtime ~384MB ≈ 520MB
         Platform::WindowsX64Cuda13 => 520 * MB,
+        // Vulkan：单包 ~32MB，不像 CUDA 还要 cudart runtime
+        Platform::WindowsX64Vulkan => 32 * MB,
         // macOS / Linux：CPU 体积，~30MB
         Platform::MacOSArm64Metal => 30 * MB,
         Platform::MacOSX64 => 30 * MB,
@@ -324,6 +522,7 @@ mod tests {
         Platform::WindowsX64Cpu,
         Platform::WindowsX64Cuda12,
         Platform::WindowsX64Cuda13,
+        Platform::WindowsX64Vulkan,
         Platform::MacOSArm64Metal,
         Platform::MacOSX64,
         Platform::LinuxX64Cpu,
@@ -352,6 +551,7 @@ mod tests {
         assert!(binary_relative_path(Platform::WindowsX64Cpu).ends_with(".exe"));
         assert!(binary_relative_path(Platform::WindowsX64Cuda12).ends_with(".exe"));
         assert!(binary_relative_path(Platform::WindowsX64Cuda13).ends_with(".exe"));
+        assert!(binary_relative_path(Platform::WindowsX64Vulkan).ends_with(".exe"));
     }
 
     #[test]
@@ -435,5 +635,35 @@ mod tests {
         assert_eq!(pick(Some((12, 3))), Platform::WindowsX64Cpu);
         assert_eq!(pick(Some((11, 8))), Platform::WindowsX64Cpu);
         assert_eq!(pick(None), Platform::WindowsX64Cpu);
+    }
+
+    #[test]
+    fn backend_choice_roundtrip() {
+        for c in [
+            BackendChoice::Auto,
+            BackendChoice::Cuda,
+            BackendChoice::Vulkan,
+            BackendChoice::Cpu,
+        ] {
+            assert_eq!(BackendChoice::from_str(c.as_str()), c);
+        }
+        // 未知字符串回退到 Auto
+        assert_eq!(BackendChoice::from_str(""), BackendChoice::Auto);
+        assert_eq!(BackendChoice::from_str("opencl"), BackendChoice::Auto);
+        // 大小写不敏感
+        assert_eq!(BackendChoice::from_str("CUDA"), BackendChoice::Cuda);
+        assert_eq!(BackendChoice::from_str("Vulkan"), BackendChoice::Vulkan);
+    }
+
+    #[test]
+    fn vulkan_asset_naming() {
+        let name = release_asset_name(Platform::WindowsX64Vulkan, "b9025");
+        assert_eq!(name, "llama-b9025-bin-win-vulkan-x64.zip");
+    }
+
+    #[test]
+    fn vulkan_no_cuda_runtime() {
+        // Vulkan 单包，跟 CPU / Metal 一样不需要额外 runtime zip
+        assert_eq!(cuda_runtime_asset_name(Platform::WindowsX64Vulkan), None);
     }
 }

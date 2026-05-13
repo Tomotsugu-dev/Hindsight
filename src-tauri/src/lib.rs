@@ -101,6 +101,12 @@ pub fn run() {
                 let cfg = settings::load(&pool).await.expect("读取设置");
                 MINIMIZE_TO_TRAY
                     .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
+                // 把用户的 backend 偏好同步到 platform 模块的全局原子状态，
+                // 让后续所有 platform::detect() 调用反映用户在 AI 设置里选的 backend。
+                // commands::ai_engine::set_backend_choice 修改 settings 时也会再调一次同步。
+                ai::platform::set_user_preference(
+                    ai::platform::BackendChoice::from_str(&cfg.ai.backend_choice),
+                );
 
                 let svc = bootstrap::init_capture_service(pool.clone(), &cfg).await;
                 spawn_cleanup_task(pool.clone());
@@ -186,6 +192,7 @@ pub fn run() {
             commands::ai_engine::stop_engine,
             commands::ai_engine::set_active_model,
             commands::ai_engine::set_step_model,
+            commands::ai_engine::set_backend_choice,
             commands::ai_engine::get_engine_logs,
             // --- ai: binary ---
             commands::ai_binary::download_binary,

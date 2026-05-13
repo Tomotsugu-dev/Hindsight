@@ -129,6 +129,24 @@ pub struct AiConfig {
     /// 段总结阶段的每槽 ctx；`None` = fallback 到 [`Self::ctx_size`]。
     /// 这是双套参数的关键差异点——summary 默认推荐高 ctx（容纳多图描述聚合）。
     pub summary_ctx_size: Option<u32>,
+
+    /// 用户在 AI 设置 → 引擎页选择的 backend 偏好。
+    ///
+    /// 取值（小写字符串，跟 [`crate::ai::platform::BackendChoice`] 一对一）：
+    /// - `"auto"`（默认）：让 Hindsight 自动按 CUDA → Vulkan → CPU 三档挑最强可用
+    /// - `"cuda"`：强制 NVIDIA CUDA；系统没装 N 卡时实际下载会安全回退到 CPU
+    /// - `"vulkan"`：强制 Vulkan（A 卡 / Intel / 没装 CUDA 的 N 卡通用 fallback）
+    /// - `"cpu"`：强制 CPU
+    ///
+    /// 改值后 `bootstrap::init` / `commands::ai_engine::set_backend_choice` 会
+    /// 同步到 `platform::set_user_preference`，后续所有 `platform::detect()` 调用立刻
+    /// 反映新偏好——但已经下载到磁盘的旧 backend binary 不会自动删，用户主动重下才换。
+    #[serde(default = "default_backend_choice")]
+    pub backend_choice: String,
+}
+
+fn default_backend_choice() -> String {
+    "auto".to_string()
 }
 
 impl AiConfig {
@@ -262,6 +280,7 @@ impl Default for AiConfig {
             summary_batch_size: None,
             summary_parallel_slots: None,
             summary_ctx_size: None,
+            backend_choice: default_backend_choice(),
         }
     }
 }
@@ -383,6 +402,16 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         "en" => "en".to_string(),
         "ja" => "ja".to_string(),
         _ => "zh".to_string(),
+    };
+
+    // backend_choice 取四值之一；其它（包括空 / 大小写错 / 历史 v0.6.6 之前的 settings
+    // 没这字段）统一回退到 "auto"——配合 BackendChoice::from_str 的行为，跟前端的
+    // 下拉框选项严格对齐。
+    next.backend_choice = match next.backend_choice.trim().to_lowercase().as_str() {
+        "cuda" => "cuda".to_string(),
+        "vulkan" => "vulkan".to_string(),
+        "cpu" => "cpu".to_string(),
+        _ => "auto".to_string(),
     };
     // 覆盖文本不 trim 中间空白（用户可能想保留缩进），仅去前后整体空白
     next.prompt_overrides.system_zh = next.prompt_overrides.system_zh.trim().to_string();

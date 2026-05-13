@@ -13,6 +13,14 @@ const TRIGGER_GAP = 6;
 export interface SimplePickerOption<T extends string> {
   value: T;
   label: string;
+  /** 不可选——渲染为灰显条，点击无响应。 */
+  disabled?: boolean;
+  /** 鼠标悬停 tooltip，多用于解释 disabled 项的原因或 note 的完整文字。 */
+  title?: string;
+  /** 选项右侧的副标签——小字 + 灰色,跟 label 同行。EngineTab backend 下拉用：
+   *  显示"未检测到 / 兜底"等状态提示而不阻拦用户选择（不准的硬件探测也不会
+   *  误把用户能跑的硬件灰掉）。空字符串或 undefined = 不渲染。 */
+  note?: string;
 }
 
 interface SimplePickerProps<T extends string> {
@@ -86,21 +94,22 @@ export function SimplePicker<T extends string>({
               type="button"
               className={`${styles.item} ${
                 opt.value === value ? styles.itemChecked : ""
-              }`}
+              } ${opt.disabled ? styles.itemDisabled : ""}`}
               onClick={() => {
+                if (opt.disabled) return;
                 onChange(opt.value);
                 close();
               }}
+              disabled={opt.disabled}
+              title={opt.title}
               role="option"
               aria-selected={opt.value === value}
+              aria-disabled={opt.disabled || undefined}
             >
               <span className={styles.itemLabel}>{opt.label}</span>
+              {opt.note ? <span className={styles.itemNote}>{opt.note}</span> : null}
               {opt.value === value && (
-                <Check
-                  size={13}
-                  strokeWidth={2.25}
-                  className={styles.itemCheck}
-                />
+                <Check size={13} strokeWidth={2.25} className={styles.itemCheck} />
               )}
             </button>
           ))}
