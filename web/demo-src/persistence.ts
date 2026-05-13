@@ -1,7 +1,7 @@
 // localStorage 持久化工具——demo 内用户改动（设置 / 分类编辑 / 分组）刷新仍在。
 // 跨浏览器 / 隐身模式重置（这是 demo 的合理行为，不是 bug）。
 
-const KEY = "hindsight-demo-state-v2";
+const KEY = "hindsight-demo-state-v3";
 
 export interface DemoState {
   // 不存"day 数据"——那是只读的 fixtures；只存用户能改的部分

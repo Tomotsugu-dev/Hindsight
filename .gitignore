@@ -67,3 +67,6 @@ similarity-poc/
 
 # Claude
 .claude/
+
+# deploy doc
+web/README-pi.md
