@@ -830,6 +830,7 @@ export const mockSettings: Settings = {
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,
+    backendChoice: "cuda",
   },
 };
 
@@ -899,6 +900,8 @@ export const mockEngineStatus: EngineStatus = {
   },
   protectionDegraded: null,
   systemVram: { totalGb: 12, source: "discrete" },
+  backendCapabilities: { cuda: true, vulkan: true, cpu: true },
+  backendChoice: "cuda",
 };
 
 export const mockLocalModels: ModelEntry[] = [
