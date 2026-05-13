@@ -74,7 +74,7 @@ const APP_ICON_URLS: Record<string, string> = {
   // 浏览（Chrome 用本地 PNG，多彩 logo CDN 单色版没法还原）
   "chrome.exe": LOCAL_ICON("chrome"),
   "firefox.exe": "https://cdn.simpleicons.org/firefox/FF7139",
-  "msedge.exe": "https://cdn.simpleicons.org/microsoftedge/0078D7",
+  "msedge.exe": LOCAL_ICON("edge"),
   // 沟通（Teams 用本地 PNG，多层紫色 logo 比 CDN 单色更准）
   "telegram.exe": "https://cdn.simpleicons.org/telegram/26A5E4",
   "teams.exe": LOCAL_ICON("teams"),
@@ -86,11 +86,15 @@ const APP_ICON_URLS: Record<string, string> = {
   "spotify.exe": "https://cdn.simpleicons.org/spotify/1DB954",
   "discord.exe": "https://cdn.simpleicons.org/discord/5865F2",
   "steam.exe": "https://cdn.simpleicons.org/steam/000000",
+  // 系统（其他分类）
+  "explorer.exe": LOCAL_ICON("explorer"),
+  "systemsettings.exe": LOCAL_ICON("systemsettings"),
   // 杂项（unclassified 用）
   "githubdesktop.exe": "https://cdn.simpleicons.org/github/000000",
 };
 
 import { emit } from "./tauri/event";
+import i18n from "@app/i18n";
 import {
   mockCategories,
   mockSettings,
@@ -104,6 +108,8 @@ import {
   mockAppGroups,
   mockUnclassifiedApps,
   mockDayFor,
+  dailySegmentsForLocale,
+  userBriefForLocale,
 } from "./fixtures";
 import { persistence } from "./persistence";
 
@@ -701,7 +707,18 @@ export const api = {
   },
 
   // ─── Settings ──────────────────────────────
-  getSettings: async (): Promise<Settings> => structuredClone(state.settings),
+  getSettings: async (): Promise<Settings> => {
+    // demo 的 AI 系统提示词语言 + "あなたについて / About you" 简介都按当前 i18n 切，
+    // 让 /en/、/ja/ 看到对应语言的默认值。
+    const s = structuredClone(state.settings);
+    const lng = (i18n.language || "zh-CN").toLowerCase();
+    s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
+    s.ai.userBrief = userBriefForLocale(lng);
+    // 清空 promptOverrides，确保 PromptTab fallback 到 DEFAULT_SYSTEM_PROMPTS[lang]
+    s.ai.promptOverrides = { systemZh: "", systemEn: "", systemJa: "" };
+    s.ai.imageDescribeOverrides = { systemZh: "", systemEn: "", systemJa: "" };
+    return s;
+  },
   updateSettings: async (patch: SettingsPatch): Promise<Settings> => {
     state.settings = { ...state.settings, ...patch };
     if (patch.ai) state.settings.ai = { ...state.settings.ai, ...patch.ai };
@@ -865,6 +882,13 @@ export const api = {
     source: string = "daily",
   ): Promise<SegmentSummaryRow[]> => {
     const key = `${source}:${date}`;
+    // 只有 daily 段总结按当前 i18n 语言动态返回；其它 source（weekly/monthly）保持
+    // 落在 state 里的拷贝。这样切语言后日报立刻跟随，不需要清缓存。
+    if (state.daySummaries.has(key) && source === "daily") {
+      const segs = dailySegmentsForLocale(i18n.language || "zh-CN");
+      for (const s of segs) s.localDate = date;
+      return segs;
+    }
     return structuredClone(state.daySummaries.get(key) ?? []);
   },
 
@@ -937,8 +961,8 @@ const MODEL_EVENT = "ai://model-download-progress";
 const ENGINE_EVENT = "ai://engine-download-progress";
 
 async function simulateSummaryProgress(date: string, source: string): Promise<void> {
-  // 5 段，每段 ~800ms：emit started → emit done
-  const segments = structuredClone(mockDailySegments);
+  // 5 段，每段 ~800ms：emit started → emit done。按当前 i18n locale 取段内容。
+  const segments = dailySegmentsForLocale(i18n.language || "zh-CN");
   for (const seg of segments) seg.localDate = date;
 
   await emit(SUMMARY_EVENT, {

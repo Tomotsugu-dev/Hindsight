@@ -21,6 +21,7 @@ if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__) {
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppDemo } from "./AppDemo";
+import "./mobile-overrides.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

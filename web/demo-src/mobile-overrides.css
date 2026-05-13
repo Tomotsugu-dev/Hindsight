@@ -1,0 +1,16 @@
+/* Demo-only mobile CSS overrides.
+ *
+ * 主 src/ 里 TodayPage / WeekPage / MonthPage 的 .ranks 是 2 列 grid（最常用应用 +
+ * 最常用分类）。在桌面 iframe 上是好看的，但 iframe 在手机 (<700px) 上虽然走 transform: scale，
+ * 每个 column 仍然只有 ~310px 设计像素宽，给 RankedList 的固定列宽（rank/text/bar/time）压得
+ * 进度条几乎看不见。
+ *
+ * 这里在窄视口下把 .ranks 改成单列，让每行拥有全部设计宽度（~636px）→ scale 后视觉
+ * ~340px，应用名、bar、时长完整可见、按比例缩放。
+ *
+ * 用属性选择器避开 CSS modules 哈希名（_ranks_xxx_70）。 */
+@media (max-width: 700px) {
+  [class*="_ranks_"] {
+    grid-template-columns: 1fr !important;
+  }
+}
