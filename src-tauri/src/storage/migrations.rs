@@ -550,12 +550,49 @@ const RESET_DRIVE_FILES_CURSOR_SQL: &str = r#"
      WHERE entity = 'drive_files';
 "#;
 
+/// v25：把 push 侧 dead-letter 行重新激活 + 兜底再跑一遍 v13 风格的 activities backfill。
+///
+/// 背景：[sync/engine/io.rs:MAX_ATTEMPTS] = 10，push 失败走 [bump_outbox_retry] 指数退避
+/// 累加计数器，10 次后 `read_due_outbox` 用 `WHERE attempts < MAX_ATTEMPTS` 过滤永远不再选中。
+/// 全局 grep `attempts` 唯一的写入位置是累加 1，**没有任何路径把它重置为 0**，UI 也没有
+/// 「重试死信」入口。用户上云第一周遇到一次连续失败（Drive 5xx / 网络抖动 / token 续期）
+/// 就让对应那天的 outbox 行永久卡住，Drive 上从此缺这天的 ndjson；pull 再幂等也补不回来。
+///
+/// 第一段：把 `attempts >= 10` 的死信 attempts=0 + next_retry_at=epoch + 清 last_error，
+/// 下次 push tick 重新走 [build_activities_day]，按当前本地 DB 全量重写 Drive 文件。
+/// 整个流程幂等（成功后 outbox 行 delete）。
+///
+/// 第二段：兜底重新 enqueue 每个 (origin='local', local_date) 一条 outbox。覆盖
+/// "outbox 行从未产生" 的 edge case —— 比如 v9 切后端 + v13 backfill 之后某些天数据漏入。
+/// 不是幂等的（INSERT 不带 OR IGNORE），但 push.group_outbox 按 ActivityDay(date) 把
+/// 同天的重复行塌成一次 build + 一次上传，最终 Drive 状态正确。
+///
+/// 一次性副作用：升级后下个 push tick 会一口气把所有死信对应的 ndjson 重推 Drive，
+/// 持续几分钟，期间 API quota 会被占用。
+const REACTIVATE_DEAD_LETTER_SQL: &str = r#"
+    UPDATE sync_outbox
+       SET attempts = 0,
+           next_retry_at = '1970-01-01T00:00:00+00:00',
+           last_error = NULL
+     WHERE attempts >= 10;
+
+    INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+    SELECT 'upsert', 'activity', CAST(MIN(id) AS TEXT),
+           json_object('localDate', local_date),
+           '1970-01-01T00:00:00+00:00',
+           0,
+           '1970-01-01T00:00:00+00:00'
+    FROM activities
+    WHERE origin = 'local'
+    GROUP BY local_date;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 14] = [
+    let extras: [&'static str; 15] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -570,6 +607,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         SCREENSHOT_EMBEDDINGS_SQL,             // v22
         RESET_SCREENSHOT_ENABLED_TO_FALSE_SQL, // v23
         RESET_DRIVE_FILES_CURSOR_SQL,          // v24
+        REACTIVATE_DEAD_LETTER_SQL,            // v25
     ];
     pool.0
         .call(move |conn| {
