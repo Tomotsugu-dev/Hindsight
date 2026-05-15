@@ -292,6 +292,21 @@ pub fn spawn_backfill_tasks(pool: DbPool) {
         }
     });
 
+    let pool_for_aliases = pool.clone();
+    tokio::spawn(async move {
+        // 先跑跨 OS 别名配对，再跑内置分类回填：pair_existing 会把 Win "chrome.exe"
+        // 这类默认 solo 组合并到 canonical "Google Chrome"，让随后的 builtin
+        // backfill 看到的已经是 canonical 组（display_name = canonical name 能命中
+        // [builtin_categories] 字典）。两者都幂等，重启重跑零代价。
+        match crate::repo::cross_os_aliases::pair_existing(&pool_for_aliases).await {
+            Ok(n) if n > 0 => {
+                log::info!("cross-OS alias backfill: 合并 {n} 个 app_group_member")
+            }
+            Ok(_) => {}
+            Err(e) => log::warn!("cross-OS alias backfill 失败: {e}"),
+        }
+    });
+
     tokio::spawn(async move {
         match crate::repo::builtin_categories::backfill_builtin_categories(&pool).await {
             Ok(n) if n > 0 => {

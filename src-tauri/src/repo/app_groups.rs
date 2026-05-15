@@ -493,9 +493,15 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
         return Ok(());
     }
     let now = Utc::now().to_rfc3339();
-    // 第一次见到这个 process_name 时，按内置字典自动归类（命中常见浏览器 / 编辑器
-    // / 聊天工具等）。命中保留 None 让前端显示"其他"。用户后面手动改了不会被覆盖。
-    let builtin_cat = super::builtin_categories::match_builtin_category(&p);
+    // 跨 OS 别名规范化：mac "Microsoft PowerPoint" + Win "POWERPNT.EXE" 通过别名表
+    // 都映射到同一 canonical "Microsoft PowerPoint"。第一次见到一个别名时直接进 canonical
+    // 组（而不是 process_name 自身），让两台设备上的同一应用自然合并成一行。
+    let canonical = super::cross_os_aliases::lookup_canonical(&p);
+    let group_id = canonical.map(String::from).unwrap_or_else(|| p.clone());
+    let display_name = canonical.unwrap_or(&p).to_string();
+    // 内置分类按 canonical 名查（"google chrome" 命中），让别名也能拿到对应分类。
+    // 命中保留 None 让前端显示"其他"。用户后面手动改了不会被覆盖。
+    let builtin_cat = super::builtin_categories::match_builtin_category(canonical.unwrap_or(&p));
 
     pool.0
         .call(move |conn| {
@@ -512,22 +518,26 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
             if exists {
                 return Ok(());
             }
+            // 用 ON CONFLICT DO UPDATE ... WHERE deleted_at IS NOT NULL 只复活软删的组；
+            // 已经 active 的组保留用户改过的 display_name / category_id 不动 ——
+            // 跨 OS 别名表把多个 process_name 都指向同一 canonical 组后，第二个、第三个
+            // 别名 capture 时 ON CONFLICT 会高频触发；不做 WHERE 限定会冲掉用户的改名。
             conn.execute(
                 "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
                  VALUES(?, ?, ?, ?, NULL)
                  ON CONFLICT(id) DO UPDATE SET
-                   display_name = excluded.display_name,
-                   updated_at   = excluded.updated_at,
-                   deleted_at   = NULL",
-                rusqlite::params![p, p, builtin_cat, now],
+                   deleted_at = NULL,
+                   updated_at = excluded.updated_at
+                 WHERE app_groups.deleted_at IS NOT NULL",
+                rusqlite::params![group_id, display_name, builtin_cat, now],
             )
             .db()?;
             enqueue(
                 conn,
                 OutboxOp::Upsert,
                 OutboxEntity::AppGroup,
-                &p,
-                &serde_json::json!({ "groupId": p }).to_string(),
+                &group_id,
+                &serde_json::json!({ "groupId": group_id }).to_string(),
             )
             .db()?;
 
@@ -538,7 +548,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                    group_id   = excluded.group_id,
                    updated_at = excluded.updated_at,
                    deleted_at = NULL",
-                rusqlite::params![p, p, now],
+                rusqlite::params![p, group_id, now],
             )
             .db()?;
             enqueue(

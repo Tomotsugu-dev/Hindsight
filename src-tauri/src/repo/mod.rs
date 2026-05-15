@@ -4,6 +4,7 @@ pub mod app_groups;
 pub mod app_icons;
 pub mod builtin_categories;
 pub mod categories;
+pub mod cross_os_aliases;
 pub mod devices;
 pub mod embeddings;
 pub mod outbox;
