@@ -182,6 +182,93 @@ pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
     Ok(id)
 }
 
+/// **强力删除**：组 + 它所有 active member 一起软删（cascade）。
+/// activities 表不动 —— 只断 (app_group_members → app_groups) 的链接；之后这些
+/// process_name 在 [reports.rs:day_apps] 的 `GROUP BY COALESCE(g.id, a.process_name)`
+/// 下走 process_name 自身作 bucket 聚合（不影响时长统计，只是 UI 没了组的 display_name 与分类）。
+///
+/// 使用场景：UI 上某行所有 device 列都是 emptyDash（成员近 7 天无活动 →
+/// `lastDeviceId` 全为 null，`membersByDevice` 在每列都返回 None），用户看到的是一行空
+/// 数据，合理诉求是「让这一行消失」。严格的 [`delete`] 在 `has_members` 时拒绝；这里专门给
+/// 这个场景。
+///
+/// 成员复活：未来再次 capture 同名 process_name → [`ensure_group`] 的 SELECT exists
+/// 看到 `deleted_at IS NOT NULL` → 不命中 → 走 INSERT 路径 + ON CONFLICT DO UPDATE
+/// 把 deleted_at 设回 NULL → 自然复活。所以本动作不阻止未来重新采集。
+///
+/// 幂等：第二次调用所有目标行已经 `deleted_at IS NOT NULL`，UPDATE 命中数 0 → no-op；
+/// outbox 也不再 enqueue。
+pub async fn purge_with_members(pool: &DbPool, group_id: &str) -> Result<()> {
+    let id = group_id.to_string();
+    let now = Utc::now().to_rfc3339();
+    pool.0
+        .call(move |conn| {
+            // 1. 列出该组所有 active member 的 process_name
+            let members: Vec<String> = {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT process_name FROM app_group_members
+                         WHERE group_id = ?1 AND deleted_at IS NULL",
+                    )
+                    .db()?;
+                let rows = stmt
+                    .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))
+                    .db()?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r.db()?);
+                }
+                out
+            };
+
+            // 2. 逐个软删 member，并入 outbox 让对端 LWW 拉到同样的删除状态。
+            //    `WHERE deleted_at IS NULL` 让本次 N=0（已是软删状态）不再 enqueue。
+            for m in &members {
+                let n = conn
+                    .execute(
+                        "UPDATE app_group_members SET deleted_at = ?1, updated_at = ?1
+                         WHERE process_name = ?2 AND deleted_at IS NULL",
+                        rusqlite::params![now, m],
+                    )
+                    .db()?;
+                if n > 0 {
+                    enqueue(
+                        conn,
+                        OutboxOp::Upsert,
+                        OutboxEntity::AppGroupMember,
+                        m,
+                        &serde_json::json!({ "processName": m }).to_string(),
+                    )
+                    .db()?;
+                    // app_categories 镜像也跟着断（保持 reports 的 LEFT JOIN 一致）
+                    sync_app_category_row(conn, m, None, &now)?;
+                }
+            }
+
+            // 3. 软删 group 本身
+            let n = conn
+                .execute(
+                    "UPDATE app_groups SET deleted_at = ?1, updated_at = ?1
+                     WHERE id = ?2 AND deleted_at IS NULL",
+                    rusqlite::params![now, id],
+                )
+                .db()?;
+            if n > 0 {
+                enqueue(
+                    conn,
+                    OutboxOp::Upsert,
+                    OutboxEntity::AppGroup,
+                    &id,
+                    &serde_json::json!({ "groupId": id }).to_string(),
+                )
+                .db()?;
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// 软删一个**空组**。仅对 0 成员的组生效（有成员强制走 unmerge 路径，避免孤儿成员
 /// 突然没有 group_id 可指）。enqueue outbox 让对端也把这个组从列表里去掉。
 /// 幂等：组已被删 / 不存在 → no-op。

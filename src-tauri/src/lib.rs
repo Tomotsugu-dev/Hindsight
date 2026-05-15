@@ -145,6 +145,7 @@ pub fn run() {
             commands::app_groups::list_app_groups,
             commands::app_groups::create_app_group,
             commands::app_groups::delete_app_group,
+            commands::app_groups::purge_app_group,
             commands::app_groups::merge_app_group,
             commands::app_groups::unmerge_app_group,
             commands::app_groups::rename_app_group,

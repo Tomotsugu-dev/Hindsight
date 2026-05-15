@@ -31,6 +31,15 @@ pub async fn delete_app_group(pool: State<'_, DbPool>, group_id: String) -> Resu
         .map_err(Into::into)
 }
 
+/// 强力删除应用组：组 + 所有 member 一起软删。给 UI 上「行视觉为空」（成员存在但
+/// 全部近 7 天无活动）场景用。详见 [`app_groups::purge_with_members`]。
+#[tauri::command]
+pub async fn purge_app_group(pool: State<'_, DbPool>, group_id: String) -> Result<(), String> {
+    app_groups::purge_with_members(&pool, &group_id)
+        .await
+        .map_err(Into::into)
+}
+
 /// 把某 process_name 合并到目标组（让两个 process 在统计上算同一应用）。
 /// 例如把 `chrome.exe` 和 `Google Chrome` 合并。
 #[tauri::command]

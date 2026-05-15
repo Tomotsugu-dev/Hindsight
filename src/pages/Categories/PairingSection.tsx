@@ -173,8 +173,12 @@ export function PairingSection() {
   };
 
   const onDeleteRow = async (groupId: string) => {
+    // 走「强力删除」路径：组 + 所有 member 一起软删。trash 按钮渲染条件已经收紧到
+    // 「所有 device 列都是 emptyDash」，所以这里要删的全是视觉上空的行，没有顾虑。
+    // 严格的 deleteAppGroup（要求 members.length === 0）覆盖不了「有 member 但
+    // 都近 7 天无活动 → 视觉为空」这种用户最常见的清理诉求。
     try {
-      await api.deleteAppGroup(groupId);
+      await api.purgeAppGroup(groupId);
       await reload();
     } catch (e) {
       logError("pairing.deleteRow", e);
@@ -364,7 +368,14 @@ export function PairingSection() {
             </div>
 
             <div className={styles.deleteCol}>
-              {group.members.length === 0 && (
+              {/*
+                行视觉为空才显示 trash：
+                - members.length === 0：组里完全没成员（建组后没拖任何 process 进来）
+                - 所有 slots === null：member 存在但近 7 天无活动 → membersByDevice
+                  把每列都返回 None → 渲染 emptyDash
+                两种情况都是用户"看着空"的行，合理诉求是让它消失。
+              */}
+              {slots.every((s) => s === null) && (
                 <button
                   type="button"
                   className={styles.deleteRowBtn}
