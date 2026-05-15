@@ -221,8 +221,7 @@ async fn update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> 
 }
 
 /// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
-/// 留给将来 purge_cloud_data 命令用。
-#[allow(dead_code)]
+/// 调用方：[`crate::commands::storage::purge_cloud_data`]。
 pub async fn delete(token: &str, file_id: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client

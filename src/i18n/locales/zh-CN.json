@@ -130,18 +130,25 @@
       "manage": {
         "title": "数据管理",
         "description": "清理不需要的数据，释放磁盘空间。",
-        "purgeDbLabel": "清空数据库",
-        "purgeDbDescription": "删除所有窗口活动记录，保留分类和设置。",
+        "purgeDbLabel": "清空本机数据库",
+        "purgeDbDescription": "删除本机数据库中所有活动记录（包括对端同步过来的镜像）。云端 Drive 文件不动；下次同步会重新拉回对端镜像。分类和设置不受影响。",
         "purgeDbOpenTitle": "在文件管理器中显示数据库",
         "purgeShotsLabel": "清空截图",
         "purgeShotsDescription": "删除已保存的全部截图文件。",
-        "purgeShotsOpenTitle": "打开截图保存文件夹"
+        "purgeShotsOpenTitle": "打开截图保存文件夹",
+        "purgeCloudLabel": "清空云端数据",
+        "purgeCloudDescription": "从 Google Drive 的 appDataFolder 删除本机推过的所有同步文件。本机数据库不动；其它设备已经拉到本地的镜像不受影响。需要先登录云同步。",
+        "purgeCloudBusy": "删除中…"
       },
       "purgeDialog": {
-        "dbTitle": "清空数据库？",
+        "dbTitle": "清空本机数据库？",
         "shotsTitle": "清空截图？",
-        "dbMessage": "将删除所有窗口活动记录。分类和设置不会受影响。此操作无法撤销。",
-        "shotsMessage": "将删除已保存的全部截图文件。数据库中对应的截图引用也会一并清除。此操作无法撤销。"
+        "cloudTitle": "清空云端数据？",
+        "dbMessage": "将删除本机数据库中所有窗口活动记录（含对端镜像）。云端 Drive 不动，下次同步会自动重新拉回对端的镜像数据。分类和设置不受影响。此操作无法撤销。",
+        "shotsMessage": "将删除已保存的全部截图文件。数据库中对应的截图引用也会一并清除。此操作无法撤销。",
+        "cloudMessage": "将从 Google Drive 删除本机推过的全部同步文件。其它设备已经拉到本地的镜像不受影响。此操作不可撤销；本机历史推送将从云端永久删除。",
+        "cloudDoneMessage": "云端数据已清空：共删除 {{count}} 个 Drive 文件。",
+        "error": "操作失败：{{message}}"
       }
     },
     "privacy": {

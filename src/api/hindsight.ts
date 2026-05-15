@@ -620,6 +620,9 @@ export const api = {
   getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
   purgeActivities: () => invoke<void>("purge_activities"),
   purgeScreenshots: () => invoke<void>("purge_screenshots"),
+  /** 删除本机推过的所有 Drive 同步文件（appDataFolder 内 `device.<self>.*`）。
+   *  返回实际删除的文件数。本机 DB 不动。 */
+  purgeCloudData: () => invoke<number>("purge_cloud_data"),
   openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
   getDataRoot: () => invoke<string>("get_data_root"),
   setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),

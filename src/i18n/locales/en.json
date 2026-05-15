@@ -130,18 +130,25 @@
       "manage": {
         "title": "Data management",
         "description": "Clean up unwanted data to free disk space.",
-        "purgeDbLabel": "Clear database",
-        "purgeDbDescription": "Delete all window activity records. Categories and settings are kept.",
+        "purgeDbLabel": "Clear local database",
+        "purgeDbDescription": "Delete all window activity records from this device's local database (including mirrored data from other devices). Cloud Drive files are untouched; the next sync will re-mirror peer data. Categories and settings are kept.",
         "purgeDbOpenTitle": "Reveal database in file manager",
         "purgeShotsLabel": "Clear screenshots",
         "purgeShotsDescription": "Delete all saved screenshot files.",
-        "purgeShotsOpenTitle": "Open screenshots folder"
+        "purgeShotsOpenTitle": "Open screenshots folder",
+        "purgeCloudLabel": "Clear cloud data",
+        "purgeCloudDescription": "Delete every sync file this device has pushed to the Google Drive appDataFolder. The local database is not touched; mirrors that other devices have already pulled are unaffected. Requires being signed in to cloud sync.",
+        "purgeCloudBusy": "Deleting…"
       },
       "purgeDialog": {
-        "dbTitle": "Clear database?",
+        "dbTitle": "Clear local database?",
         "shotsTitle": "Clear screenshots?",
-        "dbMessage": "All window activity records will be deleted. Categories and settings are unaffected. This cannot be undone.",
-        "shotsMessage": "All saved screenshot files will be deleted. The corresponding screenshot references in the database will also be cleared. This cannot be undone."
+        "cloudTitle": "Clear cloud data?",
+        "dbMessage": "All window activity records in this device's local database (including peer mirrors) will be deleted. The Cloud Drive is untouched; the next sync will automatically re-pull peer mirrors. Categories and settings are unaffected. This cannot be undone.",
+        "shotsMessage": "All saved screenshot files will be deleted. The corresponding screenshot references in the database will also be cleared. This cannot be undone.",
+        "cloudMessage": "Every sync file this device has pushed to Google Drive will be deleted. Mirrors that other devices have already pulled are unaffected. This cannot be undone; this device's cloud history will be permanently removed.",
+        "cloudDoneMessage": "Cloud data cleared: {{count}} Drive file(s) deleted.",
+        "error": "Action failed: {{message}}"
       }
     },
     "privacy": {

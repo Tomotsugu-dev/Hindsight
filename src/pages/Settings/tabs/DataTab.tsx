@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertCircle,
+  Cloud,
   Database,
   FolderOpen,
   HardDrive,
@@ -27,13 +28,14 @@ function fmtBytes(n: number): string {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-type PurgeTarget = "db" | "shots";
+type PurgeTarget = "db" | "shots" | "cloud";
 
 export default function DataTab() {
   const { t } = useTranslation();
   const { settings, update } = useSettings();
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [confirm, setConfirm] = useState<PurgeTarget | null>(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
 
   const refreshStorage = () => {
     api
@@ -57,11 +59,28 @@ export default function DataTab() {
     setConfirm(null);
     if (!target) return;
     try {
-      if (target === "db") await api.purgeActivities();
-      else await api.purgeScreenshots();
+      if (target === "db") {
+        await api.purgeActivities();
+      } else if (target === "shots") {
+        await api.purgeScreenshots();
+      } else {
+        // cloud
+        setCloudBusy(true);
+        const deleted = await api.purgeCloudData();
+        window.alert(
+          t("settings.data.purgeDialog.cloudDoneMessage", { count: deleted }),
+        );
+      }
       refreshStorage();
     } catch (e) {
       logError("data.clear", e);
+      window.alert(
+        t("settings.data.purgeDialog.error", {
+          message: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    } finally {
+      setCloudBusy(false);
     }
   };
 
@@ -205,6 +224,23 @@ export default function DataTab() {
             {t("common.delete")}
           </button>
         </Row>
+        <Row
+          label={t("settings.data.manage.purgeCloudLabel")}
+          description={t("settings.data.manage.purgeCloudDescription")}
+          icon={Cloud}
+          tone="danger"
+        >
+          <button
+            type="button"
+            className={styles.dangerBtn}
+            onClick={() => setConfirm("cloud")}
+            disabled={cloudBusy}
+          >
+            {cloudBusy
+              ? t("settings.data.manage.purgeCloudBusy")
+              : t("common.delete")}
+          </button>
+        </Row>
       </Section>
 
       <ConfirmDialog
@@ -212,12 +248,16 @@ export default function DataTab() {
         title={
           confirm === "db"
             ? t("settings.data.purgeDialog.dbTitle")
-            : t("settings.data.purgeDialog.shotsTitle")
+            : confirm === "shots"
+              ? t("settings.data.purgeDialog.shotsTitle")
+              : t("settings.data.purgeDialog.cloudTitle")
         }
         message={
           confirm === "db"
             ? t("settings.data.purgeDialog.dbMessage")
-            : t("settings.data.purgeDialog.shotsMessage")
+            : confirm === "shots"
+              ? t("settings.data.purgeDialog.shotsMessage")
+              : t("settings.data.purgeDialog.cloudMessage")
         }
         confirmLabel={t("common.delete")}
         cancelLabel={t("common.cancel")}

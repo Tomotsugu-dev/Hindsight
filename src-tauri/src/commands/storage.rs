@@ -54,10 +54,20 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
     })
 }
 
-/// 清空 activities + process_paths 表（不动 settings / categories / app_groups）。
+/// 清空**本机**数据库（不动云端 Drive，不动 settings / categories / app_groups）。
 ///
-/// 调用后立刻 `svc.reset_session()` 让 capture 服务忘记当前会话，
-/// 否则下一 tick 会去 UPDATE 已被删除的行。
+/// 删除 activities + process_paths 两张表，并清掉 sync_outbox + 重置 pull 游标。
+/// 后两步是必须的：
+/// - 不清 outbox：下个 push tick 会按现状重写 ndjson 推到 Drive；本机现在 0 行
+///   → 把 Drive 上对应天的 ndjson 写成空，**意外删除云端数据**。
+/// - 不重置游标：DELETE 把 origin='remote'（对端同步过来的镜像）也清了；游标不动 →
+///   下次 pull 只看 `modifiedTime > cursor` 的新文件 → 老镜像永远拉不回。重置后下次
+///   pull 走全量，对端历史数据自动重新镜像回本机。
+///
+/// 完成后 `svc.reset_session()` 让 capture 忘记当前活跃会话（否则下一 tick 会去 UPDATE
+/// 已被删除的行）。
+///
+/// 幂等：连续多次调用每次效果一致（DELETE 空表 / UPDATE 已是 epoch 的 cursor 都是 no-op）。
 #[tauri::command]
 pub async fn purge_activities(
     pool: State<'_, DbPool>,
@@ -65,8 +75,14 @@ pub async fn purge_activities(
 ) -> Result<(), String> {
     pool.0
         .call(|conn| {
-            conn.execute_batch("DELETE FROM activities; DELETE FROM process_paths;")
-                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            conn.execute_batch(
+                "DELETE FROM activities;
+                 DELETE FROM process_paths;
+                 DELETE FROM sync_outbox;
+                 UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
+                  WHERE entity = 'drive_files';",
+            )
+            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
             Ok(())
         })
         .await
@@ -74,6 +90,67 @@ pub async fn purge_activities(
 
     svc.reset_session().await;
     Ok(())
+}
+
+/// 清空**云端**数据（不动本机 DB）：从 Google Drive 的 appDataFolder 里删掉**本机
+/// 推送过的所有同步文件**（命名前缀 `device.<self_id>.*`）。其它设备贡献的文件不动。
+///
+/// 流程：
+/// 1. 拿 OAuth token；未登录直接返回错误（前端按钮在未登录时不渲染，但兜底一下）
+/// 2. List Drive 上 appDataFolder 的所有文件，过滤出 `device.<self_id>.` 前缀
+/// 3. 逐个 [`drive::delete`]；404 视为成功（已被别处删过，幂等）；其它错误 log warn 继续
+/// 4. 删完后清掉 sync_outbox（否则下个 push tick 会按本机现状重新生成 ndjson 上传到
+///    Drive，把刚删的文件又造回来）。本机 DB 保留，但用户后续捕获的新数据会按
+///    正常流程产生 outbox → push → Drive 重建。
+/// 5. 同步重置 `drive_files` pull 游标，避免本机老 cursor 把对端文件也跳过；下次
+///    pull 会重新拉对端贡献（自身文件已删，pull 路径 `if device_id == self_id`
+///    会主动跳过，不会把自己删的东西从远端「再拉回来」）。
+///
+/// 返回被实际删除的文件数量（含 404 在内的尝试数），供前端 toast 展示。
+///
+/// 幂等：第二次调用 Drive list 返回 0 个 `device.<self_id>.*` 文件 → 不发起任何
+/// DELETE 请求；本地 outbox / cursor 已经是清空 / epoch 状态，UPDATE / DELETE 都 no-op。
+#[tauri::command]
+pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
+    let token = crate::sync::auth::ensure_valid_token(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let self_id = crate::device::self_id().map_err(|e| e.to_string())?;
+    let prefix = format!("device.{self_id}.");
+
+    // 1. 列 Drive 全量文件（appDataFolder 范围内），按本机 prefix 过滤
+    let files = crate::sync::drive::list_appdata_files(&token.access_token, "")
+        .await
+        .map_err(|e| e.to_string())?;
+    let mine: Vec<_> = files
+        .iter()
+        .filter(|f| f.name.starts_with(&prefix))
+        .collect();
+
+    // 2. 逐个 DELETE；单文件失败不抛，让能删的尽量删完
+    let mut deleted = 0u64;
+    for f in &mine {
+        match crate::sync::drive::delete(&token.access_token, &f.id).await {
+            Ok(()) => deleted += 1,
+            Err(e) => log::warn!("purge_cloud_data: delete {} 失败: {e}", f.name),
+        }
+    }
+
+    // 3. 清掉 outbox + 重置 pull 游标，避免下次 sync 把刚删的文件又重新构造上传
+    pool.0
+        .call(|conn| {
+            conn.execute_batch(
+                "DELETE FROM sync_outbox;
+                 UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
+                  WHERE entity = 'drive_files';",
+            )
+            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(deleted)
 }
 
 /// 返回当前 data_root（DB / 截图等数据的根目录）。前端「设置 → 数据」面板显示用。
