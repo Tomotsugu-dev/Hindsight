@@ -533,25 +533,43 @@ const RESET_SCREENSHOT_ENABLED_TO_FALSE_SQL: &str = r#"
     WHERE id = 1;
 "#;
 
+/// v24：重置 `drive_files` pull 游标到 epoch，让下次 pull 重新枚举 Drive 上所有文件。
+///
+/// 背景：v24 之前的 [sync/engine/pull.rs:flush_pull] 有个静默丢数据 bug —— 把 listing
+/// 整批的 max(modifiedTime) 直接写回游标，无视 Pass 2 里 download / merge 失败的文件。
+/// 下次 pull `modifiedTime > cursor` 查询会跳过那些失败文件；过往日期的 activities ndjson
+/// 不会再被源端 republish（[activities.rs:seal_session] 只对当下会话入 outbox），所以
+/// **数据永久丢失**在消费端。两台设备「所有设备」聚合长期对不上就是这个原因。
+///
+/// 修完 pull 路径后，本地 DB 已经有缺失数据。重置游标让下次 pull 走全量；upsert 走
+/// `(device_id, remote_id)` 幂等 + LWW updated_at，重复拉无副作用，缺失的行会被补回。
+/// 一次性副作用：升级后第一次 pull 比平时慢（要重新下载所有 Drive 文件）。
+const RESET_DRIVE_FILES_CURSOR_SQL: &str = r#"
+    UPDATE sync_cursor
+       SET last_pulled_at = '1970-01-01T00:00:00Z'
+     WHERE entity = 'drive_files';
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 13] = [
-        CROSS_OS_CLEANUP_SQL,                // v11
-        V12_PLACEHOLDER,                     // v12（occupied，no-op）
-        BACKFILL_OUTBOX_SQL,                 // v13
-        APP_ICONS_TABLE_SQL,                 // v14
-        APP_GROUPS_SQL,                      // v15
-        ADD_CATEGORY_SORT_ORDER_SQL,         // v16
-        ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL, // v17
-        AI_SUMMARIES_TABLE_SQL,              // v18
-        AI_IMAGE_DESCRIPTIONS_TABLE_SQL,     // v19
-        AI_IMAGE_DESC_PERF_COLS_SQL,         // v20
-        AI_TABLES_ADD_SOURCE_SQL,            // v21
-        SCREENSHOT_EMBEDDINGS_SQL,           // v22
+    let extras: [&'static str; 14] = [
+        CROSS_OS_CLEANUP_SQL,                  // v11
+        V12_PLACEHOLDER,                       // v12（occupied，no-op）
+        BACKFILL_OUTBOX_SQL,                   // v13
+        APP_ICONS_TABLE_SQL,                   // v14
+        APP_GROUPS_SQL,                        // v15
+        ADD_CATEGORY_SORT_ORDER_SQL,           // v16
+        ADD_PASSWORD_TO_PRIVACY_DEFAULT_SQL,   // v17
+        AI_SUMMARIES_TABLE_SQL,                // v18
+        AI_IMAGE_DESCRIPTIONS_TABLE_SQL,       // v19
+        AI_IMAGE_DESC_PERF_COLS_SQL,           // v20
+        AI_TABLES_ADD_SOURCE_SQL,              // v21
+        SCREENSHOT_EMBEDDINGS_SQL,             // v22
         RESET_SCREENSHOT_ENABLED_TO_FALSE_SQL, // v23
+        RESET_DRIVE_FILES_CURSOR_SQL,          // v24
     ];
     pool.0
         .call(move |conn| {

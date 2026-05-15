@@ -131,28 +131,30 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
     let self_id = crate::device::self_id()?;
     let local_os = crate::platform::local_os_id();
-    let mut max_modified: Option<String> = None;
     let mut applied = 0u64;
+    // 每个文件是否「应用 or 主动跳过」。Drive 已按 modifiedTime 升序返回，pull 结束时
+    // 游标只推到最长连续 true 前缀的末尾 —— 第一个 false 之后哪怕后面有成功也不推，
+    // 否则下次 pull 用 `modifiedTime > cursor` 查询会跳过那个失败文件，永久丢数据。
+    // upsert 路径靠 (device_id, remote_id) 幂等 + LWW updated_at，重复拉无副作用。
+    let mut handled = vec![false; files.len()];
 
     // Pass 1: 只跑 device.meta.json，让 devices.os 在 Pass 2 之前就位。
     // 否则一台陌生设备首次出现时，我们读 devices.os 是空的，没法做跨 OS 过滤。
-    for f in &files {
-        // 比较 modifiedTime 用字符串字典序就够（RFC3339 都是 ISO 8601）
-        if max_modified
-            .as_ref()
-            .is_none_or(|c| f.modified_time.as_str() > c.as_str())
-        {
-            max_modified = Some(f.modified_time.clone());
-        }
-
+    for (i, f) in files.iter().enumerate() {
         let parsed = match parse_filename(&f.name) {
             Some(p) => p,
-            None => continue,
+            None => {
+                // 不认识的文件名 = 不归我们管，可以跨过
+                handled[i] = true;
+                continue;
+            }
         };
         let ParsedFile::DeviceMeta { device_id } = parsed else {
+            // 非 DeviceMeta：留给 Pass 2 处理；这一 pass 不能下结论
             continue;
         };
         if device_id == self_id {
+            handled[i] = true;
             continue;
         }
         let body = match with_token_retry(&inner.pool, &mut token, |tok| {
@@ -171,16 +173,19 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             log::warn!("merge {} 失败: {e}", f.name);
             continue;
         }
+        handled[i] = true;
         applied += 1;
     }
 
     // Pass 2: 其余类型；对平台特定的两类做 OS 过滤。
-    for f in &files {
+    for (i, f) in files.iter().enumerate() {
         let parsed = match parse_filename(&f.name) {
             Some(p) => p,
+            // 不认识的文件名 Pass 1 已 mark handled=true，跳过
             None => continue,
         };
         if matches!(parsed, ParsedFile::DeviceMeta { .. }) {
+            // Pass 1 已下结论（成功 / self / 失败），不重复处理
             continue;
         }
         let device_id = match &parsed {
@@ -194,6 +199,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::DeviceMeta { .. } => unreachable!(),
         };
         if device_id == self_id {
+            handled[i] = true;
             continue;
         }
 
@@ -215,6 +221,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
                     remote_os,
                     local_os,
                 );
+                handled[i] = true;
                 continue;
             }
         }
@@ -260,10 +267,19 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             log::warn!("merge {} 失败: {e}", f.name);
             continue;
         }
+        handled[i] = true;
         applied += 1;
     }
 
-    if let Some(t) = max_modified {
+    // 推 cursor 到最长连续 handled 前缀的 modified_time。第一个失败之后即使后面有成功也不
+    // 推 —— 见 `handled` 声明处的说明。
+    let cursor_advance = files
+        .iter()
+        .zip(handled.iter())
+        .take_while(|(_, ok)| **ok)
+        .map(|(f, _)| f.modified_time.clone())
+        .last();
+    if let Some(t) = cursor_advance {
         io::write_cursor(&inner.pool, PULL_CURSOR_KEY, &t).await?;
     }
     inner.status.write().await.last_pulled_at = Some(Utc::now().to_rfc3339());
@@ -318,7 +334,9 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
         } else {
             row.updated_at.clone()
         };
-        upsert_remote_activity(
+        // 单行 upsert 失败降级为 warn —— 否则一行坏数据会让 flush_pull 把整文件判为
+        // 失败（handled[i] 留 false），游标停在前一文件，下次再拉这文件还是坏行 → 永久卡住。
+        if let Err(e) = upsert_remote_activity(
             pool,
             device_id,
             &remote_id,
@@ -332,7 +350,10 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
             &row.category_id,
             &updated_at,
         )
-        .await?;
+        .await
+        {
+            log::warn!("activities 行 {lineno} upsert 失败: {e}");
+        }
     }
     Ok(())
 }
@@ -343,7 +364,9 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
         if row.id.is_empty() {
             continue;
         }
-        pool.0
+        let row_id_log = row.id.clone();
+        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
+        if let Err(e) = pool.0
             .call(move |conn| {
                 let cur: Option<(String, Option<String>)> = conn
                     .query_row(
@@ -386,7 +409,10 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                 }
                 Ok(())
             })
-            .await?;
+            .await
+        {
+            log::warn!("category {row_id_log} merge 失败: {e}");
+        }
     }
     Ok(())
 }
@@ -397,7 +423,9 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
         if row.process_name.is_empty() {
             continue;
         }
-        pool.0
+        let pn_log = row.process_name.clone();
+        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
+        if let Err(e) = pool.0
             .call(move |conn| {
                 if !is_remote_newer(
                     conn,
@@ -424,7 +452,10 @@ async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> R
                 .db()?;
                 Ok(())
             })
-            .await?;
+            .await
+        {
+            log::warn!("app_category {pn_log} merge 失败: {e}");
+        }
     }
     Ok(())
 }
@@ -435,7 +466,9 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
         if row.process_name.is_empty() {
             continue;
         }
-        pool.0
+        let pn_log = row.process_name.clone();
+        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
+        if let Err(e) = pool.0
             .call(move |conn| {
                 if !is_remote_newer(
                     conn,
@@ -457,7 +490,10 @@ async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Re
                 .db()?;
                 Ok(())
             })
-            .await?;
+            .await
+        {
+            log::warn!("process_path {pn_log} merge 失败: {e}");
+        }
     }
     Ok(())
 }
@@ -484,7 +520,8 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
         let icon_bytes_db = icon_bytes.clone();
         let updated_at_db = updated_at.clone();
         let deleted_at_db = deleted_at.clone();
-        let applied: bool = pool
+        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
+        let applied: bool = match pool
             .0
             .call(move |conn| {
                 if !is_remote_newer(
@@ -507,7 +544,14 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
                 .db()?;
                 Ok(true)
             })
-            .await?;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("app_icon {process_name} merge 失败: {e}");
+                continue;
+            }
+        };
 
         // 把 BLOB 同步落到文件 cache —— 让 UI 后续 get_app_icon 直接命中文件 cache 返回。
         // 软删（deleted_at != NULL）时反过来：把 cache 文件清掉，避免渲染过期图标。
@@ -538,7 +582,8 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
         // 拿当前本地 category_id 用来对比 —— 远端的分类 LWW 赢了之后，要 mirror 到
         // app_categories 表里所有成员行（让 reports.rs 的 LEFT JOIN 仍能拿到正确分类）。
         let id = row.id.clone();
-        let applied: Option<(Option<String>, Option<String>)> = pool
+        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
+        let applied: Option<(Option<String>, Option<String>)> = match pool
             .0
             .call(move |conn| {
                 let prev: Option<(String, Option<String>)> = conn
@@ -575,7 +620,14 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                 .db()?;
                 Ok(Some((prev_cat, row.category_id)))
             })
-            .await?;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("app_group {id} merge 失败: {e}");
+                continue;
+            }
+        };
 
         // 如果分类变了 —— 把新分类同步到组里所有 (active) 成员的 app_categories 行。
         // 用本地的 process_name 列表（成员可能是 Mac 风格也可能是 Win 风格），
@@ -585,7 +637,8 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                 let id_for_mirror = id.clone();
                 let next_for_mirror = next_cat.clone();
                 let now = chrono::Utc::now().to_rfc3339();
-                pool.0
+                if let Err(e) = pool
+                    .0
                     .call(move |conn| {
                         let members: Vec<String> = {
                             let mut stmt = conn
@@ -617,7 +670,10 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                         }
                         Ok(())
                     })
-                    .await?;
+                    .await
+                {
+                    log::warn!("app_group {id} 分类 mirror 失败: {e}");
+                }
             }
         }
     }
@@ -630,7 +686,9 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
         if row.process_name.is_empty() || row.group_id.is_empty() {
             continue;
         }
-        pool.0
+        let pn_log = row.process_name.clone();
+        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
+        if let Err(e) = pool.0
             .call(move |conn| {
                 if !is_remote_newer(
                     conn,
@@ -657,7 +715,10 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
                 .db()?;
                 Ok(())
             })
-            .await?;
+            .await
+        {
+            log::warn!("app_group_member {pn_log} merge 失败: {e}");
+        }
     }
     Ok(())
 }
