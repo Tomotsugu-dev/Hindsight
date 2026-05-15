@@ -10,6 +10,7 @@ import {
   LogOut,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Settings2,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -91,6 +92,7 @@ function CloudSyncCard() {
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [forceBusy, setForceBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
 
@@ -164,6 +166,38 @@ function CloudSyncCard() {
       refreshSync();
     } finally {
       setSyncBusy(false);
+    }
+  };
+
+  // 「强制完全重同步」：用户用来从「两端数据长期对不上」状态自愈。
+  // 调用后端的 force_resync 命令，把 sync_cursor 重置、清掉所有失败 outbox 行、
+  // 重新入队所有本地 local_date —— 重 push + 重 pull 一轮。
+  // 命令本身幂等：连点 N 次和点 1 次效果相同。
+  const onForceResync = async () => {
+    // window.confirm 临时占位，避免引入新组件
+    if (!window.confirm(t("devices.cloud.confirm.forceResync"))) return;
+    setForceBusy(true);
+    setError(null);
+    try {
+      const r = await api.forceResync();
+      refreshSync();
+      reloadDevices();
+      if (r.syncError) {
+        // SQL 状态清干净了但 push/pull 一轮有报错；展示报错给用户
+        setError(r.syncError);
+      } else {
+        window.alert(
+          t("devices.cloud.toast.forceResyncDone", {
+            cleared: r.clearedDeadLetter,
+            enqueued: r.enqueuedDays,
+          }),
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      refreshSync();
+    } finally {
+      setForceBusy(false);
     }
   };
 
@@ -292,7 +326,7 @@ function CloudSyncCard() {
                 type="button"
                 className={styles.smallBtn}
                 onClick={onSyncNow}
-                disabled={syncBusy}
+                disabled={syncBusy || forceBusy}
                 title={t("devices.cloud.actions.syncNowTitle")}
               >
                 <RefreshCw
@@ -303,6 +337,22 @@ function CloudSyncCard() {
                 {syncBusy
                   ? t("devices.cloud.actions.syncing")
                   : t("devices.cloud.actions.syncNow")}
+              </button>
+              <button
+                type="button"
+                className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
+                onClick={onForceResync}
+                disabled={syncBusy || forceBusy}
+                title={t("devices.cloud.actions.forceResyncTitle")}
+              >
+                <RotateCcw
+                  size={13}
+                  strokeWidth={1.85}
+                  className={forceBusy ? styles.spinning : ""}
+                />
+                {forceBusy
+                  ? t("devices.cloud.actions.forceResyncing")
+                  : t("devices.cloud.actions.forceResync")}
               </button>
               <button
                 type="button"

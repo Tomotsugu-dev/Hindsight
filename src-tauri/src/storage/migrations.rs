@@ -577,14 +577,19 @@ const REACTIVATE_DEAD_LETTER_SQL: &str = r#"
      WHERE attempts >= 10;
 
     INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
-    SELECT 'upsert', 'activity', CAST(MIN(id) AS TEXT),
-           json_object('localDate', local_date),
+    SELECT 'upsert', 'activity', CAST(MIN(a.id) AS TEXT),
+           json_object('localDate', a.local_date),
            '1970-01-01T00:00:00+00:00',
            0,
            '1970-01-01T00:00:00+00:00'
-    FROM activities
-    WHERE origin = 'local'
-    GROUP BY local_date;
+    FROM activities a
+    WHERE a.origin = 'local'
+      AND NOT EXISTS (
+          SELECT 1 FROM sync_outbox so
+          WHERE so.entity = 'activity'
+            AND json_extract(so.payload, '$.localDate') = a.local_date
+      )
+    GROUP BY a.local_date;
 "#;
 
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。

@@ -173,6 +173,7 @@ pub fn run() {
             // --- sync: 云同步 ---
             commands::sync::sync_status,
             commands::sync::sync_now,
+            commands::sync::force_resync,
             // --- ai: endpoint 测试 ---
             commands::ai_endpoint::test_ai_endpoint,
             // --- ai: 引擎运行时 ---

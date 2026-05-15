@@ -554,6 +554,14 @@ export interface SyncStatus {
   deadLetter: number;
 }
 
+/** `force_resync` 命令的返回；UI 用来 toast 提示用户「清掉了什么 / 重新入队了什么」。 */
+export interface ForceResyncReport {
+  resetCursor: boolean;
+  clearedDeadLetter: number;
+  enqueuedDays: number;
+  syncError: string | null;
+}
+
 export const api = {
   getDayHours: (dayOffset: number, deviceId?: string) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
@@ -627,6 +635,7 @@ export const api = {
   restartApp: () => invoke<void>("restart_app"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncNow: () => invoke<void>("sync_now"),
+  forceResync: () => invoke<ForceResyncReport>("force_resync"),
   /** 测试 AI 端点连通性：GET {endpoint}/models。
    *  失败不抛 Promise reject，而是 resolve { ok: false, message }，
    *  前端只需检查 ok 字段。 */

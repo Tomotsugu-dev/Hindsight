@@ -694,6 +694,9 @@
         "syncNow": "Sync now",
         "syncing": "Syncing…",
         "syncNowTitle": "Sync now",
+        "forceResync": "Force resync",
+        "forceResyncing": "Resyncing…",
+        "forceResyncTitle": "Reset sync cursor + clear failed queue + re-upload all local data + re-download all cloud data. Use when devices disagree for a long time; may take several minutes.",
         "signOut": "Sign out",
         "signIn": "Sign in again",
         "signOutTitle": "Sign out of this account",
@@ -702,6 +705,12 @@
         "signingIn": "Opening browser…",
         "configureOAuth": "Configure OAuth",
         "restartApp": "Restart app"
+      },
+      "confirm": {
+        "forceResync": "Force a full resync? This may take several minutes and use bandwidth. Only run it when devices have disagreed for a while."
+      },
+      "toast": {
+        "forceResyncDone": "Resync started: cleared {{cleared}} failed items, re-queued {{enqueued}} days. Push/pull continues in the background — watch progress in the cloud sync panel."
       },
       "restartHint": "Signed in to a new account. Restart the app to switch to that account's local database."
     },

@@ -694,6 +694,9 @@
         "syncNow": "立即同步",
         "syncing": "同步中…",
         "syncNowTitle": "立即同步",
+        "forceResync": "强制重同步",
+        "forceResyncing": "重同步中…",
+        "forceResyncTitle": "重置同步游标 + 清失败队列 + 重传本地全部数据 + 重拉云端全部数据。两端长期对不上时使用，可能持续几分钟。",
         "signOut": "退出",
         "signIn": "重新登录",
         "signOutTitle": "退出当前账号",
@@ -702,6 +705,12 @@
         "signingIn": "浏览器中…",
         "configureOAuth": "配置 OAuth",
         "restartApp": "重启 app"
+      },
+      "confirm": {
+        "forceResync": "确认强制完全重同步？过程可能持续几分钟，会占用网络。两端数据长期对不上时再用。"
+      },
+      "toast": {
+        "forceResyncDone": "重同步已开始：清除失败 {{cleared}} 条、重新入队 {{enqueued}} 天。后台会继续 push/pull，可在「云同步」面板看进度。"
       },
       "restartHint": "已登录到新的账号，需要重启 app 才能切换到该账号的本地数据库。"
     },
