@@ -11,6 +11,7 @@ import {
   ImageDown,
   Loader2,
   PieChart,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
@@ -18,6 +19,7 @@ import { Row } from "../../../components/FormLayout/Row";
 import { Slider } from "../../../components/FormControls/Slider";
 import { PathField } from "../../../components/FormControls/PathField";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
+import { RemoveDeviceDialog } from "../../../components/RemoveDeviceDialog/RemoveDeviceDialog";
 import { useSettings } from "../../../state/settings";
 import { api, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
@@ -30,13 +32,18 @@ function fmtBytes(n: number): string {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-type PurgeTarget = "db" | "shots" | "cloud";
+/** "db" = 从云端重建本机数据；"shots" = 清空截图；"remove" = 从云端移除本设备 */
+type PurgeTarget = "db" | "shots" | "remove";
 
 export default function DataTab() {
   const { t } = useTranslation();
   const { settings, update } = useSettings();
   const [storage, setStorage] = useState<StorageInfo | null>(null);
-  const [confirm, setConfirm] = useState<PurgeTarget | null>(null);
+  /** 简单确认弹窗只用于 rebuild + shots；remove 走单独的 RemoveDeviceDialog */
+  const [simpleConfirm, setSimpleConfirm] = useState<"db" | "shots" | null>(
+    null,
+  );
+  const [removeOpen, setRemoveOpen] = useState(false);
   // 哪一个 purge 操作正在跑：null = 三个按钮都空闲。busy 时**所有**三个按钮 disabled，
   // 避免用户连点 / 在一个 destructive op 跑到一半时触发另一个。busy 的那一个按钮显示
   // spinner + busy 文案；其它两个走 :disabled 的灰色路径。
@@ -59,23 +66,42 @@ export default function DataTab() {
 
   const total = storage ? storage.dbBytes + storage.screenshotsBytes : 0;
 
-  const handleConfirm = async () => {
-    const target = confirm;
-    setConfirm(null);
-    if (!target) return;
-    setBusyTarget(target);
+  const runSimple = async (which: "db" | "shots") => {
+    setSimpleConfirm(null);
+    setBusyTarget(which);
     try {
-      if (target === "db") {
+      if (which === "db") {
         await api.purgeActivities();
-      } else if (target === "shots") {
-        await api.purgeScreenshots();
       } else {
-        // cloud
-        const deleted = await api.purgeCloudData();
-        window.alert(
-          t("settings.data.purgeDialog.cloudDoneMessage", { count: deleted }),
-        );
+        await api.purgeScreenshots();
       }
+      refreshStorage();
+    } catch (e) {
+      logError("data.clear", e);
+      window.alert(
+        t("settings.data.purgeDialog.error", {
+          message: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    } finally {
+      setBusyTarget(null);
+    }
+  };
+
+  const runRemove = async (keepLocal: boolean) => {
+    setRemoveOpen(false);
+    setBusyTarget("remove");
+    try {
+      const deleted = await api.purgeCloudData(keepLocal);
+      window.alert(
+        keepLocal
+          ? t("settings.data.removeDeviceDialog.doneKeepLocal", {
+              count: deleted,
+            })
+          : t("settings.data.removeDeviceDialog.doneAlsoClear", {
+              count: deleted,
+            }),
+      );
       refreshStorage();
     } catch (e) {
       logError("data.clear", e);
@@ -128,6 +154,7 @@ export default function DataTab() {
 
   return (
     <>
+      {/* ───── Section 1：存储用量 + AI 模型路径（蓝/中性）───── */}
       <Section
         title={t("settings.data.storage.title")}
         description={t("settings.data.storage.description")}
@@ -177,118 +204,149 @@ export default function DataTab() {
         </Row>
       </Section>
 
+      {/* ───── Section 2：本地数据清理（蓝/中性，维护类，可恢复）───── */}
       <Section
-        title={t("settings.data.manage.title")}
-        description={t("settings.data.manage.description")}
-        icon={AlertCircle}
-        tone="danger"
+        title={t("settings.data.cleanup.title")}
+        description={t("settings.data.cleanup.description")}
+        icon={Sparkles}
       >
         <Row
-          label={t("settings.data.manage.purgeDbLabel")}
-          description={t("settings.data.manage.purgeDbDescription")}
-          icon={Database}
-          tone="danger"
-        >
-          <button
-            type="button"
-            className={styles.openBtn}
-            onClick={revealDb}
-            title={t("settings.data.manage.purgeDbOpenTitle")}
-          >
-            <FolderOpen size={14} strokeWidth={1.85} />
-            {t("common.open")}
-          </button>
-          <PurgeButton
-            target="db"
-            busyTarget={busyTarget}
-            busyLabel={t("settings.data.manage.purgeDbBusy")}
-            onClick={() => setConfirm("db")}
-          />
-        </Row>
-        <Row
-          label={t("settings.data.manage.purgeShotsLabel")}
-          description={t("settings.data.manage.purgeShotsDescription")}
+          label={t("settings.data.cleanup.purgeShotsLabel")}
+          description={t("settings.data.cleanup.purgeShotsDescription")}
           icon={ImageDown}
-          tone="danger"
         >
           <button
             type="button"
             className={styles.openBtn}
             onClick={openShots}
-            title={t("settings.data.manage.purgeShotsOpenTitle")}
+            title={t("settings.data.cleanup.purgeShotsOpenTitle")}
           >
             <FolderOpen size={14} strokeWidth={1.85} />
             {t("common.open")}
           </button>
           <PurgeButton
             target="shots"
+            variant="neutral"
             busyTarget={busyTarget}
-            busyLabel={t("settings.data.manage.purgeShotsBusy")}
-            onClick={() => setConfirm("shots")}
+            busyLabel={t("settings.data.cleanup.purgeShotsBusy")}
+            idleLabel={t("settings.data.cleanup.purgeShotsLabel")}
+            onClick={() => setSimpleConfirm("shots")}
           />
         </Row>
         <Row
-          label={t("settings.data.manage.purgeCloudLabel")}
-          description={t("settings.data.manage.purgeCloudDescription")}
-          icon={Cloud}
-          tone="danger"
+          label={t("settings.data.cleanup.purgeDbLabel")}
+          description={t("settings.data.cleanup.purgeDbDescription")}
+          icon={Database}
         >
+          <button
+            type="button"
+            className={styles.openBtn}
+            onClick={revealDb}
+            title={t("settings.data.cleanup.purgeDbOpenTitle")}
+          >
+            <FolderOpen size={14} strokeWidth={1.85} />
+            {t("common.open")}
+          </button>
           <PurgeButton
-            target="cloud"
+            target="db"
+            variant="neutral"
             busyTarget={busyTarget}
-            busyLabel={t("settings.data.manage.purgeCloudBusy")}
-            onClick={() => setConfirm("cloud")}
+            busyLabel={t("settings.data.cleanup.purgeDbBusy")}
+            idleLabel={t("settings.data.cleanup.purgeDbLabel")}
+            onClick={() => setSimpleConfirm("db")}
           />
         </Row>
       </Section>
 
+      {/* ───── Section 3：危险区（红/警示，不可逆，影响所有设备）───── */}
+      <Section
+        title={t("settings.data.danger.title")}
+        description={t("settings.data.danger.description")}
+        icon={AlertCircle}
+        tone="danger"
+      >
+        <Row
+          label={t("settings.data.danger.removeDeviceLabel")}
+          description={t("settings.data.danger.removeDeviceDescription")}
+          icon={Cloud}
+          tone="danger"
+        >
+          <PurgeButton
+            target="remove"
+            variant="danger"
+            busyTarget={busyTarget}
+            busyLabel={t("settings.data.danger.removeDeviceBusy")}
+            idleLabel={t("settings.data.danger.removeDeviceLabel")}
+            onClick={() => setRemoveOpen(true)}
+          />
+        </Row>
+      </Section>
+
+      {/* ───── 简单确认弹窗：rebuild + shots ───── */}
       <ConfirmDialog
-        open={confirm !== null}
+        open={simpleConfirm !== null}
         title={
-          confirm === "db"
-            ? t("settings.data.purgeDialog.dbTitle")
-            : confirm === "shots"
-              ? t("settings.data.purgeDialog.shotsTitle")
-              : t("settings.data.purgeDialog.cloudTitle")
+          simpleConfirm === "db"
+            ? t("settings.data.purgeDialog.purgeDbTitle")
+            : t("settings.data.purgeDialog.shotsTitle")
         }
         message={
-          confirm === "db"
-            ? t("settings.data.purgeDialog.dbMessage")
-            : confirm === "shots"
-              ? t("settings.data.purgeDialog.shotsMessage")
-              : t("settings.data.purgeDialog.cloudMessage")
+          simpleConfirm === "db"
+            ? t("settings.data.purgeDialog.purgeDbMessage")
+            : t("settings.data.purgeDialog.shotsMessage")
         }
-        confirmLabel={t("common.delete")}
+        confirmLabel={
+          simpleConfirm === "db"
+            ? t("settings.data.purgeDialog.purgeDbConfirm")
+            : t("settings.data.purgeDialog.shotsConfirm")
+        }
         cancelLabel={t("common.cancel")}
-        variant="danger"
-        onConfirm={handleConfirm}
-        onCancel={() => setConfirm(null)}
+        variant="primary"
+        onConfirm={() => simpleConfirm && runSimple(simpleConfirm)}
+        onCancel={() => setSimpleConfirm(null)}
+      />
+
+      {/* ───── 复杂确认弹窗：从云端移除本设备（radio + 打字确认）───── */}
+      <RemoveDeviceDialog
+        open={removeOpen}
+        onConfirm={runRemove}
+        onCancel={() => setRemoveOpen(false)}
       />
     </>
   );
 }
 
-/** 复用的 danger 删除按钮：自身正在跑 → spinner + busyLabel + 高对比样式；
- *  别的按钮在跑 → 灰色 disabled；闲置 → 正常 trash 图标 + 「删除」字。
+/** 复用的删除按钮：支持 neutral（维护色）和 danger（红警示）两种 variant。
+ *  自身正在跑 → spinner + busyLabel；别的按钮在跑 → 灰色 disabled；闲置 → 正常 trash 图标。
  *  三个按钮共享 busyTarget，互锁防并发。 */
 function PurgeButton({
   target,
+  variant,
   busyTarget,
   busyLabel,
+  idleLabel,
   onClick,
 }: {
   target: PurgeTarget;
+  variant: "neutral" | "danger";
   busyTarget: PurgeTarget | null;
   busyLabel: string;
+  idleLabel: string;
   onClick: () => void;
 }) {
-  const { t } = useTranslation();
   const isBusy = busyTarget === target;
   const isLocked = busyTarget !== null && !isBusy;
+  const variantClass =
+    variant === "danger" ? styles.dangerBtn : styles.neutralBtn;
+  const busyClass = isBusy
+    ? variant === "danger"
+      ? styles.dangerBtnBusy
+      : styles.neutralBtnBusy
+    : "";
   return (
     <button
       type="button"
-      className={`${styles.dangerBtn} ${isBusy ? styles.dangerBtnBusy : ""}`}
+      className={`${variantClass} ${busyClass}`}
       onClick={onClick}
       disabled={isBusy || isLocked}
       aria-busy={isBusy}
@@ -298,7 +356,7 @@ function PurgeButton({
       ) : (
         <Trash2 size={13} strokeWidth={2.25} />
       )}
-      {isBusy ? busyLabel : t("common.delete")}
+      {isBusy ? busyLabel : idleLabel}
     </button>
   );
 }

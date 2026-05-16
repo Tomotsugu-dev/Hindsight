@@ -235,7 +235,8 @@ async fn tombstone_clear_cloud() {
     assert_eq!(count_for_device(&b, "device-a").await, 5);
 
     // A 调 purge_cloud_data —— 删 Drive 上自己的文件 + 上传 tombstone + 本机 trim
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine)
+    // keep_local=false 走对称 trim（默认行为，离职/卖机器场景）
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, false)
         .await
         .expect("purge_cloud_data");
     // 本机已被 trim
@@ -247,6 +248,43 @@ async fn tombstone_clear_cloud() {
         count_for_device(&b, "device-a").await,
         0,
         "B 的 A-mirror 应被 tombstone 触发 DELETE 干净"
+    );
+}
+
+/// Test 2b：keep_local=true 路径（换 Google 账号场景）
+/// 云端文件全删 + tombstone 上传 + 对端 mirror 清，但本机数据完整保留。
+#[tokio::test]
+async fn purge_cloud_keep_local_preserves_local_data() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+
+    let captured = Local::now();
+    for p in ["Code", "Chrome", "Slack"] {
+        insert_sealed(&a, p, captured, 30).await;
+    }
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 3);
+
+    // keep_local=true：本机数据不动
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, true)
+        .await
+        .expect("purge_cloud_data keep_local");
+
+    // 本机的 3 行原样保留
+    assert_eq!(
+        count_for_device(&a, "device-a").await,
+        3,
+        "keep_local=true 时本机数据必须完整保留"
+    );
+
+    // B sync → pull tombstone → B 的 A-mirror 仍被清（对端不知道本机要保留）
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        count_for_device(&b, "device-a").await,
+        0,
+        "对端仍按 tombstone 清 A 的 mirror（云端语义对外一致）"
     );
 }
 

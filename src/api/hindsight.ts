@@ -554,14 +554,6 @@ export interface SyncStatus {
   deadLetter: number;
 }
 
-/** `force_resync` 命令的返回；UI 用来 toast 提示用户「清掉了什么 / 重新入队了什么」。 */
-export interface ForceResyncReport {
-  resetCursor: boolean;
-  clearedDeadLetter: number;
-  enqueuedDays: number;
-  syncError: string | null;
-}
-
 export const api = {
   getDayHours: (dayOffset: number, deviceId?: string) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
@@ -624,9 +616,12 @@ export const api = {
   getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
   purgeActivities: () => invoke<void>("purge_activities"),
   purgeScreenshots: () => invoke<void>("purge_screenshots"),
-  /** 删除本机推过的所有 Drive 同步文件（appDataFolder 内 `device.<self>.*`）。
-   *  返回实际删除的文件数。本机 DB 不动。 */
-  purgeCloudData: () => invoke<number>("purge_cloud_data"),
+  /** 删除本机推过的所有 Drive 同步文件 + 上传 tombstone 通知对端清镜像。
+   *  返回实际删除的 Drive 文件数。
+   *  - `keepLocal=false`：本机也按同款 clearedAt trim 旧数据（对称语义，离职/卖机器场景）
+   *  - `keepLocal=true`：本机数据完整保留（换 Google 账号场景，迁数据到新账号） */
+  purgeCloudData: (keepLocal: boolean) =>
+    invoke<number>("purge_cloud_data", { keepLocal }),
   openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
   getDataRoot: () => invoke<string>("get_data_root"),
   setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),
@@ -642,7 +637,6 @@ export const api = {
   restartApp: () => invoke<void>("restart_app"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncNow: () => invoke<void>("sync_now"),
-  forceResync: () => invoke<ForceResyncReport>("force_resync"),
   /** 测试 AI 端点连通性：GET {endpoint}/models。
    *  失败不抛 Promise reject，而是 resolve { ok: false, message }，
    *  前端只需检查 ok 字段。 */

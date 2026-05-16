@@ -45,6 +45,49 @@
   border-color: color-mix(in oklab, #ef4444 35%, transparent);
 }
 
+/* —— 维护色（neutral）按钮：清空截图 / 从云端重建本机数据 用 —— */
+/* 跟 danger 同样的形状，但用中性 slate 色，区分"维护可恢复" vs "不可逆"两类。 */
+.neutralBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: color-mix(in oklab, #64748b 12%, transparent);
+  border: 1px solid color-mix(in oklab, #64748b 22%, transparent);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    transform 120ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.neutralBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, #64748b 18%, transparent);
+  border-color: color-mix(in oklab, #64748b 35%, transparent);
+}
+
+.neutralBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.neutralBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.neutralBtnBusy {
+  opacity: 1;
+  background: color-mix(in oklab, #64748b 18%, transparent);
+  border-color: color-mix(in oklab, #64748b 35%, transparent);
+}
+
 /* Loader2 旋转动画 */
 .spinning {
   animation: dataTabBtnSpin 0.9s linear infinite;

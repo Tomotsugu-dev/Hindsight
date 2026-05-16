@@ -127,30 +127,50 @@
         "modelsPathLabel": "AI 模型保存路径",
         "modelsPathHint": "切换路径后，旧目录里的模型不会自动迁移——要么手动拷过去，要么在新路径里重新下载。"
       },
-      "manage": {
-        "title": "数据管理",
-        "description": "清理不需要的数据，释放磁盘空间。",
-        "purgeDbLabel": "清空本机数据库",
-        "purgeDbDescription": "删除本机数据库中所有活动记录（包括对端同步过来的镜像）。云端 Drive 文件不动；下次同步会重新拉回对端镜像。分类和设置不受影响。",
-        "purgeDbOpenTitle": "在文件管理器中显示数据库",
-        "purgeDbBusy": "清空中…",
+      "cleanup": {
+        "title": "本地数据清理",
+        "description": "清理本机数据或截图文件，释放磁盘空间。",
         "purgeShotsLabel": "清空截图",
-        "purgeShotsDescription": "删除已保存的全部截图文件。",
+        "purgeShotsDescription": "删除已保存的全部截图文件。数据库里活动记录本身保留。",
         "purgeShotsOpenTitle": "打开截图保存文件夹",
         "purgeShotsBusy": "清空中…",
-        "purgeCloudLabel": "清空云端数据",
-        "purgeCloudDescription": "**所有设备**（含本机）忘记此刻之前由本机捕获的活动数据。删除 Drive 上本机推过的同步文件、对端通过 tombstone 自动 trim 本机镜像、本机也按同款时刻 trim 自己的旧数据。本机之后新捕获的活动不受影响、正常同步。需要先登录云同步。",
-        "purgeCloudBusy": "删除中…"
+        "purgeDbLabel": "清空本机数据",
+        "purgeDbDescription": "清空本机数据库，下次同步从云端重新拉回所有历史。云端文件完全不动，其它设备不受影响。⚠️ 本机暂未上传到云端的数据（最近几次 capture / 因网络问题积压的）会丢失。",
+        "purgeDbOpenTitle": "在文件管理器中显示数据库",
+        "purgeDbBusy": "清空中…"
+      },
+      "danger": {
+        "title": "危险区",
+        "description": "下面的操作影响所有设备，且无法撤销。",
+        "removeDeviceLabel": "从云端移除本设备",
+        "removeDeviceDescription": "所有设备都将看不到本设备贡献的历史活动——就像本设备从未同步过云端。其它设备贡献的数据不受影响。需要先登录云同步。",
+        "removeDeviceBusy": "移除中…"
       },
       "purgeDialog": {
-        "dbTitle": "清空本机数据库？",
+        "purgeDbTitle": "清空本机数据？",
+        "purgeDbMessage": "本机数据库将被清空，下次同步会从云端重新拉回所有历史。云端文件完全不动，其它设备不受影响。\n\n⚠️ 本机暂未上传到云端的数据会丢失（最近几次 capture / 因网络问题积压的 outbox 行）。\n\n此操作不可撤销。",
+        "purgeDbConfirm": "清空",
         "shotsTitle": "清空截图？",
-        "cloudTitle": "清空云端数据？",
-        "dbMessage": "将删除本机数据库中所有窗口活动记录（含对端镜像）。云端 Drive 不动，下次同步会自动重新拉回对端的镜像数据。分类和设置不受影响。此操作无法撤销。",
-        "shotsMessage": "将删除已保存的全部截图文件。数据库中对应的截图引用也会一并清除。此操作无法撤销。",
-        "cloudMessage": "**所有设备（含本机）**忘记此刻之前由本机捕获的活动数据：Drive 上本机推过的同步文件全删、对端通过 tombstone 自动 trim 自己的本机镜像、本机也按同款时刻 trim 自己的旧数据。本机此刻之后新捕获的活动不受影响、继续正常同步。此操作不可撤销。",
-        "cloudDoneMessage": "云端数据已清空：共删除 {{count}} 个 Drive 文件。",
+        "shotsMessage": "已保存的全部截图文件将被删除。数据库里活动记录本身保留，截图引用清零。此操作不可撤销。",
+        "shotsConfirm": "清空",
         "error": "操作失败：{{message}}"
+      },
+      "removeDeviceDialog": {
+        "title": "从云端移除本设备",
+        "intro": "本设备贡献的所有活动历史将从 Google Drive 删除。所有同步过的其它设备下次同步时会一并清除对本设备的镜像，就像本设备从未同步过云端。",
+        "unaffected": "不影响：其它设备贡献的数据、本设备未来新捕获的活动。",
+        "localQuestion": "本机的本地副本怎么处理？",
+        "alsoClearLabel": "也一并清空（推荐）",
+        "alsoClearHint": "彻底干净。适合：离职、卖机器、隐私清理。",
+        "keepLabel": "保留本机副本",
+        "keepHint": "云端清，本地数据原样保留。适合接下来要换 Google 账号、把本机数据迁移到新账号。",
+        "typeToConfirmPrompt": "输入「{{keyword}}」确认此操作（不可恢复）：",
+        "typeKeyword": "移除",
+        "typePlaceholder": "在此输入",
+        "cancel": "取消",
+        "confirm": "移除",
+        "doneAlsoClear": "已撤回 {{count}} 个 Drive 文件 + 通知所有设备清除本机镜像。本机数据已一并清空。",
+        "doneKeepLocal": "已撤回 {{count}} 个 Drive 文件 + 通知所有设备清除本机镜像。本机数据已保留，可换账号后重新上传。"
       }
     },
     "privacy": {
@@ -703,9 +723,6 @@
         "syncNow": "立即同步",
         "syncing": "同步中…",
         "syncNowTitle": "立即同步",
-        "forceResync": "强制重同步",
-        "forceResyncing": "重同步中…",
-        "forceResyncTitle": "重置同步游标 + 清失败队列 + 重传本地全部数据 + 重拉云端全部数据。两端长期对不上时使用，可能持续几分钟。",
         "signOut": "退出",
         "signIn": "重新登录",
         "signOutTitle": "退出当前账号",
@@ -714,12 +731,6 @@
         "signingIn": "浏览器中…",
         "configureOAuth": "配置 OAuth",
         "restartApp": "重启 app"
-      },
-      "confirm": {
-        "forceResync": "确认强制完全重同步？过程可能持续几分钟，会占用网络。两端数据长期对不上时再用。"
-      },
-      "toast": {
-        "forceResyncDone": "重同步已开始：清除失败 {{cleared}} 条、重新入队 {{enqueued}} 天。后台会继续 push/pull，可在「云同步」面板看进度。"
       },
       "restartHint": "已登录到新的账号，需要重启 app 才能切换到该账号的本地数据库。"
     },

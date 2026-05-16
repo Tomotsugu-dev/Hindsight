@@ -126,14 +126,22 @@ pub async fn purge_activities(
 pub async fn purge_cloud_data(
     pool: State<'_, DbPool>,
     engine: State<'_, Arc<SyncEngine>>,
+    keep_local: bool,
 ) -> Result<u64, String> {
-    purge_cloud_data_impl(&pool, &engine).await
+    purge_cloud_data_impl(&pool, &engine, keep_local).await
 }
 
 /// 抽出来的实际实现，给集成测试可以直接调用（绕开 Tauri State<> 包装）。
+///
+/// `keep_local`：
+/// - `false`（默认 / 推荐）：对称语义，本机也按同款 clearedAt trim 旧数据，源端 / 对端 / Drive 三处一致。
+///   适用：离职 / 卖机器 / 永久删除本设备贡献。
+/// - `true`：仅删 Drive + 上传 tombstone + 通知对端清，**本机数据完整保留**。
+///   适用：换 Google 账号 —— 撤回当前账号云端后退出登录、登入新账号、自动 push 本机数据到新账号。
 pub(crate) async fn purge_cloud_data_impl(
     pool: &DbPool,
     engine: &SyncEngine,
+    keep_local: bool,
 ) -> Result<u64, String> {
     let token = crate::sync::auth::ensure_valid_token(pool)
         .await
@@ -180,27 +188,37 @@ pub(crate) async fn purge_cloud_data_impl(
     }
 
     // 4. 源端本地按同款 clearedAt trim activities + 5. 清 outbox + 6. 重置 cursor，
-    //    打包在一个 pool.0.call 里事务性执行
+    //    打包在一个 pool.0.call 里事务性执行。keep_local=true 时跳过 step 4 + 5 的 outbox 清，
+    //    保留所有本机数据 + outbox（"换 Google 账号"场景：用户接下来要登入新账号、自动 push
+    //    本机数据到新账号 appDataFolder，需要 outbox 行触发）。
     let self_id_owned = self_id.to_string();
     let cleared_at_for_db = cleared_at.clone();
     pool.0
         .call(move |conn| {
-            // Step 4: 源端 self-trim —— 跟对端 pull 应用 tombstone 时的 DELETE 完全一致。
-            // 这一刀确保下次 push tick 把 build_activities_day 全表重写到 Drive 时，
-            // pre-clearedAt 的行**不在源端本地了**，不会被 push 回到 Drive，
-            // 跟 tombstone 通知对端的语义保持对称。
-            conn.execute(
-                "DELETE FROM activities
-                 WHERE device_id = ?1 AND updated_at < ?2",
-                rusqlite::params![self_id_owned, cleared_at_for_db],
-            )
-            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            if !keep_local {
+                // Step 4: 源端 self-trim —— 跟对端 pull 应用 tombstone 时的 DELETE 完全一致。
+                // 这一刀确保下次 push tick 把 build_activities_day 全表重写到 Drive 时，
+                // pre-clearedAt 的行**不在源端本地了**，不会被 push 回到 Drive，
+                // 跟 tombstone 通知对端的语义保持对称。
+                conn.execute(
+                    "DELETE FROM activities
+                     WHERE device_id = ?1 AND updated_at < ?2",
+                    rusqlite::params![self_id_owned, cleared_at_for_db],
+                )
+                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
 
-            // Step 5 + 6: 清 outbox（已经被 trim 的行对应的 outbox 行不再有意义）+ 重置 cursor
-            conn.execute_batch(
-                "DELETE FROM sync_outbox;
-                 UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
-                  WHERE entity = 'drive_files';",
+                // Step 5: 清 outbox（已被 trim 的行对应的 outbox 行不再有意义）
+                conn.execute("DELETE FROM sync_outbox", [])
+                    .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            }
+
+            // Step 6: 总是重置 pull cursor —— 不论保留本地与否：
+            // - keep_local=false 时：tombstone 上传后立刻 pull 一下能拉到自己的 tombstone（无副作用）
+            // - keep_local=true  时：换账号后重置游标确保从新账号 appDataFolder 全量 pull
+            conn.execute(
+                "UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
+                 WHERE entity = 'drive_files'",
+                [],
             )
             .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
             Ok(())

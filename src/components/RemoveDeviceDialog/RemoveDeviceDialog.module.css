@@ -1,0 +1,215 @@
+/* 复用 ConfirmDialog 的 backdrop / dialog / btn 视觉，加 radio + input 专属样式。
+   保留一致的 modal grammar（同尺寸、同动画、同按钮风格），降低视觉跳跃。 */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(20, 20, 40, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 180ms var(--ease-out);
+}
+
+.dialog {
+  position: relative;
+  z-index: 9999;
+  min-width: 380px;
+  max-width: 480px;
+  padding: 22px 22px 16px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 12px 36px rgba(20, 20, 40, 0.22),
+    0 2px 6px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: scaleIn 220ms var(--ease-spring);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.intro {
+  font-size: 13px;
+  color: var(--text-regular);
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.unaffected {
+  font-size: 12.5px;
+  color: var(--text-regular);
+  line-height: 1.5;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(34, 197, 94, 0.08);
+  border-left: 3px solid rgba(34, 197, 94, 0.55);
+  border-radius: 4px;
+}
+
+.divider {
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin: 2px 0;
+}
+
+.question {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.option:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.optionChecked {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.optionRadio {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.optionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.optionLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.optionHint {
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.confirmPrompt {
+  font-size: 13px;
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.confirmInput {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.02);
+  outline: none;
+  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+}
+
+.confirmInput:focus {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: #ffffff;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 100ms ease-out;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnCancel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.btnCancel:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.btnDanger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
