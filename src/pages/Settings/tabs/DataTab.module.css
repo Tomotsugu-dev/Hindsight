@@ -2,6 +2,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   height: 30px;
   padding: 0 14px;
   background: color-mix(in oklab, #ef4444 12%, transparent);
@@ -14,16 +15,48 @@
   transition:
     background-color 180ms ease-out,
     border-color 180ms ease-out,
-    transform 120ms ease-out;
+    transform 120ms ease-out,
+    opacity 180ms ease-out;
 }
 
-.dangerBtn:hover {
+.dangerBtn:hover:not(:disabled) {
   background: color-mix(in oklab, #ef4444 18%, transparent);
   border-color: color-mix(in oklab, #ef4444 35%, transparent);
 }
 
-.dangerBtn:active {
+.dangerBtn:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+/* 三种状态共用：
+ *   - busy（自己正在跑）：dimmed + 显示 spinner，cursor not-allowed
+ *   - locked（别的按钮在跑）：dimmed，避免并发触发 destructive ops
+ *   - 都映射到原生 :disabled
+ */
+.dangerBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 正在 busy 的那一个按钮：保留原色 + 高对比，spinner 在转。其它按钮走 :disabled 的暗色路径。 */
+.dangerBtnBusy {
+  opacity: 1;
+  background: color-mix(in oklab, #ef4444 18%, transparent);
+  border-color: color-mix(in oklab, #ef4444 35%, transparent);
+}
+
+/* Loader2 旋转动画 */
+.spinning {
+  animation: dataTabBtnSpin 0.9s linear infinite;
+}
+
+@keyframes dataTabBtnSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* —— 打开文件夹按钮：与 PathField 的 "选择" 同款灰色 ghost —— */

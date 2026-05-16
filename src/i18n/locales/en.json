@@ -133,9 +133,11 @@
         "purgeDbLabel": "Clear local database",
         "purgeDbDescription": "Delete all window activity records from this device's local database (including mirrored data from other devices). Cloud Drive files are untouched; the next sync will re-mirror peer data. Categories and settings are kept.",
         "purgeDbOpenTitle": "Reveal database in file manager",
+        "purgeDbBusy": "Clearing…",
         "purgeShotsLabel": "Clear screenshots",
         "purgeShotsDescription": "Delete all saved screenshot files.",
         "purgeShotsOpenTitle": "Open screenshots folder",
+        "purgeShotsBusy": "Clearing…",
         "purgeCloudLabel": "Clear cloud data",
         "purgeCloudDescription": "Delete every sync file this device has pushed to the Google Drive appDataFolder. The local database is not touched; mirrors that other devices have already pulled are unaffected. Requires being signed in to cloud sync.",
         "purgeCloudBusy": "Deleting…"

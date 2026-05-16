@@ -133,9 +133,11 @@
         "purgeDbLabel": "清空本机数据库",
         "purgeDbDescription": "删除本机数据库中所有活动记录（包括对端同步过来的镜像）。云端 Drive 文件不动；下次同步会重新拉回对端镜像。分类和设置不受影响。",
         "purgeDbOpenTitle": "在文件管理器中显示数据库",
+        "purgeDbBusy": "清空中…",
         "purgeShotsLabel": "清空截图",
         "purgeShotsDescription": "删除已保存的全部截图文件。",
         "purgeShotsOpenTitle": "打开截图保存文件夹",
+        "purgeShotsBusy": "清空中…",
         "purgeCloudLabel": "清空云端数据",
         "purgeCloudDescription": "从 Google Drive 的 appDataFolder 删除本机推过的所有同步文件。本机数据库不动；其它设备已经拉到本地的镜像不受影响。需要先登录云同步。",
         "purgeCloudBusy": "删除中…"

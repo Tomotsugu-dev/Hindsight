@@ -133,9 +133,11 @@
         "purgeDbLabel": "ローカルデータベースを削除",
         "purgeDbDescription": "ローカルデータベース内のすべてのウィンドウアクティビティ記録を削除します（他デバイスから同期されたミラーも含む）。クラウド Drive のファイルには影響せず、次回の同期で対端のミラーが再取得されます。分類と設定は保持されます。",
         "purgeDbOpenTitle": "ファインダー / エクスプローラーでデータベースを表示",
+        "purgeDbBusy": "削除中…",
         "purgeShotsLabel": "スクリーンショットを削除",
         "purgeShotsDescription": "保存されているすべてのスクリーンショットファイルを削除します。",
         "purgeShotsOpenTitle": "スクリーンショットフォルダを開く",
+        "purgeShotsBusy": "削除中…",
         "purgeCloudLabel": "クラウドデータを削除",
         "purgeCloudDescription": "Google Drive の appDataFolder からこのデバイスがプッシュした同期ファイルをすべて削除します。ローカルデータベースには影響せず、他デバイスがすでに取得済みのミラーにも影響しません。クラウド同期へのログインが必要です。",
         "purgeCloudBusy": "削除中…"

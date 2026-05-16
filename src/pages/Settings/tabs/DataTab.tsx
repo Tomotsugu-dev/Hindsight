@@ -9,7 +9,9 @@ import {
   FolderOpen,
   HardDrive,
   ImageDown,
+  Loader2,
   PieChart,
+  Trash2,
 } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
@@ -35,7 +37,10 @@ export default function DataTab() {
   const { settings, update } = useSettings();
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [confirm, setConfirm] = useState<PurgeTarget | null>(null);
-  const [cloudBusy, setCloudBusy] = useState(false);
+  // 哪一个 purge 操作正在跑：null = 三个按钮都空闲。busy 时**所有**三个按钮 disabled，
+  // 避免用户连点 / 在一个 destructive op 跑到一半时触发另一个。busy 的那一个按钮显示
+  // spinner + busy 文案；其它两个走 :disabled 的灰色路径。
+  const [busyTarget, setBusyTarget] = useState<PurgeTarget | null>(null);
 
   const refreshStorage = () => {
     api
@@ -58,6 +63,7 @@ export default function DataTab() {
     const target = confirm;
     setConfirm(null);
     if (!target) return;
+    setBusyTarget(target);
     try {
       if (target === "db") {
         await api.purgeActivities();
@@ -65,7 +71,6 @@ export default function DataTab() {
         await api.purgeScreenshots();
       } else {
         // cloud
-        setCloudBusy(true);
         const deleted = await api.purgeCloudData();
         window.alert(
           t("settings.data.purgeDialog.cloudDoneMessage", { count: deleted }),
@@ -80,7 +85,7 @@ export default function DataTab() {
         }),
       );
     } finally {
-      setCloudBusy(false);
+      setBusyTarget(null);
     }
   };
 
@@ -193,13 +198,12 @@ export default function DataTab() {
             <FolderOpen size={14} strokeWidth={1.85} />
             {t("common.open")}
           </button>
-          <button
-            type="button"
-            className={styles.dangerBtn}
+          <PurgeButton
+            target="db"
+            busyTarget={busyTarget}
+            busyLabel={t("settings.data.manage.purgeDbBusy")}
             onClick={() => setConfirm("db")}
-          >
-            {t("common.delete")}
-          </button>
+          />
         </Row>
         <Row
           label={t("settings.data.manage.purgeShotsLabel")}
@@ -216,13 +220,12 @@ export default function DataTab() {
             <FolderOpen size={14} strokeWidth={1.85} />
             {t("common.open")}
           </button>
-          <button
-            type="button"
-            className={styles.dangerBtn}
+          <PurgeButton
+            target="shots"
+            busyTarget={busyTarget}
+            busyLabel={t("settings.data.manage.purgeShotsBusy")}
             onClick={() => setConfirm("shots")}
-          >
-            {t("common.delete")}
-          </button>
+          />
         </Row>
         <Row
           label={t("settings.data.manage.purgeCloudLabel")}
@@ -230,16 +233,12 @@ export default function DataTab() {
           icon={Cloud}
           tone="danger"
         >
-          <button
-            type="button"
-            className={styles.dangerBtn}
+          <PurgeButton
+            target="cloud"
+            busyTarget={busyTarget}
+            busyLabel={t("settings.data.manage.purgeCloudBusy")}
             onClick={() => setConfirm("cloud")}
-            disabled={cloudBusy}
-          >
-            {cloudBusy
-              ? t("settings.data.manage.purgeCloudBusy")
-              : t("common.delete")}
-          </button>
+          />
         </Row>
       </Section>
 
@@ -266,5 +265,40 @@ export default function DataTab() {
         onCancel={() => setConfirm(null)}
       />
     </>
+  );
+}
+
+/** 复用的 danger 删除按钮：自身正在跑 → spinner + busyLabel + 高对比样式；
+ *  别的按钮在跑 → 灰色 disabled；闲置 → 正常 trash 图标 + 「删除」字。
+ *  三个按钮共享 busyTarget，互锁防并发。 */
+function PurgeButton({
+  target,
+  busyTarget,
+  busyLabel,
+  onClick,
+}: {
+  target: PurgeTarget;
+  busyTarget: PurgeTarget | null;
+  busyLabel: string;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  const isBusy = busyTarget === target;
+  const isLocked = busyTarget !== null && !isBusy;
+  return (
+    <button
+      type="button"
+      className={`${styles.dangerBtn} ${isBusy ? styles.dangerBtnBusy : ""}`}
+      onClick={onClick}
+      disabled={isBusy || isLocked}
+      aria-busy={isBusy}
+    >
+      {isBusy ? (
+        <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} />
+      ) : (
+        <Trash2 size={13} strokeWidth={2.25} />
+      )}
+      {isBusy ? busyLabel : t("common.delete")}
+    </button>
   );
 }
