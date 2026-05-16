@@ -23,7 +23,12 @@ pub async fn insert_new(
     let info = info.clone();
     let started = captured_at.to_rfc3339();
     let ended = captured_at.to_rfc3339();
-    let updated = ended.clone();
+    // updated_at 必须是 UTC：跨设备 LWW 走的是 `updated_at > cur_updated` **字符串字典序**
+    // 比较。如果这里用 captured_at.to_rfc3339()（local TZ，比如 "+09:00"），后续 seal_session
+    // 用 Utc::now().to_rfc3339()（"+00:00"），两个 RFC3339 串的字典序跟时间序不一致 ——
+    // JST 凌晨的 local 串 "2026-05-17T00:..." 字典序大于同一时刻的 UTC 串 "2026-05-16T15:..."
+    // → 对端 pull 时 LWW 错误地拒绝 seal 后的 update → 镜像永远卡在 dur=0 unsealed。
+    let updated = captured_at.with_timezone(&Utc).to_rfc3339();
     let local_date = captured_at.format("%Y-%m-%d").to_string();
     let local_hour = captured_at.hour() as u8;
     let device_id = device::self_id()?.to_string();
@@ -458,6 +463,66 @@ mod tests {
             0,
             "insert_new 不该入 outbox（心跳级 push 会把 Drive 吵爆）"
         );
+    }
+
+    /// 跨设备 LWW 的字符串字典序不变性：
+    /// **同一行的 seal_session updated_at 必须字典序 > insert_new updated_at**。
+    ///
+    /// 跨设备 [`pull::upsert_remote_activity`] 用字符串比较 `updated_at > cur_updated`
+    /// 判 LWW。如果 insert_new 用 Local TZ（`"+09:00"`）写 updated_at、seal_session 用
+    /// UTC（`"+00:00"`）写，JST 凌晨这两个串字典序与时间序相反 ——
+    /// `"2026-05-17T00:15:09+09:00"` (insert local) > `"2026-05-16T15:15:24+00:00"` (seal UTC)。
+    ///
+    /// 对端 pull 时 LWW 错误地拒绝 seal 后的 update → 镜像永远卡在 dur=0 unsealed。
+    /// 这条 invariant 就是钉死「所有 updated_at 写入都用 UTC」。
+    #[tokio::test]
+    async fn insert_new_and_seal_session_updated_at_lww_ordering() {
+        let pool = fresh_test_pool().await;
+        let info = WindowInfo {
+            app_name: "Code".into(),
+            title: "main.rs".into(),
+            app_path: None,
+        };
+        let captured = Local::now();
+        let id = insert_new(&pool, &info, captured, None).await.unwrap();
+        let insert_updated = read_updated_at(&pool, id).await;
+        // 必须 UTC（'+00:00'），否则跨设备 LWW 会因为 +09:00 / +00:00 字典序错乱
+        assert!(
+            insert_updated.ends_with("+00:00"),
+            "insert_new updated_at 必须 UTC（+00:00），实际：{insert_updated}"
+        );
+
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        seal_session(&pool, id, captured + Duration::seconds(30))
+            .await
+            .unwrap();
+        let seal_updated = read_updated_at(&pool, id).await;
+        assert!(
+            seal_updated.ends_with("+00:00"),
+            "seal_session updated_at 必须 UTC，实际：{seal_updated}"
+        );
+
+        // 关键不变性：seal 后的字符串字典序 > insert 时的字符串
+        assert!(
+            seal_updated > insert_updated,
+            "seal_updated 字典序应大于 insert_updated（防 LWW 错乱）\n  seal:   {seal_updated}\n  insert: {insert_updated}"
+        );
+    }
+
+    async fn read_updated_at(pool: &DbPool, id: i64) -> String {
+        pool.0
+            .call(move |conn| {
+                let s: String = conn
+                    .query_row(
+                        "SELECT updated_at FROM activities WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(s)
+            })
+            .await
+            .unwrap()
     }
 
     /// [`seal_session`] 写一条 entity='activity' 的 Upsert outbox，payload 含
