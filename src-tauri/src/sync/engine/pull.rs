@@ -54,7 +54,7 @@ fn is_remote_newer<P: rusqlite::Params>(
 const PULL_CURSOR_KEY: &str = "drive_files";
 
 enum ParsedFile {
-    ActivityDay { device_id: String },
+    ActivityDay { device_id: String, local_date: String },
     Categories { device_id: String },
     AppCategories { device_id: String },
     ProcessPaths { device_id: String },
@@ -75,8 +75,9 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
         return None;
     }
     match parts.as_slice() {
-        ["device", uuid, "activities", _day, "ndjson"] => Some(ParsedFile::ActivityDay {
+        ["device", uuid, "activities", day, "ndjson"] => Some(ParsedFile::ActivityDay {
             device_id: uuid.to_string(),
+            local_date: day.to_string(),
         }),
         ["device", uuid, "categories", "json"] => Some(ParsedFile::Categories {
             device_id: uuid.to_string(),
@@ -259,8 +260,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         };
 
         let res = match parsed {
-            ParsedFile::ActivityDay { device_id, .. } => {
-                merge_activities(&inner.pool, &device_id, &body).await
+            ParsedFile::ActivityDay { device_id, local_date } => {
+                merge_activities(&inner.pool, &device_id, &local_date, &body).await
             }
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
@@ -361,9 +362,24 @@ async fn remote_device_os(pool: &DbPool, device_id: &str) -> Option<String> {
         .flatten()
 }
 
-async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_activities(
+    pool: &DbPool,
+    device_id: &str,
+    local_date: &str,
+    body: &[u8],
+) -> Result<()> {
     // ndjson：一行一个 ActivityPayload
     let s = std::str::from_utf8(body).map_err(Error::from)?;
+    // 收集本文件出现过的 remote_id（= 源端 activities.id）—— 解析成功 + 字段合法的行才算
+    // 「源端目前存在」。结束后用 NOT IN 把本机 mirror 里这个 (device_id, local_date)
+    // 范围内不在 set 里的行 DELETE 掉，让 mirror 跟源端的全表 rewrite 严格一致。
+    // 这是修补 sync 协议「源端删行 → 对端 mirror 不会自动 DELETE」的关键 ——
+    // 没有这一步，源端 [activities::purge_orphan_sessions] 干掉的孤儿行永久留在对端镜像。
+    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // 解析阶段任何一行硬错误就放弃 mirror 收敛，避免半截文件 / 解析 bug 把对端 mirror
+    // 误删一大堆。仅在文件**完整解析无异常**时执行 DELETE 收敛。
+    let mut parse_clean = true;
+
     for (lineno, line) in s.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() {
@@ -373,6 +389,7 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
             Ok(r) => r,
             Err(e) => {
                 log::warn!("activities 行 {lineno} 解析失败: {e}");
+                parse_clean = false;
                 continue;
             }
         };
@@ -380,6 +397,7 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
             continue;
         }
         let remote_id = row.id.to_string();
+        seen_ids.insert(remote_id.clone());
         let updated_at = if row.updated_at.is_empty() {
             row.ended_at.clone()
         } else {
@@ -404,7 +422,59 @@ async fn merge_activities(pool: &DbPool, device_id: &str, body: &[u8]) -> Result
         .await
         {
             log::warn!("activities 行 {lineno} upsert 失败: {e}");
+            parse_clean = false;
         }
+    }
+
+    // mirror 收敛：本文件该 (device_id, local_date) 下 ndjson 没列出的 mirror 行 DELETE。
+    // 跳过 self_id 防自删 —— self 自己的行不受 mirror 收敛影响（self 的 row 是 local 来源
+    // 不是 mirror，DELETE 它们会丢失本机自己的数据）。这条件配合 v26 + lift self-skip 的
+    // self-pull 场景：本机 pull 自己的 ndjson 时，不收敛自己的行（既然是自己的，DELETE
+    // 任何 < clearedAt 之类的逻辑该走 tombstone 路径，不该走 mirror 收敛）。
+    let self_id = crate::device::self_id().map(String::from).unwrap_or_default();
+    let is_self = !self_id.is_empty() && device_id == self_id;
+    if !parse_clean || is_self {
+        return Ok(());
+    }
+    let device_id_db = device_id.to_string();
+    let local_date_db = local_date.to_string();
+    let ids_vec: Vec<String> = seen_ids.into_iter().collect();
+    let deleted = pool
+        .0
+        .call(move |conn| {
+            // 拼 NOT IN ?,?,... 用动态占位符
+            let placeholders: String = if ids_vec.is_empty() {
+                String::new()
+            } else {
+                std::iter::repeat_n("?", ids_vec.len())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
+            let sql = if placeholders.is_empty() {
+                // 空文件 → 收敛 = 该 (device, local_date) 下所有 mirror 行都 DELETE
+                "DELETE FROM activities
+                 WHERE device_id = ?1 AND local_date = ?2".to_string()
+            } else {
+                format!(
+                    "DELETE FROM activities
+                     WHERE device_id = ?1 AND local_date = ?2
+                       AND remote_id NOT IN ({placeholders})"
+                )
+            };
+            let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(2 + ids_vec.len());
+            params.push(&device_id_db);
+            params.push(&local_date_db);
+            for id in &ids_vec {
+                params.push(id);
+            }
+            let n = conn.execute(&sql, params.as_slice()).db()?;
+            Ok(n)
+        })
+        .await?;
+    if deleted > 0 {
+        log::info!(
+            "mirror 收敛 device={device_id} local_date={local_date}: 删 {deleted} 条已不在源端 ndjson 的旧 mirror 行"
+        );
     }
     Ok(())
 }

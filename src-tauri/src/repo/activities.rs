@@ -225,6 +225,94 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
     Ok(deleted_files)
 }
 
+/// 启动期：删掉本机自己之前跑遗留的 unsealed 孤儿 session 行。
+///
+/// 孤儿定义：`device_id = self_id AND duration_secs = 0 AND ended_at = started_at` —— 这种行只能由
+/// [`insert_new`] 创建后没等到 [`seal_session`] 就被中断（app 退出 / crash / 服务 stop 没走到
+/// seal 通道）产生。**当下没有任何 in-memory `current_lock` 指向它们**，因为本函数仅在
+/// [`crate::capture::CaptureService::start`] 注册后台 tick task **之前**调用，
+/// `Inner::current` 还是 None。
+///
+/// 副作用：
+/// - **本地 DELETE**：所有匹配的行直接删（不软删，本表没 deleted_at 列）。
+///   pure 0 时长的行没数据价值，删了 day_apps SUM 不变（贡献本来就是 0）。
+/// - **触发 push 同步**：每个受影响的 local_date 入一个 outbox 行，下次 push tick
+///   走 [`crate::sync::engine::push::build_activities_day`] 全量重写当天 ndjson 到 Drive。
+///   对端 pull 收到 [`crate::sync::engine::pull::merge_activities`] 的 mirror 收敛
+///   逻辑（按 ndjson 内容 DELETE 不在的镜像行）→ 对端镜像里这些孤儿也自然消失。
+///
+/// 幂等：连续调两次，第二次 SELECT DISTINCT 找不到匹配行 → 返回 0，no-op。
+pub async fn purge_orphan_sessions(pool: &DbPool) -> Result<u64> {
+    let device_id = device::self_id()?.to_string();
+
+    // 1. 找出受影响的 local_date 列表（每个独立的天需要一条 outbox 触发 push 重写）
+    let local_dates: Vec<String> = pool
+        .0
+        .call({
+            let device_id = device_id.clone();
+            move |conn| {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT DISTINCT local_date FROM activities
+                         WHERE device_id = ?1 AND duration_secs = 0 AND ended_at = started_at",
+                    )
+                    .db()?;
+                let rows = stmt
+                    .query_map(rusqlite::params![device_id], |r| r.get::<_, String>(0))
+                    .db()?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r.db()?);
+                }
+                Ok(out)
+            }
+        })
+        .await?;
+
+    if local_dates.is_empty() {
+        return Ok(0);
+    }
+
+    // 2. DELETE 一刀切 + 给每个受影响的 local_date 写一条 outbox（同一 conn / 同一事务）
+    let deleted = pool
+        .0
+        .call({
+            let device_id = device_id.clone();
+            let local_dates = local_dates.clone();
+            move |conn| {
+                let n = conn
+                    .execute(
+                        "DELETE FROM activities
+                         WHERE device_id = ?1 AND duration_secs = 0 AND ended_at = started_at",
+                        rusqlite::params![device_id],
+                    )
+                    .db()? as u64;
+                for date in &local_dates {
+                    // payload 只用 localDate 字段（push.group_outbox 解析它决定 ndjson 文件名）。
+                    // entity_pk 给 device_id 占位（NOT NULL 约束），不参与去重
+                    let payload = serde_json::json!({ "localDate": date }).to_string();
+                    enqueue(
+                        conn,
+                        OutboxOp::Upsert,
+                        OutboxEntity::Activity,
+                        &device_id,
+                        &payload,
+                    )
+                    .db()?;
+                }
+                Ok(n)
+            }
+        })
+        .await?;
+
+    log::info!(
+        "启动期清理孤儿 session：删 {} 行，触发 push 重写 {} 天",
+        deleted,
+        local_dates.len()
+    );
+    Ok(deleted)
+}
+
 /// 统计今天 activities 表的行数（按本机时区的 local_date 过滤）。给前端 status 指示器用。
 pub async fn today_count(pool: &DbPool) -> Result<u32> {
     let today = Local::now().format("%Y-%m-%d").to_string();

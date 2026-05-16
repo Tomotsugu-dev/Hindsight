@@ -153,6 +153,22 @@ impl CaptureService {
         if h.is_some() {
             return;
         }
+
+        // 启动期清扫：上次进程退出（quit / crash / 重启）时遗留的 unsealed 活跃
+        // session 永远拿不回 ended_at —— current_lock 是 in-memory 的，进程一退就丢，
+        // 留在 DB 里的 duration_secs=0 + ended_at=started_at 的孤儿行就这么僵着。
+        // 这里 spawn 后台 tick 之前先一刀切删掉所有这种孤儿，避免：
+        //   1. day_apps / day_hours 的 SUM 不变（孤儿贡献本来就是 0），但 PairingSection
+        //      之类按行展示的 UI 会看到一堆 dur=0 的诡异历史
+        //   2. push 把它们当今天/历史日的有效行上传 Drive，对端 mirror 进 DB 占空间
+        //
+        // 注意时序：start() 才刚开始跑，self.inner.current 一定是 None
+        // （只有 tick() 才会 set 它），所以无差别 DELETE 不会冲掉"正在 capture 的当前
+        // session" —— 当前还没创建呢。
+        if let Err(e) = activities::purge_orphan_sessions(&self.inner.pool).await {
+            log::warn!("启动期孤儿 session 清理失败: {e}");
+        }
+
         let inner = Arc::clone(&self.inner);
         *h = Some(tokio::spawn(async move {
             loop {
