@@ -113,6 +113,24 @@ pub fn self_meta() -> crate::error::Result<&'static DeviceMeta> {
         .ok_or_else(|| crate::error::Error::Other("device::ensure_loaded() 未调用".to_string()))
 }
 
+/// 单元测试入口：把 `SELF_META` 设成一个固定 device_id 让 [`self_id`] 能返回值。
+///
+/// `OnceLock` 是 set-once：进程内所有 `cargo test` 共享一份 `SELF_META`，所以约定
+/// 全部测试用同一个 id（"test-self-device"）。第一个 test 调用 init 时真正写入，
+/// 之后的 test 调用 `get_or_init` 返回已存的值——不会 panic 也不会换值，
+/// 但测试的 fixture row 也必须用这个固定 id 才能配合 device_id 过滤逻辑。
+#[cfg(test)]
+pub(crate) fn init_for_tests(id: &str) -> &'static DeviceMeta {
+    SELF_META.get_or_init(|| DeviceMeta {
+        device_id: id.to_string(),
+        display_name: format!("test-{id}"),
+        color: default_color(),
+        icon: default_icon(),
+        os: "test".into(),
+        created_at: Utc::now().to_rfc3339(),
+    })
+}
+
 /// 用户改名 / 改颜色 / 改图标后写回 device.json。
 pub fn update_self(
     name: Option<String>,

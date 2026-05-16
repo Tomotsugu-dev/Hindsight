@@ -233,3 +233,141 @@ async fn pair_one(pool: &DbPool, process_name: &str, canonical: &str) -> Result<
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+    use crate::storage::SqliteResultExt;
+
+    /// 测 [`pair_existing`]：把两个跨 OS 别名（默认 solo 组）合并到 canonical 组。
+    /// 别名表已嵌入二进制：`Code` 和 `Code.exe` 都映射到 `"Visual Studio Code"`。
+    #[tokio::test]
+    async fn pair_existing_merges_aliases_into_canonical_group() {
+        let pool = fresh_test_pool().await;
+        seed_solo_groups(&pool, &[("Code", "Code"), ("Code.exe", "Code.exe")]).await;
+        // sanity 检查别名表确实命中
+        assert_eq!(lookup_canonical("Code"), Some("Visual Studio Code"));
+        assert_eq!(lookup_canonical("Code.exe"), Some("Visual Studio Code"));
+
+        let merged = pair_existing(&pool).await.unwrap();
+        assert_eq!(merged, 2, "两条别名都应被合并到 canonical");
+
+        let canon_id = group_id_of_member(&pool, "Code").await.unwrap();
+        assert_eq!(canon_id, "Visual Studio Code");
+        let canon_id2 = group_id_of_member(&pool, "Code.exe").await.unwrap();
+        assert_eq!(canon_id2, "Visual Studio Code");
+
+        // canonical 组存在且 active
+        assert!(group_active(&pool, "Visual Studio Code").await);
+        // 原 solo 组都被软删
+        assert!(!group_active(&pool, "Code").await);
+        assert!(!group_active(&pool, "Code.exe").await);
+
+        // 幂等：再跑一次发现 member.group_id 已是 canonical → 全部跳过
+        let merged2 = pair_existing(&pool).await.unwrap();
+        assert_eq!(merged2, 0);
+    }
+
+    /// 用户改过组结构（拖到自定义组）的成员不该被强拉回 canonical。
+    #[tokio::test]
+    async fn pair_existing_respects_user_custom_grouping() {
+        let pool = fresh_test_pool().await;
+        // "Code" 在自定义组 "my-tools" 里（不等于 process_name 也不等于 canonical）
+        seed_solo_groups(&pool, &[("my-tools", "my-tools")]).await;
+        seed_member(&pool, "Code", "my-tools").await;
+
+        let merged = pair_existing(&pool).await.unwrap();
+        assert_eq!(merged, 0, "用户手动配过的成员不该被强拉到 canonical");
+
+        let still_custom = group_id_of_member(&pool, "Code").await.unwrap();
+        assert_eq!(still_custom, "my-tools");
+    }
+
+    async fn seed_solo_groups(pool: &DbPool, groups: &[(&str, &str)]) {
+        let groups: Vec<(String, String)> = groups
+            .iter()
+            .map(|(id, pn)| (id.to_string(), pn.to_string()))
+            .collect();
+        pool.0
+            .call(move |conn| {
+                let now = "2026-05-15T10:00:00Z";
+                for (id, _pn) in &groups {
+                    conn.execute(
+                        "INSERT OR IGNORE INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                         VALUES(?1, ?1, NULL, ?2, NULL)",
+                        rusqlite::params![id, now],
+                    )
+                    .db()?;
+                }
+                // solo 组：每条 (process_name, group_id=process_name) 一行 member
+                for (id, pn) in &groups {
+                    if id == pn {
+                        conn.execute(
+                            "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                             VALUES(?1, ?1, ?2, NULL)",
+                            rusqlite::params![pn, now],
+                        )
+                        .db()?;
+                    }
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn seed_member(pool: &DbPool, process_name: &str, group_id: &str) {
+        let pn = process_name.to_string();
+        let gid = group_id.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES(?1, ?2, '2026-05-15T10:00:00Z', NULL)",
+                    rusqlite::params![pn, gid],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn group_id_of_member(pool: &DbPool, process_name: &str) -> Option<String> {
+        let pn = process_name.to_string();
+        pool.0
+            .call(move |conn| {
+                let r: Option<String> = conn
+                    .query_row(
+                        "SELECT group_id FROM app_group_members
+                         WHERE process_name = ?1 AND deleted_at IS NULL",
+                        rusqlite::params![pn],
+                        |r| r.get(0),
+                    )
+                    .optional()
+                    .db()?;
+                Ok(r)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn group_active(pool: &DbPool, id: &str) -> bool {
+        let id = id.to_string();
+        pool.0
+            .call(move |conn| {
+                let r: Option<i64> = conn
+                    .query_row(
+                        "SELECT 1 FROM app_groups WHERE id = ?1 AND deleted_at IS NULL",
+                        rusqlite::params![id],
+                        |r| r.get(0),
+                    )
+                    .optional()
+                    .db()?;
+                Ok(r.is_some())
+            })
+            .await
+            .unwrap()
+    }
+}

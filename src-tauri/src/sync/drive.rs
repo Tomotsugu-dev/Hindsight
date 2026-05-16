@@ -1,12 +1,24 @@
-//! Google Drive REST 客户端。只用 4 个端点：
+//! Drive 后端抽象：生产路径打 Google Drive REST，集成测试用 in-memory mock。
+//!
+//! 生产实现走 4 个 REST 端点（保留为 [`DriveBackend::Http`] 分支内部 fn）：
 //!
 //!   GET    https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=...
 //!   GET    https://www.googleapis.com/drive/v3/files/<id>?alt=media
 //!   POST   https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart
 //!   PATCH  https://www.googleapis.com/upload/drive/v3/files/<id>?uploadType=media
+//!   DELETE https://www.googleapis.com/drive/v3/files/<id>
 //!
 //! 所有 IO 文件都落进 `appDataFolder`：每个 OAuth client 自己的隐藏目录，浏览器看不见，
 //! 多设备共享，不需要 rules / index / region。
+//!
+//! [`DriveBackend`] 枚举注入到 [`crate::sync::engine::SyncEngine`]，生产用 `Http`，
+//! 集成测试用 `InMemory`（HashMap 模拟 appDataFolder，时钟 + 唯一 id 单调）。
+//! 见 `src-tauri/tests/sync_two_devices.rs`。
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use rand::Rng;
 use serde::Deserialize;
@@ -47,9 +59,60 @@ struct ListResp {
     next_page_token: Option<String>,
 }
 
-/// 列 appDataFolder 下、`modified_after` 之后修改过的文件（按 modifiedTime 升序）。
-/// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
-pub async fn list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
+/// Drive 后端：生产 = HTTP / 测试 = InMemory。
+///
+/// 注入到 [`crate::sync::engine::SyncEngine`]；push/pull 路径只看 trait-like 方法接口，
+/// 不直接打 reqwest。
+pub enum DriveBackend {
+    Http,
+    // 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
+    #[allow(dead_code)]
+    InMemory(Arc<InMemoryDriveStore>),
+}
+
+impl DriveBackend {
+    /// 列 appDataFolder 下、`modified_after` 之后修改过的文件（按 modifiedTime 升序）。
+    /// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
+    pub async fn list_appdata_files(
+        &self,
+        token: &str,
+        modified_after: &str,
+    ) -> Result<Vec<FileMeta>> {
+        match self {
+            DriveBackend::Http => http_list_appdata_files(token, modified_after).await,
+            DriveBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
+        }
+    }
+
+    /// 下载文件全部内容。
+    pub async fn download(&self, token: &str, file_id: &str) -> Result<Vec<u8>> {
+        match self {
+            DriveBackend::Http => http_download(token, file_id).await,
+            DriveBackend::InMemory(store) => store.download(file_id).await,
+        }
+    }
+
+    /// 按 name upsert：有则更新内容，没有就创建到 appDataFolder。返回文件 id。
+    pub async fn upsert_by_name(&self, token: &str, name: &str, content: &[u8]) -> Result<String> {
+        match self {
+            DriveBackend::Http => http_upsert_by_name(token, name, content).await,
+            DriveBackend::InMemory(store) => store.upsert_by_name(name, content).await,
+        }
+    }
+
+    /// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
+    /// 404 视为成功（幂等删）。
+    pub async fn delete(&self, token: &str, file_id: &str) -> Result<()> {
+        match self {
+            DriveBackend::Http => http_delete(token, file_id).await,
+            DriveBackend::InMemory(store) => store.delete(file_id).await,
+        }
+    }
+}
+
+// ─────────────── HTTP impl（生产路径，原 pub async fn 移到这里） ───────────────
+
+async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
     let client = reqwest::Client::new();
     let mut out = Vec::new();
     let mut page_token: Option<String> = None;
@@ -100,8 +163,7 @@ pub async fn list_appdata_files(token: &str, modified_after: &str) -> Result<Vec
     Ok(out)
 }
 
-/// 按 name 在 appDataFolder 里精确查一个文件，没有就返回 None。
-pub async fn find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
+async fn http_find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
     let client = reqwest::Client::new();
     // q 里的单引号需要反斜杠转义
     let escaped = name.replace('\\', "\\\\").replace('\'', "\\'");
@@ -134,8 +196,7 @@ pub async fn find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
     }))
 }
 
-/// 下载文件全部内容。
-pub async fn download(token: &str, file_id: &str) -> Result<Vec<u8>> {
+async fn http_download(token: &str, file_id: &str) -> Result<Vec<u8>> {
     let client = reqwest::Client::new();
     let resp = client
         .get(format!("{DRIVE_BASE}/files/{file_id}"))
@@ -151,18 +212,16 @@ pub async fn download(token: &str, file_id: &str) -> Result<Vec<u8>> {
     Ok(bytes.to_vec())
 }
 
-/// 按 name upsert：有则 PATCH 新内容，没有就 POST 创建到 appDataFolder。
-/// 返回文件的 Drive id。
-pub async fn upsert_by_name(token: &str, name: &str, content: &[u8]) -> Result<String> {
-    if let Some(existing) = find_by_name(token, name).await? {
-        update_media(token, &existing.id, content).await?;
+async fn http_upsert_by_name(token: &str, name: &str, content: &[u8]) -> Result<String> {
+    if let Some(existing) = http_find_by_name(token, name).await? {
+        http_update_media(token, &existing.id, content).await?;
         Ok(existing.id)
     } else {
-        create_multipart(token, name, content).await
+        http_create_multipart(token, name, content).await
     }
 }
 
-async fn create_multipart(token: &str, name: &str, content: &[u8]) -> Result<String> {
+async fn http_create_multipart(token: &str, name: &str, content: &[u8]) -> Result<String> {
     // multipart/related 边界
     let boundary = format!("hindsight_{}", rand::thread_rng().gen::<u128>());
     let metadata = json!({
@@ -203,7 +262,7 @@ async fn create_multipart(token: &str, name: &str, content: &[u8]) -> Result<Str
         .to_string())
 }
 
-async fn update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> {
+async fn http_update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .patch(format!("{UPLOAD_BASE}/files/{file_id}"))
@@ -220,9 +279,7 @@ async fn update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> 
     Ok(())
 }
 
-/// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
-/// 调用方：[`crate::commands::storage::purge_cloud_data`]。
-pub async fn delete(token: &str, file_id: &str) -> Result<()> {
+async fn http_delete(token: &str, file_id: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .delete(format!("{DRIVE_BASE}/files/{file_id}"))
@@ -258,5 +315,104 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
         stage,
         status,
         body,
+    }
+}
+
+// ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
+
+#[derive(Debug, Clone)]
+struct StoredFile {
+    name: String,
+    content: Vec<u8>,
+    modified_time: String,
+}
+
+/// 进程内 HashMap 模拟 Drive appDataFolder。语义精确镜像 Drive REST：
+/// - 文件命名空间是扁平的（`device.<uuid>.<kind>...`）
+/// - `upsert_by_name` 推进内部时钟，modifiedTime 单调递增
+/// - `delete` 404 视为 Ok，与 HTTP 实现一致
+/// - `list_appdata_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
+pub struct InMemoryDriveStore {
+    files: Mutex<HashMap<String, StoredFile>>,
+    next_id: AtomicU64,
+    clock: Mutex<i64>,
+}
+
+impl InMemoryDriveStore {
+    pub fn new() -> Self {
+        Self {
+            files: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(1),
+            clock: Mutex::new(0),
+        }
+    }
+
+    async fn next_modified_time(&self) -> String {
+        let mut c = self.clock.lock().await;
+        *c += 1;
+        // 单调递增的 RFC3339，方便跟真实 Drive 的字典序一致
+        format!("2026-05-15T10:00:{:02}.{:06}Z", *c % 60, *c)
+    }
+
+    pub async fn list_appdata_files(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+        let files = self.files.lock().await;
+        let mut out: Vec<FileMeta> = files
+            .iter()
+            .filter(|(_, f)| modified_after.is_empty() || f.modified_time.as_str() > modified_after)
+            .map(|(id, f)| FileMeta {
+                id: id.clone(),
+                name: f.name.clone(),
+                modified_time: f.modified_time.clone(),
+                size: Some(f.content.len() as u64),
+            })
+            .collect();
+        out.sort_by(|a, b| a.modified_time.cmp(&b.modified_time));
+        Ok(out)
+    }
+
+    pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
+        let files = self.files.lock().await;
+        match files.get(file_id) {
+            Some(f) => Ok(f.content.clone()),
+            None => Err(Error::DriveHttp {
+                stage: "InMemory download",
+                status: 404,
+                body: format!("file_id {file_id} not found"),
+            }),
+        }
+    }
+
+    pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
+        let mt = self.next_modified_time().await;
+        let mut files = self.files.lock().await;
+        // 找现有 name 对应的 id
+        let existing_id = files
+            .iter()
+            .find(|(_, f)| f.name == name)
+            .map(|(id, _)| id.clone());
+        let id = existing_id.unwrap_or_else(|| {
+            format!("mock-id-{}", self.next_id.fetch_add(1, Ordering::SeqCst))
+        });
+        files.insert(
+            id.clone(),
+            StoredFile {
+                name: name.to_string(),
+                content: content.to_vec(),
+                modified_time: mt,
+            },
+        );
+        Ok(id)
+    }
+
+    pub async fn delete(&self, file_id: &str) -> Result<()> {
+        let mut files = self.files.lock().await;
+        files.remove(file_id);
+        Ok(())
+    }
+}
+
+impl Default for InMemoryDriveStore {
+    fn default() -> Self {
+        Self::new()
     }
 }

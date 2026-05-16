@@ -171,3 +171,116 @@ pub(super) async fn write_cursor(pool: &DbPool, entity: &str, value: &str) -> Re
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    /// 测 [`bump_outbox_retry`] + [`count_dead_letter`]：连续失败 N 次后 attempts 累加，
+    /// 第 10 次达到 [`MAX_ATTEMPTS`] 阈值，`read_due_outbox` 不再选中它，`count_dead_letter` += 1。
+    ///
+    /// 钉死 dead-letter 边界：若未来谁把 MAX_ATTEMPTS 改成 100，本测试立刻红。
+    #[tokio::test]
+    async fn bump_outbox_retry_dead_letter_at_10() {
+        let pool = fresh_test_pool().await;
+        // 入一条 outbox（attempts=0，next_retry_at=epoch 让它立刻 due）
+        let id = pool
+            .0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+                     VALUES('upsert', 'activity', 'pk-1', '{\"localDate\":\"2026-05-15\"}',
+                            '1970-01-01T00:00:00+00:00', 0,
+                            '1970-01-01T00:00:00+00:00')",
+                    [],
+                )
+                .db()?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .unwrap();
+
+        // 跑 10 次 bump_outbox_retry
+        for _ in 0..MAX_ATTEMPTS {
+            bump_outbox_retry(&pool, &[id], "test error").await.unwrap();
+        }
+
+        // attempts 应到 10 → count_dead_letter = 1
+        assert_eq!(count_dead_letter(&pool).await.unwrap(), 1);
+        assert_eq!(count_outbox(&pool).await.unwrap(), 0);
+
+        // read_due_outbox 不该再选中它（attempts >= MAX_ATTEMPTS 被过滤）
+        let due = read_due_outbox(&pool, 100).await.unwrap();
+        assert!(
+            due.iter().all(|r| r.id != id),
+            "attempts >= MAX_ATTEMPTS 的行不应被 read_due_outbox 选中"
+        );
+    }
+
+    /// `bump_outbox_retry` 第 N 次调用后 attempts 单调递增。
+    #[tokio::test]
+    async fn bump_outbox_retry_increments_attempts_monotonically() {
+        let pool = fresh_test_pool().await;
+        let id = pool
+            .0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+                     VALUES('upsert', 'activity', 'pk-2', '{\"localDate\":\"2026-05-15\"}',
+                            '1970-01-01T00:00:00+00:00', 0,
+                            '1970-01-01T00:00:00+00:00')",
+                    [],
+                )
+                .db()?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .unwrap();
+
+        let read_attempts = || async {
+            pool.0
+                .call(move |conn| {
+                    let n: i64 = conn
+                        .query_row(
+                            "SELECT attempts FROM sync_outbox WHERE id = ?1",
+                            [id],
+                            |r| r.get(0),
+                        )
+                        .db()?;
+                    Ok(n)
+                })
+                .await
+                .unwrap()
+        };
+
+        for expected in 1..=5 {
+            bump_outbox_retry(&pool, &[id], "x").await.unwrap();
+            assert_eq!(read_attempts().await, expected);
+        }
+    }
+
+    /// `read_cursor` 在 sync_cursor 表无对应行时返回 epoch 默认值。
+    #[tokio::test]
+    async fn read_cursor_defaults_to_epoch_when_missing() {
+        let pool = fresh_test_pool().await;
+        let cursor = read_cursor(&pool, "drive_files").await.unwrap();
+        assert_eq!(cursor, "1970-01-01T00:00:00Z");
+    }
+
+    /// `write_cursor` UPSERT：第二次写覆盖第一次的值。
+    #[tokio::test]
+    async fn write_cursor_upserts_value() {
+        let pool = fresh_test_pool().await;
+        write_cursor(&pool, "drive_files", "2026-05-15T10:00:00Z").await.unwrap();
+        assert_eq!(
+            read_cursor(&pool, "drive_files").await.unwrap(),
+            "2026-05-15T10:00:00Z"
+        );
+        write_cursor(&pool, "drive_files", "2026-05-16T11:00:00Z").await.unwrap();
+        assert_eq!(
+            read_cursor(&pool, "drive_files").await.unwrap(),
+            "2026-05-16T11:00:00Z"
+        );
+    }
+}

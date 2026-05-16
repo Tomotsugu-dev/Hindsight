@@ -328,3 +328,307 @@ pub async fn today_count(pool: &DbPool) -> Result<u32> {
         .await?;
     Ok(count)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+
+    /// 测 [`purge_orphan_sessions`]：
+    /// - 只删本机 (device_id = self_id) 的孤儿（dur=0 且 ended_at=started_at）
+    /// - 不动本机 sealed 行（duration_secs > 0）
+    /// - 不跨设备删（其它 device_id 的孤儿要留着）
+    /// - 受影响的每个 local_date 入一条 outbox（让 push 重写当天 ndjson）
+    #[tokio::test]
+    async fn purge_orphan_sessions_only_self_keeps_sealed_and_other_devices() {
+        let pool = fresh_test_pool().await;
+
+        seed_activities(&pool).await;
+
+        let deleted = purge_orphan_sessions(&pool).await.unwrap();
+        assert_eq!(deleted, 3, "应删 3 行本机 orphan");
+
+        let (self_total, other_total) = count_by_device(&pool).await;
+        assert_eq!(self_total, 2, "本机 sealed 应留 2 行");
+        assert_eq!(other_total, 1, "其它设备的 orphan 不该被本机的 purge 动到");
+
+        let dates = outbox_activity_local_dates(&pool).await;
+        assert!(
+            dates.iter().any(|d| d == "2026-05-15"),
+            "受影响的 local_date 应入 outbox（push 重写当天）"
+        );
+
+        // 幂等：再调一次没有可删的行，返回 0、outbox 不再增长
+        let outbox_before = outbox_activity_count(&pool).await;
+        let deleted2 = purge_orphan_sessions(&pool).await.unwrap();
+        assert_eq!(deleted2, 0);
+        assert_eq!(outbox_activity_count(&pool).await, outbox_before);
+    }
+
+    /// v26 trigger `activities_local_remote_id`：未指定 remote_id 的 INSERT 应
+    /// 被自动填上 `CAST(id AS TEXT)`。本机自恢复 + 跨设备身份对称依赖这条不变量。
+    #[tokio::test]
+    async fn v26_trigger_fills_remote_id_when_null() {
+        let pool = fresh_test_pool().await;
+        let id = pool
+            .0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(
+                        '2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30,
+                        '2026-05-15', 10, 'Code', '', 'other', 'test-self-device',
+                        '2026-05-15T10:00:30Z', 'local'
+                     )",
+                    [],
+                )
+                .db()?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .unwrap();
+
+        let remote_id = read_remote_id(&pool, id).await;
+        assert_eq!(
+            remote_id.as_deref(),
+            Some(id.to_string().as_str()),
+            "trigger 应把 remote_id 填成 CAST(id AS TEXT)"
+        );
+    }
+
+    /// v26 trigger 的 `WHEN NEW.remote_id IS NULL` 保护：显式 remote_id 不该被覆盖。
+    /// pull 路径走的就是显式 remote_id（来自源端 ndjson 的 id 字段），不能被本机 trigger 重写。
+    #[tokio::test]
+    async fn v26_trigger_does_not_override_explicit_remote_id() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, remote_id,
+                        updated_at, origin
+                     ) VALUES(
+                        '2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30,
+                        '2026-05-15', 10, 'Code', '', 'other', 'device-win',
+                        'explicit-42', '2026-05-15T10:00:30Z', 'remote'
+                     )",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let remote_id = pool
+            .0
+            .call(|conn| {
+                let r: Option<String> = conn
+                    .query_row(
+                        "SELECT remote_id FROM activities WHERE remote_id = 'explicit-42'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .ok();
+                Ok(r)
+            })
+            .await
+            .unwrap();
+        assert_eq!(remote_id.as_deref(), Some("explicit-42"));
+    }
+
+    /// 焦点窗口刚切入 ([`insert_new`])：写 activities 行但**不**入 outbox ——
+    /// 心跳级 INSERT 不能每秒一条 push 到 Drive。outbox 只在 seal 时入。
+    #[tokio::test]
+    async fn insert_new_does_not_enqueue_outbox() {
+        let pool = fresh_test_pool().await;
+        let info = WindowInfo {
+            app_name: "Code".into(),
+            title: "main.rs".into(),
+            app_path: None,
+        };
+        let captured = Local::now();
+        let _id = insert_new(&pool, &info, captured, None).await.unwrap();
+
+        assert_eq!(
+            outbox_activity_count(&pool).await,
+            0,
+            "insert_new 不该入 outbox（心跳级 push 会把 Drive 吵爆）"
+        );
+    }
+
+    /// [`seal_session`] 写一条 entity='activity' 的 Upsert outbox，payload 含
+    /// deviceId/startedAt/endedAt/durationSecs/localDate/processName/updatedAt。
+    /// 漏掉这条 push 永远不知道有这段 session，对端永远看不到。
+    #[tokio::test]
+    async fn seal_session_enqueues_outbox_with_full_payload() {
+        let pool = fresh_test_pool().await;
+        let info = WindowInfo {
+            app_name: "Code".into(),
+            title: "main.rs".into(),
+            app_path: None,
+        };
+        let captured = Local::now();
+        let id = insert_new(&pool, &info, captured, None).await.unwrap();
+        seal_session(&pool, id, captured + Duration::seconds(30))
+            .await
+            .unwrap();
+
+        assert_eq!(outbox_activity_count(&pool).await, 1);
+
+        let payload = pool
+            .0
+            .call(|conn| {
+                let s: String = conn
+                    .query_row(
+                        "SELECT payload FROM sync_outbox WHERE entity = 'activity' LIMIT 1",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(s)
+            })
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(v.get("deviceId").and_then(|x| x.as_str()), Some(TEST_SELF_ID));
+        assert_eq!(v.get("processName").and_then(|x| x.as_str()), Some("Code"));
+        assert!(v.get("startedAt").and_then(|x| x.as_str()).is_some());
+        assert!(v.get("endedAt").and_then(|x| x.as_str()).is_some());
+        // duration_secs 取 ended - started 的整秒值，captured + 30s → 30
+        assert_eq!(v.get("durationSecs").and_then(|x| x.as_i64()), Some(30));
+        assert!(v.get("localDate").and_then(|x| x.as_str()).is_some());
+        assert!(v.get("updatedAt").and_then(|x| x.as_str()).is_some());
+    }
+
+    async fn read_remote_id(pool: &DbPool, id: i64) -> Option<String> {
+        pool.0
+            .call(move |conn| {
+                let r: Option<String> = conn
+                    .query_row(
+                        "SELECT remote_id FROM activities WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| r.get(0),
+                    )
+                    .ok();
+                Ok(r)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn seed_activities(pool: &DbPool) {
+        pool.0
+            .call(|conn| {
+                // 3 行本机 orphan
+                for _ in 0..3 {
+                    conn.execute(
+                        "INSERT INTO activities(
+                            started_at, ended_at, duration_secs, local_date, local_hour,
+                            process_name, window_title, category_id, device_id, updated_at, origin
+                         ) VALUES(
+                            '2026-05-15T10:00:00Z', '2026-05-15T10:00:00Z', 0, '2026-05-15', 10,
+                            'Code', '', 'other', ?1, '2026-05-15T10:00:00Z', 'local'
+                         )",
+                        rusqlite::params![TEST_SELF_ID],
+                    )
+                    .db()?;
+                }
+                // 2 行本机 sealed
+                for _ in 0..2 {
+                    conn.execute(
+                        "INSERT INTO activities(
+                            started_at, ended_at, duration_secs, local_date, local_hour,
+                            process_name, window_title, category_id, device_id, updated_at, origin
+                         ) VALUES(
+                            '2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30, '2026-05-15', 10,
+                            'Code', '', 'other', ?1, '2026-05-15T10:00:30Z', 'local'
+                         )",
+                        rusqlite::params![TEST_SELF_ID],
+                    )
+                    .db()?;
+                }
+                // 1 行其它设备 orphan
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, remote_id, updated_at, origin
+                     ) VALUES(
+                        '2026-05-15T11:00:00Z', '2026-05-15T11:00:00Z', 0, '2026-05-15', 11,
+                        'Slack', '', 'other', 'other-device', 'remote-7', '2026-05-15T11:00:00Z', 'remote'
+                     )",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn count_by_device(pool: &DbPool) -> (i64, i64) {
+        pool.0
+            .call(|conn| {
+                let self_total: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM activities WHERE device_id = ?1",
+                        rusqlite::params![TEST_SELF_ID],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                let other_total: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM activities WHERE device_id != ?1",
+                        rusqlite::params![TEST_SELF_ID],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok((self_total, other_total))
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn outbox_activity_local_dates(pool: &DbPool) -> Vec<String> {
+        pool.0
+            .call(|conn| {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT json_extract(payload, '$.localDate') FROM sync_outbox
+                         WHERE entity = 'activity'",
+                    )
+                    .db()?;
+                let rows = stmt
+                    .query_map([], |r| r.get::<_, Option<String>>(0))
+                    .db()?;
+                let mut out = Vec::new();
+                for r in rows {
+                    if let Some(s) = r.db()? {
+                        out.push(s);
+                    }
+                }
+                Ok(out)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn outbox_activity_count(pool: &DbPool) -> i64 {
+        pool.0
+            .call(|conn| {
+                let n: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM sync_outbox WHERE entity = 'activity'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(n)
+            })
+            .await
+            .unwrap()
+    }
+}

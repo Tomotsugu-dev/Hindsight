@@ -726,3 +726,214 @@ pub(crate) fn apply_app_category_change(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+    use crate::storage::SqliteResultExt;
+
+    /// 测 [`purge_with_members`]：
+    /// - 组 + 所有 active member 全部软删（deleted_at IS NOT NULL）
+    /// - app_categories 镜像跟着软删（保持 reports LEFT JOIN 一致）
+    /// - outbox 写入对应 entity 行（让对端 LWW 拉到同样删除状态）
+    /// - 幂等：再调一次 outbox 不再增长
+    #[tokio::test]
+    async fn purge_with_members_soft_deletes_group_members_and_mirror() {
+        let pool = fresh_test_pool().await;
+        seed_vscode_group(&pool).await;
+
+        purge_with_members(&pool, "vscode").await.unwrap();
+
+        // 组 + 两成员都被软删
+        assert!(
+            group_deleted(&pool, "vscode").await,
+            "组本身应被软删"
+        );
+        assert!(
+            member_deleted(&pool, "Code").await,
+            "成员 Code 应被软删"
+        );
+        assert!(
+            member_deleted(&pool, "Code.exe").await,
+            "成员 Code.exe 应被软删"
+        );
+
+        // app_categories 镜像也跟着软删
+        assert!(
+            app_category_deleted(&pool, "Code").await,
+            "app_categories Code 镜像应跟着软删"
+        );
+        assert!(
+            app_category_deleted(&pool, "Code.exe").await,
+            "app_categories Code.exe 镜像应跟着软删"
+        );
+
+        // outbox：至少 1 个 group + 2 个 member upsert + 2 个 app_category upsert
+        let outbox_after = outbox_summary(&pool).await;
+        assert!(
+            outbox_after.group_count >= 1,
+            "至少应有 1 条 app_group outbox"
+        );
+        assert_eq!(
+            outbox_after.member_count, 2,
+            "应有 2 条 app_group_member outbox"
+        );
+        assert_eq!(
+            outbox_after.app_category_count, 2,
+            "应有 2 条 app_category outbox（镜像跟随）"
+        );
+
+        // 幂等：再调一次，outbox 不应再增长
+        let before = outbox_total(&pool).await;
+        purge_with_members(&pool, "vscode").await.unwrap();
+        let after = outbox_total(&pool).await;
+        assert_eq!(before, after, "幂等：第二次调用不该写新 outbox");
+    }
+
+    async fn seed_vscode_group(pool: &DbPool) {
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                // 用裸 INSERT 绕开 ensure_group 的 cross_os_alias 规范化逻辑，
+                // 测试想要的就是 group_id="vscode" + 两个 member。
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('vscode', 'vscode', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('Code', 'vscode', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('Code.exe', 'vscode', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                // app_categories 镜像
+                conn.execute(
+                    "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                     VALUES('Code', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                     VALUES('Code.exe', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn group_deleted(pool: &DbPool, id: &str) -> bool {
+        let id = id.to_string();
+        pool.0
+            .call(move |conn| {
+                let v: Option<String> = conn
+                    .query_row(
+                        "SELECT deleted_at FROM app_groups WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(v.is_some())
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn member_deleted(pool: &DbPool, process_name: &str) -> bool {
+        let pn = process_name.to_string();
+        pool.0
+            .call(move |conn| {
+                let v: Option<String> = conn
+                    .query_row(
+                        "SELECT deleted_at FROM app_group_members WHERE process_name = ?1",
+                        rusqlite::params![pn],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(v.is_some())
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn app_category_deleted(pool: &DbPool, process_name: &str) -> bool {
+        let pn = process_name.to_string();
+        pool.0
+            .call(move |conn| {
+                let v: Option<String> = conn
+                    .query_row(
+                        "SELECT deleted_at FROM app_categories WHERE process_name = ?1",
+                        rusqlite::params![pn],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(v.is_some())
+            })
+            .await
+            .unwrap()
+    }
+
+    struct OutboxSummary {
+        group_count: i64,
+        member_count: i64,
+        app_category_count: i64,
+    }
+
+    async fn outbox_summary(pool: &DbPool) -> OutboxSummary {
+        pool.0
+            .call(|conn| {
+                let g: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM sync_outbox WHERE entity = 'app_group'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                let m: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM sync_outbox WHERE entity = 'app_group_member'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                let c: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM sync_outbox WHERE entity = 'app_category'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(OutboxSummary {
+                    group_count: g,
+                    member_count: m,
+                    app_category_count: c,
+                })
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn outbox_total(pool: &DbPool) -> i64 {
+        pool.0
+            .call(|conn| {
+                let n: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM sync_outbox", [], |r| r.get(0))
+                    .db()?;
+                Ok(n)
+            })
+            .await
+            .unwrap()
+    }
+}

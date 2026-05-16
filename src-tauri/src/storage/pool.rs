@@ -14,6 +14,14 @@ impl DbPool {
         let conn = Connection::open(path).await?;
         Ok(Self(conn))
     }
+
+    /// 在内存里开一个临时 SQLite DB——给单元测试用，调用方需自行跑 migrations。
+    /// 每次返回一个全新独立的连接，互相之间不共享 schema / 数据。
+    #[cfg(test)]
+    pub async fn open_in_memory() -> Result<Self> {
+        let conn = Connection::open(":memory:").await?;
+        Ok(Self(conn))
+    }
 }
 
 /// 当前生效的 SQLite 文件路径。多账号时按 `active_uid` 选 `hindsight.<uid>.sqlite`，

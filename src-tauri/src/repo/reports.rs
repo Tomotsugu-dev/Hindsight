@@ -582,3 +582,341 @@ fn slice_by_hour(start: DateTime<Local>, end: DateTime<Local>) -> Vec<(u8, u64)>
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+    use crate::storage::SqliteResultExt;
+
+    /// 测 [`day_apps`] 跨设备 SUM：
+    /// - `DeviceFilter::All` 合并两端时长到 1 行
+    /// - `DeviceFilter::Only(...)` 只算指定设备
+    ///
+    /// 钉死「今日总览」上方设备 chip 切换的数字一致性。
+    #[tokio::test]
+    async fn day_apps_aggregates_correctly_across_devices() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().format("%Y-%m-%d").to_string();
+
+        // 同一进程 "Code" 在 self（5 分钟）和 device-win（3 分钟）各贡献时长
+        insert_activity(&pool, TEST_SELF_ID, &today, "Code", 300).await;
+        insert_activity(&pool, "device-win", &today, "Code", 180).await;
+        // 简单 1:1 组：组 id = process_name = "Code"，category=code
+        seed_solo_group(&pool, "Code", "code").await;
+
+        // All: 5 + 3 = 8 分钟
+        let all = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
+        assert_eq!(all.len(), 1, "All 视角应只有一行");
+        assert_eq!(all[0].process, "Code");
+        assert_eq!(all[0].minutes, 8);
+        assert_eq!(all[0].category_id, "code");
+
+        // Only self: 只 5 分钟
+        let only_self = day_apps(&pool, 0, 50, DeviceFilter::Only(TEST_SELF_ID.into()))
+            .await
+            .unwrap();
+        assert_eq!(only_self.len(), 1);
+        assert_eq!(only_self[0].minutes, 5);
+
+        // Only win: 只 3 分钟
+        let only_win = day_apps(&pool, 0, 50, DeviceFilter::Only("device-win".into()))
+            .await
+            .unwrap();
+        assert_eq!(only_win.len(), 1);
+        assert_eq!(only_win[0].minutes, 3);
+    }
+
+    /// 测 [`day_apps`] 跨 OS 别名合并：mac="Code" + Win="Code.exe" 共享
+    /// canonical 组 "Visual Studio Code" → All 视角下应合并成 1 行。
+    ///
+    /// 钉死："两台机器各显示 5min / 3min" 而不是合并的 "8min" 这条 bug 重现。
+    #[tokio::test]
+    async fn day_apps_merges_cross_os_aliases_into_one_row() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().format("%Y-%m-%d").to_string();
+
+        // mac 视角的 "Code" 5 分钟 + Win 视角的 "Code.exe" 3 分钟
+        insert_activity(&pool, TEST_SELF_ID, &today, "Code", 300).await;
+        insert_activity(&pool, "device-win", &today, "Code.exe", 180).await;
+
+        // 一个 canonical 组，两个成员都指向它
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('Visual Studio Code', 'Visual Studio Code', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                for name in ["Code", "Code.exe"] {
+                    conn.execute(
+                        "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                         VALUES(?1, 'Visual Studio Code', ?2, NULL)",
+                        rusqlite::params![name, now],
+                    )
+                    .db()?;
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let rows = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
+        assert_eq!(rows.len(), 1, "cross-OS 别名应合并成一行，不是两行");
+        assert_eq!(rows[0].process, "Visual Studio Code");
+        assert_eq!(rows[0].minutes, 8);
+        assert_eq!(rows[0].category_id, "code");
+        // icon_process 是 MIN(process_name)，二选一即可
+        assert!(
+            rows[0].icon_process == "Code" || rows[0].icon_process == "Code.exe",
+            "icon_process 应是组内某个真实成员名: got {}",
+            rows[0].icon_process
+        );
+    }
+
+    async fn insert_activity(
+        pool: &DbPool,
+        device_id: &str,
+        local_date: &str,
+        process_name: &str,
+        duration_secs: i64,
+    ) {
+        let device_id = device_id.to_string();
+        let local_date = local_date.to_string();
+        let process_name = process_name.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(
+                        ?1 || 'T10:00:00Z', ?1 || 'T10:00:30Z', ?2, ?1, 10,
+                        ?3, '', 'other', ?4, ?1 || 'T10:00:30Z', 'local'
+                     )",
+                    rusqlite::params![local_date, duration_secs, process_name, device_id],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 测 [`day_hours`]：跨两个小时的 session 应按时钟分桶到对应 HourSlot。
+    /// 10:30 → 11:30 的 1 小时 session：hour=10 / hour=11 各 30 分钟。
+    #[tokio::test]
+    async fn day_hours_buckets_correctly() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+        let started = Local
+            .from_local_datetime(&today.and_hms_opt(10, 30, 0).unwrap())
+            .single()
+            .unwrap();
+        let ended = Local
+            .from_local_datetime(&today.and_hms_opt(11, 30, 0).unwrap())
+            .single()
+            .unwrap();
+        insert_session_with_times(&pool, TEST_SELF_ID, &today_str, "Code", started, ended).await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let slots = day_hours(&pool, 0, DeviceFilter::All).await.unwrap();
+        assert_eq!(slots.len(), 24);
+
+        let h10 = slots.iter().find(|s| s.hour == 10).unwrap();
+        let h10_code: u32 = h10
+            .segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.minutes)
+            .sum();
+        assert_eq!(h10_code, 30, "10 点应有 30 分钟 code");
+
+        let h11 = slots.iter().find(|s| s.hour == 11).unwrap();
+        let h11_code: u32 = h11
+            .segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.minutes)
+            .sum();
+        assert_eq!(h11_code, 30, "11 点应有 30 分钟 code");
+
+        // 其它小时不该出现 code 段
+        for h in [9u8, 12, 13] {
+            let slot = slots.iter().find(|s| s.hour == h).unwrap();
+            assert!(
+                slot.segments.iter().all(|s| s.category_id != "code"),
+                "{h} 点不该出现 code 段"
+            );
+        }
+    }
+
+    /// 测 [`day_hour_apps`]：local_hour 过滤后只返该小时内的应用。
+    #[tokio::test]
+    async fn day_hour_apps_filters_by_hour() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+
+        // 10 点 30 分钟 Code
+        let s10 = Local
+            .from_local_datetime(&today.and_hms_opt(10, 0, 0).unwrap())
+            .single()
+            .unwrap();
+        let e10 = s10 + Duration::minutes(30);
+        insert_session_with_times(&pool, TEST_SELF_ID, &today_str, "Code", s10, e10).await;
+
+        // 11 点 30 分钟 Chrome
+        let s11 = Local
+            .from_local_datetime(&today.and_hms_opt(11, 0, 0).unwrap())
+            .single()
+            .unwrap();
+        let e11 = s11 + Duration::minutes(30);
+        insert_session_with_times(&pool, TEST_SELF_ID, &today_str, "Chrome", s11, e11).await;
+
+        seed_solo_group(&pool, "Code", "code").await;
+        seed_solo_group(&pool, "Chrome", "browse").await;
+
+        let h10 = day_hour_apps(&pool, 0, 10, 50, DeviceFilter::All).await.unwrap();
+        assert_eq!(h10.len(), 1, "hour=10 只应有 Code");
+        assert_eq!(h10[0].process, "Code");
+
+        let h11 = day_hour_apps(&pool, 0, 11, 50, DeviceFilter::All).await.unwrap();
+        assert_eq!(h11.len(), 1, "hour=11 只应有 Chrome");
+        assert_eq!(h11[0].process, "Chrome");
+    }
+
+    /// 测 [`week_days`]：今天的 DaySummary 应 SUM 多设备 (All) 或单设备 (Only) 时长。
+    #[tokio::test]
+    async fn week_days_aggregates_cross_device() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+
+        insert_activity(&pool, TEST_SELF_ID, &today_str, "Code", 300).await; // 5 min self
+        insert_activity(&pool, "device-win", &today_str, "Code", 180).await; // 3 min win
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let all = week_days(&pool, 0, DeviceFilter::All).await.unwrap();
+        let today_all = all.iter().find(|d| d.date == today_str).unwrap();
+        let code_all: u32 = today_all
+            .segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.minutes)
+            .sum();
+        assert_eq!(code_all, 8, "All 视角 today 应 5+3 = 8 分钟 code");
+
+        let only_self = week_days(&pool, 0, DeviceFilter::Only(TEST_SELF_ID.into()))
+            .await
+            .unwrap();
+        let today_self = only_self.iter().find(|d| d.date == today_str).unwrap();
+        let code_self: u32 = today_self
+            .segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.minutes)
+            .sum();
+        assert_eq!(code_self, 5, "Only self 视角 today 应 5 分钟");
+    }
+
+    /// 测 [`month_apps`]：top N 按总时长降序。
+    #[tokio::test]
+    async fn month_apps_top_n_correct() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+
+        insert_activity(&pool, TEST_SELF_ID, &today_str, "Code", 300).await; // 5 min
+        insert_activity(&pool, TEST_SELF_ID, &today_str, "Chrome", 180).await; // 3 min
+        insert_activity(&pool, TEST_SELF_ID, &today_str, "Slack", 60).await; // 1 min
+        seed_solo_group(&pool, "Code", "code").await;
+        seed_solo_group(&pool, "Chrome", "browse").await;
+        seed_solo_group(&pool, "Slack", "talk").await;
+
+        let apps = month_apps(&pool, 0, 5, DeviceFilter::All).await.unwrap();
+        assert!(apps.len() >= 3, "应至少 3 行");
+        // 降序：Code (5) > Chrome (3) > Slack (1)
+        assert_eq!(apps[0].process, "Code");
+        assert_eq!(apps[0].minutes, 5);
+        assert_eq!(apps[1].process, "Chrome");
+        assert_eq!(apps[1].minutes, 3);
+        assert_eq!(apps[2].process, "Slack");
+        assert_eq!(apps[2].minutes, 1);
+
+        // limit 钉死
+        let top_2 = month_apps(&pool, 0, 2, DeviceFilter::All).await.unwrap();
+        assert_eq!(top_2.len(), 2);
+        assert_eq!(top_2[0].process, "Code");
+        assert_eq!(top_2[1].process, "Chrome");
+    }
+
+    /// 给 day_hours / day_hour_apps 测试用：插一行 sealed activity 但用真实的 local 时区
+    /// started_at / ended_at（不再用固定的 'T10:00:00Z' UTC 串）。
+    async fn insert_session_with_times(
+        pool: &DbPool,
+        device_id: &str,
+        local_date: &str,
+        process_name: &str,
+        started: DateTime<Local>,
+        ended: DateTime<Local>,
+    ) {
+        let device_id = device_id.to_string();
+        let local_date = local_date.to_string();
+        let process_name = process_name.to_string();
+        let dur = (ended - started).num_seconds().max(0);
+        let local_hour = started.hour() as i64;
+        let started_str = started.to_rfc3339();
+        let ended_str = ended.to_rfc3339();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(?, ?, ?, ?, ?, ?, '', 'other', ?, ?, 'local')",
+                    rusqlite::params![
+                        started_str,
+                        ended_str,
+                        dur,
+                        local_date,
+                        local_hour,
+                        process_name,
+                        device_id,
+                        ended_str,
+                    ],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str) {
+        let name = name.to_string();
+        let category_id = category_id.to_string();
+        pool.0
+            .call(move |conn| {
+                let now = "2026-05-15T10:00:00Z";
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES(?1, ?1, ?2, ?3, NULL)",
+                    rusqlite::params![name, category_id, now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES(?1, ?1, ?2, NULL)",
+                    rusqlite::params![name, now],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+}

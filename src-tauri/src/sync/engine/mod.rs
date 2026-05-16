@@ -8,6 +8,9 @@ mod io;
 mod pull;
 mod push;
 
+#[cfg(test)]
+mod e2e_tests;
+
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,6 +23,7 @@ use tokio::task::JoinHandle;
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
+use crate::sync::drive::DriveBackend;
 
 /// `last_error` 前缀：分类后端写进 status 的同步错误，让前端能稳定判别
 /// "需要重新登录" vs "暂时失败"，不再依赖中文本地化字符串匹配。
@@ -97,9 +101,12 @@ pub struct SyncStatus {
     pub dead_letter: u64,
 }
 
-/// 内部共享状态：池、后台任务句柄、状态。push / pull 模块都用 `&Arc<Inner>` 访问。
+/// 内部共享状态：池、Drive 后端、设备身份、后台任务句柄、状态。
+/// push / pull 模块都用 `&Arc<Inner>` 访问。
 pub(super) struct Inner {
     pub(super) pool: DbPool,
+    pub(super) drive: DriveBackend,
+    pub(super) self_id: String,
     pub(super) handle: Mutex<Option<JoinHandle<()>>>,
     pub(super) status: RwLock<SyncStatus>,
 }
@@ -110,16 +117,38 @@ pub struct SyncEngine {
 }
 
 impl SyncEngine {
-    /// 创建（不自动 start）。需要外层调一次 [`SyncEngine::start`] 才会跑后台循环。
+    /// 生产入口：用全局 `device::self_id()` + HTTP Drive。`device::ensure_loaded()`
+    /// 必须先跑过；未初始化时 self_id 退化为空串（push/pull 内部会跳过实际工作）。
     pub fn new(pool: DbPool) -> Self {
+        let self_id = crate::device::self_id().unwrap_or("").to_string();
+        Self::with_backend(pool, DriveBackend::Http, self_id)
+    }
+
+    /// 测试入口：注入自定义 DriveBackend + self_id，同进程跑多个独立设备。
+    /// 见 `src-tauri/tests/sync_two_devices.rs`。
+    pub fn with_backend(pool: DbPool, drive: DriveBackend, self_id: String) -> Self {
         Self {
             inner: Arc::new(Inner {
                 pool,
+                drive,
+                self_id,
                 handle: Mutex::new(None),
                 status: RwLock::new(SyncStatus::default()),
             }),
         }
     }
+
+    /// 借出当前 Drive 后端引用。给 `purge_cloud_data` 这类 command-layer 入口走。
+    pub fn drive(&self) -> &DriveBackend {
+        &self.inner.drive
+    }
+
+    /// 借出当前设备身份。给 command-layer 入口（`purge_cloud_data` 等）走，
+    /// 测试场景 self_id 不等于 `device::self_id()`，必须从 engine 拿。
+    pub fn self_id(&self) -> &str {
+        &self.inner.self_id
+    }
+
 
     /// 启动后台 push/pull 循环。已在跑时 no-op。未登录时循环内每次都 silently 跳过。
     pub async fn start(&self) {

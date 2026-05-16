@@ -13,6 +13,7 @@ use crate::capture::CaptureService;
 use crate::repo::settings;
 use crate::storage::SqliteResultExt;
 use crate::storage::{db_path, DbPool};
+use crate::sync::engine::SyncEngine;
 
 /// `get_storage_info` 命令的返回。前端「设置 → 数据」面板拿来渲染当前空间占用。
 #[derive(Debug, Clone, Serialize)]
@@ -123,17 +124,33 @@ pub async fn purge_activities(
 ///     新累积部分，符合"清空过去"语义）
 ///   - outbox / cursor 已经是清空 / epoch 状态，UPDATE / DELETE no-op
 #[tauri::command]
-pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
-    let token = crate::sync::auth::ensure_valid_token(&pool)
+pub async fn purge_cloud_data(
+    pool: State<'_, DbPool>,
+    engine: State<'_, Arc<SyncEngine>>,
+) -> Result<u64, String> {
+    purge_cloud_data_impl(&pool, &engine).await
+}
+
+/// 抽出来的实际实现，给集成测试可以直接调用（绕开 Tauri State<> 包装）。
+pub(crate) async fn purge_cloud_data_impl(
+    pool: &DbPool,
+    engine: &SyncEngine,
+) -> Result<u64, String> {
+    let token = crate::sync::auth::ensure_valid_token(pool)
         .await
         .map_err(|e| e.to_string())?;
-    let self_id = crate::device::self_id().map_err(|e| e.to_string())?;
+    let self_id = engine.self_id();
+    if self_id.is_empty() {
+        return Err("self_id 未初始化".into());
+    }
     let prefix = format!("device.{self_id}.");
+    let drive = engine.drive();
 
     // 1. 列 Drive 全量文件，按本机 prefix 过滤。
     //    跳过 tombstone 本身（清云端时 tombstone 留下来当 marker，不然对端永远不知道）。
     let tombstone_name = format!("device.{self_id}.tombstone.json");
-    let files = crate::sync::drive::list_appdata_files(&token.access_token, "")
+    let files = drive
+        .list_appdata_files(&token.access_token, "")
         .await
         .map_err(|e| e.to_string())?;
     let mine: Vec<_> = files
@@ -144,7 +161,7 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
     // 2. 逐个 DELETE；单文件失败不抛，让能删的尽量删完
     let mut deleted = 0u64;
     for f in &mine {
-        match crate::sync::drive::delete(&token.access_token, &f.id).await {
+        match drive.delete(&token.access_token, &f.id).await {
             Ok(()) => deleted += 1,
             Err(e) => log::warn!("purge_cloud_data: delete {} 失败: {e}", f.name),
         }
@@ -156,9 +173,9 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
         cleared_at: cleared_at.clone(),
     })
     .map_err(|e| e.to_string())?;
-    if let Err(e) =
-        crate::sync::drive::upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
-            .await
+    if let Err(e) = drive
+        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+        .await
     {
         log::warn!("purge_cloud_data: upload tombstone 失败: {e}");
     }

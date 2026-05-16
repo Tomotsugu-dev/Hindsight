@@ -12,7 +12,6 @@ use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 use crate::sync::auth::{self, TokenInfo};
-use crate::sync::drive;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
@@ -67,7 +66,11 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         return Ok(());
     }
 
-    let self_id = crate::device::self_id()?;
+    let self_id = inner.self_id.as_str();
+    if self_id.is_empty() {
+        log::debug!("sync push 跳过：self_id 为空（device 未初始化）");
+        return Ok(());
+    }
     let mut succeeded_ids: Vec<i64> = Vec::new();
     let mut failed_ids: Vec<i64> = Vec::new();
     let mut last_err_raw: Option<crate::error::Error> = None;
@@ -88,7 +91,8 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         let upsert_res = with_token_retry(&inner.pool, &mut token, |tok| {
             let name = name.clone();
             let content = content.clone();
-            async move { drive::upsert_by_name(&tok, &name, &content).await }
+            let drive = &inner.drive;
+            async move { drive.upsert_by_name(&tok, &name, &content).await }
         })
         .await;
         match upsert_res {
@@ -442,4 +446,151 @@ async fn build_device_meta(pool: &DbPool, self_id: &str) -> Result<Vec<u8>> {
         return Ok(b"{}".to_vec());
     };
     Ok(serde_json::to_vec(&meta)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+    use chrono::Local;
+
+    /// 测 [`build_activities_day`] 的 device + date 过滤：
+    /// - 只导出 `device_id = self_id` 的行
+    /// - 跨日期不混（昨天的 self 行不能出现在今天的 ndjson）
+    /// - 跨设备不混（对端 mirror 行不能被当作"本机贡献"重推）
+    ///
+    /// 这条防"mac 重推 Win 镜像数据"的 bug 重现。
+    #[tokio::test]
+    async fn build_activities_day_filters_by_device_and_date() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let yesterday = (Local::now() - chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string();
+
+        // 3 行 self + today，process_name 各不同
+        for process in ["Code", "Chrome", "Slack"] {
+            insert_sealed(&pool, TEST_SELF_ID, &today, process, "local").await;
+        }
+        // 2 行 other device + today，origin='remote'（mac pull 来的镜像 —— 不能被回推）
+        for process in ["Win-only-A", "Win-only-B"] {
+            insert_sealed(&pool, "device-other", &today, process, "remote").await;
+        }
+        // 1 行 self 但是昨天 —— 当天的 ndjson 不该含它
+        insert_sealed(&pool, TEST_SELF_ID, &yesterday, "Yesterday-app", "local").await;
+
+        let body = build_activities_day(&pool, TEST_SELF_ID, &today)
+            .await
+            .unwrap();
+
+        let lines: Vec<&[u8]> = body.split(|b| *b == b'\n').filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines.len(), 3, "应仅导出 3 行 (self + today)");
+
+        let processes: Vec<String> = lines
+            .iter()
+            .map(|l| {
+                let p: ActivityPayload = serde_json::from_slice(l).unwrap();
+                p.process_name
+            })
+            .collect();
+
+        let expected: std::collections::HashSet<&str> =
+            ["Code", "Chrome", "Slack"].into_iter().collect();
+        let got: std::collections::HashSet<&str> = processes.iter().map(|s| s.as_str()).collect();
+        assert_eq!(got, expected, "导出的 process_name 集合应正好是 self+today 的 3 个");
+
+        // 显式断言对端 + 昨日的没漏出
+        for forbidden in ["Win-only-A", "Win-only-B", "Yesterday-app"] {
+            assert!(
+                !processes.iter().any(|p| p == forbidden),
+                "不应导出 process_name={forbidden}（要么跨设备要么跨日期）"
+            );
+        }
+    }
+
+    async fn insert_sealed(
+        pool: &DbPool,
+        device_id: &str,
+        local_date: &str,
+        process_name: &str,
+        origin: &str,
+    ) {
+        let device_id = device_id.to_string();
+        let local_date = local_date.to_string();
+        let process_name = process_name.to_string();
+        let origin = origin.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(
+                        ?1 || 'T10:00:00Z', ?1 || 'T10:00:30Z', 30, ?1, 10,
+                        ?2, '', 'other', ?3, ?1 || 'T10:00:30Z', ?4
+                     )",
+                    rusqlite::params![local_date, process_name, device_id, origin],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 测 [`group_outbox`]：同一 local_date 的 5 条 outbox 应塌成 1 个
+    /// `DirtyKey::ActivityDay(date)` 键，5 个 row id 全部进 value。
+    /// 防"push 把同一天 ndjson 重写 5 次"的回归（早期 bug 引起 Drive quota 抖动）。
+    #[test]
+    fn group_outbox_collapses_same_local_date() {
+        let make_row = |id: i64, date: &str| OutboxRow {
+            id,
+            entity: "activity".into(),
+            payload: serde_json::json!({ "localDate": date }).to_string(),
+        };
+        let rows = vec![
+            make_row(1, "2026-05-15"),
+            make_row(2, "2026-05-15"),
+            make_row(3, "2026-05-15"),
+            make_row(4, "2026-05-15"),
+            make_row(5, "2026-05-15"),
+        ];
+        let groups = group_outbox(&rows);
+
+        assert_eq!(groups.len(), 1, "5 行同一 local_date 应只产生 1 个 DirtyKey");
+        let ids = groups
+            .get(&DirtyKey::ActivityDay("2026-05-15".into()))
+            .expect("ActivityDay key should exist");
+        let mut ids = ids.clone();
+        ids.sort();
+        assert_eq!(ids, vec![1, 2, 3, 4, 5], "所有 5 个 outbox row id 都应进入 value");
+    }
+
+    /// 不同 local_date 的 outbox 行应进入不同的 DirtyKey 桶。
+    #[test]
+    fn group_outbox_splits_different_local_dates() {
+        let make_row = |id: i64, date: &str| OutboxRow {
+            id,
+            entity: "activity".into(),
+            payload: serde_json::json!({ "localDate": date }).to_string(),
+        };
+        let rows = vec![
+            make_row(1, "2026-05-15"),
+            make_row(2, "2026-05-16"),
+            make_row(3, "2026-05-15"),
+        ];
+        let groups = group_outbox(&rows);
+        assert_eq!(groups.len(), 2);
+        let mut d1 = groups
+            .get(&DirtyKey::ActivityDay("2026-05-15".into()))
+            .unwrap()
+            .clone();
+        d1.sort();
+        assert_eq!(d1, vec![1, 3]);
+        let d2 = groups
+            .get(&DirtyKey::ActivityDay("2026-05-16".into()))
+            .unwrap()
+            .clone();
+        assert_eq!(d2, vec![2]);
+    }
 }

@@ -11,3 +11,6 @@ pub mod outbox;
 pub mod process_paths;
 pub mod reports;
 pub mod settings;
+
+#[cfg(test)]
+pub mod test_util;

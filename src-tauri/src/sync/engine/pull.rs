@@ -12,7 +12,6 @@ use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 use crate::sync::auth::{self, TokenInfo};
-use crate::sync::drive;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload, TombstonePayload,
@@ -130,14 +129,19 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
     let files = with_token_retry(&inner.pool, &mut token, |tok| {
         let cursor_q = cursor_q.clone();
-        async move { drive::list_appdata_files(&tok, &cursor_q).await }
+        let drive = &inner.drive;
+        async move { drive.list_appdata_files(&tok, &cursor_q).await }
     })
     .await?;
     if files.is_empty() {
         return Ok(());
     }
 
-    let self_id = crate::device::self_id()?;
+    let self_id = inner.self_id.as_str();
+    if self_id.is_empty() {
+        log::debug!("sync pull 跳过：self_id 为空（device 未初始化）");
+        return Ok(());
+    }
     let local_os = crate::platform::local_os_id();
     let mut applied = 0u64;
     // 每个文件是否「应用 or 主动跳过」。Drive 已按 modifiedTime 升序返回，pull 结束时
@@ -167,7 +171,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         }
         let body = match with_token_retry(&inner.pool, &mut token, |tok| {
             let id = f.id.clone();
-            async move { drive::download(&tok, &id).await }
+            let drive = &inner.drive;
+            async move { drive.download(&tok, &id).await }
         })
         .await
         {
@@ -248,7 +253,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
         let body = match with_token_retry(&inner.pool, &mut token, |tok| {
             let id = f.id.clone();
-            async move { drive::download(&tok, &id).await }
+            let drive = &inner.drive;
+            async move { drive.download(&tok, &id).await }
         })
         .await
         {
@@ -261,7 +267,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
         let res = match parsed {
             ParsedFile::ActivityDay { device_id, local_date } => {
-                merge_activities(&inner.pool, &device_id, &local_date, &body).await
+                merge_activities(&inner.pool, self_id, &device_id, &local_date, &body).await
             }
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
@@ -305,7 +311,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         };
         let body = match with_token_retry(&inner.pool, &mut token, |tok| {
             let id = f.id.clone();
-            async move { drive::download(&tok, &id).await }
+            let drive = &inner.drive;
+            async move { drive.download(&tok, &id).await }
         })
         .await
         {
@@ -364,6 +371,7 @@ async fn remote_device_os(pool: &DbPool, device_id: &str) -> Option<String> {
 
 async fn merge_activities(
     pool: &DbPool,
+    self_id: &str,
     device_id: &str,
     local_date: &str,
     body: &[u8],
@@ -407,6 +415,7 @@ async fn merge_activities(
         // 失败（handled[i] 留 false），游标停在前一文件，下次再拉这文件还是坏行 → 永久卡住。
         if let Err(e) = upsert_remote_activity(
             pool,
+            self_id,
             device_id,
             &remote_id,
             &row.started_at,
@@ -431,7 +440,6 @@ async fn merge_activities(
     // 不是 mirror，DELETE 它们会丢失本机自己的数据）。这条件配合 v26 + lift self-skip 的
     // self-pull 场景：本机 pull 自己的 ndjson 时，不收敛自己的行（既然是自己的，DELETE
     // 任何 < clearedAt 之类的逻辑该走 tombstone 路径，不该走 mirror 收敛）。
-    let self_id = crate::device::self_id().map(String::from).unwrap_or_default();
     let is_self = !self_id.is_empty() && device_id == self_id;
     if !parse_clean || is_self {
         return Ok(());
@@ -940,6 +948,7 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
 #[allow(clippy::too_many_arguments)]
 async fn upsert_remote_activity(
     pool: &DbPool,
+    self_id: &str,
     device_id: &str,
     remote_id: &str,
     started_at: &str,
@@ -961,7 +970,6 @@ async fn upsert_remote_activity(
     //      变成 id=1 → 对端 Win pull 看到的 remote_id 从 "42" 变 "1" → upsert key 错位 →
     //      Win 端**重复 INSERT**。整张历史在对端裂成两份。
     // - 显式 id 保证 push 重写后 Drive 文件 id 字段跟 purge 前一致，跨设备身份对称
-    let self_id = crate::device::self_id().map(String::from).unwrap_or_default();
     let is_self = !self_id.is_empty() && device_id == self_id;
     let device_id = device_id.to_string();
     let remote_id = remote_id.to_string();
@@ -996,7 +1004,7 @@ async fn upsert_remote_activity(
                                id, started_at, ended_at, duration_secs, local_date, local_hour,
                                process_name, window_title, category_id, screenshot_path,
                                device_id, remote_id, updated_at, origin
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local')",
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local')",
                             rusqlite::params![
                                 explicit_id,
                                 started_at,
@@ -1068,4 +1076,191 @@ async fn upsert_remote_activity(
         })
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+
+    const DAY: &str = "2026-05-15";
+    const OTHER_DEVICE: &str = "device-a";
+
+    /// 跨设备路径 (device_id != self_id)：
+    /// - ndjson 中的 id 全部覆盖到 mirror（UPDATE 已存在 / INSERT 新行）
+    /// - ndjson 中**不在**的 remote_id 通过 mirror 收敛 DELETE 掉
+    #[tokio::test]
+    async fn merge_activities_cross_device_converges_mirror() {
+        let pool = fresh_test_pool().await;
+        seed_mirror_rows(&pool, OTHER_DEVICE, &["1", "2", "3", "4", "5"]).await;
+
+        let body = ndjson_for_ids(&[1, 2, 3, 6]);
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes())
+            .await
+            .unwrap();
+
+        let ids = remote_ids_for(&pool, OTHER_DEVICE).await;
+        assert_eq!(
+            ids,
+            vec!["1".to_string(), "2".into(), "3".into(), "6".into()],
+            "ndjson 包含 1/2/3/6，不在的 4/5 应被 mirror 收敛 DELETE"
+        );
+    }
+
+    /// 自身路径 (device_id == self_id)：mirror 收敛**不**触发，
+    /// 自己原有的 mirror 行不该被对端 ndjson 收敛 DELETE。
+    #[tokio::test]
+    async fn merge_activities_self_skips_mirror_convergence() {
+        let pool = fresh_test_pool().await;
+        // 自身路径的 fixture 用 origin='local'（mac 本机刚写的状态），并显式 id
+        // 保证 (device_id, remote_id) 唯一索引下能正确做 UPDATE
+        seed_self_rows(&pool, &[1, 2, 3, 4, 5]).await;
+
+        let body = ndjson_for_ids(&[1, 2, 3, 6]);
+        merge_activities(&pool, TEST_SELF_ID, TEST_SELF_ID, DAY, body.as_bytes())
+            .await
+            .unwrap();
+
+        let ids = remote_ids_for(&pool, TEST_SELF_ID).await;
+        // 自身路径不收敛：原 1..5 应全部保留，外加新 INSERT 的 6 → 共 6 行
+        assert_eq!(
+            ids,
+            vec![
+                "1".to_string(),
+                "2".into(),
+                "3".into(),
+                "4".into(),
+                "5".into(),
+                "6".into(),
+            ],
+            "self 路径下 mirror 收敛应跳过，4/5 应保留"
+        );
+    }
+
+    /// 解析失败的 ndjson：mirror 收敛**不**触发，避免半截文件误删一大堆。
+    #[tokio::test]
+    async fn merge_activities_parse_failure_skips_mirror_convergence() {
+        let pool = fresh_test_pool().await;
+        seed_mirror_rows(&pool, OTHER_DEVICE, &["1", "2", "3", "4", "5"]).await;
+
+        // 第二行故意写坏 JSON
+        let body = format!(
+            "{}\nthis is not valid json {{\n{}\n",
+            payload_line(1),
+            payload_line(2),
+        );
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes())
+            .await
+            .unwrap();
+
+        let ids = remote_ids_for(&pool, OTHER_DEVICE).await;
+        assert_eq!(
+            ids,
+            vec![
+                "1".to_string(),
+                "2".into(),
+                "3".into(),
+                "4".into(),
+                "5".into(),
+            ],
+            "解析失败时 mirror 收敛应跳过：原 5 行全部保留"
+        );
+    }
+
+    fn payload_line(id: i64) -> String {
+        let p = ActivityPayload {
+            id,
+            started_at: format!("{DAY}T10:0{id}:00Z"),
+            ended_at: format!("{DAY}T10:0{id}:30Z"),
+            duration_secs: 30,
+            local_date: DAY.into(),
+            local_hour: 10,
+            process_name: "Code".into(),
+            window_title: None,
+            category_id: "other".into(),
+            updated_at: format!("{DAY}T10:0{id}:30Z"),
+        };
+        serde_json::to_string(&p).unwrap()
+    }
+
+    fn ndjson_for_ids(ids: &[i64]) -> String {
+        ids.iter()
+            .map(|id| payload_line(*id))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    async fn seed_mirror_rows(pool: &DbPool, device_id: &str, remote_ids: &[&str]) {
+        let device_id = device_id.to_string();
+        let remote_ids: Vec<String> = remote_ids.iter().map(|s| s.to_string()).collect();
+        pool.0
+            .call(move |conn| {
+                for r in &remote_ids {
+                    conn.execute(
+                        "INSERT INTO activities(
+                            started_at, ended_at, duration_secs, local_date, local_hour,
+                            process_name, window_title, category_id, device_id, remote_id,
+                            updated_at, origin
+                         ) VALUES(
+                            '2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30, '2026-05-15', 10,
+                            'Code', '', 'other', ?1, ?2, '2026-05-15T10:00:00Z', 'remote'
+                         )",
+                        rusqlite::params![device_id, r],
+                    )
+                    .db()?;
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 自身路径专用 fixture：origin='local' + 显式 id（对端 ndjson upsert 自己时用 id 对齐）
+    async fn seed_self_rows(pool: &DbPool, ids: &[i64]) {
+        let ids = ids.to_vec();
+        pool.0
+            .call(move |conn| {
+                for id in &ids {
+                    conn.execute(
+                        "INSERT INTO activities(
+                            id, started_at, ended_at, duration_secs, local_date, local_hour,
+                            process_name, window_title, category_id, device_id, remote_id,
+                            updated_at, origin
+                         ) VALUES(
+                            ?1, '2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30, '2026-05-15', 10,
+                            'Code', '', 'other', ?2, ?3,
+                            '2026-05-15T10:00:00Z', 'local'
+                         )",
+                        rusqlite::params![id, TEST_SELF_ID, id.to_string()],
+                    )
+                    .db()?;
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn remote_ids_for(pool: &DbPool, device_id: &str) -> Vec<String> {
+        let device_id = device_id.to_string();
+        pool.0
+            .call(move |conn| {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT remote_id FROM activities
+                         WHERE device_id = ?1 ORDER BY remote_id",
+                    )
+                    .db()?;
+                let rows = stmt
+                    .query_map(rusqlite::params![device_id], |r| r.get::<_, String>(0))
+                    .db()?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r.db()?);
+                }
+                Ok(out)
+            })
+            .await
+            .unwrap()
+    }
 }
