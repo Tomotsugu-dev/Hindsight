@@ -3,8 +3,7 @@
 use rand::Rng;
 
 use crate::error::Result;
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 pub(super) const MAX_ATTEMPTS: i64 = 10;
 const RETRY_BASE_SECS: i64 = 5;
@@ -22,7 +21,7 @@ pub(super) async fn read_due_outbox(pool: &DbPool, limit: usize) -> Result<Vec<O
     // 关键：next_retry_at 是 chrono::to_rfc3339()（"2026-05-03T...+00:00"），
     // 不能跟 SQLite 的 datetime('now')（"2026-05-03 ..."，空格无 T）做字典序比较 —— 'T' > ' ' 永远不等。
     // 这里用 Rust 端生成同格式的 now 当参数。
-    let now_rfc = chrono::Utc::now().to_rfc3339();
+    let now_rfc = utc_now_rfc3339();
     let rows = pool
         .0
         .call(move |conn| {

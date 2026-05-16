@@ -8,11 +8,12 @@
 
 #[cfg(target_os = "macos")]
 mod macos_impl;
-#[cfg(target_os = "windows")]
-mod windows_impl;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+// 非 macOS 平台（Windows + Linux 等）走同一份 stub：
+// - Windows：Win32 GDI / DWM 直接给所有窗口的 owner pid + title，无 OS-level 屏幕录制权限模型
+// - Linux：xcap 用 X11 / Wayland 拿窗口，亦无统一权限模型
+// 都返回 Granted，让上层 ensure_screen_recording 可以无条件调。
+#[cfg(not(target_os = "macos"))]
 mod stub_impl {
-    /// 其它 unix 平台 stub：默认 Granted，调用方按已授权处理。
     pub fn ensure_screen_recording() -> super::ScreenRecordingState {
         super::ScreenRecordingState::Granted
     }
@@ -20,10 +21,8 @@ mod stub_impl {
 
 #[cfg(target_os = "macos")]
 use macos_impl as imp;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(target_os = "macos"))]
 use stub_impl as imp;
-#[cfg(target_os = "windows")]
-use windows_impl as imp;
 
 /// macOS Screen Recording 权限的当前状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

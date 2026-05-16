@@ -9,8 +9,7 @@ use crate::capture::WindowInfo;
 use crate::device;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 创建一条新的会话记录。device_id = self；updated_at = captured_at；
 /// **不**写 outbox —— 用户明确要求只在会话结束 (seal) 时才推到云端。
@@ -25,7 +24,7 @@ pub async fn insert_new(
     let ended = captured_at.to_rfc3339();
     // updated_at 必须是 UTC：跨设备 LWW 走的是 `updated_at > cur_updated` **字符串字典序**
     // 比较。如果这里用 captured_at.to_rfc3339()（local TZ，比如 "+09:00"），后续 seal_session
-    // 用 Utc::now().to_rfc3339()（"+00:00"），两个 RFC3339 串的字典序跟时间序不一致 ——
+    // 用 utc_now_rfc3339()（"+00:00"），两个 RFC3339 串的字典序跟时间序不一致 ——
     // JST 凌晨的 local 串 "2026-05-17T00:..." 字典序大于同一时刻的 UTC 串 "2026-05-16T15:..."
     // → 对端 pull 时 LWW 错误地拒绝 seal 后的 update → 镜像永远卡在 dur=0 unsealed。
     let updated = captured_at.with_timezone(&Utc).to_rfc3339();
@@ -66,7 +65,7 @@ pub async fn insert_new(
 /// 同事务里：把 ended_at 钉死成 final_ended_at，更新 duration_secs / updated_at，并写一条 outbox 推到云端。
 pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local>) -> Result<()> {
     let ended = final_ended_at.to_rfc3339();
-    let updated = Utc::now().to_rfc3339();
+    let updated = utc_now_rfc3339();
     let device_id = device::self_id()?.to_string();
 
     pool.0

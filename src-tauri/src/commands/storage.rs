@@ -11,8 +11,7 @@ use tauri::State;
 
 use crate::capture::CaptureService;
 use crate::repo::settings;
-use crate::storage::SqliteResultExt;
-use crate::storage::{db_path, DbPool};
+use crate::storage::{db_path, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::engine::SyncEngine;
 
 /// `get_storage_info` 命令的返回。前端「设置 → 数据」面板拿来渲染当前空间占用。
@@ -168,7 +167,7 @@ pub(crate) async fn purge_cloud_data_impl(
     }
 
     // 3. 上传 tombstone（覆盖任何旧版本，modifiedTime 自然刷新让对端 pull 看到）。
-    let cleared_at = chrono::Utc::now().to_rfc3339();
+    let cleared_at = utc_now_rfc3339();
     let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
         cleared_at: cleared_at.clone(),
     })

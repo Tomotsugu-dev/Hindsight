@@ -11,14 +11,12 @@
 //!   - app_groups.category_id 是 source of truth；变更时自动同步到 app_categories
 //!     里所有成员的对应行（让旧的 reports.rs LEFT JOIN app_categories 继续工作）
 
-use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension};
 use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 应用组的对外快照（包含成员 + category_id + display_name）。
 #[derive(Debug, Clone, Serialize)]
@@ -157,7 +155,7 @@ pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
         return Err(crate::error::Error::InvalidInput("组名不能为空"));
     }
     let id = uuid::Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     let id_for_db = id.clone();
     let id_for_outbox = id.clone();
     pool.0
@@ -200,7 +198,7 @@ pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
 /// outbox 也不再 enqueue。
 pub async fn purge_with_members(pool: &DbPool, group_id: &str) -> Result<()> {
     let id = group_id.to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
             // 1. 列出该组所有 active member 的 process_name
@@ -274,7 +272,7 @@ pub async fn purge_with_members(pool: &DbPool, group_id: &str) -> Result<()> {
 /// 幂等：组已被删 / 不存在 → no-op。
 pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
     let id = group_id.to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     let outcome: std::result::Result<(), &'static str> = pool
         .0
         .call(move |conn| {
@@ -321,7 +319,7 @@ pub async fn delete(pool: &DbPool, group_id: &str) -> Result<()> {
 pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &str) -> Result<()> {
     let src = source_process_name.to_string();
     let tgt = target_group_id.to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
 
     let outcome: std::result::Result<(), &'static str> = pool
         .0
@@ -384,7 +382,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
 /// 如果这个组已被软删，复活它。category 跟随当前所在组保留。
 pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
     let p = process_name.to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
 
     pool.0
         .call(move |conn| {
@@ -455,7 +453,7 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
 pub async fn rename(pool: &DbPool, group_id: &str, new_name: &str) -> Result<()> {
     let id = group_id.to_string();
     let name = new_name.to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
 
     pool.0
         .call(move |conn| {
@@ -488,7 +486,7 @@ pub async fn assign_category(
 ) -> Result<()> {
     let id = group_id.to_string();
     let cat = category_id;
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
 
     pool.0
         .call(move |conn| {
@@ -579,7 +577,7 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
     if p.is_empty() || p == "Unknown" {
         return Ok(());
     }
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     // 跨 OS 别名规范化：mac "Microsoft PowerPoint" + Win "POWERPNT.EXE" 通过别名表
     // 都映射到同一 canonical "Microsoft PowerPoint"。第一次见到一个别名时直接进 canonical
     // 组（而不是 process_name 自身），让两台设备上的同一应用自然合并成一行。

@@ -3,14 +3,12 @@
 //! 所有写入都同步入 outbox 走 push 路径，保证跨设备 LWW；
 //! 内置分类（builtin=1）拒绝删除（必须给所有未分类的 app 一个落点）。
 
-use chrono::Utc;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 分类（DB 行 + 该分类下的 app process_name 列表，用于前端渲染）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,7 +183,7 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     let n = name.clone();
     let c = color.clone();
     let i = final_icon.clone();
-    let updated = Utc::now().to_rfc3339();
+    let updated = utc_now_rfc3339();
     let updated_clone = updated.clone();
 
     pool.0
@@ -226,7 +224,7 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
 /// 内置分类也允许 update（仅改外观，不改 id / builtin 标志）。
 pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()> {
     let id = id.to_string();
-    let updated = Utc::now().to_rfc3339();
+    let updated = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
             // 读出当前行做基线
@@ -296,7 +294,7 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
 /// 仅对 sort_order 实际变了的行 enqueue outbox（幂等：原地拖一下不重复推）。
 /// `updated_at` 也 bump，保证跨设备 LWW 拿到的是新顺序。
 pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
             for (idx, id) in ordered_ids.iter().enumerate() {
@@ -345,7 +343,7 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
 /// app_groups.category_id 引用一起清掉。
 pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     let id = id.to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     // 闭包返回 Ok(Err(msg)) 表示业务校验拒绝，外层翻译成 Error::InvalidInput；
     // 真正的 db 错误仍走 ? 通道。这样 InvalidInput 不会被 tokio_rusqlite::Error::Other 包一层。
     let outcome: std::result::Result<(), &'static str> = pool

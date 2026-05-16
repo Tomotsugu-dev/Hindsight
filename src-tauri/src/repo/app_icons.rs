@@ -6,13 +6,11 @@
 
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
 use rusqlite::OptionalExtension;
 
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::SqliteResultExt;
-use crate::storage::{db_path_dir, DbPool};
+use crate::storage::{db_path_dir, utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 文件 cache 路径：`<data_root>/icons/<sanitized>.png`。
 /// process_name 里的非 ASCII alnum/. /-/_ 字符替换成 `_`，避免文件名歧义。
@@ -50,7 +48,7 @@ pub fn write_cache_file(path: &Path, bytes: &[u8]) {
 pub async fn upsert_local(pool: &DbPool, process_name: &str, icon_png: &[u8]) -> Result<()> {
     let p = process_name.to_string();
     let bytes = icon_png.to_vec();
-    let updated = Utc::now().to_rfc3339();
+    let updated = utc_now_rfc3339();
 
     pool.0
         .call(move |conn| {

@@ -1,10 +1,8 @@
-use chrono::Utc;
 use serde::Serialize;
 
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 设备表的一行（前端「设备」页面渲染用）。包含本机和同步看到的远端设备。
 #[derive(Debug, Clone, Serialize)]
@@ -34,7 +32,7 @@ pub async fn upsert_self(
     default_icon: String,
     os: String,
 ) -> Result<()> {
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
             // 先把所有 is_self 清掉，确保只有一行 self
@@ -118,7 +116,7 @@ pub async fn update_self_meta(
     color: Option<String>,
     icon: Option<String>,
 ) -> Result<DeviceRow> {
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     let row = pool
         .0
         .call(move |conn| {

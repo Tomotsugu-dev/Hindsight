@@ -3,7 +3,7 @@
 //! - [`ChatClient::new`] 用引擎当前端口构造客户端
 //! - [`ChatClient::chat_with_images`] 发送一条 multimodal 请求（system + user text + N 张 image_url）
 //!
-//! 错误格式化复用 [`crate::commands::ai::fmt_send_err`]，统一错误链给用户看。
+//! 错误格式化复用 [`crate::commands::ai_endpoint::fmt_send_err`]，统一错误链给用户看。
 //!
 //! 不做流式：γ 阶段每段一次性出文，简单可靠。流式留给后续优化。
 
@@ -265,7 +265,7 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
     let resp = req
         .send()
         .await
-        .map_err(|e| Error::LlmResponse(crate::commands::ai::fmt_send_err(e)))?;
+        .map_err(|e| Error::LlmResponse(crate::commands::ai_endpoint::fmt_send_err(e)))?;
 
     let status = resp.status();
     if !status.is_success() {

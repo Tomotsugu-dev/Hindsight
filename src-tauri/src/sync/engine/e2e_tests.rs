@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Local, Timelike};
 
-use crate::storage::{migrations, DbPool, SqliteResultExt};
+use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::drive::{DriveBackend, InMemoryDriveStore};
 use crate::sync::engine::SyncEngine;
 
@@ -82,7 +82,7 @@ async fn insert_sealed(
     let ended_str = ended.to_rfc3339();
     let local_date = started.format("%Y-%m-%d").to_string();
     let local_hour = started.hour() as u8;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     let local_date_for_outbox = local_date.clone();
     dev.pool
         .0

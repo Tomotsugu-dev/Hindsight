@@ -1,4 +1,3 @@
-pub mod ai;
 pub mod ai_binary;
 pub mod ai_endpoint;
 pub mod ai_engine;

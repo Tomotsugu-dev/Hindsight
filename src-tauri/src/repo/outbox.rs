@@ -1,5 +1,6 @@
-use chrono::Utc;
 use rusqlite::{params, Connection};
+
+use crate::storage::utc_now_rfc3339;
 
 /// outbox 操作类型
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +61,7 @@ pub fn enqueue(
     entity_pk: &str,
     payload: &str,
 ) -> rusqlite::Result<()> {
-    let now = Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     conn.execute(
         "INSERT INTO sync_outbox (op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
          VALUES (?1, ?2, ?3, ?4, ?5, 0, ?5)",

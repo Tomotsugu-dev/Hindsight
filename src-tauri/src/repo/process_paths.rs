@@ -4,12 +4,11 @@
 //! capture 路径每次见到一个进程时调用 [`upsert`] 把当前 exe 路径登记。
 //! 路径没变时不写 outbox（高频心跳级噪声过滤）。
 
-use chrono::{Local, Utc};
+use chrono::Local;
 
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 登记 / 更新某 process_name 对应的 exe 路径。
 /// 路径未变时仅刷 seen_at，不写 outbox。
@@ -17,7 +16,7 @@ pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result
     let p = process_name.to_string();
     let e = exe_path.to_string();
     let seen = Local::now().to_rfc3339();
-    let updated = Utc::now().to_rfc3339();
+    let updated = utc_now_rfc3339();
     let p_clone = p.clone();
     let e_clone = e.clone();
     let seen_clone = seen.clone();

@@ -3,14 +3,12 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use serde_json::Value;
 
 use super::io;
 use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
@@ -341,7 +339,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     if let Some(t) = cursor_advance {
         io::write_cursor(&inner.pool, PULL_CURSOR_KEY, &t).await?;
     }
-    inner.status.write().await.last_pulled_at = Some(Utc::now().to_rfc3339());
+    inner.status.write().await.last_pulled_at = Some(utc_now_rfc3339());
     if applied > 0 {
         log::info!("sync pull 完成，应用 {} 个远端文件", applied);
     }
@@ -487,144 +485,154 @@ async fn merge_activities(
     Ok(())
 }
 
-async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let rows: Vec<CategoryPayload> = parse_rows("categories", body)?;
+/// 简单 LWW upsert 合并模板：
+/// 1. parse_rows 整文件失败 → 抛错（让 flush_pull 的 cursor 别推进）
+/// 2. 单行通过 `pk_for_log` 返 `Some(label)` 才进 upsert；`None` 跳过
+/// 3. 单行的 LWW gate + upsert 由 `apply` 闭包做（只能引用 `T` 自带的字段，
+///    不能 capture 外部变量 —— 这样闭包是 `Copy`，能被循环里每行复用）
+/// 4. 单行 DB 错误降级 warn（per-line skip：一行坏数据不让对端 mirror 永久卡住）
+///
+/// merge_app_icons / merge_app_groups / merge_categories / merge_activities 不走这个模板，
+/// 因为它们各自有合理的特殊路径（base64 文件 cache / member mirror / cascade
+/// delete / mirror 收敛）。
+async fn merge_lww_simple<T, F>(
+    pool: &DbPool,
+    entity: &'static str,
+    body: &[u8],
+    pk_for_log: impl Fn(&T) -> Option<String>,
+    apply: F,
+) -> Result<()>
+where
+    T: serde::de::DeserializeOwned + Send + 'static,
+    F: Fn(&rusqlite::Connection, T) -> rusqlite::Result<()> + Send + Sync + Copy + 'static,
+{
+    let rows: Vec<T> = parse_rows(entity, body)?;
     for row in rows {
-        if row.id.is_empty() {
-            continue;
-        }
-        let row_id_log = row.id.clone();
-        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
-        if let Err(e) = pool.0
-            .call(move |conn| {
-                let cur: Option<(String, Option<String>)> = conn
-                    .query_row(
-                        "SELECT updated_at, deleted_at FROM categories WHERE id = ?1",
-                        rusqlite::params![row.id],
-                        |r| Ok((r.get(0)?, r.get(1)?)),
-                    )
-                    .ok();
-                let should_apply = match &cur {
-                    None => true,
-                    Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),
-                };
-                if !should_apply {
-                    return Ok(());
-                }
-                let prev_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
-
-                if cur.is_none() {
-                    conn.execute(
-                        "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
-                         VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
-                        rusqlite::params![row.id, row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at],
-                    )
-                    .db()?;
-                } else {
-                    conn.execute(
-                        "UPDATE categories SET name = ?, color = ?, icon = ?, builtin = ?,
-                                                sort_order = ?, updated_at = ?, deleted_at = ?
-                         WHERE id = ?",
-                        rusqlite::params![row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at, row.id],
-                    )
-                    .db()?;
-                }
-
-                // 远端把这个分类删了 —— 跑一次本地 cascade。仅在「之前没删，现在变成删了」的
-                // 边沿触发；幂等 cascade SQL 让重复同步是 no-op。
-                let just_deleted = row.deleted_at.is_some() && prev_deleted.is_none();
-                if just_deleted {
-                    crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
-                }
-                Ok(())
-            })
-            .await
-        {
-            log::warn!("category {row_id_log} merge 失败: {e}");
+        let Some(label) = pk_for_log(&row) else { continue };
+        let res = pool
+            .0
+            .call(move |conn| apply(conn, row).map_err(tokio_rusqlite::Error::Rusqlite))
+            .await;
+        if let Err(e) = res {
+            log::warn!("{entity} {label} merge 失败: {e}");
         }
     }
     Ok(())
+}
+
+async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+    merge_lww_simple(
+        pool,
+        "category",
+        body,
+        |row: &CategoryPayload| (!row.id.is_empty()).then(|| row.id.clone()),
+        |conn, row: CategoryPayload| {
+            let cur: Option<(String, Option<String>)> = conn
+                .query_row(
+                    "SELECT updated_at, deleted_at FROM categories WHERE id = ?1",
+                    rusqlite::params![row.id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .ok();
+            let should_apply = match &cur {
+                None => true,
+                Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),
+            };
+            if !should_apply {
+                return Ok(());
+            }
+            let prev_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
+
+            if cur.is_none() {
+                conn.execute(
+                    "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
+                     VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                    rusqlite::params![row.id, row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at],
+                )?;
+            } else {
+                conn.execute(
+                    "UPDATE categories SET name = ?, color = ?, icon = ?, builtin = ?,
+                                            sort_order = ?, updated_at = ?, deleted_at = ?
+                     WHERE id = ?",
+                    rusqlite::params![row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at, row.id],
+                )?;
+            }
+
+            // 远端把这个分类删了 —— 跑一次本地 cascade。仅在「之前没删，现在变成删了」的
+            // 边沿触发；幂等 cascade SQL 让重复同步是 no-op。
+            let just_deleted = row.deleted_at.is_some() && prev_deleted.is_none();
+            if just_deleted {
+                crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
+            }
+            Ok(())
+        },
+    )
+    .await
 }
 
 async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let rows: Vec<AppCategoryPayload> = parse_rows("app_categories", body)?;
-    for row in rows {
-        if row.process_name.is_empty() {
-            continue;
-        }
-        let pn_log = row.process_name.clone();
-        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
-        if let Err(e) = pool.0
-            .call(move |conn| {
-                if !is_remote_newer(
-                    conn,
-                    "SELECT updated_at FROM app_categories WHERE process_name = ?1",
-                    rusqlite::params![row.process_name],
-                    &row.updated_at,
-                )? {
-                    return Ok(());
-                }
-                conn.execute(
-                    "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                     VALUES(?, ?, ?, ?)
-                     ON CONFLICT(process_name) DO UPDATE SET
-                       category_id = excluded.category_id,
-                       updated_at = excluded.updated_at,
-                       deleted_at = excluded.deleted_at",
-                    rusqlite::params![
-                        row.process_name,
-                        row.category_id,
-                        row.updated_at,
-                        row.deleted_at
-                    ],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await
-        {
-            log::warn!("app_category {pn_log} merge 失败: {e}");
-        }
-    }
-    Ok(())
+    merge_lww_simple(
+        pool,
+        "app_category",
+        body,
+        |row: &AppCategoryPayload| (!row.process_name.is_empty()).then(|| row.process_name.clone()),
+        |conn, row: AppCategoryPayload| {
+            if !is_remote_newer(
+                conn,
+                "SELECT updated_at FROM app_categories WHERE process_name = ?1",
+                rusqlite::params![row.process_name],
+                &row.updated_at,
+            )? {
+                return Ok(());
+            }
+            conn.execute(
+                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                 VALUES(?, ?, ?, ?)
+                 ON CONFLICT(process_name) DO UPDATE SET
+                   category_id = excluded.category_id,
+                   updated_at = excluded.updated_at,
+                   deleted_at = excluded.deleted_at",
+                rusqlite::params![
+                    row.process_name,
+                    row.category_id,
+                    row.updated_at,
+                    row.deleted_at
+                ],
+            )?;
+            Ok(())
+        },
+    )
+    .await
 }
 
 async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let rows: Vec<ProcessPathPayload> = parse_rows("process_paths", body)?;
-    for row in rows {
-        if row.process_name.is_empty() {
-            continue;
-        }
-        let pn_log = row.process_name.clone();
-        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
-        if let Err(e) = pool.0
-            .call(move |conn| {
-                if !is_remote_newer(
-                    conn,
-                    "SELECT updated_at FROM process_paths WHERE process_name = ?1",
-                    rusqlite::params![row.process_name],
-                    &row.updated_at,
-                )? {
-                    return Ok(());
-                }
-                conn.execute(
-                    "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
-                     VALUES(?, ?, ?, ?)
-                     ON CONFLICT(process_name) DO UPDATE SET
-                       exe_path = excluded.exe_path,
-                       seen_at = excluded.seen_at,
-                       updated_at = excluded.updated_at",
-                    rusqlite::params![row.process_name, row.exe_path, row.seen_at, row.updated_at],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await
-        {
-            log::warn!("process_path {pn_log} merge 失败: {e}");
-        }
-    }
-    Ok(())
+    merge_lww_simple(
+        pool,
+        "process_path",
+        body,
+        |row: &ProcessPathPayload| (!row.process_name.is_empty()).then(|| row.process_name.clone()),
+        |conn, row: ProcessPathPayload| {
+            if !is_remote_newer(
+                conn,
+                "SELECT updated_at FROM process_paths WHERE process_name = ?1",
+                rusqlite::params![row.process_name],
+                &row.updated_at,
+            )? {
+                return Ok(());
+            }
+            conn.execute(
+                "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
+                 VALUES(?, ?, ?, ?)
+                 ON CONFLICT(process_name) DO UPDATE SET
+                   exe_path = excluded.exe_path,
+                   seen_at = excluded.seen_at,
+                   updated_at = excluded.updated_at",
+                rusqlite::params![row.process_name, row.exe_path, row.seen_at, row.updated_at],
+            )?;
+            Ok(())
+        },
+    )
+    .await
 }
 
 async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
@@ -765,7 +773,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
             if prev_cat != next_cat {
                 let id_for_mirror = id.clone();
                 let next_for_mirror = next_cat.clone();
-                let now = chrono::Utc::now().to_rfc3339();
+                let now = utc_now_rfc3339();
                 if let Err(e) = pool
                     .0
                     .call(move |conn| {
@@ -810,46 +818,41 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
 }
 
 async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let rows: Vec<AppGroupMemberPayload> = parse_rows("app_group_members", body)?;
-    for row in rows {
-        if row.process_name.is_empty() || row.group_id.is_empty() {
-            continue;
-        }
-        let pn_log = row.process_name.clone();
-        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
-        if let Err(e) = pool.0
-            .call(move |conn| {
-                if !is_remote_newer(
-                    conn,
-                    "SELECT updated_at FROM app_group_members WHERE process_name = ?1",
-                    rusqlite::params![row.process_name],
-                    &row.updated_at,
-                )? {
-                    return Ok(());
-                }
-                conn.execute(
-                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
-                     VALUES(?, ?, ?, ?)
-                     ON CONFLICT(process_name) DO UPDATE SET
-                       group_id   = excluded.group_id,
-                       updated_at = excluded.updated_at,
-                       deleted_at = excluded.deleted_at",
-                    rusqlite::params![
-                        row.process_name,
-                        row.group_id,
-                        row.updated_at,
-                        row.deleted_at
-                    ],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await
-        {
-            log::warn!("app_group_member {pn_log} merge 失败: {e}");
-        }
-    }
-    Ok(())
+    merge_lww_simple(
+        pool,
+        "app_group_member",
+        body,
+        |row: &AppGroupMemberPayload| {
+            (!row.process_name.is_empty() && !row.group_id.is_empty())
+                .then(|| row.process_name.clone())
+        },
+        |conn, row: AppGroupMemberPayload| {
+            if !is_remote_newer(
+                conn,
+                "SELECT updated_at FROM app_group_members WHERE process_name = ?1",
+                rusqlite::params![row.process_name],
+                &row.updated_at,
+            )? {
+                return Ok(());
+            }
+            conn.execute(
+                "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                 VALUES(?, ?, ?, ?)
+                 ON CONFLICT(process_name) DO UPDATE SET
+                   group_id   = excluded.group_id,
+                   updated_at = excluded.updated_at,
+                   deleted_at = excluded.deleted_at",
+                rusqlite::params![
+                    row.process_name,
+                    row.group_id,
+                    row.updated_at,
+                    row.deleted_at
+                ],
+            )?;
+            Ok(())
+        },
+    )
+    .await
 }
 
 /// 处理 `device.<owner_id>.tombstone.json`：源设备明确告知"在 clearedAt 之前的我的数据

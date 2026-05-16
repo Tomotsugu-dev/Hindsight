@@ -20,8 +20,7 @@ use std::sync::OnceLock;
 
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 const ALIASES_JSON: &str = include_str!("../../data/cross_os_app_aliases.json");
 
@@ -134,7 +133,7 @@ pub async fn pair_existing(pool: &DbPool) -> Result<u64> {
 async fn pair_one(pool: &DbPool, process_name: &str, canonical: &str) -> Result<()> {
     let pn = process_name.to_string();
     let canon = canonical.to_string();
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = utc_now_rfc3339();
     // canonical 名也跑一次内置分类匹配 —— mac 的 "Google Chrome" 已经有 builtin 命中，
     // 新建 canonical 组时把这层分类一并带上，避免组建出来全 None 落到「其他」。
     let builtin_cat = super::builtin_categories::match_builtin_category(canonical);

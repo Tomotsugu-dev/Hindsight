@@ -12,7 +12,6 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use chrono::Utc;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
@@ -25,7 +24,7 @@ use crate::ai::server::EngineSupervisor;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::Result;
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, ScreenshotMeta, SegmentSummaryRow};
-use crate::storage::DbPool;
+use crate::storage::{utc_now_rfc3339, DbPool};
 
 /// 总结 LLM 输出时给段加的图片缩放上限——长边 768 px 是 vision LLM 的常见甜点：
 /// 文字仍可读，token 数比原图少一半以上。
@@ -203,7 +202,7 @@ async fn process_one_image(
             screenshot_path: item.img_path.clone(),
             description: desc.clone(),
             model: item.model.clone(),
-            generated_at: Utc::now().to_rfc3339(),
+            generated_at: utc_now_rfc3339(),
             latency_ms: Some(usage.latency_ms),
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
@@ -303,7 +302,7 @@ pub(crate) async fn summarize_segment(
                     model: step2_model,
                     status: "ok".to_string(),
                     error: None,
-                    generated_at: Utc::now().to_rfc3339(),
+                    generated_at: utc_now_rfc3339(),
                 },
                 "ok",
             ),
@@ -319,7 +318,7 @@ pub(crate) async fn summarize_segment(
                     model: step2_model,
                     status: "error".to_string(),
                     error: Some(e.to_string()),
-                    generated_at: Utc::now().to_rfc3339(),
+                    generated_at: utc_now_rfc3339(),
                 },
                 "error",
             ),
@@ -417,7 +416,7 @@ pub(crate) async fn upsert_skipped_segment(
             model,
             status: "skipped_no_screenshots".to_string(),
             error: None,
-            generated_at: Utc::now().to_rfc3339(),
+            generated_at: utc_now_rfc3339(),
         },
     )
     .await

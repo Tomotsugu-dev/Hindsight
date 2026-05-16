@@ -3,9 +3,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::storage::utc_now_rfc3339;
 
 /// 当前设备身份（device.json 里持久化的字段）。安装级别身份，不随数据走：
 /// 把 DB 拷到另一台机器时不会带走 device_id。
@@ -91,7 +92,7 @@ fn generate_default() -> DeviceMeta {
         color: default_color(),
         icon: default_icon(),
         os: crate::platform::local_os_id().into(),
-        created_at: Utc::now().to_rfc3339(),
+        created_at: utc_now_rfc3339(),
     }
 }
 
@@ -139,7 +140,7 @@ pub(crate) fn init_for_tests(id: &str) -> &'static DeviceMeta {
         color: default_color(),
         icon: default_icon(),
         os: "test".into(),
-        created_at: Utc::now().to_rfc3339(),
+        created_at: utc_now_rfc3339(),
     })
 }
 

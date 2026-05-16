@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
@@ -40,7 +40,7 @@ use crate::repo::ai_summaries::{
 use crate::repo::embeddings as embeddings_repo;
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
-use crate::storage::DbPool;
+use crate::storage::{utc_now_rfc3339, DbPool};
 
 /// AI summary pipeline 里的两个阶段——决定加载哪份模型 + 用哪套 batch / -np / ctx。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -796,7 +796,7 @@ impl DaySummaryRunner {
                 picked.len()
             );
             log::warn!("段 {idx} {err_msg}");
-            let now = Utc::now().to_rfc3339();
+            let now = utc_now_rfc3339();
             let row = crate::repo::ai_summaries::SegmentSummaryRow {
                 source: source.to_string(),
                 local_date: date_str.to_string(),
@@ -944,7 +944,7 @@ impl DaySummaryRunner {
                         model,
                         status: "error".to_string(),
                         error: Some(err_msg),
-                        generated_at: Utc::now().to_rfc3339(),
+                        generated_at: utc_now_rfc3339(),
                     };
                     ai_summaries::upsert_segment(&self.pool, &row).await?;
                     "error"
@@ -1174,7 +1174,7 @@ impl DaySummaryRunner {
                 screenshot_path: existing_row.screenshot_path.clone(),
                 description: desc.clone(),
                 model: ai.effective_describe_main().to_string(),
-                generated_at: Utc::now().to_rfc3339(),
+                generated_at: utc_now_rfc3339(),
                 latency_ms: Some(usage.latency_ms),
                 prompt_tokens: usage.prompt_tokens,
                 completion_tokens: usage.completion_tokens,

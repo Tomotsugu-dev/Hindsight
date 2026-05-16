@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use chrono::{Datelike, Duration, NaiveDate, Utc};
+use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -37,7 +37,7 @@ use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
-use crate::storage::DbPool;
+use crate::storage::{utc_now_rfc3339, DbPool};
 
 /// 周报固定的 source 命名空间值。
 pub const WEEKLY_SOURCE: &str = "weekly";
@@ -51,7 +51,7 @@ pub struct WeekSummaryRunner {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
     app: AppHandle,
-    /// 取消信号——跟 daily 共用全局 [`crate::commands::ai::SummaryCancel`]。
+    /// 取消信号——跟 daily 共用全局 [`crate::commands::ai_summary::SummaryCancel`]。
     /// 单次 chat 跑起来后没法中途中断，所以 cancel 实际只在"启动引擎前 / chat 调用前"
     /// 检查到时早 return。
     cancel: Arc<AtomicBool>,
@@ -133,7 +133,7 @@ impl WeekSummaryRunner {
                 error: Some(
                     "本周还没有任何已生成的日报。请先到「日报」页生成几天后再试。".to_string(),
                 ),
-                generated_at: Utc::now().to_rfc3339(),
+                generated_at: utc_now_rfc3339(),
             };
             ai_summaries::upsert_segment(&self.pool, &row).await?;
             // emit 一条 segment_done 让前端 store 写入这一行（status=error），
@@ -219,7 +219,7 @@ impl WeekSummaryRunner {
                     "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。"
                         .to_string(),
                 ),
-                generated_at: Utc::now().to_rfc3339(),
+                generated_at: utc_now_rfc3339(),
             };
             ai_summaries::upsert_segment(&self.pool, &row).await?;
             let mut p = SummaryProgress::base(
@@ -308,7 +308,7 @@ impl WeekSummaryRunner {
                     model: step2_model.clone(),
                     status: "ok".to_string(),
                     error: None,
-                    generated_at: Utc::now().to_rfc3339(),
+                    generated_at: utc_now_rfc3339(),
                 },
                 "ok",
             ),
@@ -324,7 +324,7 @@ impl WeekSummaryRunner {
                     model: step2_model,
                     status: "error".to_string(),
                     error: Some(e.to_string()),
-                    generated_at: Utc::now().to_rfc3339(),
+                    generated_at: utc_now_rfc3339(),
                 },
                 "error",
             ),

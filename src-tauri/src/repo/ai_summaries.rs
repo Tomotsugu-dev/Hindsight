@@ -10,15 +10,13 @@
 //!
 //! 不进 sync_outbox：本地产物 + 模型差异大，跨设备同步无意义。
 
-use chrono::Utc;
 use rusqlite::types::ToSql;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::repo::reports::DeviceFilter;
-use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 单段总结的一行（DB <-> 前端共用）。
 ///
@@ -179,7 +177,7 @@ pub async fn get_segment_status(
 pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()> {
     let mut row = row.clone();
     if row.generated_at.is_empty() {
-        row.generated_at = Utc::now().to_rfc3339();
+        row.generated_at = utc_now_rfc3339();
     }
     pool.0
         .call(move |conn| {
@@ -332,7 +330,7 @@ pub struct ImageDescriptionRow {
 pub async fn upsert_image_description(pool: &DbPool, row: &ImageDescriptionRow) -> Result<()> {
     let mut row = row.clone();
     if row.generated_at.is_empty() {
-        row.generated_at = Utc::now().to_rfc3339();
+        row.generated_at = utc_now_rfc3339();
     }
     pool.0
         .call(move |conn| {

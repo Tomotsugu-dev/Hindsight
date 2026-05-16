@@ -127,7 +127,7 @@ pub fn run() {
                 handle.manage(engine_supervisor);
                 // AI 总结取消信号——单例，前端调 cancel_day_summary 设 true，
                 // summary_runner 每段循环检查；不能中断已在路上的 LLM 单段请求。
-                handle.manage(commands::ai::SummaryCancel::default());
+                handle.manage(commands::ai_summary::SummaryCancel::default());
             });
             Ok(())
         })
