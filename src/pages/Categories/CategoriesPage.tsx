@@ -32,7 +32,13 @@ const DEFAULT_NEW_ICON = "Tag";
 
 export default function CategoriesPage() {
   const { t } = useTranslation();
-  const { categories, loading, create, reorder } = useCategories();
+  const { categories, loading, create, reorder, refresh } = useCategories();
+  // 每次切回本页强制 refetch —— CategoriesProvider 全局 mount 一次后不会自动重拉，
+  // 用户后台开新 app 让 capture 写 app_group_members 时 UI 无感知，导致分类卡片
+  // 一直显示"暂无绑定应用"。这里 mount 触发一次，切别的页面再回来就能刷新。
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
   const [creating, setCreating] = useState(false);
 
   const handleCreated = async (input: { name: string; color: string; icon: string }) => {
