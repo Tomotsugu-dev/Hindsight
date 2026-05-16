@@ -92,24 +92,36 @@ pub async fn purge_activities(
     Ok(())
 }
 
-/// 清空**云端**数据（不动本机 DB）：从 Google Drive 的 appDataFolder 里删掉**本机
-/// 推送过的所有同步文件**（命名前缀 `device.<self_id>.*`）。其它设备贡献的文件不动。
+/// 清空**云端**数据 —— 完整语义是**"所有设备（含本机）忘记我此刻之前由本机捕获的数据"**。
+///
+/// 历史：早期实现只删 Drive 不动本机，后来发现对端 mirror 永久保留对称性破坏；
+/// 加 tombstone 让对端 trim；又发现源端本地保留 pre-clearedAt 的旧行 + 全量 push
+/// rewrite 会把这些行重新写回 Drive，对端 trim 后看到的比源端少 —— 本机 9 min /
+/// 对端 4 min 这种 asymmetric 状态。最终走 **Option C**：源端、对端、Drive 三处
+/// 完全对称，clearedAt 统一为操作时刻。源端 post-clearedAt 的新 capture 完全不受影响，
+/// 继续 push / sync 正常。
 ///
 /// 流程：
-/// 1. 拿 OAuth token；未登录直接返回错误（前端按钮在未登录时不渲染，但兜底一下）
-/// 2. List Drive 上 appDataFolder 的所有文件，过滤出 `device.<self_id>.` 前缀
-/// 3. 逐个 [`drive::delete`]；404 视为成功（已被别处删过，幂等）；其它错误 log warn 继续
-/// 4. 删完后清掉 sync_outbox（否则下个 push tick 会按本机现状重新生成 ndjson 上传到
-///    Drive，把刚删的文件又造回来）。本机 DB 保留，但用户后续捕获的新数据会按
-///    正常流程产生 outbox → push → Drive 重建。
-/// 5. 同步重置 `drive_files` pull 游标，避免本机老 cursor 把对端文件也跳过；下次
-///    pull 会重新拉对端贡献（自身文件已删，pull 路径 `if device_id == self_id`
-///    会主动跳过，不会把自己删的东西从远端「再拉回来」）。
+/// 1. 拿 OAuth token；未登录直接返回错误
+/// 2. List Drive 上 `device.<self_id>.*`（**不含** tombstone 本身），逐个 [`drive::delete`]
+///    （404 视为成功）
+/// 3. 上传新 tombstone `device.<self_id>.tombstone.json`，记录 `clearedAt = now()`，
+///    对端 pull → [`merge_tombstone`] → DELETE 对端的 pre-clearedAt mirror 行
+/// 4. **同款 trim 应用到源端本地**：
+///    `DELETE FROM activities WHERE device_id = <self> AND updated_at < clearedAt`
+///    保证源端本地跟对端最终看到的一致（不留 pre-T 数据让下一次 push 重写回 Drive）
+/// 5. 清 sync_outbox（防 step 3 上传 tombstone 前累积的旧 outbox 行下个 tick push 把
+///    步骤 4 删的行又造回 Drive；clearedAt 之后新 capture 自然产生新 outbox 行）
+/// 6. 重置 `drive_files` pull 游标
 ///
-/// 返回被实际删除的文件数量（含 404 在内的尝试数），供前端 toast 展示。
+/// 返回被实际删除的 Drive 文件数（不含 tombstone 上传 / 本机 DELETE）。
 ///
-/// 幂等：第二次调用 Drive list 返回 0 个 `device.<self_id>.*` 文件 → 不发起任何
-/// DELETE 请求；本地 outbox / cursor 已经是清空 / epoch 状态，UPDATE / DELETE 都 no-op。
+/// 幂等：连点 N 次，每次 clearedAt 更新到当下 now：
+///   - Drive list 返回 0 个（除 tombstone），无 DELETE 请求
+///   - 上传 tombstone 覆盖同名文件，modifiedTime 刷新让对端再次 pull 应用最新 clearedAt
+///   - 本机 trim 命中 0 行（除非两次点击之间有新 capture，那些是用户自己点的"清掉过去"
+///     新累积部分，符合"清空过去"语义）
+///   - outbox / cursor 已经是清空 / epoch 状态，UPDATE / DELETE no-op
 #[tauri::command]
 pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
     let token = crate::sync::auth::ensure_valid_token(&pool)
@@ -118,7 +130,7 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
     let self_id = crate::device::self_id().map_err(|e| e.to_string())?;
     let prefix = format!("device.{self_id}.");
 
-    // 1. 列 Drive 全量文件（appDataFolder 范围内），按本机 prefix 过滤。
+    // 1. 列 Drive 全量文件，按本机 prefix 过滤。
     //    跳过 tombstone 本身（清云端时 tombstone 留下来当 marker，不然对端永远不知道）。
     let tombstone_name = format!("device.{self_id}.tombstone.json");
     let files = crate::sync::drive::list_appdata_files(&token.access_token, "")
@@ -138,12 +150,7 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
         }
     }
 
-    // 3. 上传一个新的 tombstone（覆盖任何旧版本，modifiedTime 自然刷新让对端 pull 看到）。
-    //    内容是 `clearedAt = now()`，对端 pull 触发 [merge_tombstone] →
-    //    `DELETE FROM activities WHERE device_id=<self> AND updated_at < clearedAt`。
-    //    源端后续 capture 的新行 updated_at > clearedAt，不被删；老的本机镜像在对端被清。
-    //    覆盖语义保证幂等：连点 N 次该命令，每次 tombstone 的 clearedAt 都是当下时间，
-    //    push 都是 idempotent overwrite。
+    // 3. 上传 tombstone（覆盖任何旧版本，modifiedTime 自然刷新让对端 pull 看到）。
     let cleared_at = chrono::Utc::now().to_rfc3339();
     let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
         cleared_at: cleared_at.clone(),
@@ -156,9 +163,24 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
         log::warn!("purge_cloud_data: upload tombstone 失败: {e}");
     }
 
-    // 4. 清掉 outbox + 重置 pull 游标，避免下次 sync 把刚删的文件又重新构造上传
+    // 4. 源端本地按同款 clearedAt trim activities + 5. 清 outbox + 6. 重置 cursor，
+    //    打包在一个 pool.0.call 里事务性执行
+    let self_id_owned = self_id.to_string();
+    let cleared_at_for_db = cleared_at.clone();
     pool.0
-        .call(|conn| {
+        .call(move |conn| {
+            // Step 4: 源端 self-trim —— 跟对端 pull 应用 tombstone 时的 DELETE 完全一致。
+            // 这一刀确保下次 push tick 把 build_activities_day 全表重写到 Drive 时，
+            // pre-clearedAt 的行**不在源端本地了**，不会被 push 回到 Drive，
+            // 跟 tombstone 通知对端的语义保持对称。
+            conn.execute(
+                "DELETE FROM activities
+                 WHERE device_id = ?1 AND updated_at < ?2",
+                rusqlite::params![self_id_owned, cleared_at_for_db],
+            )
+            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+
+            // Step 5 + 6: 清 outbox（已经被 trim 的行对应的 outbox 行不再有意义）+ 重置 cursor
             conn.execute_batch(
                 "DELETE FROM sync_outbox;
                  UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'

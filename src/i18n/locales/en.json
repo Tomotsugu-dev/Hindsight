@@ -139,7 +139,7 @@
         "purgeShotsOpenTitle": "Open screenshots folder",
         "purgeShotsBusy": "Clearing…",
         "purgeCloudLabel": "Clear cloud data",
-        "purgeCloudDescription": "Delete every sync file this device has pushed to the Google Drive appDataFolder. The local database is not touched; mirrors that other devices have already pulled are unaffected. Requires being signed in to cloud sync.",
+        "purgeCloudDescription": "Make **every device** (including this one) forget activities captured on this device before now. Deletes this device's sync files from Google Drive, peers trim their local mirror via tombstone, and this device also trims its own pre-now rows. New activity captured after now keeps syncing normally. Requires being signed in to cloud sync.",
         "purgeCloudBusy": "Deleting…"
       },
       "purgeDialog": {
@@ -148,7 +148,7 @@
         "cloudTitle": "Clear cloud data?",
         "dbMessage": "All window activity records in this device's local database (including peer mirrors) will be deleted. The Cloud Drive is untouched; the next sync will automatically re-pull peer mirrors. Categories and settings are unaffected. This cannot be undone.",
         "shotsMessage": "All saved screenshot files will be deleted. The corresponding screenshot references in the database will also be cleared. This cannot be undone.",
-        "cloudMessage": "Every sync file this device has pushed to Google Drive will be deleted. Mirrors that other devices have already pulled are unaffected. This cannot be undone; this device's cloud history will be permanently removed.",
+        "cloudMessage": "**Every device (including this one)** will forget activities captured on this device before now: this device's sync files on Google Drive are deleted, peers trim their local mirror via tombstone, and this device also trims its own pre-now rows. Activities captured after now keep syncing normally. This cannot be undone.",
         "cloudDoneMessage": "Cloud data cleared: {{count}} Drive file(s) deleted.",
         "error": "Action failed: {{message}}"
       }
