@@ -942,6 +942,7 @@
           "summarizing": "Image descriptions done ({{count}}); model is now writing the segment summary…",
           "summarizingNoTotal": "Writing segment summary…",
           "skipped": "No screenshots in this time range (computer was off / everything was on the privacy list / everything was in excluded categories).",
+          "skippedNoActivity": "Nothing was recorded in this time range (computer was off / everything was in excluded categories).",
           "errorLabel": "Failed: "
         }
       },
@@ -957,6 +958,7 @@
         "summaryJoin": " · ",
         "statePending": "⏳ **Not generated**",
         "stateSkipped": "⚪ **Skipped** — no screenshots in this time range",
+        "stateSkippedNoActivity": "⚪ **Skipped** — nothing was recorded in this time range",
         "stateError": "❌ **Failed**",
         "stateEmptyContent": "_(empty)_"
       }
@@ -1181,6 +1183,7 @@
         "empty": "No segment summary yet. Click \"Run\" above to have the model aggregate per-image descriptions into a segment summary.",
         "chipTitle": "Segment idx={{idx}}",
         "skippedFallback": "(no screenshots in this segment)",
+        "skippedNoActivityFallback": "(no activity in this segment)",
         "emptyFallback": "(empty)"
       },
       "events": {

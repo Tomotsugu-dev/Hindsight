@@ -303,7 +303,7 @@ export interface SummaryProgress {
   completionTokens: number | null;
   /** segment_done 时附该段总结正文（直接是 LLM 输出 markdown），其它阶段为 null */
   content: string | null;
-  /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "error" */
+  /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "skipped_no_activity" / "error" */
   status: SummarySegmentStatus | null;
   /** error / engine_starting 时的提示文字 */
   message: string | null;
@@ -367,8 +367,16 @@ export interface ImageDescriptionRow {
   completionTokens: number | null;
 }
 
-/** 段总结落库状态。 */
-export type SummarySegmentStatus = "ok" | "skipped_no_screenshots" | "error";
+/** 段总结落库状态。
+ *  - `ok`：含 step 2 模型写的 markdown 正文
+ *  - `skipped_no_screenshots`：该段无截图（旧值，保留兼容；新生成的段不会再写此值）
+ *  - `skipped_no_activity`：该段既无截图也无 activities（凌晨/未在用电脑）
+ *  - `error`：step 1 全失败 / step 2 调用失败 */
+export type SummarySegmentStatus =
+  | "ok"
+  | "skipped_no_screenshots"
+  | "skipped_no_activity"
+  | "error";
 
 /** ai_summaries 表的一行，前端拿来渲染 SegmentSummaryCard。 */
 export interface SegmentSummaryRow {

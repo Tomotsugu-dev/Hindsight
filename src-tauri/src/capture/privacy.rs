@@ -31,7 +31,7 @@ pub fn should_skip_screenshot(
     false
 }
 
-fn matches_any(haystack: &str, keywords: &[String]) -> bool {
+pub(crate) fn matches_any(haystack: &str, keywords: &[String]) -> bool {
     let h = haystack.to_lowercase();
     keywords.iter().any(|k| {
         let k = k.trim();

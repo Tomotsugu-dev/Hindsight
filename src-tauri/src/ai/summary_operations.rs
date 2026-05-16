@@ -22,9 +22,11 @@ use crate::ai::prompt::{
 };
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::capture::privacy;
 use crate::error::Result;
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, ScreenshotMeta, SegmentSummaryRow};
-use crate::storage::{utc_now_rfc3339, DbPool};
+use crate::repo::reports::DeviceFilter;
+use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 总结 LLM 输出时给段加的图片缩放上限——长边 768 px 是 vision LLM 的常见甜点：
 /// 文字仍可读，token 数比原图少一半以上。
@@ -395,9 +397,13 @@ pub(crate) fn build_step2(
     }
 }
 
-/// 让某段直接落 `skipped_no_screenshots` 行 —— 没截图时 step 1/2 都不跑，直接补档。
+/// 让某段直接落 `skipped_no_activity` 行 —— 既无截图也无 activities 时的真兜底。
+///
+/// "无截图但 activities 有数据" 的旧 `"skipped_no_screenshots"` 状态值仍由
+/// 数据库里的历史行使用；新一代生成路径会先尝试合成描述再走 step 2，剩下的
+/// 真空段才落本状态。
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn upsert_skipped_segment(
+pub(crate) async fn upsert_skipped_no_activity(
     pool: &DbPool,
     source: &str,
     date_str: &str,
@@ -418,10 +424,407 @@ pub(crate) async fn upsert_skipped_segment(
             end_hour,
             content: String::new(),
             model,
-            status: "skipped_no_screenshots".to_string(),
+            status: "skipped_no_activity".to_string(),
             error: None,
             generated_at: utc_now_rfc3339(),
         },
     )
     .await
+}
+
+// ───────── activities 兜底：截图为空时从 activities 表合成段描述 ─────────
+
+/// 当一段时间没有截图时，从 `activities` 表合成「按小时」的活动描述，
+/// 形状与 step 1 的 `(time_label, description)` 一致，可直接喂给 [`summarize_segment`]。
+///
+/// 用于 step 1 路径 [`crate::ai::summary_runner::DaySummaryRunner::run_one_segment`]
+/// 的 `metas.is_empty()` 分支兜底——只要 activities 还有行（用户关了截图 / 截图过期
+/// 被清 / OS 权限抖动），就把窗口标题 + 时长汇总成一段文字喂给 step 2，避免段卡片
+/// 在 UI 上彻底空白。
+///
+/// SQL 语义：
+/// - `local_date` + `local_hour` 在 `[start_hour, end_hour)` 范围内
+/// - 仅取 `duration_secs > 0` 的已 seal 行（unsealed 心跳行 dur=0 排除）
+/// - 复用 [`crate::repo::ai_summaries::list_segment_screenshots`] 的
+///   `excluded_categories` 与 [`DeviceFilter`] 过滤模式
+///
+/// 隐私行为：window_title 命中 `privacy_app_keywords`（子串忽略大小写）→ 替换成
+/// `[私密]`，app 名 + 时长照常贡献。URL 关键词不参与（activities 表无 URL 字段）。
+///
+/// 返回的 `Vec` 元素形状：`(time_label, hour_summary_text)`，如：
+///   `("09:00-10:00", "VSCode 45 分钟（DataTab.tsx、ModelsSection.tsx）· Chrome 10 分钟…")`
+///
+/// 空小时（该小时无任何活动）不产生条目；整段无活动 → 返回 `vec![]`，
+/// 调用方应据此回退到 `skipped_no_activity`。
+pub(crate) async fn build_synthetic_descriptions_from_activities(
+    pool: &DbPool,
+    date_str: &str,
+    start_hour: u8,
+    end_hour: u8,
+    excluded_categories: &[String],
+    device: &DeviceFilter,
+    privacy_app_keywords: &[String],
+) -> Result<Vec<(String, String)>> {
+    use rusqlite::ToSql;
+
+    let date = date_str.to_string();
+    let excluded: Vec<String> = excluded_categories.to_vec();
+    let dev = device.clone();
+    let rows: Vec<(u8, String, Option<String>, i64)> = pool
+        .0
+        .call(move |conn| {
+            let placeholders = if excluded.is_empty() {
+                String::new()
+            } else {
+                let marks = vec!["?"; excluded.len()].join(",");
+                format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
+            };
+            let sql = format!(
+                "SELECT a.local_hour,
+                        COALESCE(g.display_name, a.process_name) AS app_display,
+                        a.window_title,
+                        a.duration_secs
+                   FROM activities a
+              LEFT JOIN app_group_members gm
+                     ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+              LEFT JOIN app_groups g
+                     ON g.id = gm.group_id AND g.deleted_at IS NULL
+              LEFT JOIN categories c
+                     ON c.id = g.category_id AND c.deleted_at IS NULL
+                  WHERE a.local_date = ?
+                    AND a.local_hour >= ?
+                    AND a.local_hour < ?
+                    AND a.duration_secs > 0
+                    {}
+                    {}
+                  ORDER BY a.local_hour ASC, a.duration_secs DESC",
+                placeholders,
+                dev.sql_clause(),
+            );
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&date);
+            let sh = start_hour as i64;
+            let eh = end_hour as i64;
+            params.push(&sh);
+            params.push(&eh);
+            for cat in &excluded {
+                params.push(cat);
+            }
+            if let Some(extra) = dev.extra_param() {
+                params.push(extra);
+            }
+            let mut stmt = conn.prepare(&sql).db()?;
+            let it = stmt
+                .query_map(params.as_slice(), |r| {
+                    let hour: i64 = r.get(0)?;
+                    let app: String = r.get(1)?;
+                    let title: Option<String> = r.get(2)?;
+                    let dur: i64 = r.get(3)?;
+                    Ok((hour as u8, app, title, dur))
+                })
+                .db()?;
+            let mut out = Vec::new();
+            for row in it {
+                out.push(row.db()?);
+            }
+            Ok(out)
+        })
+        .await?;
+
+    Ok(format_synthetic_hours(rows, privacy_app_keywords))
+}
+
+/// 把 SQL 行（hour, app, title, dur）按小时 / 应用聚合成 `(time_label, desc)` 列表。
+/// 抽函数让单测可以纯粹喂结构化数据，不依赖 SQLite。
+fn format_synthetic_hours(
+    rows: Vec<(u8, String, Option<String>, i64)>,
+    privacy_app_keywords: &[String],
+) -> Vec<(String, String)> {
+    use std::collections::BTreeMap;
+
+    // hour → app → (total_secs, Vec<title>)
+    // BTreeMap 让 hour 升序、app 名稳定；app 内时长聚合后再排序。
+    let mut by_hour: BTreeMap<u8, BTreeMap<String, (i64, Vec<String>)>> = BTreeMap::new();
+    for (hour, app, title, dur) in rows {
+        let app_bucket = by_hour
+            .entry(hour)
+            .or_default()
+            .entry(app)
+            .or_insert((0i64, Vec::new()));
+        app_bucket.0 += dur;
+        if let Some(t) = title {
+            let trimmed = t.trim();
+            if !trimmed.is_empty() {
+                let display = if privacy::matches_any(trimmed, privacy_app_keywords) {
+                    "[私密]".to_string()
+                } else {
+                    trimmed.to_string()
+                };
+                app_bucket.1.push(display);
+            }
+        }
+    }
+
+    let mut result = Vec::new();
+    for (hour, apps_map) in by_hour {
+        let mut apps: Vec<(String, i64, Vec<String>)> = apps_map
+            .into_iter()
+            .map(|(app, (secs, titles))| (app, secs, titles))
+            .collect();
+        // 按总时长降序，时长相同时按 app 名稳定
+        apps.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+        let mut major_parts: Vec<String> = Vec::new();
+        let mut minor_count: u32 = 0;
+        let mut minor_secs: i64 = 0;
+        for (app, secs, titles) in apps {
+            if secs < 60 {
+                minor_count += 1;
+                minor_secs += secs;
+                continue;
+            }
+            let dur_str = format_secs_human(secs);
+            let titles_str = pick_titles(&titles);
+            let part = if titles_str.is_empty() {
+                format!("{app} {dur_str}")
+            } else {
+                format!("{app} {dur_str}（{titles_str}）")
+            };
+            major_parts.push(part);
+        }
+        if minor_count > 0 {
+            major_parts.push(format!("其它（{minor_count} 项 · {minor_secs}s）"));
+        }
+        if major_parts.is_empty() {
+            continue;
+        }
+        let label = format!("{hour:02}:00-{:02}:00", hour.saturating_add(1));
+        let desc = major_parts.join(" · ");
+        result.push((label, desc));
+    }
+    result
+}
+
+fn format_secs_human(secs: i64) -> String {
+    let minutes = secs / 60;
+    if minutes >= 1 {
+        format!("{minutes} 分钟")
+    } else {
+        format!("{secs}s")
+    }
+}
+
+/// 去重保序后按字符数降序取前 3 个，"、" 分隔。
+fn pick_titles(titles: &[String]) -> String {
+    use std::collections::HashSet;
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut unique: Vec<&str> = Vec::new();
+    for t in titles {
+        if seen.insert(t.as_str()) {
+            unique.push(t.as_str());
+        }
+    }
+    unique.sort_by_key(|t| std::cmp::Reverse(t.chars().count()));
+    unique.into_iter().take(3).collect::<Vec<_>>().join("、")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+
+    /// 插一行 activities 行用于测试，控制 local_hour / app / title / dur / category。
+    /// category_id 为 None 时不挂 app_group（COALESCE 落到 'other'）。
+    async fn insert_act(
+        pool: &DbPool,
+        local_date: &str,
+        local_hour: u8,
+        process_name: &str,
+        window_title: &str,
+        duration_secs: i64,
+    ) {
+        let local_date = local_date.to_string();
+        let process_name = process_name.to_string();
+        let window_title = window_title.to_string();
+        let device_id = TEST_SELF_ID.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(
+                        ?1 || 'T' || printf('%02d', ?2) || ':00:00Z',
+                        ?1 || 'T' || printf('%02d', ?2) || ':00:30Z',
+                        ?3, ?1, ?2,
+                        ?4, ?5, 'other', ?6,
+                        ?1 || 'T' || printf('%02d', ?2) || ':00:30Z',
+                        'local'
+                     )",
+                    rusqlite::params![
+                        local_date,
+                        local_hour as i64,
+                        duration_secs,
+                        process_name,
+                        window_title,
+                        device_id,
+                    ],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str) {
+        let name = name.to_string();
+        let category_id = category_id.to_string();
+        pool.0
+            .call(move |conn| {
+                let now = "2026-05-15T10:00:00Z";
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES(?1, ?1, ?2, ?3, NULL)",
+                    rusqlite::params![name, category_id, now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES(?1, ?1, ?2, NULL)",
+                    rusqlite::params![name, now],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn synth_empty_activities_returns_empty() {
+        let pool = fresh_test_pool().await;
+        let out = build_synthetic_descriptions_from_activities(
+            &pool,
+            "2026-05-15",
+            9,
+            10,
+            &[],
+            &DeviceFilter::All,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(out.is_empty(), "无 activities 应返回空: {out:?}");
+    }
+
+    #[tokio::test]
+    async fn synth_groups_by_hour_and_sorts_by_duration() {
+        let pool = fresh_test_pool().await;
+        // 同小时 (9点) 3 个 app：VSCode > Chrome > Slack（全部 >= 60s 才不会折叠到「其它」）
+        insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "Chrome", "GitHub", 180).await;
+        insert_act(&pool, "2026-05-15", 9, "Slack", "#hindsight", 90).await;
+
+        let out = build_synthetic_descriptions_from_activities(
+            &pool,
+            "2026-05-15",
+            9,
+            10,
+            &[],
+            &DeviceFilter::All,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.len(), 1, "只一小时应只返回一项: {out:?}");
+        assert_eq!(out[0].0, "09:00-10:00");
+        let desc = &out[0].1;
+        let p_vscode = desc.find("VSCode").expect("缺 VSCode");
+        let p_chrome = desc.find("Chrome").expect("缺 Chrome");
+        let p_slack = desc.find("Slack").expect("缺 Slack");
+        assert!(p_vscode < p_chrome, "VSCode 应排在 Chrome 前: {desc}");
+        assert!(p_chrome < p_slack, "Chrome 应排在 Slack 前: {desc}");
+    }
+
+    #[tokio::test]
+    async fn synth_privacy_keyword_replaces_window_title() {
+        let pool = fresh_test_pool().await;
+        insert_act(&pool, "2026-05-15", 9, "Chrome", "GitHub PR #142", 300).await;
+
+        let keywords = vec!["github".to_string()];
+        let out = build_synthetic_descriptions_from_activities(
+            &pool,
+            "2026-05-15",
+            9,
+            10,
+            &[],
+            &DeviceFilter::All,
+            &keywords,
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.len(), 1);
+        let desc = &out[0].1;
+        assert!(
+            desc.contains("[私密]"),
+            "命中 keyword 应替换成 [私密]: {desc}"
+        );
+        assert!(
+            !desc.contains("GitHub PR #142"),
+            "原标题不应再出现: {desc}"
+        );
+        assert!(desc.contains("Chrome"), "app 名仍应贡献: {desc}");
+        assert!(desc.contains("5 分钟"), "时长仍应贡献: {desc}");
+    }
+
+    #[tokio::test]
+    async fn synth_excludes_categories() {
+        let pool = fresh_test_pool().await;
+        // Slack 挂到 'fun' 分类，VSCode 挂到 'code' 分类
+        seed_solo_group(&pool, "Slack", "fun").await;
+        seed_solo_group(&pool, "VSCode", "code").await;
+        insert_act(&pool, "2026-05-15", 9, "Slack", "amusing", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "VSCode", "lib.rs", 300).await;
+
+        let excluded = vec!["fun".to_string()];
+        let out = build_synthetic_descriptions_from_activities(
+            &pool,
+            "2026-05-15",
+            9,
+            10,
+            &excluded,
+            &DeviceFilter::All,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.len(), 1);
+        let desc = &out[0].1;
+        assert!(desc.contains("VSCode"), "code 类应保留: {desc}");
+        assert!(!desc.contains("Slack"), "fun 类应被排除: {desc}");
+    }
+
+    #[tokio::test]
+    async fn synth_skips_empty_hours() {
+        let pool = fresh_test_pool().await;
+        // 9 点 + 11 点有活动，10 点空
+        insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
+        insert_act(&pool, "2026-05-15", 11, "VSCode", "lib.rs", 300).await;
+
+        let out = build_synthetic_descriptions_from_activities(
+            &pool,
+            "2026-05-15",
+            9,
+            12,
+            &[],
+            &DeviceFilter::All,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.len(), 2, "只 9 + 11 两点有活动: {out:?}");
+        assert_eq!(out[0].0, "09:00-10:00");
+        assert_eq!(out[1].0, "11:00-12:00");
+    }
 }

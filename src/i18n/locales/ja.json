@@ -942,6 +942,7 @@
           "summarizing": "画像説明完了（{{count}} 枚）。モデルが時間帯要約を生成中…",
           "summarizingNoTotal": "時間帯要約を生成中…",
           "skipped": "この時間帯にはスクリーンショットがありません（PC を使っていない / すべてプライバシーリストに該当 / すべて除外カテゴリに該当）。",
+          "skippedNoActivity": "この時間帯には何も記録されていません（PC を使っていない / すべて除外カテゴリに該当）。",
           "errorLabel": "失敗: "
         }
       },
@@ -957,6 +958,7 @@
         "summaryJoin": " · ",
         "statePending": "⏳ **未生成**",
         "stateSkipped": "⚪ **スキップ** — この時間帯にはスクリーンショットがありません",
+        "stateSkippedNoActivity": "⚪ **スキップ** — この時間帯には何も記録されていません",
         "stateError": "❌ **失敗**",
         "stateEmptyContent": "_（空）_"
       }
@@ -1181,6 +1183,7 @@
         "empty": "まだ時間帯の要約がありません。上の「実行」をクリックすると、モデルが時間帯内の記述を 1 つの要約に集約します。",
         "chipTitle": "区間 idx={{idx}}",
         "skippedFallback": "（この時間帯にはスクリーンショットなし）",
+        "skippedNoActivityFallback": "（この時間帯には何も記録されていません）",
         "emptyFallback": "（空）"
       },
       "events": {

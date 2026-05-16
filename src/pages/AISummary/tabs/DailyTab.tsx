@@ -291,7 +291,11 @@ export default function DailyTab() {
         return;
       }
       if (row.status === "ok") okCount += 1;
-      else if (row.status === "skipped_no_screenshots") skipCount += 1;
+      else if (
+        row.status === "skipped_no_screenshots" ||
+        row.status === "skipped_no_activity"
+      )
+        skipCount += 1;
       else errCount += 1;
       if (row.model) modelName = row.model;
       if (row.generatedAt && (!latestGeneratedAt || row.generatedAt > latestGeneratedAt)) {
@@ -337,6 +341,8 @@ export default function DailyTab() {
         lines.push(row.content?.trim() || t("aiSummary.daily.export.stateEmptyContent"), "");
       } else if (row.status === "skipped_no_screenshots") {
         lines.push(t("aiSummary.daily.export.stateSkipped"), "");
+      } else if (row.status === "skipped_no_activity") {
+        lines.push(t("aiSummary.daily.export.stateSkippedNoActivity"), "");
       } else {
         lines.push(t("aiSummary.daily.export.stateError"), "");
         lines.push(`> ${(row.error || t("aiSummary.daily.errors.unknown")).replace(/\n/g, "\n> ")}`, "");
@@ -528,7 +534,8 @@ export default function DailyTab() {
               ? { kind: "empty" }
               : row.status === "ok"
                 ? { kind: "ok", row }
-                : row.status === "skipped_no_screenshots"
+                : row.status === "skipped_no_screenshots" ||
+                    row.status === "skipped_no_activity"
                   ? { kind: "skipped", row }
                   : { kind: "error", row };
 
@@ -707,7 +714,9 @@ function CardBody({ state }: { state: CardState }) {
     case "skipped":
       return (
         <div className={styles.bodyMuted}>
-          {t("aiSummary.daily.card.body.skipped")}
+          {state.row.status === "skipped_no_activity"
+            ? t("aiSummary.daily.card.body.skippedNoActivity")
+            : t("aiSummary.daily.card.body.skipped")}
         </div>
       );
     case "error":

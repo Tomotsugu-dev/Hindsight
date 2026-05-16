@@ -587,7 +587,11 @@ export default function DebugTab() {
     let latestGeneratedAt = "";
     sorted.forEach((row) => {
       if (row.status === "ok") okCount += 1;
-      else if (row.status === "skipped_no_screenshots") skipCount += 1;
+      else if (
+        row.status === "skipped_no_screenshots" ||
+        row.status === "skipped_no_activity"
+      )
+        skipCount += 1;
       else errCount += 1;
       if (row.model) modelName = row.model;
       if (row.generatedAt && (!latestGeneratedAt || row.generatedAt > latestGeneratedAt)) {
@@ -613,6 +617,8 @@ export default function DebugTab() {
         lines.push(row.content?.trim() || "(empty)", "");
       } else if (row.status === "skipped_no_screenshots") {
         lines.push("_skipped (no screenshots in this segment)_", "");
+      } else if (row.status === "skipped_no_activity") {
+        lines.push("_skipped (no activity in this segment)_", "");
       } else {
         lines.push("_error_", "");
         if (row.error) lines.push(`> ${row.error.replace(/\n/g, "\n> ")}`, "");
@@ -1021,18 +1027,16 @@ export default function DebugTab() {
                 : { background: "#cbd5e1", isLight: true };
               const chipColor = isLight ? "#3a3f55" : "#fff";
               // 状态徽章：ok 绿 / error 红 / skipped 灰
+              const isSkipped =
+                s.status === "skipped_no_screenshots" ||
+                s.status === "skipped_no_activity";
               const statusClass =
                 s.status === "ok"
                   ? styles.summaryStatusOk
-                  : s.status === "skipped_no_screenshots"
+                  : isSkipped
                     ? styles.summaryStatusSkipped
                     : styles.summaryStatusError;
-              const statusText =
-                s.status === "ok"
-                  ? "ok"
-                  : s.status === "skipped_no_screenshots"
-                    ? "skipped"
-                    : "error";
+              const statusText = s.status === "ok" ? "ok" : isSkipped ? "skipped" : "error";
               return (
                 <div key={s.segmentIdx} className={styles.summaryBox}>
                   <div className={styles.summaryHead}>
@@ -1056,7 +1060,9 @@ export default function DebugTab() {
                     {s.content ||
                       (s.status === "skipped_no_screenshots"
                         ? t("aiSummary.debug.segments.skippedFallback")
-                        : s.error || t("aiSummary.debug.segments.emptyFallback"))}
+                        : s.status === "skipped_no_activity"
+                          ? t("aiSummary.debug.segments.skippedNoActivityFallback")
+                          : s.error || t("aiSummary.debug.segments.emptyFallback"))}
                   </div>
                 </div>
               );

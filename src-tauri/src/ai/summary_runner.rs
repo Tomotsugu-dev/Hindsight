@@ -28,8 +28,8 @@ use crate::ai::models;
 use crate::ai::prompt::{build_image_describe_system_prompt, build_image_describe_user_prompt};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
-    build_step2, describe_images, extract_time_label, summarize_segment, upsert_skipped_segment,
-    SUMMARY_IMAGE_MAX_DIM,
+    build_step2, build_synthetic_descriptions_from_activities, describe_images, extract_time_label,
+    summarize_segment, upsert_skipped_no_activity, SUMMARY_IMAGE_MAX_DIM,
 };
 use crate::ai::summary_overrides::AiOverrides;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
@@ -550,13 +550,17 @@ impl DaySummaryRunner {
 
             // A1：step 1 全失败兜底已经写了 ai_summaries error 行 + emit segment_done error。
             // 这种情况下没必要继续 swap 加载 summary 模型再让 step2_only 看到空 stored 重 emit 一遍——
-            // 直接进下一段。注：metas 真空情况 run_one_segment 里走 skipped 路径写的是
-            // status="skipped_no_screenshots"，也跳过没有意义（一致返还）。
+            // 直接进下一段。
+            //
+            // metas 真空但 activities 有数据：run_one_segment 已经在 step1_only 路径里
+            // 用合成描述 + step 2 占位 client 跑完了 summarize_segment → status="ok"，
+            // 再 swap 一次 summary 模型重跑没意义；status="ok" 命中下面 "ok" 分支跳过。
+            // metas + activities 都空：status="skipped_no_activity"，同样跳过。
             let seg_status =
                 ai_summaries::get_segment_status(&self.pool, source, date_str, idx as u32).await?;
             if matches!(
                 seg_status.as_deref(),
-                Some("error" | "skipped_no_screenshots")
+                Some("ok" | "error" | "skipped_no_screenshots" | "skipped_no_activity")
             ) {
                 log::info!(
                     "swap_per_segment: 段 {idx} step 1 后 status={:?}，跳过 step 2 swap",
@@ -672,7 +676,8 @@ impl DaySummaryRunner {
         )
         .await?;
 
-        // 没截图的段直接 skipped 兜底
+        // 没截图的段：先看 activities 表，能合成"按小时活动描述"就喂给 step 2 兜底
+        // （用户关了截图 / 截图过期被清 / OS 权限抖动都走这条），都没就 skipped。
         if metas.is_empty() {
             let mut p_started = SummaryProgress::base(
                 source.to_string(),
@@ -684,8 +689,76 @@ impl DaySummaryRunner {
             p_started.images_total = Some(0);
             self.emit(p_started);
 
-            upsert_skipped_segment(
-                &self.pool, source, date_str, idx, &label, start_hour, end_hour, model,
+            // 隐私关键词只在 Settings 顶层，不在 AiConfig 里 —— 这里 ad-hoc load。
+            // 兜底路径每段一次额外 settings 读，量级可忽略。
+            let cfg = settings_repo::load(&self.pool).await?;
+            let synthetic = build_synthetic_descriptions_from_activities(
+                &self.pool,
+                date_str,
+                start_hour,
+                end_hour,
+                &ai.excluded_categories,
+                &device,
+                &cfg.privacy_app_keywords,
+            )
+            .await?;
+
+            if synthetic.is_empty() {
+                // 真的什么都没有 —— skipped_no_activity 兜底
+                upsert_skipped_no_activity(
+                    &self.pool, source, date_str, idx, &label, start_hour, end_hour, model,
+                )
+                .await?;
+                let mut p_done = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "segment_done",
+                    total_segments,
+                );
+                p_done.segment_idx = Some(idx);
+                p_done.images_total = Some(0);
+                p_done.content = Some(String::new());
+                p_done.status = Some("skipped_no_activity");
+                self.emit(p_done);
+                return Ok(());
+            }
+
+            // 有 activities → 合成描述当 step 1 输出喂给 step 2
+            let top_apps = list_segment_top_apps(
+                &self.pool,
+                date_str,
+                start_hour,
+                end_hour,
+                &ai.excluded_categories,
+                device.clone(),
+                8,
+            )
+            .await
+            .unwrap_or_default();
+
+            let mut p_sum = SummaryProgress::base(
+                source.to_string(),
+                date_str.to_string(),
+                "summarizing",
+                total_segments,
+            );
+            p_sum.segment_idx = Some(idx);
+            p_sum.images_total = Some(0);
+            self.emit(p_sum);
+            let (row, status_str) = summarize_segment(
+                &self.pool,
+                step2,
+                &self.supervisor,
+                ai,
+                source,
+                date_str,
+                &label,
+                start_hour,
+                end_hour,
+                idx,
+                &synthetic,
+                &top_apps,
+                step2.model_label().to_string(),
             )
             .await?;
 
@@ -697,8 +770,9 @@ impl DaySummaryRunner {
             );
             p_done.segment_idx = Some(idx);
             p_done.images_total = Some(0);
-            p_done.content = Some(String::new());
-            p_done.status = Some("skipped_no_screenshots");
+            p_done.content = Some(row.content.clone());
+            p_done.status = Some(status_str);
+            p_done.message = row.error.clone();
             self.emit(p_done);
             return Ok(());
         }
@@ -927,6 +1001,7 @@ impl DaySummaryRunner {
             let status_static: &'static str = match existing.as_deref() {
                 Some("ok") => "ok",
                 Some("skipped_no_screenshots") => "skipped_no_screenshots",
+                Some("skipped_no_activity") => "skipped_no_activity",
                 Some(_) => "error",
                 None => {
                     // 没行——写一条提示 error 让前端看到

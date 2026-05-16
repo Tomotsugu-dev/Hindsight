@@ -942,6 +942,7 @@
           "summarizing": "图描述完成（{{count}} 张），正在让模型生成段总结…",
           "summarizingNoTotal": "正在生成段总结…",
           "skipped": "这段时间没有截图（可能没用电脑 / 全在隐私名单 / 全在排除分类）。",
+          "skippedNoActivity": "这段时间什么都没记录（没用电脑 / 全在排除分类）。",
           "errorLabel": "失败："
         }
       },
@@ -957,6 +958,7 @@
         "summaryJoin": " · ",
         "statePending": "⏳ **未生成**",
         "stateSkipped": "⚪ **跳过** — 这段时间没有截图",
+        "stateSkippedNoActivity": "⚪ **跳过** — 这段时间什么都没记录",
         "stateError": "❌ **失败**",
         "stateEmptyContent": "_（空）_"
       }
@@ -1181,6 +1183,7 @@
         "empty": "还没有段总结结果。点上方「开始」让模型把段内描述聚合成一段总结。",
         "chipTitle": "段 idx={{idx}}",
         "skippedFallback": "(该段无截图)",
+        "skippedNoActivityFallback": "(该段无任何活动)",
         "emptyFallback": "(空)"
       },
       "events": {
