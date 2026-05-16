@@ -358,7 +358,7 @@ pub(crate) fn extract_time_label(screenshot_path: &str) -> String {
     "??:??".to_string()
 }
 
-/// 根据 settings.ai.external_enabled 构造 step 2 的 chat 路由。
+/// 根据 [`AiConfig::summary_use_cloud`] 构造 step 2 的 chat 路由。
 ///
 /// - false：[`Step2Chat::Local`]——本地端口；`local_model_label` 是当前引擎实际加载的
 ///   GGUF 文件名（即 `effective_summary_main`，跟 step 1 可能不同），用作
@@ -366,15 +366,19 @@ pub(crate) fn extract_time_label(screenshot_path: &str) -> String {
 /// - true：[`Step2Chat::External`] 包一个新建的 [`ExternalChatClient`]，
 ///   走用户填的 endpoint / model / api_key
 ///
+/// `summary_use_cloud()` 同时检查 `summary_main == SUMMARY_CLOUD_SENTINEL` 且
+/// `external_enabled = true` —— 用户在 Models tab 的云端卡点了 Text + 云端 API tab
+/// 启用 toggle 开着，两个条件都满足才路由到 External。
+///
 /// 外部 client 构造失败（endpoint 空、model 空）会向上抛——这种情况说明用户
-/// 开了 toggle 但没填配置，让顶层错误条直接显示让他去填。
+/// 选了 cloud 但配置不全，让顶层错误条直接显示让他去填。
 pub(crate) fn build_step2(
     ai: &AiConfig,
     local_port: u16,
     local_model_label: &str,
 ) -> Result<Step2Chat> {
     let max_tokens = ai.summary_max_tokens();
-    if ai.external_enabled {
+    if ai.summary_use_cloud() {
         let ext = ExternalChatClient::new(
             &ai.endpoint,
             ai.model.clone(),

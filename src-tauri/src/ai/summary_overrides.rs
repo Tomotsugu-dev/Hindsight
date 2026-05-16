@@ -12,7 +12,7 @@
 
 use serde::Deserialize;
 
-use crate::ai::config::AiConfig;
+use crate::ai::config::{AiConfig, SUMMARY_CLOUD_SENTINEL};
 
 /// 调试覆盖参数。从 generate_day_summary / retry_one_image_description 等命令的
 /// `overrides` 字段反序列化进来；详见模块顶部说明。
@@ -133,10 +133,18 @@ impl AiOverrides {
         if let Some(v) = self.summary_ctx_size {
             ai.summary_ctx_size = Some(v);
         }
-        // 云端段总结路径开关：Debug tab 的「云端 API」section toggle 触发；
-        // build_step2() 看 ai.external_enabled 决定 Local vs External。
+        // 云端段总结路径开关：Debug tab 的「云端 API」section toggle 触发。
+        // build_step2() 看 ai.summary_use_cloud()——同时需要 external_enabled=true
+        // 且 summary_main == SUMMARY_CLOUD_SENTINEL。这里两个一起改，保证 override
+        // 语义不被 sentinel 二态门破坏。
         if let Some(v) = self.external_enabled {
             ai.external_enabled = v;
+            if v {
+                ai.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
+            } else if ai.summary_main.trim() == SUMMARY_CLOUD_SENTINEL {
+                // 当前本来选定云端，但 Debug 要本地跑这次 → 临时清成 fallback 到 active_main
+                ai.summary_main = String::new();
+            }
         }
         ai
     }

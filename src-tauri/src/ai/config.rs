@@ -6,6 +6,19 @@
 
 use serde::{Deserialize, Serialize};
 
+/// `summary_main` 的特殊值——"用云端 API 跑 step 2"。
+///
+/// 历史：早期 `external_enabled` 单一开关同时表示「云端配好可用」+「step 2 就用云端」。
+/// 用户反馈：希望两件事分开 ——「云端 API tab 的启用」只表示配好可用，
+/// 是否真的把云端选为 step 2 backend 应该是 Models tab 里独立的一次点击。
+/// 实现上避免引入第二个布尔字段（容易跟 `external_enabled` 状态打架），
+/// 复用 `summary_main` 一个槽位：本来它存 GGUF 文件名（或空 fallback 到 active_main），
+/// 多塞这一个 sentinel 表示「目标不是文件，是云端」。
+///
+/// 路由判定走 [`AiConfig::summary_use_cloud`]——它把"标记为 cloud" + "external 配好"
+/// 两条件合在一起，避免漏判其一造成静默退化。
+pub const SUMMARY_CLOUD_SENTINEL: &str = "__cloud__";
+
 /// 一天内的一个时段，AI 按段聚合截图 + 活动做总结。
 ///
 /// 取值约束：`start_hour ∈ 0..=23`、`end_hour ∈ 1..=24`、`start_hour < end_hour`。
@@ -182,20 +195,32 @@ impl AiConfig {
         }
     }
     /// step 2 主权重文件名；空 → fallback 到 `active_main`。
+    /// `summary_main == SUMMARY_CLOUD_SENTINEL` 也走 fallback —— 那是"用云端"标记，
+    /// 不是真实文件名；走本地路径的代码（VRAM 估算 / fallback chain）应当看到 active_main。
     pub fn effective_summary_main(&self) -> &str {
-        if self.summary_main.trim().is_empty() {
+        let s = self.summary_main.trim();
+        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
             self.active_main.as_str()
         } else {
             self.summary_main.as_str()
         }
     }
     /// step 2 mmproj 文件名。配套 fallback 规则同 [`Self::effective_describe_mmproj`]。
+    /// `summary_main` 为 sentinel 时同走 fallback（mmproj 跟主权重的来源绑定）。
     pub fn effective_summary_mmproj(&self) -> &str {
-        if self.summary_main.trim().is_empty() {
+        let s = self.summary_main.trim();
+        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
             self.active_mmproj.as_str()
         } else {
             self.summary_mmproj.as_str()
         }
+    }
+
+    /// step 2 是否实际路由到云端：要 `summary_main` 是"用云端"标记 **且** `external_enabled=true`。
+    /// `external_enabled=false` 时 sentinel 退化为 fallback（按 `active_main` 跑本地），
+    /// 不会因为 sentinel 残留就硬卡住没法跑总结。
+    pub fn summary_use_cloud(&self) -> bool {
+        self.external_enabled && self.summary_main.trim() == SUMMARY_CLOUD_SENTINEL
     }
 
     /// step 1 单次响应 max_tokens：让用户配的 ctx_size 能反映到响应能写多长。

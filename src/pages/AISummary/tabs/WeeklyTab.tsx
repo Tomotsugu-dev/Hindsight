@@ -32,6 +32,7 @@ import {
 } from "../../../state/weeklySummary";
 import {
   api,
+  SUMMARY_CLOUD_SENTINEL,
   type SegmentSummaryRow,
   type WeekPrecheckDay,
   type WeekPrecheckResp,
@@ -105,10 +106,15 @@ export default function WeeklyTab() {
   const { monday, sunday } = useMemo(() => weekRangeFromOffset(weekOffset), [weekOffset]);
 
   // hasModel：周报只走 step 2（纯文本），所以条件比 daily 宽松——本地 summary 模型
-  // 或 external_enabled 二选一即可。describeMain 不参与判断（不过 vision）。
-  const summaryMain = settings?.ai.summaryMain || settings?.ai.activeMain || "";
+  // 或选定云端 二选一即可。describeMain 不参与判断（不过 vision）。
+  const activeMain = settings?.ai.activeMain ?? "";
+  const rawSummaryMain = settings?.ai.summaryMain ?? "";
   const externalEnabled = settings?.ai.externalEnabled ?? false;
-  const hasModel = externalEnabled || summaryMain.trim().length > 0;
+  const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
+  const localSummaryAvailable =
+    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
+    activeMain !== "";
+  const hasModel = cloudRoute || localSummaryAvailable;
 
   // 全局 store 订阅——切走再回来还在跑的 weekly run 仍能保持"停止"按钮
   const runSnap = useSyncExternalStore(

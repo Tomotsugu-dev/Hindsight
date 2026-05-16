@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  SUMMARY_CLOUD_SENTINEL,
   SUMMARY_PROGRESS_EVENT,
   type AiOverrides,
   type AiSegment,
@@ -187,13 +188,16 @@ export default function DebugTab() {
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
   // hasModel 跟 DailyTab + 后端 summary_runner check 对齐：step 1 必须本地 vision，
-  // step 2 走本地 summary 或 external 云端
+  // step 2 走选定云端（sentinel + externalEnabled）或本地 summary 或 activeMain fallback
   const describeMain = settings?.ai.describeMain || activeMain;
-  const summaryMain = settings?.ai.summaryMain || activeMain;
+  const rawSummaryMain = settings?.ai.summaryMain ?? "";
   const externalEnabled = settings?.ai.externalEnabled ?? false;
+  const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
+  const localSummaryAvailable =
+    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
+    activeMain !== "";
   const hasModel =
-    describeMain.trim().length > 0 &&
-    (externalEnabled || summaryMain.trim().length > 0);
+    describeMain.trim().length > 0 && (cloudRoute || localSummaryAvailable);
 
   // Picker 选项随语言变化而重建——i18next 切语言会让 t 引用变更，触发 useMemo 重算
   const SCOPE_OPTIONS = useMemo(() => buildScopeOptions(t), [t]);

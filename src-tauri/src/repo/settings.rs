@@ -179,6 +179,15 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         dirty = true;
     }
 
+    // 旧版本里 `external_enabled=true` 单一开关同时表示「云端配好」+「step 2 走云端」。
+    // 新版本把"是否选定云端"剥离到 `summary_main == SUMMARY_CLOUD_SENTINEL`。
+    // 一次性迁移：之前启用了云端且没设本地 summary main 的用户，自动补上 sentinel，
+    // 保持旧行为。已经设本地 summary main 的用户保留本地选择（更接近他们的实际意图）。
+    if settings.ai.external_enabled && settings.ai.summary_main.trim().is_empty() {
+        settings.ai.summary_main = crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string();
+        dirty = true;
+    }
+
     if dirty {
         save(pool, &settings).await?;
     }

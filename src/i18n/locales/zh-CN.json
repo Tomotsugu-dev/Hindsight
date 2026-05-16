@@ -564,7 +564,9 @@
       "cloud": {
         "cardTitle": "云端 · {{provider}}",
         "modelUnset": "（未填模型）",
-        "step2Tooltip": "Step 2（段总结）当前路由到云端 API。要改 endpoint / 模型，去「云端 API」tab 编辑。"
+        "step2Tooltip": "Step 2（段总结）当前路由到云端 API。要改 endpoint / 模型，去「云端 API」tab 编辑。",
+        "step1DisabledTooltip": "云端 API 不支持图片输入（Step 1 需要 vision 能力）",
+        "step2DisabledTooltip": "已选定云端 API 为 Step 2 后端。要关闭，去「云端 API」tab 取消启用。"
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",

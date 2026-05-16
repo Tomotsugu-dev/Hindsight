@@ -564,7 +564,9 @@
       "cloud": {
         "cardTitle": "クラウド · {{provider}}",
         "modelUnset": "(モデル未設定)",
-        "step2Tooltip": "Step 2 (セグメント要約) はクラウド API にルーティングされています。エンドポイント / モデルの編集は「クラウド API」タブで行ってください。"
+        "step2Tooltip": "Step 2 (セグメント要約) はクラウド API にルーティングされています。エンドポイント / モデルの編集は「クラウド API」タブで行ってください。",
+        "step1DisabledTooltip": "クラウド API は画像入力に対応していません（Step 1 には vision 能力が必要）",
+        "step2DisabledTooltip": "Step 2 のバックエンドとしてクラウド API が選択されています。オフにするには「クラウド API」タブで無効化してください。"
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",

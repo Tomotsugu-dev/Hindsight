@@ -242,6 +242,11 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 /** AI 总结进度事件（Phase 1B-γ）。 */
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 
+/** `Settings.ai.summaryMain` 的特殊值——"用云端 API 跑 step 2"。
+ *  跟后端 `crate::ai::config::SUMMARY_CLOUD_SENTINEL` 必须保持同步。
+ *  路由真正生效还要 `externalEnabled=true`（云端 API tab 启用 toggle）。 */
+export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
+
 /** 周报 precheck 返回的"某天"元数据。 */
 export interface WeekPrecheckDay {
   /** "YYYY-MM-DD" */
@@ -428,7 +433,9 @@ export interface AiConfig {
   describeMain: string;
   /** step 1 专用 mmproj；空 = fallback 到 `activeMmproj`。 */
   describeMmproj: string;
-  /** step 2（段总结）专用主权重；空 = fallback 到 `activeMain`。 */
+  /** step 2（段总结）专用主权重；空 = fallback 到 `activeMain`。
+   *  特殊值 [`SUMMARY_CLOUD_SENTINEL`] = 用云端 API 跑 step 2（需要同时
+   *  `externalEnabled=true`，由 `summary_use_cloud()` 后端 helper 一起判）。 */
   summaryMain: string;
   /** step 2 专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
   summaryMmproj: string;

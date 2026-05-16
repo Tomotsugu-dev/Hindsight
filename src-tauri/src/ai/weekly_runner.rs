@@ -100,10 +100,10 @@ impl WeekSummaryRunner {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = cfg.ai.clone();
 
-        // step2 模型校验：本地 summary main 非空 或 external_enabled=true
-        if !ai.external_enabled && ai.effective_summary_main().trim().is_empty() {
+        // step2 模型校验：本地 summary main 非空 或 选定走云端
+        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」给段总结选一个模型，或在「云端 API」启用云端总结",
+                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
         }
 
@@ -243,8 +243,8 @@ impl WeekSummaryRunner {
         }
 
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
-        // 让前端显示"加载模型中…"。云端路径 (external_enabled) 跳过，不动 supervisor。
-        let port = if !ai.external_enabled {
+        // 让前端显示"加载模型中…"。云端路径（summary_use_cloud()）跳过，不动 supervisor。
+        let port = if !ai.summary_use_cloud() {
             let st = self.supervisor.status().await;
             if st.state != EngineState::Running {
                 self.emit_phase(

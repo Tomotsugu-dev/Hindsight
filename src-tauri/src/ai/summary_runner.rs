@@ -167,15 +167,15 @@ impl DaySummaryRunner {
         // step 1 图描述并发数 = describe 阶段的 -np（多图同时跑）
         let parallel = ai.describe_parallel_slots_effective().unwrap_or(1).max(1) as usize;
 
-        // step 1 必须有本地 vision 模型；step 2 要么有本地模型，要么 external_enabled 走云端
+        // step 1 必须有本地 vision 模型；step 2 要么有本地模型，要么选定走云端
         if ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
                 "请先在「模型」给图描述选一个 vision 模型再生成总结",
             ));
         }
-        if !ai.external_enabled && ai.effective_summary_main().trim().is_empty() {
+        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」给段总结选一个模型，或在「云端 API」启用云端总结",
+                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
         }
 

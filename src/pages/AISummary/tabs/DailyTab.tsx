@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  SUMMARY_CLOUD_SENTINEL,
   type AiSegment,
   type SegmentSummaryRow,
 } from "../../../api/hindsight";
@@ -90,13 +91,19 @@ export default function DailyTab() {
   const activeMain = settings?.ai.activeMain ?? "";
   // hasModel 跟后端 summary_runner 的 check 对齐：
   //   step 1（图描述）必须有本地 vision 模型 → describeMain 或 activeMain 非空
-  //   step 2（段总结）要么有本地 summary 模型，要么 external_enabled 走云端
+  //   step 2（段总结）满足以下任一：
+  //     - 用户在云端卡选 Text（rawSummaryMain == sentinel）且云端 API 启用
+  //     - 用户在本地某个模型卡选 Text（rawSummaryMain 是真实文件名）
+  //     - 都没选但 activeMain 存在（旧版 fallback 兼容）
   const describeMain = settings?.ai.describeMain || activeMain;
-  const summaryMain = settings?.ai.summaryMain || activeMain;
+  const rawSummaryMain = settings?.ai.summaryMain ?? "";
   const externalEnabled = settings?.ai.externalEnabled ?? false;
+  const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
+  const localSummaryAvailable =
+    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
+    activeMain !== "";
   const hasModel =
-    describeMain.trim().length > 0 &&
-    (externalEnabled || summaryMain.trim().length > 0);
+    describeMain.trim().length > 0 && (cloudRoute || localSummaryAvailable);
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
   // 依赖 t，所以在组件里定义，跟随 i18n.language 自动重渲。

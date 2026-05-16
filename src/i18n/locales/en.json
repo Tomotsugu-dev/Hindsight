@@ -564,7 +564,9 @@
       "cloud": {
         "cardTitle": "Cloud · {{provider}}",
         "modelUnset": "(model not set)",
-        "step2Tooltip": "Step 2 (segment summary) is routed to the cloud API. Edit endpoint / model in the Cloud API tab."
+        "step2Tooltip": "Step 2 (segment summary) is routed to the cloud API. Edit endpoint / model in the Cloud API tab.",
+        "step1DisabledTooltip": "Cloud API does not support image input (Step 1 requires vision capability)",
+        "step2DisabledTooltip": "Cloud API is selected as Step 2 backend. To turn it off, disable it in the Cloud API tab."
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",

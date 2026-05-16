@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  SUMMARY_CLOUD_SENTINEL,
   type ModelDownloadProgress,
   type ModelEntry,
   type RecommendedModel,
@@ -69,7 +70,13 @@ export function ModelsSection() {
   // 在卡上显示对应 chip。reload 让下载完成后能拉到刚刷新的本地文件清单。
   const { settings, reload } = useAiSettings();
   const describeMain = settings?.ai.describeMain || settings?.ai.activeMain || "";
+  // 注意：raw summary_main 可能是 SUMMARY_CLOUD_SENTINEL（用户在云端卡选了 Text）。
+  // 走 fallback 链拿到的字符串可能是 sentinel 或真实文件名；本地卡的 usedForSummary
+  // 比较时永远拿 sentinel 跟 rec.mainFile 比，永远不命中——所以本地卡正确显示成"未选"。
   const summaryMain = settings?.ai.summaryMain || settings?.ai.activeMain || "";
+  // 云端卡用 RAW 字段判，避免 fallback 链上 activeMain 的干扰。
+  const cloudIsSelectedAsSummary =
+    (settings?.ai.summaryMain || "") === SUMMARY_CLOUD_SENTINEL;
 
   const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
   const [local, setLocal] = useState<ModelEntry[]>([]);
@@ -271,6 +278,28 @@ export function ModelsSection() {
     }
   };
 
+  /**
+   * 云端卡 Text 按钮 toggle：在「选中云端为 step 2」和「fallback 回本地」之间切换。
+   *
+   * 通过把 `summary_main` 写成 [`SUMMARY_CLOUD_SENTINEL`] 来表示选中云端，后端
+   * [`build_step2`] 看到 sentinel + `external_enabled=true` 才路由到 External。
+   * 跟本地卡的 toggle 互斥：本地卡 set summary 是真实文件名、覆盖 sentinel；
+   * 云端卡 set sentinel、覆盖任何本地文件名。一处状态，互斥自然成立。
+   */
+  const onToggleCloudSummary = async () => {
+    setError(null);
+    try {
+      if (cloudIsSelectedAsSummary) {
+        await api.setStepModel("summary", "", null);
+      } else {
+        await api.setStepModel("summary", SUMMARY_CLOUD_SENTINEL, null);
+      }
+      await reload();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
   const customMainBusy = !!customMainFile && busyFiles.has(customMainFile);
   const customMmprojBusy =
     !!customMmprojFile && busyFiles.has(customMmprojFile);
@@ -413,7 +442,10 @@ export function ModelsSection() {
 
       <div className={styles.modelList}>
         {/* 云端 API 启用时第一行展示云端卡——表明 step 2 当前不走本地推荐里的任何模型，
-            而是路由到 Cloud API tab 配的 endpoint + model。固定置顶，不参与筛选/排序。 */}
+            而是路由到 Cloud API tab 配的 endpoint + model。固定置顶，不参与筛选/排序。
+            step 1 / step 2 按钮都 disabled：cloud 没 vision 能力（step 1 永远不可用），
+            step 2 已是 active（要切换去「云端 API」tab）。两个按钮存在是为了视觉上跟本地
+            模型卡对齐 —— 用户一眼能看清云端在哪个 step 上、为啥不能在这里改。 */}
         {settings?.ai.externalEnabled ? (
           <div
             className={`${styles.modelCard} ${styles.modelCardCloud}`}
@@ -422,7 +454,7 @@ export function ModelsSection() {
             <div className={styles.modelCardRow}>
               <div className={styles.modelCardLeft}>
                 <Cloud
-                  size={18}
+                  size={22}
                   strokeWidth={2}
                   className={styles.modelCardCloudIcon}
                 />
@@ -435,6 +467,32 @@ export function ModelsSection() {
                   {settings.ai.model ||
                     t("aiSettings.models.cloud.modelUnset")}
                 </span>
+              </div>
+              <div className={styles.modelCardRight}>
+                {/* Vision (Step 1)：云端 deepseek / openai 文本接口不支持图描述，永远 disabled */}
+                <button
+                  type="button"
+                  className={styles.modelStepToggle}
+                  disabled
+                  title={t("aiSettings.models.cloud.step1DisabledTooltip")}
+                >
+                  {t("aiSettings.models.card.step1")}
+                </button>
+                {/* Text (Step 2)：可点击 toggle，跟本地卡的 step 2 是 radio 关系 */}
+                <button
+                  type="button"
+                  className={`${styles.modelStepToggle} ${
+                    cloudIsSelectedAsSummary ? styles.modelStepToggleActive : ""
+                  }`}
+                  onClick={onToggleCloudSummary}
+                  title={
+                    cloudIsSelectedAsSummary
+                      ? t("aiSettings.models.card.step2ToggleOffTooltip")
+                      : t("aiSettings.models.card.step2ToggleOnTooltip")
+                  }
+                >
+                  {t("aiSettings.models.card.step2")}
+                </button>
               </div>
             </div>
           </div>
