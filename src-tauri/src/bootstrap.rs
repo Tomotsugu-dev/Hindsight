@@ -48,8 +48,18 @@ fn default_data_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("hindsight-data"))
 }
 
-/// 当前生效的数据根：优先 bootstrap 里的自定义值，没有则系统默认。
+/// 当前生效的数据根：优先 `HINDSIGHT_DATA_DIR` 环境变量（仅本地多实例测试用）
+/// → 然后 bootstrap.json 里的自定义值 → 最后系统默认。
+///
+/// 环境变量是为「在同一台机器跑两个独立 Hindsight 实例模拟两台设备」的本地测试
+/// 场景，详见 [`docs/internal/local-multi-device-test.md`]。生产路径不会设置它。
 pub fn data_root() -> PathBuf {
+    if let Ok(env_path) = std::env::var("HINDSIGHT_DATA_DIR") {
+        let trimmed = env_path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
     if let Some(path) = read_custom_data_path() {
         if !path.as_os_str().is_empty() {
             return path;

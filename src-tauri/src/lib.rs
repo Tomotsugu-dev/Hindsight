@@ -49,17 +49,29 @@ pub fn run() {
     let engine_supervisor = Arc::new(EngineSupervisor::new());
     let engine_for_exit = engine_supervisor.clone();
 
-    tauri::Builder::default()
-        // 单实例守门：第二个进程一启动就把现有窗口拉到前台再自己退出。
-        // 必须在 .setup 之前的最前面注册——后续 plugin / setup 都默认假设
-        // "整个进程内 capture / DB / sync 单例运行"。
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // 单实例守门：第二个进程一启动就把现有窗口拉到前台再自己退出。
+    // 必须在 .setup 之前的最前面注册——后续 plugin / setup 都默认假设
+    // "整个进程内 capture / DB / sync 单例运行"。
+    //
+    // 本地多设备同步测试场景（[`docs/internal/local-multi-device-test.md`]）需要
+    // 同一台机器跑两个独立实例 → 设 `HINDSIGHT_MULTI_INSTANCE=1` 跳过 single instance
+    // 守门，让两个进程各起一个窗口、各用各的 data_dir。生产路径不会设这个变量。
+    let multi_instance_test = std::env::var("HINDSIGHT_MULTI_INSTANCE")
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    let mut builder = tauri::Builder::default();
+    if !multi_instance_test {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize();
                 let _ = w.show();
                 let _ = w.set_focus();
             }
-        }))
+        }));
+    } else {
+        log::warn!("HINDSIGHT_MULTI_INSTANCE 已设：跳过 single instance gate（仅测试用，生产请勿设）");
+    }
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
