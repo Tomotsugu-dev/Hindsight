@@ -29,6 +29,19 @@ pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
 }
 
 fn find_bundle(exe_path: &Path) -> Option<PathBuf> {
+    // 情况 1：`exe_path` 自身就是 `.app` —— [`capture::window`] 通过 NSWorkspace 拿
+    // 到的 `bundleURL` 是 `/Applications/Google Chrome.app` 这种形式，process_paths
+    // 表里存的也是它，所以本路径最常见。
+    if exe_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(|s| s.ends_with(".app"))
+        .unwrap_or(false)
+    {
+        return Some(exe_path.to_path_buf());
+    }
+    // 情况 2：`exe_path` 是 bundle 里的 binary（`.../Foo.app/Contents/MacOS/Foo`）
+    // —— 兼容历史调用方 / 第三方 process_paths 来源。往父目录走找 `.app`。
     let mut cur = exe_path.to_path_buf();
     while let Some(parent) = cur.parent() {
         if parent
