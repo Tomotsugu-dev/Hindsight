@@ -31,9 +31,21 @@ fn default_icon() -> String {
     "Monitor".into()
 }
 
-/// 启动级身份：在 bootstrap.json 同级目录存 device.json，与数据 DB 物理分离。
-/// 把 DB 拷到另一台机器时不会带走 device_id —— device_id 必须随安装走，不随数据走。
+/// 启动级身份：默认走系统 config_dir（`~/Library/Application Support/Hindsight/`），
+/// 与数据 DB 物理分离 —— 把 DB 拷到另一台机器时不会带走 device_id。
+///
+/// 测试场景例外：`HINDSIGHT_DATA_DIR` 被设时，device.json 跟数据走，确保
+/// [`docs/internal/local-multi-device-test.md`] 的双进程同机测试里两个实例
+/// 各自有独立的 device_id（否则它们共享系统 config_dir 的 device.json 共用同一个
+/// UUID，push 到 Drive 上撞同名文件、互相覆盖，等价于完全没 sync）。生产路径
+/// 不会设这个 env var，行为完全不变。
 fn device_file() -> Option<PathBuf> {
+    if let Ok(custom) = std::env::var("HINDSIGHT_DATA_DIR") {
+        let trimmed = custom.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed).join("device.json"));
+        }
+    }
     Some(dirs::config_dir()?.join("Hindsight").join("device.json"))
 }
 
