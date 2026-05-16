@@ -58,6 +58,13 @@ pub fn current_window() -> Result<WindowInfo> {
 /// macOS：通过 NSWorkspace 拿系统层 frontmost app 的 (name, pid, bundle path)，
 /// 再用 PID filter xcap 窗口列表拿 title（拿不到无所谓，title 空着仍能正确归属
 /// 到对应 app）。返 None = NSWorkspace 这层失败，调用方落回老 xcap 路径。
+///
+/// **helper / mini-program 子 bundle 归一**：WeChat 的 mini-program 跑在嵌套
+/// `WeChatAppEx.app` 里、Claude / Chrome 这种 Electron app 把渲染进程打成
+/// `Claude Helper (Renderer).app`，NSWorkspace 直接把这些当独立 app 返回 ——
+/// `localizedName` 会是 "WeChatAppEx" 而非 "WeChat"。这里调
+/// [`super::bundle::canonicalize_to_parent_bundle`] 折叠到最外层父 bundle，让
+/// activities 行的 `process_name` 始终是用户认识的那个名字。
 #[cfg(target_os = "macos")]
 fn macos_resolve_focused_window() -> Option<WindowInfo> {
     use objc2_app_kit::NSWorkspace;
@@ -69,18 +76,21 @@ fn macos_resolve_focused_window() -> Option<WindowInfo> {
     }
     let pid = pid_i32 as u32;
 
-    let app_name = app
+    let raw_name = app
         .localizedName()
         .map(|s| s.to_string())
         .unwrap_or_default();
-    if app_name.trim().is_empty() {
+    if raw_name.trim().is_empty() {
         return None;
     }
 
-    let app_path = app
+    let raw_path = app
         .bundleURL()
         .and_then(|url| url.path())
         .map(|s| s.to_string());
+
+    let (app_name, app_path) =
+        super::bundle::canonicalize_to_parent_bundle(&raw_name, raw_path.as_deref());
 
     // title 是 nice-to-have——xcap 多屏下经常拿不到主屏 app 的窗口，那就空着
     let title = xcap::Window::all()
