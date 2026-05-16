@@ -128,11 +128,20 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                 cats.push((id, name, color, icon, builtin, Vec::new()));
             }
 
+            // 旧实现读 `app_categories` 镜像表 —— 当 app_groups.category_id 已被
+            // 设上但 mirror 没及时同步（如 backfill_builtin_categories 跑过但 sync 路径
+            // 没补 mirror、或新 member 加入已分类组时漏 sync），UI 上分类下就显示
+            // "暂无绑定应用" —— 即便 rankings / 日报里这个 app 已经被正确归类。
+            // 现在直接走真实源 app_group_members + app_groups.category_id，避开镜像 lag。
             let mut stmt2 = conn
                 .prepare_cached(
-                    "SELECT process_name, category_id FROM app_categories
-                     WHERE deleted_at IS NULL
-                     ORDER BY process_name",
+                    "SELECT m.process_name, g.category_id
+                       FROM app_group_members m
+                       JOIN app_groups g ON g.id = m.group_id
+                                        AND g.deleted_at IS NULL
+                      WHERE m.deleted_at IS NULL
+                        AND g.category_id IS NOT NULL
+                      ORDER BY m.process_name",
                 )
                 .db()?;
             let map_rows = stmt2
@@ -530,4 +539,125 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
             last_seen_at,
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    /// 钉死 bug：当 app_group_members + app_groups.category_id 有数据但 app_categories
+    /// 镜像表为空时（典型 backfill 漏镜像 / sync 顺序错位），categories::list 仍应
+    /// 返回该 process_name —— 因为现在直接读真实源而不是镜像表。
+    ///
+    /// 旧实现（读 app_categories）下：apps 列表会是空，UI 显示"暂无绑定应用"。
+    /// 新实现（JOIN app_group_members + app_groups）：直接拿到 process_name。
+    #[tokio::test]
+    async fn list_returns_app_when_only_app_groups_has_category_no_app_categories_mirror() {
+        let pool = fresh_test_pool().await;
+
+        // 模拟 capture 写入：建组（带 category）+ 加成员；**故意不写 app_categories 镜像**。
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-17T10:00:00Z";
+                // 组 "Visual Studio Code" 归类到 builtin "code"（categories 表已 seed）
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('Visual Studio Code', 'Visual Studio Code', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )?;
+                // mac 进程名 "Code" 归到这个组
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('Code', 'Visual Studio Code', ?1, NULL)",
+                    rusqlite::params![now],
+                )?;
+                // **故意不**写 app_categories —— 模拟镜像 lag
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let cats = list(&pool).await.unwrap();
+        let code = cats
+            .iter()
+            .find(|c| c.id == "code")
+            .expect("'code' 内置分类应该存在");
+        assert!(
+            code.apps.iter().any(|p| p == "Code"),
+            "镜像表为空时也应该能看到 Code，实际 apps={:?}",
+            code.apps,
+        );
+    }
+
+    /// 反例：当 app_groups.category_id IS NULL（未分类）时，**不**应出现在任何分类的 apps 里。
+    #[tokio::test]
+    async fn list_excludes_app_when_group_has_no_category() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-17T10:00:00Z";
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('SomeApp', 'SomeApp', NULL, ?1, NULL)",
+                    rusqlite::params![now],
+                )?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('SomeApp', 'SomeApp', ?1, NULL)",
+                    rusqlite::params![now],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let cats = list(&pool).await.unwrap();
+        for c in &cats {
+            assert!(
+                !c.apps.iter().any(|p| p == "SomeApp"),
+                "未分类组的成员不应出现在任何分类下，但 {} 包含: {:?}",
+                c.id,
+                c.apps,
+            );
+        }
+    }
+
+    /// 反例：软删除的 group / member 不应被列出。
+    #[tokio::test]
+    async fn list_excludes_soft_deleted_groups_and_members() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-17T10:00:00Z";
+                // 软删的 group：成员还在，但 group 不算 active
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('DeletedGroup', 'DeletedGroup', 'code', ?1, ?1)",
+                    rusqlite::params![now],
+                )?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('AppInDeletedGroup', 'DeletedGroup', ?1, NULL)",
+                    rusqlite::params![now],
+                )?;
+                // active group 但软删的 member
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('LiveGroup', 'LiveGroup', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('DeletedMember', 'LiveGroup', ?1, ?1)",
+                    rusqlite::params![now],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let cats = list(&pool).await.unwrap();
+        let code = cats.iter().find(|c| c.id == "code").unwrap();
+        assert!(!code.apps.iter().any(|p| p == "AppInDeletedGroup"));
+        assert!(!code.apps.iter().any(|p| p == "DeletedMember"));
+    }
 }
