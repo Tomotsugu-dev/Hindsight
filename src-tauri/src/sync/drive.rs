@@ -65,7 +65,7 @@ struct ListResp {
 /// 不直接打 reqwest。
 pub enum DriveBackend {
     Http,
-    // 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
+    /// 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
     #[allow(dead_code)]
     InMemory(Arc<InMemoryDriveStore>),
 }
