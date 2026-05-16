@@ -592,12 +592,51 @@ const REACTIVATE_DEAD_LETTER_SQL: &str = r#"
     GROUP BY a.local_date;
 "#;
 
+/// v26：activities 行身份对称化。
+///
+/// 让每条 active activities 行都有 `remote_id`（取自 `id` 本身），把
+/// `idx_activities_remote (device_id, remote_id) WHERE remote_id IS NOT NULL`
+/// 唯一索引的覆盖范围从「仅 origin='remote' 行」扩展到**所有 active 行**。
+///
+/// 解决的问题：
+///   1. 旧设计本机 local 行 `remote_id=NULL`，[pull.rs] 的 self-skip
+///      （`if device_id == self_id { continue; }`）必须存在 —— 不然 pull 自己的
+///      ndjson 时 `upsert_remote_activity` 的 `(device_id, remote_id)` 查询碰不到
+///      `NULL` 的 local 行，每条会被 INSERT 两份。
+///   2. self-skip 一存在，「清空本机数据库」之后 mac 自己永远拉不回 Drive 上的历史
+///      —— 即便文件还在 Drive 上。
+///
+/// 修复后：
+///   - local 行也走 `(device_id, remote_id)` 索引，pull 自己的 ndjson 时正常走
+///     LWW 路径（找到本机行 + updated_at 比较 + 决定 update / no-op），不会重复 INSERT
+///   - 可以安全移除 self-skip，让本机能从 Drive 完整恢复自己的历史
+///
+/// 两段：
+/// 1. 回填存量本机 local 行 `remote_id = CAST(id AS TEXT)`（无副作用，仅设字段）
+/// 2. 创建 AFTER INSERT trigger：任何新 INSERT 若 `remote_id IS NULL`，自动设
+///    `remote_id = CAST(NEW.id AS TEXT)`。这样 [`activities.rs:insert_new`]
+///    无需改代码，未来插入路径也覆盖到
+///
+/// 副作用：旧 [pull.rs:upsert_remote_activity] 走 INSERT 不带 remote_id；这条迁移之后
+/// trigger 不会覆盖那条路径（pull 自己显式传 remote_id），所以 remote 镜像行行为不变。
+const ACTIVITIES_LOCAL_REMOTE_ID_SQL: &str = r#"
+    UPDATE activities SET remote_id = CAST(id AS TEXT)
+     WHERE remote_id IS NULL;
+
+    CREATE TRIGGER IF NOT EXISTS activities_local_remote_id
+    AFTER INSERT ON activities
+    FOR EACH ROW WHEN NEW.remote_id IS NULL
+    BEGIN
+        UPDATE activities SET remote_id = CAST(NEW.id AS TEXT) WHERE id = NEW.id;
+    END;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 15] = [
+    let extras: [&'static str; 16] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -613,6 +652,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         RESET_SCREENSHOT_ENABLED_TO_FALSE_SQL, // v23
         RESET_DRIVE_FILES_CURSOR_SQL,          // v24
         REACTIVATE_DEAD_LETTER_SQL,            // v25
+        ACTIVITIES_LOCAL_REMOTE_ID_SQL,        // v26
     ];
     pool.0
         .call(move |conn| {

@@ -118,13 +118,15 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
     let self_id = crate::device::self_id().map_err(|e| e.to_string())?;
     let prefix = format!("device.{self_id}.");
 
-    // 1. 列 Drive 全量文件（appDataFolder 范围内），按本机 prefix 过滤
+    // 1. 列 Drive 全量文件（appDataFolder 范围内），按本机 prefix 过滤。
+    //    跳过 tombstone 本身（清云端时 tombstone 留下来当 marker，不然对端永远不知道）。
+    let tombstone_name = format!("device.{self_id}.tombstone.json");
     let files = crate::sync::drive::list_appdata_files(&token.access_token, "")
         .await
         .map_err(|e| e.to_string())?;
     let mine: Vec<_> = files
         .iter()
-        .filter(|f| f.name.starts_with(&prefix))
+        .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
         .collect();
 
     // 2. 逐个 DELETE；单文件失败不抛，让能删的尽量删完
@@ -136,7 +138,25 @@ pub async fn purge_cloud_data(pool: State<'_, DbPool>) -> Result<u64, String> {
         }
     }
 
-    // 3. 清掉 outbox + 重置 pull 游标，避免下次 sync 把刚删的文件又重新构造上传
+    // 3. 上传一个新的 tombstone（覆盖任何旧版本，modifiedTime 自然刷新让对端 pull 看到）。
+    //    内容是 `clearedAt = now()`，对端 pull 触发 [merge_tombstone] →
+    //    `DELETE FROM activities WHERE device_id=<self> AND updated_at < clearedAt`。
+    //    源端后续 capture 的新行 updated_at > clearedAt，不被删；老的本机镜像在对端被清。
+    //    覆盖语义保证幂等：连点 N 次该命令，每次 tombstone 的 clearedAt 都是当下时间，
+    //    push 都是 idempotent overwrite。
+    let cleared_at = chrono::Utc::now().to_rfc3339();
+    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
+        cleared_at: cleared_at.clone(),
+    })
+    .map_err(|e| e.to_string())?;
+    if let Err(e) =
+        crate::sync::drive::upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+            .await
+    {
+        log::warn!("purge_cloud_data: upload tombstone 失败: {e}");
+    }
+
+    // 4. 清掉 outbox + 重置 pull 游标，避免下次 sync 把刚删的文件又重新构造上传
     pool.0
         .call(|conn| {
             conn.execute_batch(

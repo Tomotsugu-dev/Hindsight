@@ -190,12 +190,18 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
     let rows: Vec<ActivityPayload> = pool
         .0
         .call(move |conn| {
+            // 没有 `AND origin = 'local'` 过滤 —— 取 device_id=self 的**全部**行，
+            // 包含 origin='local'（本机直接 capture）和 origin='remote'（mac 自己 purge
+            // 之后 pull 自己 Drive 文件恢复回来的行，按 [v26 migration] + 移除 self-skip
+            // 后的设计也会用 device_id=self）。少了 origin 过滤后 push 不会把 pull-back
+            // 来的本机历史"漏掉"，整张 ndjson 重写仍然是本机视角下完整的"我贡献过的"集合。
+            // 对端镜像 `device_id != self` 被 WHERE device_id=?1 已经排除，不会回推。
             let mut stmt = conn
                 .prepare(
                     "SELECT id, started_at, ended_at, duration_secs, local_date, local_hour,
                             process_name, window_title, category_id, updated_at
                      FROM activities
-                     WHERE device_id = ?1 AND local_date = ?2 AND origin = 'local'
+                     WHERE device_id = ?1 AND local_date = ?2
                      ORDER BY id",
                 )
                 .db()?;

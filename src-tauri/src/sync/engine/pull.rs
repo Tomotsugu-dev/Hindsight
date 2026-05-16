@@ -15,7 +15,7 @@ use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
-    CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
+    CategoryPayload, DeviceMetaPayload, ProcessPathPayload, TombstonePayload,
 };
 
 /// 解析一个 JSON 数组到 `Vec<T>`，但保留**每行容错**：单行解析失败仅打 warn 跳过，
@@ -62,6 +62,10 @@ enum ParsedFile {
     AppIcons { device_id: String },
     AppGroups { device_id: String },
     AppGroupMembers { device_id: String },
+    /// `device.<UUID>.tombstone.json` —— 源设备明确告知"在某时刻之前的我的数据请全部清"，
+    /// 对端 pull 时执行 `DELETE WHERE device_id=<owner> AND updated_at < clearedAt`。
+    /// 修补 sync 协议「Drive 文件级删除不传播为 DB 行级 DELETE」的缺陷。
+    Tombstone { device_id: String },
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
@@ -93,6 +97,9 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
             device_id: uuid.to_string(),
         }),
         ["device", uuid, "app_group_members", "json"] => Some(ParsedFile::AppGroupMembers {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "tombstone", "json"] => Some(ParsedFile::Tombstone {
             device_id: uuid.to_string(),
         }),
         _ => None,
@@ -188,6 +195,12 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             // Pass 1 已下结论（成功 / self / 失败），不重复处理
             continue;
         }
+        if matches!(parsed, ParsedFile::Tombstone { .. }) {
+            // tombstone 留到 Pass 3 处理 —— 确保所有 activity merge 完之后再 DELETE，
+            // 即便存在「旧 ndjson 在 Drive 上残留没被 purge_cloud_data 删干净」的边角
+            // 情况，tombstone 也能把刚刚 merge 进来的过期行清掉
+            continue;
+        }
         let device_id = match &parsed {
             ParsedFile::ActivityDay { device_id, .. }
             | ParsedFile::Categories { device_id }
@@ -196,9 +209,15 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             | ParsedFile::AppIcons { device_id }
             | ParsedFile::AppGroups { device_id }
             | ParsedFile::AppGroupMembers { device_id } => device_id.as_str(),
-            ParsedFile::DeviceMeta { .. } => unreachable!(),
+            ParsedFile::DeviceMeta { .. } | ParsedFile::Tombstone { .. } => unreachable!(),
         };
-        if device_id == self_id {
+        // 本机自己的 activities ndjson **不**跳过 —— 配合 v26 + upsert_remote_activity
+        // 的 self 分支（显式 id + origin='local'），让「清空本机数据库」后能从 Drive 恢复
+        // 本机自己的历史。其它共享 metadata（categories / app_groups / ...）继续跳过：
+        // - 这些 schema 没 device_id 列，跨设备共享，本机不会"丢"这些数据
+        // - 拉自己的 metadata 文件除了浪费一次 download 没价值
+        let is_self_activity = matches!(parsed, ParsedFile::ActivityDay { .. }) && device_id == self_id;
+        if device_id == self_id && !is_self_activity {
             handled[i] = true;
             continue;
         }
@@ -261,10 +280,42 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::AppGroupMembers { device_id } => {
                 merge_app_group_members(&inner.pool, &device_id, &body).await
             }
-            ParsedFile::DeviceMeta { .. } => unreachable!(),
+            ParsedFile::DeviceMeta { .. } | ParsedFile::Tombstone { .. } => unreachable!(),
         };
         if let Err(e) = res {
             log::warn!("merge {} 失败: {e}", f.name);
+            continue;
+        }
+        handled[i] = true;
+        applied += 1;
+    }
+
+    // Pass 3: tombstone 清扫 —— 放在最后跑，确保 Pass 2 merge 进来的 activity 行
+    // 之后再做时间戳 DELETE。这样即便 Drive 上 purge_cloud_data 没删干净的旧 ndjson
+    // 残留被 Pass 2 merge 回来，Pass 3 的 `DELETE WHERE updated_at < clearedAt` 还能
+    // 把它们清掉。
+    for (i, f) in files.iter().enumerate() {
+        let parsed = match parse_filename(&f.name) {
+            Some(p) => p,
+            None => continue, // Pass 1 已 mark
+        };
+        let ParsedFile::Tombstone { device_id } = parsed else {
+            continue; // 只处理 tombstone
+        };
+        let body = match with_token_retry(&inner.pool, &mut token, |tok| {
+            let id = f.id.clone();
+            async move { drive::download(&tok, &id).await }
+        })
+        .await
+        {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("下载 {} 失败: {e}", f.name);
+                continue;
+            }
+        };
+        if let Err(e) = merge_tombstone(&inner.pool, &device_id, &body).await {
+            log::warn!("merge tombstone {} 失败: {e}", f.name);
             continue;
         }
         handled[i] = true;
@@ -723,6 +774,53 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
     Ok(())
 }
 
+/// 处理 `device.<owner_id>.tombstone.json`：源设备明确告知"在 clearedAt 之前的我的数据
+/// 请全部清"。执行：
+///
+///   DELETE FROM activities WHERE device_id = <owner_id> AND updated_at < clearedAt;
+///
+/// 边角：
+/// - **本机自己的 tombstone**（owner_id == self_id）也会跑：mac 在 purge_cloud_data 之后
+///   `purge_activities` 把本地表清空，这条 DELETE 命中 0 → no-op；
+///   即便此前 mac 有 「self pull-back 恢复的本机历史行」 残留也会被这一刀清掉，
+///   逻辑跟跨设备一致。
+/// - 幂等：tombstone 永久留在 Drive，对端反复 pull 看到它，每次 DELETE 命中 0
+///   （因为已经删过了）→ no-op。
+/// - 不影响 capture：源端 purge 之后新 capture 的行 `updated_at > clearedAt` →
+///   不被 DELETE 影响。
+async fn merge_tombstone(pool: &DbPool, owner_device_id: &str, body: &[u8]) -> Result<()> {
+    let payload: TombstonePayload = match serde_json::from_slice(body) {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("tombstone 解析失败 (device={owner_device_id}): {e}");
+            return Ok(());
+        }
+    };
+    if payload.cleared_at.is_empty() {
+        log::warn!("tombstone clearedAt 为空 (device={owner_device_id})，跳过");
+        return Ok(());
+    }
+    let owner = owner_device_id.to_string();
+    let cleared_at = payload.cleared_at;
+    let deleted = pool
+        .0
+        .call(move |conn| {
+            let n = conn
+                .execute(
+                    "DELETE FROM activities
+                     WHERE device_id = ?1 AND updated_at < ?2",
+                    rusqlite::params![owner, cleared_at],
+                )
+                .db()?;
+            Ok(n)
+        })
+        .await?;
+    if deleted > 0 {
+        log::info!("tombstone applied: device={owner_device_id} deleted {deleted} activity rows");
+    }
+    Ok(())
+}
+
 async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
     // device meta 是单对象，不是数组。空对象当作"还没数据"，跳过。
     let parsed: Value = serde_json::from_slice(body).map_err(|e| Error::SyncParse {
@@ -784,6 +882,17 @@ async fn upsert_remote_activity(
     category_id: &str,
     updated_at: &str,
 ) -> Result<()> {
+    // 是否本机自己的 ndjson 拉回来？
+    // 配合 v26 migration（local 行 `remote_id = id`）+ pull self-skip 移除后的设计：
+    // - mac 在「清空本机数据库」之后下次 pull 会拉到自己的 `device.<mac>.activities.<day>.ndjson`
+    // - 这里 INSERT 必须**用显式 id**（来自 remote_id）+ origin='local'，否则：
+    //   1. id 用 AUTOINCREMENT 拿到新值（如 1）→ 跟 Drive 文件里的原 id（如 42）对不上
+    //   2. 下次 push 走 [build_activities_day]，SELECT 出来的是新本地 id（1）→ rewrite Drive 文件
+    //      变成 id=1 → 对端 Win pull 看到的 remote_id 从 "42" 变 "1" → upsert key 错位 →
+    //      Win 端**重复 INSERT**。整张历史在对端裂成两份。
+    // - 显式 id 保证 push 重写后 Drive 文件 id 字段跟 purge 前一致，跨设备身份对称
+    let self_id = crate::device::self_id().map(String::from).unwrap_or_default();
+    let is_self = !self_id.is_empty() && device_id == self_id;
     let device_id = device_id.to_string();
     let remote_id = remote_id.to_string();
     let started_at = started_at.to_string();
@@ -805,27 +914,59 @@ async fn upsert_remote_activity(
                 .ok();
             match existing {
                 None => {
-                    conn.execute(
-                        "INSERT INTO activities(
-                           started_at, ended_at, duration_secs, local_date, local_hour,
-                           process_name, window_title, category_id, screenshot_path,
-                           device_id, remote_id, updated_at, origin
-                         ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote')",
-                        rusqlite::params![
-                            started_at,
-                            ended_at,
-                            duration_secs,
-                            local_date,
-                            local_hour,
-                            process_name,
-                            window_title,
-                            category_id,
-                            device_id,
-                            remote_id,
-                            updated_at,
-                        ],
-                    )
-                    .db()?;
+                    if is_self {
+                        // 本机自己拉回来：显式 id + origin='local'，保持身份对端可识别 +
+                        // 本机视角的 "local 来源" 语义
+                        let explicit_id: i64 =
+                            remote_id.parse().map_err(|e: std::num::ParseIntError| {
+                                tokio_rusqlite::Error::Other(Box::new(e))
+                            })?;
+                        conn.execute(
+                            "INSERT INTO activities(
+                               id, started_at, ended_at, duration_secs, local_date, local_hour,
+                               process_name, window_title, category_id, screenshot_path,
+                               device_id, remote_id, updated_at, origin
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local')",
+                            rusqlite::params![
+                                explicit_id,
+                                started_at,
+                                ended_at,
+                                duration_secs,
+                                local_date,
+                                local_hour,
+                                process_name,
+                                window_title,
+                                category_id,
+                                device_id,
+                                remote_id,
+                                updated_at,
+                            ],
+                        )
+                        .db()?;
+                    } else {
+                        // 对端的数据：本机看做 remote 镜像，auto id
+                        conn.execute(
+                            "INSERT INTO activities(
+                               started_at, ended_at, duration_secs, local_date, local_hour,
+                               process_name, window_title, category_id, screenshot_path,
+                               device_id, remote_id, updated_at, origin
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote')",
+                            rusqlite::params![
+                                started_at,
+                                ended_at,
+                                duration_secs,
+                                local_date,
+                                local_hour,
+                                process_name,
+                                window_title,
+                                category_id,
+                                device_id,
+                                remote_id,
+                                updated_at,
+                            ],
+                        )
+                        .db()?;
+                    }
                 }
                 Some((id, cur_updated)) => {
                     if updated_at > cur_updated {

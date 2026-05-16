@@ -110,3 +110,21 @@ pub struct DeviceMetaPayload {
     pub last_seen_at: Option<String>,
     pub updated_at: String,
 }
+
+/// 设备 tombstone 文件 (`device.<self_id>.tombstone.json`) 的 JSON 形式。
+///
+/// 由 [`crate::commands::storage::purge_cloud_data`] 在删完本机 Drive 文件之后上传一个，
+/// 内容只有一个 `clearedAt` 时间戳。对端 pull 时识别 → 对该设备 mirror 行执行
+/// `DELETE WHERE device_id=<owner> AND updated_at < clearedAt` —— 修补
+/// 「Drive 上文件没了，对端的本地 mirror 仍残留」的 sync 协议缺陷
+/// （sync 引擎只有 INSERT/UPDATE + 软删，没有"文件级缺失 → 行级 DELETE"的反向传播）。
+///
+/// 幂等：tombstone 文件本身留在 Drive 永久存在；对端反复 pull 看到它执行 DELETE 命中 0
+/// 行（因为已经删过了）即 no-op。源端后续 capture 的新行 `updated_at > clearedAt`
+/// 不会被 DELETE 影响。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TombstonePayload {
+    /// RFC3339 字符串，purge_cloud_data 完成那一刻的时间
+    pub cleared_at: String,
+}
