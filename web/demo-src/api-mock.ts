@@ -48,6 +48,9 @@ export function dtoToDaySummary(dto: DaySummaryDto): DaySummary {
 export const MODEL_DOWNLOAD_EVENT = "ai://model-download-progress";
 export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
+/** demo 跟主 API hindsight.ts 同步：summary_main = "__cloud__" 表示 step 2 走云端。
+ *  demo 里没真云端调用，仅作为类型 / 比较符号存在，让消费方代码能跑通。 */
+export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
 
 // ────────────────────────────────────────────
 // 应用图标 —— 用 Simple Icons CDN 拿品牌 SVG
