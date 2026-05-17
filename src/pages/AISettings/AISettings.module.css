@@ -283,14 +283,148 @@
   }
 }
 
-/* —— 本地 AI 引擎卡片（Phase 1B-α） —— */
+/* —— 本地 AI 引擎卡片（Phase 1B-α）——
+   外层 flex 行：左侧引擎 icon + 右侧内容 body 列。align-items: flex-start 让 icon
+   贴顶部，跟 .engineNameRow 视觉对齐。 */
 .engineCard {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 14px;
   padding: 16px 20px;
 }
 
+.engineCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 左侧引擎 icon：square avatar 60×60，比模型卡 logo (40×40) 大一档区分等级
+   ——引擎是"上位概念"，模型挂在引擎下，视觉权重应更高。浅紫底跟"系统/引擎"色调。 */
+.engineCardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+}
+
+/* 第 1 行：llama.cpp 名 + ⓘ（左），约 30 MB（右，margin-left:auto 推过去）。
+   display: flex 让行占 body 全宽，size 才能贴右。 */
+.engineNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.engineName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+
+/* 第 2 行：安装状态 badge 在前 + 推理库标签（已装版本号 / 未装提示）小灰字在后 */
+.engineStatusRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.engineRuntimeNote {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 第 3 行：检测到的加速后端，整行灰字（size 已移到第 1 行右侧） */
+.engineDetectedRow {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 主操作 + 维护操作：竖分割两栏
+   - 左栈：下载 AI 引擎 + 测试连接（垂直堆叠，左对齐）
+   - 中：1px 竖分割
+   - 右栈：大小 + 打开 + 卸载（+ 释放显存）右对齐
+   align-items: stretch 让左右两栈等高，分割线自然贯穿到底。 */
+.engineSplit {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.engineLeftCol {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  /* flex-start 让按钮各自按内容宽度自适应；下面的 .engineDownloadOutline
+     设了 min-width 让两个按钮自然等宽（取较长那个为基准），不会拉到栈满宽。 */
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.engineRightCol {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.engineVerticalDivider {
+  width: 1px;
+  background: rgba(0, 0, 0, 0.08);
+  align-self: stretch;
+}
+
+/* 「下载 llama 引擎」按钮：outline 紫色，跟 AISummary tabs 的 .startBtn 同款风格。
+   主操作但属于"发现 / 浏览"语义而非支付级 CTA，所以走 outline 不是 solid。
+   尺寸跟 .testBtn 对齐（h36 / pad 24）让 busy 状态宽度变化时不抖。 */
+.engineDownloadOutline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  /* min-width 让"测试连接"和"下载 llama 引擎"自然等宽：按较长的下载文字 + 图标
+     + 双侧 padding 算出来，~150px 刚好；短文字按钮拉到同宽，内容居中。 */
+  min-width: 150px;
+  background: transparent;
+  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+  color: var(--color-accent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.engineDownloadOutline:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  border-color: var(--color-accent);
+}
+
+.engineDownloadOutline:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.engineDownloadOutline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 旧 .engineHead 留着兼容（如别处仍用），但本 tab 已不引用 */
 .engineHead {
   display: flex;
   align-items: center;
@@ -601,9 +735,12 @@
   color: #dc2626;
 }
 
-/* 包大小提示：在操作行最右端 */
+/* 包大小提示：第 1 行右端，跟 llama.cpp 名同行。font 15px 半粗让用户一眼看到，
+   但仍是灰字（不抢主要标题 16px 黑）。margin-left:auto 推到行尾，
+   margin-right 留点缝隙不贴卡片右内边距。 */
 .engineSize {
   margin-left: auto;
+  margin-right: 16px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
@@ -636,6 +773,60 @@
    在这里加：未安装时打开 / 卸载按钮变灰 + 不响应 hover */
 .engineActions .engineFolderBtn:disabled,
 .engineActions .engineUninstall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 新版 EngineCard 右栈：跟左栈下载/测试按钮 (h36) 等高对齐。同上专门 override
+   composes 自 DataTab 的 30px 默认。min-width 让"打开"和"卸载 llama"自然等宽
+   （以较长的"卸载 llama"+ Trash icon 为基准）。 */
+.engineRightCol .engineFolderBtn,
+.engineRightCol .engineUninstallOutline {
+  height: 36px;
+  font-size: 13px;
+  min-width: 130px;
+  justify-content: center;
+}
+
+.engineRightCol .engineFolderBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 「卸载」按钮 outline 风：跟 AISummary tabs 的 .deleteBtn / AISettings 卡片的
+   .uninstallOutline 同一族——透明底 + 1.5px 红边 + 红字。height 36 跟左栈下载/测试
+   等高，padding 14 对齐。颜色编码统一：红 = 破坏性操作。 */
+.engineUninstallOutline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.engineUninstallOutline:hover:not(:disabled) {
+  background: color-mix(in oklab, #ef4444 8%, transparent);
+  border-color: #ef4444;
+}
+
+.engineUninstallOutline:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.engineUninstallOutline:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
@@ -715,22 +906,47 @@
 
 .modelCardLeft {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  /* 上下两行布局：name 在第 1 行、caps 在第 2 行。logo 用 flex-start 顶部对齐，
+     视觉上"占满两行高度"是因为 .modelCardLogo 自身高度做大到 ~40px。 */
+  align-items: flex-start;
+  gap: 10px;
   min-width: 0;
   flex: 1;
 }
 
-/* 品牌 logo：HF org 头像直链；圆角方形 + 浅描边，跟卡片背景拉开。
+/* 品牌 logo：HF org 头像直链；square avatar 风格，跨 name+caps 两行视觉高度。
    img 加载失败时 onError 会把 display:none，所以这里没占位行为——简单。 */
 .modelCardLogo {
-  width: 22px;
-  height: 22px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   object-fit: cover;
-  border-radius: 5px;
+  border-radius: 7px;
   border: 1px solid rgba(0, 0, 0, 0.06);
   background: rgba(0, 0, 0, 0.03);
+}
+
+/* logo 右侧的"身份块"：name + ⓘ 在第 1 行，caps 在第 2 行。 */
+.modelCardIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.modelCardNameRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modelCardCaps {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .modelCardRight {
@@ -826,30 +1042,218 @@
   padding: 0 12px;
 }
 
-/* 能力 chip：贴在模型名旁的 vision / text-only 标签，icon-only 紧凑形态。
-   仅展示用，不可点；hover 时通过 title / aria-label 解释含义。
-   颜色按能力区分：vision 走主色调蓝，text-only 走中性灰。 */
-.modelCapChip {
+/* 下载 CTA outline 风：紫色描边 + 紫色字 / icon + 透明底。设计稿里推荐卡列表的"下载"
+   是发现 / 浏览态，不是支付级 CTA —— 用 outline 让强调比 .testBtn solid 弱一档，
+   不喧宾夺主（用户在选模型不是在结账）。hover 时背景轻微着色暗示可点。
+   推荐卡列表专用，覆盖 .modelCardRight .testBtn 的 solid 风。 */
+.modelCardRight .downloadOutline {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border-radius: 4px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  min-width: 0;
+  background: transparent;
+  color: var(--color-accent);
+  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.modelCardRight .downloadOutline:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  border-color: var(--color-accent);
+}
+
+.modelCardRight .downloadOutline:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.modelCardRight .downloadOutline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 卸载按钮 outline 风：红边 + 红字 + 透明底。跟同行的 .downloadOutline 是同一族
+   "outline 描边"风格，仅颜色换成红色保留破坏性 affordance。hover 时背景轻微着色。
+   推荐卡列表专用，覆盖 .engineUninstall 的 dangerBtn solid 风。 */
+.modelCardRight .uninstallOutline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  min-width: 0;
+  background: transparent;
+  color: #b91c1c;
+  border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.modelCardRight .uninstallOutline:hover:not(:disabled) {
+  background: color-mix(in oklab, #ef4444 8%, transparent);
+  border-color: #ef4444;
+}
+
+.modelCardRight .uninstallOutline:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.modelCardRight .uninstallOutline:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 「已下载」状态徽章：同款 outline 风（紫边 + 紫字 + ✓ icon），跟未下载的"下载"按钮
+   视觉等大 + 等强度，让两态切换一目了然。显示用，不可点；卸载走右边的 trash icon。 */
+.installedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--color-accent);
+  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
   user-select: none;
   flex-shrink: 0;
 }
 
-.modelCapChipVision {
-  background: color-mix(in oklab, #3b82f6 11%, transparent);
-  border: 1px solid color-mix(in oklab, #3b82f6 26%, transparent);
-  color: #1d4ed8;
+/* 能力 / 定位 caps chip：贴在模型名右边的彩色小胶囊（TEXT / VISION / FAST / 等）。
+   纯展示用，不可点。配色 pastel（背景 11% 不透明度 + 边框 22% + 深色字），跟模型名行
+   保持 14px 高度。新增 type 时：CAP_CLASS_MAP 里加一行 + 在下面 .capBadge<X> 写一份色。
+   `position: relative` 是给 .capBadgeTip absolute 定位锚点用。 */
+.capBadge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  user-select: none;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  cursor: help;
 }
 
-.modelCapChipText {
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+/* hover 时显示的解释气泡：跟 .engineInfoTip 同款深色 tooltip 模式（macOS WKWebView
+   下原生 title 属性触发不稳，所以用 DOM span + CSS :hover 切 opacity 自己画）。
+   重置 .capBadge 的字号 / 字重 / letter-spacing / nowrap，避免继承导致 tip 文本变形。 */
+.capBadgeTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%) translateY(4px);
+  z-index: 10;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: rgba(28, 28, 36, 0.94);
+  border-radius: 6px;
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.20),
+    0 2px 4px rgba(0, 0, 0, 0.10);
+  opacity: 0;
+  pointer-events: none;
+  white-space: normal;
+  text-align: left;
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms var(--ease-out);
+}
+
+.capBadgeTip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(28, 28, 36, 0.94);
+}
+
+.capBadge:hover .capBadgeTip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── 能力类（蓝 / 青 / 灰蓝）—— 表示模型"能做什么" ── */
+.capBadgeText {
+  background: color-mix(in oklab, #1e3a8a 11%, transparent);
+  border-color: color-mix(in oklab, #1e3a8a 22%, transparent);
+  color: #1e3a8a;
+}
+.capBadgeVision {
+  background: color-mix(in oklab, #0f766e 11%, transparent);
+  border-color: color-mix(in oklab, #0f766e 22%, transparent);
+  color: #0f766e;
+}
+.capBadgeCode {
+  background: color-mix(in oklab, #3730a3 11%, transparent);
+  border-color: color-mix(in oklab, #3730a3 22%, transparent);
+  color: #3730a3;
+}
+
+/* ── 定位类（橙 / 紫 / 蓝 / 玫红）—— 表示模型"什么档位 / 风格" ── */
+.capBadgeFast {
+  background: color-mix(in oklab, #9a3412 11%, transparent);
+  border-color: color-mix(in oklab, #9a3412 22%, transparent);
+  color: #9a3412;
+}
+.capBadgeBalanced {
+  background: color-mix(in oklab, #5b21b6 11%, transparent);
+  border-color: color-mix(in oklab, #5b21b6 22%, transparent);
+  color: #5b21b6;
+}
+.capBadgeReasoning {
+  background: color-mix(in oklab, #1d4ed8 11%, transparent);
+  border-color: color-mix(in oklab, #1d4ed8 22%, transparent);
+  color: #1d4ed8;
+}
+.capBadgeR1 {
+  background: color-mix(in oklab, #9d174d 11%, transparent);
+  border-color: color-mix(in oklab, #9d174d 22%, transparent);
+  color: #9d174d;
+}
+
+/* ── 标记类（紫粉，仅一条作首推）── */
+.capBadgeDefault {
+  background: color-mix(in oklab, #6b21a8 14%, transparent);
+  border-color: color-mix(in oklab, #6b21a8 28%, transparent);
+  color: #6b21a8;
+}
+
+/* ── fallback：JSON 加了新 type 但前端没补色 → 走灰色不至于布局崩 ── */
+.capBadgeUnknown {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
   color: var(--text-muted);
 }
 

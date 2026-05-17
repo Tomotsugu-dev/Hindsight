@@ -54,6 +54,16 @@ pub struct Recommended {
     /// 空串 = 不参与品牌筛选（旧 JSON 兼容）。
     #[serde(default)]
     pub brand: String,
+    /// 能力 / 定位标签，前端按 pastel 色 chip 渲染在模型名右侧。
+    ///
+    /// 约定大写英文缩写，便于跨语言一致 + 紧凑显示：
+    /// - **能力类**：`TEXT`、`VISION`、`CODE`
+    /// - **定位类**：`FAST`（< 1GB 轻量）、`BALANCED`（中量）、`REASONING`（深度推理）、`R1`（DeepSeek R1 系）
+    /// - **标记类**：`DEFAULT`（仅一条作为"首推"）
+    ///
+    /// 由 JSON 维护者按模型实测特性填；前端拿到不认识的 type 会按 default fallback 色显示。
+    #[serde(default)]
+    pub caps: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ArrowUpDown,
+  Check,
   ChevronDown,
   Cloud,
   Cpu,
   Download,
-  Eye,
   HardDrive,
   Info,
   Loader2,
@@ -15,7 +15,6 @@ import {
   Plus,
   Tag,
   Trash2,
-  Type,
 } from "lucide-react";
 import {
   api,
@@ -42,6 +41,19 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useAiSettings } from "./useAiSettings";
 import { logError } from "../../../lib/logger";
 import styles from "../AISettings.module.css";
+
+/** 能力 chip：cap 字符串 → CSS class。识别不出的 type fallback 到 `capBadgeUnknown`
+ *  灰色（JSON 维护者加了新 type 但前端没补色时仍可显示，不至于布局崩）。 */
+const CAP_CLASS_MAP: Record<string, string> = {
+  TEXT: styles.capBadgeText,
+  VISION: styles.capBadgeVision,
+  FAST: styles.capBadgeFast,
+  BALANCED: styles.capBadgeBalanced,
+  R1: styles.capBadgeR1,
+  CODE: styles.capBadgeCode,
+  REASONING: styles.capBadgeReasoning,
+  DEFAULT: styles.capBadgeDefault,
+};
 
 /** toolbar 筛选 / 排序的取值；前 3 个跟筛选维度一一对应。 */
 type FilterCap = "all" | "vision" | "text";
@@ -815,44 +827,66 @@ function RecommendedCard({
               }}
             />
           ) : null}
-          <span className={styles.modelCardName}>{rec.displayName}</span>
-          {/* 能力清单：每个 chip 表示一种"能用作"。
-              vision 模型既能图（step 1）也能文（step 2）→ 双 chip；
-              text-only 模型只能文（step 2）→ 单 chip。 */}
-          {rec.vision ? (
-            <span
-              className={`${styles.modelCapChip} ${styles.modelCapChipVision}`}
-              title={t("aiSettings.models.card.capImageTooltip")}
-              aria-label={t("aiSettings.models.card.capImage")}
-            >
-              <Eye size={12} strokeWidth={2.2} />
-            </span>
-          ) : null}
-          <span
-            className={`${styles.modelCapChip} ${styles.modelCapChipText}`}
-            title={t("aiSettings.models.card.capTextTooltip")}
-            aria-label={t("aiSettings.models.card.capText")}
-          >
-            <Type size={12} strokeWidth={2.2} />
-          </span>
-          <button
-            type="button"
-            className={styles.engineInfoWrap}
-            aria-label={t("aiSettings.models.card.hfTooltipAria", {
-              repo: rec.repo,
-            })}
-          >
-            <Info size={12} strokeWidth={2.2} className={styles.engineInfoIcon} />
-            <span className={styles.engineInfoTip} role="tooltip">
-              {t("aiSettings.models.card.hfTooltipPrefix")}
-              <code>{rec.repo}</code>
-            </span>
-          </button>
-          <span className={styles.modelCardSize}>
-            {t("aiSettings.models.card.approxSize", {
-              size: totalGB.toFixed(1),
-            })}
-          </span>
+          {/* 名 + caps 上下两行堆叠在 logo 右侧；logo 用 align-items:flex-start
+              视觉上占满两行高度（square avatar 风格）。size 跟在 ⓘ 后面给
+              用户一眼看到"模型多大"，不用扫到卡片右边。 */}
+          <div className={styles.modelCardIdentity}>
+            <div className={styles.modelCardNameRow}>
+              <span className={styles.modelCardName}>{rec.displayName}</span>
+              <button
+                type="button"
+                className={styles.engineInfoWrap}
+                aria-label={t("aiSettings.models.card.hfTooltipAria", {
+                  repo: rec.repo,
+                })}
+              >
+                <Info
+                  size={12}
+                  strokeWidth={2.2}
+                  className={styles.engineInfoIcon}
+                />
+                <span className={styles.engineInfoTip} role="tooltip">
+                  {t("aiSettings.models.card.hfTooltipPrefix")}
+                  <code>{rec.repo}</code>
+                </span>
+              </button>
+              <span className={styles.modelCardSize}>
+                {t("aiSettings.models.card.approxSize", {
+                  size: totalGB.toFixed(1),
+                })}
+              </span>
+            </div>
+            {/* 能力 / 定位 caps：来自 recommended-models.json 的 `caps` 数组
+                （如 ["VISION","TEXT","DEFAULT"]）；color/class 走 CAP_CLASS_MAP，
+                新加未知 type 会 fallback 到灰色不报错。
+                title 走 i18n `card.capsTooltips.<CAP>`；i18next 找不到 key 时返回 key
+                自身，这里用 `defaultValue: ""` 让未注册的 cap silently 无 tooltip。 */}
+            {rec.caps.length > 0 ? (
+              <div className={styles.modelCardCaps}>
+                {rec.caps.map((cap) => {
+                  // i18next 默认找不到 key 返回 key 自身——`defaultValue: ""`
+                  // 让未注册的 cap 拿到空串，下面据此决定要不要渲染 tooltip。
+                  const tip = t(
+                    `aiSettings.models.card.capsTooltips.${cap}`,
+                    { defaultValue: "" },
+                  );
+                  return (
+                    <span
+                      key={cap}
+                      className={`${styles.capBadge} ${CAP_CLASS_MAP[cap] ?? styles.capBadgeUnknown}`}
+                    >
+                      {cap}
+                      {tip ? (
+                        <span className={styles.capBadgeTip} role="tooltip">
+                          {tip}
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className={styles.modelCardRight}>
           {!installed ? (
@@ -871,7 +905,7 @@ function RecommendedCard({
               // 已暂停（有 partial 但不在 inflight） → 显示「继续」按钮 + 已下进度
               <button
                 type="button"
-                className={styles.testBtn}
+                className={styles.downloadOutline}
                 onClick={() => onDownload(rec)}
                 title={t("aiSettings.models.card.resumeTooltip", {
                   size: (pausedBytes / 1024 / 1024).toFixed(1),
@@ -881,10 +915,10 @@ function RecommendedCard({
                 {t("aiSettings.models.card.resume")}
               </button>
             ) : (
-              // 未下载、未暂停 → 标准「下载」按钮
+              // 未下载、未暂停 → 标准「下载」按钮（outline 风，发现态而非支付级 CTA）
               <button
                 type="button"
-                className={styles.testBtn}
+                className={styles.downloadOutline}
                 onClick={() => onDownload(rec)}
               >
                 <Download size={14} strokeWidth={2} />
@@ -893,6 +927,13 @@ function RecommendedCard({
             )
           ) : (
             <>
+              {/* 已下载：紫色实心 pill + ✓，跟未下载的「下载」按钮视觉等大，
+                  让"模型有没有装"一望即知（旧版只靠 step1/step2 toggle 存在感
+                  示意，新用户经常看不出）。卸载走右边的 trash icon button。 */}
+              <span className={styles.installedBadge}>
+                <Check size={14} strokeWidth={2.4} />
+                {t("aiSettings.models.card.installedBadge")}
+              </span>
               {/* step 1 toggle：vision=false 时禁用并给 tooltip 解释 */}
               <button
                 type="button"
@@ -930,7 +971,7 @@ function RecommendedCard({
           )}
           <button
             type="button"
-            className={styles.engineUninstall}
+            className={styles.uninstallOutline}
             onClick={() => onUninstall(rec)}
             disabled={!installed || busy}
             title={
@@ -940,7 +981,7 @@ function RecommendedCard({
             }
           >
             <Trash2 size={14} strokeWidth={1.85} />
-            {t("aiSettings.engine.actions.uninstall")}
+            {t("aiSettings.models.card.uninstall")}
           </button>
         </div>
       </div>

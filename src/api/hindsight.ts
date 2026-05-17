@@ -198,6 +198,11 @@ export interface RecommendedModel {
   /** 品牌标识——前端按这个分组筛选 (Qwen / Google / DeepSeek / OpenAI / Z.AI)；
    *  空串 = 该模型不参与品牌筛选。 */
   brand: string;
+  /** 能力 / 定位标签，按 pastel chip 渲染在模型名右边。约定大写英文缩写：
+   *  能力类 `TEXT` / `VISION` / `CODE`；
+   *  定位类 `FAST` / `BALANCED` / `REASONING` / `R1`；
+   *  标记类 `DEFAULT`（首推）。识别不出的 type 走 fallback 灰色。 */
+  caps: string[];
 }
 
 /** 下载 GGUF 时的进度事件 payload。`file` 字段标识哪个文件（main / mmproj）。 */
