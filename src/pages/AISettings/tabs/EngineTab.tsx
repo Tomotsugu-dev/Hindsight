@@ -414,6 +414,11 @@ function EngineSection() {
       </span>
 
       <div className={styles.engineCardBody}>
+      {/* 竖分割线：absolute 定位到 body 50%，top/bottom: 0 让它横跨整个 body 高度
+          （包括 name / status / device / split 所有行）。不放在 split 行里是因为那样
+          只能跟着按钮区高度走，达不到"横跨整个 box"的效果。 */}
+      <span className={styles.engineVerticalDivider} aria-hidden="true" />
+
       {/* 第 1 行：llama.cpp 名 + ⓘ tooltip（左），约 30 MB 大小提示（右）。
           名字 / 大小都是"引擎身份"信息，放同行让用户一眼看到。 */}
       <div className={styles.engineNameRow}>
@@ -532,8 +537,6 @@ function EngineSection() {
             {t("aiSettings.engine.actions.testConnection")}
           </button>
         </div>
-
-        <div className={styles.engineVerticalDivider} aria-hidden="true" />
 
         <div className={styles.engineRightCol}>
           {status.runtime.state === "running" ? (

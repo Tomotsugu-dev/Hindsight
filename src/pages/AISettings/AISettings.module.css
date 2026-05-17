@@ -294,6 +294,7 @@
 }
 
 .engineCardBody {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -379,9 +380,17 @@
 }
 
 .engineVerticalDivider {
+  /* absolute 定位到 body 容器 50%（横向居中于 split 行的两栈之间）；
+     top/bottom 0 让它横跨整个 body 高度（name / status / device / split 所有行）。
+     transform: translateX(-50%) 把 2px 宽度本身的中点对齐到 50%。 */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 1px;
-  background: rgba(0, 0, 0, 0.08);
-  align-self: stretch;
+  background: rgba(0, 0, 0, 0.14);
+  pointer-events: none;
 }
 
 /* 「下载 llama 引擎」按钮：outline 紫色，跟 AISummary tabs 的 .startBtn 同款风格。
