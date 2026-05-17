@@ -882,7 +882,7 @@ async fn merge_tombstone(pool: &DbPool, owner_device_id: &str, body: &[u8]) -> R
         return Ok(());
     }
     let owner = owner_device_id.to_string();
-    let cleared_at = payload.cleared_at;
+    let cleared_at = payload.cleared_at.clone();
     let deleted = pool
         .0
         .call(move |conn| {
@@ -896,6 +896,35 @@ async fn merge_tombstone(pool: &DbPool, owner_device_id: &str, body: &[u8]) -> R
             Ok(n)
         })
         .await?;
+
+    // tombstone 还顺手把 devices 行 mark deleted_at —— 让 "controller 从云端把
+    // device X 整个移除" 操作传达给所有其它设备：它们 pull 到这个 tombstone 后，
+    // 不光删 activities，还把 "设备页里那个幽灵设备卡" 也清掉。
+    //
+    // 关键防护 `updated_at < cleared_at`：只在该设备 meta 没有在 cleared_at 之后
+    // 刷新过时才软删。场景对比：
+    //   - 死掉的设备：永远不再 push 新 meta，updated_at 永远 < cleared_at，标软删 ✓
+    //   - 还活着的设备触发 purge_cloud_data：随后会继续 push 新 meta，下次 push tick
+    //     上传的 meta.updated_at > cleared_at；pull pass 1 先 upsert meta（同时清空
+    //     deleted_at，见 merge_device_meta 的 ON CONFLICT 子句），pass 3 的 tombstone
+    //     遇到 updated_at > cleared_at 不再命中，最终设备仍然出现在列表 ✓
+    let owner2 = owner_device_id.to_string();
+    let cleared_at2 = payload.cleared_at;
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE devices
+                 SET deleted_at = ?2, updated_at = ?2
+                 WHERE device_id = ?1
+                   AND updated_at < ?2
+                   AND (deleted_at IS NULL OR deleted_at < ?2)",
+                rusqlite::params![owner2, cleared_at2],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+
     if deleted > 0 {
         log::info!("tombstone applied: device={owner_device_id} deleted {deleted} activity rows");
     }
@@ -929,16 +958,22 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
             )? {
                 return Ok(());
             }
+            // 收到比本地 updated_at 更新的 meta → 该设备"又活了"：清掉之前
+            // tombstone 留下的 deleted_at 软删标记，让该设备重新出现在设备列表里。
+            // 场景：用户在 A 上跑 purge_cloud_data（清云端但 A 还活着），B 先 pull 到
+            // tombstone 把 A 标 deleted，A 继续 capture 一会儿后又 push 新 meta，
+            // B 下次 pull 到这个新 meta 应该把 A 拉回来。
             conn.execute(
-                "INSERT INTO devices(device_id, display_name, color, icon, os, last_seen_at, is_self, updated_at)
-                 VALUES(?, ?, ?, ?, ?, ?, 0, ?)
+                "INSERT INTO devices(device_id, display_name, color, icon, os, last_seen_at, is_self, updated_at, deleted_at)
+                 VALUES(?, ?, ?, ?, ?, ?, 0, ?, NULL)
                  ON CONFLICT(device_id) DO UPDATE SET
                    display_name = excluded.display_name,
                    color = excluded.color,
                    icon = excluded.icon,
                    os = excluded.os,
                    last_seen_at = excluded.last_seen_at,
-                   updated_at = excluded.updated_at",
+                   updated_at = excluded.updated_at,
+                   deleted_at = NULL",
                 rusqlite::params![device_id, row.display_name, row.color, row.icon, row.os, row.last_seen_at, row.updated_at],
             )
             .db()?;

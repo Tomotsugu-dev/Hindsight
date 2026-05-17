@@ -795,7 +795,17 @@
       "renameTitle": "改名"
     },
     "other": {
-      "lastSync": "上次同步: {{when}}"
+      "lastSync": "上次同步: {{when}}",
+      "forgetAria": "从云端移除 {{name}}",
+      "forgetTitle": "从云端永久移除这台设备"
+    },
+    "forgetDialog": {
+      "title": "从云端移除「{{name}}」？",
+      "intro": "将永久删除这台设备在 Google Drive 里的全部数据，以及本机/其他设备上跟它相关的所有活动记录。其他设备下次连接上云盘时也会一并清理这台设备的相关所有数据。",
+      "unaffected": "适用场景：这台设备已经不在你手里了（卖了 / 丢了 / 换机器了），当时忘了从云端清掉它的数据，现在残留记录还出现在其他设备上。",
+      "confirm": "永久移除",
+      "doneToast": "已从云端移除「{{name}}」，删除 {{count}} 个 Drive 文件。",
+      "error": "移除失败：{{message}}"
     }
   },
   "aiSummary": {

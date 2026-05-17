@@ -927,6 +927,7 @@ export const mockRecommendedModels: RecommendedModel[] = [
     logoUrl: null,
     vision: true,
     brand: "Qwen",
+    caps: ["VISION", "TEXT", "DEFAULT"],
   },
 ];
 

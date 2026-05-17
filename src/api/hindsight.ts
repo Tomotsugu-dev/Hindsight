@@ -642,6 +642,15 @@ export const api = {
    *  - `keepLocal=true`：本机数据完整保留（换 Google 账号场景，迁数据到新账号） */
   purgeCloudData: (keepLocal: boolean) =>
     invoke<number>("purge_cloud_data", { keepLocal }),
+  /** 从云端永久移除一台不在自己手里的远端设备：
+   *  - 删 Drive 上 `device.<deviceId>.*` 全部文件
+   *  - 上传 tombstone 让其它设备 pull 后也清掉这台设备的活动 + 软删 devices 行
+   *  - 本机：删 activities + UPDATE devices SET deleted_at
+   *
+   *  返回 Drive 上被删除的文件数。
+   *  必须已登录；deviceId == self 会被后端拒（请走 purgeCloudData）。 */
+  forgetRemoteDevice: (deviceId: string) =>
+    invoke<number>("forget_remote_device", { deviceId }),
   openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
   getDataRoot: () => invoke<string>("get_data_root"),
   setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),

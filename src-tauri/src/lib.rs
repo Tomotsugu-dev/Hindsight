@@ -172,6 +172,7 @@ pub fn run() {
             commands::storage::purge_activities,
             commands::storage::purge_screenshots,
             commands::storage::purge_cloud_data,
+            commands::storage::forget_remote_device,
             commands::storage::open_screenshots_dir,
             commands::storage::get_data_root,
             commands::storage::set_data_root,

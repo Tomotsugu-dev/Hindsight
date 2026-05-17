@@ -286,6 +286,121 @@ pub(crate) async fn purge_cloud_data_impl(
     Ok(deleted)
 }
 
+/// 从云端永久移除一台已经不在自己手里的远端设备。
+///
+/// 跟 [`purge_cloud_data`] 的区别：
+/// - `purge_cloud_data` 在 **被注销的那台机器** 上跑，清的是 self 的数据
+/// - `forget_remote_device` 在 **任何还活着的机器** 上跑，按 device_id 清掉别人留下的孤儿数据
+///
+/// 用途：用户把那台 MacbookAir / 旧 ThinkPad 卖了 / 摔了 / 重装系统了，没机会从那台机器
+/// 主动调 `purge_cloud_data` —— 现在可以在任意机器上从设备页面把它清出去。
+///
+/// 流程对称镜像 `purge_cloud_data`：
+/// 1. 列 Drive 上所有 `device.<target_id>.*` 文件（除 tombstone）
+/// 2. 逐个 DELETE
+/// 3. 上传 `device.<target_id>.tombstone.json` —— 让其它机器 pull 后也清这台设备的活动
+/// 4. 本机事务：DELETE activities + UPDATE devices SET deleted_at = now
+///
+/// 返回 Drive 上被删除的文件数（不含 tombstone）。
+///
+/// 安全约束：
+/// - 必须已登录（云端步骤无法绕过；无登录直接返错，因为不删云端就等于啥也没做）
+/// - 拒绝 target_id == self_id —— 让用户走 `purge_cloud_data` 那条带"保留本机"语义的路径
+#[tauri::command]
+pub async fn forget_remote_device(
+    pool: State<'_, DbPool>,
+    engine: State<'_, Arc<SyncEngine>>,
+    device_id: String,
+) -> Result<u64, String> {
+    forget_remote_device_impl(&pool, &engine, &device_id).await
+}
+
+pub(crate) async fn forget_remote_device_impl(
+    pool: &DbPool,
+    engine: &SyncEngine,
+    target_id: &str,
+) -> Result<u64, String> {
+    let target_id = target_id.trim();
+    if target_id.is_empty() {
+        return Err("device_id 不能为空".into());
+    }
+
+    let self_id = engine.self_id();
+    if self_id == target_id {
+        return Err("不能用 forget_remote_device 清自己，请用 purge_cloud_data".into());
+    }
+
+    // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
+    let token = crate::sync::auth::ensure_valid_token(pool)
+        .await
+        .map_err(|e| format!("需要登录后才能从云端移除远端设备：{e}"))?;
+
+    let prefix = format!("device.{target_id}.");
+    let tombstone_name = format!("device.{target_id}.tombstone.json");
+    let drive = engine.drive();
+
+    // 1. 列 Drive 上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
+    let files = drive
+        .list_appdata_files(&token.access_token, "")
+        .await
+        .map_err(|e| e.to_string())?;
+    let target_files: Vec<_> = files
+        .iter()
+        .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
+        .collect();
+
+    // 2. 逐个 DELETE；单文件失败不抛，让能删的尽量删完
+    let mut deleted = 0u64;
+    for f in &target_files {
+        match drive.delete(&token.access_token, &f.id).await {
+            Ok(()) => deleted += 1,
+            Err(e) => log::warn!("forget_remote_device: delete {} 失败: {e}", f.name),
+        }
+    }
+
+    // 3. 上传 tombstone（覆盖任何旧版本）。其它机器 pull 后按 cleared_at trim activities
+    //    + mark devices.deleted_at（见 merge_tombstone 的 deleted_at 处理）。
+    let cleared_at = utc_now_rfc3339();
+    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
+        cleared_at: cleared_at.clone(),
+    })
+    .map_err(|e| e.to_string())?;
+    if let Err(e) = drive
+        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+        .await
+    {
+        log::warn!("forget_remote_device: upload tombstone 失败: {e}");
+    }
+
+    // 4. 本机：删活动 + 软删设备。事务保证两步原子。
+    let target_owned = target_id.to_string();
+    let cleared_at_for_db = cleared_at.clone();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "DELETE FROM activities WHERE device_id = ?1",
+                rusqlite::params![target_owned],
+            )
+            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            conn.execute(
+                "UPDATE devices
+                 SET deleted_at = ?2, updated_at = ?2
+                 WHERE device_id = ?1",
+                rusqlite::params![target_owned, cleared_at_for_db],
+            )
+            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+    log::info!(
+        "forget_remote_device: device={target_id} drive_deleted={deleted} files (tombstone={cleared_at})"
+    );
+
+    Ok(deleted)
+}
+
 /// 返回当前 data_root（DB / 截图等数据的根目录）。前端「设置 → 数据」面板显示用。
 #[tauri::command]
 pub fn get_data_root() -> String {

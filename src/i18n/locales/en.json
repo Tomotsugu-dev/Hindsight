@@ -795,7 +795,17 @@
       "renameTitle": "Rename"
     },
     "other": {
-      "lastSync": "Last synced: {{when}}"
+      "lastSync": "Last synced: {{when}}",
+      "forgetAria": "Forget {{name}} from the cloud",
+      "forgetTitle": "Permanently remove this device from the cloud"
+    },
+    "forgetDialog": {
+      "title": "Forget \"{{name}}\" from the cloud?",
+      "intro": "This permanently deletes all data this device has in Google Drive, plus every activity record tied to it on this and any other machine. Other devices will clean up this device's data the next time they connect to the cloud.",
+      "unaffected": "Use this when the device is no longer with you (sold / lost / replaced) and you didn't clear its data from the cloud at the time — the leftover records still show up on your other devices.",
+      "confirm": "Forget device",
+      "doneToast": "\"{{name}}\" removed from the cloud ({{count}} Drive files deleted).",
+      "error": "Failed to remove device: {{message}}"
     }
   },
   "aiSummary": {

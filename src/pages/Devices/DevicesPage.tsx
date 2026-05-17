@@ -6,26 +6,58 @@ import {
   CloudOff,
   Eye,
   EyeOff,
+  Loader2,
   LogIn,
   LogOut,
   Pencil,
   RefreshCw,
   Settings2,
+  Trash2,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import { useSettings } from "../../state/settings";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
+import { ForgetRemoteDeviceDialog } from "../../components/ForgetRemoteDeviceDialog/ForgetRemoteDeviceDialog";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
+import { logError } from "../../lib/logger";
 import { api, type AuthState, type SyncStatus } from "../../api/hindsight";
 import styles from "./DevicesPage.module.css";
 
 export default function DevicesPage() {
   const { t } = useTranslation();
-  const { devices, renameSelf, recolorSelf, reiconSelf } = useDeviceFilter();
+  const { devices, renameSelf, recolorSelf, reiconSelf, reload } = useDeviceFilter();
   const self = devices.find((d) => d.current);
   const others = devices.filter((d) => !d.current);
+
+  // 当前正在弹"从云端移除"确认框的设备；null = 关闭
+  const [forgetTarget, setForgetTarget] = useState<Device | null>(null);
+  // 正在跑后端 forget 的设备 id（按 id 锁，避免多张卡都被禁用）
+  const [forgetBusyId, setForgetBusyId] = useState<string | null>(null);
+
+  const runForget = async () => {
+    if (!forgetTarget) return;
+    const target = forgetTarget;
+    setForgetTarget(null);
+    setForgetBusyId(target.id);
+    try {
+      const deleted = await api.forgetRemoteDevice(target.id);
+      window.alert(
+        t("devices.forgetDialog.doneToast", { name: target.name, count: deleted }),
+      );
+      reload();
+    } catch (e) {
+      logError("devices.forgetRemote", e);
+      window.alert(
+        t("devices.forgetDialog.error", {
+          message: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    } finally {
+      setForgetBusyId(null);
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -53,9 +85,23 @@ export default function DevicesPage() {
         {others.length === 0 ? (
           <div className={styles.empty}>{t("devices.emptyOthers")}</div>
         ) : (
-          others.map((d) => <OtherRow key={d.id} device={d} />)
+          others.map((d) => (
+            <OtherRow
+              key={d.id}
+              device={d}
+              busy={forgetBusyId === d.id}
+              onForget={() => setForgetTarget(d)}
+            />
+          ))
         )}
       </section>
+
+      <ForgetRemoteDeviceDialog
+        open={forgetTarget !== null}
+        deviceName={forgetTarget?.name ?? ""}
+        onConfirm={runForget}
+        onCancel={() => setForgetTarget(null)}
+      />
     </div>
   );
 }
@@ -730,10 +776,21 @@ function SelfRow({
   );
 }
 
-function OtherRow({ device }: { device: Device }) {
+function OtherRow({
+  device,
+  busy,
+  onForget,
+}: {
+  device: Device;
+  /** 正在跑 forget_remote_device —— 按钮 disable + 显示 spinner */
+  busy: boolean;
+  onForget: () => void;
+}) {
   const { t } = useTranslation();
+  const fmtRelative = useFmtRelative();
   const Icon = resolveCategoryIcon(device.icon);
   const styleVar = { "--cat-color": device.color } as CSSProperties;
+  const when = device.lastSeenAt ? fmtRelative(device.lastSeenAt) : "—";
   return (
     <div className={styles.deviceRow} style={styleVar}>
       <div className={styles.deviceIconWrap}>
@@ -746,8 +803,24 @@ function OtherRow({ device }: { device: Device }) {
           <span className={styles.deviceName}>{device.name}</span>
         </div>
         <div className={styles.metaRow}>
-          <span>{t("devices.other.lastSync", { when: "—" })}</span>
+          <span>{t("devices.other.lastSync", { when })}</span>
         </div>
+      </div>
+      <div className={styles.deviceActions}>
+        <button
+          type="button"
+          className={styles.actionBtn}
+          onClick={onForget}
+          disabled={busy}
+          aria-label={t("devices.other.forgetAria", { name: device.name })}
+          title={t("devices.other.forgetTitle")}
+        >
+          {busy ? (
+            <Loader2 size={14} strokeWidth={1.85} className={styles.spinning} />
+          ) : (
+            <Trash2 size={14} strokeWidth={1.85} />
+          )}
+        </button>
       </div>
     </div>
   );

@@ -16,6 +16,8 @@ export interface Device {
   color: string;
   icon: string;
   current: boolean;
+  /** 最后一次见到该设备活动；远端设备靠 sync 推过来的 last_seen_at，未同步过为 null */
+  lastSeenAt: string | null;
 }
 
 export type DeviceFilterValue = string | "all";
@@ -46,6 +48,7 @@ function rowToDevice(row: DeviceRow): Device {
     color: row.color,
     icon: row.icon,
     current: row.isSelf,
+    lastSeenAt: row.lastSeenAt,
   };
 }
 
