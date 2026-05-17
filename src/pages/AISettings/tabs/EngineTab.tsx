@@ -414,13 +414,8 @@ function EngineSection() {
       </span>
 
       <div className={styles.engineCardBody}>
-      {/* 竖分割线：absolute 定位到 body 50%，top/bottom: 0 让它横跨整个 body 高度
-          （包括 name / status / device / split 所有行）。不放在 split 行里是因为那样
-          只能跟着按钮区高度走，达不到"横跨整个 box"的效果。 */}
-      <span className={styles.engineVerticalDivider} aria-hidden="true" />
-
-      {/* 第 1 行：llama.cpp 名 + ⓘ tooltip（左），约 30 MB 大小提示（右）。
-          名字 / 大小都是"引擎身份"信息，放同行让用户一眼看到。 */}
+      {/* 第 1 行：llama.cpp 名 + ⓘ + 状态 badge（inline，紧跟名字像"标签"）+ 大小（右）。
+          A 方案：把状态 badge 从独立一行 inline 上来，节省垂直空间。 */}
       <div className={styles.engineNameRow}>
         <span className={styles.engineName}>llama.cpp</span>
         <button
@@ -446,6 +441,15 @@ function EngineSection() {
           </span>
         </button>
         <span
+          className={`${styles.engineBadge} ${
+            installed ? styles.engineBadgeOk : styles.engineBadgeWarn
+          }`}
+        >
+          {installed
+            ? t("aiSettings.engine.installed")
+            : t("aiSettings.engine.notInstalled")}
+        </span>
+        <span
           className={styles.engineSize}
           style={busy ? { visibility: "hidden" } : undefined}
         >
@@ -455,20 +459,7 @@ function EngineSection() {
         </span>
       </div>
 
-      {/* 第 2 行：安装状态 badge —— 已装 / 未装 */}
-      <div className={styles.engineStatusRow}>
-        <span
-          className={`${styles.engineBadge} ${
-            installed ? styles.engineBadgeOk : styles.engineBadgeWarn
-          }`}
-        >
-          {installed
-            ? t("aiSettings.engine.installed")
-            : t("aiSettings.engine.notInstalled")}
-        </span>
-      </div>
-
-      {/* 第 3 行：检测到的加速后端（Apple Silicon Metal / CUDA / Vulkan / CPU） */}
+      {/* 第 2 行：检测到的加速后端（Apple Silicon Metal / CUDA / Vulkan / CPU） */}
       <div className={styles.engineDetectedRow}>
         {t("aiSettings.engine.detected", { accel: accelLabel })}
       </div>
@@ -499,91 +490,90 @@ function EngineSection() {
 
       {progress ? <EngineProgress progress={progress} /> : null}
 
-      {/* 主操作 + 维护操作：竖分割两栏布局
-          - 左栈：下载 AI 引擎（紫实心）+ 测试连接（outline）
-          - 右栈（右对齐）：大小 + 打开目录 + 卸载（+ 引擎跑时的「释放显存」） */}
-      <div className={styles.engineSplit}>
-        <div className={styles.engineLeftCol}>
-          <button
-            type="button"
-            className={styles.engineDownloadOutline}
-            onClick={() => void onDownload()}
-            disabled={busy}
-          >
-            {busy ? (
-              <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
-            ) : (
-              <Download size={16} strokeWidth={2.2} />
-            )}
-            <span>{downloadBtnLabel}</span>
-          </button>
-          {/* 「测试连接」合并按钮：未启动 → 先 start_engine → 再 test_ai_endpoint。
-              复用 .engineDownloadOutline 同款 outline 紫 + 同尺寸 (h36/pad14)，跟左侧
-              下载按钮视觉等大 + 同族风格，做"一组主操作"的整体感。 */}
-          <button
-            type="button"
-            className={styles.engineDownloadOutline}
-            onClick={() => void onTestLocal()}
-            disabled={busy || !installed || engineBusy}
-            title={
-              installed
-                ? t("aiSettings.engine.actions.testTooltipReady")
-                : t("aiSettings.engine.actions.testTooltipNotInstalled")
-            }
-          >
-            {engineBusy ? (
-              <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-            ) : null}
-            {t("aiSettings.engine.actions.testConnection")}
-          </button>
-        </div>
-
-        <div className={styles.engineRightCol}>
-          {status.runtime.state === "running" ? (
-            <button
-              type="button"
-              className={styles.engineFolderBtn}
-              onClick={() => void onReleaseVram()}
-              disabled={engineBusy}
-              title={t("aiSettings.engine.actions.releaseVramTooltip")}
-            >
-              <PowerOff size={14} strokeWidth={1.85} />
-              {t("aiSettings.engine.actions.releaseVram")}
-            </button>
+      {/* 主操作：下载 + 测试连接 平铺一行（两列 grid，跟下面"打开/卸载"维护行
+          视觉模式呼应）；引擎在跑时的「释放显存」紧跟其后单独一行。 */}
+      <div className={styles.engineActionPair}>
+        <button
+          type="button"
+          className={styles.engineDownloadOutline}
+          onClick={() => void onDownload()}
+          disabled={busy}
+        >
+          {busy ? (
+            <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
+          ) : (
+            <Download size={16} strokeWidth={2.2} />
+          )}
+          <span>{downloadBtnLabel}</span>
+        </button>
+        <button
+          type="button"
+          className={styles.engineDownloadOutline}
+          onClick={() => void onTestLocal()}
+          disabled={busy || !installed || engineBusy}
+          title={
+            installed
+              ? t("aiSettings.engine.actions.testTooltipReady")
+              : t("aiSettings.engine.actions.testTooltipNotInstalled")
+          }
+        >
+          {engineBusy ? (
+            <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
           ) : null}
-          <button
-            type="button"
-            className={styles.engineFolderBtn}
-            onClick={() =>
-              void api
-                .openEngineDir()
-                .catch((e) => logError("engine.openDir", e))
-            }
-            disabled={busy || !installed}
-            title={
-              installed
-                ? t("aiSettings.engine.actions.openFolderTooltipInstalled")
-                : t("aiSettings.engine.actions.openFolderTooltipNotInstalled")
-            }
-          >
-            <FolderOpen size={14} strokeWidth={1.85} />
-            {t("common.open")}
-          </button>
-          <button
-            type="button"
-            className={styles.engineUninstallOutline}
-            onClick={onDelete}
-            disabled={busy || !installed}
-            title={
-              installed
-                ? t("aiSettings.engine.actions.uninstallTooltipInstalled")
-                : t("aiSettings.engine.actions.uninstallTooltipNotInstalled")
-            }
-          >
-            <Trash2 size={14} strokeWidth={1.85} />
-            {t("aiSettings.engine.actions.uninstall")}
-          </button>
-        </div>
+          {t("aiSettings.engine.actions.testConnection")}
+        </button>
+      </div>
+      {status.runtime.state === "running" ? (
+        <button
+          type="button"
+          className={styles.engineDownloadOutline}
+          onClick={() => void onReleaseVram()}
+          disabled={engineBusy}
+          title={t("aiSettings.engine.actions.releaseVramTooltip")}
+        >
+          <PowerOff size={14} strokeWidth={1.85} />
+          {t("aiSettings.engine.actions.releaseVram")}
+        </button>
+      ) : null}
+
+      {/* 横分割线：把"主操作"与"维护操作（打开 / 卸载）"区分开 */}
+      <hr className={styles.engineHorizontalDivider} />
+
+      {/* 维护操作行：打开（左）+ 竖线 + 卸载 llama（右） */}
+      <div className={styles.engineMaintenanceRow}>
+        <button
+          type="button"
+          className={styles.engineFolderBtn}
+          onClick={() =>
+            void api
+              .openEngineDir()
+              .catch((e) => logError("engine.openDir", e))
+          }
+          disabled={busy || !installed}
+          title={
+            installed
+              ? t("aiSettings.engine.actions.openFolderTooltipInstalled")
+              : t("aiSettings.engine.actions.openFolderTooltipNotInstalled")
+          }
+        >
+          <FolderOpen size={14} strokeWidth={1.85} />
+          {t("common.open")}
+        </button>
+        <span className={styles.engineMaintenanceDivider} aria-hidden="true" />
+        <button
+          type="button"
+          className={styles.engineUninstallOutline}
+          onClick={onDelete}
+          disabled={busy || !installed}
+          title={
+            installed
+              ? t("aiSettings.engine.actions.uninstallTooltipInstalled")
+              : t("aiSettings.engine.actions.uninstallTooltipNotInstalled")
+          }
+        >
+          <Trash2 size={14} strokeWidth={1.85} />
+          {t("aiSettings.engine.actions.uninstall")}
+        </button>
       </div>
 
       {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
