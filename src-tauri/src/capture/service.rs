@@ -315,6 +315,25 @@ async fn tick(inner: &Inner) -> Result<()> {
         return Ok(());
     }
 
+    // 系统占位进程（锁屏 loginwindow / 屏保 ScreenSaverEngine 等）：用户明显挂机但
+    // platform::idle_secs() 在 macOS 锁屏后有时不增加 → 上面 idle 分支漏判 → 17 分钟
+    // 锁屏被记成 17 分钟使用。这里基于"前台是谁"再做一次 force-idle 兜底。
+    // 行为跟 idle 分支一致：seal 当前会话 + return，下一 tick 用户回来动鼠键自然开新会话。
+    if window::is_system_idle_proxy(&info.app_name) {
+        let mut cur_lock = inner.current.lock().await;
+        if let Some(prev) = cur_lock.take() {
+            drop(cur_lock);
+            if let Err(e) = activities::seal_session(&inner.pool, prev.id, Local::now()).await {
+                log::warn!(
+                    "seal_session 失败 (系统占位进程 {}, id={}): {e}",
+                    info.app_name,
+                    prev.id
+                );
+            }
+        }
+        return Ok(());
+    }
+
     let now = Local::now();
 
     // 浏览器场景：每次 tick 都抓 URL，因为 URL 是 focus 的一部分（切 URL 要立即触发新会话）。

@@ -130,3 +130,49 @@ fn resolve_exe_path(pid: u32) -> Option<String> {
     sys.process(Pid::from_u32(pid))
         .and_then(|p| p.exe().map(|p| p.to_string_lossy().to_string()))
 }
+
+/// 判断某个 process_name 是不是"系统占位进程"——锁屏 / 屏保 这种用户**显然不在用电脑**
+/// 但 macOS 仍然把它当前台 app 返回的进程。capture 看到这些应该立刻 seal 当前会话
+/// 不再累计时长，等同于"用户挂机"。
+///
+/// 不依赖 [`crate::platform::idle_secs`] —— macOS 锁屏后 idle 计数有时回 0 / 不增，
+/// 单靠系统 idle 信号会让 17 分钟锁屏被记成 17 分钟使用。
+///
+/// 黑名单只列"无歧义占位"那几个：
+/// - `loginwindow` —— 锁屏 / 登录窗 / 登出确认
+/// - `ScreenSaverEngine` / `ScreenSaverAgent` —— 屏保
+///
+/// **不**列 SecurityAgent（用户在输密码 = 真活动）/ CoreServicesUIAgent
+/// （系统模态对话框 = 用户在交互），那些算"用户在交互"不应跳过。
+pub(crate) fn is_system_idle_proxy(app_name: &str) -> bool {
+    matches!(
+        app_name,
+        "loginwindow" | "ScreenSaverEngine" | "ScreenSaverAgent"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_system_idle_proxy_matches_lockscreen_processes() {
+        assert!(is_system_idle_proxy("loginwindow"));
+        assert!(is_system_idle_proxy("ScreenSaverEngine"));
+        assert!(is_system_idle_proxy("ScreenSaverAgent"));
+    }
+
+    #[test]
+    fn is_system_idle_proxy_does_not_match_user_facing_apps() {
+        // 用户在用电脑的常见前台 app
+        assert!(!is_system_idle_proxy("WeChat"));
+        assert!(!is_system_idle_proxy("Chrome"));
+        assert!(!is_system_idle_proxy("Code"));
+        // SecurityAgent / CoreServicesUIAgent 是"用户在交互"——不算挂机
+        assert!(!is_system_idle_proxy("SecurityAgent"));
+        assert!(!is_system_idle_proxy("CoreServicesUIAgent"));
+        // 空 / 未知 / 自身 = 正常 app 路径
+        assert!(!is_system_idle_proxy(""));
+        assert!(!is_system_idle_proxy("hindsight"));
+    }
+}
