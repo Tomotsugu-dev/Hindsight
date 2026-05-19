@@ -1,8 +1,3 @@
-
-
-https://github.com/user-attachments/assets/dbe54855-7fb7-4b8e-b45c-ca4b7ddd8799
-
-
 <p align="center">
   <img src="./src/assets/logo.png" alt="Hindsight" width="200">
 </p>
