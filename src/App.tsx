@@ -27,6 +27,8 @@ const PromptTab = lazy(() => import("./pages/AISettings/tabs/PromptTab"));
 const ExternalApiTab = lazy(() => import("./pages/AISettings/tabs/ExternalApiTab"));
 const Devices = lazy(() => import("./pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
+const CategoriesListTab = lazy(() => import("./pages/Categories/tabs/ListTab"));
+const CategoriesPairingTab = lazy(() => import("./pages/Categories/tabs/PairingTab"));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("./pages/Settings/tabs/GeneralTab"));
 const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
@@ -79,7 +81,10 @@ function App() {
             <Route path="external" element={<ExternalApiTab />} />
           </Route>
           <Route path={ROUTES.devices} element={<Devices />} />
-          <Route path={ROUTES.categories} element={<CategoriesPage />} />
+          <Route path={ROUTES.categories} element={<CategoriesPage />}>
+            <Route index element={<CategoriesListTab />} />
+            <Route path="pairing" element={<CategoriesPairingTab />} />
+          </Route>
           <Route path={ROUTES.settings} element={<SettingsPage />}>
             <Route index element={<GeneralTab />} />
             <Route path="data" element={<DataTab />} />

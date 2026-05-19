@@ -387,6 +387,10 @@
   },
   "categories": {
     "title": "App Categories",
+    "tabs": {
+      "list": "Categories",
+      "pairing": "Apps"
+    },
     "intro": "Group processes into activity categories. Color, icon, name, and bound apps are all customizable.",
     "newCategory": "New category",
     "loading": "Loading…",
