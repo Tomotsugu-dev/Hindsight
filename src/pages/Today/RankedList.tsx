@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 import styles from "./RankedList.module.css";
 
 export interface RankedItem {
@@ -28,6 +29,12 @@ interface RankedListProps {
 export function RankedList({ items, totalMinutes }: RankedListProps) {
   const { t } = useTranslation();
   const denom = totalMinutes ?? Math.max(...items.map((i) => i.minutes), 1);
+  // 切日 / 切设备 / 选时段 → items 重排时，让 row 平滑滑到新位置；
+  // 新增 / 消失 fade。`key={item.id}` 是稳定 key，库据此识别 reorder vs add/remove。
+  const [listRef] = useAutoAnimate<HTMLOListElement>({
+    duration: 250,
+    easing: "ease-in-out",
+  });
 
   // 排行行的时长格式化 —— 复用 common.duration.* 资源
   const fmtTime = (minutes: number): string => {
@@ -40,7 +47,7 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
   };
 
   return (
-    <ol className={styles.list}>
+    <ol ref={listRef} className={styles.list}>
       {items.map((item, idx) => {
         const pct = (item.minutes / denom) * 100;
         return (
