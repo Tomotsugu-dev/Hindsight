@@ -1,4 +1,8 @@
 
+
+https://github.com/user-attachments/assets/dbe54855-7fb7-4b8e-b45c-ca4b7ddd8799
+
+
 <p align="center">
   <img src="./src/assets/logo.png" alt="Hindsight" width="200">
 </p>
@@ -39,7 +43,7 @@
 ## インターフェースプレビュー
 
 <p align="center">
-  <video src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.6.6/Hindsight_en.mp4" controls muted autoplay loop playsinline width="800"></video>
+  <video src="https://github.com/user-attachments/assets/d5101400-1b86-4b8a-b218-c3d8de9b6261" controls muted autoplay loop playsinline width="800"></video>
 </p>
 <p align="center">
   <sub><i><b>アプリプレビュー</b> · Hindsight の主要な操作を 1 分で</i></sub>
