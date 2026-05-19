@@ -16,6 +16,9 @@
   z-index: 9999;
   min-width: 320px;
   max-width: 440px;
+  /* max-height 限定不超出视口；超出部分由内部 .message 自滚动，
+     让 title 钉顶 / actions 钉底始终可见。 */
+  max-height: 80vh;
   padding: 22px 22px 16px;
   background: #ffffff;
   border-radius: 14px;
@@ -43,6 +46,12 @@
   line-height: 1.5;
   margin: 0;
   white-space: pre-wrap;
+  /* 内容多时（如更新说明几十行）单独滚动；min-height: 0 是 flex 子项允许收缩的必需值，
+     不写就因为 flex item 默认 min-height:auto 撑爆父容器。 */
+  overflow-y: auto;
+  min-height: 0;
+  /* 给滚动内容点呼吸空间，跟标题 / 按钮区分 */
+  padding-right: 4px;
 }
 
 .actions {
