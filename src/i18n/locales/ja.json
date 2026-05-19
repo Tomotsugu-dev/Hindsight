@@ -499,6 +499,8 @@
         "testTooltipNotInstalled": "未インストール",
         "releaseVram": "VRAM を解放",
         "releaseVramTooltip": "エンジンを停止して VRAM をすぐに解放します。次の要約実行時に自動的に再起動します。",
+        "releaseVramTooltipNotInstalled": "エンジンが未インストールです",
+        "releaseVramTooltipNotRunning": "エンジンが起動していません — 解放対象なし",
         "openFolderTooltipInstalled": "インストール先のフォルダをファインダー / エクスプローラーで開く",
         "openFolderTooltipNotInstalled": "未インストール",
         "uninstallTooltipInstalled": "ローカル AI エンジンをアンインストール",

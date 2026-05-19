@@ -499,6 +499,8 @@
         "testTooltipNotInstalled": "Not installed",
         "releaseVram": "Release VRAM",
         "releaseVramTooltip": "Stop the engine and free GPU memory now. It will spawn again automatically on the next summary run.",
+        "releaseVramTooltipNotInstalled": "Engine is not installed",
+        "releaseVramTooltipNotRunning": "Engine is not running — nothing to release",
         "openFolderTooltipInstalled": "Reveal the install folder in the file manager",
         "openFolderTooltipNotInstalled": "Not installed",
         "uninstallTooltipInstalled": "Uninstall the local AI engine",

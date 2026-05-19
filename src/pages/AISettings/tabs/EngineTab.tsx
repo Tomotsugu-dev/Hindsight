@@ -4,13 +4,15 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
-  Box,
+  ArrowUpFromLine,
+  Cable,
   Check,
   Download,
   FolderOpen,
-  PowerOff,
+  Images,
   Info,
   Loader2,
+  Pilcrow,
   Server,
   Trash2,
   XCircle,
@@ -160,7 +162,7 @@ export default function EngineTab() {
           ctxSize（兼容老 settings JSON），所以两个 Section picker 可能展示同一个值。 */}
       <Section
         title={t("aiSettings.describeParams.sectionTitle")}
-        icon={Server}
+        icon={Images}
       >
         <Row label={t("aiSettings.engineParams.batch")}>
           <SimplePicker<EngineBatchKey>
@@ -202,7 +204,7 @@ export default function EngineTab() {
 
       <Section
         title={t("aiSettings.summaryParams.sectionTitle")}
-        icon={Server}
+        icon={Pilcrow}
       >
         <Row label={t("aiSettings.engineParams.batch")}>
           <SimplePicker<EngineBatchKey>
@@ -407,16 +409,8 @@ function EngineSection() {
   return (
     <>
     <div className={styles.engineCard}>
-      {/* 左侧引擎 icon——square avatar，跟模型卡 .modelCardLogo 视觉同一族
-          （square + 浅紫底 + 圆角），表示"这是一个引擎"的图形标识 */}
-      <span className={styles.engineCardIcon} aria-hidden="true">
-        <Box size={30} strokeWidth={1.75} />
-      </span>
-
-      <div className={styles.engineCardBody}>
-      {/* 第 1 行：llama.cpp 名 + ⓘ + 状态 badge（inline，紧跟名字像"标签"）+ 大小（右）。
-          A 方案：把状态 badge 从独立一行 inline 上来，节省垂直空间。 */}
-      <div className={styles.engineNameRow}>
+      {/* 第 1 行：name + ⓘ + size + 状态 badge —— inline 信息条，扁平不带 box */}
+      <div className={styles.engineInfoRow}>
         <span className={styles.engineName}>llama.cpp</span>
         <button
           type="button"
@@ -441,6 +435,14 @@ function EngineSection() {
           </span>
         </button>
         <span
+          className={styles.engineSize}
+          style={busy ? { visibility: "hidden" } : undefined}
+        >
+          {t("aiSettings.engine.actions.approxSize", {
+            size: Math.round(status.estimatedBytes / 1024 / 1024),
+          })}
+        </span>
+        <span
           className={`${styles.engineBadge} ${
             installed ? styles.engineBadgeOk : styles.engineBadgeWarn
           }`}
@@ -449,17 +451,9 @@ function EngineSection() {
             ? t("aiSettings.engine.installed")
             : t("aiSettings.engine.notInstalled")}
         </span>
-        <span
-          className={styles.engineSize}
-          style={busy ? { visibility: "hidden" } : undefined}
-        >
-          {t("aiSettings.engine.actions.approxSize", {
-            size: Math.round(status.estimatedBytes / 1024 / 1024),
-          })}
-        </span>
       </div>
 
-      {/* 第 2 行：检测到的加速后端（Apple Silicon Metal / CUDA / Vulkan / CPU） */}
+      {/* 第 2 行：检测到的加速后端，灰小字 subtitle */}
       <div className={styles.engineDetectedRow}>
         {t("aiSettings.engine.detected", { accel: accelLabel })}
       </div>
@@ -490,9 +484,10 @@ function EngineSection() {
 
       {progress ? <EngineProgress progress={progress} /> : null}
 
-      {/* 主操作：下载 + 测试连接 平铺一行（两列 grid，跟下面"打开/卸载"维护行
-          视觉模式呼应）；引擎在跑时的「释放显存」紧跟其后单独一行。 */}
-      <div className={styles.engineActionPair}>
+      {/* 第 3 行：5 个按钮平铺一行
+          下载 / 测试连接 (主操作 紫 outline) + 释放显存 / 打开 (维护 灰 ghost) + 卸载 (红 outline)
+          颜色编码：紫 = 主操作 / 灰 = 中性维护 / 红 = 破坏 */}
+      <div className={styles.engineActionsFlat}>
         <button
           type="button"
           className={styles.engineDownloadOutline}
@@ -519,31 +514,35 @@ function EngineSection() {
         >
           {engineBusy ? (
             <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-          ) : null}
+          ) : (
+            <Cable size={14} strokeWidth={2} />
+          )}
           {t("aiSettings.engine.actions.testConnection")}
         </button>
-      </div>
-      {status.runtime.state === "running" ? (
+        {/* spacer：让"释放显存 / 打开 / 卸载"靠右贴齐，跟左边主操作分组 */}
+        <span className={styles.engineActionsSpacer} aria-hidden="true" />
+        {/* 释放显存：永远显示。未装 / 未跑 → disabled 灰着不可点；引擎在跑时才激活。 */}
         <button
           type="button"
-          className={styles.engineDownloadOutline}
+          className={styles.engineSecondaryGhost}
           onClick={() => void onReleaseVram()}
-          disabled={engineBusy}
-          title={t("aiSettings.engine.actions.releaseVramTooltip")}
+          disabled={
+            !installed || status.runtime.state !== "running" || engineBusy
+          }
+          title={
+            !installed
+              ? t("aiSettings.engine.actions.releaseVramTooltipNotInstalled")
+              : status.runtime.state !== "running"
+                ? t("aiSettings.engine.actions.releaseVramTooltipNotRunning")
+                : t("aiSettings.engine.actions.releaseVramTooltip")
+          }
         >
-          <PowerOff size={14} strokeWidth={1.85} />
+          <ArrowUpFromLine size={14} strokeWidth={1.85} />
           {t("aiSettings.engine.actions.releaseVram")}
         </button>
-      ) : null}
-
-      {/* 横分割线：把"主操作"与"维护操作（打开 / 卸载）"区分开 */}
-      <hr className={styles.engineHorizontalDivider} />
-
-      {/* 维护操作行：打开（左）+ 竖线 + 卸载 llama（右） */}
-      <div className={styles.engineMaintenanceRow}>
         <button
           type="button"
-          className={styles.engineFolderBtn}
+          className={styles.engineSecondaryGhost}
           onClick={() =>
             void api
               .openEngineDir()
@@ -559,7 +558,6 @@ function EngineSection() {
           <FolderOpen size={14} strokeWidth={1.85} />
           {t("common.open")}
         </button>
-        <span className={styles.engineMaintenanceDivider} aria-hidden="true" />
         <button
           type="button"
           className={styles.engineUninstallOutline}
@@ -577,7 +575,6 @@ function EngineSection() {
       </div>
 
       {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
-      </div>
     </div>
     <ConfirmDialog
       open={confirmingDelete}

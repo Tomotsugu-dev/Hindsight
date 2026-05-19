@@ -499,6 +499,8 @@
         "testTooltipNotInstalled": "尚未安装",
         "releaseVram": "释放显存",
         "releaseVramTooltip": "停止引擎，立即释放显存。下次跑总结时会自动重启。",
+        "releaseVramTooltipNotInstalled": "引擎尚未安装",
+        "releaseVramTooltipNotRunning": "引擎未运行，无显存可释放",
         "openFolderTooltipInstalled": "在文件管理器打开安装目录",
         "openFolderTooltipNotInstalled": "尚未安装",
         "uninstallTooltipInstalled": "卸载本地 AI 引擎",
