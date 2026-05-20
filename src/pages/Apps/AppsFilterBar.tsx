@@ -82,11 +82,13 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  );
 
   const labelOf = (v: AppsSortBy): string => t(`apps.filter.sort.${camelCase(v)}`);
 
-  // 定位
+  // 定位 + 把菜单宽度对齐 trigger 自身宽度
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const tr = triggerRef.current.getBoundingClientRect();
@@ -97,11 +99,11 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
       top = tr.top - menuH - 6;
     }
     let left = tr.left;
-    const menuW = menuRef.current?.offsetWidth ?? 160;
+    const menuW = tr.width;
     if (left + menuW + margin > window.innerWidth) {
       left = window.innerWidth - menuW - margin;
     }
-    setMenuPos({ top, left });
+    setMenuPos({ top, left, width: menuW });
   }, [open]);
 
   // 外击 + Esc
@@ -148,7 +150,11 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
             className={styles.sortMenu}
             style={
               menuPos
-                ? ({ top: menuPos.top, left: menuPos.left } as CSSProperties)
+                ? ({
+                    top: menuPos.top,
+                    left: menuPos.left,
+                    width: menuPos.width,
+                  } as CSSProperties)
                 : { visibility: "hidden" }
             }
             role="menu"

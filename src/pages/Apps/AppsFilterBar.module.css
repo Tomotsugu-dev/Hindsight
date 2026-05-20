@@ -222,10 +222,10 @@
 
 /* —— 排序 dropdown menu —— */
 
+/* 菜单宽度由 inline style 设置为 trigger 自身宽度，保持视觉一致 */
 .sortMenu {
   position: fixed;
   z-index: 100;
-  min-width: 160px;
   padding: 4px;
   background: var(--surface-1, #ffffff);
   border: 1px solid rgba(0, 0, 0, 0.08);

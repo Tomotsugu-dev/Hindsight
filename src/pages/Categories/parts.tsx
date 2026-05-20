@@ -4,6 +4,7 @@ import { ChevronDown, Plus, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import type { Category } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { displayAppName } from "../../utils/displayName";
 import { displayCategoryName } from "../../utils/categoryName";
 import styles from "./Categories.module.css";
@@ -166,10 +167,11 @@ export function AssignDropdown({
 
   // trigger 按 current 是否存在切换显示形态：
   //   未分类 → "+ 指派"
-  //   已分类 → "● <分类名>"（带分类色作为左侧色点）
+  //   已分类 → "<分类 icon> <分类名>"（icon 染分类色，跟 chip filter 一族对齐）
   const triggerStyle = current
     ? ({ "--cat-color": current.color } as CSSProperties)
     : undefined;
+  const CurrentIcon = current ? resolveCategoryIcon(current.icon) : null;
 
   return (
     <div className={styles.assignWrap}>
@@ -182,9 +184,14 @@ export function AssignDropdown({
         style={triggerStyle}
         onClick={handleToggle}
       >
-        {current ? (
+        {current && CurrentIcon ? (
           <>
-            <span className={styles.assignOptionDot} aria-hidden />
+            <CurrentIcon
+              size={12}
+              strokeWidth={2}
+              className={styles.assignOptionIcon}
+              aria-hidden
+            />
             <span className={styles.assignBtnLabel}>{displayCategoryName(current, t)}</span>
           </>
         ) : (
@@ -224,6 +231,7 @@ export function AssignDropdown({
           {categories.map((c) => {
             const style = { "--cat-color": c.color } as CSSProperties;
             const isCurrent = current?.id === c.id;
+            const Icon = resolveCategoryIcon(c.icon);
             return (
               <button
                 key={c.id}
@@ -238,7 +246,12 @@ export function AssignDropdown({
                   void onPick(c.id);
                 }}
               >
-                <span className={styles.assignOptionDot} aria-hidden />
+                <Icon
+                  size={12}
+                  strokeWidth={2}
+                  className={styles.assignOptionIcon}
+                  aria-hidden
+                />
                 <span className={styles.assignOptionLabel}>{displayCategoryName(c, t)}</span>
               </button>
             );
