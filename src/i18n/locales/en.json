@@ -27,7 +27,7 @@
   "nav": {
     "groups": {
       "primary": "Stats",
-      "ai": "AI",
+      "ai": "AI-beta",
       "data": "Data",
       "system": "System"
     },
