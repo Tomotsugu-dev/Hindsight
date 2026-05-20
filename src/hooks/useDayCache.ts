@@ -23,7 +23,9 @@ export const useDayCache = createUsageCache<DayData>({
   fetch: async (offset, deviceId) => {
     const [hours, apps] = await Promise.all([
       api.getDayHours(offset, deviceId),
-      api.getDayApps(offset, 10, deviceId),
+      // 超额取 200：RankedList 默认只渲染前 10，用户点展开后看到全部。
+      // SQL LIMIT 200 跟 LIMIT 10 成本几乎相同；payload 多几 KB 在本地 IPC 可忽略。
+      api.getDayApps(offset, 200, deviceId),
     ]);
     return { hours, apps };
   },

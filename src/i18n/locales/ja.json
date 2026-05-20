@@ -26,17 +26,19 @@
   },
   "nav": {
     "groups": {
-      "primary": "概要",
+      "primary": "統計",
       "ai": "AI",
+      "data": "データ",
       "system": "システム"
     },
     "items": {
-      "today": "今日",
+      "today": "日次",
       "week": "週次",
       "month": "月次",
       "aiSummary": "AI サマリー",
       "aiSettings": "AI 設定",
-      "categories": "アプリ分類",
+      "categories": "分類",
+      "apps": "アプリ",
       "devices": "同期",
       "settings": "設定"
     }
@@ -273,6 +275,10 @@
       "excludedTitle": "除外中 — クリックで再度含める",
       "includeTitle": "クリックで分析から除外"
     },
+    "rankedList": {
+      "expand": "残り {{count}} 件を表示",
+      "collapse": "閉じる"
+    },
     "segmentList": {
       "empty": "セグメントがまだありません。下の「セグメントを追加」をクリックして始めてください",
       "newSegmentLabel": "新しいセグメント",
@@ -299,7 +305,7 @@
     }
   },
   "today": {
-    "title": "今日",
+    "title": "日次",
     "meta": "{{date}} · 記録 {{duration}}",
     "chart": {
       "title": "24 時間のアクティビティ",
@@ -385,12 +391,11 @@
       "label": "{{month}}/{{day}}"
     }
   },
+  "apps": {
+    "title": "アプリ"
+  },
   "categories": {
-    "title": "アプリ分類",
-    "tabs": {
-      "list": "分類",
-      "pairing": "アプリ"
-    },
+    "title": "分類",
     "intro": "プロセスをアクティビティ分類にまとめます。色、アイコン、名前、紐付けるアプリはすべてカスタマイズできます。",
     "newCategory": "分類を追加",
     "loading": "読み込み中…",
@@ -400,7 +405,8 @@
       "talk": "コミュニケーション",
       "design": "デザイン",
       "fun": "エンタメ",
-      "other": "その他"
+      "other": "その他",
+      "hidden": "非表示"
     },
     "list": {
       "namePlaceholder": "分類名",

@@ -103,6 +103,8 @@ pub async fn day_hours(
         .call(move |conn| {
             // 通过 app_group_members → app_groups 拿分类（group 是 cross-OS 同步的真相），
             // 再 LEFT JOIN active categories 把指向已删分类的归到 'other'。
+            // `g.category_id IS NOT 'hidden'`：SQLite NULL-safe 标量比较，未分组的活动
+            // (g.category_id 为 NULL) 仍通过，仅显式指派到 hidden 的被剔除。
             let sql = format!(
                 "SELECT a.started_at, a.ended_at,
                         COALESCE(c.id, 'other') AS cat
@@ -113,7 +115,8 @@ pub async fn day_hours(
                    ON g.id = gm.group_id AND g.deleted_at IS NULL
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
-                 WHERE a.local_date = ? {}",
+                 WHERE a.local_date = ? {}
+                   AND g.category_id IS NOT 'hidden'",
                 device.sql_clause()
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
@@ -210,6 +213,7 @@ pub async fn day_apps(
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}
+                   AND g.category_id IS NOT 'hidden'
                  GROUP BY COALESCE(g.id, a.process_name)
                  ORDER BY total DESC
                  LIMIT ?",
@@ -267,7 +271,7 @@ pub async fn day_hour_apps(
     let rows: Vec<(String, String, String, i64)> = pool
         .0
         .call(move |conn| {
-            // 跟 day_apps 同 SQL，多了 `AND a.local_hour = ?`
+            // 跟 day_apps 同 SQL，多了 `AND a.local_hour = ?` + hidden 过滤
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
@@ -281,6 +285,7 @@ pub async fn day_hour_apps(
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? AND a.local_hour = ? {}
+                   AND g.category_id IS NOT 'hidden'
                  GROUP BY COALESCE(g.id, a.process_name)
                  ORDER BY total DESC
                  LIMIT ?",
@@ -378,7 +383,7 @@ async fn days_in_range(
     let rows: Vec<(String, String, i64)> = pool
         .0
         .call(move |conn| {
-            // 同 day_hours：通过 group → category 拿分类，过滤已删分类
+            // 同 day_hours：通过 group → category 拿分类，过滤已删分类 + hidden 分类
             let sql = format!(
                 "SELECT a.local_date,
                         COALESCE(c.id, 'other') AS cat,
@@ -391,6 +396,7 @@ async fn days_in_range(
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND g.category_id IS NOT 'hidden'
                  GROUP BY a.local_date, cat",
                 device.sql_clause()
             );
@@ -467,6 +473,7 @@ async fn apps_in_range(
         .0
         .call(move |conn| {
             // 同 day_apps：按组聚合，display = display_name，icon_process = MIN(process_name)
+            // hidden 分类的活动整段排除（不计入 top apps）
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
@@ -480,6 +487,7 @@ async fn apps_in_range(
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND g.category_id IS NOT 'hidden'
                  GROUP BY COALESCE(g.id, a.process_name)
                  ORDER BY total DESC
                  LIMIT ?",

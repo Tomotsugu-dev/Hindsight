@@ -17,7 +17,8 @@ export const useWeekCache = createUsageCache<WeekData>({
   fetch: async (offset, deviceId) => {
     const [dayDtos, apps] = await Promise.all([
       api.getWeekDays(offset, deviceId),
-      api.getWeekApps(offset, 10, deviceId),
+      // 超额取 200：RankedList 默认前 10，用户点展开后看到全部。
+      api.getWeekApps(offset, 200, deviceId),
     ]);
     return { days: dayDtos.map(dtoToDaySummary), apps };
   },

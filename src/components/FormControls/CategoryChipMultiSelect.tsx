@@ -50,9 +50,14 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
     return <div className={styles.empty}>{t("components.categoryChipMultiSelect.empty")}</div>;
   }
 
+  // 内置分类（如 v27 的 hidden）已经在 SQL 层硬编码排除，不应该出现在用户可调的
+  // chip 选择器里——否则用户取消勾选会让人以为"现在 AI 能看见 hidden 了"，
+  // 实际上 SQL 层永远过滤。直接在渲染层过滤掉这些分类即可。
+  const visibleCategories = categories.filter((c) => !c.builtin);
+
   return (
     <div className={styles.chips}>
-      {categories.map((c) => {
+      {visibleCategories.map((c) => {
         const excluded = selectedIds.includes(c.id);
         // 已排除时换成 EyeOff 图标，语义上"AI 看不到这个分类"
         const Icon = excluded ? EyeOff : resolveCategoryIcon(c.icon);

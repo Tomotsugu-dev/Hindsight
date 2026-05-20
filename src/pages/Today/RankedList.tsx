@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import styles from "./RankedList.module.css";
 
 export interface RankedItem {
@@ -24,9 +25,11 @@ interface RankedListProps {
   items: RankedItem[];
   /** 用于计算条形百分比；不传则取最大项作为 100% */
   totalMinutes?: number;
+  /** 默认显示的最大行数；超出则折叠并显示展开按钮。null/0 = 不折叠。 */
+  defaultLimit?: number;
 }
 
-export function RankedList({ items, totalMinutes }: RankedListProps) {
+export function RankedList({ items, totalMinutes, defaultLimit = 10 }: RankedListProps) {
   const { t } = useTranslation();
   const denom = totalMinutes ?? Math.max(...items.map((i) => i.minutes), 1);
   // 切日 / 切设备 / 选时段 → items 重排时，让 row 平滑滑到新位置；
@@ -35,6 +38,11 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
     duration: 250,
     easing: "ease-in-out",
   });
+
+  // 折叠/展开状态。每次切日 / 切设备时不主动 reset——用户的展开偏好沿用。
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = defaultLimit > 0 && items.length > defaultLimit;
+  const visibleItems = canExpand && !expanded ? items.slice(0, defaultLimit) : items;
 
   // 排行行的时长格式化 —— 复用 common.duration.* 资源
   const fmtTime = (minutes: number): string => {
@@ -48,7 +56,7 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
 
   return (
     <ol ref={listRef} className={styles.list}>
-      {items.map((item, idx) => {
+      {visibleItems.map((item, idx) => {
         const pct = (item.minutes / denom) * 100;
         return (
           <li key={item.id} className={styles.row}>
@@ -80,6 +88,31 @@ export function RankedList({ items, totalMinutes }: RankedListProps) {
           </li>
         );
       })}
+      {canExpand && (
+        <li key="__toggle" className={styles.toggleRow}>
+          <button
+            type="button"
+            className={styles.toggleBtn}
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={
+              expanded
+                ? t("components.rankedList.collapse")
+                : t("components.rankedList.expand", { count: items.length - defaultLimit })
+            }
+            title={
+              expanded
+                ? t("components.rankedList.collapse")
+                : t("components.rankedList.expand", { count: items.length - defaultLimit })
+            }
+          >
+            {expanded ? (
+              <ChevronUp size={16} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={16} strokeWidth={2} />
+            )}
+          </button>
+        </li>
+      )}
     </ol>
   );
 }

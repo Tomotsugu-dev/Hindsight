@@ -525,6 +525,7 @@ pub async fn list_segment_screenshots(
                     AND a.local_hour < ?
                     AND a.screenshot_path IS NOT NULL
                     AND a.screenshot_path <> ''
+                    AND g.category_id IS NOT 'hidden'
                     {}
                     {}
                   ORDER BY a.started_at",
@@ -631,6 +632,7 @@ pub async fn list_segment_top_apps(
                 let marks = vec!["?"; excluded.len()].join(",");
                 format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
             };
+            // 硬编码排除 hidden 分类（不在 excluded_categories 配置范畴内）
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name) AS name,
                         SUM(a.duration_secs) AS secs,
@@ -645,6 +647,7 @@ pub async fn list_segment_top_apps(
                   WHERE a.local_date = ?
                     AND a.local_hour >= ?
                     AND a.local_hour < ?
+                    AND g.category_id IS NOT 'hidden'
                     {}
                     {}
                   GROUP BY name, cat
@@ -713,6 +716,7 @@ pub async fn list_range_top_apps(
                 let marks = vec!["?"; excluded.len()].join(",");
                 format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
             };
+            // 硬编码排除 hidden 分类（不在 excluded_categories 配置范畴内）
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name) AS name,
                         SUM(a.duration_secs) AS secs,
@@ -726,6 +730,7 @@ pub async fn list_range_top_apps(
                      ON c.id = g.category_id AND c.deleted_at IS NULL
                   WHERE a.local_date >= ?
                     AND a.local_date <= ?
+                    AND g.category_id IS NOT 'hidden'
                     {}
                     {}
                   GROUP BY name, cat

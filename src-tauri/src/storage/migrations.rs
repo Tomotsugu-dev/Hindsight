@@ -631,12 +631,40 @@ const ACTIVITIES_LOCAL_REMOTE_ID_SQL: &str = r#"
     END;
 "#;
 
+/// v27：新增「隐藏」默认分类。被指派到这分类的应用从所有时长聚合中被排除——
+/// 日/周/月统计图表、Top 排行榜、AI 总结都看不到。
+///
+/// 字段设计：
+/// - `builtin = 1` 让 [`categories::delete`](crate::repo::categories::delete) 现有的
+///   "内置分类不可删"检查生效。v5 把所有旧默认分类的 builtin 置 0，本次是唯一保留 1 的。
+/// - `updated_at = '1970-01-01T00:00:00Z'` epoch 时间戳 → 任何用户改动（rename/换色/换 icon）
+///   通过 sync LWW 必然覆盖，跨设备一致。
+/// - `sort_order = MAX+1` 排到列表最末（用户主动拖动可改）。
+///
+/// 不入 outbox：对齐 v5/v6 默认分类的 migration 做法——各端独立 INSERT OR IGNORE 幂等，
+/// 改名等用户操作走正常 [`update`](crate::repo::categories::update) 路径 enqueue 同步。
+///
+/// 软删边界：若用户曾通过非常手段删过 hidden（deleted_at 非空），INSERT OR IGNORE
+/// 跳过 → 不自动复活。这是 acceptable 取舍：正常 API 路径有 builtin 守门，不应有此情况。
+const ADD_HIDDEN_CATEGORY_SQL: &str = r#"
+    INSERT OR IGNORE INTO categories(id, name, color, icon, builtin, sort_order, updated_at)
+    VALUES (
+        'hidden',
+        '隐藏',
+        '#64748b',
+        'EyeOff',
+        1,
+        COALESCE((SELECT MAX(sort_order) + 1 FROM categories WHERE deleted_at IS NULL), 0),
+        '1970-01-01T00:00:00Z'
+    );
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 16] = [
+    let extras: [&'static str; 17] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -653,6 +681,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         RESET_DRIVE_FILES_CURSOR_SQL,          // v24
         REACTIVATE_DEAD_LETTER_SQL,            // v25
         ACTIVITIES_LOCAL_REMOTE_ID_SQL,        // v26
+        ADD_HIDDEN_CATEGORY_SQL,               // v27
     ];
     pool.0
         .call(move |conn| {

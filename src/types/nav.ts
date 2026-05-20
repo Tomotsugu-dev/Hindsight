@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export type NavGroup = "primary" | "ai" | "system";
+export type NavGroup = "primary" | "ai" | "data" | "system";
 
 export interface NavItem {
   /** 路由路径 */

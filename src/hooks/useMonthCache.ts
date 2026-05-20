@@ -17,7 +17,8 @@ export const useMonthCache = createUsageCache<MonthData>({
   fetch: async (offset, deviceId) => {
     const [dayDtos, apps] = await Promise.all([
       api.getMonthDays(offset, deviceId),
-      api.getMonthApps(offset, 10, deviceId),
+      // 超额取 200：RankedList 默认前 10，用户点展开后看到全部。
+      api.getMonthApps(offset, 200, deviceId),
     ]);
     return { days: dayDtos.map(dtoToDaySummary), apps };
   },

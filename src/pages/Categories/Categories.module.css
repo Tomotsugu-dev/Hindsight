@@ -476,32 +476,41 @@
   padding: 16px;
 }
 
+/* 主创建按钮——outline 紫边风，跟 AI 总结 .startBtn 同款。
+   蓝紫 = 主操作的视觉编码统一；outline 比 solid 克制，
+   跟 AI 设置 .downloadOutline 等同族对齐。 */
 .createBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 32px;
   padding: 0 14px;
-  background: var(--color-accent);
-  color: #ffffff;
-  border: none;
-  border-radius: 9px;
+  background: transparent;
+  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+  color: var(--color-accent);
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.005em;
   cursor: pointer;
   transition:
-    background-color 160ms ease-out,
-    transform 100ms ease-out;
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    transform 120ms ease-out;
   flex-shrink: 0;
 }
 
-.createBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
+.createBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  border-color: var(--color-accent);
 }
 
-.createBtn:active {
+.createBtn:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+.createBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .createForm {

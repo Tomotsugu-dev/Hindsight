@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import type { Category } from "../api/hindsight";
 
-// 数据库 migration v5 + v10 写入的原始默认分类映射
+// 数据库 migration v5 + v10 + v27 写入的原始默认分类映射
 // 仅当 id 与 name 都精确匹配时才翻译；用户改过名的不翻译
 const DEFAULT_CATEGORY_NAMES: Record<string, string> = {
   code: "编程",
@@ -10,6 +10,7 @@ const DEFAULT_CATEGORY_NAMES: Record<string, string> = {
   design: "设计",
   fun: "娱乐",
   other: "其他",
+  hidden: "隐藏",
 };
 
 /** 渲染分类名：默认分类（且未被改名）走 i18n，其余直接用 category.name */

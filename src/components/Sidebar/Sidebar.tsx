@@ -15,6 +15,7 @@ import styles from "./Sidebar.module.css";
 const GROUP_TITLE_KEY: Record<NavGroup, string> = {
   primary: "nav.groups.primary",
   ai: "nav.groups.ai",
+  data: "nav.groups.data",
   system: "nav.groups.system",
 };
 
@@ -25,7 +26,7 @@ interface PillStyle {
 }
 
 export function Sidebar() {
-  const groups: NavGroup[] = ["primary", "ai", "system"];
+  const groups: NavGroup[] = ["primary", "ai", "data", "system"];
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();

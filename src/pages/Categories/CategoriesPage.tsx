@@ -1,20 +1,13 @@
-import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { type TabDef } from "../../components/TabNav/TabNav";
-import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
+import ListTab from "./tabs/ListTab";
 import styles from "./Categories.module.css";
 
-// tab 路由元数据；label 通过 t() 动态解析
-const TABS: TabDef[] = [
-  { to: "", labelKey: "categories.tabs.list", end: true },
-  { to: "pairing", labelKey: "categories.tabs.pairing" },
-];
-
 /**
- * 应用分类页外壳：标题 + 2 个 tab + Outlet。
+ * 分类页：分类 CRUD（新建 / 改名 / 换色换图标 / 删除 / 拖拽排序），
+ * 每条分类展开显示绑定的应用。
  *
- * 历史上这里是一个长滚动页（分类列表 + 多设备合并）。tab 化让两块独立的功能各自占
- * 一屏，新用户不会错过"多设备合并"那块在长页中段的存在。
+ * 原本这里是 tab 外壳（分类 + 应用配对两个 tab），现在「应用配对」拆到独立的
+ * /apps 页面（侧边栏「应用」），这里退化成单页直接渲染 ListTab。
  */
 export default function CategoriesPage() {
   const { t } = useTranslation();
@@ -23,12 +16,7 @@ export default function CategoriesPage() {
       <header className={styles.header}>
         <h1 className={styles.title}>{t("categories.title")}</h1>
       </header>
-
-      <FloatingTabNav tabs={TABS} ariaLabel={t("categories.title")} />
-
-      {/* Outlet 直接落进 .page 的 flex-column；.page 自带 gap: 24px 处理间距，
-          不需要额外的 tabContent 包装。 */}
-      <Outlet />
+      <ListTab />
     </div>
   );
 }

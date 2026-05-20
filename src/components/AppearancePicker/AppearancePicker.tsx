@@ -1,22 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { CATEGORY_ICONS, ICON_NAMES } from "../../config/categoryIcons";
+import { CATEGORY_ICONS, CATEGORY_PALETTE, ICON_NAMES } from "../../config/categoryIcons";
 import styles from "./AppearancePicker.module.css";
-
-const PALETTE = [
-  "#a78bfa",
-  "#60a5fa",
-  "#34d399",
-  "#fbbf24",
-  "#fb7185",
-  "#94a3b8",
-  "#f97316",
-  "#3b82f6",
-  "#10b981",
-  "#d946ef",
-  "#06b6d4",
-  "#facc15",
-];
 
 interface AppearancePickerProps {
   color: string;
@@ -59,7 +44,7 @@ export function AppearancePicker({
       <div className={styles.section}>
         <span className={styles.label}>{t("components.appearancePicker.color")}</span>
         <div className={styles.colorRow}>
-          {PALETTE.map((c) => (
+          {CATEGORY_PALETTE.map((c) => (
             <button
               key={c}
               type="button"

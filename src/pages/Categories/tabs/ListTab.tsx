@@ -23,7 +23,7 @@ import { AppearancePicker } from "../../../components/AppearancePicker/Appearanc
 import { resolveCategoryIcon } from "../../../config/categoryIcons";
 import { displayCategoryName } from "../../../utils/categoryName";
 import { AppList } from "../parts";
-import { DEFAULT_PALETTE } from "../constants";
+import { CATEGORY_PALETTE } from "../../../config/categoryIcons";
 import styles from "../Categories.module.css";
 
 const DEFAULT_NEW_ICON = "Tag";
@@ -58,7 +58,7 @@ export default function ListTab() {
           onClick={() => setCreating(true)}
           disabled={creating}
         >
-          <Plus size={14} strokeWidth={2.25} />
+          <Plus size={14} strokeWidth={2} />
           {t("categories.newCategory")}
         </button>
       </header>
@@ -235,26 +235,32 @@ function CategoryRow({
         >
           <Pencil size={14} strokeWidth={1.85} />
         </button>
-        <button
-          type="button"
-          className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-          onClick={() => setConfirmOpen(true)}
-          aria-label={t("categories.list.deleteAria")}
-          title={t("categories.list.deleteAria")}
-        >
-          <Trash2 size={14} strokeWidth={1.85} />
-        </button>
+        {/* 内置分类（如 v27 的 hidden）不允许删除：按钮不渲染，dialog 也不挂。
+            后端 categories::delete 有二次防御（builtin != 0 拒绝） */}
+        {!category.builtin && (
+          <button
+            type="button"
+            className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+            onClick={() => setConfirmOpen(true)}
+            aria-label={t("categories.list.deleteAria")}
+            title={t("categories.list.deleteAria")}
+          >
+            <Trash2 size={14} strokeWidth={1.85} />
+          </button>
+        )}
       </div>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title={t("categories.deleteDialog.title")}
-        message={t("categories.deleteDialog.message", { name: displayCategoryName(category, t) })}
-        confirmLabel={t("categories.deleteDialog.confirm")}
-        variant="danger"
-        onConfirm={onConfirmDelete}
-        onCancel={() => setConfirmOpen(false)}
-      />
+      {!category.builtin && (
+        <ConfirmDialog
+          open={confirmOpen}
+          title={t("categories.deleteDialog.title")}
+          message={t("categories.deleteDialog.message", { name: displayCategoryName(category, t) })}
+          confirmLabel={t("categories.deleteDialog.confirm")}
+          variant="danger"
+          onConfirm={onConfirmDelete}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -268,7 +274,7 @@ function CreatingRow({
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
-  const [color, setColor] = useState(DEFAULT_PALETTE[0]);
+  const [color, setColor] = useState(CATEGORY_PALETTE[0]);
   const [icon, setIcon] = useState(DEFAULT_NEW_ICON);
   const [pickerOpen, setPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

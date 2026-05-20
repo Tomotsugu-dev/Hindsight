@@ -26,17 +26,19 @@
   },
   "nav": {
     "groups": {
-      "primary": "Overview",
+      "primary": "Stats",
       "ai": "AI",
+      "data": "Data",
       "system": "System"
     },
     "items": {
-      "today": "Today",
+      "today": "Daily",
       "week": "Weekly",
       "month": "Monthly",
       "aiSummary": "AI Summary",
       "aiSettings": "AI Settings",
       "categories": "Categories",
+      "apps": "Apps",
       "devices": "Cloud Sync",
       "settings": "Settings"
     }
@@ -273,6 +275,10 @@
       "excludedTitle": "Excluded — click to include again",
       "includeTitle": "Click to exclude from analysis"
     },
+    "rankedList": {
+      "expand": "Show {{count}} more",
+      "collapse": "Collapse"
+    },
     "segmentList": {
       "empty": "No segments yet — click \"Add segment\" below to start",
       "newSegmentLabel": "New segment",
@@ -299,7 +305,7 @@
     }
   },
   "today": {
-    "title": "Today",
+    "title": "Daily",
     "meta": "{{date}} · {{duration}} tracked",
     "chart": {
       "title": "24-hour activity",
@@ -385,12 +391,11 @@
       "label": "{{month}}/{{day}}"
     }
   },
+  "apps": {
+    "title": "Apps"
+  },
   "categories": {
-    "title": "App Categories",
-    "tabs": {
-      "list": "Categories",
-      "pairing": "Apps"
-    },
+    "title": "Categories",
     "intro": "Group processes into activity categories. Color, icon, name, and bound apps are all customizable.",
     "newCategory": "New category",
     "loading": "Loading…",
@@ -400,7 +405,8 @@
       "talk": "Social",
       "design": "Design",
       "fun": "Entertainment",
-      "other": "Other"
+      "other": "Other",
+      "hidden": "Hidden"
     },
     "list": {
       "namePlaceholder": "Category name",

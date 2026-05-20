@@ -1,18 +1,29 @@
 import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
-import { PairingSection } from "../PairingSection";
-import styles from "../Categories.module.css";
+import { PairingSection } from "../Categories/PairingSection";
+import styles from "../Categories/Categories.module.css";
 
-/** 多设备合并 tab：把不同设备上同一个 app（process 名不同）合并到一个 app group。
- *  原 CategoriesPage 的 Section 2 提取过来，header 描述文案沿用 categories.pairing.* */
-export default function PairingTab() {
+/**
+ * 应用页：跨设备应用合并 + 分类指派。
+ *
+ * 同一应用在不同 OS 上进程名不同（macOS 的 "Code" / Windows 的 "Visual Studio
+ * Code"）—— 这页把它们拖到同一行就统一名字 / 分类 / 图标 / 时长。
+ *
+ * 原来是 /categories 下的 pairing tab，现在拆成 sidebar 一级入口「应用」，
+ * 跟「分类」(/categories) 平起平坐——分类管"桶"、应用管"放进桶里的东西"。
+ *
+ * 沿用 Categories 那套 styles + i18n 文案（categories.pairing.*）以减少改动；
+ * PairingSection 本体还住在 Categories 目录下，因为跟 parts.tsx 的 AssignDropdown
+ * 共享。
+ */
+export default function AppsPage() {
   const { t } = useTranslation();
   return (
-    <>
+    <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerText}>
-          <h2 className={styles.title} style={{ fontSize: 18 }}>
-            {t("categories.pairing.sectionTitle")}
+          <h1 className={styles.title}>
+            {t("apps.title")}
             <button
               type="button"
               className={styles.infoTip}
@@ -23,7 +34,7 @@ export default function PairingTab() {
                 {t("categories.pairing.infoTipBody")}
               </span>
             </button>
-          </h2>
+          </h1>
           <p className={styles.meta}>
             {t("categories.pairing.instructionPrefix")}
             <strong className={styles.metaEmph}>
@@ -40,6 +51,6 @@ export default function PairingTab() {
       <section className={styles.card}>
         <PairingSection />
       </section>
-    </>
+    </div>
   );
 }
