@@ -314,37 +314,6 @@
   color: var(--text-muted);
 }
 
-/* 「+ 新建行」按钮：克制风格，不抢眼但能找到。误操作后用它建一个新空行作 drop 靶 */
-.createRowBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: center;
-  margin-top: 6px;
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.createRowBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  color: var(--color-accent);
-}
-
-.createRowBtn:active {
-  transform: translateY(0.5px);
-}
-
 /* 空行末尾的删除按钮：低饱和度，hover 时变红色提示破坏性操作 */
 .deleteRowBtn {
   display: inline-flex;

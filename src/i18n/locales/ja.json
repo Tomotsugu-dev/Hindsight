@@ -468,9 +468,7 @@
       "row": {
         "deleteEmptyTooltip": "この空の行を削除",
         "deleteEmptyAria": "この空の行を削除"
-      },
-      "newRow": "新しい行",
-      "newRowDefaultName": "新しい行 {{time}}"
+      }
     },
     "assign": {
       "label": "割り当て",

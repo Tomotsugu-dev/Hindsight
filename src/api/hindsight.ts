@@ -609,8 +609,6 @@ export const api = {
   listUnclassifiedApps: (daysBack?: number) =>
     invoke<UnclassifiedApp[]>("list_unclassified_apps", { daysBack }),
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
-  createAppGroup: (displayName: string) =>
-    invoke<string>("create_app_group", { displayName }),
   deleteAppGroup: (groupId: string) =>
     invoke<void>("delete_app_group", { groupId }),
   /** 强力删除：组 + 所有 member 一起软删。给 UI 上「行视觉为空」（成员近 7 天无活动）

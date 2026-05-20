@@ -10,6 +10,14 @@
   flex-wrap: wrap;
 }
 
+/* 把分类/排序两个 dropdown 推到工具栏最右；margin-left: auto 吃掉中间所有剩余空间 */
+.rightGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 /* —— 搜索框 —— */
 
 .searchWrap {
@@ -119,38 +127,6 @@
   color: var(--color-accent);
 }
 
-/* —— + 新建行 按钮 —— 沿用 Categories .createBtn 同款 outline 紫边 */
-
-.createBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.createBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.createBtn:active {
-  transform: scale(0.97);
-}
-
 /* —— 分类筛选 popover panel —— */
 
 .panel {
@@ -209,10 +185,13 @@
   font-weight: 600;
 }
 
-/* 真分类 chip = 按 --chip-color 染色 */
+/* 真分类 chip = 按 --chip-color 染色，前置该分类的 icon */
 .catChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 26px;
-  padding: 0 10px;
+  padding: 0 10px 0 8px;
   background: transparent;
   border: 1px solid color-mix(in oklab, var(--chip-color) 40%, transparent);
   border-radius: 999px;
@@ -233,6 +212,12 @@
   background: color-mix(in oklab, var(--chip-color) 25%, transparent);
   border-color: var(--chip-color);
   font-weight: 600;
+}
+
+/* chip 内 icon 用分类色着色，跟边框 / 选中态填充色一致，形成统一视觉信号 */
+.catChipIcon {
+  color: var(--chip-color);
+  flex-shrink: 0;
 }
 
 /* —— 排序 dropdown menu —— */

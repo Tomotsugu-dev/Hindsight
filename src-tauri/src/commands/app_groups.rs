@@ -11,18 +11,6 @@ pub async fn list_app_groups(pool: State<'_, DbPool>) -> Result<Vec<AppGroup>, S
     app_groups::list_groups(&pool).await.map_err(Into::into)
 }
 
-/// 新建一个空应用组（仅有 display_name，无成员）。返回新组 group_id。
-/// 用户在「分类」页可手动建组再合并 process_names 进去。
-#[tauri::command]
-pub async fn create_app_group(
-    pool: State<'_, DbPool>,
-    display_name: String,
-) -> Result<String, String> {
-    app_groups::create(&pool, &display_name)
-        .await
-        .map_err(Into::into)
-}
-
 /// 删除应用组。组内 process 退回各自单成员组（不丢数据）。
 #[tauri::command]
 pub async fn delete_app_group(pool: State<'_, DbPool>, group_id: String) -> Result<(), String> {

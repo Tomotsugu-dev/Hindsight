@@ -468,9 +468,7 @@
       "row": {
         "deleteEmptyTooltip": "Delete this empty row",
         "deleteEmptyAria": "Delete this empty row"
-      },
-      "newRow": "New row",
-      "newRowDefaultName": "New row {{time}}"
+      }
     },
     "assign": {
       "label": "Assign",

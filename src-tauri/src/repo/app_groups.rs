@@ -144,42 +144,6 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
     Ok(groups)
 }
 
-/// 用户在 UI 主动建一个空组：随机 UUID 作 id，display_name 用户给。
-/// enqueue outbox 让对端也拉到这个空组。返回新组的 id 给前端，方便后续操作。
-///
-/// 主要用途：误把 chip 拖进了别的组，源行被过滤光后想回到一个干净的目标行 —— 现在
-/// 用户能主动新建，而不是依赖 capture loop 见到新 process_name 才被动 ensure_group。
-pub async fn create(pool: &DbPool, display_name: &str) -> Result<String> {
-    let name = display_name.trim().to_string();
-    if name.is_empty() {
-        return Err(crate::error::Error::InvalidInput("组名不能为空"));
-    }
-    let id = uuid::Uuid::new_v4().to_string();
-    let now = utc_now_rfc3339();
-    let id_for_db = id.clone();
-    let id_for_outbox = id.clone();
-    pool.0
-        .call(move |conn| {
-            conn.execute(
-                "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, NULL, ?, NULL)",
-                rusqlite::params![id_for_db, name, now],
-            )
-            .db()?;
-            enqueue(
-                conn,
-                OutboxOp::Upsert,
-                OutboxEntity::AppGroup,
-                &id_for_outbox,
-                &serde_json::json!({ "groupId": id_for_outbox }).to_string(),
-            )
-            .db()?;
-            Ok(())
-        })
-        .await?;
-    Ok(id)
-}
-
 /// **强力删除**：组 + 它所有 active member 一起软删（cascade）。
 /// activities 表不动 —— 只断 (app_group_members → app_groups) 的链接；之后这些
 /// process_name 在 [reports.rs:day_apps] 的 `GROUP BY COALESCE(g.id, a.process_name)`

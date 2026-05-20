@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import type { Category } from "../../api/hindsight";
 import { CategoryFilterDropdown } from "./CategoryFilterDropdown";
 import type { AppsSortBy } from "./useAppsFilter";
@@ -26,10 +26,9 @@ interface Props {
   onResetCategories: () => void;
   sortBy: AppsSortBy;
   onSortChange: (v: AppsSortBy) => void;
-  onCreateRow: () => void;
 }
 
-/** `/apps` 页头部的单行工具栏：搜索 + 分类 dropdown + 排序 dropdown + 新建行。 */
+/** `/apps` 页头部的单行工具栏：搜索 + 分类 dropdown + 排序 dropdown。 */
 export function AppsFilterBar({
   search,
   onSearchChange,
@@ -41,7 +40,6 @@ export function AppsFilterBar({
   onResetCategories,
   sortBy,
   onSortChange,
-  onCreateRow,
 }: Props) {
   const { t } = useTranslation();
 
@@ -59,21 +57,17 @@ export function AppsFilterBar({
         />
       </div>
 
-      <CategoryFilterDropdown
-        categories={categories}
-        selectedCategoryIds={selectedCategoryIds}
-        unassignedOnly={unassignedOnly}
-        onToggleCategory={onToggleCategory}
-        onToggleUnassigned={onToggleUnassigned}
-        onReset={onResetCategories}
-      />
-
-      <SortDropdown value={sortBy} onChange={onSortChange} />
-
-      <button type="button" className={styles.createBtn} onClick={onCreateRow}>
-        <Plus size={14} strokeWidth={2} />
-        {t("categories.pairing.newRow")}
-      </button>
+      <div className={styles.rightGroup}>
+        <CategoryFilterDropdown
+          categories={categories}
+          selectedCategoryIds={selectedCategoryIds}
+          unassignedOnly={unassignedOnly}
+          onToggleCategory={onToggleCategory}
+          onToggleUnassigned={onToggleUnassigned}
+          onReset={onResetCategories}
+        />
+        <SortDropdown value={sortBy} onChange={onSortChange} />
+      </div>
     </div>
   );
 }

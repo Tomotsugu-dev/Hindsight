@@ -8,7 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { api, type AppGroup, type AppGroupMember } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { useCategories } from "../../state/categories";
@@ -54,18 +54,12 @@ export interface PairingSectionProps {
   loading?: boolean;
   /** 外部数据源的 reload 回调；merge/unmerge/rename/delete 完成后调用。 */
   onReload?: () => Promise<void>;
-  /** 是否渲染矩阵底部的「+ 新建行」按钮。AppsFilterBar 已经接管这个按钮时传 false。 */
-  showNewRowButton?: boolean;
-  /** "新建行"动作。controlled 模式由外部提供；uncontrolled 走内部实现。 */
-  onCreateRow?: () => Promise<void>;
 }
 
 export function PairingSection({
   groups: groupsProp,
   loading: loadingProp,
   onReload: onReloadProp,
-  showNewRowButton = true,
-  onCreateRow: onCreateRowProp,
 }: PairingSectionProps = {}) {
   const { t } = useTranslation();
   const { devices } = useDeviceFilter();
@@ -213,26 +207,6 @@ export function PairingSection({
       await reload();
     } catch (e) {
       logError("pairing.deleteRow", e);
-    }
-  };
-
-  const onCreateGroup = async () => {
-    // 受控模式：让外部去做（AppsPage 已经把同款逻辑挂在 AppsFilterBar 上）
-    if (onCreateRowProp) {
-      await onCreateRowProp();
-      return;
-    }
-    // 默认名 + 时间后缀防重；用户可立即在 nameInput 里改
-    const time = new Date().toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const defaultName = t("categories.pairing.newRowDefaultName", { time });
-    try {
-      await api.createAppGroup(defaultName);
-      await reload();
-    } catch (e) {
-      logError("pairing.createRow", e);
     }
   };
 
@@ -427,17 +401,6 @@ export function PairingSection({
           </div>
         );
       })}
-
-      {showNewRowButton && (
-        <button
-          type="button"
-          className={styles.createRowBtn}
-          onClick={() => void onCreateGroup()}
-        >
-          <Plus size={12} strokeWidth={2.25} />
-          {t("categories.pairing.newRow")}
-        </button>
-      )}
 
       {drag &&
         createPortal(

@@ -44,20 +44,6 @@ export default function AppsPage() {
     void reload();
   }, [reload]);
 
-  const onCreateRow = useCallback(async () => {
-    const time = new Date().toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const defaultName = t("categories.pairing.newRowDefaultName", { time });
-    try {
-      await api.createAppGroup(defaultName);
-      await reload();
-    } catch (e) {
-      logError("apps.createRow", e);
-    }
-  }, [reload, t]);
-
   // 过滤后用于渲染的 groups；空数组占位避免 .map 上 null
   const filteredGroups = useMemo<AppGroup[] | null>(() => {
     if (groups === null) return null;
@@ -115,7 +101,6 @@ export default function AppsPage() {
           onResetCategories={filter.resetCategories}
           sortBy={filter.filter.sortBy}
           onSortChange={filter.setSortBy}
-          onCreateRow={() => void onCreateRow()}
         />
       )}
 
@@ -139,8 +124,6 @@ export default function AppsPage() {
             groups={filteredGroups ?? undefined}
             loading={filteredGroups === null}
             onReload={onPairingReload}
-            showNewRowButton={!showToolbar}
-            onCreateRow={onCreateRow}
           />
         )}
       </section>

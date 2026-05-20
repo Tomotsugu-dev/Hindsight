@@ -155,7 +155,6 @@ pub fn run() {
             commands::categories::list_unclassified_apps,
             // --- app_groups: 应用分组（多个进程合一组） ---
             commands::app_groups::list_app_groups,
-            commands::app_groups::create_app_group,
             commands::app_groups::delete_app_group,
             commands::app_groups::purge_app_group,
             commands::app_groups::merge_app_group,

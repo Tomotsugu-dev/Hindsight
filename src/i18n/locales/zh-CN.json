@@ -468,9 +468,7 @@
       "row": {
         "deleteEmptyTooltip": "删除此空行",
         "deleteEmptyAria": "删除此空行"
-      },
-      "newRow": "新建行",
-      "newRowDefaultName": "新行 {{time}}"
+      }
     },
     "assign": {
       "label": "指派",
