@@ -392,7 +392,24 @@
     }
   },
   "apps": {
-    "title": "Apps"
+    "title": "Apps",
+    "filter": {
+      "searchPlaceholder": "Search app or process name",
+      "categoryTrigger": "Category",
+      "categoryAll": "All",
+      "categoryAllAria": "Show all categories (clear filter)",
+      "categoryUnassigned": "Unassigned",
+      "sortLabel": "Sort",
+      "sort": {
+        "default": "Default",
+        "durationDesc": "Time ↓",
+        "durationAsc": "Time ↑",
+        "nameAsc": "Name A-Z",
+        "nameDesc": "Name Z-A"
+      },
+      "noResults": "No apps match your filter",
+      "clearFilters": "Clear filters"
+    }
   },
   "categories": {
     "title": "Categories",

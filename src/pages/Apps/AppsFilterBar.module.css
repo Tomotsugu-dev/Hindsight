@@ -1,0 +1,305 @@
+/* /apps 页头部工具栏：单行 layout（搜索 + 分类 dropdown + 排序 dropdown + 新建行）。
+   高 ~40px，跟页面 header 之间用 16px gap。视觉风格跟 AppearancePicker / AssignDropdown
+   一族对齐：白底卡片、subtle border、popover 阴影。 */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+
+/* —— 搜索框 —— */
+
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+  height: 32px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  height: 100%;
+  padding: 0 10px 0 30px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.025));
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-strong);
+  outline: none;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.searchInput::placeholder {
+  color: var(--text-faint);
+}
+
+.searchInput:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.searchInput:focus {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+/* —— Dropdown trigger（分类 / 排序共用样式） —— */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--text-faint) 30%, transparent);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+  flex-shrink: 0;
+}
+
+.trigger:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: color-mix(in oklab, var(--text-faint) 50%, transparent);
+}
+
+.trigger:active {
+  transform: scale(0.97);
+}
+
+.triggerActive {
+  border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  color: var(--color-accent);
+}
+
+.triggerActive:hover {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  border-color: var(--color-accent);
+}
+
+.triggerLabel {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.triggerActive .triggerLabel {
+  color: color-mix(in oklab, var(--color-accent) 70%, transparent);
+}
+
+.triggerValue {
+  font-weight: 600;
+}
+
+.triggerChevron {
+  margin-left: 2px;
+  color: var(--text-faint);
+}
+
+.triggerActive .triggerChevron {
+  color: var(--color-accent);
+}
+
+/* —— + 新建行 按钮 —— 沿用 Categories .createBtn 同款 outline 紫边 */
+
+.createBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+  color: var(--color-accent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    transform 120ms ease-out;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.createBtn:hover {
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  border-color: var(--color-accent);
+}
+
+.createBtn:active {
+  transform: scale(0.97);
+}
+
+/* —— 分类筛选 popover panel —— */
+
+.panel {
+  position: fixed;
+  z-index: 100;
+  min-width: 280px;
+  max-width: 360px;
+  padding: 10px;
+  background: var(--surface-1, #ffffff);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow:
+    0 12px 40px rgba(20, 20, 40, 0.12),
+    0 2px 6px rgba(20, 20, 40, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panelRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.panelDivider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 2px 0;
+}
+
+/* pseudo-chip = 「全部」「未分类」灰色风格 */
+.pseudoChip {
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--text-faint) 30%, transparent);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.pseudoChip:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.pseudoChipActive {
+  background: color-mix(in oklab, var(--text-strong) 8%, transparent);
+  border-color: color-mix(in oklab, var(--text-strong) 35%, transparent);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+/* 真分类 chip = 按 --chip-color 染色 */
+.catChip {
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--chip-color) 40%, transparent);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.catChip:hover {
+  background: color-mix(in oklab, var(--chip-color) 12%, transparent);
+}
+
+.catChipSelected {
+  background: color-mix(in oklab, var(--chip-color) 25%, transparent);
+  border-color: var(--chip-color);
+  font-weight: 600;
+}
+
+/* —— 排序 dropdown menu —— */
+
+.sortMenu {
+  position: fixed;
+  z-index: 100;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--surface-1, #ffffff);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  box-shadow:
+    0 12px 40px rgba(20, 20, 40, 0.12),
+    0 2px 6px rgba(20, 20, 40, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sortItem {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 100ms ease-out;
+}
+
+.sortItem:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.sortItemActive {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.sortItemActive:hover {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+/* —— 空态 —— */
+
+.empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.emptyClearBtn {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}

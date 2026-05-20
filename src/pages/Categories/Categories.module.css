@@ -362,16 +362,22 @@
 }
 
 /* —— App chips 的"两行夹片" —— 默认 height 锁到 2 行 + 底部渐隐 mask；
-   hover 时 height 变 auto（依赖全局 interpolate-size）+ mask 消失，平滑动画展开。 */
+   hover 时展开到内容真实高度，平滑动画。
+
+   实现走 grid-template-rows `minmax(56px, 0fr) → minmax(56px, 1fr)`：
+     - min=56px 锁住默认 2 行可见
+     - max 从 0fr（不占额外空间，content 被 overflow:hidden 截）变 1fr（占满 content 实际高度）
+     - fr 单位在 grid-template-rows 上是 Safari 17+ / 全 Chromium / Firefox 都支持的平滑过渡
+
+   原来用 `height: 56px → auto` 依赖 CSS `interpolate-size: allow-keywords`（2024 Chromium-only），
+   导致 macOS WKWebView 直接 snap 没动画，Windows WebView2 才正常。 */
 .appListClip {
   --collapsed-h: 56px; /* 2 行 chip (24px) + 1 个 6px gap + 一点 buffer */
   position: relative;
   width: 100%;            /* 锁宽：hover 时绝不允许横向变化 */
   box-sizing: border-box;
-  height: var(--collapsed-h);
-  /* 即使 hover 后切到 height: auto，也不允许塌陷到 collapsed 以下 */
-  min-height: var(--collapsed-h);
-  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(var(--collapsed-h), 0fr);
   -webkit-mask-image: linear-gradient(
     to bottom,
     #000 65%,
@@ -383,22 +389,26 @@
     transparent 100%
   );
   transition:
-    height 900ms var(--ease-out),
+    grid-template-rows 900ms var(--ease-out),
     -webkit-mask-image 600ms ease-out,
     mask-image 600ms ease-out;
 }
 
 .catRow:hover .appListClip,
 .catRow:focus-within .appListClip {
-  height: auto;
+  grid-template-rows: minmax(var(--collapsed-h), 1fr);
   -webkit-mask-image: linear-gradient(to bottom, #000 100%, #000 100%);
   mask-image: linear-gradient(to bottom, #000 100%, #000 100%);
 }
 
+/* grid item：min-height: 0 解锁缩小（默认 min-content）；overflow:hidden 截掉溢出
+   的多余 chip 行，配合外层 minmax 的 max=0fr 实现 collapsed 时只露 56px。 */
 .appList {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .appChip {

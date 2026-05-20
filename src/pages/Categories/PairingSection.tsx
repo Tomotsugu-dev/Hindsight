@@ -46,11 +46,36 @@ interface DragState {
   cursorY: number;
 }
 
-export function PairingSection() {
+export interface PairingSectionProps {
+  /** 外部传入的 groups（已经过 filter/sort）。
+   *  传 undefined → 内部自取数据（向后兼容模式）。 */
+  groups?: AppGroup[];
+  /** 外部数据 loading 中。仅 controlled 模式有意义。 */
+  loading?: boolean;
+  /** 外部数据源的 reload 回调；merge/unmerge/rename/delete 完成后调用。 */
+  onReload?: () => Promise<void>;
+  /** 是否渲染矩阵底部的「+ 新建行」按钮。AppsFilterBar 已经接管这个按钮时传 false。 */
+  showNewRowButton?: boolean;
+  /** "新建行"动作。controlled 模式由外部提供；uncontrolled 走内部实现。 */
+  onCreateRow?: () => Promise<void>;
+}
+
+export function PairingSection({
+  groups: groupsProp,
+  loading: loadingProp,
+  onReload: onReloadProp,
+  showNewRowButton = true,
+  onCreateRow: onCreateRowProp,
+}: PairingSectionProps = {}) {
   const { t } = useTranslation();
   const { devices } = useDeviceFilter();
   const { categories, refresh: refreshCategories } = useCategories();
-  const [groups, setGroups] = useState<AppGroup[] | null>(null);
+  // controlled 模式（外部传 groups）跳过内部 state；uncontrolled 走旧 path
+  const isControlled = groupsProp !== undefined;
+  const [groupsInternal, setGroupsInternal] = useState<AppGroup[] | null>(null);
+  const groups = isControlled
+    ? (groupsProp ?? [])
+    : groupsInternal;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
   const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
@@ -65,19 +90,23 @@ export function PairingSection() {
     [],
   );
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
+    if (isControlled) {
+      if (onReloadProp) await onReloadProp();
+      return;
+    }
     try {
       const list = await api.listAppGroups();
-      setGroups(list);
+      setGroupsInternal(list);
     } catch (e) {
       logError("pairing.listGroups", e);
-      setGroups([]);
+      setGroupsInternal([]);
     }
-  };
+  }, [isControlled, onReloadProp]);
 
   useEffect(() => {
-    void reload();
-  }, []);
+    if (!isControlled) void reload();
+  }, [isControlled, reload]);
 
   // self 设备先排前面，其它按名字稳定排序
   const sortedDevices = useMemo<Device[]>(() => {
@@ -94,10 +123,12 @@ export function PairingSection() {
   //   - 空组保留（误操作 merge 后源行变空 → 用户能看到、能拖回）
   //   - 已删的组不显示（list_groups 已过滤 deleted_at IS NULL，保险再过一遍）
   //   - 有成员但全在未知设备上的也保留（避免数据偶尔漏 device_meta 时整行消失）
+  // controlled 模式直接用入参；非 controlled 模式用内部 state
   const visibleGroups = useMemo(() => {
-    if (!groups) return null;
+    if (groups === null || groups === undefined) return null;
     return groups;
   }, [groups]);
+  const isLoading = isControlled ? (loadingProp ?? false) : groupsInternal === null;
 
   // —— 拖拽：mousemove 实时锁 X、跟随 Y、命中检测 ——
   useEffect(() => {
@@ -135,7 +166,7 @@ export function PairingSection() {
     };
   }, [drag, hoverGroupId, refreshCategories]);
 
-  if (visibleGroups === null) {
+  if (isLoading || visibleGroups === null) {
     return <div className={styles.toolbar}>{t("categories.pairing.loading")}</div>;
   }
   if (sortedDevices.length === 0) {
@@ -186,6 +217,11 @@ export function PairingSection() {
   };
 
   const onCreateGroup = async () => {
+    // 受控模式：让外部去做（AppsPage 已经把同款逻辑挂在 AppsFilterBar 上）
+    if (onCreateRowProp) {
+      await onCreateRowProp();
+      return;
+    }
     // 默认名 + 时间后缀防重；用户可立即在 nameInput 里改
     const time = new Date().toLocaleTimeString(undefined, {
       hour: "2-digit",
@@ -392,14 +428,16 @@ export function PairingSection() {
         );
       })}
 
-      <button
-        type="button"
-        className={styles.createRowBtn}
-        onClick={() => void onCreateGroup()}
-      >
-        <Plus size={12} strokeWidth={2.25} />
-        {t("categories.pairing.newRow")}
-      </button>
+      {showNewRowButton && (
+        <button
+          type="button"
+          className={styles.createRowBtn}
+          onClick={() => void onCreateGroup()}
+        >
+          <Plus size={12} strokeWidth={2.25} />
+          {t("categories.pairing.newRow")}
+        </button>
+      )}
 
       {drag &&
         createPortal(

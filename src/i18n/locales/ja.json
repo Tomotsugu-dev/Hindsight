@@ -392,7 +392,24 @@
     }
   },
   "apps": {
-    "title": "アプリ"
+    "title": "アプリ",
+    "filter": {
+      "searchPlaceholder": "アプリ名 / プロセス名で検索",
+      "categoryTrigger": "分類",
+      "categoryAll": "すべて",
+      "categoryAllAria": "すべての分類を表示（フィルタ解除）",
+      "categoryUnassigned": "未分類",
+      "sortLabel": "並び替え",
+      "sort": {
+        "default": "デフォルト",
+        "durationDesc": "時間 ↓",
+        "durationAsc": "時間 ↑",
+        "nameAsc": "名前 A-Z",
+        "nameDesc": "名前 Z-A"
+      },
+      "noResults": "条件に合うアプリが見つかりません",
+      "clearFilters": "フィルタをクリア"
+    }
   },
   "categories": {
     "title": "分類",

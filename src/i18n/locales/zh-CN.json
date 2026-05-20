@@ -392,7 +392,24 @@
     }
   },
   "apps": {
-    "title": "应用"
+    "title": "应用",
+    "filter": {
+      "searchPlaceholder": "搜索应用名 / 进程名",
+      "categoryTrigger": "分类",
+      "categoryAll": "全部",
+      "categoryAllAria": "查看所有分类（清除筛选）",
+      "categoryUnassigned": "未分类",
+      "sortLabel": "排序",
+      "sort": {
+        "default": "默认",
+        "durationDesc": "时长 ↓",
+        "durationAsc": "时长 ↑",
+        "nameAsc": "名字 A-Z",
+        "nameDesc": "名字 Z-A"
+      },
+      "noResults": "没找到匹配的应用",
+      "clearFilters": "清除筛选"
+    }
   },
   "categories": {
     "title": "分类",
