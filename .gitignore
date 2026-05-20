@@ -40,6 +40,9 @@ src-tauri/resources/runtime/*.dylib
 docs/intro_zh/imgs/Hindsight_zh.mp4
 docs/intro_en/imgs/Hindsight_en.mp4
 
+# 内部 doc / TODO / 多设备测试笔记，仅本地保留不入仓
+docs/internal/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
