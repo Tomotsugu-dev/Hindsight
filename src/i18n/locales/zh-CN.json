@@ -216,7 +216,7 @@
           "checking": "正在检查…",
           "uptodate": "已是最新版本",
           "installing": "下载并安装中，完成后将自动重启…",
-          "error": "检查失败：{{message}}"
+          "error": "请检查网络连接"
         },
         "autoLabel": "自动检查更新",
         "intervalLabel": "检查频率",

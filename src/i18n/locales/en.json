@@ -216,7 +216,7 @@
           "checking": "Checking…",
           "uptodate": "Up to date",
           "installing": "Downloading and installing — the app will restart when done…",
-          "error": "Check failed: {{message}}"
+          "error": "Please check your network connection"
         },
         "autoLabel": "Check for updates automatically",
         "intervalLabel": "Frequency",

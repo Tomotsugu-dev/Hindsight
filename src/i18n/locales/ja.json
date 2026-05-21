@@ -216,7 +216,7 @@
           "checking": "確認中…",
           "uptodate": "最新です",
           "installing": "ダウンロードしてインストール中。完了すると自動で再起動します…",
-          "error": "確認に失敗しました: {{message}}"
+          "error": "ネットワーク接続をご確認ください"
         },
         "autoLabel": "アップデートを自動で確認",
         "intervalLabel": "確認頻度",
