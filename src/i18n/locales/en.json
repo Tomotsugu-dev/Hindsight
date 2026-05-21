@@ -86,12 +86,12 @@
         "enableLabel": "Enable capture",
         "enableDescription": "When off, background capture stops (both window activity and screenshots).",
         "screenshotEnableLabel": "Enable screenshots",
-        "screenshotEnableDescription": "Only controls screenshots. When off, window activity is still recorded.",
+        "screenshotEnableDescription": "Turning this off stops screenshots.",
         "intervalLabel": "Capture interval",
-        "intervalDescription": "How often window info and screenshots are captured.",
+        "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
         "idleLabel": "Idle timeout",
-        "idleDescription": "Stop counting time after prolonged mouse/keyboard inactivity.",
+        "idleDescription": "Treat the user as away after this much mouse/keyboard inactivity.",
         "idleHint": "Detection uses system-level mouse / keyboard / trackpad events.\nSet to 0 to disable (never trigger).",
         "screenshotPathLabel": "Screenshots folder",
         "dataPathLabel": "Data folder",
@@ -99,7 +99,7 @@
       },
       "workHours": {
         "title": "Work hours",
-        "description": "Only capture during the specified hours, so off-hours activity isn't recorded. Multiple ranges supported.",
+        "description": "Only capture activity during the specified hours.",
         "enableLabel": "Enable work hours",
         "rangesLabel": "Ranges"
       },
@@ -108,10 +108,10 @@
         "autoStartLabel": "Launch on system startup",
         "autoStartDescription": "Hindsight starts automatically after you log in.",
         "showWindowLabel": "Show main window on startup",
-        "showWindowDescription": "When off, the app stays in the tray and you open it manually when needed.",
+        "showWindowDescription": "When off, start silently in the tray.",
         "minimizeToTrayLabel": "Minimize to tray on close",
-        "minimizeToTrayDescriptionMac": "Clicking the X in the top-left of the window hides it to the tray; capture and sync keep running in the background. When off, clicking X quits the app.",
-        "minimizeToTrayDescriptionWin": "Clicking the X in the top-right of the window hides it to the tray; capture and sync keep running in the background. When off, clicking X quits the app."
+        "minimizeToTrayDescriptionMac": "When off, clicking X quits the app.",
+        "minimizeToTrayDescriptionWin": "When off, clicking X quits the app."
       },
       "dataRootDialog": {
         "title": "Switch data folder?",
@@ -122,7 +122,7 @@
       "storage": {
         "title": "Storage",
         "description": "Screenshot retention and current usage. The database is never auto-cleaned.",
-        "retentionLabel": "Screenshot retention (days)",
+        "retentionLabel": "Screenshot retention",
         "retentionDescription": "Expired screenshot files are deleted automatically (activity records are kept).",
         "currentUsageLabel": "Current usage",
         "currentUsageDescription": "Database {{db}} · Screenshots {{shots}}",
@@ -219,7 +219,6 @@
           "error": "Check failed: {{message}}"
         },
         "autoLabel": "Check for updates automatically",
-        "autoDescription": "When enabled, the app silently checks at startup at the frequency below and notifies you if a new version is available.",
         "intervalLabel": "Frequency",
         "intervals": {
           "daily": "Daily",
@@ -231,7 +230,6 @@
       "info": {
         "title": "Info",
         "authorLabel": "Author",
-        "authorDescription": "Personal project, non-commercial",
         "licenseLabel": "License"
       },
       "links": {
@@ -413,7 +411,7 @@
   },
   "categories": {
     "title": "Categories",
-    "intro": "Group processes into activity categories. Color, icon, name, and bound apps are all customizable.",
+    "intro": "Manage activity categories. Assign apps to categories on the Apps page.",
     "newCategory": "New category",
     "loading": "Loading…",
     "defaults": {

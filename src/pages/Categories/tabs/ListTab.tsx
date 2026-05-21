@@ -49,9 +49,7 @@ export default function ListTab() {
   return (
     <>
       <header className={styles.header}>
-        <div className={styles.headerText}>
-          <p className={styles.meta}>{t("categories.intro")}</p>
-        </div>
+        <p className={styles.meta}>{t("categories.intro")}</p>
         <button
           type="button"
           className={styles.createBtn}
@@ -395,6 +393,17 @@ function DraggableCategoryList({
   } | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [landedId, setLandedId] = useState<string | null>(null);
+  // 落地后到父组件 categories 追上 onReorder 结果之间，本地用这个数组锁住"已落新位置"。
+  // 没它的话 mouseup 瞬间 drag/hoverId 一清，displayedCategories 回退到 categories（旧序），
+  // FLIP 会先把行动画回旧位置，等 API 完成再动画到新位置 → 视觉上"卡一下" + 双动画。
+  const [optimisticOrderIds, setOptimisticOrderIds] = useState<string[] | null>(
+    null,
+  );
+  // mouseup 时置 true，下一次 FLIP useLayoutEffect 跳过动画 + 平滑接手逻辑，
+  // 直接把所有行的 transform 清掉，立刻就位。
+  // 不置这个 flag 的话，源行 mid-animation 的视觉残余会被识别为"动画中途"，
+  // 再播一轮 320ms 的"平滑接手" → 看起来就是"放手后又卡了 300ms"。
+  const dropSnapRef = useRef(false);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   // 拖动开始时快照各行 top/bottom，整个 drag 都用这份静态数据做命中检测。
   // 不能在 mousemove 时读 getBoundingClientRect()：FLIP 动画期间行位置正在动，
@@ -413,48 +422,93 @@ function DraggableCategoryList({
   // FLIP useLayoutEffect 给每行加 translateY 动画 → 实时碰撞 / 让位的视觉效果。
   // 没在拖时 displayedCategories 直接是数据本身，零改动。
   const displayedCategories = useMemo(() => {
-    if (!drag || !hoverId || drag.id === hoverId) return categories;
-    const ids = categories.map((c) => c.id);
-    const fromIdx = ids.indexOf(drag.id);
-    const toIdx = ids.indexOf(hoverId);
-    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return categories;
-    const reordered = [...categories];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    return reordered;
-  }, [categories, drag, hoverId]);
+    // 拖动中：按 hoverId 投机重排
+    if (drag && hoverId && drag.id !== hoverId) {
+      const ids = categories.map((c) => c.id);
+      const fromIdx = ids.indexOf(drag.id);
+      const toIdx = ids.indexOf(hoverId);
+      if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+        const reordered = [...categories];
+        const [moved] = reordered.splice(fromIdx, 1);
+        reordered.splice(toIdx, 0, moved);
+        return reordered;
+      }
+    }
+    // 落地后等 API：用 optimistic 顺序兜底，防止回退到 categories 旧序触发 double FLIP
+    if (optimisticOrderIds) {
+      const map = new Map(categories.map((c) => [c.id, c]));
+      const out = optimisticOrderIds
+        .map((id) => map.get(id))
+        .filter((c): c is Category => c !== undefined);
+      // 行数对齐才用 optimistic；categories 已有增/删时回退到真值，避免错位
+      if (out.length === categories.length) return out;
+    }
+    return categories;
+  }, [categories, drag, hoverId, optimisticOrderIds]);
+
+  // 父组件 categories 顺序跟 optimisticOrderIds 一致后，清掉 optimistic（API 落地）
+  useEffect(() => {
+    if (!optimisticOrderIds) return;
+    const currentIds = categories.map((c) => c.id).join(",");
+    if (currentIds === optimisticOrderIds.join(",")) {
+      setOptimisticOrderIds(null);
+    }
+  }, [categories, optimisticOrderIds]);
 
   // FLIP 动画：displayedCategories 顺序一变（drag 时 hover 切换 / drop 后真正 reorder），
   // 让每行从旧位置滑到新位置 —— 拖动时实时让位、drop 后落地都是同一动画机制。
-  //   1. 拿渲染前每行的 top（上次 useLayoutEffect 末尾存的），对比当前 top
-  //   2. delta = old - new；瞬间用 transform: translateY(delta) 把元素放回旧位置
-  //   3. 双 rAF 后 transform=0 + transition → 滑回新位置
+  //
+  // 标准 FLIP 模板：
+  //   1. 测渲染前位置（上次 useLayoutEffect 末尾存的 prevLayout，纯 layout 不含 transform）
+  //   2. 重置正在跑的 transform / transition → 测纯 layout 位置（newLayout）
+  //   3. 选 "from" 起点：
+  //        a) 上一帧动画还没跑完 → 用 visualBefore（视觉当前位置）→ 平滑接手
+  //        b) 否则 → 用 prevLayout（标准 FLIP "old layout → new layout"）
+  //   4. transform: translateY(from - newLayout) 让元素视觉回到 from
+  //   5. 双 rAF 后清 transform → 沿 transition 滑回 newLayout
+  //
+  // 老版本两处坑（macOS WKWebView 上更易暴露）：
+  //   - 保存基线时调 getBoundingClientRect()，但此刻 transform 还在身上 →
+  //     存的是"被 transform 反向推过的位置"≈ 上次的旧位置，不是真 layout
+  //   - 动画中途 hover 变了，next 读到 mid-animation 视觉位置 →
+  //     计算的 dy 偏小，transition: none 后视觉跳回某个错位坐标
   const prevTops = useRef<Map<string, number>>(new Map());
   useLayoutEffect(() => {
+    const snap = dropSnapRef.current;
+    dropSnapRef.current = false;
+
+    const newLayouts = new Map<string, number>();
     rowRefs.current.forEach((el, id) => {
-      const prev = prevTops.current.get(id);
-      const next = el.getBoundingClientRect().top;
-      if (prev !== undefined && Math.abs(prev - next) > 0.5) {
-        const dy = prev - next;
-        el.style.transition = "none";
-        el.style.transform = `translateY(${dy}px)`;
-        // 双 rAF 保证浏览器先 commit 上面的 transform，再开 transition 还原
+      // 清掉正在跑的动画，取纯 layout 位置（这一步 snap 与否都需要）
+      const visualBefore = el.getBoundingClientRect().top;
+      el.style.transition = "none";
+      el.style.transform = "";
+      const newLayout = el.getBoundingClientRect().top;
+      newLayouts.set(id, newLayout);
+
+      // drop 落地：直接停在 layout 上，不再播任何过渡（含"平滑接手"也不要）
+      if (snap) return;
+
+      // 选 from：动画中途 → visualBefore（平滑接手）；否则 → prevLayout（标准 FLIP）
+      const prevLayout = prevTops.current.get(id);
+      const midAnim = Math.abs(visualBefore - newLayout) > 0.5;
+      const from = midAnim ? visualBefore : prevLayout;
+      if (from === undefined || Math.abs(from - newLayout) <= 0.5) return;
+
+      const dy = from - newLayout;
+      el.style.transform = `translateY(${dy}px)`;
+      // 双 rAF 保证浏览器先 commit 上面的 transform，再开 transition 还原
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            // back ease: 过冲再回弹，给"碰到一起"加一点物理弹性
-            el.style.transition =
-              "transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1)";
-            el.style.transform = "";
-          });
+          // back ease: 过冲再回弹，给"碰到一起"加一点物理弹性
+          el.style.transition =
+            "transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1)";
+          el.style.transform = "";
         });
-      }
+      });
     });
-    // 更新基线，下次重排时拿来对比
-    const fresh = new Map<string, number>();
-    rowRefs.current.forEach((el, id) => {
-      fresh.set(id, el.getBoundingClientRect().top);
-    });
-    prevTops.current = fresh;
+    // 存纯 layout 基线（在 forEach 内已清完 transform 后测的，不含 transform 污染）
+    prevTops.current = newLayouts;
   }, [displayedCategories]);
 
   useEffect(() => {
@@ -483,6 +537,12 @@ function DraggableCategoryList({
         if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
           ids.splice(fromIdx, 1);
           ids.splice(toIdx, 0, cur.id);
+          // optimistic：立刻把"落到的新顺序"锁进本地 state，
+          // displayedCategories 不会回退到 categories 旧序，FLIP 不会双跳。
+          // 等 onReorder 异步完成、父 categories prop 追上来后由 useEffect 清掉。
+          setOptimisticOrderIds(ids);
+          // 告诉下一次 FLIP：drop 落地 → 跳过动画 + 平滑接手，所有行立刻就位
+          dropSnapRef.current = true;
           // 标记落地行 → CSS 给它一段 squish 动画（碰撞质感）
           setLandedId(cur.id);
           window.setTimeout(() => setLandedId(null), 360);

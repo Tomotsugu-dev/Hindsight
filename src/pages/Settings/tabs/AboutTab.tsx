@@ -1,13 +1,15 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Info,
+  Link2,
   MessageSquare,
   RefreshCw,
   Scale,
-  Sparkles,
   User,
   type LucideProps,
 } from "lucide-react";
+import { UpdateIcon } from "../../../components/icons/UpdateIcon";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 import { Section } from "../../../components/FormLayout/Section";
@@ -17,6 +19,7 @@ import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { useSettings } from "../../../state/settings";
 import { useUpdater } from "../../../state/updater";
 import type { Settings } from "../../../api/hindsight";
+import logoUrl from "../../../assets/logo.png";
 import styles from "./AboutTab.module.css";
 
 const REPO_URL = "https://github.com/Tomotsugu-dev/Hindsight";
@@ -88,7 +91,13 @@ export default function AboutTab() {
   return (
     <>
       <div className={styles.hero}>
-        <div className={styles.logo} aria-hidden />
+        <img
+          className={styles.logo}
+          src={logoUrl}
+          alt=""
+          aria-hidden
+          draggable={false}
+        />
         <div className={styles.heroText}>
           <div className={styles.appName}>Hindsight</div>
           <div className={styles.version}>
@@ -99,7 +108,7 @@ export default function AboutTab() {
         </div>
       </div>
 
-      <Section title={t("settings.about.update.title")} icon={Sparkles}>
+      <Section title={t("settings.about.update.title")} icon={UpdateIcon}>
         <Row
           label={t("settings.about.update.currentVersionLabel")}
           description={statusText}
@@ -130,7 +139,6 @@ export default function AboutTab() {
 
         <Row
           label={t("settings.about.update.autoLabel")}
-          description={t("settings.about.update.autoDescription")}
         >
           <Toggle
             checked={settings.autoUpdateEnabled}
@@ -159,10 +167,9 @@ export default function AboutTab() {
         </div>
       </Section>
 
-      <Section title={t("settings.about.info.title")}>
+      <Section title={t("settings.about.info.title")} icon={Info}>
         <Row
           label={t("settings.about.info.authorLabel")}
-          description={t("settings.about.info.authorDescription")}
           icon={User}
         >
           <span className={styles.value}>Tomotsugu-dev</span>
@@ -172,7 +179,7 @@ export default function AboutTab() {
         </Row>
       </Section>
 
-      <Section title={t("settings.about.links.title")}>
+      <Section title={t("settings.about.links.title")} icon={Link2}>
         <Row label={t("settings.about.links.repoLabel")} icon={GithubMark}>
           <a
             href={REPO_URL}

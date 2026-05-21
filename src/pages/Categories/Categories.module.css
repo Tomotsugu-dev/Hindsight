@@ -499,6 +499,7 @@
   gap: 6px;
   height: 32px;
   padding: 0 14px;
+  margin-left: auto;
   background: transparent;
   border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
   color: var(--color-accent);

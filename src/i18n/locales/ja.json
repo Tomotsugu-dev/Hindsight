@@ -86,12 +86,12 @@
         "enableLabel": "記録を有効化",
         "enableDescription": "オフにするとバックグラウンド記録（ウィンドウ情報 + スクリーンショット）を停止します。",
         "screenshotEnableLabel": "スクリーンショットを有効化",
-        "screenshotEnableDescription": "スクリーンショットのみを制御。オフにしてもウィンドウ情報は記録され続けます。",
+        "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
         "intervalLabel": "記録の間隔",
-        "intervalDescription": "ウィンドウ情報とスクリーンショットの記録頻度。間隔を短くすると詳細になりますが、ディスク使用量が増えます。",
+        "intervalDescription": "記録間隔。",
         "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",
         "idleLabel": "アイドル時間",
-        "idleDescription": "マウス / キーボード操作が長時間ない場合、現在のセッションの計測を停止します。離席中の時間が記録されるのを防ぎます。0 にすると停止しません。",
+        "idleDescription": "この時間マウス / キーボード操作がないと離席とみなします。",
         "idleHint": "システム標準のマウス / キーボード / トラックパッドの入力で判定します。\n動画視聴や入力なしの読書では発火しません。\n操作を再開すると新しいセッションが自動で開始されます。",
         "screenshotPathLabel": "スクリーンショットの保存先",
         "dataPathLabel": "データの保存先",
@@ -99,7 +99,7 @@
       },
       "workHours": {
         "title": "勤務時間",
-        "description": "指定した時間帯のみ記録を行い、勤務時間外の活動は記録しません。複数の時間帯に対応しています。",
+        "description": "指定した時間帯のみ活動を記録します。",
         "enableLabel": "勤務時間を有効化",
         "rangesLabel": "時間帯"
       },
@@ -108,10 +108,10 @@
         "autoStartLabel": "システム起動時に自動起動",
         "autoStartDescription": "ログイン後に Hindsight が自動的に起動します。",
         "showWindowLabel": "起動時にメインウィンドウを表示",
-        "showWindowDescription": "オフにするとトレイに常駐し、必要なときに手動で開きます。",
+        "showWindowDescription": "オフにするとトレイに常駐し静かに起動します。",
         "minimizeToTrayLabel": "閉じるときにトレイへ最小化",
-        "minimizeToTrayDescriptionMac": "ウィンドウ左上の X をクリックするとトレイに格納され、記録と同期はバックグラウンドで継続されます。オフの場合は X をクリックするとアプリが終了します。",
-        "minimizeToTrayDescriptionWin": "ウィンドウ右上の X をクリックするとトレイに格納され、記録と同期はバックグラウンドで継続されます。オフの場合は X をクリックするとアプリが終了します。"
+        "minimizeToTrayDescriptionMac": "オフにすると X クリックでアプリが終了します。",
+        "minimizeToTrayDescriptionWin": "オフにすると X クリックでアプリが終了します。"
       },
       "dataRootDialog": {
         "title": "データの保存先を変更しますか?",
@@ -122,7 +122,7 @@
       "storage": {
         "title": "ストレージ",
         "description": "スクリーンショットの保持期間と現在の使用量です。データベースは自動削除されません。",
-        "retentionLabel": "スクリーンショット保持日数",
+        "retentionLabel": "スクリーンショット保持",
         "retentionDescription": "期限切れのスクリーンショットファイルは自動的に削除されます (アクティビティ記録は保持)。",
         "currentUsageLabel": "現在の使用量",
         "currentUsageDescription": "データベース {{db}} · スクリーンショット {{shots}}",
@@ -219,7 +219,6 @@
           "error": "確認に失敗しました: {{message}}"
         },
         "autoLabel": "アップデートを自動で確認",
-        "autoDescription": "オンにすると、起動時に下記の頻度で静かに確認し、新しいバージョンが見つかると通知します。",
         "intervalLabel": "確認頻度",
         "intervals": {
           "daily": "毎日",
@@ -231,7 +230,6 @@
       "info": {
         "title": "情報",
         "authorLabel": "作者",
-        "authorDescription": "個人プロジェクト · 非商用",
         "licenseLabel": "ライセンス"
       },
       "links": {
@@ -413,7 +411,7 @@
   },
   "categories": {
     "title": "分類",
-    "intro": "プロセスをアクティビティ分類にまとめます。色、アイコン、名前、紐付けるアプリはすべてカスタマイズできます。",
+    "intro": "アクティビティ分類を管理。アプリへの分類割り当ては「アプリ」ページで行います。",
     "newCategory": "分類を追加",
     "loading": "読み込み中…",
     "defaults": {

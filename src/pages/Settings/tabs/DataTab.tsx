@@ -6,12 +6,13 @@ import {
   AlertCircle,
   Cloud,
   Database,
+  DatabaseBackup,
+  DatabaseZap,
   FolderOpen,
   HardDrive,
   ImageDown,
   Loader2,
   PieChart,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
@@ -208,7 +209,7 @@ export default function DataTab() {
       <Section
         title={t("settings.data.cleanup.title")}
         description={t("settings.data.cleanup.description")}
-        icon={Sparkles}
+        icon={DatabaseZap}
       >
         <Row
           label={t("settings.data.cleanup.purgeShotsLabel")}
@@ -236,7 +237,7 @@ export default function DataTab() {
         <Row
           label={t("settings.data.cleanup.purgeDbLabel")}
           description={t("settings.data.cleanup.purgeDbDescription")}
-          icon={Database}
+          icon={DatabaseBackup}
         >
           <button
             type="button"

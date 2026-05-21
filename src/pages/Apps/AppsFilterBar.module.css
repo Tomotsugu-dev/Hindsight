@@ -114,8 +114,10 @@
   color: color-mix(in oklab, var(--color-accent) 70%, transparent);
 }
 
+/* trigger 的"值"部分（全部 / 默认 / 时长↓ 等）跟 label 同样字重，
+   避免默认态显得过重；激活态由颜色染紫区分，不靠加粗。 */
 .triggerValue {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .triggerChevron {
