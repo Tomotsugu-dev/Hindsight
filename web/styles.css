@@ -535,12 +535,13 @@ h4 {
 }
 
 /* Hero iframe —— 真应用 demo 嵌入；首屏即加载
-   宽高比 16:11 接近真实桌面窗口，给应用 sidebar + 主面板足够呼吸空间 */
+   宽高比 5:4 —— 比 16:11 略 portrait，给 stats 页 InsightTiles + 排行卡多一行
+   竖向空间，首屏能看到完整的"图表 + 数据 tile + 应用排行"三段 */
 .hero-demo-frame {
   position: relative;
   z-index: 1;
   width: 100%;
-  aspect-ratio: 16 / 11;
+  aspect-ratio: 5 / 4;
   border: 1px solid #e8e5e0;
   border-radius: var(--r-img);
   background: white;

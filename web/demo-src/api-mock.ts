@@ -27,6 +27,9 @@ import type {
   Settings,
   SettingsPatch,
   StorageInfo,
+  SuperCategory,
+  SuperCategoryInput,
+  SuperCategoryPatch,
   SyncStatus,
   TestAiEndpointResp,
   UnclassifiedApp,
@@ -103,6 +106,7 @@ import {
   mockRecommendedModels,
   mockDailySegments,
   mockAppGroups,
+  mockSuperCategories,
   mockUnclassifiedApps,
   mockDayFor,
   dailySegmentsForLocale,
@@ -121,6 +125,7 @@ interface MutableState {
   authState: AuthState;
   syncStatus: SyncStatus;
   appGroups: AppGroup[];
+  superCategories: SuperCategory[];
   // 段总结按 source → date → segments
   daySummaries: Map<string, SegmentSummaryRow[]>;
 }
@@ -138,6 +143,7 @@ function loadState(): MutableState {
     authState: structuredClone(mockAuthState),
     syncStatus: structuredClone(mockSyncStatus),
     appGroups: (saved?.appGroups as AppGroup[]) ?? structuredClone(mockAppGroups),
+    superCategories: structuredClone(mockSuperCategories),
     daySummaries: new Map([[`daily:${todayStr()}`, structuredClone(mockDailySegments)]]),
   };
 }
@@ -356,6 +362,7 @@ export const api = {
       icon: input.icon,
       builtin: false,
       apps: [],
+      superCategoryId: null,
     };
     state.categories.push(c);
     persist();
@@ -379,6 +386,57 @@ export const api = {
       (a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id),
     );
     persist();
+  },
+
+  // ─── 大类（super-category）—— v28+ ────────
+  // 主仓库的 useSuperCategoriesProvider 启动时无条件调 listSuperCategories；
+  // demo 必须实现这一组，否则 useSuperCategories 抛错 → 整树 unmount
+  listSuperCategories: async (): Promise<SuperCategory[]> =>
+    structuredClone(state.superCategories),
+  createSuperCategory: async (input: SuperCategoryInput): Promise<SuperCategory> => {
+    const s: SuperCategory = {
+      id: `sup-${Date.now()}`,
+      name: input.name,
+      color: input.color,
+      icon: input.icon,
+      sortOrder: state.superCategories.length,
+    };
+    state.superCategories.push(s);
+    return s;
+  },
+  updateSuperCategory: async (
+    id: string,
+    patch: SuperCategoryPatch,
+  ): Promise<void> => {
+    const s = state.superCategories.find((x) => x.id === id);
+    if (s) {
+      if (patch.name !== undefined) s.name = patch.name;
+      if (patch.color !== undefined) s.color = patch.color;
+      if (patch.icon !== undefined) s.icon = patch.icon;
+    }
+  },
+  reorderSuperCategories: async (orderedIds: string[]): Promise<void> => {
+    state.superCategories.sort(
+      (a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id),
+    );
+  },
+  deleteSuperCategory: async (id: string): Promise<void> => {
+    state.superCategories = state.superCategories.filter((x) => x.id !== id);
+    // 子分类 super_category_id 置 null（跟 Rust 端语义一致）
+    for (const c of state.categories) {
+      if (c.superCategoryId === id) c.superCategoryId = null;
+    }
+    persist();
+  },
+  assignCategoryToSuper: async (
+    categoryId: string,
+    superId: string | null,
+  ): Promise<void> => {
+    const c = state.categories.find((x) => x.id === categoryId);
+    if (c) {
+      c.superCategoryId = superId;
+      persist();
+    }
   },
 
   // ─── 应用分配 ──────────────────────────────

@@ -21,6 +21,7 @@ import type {
   RecommendedModel,
   SegmentSummaryRow,
   AppGroup,
+  SuperCategory,
   UnclassifiedApp,
 } from "@app/api/hindsight";
 
@@ -34,49 +35,63 @@ export const mockCategories: Category[] = [
     name: "编程",
     color: "#a78bfa",
     icon: "Code",
-    builtin: true,
+    builtin: false,
     apps: ["Code.exe", "cursor.exe", "WindowsTerminal.exe", "RustRover.exe"],
+    superCategoryId: "work",
   },
   {
     id: "browse",
     name: "浏览",
     color: "#60a5fa",
     icon: "Globe",
-    builtin: true,
+    builtin: false,
     apps: ["chrome.exe", "firefox.exe", "msedge.exe"],
+    superCategoryId: "browse",
   },
   {
     id: "talk",
     name: "社交",
     color: "#34d399",
     icon: "MessageCircle",
-    builtin: true,
+    builtin: false,
     apps: ["Telegram.exe", "Teams.exe", "WeChat.exe"],
+    superCategoryId: "social",
   },
   {
     id: "study",
     name: "学习",
     color: "#f59e0b",
     icon: "BookOpen",
-    builtin: true,
+    builtin: false,
     apps: ["Obsidian.exe", "Notion.exe"],
+    superCategoryId: "work",
   },
   {
     id: "fun",
     name: "娱乐",
     color: "#ec4899",
     icon: "Gamepad2",
-    builtin: true,
+    builtin: false,
     apps: ["Spotify.exe", "Steam.exe", "Discord.exe"],
+    superCategoryId: "play",
   },
   {
     id: "other",
     name: "其他",
     color: "#94a3b8",
     icon: "MoreHorizontal",
-    builtin: true,
+    builtin: false,
     apps: ["explorer.exe", "SystemSettings.exe"],
+    superCategoryId: null,
   },
+];
+
+// 跟 Rust migration v29 / v31 / v32 / v33 seed 出来的默认大类一致
+export const mockSuperCategories: SuperCategory[] = [
+  { id: "work", name: "工作", color: "#8b5cf6", icon: "Briefcase", sortOrder: 0 },
+  { id: "play", name: "娱乐", color: "#ec4899", icon: "Sparkles", sortOrder: 1 },
+  { id: "social", name: "社交", color: "#34d399", icon: "MessageCircle", sortOrder: 2 },
+  { id: "browse", name: "浏览", color: "#60a5fa", icon: "Globe", sortOrder: 3 },
 ];
 
 // ────────────────────────────────────────────
@@ -935,7 +950,118 @@ export const mockRecommendedModels: RecommendedModel[] = [
 // App groups / unclassified（Categories 页用）
 // ────────────────────────────────────────────
 
-export const mockAppGroups: AppGroup[] = [];
+// 真实感的应用清单 —— 让「应用」页有内容；recentSecs ≈ 近 7 天累计秒数。
+// lastDeviceId 跟 mockDevices 对得上：demo-self（Win 工作站）+ demo-mac（MacBook）。
+// 部分 group 有多 member（合并组，比如 Code/cursor 合并到 "Visual Studio Code"）。
+const H = 3600;
+export const mockAppGroups: AppGroup[] = [
+  {
+    id: "g-vscode",
+    displayName: "Visual Studio Code",
+    categoryId: "code",
+    members: [
+      { processName: "Code.exe", recentSecs: 18 * H, lastDeviceId: "demo-self" },
+      { processName: "cursor.exe", recentSecs: 6 * H, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-terminal",
+    displayName: "Windows Terminal",
+    categoryId: "code",
+    members: [
+      { processName: "WindowsTerminal.exe", recentSecs: 4 * H, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-chrome",
+    displayName: "Google Chrome",
+    categoryId: "browse",
+    members: [
+      { processName: "chrome.exe", recentSecs: 22 * H, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-firefox",
+    displayName: "Firefox",
+    categoryId: "browse",
+    members: [
+      { processName: "firefox.exe", recentSecs: 3 * H, lastDeviceId: "demo-mac" },
+    ],
+  },
+  {
+    id: "g-telegram",
+    displayName: "Telegram",
+    categoryId: "talk",
+    members: [
+      { processName: "Telegram.exe", recentSecs: 2 * H + 1200, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-teams",
+    displayName: "Microsoft Teams",
+    categoryId: "talk",
+    members: [
+      { processName: "Teams.exe", recentSecs: 5 * H, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-obsidian",
+    displayName: "Obsidian",
+    categoryId: "study",
+    members: [
+      { processName: "Obsidian.exe", recentSecs: 7 * H, lastDeviceId: "demo-mac" },
+    ],
+  },
+  {
+    id: "g-notion",
+    displayName: "Notion",
+    categoryId: "study",
+    members: [
+      { processName: "Notion.exe", recentSecs: 2 * H, lastDeviceId: "demo-mac" },
+    ],
+  },
+  {
+    id: "g-spotify",
+    displayName: "Spotify",
+    categoryId: "fun",
+    members: [
+      { processName: "Spotify.exe", recentSecs: 12 * H, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-discord",
+    displayName: "Discord",
+    categoryId: "fun",
+    members: [
+      { processName: "Discord.exe", recentSecs: 4 * H, lastDeviceId: "demo-mac" },
+    ],
+  },
+  {
+    id: "g-steam",
+    displayName: "Steam",
+    categoryId: "fun",
+    members: [
+      { processName: "Steam.exe", recentSecs: 1 * H + 1800, lastDeviceId: "demo-self" },
+    ],
+  },
+  // 未归类（categoryId: null）—— 给「未分类」筛选有内容
+  {
+    id: "g-discord-game",
+    displayName: "Discord Overlay",
+    categoryId: null,
+    members: [
+      { processName: "discord.exe", recentSecs: 30 * 60, lastDeviceId: "demo-self" },
+    ],
+  },
+  {
+    id: "g-github",
+    displayName: "GitHub Desktop",
+    categoryId: null,
+    members: [
+      { processName: "GitHubDesktop.exe", recentSecs: 22 * 60, lastDeviceId: "demo-self" },
+    ],
+  },
+];
 
 export const mockUnclassifiedApps: UnclassifiedApp[] = [
   {

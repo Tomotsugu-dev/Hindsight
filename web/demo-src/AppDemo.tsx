@@ -10,6 +10,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { SettingsProvider } from "@app/state/settings";
 import { UpdaterProvider } from "@app/state/updater";
 import { CategoriesProvider } from "@app/state/categories";
+import { SuperCategoriesProvider } from "@app/state/superCategories";
 import { DeviceFilterProvider } from "@app/state/deviceFilter";
 import { Sidebar } from "@app/components/Sidebar/Sidebar";
 import { ROUTES } from "@app/config/nav";
@@ -39,6 +40,7 @@ const PromptTab = lazy(() => import("@app/pages/AISettings/tabs/PromptTab"));
 const ExternalApiTab = lazy(() => import("@app/pages/AISettings/tabs/ExternalApiTab"));
 const DevicesPage = lazy(() => import("@app/pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("@app/pages/Categories/CategoriesPage"));
+const AppsPage = lazy(() => import("@app/pages/Apps/AppsPage"));
 const SettingsPage = lazy(() => import("@app/pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
 const DataTab = lazy(() => import("@app/pages/Settings/tabs/DataTab"));
@@ -69,6 +71,7 @@ function DemoLayout() {
           </Route>
           <Route path={ROUTES.devices} element={<DevicesPage />} />
           <Route path={ROUTES.categories} element={<CategoriesPage />} />
+          <Route path={ROUTES.apps} element={<AppsPage />} />
           <Route path={ROUTES.settings} element={<SettingsPage />}>
             <Route index element={<GeneralTab />} />
             <Route path="data" element={<DataTab />} />
@@ -130,11 +133,13 @@ export function AppDemo() {
         <SettingsProvider>
           <UpdaterProvider>
             <CategoriesProvider>
-              <DeviceFilterProvider>
+              <SuperCategoriesProvider>
+                <DeviceFilterProvider>
                 <Suspense fallback={<></>}>
                   <DemoLayout />
                 </Suspense>
-              </DeviceFilterProvider>
+                </DeviceFilterProvider>
+              </SuperCategoriesProvider>
             </CategoriesProvider>
           </UpdaterProvider>
         </SettingsProvider>
@@ -157,11 +162,13 @@ export function AppDemo() {
         <SettingsProvider>
           <UpdaterProvider>
             <CategoriesProvider>
-              <DeviceFilterProvider>
+              <SuperCategoriesProvider>
+                <DeviceFilterProvider>
                 <Suspense fallback={<></>}>
                   <DemoLayout />
                 </Suspense>
-              </DeviceFilterProvider>
+                </DeviceFilterProvider>
+              </SuperCategoriesProvider>
             </CategoriesProvider>
           </UpdaterProvider>
         </SettingsProvider>
