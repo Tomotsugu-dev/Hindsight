@@ -305,6 +305,15 @@
   "today": {
     "title": "Daily",
     "meta": "{{date}} {{weekday}}",
+    "insights": {
+      "vsPrev": {
+        "label": "vs yesterday",
+        "flat": "Same as yesterday"
+      },
+      "peak": "Peak",
+      "dominant": "Top",
+      "composition": "Breakdown"
+    },
     "chart": {
       "title": "24-hour activity",
       "barTitle": "{{hour}}:00 — {{minutes}} min",
@@ -353,6 +362,15 @@
   "week": {
     "title": "Weekly",
     "meta": "{{range}} · {{avg}} daily avg",
+    "insights": {
+      "vsPrev": {
+        "label": "vs last week",
+        "flat": "Same as last week"
+      },
+      "peak": "Peak",
+      "dominant": "Top",
+      "composition": "Breakdown"
+    },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -389,6 +407,16 @@
   "month": {
     "title": "Monthly",
     "meta": "{{month}} · {{avg}} daily avg",
+    "insights": {
+      "vsPrev": {
+        "label": "vs last month",
+        "flat": "Same as last month"
+      },
+      "peak": "Peak",
+      "peakDate": "{{month}}/{{day}}",
+      "dominant": "Top",
+      "composition": "Breakdown"
+    },
     "monthLabel": "{{month}} {{year}}",
     "chart": {
       "title": "Daily activity"
@@ -445,7 +473,8 @@
       "defaults": {
         "work": "Work",
         "play": "Entertainment",
-        "social": "Social"
+        "social": "Social",
+        "browse": "Browsing"
       },
       "orphanLabel": "Ungrouped",
       "catCount": "{{count}} categories",

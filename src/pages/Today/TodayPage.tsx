@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
@@ -6,6 +6,7 @@ import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
 import { PeriodLegend } from "../../components/PeriodLegend/PeriodLegend";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
+import { InsightTiles } from "../../components/InsightTiles/InsightTiles";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList } from "./RankedList";
 import { ViewToggle, type StatsView } from "./ViewToggle";
@@ -16,12 +17,14 @@ import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
+import { usePeriodInsights } from "../../hooks/usePeriodInsights";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
 } from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
+import type { HourSlot } from "../../api/hindsight";
 import styles from "./TodayPage.module.css";
 
 function parseHM(s: string): number {
@@ -166,6 +169,30 @@ export default function TodayPage() {
     ? t("today.pie.drill.categoriesTitle")
     : t("today.ranks.topCategories");
 
+  // 顶部洞察行：当期 vs 上期 · 峰值小时 · 主力大类
+  // drill 时该大类视角；上期同 super-cat lookup
+  const peakLabelForHour = useCallback(
+    (slot: HourSlot) => `${String(slot.hour).padStart(2, "0")}:00`,
+    [],
+  );
+  const prevDrilledSlice = useMemo(
+    () =>
+      drilledSlice
+        ? prevBreakdown.slices.find((s) => s.id === drilledSlice.id) ?? null
+        : null,
+    [drilledSlice, prevBreakdown],
+  );
+  const insights = usePeriodInsights({
+    curr: hours,
+    prev: prevHoursData,
+    buildPeakLabel: peakLabelForHour,
+    topSlice: currBreakdown.slices[0] ?? null,
+    currTotal: totalMinutes,
+    drill: drilledSlice
+      ? { slice: drilledSlice, prevSlice: prevDrilledSlice }
+      : undefined,
+  });
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -249,6 +276,15 @@ export default function TodayPage() {
               ]
         }
       />
+
+      {/* 仅占比视图显示：tile 是饼图的数字摘要（drill 联动 / 主力 / 构成） */}
+      {view === "pie" && (
+        <InsightTiles
+          insights={insights}
+          scope="today"
+          drilledSlice={drilledSlice}
+        />
+      )}
 
       <div className={styles.ranks}>
         <section className={styles.card}>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ArrowUpDown,
-  Check,
   ChevronDown,
   Cloud,
   Cpu,
@@ -927,13 +926,8 @@ function RecommendedCard({
             )
           ) : (
             <>
-              {/* 已下载：紫色实心 pill + ✓，跟未下载的「下载」按钮视觉等大，
-                  让"模型有没有装"一望即知（旧版只靠 step1/step2 toggle 存在感
-                  示意，新用户经常看不出）。卸载走右边的 trash icon button。 */}
-              <span className={styles.installedBadge}>
-                <Check size={14} strokeWidth={2.4} />
-                {t("aiSettings.models.card.installedBadge")}
-              </span>
+              {/* 已下载状态不再单独显 badge —— step1/step2 toggle + 右侧 trash
+                  已经足够暗示模型可用 / 可卸载，避免视觉重复 */}
               {/* step 1 toggle：vision=false 时禁用并给 tooltip 解释 */}
               <button
                 type="button"

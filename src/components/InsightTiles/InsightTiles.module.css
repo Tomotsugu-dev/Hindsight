@@ -1,0 +1,79 @@
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* 单 tile 复用三页 .card token 的视觉语言 */
+.tile {
+  position: relative;
+  background: #fbfbfd;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+  transition:
+    background-color 220ms var(--ease-out),
+    border-color 220ms var(--ease-out);
+}
+
+/* 大字 value */
+.value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 占位「—」用同一行高度，颜色淡化 */
+.dash {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+/* up / down 着色 */
+.up {
+  color: #16a34a;
+}
+.down {
+  color: #ef4444;
+}
+
+/* 主力 / 构成 行首的圆点 */
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+/* drill 状态：每 tile 左 3px accent 条 + 4% accent tint bg */
+.tiles[data-drill] .tile {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 4%, #fbfbfd);
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+  padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
+}

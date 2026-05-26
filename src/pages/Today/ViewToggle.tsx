@@ -10,14 +10,14 @@ interface Props {
 }
 
 /**
- * 「时段 / 占比」segmented：PeriodCard headLeftExtras 用。26px 高、白 thumb 滑动。
- * thumb 用 `data-view` 控制 `transform: translateX(...)`，跟 sidebar 那套同款。
+ * 「时段 / 占比」underline tab：PeriodCard headLeftExtras 用。
+ * 纯文字 + icon，下方 2px 紫色 underline 跟 `data-view` 滑。
  */
 export function ViewToggle({ view, onChange }: Props) {
   const { t } = useTranslation();
   return (
     <div className={styles.toggle} data-view={view} role="tablist">
-      <span className={styles.thumb} aria-hidden />
+      <span className={styles.underline} aria-hidden />
       <button
         type="button"
         role="tab"

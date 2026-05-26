@@ -1,58 +1,32 @@
+/* underline tab：纯文字+icon，下方 2px 紫色 underline 滑动。
+   no border / no bg / no shadow —— header 里最轻。 */
 .toggle {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 2px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
-  background: rgba(255, 255, 255, 0.55);
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  /* underline 贴底部；预留 2px 给 underline 不被 clip */
   isolation: isolate;
-}
-
-/* 白色滑块：宽度 = 半边 - 边距，translateX 跟 data-view 切 */
-.thumb {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  width: calc(50% - 2px);
-  border-radius: 6px;
-  background: #fff;
-  box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.08),
-    0 0 0 1px rgba(108, 92, 231, 0.18);
-  transition: transform var(--duration-slow, 240ms) var(--ease-out);
-  z-index: 0;
-}
-
-.toggle[data-view="pie"] .thumb {
-  transform: translateX(100%);
 }
 
 .btn {
   position: relative;
   z-index: 1;
-  flex: 1 1 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 100%;
-  min-width: 56px;
-  padding: 0 10px;
+  gap: 5px;
+  min-width: 60px;
+  padding: 6px 14px 8px;
   border: none;
   background: transparent;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.01em;
   cursor: pointer;
   font-family: inherit;
-  border-radius: 6px;
-  transition: color 180ms var(--ease-out);
-  /* 防 hover 时按钮自身放大动画破坏 thumb 对齐 */
   line-height: 1;
+  transition: color 180ms var(--ease-out);
 }
 
 .btn:hover:not(.btnActive) {
@@ -60,9 +34,29 @@
 }
 
 .btnActive {
-  color: var(--text-strong);
+  color: var(--color-accent);
+  font-weight: 700;
 }
 
 .btn svg {
   flex-shrink: 0;
+}
+
+/* 滑动 underline：宽度 = 50%（一个 grid 列），translateX 跟 data-view 切 */
+.underline {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 50%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  /* 紫色微 glow 让 underline 不平 */
+  box-shadow: 0 1px 4px color-mix(in oklab, var(--color-accent) 35%, transparent);
+  transition: transform var(--duration-slow, 240ms) var(--ease-out);
+  z-index: 0;
+}
+
+.toggle[data-view="pie"] .underline {
+  transform: translateX(100%);
 }

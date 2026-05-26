@@ -138,6 +138,9 @@
      overflow-wrap: anywhere 比 break-word 更宽松，长单词内部任意位置都能换 */
   overflow-wrap: anywhere;
   line-height: 1.2;
+  /* I-beam 光标提示「双击可改名」（input 模式天生就是 text 光标，
+     span 模式默认是箭头，需要显式覆盖） */
+  cursor: text;
 }
 .superName:focus { background: rgba(255, 255, 255, 0.6); }
 .superBox.orphan .superName { color: var(--text-muted); cursor: default; }
@@ -148,27 +151,49 @@
   font-weight: 500;
 }
 
-.superDel {
+/* —— 右上角小 × 关闭按钮（macOS close button 风）——
+   18px 圆形，挂在卡片右上角外侧（top/right: -6px）。hover 卡时 fade + scale 出现。
+   不占卡内空间、不压 icon / name；卡身 overflow 不裁（祖先无 overflow:hidden）。 */
+.superClose {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-faint);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 999px;
+  color: var(--text-muted);
   cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.08),
+    0 2px 6px rgba(20, 20, 40, 0.06);
   opacity: 0;
-  transition: opacity 140ms, background-color 140ms, color 140ms;
+  transform: scale(0.7);
+  transform-origin: center;
+  transition:
+    opacity 160ms ease-out,
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 140ms ease-out,
+    color 140ms ease-out,
+    border-color 140ms ease-out;
+  z-index: 5;
 }
-.superCard:hover .superDel { opacity: 1; }
-.superDel:hover {
-  background: rgba(239, 68, 68, 0.14);
-  color: #ef4444;
+
+.superCard:hover .superClose,
+.superClose:hover,
+.superClose:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.superClose:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
 }
 
 /* —— 右侧 rows 列：独立卡片堆叠 + 之间留 gap —— */

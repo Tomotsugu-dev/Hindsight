@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Folder, Trash2 } from "lucide-react";
+import { Folder, X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { useSuperCategories } from "../../state/superCategories";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
@@ -341,9 +341,10 @@ export function SuperCategoriesTable() {
       boxEl: HTMLElement,
     ) => {
       if (e.button !== 0) return;
-      // mousedown 落在按钮 / input 上则不当 drag（让按钮自己 click）
+      // mousedown 落在按钮 / input / role=button 元素上则不当 drag（让它们自己 click / dblclick）
+      // role=button 用于排除 superName span（双击改名）等"语义按钮但非 <button> tag"的节点
       const target = e.target as HTMLElement;
-      if (target.closest("button, input")) return;
+      if (target.closest('button, input, [role="button"]')) return;
       e.preventDefault();
       const rect = boxEl.getBoundingClientRect();
       // 拍 super 级 Y 范围快照（用 superRowRefs 已经在 cat-drag 路径下注册好的）
@@ -767,12 +768,12 @@ function SuperRow_({
 
         <button
           type="button"
-          className={styles.superDel}
+          className={styles.superClose}
           onClick={() => setConfirmOpen(true)}
           aria-label={t("categories.super.deleteAria")}
           title={t("categories.super.deleteAria")}
         >
-          <Trash2 size={14} strokeWidth={2} />
+          <X size={12} strokeWidth={2.4} />
         </button>
       </div>
 

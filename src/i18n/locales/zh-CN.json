@@ -305,6 +305,15 @@
   "today": {
     "title": "日统计",
     "meta": "{{date}} {{weekday}}",
+    "insights": {
+      "vsPrev": {
+        "label": "较昨日",
+        "flat": "持平昨日"
+      },
+      "peak": "峰值",
+      "dominant": "主力",
+      "composition": "构成"
+    },
     "chart": {
       "title": "24 小时活动分布",
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
@@ -353,6 +362,15 @@
   "week": {
     "title": "周统计",
     "meta": "{{range}} · 日均 {{avg}}",
+    "insights": {
+      "vsPrev": {
+        "label": "较上周",
+        "flat": "持平上周"
+      },
+      "peak": "峰值",
+      "dominant": "主力",
+      "composition": "构成"
+    },
     "rangeSameMonth": "{{month}}月{{startDay}}日 — {{endDay}}日",
     "rangeCrossMonth": "{{startMonth}}月{{startDay}}日 — {{endMonth}}月{{endDay}}日",
     "chart": {
@@ -389,6 +407,16 @@
   "month": {
     "title": "月统计",
     "meta": "{{month}} · 日均 {{avg}}",
+    "insights": {
+      "vsPrev": {
+        "label": "较上月",
+        "flat": "持平上月"
+      },
+      "peak": "峰值",
+      "peakDate": "{{month}}月{{day}}日",
+      "dominant": "主力",
+      "composition": "构成"
+    },
     "monthLabel": "{{year}}年{{month}}月",
     "chart": {
       "title": "每日活动分布"
@@ -445,7 +473,8 @@
       "defaults": {
         "work": "工作",
         "play": "娱乐",
-        "social": "社交"
+        "social": "社交",
+        "browse": "浏览"
       },
       "orphanLabel": "未归入大类",
       "catCount": "{{count}} 个分类",

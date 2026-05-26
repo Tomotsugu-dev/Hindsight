@@ -311,7 +311,8 @@
   font-weight: 650;
   color: var(--text-strong);
   letter-spacing: -0.005em;
-  cursor: pointer;
+  /* I-beam 提示「双击可改名」，跟 .superName 同款语义 */
+  cursor: text;
 }
 
 .catNameInput {

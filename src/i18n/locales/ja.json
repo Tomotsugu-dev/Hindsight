@@ -305,6 +305,15 @@
   "today": {
     "title": "日次",
     "meta": "{{date}} {{weekday}}",
+    "insights": {
+      "vsPrev": {
+        "label": "昨日比",
+        "flat": "昨日と同じ"
+      },
+      "peak": "ピーク",
+      "dominant": "主要",
+      "composition": "構成"
+    },
     "chart": {
       "title": "24 時間のアクティビティ",
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
@@ -353,6 +362,15 @@
   "week": {
     "title": "週次",
     "meta": "{{range}} · 1 日平均 {{avg}}",
+    "insights": {
+      "vsPrev": {
+        "label": "先週比",
+        "flat": "先週と同じ"
+      },
+      "peak": "ピーク",
+      "dominant": "主要",
+      "composition": "構成"
+    },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -389,6 +407,16 @@
   "month": {
     "title": "月次",
     "meta": "{{month}} · 1 日平均 {{avg}}",
+    "insights": {
+      "vsPrev": {
+        "label": "先月比",
+        "flat": "先月と同じ"
+      },
+      "peak": "ピーク",
+      "peakDate": "{{month}}月{{day}}日",
+      "dominant": "主要",
+      "composition": "構成"
+    },
     "monthLabel": "{{year}}年{{month}}",
     "chart": {
       "title": "毎日のアクティビティ"
@@ -445,7 +473,8 @@
       "defaults": {
         "work": "仕事",
         "play": "娯楽",
-        "social": "ソーシャル"
+        "social": "ソーシャル",
+        "browse": "ブラウジング"
       },
       "orphanLabel": "未グループ",
       "catCount": "{{count}} 件の分類",

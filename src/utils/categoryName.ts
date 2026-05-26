@@ -19,11 +19,12 @@ const DEFAULT_CATEGORY_NAMES: Record<string, string> = {
   video: "影音",
 };
 
-// v29 / v31 / v32 migration 写入的默认大类映射，同款"未改名才翻译"逻辑
+// v29 / v31 / v32 / v33 migration 写入的默认大类映射，同款"未改名才翻译"逻辑
 const DEFAULT_SUPER_CATEGORY_NAMES: Record<string, string> = {
   work: "工作",
   play: "娱乐",
   social: "社交",
+  browse: "浏览",
 };
 
 /** 渲染分类名：默认分类（且未被改名）走 i18n，其余直接用 category.name */

@@ -719,6 +719,19 @@ const SEED_DEFAULT_SOCIAL_SUPER_SQL: &str = r#"
        AND (id = 'talk' OR TRIM(name) = '社交');
 "#;
 
+/// v33：「浏览」大类，把现有 browse (name='浏览') 默认归入。
+/// 跟 social 同款单子分类大类；id / color / icon 复用 v5 seed 的 browse 分类，
+/// 保持视觉一致（Globe + #60a5fa 蓝）。sort_order=3 接在 social 后面。
+const SEED_DEFAULT_BROWSE_SUPER_SQL: &str = r#"
+    INSERT OR IGNORE INTO super_categories(id, name, color, icon, sort_order, updated_at)
+    VALUES ('browse', '浏览', '#60a5fa', 'Globe', 3, '1970-01-01T00:00:00Z');
+
+    UPDATE categories SET super_category_id = 'browse', updated_at = '1970-01-01T00:00:00Z'
+     WHERE deleted_at IS NULL
+       AND super_category_id IS NULL
+       AND (id = 'browse' OR TRIM(name) = '浏览');
+"#;
+
 /// v31：拆解 fun 默认分类 → 引入「娱乐」大类 + 「游戏」「影音」两个子分类。
 ///
 /// 原 v5 的 `fun` (name='娱乐') 是一个粗粒度分类，跟 v29 引入大类后的"娱乐应该是 super"
@@ -828,7 +841,7 @@ const ADD_SUPER_CATEGORIES_SQL: &str = r#"
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 22] = [
+    let extras: [&'static str; 23] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -851,6 +864,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         SEED_DEFAULT_WORKCHAT_SQL,             // v30
         SEED_DEFAULT_PLAY_SUPER_SQL,           // v31
         SEED_DEFAULT_SOCIAL_SUPER_SQL,         // v32
+        SEED_DEFAULT_BROWSE_SUPER_SQL,         // v33
     ];
     pool.0
         .call(move |conn| {
