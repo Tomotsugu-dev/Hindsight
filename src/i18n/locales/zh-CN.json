@@ -413,7 +413,29 @@
     "title": "分类",
     "intro": "管理活动分类。要把应用归到分类，请去「应用」页指派。",
     "newCategory": "新建分类",
+    "newCategoryDefaultName": "新分类",
     "loading": "加载中…",
+    "appsPopover": {
+      "label": "绑定的应用"
+    },
+    "super": {
+      "newButton": "新建大类",
+      "newDefaultName": "新大类",
+      "defaults": {
+        "work": "工作",
+        "play": "娱乐",
+        "social": "社交"
+      },
+      "orphanLabel": "未归入大类",
+      "catCount": "{{count}} 个分类",
+      "emptyHint": "拖一个分类到左边大类名上即归入",
+      "orphanEmptyHint": "（所有分类已归入大类）",
+      "deleteAria": "删除大类",
+      "deleteDialog": {
+        "title": "删除大类",
+        "message": "确认删除大类「{{name}}」？其下分类会回到「未归入大类」，不会被删除。"
+      }
+    },
     "defaults": {
       "code": "编程",
       "browse": "浏览",
@@ -421,7 +443,11 @@
       "design": "设计",
       "fun": "娱乐",
       "other": "其他",
-      "hidden": "隐藏"
+      "hidden": "隐藏",
+      "office": "办公",
+      "workchat": "工作沟通",
+      "game": "游戏",
+      "video": "影音"
     },
     "list": {
       "namePlaceholder": "分类名",

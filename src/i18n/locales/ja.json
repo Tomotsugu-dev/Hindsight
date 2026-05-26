@@ -413,7 +413,29 @@
     "title": "分類",
     "intro": "アクティビティ分類を管理。アプリへの分類割り当ては「アプリ」ページで行います。",
     "newCategory": "分類を追加",
+    "newCategoryDefaultName": "新しい分類",
     "loading": "読み込み中…",
+    "appsPopover": {
+      "label": "紐付くアプリ"
+    },
+    "super": {
+      "newButton": "大分類を追加",
+      "newDefaultName": "新しい大分類",
+      "defaults": {
+        "work": "仕事",
+        "play": "娯楽",
+        "social": "ソーシャル"
+      },
+      "orphanLabel": "未グループ",
+      "catCount": "{{count}} 件の分類",
+      "emptyHint": "分類を左の大分類名にドラッグすると追加",
+      "orphanEmptyHint": "（すべての分類がグループ化されています）",
+      "deleteAria": "大分類を削除",
+      "deleteDialog": {
+        "title": "大分類を削除",
+        "message": "大分類「{{name}}」を削除しますか？配下の分類は「未グループ」に戻ります（削除されません）。"
+      }
+    },
     "defaults": {
       "code": "コーディング",
       "browse": "ブラウジング",
@@ -421,7 +443,11 @@
       "design": "デザイン",
       "fun": "エンタメ",
       "other": "その他",
-      "hidden": "非表示"
+      "hidden": "非表示",
+      "office": "事務",
+      "workchat": "仕事チャット",
+      "game": "ゲーム",
+      "video": "メディア"
     },
     "list": {
       "namePlaceholder": "分類名",

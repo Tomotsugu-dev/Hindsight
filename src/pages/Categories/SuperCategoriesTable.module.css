@@ -1,0 +1,220 @@
+/* 大类（super-category）页面布局——对齐设计稿：
+ *   每个大类组 = 横向 flex
+ *     ┌─────────┐   ┌──────────────────────────────────┐
+ *     │  super  │   │  CategoryRow (现成的 .catRow card) │
+ *     │  card   │   ├──────────────────────────────────┤
+ *     │ (全圆角) │   │  CategoryRow                      │
+ *     │         │   └──────────────────────────────────┘
+ *     └─────────┘
+ *
+ *   super card 大圆角、彩色背景，里面：顶部大 icon、底部 name + count
+ *   右侧 column 是独立 row cards 堆叠，row 间有 gap，每行还是原 .catRow 视觉
+ */
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* —— 单个大类组：左右两栏 flex —— */
+.superBox {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  /* drag 结束 fly-box 落地、isSuperDragSource 移除时，源 superBox opacity 从 0.3 → 1
+     需要平滑过渡，否则会"突然实色"——跟 fly-box snap 动画对齐。 */
+  transition: opacity 420ms ease-out;
+}
+
+/* —— 左侧 super card：全圆角、彩色背景 —— */
+.superCard {
+  flex-shrink: 0;
+  width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 10px;
+  border-radius: 14px;
+  /* hover 时整张卡是可拖拽的（除内部 button / input 外） —— grab 光标提示
+     拖动期间 body cursor 在 JS 里锁成 grabbing（见 SuperCategoriesTable.tsx 的 useEffect） */
+  cursor: grab;
+  background: color-mix(in oklab, var(--sup-color, #94a3b8) 14%, var(--surface-1, #fff));
+  border: 1px solid color-mix(in oklab, var(--sup-color, #94a3b8) 28%, transparent);
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 24px color-mix(in oklab, var(--sup-color, #94a3b8) 12%, transparent);
+  user-select: none;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+  position: relative;
+  /* 不能加 overflow: hidden —— 会把 .iconPickerAnchor 里 AppearancePicker
+     absolute 弹层裁掉（往 card 边缘外展开的部分看不见） */
+}
+
+.superBox.orphan .superCard {
+  background: color-mix(in oklab, #94a3b8 6%, var(--surface-1, #fff));
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 6px 18px rgba(20, 20, 40, 0.05);
+  /* orphan 不能被拖（"未归入"是固定行），不显示 grab 提示 */
+  cursor: default;
+}
+
+/* drop-target：所有 super card 在 chip drag 期间亮起紫虚线 */
+.superCard.dropTarget {
+  border: 2px dashed var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 6%, var(--surface-1, #fff));
+}
+/* 鼠标 Y 命中的那个变实线 + 紫光环 */
+.superCard.dropHot {
+  border: 2px solid var(--color-accent);
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--color-accent) 18%, transparent),
+    0 8px 24px color-mix(in oklab, var(--color-accent) 20%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1, #fff));
+}
+
+/* —— super card 顶部大 icon —— */
+.superIcon {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--sup-color, #94a3b8) 22%, transparent);
+  color: var(--sup-color, #94a3b8);
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 120ms ease-out;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 6px 16px color-mix(in oklab, var(--sup-color, #94a3b8) 22%, transparent);
+}
+.superIcon:hover { transform: scale(1.04); }
+.superBox.orphan .superIcon {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-faint);
+  cursor: default;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.superBox.orphan .superIcon:hover { transform: none; }
+
+.iconPickerAnchor {
+  position: relative;
+}
+
+/* —— super card 底部 name + count —— */
+.superNameWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  text-align: center;
+}
+
+.superName {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: -0.012em;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  width: 100%;
+  text-align: center;
+  font-family: inherit;
+  /* 卡片只有 104px 宽，长词（如英文 "Entertainment"）必须能跨字符断行
+     overflow-wrap: anywhere 比 break-word 更宽松，长单词内部任意位置都能换 */
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+.superName:focus { background: rgba(255, 255, 255, 0.6); }
+.superBox.orphan .superName { color: var(--text-muted); cursor: default; }
+
+.superCount {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.superDel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms, background-color 140ms, color 140ms;
+}
+.superCard:hover .superDel { opacity: 1; }
+.superDel:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+}
+
+/* —— 右侧 rows 列：独立卡片堆叠 + 之间留 gap —— */
+.superBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.emptyHint {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  font-style: italic;
+  background: rgba(0, 0, 0, 0.015);
+  border: 1px dashed rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+}
+
+/* 大类卡片正在被拖：源 superBox 整体淡化（左卡 + 右侧 rows 一起 0.3，
+   保持"整个大类组作为一个单位"的视觉一致性，避免左卡半透明 / 右行依旧实色的割裂感） */
+.superBoxSource {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* 大类拖动期间，另一个大类卡是 reorder 目标：紫实线 + 紫光环 */
+.superCardDropHot {
+  border: 2px solid var(--color-accent) !important;
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--color-accent) 18%, transparent),
+    0 8px 24px color-mix(in oklab, var(--color-accent) 20%, transparent) !important;
+  background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1, #fff)) !important;
+}
+
+/* 大类拖动 fly-box 不再有专属类——
+   见 SuperCategoriesTable.tsx 的 portal 渲染：直接复用 .superBox / .superCard /
+   .superBody 三件套 + inline style 覆盖 position/left/top/width/drop-shadow/z-index/
+   pointer-events，保证跟源大类 1:1 视觉。 */
+
+/* —— 「隐藏」builtin 行：没有 super card，直接平铺 CategoryRow —— */
+.builtinBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

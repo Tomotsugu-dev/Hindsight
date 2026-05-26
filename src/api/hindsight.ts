@@ -44,6 +44,8 @@ export interface Category {
   icon: string;
   builtin: boolean;
   apps: string[];
+  /** v28：所属大类 id；null = 未归入大类，渲染在"未归入"行 */
+  superCategoryId: string | null;
 }
 
 export interface CategoryInput {
@@ -53,6 +55,27 @@ export interface CategoryInput {
 }
 
 export interface CategoryPatch {
+  name?: string;
+  color?: string;
+  icon?: string;
+}
+
+/** v28：大类（super-category）容器，用来视觉/语义打包一组 categories。 */
+export interface SuperCategory {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  sortOrder: number;
+}
+
+export interface SuperCategoryInput {
+  name: string;
+  color: string;
+  icon: string;
+}
+
+export interface SuperCategoryPatch {
   name?: string;
   color?: string;
   icon?: string;
@@ -608,6 +631,19 @@ export const api = {
     invoke<void>("unassign_app", { processName }),
   listUnclassifiedApps: (daysBack?: number) =>
     invoke<UnclassifiedApp[]>("list_unclassified_apps", { daysBack }),
+  // —— v28 大类（super-category）—— 本地 only，sync 暂未接入
+  listSuperCategories: () =>
+    invoke<SuperCategory[]>("list_super_categories"),
+  createSuperCategory: (input: SuperCategoryInput) =>
+    invoke<SuperCategory>("create_super_category", { input }),
+  updateSuperCategory: (id: string, patch: SuperCategoryPatch) =>
+    invoke<void>("update_super_category", { id, patch }),
+  reorderSuperCategories: (orderedIds: string[]) =>
+    invoke<void>("reorder_super_categories", { orderedIds }),
+  deleteSuperCategory: (id: string) =>
+    invoke<void>("delete_super_category", { id }),
+  assignCategoryToSuper: (categoryId: string, superId: string | null) =>
+    invoke<void>("assign_category_to_super", { categoryId, superId }),
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
   deleteAppGroup: (groupId: string) =>
     invoke<void>("delete_app_group", { groupId }),

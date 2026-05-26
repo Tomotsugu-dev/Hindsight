@@ -13,6 +13,15 @@
   gap: 16px;
 }
 
+/* 两个「新建」按钮的容器：靠右贴齐 + 按钮之间小 gap，
+   而不是让两个按钮各自 margin-left:auto 把 flex 剩余空间瓜分掉。 */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .headerText {
   flex: 1;
   display: flex;
@@ -499,7 +508,6 @@
   gap: 6px;
   height: 32px;
   padding: 0 14px;
-  margin-left: auto;
   background: transparent;
   border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
   color: var(--color-accent);

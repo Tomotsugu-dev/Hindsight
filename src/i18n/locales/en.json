@@ -413,7 +413,29 @@
     "title": "Categories",
     "intro": "Manage activity categories. Assign apps to categories on the Apps page.",
     "newCategory": "New category",
+    "newCategoryDefaultName": "New category",
     "loading": "Loading…",
+    "appsPopover": {
+      "label": "Bound apps"
+    },
+    "super": {
+      "newButton": "New super-category",
+      "newDefaultName": "New group",
+      "defaults": {
+        "work": "Work",
+        "play": "Entertainment",
+        "social": "Social"
+      },
+      "orphanLabel": "Ungrouped",
+      "catCount": "{{count}} categories",
+      "emptyHint": "Drag a category onto a super-category label to assign",
+      "orphanEmptyHint": "(All categories are grouped)",
+      "deleteAria": "Delete super-category",
+      "deleteDialog": {
+        "title": "Delete super-category",
+        "message": "Delete super-category \"{{name}}\"? Its categories will move back to \"Ungrouped\"; they won't be deleted."
+      }
+    },
     "defaults": {
       "code": "Coding",
       "browse": "Browsing",
@@ -421,7 +443,11 @@
       "design": "Design",
       "fun": "Entertainment",
       "other": "Other",
-      "hidden": "Hidden"
+      "hidden": "Hidden",
+      "office": "Office",
+      "workchat": "Work chat",
+      "game": "Games",
+      "video": "Media"
     },
     "list": {
       "namePlaceholder": "Category name",

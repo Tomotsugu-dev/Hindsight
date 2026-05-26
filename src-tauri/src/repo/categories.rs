@@ -26,6 +26,8 @@ pub struct Category {
     pub builtin: bool,
     /// 当前归到该分类下的 process_name 列表（按字母序）
     pub apps: Vec<String>,
+    /// 所属大类 id（NULL = 未归入大类，UI 渲染在"未归入"行）。v28 引入。
+    pub super_category_id: Option<String>,
 }
 
 /// 新建分类时前端传过来的字段（不含 id —— 后端生成 UUID）。
@@ -100,32 +102,46 @@ fn app_category_payload(
 
 /// 列所有 active 分类（按 sort_order 升序），每条带它当前归类的 process_name 列表。
 pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
+    // 累积器：每行临时存 base 字段 + 待填充的 apps 列表。
+    // 用具名 struct 而不是 7-tuple 让 clippy::type_complexity 满意。
+    struct CatAccum {
+        id: String,
+        name: String,
+        color: String,
+        icon: String,
+        builtin: bool,
+        super_category_id: Option<String>,
+        apps: Vec<String>,
+    }
+
     let cats = pool
         .0
         .call(|conn| {
             let mut stmt = conn
                 .prepare_cached(
                     // 用户拖拽排序后的 sort_order 决定显示顺序；id 作为 tiebreaker。
-                    "SELECT id, name, color, icon, builtin FROM categories
+                    // super_category_id 跟 v28 大类绑定；NULL = 未归入大类。
+                    "SELECT id, name, color, icon, builtin, super_category_id FROM categories
                      WHERE deleted_at IS NULL
                      ORDER BY sort_order ASC, id ASC",
                 )
                 .db()?;
             let cat_rows = stmt
                 .query_map([], |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                        r.get::<_, String>(3)?,
-                        r.get::<_, i64>(4)? != 0,
-                    ))
+                    Ok(CatAccum {
+                        id: r.get::<_, String>(0)?,
+                        name: r.get::<_, String>(1)?,
+                        color: r.get::<_, String>(2)?,
+                        icon: r.get::<_, String>(3)?,
+                        builtin: r.get::<_, i64>(4)? != 0,
+                        super_category_id: r.get::<_, Option<String>>(5)?,
+                        apps: Vec::new(),
+                    })
                 })
                 .db()?;
-            let mut cats: Vec<(String, String, String, String, bool, Vec<String>)> = Vec::new();
+            let mut cats: Vec<CatAccum> = Vec::new();
             for r in cat_rows {
-                let (id, name, color, icon, builtin) = r.db()?;
-                cats.push((id, name, color, icon, builtin, Vec::new()));
+                cats.push(r.db()?);
             }
 
             // 旧实现读 `app_categories` 镜像表 —— 当 app_groups.category_id 已被
@@ -149,8 +165,8 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
                 .db()?;
             for r in map_rows {
                 let (process, cat_id) = r.db()?;
-                if let Some(c) = cats.iter_mut().find(|c| c.0 == cat_id) {
-                    c.5.push(process);
+                if let Some(c) = cats.iter_mut().find(|c| c.id == cat_id) {
+                    c.apps.push(process);
                 }
             }
             Ok(cats)
@@ -159,13 +175,14 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
 
     Ok(cats
         .into_iter()
-        .map(|(id, name, color, icon, builtin, apps)| Category {
-            id,
-            name,
-            color,
-            icon,
-            builtin,
-            apps,
+        .map(|c| Category {
+            id: c.id,
+            name: c.name,
+            color: c.color,
+            icon: c.icon,
+            builtin: c.builtin,
+            apps: c.apps,
+            super_category_id: c.super_category_id,
         })
         .collect())
 }
@@ -226,6 +243,7 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
         icon: final_icon,
         builtin: false,
         apps: Vec::new(),
+        super_category_id: None,
     })
 }
 

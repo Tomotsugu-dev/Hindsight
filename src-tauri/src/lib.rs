@@ -153,6 +153,13 @@ pub fn run() {
             commands::categories::assign_app_to_category,
             commands::categories::unassign_app,
             commands::categories::list_unclassified_apps,
+            // --- super_categories: 大类容器（v28，本地 only，sync 暂未接入） ---
+            commands::super_categories::list_super_categories,
+            commands::super_categories::create_super_category,
+            commands::super_categories::update_super_category,
+            commands::super_categories::reorder_super_categories,
+            commands::super_categories::delete_super_category,
+            commands::super_categories::assign_category_to_super,
             // --- app_groups: 应用分组（多个进程合一组） ---
             commands::app_groups::list_app_groups,
             commands::app_groups::delete_app_group,

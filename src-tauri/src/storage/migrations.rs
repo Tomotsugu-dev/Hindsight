@@ -659,12 +659,176 @@ const ADD_HIDDEN_CATEGORY_SQL: &str = r#"
     );
 "#;
 
+/// v29：默认 seed 「工作」大类 + 「办公」分类，且把 编程 / 办公 默认归入 工作。
+/// 跟 v5（默认 6 个分类）+ v27（隐藏分类）同款幂等首启 seed 模式。
+///
+/// 设计要点：
+/// - `INSERT OR IGNORE` —— 已存在（含用户已删的软删行）一律跳过，不抢回。
+/// - 默认 assign 走 `super_category_id IS NULL` 的守门：用户已经主动把分类归到别的
+///   大类的不动；只把"还没归入任何大类"的 编程 / 办公 默认推进 工作。
+/// - 用固定 id `'work'`（不 UUID），方便后续 migration 或前端 i18n 锁定。
+/// - epoch updated_at 同 v27：用户后续改名等改动 LWW 必胜。
+const SEED_DEFAULT_WORK_SUPER_SQL: &str = r#"
+    -- 新增 office 默认分类 —— 但仅当用户没有任何 id 或 name 已匹配"办公/office"的活动分类
+    -- （`INSERT OR IGNORE` 只防 id 撞车，用户曾用别的 UUID 手动建了「办公」时拦不住，
+    --  所以这里用 SELECT...WHERE NOT EXISTS 双校验：id='office' / name='办公' / name='office'
+    --  任一已存在的活动分类即跳过插入）
+    INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at)
+    SELECT 'office', '办公', '#0ea5e9', 'Briefcase', 0,
+           COALESCE((SELECT MAX(sort_order) + 1 FROM categories WHERE deleted_at IS NULL), 0),
+           '1970-01-01T00:00:00Z'
+     WHERE NOT EXISTS (
+         SELECT 1 FROM categories
+          WHERE deleted_at IS NULL
+            AND (id = 'office' OR TRIM(name) = '办公' OR LOWER(TRIM(name)) = 'office')
+     );
+
+    -- 新增 work 默认大类（id 固定 'work'，INSERT OR IGNORE 防重复）
+    INSERT OR IGNORE INTO super_categories(id, name, color, icon, sort_order, updated_at)
+    VALUES (
+        'work',
+        '工作',
+        '#8b5cf6',
+        'Briefcase',
+        0,
+        '1970-01-01T00:00:00Z'
+    );
+
+    -- 把 编程 / 任何"办公-like"分类 默认归入 工作 —— 仅当它们还未归入任何大类时。
+    -- 用户已自创办公（UUID id）也会被匹配上，跟新 seed 的 office 行为一致。
+    UPDATE categories SET super_category_id = 'work', updated_at = '1970-01-01T00:00:00Z'
+     WHERE deleted_at IS NULL
+       AND super_category_id IS NULL
+       AND (
+           id = 'code'
+           OR id = 'office'
+           OR TRIM(name) = '办公'
+           OR LOWER(TRIM(name)) = 'office'
+       );
+"#;
+
+/// v32：「社交」大类，把现有 talk (name='社交') 默认归入。
+/// 单子分类大类——后续用户可继续拖别的 social-related 分类（如微信 / Discord 自创）进来。
+const SEED_DEFAULT_SOCIAL_SUPER_SQL: &str = r#"
+    INSERT OR IGNORE INTO super_categories(id, name, color, icon, sort_order, updated_at)
+    VALUES ('social', '社交', '#34d399', 'MessageCircle', 2, '1970-01-01T00:00:00Z');
+
+    UPDATE categories SET super_category_id = 'social', updated_at = '1970-01-01T00:00:00Z'
+     WHERE deleted_at IS NULL
+       AND super_category_id IS NULL
+       AND (id = 'talk' OR TRIM(name) = '社交');
+"#;
+
+/// v31：拆解 fun 默认分类 → 引入「娱乐」大类 + 「游戏」「影音」两个子分类。
+///
+/// 原 v5 的 `fun` (name='娱乐') 是一个粗粒度分类，跟 v29 引入大类后的"娱乐应该是 super"
+/// 概念冲突。这里做"破坏性 reset"：
+///   1. 清掉 app_groups / app_categories 里所有指向 fun 的 binding（app 落 NULL = 未分类）
+///   2. 软删 fun 本身（避免 UI 上出现"娱乐(大类) + 娱乐(分类)"双同名）
+///   3. 新建 play 大类 + game / video 两个子分类，auto-assign 子分类到 play
+///
+/// 用户的 app 绑定丢失但 process_name / activities 数据完全不动；用户可在新分类下重新绑定。
+const SEED_DEFAULT_PLAY_SUPER_SQL: &str = r#"
+    -- 1. 清掉 app_groups 指向 fun 的归属（app 变成未分类）
+    UPDATE app_groups SET category_id = NULL, updated_at = '1970-01-01T00:00:00Z'
+     WHERE category_id = 'fun';
+
+    -- 2. 清掉旧 app_categories 镜像表里指向 fun 的行（软删）
+    UPDATE app_categories SET deleted_at = '1970-01-01T00:00:00Z',
+                              updated_at = '1970-01-01T00:00:00Z'
+     WHERE category_id = 'fun' AND deleted_at IS NULL;
+
+    -- 3. 软删 fun 分类本身（builtin=0，没有保护）
+    UPDATE categories SET deleted_at = '1970-01-01T00:00:00Z'
+     WHERE id = 'fun' AND deleted_at IS NULL;
+
+    -- 4. 新增 play 大类（id 固定，跟 work 同款套路）
+    INSERT OR IGNORE INTO super_categories(id, name, color, icon, sort_order, updated_at)
+    VALUES ('play', '娱乐', '#ec4899', 'Sparkles', 1, '1970-01-01T00:00:00Z');
+
+    -- 5. 新增 game 分类，直接 super=play
+    INSERT INTO categories(id, name, color, icon, builtin, sort_order, super_category_id, updated_at)
+    SELECT 'game', '游戏', '#fb7185', 'Gamepad2', 0,
+           COALESCE((SELECT MAX(sort_order) + 1 FROM categories WHERE deleted_at IS NULL), 0),
+           'play',
+           '1970-01-01T00:00:00Z'
+     WHERE NOT EXISTS (
+         SELECT 1 FROM categories
+          WHERE deleted_at IS NULL
+            AND (id = 'game' OR TRIM(name) = '游戏')
+     );
+
+    -- 6. 新增 video 分类，直接 super=play
+    INSERT INTO categories(id, name, color, icon, builtin, sort_order, super_category_id, updated_at)
+    SELECT 'video', '影音', '#a855f7', 'Film', 0,
+           COALESCE((SELECT MAX(sort_order) + 1 FROM categories WHERE deleted_at IS NULL), 0),
+           'play',
+           '1970-01-01T00:00:00Z'
+     WHERE NOT EXISTS (
+         SELECT 1 FROM categories
+          WHERE deleted_at IS NULL
+            AND (id = 'video' OR TRIM(name) = '影音')
+     );
+
+    -- 7. 把所有 game/video-like 分类（含用户自创 UUID）默认归入 play 大类，
+    --    仅当它们未归入任何大类时
+    UPDATE categories SET super_category_id = 'play', updated_at = '1970-01-01T00:00:00Z'
+     WHERE deleted_at IS NULL
+       AND super_category_id IS NULL
+       AND (id IN ('game', 'video') OR TRIM(name) IN ('游戏', '影音'));
+"#;
+
+/// v30：「工作沟通」分类 + 自动归入「工作」大类。跟 v29 的 office 同款幂等 seed
+/// 模式：name / id 双校验，已存在则跳过；assign 时仅当 super_category_id IS NULL 才覆盖。
+const SEED_DEFAULT_WORKCHAT_SQL: &str = r#"
+    INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at)
+    SELECT 'workchat', '工作沟通', '#14b8a6', 'MessageCircle', 0,
+           COALESCE((SELECT MAX(sort_order) + 1 FROM categories WHERE deleted_at IS NULL), 0),
+           '1970-01-01T00:00:00Z'
+     WHERE NOT EXISTS (
+         SELECT 1 FROM categories
+          WHERE deleted_at IS NULL
+            AND (id = 'workchat' OR TRIM(name) = '工作沟通')
+     );
+
+    -- 把所有"工作沟通"-like 分类（不管 id 是新 seed 的 workchat 还是用户自创 UUID）
+    -- 默认归入 work 大类——仅当它们还未归入任何大类时。
+    UPDATE categories SET super_category_id = 'work', updated_at = '1970-01-01T00:00:00Z'
+     WHERE deleted_at IS NULL
+       AND super_category_id IS NULL
+       AND (id = 'workchat' OR TRIM(name) = '工作沟通');
+"#;
+
+/// v28：「大类」(super-category) 容器层。把多个 categories 装进同一个大类，方便用户在
+/// 分类很多时按"工作 / 娱乐 / 学习"这种顶层归类组织。
+///
+/// 设计要点：
+/// - 独立表 `super_categories`（不复用 categories 自引用），跟普通 categories 视觉/语义都不同
+///   —— 大类只是容器，不参与时长统计的 JOIN 路径（统计仍按 categories 聚合）。
+/// - `categories.super_category_id TEXT NULL`：NULL = 未归入大类 = "未归入"行渲染。
+///   不加 FK constraint：大类软删后悬挂引用应该被 LEFT JOIN 回退到 orphan，
+///   而不是 cascade 把分类删掉。
+/// - sort_order / updated_at / deleted_at 全套——为日后接入 sync 留好接口（v28 暂不上 outbox）。
+const ADD_SUPER_CATEGORIES_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS super_categories (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        color       TEXT NOT NULL,
+        icon        TEXT NOT NULL,
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        updated_at  TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+        deleted_at  TEXT
+    );
+
+    ALTER TABLE categories ADD COLUMN super_category_id TEXT;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 17] = [
+    let extras: [&'static str; 22] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -682,6 +846,11 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         REACTIVATE_DEAD_LETTER_SQL,            // v25
         ACTIVITIES_LOCAL_REMOTE_ID_SQL,        // v26
         ADD_HIDDEN_CATEGORY_SQL,               // v27
+        ADD_SUPER_CATEGORIES_SQL,              // v28
+        SEED_DEFAULT_WORK_SUPER_SQL,           // v29
+        SEED_DEFAULT_WORKCHAT_SQL,             // v30
+        SEED_DEFAULT_PLAY_SUPER_SQL,           // v31
+        SEED_DEFAULT_SOCIAL_SUPER_SQL,         // v32
     ];
     pool.0
         .call(move |conn| {

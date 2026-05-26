@@ -781,13 +781,13 @@ mod tests {
     #[tokio::test]
     async fn synth_excludes_categories() {
         let pool = fresh_test_pool().await;
-        // Slack 挂到 'fun' 分类，VSCode 挂到 'code' 分类
-        seed_solo_group(&pool, "Slack", "fun").await;
+        // Slack 挂到 'browse' 分类（旧版本用 'fun'，v31 软删后改成另一个 active 默认分类）
+        seed_solo_group(&pool, "Slack", "browse").await;
         seed_solo_group(&pool, "VSCode", "code").await;
         insert_act(&pool, "2026-05-15", 9, "Slack", "amusing", 300).await;
         insert_act(&pool, "2026-05-15", 9, "VSCode", "lib.rs", 300).await;
 
-        let excluded = vec!["fun".to_string()];
+        let excluded = vec!["browse".to_string()];
         let out = build_synthetic_descriptions_from_activities(
             &pool,
             "2026-05-15",
@@ -802,7 +802,7 @@ mod tests {
         assert_eq!(out.len(), 1);
         let desc = &out[0].1;
         assert!(desc.contains("VSCode"), "code 类应保留: {desc}");
-        assert!(!desc.contains("Slack"), "fun 类应被排除: {desc}");
+        assert!(!desc.contains("Slack"), "browse 类应被排除: {desc}");
     }
 
     #[tokio::test]

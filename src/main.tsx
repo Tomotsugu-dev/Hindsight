@@ -5,6 +5,7 @@ import { type } from "@tauri-apps/plugin-os";
 import App from "./App";
 import { DeviceFilterProvider } from "./state/deviceFilter";
 import { CategoriesProvider } from "./state/categories";
+import { SuperCategoriesProvider } from "./state/superCategories";
 import { SettingsProvider } from "./state/settings";
 import { UpdaterProvider } from "./state/updater";
 import "./i18n";
@@ -23,9 +24,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <SettingsProvider>
         <UpdaterProvider>
           <CategoriesProvider>
-            <DeviceFilterProvider>
-              <App />
-            </DeviceFilterProvider>
+            {/* SuperCategoriesProvider 依赖 useCategories，必须嵌套在 CategoriesProvider 内 */}
+            <SuperCategoriesProvider>
+              <DeviceFilterProvider>
+                <App />
+              </DeviceFilterProvider>
+            </SuperCategoriesProvider>
           </CategoriesProvider>
         </UpdaterProvider>
       </SettingsProvider>
