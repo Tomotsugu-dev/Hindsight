@@ -73,3 +73,7 @@ similarity-poc/
 
 # deploy doc
 web/README-pi.md
+
+# 设计原型 / 草稿 HTML：本地预览用，不入仓
+prototypes/
+

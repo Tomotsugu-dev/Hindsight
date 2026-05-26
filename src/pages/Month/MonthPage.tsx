@@ -9,11 +9,20 @@ import { useMonthCache } from "../../hooks/useMonthCache";
 import { useSelectedDayApps } from "../../hooks/useSelectedDayApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
+import { useCategories } from "../../state/categories";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
+import {
+  useSuperCategoryBreakdown,
+  catMinutesFromSegments,
+} from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
+import { withViewTransition } from "../../utils/viewTransition";
 import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList } from "../Today/RankedList";
+import { ViewToggle, type StatsView } from "../Today/ViewToggle";
+import { PieView } from "../Today/PieView";
+import { PieDrillDetail } from "../Today/PieDrillDetail";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./MonthPage.module.css";
 
@@ -33,8 +42,16 @@ export default function MonthPage() {
     usePeriodNavigation();
   const { get: getMonth } = useMonthCache(offset, selectedDeviceId);
   const fmtHM = useDurationFormatter();
+  const { categories } = useCategories();
 
   const { days, apps } = useMemo(() => getMonth(offset), [getMonth, offset]);
+
+  /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释） */
+  const [view, setView] = useState<StatsView>("bars");
+  const [drillId, setDrillId] = useState<string | null>(null);
+  useEffect(() => {
+    setDrillId(null);
+  }, [offset, selectedDeviceId]);
 
   // 月份显示文案：中文取数字 1-12，英文取本地化月份名（如 "May"）
   const fmtMonth = (list: DaySummary[], off: number): string => {
@@ -122,6 +139,14 @@ export default function MonthPage() {
     o === offset ? days : getMonth(o).days,
   );
 
+  // —— 占比视图三 slide 的 super-category 聚合 ——
+  const prevCatMinutes = useMemo(() => catMinutesFromSegments(slideDaysList[0]), [slideDaysList]);
+  const currCatMinutes = useMemo(() => catMinutesFromSegments(days), [days]);
+  const nextCatMinutes = useMemo(() => catMinutesFromSegments(slideDaysList[2]), [slideDaysList]);
+  const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
+  const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
+  const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -136,7 +161,13 @@ export default function MonthPage() {
       </header>
 
       <PeriodCard
-        title={t("month.chart.title")}
+        title={view === "bars" ? t("month.chart.title") : t("today.pie.monthCardTitle")}
+        headLeftExtras={
+          <ViewToggle
+            view={view}
+            onChange={(v) => withViewTransition(() => setView(v))}
+          />
+        }
         pillLabel={monthPillLabel(offset)}
         pillTooltip={t("month.monthNav.backToThisMonth")}
         prevAriaLabel={t("month.monthNav.prev")}
@@ -150,26 +181,61 @@ export default function MonthPage() {
         onNext={() => commit(1)}
         onJumpToCurrent={jumpToCurrent}
         rightExtras={<DevicePicker />}
-        footer={<PeriodLegend />}
-        slides={[
-          <DailyBarChart
-            key="prev"
-            days={slideDaysList[0]}
-            xLabel={buildXLabel(slideDaysList[0])}
-          />,
-          <DailyBarChart
-            key="current"
-            days={slideDaysList[1]}
-            xLabel={buildXLabel(slideDaysList[1])}
-            selectedIndex={selectedIndex}
-            onIndexClick={handleDayClick}
-          />,
-          <DailyBarChart
-            key="next"
-            days={slideDaysList[2]}
-            xLabel={buildXLabel(slideDaysList[2])}
-          />,
-        ]}
+        footer={view === "bars" ? <PeriodLegend /> : null}
+        slides={
+          view === "bars"
+            ? [
+                <DailyBarChart
+                  key="prev"
+                  days={slideDaysList[0]}
+                  xLabel={buildXLabel(slideDaysList[0])}
+                />,
+                <DailyBarChart
+                  key="current"
+                  days={slideDaysList[1]}
+                  xLabel={buildXLabel(slideDaysList[1])}
+                  selectedIndex={selectedIndex}
+                  onIndexClick={handleDayClick}
+                />,
+                <DailyBarChart
+                  key="next"
+                  days={slideDaysList[2]}
+                  xLabel={buildXLabel(slideDaysList[2])}
+                />,
+              ]
+            : [
+                <PieView
+                  key={`pie-prev-${offset - 1}`}
+                  slices={prevBreakdown.slices}
+                  total={prevBreakdown.total}
+                  interactive={false}
+                />,
+                drillId !== null &&
+                currBreakdown.slices.find((s) => s.id === drillId) ? (
+                  <PieDrillDetail
+                    key={`pie-drill-${offset}-${drillId}`}
+                    slice={currBreakdown.slices.find((s) => s.id === drillId)!}
+                    grandTotal={currBreakdown.total}
+                    apps={apps}
+                    cats={categories}
+                    onBack={() => setDrillId(null)}
+                  />
+                ) : (
+                  <PieView
+                    key={`pie-curr-${offset}`}
+                    slices={currBreakdown.slices}
+                    total={currBreakdown.total}
+                    onDrill={setDrillId}
+                  />
+                ),
+                <PieView
+                  key={`pie-next-${offset + 1}`}
+                  slices={nextBreakdown.slices}
+                  total={nextBreakdown.total}
+                  interactive={false}
+                />,
+              ]
+        }
       />
 
       <div className={styles.ranks}>

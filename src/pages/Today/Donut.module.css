@@ -1,0 +1,42 @@
+.donut {
+  display: block;
+  overflow: visible;
+  /* 给整环加一层柔阴影，环看起来"浮起"立体感更强；
+     用 drop-shadow 不是 box-shadow —— SVG 要按形状投，不是按矩形 */
+  filter: drop-shadow(0 4px 14px rgba(20, 20, 40, 0.08));
+}
+
+.segment {
+  transition:
+    stroke-width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms var(--ease-out);
+}
+
+.segmentInteractive {
+  cursor: pointer;
+}
+
+.segmentDim {
+  opacity: 0.32;
+}
+
+/* 中央文字 —— tabular-nums 让 hover 时数值切换不弹宽 */
+.centerTitle {
+  font-weight: 700;
+  fill: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.centerSub {
+  font-weight: 500;
+  fill: var(--text-muted);
+  letter-spacing: 0;
+}
+
+.centerPct {
+  font-weight: 700;
+  font-size: 14px;
+  fill: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,199 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+  padding: var(--space-3, 12px) var(--space-5, 20px) var(--space-5, 20px);
+}
+
+/* —— Head: ← 返回 + 色块 + 名 + 数字栈 —— */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-2, 8px) 0;
+  border-bottom: 1px solid rgba(0, 0, 0, var(--alpha-border-subtle));
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--font-size-xs, 11px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out);
+}
+
+.backBtn:hover {
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(0, 0, 0, var(--alpha-border, 0.07));
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: var(--font-size-md, 14px);
+  font-weight: 650;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+
+.headNumStack {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.headTime {
+  font-size: var(--font-size-md, 14px);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.headPct {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* —— Split: 左 donut + 右 sections —— */
+.split {
+  display: grid;
+  grid-template-columns: 156px 1fr;
+  gap: var(--space-6, 24px);
+  align-items: start;
+  padding-top: var(--space-2, 8px);
+}
+
+.donutWrap {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-2, 8px);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+  min-width: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2, 8px);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--font-size-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sectionCount {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— 共用 drill 行 —— */
+.drillList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+.drillRow {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 120px 64px;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-2, 8px) 0;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--text-strong);
+}
+
+.drillSwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.appIconWrap {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drillName {
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drillBarWrap {
+  position: relative;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.drillBarFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  transition: width 360ms var(--ease-out);
+}
+
+.drillTime {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.emptyApps {
+  margin: 0;
+  padding: var(--space-3, 12px) 0;
+  color: var(--text-faint);
+  font-size: var(--font-size-xs, 11px);
+}

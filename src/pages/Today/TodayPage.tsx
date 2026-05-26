@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
+import { useCategories } from "../../state/categories";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
@@ -8,13 +9,21 @@ import { PeriodLegend } from "../../components/PeriodLegend/PeriodLegend";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList } from "./RankedList";
+import { ViewToggle, type StatsView } from "./ViewToggle";
+import { PieView } from "./PieView";
+import { PieDrillDetail } from "./PieDrillDetail";
 import { useDayCache } from "../../hooks/useDayCache";
 import { useHourApps } from "../../hooks/useHourApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
+import {
+  useSuperCategoryBreakdown,
+  catMinutesFromSegments,
+} from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
+import { withViewTransition } from "../../utils/viewTransition";
 import styles from "./TodayPage.module.css";
 
 function parseHM(s: string): number {
@@ -40,7 +49,17 @@ export default function TodayPage() {
     usePeriodNavigation();
   const { get: getDay } = useDayCache(offset, selectedDeviceId);
   const { settings } = useSettings();
+  const { categories } = useCategories();
   const fmtHM = useDurationFormatter();
+
+  /** 「时段 / 占比」segmented；默认 "bars" 保留现有行为。 */
+  const [view, setView] = useState<StatsView>("bars");
+  /** 占比 drill：当前选中的 super-id；null 表示列表层。 */
+  const [drillId, setDrillId] = useState<string | null>(null);
+  // 切日 / 切设备 → 自动回列表层（防止 drill 状态跨日跨设备 stale）
+  useEffect(() => {
+    setDrillId(null);
+  }, [offset, selectedDeviceId]);
 
   // 日期切换 pill 的本地化文案
   const dayLabel = (off: number): string => {
@@ -98,6 +117,19 @@ export default function TodayPage() {
     appsForRanks,
   );
 
+  // —— 占比视图三 slide 的 super-category 聚合 —— //
+  // prev/curr/next 三天分别算 cat-minutes，再各跑一遍 useSuperCategoryBreakdown
+  // （三次 hook 调用顺序稳定，符合 hooks 规则）。prev/next 不参与 drill，所以
+  // 只需要 slices/total，不需要 cats 详情。
+  const prevHoursData = useMemo(() => getDay(offset - 1).hours, [getDay, offset]);
+  const nextHoursData = useMemo(() => getDay(offset + 1).hours, [getDay, offset]);
+  const prevCatMinutes = useMemo(() => catMinutesFromSegments(prevHoursData), [prevHoursData]);
+  const currCatMinutes = useMemo(() => catMinutesFromSegments(hours), [hours]);
+  const nextCatMinutes = useMemo(() => catMinutesFromSegments(nextHoursData), [nextHoursData]);
+  const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
+  const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
+  const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+
   const selectionLabel =
     selectedHour !== null
       ? t("today.selection.label", {
@@ -118,7 +150,13 @@ export default function TodayPage() {
       </header>
 
       <PeriodCard
-        title={t("today.chart.title")}
+        title={view === "bars" ? t("today.chart.title") : t("today.pie.cardTitle")}
+        headLeftExtras={
+          <ViewToggle
+            view={view}
+            onChange={(v) => withViewTransition(() => setView(v))}
+          />
+        }
         pillLabel={dayLabel(offset)}
         pillTooltip={t("today.dayNav.backToToday")}
         prevAriaLabel={t("today.dayNav.prev")}
@@ -133,22 +171,60 @@ export default function TodayPage() {
         onJumpToCurrent={jumpToCurrent}
         rightExtras={<DevicePicker />}
         footer={
-          <PeriodLegend
-            workHoursLabel={workRanges ? t("today.legend.workHours") : undefined}
-          />
+          view === "bars" ? (
+            <PeriodLegend
+              workHoursLabel={workRanges ? t("today.legend.workHours") : undefined}
+            />
+          ) : null
         }
-        slides={[
-          // prev/next 是 PeriodCard 的滑动副本，不参与点击；只 current 接 onHourClick
-          <HourlyChart key="prev" hours={getDay(offset - 1).hours} workHours={workRanges} />,
-          <HourlyChart
-            key="current"
-            hours={hours}
-            workHours={workRanges}
-            selectedHour={selectedHour}
-            onHourClick={handleHourClick}
-          />,
-          <HourlyChart key="next" hours={getDay(offset + 1).hours} workHours={workRanges} />,
-        ]}
+        slides={
+          view === "bars"
+            ? [
+                // prev/next 是 PeriodCard 的滑动副本，不参与点击；只 current 接 onHourClick
+                <HourlyChart key="prev" hours={getDay(offset - 1).hours} workHours={workRanges} />,
+                <HourlyChart
+                  key="current"
+                  hours={hours}
+                  workHours={workRanges}
+                  selectedHour={selectedHour}
+                  onHourClick={handleHourClick}
+                />,
+                <HourlyChart key="next" hours={getDay(offset + 1).hours} workHours={workRanges} />,
+              ]
+            : [
+                // 占比视图三 slide：prev/next 渲染但 interactive=false，不挂 view-transition-name
+                <PieView
+                  key={`pie-prev-${offset - 1}`}
+                  slices={prevBreakdown.slices}
+                  total={prevBreakdown.total}
+                  interactive={false}
+                />,
+                drillId !== null &&
+                currBreakdown.slices.find((s) => s.id === drillId) ? (
+                  <PieDrillDetail
+                    key={`pie-drill-${offset}-${drillId}`}
+                    slice={currBreakdown.slices.find((s) => s.id === drillId)!}
+                    grandTotal={currBreakdown.total}
+                    apps={apps}
+                    cats={categories}
+                    onBack={() => setDrillId(null)}
+                  />
+                ) : (
+                  <PieView
+                    key={`pie-curr-${offset}`}
+                    slices={currBreakdown.slices}
+                    total={currBreakdown.total}
+                    onDrill={setDrillId}
+                  />
+                ),
+                <PieView
+                  key={`pie-next-${offset + 1}`}
+                  slices={nextBreakdown.slices}
+                  total={nextBreakdown.total}
+                  interactive={false}
+                />,
+              ]
+        }
       />
 
       <div className={styles.ranks}>

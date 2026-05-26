@@ -307,7 +307,28 @@
     "meta": "{{date}} · {{duration}} tracked",
     "chart": {
       "title": "24-hour activity",
-      "barTitle": "{{hour}}:00 — {{minutes}} min"
+      "barTitle": "{{hour}}:00 — {{minutes}} min",
+      "viewToggle": {
+        "bars": "Hours",
+        "pie": "Share",
+        "ariaBars": "Switch to 24-hour distribution view",
+        "ariaPie": "Switch to super-category share view"
+      }
+    },
+    "pie": {
+      "cardTitle": "Today's time share",
+      "weekCardTitle": "This week's time share",
+      "monthCardTitle": "This month's time share",
+      "donut": {
+        "totalLabel": "Total",
+        "hint": "Click a slice to drill in"
+      },
+      "drill": {
+        "back": "Back",
+        "categoriesTitle": "Categories",
+        "appsTitle": "Top apps",
+        "topNCount": "Top {{count}}"
+      }
     },
     "dayNav": {
       "prev": "Previous day",

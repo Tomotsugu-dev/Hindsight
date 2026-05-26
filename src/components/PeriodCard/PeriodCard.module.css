@@ -12,18 +12,42 @@
 
 .cardHead {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
   padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
+/* 行 1：title 单独 */
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* 行 2：headLeftExtras 跟 rightExtras + dayNav 各占一边 */
+.cardControlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 行 2 左侧的 extras（如 ViewToggle） */
+.cardHeadLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
 .cardTitle {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
   color: var(--text-strong);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 /* 卡片头右侧：picker + 日期导航 并排 */

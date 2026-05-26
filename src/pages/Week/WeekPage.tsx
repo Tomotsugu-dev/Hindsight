@@ -9,11 +9,20 @@ import { useWeekCache } from "../../hooks/useWeekCache";
 import { useSelectedDayApps } from "../../hooks/useSelectedDayApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
+import { useCategories } from "../../state/categories";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
+import {
+  useSuperCategoryBreakdown,
+  catMinutesFromSegments,
+} from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
+import { withViewTransition } from "../../utils/viewTransition";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList } from "../Today/RankedList";
+import { ViewToggle, type StatsView } from "../Today/ViewToggle";
+import { PieView } from "../Today/PieView";
+import { PieDrillDetail } from "../Today/PieDrillDetail";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeekPage.module.css";
 
@@ -34,8 +43,16 @@ export default function WeekPage() {
     usePeriodNavigation();
   const { get: getWeek } = useWeekCache(offset, selectedDeviceId);
   const fmtHM = useDurationFormatter();
+  const { categories } = useCategories();
 
   const { days, apps } = useMemo(() => getWeek(offset), [getWeek, offset]);
+
+  /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释） */
+  const [view, setView] = useState<StatsView>("bars");
+  const [drillId, setDrillId] = useState<string | null>(null);
+  useEffect(() => {
+    setDrillId(null);
+  }, [offset, selectedDeviceId]);
 
   // 周日期范围文案
   const fmtRange = (list: DaySummary[]): string => {
@@ -105,6 +122,16 @@ export default function WeekPage() {
   );
   const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks);
 
+  // —— 占比视图三 slide 的 super-category 聚合 ——
+  const prevDaysData = useMemo(() => getWeek(offset - 1).days, [getWeek, offset]);
+  const nextDaysData = useMemo(() => getWeek(offset + 1).days, [getWeek, offset]);
+  const prevCatMinutes = useMemo(() => catMinutesFromSegments(prevDaysData), [prevDaysData]);
+  const currCatMinutes = useMemo(() => catMinutesFromSegments(days), [days]);
+  const nextCatMinutes = useMemo(() => catMinutesFromSegments(nextDaysData), [nextDaysData]);
+  const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
+  const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
+  const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+
   const selectionLabel =
     selectedDay !== null
       ? t("week.selection.label", {
@@ -127,7 +154,13 @@ export default function WeekPage() {
       </header>
 
       <PeriodCard
-        title={t("week.chart.title")}
+        title={view === "bars" ? t("week.chart.title") : t("today.pie.weekCardTitle")}
+        headLeftExtras={
+          <ViewToggle
+            view={view}
+            onChange={(v) => withViewTransition(() => setView(v))}
+          />
+        }
         pillLabel={weekLabel(offset)}
         pillTooltip={t("week.weekNav.backToThisWeek")}
         prevAriaLabel={t("week.weekNav.prev")}
@@ -141,17 +174,52 @@ export default function WeekPage() {
         onNext={() => commit(1)}
         onJumpToCurrent={jumpToCurrent}
         rightExtras={<DevicePicker />}
-        footer={<PeriodLegend />}
-        slides={[
-          <WeeklyBarChart key="prev" days={getWeek(offset - 1).days} />,
-          <WeeklyBarChart
-            key="current"
-            days={days}
-            selectedIndex={selectedIndex}
-            onIndexClick={handleDayClick}
-          />,
-          <WeeklyBarChart key="next" days={getWeek(offset + 1).days} />,
-        ]}
+        footer={view === "bars" ? <PeriodLegend /> : null}
+        slides={
+          view === "bars"
+            ? [
+                <WeeklyBarChart key="prev" days={getWeek(offset - 1).days} />,
+                <WeeklyBarChart
+                  key="current"
+                  days={days}
+                  selectedIndex={selectedIndex}
+                  onIndexClick={handleDayClick}
+                />,
+                <WeeklyBarChart key="next" days={getWeek(offset + 1).days} />,
+              ]
+            : [
+                <PieView
+                  key={`pie-prev-${offset - 1}`}
+                  slices={prevBreakdown.slices}
+                  total={prevBreakdown.total}
+                  interactive={false}
+                />,
+                drillId !== null &&
+                currBreakdown.slices.find((s) => s.id === drillId) ? (
+                  <PieDrillDetail
+                    key={`pie-drill-${offset}-${drillId}`}
+                    slice={currBreakdown.slices.find((s) => s.id === drillId)!}
+                    grandTotal={currBreakdown.total}
+                    apps={apps}
+                    cats={categories}
+                    onBack={() => setDrillId(null)}
+                  />
+                ) : (
+                  <PieView
+                    key={`pie-curr-${offset}`}
+                    slices={currBreakdown.slices}
+                    total={currBreakdown.total}
+                    onDrill={setDrillId}
+                  />
+                ),
+                <PieView
+                  key={`pie-next-${offset + 1}`}
+                  slices={nextBreakdown.slices}
+                  total={nextBreakdown.total}
+                  interactive={false}
+                />,
+              ]
+        }
       />
 
       <div className={styles.ranks}>

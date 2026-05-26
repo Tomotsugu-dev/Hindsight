@@ -307,7 +307,28 @@
     "meta": "{{date}} · 記録 {{duration}}",
     "chart": {
       "title": "24 時間のアクティビティ",
-      "barTitle": "{{hour}}:00 — {{minutes}} 分"
+      "barTitle": "{{hour}}:00 — {{minutes}} 分",
+      "viewToggle": {
+        "bars": "時間",
+        "pie": "割合",
+        "ariaBars": "24 時間分布表示に切り替え",
+        "ariaPie": "大分類割合表示に切り替え"
+      }
+    },
+    "pie": {
+      "cardTitle": "今日の時間割合",
+      "weekCardTitle": "今週の時間割合",
+      "monthCardTitle": "今月の時間割合",
+      "donut": {
+        "totalLabel": "合計",
+        "hint": "スライスをクリックして内訳表示"
+      },
+      "drill": {
+        "back": "戻る",
+        "categoriesTitle": "分類構成",
+        "appsTitle": "主なアプリ",
+        "topNCount": "Top {{count}}"
+      }
     },
     "dayNav": {
       "prev": "前の日",

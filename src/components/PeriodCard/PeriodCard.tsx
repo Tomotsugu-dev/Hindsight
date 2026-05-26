@@ -28,6 +28,8 @@ interface PeriodCardProps {
   onJumpToCurrent: () => void;
   /** 卡片头右侧 dayNav 之前的内容（一般是 DevicePicker） */
   rightExtras?: ReactNode;
+  /** 卡片头左侧 title 旁边的内容（如 ViewToggle 切「时段 / 占比」） */
+  headLeftExtras?: ReactNode;
   /** 卡片底部内容（一般是 PeriodLegend） */
   footer?: ReactNode;
   /** 三个 slide 的渲染节点，按 [前一期, 当前, 后一期] 顺序传入 */
@@ -55,6 +57,7 @@ export function PeriodCard({
   onNext,
   onJumpToCurrent,
   rightExtras,
+  headLeftExtras,
   footer,
   slides,
 }: PeriodCardProps) {
@@ -66,10 +69,18 @@ export function PeriodCard({
 
   return (
     <section className={styles.card}>
+      {/* 卡片头：title 单独一行（行 1），controls（ViewToggle + DevicePicker + day-nav）一行（行 2）
+          —— 横向单行时四个东西挤一起，每个都被压窄；拆成两行让 title 喘口气，
+             ViewToggle / day-nav 各自有完整宽度 */}
       <header className={styles.cardHead}>
-        <h2 className={styles.cardTitle}>{title}</h2>
+        <div className={styles.cardTitleRow}>
+          <h2 className={styles.cardTitle}>{title}</h2>
+        </div>
 
-        <div className={styles.headRight}>
+        <div className={styles.cardControlsRow}>
+          <div className={styles.cardHeadLeft}>{headLeftExtras}</div>
+
+          <div className={styles.headRight}>
           {rightExtras}
 
           <div className={styles.dayNav}>
@@ -107,6 +118,7 @@ export function PeriodCard({
             >
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
+          </div>
           </div>
         </div>
       </header>

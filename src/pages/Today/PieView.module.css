@@ -1,0 +1,151 @@
+.body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--space-6, 24px);
+  align-items: center;
+  padding: var(--space-5, 20px) var(--space-5, 20px) var(--space-5, 20px);
+}
+
+.donutWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 比 donut size 略大让 drop-shadow 有展示空间 */
+  padding: var(--space-2, 8px);
+}
+
+/* —— super-cat 列表 —— */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  min-width: 0;
+}
+
+/* 每行 grid：icon(20) · name(自适应) · bar(固定窄宽) · pct/time(自然宽，右对齐) */
+.row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 110px auto;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  width: 100%;
+  padding: 7px var(--space-3, 12px);
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-md, 10px);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-sm, 13px);
+  text-align: left;
+  color: var(--text-strong);
+  transition:
+    background-color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out),
+    transform 180ms var(--ease-out),
+    opacity 180ms var(--ease-out);
+}
+
+.row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.row[data-active] {
+  background: #fff;
+  border-color: color-mix(in oklab, var(--row-color) 42%, transparent);
+  transform: translateX(2px);
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 4px 12px color-mix(in oklab, var(--row-color) 14%, transparent);
+}
+
+.row[data-dim] {
+  opacity: 0.4;
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+/* 行首：彩色背景圆角方块装 lucide icon —— 比色块更有信息量 */
+.iconWrap {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--row-color);
+  background: color-mix(in oklab, var(--row-color) 14%, transparent);
+  flex-shrink: 0;
+  transition: background-color 180ms var(--ease-out);
+}
+
+.row[data-active] .iconWrap {
+  background: color-mix(in oklab, var(--row-color) 22%, transparent);
+}
+
+.name {
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+
+/* —— Bar：饱和原色 + 顶部 1px 高光 + 圆角条 —— */
+.barWrap {
+  position: relative;
+  height: 7px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--row-color);
+  border-radius: inherit;
+  /* 顶部 inset 高光让色块更立体，跟分类卡的色块统一 */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: width 360ms var(--ease-out);
+}
+
+/* —— 数字：pct · time 同一行 —— */
+.num {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.pct {
+  font-size: var(--font-size-sm, 13px);
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+
+.numSep {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.time {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* 空态 */
+.empty {
+  grid-column: 1 / -1;
+  padding: var(--space-7, 28px) 0;
+}

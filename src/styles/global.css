@@ -120,3 +120,44 @@ a {
 .glow[aria-disabled="true"]::before {
   opacity: 0;
 }
+
+/* —— View Transitions：占比视图的圆环 morph + body 交叉淡入 —— */
+/* 圆环在 PieView ↔ PieDrillDetail 之间形变（180→156 + 中心字交叉淡入） */
+::view-transition-old(super-donut),
+::view-transition-new(super-donut) {
+  animation-duration: 540ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 整体 body 交叉淡入：旧 scale(0.96)+blur(2px) 出，新 scale(1.04)+blur(3px) 入。
+   新的延迟 80ms 让圆环先动起来，body 慢半拍接管 */
+::view-transition-old(pie-body) {
+  animation: pieBodyOut 360ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+::view-transition-new(pie-body) {
+  animation: pieBodyIn 420ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+}
+@keyframes pieBodyOut {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(2px);
+  }
+}
+@keyframes pieBodyIn {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(3px);
+  }
+}
+
+/* prefers-reduced-motion: 全部 view-transition 降级到 1ms 瞬切 */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(super-donut),
+  ::view-transition-new(super-donut),
+  ::view-transition-old(pie-body),
+  ::view-transition-new(pie-body) {
+    animation-duration: 1ms !important;
+  }
+}

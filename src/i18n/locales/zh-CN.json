@@ -307,7 +307,28 @@
     "meta": "{{date}} · 已采集 {{duration}}",
     "chart": {
       "title": "24 小时活动分布",
-      "barTitle": "{{hour}}:00 — {{minutes}} 分"
+      "barTitle": "{{hour}}:00 — {{minutes}} 分",
+      "viewToggle": {
+        "bars": "时段",
+        "pie": "占比",
+        "ariaBars": "切换到 24 小时分布视图",
+        "ariaPie": "切换到大类占比视图"
+      }
+    },
+    "pie": {
+      "cardTitle": "今日时长占比",
+      "weekCardTitle": "本周时长占比",
+      "monthCardTitle": "本月时长占比",
+      "donut": {
+        "totalLabel": "总时长",
+        "hint": "点击切片查看构成"
+      },
+      "drill": {
+        "back": "返回",
+        "categoriesTitle": "分类构成",
+        "appsTitle": "主要应用",
+        "topNCount": "Top {{count}}"
+      }
     },
     "dayNav": {
       "prev": "前一天",
