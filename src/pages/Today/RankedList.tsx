@@ -19,6 +19,8 @@ export interface RankedItem {
   leading?: ReactNode;
   /** 文字与进度条之间的额外内容（如分类的常用应用堆叠图标） */
   extras?: ReactNode;
+  /** 仅 app 排行用：该 app 的小分类 id，便于按 super-category 过滤 */
+  categoryId?: string;
 }
 
 interface RankedListProps {

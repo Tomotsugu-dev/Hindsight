@@ -9,7 +9,6 @@ import { useMonthCache } from "../../hooks/useMonthCache";
 import { useSelectedDayApps } from "../../hooks/useSelectedDayApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
-import { useCategories } from "../../state/categories";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
 import {
@@ -22,7 +21,6 @@ import { DailyBarChart } from "../Week/DailyBarChart";
 import { RankedList } from "../Today/RankedList";
 import { ViewToggle, type StatsView } from "../Today/ViewToggle";
 import { PieView } from "../Today/PieView";
-import { PieDrillDetail } from "../Today/PieDrillDetail";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./MonthPage.module.css";
 
@@ -42,7 +40,6 @@ export default function MonthPage() {
     usePeriodNavigation();
   const { get: getMonth } = useMonthCache(offset, selectedDeviceId);
   const fmtHM = useDurationFormatter();
-  const { categories } = useCategories();
 
   const { days, apps } = useMemo(() => getMonth(offset), [getMonth, offset]);
 
@@ -147,6 +144,36 @@ export default function MonthPage() {
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
 
+  // drill 状态下：底部两卡片同步缩进到该大类范围（详见 TodayPage 同名块注释）
+  const drilledSlice =
+    drillId !== null
+      ? currBreakdown.slices.find((s) => s.id === drillId) ?? null
+      : null;
+  const childCatIds = useMemo(
+    () => (drilledSlice ? new Set(drilledSlice.cats.map((c) => c.id)) : null),
+    [drilledSlice],
+  );
+  const displayedAppRanks = useMemo(
+    () =>
+      childCatIds
+        ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+        : appRanks,
+    [appRanks, childCatIds],
+  );
+  const displayedCategoryRanks = useMemo(
+    () =>
+      childCatIds
+        ? categoryRanks.filter((r) => childCatIds.has(r.id))
+        : categoryRanks,
+    [categoryRanks, childCatIds],
+  );
+  const appsTitle = drilledSlice
+    ? t("today.pie.drill.appsTitle")
+    : t("month.ranks.topApps");
+  const categoriesTitle = drilledSlice
+    ? t("today.pie.drill.categoriesTitle")
+    : t("month.ranks.topCategories");
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -154,7 +181,6 @@ export default function MonthPage() {
         <p className={styles.meta}>
           {t("month.meta", {
             month: fmtMonth(days, offset),
-            total: fmtHM(totalMinutes),
             avg: fmtHM(Math.round(avgPerDay)),
           })}
         </p>
@@ -210,24 +236,16 @@ export default function MonthPage() {
                   total={prevBreakdown.total}
                   interactive={false}
                 />,
-                drillId !== null &&
-                currBreakdown.slices.find((s) => s.id === drillId) ? (
-                  <PieDrillDetail
-                    key={`pie-drill-${offset}-${drillId}`}
-                    slice={currBreakdown.slices.find((s) => s.id === drillId)!}
-                    grandTotal={currBreakdown.total}
-                    apps={apps}
-                    cats={categories}
-                    onBack={() => setDrillId(null)}
-                  />
-                ) : (
-                  <PieView
-                    key={`pie-curr-${offset}`}
-                    slices={currBreakdown.slices}
-                    total={currBreakdown.total}
-                    onDrill={setDrillId}
-                  />
-                ),
+                // 当前 slide 始终是 PieView；点击 toggle drillId（详见 TodayPage 同名块）
+                <PieView
+                  key={`pie-curr-${offset}`}
+                  slices={currBreakdown.slices}
+                  total={currBreakdown.total}
+                  pinnedId={drillId}
+                  onDrill={(id) =>
+                    setDrillId((prev) => (prev === id ? null : id))
+                  }
+                />,
                 <PieView
                   key={`pie-next-${offset + 1}`}
                   slices={nextBreakdown.slices}
@@ -241,14 +259,20 @@ export default function MonthPage() {
       <div className={styles.ranks}>
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>{t("month.ranks.topApps")}</h2>
-            {selectionLabel && (
-              <span className={styles.selectionLabel}>{selectionLabel}</span>
-            )}
+            <h2 className={styles.cardTitle}>{appsTitle}</h2>
+            <div className={styles.cardHeadRight}>
+              {selectionLabel && (
+                <span className={styles.selectionLabel}>{selectionLabel}</span>
+              )}
+              {/* 总活动时间：drill 时显示该大类小计，否则全月总时长 */}
+              <span className={styles.cardTotal}>
+                {fmtHM(drilledSlice ? drilledSlice.minutes : totalMinutes)}
+              </span>
+            </div>
           </header>
-          {appRanks.length > 0 ? (
+          {displayedAppRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
-              <RankedList items={appRanks} />
+              <RankedList items={displayedAppRanks} />
             </ScrollBox>
           ) : (
             <EmptyHint />
@@ -257,14 +281,14 @@ export default function MonthPage() {
 
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>{t("month.ranks.topCategories")}</h2>
+            <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
             {selectionLabel && (
               <span className={styles.selectionLabel}>{selectionLabel}</span>
             )}
           </header>
-          {categoryRanks.length > 0 ? (
+          {displayedCategoryRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
-              <RankedList items={categoryRanks} />
+              <RankedList items={displayedCategoryRanks} />
             </ScrollBox>
           ) : (
             <EmptyHint />

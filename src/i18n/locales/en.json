@@ -304,7 +304,7 @@
   },
   "today": {
     "title": "Daily",
-    "meta": "{{date}} · {{duration}} tracked",
+    "meta": "{{date}} {{weekday}}",
     "chart": {
       "title": "24-hour activity",
       "barTitle": "{{hour}}:00 — {{minutes}} min",
@@ -352,7 +352,7 @@
   },
   "week": {
     "title": "Weekly",
-    "meta": "{{range}} · {{total}} total · {{avg}} daily avg",
+    "meta": "{{range}} · {{avg}} daily avg",
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -388,7 +388,7 @@
   },
   "month": {
     "title": "Monthly",
-    "meta": "{{month}} · {{total}} total · {{avg}} daily avg",
+    "meta": "{{month}} · {{avg}} daily avg",
     "monthLabel": "{{month}} {{year}}",
     "chart": {
       "title": "Daily activity"

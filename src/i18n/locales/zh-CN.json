@@ -304,7 +304,7 @@
   },
   "today": {
     "title": "日统计",
-    "meta": "{{date}} · 已采集 {{duration}}",
+    "meta": "{{date}} {{weekday}}",
     "chart": {
       "title": "24 小时活动分布",
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
@@ -352,7 +352,7 @@
   },
   "week": {
     "title": "周统计",
-    "meta": "{{range}} · 共 {{total}} · 日均 {{avg}}",
+    "meta": "{{range}} · 日均 {{avg}}",
     "rangeSameMonth": "{{month}}月{{startDay}}日 — {{endDay}}日",
     "rangeCrossMonth": "{{startMonth}}月{{startDay}}日 — {{endMonth}}月{{endDay}}日",
     "chart": {
@@ -388,7 +388,7 @@
   },
   "month": {
     "title": "月统计",
-    "meta": "{{month}} · 共 {{total}} · 日均 {{avg}}",
+    "meta": "{{month}} · 日均 {{avg}}",
     "monthLabel": "{{year}}年{{month}}月",
     "chart": {
       "title": "每日活动分布"

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
-import { useCategories } from "../../state/categories";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
@@ -11,7 +10,6 @@ import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList } from "./RankedList";
 import { ViewToggle, type StatsView } from "./ViewToggle";
 import { PieView } from "./PieView";
-import { PieDrillDetail } from "./PieDrillDetail";
 import { useDayCache } from "../../hooks/useDayCache";
 import { useHourApps } from "../../hooks/useHourApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
@@ -43,13 +41,12 @@ function dateForOffset(offset: number): Date {
 }
 
 export default function TodayPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { selectedDeviceId } = useDeviceFilter();
   const { offset, delta, transitioning, canGoForward, frameRef, commit, jumpToCurrent } =
     usePeriodNavigation();
   const { get: getDay } = useDayCache(offset, selectedDeviceId);
   const { settings } = useSettings();
-  const { categories } = useCategories();
   const fmtHM = useDurationFormatter();
 
   /** 「时段 / 占比」segmented；默认 "bars" 保留现有行为。 */
@@ -137,6 +134,38 @@ export default function TodayPage() {
         })
       : null;
 
+  // drill 状态下：底部两卡片同步缩进到该大类范围
+  // - 标题改为「主要应用」/「分类构成」（复用 PieDrillDetail 已有 i18n key）
+  // - app 排行只留 categoryId 命中该大类 cats 的；category 排行只留该大类下属
+  const drilledSlice =
+    drillId !== null
+      ? currBreakdown.slices.find((s) => s.id === drillId) ?? null
+      : null;
+  const childCatIds = useMemo(
+    () => (drilledSlice ? new Set(drilledSlice.cats.map((c) => c.id)) : null),
+    [drilledSlice],
+  );
+  const displayedAppRanks = useMemo(
+    () =>
+      childCatIds
+        ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+        : appRanks,
+    [appRanks, childCatIds],
+  );
+  const displayedCategoryRanks = useMemo(
+    () =>
+      childCatIds
+        ? categoryRanks.filter((r) => childCatIds.has(r.id))
+        : categoryRanks,
+    [categoryRanks, childCatIds],
+  );
+  const appsTitle = drilledSlice
+    ? t("today.pie.drill.appsTitle")
+    : t("today.ranks.topApps");
+  const categoriesTitle = drilledSlice
+    ? t("today.pie.drill.categoriesTitle")
+    : t("today.ranks.topCategories");
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -144,7 +173,9 @@ export default function TodayPage() {
         <p className={styles.meta}>
           {t("today.meta", {
             date: fmtDate(dateForOffset(offset)),
-            duration: fmtHM(totalMinutes),
+            weekday: new Intl.DateTimeFormat(i18n.language, {
+              weekday: "short",
+            }).format(dateForOffset(offset)),
           })}
         </p>
       </header>
@@ -199,24 +230,16 @@ export default function TodayPage() {
                   total={prevBreakdown.total}
                   interactive={false}
                 />,
-                drillId !== null &&
-                currBreakdown.slices.find((s) => s.id === drillId) ? (
-                  <PieDrillDetail
-                    key={`pie-drill-${offset}-${drillId}`}
-                    slice={currBreakdown.slices.find((s) => s.id === drillId)!}
-                    grandTotal={currBreakdown.total}
-                    apps={apps}
-                    cats={categories}
-                    onBack={() => setDrillId(null)}
-                  />
-                ) : (
-                  <PieView
-                    key={`pie-curr-${offset}`}
-                    slices={currBreakdown.slices}
-                    total={currBreakdown.total}
-                    onDrill={setDrillId}
-                  />
-                ),
+                // 当前 slide 始终是 PieView；点击 toggle drillId，pin 住高亮，下方两卡按它过滤
+                <PieView
+                  key={`pie-curr-${offset}`}
+                  slices={currBreakdown.slices}
+                  total={currBreakdown.total}
+                  pinnedId={drillId}
+                  onDrill={(id) =>
+                    setDrillId((prev) => (prev === id ? null : id))
+                  }
+                />,
                 <PieView
                   key={`pie-next-${offset + 1}`}
                   slices={nextBreakdown.slices}
@@ -230,14 +253,20 @@ export default function TodayPage() {
       <div className={styles.ranks}>
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>{t("today.ranks.topApps")}</h2>
-            {selectionLabel && (
-              <span className={styles.selectionLabel}>{selectionLabel}</span>
-            )}
+            <h2 className={styles.cardTitle}>{appsTitle}</h2>
+            <div className={styles.cardHeadRight}>
+              {selectionLabel && (
+                <span className={styles.selectionLabel}>{selectionLabel}</span>
+              )}
+              {/* 总活动时间：drill 时显示该大类小计，否则显示全日总活动时长 */}
+              <span className={styles.cardTotal}>
+                {fmtHM(drilledSlice ? drilledSlice.minutes : totalMinutes)}
+              </span>
+            </div>
           </header>
-          {appRanks.length > 0 ? (
+          {displayedAppRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
-              <RankedList items={appRanks} />
+              <RankedList items={displayedAppRanks} />
             </ScrollBox>
           ) : (
             <EmptyHint />
@@ -246,14 +275,14 @@ export default function TodayPage() {
 
         <section className={styles.card}>
           <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>{t("today.ranks.topCategories")}</h2>
+            <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
             {selectionLabel && (
               <span className={styles.selectionLabel}>{selectionLabel}</span>
             )}
           </header>
-          {categoryRanks.length > 0 ? (
+          {displayedCategoryRanks.length > 0 ? (
             <div className={styles.rankBody}>
-              <RankedList items={categoryRanks} />
+              <RankedList items={displayedCategoryRanks} />
             </div>
           ) : (
             <EmptyHint />

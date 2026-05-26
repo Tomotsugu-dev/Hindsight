@@ -57,6 +57,20 @@
   margin: 0;
 }
 
+/* 排行卡 head 右侧：selectionLabel + 总活动时长右对齐组 */
+.cardHeadRight {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.cardTotal {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
 .ranks {
   display: grid;
   grid-template-columns: 1fr 1fr;

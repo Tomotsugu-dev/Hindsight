@@ -58,6 +58,20 @@
   margin: 0;
 }
 
+/* 排行卡 head 右侧：selectionLabel + 总活动时长右对齐组 */
+.cardHeadRight {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.cardTotal {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 选中态显示在排行卡标题旁的纯文字时段标签，如 "14:00–14:59"。
    清除筛选靠点同一根柱子（toggle），不是点这个文字。 */
 .selectionLabel {

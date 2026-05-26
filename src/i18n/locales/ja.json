@@ -304,7 +304,7 @@
   },
   "today": {
     "title": "日次",
-    "meta": "{{date}} · 記録 {{duration}}",
+    "meta": "{{date}} {{weekday}}",
     "chart": {
       "title": "24 時間のアクティビティ",
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
@@ -352,7 +352,7 @@
   },
   "week": {
     "title": "週次",
-    "meta": "{{range}} · 合計 {{total}} · 1 日平均 {{avg}}",
+    "meta": "{{range}} · 1 日平均 {{avg}}",
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -388,7 +388,7 @@
   },
   "month": {
     "title": "月次",
-    "meta": "{{month}} · 合計 {{total}} · 1 日平均 {{avg}}",
+    "meta": "{{month}} · 1 日平均 {{avg}}",
     "monthLabel": "{{year}}年{{month}}",
     "chart": {
       "title": "毎日のアクティビティ"

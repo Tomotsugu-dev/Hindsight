@@ -2,7 +2,6 @@ import { useState, type CSSProperties } from "react";
 import { useDurationFormatter } from "../../utils/duration";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import type { BreakdownSlice } from "../../hooks/useSuperCategoryBreakdown";
-import { withViewTransition } from "../../utils/viewTransition";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { Donut } from "./Donut";
 import styles from "./PieView.module.css";
@@ -12,7 +11,9 @@ interface Props {
   total: number;
   /** false 时禁用 hover/click + 不挂 view-transition-name（给 day-swipe 的 prev/next slide） */
   interactive?: boolean;
-  /** 点击切片或行 → 通知父切换到 PieDrillDetail */
+  /** 父侧 pin 住的切片 id（drill 状态）→ 持久高亮，hover 仍可临时覆盖 */
+  pinnedId?: string | null;
+  /** 点击切片或行：父侧 toggle drillId（点同一片取消，点新片切换） */
   onDrill?: (superId: string) => void;
 }
 
@@ -25,7 +26,13 @@ interface Props {
  * Idle 时圆心放 top-1 大类名做 watermark（不显示总时长，那个信息已经在页 header
  * "2026-05-26 · 已采集 5 小时 19 分" 里）。Hover 时 watermark 让位给该切片的 pct/时长/名。
  */
-export function PieView({ slices, total, interactive = true, onDrill }: Props) {
+export function PieView({
+  slices,
+  total,
+  interactive = true,
+  pinnedId,
+  onDrill,
+}: Props) {
   const fmtHM = useDurationFormatter();
   const [hover, setHover] = useState<string | null>(null);
 
@@ -39,13 +46,13 @@ export function PieView({ slices, total, interactive = true, onDrill }: Props) {
     );
   }
 
-  const activeId = interactive ? hover : null;
+  // hover 优先；无 hover 时落到 pinnedId（drill 选中）
+  const activeId = interactive ? (hover ?? pinnedId ?? null) : null;
   const hovered = activeId ? slices.find((s) => s.id === activeId) : null;
-  const top = slices[0]; // 已按 minutes 降序
 
   const handleClick = (id: string) => {
     if (!interactive || !onDrill) return;
-    withViewTransition(() => onDrill(id));
+    onDrill(id);
   };
 
   return (
@@ -66,9 +73,9 @@ export function PieView({ slices, total, interactive = true, onDrill }: Props) {
           activeId={activeId}
           onHover={interactive ? setHover : undefined}
           onClick={interactive ? handleClick : undefined}
-          /* Hover → pct 大字 + 时长 + 名（tooltip 等价）；Idle → 仅 top-1 大类名做 watermark */
-          centerTitle={hovered ? fmtHM(hovered.minutes) : undefined}
-          centerSub={hovered ? hovered.name : top.name}
+          /* Idle → 圆心放设备总使用时间；Hover → 切片 pct + 时长 + 名（tooltip 等价） */
+          centerTitle={hovered ? fmtHM(hovered.minutes) : fmtHM(total)}
+          centerSub={hovered ? hovered.name : undefined}
           centerPctTop={
             hovered ? `${Math.round((hovered.minutes / total) * 100)}%` : undefined
           }

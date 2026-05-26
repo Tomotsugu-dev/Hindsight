@@ -14,24 +14,32 @@
   padding: var(--space-2, 8px);
 }
 
-/* —— super-cat 列表 —— */
+/* —— super-cat 列表 ——
+   grid 抬到 list 层，各行用 subgrid 共享列宽，否则每行 auto 的 num 列
+   宽度跟着各自 "X 小时 Y 分" 文本飘，bar 右端会跟着错位。 */
 .list {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1, 4px);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 110px max-content;
+  column-gap: var(--space-3, 12px);
+  row-gap: var(--space-1, 4px);
   min-width: 0;
 }
 
-/* 每行 grid：icon(20) · name(自适应) · bar(固定窄宽) · pct/time(自然宽，右对齐) */
+/* li 用 display: contents 让 button 直接做 list 的 grid item */
+.list > li {
+  display: contents;
+}
+
+/* 每行 = 4 列 subgrid，icon · name · bar · pct/time */
 .row {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 110px auto;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
-  gap: var(--space-3, 12px);
-  width: 100%;
+  /* 行内项之间的间距由 list 的 column-gap 控；padding 仍走自己 */
   padding: 7px var(--space-3, 12px);
   border: 1px solid transparent;
   background: transparent;
@@ -88,6 +96,8 @@
 }
 
 .name {
+  /* 在 list column-gap (12px) 之上再补 6px，icon 与 name 之间留 18px */
+  margin-left: 6px;
   font-weight: 600;
   color: var(--text-strong);
   overflow: hidden;
@@ -115,7 +125,10 @@
   transition: width 360ms var(--ease-out);
 }
 
-/* —— 数字：pct · time 同一行 —— */
+/* —— 数字：pct · time 同一行 ——
+   pct 和 time 都给 min-width + right-align：100%/1% 等不同宽度的 pct
+   不会让 sep/time 位置跟着飘；不同时长不会让整个 .num 块宽度变化。
+   配合 subgrid 的 max-content 列，bar 右端就在所有行对齐。 */
 .num {
   display: inline-flex;
   align-items: baseline;
@@ -126,6 +139,9 @@
 }
 
 .pct {
+  display: inline-block;
+  min-width: 30px;
+  text-align: right;
   font-size: var(--font-size-sm, 13px);
   font-weight: 700;
   color: var(--text-strong);
@@ -139,6 +155,9 @@
 }
 
 .time {
+  display: inline-block;
+  min-width: 84px;
+  text-align: right;
   font-size: var(--font-size-xs, 11px);
   color: var(--text-muted);
   font-weight: 500;

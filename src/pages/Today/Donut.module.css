@@ -7,9 +7,8 @@
 }
 
 .segment {
-  transition:
-    stroke-width 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 200ms var(--ease-out);
+  /* path 几何（d）不能 CSS 动画；只过渡 opacity 用于 dim */
+  transition: opacity 200ms var(--ease-out);
 }
 
 .segmentInteractive {
