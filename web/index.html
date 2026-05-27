@@ -17,13 +17,20 @@
 
   <script>
     // 按浏览器语言把根路径 / 路由到对应语言页。
-    // sessionStorage 标记防止从 /en/ 点 "简体中文" 回到 / 时被又踢回 /en/。
+    // 两道防回弹：
+    //   1. ?hl=zh —— 从 /en/ 或 /ja/ 显式点「简体中文」过来时带的 marker，
+    //      表示用户主动选了中文，永不自动跳走（跨标签页也生效，因为在 URL 里）。
+    //   2. sessionStorage 标记 —— 同标签页内首次自动路由后不再重复跳。
     (function () {
       try {
+        if (/[?&]hl=zh\b/.test(location.search)) {
+          sessionStorage.setItem("hindsight-lang-routed", "1");
+          return; // 用户显式选中文 → 留在根路径
+        }
         if (sessionStorage.getItem("hindsight-lang-routed")) return;
         sessionStorage.setItem("hindsight-lang-routed", "1");
         var lang = (navigator.language || "en").toLowerCase();
-        if (lang.indexOf("zh") === 0) return; // 中文 → 留在根路径
+        if (lang.indexOf("zh") === 0) return; // 中文系统 → 留在根路径
         var target = lang.indexOf("ja") === 0 ? "/ja/" : "/en/";
         location.replace(target);
       } catch (e) {}
