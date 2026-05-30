@@ -134,9 +134,15 @@ fn detect_cuda_version() -> Option<(u32, u32)> {
 /// `detect_cuda_version` 真的会调它，allow 在那两个平台无影响。
 #[allow(dead_code)]
 fn parse_cuda_version(text: &str) -> Option<(u32, u32)> {
-    let key = "CUDA Version:";
-    let idx = text.find(key)?;
-    let rest = text[idx + key.len()..].trim_start();
+    // 字段名随驱动版本变过：
+    //   - 老驱动：`Driver Version: 545.84  CUDA Version: 12.3`
+    //   - 新驱动（如 610.47 起）：`KMD Version: 610.47  CUDA UMD Version: 13.3`
+    // 两者都表示"驱动支持的最高 CUDA 版本"。优先匹配新名（UMD = User Mode Driver），
+    // 没有再回落老名——否则新驱动会被误判成"没有 CUDA"退回 CPU。
+    let rest = ["CUDA UMD Version:", "CUDA Version:"]
+        .iter()
+        .find_map(|key| text.find(key).map(|idx| &text[idx + key.len()..]))?
+        .trim_start();
 
     let mut chars = rest.chars().peekable();
     let major: String = std::iter::from_fn(|| chars.next_if(|c| c.is_ascii_digit())).collect();
@@ -399,6 +405,13 @@ mod tests {
     #[test]
     fn parse_cuda_version_two_digits() {
         assert_eq!(parse_cuda_version("CUDA Version: 13.10"), Some((13, 10)));
+    }
+
+    #[test]
+    fn parse_cuda_version_umd_format() {
+        // 驱动 610.47（RTX 5090）起表头字段改名为 "CUDA UMD Version:"
+        let s = "| NVIDIA-SMI 610.47   KMD Version: 610.47   CUDA UMD Version: 13.3 |";
+        assert_eq!(parse_cuda_version(s), Some((13, 3)));
     }
 
     #[test]
