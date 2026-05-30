@@ -157,7 +157,6 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
                   })
                 : { visibility: "hidden" }
             }
-            role="menu"
           >
             {SORT_OPTIONS.map((opt) => (
               <button
@@ -170,7 +169,6 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
                   onChange(opt);
                   setOpen(false);
                 }}
-                role="menuitem"
               >
                 {labelOf(opt)}
               </button>

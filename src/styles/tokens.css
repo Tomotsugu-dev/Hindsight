@@ -109,4 +109,24 @@
 
   /* 跨页滑动动画时长（Today/Week/Month 切日期、AISettings/Settings/AISummary 切 tab） */
   --duration-swipe: 420ms;
+
+  /* —— z-index 语义层级 ——
+     仅收纳「跨组件、语义全局」的层级；组件内部私有的局部层级（如 SegmentList 段块
+     1/2/5/7/8/9、TabNav pill 0/1、ViewToggle 0/1、Sidebar/NavItem 0/1、TimeField 1/20）
+     保持裸数字——它们只跟自己 stacking context 内的兄弟比较，套全局 token 无收益且易误耦合。
+     数字之间留有间隔，方便后续插入新层级而不必重排。
+     —— App chrome：全部活在 AppLayout .shell 根 stacking context，顺序必须保持
+        模糊条带 < 侧栏 < 拖动条 < 浮动 Tab < 窗口按钮 */
+  --z-chrome-blur: 2000;     /* AppLayout .shell::before/::after 顶/底模糊条带（原 3） */
+  --z-chrome-sidebar: 2010;  /* AppLayout .sidebarHost 侧栏宿主（原 4） */
+  --z-chrome-drag: 2020;     /* AppLayout .dragStrip 窗口拖动条（原 5） */
+  --z-chrome-floattab: 2030; /* FloatingTabNav 浮动 Tab 副本（原 6） */
+  --z-chrome-controls: 2040; /* WindowControls 窗口红绿灯/最小化关闭（原 10） */
+  /* —— Dropdown / popover：浮在页面内容之上的菜单（原 30/50/100，互不为兄弟，统一为一档） */
+  --z-dropdown: 1000;
+  /* —— Modal：遮罩 + 对话框（原 9998/9999） */
+  --z-modal-backdrop: 9000;
+  --z-modal: 9010;
+  /* —— Drag fly：拖拽时跟随光标的飞行 chip（原 9999），盖在一切之上 */
+  --z-drag-fly: 9020;
 }

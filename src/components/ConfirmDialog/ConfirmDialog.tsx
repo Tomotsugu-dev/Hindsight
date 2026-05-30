@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 import styles from "./ConfirmDialog.module.css";
 
@@ -38,6 +39,9 @@ export function ConfirmDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onCancel, onConfirm]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, dialogRef);
+
   if (!open) return null;
 
   return createPortal(
@@ -49,6 +53,7 @@ export function ConfirmDialog({
       {/* role="alertdialog" 已是 interactive role，但 ESLint plugin 仍按 div 默认判定 */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        ref={dialogRef}
         className={styles.dialog}
         role="alertdialog"
         aria-modal="true"

@@ -58,7 +58,7 @@ export function SimplePicker<T extends string>({
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""}`}
         onClick={() => !disabled && toggle()}
         disabled={disabled}
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
       >
         {/* 用 grid 让所有候选 label 占同一格，trigger 宽度跟着最宽的 label 走，
@@ -79,7 +79,7 @@ export function SimplePicker<T extends string>({
       </button>
 
       {open && (
-        <div className={styles.menu} role="listbox" data-direction={direction}>
+        <div className={styles.menu} data-direction={direction}>
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -91,8 +91,6 @@ export function SimplePicker<T extends string>({
                 onChange(opt.value);
                 close();
               }}
-              role="option"
-              aria-selected={opt.value === value}
             >
               <span className={styles.itemLabel}>{opt.label}</span>
               {opt.value === value && (

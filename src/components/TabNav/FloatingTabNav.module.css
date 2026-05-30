@@ -21,7 +21,7 @@
   top: 16px;
   left: var(--sb-current-width, 0);
   right: 0;
-  z-index: 6;
+  z-index: var(--z-chrome-floattab);
   -webkit-app-region: no-drag;
   app-region: no-drag;
   display: flex;

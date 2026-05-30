@@ -20,9 +20,9 @@ import {
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
 import { WeeklyBarChart } from "./WeeklyBarChart";
-import { RankedList } from "../Today/RankedList";
-import { ViewToggle, type StatsView } from "../Today/ViewToggle";
-import { PieView } from "../Today/PieView";
+import { RankedList } from "../../components/RankedList/RankedList";
+import { ViewToggle, type StatsView } from "../../components/ViewToggle/ViewToggle";
+import { PieView } from "../../components/PieView/PieView";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeekPage.module.css";
 

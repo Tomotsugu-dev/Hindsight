@@ -35,7 +35,7 @@
   left: 0;
   right: 96px;
   height: 36px;
-  z-index: 5;
+  z-index: var(--z-chrome-drag);
   -webkit-app-region: drag;
   app-region: drag;
   user-select: none;
@@ -66,7 +66,7 @@
   left: var(--sb-current-width);
   right: 0;
   height: 32px;
-  z-index: 3;
+  z-index: var(--z-chrome-blur);
   pointer-events: none;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -92,6 +92,6 @@
   bottom: 0;
   width: var(--sb-current-width);
   overflow: hidden;
-  z-index: 4;
+  z-index: var(--z-chrome-sidebar);
   filter: drop-shadow(8px 0 18px rgba(20, 20, 40, 0.06));
 }

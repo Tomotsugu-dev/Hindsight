@@ -28,7 +28,7 @@ export function DevicePicker() {
         type="button"
         className={`${styles.trigger} ${open ? styles.triggerOpen : ""} glow`}
         onClick={toggle}
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
       >
         <DeviceTile device={currentDevice} all={selected === "all"} />
@@ -43,7 +43,7 @@ export function DevicePicker() {
       </button>
 
       {open && (
-        <div className={styles.menu} role="listbox">
+        <div className={styles.menu}>
           {showAllOption && (
             <MenuItem
               label={t("components.devicePicker.all")}
@@ -112,8 +112,6 @@ function MenuItem({ label, hint, tile, checked, onClick }: MenuItemProps) {
       type="button"
       className={`${styles.item} ${checked ? styles.itemChecked : ""}`}
       onClick={onClick}
-      role="option"
-      aria-selected={checked}
     >
       {tile}
       <span className={styles.itemLabel}>

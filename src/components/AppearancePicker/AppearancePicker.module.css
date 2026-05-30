@@ -2,7 +2,7 @@
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  z-index: 30;
+  z-index: var(--z-dropdown);
   width: 248px;
   padding: 12px;
   background: #ffffff;

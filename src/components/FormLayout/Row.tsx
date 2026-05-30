@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { Info, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { RowLabelContext } from "./rowLabelContext";
 import styles from "./Row.module.css";
 
 interface RowProps {
@@ -28,6 +30,7 @@ export function Row({
   tone = "primary",
   labelHint,
 }: RowProps) {
+  const labelId = useId();
   return (
     <div
       className={`${styles.row} ${block ? styles.rowBlock : ""} ${disabled ? styles.rowDisabled : ""}`}
@@ -40,7 +43,9 @@ export function Row({
         ) : null}
         <div className={styles.text}>
           <span className={styles.labelLine}>
-            <span className={styles.label}>{label}</span>
+            <span id={labelId} className={styles.label}>
+              {label}
+            </span>
             {labelHint ? (
               <button
                 type="button"
@@ -63,7 +68,11 @@ export function Row({
           ) : null}
         </div>
       </div>
-      <div className={styles.control}>{children}</div>
+      <div className={styles.control}>
+        <RowLabelContext.Provider value={labelId}>
+          {children}
+        </RowLabelContext.Provider>
+      </div>
     </div>
   );
 }

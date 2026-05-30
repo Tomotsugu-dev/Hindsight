@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  z-index: var(--z-modal-backdrop);
   background: rgba(20, 20, 40, 0.32);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -13,7 +13,7 @@
 
 .dialog {
   position: relative;
-  z-index: 9999;
+  z-index: var(--z-modal);
   min-width: 320px;
   max-width: 440px;
   /* max-height 限定不超出视口；超出部分由内部 .message 自滚动，

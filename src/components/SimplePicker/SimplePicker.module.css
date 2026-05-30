@@ -83,7 +83,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: var(--z-dropdown);
   padding: 4px;
   background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.08);

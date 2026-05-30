@@ -88,6 +88,9 @@ export function PieDrillDetail({
   };
 
   return (
+    // 点空白区退回 PieView 仅是鼠标便捷操作；返回另有显式 Back 按钮 + Donut 点击
+    // 两条可达路径，键盘 user 不依赖此处，故 disable 两条 a11y 规则
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div
       className={styles.body}
       style={{ viewTransitionName: "pie-body" }}

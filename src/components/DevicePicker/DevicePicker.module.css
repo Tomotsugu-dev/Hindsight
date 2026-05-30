@@ -85,7 +85,7 @@
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: var(--z-dropdown);
   /* 跟 trigger 等宽：wrap 是 inline-flex，width:auto 自适应 trigger 宽度；
      菜单 left:0/right:0 拉满 wrap 的宽度，从而跟 trigger 完全一致 */
   padding: 4px;

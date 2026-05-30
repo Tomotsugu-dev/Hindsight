@@ -6,7 +6,7 @@ import { useCategories } from "../state/categories";
 import type { AppUsage } from "../api/hindsight";
 import { displayAppName } from "../utils/displayName";
 import { displayCategoryName } from "../utils/categoryName";
-import type { RankedItem } from "../pages/Today/RankedList";
+import type { RankedItem } from "../components/RankedList/RankedList";
 
 /** 排行所需的每个数据源（每小时槽位 / 每日汇总）通用形状：
  *  只关心其 segments 数组的 categoryId + minutes。 */

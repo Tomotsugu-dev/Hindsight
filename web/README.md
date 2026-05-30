@@ -47,10 +47,14 @@ npx serve web
 2. **Connect to Git** → 选 Hindsight repo
 3. 部署设置：
    - **Production branch**: `main`
-   - **Build command**: 留空（纯静态）
+   - **Build command**: `npm ci && npm run build:demo`（构建可交互 demo；landing page 本身纯静态，但 `/demo/` 子目录需构建）
    - **Build output directory**: `web`
    - **Root directory**: 留空（用 repo 根）
+   - **Node version**: 设环境变量 `NODE_VERSION=20`（package.json engines.node >=20）
 4. **Save and Deploy**
+
+> ⚠️ `web/demo/` 是 `npm run build:demo` 的构建产物，**不入仓**（见根 `.gitignore`）。Cloudflare 每次部署由上面的 Build command 重新生成；本地预览先 `npm run build:demo` 再 `npm run preview:demo`。
+> 若 Build command 仍留空，下次部署的 `web` 树将缺少 `/demo/` 子目录，三个 landing page 内嵌的 demo iframe 会 404。
 
 部署后会拿到 `<project-name>.pages.dev` 默认域名。
 

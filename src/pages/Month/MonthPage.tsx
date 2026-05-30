@@ -19,10 +19,10 @@ import {
 } from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
-import { DailyBarChart } from "../Week/DailyBarChart";
-import { RankedList } from "../Today/RankedList";
-import { ViewToggle, type StatsView } from "../Today/ViewToggle";
-import { PieView } from "../Today/PieView";
+import { DailyBarChart } from "../../components/DailyBarChart/DailyBarChart";
+import { RankedList } from "../../components/RankedList/RankedList";
+import { ViewToggle, type StatsView } from "../../components/ViewToggle/ViewToggle";
+import { PieView } from "../../components/PieView/PieView";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./MonthPage.module.css";
 

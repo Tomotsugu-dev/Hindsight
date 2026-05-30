@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 import styles from "./RemoveDeviceDialog.module.css";
 
@@ -43,12 +44,16 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, canConfirm, keepLocal, onCancel, onConfirm]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, dialogRef);
+
   if (!open) return null;
 
   return createPortal(
     <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        ref={dialogRef}
         className={styles.dialog}
         role="alertdialog"
         aria-modal="true"
@@ -82,6 +87,7 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
               className={styles.optionRadio}
               checked={!keepLocal}
               onChange={() => setKeepLocal(false)}
+              aria-label={t("settings.data.removeDeviceDialog.alsoClearLabel")}
             />
             <div className={styles.optionBody}>
               <div className={styles.optionLabel}>
@@ -101,6 +107,7 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
               className={styles.optionRadio}
               checked={keepLocal}
               onChange={() => setKeepLocal(true)}
+              aria-label={t("settings.data.removeDeviceDialog.keepLabel")}
             />
             <div className={styles.optionBody}>
               <div className={styles.optionLabel}>

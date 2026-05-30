@@ -709,6 +709,9 @@ function SuperRow_({
       className={boxClass}
       style={{ "--sup-color": sup.color } as CSSProperties}
     >
+      {/* 卡片 mousedown 仅用于鼠标拖拽排序；拖拽暂无键盘等价操作（已知 a11y 缺口）。
+          卡内 icon/改名等都是独立 button，故此处不把整卡当按钮。 */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div ref={cardRef} className={cardClass} onMouseDown={handleCardMouseDown}>
         <div className={styles.iconPickerAnchor}>
           <button

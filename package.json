@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "npm run lint && tsc && vite build",
     "build:notest": "tsc && vite build",
-    "lint": "eslint src --max-warnings 7",
+    "lint": "eslint src --max-warnings 2",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "format:check": "prettier --check src",

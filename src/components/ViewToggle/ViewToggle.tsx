@@ -16,12 +16,11 @@ interface Props {
 export function ViewToggle({ view, onChange }: Props) {
   const { t } = useTranslation();
   return (
-    <div className={styles.toggle} data-view={view} role="tablist">
+    <div className={styles.toggle} data-view={view}>
       <span className={styles.underline} aria-hidden />
       <button
         type="button"
-        role="tab"
-        aria-selected={view === "bars"}
+        aria-pressed={view === "bars"}
         aria-label={t("today.chart.viewToggle.ariaBars")}
         className={`${styles.btn} ${view === "bars" ? styles.btnActive : ""}`}
         onClick={() => onChange("bars")}
@@ -31,8 +30,7 @@ export function ViewToggle({ view, onChange }: Props) {
       </button>
       <button
         type="button"
-        role="tab"
-        aria-selected={view === "pie"}
+        aria-pressed={view === "pie"}
         aria-label={t("today.chart.viewToggle.ariaPie")}
         className={`${styles.btn} ${view === "pie" ? styles.btnActive : ""}`}
         onClick={() => onChange("pie")}

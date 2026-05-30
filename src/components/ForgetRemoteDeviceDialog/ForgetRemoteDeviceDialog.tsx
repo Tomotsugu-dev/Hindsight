@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 // 复用 RemoveDeviceDialog 同款样式（backdrop / dialog / btn / input），保持 modal 视觉一致。
 import styles from "../RemoveDeviceDialog/RemoveDeviceDialog.module.css";
@@ -42,12 +43,16 @@ export function ForgetRemoteDeviceDialog({ open, deviceName, onConfirm, onCancel
     return () => document.removeEventListener("keydown", onKey);
   }, [open, canConfirm, onCancel, onConfirm]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, dialogRef);
+
   if (!open) return null;
 
   return createPortal(
     <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        ref={dialogRef}
         className={styles.dialog}
         role="alertdialog"
         aria-modal="true"

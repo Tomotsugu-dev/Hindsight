@@ -77,3 +77,6 @@ web/README-pi.md
 # 设计原型 / 草稿 HTML：本地预览用，不入仓
 prototypes/
 
+# demo 构建产物：由 Cloudflare Pages 部署时 `npm ci && npm run build:demo` 重新生成，不入仓
+web/demo/
+

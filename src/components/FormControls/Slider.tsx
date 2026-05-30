@@ -1,5 +1,6 @@
-import { useId, useRef, useState, type CSSProperties } from "react";
+import { useContext, useId, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
+import { RowLabelContext } from "../FormLayout/rowLabelContext";
 import styles from "./Slider.module.css";
 
 interface SliderProps {
@@ -15,6 +16,8 @@ interface SliderProps {
 export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderProps) {
   const { t } = useTranslation();
   const id = useId();
+  // Row 通过 context 下传可见 label 的 id；不在 Row 内时回落到通用 valueAria
+  const rowLabelId = useContext(RowLabelContext);
   const percent = ((value - min) / (max - min)) * 100;
 
   const [focused, setFocused] = useState(false);
@@ -76,7 +79,8 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
-        aria-label={t("components.slider.valueAria")}
+        aria-label={rowLabelId ? undefined : t("components.slider.valueAria")}
+        aria-labelledby={rowLabelId}
         className={`${styles.valueBox} ${focused ? styles.valueBoxFocused : ""}`}
         onFocus={() => setFocused(true)}
         onBlur={() => {

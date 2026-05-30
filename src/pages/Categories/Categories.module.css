@@ -82,7 +82,7 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 50;
+  z-index: var(--z-dropdown);
   width: max-content;
   max-width: 320px;
   padding: 10px 12px;

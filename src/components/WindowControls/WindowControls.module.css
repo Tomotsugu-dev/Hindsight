@@ -2,7 +2,7 @@
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 10;
+  z-index: var(--z-chrome-controls);
   display: flex;
   align-items: center;
   gap: 4px;

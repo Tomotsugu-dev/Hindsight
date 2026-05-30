@@ -1,1 +1,0 @@
-import{f as o}from"./index-Bj99kQTh.js";const n=[["rect",{width:"18",height:"18",x:"3",y:"3",rx:"2",key:"afitv7"}]],t=o("square",n);async function a(e,i){console.warn(`[demo] invoke("${e}") 在 demo 模式下未实现，返回 undefined`)}export{t as S,a as i};
