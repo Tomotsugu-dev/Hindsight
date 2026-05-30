@@ -29,6 +29,9 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     const inFlightRef = useRef<Set<number>>(new Set());
     // cache 的同步镜像 —— fetchOne 里用 ref 比 state 闭包稳定（避免拿到过时 cache）。
     const cacheRef = useRef<Map<number, TData>>(cache);
+    // scope 代际：每次切设备/分类 +1。fetchOne 在 await 前快照，回来后比对——
+    // 不一致说明这份数据属于已经切走的旧 scope，丢弃，避免写进新 scope 的缓存。
+    const scopeRef = useRef(0);
 
     const fetchOne = useCallback(
       // `force` = true 时无视已 cached，强制重发（给 polling + 当前期用）；
@@ -40,8 +43,12 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
         if (inFlightRef.current.has(offset)) return;
         if (!force && cacheRef.current.has(offset)) return;
         inFlightRef.current.add(offset);
+        const scope = scopeRef.current; // await 前快照当前 scope 代际
         try {
           const data = await fetch(offset, deviceId);
+          // 解析期间切了设备/分类 → scope 已变，这份数据属于旧 scope，丢弃。
+          // 历史 offset 用 force=false 不会自纠，不丢就会把旧设备数据算到新设备头上。
+          if (scope !== scopeRef.current) return;
           setCache((prev) => {
             const next = new Map(prev);
             next.set(offset, data);
@@ -50,7 +57,9 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
         } catch {
           // 查询失败静默——UI 由 emptyValue 兜底，错误细节后端日志已记
         } finally {
-          inFlightRef.current.delete(offset);
+          // 仅清理仍属当前 scope 的在途标记；scope 已切换时 inFlight 已被清空 effect 重置，
+          // 误删会把新 scope 刚加入的同 offset 标记清掉，放行多余的重复 fetch。
+          if (scope === scopeRef.current) inFlightRef.current.delete(offset);
         }
       },
       [deviceId],
@@ -59,6 +68,7 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     // 切设备 / categories 引用变化（CategoriesProvider 每次 refresh 后都换新数组）→
     // 清空缓存重新拉。这样分类页指派 / 配对操作完，三页立刻反映。
     useEffect(() => {
+      scopeRef.current += 1; // 代际 +1：让仍在解析的旧 scope fetch 作废
       setCache(new Map());
       cacheRef.current = new Map();
       inFlightRef.current.clear();
@@ -82,16 +92,17 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     //     就是用户看到的"16h 柱子突然变长 / 变短"。
     //   - 邻居（currentOffset ± 1）：永远 force=false，cache 有就跳过预取。
     useEffect(() => {
-      fetchOne(currentOffset - 1);
-      fetchOne(currentOffset, currentOffset === 0);
-      fetchOne(currentOffset + 1);
+      void fetchOne(currentOffset - 1);
+      void fetchOne(currentOffset, currentOffset === 0);
+      void fetchOne(currentOffset + 1);
     }, [currentOffset, fetchOne, categories]);
 
     useEffect(() => {
       if (currentOffset !== 0) return;
       const t = setInterval(() => {
-        inFlightRef.current.delete(0);
-        fetchOne(0, true);
+        // 不再无条件 delete(0)：交给 fetchOne 自身的 inFlight 守卫去重，
+        // 避免同一 offset=0 并发多发、回来乱序覆盖（"柱子忽长忽短"的另一来源）。
+        void fetchOne(0, true);
       }, pollInterval);
       return () => clearInterval(t);
     }, [currentOffset, fetchOne]);

@@ -268,7 +268,7 @@ export function SegmentList({ segments, onChange }: Props) {
                     // 编辑模式刚展开就让光标进 input 是用户预期，键盘 user 也希望立刻能输入
                     // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
-                    value={editing!.value}
+                    value={editing.value}
                     onChange={(e) =>
                       setEditing({ index: i, value: e.target.value })
                     }

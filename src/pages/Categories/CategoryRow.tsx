@@ -148,7 +148,7 @@ export function CategoryRow({
             icon={category.icon}
             onColorChange={(c) => update(category.id, { color: c })}
             onIconChange={(i) => {
-              update(category.id, { icon: i });
+              void update(category.id, { icon: i });
               setPickerOpen(false);
             }}
             onDismiss={() => setPickerOpen(false)}
@@ -167,7 +167,7 @@ export function CategoryRow({
               onChange={(e) => setDraftName(e.target.value)}
               onBlur={commitName}
               onKeyDown={(e) => {
-                if (e.key === "Enter") commitName();
+                if (e.key === "Enter") void commitName();
                 if (e.key === "Escape") cancelName();
               }}
               onMouseDown={(e) => e.stopPropagation()}

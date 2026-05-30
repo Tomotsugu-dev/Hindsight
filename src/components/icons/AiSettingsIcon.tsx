@@ -36,4 +36,4 @@ export const AiSettingsIcon: LucideIcon = forwardRef<SVGSVGElement, LucideProps>
       </svg>
     );
   },
-) as unknown as LucideIcon;
+);

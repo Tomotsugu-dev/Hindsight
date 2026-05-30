@@ -3,14 +3,19 @@
   "private": true,
   "version": "0.7.4",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "npm run lint && tsc && vite build",
     "build:notest": "tsc && vite build",
-    "lint": "eslint src",
+    "lint": "eslint src --max-warnings 7",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "build:demo": "vite build --config web/vite.config.ts",
     "preview:demo": "vite preview --config web/vite.config.ts",
@@ -49,6 +54,7 @@
     "prettier": "^3.8.3",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.59.2",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.7"
   }
 }

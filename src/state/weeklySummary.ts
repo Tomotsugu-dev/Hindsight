@@ -42,7 +42,7 @@ export interface WeeklyRunningSnapshot {
 const EMPTY_SNAP: WeeklyRunningSnapshot = Object.freeze({
   generating: false,
   runningWeek: null,
-  stage: "idle" as WeeklyStage,
+  stage: "idle",
   enginePhase: null,
   topError: null,
 });

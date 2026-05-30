@@ -8,6 +8,11 @@
     "close": "关闭",
     "empty": "暂无数据",
     "open": "打开",
+    "errorBoundary": {
+      "title": "出了点问题",
+      "message": "此页面遇到了意外错误，可以重新加载后继续。",
+      "reload": "重新加载"
+    },
     "duration": {
       "minutesShort": "{{count}} 分钟",
       "hourMinute": "{{hours}} 小时 {{minutes}} 分",
@@ -225,6 +230,13 @@
           "weekly": "每周",
           "monthly": "每月",
           "onstartup": "每次打开应用时"
+        },
+        "dialog": {
+          "title": "发现新版本 v{{version}}",
+          "message": "点击「现在更新」将下载并自动安装新版本，完成后应用会重启。\n\n更新说明：\n{{body}}",
+          "bodyEmpty": "（无）",
+          "confirm": "现在更新",
+          "cancel": "稍后"
         }
       },
       "info": {

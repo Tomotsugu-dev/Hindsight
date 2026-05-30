@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Search } from "lucide-react";
@@ -154,7 +154,7 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
                     top: menuPos.top,
                     left: menuPos.left,
                     width: menuPos.width,
-                  } as CSSProperties)
+                  })
                 : { visibility: "hidden" }
             }
             role="menu"

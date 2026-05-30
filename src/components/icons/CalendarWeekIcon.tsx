@@ -23,4 +23,4 @@ export const CalendarWeekIcon: LucideIcon = forwardRef<SVGSVGElement, LucideProp
       </svg>
     );
   },
-) as unknown as LucideIcon;
+);

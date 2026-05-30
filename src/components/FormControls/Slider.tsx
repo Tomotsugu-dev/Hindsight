@@ -103,7 +103,7 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
             onChange(min);
           } else if (e.key === "Enter") {
             e.preventDefault();
-            (e.currentTarget as HTMLButtonElement).blur();
+            (e.currentTarget).blur();
           }
         }}
         onWheel={(e) => {

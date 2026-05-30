@@ -1,0 +1,84 @@
+# PR / push-to-main 质量门禁：在合并前跑前端 lint + 类型检查 + 单测 + 构建，
+# 以及后端 cargo fmt / clippy / test。与 release.yml 互补——release 只在打 tag
+# 时构建产物，这里负责日常回归拦截。
+#
+# 后端跑在 windows-latest：项目实际目标是 macOS + Windows（release 不含 Linux，
+# 源码含 OS 专属模块），Windows runner 自带 WebView2、无需额外系统依赖。
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# 同一分支新 push 取消旧的在跑 run，省 CI 额度
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint + tsc + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Lint (eslint, ratcheted warnings)
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npx vite build
+
+  rust:
+    name: Backend (fmt + clippy + test)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # tauri_build 会校验 frontendDist(../dist) 存在，所以 cargo 前先产出前端 dist
+      - name: Build frontend (dist for tauri_build)
+        run: |
+          npm ci
+          npx vite build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: rustfmt
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        working-directory: src-tauri
+        run: cargo test

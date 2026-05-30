@@ -65,7 +65,7 @@ export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps)
         });
     if (!existing) inflight.set(processName, p);
 
-    p.then((data) => {
+    void p.then((data) => {
       if (!cancelled) setSrc(data);
     });
 

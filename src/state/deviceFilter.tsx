@@ -143,18 +143,34 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
       .catch((e) => logError("devices.reiconSelf", e));
   }, []);
 
-  const value: DeviceFilterState = {
-    devices,
-    selected,
-    selectedDeviceId,
-    selfId,
-    setSelected,
-    renameSelf,
-    recolorSelf,
-    reiconSelf,
-    self,
-    reload,
-  };
+  // memo 化与其它四个 provider 对齐：所有回调已 useCallback 稳定，self/selectedDeviceId
+  // 已 useMemo，避免每次 render 造新 value 把全部消费方（Today/Week/Month/DevicePicker…）带着重渲染
+  const value = useMemo<DeviceFilterState>(
+    () => ({
+      devices,
+      selected,
+      selectedDeviceId,
+      selfId,
+      setSelected,
+      renameSelf,
+      recolorSelf,
+      reiconSelf,
+      self,
+      reload,
+    }),
+    [
+      devices,
+      selected,
+      selectedDeviceId,
+      selfId,
+      setSelected,
+      renameSelf,
+      recolorSelf,
+      reiconSelf,
+      self,
+      reload,
+    ],
+  );
 
   return (
     <DeviceFilterContext.Provider value={value}>

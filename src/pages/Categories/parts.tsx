@@ -73,7 +73,7 @@ export function AppList({ category }: { category: Category }) {
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
+            if (e.key === "Enter") void commit();
             if (e.key === "Escape") cancel();
           }}
         />

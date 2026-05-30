@@ -8,6 +8,11 @@
     "close": "Close",
     "empty": "No data yet",
     "open": "Open",
+    "errorBoundary": {
+      "title": "Something went wrong",
+      "message": "This screen ran into an unexpected error. You can reload to continue.",
+      "reload": "Reload"
+    },
     "duration": {
       "minutesShort": "{{count}} min",
       "hourMinute": "{{hours}}h {{minutes}}m",
@@ -225,6 +230,13 @@
           "weekly": "Weekly",
           "monthly": "Monthly",
           "onstartup": "Every time the app opens"
+        },
+        "dialog": {
+          "title": "New version v{{version}} available",
+          "message": "Click \"Update now\" to download and install the new version. The app will restart automatically when done.\n\nRelease notes:\n{{body}}",
+          "bodyEmpty": "(none)",
+          "confirm": "Update now",
+          "cancel": "Later"
         }
       },
       "info": {

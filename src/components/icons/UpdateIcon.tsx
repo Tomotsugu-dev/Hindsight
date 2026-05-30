@@ -23,4 +23,4 @@ export const UpdateIcon: LucideIcon = forwardRef<SVGSVGElement, LucideProps>(
       </svg>
     );
   },
-) as unknown as LucideIcon;
+);

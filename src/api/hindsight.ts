@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { logError } from "../lib/logger";
 
 export interface HourSegment {
   categoryId: string;
@@ -31,8 +32,16 @@ export interface DaySummary {
 
 export function dtoToDaySummary(dto: DaySummaryDto): DaySummary {
   const [y, m, d] = dto.date.split("-").map((s) => parseInt(s, 10));
+  const date = new Date(y, m - 1, d);
+  // 后端保证 "YYYY-MM-DD" 格式；这里是契约破坏的响亮哨兵——一旦格式变了
+  // 就在这个边界处显式报错，而不是让 Invalid Date 静默流到 getDay()/getTime()
+  // 变成 NaN 索引（DOW_KEYS[NaN] / NaN 算术）在下游难以追踪。
+  if (Number.isNaN(date.getTime())) {
+    logError("api.dtoToDaySummary", new Error(`无法解析日期: ${dto.date}`));
+    throw new Error(`Invalid date from backend: ${dto.date}`);
+  }
   return {
-    date: new Date(y, m - 1, d),
+    date,
     segments: dto.segments,
   };
 }
@@ -598,6 +607,9 @@ export interface SyncStatus {
 }
 
 export const api = {
+  /** 把文本写到指定路径（AI 总结导出 Markdown 用） */
+  writeTextFile: (path: string, content: string) =>
+    invoke<void>("write_text_file", { path, content }),
   getDayHours: (dayOffset: number, deviceId?: string) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>

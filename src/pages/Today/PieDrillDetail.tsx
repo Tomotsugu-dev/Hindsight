@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 import type { AppUsage, Category } from "../../api/hindsight";
@@ -90,7 +90,7 @@ export function PieDrillDetail({
   return (
     <div
       className={styles.body}
-      style={{ viewTransitionName: "pie-body" } as CSSProperties}
+      style={{ viewTransitionName: "pie-body" }}
       onClick={handleBodyClick}
     >
       <header className={styles.head}>

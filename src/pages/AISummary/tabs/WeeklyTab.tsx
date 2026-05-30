@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
@@ -310,7 +309,7 @@ export default function WeeklyTab() {
     }
     if (!chosenPath) return;
     try {
-      await invoke("write_text_file", { path: chosenPath, content: md });
+      await api.writeTextFile(chosenPath, md);
       setTopNotice(t("aiSummary.weekly.toast.exported", { filename: chosenPath }));
       setTimeout(() => setTopNotice(null), 3500);
     } catch (e) {

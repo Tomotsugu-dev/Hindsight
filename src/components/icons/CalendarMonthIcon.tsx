@@ -23,4 +23,4 @@ export const CalendarMonthIcon: LucideIcon = forwardRef<SVGSVGElement, LucidePro
       </svg>
     );
   },
-) as unknown as LucideIcon;
+);

@@ -50,8 +50,8 @@ function loadFromStorage(): AppsFilter {
         : [],
       unassignedOnly: parsed.unassignedOnly === true,
       sortBy:
-        typeof parsed.sortBy === "string" && VALID_SORT_BYS.includes(parsed.sortBy as AppsSortBy)
-          ? (parsed.sortBy as AppsSortBy)
+        typeof parsed.sortBy === "string" && VALID_SORT_BYS.includes(parsed.sortBy)
+          ? (parsed.sortBy)
           : "default",
     };
   } catch {

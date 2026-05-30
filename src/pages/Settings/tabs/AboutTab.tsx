@@ -18,7 +18,6 @@ import { Toggle } from "../../../components/FormControls/Toggle";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { useSettings } from "../../../state/settings";
 import { useUpdater } from "../../../state/updater";
-import type { Settings } from "../../../api/hindsight";
 import logoUrl from "../../../assets/logo.png";
 import styles from "./AboutTab.module.css";
 
@@ -158,7 +157,7 @@ export default function AboutTab() {
                 options={intervalOptions}
                 onChange={(v) =>
                   updateSettings({
-                    autoUpdateInterval: v as Settings["autoUpdateInterval"],
+                    autoUpdateInterval: v,
                   })
                 }
               />

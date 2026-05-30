@@ -46,7 +46,7 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const create = useCallback(

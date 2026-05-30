@@ -184,7 +184,7 @@ export function recommendEngineParams(
   }
 
   // 用 effectiveVramGB 折算（unified × 0.7、discrete 不打折），再留 35% margin
-  const targetGB = effectiveVramGB(systemVram!) * 0.65;
+  const targetGB = effectiveVramGB(systemVram) * 0.65;
   const weightsGB = params * 0.55;
   const overheadGB = 2;
   const kvBudgetGB = Math.max(targetGB - weightsGB - overheadGB, 0);
@@ -223,9 +223,9 @@ export function recommendEngineParams(
 
   // batch：仅 NVIDIA discrete 上分档；Apple unified / 其它默认
   let batchSize: number | null = null;
-  if (systemVram!.source === "discrete") {
-    if (systemVram!.totalGb >= 24) batchSize = 2048;
-    else if (systemVram!.totalGb >= 12) batchSize = 1024;
+  if (systemVram.source === "discrete") {
+    if (systemVram.totalGb >= 24) batchSize = 2048;
+    else if (systemVram.totalGb >= 12) batchSize = 1024;
   }
 
   return {

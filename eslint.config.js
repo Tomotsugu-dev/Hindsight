@@ -26,6 +26,35 @@ export default tseslint.config(
   // 基础配置（仅 src/）
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // —— 类型感知层（仅 src）——
+  // projectService 让 typescript-eslint 拿到类型信息，开启只有类型才能查的规则
+  // （no-floating-promises / no-misused-promises 等）。这是重异步 Tauri 应用最高价值的
+  // lint 升级——能抓住一整类漏 await 的 bug，AST-only 规则看不到。
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      // 高价值：漏 await / promise 误用，保 error（这是开类型感知层的主要目的）
+      "@typescript-eslint/no-floating-promises": "error",
+      // async 事件处理器（onClick={() => x.minimize()} 等）是 React 惯用法，
+      // 不视为 misuse；其余真正危险的 void-return 误用仍保 error
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: { attributes: false } },
+      ],
+      // 以下两条偏噪声/风格，各仅 1 处，关掉避免污染 ratchet（与"先放后渐进"策略一致）：
+      // - restrict-template-expressions：模板里插非 string/number 的风格约束
+      // - no-redundant-type-constituents：DeviceFilterValue = string | "all" 的语义化冗余
+      "@typescript-eslint/restrict-template-expressions": "off",
+      "@typescript-eslint/no-redundant-type-constituents": "off",
+    },
+  },
   {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
@@ -81,9 +110,11 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "warn",
     },
   },
-  // Vite 配置文件单独允许 process / Node 环境
+  // Vite / Vitest 配置文件：Node 环境，且关掉类型感知规则
+  // （它们不在 src 工程内，开 type-checked 会报 "not in project"）
   {
-    files: ["vite.config.ts"],
+    files: ["vite.config.ts", "vitest.config.ts"],
+    extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: { ...globals.node },
     },

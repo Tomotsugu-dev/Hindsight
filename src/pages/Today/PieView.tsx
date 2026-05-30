@@ -60,7 +60,7 @@ export function PieView({
       className={styles.body}
       style={
         interactive
-          ? ({ viewTransitionName: "pie-body" } as CSSProperties)
+          ? ({ viewTransitionName: "pie-body" })
           : undefined
       }
     >

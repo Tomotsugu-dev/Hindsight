@@ -10,6 +10,7 @@ import {
 } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "./settings";
 
@@ -49,6 +50,7 @@ function shouldAutoCheck(
 }
 
 export function UpdaterProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const { settings, update: updateSettings } = useSettings();
   const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
@@ -120,10 +122,16 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       {children}
       <ConfirmDialog
         open={pendingUpdate !== null}
-        title={`发现新版本 v${pendingUpdate?.version ?? ""}`}
-        message={`点击"现在更新"将下载并自动安装新版本，完成后应用会重启。\n\n更新说明：\n${pendingUpdate?.body || "（无）"}`}
-        confirmLabel="现在更新"
-        cancelLabel="稍后"
+        title={t("settings.about.update.dialog.title", {
+          version: pendingUpdate?.version ?? "",
+        })}
+        message={t("settings.about.update.dialog.message", {
+          body:
+            pendingUpdate?.body ||
+            t("settings.about.update.dialog.bodyEmpty"),
+        })}
+        confirmLabel={t("settings.about.update.dialog.confirm")}
+        cancelLabel={t("settings.about.update.dialog.cancel")}
         variant="primary"
         onConfirm={confirmInstall}
         onCancel={dismiss}

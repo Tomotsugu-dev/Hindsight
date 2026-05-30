@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -289,7 +288,7 @@ export default function DebugTab() {
     setEnginePhase(null);
     setTopError(null);
 
-    Promise.all([
+    void Promise.all([
       api.getEngineStatus().catch((e) => {
         logError("debug.getEngineStatus", e);
         return null;
@@ -519,7 +518,7 @@ export default function DebugTab() {
     }
     if (!chosenPath) return; // 用户取消
     try {
-      await invoke("write_text_file", { path: chosenPath, content: md });
+      await api.writeTextFile(chosenPath, md);
       setTopNotice(
         t("aiSummary.debug.actions.exportSavedAt", { path: chosenPath }),
       );

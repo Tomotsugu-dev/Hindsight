@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import { logError } from "../../../lib/logger";
@@ -372,7 +371,7 @@ export default function DailyTab() {
     }
     if (!chosenPath) return; // 用户取消
     try {
-      await invoke("write_text_file", { path: chosenPath, content: md });
+      await api.writeTextFile(chosenPath, md);
       setTopNotice(t("aiSummary.daily.toast.exported", { filename: chosenPath }));
       setTimeout(() => setTopNotice(null), 3500);
     } catch (e) {

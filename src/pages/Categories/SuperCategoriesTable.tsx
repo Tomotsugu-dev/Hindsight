@@ -726,7 +726,7 @@ function SuperRow_({
               icon={sup.icon}
               onColorChange={(c) => update(sup.id, { color: c })}
               onIconChange={(i) => {
-                update(sup.id, { icon: i });
+                void update(sup.id, { icon: i });
                 setPickerOpen(false);
               }}
               onDismiss={() => setPickerOpen(false)}
@@ -744,7 +744,7 @@ function SuperRow_({
               onChange={(e) => setDraftName(e.target.value)}
               onBlur={commitName}
               onKeyDown={(e) => {
-                if (e.key === "Enter") commitName();
+                if (e.key === "Enter") void commitName();
                 if (e.key === "Escape") cancelName();
               }}
             />

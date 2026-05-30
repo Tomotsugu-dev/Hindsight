@@ -17,7 +17,7 @@ export function useCaptureStatus() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
     const t = setInterval(refresh, POLL_MS);
     return () => clearInterval(t);
   }, [refresh]);

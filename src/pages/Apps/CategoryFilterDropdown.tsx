@@ -123,7 +123,7 @@ export function CategoryFilterDropdown({
             className={styles.panel}
             style={
               panelPos
-                ? ({ top: panelPos.top, left: panelPos.left } as CSSProperties)
+                ? ({ top: panelPos.top, left: panelPos.left })
                 : { visibility: "hidden" } // 第一帧未测量好之前先藏，避免闪
             }
           >

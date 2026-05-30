@@ -57,7 +57,7 @@ const EMPTY_SNAP: DailyRunningSnapshot = Object.freeze({
   runningIdx: null,
   runningImages: null,
   runningDone: 0,
-  runningStage: "describing" as RunningStage,
+  runningStage: "describing",
   enginePhase: null,
   topError: null,
 });

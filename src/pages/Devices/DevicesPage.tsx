@@ -46,7 +46,7 @@ export default function DevicesPage() {
       window.alert(
         t("devices.forgetDialog.doneToast", { name: target.name, count: deleted }),
       );
-      reload();
+      void reload();
     } catch (e) {
       logError("devices.forgetRemote", e);
       window.alert(
@@ -204,7 +204,7 @@ function CloudSyncCard() {
       await api.syncNow();
       refreshSync();
       // 拉到新的远端活动后，让 device 列表也刷一下
-      reloadDevices();
+      void reloadDevices();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       refreshSync();

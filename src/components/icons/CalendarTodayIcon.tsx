@@ -27,4 +27,4 @@ export const CalendarTodayIcon: LucideIcon = forwardRef<SVGSVGElement, LucidePro
       </svg>
     );
   },
-) as unknown as LucideIcon;
+);
