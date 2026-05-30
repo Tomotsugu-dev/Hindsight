@@ -40,7 +40,7 @@
   padding: 0 14px;
   border-radius: 7px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   letter-spacing: -0.005em;
   text-decoration: none;
@@ -68,7 +68,7 @@
   bottom: 4px;
   left: 0;
   z-index: 0;
-  background: #ffffff;
+  background: var(--surface-card);
   border-radius: 7px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8) inset,

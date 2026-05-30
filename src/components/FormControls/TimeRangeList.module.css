@@ -43,7 +43,7 @@
 
 .remove:hover {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 .add {
@@ -56,7 +56,7 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   transition:
     background-color 180ms ease-out,

@@ -20,7 +20,7 @@
   border: none;
   background: transparent;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-muted);
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -35,7 +35,7 @@
 
 .btnActive {
   color: var(--color-accent);
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
 }
 
 .btn svg {

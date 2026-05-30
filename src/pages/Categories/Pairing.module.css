@@ -160,7 +160,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
 }
 
@@ -211,7 +211,7 @@
   border-radius: 6px;
   background: transparent;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   outline: none;
   text-align: center;
@@ -228,7 +228,7 @@
 
 .nameInput:focus {
   border-color: color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.08));
-  background: #ffffff;
+  background: var(--surface-card);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
 
@@ -250,7 +250,7 @@
   gap: 12px;
   padding: 0 12px 8px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -291,7 +291,7 @@
   z-index: 9999;
   pointer-events: none;
   transform: translate(-50%, -50%) scale(1.04);
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.12));
   border-radius: 8px;
   padding: 6px 10px;
@@ -303,7 +303,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   user-select: none;
   white-space: nowrap;
@@ -336,5 +336,5 @@
 .deleteRowBtn:hover {
   background: color-mix(in oklab, #ef4444 10%, transparent);
   border-color: color-mix(in oklab, #ef4444 35%, transparent);
-  color: #ef4444;
+  color: var(--status-error);
 }

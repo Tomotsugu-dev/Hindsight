@@ -107,7 +107,7 @@
 
 .triggerLabel {
   color: var(--text-faint);
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
 }
 
 .triggerActive .triggerLabel {
@@ -117,7 +117,7 @@
 /* trigger 的"值"部分（全部 / 默认 / 时长↓ 等）跟 label 同样字重，
    避免默认态显得过重；激活态由颜色染紫区分，不靠加粗。 */
 .triggerValue {
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
 }
 
 .triggerChevron {
@@ -168,7 +168,7 @@
   border: 1px solid color-mix(in oklab, var(--text-faint) 30%, transparent);
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
   transition:
@@ -184,7 +184,7 @@
   background: color-mix(in oklab, var(--text-strong) 8%, transparent);
   border-color: color-mix(in oklab, var(--text-strong) 35%, transparent);
   color: var(--text-strong);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 /* 真分类 chip = 按 --chip-color 染色，前置该分类的 icon */
@@ -198,7 +198,7 @@
   border: 1px solid color-mix(in oklab, var(--chip-color) 40%, transparent);
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
   transition:
@@ -213,7 +213,7 @@
 .catChipSelected {
   background: color-mix(in oklab, var(--chip-color) 25%, transparent);
   border-color: var(--chip-color);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 /* chip 内 icon 用分类色着色，跟边框 / 选中态填充色一致，形成统一视觉信号 */
@@ -262,7 +262,7 @@
 .sortItemActive {
   background: color-mix(in oklab, var(--color-accent) 10%, transparent);
   color: var(--color-accent);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 .sortItemActive:hover {
@@ -286,7 +286,7 @@
   border: none;
   color: var(--color-accent);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   cursor: pointer;
   text-decoration: underline;
 }

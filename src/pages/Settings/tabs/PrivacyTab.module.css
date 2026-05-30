@@ -15,7 +15,7 @@
   background: rgba(0, 0, 0, 0.04);
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-regular);
   font-variant-numeric: tabular-nums;
   font-family:
@@ -45,7 +45,7 @@
 
 .chipRemove:hover {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 /* —— "+ 添加 xxx" 虚线按钮：跟分类页 .appAddBtn 同款 —— */
@@ -59,7 +59,7 @@
   border: 1px dashed rgba(0, 0, 0, 0.18);
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -77,11 +77,11 @@
   height: 24px;
   padding: 0 8px;
   width: 160px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -107,10 +107,10 @@
    配色与分类页 "上下拖动" 等强调词保持一致，都走 brand accent 紫色。 */
 .attention {
   color: var(--color-accent);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .kbd {
   color: var(--color-accent);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }

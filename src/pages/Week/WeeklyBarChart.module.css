@@ -59,7 +59,7 @@
 
 .dow {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
@@ -108,7 +108,7 @@
   width: 60px;
   text-align: right;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;
@@ -116,5 +116,5 @@
 
 .totalEmpty {
   color: var(--text-faint);
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
 }

@@ -5,7 +5,7 @@
 
 .subtitle {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   letter-spacing: -0.005em;
   margin: 0 0 12px;
@@ -62,7 +62,7 @@
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
   background: rgba(255, 255, 255, 0.55);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;
@@ -97,7 +97,7 @@
   color: var(--color-accent);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   cursor: pointer;
   transition:
     background-color 140ms ease-out,
@@ -130,7 +130,7 @@
   color: #b45309;
   border-radius: 7px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   cursor: pointer;
   transition: background-color 140ms ease-out;
 }
@@ -152,7 +152,7 @@
   color: #b91c1c;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   cursor: pointer;
   transition:
     background-color 140ms ease-out,
@@ -162,7 +162,7 @@
 
 .deleteBtn:hover:not(:disabled) {
   background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 .deleteBtn:active:not(:disabled) {
@@ -186,7 +186,7 @@
   color: var(--text-strong);
   border-radius: 7px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   cursor: pointer;
   transition:
     background-color 140ms ease-out,
@@ -212,7 +212,7 @@
   border: 1px solid color-mix(in oklab, #dc2626 25%, transparent);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: #991b1b;
 }
 
@@ -247,7 +247,7 @@
   border: 1px solid color-mix(in oklab, #16a34a 28%, transparent);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: #15803d;
   animation: weeklyTabSuccessIn 200ms var(--ease-out);
 }
@@ -266,7 +266,7 @@
   border: 1px solid color-mix(in oklab, var(--color-accent) 22%, transparent);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
 }
 
@@ -276,7 +276,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 18px 20px;
-  background: #fbfbfd;
+  background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 12px;
   box-shadow:
@@ -297,7 +297,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -310,7 +310,7 @@
   padding: 2px 8px;
   border-radius: 9px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
 }
 

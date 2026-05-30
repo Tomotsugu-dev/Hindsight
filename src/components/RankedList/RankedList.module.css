@@ -22,7 +22,7 @@
   width: 16px;
   text-align: center;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -48,7 +48,7 @@
 
 .name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   overflow: hidden;
@@ -93,7 +93,7 @@
   width: 50px;
   text-align: right;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }

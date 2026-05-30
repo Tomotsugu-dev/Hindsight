@@ -12,7 +12,7 @@
 
 .title {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.015em;
   margin: 0;
@@ -146,7 +146,7 @@
 .promptHint {
   flex: 1;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   letter-spacing: -0.005em;
 }
@@ -162,7 +162,7 @@
   border: 1px dashed rgba(0, 0, 0, 0.2);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -193,7 +193,7 @@
   border: 1px solid var(--color-accent);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: #fff;
   cursor: pointer;
   transition: filter 140ms ease-out;
@@ -227,7 +227,7 @@
   border: none;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     filter 160ms ease-out,
@@ -258,7 +258,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   /* 失败可能比较长，超出宽度自然换行不溢出 */
   max-width: 100%;
@@ -303,7 +303,7 @@
 
 .engineName {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
@@ -336,7 +336,7 @@
   color: var(--text-strong);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms ease-out,
@@ -423,7 +423,7 @@
   color: var(--color-accent);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms ease-out,
@@ -455,7 +455,7 @@
 
 .engineBadge {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   padding: 3px 9px;
   border-radius: 11px;
   letter-spacing: -0.005em;
@@ -489,7 +489,7 @@
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
@@ -535,7 +535,7 @@
   max-width: 240px;
   padding: 6px 10px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   line-height: 1.5;
   color: #fff;
   background: rgba(28, 28, 36, 0.94);
@@ -601,7 +601,7 @@
   color: #b45309;
   text-decoration: underline;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 .engineWarningLink:hover {
@@ -610,7 +610,7 @@
 
 .engineError {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: #dc2626;
   word-break: break-word;
   background: color-mix(in oklab, #dc2626 8%, transparent);
@@ -659,7 +659,7 @@
   height: 26px;
   padding: 0 12px 0 10px;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
   color: var(--color-accent);
   background: color-mix(in oklab, var(--color-accent) 8%, transparent);
@@ -702,18 +702,18 @@
 }
 
 .vramEstLabel {
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-muted);
 }
 
 .vramEstValue {
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   font-size: 13px;
 }
 
 .vramEstBreakdown {
   color: var(--text-faint);
-  font-weight: 400;
+  font-weight: var(--font-weight-400);
 }
 
 /* Info icon —— 把权重 / KV / ctx / slots 拆分细节折进 native title tooltip
@@ -763,7 +763,7 @@
   margin-left: auto;
   margin-right: 16px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -830,7 +830,7 @@
   color: #b91c1c;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms ease-out,
@@ -840,7 +840,7 @@
 
 .engineUninstallOutline:hover:not(:disabled) {
   background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 .engineUninstallOutline:active:not(:disabled) {
@@ -1002,7 +1002,7 @@
   color: #15803d; /* green-700 */
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   cursor: pointer;
   user-select: none;
@@ -1036,7 +1036,7 @@
   color: var(--text-strong);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   cursor: pointer;
   transition:
@@ -1079,7 +1079,7 @@
   border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms ease-out,
@@ -1116,7 +1116,7 @@
   border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms ease-out,
@@ -1126,7 +1126,7 @@
 
 .modelCardRight .uninstallOutline:hover:not(:disabled) {
   background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 .modelCardRight .uninstallOutline:active:not(:disabled) {
@@ -1152,7 +1152,7 @@
   border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   user-select: none;
   flex-shrink: 0;
 }
@@ -1170,7 +1170,7 @@
   padding: 0 6px;
   border-radius: 4px;
   font-size: 9.5px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   letter-spacing: 0.04em;
   user-select: none;
   flex-shrink: 0;
@@ -1192,7 +1192,7 @@
   max-width: 240px;
   padding: 6px 10px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   line-height: 1.5;
   letter-spacing: 0.01em;
   color: #fff;
@@ -1293,7 +1293,7 @@
   color: var(--text-muted);
   border-radius: 6px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition:
@@ -1327,14 +1327,14 @@
 
 .modelCardName {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
 
 .modelCardSize {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1378,7 +1378,7 @@
   border: 1px dashed rgba(0, 0, 0, 0.18);
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -1424,7 +1424,7 @@
 
 .modelCustomHint {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   line-height: 1.55;
   letter-spacing: -0.005em;
@@ -1438,7 +1438,7 @@
 
 .modelCustomLabel {
   font-size: 11.5px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   letter-spacing: 0.01em;
 }
@@ -1493,7 +1493,7 @@
   padding: 0 18px;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms ease-out,
@@ -1551,7 +1551,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   letter-spacing: -0.005em;
   word-break: break-word;
 }
@@ -1611,7 +1611,7 @@
 
 .engineProgressText {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -1674,7 +1674,7 @@
 }
 
 .externalInput:focus {
-  background: #ffffff;
+  background: var(--surface-card);
   border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
 }
@@ -1735,7 +1735,7 @@
   border: none;
   border-radius: 7px;
   font-size: 12.5px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     filter 160ms ease-out,
@@ -1760,7 +1760,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: #15803d; /* green-700 */
 }
 
@@ -1769,7 +1769,7 @@
   align-items: flex-start;
   gap: 4px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: #991b1b; /* red-800 */
   max-width: 100%;
   word-break: break-word;

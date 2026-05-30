@@ -22,7 +22,7 @@
 
 .appName {
   font-size: 22px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.012em;
 }
@@ -35,13 +35,13 @@
 .value {
   font-size: 13px;
   color: var(--text-strong);
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
 }
 
 .link {
   font-size: 13px;
   color: var(--color-accent);
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   transition: opacity 160ms ease-out;
 }
 
@@ -59,7 +59,7 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   transition:
     background-color 180ms ease-out,
@@ -113,7 +113,7 @@
 
 .updateError {
   font-size: 12px;
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 /* —— 检查频率折叠：grid-template-rows 0fr / 1fr 让 row 高度平滑过渡 —— */

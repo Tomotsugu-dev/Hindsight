@@ -39,6 +39,6 @@
 }
 
 .close:hover {
-  background: #ef4444;
+  background: var(--status-error);
   color: #ffffff;
 }

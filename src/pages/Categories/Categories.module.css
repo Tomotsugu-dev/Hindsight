@@ -31,7 +31,7 @@
 
 .title {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.015em;
   margin: 0;
@@ -46,7 +46,7 @@
 /* meta 文本里需要强调的关键词（操作动词等）—— 不喧宾夺主，但比正文显眼一档 */
 .metaEmph {
   color: var(--color-accent);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.005em;
   padding: 0 1px;
 }
@@ -55,7 +55,7 @@
 .metaUnassigned {
   margin-left: 8px;
   color: #d97706;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
 }
 
 /* 标题旁的 (i) 图标：hover/focus 出现详细说明 tooltip */
@@ -89,7 +89,7 @@
   background: rgba(20, 20, 40, 0.94);
   color: #ffffff;
   font-size: 11px;
-  font-weight: 400;
+  font-weight: var(--font-weight-400);
   line-height: 1.6;
   letter-spacing: 0.01em;
   text-transform: none;
@@ -123,7 +123,7 @@
   align-items: center;
   gap: 16px;
   padding: 16px 18px 16px 28px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 14px;
   box-shadow:
@@ -220,7 +220,7 @@
   align-items: center;
   gap: 12px;
   padding: 0 18px 0 28px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 30%, rgba(0, 0, 0, 0.08));
   border-radius: 14px;
   box-shadow:
@@ -256,7 +256,7 @@
 
 .catFlyName {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
@@ -308,7 +308,7 @@
 
 .catName {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   /* I-beam 提示「双击可改名」，跟 .superName 同款语义 */
@@ -321,11 +321,11 @@
   max-width: 220px;
   height: 28px;
   padding: 0 10px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: 6px;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -372,7 +372,7 @@
 /* delete 按钮 hover 时**覆盖**普通 actionBtn 的紫色 hover，改为红色 danger 警示 */
 .actionBtnDanger:hover {
   background: rgba(239, 68, 68, 0.14);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 /* —— App chips 的"两行夹片" —— 默认 height 锁到 2 行 + 底部渐隐 mask；
@@ -434,7 +434,7 @@
   background: rgba(0, 0, 0, 0.04);
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-regular);
   font-variant-numeric: tabular-nums;
 }
@@ -454,7 +454,7 @@
 
 .appChipRemove:hover {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 .appAddBtn {
@@ -467,7 +467,7 @@
   border: 1px dashed rgba(0, 0, 0, 0.18);
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   transition:
     border-color 160ms ease-out,
@@ -483,11 +483,11 @@
   height: 24px;
   padding: 0 8px;
   width: 140px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -514,7 +514,7 @@
   color: var(--color-accent);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   cursor: pointer;
   transition:
     background-color 140ms ease-out,
@@ -543,7 +543,7 @@
   align-items: center;
   gap: 12px;
   padding: 16px 18px 16px 28px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 25%, rgba(0, 0, 0, 0.06));
   border-radius: 14px;
   box-shadow:
@@ -612,7 +612,7 @@
 
 .unclassName {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   flex: 0 1 auto;
   min-width: 0;
@@ -638,7 +638,7 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 6px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -668,7 +668,7 @@
   /* 让菜单宽度按最长 option 自动撑开（trigger 是最小宽），避免短词 trigger 下长选项超框 */
   width: max-content;
   padding: 4px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   box-shadow:
@@ -689,7 +689,7 @@
   border: none;
   border-radius: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
   text-align: left;
@@ -750,5 +750,5 @@
 /* 当前已选中那项：背景填充 + 加粗，告诉用户「就是这个」*/
 .assignOptionCurrent {
   background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 14%, transparent);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }

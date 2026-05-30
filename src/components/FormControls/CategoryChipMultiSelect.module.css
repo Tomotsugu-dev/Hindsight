@@ -23,7 +23,7 @@
   border: 1px solid transparent;
   border-radius: 14px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   color: #fff;
   cursor: pointer;

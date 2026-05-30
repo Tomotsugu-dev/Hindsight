@@ -94,6 +94,12 @@
   --font-weight-regular: 450;
   --font-weight-medium: 550;
   --font-weight-semibold: 650;
+  /* 别名：组件 CSS 历史上用裸值 400/500/600/700，补齐令牌后统一改走变量（值完全一致），
+     消除"裸 500/600/700 与令牌 450/550/650 双轨分叉" */
+  --font-weight-400: 400;
+  --font-weight-500: 500;
+  --font-weight-600: 600;
+  --font-weight-700: 700;
 
   /* —— Layout —— */
   --sidebar-width: 176px;

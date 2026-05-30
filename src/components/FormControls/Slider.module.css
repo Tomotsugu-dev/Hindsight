@@ -91,7 +91,7 @@
   justify-content: flex-end;
   gap: 3px;
   padding: 5px 12px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   box-shadow:
@@ -124,7 +124,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   line-height: 1;
   color: var(--text-strong);
 }

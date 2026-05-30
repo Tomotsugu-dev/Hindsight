@@ -15,7 +15,7 @@
 
 .title {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.015em;
   margin: 0;
@@ -32,7 +32,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px 18px;
-  background: #fbfbfd;
+  background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 12px;
   box-shadow:
@@ -82,7 +82,7 @@
 
 .syncTitle {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
@@ -104,7 +104,7 @@
 
 .syncStatErr {
   color: var(--status-error);
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
 }
 
 /* "已同步" 状态：绿色文字 + 前面一个绿色小圆点（带轻微光晕） */
@@ -126,7 +126,7 @@
 /* "待发送" 状态：琥珀色文字 + 圆点带柔和呼吸脉冲（暗示"还在排队"） */
 .syncStatPending {
   color: var(--status-pending);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 .syncDotPending {
@@ -177,7 +177,7 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   transition:
     background-color 180ms ease-out,
@@ -195,7 +195,7 @@
 
 .smallBtnDanger:hover {
   background: rgba(239, 68, 68, 0.08);
-  color: #ef4444;
+  color: var(--status-error);
   border-color: rgba(239, 68, 68, 0.2);
 }
 
@@ -253,7 +253,7 @@
   color: #ffffff;
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
   transition:
     background-color 200ms ease-out,
@@ -309,7 +309,7 @@
   border: none;
   padding: 0;
   font-size: 11px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--color-accent);
   letter-spacing: -0.005em;
   cursor: pointer;
@@ -375,7 +375,7 @@
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   color: var(--color-accent);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -391,7 +391,7 @@
   height: 22px;
   padding: 0 9px;
   font-size: 11px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -404,7 +404,7 @@
 }
 
 .setupClose:hover {
-  background: #ffffff;
+  background: var(--surface-card);
   color: var(--text-strong);
 }
 
@@ -454,7 +454,7 @@
   color: var(--color-accent);
   border-radius: 50%;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   box-shadow:
@@ -476,7 +476,7 @@
 
 .stepTitle {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
@@ -489,7 +489,7 @@
 
 .stepDesc b {
   color: var(--text-strong);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 /* 文字链 + 右侧箭头风格，跟今日页 navBtn 类似的轻量感 */
@@ -504,7 +504,7 @@
   color: var(--color-accent);
   border: none;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   cursor: pointer;
   transition: color 160ms ease-out, gap 160ms ease-out;
@@ -530,7 +530,7 @@
   display: inline-block;
   background: #1a73e8;
   color: #fff;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   font-size: 11px;
   line-height: 1;
   padding: 3px 8px;
@@ -543,7 +543,7 @@
 /* GCP 里那种"蓝色文字 + 号"风格的轻量按钮（无背景填充）。 */
 .cueLink {
   color: #1a73e8;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 /* —— Client ID / Secret 输入 —— */
@@ -556,7 +556,7 @@
 
 .credLabel {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -566,7 +566,7 @@
   width: 100%;
   height: 32px;
   padding: 0 11px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 8px;
   font-size: 12px;
@@ -626,7 +626,7 @@
 }
 
 .credInput:focus {
-  background: #ffffff;
+  background: var(--surface-card);
   border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
   box-shadow:
     0 1px 1px rgba(20, 20, 40, 0.03) inset,
@@ -641,7 +641,7 @@
 
 .sectionTitle {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: 0;
   margin: 0;
@@ -654,7 +654,7 @@
   align-items: center;
   gap: 16px;
   padding: 16px 18px 16px 28px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 14px;
   box-shadow:
@@ -721,7 +721,7 @@
 
 .deviceName {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   cursor: pointer;
@@ -736,11 +736,11 @@
   max-width: 240px;
   height: 28px;
   padding: 0 10px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: 6px;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -754,7 +754,7 @@
   background: color-mix(in oklab, var(--cat-color) 18%, transparent);
   color: var(--cat-color);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   border-radius: 4px;
   letter-spacing: 0.02em;
 }
@@ -804,7 +804,7 @@
 
 .empty {
   padding: 18px 18px;
-  background: #fbfbfd;
+  background: var(--surface-card-elevated);
   border: 1px dashed rgba(0, 0, 0, 0.08);
   border-radius: 12px;
   font-size: 13px;

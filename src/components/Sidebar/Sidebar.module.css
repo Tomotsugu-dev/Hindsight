@@ -79,7 +79,7 @@
   display: flex;
   align-items: center;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-faint);
   letter-spacing: 0;
   white-space: nowrap;

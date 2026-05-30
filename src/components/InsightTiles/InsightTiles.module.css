@@ -7,7 +7,7 @@
 /* 单 tile 复用三页 .card token 的视觉语言 */
 .tile {
   position: relative;
-  background: #fbfbfd;
+  background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 12px;
   padding: 14px 16px;
@@ -30,7 +30,7 @@
   align-items: center;
   gap: 6px;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
@@ -42,7 +42,7 @@
 /* 占位「—」用同一行高度，颜色淡化 */
 .dash {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-faint);
 }
 
@@ -51,7 +51,7 @@
   color: #16a34a;
 }
 .down {
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 /* 主力 / 构成 行首的圆点 */

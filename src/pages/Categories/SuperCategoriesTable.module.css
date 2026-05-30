@@ -123,7 +123,7 @@
 
 .superName {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   color: var(--text-strong);
   letter-spacing: -0.012em;
   border: none;
@@ -148,7 +148,7 @@
 .superCount {
   font-size: 12px;
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
 }
 
 /* —— 右上角小 × 关闭按钮（macOS close button 风）——
@@ -191,8 +191,8 @@
 }
 
 .superClose:hover {
-  background: #ef4444;
-  border-color: #ef4444;
+  background: var(--status-error);
+  border-color: var(--status-error);
   color: #fff;
 }
 

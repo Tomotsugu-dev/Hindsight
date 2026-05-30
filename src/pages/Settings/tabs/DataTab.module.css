@@ -9,7 +9,7 @@
   border: 1px solid color-mix(in oklab, #ef4444 22%, transparent);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: #b91c1c;
   cursor: pointer;
   transition:
@@ -62,7 +62,7 @@
   border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: #b91c1c;
   cursor: pointer;
   transition:
@@ -74,7 +74,7 @@
 
 .neutralBtn:hover:not(:disabled) {
   background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 .neutralBtn:active:not(:disabled) {
@@ -89,7 +89,7 @@
 .neutralBtnBusy {
   opacity: 1;
   background: color-mix(in oklab, #ef4444 10%, transparent);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 /* Loader2 旋转动画 */
@@ -117,7 +117,7 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   cursor: pointer;
   transition:

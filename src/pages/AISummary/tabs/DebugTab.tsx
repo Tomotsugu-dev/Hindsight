@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import {
   AlertTriangle,
@@ -17,7 +15,6 @@ import {
   MessageSquareText,
   Newspaper,
   Play,
-  RotateCcw,
   Square,
   Trash2,
 } from "lucide-react";
@@ -26,7 +23,6 @@ import {
   SUMMARY_CLOUD_SENTINEL,
   SUMMARY_PROGRESS_EVENT,
   type AiOverrides,
-  type AiSegment,
   type EngineStatus,
   type ImageDescriptionRow,
   type SegmentSummaryRow,
@@ -51,120 +47,19 @@ import {
   optionToMaxImages,
   type MaxImagesKey,
 } from "./debugTabOptions";
+import {
+  type LogEntry,
+  type DebugScope,
+  buildScopeOptions,
+  LOG_RING_SIZE,
+  anchorDateStr,
+  offsetLabel,
+  nowHms,
+  fmtPhaseBody,
+} from "./debugTabHelpers";
+import { EngineBar } from "./EngineBar";
+import { DescItem } from "./DescItem";
 import styles from "./DebugTab.module.css";
-
-/** 事件流 log 单条。 */
-interface LogEntry {
-  ts: string; // HH:MM:SS.mmm
-  phase: SummaryProgress["phase"];
-  body: string;
-}
-
-/** 调试 tab 顶部的"调什么"——目前只有日报有真后端，周报 / 月报先占位。 */
-type DebugScope = "daily" | "weekly" | "monthly";
-
-function buildScopeOptions(t: TFunction): Array<{ value: DebugScope; label: string }> {
-  return [
-    { value: "daily", label: t("aiSummary.debug.scope.daily") },
-    { value: "weekly", label: t("aiSummary.debug.scope.weekly") },
-    { value: "monthly", label: t("aiSummary.debug.scope.monthly") },
-  ];
-}
-
-const LOG_RING_SIZE = 200; // 防止整日跑事件流爆内存
-
-function fmtLocalDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** 按 scope 把 offset 解释成具体的"锚定日期"。
- *
- * - daily   →  当天本身（offset = 距今多少天）
- * - weekly  →  该周的周一（offset = 距本周多少周；以 周一为周起点）
- * - monthly →  该月 1 号（offset = 距本月多少月）
- *
- * 后端实现周报 / 月报命令时，约定传这个 "周一日期 / 月初日期" 作为 anchor。 */
-function anchorDateStr(scope: DebugScope, offset: number): string {
-  const d = new Date();
-  if (scope === "daily") {
-    d.setDate(d.getDate() + offset);
-  } else if (scope === "weekly") {
-    // JS 的 getDay() 周日=0，调整为周一=0
-    const dow = (d.getDay() + 6) % 7;
-    d.setDate(d.getDate() - dow + offset * 7);
-  } else {
-    d.setDate(1);
-    d.setMonth(d.getMonth() + offset);
-  }
-  return fmtLocalDate(d);
-}
-
-/** 按 scope + offset 给 dayPill 显示的文案。 */
-function offsetLabel(scope: DebugScope, offset: number, t: TFunction): string {
-  if (scope === "daily") {
-    if (offset === 0) return t("aiSummary.debug.dateNav.today");
-    if (offset === -1) return t("aiSummary.debug.dateNav.yesterday");
-    return anchorDateStr("daily", offset);
-  }
-  if (scope === "weekly") {
-    if (offset === 0) return t("aiSummary.debug.dateNav.thisWeek");
-    if (offset === -1) return t("aiSummary.debug.dateNav.lastWeek");
-    if (offset === -2) return t("aiSummary.debug.dateNav.weekBeforeLast");
-    return t("aiSummary.debug.dateNav.weeksAgo", { count: -offset });
-  }
-  // monthly
-  if (offset === 0) return t("aiSummary.debug.dateNav.thisMonth");
-  if (offset === -1) return t("aiSummary.debug.dateNav.lastMonth");
-  return t("aiSummary.debug.dateNav.monthsAgo", { count: -offset });
-}
-
-/** platform_id 是 binary 变体路由 ID（"win-cuda-13.1-x64" 等），不是 OS 平台。
- *  转成人话标签给状态条显示。跟 [AISettings.tsx::humanAccelLabel] 同步维护。 */
-function humanAccelLabel(platformId: string): string {
-  switch (platformId) {
-    case "win-cuda-12.4-x64":
-      return "CUDA 12.4";
-    case "win-cuda-13.1-x64":
-      return "CUDA 13.1";
-    case "win-cpu-x64":
-      return "CPU";
-    case "macos-arm64":
-      return "Apple Silicon · Metal";
-    case "macos-x64":
-      return "Intel Mac";
-    case "ubuntu-x64":
-      return "Linux CPU";
-    default:
-      return platformId;
-  }
-}
-
-function nowHms(): string {
-  const d = new Date();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  const ms = String(d.getMilliseconds()).padStart(3, "0");
-  return `${hh}:${mm}:${ss}.${ms}`;
-}
-
-/** 把 phase + payload 浓缩成一行 log body 字符串。 */
-function fmtPhaseBody(p: SummaryProgress): string {
-  const parts: string[] = [];
-  if (p.segmentIdx != null) parts.push(`idx=${p.segmentIdx}`);
-  if (p.imageIndex != null) parts.push(`img=${p.imageIndex}`);
-  if (p.imagesTotal != null) parts.push(`total=${p.imagesTotal}`);
-  if (p.status != null) parts.push(`status=${p.status}`);
-  if (p.message) parts.push(p.message);
-  if (p.imageDescription) {
-    const short = p.imageDescription.replace(/\s+/g, " ").slice(0, 80);
-    parts.push(`"${short}${p.imageDescription.length > 80 ? "…" : ""}"`);
-  }
-  return parts.join(" · ");
-}
 
 /**
  * 调试 tab：本次只做前端骨架 —— 已接入的：
@@ -1180,183 +1075,3 @@ export default function DebugTab() {
     </>
   );
 }
-
-/** 引擎状态条：端口 / 模型 / ctx / 状态指示 dot。 */
-function EngineBar({ engine }: { engine: EngineStatus | null }) {
-  const { t } = useTranslation();
-  if (!engine) {
-    return (
-      <div className={styles.engineBar}>
-        <span className={styles.engineDot} />
-        <span>{t("aiSummary.debug.engineBar.loading")}</span>
-      </div>
-    );
-  }
-  const rt = engine.runtime;
-  const dotClass =
-    rt.state === "running"
-      ? styles.engineDotRunning
-      : rt.state === "starting"
-        ? styles.engineDotStarting
-        : rt.state === "error"
-          ? styles.engineDotError
-          : "";
-  const versionStr = engine.installed
-    ? engine.installedVersion ?? engine.currentPin
-    : t("aiSummary.debug.engineBar.notInstalled");
-  return (
-    <div className={styles.engineBar}>
-      <span className={`${styles.engineDot} ${dotClass}`} />
-      <span>
-        {t("aiSummary.debug.engineBar.port")}
-        <span className={styles.engineMetaStrong}>
-          {rt.state === "running" && rt.port != null ? `:${rt.port}` : "—"}
-        </span>
-      </span>
-      <span className={styles.engineSep}>·</span>
-      <span>
-        {t("aiSummary.debug.engineBar.version")}
-        <span className={styles.engineMetaStrong}>{versionStr}</span>
-      </span>
-      <span className={styles.engineSep}>·</span>
-      <span>
-        {t("aiSummary.debug.engineBar.accel")}
-        <span
-          className={styles.engineMetaStrong}
-          title={t("aiSummary.debug.engineBar.accelTitle", { id: engine.platformId })}
-        >
-          {humanAccelLabel(engine.platformId)}
-        </span>
-      </span>
-      <span className={styles.engineSep}>·</span>
-      <span>
-        {t("aiSummary.debug.engineBar.state")}
-        <span className={styles.engineMetaStrong}>{rt.state}</span>
-      </span>
-      {rt.error ? (
-        <>
-          <span className={styles.engineSep}>·</span>
-          <span style={{ color: "#dc2626" }}>
-            {t("aiSummary.debug.engineBar.error")}
-            {rt.error}
-          </span>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-/** 单条逐图描述项。
- *  - 段标识背景色用 settings.ai.segments[idx].color（用户在「时段划分」里配的色）
- *  - 文件名 click → openPath 用系统默认查看器预览原图
- *  - 耗时 / token 来自 ai_image_descriptions 行 + image_described 事件
- *  - 重跑按钮调 api.retrySingleImageDescription */
-function DescItem({
-  row,
-  segmentLabel,
-  segment,
-  onRetry,
-  retryDisabled,
-  onOpenError,
-}: {
-  row: ImageDescriptionRow;
-  segmentLabel?: string;
-  segment?: AiSegment;
-  onRetry: () => void;
-  retryDisabled: boolean;
-  /** 打开图片失败时上报错误给父组件展示（顶部 errorBar） */
-  onOpenError: (msg: string) => void;
-}) {
-  const { t } = useTranslation();
-  const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
-  // 截图时间（HH:MM）：直接从文件名解析（capture 写入约定 HHMMSS_NNN.jpg）
-  const captureTime = extractScreenshotTime(row.screenshotPath);
-  // chip 颜色：跟设置页 SegmentList / DailyTab 走同一份 fallback——配过 hex 用配置色，
-  // 没配则按段中点的色温自动渐变。settings 还没加载 (segment === undefined) 时退回中性灰。
-  const { background: chipBg, isLight } = segment
-    ? resolveSegmentChip(segment)
-    : { background: "#cbd5e1", isLight: true };
-  const chipColor = isLight ? "#3a3f55" : "#fff";
-
-  // 耗时 / token 文本：null 时显示 "—"，让排版稳定
-  const latencyStr = row.latencyMs != null ? `${row.latencyMs} ms` : "—";
-  const tokenStr =
-    row.promptTokens != null || row.completionTokens != null
-      ? `${row.promptTokens ?? "—"} / ${row.completionTokens ?? "—"} t`
-      : "— / — t";
-
-  return (
-    <div className={styles.descItem}>
-      <div className={styles.descMeta}>
-        <span
-          className={styles.descIndex}
-          style={{ background: chipBg, color: chipColor }}
-          title={t("aiSummary.debug.perImage.chipTitle", {
-            seg: row.segmentIdx,
-            img: row.imageIndex,
-          })}
-        >
-          {segmentLabel ?? t("aiSummary.debug.perImage.segFallback", { idx: row.segmentIdx })}
-          {t("aiSummary.debug.perImage.imageNoSuffix", { n: row.imageIndex + 1 })}
-        </span>
-        <span
-          className={styles.descTime}
-          title={t("aiSummary.debug.perImage.captureTimeTooltip", { time: captureTime })}
-        >
-          <Clock size={11} strokeWidth={2.2} />
-          {captureTime}
-        </span>
-        <button
-          type="button"
-          className={styles.descPath}
-          title={t("aiSummary.debug.perImage.pathTooltip", { path: row.screenshotPath })}
-          onClick={() => {
-            // 先试系统默认查看器；失败 fallback 到资源管理器选中文件
-            // ——后者用 opener:default 自带的 allow-reveal-item-in-dir 权限，
-            // 不依赖 capability 是否新加了 allow-open-path
-            void (async () => {
-              try {
-                await openPath(row.screenshotPath);
-                return;
-              } catch (e) {
-                logWarn("debug.openPathFallback", e);
-              }
-              try {
-                await revealItemInDir(row.screenshotPath);
-              } catch (e2) {
-                const msg = e2 instanceof Error ? e2.message : String(e2);
-                onOpenError(t("aiSummary.debug.perImage.openImageError", { msg }));
-              }
-            })();
-          }}
-        >
-          {fileName}
-        </button>
-        <span
-          className={styles.descStat}
-          title={t("aiSummary.debug.perImage.statTooltip")}
-        >
-          {latencyStr} · {tokenStr}
-        </span>
-        <button
-          type="button"
-          className={styles.retryImg}
-          onClick={onRetry}
-          disabled={retryDisabled}
-          title={
-            retryDisabled
-              ? t("aiSummary.debug.perImage.retryTooltipBusy")
-              : t("aiSummary.debug.perImage.retryTooltipReady")
-          }
-        >
-          <RotateCcw size={11} strokeWidth={2.2} />
-          {t("aiSummary.debug.perImage.retry")}
-        </button>
-      </div>
-      <div className={styles.descText}>
-        {row.description || t("aiSummary.debug.perImage.descEmpty")}
-      </div>
-    </div>
-  );
-}
-

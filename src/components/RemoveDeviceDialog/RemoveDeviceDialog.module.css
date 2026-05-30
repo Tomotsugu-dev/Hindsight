@@ -20,7 +20,7 @@
   min-width: 380px;
   max-width: 480px;
   padding: 22px 22px 16px;
-  background: #ffffff;
+  background: var(--surface-card);
   border-radius: 14px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
@@ -34,7 +34,7 @@
 
 .title {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   margin: 0;
@@ -67,7 +67,7 @@
 
 .question {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   margin: 0;
 }
@@ -111,7 +111,7 @@
 
 .optionLabel {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
 }
 
@@ -141,7 +141,7 @@
 
 .confirmInput:focus {
   border-color: rgba(239, 68, 68, 0.6);
-  background: #ffffff;
+  background: var(--surface-card);
 }
 
 .actions {
@@ -159,7 +159,7 @@
   padding: 0 14px;
   border-radius: 7px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   border: 1px solid transparent;
   cursor: pointer;
@@ -190,7 +190,7 @@
 }
 
 .btnDanger {
-  background: #ef4444;
+  background: var(--status-error);
   color: #ffffff;
 }
 

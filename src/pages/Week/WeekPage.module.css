@@ -18,7 +18,7 @@
 
 .title {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.015em;
   margin: 0;
@@ -31,7 +31,7 @@
 }
 
 .card {
-  background: #fbfbfd;
+  background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 12px;
   overflow: hidden;
@@ -52,7 +52,7 @@
 
 .cardTitle {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   margin: 0;
 }
@@ -66,7 +66,7 @@
 
 .cardTotal {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }
@@ -81,7 +81,7 @@
 /* 选中某天后标题旁的纯文字时段标签，例 "5/12"。 */
 .selectionLabel {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;

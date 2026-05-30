@@ -26,7 +26,7 @@
   color: var(--text-muted);
   font-family: inherit;
   font-size: var(--font-size-xs, 11px);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   cursor: pointer;
   transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
@@ -52,7 +52,7 @@
 
 .title {
   font-size: var(--font-size-md, 14px);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
@@ -67,14 +67,14 @@
 
 .headTime {
   font-size: var(--font-size-md, 14px);
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   color: var(--text-strong);
 }
 
 .headPct {
   font-size: var(--font-size-xs, 11px);
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
 }
 
 /* —— Split: 左 donut + 右 sections —— */
@@ -114,7 +114,7 @@
 .sectionTitle {
   margin: 0;
   font-size: var(--font-size-xs, 11px);
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -162,7 +162,7 @@
 }
 
 .drillName {
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   overflow: hidden;
   text-overflow: ellipsis;

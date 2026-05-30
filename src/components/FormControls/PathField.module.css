@@ -24,7 +24,7 @@
 }
 
 .input:focus {
-  background: #ffffff;
+  background: var(--surface-card);
   border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
 }
@@ -39,7 +39,7 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 7px;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   transition:
     background-color 180ms ease-out,

@@ -19,7 +19,7 @@
     color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
   background: rgba(255, 255, 255, 0.55);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   transition:
@@ -33,7 +33,7 @@
 }
 
 .triggerOpen {
-  background: #ffffff;
+  background: var(--surface-card);
   border-color: color-mix(
     in oklab,
     var(--color-accent) 32%,
@@ -85,7 +85,7 @@
   right: 0;
   z-index: var(--z-dropdown);
   padding: 4px;
-  background: #ffffff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 9px;
   box-shadow:
@@ -139,7 +139,7 @@
   padding: 0 7px;
   border-radius: 6px;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   color: var(--text-regular);
   text-align: left;
   letter-spacing: -0.005em;

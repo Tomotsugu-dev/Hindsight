@@ -37,7 +37,7 @@
 
 .title {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   margin: 0;
@@ -81,7 +81,7 @@
   max-width: 280px;
   padding: 8px 12px;
   font-size: 12px;
-  font-weight: 400;
+  font-weight: var(--font-weight-400);
   line-height: 1.5;
   color: #fff;
   background: rgba(28, 28, 36, 0.94);
@@ -117,7 +117,7 @@
 
 .description {
   font-size: 12px;
-  font-weight: 400;
+  font-weight: var(--font-weight-400);
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
@@ -140,13 +140,13 @@
 
 .tone_danger {
   background: color-mix(in oklab, #ef4444 13%, transparent);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  background: #fbfbfd;
+  background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 12px;
   /* 不能 hidden —— 否则 row 内的 hover tooltip（labelHint）会被截断在 card 外。

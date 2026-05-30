@@ -21,20 +21,20 @@
 
 /* 中央文字 —— tabular-nums 让 hover 时数值切换不弹宽 */
 .centerTitle {
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   fill: var(--text-strong);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
 .centerSub {
-  font-weight: 500;
+  font-weight: var(--font-weight-500);
   fill: var(--text-muted);
   letter-spacing: 0;
 }
 
 .centerPct {
-  font-weight: 700;
+  font-weight: var(--font-weight-700);
   font-size: 14px;
   fill: var(--color-accent);
   font-variant-numeric: tabular-nums;
