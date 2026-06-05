@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCategories } from "../state/categories";
+import { lruInsert } from "../utils/lru";
 
 /**
  * useDayCache / useWeekCache / useMonthCache 的工厂：抽 95% 同构的滑窗缓存
@@ -18,10 +19,19 @@ export interface UsageCacheConfig<TData> {
   emptyValue: TData;
   /** 当前期数据轮询间隔（ms）；offset !== 0 不轮询 */
   pollInterval: number;
+  /**
+   * cache 上限（按插入序 evict）。默认 8 = 覆盖 currentOffset ±1 预取（3）+
+   * 5 个最近翻过的历史位置。DayData ~30–80 KB / WeekData / MonthData 更大；
+   * 8 让最坏占用上界从"无限增长"压回固定 MB 量级。
+   */
+  maxCacheSize?: number;
 }
+
+const DEFAULT_MAX_CACHE_SIZE = 8;
 
 export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
   const { fetch, emptyValue, pollInterval } = config;
+  const maxCacheSize = config.maxCacheSize ?? DEFAULT_MAX_CACHE_SIZE;
 
   return function useUsageCache(currentOffset: number, deviceId?: string) {
     const { categories } = useCategories();
@@ -51,7 +61,7 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
           if (scope !== scopeRef.current) return;
           setCache((prev) => {
             const next = new Map(prev);
-            next.set(offset, data);
+            lruInsert(next, offset, data, maxCacheSize);
             return next;
           });
         } catch {

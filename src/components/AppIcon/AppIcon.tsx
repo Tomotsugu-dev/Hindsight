@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/hindsight";
+import { lruInsert } from "../../utils/lru";
 import styles from "./AppIcon.module.css";
 
 interface CacheEntry {
@@ -16,6 +17,13 @@ const inflight = new Map<string, Promise<string | null>>();
  * 命中（非 null）的项不过期：图标内容很少变，重复 invoke 浪费。
  */
 const NULL_CACHE_TTL_MS = 60_000;
+
+/**
+ * base64 data URL 单个 5–30 KB（最坏 macOS .icns 512px 可达 188 KB），
+ * 历史/多设备会让 unique processName 一路涨。cap 在 128 → 内存上界 ~3–24 MB；
+ * LRU 命中率在常用集合（一般用户 50–100 个 app）下几乎不掉。
+ */
+const MAX_CACHE = 128;
 
 function readCache(processName: string): string | null | undefined {
   const entry = cache.get(processName);
@@ -54,12 +62,12 @@ export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps)
       api
         .getAppIcon(processName)
         .then((data) => {
-          cache.set(processName, { src: data ?? null, ts: Date.now() });
+          lruInsert(cache, processName, { src: data ?? null, ts: Date.now() }, MAX_CACHE);
           inflight.delete(processName);
           return data ?? null;
         })
         .catch(() => {
-          cache.set(processName, { src: null, ts: Date.now() });
+          lruInsert(cache, processName, { src: null, ts: Date.now() }, MAX_CACHE);
           inflight.delete(processName);
           return null;
         });
