@@ -9,9 +9,15 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 # 同一分支新 push 取消旧的在跑 run，省 CI 额度
 concurrency:
