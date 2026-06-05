@@ -4,9 +4,7 @@
 
 use tauri::State;
 
-use crate::repo::super_categories::{
-    self, SuperCategory, SuperCategoryInput, SuperCategoryPatch,
-};
+use crate::repo::super_categories::{self, SuperCategory, SuperCategoryInput, SuperCategoryPatch};
 use crate::storage::DbPool;
 
 #[tauri::command]

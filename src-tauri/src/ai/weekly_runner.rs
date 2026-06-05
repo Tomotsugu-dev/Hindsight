@@ -112,8 +112,7 @@ impl WeekSummaryRunner {
         }
 
         // 拉一周内所有 daily 段总结，按日期 group
-        let daily_rows =
-            ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
+        let daily_rows = ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
         let lang = ai.prompt_language.as_str().to_string();
         let mut days = group_days(&daily_rows, week_start, week_end, &lang);
 
@@ -155,8 +154,7 @@ impl WeekSummaryRunner {
         // 宽松模式：缺日报的天用当日 top apps 文本顶替——还是缺数据的天（既没日报
         // 也没 activity）直接不进 prompt，让 LLM 视为"未使用电脑"。
         if allow_missing_days {
-            let present_dates: HashSet<String> =
-                days.iter().map(|(d, _, _)| d.clone()).collect();
+            let present_dates: HashSet<String> = days.iter().map(|(d, _, _)| d.clone()).collect();
             let mut day = week_start;
             while day <= week_end {
                 let day_str = day.format("%Y-%m-%d").to_string();
@@ -291,49 +289,53 @@ impl WeekSummaryRunner {
             self.emit(p);
         }
 
-        let _inflight = step2.is_local().then(|| self.supervisor.acquire_inference());
-        let (row, status_str): (SegmentSummaryRow, &'static str) = match step2
-            .chat(&system, &user_text, &[])
-            .await
-        {
-            Ok((content, _usage)) => (
-                SegmentSummaryRow {
-                    source: WEEKLY_SOURCE.to_string(),
-                    local_date: week_key.clone(),
-                    segment_idx: WEEKLY_SEGMENT_IDX,
-                    label: weekly_label(&week_key, &end_key),
-                    start_hour: 0,
-                    end_hour: 0,
-                    content,
-                    model: step2_model.clone(),
-                    status: "ok".to_string(),
-                    error: None,
-                    generated_at: utc_now_rfc3339(),
-                },
-                "ok",
-            ),
-            Err(e) => (
-                SegmentSummaryRow {
-                    source: WEEKLY_SOURCE.to_string(),
-                    local_date: week_key.clone(),
-                    segment_idx: WEEKLY_SEGMENT_IDX,
-                    label: weekly_label(&week_key, &end_key),
-                    start_hour: 0,
-                    end_hour: 0,
-                    content: String::new(),
-                    model: step2_model,
-                    status: "error".to_string(),
-                    error: Some(e.to_string()),
-                    generated_at: utc_now_rfc3339(),
-                },
-                "error",
-            ),
-        };
+        let _inflight = step2
+            .is_local()
+            .then(|| self.supervisor.acquire_inference());
+        let (row, status_str): (SegmentSummaryRow, &'static str) =
+            match step2.chat(&system, &user_text, &[]).await {
+                Ok((content, _usage)) => (
+                    SegmentSummaryRow {
+                        source: WEEKLY_SOURCE.to_string(),
+                        local_date: week_key.clone(),
+                        segment_idx: WEEKLY_SEGMENT_IDX,
+                        label: weekly_label(&week_key, &end_key),
+                        start_hour: 0,
+                        end_hour: 0,
+                        content,
+                        model: step2_model.clone(),
+                        status: "ok".to_string(),
+                        error: None,
+                        generated_at: utc_now_rfc3339(),
+                    },
+                    "ok",
+                ),
+                Err(e) => (
+                    SegmentSummaryRow {
+                        source: WEEKLY_SOURCE.to_string(),
+                        local_date: week_key.clone(),
+                        segment_idx: WEEKLY_SEGMENT_IDX,
+                        label: weekly_label(&week_key, &end_key),
+                        start_hour: 0,
+                        end_hour: 0,
+                        content: String::new(),
+                        model: step2_model,
+                        status: "error".to_string(),
+                        error: Some(e.to_string()),
+                        generated_at: utc_now_rfc3339(),
+                    },
+                    "error",
+                ),
+            };
 
         // upsert 失败不让整轮抛飞——日报路径同款防御：磁盘满 / DB lock 时 row
         // 写不进去也得让上层 emit segment_done，至少前端能看到红色 error badge
         if let Err(e) = ai_summaries::upsert_segment(&self.pool, &row).await {
-            log::error!("ai_summaries upsert 失败（weekly {} status={}）：{e}", week_key, row.status);
+            log::error!(
+                "ai_summaries upsert 失败（weekly {} status={}）：{e}",
+                week_key,
+                row.status
+            );
         }
 
         // emit segment_done 把 row 推给前端
@@ -369,10 +371,7 @@ impl WeekSummaryRunner {
     ///
     /// 跟 `DaySummaryRunner::ensure_engine_running` 同语义——但只关心 Step::Summary
     /// 因为周报全程纯文本，不需要 vision describe 的 mmproj。
-    async fn ensure_engine_running(
-        &self,
-        ai: &crate::ai::config::AiConfig,
-    ) -> Result<u16> {
+    async fn ensure_engine_running(&self, ai: &crate::ai::config::AiConfig) -> Result<u16> {
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
@@ -394,7 +393,10 @@ impl WeekSummaryRunner {
         } else {
             let p = models_dir.join(mmproj_name);
             if !p.exists() {
-                return Err(Error::ModelFileMissing(format!("vision 投影 {}", mmproj_name)));
+                return Err(Error::ModelFileMissing(format!(
+                    "vision 投影 {}",
+                    mmproj_name
+                )));
             }
             Some(p)
         };
@@ -428,7 +430,6 @@ impl WeekSummaryRunner {
         p.message = message;
         self.emit(p);
     }
-
 }
 
 /// 把一周内所有 daily 段总结按日期 group + 拼成日维度文本。
@@ -485,23 +486,14 @@ fn weekly_label(week_start: &str, week_end: &str) -> String {
 /// 拼装格式：第一行打 marker 标签让 LLM 一眼识别"这天没日报、只有应用统计"；
 /// 余下是跟段总结 user prompt 同款的应用列表。三语都遵守同样的 marker 结构，
 /// weekly_*.md 里有对应说明告诉模型遇到 marker 时怎么处理。
-fn format_missing_day_fallback(
-    lang: &str,
-    day_apps: &[(String, u32, String)],
-) -> String {
+fn format_missing_day_fallback(lang: &str, day_apps: &[(String, u32, String)]) -> String {
     let (marker, header) = match lang {
-        "en" => (
-            "[No daily report; app stats only]",
-            "Top apps used:",
-        ),
+        "en" => ("[No daily report; app stats only]", "Top apps used:"),
         "ja" => (
             "[この日は日報なし、アプリ統計のみ]",
             "最も使用されたアプリ：",
         ),
-        _ => (
-            "[当日无日报，仅应用统计]",
-            "使用最多的应用：",
-        ),
+        _ => ("[当日无日报，仅应用统计]", "使用最多的应用："),
     };
     let mut out = String::new();
     out.push_str(marker);
@@ -548,10 +540,7 @@ pub struct WeekPrecheckResp {
 ///
 /// 不依赖 [`WeekSummaryRunner`]，纯函数形式——前端可以单独 invoke 而无需触发任何
 /// 引擎 / 模型加载，是"生成前确认"流程的支点。
-pub async fn precheck_week(
-    pool: &DbPool,
-    week_start: NaiveDate,
-) -> Result<WeekPrecheckResp> {
+pub async fn precheck_week(pool: &DbPool, week_start: NaiveDate) -> Result<WeekPrecheckResp> {
     let week_end = week_start + Duration::days(6);
     let week_key = week_start.format("%Y-%m-%d").to_string();
     let end_key = week_end.format("%Y-%m-%d").to_string();

@@ -160,9 +160,7 @@ async fn remote_ids_for(dev: &TestDevice, device_id: &str) -> Vec<String> {
         .0
         .call(move |conn| {
             let mut stmt = conn
-                .prepare(
-                    "SELECT remote_id FROM activities WHERE device_id = ?1 ORDER BY remote_id",
-                )
+                .prepare("SELECT remote_id FROM activities WHERE device_id = ?1 ORDER BY remote_id")
                 .db()?;
             let rows = stmt
                 .query_map(rusqlite::params![device_id], |r| r.get::<_, String>(0))
@@ -206,11 +204,25 @@ async fn cross_device_push_pull_basic() {
     insert_sealed(&a, "Chrome", captured, 60).await;
     insert_sealed(&a, "Slack", captured, 45).await;
 
-    a.engine.sync_now().await.expect("A sync_now should succeed");
-    b.engine.sync_now().await.expect("B sync_now should succeed");
+    a.engine
+        .sync_now()
+        .await
+        .expect("A sync_now should succeed");
+    b.engine
+        .sync_now()
+        .await
+        .expect("B sync_now should succeed");
 
-    assert_eq!(count_for_device(&b, "device-a").await, 3, "B 应 mirror A 的 3 行");
-    assert_eq!(sum_secs_for_device(&b, "device-a").await, 135, "B mirror 总秒数应 = 30+60+45");
+    assert_eq!(
+        count_for_device(&b, "device-a").await,
+        3,
+        "B 应 mirror A 的 3 行"
+    );
+    assert_eq!(
+        sum_secs_for_device(&b, "device-a").await,
+        135,
+        "B mirror 总秒数应 = 30+60+45"
+    );
     // A 自己的行保留
     assert_eq!(count_for_device(&a, "device-a").await, 3);
     // B 没自己的本地行（只有 A 的 mirror）
@@ -366,7 +378,9 @@ async fn flush_pull_cursor_stops_at_failed_file() {
 
     dev.engine.sync_now().await.unwrap();
 
-    let cursor = super::io::read_cursor(&dev.pool, "drive_files").await.unwrap();
+    let cursor = super::io::read_cursor(&dev.pool, "drive_files")
+        .await
+        .unwrap();
     assert_eq!(
         cursor, t1,
         "cursor 应停在 T1（T2 失败后不能跨过），实际: {cursor:?}, 期望: {t1:?}"

@@ -774,7 +774,10 @@ mod tests {
         let app_groups_before = count(&pool, "app_groups").await;
         let app_group_members_before = count(&pool, "app_group_members").await;
         let settings_before = count(&pool, "settings_store").await;
-        assert!(bytes_before > 400_000, "fixture 应当至少 400KB: got {bytes_before}");
+        assert!(
+            bytes_before > 400_000,
+            "fixture 应当至少 400KB: got {bytes_before}"
+        );
         assert!(categories_before > 0, "builtin categories 应该已 seed");
 
         // ── act ──
@@ -794,8 +797,16 @@ mod tests {
         }
 
         // ── assert: 用户其它自定义未动（不再含 app_groups） ──
-        assert_eq!(count(&pool, "categories").await, categories_before, "categories 不应被动");
-        assert_eq!(count(&pool, "settings_store").await, settings_before, "settings_store 不应被动");
+        assert_eq!(
+            count(&pool, "categories").await,
+            categories_before,
+            "categories 不应被动"
+        );
+        assert_eq!(
+            count(&pool, "settings_store").await,
+            settings_before,
+            "settings_store 不应被动"
+        );
 
         // ── assert: app_groups + app_group_members 物理行还在（软删保留行让 LWW
         //    跨设备 merge 能识别 tombstone），但 deleted_at 已置位 ──
@@ -867,16 +878,18 @@ mod tests {
         let cursor: String = pool
             .0
             .call(|conn| {
-                Ok(conn
-                    .query_row(
-                        "SELECT last_pulled_at FROM sync_cursor WHERE entity='drive_files'",
-                        [],
-                        |r| r.get(0),
-                    )?)
+                Ok(conn.query_row(
+                    "SELECT last_pulled_at FROM sync_cursor WHERE entity='drive_files'",
+                    [],
+                    |r| r.get(0),
+                )?)
             })
             .await
             .unwrap();
-        assert_eq!(cursor, "1970-01-01T00:00:00Z", "drive_files cursor 应重置到 epoch");
+        assert_eq!(
+            cursor, "1970-01-01T00:00:00Z",
+            "drive_files cursor 应重置到 epoch"
+        );
 
         // ── assert: VACUUM 真的把页数压回去了 ──
         let bytes_after = db_logical_bytes(&pool).await;

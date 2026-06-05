@@ -708,14 +708,8 @@ mod tests {
         purge_with_members(&pool, "vscode").await.unwrap();
 
         // 组 + 两成员都被软删
-        assert!(
-            group_deleted(&pool, "vscode").await,
-            "组本身应被软删"
-        );
-        assert!(
-            member_deleted(&pool, "Code").await,
-            "成员 Code 应被软删"
-        );
+        assert!(group_deleted(&pool, "vscode").await, "组本身应被软删");
+        assert!(member_deleted(&pool, "Code").await, "成员 Code 应被软删");
         assert!(
             member_deleted(&pool, "Code.exe").await,
             "成员 Code.exe 应被软删"

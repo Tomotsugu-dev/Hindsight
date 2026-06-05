@@ -295,7 +295,13 @@ impl Default for AiConfig {
 /// 标签按用户语言取一套。新装首启时通过 [`detect_default_lang`] 拿系统 locale。
 pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
     let labels: [&str; 5] = match lang {
-        "en" => ["Late Night", "Early Morning", "Morning", "Afternoon", "Evening"],
+        "en" => [
+            "Late Night",
+            "Early Morning",
+            "Morning",
+            "Afternoon",
+            "Evening",
+        ],
         "ja" => ["深夜", "早朝", "午前", "午後", "夜"],
         _ => ["深夜", "早上", "上午", "下午", "晚上"],
     };

@@ -71,7 +71,9 @@ fn capture_focused_window_inner(frontmost_pid: u32) -> Result<RgbaImage> {
         .max_by(|a, b| {
             let area_a = a.frame().width * a.frame().height;
             let area_b = b.frame().width * b.frame().height;
-            area_a.partial_cmp(&area_b).unwrap_or(std::cmp::Ordering::Equal)
+            area_a
+                .partial_cmp(&area_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
         .ok_or_else(|| Error::Capture(format!("no normal SCWindow for pid {frontmost_pid}")))?;
 

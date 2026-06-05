@@ -788,11 +788,15 @@ mod tests {
         seed_solo_group(&pool, "Code", "code").await;
         seed_solo_group(&pool, "Chrome", "browse").await;
 
-        let h10 = day_hour_apps(&pool, 0, 10, 50, DeviceFilter::All).await.unwrap();
+        let h10 = day_hour_apps(&pool, 0, 10, 50, DeviceFilter::All)
+            .await
+            .unwrap();
         assert_eq!(h10.len(), 1, "hour=10 只应有 Code");
         assert_eq!(h10[0].process, "Code");
 
-        let h11 = day_hour_apps(&pool, 0, 11, 50, DeviceFilter::All).await.unwrap();
+        let h11 = day_hour_apps(&pool, 0, 11, 50, DeviceFilter::All)
+            .await
+            .unwrap();
         assert_eq!(h11.len(), 1, "hour=11 只应有 Chrome");
         assert_eq!(h11[0].process, "Chrome");
     }

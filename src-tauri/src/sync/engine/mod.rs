@@ -149,7 +149,6 @@ impl SyncEngine {
         &self.inner.self_id
     }
 
-
     /// 启动后台 push/pull 循环。已在跑时 no-op。未登录时循环内每次都 silently 跳过。
     pub async fn start(&self) {
         let mut h = self.inner.handle.lock().await;

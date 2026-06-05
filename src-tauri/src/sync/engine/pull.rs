@@ -51,18 +51,37 @@ fn is_remote_newer<P: rusqlite::Params>(
 const PULL_CURSOR_KEY: &str = "drive_files";
 
 enum ParsedFile {
-    ActivityDay { device_id: String, local_date: String },
-    Categories { device_id: String },
-    AppCategories { device_id: String },
-    ProcessPaths { device_id: String },
-    DeviceMeta { device_id: String },
-    AppIcons { device_id: String },
-    AppGroups { device_id: String },
-    AppGroupMembers { device_id: String },
+    ActivityDay {
+        device_id: String,
+        local_date: String,
+    },
+    Categories {
+        device_id: String,
+    },
+    AppCategories {
+        device_id: String,
+    },
+    ProcessPaths {
+        device_id: String,
+    },
+    DeviceMeta {
+        device_id: String,
+    },
+    AppIcons {
+        device_id: String,
+    },
+    AppGroups {
+        device_id: String,
+    },
+    AppGroupMembers {
+        device_id: String,
+    },
     /// `device.<UUID>.tombstone.json` —— 源设备明确告知"在某时刻之前的我的数据请全部清"，
     /// 对端 pull 时执行 `DELETE WHERE device_id=<owner> AND updated_at < clearedAt`。
     /// 修补 sync 协议「Drive 文件级删除不传播为 DB 行级 DELETE」的缺陷。
-    Tombstone { device_id: String },
+    Tombstone {
+        device_id: String,
+    },
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
@@ -220,7 +239,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         // 本机自己的历史。其它共享 metadata（categories / app_groups / ...）继续跳过：
         // - 这些 schema 没 device_id 列，跨设备共享，本机不会"丢"这些数据
         // - 拉自己的 metadata 文件除了浪费一次 download 没价值
-        let is_self_activity = matches!(parsed, ParsedFile::ActivityDay { .. }) && device_id == self_id;
+        let is_self_activity =
+            matches!(parsed, ParsedFile::ActivityDay { .. }) && device_id == self_id;
         if device_id == self_id && !is_self_activity {
             handled[i] = true;
             continue;
@@ -264,9 +284,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         };
 
         let res = match parsed {
-            ParsedFile::ActivityDay { device_id, local_date } => {
-                merge_activities(&inner.pool, self_id, &device_id, &local_date, &body).await
-            }
+            ParsedFile::ActivityDay {
+                device_id,
+                local_date,
+            } => merge_activities(&inner.pool, self_id, &device_id, &local_date, &body).await,
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
             }
@@ -459,7 +480,8 @@ async fn merge_activities(
             let sql = if placeholders.is_empty() {
                 // 空文件 → 收敛 = 该 (device, local_date) 下所有 mirror 行都 DELETE
                 "DELETE FROM activities
-                 WHERE device_id = ?1 AND local_date = ?2".to_string()
+                 WHERE device_id = ?1 AND local_date = ?2"
+                    .to_string()
             } else {
                 format!(
                     "DELETE FROM activities
@@ -508,7 +530,9 @@ where
 {
     let rows: Vec<T> = parse_rows(entity, body)?;
     for row in rows {
-        let Some(label) = pk_for_log(&row) else { continue };
+        let Some(label) = pk_for_log(&row) else {
+            continue;
+        };
         let res = pool
             .0
             .call(move |conn| apply(conn, row).map_err(tokio_rusqlite::Error::Rusqlite))

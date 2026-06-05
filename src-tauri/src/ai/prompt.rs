@@ -320,11 +320,16 @@ pub fn build_weekly_user_prompt(ai: &AiConfig, ctx: &WeeklyContext) -> String {
 
 fn build_weekly_user_prompt_zh(ctx: &WeeklyContext) -> String {
     let mut out = String::new();
-    out.push_str(&format!("本周范围：{} – {}\n\n", ctx.week_start, ctx.week_end));
+    out.push_str(&format!(
+        "本周范围：{} – {}\n\n",
+        ctx.week_start, ctx.week_end
+    ));
     // 完全没数据：让 LLM 直说无法生成。后端有兜底分支基本走不到这里，
     // 但留着保险——避免 LLM 在零数据上幻觉。
     if ctx.days.is_empty() && ctx.top_apps.is_empty() {
-        out.push_str("（这一周还没有任何日报数据，也没有应用使用记录，请基于这一点说明无法生成周报。）");
+        out.push_str(
+            "（这一周还没有任何日报数据，也没有应用使用记录，请基于这一点说明无法生成周报。）",
+        );
         return out;
     }
     if !ctx.top_apps.is_empty() {

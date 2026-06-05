@@ -558,7 +558,10 @@ mod tests {
             .await
             .unwrap();
         let v: serde_json::Value = serde_json::from_str(&payload).unwrap();
-        assert_eq!(v.get("deviceId").and_then(|x| x.as_str()), Some(TEST_SELF_ID));
+        assert_eq!(
+            v.get("deviceId").and_then(|x| x.as_str()),
+            Some(TEST_SELF_ID)
+        );
         assert_eq!(v.get("processName").and_then(|x| x.as_str()), Some("Code"));
         assert!(v.get("startedAt").and_then(|x| x.as_str()).is_some());
         assert!(v.get("endedAt").and_then(|x| x.as_str()).is_some());
@@ -665,9 +668,7 @@ mod tests {
                          WHERE entity = 'activity'",
                     )
                     .db()?;
-                let rows = stmt
-                    .query_map([], |r| r.get::<_, Option<String>>(0))
-                    .db()?;
+                let rows = stmt.query_map([], |r| r.get::<_, Option<String>>(0)).db()?;
                 let mut out = Vec::new();
                 for r in rows {
                     if let Some(s) = r.db()? {

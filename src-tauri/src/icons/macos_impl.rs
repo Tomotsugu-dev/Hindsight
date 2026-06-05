@@ -102,10 +102,11 @@ fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
 
     // icns 变体可能是 RGB / GrayAlpha / Gray，统一转 RGBA 让 image crate 接住
     let rgba = src_img.convert_to(icns::PixelFormat::RGBA);
-    let dyn_img = match image::RgbaImage::from_raw(rgba.width(), rgba.height(), rgba.data().to_vec()) {
-        Some(buf) => image::DynamicImage::ImageRgba8(buf),
-        None => return Ok(None),
-    };
+    let dyn_img =
+        match image::RgbaImage::from_raw(rgba.width(), rgba.height(), rgba.data().to_vec()) {
+            Some(buf) => image::DynamicImage::ImageRgba8(buf),
+            None => return Ok(None),
+        };
 
     // Triangle filter：速度 / 质量平衡好；CatmullRom / Lanczos3 在小图标上视觉差异不明显，多耗 CPU
     let final_img = if src_w > MAX_DIM {

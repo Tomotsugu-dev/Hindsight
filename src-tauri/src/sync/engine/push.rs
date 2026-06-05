@@ -440,7 +440,10 @@ mod tests {
             .await
             .unwrap();
 
-        let lines: Vec<&[u8]> = body.split(|b| *b == b'\n').filter(|l| !l.is_empty()).collect();
+        let lines: Vec<&[u8]> = body
+            .split(|b| *b == b'\n')
+            .filter(|l| !l.is_empty())
+            .collect();
         assert_eq!(lines.len(), 3, "应仅导出 3 行 (self + today)");
 
         let processes: Vec<String> = lines
@@ -454,7 +457,10 @@ mod tests {
         let expected: std::collections::HashSet<&str> =
             ["Code", "Chrome", "Slack"].into_iter().collect();
         let got: std::collections::HashSet<&str> = processes.iter().map(|s| s.as_str()).collect();
-        assert_eq!(got, expected, "导出的 process_name 集合应正好是 self+today 的 3 个");
+        assert_eq!(
+            got, expected,
+            "导出的 process_name 集合应正好是 self+today 的 3 个"
+        );
 
         // 显式断言对端 + 昨日的没漏出
         for forbidden in ["Win-only-A", "Win-only-B", "Yesterday-app"] {
@@ -514,13 +520,21 @@ mod tests {
         ];
         let groups = group_outbox(&rows);
 
-        assert_eq!(groups.len(), 1, "5 行同一 local_date 应只产生 1 个 DirtyKey");
+        assert_eq!(
+            groups.len(),
+            1,
+            "5 行同一 local_date 应只产生 1 个 DirtyKey"
+        );
         let ids = groups
             .get(&DirtyKey::ActivityDay("2026-05-15".into()))
             .expect("ActivityDay key should exist");
         let mut ids = ids.clone();
         ids.sort();
-        assert_eq!(ids, vec![1, 2, 3, 4, 5], "所有 5 个 outbox row id 都应进入 value");
+        assert_eq!(
+            ids,
+            vec![1, 2, 3, 4, 5],
+            "所有 5 个 outbox row id 都应进入 value"
+        );
     }
 
     /// 不同 local_date 的 outbox 行应进入不同的 DirtyKey 桶。

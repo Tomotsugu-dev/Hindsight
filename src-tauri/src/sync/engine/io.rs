@@ -271,12 +271,16 @@ mod tests {
     #[tokio::test]
     async fn write_cursor_upserts_value() {
         let pool = fresh_test_pool().await;
-        write_cursor(&pool, "drive_files", "2026-05-15T10:00:00Z").await.unwrap();
+        write_cursor(&pool, "drive_files", "2026-05-15T10:00:00Z")
+            .await
+            .unwrap();
         assert_eq!(
             read_cursor(&pool, "drive_files").await.unwrap(),
             "2026-05-15T10:00:00Z"
         );
-        write_cursor(&pool, "drive_files", "2026-05-16T11:00:00Z").await.unwrap();
+        write_cursor(&pool, "drive_files", "2026-05-16T11:00:00Z")
+            .await
+            .unwrap();
         assert_eq!(
             read_cursor(&pool, "drive_files").await.unwrap(),
             "2026-05-16T11:00:00Z"

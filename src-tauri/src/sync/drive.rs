@@ -390,9 +390,8 @@ impl InMemoryDriveStore {
             .iter()
             .find(|(_, f)| f.name == name)
             .map(|(id, _)| id.clone());
-        let id = existing_id.unwrap_or_else(|| {
-            format!("mock-id-{}", self.next_id.fetch_add(1, Ordering::SeqCst))
-        });
+        let id = existing_id
+            .unwrap_or_else(|| format!("mock-id-{}", self.next_id.fetch_add(1, Ordering::SeqCst)));
         files.insert(
             id.clone(),
             StoredFile {

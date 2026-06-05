@@ -59,7 +59,9 @@ fn aliases() -> &'static HashMap<String, String> {
 /// 看 process_name 是否命中跨 OS 别名表。命中返回 canonical 名字，否则 None。
 /// 大小写不敏感（`"chrome.exe"` 跟 `"Chrome.exe"` 等价）。
 pub fn lookup_canonical(process_name: &str) -> Option<&'static str> {
-    aliases().get(&process_name.to_lowercase()).map(|s| s.as_str())
+    aliases()
+        .get(&process_name.to_lowercase())
+        .map(|s| s.as_str())
 }
 
 /// 启动期一次性 backfill：扫所有 active member，把命中别名表且仍在默认 solo 组的
@@ -112,9 +114,7 @@ pub async fn pair_existing(pool: &DbPool) -> Result<u64> {
         }
         if let Err(e) = pair_one(pool, &process_name, canonical).await {
             // 单条失败不连累整批；日志里留下来方便排查。
-            log::warn!(
-                "cross_os pair 失败 process_name={process_name} canonical={canonical}: {e}"
-            );
+            log::warn!("cross_os pair 失败 process_name={process_name} canonical={canonical}: {e}");
             continue;
         }
         merged += 1;

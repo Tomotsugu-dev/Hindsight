@@ -69,7 +69,9 @@ pub fn run() {
             }
         }));
     } else {
-        log::warn!("HINDSIGHT_MULTI_INSTANCE 已设：跳过 single instance gate（仅测试用，生产请勿设）");
+        log::warn!(
+            "HINDSIGHT_MULTI_INSTANCE 已设：跳过 single instance gate（仅测试用，生产请勿设）"
+        );
     }
     builder
         .plugin(tauri_plugin_opener::init())

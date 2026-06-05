@@ -305,7 +305,8 @@ pub async fn generate_week_summary(
 
     if let Err(e) = runner.run(monday, force_refresh, allow_missing_days).await {
         // 顶层失败也 emit 一条 error 让前端 toast——和 daily 同款 UX
-        let mut p = SummaryProgress::base(WEEKLY_SOURCE.to_string(), monday_str.clone(), "error", 1);
+        let mut p =
+            SummaryProgress::base(WEEKLY_SOURCE.to_string(), monday_str.clone(), "error", 1);
         p.message = Some(e.to_string());
         let _ = app.emit(SUMMARY_PROGRESS_EVENT, &p);
         return Err(e.to_string());
@@ -351,10 +352,7 @@ pub async fn get_week_summary(
 
 /// 删除某周已落库的周报行。前端"删除"按钮调。
 #[tauri::command]
-pub async fn clear_week_summary(
-    pool: State<'_, DbPool>,
-    week_start: String,
-) -> Result<(), String> {
+pub async fn clear_week_summary(pool: State<'_, DbPool>, week_start: String) -> Result<(), String> {
     let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let monday = align_to_monday(parsed_date);

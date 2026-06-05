@@ -114,9 +114,14 @@ mod tests {
         // 嵌套 helper：父 bundle 不在磁盘 → plist 读失败 → 退到 basename "WeChat"
         let (name, path) = canonicalize_to_parent_bundle(
             "WeChatAppEx",
-            Some("/no/such/dir/WeChat.app/Contents/MacOS/WeChatAppEx.app/Contents/MacOS/WeChatAppEx"),
+            Some(
+                "/no/such/dir/WeChat.app/Contents/MacOS/WeChatAppEx.app/Contents/MacOS/WeChatAppEx",
+            ),
         );
-        assert_eq!(name, "WeChat", "嵌套时 canonical name 应是父 bundle basename");
+        assert_eq!(
+            name, "WeChat",
+            "嵌套时 canonical name 应是父 bundle basename"
+        );
         assert_eq!(
             path.as_deref(),
             Some("/no/such/dir/WeChat.app"),
@@ -135,8 +140,10 @@ mod tests {
     #[test]
     fn canonicalize_non_nested_passthrough() {
         // 路径本身就是最外层 .app（NSWorkspace 给主进程时的典型形状）→ 不动
-        let (name, path) =
-            canonicalize_to_parent_bundle("Calculator", Some("/System/Applications/Calculator.app"));
+        let (name, path) = canonicalize_to_parent_bundle(
+            "Calculator",
+            Some("/System/Applications/Calculator.app"),
+        );
         assert_eq!(name, "Calculator");
         assert_eq!(path.as_deref(), Some("/System/Applications/Calculator.app"));
     }

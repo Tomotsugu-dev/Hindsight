@@ -770,10 +770,7 @@ mod tests {
             desc.contains("[私密]"),
             "命中 keyword 应替换成 [私密]: {desc}"
         );
-        assert!(
-            !desc.contains("GitHub PR #142"),
-            "原标题不应再出现: {desc}"
-        );
+        assert!(!desc.contains("GitHub PR #142"), "原标题不应再出现: {desc}");
         assert!(desc.contains("Chrome"), "app 名仍应贡献: {desc}");
         assert!(desc.contains("5 分钟"), "时长仍应贡献: {desc}");
     }

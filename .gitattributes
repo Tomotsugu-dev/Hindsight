@@ -1,0 +1,22 @@
+# 跨平台行尾统一为 LF。
+# 没有这条的话，Windows checkout 时 git autocrlf 会把所有 text 转成 CRLF，
+# 导致 windows-latest CI runner 上 `cargo fmt --all -- --check` 把整套
+# src-tauri/src/ 都报 "Incorrect newline style"。所有文本视为 LF，二进制
+# 显式标出来避免误转。
+* text=auto eol=lf
+
+# 二进制资源（git 不应试图猜行尾、不应 diff）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.onnx binary
+*.dmg binary
+*.zip binary
+*.gz binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary

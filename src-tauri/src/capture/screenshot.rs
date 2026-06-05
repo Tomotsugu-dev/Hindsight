@@ -86,7 +86,11 @@ fn macos_frontmost_pid() -> Option<u32> {
     objc2::rc::autoreleasepool(|_| {
         let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
         let pid = app.processIdentifier();
-        if pid > 0 { Some(pid as u32) } else { None }
+        if pid > 0 {
+            Some(pid as u32)
+        } else {
+            None
+        }
     })
 }
 
