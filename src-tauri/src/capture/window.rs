@@ -68,44 +68,49 @@ pub fn current_window() -> Result<WindowInfo> {
 #[cfg(target_os = "macos")]
 fn macos_resolve_focused_window() -> Option<WindowInfo> {
     use objc2_app_kit::NSWorkspace;
-    let workspace = NSWorkspace::sharedWorkspace();
-    let app = workspace.frontmostApplication()?;
-    let pid_i32 = app.processIdentifier();
-    if pid_i32 <= 0 {
-        return None;
-    }
-    let pid = pid_i32 as u32;
+    // tokio worker 线程上没有 ambient autoreleasepool，AppKit/CG 内部 autorelease 的
+    // 临时对象（NSString / NSURL / NSPathStore2 / CGWindow 列表的 NSValue 等）会一直
+    // 沉在线程上不释放 —— 5s tick × 长期 uptime 累计低 MB / 小时的 RSS 漂移。
+    objc2::rc::autoreleasepool(|_| {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let app = workspace.frontmostApplication()?;
+        let pid_i32 = app.processIdentifier();
+        if pid_i32 <= 0 {
+            return None;
+        }
+        let pid = pid_i32 as u32;
 
-    let raw_name = app
-        .localizedName()
-        .map(|s| s.to_string())
-        .unwrap_or_default();
-    if raw_name.trim().is_empty() {
-        return None;
-    }
+        let raw_name = app
+            .localizedName()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        if raw_name.trim().is_empty() {
+            return None;
+        }
 
-    let raw_path = app
-        .bundleURL()
-        .and_then(|url| url.path())
-        .map(|s| s.to_string());
+        let raw_path = app
+            .bundleURL()
+            .and_then(|url| url.path())
+            .map(|s| s.to_string());
 
-    let (app_name, app_path) =
-        super::bundle::canonicalize_to_parent_bundle(&raw_name, raw_path.as_deref());
+        let (app_name, app_path) =
+            super::bundle::canonicalize_to_parent_bundle(&raw_name, raw_path.as_deref());
 
-    // title 是 nice-to-have——xcap 多屏下经常拿不到主屏 app 的窗口，那就空着
-    let title = xcap::Window::all()
-        .ok()
-        .and_then(|ws| {
-            ws.into_iter()
-                .find(|w| w.pid().ok() == Some(pid))
-                .and_then(|w| w.title().ok())
+        // title 是 nice-to-have——xcap 多屏下经常拿不到主屏 app 的窗口，那就空着
+        let title = xcap::Window::all()
+            .ok()
+            .and_then(|ws| {
+                ws.into_iter()
+                    .find(|w| w.pid().ok() == Some(pid))
+                    .and_then(|w| w.title().ok())
+            })
+            .unwrap_or_default();
+
+        Some(WindowInfo {
+            app_name: basename(&app_name),
+            title,
+            app_path,
         })
-        .unwrap_or_default();
-
-    Some(WindowInfo {
-        app_name: basename(&app_name),
-        title,
-        app_path,
     })
 }
 

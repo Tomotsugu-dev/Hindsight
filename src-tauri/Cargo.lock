@@ -1816,6 +1816,7 @@ dependencies = [
  "libc",
  "log",
  "ndarray",
+ "objc2",
  "objc2-app-kit",
  "open",
  "ort",

@@ -34,6 +34,15 @@ use crate::error::{Error, Result};
 ///   用户授权后下次 tick 即可成功
 /// - 目标 app 没有可见窗口（极少见——比如 menubar-only app）：返 Err，调用方跳过该 tick
 pub fn capture_focused_window(frontmost_pid: u32) -> Result<RgbaImage> {
+    // tokio blocking pool 线程从不退出 → 没有 ambient autoreleasepool 来排空
+    // SCK / CoreGraphics 内部 autorelease 的 NSString / NSValue / CMFormatDescription
+    // 临时对象，长 uptime 下会逐渐沉积。包一层 pool 让本次 capture 的所有 Cocoa
+    // 临时对象在函数返回时一起 drain。返回的 RgbaImage 底层是 Rust-owned Vec<u8>，
+    // 可以安全跨出 pool 边界。
+    objc2::rc::autoreleasepool(|_| capture_focused_window_inner(frontmost_pid))
+}
+
+fn capture_focused_window_inner(frontmost_pid: u32) -> Result<RgbaImage> {
     // 1. 枚举当前所有可见窗口（含跨 Space 跨监视器）
     let content = SCShareableContent::get()
         .map_err(|e| Error::Capture(format!("SCShareableContent::get: {e:?}")))?;

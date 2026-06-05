@@ -81,9 +81,13 @@ fn grab_focused_image() -> Option<image::RgbaImage> {
 #[cfg(target_os = "macos")]
 fn macos_frontmost_pid() -> Option<u32> {
     use objc2_app_kit::NSWorkspace;
-    let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
-    let pid = app.processIdentifier();
-    if pid > 0 { Some(pid as u32) } else { None }
+    // 在 tokio blocking 线程上调 AppKit，没有 ambient autoreleasepool 会导致
+    // NSRunningApplication 等 autorelease 临时对象堆积。
+    objc2::rc::autoreleasepool(|_| {
+        let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+        let pid = app.processIdentifier();
+        if pid > 0 { Some(pid as u32) } else { None }
+    })
 }
 
 /// 整窗保留：等比缩放使其装入 max_w × max_h，超过任一上限才缩，否则保持原始尺寸。
