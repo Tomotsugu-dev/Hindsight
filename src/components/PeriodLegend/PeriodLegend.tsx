@@ -15,7 +15,7 @@ export function PeriodLegend({ workHoursLabel }: PeriodLegendProps) {
   const { categories } = useCategories();
   return (
     <div className={styles.legend}>
-      {categories.map((c) => (
+      {categories.filter((c) => c.id !== "hidden").map((c) => (
         <span key={c.id} className={styles.legendItem}>
           <span
             className={styles.legendDot}
