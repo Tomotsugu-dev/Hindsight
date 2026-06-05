@@ -74,27 +74,49 @@ fn resolve_icns(bundle: &Path, icon_name: &str) -> PathBuf {
 }
 
 fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
+    // 上界：UI 实际 size=18px，过去取最大 .icns 变体直出 PNG（512/1024px）让单
+    // 图标 PNG 达 ~188 KB，缩放后 64px 通常 3–8 KB（10–30× 体积差），同时大幅降
+    // WKWebView 端解码后位图的 RAM 占用。128 留余量给 HiDPI。
+    const MAX_DIM: u32 = 128;
+
     let file = std::fs::File::open(icns_path)?;
     let family = match icns::IconFamily::read(file) {
         Ok(f) => f,
         Err(_) => return Ok(None),
     };
 
-    let mut best: Option<(u32, Vec<u8>)> = None;
+    // 仍然挑最大变体（最高分辨率源）—— resize 自高质量源比从低质量源放大好。
+    let mut best: Option<(u32, icns::Image)> = None;
     for ty in family.available_icons() {
         if let Ok(image) = family.get_icon_with_type(ty) {
             let w = image.width();
-            let pick = match &best {
-                Some((bw, _)) => w > *bw,
-                None => true,
-            };
-            if pick {
-                let mut buf = std::io::Cursor::new(Vec::new());
-                if image.write_png(&mut buf).is_ok() {
-                    best = Some((w, buf.into_inner()));
-                }
+            if best.as_ref().is_none_or(|(bw, _)| w > *bw) {
+                best = Some((w, image));
             }
         }
     }
-    Ok(best.map(|(_, b)| b))
+    let (src_w, src_img) = match best {
+        Some(b) => b,
+        None => return Ok(None),
+    };
+
+    // icns 变体可能是 RGB / GrayAlpha / Gray，统一转 RGBA 让 image crate 接住
+    let rgba = src_img.convert_to(icns::PixelFormat::RGBA);
+    let dyn_img = match image::RgbaImage::from_raw(rgba.width(), rgba.height(), rgba.data().to_vec()) {
+        Some(buf) => image::DynamicImage::ImageRgba8(buf),
+        None => return Ok(None),
+    };
+
+    // Triangle filter：速度 / 质量平衡好；CatmullRom / Lanczos3 在小图标上视觉差异不明显，多耗 CPU
+    let final_img = if src_w > MAX_DIM {
+        dyn_img.resize(MAX_DIM, MAX_DIM, image::imageops::FilterType::Triangle)
+    } else {
+        dyn_img
+    };
+
+    let mut buf = std::io::Cursor::new(Vec::new());
+    final_img
+        .write_to(&mut buf, image::ImageFormat::Png)
+        .map_err(|e| crate::error::Error::Capture(format!("icns PNG encode: {e}")))?;
+    Ok(Some(buf.into_inner()))
 }

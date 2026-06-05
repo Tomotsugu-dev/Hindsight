@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../api/hindsight";
 import { lruInsert } from "../../utils/lru";
 import styles from "./AppIcon.module.css";
 
 interface CacheEntry {
+  /** 后端返回的图标文件**绝对路径**；为 null 表示曾经查过、当时没有图标。 */
   src: string | null;
   ts: number;
 }
@@ -19,9 +21,9 @@ const inflight = new Map<string, Promise<string | null>>();
 const NULL_CACHE_TTL_MS = 60_000;
 
 /**
- * base64 data URL 单个 5–30 KB（最坏 macOS .icns 512px 可达 188 KB），
- * 历史/多设备会让 unique processName 一路涨。cap 在 128 → 内存上界 ~3–24 MB；
- * LRU 命中率在常用集合（一般用户 50–100 个 app）下几乎不掉。
+ * cache 现在存的是几十字节的文件路径（不再是几十~两百 KB 的 base64 data URL），
+ * 实际尺寸对内存影响很小；LRU 保留主要是 invoke 去重 + 防止 unique processName
+ * 失控（极端用户跑过 N 千个 app）。128 足够覆盖常用集合。
  */
 const MAX_CACHE = 128;
 
@@ -86,7 +88,9 @@ export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps)
     return (
       <img
         className={styles.icon}
-        src={src}
+        // 后端返绝对路径，convertFileSrc 转 asset://localhost/<url-encoded-path>
+        // 让 WKWebView 自己缓存/淘汰图像数据（不再压在 JS heap 上）
+        src={convertFileSrc(src)}
         alt={processName}
         width={size}
         height={size}
