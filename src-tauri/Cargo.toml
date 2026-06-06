@@ -1,6 +1,6 @@
 [package]
 name = "hindsight"
-version = "0.7.4"
+version = "0.7.5"
 description = "Privacy-first activity tracking and AI summaries for desktop"
 authors = ["Tomotsugu-dev <heroburnning@gmail.com>"]
 edition = "2021"
