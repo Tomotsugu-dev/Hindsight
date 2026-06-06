@@ -54,7 +54,7 @@ export default function WeekPage() {
   const [drillId, setDrillId] = useState<string | null>(null);
   useEffect(() => {
     setDrillId(null);
-  }, [offset, selectedDeviceId]);
+  }, [offset, selectedDeviceId, view]);
 
   // 周日期范围文案
   const fmtRange = (list: DaySummary[]): string => {
@@ -117,6 +117,16 @@ export default function WeekPage() {
     () =>
       selectedIndex === null || !days[selectedIndex] ? days : [days[selectedIndex]],
     [days, selectedIndex],
+  );
+  // 跟 segmentsForRanks 同 scope 的总时长：选中某天时就是该天总和，否则全周。
+  // 卡片右上角"总时长"用这个值才跟下方 apps 列表对齐。
+  const scopedMinutes = useMemo(
+    () =>
+      segmentsForRanks.reduce(
+        (sum, d) => sum + d.segments.reduce((s, x) => s + x.minutes, 0),
+        0,
+      ),
+    [segmentsForRanks],
   );
   const appsForRanks = useMemo(
     () => (selectedIndex === null ? apps : (dayApps.apps ?? apps)),
@@ -286,9 +296,16 @@ export default function WeekPage() {
               {selectionLabel && (
                 <span className={styles.selectionLabel}>{selectionLabel}</span>
               )}
-              {/* 总活动时间：drill 时显示该大类小计，否则全周总时长 */}
+              {/* 总活动时间（跟 TodayPage 同款语义）：
+                  选中某天 → 该天总时长；否则 drill → 大类小计；否则全周。 */}
               <span className={styles.cardTotal}>
-                {fmtHM(drilledSlice ? drilledSlice.minutes : totalMinutes)}
+                {fmtHM(
+                  selectedIndex !== null
+                    ? scopedMinutes
+                    : drilledSlice
+                      ? drilledSlice.minutes
+                      : totalMinutes,
+                )}
               </span>
             </div>
           </header>

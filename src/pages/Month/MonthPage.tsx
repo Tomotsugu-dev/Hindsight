@@ -50,7 +50,7 @@ export default function MonthPage() {
   const [drillId, setDrillId] = useState<string | null>(null);
   useEffect(() => {
     setDrillId(null);
-  }, [offset, selectedDeviceId]);
+  }, [offset, selectedDeviceId, view]);
 
   // 月份显示文案：中文取数字 1-12，英文取本地化月份名（如 "May"）
   const fmtMonth = (list: DaySummary[], off: number): string => {
@@ -108,6 +108,16 @@ export default function MonthPage() {
     () =>
       selectedIndex === null || !days[selectedIndex] ? days : [days[selectedIndex]],
     [days, selectedIndex],
+  );
+  // 跟 segmentsForRanks 同 scope 的总时长：选中某天时就是该天总和，否则全月。
+  // 卡片右上角"总时长"用这个值才跟下方 apps 列表对齐。
+  const scopedMinutes = useMemo(
+    () =>
+      segmentsForRanks.reduce(
+        (sum, d) => sum + d.segments.reduce((s, x) => s + x.minutes, 0),
+        0,
+      ),
+    [segmentsForRanks],
   );
   const appsForRanks = useMemo(
     () => (selectedIndex === null ? apps : (dayApps.apps ?? apps)),
@@ -303,9 +313,16 @@ export default function MonthPage() {
               {selectionLabel && (
                 <span className={styles.selectionLabel}>{selectionLabel}</span>
               )}
-              {/* 总活动时间：drill 时显示该大类小计，否则全月总时长 */}
+              {/* 总活动时间（跟 TodayPage 同款语义）：
+                  选中某天 → 该天总时长；否则 drill → 大类小计；否则全月。 */}
               <span className={styles.cardTotal}>
-                {fmtHM(drilledSlice ? drilledSlice.minutes : totalMinutes)}
+                {fmtHM(
+                  selectedIndex !== null
+                    ? scopedMinutes
+                    : drilledSlice
+                      ? drilledSlice.minutes
+                      : totalMinutes,
+                )}
               </span>
             </div>
           </header>

@@ -56,10 +56,12 @@ export default function TodayPage() {
   const [view, setView] = useState<StatsView>("bars");
   /** 占比 drill：当前选中的 super-id；null 表示列表层。 */
   const [drillId, setDrillId] = useState<string | null>(null);
-  // 切日 / 切设备 → 自动回列表层（防止 drill 状态跨日跨设备 stale）
+  // 切日 / 切设备 / 切视图 → 自动回列表层。view 进 deps 是为了：用户在占比里
+  // pin 了某大类后切回时段视图，drill 状态在 UI 上已不可见但仍 pinned，再切回
+  // 占比会"幽灵高亮"在上次的大类上。切视图时清掉，回占比是干净的列表层。
   useEffect(() => {
     setDrillId(null);
-  }, [offset, selectedDeviceId]);
+  }, [offset, selectedDeviceId, view]);
 
   // 日期切换 pill 的本地化文案
   const dayLabel = (off: number): string => {
@@ -107,6 +109,16 @@ export default function TodayPage() {
   const segmentsForRanks = useMemo(
     () => (selectedHour === null ? hours : hours.filter((h) => h.hour === selectedHour)),
     [hours, selectedHour],
+  );
+  // 跟 segmentsForRanks 同 scope 的总时长：选中小时时就是该小时总和，否则等于
+  // totalMinutes（全日）。卡片右上角"总时长"显示用这个值才跟下方 apps 列表对齐。
+  const scopedMinutes = useMemo(
+    () =>
+      segmentsForRanks.reduce(
+        (sum, h) => sum + h.segments.reduce((s, x) => s + x.minutes, 0),
+        0,
+      ),
+    [segmentsForRanks],
   );
   const appsForRanks = useMemo(
     () => (selectedHour === null ? apps : (hourApps.apps ?? apps)),
@@ -294,9 +306,19 @@ export default function TodayPage() {
               {selectionLabel && (
                 <span className={styles.selectionLabel}>{selectionLabel}</span>
               )}
-              {/* 总活动时间：drill 时显示该大类小计，否则显示全日总活动时长 */}
+              {/* 总活动时间：
+                  - 选中某小时 → 该小时总时长（跟下方 apps 列表 scope 一致）
+                  - 否则 drill 时 → 该大类小计
+                  - 否则 → 全日总时长
+                  选中优先于 drill，因为用户对"选了再看时间"的直觉是"那个小时多少分钟" */}
               <span className={styles.cardTotal}>
-                {fmtHM(drilledSlice ? drilledSlice.minutes : totalMinutes)}
+                {fmtHM(
+                  selectedHour !== null
+                    ? scopedMinutes
+                    : drilledSlice
+                      ? drilledSlice.minutes
+                      : totalMinutes,
+                )}
               </span>
             </div>
           </header>
