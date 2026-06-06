@@ -130,6 +130,11 @@ export default function MonthPage() {
       ? t("month.selection.label", {
           month: selectedDay.date.getMonth() + 1,
           day: selectedDay.date.getDate(),
+          // 月度 30+ 天的密集柱图里光看 6/6 不直观，加星期帮用户判断"这是星期几"。
+          // Intl.DateTimeFormat 跟系统 locale 走：zh→"周六" / ja→"土" / en→"Sat"
+          weekday: new Intl.DateTimeFormat(i18n.language, {
+            weekday: "short",
+          }).format(selectedDay.date),
         })
       : null;
 

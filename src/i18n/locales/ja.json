@@ -399,7 +399,7 @@
       "weeksLater": "{{count}} 週間後"
     },
     "selection": {
-      "label": "{{month}}/{{day}}"
+      "label": "{{month}}月{{day}}日"
     },
     "ranks": {
       "topApps": "今週よく使ったアプリ",
@@ -447,7 +447,7 @@
       "topCategories": "今月よく使った分類"
     },
     "selection": {
-      "label": "{{month}}/{{day}}"
+      "label": "{{month}}月{{day}}日（{{weekday}}）"
     }
   },
   "apps": {

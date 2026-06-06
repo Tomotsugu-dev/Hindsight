@@ -447,7 +447,7 @@
       "topCategories": "Top categories this month"
     },
     "selection": {
-      "label": "{{month}}/{{day}}"
+      "label": "{{month}}/{{day}} {{weekday}}"
     }
   },
   "apps": {

@@ -403,7 +403,7 @@
       "topCategories": "本周最常用分类"
     },
     "selection": {
-      "label": "{{month}}/{{day}}"
+      "label": "{{month}}月{{day}}日"
     },
     "dow": {
       "mon": "周一",
@@ -447,7 +447,7 @@
       "topCategories": "本月最常用分类"
     },
     "selection": {
-      "label": "{{month}}/{{day}}"
+      "label": "{{month}}月{{day}}日 {{weekday}}"
     }
   },
   "apps": {
