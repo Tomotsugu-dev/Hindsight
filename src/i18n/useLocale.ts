@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { LOCALE_STORAGE_KEY } from "./index";
 
-export type Locale = "zh-CN" | "en" | "ja";
+export type Locale = "zh-CN" | "en" | "ja" | "pt-BR";
 
 export function useLocale(): [Locale, (next: Locale) => void] {
   const { i18n } = useTranslation();

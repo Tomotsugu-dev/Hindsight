@@ -1,0 +1,1351 @@
+{
+  "tray": {
+    "show": "Mostrar janela",
+    "quit": "Sair"
+  },
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "delete": "Excluir",
+    "minimize": "Minimizar",
+    "close": "Fechar",
+    "empty": "Nenhum dado ainda",
+    "open": "Abrir",
+    "errorBoundary": {
+      "title": "Algo deu errado",
+      "message": "Esta tela encontrou um erro inesperado. Você pode recarregar para continuar.",
+      "reload": "Recarregar"
+    },
+    "duration": {
+      "minutesShort": "{{count}} min",
+      "hourMinute": "{{hours}}h {{minutes}}m",
+      "minutesPlain": "{{count}} min",
+      "hoursPlain": "{{count}}h",
+      "hoursAndMinutesShort": "{{hours}}h {{minutes}}m",
+      "tickMinutes": "{{count}}m",
+      "tickHours": "{{count}}h"
+    },
+    "units": {
+      "seconds": "s",
+      "minutes": "min",
+      "hours": "h",
+      "days": "dias"
+    }
+  },
+  "nav": {
+    "groups": {
+      "primary": "Estatísticas",
+      "ai": "IA-beta",
+      "data": "Dados",
+      "system": "Sistema"
+    },
+    "items": {
+      "today": "Diário",
+      "week": "Semanal",
+      "month": "Mensal",
+      "aiSummary": "Resumo de IA",
+      "aiSettings": "Configurações de IA",
+      "categories": "Categorias",
+      "apps": "Aplicativos",
+      "devices": "Sincronização na nuvem",
+      "settings": "Configurações"
+    }
+  },
+  "sidebar": {
+    "capture": {
+      "ok": "Capturando",
+      "idle": "Pausado",
+      "error": "Erro de captura",
+      "resting": "Em repouso",
+      "stop": "Parar captura",
+      "toggleAria": "Alternar captura"
+    },
+    "sync": {
+      "connected": "Conectado",
+      "signedOut": "Não conectado",
+      "aria": "Gerenciar dispositivos e sincronização na nuvem",
+      "title": "Dispositivos / Sincronização na nuvem"
+    }
+  },
+  "windowControls": {
+    "minimize": "Minimizar",
+    "close": "Fechar"
+  },
+  "settings": {
+    "pageTitle": "Configurações",
+    "tabs": {
+      "general": "Geral",
+      "data": "Dados",
+      "privacy": "Privacidade",
+      "about": "Sobre"
+    },
+    "language": {
+      "sectionTitle": "语言 / Language",
+      "label": "Idioma",
+      "options": {
+        "zhCN": "简体中文",
+        "en": "English"
+      }
+    },
+    "general": {
+      "capture": {
+        "title": "Captura",
+        "description": "Registra periodicamente a janela em foco e uma captura de tela, para que você possa revisar a atividade depois.",
+        "enableLabel": "Ativar captura",
+        "enableDescription": "Quando desativada, a captura em segundo plano para (tanto a atividade de janela quanto as capturas de tela).",
+        "screenshotEnableLabel": "Ativar capturas de tela",
+        "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
+        "intervalLabel": "Intervalo de captura",
+        "intervalDescription": "Intervalo de captura.",
+        "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
+        "idleLabel": "Tempo limite de inatividade",
+        "idleDescription": "Considera o usuário ausente após este tempo de inatividade do mouse/teclado.",
+        "idleHint": "A detecção usa eventos de mouse / teclado / trackpad em nível de sistema.\nDefina como 0 para desativar (nunca acionar).",
+        "screenshotPathLabel": "Pasta de capturas de tela",
+        "dataPathLabel": "Pasta de dados",
+        "dataPathHint": "Local do banco de dados e da raiz padrão das capturas de tela. Alterar exige reiniciar, e os dados antigos devem ser migrados manualmente."
+      },
+      "workHours": {
+        "title": "Horário de trabalho",
+        "description": "Capturar atividade apenas durante o horário especificado.",
+        "enableLabel": "Ativar horário de trabalho",
+        "rangesLabel": "Intervalos"
+      },
+      "startup": {
+        "title": "Comportamento de inicialização",
+        "autoStartLabel": "Iniciar com o sistema",
+        "autoStartDescription": "O Hindsight inicia automaticamente após você fazer login.",
+        "showWindowLabel": "Mostrar janela principal na inicialização",
+        "showWindowDescription": "Quando desativado, inicia silenciosamente na bandeja do sistema.",
+        "minimizeToTrayLabel": "Minimizar para a bandeja do sistema ao fechar",
+        "minimizeToTrayDescriptionMac": "Quando desativado, clicar no X encerra o aplicativo.",
+        "minimizeToTrayDescriptionWin": "Quando desativado, clicar no X encerra o aplicativo."
+      },
+      "dataRootDialog": {
+        "title": "Trocar a pasta de dados?",
+        "message": "Novo caminho: {{path}}\n\nÉ necessário reiniciar para que a alteração tenha efeito.\n\nO banco de dados e as capturas de tela na pasta antiga não serão migrados automaticamente — se quiser manter seu histórico, copie o conteúdo de {{oldPath}} para o novo local primeiro."
+      }
+    },
+    "data": {
+      "storage": {
+        "title": "Armazenamento",
+        "description": "Retenção de capturas de tela e uso atual. O banco de dados nunca é limpo automaticamente.",
+        "retentionLabel": "Retenção de capturas de tela",
+        "retentionDescription": "Os arquivos de captura de tela expirados são excluídos automaticamente (os registros de atividade são mantidos).",
+        "currentUsageLabel": "Uso atual",
+        "currentUsageDescription": "Banco de dados {{db}} · Capturas de tela {{shots}}",
+        "modelsPathLabel": "Pasta de modelos de IA",
+        "modelsPathHint": "Após alterar o caminho, os modelos na pasta antiga não são migrados — copie-os manualmente ou baixe-os novamente no novo local."
+      },
+      "cleanup": {
+        "title": "Limpeza de dados locais",
+        "description": "Limpe dados locais ou arquivos de captura de tela para liberar espaço em disco.",
+        "purgeShotsLabel": "Limpar capturas de tela",
+        "purgeShotsDescription": "Excluir todos os arquivos de captura de tela salvos.",
+        "purgeShotsOpenTitle": "Abrir pasta de capturas de tela",
+        "purgeShotsBusy": "Limpando…",
+        "purgeDbLabel": "Limpar dados",
+        "purgeDbDescription": "Limpar o banco de dados local",
+        "purgeDbOpenTitle": "Mostrar banco de dados no gerenciador de arquivos",
+        "purgeDbBusy": "Limpando…"
+      },
+      "danger": {
+        "title": "Zona de perigo",
+        "description": "As ações abaixo afetam todos os dispositivos e não podem ser desfeitas.",
+        "removeDeviceLabel": "Remover este dispositivo",
+        "removeDeviceDescription": "Remover todos os dados deste dispositivo da nuvem",
+        "removeDeviceBusy": "Removendo…"
+      },
+      "purgeDialog": {
+        "purgeDbTitle": "Limpar dados locais?",
+        "purgeDbMessage": "O banco de dados local será limpo, e a próxima sincronização baixará todo o histórico novamente da nuvem. Os arquivos no Drive permanecem intactos; outros dispositivos não são afetados.\n\n⚠️ Isto não pode ser desfeito.",
+        "purgeDbConfirm": "Limpar",
+        "shotsTitle": "Limpar capturas de tela?",
+        "shotsMessage": "Todos os arquivos de captura de tela salvos serão excluídos. Isto não pode ser desfeito.",
+        "shotsConfirm": "Limpar",
+        "error": "Falha na ação: {{message}}"
+      },
+      "removeDeviceDialog": {
+        "title": "Remover este dispositivo da nuvem",
+        "intro": "Todos os dados deste dispositivo na nuvem serão excluídos. Após a sincronização, os outros dispositivos também esquecerão os registros sobre este dispositivo — como se este dispositivo nunca tivesse se conectado à nuvem.",
+        "unaffected": "Não afetados: os dados próprios dos outros dispositivos e os novos dados produzidos neste dispositivo a partir de agora.",
+        "localQuestion": "E quanto à cópia local deste dispositivo?",
+        "alsoClearLabel": "Também limpar dados locais (padrão)",
+        "alsoClearHint": "Completamente limpo. Para: sair de um emprego, vender a máquina, limpeza de privacidade.",
+        "keepLabel": "Manter cópia local",
+        "keepHint": "Nuvem limpa, dados locais preservados. Use isto ao trocar para uma conta Google diferente e migrar os dados locais.",
+        "typeToConfirmPrompt": "Digite \"{{keyword}}\" para confirmar (não pode ser desfeito):",
+        "typeKeyword": "REMOVE",
+        "typePlaceholder": "Digite aqui",
+        "cancel": "Cancelar",
+        "confirm": "Remover",
+        "doneAlsoClear": "Removido: {{count}} arquivo(s) do Drive excluído(s) + os pares foram notificados para limpar o espelho deste dispositivo. Os dados locais também foram limpos.",
+        "doneKeepLocal": "Removido: {{count}} arquivo(s) do Drive excluído(s) + os pares foram notificados para limpar o espelho deste dispositivo. Dados locais preservados — faça login em uma nova conta para reenviar."
+      }
+    },
+    "privacy": {
+      "browser": {
+        "title": "Filtro de navegador",
+        "info": "Ignorar capturas de tela quando a URL na barra de endereços do navegador contém qualquer um destes (não diferencia maiúsculas de minúsculas).",
+        "rowLabel": "Palavras-chave de URL",
+        "addLabel": "Adicionar fragmento de URL",
+        "placeholder": "ex.: /login"
+      },
+      "app": {
+        "title": "Filtro de aplicativos",
+        "info": "Ignorar capturas de tela quando o nome do aplicativo ou o título da janela contém qualquer um destes (não diferencia maiúsculas de minúsculas).",
+        "rowLabel": "Palavras-chave de título / aplicativo",
+        "addLabel": "Adicionar nome de aplicativo",
+        "placeholder": "ex.: WeChat"
+      },
+      "scope": {
+        "title": "Escopo",
+        "info": "Quando há correspondência, apenas as capturas de tela são ignoradas",
+        "noticePrefix": "A filtragem de capturas de tela é um comportamento apenas local, ",
+        "noticeEmph": "não afeta as capturas de tela já salvas",
+        "noticeMiddle": ". Para limpar capturas de tela do histórico, vá em ",
+        "noticeKbd": "Configurações · Dados · Limpar capturas de tela",
+        "noticeSuffix": "."
+      },
+      "keywordEditor": {
+        "removeAria": "Remover {{keyword}}",
+        "removeTooltip": "Remover"
+      }
+    },
+    "about": {
+      "subtitle": "{{version}} · Tauri 2 + React",
+      "update": {
+        "title": "Atualizações do aplicativo",
+        "currentVersionLabel": "Versão atual",
+        "checkBtn": "Verificar atualizações",
+        "checkingBtn": "Verificando…",
+        "installingBtn": "Atualizando…",
+        "status": {
+          "checking": "Verificando…",
+          "uptodate": "Atualizado",
+          "installing": "Baixando e instalando — o aplicativo será reiniciado ao concluir…",
+          "error": "Verifique sua conexão de rede"
+        },
+        "autoLabel": "Verificar atualizações automaticamente",
+        "intervalLabel": "Frequência",
+        "intervals": {
+          "daily": "Diariamente",
+          "weekly": "Semanalmente",
+          "monthly": "Mensalmente",
+          "onstartup": "Toda vez que o aplicativo abre"
+        },
+        "dialog": {
+          "title": "Nova versão v{{version}} disponível",
+          "message": "Clique em \"Atualizar agora\" para baixar e instalar a nova versão. O aplicativo será reiniciado automaticamente ao concluir.\n\nNotas da versão:\n{{body}}",
+          "bodyEmpty": "(nenhuma)",
+          "confirm": "Atualizar agora",
+          "cancel": "Depois"
+        }
+      },
+      "info": {
+        "title": "Informações",
+        "authorLabel": "Autor",
+        "licenseLabel": "Licença"
+      },
+      "links": {
+        "title": "Links",
+        "repoLabel": "Repositório no GitHub",
+        "repoLink": "Ver →",
+        "feedbackLabel": "Comentários e sugestões",
+        "feedbackLink": "Enviar →"
+      }
+    }
+  },
+  "components": {
+    "devicePicker": {
+      "all": "Todos os dispositivos",
+      "thisDevice": "Este dispositivo"
+    },
+    "appearancePicker": {
+      "color": "Cor",
+      "icon": "Ícone"
+    },
+    "slider": {
+      "valueAria": "Valor"
+    },
+    "timeField": {
+      "hourAria": "Hora",
+      "minuteAria": "Minuto",
+      "tooltip": "Rolar · Teclas de seta · Digitar números"
+    },
+    "timeRangeList": {
+      "empty": "Nenhum intervalo definido — capturando o dia todo",
+      "to": "até",
+      "removeAria": "Excluir intervalo",
+      "addBtn": "Adicionar intervalo"
+    },
+    "pathField": {
+      "pickLabel": "Escolher"
+    },
+    "categoryChipMultiSelect": {
+      "loading": "Carregando categorias…",
+      "empty": "Nenhuma categoria ainda",
+      "excludedTitle": "Excluída — clique para incluir novamente",
+      "includeTitle": "Clique para excluir da análise"
+    },
+    "rankedList": {
+      "expand": "Mostrar mais {{count}}",
+      "collapse": "Recolher"
+    },
+    "segmentList": {
+      "empty": "Nenhum segmento ainda — clique em \"Adicionar segmento\" abaixo para começar",
+      "newSegmentLabel": "Novo segmento",
+      "addBtn": "Adicionar segmento",
+      "leftEdgeAria": "Início da atividade",
+      "betweenAria": "Divisor de segmento",
+      "rightEdgeAria": "Fim da atividade",
+      "removeAria": "Excluir segmento",
+      "removeMergeRight": "Excluir (mesclar intervalo com o vizinho à direita)",
+      "removeMergeLeft": "Excluir (mesclar intervalo com o vizinho à esquerda)",
+      "swatchAria": "Cor {{name}}",
+      "swatchAuto": "Automático",
+      "swatchAutoTitle": "Gradiente automático com base na hora do dia",
+      "swatches": {
+        "blue": "Azul",
+        "lavender": "Lavanda",
+        "lilac": "Lilás",
+        "rose": "Rosa",
+        "creamOrange": "Laranja-creme",
+        "peach": "Pêssego",
+        "warmYellow": "Amarelo quente",
+        "mint": "Menta"
+      }
+    }
+  },
+  "today": {
+    "title": "Diário",
+    "meta": "{{date}} {{weekday}}",
+    "insights": {
+      "vsPrev": {
+        "label": "vs. ontem",
+        "flat": "Igual a ontem"
+      },
+      "peak": "Pico",
+      "dominant": "Principal",
+      "composition": "Detalhamento"
+    },
+    "chart": {
+      "title": "Atividade de 24 horas",
+      "barTitle": "{{hour}}:00 — {{minutes}} min",
+      "viewToggle": {
+        "bars": "Horas",
+        "pie": "Proporção",
+        "ariaBars": "Mudar para a visão de distribuição de 24 horas",
+        "ariaPie": "Mudar para a visão de proporção por supercategoria"
+      }
+    },
+    "pie": {
+      "cardTitle": "Proporção de tempo de hoje",
+      "weekCardTitle": "Proporção de tempo desta semana",
+      "monthCardTitle": "Proporção de tempo deste mês",
+      "donut": {
+        "totalLabel": "Total",
+        "hint": "Clique em uma fatia para detalhar"
+      },
+      "drill": {
+        "back": "Voltar",
+        "categoriesTitle": "Categorias",
+        "appsTitle": "Principais aplicativos",
+        "topNCount": "Top {{count}}"
+      }
+    },
+    "dayNav": {
+      "prev": "Dia anterior",
+      "next": "Próximo dia",
+      "backToToday": "Voltar para hoje",
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "daysAgo": "{{count}} dias atrás",
+      "daysLater": "Em {{count}} dias"
+    },
+    "legend": {
+      "workHours": "Horário de trabalho"
+    },
+    "ranks": {
+      "topApps": "Principais aplicativos",
+      "topCategories": "Principais categorias"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
+    }
+  },
+  "week": {
+    "title": "Semanal",
+    "meta": "{{range}} · {{avg}} média diária",
+    "insights": {
+      "vsPrev": {
+        "label": "vs. semana passada",
+        "flat": "Igual à semana passada"
+      },
+      "peak": "Pico",
+      "dominant": "Principal",
+      "composition": "Detalhamento"
+    },
+    "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
+    "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
+    "chart": {
+      "title": "Atividade diária",
+      "barTitle": "{{date}} — {{duration}}"
+    },
+    "weekNav": {
+      "prev": "Semana anterior",
+      "next": "Próxima semana",
+      "backToThisWeek": "Voltar para esta semana",
+      "thisWeek": "Esta semana",
+      "lastWeek": "Semana passada",
+      "weeksAgo": "{{count}} semanas atrás",
+      "weeksLater": "Em {{count}} semanas"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}}"
+    },
+    "ranks": {
+      "topApps": "Principais aplicativos desta semana",
+      "topCategories": "Principais categorias desta semana"
+    },
+    "dow": {
+      "mon": "Seg",
+      "tue": "Ter",
+      "wed": "Qua",
+      "thu": "Qui",
+      "fri": "Sex",
+      "sat": "Sáb",
+      "sun": "Dom"
+    },
+    "shortDate": "{{month}}/{{day}}"
+  },
+  "month": {
+    "title": "Mensal",
+    "meta": "{{month}} · {{avg}} média diária",
+    "insights": {
+      "vsPrev": {
+        "label": "vs. mês passado",
+        "flat": "Igual ao mês passado"
+      },
+      "peak": "Pico",
+      "peakDate": "{{month}}/{{day}}",
+      "dominant": "Principal",
+      "composition": "Detalhamento"
+    },
+    "monthLabel": "{{month}} {{year}}",
+    "chart": {
+      "title": "Atividade diária"
+    },
+    "monthNav": {
+      "prev": "Mês anterior",
+      "next": "Próximo mês",
+      "backToThisMonth": "Voltar para este mês",
+      "thisMonth": "Este mês",
+      "lastMonth": "Mês passado",
+      "monthsAgo": "{{count}} meses atrás",
+      "monthsLater": "Em {{count}} meses"
+    },
+    "ranks": {
+      "topApps": "Principais aplicativos deste mês",
+      "topCategories": "Principais categorias deste mês"
+    },
+    "selection": {
+      "label": "{{month}}/{{day}} {{weekday}}"
+    }
+  },
+  "apps": {
+    "title": "Aplicativos",
+    "filter": {
+      "searchPlaceholder": "Pesquisar nome do aplicativo ou do processo",
+      "categoryTrigger": "Categoria",
+      "categoryAll": "Todas",
+      "categoryAllAria": "Mostrar todas as categorias (limpar filtro)",
+      "categoryUnassigned": "Sem atribuição",
+      "sortLabel": "Ordenar",
+      "sort": {
+        "default": "Padrão",
+        "durationDesc": "Tempo ↓",
+        "durationAsc": "Tempo ↑",
+        "nameAsc": "Nome A-Z",
+        "nameDesc": "Nome Z-A"
+      },
+      "noResults": "Nenhum aplicativo corresponde ao seu filtro",
+      "clearFilters": "Limpar filtros"
+    }
+  },
+  "categories": {
+    "title": "Categorias",
+    "intro": "Gerencie as categorias de atividade. Atribua aplicativos a categorias na página Aplicativos.",
+    "newCategory": "Nova categoria",
+    "newCategoryDefaultName": "Nova categoria",
+    "loading": "Carregando…",
+    "appsPopover": {
+      "label": "Aplicativos vinculados"
+    },
+    "super": {
+      "newButton": "Nova supercategoria",
+      "newDefaultName": "Novo grupo",
+      "defaults": {
+        "work": "Trabalho",
+        "play": "Entretenimento",
+        "social": "Social",
+        "browse": "Navegação"
+      },
+      "orphanLabel": "Sem grupo",
+      "catCount": "{{count}} categorias",
+      "emptyHint": "Arraste uma categoria até o rótulo de uma supercategoria para atribuir",
+      "orphanEmptyHint": "(Todas as categorias estão agrupadas)",
+      "deleteAria": "Excluir supercategoria",
+      "deleteDialog": {
+        "title": "Excluir supercategoria",
+        "message": "Excluir a supercategoria \"{{name}}\"? As categorias dela voltarão para \"Sem grupo\"; elas não serão excluídas."
+      }
+    },
+    "defaults": {
+      "code": "Programação",
+      "browse": "Navegação",
+      "talk": "Social",
+      "design": "Design",
+      "fun": "Entretenimento",
+      "other": "Outros",
+      "hidden": "Oculto",
+      "office": "Escritório",
+      "workchat": "Chat de trabalho",
+      "game": "Jogos",
+      "video": "Mídia"
+    },
+    "list": {
+      "namePlaceholder": "Nome da categoria",
+      "renameTooltip": "Clique duas vezes para renomear",
+      "dragHandleAria": "Arraste para reordenar",
+      "iconBtnAria": "Editar aparência",
+      "iconBtnTitle": "Alterar cor e ícone",
+      "createIconAria": "Escolher cor e ícone",
+      "renameAria": "Renomear",
+      "deleteAria": "Excluir categoria",
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
+    },
+    "appList": {
+      "empty": "(nenhum aplicativo vinculado)",
+      "addPlaceholder": "ex.: chrome.exe",
+      "add": "Adicionar aplicativo",
+      "removeAria": "Remover {{name}}",
+      "removeTooltip": "Remover"
+    },
+    "deleteDialog": {
+      "title": "Excluir categoria",
+      "message": "Excluir a categoria \"{{name}}\"? Seus aplicativos serão devolvidos para \"Outros\".",
+      "confirm": "Excluir"
+    },
+    "pairing": {
+      "sectionTitle": "Emparelhamento de aplicativos entre dispositivos",
+      "infoTipAria": "Detalhes",
+      "infoTipBody": "O mesmo aplicativo pode ter nomes de processo diferentes em sistemas diferentes (\"Code\" no macOS, \"Visual Studio Code\" no Windows). Sem o emparelhamento, o tempo é contado como dois aplicativos separados e a categoria precisa ser definida em cada dispositivo. Uma vez emparelhados, o nome, a categoria, o ícone e o tempo são unificados.",
+      "instructionPrefix": "Dentro de uma coluna de dispositivo, ",
+      "instructionEmph": "arraste verticalmente",
+      "instructionSuffix": " para mover o mesmo aplicativo para uma única linha — unificando nome, categoria e tempo combinado.",
+      "unassignedHint": "As linhas sem atribuição ficam destacadas em amarelo",
+      "loading": "Carregando…",
+      "noDevices": "Nenhum dado de dispositivo ainda. Volte depois de capturar por um tempo.",
+      "header": {
+        "displayName": "Nome de exibição"
+      },
+      "chip": {
+        "unmergeTooltip": "Remover deste grupo"
+      },
+      "row": {
+        "deleteEmptyTooltip": "Excluir esta linha vazia",
+        "deleteEmptyAria": "Excluir esta linha vazia"
+      }
+    },
+    "assign": {
+      "label": "Atribuir",
+      "clear": "Limpar categoria"
+    }
+  },
+  "aiSettings": {
+    "title": "Configurações de IA",
+    "tabs": {
+      "engine": "Mecanismo",
+      "models": "Modelos",
+      "general": "Geral",
+      "prompt": "Prompt",
+      "external": "API na nuvem"
+    },
+    "engine": {
+      "sectionTitle": "Mecanismo de IA local",
+      "sectionDesc": "O Hindsight vem com o mecanismo de inferência llama.cpp e executa tudo localmente — as capturas de tela nunca são enviadas para nenhum serviço externo.",
+      "loading": "Carregando…",
+      "installed": "Instalado",
+      "notInstalled": "Não instalado",
+      "versionAria": "Versão {{version}}",
+      "versionStaleAria": "Versão {{version}} (mais recente {{latest}})",
+      "versionLabel": "Versão {{version}}",
+      "versionStaleLabel": " · mais recente {{latest}}",
+      "versionUnknown": "?",
+      "detected": "Detectado {{accel}}",
+      "accel": {
+        "cuda12": "CUDA 12.4",
+        "cuda13": "CUDA 13.1",
+        "winCpu": "Modo CPU",
+        "macArm": "Apple Silicon · Metal",
+        "macIntel": "Mac Intel",
+        "linuxCpu": "Linux CPU"
+      },
+      "noCuda": {
+        "headline": "O NVIDIA CUDA não foi detectado.",
+        "prefix": " Os LLMs de visão rodam muito lentamente na CPU. Recomendamos instalar o",
+        "linkText": " CUDA Toolkit da NVIDIA",
+        "suffix": " (≥ 12.4) primeiro; o Hindsight mudará automaticamente para a variante acelerada por GPU após reiniciar."
+      },
+      "uninstallConfirm": "Desinstalar o mecanismo de IA local? Os arquivos de modelo não serão afetados.",
+      "uninstallConfirmTitle": "Desinstalar o mecanismo de IA local?",
+      "uninstallConfirmMessage": "Os arquivos de modelo não serão afetados.",
+      "actions": {
+        "downloading": "Baixando…",
+        "updating": "Atualizando…",
+        "updateToLatest": "Atualizar para a mais recente",
+        "redownload": "Baixar novamente",
+        "downloadEngine": "Baixar mecanismo llama",
+        "testConnection": "Testar conexão",
+        "testTooltipReady": "Inicia o mecanismo (se não estiver em execução) e verifica acessando o endpoint local /v1/models",
+        "testTooltipNotInstalled": "Não instalado",
+        "releaseVram": "Liberar VRAM",
+        "releaseVramTooltip": "Para o mecanismo e libera a memória da GPU agora. Ele será iniciado novamente de forma automática na próxima geração de resumo.",
+        "releaseVramTooltipNotInstalled": "O mecanismo não está instalado",
+        "releaseVramTooltipNotRunning": "O mecanismo não está em execução — nada para liberar",
+        "openFolderTooltipInstalled": "Mostrar a pasta de instalação no gerenciador de arquivos",
+        "openFolderTooltipNotInstalled": "Não instalado",
+        "uninstallTooltipInstalled": "Desinstalar o mecanismo de IA local",
+        "uninstallTooltipNotInstalled": "Não instalado",
+        "uninstall": "Desinstalar llama",
+        "approxSize": "~{{size}} MB"
+      },
+      "runtimeBadge": "runtime v{{version}}",
+      "runtimeBadgeMissing": "runtime ausente",
+      "progress": {
+        "stageEngine": "Mecanismo de IA",
+        "stageRuntime": "Runtime",
+        "downloading": "Baixando… {{size}} MB",
+        "verifying": "Verificando…",
+        "extracting": "Extraindo…",
+        "done": "✓ Concluído"
+      },
+      "runtime": {
+        "running": "Em execução · porta: {{port}}",
+        "starting": "Iniciando…",
+        "error": "Erro",
+        "connectedNoModels": "Conectado (nenhum modelo carregado)",
+        "connectedWithModels": "Conectado — {{count}} modelo(s)",
+        "idleCountdownSec": "Libera a VRAM em {{sec}}s",
+        "idleCountdownMin": "Libera a VRAM em {{min}}m {{sec}}s"
+      }
+    },
+    "describeParams": {
+      "sectionTitle": "Parâmetros de descrição de imagem"
+    },
+    "summaryParams": {
+      "sectionTitle": "Parâmetros de resumo de segmento"
+    },
+    "engineParams": {
+      "sectionTitle": "Parâmetros do mecanismo (na inicialização)",
+      "batch": "Tamanho do lote",
+      "slots": "Slots paralelos",
+      "ctx": "Contexto (por slot)",
+      "vramLabel": "VRAM estimada",
+      "vramBreakdown": "(pesos {{weights}} + cache KV {{kv}} + ~2.0 de sobrecarga · para modelo de {{params}}B + {{ctx}}K de ctx × {{slots}} slot(s))",
+      "vramSystemDiscrete": "VRAM do sistema: {{total}} GB",
+      "vramSystemUnified": "Memória unificada Apple = {{total}} GB",
+      "applyRecommended": "Aplicar recomendado",
+      "recommendedAlreadyApplied": "Já recomendado",
+      "recommendedHint": "Recomendado: slots {{slots}} · ctx {{ctx}} · lote {{batch}}"
+    },
+    "models": {
+      "sectionTitle": "Modelos",
+      "sectionDesc": "LLM de visão usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
+      "toolbar": {
+        "capAll": "Todos",
+        "capVision": "Visão",
+        "capText": "Apenas texto",
+        "statusAll": "Todos",
+        "statusInstalled": "Baixados",
+        "statusNotInstalled": "Não baixados",
+        "brandAll": "Todos",
+        "sortDefault": "Ordem padrão",
+        "sortSizeAsc": "Tamanho ↑",
+        "sortSizeDesc": "Tamanho ↓",
+        "sortName": "Nome A-Z"
+      },
+      "cloud": {
+        "cardTitle": "Nuvem · {{provider}}",
+        "modelUnset": "(modelo não definido)",
+        "step2Tooltip": "A etapa 2 (resumo de segmento) é roteada para a API na nuvem. Edite o endpoint / modelo na aba API na nuvem.",
+        "step1DisabledTooltip": "A API na nuvem não oferece suporte a entrada de imagem (a etapa 1 requer capacidade de visão)",
+        "step2DisabledTooltip": "A API na nuvem está selecionada como backend da etapa 2. Para desativá-la, desative-a na aba API na nuvem."
+      },
+      "card": {
+        "hfTooltipPrefix": "HuggingFace · ",
+        "hfTooltipAria": "HuggingFace {{repo}}",
+        "approxSize": "~{{size}} GB",
+        "download": "Baixar",
+        "downloading": "Baixando…",
+        "installedBadge": "Baixado",
+        "pause": "Pausar",
+        "pauseTooltip": "Pausa o download atual. Os bytes parciais são mantidos; ao retomar mais tarde, continua de onde você parou.",
+        "resume": "Retomar",
+        "resumeTooltip": "Retomar a partir de {{size}} MB já baixados.",
+        "visionLabel": "visão",
+        "visionTooltip": "Oferece suporte a entrada de imagem — pode executar a etapa 1 (descrição de imagem) e a etapa 2 (resumo de segmento).",
+        "textOnlyLabel": "apenas texto",
+        "textOnlyTooltip": "Modelo apenas de texto — pode executar a etapa 2 (resumo de segmento), mas não a etapa 1.",
+        "capsTooltips": {
+          "TEXT": "Geração de texto — escrever / continuar / resumir prosa (etapa 2, resumo de segmento).",
+          "VISION": "Multimodal — entende entrada de imagem (etapa 1, descrição de imagem).",
+          "CODE": "Ajustado para código — melhor em escrever e explicar código.",
+          "FAST": "Leve (< 1GB), velocidade em primeiro lugar; ótimo para a primeira tentativa.",
+          "BALANCED": "Tamanho médio, equilibra qualidade e velocidade para o uso diário.",
+          "REASONING": "Raciocínio profundo — pensamento de várias etapas, matemática, planejamento.",
+          "R1": "Família DeepSeek R1 — modelo de raciocínio treinado por RL.",
+          "DEFAULT": "A melhor escolha do Hindsight — o melhor equilíbrio geral."
+        },
+        "step1": "Visão",
+        "step1ToggleOnTooltip": "Use este modelo para a etapa de visão (etapa 1: descrição de imagem). Substitui a seleção anterior.",
+        "step1ToggleOffTooltip": "Clique para limpar a etapa de visão (voltará ao modelo ativo legado).",
+        "step1DisabledTooltip": "Este modelo não tem capacidade de visão — não pode executar a etapa de descrição de imagem.",
+        "step2": "Texto",
+        "step2ToggleOnTooltip": "Use este modelo para a etapa de texto (etapa 2: resumo de segmento). Substitui a seleção anterior.",
+        "step2ToggleOffTooltip": "Clique para limpar a etapa de texto (voltará ao modelo ativo legado).",
+        "uninstall": "Desinstalar",
+        "uninstallTooltipInstalled": "Excluir arquivos locais (principal + mmproj)",
+        "uninstallTooltipNotInstalled": "Não instalado",
+        "progressMain": "pesos principais",
+        "progressMmproj": "projetor de visão",
+        "progressUnit": "MB",
+        "progressUnknownTotal": "?"
+      },
+      "uninstallConfirm": "Desinstalar {{name}}? Isto excluirá os pesos principais{{extra}} — não pode ser desfeito.",
+      "uninstallConfirmTitle": "Desinstalar {{name}}?",
+      "uninstallConfirmMessage": "Isto excluirá os pesos principais{{extra}}. A ação não pode ser desfeita.",
+      "uninstallConfirmExtra": " e o projetor mmproj",
+      "expand": {
+        "more": "Mostrar mais modelos ({{count}})",
+        "collapse": "Recolher",
+        "busyTooltip": "Só é possível recolher após os downloads terminarem"
+      },
+      "custom": {
+        "expand": "Modelo HuggingFace personalizado",
+        "collapse": "Recolher o formulário de modelo personalizado",
+        "hint": "Baixe qualquer arquivo GGUF de um repositório do HuggingFace. O arquivo deve poder ser carregado pelo llama.cpp; o campo mmproj só é necessário para modelos de visão.",
+        "repoLabel": "Repositório",
+        "repoPlaceholder": "ex.: bartowski/Llama-3.2-11B-Vision-Instruct-GGUF",
+        "mainFileLabel": "Arquivo de pesos principais",
+        "mainFilePlaceholder": "ex.: Llama-3.2-11B-Vision-Instruct-Q4_K_M.gguf",
+        "mmprojFileLabel": "Arquivo mmproj (opcional, apenas modelos de visão)",
+        "mmprojFilePlaceholder": "ex.: mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
+        "errorRequired": "O repositório e o arquivo de pesos principais são obrigatórios."
+      }
+    },
+    "brief": {
+      "sectionTitle": "Sobre você",
+      "sectionInfo": "Incluído nos resumos de IA para ajudar o modelo a entender seu trabalho e contexto.",
+      "rowLabel": "Sobre você (opcional)",
+      "placeholder": "ex.: Sou desenvolvedor backend e escrevo principalmente em Rust e TypeScript; nos fins de semana, mexo com jogos."
+    },
+    "prompt": {
+      "sectionTitle": "Prompts",
+      "sectionDesc": "Diga ao modelo como escrever os resumos. Cada idioma tem um padrão embutido; clique em Salvar após editar, ou em Redefinir para reverter ao padrão.",
+      "rowLabel": "Prompt do sistema",
+      "hint": {
+        "dirty": "Alterações não salvas",
+        "custom": "Usando prompt personalizado",
+        "default": "Usando padrão embutido"
+      },
+      "actions": {
+        "reset": "Redefinir para o padrão",
+        "resetTooltip": "Preenche o editor novamente com o padrão embutido (clique em Salvar para aplicar)",
+        "save": "Salvar",
+        "saveTooltip": "Salvar a substituição para o idioma atual"
+      }
+    },
+    "segments": {
+      "sectionTitle": "Segmentos de tempo",
+      "sectionInfo": "Os resumos de IA são produzidos por segmento; as capturas de tela dentro de cada segmento são amostradas por similaridade antes de serem enviadas ao modelo.",
+      "rowLabel": "Segmentos"
+    },
+    "filter": {
+      "sectionTitle": "Filtros",
+      "rowLabel": "Analisar estas categorias",
+      "rowHint": "Clique para alternar:\n• Colorido + ícone de categoria = incluído na análise de IA\n• Contorno cinza + ícone de olho fechado = excluído"
+    },
+    "frame": {
+      "sectionTitle": "Amostragem de quadros",
+      "sectionDesc": "As capturas de tela podem se acumular com o tempo — primeiro remova duplicatas por similaridade, depois envie o restante ao modelo para economizar tempo e tokens.",
+      "dedupThresholdLabel": "Limite de similaridade para remoção de duplicatas",
+      "dedupThresholdHint": "Mescla duas capturas de tela quando a similaridade de cosseno delas ≥ limite. Mais alto = mais conservador (mantém mais); mais baixo = mais agressivo (mescla mais, pode descartar quadros que você queria). O padrão de 95% descarta ~70% em dados reais.",
+      "maxImagesLabel": "Máximo de imagens por segmento",
+      "maxImagesHint": "Limite de capturas de tela amostradas por segmento após a remoção de duplicatas. A etapa 1 (descrição de visão) é executada uma vez por imagem, então valores altos adicionam diretamente tempo de processamento ao segmento. Padrão 1024; aumente se quiser mais cobertura de segmentos longos."
+    },
+    "external": {
+      "sectionTitle": "API na nuvem (opcional)",
+      "sectionDesc": "Gere resumos de segmento por meio de um modelo na nuvem. As capturas de tela nunca são enviadas — as descrições por imagem permanecem no seu modelo de visão local.",
+      "enableLabel": "Usar a nuvem para resumos de segmento",
+      "enableHint": "Quando ativado, cada chamada de resumo de segmento vai para a API configurada abaixo. A etapa 1 (descrição por imagem) ainda é executada localmente.",
+      "providerLabel": "Provedor",
+      "provider": {
+        "openai": "OpenAI",
+        "deepseek": "DeepSeek",
+        "openrouter": "OpenRouter",
+        "together": "Together",
+        "groq": "Groq",
+        "custom": "Personalizado"
+      },
+      "baseUrlLabel": "Base URL",
+      "baseUrlPlaceholder": "https://api.openai.com/v1",
+      "apiKeyLabel": "API Key",
+      "apiKeyPlaceholder": "sk-...",
+      "apiKeyShow": "Mostrar",
+      "apiKeyHide": "Ocultar",
+      "modelLabel": "ID do modelo",
+      "testButton": "Testar conexão",
+      "testRunning": "Testando…",
+      "testOk": "Conectado · {{count}} modelos disponíveis",
+      "testOkNoModels": "Conectado",
+      "testFail": "Falha na conexão: {{message}}",
+      "missingFields": "Preencha primeiro a Base URL e o ID do modelo",
+      "privacyNote": "Observação: quando ativado, os nomes dos aplicativos, as categorias e as descrições em texto das capturas de tela são enviados à API na nuvem a cada chamada de resumo de segmento. As imagens em si não são enviadas."
+    }
+  },
+  "devices": {
+    "title": "Dispositivos",
+    "meta": "Gerencie o nome deste dispositivo e o status de sincronização dos outros dispositivos.",
+    "sectionSelf": "Este dispositivo",
+    "sectionOthers": "Outros dispositivos",
+    "emptyOthers": "Faça login com a mesma conta em outro dispositivo para vê-lo aqui.",
+    "relative": {
+      "justNow": "Agora mesmo",
+      "minutesAgo": "{{count}} min atrás",
+      "hoursAgo": "{{count}} h atrás",
+      "daysAgo": "{{count}} d atrás"
+    },
+    "cloud": {
+      "state": {
+        "connected": "Conectado ao Google Drive",
+        "notSignedIn": "Não conectado",
+        "notConfigured": "Não configurado"
+      },
+      "desc": {
+        "signInPrompt": "Faça login com o Google para sincronizar os dados de atividade entre dispositivos via Drive. As capturas de tela nunca são enviadas.",
+        "configurePrompt": "Antes do primeiro uso, crie uma credencial OAuth no Google Cloud Console (cerca de 3 minutos)."
+      },
+      "stats": {
+        "pending": "{{count}} pendente(s)",
+        "synced": "Sincronizado · {{when}}",
+        "waitingFirst": "Aguardando a primeira sincronização",
+        "deadLetter": "· {{count}} com falha"
+      },
+      "editCreds": "Editar credenciais",
+      "actions": {
+        "syncNow": "Sincronizar agora",
+        "syncing": "Sincronizando…",
+        "syncNowTitle": "Sincronizar agora",
+        "signOut": "Sair",
+        "signIn": "Fazer login novamente",
+        "signOutTitle": "Sair desta conta",
+        "reauthTitle": "Credenciais expiradas — faça login novamente para atualizar o token",
+        "signInWithGoogle": "Fazer login com o Google",
+        "signingIn": "Abrindo o navegador…",
+        "configureOAuth": "Configurar OAuth",
+        "restartApp": "Reiniciar aplicativo"
+      },
+      "restartHint": "Login feito em uma nova conta. Reinicie o aplicativo para mudar para o banco de dados local dessa conta."
+    },
+    "errors": {
+      "credExpired": "Credenciais expiradas. Faça login novamente.",
+      "transient": "A sincronização encontrou um erro temporário; tentando novamente de forma automática…"
+    },
+    "setup": {
+      "header": "Configuração da credencial OAuth",
+      "collapse": "Recolher",
+      "step1": {
+        "title": "Ative a API do Google Drive",
+        "bodyPrefix": "Clique no botão ",
+        "cueEnable": "Enable",
+        "bodySuffix": ".",
+        "openLink": "Abrir Drive API"
+      },
+      "step2": {
+        "title": "Configure a tela de consentimento do OAuth",
+        "bodyPrefix": "Na primeira visita, clique em ",
+        "cueStart": "Get started",
+        "bodyMiddle": " → preencha um nome de aplicativo e um e-mail quaisquer → defina Audience como External → informe seu e-mail novamente nas informações de contato → clique em ",
+        "cueCreate": "Create",
+        "bodySuffix": ".",
+        "openLink": "Abrir Audience"
+      },
+      "step3": {
+        "title": "Crie o cliente OAuth",
+        "bodyPrefix": "Abra Clients à esquerda → clique em ",
+        "cueCreateClient": "+ Create client",
+        "bodySuffix": " no topo → escolha Desktop app como o tipo de aplicativo → use um nome qualquer. O Client ID e o Client Secret serão exibidos em seguida.",
+        "openLink": "Abrir Clients"
+      },
+      "step4": {
+        "title": "Cole o Client ID e o Client Secret abaixo",
+        "clientIdLabel": "Client ID",
+        "secretLabel": "Client Secret",
+        "showSecret": "Mostrar client secret",
+        "hideSecret": "Ocultar client secret",
+        "show": "Mostrar",
+        "hide": "Ocultar"
+      }
+    },
+    "self": {
+      "tag": "Este dispositivo",
+      "lastActivity": "Última atividade: {{when}}",
+      "todayCount": "{{count}} capturas hoje",
+      "appearanceAria": "Alterar aparência",
+      "appearanceTitle": "Alterar cor e ícone",
+      "doubleClickToRename": "Clique duas vezes para renomear",
+      "renameAria": "Renomear",
+      "renameTitle": "Renomear"
+    },
+    "other": {
+      "lastSync": "Última sincronização: {{when}}",
+      "forgetAria": "Esquecer {{name}} da nuvem",
+      "forgetTitle": "Remover permanentemente este dispositivo da nuvem"
+    },
+    "forgetDialog": {
+      "title": "Esquecer \"{{name}}\" da nuvem?",
+      "intro": "Isto exclui permanentemente todos os dados que este dispositivo tem no Google Drive, além de todos os registros de atividade vinculados a ele nesta e em qualquer outra máquina. Os outros dispositivos limparão os dados deste dispositivo na próxima vez que se conectarem à nuvem.",
+      "unaffected": "Use isto quando o dispositivo não estiver mais com você (vendido / perdido / substituído) e você não tiver limpado os dados dele da nuvem na ocasião — os registros remanescentes ainda aparecem nos seus outros dispositivos.",
+      "confirm": "Esquecer dispositivo",
+      "doneToast": "\"{{name}}\" removido da nuvem ({{count}} arquivos do Drive excluídos).",
+      "error": "Falha ao remover o dispositivo: {{message}}"
+    }
+  },
+  "aiSummary": {
+    "title": "Resumo de IA",
+    "tabs": {
+      "daily": "Diário",
+      "week": "Semanal",
+      "month": "Mensal",
+      "chat": "Chat",
+      "debug": "Depuração"
+    },
+    "placeholder": {
+      "hint": "Recurso em desenvolvimento."
+    },
+    "weekly": {
+      "title": "Semanal",
+      "hint": "Resumo semanal de atividades com detalhamento por data + tema.",
+      "subtitle": "Sintetize os relatórios diários desta semana em uma única revisão semanal",
+      "weekNav": {
+        "prevAria": "Semana anterior",
+        "nextAria": "Próxima semana",
+        "thisWeek": "Esta semana",
+        "lastWeek": "Semana passada",
+        "thisWeekBack": "Voltar para esta semana"
+      },
+      "actions": {
+        "stop": "Parar",
+        "regenerate": "Regenerar",
+        "start": "Gerar",
+        "startTooltip": "Cria uma revisão semanal a partir dos relatórios diários existentes desta semana — sem capturas de tela, muito mais rápido que o diário",
+        "regenerateTooltip": "Regenerar limpará e substituirá o relatório semanal desta semana",
+        "noModelTooltip": "Escolha um modelo de resumo em Configurações de IA → Modelos, ou ative a API na nuvem",
+        "delete": "Excluir",
+        "deleteTooltip": "Limpar o relatório semanal desta semana (não afeta os relatórios diários)",
+        "deleteEmptyTooltip": "Ainda não há relatório semanal para excluir",
+        "deleteConfirmTitle": "Excluir o relatório semanal de {{weekStart}}?",
+        "deleteConfirmMessage": "O conteúdo do relatório semanal será limpo. Os relatórios diários não são afetados. Isto não pode ser desfeito.",
+        "exportMarkdown": "Exportar como Markdown",
+        "exportTooltip": "Exportar o relatório semanal atual como um arquivo Markdown",
+        "exportEmptyTooltip": "Ainda não há relatório semanal para exportar",
+        "exportRunningTooltip": "O relatório semanal está sendo gerado; exporte depois que ele terminar",
+        "dismissError": "Dispensar"
+      },
+      "errors": {
+        "noSummaryModel": "Escolha um modelo de resumo em Configurações de IA → Modelos, ou ative a API na nuvem",
+        "generationFailed": "Falha na geração do relatório semanal",
+        "unknown": "Erro desconhecido"
+      },
+      "confirm": {
+        "continueAnyway": "Gerar mesmo assim",
+        "partialMissing": {
+          "title": "Alguns dias não têm relatório diário",
+          "message": "{{count}} dia(s) desta semana não têm relatório diário: {{dates}}. Se você continuar, esses dias usarão apenas as estatísticas de aplicativos no lugar de um relatório diário; o restante continuará usando os relatórios diários normalmente. Continuar?"
+        },
+        "fullMissing": {
+          "title": "Nenhum relatório diário para esta semana",
+          "message": "Nenhum dos 7 dias desta semana tem relatório diário, mas {{activityCount}} deles têm registros de uso de aplicativos para usar como base. Gerar produzirá apenas uma revisão semanal simplificada baseada nas estatísticas de aplicativos — qualidade visivelmente inferior à obtida com os relatórios diários. Continuar?",
+          "messageNoActivity": "Nenhum dos 7 dias desta semana tem relatório diário, e também não há registros de uso de aplicativos. A geração provavelmente falhará. Tentar mesmo assim?"
+        }
+      },
+      "engineLoading": "Carregando modelo…",
+      "toast": {
+        "exported": "Exportado para {{filename}}"
+      },
+      "card": {
+        "badge": {
+          "empty": "Não gerado",
+          "ok": "Gerado",
+          "error": "Falhou",
+          "engineStarting": "Carregando modelo…",
+          "summarizing": "Gerando…"
+        },
+        "body": {
+          "empty": "Clique em \"Gerar\" acima para sintetizar uma revisão semanal a partir dos relatórios diários desta semana.",
+          "engineStarting": "Carregando modelo — cerca de 30-90s na primeira execução…",
+          "summarizing": "O modelo está sintetizando os relatórios diários desta semana em uma revisão semanal…",
+          "errorLabel": "Falhou: "
+        }
+      },
+      "export": {
+        "frontmatterTitle": "Semanal {{weekStart}} ~ {{weekEnd}}",
+        "heading": "Semanal · {{weekStart}} ~ {{weekEnd}}",
+        "stateError": "❌ **Falhou**",
+        "stateEmptyContent": "_(vazio)_"
+      }
+    },
+    "monthly": {
+      "title": "Mensal",
+      "hint": "Tendências e destaques mensais de atividade. Recurso em desenvolvimento."
+    },
+    "daily": {
+      "subtitle": "Resumo por segmento das capturas de tela e do uso de aplicativos de hoje, gerado por um modelo de visão local.",
+      "runtimeMissing": {
+        "title": "Mecanismo de IA não instalado",
+        "message": "Um modelo de embedding de imagem é necessário para a remoção de capturas de tela duplicadas. Junto com o mecanismo de visão, o download é de ~80 MB. A geração será retomada após o download terminar.",
+        "confirm": "Baixar e continuar",
+        "cancel": "Cancelar"
+      },
+      "dateNav": {
+        "prevAria": "Dia anterior",
+        "nextAria": "Próximo dia",
+        "todayBack": "Voltar para hoje",
+        "today": "Hoje",
+        "yesterday": "Ontem"
+      },
+      "actions": {
+        "stop": "Parar",
+        "regenerate": "Regenerar",
+        "start": "Iniciar resumo",
+        "startTooltip": "O modelo de visão local analisa cada segmento por vez; a duração depende do hardware (alguns segundos por segmento na GPU, dezenas de segundos na CPU).",
+        "regenerateTooltip": "Regenerar limpa todos os resumos de segmento deste dia e os executa novamente.",
+        "noModelTooltip": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
+        "delete": "Excluir",
+        "deleteTooltip": "Limpar ai_summaries (source=daily) e ai_image_descriptions deste dia (não pode ser desfeito).",
+        "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
+        "deleteConfirm": "Excluir os dados do relatório diário de {{date}}? Os resumos de segmento e as descrições por imagem serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
+        "deleteConfirmTitle": "Excluir os dados do relatório diário de {{date}}?",
+        "deleteConfirmMessage": "Os resumos de segmento e as descrições por imagem serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
+        "exportMarkdown": "Exportar Markdown",
+        "exportTooltip": "Exportar todos os resumos de segmento da data atual como um arquivo Markdown.",
+        "exportEmptyTooltip": "Ainda não há resumos de segmento para exportar.",
+        "exportRunningTooltip": "Resumo em andamento — aguarde até terminar antes de exportar.",
+        "retry": "Tentar novamente",
+        "retryTooltip": "Regenerar este segmento",
+        "retryDisabledTooltip": "O resumo do dia inteiro está em execução; aguarde até terminar ou ser interrompido antes de tentar novamente.",
+        "dismissError": "Dispensar"
+      },
+      "errors": {
+        "noVisionModel": "Escolha primeiro um modelo de visão em Configurações de IA → Modelos.",
+        "generationFailed": "Falha no resumo",
+        "unknown": "Erro desconhecido"
+      },
+      "engineLoading": "Carregando modelo…",
+      "dedupRunning": "Removendo capturas de tela semelhantes duplicadas… ({{count}})",
+      "toast": {
+        "exported": "{{filename}} exportado para a sua pasta de Downloads."
+      },
+      "card": {
+        "badge": {
+          "empty": "Não gerado",
+          "ok": "Gerado",
+          "skipped": "Sem capturas de tela",
+          "error": "Falhou",
+          "analyzing": "Analisando · {{done}} / {{total}} capturas de tela",
+          "analyzingNoTotal": "Analisando…",
+          "summarizing": "Escrevendo o resumo de segmento…"
+        },
+        "body": {
+          "empty": "Clique em \"Iniciar resumo\" acima para gerar este segmento.",
+          "analyzing": "Enviando as capturas de tela ao modelo… {{done}} / {{total}} concluídas",
+          "analyzingNoTotal": "Analisando…",
+          "summarizing": "Descrições de imagem concluídas ({{count}}); o modelo está escrevendo o resumo de segmento agora…",
+          "summarizingNoTotal": "Escrevendo o resumo de segmento…",
+          "skipped": "Nenhuma captura de tela neste intervalo de tempo (o computador estava desligado / tudo estava na lista de privacidade / tudo estava em categorias excluídas).",
+          "skippedNoActivity": "Nada foi registrado neste intervalo de tempo (o computador estava desligado / tudo estava em categorias excluídas).",
+          "errorLabel": "Falhou: "
+        }
+      },
+      "export": {
+        "frontmatterTitle": "Relatório diário — {{dateLabel}}",
+        "heading": "Relatório diário — {{dateLabel}} · {{date}}",
+        "intro": "Gerado pela IA do Hindsight · {{summary}}",
+        "segmentsCount": "{{count}} segmentos",
+        "okCount": "{{count}} gerados",
+        "skipCount": "{{count}} ignorados",
+        "errCount": "{{count}} com falha",
+        "pendingCount": "{{count}} pendentes",
+        "summaryJoin": " · ",
+        "statePending": "⏳ **Não gerado**",
+        "stateSkipped": "⚪ **Ignorado** — nenhuma captura de tela neste intervalo de tempo",
+        "stateSkippedNoActivity": "⚪ **Ignorado** — nada foi registrado neste intervalo de tempo",
+        "stateError": "❌ **Falhou**",
+        "stateEmptyContent": "_(vazio)_"
+      }
+    },
+    "chat": {
+      "subtitle": "Converse com a IA sobre seus dados de atividade — pesquise o histórico, verifique o tempo de aplicativos, reflita sobre o dia.",
+      "mockBadge": "MOCK",
+      "clear": "Limpar",
+      "clearTooltip": "Limpar a conversa atual",
+      "empty": {
+        "title": "O que você gostaria de perguntar?",
+        "hint": "Tente um dos exemplos abaixo, ou simplesmente digite na parte de baixo."
+      },
+      "input": {
+        "placeholder": "Pergunte qualquer coisa…",
+        "sendAria": "Enviar",
+        "sendTooltip": "Enviar (Enter)"
+      },
+      "presets": {
+        "search": {
+          "label": "Pesquisar histórico",
+          "q": "Descubra quando corrigi o bug de hover do PairingSection"
+        },
+        "stat": {
+          "label": "Estatísticas",
+          "q": "Quanto tempo passei no Cursor na semana passada?"
+        },
+        "reflect": {
+          "label": "Refletir",
+          "q": "Como esteve meu foco hoje? Me dê reflexões"
+        }
+      },
+      "mock": {
+        "search": {
+          "intro": "Encontrei 3 correspondências relevantes em resumos de segmento anteriores:",
+          "segLabelAfternoon": "Tarde",
+          "segLabelEvening": "Noite",
+          "hit1Snippet": "Ajustando o efeito de hover/brilho do PairingSection no projeto Hindsight. Tentei grid template de largura fixa vs minmax várias vezes, acabei usando :has(.nameCol:hover) para expandir a coluna inteira.",
+          "hit2Snippet": "Continuei corrigindo o problema de alinhamento à esquerda + padding-left do actionCol. Descobri que o nameCol 1fr encolhe automaticamente para anular o padding, acabei mudando o grid template para um valor fixo de 140px.",
+          "hit3Snippet": "Notei primeiro que o trigger não se alinhava à mesma linha X; suspeitei que o arredondamento subpixel do grid ou o justify-end do flex fosse a causa."
+        },
+        "stat": {
+          "intro": "Cursor na semana passada: 12h 23m no total, detalhamento dia a dia:",
+          "sumPrefix": "Total {{total}}",
+          "weekday1": "Seg",
+          "weekday2": "Ter",
+          "weekday3": "Qua",
+          "weekday4": "Qui",
+          "weekday5": "Sex",
+          "weekday6": "Sáb",
+          "weekday7": "Dom"
+        },
+        "reflect": {
+          "section1Title": "Visão geral de hoje",
+          "section1Body": "Cerca de 4 horas de foco profundo (2h de manhã + 2h à tarde); o resto do tempo foi troca de contexto e conversas. O foco esteve bom no geral, mas durante ~40 minutos à tarde a troca de aplicativos ficou alta (28 trocas/hora).",
+          "section2Title": "Destaque",
+          "section2Body": "Tarde das 14:00 às 16:00 no Cursor com quase nenhuma troca — o bloco de trabalho mais profundo do dia.",
+          "section3Title": "Sugestões",
+          "section3Body": "Depois das 19:00, os aplicativos sociais ocuparam 60% do tempo. Considere concentrá-los em uma janela focada de 30 minutos antes de dormir, deixando um bloco contínuo após o jantar para trabalho ou leitura."
+        },
+        "fallback": {
+          "text": "(mock) Esta é uma resposta de exemplo. O backend ainda não está conectado; apenas alguns grupos de palavras-chave são reconhecidos:\n• Pesquisar histórico — palavras-chave como \"pesquisar / descobrir / quando / hover / bug\"\n• Estatísticas — palavras-chave como \"quanto tempo / passei / cursor\"\n• Refletir — palavras-chave como \"refletir / foco / hoje / como esteve\""
+        }
+      }
+    },
+    "debug": {
+      "scope": {
+        "daily": "Diário",
+        "weekly": "Semanal",
+        "monthly": "Mensal"
+      },
+      "pickerOptions": {
+        "maxImages15": "15 / segmento",
+        "maxImages30": "30 / segmento",
+        "maxImagesUnlimited": "Ilimitado",
+        "slots1": "1 paralelo",
+        "slots2": "2 paralelos",
+        "slots4": "4 paralelos",
+        "slots8": "8 paralelos",
+        "ctxDefault": "ctx 8K/slot",
+        "ctx16k": "ctx 16K/slot",
+        "ctx32k": "ctx 32K/slot",
+        "ctx64k": "ctx 64K/slot"
+      },
+      "dateNav": {
+        "prevDayAria": "Dia anterior",
+        "nextDayAria": "Próximo dia",
+        "prevWeekAria": "Semana anterior",
+        "nextWeekAria": "Próxima semana",
+        "prevMonthAria": "Mês anterior",
+        "nextMonthAria": "Próximo mês",
+        "todayBack": "Voltar para hoje",
+        "thisWeekBack": "Voltar para esta semana",
+        "thisMonthBack": "Voltar para este mês",
+        "today": "Hoje",
+        "yesterday": "Ontem",
+        "thisWeek": "Esta semana",
+        "lastWeek": "Semana passada",
+        "weekBeforeLast": "2 semanas atrás",
+        "weeksAgo": "{{count}} semanas atrás",
+        "thisMonth": "Este mês",
+        "lastMonth": "Mês passado",
+        "monthsAgo": "{{count}} meses atrás"
+      },
+      "maxImagesInfo": {
+        "tooltip": "Quantas capturas de tela por segmento enviar ao modelo — menos significa depuração mais rápida.",
+        "aria": "Máximo de imagens por segmento — informações"
+      },
+      "actions": {
+        "stop": "Parar",
+        "start": "Regenerar",
+        "startInfo": "Regenerar as descrições de imagem e os resumos de segmento deste dia.",
+        "startInfoAria": "Informações sobre o escopo de regeneração",
+        "describeOnly": "Gerar apenas descrições",
+        "describeOnlyInfo": "Apenas a etapa 1: descrições de visão por imagem de hoje, os resumos de segmento são ignorados.",
+        "describeOnlyAria": "Gerar apenas descrições de imagem (ignorar resumos de segmento)",
+        "summarizeOnly": "Gerar apenas resumos",
+        "summarizeOnlyInfo": "Apenas a etapa 2: reconstruir os resumos de segmento a partir das descrições de imagem existentes. Os segmentos sem dados da etapa 1 são marcados como ignorados.",
+        "summarizeOnlyAria": "Gerar apenas resumos de segmento (ignorar descrições de imagem)",
+        "clearDescriptions": "Excluir",
+        "clearDescriptionsTooltip": "Limpar todas as descrições de imagem deste dia (os resumos de segmento são mantidos, não pode ser desfeito).",
+        "clearDescriptionsConfirm": "Excluir todas as descrições de imagem de {{date}}? Os resumos de segmento serão mantidos. Isto não pode ser desfeito.",
+        "clearDescriptionsConfirmTitle": "Excluir todas as descrições de imagem de {{date}}?",
+        "clearDescriptionsConfirmMessage": "Os resumos de segmento serão mantidos. Isto não pode ser desfeito.",
+        "clearSummaries": "Excluir",
+        "clearSummariesTooltip": "Limpar todos os resumos de segmento deste dia (as descrições de imagem são mantidas, não pode ser desfeito).",
+        "clearSummariesConfirm": "Excluir todos os resumos de segmento de {{date}}? As descrições de imagem serão mantidas. Isto não pode ser desfeito.",
+        "clearSummariesConfirmTitle": "Excluir todos os resumos de segmento de {{date}}?",
+        "clearSummariesConfirmMessage": "As descrições de imagem serão mantidas. Isto não pode ser desfeito.",
+        "exportDescriptionsMd": "Exportar Markdown",
+        "exportDescriptionsMdTooltip": "Exportar todas as descrições de imagem deste dia como um arquivo Markdown.",
+        "exportDescriptionsMdEmptyTooltip": "Ainda não há descrições de imagem para exportar.",
+        "exportSummariesMd": "Exportar Markdown",
+        "exportSummariesMdTooltip": "Exportar todos os resumos de segmento deste dia como um arquivo Markdown.",
+        "exportSummariesMdEmptyTooltip": "Ainda não há resumos de segmento para exportar.",
+        "exportSaveTitle": "Salvar como Markdown",
+        "exportSavedAt": "Exportado para {{path}}",
+        "exportFailed": "Falha na exportação: {{err}}",
+        "startTooltipPending": "Depuração de {{type}} pendente de implementação no backend.",
+        "startTooltipReady": "Modo de depuração: executa novamente cada segmento do dia (limpa os resultados existentes), as descrições por imagem são transmitidas ao vivo.",
+        "startTooltipNoModel": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
+        "delete": "Excluir tudo",
+        "deleteTooltip": "Limpar todas as descrições de imagem + resumos de segmento deste dia (não pode ser desfeito).",
+        "deleteInfoAria": "Informações sobre o escopo de exclusão",
+        "deleteConfirm": "Excluir todos os artefatos de IA de {{date}}? Os resumos de segmento e as descrições por imagem serão limpos. Isto não pode ser desfeito.",
+        "exportJson": "Exportar JSON",
+        "exportTooltip": "Exportar todos os dados de depuração desta página como um arquivo JSON."
+      },
+      "filter": {
+        "title": "Filtro",
+        "description": "Aplica-se apenas a esta janela de depuração — não altera as Configurações de IA globais.",
+        "categoriesLabel": "Categorias a analisar",
+        "categoriesHint": "Clique para alternar:\n• Cor + ícone de categoria = incluído na análise de IA\n• Contorno cinza + ícone de olho fechado = excluído"
+      },
+      "frame": {
+        "title": "Amostragem de quadros",
+        "description": "Muitas capturas de tela em um segmento — primeiro remova duplicatas por similaridade, depois envie ao modelo para economizar tempo e tokens. Aplica-se apenas a esta janela de depuração.",
+        "dedupThresholdLabel": "Limite de similaridade para remoção de duplicatas",
+        "dedupThresholdHint": "Mescla duas capturas de tela quando a similaridade de cosseno delas ≥ limite. Mais alto = mais conservador (mantém mais); mais baixo = mais agressivo (mescla mais, pode descartar quadros que você queria). O padrão de 95% descarta ~70% em dados reais."
+      },
+      "engine": {
+        "title": "Parâmetros do mecanismo (inicialização)",
+        "description": "Alterar isto para o mecanismo, reinicia com os novos parâmetros e então executa. Após as execuções de depuração, o mecanismo é parado incondicionalmente — o próximo resumo diário será iniciado de forma preguiçosa com os padrões, para que o estado global não seja poluído."
+      },
+      "describeEngine": {
+        "title": "Parâmetros de descrição de imagem"
+      },
+      "summaryEngine": {
+        "title": "Parâmetros de resumo de segmento"
+      },
+      "errors": {
+        "scopePending": "Depuração de {{type}} pendente de implementação no backend.",
+        "noVisionModel": "Escolha primeiro um modelo de visão em Configurações de IA → Modelos.",
+        "runFailed": "Falha na execução de depuração"
+      },
+      "engineLoading": "Carregando modelo…",
+      "dedupRunning": "Removendo capturas de tela semelhantes duplicadas… ({{count}})",
+      "scopePlaceholder": "Depuração de {{type}} pendente de implementação no backend. Volte para \"Diário\" para depurar o fluxo diário de duas etapas (descrições por imagem → resumo de segmento).",
+      "imagePrompt": {
+        "title": "Prompt de descrição por imagem",
+        "description": "Usado quando o modelo descreve cada captura de tela de forma independente. As alterações se aplicam apenas a esta janela.",
+        "label": "Prompt"
+      },
+      "segPrompt": {
+        "title": "Prompt de resumo de segmento",
+        "description": "Usado ao agregar as descrições por imagem + estatísticas de aplicativos em um resumo de segmento. As alterações se aplicam apenas a esta janela.",
+        "label": "Prompt"
+      },
+      "cloudApi": {
+        "title": "API na nuvem",
+        "description": "Executa os resumos de segmento (etapa 2) por meio de um modelo na nuvem nesta execução. O endpoint / modelo / chave de API são herdados das Configurações de IA; esta opção apenas alterna o caminho.",
+        "enableLabel": "Ativar resumos na nuvem",
+        "enableHint": "Desative para usar a etapa 2 local. Configure as credenciais da nuvem em Configurações de IA → API na nuvem."
+      },
+      "subTabs": {
+        "main": "Visão de depuração",
+        "settings": "Configurações de depuração"
+      },
+      "perImage": {
+        "title": "Descrições por imagem",
+        "descriptionBase": "saída da etapa 1 — cada captura de tela recebe uma descrição independente do LLM de visão",
+        "countSuffix": ", {{count}} entradas",
+        "descriptionSuffix": ". Clique em um nome de arquivo para visualizar o original; clique em \"Reexecutar\" no fim de uma linha para regenerar a descrição daquela imagem com os parâmetros de depuração atuais.",
+        "empty": "Nenhum dado ainda. Clique em \"Executar\" acima para que o modelo descreva cada captura de tela.",
+        "segFallback": "Seg {{idx}}",
+        "imageNoSuffix": " · #{{n}}",
+        "chipTitle": "Segmento idx={{seg}} · imagem idx={{img}} (ordem pós-remoção de duplicatas)",
+        "captureTimeTooltip": "Capturada às {{time}}",
+        "pathTooltip": "Clique para visualizar o original: {{path}}",
+        "statTooltip": "latência · tokens de prompt / conclusão",
+        "retry": "Reexecutar",
+        "retryTooltipBusy": "O resumo do dia inteiro está em execução; aguarde até terminar ou ser interrompido antes de reexecutar.",
+        "retryTooltipReady": "Regenerar a descrição desta imagem com os parâmetros de depuração atuais.",
+        "descEmpty": "(vazio)",
+        "openImageError": "Não é possível abrir / localizar a imagem: {{msg}}"
+      },
+      "segments": {
+        "title": "Resumo de segmento",
+        "descriptionBase": "saída da etapa 2 — resumo de segmento agregado a partir das descrições por imagem + estatísticas de aplicativos",
+        "countSuffix": ", {{count}} segmentos",
+        "descriptionSuffix": ".",
+        "empty": "Nenhum resumo de segmento ainda. Clique em \"Executar\" acima para que o modelo agregue as descrições por imagem em um resumo de segmento.",
+        "chipTitle": "Segmento idx={{idx}}",
+        "skippedFallback": "(nenhuma captura de tela neste segmento)",
+        "skippedNoActivityFallback": "(nenhuma atividade neste segmento)",
+        "emptyFallback": "(vazio)"
+      },
+      "events": {
+        "label": "Fluxo de eventos (últimos 200)",
+        "empty": "Nenhum evento ainda. Eles aparecerão rolando aqui assim que você clicar em Executar."
+      },
+      "engineLogs": {
+        "label": "Log do mecanismo",
+        "refresh": "Atualizar",
+        "refreshing": "Atualizando…",
+        "refreshTooltip": "Buscar o stderr / stdout recente do processo filho llama-server.",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "copyTooltip": "Copiar todas as linhas de log para a área de transferência.",
+        "emptyPrefix": "Nenhum log buscado ainda. Clique em \"Atualizar\" acima para buscar uma vez; o conteúdo aparece somente depois que o mecanismo tiver gerado um resumo. Procure por linhas ",
+        "emptySuffix": " para saber se a GPU está sendo usada."
+      },
+      "engineBar": {
+        "loading": "Carregando o status do mecanismo…",
+        "notInstalled": "Não instalado",
+        "port": "Porta: ",
+        "version": "Versão do llama.cpp: ",
+        "accel": "Aceleração: ",
+        "state": "Estado: ",
+        "error": "Erro: ",
+        "accelTitle": "ID da variante de binário: {{id}}"
+      }
+    }
+  }
+}

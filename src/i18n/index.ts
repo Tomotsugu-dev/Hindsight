@@ -8,18 +8,20 @@ import { locale as osLocale } from "@tauri-apps/plugin-os";
 import zhCN from "./locales/zh-CN.json";
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
+import ptBR from "./locales/pt-BR.json";
 
 export const LOCALE_STORAGE_KEY = "hindsight.locale";
 /** 兜底语言：系统 locale 无法识别 / 非 zh,ja 时用 en（比中文通用） */
 export const FALLBACK_LOCALE = "en";
 
-type Supported = "zh-CN" | "en" | "ja";
+type Supported = "zh-CN" | "en" | "ja" | "pt-BR";
 
-/** 把任意 BCP-47 locale 串映射到支持的三种之一 */
+/** 把任意 BCP-47 locale 串映射到支持的四种之一 */
 function mapToSupported(loc: string | null | undefined): Supported {
   const l = (loc ?? "").toLowerCase();
   if (l.startsWith("zh")) return "zh-CN";
   if (l.startsWith("ja")) return "ja";
+  if (l.startsWith("pt")) return "pt-BR";
   return "en";
 }
 
@@ -31,6 +33,7 @@ void i18n.use(initReactI18next).init({
     "zh-CN": { translation: zhCN },
     en: { translation: en },
     ja: { translation: ja },
+    "pt-BR": { translation: ptBR },
   },
   lng: stored ?? FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,

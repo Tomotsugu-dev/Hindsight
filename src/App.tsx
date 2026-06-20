@@ -34,10 +34,12 @@ const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("./pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
 
-/** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/en/ja）。 */
+/** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/en/ja）。
+ *  pt-BR 等没有对应 AI 提示词的语言回退到 en（AI 总结用英文，比中文合适）。 */
 function i18nToPromptLang(lang: string): PromptLanguage {
   if (lang.startsWith("en")) return "en";
   if (lang.startsWith("ja")) return "ja";
+  if (lang.startsWith("pt")) return "en";
   return "zh";
 }
 
