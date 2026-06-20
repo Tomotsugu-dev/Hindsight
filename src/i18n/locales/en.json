@@ -1,4 +1,8 @@
 {
+  "tray": {
+    "show": "Show Window",
+    "quit": "Quit"
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",

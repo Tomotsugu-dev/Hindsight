@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
 import { useSettings } from "./state/settings";
-import type { PromptLanguage } from "./api/hindsight";
+import { api, type PromptLanguage } from "./api/hindsight";
 
 // 代码拆分：所有 page / tab 都走 `React.lazy`，Vite 给每个组件出独立 chunk。
 // 首屏只加载 sidebar / layout / `i18n` 这些必备的东西；切到某个 tab 时按需 fetch。
@@ -42,7 +42,7 @@ function i18nToPromptLang(lang: string): PromptLanguage {
 }
 
 function App() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, update } = useSettings();
 
   // UI 语言切换时同步 settings.ai.promptLanguage —— 让 AISettings 提示词编辑器、
@@ -54,6 +54,11 @@ function App() {
       update({ ai: { ...settings.ai, promptLanguage: target } });
     }
   }, [i18n.language, settings, update]);
+
+  // 原生托盘菜单不走前端 i18n，挂载 + 切语言时把译文推给后端 set_tray_labels 同步
+  useEffect(() => {
+    void api.setTrayLabels(t("tray.show"), t("tray.quit")).catch(() => {});
+  }, [t, i18n.language]);
 
   return (
     // Suspense fallback 故意保持空 —— page chunk 通常 < 50KB，本地加载几十毫秒级，

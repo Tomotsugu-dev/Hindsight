@@ -610,6 +610,9 @@ export const api = {
   /** 把文本写到指定路径（AI 总结导出 Markdown 用） */
   writeTextFile: (path: string, content: string) =>
     invoke<void>("write_text_file", { path, content }),
+  /** 把托盘菜单文案同步成当前 UI 语言（show=显示主窗口 / quit=退出 的译文） */
+  setTrayLabels: (show: string, quit: string) =>
+    invoke<void>("set_tray_labels", { show, quit }),
   getDayHours: (dayOffset: number, deviceId?: string) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>

@@ -223,19 +223,55 @@ pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
     install_tray_icon(app)
 }
 
+/// 托盘菜单项句柄——存进 app state，让前端切 UI 语言后能 `set_text` 更新文案。
+pub struct TrayMenu {
+    show: tauri::menu::MenuItem<tauri::Wry>,
+    quit: tauri::menu::MenuItem<tauri::Wry>,
+}
+
+/// 托盘文案按语言取一套。启动时 lang 来自 [`crate::ai::config::detect_default_lang`]，
+/// 运行时由前端经 [`set_tray_labels`] 传 i18n 译文覆盖。
+fn tray_labels(lang: &str) -> (&'static str, &'static str) {
+    match lang {
+        "ja" => ("メインウィンドウを表示", "終了"),
+        "en" => ("Show Window", "Quit"),
+        _ => ("显示主窗口", "退出"),
+    }
+}
+
+/// 前端切 UI 语言后调用，把托盘菜单文案同步成对应语言。
+#[tauri::command]
+pub fn set_tray_labels(
+    state: tauri::State<'_, TrayMenu>,
+    show: String,
+    quit: String,
+) -> Result<(), String> {
+    state.show.set_text(show).map_err(|e| e.to_string())?;
+    state.quit.set_text(quit).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// 系统托盘：图标用主窗口同款。左键单击 toggle 显示 / 隐藏；
 /// 右键 / 菜单提供"显示主窗口" + "退出"。退出走 app.exit(0)。
 fn install_tray_icon(app: &mut App) -> tauri::Result<()> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder};
     use tauri::tray::TrayIconBuilder;
 
-    let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+    // 启动时按系统 locale 取初始文案；webview 加载后前端会 set_tray_labels 同步到实际 UI 语言
+    let (show_label, quit_label) = tray_labels(crate::ai::config::detect_default_lang());
+    let show_item = MenuItemBuilder::with_id("show", show_label).build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", quit_label).build(app)?;
     let menu = MenuBuilder::new(app)
         .item(&show_item)
         .separator()
         .item(&quit_item)
         .build()?;
+
+    // 存句柄给 set_tray_labels 用（MenuItem 是 Arc 句柄，clone 廉价）
+    app.manage(TrayMenu {
+        show: show_item.clone(),
+        quit: quit_item.clone(),
+    });
 
     let _tray = TrayIconBuilder::with_id("hindsight-tray")
         // 启动期失败需快速失败：Tauri 总会带默认窗口图标，缺失意味着打包资源错误

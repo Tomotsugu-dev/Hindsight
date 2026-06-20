@@ -175,6 +175,8 @@ pub fn run() {
             // --- settings: 全局设置 ---
             commands::settings::get_settings,
             commands::settings::update_settings,
+            // --- 托盘菜单文案随 UI 语言同步 ---
+            bootstrap::set_tray_labels,
             // --- storage: 存储 / 数据目录 ---
             commands::storage::get_storage_info,
             commands::storage::purge_activities,
