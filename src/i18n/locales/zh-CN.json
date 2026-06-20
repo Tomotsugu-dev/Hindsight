@@ -89,6 +89,11 @@
       }
     },
     "general": {
+      "language": {
+        "title": "语言",
+        "label": "界面语言",
+        "description": "切换应用界面的显示语言。"
+      },
       "capture": {
         "title": "采集",
         "description": "定时记录焦点窗口和当时的屏幕截图，作为之后回看的依据。",

@@ -14,14 +14,16 @@ export default defineConfig(async () => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
+    // 1420 在本机被 Hyper-V/WinNAT 动态保留（EACCES）→ 换 7420。改这里必须同步改
+    // src-tauri/tauri.conf.json 的 build.devUrl，否则 Tauri 连不上 dev server。
+    port: 7420,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: 7421,
         }
       : undefined,
     watch: {

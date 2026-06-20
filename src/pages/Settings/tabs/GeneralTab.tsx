@@ -2,21 +2,24 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
-import { Aperture, Clock, Rocket } from "lucide-react";
+import { Aperture, Clock, Languages, Rocket } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
 import { PathField } from "../../../components/FormControls/PathField";
 import { Slider } from "../../../components/FormControls/Slider";
 import { TimeRangeList } from "../../../components/FormControls/TimeRangeList";
+import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useSettings } from "../../../state/settings";
+import { useLocale, LOCALE_OPTIONS } from "../../../i18n/useLocale";
 import { api } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
 
 export default function GeneralTab() {
   const { t } = useTranslation();
   const { settings, update } = useSettings();
+  const [locale, setLocale] = useLocale();
   const [dataRoot, setDataRoot] = useState<string>("");
   const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
   // macOS 关闭按钮在窗口左上角；Win/Linux 在右上角。文案要根据平台变。
@@ -72,6 +75,19 @@ export default function GeneralTab() {
 
   return (
     <>
+      <Section title={t("settings.general.language.title")} icon={Languages}>
+        <Row
+          label={t("settings.general.language.label")}
+          description={t("settings.general.language.description")}
+        >
+          <SimplePicker
+            value={locale}
+            options={LOCALE_OPTIONS}
+            onChange={setLocale}
+          />
+        </Row>
+      </Section>
+
       <Section
         title={t("settings.general.capture.title")}
         description={t("settings.general.capture.description")}

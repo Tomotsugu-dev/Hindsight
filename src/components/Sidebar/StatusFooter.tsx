@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRightLeft, Coffee, Globe, Pause } from "lucide-react";
 import { useSettings } from "../../state/settings";
-import { useLocale, type Locale } from "../../i18n/useLocale";
+import { useLocale, LOCALE_OPTIONS } from "../../i18n/useLocale";
 import styles from "./StatusFooter.module.css";
 
 type CaptureStatus = "ok" | "idle" | "error";
@@ -18,15 +18,6 @@ const CAPTURE_TEXT_KEY: Record<CaptureStatus, string> = {
   idle: "sidebar.capture.idle",
   error: "sidebar.capture.error",
 };
-
-// 各语言 option 的元信息（label 用各自语言的母语写法，避免再走 t()）
-// 顺序也是循环切换的顺序：点击 trigger → 跳到 next（zh-CN → en → ja → pt-BR → zh-CN）
-const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
-  { value: "zh-CN", label: "简体中文" },
-  { value: "en", label: "English" },
-  { value: "ja", label: "日本語" },
-  { value: "pt-BR", label: "Português (Brasil)" },
-];
 
 function parseHM(s: string): number {
   const [h, m] = s.split(":").map((p) => parseInt(p, 10));

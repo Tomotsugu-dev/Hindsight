@@ -89,6 +89,11 @@
       }
     },
     "general": {
+      "language": {
+        "title": "言語",
+        "label": "表示言語",
+        "description": "アプリの表示言語を切り替えます。"
+      },
       "capture": {
         "title": "記録",
         "description": "アクティブなウィンドウとスクリーンショットを定期的に記録し、後から振り返れるようにします。",

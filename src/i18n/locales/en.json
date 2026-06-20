@@ -89,6 +89,11 @@
       }
     },
     "general": {
+      "language": {
+        "title": "Language",
+        "label": "Interface language",
+        "description": "Switch the app's display language."
+      },
       "capture": {
         "title": "Capture",
         "description": "Periodically record the focused window and a screenshot, so you can review activity later.",

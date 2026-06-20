@@ -45,25 +45,25 @@
       "week": "Semanal",
       "month": "Mensal",
       "aiSummary": "Resumo de IA",
-      "aiSettings": "Configurações de IA",
+      "aiSettings": "Ajustes IA",
       "categories": "Categorias",
       "apps": "Aplicativos",
-      "devices": "Sincronização na nuvem",
-      "settings": "Configurações"
+      "devices": "Nuvem",
+      "settings": "Ajustes"
     }
   },
   "sidebar": {
     "capture": {
       "ok": "Capturando",
       "idle": "Pausado",
-      "error": "Erro de captura",
+      "error": "Erro",
       "resting": "Em repouso",
-      "stop": "Parar captura",
+      "stop": "Parar",
       "toggleAria": "Alternar captura"
     },
     "sync": {
       "connected": "Conectado",
-      "signedOut": "Não conectado",
+      "signedOut": "Desconectado",
       "aria": "Gerenciar dispositivos e sincronização na nuvem",
       "title": "Dispositivos / Sincronização na nuvem"
     }
@@ -89,6 +89,11 @@
       }
     },
     "general": {
+      "language": {
+        "title": "Idioma",
+        "label": "Idioma da interface",
+        "description": "Altera o idioma de exibição do aplicativo."
+      },
       "capture": {
         "title": "Captura",
         "description": "Registra periodicamente a janela em foco e uma captura de tela, para que você possa revisar a atividade depois.",
