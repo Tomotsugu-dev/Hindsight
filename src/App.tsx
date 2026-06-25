@@ -5,6 +5,10 @@ import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
 import { useSettings } from "./state/settings";
 import { api, type PromptLanguage } from "./api/hindsight";
+import {
+  isDefaultSegments,
+  retranslateDefaultSegments,
+} from "./utils/defaultSegments";
 
 // 代码拆分：所有 page / tab 都走 `React.lazy`，Vite 给每个组件出独立 chunk。
 // 首屏只加载 sidebar / layout / `i18n` 这些必备的东西；切到某个 tab 时按需 fetch。
@@ -46,14 +50,29 @@ function App() {
   const { t, i18n } = useTranslation();
   const { settings, update } = useSettings();
 
-  // UI 语言切换时同步 settings.ai.promptLanguage —— 让 AISettings 提示词编辑器、
-  // DebugTab、以及后端 generate 用的 prompt 都跟随 UI 语言走
+  // UI 语言切换时同步 AI 设置：
+  //  1. promptLanguage —— 让 AISettings 提示词编辑器、DebugTab、后端 generate 的 prompt 都跟随 UI 语言
+  //  2. 时段标签若仍是某语言的默认 → 跟着重译成新语言的默认（用户自定义过则不动，颜色保留）
   useEffect(() => {
     if (!settings) return;
-    const target = i18nToPromptLang(i18n.language);
-    if (settings.ai.promptLanguage !== target) {
-      update({ ai: { ...settings.ai, promptLanguage: target } });
+    const nextAi = { ...settings.ai };
+    let changed = false;
+
+    const promptLang = i18nToPromptLang(i18n.language);
+    if (settings.ai.promptLanguage !== promptLang) {
+      nextAi.promptLanguage = promptLang;
+      changed = true;
     }
+
+    if (isDefaultSegments(settings.ai.segments)) {
+      const reseg = retranslateDefaultSegments(settings.ai.segments, i18n.language);
+      if (reseg.some((s, i) => s.label !== settings.ai.segments[i].label)) {
+        nextAi.segments = reseg;
+        changed = true;
+      }
+    }
+
+    if (changed) update({ ai: nextAi });
   }, [i18n.language, settings, update]);
 
   // 原生托盘菜单不走前端 i18n，挂载 + 切语言时把译文推给后端 set_tray_labels 同步
