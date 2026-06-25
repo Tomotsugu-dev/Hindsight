@@ -518,13 +518,14 @@ export interface AiConfig {
   summaryCtxSize: number | null;
 }
 
-export type PromptLanguage = "zh" | "en" | "ja";
+export type PromptLanguage = "zh" | "en" | "ja" | "pt";
 
 export interface PromptOverrides {
   /** 中文 system prompt 覆盖；空 = 用内置默认 */
   systemZh: string;
   systemEn: string;
   systemJa: string;
+  systemPt: string;
 }
 
 export interface Settings {

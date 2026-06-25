@@ -482,14 +482,14 @@
   "categories": {
     "title": "Categories",
     "intro": "Manage activity categories. Assign apps to categories on the Apps page.",
-    "newCategory": "New category",
+    "newCategory": "Category",
     "newCategoryDefaultName": "New category",
     "loading": "Loading…",
     "appsPopover": {
       "label": "Bound apps"
     },
     "super": {
-      "newButton": "New super-category",
+      "newButton": "Super-category",
       "newDefaultName": "New group",
       "defaults": {
         "work": "Work",
@@ -941,6 +941,12 @@
     },
     "placeholder": {
       "hint": "Feature in development."
+    },
+    "errors": {
+      "llmEmptyReasoning": "The model spent its whole budget \"thinking\" and never wrote the answer. Use a regular (non-reasoning) text model like Gemma or Qwen3, or raise the context size in AI Settings.",
+      "llmEmptyEos": "The model stopped without generating anything — usually the chosen model or its vision projector (mmproj) don't match. Pick a different model in AI Settings.",
+      "llmEmptyTruncated": "The model's answer was cut off before any usable text came out (likely a reasoning model). Use a regular text model like Gemma or Qwen3, or raise the context size in AI Settings.",
+      "llmEmpty": "The model returned no content. Try a different model in AI Settings."
     },
     "weekly": {
       "title": "Weekly",

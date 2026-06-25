@@ -102,7 +102,7 @@ pub struct AiConfig {
     #[serde(default)]
     pub summary_mmproj: String,
     /// AI 总结使用的提示词语言（决定模型出哪种语言的总结 + 默认提示词模板用哪套）。
-    /// 取值 "zh" / "en" / "ja"；非法值 sanitize 时回退到 "zh"。
+    /// 取值 "zh" / "en" / "ja" / "pt"；非法值 sanitize 时回退到 "zh"。
     pub prompt_language: String,
     /// 用户对内置 system prompt（step 2 段总结）的覆盖；按语言分别存。
     /// 某语言对应字段为空 = 用内置默认；非空 = 走覆盖。
@@ -252,6 +252,8 @@ pub struct PromptOverrides {
     pub system_en: String,
     /// 日文 system prompt 覆盖
     pub system_ja: String,
+    /// 葡萄牙语（巴西）system prompt 覆盖
+    pub system_pt: String,
 }
 
 impl Default for AiConfig {
@@ -303,6 +305,7 @@ pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
             "Evening",
         ],
         "ja" => ["深夜", "早朝", "午前", "午後", "夜"],
+        "pt" => ["Madrugada", "Manhã cedo", "Manhã", "Tarde", "Noite"],
         _ => ["深夜", "早上", "上午", "下午", "晚上"],
     };
     let ranges: [(u8, u8); 5] = [(0, 6), (6, 9), (9, 12), (12, 18), (18, 24)];
@@ -328,6 +331,8 @@ pub fn detect_default_lang() -> &'static str {
                 "zh"
             } else if l.starts_with("ja") {
                 "ja"
+            } else if l.starts_with("pt") {
+                "pt"
             } else {
                 "en"
             }
@@ -413,18 +418,22 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.prompt_language = match next.prompt_language.trim() {
         "en" => "en".to_string(),
         "ja" => "ja".to_string(),
+        "pt" => "pt".to_string(),
         _ => "zh".to_string(),
     };
     // 覆盖文本不 trim 中间空白（用户可能想保留缩进），仅去前后整体空白
     next.prompt_overrides.system_zh = next.prompt_overrides.system_zh.trim().to_string();
     next.prompt_overrides.system_en = next.prompt_overrides.system_en.trim().to_string();
     next.prompt_overrides.system_ja = next.prompt_overrides.system_ja.trim().to_string();
+    next.prompt_overrides.system_pt = next.prompt_overrides.system_pt.trim().to_string();
     next.image_describe_overrides.system_zh =
         next.image_describe_overrides.system_zh.trim().to_string();
     next.image_describe_overrides.system_en =
         next.image_describe_overrides.system_en.trim().to_string();
     next.image_describe_overrides.system_ja =
         next.image_describe_overrides.system_ja.trim().to_string();
+    next.image_describe_overrides.system_pt =
+        next.image_describe_overrides.system_pt.trim().to_string();
 
     next
 }

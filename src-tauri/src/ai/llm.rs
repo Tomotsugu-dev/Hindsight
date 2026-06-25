@@ -321,32 +321,26 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
     );
 
     if content.is_empty() {
-        // 区分两种"内容为空"的场景，用不一样的错误描述——用户能直接看出怎么修：
-        // 1. reasoning 模型思考链占满 max_tokens（reasoning_chars > 0）→ 提示加大 max_tokens
-        //    或换非 reasoning 模型
-        // 2. 模型主动 EOS（finish_reason=stop, completion_tokens=0）→ chat template /
-        //    mmproj 错配 / 模型不兼容
-        let hint = if reasoning_chars > 0 {
-            format!(
-                "（看起来是 reasoning 模型——思考链 {} 字耗光 max_tokens={:?}，正式回答没机会输出。换 Gemma 4 / Qwen3 0.6B 这种非 reasoning 文本模型再试，或在调试 tab 里加大 ctxSize）",
-                reasoning_chars, usage.completion_tokens,
-            )
+        // 内容为空分四种成因，各发一个**稳定错误码**（前缀 `[LLM_EMPTY_*]`）；前端按码
+        // 显示本地化的"为什么 + 怎么办"，不把 token 术语堆给用户。技术细节（token 数 /
+        // finish_reason）已经在上面的 [chat-result] log::info 里，调试看日志即可。
+        // 码后面保留一小段英文技术摘要，纯给日志 / 不认识码的兜底用，前端会忽略它。
+        //   - LLM_EMPTY_REASONING：reasoning 模型思考链占满 max_tokens，正式答案没机会输出
+        //   - LLM_EMPTY_EOS：模型 prompt 一进去就 EOS（chat template / mmproj 错配）
+        //   - LLM_EMPTY_TRUNCATED：老版 llama-server 思考链塞 content 撞 max_tokens 被截
+        //   - LLM_EMPTY：其它未分类的空响应
+        let code = if reasoning_chars > 0 {
+            "LLM_EMPTY_REASONING"
         } else if finish_reason == "stop" && usage.completion_tokens == Some(0) {
-            "（模型 prompt 一进去就 EOS——多半是 chat template / mmproj 错配，看 [engine-spawn] 日志确认 mmproj 是否对得上选的模型）".to_string()
+            "LLM_EMPTY_EOS"
         } else if finish_reason == "length" && usage.completion_tokens.is_some_and(|n| n > 0) {
-            // 老版 llama-server (< b4500) 不返 reasoning_content 字段，DeepSeek R1 / Qwen3 thinking
-            // 模型的思考链整段塞 content；撞 max_tokens 时被截断，content 末段格式损坏后被
-            // .trim() 处理也可能为空。reasoning_chars=0 但 completion_tokens > 0 就是这种情况。
-            format!(
-                "（模型生成了 {:?} token 但 content 仍为空——可能用的是 reasoning 模型 + 老版 llama-server 不会拆分 reasoning_content；或思考链塞满 max_tokens 没机会输出正式答案。换 Gemma 4 / Qwen3 0.6B 等非 reasoning 模型，或升级 llama-server 到 b4500+ 让思考链单独走 reasoning_content 字段）",
-                usage.completion_tokens,
-            )
+            "LLM_EMPTY_TRUNCATED"
         } else {
-            String::new()
+            "LLM_EMPTY"
         };
         return Err(Error::LlmResponse(format!(
-            "模型返回为空（finish_reason={}, prompt_tokens={:?}, completion_tokens={:?}）{}",
-            finish_reason, usage.prompt_tokens, usage.completion_tokens, hint,
+            "[{}] empty content (finish_reason={}, prompt_tokens={:?}, completion_tokens={:?}, reasoning_chars={})",
+            code, finish_reason, usage.prompt_tokens, usage.completion_tokens, reasoning_chars,
         )));
     }
     Ok((content, usage))

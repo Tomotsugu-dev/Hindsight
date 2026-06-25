@@ -482,14 +482,14 @@
   "categories": {
     "title": "分类",
     "intro": "管理活动分类。要把应用归到分类，请去「应用」页指派。",
-    "newCategory": "新建分类",
+    "newCategory": "分类",
     "newCategoryDefaultName": "新分类",
     "loading": "加载中…",
     "appsPopover": {
       "label": "绑定的应用"
     },
     "super": {
-      "newButton": "新建大类",
+      "newButton": "大类",
       "newDefaultName": "新大类",
       "defaults": {
         "work": "工作",
@@ -941,6 +941,12 @@
     },
     "placeholder": {
       "hint": "功能开发中。"
+    },
+    "errors": {
+      "llmEmptyReasoning": "模型把额度都用在「思考」上，没来得及写出答案。换一个普通（非推理）文本模型，比如 Gemma 或 Qwen3，或在 AI 设置里调大上下文。",
+      "llmEmptyEos": "模型还没开始生成就停了——通常是选的模型或它的视觉投影器（mmproj）不匹配。在 AI 设置里换一个模型。",
+      "llmEmptyTruncated": "模型的回答还没输出有用内容就被截断了（多半是推理模型）。换 Gemma 或 Qwen3 这类普通文本模型，或在 AI 设置里调大上下文。",
+      "llmEmpty": "模型没有返回任何内容。在 AI 设置里换一个模型试试。"
     },
     "weekly": {
       "title": "周报",

@@ -245,12 +245,8 @@ impl WeekSummaryRunner {
         let port = if !ai.summary_use_cloud() {
             let st = self.supervisor.status().await;
             if st.state != EngineState::Running {
-                self.emit_phase(
-                    "engine_starting",
-                    &week_key,
-                    None,
-                    Some("加载模型中（首次约 30-90 秒）…".to_string()),
-                );
+                // message 留空：前端按 phase 显示本地化的"加载模型中…"（weeklySummary.ts）
+                self.emit_phase("engine_starting", &week_key, None, None);
             }
             self.ensure_engine_running(&ai).await?
         } else {

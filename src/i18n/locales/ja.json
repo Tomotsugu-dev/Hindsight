@@ -482,14 +482,14 @@
   "categories": {
     "title": "分類",
     "intro": "アクティビティ分類を管理。アプリへの分類割り当ては「アプリ」ページで行います。",
-    "newCategory": "分類を追加",
+    "newCategory": "分類",
     "newCategoryDefaultName": "新しい分類",
     "loading": "読み込み中…",
     "appsPopover": {
       "label": "紐付くアプリ"
     },
     "super": {
-      "newButton": "大分類を追加",
+      "newButton": "大分類",
       "newDefaultName": "新しい大分類",
       "defaults": {
         "work": "仕事",
@@ -941,6 +941,12 @@
     },
     "placeholder": {
       "hint": "開発中の機能です。"
+    },
+    "errors": {
+      "llmEmptyReasoning": "モデルが「思考」だけで上限に達し、回答を出力できませんでした。Gemma や Qwen3 などの通常（非推論）テキストモデルに変えるか、AI 設定でコンテキストを増やしてください。",
+      "llmEmptyEos": "モデルが何も生成せずに停止しました——選択したモデルかその視覚プロジェクタ（mmproj）が合っていない可能性が高いです。AI 設定で別のモデルを選んでください。",
+      "llmEmptyTruncated": "使えるテキストが出る前にモデルの回答が打ち切られました（おそらく推論モデル）。Gemma や Qwen3 などの通常テキストモデルに変えるか、AI 設定でコンテキストを増やしてください。",
+      "llmEmpty": "モデルが何も返しませんでした。AI 設定で別のモデルをお試しください。"
     },
     "weekly": {
       "title": "週次",

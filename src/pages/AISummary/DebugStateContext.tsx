@@ -18,6 +18,7 @@ import {
 import {
   DEFAULT_IMAGE_DESCRIBE_PROMPTS,
   DEFAULT_SYSTEM_PROMPTS,
+  overrideKey,
 } from "../../lib/aiPrompts";
 import { useSettings } from "../../state/settings";
 
@@ -109,12 +110,9 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     );
     // prompt：settings 覆盖优先，否则内置默认；保证 textarea 一打开就有真实文本
     const lang = settings.ai.promptLanguage;
-    const sysOverride = settings.ai.promptOverrides[
-      lang === "en" ? "systemEn" : lang === "ja" ? "systemJa" : "systemZh"
-    ];
-    const imgOverride = settings.ai.imageDescribeOverrides?.[
-      lang === "en" ? "systemEn" : lang === "ja" ? "systemJa" : "systemZh"
-    ] ?? "";
+    const key = overrideKey(lang);
+    const sysOverride = settings.ai.promptOverrides[key];
+    const imgOverride = settings.ai.imageDescribeOverrides?.[key] ?? "";
     setDebugSysPrompt(sysOverride.trim() || DEFAULT_SYSTEM_PROMPTS[lang]);
     setDebugImagePrompt(imgOverride.trim() || DEFAULT_IMAGE_DESCRIBE_PROMPTS[lang]);
     setDebugExternalEnabled(settings.ai.externalEnabled ?? false);

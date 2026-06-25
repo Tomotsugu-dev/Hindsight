@@ -21,6 +21,7 @@ import {
   SUMMARY_PROGRESS_EVENT,
   type SummaryProgress,
 } from "../api/hindsight";
+import { localizeAiError } from "../lib/aiErrors";
 import { logWarn } from "../lib/logger";
 
 /** 段在跑时具体处于哪个子阶段——决定段卡片 body 文案。
@@ -183,7 +184,9 @@ function ensureListener(): void {
       case "error":
         snap = Object.freeze({
           ...EMPTY_SNAP,
-          topError: p.message ?? i18next.t("aiSummary.daily.errors.generationFailed"),
+          topError: p.message
+            ? localizeAiError(p.message)
+            : i18next.t("aiSummary.daily.errors.generationFailed"),
         });
         notify();
         break;

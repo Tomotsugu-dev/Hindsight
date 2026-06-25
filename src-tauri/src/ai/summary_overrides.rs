@@ -93,6 +93,7 @@ impl AiOverrides {
             match lang.as_str() {
                 "en" => ai.prompt_overrides.system_en = v,
                 "ja" => ai.prompt_overrides.system_ja = v,
+                "pt" => ai.prompt_overrides.system_pt = v,
                 _ => ai.prompt_overrides.system_zh = v,
             }
         }
@@ -100,6 +101,7 @@ impl AiOverrides {
             match lang.as_str() {
                 "en" => ai.image_describe_overrides.system_en = v,
                 "ja" => ai.image_describe_overrides.system_ja = v,
+                "pt" => ai.image_describe_overrides.system_pt = v,
                 _ => ai.image_describe_overrides.system_zh = v,
             }
         }

@@ -18,6 +18,7 @@ import {
   type SegmentSummaryRow,
   type SummaryProgress,
 } from "../api/hindsight";
+import { localizeAiError } from "../lib/aiErrors";
 import { logWarn } from "../lib/logger";
 
 /** 周报当前的子阶段：
@@ -104,7 +105,9 @@ function ensureListener(): void {
       case "error":
         snap = Object.freeze({
           ...EMPTY_SNAP,
-          topError: p.message ?? i18next.t("aiSummary.weekly.errors.generationFailed"),
+          topError: p.message
+            ? localizeAiError(p.message)
+            : i18next.t("aiSummary.weekly.errors.generationFailed"),
         });
         notify();
         break;

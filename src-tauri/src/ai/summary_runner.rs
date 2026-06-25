@@ -296,7 +296,8 @@ impl DaySummaryRunner {
                 "engine_starting",
                 total_segments,
             );
-            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+            p.message = None;
             self.emit(p);
         }
         let port = self
@@ -378,7 +379,8 @@ impl DaySummaryRunner {
                 "engine_starting",
                 total_segments,
             );
-            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+            p.message = None;
             self.emit(p);
         }
         let port = self
@@ -502,7 +504,8 @@ impl DaySummaryRunner {
                 total_segments,
             );
             p_load_d.segment_idx = Some(idx as u32);
-            p_load_d.message = Some("加载图描述模型中…".to_string());
+            // message 留空：前端按 phase 显示本地化的"加载模型中…"
+            p_load_d.message = None;
             self.emit(p_load_d);
             let (main_d, mmproj_d) = self.resolve_model_paths_for(ai, Step::Describe)?;
             let port_d = self
@@ -577,7 +580,8 @@ impl DaySummaryRunner {
                 total_segments,
             );
             p_load_s.segment_idx = Some(idx as u32);
-            p_load_s.message = Some("加载段总结模型中…".to_string());
+            // message 留空：前端按 phase 显示本地化的"加载模型中…"
+            p_load_s.message = None;
             self.emit(p_load_s);
             let (main_s, mmproj_s) = self.resolve_model_paths_for(ai, Step::Summary)?;
             let port_s = self
@@ -1355,7 +1359,8 @@ impl DaySummaryRunner {
                 "engine_starting",
                 ai.segments.len() as u32,
             );
-            p.message = Some("加载模型中（首次约 30-90 秒）…".to_string());
+            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+            p.message = None;
             self.emit(p);
         }
         // 单段重试只起一个引擎实例；如果用户给 step1/step2 配了不同模型，本路径用

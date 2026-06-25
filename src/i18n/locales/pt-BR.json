@@ -482,14 +482,14 @@
   "categories": {
     "title": "Categorias",
     "intro": "Gerencie as categorias de atividade. Atribua aplicativos a categorias na página Aplicativos.",
-    "newCategory": "Nova categoria",
+    "newCategory": "Categoria",
     "newCategoryDefaultName": "Nova categoria",
     "loading": "Carregando…",
     "appsPopover": {
       "label": "Aplicativos vinculados"
     },
     "super": {
-      "newButton": "Nova supercategoria",
+      "newButton": "Supercategoria",
       "newDefaultName": "Novo grupo",
       "defaults": {
         "work": "Trabalho",
@@ -941,6 +941,12 @@
     },
     "placeholder": {
       "hint": "Recurso em desenvolvimento."
+    },
+    "errors": {
+      "llmEmptyReasoning": "O modelo gastou todo o limite \"pensando\" e não chegou a escrever a resposta. Use um modelo de texto comum (não-reasoning), como Gemma ou Qwen3, ou aumente o contexto nos Ajustes de IA.",
+      "llmEmptyEos": "O modelo parou sem gerar nada — geralmente o modelo escolhido ou o projetor de visão (mmproj) não combinam. Escolha outro modelo nos Ajustes de IA.",
+      "llmEmptyTruncated": "A resposta do modelo foi cortada antes de sair qualquer texto útil (provavelmente um modelo de reasoning). Use um modelo de texto comum, como Gemma ou Qwen3, ou aumente o contexto nos Ajustes de IA.",
+      "llmEmpty": "O modelo não retornou nenhum conteúdo. Tente outro modelo nos Ajustes de IA."
     },
     "weekly": {
       "title": "Semanal",
