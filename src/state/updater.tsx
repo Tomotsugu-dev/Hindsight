@@ -12,6 +12,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ConfirmDialog/ConfirmDialog";
+import { pickReleaseNotesForLang } from "../lib/releaseNotes";
 import { useSettings } from "./settings";
 
 export type UpdatePhase =
@@ -50,7 +51,7 @@ function shouldAutoCheck(
 }
 
 export function UpdaterProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, update: updateSettings } = useSettings();
   const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
@@ -126,9 +127,10 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
           version: pendingUpdate?.version ?? "",
         })}
         message={t("settings.about.update.dialog.message", {
-          body:
-            pendingUpdate?.body ||
-            t("settings.about.update.dialog.bodyEmpty"),
+          // release note 是多语言一坨（带 <!-- xx --> 标记），按界面语言抽对应块
+          body: pendingUpdate?.body
+            ? pickReleaseNotesForLang(pendingUpdate.body, i18n.language)
+            : t("settings.about.update.dialog.bodyEmpty"),
         })}
         confirmLabel={t("settings.about.update.dialog.confirm")}
         cancelLabel={t("settings.about.update.dialog.cancel")}
