@@ -11,3 +11,9 @@ export async function invoke<T = unknown>(
   console.warn(`[demo] invoke("${cmd}") 在 demo 模式下未实现，返回 undefined`);
   return undefined as T;
 }
+
+// AppIcon 用 convertFileSrc 把后端绝对路径转 asset:// URL；demo 里 api-mock 给的已经是
+// 现成可用的图标 URL（/demo/icons/*.png 或 simpleicons CDN），原样返回即可。
+export function convertFileSrc(filePath: string, _protocol?: string): string {
+  return filePath;
+}

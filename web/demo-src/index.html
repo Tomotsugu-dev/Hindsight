@@ -29,7 +29,7 @@
       (function () {
         try {
           var lng = new URLSearchParams(location.search).get("lang");
-          if (lng === "en" || lng === "ja" || lng === "zh-CN") {
+          if (lng === "en" || lng === "ja" || lng === "zh-CN" || lng === "pt-BR") {
             localStorage.setItem("hindsight.locale", lng);
           }
         } catch (e) {}
