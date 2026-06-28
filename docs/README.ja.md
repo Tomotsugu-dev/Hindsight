@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./src/assets/logo.png" alt="Hindsight" width="200">
+  <img src="../src/assets/logo.png" alt="Hindsight" width="200">
 </p>
 
 <h1 align="center">Hindsight</h1>
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="README.zh.md">简体中文</a> · <a href="README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
+  <a href="README.zh.md">简体中文</a> · <a href="../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
   </a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
-  <a href="LICENSE">
+  <a href="../LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
@@ -45,17 +45,17 @@
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
+  <img src="./intro_zh/imgs/today.png" alt="Today Overview" width="800"><br/>
   <sub><i><b>今日の総括</b> · 24時間積み重ねグラフ × アプリランキング、今日の時間の使い道と仕事 / 学習リズムを一目で把握</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="800"><br/>
+  <img src="./intro_zh/imgs/monthly.png" alt="Monthly Statistics" width="800"><br/>
   <sub><i><b>月間統計</b> · 日別グラフ × 月間ランキング、長期的な作業リズムを把握</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
+  <img src="./intro_zh/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
   <sub><i><b>AI 自動日報</b> · ローカル LLM が時間帯別にスクリーンショットを読み取り、段落形式の総括を出力；スクリーンショットは常にローカル</i></sub>
 </p>
 
@@ -95,6 +95,6 @@
 ## ライセンス
 
 <p align="center">
-  本プロジェクトは<a href="LICENSE"><b>MITライセンス</b></a>の下でオープンソースとして公開されています。自由に使用、改変、配布できます。<br/>
+  本プロジェクトは<a href="../LICENSE"><b>MITライセンス</b></a>の下でオープンソースとして公開されています。自由に使用、改変、配布できます。<br/>
   <sub>© 2026 Hindsight contributors</sub>
 </p>

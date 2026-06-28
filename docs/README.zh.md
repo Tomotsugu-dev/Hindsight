@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="./src/assets/logo.png" alt="Hindsight" width="200">
+  <img src="../src/assets/logo.png" alt="Hindsight" width="200">
 </p>
 
 <h1 align="center">Hindsight</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="README.zh.md">简体中文</a> · <a href="README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
+  <a href="README.zh.md">简体中文</a> · <a href="../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
   </a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
-  <a href="LICENSE">
+  <a href="../LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
@@ -46,17 +46,17 @@
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/today.png" alt="今日总览" width="800"><br/>
+  <img src="./intro_zh/imgs/today.png" alt="今日总览" width="800"><br/>
   <sub><i><b>今日总览</b> · 24 小时分时段堆叠图 × 应用排行榜，一眼看清今天的时间去向，工作学习节奏</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/monthly.png" alt="月统计" width="800"><br/>
+  <img src="./intro_zh/imgs/monthly.png" alt="月统计" width="800"><br/>
   <sub><i><b>月统计</b> · 每日柱状 × 月度排行，看清长期工作节奏</i></sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
+  <img src="./intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
   <sub><i><b>AI 自动写日报</b> · 本地 LLM 按时段看截图，输出段落式总结；截图始终本地</i></sub>
 </p>
 
@@ -96,6 +96,6 @@
 ## License
 
 <p align="center">
-  本项目基于 <a href="LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
+  本项目基于 <a href="../LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
   <sub>© 2026 Hindsight contributors</sub>
 </p>
