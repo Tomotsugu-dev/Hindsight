@@ -10,7 +10,7 @@
   gap: 14px;
   height: 32px;
   padding: 0 18px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition:
     background-color 180ms var(--ease-out),
     opacity 180ms var(--ease-out),
@@ -76,7 +76,7 @@
   height: 14px;
   display: flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
@@ -84,7 +84,7 @@
 .bar {
   height: 100%;
   display: flex;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   transition: filter 180ms var(--ease-out);
 }

@@ -22,7 +22,7 @@
   padding: 0 10px;
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
   background: rgba(255, 255, 255, 0.55);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-family: inherit;
   font-size: var(--font-size-xs, 11px);
@@ -45,7 +45,7 @@
 .swatch {
   width: 14px;
   height: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
 }
@@ -149,7 +149,7 @@
 .drillSwatch {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
@@ -173,7 +173,7 @@
   position: relative;
   height: 6px;
   background: rgba(0, 0, 0, 0.04);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 

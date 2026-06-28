@@ -323,6 +323,10 @@
       }
     }
   },
+  "appDetail": {
+    "loading": "加载中…",
+    "untitled": "无标题"
+  },
   "today": {
     "title": "日统计",
     "meta": "{{date}} {{weekday}}",

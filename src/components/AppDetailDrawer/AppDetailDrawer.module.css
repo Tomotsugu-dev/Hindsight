@@ -1,0 +1,267 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+  background: rgba(20, 20, 40, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: flex-end;
+  /* 四周留间隙 → 抽屉悬浮成一张圆角卡，而不是贴边到顶/右/底的直角面板 */
+  padding: 14px;
+  animation: fadeIn 160ms var(--ease-out);
+}
+
+.panel {
+  position: relative;
+  z-index: var(--z-modal);
+  width: min(560px, 92vw);
+  /* 不写 height —— 靠 backdrop 默认 align-items:stretch 填满"视口减去 padding"的高度，
+     于是上下自然留出间隙；圆角 + overflow:hidden 把内部内容裁进圆角里 */
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow:
+    0 12px 40px rgba(20, 20, 40, 0.22),
+    0 2px 8px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 240ms var(--ease-spring);
+}
+
+/* —— Header —— */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  flex-shrink: 0;
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.appName {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appCat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.catDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.headTotal {
+  font-size: 14px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.closeBtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+/* —— Body —— */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* top 4：head 已有 16 下内边距，这里不必再大留白；两张卡之间用 gap */
+  padding: 4px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* 隐藏滚动条（保留滚动功能），跟侧栏 / 主内容一致 */
+  scrollbar-width: none;
+}
+.body::-webkit-scrollbar {
+  display: none;
+}
+
+/* 两个区块各做成一张圆角卡（跟参考一致：抽屉里再分层） */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--surface-card-elevated);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-md);
+}
+
+/* —— 时间柱（日=小时 / 周·月=天）—— */
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 56px;
+}
+
+.bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  /* 柱子在自己的槽里水平居中——配合 .fill 的 max-width，宽槽(周)里柱子收细且居中 */
+  justify-content: center;
+}
+
+.fill {
+  width: 100%;
+  /* 封顶宽度：日报 24 根槽窄(~18px)够不到、不受影响；周 7 根槽宽(~64px)就被收到 40px，
+     不再又粗又方 */
+  max-width: 40px;
+  min-height: 1px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  opacity: 0.85;
+}
+
+/* 轴标：日 / 月用 space-between 的稀疏刻度 */
+.axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 周：每个柱子下一个星期标，跟柱子同 flex/gap 对齐 */
+.axisWeek {
+  display: flex;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.axisWeek > span {
+  flex: 1;
+  text-align: center;
+}
+
+/* —— 具体在干啥（按窗口标题） —— */
+.titleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.titleName {
+  /* 标题是"干了啥"的主角 → 弹性吃掉中间空间、尽量显示完整；省略号兜底 */
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleBarWrap {
+  /* 进度条只做"相对时长"的轻提示 → 固定一小段就够，不再拉满 */
+  flex: 0 0 auto;
+  width: 64px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.titleBar {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+
+.titleTime {
+  /* 按内容自适应、至少 56px、不收缩——月/周的超长时长不溢出 */
+  min-width: 56px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— 加载 —— */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  border-top-color: var(--color-accent);
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

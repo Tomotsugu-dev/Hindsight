@@ -20,7 +20,7 @@
   padding: 3px 4px 3px 6px;
   background: rgba(0, 0, 0, 0.025);
   border: 1px solid rgba(0, 0, 0, 0.04);
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
 }
 
 .dash {
@@ -34,7 +34,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   transition:
     background-color 180ms ease-out,
@@ -54,7 +54,7 @@
   padding: 0 12px;
   background: rgba(0, 0, 0, 0.045);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);

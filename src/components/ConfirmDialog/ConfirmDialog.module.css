@@ -21,7 +21,7 @@
   max-height: 80vh;
   padding: 22px 22px 16px;
   background: var(--surface-card);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 12px 36px rgba(20, 20, 40, 0.22),
@@ -67,7 +67,7 @@
   justify-content: center;
   height: 30px;
   padding: 0 14px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;

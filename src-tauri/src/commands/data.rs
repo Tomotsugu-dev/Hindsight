@@ -5,7 +5,9 @@
 
 use tauri::State;
 
-use crate::repo::reports::{self, device_filter_from_option, AppUsage, DaySummary, HourSlot};
+use crate::repo::reports::{
+    self, device_filter_from_option, AppDetail, AppUsage, DaySummary, HourSlot,
+};
 use crate::storage::DbPool;
 
 /// 拉某天 24 小时的使用时长分布（每小时一条），给「日」页面顶部柱状图用。
@@ -54,6 +56,61 @@ pub async fn get_hour_apps(
         day_offset,
         hour,
         limit.unwrap_or(10),
+        device_filter_from_option(device_id),
+    )
+    .await
+    .map_err(Into::into)
+}
+
+/// 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时。`icon_process` 传排行行里的
+/// 稳定代表 process_name（合并组里任一成员名都行）。日报按小时聚合。
+#[tauri::command]
+pub async fn get_app_day_detail(
+    pool: State<'_, DbPool>,
+    day_offset: i32,
+    icon_process: String,
+    device_id: Option<String>,
+) -> Result<AppDetail, String> {
+    reports::app_day_detail(
+        &pool,
+        day_offset,
+        icon_process,
+        device_filter_from_option(device_id),
+    )
+    .await
+    .map_err(Into::into)
+}
+
+/// 周报版：本周(周一~周日)按天聚合。
+#[tauri::command]
+pub async fn get_app_week_detail(
+    pool: State<'_, DbPool>,
+    week_offset: i32,
+    icon_process: String,
+    device_id: Option<String>,
+) -> Result<AppDetail, String> {
+    reports::app_week_detail(
+        &pool,
+        week_offset,
+        icon_process,
+        device_filter_from_option(device_id),
+    )
+    .await
+    .map_err(Into::into)
+}
+
+/// 月报版：当月按天聚合。
+#[tauri::command]
+pub async fn get_app_month_detail(
+    pool: State<'_, DbPool>,
+    month_offset: i32,
+    icon_process: String,
+    device_id: Option<String>,
+) -> Result<AppDetail, String> {
+    reports::app_month_detail(
+        &pool,
+        month_offset,
+        icon_process,
         device_filter_from_option(device_id),
     )
     .await

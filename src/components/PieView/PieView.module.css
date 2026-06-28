@@ -84,7 +84,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--row-color);
   background: color-mix(in oklab, var(--row-color) 14%, transparent);
   flex-shrink: 0;
@@ -111,7 +111,7 @@
   position: relative;
   height: 7px;
   background: rgba(0, 0, 0, 0.05);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 

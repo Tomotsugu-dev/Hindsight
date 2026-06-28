@@ -37,7 +37,7 @@
   justify-content: center;
   gap: 8px;
   padding: 16px 10px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   /* hover 时整张卡是可拖拽的（除内部 button / input 外） —— grab 光标提示
      拖动期间 body cursor 在 JS 里锁成 grabbing（见 SuperCategoriesTable.tsx 的 useEffect） */
   cursor: grab;
@@ -89,7 +89,7 @@
   justify-content: center;
   background: color-mix(in oklab, var(--sup-color, #94a3b8) 22%, transparent);
   color: var(--sup-color, #94a3b8);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: none;
   cursor: pointer;
   flex-shrink: 0;
@@ -130,7 +130,7 @@
   background: transparent;
   outline: none;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   width: 100%;
   text-align: center;
   font-family: inherit;
@@ -165,7 +165,7 @@
   justify-content: center;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   cursor: pointer;
   box-shadow:
@@ -213,7 +213,7 @@
   font-style: italic;
   background: rgba(0, 0, 0, 0.015);
   border: 1px dashed rgba(0, 0, 0, 0.08);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
 }
 
 /* 大类卡片正在被拖：源 superBox 整体淡化（左卡 + 右侧 rows 一起 0.3，

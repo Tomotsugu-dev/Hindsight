@@ -9,6 +9,10 @@ import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { InsightTiles } from "../../components/InsightTiles/InsightTiles";
 import { HourlyChart, type WorkRange } from "./HourlyChart";
 import { RankedList } from "../../components/RankedList/RankedList";
+import {
+  AppDetailDrawer,
+  type AppDetailTarget,
+} from "../../components/AppDetailDrawer/AppDetailDrawer";
 import { ViewToggle, type StatsView } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
 import { useDayCache } from "../../hooks/useDayCache";
@@ -76,8 +80,11 @@ export default function TodayPage() {
   // 点柱子→选中那个小时；再点同一柱子取消（toggle）。
   // offset / device 切换时自动清，避免上一段选择跨日生效。
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  // 点应用 → 详情抽屉的目标；null = 关闭。切日 / 切设备时一并关掉（旧 app 明细失效）。
+  const [selectedApp, setSelectedApp] = useState<AppDetailTarget | null>(null);
   useEffect(() => {
     setSelectedHour(null);
+    setSelectedApp(null);
   }, [offset, selectedDeviceId]);
   const handleHourClick = (h: number) =>
     setSelectedHour((prev) => (prev === h ? null : h));
@@ -324,7 +331,18 @@ export default function TodayPage() {
           </header>
           {displayedAppRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
-              <RankedList items={displayedAppRanks} />
+              <RankedList
+                items={displayedAppRanks}
+                onItemClick={(item) =>
+                  setSelectedApp({
+                    name: item.name,
+                    iconProcess: item.iconProcess ?? item.id,
+                    categoryLabel: item.subtitle,
+                    color: item.color,
+                    minutes: item.minutes,
+                  })
+                }
+              />
             </ScrollBox>
           ) : (
             <EmptyHint />
@@ -347,6 +365,14 @@ export default function TodayPage() {
           )}
         </section>
       </div>
+
+      <AppDetailDrawer
+        app={selectedApp}
+        scope="day"
+        offset={offset}
+        deviceId={selectedDeviceId}
+        onClose={() => setSelectedApp(null)}
+      />
     </div>
   );
 }

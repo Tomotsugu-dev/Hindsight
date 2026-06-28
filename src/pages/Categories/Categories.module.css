@@ -93,7 +93,7 @@
   line-height: 1.6;
   letter-spacing: 0.01em;
   text-transform: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   box-shadow:
     0 8px 24px rgba(20, 20, 40, 0.18),
     0 1px 2px rgba(20, 20, 40, 0.06);
@@ -125,7 +125,7 @@
   padding: 16px 18px 16px 28px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(20, 20, 40, 0.04),
@@ -191,7 +191,7 @@
   border: none;
   color: var(--text-faint);
   cursor: grab;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   opacity: 0;
   transition: opacity 140ms ease-out, color 140ms ease-out, background-color 140ms ease-out;
   flex-shrink: 0;
@@ -222,7 +222,7 @@
   padding: 0 18px 0 28px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 30%, rgba(0, 0, 0, 0.08));
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow:
     0 12px 28px rgba(20, 20, 40, 0.18),
     0 2px 6px rgba(20, 20, 40, 0.08),
@@ -248,7 +248,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: color-mix(in oklab, var(--cat-color) 14%, transparent);
   color: var(--cat-color);
   flex-shrink: 0;
@@ -273,7 +273,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: color-mix(in oklab, var(--cat-color) 14%, transparent);
   color: var(--cat-color);
   border: none;
@@ -323,7 +323,7 @@
   padding: 0 10px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 15px;
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
@@ -349,7 +349,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.05);
   color: var(--text-muted, #64748b);
   border: none;
@@ -432,7 +432,7 @@
   height: 24px;
   padding: 0 4px 0 5px;
   background: rgba(0, 0, 0, 0.04);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-regular);
@@ -445,7 +445,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--text-faint);
   transition:
     background-color 120ms ease-out,
@@ -465,7 +465,7 @@
   padding: 0 8px;
   background: transparent;
   border: 1px dashed rgba(0, 0, 0, 0.18);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
@@ -485,7 +485,7 @@
   width: 140px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
@@ -512,7 +512,7 @@
   background: transparent;
   border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
   color: var(--color-accent);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: var(--font-weight-600);
   cursor: pointer;
@@ -545,7 +545,7 @@
   padding: 16px 18px 16px 28px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 25%, rgba(0, 0, 0, 0.06));
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow:
     0 0 0 3px color-mix(in oklab, var(--color-accent) 10%, transparent),
     0 6px 16px rgba(20, 20, 40, 0.06);
@@ -568,7 +568,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
   background: rgba(0, 0, 0, 0.04);
   transition:
@@ -636,7 +636,7 @@
   padding: 0 10px;
   background: rgba(0, 0, 0, 0.03);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
@@ -670,7 +670,7 @@
   padding: 4px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   box-shadow:
     0 6px 18px rgba(20, 20, 40, 0.12),
     0 1px 2px rgba(20, 20, 40, 0.06);
@@ -687,7 +687,7 @@
   padding: 0 8px;
   background: transparent;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-strong);

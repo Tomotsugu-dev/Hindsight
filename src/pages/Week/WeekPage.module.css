@@ -3,7 +3,7 @@
 
 .page {
   padding: 32px 32px 48px;
-  max-width: 720px;
+  max-width: 800px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -33,7 +33,7 @@
 .card {
   background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,

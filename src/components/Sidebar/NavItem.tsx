@@ -48,7 +48,9 @@ export function NavItem({ to, label, Icon, color, end, excludePaths }: NavItemPr
       <span className={styles.iconWrap} aria-hidden>
         <Icon className={styles.icon} size={18} strokeWidth={1.85} />
       </span>
-      <span className={styles.label}>{label}</span>
+      <span className={styles.label} data-sb-label>
+        {label}
+      </span>
     </Link>
   );
 }

@@ -91,7 +91,7 @@
   line-height: 1.5;
   color: #fff;
   background: rgba(28, 28, 36, 0.94);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   box-shadow:
     0 4px 12px -2px rgba(0, 0, 0, 0.20),
     0 2px 4px rgba(0, 0, 0, 0.10);
@@ -143,7 +143,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 

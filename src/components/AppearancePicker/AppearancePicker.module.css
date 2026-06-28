@@ -7,7 +7,7 @@
   padding: 12px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   box-shadow:
     0 12px 32px rgba(20, 20, 40, 0.16),
     0 2px 6px rgba(20, 20, 40, 0.08);
@@ -39,7 +39,7 @@
 .swatch {
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.4),
@@ -70,7 +70,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   border: none;
   color: var(--text-muted);

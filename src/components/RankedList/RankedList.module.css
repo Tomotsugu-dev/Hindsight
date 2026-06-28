@@ -18,6 +18,40 @@
   border-bottom: none;
 }
 
+/* 可点行：分隔线留在 li(.rowClickable)，flex 布局 + 交互放在内层原生 button。
+   button 天生可交互、键盘免费，无 jsx-a11y 警告。 */
+.rowClickable {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.rowClickable:last-child {
+  border-bottom: none;
+}
+
+.rowBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 130ms ease-out;
+}
+
+.rowBtn:hover {
+  background: rgba(0, 0, 0, 0.035);
+}
+
+.rowBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .rank {
   width: 16px;
   text-align: center;
@@ -30,7 +64,7 @@
 .dot {
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.4),
@@ -38,12 +72,13 @@
 }
 
 .text {
-  flex-shrink: 0;
+  /* 弹性抢占可用宽度（grow 3 优先于进度条 grow 1），让 app 名（如
+     "Visual Studio Code"）尽量显示完整；min-width:0 让内部 .name 省略号生效 */
+  flex: 3 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  width: 80px;
 }
 
 .name {
@@ -74,10 +109,15 @@
   width: 52px;
 }
 
+/* app 排行行没有分类堆叠图标（extras 为空）→ 折叠这 52px，把空间让给名字 */
+.extras:empty {
+  width: 0;
+}
+
 .barWrap {
   flex: 1;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.04);
   overflow: hidden;
   min-width: 40px;
@@ -85,13 +125,17 @@
 
 .barFill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   transition: width 360ms var(--ease-out);
 }
 
 .time {
-  width: 50px;
+  /* 按内容自适应、至少 58px、不收缩：短时长右对齐占 58，月那种"111 小时 28 分"
+     超长时长把列撑开，两头都不溢出、也不换行 */
+  min-width: 58px;
+  flex-shrink: 0;
   text-align: right;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
@@ -119,7 +163,7 @@
   border: none;
   color: var(--text-faint);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition:
     background-color 140ms ease-out,
     color 140ms ease-out;

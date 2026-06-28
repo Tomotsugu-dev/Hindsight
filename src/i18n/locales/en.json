@@ -323,6 +323,10 @@
       }
     }
   },
+  "appDetail": {
+    "loading": "Loading…",
+    "untitled": "Untitled"
+  },
   "today": {
     "title": "Daily",
     "meta": "{{date}} {{weekday}}",

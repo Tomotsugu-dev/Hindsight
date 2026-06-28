@@ -20,6 +20,25 @@ export interface AppUsage {
   iconProcess: string;
 }
 
+/** 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时（日/周/月共用）。 */
+export interface AppDetail {
+  /** 时间柱：日=24 根(key "0".."23")，周/月=每天一根(key "YYYY-MM-DD")；含 0 空桶、已排序 */
+  buckets: DetailBucket[];
+  /** 按窗口标题聚合的用时（降序）；原始标题，前端再剥 app 名后缀 + 合并 */
+  titles: TitleUsage[];
+}
+
+export interface DetailBucket {
+  /** 小时粒度："0".."23"；天粒度："YYYY-MM-DD" */
+  key: string;
+  secs: number;
+}
+
+export interface TitleUsage {
+  title: string;
+  secs: number;
+}
+
 export interface DaySummaryDto {
   date: string;
   segments: HourSegment[];
@@ -625,6 +644,20 @@ export const api = {
     deviceId?: string,
   ) =>
     invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
+  getAppDayDetail: (dayOffset: number, iconProcess: string, deviceId?: string) =>
+    invoke<AppDetail>("get_app_day_detail", { dayOffset, iconProcess, deviceId }),
+  getAppWeekDetail: (weekOffset: number, iconProcess: string, deviceId?: string) =>
+    invoke<AppDetail>("get_app_week_detail", { weekOffset, iconProcess, deviceId }),
+  getAppMonthDetail: (
+    monthOffset: number,
+    iconProcess: string,
+    deviceId?: string,
+  ) =>
+    invoke<AppDetail>("get_app_month_detail", {
+      monthOffset,
+      iconProcess,
+      deviceId,
+    }),
   getWeekDays: (weekOffset: number, deviceId?: string) =>
     invoke<DaySummaryDto[]>("get_week_days", { weekOffset, deviceId }),
   getWeekApps: (weekOffset: number, limit?: number, deviceId?: string) =>

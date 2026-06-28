@@ -4,7 +4,7 @@
 //! 形状的 Vec，前端拿到直接渲染。所有查询走 [`DeviceFilter`] 控制单设备 vs 全设备聚合。
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike};
-use rusqlite::ToSql;
+use rusqlite::{OptionalExtension, ToSql};
 use serde::Serialize;
 
 use crate::error::Result;
@@ -52,6 +52,41 @@ pub struct AppUsage {
     /// AppIcon 用来查图标的代表 process_name —— 在合并组里取一个稳定的成员名，
     /// 让前端拿组里任一个 process_name 都能查到（图标已跨设备同步）。
     pub icon_process: String,
+}
+
+/// 「点应用 → 详情抽屉」的聚合数据：一串时间柱 + 窗口标题用时排行。
+/// 日 / 周 / 月共用——各自的日期范围在后端聚合好再下发（避免把一个月上万条
+/// 原始 session 全传给前端）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppDetail {
+    /// 时间柱：小时粒度=24 根(key="0".."23")，天粒度=范围内每天一根(key="YYYY-MM-DD")。
+    /// 已按时间排好、含 0 值空桶，前端直接渲染。
+    pub buckets: Vec<DetailBucket>,
+    /// 按窗口标题聚合的用时（降序）。原始标题，前端再剥 app 名后缀 + 合并。
+    pub titles: Vec<TitleUsage>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailBucket {
+    /// 小时粒度："0".."23"；天粒度："YYYY-MM-DD"
+    pub key: String,
+    pub secs: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TitleUsage {
+    pub title: String,
+    pub secs: u32,
+}
+
+/// 详情时间柱的聚合粒度：日报按小时，周 / 月报按天。
+#[derive(Debug, Clone, Copy)]
+enum BucketBy {
+    Hour,
+    Day,
 }
 
 /// 报表层的设备维度：All=多设备聚合，Only(id)=只看某一台
@@ -327,6 +362,171 @@ pub async fn day_hour_apps(
         })
         .filter(|a| a.minutes > 0)
         .collect())
+}
+
+/// 「点应用 → 详情抽屉」核心：按 `[from, to]` 日期范围 + 粒度，聚合出时间柱(buckets)
+/// + 窗口标题用时(titles)。先解析 icon_process 的 group key（与 [`day_apps`] 的
+/// `GROUP BY COALESCE(g.id, a.process_name)` 同口径），再对同组活动按粒度聚合。
+async fn app_range_detail(
+    pool: &DbPool,
+    from: NaiveDate,
+    to: NaiveDate,
+    icon_process: String,
+    device: DeviceFilter,
+    bucket_by: BucketBy,
+) -> Result<AppDetail> {
+    let from_str = from.format("%Y-%m-%d").to_string();
+    let to_str = to.format("%Y-%m-%d").to_string();
+
+    let (raw_buckets, titles): (std::collections::HashMap<String, u64>, Vec<TitleUsage>) = pool
+        .0
+        .call(move |conn| {
+            // 1) 解析 group key：有组取 group_id，无组退化为 process_name 本身
+            let group_key: String = conn
+                .query_row(
+                    "SELECT group_id FROM app_group_members
+                     WHERE process_name = ?1 AND deleted_at IS NULL",
+                    rusqlite::params![icon_process],
+                    |r| r.get::<_, String>(0),
+                )
+                .optional()
+                .db()?
+                .unwrap_or_else(|| icon_process.clone());
+
+            // 2) 时间柱：小时粒度按 local_hour，天粒度按 local_date 分组求和
+            let bucket_expr = match bucket_by {
+                BucketBy::Hour => "CAST(a.local_hour AS TEXT)",
+                BucketBy::Day => "a.local_date",
+            };
+            let bsql = format!(
+                "SELECT {} AS k, SUM(a.duration_secs) AS total
+                 FROM activities a
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 WHERE a.local_date >= ? AND a.local_date <= ?
+                   AND COALESCE(g.id, a.process_name) = ?
+                   {}
+                 GROUP BY k",
+                bucket_expr,
+                device.sql_clause()
+            );
+            let mut bparams: Vec<&dyn ToSql> = Vec::new();
+            bparams.push(&from_str);
+            bparams.push(&to_str);
+            bparams.push(&group_key);
+            if let Some(extra) = device.extra_param() {
+                bparams.push(extra);
+            }
+            let mut bstmt = conn.prepare(&bsql).db()?;
+            let mut raw: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+            let bit = bstmt
+                .query_map(bparams.as_slice(), |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?.max(0) as u64))
+                })
+                .db()?;
+            for row in bit {
+                let (k, secs) = row.db()?;
+                raw.insert(k, secs);
+            }
+
+            // 3) 窗口标题用时：按 window_title 聚合（空标题归一为空串），降序
+            let tsql = format!(
+                "SELECT COALESCE(a.window_title, '') AS t, SUM(a.duration_secs) AS total
+                 FROM activities a
+                 LEFT JOIN app_group_members gm
+                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                 LEFT JOIN app_groups g
+                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 WHERE a.local_date >= ? AND a.local_date <= ?
+                   AND COALESCE(g.id, a.process_name) = ?
+                   {}
+                 GROUP BY t
+                 ORDER BY total DESC",
+                device.sql_clause()
+            );
+            let mut tparams: Vec<&dyn ToSql> = Vec::new();
+            tparams.push(&from_str);
+            tparams.push(&to_str);
+            tparams.push(&group_key);
+            if let Some(extra) = device.extra_param() {
+                tparams.push(extra);
+            }
+            let mut tstmt = conn.prepare(&tsql).db()?;
+            let tit = tstmt
+                .query_map(tparams.as_slice(), |r| {
+                    Ok(TitleUsage {
+                        title: r.get::<_, String>(0)?,
+                        secs: r.get::<_, i64>(1)?.max(0) as u32,
+                    })
+                })
+                .db()?;
+            let mut titles = Vec::new();
+            for row in tit {
+                titles.push(row.db()?);
+            }
+
+            Ok((raw, titles))
+        })
+        .await?;
+
+    // 4) 把稀疏聚合铺成"完整有序、含 0 空桶"的柱序列，前端直接渲染
+    let buckets = match bucket_by {
+        BucketBy::Hour => (0u8..24)
+            .map(|h| {
+                let key = h.to_string();
+                let secs = raw_buckets.get(&key).copied().unwrap_or(0) as u32;
+                DetailBucket { key, secs }
+            })
+            .collect(),
+        BucketBy::Day => {
+            let mut out = Vec::new();
+            let mut cur = from;
+            while cur <= to {
+                let key = cur.format("%Y-%m-%d").to_string();
+                let secs = raw_buckets.get(&key).copied().unwrap_or(0) as u32;
+                out.push(DetailBucket { key, secs });
+                cur += Duration::days(1);
+            }
+            out
+        }
+    };
+
+    Ok(AppDetail { buckets, titles })
+}
+
+/// 日报详情：当天按小时聚合（24 桶）。`day_offset = 0` 今天。
+pub async fn app_day_detail(
+    pool: &DbPool,
+    day_offset: i32,
+    icon_process: String,
+    device: DeviceFilter,
+) -> Result<AppDetail> {
+    let date = (Local::now() + Duration::days(day_offset as i64)).date_naive();
+    app_range_detail(pool, date, date, icon_process, device, BucketBy::Hour).await
+}
+
+/// 周报详情：本周(周一~周日)按天聚合（7 桶）。`week_offset = 0` 本周。
+pub async fn app_week_detail(
+    pool: &DbPool,
+    week_offset: i32,
+    icon_process: String,
+    device: DeviceFilter,
+) -> Result<AppDetail> {
+    let (monday, sunday) = week_range(week_offset);
+    app_range_detail(pool, monday, sunday, icon_process, device, BucketBy::Day).await
+}
+
+/// 月报详情：当月每天聚合（28~31 桶）。`month_offset = 0` 本月。
+pub async fn app_month_detail(
+    pool: &DbPool,
+    month_offset: i32,
+    icon_process: String,
+    device: DeviceFilter,
+) -> Result<AppDetail> {
+    let (first, last) = month_range(month_offset);
+    app_range_detail(pool, first, last, icon_process, device, BucketBy::Day).await
 }
 
 /// 拉某周 7 天每天的分类时长分布。`week_offset = 0` 是本周（周一开始）。

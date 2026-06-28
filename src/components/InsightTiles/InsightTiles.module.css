@@ -9,7 +9,7 @@
   position: relative;
   background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
@@ -59,7 +59,7 @@
   display: inline-block;
   width: 9px;
   height: 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 

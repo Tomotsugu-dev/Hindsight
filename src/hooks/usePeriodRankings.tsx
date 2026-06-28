@@ -74,6 +74,7 @@ export function usePeriodRankings(
         minutes: a.minutes,
         leading: <AppIcon processName={a.iconProcess} fallbackColor={color} size={26} />,
         categoryId: a.categoryId,
+        iconProcess: a.iconProcess,
       };
     });
   }, [apps, getCategory, t]);

@@ -14,7 +14,7 @@
      视觉宽度接近 Today 页 DevicePicker（设备名通常 3-4 字） */
   min-width: 100px;
   padding: 4px 7px 4px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid
     color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
   background: rgba(255, 255, 255, 0.55);
@@ -87,7 +87,7 @@
   padding: 4px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 4px 12px rgba(20, 20, 40, 0.08),
@@ -137,7 +137,7 @@
   width: 100%;
   height: 32px;
   padding: 0 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12.5px;
   font-weight: var(--font-weight-500);
   color: var(--text-regular);

@@ -80,6 +80,11 @@ function App() {
     void api.setTrayLabels(t("tray.show"), t("tray.quit")).catch(() => {});
   }, [t, i18n.language]);
 
+  // <html lang> 跟随 UI 语言：① a11y / 屏幕阅读器；② CSS 据此按语言调侧栏宽度（中文标签短，收窄）
+  useEffect(() => {
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
+
   return (
     // Suspense fallback 故意保持空 —— page chunk 通常 < 50KB，本地加载几十毫秒级，
     // 闪 spinner 反而扰人。如果将来某个 page 体积涨到肉眼可感的程度（数百 KB+），

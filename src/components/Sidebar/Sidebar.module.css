@@ -32,7 +32,7 @@
 .logoMark {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   object-fit: contain;
   -webkit-user-drag: none;
   user-select: none;

@@ -1,6 +1,6 @@
 .icon {
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   object-fit: contain;
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06);
 }

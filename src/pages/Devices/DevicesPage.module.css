@@ -34,7 +34,7 @@
   padding: 16px 18px;
   background: var(--surface-card-elevated);
   border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(20, 20, 40, 0.04),
@@ -63,7 +63,7 @@
   justify-content: center;
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   color: var(--color-accent);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -175,7 +175,7 @@
   padding: 0 10px;
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);
@@ -251,7 +251,7 @@
   padding: 0 12px;
   background: var(--color-accent);
   color: #ffffff;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
@@ -281,7 +281,7 @@
   width: 96px;
   background: rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.05);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   animation: syncActionsSkeletonPulse 1.2s ease-in-out infinite;
 }
 
@@ -294,7 +294,7 @@
   padding: 10px 12px;
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.18);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   color: #b91c1c;
   white-space: pre-wrap;
@@ -364,7 +364,7 @@
       color-mix(in oklab, var(--color-accent) 1%, #fbfbfd)
     );
   border: 1px solid color-mix(in oklab, var(--color-accent) 16%, rgba(0, 0, 0, 0.05));
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(108, 92, 231, 0.05);
@@ -395,7 +395,7 @@
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   letter-spacing: 0;
   text-transform: none;
   transition:
@@ -534,7 +534,7 @@
   font-size: 11px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   letter-spacing: 0.01em;
   vertical-align: 1px;
   user-select: none;
@@ -568,7 +568,7 @@
   padding: 0 11px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--text-strong);
   font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas,
@@ -606,7 +606,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   border: none;
   color: var(--text-faint);
@@ -656,7 +656,7 @@
   padding: 16px 18px 16px 28px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(20, 20, 40, 0.04),
@@ -686,7 +686,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: color-mix(in oklab, var(--cat-color) 14%, transparent);
   color: var(--cat-color);
   border: none;
@@ -738,7 +738,7 @@
   padding: 0 10px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 15px;
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
@@ -755,7 +755,7 @@
   color: var(--cat-color);
   font-size: 10px;
   font-weight: var(--font-weight-600);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   letter-spacing: 0.02em;
 }
 
@@ -784,7 +784,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--cat-color) 10%, transparent);
   color: var(--cat-color);
   border: none;
@@ -806,7 +806,7 @@
   padding: 18px 18px;
   background: var(--surface-card-elevated);
   border: 1px dashed rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   color: var(--text-muted);
   line-height: 1.5;

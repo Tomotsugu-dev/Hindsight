@@ -15,12 +15,12 @@
 
 .pairing::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.04);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
 }
 
 .pairing::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.18);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   transition: background-color 140ms ease-out;
 }
 
@@ -44,7 +44,7 @@
   align-items: center;
   gap: 12px;
   padding: 6px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   transition:
     grid-template-columns 280ms var(--ease-out),
@@ -128,7 +128,7 @@
   width: 100%;
   min-width: 0;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   transition:
     background-color 120ms ease-out,
@@ -182,7 +182,7 @@
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 120ms ease-out, background-color 120ms ease-out;
@@ -208,7 +208,7 @@
   height: 28px;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 13px;
   font-weight: var(--font-weight-500);
@@ -293,7 +293,7 @@
   transform: translate(-50%, -50%) scale(1.04);
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.12));
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
   box-shadow:
     0 8px 24px rgba(20, 20, 40, 0.18),
@@ -324,7 +324,7 @@
   padding: 0;
   background: transparent;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
   cursor: pointer;
   transition:

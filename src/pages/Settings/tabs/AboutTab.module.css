@@ -8,7 +8,7 @@
 .logo {
   width: 56px;
   height: 56px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   object-fit: cover;
   box-shadow: 0 4px 14px rgba(20, 20, 40, 0.12);
   user-select: none;
@@ -57,7 +57,7 @@
   padding: 0 12px;
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);

@@ -7,7 +7,7 @@
   padding: 0 14px;
   background: color-mix(in oklab, #ef4444 12%, transparent);
   border: 1px solid color-mix(in oklab, #ef4444 22%, transparent);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: #b91c1c;
@@ -60,7 +60,7 @@
   padding: 0 14px;
   background: transparent;
   border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: #b91c1c;
@@ -115,7 +115,7 @@
   padding: 0 12px;
   background: rgba(0, 0, 0, 0.045);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);

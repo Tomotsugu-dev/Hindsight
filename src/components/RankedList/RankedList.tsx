@@ -21,6 +21,8 @@ export interface RankedItem {
   extras?: ReactNode;
   /** 仅 app 排行用：该 app 的小分类 id，便于按 super-category 过滤 */
   categoryId?: string;
+  /** 仅 app 排行用：稳定代表 process_name，点击行查当天该 app 明细时传给后端 */
+  iconProcess?: string;
 }
 
 interface RankedListProps {
@@ -29,9 +31,16 @@ interface RankedListProps {
   totalMinutes?: number;
   /** 默认显示的最大行数；超出则折叠并显示展开按钮。null/0 = 不折叠。 */
   defaultLimit?: number;
+  /** 传了则每行可点（进 app 详情）；不传保持纯展示（Week/Month 等不接） */
+  onItemClick?: (item: RankedItem) => void;
 }
 
-export function RankedList({ items, totalMinutes, defaultLimit = 10 }: RankedListProps) {
+export function RankedList({
+  items,
+  totalMinutes,
+  defaultLimit = 10,
+  onItemClick,
+}: RankedListProps) {
   const { t } = useTranslation();
   const denom = totalMinutes ?? Math.max(...items.map((i) => i.minutes), 1);
   // 切日 / 切设备 / 选时段 → items 重排时，让 row 平滑滑到新位置；
@@ -60,8 +69,8 @@ export function RankedList({ items, totalMinutes, defaultLimit = 10 }: RankedLis
     <ol ref={listRef} className={styles.list}>
       {visibleItems.map((item, idx) => {
         const pct = (item.minutes / denom) * 100;
-        return (
-          <li key={item.id} className={styles.row}>
+        const inner = (
+          <>
             <span className={styles.rank}>{idx + 1}</span>
             {item.leading ?? (
               <span
@@ -87,6 +96,23 @@ export function RankedList({ items, totalMinutes, defaultLimit = 10 }: RankedLis
               />
             </div>
             <span className={styles.time}>{fmtTime(item.minutes)}</span>
+          </>
+        );
+        // 排行行可点（仅 app 排行传 onItemClick）：用原生 button 包在 li 里——
+        // button 天生可交互、键盘 Enter/Space 免费，且无 jsx-a11y 警告。
+        return onItemClick ? (
+          <li key={item.id} className={styles.rowClickable}>
+            <button
+              type="button"
+              className={styles.rowBtn}
+              onClick={() => onItemClick(item)}
+            >
+              {inner}
+            </button>
+          </li>
+        ) : (
+          <li key={item.id} className={styles.row}>
+            {inner}
           </li>
         );
       })}

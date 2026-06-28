@@ -13,7 +13,7 @@
   height: 24px;
   padding: 0 4px 0 8px;
   background: rgba(0, 0, 0, 0.04);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-regular);
@@ -35,7 +35,7 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--text-faint);
   cursor: pointer;
   transition:
@@ -57,7 +57,7 @@
   padding: 0 8px;
   background: transparent;
   border: 1px dashed rgba(0, 0, 0, 0.18);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
@@ -79,7 +79,7 @@
   width: 160px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
   color: var(--text-strong);

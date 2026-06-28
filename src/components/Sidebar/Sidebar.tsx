@@ -29,7 +29,7 @@ export function Sidebar() {
   const groups: NavGroup[] = ["primary", "ai", "data", "system"];
   const location = useLocation();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { status, toggle } = useCaptureStatus();
 
   // 云同步登录状态：周期性刷新 + 窗口聚焦时立刻刷一次
@@ -88,6 +88,27 @@ export function Sidebar() {
       return () => cancelAnimationFrame(id);
     }
   }, [pill.visible, animated]);
+
+  // 侧栏宽度按"当前语言最长导航标签的真实文字宽"取最短适配——每种语言各自贴合，不截断、
+  // 也不为最长语言留空白；以后加新语言也自动。scrollWidth 拿的是完整文字宽（即便 CSS
+  // 省略号截断也准）；+86 = icon + gap + 各层 padding 的固定 chrome(82) 再留 4px 余量；
+  // 下限 150 保证品牌 "Hindsight" 不被挤掉。
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const measure = () => {
+      let maxLabel = 0;
+      for (const el of nav.querySelectorAll<HTMLElement>("[data-sb-label]")) {
+        maxLabel = Math.max(maxLabel, el.scrollWidth);
+      }
+      if (maxLabel === 0) return;
+      const width = Math.min(220, Math.max(150, Math.ceil(maxLabel) + 86));
+      document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
+    };
+    measure();
+    // 首屏 Inter / CJK 字体异步加载，加载完字宽会变 → 再量一次
+    void document.fonts?.ready.then(measure).catch(() => {});
+  }, [i18n.language]);
 
   return (
     <aside className={styles.sidebar}>

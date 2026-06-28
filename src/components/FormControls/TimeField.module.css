@@ -7,7 +7,7 @@
   padding: 0 4px;
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   -webkit-app-region: no-drag;
   app-region: no-drag;
   transition:
@@ -29,7 +29,7 @@
   font-weight: var(--font-weight-500);
   letter-spacing: 0.005em;
   white-space: nowrap;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 4px 14px rgba(20, 20, 40, 0.18);
   opacity: 0;
   pointer-events: none;
@@ -71,7 +71,7 @@
   justify-content: center;
   height: 22px;
   padding: 0 6px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-size: 13px;
   font-weight: var(--font-weight-600);
   line-height: 1;

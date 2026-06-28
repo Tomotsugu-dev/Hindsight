@@ -21,6 +21,10 @@ import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
 import { WeeklyBarChart } from "./WeeklyBarChart";
 import { RankedList } from "../../components/RankedList/RankedList";
+import {
+  AppDetailDrawer,
+  type AppDetailTarget,
+} from "../../components/AppDetailDrawer/AppDetailDrawer";
 import { ViewToggle, type StatsView } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
 import type { DaySummary } from "../../api/hindsight";
@@ -102,8 +106,11 @@ export default function WeekPage() {
 
   // 点某天 → 该 day index 高亮，其它淡化；toggle
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // 点应用 → 详情抽屉；切周 / 切设备时关掉
+  const [selectedApp, setSelectedApp] = useState<AppDetailTarget | null>(null);
   useEffect(() => {
     setSelectedIndex(null);
+    setSelectedApp(null);
   }, [offset, selectedDeviceId]);
   const handleDayClick = (i: number) =>
     setSelectedIndex((prev) => (prev === i ? null : i));
@@ -311,7 +318,18 @@ export default function WeekPage() {
           </header>
           {displayedAppRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>
-              <RankedList items={displayedAppRanks} />
+              <RankedList
+                items={displayedAppRanks}
+                onItemClick={(item) =>
+                  setSelectedApp({
+                    name: item.name,
+                    iconProcess: item.iconProcess ?? item.id,
+                    categoryLabel: item.subtitle,
+                    color: item.color,
+                    minutes: item.minutes,
+                  })
+                }
+              />
             </ScrollBox>
           ) : (
             <EmptyHint />
@@ -334,6 +352,14 @@ export default function WeekPage() {
           )}
         </section>
       </div>
+
+      <AppDetailDrawer
+        app={selectedApp}
+        scope="week"
+        offset={offset}
+        deviceId={selectedDeviceId}
+        onClose={() => setSelectedApp(null)}
+      />
     </div>
   );
 }
