@@ -404,7 +404,9 @@
       },
       "peak": "峰值",
       "dominant": "主力",
-      "composition": "构成"
+      "composition": "构成",
+      "avg": "日均",
+      "avgVsPrev": "日均较上周"
     },
     "rangeSameMonth": "{{month}}月{{startDay}}日 — {{endDay}}日",
     "rangeCrossMonth": "{{startMonth}}月{{startDay}}日 — {{endMonth}}月{{endDay}}日",
@@ -450,7 +452,9 @@
       "peak": "峰值",
       "peakDate": "{{month}}月{{day}}日",
       "dominant": "主力",
-      "composition": "构成"
+      "composition": "构成",
+      "avgVsPrev": "日均较上月",
+      "avg": "日均"
     },
     "monthLabel": "{{year}}年{{month}}月",
     "chart": {

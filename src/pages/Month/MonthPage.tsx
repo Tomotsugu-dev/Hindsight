@@ -94,6 +94,8 @@ export default function MonthPage() {
     [days],
   );
   const avgPerDay = activeDays > 0 ? totalMinutes / activeDays : 0;
+  const avgPerTotalDays =
+    totalMinutes > 0 && activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0;
 
   // 点某天 → 高亮 + 筛排行；toggle；offset / device 切换时清
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -167,6 +169,17 @@ export default function MonthPage() {
   const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+  const prevActiveDays = useMemo(
+    () => slideDaysList[0].filter((d) => d.segments.length > 0).length,
+    [slideDaysList],
+  );
+  const prevAvgPerTotalDays = useMemo(
+    () =>
+      prevBreakdown.total > 0 && prevActiveDays > 0
+        ? Math.round(prevBreakdown.total / prevActiveDays)
+        : 0,
+    [prevBreakdown.total, prevActiveDays],
+  );
 
   // drill 状态下：底部两卡片同步缩进到该大类范围（详见 TodayPage 同名块注释）
   const drilledSlice =
@@ -314,6 +327,8 @@ export default function MonthPage() {
           insights={insights}
           scope="month"
           drilledSlice={drilledSlice}
+          avgMinutes={avgPerTotalDays}
+          prevAvgMinutes={prevAvgPerTotalDays}
         />
       )}
 

@@ -404,7 +404,9 @@
       },
       "peak": "Pico",
       "dominant": "Principal",
-      "composition": "Detalhamento"
+      "composition": "Detalhamento",
+      "avg": "Média diária",
+      "avgVsPrev": "Média vs sem. passada"
     },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
@@ -450,7 +452,9 @@
       "peak": "Pico",
       "peakDate": "{{month}}/{{day}}",
       "dominant": "Principal",
-      "composition": "Detalhamento"
+      "composition": "Detalhamento",
+      "avgVsPrev": "Média vs mês passado",
+      "avg": "Média diária"
     },
     "monthLabel": "{{month}} {{year}}",
     "chart": {

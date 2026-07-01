@@ -103,6 +103,7 @@ export default function WeekPage() {
     [days],
   );
   const avgPerDay = activeDays > 0 ? totalMinutes / activeDays : 0;
+  const avgPerTotalDays = totalMinutes > 0 ? Math.round(totalMinutes / 7) : 0;
 
   // 点某天 → 该 day index 高亮，其它淡化；toggle
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -150,6 +151,10 @@ export default function WeekPage() {
   const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+  const prevAvgPerTotalDays = useMemo(
+    () => (prevBreakdown.total > 0 ? Math.round(prevBreakdown.total / 7) : 0),
+    [prevBreakdown.total],
+  );
 
   const selectionLabel =
     selectedDay !== null
@@ -292,6 +297,8 @@ export default function WeekPage() {
           insights={insights}
           scope="week"
           drilledSlice={drilledSlice}
+          avgMinutes={avgPerTotalDays}
+          prevAvgMinutes={prevAvgPerTotalDays}
         />
       )}
 

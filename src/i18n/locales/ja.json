@@ -404,7 +404,9 @@
       },
       "peak": "ピーク",
       "dominant": "主要",
-      "composition": "構成"
+      "composition": "構成",
+      "avg": "日平均",
+      "avgVsPrev": "日平均 vs 先週"
     },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
@@ -450,7 +452,9 @@
       "peak": "ピーク",
       "peakDate": "{{month}}月{{day}}日",
       "dominant": "主要",
-      "composition": "構成"
+      "composition": "構成",
+      "avgVsPrev": "日平均 vs 先月",
+      "avg": "日平均"
     },
     "monthLabel": "{{year}}年{{month}}",
     "chart": {

@@ -11,6 +11,10 @@ interface Props {
   scope: "today" | "week" | "month";
   /** drill 状态下整行换 accent 色（左侧色条 + 浅 tint）；null = 默认模式 */
   drilledSlice: BreakdownSlice | null;
+  /** 日均分钟数；传入后第二个 tile 从"峰值"切换为"日均" */
+  avgMinutes?: number;
+  /** 上期日均分钟数；传入后追加第 4 个 tile 显示日均对比 */
+  prevAvgMinutes?: number;
 }
 
 const DASH = "—";
@@ -21,12 +25,15 @@ const DASH = "—";
  * - 三项全 null：整行不渲染（header 收回那行高度）
  * - drill 状态：每 tile 走 super-cat accent（左 3px 色条 + 4% tint）
  */
-export function InsightTiles({ insights, scope, drilledSlice }: Props) {
+export function InsightTiles({ insights, scope, drilledSlice, avgMinutes, prevAvgMinutes }: Props) {
   const { t } = useTranslation();
   const fmtHM = useDurationFormatter();
   const { diff, peak, third } = insights;
 
-  if (!diff && !peak && !third) return null;
+  if (!diff && !peak && !third && avgMinutes == null) return null;
+
+  const showAvg = avgMinutes != null;
+  const showAvgVsPrev = showAvg && prevAvgMinutes != null;
 
   // —— A：vs 上期 ——
   let aValue: React.ReactNode;
@@ -53,12 +60,22 @@ export function InsightTiles({ insights, scope, drilledSlice }: Props) {
     );
   }
 
-  // —— B：峰值 ——
-  const bValue = peak ? (
-    <span className={styles.value}>{peak.label}</span>
-  ) : (
-    <span className={styles.dash}>{DASH}</span>
-  );
+  // —— B：峰值 / 日均 ——
+  const bValue =
+    avgMinutes != null ? (
+      <span className={styles.value}>{fmtHM(avgMinutes)}</span>
+    ) : peak ? (
+      <span className={styles.value}>{peak.label}</span>
+    ) : (
+      <span className={styles.dash}>{DASH}</span>
+    );
+
+  const bLabel =
+    avgMinutes != null
+      ? t(`${scope}.insights.avg`)
+      : peak
+        ? `${t(`${scope}.insights.peak`)} · ${fmtHM(peak.minutes)}`
+        : t(`${scope}.insights.peak`);
 
   // —— C：主力 / 构成 ——
   const cValue = third ? (
@@ -79,13 +96,35 @@ export function InsightTiles({ insights, scope, drilledSlice }: Props) {
       ? t(`${scope}.insights.composition`)
       : t(`${scope}.insights.dominant`);
 
+  // —— D：日均对比 ——
+  let dValue: React.ReactNode = null;
+  if (showAvgVsPrev && avgMinutes != null && prevAvgMinutes != null) {
+    const diffAvg = avgMinutes - prevAvgMinutes;
+    if (diffAvg === 0) {
+      dValue = <span className={styles.value}>{t(`${scope}.insights.vsPrev.flat`)}</span>;
+    } else {
+      const abs = Math.abs(diffAvg);
+      const isUp = diffAvg > 0;
+      dValue = (
+        <span className={`${styles.value} ${isUp ? styles.up : styles.down}`}>
+          {isUp ? (
+            <ArrowUp size={14} strokeWidth={2.4} aria-hidden />
+          ) : (
+            <ArrowDown size={14} strokeWidth={2.4} aria-hidden />
+          )}
+          {fmtHM(abs)}
+        </span>
+      );
+    }
+  }
+
   const rootStyle: CSSProperties | undefined = drilledSlice
     ? ({ "--accent": drilledSlice.color } as CSSProperties)
     : undefined;
 
   return (
     <div
-      className={styles.tiles}
+      className={`${styles.tiles} ${showAvg ? styles.hasAvg : ""}`}
       data-drill={drilledSlice ? "" : undefined}
       style={rootStyle}
     >
@@ -95,11 +134,14 @@ export function InsightTiles({ insights, scope, drilledSlice }: Props) {
       </div>
       <div className={styles.tile}>
         {bValue}
-        <div className={styles.label}>
-          {t(`${scope}.insights.peak`)}
-          {peak && <> · {fmtHM(peak.minutes)}</>}
-        </div>
+        <div className={styles.label}>{bLabel}</div>
       </div>
+      {showAvgVsPrev && (
+        <div className={styles.tile}>
+          {dValue}
+          <div className={styles.label}>{t(`${scope}.insights.avgVsPrev`)}</div>
+        </div>
+      )}
       <div className={styles.tile}>
         {cValue}
         <div className={styles.label}>{cLabel}</div>

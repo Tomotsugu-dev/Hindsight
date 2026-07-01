@@ -404,7 +404,9 @@
       },
       "peak": "Peak",
       "dominant": "Top",
-      "composition": "Breakdown"
+      "composition": "Breakdown",
+      "avg": "Daily avg",
+      "avgVsPrev": "Avg vs last week"
     },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
@@ -450,7 +452,9 @@
       "peak": "Peak",
       "peakDate": "{{month}}/{{day}}",
       "dominant": "Top",
-      "composition": "Breakdown"
+      "composition": "Breakdown",
+      "avg": "Daily avg",
+      "avgVsPrev": "Avg vs last month"
     },
     "monthLabel": "{{month}} {{year}}",
     "chart": {
