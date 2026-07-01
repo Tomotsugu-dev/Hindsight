@@ -121,3 +121,17 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
+
+/* —— 暗色专属：跟日柱状图(HourlyChart)统一——段间白线改暗缝(0.32)、网格/基线改暗色可见。
+   亮色声明一律不动。 —— */
+:global([data-theme="dark"]) .plotArea {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+:global([data-theme="dark"]) .gridLine {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:global([data-theme="dark"]) .segment:not(:last-child) {
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.32);
+}

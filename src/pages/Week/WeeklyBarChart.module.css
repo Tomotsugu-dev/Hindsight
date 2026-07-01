@@ -118,3 +118,13 @@
   color: var(--text-faint);
   font-weight: var(--font-weight-500);
 }
+
+/* —— 暗色专属：跟日/月柱状图统一——段间白线改暗缝(0.32)；条底槽改淡白（空条部分可见）。
+   亮色声明一律不动。 —— */
+:global([data-theme="dark"]) .track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:global([data-theme="dark"]) .segment:not(:first-child) {
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.32);
+}

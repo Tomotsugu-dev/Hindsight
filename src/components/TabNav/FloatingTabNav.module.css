@@ -58,3 +58,12 @@
 .floatingTabsVisible nav {
   pointer-events: auto;
 }
+
+/* 暗色：亮色 tint（黑叠加）和亮色高光线在深底上全部失效/刺眼，换成淡白 tint + 暗阴影 */
+:global([data-theme="dark"]) .floatingTabs nav {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 4px 14px rgba(0, 0, 0, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}

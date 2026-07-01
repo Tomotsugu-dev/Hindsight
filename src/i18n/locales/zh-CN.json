@@ -76,9 +76,19 @@
     "pageTitle": "设置",
     "tabs": {
       "general": "常规",
+      "appearance": "外观",
       "data": "数据",
       "privacy": "隐私",
       "about": "关于"
+    },
+    "appearance": {
+      "sectionTitle": "主题",
+      "description": "选择界面外观，设置立即生效并保存在本机。",
+      "themes": {
+        "default": { "name": "明亮", "desc": "柔和渐变侧栏，明亮配色" },
+        "minimal": { "name": "简约", "desc": "纯色侧栏，扁平无渐变" },
+        "dark": { "name": "暗色", "desc": "深色背景，适合夜间" }
+      }
     },
     "language": {
       "sectionTitle": "语言 / Language",

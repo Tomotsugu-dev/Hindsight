@@ -76,9 +76,19 @@
     "pageTitle": "設定",
     "tabs": {
       "general": "一般",
+      "appearance": "外観",
       "data": "データ",
       "privacy": "プライバシー",
       "about": "情報"
+    },
+    "appearance": {
+      "sectionTitle": "テーマ",
+      "description": "インターフェースの外観を選びます。すぐに反映され、この端末に保存されます。",
+      "themes": {
+        "default": { "name": "デフォルト", "desc": "やわらかいグラデーションのサイドバー、明るい配色" },
+        "minimal": { "name": "シンプル", "desc": "単色サイドバー、グラデーションなしのフラット" },
+        "dark": { "name": "ダーク", "desc": "暗い背景、夜間に見やすい" }
+      }
     },
     "language": {
       "sectionTitle": "言語 / Language",

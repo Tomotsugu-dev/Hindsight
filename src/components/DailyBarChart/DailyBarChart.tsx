@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
+import { useIsDark } from "../../hooks/useTheme";
+import { adjustCategoryColor } from "../../utils/categoryColor";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./DailyBarChart.module.css";
 
@@ -32,6 +34,7 @@ export function DailyBarChart({
 }: DailyBarChartProps) {
   const { t } = useTranslation();
   const { getCategory } = useCategories();
+  const isDark = useIsDark();
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
   const maxTotal = Math.max(0, ...totals);
   const yMax = niceYMax(maxTotal);
@@ -116,7 +119,7 @@ export function DailyBarChart({
                           className={styles.segment}
                           style={{
                             height: `${(seg.minutes / total) * 100}%`,
-                            background: cat.color,
+                            background: adjustCategoryColor(cat.color, isDark),
                           }}
                         />
                       );

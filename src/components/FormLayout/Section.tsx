@@ -18,6 +18,7 @@ interface SectionProps {
   /** Section 标题行最右侧的 action slot——给 Section 级别的"主操作"按钮用
    *  （例如「仅生成」、「全部清空」）。CSS 把它推到 header 行最右、跟标题对齐。 */
   headerAction?: ReactNode;
+  bare?: boolean;
   children: ReactNode;
 }
 
@@ -29,6 +30,7 @@ export function Section({
   info,
   collapsible = false,
   headerAction,
+  bare = false,
   children,
 }: SectionProps) {
   return (
@@ -70,7 +72,9 @@ export function Section({
         ) : null}
       </header>
       {/* collapsible 时外层 cardWrap 走 grid-rows trick；非 collapsible 直接渲 card */}
-      {collapsible ? (
+      {bare ? (
+        children
+      ) : collapsible ? (
         <div className={styles.cardWrap}>
           <div className={styles.cardInner}>
             <div className={styles.card}>{children}</div>

@@ -118,6 +118,26 @@
   margin: 0 12px;
 }
 
+/* —— 暗色专属：这页是密集多设备表格，亮色靠 2.5% 黑斑马纹 + gap 分行；暗色下黑斑马纹、
+   黑虚线全看不见 → 行糊在一起。恢复暗色的分行信号（亮色声明一律不动）：行距加大、
+   斑马纹改淡白、hover 可见、空列虚线改淡白。unassigned/hot 等特殊态用 :not 排除，
+   保持它们各自的黄/accent 高亮。 —— */
+:global([data-theme="dark"]) .pairing {
+  gap: 7px;
+}
+
+:global([data-theme="dark"]) .rowEven:not(.unassigned):not(.hot) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:global([data-theme="dark"]) .row:hover:not(.unassigned):not(.hot) {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+:global([data-theme="dark"]) .emptyDash {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -224,6 +244,13 @@
 .nameInput:hover {
   border-color: rgba(0, 0, 0, 0.12);
   background: rgba(255, 255, 255, 0.6);
+}
+
+/* 暗色：hover 提示底亮色是 60% 白，暗色下就是刺眼灰白框。改成淡白提示。亮色不动。 */
+:global([data-theme="dark"]) .row:hover .nameInput,
+:global([data-theme="dark"]) .nameInput:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .nameInput:focus {

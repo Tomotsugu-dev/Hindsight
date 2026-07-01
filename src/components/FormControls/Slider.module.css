@@ -119,6 +119,22 @@
     0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
 }
 
+/* 暗色：未填充轨道段是 7% 黑（暗底看不见空轨）、valueBox 黑边看不见。
+   未填充段改淡白（空轨可见）、valueBox 边淡白。白球 thumb + accent 填充保留。亮色不动。 */
+:global([data-theme="dark"]) .input {
+  background: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--color-accent) 78%, white) 0%,
+    var(--color-accent) var(--fill, 0%),
+    rgba(255, 255, 255, 0.1) var(--fill, 0%),
+    rgba(255, 255, 255, 0.1) 100%
+  );
+}
+
+:global([data-theme="dark"]) .valueBox {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 /* —— 数字滚轴：参考 TimeField，每位一个 column，strip 滚动 —— */
 .digits {
   display: inline-flex;

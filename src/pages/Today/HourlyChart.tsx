@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
+import { useIsDark } from "../../hooks/useTheme";
+import { adjustCategoryColor } from "../../utils/categoryColor";
 import type { HourSlot } from "../../api/hindsight";
 import styles from "./HourlyChart.module.css";
 
@@ -149,6 +151,7 @@ function HourBar({
   const total = slot.segments.reduce((s, x) => s + x.minutes, 0);
   const heightPct = Math.min((total / maxMinutes) * 100, 100);
   const interactive = !!onClick;
+  const isDark = useIsDark();
   // 整列都可点（不只柱子的高度内），点空槽位也能选中那个小时——和"hit area
   // 限制在 bar 高度内会让点低柱难"的常见 UX 痛点对齐
   return (
@@ -181,7 +184,7 @@ function HourBar({
                 className={styles.segment}
                 style={{
                   height: `${(seg.minutes / total) * 100}%`,
-                  background: cat.color,
+                  background: adjustCategoryColor(cat.color, isDark),
                 }}
               />
             );

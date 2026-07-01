@@ -16,8 +16,8 @@
   padding: 4px 7px 4px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid
-    color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
-  background: rgba(255, 255, 255, 0.55);
+    color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  background: var(--control-bg);
   font-size: 12px;
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
@@ -29,7 +29,7 @@
 }
 
 .trigger:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--control-bg-hover);
 }
 
 .triggerOpen {
@@ -37,7 +37,7 @@
   border-color: color-mix(
     in oklab,
     var(--color-accent) 32%,
-    rgba(0, 0, 0, 0.06)
+    var(--border-default)
   );
 }
 
@@ -86,10 +86,10 @@
   z-index: var(--z-dropdown);
   padding: 4px;
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 1px 0 var(--hairline-hi) inset,
     0 4px 12px rgba(20, 20, 40, 0.08),
     0 12px 28px rgba(20, 20, 40, 0.1);
   animation-duration: 200ms;
@@ -149,7 +149,7 @@
 }
 
 .item:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--surface-2);
   color: var(--text-strong);
 }
 

@@ -34,6 +34,7 @@ const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
 const AppsPage = lazy(() => import("./pages/Apps/AppsPage"));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("./pages/Settings/tabs/GeneralTab"));
+const AppearanceTab = lazy(() => import("./pages/Settings/tabs/AppearanceTab"));
 const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("./pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
@@ -114,6 +115,7 @@ function App() {
           <Route path={ROUTES.apps} element={<AppsPage />} />
           <Route path={ROUTES.settings} element={<SettingsPage />}>
             <Route index element={<GeneralTab />} />
+            <Route path="appearance" element={<AppearanceTab />} />
             <Route path="data" element={<DataTab />} />
             <Route path="privacy" element={<PrivacyTab />} />
             <Route path="about" element={<AboutTab />} />

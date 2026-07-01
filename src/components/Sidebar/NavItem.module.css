@@ -42,14 +42,16 @@
 }
 
 .icon {
-  color: var(--icon-color);
-  /* 未激活时也保持 90% 饱和度，避免变灰 */
-  opacity: 0.92;
-  transition: opacity var(--duration-base) var(--ease-out);
+  /* 去掉每项品牌色：图标跟随 .item 文字色（平时 muted、hover strong、选中 on-pill），
+     整条侧栏统一为中性单色，选中态靠高亮条 + 图标/文字一起提亮来区分。 */
+  color: currentColor;
+  transition: color var(--duration-base) var(--ease-out);
 }
 
-.item.active .icon {
-  opacity: 1;
+/* 「默认」外观（柔和渐变侧栏、明亮配色）保留每项品牌色；简约 / 暗色走上面的中性单色。
+   --icon-color 由 NavItem 注入，取自 nav.ts 每项各自的品牌色。 */
+:global([data-theme="default"]) .icon {
+  color: var(--icon-color);
 }
 
 .label {

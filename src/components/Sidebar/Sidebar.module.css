@@ -6,7 +6,7 @@
   padding: var(--space-3);
   background: var(--sidebar-gradient);
   border-right: 1px solid var(--sidebar-border);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.4);
+  box-shadow: inset -1px 0 0 var(--hairline-hi);
 }
 
 .brand {

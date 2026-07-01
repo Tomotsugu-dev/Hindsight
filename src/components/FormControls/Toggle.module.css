@@ -42,3 +42,18 @@
 .toggle.on .thumb {
   transform: translateX(16px);
 }
+
+/* 暗色：关闭态 track 是 12% 黑、thumb 是深色 surface-card → 暗底上整个开关看不见。
+   关闭态 track 改淡白（可见）、thumb 改亮白（深/紫 track 上都清晰）；开启态 accent 紫
+   由 :not(.on) 排除、保持原样。亮色不动。 */
+:global([data-theme="dark"]) .toggle:not(.on) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+:global([data-theme="dark"]) .toggle:not(.on):hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+:global([data-theme="dark"]) .thumb {
+  background: #e9e9ec;
+}

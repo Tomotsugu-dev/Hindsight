@@ -76,9 +76,19 @@
     "pageTitle": "Configurações",
     "tabs": {
       "general": "Geral",
+      "appearance": "Aparência",
       "data": "Dados",
       "privacy": "Privacidade",
       "about": "Sobre"
+    },
+    "appearance": {
+      "sectionTitle": "Tema",
+      "description": "Escolha a aparência da interface. Aplica na hora e fica salvo neste dispositivo.",
+      "themes": {
+        "default": { "name": "Padrão", "desc": "Barra lateral com gradiente suave, paleta clara" },
+        "minimal": { "name": "Minimalista", "desc": "Barra lateral sólida, plana e sem gradiente" },
+        "dark": { "name": "Escuro", "desc": "Fundo escuro, confortável à noite" }
+      }
     },
     "language": {
       "sectionTitle": "语言 / Language",

@@ -1,5 +1,6 @@
 /* Design tokens — Arc-inspired light palette for Hindsight.
-   暗色模式预留：dark 命名空间留给后续 issue，本文件仅 light 主题。 */
+   :root = 默认（default）主题；简约（minimal）/ 暗色（dark）的 token 覆盖见文件末尾
+   [data-theme=...] 块，由 lib/theme.ts 写到 <html data-theme> 上驱动。 */
 
 :root {
   /* —— Brand / accent —— */
@@ -16,6 +17,11 @@
   --surface-card: #ffffff;
   --surface-card-elevated: #fbfbfd;
   --surface-overlay: rgba(255, 255, 255, 0.75);
+  /* 组件里散用的 surface 别名（历史遗留：曾各自带 #fff / rgba 兜底）——正式纳入
+     token，让三种主题都能覆盖，避免暗色下走白色兜底出现荧光亮块。 */
+  --surface-1: var(--surface-card);
+  --surface-2: rgba(0, 0, 0, 0.025);
+  --surface: var(--surface-card);
 
   /* Pill (active nav item) — 半透明 + 毛玻璃，能透出渐变 */
   --pill-bg: rgba(255, 255, 255, 0.55);
@@ -53,6 +59,20 @@
   --alpha-border-strong: 0.12;
   --alpha-overlay-subtle: 0.06;
   --alpha-overlay: 0.16;
+
+  /* —— 边框语义色（完整值）——
+     组件 CSS 一律走这三档，别再裸写 rgba(0,0,0,X)：亮色是淡黑描边，暗色自动转淡白描边
+     （见 [data-theme="dark"]），否则黑描边在深底上直接隐形。 */
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  /* 卡片 / 按钮顶部那道内高光亮线；暗色下调到很淡，避免亮边过重 */
+  --hairline-hi: rgba(255, 255, 255, 0.6);
+
+  /* 控件（下拉 / 日期导航钮）的半透明底：亮色是玻璃白，暗色转成很淡的白 wash
+     （见 [data-theme="dark"]），否则半透明白在深底上是一块刺眼灰白。 */
+  --control-bg: rgba(255, 255, 255, 0.55);
+  --control-bg-hover: rgba(255, 255, 255, 0.85);
 
   /* —— Shadows —— */
   --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.08);
@@ -138,4 +158,87 @@
   --z-modal: 9010;
   /* —— Drag fly：拖拽时跟随光标的飞行 chip（原 9999），盖在一切之上 */
   --z-drag-fly: 9020;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   外观主题覆盖：<html data-theme> 由 lib/theme.ts 写入。
+   default 走上面的 :root；minimal / dark 只覆盖需要变的 token。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* —— 简约：去掉侧栏渐变，纯色扁平；亮色配色其余继承默认 —— */
+[data-theme="minimal"] {
+  /* 侧栏纯色（无渐变），配一条略清晰的分隔线 */
+  --sidebar-gradient: #f4f4f6;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+
+  /* 激活胶囊：没有渐变可透，半透明毛玻璃会"隐形"——改实心白 + 描边 + 轻阴影 */
+  --pill-bg: #ffffff;
+  --pill-blur: none;
+  --pill-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(20, 20, 40, 0.08);
+
+  /* hover 在浅灰侧栏上用淡黑，比默认的半透明白更可见 */
+  --hover-bg: rgba(0, 0, 0, 0.045);
+}
+
+/* —— 暗色：深色背景，surface 分三级明度制造层次 —— */
+[data-theme="dark"] {
+  --color-accent: #8b7bf0;
+  --color-accent-soft: rgba(139, 123, 240, 0.18);
+
+  /* 侧栏低调深色渐变（顶部略亮），不喧宾夺主 */
+  --sidebar-gradient: linear-gradient(180deg, #1b1b21 0%, #141418 100%);
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+
+  --surface-app: #0e0e11;
+  --surface-card: #16161a;
+  --surface-card-elevated: #1d1d23;
+  --surface-overlay: rgba(22, 22, 26, 0.8);
+  /* 大类卡等用 --surface-1 当底：给它比内容亮一档的 elevated 深灰（表层越高越亮），
+     大面积不再用高饱和分类色，色相只作微弱掺入 + 边条强调 */
+  --surface-1: var(--surface-card-elevated);
+  --surface-2: rgba(255, 255, 255, 0.04);
+
+  /* 边框转淡白描边——深底上黑描边不可见 */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --hairline-hi: rgba(255, 255, 255, 0.05);
+
+  /* 控件底转成很淡的白 wash——深底上是一块微微浮起的控件，而不是灰白亮块 */
+  --control-bg: rgba(255, 255, 255, 0.05);
+  --control-bg-hover: rgba(255, 255, 255, 0.09);
+
+  /* 激活胶囊：深色下用半透明白 + 内高光透出侧栏渐变 */
+  --pill-bg: rgba(255, 255, 255, 0.07);
+  --pill-blur: saturate(140%) blur(14px);
+  --pill-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+
+  --hover-bg: rgba(255, 255, 255, 0.05);
+
+  --text-strong: #dadae1;
+  --text-regular: #c6c6d0;
+  --text-muted: #9b9ba6;
+  --text-faint: #6c6c78;
+  --text-on-pill: #f2f2f5;
+
+  /* 状态 chip 背景在深色下需要更高透明度才够可见 */
+  --status-ok-soft: rgba(34, 197, 94, 0.18);
+  --status-error-soft: rgba(239, 68, 68, 0.18);
+  --status-pending-soft: rgba(245, 158, 11, 0.18);
+
+  /* 阴影改深黑，深背景上才有立体感 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md:
+    0 1px 0 rgba(255, 255, 255, 0) inset,
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-inset-hi: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }

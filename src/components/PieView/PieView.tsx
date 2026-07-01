@@ -3,6 +3,8 @@ import { useDurationFormatter } from "../../utils/duration";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import type { BreakdownSlice } from "../../hooks/useSuperCategoryBreakdown";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
+import { useIsDark } from "../../hooks/useTheme";
+import { adjustCategoryColor } from "../../utils/categoryColor";
 import { Donut } from "./Donut";
 import styles from "./PieView.module.css";
 
@@ -34,6 +36,7 @@ export function PieView({
   onDrill,
 }: Props) {
   const fmtHM = useDurationFormatter();
+  const isDark = useIsDark();
   const [hover, setHover] = useState<string | null>(null);
 
   if (slices.length === 0 || total <= 0) {
@@ -68,7 +71,11 @@ export function PieView({
         <Donut
           size={180}
           thickness={20}
-          segments={slices.map((s) => ({ id: s.id, color: s.color, value: s.minutes }))}
+          segments={slices.map((s) => ({
+            id: s.id,
+            color: adjustCategoryColor(s.color, isDark),
+            value: s.minutes,
+          }))}
           total={total}
           activeId={activeId}
           onHover={interactive ? setHover : undefined}
@@ -94,7 +101,9 @@ export function PieView({
               <button
                 type="button"
                 className={styles.row}
-                style={{ "--row-color": s.color } as CSSProperties}
+                style={
+                  { "--row-color": adjustCategoryColor(s.color, isDark) } as CSSProperties
+                }
                 data-active={isActive || undefined}
                 data-dim={dim || undefined}
                 onMouseEnter={() => interactive && setHover(s.id)}

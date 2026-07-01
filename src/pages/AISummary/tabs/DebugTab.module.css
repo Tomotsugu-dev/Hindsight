@@ -77,8 +77,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  background: var(--control-bg);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -88,7 +88,7 @@
 
 .navBtn:hover:not(:disabled) {
   color: var(--color-accent);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--control-bg-hover);
 }
 
 .navBtn:disabled {
@@ -104,8 +104,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, rgba(0, 0, 0, 0.06));
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  background: var(--control-bg);
   font-size: 12px;
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
@@ -119,7 +119,7 @@
 
 .dayPill:hover:not(:disabled) {
   color: var(--color-accent);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--control-bg-hover);
 }
 
 .dayPill:disabled {
@@ -130,8 +130,8 @@
 .segSelect {
   height: 30px;
   padding: 0 10px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-500);
@@ -332,7 +332,7 @@
   height: 30px;
   padding: 0 12px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-strong);
   color: var(--text-strong);
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -344,8 +344,8 @@
 }
 
 .exportBtn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.2);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
 .exportBtn:disabled {
@@ -360,7 +360,7 @@
   gap: 10px;
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.025);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--text-muted);
@@ -403,8 +403,8 @@
   min-height: 160px;
   max-height: 360px;
   padding: 12px 14px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
   font-family:
@@ -458,8 +458,9 @@
   cursor: text;
 }
 
-/* 折叠态：textarea 底部叠一个透明→白渐变，让露出的那一行文字下方虚化，
-   暗示"内容还有更多"。hover 时 opacity 0 隐去，textarea 完整显示。 */
+/* 折叠态：textarea 底部叠一个透明→卡片底色的渐变，让露出的那一行文字下方虚化，
+   暗示"内容还有更多"。渐隐到 --surface-card：亮色=白、暗色=深灰，两个主题都
+   匹配 textarea 底色，暗色下不再发白糊字。hover 时 opacity 0 隐去，完整显示。 */
 .collapseFade {
   position: absolute;
   left: 1px;
@@ -467,7 +468,11 @@
   bottom: 1px;
   height: 30px;
   pointer-events: none;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 80%);
+  background: linear-gradient(
+    to bottom,
+    rgb(from var(--surface-card) r g b / 0),
+    var(--surface-card) 80%
+  );
   border-radius: 0 0 8px 8px;
   transition: opacity 900ms ease-out;
 }
@@ -588,7 +593,7 @@
   margin: 0;
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.025);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 11.5px;
   line-height: 1.55;
@@ -604,7 +609,7 @@
   font-style: italic;
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.02);
-  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   line-height: 1.6;
 }
@@ -630,7 +635,7 @@
   padding: 18px 12px;
   text-align: center;
   background: rgba(0, 0, 0, 0.02);
-  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
 }
 
@@ -639,8 +644,8 @@
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }
 
@@ -674,7 +679,7 @@
   gap: 3px;
   height: 18px;
   padding: 0 7px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--surface-2);
   border-radius: var(--radius-sm);
   font-size: 10.5px;
   font-weight: var(--font-weight-500);
@@ -733,7 +738,7 @@
   height: 22px;
   padding: 0 7px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-xs);
   font-size: 10.5px;
   font-weight: var(--font-weight-500);
@@ -765,7 +770,7 @@
   overflow-y: auto;
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.025);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   font-size: 11px;
@@ -818,8 +823,8 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }
 
@@ -877,7 +882,7 @@
 }
 
 .summaryStatusSkipped {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--surface-2);
   color: var(--text-muted);
 }
 
@@ -897,7 +902,7 @@
   padding: 18px 12px;
   text-align: center;
   background: rgba(0, 0, 0, 0.02);
-  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
 }
 
@@ -907,7 +912,7 @@
   height: 18px;
   padding: 0 8px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   font-size: 10px;
   font-weight: var(--font-weight-500);

@@ -36,7 +36,6 @@
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(20, 20, 40, 0.04),
     0 8px 20px rgba(20, 20, 40, 0.06);
 }
@@ -53,6 +52,34 @@
     #fbfbfd
   );
   border-color: color-mix(in oklab, var(--color-accent) 22%, rgba(0, 0, 0, 0.07));
+}
+
+/* —— 暗色：账户卡「已连接」态、OAuth setup 面板、面板关闭钮原本都是 accent×白 的亮卡，
+   暗色下会发白（且卡内 --text-strong 亮字打在白底上直接看不清）。统一改成 accent 淡染
+   暗底：卡内文字都是语义 token，卡底一暗就自动恢复正常。 —— */
+:global([data-theme="dark"]) .syncCardConnected {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-accent) 16%, var(--surface-card-elevated)),
+    color-mix(in oklab, var(--color-accent) 7%, var(--surface-card-elevated))
+  );
+  border-color: color-mix(in oklab, var(--color-accent) 34%, transparent);
+}
+
+:global([data-theme="dark"]) .setupPanel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-accent) 14%, var(--surface-card-elevated)),
+    color-mix(in oklab, var(--color-accent) 6%, var(--surface-card-elevated))
+  );
+  border-color: color-mix(in oklab, var(--color-accent) 26%, transparent);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+:global([data-theme="dark"]) .setupClose {
+  background: var(--surface-2);
+  border-color: var(--border-default);
 }
 
 .syncIcon {
@@ -366,7 +393,6 @@
   border: 1px solid color-mix(in oklab, var(--color-accent) 16%, rgba(0, 0, 0, 0.05));
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 1px 2px rgba(108, 92, 231, 0.05);
 }
 
@@ -658,9 +684,13 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 6px 16px rgba(20, 20, 40, 0.04);
+    0 1px 16px rgba(20, 20, 40, 0.04);
+}
+
+/* 暗色：surface-card(#16161a) 跟页面底(#0e0e11) 太接近，卡几乎看不出填充、显得扁平。
+   提到 surface-card-elevated(#1d1d23)——比背景亮一档，跟设置页卡片同款体积感。亮色不动。 */
+:global([data-theme="dark"]) .deviceRow {
+  background: var(--surface-card-elevated);
 }
 
 .deviceRow::before {

@@ -29,8 +29,8 @@
   width: 280px;
   height: 32px;
   padding: 0 10px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-strong);
@@ -57,8 +57,8 @@
      resize 自己拉高（resize: vertical 仍生效）。 */
   max-height: 280px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-family: inherit;
@@ -115,8 +115,8 @@
   /* 内容超出后内部滚动，避免 Section 越拉越长。用户仍能拖右下角自己加高。 */
   max-height: 420px;
   padding: 12px 14px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
   font-family:
@@ -159,7 +159,7 @@
   height: 30px;
   padding: 0 12px;
   background: transparent;
-  border: 1px dashed rgba(0, 0, 0, 0.2);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-500);
@@ -332,7 +332,7 @@
   height: 36px;
   padding: 0 14px;
   background: transparent;
-  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  border: 1.5px solid var(--border-strong);
   color: var(--text-strong);
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -345,8 +345,8 @@
 }
 
 .engineSecondaryGhost:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.22);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
 .engineSecondaryGhost:active:not(:disabled) {
@@ -468,7 +468,7 @@
 }
 
 .engineBadgeOff {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--surface-2);
   color: var(--text-muted);
 }
 
@@ -667,7 +667,7 @@
   border-radius: var(--radius-pill);
   cursor: pointer;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 1px 0 var(--hairline-hi) inset,
     0 1px 2px rgba(20, 20, 40, 0.04);
   transition:
     background 160ms var(--ease-out),
@@ -682,14 +682,14 @@
   background: color-mix(in oklab, var(--color-accent) 14%, transparent);
   border-color: color-mix(in oklab, var(--color-accent) 32%, transparent);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 1px 0 var(--hairline-hi) inset,
     0 2px 6px color-mix(in oklab, var(--color-accent) 18%, transparent);
 }
 
 .vramRecommendBtn:active:not(:disabled) {
   transform: scale(0.97);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 1px 0 var(--hairline-hi) inset,
     0 1px 2px rgba(20, 20, 40, 0.04);
 }
 
@@ -697,7 +697,7 @@
   cursor: default;
   color: var(--text-faint);
   background: rgba(0, 0, 0, 0.025);
-  border-color: rgba(0, 0, 0, 0.06);
+  border-color: var(--border-default);
   box-shadow: none;
 }
 
@@ -739,7 +739,7 @@
 .vramEstInfo:hover,
 .vramEstInfo:focus-visible {
   color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--surface-2);
   outline: none;
 }
 
@@ -893,7 +893,7 @@
    但用偏蓝调底色 + 蓝描边把它跟"本地"区分开。不可点、不参与筛选/排序。 */
 .modelCardCloud {
   background: color-mix(in oklab, #3b82f6 6%, rgba(0, 0, 0, 0.02));
-  border-color: color-mix(in oklab, #3b82f6 26%, rgba(0, 0, 0, 0.06));
+  border-color: color-mix(in oklab, #3b82f6 26%, var(--border-default));
 }
 
 .modelCardCloudIcon {
@@ -913,7 +913,7 @@
   gap: 8px;
   padding: 10px 14px;
   background: rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }
 
@@ -943,7 +943,7 @@
   flex-shrink: 0;
   object-fit: cover;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   background: rgba(0, 0, 0, 0.03);
 }
 
@@ -1032,7 +1032,7 @@
   height: 36px;
   padding: 0 24px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.16);
+  border: 1px solid var(--border-strong);
   color: var(--text-strong);
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -1273,8 +1273,8 @@
 
 /* ── fallback：JSON 加了新 type 但前端没补色 → 走灰色不至于布局崩 ── */
 .capBadgeUnknown {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.12);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
   color: var(--text-muted);
 }
 
@@ -1289,7 +1289,7 @@
   height: 26px;
   padding: 0 10px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-strong);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
   font-size: 11px;
@@ -1375,7 +1375,7 @@
   margin-top: 4px;
   padding: 6px 14px;
   background: transparent;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-500);
@@ -1418,7 +1418,7 @@
   gap: 10px;
   padding: 12px 14px;
   background: rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }
 
@@ -1660,8 +1660,8 @@
   width: 100%;
   height: 32px;
   padding: 0 12px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
   color: var(--text-strong);
@@ -1698,8 +1698,8 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;

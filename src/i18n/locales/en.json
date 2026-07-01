@@ -76,9 +76,19 @@
     "pageTitle": "Settings",
     "tabs": {
       "general": "General",
+      "appearance": "Appearance",
       "data": "Data",
       "privacy": "Privacy",
       "about": "About"
+    },
+    "appearance": {
+      "sectionTitle": "Theme",
+      "description": "Choose how the interface looks. Applies instantly and is saved on this device.",
+      "themes": {
+        "default": { "name": "Default", "desc": "Soft gradient sidebar, bright palette" },
+        "minimal": { "name": "Minimal", "desc": "Solid sidebar, flat and gradient-free" },
+        "dark": { "name": "Dark", "desc": "Dark background, easy on the eyes at night" }
+      }
     },
     "language": {
       "sectionTitle": "语言 / Language",

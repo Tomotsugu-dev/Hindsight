@@ -1,0 +1,140 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+/* 每种主题一张可点卡片（button reset 见 global.css） */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+.card:hover {
+  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+.cardActive {
+  border-color: var(--color-accent);
+  box-shadow:
+    0 0 0 1px var(--color-accent),
+    0 6px 20px color-mix(in oklab, var(--color-accent) 22%, transparent),
+    var(--shadow-md);
+}
+
+/* —— 迷你预览：左侧栏 + 右内容，用真实色值直接画三种主题效果 —— */
+.preview {
+  display: flex;
+  height: 76px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.previewSidebar {
+  width: 34%;
+  height: 100%;
+}
+.previewBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 8px;
+}
+.previewLine {
+  height: 5px;
+  width: 80%;
+  border-radius: 3px;
+}
+.previewLine:nth-child(2) {
+  width: 55%;
+}
+.previewCard {
+  margin-top: auto;
+  height: 20px;
+  border-radius: 5px;
+}
+
+/* default：紫粉渐变侧栏 + 白内容 */
+.preview_default .previewSidebar {
+  background: radial-gradient(120% 80% at 0% 0%, #efe7ff 0%, #ffe9f0 60%, #fff4e6 100%);
+}
+.preview_default .previewBody {
+  background: #ffffff;
+}
+.preview_default .previewLine {
+  background: #e3e1ea;
+}
+.preview_default .previewCard {
+  background: #f2f0f7;
+}
+
+/* minimal：纯浅灰侧栏（无渐变）+ 白内容 */
+.preview_minimal .previewSidebar {
+  background: #f4f4f6;
+}
+.preview_minimal .previewBody {
+  background: #ffffff;
+}
+.preview_minimal .previewLine {
+  background: #e3e3e6;
+}
+.preview_minimal .previewCard {
+  background: #f4f4f6;
+}
+
+/* dark：深色侧栏 + 深内容 */
+.preview_dark {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.preview_dark .previewSidebar {
+  background: linear-gradient(180deg, #1b1b21 0%, #141418 100%);
+}
+.preview_dark .previewBody {
+  background: #16161a;
+}
+.preview_dark .previewLine {
+  background: #3a3a42;
+}
+.preview_dark .previewCard {
+  background: #24242b;
+}
+
+/* —— 名称 + 描述 —— */
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+}
+.check {
+  color: var(--color-accent);
+}
+.desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+:global([data-theme="dark"]) .card {
+  background: var(--surface-card-elevated);
+  border-color: var(--border-default);
+}

@@ -61,7 +61,7 @@
 }
 
 .row[data-active] {
-  background: #fff;
+  background: var(--surface-card);
   border-color: color-mix(in oklab, var(--row-color) 42%, transparent);
   transform: translateX(2px);
   box-shadow:

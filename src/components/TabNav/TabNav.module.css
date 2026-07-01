@@ -87,3 +87,22 @@
     width 460ms var(--ease-spring),
     opacity 200ms var(--ease-out);
 }
+
+/* 暗色：亮色 .tabs 用 3.5% 黑底，暗色下消失=透明。tabs 条用 surface-card 做底，
+   pill 用 elevated（更亮一档），制造"选中项浮起"的对比。 */
+:global([data-theme="dark"]) .tabs {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+}
+
+:global([data-theme="dark"]) .divider {
+  background: var(--border-strong);
+}
+
+:global([data-theme="dark"]) .pill {
+  background: var(--surface-card-elevated);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 4px 10px rgba(0, 0, 0, 0.3);
+}

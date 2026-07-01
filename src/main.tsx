@@ -10,6 +10,7 @@ import { SuperCategoriesProvider } from "./state/superCategories";
 import { SettingsProvider } from "./state/settings";
 import { UpdaterProvider } from "./state/updater";
 import { ensureInitialLocale } from "./i18n";
+import { applyTheme, getStoredTheme } from "./lib/theme";
 import "./styles/global.css";
 
 // 把当前 OS 写到 body[data-platform]，CSS 据此区分 macOS / windows / linux 的 chrome 表现
@@ -18,6 +19,9 @@ try {
 } catch {
   document.body.dataset.platform = "windows"; // 默认按 Windows 渲染
 }
+
+// 渲染前先套用已保存的外观主题，避免首帧闪一下默认亮色再切到简约 / 暗色
+applyTheme(getStoredTheme());
 
 // 首启按系统语言设好 locale 再渲染，避免闪一下兜底语言；有显式选择则瞬时 resolve
 void ensureInitialLocale().finally(() => {

@@ -47,6 +47,13 @@ a {
   color: var(--text-strong);
 }
 
+/* 暗色：--color-accent-soft 在深底上太淡，鼠标拖拽选中几乎看不见。
+   改成 accent 半透明高亮 + 白字，选中范围清晰。亮色不动。 */
+[data-theme="dark"] ::selection {
+  background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  color: #fff;
+}
+
 /* a11y 兜底：键盘聚焦时如果元素没有自定义 focus 样式，给一个默认的描边。
    各组件自己定义了 :focus / :focus-visible（box-shadow 软光晕 / border-color 等）
    会盖过这条；纯 outline:none 而没替代的也至少能看到这一道描边。 */

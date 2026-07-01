@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
+import { useIsDark } from "../../hooks/useTheme";
+import { adjustCategoryColor } from "../../utils/categoryColor";
 import { displayCategoryName } from "../../utils/categoryName";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeeklyBarChart.module.css";
@@ -30,6 +32,7 @@ export function WeeklyBarChart({
 }: WeeklyBarChartProps) {
   const { t } = useTranslation();
   const { categories, getCategory } = useCategories();
+  const isDark = useIsDark();
   const order = new Map(categories.map((c, i) => [c.id, i]));
   const sortSegments = (segments: DaySummary["segments"]) =>
     [...segments].sort(
@@ -93,7 +96,7 @@ export function WeeklyBarChart({
                         className={styles.segment}
                         style={{
                           width: `${(seg.minutes / total) * 100}%`,
-                          background: cat.color,
+                          background: adjustCategoryColor(cat.color, isDark),
                         }}
                         title={`${displayCategoryName(cat, t)} · ${fmtTotal(seg.minutes)}`}
                       />

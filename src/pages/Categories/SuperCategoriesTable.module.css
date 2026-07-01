@@ -163,7 +163,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: var(--radius-pill);
   color: var(--text-muted);

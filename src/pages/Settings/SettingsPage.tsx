@@ -7,6 +7,7 @@ import styles from "./SettingsPage.module.css";
 // tab 路由元数据；label 通过 t() 动态解析
 const TABS: TabDef[] = [
   { to: "", labelKey: "settings.tabs.general", end: true },
+  { to: "appearance", labelKey: "settings.tabs.appearance" },
   { to: "data", labelKey: "settings.tabs.data" },
   { to: "privacy", labelKey: "settings.tabs.privacy" },
   { to: "about", labelKey: "settings.tabs.about" },

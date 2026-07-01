@@ -86,6 +86,17 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
 
+            // asset 协议默认 scope 只放行 $HOME/**（见 tauri.conf.json）。用户把数据
+            // 目录改到 $HOME 之外（比如别的盘）后，<data_root>/icons/*.png 落在 scope
+            // 外，图标的 asset:// 请求被拒，前端显示破图。这里在启动时把当前实际
+            // data_root 递归加进白名单，让自定义目录下的图标也能正常加载。
+            let data_root = bootstrap::data_root();
+            if let Err(e) = app.asset_protocol_scope().allow_directory(&data_root, true) {
+                log::warn!(
+                    "把 data_root 加入 asset 协议白名单失败（自定义目录下图标可能显示不出）: {e}"
+                );
+            }
+
             // 托盘 + 关闭行为：稳定的一次性安装逻辑，挪到 bootstrap 里
             bootstrap::install_tray_and_window(app)?;
 

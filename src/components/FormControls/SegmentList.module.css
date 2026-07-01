@@ -27,7 +27,7 @@
 .barClip {
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-md);
   overflow: hidden;
