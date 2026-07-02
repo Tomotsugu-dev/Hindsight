@@ -30,7 +30,7 @@ import {
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { useDebugState } from "../DebugStateContext";
-import { resolveSegmentChip } from "../../../utils/segmentColor";
+import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import { extractScreenshotTime } from "../../../utils/screenshotTime";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { Row } from "../../../components/FormLayout/Row";
@@ -913,13 +913,10 @@ export default function DebugTab() {
         ) : (
           <div className={styles.panelOpen}>
             {visibleSummaries.map((s) => {
-              // 段 chip 背景色：跟 DescItem / SegmentList / DailyTab 走同一份 fallback——
-              // 配过 hex 用配置色，没配则按段中点色温渐变（早亮晚暗）。
+              // 段标签＝色点 + 中性文字（跟 DailyTab 同款）：颜色只出现在圆点上。
+              // settings 未加载到该段时圆点退回中性灰。
               const seg = segments[s.segmentIdx];
-              const { background: chipBg, isLight } = seg
-                ? resolveSegmentChip(seg)
-                : { background: "#cbd5e1", isLight: true };
-              const chipColor = isLight ? "#3a3f55" : "#fff";
+              const dotColor = seg ? resolveSegmentDotColor(seg) : "#cbd5e1";
               // 状态徽章：ok 绿 / error 红 / skipped 灰
               const isSkipped =
                 s.status === "skipped_no_screenshots" ||
@@ -936,9 +933,13 @@ export default function DebugTab() {
                   <div className={styles.summaryHead}>
                     <span
                       className={styles.summaryChip}
-                      style={{ background: chipBg, color: chipColor }}
                       title={t("aiSummary.debug.segments.chipTitle", { idx: s.segmentIdx })}
                     >
+                      <span
+                        className={styles.segDot}
+                        style={{ background: dotColor }}
+                        aria-hidden
+                      />
                       {s.label}
                     </span>
                     <span className={styles.summaryTimeRange}>

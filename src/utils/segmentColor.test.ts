@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { isLightHex, resolveSegmentChip } from "./segmentColor";
+import {
+  isLightHex,
+  resolveSegmentChip,
+  resolveSegmentDotColor,
+} from "./segmentColor";
 
 describe("isLightHex", () => {
   it("纯白判为浅色", () => {
@@ -59,5 +63,24 @@ describe("resolveSegmentChip", () => {
     const a = resolveSegmentChip({ startHour: 14, endHour: 15, color: "" });
     const b = resolveSegmentChip({ startHour: 14, endHour: 15, color: "" });
     expect(a).toEqual(b);
+  });
+});
+
+describe("resolveSegmentDotColor", () => {
+  it("用户配了 hex 原样返回", () => {
+    expect(
+      resolveSegmentDotColor({ startHour: 9, endHour: 12, color: "#ff8800" }),
+    ).toBe("#ff8800");
+  });
+
+  it("自动色压暗到 l=58%（粉彩底色调直接当 8px 色点会看不清）", () => {
+    const c = resolveSegmentDotColor({ startHour: 10, endHour: 11, color: "" });
+    expect(c).toMatch(/^hsl\(\d+, \d+%, 58%\)$/);
+  });
+
+  it("同一输入稳定（确定性，无随机）", () => {
+    const a = resolveSegmentDotColor({ startHour: 14, endHour: 15, color: "" });
+    const b = resolveSegmentDotColor({ startHour: 14, endHour: 15, color: "" });
+    expect(a).toBe(b);
   });
 });

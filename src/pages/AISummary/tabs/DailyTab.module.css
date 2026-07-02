@@ -305,17 +305,23 @@
   flex-wrap: wrap;
 }
 
-/* 段彩色 chip，等同于 SegmentList 段块的 mini 版 */
+/* 段标签：色点承担时段色、文字保持中性——文字不再压在饱和色块上 */
 .chip {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 22px;
-  padding: 0 9px;
-  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-600);
-  color: #1c1c24;
+  color: var(--text-strong);
   letter-spacing: -0.005em;
+}
+
+.chipDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
 }
 
 .timeRange {

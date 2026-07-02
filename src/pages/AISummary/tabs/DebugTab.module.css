@@ -659,17 +659,23 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 段标识：色点 + 中性文字（跟 DailyTab 的 .chip 同款），文字不再压在色块上 */
 .descIndex {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   height: 18px;
-  padding: 0 8px;
-  /* background / color 由内联 style 用 segment.color 覆盖；这里给个兜底 */
-  background: rgba(0, 0, 0, 0.06);
-  border-radius: var(--radius-sm);
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
+}
+
+/* 时段色圆点（.descIndex / .summaryChip 共用） */
+.segDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
 }
 
 /* 截图时间：跟段 chip 紧挨着，monospace 数字稳定对齐，配色比 chip 轻一档 */
@@ -836,15 +842,15 @@
 }
 
 /* 段彩色 chip：跟 DailyTab .chip 同款（高 22 / 5px 圆角 / 背景由内联 style 覆盖） */
+/* 段标签：色点 + 中性文字（跟 DailyTab 的 .chip 同款） */
 .summaryChip {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 22px;
-  padding: 0 9px;
-  border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-600);
-  color: #1c1c24;
+  color: var(--text-strong);
   letter-spacing: -0.005em;
 }
 

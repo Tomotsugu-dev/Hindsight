@@ -87,3 +87,16 @@ export function resolveSegmentChip(seg: SegmentColorInput): {
   const hsl = hourColor(mid);
   return { background: hslStr(hsl), isLight: isLightHsl(hsl) };
 }
+
+/**
+ * 段标识**色点**用色——AI 总结页的"色点 + 中性文字"标签（文字不再压在色块上）。
+ * 与 chip 背景同源；自动渐变色是给大块底色调的粉彩（l 70–86），8px 小点在浅底上
+ * 会看不清，压暗到 l=58、饱和度略提。用户配过的 hex 原样用（那是明确意图）。
+ */
+export function resolveSegmentDotColor(seg: SegmentColorInput): string {
+  const hasCustom = seg.color && seg.color.trim().length > 0;
+  if (hasCustom) return seg.color;
+  const mid = (seg.startHour + seg.endHour) / 2;
+  const { h, s } = hourColor(mid);
+  return `hsl(${h.toFixed(0)}, ${Math.min(85, s + 10).toFixed(0)}%, 58%)`;
+}

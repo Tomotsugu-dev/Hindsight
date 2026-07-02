@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Clock, RotateCcw } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { AiSegment, ImageDescriptionRow } from "../../../api/hindsight";
-import { resolveSegmentChip } from "../../../utils/segmentColor";
+import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import { extractScreenshotTime } from "../../../utils/screenshotTime";
 import { logWarn } from "../../../lib/logger";
 import styles from "./DebugTab.module.css";
@@ -32,12 +32,9 @@ export function DescItem({
   const fileName = row.screenshotPath.split(/[\\/]/).pop() ?? row.screenshotPath;
   // 截图时间（HH:MM）：直接从文件名解析（capture 写入约定 HHMMSS_NNN.jpg）
   const captureTime = extractScreenshotTime(row.screenshotPath);
-  // chip 颜色：跟设置页 SegmentList / DailyTab 走同一份 fallback——配过 hex 用配置色，
-  // 没配则按段中点的色温自动渐变。settings 还没加载 (segment === undefined) 时退回中性灰。
-  const { background: chipBg, isLight } = segment
-    ? resolveSegmentChip(segment)
-    : { background: "#cbd5e1", isLight: true };
-  const chipColor = isLight ? "#3a3f55" : "#fff";
+  // 段标签＝色点 + 中性文字（跟 DailyTab / DebugTab 同款）：颜色只出现在圆点上。
+  // settings 还没加载 (segment === undefined) 时圆点退回中性灰。
+  const dotColor = segment ? resolveSegmentDotColor(segment) : "#cbd5e1";
 
   // 耗时 / token 文本：null 时显示 "—"，让排版稳定
   const latencyStr = row.latencyMs != null ? `${row.latencyMs} ms` : "—";
@@ -51,12 +48,16 @@ export function DescItem({
       <div className={styles.descMeta}>
         <span
           className={styles.descIndex}
-          style={{ background: chipBg, color: chipColor }}
           title={t("aiSummary.debug.perImage.chipTitle", {
             seg: row.segmentIdx,
             img: row.imageIndex,
           })}
         >
+          <span
+            className={styles.segDot}
+            style={{ background: dotColor }}
+            aria-hidden
+          />
           {segmentLabel ?? t("aiSummary.debug.perImage.segFallback", { idx: row.segmentIdx })}
           {t("aiSummary.debug.perImage.imageNoSuffix", { n: row.imageIndex + 1 })}
         </span>

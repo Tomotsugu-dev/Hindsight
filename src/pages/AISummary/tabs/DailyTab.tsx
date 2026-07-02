@@ -27,7 +27,7 @@ import {
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
-import { resolveSegmentChip } from "../../../utils/segmentColor";
+import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import {
   cancelDailyGenerate,
   clearTopError,
@@ -592,17 +592,18 @@ interface SegmentCardProps {
 
 function SegmentCard({ seg, state, onRetry, retryDisabled }: SegmentCardProps) {
   const { t } = useTranslation();
-  // chip 颜色：跟设置页 SegmentList 走同一份 fallback——配过 hex 用配置色，
-  // 没配则按段中点的色温自动渐变（早亮晚暗），保证两边视觉一致。
-  const { background: chipBg, isLight } = resolveSegmentChip(seg);
-  const chipFg = isLight ? "#3a3f55" : "#fff";
+  // 段标签＝色点 + 中性文字：颜色只出现在 8px 圆点上（跟设置页同一份色源），
+  // 文字保持中性深灰，不再压在饱和色块上。
+  const dotColor = resolveSegmentDotColor(seg);
   return (
     <div className={styles.card}>
       <div className={styles.cardHead}>
-        <span
-          className={styles.chip}
-          style={{ background: chipBg, color: chipFg }}
-        >
+        <span className={styles.chip}>
+          <span
+            className={styles.chipDot}
+            style={{ background: dotColor }}
+            aria-hidden
+          />
           {seg.label}
         </span>
         <span className={styles.timeRange}>
