@@ -207,6 +207,17 @@ export default function WeekPage() {
         : null,
     [drilledSlice, prevBreakdown],
   );
+  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类的日均
+  // （分母跟全周口径一致 = 7 天）。上周没有该大类（prevDrilledSlice=null）按 0 算，
+  // 对比语义即"从无到有"。
+  const displayedAvgMinutes = drilledSlice
+    ? Math.round(drilledSlice.minutes / 7)
+    : avgPerTotalDays;
+  const displayedPrevAvgMinutes = drilledSlice
+    ? prevDrilledSlice
+      ? Math.round(prevDrilledSlice.minutes / 7)
+      : 0
+    : prevAvgPerTotalDays;
   const insights = usePeriodInsights({
     curr: days,
     prev: prevDaysData,
@@ -297,8 +308,8 @@ export default function WeekPage() {
           insights={insights}
           scope="week"
           drilledSlice={drilledSlice}
-          avgMinutes={avgPerTotalDays}
-          prevAvgMinutes={prevAvgPerTotalDays}
+          avgMinutes={displayedAvgMinutes}
+          prevAvgMinutes={displayedPrevAvgMinutes}
         />
       )}
 

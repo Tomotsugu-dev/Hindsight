@@ -228,6 +228,19 @@ export default function MonthPage() {
         : null,
     [drilledSlice, prevBreakdown],
   );
+  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类的日均，
+  // 分母跟全月口径一致（activeDays / prevActiveDays = 有数据的天数）。
+  // 上月没有该大类（prevDrilledSlice=null）按 0 算，对比语义即"从无到有"。
+  const displayedAvgMinutes = drilledSlice
+    ? activeDays > 0
+      ? Math.round(drilledSlice.minutes / activeDays)
+      : 0
+    : avgPerTotalDays;
+  const displayedPrevAvgMinutes = drilledSlice
+    ? prevDrilledSlice && prevActiveDays > 0
+      ? Math.round(prevDrilledSlice.minutes / prevActiveDays)
+      : 0
+    : prevAvgPerTotalDays;
   const insights = usePeriodInsights({
     curr: days,
     prev: slideDaysList[0],
@@ -327,8 +340,8 @@ export default function MonthPage() {
           insights={insights}
           scope="month"
           drilledSlice={drilledSlice}
-          avgMinutes={avgPerTotalDays}
-          prevAvgMinutes={prevAvgPerTotalDays}
+          avgMinutes={displayedAvgMinutes}
+          prevAvgMinutes={displayedPrevAvgMinutes}
         />
       )}
 
