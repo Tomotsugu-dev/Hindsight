@@ -2,6 +2,16 @@
 ; Tauri inserts these macros inside the auto-generated Section "Uninstall"
 ; (run via !ifmacrodef so missing hooks are silently skipped).
 
+; 安装写文件之前：把在跑的 hindsight.exe 杀掉。Hindsight 是托盘常驻应用，
+; 覆盖安装（升级）时旧进程握着 hindsight.exe 的文件锁，NSIS 写入会报
+; "Error opening file for writing"。Tauri 模板自带的"关闭运行中应用"检测
+; 对托盘应用不可靠，这里强杀兜底。
+!macro NSIS_HOOK_PREINSTALL
+    DetailPrint "Stopping hindsight.exe before install..."
+    nsExec::Exec '"taskkill" /F /IM hindsight.exe /T'
+    Sleep 1000
+!macroend
+
 ; 卸载主流程开始前：把 hindsight.exe 杀掉，避免它握着安装目录里的可执行文件
 ; 或 %APPDATA% 里的 SQLite/截图，导致后续 RMDir 删不干净。
 ; nsExec::Exec 是静默执行（无黑窗一闪），taskkill /F /T 强杀含子进程。

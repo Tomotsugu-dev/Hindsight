@@ -81,7 +81,8 @@
     ],
     "windows": {
       "nsis": {
-        "installerHooks": "nsis/installer_hooks.nsh"
+        "installerHooks": "nsis/installer_hooks.nsh",
+        "installMode": "both"
       }
     },
     "macOS": {
