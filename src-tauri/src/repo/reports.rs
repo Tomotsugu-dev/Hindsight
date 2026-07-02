@@ -399,7 +399,7 @@ pub async fn day_hour_apps(
 }
 
 /// 「点应用 → 详情抽屉」核心：按 `[from, to]` 日期范围 + 粒度，聚合出时间柱(buckets)
-/// + 窗口标题用时(titles)。先解析 icon_process 的 group key（与 [`day_apps`] 的
+/// 与窗口标题用时(titles)。先解析 icon_process 的 group key（与 [`day_apps`] 的
 /// `GROUP BY COALESCE(g.id, a.process_name)` 同口径），再对同组活动按粒度聚合。
 async fn app_range_detail(
     pool: &DbPool,

@@ -65,8 +65,9 @@ fn extract_via_nsworkspace(path: &Path) -> Option<Vec<u8>> {
         let tiff = image.TIFFRepresentation()?;
         let rep = NSBitmapImageRep::imageRepWithData(&tiff)?;
         // properties 空字典即可；PNG 无必填属性
-        let data =
-            unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new()) }?;
+        let data = unsafe {
+            rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
+        }?;
         Some(data.to_vec())
     })?;
 
@@ -169,4 +170,3 @@ fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
         .map_err(|e| crate::error::Error::Capture(format!("icns PNG encode: {e}")))?;
     Ok(Some(buf.into_inner()))
 }
-

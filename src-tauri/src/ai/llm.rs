@@ -174,7 +174,14 @@ impl ExternalChatClient {
         image_data_uris: &[String],
     ) -> Result<(String, ChatUsage)> {
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, image_data_uris, self.max_tokens, None);
+        let body = build_chat_body(
+            &self.model,
+            system,
+            user_text,
+            image_data_uris,
+            self.max_tokens,
+            None,
+        );
         self.post_with_retry(&url, &body).await
     }
 
@@ -315,8 +322,14 @@ fn build_chat_body_local(
     image_data_uris: &[String],
     max_tokens: u32,
 ) -> serde_json::Value {
-    let mut body =
-        build_chat_body(model, system, user_text, image_data_uris, max_tokens, Some(0.4));
+    let mut body = build_chat_body(
+        model,
+        system,
+        user_text,
+        image_data_uris,
+        max_tokens,
+        Some(0.4),
+    );
     body["chat_template_kwargs"] = json!({ "enable_thinking": false });
     body
 }

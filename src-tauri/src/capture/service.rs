@@ -581,12 +581,10 @@ async fn recheck_privacy_after_shot(
     }
     let url = if is_browser && !url_kw.is_empty() {
         let app_name = now_info.app_name.clone();
-        tokio::task::spawn_blocking(move || {
-            browser_url::try_get_foreground_browser_url(&app_name)
-        })
-        .await
-        .ok()
-        .flatten()
+        tokio::task::spawn_blocking(move || browser_url::try_get_foreground_browser_url(&app_name))
+            .await
+            .ok()
+            .flatten()
     } else {
         None
     };

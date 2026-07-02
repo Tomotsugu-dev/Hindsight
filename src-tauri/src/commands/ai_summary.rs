@@ -306,6 +306,7 @@ fn align_to_monday(date: NaiveDate) -> NaiveDate {
 ///
 /// Tauri 命令参数不支持 doc 注释或 `#[serde(default)]`，前端必须显式传布尔值。
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn generate_week_summary(
     app: AppHandle,
     pool: State<'_, DbPool>,

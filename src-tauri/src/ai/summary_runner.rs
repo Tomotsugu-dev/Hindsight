@@ -29,8 +29,8 @@ use crate::ai::prompt::{build_image_describe_system_prompt, build_image_describe
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
     build_step1, build_step2, build_synthetic_descriptions_from_activities, describe_images,
-    extract_time_label, merge_descriptions_with_activity_gaps,
-    summarize_segment, upsert_skipped_no_activity, SUMMARY_IMAGE_MAX_DIM,
+    extract_time_label, merge_descriptions_with_activity_gaps, summarize_segment,
+    upsert_skipped_no_activity, SUMMARY_IMAGE_MAX_DIM,
 };
 use crate::ai::summary_overrides::AiOverrides;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
@@ -337,8 +337,12 @@ impl DaySummaryRunner {
                 p.message = None;
                 self.emit(p);
             }
-            self.engine_start_cancellable(self.ensure_engine_running(ai, Step::Describe, describe_overrides))
-                .await?
+            self.engine_start_cancellable(self.ensure_engine_running(
+                ai,
+                Step::Describe,
+                describe_overrides,
+            ))
+            .await?
         };
         let step1 = build_step1(ai, port)?;
         // step2 client 在 step1_only 路径不会被调用——构造一份占位的让 run_one_segment 签名能通过
@@ -424,8 +428,12 @@ impl DaySummaryRunner {
                 p.message = None;
                 self.emit(p);
             }
-            self.engine_start_cancellable(self.ensure_engine_running(ai, Step::Summary, summary_overrides))
-                .await?
+            self.engine_start_cancellable(self.ensure_engine_running(
+                ai,
+                Step::Summary,
+                summary_overrides,
+            ))
+            .await?
         };
         // step2_only 路径不会调 step 1——构造 Local 占位（端口可能是 0，不会被用）
         let step1_placeholder = Step1Chat::Local(ChatClient::new(
@@ -560,10 +568,11 @@ impl DaySummaryRunner {
                 p_load_d.message = None;
                 self.emit(p_load_d);
                 let (main_d, mmproj_d) = self.resolve_model_paths_for(ai, Step::Describe)?;
-                self.engine_start_cancellable(
-                    self.supervisor
-                        .restart_with_overrides(Some(main_d), mmproj_d, describe_overrides.clone()),
-                )
+                self.engine_start_cancellable(self.supervisor.restart_with_overrides(
+                    Some(main_d),
+                    mmproj_d,
+                    describe_overrides.clone(),
+                ))
                 .await?
             };
             let step1 = build_step1(ai, port_d)?;
@@ -644,10 +653,11 @@ impl DaySummaryRunner {
                 p_load_s.message = None;
                 self.emit(p_load_s);
                 let (main_s, mmproj_s) = self.resolve_model_paths_for(ai, Step::Summary)?;
-                self.engine_start_cancellable(
-                    self.supervisor
-                        .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone()),
-                )
+                self.engine_start_cancellable(self.supervisor.restart_with_overrides(
+                    Some(main_s),
+                    mmproj_s,
+                    summary_overrides.clone(),
+                ))
                 .await?
             };
             // step2_only 调用不会碰 step 1——构造 Local 占位（端口可能是 0，不会被用）
@@ -1060,7 +1070,10 @@ impl DaySummaryRunner {
             &cfg.privacy_app_keywords,
         )
         .await?;
-        Ok(merge_descriptions_with_activity_gaps(descriptions, synthetic))
+        Ok(merge_descriptions_with_activity_gaps(
+            descriptions,
+            synthetic,
+        ))
     }
 
     /// step2-only 路径：跳过逐图描述，从 DB 读出已存的 image descriptions 直接喂 step 2。
@@ -1311,8 +1324,12 @@ impl DaySummaryRunner {
         let port = if ai.describe_use_cloud() {
             0
         } else {
-            self.engine_start_cancellable(self.ensure_engine_running(&ai, Step::Describe, engine_overrides))
-                .await?
+            self.engine_start_cancellable(self.ensure_engine_running(
+                &ai,
+                Step::Describe,
+                engine_overrides,
+            ))
+            .await?
         };
         let chat = build_step1(&ai, port)?;
 
@@ -1495,7 +1512,11 @@ impl DaySummaryRunner {
                 self.emit(p);
             }
             let port = self
-                .engine_start_cancellable(self.ensure_engine_running(&ai, Step::Describe, engine_overrides))
+                .engine_start_cancellable(self.ensure_engine_running(
+                    &ai,
+                    Step::Describe,
+                    engine_overrides,
+                ))
                 .await?;
             (port, ai.effective_describe_main().to_string())
         } else if !ai.summary_use_cloud() {
@@ -1516,7 +1537,11 @@ impl DaySummaryRunner {
                 ctx_size: ai.summary_ctx_size_effective(),
             };
             let port = self
-                .engine_start_cancellable(self.ensure_engine_running(&ai, Step::Summary, summary_overrides))
+                .engine_start_cancellable(self.ensure_engine_running(
+                    &ai,
+                    Step::Summary,
+                    summary_overrides,
+                ))
                 .await?;
             (port, ai.effective_summary_main().to_string())
         } else {

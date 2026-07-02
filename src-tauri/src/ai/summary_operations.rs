@@ -338,44 +338,43 @@ pub(crate) async fn summarize_segment(
     if matches!(chat_result, Err(Error::SummaryCancelled)) {
         return Err(Error::SummaryCancelled);
     }
-    let (row, status_str): (SegmentSummaryRow, &'static str) =
-        match chat_result {
-            // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
-            // （需要时未来加列）。落库的 model 用 step2_model——本地是 GGUF 文件名，
-            // 外部是用户填的云端模型 ID（如 gpt-4o-mini）
-            Ok((content, _usage)) => (
-                SegmentSummaryRow {
-                    source: source.to_string(),
-                    local_date: date_str.to_string(),
-                    segment_idx,
-                    label: label.to_string(),
-                    start_hour,
-                    end_hour,
-                    content,
-                    model: step2_model,
-                    status: "ok".to_string(),
-                    error: None,
-                    generated_at: utc_now_rfc3339(),
-                },
-                "ok",
-            ),
-            Err(e) => (
-                SegmentSummaryRow {
-                    source: source.to_string(),
-                    local_date: date_str.to_string(),
-                    segment_idx,
-                    label: label.to_string(),
-                    start_hour,
-                    end_hour,
-                    content: String::new(),
-                    model: step2_model,
-                    status: "error".to_string(),
-                    error: Some(e.to_string()),
-                    generated_at: utc_now_rfc3339(),
-                },
-                "error",
-            ),
-        };
+    let (row, status_str): (SegmentSummaryRow, &'static str) = match chat_result {
+        // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
+        // （需要时未来加列）。落库的 model 用 step2_model——本地是 GGUF 文件名，
+        // 外部是用户填的云端模型 ID（如 gpt-4o-mini）
+        Ok((content, _usage)) => (
+            SegmentSummaryRow {
+                source: source.to_string(),
+                local_date: date_str.to_string(),
+                segment_idx,
+                label: label.to_string(),
+                start_hour,
+                end_hour,
+                content,
+                model: step2_model,
+                status: "ok".to_string(),
+                error: None,
+                generated_at: utc_now_rfc3339(),
+            },
+            "ok",
+        ),
+        Err(e) => (
+            SegmentSummaryRow {
+                source: source.to_string(),
+                local_date: date_str.to_string(),
+                segment_idx,
+                label: label.to_string(),
+                start_hour,
+                end_hour,
+                content: String::new(),
+                model: step2_model,
+                status: "error".to_string(),
+                error: Some(e.to_string()),
+                generated_at: utc_now_rfc3339(),
+            },
+            "error",
+        ),
+    };
 
     // upsert 失败不让整轮 daily 抛飞——磁盘满 / DB lock 时 row 写不进去也得让上层
     // emit segment_done 把当前 row 推给前端（至少能看到红色 error badge + 错误描述）。
@@ -705,6 +704,39 @@ fn pick_titles(titles: &[String]) -> String {
     unique.into_iter().take(5).collect::<Vec<_>>().join("、")
 }
 
+/// 「融合时间线」：截图描述 + 无截图小时的活动合成行，按时间排序合并。
+///
+/// 截图行 time_label 是 `HH:MM`，活动合成行是 `HH:00-HH:00`（见
+/// [`build_synthetic_descriptions_from_activities`]）——label 格式本身就是来源标记，
+/// user prompt 的材料头据此向 LLM 说明两种行各自的含义。
+/// 覆盖判定按小时粒度：该小时内只要有任意一张截图描述，就不再插活动行。
+pub(crate) fn merge_descriptions_with_activity_gaps(
+    descriptions: Vec<(String, String)>,
+    synthetic_rows: Vec<(String, String)>,
+) -> Vec<(String, String)> {
+    use std::collections::HashSet;
+
+    let covered: HashSet<u8> = descriptions
+        .iter()
+        .filter_map(|(t, _)| t.get(0..2)?.parse::<u8>().ok())
+        .collect();
+
+    let gaps = synthetic_rows.into_iter().filter(|(label, _)| {
+        label
+            .get(0..2)
+            .and_then(|h| h.parse::<u8>().ok())
+            .is_some_and(|h| !covered.contains(&h))
+    });
+
+    let mut merged: Vec<(String, String)> = descriptions.into_iter().chain(gaps).collect();
+    merged.sort_by_key(|(t, _)| {
+        let h: u32 = t.get(0..2).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let m: u32 = t.get(3..5).and_then(|s| s.parse().ok()).unwrap_or(0);
+        h * 60 + m
+    });
+    merged
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -901,37 +933,4 @@ mod tests {
         assert_eq!(out[0].0, "09:00-10:00");
         assert_eq!(out[1].0, "11:00-12:00");
     }
-}
-
-/// 「融合时间线」：截图描述 + 无截图小时的活动合成行，按时间排序合并。
-///
-/// 截图行 time_label 是 `HH:MM`，活动合成行是 `HH:00-HH:00`（见
-/// [`build_synthetic_descriptions_from_activities`]）——label 格式本身就是来源标记，
-/// user prompt 的材料头据此向 LLM 说明两种行各自的含义。
-/// 覆盖判定按小时粒度：该小时内只要有任意一张截图描述，就不再插活动行。
-pub(crate) fn merge_descriptions_with_activity_gaps(
-    descriptions: Vec<(String, String)>,
-    synthetic_rows: Vec<(String, String)>,
-) -> Vec<(String, String)> {
-    use std::collections::HashSet;
-
-    let covered: HashSet<u8> = descriptions
-        .iter()
-        .filter_map(|(t, _)| t.get(0..2)?.parse::<u8>().ok())
-        .collect();
-
-    let gaps = synthetic_rows.into_iter().filter(|(label, _)| {
-        label
-            .get(0..2)
-            .and_then(|h| h.parse::<u8>().ok())
-            .is_some_and(|h| !covered.contains(&h))
-    });
-
-    let mut merged: Vec<(String, String)> = descriptions.into_iter().chain(gaps).collect();
-    merged.sort_by_key(|(t, _)| {
-        let h: u32 = t.get(0..2).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let m: u32 = t.get(3..5).and_then(|s| s.parse().ok()).unwrap_or(0);
-        h * 60 + m
-    });
-    merged
 }
