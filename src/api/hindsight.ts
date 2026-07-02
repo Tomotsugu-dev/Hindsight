@@ -301,9 +301,10 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 /** AI 总结进度事件（Phase 1B-γ）。 */
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 
-/** `Settings.ai.summaryMain` 的特殊值——"用云端 API 跑 step 2"。
+/** `Settings.ai.summaryMain` / `Settings.ai.describeMain` 的特殊值——"这一步用云端 API"。
  *  跟后端 `crate::ai::config::SUMMARY_CLOUD_SENTINEL` 必须保持同步。
- *  路由真正生效还要 `externalEnabled=true`（云端 API tab 启用 toggle）。 */
+ *  路由真正生效还要 `externalEnabled=true`（云端 API tab 启用 toggle）。
+ *  放进 describeMain（Vision / Step 1）意味着**截图本身会上传**——选择时必须先弹隐私确认。 */
 export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
 
 /** 周报 precheck 返回的"某天"元数据。 */
@@ -466,11 +467,15 @@ export interface AiConfig {
   /** 外部 API 的模型 ID，如 gpt-4o-mini / deepseek-chat。
    *  仅在 externalEnabled = true 时生效。 */
   model: string;
+  /** 云端 Vision（step 1 图片描述）用的模型 ID；空 = 复用 model。
+   *  仅在 describeMain 为云端 sentinel 且 externalEnabled = true 时生效。 */
+  visionModel: string;
   /** 外部 API 的 Bearer token；明文落 settings JSON。 */
   apiKey: string;
-  /** 是否启用云端 API 跑 step 2 段总结。
-   *  false = 全程本地；true = step 1 本地 vision，step 2 走 endpoint/model/apiKey。
-   *  截图永远只在 step 1 经手，不上云。 */
+  /** 是否启用云端 API。
+   *  false = 全程本地；true 时具体哪一步走云由各 step 槽位的 __cloud__ sentinel
+   *  决定（describeMain / summaryMain）。Vision (Step 1) 选云端 = 截图本身会上传，
+   *  选择时前端必须先弹隐私确认。 */
   externalEnabled: boolean;
   /** Provider 预设 ID："openai" / "deepseek" / "openrouter" / "together" / "groq" / "custom"。
    *  仅控前端 Base URL / Model placeholder；后端只 sanitize。 */

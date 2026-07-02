@@ -88,6 +88,8 @@ export function ModelsSection() {
   // 云端卡用 RAW 字段判，避免 fallback 链上 activeMain 的干扰。
   const cloudIsSelectedAsSummary =
     (settings?.ai.summaryMain || "") === SUMMARY_CLOUD_SENTINEL;
+  const cloudIsSelectedAsDescribe =
+    (settings?.ai.describeMain || "") === SUMMARY_CLOUD_SENTINEL;
 
   const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
   const [local, setLocal] = useState<ModelEntry[]>([]);
@@ -129,6 +131,11 @@ export function ModelsSection() {
   // busyFiles.has("mmproj-F16.gguf") 会让所有 vision 卡都判定为 busy，进度条串扰。
   const [confirmingUninstall, setConfirmingUninstall] =
     useState<RecommendedModel | null>(null);
+  // 云端选择的隐私确认弹窗：选 Text (Step 2) = 轻警示（上传应用名/分类/文字描述），
+  // 选 Vision (Step 1) = 重警示（截图本身会上传）。取消选择不弹。
+  const [cloudConfirm, setCloudConfirm] = useState<
+    "describe" | "summary" | null
+  >(null);
   const [busyRecs, setBusyRecs] = useState<ReadonlySet<string>>(
     new Set<string>(),
   );
@@ -299,12 +306,46 @@ export function ModelsSection() {
    */
   const onToggleCloudSummary = async () => {
     setError(null);
+    if (!cloudIsSelectedAsSummary) {
+      // 启用方向：先弹隐私确认（应用名/分类/文字描述将上传），确认后再真正切换
+      setCloudConfirm("summary");
+      return;
+    }
     try {
-      if (cloudIsSelectedAsSummary) {
-        await api.setStepModel("summary", "", null);
-      } else {
-        await api.setStepModel("summary", SUMMARY_CLOUD_SENTINEL, null);
-      }
+      await api.setStepModel("summary", "", null);
+      await reload();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+  /**
+   * 云端卡 Vision 按钮 toggle：把 `describe_main` 写成 sentinel = step 1 图片描述
+   * 走云端 —— **截图本身会上传**到用户配置的第三方 API。启用方向必须先过
+   * 重级隐私确认弹窗；取消选择（回本地）直接执行。
+   * 与本地卡的 step 1 toggle 互斥机制同 step 2（一处状态天然互斥）。
+   */
+  const onToggleCloudDescribe = async () => {
+    setError(null);
+    if (!cloudIsSelectedAsDescribe) {
+      setCloudConfirm("describe");
+      return;
+    }
+    try {
+      await api.setStepModel("describe", "", null);
+      await reload();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+  /** 隐私确认弹窗点了"确认"：真正把对应 step 槽位写成云端 sentinel。 */
+  const onConfirmCloudSelect = async () => {
+    const step = cloudConfirm;
+    setCloudConfirm(null);
+    if (!step) return;
+    try {
+      await api.setStepModel(step, SUMMARY_CLOUD_SENTINEL, null);
       await reload();
     } catch (e) {
       setError(typeof e === "string" ? e : String(e));
@@ -452,16 +493,12 @@ export function ModelsSection() {
       </div>
 
       <div className={styles.modelList}>
-        {/* 云端 API 启用时第一行展示云端卡——表明 step 2 当前不走本地推荐里的任何模型，
-            而是路由到 Cloud API tab 配的 endpoint + model。固定置顶，不参与筛选/排序。
-            step 1 / step 2 按钮都 disabled：cloud 没 vision 能力（step 1 永远不可用），
-            step 2 已是 active（要切换去「云端 API」tab）。两个按钮存在是为了视觉上跟本地
-            模型卡对齐 —— 用户一眼能看清云端在哪个 step 上、为啥不能在这里改。 */}
+        {/* 云端 API 启用时第一行展示云端卡——表明对应 step 当前不走本地推荐里的任何
+            模型，而是路由到 Cloud API tab 配的 endpoint + model。固定置顶，不参与筛选/
+            排序。Vision (Step 1) / Text (Step 2) 都是可点 toggle，跟本地卡的对应 step
+            是 radio 关系；启用方向先过隐私确认弹窗（Vision = 截图上传的重级警示）。 */}
         {settings?.ai.externalEnabled ? (
-          <div
-            className={`${styles.modelCard} ${styles.modelCardCloud}`}
-            title={t("aiSettings.models.cloud.step2Tooltip")}
-          >
+          <div className={`${styles.modelCard} ${styles.modelCardCloud}`}>
             <div className={styles.modelCardRow}>
               <div className={styles.modelCardLeft}>
                 <Cloud
@@ -477,15 +514,26 @@ export function ModelsSection() {
                 <span className={styles.modelCardSize}>
                   {settings.ai.model ||
                     t("aiSettings.models.cloud.modelUnset")}
+                  {cloudIsSelectedAsDescribe && settings.ai.visionModel
+                    ? ` · ${settings.ai.visionModel}`
+                    : ""}
                 </span>
               </div>
               <div className={styles.modelCardRight}>
-                {/* Vision (Step 1)：云端 deepseek / openai 文本接口不支持图描述，永远 disabled */}
+                {/* Vision (Step 1)：选中 = 截图上传云端做图片描述。启用方向先弹重级隐私确认 */}
                 <button
                   type="button"
-                  className={styles.modelStepToggle}
-                  disabled
-                  title={t("aiSettings.models.cloud.step1DisabledTooltip")}
+                  className={`${styles.modelStepToggle} ${
+                    cloudIsSelectedAsDescribe
+                      ? styles.modelStepToggleActive
+                      : ""
+                  }`}
+                  onClick={onToggleCloudDescribe}
+                  title={
+                    cloudIsSelectedAsDescribe
+                      ? t("aiSettings.models.cloud.step1ToggleOffTooltip")
+                      : t("aiSettings.models.cloud.step1ToggleOnTooltip")
+                  }
                 >
                   {t("aiSettings.models.card.step1")}
                 </button>
@@ -560,6 +608,30 @@ export function ModelsSection() {
           if (rec) void doUninstallRecommended(rec);
         }}
         onCancel={() => setConfirmingUninstall(null)}
+      />
+      {/* 云端选择的两级隐私确认：Vision (Step 1) = 截图本身上传（danger 重警示）；
+          Text (Step 2) = 应用名/分类/文字描述上传（primary 轻警示）。 */}
+      <ConfirmDialog
+        open={cloudConfirm === "describe"}
+        title={t("aiSettings.models.cloud.visionConfirmTitle")}
+        message={t("aiSettings.models.cloud.visionConfirmMessage", {
+          provider: settings?.ai.externalProvider || "cloud",
+        })}
+        confirmLabel={t("aiSettings.models.cloud.visionConfirmAccept")}
+        variant="danger"
+        onConfirm={() => void onConfirmCloudSelect()}
+        onCancel={() => setCloudConfirm(null)}
+      />
+      <ConfirmDialog
+        open={cloudConfirm === "summary"}
+        title={t("aiSettings.models.cloud.summaryConfirmTitle")}
+        message={t("aiSettings.models.cloud.summaryConfirmMessage", {
+          provider: settings?.ai.externalProvider || "cloud",
+        })}
+        confirmLabel={t("aiSettings.models.cloud.summaryConfirmAccept")}
+        variant="primary"
+        onConfirm={() => void onConfirmCloudSelect()}
+        onCancel={() => setCloudConfirm(null)}
       />
     </div>
   );

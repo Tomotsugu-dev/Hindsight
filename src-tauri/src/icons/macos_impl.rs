@@ -169,3 +169,4 @@ fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
         .map_err(|e| crate::error::Error::Capture(format!("icns PNG encode: {e}")))?;
     Ok(Some(buf.into_inner()))
 }
+

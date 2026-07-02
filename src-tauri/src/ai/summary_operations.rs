@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
 use crate::ai::image::to_data_uri;
-use crate::ai::llm::{ChatClient, ExternalChatClient, Step2Chat};
+use crate::ai::llm::{ChatClient, ExternalChatClient, Step1Chat, Step2Chat};
 use crate::ai::prompt::{
     build_image_describe_user_prompt, build_system_prompt, build_user_prompt, SegmentContext,
 };
@@ -67,7 +67,7 @@ pub(crate) async fn describe_images(
     app: AppHandle,
     supervisor: Arc<EngineSupervisor>,
     cancel: Arc<AtomicBool>,
-    step1: ChatClient,
+    step1: Step1Chat,
     picked: &[ScreenshotMeta],
     prompt_lang: String,
     describe_system: String,
@@ -128,7 +128,7 @@ fn build_image_tasks(
 /// 用 `buffer_unordered` 顺序不固定；调用 [`collect_descriptions`] 排序后才能给 step 2 用。
 async fn execute_parallel(
     tasks: Vec<ImageWorkItem>,
-    chat: ChatClient,
+    chat: Step1Chat,
     pool: DbPool,
     app: AppHandle,
     supervisor: Arc<EngineSupervisor>,
@@ -154,7 +154,7 @@ async fn execute_parallel(
 /// `Err` 仅在 DB 写入失败时抛——会让整段失败。
 async fn process_one_image(
     item: ImageWorkItem,
-    chat: ChatClient,
+    chat: Step1Chat,
     pool: DbPool,
     app: AppHandle,
     supervisor: Arc<EngineSupervisor>,
@@ -182,7 +182,12 @@ async fn process_one_image(
     );
 
     let single = std::slice::from_ref(&data_uri);
-    let _inflight = supervisor.acquire_inference();
+    // 推理 guard 只对本地引擎有意义（idle watcher 防猝杀）；云端调用不占本地引擎
+    let _inflight = if chat.is_local() {
+        Some(supervisor.acquire_inference())
+    } else {
+        None
+    };
     let (desc, usage) = match chat
         .chat_with_images(&item.describe_system, &describe_user, single)
         .await
@@ -374,6 +379,30 @@ pub(crate) fn extract_time_label(screenshot_path: &str) -> String {
 ///
 /// 外部 client 构造失败（endpoint 空、model 空）会向上抛——这种情况说明用户
 /// 选了 cloud 但配置不全，让顶层错误条直接显示让他去填。
+/// step 1 图片描述的 chat 客户端构造。`describe_use_cloud()`（用户在模型卡显式
+/// 把 Vision 指到云端 + external 启用，前端已弹过"截图将上传"的隐私确认）时走
+/// [`ExternalChatClient`]（模型 ID 用 `vision_model`，空则复用 `model`）；
+/// 否则本地 [`ChatClient`]。外部构造失败（endpoint / model 空）向上抛，
+/// 顶层错误条提示用户去补配置。
+pub(crate) fn build_step1(ai: &AiConfig, local_port: u16) -> Result<Step1Chat> {
+    let max_tokens = ai.describe_max_tokens();
+    if ai.describe_use_cloud() {
+        let ext = ExternalChatClient::new(
+            &ai.endpoint,
+            ai.cloud_vision_model().to_string(),
+            ai.api_key.clone(),
+            max_tokens,
+        )?;
+        Ok(Step1Chat::External(ext))
+    } else {
+        Ok(Step1Chat::Local(ChatClient::new(
+            local_port,
+            ai.effective_describe_main().to_string(),
+            max_tokens,
+        )?))
+    }
+}
+
 pub(crate) fn build_step2(
     ai: &AiConfig,
     local_port: u16,

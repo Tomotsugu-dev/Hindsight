@@ -715,7 +715,15 @@
         "modelUnset": "（未填模型）",
         "step2Tooltip": "Step 2（段总结）当前路由到云端 API。要改 endpoint / 模型，去「云端 API」tab 编辑。",
         "step1DisabledTooltip": "云端 API 不支持图片输入（Step 1 需要 vision 能力）",
-        "step2DisabledTooltip": "已选定云端 API 为 Step 2 后端。要关闭，去「云端 API」tab 取消启用。"
+        "step2DisabledTooltip": "已选定云端 API 为 Step 2 后端。要关闭，去「云端 API」tab 取消启用。",
+        "step1ToggleOnTooltip": "把 Step 1（图片描述）路由到云端 API——截图将被上传",
+        "step1ToggleOffTooltip": "取消云端 Step 1（回退到本地 vision 模型）",
+        "visionConfirmTitle": "把截图上传到云端？",
+        "visionConfirmMessage": "Vision (Step 1) 选云端后，你的截图图片会发送到 {{provider}} 进行分析。截图可能包含聊天、邮件、密码等敏感内容。建议先在 设置 → 隐私 配置关键词过滤。该选择会一直生效，直到你切回本地模型。",
+        "visionConfirmAccept": "我了解风险，上传截图",
+        "summaryConfirmTitle": "把总结数据发送到云端？",
+        "summaryConfirmMessage": "Text (Step 2) 选云端后，每次段总结会把应用名、分类、文字版图片描述发送到 {{provider}}。此选项不会上传截图图片本身。",
+        "summaryConfirmAccept": "我了解，继续"
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
@@ -846,7 +854,10 @@
       "testOkNoModels": "连接成功",
       "testFail": "连接失败：{{message}}",
       "missingFields": "请先填 Base URL 和 Model ID",
-      "privacyNote": "提示：开启后，应用名、分类、文字版图片描述会随每次段总结发送到云端 API；图片本身不上传。"
+      "privacyNote": "提示：Text (Step 2) 选云端时，应用名、分类、文字版图片描述会发送到云端 API；Vision (Step 1) 选云端时，截图图片本身会上传。API Key 以明文保存在本地设置中。",
+      "visionModelLabel": "Vision 模型 ID（可选）",
+      "visionModelHint": "Vision (Step 1) 选云端时使用。留空则复用上方的模型 ID——此时该模型必须支持图片输入。",
+      "visionModelPlaceholder": "如 gpt-4o-mini / qwen-vl-plus（留空 = 复用模型 ID）"
     }
   },
   "devices": {

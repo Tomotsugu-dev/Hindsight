@@ -23,12 +23,13 @@ use crate::ai::config::AiConfig;
 use crate::ai::dedup;
 use crate::ai::embedding;
 use crate::ai::image::{pick_frames, to_data_uri};
-use crate::ai::llm::ChatClient;
+use crate::ai::llm::{ChatClient, Step1Chat};
 use crate::ai::models;
 use crate::ai::prompt::{build_image_describe_system_prompt, build_image_describe_user_prompt};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
-    build_step2, build_synthetic_descriptions_from_activities, describe_images, extract_time_label,
+    build_step1, build_step2, build_synthetic_descriptions_from_activities, describe_images,
+    extract_time_label,
     summarize_segment, upsert_skipped_no_activity, SUMMARY_IMAGE_MAX_DIM,
 };
 use crate::ai::summary_overrides::AiOverrides;
@@ -167,10 +168,11 @@ impl DaySummaryRunner {
         // step 1 图描述并发数 = describe 阶段的 -np（多图同时跑）
         let parallel = ai.describe_parallel_slots_effective().unwrap_or(1).max(1) as usize;
 
-        // step 1 必须有本地 vision 模型；step 2 要么有本地模型，要么选定走云端
-        if ai.effective_describe_main().trim().is_empty() {
+        // step 1 要么有本地 vision 模型，要么选定走云端（云端配置缺失由
+        // build_step1 构造时报错）；step 2 同理。
+        if !ai.describe_use_cloud() && ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」给图描述选一个 vision 模型再生成总结",
+                "请先在「模型」给图描述选一个 vision 模型，或选定云端 API 跑图片分析",
             ));
         }
         if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
@@ -288,26 +290,27 @@ impl DaySummaryRunner {
         device: DeviceFilter,
         parallel: usize,
     ) -> Result<()> {
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
-            p.message = None;
-            self.emit(p);
-        }
-        let port = self
-            .ensure_engine_running(ai, Step::Describe, describe_overrides)
-            .await?;
-        let step1 = ChatClient::new(
-            port,
-            ai.effective_describe_main().to_string(),
-            ai.describe_max_tokens(),
-        )?;
+        // 云端图片描述：跳过本地引擎（0 为占位端口，Local 分支不会被构造）
+        let port = if ai.describe_use_cloud() {
+            log::info!("step1_all: 图片描述走云端，跳过本地引擎启动");
+            0
+        } else {
+            let st = self.supervisor.status().await;
+            if st.state != EngineState::Running {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "engine_starting",
+                    total_segments,
+                );
+                // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+                p.message = None;
+                self.emit(p);
+            }
+            self.ensure_engine_running(ai, Step::Describe, describe_overrides)
+                .await?
+        };
+        let step1 = build_step1(ai, port)?;
         // step2 client 在 step1_only 路径不会被调用——构造一份占位的让 run_one_segment 签名能通过
         let step2_placeholder = build_step2(ai, port, ai.effective_describe_main())?;
         for (idx, seg) in ai.segments.iter().enumerate() {
@@ -394,11 +397,12 @@ impl DaySummaryRunner {
             self.ensure_engine_running(ai, Step::Summary, summary_overrides)
                 .await?
         };
-        let step1_placeholder = ChatClient::new(
+        // step2_only 路径不会调 step 1——构造 Local 占位（端口可能是 0，不会被用）
+        let step1_placeholder = Step1Chat::Local(ChatClient::new(
             port,
             ai.effective_summary_main().to_string(),
             ai.summary_max_tokens(),
-        )?;
+        )?);
         let step2 = build_step2(ai, port, ai.effective_summary_main())?;
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
@@ -509,27 +513,28 @@ impl DaySummaryRunner {
             ai_summaries::clear_segment_summary(&self.pool, source, date_str, idx as u32).await?;
 
             // ── step 1：load describe model ──
-            // 每段都 emit engine_starting 让前端知道在 swap（5-15 分钟级总等待）
-            let mut p_load_d = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            p_load_d.segment_idx = Some(idx as u32);
-            // message 留空：前端按 phase 显示本地化的"加载模型中…"
-            p_load_d.message = None;
-            self.emit(p_load_d);
-            let (main_d, mmproj_d) = self.resolve_model_paths_for(ai, Step::Describe)?;
-            let port_d = self
-                .supervisor
-                .restart_with_overrides(Some(main_d), mmproj_d, describe_overrides.clone())
-                .await?;
-            let step1 = ChatClient::new(
-                port_d,
-                ai.effective_describe_main().to_string(),
-                ai.describe_max_tokens(),
-            )?;
+            // 云端图片描述：跳过本地引擎 swap（0 为占位端口，Local 分支不会被构造）
+            let port_d = if ai.describe_use_cloud() {
+                log::info!("swap_per_segment: 段 {idx} step 1 走云端，跳过本地引擎 swap");
+                0
+            } else {
+                // 每段都 emit engine_starting 让前端知道在 swap（5-15 分钟级总等待）
+                let mut p_load_d = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "engine_starting",
+                    total_segments,
+                );
+                p_load_d.segment_idx = Some(idx as u32);
+                // message 留空：前端按 phase 显示本地化的"加载模型中…"
+                p_load_d.message = None;
+                self.emit(p_load_d);
+                let (main_d, mmproj_d) = self.resolve_model_paths_for(ai, Step::Describe)?;
+                self.supervisor
+                    .restart_with_overrides(Some(main_d), mmproj_d, describe_overrides.clone())
+                    .await?
+            };
+            let step1 = build_step1(ai, port_d)?;
             // step2 占位——不会调用（step1_only=true）
             let step2_placeholder = build_step2(ai, port_d, ai.effective_describe_main())?;
             self.run_one_segment(
@@ -611,11 +616,12 @@ impl DaySummaryRunner {
                     .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone())
                     .await?
             };
-            let step1_placeholder = ChatClient::new(
+            // step2_only 调用不会碰 step 1——构造 Local 占位（端口可能是 0，不会被用）
+            let step1_placeholder = Step1Chat::Local(ChatClient::new(
                 port_s,
                 ai.effective_summary_main().to_string(),
                 ai.summary_max_tokens(),
-            )?;
+            )?);
             let step2 = build_step2(ai, port_s, ai.effective_summary_main())?;
             self.run_one_segment(
                 source,
@@ -651,7 +657,7 @@ impl DaySummaryRunner {
     async fn run_one_segment(
         &self,
         source: &str,
-        step1: &ChatClient,
+        step1: &Step1Chat,
         step2: &crate::ai::llm::Step2Chat,
         ai: &AiConfig,
         date_str: &str,
@@ -687,9 +693,10 @@ impl DaySummaryRunner {
                 .await;
         }
 
-        // step 1 落库的 model 是 describe 阶段实际加载的 GGUF 文件名；step 2 落库的 model
-        // 由 step2.model_label() 给出（本地 = effective_summary_main，外部 = 用户填的 ID）
-        let model = ai.effective_describe_main().to_string();
+        // step 1 落库的 model：本地 = describe 阶段实际加载的 GGUF 文件名，
+        // 云端 = 用户填的 vision 模型 ID；step 2 落库的 model 由 step2.model_label()
+        // 给出（本地 = effective_summary_main，外部 = 用户填的 ID）
+        let model = step1.model_label().to_string();
         let step2_model = step2.model_label().to_string();
 
         // ────── 取数据 ──────
@@ -1195,9 +1202,9 @@ impl DaySummaryRunner {
             ctx_size: ai.describe_ctx_size_effective(),
         };
 
-        if ai.effective_describe_main().trim().is_empty() {
+        if !ai.describe_use_cloud() && ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」给图描述选一个 vision 模型再调试",
+                "请先在「模型」给图描述选一个 vision 模型（或选定云端 API）再调试",
             ));
         }
 
@@ -1225,15 +1232,15 @@ impl DaySummaryRunner {
         if needs_restart {
             let _ = self.supervisor.stop().await;
         }
-        // 启引擎（如未启动）——单图调试只走 step 1，加载 describe 模型
-        let port = self
-            .ensure_engine_running(&ai, Step::Describe, engine_overrides)
-            .await?;
-        let chat = ChatClient::new(
-            port,
-            ai.effective_describe_main().to_string(),
-            ai.describe_max_tokens(),
-        )?;
+        // 启引擎（如未启动）——单图调试只走 step 1，加载 describe 模型。
+        // 云端图片描述：不启动本地引擎（0 为占位端口）。
+        let port = if ai.describe_use_cloud() {
+            0
+        } else {
+            self.ensure_engine_running(&ai, Step::Describe, engine_overrides)
+                .await?
+        };
+        let chat = build_step1(&ai, port)?;
 
         // 反查这张图的 app/category 元数据；查不到就兜底用 path 当 app 名继续跑
         // —— 不能因为元数据丢失阻塞重跑，prompt 即使没分类也能正常工作。
@@ -1258,7 +1265,12 @@ impl DaySummaryRunner {
         )
         .await?;
 
-        let _inflight = self.supervisor.acquire_inference();
+        // 推理 guard 只对本地引擎有意义；云端调用不占本地引擎
+        let inflight = if chat.is_local() {
+            Some(self.supervisor.acquire_inference())
+        } else {
+            None
+        };
         let (desc, usage) = chat
             .chat_with_images(
                 &describe_system,
@@ -1266,7 +1278,7 @@ impl DaySummaryRunner {
                 std::slice::from_ref(&data_uri),
             )
             .await?;
-        drop(_inflight);
+        drop(inflight);
 
         // 覆盖落库
         ai_summaries::upsert_image_description(
@@ -1278,7 +1290,7 @@ impl DaySummaryRunner {
                 image_index,
                 screenshot_path: existing_row.screenshot_path.clone(),
                 description: desc.clone(),
-                model: ai.effective_describe_main().to_string(),
+                model: chat.model_label().to_string(),
                 generated_at: utc_now_rfc3339(),
                 latency_ms: Some(usage.latency_ms),
                 prompt_tokens: usage.prompt_tokens,
@@ -1360,9 +1372,19 @@ impl DaySummaryRunner {
         };
         let parallel = ai.describe_parallel_slots_effective().unwrap_or(1).max(1) as usize;
 
-        if ai.effective_describe_main().trim().is_empty() {
+        if !ai.describe_use_cloud() && ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
-                "请先在「模型」给图描述选一个 vision 模型再生成总结",
+                "请先在「模型」给图描述选一个 vision 模型，或选定云端 API 跑图片分析",
+            ));
+        }
+        // describe 走云 + summary 走本地时，本路径的引擎要为 step 2 服务，
+        // 必须有本地 summary 模型可加载
+        if ai.describe_use_cloud()
+            && !ai.summary_use_cloud()
+            && ai.effective_summary_main().trim().is_empty()
+        {
+            return Err(Error::InvalidInput(
+                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
         }
 
@@ -1380,30 +1402,55 @@ impl DaySummaryRunner {
         if needs_restart {
             let _ = self.supervisor.stop().await;
         }
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.clone(),
-                "engine_starting",
-                ai.segments.len() as u32,
-            );
-            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
-            p.message = None;
-            self.emit(p);
-        }
-        // 单段重试只起一个引擎实例；如果用户给 step1/step2 配了不同模型，本路径用
-        // describe 模型（vision 能力）跑完整段——step 2 是纯文本任务，vision 模型也能跑。
-        // 想要严格 step 2 用 summary 模型，去 daily 路径重跑当天即可。
-        let port = self
-            .ensure_engine_running(&ai, Step::Describe, engine_overrides)
-            .await?;
-        let step1 = ChatClient::new(
-            port,
-            ai.effective_describe_main().to_string(),
-            ai.describe_max_tokens(),
-        )?;
-        let step2 = build_step2(&ai, port, ai.effective_describe_main())?;
+        // 单段重试只起一个引擎实例。三种组合：
+        //   - describe 本地（summary 随意）：引擎加载 describe 模型（vision），step 2
+        //     纯文本任务共用它——想严格用 summary 模型去 daily 路径重跑当天即可。
+        //   - describe 云端 + summary 本地：引擎只为 step 2 服务，按 Summary 参数加载。
+        //   - 双云端：不启动本地引擎（0 为占位端口）。
+        let (port, step2_label) = if !ai.describe_use_cloud() {
+            let st = self.supervisor.status().await;
+            if st.state != EngineState::Running {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.clone(),
+                    "engine_starting",
+                    ai.segments.len() as u32,
+                );
+                // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+                p.message = None;
+                self.emit(p);
+            }
+            let port = self
+                .ensure_engine_running(&ai, Step::Describe, engine_overrides)
+                .await?;
+            (port, ai.effective_describe_main().to_string())
+        } else if !ai.summary_use_cloud() {
+            let st = self.supervisor.status().await;
+            if st.state != EngineState::Running {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.clone(),
+                    "engine_starting",
+                    ai.segments.len() as u32,
+                );
+                p.message = None;
+                self.emit(p);
+            }
+            let summary_overrides = EngineStartOverrides {
+                batch_size: ai.summary_batch_size_effective(),
+                parallel_slots: ai.summary_parallel_slots_effective(),
+                ctx_size: ai.summary_ctx_size_effective(),
+            };
+            let port = self
+                .ensure_engine_running(&ai, Step::Summary, summary_overrides)
+                .await?;
+            (port, ai.effective_summary_main().to_string())
+        } else {
+            log::info!("单段重试：step 1 / step 2 均走云端，跳过本地引擎");
+            (0, ai.effective_summary_main().to_string())
+        };
+        let step1 = build_step1(&ai, port)?;
+        let step2 = build_step2(&ai, port, &step2_label)?;
         let max_images = ai.max_images_per_segment as usize;
 
         // 单段重试是「重新生成段总结」语义，永远走完整 step1+step2 流程

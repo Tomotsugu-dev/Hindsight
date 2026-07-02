@@ -715,7 +715,15 @@
         "modelUnset": "(model not set)",
         "step2Tooltip": "Step 2 (segment summary) is routed to the cloud API. Edit endpoint / model in the Cloud API tab.",
         "step1DisabledTooltip": "Cloud API does not support image input (Step 1 requires vision capability)",
-        "step2DisabledTooltip": "Cloud API is selected as Step 2 backend. To turn it off, disable it in the Cloud API tab."
+        "step2DisabledTooltip": "Cloud API is selected as Step 2 backend. To turn it off, disable it in the Cloud API tab.",
+        "step1ToggleOnTooltip": "Route Step 1 (image description) to the cloud API — screenshots will be uploaded",
+        "step1ToggleOffTooltip": "Stop using the cloud for Step 1 (falls back to the local vision model)",
+        "visionConfirmTitle": "Upload screenshots to the cloud?",
+        "visionConfirmMessage": "Routing Vision (Step 1) to the cloud sends your screenshot images to {{provider}} for analysis. Screenshots may contain chats, emails, passwords, and other sensitive content. Configure privacy keyword filters first (Settings → Privacy) if you haven't. This choice stays until you switch back to a local model.",
+        "visionConfirmAccept": "I understand, upload screenshots",
+        "summaryConfirmTitle": "Send summary data to the cloud?",
+        "summaryConfirmMessage": "Routing Text (Step 2) to the cloud sends app names, categories, and text descriptions of your screenshots to {{provider}} on every segment summary. The screenshot images themselves are not uploaded by this option.",
+        "summaryConfirmAccept": "I understand, continue"
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
@@ -846,7 +854,10 @@
       "testOkNoModels": "Connected",
       "testFail": "Connection failed: {{message}}",
       "missingFields": "Fill in Base URL and Model ID first",
-      "privacyNote": "Note: when enabled, app names, categories, and text descriptions of screenshots are sent to the cloud API on each segment summary call. The images themselves are not uploaded."
+      "privacyNote": "Note: with Text (Step 2) on the cloud, app names, categories, and text descriptions of screenshots are sent to the cloud API. With Vision (Step 1) on the cloud, the screenshot images themselves are uploaded. The API key is stored in plain text in local settings.",
+      "visionModelLabel": "Vision model ID (optional)",
+      "visionModelHint": "Used when Vision (Step 1) is routed to the cloud. Leave empty to reuse the model ID above — it must then support image input.",
+      "visionModelPlaceholder": "e.g. gpt-4o-mini / qwen-vl-plus (empty = reuse model ID)"
     }
   },
   "devices": {

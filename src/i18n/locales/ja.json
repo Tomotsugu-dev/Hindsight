@@ -715,7 +715,15 @@
         "modelUnset": "(モデル未設定)",
         "step2Tooltip": "Step 2 (セグメント要約) はクラウド API にルーティングされています。エンドポイント / モデルの編集は「クラウド API」タブで行ってください。",
         "step1DisabledTooltip": "クラウド API は画像入力に対応していません（Step 1 には vision 能力が必要）",
-        "step2DisabledTooltip": "Step 2 のバックエンドとしてクラウド API が選択されています。オフにするには「クラウド API」タブで無効化してください。"
+        "step2DisabledTooltip": "Step 2 のバックエンドとしてクラウド API が選択されています。オフにするには「クラウド API」タブで無効化してください。",
+        "step1ToggleOnTooltip": "ステップ 1（画像記述）をクラウド API に向ける——スクリーンショットがアップロードされます",
+        "step1ToggleOffTooltip": "クラウドのステップ 1 を解除（ローカルの vision モデルに戻す）",
+        "visionConfirmTitle": "スクリーンショットをクラウドへアップロードしますか？",
+        "visionConfirmMessage": "Vision（ステップ 1）をクラウドにすると、スクリーンショット画像が {{provider}} に送信され解析されます。画像にはチャット・メール・パスワードなどの機微な内容が含まれる可能性があります。先に 設定 → プライバシー でキーワードフィルタを設定することをおすすめします。この選択はローカルモデルに戻すまで有効です。",
+        "visionConfirmAccept": "理解した上でアップロードする",
+        "summaryConfirmTitle": "要約データをクラウドへ送信しますか？",
+        "summaryConfirmMessage": "Text（ステップ 2）をクラウドにすると、各時間帯の要約ごとにアプリ名・分類・画像の文字記述が {{provider}} に送信されます。このオプションではスクリーンショット画像そのものは送信されません。",
+        "summaryConfirmAccept": "理解した、続行する"
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
@@ -846,7 +854,10 @@
       "testOkNoModels": "接続成功",
       "testFail": "接続失敗：{{message}}",
       "missingFields": "Base URL とモデル ID を入力してください",
-      "privacyNote": "ヒント：オンにすると、アプリ名・分類・画像の文字記述が各時間帯の要約呼び出しごとにクラウド API へ送信されます。画像本体はアップロードされません。"
+      "privacyNote": "ヒント：Text（ステップ 2）をクラウドにすると、アプリ名・分類・画像の文字記述がクラウド API へ送信されます。Vision（ステップ 1）をクラウドにすると、スクリーンショット画像そのものがアップロードされます。API キーはローカル設定に平文で保存されます。",
+      "visionModelLabel": "Vision モデル ID（任意）",
+      "visionModelHint": "Vision（ステップ 1）をクラウドに向けたときに使用します。空欄なら上のモデル ID を再利用します（その場合、画像入力対応モデルが必要です）。",
+      "visionModelPlaceholder": "例：gpt-4o-mini / qwen-vl-plus（空欄 = モデル ID を再利用）"
     }
   },
   "devices": {

@@ -47,11 +47,18 @@ pub struct AiConfig {
     /// 外部 API 的模型 ID（如 `gpt-4o-mini` / `deepseek-chat`）；
     /// 仅在 `external_enabled = true` 时生效。
     pub model: String,
+    /// 外部 API 跑 step 1 图片描述时用的 vision 模型 ID（如 `gpt-4o-mini` / `qwen-vl-plus`）。
+    /// 空 = 复用 [`Self::model`]。仅在 [`Self::describe_use_cloud`] 时生效。
+    /// 通过 [`Self::cloud_vision_model`] 读取，不要直接读字段。
+    #[serde(default)]
+    pub vision_model: String,
     /// 外部 API 的 Bearer token；明文落 settings JSON。
     pub api_key: String,
-    /// 是否启用外部云端 API 跑 step 2 段总结。
-    /// false = 全程本地（默认）；true = step 1 本地 vision，step 2 走外部 API。
-    /// 截图本身在任何情况下都不上传——step 1 永远本地。
+    /// 是否启用外部云端 API。
+    /// false = 全程本地（默认）。true 时具体哪一步走云由各 step 槽位的
+    /// `__cloud__` sentinel 决定（见 [`Self::summary_use_cloud`] /
+    /// [`Self::describe_use_cloud`]）。step 1 选云端意味着**截图本身会上传**，
+    /// 前端在用户选择时弹隐私确认。
     pub external_enabled: bool,
     /// Provider 预设标识（"openai" / "deepseek" / "openrouter" / "together" / "groq" / "custom"）。
     /// 后端只用来 sanitize；UI 用它决定 Base URL / Model 的 placeholder。
@@ -171,8 +178,11 @@ impl AiConfig {
     }
 
     /// step 1 主权重文件名（去前后空白后非空）；空 → fallback 到 `active_main`。
+    /// `describe_main == SUMMARY_CLOUD_SENTINEL` 也走 fallback——那是"用云端"标记，
+    /// 不是真实文件名；走本地路径的代码应当看到 active_main（同 step 2 的语义）。
     pub fn effective_describe_main(&self) -> &str {
-        if self.describe_main.trim().is_empty() {
+        let s = self.describe_main.trim();
+        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
             self.active_main.as_str()
         } else {
             self.describe_main.as_str()
@@ -188,7 +198,8 @@ impl AiConfig {
     /// 错把 vision mmproj 强加到文本模型上，llama-server 加载后 token embedding 错位，
     /// 推理首 token 即 EOS（"模型返回为空"）。
     pub fn effective_describe_mmproj(&self) -> &str {
-        if self.describe_main.trim().is_empty() {
+        let s = self.describe_main.trim();
+        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
             self.active_mmproj.as_str()
         } else {
             self.describe_mmproj.as_str()
@@ -221,6 +232,24 @@ impl AiConfig {
     /// 不会因为 sentinel 残留就硬卡住没法跑总结。
     pub fn summary_use_cloud(&self) -> bool {
         self.external_enabled && self.summary_main.trim() == SUMMARY_CLOUD_SENTINEL
+    }
+
+    /// step 1 是否实际路由到云端：`describe_main` 是"用云端"标记 **且** `external_enabled=true`。
+    /// 语义与 [`Self::summary_use_cloud`] 完全对齐：external 关掉时 sentinel 退化为
+    /// fallback（按 `active_main` 跑本地），不会硬卡住。
+    /// 注意：step 1 走云端 = **截图图片本体会上传**到所配置的第三方 API。
+    pub fn describe_use_cloud(&self) -> bool {
+        self.external_enabled && self.describe_main.trim() == SUMMARY_CLOUD_SENTINEL
+    }
+
+    /// 云端 step 1 用的模型 ID：`vision_model` 非空用它，空则复用 [`Self::model`]。
+    pub fn cloud_vision_model(&self) -> &str {
+        let v = self.vision_model.trim();
+        if v.is_empty() {
+            self.model.as_str()
+        } else {
+            v
+        }
     }
 
     /// step 1 单次响应 max_tokens：让用户配的 ctx_size 能反映到响应能写多长。
@@ -262,6 +291,7 @@ impl Default for AiConfig {
         Self {
             endpoint: String::new(),
             model: String::new(),
+            vision_model: String::new(),
             api_key: String::new(),
             external_enabled: false,
             external_provider: "openai".to_string(),

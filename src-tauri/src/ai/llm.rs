@@ -98,12 +98,17 @@ impl ChatClient {
     }
 }
 
-/// 外部云端 API 的 OpenAI 兼容 chat 客户端（仅用于 step 2 段总结，纯文本）。
+/// 外部云端 API 的 OpenAI 兼容 chat 客户端。
 ///
 /// 跟 [`ChatClient`] 走同样的 `/chat/completions` 协议，区别只在：
 /// - base URL 是用户填的（`https://api.openai.com/v1` 等）
 /// - 带 `Authorization: Bearer <api_key>` 头
-/// - 拒绝任何 image_data_uris 非空的调用——本设计里截图永远不上云
+///
+/// 两个入口，语义分开：
+/// - [`Self::chat_text`]：step 2 段总结，**拒绝**任何带图调用（防路由 bug）
+/// - [`Self::chat_with_images`]：step 1 图片描述——仅当用户在模型卡上**显式**把
+///   Vision (Step 1) 指到云端（`describe_use_cloud`，前端有隐私确认弹窗）才会被
+///   构造使用，此时截图会以 data URI 形式上传到用户配置的第三方 API
 #[derive(Clone)]
 pub struct ExternalChatClient {
     base_url: String,
@@ -161,6 +166,61 @@ impl ExternalChatClient {
             req = req.bearer_auth(self.api_key.trim());
         }
         send_and_parse(req, Instant::now()).await
+    }
+
+    /// 发一条多模态 chat 请求（step 1 云端图片描述专用）。
+    /// 只有 `describe_use_cloud` 路由会构造到这里——用户已在前端确认过
+    /// "截图将上传"的隐私弹窗。请求体格式与本地 [`ChatClient::chat_with_images`]
+    /// 完全一致（OpenAI 兼容 text + image_url data URI）。
+    pub async fn chat_with_images(
+        &self,
+        system: &str,
+        user_text: &str,
+        image_data_uris: &[String],
+    ) -> Result<(String, ChatUsage)> {
+        let url = format!("{}/chat/completions", self.base_url);
+        let body = build_chat_body(&self.model, system, user_text, image_data_uris, self.max_tokens);
+        let mut req = self.http.post(&url).json(&body);
+        if !self.api_key.trim().is_empty() {
+            req = req.bearer_auth(self.api_key.trim());
+        }
+        send_and_parse(req, Instant::now()).await
+    }
+}
+
+/// step 1 图片描述的 chat 路由。本地走 [`ChatClient`]（llama-server vision 模型），
+/// 云端走 [`ExternalChatClient::chat_with_images`]（用户显式选择 + 隐私确认后）。
+/// 结构与 [`Step2Chat`] 对齐。
+#[derive(Clone)]
+pub enum Step1Chat {
+    Local(ChatClient),
+    External(ExternalChatClient),
+}
+
+impl Step1Chat {
+    pub async fn chat_with_images(
+        &self,
+        system: &str,
+        user_text: &str,
+        image_data_uris: &[String],
+    ) -> Result<(String, ChatUsage)> {
+        match self {
+            Step1Chat::Local(c) => c.chat_with_images(system, user_text, image_data_uris).await,
+            Step1Chat::External(c) => c.chat_with_images(system, user_text, image_data_uris).await,
+        }
+    }
+
+    /// 是否走本地引擎（用于 idle watcher：只有本地调用才 acquire 推理 guard）。
+    pub fn is_local(&self) -> bool {
+        matches!(self, Step1Chat::Local(_))
+    }
+
+    /// 写入 `ai_image_descriptions.model` 的标识——本地用 GGUF 文件名，云端用模型 ID。
+    pub fn model_label(&self) -> &str {
+        match self {
+            Step1Chat::Local(c) => c.model(),
+            Step1Chat::External(c) => &c.model,
+        }
     }
 }
 

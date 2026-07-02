@@ -231,6 +231,23 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
             />
           </Row>
 
+          <Row
+            label={t("aiSettings.external.visionModelLabel")}
+            description={t("aiSettings.external.visionModelHint")}
+            block
+          >
+            <input
+              type="text"
+              className={styles.externalInput}
+              value={ai.visionModel}
+              onChange={(e) => updateAi({ visionModel: e.target.value })}
+              placeholder={t("aiSettings.external.visionModelPlaceholder")}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+          </Row>
+
           <div className={styles.externalActionRow}>
             <button
               type="button"

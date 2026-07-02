@@ -715,7 +715,15 @@
         "modelUnset": "(modelo não definido)",
         "step2Tooltip": "A etapa 2 (resumo de segmento) é roteada para a API na nuvem. Edite o endpoint / modelo na aba API na nuvem.",
         "step1DisabledTooltip": "A API na nuvem não oferece suporte a entrada de imagem (a etapa 1 requer capacidade de visão)",
-        "step2DisabledTooltip": "A API na nuvem está selecionada como backend da etapa 2. Para desativá-la, desative-a na aba API na nuvem."
+        "step2DisabledTooltip": "A API na nuvem está selecionada como backend da etapa 2. Para desativá-la, desative-a na aba API na nuvem.",
+        "step1ToggleOnTooltip": "Direcionar a Etapa 1 (descrição de imagens) para a API na nuvem — as capturas de tela serão enviadas",
+        "step1ToggleOffTooltip": "Parar de usar a nuvem na Etapa 1 (volta ao modelo vision local)",
+        "visionConfirmTitle": "Enviar capturas de tela para a nuvem?",
+        "visionConfirmMessage": "Com o Vision (Etapa 1) na nuvem, as imagens das suas capturas são enviadas a {{provider}} para análise. Elas podem conter conversas, e-mails, senhas e outros dados sensíveis. Configure antes os filtros de palavras-chave de privacidade (Configurações → Privacidade). A escolha permanece até você voltar a um modelo local.",
+        "visionConfirmAccept": "Entendo o risco, enviar capturas",
+        "summaryConfirmTitle": "Enviar dados de resumo para a nuvem?",
+        "summaryConfirmMessage": "Com o Text (Etapa 2) na nuvem, nomes de aplicativos, categorias e descrições textuais das capturas são enviados a {{provider}} em cada resumo de segmento. Esta opção não envia as imagens em si.",
+        "summaryConfirmAccept": "Entendo, continuar"
       },
       "card": {
         "hfTooltipPrefix": "HuggingFace · ",
@@ -846,7 +854,10 @@
       "testOkNoModels": "Conectado",
       "testFail": "Falha na conexão: {{message}}",
       "missingFields": "Preencha primeiro a Base URL e o ID do modelo",
-      "privacyNote": "Observação: quando ativado, os nomes dos aplicativos, as categorias e as descrições em texto das capturas de tela são enviados à API na nuvem a cada chamada de resumo de segmento. As imagens em si não são enviadas."
+      "privacyNote": "Observação: com o Text (Etapa 2) na nuvem, nomes de aplicativos, categorias e descrições textuais das capturas são enviados à API. Com o Vision (Etapa 1) na nuvem, as próprias imagens das capturas são enviadas. A chave de API é salva em texto simples nas configurações locais.",
+      "visionModelLabel": "ID do modelo Vision (opcional)",
+      "visionModelHint": "Usado quando o Vision (Etapa 1) é direcionado para a nuvem. Deixe vazio para reutilizar o ID do modelo acima — nesse caso, ele precisa aceitar imagens.",
+      "visionModelPlaceholder": "ex.: gpt-4o-mini / qwen-vl-plus (vazio = reutilizar o ID do modelo)"
     }
   },
   "devices": {
