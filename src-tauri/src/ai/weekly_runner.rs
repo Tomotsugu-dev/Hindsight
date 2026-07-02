@@ -368,12 +368,6 @@ impl WeekSummaryRunner {
     /// 跟 `DaySummaryRunner::ensure_engine_running` 同语义——但只关心 Step::Summary
     /// 因为周报全程纯文本，不需要 vision describe 的 mmproj。
     async fn ensure_engine_running(&self, ai: &crate::ai::config::AiConfig) -> Result<u16> {
-        let st = self.supervisor.status().await;
-        if st.state == EngineState::Running {
-            if let Some(p) = st.port {
-                return Ok(p);
-            }
-        }
         let main_name = ai.effective_summary_main();
         let mmproj_name = ai.effective_summary_mmproj();
         let models_dir = models::root_dir(ai);
@@ -383,6 +377,25 @@ impl WeekSummaryRunner {
                 "{}（可能被删除或路径变了）",
                 main_name
             )));
+        }
+        let st = self.supervisor.status().await;
+        if st.state == EngineState::Running {
+            if let Some(p) = st.port {
+                // 校验装的确实是 summary 模型才复用——不校验的话，2 分钟前调试跑
+                // 留下的 vision 模型（小 ctx）会被直接拿来生成周报：整周日报塞不下，
+                // 输出截断或直接报错。不符则重启换模。复用前 touch 防 idle 猝杀。
+                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path()) {
+                    self.supervisor.touch();
+                    return Ok(p);
+                }
+                log::info!(
+                    "weekly ensure_engine_running: 已加载模型非 summary 模型，重启换模 (want={})",
+                    main_path.display()
+                );
+                if let Err(e) = self.supervisor.stop().await {
+                    log::warn!("换模前 stop 引擎失败（继续尝试启动）: {e}");
+                }
+            }
         }
         let mmproj_path = if mmproj_name.trim().is_empty() {
             None
@@ -483,11 +496,17 @@ fn weekly_label(week_start: &str, week_end: &str) -> String {
 /// 余下是跟段总结 user prompt 同款的应用列表。三语都遵守同样的 marker 结构，
 /// weekly_*.md 里有对应说明告诉模型遇到 marker 时怎么处理。
 fn format_missing_day_fallback(lang: &str, day_apps: &[(String, u32, String)]) -> String {
+    // marker 必须与各语言 weekly_*.md 里教模型识别的字符串**逐字一致**——
+    // 对不上的话模型会把占位块当正文（葡语周报里混中文就是这么来的）。
     let (marker, header) = match lang {
         "en" => ("[No daily report; app stats only]", "Top apps used:"),
         "ja" => (
             "[この日は日報なし、アプリ統計のみ]",
             "最も使用されたアプリ：",
+        ),
+        "pt" => (
+            "[Sem relatório diário; apenas estatísticas de apps]",
+            "Aplicativos mais usados:",
         ),
         _ => ("[当日无日报，仅应用统计]", "使用最多的应用："),
     };
@@ -500,6 +519,7 @@ fn format_missing_day_fallback(lang: &str, day_apps: &[(String, u32, String)]) -
         match lang {
             "en" => out.push_str(&format!("- {} ({} min · {})\n", name, minutes, category)),
             "ja" => out.push_str(&format!("- {}（{} 分 · {}）\n", name, minutes, category)),
+            "pt" => out.push_str(&format!("- {} ({} min · {})\n", name, minutes, category)),
             _ => out.push_str(&format!("- {}（{} 分钟 · {}）\n", name, minutes, category)),
         }
     }

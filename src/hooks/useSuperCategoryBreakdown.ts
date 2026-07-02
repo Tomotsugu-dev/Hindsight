@@ -45,15 +45,17 @@ interface CategoryMinutesInput {
 /** 把 HourSlot[] / DaySummary[] 等带 `segments` 的源汇总成 [{id, minutes}, ...]。
  *  给 useSuperCategoryBreakdown 当 input；Today 用 hours, Week/Month 用 days。 */
 export function catMinutesFromSegments(
-  sources: { segments: { categoryId: string; minutes: number }[] }[],
+  sources: { segments: { categoryId: string; secs: number }[] }[],
 ): CategoryMinutesInput[] {
-  const totals = new Map<string, number>();
+  // 累秒后统一取整——逐桶取整再相加会系统性偏差（碎片使用越多偏得越多），
+  // 与 top-apps 的"先加总后取整"口径保持一致。
+  const totalSecs = new Map<string, number>();
   for (const src of sources) {
     for (const seg of src.segments) {
-      totals.set(seg.categoryId, (totals.get(seg.categoryId) ?? 0) + seg.minutes);
+      totalSecs.set(seg.categoryId, (totalSecs.get(seg.categoryId) ?? 0) + seg.secs);
     }
   }
-  return Array.from(totals, ([id, minutes]) => ({ id, minutes }));
+  return Array.from(totalSecs, ([id, secs]) => ({ id, minutes: Math.round(secs / 60) }));
 }
 
 /**

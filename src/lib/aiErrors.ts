@@ -15,11 +15,16 @@ const CODE_KEYS: Record<string, string> = {
   LLM_EMPTY_EOS: "aiSummary.errors.llmEmptyEos",
   LLM_EMPTY_TRUNCATED: "aiSummary.errors.llmEmptyTruncated",
   LLM_EMPTY: "aiSummary.errors.llmEmpty",
+  AI_RUN_BUSY: "aiSummary.errors.runBusy",
 };
 
-/** 把后端原始错误串映射成本地化文案：命中已知 `[CODE]` 前缀走 i18n，否则原样返回。 */
+/** 把后端原始错误串映射成本地化文案：命中已知 `[CODE]` 码走 i18n，否则原样返回。
+ *
+ *  正则**不锚定开头**：错误码经 Rust 的 error 链包装后到达前端时通常带外层前缀
+ *  （`Error::LlmResponse` 的 Display 是 "llm response: [LLM_EMPTY_EOS] ..."），
+ *  锚 `^` 会让本函数对它设计要处理的那批错误恰好全部失效。 */
 export function localizeAiError(raw: string): string {
-  const m = /^\[([A-Z_]+)\]/.exec(raw);
+  const m = /\[([A-Z_]+)\]/.exec(raw);
   const key = m ? CODE_KEYS[m[1]] : undefined;
   return key ? i18next.t(key) : raw;
 }

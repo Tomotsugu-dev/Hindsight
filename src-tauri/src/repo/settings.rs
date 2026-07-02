@@ -150,7 +150,12 @@ pub struct SettingsPatch {
 }
 
 /// 读 settings_store 单行 + 反序列化。
-/// 缺字段 / JSON 损坏走 `Settings::default()`；空截图路径自动填默认值并写回。
+/// 缺字段走 `#[serde(default)]` 补默认；空截图路径自动填默认值并写回。
+///
+/// **JSON 整体解析失败**（字段类型对不上 / 写了一半被截断）时：内存里用默认值让
+/// 应用能起，但**绝不回写**——旧实现 `unwrap_or_default()` + dirty 保存会把用户全部
+/// 设置（工作时段 / 隐私关键词 / API key / AI 参数）一次性覆盖成默认且不可恢复。
+/// 现在原始 JSON 先备份到数据目录再继续，等下一个能读懂它的版本或用户手工救回。
 pub async fn load(pool: &DbPool) -> Result<Settings> {
     let data: String = pool
         .0
@@ -164,7 +169,20 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         })
         .await?;
 
-    let mut settings = serde_json::from_str::<Settings>(&data).unwrap_or_default();
+    let (mut settings, parse_failed) = match serde_json::from_str::<Settings>(&data) {
+        Ok(s) => (s, false),
+        Err(e) => {
+            log::error!("settings JSON 解析失败（本次使用默认值、不回写）: {e}");
+            if let Ok(dir) = crate::storage::db_path_dir() {
+                let backup = dir.join("settings_store.corrupt.json");
+                match std::fs::write(&backup, &data) {
+                    Ok(()) => log::error!("原始 settings 已备份到 {}", backup.display()),
+                    Err(we) => log::error!("备份原始 settings 失败: {we}"),
+                }
+            }
+            (Settings::default(), true)
+        }
+    };
     let mut dirty = false;
 
     if settings.screenshot_path.trim().is_empty() {
@@ -188,7 +206,9 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         dirty = true;
     }
 
-    if dirty {
+    // 解析失败时的 dirty 全是"默认值缺路径"造成的，绝不能把这份默认值写回去
+    // 覆盖用户仅存的原始 JSON。
+    if dirty && !parse_failed {
         save(pool, &settings).await?;
     }
 

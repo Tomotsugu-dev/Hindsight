@@ -89,6 +89,21 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
       cacheRef.current = cache;
     }, [cache]);
 
+    // 跨午夜失效：缓存按**相对 offset** 键控，而后端按查询时刻的 now 解析 offset。
+    // 常驻 app 挂过夜后，昨天缓存的 offset=-1 内容其实是"前天"——不清的话第二天
+    // 点「昨天」看到的是前天的数据。记录写入日，任何交互（预取 effect / 轮询）
+    // 发现本地日期变了就整体作废重拉。
+    const dayKeyRef = useRef(new Date().toDateString());
+    const invalidateOnRollover = useCallback(() => {
+      const key = new Date().toDateString();
+      if (key === dayKeyRef.current) return;
+      dayKeyRef.current = key;
+      scopeRef.current += 1; // 在途旧 fetch 一并作废
+      setCache(new Map());
+      cacheRef.current = new Map();
+      inFlightRef.current.clear();
+    }, []);
+
     // categories 进 deps：CategoriesProvider 初次 mount 是空数组，
     // 数据回来后会换新引用 → 上面的清缓存 effect 已触发把刚到的数据清掉，
     // 不带 categories 的话就再也不会补一发，UI 卡空白。
@@ -102,20 +117,22 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     //     就是用户看到的"16h 柱子突然变长 / 变短"。
     //   - 邻居（currentOffset ± 1）：永远 force=false，cache 有就跳过预取。
     useEffect(() => {
+      invalidateOnRollover();
       void fetchOne(currentOffset - 1);
       void fetchOne(currentOffset, currentOffset === 0);
       void fetchOne(currentOffset + 1);
-    }, [currentOffset, fetchOne, categories]);
+    }, [currentOffset, fetchOne, categories, invalidateOnRollover]);
 
     useEffect(() => {
       if (currentOffset !== 0) return;
       const t = setInterval(() => {
+        invalidateOnRollover();
         // 不再无条件 delete(0)：交给 fetchOne 自身的 inFlight 守卫去重，
         // 避免同一 offset=0 并发多发、回来乱序覆盖（"柱子忽长忽短"的另一来源）。
         void fetchOne(0, true);
       }, pollInterval);
       return () => clearInterval(t);
-    }, [currentOffset, fetchOne]);
+    }, [currentOffset, fetchOne, invalidateOnRollover]);
 
     const get = useCallback(
       (offset: number): TData => cache.get(offset) ?? emptyValue,

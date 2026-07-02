@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, type AppUsage } from "../api/hindsight";
 
 const MAX_CACHE = 16; // Week 7 + Month ~30 + 余量
+/** 今天(offset=0)仍在累积——同 useHourApps 的 TTL 语义，30s 过期重拉。 */
+const TODAY_TTL_MS = 30_000;
 
 interface State {
   apps: AppUsage[] | null;
@@ -20,7 +22,7 @@ export function useSelectedDayApps(
   dayOffset: number | null,
   deviceId?: string,
 ): State {
-  const cacheRef = useRef<Map<string, AppUsage[]>>(new Map());
+  const cacheRef = useRef<Map<string, { apps: AppUsage[]; at: number }>>(new Map());
   const [state, setState] = useState<State>({ apps: null, loading: false });
 
   // deviceId 切换 → 缓存全部失效
@@ -37,8 +39,8 @@ export function useSelectedDayApps(
     }
     const key = cacheKey(dayOffset, deviceId);
     const cached = cacheRef.current.get(key);
-    if (cached) {
-      setState({ apps: cached, loading: false });
+    if (cached && !(dayOffset === 0 && Date.now() - cached.at > TODAY_TTL_MS)) {
+      setState({ apps: cached.apps, loading: false });
       return;
     }
 
@@ -49,7 +51,7 @@ export function useSelectedDayApps(
       .then((apps) => {
         if (cancelled) return;
         const cache = cacheRef.current;
-        cache.set(key, apps);
+        cache.set(key, { apps, at: Date.now() });
         if (cache.size > MAX_CACHE) {
           const oldest = cache.keys().next().value;
           if (oldest !== undefined) cache.delete(oldest);

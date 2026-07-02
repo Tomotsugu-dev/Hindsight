@@ -60,12 +60,16 @@ export default function TodayPage() {
   const [view, setView] = useState<StatsView>("bars");
   /** 占比 drill：当前选中的 super-id；null 表示列表层。 */
   const [drillId, setDrillId] = useState<string | null>(null);
-  // 切日 / 切设备 / 切视图 → 自动回列表层。view 进 deps 是为了：用户在占比里
+  // 切设备 / 切视图 → 自动回列表层。view 进 deps 是为了：用户在占比里
   // pin 了某大类后切回时段视图，drill 状态在 UI 上已不可见但仍 pinned，再切回
   // 占比会"幽灵高亮"在上次的大类上。切视图时清掉，回占比是干净的列表层。
+  //
+  // 切日期**不清** drill：钉住某大类翻上一天正是"对比同一大类不同时期"的动线。
+  // 新时期没有该大类时 drilledSlice 查不到 → 自动落回总览视角（消费方都 null
+  // 安全），翻回有数据的时期 drill 又恢复。
   useEffect(() => {
     setDrillId(null);
-  }, [offset, selectedDeviceId, view]);
+  }, [selectedDeviceId, view]);
 
   // 日期切换 pill 的本地化文案
   const dayLabel = (off: number): string => {
@@ -105,10 +109,12 @@ export default function TodayPage() {
 
   const totalMinutes = useMemo(
     () =>
-      hours.reduce(
-        (sum, h) => sum + h.segments.reduce((s, x) => s + x.minutes, 0),
-        0,
-      ),
+      Math.round(
+          hours.reduce(
+            (sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0),
+            0,
+          ) / 60,
+        ),
     [hours],
   );
 
@@ -121,10 +127,12 @@ export default function TodayPage() {
   // totalMinutes（全日）。卡片右上角"总时长"显示用这个值才跟下方 apps 列表对齐。
   const scopedMinutes = useMemo(
     () =>
-      segmentsForRanks.reduce(
-        (sum, h) => sum + h.segments.reduce((s, x) => s + x.minutes, 0),
-        0,
-      ),
+      Math.round(
+          segmentsForRanks.reduce(
+            (sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0),
+            0,
+          ) / 60,
+        ),
     [segmentsForRanks],
   );
   const appsForRanks = useMemo(
@@ -281,7 +289,9 @@ export default function TodayPage() {
                   key={`pie-curr-${offset}`}
                   slices={currBreakdown.slices}
                   total={currBreakdown.total}
-                  pinnedId={drillId}
+                  // drill 跨周期保留后 drillId 可能在当前周期没有对应切片（ghost）——
+                  // 直接传会让 PieView 把所有行/圆环置灰且无高亮。解析得到才 pin。
+                  pinnedId={drilledSlice ? drillId : null}
                   onDrill={(id) =>
                     setDrillId((prev) => (prev === id ? null : id))
                   }

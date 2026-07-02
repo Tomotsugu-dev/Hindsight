@@ -3,7 +3,10 @@ import { logError } from "../lib/logger";
 
 export interface HourSegment {
   categoryId: string;
+  /** 显示用整数分钟（每桶各自四舍五入）。求总和用 secs——逐桶取整再相加会系统性偏差。 */
   minutes: number;
+  /** 未取整秒数。所有"总时长/日均/占比"从这里累加、最后一步再换算分钟。 */
+  secs: number;
 }
 
 export interface HourSlot {

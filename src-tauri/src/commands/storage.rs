@@ -93,10 +93,16 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
 pub async fn purge_activities(
     pool: State<'_, DbPool>,
     svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
 ) -> Result<(), String> {
-    purge_activities_impl(&pool).await?;
-    svc.reset_session().await;
-    Ok(())
+    // 两把并发保护，缺一不可：
+    // 1. pause_flushes：等在途 push/pull tick 结束并挡住新 tick——否则 push 若已读完
+    //    outbox、还没读表，会把清空后的表内容（空 ndjson）写上 Drive，云端备份被抹掉。
+    // 2. run_with_session_cleared：持 capture 会话锁清指针——否则并发 tick 可能在
+    //    DELETE 之后插入新行又被 reset 清掉指针，留一条永不 seal 的孤儿行。
+    let _sync_guard = engine.pause_flushes().await;
+    svc.run_with_session_cleared(|| async { purge_activities_impl(&pool).await })
+        .await
 }
 
 /// 抽出来的实际实现，给单测可以直接调用（绕开 Tauri State<> 包装 + CaptureService
@@ -307,9 +313,27 @@ pub(crate) async fn purge_cloud_data_impl(
     let prefix = format!("device.{self_id}.");
     let drive = engine.drive();
 
-    // 1. 列 Drive 全量文件，按本机 prefix 过滤。
-    //    跳过 tombstone 本身（清云端时 tombstone 留下来当 marker，不然对端永远不知道）。
+    // 挡住并发 push/pull：清理进行到一半时后台 tick 把刚删的文件重新传回 Drive
+    // （"复活"）或用半清状态覆盖，全流程持串行门。
+    let _gate = engine.pause_flushes().await;
+
+    // 1. **先上传 tombstone**（覆盖任何旧版本，modifiedTime 刷新让对端 pull 看到）。
+    //    顺序是关键：tombstone 是"对端请清掉这台设备镜像"的唯一信号——若像旧实现
+    //    那样最后才传、失败还只 warn，就会出现"Drive 文件删了、本地清了、界面报成功，
+    //    但对端永远不知道"的静默半成功。现在 tombstone 失败 = 整个命令失败，
+    //    此时什么都还没删，用户直接重试即可。
+    let cleared_at = utc_now_rfc3339();
     let tombstone_name = format!("device.{self_id}.tombstone.json");
+    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
+        cleared_at: cleared_at.clone(),
+    })
+    .map_err(|e| e.to_string())?;
+    drive
+        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+        .await
+        .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
+
+    // 2. 列 Drive 全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
     let files = drive
         .list_appdata_files(&token.access_token, "")
         .await
@@ -319,26 +343,14 @@ pub(crate) async fn purge_cloud_data_impl(
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
         .collect();
 
-    // 2. 逐个 DELETE；单文件失败不抛，让能删的尽量删完
+    // 3. 逐个 DELETE；单文件失败不抛，让能删的尽量删完（漏删的对端也会因
+    //    tombstone 的 clearedAt trim 掉，只是 Drive 上多占点空间）
     let mut deleted = 0u64;
     for f in &mine {
         match drive.delete(&token.access_token, &f.id).await {
             Ok(()) => deleted += 1,
             Err(e) => log::warn!("purge_cloud_data: delete {} 失败: {e}", f.name),
         }
-    }
-
-    // 3. 上传 tombstone（覆盖任何旧版本，modifiedTime 自然刷新让对端 pull 看到）。
-    let cleared_at = utc_now_rfc3339();
-    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
-        cleared_at: cleared_at.clone(),
-    })
-    .map_err(|e| e.to_string())?;
-    if let Err(e) = drive
-        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
-        .await
-    {
-        log::warn!("purge_cloud_data: upload tombstone 失败: {e}");
     }
 
     // 4. 源端本地按同款 clearedAt trim activities + 5. 清 outbox + 6. 重置 cursor，
@@ -436,7 +448,25 @@ pub(crate) async fn forget_remote_device_impl(
     let tombstone_name = format!("device.{target_id}.tombstone.json");
     let drive = engine.drive();
 
-    // 1. 列 Drive 上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
+    // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
+    let _gate = engine.pause_flushes().await;
+
+    // 1. **先上传 tombstone**（覆盖任何旧版本）。其它机器 pull 后按 cleared_at trim
+    //    activities + mark devices.deleted_at。顺序同 purge_cloud_data_impl：tombstone
+    //    是对端清镜像的唯一信号，失败必须让整个命令失败（此时云端和本地都还没动，
+    //    重试即可），不能只 warn 然后照常删文件清本地——那是"界面报成功、对端永远
+    //    留着这台设备数据"的静默半成功。
+    let cleared_at = utc_now_rfc3339();
+    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
+        cleared_at: cleared_at.clone(),
+    })
+    .map_err(|e| e.to_string())?;
+    drive
+        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+        .await
+        .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
+
+    // 2. 列 Drive 上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
     let files = drive
         .list_appdata_files(&token.access_token, "")
         .await
@@ -446,27 +476,13 @@ pub(crate) async fn forget_remote_device_impl(
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
         .collect();
 
-    // 2. 逐个 DELETE；单文件失败不抛，让能删的尽量删完
+    // 3. 逐个 DELETE；单文件失败不抛，让能删的尽量删完（漏删的对端也会被 tombstone trim）
     let mut deleted = 0u64;
     for f in &target_files {
         match drive.delete(&token.access_token, &f.id).await {
             Ok(()) => deleted += 1,
             Err(e) => log::warn!("forget_remote_device: delete {} 失败: {e}", f.name),
         }
-    }
-
-    // 3. 上传 tombstone（覆盖任何旧版本）。其它机器 pull 后按 cleared_at trim activities
-    //    + mark devices.deleted_at（见 merge_tombstone 的 deleted_at 处理）。
-    let cleared_at = utc_now_rfc3339();
-    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
-        cleared_at: cleared_at.clone(),
-    })
-    .map_err(|e| e.to_string())?;
-    if let Err(e) = drive
-        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
-        .await
-    {
-        log::warn!("forget_remote_device: upload tombstone 失败: {e}");
     }
 
     // 4. 本机：删活动 + 软删设备。事务保证两步原子。

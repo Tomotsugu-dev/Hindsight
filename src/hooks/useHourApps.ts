@@ -12,7 +12,10 @@ interface CacheKey {
 }
 
 const MAX_CACHE = 24; // 一天 24 小时够用
-type Cache = Map<string, AppUsage[]>;
+/** 今天(offset=0)的数据一直在涨——柱子/头部总时长 30s 轮询会长，明细卡着首拍
+ *  不动会自相矛盾。今天的缓存 30s 过期重拉；历史日不变，会话内长存。 */
+const TODAY_TTL_MS = 30_000;
+type Cache = Map<string, { apps: AppUsage[]; at: number }>;
 
 function cacheKey(k: CacheKey): string {
   return `${k.offset}|${k.hour}|${k.deviceId ?? ""}`;
@@ -51,8 +54,8 @@ export function useHourApps(
     }
     const key = cacheKey({ offset: dayOffset, hour, deviceId });
     const cached = cacheRef.current.get(key);
-    if (cached) {
-      setState({ apps: cached, loading: false });
+    if (cached && !(dayOffset === 0 && Date.now() - cached.at > TODAY_TTL_MS)) {
+      setState({ apps: cached.apps, loading: false });
       return;
     }
 
@@ -63,7 +66,7 @@ export function useHourApps(
       .then((apps) => {
         if (cancelled) return;
         const cache = cacheRef.current;
-        cache.set(key, apps);
+        cache.set(key, { apps, at: Date.now() });
         // 简单 LRU：超过 MAX_CACHE 删最早条目
         if (cache.size > MAX_CACHE) {
           const oldest = cache.keys().next().value;

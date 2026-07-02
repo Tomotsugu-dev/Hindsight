@@ -85,9 +85,18 @@
       "sectionTitle": "Tema",
       "description": "Escolha a aparência da interface. Aplica na hora e fica salvo neste dispositivo.",
       "themes": {
-        "default": { "name": "Padrão", "desc": "Barra lateral com gradiente suave, paleta clara" },
-        "minimal": { "name": "Minimalista", "desc": "Barra lateral sólida, plana e sem gradiente" },
-        "dark": { "name": "Escuro", "desc": "Fundo escuro, confortável à noite" }
+        "default": {
+          "name": "Padrão",
+          "desc": "Barra lateral com gradiente suave, paleta clara"
+        },
+        "minimal": {
+          "name": "Minimalista",
+          "desc": "Barra lateral sólida, plana e sem gradiente"
+        },
+        "dark": {
+          "name": "Escuro",
+          "desc": "Fundo escuro, confortável à noite"
+        }
       }
     },
     "language": {
@@ -961,6 +970,7 @@
       "hint": "Recurso em desenvolvimento."
     },
     "errors": {
+      "runBusy": "Outra tarefa de geração de IA já está em execução. Aguarde ela terminar ou pressione Parar primeiro.",
       "llmEmptyReasoning": "O modelo gastou todo o limite \"pensando\" e não chegou a escrever a resposta. Use um modelo de texto comum (não-reasoning), como Gemma ou Qwen3, ou aumente o contexto nos Ajustes de IA.",
       "llmEmptyEos": "O modelo parou sem gerar nada — geralmente o modelo escolhido ou o projetor de visão (mmproj) não combinam. Escolha outro modelo nos Ajustes de IA.",
       "llmEmptyTruncated": "A resposta do modelo foi cortada antes de sair qualquer texto útil (provavelmente um modelo de reasoning). Use um modelo de texto comum, como Gemma ou Qwen3, ou aumente o contexto nos Ajustes de IA.",

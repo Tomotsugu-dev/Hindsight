@@ -511,20 +511,23 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
     let rows = pool
         .0
         .call(move |conn| {
-            // 双 LEFT JOIN：m 是 active app_categories 行，c 是 m 指向的、active 的 category。
-            // 「未归类」= 找不到 active mapping 或 mapping 指向已删/不存在的分类。
-            // 这层防御让即便 cascade 因 sync 时序错过、有 stale app_categories 残留，
-            // UI 还是能正确把那些 app 显示在未归类里。
+            // 「未归类」的判定走**真实源** app_group_members → app_groups.category_id，
+            // 而不是 app_categories 镜像表——镜像会滞后（新成员并入已归类组时不一定
+            // 补 mirror，见 categories::list 里同款修正的注释）：按镜像判会把报表里
+            // 已经正确归类的 app 错误地留在"待分类"卡片里。
+            // 三层 LEFT JOIN 防御：member 缺失 / group 已删 / category 已删都算未归类。
             let mut stmt = conn
                 .prepare_cached(
                     "SELECT a.process_name,
                             CAST(SUM(a.duration_secs) / 60 AS INTEGER) AS minutes,
                             MAX(a.ended_at) AS last_seen_at
                      FROM activities a
-                     LEFT JOIN app_categories m
+                     LEFT JOIN app_group_members m
                        ON m.process_name = a.process_name AND m.deleted_at IS NULL
+                     LEFT JOIN app_groups g
+                       ON g.id = m.group_id AND g.deleted_at IS NULL
                      LEFT JOIN categories c
-                       ON c.id = m.category_id AND c.deleted_at IS NULL
+                       ON c.id = g.category_id AND c.deleted_at IS NULL
                      WHERE c.id IS NULL
                        AND a.local_date >= date('now','localtime', '-' || ?1 || ' days')
                        AND a.process_name <> 'Unknown'

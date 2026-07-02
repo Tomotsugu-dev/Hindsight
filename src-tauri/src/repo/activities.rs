@@ -126,10 +126,19 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
                 .map(|dt| dt.with_timezone(&Local))
                 .unwrap_or_else(|_| Local::now());
             let dur = (ended_dt - started).num_seconds().max(0);
+            // 不变量：ended_at >= started_at。挂机分支的 real_end = now - idle 可能早于
+            // 一条"挂机期间才开出来"的会话的 started_at——只钳 duration 不钳 ended_at
+            // 会写出负跨度行：时间轴渲染负宽度、推上云端，且永远匹配不上 orphan 清理的
+            // `ended_at = started_at` 谓词。此处把写入值一并钳到 started_at。
+            let ended_final = if ended_dt < started {
+                started_at.clone()
+            } else {
+                ended.clone()
+            };
 
             conn.execute(
                 "UPDATE activities SET ended_at = ?, duration_secs = ?, updated_at = ? WHERE id = ?",
-                rusqlite::params![ended, dur, updated, id],
+                rusqlite::params![ended_final, dur, updated, id],
             )
             .db()?;
 
@@ -138,7 +147,7 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
                 let payload = serde_json::json!({
                     "deviceId": this_device,
                     "startedAt": started_at,
-                    "endedAt": ended,
+                    "endedAt": ended_final,
                     "durationSecs": dur,
                     "localDate": local_date,
                     "localHour": local_hour,
@@ -453,6 +462,7 @@ mod tests {
             app_name: "Code".into(),
             title: "main.rs".into(),
             app_path: None,
+            pid: 0,
         };
         let captured = Local::now();
         let _id = insert_new(&pool, &info, captured, None).await.unwrap();
@@ -481,6 +491,7 @@ mod tests {
             app_name: "Code".into(),
             title: "main.rs".into(),
             app_path: None,
+            pid: 0,
         };
         let captured = Local::now();
         let id = insert_new(&pool, &info, captured, None).await.unwrap();
@@ -534,6 +545,7 @@ mod tests {
             app_name: "Code".into(),
             title: "main.rs".into(),
             app_path: None,
+            pid: 0,
         };
         let captured = Local::now();
         let id = insert_new(&pool, &info, captured, None).await.unwrap();

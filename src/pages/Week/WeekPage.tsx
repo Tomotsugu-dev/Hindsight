@@ -53,12 +53,13 @@ export default function WeekPage() {
 
   const { days, apps } = useMemo(() => getWeek(offset), [getWeek, offset]);
 
-  /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释） */
+  /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释；
+   *  切周不清 drill——钉着大类翻上/下周对比才是动线） */
   const [view, setView] = useState<StatsView>("bars");
   const [drillId, setDrillId] = useState<string | null>(null);
   useEffect(() => {
     setDrillId(null);
-  }, [offset, selectedDeviceId, view]);
+  }, [selectedDeviceId, view]);
 
   // 周日期范围文案
   const fmtRange = (list: DaySummary[]): string => {
@@ -91,10 +92,12 @@ export default function WeekPage() {
 
   const totalMinutes = useMemo(
     () =>
-      days.reduce(
-        (sum, d) => sum + d.segments.reduce((s, x) => s + x.minutes, 0),
-        0,
-      ),
+      Math.round(
+          days.reduce(
+            (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
+            0,
+          ) / 60,
+        ),
     [days],
   );
 
@@ -130,10 +133,12 @@ export default function WeekPage() {
   // 卡片右上角"总时长"用这个值才跟下方 apps 列表对齐。
   const scopedMinutes = useMemo(
     () =>
-      segmentsForRanks.reduce(
-        (sum, d) => sum + d.segments.reduce((s, x) => s + x.minutes, 0),
-        0,
-      ),
+      Math.round(
+          segmentsForRanks.reduce(
+            (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
+            0,
+          ) / 60,
+        ),
     [segmentsForRanks],
   );
   const appsForRanks = useMemo(
@@ -151,8 +156,11 @@ export default function WeekPage() {
   const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+  // 上周完全无数据时是 undefined（tile 显示 —）而不是 0——0 会被渲染成
+  // "↑ 满值 比上周" 的假涨幅，跟旁边 vs-prev tile 的 "—" 自相矛盾。
   const prevAvgPerTotalDays = useMemo(
-    () => (prevBreakdown.total > 0 ? Math.round(prevBreakdown.total / 7) : 0),
+    () =>
+      prevBreakdown.total > 0 ? Math.round(prevBreakdown.total / 7) : undefined,
     [prevBreakdown.total],
   );
 
@@ -214,9 +222,9 @@ export default function WeekPage() {
     ? Math.round(drilledSlice.minutes / 7)
     : avgPerTotalDays;
   const displayedPrevAvgMinutes = drilledSlice
-    ? prevDrilledSlice
-      ? Math.round(prevDrilledSlice.minutes / 7)
-      : 0
+    ? prevBreakdown.total > 0
+      ? Math.round((prevDrilledSlice?.minutes ?? 0) / 7)
+      : undefined // 上周整周无数据：连"从无到有"都谈不上，显示 —
     : prevAvgPerTotalDays;
   const insights = usePeriodInsights({
     curr: days,
@@ -287,7 +295,9 @@ export default function WeekPage() {
                   key={`pie-curr-${offset}`}
                   slices={currBreakdown.slices}
                   total={currBreakdown.total}
-                  pinnedId={drillId}
+                  // drill 跨周期保留后 drillId 可能在当前周期没有对应切片（ghost）——
+                  // 直接传会让 PieView 把所有行/圆环置灰且无高亮。解析得到才 pin。
+                  pinnedId={drilledSlice ? drillId : null}
                   onDrill={(id) =>
                     setDrillId((prev) => (prev === id ? null : id))
                   }

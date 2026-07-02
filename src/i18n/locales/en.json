@@ -85,9 +85,18 @@
       "sectionTitle": "Theme",
       "description": "Choose how the interface looks. Applies instantly and is saved on this device.",
       "themes": {
-        "default": { "name": "Default", "desc": "Soft gradient sidebar, bright palette" },
-        "minimal": { "name": "Minimal", "desc": "Solid sidebar, flat and gradient-free" },
-        "dark": { "name": "Dark", "desc": "Dark background, easy on the eyes at night" }
+        "default": {
+          "name": "Default",
+          "desc": "Soft gradient sidebar, bright palette"
+        },
+        "minimal": {
+          "name": "Minimal",
+          "desc": "Solid sidebar, flat and gradient-free"
+        },
+        "dark": {
+          "name": "Dark",
+          "desc": "Dark background, easy on the eyes at night"
+        }
       }
     },
     "language": {
@@ -961,6 +970,7 @@
       "hint": "Feature in development."
     },
     "errors": {
+      "runBusy": "Another AI generation task is already running. Wait for it to finish, or press Stop first.",
       "llmEmptyReasoning": "The model spent its whole budget \"thinking\" and never wrote the answer. Use a regular (non-reasoning) text model like Gemma or Qwen3, or raise the context size in AI Settings.",
       "llmEmptyEos": "The model stopped without generating anything — usually the chosen model or its vision projector (mmproj) don't match. Pick a different model in AI Settings.",
       "llmEmptyTruncated": "The model's answer was cut off before any usable text came out (likely a reasoning model). Use a regular text model like Gemma or Qwen3, or raise the context size in AI Settings.",

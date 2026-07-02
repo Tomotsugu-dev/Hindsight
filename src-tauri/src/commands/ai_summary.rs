@@ -32,6 +32,19 @@ impl Default for SummaryCancel {
     }
 }
 
+/// 全局 AI 生成互斥：daily / weekly / 段重试 / 单图重试同一时刻只允许一个在跑。
+///
+/// 之前后端零互斥、且所有入口共享一个 cancel 标记并在启动时清 false——正在停止的
+/// 旧任务会被新任务"复活"，两个 runner 抢同一个 EngineSupervisor 互相 stop/restart；
+/// 周报跑着时在日报页点 Stop 也会连带取消周报。现在：入口 try_lock 失败直接返回
+/// `[AI_RUN_BUSY]` 错误码（前端 aiErrors.ts 本地化），cancel 的 reset 只发生在
+/// 持锁之后——旧任务必然已退出，清标记不会误伤任何在途任务。
+#[derive(Default)]
+pub struct RunLock(pub tokio::sync::Mutex<()>);
+
+/// try_lock 失败时的稳定错误码；`[]` 前缀供前端识别本地化，正文是英文兜底。
+const AI_RUN_BUSY: &str = "[AI_RUN_BUSY] another AI generation task is already running";
+
 /// 跑某天的全部段总结。
 ///
 /// 命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）；
@@ -48,6 +61,7 @@ pub async fn generate_day_summary(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
     cancel: State<'_, SummaryCancel>,
+    run_lock: State<'_, RunLock>,
     date: String,
     force_refresh: bool,
     device_id: Option<String>,
@@ -60,6 +74,9 @@ pub async fn generate_day_summary(
     step1_only: Option<bool>,
     step2_only: Option<bool>,
 ) -> Result<(), String> {
+    let Ok(_run) = run_lock.0.try_lock() else {
+        return Err(AI_RUN_BUSY.to_string());
+    };
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = device_filter_from_option(device_id);
@@ -104,12 +121,16 @@ pub async fn retry_summary_segment(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
     cancel: State<'_, SummaryCancel>,
+    run_lock: State<'_, RunLock>,
     date: String,
     segment_idx: u32,
     device_id: Option<String>,
     overrides: Option<AiOverrides>,
     source: Option<String>,
 ) -> Result<(), String> {
+    let Ok(_run) = run_lock.0.try_lock() else {
+        return Err(AI_RUN_BUSY.to_string());
+    };
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = device_filter_from_option(device_id);
@@ -139,12 +160,16 @@ pub async fn retry_single_image_description(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
     cancel: State<'_, SummaryCancel>,
+    run_lock: State<'_, RunLock>,
     date: String,
     segment_idx: u32,
     image_index: u32,
     overrides: Option<AiOverrides>,
     source: Option<String>,
 ) -> Result<(), String> {
+    let Ok(_run) = run_lock.0.try_lock() else {
+        return Err(AI_RUN_BUSY.to_string());
+    };
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let source = source.unwrap_or_else(|| "daily".to_string());
@@ -286,10 +311,14 @@ pub async fn generate_week_summary(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
     cancel: State<'_, SummaryCancel>,
+    run_lock: State<'_, RunLock>,
     week_start: String,
     force_refresh: bool,
     allow_missing_days: bool,
 ) -> Result<(), String> {
+    let Ok(_run) = run_lock.0.try_lock() else {
+        return Err(AI_RUN_BUSY.to_string());
+    };
     let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let monday = align_to_monday(parsed_date);

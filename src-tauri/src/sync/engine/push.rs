@@ -32,6 +32,10 @@ enum DirtyKey {
 }
 
 pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
+    // 串行门：与另一个 flush_push（「立即同步」vs 后台 tick）以及 purge 类命令互斥。
+    // 并发 push 的危害：慢的一方用旧表内容覆盖 Drive、而新行的 outbox 已被快的一方
+    // 删掉 → 那批数据到不了云端；与 purge 并发：读完 outbox 后表被清 → 空内容上云。
+    let _gate = inner.flush_gate.lock().await;
     let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
         // NotSignedIn 是预期状态，不当错误显示；其它（续期失败 / refresh_token 失效）让用户看见

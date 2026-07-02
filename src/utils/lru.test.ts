@@ -22,24 +22,24 @@ describe("lruInsert", () => {
     expect([...m.keys()]).toEqual(["b", "c", "d"]);
   });
 
-  it("re-set of existing key preserves insertion order", () => {
+  it("re-set of existing key refreshes recency (moves to tail)", () => {
     const m = new Map<string, number>();
     lruInsert(m, "a", 1, 3);
     lruInsert(m, "b", 2, 3);
-    lruInsert(m, "a", 99, 3); // 同 key 重写
-    expect([...m.keys()]).toEqual(["a", "b"]);
+    lruInsert(m, "a", 99, 3); // 同 key 重写 → 续活到队尾
+    expect([...m.keys()]).toEqual(["b", "a"]);
     expect(m.get("a")).toBe(99);
   });
 
-  it("re-set then overflow evicts original 'a' (oldest by insertion)", () => {
+  it("re-set then overflow evicts the stale 'b', not the refreshed 'a'", () => {
     const m = new Map<string, number>();
     lruInsert(m, "a", 1, 3);
     lruInsert(m, "b", 2, 3);
-    lruInsert(m, "a", 99, 3); // 同 key 重写不改插入序
+    lruInsert(m, "a", 99, 3); // a 续活
     lruInsert(m, "c", 3, 3);
-    lruInsert(m, "d", 4, 3); // 触发 evict
-    expect(m.has("a")).toBe(false);
-    expect([...m.keys()]).toEqual(["b", "c", "d"]);
+    lruInsert(m, "d", 4, 3); // 触发 evict：最老的是 b
+    expect(m.has("b")).toBe(false);
+    expect([...m.keys()]).toEqual(["a", "c", "d"]);
   });
 
   it("max=0 evicts immediately", () => {

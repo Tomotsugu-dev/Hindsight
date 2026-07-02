@@ -49,12 +49,13 @@ export default function MonthPage() {
 
   const { days, apps } = useMemo(() => getMonth(offset), [getMonth, offset]);
 
-  /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释） */
+  /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释；
+   *  切月不清 drill——钉着大类翻上/下月对比才是动线） */
   const [view, setView] = useState<StatsView>("bars");
   const [drillId, setDrillId] = useState<string | null>(null);
   useEffect(() => {
     setDrillId(null);
-  }, [offset, selectedDeviceId, view]);
+  }, [selectedDeviceId, view]);
 
   // 月份显示文案：中文取数字 1-12，英文取本地化月份名（如 "May"）
   const fmtMonth = (list: DaySummary[], off: number): string => {
@@ -82,10 +83,12 @@ export default function MonthPage() {
 
   const totalMinutes = useMemo(
     () =>
-      days.reduce(
-        (sum, d) => sum + d.segments.reduce((s, x) => s + x.minutes, 0),
-        0,
-      ),
+      Math.round(
+          days.reduce(
+            (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
+            0,
+          ) / 60,
+        ),
     [days],
   );
 
@@ -122,10 +125,12 @@ export default function MonthPage() {
   // 卡片右上角"总时长"用这个值才跟下方 apps 列表对齐。
   const scopedMinutes = useMemo(
     () =>
-      segmentsForRanks.reduce(
-        (sum, d) => sum + d.segments.reduce((s, x) => s + x.minutes, 0),
-        0,
-      ),
+      Math.round(
+          segmentsForRanks.reduce(
+            (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
+            0,
+          ) / 60,
+        ),
     [segmentsForRanks],
   );
   const appsForRanks = useMemo(
@@ -173,11 +178,12 @@ export default function MonthPage() {
     () => slideDaysList[0].filter((d) => d.segments.length > 0).length,
     [slideDaysList],
   );
+  // 上月完全无数据 → undefined（tile 显示 —）而不是 0，避免"↑ 满值 比上月"假涨幅
   const prevAvgPerTotalDays = useMemo(
     () =>
       prevBreakdown.total > 0 && prevActiveDays > 0
         ? Math.round(prevBreakdown.total / prevActiveDays)
-        : 0,
+        : undefined,
     [prevBreakdown.total, prevActiveDays],
   );
 
@@ -237,9 +243,9 @@ export default function MonthPage() {
       : 0
     : avgPerTotalDays;
   const displayedPrevAvgMinutes = drilledSlice
-    ? prevDrilledSlice && prevActiveDays > 0
-      ? Math.round(prevDrilledSlice.minutes / prevActiveDays)
-      : 0
+    ? prevBreakdown.total > 0 && prevActiveDays > 0
+      ? Math.round((prevDrilledSlice?.minutes ?? 0) / prevActiveDays)
+      : undefined // 上月整月无数据：显示 — 而非"从无到有"
     : prevAvgPerTotalDays;
   const insights = usePeriodInsights({
     curr: days,
@@ -319,7 +325,9 @@ export default function MonthPage() {
                   key={`pie-curr-${offset}`}
                   slices={currBreakdown.slices}
                   total={currBreakdown.total}
-                  pinnedId={drillId}
+                  // drill 跨周期保留后 drillId 可能在当前周期没有对应切片（ghost）——
+                  // 直接传会让 PieView 把所有行/圆环置灰且无高亮。解析得到才 pin。
+                  pinnedId={drilledSlice ? drillId : null}
                   onDrill={(id) =>
                     setDrillId((prev) => (prev === id ? null : id))
                   }

@@ -573,21 +573,31 @@ impl DaySummaryRunner {
             }
 
             // ── step 2：swap to summary model ──
-            let mut p_load_s = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            p_load_s.segment_idx = Some(idx as u32);
-            // message 留空：前端按 phase 显示本地化的"加载模型中…"
-            p_load_s.message = None;
-            self.emit(p_load_s);
-            let (main_s, mmproj_s) = self.resolve_model_paths_for(ai, Step::Summary)?;
-            let port_s = self
-                .supervisor
-                .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone())
-                .await?;
+            // 云端总结（summary_use_cloud）时**跳过本地引擎重启**：
+            //  - 云端时本地 summary fallback 允许为空/文件已删（设置校验放行），
+            //    这里无条件 resolve+restart 会直接把整轮跑挂；
+            //  - 即便 fallback 有效，每段 stop+reload 一次本地大模型也是纯浪费——
+            //    step 2 请求根本不会发给它。build_step2 自己会路由到 ExternalChatClient，
+            //    本地端口只是占位参数（External 分支不使用）。
+            let port_s = if ai.summary_use_cloud() {
+                log::info!("swap_per_segment: 段 {idx} step 2 走云端，跳过本地引擎 swap");
+                port_d
+            } else {
+                let mut p_load_s = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "engine_starting",
+                    total_segments,
+                );
+                p_load_s.segment_idx = Some(idx as u32);
+                // message 留空：前端按 phase 显示本地化的"加载模型中…"
+                p_load_s.message = None;
+                self.emit(p_load_s);
+                let (main_s, mmproj_s) = self.resolve_model_paths_for(ai, Step::Summary)?;
+                self.supervisor
+                    .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone())
+                    .await?
+            };
             let step1_placeholder = ChatClient::new(
                 port_s,
                 ai.effective_summary_main().to_string(),
@@ -1496,13 +1506,27 @@ impl DaySummaryRunner {
         step: Step,
         engine_overrides: EngineStartOverrides,
     ) -> Result<u16> {
+        let (main_path, mmproj_path) = self.resolve_model_paths_for(ai, step)?;
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
-                return Ok(p);
+                // 只有装的确实是本 step 需要的模型才复用——2 分钟前调试跑留下的
+                // vision 模型 + 小 ctx 拿来跑 step 2 会截断/低质。不匹配则重启换模。
+                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path()) {
+                    // 复用前"续命"：不 touch 的话，引擎若已接近 idle 阈值，准备图片
+                    // 的几秒里 watcher 会把 server 杀掉，第一个请求打到已死端口。
+                    self.supervisor.touch();
+                    return Ok(p);
+                }
+                log::info!(
+                    "ensure_engine_running: 已加载模型与 step 需求不符，重启换模 (want={})",
+                    main_path.display()
+                );
+                if let Err(e) = self.supervisor.stop().await {
+                    log::warn!("换模前 stop 引擎失败（继续尝试启动）: {e}");
+                }
             }
         }
-        let (main_path, mmproj_path) = self.resolve_model_paths_for(ai, step)?;
         self.supervisor
             .start_with_overrides(Some(main_path), mmproj_path, engine_overrides)
             .await

@@ -892,14 +892,21 @@ pub async fn run(pool: &DbPool) -> Result<()> {
                 } else {
                     extras[idx - static_count]
                 };
+                // 每个迁移 + 它的版本号写入必须是**一个事务**：execute_batch 自身不带
+                // 事务、逐语句自动提交——中途断电/被杀/报错会留下"改了一半但版本没记"
+                // 的库，下次启动重跑同一批直接撞 duplicate column → 启动永久 panic。
+                // 事务化后要么迁移连版本号一起落盘，要么完全没发生，重跑安全。
+                // （迁移里的 CREATE TRIGGER ... BEGIN/END 是 trigger 体语法，不冲突。）
+                let tx = conn.transaction().db()?;
                 if !sql.trim().is_empty() {
-                    conn.execute_batch(sql).db()?;
+                    tx.execute_batch(sql).db()?;
                 }
-                conn.execute(
+                tx.execute(
                     "INSERT INTO schema_version VALUES (?)",
                     rusqlite::params![version],
                 )
                 .db()?;
+                tx.commit().db()?;
             }
             Ok(())
         })

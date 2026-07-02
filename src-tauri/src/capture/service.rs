@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::{Duration, Local, Timelike};
+use chrono::{DateTime, Duration, Local, Timelike};
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -97,7 +97,18 @@ struct Inner {
     /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
     idle_threshold_secs: Mutex<u32>,
     current: Mutex<Option<CurrentSession>>,
+    /// 上一次 tick 的墙钟时刻——睡眠 gap 检测用。系统睡眠期间 tick 循环不跑
+    /// （`Instant` 在 macOS 还会暂停计时），若两次 tick 的墙钟间隔远超轮询周期，
+    /// 说明机器睡过去了：当前会话必须按"最后已知活跃时刻"（= 上次 tick）封口，
+    /// 否则整段睡眠会被算成最后聚焦 app 的使用时长。
+    /// 锁顺序：独立短锁，取值即放，不与其它锁嵌套。
+    last_tick_at: Mutex<Option<DateTime<Local>>>,
 }
+
+/// 墙钟 gap 超过多少秒视为"经历了睡眠/进程暂停"。3 个轮询周期：正常 tick 间隔
+/// = 5s + tick 自身执行时长（截图/URL 抓取偶尔数百 ms~几秒），15s 留足余量；
+/// 误触发也无害——只是把会话在上次 tick 处拆开，少记几秒。
+const SLEEP_GAP_SECS: i64 = (POLL_INTERVAL_SECS * 3) as i64;
 
 /// 焦点采集服务的对外句柄。`Arc<Inner>` 让多个 setter / 后台 tick task 共享内部状态。
 pub struct CaptureService {
@@ -123,6 +134,7 @@ impl CaptureService {
                 // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
                 idle_threshold_secs: Mutex::new(180),
                 current: Mutex::new(None),
+                last_tick_at: Mutex::new(None),
             }),
         }
     }
@@ -188,13 +200,20 @@ impl CaptureService {
         if let Some(handle) = h.take() {
             handle.abort();
         }
-        // seal 当前会话（如果有），让它进入 outbox 在下次同步推送
+        // seal 当前会话（如果有），让它进入 outbox 在下次同步推送。
+        // 结束时刻做 gap 钳制：机器刚从睡眠醒来、还没跑过一次 tick 用户就退出的话，
+        // 按"上次 tick"封口而不是 now——不把整段睡眠算进最后那个 app。
+        let end = {
+            let lt = self.inner.last_tick_at.lock().await;
+            match *lt {
+                Some(prev) if (Local::now() - prev).num_seconds() > SLEEP_GAP_SECS => prev,
+                _ => Local::now(),
+            }
+        };
         let mut cur_lock = self.inner.current.lock().await;
         if let Some(prev) = cur_lock.take() {
             drop(cur_lock);
-            if let Err(e) =
-                activities::seal_session(&self.inner.pool, prev.id, chrono::Local::now()).await
-            {
+            if let Err(e) = activities::seal_session(&self.inner.pool, prev.id, end).await {
                 log::warn!("stop: seal_session 失败 (id={}): {e}", prev.id);
             }
         }
@@ -203,6 +222,25 @@ impl CaptureService {
     /// 清空当前会话指针；用于在外部清空 activities 表后避免下一次 tick 去 UPDATE 已被删除的行。
     pub async fn reset_session(&self) {
         *self.inner.current.lock().await = None;
+    }
+
+    /// 在**持有会话锁**的前提下执行清库类操作。
+    ///
+    /// `purge_activities` 这类"DELETE 全表"若与 tick 并发：tick 可能在 DELETE 之后
+    /// 插入新行、又被随后的 `reset_session` 清掉指针——留下一条永远不会被 seal 的
+    /// dur=0 孤儿行（用户刚清完库就多出一条脏数据）。tick 的插入/延长路径都必须先
+    /// 拿 `current` 锁（见 [`tick`]），所以整个闭包期间持锁即可完全互斥。
+    /// 进入时直接丢弃当前会话（不 seal——它所在的行马上就要被删了）。
+    pub async fn run_with_session_cleared<T, F, Fut>(&self, f: F) -> T
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = T>,
+    {
+        let mut cur = self.inner.current.lock().await;
+        *cur = None;
+        let out = f().await;
+        drop(cur);
+        out
     }
 
     /// 后台采集 task 是否在跑。
@@ -251,6 +289,33 @@ impl CaptureService {
 }
 
 async fn tick(inner: &Inner) -> Result<()> {
+    // ── 睡眠 gap 检测（最先跑，先于工作时段/挂机分支）──
+    // 两次 tick 的墙钟间隔远超轮询周期 = 机器睡过 / 进程被暂停过。当前会话按
+    // "最后已知活跃时刻"（上次 tick）封口——不封的话整段睡眠会算进该 app：
+    //   合盖 9 小时 → 醒来第一个 tick 若不处理，昨晚的 Chrome 会话吸走 9h。
+    // `last_extend_at` 的 `Instant` 在 macOS(Intel) 睡眠期间不走，靠它兜不住。
+    let now_tick = Local::now();
+    let prev_tick = {
+        let mut lt = inner.last_tick_at.lock().await;
+        lt.replace(now_tick)
+    };
+    if let Some(prev) = prev_tick {
+        if (now_tick - prev).num_seconds() > SLEEP_GAP_SECS {
+            let mut cur_lock = inner.current.lock().await;
+            if let Some(prev_sess) = cur_lock.take() {
+                drop(cur_lock);
+                log::info!(
+                    "tick gap {}s（睡眠/暂停），会话 {} 按上次 tick 时刻封口",
+                    (now_tick - prev).num_seconds(),
+                    prev_sess.id
+                );
+                if let Err(e) = activities::seal_session(&inner.pool, prev_sess.id, prev).await {
+                    log::warn!("seal_session 失败 (睡眠 gap, id={}): {e}", prev_sess.id);
+                }
+            }
+        }
+    }
+
     {
         let wh = inner.work_hours.lock().await;
         if wh.enabled && !wh.ranges.is_empty() {
@@ -285,21 +350,23 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 挂机检测：用户多久没动鼠键。超过阈值就 seal 当前会话并 return，让"挂机时段"
     // 不计入使用时长。ended_at 用"用户最后一次活动时间" = now - idle，duration 才准。
     // 用户回来动鼠键 → 下次 tick 看到 current=None → 自然开新会话。
+    // idle 读一次供两处用：本分支的阈值判断 + 下面 interval-roll 的抑制。
+    let idle_now = crate::platform::idle_secs();
     {
         let threshold = *inner.idle_threshold_secs.lock().await;
-        if threshold > 0 {
-            let idle = crate::platform::idle_secs();
-            if idle as u32 >= threshold {
-                let mut cur_lock = inner.current.lock().await;
-                if let Some(prev) = cur_lock.take() {
-                    drop(cur_lock);
-                    let real_end = Local::now() - Duration::seconds(idle as i64);
-                    if let Err(e) = activities::seal_session(&inner.pool, prev.id, real_end).await {
-                        log::warn!("seal_session 失败 (用户挂机 {idle}s, id={}): {e}", prev.id);
-                    }
+        if threshold > 0 && idle_now as u32 >= threshold {
+            let mut cur_lock = inner.current.lock().await;
+            if let Some(prev) = cur_lock.take() {
+                drop(cur_lock);
+                let real_end = Local::now() - Duration::seconds(idle_now as i64);
+                if let Err(e) = activities::seal_session(&inner.pool, prev.id, real_end).await {
+                    log::warn!(
+                        "seal_session 失败 (用户挂机 {idle_now}s, id={}): {e}",
+                        prev.id
+                    );
                 }
-                return Ok(());
             }
+            return Ok(());
         }
     }
 
@@ -339,7 +406,8 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 浏览器场景：每次 tick 都抓 URL，因为 URL 是 focus 的一部分（切 URL 要立即触发新会话）。
     // 平台调用阻塞 + 偶尔卡几百 ms，扔到 spawn_blocking 不堵 async runtime。
     // 非浏览器跳过这步，省 50–300ms。
-    let url = if browser_url::is_browser_app(&info.app_name) {
+    let is_browser = browser_url::is_browser_app(&info.app_name);
+    let fetched_url = if is_browser {
         let app_name_for_url = info.app_name.clone();
         tokio::task::spawn_blocking(move || {
             browser_url::try_get_foreground_browser_url(&app_name_for_url)
@@ -351,20 +419,39 @@ async fn tick(inner: &Inner) -> Result<()> {
         None
     };
 
+    let mut current_lock = inner.current.lock().await;
+
+    // URL 抓取的瞬时失败（浏览器还在前台但这次没拿到地址栏）不能当成"URL 变了"：
+    // Some -> None 会被 focus 比较判成切换 → 强制开新会话 + 在"恰好没法做 URL 隐私
+    // 过滤"的这一刻截图。同 app 且上个会话有已知 URL 时继承之，视为焦点未变。
+    let url = match (&fetched_url, current_lock.as_ref()) {
+        (None, Some(cur))
+            if is_browser && cur.focus.app_name == info.app_name && cur.focus.url.is_some() =>
+        {
+            cur.focus.url.clone()
+        }
+        _ => fetched_url,
+    };
+
     let new_focus = FocusState {
         app_name: info.app_name.clone(),
         url: url.clone(),
     };
 
-    let mut current_lock = inner.current.lock().await;
     let interval_secs = *inner.interval_secs.lock().await;
     let need_new = match current_lock.as_ref() {
         None => true,
         // 触发新会话的两种情况：
         //   1) 焦点切换（不同 app / 不同 url）—— 立即截图
-        //   2) 同一焦点停留满 interval_secs —— 周期性补一张图，让长时间停留也有时间序列
+        //   2) 同一焦点停留满 interval_secs —— 周期性补一张图，让长时间停留也有时间序列。
+        //      但用户已经手离鼠键一阵（idle 超过两个轮询周期）时**不 roll**：roll 出来的
+        //      会话按墙钟封口，会把阈值前的挂机秒数（默认最多 180s-30s=150s/次）全记成
+        //      使用。焦点没变又没人在操作 → 让当前会话原地等着，等 idle 分支/焦点切换
+        //      给它正确的结束时刻。
         Some(cur) => {
-            cur.focus != new_focus || cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs
+            cur.focus != new_focus
+                || (cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs
+                    && idle_now < POLL_INTERVAL_SECS * 2)
         }
     };
 
@@ -376,7 +463,7 @@ async fn tick(inner: &Inner) -> Result<()> {
             }
         }
         // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
-        let skip = should_skip_for_privacy(inner, &info, url.as_deref()).await;
+        let skip = should_skip_for_privacy(inner, &info, url.as_deref(), is_browser).await;
         if skip {
             log::info!(
                 "隐私过滤命中，跳过截图 app={} title={:?} url={:?}",
@@ -388,7 +475,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         let shot = if skip {
             None
         } else {
-            take_screenshot(inner).await
+            take_screenshot(inner, info.pid).await
         };
         let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
@@ -425,21 +512,27 @@ fn parse_hm(s: &str) -> i32 {
 }
 
 /// 隐私关键词是否命中本次焦点。
-/// `url` 是浏览器地址栏 URL（暂未接入抓取，永远 None；接入后由调用方传入）。
+///
+/// fail-closed：浏览器在前台、配置了 URL 关键词、但这次没拿到 URL（连继承都没有，
+/// 比如浏览器刚启动的第一个 tick）→ 视为命中跳过截图。没法判定就不拍。
 async fn should_skip_for_privacy(
     inner: &Inner,
     info: &window::WindowInfo,
     url: Option<&str>,
+    is_browser: bool,
 ) -> bool {
     let url_kw = inner.privacy_url_keywords.lock().await.clone();
     let app_kw = inner.privacy_app_keywords.lock().await.clone();
     if url_kw.is_empty() && app_kw.is_empty() {
         return false;
     }
+    if is_browser && url.is_none() && !url_kw.is_empty() {
+        return true;
+    }
     privacy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
 }
 
-async fn take_screenshot(inner: &Inner) -> Option<String> {
+async fn take_screenshot(inner: &Inner, expected_pid: u32) -> Option<String> {
     let cfg = inner.screenshot.lock().await.clone();
     if !cfg.enabled || cfg.dir.trim().is_empty() {
         return None;
@@ -450,6 +543,7 @@ async fn take_screenshot(inner: &Inner) -> Option<String> {
         cfg.target_width,
         cfg.target_height,
         cfg.jpeg_quality,
+        expected_pid,
     )
     .await
     {

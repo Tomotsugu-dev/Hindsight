@@ -8,14 +8,19 @@ use crate::error::{Error, Result};
 /// 截当前激活窗口 → 缩放到 `max_width × max_height`（保持比例 + letterbox 透明）→
 /// JPEG 编码 → 写到 `dir/<HHMMSS_NNN>.jpg`。返回写入的绝对路径。
 /// 同步图像处理放在 `spawn_blocking` 里跑，不堵 Tokio runtime。
+///
+/// `expected_pid`：tick 开始时解析出的焦点进程。隐私过滤是基于那一刻的窗口信息
+/// 判定的，而截图在几百 ms 后才发生——若此刻前台已切到别的（可能命中隐私过滤的）
+/// 应用，直接放弃本次截图，避免"过滤按 A 判、镜头拍到 B"的 TOCTOU。0 = 不校验。
 pub async fn capture_active_window(
     dir: PathBuf,
     max_width: u32,
     max_height: u32,
     jpeg_quality: u8,
+    expected_pid: u32,
 ) -> Result<Option<String>> {
     let result = tokio::task::spawn_blocking(move || {
-        capture_blocking(&dir, max_width, max_height, jpeg_quality)
+        capture_blocking(&dir, max_width, max_height, jpeg_quality, expected_pid)
     })
     .await
     .map_err(|e| Error::Capture(format!("screenshot task join: {e}")))?;
@@ -27,8 +32,9 @@ fn capture_blocking(
     max_width: u32,
     max_height: u32,
     jpeg_quality: u8,
+    expected_pid: u32,
 ) -> Result<Option<String>> {
-    let rgba = match grab_focused_image() {
+    let rgba = match grab_focused_image(expected_pid) {
         Some(img) => img,
         None => return Ok(None),
     };
@@ -55,10 +61,17 @@ fn capture_blocking(
 
 /// 拿当前前台 app 的截图——macOS 走 ScreenCaptureKit（focused window only），
 /// 其它平台走 xcap heuristic。失败返 None，调用方跳过该 tick。
-fn grab_focused_image() -> Option<image::RgbaImage> {
+///
+/// `expected_pid != 0` 时校验"现在的前台还是 tick 判定隐私时的那个进程"，
+/// 已经切走就放弃（宁可少一张图，不拍错人）。
+fn grab_focused_image(expected_pid: u32) -> Option<image::RgbaImage> {
     #[cfg(target_os = "macos")]
     {
         let pid = macos_frontmost_pid()?;
+        if expected_pid != 0 && pid != expected_pid {
+            log::debug!("跳过截图：前台已从 pid={expected_pid} 切到 pid={pid}（TOCTOU 防护）");
+            return None;
+        }
         match super::screenshot_macos::capture_focused_window(pid) {
             Ok(img) => Some(img),
             Err(e) => {
@@ -71,6 +84,13 @@ fn grab_focused_image() -> Option<image::RgbaImage> {
     {
         let windows = xcap::Window::all().ok()?;
         let focused = windows.iter().find(|w| w.is_focused().unwrap_or(false))?;
+        if expected_pid != 0 {
+            let pid = focused.pid().unwrap_or(0);
+            if pid != 0 && pid != expected_pid {
+                log::debug!("跳过截图：前台已从 pid={expected_pid} 切到 pid={pid}（TOCTOU 防护）");
+                return None;
+            }
+        }
         focused.capture_image().ok()
     }
 }

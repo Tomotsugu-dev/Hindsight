@@ -109,6 +109,12 @@ pub(super) struct Inner {
     pub(super) self_id: String,
     pub(super) handle: Mutex<Option<JoinHandle<()>>>,
     pub(super) status: RwLock<SyncStatus>,
+    /// flush 串行门：flush_push / flush_pull 全程持有。作用有二——
+    /// 1. 「立即同步」与后台 30s tick 不再并发跑 flush_push：并发时慢的一方会用
+    ///    旧内容覆盖 Drive、而新行的 outbox 已被快的一方删除 → 那批数据到不了云端；
+    /// 2. purge 类命令经 [`SyncEngine::pause_flushes`] 持有它，让清库与在途 push
+    ///    完全互斥（push 先读 outbox 再读表，清库落在两步之间会把空内容传上云）。
+    pub(super) flush_gate: Mutex<()>,
 }
 
 /// 同步引擎对外句柄。一个进程一份；`app.manage(Arc::new(SyncEngine::new))` 注册。
@@ -134,8 +140,15 @@ impl SyncEngine {
                 self_id,
                 handle: Mutex::new(None),
                 status: RwLock::new(SyncStatus::default()),
+                flush_gate: Mutex::new(()),
             }),
         }
+    }
+
+    /// 暂停 push/pull：等在途 flush 结束并挡住新的，直到返回的 guard 被 drop。
+    /// purge_activities / purge_cloud_data 这类"动表"的命令在整个清理期间持有它。
+    pub async fn pause_flushes(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inner.flush_gate.lock().await
     }
 
     /// 借出当前 Drive 后端引用。给 `purge_cloud_data` 这类 command-layer 入口走。

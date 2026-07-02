@@ -124,6 +124,8 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
 }
 
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
+    // 串行门：与 flush_push / purge 类命令互斥（详见 Inner::flush_gate）。
+    let _gate = inner.flush_gate.lock().await;
     let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
         Err(Error::NotSignedIn) => return Ok(()),
@@ -256,16 +258,31 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             parsed,
             ParsedFile::AppCategories { .. } | ParsedFile::ProcessPaths { .. }
         ) {
-            let remote_os = remote_device_os(&inner.pool, device_id).await;
-            if remote_os.as_deref() != Some(local_os) {
-                log::debug!(
-                    "跳过跨 OS 文件 {} (远端 os={:?}, 本机 {})",
-                    f.name,
-                    remote_os,
-                    local_os,
-                );
-                handled[i] = true;
-                continue;
+            match remote_device_os(&inner.pool, device_id).await {
+                // OS 已知且确实跨平台：跳过并标 handled（游标可越过——永远不该拉）。
+                Some(os) if os != local_os => {
+                    log::debug!(
+                        "跳过跨 OS 文件 {} (远端 os={os}, 本机 {})",
+                        f.name,
+                        local_os
+                    );
+                    handled[i] = true;
+                    continue;
+                }
+                Some(_) => {} // 同 OS：正常处理
+                // OS 未知：多半是对端的 meta 文件还没到（push 是 HashMap 随机序，
+                // app_categories 可能先落 Drive）。**不标 handled**——让游标停在
+                // 这里，下轮 meta 到了再处理；标了 handled 游标越过后（list 用严格
+                // `modifiedTime >`）这份文件永远不会再被拉，同 OS 对端的归类数据
+                // 就永久缺失。
+                None => {
+                    log::debug!(
+                        "暂缓文件 {}（远端 {} 的 OS 未知，等 meta）",
+                        f.name,
+                        device_id
+                    );
+                    continue;
+                }
             }
         }
 
@@ -351,11 +368,25 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
     // 推 cursor 到最长连续 handled 前缀的 modified_time。第一个失败之后即使后面有成功也不
     // 推 —— 见 `handled` 声明处的说明。
+    //
+    // 边界：下次 list 用严格 `modifiedTime > cursor`。若首个未处理文件与前缀里最后
+    // 一个已处理文件的 modifiedTime **精确相同**（两设备同毫秒落盘 + 其一瞬时下载
+    // 失败），把 cursor 推到该时间会让失败的那份永远查不出来。因此推进值取前缀中
+    // "严格早于首个未处理文件时间"的最后一个；RFC3339 同构串比大小 = 时间序。
+    let first_unhandled_time = files
+        .iter()
+        .zip(handled.iter())
+        .find(|(_, ok)| !**ok)
+        .map(|(f, _)| f.modified_time.clone());
     let cursor_advance = files
         .iter()
         .zip(handled.iter())
         .take_while(|(_, ok)| **ok)
         .map(|(f, _)| f.modified_time.clone())
+        .filter(|t| match &first_unhandled_time {
+            Some(fu) => t.as_str() < fu.as_str(),
+            None => true,
+        })
         .last();
     if let Some(t) = cursor_advance {
         io::write_cursor(&inner.pool, PULL_CURSOR_KEY, &t).await?;

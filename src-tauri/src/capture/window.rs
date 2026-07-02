@@ -10,6 +10,10 @@ pub struct WindowInfo {
     pub app_name: String,
     pub title: String,
     pub app_path: Option<String>,
+    /// 解析焦点时的进程 PID；0 = 未知。截图路径用它做"同一进程"校验：
+    /// 隐私过滤基于 tick 开始时的窗口信息判定，截图却在几百 ms 后才拍——
+    /// 中间焦点切到隐私应用的话，不带校验会把隐私画面拍下来挂到错的会话上。
+    pub pid: u32,
 }
 
 /// 拉当前焦点窗口的 [`WindowInfo`]。取不到（屏幕权限缺失 / 没有窗口在前 等）
@@ -52,6 +56,7 @@ pub fn current_window() -> Result<WindowInfo> {
         app_name,
         title,
         app_path,
+        pid,
     })
 }
 
@@ -110,6 +115,7 @@ fn macos_resolve_focused_window() -> Option<WindowInfo> {
             app_name: basename(&app_name),
             title,
             app_path,
+            pid,
         })
     })
 }

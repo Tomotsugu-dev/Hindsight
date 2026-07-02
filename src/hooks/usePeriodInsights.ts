@@ -22,7 +22,7 @@ export interface PeriodInsights {
 }
 
 interface SegmentSource {
-  segments: { categoryId: string; minutes: number }[];
+  segments: { categoryId: string; minutes: number; secs: number }[];
 }
 
 interface UseInsightsArgs<T extends SegmentSource> {
@@ -41,11 +41,12 @@ interface UseInsightsArgs<T extends SegmentSource> {
 }
 
 function sumMinutes(sources: SegmentSource[]): number {
-  let total = 0;
+  // 累秒后取整——与 top-apps / 页面头部总时长同口径（见 HourSegment.secs 注释）
+  let secs = 0;
   for (const src of sources) {
-    for (const seg of src.segments) total += seg.minutes;
+    for (const seg of src.segments) secs += seg.secs;
   }
-  return total;
+  return Math.round(secs / 60);
 }
 
 /**
@@ -80,20 +81,23 @@ export function usePeriodInsights<T extends SegmentSource>(
 
       // peak：每个 slot 只 sum 属于该大类的 segments
       let bestIdx = -1;
-      let bestMin = 0;
+      let bestSecs = 0;
       for (let i = 0; i < curr.length; i++) {
-        let m = 0;
+        let sec = 0;
         for (const seg of curr[i].segments) {
-          if (catIds.has(seg.categoryId)) m += seg.minutes;
+          if (catIds.has(seg.categoryId)) sec += seg.secs;
         }
-        if (m > bestMin) {
-          bestMin = m;
+        if (sec > bestSecs) {
+          bestSecs = sec;
           bestIdx = i;
         }
       }
       const peak =
         bestIdx >= 0
-          ? { label: buildPeakLabel(curr[bestIdx], bestIdx), minutes: bestMin }
+          ? {
+              label: buildPeakLabel(curr[bestIdx], bestIdx),
+              minutes: Math.round(bestSecs / 60),
+            }
           : null;
 
       // third：该大类下 top 小分类（cats 已按 minutes 降序）
@@ -120,18 +124,21 @@ export function usePeriodInsights<T extends SegmentSource>(
       prevTotal > 0 ? { signMinutes: currTotal - prevTotal } : null;
 
     let bestIdx = -1;
-    let bestMin = 0;
+    let bestSecs = 0;
     for (let i = 0; i < curr.length; i++) {
-      let m = 0;
-      for (const seg of curr[i].segments) m += seg.minutes;
-      if (m > bestMin) {
-        bestMin = m;
+      let sec = 0;
+      for (const seg of curr[i].segments) sec += seg.secs;
+      if (sec > bestSecs) {
+        bestSecs = sec;
         bestIdx = i;
       }
     }
     const peak =
       bestIdx >= 0
-        ? { label: buildPeakLabel(curr[bestIdx], bestIdx), minutes: bestMin }
+        ? {
+            label: buildPeakLabel(curr[bestIdx], bestIdx),
+            minutes: Math.round(bestSecs / 60),
+          }
         : null;
 
     const third = topSlice

@@ -11,7 +11,7 @@ import type { RankedItem } from "../components/RankedList/RankedList";
 /** 排行所需的每个数据源（每小时槽位 / 每日汇总）通用形状：
  *  只关心其 segments 数组的 categoryId + minutes。 */
 interface SegmentSource {
-  segments: { categoryId: string; minutes: number }[];
+  segments: { categoryId: string; minutes: number; secs: number }[];
 }
 
 /**
@@ -32,7 +32,7 @@ export function usePeriodRankings(
       for (const seg of src.segments) {
         totals.set(
           seg.categoryId,
-          (totals.get(seg.categoryId) ?? 0) + seg.minutes,
+          (totals.get(seg.categoryId) ?? 0) + seg.secs,
         );
       }
     }
@@ -50,7 +50,7 @@ export function usePeriodRankings(
         id: c.id,
         name: displayCategoryName(c, t),
         color: c.color,
-        minutes: totals.get(c.id) ?? 0,
+        minutes: Math.round((totals.get(c.id) ?? 0) / 60),
         extras: (
           <AppStack
             apps={topAppsByCat.get(c.id) ?? []}

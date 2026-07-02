@@ -17,8 +17,14 @@ use crate::storage::SqliteResultExt;
 pub struct HourSegment {
     /// 分类 ID（'other' / 用户自定义 ID 等）
     pub category_id: String,
-    /// 该分类在该小时累计分钟数；多设备聚合时可超 60
+    /// 该分类在该小时累计分钟数；多设备聚合时可超 60。**仅供柱图显示**——
+    /// 求总和请用 `secs`：每桶各自四舍五入的分钟数相加会系统性偏离真实总量
+    /// （碎片使用越多偏得越多，如每小时 40s×12h：round 后 12min，实际 8min）。
     pub minutes: u32,
+    /// 该分类在该桶的累计秒数（未取整原值）。前端所有"总时长/日均/占比"
+    /// 计算都应从 secs 累加、最后一步再换算分钟，保证与 top-apps 的
+    /// "先加总后取整"口径一致。
+    pub secs: u64,
 }
 
 /// 单小时的分类时长分布（一个 [`HourSlot`] 对应 24 小时柱状图的一根柱子）。
@@ -200,6 +206,7 @@ pub async fn day_hours(
                 .map(|(cat, secs)| HourSegment {
                     category_id: cat.clone(),
                     minutes: ((*secs as f64 / 60.0).round() as u32),
+                    secs: *secs,
                 })
                 .filter(|s| s.minutes > 0)
                 .collect();
@@ -291,8 +298,13 @@ pub async fn day_apps(
         .collect())
 }
 
-/// 拉某日特定小时（local_hour = ?）的 top 应用列表，逻辑同 [`day_apps`]——
-/// 多 `AND a.local_hour = ?` 一条过滤。给前端"点小时柱子→排行筛选到该小时"用。
+/// 拉某日特定小时的 top 应用列表。给前端"点小时柱子→排行筛选到该小时"用。
+///
+/// **口径必须与柱子一致**：[`day_hours`] 的柱子是把每条会话按真实时钟切片进小时桶
+/// （跨小时的会话两头各计各的）；而 `activities.local_hour` 是**会话开始时刻**的
+/// 小时、seal 时不更新——按它过滤会出现"柱子有量、点开明细为空/对不上"（采集
+/// 间隔调大时跨界会话可达 10 分钟）。所以这里同样取整天的行、在 Rust 里
+/// [`slice_by_hour`] 切片后只留目标小时的秒数再聚合。
 pub async fn day_hour_apps(
     pool: &DbPool,
     day_offset: i32,
@@ -303,15 +315,15 @@ pub async fn day_hour_apps(
     let target = Local::now() + Duration::days(day_offset as i64);
     let date = target.format("%Y-%m-%d").to_string();
 
-    let rows: Vec<(String, String, String, i64)> = pool
+    // (display, cat, icon_process, started, ended) —— 聚合放到切片之后做
+    let rows: Vec<(String, String, String, String, String)> = pool
         .0
         .call(move |conn| {
-            // 跟 day_apps 同 SQL，多了 `AND a.local_hour = ?` + hidden 过滤
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
-                        MIN(a.process_name)                             AS icon_process,
-                        SUM(a.duration_secs)                            AS total
+                        a.process_name                                  AS icon_process,
+                        a.started_at, a.ended_at
                  FROM activities a
                  LEFT JOIN app_group_members gm
                    ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
@@ -319,20 +331,15 @@ pub async fn day_hour_apps(
                    ON g.id = gm.group_id AND g.deleted_at IS NULL
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
-                 WHERE a.local_date = ? AND a.local_hour = ? {}
-                   AND g.category_id IS NOT 'hidden'
-                 GROUP BY COALESCE(g.id, a.process_name)
-                 ORDER BY total DESC
-                 LIMIT ?",
+                 WHERE a.local_date = ? {}
+                   AND g.category_id IS NOT 'hidden'",
                 device.sql_clause()
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&date);
-            params.push(&hour);
             if let Some(extra) = device.extra_param() {
                 params.push(extra);
             }
-            params.push(&limit);
             let mut stmt = conn.prepare(&sql).db()?;
             let it = stmt
                 .query_map(params.as_slice(), |r| {
@@ -340,7 +347,8 @@ pub async fn day_hour_apps(
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, String>(2)?,
-                        r.get::<_, i64>(3)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, String>(4)?,
                     ))
                 })
                 .db()?;
@@ -352,16 +360,40 @@ pub async fn day_hour_apps(
         })
         .await?;
 
-    Ok(rows
+    // 按 display 聚合目标小时内的切片秒数；icon_process 取该组见到的第一个成员名
+    let mut agg: std::collections::HashMap<String, (String, String, u64)> =
+        std::collections::HashMap::new();
+    for (display, cat, icon_process, started, ended) in rows {
+        let s = parse_local(&started);
+        let e = parse_local(&ended);
+        if e <= s {
+            continue;
+        }
+        let hour_secs: u64 = slice_by_hour(s, e)
+            .into_iter()
+            .filter(|(h, _)| *h as i32 == hour)
+            .map(|(_, secs)| secs)
+            .sum();
+        if hour_secs == 0 {
+            continue;
+        }
+        let entry = agg.entry(display).or_insert((cat, icon_process, 0));
+        entry.2 += hour_secs;
+    }
+
+    let mut list: Vec<AppUsage> = agg
         .into_iter()
-        .map(|(process, cat, icon_process, secs)| AppUsage {
+        .map(|(process, (category_id, icon_process, secs))| AppUsage {
             process,
-            category_id: cat,
+            category_id,
             minutes: ((secs as f64 / 60.0).round() as u32),
             icon_process,
         })
         .filter(|a| a.minutes > 0)
-        .collect())
+        .collect();
+    list.sort_by_key(|a| std::cmp::Reverse(a.minutes));
+    list.truncate(limit as usize);
+    Ok(list)
 }
 
 /// 「点应用 → 详情抽屉」核心：按 `[from, to]` 日期范围 + 粒度，聚合出时间柱(buckets)
@@ -624,14 +656,13 @@ async fn days_in_range(
         })
         .await?;
 
-    let mut buckets: std::collections::HashMap<String, std::collections::HashMap<String, u32>> =
+    let mut buckets: std::collections::HashMap<String, std::collections::HashMap<String, u64>> =
         std::collections::HashMap::new();
     for (date, cat, secs) in rows {
-        let minutes = (secs as f64 / 60.0).round() as u32;
-        if minutes == 0 {
+        if (secs as f64 / 60.0).round() as u32 == 0 {
             continue;
         }
-        buckets.entry(date).or_default().insert(cat, minutes);
+        buckets.entry(date).or_default().insert(cat, secs as u64);
     }
 
     let mut out = Vec::new();
@@ -642,9 +673,10 @@ async fn days_in_range(
             .remove(&key)
             .unwrap_or_default()
             .into_iter()
-            .map(|(category_id, minutes)| HourSegment {
+            .map(|(category_id, secs)| HourSegment {
                 category_id,
-                minutes,
+                minutes: (secs as f64 / 60.0).round() as u32,
+                secs,
             })
             .collect();
         // 降序：见上面同模式注释

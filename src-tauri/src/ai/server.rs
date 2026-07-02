@@ -125,6 +125,10 @@ pub struct EngineSupervisor {
     /// 用 std sync mutex 而不是 tokio mutex：临界区只是 usize+Instant 赋值，几纳秒，
     /// 同时让 [`InferenceGuard::drop`] 能同步访问（drop 不能 await tokio mutex）。
     inflight_state: std::sync::Mutex<InflightState>,
+    /// 当前（或最近一次启动时）加载的 main GGUF 路径。调用方在"复用 Running 引擎"
+    /// 之前用 [`Self::loaded_main`] 校验装的是不是自己需要的模型——否则周报可能
+    /// 被 2 分钟前调试跑留下的 vision 模型+小上下文生成（截断/低质/报错）。
+    loaded_main: std::sync::Mutex<Option<PathBuf>>,
 }
 
 const LOGS_RING_SIZE: usize = 500;
@@ -192,7 +196,22 @@ impl EngineSupervisor {
             startup_logs: Arc::new(Mutex::new(Vec::with_capacity(STARTUP_LINES))),
             logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
             inflight_state: std::sync::Mutex::new(InflightState::default()),
+            loaded_main: std::sync::Mutex::new(None),
         }
+    }
+
+    /// 手动把 idle 计时推到现在。复用已在 Running 的引擎（不经 acquire_inference）
+    /// 之前必须调一次：否则"拿到端口 → 准备图片/拼 prompt 的几秒"落在 idle 阈值边缘
+    /// 时，watcher 会把 server 杀掉，第一个请求打到已死端口。
+    pub fn touch(&self) {
+        if let Ok(mut s) = self.inflight_state.lock() {
+            s.last_used_at = Instant::now();
+        }
+    }
+
+    /// 当前（或最近一次启动加载）的 main GGUF 路径；从未启动过为 None。
+    pub fn loaded_main(&self) -> Option<PathBuf> {
+        self.loaded_main.lock().ok().and_then(|g| g.clone())
     }
 
     /// 注册一次推理请求：in-flight +1 + last_used_at 推到现在。
@@ -330,6 +349,9 @@ impl EngineSupervisor {
         mmproj_path: Option<PathBuf>,
         overrides: EngineStartOverrides,
     ) -> Result<u16> {
+        // 记录本次要加载的 main 路径（Running 早退分支不覆盖——那时装的还是旧的）。
+        // 供 loaded_main() 查询："复用已在跑的引擎"前调用方能校验装的是不是自己要的模型。
+        let requested_main = model_path.clone();
         // 第一段：占锁、预检、置 starting、spawn、释放锁
         let port = {
             let mut inner = self.inner.lock().await;
@@ -344,6 +366,7 @@ impl EngineSupervisor {
                 }
                 EngineState::Stopped | EngineState::Error => {}
             }
+            *self.loaded_main.lock().expect("loaded_main 锁不该毒化") = requested_main;
 
             let bin_path = binary::binary_path()?;
             if !bin_path.exists() {

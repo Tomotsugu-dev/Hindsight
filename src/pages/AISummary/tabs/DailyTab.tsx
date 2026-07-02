@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import { logError } from "../../../lib/logger";
+import { localizeAiError } from "../../../lib/aiErrors";
 import {
   AlertTriangle,
   Check,
@@ -344,7 +345,10 @@ export default function DailyTab() {
         lines.push(t("aiSummary.daily.export.stateSkippedNoActivity"), "");
       } else {
         lines.push(t("aiSummary.daily.export.stateError"), "");
-        lines.push(`> ${(row.error || t("aiSummary.daily.errors.unknown")).replace(/\n/g, "\n> ")}`, "");
+        lines.push(
+          `> ${(row.error ? localizeAiError(row.error) : t("aiSummary.daily.errors.unknown")).replace(/\n/g, "\n> ")}`,
+          "",
+        );
       }
 
       // 段间分隔（最后一段不加）
@@ -722,7 +726,10 @@ function CardBody({ state }: { state: CardState }) {
       return (
         <div className={styles.bodyError}>
           <strong>{t("aiSummary.daily.card.body.errorLabel")}</strong>
-          {state.row.error || t("aiSummary.daily.errors.unknown")}
+          {/* 段级错误也过 localizeAiError——[LLM_*]/[AI_*] 码换成本地化人话 */}
+          {state.row.error
+            ? localizeAiError(state.row.error)
+            : t("aiSummary.daily.errors.unknown")}
         </div>
       );
   }
