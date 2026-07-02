@@ -81,10 +81,12 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                        SELECT a.process_name,
                               SUM(a.duration_secs)        AS total_secs,
                               -- 取该 process_name 最后一次活动所在的设备
+                              -- ended_at 是各设备本地时区偏移的 RFC3339 字符串，
+                              -- 直接字符串比较跨时区会排错，用 datetime() 归一化到 UTC
                               (SELECT a2.device_id
                                  FROM activities a2
                                  WHERE a2.process_name = a.process_name
-                                 ORDER BY a2.ended_at DESC LIMIT 1) AS last_device_id
+                                 ORDER BY datetime(a2.ended_at) DESC LIMIT 1) AS last_device_id
                        FROM activities a
                        WHERE a.local_date >= date('now','localtime','-7 days')
                        GROUP BY a.process_name
@@ -344,72 +346,106 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
 
 /// 拆开：把 process_name 还原到自己的单成员组（id = process_name）。
 /// 如果这个组已被软删，复活它。category 跟随当前所在组保留。
+///
+/// 锚点成员（process_name == 当前 group_id）的"单成员组"就是当前组本身——
+/// 把它 upsert 回去是 no-op，其余成员会留在组里。对锚点改为解散语义：
+/// 把其余成员各自还原成单成员组，锚点留在原组（组名/分类不动）。
 pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
     let p = process_name.to_string();
     let now = utc_now_rfc3339();
 
     pool.0
         .call(move |conn| {
-            // 当前的 category 用作复活后的初始值，避免用户拆开后分类丢失
-            let cur_cat: Option<String> = conn
+            // 当前组 + category（category 用作复活后的初始值，避免用户拆开后分类丢失）
+            let cur: Option<(String, Option<String>)> = conn
                 .query_row(
-                    "SELECT g.category_id
+                    "SELECT g.id, g.category_id
                      FROM app_group_members m
                      JOIN app_groups g ON g.id = m.group_id
                      WHERE m.process_name = ?1 AND m.deleted_at IS NULL",
                     rusqlite::params![p],
-                    |r| r.get::<_, Option<String>>(0),
+                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
                 )
                 .optional()
-                .db()?
-                .flatten();
+                .db()?;
+            let Some((cur_group, cur_cat)) = cur else {
+                return Ok(());
+            };
 
-            // 确保 (id = process_name) 这个原始组存在 / 未删
-            conn.execute(
-                "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, ?, NULL)
-                 ON CONFLICT(id) DO UPDATE SET
-                   display_name = excluded.display_name,
-                   category_id  = excluded.category_id,
-                   updated_at   = excluded.updated_at,
-                   deleted_at   = NULL",
-                rusqlite::params![p, p, cur_cat, now],
-            )
-            .db()?;
-            enqueue(
-                conn,
-                OutboxOp::Upsert,
-                OutboxEntity::AppGroup,
-                &p,
-                &serde_json::json!({ "groupId": p }).to_string(),
-            )
-            .db()?;
-
-            conn.execute(
-                "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, NULL)
-                 ON CONFLICT(process_name) DO UPDATE SET
-                   group_id   = excluded.group_id,
-                   updated_at = excluded.updated_at,
-                   deleted_at = NULL",
-                rusqlite::params![p, p, now],
-            )
-            .db()?;
-            enqueue(
-                conn,
-                OutboxOp::Upsert,
-                OutboxEntity::AppGroupMember,
-                &p,
-                &serde_json::json!({ "processName": p }).to_string(),
-            )
-            .db()?;
-
-            // app_categories 跟随：把 source 这个 process_name 的分类同步到 cur_cat
-            sync_app_category_row(conn, &p, cur_cat.as_deref(), &now)?;
+            if cur_group == p {
+                let others: Vec<String> = {
+                    let mut stmt = conn
+                        .prepare(
+                            "SELECT process_name FROM app_group_members
+                             WHERE group_id = ?1 AND deleted_at IS NULL AND process_name <> ?1",
+                        )
+                        .db()?;
+                    let rows = stmt
+                        .query_map(rusqlite::params![p], |r| r.get::<_, String>(0))
+                        .db()?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r.db()?);
+                    }
+                    out
+                };
+                for o in &others {
+                    restore_solo_group(conn, o, cur_cat.as_deref(), &now)?;
+                }
+            } else {
+                restore_solo_group(conn, &p, cur_cat.as_deref(), &now)?;
+            }
 
             Ok(())
         })
         .await?;
+    Ok(())
+}
+
+/// 把一个成员还原到自己的单成员组（id = process_name），软删的组复活。
+/// ON CONFLICT 不覆盖 display_name：组已存在时保留用户改过的名字（同 ensure_group 的理由）。
+fn restore_solo_group(
+    conn: &Connection,
+    process_name: &str,
+    category_id: Option<&str>,
+    now: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+         VALUES(?, ?, ?, ?, NULL)
+         ON CONFLICT(id) DO UPDATE SET
+           category_id  = excluded.category_id,
+           updated_at   = excluded.updated_at,
+           deleted_at   = NULL",
+        rusqlite::params![process_name, process_name, category_id, now],
+    )?;
+    enqueue(
+        conn,
+        OutboxOp::Upsert,
+        OutboxEntity::AppGroup,
+        process_name,
+        &serde_json::json!({ "groupId": process_name }).to_string(),
+    )?;
+
+    conn.execute(
+        "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+         VALUES(?, ?, ?, NULL)
+         ON CONFLICT(process_name) DO UPDATE SET
+           group_id   = excluded.group_id,
+           updated_at = excluded.updated_at,
+           deleted_at = NULL",
+        rusqlite::params![process_name, process_name, now],
+    )?;
+    enqueue(
+        conn,
+        OutboxOp::Upsert,
+        OutboxEntity::AppGroupMember,
+        process_name,
+        &serde_json::json!({ "processName": process_name }).to_string(),
+    )?;
+
+    // app_categories 跟随：把这个 process_name 的分类同步到 category_id
+    sync_app_category_row(conn, process_name, category_id, now)?;
     Ok(())
 }
 

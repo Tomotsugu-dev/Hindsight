@@ -91,18 +91,33 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
 
     // 跨午夜失效：缓存按**相对 offset** 键控，而后端按查询时刻的 now 解析 offset。
     // 常驻 app 挂过夜后，昨天缓存的 offset=-1 内容其实是"前天"——不清的话第二天
-    // 点「昨天」看到的是前天的数据。记录写入日，任何交互（预取 effect / 轮询）
-    // 发现本地日期变了就整体作废重拉。
+    // 点「昨天」看到的是前天的数据。记录写入日，发现本地日期变了就整体作废重拉。
+    // 返回 true = 刚发生翻转（调用方需要触发重拉）。
     const dayKeyRef = useRef(new Date().toDateString());
-    const invalidateOnRollover = useCallback(() => {
+    const invalidateOnRollover = useCallback((): boolean => {
       const key = new Date().toDateString();
-      if (key === dayKeyRef.current) return;
+      if (key === dayKeyRef.current) return false;
       dayKeyRef.current = key;
       scopeRef.current += 1; // 在途旧 fetch 一并作废
       setCache(new Map());
       cacheRef.current = new Map();
       inFlightRef.current.clear();
+      return true;
     }, []);
+
+    // 翻转检测不能只挂在 offset=0 的轮询上：用户停在历史 offset 过夜时那个轮询
+    // 根本不跑，日期标签（每次渲染重算）已经翻了、数据还是旧 offset 语义。
+    // 独立低频定时器常驻检查；翻转后重拉当前窗口三件套——预取 effect 的 deps 里
+    // 没有 dayKey，不会自己重跑，不在这里拉的话邻居会一直停在 emptyValue。
+    useEffect(() => {
+      const t = setInterval(() => {
+        if (!invalidateOnRollover()) return;
+        void fetchOne(currentOffset - 1);
+        void fetchOne(currentOffset, currentOffset === 0);
+        void fetchOne(currentOffset + 1);
+      }, 30_000);
+      return () => clearInterval(t);
+    }, [currentOffset, fetchOne, invalidateOnRollover]);
 
     // categories 进 deps：CategoriesProvider 初次 mount 是空数组，
     // 数据回来后会换新引用 → 上面的清缓存 effect 已触发把刚到的数据清掉，
@@ -126,7 +141,11 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     useEffect(() => {
       if (currentOffset !== 0) return;
       const t = setInterval(() => {
-        invalidateOnRollover();
+        // 翻转后除了 0 还要补邻居——只重拉 0 的话"昨天"面板会停在 emptyValue
+        if (invalidateOnRollover()) {
+          void fetchOne(-1);
+          void fetchOne(1);
+        }
         // 不再无条件 delete(0)：交给 fetchOne 自身的 inFlight 守卫去重，
         // 避免同一 offset=0 并发多发、回来乱序覆盖（"柱子忽长忽短"的另一来源）。
         void fetchOne(0, true);

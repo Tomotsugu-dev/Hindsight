@@ -352,8 +352,9 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 用户回来动鼠键 → 下次 tick 看到 current=None → 自然开新会话。
     // idle 读一次供两处用：本分支的阈值判断 + 下面 interval-roll 的抑制。
     let idle_now = crate::platform::idle_secs();
+    let idle_threshold = *inner.idle_threshold_secs.lock().await;
     {
-        let threshold = *inner.idle_threshold_secs.lock().await;
+        let threshold = idle_threshold;
         if threshold > 0 && idle_now as u32 >= threshold {
             let mut cur_lock = inner.current.lock().await;
             if let Some(prev) = cur_lock.take() {
@@ -379,6 +380,13 @@ async fn tick(inner: &Inner) -> Result<()> {
     };
 
     if info.app_name.is_empty() || info.app_name == "Unknown" {
+        return Ok(());
+    }
+
+    // 调试字符串残片（如 "8607797 pid=58750 ]"）：进程启动/退出瞬间 AppKit/xcap
+    // 偶尔给出的垃圾名。写进 activities 会在前端出现无图标的幽灵应用行，跳过本 tick。
+    if window::is_garbage_window_name(&info.app_name) {
+        log::debug!("跳过本次采集：app 名疑似调试残片 ({})", info.app_name);
         return Ok(());
     }
 
@@ -424,13 +432,16 @@ async fn tick(inner: &Inner) -> Result<()> {
     // URL 抓取的瞬时失败（浏览器还在前台但这次没拿到地址栏）不能当成"URL 变了"：
     // Some -> None 会被 focus 比较判成切换 → 强制开新会话 + 在"恰好没法做 URL 隐私
     // 过滤"的这一刻截图。同 app 且上个会话有已知 URL 时继承之，视为焦点未变。
-    let url = match (&fetched_url, current_lock.as_ref()) {
+    // `url_inherited` 记住"这是继承的旧值"：继承只用于焦点连续性判断，**不能**
+    // 拿去做隐私判断——抓取持续失败（如中途撤销自动化权限）时旧 URL 会被无限继承，
+    // 屏幕上实际可能已是命中关键词的隐私页面，按旧 URL 判会照常截图。
+    let (url, url_inherited) = match (&fetched_url, current_lock.as_ref()) {
         (None, Some(cur))
             if is_browser && cur.focus.app_name == info.app_name && cur.focus.url.is_some() =>
         {
-            cur.focus.url.clone()
+            (cur.focus.url.clone(), true)
         }
-        _ => fetched_url,
+        _ => (fetched_url, false),
     };
 
     let new_focus = FocusState {
@@ -448,10 +459,13 @@ async fn tick(inner: &Inner) -> Result<()> {
         //      会话按墙钟封口，会把阈值前的挂机秒数（默认最多 180s-30s=150s/次）全记成
         //      使用。焦点没变又没人在操作 → 让当前会话原地等着，等 idle 分支/焦点切换
         //      给它正确的结束时刻。
+        //      例外：idle_threshold == 0 = 用户明确关闭挂机检测（"永远算在用"）——
+        //      此时不能再按 idle 抑制 roll，否则看视频/阅读几分钟不碰键鼠就没有
+        //      周期截图和时间序列了，违背"关闭"的语义。
         Some(cur) => {
             cur.focus != new_focus
                 || (cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs
-                    && idle_now < POLL_INTERVAL_SECS * 2)
+                    && (idle_threshold == 0 || idle_now < POLL_INTERVAL_SECS * 2))
         }
     };
 
@@ -463,10 +477,13 @@ async fn tick(inner: &Inner) -> Result<()> {
             }
         }
         // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
-        let skip = should_skip_for_privacy(inner, &info, url.as_deref(), is_browser).await;
+        // 继承来的 URL 按 None 处理（fail-closed）：它只证明"焦点大概率没变"，
+        // 不能证明"当前页面安全"。
+        let privacy_url = if url_inherited { None } else { url.as_deref() };
+        let skip = should_skip_for_privacy(inner, &info, privacy_url, is_browser).await;
         if skip {
             log::info!(
-                "隐私过滤命中，跳过截图 app={} title={:?} url={:?}",
+                "隐私过滤命中，跳过截图 app={} title={:?} url={:?} (inherited={url_inherited})",
                 info.app_name,
                 info.title,
                 url
@@ -475,7 +492,21 @@ async fn tick(inner: &Inner) -> Result<()> {
         let shot = if skip {
             None
         } else {
-            take_screenshot(inner, info.pid).await
+            match take_screenshot(inner, info.pid).await {
+                Some(path) => {
+                    // TOCTOU 复核：隐私判断用的是 tick 开始时的标题/URL，截图在几百 ms
+                    // 后才拍；同一浏览器进程内切 tab 不换 PID，pre-capture 的 PID 校验
+                    // 挡不住。拍完按"现在"的焦点再判一次，命中就丢图（活动行照常落库）。
+                    if recheck_privacy_after_shot(inner, &info, is_browser).await {
+                        log::info!("隐私复核命中，丢弃截图 app={}", info.app_name);
+                        let _ = tokio::fs::remove_file(&path).await;
+                        None
+                    } else {
+                        Some(path)
+                    }
+                }
+                None => None,
+            }
         };
         let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
@@ -530,6 +561,41 @@ async fn should_skip_for_privacy(
         return true;
     }
     privacy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
+}
+
+/// 截图后的隐私复核：按"现在"的窗口标题（浏览器再抓一次 URL）重跑同一套隐私规则。
+/// 返回 true = 应丢弃这张图。判定不了（窗口解析失败 / 前台进程已换）也返回 true——
+/// 无法证明安全就不留。没配任何关键词时直接 false，零开销。
+async fn recheck_privacy_after_shot(
+    inner: &Inner,
+    expected: &window::WindowInfo,
+    is_browser: bool,
+) -> bool {
+    let url_kw = inner.privacy_url_keywords.lock().await.clone();
+    let app_kw = inner.privacy_app_keywords.lock().await.clone();
+    if url_kw.is_empty() && app_kw.is_empty() {
+        return false;
+    }
+    let now_info = match window::current_window() {
+        Ok(i) => i,
+        Err(_) => return true,
+    };
+    if now_info.pid != expected.pid || now_info.app_name != expected.app_name {
+        // 前台已换进程：这张图的归属都不确定了，丢弃
+        return true;
+    }
+    let url = if is_browser && !url_kw.is_empty() {
+        let app_name = now_info.app_name.clone();
+        tokio::task::spawn_blocking(move || {
+            browser_url::try_get_foreground_browser_url(&app_name)
+        })
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+    should_skip_for_privacy(inner, &now_info, url.as_deref(), is_browser).await
 }
 
 async fn take_screenshot(inner: &Inner, expected_pid: u32) -> Option<String> {

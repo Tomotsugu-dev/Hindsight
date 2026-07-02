@@ -51,7 +51,10 @@ export function StatusFooter({
     return ranges.some((r) => {
       const s = parseHM(r.start);
       const e = parseHM(r.end);
-      return h >= s && h < e;
+      // end < start = 跨零点时段（夜班 22:00–06:00）。后端 capture 的工作时段
+      // 判断就是这么处理的（service.rs），这里必须同口径，否则夜班用户在真正的
+      // 工作时间里显示"休息中"。
+      return s <= e ? h >= s && h < e : h >= s || h < e;
     });
   }, [settings, tick]);
 

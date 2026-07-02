@@ -142,6 +142,17 @@ fn resolve_exe_path(pid: u32) -> Option<String> {
         .and_then(|p| p.exe().map(|p| p.to_string_lossy().to_string()))
 }
 
+/// 判断捕获到的 app 名是不是"调试字符串残片"这类垃圾。
+///
+/// AppKit / xcap 在进程正处于启动或退出的瞬间，偶尔会把内部对象描述的碎片当
+/// 名字给出来（实测库里出现过 `"17969442 pid=49230 ]"`、`"8607797 pid=58750 ]"`）。
+/// 真实应用名不会包含 `" pid="`，也不会是 `<...>` 形式的 ObjC 描述串。
+/// 记录这种行的后果：应用列表 / 配对页出现无图标、无标题、名字是乱码的幽灵应用。
+pub(crate) fn is_garbage_window_name(name: &str) -> bool {
+    let t = name.trim();
+    t.contains(" pid=") || (t.starts_with('<') && t.ends_with('>'))
+}
+
 /// 判断某个 process_name 是不是"系统占位进程"——锁屏 / 屏保 这种用户**显然不在用电脑**
 /// 但 macOS 仍然把它当前台 app 返回的进程。capture 看到这些应该立刻 seal 当前会话
 /// 不再累计时长，等同于"用户挂机"。
@@ -165,6 +176,22 @@ pub(crate) fn is_system_idle_proxy(app_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn garbage_window_name_matches_debug_fragments() {
+        // 实际数据库里出现过的残片
+        assert!(is_garbage_window_name("17969442 pid=49230 ]"));
+        assert!(is_garbage_window_name("8607797 pid=58750 ]"));
+        // ObjC 描述串形态
+        assert!(is_garbage_window_name(
+            "<NSRunningApplication: 0x600001b30340>"
+        ));
+        // 正常应用名不能误伤
+        assert!(!is_garbage_window_name("WeChat"));
+        assert!(!is_garbage_window_name("Visual Studio Code"));
+        assert!(!is_garbage_window_name("Foo [Beta]"));
+        assert!(!is_garbage_window_name("百度网盘"));
+    }
 
     #[test]
     fn is_system_idle_proxy_matches_lockscreen_processes() {

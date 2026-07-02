@@ -18,9 +18,11 @@ import { displayAppName } from "../../utils/displayName";
 import { AssignDropdown } from "./parts";
 import styles from "./Pairing.module.css";
 
-/** 把 group + 设备列表换算成「每个 device 列对应哪个 member（如果有）」的 lookup */
-function membersByDevice(group: AppGroup, devices: Device[]): (AppGroupMember | null)[] {
-  return devices.map((d) => group.members.find((m) => m.lastDeviceId === d.id) ?? null);
+/** 把 group + 设备列表换算成「每个 device 列有哪些 member」的 lookup。
+ *  必须返回数组：同一台设备上的两个进程合进一组时（拖拽允许），用 find 只取
+ *  第一个会让第二个成员没有 chip——不可见也没法解除合并。 */
+function membersByDevice(group: AppGroup, devices: Device[]): AppGroupMember[][] {
+  return devices.map((d) => group.members.filter((m) => m.lastDeviceId === d.id));
 }
 
 function fmtDuration(secs: number): string {
@@ -73,6 +75,10 @@ export function PairingSection({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
   const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
+  // Escape 取消改名的标记。Escape 的 blur() 是在 keydown 里**同步**触发的，
+  // onBlur 闭包看到的还是清除前的 pendingNames（React 状态未 flush）——不加标记
+  // 的话"取消"反而会把丢弃的草稿提交出去。ref 同步可见，不受批处理影响。
+  const renameCancelledRef = useRef(false);
 
   // 每行（一个 group）的 DOM 引用，mousemove 时拿来做命中检测
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -175,15 +181,17 @@ export function PairingSection({
   const cssVars = { "--device-cols": deviceColsTemplate } as CSSProperties;
 
   const startDrag = (
-    e: React.MouseEvent<HTMLDivElement>,
+    e: React.MouseEvent<HTMLElement>,
     member: AppGroupMember,
     sourceGroupId: string,
     deviceColIdx: number,
   ) => {
     if (e.button !== 0) return; // 只接左键
     e.preventDefault();
-    // 用源 chip 的列容器水平中心做 lockedX —— 后续飞行 chip 永远停在这条线上
-    const colEl = e.currentTarget as HTMLElement;
+    // 用源 chip 的**列容器**水平中心做 lockedX —— 后续飞行 chip 永远停在这条线上
+    //（事件现在挂在 chip 上，往上找列容器；找不到退化用 chip 自身）
+    const chipEl = e.currentTarget;
+    const colEl = chipEl.closest<HTMLElement>(`.${styles.devCol}`) ?? chipEl;
     const rect = colEl.getBoundingClientRect();
     const lockedX = rect.left + rect.width / 2;
     setDrag({
@@ -229,6 +237,10 @@ export function PairingSection({
   };
 
   const onCommitName = async (groupId: string) => {
+    if (renameCancelledRef.current) {
+      renameCancelledRef.current = false;
+      return; // Escape 取消：草稿已（或即将）被清掉，不提交
+    }
     const next = pendingNames[groupId];
     if (next === undefined) return;
     const trimmed = next.trim();
@@ -295,51 +307,55 @@ export function PairingSection({
               .filter(Boolean)
               .join(" ")}
           >
-            {slots.map((member, idx) => {
+            {slots.map((colMembers, idx) => {
               const dev = sortedDevices[idx];
-              if (!member) {
+              if (colMembers.length === 0) {
                 return (
                   <div key={dev.id} className={`${styles.devCol} ${styles.empty}`}>
                     <span className={styles.emptyDash} aria-hidden />
                   </div>
                 );
               }
-              const isDraggingThis =
-                drag !== null && drag.processName === member.processName;
               return (
-                // 拖拽天然没有键盘等效（要在 dev 网格里拖到另一格），保留鼠标交互
-                // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-                <div
-                  key={dev.id}
-                  className={styles.devCol}
-                  onMouseDown={(e) => startDrag(e, member, group.id, idx)}
-                >
-                  <span
-                    className={`${styles.chip} ${
-                      isDraggingThis ? styles.chipPlaceholder : ""
-                    }`}
-                  >
-                    <AppIcon
-                      processName={member.processName}
-                      fallbackColor="#94a3b8"
-                      size={14}
-                    />
-                    <span className={styles.chipName} title={member.processName}>
-                      {displayAppName(member.processName)}
-                    </span>
-                    <span className={styles.chipMeta}>{fmtDuration(member.recentSecs)}</span>
-                    {isPaired && !isDraggingThis && (
-                      <button
-                        type="button"
-                        className={styles.chipUnmerge}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => void onUnmerge(member.processName)}
-                        title={t("categories.pairing.chip.unmergeTooltip")}
+                <div key={dev.id} className={styles.devCol}>
+                  {colMembers.map((member) => {
+                    const isDraggingThis =
+                      drag !== null && drag.processName === member.processName;
+                    return (
+                      // 拖拽天然没有键盘等效（要在 dev 网格里拖到另一格），保留鼠标交互
+                      // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+                      <span
+                        key={member.processName}
+                        className={`${styles.chip} ${
+                          isDraggingThis ? styles.chipPlaceholder : ""
+                        }`}
+                        onMouseDown={(e) => startDrag(e, member, group.id, idx)}
                       >
-                        <X size={11} strokeWidth={2.25} />
-                      </button>
-                    )}
-                  </span>
+                        <AppIcon
+                          processName={member.processName}
+                          fallbackColor="#94a3b8"
+                          size={14}
+                        />
+                        <span className={styles.chipName} title={member.processName}>
+                          {displayAppName(member.processName)}
+                        </span>
+                        <span className={styles.chipMeta}>
+                          {fmtDuration(member.recentSecs)}
+                        </span>
+                        {isPaired && !isDraggingThis && (
+                          <button
+                            type="button"
+                            className={styles.chipUnmerge}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={() => void onUnmerge(member.processName)}
+                            title={t("categories.pairing.chip.unmergeTooltip")}
+                          >
+                            <X size={11} strokeWidth={2.25} />
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -357,6 +373,7 @@ export function PairingSection({
                   if (e.key === "Enter") {
                     e.currentTarget.blur();
                   } else if (e.key === "Escape") {
+                    renameCancelledRef.current = true;
                     setPendingNames((p) => {
                       const cp = { ...p };
                       delete cp[group.id];
@@ -385,7 +402,7 @@ export function PairingSection({
                   把每列都返回 None → 渲染 emptyDash
                 两种情况都是用户"看着空"的行，合理诉求是让它消失。
               */}
-              {slots.every((s) => s === null) && (
+              {slots.every((s) => s.length === 0) && (
                 <button
                   type="button"
                   className={styles.deleteRowBtn}

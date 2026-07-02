@@ -208,7 +208,7 @@ where
 
         // ── 校验（可选）─────────────────────────────────
         progress(DownloadPhase::Verifying, total_downloaded, combined_total);
-        if let Some(expected) = platform::sha256(p, tag) {
+        if let Some(expected) = platform::sha256(p, tag, asset_name) {
             let temp_clone = temp_path.clone();
             let expected = expected.to_string();
             let asset_clone = asset_name.clone();

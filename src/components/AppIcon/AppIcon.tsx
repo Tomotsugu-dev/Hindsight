@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../api/hindsight";
 import { lruInsert } from "../../utils/lru";
@@ -47,6 +47,15 @@ export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps)
   const [src, setSrc] = useState<string | null | undefined>(() =>
     readCache(processName),
   );
+
+  // processName 变化时重置 src（React 官方"prop 变化调整 state"的渲染期模式）：
+  // 不重置的话下面 effect 因 src !== undefined 直接 return，被复用的实例
+  //（合并/拆分应用组后同一行换了 iconProcess）会永远显示旧应用的图标。
+  const prevNameRef = useRef(processName);
+  if (prevNameRef.current !== processName) {
+    prevNameRef.current = processName;
+    setSrc(readCache(processName));
+  }
 
   useEffect(() => {
     if (src !== undefined) return;

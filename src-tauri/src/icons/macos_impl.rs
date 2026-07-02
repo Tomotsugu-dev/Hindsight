@@ -2,9 +2,26 @@ use std::path::{Path, PathBuf};
 
 use crate::error::Result;
 
+/// 图标 PNG 的边长上界：UI 实际 size=18px，128 给 HiDPI 留余量。
+/// 过去取最大 .icns 变体直出 PNG（512/1024px）让单图标 PNG 达 ~188 KB，
+/// 缩放后 64px 通常 3–8 KB（10–30× 体积差），同时大幅降 WKWebView 解码 RAM。
+const MAX_DIM: u32 = 128;
+
 /// macOS 实现：找到 exe 所在 .app bundle → 读 Info.plist 拿 CFBundleIconFile →
-/// 解码 .icns 取最大变体编码 PNG。bundle 找不到返回 `Ok(None)`。
+/// 解码 .icns 取最大变体编码 PNG。
+///
+/// icns 路径走不通时（现代系统 app 图标只在 Assets.car、Info.plist 没有
+/// CFBundleIconFile；SecurityAgent 这类 .bundle 不是 .app；icns 文件解析失败 等）
+/// 兜底走 `NSWorkspace.iconForFile`——它对任意路径都能给出系统渲染的图标，
+/// 覆盖上述全部场景。两条路都空才返回 `Ok(None)`。
 pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
+    if let Some(png) = extract_via_icns(exe_path)? {
+        return Ok(Some(png));
+    }
+    Ok(extract_via_nsworkspace(exe_path))
+}
+
+fn extract_via_icns(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     let bundle = match find_bundle(exe_path) {
         Some(b) => b,
         None => return Ok(None),
@@ -26,6 +43,42 @@ pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     }
 
     extract_largest_png(&icns_path)
+}
+
+/// `NSWorkspace.iconForFile` 兜底：拿系统为该路径渲染的图标（NSImage），
+/// TIFF → NSBitmapImageRep → PNG，再统一缩到 ≤ MAX_DIM。
+/// 路径不存在时系统会给"通用文档"图标，比前端的默认占位图更有辨识度不了多少，
+/// 所以先检查存在性，不存在直接 None。
+fn extract_via_nsworkspace(path: &Path) -> Option<Vec<u8>> {
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSWorkspace};
+    use objc2_foundation::{NSDictionary, NSString};
+
+    if !path.exists() {
+        return None;
+    }
+    let path_str = path.to_str()?;
+
+    let png = objc2::rc::autoreleasepool(|_| {
+        let ws = NSWorkspace::sharedWorkspace();
+        let ns_path = NSString::from_str(path_str);
+        let image = ws.iconForFile(&ns_path);
+        let tiff = image.TIFFRepresentation()?;
+        let rep = NSBitmapImageRep::imageRepWithData(&tiff)?;
+        // properties 空字典即可；PNG 无必填属性
+        let data =
+            unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new()) }?;
+        Some(data.to_vec())
+    })?;
+
+    // 与 icns 路径同规格：统一缩到 ≤ MAX_DIM，控制 DB BLOB / 前端解码内存
+    let img = image::load_from_memory(&png).ok()?;
+    if img.width() <= MAX_DIM && img.height() <= MAX_DIM {
+        return Some(png);
+    }
+    let resized = img.resize(MAX_DIM, MAX_DIM, image::imageops::FilterType::Triangle);
+    let mut buf = std::io::Cursor::new(Vec::new());
+    resized.write_to(&mut buf, image::ImageFormat::Png).ok()?;
+    Some(buf.into_inner())
 }
 
 fn find_bundle(exe_path: &Path) -> Option<PathBuf> {
@@ -74,11 +127,6 @@ fn resolve_icns(bundle: &Path, icon_name: &str) -> PathBuf {
 }
 
 fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
-    // 上界：UI 实际 size=18px，过去取最大 .icns 变体直出 PNG（512/1024px）让单
-    // 图标 PNG 达 ~188 KB，缩放后 64px 通常 3–8 KB（10–30× 体积差），同时大幅降
-    // WKWebView 端解码后位图的 RAM 占用。128 留余量给 HiDPI。
-    const MAX_DIM: u32 = 128;
-
     let file = std::fs::File::open(icns_path)?;
     let family = match icns::IconFamily::read(file) {
         Ok(f) => f,

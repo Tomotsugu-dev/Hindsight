@@ -78,7 +78,8 @@ uiautomation = "0.24"
 plist = "1"
 icns = "0.3"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["NSRunningApplication", "NSWorkspace"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphics"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSData", "NSDictionary"] }
 screencapturekit = { version = "2.1", features = ["macos_14_0"] }
 
 # Unix（Linux + macOS）：子进程保护用 setpgid + （Linux）prctl PDEATHSIG

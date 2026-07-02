@@ -121,7 +121,9 @@ export default function AppsPage() {
           </div>
         ) : (
           <PairingSection
-            groups={filteredGroups ?? undefined}
+            // 加载中传 [] 保持 controlled 模式：传 undefined 会让 PairingSection
+            // 进入 uncontrolled 自取数据——重复请求一次后端 + 闪一下未过滤的完整列表
+            groups={filteredGroups ?? []}
             loading={filteredGroups === null}
             onReload={onPairingReload}
           />

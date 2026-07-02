@@ -209,9 +209,10 @@ export function CategoryRow({
         >
           <Pencil size={14} strokeWidth={1.85} />
         </button>
-        {/* 内置分类（如 v27 的 hidden）不允许删除：按钮不渲染，dialog 也不挂。
-            后端 categories::delete 有二次防御（builtin != 0 拒绝） */}
-        {!category.builtin && (
+        {/* 内置分类（如 v27 的 hidden）与 'other'（未分类时长的隐式归属，reports SQL
+            COALESCE 到它）不允许删除：按钮不渲染，dialog 也不挂。
+            后端 categories::delete 有二次防御 */}
+        {!category.builtin && category.id !== "other" && (
           <button
             type="button"
             className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
@@ -226,7 +227,7 @@ export function CategoryRow({
         )}
       </div>
 
-      {!category.builtin && (
+      {!category.builtin && category.id !== "other" && (
         <ConfirmDialog
           open={confirmOpen}
           title={t("categories.deleteDialog.title")}

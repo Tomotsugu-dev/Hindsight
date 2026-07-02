@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
+import { useDurationFormatter } from "../../utils/duration";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./DailyBarChart.module.css";
 
@@ -35,6 +36,7 @@ export function DailyBarChart({
   const { t } = useTranslation();
   const { getCategory } = useCategories();
   const isDark = useIsDark();
+  const fmtHM = useDurationFormatter();
   const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
   const maxTotal = Math.max(0, ...totals);
   const yMax = niceYMax(maxTotal);
@@ -50,14 +52,15 @@ export function DailyBarChart({
     return t("common.duration.tickMinutes", { count: min });
   };
 
-  // 柱子 tooltip —— 月/日 + 时长
+  // 柱子 tooltip —— 月/日 + 时长。时长用 fmtHM（"10h 5m"），不能用 fmtTickLabel：
+  // 那是 Y 轴刻度格式，非整小时会显示原始分钟数（605m）
   const fmtBarTitle = (day: DaySummary, total: number): string =>
     t("week.chart.barTitle", {
       date: t("week.shortDate", {
         month: day.date.getMonth() + 1,
         day: day.date.getDate(),
       }),
-      duration: fmtTickLabel(total),
+      duration: fmtHM(total),
     });
 
   return (
@@ -111,15 +114,20 @@ export function DailyBarChart({
                     data-dimmed={dimmed || undefined}
                   >
                     {day.segments.map((seg) => {
+                      if (total === 0) return null;
+                      // categoryId 解析不到（分类刚被删、缓存未刷新）时不能跳过：
+                      // 柱高按全部 segments 求和，跳过会在柱顶留透明缺口。用中性灰兜底。
                       const cat = getCategory(seg.categoryId);
-                      if (!cat || total === 0) return null;
+                      const color = cat
+                        ? adjustCategoryColor(cat.color, isDark)
+                        : "var(--cat-fallback, #9ca3af)";
                       return (
                         <div
                           key={seg.categoryId}
                           className={styles.segment}
                           style={{
                             height: `${(seg.minutes / total) * 100}%`,
-                            background: adjustCategoryColor(cat.color, isDark),
+                            background: color,
                           }}
                         />
                       );

@@ -47,15 +47,17 @@ function notify(): void {
   listeners.forEach((cb) => cb());
 }
 
-function ensureListener(): void {
-  if (listenerInit) return;
-  listenerInit = listen<ModelDownloadProgress>(MODEL_DOWNLOAD_EVENT, (ev) => {
-    progressSnap = Object.freeze({
-      ...progressSnap,
-      [ev.payload.file]: ev.payload,
+function ensureListener(): Promise<UnlistenFn> {
+  if (!listenerInit) {
+    listenerInit = listen<ModelDownloadProgress>(MODEL_DOWNLOAD_EVENT, (ev) => {
+      progressSnap = Object.freeze({
+        ...progressSnap,
+        [ev.payload.file]: ev.payload,
+      });
+      notify();
     });
-    notify();
-  });
+  }
+  return listenerInit;
 }
 
 function refreshInflight(): void {
@@ -63,7 +65,7 @@ function refreshInflight(): void {
 }
 
 export function subscribeModelDownloads(cb: () => void): () => void {
-  ensureListener();
+  void ensureListener();
   listeners.add(cb);
   return () => {
     listeners.delete(cb);
@@ -134,13 +136,15 @@ export function downloadModelDedup(
   expectedBytes: number,
   saveAs?: string,
 ): Promise<string> {
-  ensureListener();
   const key = saveAs ?? file;
   const existing = inflight.get(key);
   if (existing) return existing;
 
-  const p = api
-    .downloadModel(repo, file, expectedBytes, saveAs)
+  // listen() 注册要跟 core 走一个来回，注册完成前后端 emit 的进度事件会丢
+  //（首次下载头几个事件没进度条）。先等注册完成再 invoke；注册失败也照常下载。
+  const p = ensureListener()
+    .catch(() => undefined)
+    .then(() => api.downloadModel(repo, file, expectedBytes, saveAs))
     .finally(() => {
       inflight.delete(key);
       refreshInflight();

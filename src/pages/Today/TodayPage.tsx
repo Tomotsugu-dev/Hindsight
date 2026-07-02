@@ -101,10 +101,17 @@ export default function TodayPage() {
   const workRanges: WorkRange[] | null = useMemo(() => {
     if (!settings?.workHoursEnabled) return null;
     if (!settings.workRanges.length) return null;
-    return settings.workRanges.map((r) => ({
-      startHour: parseHM(r.start),
-      endHour: parseHM(r.end),
-    }));
+    // 跨零点时段（22:00–06:00，后端 capture 支持）拆成 [start,24) + [0,end) 两段，
+    // 否则 endHour - startHour 为负 → 工作时段背景条负宽度直接消失
+    return settings.workRanges.flatMap((r) => {
+      const startHour = parseHM(r.start);
+      const endHour = parseHM(r.end);
+      if (startHour <= endHour) return [{ startHour, endHour }];
+      return [
+        { startHour, endHour: 24 },
+        { startHour: 0, endHour },
+      ];
+    });
   }, [settings]);
 
   const totalMinutes = useMemo(

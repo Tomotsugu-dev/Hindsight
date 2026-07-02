@@ -390,6 +390,12 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
             if builtin_i != 0 {
                 return Ok(Err("内置分类不可删除"));
             }
+            // 'other' 虽然 seed 时 builtin=0，但它是所有未分类时长的隐式归属
+            //（reports SQL 里 COALESCE(c.id, 'other')）：删掉后 SQL 仍然产出
+            // 'other'，前端解析不到分类，柱状图/占比会出现无色缺口
+            if id == "other" {
+                return Ok(Err("「其他」是未分类时长的默认归属，不可删除"));
+            }
 
             conn.execute(
                 "UPDATE categories SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",

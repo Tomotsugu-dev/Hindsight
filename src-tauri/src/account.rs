@@ -129,12 +129,23 @@ pub async fn migrate_legacy_db(data_root: &Path) -> Result<()> {
     let owner = legacy_owner();
     if let Some(owner) = owner {
         let target = data_root.join(format!("hindsight.{owner}.sqlite"));
+        if legacy.exists() && target.exists() {
+            // 冲突：多半是上次 rename 失败（Windows 句柄未释放等）后，那次启动
+            // 已经在 target 位置建了新库。此时**不能**清 legacy_owner——清了下次
+            // 就再也不会尝试迁移，老数据永久搁浅在 hindsight.sqlite 里。
+            // 保留 hint、大声记错误，等 legacy 句柄释放后的下次启动重试。
+            log::error!(
+                "legacy DB 迁移冲突：{} 与 {} 同时存在，升级前的历史数据仍在旧文件中；保留 legacy_owner 下次重试",
+                legacy.display(),
+                target.display()
+            );
+            return Ok(());
+        }
         if legacy.exists() && !target.exists() {
             rename_db_files(&legacy, &target)?;
             log::info!("rename hindsight.sqlite -> hindsight.{owner}.sqlite");
         }
-        // 不论 rename 是否真的发生（target 可能已存在 / legacy 可能已不存在），
-        // 都清掉 legacy_owner —— 这个 hint 已经过期。
+        // rename 成功 / legacy 已不存在 → hint 过期，清掉
         set_legacy_owner(None)?;
     }
 
@@ -149,7 +160,7 @@ pub fn claim_legacy_for(uid: &str) -> io::Result<()> {
 
 async fn peek_auth_state_uid(path: &Path) -> Option<String> {
     let pool = DbPool::open(path).await.ok()?;
-    let row: Option<Option<String>> = pool
+    let row: Option<Option<Option<String>>> = pool
         .0
         .call(|conn| {
             Ok(conn
@@ -159,8 +170,14 @@ async fn peek_auth_state_uid(path: &Path) -> Option<String> {
                 .ok())
         })
         .await
-        .ok()?;
-    row.flatten().filter(|s| !s.trim().is_empty())
+        .ok();
+    // 显式 close 等后台线程真正释放文件句柄再返回——直接 drop 是异步释放，
+    // 同一次启动里 Step 2 紧接着 rename 这个文件，Windows 上句柄没放会撞
+    // sharing violation，迁移失败 + 本次启动在目标路径建空库。
+    if let Err(e) = pool.0.close().await {
+        log::warn!("peek_auth_state_uid: close legacy DB 失败: {e:?}");
+    }
+    row?.flatten().filter(|s| !s.trim().is_empty())
 }
 
 /// 重命名主 DB 文件，连带 SQLite 的 `-wal` / `-shm` 副文件一起。

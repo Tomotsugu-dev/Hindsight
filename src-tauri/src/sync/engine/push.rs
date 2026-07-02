@@ -61,11 +61,13 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     }
 
     // 把 outbox 行分组到"脏文件"
-    let groups = group_outbox(&rows);
+    let (groups, ungroupable_ids) = group_outbox(&rows);
+    // 没法分组的行（entity 未知 / payload 损坏）立刻 drop：它们永远不可能发出去，
+    // 留着会每 30s 重读一次、占 batch 名额、把 pending 计数永久顶高
+    if !ungroupable_ids.is_empty() {
+        io::delete_outbox_rows(&inner.pool, &ungroupable_ids).await?;
+    }
     if groups.is_empty() {
-        // 所有行都没法分组（entity 未知）→ 全部 drop
-        let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
-        io::delete_outbox_rows(&inner.pool, &ids).await?;
         return Ok(());
     }
 
@@ -131,8 +133,12 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     Ok(())
 }
 
-fn group_outbox(rows: &[OutboxRow]) -> HashMap<DirtyKey, Vec<i64>> {
+/// 返回 (可分组的脏文件映射, 没法分组必须直接 drop 的行 id)。
+/// 没法分组的行如果不删，会在每个 batch 里既进不了 succeeded 也进不了 failed，
+/// 永远留在 outbox（读取按 id ASC，它们还总排在最前面）。
+fn group_outbox(rows: &[OutboxRow]) -> (HashMap<DirtyKey, Vec<i64>>, Vec<i64>) {
     let mut groups: HashMap<DirtyKey, Vec<i64>> = HashMap::new();
+    let mut ungroupable: Vec<i64> = Vec::new();
     for row in rows {
         let key = match row.entity.as_str() {
             "activity" => match serde_json::from_str::<Value>(&row.payload)
@@ -145,6 +151,7 @@ fn group_outbox(rows: &[OutboxRow]) -> HashMap<DirtyKey, Vec<i64>> {
                 Some(d) => DirtyKey::ActivityDay(d),
                 None => {
                     log::warn!("outbox row {} 是 activity 但 payload 缺 localDate", row.id);
+                    ungroupable.push(row.id);
                     continue;
                 }
             },
@@ -157,12 +164,13 @@ fn group_outbox(rows: &[OutboxRow]) -> HashMap<DirtyKey, Vec<i64>> {
             "app_group_member" => DirtyKey::AppGroupMembers,
             _ => {
                 log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
+                ungroupable.push(row.id);
                 continue;
             }
         };
         groups.entry(key).or_default().push(row.id);
     }
-    groups
+    (groups, ungroupable)
 }
 
 fn file_name_for(self_id: &str, key: &DirtyKey) -> String {
@@ -522,13 +530,14 @@ mod tests {
             make_row(4, "2026-05-15"),
             make_row(5, "2026-05-15"),
         ];
-        let groups = group_outbox(&rows);
+        let (groups, ungroupable) = group_outbox(&rows);
 
         assert_eq!(
             groups.len(),
             1,
             "5 行同一 local_date 应只产生 1 个 DirtyKey"
         );
+        assert!(ungroupable.is_empty(), "合法行不应进 ungroupable");
         let ids = groups
             .get(&DirtyKey::ActivityDay("2026-05-15".into()))
             .expect("ActivityDay key should exist");
@@ -554,8 +563,9 @@ mod tests {
             make_row(2, "2026-05-16"),
             make_row(3, "2026-05-15"),
         ];
-        let groups = group_outbox(&rows);
+        let (groups, ungroupable) = group_outbox(&rows);
         assert_eq!(groups.len(), 2);
+        assert!(ungroupable.is_empty(), "合法行不应进 ungroupable");
         let mut d1 = groups
             .get(&DirtyKey::ActivityDay("2026-05-15".into()))
             .unwrap()

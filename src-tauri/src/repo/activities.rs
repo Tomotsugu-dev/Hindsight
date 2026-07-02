@@ -184,21 +184,24 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
     // 先取出待清理的 (id, path) 列表
     let rows: Vec<(i64, String)> = pool
         .0
-        .call(move |conn| {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, screenshot_path FROM activities
-                     WHERE screenshot_path IS NOT NULL AND local_date < ?",
-                )
-                .db()?;
-            let rows = stmt
-                .query_map([&cutoff], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-                })
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?;
-            Ok(rows)
+        .call({
+            let cutoff = cutoff.clone();
+            move |conn| {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, screenshot_path FROM activities
+                         WHERE screenshot_path IS NOT NULL AND local_date < ?",
+                    )
+                    .db()?;
+                let rows = stmt
+                    .query_map([&cutoff], |r| {
+                        Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                    })
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                Ok(rows)
+            }
         })
         .await?;
 
@@ -218,18 +221,18 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
     .await
     .unwrap_or(0);
 
-    // 把这些行的 screenshot_path 置 NULL（即使文件删除失败也清引用，避免下次反复尝试）
+    // 把这些行的 screenshot_path 置 NULL（即使文件删除失败也清引用，避免下次反复尝试）。
+    // 不用 id IN (...)：行数超过 SQLITE_MAX_VARIABLE_NUMBER(32766) 会报错，而此时
+    // 文件已经删掉，引用清不掉 → 之后每轮清理永远失败。直接按同一 cutoff 条件 UPDATE。
     if !rows.is_empty() {
-        let ids: Vec<i64> = rows.into_iter().map(|(id, _)| id).collect();
         pool.0
             .call(move |conn| {
-                let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                let sql = format!(
-                    "UPDATE activities SET screenshot_path = NULL WHERE id IN ({placeholders})"
-                );
-                let params: Vec<&dyn rusqlite::ToSql> =
-                    ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
-                conn.execute(&sql, params.as_slice()).db()?;
+                conn.execute(
+                    "UPDATE activities SET screenshot_path = NULL
+                     WHERE screenshot_path IS NOT NULL AND local_date < ?",
+                    [&cutoff],
+                )
+                .db()?;
                 Ok(())
             })
             .await?;

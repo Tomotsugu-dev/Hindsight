@@ -836,12 +836,27 @@ const ADD_SUPER_CATEGORIES_SQL: &str = r#"
     ALTER TABLE categories ADD COLUMN super_category_id TEXT;
 "#;
 
+/// v34：清理"调试字符串残片"垃圾进程名（如 `"8607797 pid=58750 ]"`）。
+///
+/// 这些是 AppKit/xcap 在进程启动/退出瞬间偶发给出的碎片名，被 capture 层写进了
+/// activities / app_group* 等表，前端表现为无图标、无标题的幽灵应用行。
+/// capture 层已加 `is_garbage_window_name` 防护不再产生新行；这里把存量清掉。
+/// 真实应用名不会包含 `" pid="`，硬删安全。幂等：重跑命中 0 行。
+const CLEANUP_GARBAGE_PROCESS_NAMES_SQL: &str = r#"
+    DELETE FROM activities        WHERE process_name LIKE '% pid=%';
+    DELETE FROM app_group_members WHERE process_name LIKE '% pid=%';
+    DELETE FROM app_groups        WHERE id           LIKE '% pid=%';
+    DELETE FROM app_categories    WHERE process_name LIKE '% pid=%';
+    DELETE FROM process_paths     WHERE process_name LIKE '% pid=%';
+    DELETE FROM app_icons         WHERE process_name LIKE '% pid=%';
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 23] = [
+    let extras: [&'static str; 24] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -865,6 +880,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         SEED_DEFAULT_PLAY_SUPER_SQL,           // v31
         SEED_DEFAULT_SOCIAL_SUPER_SQL,         // v32
         SEED_DEFAULT_BROWSE_SUPER_SQL,         // v33
+        CLEANUP_GARBAGE_PROCESS_NAMES_SQL,     // v34
     ];
     pool.0
         .call(move |conn| {

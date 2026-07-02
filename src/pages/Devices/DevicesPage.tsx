@@ -654,6 +654,7 @@ function SelfRow({
 }) {
   const { t } = useTranslation();
   const { status } = useCaptureStatus();
+  const fmtRelative = useFmtRelative();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(device.name);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -687,7 +688,8 @@ function SelfRow({
   };
 
   const styleVar = { "--cat-color": device.color } as CSSProperties;
-  const lastSeen = status?.lastCaptureAt ? t("devices.relative.justNow") : "—";
+  // 用真实时间戳走相对时间格式化——写死"刚刚"的话采集停了几小时也显示"刚刚"
+  const lastSeen = status?.lastCaptureAt ? fmtRelative(status.lastCaptureAt) : "—";
   const todayCount = status?.todayCount ?? 0;
 
   return (

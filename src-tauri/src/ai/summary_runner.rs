@@ -371,21 +371,29 @@ impl DaySummaryRunner {
         device: DeviceFilter,
         parallel: usize,
     ) -> Result<()> {
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
-            p.message = None;
-            self.emit(p);
-        }
-        let port = self
-            .ensure_engine_running(ai, Step::Summary, summary_overrides)
-            .await?;
+        // 云端总结时跳过本地引擎：和 daily 交错路径同理——云端时本地 summary
+        // fallback 允许为空/文件已删（设置校验放行），无条件 resolve+start 会直接把
+        // 整轮跑挂；即便 fallback 有效也是白加载一个大模型。build_step2 自己会路由到
+        // ExternalChatClient，本地端口只是占位参数（External 分支不使用）。
+        let port = if ai.summary_use_cloud() {
+            log::info!("step2_all: 段总结走云端，跳过本地引擎启动");
+            0
+        } else {
+            let st = self.supervisor.status().await;
+            if st.state != EngineState::Running {
+                let mut p = SummaryProgress::base(
+                    source.to_string(),
+                    date_str.to_string(),
+                    "engine_starting",
+                    total_segments,
+                );
+                // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+                p.message = None;
+                self.emit(p);
+            }
+            self.ensure_engine_running(ai, Step::Summary, summary_overrides)
+                .await?
+        };
         let step1_placeholder = ChatClient::new(
             port,
             ai.effective_summary_main().to_string(),
@@ -494,6 +502,11 @@ impl DaySummaryRunner {
             {
                 continue;
             }
+
+            // 清掉这段上一轮残留的总结行（error / skipped_*）：下面 step 1 之后要按
+            // status 决定是否跳过 step 2，残留行会让刚成功的 step 1 误跳 step 2，
+            // 段永远卡在 error。清掉后读到的 status 一定是本轮写的。
+            ai_summaries::clear_segment_summary(&self.pool, source, date_str, idx as u32).await?;
 
             // ── step 1：load describe model ──
             // 每段都 emit engine_starting 让前端知道在 swap（5-15 分钟级总等待）
@@ -1172,11 +1185,14 @@ impl DaySummaryRunner {
             Some(o) => o.with_overrides(cfg.ai.clone()),
             None => cfg.ai.clone(),
         };
-        // engine_overrides 同 run() 一样从合并后的 ai.* 取，daily / debug 共用
+        // 同 run() 的 describe_overrides：必须用 describe_*_effective()。
+        // 用旧的全局 ai.ctx_size 会和下面 ChatClient 的 describe_max_tokens()
+        //（= describe_ctx_size_effective()/2）不匹配：引擎按 8K 起、请求按 16K 发，
+        // 重跑必失败——而完整生成却正常。
         let engine_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size,
-            parallel_slots: ai.parallel_slots,
-            ctx_size: ai.ctx_size,
+            batch_size: ai.describe_batch_size_effective(),
+            parallel_slots: ai.describe_parallel_slots_effective(),
+            ctx_size: ai.describe_ctx_size_effective(),
         };
 
         if ai.effective_describe_main().trim().is_empty() {
@@ -1334,12 +1350,15 @@ impl DaySummaryRunner {
             Some(o) => o.with_overrides(cfg.ai.clone()),
             None => cfg.ai.clone(),
         };
+        // 同 run() 的 describe_overrides：必须用 describe_*_effective()，
+        // 否则引擎按旧全局 ctx 起、请求按 describe_max_tokens()（新参数折半）发，
+        // 单段重试必失败而完整生成正常（本路径 step1+step2 共用 describe 引擎）。
         let engine_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size,
-            parallel_slots: ai.parallel_slots,
-            ctx_size: ai.ctx_size,
+            batch_size: ai.describe_batch_size_effective(),
+            parallel_slots: ai.describe_parallel_slots_effective(),
+            ctx_size: ai.describe_ctx_size_effective(),
         };
-        let parallel = ai.parallel_slots.unwrap_or(1).max(1) as usize;
+        let parallel = ai.describe_parallel_slots_effective().unwrap_or(1).max(1) as usize;
 
         if ai.effective_describe_main().trim().is_empty() {
             return Err(Error::InvalidInput(
@@ -1510,16 +1529,19 @@ impl DaySummaryRunner {
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
-                // 只有装的确实是本 step 需要的模型才复用——2 分钟前调试跑留下的
-                // vision 模型 + 小 ctx 拿来跑 step 2 会截断/低质。不匹配则重启换模。
-                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path()) {
+                // 模型 **和启动参数** 都匹配才复用——2 分钟前调试跑 / 手动 start_engine
+                // 留下的引擎可能模型相同但 ctx/slots 是默认小值，拿来跑配了大 ctx 的
+                // step 会请求超限（max_tokens 按新参数折半算）。不匹配则重启换参。
+                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
+                    && self.supervisor.loaded_overrides() == engine_overrides
+                {
                     // 复用前"续命"：不 touch 的话，引擎若已接近 idle 阈值，准备图片
                     // 的几秒里 watcher 会把 server 杀掉，第一个请求打到已死端口。
                     self.supervisor.touch();
                     return Ok(p);
                 }
                 log::info!(
-                    "ensure_engine_running: 已加载模型与 step 需求不符，重启换模 (want={})",
+                    "ensure_engine_running: 已加载模型/参数与 step 需求不符，重启换模 (want={})",
                     main_path.display()
                 );
                 if let Err(e) = self.supervisor.stop().await {

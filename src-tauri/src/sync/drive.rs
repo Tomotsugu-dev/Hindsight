@@ -350,8 +350,10 @@ impl InMemoryDriveStore {
     async fn next_modified_time(&self) -> String {
         let mut c = self.clock.lock().await;
         *c += 1;
-        // 单调递增的 RFC3339，方便跟真实 Drive 的字典序一致
-        format!("2026-05-15T10:00:{:02}.{:06}Z", *c % 60, *c)
+        // 单调递增的 RFC3339，方便跟真实 Drive 的字典序一致。
+        // 秒字段固定为 0、只让小数位增长：之前 `{:02}` 填 `*c % 60` 会在第 60 次
+        // 上传时秒位回绕（...00.000060 < ...59.000059），破坏单调性
+        format!("2026-05-15T10:00:00.{:09}Z", *c)
     }
 
     pub async fn list_appdata_files(&self, modified_after: &str) -> Result<Vec<FileMeta>> {

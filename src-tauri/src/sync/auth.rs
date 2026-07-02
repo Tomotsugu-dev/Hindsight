@@ -531,64 +531,76 @@ struct CodeState {
 }
 
 async fn accept_callback(listener: TcpListener) -> Result<CodeState> {
-    let (mut socket, _) = listener
-        .accept()
-        .await
-        .map_err(|e| Error::OAuthSetup(format!("accept callback: {e}")))?;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let mut buf = vec![0u8; 4096];
-    let n = {
-        use tokio::io::AsyncReadExt;
-        socket
-            .read(&mut buf)
+    // 浏览器会开投机性预连接（可能不发任何数据）、杀软/端口扫描也会碰这个端口。
+    // 只 accept 一次会被这类连接吃掉，真正的 /callback 请求永远进不来。
+    // 所以循环 accept：不带 code/error 的连接用 404 打发掉继续等；
+    // 整体时限由调用方的 OAUTH_TIMEOUT_SECS 控制，单连接读加小超时防止
+    // 挂着不发数据的预连接堵住队列。
+    loop {
+        let (mut socket, _) = listener
+            .accept()
             .await
-            .map_err(|e| Error::OAuthSetup(format!("read callback: {e}")))?
-    };
-    let req = String::from_utf8_lossy(&buf[..n]).to_string();
-    let first = req.lines().next().unwrap_or("");
-    // GET /callback?code=...&state=... HTTP/1.1
-    let path = first.split_whitespace().nth(1).unwrap_or("");
-    let query = path.split_once('?').map(|x| x.1).unwrap_or("");
-    let mut code = String::new();
-    let mut state = String::new();
-    let mut error: Option<String> = None;
-    for kv in query.split('&') {
-        let (k, v) = match kv.split_once('=') {
-            Some(p) => p,
-            None => continue,
-        };
-        let dec = urlencoding::decode(v).unwrap_or_default().to_string();
-        match k {
-            "code" => code = dec,
-            "state" => state = dec,
-            "error" => error = Some(dec),
-            _ => {}
-        }
-    }
+            .map_err(|e| Error::OAuthSetup(format!("accept callback: {e}")))?;
 
-    let body = if let Some(ref e) = error {
-        super::auth_callback::render(false, &super::auth_callback::html_escape(e))
-    } else {
-        super::auth_callback::render(true, "可以关闭此页，回到 Hindsight。")
-    };
-    let resp = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    );
-    {
-        use tokio::io::AsyncWriteExt;
+        let mut buf = vec![0u8; 4096];
+        let n = match timeout(Duration::from_secs(5), socket.read(&mut buf)).await {
+            Ok(Ok(n)) => n,
+            // 读超时 / 对端重置：不是回调，等下一个连接
+            _ => continue,
+        };
+        if n == 0 {
+            continue; // 空连接（预连接 / 探测）
+        }
+        let req = String::from_utf8_lossy(&buf[..n]).to_string();
+        let first = req.lines().next().unwrap_or("");
+        // GET /callback?code=...&state=... HTTP/1.1
+        let path = first.split_whitespace().nth(1).unwrap_or("");
+        let query = path.split_once('?').map(|x| x.1).unwrap_or("");
+        let mut code = String::new();
+        let mut state = String::new();
+        let mut error: Option<String> = None;
+        for kv in query.split('&') {
+            let (k, v) = match kv.split_once('=') {
+                Some(p) => p,
+                None => continue,
+            };
+            let dec = urlencoding::decode(v).unwrap_or_default().to_string();
+            match k {
+                "code" => code = dec,
+                "state" => state = dec,
+                "error" => error = Some(dec),
+                _ => {}
+            }
+        }
+
+        if error.is_none() && code.is_empty() {
+            // 不是 OAuth 回调（favicon / 健康探测等），打发掉继续等真正的回调
+            let resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = socket.write_all(resp.as_bytes()).await;
+            let _ = socket.shutdown().await;
+            continue;
+        }
+
+        let body = if let Some(ref e) = error {
+            super::auth_callback::render(false, &super::auth_callback::html_escape(e))
+        } else {
+            super::auth_callback::render(true, "可以关闭此页，回到 Hindsight。")
+        };
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
         let _ = socket.write_all(resp.as_bytes()).await;
         let _ = socket.shutdown().await;
-    }
 
-    if let Some(e) = error {
-        return Err(Error::OAuthDenied(e));
+        if let Some(e) = error {
+            return Err(Error::OAuthDenied(e));
+        }
+        return Ok(CodeState { code, state });
     }
-    if code.is_empty() {
-        return Err(Error::OAuthMissingCode);
-    }
-    Ok(CodeState { code, state })
 }
 
 // ───────────── 内部：HTTP 调用 ─────────────

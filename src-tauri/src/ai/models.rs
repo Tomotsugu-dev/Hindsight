@@ -9,7 +9,7 @@
 //! - [`set_cancel`] / [`is_cancelled`] / [`clear_cancel`]：给 [`download_from_hf`] 配套
 //!   的 cancel signal，前端 invoke `cancel_model_download` 时翻 flag
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -32,12 +32,21 @@ fn cancel_map() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
 
 /// 注册某文件的 cancel signal。重复注册时返回旧的 flag（让旧任务也能走 cancel 路径）。
 fn register_cancel(file: &str) -> Arc<AtomicBool> {
-    let flag = Arc::new(AtomicBool::new(false));
-    cancel_map()
-        .lock()
-        .expect("cancel_map mutex poisoned")
-        .insert(file.to_string(), Arc::clone(&flag));
-    flag
+    Arc::clone(
+        cancel_map()
+            .lock()
+            .expect("cancel_map mutex poisoned")
+            .entry(file.to_string())
+            .or_insert_with(|| Arc::new(AtomicBool::new(false))),
+    )
+}
+
+/// 正在下载中的落盘文件名集合——同一 save_as 同时只允许一个下载任务。
+/// 两个任务同时写同一个 `.partial`（一个 append 续传、一个 truncate 重写）会交错出
+/// 损坏的 GGUF，且最终体积可能恰好过"已下"的 1% 容差检查，加载时才报晦涩错误。
+fn inflight_set() -> &'static Mutex<HashSet<String>> {
+    static SET: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    SET.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
 /// 给指定文件翻 cancel flag。文件没在下载时静默返回（前端可能在文件下完后才点取消）。
@@ -263,6 +272,18 @@ where
         _ => None,
     };
 
+    // 并发保护：同一落盘名在跑就拒绝第二个任务（webview reload 后 UI 的 inflight
+    // 去重会丢失，旧的后端任务可能还在流式写 .partial）
+    if !inflight_set()
+        .lock()
+        .expect("inflight_set mutex poisoned")
+        .insert(local_name.to_string())
+    {
+        return Err(Error::InvalidInputDyn(format!(
+            "{local_name} 已在下载中，等它完成或先取消"
+        )));
+    }
+
     // 注册 cancel signal——下面循环每写一个 chunk 检查一次。key 用 save_as，
     // 因为前端 cancel 命令传的是落盘名（progress event 也按落盘名 emit）
     let cancel = register_cancel(local_name);
@@ -270,6 +291,10 @@ where
     let url = hf_url(repo, hf_file);
     let result = stream_to_file(&url, &temp, resume_from, &cancel, &mut progress).await;
     clear_cancel(local_name);
+    inflight_set()
+        .lock()
+        .expect("inflight_set mutex poisoned")
+        .remove(local_name);
 
     match result {
         Ok(()) => {

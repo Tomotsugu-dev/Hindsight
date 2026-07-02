@@ -78,13 +78,15 @@ fn build_script(app_name: &str) -> Option<String> {
 }
 
 fn is_chromium_macos(lower: &str) -> bool {
+    // 短词（edge/opera/arc）按独立词匹配，同 is_browser_app 的理由：
+    // 对误判的 app 发 AppleScript 会触发自动化授权弹窗 + 每 tick 白跑 osascript
     lower.contains("chrome")
         || lower.contains("chromium")
-        || lower.contains("edge") // Microsoft Edge
         || lower.contains("brave")
         || lower.contains("vivaldi")
-        || lower.contains("opera")
-        || lower.contains("arc")
+        || ["edge", "opera", "arc"]
+            .iter()
+            .any(|w| super::name_has_word(lower, w))
 }
 
 /// AppleScript 字面量转义：反斜杠和双引号。

@@ -129,6 +129,10 @@ pub struct EngineSupervisor {
     /// 之前用 [`Self::loaded_main`] 校验装的是不是自己需要的模型——否则周报可能
     /// 被 2 分钟前调试跑留下的 vision 模型+小上下文生成（截断/低质/报错）。
     loaded_main: std::sync::Mutex<Option<PathBuf>>,
+    /// 当前（或最近一次启动时）的 EngineStartOverrides。与 [`Self::loaded_main`] 配套：
+    /// 复用 Running 引擎前还要校验 ctx / slots / batch 是否匹配——模型相同但用默认
+    /// 8K ctx 起的引擎（如手动 start_engine）拿去跑配了 64K ctx 的 step 会请求超限。
+    loaded_overrides: std::sync::Mutex<EngineStartOverrides>,
 }
 
 const LOGS_RING_SIZE: usize = 500;
@@ -139,6 +143,11 @@ const STARTUP_LINES: usize = 200;
 struct Inner {
     state: EngineRuntimeStatus,
     child: Option<Child>,
+    /// 启动世代计数：每次 start spawn / stop 都 +1。start 的收尾阶段（health 判定后）
+    /// 用它识别"自己等待期间引擎已被 stop()/新的 start 接管"——此时 child/state 已
+    /// 不属于本次调用，不能 kill 或改状态，否则会误杀新启动的健康引擎 / 把 Stopped
+    /// 冲成 Error。
+    generation: u64,
 }
 
 /// in-flight 推理请求计数器 + 最后一次活跃时间戳。
@@ -197,6 +206,7 @@ impl EngineSupervisor {
             logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
             inflight_state: std::sync::Mutex::new(InflightState::default()),
             loaded_main: std::sync::Mutex::new(None),
+            loaded_overrides: std::sync::Mutex::new(EngineStartOverrides::default()),
         }
     }
 
@@ -212,6 +222,15 @@ impl EngineSupervisor {
     /// 当前（或最近一次启动加载）的 main GGUF 路径；从未启动过为 None。
     pub fn loaded_main(&self) -> Option<PathBuf> {
         self.loaded_main.lock().ok().and_then(|g| g.clone())
+    }
+
+    /// 当前（或最近一次启动时）的 EngineStartOverrides。复用 Running 引擎前
+    /// 与 [`Self::loaded_main`] 一起校验。
+    pub fn loaded_overrides(&self) -> EngineStartOverrides {
+        self.loaded_overrides
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_default()
     }
 
     /// 注册一次推理请求：in-flight +1 + last_used_at 推到现在。
@@ -353,7 +372,7 @@ impl EngineSupervisor {
         // 供 loaded_main() 查询："复用已在跑的引擎"前调用方能校验装的是不是自己要的模型。
         let requested_main = model_path.clone();
         // 第一段：占锁、预检、置 starting、spawn、释放锁
-        let port = {
+        let (port, my_gen) = {
             let mut inner = self.inner.lock().await;
             match inner.state.state {
                 EngineState::Running => {
@@ -367,6 +386,10 @@ impl EngineSupervisor {
                 EngineState::Stopped | EngineState::Error => {}
             }
             *self.loaded_main.lock().expect("loaded_main 锁不该毒化") = requested_main;
+            *self
+                .loaded_overrides
+                .lock()
+                .expect("loaded_overrides 锁不该毒化") = overrides.clone();
 
             let bin_path = binary::binary_path()?;
             if !bin_path.exists() {
@@ -465,16 +488,24 @@ impl EngineSupervisor {
                 ..Default::default()
             };
             inner.child = Some(child);
-            port
+            inner.generation = inner.generation.wrapping_add(1);
+            (port, inner.generation)
         };
 
         // 第二段：不持锁等 health（持锁等会卡住其它 status 查询）。
-        // poll_health 每轮轮询前会检查 inner（state 还是不是 Starting / child 是否退出），
-        // 让 stop() 改 state 或子进程自己 OOM 死时能立刻 break，不必等满 90s 超时。
-        let healthy = poll_health(port, HEALTH_TIMEOUT, &self.inner).await;
+        // poll_health 每轮轮询前会检查 inner（state 还是不是 Starting / child 是否退出 /
+        // generation 是否被 stop()/新 start 推进），让外部变化能立刻 break，不必等满 90s。
+        let healthy = poll_health(port, HEALTH_TIMEOUT, &self.inner, my_gen).await;
 
         // 第三段：根据 health 结果定状态
         let mut inner = self.inner.lock().await;
+        if inner.generation != my_gen {
+            // 等待期间引擎被 stop() / 新的 start 接管：当前 child/state 属于接管方，
+            // 本次调用不能动它们（否则误杀新引擎 / 冲掉新状态），只报自己失败
+            return Err(Error::EngineStart(
+                "启动等待期间引擎被 stop/新的 start 接管".to_string(),
+            ));
+        }
         if healthy {
             inner.state = EngineRuntimeStatus {
                 state: EngineState::Running,
@@ -531,6 +562,8 @@ impl EngineSupervisor {
         let child = {
             let mut inner = self.inner.lock().await;
             inner.state = EngineRuntimeStatus::default();
+            // 推进世代：让还在等 health 的旧 start 立刻退出，且不把 Stopped 冲成 Error
+            inner.generation = inner.generation.wrapping_add(1);
             inner.child.take()
         };
         if let Some(mut child) = child {
@@ -627,12 +660,14 @@ fn build_command(
 }
 
 /// 轮询 /health 等启动完成。每轮前先检查 inner：
+/// - generation 变了（stop() / 新的 start 接管）→ 立刻 break，不再等
 /// - state 不是 Starting（stop() 改成了 Stopped）→ 立刻 break，不再等
 /// - child 已退出（OOM / 配置错 fail-fast 等）→ 立刻 break，不死等满 timeout
 ///
-/// 不加这两个 early-exit 时，子进程刚 spawn 就 OOM 死的话还要等 90s 超时；
-/// 用户点「停止」也要等 90s 才生效。
-async fn poll_health(port: u16, timeout: Duration, inner: &Mutex<Inner>) -> bool {
+/// 不加这些 early-exit 时，子进程刚 spawn 就 OOM 死的话还要等 90s 超时；
+/// 用户点「停止」也要等 90s 才生效；stop 后紧接着新 start 时，旧 start 会
+/// 盯着新 start 的 Starting 状态轮询自己已死的端口。
+async fn poll_health(port: u16, timeout: Duration, inner: &Mutex<Inner>, my_gen: u64) -> bool {
     let deadline = Instant::now() + timeout;
     let url = format!("http://127.0.0.1:{port}/health");
     let client = match reqwest::Client::builder()
@@ -643,9 +678,12 @@ async fn poll_health(port: u16, timeout: Duration, inner: &Mutex<Inner>) -> bool
         Err(_) => return false,
     };
     while Instant::now() < deadline {
-        // early-exit：state 被外部 stop() 改 / child 已退出 → 不再轮询
+        // early-exit：generation 被推进 / state 被外部 stop() 改 / child 已退出 → 不再轮询
         {
             let mut guard = inner.lock().await;
+            if guard.generation != my_gen {
+                return false;
+            }
             if guard.state.state != EngineState::Starting {
                 return false;
             }

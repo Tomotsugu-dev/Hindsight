@@ -225,17 +225,21 @@ pub fn estimated_bytes(p: Platform) -> u64 {
     }
 }
 
-/// 下载校验用 SHA256，按 `(platform, tag)` 查。
+/// 下载校验用 SHA256，按 `(platform, tag, asset)` 查。
+///
+/// 必须带 asset 维度：CUDA 平台一次下载**两个** zip（主 binary + cudart runtime），
+/// 若只按 (platform, tag) 存一个哈希，两个 asset 会被拿去比同一个值——录入哈希的
+/// 那一刻起 Windows CUDA 安装必然校验失败。
 ///
 /// `None` = 该组合的 SHA256 暂未录入；下载层应记 warning 但不 abort（v1 简化策略）。
 ///
 /// 录入步骤：升级 [`PINNED_TAG`] 时跑一次实际下载，
-/// `Get-FileHash <file> -Algorithm SHA256`，把所有变体填进来。
-pub fn sha256(p: Platform, tag: &str) -> Option<&'static str> {
+/// `Get-FileHash <file> -Algorithm SHA256`，把所有 (platform, asset) 变体填进来。
+pub fn sha256(p: Platform, tag: &str, asset: &str) -> Option<&'static str> {
     // 当前阶段所有平台返回 None = 跳过 sha256 校验。
     // 待办（owner: 引擎子系统）：PIN tag 稳定后跑一次实际下载抓 sha256 填进来；
     // 此前每次升级 [`PINNED_TAG`] 都要同步更新这里，否则用户拿到的 binary 完全无完整性保证。
-    let _ = (p, tag);
+    let _ = (p, tag, asset);
     None
 }
 

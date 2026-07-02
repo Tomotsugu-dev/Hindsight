@@ -238,6 +238,32 @@ pub async fn clear_day(pool: &DbPool, source: &str, local_date: &str) -> Result<
     Ok(())
 }
 
+/// 清单独一段的总结行（不动逐图描述）。
+/// daily 交错路径在重跑某段的 step 1 之前调：step 1 之后按 status 决定要不要跳过
+/// step 2，上一轮残留的 error/skipped 行会让刚成功的 step 1 之后误跳 step 2，
+/// 该段永远停在 error。清掉后，step 1 之后读到的 status 一定是本轮写的。
+pub async fn clear_segment_summary(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+    segment_idx: u32,
+) -> Result<()> {
+    let src = source.to_string();
+    let date = local_date.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "DELETE FROM ai_summaries
+                 WHERE source = ?1 AND local_date = ?2 AND segment_idx = ?3",
+                rusqlite::params![src, date, segment_idx as i64],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// 只清当天段总结，**不**动逐图描述（step 1 产物）。
 /// step2-only 路径调：用户想用已有 image descriptions 重跑段总结，必须保留 step 1 数据。
 pub async fn clear_day_summaries_only(pool: &DbPool, source: &str, local_date: &str) -> Result<()> {

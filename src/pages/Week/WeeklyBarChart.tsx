@@ -88,17 +88,24 @@ export function WeeklyBarChart({
               {total > 0 && (
                 <div className={styles.bar} style={{ width: `${widthPct}%` }}>
                   {sortSegments(day.segments).map((seg) => {
+                    // 分类解析不到不能跳过：条宽按全部 segments 求和，跳过会留
+                    // 透明缺口（同 DailyBarChart 的兜底）。
                     const cat = getCategory(seg.categoryId);
-                    if (!cat) return null;
                     return (
                       <div
                         key={seg.categoryId}
                         className={styles.segment}
                         style={{
                           width: `${(seg.minutes / total) * 100}%`,
-                          background: adjustCategoryColor(cat.color, isDark),
+                          background: cat
+                            ? adjustCategoryColor(cat.color, isDark)
+                            : "var(--cat-fallback, #9ca3af)",
                         }}
-                        title={`${displayCategoryName(cat, t)} · ${fmtTotal(seg.minutes)}`}
+                        title={
+                          cat
+                            ? `${displayCategoryName(cat, t)} · ${fmtTotal(seg.minutes)}`
+                            : fmtTotal(seg.minutes)
+                        }
                       />
                     );
                   })}

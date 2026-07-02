@@ -482,7 +482,9 @@ function EngineSection() {
 
       {error ? <div className={styles.engineError}>{error}</div> : null}
 
-      {progress ? <EngineProgress progress={progress} /> : null}
+      {/* key=stage：EngineProgress 的 maxMbRef 是单调的，靠换 key 在 engine → runtime
+          两个下载阶段之间重置，否则第二阶段的 MB 数冻结在第一阶段的最大值 */}
+      {progress ? <EngineProgress key={progress.stage} progress={progress} /> : null}
 
       {/* 第 3 行：5 个按钮平铺一行
           下载 / 测试连接 (主操作 紫 outline) + 释放显存 / 打开 (维护 灰 ghost) + 卸载 (红 outline)

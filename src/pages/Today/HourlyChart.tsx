@@ -176,15 +176,19 @@ function HourBar({
       >
         {total > 0 &&
           slot.segments.map((seg) => {
+            // 分类解析不到（刚被删、缓存未刷新）不能跳过：柱高按全部 segments
+            // 求和，跳过会留透明缺口（同 DailyBarChart 的兜底）。
             const cat = getCategory(seg.categoryId);
-            if (!cat) return null;
+            const color = cat
+              ? adjustCategoryColor(cat.color, isDark)
+              : "var(--cat-fallback, #9ca3af)";
             return (
               <div
                 key={seg.categoryId}
                 className={styles.segment}
                 style={{
                   height: `${(seg.minutes / total) * 100}%`,
-                  background: adjustCategoryColor(cat.color, isDark),
+                  background: color,
                 }}
               />
             );

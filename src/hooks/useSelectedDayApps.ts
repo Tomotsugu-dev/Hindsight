@@ -32,6 +32,15 @@ export function useSelectedDayApps(
     lastDeviceRef.current = deviceId;
   }
 
+  // 跨午夜失效：键是相对 offset、后端按查询时刻解析——过夜后 offset=-2 从周一
+  // 变成周二，不清就是"标签周二、数据周一"（同 createUsageCache 的翻转语义）
+  const dayKeyRef = useRef(new Date().toDateString());
+  const dayKey = new Date().toDateString();
+  if (dayKeyRef.current !== dayKey) {
+    cacheRef.current.clear();
+    dayKeyRef.current = dayKey;
+  }
+
   useEffect(() => {
     if (dayOffset === null) {
       setState({ apps: null, loading: false });

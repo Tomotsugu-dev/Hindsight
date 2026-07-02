@@ -47,6 +47,15 @@ export function useHourApps(
     lastScopeRef.current = { offset: dayOffset, deviceId };
   }
 
+  // 跨午夜失效：停在同一个历史 dayOffset 过夜时，缓存内容属于翻转前的日历日
+  //（同 createUsageCache 的翻转语义），日期一变整体作废
+  const dayKeyRef = useRef(new Date().toDateString());
+  const dayKey = new Date().toDateString();
+  if (dayKeyRef.current !== dayKey) {
+    cacheRef.current.clear();
+    dayKeyRef.current = dayKey;
+  }
+
   useEffect(() => {
     if (hour === null) {
       setState({ apps: null, loading: false });

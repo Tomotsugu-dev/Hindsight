@@ -516,7 +516,6 @@ export function ModelsSection() {
             installed={isInstalled(rec)}
             usedForDescribe={describeMain === rec.mainFile}
             usedForSummary={summaryMain === rec.mainFile}
-            isRecBusy={busyRecs.has(rec.mainFile)}
             busyFiles={busyFiles}
             partialMap={partialMap}
             progress={progress}
@@ -749,7 +748,6 @@ function RecommendedCard({
   installed,
   usedForDescribe,
   usedForSummary,
-  isRecBusy,
   busyFiles,
   partialMap,
   progress,
@@ -764,10 +762,6 @@ function RecommendedCard({
   usedForDescribe: boolean;
   /** 该模型当前是 step 2 选择 → step 2 toggle 显示已激活 */
   usedForSummary: boolean;
-  /** 这个 rec 当前是不是 onDownloadRecommended 的发起者。
-   *  必须按 rec 维度跟踪——所有 unsloth vision 镜像的 mmproj 都叫 mmproj-F16.gguf，
-   *  仅靠 busyFiles.has(裸名) 会让所有 vision 卡都判 busy 串扰进度条。 */
-  isRecBusy: boolean;
   busyFiles: Set<string>;
   /** 半成品 map：file → 已下字节数。结合 inflight 判断 paused */
   partialMap: Readonly<Record<string, number>>;
@@ -782,16 +776,14 @@ function RecommendedCard({
 }) {
   const { t } = useTranslation();
   const totalGB = (rec.mainBytes + rec.mmprojBytes) / 1024 / 1024 / 1024;
-  // mainBusy / mmprojBusy 跟 isRecBusy 与门：所有 unsloth vision 镜像的 mmproj 同名
-  // ("mmproj-F16.gguf")，单看 busyFiles.has(裸名) 会让所有 vision 卡串扰显示进度条。
-  // 加 isRecBusy（"我自己是不是 onDownloadRecommended 的发起者"）作为第二维度。
   // mmproj 在本地落盘用 saveAs（rec-aware 唯一名，避免 unsloth 系列 mmproj-F16.gguf
   // 跨 rec 同名互覆盖 / 串扰），busy 检测、progress 索引、partial 检测都用 saveAs。
   const mmprojLocal = rec.mmprojFile ? mmprojSaveAs(rec) : "";
-  // mainBusy / mmprojBusy 跟 isRecBusy 与门：双维度防误判（mainFile 已经唯一，
-  // 加 isRecBusy 是历史遗留保险——以前 mmproj 同名时这是必须的）
-  const mainBusy = isRecBusy && busyFiles.has(rec.mainFile);
-  const mmprojBusy = isRecBusy && !!mmprojLocal && busyFiles.has(mmprojLocal);
+  // 只看 busyFiles（模块级 store，跨挂载存活）：mainFile / mmprojSaveAs 都已按 rec
+  // 唯一，无串扰风险。以前这里还与门了组件本地的 isRecBusy——切走页面再回来
+  // busyRecs 丢失、下载还在跑，卡片就错误显示成"继续/下载"且没有进度条。
+  const mainBusy = busyFiles.has(rec.mainFile);
+  const mmprojBusy = !!mmprojLocal && busyFiles.has(mmprojLocal);
   const busy = mainBusy || mmprojBusy;
   const activeFile = mainBusy
     ? rec.mainFile

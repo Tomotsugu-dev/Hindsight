@@ -29,6 +29,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const pendingRef = useRef<SettingsPatch>({});
   const timerRef = useRef<number | null>(null);
+  // flush 请求的单调序号：应答返回时序号已不是最新 → 丢弃，防止乱序的旧应答
+  // 把更新的乐观值覆盖回去（快速连点两个开关时的"闪回旧值"）
+  const flushSeqRef = useRef(0);
 
   useEffect(() => {
     api
@@ -47,9 +50,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     pendingRef.current = {};
     timerRef.current = null;
     if (Object.keys(patch).length === 0) return;
+    const seq = ++flushSeqRef.current;
     try {
       const next = await api.updateSettings(patch);
-      setSettings(next);
+      // 应答期间又有新的 flush 发出 → 这份是旧快照，应用会覆盖更新的值，丢弃
+      if (seq !== flushSeqRef.current) return;
+      // 应答期间用户又改了设置（还在 debounce 未 flush）→ 把 pending 重新盖上，
+      // 否则服务器快照会把刚点的开关闪回旧值
+      setSettings({ ...next, ...pendingRef.current });
     } catch (e) {
       logError("settings.save", e);
     }

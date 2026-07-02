@@ -345,6 +345,13 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         let ParsedFile::Tombstone { device_id } = parsed else {
             continue; // 只处理 tombstone
         };
+        // 本机自己的 tombstone 不应用：purge_cloud_data(keep_local=true)（切换账号场景）
+        // 会上传 self tombstone 但**保留本地数据**，若在这里执行 DELETE 会把承诺保留的
+        // 本地历史全部删光。keep_local=false 时本地已清空，跳过也是 no-op，语义不变。
+        if device_id == self_id {
+            handled[i] = true;
+            continue;
+        }
         let body = match with_token_retry(&inner.pool, &mut token, |tok| {
             let id = f.id.clone();
             let drive = &inner.drive;
@@ -916,10 +923,9 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
 ///   DELETE FROM activities WHERE device_id = <owner_id> AND updated_at < clearedAt;
 ///
 /// 边角：
-/// - **本机自己的 tombstone**（owner_id == self_id）也会跑：mac 在 purge_cloud_data 之后
-///   `purge_activities` 把本地表清空，这条 DELETE 命中 0 → no-op；
-///   即便此前 mac 有 「self pull-back 恢复的本机历史行」 残留也会被这一刀清掉，
-///   逻辑跟跨设备一致。
+/// - **本机自己的 tombstone**（owner_id == self_id）在 Pass 3 就被跳过、不会走到这里：
+///   purge_cloud_data(keep_local=true) 上传 self tombstone 但保留本地数据，应用它会把
+///   本地历史删光（keep_local=false 时本地已清空，跳过等价 no-op）。
 /// - 幂等：tombstone 永久留在 Drive，对端反复 pull 看到它，每次 DELETE 命中 0
 ///   （因为已经删过了）→ no-op。
 /// - 不影响 capture：源端 purge 之后新 capture 的行 `updated_at > clearedAt` →

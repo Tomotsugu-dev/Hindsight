@@ -378,18 +378,26 @@ impl WeekSummaryRunner {
                 main_name
             )));
         }
+        let wanted_overrides = EngineStartOverrides {
+            batch_size: ai.summary_batch_size_effective(),
+            parallel_slots: ai.summary_parallel_slots_effective(),
+            ctx_size: ai.summary_ctx_size_effective(),
+        };
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
-                // 校验装的确实是 summary 模型才复用——不校验的话，2 分钟前调试跑
-                // 留下的 vision 模型（小 ctx）会被直接拿来生成周报：整周日报塞不下，
+                // 校验装的确实是 summary 模型 **且启动参数一致** 才复用——不校验的话，
+                // 2 分钟前调试跑留下的 vision 模型（小 ctx），或模型相同但按默认 8K ctx
+                // 手动启动的引擎，会被直接拿来生成周报：整周日报塞不下，
                 // 输出截断或直接报错。不符则重启换模。复用前 touch 防 idle 猝杀。
-                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path()) {
+                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
+                    && self.supervisor.loaded_overrides() == wanted_overrides
+                {
                     self.supervisor.touch();
                     return Ok(p);
                 }
                 log::info!(
-                    "weekly ensure_engine_running: 已加载模型非 summary 模型，重启换模 (want={})",
+                    "weekly ensure_engine_running: 已加载模型/参数与周报需求不符，重启换模 (want={})",
                     main_path.display()
                 );
                 if let Err(e) = self.supervisor.stop().await {
@@ -409,13 +417,8 @@ impl WeekSummaryRunner {
             }
             Some(p)
         };
-        let overrides = EngineStartOverrides {
-            batch_size: ai.summary_batch_size_effective(),
-            parallel_slots: ai.summary_parallel_slots_effective(),
-            ctx_size: ai.summary_ctx_size_effective(),
-        };
         self.supervisor
-            .start_with_overrides(Some(main_path), mmproj_path, overrides)
+            .start_with_overrides(Some(main_path), mmproj_path, wanted_overrides)
             .await
     }
 

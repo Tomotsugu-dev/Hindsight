@@ -208,7 +208,9 @@ pub async fn day_hours(
                     minutes: ((*secs as f64 / 60.0).round() as u32),
                     secs: *secs,
                 })
-                .filter(|s| s.minutes > 0)
+                // 按 secs 过滤而不是 minutes：<30s 的片段 minutes 四舍五入成 0，
+                // 但 secs 仍计入前端总量（HourSegment.secs 契约），丢掉会和 top-apps 对不上
+                .filter(|s| s.secs > 0)
                 .collect();
             // 降序排列：sort_by_key 用 Reverse(...) 实现 desc
             segs.sort_by_key(|s| std::cmp::Reverse(s.minutes));
@@ -425,42 +427,82 @@ async fn app_range_detail(
                 .db()?
                 .unwrap_or_else(|| icon_process.clone());
 
-            // 2) 时间柱：小时粒度按 local_hour，天粒度按 local_date 分组求和
-            let bucket_expr = match bucket_by {
-                BucketBy::Hour => "CAST(a.local_hour AS TEXT)",
-                BucketBy::Day => "a.local_date",
-            };
-            let bsql = format!(
-                "SELECT {} AS k, SUM(a.duration_secs) AS total
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
-                 WHERE a.local_date >= ? AND a.local_date <= ?
-                   AND COALESCE(g.id, a.process_name) = ?
-                   {}
-                 GROUP BY k",
-                bucket_expr,
-                device.sql_clause()
-            );
-            let mut bparams: Vec<&dyn ToSql> = Vec::new();
-            bparams.push(&from_str);
-            bparams.push(&to_str);
-            bparams.push(&group_key);
-            if let Some(extra) = device.extra_param() {
-                bparams.push(extra);
-            }
-            let mut bstmt = conn.prepare(&bsql).db()?;
+            // 2) 时间柱。小时粒度不能按 local_hour 分组：它是会话**开始时刻**的小时、
+            //    seal 时不更新（见 day_hour_apps 的口径注释），跨小时会话会整段挤进
+            //    开始桶，和 day_hours 的柱子对不上。这里同样取行后在 Rust 里按真实
+            //    时钟 slice_by_hour 切片。天粒度仍按 local_date SQL 求和。
             let mut raw: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
-            let bit = bstmt
-                .query_map(bparams.as_slice(), |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?.max(0) as u64))
-                })
-                .db()?;
-            for row in bit {
-                let (k, secs) = row.db()?;
-                raw.insert(k, secs);
+            match bucket_by {
+                BucketBy::Hour => {
+                    let bsql = format!(
+                        "SELECT a.started_at, a.ended_at
+                         FROM activities a
+                         LEFT JOIN app_group_members gm
+                           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                         LEFT JOIN app_groups g
+                           ON g.id = gm.group_id AND g.deleted_at IS NULL
+                         WHERE a.local_date >= ? AND a.local_date <= ?
+                           AND COALESCE(g.id, a.process_name) = ?
+                           {}",
+                        device.sql_clause()
+                    );
+                    let mut bparams: Vec<&dyn ToSql> = Vec::new();
+                    bparams.push(&from_str);
+                    bparams.push(&to_str);
+                    bparams.push(&group_key);
+                    if let Some(extra) = device.extra_param() {
+                        bparams.push(extra);
+                    }
+                    let mut bstmt = conn.prepare(&bsql).db()?;
+                    let bit = bstmt
+                        .query_map(bparams.as_slice(), |r| {
+                            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                        })
+                        .db()?;
+                    for row in bit {
+                        let (started, ended) = row.db()?;
+                        let s = parse_local(&started);
+                        let e = parse_local(&ended);
+                        if e <= s {
+                            continue;
+                        }
+                        for (h, secs) in slice_by_hour(s, e) {
+                            *raw.entry(h.to_string()).or_insert(0) += secs;
+                        }
+                    }
+                }
+                BucketBy::Day => {
+                    let bsql = format!(
+                        "SELECT a.local_date AS k, SUM(a.duration_secs) AS total
+                         FROM activities a
+                         LEFT JOIN app_group_members gm
+                           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+                         LEFT JOIN app_groups g
+                           ON g.id = gm.group_id AND g.deleted_at IS NULL
+                         WHERE a.local_date >= ? AND a.local_date <= ?
+                           AND COALESCE(g.id, a.process_name) = ?
+                           {}
+                         GROUP BY k",
+                        device.sql_clause()
+                    );
+                    let mut bparams: Vec<&dyn ToSql> = Vec::new();
+                    bparams.push(&from_str);
+                    bparams.push(&to_str);
+                    bparams.push(&group_key);
+                    if let Some(extra) = device.extra_param() {
+                        bparams.push(extra);
+                    }
+                    let mut bstmt = conn.prepare(&bsql).db()?;
+                    let bit = bstmt
+                        .query_map(bparams.as_slice(), |r| {
+                            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?.max(0) as u64))
+                        })
+                        .db()?;
+                    for row in bit {
+                        let (k, secs) = row.db()?;
+                        raw.insert(k, secs);
+                    }
+                }
             }
 
             // 3) 窗口标题用时：按 window_title 聚合（空标题归一为空串），降序
@@ -659,7 +701,9 @@ async fn days_in_range(
     let mut buckets: std::collections::HashMap<String, std::collections::HashMap<String, u64>> =
         std::collections::HashMap::new();
     for (date, cat, secs) in rows {
-        if (secs as f64 / 60.0).round() as u32 == 0 {
+        // 只丢 secs == 0 的行；<30s 的片段 minutes 会取整成 0，但 secs 必须保留，
+        // 否则前端按 secs 求和的总量 / 日均和 top-apps 的 SQL SUM 对不上
+        if secs <= 0 {
             continue;
         }
         buckets.entry(date).or_default().insert(cat, secs as u64);
@@ -808,9 +852,12 @@ fn slice_by_hour(start: DateTime<Local>, end: DateTime<Local>) -> Vec<(u8, u64)>
     let mut cur = start;
     while cur < end {
         let hour = cur.hour() as u8;
+        // DST 回拨时整点是 Ambiguous，.single() 会返回 None 把剩余全塞进当前桶；
+        // 用 .latest()（第二次出现的那个整点）：重复时段墙钟仍显示同一小时，归入
+        // 当前桶本来就正确，且 +1h 后严格大于 cur，循环保证前进
         let next_hour = Local
             .with_ymd_and_hms(cur.year(), cur.month(), cur.day(), cur.hour(), 0, 0)
-            .single()
+            .latest()
             .map(|t| t + Duration::hours(1))
             .unwrap_or(end);
         let chunk_end = if next_hour < end { next_hour } else { end };
