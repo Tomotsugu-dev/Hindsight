@@ -70,23 +70,25 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                 out.push(r.db()?);
             }
 
-            // 一次性把所有未软删成员 + 时长统计拉出来；用 GROUP BY process_name 聚合活动时长
+            // 一次性把所有未软删成员 + 时长统计拉出来；用 GROUP BY process_name 聚合活动时长。
+            // recent_secs 按近 7 天窗口算（chip 上显示的时长）；last_device_id 必须查
+            // **全部历史**——只查 7 天窗口的话，久未使用的应用哪个设备列都分不到，
+            // 配对表整行只剩虚线（没有名字也没有图标）。
             let mut mstmt = conn
                 .prepare(
                     "SELECT m.process_name, m.group_id,
                             COALESCE(s.total_secs, 0)   AS recent_secs,
-                            s.last_device_id            AS last_device_id
+                            -- 该 process_name 最后一次活动所在的设备（全历史）。
+                            -- ended_at 是各设备本地时区偏移的 RFC3339 字符串，
+                            -- 直接字符串比较跨时区会排错，用 datetime() 归一化到 UTC
+                            (SELECT a2.device_id
+                               FROM activities a2
+                               WHERE a2.process_name = m.process_name
+                               ORDER BY datetime(a2.ended_at) DESC LIMIT 1) AS last_device_id
                      FROM app_group_members m
                      LEFT JOIN (
                        SELECT a.process_name,
-                              SUM(a.duration_secs)        AS total_secs,
-                              -- 取该 process_name 最后一次活动所在的设备
-                              -- ended_at 是各设备本地时区偏移的 RFC3339 字符串，
-                              -- 直接字符串比较跨时区会排错，用 datetime() 归一化到 UTC
-                              (SELECT a2.device_id
-                                 FROM activities a2
-                                 WHERE a2.process_name = a.process_name
-                                 ORDER BY datetime(a2.ended_at) DESC LIMIT 1) AS last_device_id
+                              SUM(a.duration_secs) AS total_secs
                        FROM activities a
                        WHERE a.local_date >= date('now','localtime','-7 days')
                        GROUP BY a.process_name
