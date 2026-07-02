@@ -129,3 +129,64 @@ fn fail(msg: &str) -> TestAiEndpointResp {
         message: msg.to_string(),
     }
 }
+
+/// 1×1 透明 PNG 的 data URL——`test_ai_chat(with_image=true)` 用它验证模型
+/// 真的接受图片输入（纯文本模型会 4xx），比只看 /models 列表可靠。
+const TINY_PNG_DATA_URL: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+/// 测试模型是否真实可用：`POST {endpoint}/chat/completions` 发一次最小请求
+/// （max_tokens=1）。模型 ID 拼错（如 deepseek-v4-flash 写成 ...flash1）会被
+/// 服务端 4xx 当场报出来；`with_image=true` 时消息附一张 1×1 PNG，同时验证
+/// 多模态能力。返回复用 [`TestAiEndpointResp`]（models 恒空）。
+#[tauri::command]
+pub async fn test_ai_chat(
+    endpoint: String,
+    api_key: Option<String>,
+    model: String,
+    with_image: bool,
+) -> Result<TestAiEndpointResp, String> {
+    let trimmed = endpoint.trim().trim_end_matches('/');
+    if trimmed.is_empty() || model.trim().is_empty() {
+        return Ok(fail("服务地址或模型 ID 为空"));
+    }
+    let url = format!("{}/chat/completions", trimmed);
+
+    let content = if with_image {
+        serde_json::json!([
+            { "type": "text", "text": "hi" },
+            { "type": "image_url", "image_url": { "url": TINY_PNG_DATA_URL } }
+        ])
+    } else {
+        serde_json::json!("hi")
+    };
+    let body = serde_json::json!({
+        "model": model.trim(),
+        "messages": [{ "role": "user", "content": content }],
+        "max_tokens": 1,
+    });
+
+    // chat 比 /models 慢得多（要真跑一次前向），超时放宽到 30s
+    let client = match Client::builder().timeout(Duration::from_secs(30)).build() {
+        Ok(c) => c,
+        Err(e) => return Ok(fail(&format!("HTTP 客户端构造失败：{e}"))),
+    };
+    let mut req = client.post(&url).json(&body);
+    if let Some(k) = api_key.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        req = req.bearer_auth(k);
+    }
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(e) => return Ok(fail(&fmt_send_err(e))),
+    };
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        let preview: String = body.chars().take(200).collect();
+        return Ok(fail(&format!("服务返回 {status}：{preview}")));
+    }
+    Ok(TestAiEndpointResp {
+        ok: true,
+        models: Vec::new(),
+        message: String::new(),
+    })
+}

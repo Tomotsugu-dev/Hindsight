@@ -52,6 +52,19 @@ pub struct AiConfig {
     /// 通过 [`Self::cloud_vision_model`] 读取，不要直接读字段。
     #[serde(default)]
     pub vision_model: String,
+    /// 外部 API 跑 step 1 时用的独立 base URL；空 = 复用 [`Self::endpoint`]。
+    /// 让「文本 API 没有多模态模型（如 DeepSeek）+ Vision 走另一家（如 Kimi）」的组合成立。
+    /// 通过 [`Self::cloud_vision_endpoint`] 读取，不要直接读字段。
+    #[serde(default)]
+    pub vision_endpoint: String,
+    /// Vision 独立 API 的 Bearer token；空 = 复用 [`Self::api_key`]。
+    /// 通过 [`Self::cloud_vision_api_key`] 读取，不要直接读字段。
+    #[serde(default)]
+    pub vision_api_key: String,
+    /// Vision API 的 provider 预设标识；空 = 前端视为「复用文本 API」。
+    /// 后端不消费；UI 用它决定 Vision 子块的 Base URL / placeholder。
+    #[serde(default)]
+    pub vision_provider: String,
     /// 外部 API 的 Bearer token；明文落 settings JSON。
     pub api_key: String,
     /// 是否启用外部云端 API。
@@ -252,6 +265,26 @@ impl AiConfig {
         }
     }
 
+    /// 云端 step 1 用的 base URL：`vision_endpoint` 非空用它，空则复用 [`Self::endpoint`]。
+    pub fn cloud_vision_endpoint(&self) -> &str {
+        let v = self.vision_endpoint.trim();
+        if v.is_empty() {
+            self.endpoint.as_str()
+        } else {
+            v
+        }
+    }
+
+    /// 云端 step 1 用的 API key：`vision_api_key` 非空用它，空则复用 [`Self::api_key`]。
+    pub fn cloud_vision_api_key(&self) -> &str {
+        let v = self.vision_api_key.trim();
+        if v.is_empty() {
+            self.api_key.as_str()
+        } else {
+            v
+        }
+    }
+
     /// step 1 单次响应 max_tokens：让用户配的 ctx_size 能反映到响应能写多长。
     /// 取 effective ctx 的一半（给 prompt 留另一半）；不够 1024 也给 1024 兜底
     /// 避免短输出被截。
@@ -292,6 +325,9 @@ impl Default for AiConfig {
             endpoint: String::new(),
             model: String::new(),
             vision_model: String::new(),
+            vision_endpoint: String::new(),
+            vision_api_key: String::new(),
+            vision_provider: String::new(),
             api_key: String::new(),
             external_enabled: false,
             external_provider: "openai".to_string(),

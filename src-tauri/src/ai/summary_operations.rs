@@ -88,6 +88,14 @@ pub(crate) async fn describe_images(
         segment_idx,
         total_segments,
     );
+    // 云端 API 有 RPM 限制（如 Moonshot 低档 20 RPM）：本地 llama 的 parallel_slots
+    // 直接套云端会瞬间打爆限流。云端 step 1 并发钳到 2，配合 client 层的 429
+    // 退避重试，任何账户配额档位都能自适应收敛。
+    let parallel = if matches!(step1, Step1Chat::External(_)) {
+        parallel.min(2)
+    } else {
+        parallel
+    };
     let raw = execute_parallel(tasks, step1, pool, app, supervisor, cancel, parallel).await;
     collect_descriptions(raw)
 }
@@ -388,9 +396,9 @@ pub(crate) fn build_step1(ai: &AiConfig, local_port: u16) -> Result<Step1Chat> {
     let max_tokens = ai.describe_max_tokens();
     if ai.describe_use_cloud() {
         let ext = ExternalChatClient::new(
-            &ai.endpoint,
+            ai.cloud_vision_endpoint(),
             ai.cloud_vision_model().to_string(),
-            ai.api_key.clone(),
+            ai.cloud_vision_api_key().to_string(),
             max_tokens,
         )?;
         Ok(Step1Chat::External(ext))

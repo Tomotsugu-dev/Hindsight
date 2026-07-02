@@ -900,7 +900,7 @@ impl DaySummaryRunner {
         // 不挡在这里 Phase 2 会看到空 stored 然后凑空总结假成功。
         if !picked.is_empty() && descriptions.is_empty() {
             let err_msg = format!(
-                "step 1 全失败：{} 张图描述都没拿到（多半是 llama-server 没起来 / 端口拒绝；调试 tab → 引擎日志 排查）",
+                "step 1 全失败：{} 张图描述都没拿到（本地：多半是 llama-server 没起来 / 端口拒绝，见 调试 tab → 引擎日志；云端：多半是 API 认证 / 配置错误，见上方 WARN 的具体报错）",
                 picked.len()
             );
             log::warn!("段 {idx} {err_msg}");

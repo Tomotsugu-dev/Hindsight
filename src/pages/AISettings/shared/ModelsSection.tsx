@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { BRAND_LOGOS } from "./brandLogos";
 import {
   ArrowUpDown,
   ChevronDown,
@@ -875,12 +876,12 @@ function RecommendedCard({
     <div className={styles.modelCard}>
       <div className={styles.modelCardRow}>
         <div className={styles.modelCardLeft}>
-          {rec.logoUrl ? (
+          {(BRAND_LOGOS[rec.brand] ?? rec.logoUrl) ? (
             // onError 是 React 资源事件，不是用户交互
             // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
             <img
               className={styles.modelCardLogo}
-              src={rec.logoUrl}
+              src={BRAND_LOGOS[rec.brand] ?? rec.logoUrl ?? undefined}
               alt=""
               loading="lazy"
               referrerPolicy="no-referrer"

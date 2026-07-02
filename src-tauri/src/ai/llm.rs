@@ -87,7 +87,7 @@ impl ChatClient {
         image_data_uris: &[String],
     ) -> Result<(String, ChatUsage)> {
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(
+        let body = build_chat_body_local(
             &self.model,
             system,
             user_text,
@@ -159,13 +159,8 @@ impl ExternalChatClient {
             ));
         }
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, &[], self.max_tokens);
-        let mut req = self.http.post(&url).json(&body);
-        // custom endpoint 可能不要 key；空串视为无鉴权
-        if !self.api_key.trim().is_empty() {
-            req = req.bearer_auth(self.api_key.trim());
-        }
-        send_and_parse(req, Instant::now()).await
+        let body = build_chat_body(&self.model, system, user_text, &[], self.max_tokens, None);
+        self.post_with_retry(&url, &body).await
     }
 
     /// 发一条多模态 chat 请求（step 1 云端图片描述专用）。
@@ -179,12 +174,47 @@ impl ExternalChatClient {
         image_data_uris: &[String],
     ) -> Result<(String, ChatUsage)> {
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, image_data_uris, self.max_tokens);
-        let mut req = self.http.post(&url).json(&body);
-        if !self.api_key.trim().is_empty() {
-            req = req.bearer_auth(self.api_key.trim());
+        let body = build_chat_body(&self.model, system, user_text, image_data_uris, self.max_tokens, None);
+        self.post_with_retry(&url, &body).await
+    }
+
+    /// POST + 429 自动退避重试。云端 API 有 RPM 限制（如 Moonshot 低档 20 RPM），
+    /// step 1 并发跑图很容易撞 429：优先按服务端 Retry-After 等待，没给则指数
+    /// 退避（2/4/8/16/32s），最多 5 次；仍失败才把 429 抛给调用方。
+    /// 本地 llama-server 无限流，不走这里。
+    async fn post_with_retry(
+        &self,
+        url: &str,
+        body: &serde_json::Value,
+    ) -> Result<(String, ChatUsage)> {
+        const RETRY_MAX: u32 = 5;
+        let mut attempt = 0u32;
+        loop {
+            let mut req = self.http.post(url).json(body);
+            if !self.api_key.trim().is_empty() {
+                req = req.bearer_auth(self.api_key.trim());
+            }
+            match send_and_classify(req, Instant::now()).await {
+                SendOutcome::Done(r) => return r,
+                SendOutcome::RateLimited(retry_after) => {
+                    attempt += 1;
+                    if attempt > RETRY_MAX {
+                        return Err(Error::LlmResponse(format!(
+                            "服务持续限流（429 Too Many Requests），已退避重试 {RETRY_MAX} 次仍失败——多半是账户 RPM 配额太低，稍后再跑或升级配额"
+                        )));
+                    }
+                    // Retry-After 常给 1s（如 Moonshot），但 RPM 是分钟级滑窗，
+                    // 1s 重试大概率再撞。取 max(Retry-After, 指数退避) 稳妥拉开。
+                    let exp = Duration::from_secs(1u64 << attempt);
+                    let wait = retry_after.map_or(exp, |ra| ra.max(exp));
+                    log::info!(
+                        "云端 API 限流（429），第 {attempt} 次退避 {}s 后重试",
+                        wait.as_secs()
+                    );
+                    tokio::time::sleep(wait).await;
+                }
+            }
         }
-        send_and_parse(req, Instant::now()).await
     }
 }
 
@@ -272,12 +302,24 @@ impl Step2Chat {
 /// 空时走纯字符串——兼容部分 provider（如 DeepSeek）对纯文本只接受字符串。
 ///
 /// `max_tokens` 由 caller 按用户配的 ctx_size 折半给（详见函数体注释）。
+/// 本地 llama-server 版：temperature 固定 0.4（我们自己调优的稳定值）。
+fn build_chat_body_local(
+    model: &str,
+    system: &str,
+    user_text: &str,
+    image_data_uris: &[String],
+    max_tokens: u32,
+) -> serde_json::Value {
+    build_chat_body(model, system, user_text, image_data_uris, max_tokens, Some(0.4))
+}
+
 fn build_chat_body(
     model: &str,
     system: &str,
     user_text: &str,
     image_data_uris: &[String],
     max_tokens: u32,
+    temperature: Option<f64>,
 ) -> serde_json::Value {
     let user_content = if image_data_uris.is_empty() {
         json!(user_text)
@@ -293,7 +335,7 @@ fn build_chat_body(
         json!(arr)
     };
 
-    json!({
+    let mut body = json!({
         "model": model,
         "messages": [
             { "role": "system", "content": system },
@@ -305,9 +347,13 @@ fn build_chat_body(
         // - ctx=64K → max_tokens 32K（reasoning 模型思考链 + 答案都有空间）
         // 写死小值（768 / 4096）让 reasoning 模型一律 length 截断 content 空。
         "max_tokens": max_tokens,
-        // 0.4 偏稳定，避免空话 / 重复
-        "temperature": 0.4,
-    })
+    });
+    // 本地 llama 固定 0.4 偏稳定（避免空话 / 重复）；云端传 None 不发该字段——
+    // 各家约束不同（kimi-k2.5 只收 1，发 0.4 直接 400），厂商默认值最安全。
+    if let Some(t) = temperature {
+        body["temperature"] = json!(t);
+    }
+    body
 }
 
 /// 已经带好 body / 鉴权头的 RequestBuilder → 发出去 → 解析 ChatResp。
@@ -321,13 +367,53 @@ async fn post_chat_completions(
     send_and_parse(req.json(&body), t0).await
 }
 
+/// 本地 llama-server 路径用：本地无限流，429（理论不出现）当普通错误。
 async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, ChatUsage)> {
-    let resp = req
-        .send()
-        .await
-        .map_err(|e| Error::LlmResponse(crate::commands::ai_endpoint::fmt_send_err(e)))?;
+    match send_and_classify(req, t0).await {
+        SendOutcome::Done(r) => r,
+        SendOutcome::RateLimited(_) => Err(Error::LlmResponse(
+            "服务返回 429 Too Many Requests".to_string(),
+        )),
+    }
+}
+
+/// [`send_and_parse`] 的分类版：把 429 单独拎出来（附 Retry-After 等待时长），
+/// 让 [`ExternalChatClient::post_with_retry`] 能做限流退避；其余情况走 Done。
+enum SendOutcome {
+    Done(Result<(String, ChatUsage)>),
+    /// 服务端 429：附 Retry-After 头解析出的等待时长（没给则 None）
+    RateLimited(Option<Duration>),
+}
+
+async fn send_and_classify(req: RequestBuilder, t0: Instant) -> SendOutcome {
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(e) => {
+            return SendOutcome::Done(Err(Error::LlmResponse(
+                crate::commands::ai_endpoint::fmt_send_err(e),
+            )))
+        }
+    };
 
     let status = resp.status();
+    if status.as_u16() == 429 {
+        let retry_after = resp
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map(Duration::from_secs);
+        return SendOutcome::RateLimited(retry_after);
+    }
+    SendOutcome::Done(parse_response(resp, status, t0).await)
+}
+
+/// 非 429 的常规收尾：非 2xx 报错；2xx 解析 OpenAI 兼容响应。
+async fn parse_response(
+    resp: reqwest::Response,
+    status: reqwest::StatusCode,
+    t0: Instant,
+) -> Result<(String, ChatUsage)> {
     if !status.is_success() {
         let preview: String = resp
             .text()

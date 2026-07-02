@@ -225,6 +225,7 @@ pub fn run() {
             commands::sync::sync_now,
             // --- ai: endpoint 测试 ---
             commands::ai_endpoint::test_ai_endpoint,
+            commands::ai_endpoint::test_ai_chat,
             // --- ai: 引擎运行时 ---
             commands::ai_engine::get_engine_status,
             commands::ai_engine::start_engine,

@@ -1653,6 +1653,10 @@
 .externalDetailsInner {
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 跟 .content 的 Section 间距一致，让展开后的两个 Section 融入页面节奏 */
+  gap: 24px;
 }
 
 /* 文本输入框：跟 PathField 同款配色，让 base URL / API key / model 输入感观一致 */
@@ -1720,7 +1724,7 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 4px;
-  padding: 0 16px;
+  padding: 0 20px 14px;
 }
 
 /* 蓝色实心：跟 .testBtn 同款，但稍微低调一点（高度短点、padding 小点） */
@@ -1796,3 +1800,23 @@
   margin-top: 2px;
   color: var(--color-accent);
 }
+
+/* 测试步骤列表：测试按钮下方逐行显示「网络与认证 / 模型可用」的进行态 */
+.externalTestSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  /* 对齐 Section 卡内 Row 的水平内边距；按钮行已带 14px 底距 */
+  padding: 0 20px 14px;
+}
+
+/* 步骤进行中（转圈）的中性色行；成功/失败沿用 externalTestOk / externalTestFail */
+.externalTestPending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: var(--font-weight-500);
+  color: var(--text-muted);
+}
+

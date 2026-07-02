@@ -470,6 +470,13 @@ export interface AiConfig {
   /** 云端 Vision（step 1 图片描述）用的模型 ID；空 = 复用 model。
    *  仅在 describeMain 为云端 sentinel 且 externalEnabled = true 时生效。 */
   visionModel: string;
+  /** Vision (step 1) 独立的云端 base URL；空 = 复用 endpoint。
+   *  让「文本 API 无多模态模型（如 DeepSeek）+ Vision 走另一家（如 Kimi）」成立。 */
+  visionEndpoint: string;
+  /** Vision 独立 API 的 Bearer token；空 = 复用 apiKey。 */
+  visionApiKey: string;
+  /** Vision API 的 provider 预设 ID；空 = 前端视为「复用文本 API」(reuse)。 */
+  visionProvider: string;
   /** 外部 API 的 Bearer token；明文落 settings JSON。 */
   apiKey: string;
   /** 是否启用云端 API。
@@ -477,7 +484,7 @@ export interface AiConfig {
    *  决定（describeMain / summaryMain）。Vision (Step 1) 选云端 = 截图本身会上传，
    *  选择时前端必须先弹隐私确认。 */
   externalEnabled: boolean;
-  /** Provider 预设 ID："openai" / "deepseek" / "openrouter" / "together" / "groq" / "custom"。
+  /** Provider 预设 ID："openai" / "deepseek" / "kimi" / "kimi-cn" / "openrouter" / "together" / "groq" / "custom"。
    *  仅控前端 Base URL / Model placeholder；后端只 sanitize。 */
   externalProvider: string;
   /** 用户对自己的简短描述，AI 总结时拼进 system prompt */
@@ -762,6 +769,19 @@ export const api = {
    *  前端只需检查 ok 字段。 */
   testAiEndpoint: (endpoint: string, apiKey?: string) =>
     invoke<TestAiEndpointResp>("test_ai_endpoint", { endpoint, apiKey }),
+  /** 真发一次 chat（max_tokens=1）验证模型 ID 可用；withImage 时带 1×1 PNG 测多模态。 */
+  testAiChat: (
+    endpoint: string,
+    apiKey: string | undefined,
+    model: string,
+    withImage: boolean,
+  ) =>
+    invoke<TestAiEndpointResp>("test_ai_chat", {
+      endpoint,
+      apiKey,
+      model,
+      withImage,
+    }),
   getEngineStatus: () => invoke<EngineStatus>("get_engine_status"),
   /** 触发下载；进度通过 listen(ENGINE_DOWNLOAD_EVENT, ...) 拿。
    *  Promise resolve = 下载 + 校验 + 解压全部成功；reject = 任何一阶段失败。 */
