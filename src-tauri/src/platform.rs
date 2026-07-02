@@ -64,6 +64,32 @@ pub fn apply_window_tweaks(window: &tauri::WebviewWindow) {
 #[cfg(not(target_os = "windows"))]
 pub fn apply_window_tweaks(_window: &tauri::WebviewWindow) {}
 
+/// macOS：窗口收进托盘时把 Dock 图标一并收起，重新显示时恢复。
+///
+/// 实现是切 NSApplication activation policy：`Regular`（正常 app，Dock + Cmd-Tab
+/// 都在）↔ `Accessory`（menubar-only，Dock / Cmd-Tab 都不出现）。不切的话
+/// 点 X 后窗口虽然 hide 了，Dock 图标还杵着——用户感知是"最小化到 Dock"
+/// 而不是"收进右上角托盘"。
+///
+/// 顺序要求：show 前先切 Regular（Accessory 下 set_focus 抢不到前台），
+/// hide 后再切 Accessory（反过来会先闪一下 Dock 图标消失再收窗口）。
+#[cfg(target_os = "macos")]
+pub fn set_dock_icon_visible(app: &tauri::AppHandle, visible: bool) {
+    use tauri::ActivationPolicy;
+    let policy = if visible {
+        ActivationPolicy::Regular
+    } else {
+        ActivationPolicy::Accessory
+    };
+    if let Err(e) = app.set_activation_policy(policy) {
+        log::warn!("切换 Dock 图标可见性失败 (visible={visible}): {e}");
+    }
+}
+
+/// 非 macOS 平台：no-op（只有 macOS 有 Dock / activation policy 概念）。
+#[cfg(not(target_os = "macos"))]
+pub fn set_dock_icon_visible(_app: &tauri::AppHandle, _visible: bool) {}
+
 /// Tauri 的 `App::run()` 回调。按平台分发系统级事件：
 ///
 /// - macOS：
@@ -84,12 +110,16 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
         } if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) => {
             api.prevent_exit();
         }
-        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）：所有窗口都隐藏时把主窗调出来
+        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）：所有窗口都隐藏时把主窗调出来。
+        // 正常情况下收进托盘时已切 Accessory、Dock 无图标不会触发 Reopen；这里的
+        // set_dock_icon_visible(true) 是防御——万一 policy 切换失败留下了 Dock 图标，
+        // 点它也能完整恢复（图标 + 窗口）而不是只弹窗口。
         tauri::RunEvent::Reopen {
             has_visible_windows: false,
             ..
         } => {
             if let Some(w) = app.get_webview_window("main") {
+                set_dock_icon_visible(app, true);
                 let _ = w.show();
                 let _ = w.set_focus();
             }

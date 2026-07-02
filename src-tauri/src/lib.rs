@@ -63,6 +63,8 @@ pub fn run() {
     if !multi_instance_test {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
+                // 主窗可能正收在托盘里（macOS 下连 Dock 图标都没有）——先恢复 Dock 再唤起
+                platform::set_dock_icon_visible(app, true);
                 let _ = w.unminimize();
                 let _ = w.show();
                 let _ = w.set_focus();
@@ -79,8 +81,13 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // macOS 用 AppleScript 模式（System Events 登录项）而不是 LaunchAgent：
+        // Ventura+ 把 LaunchAgent 归进「设置 → 通用 → 登录项 → 允许在后台」，
+        // 且那一栏按代码签名的开发者名分组显示（用户看到的是 "Youyan Xu" 而不是
+        // Hindsight）。登录项模式显示 app 名 + 图标，在「登录时打开」一栏。
+        // 老安装的 LaunchAgent plist 由 bootstrap::migrate_autostart_launch_agent 清理。
         .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            tauri_plugin_autostart::MacosLauncher::AppleScript,
             None,
         ))
         .setup(move |app| {
@@ -99,6 +106,9 @@ pub fn run() {
 
             // 托盘 + 关闭行为：稳定的一次性安装逻辑，挪到 bootstrap 里
             bootstrap::install_tray_and_window(app)?;
+
+            // macOS：老版本 LaunchAgent 自启迁移到登录项（显示 app 名）；无 plist 时 no-op
+            bootstrap::migrate_autostart_launch_agent(&handle);
 
             // ort load-dynamic 找 onnxruntime DLL 用：prod 包指向 resource_dir 里的副本，
             // dev 模式 build.rs 已把 DLL 复制到 target/<profile>/ 命中默认路径。

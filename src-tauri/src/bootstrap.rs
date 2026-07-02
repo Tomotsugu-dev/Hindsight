@@ -215,6 +215,8 @@ pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
                 if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) {
                     api.prevent_close();
                     let _ = win_for_close.hide();
+                    // macOS：连 Dock 图标一起收，"关窗 = 收进右上角托盘"才成立
+                    platform::set_dock_icon_visible(win_for_close.app_handle(), false);
                 }
             }
         });
@@ -273,13 +275,29 @@ fn install_tray_icon(app: &mut App) -> tauri::Result<()> {
         quit: quit_item.clone(),
     });
 
+    // macOS 菜单栏图标必须是 template image（纯黑 + alpha 的单色剪影，
+    // icons/tray-icon-macos.png 由 app 图标的眼睛图形按亮度抠出）：
+    // icon_as_template 让系统按菜单栏明暗自动渲染黑 / 白 + 选中态反色。
+    // 直接塞彩色 app 图标的话在菜单栏里是一块彩色方糖，不符合 macOS HIG。
+    #[cfg(target_os = "macos")]
+    let (tray_icon, as_template) = (
+        tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon-macos.png"))?,
+        true,
+    );
+    // 其它平台保持彩色 app 图标（Windows 托盘本来就该彩色）。
+    // 启动期失败需快速失败：Tauri 总会带默认窗口图标，缺失意味着打包资源错误。
+    #[cfg(not(target_os = "macos"))]
+    let (tray_icon, as_template) = (
+        app.default_window_icon()
+            .cloned()
+            .expect("default_window_icon 必存在（Tauri 资源缺失）"),
+        false,
+    );
+
     let _tray = TrayIconBuilder::with_id("hindsight-tray")
-        // 启动期失败需快速失败：Tauri 总会带默认窗口图标，缺失意味着打包资源错误
-        .icon(
-            app.default_window_icon()
-                .cloned()
-                .expect("default_window_icon 必存在（Tauri 资源缺失）"),
-        )
+        .icon(tray_icon)
+        // 非 macOS 平台此标志被忽略
+        .icon_as_template(as_template)
         .tooltip("Hindsight")
         .menu(&menu)
         // 左键不弹菜单（留给 toggle 显隐）；菜单只在右键 / macOS 上 showMenu 时弹
@@ -294,6 +312,8 @@ fn handle_tray_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     match event.id.as_ref() {
         "show" => {
             if let Some(w) = app.get_webview_window("main") {
+                // 先恢复 Dock 图标再 show——Accessory 下 set_focus 抢不到前台
+                platform::set_dock_icon_visible(app, true);
                 let _ = w.show();
                 let _ = w.set_focus();
             }
@@ -316,8 +336,10 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: tauri::tray::Tray
             match w.is_visible() {
                 Ok(true) => {
                     let _ = w.hide();
+                    platform::set_dock_icon_visible(app, false);
                 }
                 _ => {
+                    platform::set_dock_icon_visible(app, true);
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
@@ -325,6 +347,40 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: tauri::tray::Tray
         }
     }
 }
+
+/// autostart 从 LaunchAgent 迁到 AppleScript 登录项（v0.7.8）的一次性清理。
+///
+/// 老版本用 LaunchAgent 模式：开自启会写 `~/Library/LaunchAgents/hindsight.plist`
+/// （文件名 = 插件默认 app_name = package name）。换 AppleScript 模式后这份 plist
+/// 不再被插件管理：留着会双启动（plist 和登录项各拉起一次），而且它正是
+/// 「登录项显示开发者名」问题的载体。
+///
+/// plist 存在 ⟺ 用户在老版本开过自启 → 删掉后立刻用新模式重新注册，保留用户意图。
+/// 注册走 osascript（System Events），首次可能弹一次自动化授权框；拒绝的话自启
+/// 静默失效，用户在设置里重开即可（is_enabled 会如实显示关闭）。
+#[cfg(target_os = "macos")]
+pub fn migrate_autostart_launch_agent(app: &AppHandle) {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    let plist = home.join("Library/LaunchAgents/hindsight.plist");
+    if !plist.exists() {
+        return;
+    }
+    if let Err(e) = fs::remove_file(&plist) {
+        log::warn!("autostart 迁移：删除旧 LaunchAgent plist 失败: {e}");
+        return;
+    }
+    use tauri_plugin_autostart::ManagerExt;
+    match app.autolaunch().enable() {
+        Ok(()) => log::info!("autostart 已迁移：LaunchAgent → 登录项（登录项列表显示应用名）"),
+        Err(e) => log::warn!("autostart 迁移：登录项注册失败（需用户在设置里重开自启）: {e}"),
+    }
+}
+
+/// 非 macOS 平台：no-op（LaunchAgent 是 macOS 独有机制）。
+#[cfg(not(target_os = "macos"))]
+pub fn migrate_autostart_launch_agent(_app: &AppHandle) {}
 
 /// 后台 backfill 任务：图标 + 内置分类。两个任务都自带"已存在则跳过"，
 /// 重复启动开销很低；fire-and-forget 就行，不阻塞启动。
