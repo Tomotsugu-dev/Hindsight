@@ -260,10 +260,13 @@ export default function DailyTab() {
   const enginePhase = isRunningHere ? runSnap.enginePhase : null;
   const topError = runSnap.topError;
   const generating = isRunningHere;
+  const stopping = isRunningHere && runSnap.stopping;
 
   const allDone = segments.length > 0 && segments.every((_, i) => rows.has(i));
   const mainBtnLabel = generating
-    ? t("aiSummary.daily.actions.stop")
+    ? stopping
+      ? t("aiSummary.daily.actions.stopping")
+      : t("aiSummary.daily.actions.stop")
     : allDone
       ? t("aiSummary.daily.actions.regenerate")
       : t("aiSummary.daily.actions.start");
@@ -430,6 +433,7 @@ export default function DailyTab() {
             type="button"
             className={styles.stopBtn}
             onClick={() => void onCancel()}
+            disabled={stopping}
           >
             <Square size={14} strokeWidth={2} />
             {mainBtnLabel}

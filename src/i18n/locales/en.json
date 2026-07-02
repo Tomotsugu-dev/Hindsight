@@ -1100,6 +1100,7 @@
       },
       "actions": {
         "stop": "Stop",
+        "stopping": "Stopping…",
         "regenerate": "Regenerate",
         "start": "Start summary",
         "startTooltip": "The local vision model analyzes each segment in turn; duration depends on hardware (a few seconds per segment on GPU, tens of seconds on CPU).",

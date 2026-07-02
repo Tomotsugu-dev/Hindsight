@@ -58,8 +58,9 @@ pub struct DaySummaryRunner {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
     app: AppHandle,
-    /// 取消信号：每段开跑前检查；true 时整轮停止（落库写到了哪段就到哪段）。
-    /// 不能中断已经在路上的 LLM 请求——一段 30-180s 的 chat 必须跑完才能 yield。
+    /// 取消信号：段/图边界检查 + 在途 LLM 请求和引擎加载也会被
+    /// [`crate::ai::summary_operations::cancellable`] 每 250ms 轮询中断
+    /// （丢弃 future 断开连接，llama-server / 云端都会停掉该请求的生成）。
     cancel: Arc<AtomicBool>,
 }
 
@@ -127,7 +128,36 @@ impl DaySummaryRunner {
         if needs_restart {
             let _ = self.supervisor.stop().await;
         }
+
+        // 停止按钮中断在途请求 / 引擎加载时从深处抛 SummaryCancelled——不是失败，
+        // 这里统一优雅收尾：emit cancelled 让前端复位，命令返回 Ok
+        if matches!(result, Err(Error::SummaryCancelled)) {
+            let p = SummaryProgress::base(
+                source.to_string(),
+                local_date.format("%Y-%m-%d").to_string(),
+                "cancelled",
+                0,
+            );
+            self.emit(p);
+            return Ok(());
+        }
         result
+    }
+
+    /// 给引擎启动 / 换模的 future 包一层取消轮询：停止按钮在 30-90s 模型加载
+    /// 期间也能生效。中断后 stop() 收掉半启动的子进程（[`EngineSupervisor`] 的
+    /// generation 守卫保证被丢弃的启动流程不会再碰接管后的状态）。
+    async fn engine_start_cancellable(
+        &self,
+        fut: impl std::future::Future<Output = Result<u16>>,
+    ) -> Result<u16> {
+        match crate::ai::summary_operations::cancellable(&self.cancel, fut).await {
+            Err(Error::SummaryCancelled) => {
+                let _ = self.supervisor.stop().await;
+                Err(Error::SummaryCancelled)
+            }
+            r => r,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -307,7 +337,7 @@ impl DaySummaryRunner {
                 p.message = None;
                 self.emit(p);
             }
-            self.ensure_engine_running(ai, Step::Describe, describe_overrides)
+            self.engine_start_cancellable(self.ensure_engine_running(ai, Step::Describe, describe_overrides))
                 .await?
         };
         let step1 = build_step1(ai, port)?;
@@ -394,7 +424,7 @@ impl DaySummaryRunner {
                 p.message = None;
                 self.emit(p);
             }
-            self.ensure_engine_running(ai, Step::Summary, summary_overrides)
+            self.engine_start_cancellable(self.ensure_engine_running(ai, Step::Summary, summary_overrides))
                 .await?
         };
         // step2_only 路径不会调 step 1——构造 Local 占位（端口可能是 0，不会被用）
@@ -530,9 +560,11 @@ impl DaySummaryRunner {
                 p_load_d.message = None;
                 self.emit(p_load_d);
                 let (main_d, mmproj_d) = self.resolve_model_paths_for(ai, Step::Describe)?;
-                self.supervisor
-                    .restart_with_overrides(Some(main_d), mmproj_d, describe_overrides.clone())
-                    .await?
+                self.engine_start_cancellable(
+                    self.supervisor
+                        .restart_with_overrides(Some(main_d), mmproj_d, describe_overrides.clone()),
+                )
+                .await?
             };
             let step1 = build_step1(ai, port_d)?;
             // step2 占位——不会调用（step1_only=true）
@@ -612,9 +644,11 @@ impl DaySummaryRunner {
                 p_load_s.message = None;
                 self.emit(p_load_s);
                 let (main_s, mmproj_s) = self.resolve_model_paths_for(ai, Step::Summary)?;
-                self.supervisor
-                    .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone())
-                    .await?
+                self.engine_start_cancellable(
+                    self.supervisor
+                        .restart_with_overrides(Some(main_s), mmproj_s, summary_overrides.clone()),
+                )
+                .await?
             };
             // step2_only 调用不会碰 step 1——构造 Local 占位（端口可能是 0，不会被用）
             let step1_placeholder = Step1Chat::Local(ChatClient::new(
@@ -793,6 +827,8 @@ impl DaySummaryRunner {
                 &synthetic,
                 &top_apps,
                 step2.model_label().to_string(),
+                /* synthetic */ true,
+                &self.cancel,
             )
             .await?;
 
@@ -977,6 +1013,8 @@ impl DaySummaryRunner {
             &descriptions,
             &top_apps,
             step2_model,
+            /* synthetic */ false,
+            &self.cancel,
         )
         .await?;
 
@@ -1128,6 +1166,8 @@ impl DaySummaryRunner {
             &descriptions,
             &top_apps,
             step2_model,
+            /* synthetic */ false,
+            &self.cancel,
         )
         .await?;
 
@@ -1237,7 +1277,7 @@ impl DaySummaryRunner {
         let port = if ai.describe_use_cloud() {
             0
         } else {
-            self.ensure_engine_running(&ai, Step::Describe, engine_overrides)
+            self.engine_start_cancellable(self.ensure_engine_running(&ai, Step::Describe, engine_overrides))
                 .await?
         };
         let chat = build_step1(&ai, port)?;
@@ -1421,7 +1461,7 @@ impl DaySummaryRunner {
                 self.emit(p);
             }
             let port = self
-                .ensure_engine_running(&ai, Step::Describe, engine_overrides)
+                .engine_start_cancellable(self.ensure_engine_running(&ai, Step::Describe, engine_overrides))
                 .await?;
             (port, ai.effective_describe_main().to_string())
         } else if !ai.summary_use_cloud() {
@@ -1442,7 +1482,7 @@ impl DaySummaryRunner {
                 ctx_size: ai.summary_ctx_size_effective(),
             };
             let port = self
-                .ensure_engine_running(&ai, Step::Summary, summary_overrides)
+                .engine_start_cancellable(self.ensure_engine_running(&ai, Step::Summary, summary_overrides))
                 .await?;
             (port, ai.effective_summary_main().to_string())
         } else {

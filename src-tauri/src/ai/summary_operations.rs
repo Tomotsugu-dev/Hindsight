@@ -23,7 +23,7 @@ use crate::ai::prompt::{
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::capture::privacy;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, ImageDescriptionRow, ScreenshotMeta, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
@@ -31,6 +31,29 @@ use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 /// 总结 LLM 输出时给段加的图片缩放上限——长边 768 px 是 vision LLM 的常见甜点：
 /// 文字仍可读，token 数比原图少一半以上。
 pub const SUMMARY_IMAGE_MAX_DIM: u32 = 768;
+
+/// 把一个 future 变成"可被停止按钮中断的"：每 250ms 轮询一次 cancel 标志，
+/// 置位则**丢弃 future**（reqwest 请求随之断开连接）并返回 [`Error::SummaryCancelled`]。
+///
+/// 之前 cancel 只在段/图边界检查——正在路上的 LLM 请求（本地超时 600s）和
+/// 引擎加载（最长 90s）都不响应，用户点"停止"后 UI 像卡死。llama-server 检测到
+/// 客户端断开会停掉该 slot 的生成，云端 API 同理，中断是安全的。
+pub(crate) async fn cancellable<T>(
+    cancel: &Arc<AtomicBool>,
+    fut: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    tokio::pin!(fut);
+    loop {
+        tokio::select! {
+            r = &mut fut => return r,
+            _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(Error::SummaryCancelled);
+                }
+            }
+        }
+    }
+}
 
 // ───────────────────────────── step 1: describe_images ─────────────────────────────
 
@@ -196,11 +219,16 @@ async fn process_one_image(
     } else {
         None
     };
-    let (desc, usage) = match chat
-        .chat_with_images(&item.describe_system, &describe_user, single)
-        .await
+    // cancellable：停止按钮置位后 250ms 内中断在途请求，本张按跳过处理，
+    // 外层循环随即在下一项的 cancel 检查处退出
+    let (desc, usage) = match cancellable(
+        &cancel,
+        chat.chat_with_images(&item.describe_system, &describe_user, single),
+    )
+    .await
     {
         Ok(r) => r,
+        Err(Error::SummaryCancelled) => return Ok(None),
         Err(e) => {
             log::warn!("图描述失败 {}: {e}", item.img_path);
             return Ok(None);
@@ -286,6 +314,11 @@ pub(crate) async fn summarize_segment(
     descriptions: &[(String, String)],
     top_apps: &[(String, u32, String)],
     step2_model: String,
+    // true = descriptions 是无截图兜底合成的逐小时清单（见 SegmentContext::synthetic）
+    synthetic: bool,
+    // 停止按钮的取消标志：置位时中断在途的 step 2 请求，向上抛 SummaryCancelled
+    //（**不写行**——该段下次生成自然重跑），由 runner 统一 emit cancelled 收尾
+    cancel: &Arc<AtomicBool>,
 ) -> Result<(SegmentSummaryRow, &'static str)> {
     let ctx = SegmentContext {
         label,
@@ -293,6 +326,7 @@ pub(crate) async fn summarize_segment(
         end_hour,
         top_apps,
         image_descriptions: descriptions,
+        synthetic,
     };
     let system = build_system_prompt(ai);
     let user_text = build_user_prompt(ai, &ctx);
@@ -300,8 +334,12 @@ pub(crate) async fn summarize_segment(
     // 本地 step2 走自家引擎，需要 acquire 防止 watcher 在请求中途 stop；
     // 云端 step2 (External) 不动 supervisor，不 acquire。
     let _inflight = step2.is_local().then(|| supervisor.acquire_inference());
+    let chat_result = cancellable(cancel, step2.chat(&system, &user_text, &[])).await;
+    if matches!(chat_result, Err(Error::SummaryCancelled)) {
+        return Err(Error::SummaryCancelled);
+    }
     let (row, status_str): (SegmentSummaryRow, &'static str) =
-        match step2.chat(&system, &user_text, &[]).await {
+        match chat_result {
             // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
             // （需要时未来加列）。落库的 model 用 step2_model——本地是 GGUF 文件名，
             // 外部是用户填的云端模型 ID（如 gpt-4o-mini）
@@ -651,7 +689,9 @@ fn format_secs_human(secs: i64) -> String {
     }
 }
 
-/// 去重保序后按字符数降序取前 3 个，"、" 分隔。
+/// 去重保序后按字符数降序取前 5 个，"、" 分隔。
+/// 窗口标题是无截图兜底总结的主线索（文件名 / 网页标题 / 视频标题），多带一点
+/// 让 step 2 有素材可写；5 条 × 每小时几个应用的 prompt 开销可忽略。
 fn pick_titles(titles: &[String]) -> String {
     use std::collections::HashSet;
     let mut seen: HashSet<&str> = HashSet::new();
@@ -662,7 +702,7 @@ fn pick_titles(titles: &[String]) -> String {
         }
     }
     unique.sort_by_key(|t| std::cmp::Reverse(t.chars().count()));
-    unique.into_iter().take(3).collect::<Vec<_>>().join("、")
+    unique.into_iter().take(5).collect::<Vec<_>>().join("、")
 }
 
 #[cfg(test)]

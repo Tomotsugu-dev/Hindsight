@@ -164,6 +164,12 @@ pub enum Error {
     #[error("download cancelled: {0}")]
     DownloadCancelled(String),
 
+    /// AI 总结被用户停止（cancel 标志在 LLM 请求 / 引擎加载进行中被置位，
+    /// 对应的 future 已被丢弃中断）。**不是失败**——调用链看到它应当优雅收尾：
+    /// emit "cancelled" 进度、不给该段写 error 行，让下次生成自然重跑。
+    #[error("summary cancelled")]
+    SummaryCancelled,
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

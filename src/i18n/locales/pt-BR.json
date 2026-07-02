@@ -1100,6 +1100,7 @@
       },
       "actions": {
         "stop": "Parar",
+        "stopping": "Parando…",
         "regenerate": "Regenerar",
         "start": "Iniciar resumo",
         "startTooltip": "O modelo de visão local analisa cada segmento por vez; a duração depende do hardware (alguns segundos por segmento na GPU, dezenas de segundos na CPU).",

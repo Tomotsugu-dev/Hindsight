@@ -92,6 +92,11 @@ pub struct SegmentContext<'a> {
     /// time_label 是从截图文件名解析出的 `HH:MM` 本地时间，让 step 2 能按时间
     /// 顺序串故事；解析失败时是 "??:??"。
     pub image_descriptions: &'a [(String, String)],
+    /// true = `image_descriptions` 不是截图描述，而是无截图兜底路径从 activities
+    /// 数据库合成的**逐小时使用清单**（time_label 是 "HH:00-HH:00" 小时段；描述是
+    /// "应用 时长（窗口标题样例）· …"）。user prompt 据此换用如实话术——把统计行
+    /// 冒充"截图描述"会诱导模型凭空演绎画面，也浪费了窗口标题这条主线索。
+    pub synthetic: bool,
 }
 
 /// step 1（单张图描述）的 system prompt——按当前语言选覆盖或内置默认。
@@ -205,7 +210,22 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
         }
     }
     if ctx.image_descriptions.is_empty() {
-        out.push_str("\n（这段时间没有截图，仅基于上面的应用统计写一句话。）");
+        out.push_str(
+            "\n（这段时间没有截图。仅基于上面的应用统计写 2-4 句概括：用了哪些应用、大致时间分配，不要虚构任何具体操作或内容。）",
+        );
+    } else if ctx.synthetic {
+        // 无截图兜底：材料是从活动数据库合成的逐小时清单，如实告知——
+        // 冒充"截图描述"会诱导模型把统计行当画面演绎
+        out.push_str(&format!(
+            "\n这段时间没有截图（用户未开启截图或截图已清理）。下面是从活动记录数据库合成的逐小时使用清单，共 {} 个小时段（每行格式：应用 累计时长（窗口标题样例）· …，按时长降序）：\n",
+            ctx.image_descriptions.len(),
+        ));
+        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+            out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
+        }
+        out.push_str(
+            "\n请基于这份清单按时间顺序写这个时段的活动日志。窗口标题是了解具体在做什么的主要线索（文件名 / 网页标题 / 视频标题等），可以据此描述具体活动，但不要推测标题之外的细节，更不要描述任何\"画面\"。篇幅：有活动的小时 ≤2 个写 3-5 句，更多则写 5-8 句。",
+        );
     } else {
         out.push_str(&format!(
             "\n下面是该时段内 {} 张代表截图的逐一描述（已由 AI 看图后给出，按时间先后排列，每行行首 [HH:MM] 是截图本地时间）：\n",
@@ -214,7 +234,9 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
         for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
-        out.push_str("\n请综合这些描述和应用统计写段总结，不要简单复述上面任意一条。");
+        out.push_str(
+            "\n请综合这些描述和应用统计，按时间顺序写这个时段的活动日志：覆盖出现过的每一类活动，篇幅按系统要求跟随描述条数伸缩，不要简单复述上面任意一条，也不要编造描述里没有的内容。",
+        );
     }
     out
 }

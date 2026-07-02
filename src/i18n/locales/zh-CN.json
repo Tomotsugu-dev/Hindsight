@@ -1100,6 +1100,7 @@
       },
       "actions": {
         "stop": "停止",
+        "stopping": "停止中…",
         "regenerate": "重新生成",
         "start": "开始总结",
         "startTooltip": "本地 vision 模型逐段分析；时长取决于硬件（GPU 数秒/段，CPU 数十秒/段）",

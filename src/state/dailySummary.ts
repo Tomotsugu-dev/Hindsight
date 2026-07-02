@@ -47,6 +47,9 @@ export interface DailyRunningSnapshot {
   runningStage: RunningStage;
   /** 引擎冷启动提示文案；非 null 时段卡上方会显示一行 hint。 */
   enginePhase: string | null;
+  /** 用户点了"停止"、后端还没确认收尾（cancelled/all_done 事件未到）。
+   *  按钮在此期间显示"停止中…"并禁点，避免看起来没反应 / 重复点。 */
+  stopping: boolean;
   /** 顶层错误（all_done / segment_done 不算）；null = 无错。
    *  DailyTab 用 useSyncExternalStore 读，组件展示后调 clearTopError 清。 */
   topError: string | null;
@@ -60,6 +63,7 @@ const EMPTY_SNAP: DailyRunningSnapshot = Object.freeze({
   runningDone: 0,
   runningStage: "describing",
   enginePhase: null,
+  stopping: false,
   topError: null,
 });
 
@@ -262,13 +266,19 @@ export async function startDailyGenerate(
   }
 }
 
-/** 停止当前 daily run；后端会在下一段开跑前检测 cancel 标志退出，
- *  期间若有段已经在跑得 chat 必须等它跑完才能 yield。 */
+/** 停止当前 daily run。后端每 250ms 轮询 cancel 标志，会中断在途的 LLM 请求
+ *  和引擎加载，随后 emit cancelled 事件复位状态（stopping 也随之清除）。 */
 export async function cancelDailyGenerate(): Promise<void> {
+  // 乐观置 stopping：按钮立刻切"停止中…"并禁点，等 cancelled/all_done 事件复位
+  snap = Object.freeze({ ...snap, stopping: true });
+  notify();
   try {
     await api.cancelDaySummary();
   } catch (e) {
     logWarn("dailySummary.cancel", e);
+    // 取消命令本身失败（极少见）：恢复按钮可点，用户可以重试
+    snap = Object.freeze({ ...snap, stopping: false });
+    notify();
   }
 }
 
