@@ -902,3 +902,36 @@ mod tests {
         assert_eq!(out[1].0, "11:00-12:00");
     }
 }
+
+/// 「融合时间线」：截图描述 + 无截图小时的活动合成行，按时间排序合并。
+///
+/// 截图行 time_label 是 `HH:MM`，活动合成行是 `HH:00-HH:00`（见
+/// [`build_synthetic_descriptions_from_activities`]）——label 格式本身就是来源标记，
+/// user prompt 的材料头据此向 LLM 说明两种行各自的含义。
+/// 覆盖判定按小时粒度：该小时内只要有任意一张截图描述，就不再插活动行。
+pub(crate) fn merge_descriptions_with_activity_gaps(
+    descriptions: Vec<(String, String)>,
+    synthetic_rows: Vec<(String, String)>,
+) -> Vec<(String, String)> {
+    use std::collections::HashSet;
+
+    let covered: HashSet<u8> = descriptions
+        .iter()
+        .filter_map(|(t, _)| t.get(0..2)?.parse::<u8>().ok())
+        .collect();
+
+    let gaps = synthetic_rows.into_iter().filter(|(label, _)| {
+        label
+            .get(0..2)
+            .and_then(|h| h.parse::<u8>().ok())
+            .is_some_and(|h| !covered.contains(&h))
+    });
+
+    let mut merged: Vec<(String, String)> = descriptions.into_iter().chain(gaps).collect();
+    merged.sort_by_key(|(t, _)| {
+        let h: u32 = t.get(0..2).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let m: u32 = t.get(3..5).and_then(|s| s.parse().ok()).unwrap_or(0);
+        h * 60 + m
+    });
+    merged
+}

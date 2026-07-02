@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
+import { formatAxisTick } from "../../utils/duration";
 import type { HourSlot } from "../../api/hindsight";
 import styles from "./HourlyChart.module.css";
 
@@ -25,13 +26,8 @@ interface HourlyChartProps {
 /** X 轴标签 */
 const X_LABELS = [0, 6, 12, 18, 24];
 
-function formatMinLabel(min: number): string {
-  if (min < 60) return `${min}m`;
-  if (min % 60 === 0) return `${min / 60}h`;
-  // 0.25h 档位（1.25 / 1.5 / 1.75 / ...）：保留 2 位小数后用 parseFloat 去尾 0
-  // 避免 toFixed(1) 把 1.25 round 成 "1.3h"
-  return `${parseFloat((min / 60).toFixed(2))}h`;
-}
+// 刻度格式化抽到 utils/duration.ts 的 formatAxisTick，跟月统计 Y 轴共用同一套英文短格式
+const formatMinLabel = formatAxisTick;
 
 export function HourlyChart({
   hours,

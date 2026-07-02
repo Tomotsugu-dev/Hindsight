@@ -84,8 +84,8 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
 /// 还在的话，下次 `getAppIcon` 走 Layer 1 还是命中老 PNG（见
 /// [`crate::commands::icons::get_app_icon`]），等于白清。
 ///
-/// `svc.reset_session()` 让 capture 忘记当前活跃会话（否则下一 tick 会去 UPDATE 已被
-/// 删除的行）。
+/// 整个清库过程包在 `svc.run_with_session_cleared` 里：进入时丢弃当前活跃会话
+/// （否则下一 tick 会去 UPDATE 已被删除的行），且持锁期间 tick 无法插入新行。
 ///
 /// 幂等：连续多次调用每次效果一致（DELETE 空表 / VACUUM 已紧凑过 / UPDATE 已是 epoch
 /// 的 cursor / fs 删已不存在的目录 都是 no-op）。

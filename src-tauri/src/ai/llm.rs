@@ -302,7 +302,12 @@ impl Step2Chat {
 /// 空时走纯字符串——兼容部分 provider（如 DeepSeek）对纯文本只接受字符串。
 ///
 /// `max_tokens` 由 caller 按用户配的 ctx_size 折半给（详见函数体注释）。
-/// 本地 llama-server 版：temperature 固定 0.4（我们自己调优的稳定值）。
+/// 本地 llama-server 版：temperature 固定 0.4（我们自己调优的稳定值），
+/// 并默认关闭思考——图描述 / 段总结是结构化改写任务，不需要推理链。
+/// 实测（Gemma 4 E2B）：思考型模型会把 max_tokens 烧在思考上导致 content 空
+/// （LLM_EMPTY_REASONING）；带 enable_thinking=false 后 281 token 思考 → 17 token
+/// 直出正文。Gemma 4 / Qwen3 系模板认这个开关；不认的模板（如 R1-Distill 这类
+/// 纯推理模型）安全忽略（实测未知 kwarg 不报错）。
 fn build_chat_body_local(
     model: &str,
     system: &str,
@@ -310,7 +315,10 @@ fn build_chat_body_local(
     image_data_uris: &[String],
     max_tokens: u32,
 ) -> serde_json::Value {
-    build_chat_body(model, system, user_text, image_data_uris, max_tokens, Some(0.4))
+    let mut body =
+        build_chat_body(model, system, user_text, image_data_uris, max_tokens, Some(0.4));
+    body["chat_template_kwargs"] = json!({ "enable_thinking": false });
+    body
 }
 
 fn build_chat_body(

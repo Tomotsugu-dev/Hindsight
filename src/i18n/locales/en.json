@@ -1002,7 +1002,7 @@
     },
     "errors": {
       "runBusy": "Another AI generation task is already running. Wait for it to finish, or press Stop first.",
-      "llmEmptyReasoning": "The model spent its whole budget \"thinking\" and never wrote the answer. Use a regular (non-reasoning) text model like Gemma or Qwen3, or raise the context size in AI Settings.",
+      "llmEmptyReasoning": "The model spent its entire budget thinking and never wrote the answer. Update the app and retry (new builds disable local thinking by default); if it persists, switch to a non-reasoning (instruct) model or raise this step's context size.",
       "llmEmptyEos": "The model stopped without generating anything — usually the chosen model or its vision projector (mmproj) don't match. Pick a different model in AI Settings.",
       "llmEmptyTruncated": "The model's answer was cut off before any usable text came out (likely a reasoning model). Use a regular text model like Gemma or Qwen3, or raise the context size in AI Settings.",
       "llmEmpty": "The model returned no content. Try a different model in AI Settings."

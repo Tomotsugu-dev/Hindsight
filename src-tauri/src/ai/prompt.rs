@@ -228,14 +228,14 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
         );
     } else {
         out.push_str(&format!(
-            "\n下面是该时段内 {} 张代表截图的逐一描述（已由 AI 看图后给出，按时间先后排列，每行行首 [HH:MM] 是截图本地时间）：\n",
+            "\n下面是该时段按时间排列的活动材料，共 {} 条。行首 [HH:MM] 的是截图描述（AI 看图生成）；行首 [HH:00-HH:00] 的是该小时没有截图、由活动记录合成的使用清单（应用 累计分钟（窗口标题样例））：\n",
             ctx.image_descriptions.len(),
         ));
         for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
-            "\n请综合这些描述和应用统计，按时间顺序写这个时段的活动日志：覆盖出现过的每一类活动，篇幅按系统要求跟随描述条数伸缩，不要简单复述上面任意一条，也不要编造描述里没有的内容。",
+            "\n请把以上描述压缩成本时段的活动日志：同一活动全篇只写一次（相似条目合并），按时间顺序，遵守系统规则的段落与句数上限；严禁逐条复述，也不要编造描述里没有的内容。",
         );
     }
     out
@@ -259,15 +259,16 @@ fn build_user_prompt_en(ctx: &SegmentContext) -> String {
         );
     } else {
         out.push_str(&format!(
-            "\nBelow are AI-generated descriptions of {} representative screenshots from this segment, in chronological order. The leading [HH:MM] is the screenshot's local time:\n",
+            "\nBelow is this segment's activity material in chronological order, {} lines total. Lines starting with [HH:MM] are screenshot descriptions (AI-generated); lines starting with [HH:00-HH:00] cover hours without screenshots, synthesized from the activity log (app total-minutes (window-title samples)):\n",
             ctx.image_descriptions.len(),
         ));
         for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
-            "\nWrite a brief segment summary combining these descriptions and the app stats. \
-             Don't just restate any single line.",
+            "\nCompress the descriptions above into this segment's journal entry: each activity \
+             appears once (merge similar lines), in time order, within the paragraph and sentence \
+             caps from the system rules. Never rewrite the lines one-by-one or invent details.",
         );
     }
     out
@@ -291,15 +292,15 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
         );
     } else {
         out.push_str(&format!(
-            "\n以下はこの時間帯の代表的なスクリーンショット {} 枚に対する AI による個別の記述です（時系列順、行頭の [HH:MM] は撮影時刻）：\n",
+            "\n以下はこの時間帯の活動材料です（時系列順、全 {} 行）。行頭 [HH:MM] はスクリーンショット記述（AI 生成）、行頭 [HH:00-HH:00] はスクリーンショットのない時間帯を活動記録から合成した使用一覧（アプリ 累計分（ウィンドウタイトル例））：\n",
             ctx.image_descriptions.len(),
         ));
         for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
-            "\nこれらの記述とアプリ統計を組み合わせて時間帯の要約を書いてください。\
-             どれか 1 行をそのまま繰り返さないでください。",
+            "\n以上の記述をこの時間帯の活動ログに圧縮してください：同じ活動は全体で一度だけ（類似行は統合）、\
+             時系列順、システム規則の段落数・文数上限を厳守。1 条ずつ書き写さず、記述にない情報も書かないでください。",
         );
     }
     out

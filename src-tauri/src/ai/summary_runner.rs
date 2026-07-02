@@ -29,7 +29,7 @@ use crate::ai::prompt::{build_image_describe_system_prompt, build_image_describe
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
     build_step1, build_step2, build_synthetic_descriptions_from_activities, describe_images,
-    extract_time_label,
+    extract_time_label, merge_descriptions_with_activity_gaps,
     summarize_segment, upsert_skipped_no_activity, SUMMARY_IMAGE_MAX_DIM,
 };
 use crate::ai::summary_overrides::AiOverrides;
@@ -886,7 +886,7 @@ impl DaySummaryRunner {
             start_hour,
             end_hour,
             &ai.excluded_categories,
-            device,
+            device.clone(),
             8,
         )
         .await
@@ -999,6 +999,10 @@ impl DaySummaryRunner {
         p_sum.segment_idx = Some(idx);
         p_sum.images_total = Some(picked.len() as u32);
         self.emit(p_sum);
+        // 融合时间线：截图没覆盖到的小时补活动记录合成行，step 2 拿到无空洞的整段材料
+        let descriptions = self
+            .fill_activity_gaps(descriptions, ai, date_str, start_hour, end_hour, &device)
+            .await?;
         let (row, status_str) = summarize_segment(
             &self.pool,
             step2,
@@ -1031,6 +1035,32 @@ impl DaySummaryRunner {
         p_done.message = row.error.clone();
         self.emit(p_done);
         Ok(())
+    }
+
+    /// 「融合时间线」：截图没覆盖到的小时用活动记录合成行填充，让 step 2 拿到
+    /// 无空洞的整段材料（截图集中在前半段 / 中途关截图的场景，后半段不再失明）。
+    async fn fill_activity_gaps(
+        &self,
+        descriptions: Vec<(String, String)>,
+        ai: &AiConfig,
+        date_str: &str,
+        start_hour: u8,
+        end_hour: u8,
+        device: &DeviceFilter,
+    ) -> Result<Vec<(String, String)>> {
+        // 隐私关键词在 Settings 顶层——跟无截图兜底路径同款 ad-hoc load，每段一次可忽略
+        let cfg = settings_repo::load(&self.pool).await?;
+        let synthetic = build_synthetic_descriptions_from_activities(
+            &self.pool,
+            date_str,
+            start_hour,
+            end_hour,
+            &ai.excluded_categories,
+            device,
+            &cfg.privacy_app_keywords,
+        )
+        .await?;
+        Ok(merge_descriptions_with_activity_gaps(descriptions, synthetic))
     }
 
     /// step2-only 路径：跳过逐图描述，从 DB 读出已存的 image descriptions 直接喂 step 2。
@@ -1136,7 +1166,7 @@ impl DaySummaryRunner {
             start_hour,
             end_hour,
             &ai.excluded_categories,
-            device,
+            device.clone(),
             8,
         )
         .await
@@ -1152,6 +1182,10 @@ impl DaySummaryRunner {
         p_sum.segment_idx = Some(idx);
         p_sum.images_total = Some(descriptions.len() as u32);
         self.emit(p_sum);
+        // 融合时间线：同 run_one_segment——截图没覆盖到的小时补活动记录合成行
+        let descriptions = self
+            .fill_activity_gaps(descriptions, ai, date_str, start_hour, end_hour, &device)
+            .await?;
         let (row, status_str) = summarize_segment(
             &self.pool,
             step2,

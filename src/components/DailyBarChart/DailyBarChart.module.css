@@ -10,7 +10,8 @@
 
 .yAxis {
   position: relative;
-  width: 32px;
+  /* 刻度是英文短格式（16.5h）——40px 够放；.xAxis 的 margin-left 必须保持一致 */
+  width: 40px;
   flex-shrink: 0;
 }
 
@@ -106,7 +107,7 @@
 
 .xAxis {
   position: relative;
-  margin-left: 32px;
+  margin-left: 40px;
   height: 18px;
   margin-top: 6px;
 }

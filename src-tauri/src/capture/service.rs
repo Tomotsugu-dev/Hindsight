@@ -219,11 +219,6 @@ impl CaptureService {
         }
     }
 
-    /// 清空当前会话指针；用于在外部清空 activities 表后避免下一次 tick 去 UPDATE 已被删除的行。
-    pub async fn reset_session(&self) {
-        *self.inner.current.lock().await = None;
-    }
-
     /// 在**持有会话锁**的前提下执行清库类操作。
     ///
     /// `purge_activities` 这类"DELETE 全表"若与 tick 并发：tick 可能在 DELETE 之后

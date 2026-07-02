@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
-import { useDurationFormatter } from "../../utils/duration";
+import { formatAxisTick, useDurationFormatter } from "../../utils/duration";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./DailyBarChart.module.css";
 
@@ -43,17 +43,11 @@ export function DailyBarChart({
 
   const yTicks = [yMax / 4, yMax / 2, (3 * yMax) / 4, yMax];
 
-  // Y 轴刻度文案 —— 整小时显示 h，否则 m
-  const fmtTickLabel = (min: number): string => {
-    if (min === 0) return "0";
-    if (min % 60 === 0) {
-      return t("common.duration.tickHours", { count: min / 60 });
-    }
-    return t("common.duration.tickMinutes", { count: min });
-  };
+  // Y 轴刻度 —— 轴刻度全语言统一英文短格式（45m / 11h / 16.5h），跟日统计一致；
+  // tooltip / 页头等句子语境仍走本地化 fmtHM
+  const fmtTickLabel = formatAxisTick;
 
-  // 柱子 tooltip —— 月/日 + 时长。时长用 fmtHM（"10h 5m"），不能用 fmtTickLabel：
-  // 那是 Y 轴刻度格式，非整小时会显示原始分钟数（605m）
+  // 柱子 tooltip —— 月/日 + 时长
   const fmtBarTitle = (day: DaySummary, total: number): string =>
     t("week.chart.barTitle", {
       date: t("week.shortDate", {
