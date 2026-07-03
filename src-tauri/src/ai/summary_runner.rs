@@ -872,7 +872,9 @@ impl DaySummaryRunner {
         p_dedup.segment_idx = Some(idx);
         p_dedup.images_total = Some(metas.len() as u32);
         self.emit(p_dedup);
-        let metas = self.dedup_segment_metas(metas, ai.dedup_threshold).await?;
+        let metas = self
+            .dedup_segment_metas(metas, ai.dedup_threshold, date_str)
+            .await?;
 
         // 等距抽帧
         let picked: Vec<ScreenshotMeta> = pick_frames(metas, max_images);
@@ -1341,6 +1343,7 @@ impl DaySummaryRunner {
                 path: existing_row.screenshot_path.clone(),
                 app_display: existing_row.screenshot_path.clone(),
                 category_name: None,
+                window_title: None,
             });
 
         let describe_system = build_image_describe_system_prompt(&ai);
@@ -1584,6 +1587,7 @@ impl DaySummaryRunner {
         &self,
         metas: Vec<ScreenshotMeta>,
         threshold: f32,
+        local_date: &str,
     ) -> Result<Vec<ScreenshotMeta>> {
         if metas.len() < 2 {
             return Ok(metas);
@@ -1600,18 +1604,24 @@ impl DaySummaryRunner {
             }
         };
         let before = metas.len();
-        let kept = dedup::dedup_by_embedding(metas, &embeddings, threshold);
-        let dropped = before.saturating_sub(kept.len());
+        let outcome = dedup::dedup_by_embedding(metas, &embeddings, threshold);
+        let dropped = before.saturating_sub(outcome.kept.len());
         if before > 0 {
             log::info!(
                 "dedup: {before} → {} (drop {} = {:.1}%, threshold={:.2})",
-                kept.len(),
+                outcome.kept.len(),
                 dropped,
                 100.0 * dropped as f32 / before as f32,
                 threshold,
             );
         }
-        Ok(kept)
+        // 合并留痕：失败仅 warn——留痕是增值数据，不能反过来让段总结挂掉
+        if let Err(e) =
+            embeddings_repo::record_dedup_merges(&self.pool, local_date, &outcome.merged).await
+        {
+            log::warn!("dedup 合并留痕写入失败（不影响总结）: {e}");
+        }
+        Ok(outcome.kept)
     }
 
     /// DB 缓存优先批量取 embedding；缺失的现算并写表。

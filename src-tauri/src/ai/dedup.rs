@@ -6,6 +6,19 @@
 //! 输入向量必须**事先 L2 归一化**（见 [`crate::ai::embedding`]）——这样余弦
 //! 相似度退化成 dot product，省一次 sqrt + 除法。
 //!
+//! ## 标题守卫
+//!
+//! MobileNet 是 ImageNet 分类骨干，特征编码的是版面/配色/纹理，**对文字是瞎的**：
+//! 同一编辑器开不同文件、同一店铺不同商品页，嵌入几乎相同 → 会被错误合并。
+//! `window_title` 是免费的内容信号——两帧标题都非空且不同时**禁止合并**
+//! （不同文件名/商品名/网页名 = 内容不同），标题相同或任一侧缺失才回落嵌入判定。
+//!
+//! ## 合并留痕
+//!
+//! 被丢的帧记录 `(member_path → representative_path)` 映射，调用方持久化到
+//! `screenshot_dedup_map` 表。收益：搜索命中能报"该内容出现于 21:10–21:40"的
+//! 时间段而非孤立时刻；将来给被合并帧补 OCR/描述有账可查；也能反向审计去重质量。
+//!
 //! ## 为什么不带时间窗参数
 //!
 //! 调用方 [`crate::ai::summary_runner::DaySummaryRunner::run_one_segment`] 在
@@ -20,7 +33,25 @@
 
 use crate::repo::ai_summaries::ScreenshotMeta;
 
-/// 跑余弦阈值去重。返回保留的 metas（顺序与输入一致，子集）。
+/// 去重结果：保留的帧 + 被合并帧的归属映射。
+pub struct DedupOutcome {
+    /// 保留的 metas（顺序与输入一致，子集）
+    pub kept: Vec<ScreenshotMeta>,
+    /// `(member_path, representative_path)`——member 因与 representative 相似被丢
+    pub merged: Vec<(String, String)>,
+}
+
+/// 标准化窗口标题用于守卫比较：trim + 压缩连续空白。
+/// 返回 None = 无标题信号（缺失或空串），守卫对该帧不生效。
+fn norm_title(t: &Option<String>) -> Option<String> {
+    let raw = t.as_deref()?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    Some(raw.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// 跑余弦阈值去重（带标题守卫），返回保留帧 + 合并映射。
 ///
 /// `threshold` 取值范围 0..=1（实际有意义区间 0.85..=0.99）：
 ///   - 0.95：用户实跑数据 ~70% 去重率（POC 验证）
@@ -33,25 +64,41 @@ pub fn dedup_by_embedding(
     metas: Vec<ScreenshotMeta>,
     embeddings: &[Vec<f32>],
     threshold: f32,
-) -> Vec<ScreenshotMeta> {
+) -> DedupOutcome {
     if metas.len() != embeddings.len() {
         log::warn!(
             "dedup_by_embedding: metas/embeddings 长度不一致（{} vs {}），跳过去重",
             metas.len(),
             embeddings.len()
         );
-        return metas;
+        return DedupOutcome {
+            kept: metas,
+            merged: Vec::new(),
+        };
     }
     if metas.is_empty() {
-        return metas;
+        return DedupOutcome {
+            kept: metas,
+            merged: Vec::new(),
+        };
     }
 
+    let titles: Vec<Option<String>> = metas.iter().map(|m| norm_title(&m.window_title)).collect();
+
     let mut keep_idx: Vec<usize> = Vec::with_capacity(metas.len());
+    let mut merged: Vec<(String, String)> = Vec::new();
     keep_idx.push(0); // 第一张永远保留
     'outer: for i in 1..metas.len() {
         // 跟已保留池倒序比——大概率最近的一张就是最像的，命中即跳
         for &j in keep_idx.iter().rev() {
+            // 标题守卫：两侧都有标题且不同 → 内容不同，禁止并入 j（继续找池里其它候选）
+            if let (Some(ti), Some(tj)) = (&titles[i], &titles[j]) {
+                if ti != tj {
+                    continue;
+                }
+            }
             if cosine_normalized(&embeddings[i], &embeddings[j]) >= threshold {
+                merged.push((metas[i].path.clone(), metas[j].path.clone()));
                 continue 'outer;
             }
         }
@@ -60,14 +107,14 @@ pub fn dedup_by_embedding(
 
     // 按 keep_idx 顺序拼出子集（保留 metas 原顺序）
     let mut keep_iter = keep_idx.into_iter().peekable();
-    let mut out = Vec::new();
+    let mut kept = Vec::new();
     for (idx, meta) in metas.into_iter().enumerate() {
         if keep_iter.peek().copied() == Some(idx) {
-            out.push(meta);
+            kept.push(meta);
             keep_iter.next();
         }
     }
-    out
+    DedupOutcome { kept, merged }
 }
 
 /// L2 归一化向量的余弦相似度 = dot product。两边必须**事先归一化**。
@@ -88,6 +135,14 @@ mod tests {
             path: path.to_string(),
             app_display: "test".to_string(),
             category_name: None,
+            window_title: None,
+        }
+    }
+
+    fn make_meta_titled(path: &str, title: &str) -> ScreenshotMeta {
+        ScreenshotMeta {
+            window_title: Some(title.to_string()),
+            ..make_meta(path)
         }
     }
 
@@ -100,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_first_drops_identical() {
+    fn keeps_first_drops_identical_and_records_merge() {
         // 三张图，第二张跟第一张完全一样，第三张完全垂直
         let metas = vec![make_meta("a"), make_meta("b"), make_meta("c")];
         let embs = vec![
@@ -108,24 +163,28 @@ mod tests {
             unit(vec![1.0, 0.0]),
             unit(vec![0.0, 1.0]),
         ];
-        let kept = dedup_by_embedding(metas, &embs, 0.95);
-        assert_eq!(kept.len(), 2);
-        assert_eq!(kept[0].path, "a");
-        assert_eq!(kept[1].path, "c");
+        let out = dedup_by_embedding(metas, &embs, 0.95);
+        assert_eq!(out.kept.len(), 2);
+        assert_eq!(out.kept[0].path, "a");
+        assert_eq!(out.kept[1].path, "c");
+        // 合并留痕：b 被并进 a
+        assert_eq!(out.merged, vec![("b".to_string(), "a".to_string())]);
     }
 
     #[test]
     fn empty_input_passthrough() {
-        let kept = dedup_by_embedding(Vec::new(), &[], 0.95);
-        assert!(kept.is_empty());
+        let out = dedup_by_embedding(Vec::new(), &[], 0.95);
+        assert!(out.kept.is_empty());
+        assert!(out.merged.is_empty());
     }
 
     #[test]
     fn length_mismatch_passthrough() {
         let metas = vec![make_meta("a"), make_meta("b")];
         let embs = vec![unit(vec![1.0, 0.0])]; // 只有 1 个
-        let kept = dedup_by_embedding(metas, &embs, 0.95);
-        assert_eq!(kept.len(), 2); // 跳过去重，原样返回
+        let out = dedup_by_embedding(metas, &embs, 0.95);
+        assert_eq!(out.kept.len(), 2); // 跳过去重，原样返回
+        assert!(out.merged.is_empty());
     }
 
     #[test]
@@ -136,14 +195,68 @@ mod tests {
         let b = unit(vec![0.9, 0.43589]); // dot ≈ 0.9
         let embs = vec![a, b];
         assert_eq!(
-            dedup_by_embedding(metas.clone(), &embs, 0.95).len(),
+            dedup_by_embedding(metas.clone(), &embs, 0.95).kept.len(),
             2,
             "0.95 阈值都保留"
         );
         assert_eq!(
-            dedup_by_embedding(metas, &embs, 0.85).len(),
+            dedup_by_embedding(metas, &embs, 0.85).kept.len(),
             1,
             "0.85 阈值合并"
         );
+    }
+
+    #[test]
+    fn title_guard_blocks_merge_of_different_titles() {
+        // 嵌入完全相同（同店铺版面），但标题不同 = 不同商品页 → 必须都保留
+        let metas = vec![
+            make_meta_titled("a", "Keychron K8 - 淘宝网"),
+            make_meta_titled("b", "iPhone 15 - 淘宝网"),
+        ];
+        let embs = vec![unit(vec![1.0, 0.0]), unit(vec![1.0, 0.0])];
+        let out = dedup_by_embedding(metas, &embs, 0.95);
+        assert_eq!(out.kept.len(), 2, "标题不同禁止合并");
+        assert!(out.merged.is_empty());
+    }
+
+    #[test]
+    fn title_guard_allows_merge_of_same_title() {
+        // 标题相同（空白差异被标准化掉）+ 嵌入相同 → 正常合并
+        let metas = vec![
+            make_meta_titled("a", "main.rs — Hindsight"),
+            make_meta_titled("b", "main.rs   —  Hindsight"),
+        ];
+        let embs = vec![unit(vec![1.0, 0.0]), unit(vec![1.0, 0.0])];
+        let out = dedup_by_embedding(metas, &embs, 0.95);
+        assert_eq!(out.kept.len(), 1);
+        assert_eq!(out.merged, vec![("b".to_string(), "a".to_string())]);
+    }
+
+    #[test]
+    fn title_guard_inactive_when_missing() {
+        // 一侧有标题一侧没有 → 守卫不生效，回落嵌入判定（合并）
+        let metas = vec![make_meta_titled("a", "某页面"), make_meta("b")];
+        let embs = vec![unit(vec![1.0, 0.0]), unit(vec![1.0, 0.0])];
+        let out = dedup_by_embedding(metas, &embs, 0.95);
+        assert_eq!(out.kept.len(), 1);
+    }
+
+    #[test]
+    fn different_title_can_still_merge_into_matching_kept_frame() {
+        // a(标题X) 与 b(标题Y) 版面相同但标题不同 → b 保留；
+        // c(标题Y) 与 b 同标题同版面 → c 并入 b 而不是 a
+        let metas = vec![
+            make_meta_titled("a", "X"),
+            make_meta_titled("b", "Y"),
+            make_meta_titled("c", "Y"),
+        ];
+        let embs = vec![
+            unit(vec![1.0, 0.0]),
+            unit(vec![1.0, 0.0]),
+            unit(vec![1.0, 0.0]),
+        ];
+        let out = dedup_by_embedding(metas, &embs, 0.95);
+        assert_eq!(out.kept.len(), 2);
+        assert_eq!(out.merged, vec![("c".to_string(), "b".to_string())]);
     }
 }

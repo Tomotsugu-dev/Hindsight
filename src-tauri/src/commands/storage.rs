@@ -119,6 +119,7 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
                  DELETE FROM ai_image_descriptions;
                  DELETE FROM ai_summaries;
                  DELETE FROM screenshot_embeddings;
+                 DELETE FROM screenshot_dedup_map;
                  DELETE FROM sync_outbox;
                  UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
                   WHERE entity = 'drive_files';",
@@ -580,6 +581,8 @@ pub async fn purge_screenshots(pool: State<'_, DbPool>) -> Result<(), String> {
                 [],
             )
             .db()?;
+            // 截图文件即将被删，member/rep 映射全部失去指向，一并清
+            conn.execute("DELETE FROM screenshot_dedup_map", []).db()?;
             Ok(())
         })
         .await

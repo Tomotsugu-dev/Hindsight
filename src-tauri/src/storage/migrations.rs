@@ -851,12 +851,26 @@ const CLEANUP_GARBAGE_PROCESS_NAMES_SQL: &str = r#"
     DELETE FROM app_icons         WHERE process_name LIKE '% pid=%';
 "#;
 
+/// v35：截图去重"合并留痕"表。dedup 丢帧时记 member → representative 归属，
+/// 让搜索/回溯能把被合并帧折算回代表帧的时间段，也给将来补 OCR/描述留账。
+/// 本地派生数据：不同步、purge_activities / 清空截图时一并清。
+const ADD_SCREENSHOT_DEDUP_MAP_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS screenshot_dedup_map (
+        member_path TEXT PRIMARY KEY,
+        rep_path    TEXT NOT NULL,
+        local_date  TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_dedup_map_rep  ON screenshot_dedup_map(rep_path);
+    CREATE INDEX IF NOT EXISTS idx_dedup_map_date ON screenshot_dedup_map(local_date);
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 24] = [
+    let extras: [&'static str; 25] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -881,6 +895,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         SEED_DEFAULT_SOCIAL_SUPER_SQL,         // v32
         SEED_DEFAULT_BROWSE_SUPER_SQL,         // v33
         CLEANUP_GARBAGE_PROCESS_NAMES_SQL,     // v34
+        ADD_SCREENSHOT_DEDUP_MAP_SQL,          // v35
     ];
     pool.0
         .call(move |conn| {

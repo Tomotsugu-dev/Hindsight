@@ -128,6 +128,42 @@ fn bytes_to_f32_vec(bytes: &[u8]) -> Option<Vec<f32>> {
     Some(out)
 }
 
+/// 记录一批 dedup 合并映射（member 被并入 rep）。幂等：同 member 重跑覆盖旧归属
+/// （重新生成日报时代表帧可能变）。失败只该 warn——留痕是增值数据，不能让段总结挂掉。
+pub async fn record_dedup_merges(
+    pool: &DbPool,
+    local_date: &str,
+    merges: &[(String, String)],
+) -> Result<()> {
+    if merges.is_empty() {
+        return Ok(());
+    }
+    let date = local_date.to_string();
+    let rows: Vec<(String, String)> = merges.to_vec();
+    let now = crate::storage::utc_now_rfc3339();
+    pool.0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            {
+                let mut stmt = tx
+                    .prepare_cached(
+                        "INSERT OR REPLACE INTO screenshot_dedup_map
+                             (member_path, rep_path, local_date, created_at)
+                         VALUES (?, ?, ?, ?)",
+                    )
+                    .db()?;
+                for (member, rep) in &rows {
+                    stmt.execute(rusqlite::params![member, rep, date, now])
+                        .db()?;
+                }
+            }
+            tx.commit().db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

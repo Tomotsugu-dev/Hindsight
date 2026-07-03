@@ -503,6 +503,10 @@ pub struct ScreenshotMeta {
     pub app_display: String,
     /// 来自 categories.name；NULL → None
     pub category_name: Option<String>,
+    /// activities.window_title——dedup 的"标题守卫"用：标题不同的两帧内容
+    /// 几乎必然不同（不同文件/不同商品/不同网页），禁止被 MobileNet 的
+    /// 版面相似度合并。None/空串 = 无标题信号，回落纯嵌入判定。
+    pub window_title: Option<String>,
 }
 
 /// 拉某天某段（`[start_hour, end_hour)`）的截图列表（含应用元数据），按时间排序。
@@ -538,7 +542,8 @@ pub async fn list_segment_screenshots(
             let sql = format!(
                 "SELECT a.screenshot_path,
                         COALESCE(g.display_name, a.process_name) AS app_display,
-                        c.name AS category_name
+                        c.name AS category_name,
+                        a.window_title
                    FROM activities a
               LEFT JOIN app_group_members gm
                      ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
@@ -577,6 +582,7 @@ pub async fn list_segment_screenshots(
                         path: r.get::<_, String>(0)?,
                         app_display: r.get::<_, String>(1)?,
                         category_name: r.get::<_, Option<String>>(2)?,
+                        window_title: r.get::<_, Option<String>>(3)?,
                     })
                 })
                 .db()?;
@@ -607,7 +613,8 @@ pub async fn get_screenshot_meta(pool: &DbPool, path: &str) -> Result<Option<Scr
         .call(move |conn| {
             let sql = "SELECT a.screenshot_path,
                               COALESCE(g.display_name, a.process_name) AS app_display,
-                              c.name AS category_name
+                              c.name AS category_name,
+                              a.window_title
                          FROM activities a
                     LEFT JOIN app_group_members gm
                            ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
@@ -623,6 +630,7 @@ pub async fn get_screenshot_meta(pool: &DbPool, path: &str) -> Result<Option<Scr
                         path: r.get::<_, String>(0)?,
                         app_display: r.get::<_, String>(1)?,
                         category_name: r.get::<_, Option<String>>(2)?,
+                        window_title: r.get::<_, Option<String>>(3)?,
                     })
                 })
                 .optional()
