@@ -5,8 +5,10 @@
 //!
 //! 本模块只提供连接与 schema;帧登记见 [`frames`],L3 折叠与 FTS 见 [`sessions`]。
 
+pub mod clusters;
 pub mod digest;
 pub mod frames;
+pub mod resident;
 pub mod sessions;
 
 use std::path::PathBuf;
@@ -55,7 +57,8 @@ impl MemoryDb {
         Ok(db)
     }
 
-    /// schema v1(L2/L3 所需;L4/L5 的簇表在 P3 以 user_version 迁移追加)。
+    /// schema 迁移:v1 = L2/L3(帧/会话/行/FTS),v2 = L4(簇/帧嵌入)。
+    /// v1 的 CREATE 全部 IF NOT EXISTS 可重复执行;v2 含 ALTER,按 user_version 守门。
     async fn init_schema(&self) -> Result<()> {
         self.0
             .call(|conn| {
@@ -122,7 +125,40 @@ impl MemoryDb {
 
                     PRAGMA user_version = 1;",
                 )
-                .db()
+                .db()?;
+
+                // v2:L4 视觉簇 + 帧嵌入(ALTER 无 IF NOT EXISTS,按版本守门)
+                let v: i64 = conn
+                    .query_row("PRAGMA user_version", [], |r| r.get(0))
+                    .db()?;
+                if v < 2 {
+                    conn.execute_batch(
+                        "ALTER TABLE frames ADD COLUMN cluster_id INTEGER;
+
+                        -- L4 视觉簇:代表帧 + 代表向量;description = L5 描述缓存位
+                        CREATE TABLE IF NOT EXISTS clusters (
+                            id INTEGER PRIMARY KEY,
+                            local_date TEXT NOT NULL,
+                            rep_path   TEXT NOT NULL,
+                            title      TEXT,              -- 代表帧标题(标题守卫用)
+                            embedding  BLOB NOT NULL,     -- f32 小端数组(512 维)
+                            description TEXT,             -- L5 缓存(NULL=未描述)
+                            described_at TEXT
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_clusters_date
+                            ON clusters(local_date);
+
+                        -- 帧嵌入(CLIP 文本→图检索;仅视觉主导帧)
+                        CREATE TABLE IF NOT EXISTS frame_embeddings (
+                            path      TEXT PRIMARY KEY,
+                            embedding BLOB NOT NULL
+                        );
+
+                        PRAGMA user_version = 2;",
+                    )
+                    .db()?;
+                }
+                Ok(())
             })
             .await?;
         Ok(())
@@ -132,6 +168,33 @@ impl MemoryDb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 对指定路径的既有库跑迁移并验证到 v2(诊断工具,验证 v1 旧库升级路径)。
+    /// 跑法:`MEM_DB=<路径> cargo test --lib memory::tests::migrate_at_env_path -- --ignored`
+    #[tokio::test]
+    #[ignore]
+    async fn migrate_at_env_path() {
+        let path = std::env::var("MEM_DB").expect("设 MEM_DB 指向待迁移的库");
+        let db = MemoryDb::open_at(std::path::Path::new(&path))
+            .await
+            .unwrap();
+        db.0.call(|conn| {
+            let v: i64 = conn
+                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .db()?;
+            assert_eq!(v, 2, "迁移后应为 v2");
+            // cluster_id 列存在(v2 的 ALTER 生效)
+            conn.execute("UPDATE frames SET cluster_id = NULL WHERE 0", [])
+                .db()?;
+            let clusters: i64 = conn
+                .query_row("SELECT COUNT(*) FROM clusters", [], |r| r.get(0))
+                .db()?;
+            assert!(clusters >= 0);
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
 
     /// schema 建得起来 + trigram FTS 可用(bundled SQLite 版本达标的证明)。
     #[tokio::test]

@@ -120,6 +120,8 @@
         "enableDescription": "Quando desativada, a captura em segundo plano para (tanto a atividade de janela quanto as capturas de tela).",
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
+        "ocrResidentLabel": "Manter OCR residente",
+        "ocrResidentDescription": "Novas capturas ficam pesquisáveis em tempo real (~400 MB de RAM extra); desativado = reconhecimento em lote, busca com atraso.",
         "intervalLabel": "Intervalo de captura",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",

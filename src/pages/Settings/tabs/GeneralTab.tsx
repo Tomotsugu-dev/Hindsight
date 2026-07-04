@@ -113,6 +113,16 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
+          label={t("settings.general.capture.ocrResidentLabel")}
+          description={t("settings.general.capture.ocrResidentDescription")}
+          disabled={!settings.captureEnabled || !settings.screenshotEnabled}
+        >
+          <Toggle
+            checked={settings.memoryOcrResident}
+            onChange={(v) => update({ memoryOcrResident: v })}
+          />
+        </Row>
+        <Row
           label={t("settings.general.capture.intervalLabel")}
           description={t("settings.general.capture.intervalDescription")}
           disabled={!settings.captureEnabled}

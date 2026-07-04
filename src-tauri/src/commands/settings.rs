@@ -3,6 +3,8 @@ use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::capture::CaptureService;
+use crate::commands::screen_memory::MemoryState;
+use crate::memory::resident::ResidentOcr;
 use crate::repo::settings::{self, Settings, SettingsPatch};
 use crate::storage::DbPool;
 
@@ -22,6 +24,8 @@ pub async fn update_settings(
     app: AppHandle,
     pool: State<'_, DbPool>,
     svc: State<'_, Arc<CaptureService>>,
+    resident: State<'_, Arc<ResidentOcr>>,
+    mem: State<'_, MemoryState>,
     patch: SettingsPatch,
 ) -> Result<Settings, String> {
     let current = settings::load(&pool).await.map_err(String::from)?;
@@ -29,6 +33,7 @@ pub async fn update_settings(
     let prev_enabled = current.capture_enabled;
     let prev_interval = current.capture_interval_seconds;
     let prev_autostart = current.auto_start;
+    let prev_resident = current.memory_ocr_resident;
 
     let next = settings::apply_patch(current, patch);
     settings::save(&pool, &next).await.map_err(String::from)?;
@@ -52,9 +57,10 @@ pub async fn update_settings(
     svc.set_screenshot_config(
         next.screenshot_enabled,
         next.screenshot_path.clone(),
-        1280,
-        720,
-        80,
+        // 存档规格与 bootstrap 保持一致(screen-memory.md L2 定案):≤2880/q85
+        2880,
+        2880,
+        85,
     )
     .await;
     svc.set_privacy_keywords(
@@ -74,6 +80,11 @@ pub async fn update_settings(
         if let Err(e) = res {
             log::warn!("切换开机自启失败: {e}");
         }
+    }
+
+    // OCR 常驻开关:启停立即生效,不需要重启
+    if next.memory_ocr_resident != prev_resident {
+        resident.sync(next.memory_ocr_resident, mem.0.clone()).await;
     }
 
     Ok(next)

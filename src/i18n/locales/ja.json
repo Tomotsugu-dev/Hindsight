@@ -120,6 +120,8 @@
         "enableDescription": "オフにするとバックグラウンド記録（ウィンドウ情報 + スクリーンショット）を停止します。",
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
+        "ocrResidentLabel": "OCR を常駐させる",
+        "ocrResidentDescription": "新しいスクリーンショットが即時に検索可能になります（約 400MB 追加使用）。オフの場合は一括認識のため検索に遅延があります。",
         "intervalLabel": "記録の間隔",
         "intervalDescription": "記録間隔。",
         "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",

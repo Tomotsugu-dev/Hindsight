@@ -64,7 +64,7 @@ fn batch_for(ladder: u32) -> usize {
 }
 /// ort 线程数:消化是后台任务,不许吃满用户整机(ort 默认占所有核)。
 /// 取核数的 1/4、夹在 [2,4]——32 核台机用 4 线程无感,4 核笔记本只占 2 线程。
-fn ort_threads() -> usize {
+pub(crate) fn ort_threads() -> usize {
     let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
     (cores / 4).clamp(2, 4)
 }
@@ -135,19 +135,18 @@ impl OcrEngine {
         order.sort_by_key(|&i| units[i].strip.width());
         let mut chunk: Vec<usize> = Vec::with_capacity(REC_BATCH);
         let mut chunk_ladder = 0u32;
-        let mut flush =
-            |chunk: &mut Vec<usize>, ladder: u32, texts: &mut Vec<String>| -> Result<()> {
-                if chunk.is_empty() {
-                    return Ok(());
-                }
-                let batch: Vec<&RecUnit> = chunk.iter().map(|&i| &units[i]).collect();
-                let decoded = self.rec_batch(&batch, ladder)?;
-                for (&i, text) in chunk.iter().zip(decoded) {
-                    texts[i] = text;
-                }
-                chunk.clear();
-                Ok(())
-            };
+        let flush = |chunk: &mut Vec<usize>, ladder: u32, texts: &mut Vec<String>| -> Result<()> {
+            if chunk.is_empty() {
+                return Ok(());
+            }
+            let batch: Vec<&RecUnit> = chunk.iter().map(|&i| &units[i]).collect();
+            let decoded = self.rec_batch(&batch, ladder)?;
+            for (&i, text) in chunk.iter().zip(decoded) {
+                texts[i] = text;
+            }
+            chunk.clear();
+            Ok(())
+        };
         for &i in &order {
             let lad = ladder_w(units[i].strip.width());
             if !chunk.is_empty() && (lad != chunk_ladder || chunk.len() >= batch_for(chunk_ladder))

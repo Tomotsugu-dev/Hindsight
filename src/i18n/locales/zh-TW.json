@@ -120,6 +120,8 @@
         "enableDescription": "關閉後停止後臺採集（視窗活動 + 截圖）。",
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
+        "ocrResidentLabel": "常駐 OCR",
+        "ocrResidentDescription": "新截圖即時可搜，多佔約 400MB 記憶體；關閉則定時批次辨識，檢索有延遲。",
         "intervalLabel": "採集間隔",
         "intervalDescription": "採集頻率。",
         "intervalHint": "截圖觸發時機：\n• 切換應用程式 → 立即截圖\n• 瀏覽器切換 URL → 立即截圖\n• 同一視窗停留滿設定的間隔 → 截圖",

@@ -67,6 +67,10 @@ pub struct Settings {
     /// 用户多久不动鼠键就算"挂机"，超过这个秒数 capture 不再延续当前会话，
     /// 避免离开电脑后还在累计使用时长。0 = 关闭挂机检测（永远算在用）。
     pub idle_threshold_seconds: u32,
+    /// 屏幕记忆的 OCR 常驻模式：true = OCR 引擎常驻内存、新截图准实时消化
+    /// （多占约 400MB 内存）；false（默认）= 批量模式，仅手动/定时消化时
+    /// 加载引擎，用完即释放。
+    pub memory_ocr_resident: bool,
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
@@ -96,6 +100,7 @@ impl Default for Settings {
             auto_update_interval: "weekly".to_string(),
             last_update_check_at: None,
             idle_threshold_seconds: 180,
+            memory_ocr_resident: false,
             ai: AiConfig::default(),
         }
     }
@@ -145,6 +150,7 @@ pub struct SettingsPatch {
     pub auto_update_interval: Option<String>,
     pub last_update_check_at: Option<Option<String>>,
     pub idle_threshold_seconds: Option<u32>,
+    pub memory_ocr_resident: Option<bool>,
     /// AI 配置整组覆盖；前端要么不传（保留旧值），要么传完整新值
     pub ai: Option<AiConfig>,
 }
@@ -297,6 +303,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             // 0 = 关闭检测；上限 3600 (1h) 防止用户填怪值
             .map(|v| v.min(3600))
             .unwrap_or(current.idle_threshold_seconds),
+        memory_ocr_resident: patch
+            .memory_ocr_resident
+            .unwrap_or(current.memory_ocr_resident),
         ai: patch
             .ai
             .map(|new_ai| crate::ai::config::sanitize(new_ai, &current.ai))

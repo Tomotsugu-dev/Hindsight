@@ -120,6 +120,8 @@
         "enableDescription": "关闭后停止后台采集（窗口活动 + 截图）。",
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
+        "ocrResidentLabel": "常驻 OCR",
+        "ocrResidentDescription": "新截图即时可搜，多占约 400MB 内存；关闭则定时批量识别，检索有延迟。",
         "intervalLabel": "采集间隔",
         "intervalDescription": "采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",

@@ -9,6 +9,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use super::clusters::{self, ClusterBook};
 use super::frames::{self, PendingFrame};
 use super::sessions::Folder;
 use super::MemoryDb;
@@ -50,23 +51,43 @@ pub struct DigestReport {
     pub skipped_missing_file: u64,
 }
 
+/// L4 视觉编码器模型(MobileCLIP2-S2,ONNX 外部权重两件套,须同目录)。
+const VISUAL_SOURCES: [(&str, &str); 2] = [
+    (
+        "visual.onnx",
+        "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX/resolve/main/visual.onnx",
+    ),
+    (
+        "visual.onnx.data",
+        "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX/resolve/main/visual.onnx.data",
+    ),
+];
+
 /// OCR 模型三件套:缺哪个下哪个。幂等。
 pub async fn ensure_models() -> Result<()> {
-    let dir = ocr::model_dir();
-    tokio::fs::create_dir_all(&dir).await.map_err(Error::Io)?;
-    for (name, url) in MODEL_SOURCES {
+    download_missing(&ocr::model_dir(), &MODEL_SOURCES).await
+}
+
+/// L4 视觉模型两件套(~140MB)。幂等;只在首个视觉帧出现时被调用。
+pub async fn ensure_visual_models() -> Result<()> {
+    download_missing(&crate::ai::visual::model_dir(), &VISUAL_SOURCES).await
+}
+
+async fn download_missing(dir: &std::path::Path, sources: &[(&str, &str)]) -> Result<()> {
+    tokio::fs::create_dir_all(dir).await.map_err(Error::Io)?;
+    for (name, url) in sources {
         let dest = dir.join(name);
         if tokio::fs::try_exists(&dest).await.map_err(Error::Io)? {
             continue;
         }
-        log::info!("下载 OCR 模型 {name} ...");
-        let bytes = reqwest::get(url)
+        log::info!("下载模型 {name} ...");
+        let bytes = reqwest::get(*url)
             .await?
             .error_for_status()
             .map_err(|e| Error::Ocr(format!("下载 {name} 失败: {e}")))?
             .bytes()
             .await?;
-        if name == "dict.txt" {
+        if *name == "dict.txt" {
             let lines = std::str::from_utf8(&bytes)
                 .map_err(|e| Error::Ocr(format!("字典不是 UTF-8: {e}")))?
                 .lines()
@@ -80,49 +101,90 @@ pub async fn ensure_models() -> Result<()> {
         let temp = dir.join(format!("{name}.downloading"));
         tokio::fs::write(&temp, &bytes).await.map_err(Error::Io)?;
         tokio::fs::rename(&temp, &dest).await.map_err(Error::Io)?;
-        log::info!("OCR 模型 {name} 就绪 ({} bytes)", bytes.len());
+        log::info!("模型 {name} 就绪 ({} bytes)", bytes.len());
     }
     Ok(())
 }
 
-/// 消化积压:取待处理帧 → OCR → L3 折叠 → 记账,直到登记簿清空。
+/// 视觉主导帧判据:OCR 有效字符总量低于此值 → 该帧由文字解释不了,
+/// 进 L4 视觉支路(嵌入 + 聚簇)。**待真实视觉日标定**(与 L1 的 f 同法)。
+const VISUAL_CHAR_MAX: usize = 60;
+
+/// 消化管线的运行态:OCR 引擎 + 懒加载的视觉引擎 + 折叠器 + 当日簇册。
+/// 批量模式一次 run 一个;常驻模式跨 tick 持有(会话与簇册连续)。
+pub struct Pipeline {
+    ocr: Arc<OcrEngine>,
+    /// L4 视觉编码器:开发日几乎不触发,首个视觉帧出现才加载(~140MB 下载 + ~250MB 内存)
+    visual: Option<Arc<crate::ai::visual::VisualEngine>>,
+    folder: Folder,
+    clusters: Option<ClusterBook>,
+}
+
+impl Pipeline {
+    /// 加载 OCR 引擎(模型缺失自动下载;设 ORT_DYLIB_PATH 定位 onnxruntime)。
+    pub async fn new() -> Result<Self> {
+        ensure_models().await?;
+        // ort 的 load-dynamic 靠 ORT_DYLIB_PATH 定位 onnxruntime(与嵌入模型同一份)
+        if let Ok(p) = crate::ai::embedding_runtime::dylib_path() {
+            if p.exists() {
+                std::env::set_var("ORT_DYLIB_PATH", &p);
+            }
+        }
+        let ocr = Arc::new(
+            tokio::task::spawn_blocking(OcrEngine::load)
+                .await
+                .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??,
+        );
+        Ok(Self {
+            ocr,
+            visual: None,
+            folder: Folder::default(),
+            clusters: None,
+        })
+    }
+}
+
+/// 消化积压(批量模式):加载引擎 → 清空登记簿 → 引擎随返回释放。
 ///
 /// 已在跑时直接返回错误(单实例);任何单帧错误只降级(标失败重试),
 /// 只有引擎级错误(模型加载失败等)才中断整批。
 pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
+    let mut pipe = Pipeline::new().await?;
+    let never_stop = AtomicBool::new(false);
+    drain(mem, &mut pipe, &never_stop).await
+}
+
+/// 消化核心:取待处理帧 → OCR → L3 折叠 → (视觉帧)L4 聚簇 → 记账,
+/// 直到登记簿清空或 `stop` 置位。批量与常驻共用——差别只在 [`Pipeline`]
+/// 的生命周期归谁管。`stop` 在帧间检查:停止请求最多等一帧(~1s)即生效,
+/// 且不会留下半消化状态。
+pub async fn drain(mem: &MemoryDb, pipe: &mut Pipeline, stop: &AtomicBool) -> Result<DigestReport> {
     if RUNNING.swap(true, Ordering::SeqCst) {
         return Err(Error::InvalidInput("消化任务已在运行"));
     }
-    let result = run_inner(mem).await;
+    let result = drain_inner(mem, pipe, stop).await;
     RUNNING.store(false, Ordering::SeqCst);
     result
 }
 
-async fn run_inner(mem: &MemoryDb) -> Result<DigestReport> {
-    ensure_models().await?;
-    // ort 的 load-dynamic 靠 ORT_DYLIB_PATH 定位 onnxruntime(与嵌入模型同一份)
-    if let Ok(p) = crate::ai::embedding_runtime::dylib_path() {
-        if p.exists() {
-            std::env::set_var("ORT_DYLIB_PATH", &p);
-        }
-    }
-    let engine = Arc::new(
-        tokio::task::spawn_blocking(OcrEngine::load)
-            .await
-            .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??,
-    );
-
+async fn drain_inner(
+    mem: &MemoryDb,
+    pipe: &mut Pipeline,
+    stop: &AtomicBool,
+) -> Result<DigestReport> {
     let mut report = DigestReport::default();
-    let mut folder = Folder::default();
     let started = std::time::Instant::now();
 
-    loop {
+    'outer: loop {
         let batch = frames::take_pending(mem, BATCH).await?;
         if batch.is_empty() {
             break;
         }
         for frame in batch {
-            match digest_one(mem, &engine, &mut folder, &frame).await {
+            if stop.load(Ordering::Relaxed) {
+                break 'outer;
+            }
+            match digest_one(mem, pipe, &frame).await {
                 Ok(true) => report.processed += 1,
                 Ok(false) => {
                     // 图文件已不在(retention 删除/用户清理):按完成记,别无限重试
@@ -136,39 +198,87 @@ async fn run_inner(mem: &MemoryDb) -> Result<DigestReport> {
             }
         }
     }
-    log::info!(
-        "消化完成: 处理 {} 失败 {} 缺图 {} 用时 {:?}",
-        report.processed,
-        report.failed,
-        report.skipped_missing_file,
-        started.elapsed()
-    );
+    if report.processed + report.failed + report.skipped_missing_file > 0 {
+        log::info!(
+            "消化完成: 处理 {} 失败 {} 缺图 {} 用时 {:?}",
+            report.processed,
+            report.failed,
+            report.skipped_missing_file,
+            started.elapsed()
+        );
+    }
     Ok(report)
 }
 
-/// 单帧管线:读图 → OCR → 折叠 → 标完成。Ok(false) = 图文件缺失(跳过)。
-async fn digest_one(
-    mem: &MemoryDb,
-    engine: &Arc<OcrEngine>,
-    folder: &mut Folder,
-    frame: &PendingFrame,
-) -> Result<bool> {
+/// 单帧管线:读图 → OCR → 折叠 → 标完成 → 视觉主导帧走 L4(嵌入+聚簇)。
+/// Ok(false) = 图文件缺失(跳过)。L4 是尽力而为的富集:失败只告警,
+/// 不影响帧的完成态(文字部分已入库)。
+async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -> Result<bool> {
     let path = std::path::PathBuf::from(&frame.path);
     if !path.is_file() {
         frames::mark_done(mem, frame.path.clone(), -1).await?;
         return Ok(false);
     }
-    let eng = Arc::clone(engine);
+    let eng = Arc::clone(&pipe.ocr);
+    let p = path.clone();
     let lines: Vec<String> = tokio::task::spawn_blocking(move || -> Result<Vec<String>> {
-        let img = image::open(&path).map_err(|e| Error::Ocr(format!("读图失败: {e}")))?;
+        let img = image::open(&p).map_err(|e| Error::Ocr(format!("读图失败: {e}")))?;
         Ok(eng.recognize(&img)?.into_iter().map(|l| l.text).collect())
     })
     .await
     .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??;
 
-    let session_id = folder.fold_frame(mem, frame, &lines).await?;
+    let session_id = pipe.folder.fold_frame(mem, frame, &lines).await?;
     frames::mark_done(mem, frame.path.clone(), session_id).await?;
+
+    // L4 视觉支路:文字解释不了的帧(字符量低于阈值)才嵌入+聚簇
+    let char_count: usize = lines
+        .iter()
+        .map(|l| l.chars().filter(|c| !c.is_whitespace()).count())
+        .sum();
+    if char_count < VISUAL_CHAR_MAX {
+        if let Err(e) = visual_branch(mem, pipe, frame, &path).await {
+            log::warn!("视觉支路失败 ({}),文字部分不受影响: {e}", frame.path);
+        }
+    }
     Ok(true)
+}
+
+/// L4:懒加载视觉引擎 → 嵌入 → 当日簇册归属 → 留痕。
+async fn visual_branch(
+    mem: &MemoryDb,
+    pipe: &mut Pipeline,
+    frame: &PendingFrame,
+    path: &std::path::Path,
+) -> Result<()> {
+    if pipe.visual.is_none() {
+        ensure_visual_models().await?;
+        pipe.visual = Some(Arc::new(
+            tokio::task::spawn_blocking(crate::ai::visual::VisualEngine::load)
+                .await
+                .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??,
+        ));
+    }
+    let engine = Arc::clone(pipe.visual.as_ref().expect("上面刚保证过已加载"));
+    let p = path.to_path_buf();
+    let embedding: Vec<f32> = tokio::task::spawn_blocking(move || -> Result<Vec<f32>> {
+        let img = image::open(&p).map_err(|e| Error::Ocr(format!("读图失败: {e}")))?;
+        engine.embed(&img)
+    })
+    .await
+    .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??;
+
+    // 簇册按日:跨日的第一个视觉帧触发换册
+    if pipe.clusters.as_ref().map(|b| b.date()) != Some(frame.local_date.as_str()) {
+        pipe.clusters = Some(ClusterBook::load(mem, &frame.local_date).await?);
+    }
+    let book = pipe.clusters.as_mut().expect("上面刚保证过已加载");
+    let title = crate::memory::sessions::normalize_title(frame.title.as_deref().unwrap_or(""));
+    let cluster_id = book
+        .assign(mem, &frame.path, &title, embedding.clone())
+        .await?;
+    clusters::record_frame(mem, &frame.path, cluster_id, &embedding).await?;
+    Ok(())
 }
 
 /// 历史回填:把主库 activities 里已有截图的活动行派生成帧登记(一次性,幂等)。

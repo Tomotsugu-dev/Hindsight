@@ -120,6 +120,8 @@
         "enableDescription": "When off, background capture stops (both window activity and screenshots).",
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
+        "ocrResidentLabel": "Keep OCR resident",
+        "ocrResidentDescription": "New screenshots become searchable in real time (~400 MB extra RAM); off = batch recognition, search lags behind.",
         "intervalLabel": "Capture interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",

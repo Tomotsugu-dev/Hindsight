@@ -596,6 +596,9 @@ export interface Settings {
    *  避免离开电脑后还在累计使用时长。0 = 关闭挂机检测。
    *  UI 按分钟展示，值进出后端时由调用方做秒↔分钟转换。 */
   idleThresholdSeconds: number;
+  /** 屏幕记忆 OCR 常驻模式：true = 引擎常驻内存、新截图准实时消化（约多占
+   *  400MB 内存）；false = 批量模式，仅消化时加载、用完即释放。 */
+  memoryOcrResident: boolean;
   /** AI 总结相关配置（端点、模型、时段、过滤、抽帧参数）。
    *  嵌套结构而不是平铺，跟后端 Settings.ai 对齐；
    *  更新某个子字段时调用方必须 spread 旧 ai：
