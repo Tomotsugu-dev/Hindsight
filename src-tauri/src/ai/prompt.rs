@@ -24,30 +24,41 @@ const PROMPT_ZH: &str = include_str!("../../resources/prompts/system_zh.md");
 const PROMPT_EN: &str = include_str!("../../resources/prompts/system_en.md");
 const PROMPT_JA: &str = include_str!("../../resources/prompts/system_ja.md");
 const PROMPT_PT: &str = include_str!("../../resources/prompts/system_pt.md");
+const PROMPT_TW: &str = include_str!("../../resources/prompts/system_tw.md");
 
 // 两步生成 step 1：单张截图的描述 prompt（vision 调用）
 const IMAGE_DESCRIBE_ZH: &str = include_str!("../../resources/prompts/image_describe_zh.md");
 const IMAGE_DESCRIBE_EN: &str = include_str!("../../resources/prompts/image_describe_en.md");
 const IMAGE_DESCRIBE_JA: &str = include_str!("../../resources/prompts/image_describe_ja.md");
 const IMAGE_DESCRIBE_PT: &str = include_str!("../../resources/prompts/image_describe_pt.md");
+const IMAGE_DESCRIBE_TW: &str = include_str!("../../resources/prompts/image_describe_tw.md");
 
 // 周报 system prompt（基于一周内日报全文做整周回顾）
 const WEEKLY_ZH: &str = include_str!("../../resources/prompts/weekly_zh.md");
 const WEEKLY_EN: &str = include_str!("../../resources/prompts/weekly_en.md");
 const WEEKLY_JA: &str = include_str!("../../resources/prompts/weekly_ja.md");
 const WEEKLY_PT: &str = include_str!("../../resources/prompts/weekly_pt.md");
+const WEEKLY_TW: &str = include_str!("../../resources/prompts/weekly_tw.md");
 
-/// 四语 (zh/en/ja/pt) 之间挑一个 —— 把分散在多处的 match 收敛进单一 helper。
+/// 五语 (zh/tw/en/ja/pt) 之间挑一个 —— 把分散在多处的 match 收敛进单一 helper。
 ///
-/// `prompt_language` 在 sanitize 时已被钳到 "zh" / "en" / "ja" / "pt"，本函数对其它值
-/// 兜底走 zh（与 sanitize 行为一致）。
+/// `prompt_language` 在 sanitize 时已被钳到 "zh" / "tw" / "en" / "ja" / "pt"，本函数对
+/// 其它值兜底走 zh（与 sanitize 行为一致）。
 ///
-/// 注：system / image-describe / weekly 这三种 system prompt 的内置默认走本函数选 pt
-/// 专属文本（决定模型出葡语）。而 user prompt 的「脚手架」文案（"Segment:" / "Top apps:"
-/// 等结构性框架）pt 复用英文——这些只是喂给模型的结构提示，模型在葡语 system prompt
-/// 主导下仍输出葡语，没必要再翻一份。
-fn pick_lang<'a>(lang: &str, zh: &'a str, en: &'a str, ja: &'a str, pt: &'a str) -> &'a str {
+/// 注：system / image-describe / weekly 这三种 system prompt 的内置默认走本函数选
+/// 专属文本（决定模型输出语言）。而 user prompt 的「脚手架」文案（"Segment:" /
+/// "Top apps:" 等结构性框架）pt 复用英文、tw 复用简体——这些只是喂给模型的结构提示，
+/// 模型在对应 system prompt 主导下仍输出目标语言，没必要再翻一份。
+fn pick_lang<'a>(
+    lang: &str,
+    zh: &'a str,
+    tw: &'a str,
+    en: &'a str,
+    ja: &'a str,
+    pt: &'a str,
+) -> &'a str {
     match lang {
+        "tw" => tw,
         "en" => en,
         "ja" => ja,
         "pt" => pt,
@@ -63,6 +74,7 @@ fn pick_system_base(ai: &AiConfig) -> &str {
     let ov = pick_lang(
         lang,
         &ai.prompt_overrides.system_zh,
+        &ai.prompt_overrides.system_tw,
         &ai.prompt_overrides.system_en,
         &ai.prompt_overrides.system_ja,
         &ai.prompt_overrides.system_pt,
@@ -71,7 +83,7 @@ fn pick_system_base(ai: &AiConfig) -> &str {
     if !ov.is_empty() {
         ov
     } else {
-        pick_lang(lang, PROMPT_ZH, PROMPT_EN, PROMPT_JA, PROMPT_PT)
+        pick_lang(lang, PROMPT_ZH, PROMPT_TW, PROMPT_EN, PROMPT_JA, PROMPT_PT)
     }
 }
 
@@ -109,6 +121,7 @@ pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
     let user_override = pick_lang(
         lang,
         &ai.image_describe_overrides.system_zh,
+        &ai.image_describe_overrides.system_tw,
         &ai.image_describe_overrides.system_en,
         &ai.image_describe_overrides.system_ja,
         &ai.image_describe_overrides.system_pt,
@@ -119,6 +132,7 @@ pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
         pick_lang(
             lang,
             IMAGE_DESCRIBE_ZH,
+            IMAGE_DESCRIBE_TW,
             IMAGE_DESCRIBE_EN,
             IMAGE_DESCRIBE_JA,
             IMAGE_DESCRIBE_PT,
@@ -173,6 +187,7 @@ pub fn build_system_prompt(ai: &AiConfig) -> String {
         let label = pick_lang(
             ai.prompt_language.as_str(),
             "关于用户：",
+            "關於使用者：",
             "About the user: ",
             "ユーザーについて：",
             "Sobre o usuário: ",
@@ -335,13 +350,14 @@ pub struct WeeklyContext<'a> {
 /// MVP 不暴露 weekly 专属覆盖；未来需要时再扩 `weekly_overrides` 字段。
 pub fn build_weekly_system_prompt(ai: &AiConfig) -> String {
     let lang = ai.prompt_language.as_str();
-    let base = pick_lang(lang, WEEKLY_ZH, WEEKLY_EN, WEEKLY_JA, WEEKLY_PT);
+    let base = pick_lang(lang, WEEKLY_ZH, WEEKLY_TW, WEEKLY_EN, WEEKLY_JA, WEEKLY_PT);
     let mut out = String::from(base.trim_end());
     let brief = ai.user_brief.trim();
     if !brief.is_empty() {
         let label = pick_lang(
             lang,
             "关于用户：",
+            "關於使用者：",
             "About the user: ",
             "ユーザーについて：",
             "Sobre o usuário: ",

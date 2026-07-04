@@ -30,7 +30,15 @@ export function pickReleaseNotesForLang(body: string, locale: string): string {
     sections[marks[i].code] = body.slice(marks[i].contentStart, end).trim();
   }
 
-  // "pt-BR" → "pt"、"zh-CN" → "zh"
-  const want = locale.slice(0, 2).toLowerCase();
-  return sections[want] ?? sections.en ?? Object.values(sections)[0] ?? body.trim();
+  // "pt-BR" → "pt"、"zh-CN" → "zh"；繁体（zh-TW/HK/MO/Hant）→ "tw"（标记只能 2 字母，
+  // 见 v0.7.9.md）。繁体块缺失时先回退简体（对繁体用户比英文友好），再回退英文。
+  const lower = locale.toLowerCase();
+  const want = /^zh(-|_)?(tw|hk|mo|hant)/.test(lower) ? "tw" : lower.slice(0, 2);
+  return (
+    sections[want] ??
+    (want === "tw" ? sections.zh : undefined) ??
+    sections.en ??
+    Object.values(sections)[0] ??
+    body.trim()
+  );
 }

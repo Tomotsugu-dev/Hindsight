@@ -145,12 +145,18 @@ where
         assets.push((cudart.to_string(), url));
     }
 
-    // 清掉旧版本目录，避免新解压跟旧文件混在一起。
+    // 清掉旧版本目录，避免新解压跟旧文件混在一起——但**保留本次要下的
+    // `<asset>.partial` 半成品**，下载失败重试时才能断点续传（asset 名里带
+    // pinned tag，升级 tag 后旧半成品不会被误续，会在这里被一并清掉）。
     // Windows 上 stop() 返回到 OS 真正释放 .exe / .dll 文件锁有 ~几百 ms 的窗口期
-    // （内核 unmap image + Defender 实时扫描），所以 remove 用带退避的重试。
+    // （内核 unmap image + Defender 实时扫描），所以删除用带退避的重试。
     let dir = platform_dir(p)?;
+    let keep: Vec<String> = assets
+        .iter()
+        .map(|(name, _)| format!("{name}.partial"))
+        .collect();
     if dir.exists() {
-        remove_dir_all_retry(&dir).await?;
+        clear_dir_keep_partials(&dir, &keep).await?;
     }
     std::fs::create_dir_all(&dir).map_err(|e| Error::EngineBinary {
         stage: "mkdir",
@@ -193,10 +199,8 @@ where
             };
             stream_download_with(&client, url, &temp_path, &mut wrapped).await
         };
-        if let Err(e) = res {
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(e);
-        }
+        // 失败时**不删** .partial：再次点「下载」会按 Range 从断点继续，605MB 不必重头再来
+        res?;
         total_downloaded = match size_hint {
             Some(s) => base + s,
             None => match std::fs::metadata(&temp_path) {
@@ -266,6 +270,55 @@ fn release_url(tag: &str, asset: &str) -> String {
 /// 实测 ~几百 ms 即可释放，所以退避序列 0.2s/0.5s/1s/2s/3s 共 ~7s。
 ///
 /// 重试到底还失败就把最后一次错误带路径抛上去。
+/// 清空目录但保留 `keep` 里列出的文件名（本次要续传的 `.partial`）。
+/// 删除带退避重试，原因同 [`remove_dir_all_retry`]（Windows 释放 exe/dll 文件锁有窗口期）。
+async fn clear_dir_keep_partials(dir: &Path, keep: &[String]) -> Result<()> {
+    const BACKOFFS_MS: [u64; 5] = [200, 500, 1000, 2000, 3000];
+    let mut last_err: Option<std::io::Error> = None;
+    for (attempt, delay_ms) in std::iter::once(0)
+        .chain(BACKOFFS_MS.iter().copied())
+        .enumerate()
+    {
+        if delay_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        }
+        match try_clear_keep(dir, keep) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                log::warn!(
+                    "清理引擎目录第 {} 次失败: path={} kind={:?} err={e}",
+                    attempt + 1,
+                    dir.display(),
+                    e.kind()
+                );
+                last_err = Some(e);
+            }
+        }
+    }
+    Err(Error::EngineBinary {
+        stage: "cleanup",
+        details: format!("path={} err={:?}", dir.display(), last_err),
+    })
+}
+
+fn try_clear_keep(dir: &Path, keep: &[String]) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if keep.iter().any(|k| k == &name) {
+            continue;
+        }
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
+
 async fn remove_dir_all_retry(dir: &Path) -> Result<()> {
     const BACKOFFS_MS: [u64; 5] = [200, 500, 1000, 2000, 3000];
     let mut last_err: Option<std::io::Error> = None;
@@ -339,32 +392,62 @@ where
     use futures_util::StreamExt;
     use tokio::io::AsyncWriteExt;
 
-    let resp = client.get(url).send().await?;
-    if !resp.status().is_success() {
+    // 断点续传：dest（.partial）已有字节 → 带 Range 头接着下。
+    // GitHub releases 支持 Range；服务器不认（返 200 而非 206）就 truncate 重头。
+    let resume_from = tokio::fs::metadata(dest)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let mut req = client.get(url);
+    if resume_from > 0 {
+        req = req.header(reqwest::header::RANGE, format!("bytes={resume_from}-"));
+    }
+    let resp = req.send().await?;
+    let status = resp.status();
+    if !status.is_success() {
         return Err(Error::EngineBinary {
             stage: "download",
-            details: format!("HTTP {} {}", resp.status(), url),
+            details: format!("HTTP {status} {url}"),
         });
     }
-    let total = resp.content_length();
+    let resuming = resume_from > 0 && status == reqwest::StatusCode::PARTIAL_CONTENT;
+    if resume_from > 0 && !resuming {
+        log::info!("引擎下载：服务器未接受 Range（HTTP {status}），从头重下 {url}");
+    }
+    // 206 的 content_length 是**剩余**字节数，总量要补上已下的部分
+    let total = match resp.content_length() {
+        Some(len) if resuming => Some(resume_from + len),
+        other => other,
+    };
 
-    let mut file = tokio::fs::File::create(dest)
-        .await
-        .map_err(|e| Error::EngineBinary {
-            stage: "download",
-            details: format!(
-                "File::create 失败: path={} err={e}（kind={:?}）",
-                dest.display(),
-                e.kind()
-            ),
-        })?;
+    let mut file = if resuming {
+        tokio::fs::OpenOptions::new().append(true).open(dest).await
+    } else {
+        tokio::fs::File::create(dest).await
+    }
+    .map_err(|e| Error::EngineBinary {
+        stage: "download",
+        details: format!(
+            "打开下载文件失败: path={} err={e}（kind={:?}）",
+            dest.display(),
+            e.kind()
+        ),
+    })?;
     let mut stream = resp.bytes_stream();
-    let mut downloaded: u64 = 0;
+    let mut downloaded: u64 = resume_from;
+    if resuming {
+        log::info!("引擎下载：从 {resume_from} 字节断点续传 {url}");
+    }
     let mut last_emit = std::time::Instant::now();
-    progress(DownloadPhase::Downloading, 0, total);
+    progress(DownloadPhase::Downloading, downloaded, total);
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
+        let chunk = chunk.map_err(|e| Error::EngineBinary {
+            stage: "download",
+            details: format!(
+                "网络中断（已下载 {downloaded} 字节，断点已保留，再次点击下载将从断点继续）：{e}"
+            ),
+        })?;
         file.write_all(&chunk).await.map_err(Error::from)?;
         downloaded += chunk.len() as u64;
 

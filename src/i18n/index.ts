@@ -6,6 +6,7 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { locale as osLocale } from "@tauri-apps/plugin-os";
 import zhCN from "./locales/zh-CN.json";
+import zhTW from "./locales/zh-TW.json";
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
 import ptBR from "./locales/pt-BR.json";
@@ -14,11 +15,13 @@ export const LOCALE_STORAGE_KEY = "hindsight.locale";
 /** 兜底语言：系统 locale 无法识别 / 非 zh,ja 时用 en（比中文通用） */
 export const FALLBACK_LOCALE = "en";
 
-type Supported = "zh-CN" | "en" | "ja" | "pt-BR";
+type Supported = "zh-CN" | "zh-TW" | "en" | "ja" | "pt-BR";
 
-/** 把任意 BCP-47 locale 串映射到支持的四种之一 */
+/** 把任意 BCP-47 locale 串映射到支持的五种之一 */
 function mapToSupported(loc: string | null | undefined): Supported {
   const l = (loc ?? "").toLowerCase();
+  // 繁体圈（台湾 / 香港 / 澳门 / 显式 Hant 脚本）→ 繁体；其余中文 → 简体
+  if (/^zh[-_]?(tw|hk|mo|hant)/.test(l)) return "zh-TW";
   if (l.startsWith("zh")) return "zh-CN";
   if (l.startsWith("ja")) return "ja";
   if (l.startsWith("pt")) return "pt-BR";
@@ -31,6 +34,7 @@ const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
 void i18n.use(initReactI18next).init({
   resources: {
     "zh-CN": { translation: zhCN },
+    "zh-TW": { translation: zhTW },
     en: { translation: en },
     ja: { translation: ja },
     "pt-BR": { translation: ptBR },

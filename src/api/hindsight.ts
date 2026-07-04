@@ -518,7 +518,7 @@ export interface AiConfig {
   summaryMain: string;
   /** step 2 专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
   summaryMmproj: string;
-  /** AI 总结使用的提示词语言："zh" / "en" / "ja"。
+  /** AI 总结使用的提示词语言："zh" / "tw" / "en" / "ja" / "pt"。
    *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
   promptLanguage: PromptLanguage;
   /** 用户对内置 system prompt（step 2 段总结）的覆盖；按语言独立。
@@ -552,7 +552,7 @@ export interface AiConfig {
   summaryCtxSize: number | null;
 }
 
-export type PromptLanguage = "zh" | "en" | "ja" | "pt";
+export type PromptLanguage = "zh" | "tw" | "en" | "ja" | "pt";
 
 export interface PromptOverrides {
   /** 中文 system prompt 覆盖；空 = 用内置默认 */
@@ -560,6 +560,8 @@ export interface PromptOverrides {
   systemEn: string;
   systemJa: string;
   systemPt: string;
+  /** 繁体中文（台湾）system prompt 覆盖 */
+  systemTw: string;
 }
 
 export interface Settings {

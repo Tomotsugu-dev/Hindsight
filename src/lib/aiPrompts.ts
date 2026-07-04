@@ -12,14 +12,17 @@ import zhText from "../../src-tauri/resources/prompts/system_zh.md?raw";
 import enText from "../../src-tauri/resources/prompts/system_en.md?raw";
 import jaText from "../../src-tauri/resources/prompts/system_ja.md?raw";
 import ptText from "../../src-tauri/resources/prompts/system_pt.md?raw";
+import twText from "../../src-tauri/resources/prompts/system_tw.md?raw";
 import zhImageText from "../../src-tauri/resources/prompts/image_describe_zh.md?raw";
 import enImageText from "../../src-tauri/resources/prompts/image_describe_en.md?raw";
 import jaImageText from "../../src-tauri/resources/prompts/image_describe_ja.md?raw";
 import ptImageText from "../../src-tauri/resources/prompts/image_describe_pt.md?raw";
+import twImageText from "../../src-tauri/resources/prompts/image_describe_tw.md?raw";
 
 /** 内置默认 system prompt（step 2 段总结）——按语言索引。 */
 export const DEFAULT_SYSTEM_PROMPTS: Record<PromptLanguage, string> = {
   zh: zhText.trimEnd(),
+  tw: twText.trimEnd(),
   en: enText.trimEnd(),
   ja: jaText.trimEnd(),
   pt: ptText.trimEnd(),
@@ -28,6 +31,7 @@ export const DEFAULT_SYSTEM_PROMPTS: Record<PromptLanguage, string> = {
 /** 内置默认 image describe prompt（step 1 单图描述）——按语言索引。 */
 export const DEFAULT_IMAGE_DESCRIBE_PROMPTS: Record<PromptLanguage, string> = {
   zh: zhImageText.trimEnd(),
+  tw: twImageText.trimEnd(),
   en: enImageText.trimEnd(),
   ja: jaImageText.trimEnd(),
   pt: ptImageText.trimEnd(),
@@ -36,10 +40,12 @@ export const DEFAULT_IMAGE_DESCRIBE_PROMPTS: Record<PromptLanguage, string> = {
 /** 把 PromptLanguage 映射到 PromptOverrides 的字段名。 */
 export function overrideKey(
   lang: PromptLanguage,
-): "systemZh" | "systemEn" | "systemJa" | "systemPt" {
+): "systemZh" | "systemTw" | "systemEn" | "systemJa" | "systemPt" {
   switch (lang) {
     case "zh":
       return "systemZh";
+    case "tw":
+      return "systemTw";
     case "en":
       return "systemEn";
     case "ja":
