@@ -141,6 +141,7 @@ fn macos_frontmost_pid() -> Option<u32> {
 }
 
 /// 整窗保留：等比缩放使其装入 max_w × max_h，超过任一上限才缩，否则保持原始尺寸。
+/// Lanczos3:存档是 OCR 的输入,缩放质量直接决定小字是否可读(Triangle 会糊笔画)。
 fn fit_within(img: DynamicImage, max_w: u32, max_h: u32) -> DynamicImage {
     if max_w == 0 || max_h == 0 {
         return img;
@@ -148,5 +149,5 @@ fn fit_within(img: DynamicImage, max_w: u32, max_h: u32) -> DynamicImage {
     if img.width() <= max_w && img.height() <= max_h {
         return img;
     }
-    img.resize(max_w, max_h, image::imageops::FilterType::Triangle)
+    img.resize(max_w, max_h, image::imageops::FilterType::Lanczos3)
 }

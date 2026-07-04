@@ -22,6 +22,7 @@ pub mod image;
 pub mod job_guard;
 pub mod llm;
 pub mod models;
+pub mod ocr;
 pub mod platform;
 pub mod prompt;
 pub mod recommended;

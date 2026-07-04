@@ -157,6 +157,11 @@ pub enum Error {
     #[error("embedding failed: {0}")]
     EmbeddingFailed(String),
 
+    /// PP-OCRv5 识别失败（模型加载 / 预处理 / 推理 / 后处理任一阶段）。
+    /// caller（消化 worker）按单帧失败处理：标 `ocr_state=2` 重试，不中断批次。
+    #[error("ocr failed: {0}")]
+    Ocr(String),
+
     /// 模型下载被用户主动取消（点暂停）。**不是 fatal**——`.partial` 文件保留，
     /// 下次再调 `download_from_hf` 同 file 名时走 Range 续传。
     /// caller（download_model command）应把这条单独 catch，让前端表达成"已暂停"

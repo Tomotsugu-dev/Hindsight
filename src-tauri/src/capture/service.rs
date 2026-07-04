@@ -8,6 +8,7 @@ use tokio::task::JoinHandle;
 
 use crate::capture::{browser_url, privacy, screenshot, window};
 use crate::error::Result;
+use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
 use crate::repo::{activities, app_groups, process_paths};
 use crate::storage::DbPool;
@@ -48,9 +49,10 @@ impl Default for ScreenshotConfig {
         Self {
             enabled: false,
             dir: String::new(),
-            target_width: 1280,
-            target_height: 720,
-            jpeg_quality: 80,
+            // 与 bootstrap 的存档规格一致(screen-memory.md L2):≤2880/q85
+            target_width: 2880,
+            target_height: 2880,
+            jpeg_quality: 85,
         }
     }
 }
@@ -107,6 +109,9 @@ const PROBE_CHANGED_FRACTION: f64 = 0.001;
 /// 临界区都极短（克隆配置 / 单赋值 / 取出 Option），不会因细粒度锁产生抖动。
 struct Inner {
     pool: DbPool,
+    /// 屏幕记忆库(L2 帧登记)。None = 记忆库打开失败,采集照常、只是不登记——
+    /// 帧登记失败永远不该阻塞采集本身。
+    memory: Option<MemoryDb>,
     interval_secs: Mutex<u32>,
     handle: Mutex<Option<JoinHandle<()>>>,
     last_capture_at: Mutex<Option<String>>,
@@ -145,10 +150,11 @@ pub struct CaptureService {
 impl CaptureService {
     /// 创建采集服务。`interval_secs` 是同一焦点持续多少秒后强制补一张截图，
     /// 启动后由 `set_interval` 跟 settings 同步。
-    pub fn new(pool: DbPool, interval_secs: u32) -> Self {
+    pub fn new(pool: DbPool, memory: Option<MemoryDb>, interval_secs: u32) -> Self {
         Self {
             inner: Arc::new(Inner {
                 pool,
+                memory,
                 interval_secs: Mutex::new(interval_secs),
                 handle: Mutex::new(None),
                 last_capture_at: Mutex::new(None),
@@ -548,6 +554,22 @@ async fn tick(inner: &Inner) -> Result<()> {
                 None => None,
             }
         };
+        // L2 帧登记:落盘成功的帧登进屏幕记忆库,消化 worker 按此消费。
+        // 失败只告警——记忆库问题永远不阻塞采集。
+        if let (Some(mem), Some(path)) = (inner.memory.as_ref(), shot.as_ref()) {
+            if let Err(e) = memory_frames::register(
+                mem,
+                path.clone(),
+                now.to_rfc3339(),
+                now.format("%Y-%m-%d").to_string(),
+                Some(info.app_name.clone()),
+                Some(info.title.clone()),
+            )
+            .await
+            {
+                log::warn!("帧登记失败 ({path}): {e}");
+            }
+        }
         let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
         if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {

@@ -6,6 +6,7 @@ mod commands;
 mod device;
 mod error;
 mod icons;
+mod memory;
 mod permissions;
 mod platform;
 mod repo;
@@ -136,7 +137,17 @@ pub fn run() {
                 MINIMIZE_TO_TRAY
                     .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
-                let svc = bootstrap::init_capture_service(pool.clone(), &cfg).await;
+                // 屏幕记忆库(L2):打开失败不阻塞启动,采集端只是不登记帧
+                let memdb = match memory::MemoryDb::open().await {
+                    Ok(db) => Some(db),
+                    Err(e) => {
+                        log::warn!("屏幕记忆库打开失败,帧登记停用: {e}");
+                        None
+                    }
+                };
+                let svc =
+                    bootstrap::init_capture_service(pool.clone(), memdb.clone(), &cfg).await;
+                handle.manage(commands::screen_memory::MemoryState(memdb));
                 spawn_cleanup_task(pool.clone());
                 bootstrap::spawn_backfill_tasks(pool.clone());
                 let sync_engine = bootstrap::init_sync_engine(pool.clone()).await;
@@ -245,6 +256,9 @@ pub fn run() {
             commands::ai_models::import_model,
             commands::ai_models::cancel_model_download,
             commands::ai_models::list_partial_downloads,
+            // --- 屏幕记忆(L2/L3) ---
+            commands::screen_memory::memory_backfill,
+            commands::screen_memory::memory_digest_now,
             // --- ai: 总结 ---
             commands::ai_summary::generate_day_summary,
             commands::ai_summary::retry_summary_segment,

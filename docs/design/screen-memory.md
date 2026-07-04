@@ -1,6 +1,6 @@
 # 屏幕记忆(Screen Memory)架构设计
 
-状态:设计定稿;L1(帧差静止门)与 L2(存档规格)参数已实测定稿,待实施
+状态:设计定稿;L2/L3 已落地(2026-07-05:存档规格切换 + memory.sqlite + PP-OCRv5 消化管线 + 行级折叠 + FTS,真实档案 e2e 通过);L1 静止门参数已定稿、待实施
 关联:现有 AI 日报管线(`src-tauri/src/ai/`)、`screenshot_dedup_map`(迁移 v35)、标题守卫去重(`ai/dedup.rs`)
 
 ---
@@ -39,7 +39,7 @@
 │                                                 │
 │  L0 元数据    app/标题/时长          免费  100%全留 │
 │  L1 静止门    帧差法(占比阈值)       ~1ms  拦~5-15% │
-│  L2 文本层    OCR 逐字识别           0.13s  近全量  │
+│  L2 文本层    OCR 逐字识别           ~0.5s  全量   │
 │  L3 会话折叠  标题+行级并集去重        μs    真正的去重层│
 │  L4 视觉门    CLIP 嵌入 + 新颖度判定   ~ms   拦已知簇 │
 │  L5 理解层    VLM 描述新簇 + 长驻重采样 2-10s 5-30张/天│
@@ -124,20 +124,28 @@
 过渡实现已上线(`service.rs::screen_probe_active`,挂机判定第二信号,限频 20s、
 截图功能关闭时停用);P1 时探测器并入 L1 静止门,同一传感器不留两套。
 
-### L2 文本层——OCR 逐字识别(0.13s/帧,全量)
+### L2 文本层——OCR 逐字识别(全量)
 
-所有通过 L1 的帧(~350 帧/天)全部过系统 OCR(macOS Vision framework / Windows OCR)。
-实测(用户机器):1280×720 与全分辨率速度相同 ~130ms/帧;350 帧 ≈ **45 秒/天**总计算量,
-便宜到不需要抽样。产出逐字文本,进 FTS 索引(trigram tokenizer,支持中日文子串)。
+所有通过 L1 的帧全部 OCR,产出逐字文本行交 L3 折叠。**帧级识别结果不落库**——
+全量重跑一天只要分钟级,比维护任何帧级缓存都便宜,折叠规则改了重跑即可。
+成本:几百 ms/帧(CPU),全天数百帧 ≈ 分钟级,不需要抽样。
 
 设计要点:**OCR 在去重之前**——先全录,再折叠。旧方案"先去重再分析"的信息丢失由此根除。
+
+引擎(可替换抽象,一侧一实现):
+
+- **Windows:PP-OCRv5(ONNX)**——单模型原生识别简中/繁中/英/日,混排页直接认,
+  **无语言检测环节**;跑在既有 onnxruntime(嵌入模型同款)上,模型 ~20MB 走既有
+  HF 下载管道;输出置信度 + 行框(系统 OCR 两者皆无)。小语种(韩文/西里尔等)
+  = 换装对应识别模型文件,管线不动。
+- **macOS:Vision**——原生多语言列表 + 自动检测;设 `minimumTextHeight = 0`
+  (P2 合成图复测项)。
 
 **输入分辨率结论(POC 实测)**:
 
 - 唯一的地板:**原生渲染 ≲13px** 的细笔画识别不动,放大/插值救不回
   (16px 99%,13px 仅 27-33%)——由存档规格保原生像素应对。JPEG 压缩无损耗顾虑。
-- **整图直喂**,不做任何预切分(Windows 实测直喂无损失;mac 设 `minimumTextHeight = 0`,
-  P2 用合成图复测确认)。
+- **整图直喂**,不做任何预切分。
 - **屏幕 DPI 决定生死**:2× Retina 屏 UI 文字 26px+ 物理,现有 1280 存档缩后是"高墨量 13px",
   99.7% 可读——**现状即可用**;1× 屏(QHD/1080p@100%)正文 14-16px 物理骑在地板上,
   **1280/q80 存档为不可逆毁灭**(实测存档图 225 乱码字符),历史档案无法回填。
@@ -151,7 +159,6 @@
   - 4K@100%(罕见)超上限截到 2880,小字接受损失并在文档声明。
   - 磁盘账:单张 2-4×,但 L1 静止帧不落盘抵消一部分,净增约 2-3×,retention 管上限。
   - 历史档案(1× 屏来源)无法回填文本,从新规格起累积。
-- L1 输出的变化块掩码 → **区域 OCR**(只 OCR 变化条带):省时 + 裁剪天然抬高相对图高。
 
 ### L3 会话折叠——标题定界 + 行级并集(μs 级,真正的去重层)
 
@@ -259,11 +266,21 @@ CREATE TABLE text_sessions (
     started_ts TEXT NOT NULL, ended_ts TEXT NOT NULL,
     app_id TEXT, title TEXT,
     simhash INTEGER,
-    text TEXT NOT NULL              -- 会话合并文本(增量拼接)
+    text TEXT NOT NULL              -- 会话合并文本(= session_lines 物化拼接)
 );
 CREATE VIRTUAL TABLE text_sessions_fts USING fts5(
     text, content='text_sessions', content_rowid='id',
-    tokenize='trigram'              -- 中日文子串搜索
+    tokenize='trigram'              -- 中日文子串搜索,语言无关
+);
+
+-- L3 行级留痕:每个唯一行 + 首次出现帧(搜索命中 → 精确到帧的证据卡)
+CREATE TABLE session_lines (
+    session_id INTEGER NOT NULL,
+    line_no    INTEGER NOT NULL,    -- 会话内序
+    text       TEXT NOT NULL,       -- 标准化后 ≥6 字符
+    first_path TEXT NOT NULL,       -- 首现帧
+    first_ts   TEXT NOT NULL,
+    PRIMARY KEY (session_id, line_no)
 );
 
 -- L4 视觉簇
@@ -302,8 +319,9 @@ CREATE TABLE attach_map (
 复用已定的 OCR worker 方案,扩展为全瀑布:
 
 - **形态**:独立子进程(`hindsight --digest-worker`),spawn → 加载模型 → 消化积压 → 退出。
-  OCR 模型编译为 OS 级缓存(实测首次 12s 一次性,之后新进程 ~200ms 冷启);
-  CLIP ONNX 常内存 ~100MB、VLM 按需由 EngineSupervisor 管理——都只挂在 worker 存续期。
+  OCR(PP-OCRv5)与 CLIP 同跑 onnxruntime,VLM 按需由 EngineSupervisor 管理——
+  都只挂在 worker 存续期。单实例文件锁防双跑;单帧失败标记重试(上限 3 次)后跳过,
+  不让整晚消化卡死在一帧上。
 - **两档模式**(设置项,仅截图开启时可见):
   - **批量(默认)**:触发时机 = 生成日报前 / 系统空闲 / 每日定时。一次消化完积压即退出;
   - **插电常驻(opt-in)**:接电源时驻留,准实时消化 + 预富集(提前跑 L5 新簇);
@@ -379,10 +397,12 @@ tool-calling 循环,工具面(每类问题都有廉价通道):
 
 | 参数 | 值 | 依据 |
 |---|---|---|
+| 引擎 | Windows = PP-OCRv5(ONNX,复用 onnxruntime);mac = Vision | 单模型简中/繁中/英/日混排直认,无语言检测环节 |
 | OCR 输入 | 存档整图直喂 | mac 需设 `minimumTextHeight=0`(P2 复测项) |
 | 输入下限 | 原生渲染 ≥16px 物理文字 | 13px 即使无损也仅 27-33%;16px 为 99% |
 | 识别质量评法 | 句子还原率(逐字地面真值) | 字符数/字多者为基准均已证伪 |
 | 存档规格 | **宽 = 逻辑宽度(≤2880),q85,Lanczos3** | 1×屏原生锐利、2×屏高墨量缩放,两个 OCR 可用域 |
+| 帧级结果 | 不落库,折叠后只存会话行 | 全量重跑分钟级,比维护帧级缓存便宜 |
 
 **L3 会话折叠(设计定案,阈值待实装标定)**
 

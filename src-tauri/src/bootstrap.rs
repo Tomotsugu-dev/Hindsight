@@ -161,8 +161,16 @@ pub async fn init_database(dev_meta: &DeviceMeta) -> crate::error::Result<DbPool
 
 /// 第 3 步：构造 [`CaptureService`] 并按当前 settings 配置一次。
 /// 不在这里 start —— 调用方根据 settings.capture_enabled 决定是否启动。
-pub async fn init_capture_service(pool: DbPool, cfg: &Settings) -> Arc<CaptureService> {
-    let svc = Arc::new(CaptureService::new(pool, cfg.capture_interval_seconds));
+pub async fn init_capture_service(
+    pool: DbPool,
+    memory: Option<crate::memory::MemoryDb>,
+    cfg: &Settings,
+) -> Arc<CaptureService> {
+    let svc = Arc::new(CaptureService::new(
+        pool,
+        memory,
+        cfg.capture_interval_seconds,
+    ));
     svc.set_work_hours(cfg.work_hours_enabled, cfg.work_ranges.clone())
         .await;
     svc.set_screenshot_config(
@@ -170,9 +178,12 @@ pub async fn init_capture_service(pool: DbPool, cfg: &Settings) -> Arc<CaptureSe
         // screenshot_enabled=false 时窗口活动照常落库，仅跳过 take_screenshot
         cfg.screenshot_enabled,
         cfg.screenshot_path.clone(),
-        1280,
-        720,
-        80,
+        // 存档规格(screen-memory.md L2 定案):上限 2880、q85、Lanczos3。
+        // 1× 屏(QHD 2560)从此原生存储,14-16px 正文以原生像素进 OCR;
+        // 旧 1280/q80 对 1× 屏的文字是不可逆毁灭,历史无法回填。
+        2880,
+        2880,
+        85,
     )
     .await;
     svc.set_privacy_keywords(
