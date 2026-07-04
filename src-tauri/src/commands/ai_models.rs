@@ -119,6 +119,43 @@ pub async fn download_model(
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// 把用户磁盘上已有的 GGUF 文件导入模型目录（拷贝，源文件保持不动）。
+///
+/// - `src_path` 是系统文件选择框返回的绝对路径
+/// - 后端校验 `.gguf` 后缀 + GGUF 文件头，挡住改后缀的非模型文件
+/// - 拷贝进度复用 [`MODEL_PROGRESS_EVENT`]，事件的 `file` 字段用落盘文件名
+///   （= 源 basename），前端按相同名字索引进度
+/// - 返回落盘后的完整路径
+#[tauri::command]
+pub async fn import_model(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    src_path: String,
+) -> Result<String, String> {
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let src = std::path::PathBuf::from(&src_path);
+    // emit 用落盘名 = 源文件名，让前端按同名索引进度 / 判 busy
+    let file_for_emit = src
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
+    let app_for_emit = app.clone();
+    let path = models::import_file(&cfg.ai, &src, move |downloaded, total| {
+        let payload = ModelDownloadProgressPayload {
+            file: file_for_emit.clone(),
+            downloaded,
+            total,
+        };
+        if let Err(e) = app_for_emit.emit(MODEL_PROGRESS_EVENT, &payload) {
+            log::warn!("emit {MODEL_PROGRESS_EVENT} 失败: {e}");
+        }
+    })
+    .await
+    .map_err(String::from)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 /// 暂停某个正在进行中的下载——翻 cancel flag。`<file>.partial` 被保留，
 /// 用户下次再调 `download_model` 同 file 名时会走 Range 续传。
 ///

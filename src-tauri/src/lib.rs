@@ -242,6 +242,7 @@ pub fn run() {
             commands::ai_models::delete_model,
             commands::ai_models::list_recommended_models,
             commands::ai_models::download_model,
+            commands::ai_models::import_model,
             commands::ai_models::cancel_model_download,
             commands::ai_models::list_partial_downloads,
             // --- ai: 总结 ---

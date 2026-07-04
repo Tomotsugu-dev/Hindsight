@@ -785,6 +785,18 @@
         "mmprojFileLabel": "mmproj 文件（可选，仅 vision 模型需要）",
         "mmprojFilePlaceholder": "例：mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
         "errorRequired": "仓库和主权重文件不能为空。"
+      },
+      "import": {
+        "button": "导入本地模型文件",
+        "importing": "正在导入 {{name}}…",
+        "importingPct": "正在导入 {{name}}（{{pct}}%）…",
+        "tooltip": "把磁盘上已有的 GGUF 文件拷贝进模型目录",
+        "dialogTitle": "选择 GGUF 模型文件"
+      },
+      "local": {
+        "title": "本地模型（不在推荐列表中）",
+        "pairedMmproj": "视觉投影：{{name}}",
+        "orphanMmproj": "视觉投影文件（需配合对应主模型使用）"
       }
     },
     "brief": {

@@ -785,6 +785,18 @@
         "mmprojFileLabel": "mmproj ファイル (任意、ビジョンモデルのみ)",
         "mmprojFilePlaceholder": "例: mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
         "errorRequired": "リポジトリとメイン重みファイルは必須です。"
+      },
+      "import": {
+        "button": "ローカルモデルファイルを取り込む",
+        "importing": "{{name}} を取り込み中…",
+        "importingPct": "{{name}} を取り込み中（{{pct}}%）…",
+        "tooltip": "ディスク上にある GGUF ファイルをモデルフォルダにコピーします",
+        "dialogTitle": "GGUF モデルファイルを選択"
+      },
+      "local": {
+        "title": "ローカルモデル（推奨リストにないもの）",
+        "pairedMmproj": "ビジョンプロジェクター：{{name}}",
+        "orphanMmproj": "ビジョンプロジェクターファイル（対応するメインモデルと組み合わせて使用）"
       }
     },
     "brief": {

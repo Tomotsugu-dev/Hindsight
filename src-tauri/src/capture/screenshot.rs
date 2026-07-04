@@ -59,6 +59,32 @@ fn capture_blocking(
     Ok(Some(target.to_string_lossy().to_string()))
 }
 
+/// 屏幕活跃探测缩略图尺寸（与 docs/design/screen-memory.md L1 帧差传感器一致：256×144 灰度）。
+const PROBE_THUMB_W: u32 = 256;
+const PROBE_THUMB_H: u32 = 144;
+
+/// 屏幕活跃探测用：抓当前焦点窗口，缩成 256×144 灰度缩略图返回（不编码、不落盘）。
+/// 抓不到（锁屏 / 无焦点窗口 / 权限缺失）返回 None。
+/// 后续 L1 静止门实装时，本函数升级为完整帧差门的输入。
+pub(crate) async fn capture_focus_thumb() -> Option<Vec<u8>> {
+    tokio::task::spawn_blocking(|| {
+        let rgba = grab_focused_image(0)?;
+        let img = DynamicImage::ImageRgba8(rgba);
+        Some(
+            img.resize_exact(
+                PROBE_THUMB_W,
+                PROBE_THUMB_H,
+                image::imageops::FilterType::Triangle,
+            )
+            .to_luma8()
+            .into_raw(),
+        )
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 /// 拿当前前台 app 的截图——macOS 走 ScreenCaptureKit（focused window only），
 /// 其它平台走 xcap heuristic。失败返 None，调用方跳过该 tick。
 ///

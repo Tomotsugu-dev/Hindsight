@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { BRAND_LOGOS } from "./brandLogos";
 import {
   ArrowUpDown,
@@ -7,6 +8,7 @@ import {
   Cloud,
   Cpu,
   Download,
+  FolderInput,
   HardDrive,
   Info,
   Loader2,
@@ -70,6 +72,45 @@ function mmprojSaveAs(rec: RecommendedModel): string {
   return `${stem}__${rec.mmprojFile}`;
 }
 
+/** 文件名切成段（去 .gguf 后缀、去开头的 mmproj 前缀），小写。用于本地文件
+ *  的 main↔mmproj 自动配对。gemma-4-12B-it-Q4_K_M → [gemma,4,12b,it,q4,k,m]；
+ *  mmproj-gemma-4-12B-it-BF16 → [gemma,4,12b,it,bf16]。 */
+function fileSegments(name: string): string[] {
+  return name
+    .replace(/\.gguf$/i, "")
+    .replace(/^mmproj[-_]?/i, "")
+    .toLowerCase()
+    .split(/[-_.]/)
+    .filter(Boolean);
+}
+
+/** 两个段数组的公共前缀长度。 */
+function commonPrefixLen(a: string[], b: string[]): number {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}
+
+/** 给一个本地主模型文件，从候选 mmproj 里按文件名公共前缀自动配对一个。
+ *  要求公共前缀 ≥2 段（如 gemma-4）才算命中，避免把 12B 的 mmproj 配到 31B。
+ *  多个候选取公共前缀最长者。找不到返回 null（纯文本模型 / 命名不规范）。 */
+function autoPairMmproj(
+  mainName: string,
+  mmprojs: ModelEntry[],
+): ModelEntry | null {
+  const ms = fileSegments(mainName);
+  let best: ModelEntry | null = null;
+  let bestLen = 1; // 需 ≥2 段才配对
+  for (const p of mmprojs) {
+    const len = commonPrefixLen(ms, fileSegments(p.filename));
+    if (len > bestLen) {
+      bestLen = len;
+      best = p;
+    }
+  }
+  return best;
+}
+
 /**
  * 模型管理 Section（Phase 1B-β）。
  *
@@ -115,6 +156,11 @@ export function ModelsSection() {
     getPartialSnapshot,
   );
   const [error, setError] = useState<string | null>(null);
+  // 正在从本地磁盘导入（拷贝）中的文件 basename 集合——UI 据此把导入按钮切到进度态。
+  // 用落盘名（= 源文件 basename）做 key，跟下载进度事件的 file 字段对齐。
+  const [importingFiles, setImportingFiles] = useState<ReadonlySet<string>>(
+    new Set<string>(),
+  );
   // 自定义 HF 仓库下载表单展开态——默认收起，避免抢推荐卡的视觉重心
   const [showCustom, setShowCustom] = useState(false);
   const [customRepo, setCustomRepo] = useState("");
@@ -172,6 +218,47 @@ export function ModelsSection() {
     if (rec.mmprojFile && !localFilenames.has(mmprojSaveAs(rec))) return false;
     return true;
   };
+
+  // 推荐列表占用的落盘文件名（main + mmproj saveAs）。本地文件里不在这个集合的，
+  // 就是用户自己导入/手动放进模型目录、但不在推荐列表里的模型——它们不会被任何
+  // 推荐卡片承载，必须在下面的"本地模型"区单独展示，否则导入了在 UI 上看不到。
+  const recFilenames = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of recommended) {
+      s.add(r.mainFile);
+      if (r.mmprojFile) s.add(mmprojSaveAs(r));
+    }
+    return s;
+  }, [recommended]);
+  const orphanLocals = local.filter((m) => !recFilenames.has(m.filename));
+  const orphanMmprojs = orphanLocals.filter((m) => m.isMmproj);
+  const orphanMains = orphanLocals.filter((m) => !m.isMmproj);
+  const pairedMmprojNames = new Set<string>();
+  // 第一轮：按文件名前缀配对（每次从尚未配走的 mmproj 里挑，避免多主模型抢同一个）。
+  const localPairs: { main: ModelEntry; mmproj: ModelEntry | null }[] =
+    orphanMains.map((main) => {
+      const avail = orphanMmprojs.filter(
+        (m) => !pairedMmprojNames.has(m.filename),
+      );
+      const mmproj = autoPairMmproj(main.filename, avail);
+      if (mmproj) pairedMmprojNames.add(mmproj.filename);
+      return { main, mmproj };
+    });
+  // 第二轮兜底：LM Studio 等给 mmproj 用通用名（gemma-3 系列都叫 mmproj-model-f16.gguf，
+  // 不含模型标识），文件名前缀配不上。此时若恰好只剩 1 个没配到 mmproj 的主模型 +
+  // 1 个未被配走的 mmproj，无歧义地把它们配对。
+  const stillUnpaired = localPairs.filter((p) => !p.mmproj);
+  const remainMmprojs = orphanMmprojs.filter(
+    (m) => !pairedMmprojNames.has(m.filename),
+  );
+  if (stillUnpaired.length === 1 && remainMmprojs.length === 1) {
+    stillUnpaired[0].mmproj = remainMmprojs[0];
+    pairedMmprojNames.add(remainMmprojs[0].filename);
+  }
+  // 没配到任何主模型的孤儿 mmproj：单独列一张卡，只提供删除（无法单独当模型用）。
+  const unpairedMmprojs = orphanMmprojs.filter(
+    (m) => !pairedMmprojNames.has(m.filename),
+  );
 
   // 品牌选项：从当前 recommended 数据动态收集（去重 + 字典序），避免硬编码——
   // 未来 JSON 加新品牌不需要改前端代码。
@@ -382,6 +469,45 @@ export function ModelsSection() {
     }
   };
 
+  /** 导入本地 GGUF 文件：弹系统文件选择框（可多选），逐个拷进模型目录。
+   *  进度复用下载事件通道（modelDownloads store 的全局 listener），所以这里
+   *  只需把选中文件的 basename 塞进 importingFiles 让 UI 显示"导入中"。 */
+  const onImportLocal = async () => {
+    setError(null);
+    let picked: string | string[] | null;
+    try {
+      picked = await openDialog({
+        multiple: true,
+        filters: [{ name: "GGUF", extensions: ["gguf"] }],
+        title: t("aiSettings.models.import.dialogTitle"),
+      });
+    } catch (e) {
+      logError("models.import.dialog", e);
+      return;
+    }
+    if (picked == null) return; // 用户取消
+    const paths = Array.isArray(picked) ? picked : [picked];
+    if (paths.length === 0) return;
+
+    for (const srcPath of paths) {
+      const name = srcPath.split(/[\\/]/).pop() || srcPath;
+      setImportingFiles((s) => new Set(s).add(name));
+      try {
+        await api.importModel(srcPath);
+        clearModelDownloadProgress(name);
+      } catch (e) {
+        setError(typeof e === "string" ? e : String(e));
+      } finally {
+        setImportingFiles((s) => {
+          const n = new Set(s);
+          n.delete(name);
+          return n;
+        });
+      }
+    }
+    await Promise.all([refresh(), reload()]);
+  };
+
   const onUninstallRecommended = (rec: RecommendedModel) => {
     setConfirmingUninstall(rec);
   };
@@ -396,6 +522,45 @@ export function ModelsSection() {
         await api.deleteModel(mmprojSaveAs(rec));
       }
       await refresh();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+  /** 本地模型卡的 step toggle：跟推荐卡同逻辑，但 main/mmproj 用本地真实落盘名。
+   *  mmproj 为自动配对的结果（纯文本模型为 null，只写 main）。 */
+  const onToggleLocalStep = async (
+    main: ModelEntry,
+    mmproj: ModelEntry | null,
+    step: "describe" | "summary",
+  ) => {
+    setError(null);
+    const current =
+      step === "describe"
+        ? settings?.ai.describeMain || settings?.ai.activeMain || ""
+        : settings?.ai.summaryMain || settings?.ai.activeMain || "";
+    try {
+      if (current === main.filename) {
+        await api.setStepModel(step, "", null);
+      } else {
+        await api.setStepModel(step, main.filename, mmproj?.filename ?? null);
+      }
+      await reload();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    }
+  };
+
+  /** 删本地模型：main + 自动配对的 mmproj 一起删（孤儿 mmproj 传 null 只删自己）。 */
+  const onDeleteLocal = async (
+    main: ModelEntry,
+    mmproj: ModelEntry | null,
+  ) => {
+    setError(null);
+    try {
+      await api.deleteModel(main.filename);
+      if (mmproj) await api.deleteModel(mmproj.filename);
+      await Promise.all([refresh(), reload()]);
     } catch (e) {
       setError(typeof e === "string" ? e : String(e));
     }
@@ -575,6 +740,40 @@ export function ModelsSection() {
           />
         ))}
 
+        {/* 本地模型区——用户自己导入 / 手动放进模型目录、但不在推荐列表里的文件。
+            没有这个区，导入的非推荐模型（如 gemma-4-12B）拷进去后 UI 上无处显示。
+            main 自动配对 mmproj（按文件名前缀），vision 模型才启用 Step1。 */}
+        {localPairs.length > 0 || unpairedMmprojs.length > 0 ? (
+          <>
+            <div className={styles.modelCustomHint}>
+              {t("aiSettings.models.local.title")}
+            </div>
+            {localPairs.map(({ main, mmproj }) => (
+              <LocalModelCard
+                key={main.filename}
+                main={main}
+                mmproj={mmproj}
+                usedForDescribe={describeMain === main.filename}
+                usedForSummary={summaryMain === main.filename}
+                onToggleStep={onToggleLocalStep}
+                onDelete={onDeleteLocal}
+              />
+            ))}
+            {unpairedMmprojs.map((m) => (
+              <LocalModelCard
+                key={m.filename}
+                main={m}
+                mmproj={null}
+                orphanMmproj
+                usedForDescribe={false}
+                usedForSummary={false}
+                onToggleStep={onToggleLocalStep}
+                onDelete={onDeleteLocal}
+              />
+            ))}
+          </>
+        ) : null}
+
         {/* 自定义 HuggingFace 仓库下载——比推荐卡更通用，但风险也高（用户得自己挑兼容
             llama.cpp 的 GGUF）。放在所有推荐卡之后；表单本身仍可折叠收起。 */}
         <CustomHfDownload
@@ -591,6 +790,14 @@ export function ModelsSection() {
           mmprojBusy={customMmprojBusy}
           progress={progress}
           onDownload={onDownloadCustom}
+        />
+
+        {/* 导入本地已有 GGUF 文件——给"自己下好/网盘拷来/别的机器传来"的模型一个入口。
+            拷贝进模型目录，源文件不动，进入清单后跟下载来的模型完全等价。 */}
+        <ImportLocalModel
+          importing={importingFiles}
+          progress={progress}
+          onImport={onImportLocal}
         />
       </div>
       <ConfirmDialog
@@ -635,6 +842,54 @@ export function ModelsSection() {
         onCancel={() => setCloudConfirm(null)}
       />
     </div>
+  );
+}
+
+/**
+ * 导入本地模型文件按钮——弹系统文件选择框（可多选 .gguf），把选中文件拷进
+ * 模型目录。无表单、无展开，一个按钮完成。导入进行中原地切成进度态并禁用。
+ */
+function ImportLocalModel({
+  importing,
+  progress,
+  onImport,
+}: {
+  importing: ReadonlySet<string>;
+  progress: Record<string, ModelDownloadProgress>;
+  onImport: () => void;
+}) {
+  const { t } = useTranslation();
+  const busy = importing.size > 0;
+  // 只显示第一个正在导入的文件名；多选时其余排队，逐个显示
+  const current = busy ? Array.from(importing)[0] : "";
+  // 拷贝进度复用下载事件通道，按落盘名索引；有总字节数才显示百分比
+  const cur = current ? progress[current] : null;
+  const pct =
+    cur && cur.total ? Math.floor((cur.downloaded / cur.total) * 100) : null;
+  const label =
+    pct != null
+      ? t("aiSettings.models.import.importingPct", { name: current, pct })
+      : t("aiSettings.models.import.importing", { name: current });
+
+  return (
+    <button
+      type="button"
+      className={styles.modelExpandBtn}
+      onClick={onImport}
+      disabled={busy}
+      title={t("aiSettings.models.import.tooltip")}
+    >
+      {busy ? (
+        <Loader2
+          size={14}
+          strokeWidth={2}
+          className={styles.testSpin}
+        />
+      ) : (
+        <FolderInput size={14} strokeWidth={2} />
+      )}
+      {busy ? label : t("aiSettings.models.import.button")}
+    </button>
   );
 }
 
@@ -812,6 +1067,118 @@ function CustomHfDownload({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * 本地模型卡片——展示用户导入 / 手动放入、不在推荐列表里的 GGUF 文件。
+ *
+ * 结构比推荐卡简化：无 logo / caps / 下载按钮，只有文件名 + 大小 + Step1/Step2
+ * toggle + 删除。`mmproj` 是自动配对的视觉投影文件（有则该模型按 vision 处理，
+ * 启用 Step1）。`orphanMmproj=true` 时 `main` 其实是个没配到主模型的孤儿 mmproj，
+ * 只显示说明 + 删除（mmproj 不能单独当模型用）。
+ */
+function LocalModelCard({
+  main,
+  mmproj,
+  orphanMmproj = false,
+  usedForDescribe,
+  usedForSummary,
+  onToggleStep,
+  onDelete,
+}: {
+  main: ModelEntry;
+  mmproj: ModelEntry | null;
+  orphanMmproj?: boolean;
+  usedForDescribe: boolean;
+  usedForSummary: boolean;
+  onToggleStep: (
+    main: ModelEntry,
+    mmproj: ModelEntry | null,
+    step: "describe" | "summary",
+  ) => void;
+  onDelete: (main: ModelEntry, mmproj: ModelEntry | null) => void;
+}) {
+  const { t } = useTranslation();
+  const totalGB =
+    (main.sizeBytes + (mmproj?.sizeBytes ?? 0)) / 1024 / 1024 / 1024;
+  // 有配对 mmproj = 按 vision 模型处理，启用 Step1（图片描述）；否则纯文本只给 Step2。
+  const isVision = !!mmproj;
+
+  return (
+    <div className={styles.modelCard}>
+      <div className={styles.modelCardRow}>
+        <div className={styles.modelCardLeft}>
+          <div className={styles.modelCardIdentity}>
+            <div className={styles.modelCardNameRow}>
+              <span className={styles.modelCardName}>{main.filename}</span>
+              <span className={styles.modelCardSize}>
+                {t("aiSettings.models.card.approxSize", {
+                  size: totalGB.toFixed(1),
+                })}
+              </span>
+            </div>
+            {orphanMmproj ? (
+              <span className={styles.modelCardSize}>
+                {t("aiSettings.models.local.orphanMmproj")}
+              </span>
+            ) : mmproj ? (
+              <span className={styles.modelCardSize}>
+                {t("aiSettings.models.local.pairedMmproj", {
+                  name: mmproj.filename,
+                })}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className={styles.modelCardRight}>
+          {orphanMmproj ? null : (
+            <>
+              <button
+                type="button"
+                className={`${styles.modelStepToggle} ${
+                  usedForDescribe ? styles.modelStepToggleActive : ""
+                }`}
+                onClick={() => onToggleStep(main, mmproj, "describe")}
+                disabled={!isVision}
+                title={
+                  !isVision
+                    ? t("aiSettings.models.card.step1DisabledTooltip")
+                    : usedForDescribe
+                      ? t("aiSettings.models.card.step1ToggleOffTooltip")
+                      : t("aiSettings.models.card.step1ToggleOnTooltip")
+                }
+              >
+                {t("aiSettings.models.card.step1")}
+              </button>
+              <button
+                type="button"
+                className={`${styles.modelStepToggle} ${
+                  usedForSummary ? styles.modelStepToggleActive : ""
+                }`}
+                onClick={() => onToggleStep(main, mmproj, "summary")}
+                title={
+                  usedForSummary
+                    ? t("aiSettings.models.card.step2ToggleOffTooltip")
+                    : t("aiSettings.models.card.step2ToggleOnTooltip")
+                }
+              >
+                {t("aiSettings.models.card.step2")}
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className={styles.uninstallOutline}
+            onClick={() => onDelete(main, mmproj)}
+            title={t("aiSettings.models.card.uninstallTooltipInstalled")}
+          >
+            <Trash2 size={14} strokeWidth={1.85} />
+            {t("aiSettings.models.card.uninstall")}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

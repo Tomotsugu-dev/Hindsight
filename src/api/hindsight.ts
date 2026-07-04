@@ -828,6 +828,11 @@ export const api = {
       saveAs: saveAs ?? null,
       expectedBytes,
     }),
+  /** 把用户磁盘上已有的 GGUF 文件导入模型目录（拷贝，源文件不动）。`srcPath`
+   *  是系统文件选择框返回的绝对路径。进度复用 downloadModel 同一条事件（event 的
+   *  file 字段 = 源文件名），前端按落盘名索引进度。返回落盘后的完整路径。 */
+  importModel: (srcPath: string) =>
+    invoke<string>("import_model", { srcPath }),
   /** 暂停某个进行中的下载——翻 cancel flag。`<file>.partial` 保留，下次再调
    *  downloadModel 同 file 名时会续传。文件没在下载时静默成功（idempotent）。 */
   cancelModelDownload: (file: string) =>

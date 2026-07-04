@@ -785,6 +785,18 @@
         "mmprojFileLabel": "Arquivo mmproj (opcional, apenas modelos de visão)",
         "mmprojFilePlaceholder": "ex.: mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
         "errorRequired": "O repositório e o arquivo de pesos principais são obrigatórios."
+      },
+      "import": {
+        "button": "Importar arquivo de modelo local",
+        "importing": "Importando {{name}}…",
+        "importingPct": "Importando {{name}} ({{pct}}%)…",
+        "tooltip": "Copia um arquivo GGUF que você já tem no disco para a pasta de modelos",
+        "dialogTitle": "Selecionar arquivo(s) de modelo GGUF"
+      },
+      "local": {
+        "title": "Modelos locais (fora da lista recomendada)",
+        "pairedMmproj": "Projetor de visão: {{name}}",
+        "orphanMmproj": "Arquivo de projetor de visão (precisa de um modelo principal correspondente)"
       }
     },
     "brief": {

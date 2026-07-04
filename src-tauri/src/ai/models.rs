@@ -215,6 +215,128 @@ pub async fn list_partials(cfg: &AiConfig) -> Result<Vec<PartialEntry>> {
     Ok(out)
 }
 
+/// GGUF 文件头 magic:前 4 字节固定 "GGUF"。手动导入时用来把明显不对的
+/// 文件(改了后缀的压缩包/safetensors)挡在拷贝之前。
+const GGUF_MAGIC: &[u8; 4] = b"GGUF";
+
+/// 导入拷贝的进度回调最小间隔——本地磁盘吞吐高,不限频会把事件通道打爆
+const IMPORT_PROGRESS_INTERVAL: Duration = Duration::from_millis(120);
+
+/// 把用户磁盘上已有的 GGUF 文件导入模型目录(**拷贝**,源文件不动)。
+///
+/// - `src` 必须是 `.gguf` 后缀且文件头为 GGUF magic
+/// - 源本身已在模型目录(用户手动放过又点导入)→ 幂等返回
+/// - 目标同名已存在:大小一致视作已导入直接返回;不一致报错让用户先删除/改名,
+///   不做静默覆盖
+/// - 拷贝写 `<name>.importing` 临时名,完成后 atomic rename;失败清理临时文件
+///   (不用 `.partial`——那是 HF 续传的约定,会被 [`list_partials`] 当半成品渲染)
+/// - 与下载共用 [`inflight_set`]:同名文件正在下载/导入时拒绝并发
+pub async fn import_file<F>(cfg: &AiConfig, src: &Path, mut progress: F) -> Result<PathBuf>
+where
+    F: FnMut(u64, Option<u64>) + Send,
+{
+    let meta = tokio::fs::metadata(src).await.map_err(Error::Io)?;
+    if !meta.is_file() {
+        return Err(Error::InvalidInput("导入路径不是文件"));
+    }
+    let Some(filename) = src.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
+        return Err(Error::InvalidInput("文件名不是有效 UTF-8"));
+    };
+    if !filename.to_ascii_lowercase().ends_with(".gguf") {
+        return Err(Error::InvalidInput("只支持 .gguf 模型文件"));
+    }
+    {
+        use tokio::io::AsyncReadExt;
+        let mut f = tokio::fs::File::open(src).await.map_err(Error::Io)?;
+        let mut magic = [0u8; 4];
+        let header_ok = f.read_exact(&mut magic).await.is_ok() && &magic == GGUF_MAGIC;
+        if !header_ok {
+            return Err(Error::InvalidInput("文件头不是 GGUF,可能不是模型文件"));
+        }
+    }
+
+    let dir = root_dir(cfg);
+    tokio::fs::create_dir_all(&dir).await.map_err(Error::Io)?;
+    let dest = dir.join(&filename);
+
+    // 源就在模型目录里 → 幂等返回(canonicalize 抹平大小写/分隔符差异)
+    if let (Ok(a), Ok(b)) = (
+        tokio::fs::canonicalize(src).await,
+        tokio::fs::canonicalize(&dest).await,
+    ) {
+        if a == b {
+            progress(meta.len(), Some(meta.len()));
+            return Ok(dest);
+        }
+    }
+    if let Ok(dmeta) = tokio::fs::metadata(&dest).await {
+        if dmeta.len() == meta.len() {
+            progress(meta.len(), Some(meta.len()));
+            return Ok(dest);
+        }
+        return Err(Error::InvalidInputDyn(format!(
+            "{filename} 已存在且大小不同,请先在列表里删除或给导入文件改名"
+        )));
+    }
+
+    if !inflight_set()
+        .lock()
+        .expect("inflight_set mutex poisoned")
+        .insert(filename.clone())
+    {
+        return Err(Error::InvalidInputDyn(format!(
+            "{filename} 已在下载或导入中"
+        )));
+    }
+    let temp = dir.join(format!("{filename}.importing"));
+    let result = copy_with_progress(src, &temp, meta.len(), &mut progress).await;
+    inflight_set()
+        .lock()
+        .expect("inflight_set mutex poisoned")
+        .remove(&filename);
+
+    match result {
+        Ok(()) => {
+            tokio::fs::rename(&temp, &dest).await.map_err(Error::Io)?;
+            Ok(dest)
+        }
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&temp).await;
+            Err(e)
+        }
+    }
+}
+
+/// 分块拷贝 + 进度回调。1MB 缓冲;完成或每 [`IMPORT_PROGRESS_INTERVAL`] 发一次进度。
+async fn copy_with_progress<F>(src: &Path, dest: &Path, total: u64, progress: &mut F) -> Result<()>
+where
+    F: FnMut(u64, Option<u64>) + Send,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut rf = tokio::fs::File::open(src).await.map_err(Error::Io)?;
+    let mut wf = tokio::fs::File::create(dest).await.map_err(Error::Io)?;
+    let mut buf = vec![0u8; 1024 * 1024];
+    let mut copied: u64 = 0;
+    let mut last_emit = Instant::now();
+    progress(0, Some(total));
+    loop {
+        let n = rf.read(&mut buf).await.map_err(Error::Io)?;
+        if n == 0 {
+            break;
+        }
+        wf.write_all(&buf[..n]).await.map_err(Error::Io)?;
+        copied += n as u64;
+        let now = Instant::now();
+        if copied >= total || now.duration_since(last_emit) >= IMPORT_PROGRESS_INTERVAL {
+            progress(copied, Some(total));
+            last_emit = now;
+        }
+    }
+    wf.flush().await.map_err(Error::Io)?;
+    Ok(())
+}
+
 /// 从 HuggingFace 流式下载一个文件到 [`root_dir`] 下面。
 ///
 /// - HF URL 用 `repo` + `hf_file` 构造（直链 `/resolve/main/`）
