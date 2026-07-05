@@ -27,6 +27,7 @@ import {
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
+import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import {
   cancelDailyGenerate,
@@ -43,8 +44,7 @@ import styles from "./DailyTab.module.css";
 /** 段卡片在 UI 里的展示状态——由 ai_summaries 行 + 当前 in-flight 进度推导。 */
 type CardState =
   | { kind: "empty" } // 还没生成 / 还没轮到
-  | { kind: "running"; imagesTotal: number | null; imagesDone: number } // 段 step 1 跑中
-  | { kind: "summarizing"; imagesTotal: number | null } // 段 step 2 段总结跑中
+  | { kind: "running" } // 段总结生成中
   | { kind: "ok"; row: SegmentSummaryRow }
   | { kind: "skipped"; row: SegmentSummaryRow }
   | { kind: "error"; row: SegmentSummaryRow };
@@ -89,21 +89,17 @@ export default function DailyTab() {
   const date = useMemo(() => offsetToDateStr(dayOffset), [dayOffset]);
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
-  // hasModel 跟后端 summary_runner 的 check 对齐：
-  //   step 1（图描述）必须有本地 vision 模型 → describeMain 或 activeMain 非空
-  //   step 2（段总结）满足以下任一：
-  //     - 用户在云端卡选 Text（rawSummaryMain == sentinel）且云端 API 启用
-  //     - 用户在本地某个模型卡选 Text（rawSummaryMain 是真实文件名）
-  //     - 都没选但 activeMain 存在（旧版 fallback 兼容）
-  const describeMain = settings?.ai.describeMain || activeMain;
+  // hasModel 跟后端 summary_runner 的 check 对齐：段总结满足以下任一：
+  //   - 用户在云端卡选 Text（rawSummaryMain == sentinel）且云端 API 启用
+  //   - 用户在本地某个模型卡选 Text（rawSummaryMain 是真实文件名）
+  //   - 都没选但 activeMain 存在（旧版 fallback 兼容）
   const rawSummaryMain = settings?.ai.summaryMain ?? "";
   const externalEnabled = settings?.ai.externalEnabled ?? false;
   const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
   const localSummaryAvailable =
     (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
     activeMain !== "";
-  const hasModel =
-    describeMain.trim().length > 0 && (cloudRoute || localSummaryAvailable);
+  const hasModel = cloudRoute || localSummaryAvailable;
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
   // 依赖 t，所以在组件里定义，跟随 i18n.language 自动重渲。
@@ -214,7 +210,7 @@ export default function DailyTab() {
 
   const onGenerate = async (forceRefresh: boolean) => {
     if (!hasModel) {
-      setTopError(t("aiSummary.daily.errors.noVisionModel"));
+      setTopError(t("aiSummary.daily.errors.noModel"));
       return;
     }
     // 重新点开始/再生成时主动清旧错误条——否则用户上一轮失败留着的红条
@@ -235,7 +231,7 @@ export default function DailyTab() {
 
   const onRetrySegment = async (segmentIdx: number) => {
     if (!hasModel) {
-      setTopError(t("aiSummary.daily.errors.noVisionModel"));
+      setTopError(t("aiSummary.daily.errors.noModel"));
       return;
     }
     if (runSnap.generating) return;
@@ -254,9 +250,6 @@ export default function DailyTab() {
   const isRunningHere =
     runSnap.generating && runSnap.runningDate === date;
   const runningIdx = isRunningHere ? runSnap.runningIdx : null;
-  const runningImages = isRunningHere ? runSnap.runningImages : null;
-  const runningDone = isRunningHere ? runSnap.runningDone : 0;
-  const runningStage = isRunningHere ? runSnap.runningStage : "describing";
   const enginePhase = isRunningHere ? runSnap.enginePhase : null;
   const topError = runSnap.topError;
   const generating = isRunningHere;
@@ -534,9 +527,7 @@ export default function DailyTab() {
           const row = rows.get(idx);
           const isRunning = runningIdx === idx;
           const state: CardState = isRunning
-            ? runningStage === "summarizing"
-              ? { kind: "summarizing", imagesTotal: runningImages }
-              : { kind: "running", imagesTotal: runningImages, imagesDone: runningDone }
+            ? { kind: "running" }
             : !row
               ? { kind: "empty" }
               : row.status === "ok"
@@ -651,18 +642,6 @@ function CardStatusBadge({ state }: { state: CardState }) {
       return (
         <span className={`${styles.statusBadge} ${styles.statusRunning}`}>
           <Loader2 size={11} className={styles.spin} />
-          {state.imagesTotal != null && state.imagesTotal > 0
-            ? t("aiSummary.daily.card.badge.analyzing", {
-                done: state.imagesDone,
-                total: state.imagesTotal,
-              })
-            : t("aiSummary.daily.card.badge.analyzingNoTotal")}
-        </span>
-      );
-    case "summarizing":
-      return (
-        <span className={`${styles.statusBadge} ${styles.statusRunning}`}>
-          <Loader2 size={11} className={styles.spin} />
           {t("aiSummary.daily.card.badge.summarizing")}
         </span>
       );
@@ -699,26 +678,11 @@ function CardBody({ state }: { state: CardState }) {
     case "running":
       return (
         <div className={styles.bodyMuted}>
-          {state.imagesTotal != null && state.imagesTotal > 0
-            ? t("aiSummary.daily.card.body.analyzing", {
-                done: state.imagesDone,
-                total: state.imagesTotal,
-              })
-            : t("aiSummary.daily.card.body.analyzingNoTotal")}
-        </div>
-      );
-    case "summarizing":
-      return (
-        <div className={styles.bodyMuted}>
-          {state.imagesTotal != null && state.imagesTotal > 0
-            ? t("aiSummary.daily.card.body.summarizing", {
-                count: state.imagesTotal,
-              })
-            : t("aiSummary.daily.card.body.summarizingNoTotal")}
+          {t("aiSummary.daily.card.body.summarizingNoTotal")}
         </div>
       );
     case "ok":
-      return <div className={styles.bodyText}>{state.row.content}</div>;
+      return <MarkdownText text={state.row.content} className={styles.bodyText} />;
     case "skipped":
       return (
         <div className={styles.bodyMuted}>

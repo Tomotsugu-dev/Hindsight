@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
@@ -21,8 +21,8 @@ const AISummaryPage = lazy(() => import("./pages/AISummary/AISummaryPage"));
 const DailyTab = lazy(() => import("./pages/AISummary/tabs/DailyTab"));
 const WeeklyTab = lazy(() => import("./pages/AISummary/tabs/WeeklyTab"));
 const MonthlyTab = lazy(() => import("./pages/AISummary/tabs/MonthlyTab"));
-const ChatTab = lazy(() => import("./pages/AISummary/tabs/ChatTab"));
 const DebugTab = lazy(() => import("./pages/AISummary/tabs/DebugTab"));
+const ChatPage = lazy(() => import("./pages/Chat/ChatPage"));
 const AISettingsPage = lazy(() => import("./pages/AISettings/AISettingsPage"));
 const EngineTab = lazy(() => import("./pages/AISettings/tabs/EngineTab"));
 const ModelsTab = lazy(() => import("./pages/AISettings/tabs/ModelsTab"));
@@ -98,11 +98,13 @@ function App() {
           <Route path={ROUTES.today} element={<Today />} />
           <Route path={ROUTES.week} element={<Week />} />
           <Route path={ROUTES.month} element={<Month />} />
+          <Route path={ROUTES.chat} element={<ChatPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
             <Route path="week" element={<WeeklyTab />} />
             <Route path="month" element={<MonthlyTab />} />
-            <Route path="chat" element={<ChatTab />} />
+            {/* 旧地址重定向:对话已提升为独立页面 */}
+            <Route path="chat" element={<Navigate to={ROUTES.chat} replace />} />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>

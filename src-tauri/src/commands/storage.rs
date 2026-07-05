@@ -420,9 +420,29 @@ pub(crate) async fn purge_cloud_data_impl(
 pub async fn forget_remote_device(
     pool: State<'_, DbPool>,
     engine: State<'_, Arc<SyncEngine>>,
+    mem: State<'_, crate::commands::screen_memory::MemoryState>,
     device_id: String,
 ) -> Result<u64, String> {
-    forget_remote_device_impl(&pool, &engine, &device_id).await
+    let deleted = forget_remote_device_impl(&pool, &engine, &device_id).await?;
+    // 记忆库:清掉从该设备同步来的屏幕记忆会话(FTS 触发器自动跟删)。
+    // best-effort:记忆库不可用只记日志,不影响主流程结果。
+    if let Some(db) = &mem.0 {
+        let target = device_id.trim().to_string();
+        let res =
+            db.0.call(move |conn| {
+                conn.execute(
+                    "DELETE FROM text_sessions WHERE origin_device = ?1",
+                    rusqlite::params![target],
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)
+            })
+            .await;
+        match res {
+            Ok(n) => log::info!("forget_remote_device: 记忆库清掉 {n} 条远端会话"),
+            Err(e) => log::warn!("forget_remote_device: 记忆库清理失败: {e}"),
+        }
+    }
+    Ok(deleted)
 }
 
 pub(crate) async fn forget_remote_device_impl(

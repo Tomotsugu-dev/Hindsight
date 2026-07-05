@@ -1,68 +1,17 @@
-/* ─── 副标题行（含 MOCK 徽章 + 清空按钮） ─── */
+/* ─── 聊天区：占满右栏,消息区滚动、输入框钉底 ─── */
 
-.subtitleRow {
+.view {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
-
-.subtitle {
-  flex: 1;
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  letter-spacing: -0.005em;
-  margin: 0;
-}
-
-.mockBadge {
-  display: inline-flex;
-  align-items: center;
-  height: 16px;
-  padding: 0 6px;
-  margin-left: 8px;
-  background: color-mix(in oklab, #f59e0b 14%, transparent);
-  border: 1px solid color-mix(in oklab, #f59e0b 30%, transparent);
-  border-radius: var(--radius-xs);
-  font-size: 9.5px;
-  font-weight: var(--font-weight-700);
-  color: #b45309;
-  letter-spacing: 0.06em;
-  vertical-align: middle;
-}
-
-.clearBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 10px;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-
-.clearBtn:hover {
-  background: var(--surface-2);
-  color: var(--text-strong);
-  border-color: var(--border-strong);
-}
-
-/* ─── 主体：消息区或空状态 ─── */
 
 .body {
   display: flex;
   flex-direction: column;
-  min-height: 360px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── 空状态：欢迎语 + 三栏快捷卡片 ── */
@@ -71,6 +20,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  flex: 1;
   gap: 24px;
   padding: 40px 16px;
   background: rgba(0, 0, 0, 0.02);
@@ -183,7 +134,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 540px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 12px;
   scroll-behavior: smooth;
@@ -251,9 +203,93 @@
 }
 
 .bubbleAssistant .bubbleText + .searchHits,
-.bubbleAssistant .bubbleText + .statBars,
-.bubbleAssistant .bubbleText + .reflection {
+.bubbleAssistant .bubbleMd + .searchHits {
   margin-top: 10px;
+}
+
+/* ── 助手回答的 Markdown 容器：字号行高与 bubbleText 一致，元素间距收紧 ── */
+
+.bubbleMd {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.bubbleMd > :first-child {
+  margin-top: 0;
+}
+
+.bubbleMd > :last-child {
+  margin-bottom: 0;
+}
+
+.bubbleMd p {
+  margin: 0 0 8px;
+}
+
+.bubbleMd ul,
+.bubbleMd ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.bubbleMd li {
+  margin: 2px 0;
+}
+
+.bubbleMd code {
+  padding: 1px 5px;
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+}
+
+.bubbleMd pre {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.bubbleMd pre code {
+  padding: 0;
+  background: none;
+}
+
+.bubbleMd table {
+  margin: 0 0 8px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.bubbleMd th,
+.bubbleMd td {
+  padding: 4px 10px;
+  border: 1px solid var(--border-default);
+  text-align: left;
+}
+
+.bubbleMd th {
+  background: var(--surface-2);
+  font-weight: var(--font-weight-600);
+}
+
+.bubbleMd blockquote {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+/* 模型被要求不用标题层级;万一出现,降级成普通加粗行 */
+.bubbleMd h1,
+.bubbleMd h2,
+.bubbleMd h3,
+.bubbleMd h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
 }
 
 .assistantAvatar {
@@ -269,7 +305,7 @@
   margin-top: 2px;
 }
 
-/* ── 助手回答之 1：搜历史命中 ── */
+/* ── 助手回答的证据卡（答案里 [n] 对应的来源会话） ── */
 
 .searchHits {
   display: flex;
@@ -303,6 +339,9 @@
   font-size: 11px;
   font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .searchHitDate {
@@ -320,91 +359,68 @@
   color: var(--text-strong);
 }
 
-/* ── 助手回答之 2：横向 bar chart ── */
-
-.statBars {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 0;
-}
-
-.statBarRow {
-  display: grid;
-  grid-template-columns: 36px 1fr auto;
+/* 证据卡收起/展开按钮 */
+.hitsToggle {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-variant-numeric: tabular-nums;
-}
-
-.statBarLabel {
-  font-size: 11.5px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-}
-
-.statBarTrack {
-  position: relative;
-  height: 8px;
-  background: var(--surface-2);
-  border-radius: var(--radius-xs);
-  overflow: hidden;
-}
-
-.statBarFill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-accent) 70%, white),
-    var(--color-accent)
-  );
-  border-radius: var(--radius-xs);
-  transition: width 320ms var(--ease-out);
-}
-
-.statBarValue {
-  font-size: 11.5px;
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-}
-
-.statTotal {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── 助手回答之 3：反思分段 ── */
-
-.reflection {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.reflectionSection {
-  display: flex;
-  flex-direction: column;
+  justify-content: center;
   gap: 4px;
+  height: 26px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: var(--font-weight-500);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 140ms ease-out,
+    border-color 140ms ease-out,
+    background-color 140ms ease-out;
 }
 
-.reflectionHeading {
-  font-size: 12px;
-  font-weight: var(--font-weight-600);
+.hitsToggle:hover {
   color: var(--color-accent);
-  letter-spacing: 0.02em;
-  margin: 0;
+  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 5%, transparent);
 }
 
-.reflectionBody {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-strong);
+/* ── 等待回答的跳动三点 ── */
+
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+}
+
+.typingDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  animation: typingBounce 1.2s ease-in-out infinite;
+}
+
+.typingDot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typingDot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typingBounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 
 /* ─── 输入区（底部） ─── */

@@ -7,6 +7,7 @@ pub mod app_groups;
 pub mod auth;
 pub mod capture;
 pub mod categories;
+pub mod chat;
 pub mod data;
 pub mod devices;
 pub mod icons;

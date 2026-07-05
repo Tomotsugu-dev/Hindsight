@@ -1,0 +1,134 @@
+/* 上云确认弹窗:琥珀警告(数据将出设备) */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+  background: rgba(20, 20, 40, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 180ms var(--ease-out);
+}
+
+.dialog {
+  position: relative;
+  z-index: var(--z-modal);
+  min-width: 340px;
+  max-width: 460px;
+  padding: 22px 22px 16px;
+  background: var(--surface-card);
+  border: 1px solid color-mix(in oklab, var(--status-pending) 45%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 12px 36px rgba(20, 20, 40, 0.22),
+    0 2px 6px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: scaleIn 220ms var(--ease-spring);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.titleIcon {
+  color: var(--status-pending);
+  flex-shrink: 0;
+}
+
+.body {
+  font-size: 13px;
+  color: var(--text-regular);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.note {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--status-pending) 10%, transparent);
+  color: var(--status-pending);
+  font-weight: var(--font-weight-500);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    transform 100ms ease-out;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btnCancel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.btnCancel:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.btnConfirm {
+  background: var(--status-pending);
+  color: #ffffff;
+}
+
+.btnConfirm:hover {
+  filter: brightness(1.06);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

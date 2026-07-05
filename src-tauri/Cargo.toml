@@ -58,15 +58,13 @@ flate2 = "1"
 # 流式下载：reqwest::Response::bytes_stream() + StreamExt::next()
 futures-util = "0.3"
 
-# Phase 1C - 截图 embedding 去重（MobileNet v3 small via ONNX Runtime）
+# OCR（PP-OCRv5 via ONNX Runtime）
 # load-dynamic 让 ort 运行时找 onnxruntime DLL（不静态链 → 跨平台 ship 友好）；
 # ndarray feature 让 ort::value::Value 接受 ndarray::Array 输入。
-# default-features 关闭以避开 cuda/dml 这些重型默认 backends，CPU EP 默认就有。
-ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic", "ndarray"] }
+# default-features 关闭避开 cuda 等重型 backends;directml 只是注册入口(几 KB),
+# 运行时 dll 带不带 DML 决定实际能否上 GPU——不带时注册失败自动回退 CPU。
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic", "ndarray", "directml"] }
 ndarray = "0.16"
-# 并行 image preprocess：JPEG 解码 + resize + normalize 占大头，单线程跑 5-10s/几百张，
-# 8 核并行后 1-2s 搞定。仅在 ai::embedding 用，不污染其它 hot path。
-rayon = "1"
 sys-locale = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]

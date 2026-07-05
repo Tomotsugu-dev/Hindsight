@@ -75,8 +75,8 @@ impl ChatClient {
 
     /// 发一条 multimodal chat 请求。
     ///
-    /// `image_data_uris` 每项是 `data:image/jpeg;base64,...` 格式，由
-    /// [`crate::ai::image::to_data_uri`] 生成。0 张图也合法——纯文本对话。
+    /// `image_data_uris` 每项是 `data:image/jpeg;base64,...` 格式。
+    /// 0 张图也合法——纯文本对话（当前所有调用方都只走纯文本）。
     ///
     /// 返回模型 `choices[0].message.content` 字符串 + `ChatUsage` 性能数据。
     /// 服务端格式不对、内容为空都会返 Err，让上层把该段标 status='error'。
@@ -104,11 +104,8 @@ impl ChatClient {
 /// - base URL 是用户填的（`https://api.openai.com/v1` 等）
 /// - 带 `Authorization: Bearer <api_key>` 头
 ///
-/// 两个入口，语义分开：
-/// - [`Self::chat_text`]：step 2 段总结，**拒绝**任何带图调用（防路由 bug）
-/// - [`Self::chat_with_images`]：step 1 图片描述——仅当用户在模型卡上**显式**把
-///   Vision (Step 1) 指到云端（`describe_use_cloud`，前端有隐私确认弹窗）才会被
-///   构造使用，此时截图会以 data URI 形式上传到用户配置的第三方 API
+/// 唯一入口 [`Self::chat_text`]：纯文本调用，**拒绝**任何带图调用——
+/// 本设计里截图永远不上云。
 #[derive(Clone)]
 pub struct ExternalChatClient {
     base_url: String,
@@ -144,7 +141,7 @@ impl ExternalChatClient {
         })
     }
 
-    /// 发一条纯文本 chat 请求（step 2 段总结专用）。
+    /// 发一条纯文本 chat 请求。
     /// 拒绝任何 `image_data_uris` 非空的调用——本设计里截图永远不上云。
     pub async fn chat_text(
         &self,
@@ -152,43 +149,18 @@ impl ExternalChatClient {
         user_text: &str,
         image_data_uris: &[String],
     ) -> Result<(String, ChatUsage)> {
-        // 防御：本设计里外部 API 只跑 step 2 纯文本；任何带图调用都是路由 bug。
+        // 防御：本设计里外部 API 只跑纯文本；任何带图调用都是路由 bug。
         if !image_data_uris.is_empty() {
-            return Err(Error::InvalidInput(
-                "云端 API 不接受图片：step 1 必须走本地 vision 模型",
-            ));
+            return Err(Error::InvalidInput("云端 API 不接受图片"));
         }
         let url = format!("{}/chat/completions", self.base_url);
         let body = build_chat_body(&self.model, system, user_text, &[], self.max_tokens, None);
         self.post_with_retry(&url, &body).await
     }
 
-    /// 发一条多模态 chat 请求（step 1 云端图片描述专用）。
-    /// 只有 `describe_use_cloud` 路由会构造到这里——用户已在前端确认过
-    /// "截图将上传"的隐私弹窗。请求体格式与本地 [`ChatClient::chat_with_images`]
-    /// 完全一致（OpenAI 兼容 text + image_url data URI）。
-    pub async fn chat_with_images(
-        &self,
-        system: &str,
-        user_text: &str,
-        image_data_uris: &[String],
-    ) -> Result<(String, ChatUsage)> {
-        let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(
-            &self.model,
-            system,
-            user_text,
-            image_data_uris,
-            self.max_tokens,
-            None,
-        );
-        self.post_with_retry(&url, &body).await
-    }
-
-    /// POST + 429 自动退避重试。云端 API 有 RPM 限制（如 Moonshot 低档 20 RPM），
-    /// step 1 并发跑图很容易撞 429：优先按服务端 Retry-After 等待，没给则指数
-    /// 退避（2/4/8/16/32s），最多 5 次；仍失败才把 429 抛给调用方。
-    /// 本地 llama-server 无限流，不走这里。
+    /// POST + 429 自动退避重试。云端 API 有 RPM 限制（如 Moonshot 低档 20 RPM）：
+    /// 优先按服务端 Retry-After 等待，没给则指数退避（2/4/8/16/32s），最多 5 次；
+    /// 仍失败才把 429 抛给调用方。本地 llama-server 无限流，不走这里。
     async fn post_with_retry(
         &self,
         url: &str,
@@ -225,44 +197,7 @@ impl ExternalChatClient {
     }
 }
 
-/// step 1 图片描述的 chat 路由。本地走 [`ChatClient`]（llama-server vision 模型），
-/// 云端走 [`ExternalChatClient::chat_with_images`]（用户显式选择 + 隐私确认后）。
-/// 结构与 [`Step2Chat`] 对齐。
-#[derive(Clone)]
-pub enum Step1Chat {
-    Local(ChatClient),
-    External(ExternalChatClient),
-}
-
-impl Step1Chat {
-    pub async fn chat_with_images(
-        &self,
-        system: &str,
-        user_text: &str,
-        image_data_uris: &[String],
-    ) -> Result<(String, ChatUsage)> {
-        match self {
-            Step1Chat::Local(c) => c.chat_with_images(system, user_text, image_data_uris).await,
-            Step1Chat::External(c) => c.chat_with_images(system, user_text, image_data_uris).await,
-        }
-    }
-
-    /// 是否走本地引擎（用于 idle watcher：只有本地调用才 acquire 推理 guard）。
-    pub fn is_local(&self) -> bool {
-        matches!(self, Step1Chat::Local(_))
-    }
-
-    /// 写入 `ai_image_descriptions.model` 的标识——本地用 GGUF 文件名，云端用模型 ID。
-    pub fn model_label(&self) -> &str {
-        match self {
-            Step1Chat::Local(c) => c.model(),
-            Step1Chat::External(c) => &c.model,
-        }
-    }
-}
-
-/// step 2 段总结的 chat 路由。本地走 [`ChatClient`]（复用 step 1 引擎），
-/// 外部走 [`ExternalChatClient`]。
+/// 段总结的 chat 路由。本地走 [`ChatClient`]，外部走 [`ExternalChatClient`]。
 ///
 /// 用 enum 而不是 `Box<dyn Trait>` 是为了避免引入 `async-trait` 依赖；
 /// `summary.rs` 在构造期判一次 `external_enabled` 就拿到具体变体。

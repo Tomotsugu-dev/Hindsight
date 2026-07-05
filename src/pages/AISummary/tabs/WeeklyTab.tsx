@@ -36,6 +36,7 @@ import {
   type WeekPrecheckDay,
   type WeekPrecheckResp,
 } from "../../../api/hindsight";
+import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import styles from "./WeeklyTab.module.css";
 
 /** 把 weekOffset (0=本周 / -1=上周 / ...) 转成 [周一, 周日] 两个 "YYYY-MM-DD"。 */
@@ -104,8 +105,7 @@ export default function WeeklyTab() {
 
   const { monday, sunday } = useMemo(() => weekRangeFromOffset(weekOffset), [weekOffset]);
 
-  // hasModel：周报只走 step 2（纯文本），所以条件比 daily 宽松——本地 summary 模型
-  // 或选定云端 二选一即可。describeMain 不参与判断（不过 vision）。
+  // hasModel：周报走纯文本段总结——本地 summary 模型或选定云端 二选一即可。
   const activeMain = settings?.ai.activeMain ?? "";
   const rawSummaryMain = settings?.ai.summaryMain ?? "";
   const externalEnabled = settings?.ai.externalEnabled ?? false;
@@ -568,7 +568,7 @@ function CardBody({ state }: { state: CardState }) {
         </div>
       );
     case "ok":
-      return <div className={styles.bodyText}>{state.row.content}</div>;
+      return <MarkdownText text={state.row.content} className={styles.bodyText} />;
     case "error":
       return (
         <div className={styles.bodyError}>

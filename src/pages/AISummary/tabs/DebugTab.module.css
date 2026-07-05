@@ -258,13 +258,6 @@
   color: #dc2626;
 }
 
-/* picker + Info 图标的内联包装 —— 让图标紧贴 picker 右边 */
-.pickerWithInfo {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .infoIconWrap {
   display: inline-flex;
   align-items: center;
@@ -615,156 +608,12 @@
 }
 
 
-/* —— 逐图描述列表 —— */
-/* descListInner 是 Section 内部的列表容器（外面 Section.card 已经管 padding/边框）
-   只显示前 ~5 条；超出部分用鼠标滚轮在 box 内滚动，避免页面被几十条描述撑长 */
-.descListInner {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 480px;
-  overflow-y: auto;
-  /* 给滚动条留点呼吸，跟 chrome 默认贴边视觉拉开一点 */
-  padding-right: 4px;
-}
-
-.descListEmpty {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-style: italic;
-  padding: 18px 12px;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.02);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-}
-
-.descItem {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-}
-
-.descMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 段标识：色点 + 中性文字（跟 DailyTab 的 .chip 同款），文字不再压在色块上 */
-.descIndex {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 18px;
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  letter-spacing: -0.005em;
-}
-
-/* 时段色圆点（.descIndex / .summaryChip 共用） */
+/* 时段色圆点（.summaryChip 用） */
 .segDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex: none;
-}
-
-/* 截图时间：跟段 chip 紧挨着，monospace 数字稳定对齐，配色比 chip 轻一档 */
-.descTime {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 18px;
-  padding: 0 7px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  font-size: 10.5px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  letter-spacing: 0.01em;
-  flex-shrink: 0;
-}
-
-/* 文件名：button 样式但低调，hover 变 accent 提示可点（→ openPath 预览原图） */
-.descPath {
-  display: inline-flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  height: 20px;
-  padding: 0 6px;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-xs);
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  word-break: break-all;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.descPath:hover {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  color: var(--color-accent);
-  text-decoration: underline;
-}
-
-.descStat {
-  font-size: 10px;
-  color: var(--text-faint);
-  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-}
-
-.descText {
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--text-strong);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.retryImg {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 7px;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xs);
-  font-size: 10.5px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.retryImg:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  color: var(--color-accent);
-}
-
-.retryImg:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* —— 事件流 log —— */
@@ -900,7 +749,7 @@
   word-break: break-word;
 }
 
-/* 空状态：跟 .descListEmpty 同款（虚线框 + 居中提示），不再裸露文字 */
+/* 空状态：虚线框 + 居中提示，不再裸露文字 */
 .summaryEmpty {
   font-size: 12px;
   color: var(--text-muted);

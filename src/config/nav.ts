@@ -1,6 +1,7 @@
 import {
   Sparkles,
   Cloud,
+  MessageSquare,
   Settings,
   LayoutGrid,
   Layers,
@@ -15,6 +16,7 @@ export const ROUTES = {
   today: "/",
   week: "/week",
   month: "/month",
+  chat: "/chat",
   aiSummary: "/ai",
   aiSettings: "/ai/settings",
   devices: "/devices",
@@ -30,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: ROUTES.month,      labelKey: "nav.items.month",      icon: CalendarMonthIcon, group: "primary", color: "#8b5cf6" },
   // /ai 是 AI 总结的根；子页 /ai/week / /ai/debug 也应该让 AI 总结高亮，
   // 但 /ai/settings 是兄弟项（AI 设置）——用 excludePaths 把它从前缀匹配里抠掉
+  { path: ROUTES.chat,       labelKey: "nav.items.chat",       icon: MessageSquare,     group: "ai",      color: "#ec4899" },
   { path: ROUTES.aiSummary,  labelKey: "nav.items.aiSummary",  icon: Sparkles,          group: "ai",      color: "#d946ef", excludePaths: [ROUTES.aiSettings] },
   { path: ROUTES.aiSettings, labelKey: "nav.items.aiSettings", icon: AiSettingsIcon,    group: "ai",      color: "#a855f7" },
   { path: ROUTES.categories, labelKey: "nav.items.categories", icon: LayoutGrid,        group: "data",    color: "#0ea5e9" },

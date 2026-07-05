@@ -5,7 +5,6 @@ import {
   Cloud,
   Eye,
   EyeOff,
-  Image as ImageIcon,
   Info,
   Loader2,
   Type,
@@ -77,17 +76,8 @@ const PROVIDER_KEYS: ProviderKey[] = [
   "custom",
 ];
 
-/** 没有多模态模型的服务商：Vision (Step 1) 云端不可用，隐藏 Vision 模型 ID 输入框，
- *  原位显示一行说明（截图分析只能留在本地）。 */
-const PROVIDERS_WITHOUT_VISION: ReadonlySet<ProviderKey> = new Set(["deepseek"]);
-
-/** Vision API 可选的服务商：过滤掉没有多模态模型的（DeepSeek 选了也没意义）。 */
-const VISION_PROVIDER_KEYS: ProviderKey[] = PROVIDER_KEYS.filter(
-  (k) => !PROVIDERS_WITHOUT_VISION.has(k),
-);
-
-/** 单路 API 测试的分步状态：conn = 网络与认证（GET /models）；chat = 模型真实
- *  可用（POST /chat/completions，max_tokens=1；vision 路带 1×1 图验证多模态）。
+/** API 测试的分步状态：conn = 网络与认证（GET /models）；chat = 模型真实
+ *  可用（POST /chat/completions，max_tokens=1）。
  *  模型 ID 拼错这类问题在 chat 步被服务端 4xx 当场报出来。 */
 type StepStatus = "idle" | "running" | "ok" | "fail";
 
@@ -164,9 +154,7 @@ function TestStepRow({
 function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
   const { t } = useTranslation();
   const [showKey, setShowKey] = useState(false);
-  const [showVisionKey, setShowVisionKey] = useState(false);
   const [textTest, setTextTest] = useState<ApiTestState>(TEST_IDLE);
-  const [visionTest, setVisionTest] = useState<ApiTestState>(TEST_IDLE);
 
   const provider = (PROVIDER_KEYS as string[]).includes(ai.externalProvider)
     ? (ai.externalProvider as ProviderKey)
@@ -178,16 +166,14 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
     // model 字段不强制覆盖（避免抹掉用户填好的精确版本号），placeholder 走预设
     updateAi({ externalProvider: next, endpoint: preset.baseUrl });
     setTextTest(TEST_IDLE);
-    setVisionTest(TEST_IDLE);
   };
 
-  /** 单路测试：kind=text 测文本 API；kind=vision 测 Vision API（reuse 时
-   *  endpoint/key 用文本配置，模型用 visionModel||model，并带图验证多模态）。 */
-  const runApiTest = async (kind: "text" | "vision") => {
-    const endpoint = (kind === "vision" ? ai.visionEndpoint : ai.endpoint).trim();
-    const key = (kind === "vision" ? ai.visionApiKey : ai.apiKey).trim();
-    const model = (kind === "vision" ? ai.visionModel : ai.model).trim();
-    const set = kind === "text" ? setTextTest : setVisionTest;
+  /** 测试文本 API：先测连通（GET /models）再真发一次 chat 验证模型 ID。 */
+  const runApiTest = async () => {
+    const endpoint = ai.endpoint.trim();
+    const key = ai.apiKey.trim();
+    const model = ai.model.trim();
+    const set = setTextTest;
 
     if (!endpoint || !model) {
       set({
@@ -234,7 +220,7 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
     set({ running: true, conn: "ok", connMsg: "", chat: "running", chatMsg: "" });
     let chat;
     try {
-      chat = await api.testAiChat(endpoint, key || undefined, model, kind === "vision");
+      chat = await api.testAiChat(endpoint, key || undefined, model, false);
     } catch (e) {
       set({
         running: false,
@@ -252,20 +238,6 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
       chat: chat.ok ? "ok" : "fail",
       chatMsg: chat.ok ? "" : chat.message,
     });
-  };
-
-  // Vision API 的 provider；存量 "reuse" / 空值落到 custom（升级自旧「复用」语义，
-  // URL/Key 显示为空，用户重选服务商即可）
-  const visionProvider = (VISION_PROVIDER_KEYS as string[]).includes(
-    ai.visionProvider,
-  )
-    ? (ai.visionProvider as ProviderKey)
-    : "custom";
-
-  const onVisionProviderChange = (next: ProviderKey) => {
-    const preset = EXTERNAL_PROVIDER_PRESETS[next];
-    updateAi({ visionProvider: next, visionEndpoint: preset.baseUrl });
-    setVisionTest(TEST_IDLE);
   };
 
   const providerOptions = PROVIDER_KEYS.map((k) => ({
@@ -295,150 +267,12 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
       </Section>
 
       {/* 启用 toggle 切换时用 grid-rows 0fr↔1fr trick 做高度过渡 + opacity 淡入：
-          DOM 一直 mount，input 内容跟 textTest / visionTest / showKey 状态都不会被切关后丢失。 */}
+          DOM 一直 mount，input 内容跟 textTest / showKey 状态都不会被切关后丢失。 */}
       <div
         className={`${styles.externalDetails} ${ai.externalEnabled ? styles.externalDetailsOpen : ""}`}
         aria-hidden={!ai.externalEnabled}
       >
         <div className={styles.externalDetailsInner}>
-          {/* —— 视觉 API（Step 1）——
-              与文本 API 完全对称的独立配置：文本 API 没有多模态模型时（如 DeepSeek），
-              没本地算力的用户靠它把 Step 1 也放到云端。视觉字段留空时后端回退
-              文本配置（纯兜底，UI 不再暴露「复用」概念）。 */}
-          <Section
-            title={t("aiSettings.external.groupVisionTitle")}
-            icon={ImageIcon}
-            description={t("aiSettings.external.groupVisionHint")}
-          >
-          <Row label={t("aiSettings.external.providerLabel")}>
-            <SimplePicker<ProviderKey>
-              value={visionProvider}
-              options={VISION_PROVIDER_KEYS.map((k) => ({
-                value: k,
-                label: t(`aiSettings.external.provider.${k}`),
-              }))}
-              onChange={onVisionProviderChange}
-            />
-          </Row>
-
-          <Row
-                label={t("aiSettings.external.baseUrlLabel")}
-                description={
-                  visionProvider === "kimi" || visionProvider === "kimi-cn"
-                    ? t("aiSettings.external.kimiBaseUrlNote")
-                    : undefined
-                }
-                block
-              >
-                <input
-                  type="text"
-                  className={styles.externalInput}
-                  value={ai.visionEndpoint}
-                  onChange={(e) =>
-                    updateAi({ visionEndpoint: e.target.value })
-                  }
-                  placeholder={t("aiSettings.external.baseUrlPlaceholder")}
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                />
-              </Row>
-
-              <Row label={t("aiSettings.external.apiKeyLabel")} block>
-                <div className={styles.externalKeyRow}>
-                  <input
-                    type={showVisionKey ? "text" : "password"}
-                    className={styles.externalInput}
-                    value={ai.visionApiKey}
-                    onChange={(e) =>
-                      updateAi({ visionApiKey: e.target.value })
-                    }
-                    placeholder={t("aiSettings.external.apiKeyPlaceholder")}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                  />
-                  <button
-                    type="button"
-                    className={styles.externalEyeBtn}
-                    onClick={() => setShowVisionKey((v) => !v)}
-                    aria-label={
-                      showVisionKey
-                        ? t("aiSettings.external.apiKeyHide")
-                        : t("aiSettings.external.apiKeyShow")
-                    }
-                    title={
-                      showVisionKey
-                        ? t("aiSettings.external.apiKeyHide")
-                        : t("aiSettings.external.apiKeyShow")
-                    }
-                  >
-                    {showVisionKey ? (
-                      <EyeOff size={14} strokeWidth={1.85} />
-                    ) : (
-                      <Eye size={14} strokeWidth={1.85} />
-                    )}
-                  </button>
-                </div>
-              </Row>
-
-              <Row
-                label={t("aiSettings.external.visionModelLabel")}
-                description={t("aiSettings.external.visionModelDedicatedHint")}
-                block
-              >
-                <input
-                  type="text"
-                  className={styles.externalInput}
-                  value={ai.visionModel}
-                  onChange={(e) => updateAi({ visionModel: e.target.value })}
-                  placeholder={EXTERNAL_PROVIDER_PRESETS[visionProvider].modelHint}
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                />
-              </Row>
-
-          <div className={styles.externalActionRow}>
-                <button
-                  type="button"
-                  className={styles.externalTestBtn}
-                  onClick={() => runApiTest("vision")}
-                  disabled={visionTest.running}
-                >
-                  {visionTest.running ? (
-                    <>
-                      <Loader2
-                        size={13}
-                        strokeWidth={2}
-                        className={styles.testSpin}
-                      />
-                      {t("aiSettings.external.testRunning")}
-                    </>
-                  ) : (
-                    t("aiSettings.external.testVisionButton")
-                  )}
-                </button>
-              </div>
-              {visionTest.conn !== "idle" ? (
-                <div className={styles.externalTestSteps}>
-                  <TestStepRow
-                    status={visionTest.conn}
-                    label={t("aiSettings.external.testStepConn")}
-                    msg={visionTest.connMsg}
-                  />
-                  <TestStepRow
-                    status={visionTest.chat}
-                    label={t("aiSettings.external.testStepChatVision", {
-                      model: ai.visionModel.trim() || "?",
-                    })}
-                    msg={visionTest.chatMsg}
-                  />
-                </div>
-              ) : null}
-
-          </Section>
-
           <Section
             title={t("aiSettings.external.groupTextTitle")}
             icon={Type}
@@ -526,7 +360,7 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
             <button
               type="button"
               className={styles.externalTestBtn}
-              onClick={() => runApiTest("text")}
+              onClick={() => void runApiTest()}
               disabled={textTest.running}
             >
               {textTest.running ? (

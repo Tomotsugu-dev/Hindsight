@@ -109,13 +109,7 @@ export function nowHms(): string {
 export function fmtPhaseBody(p: SummaryProgress): string {
   const parts: string[] = [];
   if (p.segmentIdx != null) parts.push(`idx=${p.segmentIdx}`);
-  if (p.imageIndex != null) parts.push(`img=${p.imageIndex}`);
-  if (p.imagesTotal != null) parts.push(`total=${p.imagesTotal}`);
   if (p.status != null) parts.push(`status=${p.status}`);
   if (p.message) parts.push(p.message);
-  if (p.imageDescription) {
-    const short = p.imageDescription.replace(/\s+/g, " ").slice(0, 80);
-    parts.push(`"${short}${p.imageDescription.length > 80 ? "…" : ""}"`);
-  }
   return parts.join(" · ");
 }

@@ -200,8 +200,12 @@ pub async fn init_capture_service(
 
 /// 第 4 步：启动同步引擎。登录态由 engine 内部检查，未登录所有循环都是 no-op；
 /// 所以可以无条件 start，登录后自动开始推。
-pub async fn init_sync_engine(pool: DbPool) -> Arc<SyncEngine> {
-    let sync_engine = Arc::new(SyncEngine::new(pool));
+/// `mem` = 记忆库句柄(聊天历史/屏幕记忆的可选上云用;打开失败传 None)。
+pub async fn init_sync_engine(
+    pool: DbPool,
+    mem: Option<crate::memory::MemoryDb>,
+) -> Arc<SyncEngine> {
+    let sync_engine = Arc::new(SyncEngine::new(pool, mem));
     sync_engine.start().await;
     sync_engine
 }

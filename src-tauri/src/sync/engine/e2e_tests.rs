@@ -22,6 +22,7 @@ use crate::sync::engine::SyncEngine;
 
 struct TestDevice {
     pool: DbPool,
+    mem: crate::memory::MemoryDb,
     engine: Arc<SyncEngine>,
     self_id: String,
 }
@@ -30,16 +31,29 @@ async fn make_device(self_id: &str, drive: Arc<InMemoryDriveStore>) -> TestDevic
     let pool = DbPool::open_in_memory().await.unwrap();
     migrations::run(&pool).await.unwrap();
     inject_fake_auth(&pool).await;
+    // e2e 用内存记忆库:可选数据集默认关,不影响既有用例;开了开关的用例直接用
+    let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
     let engine = Arc::new(SyncEngine::with_backend(
         pool.clone(),
+        Some(mem.clone()),
         DriveBackend::InMemory(drive),
         self_id.to_string(),
     ));
     TestDevice {
         pool,
+        mem,
         engine,
         self_id: self_id.to_string(),
     }
+}
+
+/// 打开某设备的可选上云三挡(测试用:直接写 settings)。
+async fn enable_optional_sync(dev: &TestDevice) {
+    let mut cfg = crate::repo::settings::load(&dev.pool).await.unwrap();
+    cfg.sync_ai_summaries = true;
+    cfg.sync_chat_history = true;
+    cfg.sync_screen_memory = true;
+    crate::repo::settings::save(&dev.pool, &cfg).await.unwrap();
 }
 
 /// INSERT 一行 fake auth_state，让 [`auth::ensure_valid_token`] 走"未过期"分支
@@ -416,4 +430,158 @@ async fn idempotent_repeated_sync() {
     assert_eq!(sum_secs_for_device(&a, "device-a").await, baseline_a_sum);
     assert_eq!(count_for_device(&b, "device-a").await, baseline_b);
     assert_eq!(sum_secs_for_device(&b, "device-a").await, baseline_b_sum);
+}
+
+/// 可选上云三数据集的双设备闭环:
+/// A 产生 聊天会话+消息 / 屏幕记忆会话 / AI 日报 → sync → B 全部可见;
+/// A 删会话(软删墓碑)→ sync → B 的会话消失、消息清空;
+/// A 会话追加文本(ended_ts 推进)→ sync → B 侧文本更新(LWW)。
+#[tokio::test]
+async fn optional_datasets_cross_device_roundtrip() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    let b = make_device("device-b", Arc::clone(&drive)).await;
+    enable_optional_sync(&a).await;
+    enable_optional_sync(&b).await;
+
+    // — A: 聊天一问一答 —
+    let conv = crate::chat::store::create_conversation(&a.mem, "测试会话")
+        .await
+        .unwrap();
+    crate::chat::store::append_user(&a.mem, conv, "上周看了什么?")
+        .await
+        .unwrap();
+    crate::chat::store::append_assistant(&a.mem, conv, "看了三个视频 [1]", &[], false)
+        .await
+        .unwrap();
+
+    // — A: 一条屏幕记忆会话 —
+    a.mem
+        .0
+        .call(|conn| {
+            conn.execute(
+                "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text, guid)
+                 VALUES ('2026-07-05','t0','t1','code','标题甲','秘密订单编号八八四二',
+                         lower(hex(randomblob(16))))",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    // — A: 一段日报 —
+    a.pool
+        .0
+        .call(|conn| {
+            conn.execute(
+                "INSERT INTO ai_summaries(source, local_date, segment_idx, label, start_hour,
+                                          end_hour, content, model, status, error, generated_at)
+                 VALUES ('daily','2026-07-05',0,'深夜',0,6,'凌晨在写代码','m','ok',NULL,
+                         '2026-07-05T10:00:00Z')",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    // B: 聊天可见
+    let convs = crate::chat::store::list_conversations(&b.mem)
+        .await
+        .unwrap();
+    assert_eq!(convs.len(), 1, "B 应看到 A 的会话");
+    assert_eq!(convs[0].title, "测试会话");
+    let msgs = crate::chat::store::get_messages(&b.mem, convs[0].id)
+        .await
+        .unwrap();
+    assert_eq!(msgs.len(), 2, "两条消息都应到位");
+    // B: 屏幕记忆可搜(FTS 触发器在 INSERT 时生效)+ 标了来源设备
+    let (hits, origin): (i64, String) = b
+        .mem
+        .0
+        .call(|conn| {
+            let hits: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH '八八四二'",
+                    [],
+                    |r| r.get(0),
+                )
+                .db()?;
+            let origin: String = conn
+                .query_row(
+                    "SELECT origin_device FROM text_sessions LIMIT 1",
+                    [],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok((hits, origin))
+        })
+        .await
+        .unwrap();
+    assert_eq!(hits, 1, "B 的 FTS 应能搜到 A 的屏幕文字");
+    assert_eq!(origin, "device-a");
+    // B: 日报可见
+    let n: i64 = b
+        .pool
+        .0
+        .call(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM ai_summaries", [], |r| r.get(0))
+                .db()
+        })
+        .await
+        .unwrap();
+    assert_eq!(n, 1, "B 应看到 A 的日报行");
+
+    // — A 删会话 → 墓碑传播 —
+    crate::chat::store::delete_conversation(&a.mem, conv)
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    let convs = crate::chat::store::list_conversations(&b.mem)
+        .await
+        .unwrap();
+    assert!(convs.is_empty(), "删除应传播到 B");
+    let msg_left: i64 = b
+        .mem
+        .0
+        .call(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM chat_messages", [], |r| r.get(0))
+                .db()
+        })
+        .await
+        .unwrap();
+    assert_eq!(msg_left, 0, "墓碑落地应清掉 B 的消息");
+
+    // — A 的记忆会话增长(text/ended_ts 更新)→ B 侧 LWW 覆盖 —
+    a.mem
+        .0
+        .call(|conn| {
+            conn.execute(
+                "UPDATE text_sessions SET text = text || ' 新增行', ended_ts = 't2'",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    let text: String = b
+        .mem
+        .0
+        .call(|conn| {
+            conn.query_row("SELECT text FROM text_sessions LIMIT 1", [], |r| r.get(0))
+                .db()
+        })
+        .await
+        .unwrap();
+    assert!(text.contains("新增行"), "会话增长应覆盖到 B: {text}");
 }

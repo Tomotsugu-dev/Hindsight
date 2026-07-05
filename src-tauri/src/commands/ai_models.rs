@@ -34,10 +34,9 @@ pub async fn delete_model(pool: State<'_, DbPool>, filename: String) -> Result<(
     for slot in [
         &mut cfg.ai.active_main,
         &mut cfg.ai.active_mmproj,
-        &mut cfg.ai.describe_main,
-        &mut cfg.ai.describe_mmproj,
         &mut cfg.ai.summary_main,
         &mut cfg.ai.summary_mmproj,
+        &mut cfg.ai.chat_main,
     ] {
         if *slot == filename {
             slot.clear();

@@ -23,7 +23,18 @@ import { ForgetRemoteDeviceDialog } from "../../components/ForgetRemoteDeviceDia
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { logError } from "../../lib/logger";
 import { api, type AuthState, type SyncStatus } from "../../api/hindsight";
+import { Toggle } from "../../components/FormControls/Toggle";
+import { SyncOptInDialog } from "./SyncOptInDialog";
 import styles from "./DevicesPage.module.css";
+
+/** 可选上云三挡的字段名(settings 布尔键)。 */
+type OptDatasetField = "syncAiSummaries" | "syncChatHistory" | "syncScreenMemory";
+
+const OPT_DATASETS: { field: OptDatasetField; key: "summaries" | "chat" | "memory" }[] = [
+  { field: "syncAiSummaries", key: "summaries" },
+  { field: "syncChatHistory", key: "chat" },
+  { field: "syncScreenMemory", key: "memory" },
+];
 
 export default function DevicesPage() {
   const { t } = useTranslation();
@@ -139,6 +150,8 @@ function CloudSyncCard() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  // 可选上云:待确认的数据集(开启前弹琥珀警告;关闭直接生效)
+  const [optInPending, setOptInPending] = useState<OptDatasetField | null>(null);
 
   useEffect(() => {
     api.authStatus().then(setAuth).catch(() => setAuth(null));
@@ -434,6 +447,59 @@ function CloudSyncCard() {
           />
         </div>
       </div>
+
+      {/* ── 同步内容:可选上云三挡(仅登录后显示;开启前弹琥珀警告)── */}
+      {signedIn && (
+        <div className={styles.datasetBlock}>
+          <div className={styles.datasetHeader}>
+            {t("devices.cloud.datasets.title")}
+          </div>
+          <p className={styles.datasetHint}>{t("devices.cloud.datasets.hint")}</p>
+          {OPT_DATASETS.map(({ field, key }) => (
+            <div key={field} className={styles.datasetRow}>
+              <div className={styles.datasetText}>
+                <span className={styles.datasetLabel}>
+                  {t(`devices.cloud.datasets.${key}.label`)}
+                </span>
+                <span className={styles.datasetDesc}>
+                  {t(`devices.cloud.datasets.${key}.desc`)}
+                </span>
+              </div>
+              <Toggle
+                checked={settings[field]}
+                onChange={(next) => {
+                  if (next) {
+                    setOptInPending(field);
+                  } else {
+                    update({ [field]: false });
+                  }
+                }}
+                ariaLabel={t(`devices.cloud.datasets.${key}.label`)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {optInPending && (
+        <SyncOptInDialog
+          open
+          datasetLabel={t(
+            `devices.cloud.datasets.${
+              OPT_DATASETS.find((d) => d.field === optInPending)?.key
+            }.label`,
+          )}
+          body={t(
+            `devices.cloud.datasets.${
+              OPT_DATASETS.find((d) => d.field === optInPending)?.key
+            }.warn`,
+          )}
+          onConfirm={() => {
+            update({ [optInPending]: true });
+            setOptInPending(null);
+          }}
+          onCancel={() => setOptInPending(null)}
+        />
+      )}
 
       {error && <div className={styles.syncError}>{error}</div>}
       {!error && signedIn && sync?.lastError && (

@@ -66,10 +66,9 @@ pub async fn get_engine_status(
 
 /// 启动 llama-server 子进程。
 ///
-/// 加载 step 1（图描述）的 vision 模型——`effective_describe_main()` 优先读
-/// `describe_main`，空则 fallback 到老的 `active_main`。手动启动按钮一般是给
-/// daily / debug 跑前预热引擎用，加载 vision 模型最通用（既能跑 step 1 又能
-/// 跑 step 2 纯文本任务）。
+/// 加载段总结的文本模型——`effective_summary_main()` 优先读 `summary_main`，
+/// 空则 fallback 到老的 `active_main`。手动启动按钮一般是给跑总结/对话前
+/// 预热引擎用。
 ///
 /// 没选任何模型时直接拒绝启动——比让 server 起空跑然后 `/v1/models` 返空
 /// 列表友好（用户能立刻知道要先去选）。
@@ -79,9 +78,9 @@ pub async fn start_engine(
     supervisor: State<'_, Arc<EngineSupervisor>>,
 ) -> Result<u16, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
-    let main_name = cfg.ai.effective_describe_main();
+    let main_name = cfg.ai.effective_summary_main();
     if main_name.trim().is_empty() {
-        return Err("请先在「模型」里给图描述（step 1）选一个模型，再启动引擎".to_string());
+        return Err("请先在「模型」里选一个模型，再启动引擎".to_string());
     }
     let models_dir = crate::ai::models::root_dir(&cfg.ai);
     let main_path = models_dir.join(main_name);
@@ -90,7 +89,7 @@ pub async fn start_engine(
             "选中的主权重不存在：{main_name}（可能被删除或路径变了）"
         ));
     }
-    let mmproj_name = cfg.ai.effective_describe_mmproj();
+    let mmproj_name = cfg.ai.effective_summary_mmproj();
     let mmproj_path = if mmproj_name.trim().is_empty() {
         None
     } else {
@@ -133,11 +132,12 @@ pub async fn set_active_model(
     Ok(())
 }
 
-/// 单独设置 step 1（图描述）或 step 2（段总结）的模型；其它 step 不动。
+/// 单独设置段总结（summary）/ 对话（chat）的模型；另一个槽位不动。
 ///
-/// `step` 取 `"describe"` / `"summary"`；`main_file` 空字符串 = 清掉该 step 的覆盖
-/// （随后该 step fallback 到 `active_main`）。同时 stop 在跑的 server，下次跑总结
-/// 时按新模型 lazy spawn。
+/// `step` 取 `"summary"` / `"chat"`；`main_file` 空字符串 = 清掉该槽位的覆盖
+/// （summary fallback 到 `active_main`；chat 回到"自动"路由）。
+/// 同时 stop 在跑的 server，下次使用时按新模型 lazy spawn。
+/// chat 是纯文本任务不带 mmproj，`mmproj_file` 对它忽略。
 #[tauri::command]
 pub async fn set_step_model(
     pool: State<'_, DbPool>,
@@ -150,17 +150,16 @@ pub async fn set_step_model(
     let main = main_file.trim().to_string();
     let mmproj = mmproj_file.unwrap_or_default().trim().to_string();
     match step.as_str() {
-        "describe" => {
-            cfg.ai.describe_main = main;
-            cfg.ai.describe_mmproj = mmproj;
-        }
         "summary" => {
             cfg.ai.summary_main = main;
             cfg.ai.summary_mmproj = mmproj;
         }
+        "chat" => {
+            cfg.ai.chat_main = main;
+        }
         other => {
             return Err(format!(
-                "set_step_model: 未知 step {other}（仅支持 describe / summary）"
+                "set_step_model: 未知 step {other}（仅支持 summary / chat）"
             ));
         }
     }

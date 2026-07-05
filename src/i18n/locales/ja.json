@@ -49,7 +49,8 @@
       "categories": "分類",
       "apps": "アプリ",
       "devices": "同期",
-      "settings": "設定"
+      "settings": "設定",
+      "chat": "チャット"
     }
   },
   "sidebar": {
@@ -130,7 +131,13 @@
         "idleHint": "システム標準のマウス / キーボード / トラックパッドの入力で判定します。\n動画視聴や入力なしの読書では発火しません。\n操作を再開すると新しいセッションが自動で開始されます。",
         "screenshotPathLabel": "スクリーンショットの保存先",
         "dataPathLabel": "データの保存先",
-        "dataPathHint": "データベースとスクリーンショットのデフォルトの保存場所です。変更には再起動が必要で、既存のデータは手動で移行する必要があります。"
+        "dataPathHint": "データベースとスクリーンショットのデフォルトの保存場所です。変更には再起動が必要で、既存のデータは手動で移行する必要があります。",
+        "backfillLabel": "過去のスクリーンショットを取り込み",
+        "backfillDescription": "画面メモリを有効にする前の古いスクリーンショットをテキスト索引に追加し、チャットで検索できるようにします。",
+        "backfillButton": "取り込んで認識",
+        "backfillRunning": "認識中…",
+        "backfillRegistered": "{{n}} 枚を登録、認識を開始…",
+        "backfillDone": "完了：{{ok}} 枚を認識、{{failed}} 枚をスキップ"
       },
       "workHours": {
         "title": "勤務時間",
@@ -677,9 +684,6 @@
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒後に VRAM を解放"
       }
     },
-    "describeParams": {
-      "sectionTitle": "画像説明パラメータ"
-    },
     "summaryParams": {
       "sectionTitle": "セグメント要約パラメータ"
     },
@@ -698,7 +702,7 @@
     },
     "models": {
       "sectionTitle": "モデル",
-      "sectionDesc": "ローカル推論に使うビジョン LLM。GGUF ファイルは HuggingFace からダウンロードします。",
+      "sectionDesc": "ローカル推論に使う LLM。GGUF ファイルは HuggingFace からダウンロードします。",
       "toolbar": {
         "capAll": "すべて",
         "capVision": "Vision",
@@ -715,16 +719,8 @@
       "cloud": {
         "cardTitle": "クラウド · {{provider}}",
         "modelUnset": "(モデル未設定)",
-        "step2Tooltip": "Step 2 (セグメント要約) はクラウド API にルーティングされています。エンドポイント / モデルの編集は「クラウド API」タブで行ってください。",
-        "step1DisabledTooltip": "クラウド API は画像入力に対応していません（Step 1 には vision 能力が必要）",
-        "step2DisabledTooltip": "Step 2 のバックエンドとしてクラウド API が選択されています。オフにするには「クラウド API」タブで無効化してください。",
-        "step1ToggleOnTooltip": "ステップ 1（画像記述）をクラウド API に向ける——スクリーンショットがアップロードされます",
-        "step1ToggleOffTooltip": "クラウドのステップ 1 を解除（ローカルの vision モデルに戻す）",
-        "visionConfirmTitle": "スクリーンショットをクラウドへアップロードしますか？",
-        "visionConfirmMessage": "Vision（ステップ 1）をクラウドにすると、スクリーンショット画像が {{provider}} に送信され解析されます。画像にはチャット・メール・パスワードなどの機微な内容が含まれる可能性があります。先に 設定 → プライバシー でキーワードフィルタを設定することをおすすめします。この選択はローカルモデルに戻すまで有効です。",
-        "visionConfirmAccept": "理解した上でアップロードする",
         "summaryConfirmTitle": "要約データをクラウドへ送信しますか？",
-        "summaryConfirmMessage": "Text（ステップ 2）をクラウドにすると、各時間帯の要約ごとにアプリ名・分類・画像の文字記述が {{provider}} に送信されます。このオプションではスクリーンショット画像そのものは送信されません。",
+        "summaryConfirmMessage": "Text をクラウドにすると、各時間帯の要約ごとにアプリ名・分類・アクティビティのタイムラインが {{provider}} に送信されます。このオプションではスクリーンショット画像そのものは送信されません。",
         "summaryConfirmAccept": "理解した、続行する"
       },
       "card": {
@@ -738,13 +734,9 @@
         "pauseTooltip": "現在のダウンロードを一時停止します。ダウンロード済みバイトは保持され、「再開」で続きからダウンロードします。",
         "resume": "再開",
         "resumeTooltip": "ダウンロード済み {{size}} MB から再開します。",
-        "visionLabel": "vision",
-        "visionTooltip": "画像入力に対応——step 1 (画像説明) と step 2 (セグメント要約) の両方を実行できます。",
-        "textOnlyLabel": "テキスト",
-        "textOnlyTooltip": "テキスト専用モデル——step 2 (セグメント要約) は実行できますが、step 1 はできません。",
         "capsTooltips": {
-          "TEXT": "テキスト能力——生成・要約・補完（step 2 時間帯要約）。",
-          "VISION": "マルチモーダル——画像入力を理解（step 1 画像説明）。",
+          "TEXT": "テキスト能力——生成・要約・補完。",
+          "VISION": "マルチモーダル——画像入力を理解。",
           "CODE": "コード特化——コードの生成・解説が得意。",
           "FAST": "軽量 < 1GB、速度優先；お試しに最適。",
           "BALANCED": "中サイズ、品質と速度のバランス；日常用途向け。",
@@ -752,13 +744,9 @@
           "R1": "DeepSeek R1 系——RL で訓練された推論モデル。",
           "DEFAULT": "Hindsight 一推し；総合バランス最良。"
         },
-        "step1": "Vision",
-        "step1ToggleOnTooltip": "このモデルを vision ステップ (step 1: 画像説明) に割り当てます。前の選択を置き換えます。",
-        "step1ToggleOffTooltip": "クリックで vision ステップを解除 (旧 active モデルにフォールバック)。",
-        "step1DisabledTooltip": "テキスト専用モデルは画像説明ステップを実行できません (vision 能力が必要)。",
         "step2": "Text",
-        "step2ToggleOnTooltip": "このモデルを text ステップ (step 2: セグメント要約) に割り当てます。前の選択を置き換えます。",
-        "step2ToggleOffTooltip": "クリックで text ステップを解除 (旧 active モデルにフォールバック)。",
+        "step2ToggleOnTooltip": "このモデルを時間帯要約（Text）に割り当てます。前の選択を置き換えます。",
+        "step2ToggleOffTooltip": "クリックで Text の選択を解除（旧 active モデルにフォールバック）。",
         "uninstall": "アンインストール",
         "uninstallTooltipInstalled": "ローカルファイルを削除 (main + mmproj)",
         "uninstallTooltipNotInstalled": "未インストール",
@@ -833,26 +821,17 @@
       "rowLabel": "分析する分類",
       "rowHint": "クリックで切り替え:\n• 色付き + 分類アイコン = AI 分析の対象\n• グレーの枠 + 閉じた目のアイコン = 除外"
     },
-    "frame": {
-      "sectionTitle": "フレームサンプリング",
-      "sectionDesc": "スクリーンショットは時間とともに溜まります。先に類似度で重複を取り除き、残りをモデルに送ることで時間とトークンを節約します。",
-      "dedupThresholdLabel": "類似度の重複排除しきい値",
-      "dedupThresholdHint": "コサイン類似度がしきい値以上のスクリーンショット同士を 1 枚に統合します。値が大きいほど保守的（残す枚数が多い）、小さいほど積極的（統合が多く、必要なフレームを誤って削る可能性あり）。デフォルト 95% で実データの重複排除率は約 70%。",
-      "maxImagesLabel": "セグメントあたりの最大枚数",
-      "maxImagesHint": "重複排除後にセグメントごとに AI へ送る上限枚数。Step 1 (画像説明) は 1 枚ずつ vision LLM を呼ぶため、値が大きいほどそのセグメントの処理時間が直接伸びます。デフォルト 1024。長いセグメントをよりカバーしたい場合は上げてください。"
-    },
     "external": {
       "sectionTitle": "クラウド API（任意）",
-      "sectionDesc": "時間帯の要約をクラウドモデルで生成します。スクリーンショット自体はアップロードされません。各画像の記述は引き続きローカルのビジョンモデルが行います。",
-      "enableLabel": "時間帯の要約をクラウドで生成",
-      "enableHint": "オンにすると、各時間帯の要約呼び出しは下記の API へ送られます。ステップ 1（画像ごとの記述）は引き続きローカルで実行されます。",
+      "sectionDesc": "時間帯サマリーと「チャット」の回答をクラウドモデルで生成します。スクリーンショットは決してアップロードされません。",
+      "enableLabel": "クラウド API を有効化",
+      "enableHint": "オンにすると、セグメント要約と「チャット」が下記の API を呼び出します。スクリーンショットはアップロードされません。",
       "providerLabel": "プロバイダー",
       "provider": {
         "openai": "OpenAI",
         "deepseek": "DeepSeek",
         "kimi": "Kimi (Moonshot グローバル)",
         "kimi-cn": "Kimi (Moonshot 中国)",
-        "reuse": "テキスト API を再利用",
         "openrouter": "OpenRouter",
         "together": "Together",
         "groq": "Groq",
@@ -871,27 +850,13 @@
       "testOkNoModels": "接続成功",
       "testFail": "接続失敗：{{message}}",
       "missingFields": "Base URL とモデル ID を入力してください",
-      "privacyNote": "ヒント：Text（ステップ 2）をクラウドにすると、アプリ名・分類・画像の文字記述がクラウド API へ送信されます。Vision（ステップ 1）をクラウドにすると、スクリーンショット画像そのものがアップロードされます。API キーはローカル設定に平文で保存されます。",
-      "visionModelLabel": "ビジョンモデル ID",
-      "visionModelHint": "Vision（ステップ 1）をクラウドに向けたときに使用します。空欄なら上のモデル ID を再利用します（その場合、画像入力対応モデルが必要です）。",
-      "visionModelPlaceholder": "例：gpt-4o-mini / qwen-vl-plus（空欄 = モデル ID を再利用）",
-      "visionModelUnsupported": "テキストのプロバイダーにはマルチモーダルモデルがありません——上で Vision 専用のプロバイダーを選ぶか、Vision（ステップ 1）をローカルのままにしてください。",
-      "visionProviderLabel": "Vision API（ステップ 1）",
-      "visionProviderHint": "スクリーンショット記述（ステップ 1）をクラウドで実行するときに使う API。下のテキスト API を再利用するか、別のプロバイダーを指定できます。",
-      "visionModelDedicatedHint": "このプロバイダーで画像記述に使うマルチモーダルモデル ID。",
-      "testTextApi": "テキスト API",
-      "testVisionApi": "Vision API",
-      "testOkBoth": "テキスト / Vision API どちらも接続成功",
+      "privacyNote": "注意：テキスト API はセグメント要約と「チャット」で使われ、アプリ名・カテゴリ・アクティビティのタイムライン・質問と一致した画面テキストが送信されます。API キーはローカル設定に平文で保存されます。",
       "kimiBaseUrlNote": "api.moonshot.cn（中国）と api.moonshot.ai（グローバル）の Key は互換性がありません——Key を発行したサイトに合わせてください。",
       "groupTextTitle": "テキスト API",
-      "groupTextHint": "ステップ 2 · セグメント要約",
-      "groupVisionTitle": "Vision API",
-      "groupVisionHint": "ステップ 1 · スクリーンショット記述",
+      "groupTextHint": "時間帯要約 · チャット",
       "testTextButton": "テキスト API をテスト",
-      "testVisionButton": "Vision API をテスト",
       "testStepConn": "ネットワークと認証",
-      "testStepChat": "モデル {{model}} が応答",
-      "testStepChatVision": "モデル {{model}} が応答（画像入力あり）"
+      "testStepChat": "モデル {{model}} が応答"
     }
   },
   "devices": {
@@ -936,7 +901,29 @@
         "configureOAuth": "OAuth を設定",
         "restartApp": "アプリを再起動"
       },
-      "restartHint": "新しいアカウントでログインしました。そのアカウントのローカルデータベースに切り替えるには、アプリを再起動してください。"
+      "restartHint": "新しいアカウントでログインしました。そのアカウントのローカルデータベースに切り替えるには、アプリを再起動してください。",
+      "datasets": {
+        "title": "同期する内容",
+        "hint": "既定では使用統計や分類などの基本データのみ同期します。以下はより機微な情報を含むため個別に有効化が必要です。スクリーンショット画像そのものは決してクラウドに上がりません。",
+        "summaries": {
+          "label": "AI サマリーのテキスト",
+          "desc": "日次 / 週次レポートの生成テキスト。他のデバイスでも閲覧できます。",
+          "warn": "有効にすると、日報・週報の全文（そこに含まれるファイル名・ページや動画のタイトルを含む）が、あなたの Google Drive アプリデータ領域にアップロードされ、同じアカウントの他のデバイスに同期されます。"
+        },
+        "chat": {
+          "label": "チャット履歴",
+          "desc": "チャットの会話とメッセージ。他のデバイスで続きから質問できます。",
+          "warn": "有効にすると、チャットの全会話とメッセージ——あなたの質問と、回答に引用された画面テキストの断片を含む——が Google Drive アプリデータ領域にアップロードされ、他のデバイスに同期されます。"
+        },
+        "memory": {
+          "label": "画面メモリ全文",
+          "desc": "画面に表示されたテキストの索引。デバイス横断で検索できます。最も機微。",
+          "warn": "有効にすると、画面メモリ索引の全テキスト——画面に表示された逐語的な内容（チャット・メール・コード・ウェブページ等）——が Google Drive アプリデータ領域にアップロードされ、他のデバイスに同期されます。最も機微な項目です。このアカウントのすべてのデバイスを信頼できるか確認してください。"
+        },
+        "confirmTitle": "「{{dataset}}」をクラウドへアップロードしますか？",
+        "confirmNote": "データはあなた自身の Google Drive アプリデータ領域のみに保存されます（他のアプリからは見えません）。いつでもオフにでき、「クラウドデータを消去」で削除できます。",
+        "confirmAction": "リスクを理解して有効化"
+      }
     },
     "errors": {
       "credExpired": "認証情報の有効期限が切れました。再度ログインしてください。",
@@ -1008,7 +995,6 @@
       "daily": "日次",
       "week": "週次",
       "month": "月次",
-      "chat": "チャット",
       "debug": "デバッグ"
     },
     "placeholder": {
@@ -1098,10 +1084,10 @@
       "hint": "1 か月のアクティビティ傾向と主なハイライト。開発中の機能です。"
     },
     "daily": {
-      "subtitle": "その日のスクリーンショットとアプリ使用状況を時間帯ごとに集計し、ローカルのビジョンモデルで生成します。",
+      "subtitle": "その日のアクティビティを時間帯ごとに集計し、ローカルモデルで生成します。",
       "runtimeMissing": {
         "title": "AI エンジンが未インストール",
-        "message": "スクリーンショットの重複除去には画像埋め込みモデルが必要です。ビジョン エンジンと合わせて約 80 MB をダウンロードします。完了後、生成が自動的に続行します。",
+        "message": "ローカルでサマリーを生成するには AI エンジン（約 80 MB）が必要です。完了後、生成が自動的に続行します。",
         "confirm": "ダウンロードして続行",
         "cancel": "キャンセル"
       },
@@ -1117,15 +1103,14 @@
         "stopping": "停止中…",
         "regenerate": "再生成",
         "start": "サマリー開始",
-        "startTooltip": "ローカルのビジョンモデルが各時間帯を順に分析します。所要時間はハードウェアによって異なります（GPU で数秒/帯、CPU で数十秒/帯）。",
+        "startTooltip": "ローカルモデルが各時間帯のアクティビティを順に要約します。所要時間はハードウェアによって異なります（GPU で数秒/帯、CPU で数十秒/帯）。",
         "regenerateTooltip": "再生成するとこの日の全時間帯のサマリーが消去され、もう一度実行されます。",
         "noModelTooltip": "先に AI 設定 → モデル でモデルを選んでください。",
         "delete": "削除",
-        "deleteTooltip": "この日の ai_summaries (source=daily) と ai_image_descriptions を消去します（取り消し不可）。",
+        "deleteTooltip": "この日の ai_summaries (source=daily) を消去します（取り消し不可）。",
         "deleteEmptyTooltip": "この日にはまだ削除できる日次データがありません。",
-        "deleteConfirm": "{{date}} の日次レポートデータを削除しますか? 時間帯ごとのサマリーと画像ごとの記述がすべて消去されます。デバッグタブには影響しません。この操作は取り消せません。",
         "deleteConfirmTitle": "{{date}} の日次レポートデータを削除しますか?",
-        "deleteConfirmMessage": "時間帯ごとのサマリーと画像ごとの記述がすべて消去されます。デバッグタブには影響しません。この操作は取り消せません。",
+        "deleteConfirmMessage": "この日のすべての時間帯サマリーが消去されます。デバッグタブには影響しません。この操作は取り消せません。",
         "exportMarkdown": "Markdown でエクスポート",
         "exportTooltip": "現在の日付の全時間帯のサマリーを Markdown ファイルとしてエクスポートします。",
         "exportEmptyTooltip": "エクスポートできる時間帯のサマリーがまだありません。",
@@ -1136,12 +1121,11 @@
         "dismissError": "閉じる"
       },
       "errors": {
-        "noVisionModel": "先に AI 設定 → モデル でビジョンモデルを選んでください。",
         "generationFailed": "サマリーに失敗しました",
-        "unknown": "不明なエラー"
+        "unknown": "不明なエラー",
+        "noModel": "先に AI 設定 → モデル でモデルを選んでください。"
       },
       "engineLoading": "モデルを読み込み中…",
-      "dedupRunning": "類似スクリーンショットの重複排除中…（{{count}} 枚）",
       "toast": {
         "exported": "{{filename}} を「ダウンロード」フォルダにエクスポートしました。"
       },
@@ -1151,15 +1135,10 @@
           "ok": "生成済み",
           "skipped": "スクリーンショットなし",
           "error": "失敗",
-          "analyzing": "分析中 · {{done}} / {{total}} 枚",
-          "analyzingNoTotal": "分析中…",
           "summarizing": "時間帯要約を生成中…"
         },
         "body": {
           "empty": "上の「サマリー開始」をクリックして、この時間帯の内容を生成してください。",
-          "analyzing": "モデルにスクリーンショットを送っています… {{done}} / {{total}} 枚完了",
-          "analyzingNoTotal": "分析中…",
-          "summarizing": "画像説明完了（{{count}} 枚）。モデルが時間帯要約を生成中…",
           "summarizingNoTotal": "時間帯要約を生成中…",
           "skipped": "この時間帯にはスクリーンショットがありません（PC を使っていない / すべてプライバシーリストに該当 / すべて除外カテゴリに該当）。",
           "skippedNoActivity": "この時間帯には何も記録されていません（PC を使っていない / すべて除外カテゴリに該当）。",
@@ -1183,85 +1162,11 @@
         "stateEmptyContent": "_（空）_"
       }
     },
-    "chat": {
-      "subtitle": "AI とアクティビティについて話す — 履歴を検索、アプリ使用時間を確認、1 日を振り返る。",
-      "mockBadge": "MOCK",
-      "clear": "クリア",
-      "clearTooltip": "現在の会話をクリア",
-      "empty": {
-        "title": "何を聞きたいですか？",
-        "hint": "下のサンプルを試すか、下部から直接入力してください。"
-      },
-      "input": {
-        "placeholder": "何でもどうぞ…",
-        "sendAria": "送信",
-        "sendTooltip": "送信（Enter）"
-      },
-      "presets": {
-        "search": {
-          "label": "履歴を検索",
-          "q": "PairingSection の hover バグを直したのはいつだったか"
-        },
-        "stat": {
-          "label": "データ",
-          "q": "先週 Cursor をどれくらい使った？"
-        },
-        "reflect": {
-          "label": "振り返り",
-          "q": "今日の集中度はどうだった？振り返りをください"
-        }
-      },
-      "mock": {
-        "search": {
-          "intro": "過去の時間帯の要約から関連する 3 件が見つかりました：",
-          "segLabelAfternoon": "午後",
-          "segLabelEvening": "夜",
-          "hit1Snippet": "Hindsight プロジェクトで PairingSection の hover/glow 効果を調整。grid template の固定列幅と minmax を何度も試し、最終的に :has(.nameCol:hover) を使って列全体を展開させた。",
-          "hit2Snippet": "actionCol の左寄せと padding-left の問題を引き続き修正。1fr の nameCol が padding を相殺するように自動縮小していることに気づき、grid template を 140px の固定値に変更。",
-          "hit3Snippet": "trigger が同じ X 軸に揃っていないことに初めて気づき、grid のサブピクセル計算か flex justify-end が原因ではないかと疑った。"
-        },
-        "stat": {
-          "intro": "先週の Cursor は合計 12h 23m、曜日別の内訳：",
-          "sumPrefix": "合計 {{total}}",
-          "weekday1": "月",
-          "weekday2": "火",
-          "weekday3": "水",
-          "weekday4": "木",
-          "weekday5": "金",
-          "weekday6": "土",
-          "weekday7": "日"
-        },
-        "reflect": {
-          "section1Title": "今日の全体",
-          "section1Body": "深い集中は約 4 時間（午前 + 午後 各 2 時間）、それ以外は切り替えと連絡。集中度は概ね良好だが、午後の約 40 分はアプリ切り替えが多めだった（28 回/時）。",
-          "section2Title": "ハイライト",
-          "section2Body": "午後 14:00–16:00 は Cursor で 2 時間ほぼ切り替えなし。今日もっとも深く作業できた時間帯。",
-          "section3Title": "改善の提案",
-          "section3Body": "19:00 以降は SNS 系アプリが 60% を占めた。寝る前 30 分にまとめて確認するようにし、夕食後に連続した作業や読書の時間を確保するとよさそう。"
-        },
-        "fallback": {
-          "text": "（mock）これはサンプルの返答です。バックエンドはまだ接続されておらず、いくつかのキーワードのみを認識します：\n• 履歴検索 — 「検索 / 探す / いつ / hover / bug」\n• データ — 「どれくらい / 時間 / 使った」\n• 振り返り — 「振り返り / 集中 / 今日 / どうだった」"
-        }
-      }
-    },
     "debug": {
       "scope": {
         "daily": "日次",
         "weekly": "週次",
         "monthly": "月次"
-      },
-      "pickerOptions": {
-        "maxImages15": "15 枚/区間",
-        "maxImages30": "30 枚/区間",
-        "maxImagesUnlimited": "無制限",
-        "slots1": "並列 1",
-        "slots2": "並列 2",
-        "slots4": "並列 4",
-        "slots8": "並列 8",
-        "ctxDefault": "ctx 8K/スロット",
-        "ctx16k": "ctx 16K/スロット",
-        "ctx32k": "ctx 32K/スロット",
-        "ctx64k": "ctx 64K/スロット"
       },
       "dateNav": {
         "prevDayAria": "前の日",
@@ -1283,34 +1188,16 @@
         "lastMonth": "先月",
         "monthsAgo": "{{count}} か月前"
       },
-      "maxImagesInfo": {
-        "tooltip": "各時間帯にモデルへ送る最大画像数。少なくするとデバッグが速くなります。",
-        "aria": "区間あたりの最大画像数についての説明"
-      },
       "actions": {
         "stop": "停止",
         "start": "再生成",
-        "startInfo": "この日の画像説明と時間帯サマリーを再生成します。",
+        "startInfo": "この日の時間帯サマリーを再生成します。",
         "startInfoAria": "再生成範囲の説明",
-        "describeOnly": "画像説明のみ生成",
-        "describeOnlyInfo": "step 1 のみ実行：当日の画像ごとの説明を生成（時間帯サマリーは作成しません）。",
-        "describeOnlyAria": "画像説明のみ生成（時間帯サマリーをスキップ）",
-        "summarizeOnly": "時間帯サマリーのみ生成",
-        "summarizeOnlyInfo": "step 2 のみ実行：既存の画像説明から時間帯サマリーを再構築します。step 1 のデータがない時間帯はスキップ扱いになります。",
-        "summarizeOnlyAria": "時間帯サマリーのみ生成（画像説明をスキップ）",
-        "clearDescriptions": "削除",
-        "clearDescriptionsTooltip": "この日のすべての画像説明を消去します（時間帯サマリーは保持、取り消し不可）。",
-        "clearDescriptionsConfirm": "{{date}} のすべての画像説明を削除しますか? 時間帯サマリーは保持されます。この操作は取り消せません。",
-        "clearDescriptionsConfirmTitle": "{{date}} のすべての画像説明を削除しますか?",
-        "clearDescriptionsConfirmMessage": "時間帯サマリーは保持されます。この操作は取り消せません。",
         "clearSummaries": "削除",
-        "clearSummariesTooltip": "この日のすべての時間帯サマリーを消去します（画像説明は保持、取り消し不可）。",
-        "clearSummariesConfirm": "{{date}} のすべての時間帯サマリーを削除しますか? 画像説明は保持されます。この操作は取り消せません。",
+        "clearSummariesTooltip": "この日のすべての時間帯サマリーを消去します（取り消し不可）。",
+        "clearSummariesConfirm": "{{date}} のすべての時間帯サマリーを削除しますか? この操作は取り消せません。",
         "clearSummariesConfirmTitle": "{{date}} のすべての時間帯サマリーを削除しますか?",
-        "clearSummariesConfirmMessage": "画像説明は保持されます。この操作は取り消せません。",
-        "exportDescriptionsMd": "Markdown 出力",
-        "exportDescriptionsMdTooltip": "この日のすべての画像説明を Markdown ファイルとしてエクスポート。",
-        "exportDescriptionsMdEmptyTooltip": "エクスポートできる画像説明がまだありません。",
+        "clearSummariesConfirmMessage": "この操作は取り消せません。",
         "exportSummariesMd": "Markdown 出力",
         "exportSummariesMdTooltip": "この日のすべての時間帯サマリーを Markdown ファイルとしてエクスポート。",
         "exportSummariesMdEmptyTooltip": "エクスポートできる時間帯サマリーがまだありません。",
@@ -1318,89 +1205,24 @@
         "exportSavedAt": "{{path}} にエクスポートしました",
         "exportFailed": "エクスポート失敗：{{err}}",
         "startTooltipPending": "{{type}}デバッグはバックエンド実装待ちです。",
-        "startTooltipReady": "デバッグモード：1 日の全時間帯を実行（既存結果を消去して再実行）、画像ごとの記述をリアルタイム表示。",
-        "startTooltipNoModel": "先に AI 設定 → モデル でモデルを選んでください。",
-        "delete": "すべて削除",
-        "deleteTooltip": "この日のすべての画像説明と時間帯サマリーを消去します（取り消し不可）。",
-        "deleteInfoAria": "削除範囲の説明",
-        "deleteConfirm": "{{date}} の AI 生成物をすべて削除しますか? 時間帯の要約と画像ごとの記述が消去されます。この操作は取り消せません。",
-        "exportJson": "JSON でエクスポート",
-        "exportTooltip": "このページのデバッグデータをすべて JSON ファイルとしてエクスポート。"
-      },
-      "filter": {
-        "title": "フィルター",
-        "description": "このデバッグウィンドウのみ有効。AI 設定のグローバル値には影響しません。",
-        "categoriesLabel": "分析するカテゴリ",
-        "categoriesHint": "クリックで切り替え：\n• カラー + カテゴリアイコン = AI 分析対象\n• グレー輪郭 + 閉じ目アイコン = 除外"
-      },
-      "frame": {
-        "title": "フレーム抽出",
-        "description": "時間帯にスクリーンショットが多い場合、まず類似度で重複除去してからモデルに送り、時間と token を節約します。このデバッグウィンドウのみ有効。",
-        "dedupThresholdLabel": "類似度の重複排除しきい値",
-        "dedupThresholdHint": "コサイン類似度がしきい値以上のスクリーンショット同士を 1 枚に統合します。値が大きいほど保守的（残す枚数が多い）、小さいほど積極的（統合が多く、必要なフレームを誤って削る可能性あり）。デフォルト 95% で実データの重複排除率は約 70%。"
-      },
-      "engine": {
-        "title": "エンジンパラメータ（起動時）",
-        "description": "変更するとエンジンを停止し、新しいパラメータで再起動してから実行します。デバッグ後はエンジンを無条件に停止し、次回の日次サマリーはデフォルト値で lazy-start するため、グローバル状態は汚されません。"
-      },
-      "describeEngine": {
-        "title": "画像説明パラメータ"
-      },
-      "summaryEngine": {
-        "title": "セグメント要約パラメータ"
+        "startTooltipReady": "デバッグモード：1 日の全時間帯を実行（既存結果を消去して再実行）、時間帯の要約をリアルタイム表示。",
+        "startTooltipNoModel": "先に AI 設定 → モデル でモデルを選んでください。"
       },
       "errors": {
         "scopePending": "{{type}}デバッグはバックエンド実装待ちです。",
-        "noVisionModel": "先に AI 設定 → モデル でビジョンモデルを選んでください。",
-        "runFailed": "デバッグ実行に失敗しました"
+        "runFailed": "デバッグ実行に失敗しました",
+        "noModel": "先に AI 設定 → モデル でモデルを選んでください。"
       },
       "engineLoading": "モデルを読み込み中…",
-      "dedupRunning": "類似スクリーンショットの重複排除中…（{{count}} 枚）",
-      "scopePlaceholder": "{{type}}デバッグはバックエンド実装待ちです。「日次」に戻すと、日次サマリーの 2 段階生成フロー（画像ごとの記述 → 時間帯の要約）をデバッグできます。",
-      "imagePrompt": {
-        "title": "画像記述プロンプト",
-        "description": "モデルが各スクリーンショットを個別に記述する際に使用。変更は本ウィンドウのみ反映されます。",
-        "label": "プロンプト"
-      },
+      "scopePlaceholder": "{{type}}デバッグはバックエンド実装待ちです。「日次」に戻すと、日次サマリーの生成フローをデバッグできます。",
       "segPrompt": {
         "title": "時間帯要約プロンプト",
-        "description": "画像ごとの記述 + アプリ統計を時間帯の要約に集約する際に使用。変更は本ウィンドウのみ反映されます。",
+        "description": "時間帯のアクティビティを要約に集約する際に使用。変更は本ウィンドウのみ反映されます。",
         "label": "プロンプト"
-      },
-      "cloudApi": {
-        "title": "クラウド API",
-        "description": "今回の実行で時間帯サマリー（step 2）をクラウドモデルで生成します。endpoint / モデル / API Key は AI 設定の全体値を使用し、本トグルは経路のみを切り替えます。",
-        "enableLabel": "クラウドサマリーを有効化",
-        "enableHint": "オフでローカル step 2。クラウド認証情報は AI 設定 → クラウド API で設定。"
-      },
-      "subTabs": {
-        "main": "デバッグビュー",
-        "settings": "デバッグ設定"
-      },
-      "perImage": {
-        "title": "画像ごとの記述",
-        "descriptionBase": "step 1 の出力 — 各スクリーンショットを vision LLM で個別に記述したもの",
-        "countSuffix": "、{{count}} 件",
-        "descriptionSuffix": "。ファイル名をクリックで原画プレビュー、行末の「再実行」で現在のデバッグパラメータを使ってその画像の記述を再生成。",
-        "empty": "まだデータがありません。上の「実行」をクリックすると、モデルが各スクリーンショットを記述します。",
-        "segFallback": "区間{{idx}}",
-        "imageNoSuffix": " · {{n}} 枚目",
-        "chipTitle": "区間 idx={{seg}} · 画像 idx={{img}}（重複除去後の順序）",
-        "captureTimeTooltip": "キャプチャ時刻 {{time}}",
-        "pathTooltip": "クリックで原画プレビュー：{{path}}",
-        "statTooltip": "レイテンシ · prompt / completion tokens",
-        "retry": "再実行",
-        "retryTooltipBusy": "全体のサマリーが実行中です。完了または停止後に再実行してください。",
-        "retryTooltipReady": "現在のデバッグパラメータを使ってこの画像の記述を再生成。",
-        "descEmpty": "（空）",
-        "openImageError": "画像を開く / 場所を特定できません：{{msg}}"
       },
       "segments": {
         "title": "時間帯の要約",
-        "descriptionBase": "step 2 の出力 — 画像ごとの記述 + アプリ統計から集約した時間帯の要約",
-        "countSuffix": "、{{count}} 帯",
-        "descriptionSuffix": "。",
-        "empty": "まだ時間帯の要約がありません。上の「実行」をクリックすると、モデルが時間帯内の記述を 1 つの要約に集約します。",
+        "empty": "まだ時間帯の要約がありません。上の「実行」をクリックすると、モデルが時間帯内のアクティビティを要約します。",
         "chipTitle": "区間 idx={{idx}}",
         "skippedFallback": "（この時間帯にはスクリーンショットなし）",
         "skippedNoActivityFallback": "（この時間帯には何も記録されていません）",
@@ -1431,6 +1253,71 @@
         "error": "エラー：",
         "accelTitle": "バイナリバリアント ID: {{id}}"
       }
+    }
+  },
+  "chat": {
+    "title": "チャット",
+    "thinking": "検索中…",
+    "error": "エラーが発生しました：{{msg}}",
+    "empty": {
+      "title": "何を聞きたいですか？",
+      "hint": "下のサンプルを試すか、下部から直接入力してください。"
+    },
+    "input": {
+      "placeholder": "何でもどうぞ…",
+      "sendAria": "送信",
+      "sendTooltip": "送信（Enter）"
+    },
+    "presets": {
+      "search": {
+        "label": "履歴検索",
+        "q": "ONNX について調べたのはいつ？"
+      },
+      "stat": {
+        "label": "時間集計",
+        "q": "先週 Cursor をどれくらい使った？"
+      },
+      "timeline": {
+        "label": "タイムライン",
+        "q": "昨日の午後は何をしていた？"
+      }
+    },
+    "conversations": {
+      "new": "新しいチャット",
+      "empty": "まだ会話がありません",
+      "renameAria": "会話の名前を変更",
+      "deleteAria": "会話を削除",
+      "deleteTitle": "この会話を削除しますか？",
+      "deleteMessage": "会話とすべてのメッセージが完全に削除されます。",
+      "deleteConfirm": "削除"
+    },
+    "privacy": {
+      "title": "送信前にご確認ください",
+      "routeCloud": "クラウドモデル：{{provider}} · {{model}}",
+      "routeLocal": "ローカルモデル：{{model}}",
+      "body": "質問と、画面メモリで一致したテキスト断片がコンテキストとしてモデルに送信されます。",
+      "bodyCloud": "クラウド API が設定されています：上記の内容はサードパーティに送信されます。",
+      "confirm": "了解して送信"
+    },
+    "badge": {
+      "cloud": "クラウド · {{model}}",
+      "local": "ローカル · {{model}}",
+      "none": "モデル未選択"
+    },
+    "backfill": {
+      "pending": "{{count}} 枚のスクリーンショットがまだテキスト索引に入っていません。チャットで見つからない可能性があります。",
+      "action": "今すぐ取り込む",
+      "running": "索引を作成中…残り {{count}} 枚",
+      "alreadyRunning": "索引タスクはバックグラウンドで実行中、残り {{count}} 枚",
+      "failed": "取り込みに失敗：{{msg}}"
+    },
+    "citations": {
+      "showAll": "すべての情報源を表示（{{count}} 件）",
+      "collapse": "情報源を折りたたむ"
+    },
+    "model": {
+      "pickAria": "チャットモデルを選択",
+      "empty": "利用可能なモデルがありません：クラウド API を設定するか、ローカルモデルをダウンロードしてください"
     }
   }
 }

@@ -4,7 +4,7 @@
 //! 实际实现拆在：
 //! - [`crate::ai::summary_overrides`]：调试覆盖结构体 `AiOverrides`
 //! - [`crate::ai::summary_progress`]：进度事件 payload `SummaryProgress` + 事件名
-//! - [`crate::ai::summary_operations`]：step1 / step2 业务函数（描述图、写段总结）
+//! - [`crate::ai::summary_operations`]：活动时间线合成 + 段总结业务函数
 //! - [`crate::ai::summary_runner`]：编排核心 `DaySummaryRunner`
 
 pub use crate::ai::summary_overrides::AiOverrides;

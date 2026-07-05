@@ -9,7 +9,6 @@ import {
   Check,
   Download,
   FolderOpen,
-  Images,
   Info,
   Loader2,
   Pilcrow,
@@ -73,39 +72,20 @@ export default function EngineTab() {
       .catch((e) => logError("engine.getStatus.hwSnapshot", e));
   }, []);
 
-  // 双套推荐参数：图描述（slots 优先）/ 段总结（ctx 优先）。
-  // 模型名各自走 step 专用字段（describeMain / summaryMain），fallback 到旧 activeMain。
+  // 段总结推荐参数（ctx 优先）。模型名走 summary 专用字段，fallback 到旧 activeMain。
   // 否则用户只设了 step-specific 模型时 activeMain 为空，recommendEngineParams 找不到
   // 模型 spec 返回 null，「应用推荐」按钮不渲染。
-  const recommendDescribe = useMemo(() => {
-    if (!ai) return null;
-    return recommendEngineParams(
-      hwSnapshot.systemVram,
-      ai.describeMain || ai.activeMain,
-      hwSnapshot.platformId,
-      "describe",
-    );
-  }, [ai, hwSnapshot]);
   const recommendSummary = useMemo(() => {
     if (!ai) return null;
     return recommendEngineParams(
       hwSnapshot.systemVram,
       ai.summaryMain || ai.activeMain,
       hwSnapshot.platformId,
-      "summary",
     );
   }, [ai, hwSnapshot]);
 
-  // 「已是推荐值」判断各自针对自己那套字段——picker 显示的是 effective 值
+  // 「已是推荐值」判断——picker 显示的是 effective 值
   // （new 字段 ?? old 字段），所以比较时也用同一逻辑
-  const describeApplied =
-    recommendDescribe != null &&
-    ai != null &&
-    isRecommendedApplied(recommendDescribe, {
-      batchSize: ai.describeBatchSize ?? ai.batchSize,
-      parallelSlots: ai.describeParallelSlots ?? ai.parallelSlots,
-      ctxSize: ai.describeCtxSize ?? ai.ctxSize,
-    });
   const summaryApplied =
     recommendSummary != null &&
     ai != null &&
@@ -116,17 +96,9 @@ export default function EngineTab() {
     });
 
   // 推荐里的 null 表示"用 llama.cpp 默认值"（batch=512 / ctx=8192）。
-  // 但 effective getter 是 `describeBatchSize ?? batchSize`——describeBatchSize=null
+  // 但 effective getter 是 `summaryBatchSize ?? batchSize`——summaryBatchSize=null
   // 会 fallback 到旧的全局 ai.batchSize（用户之前手设的值）。结果就是按了推荐没生效。
   // 这里把 null 转显式默认值，让 effective 直接读 step-specific 字段，不再 fallback。
-  const handleApplyDescribe = () => {
-    if (!recommendDescribe) return;
-    updateAi({
-      describeBatchSize: recommendDescribe.batchSize ?? 512,
-      describeParallelSlots: recommendDescribe.parallelSlots,
-      describeCtxSize: recommendDescribe.ctxSize ?? 8192,
-    });
-  };
   const handleApplySummary = () => {
     if (!recommendSummary) return;
     updateAi({
@@ -138,10 +110,7 @@ export default function EngineTab() {
 
   if (!ai) return null;
 
-  // picker 显示用 effective 值（描述阶段未填的字段降级到旧全局字段）
-  const describeBatch = ai.describeBatchSize ?? ai.batchSize;
-  const describeSlots = ai.describeParallelSlots ?? ai.parallelSlots;
-  const describeCtx = ai.describeCtxSize ?? ai.ctxSize;
+  // picker 显示用 effective 值（summary 未填的字段降级到旧全局字段）
   const summaryBatch = ai.summaryBatchSize ?? ai.batchSize;
   const summarySlots = ai.summaryParallelSlots ?? ai.parallelSlots;
   const summaryCtx = ai.summaryCtxSize ?? ai.ctxSize;
@@ -156,52 +125,8 @@ export default function EngineTab() {
         <EngineSection />
       </Section>
 
-      {/* 引擎参数双套——图描述（slots 优先）+ 段总结（ctx 优先）。
-          两阶段串行执行：日报跑 step 1 用 describe 配置，跑完 stop+start 切到
-          summary 配置跑 step 2。新字段 null 时降级到旧全局 batchSize/parallelSlots/
-          ctxSize（兼容老 settings JSON），所以两个 Section picker 可能展示同一个值。 */}
-      <Section
-        title={t("aiSettings.describeParams.sectionTitle")}
-        icon={Images}
-      >
-        <Row label={t("aiSettings.engineParams.batch")}>
-          <SimplePicker<EngineBatchKey>
-            value={engineBatchToOption(describeBatch)}
-            options={ENGINE_BATCH_OPTIONS}
-            onChange={(next) =>
-              updateAi({ describeBatchSize: engineOptionToBatch(next) ?? 512 })
-            }
-          />
-        </Row>
-        <Row label={t("aiSettings.engineParams.slots")}>
-          <SimplePicker<EngineSlotsKey>
-            value={engineSlotsToOption(describeSlots)}
-            options={ENGINE_SLOTS_OPTIONS}
-            onChange={(next) =>
-              updateAi({ describeParallelSlots: engineOptionToSlots(next) ?? 1 })
-            }
-          />
-        </Row>
-        <Row label={t("aiSettings.engineParams.ctx")}>
-          <SimplePicker<EngineCtxKey>
-            value={engineCtxToOption(describeCtx)}
-            options={ENGINE_CTX_OPTIONS}
-            onChange={(next) =>
-              updateAi({ describeCtxSize: engineOptionToCtx(next) ?? 8192 })
-            }
-          />
-        </Row>
-        <VramEstimateLine
-          modelName={ai.describeMain || ai.activeMain}
-          parallelSlots={describeSlots ?? 1}
-          ctxSize={describeCtx ?? 8192}
-          systemVram={hwSnapshot.systemVram}
-          recommended={recommendDescribe}
-          recommendedApplied={describeApplied}
-          onApplyRecommended={handleApplyDescribe}
-        />
-      </Section>
-
+      {/* 段总结引擎参数（ctx 优先）。新字段 null 时降级到旧全局 batchSize/
+          parallelSlots/ctxSize（兼容老 settings JSON）。 */}
       <Section
         title={t("aiSettings.summaryParams.sectionTitle")}
         icon={Pilcrow}

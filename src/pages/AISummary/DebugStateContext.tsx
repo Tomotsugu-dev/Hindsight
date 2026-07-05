@@ -15,31 +15,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  DEFAULT_IMAGE_DESCRIBE_PROMPTS,
-  DEFAULT_SYSTEM_PROMPTS,
-  overrideKey,
-} from "../../lib/aiPrompts";
+import { DEFAULT_SYSTEM_PROMPTS, overrideKey } from "../../lib/aiPrompts";
 import { useSettings } from "../../state/settings";
 
 interface DebugState {
-  debugMaxImages: number;
-  setDebugMaxImages: (v: number) => void;
   debugExcluded: string[];
   setDebugExcluded: (v: string[]) => void;
-  /** 段内余弦阈值去重（0.70..=0.99）；默认 0.95 */
-  debugDedupThreshold: number;
-  setDebugDedupThreshold: (v: number) => void;
-  /** 图描述阶段（step 1）batch；null = fallback 到默认 */
-  debugDescribeBatchSize: number | null;
-  setDebugDescribeBatchSize: (v: number | null) => void;
-  /** 图描述阶段 -np（并行槽位） */
-  debugDescribeParallelSlots: number;
-  setDebugDescribeParallelSlots: (v: number) => void;
-  /** 图描述阶段每槽 ctx；null = 8K 默认 */
-  debugDescribeCtxSize: number | null;
-  setDebugDescribeCtxSize: (v: number | null) => void;
-  /** 段总结阶段（step 2）batch；null = fallback 到默认 */
+  /** 段总结阶段 batch；null = fallback 到默认 */
   debugSummaryBatchSize: number | null;
   setDebugSummaryBatchSize: (v: number | null) => void;
   /** 段总结阶段 -np（推荐恒为 1） */
@@ -48,12 +30,9 @@ interface DebugState {
   /** 段总结阶段每槽 ctx；null = 8K 默认 */
   debugSummaryCtxSize: number | null;
   setDebugSummaryCtxSize: (v: number | null) => void;
-  /** step 2 段总结 system prompt 文本 */
+  /** 段总结 system prompt 文本 */
   debugSysPrompt: string;
   setDebugSysPrompt: (v: string) => void;
-  /** step 1 单图描述 system prompt 文本 */
-  debugImagePrompt: string;
-  setDebugImagePrompt: (v: string) => void;
   /** 段总结走云端 (true) 还是本地 (false)；endpoint/model/apiKey 永远沿用全局 */
   debugExternalEnabled: boolean;
   setDebugExternalEnabled: (v: boolean) => void;
@@ -64,17 +43,11 @@ const DebugStateContext = createContext<DebugState | null>(null);
 export function DebugStateProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
 
-  const [debugMaxImages, setDebugMaxImages] = useState(30);
   const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
-  const [debugDedupThreshold, setDebugDedupThreshold] = useState(0.95);
-  const [debugDescribeBatchSize, setDebugDescribeBatchSize] = useState<number | null>(null);
-  const [debugDescribeParallelSlots, setDebugDescribeParallelSlots] = useState(1);
-  const [debugDescribeCtxSize, setDebugDescribeCtxSize] = useState<number | null>(null);
   const [debugSummaryBatchSize, setDebugSummaryBatchSize] = useState<number | null>(null);
   const [debugSummaryParallelSlots, setDebugSummaryParallelSlots] = useState(1);
   const [debugSummaryCtxSize, setDebugSummaryCtxSize] = useState<number | null>(null);
   const [debugSysPrompt, setDebugSysPrompt] = useState("");
-  const [debugImagePrompt, setDebugImagePrompt] = useState("");
   const [debugExternalEnabled, setDebugExternalEnabled] = useState(false);
 
   // settings 一加载就把 ai 字段拷成 debug 初值；只跑一次，之后用户在 debug tab
@@ -83,22 +56,8 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (initedRef.current || !settings) return;
     initedRef.current = true;
-    // maxImages snap 到 {15, 30, 100000}——picker 显示和 state 对齐，避免
-    // 「settings 100、picker 显示 30、下发 100」的视觉错配
-    const m = settings.ai.maxImagesPerSegment;
-    setDebugMaxImages(m >= 1000 ? 100_000 : m >= 30 ? 30 : 15);
     setDebugExcluded(settings.ai.excludedCategories);
-    setDebugDedupThreshold(settings.ai.dedupThreshold);
-    // 双套调试参数初值——优先用新字段，未设则 fallback 到旧全局字段
-    setDebugDescribeBatchSize(
-      settings.ai.describeBatchSize ?? settings.ai.batchSize ?? null,
-    );
-    setDebugDescribeParallelSlots(
-      settings.ai.describeParallelSlots ?? settings.ai.parallelSlots ?? 1,
-    );
-    setDebugDescribeCtxSize(
-      settings.ai.describeCtxSize ?? settings.ai.ctxSize ?? null,
-    );
+    // 调试参数初值——优先用 summary 专用字段，未设则 fallback 到旧全局字段
     setDebugSummaryBatchSize(
       settings.ai.summaryBatchSize ?? settings.ai.batchSize ?? null,
     );
@@ -112,25 +71,13 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     const lang = settings.ai.promptLanguage;
     const key = overrideKey(lang);
     const sysOverride = settings.ai.promptOverrides[key];
-    const imgOverride = settings.ai.imageDescribeOverrides?.[key] ?? "";
     setDebugSysPrompt(sysOverride.trim() || DEFAULT_SYSTEM_PROMPTS[lang]);
-    setDebugImagePrompt(imgOverride.trim() || DEFAULT_IMAGE_DESCRIBE_PROMPTS[lang]);
     setDebugExternalEnabled(settings.ai.externalEnabled ?? false);
   }, [settings]);
 
   const value: DebugState = {
-    debugMaxImages,
-    setDebugMaxImages,
     debugExcluded,
     setDebugExcluded,
-    debugDedupThreshold,
-    setDebugDedupThreshold,
-    debugDescribeBatchSize,
-    setDebugDescribeBatchSize,
-    debugDescribeParallelSlots,
-    setDebugDescribeParallelSlots,
-    debugDescribeCtxSize,
-    setDebugDescribeCtxSize,
     debugSummaryBatchSize,
     setDebugSummaryBatchSize,
     debugSummaryParallelSlots,
@@ -139,8 +86,6 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     setDebugSummaryCtxSize,
     debugSysPrompt,
     setDebugSysPrompt,
-    debugImagePrompt,
-    setDebugImagePrompt,
     debugExternalEnabled,
     setDebugExternalEnabled,
   };

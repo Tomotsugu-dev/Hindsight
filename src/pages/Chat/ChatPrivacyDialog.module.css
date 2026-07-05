@@ -1,0 +1,145 @@
+/* 隐私确认弹窗:骨架同 ConfirmDialog,加路由行(云端 = 琥珀警告色) */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+  background: rgba(20, 20, 40, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 180ms var(--ease-out);
+}
+
+.dialog {
+  position: relative;
+  z-index: var(--z-modal);
+  min-width: 340px;
+  max-width: 460px;
+  padding: 22px 22px 16px;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 12px 36px rgba(20, 20, 40, 0.22),
+    0 2px 6px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: scaleIn 220ms var(--ease-spring);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+/* 路由行:当前用的模型;本地 = 普通色,云端 = 琥珀警告 */
+.routeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  font-size: 12.5px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  word-break: break-all;
+}
+
+.routeCloud {
+  background: color-mix(in oklab, var(--status-pending) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-pending) 40%, transparent);
+  color: var(--status-pending);
+}
+
+.body {
+  font-size: 13px;
+  color: var(--text-regular);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.bodyCloud {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  color: var(--status-pending);
+  font-weight: var(--font-weight-600);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 100ms ease-out;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btnCancel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.btnCancel:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.btnConfirm {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.btnConfirm:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

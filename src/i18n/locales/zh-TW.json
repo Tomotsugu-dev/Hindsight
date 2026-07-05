@@ -49,7 +49,8 @@
       "categories": "分類",
       "apps": "應用程式",
       "devices": "雲同步",
-      "settings": "設定"
+      "settings": "設定",
+      "chat": "對話"
     }
   },
   "sidebar": {
@@ -130,7 +131,13 @@
         "idleHint": "判斷依據是系統級的滑鼠 / 鍵盤 / 觸控板事件。\n置為 0 相當於永遠不觸發。",
         "screenshotPathLabel": "截圖儲存路徑",
         "dataPathLabel": "資料儲存路徑",
-        "dataPathHint": "資料庫與預設截圖根目錄所在位置。更改後需重啟應用程式，舊資料需手動遷移。"
+        "dataPathHint": "資料庫與預設截圖根目錄所在位置。更改後需重啟應用程式，舊資料需手動遷移。",
+        "backfillLabel": "回填歷史截圖",
+        "backfillDescription": "把開啟螢幕記憶之前的舊截圖補錄進文字索引，補完即可在「對話」裡搜到。",
+        "backfillButton": "回填並辨識",
+        "backfillRunning": "辨識中…",
+        "backfillRegistered": "已登記 {{n}} 張，開始辨識…",
+        "backfillDone": "完成：辨識 {{ok}} 張，跳過 {{failed}} 張"
       },
       "workHours": {
         "title": "工作時段",
@@ -677,9 +684,6 @@
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒後自動釋放視訊記憶體"
       }
     },
-    "describeParams": {
-      "sectionTitle": "圖描述引數"
-    },
     "summaryParams": {
       "sectionTitle": "段總結引數"
     },
@@ -698,7 +702,7 @@
     },
     "models": {
       "sectionTitle": "模型",
-      "sectionDesc": "本地推理用的 vision LLM；GGUF 檔案下載自 HuggingFace。",
+      "sectionDesc": "本地推理用的 LLM；GGUF 檔案下載自 HuggingFace。",
       "toolbar": {
         "capAll": "所有",
         "capVision": "Vision",
@@ -715,16 +719,8 @@
       "cloud": {
         "cardTitle": "雲端 · {{provider}}",
         "modelUnset": "（未填模型）",
-        "step2Tooltip": "Step 2（段總結）當前路由到雲端 API。要改 endpoint / 模型，去「雲端 API」tab 編輯。",
-        "step1DisabledTooltip": "雲端 API 不支援圖片輸入（Step 1 需要 vision 能力）",
-        "step2DisabledTooltip": "已選定雲端 API 為 Step 2 後端。要關閉，去「雲端 API」tab 取消啟用。",
-        "step1ToggleOnTooltip": "把 Step 1（圖片描述）路由到雲端 API——截圖將被上傳",
-        "step1ToggleOffTooltip": "取消雲端 Step 1（回退到本地 vision 模型）",
-        "visionConfirmTitle": "把截圖上傳到雲端？",
-        "visionConfirmMessage": "Vision (Step 1) 選雲端後，你的截圖圖片會發送到 {{provider}} 進行分析。截圖可能包含聊天、郵件、密碼等敏感內容。建議先在 設定 → 隱私 配置關鍵詞過濾。該選擇會一直生效，直到你切回本地模型。",
-        "visionConfirmAccept": "我瞭解風險，上傳截圖",
         "summaryConfirmTitle": "把總結資料傳送到雲端？",
-        "summaryConfirmMessage": "Text (Step 2) 選雲端後，每次段總結會把應用程式名、分類、文字版圖片描述傳送到 {{provider}}。此選項不會上傳截圖圖片本身。",
+        "summaryConfirmMessage": "Text 選雲端後，每次段總結會把應用程式名、分類、活動時間線傳送到 {{provider}}。此選項不會上傳截圖圖片本身。",
         "summaryConfirmAccept": "我瞭解，繼續"
       },
       "card": {
@@ -738,13 +734,9 @@
         "pauseTooltip": "暫停當前下載。已下位元組保留，下次「繼續」從斷點接著下。",
         "resume": "繼續",
         "resumeTooltip": "從已下的 {{size}} MB 繼續。",
-        "visionLabel": "vision",
-        "visionTooltip": "支援影像輸入——能跑 step 1（圖描述）和 step 2（段總結）。",
-        "textOnlyLabel": "純文本",
-        "textOnlyTooltip": "純文本模型——能跑 step 2（段總結），不能跑 step 1。",
         "capsTooltips": {
-          "TEXT": "文本能力——能生成 / 續寫 / 總結文字（step 2 段總結）。",
-          "VISION": "多模態——能識別影像內容（step 1 圖描述）。",
+          "TEXT": "文本能力——能生成 / 續寫 / 總結文字。",
+          "VISION": "多模態——能識別影像內容。",
           "CODE": "程式碼任務調優——生成 / 解釋程式碼更準。",
           "FAST": "輕量級 < 1GB，速度優先，首選試用。",
           "BALANCED": "中等體積，質量與速度均衡，日常通用。",
@@ -752,13 +744,9 @@
           "R1": "DeepSeek R1 系——RL 訓練的推理模型。",
           "DEFAULT": "Hindsight 推薦首選，平衡性最好。"
         },
-        "step1": "Vision",
-        "step1ToggleOnTooltip": "把這個模型設為 vision 步驟（step 1：圖描述）使用。會替換之前的選擇。",
-        "step1ToggleOffTooltip": "點選取消 vision 步驟（會回退到舊版 active 模型）。",
-        "step1DisabledTooltip": "純文本模型不能跑圖描述步驟（需要 vision 能力）。",
         "step2": "Text",
-        "step2ToggleOnTooltip": "把這個模型設為 text 步驟（step 2：段總結）使用。會替換之前的選擇。",
-        "step2ToggleOffTooltip": "點選取消 text 步驟（會回退到舊版 active 模型）。",
+        "step2ToggleOnTooltip": "把這個模型設為段總結（Text）使用。會替換之前的選擇。",
+        "step2ToggleOffTooltip": "點選取消段總結（Text）選擇（會回退到舊版 active 模型）。",
         "uninstall": "解除安裝",
         "uninstallTooltipInstalled": "刪除本地檔案（main + mmproj）",
         "uninstallTooltipNotInstalled": "尚未安裝",
@@ -833,26 +821,17 @@
       "rowLabel": "分析這些分類",
       "rowHint": "點選切換：\n• 彩色 + 分類圖示 = 參與 AI 分析\n• 灰色空心 + 閉眼圖示 = 已排除"
     },
-    "frame": {
-      "sectionTitle": "抽幀引數",
-      "sectionDesc": "一段時間內截圖很多，先按相似度去重再選送給模型，省時省 token。",
-      "dedupThresholdLabel": "相似度去重閾值",
-      "dedupThresholdHint": "兩張截圖的餘弦相似度 ≥ 閾值時合併為同一張。值越大越保守（保留更多）；值越小越激進（合併更多，可能誤刪）。預設 95% 在實測資料上去重率約 70%。",
-      "maxImagesLabel": "單段最多張數",
-      "maxImagesHint": "去重後單個時段送 AI 分析的截圖上限。Step 1（圖描述）是每張圖都跑一次 vision LLM，數值越大該段處理時長越長。預設 1024；想覆蓋長段更全可以拉高。"
-    },
     "external": {
       "sectionTitle": "雲端 API（可選）",
-      "sectionDesc": "時段總結改用雲端模型生成，截圖永遠不上傳，單圖描述仍由本地視覺模型完成。",
-      "enableLabel": "啟用雲端段總結",
-      "enableHint": "開啟後，每段總結調下方配置的 API；分析截圖仍在本地分析。",
+      "sectionDesc": "時段總結與「對話」問答改用雲端模型，截圖永遠不會上傳。",
+      "enableLabel": "啟用雲端 API",
+      "enableHint": "開啟後，段總結與「對話」會呼叫下方設定的 API；截圖永遠不會上傳。",
       "providerLabel": "服務商",
       "provider": {
         "openai": "OpenAI",
         "deepseek": "DeepSeek",
         "kimi": "Kimi (Moonshot 國際)",
         "kimi-cn": "Kimi (Moonshot 中國)",
-        "reuse": "複用文本 API",
         "openrouter": "OpenRouter",
         "together": "Together",
         "groq": "Groq",
@@ -871,27 +850,13 @@
       "testOkNoModels": "連線成功",
       "testFail": "連線失敗：{{message}}",
       "missingFields": "請先填 Base URL 和 Model ID",
-      "privacyNote": "提示：Text (Step 2) 選雲端時，應用程式名、分類、文字版圖片描述會發送到雲端 API；Vision (Step 1) 選雲端時，截圖圖片本身會上傳。API Key 以明文儲存在本地設定中。",
-      "visionModelLabel": "視覺模型 ID",
-      "visionModelHint": "Vision (Step 1) 選雲端時使用。留空則複用上方的模型 ID——此時該模型必須支援圖片輸入。",
-      "visionModelPlaceholder": "如 gpt-4o-mini / qwen-vl-plus（留空 = 複用模型 ID）",
-      "visionModelUnsupported": "文本服務商沒有多模態模型——請在上方為 Vision 選擇獨立服務商，或將 Vision (Step 1) 留在本地。",
-      "visionProviderLabel": "Vision API（Step 1）",
-      "visionProviderHint": "截圖描述（Step 1）走雲端時用的 API。可複用下方文本 API，也可獨立指定另一家服務商。",
-      "visionModelDedicatedHint": "該服務商下用於圖片描述的多模態模型 ID。",
-      "testTextApi": "文本 API",
-      "testVisionApi": "Vision API",
-      "testOkBoth": "文本 / Vision API 均連線成功",
+      "privacyNote": "提示：文字 API 用於段總結和「對話」——應用名稱、分類、活動時間線、你的提問及命中的螢幕文字會傳送到該 API。API Key 以明文儲存在本機設定中。",
       "kimiBaseUrlNote": "國內站 api.moonshot.cn 與國際站 api.moonshot.ai 的 Key 不通用——按你申請 Key 的站點填。",
       "groupTextTitle": "文本 API",
-      "groupTextHint": "Step 2 · 段總結",
-      "groupVisionTitle": "視覺 API",
-      "groupVisionHint": "Step 1 · 截圖描述",
+      "groupTextHint": "段總結 · 「對話」ChatBot",
       "testTextButton": "測試文本 API",
-      "testVisionButton": "測試 Vision API",
       "testStepConn": "網路與認證",
-      "testStepChat": "模型 {{model}} 可用",
-      "testStepChatVision": "模型 {{model}} 可用（含圖片輸入）"
+      "testStepChat": "模型 {{model}} 可用"
     }
   },
   "devices": {
@@ -936,7 +901,29 @@
         "configureOAuth": "配置 OAuth",
         "restartApp": "重啟 app"
       },
-      "restartHint": "已登入到新的賬號，需要重啟 app 才能切換到該賬號的本地資料庫。"
+      "restartHint": "已登入到新的賬號，需要重啟 app 才能切換到該賬號的本地資料庫。",
+      "datasets": {
+        "title": "同步內容",
+        "hint": "預設只同步使用統計與分類等基礎資料。以下內容包含更敏感的資訊，需單獨開啟；截圖圖片本體永不上雲。",
+        "summaries": {
+          "label": "AI 總結文字",
+          "desc": "日報 / 週報的生成文字，跨裝置查看報告。",
+          "warn": "開啟後，日報和週報的全文（含其中提到的檔名、網頁與影片標題）將上傳到你的 Google Drive 應用資料區，並同步到你登入同一帳號的其它裝置。"
+        },
+        "chat": {
+          "label": "聊天歷史",
+          "desc": "對話的會話與訊息，跨裝置繼續追問。",
+          "warn": "開啟後，「對話」的全部會話與訊息——包括你的提問和答案中引用的螢幕文字片段——將上傳到你的 Google Drive 應用資料區，並同步到其它裝置。"
+        },
+        "memory": {
+          "label": "螢幕記憶全文",
+          "desc": "螢幕上出現過的文字索引，跨裝置搜尋。敏感度最高。",
+          "warn": "開啟後，螢幕記憶索引的全部文字——即你的螢幕上出現過的逐字內容（聊天記錄、郵件、程式碼、網頁等）——將上傳到你的 Google Drive 應用資料區，並同步到其它裝置。這是敏感度最高的一檔，請確認你信任該帳號下的所有裝置。"
+        },
+        "confirmTitle": "上傳「{{dataset}}」到雲端？",
+        "confirmNote": "資料僅存放在你自己的 Google Drive 應用資料區（第三方應用不可見），可隨時關閉開關並用「清除雲端資料」刪除。",
+        "confirmAction": "我了解風險，開啟"
+      }
     },
     "errors": {
       "credExpired": "登入憑證失效，請重新登入。",
@@ -1008,7 +995,6 @@
       "daily": "日報",
       "week": "週報",
       "month": "月報",
-      "chat": "對話",
       "debug": "除錯"
     },
     "placeholder": {
@@ -1098,10 +1084,10 @@
       "hint": "一個月的活動趨勢 + 關鍵事件回顧。功能開發中。"
     },
     "daily": {
-      "subtitle": "按時段彙總當日截圖 + 應用程式使用，本地 vision 模型生成",
+      "subtitle": "按時段彙總當日活動記錄，本地模型生成",
       "runtimeMissing": {
         "title": "需要先下載 AI 引擎",
-        "message": "影像嵌入模型用於截圖相似度去重，跟 vision 引擎一起下載約 ~80 MB。下載完會自動續上生成。",
+        "message": "本地生成總結需要 AI 引擎，下載約 ~80 MB。下載完會自動續上生成。",
         "confirm": "下載並繼續",
         "cancel": "取消"
       },
@@ -1117,15 +1103,14 @@
         "stopping": "停止中…",
         "regenerate": "重新生成",
         "start": "開始總結",
-        "startTooltip": "本地 vision 模型逐段分析；時長取決於硬體（GPU 數秒/段，CPU 數十秒/段）",
+        "startTooltip": "本地模型逐段總結當日活動時間線；時長取決於硬體（GPU 數秒/段，CPU 數十秒/段）",
         "regenerateTooltip": "重新生成會清掉本日所有段總結，重新跑一遍",
         "noModelTooltip": "請先到 AI 設定 → 模型 選一個模型",
         "delete": "刪除",
-        "deleteTooltip": "清空當天 ai_summaries（source=daily）+ ai_image_descriptions（不可撤銷）",
+        "deleteTooltip": "清空當天 ai_summaries（source=daily，不可撤銷）",
         "deleteEmptyTooltip": "當天還沒有日報資料可刪除",
-        "deleteConfirm": "刪除 {{date}} 當天日報資料？（段總結 + 逐圖描述都清空，不影響除錯 tab，操作不可撤銷）",
         "deleteConfirmTitle": "刪除 {{date}} 當天日報資料？",
-        "deleteConfirmMessage": "段總結 + 逐圖描述都會清空，不影響除錯 tab，操作不可撤銷。",
+        "deleteConfirmMessage": "當天所有段總結都會清空，不影響除錯 tab，操作不可撤銷。",
         "exportMarkdown": "匯出為 Markdown",
         "exportTooltip": "匯出當前日期的所有段總結為 Markdown 檔案",
         "exportEmptyTooltip": "還沒有任何段總結可匯出",
@@ -1136,12 +1121,11 @@
         "dismissError": "關閉"
       },
       "errors": {
-        "noVisionModel": "請先到 AI 設定 → 模型 選一個 vision 模型",
         "generationFailed": "總結失敗",
-        "unknown": "未知錯誤"
+        "unknown": "未知錯誤",
+        "noModel": "請先到 AI 設定 → 模型 選一個模型"
       },
       "engineLoading": "載入模型中…",
-      "dedupRunning": "相似度去重中…（{{count}} 張）",
       "toast": {
         "exported": "已匯出 {{filename}} 到「下載」資料夾"
       },
@@ -1151,15 +1135,10 @@
           "ok": "已生成",
           "skipped": "無截圖",
           "error": "失敗",
-          "analyzing": "分析中 · {{done}} / {{total}} 張",
-          "analyzingNoTotal": "分析中…",
           "summarizing": "生成段總結中…"
         },
         "body": {
           "empty": "點上方「開始總結」生成本段內容。",
-          "analyzing": "正在讓模型看截圖… {{done}} / {{total}} 張已完成",
-          "analyzingNoTotal": "正在分析…",
-          "summarizing": "圖描述完成（{{count}} 張），正在讓模型生成段總結…",
           "summarizingNoTotal": "正在生成段總結…",
           "skipped": "這段時間沒有截圖（可能沒用電腦 / 全在隱私名單 / 全在排除分類）。",
           "skippedNoActivity": "這段時間什麼都沒記錄（沒用電腦 / 全在排除分類）。",
@@ -1183,85 +1162,11 @@
         "stateEmptyContent": "_（空）_"
       }
     },
-    "chat": {
-      "subtitle": "跟 AI 聊聊你的活動資料 — 搜歷史、查應用程式時長、反思一天。",
-      "mockBadge": "MOCK",
-      "clear": "清空",
-      "clearTooltip": "清空當前對話",
-      "empty": {
-        "title": "有什麼想問的？",
-        "hint": "試試下面這些示例，或者直接在底下輸入。"
-      },
-      "input": {
-        "placeholder": "問點什麼…",
-        "sendAria": "傳送",
-        "sendTooltip": "傳送（Enter）"
-      },
-      "presets": {
-        "search": {
-          "label": "搜歷史",
-          "q": "找那個 PairingSection 的 hover bug 是哪天調的"
-        },
-        "stat": {
-          "label": "查資料",
-          "q": "上週我在 Cursor 用了多久？"
-        },
-        "reflect": {
-          "label": "反思",
-          "q": "今天我專注度如何？給點反思建議"
-        }
-      },
-      "mock": {
-        "search": {
-          "intro": "在歷史段總結裡找到 3 處相關：",
-          "segLabelAfternoon": "下午",
-          "segLabelEvening": "晚",
-          "hit1Snippet": "在 Hindsight 專案裡調 PairingSection 的 hover/glow 效果，反覆試 grid template 固定列寬 vs minmax，最後用 :has(.nameCol:hover) 讓整列展開。",
-          "hit2Snippet": "繼續修 actionCol 左對齊 + padding-left 的問題。發現 1fr nameCol 會自動收縮抵消 padding，最終改 grid template 為固定 140px。",
-          "hit3Snippet": "第一次注意到 trigger 沒對齊到同一條 X 線，懷疑是 grid 子畫素計算或 flex justify-end 導致的。"
-        },
-        "stat": {
-          "intro": "上週 Cursor 共 12h 23m，按天分佈：",
-          "sumPrefix": "合計 {{total}}",
-          "weekday1": "週一",
-          "weekday2": "週二",
-          "weekday3": "週三",
-          "weekday4": "週四",
-          "weekday5": "週五",
-          "weekday6": "週六",
-          "weekday7": "週日"
-        },
-        "reflect": {
-          "section1Title": "今日整體",
-          "section1Body": "深度專注約 4 小時（上午 + 下午各 2 小時），其餘時間在切換 / 溝通。整體專注度尚可，但下午有約 40 分鐘應用程式切換頻次偏高（28 次/小時）。",
-          "section2Title": "亮點",
-          "section2Body": "下午 14:00–16:00 在 Cursor 持續 2 小時幾乎無切換，是今天最 deep work 的一段。",
-          "section3Title": "改進建議",
-          "section3Body": "晚上 19:00 之後社交類應用程式佔比 60%。可以考慮把這部分時間推後到睡前 30 分鐘內集中處理，給晚飯後留一段連續工作或閱讀時間。"
-        },
-        "fallback": {
-          "text": "（mock）這是一個示例回答。當前後端尚未接入，只識別幾類關鍵詞：\n• 搜歷史 — 含「搜 / 找 / 什麼時候 / hover / bug」\n• 查資料 — 含「多久 / 時長 / 花了」\n• 反思 — 含「反思 / 專注 / 今天 / 怎麼樣」"
-        }
-      }
-    },
     "debug": {
       "scope": {
         "daily": "日報",
         "weekly": "週報",
         "monthly": "月報"
-      },
-      "pickerOptions": {
-        "maxImages15": "15 張/段",
-        "maxImages30": "30 張/段",
-        "maxImagesUnlimited": "無限制",
-        "slots1": "併發 1 路",
-        "slots2": "併發 2 路",
-        "slots4": "併發 4 路",
-        "slots8": "併發 8 路",
-        "ctxDefault": "ctx 8K/槽",
-        "ctx16k": "ctx 16K/槽",
-        "ctx32k": "ctx 32K/槽",
-        "ctx64k": "ctx 64K/槽"
       },
       "dateNav": {
         "prevDayAria": "前一天",
@@ -1283,34 +1188,16 @@
         "lastMonth": "上月",
         "monthsAgo": "{{count}} 月前"
       },
-      "maxImagesInfo": {
-        "tooltip": "每個時間段最多送多少張圖給大模型，減少除錯時間",
-        "aria": "每段最多圖數說明"
-      },
       "actions": {
         "stop": "停止",
         "start": "重新生成",
-        "startInfo": "重新生成當天的圖片描述與時段總結",
+        "startInfo": "重新生成當天的時段總結",
         "startInfoAria": "重新生成範圍說明",
-        "describeOnly": "僅生成圖片描述",
-        "describeOnlyInfo": "只跑 step 1：當天每張截圖各調一次 vision LLM 拿描述，不做時段總結",
-        "describeOnlyAria": "僅生成圖片描述（跳過時段總結）",
-        "summarizeOnly": "僅生成段總結",
-        "summarizeOnlyInfo": "只跑 step 2：用已存的圖片描述拼出段總結。前提是 step 1 已經跑過，否則按段標 skipped",
-        "summarizeOnlyAria": "僅生成段總結（跳過逐圖描述）",
-        "clearDescriptions": "刪除",
-        "clearDescriptionsTooltip": "清空當天所有圖片描述（不動段總結，不可撤銷）",
-        "clearDescriptionsConfirm": "刪除 {{date}} 當天所有圖片描述？（段總結保留，操作不可撤銷）",
-        "clearDescriptionsConfirmTitle": "刪除 {{date}} 當天所有圖片描述？",
-        "clearDescriptionsConfirmMessage": "段總結保留，操作不可撤銷。",
         "clearSummaries": "刪除",
-        "clearSummariesTooltip": "清空當天所有段總結（不動圖片描述，不可撤銷）",
-        "clearSummariesConfirm": "刪除 {{date}} 當天所有段總結？（圖片描述保留，操作不可撤銷）",
+        "clearSummariesTooltip": "清空當天所有段總結（不可撤銷）",
+        "clearSummariesConfirm": "刪除 {{date}} 當天所有段總結？（操作不可撤銷）",
         "clearSummariesConfirmTitle": "刪除 {{date}} 當天所有段總結？",
-        "clearSummariesConfirmMessage": "圖片描述保留，操作不可撤銷。",
-        "exportDescriptionsMd": "匯出 Markdown",
-        "exportDescriptionsMdTooltip": "把當天所有圖片描述匯出成 Markdown 檔案",
-        "exportDescriptionsMdEmptyTooltip": "還沒有圖片描述可匯出",
+        "clearSummariesConfirmMessage": "操作不可撤銷。",
         "exportSummariesMd": "匯出 Markdown",
         "exportSummariesMdTooltip": "把當天所有段總結匯出成 Markdown 檔案",
         "exportSummariesMdEmptyTooltip": "還沒有段總結可匯出",
@@ -1318,89 +1205,24 @@
         "exportSavedAt": "已匯出到 {{path}}",
         "exportFailed": "匯出失敗：{{err}}",
         "startTooltipPending": "{{type}}除錯待後端實現",
-        "startTooltipReady": "除錯模式：跑當天全部段（清空已有結果重跑），逐圖描述即時顯示",
-        "startTooltipNoModel": "請先到 AI 設定 → 模型 選一個模型",
-        "delete": "刪除所有",
-        "deleteTooltip": "清空當天的所有圖片描述 + 時段總結（不可撤銷）",
-        "deleteInfoAria": "刪除範圍說明",
-        "deleteConfirm": "刪除 {{date}} 當天所有 AI 產物？（段總結 + 逐圖描述都清空，操作不可撤銷）",
-        "exportJson": "匯出 JSON",
-        "exportTooltip": "匯出當前頁所有除錯資料為 JSON 檔案"
-      },
-      "filter": {
-        "title": "過濾",
-        "description": "僅本除錯視窗生效，不影響 AI 設定全域性值。",
-        "categoriesLabel": "分析這些分類",
-        "categoriesHint": "點選切換：\n• 彩色 + 分類圖示 = 參與 AI 分析\n• 灰色空心 + 閉眼圖示 = 已排除"
-      },
-      "frame": {
-        "title": "抽幀引數",
-        "description": "一段時間內截圖很多，先按相似度去重再選送給模型，省時省 token。僅本除錯視窗生效。",
-        "dedupThresholdLabel": "相似度去重閾值",
-        "dedupThresholdHint": "兩張截圖的餘弦相似度 ≥ 閾值時合併為同一張。值越大越保守（保留更多）；值越小越激進（合併更多，可能誤刪）。預設 95% 在實測資料上去重率約 70%。"
-      },
-      "engine": {
-        "title": "引擎引數（啟動時）",
-        "description": "改完會先 stop 引擎、用新引數重啟再跑；除錯結束後無條件 stop 引擎，下次日報會以預設引數 lazy-start，不汙染全域性。"
-      },
-      "describeEngine": {
-        "title": "圖描述引數"
-      },
-      "summaryEngine": {
-        "title": "段總結引數"
+        "startTooltipReady": "除錯模式：跑當天全部段（清空已有結果重跑），段總結即時顯示",
+        "startTooltipNoModel": "請先到 AI 設定 → 模型 選一個模型"
       },
       "errors": {
         "scopePending": "{{type}}除錯待後端實現",
-        "noVisionModel": "請先到 AI 設定 → 模型 選一個 vision 模型",
-        "runFailed": "除錯執行失敗"
+        "runFailed": "除錯執行失敗",
+        "noModel": "請先到 AI 設定 → 模型 選一個模型"
       },
       "engineLoading": "載入模型中…",
-      "dedupRunning": "相似度去重中…（{{count}} 張）",
-      "scopePlaceholder": "{{type}}除錯待後端實現。切回「日報」可以除錯當前日報的兩步生成流程（逐圖描述 → 段總結）。",
-      "imagePrompt": {
-        "title": "圖片描述提示詞",
-        "description": "模型對每張截圖獨立生成描述時使用，改動僅在本視窗生效。",
-        "label": "提示詞"
-      },
+      "scopePlaceholder": "{{type}}除錯待後端實現。切回「日報」可以除錯當前日報的段總結生成流程。",
       "segPrompt": {
         "title": "時間段總結提示詞",
-        "description": "把所有圖片描述 + 應用程式統計彙總成段總結時使用，改動僅在本視窗生效。",
+        "description": "把該段的活動時間線彙總成段總結時使用，改動僅在本視窗生效。",
         "label": "提示詞"
-      },
-      "cloudApi": {
-        "title": "雲端 API",
-        "description": "本次跑用雲端模型生成段總結（step 2）。endpoint / 模型 / API Key 沿用 AI 設定裡的全域性值，本開關只決定路徑。",
-        "enableLabel": "啟用雲端段總結",
-        "enableHint": "關掉就走本地 step 2；雲端憑證去 AI 設定 → 雲端 API 裡配。"
-      },
-      "subTabs": {
-        "main": "除錯檢視",
-        "settings": "除錯設定"
-      },
-      "perImage": {
-        "title": "逐圖描述",
-        "descriptionBase": "step 1 產物——每張截圖獨立調 vision LLM 拿到的描述",
-        "countSuffix": "，共 {{count}} 條",
-        "descriptionSuffix": "。點檔名預覽原圖；點行末「重跑」用當前除錯引數重新生成該圖描述。",
-        "empty": "還沒有資料。點上方「開始」讓模型對每張截圖生成描述。",
-        "segFallback": "段{{idx}}",
-        "imageNoSuffix": " · 第 {{n}} 張",
-        "chipTitle": "段 idx={{seg}} · 圖 idx={{img}}（抽幀後順序）",
-        "captureTimeTooltip": "截圖時間 {{time}}",
-        "pathTooltip": "點選預覽原圖：{{path}}",
-        "statTooltip": "耗時 · prompt / completion tokens",
-        "retry": "重跑",
-        "retryTooltipBusy": "整輪總結進行中，等完成或停止後再重跑",
-        "retryTooltipReady": "用當前除錯引數重新生成這張圖的描述",
-        "descEmpty": "(空)",
-        "openImageError": "無法開啟 / 定點陣圖片：{{msg}}"
       },
       "segments": {
         "title": "段總結結果",
-        "descriptionBase": "step 2 產物——根據每張圖的描述 + 應用程式統計彙總成的段總結",
-        "countSuffix": "，共 {{count}} 段",
-        "descriptionSuffix": "。",
-        "empty": "還沒有段總結結果。點上方「開始」讓模型把段內描述聚合成一段總結。",
+        "empty": "還沒有段總結結果。點上方「開始」讓模型把段內活動時間線總結成一段文字。",
         "chipTitle": "段 idx={{idx}}",
         "skippedFallback": "(該段無截圖)",
         "skippedNoActivityFallback": "(該段無任何活動)",
@@ -1431,6 +1253,71 @@
         "error": "錯誤：",
         "accelTitle": "binary 變體 ID: {{id}}"
       }
+    }
+  },
+  "chat": {
+    "title": "對話",
+    "thinking": "正在查詢…",
+    "error": "查詢發生錯誤：{{msg}}",
+    "empty": {
+      "title": "有什麼想問的？",
+      "hint": "試試下面這些示例，或者直接在底下輸入。"
+    },
+    "input": {
+      "placeholder": "問點什麼…",
+      "sendAria": "傳送",
+      "sendTooltip": "傳送（Enter）"
+    },
+    "presets": {
+      "search": {
+        "label": "搜歷史",
+        "q": "我什麼時候看過關於 ONNX 的內容？"
+      },
+      "stat": {
+        "label": "查數據",
+        "q": "上週我在 Cursor 用了多久？"
+      },
+      "timeline": {
+        "label": "看時間軸",
+        "q": "昨天下午我都在做什麼？"
+      }
+    },
+    "conversations": {
+      "new": "新對話",
+      "empty": "還沒有對話",
+      "renameAria": "重新命名對話",
+      "deleteAria": "刪除對話",
+      "deleteTitle": "刪除這個對話？",
+      "deleteMessage": "對話及全部訊息將被永久刪除。",
+      "deleteConfirm": "刪除"
+    },
+    "privacy": {
+      "title": "傳送前請確認",
+      "routeCloud": "雲端模型：{{provider}} · {{model}}",
+      "routeLocal": "本機模型：{{model}}",
+      "body": "你的提問，以及螢幕記憶中命中的文字片段，會作為上下文傳送給模型。",
+      "bodyCloud": "目前設定為雲端 API：以上內容將傳送到第三方服務商。",
+      "confirm": "知道了，傳送"
+    },
+    "badge": {
+      "cloud": "雲端 · {{model}}",
+      "local": "本機 · {{model}}",
+      "none": "未選擇模型"
+    },
+    "backfill": {
+      "pending": "有 {{count}} 張截圖尚未進入文字索引，對話可能查不到它們。",
+      "action": "立即回填",
+      "running": "正在建立索引…剩餘 {{count}} 張",
+      "alreadyRunning": "索引任務已在背景執行，剩餘 {{count}} 張",
+      "failed": "回填失敗：{{msg}}"
+    },
+    "citations": {
+      "showAll": "顯示全部 {{count}} 條來源",
+      "collapse": "收起來源"
+    },
+    "model": {
+      "pickAria": "選擇對話模型",
+      "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
     }
   }
 }

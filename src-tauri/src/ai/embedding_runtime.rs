@@ -1,6 +1,6 @@
 //! ONNX Runtime 动态库的下载、安装、状态管理。
 //!
-//! `embedding.rs` 用 ort + load-dynamic 在运行期 dlopen `libonnxruntime.{dylib,dll,so}`，
+//! OCR（`ai/ocr.rs`）用 ort + load-dynamic 在运行期 dlopen `libonnxruntime.{dylib,dll,so}`，
 //! Hindsight 不静态链接、也不打进 release 包（dylib ~30MB 跟 llama.cpp binary 体积接近，
 //! 让用户**用到**才下，跟 [`super::binary`] 同款 lazy-fetch 模式）。
 //!
@@ -53,9 +53,33 @@ pub fn status() -> Result<RuntimeStatus> {
     })
 }
 
-/// dylib 完整路径（不保证存在）。embedding.rs 启动时调来设 `ORT_DYLIB_PATH`。
+/// dylib 完整路径（不保证存在）。[`init_dylib_path`] 启动时调来设 `ORT_DYLIB_PATH`。
 pub fn dylib_path() -> Result<PathBuf> {
     Ok(install_root()?.join(default_dylib_name()))
+}
+
+/// 启动时调用：把 lazy-download 落盘的 onnxruntime dylib 塞进 `ORT_DYLIB_PATH`，
+/// 让 ort 的 load-dynamic feature 在 dlopen 时定位到正确路径（OCR 引擎依赖）。
+///
+/// 文件不存在 → 不设环境变量、log info 提示；OCR 首次调用会返回
+/// [`Error::EmbeddingRuntimeMissing`]，前端弹框引导下载。
+pub fn init_dylib_path() {
+    let path = match dylib_path() {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("init_dylib_path: 算 dylib 路径失败: {e}");
+            return;
+        }
+    };
+    if path.exists() {
+        std::env::set_var("ORT_DYLIB_PATH", &path);
+        log::info!("ORT_DYLIB_PATH = {}", path.display());
+    } else {
+        log::info!(
+            "onnxruntime 未安装（{}）；首次使用 OCR 时会引导下载",
+            path.display()
+        );
+    }
 }
 
 /// dylib 文件是否已落盘。

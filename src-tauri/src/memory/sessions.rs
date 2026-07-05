@@ -122,8 +122,8 @@ async fn open_session(db: &MemoryDb, frame: &PendingFrame, norm_title: &str) -> 
     let id =
         db.0.call(move |conn| {
             conn.execute(
-                "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title)
-                 VALUES (?1, ?2, ?2, ?3, ?4)",
+                "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, guid)
+                 VALUES (?1, ?2, ?2, ?3, ?4, lower(hex(randomblob(16))))",
                 params![local_date, ts, app_id, title],
             )
             .db()?;

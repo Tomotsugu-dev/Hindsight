@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
-import { Aperture, Clock, Languages, Rocket } from "lucide-react";
+import { Aperture, Clock, Languages, Loader2, Rocket } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -15,6 +15,7 @@ import { useSettings } from "../../../state/settings";
 import { useLocale, LOCALE_OPTIONS } from "../../../i18n/useLocale";
 import { api } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
+import styles from "./GeneralTab.module.css";
 
 export default function GeneralTab() {
   const { t } = useTranslation();
@@ -24,6 +25,9 @@ export default function GeneralTab() {
   const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
   // macOS 关闭按钮在窗口左上角；Win/Linux 在右上角。文案要根据平台变。
   const [isMacOS, setIsMacOS] = useState(false);
+  // 历史截图回填：登记 + 立即识别，识别跑完积压才返回（可能数分钟）
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState("");
 
   useEffect(() => {
     api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
@@ -59,6 +63,27 @@ export default function GeneralTab() {
       }
     } catch (e) {
       logError("general.pickDataDir", e);
+    }
+  };
+
+  const runBackfill = async () => {
+    setBackfillBusy(true);
+    setBackfillMsg("");
+    try {
+      const n = await api.memoryBackfill();
+      setBackfillMsg(t("settings.general.capture.backfillRegistered", { n }));
+      const rep = await api.memoryDigestNow();
+      setBackfillMsg(
+        t("settings.general.capture.backfillDone", {
+          ok: rep.processed,
+          failed: rep.failed + rep.skippedMissingFile,
+        }),
+      );
+    } catch (e) {
+      logError("general.backfill", e);
+      setBackfillMsg(String(e));
+    } finally {
+      setBackfillBusy(false);
     }
   };
 
@@ -121,6 +146,29 @@ export default function GeneralTab() {
             checked={settings.memoryOcrResident}
             onChange={(v) => update({ memoryOcrResident: v })}
           />
+        </Row>
+        <Row
+          label={t("settings.general.capture.backfillLabel")}
+          description={t("settings.general.capture.backfillDescription")}
+        >
+          <div className={styles.backfillWrap}>
+            <button
+              type="button"
+              className={styles.backfillBtn}
+              onClick={() => void runBackfill()}
+              disabled={backfillBusy}
+            >
+              {backfillBusy ? (
+                <>
+                  <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} />
+                  {t("settings.general.capture.backfillRunning")}
+                </>
+              ) : (
+                t("settings.general.capture.backfillButton")
+              )}
+            </button>
+            {backfillMsg && <span className={styles.backfillMsg}>{backfillMsg}</span>}
+          </div>
         </Row>
         <Row
           label={t("settings.general.capture.intervalLabel")}

@@ -48,7 +48,7 @@ fn is_remote_newer<P: rusqlite::Params>(
     })
 }
 
-const PULL_CURSOR_KEY: &str = "drive_files";
+pub(super) const PULL_CURSOR_KEY: &str = "drive_files";
 
 enum ParsedFile {
     ActivityDay {
@@ -80,6 +80,18 @@ enum ParsedFile {
     /// 对端 pull 时执行 `DELETE WHERE device_id=<owner> AND updated_at < clearedAt`。
     /// 修补 sync 协议「Drive 文件级删除不传播为 DB 行级 DELETE」的缺陷。
     Tombstone {
+        device_id: String,
+    },
+    /// 可选上云:AI 总结文本(见 datasets.rs)
+    AiSummaries {
+        device_id: String,
+    },
+    /// 可选上云:聊天历史
+    Chat {
+        device_id: String,
+    },
+    /// 可选上云:屏幕记忆全文(按日分片)
+    MemoryDay {
         device_id: String,
     },
 }
@@ -117,6 +129,15 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
             device_id: uuid.to_string(),
         }),
         ["device", uuid, "tombstone", "json"] => Some(ParsedFile::Tombstone {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "ai_summaries", "json"] => Some(ParsedFile::AiSummaries {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "chat", "json"] => Some(ParsedFile::Chat {
+            device_id: uuid.to_string(),
+        }),
+        ["device", uuid, "memory", _day, "ndjson"] => Some(ParsedFile::MemoryDay {
             device_id: uuid.to_string(),
         }),
         _ => None,
@@ -161,6 +182,18 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         log::debug!("sync pull 跳过：self_id 为空（device 未初始化）");
         return Ok(());
     }
+    // 可选数据集的三挡开关:关着的数据集文件标 handled 直接越过
+    // (开关翻开时命令层会重置 pull 游标,历史文件会重新入列)
+    let opt_cfg = crate::repo::settings::load(&inner.pool).await.ok();
+    let (sync_ai, sync_chat, sync_mem) = opt_cfg
+        .map(|c| {
+            (
+                c.sync_ai_summaries,
+                c.sync_chat_history,
+                c.sync_screen_memory,
+            )
+        })
+        .unwrap_or((false, false, false));
     let local_os = crate::platform::local_os_id();
     let mut applied = 0u64;
     // 每个文件是否「应用 or 主动跳过」。Drive 已按 modifiedTime 升序返回，pull 结束时
@@ -226,6 +259,27 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             // 情况，tombstone 也能把刚刚 merge 进来的过期行清掉
             continue;
         }
+        // 可选数据集:开关关着 → 标 handled 越过(不下载);开着 → 走正常下载合并
+        match &parsed {
+            ParsedFile::AiSummaries { .. } if !sync_ai => {
+                handled[i] = true;
+                continue;
+            }
+            ParsedFile::Chat { .. } if !sync_chat => {
+                handled[i] = true;
+                continue;
+            }
+            ParsedFile::MemoryDay { .. } if !sync_mem => {
+                handled[i] = true;
+                continue;
+            }
+            // 记忆库句柄缺失时这两类没法合并:同样越过,别卡游标
+            ParsedFile::Chat { .. } | ParsedFile::MemoryDay { .. } if inner.mem.is_none() => {
+                handled[i] = true;
+                continue;
+            }
+            _ => {}
+        }
         let device_id = match &parsed {
             ParsedFile::ActivityDay { device_id, .. }
             | ParsedFile::Categories { device_id }
@@ -233,7 +287,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             | ParsedFile::ProcessPaths { device_id }
             | ParsedFile::AppIcons { device_id }
             | ParsedFile::AppGroups { device_id }
-            | ParsedFile::AppGroupMembers { device_id } => device_id.as_str(),
+            | ParsedFile::AppGroupMembers { device_id }
+            | ParsedFile::AiSummaries { device_id }
+            | ParsedFile::Chat { device_id }
+            | ParsedFile::MemoryDay { device_id } => device_id.as_str(),
             ParsedFile::DeviceMeta { .. } | ParsedFile::Tombstone { .. } => unreachable!(),
         };
         // 本机自己的 activities ndjson **不**跳过 —— 配合 v26 + upsert_remote_activity
@@ -322,6 +379,21 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
             ParsedFile::AppGroupMembers { device_id } => {
                 merge_app_group_members(&inner.pool, &device_id, &body).await
+            }
+            ParsedFile::AiSummaries { .. } => {
+                super::datasets::merge_ai_summaries(&inner.pool, &body).await
+            }
+            ParsedFile::Chat { .. } => {
+                // 上面的门控已保证 mem 存在
+                super::datasets::merge_chat(inner.mem.as_ref().expect("gated"), &body).await
+            }
+            ParsedFile::MemoryDay { device_id } => {
+                super::datasets::merge_memory_sessions(
+                    inner.mem.as_ref().expect("gated"),
+                    &device_id,
+                    &body,
+                )
+                .await
             }
             ParsedFile::DeviceMeta { .. } | ParsedFile::Tombstone { .. } => unreachable!(),
         };

@@ -111,8 +111,7 @@ function ensureListener(): void {
         });
         notify();
         break;
-      // 其他 daily 专属阶段（dedup_running / segment_started / image_described / step1_done）
-      // weekly 路径不会发出，到这里直接忽略
+      // 其他 daily 专属阶段（segment_started 等）weekly 路径不会发出，到这里直接忽略
     }
   });
 }

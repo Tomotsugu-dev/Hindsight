@@ -140,19 +140,13 @@ export interface RecommendedEngineParams {
   rationale: "noGpu" | "tightFit" | "computed";
 }
 
-/** 推荐算法的"阶段模式"：
- *  - "describe": 图描述（多图并行）→ slots 优先，ctx 中等够用即可
- *  - "summary": 段总结（单段串行）→ slots 强制 1，ctx 拉满 */
-export type EngineRecommendMode = "describe" | "summary";
-
 /**
- * 算"对当前硬件 + 模型而言最快又安全"的引擎参数组合。
+ * 算"对当前硬件 + 模型而言最快又安全"的引擎参数组合（段总结：单段串行，
+ * slots 强制 1、ctx 拉满）。
  *
  * 算法核心：
- * 1. 留 35% 显存 margin 给 vision encoder 临时峰值 + 系统进程
- * 2. (slots, ctx) 在网格里挑最大化加权 log 分数的可行组合：
- *    - describe 模式：`log2(slots) + 0.4×log2(ctx/8K)`（slots 权重高）
- *    - summary 模式：`SLOTS=[1]`，仅挑 ctx 最大可行（slots 强制 1）
+ * 1. 留 35% 显存 margin 给系统进程 + 临时峰值
+ * 2. slots 锁 1，在网格里挑最大可行 ctx
  * 3. batch 单独决策：discrete 24GB+ 给 2048、12GB+ 给 1024、其它默认；
  *    Apple unified 不上大 batch（Metal 收益小、内存峰值高 30%）
  *
@@ -163,7 +157,6 @@ export function recommendEngineParams(
   systemVram: VramInfo | null,
   modelName: string,
   platformId: string | undefined,
-  mode: EngineRecommendMode = "describe",
 ): RecommendedEngineParams {
   // 抠模型参数量；正则跟 estimateVramGB 保持一致
   const m = modelName.match(/(\d+(?:\.\d+)?)\s*B/i);
@@ -197,12 +190,10 @@ export function recommendEngineParams(
     };
   }
 
-  // 网格搜索：summary 模式只考虑 slots=1；describe 模式 slots 权重更高，
-  // 32/16 给大显存场景留路（5090 32GB 跑小模型可以堆高并发吃满算力）
-  const SLOTS = mode === "summary" ? [1] : [32, 16, 8, 4, 2, 1];
+  // 网格搜索：slots 锁 1，仅挑最大可行 ctx
+  const SLOTS = [1];
   const CTXES = [65536, 32768, 16384, 8192];
-  // describe: slots 优先（权重 1.0），ctx 中等（0.4）；summary: slots 锁 1，仅 ctx 起作用
-  const ctxWeight = mode === "summary" ? 1.0 : 0.4;
+  const ctxWeight = 1.0;
   let bestSlots = 1;
   let bestCtx = 8192;
   let bestScore = 0;

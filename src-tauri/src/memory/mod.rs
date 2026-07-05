@@ -1,11 +1,11 @@
 //! 屏幕记忆库(memory.sqlite)——独立于主库的第二个数据库文件。
 //!
 //! 独立成库的理由(docs/design/screen-memory.md §5):用户可单独删除/迁移这份资产;
-//! 避开主库单连接的写争用;物理隔离保证永不进云同步(无 outbox)。
+//! 避开主库单连接的写争用。**默认不进云同步**;用户在云同步设置里显式打开
+//! 「聊天历史 / 屏幕记忆全文」开关后,由 sync 引擎按 guid 全量推拉(见 sync/engine/datasets.rs)。
 //!
 //! 本模块只提供连接与 schema;帧登记见 [`frames`],L3 折叠与 FTS 见 [`sessions`]。
 
-pub mod clusters;
 pub mod digest;
 pub mod frames;
 pub mod resident;
@@ -57,8 +57,9 @@ impl MemoryDb {
         Ok(db)
     }
 
-    /// schema 迁移:v1 = L2/L3(帧/会话/行/FTS),v2 = L4(簇/帧嵌入)。
-    /// v1 的 CREATE 全部 IF NOT EXISTS 可重复执行;v2 含 ALTER,按 user_version 守门。
+    /// schema v2:L2/L3 所需(帧/会话/行/FTS)+ Chat 会话历史。
+    /// CREATE 全部 IF NOT EXISTS,可重复执行;旧库重跑同一批次自动补新表,
+    /// 无需分支迁移,user_version 仅作世代标记。
     async fn init_schema(&self) -> Result<()> {
         self.0
             .call(|conn| {
@@ -87,7 +88,9 @@ impl MemoryDb {
                         ended_ts   TEXT NOT NULL,
                         app_id TEXT,
                         title  TEXT,
-                        text   TEXT NOT NULL DEFAULT ''  -- session_lines 的物化拼接
+                        text   TEXT NOT NULL DEFAULT '',  -- session_lines 的物化拼接
+                        guid   TEXT,                      -- 跨设备全局 id(可选上云用)
+                        origin_device TEXT                -- NULL=本机;非 NULL=来自该设备
                     );
 
                     -- 行级留痕:每个唯一行 + 首次出现帧(证据卡精确到帧)
@@ -123,41 +126,76 @@ impl MemoryDb {
                         VALUES ('delete', old.id, old.text);
                     END;
 
-                    PRAGMA user_version = 1;",
+                    -- Chat 会话(默认只在本地;guid 供可选上云时跨设备合并,
+                    -- deleted_at 软删让删除能传播到其它设备)
+                    CREATE TABLE IF NOT EXISTS chat_conversations (
+                        id          INTEGER PRIMARY KEY,
+                        title       TEXT NOT NULL,   -- 首问截断自动生成,可重命名
+                        created_ts  TEXT NOT NULL,
+                        updated_ts  TEXT NOT NULL,   -- 最后一次变更时刻,列表按此倒序,同步 LWW 用
+                        guid        TEXT,            -- 跨设备全局 id(hex)
+                        deleted_at  TEXT             -- 软删时刻;NULL = 存活
+                    );
+
+                    -- Chat 消息:user / assistant 各一行;错误消息不落库(前端瞬态展示)
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id              INTEGER PRIMARY KEY,
+                        conversation_id INTEGER NOT NULL,
+                        role            TEXT NOT NULL,   -- 'user' | 'assistant'
+                        content         TEXT NOT NULL,
+                        citations       TEXT,            -- assistant: Vec<Citation> JSON;user: NULL
+                        degraded        INTEGER NOT NULL DEFAULT 0,
+                        created_ts      TEXT NOT NULL,
+                        guid            TEXT,            -- 跨设备全局 id
+                        conv_guid       TEXT             -- 所属会话的 guid(跨设备解析用)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
+                        ON chat_messages(conversation_id, id);
+
+                    PRAGMA user_version = 3;",
                 )
                 .db()?;
 
-                // v2:L4 视觉簇 + 帧嵌入(ALTER 无 IF NOT EXISTS,按版本守门)
-                let v: i64 = conn
-                    .query_row("PRAGMA user_version", [], |r| r.get(0))
-                    .db()?;
-                if v < 2 {
-                    conn.execute_batch(
-                        "ALTER TABLE frames ADD COLUMN cluster_id INTEGER;
-
-                        -- L4 视觉簇:代表帧 + 代表向量;description = L5 描述缓存位
-                        CREATE TABLE IF NOT EXISTS clusters (
-                            id INTEGER PRIMARY KEY,
-                            local_date TEXT NOT NULL,
-                            rep_path   TEXT NOT NULL,
-                            title      TEXT,              -- 代表帧标题(标题守卫用)
-                            embedding  BLOB NOT NULL,     -- f32 小端数组(512 维)
-                            description TEXT,             -- L5 缓存(NULL=未描述)
-                            described_at TEXT
-                        );
-                        CREATE INDEX IF NOT EXISTS idx_clusters_date
-                            ON clusters(local_date);
-
-                        -- 帧嵌入(CLIP 文本→图检索;仅视觉主导帧)
-                        CREATE TABLE IF NOT EXISTS frame_embeddings (
-                            path      TEXT PRIMARY KEY,
-                            embedding BLOB NOT NULL
-                        );
-
-                        PRAGMA user_version = 2;",
-                    )
-                    .db()?;
+                // ── v3 增量列(旧库补列;新库上面的 CREATE 已带) ──
+                // CREATE IF NOT EXISTS 批次没法条件 ALTER,这里逐条加、
+                // 重复列错误(duplicate column)视为已就绪静默跳过。
+                for sql in [
+                    "ALTER TABLE chat_conversations ADD COLUMN guid TEXT",
+                    "ALTER TABLE chat_conversations ADD COLUMN deleted_at TEXT",
+                    "ALTER TABLE chat_messages ADD COLUMN guid TEXT",
+                    "ALTER TABLE chat_messages ADD COLUMN conv_guid TEXT",
+                    "ALTER TABLE text_sessions ADD COLUMN guid TEXT",
+                    // 会话来源设备:NULL = 本机产出;非 NULL = 从该设备同步而来
+                    "ALTER TABLE text_sessions ADD COLUMN origin_device TEXT",
+                ] {
+                    if let Err(e) = conn.execute(sql, []) {
+                        let msg = e.to_string();
+                        if !msg.contains("duplicate column") {
+                            return Err(tokio_rusqlite::Error::Rusqlite(e));
+                        }
+                    }
                 }
+                // guid 回填(hex(randomblob) 足够全局唯一)+ 唯一索引
+                conn.execute_batch(
+                    "UPDATE chat_conversations SET guid = lower(hex(randomblob(16)))
+                       WHERE guid IS NULL;
+                     UPDATE chat_messages SET guid = lower(hex(randomblob(16)))
+                       WHERE guid IS NULL;
+                     UPDATE chat_messages SET conv_guid =
+                         (SELECT guid FROM chat_conversations c
+                           WHERE c.id = chat_messages.conversation_id)
+                       WHERE conv_guid IS NULL;
+                     UPDATE text_sessions SET guid = lower(hex(randomblob(16)))
+                       WHERE guid IS NULL;
+                     CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_conv_guid
+                         ON chat_conversations(guid);
+                     CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_msg_guid
+                         ON chat_messages(guid);
+                     CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_guid
+                         ON text_sessions(guid);
+                     PRAGMA user_version = 3;",
+                )
+                .db()?;
                 Ok(())
             })
             .await?;
@@ -168,33 +206,6 @@ impl MemoryDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 对指定路径的既有库跑迁移并验证到 v2(诊断工具,验证 v1 旧库升级路径)。
-    /// 跑法:`MEM_DB=<路径> cargo test --lib memory::tests::migrate_at_env_path -- --ignored`
-    #[tokio::test]
-    #[ignore]
-    async fn migrate_at_env_path() {
-        let path = std::env::var("MEM_DB").expect("设 MEM_DB 指向待迁移的库");
-        let db = MemoryDb::open_at(std::path::Path::new(&path))
-            .await
-            .unwrap();
-        db.0.call(|conn| {
-            let v: i64 = conn
-                .query_row("PRAGMA user_version", [], |r| r.get(0))
-                .db()?;
-            assert_eq!(v, 2, "迁移后应为 v2");
-            // cluster_id 列存在(v2 的 ALTER 生效)
-            conn.execute("UPDATE frames SET cluster_id = NULL WHERE 0", [])
-                .db()?;
-            let clusters: i64 = conn
-                .query_row("SELECT COUNT(*) FROM clusters", [], |r| r.get(0))
-                .db()?;
-            assert!(clusters >= 0);
-            Ok(())
-        })
-        .await
-        .unwrap();
-    }
 
     /// schema 建得起来 + trigram FTS 可用(bundled SQLite 版本达标的证明)。
     #[tokio::test]

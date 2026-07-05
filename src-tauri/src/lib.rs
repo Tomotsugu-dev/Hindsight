@@ -2,6 +2,7 @@ mod account;
 mod ai;
 mod bootstrap;
 mod capture;
+mod chat;
 mod commands;
 mod device;
 mod error;
@@ -111,10 +112,9 @@ pub fn run() {
             // macOS：老版本 LaunchAgent 自启迁移到登录项（显示 app 名）；无 plist 时 no-op
             bootstrap::migrate_autostart_launch_agent(&handle);
 
-            // ort load-dynamic 找 onnxruntime DLL 用：prod 包指向 resource_dir 里的副本，
-            // dev 模式 build.rs 已把 DLL 复制到 target/<profile>/ 命中默认路径。
-            // 必须在 embedding::compute_batch 第一次调用前完成。
-            crate::ai::embedding::init_dylib_path(&handle);
+            // ort load-dynamic 找 onnxruntime DLL 用（OCR 引擎依赖）。
+            // 必须在任何 ONNX session 创建之前完成。
+            crate::ai::embedding_runtime::init_dylib_path();
 
             tauri::async_runtime::block_on(async move {
                 // 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
@@ -153,10 +153,11 @@ pub fn run() {
                     .sync(cfg.memory_ocr_resident, memdb.clone())
                     .await;
                 handle.manage(resident);
+                let memdb_for_sync = memdb.clone();
                 handle.manage(commands::screen_memory::MemoryState(memdb));
                 spawn_cleanup_task(pool.clone());
                 bootstrap::spawn_backfill_tasks(pool.clone());
-                let sync_engine = bootstrap::init_sync_engine(pool.clone()).await;
+                let sync_engine = bootstrap::init_sync_engine(pool.clone(), memdb_for_sync).await;
 
                 handle.manage(pool);
                 handle.manage(svc);
@@ -265,17 +266,20 @@ pub fn run() {
             // --- 屏幕记忆(L2/L3) ---
             commands::screen_memory::memory_backfill,
             commands::screen_memory::memory_digest_now,
+            commands::screen_memory::memory_pending_stats,
+            // --- chat: 屏幕记忆问答 + 会话管理 ---
+            commands::chat::chat_ask,
+            commands::chat::chat_list_conversations,
+            commands::chat::chat_get_messages,
+            commands::chat::chat_rename_conversation,
+            commands::chat::chat_delete_conversation,
             // --- ai: 总结 ---
             commands::ai_summary::generate_day_summary,
             commands::ai_summary::retry_summary_segment,
             commands::ai_summary::cancel_day_summary,
             commands::ai_summary::get_day_summary,
             commands::ai_summary::clear_day_summary,
-            commands::ai_summary::clear_day_image_descriptions,
             commands::ai_summary::clear_day_segment_summaries,
-            commands::ai_summary::get_segment_image_descriptions,
-            commands::ai_summary::get_day_image_descriptions,
-            commands::ai_summary::retry_single_image_description,
             // --- ai: 周报 ---
             commands::ai_summary::generate_week_summary,
             commands::ai_summary::get_week_summary,

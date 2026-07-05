@@ -4,6 +4,7 @@
 //!
 //! 失败走指数退避（最多 1 小时），attempts > 10 留在 outbox 作为 dead-letter，UI 可以看见。
 
+mod datasets;
 mod io;
 mod pull;
 mod push;
@@ -105,6 +106,9 @@ pub struct SyncStatus {
 /// push / pull 模块都用 `&Arc<Inner>` 访问。
 pub(super) struct Inner {
     pub(super) pool: DbPool,
+    /// 记忆库句柄(聊天历史/屏幕记忆全文的可选上云用);
+    /// None = 启动时打开失败,这两个数据集的推拉静默跳过。
+    pub(super) mem: Option<crate::memory::MemoryDb>,
     pub(super) drive: DriveBackend,
     pub(super) self_id: String,
     pub(super) handle: Mutex<Option<JoinHandle<()>>>,
@@ -125,17 +129,24 @@ pub struct SyncEngine {
 impl SyncEngine {
     /// 生产入口：用全局 `device::self_id()` + HTTP Drive。`device::ensure_loaded()`
     /// 必须先跑过；未初始化时 self_id 退化为空串（push/pull 内部会跳过实际工作）。
-    pub fn new(pool: DbPool) -> Self {
+    /// `mem` = 记忆库句柄(聊天历史/屏幕记忆可选上云用;打开失败传 None)。
+    pub fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
         let self_id = crate::device::self_id().unwrap_or("").to_string();
-        Self::with_backend(pool, DriveBackend::Http, self_id)
+        Self::with_backend(pool, mem, DriveBackend::Http, self_id)
     }
 
     /// 测试入口：注入自定义 DriveBackend + self_id，同进程跑多个独立设备。
     /// 见 `src-tauri/tests/sync_two_devices.rs`。
-    pub fn with_backend(pool: DbPool, drive: DriveBackend, self_id: String) -> Self {
+    pub fn with_backend(
+        pool: DbPool,
+        mem: Option<crate::memory::MemoryDb>,
+        drive: DriveBackend,
+        self_id: String,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 pool,
+                mem,
                 drive,
                 self_id,
                 handle: Mutex::new(None),
@@ -143,6 +154,17 @@ impl SyncEngine {
                 flush_gate: Mutex::new(()),
             }),
         }
+    }
+
+    /// 重置 pull 游标到 epoch:可选数据集开关从关到开时调,让 Drive 上的
+    /// 历史文件重新入列(所有 merge 都幂等,重拉无害,只多几次 download)。
+    pub async fn reset_pull_cursor(&self) -> Result<()> {
+        io::write_cursor(
+            &self.inner.pool,
+            pull::PULL_CURSOR_KEY,
+            "1970-01-01T00:00:00Z",
+        )
+        .await
     }
 
     /// 暂停 push/pull：等在途 flush 结束并挡住新的，直到返回的 guard 被 drop。

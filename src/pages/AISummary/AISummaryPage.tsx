@@ -5,10 +5,10 @@ import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
 import { DebugStateProvider } from "./DebugStateContext";
 import styles from "./AISummaryPage.module.css";
 
-/** Tab 配置：分 3 组用竖线分隔，视觉上区分语义不同的 tab：
+/** Tab 配置：分 2 组用竖线分隔，视觉上区分语义不同的 tab：
  *  - 时间维度报告：日报 / 周报 / 月报
- *  - 对话
  *  - 调试（跑总结 + 看结果；旧版"调试设置"已删，参数现在直接走 AI 设置主页）
+ *  对话已提升为独立侧栏页面（/chat）。
  */
 const TAB_GROUPS: TabDef[][] = [
   [
@@ -16,12 +16,11 @@ const TAB_GROUPS: TabDef[][] = [
     { to: "week", labelKey: "aiSummary.tabs.week" },
     { to: "month", labelKey: "aiSummary.tabs.month" },
   ],
-  [{ to: "chat", labelKey: "aiSummary.tabs.chat" }],
   [{ to: "debug", labelKey: "aiSummary.tabs.debug" }],
 ];
 
 /**
- * AI 总结页外壳：标题 + 5 个 tab + Outlet。
+ * AI 总结页外壳：标题 + 4 个 tab + Outlet。
  * DebugStateProvider 仍保留——DebugTab 自己用 debug 参数 state（之前由 settings tab 写入）。
  */
 export default function AISummaryPage() {

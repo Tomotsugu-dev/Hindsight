@@ -1056,7 +1056,7 @@
 }
 
 /* 模型卡右侧的下载按钮收窄：默认 .testBtn 是引擎下载用的大按钮 (min-width 110/padding 24)，
-   推荐卡列表里同时挤了 [下载] [step1] [step2] [卸载] 多枚按钮，下载按钮收紧到刚好包住
+   推荐卡列表里同时挤了 [下载] [Text] [卸载] 多枚按钮，下载按钮收紧到刚好包住
    "下载中…" 文字，给 step toggle 留位 */
 .modelCardRight .testBtn {
   min-width: 0;

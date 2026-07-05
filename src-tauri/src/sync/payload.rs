@@ -128,3 +128,70 @@ pub struct TombstonePayload {
     /// RFC3339 字符串，purge_cloud_data 完成那一刻的时间
     pub cleared_at: String,
 }
+
+// ───────── 可选上云数据集(默认关;见 sync/engine/datasets.rs)─────────
+
+/// ai_summaries 行(日报/周报文本)的 JSON 形式。LWW 键 = (source, localDate, segmentIdx),
+/// 时间戳 = generatedAt(新生成的报告覆盖旧的)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSummaryPayload {
+    pub source: String,
+    pub local_date: String,
+    pub segment_idx: u32,
+    pub label: String,
+    pub start_hour: u8,
+    pub end_hour: u8,
+    pub content: String,
+    pub model: String,
+    pub status: String,
+    pub error: Option<String>,
+    pub generated_at: String,
+}
+
+/// chat_conversations 行。guid 全局唯一;deleted_at 非空 = 墓碑(删除传播)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatConversationPayload {
+    pub guid: String,
+    pub title: String,
+    pub created_ts: String,
+    pub updated_ts: String,
+    pub deleted_at: Option<String>,
+}
+
+/// chat_messages 行。消息不可变:合并时按 guid INSERT OR IGNORE。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatMessagePayload {
+    pub guid: String,
+    pub conv_guid: String,
+    pub role: String,
+    pub content: String,
+    /// Vec<Citation> 的 JSON 字符串(与本地列同构);user 消息为 None
+    pub citations: Option<String>,
+    pub degraded: bool,
+    pub created_ts: String,
+}
+
+/// `device.<id>.chat.json` 的整体形状:会话(含墓碑)+ 存活会话的全部消息。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatFilePayload {
+    pub conversations: Vec<ChatConversationPayload>,
+    pub messages: Vec<ChatMessagePayload>,
+}
+
+/// text_sessions 行(屏幕记忆全文;不含 session_lines——证据帧路径只在源设备有意义)。
+/// LWW 键 = guid,时间戳 = endedTs(会话在源设备随折叠增长,取新)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySessionPayload {
+    pub guid: String,
+    pub local_date: String,
+    pub started_ts: String,
+    pub ended_ts: String,
+    pub app_id: Option<String>,
+    pub title: Option<String>,
+    pub text: String,
+}

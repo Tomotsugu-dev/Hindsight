@@ -7,6 +7,7 @@ use crate::commands::screen_memory::MemoryState;
 use crate::memory::resident::ResidentOcr;
 use crate::repo::settings::{self, Settings, SettingsPatch};
 use crate::storage::DbPool;
+use crate::sync::engine::SyncEngine;
 
 /// 拉当前 Settings 全集——前端「设置」页面进去时调一次。
 #[tauri::command]
@@ -26,6 +27,7 @@ pub async fn update_settings(
     svc: State<'_, Arc<CaptureService>>,
     resident: State<'_, Arc<ResidentOcr>>,
     mem: State<'_, MemoryState>,
+    sync_engine: State<'_, Arc<SyncEngine>>,
     patch: SettingsPatch,
 ) -> Result<Settings, String> {
     let current = settings::load(&pool).await.map_err(String::from)?;
@@ -34,6 +36,11 @@ pub async fn update_settings(
     let prev_interval = current.capture_interval_seconds;
     let prev_autostart = current.auto_start;
     let prev_resident = current.memory_ocr_resident;
+    let prev_opt_sync = (
+        current.sync_ai_summaries,
+        current.sync_chat_history,
+        current.sync_screen_memory,
+    );
 
     let next = settings::apply_patch(current, patch);
     settings::save(&pool, &next).await.map_err(String::from)?;
@@ -85,6 +92,17 @@ pub async fn update_settings(
     // OCR 常驻开关:启停立即生效,不需要重启
     if next.memory_ocr_resident != prev_resident {
         resident.sync(next.memory_ocr_resident, mem.0.clone()).await;
+    }
+
+    // 可选上云三挡任一从关到开:重置 pull 游标让 Drive 上的历史文件重新入列
+    // (关到开之前这些文件被标 handled 越过了;合并幂等,重拉无害)
+    let turned_on = (!prev_opt_sync.0 && next.sync_ai_summaries)
+        || (!prev_opt_sync.1 && next.sync_chat_history)
+        || (!prev_opt_sync.2 && next.sync_screen_memory);
+    if turned_on {
+        if let Err(e) = sync_engine.reset_pull_cursor().await {
+            log::warn!("重置 pull 游标失败(下轮 pull 拉不到历史文件): {e}");
+        }
     }
 
     Ok(next)

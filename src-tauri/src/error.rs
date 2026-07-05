@@ -131,9 +131,8 @@ pub enum Error {
     #[error("engine start: {0}")]
     EngineStart(String),
 
-    /// onnxruntime 动态库未安装——`embedding::compute_batch` 第一次调用时
-    /// dlopen 失败的"明确分类"错误。caller（生成日报命令）应该把这条往
-    /// 上抛到前端，前端弹框引导用户先下载推理库。
+    /// onnxruntime 动态库未安装——OCR 引擎首次加载时 dlopen 失败的"明确分类"错误。
+    /// caller 应把这条往上抛到前端，前端弹框引导用户先下载推理库。
     #[error("embedding runtime missing")]
     EmbeddingRuntimeMissing,
 
@@ -151,11 +150,6 @@ pub enum Error {
         stage: &'static str,
         details: String,
     },
-
-    /// MobileNet embedding 推理失败（session init / 预处理 / 推理 / 取输出任一阶段）。
-    /// caller（summary_runner）应让整段标 error 而非静默吞——dedup 失败 = 段总结不可靠。
-    #[error("embedding failed: {0}")]
-    EmbeddingFailed(String),
 
     /// PP-OCRv5 识别失败（模型加载 / 预处理 / 推理 / 后处理任一阶段）。
     /// caller（消化 worker）按单帧失败处理：标 `ocr_state=2` 重试，不中断批次。

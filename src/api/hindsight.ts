@@ -246,7 +246,7 @@ export interface RecommendedModel {
   mmprojBytes: number;
   /** 品牌 logo URL（HF org 头像直链）；缺失时前端 fallback 到首字母占位。 */
   logoUrl: string | null;
-  /** 是否支持 vision 输入。false = 纯文本模型，step 1 toggle 会被禁用。
+  /** 是否支持 vision 输入。false = 纯文本模型。
    *  跟"有没有 mmproj 文件"不是同一回事——由 JSON 维护者按实测显式标定。 */
   vision: boolean;
   /** 品牌标识——前端按这个分组筛选 (Qwen / Google / DeepSeek / OpenAI / Z.AI)；
@@ -301,10 +301,9 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 /** AI 总结进度事件（Phase 1B-γ）。 */
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 
-/** `Settings.ai.summaryMain` / `Settings.ai.describeMain` 的特殊值——"这一步用云端 API"。
+/** `Settings.ai.summaryMain` / `Settings.ai.chatMain` 的特殊值——"这一步用云端 API"。
  *  跟后端 `crate::ai::config::SUMMARY_CLOUD_SENTINEL` 必须保持同步。
- *  路由真正生效还要 `externalEnabled=true`（云端 API tab 启用 toggle）。
- *  放进 describeMain（Vision / Step 1）意味着**截图本身会上传**——选择时必须先弹隐私确认。 */
+ *  路由真正生效还要 `externalEnabled=true`（云端 API tab 启用 toggle）。 */
 export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
 
 /** 周报 precheck 返回的"某天"元数据。 */
@@ -331,10 +330,7 @@ export interface WeekPrecheckResp {
 
 export type SummaryPhase =
   | "engine_starting"
-  | "dedup_running"
   | "segment_started"
-  | "image_described"
-  | "step1_done"
   | "summarizing"
   | "segment_done"
   | "all_done"
@@ -348,19 +344,8 @@ export interface SummaryProgress {
   phase: SummaryPhase;
   segmentIdx: number | null;
   totalSegments: number;
+  /** 历史遗留字段，纯文本管线下恒为 0 */
   imagesTotal: number | null;
-  /** image_described 时该图在段内的下标（0-based） */
-  imageIndex: number | null;
-  /** image_described 时附该图绝对路径 */
-  imagePath: string | null;
-  /** image_described 时附该图的描述文本 */
-  imageDescription: string | null;
-  /** image_described 时附调用耗时（ms） */
-  latencyMs: number | null;
-  /** image_described 时附 prompt token 数 */
-  promptTokens: number | null;
-  /** image_described 时附 completion token 数 */
-  completionTokens: number | null;
   /** segment_done 时附该段总结正文（直接是 LLM 输出 markdown），其它阶段为 null */
   content: string | null;
   /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "skipped_no_activity" / "error" */
@@ -373,26 +358,15 @@ export interface SummaryProgress {
  *  调试 tab 用：跑总结时传这个 patch，跑完不留痕。 */
 export interface AiOverrides {
   excludedCategories?: string[];
-  maxImagesPerSegment?: number;
-  /** 段内余弦阈值去重；范围 0.70..=0.99。详见 [AiConfig.dedupThreshold]。 */
-  dedupThreshold?: number;
-  /** step 2 段总结的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
+  /** 段总结的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
   systemPrompt?: string;
-  /** step 1 单图描述的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
-  imageDescribePrompt?: string;
   /** llama-server `--batch-size` / `--ubatch-size`（取一致值）。
-   *  双套参数语义：旧字段是 fallback——`describe*` / `summary*` 未设时降级使用。 */
+   *  双套参数语义：旧字段是 fallback——`summary*` 未设时降级使用。 */
   batchSize?: number;
   /** llama-server `-np`（并行槽位数）。详见 [batchSize] 关于 fallback 语义。 */
   parallelSlots?: number;
   /** 每个 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
   ctxSize?: number;
-  /** 图描述阶段的 batch；`undefined` = fallback 到 [batchSize]。 */
-  describeBatchSize?: number;
-  /** 图描述阶段的 `-np`；`undefined` = fallback 到 [parallelSlots]。 */
-  describeParallelSlots?: number;
-  /** 图描述阶段的每槽 ctx；`undefined` = fallback 到 [ctxSize]。 */
-  describeCtxSize?: number;
   /** 段总结阶段的 batch；`undefined` = fallback 到 [batchSize]。 */
   summaryBatchSize?: number;
   /** 段总结阶段的 `-np`（推荐恒为 1）；`undefined` = fallback 到 [parallelSlots]。 */
@@ -404,34 +378,11 @@ export interface AiOverrides {
   externalEnabled?: boolean;
 }
 
-/** ai_image_descriptions 表的一行——两步生成 step 1 的产物，给调试 tab 渲染。 */
-export interface ImageDescriptionRow {
-  /** "daily" / "debug" — 跟段总结的 source 同义 */
-  source: string;
-  localDate: string;
-  segmentIdx: number;
-  /** 该段抽帧后的 0-based 顺序 */
-  imageIndex: number;
-  /** 截图绝对路径 */
-  screenshotPath: string;
-  /** LLM 输出的描述文本 */
-  description: string;
-  /** 生成时用的 active_main 文件名 */
-  model: string;
-  generatedAt: string;
-  /** 单张图调用 LLM 的总耗时（ms）；llama-server 没返时 null */
-  latencyMs: number | null;
-  /** 上下文 token 数；llama-server 没返时 null */
-  promptTokens: number | null;
-  /** 输出 token 数；同上 */
-  completionTokens: number | null;
-}
-
 /** 段总结落库状态。
- *  - `ok`：含 step 2 模型写的 markdown 正文
+ *  - `ok`：含总结模型写的 markdown 正文
  *  - `skipped_no_screenshots`：该段无截图（旧值，保留兼容；新生成的段不会再写此值）
  *  - `skipped_no_activity`：该段既无截图也无 activities（凌晨/未在用电脑）
- *  - `error`：step 1 全失败 / step 2 调用失败 */
+ *  - `error`：LLM 调用失败 */
 export type SummarySegmentStatus =
   | "ok"
   | "skipped_no_screenshots"
@@ -462,27 +413,16 @@ export interface SegmentSummaryRow {
  *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
 export interface AiConfig {
   /** 外部云端 API base URL（OpenAI 兼容，不含 /chat/completions）。
-   *  仅在 externalEnabled = true 时生效。本地 step 1 不用这个。 */
+   *  仅在 externalEnabled = true 时生效。 */
   endpoint: string;
   /** 外部 API 的模型 ID，如 gpt-4o-mini / deepseek-chat。
    *  仅在 externalEnabled = true 时生效。 */
   model: string;
-  /** 云端 Vision（step 1 图片描述）用的模型 ID；空 = 复用 model。
-   *  仅在 describeMain 为云端 sentinel 且 externalEnabled = true 时生效。 */
-  visionModel: string;
-  /** Vision (step 1) 独立的云端 base URL；空 = 复用 endpoint。
-   *  让「文本 API 无多模态模型（如 DeepSeek）+ Vision 走另一家（如 Kimi）」成立。 */
-  visionEndpoint: string;
-  /** Vision 独立 API 的 Bearer token；空 = 复用 apiKey。 */
-  visionApiKey: string;
-  /** Vision API 的 provider 预设 ID；空 = 前端视为「复用文本 API」(reuse)。 */
-  visionProvider: string;
   /** 外部 API 的 Bearer token；明文落 settings JSON。 */
   apiKey: string;
   /** 是否启用云端 API。
    *  false = 全程本地；true 时具体哪一步走云由各 step 槽位的 __cloud__ sentinel
-   *  决定（describeMain / summaryMain）。Vision (Step 1) 选云端 = 截图本身会上传，
-   *  选择时前端必须先弹隐私确认。 */
+   *  决定（summaryMain / chatMain）。 */
   externalEnabled: boolean;
   /** Provider 预设 ID："openai" / "deepseek" / "kimi" / "kimi-cn" / "openrouter" / "together" / "groq" / "custom"。
    *  仅控前端 Base URL / Model placeholder；后端只 sanitize。 */
@@ -493,62 +433,46 @@ export interface AiConfig {
   segments: AiSegment[];
   /** 不分析的 category id 列表 */
   excludedCategories: string[];
-  /** 单段送 AI 的截图上限 */
-  maxImagesPerSegment: number;
-  /** 截图相似度去重阈值（余弦），段内贪心去重；step 1 vision LLM 之前砍冗余画面。
-   *  范围 0.70..=0.99；默认 0.95（POC 验证 ~70% 去重率，肉眼无误删）。
-   *  越严越保守（接近 1）；越松越激进，可能误删。 */
-  dedupThreshold: number;
   /** 模型（GGUF）保存路径。
    *  空字符串 = 走默认 `<data_root>/ai/models/`；后端 settings load 启动时
    *  会把空值填成实际默认路径，所以前端拿到的总是非空字符串。 */
   modelsPath: string;
-  /** 当前选中的主权重 GGUF 文件名（旧版字段；新代码读 `describeMain` / `summaryMain` 的
+  /** 当前选中的主权重 GGUF 文件名（旧版字段；新代码读 `summaryMain` 的
    *  effective 值，本字段当 fallback 用）。空 = 还没选；启动引擎会拒绝。 */
   activeMain: string;
   /** 当前选中的 mmproj GGUF 文件名（fallback 同上）。空 = 没有。 */
   activeMmproj: string;
-  /** step 1（图描述）专用主权重；空 = fallback 到 `activeMain`。 */
-  describeMain: string;
-  /** step 1 专用 mmproj；空 = fallback 到 `activeMmproj`。 */
-  describeMmproj: string;
-  /** step 2（段总结）专用主权重；空 = fallback 到 `activeMain`。
-   *  特殊值 [`SUMMARY_CLOUD_SENTINEL`] = 用云端 API 跑 step 2（需要同时
+  /** 段总结专用主权重；空 = fallback 到 `activeMain`。
+   *  特殊值 [`SUMMARY_CLOUD_SENTINEL`] = 用云端 API 跑段总结（需要同时
    *  `externalEnabled=true`，由 `summary_use_cloud()` 后端 helper 一起判）。 */
   summaryMain: string;
-  /** step 2 专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
+  /** 段总结专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
   summaryMmproj: string;
+  /** 对话（Chat）模型槽位：空 = 自动（云端配好走云端，否则同 step 2）；
+   *  [`SUMMARY_CLOUD_SENTINEL`] = 明确云端；文件名 = 明确该本地 GGUF。 */
+  chatMain: string;
   /** AI 总结使用的提示词语言："zh" / "tw" / "en" / "ja" / "pt"。
    *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
   promptLanguage: PromptLanguage;
-  /** 用户对内置 system prompt（step 2 段总结）的覆盖；按语言独立。
+  /** 用户对内置 system prompt（段总结）的覆盖；按语言独立。
    *  对应字段为空 = 用内置默认。 */
   promptOverrides: PromptOverrides;
-  /** 用户对内置 image describe prompt（step 1 单图描述）的覆盖；按语言独立。 */
-  imageDescribeOverrides: PromptOverrides;
   /** 引擎启动级参数：`--batch-size` / `--ubatch-size` 一致值。
    *  双套参数语义：这三个旧字段（batchSize/parallelSlots/ctxSize）现在是 fallback——
-   *  对应的 describe* / summary* 字段未填时降级使用。详见 describeBatchSize 等。 */
+   *  对应的 summary* 字段未填时降级使用。详见 summaryBatchSize 等。 */
   batchSize: number | null;
   /** 引擎启动级参数：`-np` 并行槽位数。详见 [batchSize] 关于 fallback 语义。 */
   parallelSlots: number | null;
   /** 引擎启动级参数：每 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
   ctxSize: number | null;
 
-  /** 图描述阶段（step 1，多图并行）的 batch；null = fallback 到 [batchSize]。 */
-  describeBatchSize: number | null;
-  /** 图描述阶段的 `-np` 并行槽数；null = fallback 到 [parallelSlots]。
-   *  双套参数的关键差异点——describe 默认推荐高 slots（多图并行）。 */
-  describeParallelSlots: number | null;
-  /** 图描述阶段的每槽 ctx；null = fallback 到 [ctxSize]。 */
-  describeCtxSize: number | null;
-  /** 段总结阶段（step 2，单段串行）的 batch；null = fallback 到 [batchSize]。 */
+  /** 段总结阶段（单段串行）的 batch；null = fallback 到 [batchSize]。 */
   summaryBatchSize: number | null;
   /** 段总结阶段的 `-np`；null = fallback 到 [parallelSlots]。
    *  推荐恒为 1，给 ctx 让出预算。 */
   summaryParallelSlots: number | null;
   /** 段总结阶段的每槽 ctx；null = fallback 到 [ctxSize]。
-   *  双套参数的关键差异点——summary 默认推荐高 ctx（容纳多图描述聚合）。 */
+   *  summary 默认推荐高 ctx（容纳整段活动时间线）。 */
   summaryCtxSize: number | null;
 }
 
@@ -599,6 +523,14 @@ export interface Settings {
   /** 屏幕记忆 OCR 常驻模式：true = 引擎常驻内存、新截图准实时消化（约多占
    *  400MB 内存）；false = 批量模式，仅消化时加载、用完即释放。 */
   memoryOcrResident: boolean;
+  /** Chat 首次发送前的隐私确认；确认过一次即永久 true，不再弹。 */
+  chatPrivacyAcknowledged: boolean;
+  /** 可选上云三挡（默认全 false）。打开 = 该数据集参与云同步的推与拉。 */
+  syncAiSummaries: boolean;
+  /** 聊天历史（会话+消息，含屏幕文字引用）。 */
+  syncChatHistory: boolean;
+  /** 屏幕记忆全文（OCR 屏幕逐字文本，敏感度最高）。 */
+  syncScreenMemory: boolean;
   /** AI 总结相关配置（端点、模型、时段、过滤、抽帧参数）。
    *  嵌套结构而不是平铺，跟后端 Settings.ai 对齐；
    *  更新某个子字段时调用方必须 spread 旧 ai：
@@ -644,6 +576,66 @@ export interface SyncStatus {
   lastError: string | null;
   pending: number;
   deadLetter: number;
+}
+
+/** 一次屏幕记忆消化(OCR→折叠→索引)的结果账单。 */
+export interface DigestReport {
+  processed: number;
+  failed: number;
+  skippedMissingFile: number;
+}
+
+/** Chat 证据引用：答案里 [n] 编号对应的会话来源，前端渲染证据卡。 */
+export interface ChatCitation {
+  index: number;
+  app: string;
+  title: string;
+  startedTs: string;
+  endedTs: string;
+  /** 证据帧路径；可能已被清理策略删除，前端需兜底 */
+  framePath: string | null;
+}
+
+/** 一次 Chat 问答的完整结果（后端跑完 agent 循环一次性返回）。 */
+export interface ChatAnswer {
+  text: string;
+  citations: ChatCitation[];
+  steps: number;
+  /** true = 走了降级路径（模型失败/步数耗尽），text 是兜底文案 */
+  degraded: boolean;
+}
+
+/** 一次问答的返回：答案平铺 + 会话 id（首条消息隐式建会话，前端靠它接管）。 */
+export interface ChatAskResult extends ChatAnswer {
+  conversationId: number;
+}
+
+/** 会话列表项（按最近更新倒序）。 */
+export interface ChatConversationMeta {
+  id: number;
+  title: string;
+  createdTs: string;
+  updatedTs: string;
+}
+
+/** 落库的一条聊天消息（user 的 citations 恒为空数组）。 */
+export interface ChatStoredMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  citations: ChatCitation[];
+  degraded: boolean;
+  createdTs: string;
+}
+
+/** 未入索引统计：主库截图全集 vs 记忆库登记/完成情况（近似值）。 */
+export interface MemoryPendingStats {
+  /** 主库有截图但尚未登记（需回填） */
+  unregistered: number;
+  /** 已登记但 OCR 未完成 */
+  pendingOcr: number;
+  /** 两者之和，banner 显示的 N */
+  total: number;
 }
 
 export const api = {
@@ -849,11 +841,11 @@ export const api = {
    *  mmprojFile 传 null 表示没有（纯文本模型）。 */
   setActiveModel: (mainFile: string, mmprojFile: string | null) =>
     invoke<void>("set_active_model", { mainFile, mmprojFile }),
-  /** 单独设置 step 1（图描述）或 step 2（段总结）的模型；其它 step 不动。
-   *  step 取 "describe" / "summary"；mainFile 空字符串 = 清掉该 step 的覆盖（fallback
-   *  到 activeMain）。同时会 stop 在跑的 server。 */
+  /** 单独设置 段总结（summary）/ 对话（chat）的模型；其它 step 不动。
+   *  mainFile 空字符串 = 清掉该 step 的覆盖（summary fallback 到 activeMain，
+   *  chat 回到自动路由）。同时会 stop 在跑的 server。chat 忽略 mmprojFile。 */
   setStepModel: (
-    step: "describe" | "summary",
+    step: "summary" | "chat",
     mainFile: string,
     mmprojFile: string | null,
   ) => invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
@@ -868,13 +860,6 @@ export const api = {
     overrides: AiOverrides | null = null,
     /** "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据 */
     source: string = "daily",
-    /** true = 只跑 step 1（逐图描述），跳过 step 2（段总结）。
-     *  调试 tab「仅生成图片描述」按钮用；默认 false 走完整流程。 */
-    step1Only: boolean = false,
-    /** true = 跳过 step 1，从 DB 读已存的图片描述跑 step 2。
-     *  调试 tab「仅生成段总结」按钮用；默认 false 走完整流程。
-     *  与 step1Only 互斥（前端不应同时传 true）。 */
-    step2Only: boolean = false,
   ) =>
     invoke<void>("generate_day_summary", {
       date,
@@ -882,8 +867,6 @@ export const api = {
       deviceId,
       overrides,
       source,
-      step1Only,
-      step2Only,
     }),
   /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
   retrySummarySegment: (
@@ -935,47 +918,35 @@ export const api = {
   /** 删除某周已生成的周报行。weekStart 不是周一时自动对齐。 */
   clearWeekSummary: (weekStart: string) =>
     invoke<void>("clear_week_summary", { weekStart }),
-  /** 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。 */
-  getSegmentImageDescriptions: (
-    date: string,
-    segmentIdx: number,
-    source: string = "daily",
-  ) =>
-    invoke<ImageDescriptionRow[]>("get_segment_image_descriptions", {
-      date,
-      segmentIdx,
-      source,
-    }),
-  /** 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。 */
-  getDayImageDescriptions: (date: string, source: string = "daily") =>
-    invoke<ImageDescriptionRow[]>("get_day_image_descriptions", {
-      date,
-      source,
-    }),
-  /** 清当天所有 AI 产物：段总结 + 逐图描述。调试 tab 的「删除」按钮调，
+  /** 清当天所有 AI 段总结。调试 tab 的「删除」按钮调，
    *  给用户在不重跑的情况下手动清历史。 */
   clearDaySummary: (date: string, source: string = "daily") =>
     invoke<void>("clear_day_summary", { date, source }),
-  /** 只删当天逐图描述（不动段总结）。调试 tab「逐图描述」Section 删除按钮用。 */
-  clearDayImageDescriptions: (date: string, source: string = "daily") =>
-    invoke<void>("clear_day_image_descriptions", { date, source }),
-  /** 只删当天段总结（不动逐图描述）。调试 tab「段总结结果」Section 删除按钮用。 */
+  /** 只删当天段总结。调试 tab「段总结结果」Section 删除按钮用。 */
   clearDaySegmentSummaries: (date: string, source: string = "daily") =>
     invoke<void>("clear_day_segment_summaries", { date, source }),
-  /** 重跑某段某张图的描述——调试 tab 行末"重跑"按钮用。
-   *  不动段总结、其它图描述；期间走 SUMMARY_PROGRESS_EVENT 推一条 image_described。 */
-  retrySingleImageDescription: (
-    date: string,
-    segmentIdx: number,
-    imageIndex: number,
-    overrides: AiOverrides | null = null,
-    source: string = "daily",
-  ) =>
-    invoke<void>("retry_single_image_description", {
-      date,
-      segmentIdx,
-      imageIndex,
-      overrides,
-      source,
-    }),
+  /** Chat 问答：后端 agent 循环（工具查询 + LLM 归纳）跑完一次性返回。
+   *  可能长达数十秒，调用方自己管 loading 态。历史由后端从库里读；
+   *  conversationId 传 null = 新会话（后端隐式创建并返回 id）。 */
+  chatAsk: (question: string, conversationId: number | null) =>
+    invoke<ChatAskResult>("chat_ask", { question, conversationId }),
+  /** 会话列表（最近更新在前）。 */
+  chatListConversations: () =>
+    invoke<ChatConversationMeta[]>("chat_list_conversations"),
+  /** 某会话全部消息（时间正序）。 */
+  chatGetMessages: (conversationId: number) =>
+    invoke<ChatStoredMessage[]>("chat_get_messages", { conversationId }),
+  /** 重命名会话（空标题会被后端拒绝）。 */
+  chatRenameConversation: (conversationId: number, title: string) =>
+    invoke<void>("chat_rename_conversation", { conversationId, title }),
+  /** 删除会话及其全部消息。 */
+  chatDeleteConversation: (conversationId: number) =>
+    invoke<void>("chat_delete_conversation", { conversationId }),
+  /** 未入索引截图统计（Chat 页 banner 用）。 */
+  memoryPendingStats: () => invoke<MemoryPendingStats>("memory_pending_stats"),
+  /** 屏幕记忆回填：把主库已有截图的活动登记为待识别帧。幂等，返回登记行数。 */
+  memoryBackfill: () => invoke<number>("memory_backfill"),
+  /** 手动触发一次消化（OCR→折叠→索引），跑完积压才返回，可能耗时数分钟。
+   *  已在运行（常驻 OCR 的定时批）时后端报错。 */
+  memoryDigestNow: () => invoke<DigestReport>("memory_digest_now"),
 };

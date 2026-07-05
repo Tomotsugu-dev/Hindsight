@@ -119,10 +119,9 @@ function autoPairMmproj(
  */
 export function ModelsSection() {
   const { t } = useTranslation();
-  // settings 用来读 describeMain / summaryMain：判断每张推荐卡是不是被某个 step 选用，
+  // settings 用来读 summaryMain：判断每张推荐卡是不是被选为段总结模型，
   // 在卡上显示对应 chip。reload 让下载完成后能拉到刚刷新的本地文件清单。
   const { settings, reload } = useAiSettings();
-  const describeMain = settings?.ai.describeMain || settings?.ai.activeMain || "";
   // 注意：raw summary_main 可能是 SUMMARY_CLOUD_SENTINEL（用户在云端卡选了 Text）。
   // 走 fallback 链拿到的字符串可能是 sentinel 或真实文件名；本地卡的 usedForSummary
   // 比较时永远拿 sentinel 跟 rec.mainFile 比，永远不命中——所以本地卡正确显示成"未选"。
@@ -130,8 +129,6 @@ export function ModelsSection() {
   // 云端卡用 RAW 字段判，避免 fallback 链上 activeMain 的干扰。
   const cloudIsSelectedAsSummary =
     (settings?.ai.summaryMain || "") === SUMMARY_CLOUD_SENTINEL;
-  const cloudIsSelectedAsDescribe =
-    (settings?.ai.describeMain || "") === SUMMARY_CLOUD_SENTINEL;
 
   const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
   const [local, setLocal] = useState<ModelEntry[]>([]);
@@ -178,11 +175,9 @@ export function ModelsSection() {
   // busyFiles.has("mmproj-F16.gguf") 会让所有 vision 卡都判定为 busy，进度条串扰。
   const [confirmingUninstall, setConfirmingUninstall] =
     useState<RecommendedModel | null>(null);
-  // 云端选择的隐私确认弹窗：选 Text (Step 2) = 轻警示（上传应用名/分类/文字描述），
-  // 选 Vision (Step 1) = 重警示（截图本身会上传）。取消选择不弹。
-  const [cloudConfirm, setCloudConfirm] = useState<
-    "describe" | "summary" | null
-  >(null);
+  // 云端选择的隐私确认弹窗：选 Text = 轻警示（上传应用名/分类/活动时间线）。
+  // 取消选择不弹。
+  const [cloudConfirm, setCloudConfirm] = useState(false);
   const [busyRecs, setBusyRecs] = useState<ReadonlySet<string>>(
     new Set<string>(),
   );
@@ -352,28 +347,22 @@ export function ModelsSection() {
   };
 
   /**
-   * 给某个推荐模型 toggle step 1 / step 2 分配。
+   * 给某个推荐模型 toggle 段总结（summary）分配。
    *
-   * 同 step 互斥由后端隐式保证（setStepModel 直接覆盖，不累加）；前端这里只负责
-   * 区分"当前已是该 step → 清空"和"否则 → 切换到该模型"两种情况。
+   * 互斥由后端隐式保证（setStepModel 直接覆盖，不累加）；前端这里只负责
+   * 区分"当前已在用 → 清空"和"否则 → 切换到该模型"两种情况。
    */
-  const onToggleStep = async (
-    rec: RecommendedModel,
-    step: "describe" | "summary",
-  ) => {
+  const onToggleStep = async (rec: RecommendedModel) => {
     setError(null);
-    const current =
-      step === "describe"
-        ? settings?.ai.describeMain || settings?.ai.activeMain || ""
-        : settings?.ai.summaryMain || settings?.ai.activeMain || "";
+    const current = settings?.ai.summaryMain || settings?.ai.activeMain || "";
     try {
       if (current === rec.mainFile) {
-        // 已是该 step 在用 → 清空覆盖（后端 fallback 到 activeMain）
-        await api.setStepModel(step, "", null);
+        // 已在用 → 清空覆盖（后端 fallback 到 activeMain）
+        await api.setStepModel("summary", "", null);
       } else {
         // mmproj 也用 saveAs（落盘文件名），跟 settings 实际能加载的文件名对齐
         await api.setStepModel(
-          step,
+          "summary",
           rec.mainFile,
           rec.mmprojFile ? mmprojSaveAs(rec) : null,
         );
@@ -385,18 +374,18 @@ export function ModelsSection() {
   };
 
   /**
-   * 云端卡 Text 按钮 toggle：在「选中云端为 step 2」和「fallback 回本地」之间切换。
+   * 云端卡 Text 按钮 toggle：在「选中云端为段总结」和「fallback 回本地」之间切换。
    *
    * 通过把 `summary_main` 写成 [`SUMMARY_CLOUD_SENTINEL`] 来表示选中云端，后端
-   * [`build_step2`] 看到 sentinel + `external_enabled=true` 才路由到 External。
+   * 看到 sentinel + `external_enabled=true` 才路由到 External。
    * 跟本地卡的 toggle 互斥：本地卡 set summary 是真实文件名、覆盖 sentinel；
    * 云端卡 set sentinel、覆盖任何本地文件名。一处状态，互斥自然成立。
    */
   const onToggleCloudSummary = async () => {
     setError(null);
     if (!cloudIsSelectedAsSummary) {
-      // 启用方向：先弹隐私确认（应用名/分类/文字描述将上传），确认后再真正切换
-      setCloudConfirm("summary");
+      // 启用方向：先弹隐私确认（应用名/分类/活动时间线将上传），确认后再真正切换
+      setCloudConfirm(true);
       return;
     }
     try {
@@ -407,33 +396,11 @@ export function ModelsSection() {
     }
   };
 
-  /**
-   * 云端卡 Vision 按钮 toggle：把 `describe_main` 写成 sentinel = step 1 图片描述
-   * 走云端 —— **截图本身会上传**到用户配置的第三方 API。启用方向必须先过
-   * 重级隐私确认弹窗；取消选择（回本地）直接执行。
-   * 与本地卡的 step 1 toggle 互斥机制同 step 2（一处状态天然互斥）。
-   */
-  const onToggleCloudDescribe = async () => {
-    setError(null);
-    if (!cloudIsSelectedAsDescribe) {
-      setCloudConfirm("describe");
-      return;
-    }
-    try {
-      await api.setStepModel("describe", "", null);
-      await reload();
-    } catch (e) {
-      setError(typeof e === "string" ? e : String(e));
-    }
-  };
-
-  /** 隐私确认弹窗点了"确认"：真正把对应 step 槽位写成云端 sentinel。 */
+  /** 隐私确认弹窗点了"确认"：真正把 summary 槽位写成云端 sentinel。 */
   const onConfirmCloudSelect = async () => {
-    const step = cloudConfirm;
-    setCloudConfirm(null);
-    if (!step) return;
+    setCloudConfirm(false);
     try {
-      await api.setStepModel(step, SUMMARY_CLOUD_SENTINEL, null);
+      await api.setStepModel("summary", SUMMARY_CLOUD_SENTINEL, null);
       await reload();
     } catch (e) {
       setError(typeof e === "string" ? e : String(e));
@@ -527,23 +494,19 @@ export function ModelsSection() {
     }
   };
 
-  /** 本地模型卡的 step toggle：跟推荐卡同逻辑，但 main/mmproj 用本地真实落盘名。
+  /** 本地模型卡的 summary toggle：跟推荐卡同逻辑，但 main/mmproj 用本地真实落盘名。
    *  mmproj 为自动配对的结果（纯文本模型为 null，只写 main）。 */
   const onToggleLocalStep = async (
     main: ModelEntry,
     mmproj: ModelEntry | null,
-    step: "describe" | "summary",
   ) => {
     setError(null);
-    const current =
-      step === "describe"
-        ? settings?.ai.describeMain || settings?.ai.activeMain || ""
-        : settings?.ai.summaryMain || settings?.ai.activeMain || "";
+    const current = settings?.ai.summaryMain || settings?.ai.activeMain || "";
     try {
       if (current === main.filename) {
-        await api.setStepModel(step, "", null);
+        await api.setStepModel("summary", "", null);
       } else {
-        await api.setStepModel(step, main.filename, mmproj?.filename ?? null);
+        await api.setStepModel("summary", main.filename, mmproj?.filename ?? null);
       }
       await reload();
     } catch (e) {
@@ -659,10 +622,10 @@ export function ModelsSection() {
       </div>
 
       <div className={styles.modelList}>
-        {/* 云端 API 启用时第一行展示云端卡——表明对应 step 当前不走本地推荐里的任何
+        {/* 云端 API 启用时第一行展示云端卡——表明段总结当前不走本地推荐里的任何
             模型，而是路由到 Cloud API tab 配的 endpoint + model。固定置顶，不参与筛选/
-            排序。Vision (Step 1) / Text (Step 2) 都是可点 toggle，跟本地卡的对应 step
-            是 radio 关系；启用方向先过隐私确认弹窗（Vision = 截图上传的重级警示）。 */}
+            排序。Text 是可点 toggle，跟本地卡的 summary 是 radio 关系；
+            启用方向先过隐私确认弹窗。 */}
         {settings?.ai.externalEnabled ? (
           <div className={`${styles.modelCard} ${styles.modelCardCloud}`}>
             <div className={styles.modelCardRow}>
@@ -680,30 +643,10 @@ export function ModelsSection() {
                 <span className={styles.modelCardSize}>
                   {settings.ai.model ||
                     t("aiSettings.models.cloud.modelUnset")}
-                  {cloudIsSelectedAsDescribe && settings.ai.visionModel
-                    ? ` · ${settings.ai.visionModel}`
-                    : ""}
                 </span>
               </div>
               <div className={styles.modelCardRight}>
-                {/* Vision (Step 1)：选中 = 截图上传云端做图片描述。启用方向先弹重级隐私确认 */}
-                <button
-                  type="button"
-                  className={`${styles.modelStepToggle} ${
-                    cloudIsSelectedAsDescribe
-                      ? styles.modelStepToggleActive
-                      : ""
-                  }`}
-                  onClick={onToggleCloudDescribe}
-                  title={
-                    cloudIsSelectedAsDescribe
-                      ? t("aiSettings.models.cloud.step1ToggleOffTooltip")
-                      : t("aiSettings.models.cloud.step1ToggleOnTooltip")
-                  }
-                >
-                  {t("aiSettings.models.card.step1")}
-                </button>
-                {/* Text (Step 2)：可点击 toggle，跟本地卡的 step 2 是 radio 关系 */}
+                {/* Text（段总结）：可点击 toggle，跟本地卡的 summary 是 radio 关系 */}
                 <button
                   type="button"
                   className={`${styles.modelStepToggle} ${
@@ -728,7 +671,6 @@ export function ModelsSection() {
             key={rec.mainFile}
             rec={rec}
             installed={isInstalled(rec)}
-            usedForDescribe={describeMain === rec.mainFile}
             usedForSummary={summaryMain === rec.mainFile}
             busyFiles={busyFiles}
             partialMap={partialMap}
@@ -742,7 +684,7 @@ export function ModelsSection() {
 
         {/* 本地模型区——用户自己导入 / 手动放进模型目录、但不在推荐列表里的文件。
             没有这个区，导入的非推荐模型（如 gemma-4-12B）拷进去后 UI 上无处显示。
-            main 自动配对 mmproj（按文件名前缀），vision 模型才启用 Step1。 */}
+            main 自动配对 mmproj（按文件名前缀）。 */}
         {localPairs.length > 0 || unpairedMmprojs.length > 0 ? (
           <>
             <div className={styles.modelCustomHint}>
@@ -753,7 +695,6 @@ export function ModelsSection() {
                 key={main.filename}
                 main={main}
                 mmproj={mmproj}
-                usedForDescribe={describeMain === main.filename}
                 usedForSummary={summaryMain === main.filename}
                 onToggleStep={onToggleLocalStep}
                 onDelete={onDeleteLocal}
@@ -765,7 +706,6 @@ export function ModelsSection() {
                 main={m}
                 mmproj={null}
                 orphanMmproj
-                usedForDescribe={false}
                 usedForSummary={false}
                 onToggleStep={onToggleLocalStep}
                 onDelete={onDeleteLocal}
@@ -817,21 +757,9 @@ export function ModelsSection() {
         }}
         onCancel={() => setConfirmingUninstall(null)}
       />
-      {/* 云端选择的两级隐私确认：Vision (Step 1) = 截图本身上传（danger 重警示）；
-          Text (Step 2) = 应用名/分类/文字描述上传（primary 轻警示）。 */}
+      {/* 云端选择的隐私确认：Text（段总结）= 应用名/分类/活动时间线上传（轻警示）。 */}
       <ConfirmDialog
-        open={cloudConfirm === "describe"}
-        title={t("aiSettings.models.cloud.visionConfirmTitle")}
-        message={t("aiSettings.models.cloud.visionConfirmMessage", {
-          provider: settings?.ai.externalProvider || "cloud",
-        })}
-        confirmLabel={t("aiSettings.models.cloud.visionConfirmAccept")}
-        variant="danger"
-        onConfirm={() => void onConfirmCloudSelect()}
-        onCancel={() => setCloudConfirm(null)}
-      />
-      <ConfirmDialog
-        open={cloudConfirm === "summary"}
+        open={cloudConfirm}
         title={t("aiSettings.models.cloud.summaryConfirmTitle")}
         message={t("aiSettings.models.cloud.summaryConfirmMessage", {
           provider: settings?.ai.externalProvider || "cloud",
@@ -839,7 +767,7 @@ export function ModelsSection() {
         confirmLabel={t("aiSettings.models.cloud.summaryConfirmAccept")}
         variant="primary"
         onConfirm={() => void onConfirmCloudSelect()}
-        onCancel={() => setCloudConfirm(null)}
+        onCancel={() => setCloudConfirm(false)}
       />
     </div>
   );
@@ -1073,16 +1001,15 @@ function CustomHfDownload({
 /**
  * 本地模型卡片——展示用户导入 / 手动放入、不在推荐列表里的 GGUF 文件。
  *
- * 结构比推荐卡简化：无 logo / caps / 下载按钮，只有文件名 + 大小 + Step1/Step2
- * toggle + 删除。`mmproj` 是自动配对的视觉投影文件（有则该模型按 vision 处理，
- * 启用 Step1）。`orphanMmproj=true` 时 `main` 其实是个没配到主模型的孤儿 mmproj，
+ * 结构比推荐卡简化：无 logo / caps / 下载按钮，只有文件名 + 大小 + Text
+ * toggle + 删除。`mmproj` 是自动配对的视觉投影文件。
+ * `orphanMmproj=true` 时 `main` 其实是个没配到主模型的孤儿 mmproj，
  * 只显示说明 + 删除（mmproj 不能单独当模型用）。
  */
 function LocalModelCard({
   main,
   mmproj,
   orphanMmproj = false,
-  usedForDescribe,
   usedForSummary,
   onToggleStep,
   onDelete,
@@ -1090,20 +1017,13 @@ function LocalModelCard({
   main: ModelEntry;
   mmproj: ModelEntry | null;
   orphanMmproj?: boolean;
-  usedForDescribe: boolean;
   usedForSummary: boolean;
-  onToggleStep: (
-    main: ModelEntry,
-    mmproj: ModelEntry | null,
-    step: "describe" | "summary",
-  ) => void;
+  onToggleStep: (main: ModelEntry, mmproj: ModelEntry | null) => void;
   onDelete: (main: ModelEntry, mmproj: ModelEntry | null) => void;
 }) {
   const { t } = useTranslation();
   const totalGB =
     (main.sizeBytes + (mmproj?.sizeBytes ?? 0)) / 1024 / 1024 / 1024;
-  // 有配对 mmproj = 按 vision 模型处理，启用 Step1（图片描述）；否则纯文本只给 Step2。
-  const isVision = !!mmproj;
 
   return (
     <div className={styles.modelCard}>
@@ -1133,39 +1053,20 @@ function LocalModelCard({
         </div>
         <div className={styles.modelCardRight}>
           {orphanMmproj ? null : (
-            <>
-              <button
-                type="button"
-                className={`${styles.modelStepToggle} ${
-                  usedForDescribe ? styles.modelStepToggleActive : ""
-                }`}
-                onClick={() => onToggleStep(main, mmproj, "describe")}
-                disabled={!isVision}
-                title={
-                  !isVision
-                    ? t("aiSettings.models.card.step1DisabledTooltip")
-                    : usedForDescribe
-                      ? t("aiSettings.models.card.step1ToggleOffTooltip")
-                      : t("aiSettings.models.card.step1ToggleOnTooltip")
-                }
-              >
-                {t("aiSettings.models.card.step1")}
-              </button>
-              <button
-                type="button"
-                className={`${styles.modelStepToggle} ${
-                  usedForSummary ? styles.modelStepToggleActive : ""
-                }`}
-                onClick={() => onToggleStep(main, mmproj, "summary")}
-                title={
-                  usedForSummary
-                    ? t("aiSettings.models.card.step2ToggleOffTooltip")
-                    : t("aiSettings.models.card.step2ToggleOnTooltip")
-                }
-              >
-                {t("aiSettings.models.card.step2")}
-              </button>
-            </>
+            <button
+              type="button"
+              className={`${styles.modelStepToggle} ${
+                usedForSummary ? styles.modelStepToggleActive : ""
+              }`}
+              onClick={() => onToggleStep(main, mmproj)}
+              title={
+                usedForSummary
+                  ? t("aiSettings.models.card.step2ToggleOffTooltip")
+                  : t("aiSettings.models.card.step2ToggleOnTooltip")
+              }
+            >
+              {t("aiSettings.models.card.step2")}
+            </button>
           )}
           <button
             type="button"
@@ -1186,7 +1087,6 @@ function LocalModelCard({
 function RecommendedCard({
   rec,
   installed,
-  usedForDescribe,
   usedForSummary,
   busyFiles,
   partialMap,
@@ -1198,9 +1098,7 @@ function RecommendedCard({
 }: {
   rec: RecommendedModel;
   installed: boolean;
-  /** 该模型当前是 step 1 选择 → step 1 toggle 显示已激活 */
-  usedForDescribe: boolean;
-  /** 该模型当前是 step 2 选择 → step 2 toggle 显示已激活 */
+  /** 该模型当前是段总结选择 → Text toggle 显示已激活 */
   usedForSummary: boolean;
   busyFiles: Set<string>;
   /** 半成品 map：file → 已下字节数。结合 inflight 判断 paused */
@@ -1208,10 +1106,7 @@ function RecommendedCard({
   progress: Record<string, ModelDownloadProgress>;
   onDownload: (rec: RecommendedModel) => void;
   onPause: (filename: string) => void;
-  onToggleStep: (
-    rec: RecommendedModel,
-    step: "describe" | "summary",
-  ) => void;
+  onToggleStep: (rec: RecommendedModel) => void;
   onUninstall: (rec: RecommendedModel) => void;
 }) {
   const { t } = useTranslation();
@@ -1357,43 +1252,23 @@ function RecommendedCard({
               </button>
             )
           ) : (
-            <>
-              {/* 已下载状态不再单独显 badge —— step1/step2 toggle + 右侧 trash
-                  已经足够暗示模型可用 / 可卸载，避免视觉重复 */}
-              {/* step 1 toggle：vision=false 时禁用并给 tooltip 解释 */}
-              <button
-                type="button"
-                className={`${styles.modelStepToggle} ${
-                  usedForDescribe ? styles.modelStepToggleActive : ""
-                }`}
-                onClick={() => onToggleStep(rec, "describe")}
-                disabled={!rec.vision}
-                title={
-                  !rec.vision
-                    ? t("aiSettings.models.card.step1DisabledTooltip")
-                    : usedForDescribe
-                      ? t("aiSettings.models.card.step1ToggleOffTooltip")
-                      : t("aiSettings.models.card.step1ToggleOnTooltip")
-                }
-              >
-                {t("aiSettings.models.card.step1")}
-              </button>
-              {/* step 2 toggle：纯文本任务，所有模型都能用，不禁用 */}
-              <button
-                type="button"
-                className={`${styles.modelStepToggle} ${
-                  usedForSummary ? styles.modelStepToggleActive : ""
-                }`}
-                onClick={() => onToggleStep(rec, "summary")}
-                title={
-                  usedForSummary
-                    ? t("aiSettings.models.card.step2ToggleOffTooltip")
-                    : t("aiSettings.models.card.step2ToggleOnTooltip")
-                }
-              >
-                {t("aiSettings.models.card.step2")}
-              </button>
-            </>
+            /* 已下载状态不再单独显 badge —— Text toggle + 右侧 trash
+               已经足够暗示模型可用 / 可卸载，避免视觉重复。
+               Text toggle：纯文本任务，所有模型都能用，不禁用 */
+            <button
+              type="button"
+              className={`${styles.modelStepToggle} ${
+                usedForSummary ? styles.modelStepToggleActive : ""
+              }`}
+              onClick={() => onToggleStep(rec)}
+              title={
+                usedForSummary
+                  ? t("aiSettings.models.card.step2ToggleOffTooltip")
+                  : t("aiSettings.models.card.step2ToggleOnTooltip")
+              }
+            >
+              {t("aiSettings.models.card.step2")}
+            </button>
           )}
           <button
             type="button"

@@ -71,6 +71,17 @@ pub struct Settings {
     /// （多占约 400MB 内存）；false（默认）= 批量模式，仅手动/定时消化时
     /// 加载引擎，用完即释放。
     pub memory_ocr_resident: bool,
+    /// Chat 首次发送前的隐私确认(展示当前路由的模型与发送内容说明)。
+    /// 确认过一次即永久 true,不再弹。
+    pub chat_privacy_acknowledged: bool,
+    /// 可选上云三挡(默认全 false)。打开 = 该数据集参与云同步的推与拉;
+    /// 前端在开启时弹隐私警告。截图本体永不上云,与这三挡无关。
+    /// AI 总结文本(日报/周报)。
+    pub sync_ai_summaries: bool,
+    /// 聊天历史(会话+消息,含屏幕文字引用)。
+    pub sync_chat_history: bool,
+    /// 屏幕记忆全文(OCR 出的屏幕逐字文本,敏感度最高)。
+    pub sync_screen_memory: bool,
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
@@ -101,6 +112,10 @@ impl Default for Settings {
             last_update_check_at: None,
             idle_threshold_seconds: 180,
             memory_ocr_resident: false,
+            chat_privacy_acknowledged: false,
+            sync_ai_summaries: false,
+            sync_chat_history: false,
+            sync_screen_memory: false,
             ai: AiConfig::default(),
         }
     }
@@ -151,6 +166,10 @@ pub struct SettingsPatch {
     pub last_update_check_at: Option<Option<String>>,
     pub idle_threshold_seconds: Option<u32>,
     pub memory_ocr_resident: Option<bool>,
+    pub chat_privacy_acknowledged: Option<bool>,
+    pub sync_ai_summaries: Option<bool>,
+    pub sync_chat_history: Option<bool>,
+    pub sync_screen_memory: Option<bool>,
     /// AI 配置整组覆盖；前端要么不传（保留旧值），要么传完整新值
     pub ai: Option<AiConfig>,
 }
@@ -210,6 +229,34 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
     if settings.ai.external_enabled && settings.ai.summary_main.trim().is_empty() {
         settings.ai.summary_main = crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string();
         dirty = true;
+    }
+
+    // 一次性迁移:日报管线从"截图描述"换代为"活动时间线"后,旧管线时代保存的
+    // system prompt 覆盖必然与新输入格式错配(实测会导致输出混乱 + 旧示例文本泄漏)。
+    // 按旧提示词的特征串识别并清空,让用户回落到新内置默认;用户后续在提示词页
+    // 写的新覆盖不含这些特征串,不会被误清。
+    {
+        const STALE_MARKERS: [&str; 5] = [
+            "截图的逐张描述",
+            "截圖的逐張描述",
+            "per-screenshot descriptions",
+            "スクリーンショット逐次描写",
+            "descrições individuais das capturas",
+        ];
+        let po = &mut settings.ai.prompt_overrides;
+        for field in [
+            &mut po.system_zh,
+            &mut po.system_tw,
+            &mut po.system_en,
+            &mut po.system_ja,
+            &mut po.system_pt,
+        ] {
+            if !field.is_empty() && STALE_MARKERS.iter().any(|m| field.contains(m)) {
+                log::info!("清除旧管线时代的 system prompt 覆盖(与活动时间线输入不兼容)");
+                field.clear();
+                dirty = true;
+            }
+        }
     }
 
     // 解析失败时的 dirty 全是"默认值缺路径"造成的，绝不能把这份默认值写回去
@@ -306,6 +353,14 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         memory_ocr_resident: patch
             .memory_ocr_resident
             .unwrap_or(current.memory_ocr_resident),
+        chat_privacy_acknowledged: patch
+            .chat_privacy_acknowledged
+            .unwrap_or(current.chat_privacy_acknowledged),
+        sync_ai_summaries: patch.sync_ai_summaries.unwrap_or(current.sync_ai_summaries),
+        sync_chat_history: patch.sync_chat_history.unwrap_or(current.sync_chat_history),
+        sync_screen_memory: patch
+            .sync_screen_memory
+            .unwrap_or(current.sync_screen_memory),
         ai: patch
             .ai
             .map(|new_ai| crate::ai::config::sanitize(new_ai, &current.ai))

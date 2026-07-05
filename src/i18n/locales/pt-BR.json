@@ -49,7 +49,8 @@
       "categories": "Categorias",
       "apps": "Aplicativos",
       "devices": "Nuvem",
-      "settings": "Ajustes"
+      "settings": "Ajustes",
+      "chat": "Chat"
     }
   },
   "sidebar": {
@@ -130,7 +131,13 @@
         "idleHint": "A detecção usa eventos de mouse / teclado / trackpad em nível de sistema.\nDefina como 0 para desativar (nunca acionar).",
         "screenshotPathLabel": "Pasta de capturas de tela",
         "dataPathLabel": "Pasta de dados",
-        "dataPathHint": "Local do banco de dados e da raiz padrão das capturas de tela. Alterar exige reiniciar, e os dados antigos devem ser migrados manualmente."
+        "dataPathHint": "Local do banco de dados e da raiz padrão das capturas de tela. Alterar exige reiniciar, e os dados antigos devem ser migrados manualmente.",
+        "backfillLabel": "Indexar capturas antigas",
+        "backfillDescription": "Adiciona ao índice de texto as capturas feitas antes de ativar a memória de tela, para que o Chat possa pesquisá-las.",
+        "backfillButton": "Indexar e reconhecer",
+        "backfillRunning": "Reconhecendo…",
+        "backfillRegistered": "{{n}} quadros registrados, reconhecendo…",
+        "backfillDone": "Concluído: {{ok}} reconhecidos, {{failed}} ignorados"
       },
       "workHours": {
         "title": "Horário de trabalho",
@@ -677,9 +684,6 @@
         "idleCountdownMin": "Libera a VRAM em {{min}}m {{sec}}s"
       }
     },
-    "describeParams": {
-      "sectionTitle": "Parâmetros de descrição de imagem"
-    },
     "summaryParams": {
       "sectionTitle": "Parâmetros de resumo de segmento"
     },
@@ -698,7 +702,7 @@
     },
     "models": {
       "sectionTitle": "Modelos",
-      "sectionDesc": "LLM de visão usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
+      "sectionDesc": "LLM usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
       "toolbar": {
         "capAll": "Todos",
         "capVision": "Visão",
@@ -715,16 +719,8 @@
       "cloud": {
         "cardTitle": "Nuvem · {{provider}}",
         "modelUnset": "(modelo não definido)",
-        "step2Tooltip": "A etapa 2 (resumo de segmento) é roteada para a API na nuvem. Edite o endpoint / modelo na aba API na nuvem.",
-        "step1DisabledTooltip": "A API na nuvem não oferece suporte a entrada de imagem (a etapa 1 requer capacidade de visão)",
-        "step2DisabledTooltip": "A API na nuvem está selecionada como backend da etapa 2. Para desativá-la, desative-a na aba API na nuvem.",
-        "step1ToggleOnTooltip": "Direcionar a Etapa 1 (descrição de imagens) para a API na nuvem — as capturas de tela serão enviadas",
-        "step1ToggleOffTooltip": "Parar de usar a nuvem na Etapa 1 (volta ao modelo vision local)",
-        "visionConfirmTitle": "Enviar capturas de tela para a nuvem?",
-        "visionConfirmMessage": "Com o Vision (Etapa 1) na nuvem, as imagens das suas capturas são enviadas a {{provider}} para análise. Elas podem conter conversas, e-mails, senhas e outros dados sensíveis. Configure antes os filtros de palavras-chave de privacidade (Configurações → Privacidade). A escolha permanece até você voltar a um modelo local.",
-        "visionConfirmAccept": "Entendo o risco, enviar capturas",
         "summaryConfirmTitle": "Enviar dados de resumo para a nuvem?",
-        "summaryConfirmMessage": "Com o Text (Etapa 2) na nuvem, nomes de aplicativos, categorias e descrições textuais das capturas são enviados a {{provider}} em cada resumo de segmento. Esta opção não envia as imagens em si.",
+        "summaryConfirmMessage": "Com o Text na nuvem, nomes de aplicativos, categorias e a linha do tempo de atividades são enviados a {{provider}} em cada resumo de segmento. Esta opção não envia as imagens em si.",
         "summaryConfirmAccept": "Entendo, continuar"
       },
       "card": {
@@ -738,13 +734,9 @@
         "pauseTooltip": "Pausa o download atual. Os bytes parciais são mantidos; ao retomar mais tarde, continua de onde você parou.",
         "resume": "Retomar",
         "resumeTooltip": "Retomar a partir de {{size}} MB já baixados.",
-        "visionLabel": "visão",
-        "visionTooltip": "Oferece suporte a entrada de imagem — pode executar a etapa 1 (descrição de imagem) e a etapa 2 (resumo de segmento).",
-        "textOnlyLabel": "apenas texto",
-        "textOnlyTooltip": "Modelo apenas de texto — pode executar a etapa 2 (resumo de segmento), mas não a etapa 1.",
         "capsTooltips": {
-          "TEXT": "Geração de texto — escrever / continuar / resumir prosa (etapa 2, resumo de segmento).",
-          "VISION": "Multimodal — entende entrada de imagem (etapa 1, descrição de imagem).",
+          "TEXT": "Geração de texto — escrever / continuar / resumir prosa.",
+          "VISION": "Multimodal — entende entrada de imagem.",
           "CODE": "Ajustado para código — melhor em escrever e explicar código.",
           "FAST": "Leve (< 1GB), velocidade em primeiro lugar; ótimo para a primeira tentativa.",
           "BALANCED": "Tamanho médio, equilibra qualidade e velocidade para o uso diário.",
@@ -752,13 +744,9 @@
           "R1": "Família DeepSeek R1 — modelo de raciocínio treinado por RL.",
           "DEFAULT": "A melhor escolha do Hindsight — o melhor equilíbrio geral."
         },
-        "step1": "Visão",
-        "step1ToggleOnTooltip": "Use este modelo para a etapa de visão (etapa 1: descrição de imagem). Substitui a seleção anterior.",
-        "step1ToggleOffTooltip": "Clique para limpar a etapa de visão (voltará ao modelo ativo legado).",
-        "step1DisabledTooltip": "Este modelo não tem capacidade de visão — não pode executar a etapa de descrição de imagem.",
         "step2": "Texto",
-        "step2ToggleOnTooltip": "Use este modelo para a etapa de texto (etapa 2: resumo de segmento). Substitui a seleção anterior.",
-        "step2ToggleOffTooltip": "Clique para limpar a etapa de texto (voltará ao modelo ativo legado).",
+        "step2ToggleOnTooltip": "Use este modelo para resumos de segmento (Text). Substitui a seleção anterior.",
+        "step2ToggleOffTooltip": "Clique para limpar a seleção de Text (voltará ao modelo ativo legado).",
         "uninstall": "Desinstalar",
         "uninstallTooltipInstalled": "Excluir arquivos locais (principal + mmproj)",
         "uninstallTooltipNotInstalled": "Não instalado",
@@ -833,26 +821,17 @@
       "rowLabel": "Analisar estas categorias",
       "rowHint": "Clique para alternar:\n• Colorido + ícone de categoria = incluído na análise de IA\n• Contorno cinza + ícone de olho fechado = excluído"
     },
-    "frame": {
-      "sectionTitle": "Amostragem de quadros",
-      "sectionDesc": "As capturas de tela podem se acumular com o tempo — primeiro remova duplicatas por similaridade, depois envie o restante ao modelo para economizar tempo e tokens.",
-      "dedupThresholdLabel": "Limite de similaridade para remoção de duplicatas",
-      "dedupThresholdHint": "Mescla duas capturas de tela quando a similaridade de cosseno delas ≥ limite. Mais alto = mais conservador (mantém mais); mais baixo = mais agressivo (mescla mais, pode descartar quadros que você queria). O padrão de 95% descarta ~70% em dados reais.",
-      "maxImagesLabel": "Máximo de imagens por segmento",
-      "maxImagesHint": "Limite de capturas de tela amostradas por segmento após a remoção de duplicatas. A etapa 1 (descrição de visão) é executada uma vez por imagem, então valores altos adicionam diretamente tempo de processamento ao segmento. Padrão 1024; aumente se quiser mais cobertura de segmentos longos."
-    },
     "external": {
       "sectionTitle": "API na nuvem (opcional)",
-      "sectionDesc": "Gere resumos de segmento por meio de um modelo na nuvem. As capturas de tela nunca são enviadas — as descrições por imagem permanecem no seu modelo de visão local.",
-      "enableLabel": "Usar a nuvem para resumos de segmento",
-      "enableHint": "Quando ativado, cada chamada de resumo de segmento vai para a API configurada abaixo. A etapa 1 (descrição por imagem) ainda é executada localmente.",
+      "sectionDesc": "Gere resumos de períodos e respostas do Chat com um modelo na nuvem. Capturas de tela nunca são enviadas.",
+      "enableLabel": "Ativar API na nuvem",
+      "enableHint": "Quando ativado, resumos de segmentos e o Chat chamam a API configurada abaixo; capturas de tela nunca são enviadas.",
       "providerLabel": "Provedor",
       "provider": {
         "openai": "OpenAI",
         "deepseek": "DeepSeek",
         "kimi": "Kimi (Moonshot global)",
         "kimi-cn": "Kimi (Moonshot China)",
-        "reuse": "Reutilizar API de texto",
         "openrouter": "OpenRouter",
         "together": "Together",
         "groq": "Groq",
@@ -871,27 +850,13 @@
       "testOkNoModels": "Conectado",
       "testFail": "Falha na conexão: {{message}}",
       "missingFields": "Preencha primeiro a Base URL e o ID do modelo",
-      "privacyNote": "Observação: com o Text (Etapa 2) na nuvem, nomes de aplicativos, categorias e descrições textuais das capturas são enviados à API. Com o Vision (Etapa 1) na nuvem, as próprias imagens das capturas são enviadas. A chave de API é salva em texto simples nas configurações locais.",
-      "visionModelLabel": "ID do modelo de visão",
-      "visionModelHint": "Usado quando o Vision (Etapa 1) é direcionado para a nuvem. Deixe vazio para reutilizar o ID do modelo acima — nesse caso, ele precisa aceitar imagens.",
-      "visionModelPlaceholder": "ex.: gpt-4o-mini / qwen-vl-plus (vazio = reutilizar o ID do modelo)",
-      "visionModelUnsupported": "O provedor de texto não tem modelos multimodais — escolha acima um provedor dedicado para o Vision, ou mantenha o Vision (Etapa 1) local.",
-      "visionProviderLabel": "API de Vision (Etapa 1)",
-      "visionProviderHint": "API usada quando a descrição de capturas (Etapa 1) roda na nuvem. Reutilize a API de texto abaixo ou aponte para outro provedor.",
-      "visionModelDedicatedHint": "ID do modelo multimodal usado para descrição de imagens neste provedor.",
-      "testTextApi": "API de texto",
-      "testVisionApi": "API de Vision",
-      "testOkBoth": "APIs de texto e Vision conectadas",
+      "privacyNote": "Nota: a API de texto atende os resumos e o Chat — nomes de apps, categorias, a linha do tempo de atividades, suas perguntas e o texto de tela correspondente são enviados a ela. As chaves de API ficam em texto simples nas configurações locais.",
       "kimiBaseUrlNote": "As chaves de api.moonshot.cn (China) e api.moonshot.ai (global) não são intercambiáveis — use o site onde sua chave foi emitida.",
       "groupTextTitle": "API de texto",
-      "groupTextHint": "Etapa 2 · resumos de segmento",
-      "groupVisionTitle": "API de Vision",
-      "groupVisionHint": "Etapa 1 · descrição de capturas",
+      "groupTextHint": "Resumos de segmento · Chat",
       "testTextButton": "Testar API de texto",
-      "testVisionButton": "Testar API de Vision",
       "testStepConn": "Rede e autenticação",
-      "testStepChat": "Modelo {{model}} responde",
-      "testStepChatVision": "Modelo {{model}} responde (com entrada de imagem)"
+      "testStepChat": "Modelo {{model}} responde"
     }
   },
   "devices": {
@@ -936,7 +901,29 @@
         "configureOAuth": "Configurar OAuth",
         "restartApp": "Reiniciar aplicativo"
       },
-      "restartHint": "Login feito em uma nova conta. Reinicie o aplicativo para mudar para o banco de dados local dessa conta."
+      "restartHint": "Login feito em uma nova conta. Reinicie o aplicativo para mudar para o banco de dados local dessa conta.",
+      "datasets": {
+        "title": "O que sincronizar",
+        "hint": "Por padrão, apenas dados básicos (estatísticas de uso, categorias) são sincronizados. Os itens abaixo contêm informações mais sensíveis e precisam ser ativados individualmente; as imagens de captura de tela nunca saem deste dispositivo.",
+        "summaries": {
+          "label": "Texto dos resumos de IA",
+          "desc": "Texto gerado dos relatórios diários / semanais, para ler em outros dispositivos.",
+          "warn": "Quando ativado, o texto completo dos seus relatórios diários e semanais (incluindo nomes de arquivos, títulos de páginas e vídeos mencionados) será enviado à área de dados de app do seu Google Drive e sincronizado com outros dispositivos da mesma conta."
+        },
+        "chat": {
+          "label": "Histórico do chat",
+          "desc": "Conversas e mensagens do chat, para continuar em outros dispositivos.",
+          "warn": "Quando ativado, todas as conversas e mensagens do Chat — incluindo suas perguntas e os trechos de texto de tela citados nas respostas — serão enviados à área de dados de app do seu Google Drive e sincronizados com outros dispositivos."
+        },
+        "memory": {
+          "label": "Memória de tela (texto completo)",
+          "desc": "Índice do texto que apareceu na sua tela, para busca entre dispositivos. O mais sensível.",
+          "warn": "Quando ativado, todo o texto do índice de memória de tela — o conteúdo literal que apareceu na sua tela (conversas, e-mails, código, páginas web etc.) — será enviado à área de dados de app do seu Google Drive e sincronizado com outros dispositivos. Este é o nível mais sensível; confirme que você confia em todos os dispositivos desta conta."
+        },
+        "confirmTitle": "Enviar “{{dataset}}” para a nuvem?",
+        "confirmNote": "Os dados ficam apenas na área de dados de app do seu próprio Google Drive (invisível a outros apps). Você pode desativar a qualquer momento e removê-los com “Limpar dados na nuvem”.",
+        "confirmAction": "Entendo o risco, ativar"
+      }
     },
     "errors": {
       "credExpired": "Credenciais expiradas. Faça login novamente.",
@@ -1008,7 +995,6 @@
       "daily": "Diário",
       "week": "Semanal",
       "month": "Mensal",
-      "chat": "Chat",
       "debug": "Depuração"
     },
     "placeholder": {
@@ -1098,10 +1084,10 @@
       "hint": "Tendências e destaques mensais de atividade. Recurso em desenvolvimento."
     },
     "daily": {
-      "subtitle": "Resumo por segmento das capturas de tela e do uso de aplicativos de hoje, gerado por um modelo de visão local.",
+      "subtitle": "Resumo por segmento da linha do tempo de atividades de hoje, gerado por um modelo local.",
       "runtimeMissing": {
         "title": "Mecanismo de IA não instalado",
-        "message": "Um modelo de embedding de imagem é necessário para a remoção de capturas de tela duplicadas. Junto com o mecanismo de visão, o download é de ~80 MB. A geração será retomada após o download terminar.",
+        "message": "O mecanismo de IA (~80 MB) é necessário para gerar resumos localmente. A geração será retomada após o download terminar.",
         "confirm": "Baixar e continuar",
         "cancel": "Cancelar"
       },
@@ -1117,15 +1103,14 @@
         "stopping": "Parando…",
         "regenerate": "Regenerar",
         "start": "Iniciar resumo",
-        "startTooltip": "O modelo de visão local analisa cada segmento por vez; a duração depende do hardware (alguns segundos por segmento na GPU, dezenas de segundos na CPU).",
+        "startTooltip": "O modelo local resume a linha do tempo de atividades de cada segmento por vez; a duração depende do hardware (alguns segundos por segmento na GPU, dezenas de segundos na CPU).",
         "regenerateTooltip": "Regenerar limpa todos os resumos de segmento deste dia e os executa novamente.",
         "noModelTooltip": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
         "delete": "Excluir",
-        "deleteTooltip": "Limpar ai_summaries (source=daily) e ai_image_descriptions deste dia (não pode ser desfeito).",
+        "deleteTooltip": "Limpar ai_summaries (source=daily) deste dia (não pode ser desfeito).",
         "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
-        "deleteConfirm": "Excluir os dados do relatório diário de {{date}}? Os resumos de segmento e as descrições por imagem serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
         "deleteConfirmTitle": "Excluir os dados do relatório diário de {{date}}?",
-        "deleteConfirmMessage": "Os resumos de segmento e as descrições por imagem serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
+        "deleteConfirmMessage": "Todos os resumos de segmento deste dia serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
         "exportMarkdown": "Exportar Markdown",
         "exportTooltip": "Exportar todos os resumos de segmento da data atual como um arquivo Markdown.",
         "exportEmptyTooltip": "Ainda não há resumos de segmento para exportar.",
@@ -1136,12 +1121,11 @@
         "dismissError": "Dispensar"
       },
       "errors": {
-        "noVisionModel": "Escolha primeiro um modelo de visão em Configurações de IA → Modelos.",
         "generationFailed": "Falha no resumo",
-        "unknown": "Erro desconhecido"
+        "unknown": "Erro desconhecido",
+        "noModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
       },
       "engineLoading": "Carregando modelo…",
-      "dedupRunning": "Removendo capturas de tela semelhantes duplicadas… ({{count}})",
       "toast": {
         "exported": "{{filename}} exportado para a sua pasta de Downloads."
       },
@@ -1151,15 +1135,10 @@
           "ok": "Gerado",
           "skipped": "Sem capturas de tela",
           "error": "Falhou",
-          "analyzing": "Analisando · {{done}} / {{total}} capturas de tela",
-          "analyzingNoTotal": "Analisando…",
           "summarizing": "Escrevendo o resumo de segmento…"
         },
         "body": {
           "empty": "Clique em \"Iniciar resumo\" acima para gerar este segmento.",
-          "analyzing": "Enviando as capturas de tela ao modelo… {{done}} / {{total}} concluídas",
-          "analyzingNoTotal": "Analisando…",
-          "summarizing": "Descrições de imagem concluídas ({{count}}); o modelo está escrevendo o resumo de segmento agora…",
           "summarizingNoTotal": "Escrevendo o resumo de segmento…",
           "skipped": "Nenhuma captura de tela neste intervalo de tempo (o computador estava desligado / tudo estava na lista de privacidade / tudo estava em categorias excluídas).",
           "skippedNoActivity": "Nada foi registrado neste intervalo de tempo (o computador estava desligado / tudo estava em categorias excluídas).",
@@ -1183,85 +1162,11 @@
         "stateEmptyContent": "_(vazio)_"
       }
     },
-    "chat": {
-      "subtitle": "Converse com a IA sobre seus dados de atividade — pesquise o histórico, verifique o tempo de aplicativos, reflita sobre o dia.",
-      "mockBadge": "MOCK",
-      "clear": "Limpar",
-      "clearTooltip": "Limpar a conversa atual",
-      "empty": {
-        "title": "O que você gostaria de perguntar?",
-        "hint": "Tente um dos exemplos abaixo, ou simplesmente digite na parte de baixo."
-      },
-      "input": {
-        "placeholder": "Pergunte qualquer coisa…",
-        "sendAria": "Enviar",
-        "sendTooltip": "Enviar (Enter)"
-      },
-      "presets": {
-        "search": {
-          "label": "Pesquisar histórico",
-          "q": "Descubra quando corrigi o bug de hover do PairingSection"
-        },
-        "stat": {
-          "label": "Estatísticas",
-          "q": "Quanto tempo passei no Cursor na semana passada?"
-        },
-        "reflect": {
-          "label": "Refletir",
-          "q": "Como esteve meu foco hoje? Me dê reflexões"
-        }
-      },
-      "mock": {
-        "search": {
-          "intro": "Encontrei 3 correspondências relevantes em resumos de segmento anteriores:",
-          "segLabelAfternoon": "Tarde",
-          "segLabelEvening": "Noite",
-          "hit1Snippet": "Ajustando o efeito de hover/brilho do PairingSection no projeto Hindsight. Tentei grid template de largura fixa vs minmax várias vezes, acabei usando :has(.nameCol:hover) para expandir a coluna inteira.",
-          "hit2Snippet": "Continuei corrigindo o problema de alinhamento à esquerda + padding-left do actionCol. Descobri que o nameCol 1fr encolhe automaticamente para anular o padding, acabei mudando o grid template para um valor fixo de 140px.",
-          "hit3Snippet": "Notei primeiro que o trigger não se alinhava à mesma linha X; suspeitei que o arredondamento subpixel do grid ou o justify-end do flex fosse a causa."
-        },
-        "stat": {
-          "intro": "Cursor na semana passada: 12h 23m no total, detalhamento dia a dia:",
-          "sumPrefix": "Total {{total}}",
-          "weekday1": "Seg",
-          "weekday2": "Ter",
-          "weekday3": "Qua",
-          "weekday4": "Qui",
-          "weekday5": "Sex",
-          "weekday6": "Sáb",
-          "weekday7": "Dom"
-        },
-        "reflect": {
-          "section1Title": "Visão geral de hoje",
-          "section1Body": "Cerca de 4 horas de foco profundo (2h de manhã + 2h à tarde); o resto do tempo foi troca de contexto e conversas. O foco esteve bom no geral, mas durante ~40 minutos à tarde a troca de aplicativos ficou alta (28 trocas/hora).",
-          "section2Title": "Destaque",
-          "section2Body": "Tarde das 14:00 às 16:00 no Cursor com quase nenhuma troca — o bloco de trabalho mais profundo do dia.",
-          "section3Title": "Sugestões",
-          "section3Body": "Depois das 19:00, os aplicativos sociais ocuparam 60% do tempo. Considere concentrá-los em uma janela focada de 30 minutos antes de dormir, deixando um bloco contínuo após o jantar para trabalho ou leitura."
-        },
-        "fallback": {
-          "text": "(mock) Esta é uma resposta de exemplo. O backend ainda não está conectado; apenas alguns grupos de palavras-chave são reconhecidos:\n• Pesquisar histórico — palavras-chave como \"pesquisar / descobrir / quando / hover / bug\"\n• Estatísticas — palavras-chave como \"quanto tempo / passei / cursor\"\n• Refletir — palavras-chave como \"refletir / foco / hoje / como esteve\""
-        }
-      }
-    },
     "debug": {
       "scope": {
         "daily": "Diário",
         "weekly": "Semanal",
         "monthly": "Mensal"
-      },
-      "pickerOptions": {
-        "maxImages15": "15 / segmento",
-        "maxImages30": "30 / segmento",
-        "maxImagesUnlimited": "Ilimitado",
-        "slots1": "1 paralelo",
-        "slots2": "2 paralelos",
-        "slots4": "4 paralelos",
-        "slots8": "8 paralelos",
-        "ctxDefault": "ctx 8K/slot",
-        "ctx16k": "ctx 16K/slot",
-        "ctx32k": "ctx 32K/slot",
-        "ctx64k": "ctx 64K/slot"
       },
       "dateNav": {
         "prevDayAria": "Dia anterior",
@@ -1283,34 +1188,16 @@
         "lastMonth": "Mês passado",
         "monthsAgo": "{{count}} meses atrás"
       },
-      "maxImagesInfo": {
-        "tooltip": "Quantas capturas de tela por segmento enviar ao modelo — menos significa depuração mais rápida.",
-        "aria": "Máximo de imagens por segmento — informações"
-      },
       "actions": {
         "stop": "Parar",
         "start": "Regenerar",
-        "startInfo": "Regenerar as descrições de imagem e os resumos de segmento deste dia.",
+        "startInfo": "Regenerar os resumos de segmento deste dia.",
         "startInfoAria": "Informações sobre o escopo de regeneração",
-        "describeOnly": "Gerar apenas descrições",
-        "describeOnlyInfo": "Apenas a etapa 1: descrições de visão por imagem de hoje, os resumos de segmento são ignorados.",
-        "describeOnlyAria": "Gerar apenas descrições de imagem (ignorar resumos de segmento)",
-        "summarizeOnly": "Gerar apenas resumos",
-        "summarizeOnlyInfo": "Apenas a etapa 2: reconstruir os resumos de segmento a partir das descrições de imagem existentes. Os segmentos sem dados da etapa 1 são marcados como ignorados.",
-        "summarizeOnlyAria": "Gerar apenas resumos de segmento (ignorar descrições de imagem)",
-        "clearDescriptions": "Excluir",
-        "clearDescriptionsTooltip": "Limpar todas as descrições de imagem deste dia (os resumos de segmento são mantidos, não pode ser desfeito).",
-        "clearDescriptionsConfirm": "Excluir todas as descrições de imagem de {{date}}? Os resumos de segmento serão mantidos. Isto não pode ser desfeito.",
-        "clearDescriptionsConfirmTitle": "Excluir todas as descrições de imagem de {{date}}?",
-        "clearDescriptionsConfirmMessage": "Os resumos de segmento serão mantidos. Isto não pode ser desfeito.",
         "clearSummaries": "Excluir",
-        "clearSummariesTooltip": "Limpar todos os resumos de segmento deste dia (as descrições de imagem são mantidas, não pode ser desfeito).",
-        "clearSummariesConfirm": "Excluir todos os resumos de segmento de {{date}}? As descrições de imagem serão mantidas. Isto não pode ser desfeito.",
+        "clearSummariesTooltip": "Limpar todos os resumos de segmento deste dia (não pode ser desfeito).",
+        "clearSummariesConfirm": "Excluir todos os resumos de segmento de {{date}}? Isto não pode ser desfeito.",
         "clearSummariesConfirmTitle": "Excluir todos os resumos de segmento de {{date}}?",
-        "clearSummariesConfirmMessage": "As descrições de imagem serão mantidas. Isto não pode ser desfeito.",
-        "exportDescriptionsMd": "Exportar Markdown",
-        "exportDescriptionsMdTooltip": "Exportar todas as descrições de imagem deste dia como um arquivo Markdown.",
-        "exportDescriptionsMdEmptyTooltip": "Ainda não há descrições de imagem para exportar.",
+        "clearSummariesConfirmMessage": "Isto não pode ser desfeito.",
         "exportSummariesMd": "Exportar Markdown",
         "exportSummariesMdTooltip": "Exportar todos os resumos de segmento deste dia como um arquivo Markdown.",
         "exportSummariesMdEmptyTooltip": "Ainda não há resumos de segmento para exportar.",
@@ -1318,89 +1205,24 @@
         "exportSavedAt": "Exportado para {{path}}",
         "exportFailed": "Falha na exportação: {{err}}",
         "startTooltipPending": "Depuração de {{type}} pendente de implementação no backend.",
-        "startTooltipReady": "Modo de depuração: executa novamente cada segmento do dia (limpa os resultados existentes), as descrições por imagem são transmitidas ao vivo.",
-        "startTooltipNoModel": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
-        "delete": "Excluir tudo",
-        "deleteTooltip": "Limpar todas as descrições de imagem + resumos de segmento deste dia (não pode ser desfeito).",
-        "deleteInfoAria": "Informações sobre o escopo de exclusão",
-        "deleteConfirm": "Excluir todos os artefatos de IA de {{date}}? Os resumos de segmento e as descrições por imagem serão limpos. Isto não pode ser desfeito.",
-        "exportJson": "Exportar JSON",
-        "exportTooltip": "Exportar todos os dados de depuração desta página como um arquivo JSON."
-      },
-      "filter": {
-        "title": "Filtro",
-        "description": "Aplica-se apenas a esta janela de depuração — não altera as Configurações de IA globais.",
-        "categoriesLabel": "Categorias a analisar",
-        "categoriesHint": "Clique para alternar:\n• Cor + ícone de categoria = incluído na análise de IA\n• Contorno cinza + ícone de olho fechado = excluído"
-      },
-      "frame": {
-        "title": "Amostragem de quadros",
-        "description": "Muitas capturas de tela em um segmento — primeiro remova duplicatas por similaridade, depois envie ao modelo para economizar tempo e tokens. Aplica-se apenas a esta janela de depuração.",
-        "dedupThresholdLabel": "Limite de similaridade para remoção de duplicatas",
-        "dedupThresholdHint": "Mescla duas capturas de tela quando a similaridade de cosseno delas ≥ limite. Mais alto = mais conservador (mantém mais); mais baixo = mais agressivo (mescla mais, pode descartar quadros que você queria). O padrão de 95% descarta ~70% em dados reais."
-      },
-      "engine": {
-        "title": "Parâmetros do mecanismo (inicialização)",
-        "description": "Alterar isto para o mecanismo, reinicia com os novos parâmetros e então executa. Após as execuções de depuração, o mecanismo é parado incondicionalmente — o próximo resumo diário será iniciado de forma preguiçosa com os padrões, para que o estado global não seja poluído."
-      },
-      "describeEngine": {
-        "title": "Parâmetros de descrição de imagem"
-      },
-      "summaryEngine": {
-        "title": "Parâmetros de resumo de segmento"
+        "startTooltipReady": "Modo de depuração: executa novamente cada segmento do dia (limpa os resultados existentes), os resumos de segmento são transmitidos ao vivo.",
+        "startTooltipNoModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
       },
       "errors": {
         "scopePending": "Depuração de {{type}} pendente de implementação no backend.",
-        "noVisionModel": "Escolha primeiro um modelo de visão em Configurações de IA → Modelos.",
-        "runFailed": "Falha na execução de depuração"
+        "runFailed": "Falha na execução de depuração",
+        "noModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
       },
       "engineLoading": "Carregando modelo…",
-      "dedupRunning": "Removendo capturas de tela semelhantes duplicadas… ({{count}})",
-      "scopePlaceholder": "Depuração de {{type}} pendente de implementação no backend. Volte para \"Diário\" para depurar o fluxo diário de duas etapas (descrições por imagem → resumo de segmento).",
-      "imagePrompt": {
-        "title": "Prompt de descrição por imagem",
-        "description": "Usado quando o modelo descreve cada captura de tela de forma independente. As alterações se aplicam apenas a esta janela.",
-        "label": "Prompt"
-      },
+      "scopePlaceholder": "Depuração de {{type}} pendente de implementação no backend. Volte para \"Diário\" para depurar o fluxo de resumo de segmento diário.",
       "segPrompt": {
         "title": "Prompt de resumo de segmento",
-        "description": "Usado ao agregar as descrições por imagem + estatísticas de aplicativos em um resumo de segmento. As alterações se aplicam apenas a esta janela.",
+        "description": "Usado ao resumir a linha do tempo de atividades do segmento. As alterações se aplicam apenas a esta janela.",
         "label": "Prompt"
-      },
-      "cloudApi": {
-        "title": "API na nuvem",
-        "description": "Executa os resumos de segmento (etapa 2) por meio de um modelo na nuvem nesta execução. O endpoint / modelo / chave de API são herdados das Configurações de IA; esta opção apenas alterna o caminho.",
-        "enableLabel": "Ativar resumos na nuvem",
-        "enableHint": "Desative para usar a etapa 2 local. Configure as credenciais da nuvem em Configurações de IA → API na nuvem."
-      },
-      "subTabs": {
-        "main": "Visão de depuração",
-        "settings": "Configurações de depuração"
-      },
-      "perImage": {
-        "title": "Descrições por imagem",
-        "descriptionBase": "saída da etapa 1 — cada captura de tela recebe uma descrição independente do LLM de visão",
-        "countSuffix": ", {{count}} entradas",
-        "descriptionSuffix": ". Clique em um nome de arquivo para visualizar o original; clique em \"Reexecutar\" no fim de uma linha para regenerar a descrição daquela imagem com os parâmetros de depuração atuais.",
-        "empty": "Nenhum dado ainda. Clique em \"Executar\" acima para que o modelo descreva cada captura de tela.",
-        "segFallback": "Seg {{idx}}",
-        "imageNoSuffix": " · #{{n}}",
-        "chipTitle": "Segmento idx={{seg}} · imagem idx={{img}} (ordem pós-remoção de duplicatas)",
-        "captureTimeTooltip": "Capturada às {{time}}",
-        "pathTooltip": "Clique para visualizar o original: {{path}}",
-        "statTooltip": "latência · tokens de prompt / conclusão",
-        "retry": "Reexecutar",
-        "retryTooltipBusy": "O resumo do dia inteiro está em execução; aguarde até terminar ou ser interrompido antes de reexecutar.",
-        "retryTooltipReady": "Regenerar a descrição desta imagem com os parâmetros de depuração atuais.",
-        "descEmpty": "(vazio)",
-        "openImageError": "Não é possível abrir / localizar a imagem: {{msg}}"
       },
       "segments": {
         "title": "Resumo de segmento",
-        "descriptionBase": "saída da etapa 2 — resumo de segmento agregado a partir das descrições por imagem + estatísticas de aplicativos",
-        "countSuffix": ", {{count}} segmentos",
-        "descriptionSuffix": ".",
-        "empty": "Nenhum resumo de segmento ainda. Clique em \"Executar\" acima para que o modelo agregue as descrições por imagem em um resumo de segmento.",
+        "empty": "Nenhum resumo de segmento ainda. Clique em \"Executar\" acima para que o modelo resuma a linha do tempo de atividades do segmento.",
         "chipTitle": "Segmento idx={{idx}}",
         "skippedFallback": "(nenhuma captura de tela neste segmento)",
         "skippedNoActivityFallback": "(nenhuma atividade neste segmento)",
@@ -1431,6 +1253,71 @@
         "error": "Erro: ",
         "accelTitle": "ID da variante de binário: {{id}}"
       }
+    }
+  },
+  "chat": {
+    "title": "Chat",
+    "thinking": "Pesquisando…",
+    "error": "Ocorreu um erro: {{msg}}",
+    "empty": {
+      "title": "O que você gostaria de perguntar?",
+      "hint": "Tente um dos exemplos abaixo, ou simplesmente digite na parte de baixo."
+    },
+    "input": {
+      "placeholder": "Pergunte qualquer coisa…",
+      "sendAria": "Enviar",
+      "sendTooltip": "Enviar (Enter)"
+    },
+    "presets": {
+      "search": {
+        "label": "Buscar histórico",
+        "q": "Quando eu li sobre ONNX?"
+      },
+      "stat": {
+        "label": "Tempo de uso",
+        "q": "Quanto tempo usei o Cursor na semana passada?"
+      },
+      "timeline": {
+        "label": "Linha do tempo",
+        "q": "O que eu estava fazendo ontem à tarde?"
+      }
+    },
+    "conversations": {
+      "new": "Nova conversa",
+      "empty": "Nenhuma conversa ainda",
+      "renameAria": "Renomear conversa",
+      "deleteAria": "Excluir conversa",
+      "deleteTitle": "Excluir esta conversa?",
+      "deleteMessage": "A conversa e todas as suas mensagens serão excluídas permanentemente.",
+      "deleteConfirm": "Excluir"
+    },
+    "privacy": {
+      "title": "Antes de enviar",
+      "routeCloud": "Modelo na nuvem: {{provider}} · {{model}}",
+      "routeLocal": "Modelo local: {{model}}",
+      "body": "Sua pergunta e os trechos de texto correspondentes da memória de tela serão enviados ao modelo como contexto.",
+      "bodyCloud": "A API na nuvem está configurada: esses dados serão enviados a um provedor terceiro.",
+      "confirm": "Entendi, enviar"
+    },
+    "badge": {
+      "cloud": "Nuvem · {{model}}",
+      "local": "Local · {{model}}",
+      "none": "Nenhum modelo selecionado"
+    },
+    "backfill": {
+      "pending": "{{count}} capturas de tela ainda não estão no índice de texto; o chat pode não encontrá-las.",
+      "action": "Indexar agora",
+      "running": "Construindo índice… {{count}} restantes",
+      "alreadyRunning": "A indexação está em execução em segundo plano, {{count}} restantes",
+      "failed": "Falha na indexação: {{msg}}"
+    },
+    "citations": {
+      "showAll": "Mostrar todas as {{count}} fontes",
+      "collapse": "Recolher fontes"
+    },
+    "model": {
+      "pickAria": "Escolher modelo do chat",
+      "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
     }
   }
 }

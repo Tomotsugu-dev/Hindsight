@@ -15,7 +15,7 @@ use crate::ai::summary::{
     precheck_week, AiOverrides, DaySummaryRunner, SummaryProgress, WeekPrecheckResp,
     WeekSummaryRunner, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,
 };
-use crate::repo::ai_summaries::{self, ImageDescriptionRow, SegmentSummaryRow};
+use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::device_filter_from_option;
 use crate::storage::DbPool;
 
@@ -68,11 +68,6 @@ pub async fn generate_day_summary(
     overrides: Option<AiOverrides>,
     // "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据
     source: Option<String>,
-    // step1_only=true：跳过 step 2 段总结。「仅生成图片描述」按钮触发。
-    // step2_only=true：跳过 step 1，从 DB 读已存图描述跑 step 2。「仅生成段总结」按钮触发。
-    // 互斥；默认都 false，daily 路径走完整 step1+step2。
-    step1_only: Option<bool>,
-    step2_only: Option<bool>,
 ) -> Result<(), String> {
     let Ok(_run) = run_lock.0.try_lock() else {
         return Err(AI_RUN_BUSY.to_string());
@@ -81,8 +76,6 @@ pub async fn generate_day_summary(
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = device_filter_from_option(device_id);
     let source = source.unwrap_or_else(|| "daily".to_string());
-    let step1_only = step1_only.unwrap_or(false);
-    let step2_only = step2_only.unwrap_or(false);
 
     cancel.0.store(false, Ordering::Relaxed);
     let runner = DaySummaryRunner::new(
@@ -93,15 +86,7 @@ pub async fn generate_day_summary(
     );
 
     if let Err(e) = runner
-        .run(
-            &source,
-            parsed_date,
-            device,
-            force_refresh,
-            overrides,
-            step1_only,
-            step2_only,
-        )
+        .run(&source, parsed_date, device, force_refresh, overrides)
         .await
     {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
@@ -149,43 +134,6 @@ pub async fn retry_summary_segment(
         .map_err(String::from)
 }
 
-/// 重跑单张图的描述——调试 tab 的"重跑"按钮调这个。
-///
-/// 不动段总结、其它图描述；只覆盖 ai_image_descriptions 一行。
-/// 期间走全局 SUMMARY_PROGRESS_EVENT 流的 `image_described` phase 推一条事件。
-#[allow(clippy::too_many_arguments)]
-#[tauri::command]
-pub async fn retry_single_image_description(
-    app: AppHandle,
-    pool: State<'_, DbPool>,
-    supervisor: State<'_, Arc<EngineSupervisor>>,
-    cancel: State<'_, SummaryCancel>,
-    run_lock: State<'_, RunLock>,
-    date: String,
-    segment_idx: u32,
-    image_index: u32,
-    overrides: Option<AiOverrides>,
-    source: Option<String>,
-) -> Result<(), String> {
-    let Ok(_run) = run_lock.0.try_lock() else {
-        return Err(AI_RUN_BUSY.to_string());
-    };
-    let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
-        .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
-    let source = source.unwrap_or_else(|| "daily".to_string());
-
-    let runner = DaySummaryRunner::new(
-        (*pool).clone(),
-        Arc::clone(&supervisor),
-        app,
-        Arc::clone(&cancel.0),
-    );
-    runner
-        .retry_one_image_description(&source, parsed_date, segment_idx, image_index, overrides)
-        .await
-        .map_err(String::from)
-}
-
 /// 设取消标记——下一段循环开头会感知到然后 Ok(()) 提早返回。
 /// 已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。
 #[tauri::command]
@@ -208,8 +156,7 @@ pub async fn get_day_summary(
         .map_err(String::from)
 }
 
-/// 删除某天的全部 AI 产物——同时清 `ai_summaries` 段总结 + `ai_image_descriptions`
-/// 逐图描述。DailyTab 删除按钮用。
+/// 删除某天的全部 AI 产物（段总结 + 历史遗留的逐图描述行）。DailyTab 删除按钮用。
 #[tauri::command]
 pub async fn clear_day_summary(
     pool: State<'_, DbPool>,
@@ -222,22 +169,7 @@ pub async fn clear_day_summary(
         .map_err(String::from)
 }
 
-/// 只删某天的逐图描述，**不**动段总结。
-/// 调试 tab「逐图描述」Section header 删除按钮用。
-#[tauri::command]
-pub async fn clear_day_image_descriptions(
-    pool: State<'_, DbPool>,
-    date: String,
-    source: Option<String>,
-) -> Result<(), String> {
-    let src = source.unwrap_or_else(|| "daily".to_string());
-    ai_summaries::clear_day_image_descriptions_only(&pool, &src, &date)
-        .await
-        .map_err(String::from)
-}
-
-/// 只删某天的段总结，**不**动逐图描述。
-/// 调试 tab「段总结结果」Section header 删除按钮用。
+/// 只删某天的段总结。调试 tab「段总结结果」Section header 删除按钮用。
 #[tauri::command]
 pub async fn clear_day_segment_summaries(
     pool: State<'_, DbPool>,
@@ -246,33 +178,6 @@ pub async fn clear_day_segment_summaries(
 ) -> Result<(), String> {
     let src = source.unwrap_or_else(|| "daily".to_string());
     ai_summaries::clear_day_summaries_only(&pool, &src, &date)
-        .await
-        .map_err(String::from)
-}
-
-/// 拉某段所有"逐图描述"——调试 tab 渲染列表用。两步生成 step 1 的产物。
-#[tauri::command]
-pub async fn get_segment_image_descriptions(
-    pool: State<'_, DbPool>,
-    date: String,
-    segment_idx: u32,
-    source: Option<String>,
-) -> Result<Vec<ImageDescriptionRow>, String> {
-    let src = source.unwrap_or_else(|| "daily".to_string());
-    ai_summaries::get_segment_image_descriptions(&pool, &src, &date, segment_idx)
-        .await
-        .map_err(String::from)
-}
-
-/// 拉某天所有段的"逐图描述"——调试 tab 一次性渲染整日时用。
-#[tauri::command]
-pub async fn get_day_image_descriptions(
-    pool: State<'_, DbPool>,
-    date: String,
-    source: Option<String>,
-) -> Result<Vec<ImageDescriptionRow>, String> {
-    let src = source.unwrap_or_else(|| "daily".to_string());
-    ai_summaries::get_day_image_descriptions(&pool, &src, &date)
         .await
         .map_err(String::from)
 }

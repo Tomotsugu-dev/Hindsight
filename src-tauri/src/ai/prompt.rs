@@ -1,8 +1,8 @@
-//! AI 总结的 prompt 模板（Phase 1B-γ）。
+//! AI 总结的 prompt 模板。
 //!
 //! - [`build_system_prompt`] 选语言 → 走用户覆盖或内置默认 → 拼用户简介
-//! - [`build_user_prompt`] 拼当前段的元数据（label / 时段 / top apps），
-//!   截图本体由 [`crate::ai::image::to_data_uri`] 转成 data URI 拼进 messages
+//! - [`build_user_prompt`] 拼当前段的元数据（label / 时段 / top apps）
+//!   和活动记录时间线（逐小时的应用时长 + 窗口标题样例）
 //!
 //! ## 数据 vs 代码
 //!
@@ -25,13 +25,6 @@ const PROMPT_EN: &str = include_str!("../../resources/prompts/system_en.md");
 const PROMPT_JA: &str = include_str!("../../resources/prompts/system_ja.md");
 const PROMPT_PT: &str = include_str!("../../resources/prompts/system_pt.md");
 const PROMPT_TW: &str = include_str!("../../resources/prompts/system_tw.md");
-
-// 两步生成 step 1：单张截图的描述 prompt（vision 调用）
-const IMAGE_DESCRIBE_ZH: &str = include_str!("../../resources/prompts/image_describe_zh.md");
-const IMAGE_DESCRIBE_EN: &str = include_str!("../../resources/prompts/image_describe_en.md");
-const IMAGE_DESCRIBE_JA: &str = include_str!("../../resources/prompts/image_describe_ja.md");
-const IMAGE_DESCRIBE_PT: &str = include_str!("../../resources/prompts/image_describe_pt.md");
-const IMAGE_DESCRIBE_TW: &str = include_str!("../../resources/prompts/image_describe_tw.md");
 
 // 周报 system prompt（基于一周内日报全文做整周回顾）
 const WEEKLY_ZH: &str = include_str!("../../resources/prompts/weekly_zh.md");
@@ -87,92 +80,22 @@ fn pick_system_base(ai: &AiConfig) -> &str {
     }
 }
 
-/// 单段送 AI 时的上下文（step 2 段总结用）。
+/// 单段送 AI 时的上下文。
 ///
-/// 两步生成下，step 2 是纯文本调用——把 step 1 拿到的每张图描述拼进 user prompt，
-/// 不再传图片本身（节省 token + 让 LLM 专注做"汇总"而不是再看图）。
+/// 单步纯文本生成：材料 = 活动记录时间线（逐小时的应用时长 + 窗口标题样例）
+/// + top apps 统计，不再有截图描述。
 ///
 /// `top_apps` 是该段内按使用时长排序的应用列表，前若干项；
-/// `image_descriptions` 是 step 1 输出的每张图描述（按抽帧顺序）。
+/// `timeline` 是从 activities 合成的逐小时清单：(time_label "HH:00-HH:00",
+/// "应用 时长（窗口标题样例）· …")，按小时升序。
 pub struct SegmentContext<'a> {
     pub label: &'a str,
     pub start_hour: u8,
     pub end_hour: u8,
     /// (display_name, minutes, category_id) 三元组，按 minutes 降序
     pub top_apps: &'a [(String, u32, String)],
-    /// step 1 落库的每张图描述，按 image_index 升序：(time_label, description)。
-    /// time_label 是从截图文件名解析出的 `HH:MM` 本地时间，让 step 2 能按时间
-    /// 顺序串故事；解析失败时是 "??:??"。
-    pub image_descriptions: &'a [(String, String)],
-    /// true = `image_descriptions` 不是截图描述，而是无截图兜底路径从 activities
-    /// 数据库合成的**逐小时使用清单**（time_label 是 "HH:00-HH:00" 小时段；描述是
-    /// "应用 时长（窗口标题样例）· …"）。user prompt 据此换用如实话术——把统计行
-    /// 冒充"截图描述"会诱导模型凭空演绎画面，也浪费了窗口标题这条主线索。
-    pub synthetic: bool,
-}
-
-/// step 1（单张图描述）的 system prompt——按当前语言选覆盖或内置默认。
-///
-/// 优先级：用户覆盖（`image_describe_overrides.system_<lang>` 非空）→ 内置默认。
-/// 调试 tab 通过 `AiOverrides.image_describe_prompt` 临时覆盖；用户在 AI 设置以后
-/// 也可暴露持久编辑入口。
-pub fn build_image_describe_system_prompt(ai: &AiConfig) -> String {
-    let lang = ai.prompt_language.as_str();
-    let user_override = pick_lang(
-        lang,
-        &ai.image_describe_overrides.system_zh,
-        &ai.image_describe_overrides.system_tw,
-        &ai.image_describe_overrides.system_en,
-        &ai.image_describe_overrides.system_ja,
-        &ai.image_describe_overrides.system_pt,
-    );
-    let base = if !user_override.trim().is_empty() {
-        user_override
-    } else {
-        pick_lang(
-            lang,
-            IMAGE_DESCRIBE_ZH,
-            IMAGE_DESCRIBE_TW,
-            IMAGE_DESCRIBE_EN,
-            IMAGE_DESCRIBE_JA,
-            IMAGE_DESCRIBE_PT,
-        )
-    };
-    base.trim_end().to_string()
-}
-
-/// step 1 的 user prompt——只包含「这张截图来自的应用」上下文，让 LLM 看图前
-/// 就知道是哪个应用，描述更准（尤其对冷门 / 内部 / 自定义皮肤的应用）。
-///
-/// `category_name` 为 None 时省略括号部分。
-/// `app_display` 是 [`ScreenshotMeta::app_display`] —— 优先 app_groups.display_name，
-/// 落回 process_name。
-///
-/// 直接吃 `lang: &str`（值为 "en"/"ja"/其它=zh）而不吃 `&AiConfig`——并发循环里每个
-/// 闭包要 owned 数据，少一层 borrow 就少一道 lifetime。
-pub fn build_image_describe_user_prompt(
-    lang: &str,
-    app_display: &str,
-    category_name: Option<&str>,
-) -> String {
-    match lang {
-        // pt 复用英文脚手架：葡语 system prompt 已主导输出语言，这层结构提示不必再翻
-        "en" | "pt" => match category_name {
-            Some(c) => format!("Screenshot is from {} (category: {})", app_display, c),
-            None => format!("Screenshot is from {}", app_display),
-        },
-        "ja" => match category_name {
-            Some(c) => format!(
-                "このスクリーンショットのアプリ：{}（分類：{}）",
-                app_display, c
-            ),
-            None => format!("このスクリーンショットのアプリ：{}", app_display),
-        },
-        _ => match category_name {
-            Some(c) => format!("这张截图来自 {}（分类：{}）", app_display, c),
-            None => format!("这张截图来自 {}", app_display),
-        },
-    }
+    /// 逐小时活动时间线：(time_label, 该小时的应用/时长/标题清单)
+    pub timeline: &'a [(String, String)],
 }
 
 /// 组装当次调用的完整 system prompt：
@@ -199,8 +122,7 @@ pub fn build_system_prompt(ai: &AiConfig) -> String {
     out
 }
 
-/// user prompt：给当前段的标签 + 时段范围 + top apps 摘要。截图作为 messages 里的
-/// `image_url` 项独立挂，不进这段 text。
+/// user prompt：当前段的标签 + 时段范围 + top apps 摘要 + 逐小时活动时间线。
 ///
 /// 文案按 system prompt 选的语言走——保证 user 跟 system 在同一语种里。
 pub fn build_user_prompt(ai: &AiConfig, ctx: &SegmentContext) -> String {
@@ -224,33 +146,20 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
             out.push_str(&format!("- {}（{} 分钟 · {}）\n", name, minutes, category));
         }
     }
-    if ctx.image_descriptions.is_empty() {
+    if ctx.timeline.is_empty() {
         out.push_str(
-            "\n（这段时间没有截图。仅基于上面的应用统计写 2-4 句概括：用了哪些应用、大致时间分配，不要虚构任何具体操作或内容。）",
-        );
-    } else if ctx.synthetic {
-        // 无截图兜底：材料是从活动数据库合成的逐小时清单，如实告知——
-        // 冒充"截图描述"会诱导模型把统计行当画面演绎
-        out.push_str(&format!(
-            "\n这段时间没有截图（用户未开启截图或截图已清理）。下面是从活动记录数据库合成的逐小时使用清单，共 {} 个小时段（每行格式：应用 累计时长（窗口标题样例）· …，按时长降序）：\n",
-            ctx.image_descriptions.len(),
-        ));
-        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
-            out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
-        }
-        out.push_str(
-            "\n请基于这份清单按时间顺序写这个时段的活动日志。窗口标题是了解具体在做什么的主要线索（文件名 / 网页标题 / 视频标题等），可以据此描述具体活动，但不要推测标题之外的细节，更不要描述任何\"画面\"。篇幅：有活动的小时 ≤2 个写 3-5 句，更多则写 5-8 句。",
+            "\n（这段时间没有逐小时的活动记录。仅基于上面的应用统计写 2-4 句概括：用了哪些应用、大致时间分配，不要虚构任何具体操作或内容。）",
         );
     } else {
         out.push_str(&format!(
-            "\n下面是该时段按时间排列的活动材料，共 {} 条。行首 [HH:MM] 的是截图描述（AI 看图生成）；行首 [HH:00-HH:00] 的是该小时没有截图、由活动记录合成的使用清单（应用 累计分钟（窗口标题样例））：\n",
-            ctx.image_descriptions.len(),
+            "\n下面是该时段的活动记录时间线，共 {} 个小时段（每行格式：应用 累计时长（窗口标题样例）· …，按时长降序）：\n",
+            ctx.timeline.len(),
         ));
-        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+        for (i, (t, d)) in ctx.timeline.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
-            "\n请把以上描述压缩成本时段的活动日志：同一活动全篇只写一次（相似条目合并），按时间顺序，遵守系统规则的段落与句数上限；严禁逐条复述，也不要编造描述里没有的内容。",
+            "\n请基于这份时间线按时间顺序写这个时段的活动日志。窗口标题是了解具体在做什么的主要线索（文件名 / 网页标题 / 视频标题等），可以据此描述具体活动，但不要推测标题之外的细节。同一活动全篇只写一次（相似条目合并），遵守系统规则的段落与句数上限；严禁逐条复述，严禁把上面的材料（时段/应用列表/时间线行）原样抄进输出——直接从日志正文第一句开始写。",
         );
     }
     out
@@ -268,22 +177,20 @@ fn build_user_prompt_en(ctx: &SegmentContext) -> String {
             out.push_str(&format!("- {} ({} min · {})\n", name, minutes, category));
         }
     }
-    if ctx.image_descriptions.is_empty() {
+    if ctx.timeline.is_empty() {
         out.push_str(
-            "\n(No screenshots for this segment — write one short sentence based on the app stats above.)",
+            "\n(No per-hour activity records for this segment — write 2-4 short sentences based only on the app stats above; do not invent specific actions or content.)",
         );
     } else {
         out.push_str(&format!(
-            "\nBelow is this segment's activity material in chronological order, {} lines total. Lines starting with [HH:MM] are screenshot descriptions (AI-generated); lines starting with [HH:00-HH:00] cover hours without screenshots, synthesized from the activity log (app total-minutes (window-title samples)):\n",
-            ctx.image_descriptions.len(),
+            "\nBelow is this segment's activity timeline, {} hourly lines (each line: app total-time (window-title samples) · …, sorted by duration):\n",
+            ctx.timeline.len(),
         ));
-        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+        for (i, (t, d)) in ctx.timeline.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
-            "\nCompress the descriptions above into this segment's journal entry: each activity \
-             appears once (merge similar lines), in time order, within the paragraph and sentence \
-             caps from the system rules. Never rewrite the lines one-by-one or invent details.",
+            "\nWrite this segment's journal entry from the timeline, in time order. Window titles are the primary clue to what was actually done (file names / page titles / video titles); do not speculate beyond them. Each activity appears once (merge similar lines), within the paragraph and sentence caps from the system rules. Never rewrite the lines one-by-one, and never copy the material above (segment line / app list / timeline) into the output — start directly with the first sentence of the journal.",
         );
     }
     out
@@ -301,21 +208,20 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
             out.push_str(&format!("- {}（{} 分 · {}）\n", name, minutes, category));
         }
     }
-    if ctx.image_descriptions.is_empty() {
+    if ctx.timeline.is_empty() {
         out.push_str(
-            "\n（この時間帯のスクリーンショットがありません。上記のアプリ統計のみに基づいて一文で書いてください。）",
+            "\n（この時間帯には時間別の活動記録がありません。上記のアプリ統計のみに基づいて 2〜4 文で書いてください。具体的な操作や内容を捏造しないでください。）",
         );
     } else {
         out.push_str(&format!(
-            "\n以下はこの時間帯の活動材料です（時系列順、全 {} 行）。行頭 [HH:MM] はスクリーンショット記述（AI 生成）、行頭 [HH:00-HH:00] はスクリーンショットのない時間帯を活動記録から合成した使用一覧（アプリ 累計分（ウィンドウタイトル例））：\n",
-            ctx.image_descriptions.len(),
+            "\n以下はこの時間帯の活動記録タイムラインです（全 {} 行、各行：アプリ 累計時間（ウィンドウタイトル例）· …、時間降順）：\n",
+            ctx.timeline.len(),
         ));
-        for (i, (t, d)) in ctx.image_descriptions.iter().enumerate() {
+        for (i, (t, d)) in ctx.timeline.iter().enumerate() {
             out.push_str(&format!("{}. [{}] {}\n", i + 1, t, d.trim()));
         }
         out.push_str(
-            "\n以上の記述をこの時間帯の活動ログに圧縮してください：同じ活動は全体で一度だけ（類似行は統合）、\
-             時系列順、システム規則の段落数・文数上限を厳守。1 条ずつ書き写さず、記述にない情報も書かないでください。",
+            "\nこのタイムラインに基づき、時系列順にこの時間帯の活動ログを書いてください。ウィンドウタイトル（ファイル名・ページタイトル・動画タイトル）が主要な手がかりです。タイトル以外の細部を推測しないでください。同じ活動は全体で一度だけ（類似行は統合）、システム規則の段落数・文数上限を厳守。1 行ずつ書き写さず、上の材料（時間帯行・アプリ一覧・タイムライン行）を出力にコピーしないでください——ログ本文の最初の一文から直接書き始めてください。",
         );
     }
     out

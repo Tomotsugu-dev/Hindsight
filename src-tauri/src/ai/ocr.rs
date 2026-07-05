@@ -62,11 +62,18 @@ fn batch_for(ladder: u32) -> usize {
         _ => 1,
     }
 }
-/// ort 线程数:消化是后台任务,不许吃满用户整机(ort 默认占所有核)。
+/// ort 线程数(后台/常驻):消化是后台任务,不许吃满用户整机(ort 默认占所有核)。
 /// 取核数的 1/4、夹在 [2,4]——32 核台机用 4 线程无感,4 核笔记本只占 2 线程。
 pub(crate) fn ort_threads() -> usize {
     let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
     (cores / 4).clamp(2, 4)
+}
+
+/// ort 线程数(手动全速):用户主动点「立即回填」时希望尽快清完积压,
+/// 放开到 核数-2(留两核给 UI),夹在 [4,16]——超过 16 线程单帧推理收益趋零。
+pub(crate) fn ort_threads_fast() -> usize {
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    cores.saturating_sub(2).clamp(4, 16)
 }
 
 /// 模型目录:`<data_root>/ai/ocr/`。
@@ -89,9 +96,19 @@ pub struct OcrEngine {
 }
 
 impl OcrEngine {
-    /// 从 [`model_dir`] 加载两个会话 + 字典。onnxruntime 动态库缺失时返回
-    /// [`Error::EmbeddingRuntimeMissing`](与嵌入模型同一条下载引导链路)。
+    /// 后台/常驻模式加载:保守线程数,不打扰前台使用。
     pub fn load() -> Result<Self> {
+        Self::load_with_threads(ort_threads())
+    }
+
+    /// 手动全速模式加载:用户点「立即回填」时用,尽快清完积压。
+    pub fn load_fast() -> Result<Self> {
+        Self::load_with_threads(ort_threads_fast())
+    }
+
+    /// 从 [`model_dir`] 加载两个会话 + 字典。onnxruntime 动态库缺失时返回
+    /// [`Error::EmbeddingRuntimeMissing`](统一的下载引导链路)。
+    fn load_with_threads(threads: usize) -> Result<Self> {
         if !crate::ai::embedding_runtime::is_installed().unwrap_or(false) {
             return Err(Error::EmbeddingRuntimeMissing);
         }
@@ -104,11 +121,9 @@ impl OcrEngine {
         if dict.is_empty() {
             return Err(Error::Ocr("字典为空".into()));
         }
+        log::info!("OCR 引擎加载,intra threads = {threads}");
         let open = |name: &str| -> Result<Session> {
-            Session::builder()
-                .and_then(|b| b.with_intra_threads(ort_threads()))
-                // 动态形状下 memory pattern 只会放大内存池滞留,关掉
-                .and_then(|b| b.with_memory_pattern(false))
+            crate::ai::onnx_session_builder(threads)
                 .and_then(|b| b.commit_from_file(dir.join(name)))
                 .map_err(|e| Error::Ocr(format!("加载 {name} 失败: {e}")))
         };
@@ -482,8 +497,15 @@ mod tests {
 
         let t1 = std::time::Instant::now();
         let lines = engine.recognize(&img).unwrap();
-        println!("识别: {:?} | {} 行", t1.elapsed(), lines.len());
-        for l in &lines {
+        println!(
+            "识别(冷,含 EP 预热): {:?} | {} 行",
+            t1.elapsed(),
+            lines.len()
+        );
+        let t2 = std::time::Instant::now();
+        let _ = engine.recognize(&img).unwrap();
+        println!("识别(热): {:?}", t2.elapsed());
+        for l in lines.iter().take(5) {
             println!("  {}", l.text);
         }
         assert!(!lines.is_empty(), "至少识别出一行");

@@ -1,43 +1,30 @@
 //! AI 总结的具体业务操作：
 //!
-//! - [`describe_images`]：step 1 逐图描述（支持并发）
-//! - [`summarize_segment`]：step 2 段总结（纯文本调用，写库 + 返回行）
-//! - [`build_step2`]：根据 settings 构造 step 2 chat 路由（本地 / 外部）
-//! - [`extract_time_label`]：从截图文件名解析 `HH:MM` 标签
+//! - [`build_activity_timeline`]：从 activities 合成段内逐小时活动时间线（唯一材料源）
+//! - [`summarize_segment`]：段总结（纯文本调用，写库 + 返回行）
+//! - [`build_step2`]：根据 settings 构造段总结 chat 路由（本地 / 外部）
 //!
 //! 这些函数从 `DaySummaryRunner` 拎出来便于单测与代码审查；调用方传 owned
-//! 数据 + Arc 的 supervisor / cancel / pool / app，避免持引用跨 await。
+//! 数据 + Arc 的 supervisor / cancel / pool，避免持引用跨 await。
 
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter};
-
 use crate::ai::config::AiConfig;
-use crate::ai::image::to_data_uri;
-use crate::ai::llm::{ChatClient, ExternalChatClient, Step1Chat, Step2Chat};
-use crate::ai::prompt::{
-    build_image_describe_user_prompt, build_system_prompt, build_user_prompt, SegmentContext,
-};
+use crate::ai::llm::{ChatClient, ExternalChatClient, Step2Chat};
+use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
-use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::capture::privacy;
 use crate::error::{Error, Result};
-use crate::repo::ai_summaries::{self, ImageDescriptionRow, ScreenshotMeta, SegmentSummaryRow};
+use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
-
-/// 总结 LLM 输出时给段加的图片缩放上限——长边 768 px 是 vision LLM 的常见甜点：
-/// 文字仍可读，token 数比原图少一半以上。
-pub const SUMMARY_IMAGE_MAX_DIM: u32 = 768;
 
 /// 把一个 future 变成"可被停止按钮中断的"：每 250ms 轮询一次 cancel 标志，
 /// 置位则**丢弃 future**（reqwest 请求随之断开连接）并返回 [`Error::SummaryCancelled`]。
 ///
-/// 之前 cancel 只在段/图边界检查——正在路上的 LLM 请求（本地超时 600s）和
-/// 引擎加载（最长 90s）都不响应，用户点"停止"后 UI 像卡死。llama-server 检测到
-/// 客户端断开会停掉该 slot 的生成，云端 API 同理，中断是安全的。
+/// 正在路上的 LLM 请求（本地超时 600s）和引擎加载（最长 90s）都能被中断；
+/// llama-server 检测到客户端断开会停掉该 slot 的生成，云端 API 同理，中断是安全的。
 pub(crate) async fn cancellable<T>(
     cancel: &Arc<AtomicBool>,
     fut: impl std::future::Future<Output = Result<T>>,
@@ -55,243 +42,9 @@ pub(crate) async fn cancellable<T>(
     }
 }
 
-// ───────────────────────────── step 1: describe_images ─────────────────────────────
+// ───────────────────────────── 段总结 ─────────────────────────────
 
-/// 单张图描述任务的 owned 上下文。
-///
-/// 把所有 per-image 参数打包成一个结构体，避免在 `buffer_unordered` 闭包里
-/// 逐字段 clone 时遗漏新加字段；新增 image-level 参数时只改本结构体定义即可。
-pub(crate) struct ImageWorkItem {
-    pub index: u32,
-    pub segment_idx: u32,
-    pub total_segments: u32,
-    pub source: String,
-    pub date_str: String,
-    pub prompt_lang: String,
-    pub describe_system: String,
-    pub model: String,
-    pub img_path: String,
-    pub app_display: String,
-    pub category_name: Option<String>,
-}
-
-/// step 1 的图描述编排：可串行可并发。
-///
-/// `parallel` 决定同时跑多少张图——为了真正并发，llama-server 那边
-/// `-np N` 也得开（`AiOverrides.parallel_slots` 一并传）；只开这边并发
-/// 不传 `-np` 的话 llama.cpp 内部还是排队，速度不变。
-///
-/// 错误分两类：
-/// - DB 写入失败（任意一张图）→ `?` 抛上去，整段失败
-/// - data_uri / chat 失败 → log + 跳过该张，不阻塞其它
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn describe_images(
-    pool: DbPool,
-    app: AppHandle,
-    supervisor: Arc<EngineSupervisor>,
-    cancel: Arc<AtomicBool>,
-    step1: Step1Chat,
-    picked: &[ScreenshotMeta],
-    prompt_lang: String,
-    describe_system: String,
-    model: String,
-    date_str: String,
-    source: String,
-    segment_idx: u32,
-    total_segments: u32,
-    parallel: usize,
-) -> Result<Vec<(String, String)>> {
-    let tasks = build_image_tasks(
-        picked,
-        &prompt_lang,
-        &describe_system,
-        &model,
-        &date_str,
-        &source,
-        segment_idx,
-        total_segments,
-    );
-    // 云端 API 有 RPM 限制（如 Moonshot 低档 20 RPM）：本地 llama 的 parallel_slots
-    // 直接套云端会瞬间打爆限流。云端 step 1 并发钳到 2，配合 client 层的 429
-    // 退避重试，任何账户配额档位都能自适应收敛。
-    let parallel = if matches!(step1, Step1Chat::External(_)) {
-        parallel.min(2)
-    } else {
-        parallel
-    };
-    let raw = execute_parallel(tasks, step1, pool, app, supervisor, cancel, parallel).await;
-    collect_descriptions(raw)
-}
-
-/// 把 `picked` 转成 `ImageWorkItem` 列表（owned 数据，丢给并发执行器消费）。
-#[allow(clippy::too_many_arguments)]
-fn build_image_tasks(
-    picked: &[ScreenshotMeta],
-    prompt_lang: &str,
-    describe_system: &str,
-    model: &str,
-    date_str: &str,
-    source: &str,
-    segment_idx: u32,
-    total_segments: u32,
-) -> Vec<ImageWorkItem> {
-    picked
-        .iter()
-        .enumerate()
-        .map(|(i, meta)| ImageWorkItem {
-            index: i as u32,
-            segment_idx,
-            total_segments,
-            source: source.to_string(),
-            date_str: date_str.to_string(),
-            prompt_lang: prompt_lang.to_string(),
-            describe_system: describe_system.to_string(),
-            model: model.to_string(),
-            img_path: meta.path.clone(),
-            app_display: meta.app_display.clone(),
-            category_name: meta.category_name.clone(),
-        })
-        .collect()
-}
-
-/// 并发执行所有 image task，收集每个的结果（None = 跳过、Some = 描述成功、Err = DB 写入失败）。
-///
-/// 用 `buffer_unordered` 顺序不固定；调用 [`collect_descriptions`] 排序后才能给 step 2 用。
-async fn execute_parallel(
-    tasks: Vec<ImageWorkItem>,
-    chat: Step1Chat,
-    pool: DbPool,
-    app: AppHandle,
-    supervisor: Arc<EngineSupervisor>,
-    cancel: Arc<AtomicBool>,
-    parallel: usize,
-) -> Vec<Result<Option<(u32, String, String)>>> {
-    use futures_util::StreamExt;
-    let stream = futures_util::stream::iter(tasks.into_iter().map(|item| {
-        let chat = chat.clone();
-        let pool = pool.clone();
-        let app = app.clone();
-        let supervisor = Arc::clone(&supervisor);
-        let cancel = Arc::clone(&cancel);
-        async move { process_one_image(item, chat, pool, app, supervisor, cancel).await }
-    }));
-    stream.buffer_unordered(parallel.max(1)).collect().await
-}
-
-/// 单张图：to_data_uri → chat → 写 DB → emit `image_described`。
-///
-/// 返回 `Ok(Some((index, time_label, description)))` 表示成功；
-/// `Ok(None)` 表示该张被跳过（坏文件 / chat 失败 / 取消信号）；
-/// `Err` 仅在 DB 写入失败时抛——会让整段失败。
-async fn process_one_image(
-    item: ImageWorkItem,
-    chat: Step1Chat,
-    pool: DbPool,
-    app: AppHandle,
-    supervisor: Arc<EngineSupervisor>,
-    cancel: Arc<AtomicBool>,
-) -> Result<Option<(u32, String, String)>> {
-    if cancel.load(Ordering::Relaxed) {
-        return Ok(None);
-    }
-
-    let time_label = extract_time_label(&item.img_path);
-
-    let data_uri = match to_data_uri(Path::new(&item.img_path), SUMMARY_IMAGE_MAX_DIM).await {
-        Ok(u) => u,
-        Err(e) => {
-            log::warn!("跳过坏截图 {}: {e}", item.img_path);
-            return Ok(None);
-        }
-    };
-
-    // per-image 现拼 user prompt：每张图带上自己的应用名（+ 分类）
-    let describe_user = build_image_describe_user_prompt(
-        &item.prompt_lang,
-        &item.app_display,
-        item.category_name.as_deref(),
-    );
-
-    let single = std::slice::from_ref(&data_uri);
-    // 推理 guard 只对本地引擎有意义（idle watcher 防猝杀）；云端调用不占本地引擎
-    let _inflight = if chat.is_local() {
-        Some(supervisor.acquire_inference())
-    } else {
-        None
-    };
-    // cancellable：停止按钮置位后 250ms 内中断在途请求，本张按跳过处理，
-    // 外层循环随即在下一项的 cancel 检查处退出
-    let (desc, usage) = match cancellable(
-        &cancel,
-        chat.chat_with_images(&item.describe_system, &describe_user, single),
-    )
-    .await
-    {
-        Ok(r) => r,
-        Err(Error::SummaryCancelled) => return Ok(None),
-        Err(e) => {
-            log::warn!("图描述失败 {}: {e}", item.img_path);
-            return Ok(None);
-        }
-    };
-
-    ai_summaries::upsert_image_description(
-        &pool,
-        &ImageDescriptionRow {
-            source: item.source.clone(),
-            local_date: item.date_str.clone(),
-            segment_idx: item.segment_idx,
-            image_index: item.index,
-            screenshot_path: item.img_path.clone(),
-            description: desc.clone(),
-            model: item.model.clone(),
-            generated_at: utc_now_rfc3339(),
-            latency_ms: Some(usage.latency_ms),
-            prompt_tokens: usage.prompt_tokens,
-            completion_tokens: usage.completion_tokens,
-        },
-    )
-    .await?;
-
-    let mut p_img = SummaryProgress::base(
-        item.source.clone(),
-        item.date_str.clone(),
-        "image_described",
-        item.total_segments,
-    );
-    p_img.segment_idx = Some(item.segment_idx);
-    p_img.image_index = Some(item.index);
-    p_img.image_path = Some(item.img_path.clone());
-    p_img.image_description = Some(desc.clone());
-    p_img.latency_ms = Some(usage.latency_ms);
-    p_img.prompt_tokens = usage.prompt_tokens;
-    p_img.completion_tokens = usage.completion_tokens;
-    if let Err(e) = app.emit(SUMMARY_PROGRESS_EVENT, &p_img) {
-        log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
-    }
-
-    Ok(Some((item.index, time_label, desc)))
-}
-
-/// 把 [`execute_parallel`] 的乱序结果按 `image_index` 排序，
-/// 丢掉 None / 抛出 Err，最终返回给 step 2 用的 `(time_label, description)` 列表。
-fn collect_descriptions(
-    raw: Vec<Result<Option<(u32, String, String)>>>,
-) -> Result<Vec<(String, String)>> {
-    let mut triples: Vec<(u32, String, String)> = Vec::with_capacity(raw.len());
-    for r in raw {
-        if let Some(triple) = r? {
-            triples.push(triple);
-        }
-    }
-    // buffer_unordered 完成顺序不可预期；按 image_index 排序后才能给 step 2 用
-    triples.sort_by_key(|(i, _, _)| *i);
-    Ok(triples.into_iter().map(|(_, t, d)| (t, d)).collect())
-}
-
-// ───────────────────────────── step 2: summarize_segment ─────────────────────────────
-
-/// step 2 段总结：拿 step1 的描述 + top_apps 拼 prompt → 调 LLM → 落库。
+/// 段总结：拿活动时间线 + top_apps 拼 prompt → 调 LLM → 落库。
 ///
 /// 落库语义：
 /// - chat 成功 → status = "ok"
@@ -311,12 +64,10 @@ pub(crate) async fn summarize_segment(
     start_hour: u8,
     end_hour: u8,
     segment_idx: u32,
-    descriptions: &[(String, String)],
+    timeline: &[(String, String)],
     top_apps: &[(String, u32, String)],
     step2_model: String,
-    // true = descriptions 是无截图兜底合成的逐小时清单（见 SegmentContext::synthetic）
-    synthetic: bool,
-    // 停止按钮的取消标志：置位时中断在途的 step 2 请求，向上抛 SummaryCancelled
+    // 停止按钮的取消标志：置位时中断在途请求，向上抛 SummaryCancelled
     //（**不写行**——该段下次生成自然重跑），由 runner 统一 emit cancelled 收尾
     cancel: &Arc<AtomicBool>,
 ) -> Result<(SegmentSummaryRow, &'static str)> {
@@ -325,23 +76,21 @@ pub(crate) async fn summarize_segment(
         start_hour,
         end_hour,
         top_apps,
-        image_descriptions: descriptions,
-        synthetic,
+        timeline,
     };
     let system = build_system_prompt(ai);
     let user_text = build_user_prompt(ai, &ctx);
 
-    // 本地 step2 走自家引擎，需要 acquire 防止 watcher 在请求中途 stop；
-    // 云端 step2 (External) 不动 supervisor，不 acquire。
+    // 本地走自家引擎，需要 acquire 防止 watcher 在请求中途 stop；
+    // 云端 (External) 不动 supervisor，不 acquire。
     let _inflight = step2.is_local().then(|| supervisor.acquire_inference());
     let chat_result = cancellable(cancel, step2.chat(&system, &user_text, &[])).await;
     if matches!(chat_result, Err(Error::SummaryCancelled)) {
         return Err(Error::SummaryCancelled);
     }
     let (row, status_str): (SegmentSummaryRow, &'static str) = match chat_result {
-        // step 2 是纯文本调用，本表只关心 content；usage 暂不落 ai_summaries
-        // （需要时未来加列）。落库的 model 用 step2_model——本地是 GGUF 文件名，
-        // 外部是用户填的云端模型 ID（如 gpt-4o-mini）
+        // 落库的 model 用 step2_model——本地是 GGUF 文件名，
+        // 外部是用户填的云端模型 ID（如 deepseek-chat）
         Ok((content, _usage)) => (
             SegmentSummaryRow {
                 source: source.to_string(),
@@ -378,7 +127,6 @@ pub(crate) async fn summarize_segment(
 
     // upsert 失败不让整轮 daily 抛飞——磁盘满 / DB lock 时 row 写不进去也得让上层
     // emit segment_done 把当前 row 推给前端（至少能看到红色 error badge + 错误描述）。
-    // 老逻辑 .await? 会 propagate，让后续段连 emit 都发不出，前端整页空白。
     if let Err(e) = ai_summaries::upsert_segment(pool, &row).await {
         log::error!(
             "ai_summaries upsert 失败（段 {} status={}）：{e}",
@@ -389,65 +137,16 @@ pub(crate) async fn summarize_segment(
     Ok((row, status_str))
 }
 
-// ───────────────────────────── 公共小工具 ─────────────────────────────
-
-/// 从截图绝对路径里解析本地时间标签 `HH:MM`。
-///
-/// 文件名约定（capture/screenshot.rs:48 写入）：`HHMMSS_NNN.jpg`，按本机时区。
-/// 解析失败时回退到 "??:??"——不能让缺时间戳阻塞段总结。
-pub(crate) fn extract_time_label(screenshot_path: &str) -> String {
-    let stem = std::path::Path::new(screenshot_path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-    // 取下划线前部分 "HHMMSS"
-    let head = stem.split('_').next().unwrap_or("");
-    if head.len() == 6 && head.chars().all(|c| c.is_ascii_digit()) {
-        let hh = &head[0..2];
-        let mm = &head[2..4];
-        return format!("{hh}:{mm}");
-    }
-    "??:??".to_string()
-}
-
-/// 根据 [`AiConfig::summary_use_cloud`] 构造 step 2 的 chat 路由。
+/// 根据 [`AiConfig::summary_use_cloud`] 构造段总结的 chat 路由。
 ///
 /// - false：[`Step2Chat::Local`]——本地端口；`local_model_label` 是当前引擎实际加载的
-///   GGUF 文件名（即 `effective_summary_main`，跟 step 1 可能不同），用作
-///   `model_label()` 落库 + chat completions 请求的 model 字段
+///   GGUF 文件名（即 `effective_summary_main`），用作 `model_label()` 落库 +
+///   chat completions 请求的 model 字段
 /// - true：[`Step2Chat::External`] 包一个新建的 [`ExternalChatClient`]，
 ///   走用户填的 endpoint / model / api_key
 ///
-/// `summary_use_cloud()` 同时检查 `summary_main == SUMMARY_CLOUD_SENTINEL` 且
-/// `external_enabled = true` —— 用户在 Models tab 的云端卡点了 Text + 云端 API tab
-/// 启用 toggle 开着，两个条件都满足才路由到 External。
-///
 /// 外部 client 构造失败（endpoint 空、model 空）会向上抛——这种情况说明用户
 /// 选了 cloud 但配置不全，让顶层错误条直接显示让他去填。
-/// step 1 图片描述的 chat 客户端构造。`describe_use_cloud()`（用户在模型卡显式
-/// 把 Vision 指到云端 + external 启用，前端已弹过"截图将上传"的隐私确认）时走
-/// [`ExternalChatClient`]（模型 ID 用 `vision_model`，空则复用 `model`）；
-/// 否则本地 [`ChatClient`]。外部构造失败（endpoint / model 空）向上抛，
-/// 顶层错误条提示用户去补配置。
-pub(crate) fn build_step1(ai: &AiConfig, local_port: u16) -> Result<Step1Chat> {
-    let max_tokens = ai.describe_max_tokens();
-    if ai.describe_use_cloud() {
-        let ext = ExternalChatClient::new(
-            ai.cloud_vision_endpoint(),
-            ai.cloud_vision_model().to_string(),
-            ai.cloud_vision_api_key().to_string(),
-            max_tokens,
-        )?;
-        Ok(Step1Chat::External(ext))
-    } else {
-        Ok(Step1Chat::Local(ChatClient::new(
-            local_port,
-            ai.effective_describe_main().to_string(),
-            max_tokens,
-        )?))
-    }
-}
-
 pub(crate) fn build_step2(
     ai: &AiConfig,
     local_port: u16,
@@ -471,11 +170,7 @@ pub(crate) fn build_step2(
     }
 }
 
-/// 让某段直接落 `skipped_no_activity` 行 —— 既无截图也无 activities 时的真兜底。
-///
-/// "无截图但 activities 有数据" 的旧 `"skipped_no_screenshots"` 状态值仍由
-/// 数据库里的历史行使用；新一代生成路径会先尝试合成描述再走 step 2，剩下的
-/// 真空段才落本状态。
+/// 让某段直接落 `skipped_no_activity` 行 —— 该段完全没有活动记录时的兜底。
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn upsert_skipped_no_activity(
     pool: &DbPool,
@@ -506,15 +201,10 @@ pub(crate) async fn upsert_skipped_no_activity(
     .await
 }
 
-// ───────── activities 兜底：截图为空时从 activities 表合成段描述 ─────────
+// ───────── 活动时间线：从 activities 表合成段材料（唯一材料源） ─────────
 
-/// 当一段时间没有截图时，从 `activities` 表合成「按小时」的活动描述，
-/// 形状与 step 1 的 `(time_label, description)` 一致，可直接喂给 [`summarize_segment`]。
-///
-/// 用于 step 1 路径 [`crate::ai::summary_runner::DaySummaryRunner::run_one_segment`]
-/// 的 `metas.is_empty()` 分支兜底——只要 activities 还有行（用户关了截图 / 截图过期
-/// 被清 / OS 权限抖动），就把窗口标题 + 时长汇总成一段文字喂给 step 2，避免段卡片
-/// 在 UI 上彻底空白。
+/// 从 `activities` 表合成段内「按小时」的活动时间线，形状 `(time_label, desc)`，
+/// 直接喂给 [`summarize_segment`]。这是日报的唯一材料源（不再有截图描述）。
 ///
 /// SQL 语义：
 /// - `local_date` + `local_hour` 在 `[start_hour, end_hour)` 范围内
@@ -530,7 +220,7 @@ pub(crate) async fn upsert_skipped_no_activity(
 ///
 /// 空小时（该小时无任何活动）不产生条目；整段无活动 → 返回 `vec![]`，
 /// 调用方应据此回退到 `skipped_no_activity`。
-pub(crate) async fn build_synthetic_descriptions_from_activities(
+pub(crate) async fn build_activity_timeline(
     pool: &DbPool,
     date_str: &str,
     start_hour: u8,
@@ -605,12 +295,12 @@ pub(crate) async fn build_synthetic_descriptions_from_activities(
         })
         .await?;
 
-    Ok(format_synthetic_hours(rows, privacy_app_keywords))
+    Ok(format_timeline_hours(rows, privacy_app_keywords))
 }
 
 /// 把 SQL 行（hour, app, title, dur）按小时 / 应用聚合成 `(time_label, desc)` 列表。
 /// 抽函数让单测可以纯粹喂结构化数据，不依赖 SQLite。
-fn format_synthetic_hours(
+fn format_timeline_hours(
     rows: Vec<(u8, String, Option<String>, i64)>,
     privacy_app_keywords: &[String],
 ) -> Vec<(String, String)> {
@@ -689,8 +379,8 @@ fn format_secs_human(secs: i64) -> String {
 }
 
 /// 去重保序后按字符数降序取前 5 个，"、" 分隔。
-/// 窗口标题是无截图兜底总结的主线索（文件名 / 网页标题 / 视频标题），多带一点
-/// 让 step 2 有素材可写；5 条 × 每小时几个应用的 prompt 开销可忽略。
+/// 窗口标题是总结的主线索（文件名 / 网页标题 / 视频标题），多带一点
+/// 让模型有素材可写；5 条 × 每小时几个应用的 prompt 开销可忽略。
 fn pick_titles(titles: &[String]) -> String {
     use std::collections::HashSet;
     let mut seen: HashSet<&str> = HashSet::new();
@@ -704,43 +394,117 @@ fn pick_titles(titles: &[String]) -> String {
     unique.into_iter().take(5).collect::<Vec<_>>().join("、")
 }
 
-/// 「融合时间线」：截图描述 + 无截图小时的活动合成行，按时间排序合并。
-///
-/// 截图行 time_label 是 `HH:MM`，活动合成行是 `HH:00-HH:00`（见
-/// [`build_synthetic_descriptions_from_activities`]）——label 格式本身就是来源标记，
-/// user prompt 的材料头据此向 LLM 说明两种行各自的含义。
-/// 覆盖判定按小时粒度：该小时内只要有任意一张截图描述，就不再插活动行。
-pub(crate) fn merge_descriptions_with_activity_gaps(
-    descriptions: Vec<(String, String)>,
-    synthetic_rows: Vec<(String, String)>,
-) -> Vec<(String, String)> {
-    use std::collections::HashSet;
-
-    let covered: HashSet<u8> = descriptions
-        .iter()
-        .filter_map(|(t, _)| t.get(0..2)?.parse::<u8>().ok())
-        .collect();
-
-    let gaps = synthetic_rows.into_iter().filter(|(label, _)| {
-        label
-            .get(0..2)
-            .and_then(|h| h.parse::<u8>().ok())
-            .is_some_and(|h| !covered.contains(&h))
-    });
-
-    let mut merged: Vec<(String, String)> = descriptions.into_iter().chain(gaps).collect();
-    merged.sort_by_key(|(t, _)| {
-        let h: u32 = t.get(0..2).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let m: u32 = t.get(3..5).and_then(|s| s.parse().ok()).unwrap_or(0);
-        h * 60 + m
-    });
-    merged
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+
+    /// 端到端:真实主库 → 新单步管线(活动时间线 + 云端文本模型)→ 写回 daily 日报。
+    /// 跑法:
+    ///   `DAILY_E2E_DATE=2026-07-05 CHAT_E2E_ENDPOINT=... CHAT_E2E_MODEL=... CHAT_E2E_KEY=... \
+    ///    cargo test --lib summary_operations::tests::e2e -- --ignored --nocapture`
+    /// 写的是真实 ai_summaries(source='daily'),会先清掉当天旧行。
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_regenerate_daily_report() {
+        let date = std::env::var("DAILY_E2E_DATE").expect("设 DAILY_E2E_DATE=YYYY-MM-DD");
+        let endpoint = std::env::var("CHAT_E2E_ENDPOINT").expect("设 CHAT_E2E_ENDPOINT");
+        let model = std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL");
+        let api_key = std::env::var("CHAT_E2E_KEY").unwrap_or_default();
+
+        let pool = DbPool::open(&crate::storage::db_path().unwrap())
+            .await
+            .unwrap();
+        let cfg = crate::repo::settings::load(&pool).await.unwrap();
+        // 强制云端文本路由(用传入凭据),其余(段划分/排除分类/语言/简介)沿用用户设置
+        let mut ai = cfg.ai.clone();
+        ai.external_enabled = true;
+        ai.summary_main = crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string();
+        ai.endpoint = endpoint;
+        ai.model = model;
+        ai.api_key = api_key;
+
+        ai_summaries::clear_day(&pool, "daily", &date)
+            .await
+            .unwrap();
+
+        let supervisor = Arc::new(EngineSupervisor::new());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let step2 = build_step2(&ai, 0, "").unwrap();
+
+        for (idx, seg) in ai.segments.iter().enumerate() {
+            if seg.end_hour <= seg.start_hour {
+                continue;
+            }
+            let timeline = build_activity_timeline(
+                &pool,
+                &date,
+                seg.start_hour,
+                seg.end_hour,
+                &ai.excluded_categories,
+                &DeviceFilter::All,
+                &cfg.privacy_app_keywords,
+            )
+            .await
+            .unwrap();
+            println!(
+                "\n===== 段 {idx} {}({:02}:00-{:02}:00) 时间线 {} 行",
+                seg.label,
+                seg.start_hour,
+                seg.end_hour,
+                timeline.len()
+            );
+            if timeline.is_empty() {
+                upsert_skipped_no_activity(
+                    &pool,
+                    "daily",
+                    &date,
+                    idx as u32,
+                    &seg.label,
+                    seg.start_hour,
+                    seg.end_hour,
+                    step2.model_label().to_string(),
+                )
+                .await
+                .unwrap();
+                println!("(无活动,skipped)");
+                continue;
+            }
+            let top_apps = crate::repo::ai_summaries::list_segment_top_apps(
+                &pool,
+                &date,
+                seg.start_hour,
+                seg.end_hour,
+                &ai.excluded_categories,
+                DeviceFilter::All,
+                8,
+            )
+            .await
+            .unwrap_or_default();
+            let (row, status) = summarize_segment(
+                &pool,
+                &step2,
+                &supervisor,
+                &ai,
+                "daily",
+                &date,
+                &seg.label,
+                seg.start_hour,
+                seg.end_hour,
+                idx as u32,
+                &timeline,
+                &top_apps,
+                step2.model_label().to_string(),
+                &cancel,
+            )
+            .await
+            .unwrap();
+            println!("[{status}]\n{}", row.content);
+            if status == "error" {
+                println!("error: {:?}", row.error);
+            }
+        }
+    }
 
     /// 插一行 activities 行用于测试，控制 local_hour / app / title / dur / category。
     /// category_id 为 None 时不挂 app_group（COALESCE 落到 'other'）。
@@ -811,41 +575,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn synth_empty_activities_returns_empty() {
+    async fn timeline_empty_activities_returns_empty() {
         let pool = fresh_test_pool().await;
-        let out = build_synthetic_descriptions_from_activities(
-            &pool,
-            "2026-05-15",
-            9,
-            10,
-            &[],
-            &DeviceFilter::All,
-            &[],
-        )
-        .await
-        .unwrap();
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
+            .await
+            .unwrap();
         assert!(out.is_empty(), "无 activities 应返回空: {out:?}");
     }
 
     #[tokio::test]
-    async fn synth_groups_by_hour_and_sorts_by_duration() {
+    async fn timeline_groups_by_hour_and_sorts_by_duration() {
         let pool = fresh_test_pool().await;
         // 同小时 (9点) 3 个 app：VSCode > Chrome > Slack（全部 >= 60s 才不会折叠到「其它」）
         insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
         insert_act(&pool, "2026-05-15", 9, "Chrome", "GitHub", 180).await;
         insert_act(&pool, "2026-05-15", 9, "Slack", "#hindsight", 90).await;
 
-        let out = build_synthetic_descriptions_from_activities(
-            &pool,
-            "2026-05-15",
-            9,
-            10,
-            &[],
-            &DeviceFilter::All,
-            &[],
-        )
-        .await
-        .unwrap();
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
+            .await
+            .unwrap();
         assert_eq!(out.len(), 1, "只一小时应只返回一项: {out:?}");
         assert_eq!(out[0].0, "09:00-10:00");
         let desc = &out[0].1;
@@ -857,12 +605,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn synth_privacy_keyword_replaces_window_title() {
+    async fn timeline_privacy_keyword_replaces_window_title() {
         let pool = fresh_test_pool().await;
         insert_act(&pool, "2026-05-15", 9, "Chrome", "GitHub PR #142", 300).await;
 
         let keywords = vec!["github".to_string()];
-        let out = build_synthetic_descriptions_from_activities(
+        let out = build_activity_timeline(
             &pool,
             "2026-05-15",
             9,
@@ -885,7 +633,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn synth_excludes_categories() {
+    async fn timeline_excludes_categories() {
         let pool = fresh_test_pool().await;
         // Slack 挂到 'browse' 分类（旧版本用 'fun'，v31 软删后改成另一个 active 默认分类）
         seed_solo_group(&pool, "Slack", "browse").await;
@@ -894,7 +642,7 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "VSCode", "lib.rs", 300).await;
 
         let excluded = vec!["browse".to_string()];
-        let out = build_synthetic_descriptions_from_activities(
+        let out = build_activity_timeline(
             &pool,
             "2026-05-15",
             9,
@@ -912,23 +660,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn synth_skips_empty_hours() {
+    async fn timeline_skips_empty_hours() {
         let pool = fresh_test_pool().await;
         // 9 点 + 11 点有活动，10 点空
         insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
         insert_act(&pool, "2026-05-15", 11, "VSCode", "lib.rs", 300).await;
 
-        let out = build_synthetic_descriptions_from_activities(
-            &pool,
-            "2026-05-15",
-            9,
-            12,
-            &[],
-            &DeviceFilter::All,
-            &[],
-        )
-        .await
-        .unwrap();
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 12, &[], &DeviceFilter::All, &[])
+            .await
+            .unwrap();
         assert_eq!(out.len(), 2, "只 9 + 11 两点有活动: {out:?}");
         assert_eq!(out[0].0, "09:00-10:00");
         assert_eq!(out[1].0, "11:00-12:00");

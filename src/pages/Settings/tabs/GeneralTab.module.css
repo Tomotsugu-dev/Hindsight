@@ -1,0 +1,59 @@
+/* —— 回填历史截图：ghost 按钮 + 右对齐的结果行 —— */
+
+.backfillWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.backfillBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.045);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    transform 120ms ease-out;
+}
+
+.backfillBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.075);
+}
+
+.backfillBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.backfillBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.backfillMsg {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-align: right;
+  max-width: 260px;
+}
+
+.spinning {
+  animation: generalTabBtnSpin 0.9s linear infinite;
+}
+
+@keyframes generalTabBtnSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

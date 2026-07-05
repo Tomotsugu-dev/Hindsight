@@ -55,6 +55,17 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         }
     };
 
+    // 可选上云数据集(AI 总结/聊天历史/屏幕记忆):水位线检测,与 outbox 无关,
+    // 放在 outbox 早退之前保证每轮 push tick 都有机会跑到。
+    match crate::repo::settings::load(&inner.pool).await {
+        Ok(cfg) => {
+            if let Err(e) = super::datasets::push_optional(inner, &mut token, &cfg).await {
+                log::warn!("push 可选数据集失败: {e}");
+            }
+        }
+        Err(e) => log::warn!("push 可选数据集跳过(读设置失败): {e}"),
+    }
+
     let rows = io::read_due_outbox(&inner.pool, PUSH_BATCH_SIZE).await?;
     if rows.is_empty() {
         return Ok(());
