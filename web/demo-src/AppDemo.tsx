@@ -30,7 +30,7 @@ const AISummaryPage = lazy(() => import("@app/pages/AISummary/AISummaryPage"));
 const DailyTab = lazy(() => import("@app/pages/AISummary/tabs/DailyTab"));
 const WeeklyTab = lazy(() => import("@app/pages/AISummary/tabs/WeeklyTab"));
 const MonthlyTab = lazy(() => import("@app/pages/AISummary/tabs/MonthlyTab"));
-const ChatTab = lazy(() => import("@app/pages/AISummary/tabs/ChatTab"));
+const ChatPage = lazy(() => import("@app/pages/Chat/ChatPage"));
 const DebugTab = lazy(() => import("@app/pages/AISummary/tabs/DebugTab"));
 const AISettingsPage = lazy(() => import("@app/pages/AISettings/AISettingsPage"));
 const EngineTab = lazy(() => import("@app/pages/AISettings/tabs/EngineTab"));
@@ -43,6 +43,7 @@ const CategoriesPage = lazy(() => import("@app/pages/Categories/CategoriesPage")
 const AppsPage = lazy(() => import("@app/pages/Apps/AppsPage"));
 const SettingsPage = lazy(() => import("@app/pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
+const AppearanceTab = lazy(() => import("@app/pages/Settings/tabs/AppearanceTab"));
 const DataTab = lazy(() => import("@app/pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("@app/pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("@app/pages/Settings/tabs/AboutTab"));
@@ -55,11 +56,11 @@ function DemoLayout() {
           <Route path={ROUTES.today} element={<TodayPage />} />
           <Route path={ROUTES.week} element={<WeekPage />} />
           <Route path={ROUTES.month} element={<MonthPage />} />
+          <Route path={ROUTES.chat} element={<ChatPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
             <Route path="week" element={<WeeklyTab />} />
             <Route path="month" element={<MonthlyTab />} />
-            <Route path="chat" element={<ChatTab />} />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
@@ -74,6 +75,7 @@ function DemoLayout() {
           <Route path={ROUTES.apps} element={<AppsPage />} />
           <Route path={ROUTES.settings} element={<SettingsPage />}>
             <Route index element={<GeneralTab />} />
+            <Route path="appearance" element={<AppearanceTab />} />
             <Route path="data" element={<DataTab />} />
             <Route path="privacy" element={<PrivacyTab />} />
             <Route path="about" element={<AboutTab />} />

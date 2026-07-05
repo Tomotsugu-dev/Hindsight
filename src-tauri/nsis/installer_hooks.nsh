@@ -10,6 +10,30 @@
     DetailPrint "Stopping hindsight.exe before install..."
     nsExec::Exec '"taskkill" /F /IM hindsight.exe /T'
     Sleep 1000
+
+    ; ── 迁移清理：历史版本 installMode 是 "both"，可能存在“所有用户”(per-machine,
+    ; Program Files) 安装与本 per-user 安装并存。两份并存时更新器只更新其一、
+    ; 快捷方式却可能指向另一份——用户“更新完重开还是旧版本”。这里发现 HKLM
+    ; 残留就静默运行它的卸载器（需要一次 UAC 确认；拒绝则跳过并提示手动卸载）。
+    ; 卸载器的“是否删除用户数据”弹窗带 /SD IDNO，静默模式自动选“否”；
+    ; 数据库/截图都在 %APPDATA%\hindsight，不在安装目录，绝不受影响。
+    ClearErrors
+    ReadRegStr $0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\hindsight" "UninstallString"
+    IfErrors machine_copy_done
+    StrCmp $0 "" machine_copy_done
+    DetailPrint "Removing legacy all-users installation..."
+    ; UninstallString 形如 "C:\Program Files\hindsight\uninstall.exe"（带引号），
+    ; ShellExecute 的 file 参数不吃引号，剥掉首尾各一个字符
+    StrCpy $1 $0 "" 1
+    StrCpy $1 $1 -1
+    ClearErrors
+    ExecShellWait "runas" "$1" "/S"
+    IfErrors 0 +2
+    DetailPrint "Legacy copy NOT removed (elevation declined). Please uninstall the old 'hindsight' under Program Files manually."
+    ; 卸载器会自我复制到临时目录后立即返回，留 2s 让它删完全机快捷方式，
+    ; 再让本安装继续写当前用户快捷方式，避免先写后删的交错
+    Sleep 2000
+    machine_copy_done:
 !macroend
 
 ; 卸载主流程开始前：把 hindsight.exe 杀掉，避免它握着安装目录里的可执行文件

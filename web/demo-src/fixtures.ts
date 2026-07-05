@@ -583,7 +583,7 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
       segMap.set(cat, (segMap.get(cat) ?? 0) + a.minutes);
     }
     const segments: HourSegment[] = Array.from(segMap.entries()).map(
-      ([categoryId, minutes]) => ({ categoryId, minutes }),
+      ([categoryId, minutes]) => ({ categoryId, minutes, secs: minutes * 60 }),
     );
     hours.push({ hour: h, segments });
   }
@@ -809,6 +809,11 @@ export const mockSettings: Settings = {
   autoUpdateInterval: "daily",
   lastUpdateCheckAt: new Date().toISOString(),
   idleThresholdSeconds: 300,
+  memoryOcrResident: false,
+  chatPrivacyAcknowledged: false,
+  syncAiSummaries: false,
+  syncChatHistory: false,
+  syncScreenMemory: false,
   ai: {
     endpoint: "",
     model: "",
@@ -824,24 +829,23 @@ export const mockSettings: Settings = {
       { label: "深夜", startHour: 22, endHour: 24, color: "" },
     ],
     excludedCategories: [],
-    maxImagesPerSegment: 1024,
-    dedupThreshold: 0.95,
     modelsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models",
-    activeMain: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-    activeMmproj: "mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
-    describeMain: "",
-    describeMmproj: "",
+    activeMain: "Qwen3.5-9B-Q4_K_M.gguf",
+    activeMmproj: "",
     summaryMain: "",
     summaryMmproj: "",
+    chatMain: "",
     promptLanguage: "zh",
-    promptOverrides: { systemZh: "", systemEn: "", systemJa: "" },
-    imageDescribeOverrides: { systemZh: "", systemEn: "", systemJa: "" },
+    promptOverrides: {
+      systemZh: "",
+      systemEn: "",
+      systemJa: "",
+      systemPt: "",
+      systemTw: "",
+    },
     batchSize: null,
     parallelSlots: null,
     ctxSize: null,
-    describeBatchSize: null,
-    describeParallelSlots: null,
-    describeCtxSize: null,
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,

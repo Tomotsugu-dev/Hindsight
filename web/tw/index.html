@@ -1,46 +1,20 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hindsight · 你的电脑日记 — 它替你记得每一天</title>
-  <meta name="description" content="本地优先的桌面活动追踪工具 — 看清每天每款应用用了多久，AI 自动写日报，还能用自然语言问它「上周我在看什么」。Win / Mac 开源免费。">
+  <title>Hindsight · 你的電腦日記 — 它替你記得每一天</title>
+  <meta name="description" content="本機優先的桌面活動追蹤工具 — 看清每天每款應用程式用了多久，AI 自動寫日報，還能用自然語言問它「上週我在看什麼」。Win / Mac 開源免費。">
 
-  <meta property="og:title" content="Hindsight · 你的电脑日记">
-  <meta property="og:description" content="本地优先的桌面活动追踪工具 — AI 写日报，还能用自然语言问它「上周我在看什么」。">
+  <meta property="og:title" content="Hindsight · 你的電腦日記">
+  <meta property="og:description" content="本機優先的桌面活動追蹤工具 — AI 寫日報，還能用自然語言問它「上週我在看什麼」。">
   <meta property="og:image" content="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://hindsight.kyosweb.com">
+  <meta property="og:url" content="https://hindsight.kyosweb.com/tw/">
 
   <link rel="icon" type="image/png" href="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png">
   <link rel="stylesheet" href="styles.css?v=2">
 
-  <script>
-    // 按浏览器语言把根路径 / 路由到对应语言页。
-    // 两道防回弹：
-    //   1. ?hl=zh —— 从 /en/ 或 /ja/ 显式点「简体中文」过来时带的 marker，
-    //      表示用户主动选了中文，永不自动跳走（跨标签页也生效，因为在 URL 里）。
-    //   2. sessionStorage 标记 —— 同标签页内首次自动路由后不再重复跳。
-    (function () {
-      try {
-        if (/[?&]hl=zh\b/.test(location.search)) {
-          sessionStorage.setItem("hindsight-lang-routed", "1");
-          return; // 用户显式选中文 → 留在根路径
-        }
-        if (sessionStorage.getItem("hindsight-lang-routed")) return;
-        sessionStorage.setItem("hindsight-lang-routed", "1");
-        var lang = (navigator.language || "en").toLowerCase();
-        if (lang.indexOf("zh") === 0) {
-          // 台湾/香港/澳门等繁体地区 → /tw/;其余中文留在根路径(简体)
-          if (/^zh-?(tw|hk|mo|hant)/.test(lang)) location.replace("/tw/");
-          return;
-        }
-        var target =
-          lang.indexOf("pt") === 0 ? "/pt/" : lang.indexOf("ja") === 0 ? "/ja/" : "/en/";
-        location.replace(target);
-      } catch (e) {}
-    })();
-  </script>
 </head>
 <body>
 
@@ -48,13 +22,13 @@
   <nav class="nav">
     <div class="container nav-inner">
       <div class="nav-left">
-        <a href="/" class="nav-brand">
+        <a href="/tw/" class="nav-brand">
           <img src="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png" alt="" class="nav-logo">
           <span class="nav-name">Hindsight</span>
         </a>
         <nav class="nav-anchors">
-          <a href="#demo" class="nav-anchor">演示</a>
-          <a href="#download" class="nav-anchor">下载</a>
+          <a href="#demo" class="nav-anchor">展示</a>
+          <a href="#download" class="nav-anchor">下載</a>
         </nav>
       </div>
       <div class="nav-links">
@@ -64,9 +38,9 @@
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
             <line x1="2" y1="12" x2="22" y2="12"></line>
           </svg>
-          <span class="lang-active">简体中文</span>
+          <a href="/?hl=zh">简体中文</a>
           <span class="lang-sep">·</span>
-          <a href="/tw/">繁體中文</a>
+          <span class="lang-active">繁體中文</span>
           <span class="lang-sep">·</span>
           <a href="/en/">English</a>
           <span class="lang-sep">·</span>
@@ -87,11 +61,11 @@
   <section class="hero">
     <div class="container hero-grid">
       <div class="hero-text">
-        <div class="eyebrow">开源 · 本地优先 · 桌面端</div>
+        <div class="eyebrow">開源 · 本機優先 · 桌面端</div>
         <h1 class="display">Hindsight</h1>
-        <p class="subtitle">你的电脑日记 — 它替你记得每一天。</p>
+        <p class="subtitle">你的電腦日記 — 它替你記得每一天。</p>
         <p class="intro">
-          自动追踪每个应用的使用时长，AI 写每日总结；开启屏幕记忆后，可以直接问它——「上周我在 Cursor 用了多久？」「我什么时候查过 ×× 的资料？」
+          自動追蹤每個應用程式的使用時長，AI 寫每日總結；開啟螢幕記憶後，可以直接問它——「上週我在 Cursor 用了多久？」「我什麼時候查過 ×× 的資料？」
         </p>
         <div class="cta-group">
           <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-win-hero" class="btn btn-platform" data-platform="win" hidden>
@@ -99,7 +73,7 @@
               <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.851"/>
             </svg>
             <span class="btn-platform-text">
-              <span class="btn-platform-name">下载 Windows</span>
+              <span class="btn-platform-name">下載 Windows</span>
               <span class="btn-platform-meta">.exe · <span id="size-win-hero">~ 7 MB</span></span>
             </span>
           </a>
@@ -108,7 +82,7 @@
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
             </svg>
             <span class="btn-platform-text">
-              <span class="btn-platform-name">下载 macOS</span>
+              <span class="btn-platform-name">下載 macOS</span>
               <span class="btn-platform-meta">.dmg · <span id="size-mac-hero">~ 19 MB</span></span>
             </span>
           </a>
@@ -118,14 +92,14 @@
             <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
           </svg>
           Star on GitHub →
-        </a> &nbsp;·&nbsp; MIT 开源 · 完全免费</p>
+        </a> &nbsp;·&nbsp; MIT 開源 · 完全免費</p>
       </div>
       <div class="hero-visual">
         <div class="hero-blob"></div>
         <iframe
-          src="/demo/?lang=zh-CN"
+          src="/demo/?lang=zh-TW"
           class="hero-demo-frame"
-          title="Hindsight 交互预览"
+          title="Hindsight 互動預覽"
           loading="eager"
           referrerpolicy="no-referrer"
         ></iframe>
@@ -136,13 +110,13 @@
   <!-- ============ Video Demo ============ -->
   <section class="demo" id="demo">
     <div class="container">
-      <h2 class="section-title">1 分钟看懂 Hindsight</h2>
+      <h2 class="section-title">1 分鐘看懂 Hindsight</h2>
       <div class="video-frame">
         <video src="/assets/video/Hindsight_zh.mp4"
                controls muted autoplay loop playsinline preload="metadata"
                poster="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/docs/intro_zh/imgs/today.png"></video>
       </div>
-      <p class="caption">软件预览 · Hindsight 的核心交互</p>
+      <p class="caption">軟體預覽 · Hindsight 的核心互動</p>
     </div>
   </section>
 
@@ -150,15 +124,15 @@
   <section class="final-cta" id="download">
     <div class="container">
       <div class="cta-card">
-        <h2>开始记录你的每一天</h2>
-        <p>完全免费 · MIT 开源 · 30 秒安装</p>
+        <h2>開始記錄你的每一天</h2>
+        <p>完全免費 · MIT 開源 · 30 秒安裝</p>
         <div class="cta-group">
           <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-win-final" class="btn btn-platform btn-platform-light">
             <svg class="btn-platform-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.851"/>
             </svg>
             <span class="btn-platform-text">
-              <span class="btn-platform-name">下载 Windows</span>
+              <span class="btn-platform-name">下載 Windows</span>
               <span class="btn-platform-meta">.exe · <span id="size-win-final">~ 7 MB</span></span>
             </span>
           </a>
@@ -167,7 +141,7 @@
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
             </svg>
             <span class="btn-platform-text">
-              <span class="btn-platform-name">下载 macOS</span>
+              <span class="btn-platform-name">下載 macOS</span>
               <span class="btn-platform-meta">.dmg · <span id="size-mac-final">~ 19 MB</span></span>
             </span>
           </a>
@@ -185,29 +159,29 @@
             <img src="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png" alt="" class="footer-logo">
             <h3>Hindsight</h3>
           </div>
-          <p>你的电脑日记 — 它替你记得每一天。</p>
+          <p>你的電腦日記 — 它替你記得每一天。</p>
           <p class="muted">© 2026 Hindsight contributors<br>MIT License</p>
         </div>
         <div class="footer-col">
-          <h4>产品</h4>
+          <h4>產品</h4>
           <ul>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest">下载最新版</a></li>
+            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest">下載最新版</a></li>
             <li><a href="https://github.com/Tomotsugu-dev/Hindsight/releases">所有版本</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/tree/main/docs/release-notes">更新日志</a></li>
+            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/tree/main/docs/release-notes">更新日誌</a></li>
           </ul>
         </div>
         <div class="footer-col">
-          <h4>资源</h4>
+          <h4>資源</h4>
           <ul>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight">GitHub 仓库</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight#readme">README 文档</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/issues">报告问题</a></li>
+            <li><a href="https://github.com/Tomotsugu-dev/Hindsight">GitHub 儲存庫</a></li>
+            <li><a href="https://github.com/Tomotsugu-dev/Hindsight#readme">README 文件</a></li>
+            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/issues">回報問題</a></li>
           </ul>
         </div>
         <div class="footer-col">
-          <h4>语言</h4>
+          <h4>語言</h4>
           <ul>
-            <li><a href="/">简体中文</a></li>
+            <li><a href="/?hl=zh">简体中文</a></li>
             <li><a href="/tw/">繁體中文</a></li>
             <li><a href="/en/">English</a></li>
             <li><a href="/ja/">日本語</a></li>

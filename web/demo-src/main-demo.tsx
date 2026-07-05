@@ -20,8 +20,13 @@ if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__) {
 
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { applyTheme, getStoredTheme } from "@app/lib/theme";
 import { AppDemo } from "./AppDemo";
 import "./mobile-overrides.css";
+
+// 跟主 main.tsx 一致:启动即应用主题(默认 minimal 简约),
+// 否则 <html> 无 data-theme,会渲染成 default 多彩主题
+applyTheme(getStoredTheme());
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

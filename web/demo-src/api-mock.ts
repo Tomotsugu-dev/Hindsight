@@ -7,6 +7,7 @@
 // - 错误处理：尽量"成功"——demo 不应该让用户看到错误状态破坏体验
 
 import type {
+  AppDetail,
   AppGroup,
   AppUsage,
   AuthState,
@@ -14,12 +15,16 @@ import type {
   CategoryInput,
   CategoryPatch,
   CaptureStatus,
+  ChatAskResult,
+  ChatConversationMeta,
+  ChatStoredMessage,
   DaySummary,
   DaySummaryDto,
   DeviceRow,
+  DigestReport,
   EngineStatus,
   HourSlot,
-  ImageDescriptionRow,
+  MemoryPendingStats,
   ModelEntry,
   PartialDownload,
   RecommendedModel,
@@ -54,6 +59,8 @@ export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 /** demo 跟主 API hindsight.ts 同步：summary_main = "__cloud__" 表示 step 2 走云端。
  *  demo 里没真云端调用，仅作为类型 / 比较符号存在，让消费方代码能跑通。 */
 export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
+/** OAuth 授权 URL 就绪事件——demo 里永不触发，仅满足消费方 import。 */
+export const OAUTH_URL_EVENT = "sync://oauth-url";
 
 // ────────────────────────────────────────────
 // 应用图标 —— 用 Simple Icons CDN 拿品牌 SVG
@@ -248,6 +255,7 @@ export const api = {
         segments: Array.from(segMap.entries()).map(([categoryId, minutes]) => ({
           categoryId,
           minutes,
+          secs: minutes * 60,
         })),
       });
     }
@@ -318,6 +326,7 @@ export const api = {
         segments: Array.from(segMap.entries()).map(([categoryId, minutes]) => ({
           categoryId,
           minutes,
+          secs: minutes * 60,
         })),
       });
     }
@@ -525,8 +534,13 @@ export const api = {
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);
     // 清空 promptOverrides，确保 PromptTab fallback 到 DEFAULT_SYSTEM_PROMPTS[lang]
-    s.ai.promptOverrides = { systemZh: "", systemEn: "", systemJa: "" };
-    s.ai.imageDescribeOverrides = { systemZh: "", systemEn: "", systemJa: "" };
+    s.ai.promptOverrides = {
+      systemZh: "",
+      systemEn: "",
+      systemJa: "",
+      systemPt: "",
+      systemTw: "",
+    };
     return s;
   },
   updateSettings: async (patch: SettingsPatch): Promise<Settings> => {
@@ -651,13 +665,12 @@ export const api = {
     persist();
   },
   setStepModel: async (
-    step: "describe" | "summary",
+    step: "summary" | "chat",
     mainFile: string,
     mmprojFile: string | null,
   ): Promise<void> => {
-    if (step === "describe") {
-      state.settings.ai.describeMain = mainFile;
-      state.settings.ai.describeMmproj = mmprojFile ?? "";
+    if (step === "chat") {
+      state.settings.ai.chatMain = mainFile;
     } else {
       state.settings.ai.summaryMain = mainFile;
       state.settings.ai.summaryMmproj = mmprojFile ?? "";
@@ -730,37 +743,209 @@ export const api = {
   getWeekSummary: async (_weekStart: string): Promise<SegmentSummaryRow | null> => null,
   clearWeekSummary: async (_weekStart: string): Promise<void> => {},
 
-  // ─── AI image descriptions ─────────────────
-  getSegmentImageDescriptions: async (
-    _date: string,
-    _segmentIdx: number,
-    _source: string = "daily",
-  ): Promise<ImageDescriptionRow[]> => [],
-  getDayImageDescriptions: async (
-    _date: string,
-    _source: string = "daily",
-  ): Promise<ImageDescriptionRow[]> => [],
   clearDaySummary: async (date: string, source: string = "daily"): Promise<void> => {
     state.daySummaries.delete(`${source}:${date}`);
   },
-  clearDayImageDescriptions: async (
-    _date: string,
-    _source: string = "daily",
-  ): Promise<void> => {},
   clearDaySegmentSummaries: async (
     date: string,
     source: string = "daily",
   ): Promise<void> => {
     state.daySummaries.delete(`${source}:${date}`);
   },
-  retrySingleImageDescription: async (
-    _date: string,
-    _segmentIdx: number,
-    _imageIndex: number,
-    _overrides: AiOverrides | null = null,
-    _source: string = "daily",
-  ): Promise<void> => {},
+  // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
+  getAppDayDetail: async (
+    _dayOffset: number,
+    iconProcess: string,
+    _deviceId?: string,
+  ): Promise<AppDetail> => mockAppDetail("hours", 24, iconProcess),
+  getAppWeekDetail: async (
+    _weekOffset: number,
+    iconProcess: string,
+    _deviceId?: string,
+  ): Promise<AppDetail> => mockAppDetail("days", 7, iconProcess),
+  getAppMonthDetail: async (
+    _monthOffset: number,
+    iconProcess: string,
+    _deviceId?: string,
+  ): Promise<AppDetail> => mockAppDetail("days", 30, iconProcess),
+
+  // ─── Chat（演示回答） ────────────────────
+  chatAsk: async (
+    question: string,
+    conversationId: number | null,
+  ): Promise<ChatAskResult> => {
+    await sleep(900); // 模拟检索 + 推理耗时
+    const now = new Date().toISOString();
+    let conv = chatConvs.find((c) => c.meta.id === conversationId);
+    if (!conv) {
+      conv = {
+        meta: {
+          id: chatNextConvId++,
+          title: question.length > 24 ? `${question.slice(0, 24)}…` : question,
+          createdTs: now,
+          updatedTs: now,
+        },
+        messages: [],
+      };
+      chatConvs.unshift(conv);
+    }
+    conv.meta.updatedTs = now;
+    const answer = chatDemoAnswer(question);
+    conv.messages.push({
+      id: chatNextMsgId++,
+      role: "user",
+      content: question,
+      citations: [],
+      degraded: false,
+      createdTs: now,
+    });
+    conv.messages.push({
+      id: chatNextMsgId++,
+      role: "assistant",
+      content: answer.text,
+      citations: answer.citations,
+      degraded: false,
+      createdTs: now,
+    });
+    return {
+      conversationId: conv.meta.id,
+      text: answer.text,
+      citations: answer.citations,
+      steps: 2,
+      degraded: false,
+    };
+  },
+  chatListConversations: async (): Promise<ChatConversationMeta[]> =>
+    chatConvs.map((c) => structuredClone(c.meta)),
+  chatGetMessages: async (conversationId: number): Promise<ChatStoredMessage[]> =>
+    structuredClone(chatConvs.find((c) => c.meta.id === conversationId)?.messages ?? []),
+  chatRenameConversation: async (conversationId: number, title: string): Promise<void> => {
+    const conv = chatConvs.find((c) => c.meta.id === conversationId);
+    if (conv) {
+      conv.meta.title = title;
+      conv.meta.updatedTs = new Date().toISOString();
+    }
+  },
+  chatDeleteConversation: async (conversationId: number): Promise<void> => {
+    const i = chatConvs.findIndex((c) => c.meta.id === conversationId);
+    if (i >= 0) chatConvs.splice(i, 1);
+  },
+
+  // ─── 屏幕记忆（demo 无积压） ──────────────
+  memoryPendingStats: async (): Promise<MemoryPendingStats> => ({
+    unregistered: 0,
+    pendingOcr: 0,
+    total: 0,
+  }),
+  memoryBackfill: async (): Promise<number> => 0,
+  memoryDigestNow: async (): Promise<DigestReport> => ({
+    processed: 0,
+    failed: 0,
+    skippedMissingFile: 0,
+  }),
+
+  // ─── 杂项 no-op ──────────────────────────
+  writeTextFile: async (_path: string, _content: string): Promise<void> => {},
+  setTrayLabels: async (_show: string, _quit: string): Promise<void> => {},
+  testAiChat: async (
+    _endpoint: string,
+    _apiKey: string | undefined,
+    _model: string,
+    _withImage: boolean,
+  ): Promise<TestAiEndpointResp> => ({
+    ok: true,
+    models: [],
+    message: "Demo 模式 · 假返回",
+  }),
+  importModel: async (srcPath: string): Promise<string> => srcPath,
+  purgeAppGroup: async (_groupId: string): Promise<void> => {},
+  purgeCloudData: async (_keepLocal: boolean): Promise<void> => {},
+  forgetRemoteDevice: async (deviceId: string): Promise<void> => {
+    const i = state.devices.findIndex((d) => d.deviceId === deviceId && !d.isSelf);
+    if (i >= 0) state.devices.splice(i, 1);
+  },
 };
+
+// ────────────────────────────────────────────
+// Chat 演示状态 + 固定示例回答（按界面语言）
+// ────────────────────────────────────────────
+
+interface DemoConv {
+  meta: ChatConversationMeta;
+  messages: ChatStoredMessage[];
+}
+const chatConvs: DemoConv[] = [];
+let chatNextConvId = 1;
+let chatNextMsgId = 1;
+
+function chatDemoAnswer(question: string): {
+  text: string;
+  citations: ChatStoredMessage["citations"];
+} {
+  const lng = (i18n.language || "zh-CN").toLowerCase();
+  const q = question.length > 40 ? `${question.slice(0, 40)}…` : question;
+  const text = lng.startsWith("zh-tw") || lng.startsWith("zh-hk")
+    ? `這是展示環境的範例回答。正式版會檢索你的**活動記錄**與**螢幕文字索引**來回答「${q}」:先用統計工具彙總相關應用程式的使用時長與次數,再用全文搜尋找出螢幕上出現過的相關內容,並附上可核對的證據卡 [1,2]。`
+    : lng.startsWith("zh")
+    ? `这是演示环境的示例回答。正式版会检索你的**活动记录**与**屏幕文字索引**来回答「${q}」:先用统计工具汇总相关应用的使用时长与次数,再用全文搜索找出屏幕上出现过的相关内容,并附上可核对的证据卡 [1,2]。`
+    : lng.startsWith("ja")
+      ? `これはデモ環境のサンプル回答です。製品版では**アクティビティ記録**と**画面テキスト索引**を検索して「${q}」に回答します:統計ツールで使用時間や回数を集計し、全文検索で画面に表示された内容を見つけ、検証可能な出典カード [1,2] を添付します。`
+      : lng.startsWith("pt")
+        ? `Esta é uma resposta de demonstração. Na versão real, eu pesquisaria seu **registro de atividades** e o **índice de texto da tela** para responder "${q}": agregando tempo de uso com ferramentas de estatística e buscando conteúdo que apareceu na tela, com cartões de evidência verificáveis [1,2].`
+        : `This is a sample answer in the demo environment. The real app would search your **activity records** and **screen-text index** to answer "${q}": aggregating app usage with the stats tool, then full-text searching what appeared on screen, with verifiable evidence cards [1,2].`;
+  const today = todayStr();
+  return {
+    text,
+    citations: [
+      {
+        index: 1,
+        app: "Visual Studio Code",
+        title: "hindsight — src/pages/Chat/ChatPage.tsx",
+        startedTs: `${today}T10:12:00+08:00`,
+        endedTs: `${today}T11:03:00+08:00`,
+        framePath: null,
+      },
+      {
+        index: 2,
+        app: "Google Chrome",
+        title: "llama.cpp server docs — GitHub",
+        startedTs: `${today}T14:20:00+08:00`,
+        endedTs: `${today}T14:41:00+08:00`,
+        framePath: null,
+      },
+    ],
+  };
+}
+
+/** 应用详情的演示数据:确定性钟形分布(刷新不跳),标题列表用领域合理的假标题。 */
+function mockAppDetail(
+  kind: "hours" | "days",
+  count: number,
+  iconProcess: string,
+): AppDetail {
+  const buckets = Array.from({ length: count }, (_, i) => {
+    const key = kind === "hours" ? String(i) : isoDateOffset(i - count + 1);
+    // 小时粒度:工作时段高、深夜为 0;天粒度:伪随机但确定
+    const w =
+      kind === "hours"
+        ? i >= 9 && i <= 18
+          ? 0.6 + ((i * 3) % 5) / 10
+          : i >= 20 && i <= 23
+            ? 0.3
+            : 0
+        : 0.3 + (((i * 7) % 10) / 10) * 0.7;
+    return { key, secs: Math.round(w * 3000) };
+  });
+  const name = iconProcess.replace(/\.exe$/i, "");
+  return {
+    buckets,
+    titles: [
+      { title: `hindsight — ${name}`, secs: 5400 },
+      { title: `docs / design notes — ${name}`, secs: 2700 },
+      { title: "GitHub — Pull Request #42", secs: 1500 },
+    ],
+  };
+}
 
 // ────────────────────────────────────────────
 // 长任务模拟器（事件驱动）
