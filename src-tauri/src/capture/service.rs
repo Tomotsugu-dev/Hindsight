@@ -376,6 +376,28 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
     }
 
+    // ── 息屏/锁屏/屏保：人必然不在看，无条件封口 ──
+    // AIDA64 传感器面板这类"屏幕永远在变"的前台会让下面的被动观看豁免变成
+    // 永动机（离开 9 小时全算使用），系统硬信号在此截断。封口时刻 = 最后键鼠
+    // 输入：真人看着屏幕变黑会动鼠标把它点亮，没点亮 = 息屏前那段空闲也没人在；
+    // Win+L 主动锁屏时按键本身就是输入，idle≈0 等价于当下。
+    // 息屏/锁屏期间每 tick 从这里 return，不开新会话、不截图。
+    if crate::platform::screen_unavailable() {
+        let mut cur_lock = inner.current.lock().await;
+        if let Some(prev) = cur_lock.take() {
+            drop(cur_lock);
+            let end = Local::now() - Duration::seconds(crate::platform::idle_secs() as i64);
+            log::info!(
+                "屏幕不可看（息屏/锁屏/屏保），会话 {} 按最后输入时刻封口",
+                prev.id
+            );
+            if let Err(e) = activities::seal_session(&inner.pool, prev.id, end).await {
+                log::warn!("seal_session 失败 (息屏/锁屏, id={}): {e}", prev.id);
+            }
+        }
+        return Ok(());
+    }
+
     // 挂机检测：用户多久没动鼠键。但键鼠超阈只是"疑似挂机"——全屏视频/盯编译
     // 这类被动观看零输入而屏幕在变，不是挂机（否则这类时段只剩开场一帧，
     // 见 docs/design/screen-memory.md"采集层解耦"）。屏幕也静止才 seal 并 return，
@@ -383,13 +405,15 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 已封（current=None）后不再探屏，等键鼠输入自然开新会话——人已离开，
     // 不必每 20s 白抓一次屏。
     // idle 读一次供两处用：本分支的阈值判断 + 下面 interval-roll 的抑制。
+    // 被动观看豁免对桌面前台（Progman/WorkerW）不适用：Wallpaper Engine 等动态
+    // 壁纸让桌面永远在变，但没人盯着桌面看——桌面焦点回归纯键鼠挂机语义。
     let idle_now = crate::platform::idle_secs();
     let idle_threshold = *inner.idle_threshold_secs.lock().await;
     if idle_threshold > 0 && idle_now as u32 >= idle_threshold {
         if inner.current.lock().await.is_none() {
             return Ok(());
         }
-        if screen_probe_active(inner).await {
+        if !crate::platform::is_desktop_foreground() && screen_probe_active(inner).await {
             log::debug!("键鼠空闲 {idle_now}s 但屏幕在变（被动观看），会话延续");
         } else {
             let mut cur_lock = inner.current.lock().await;

@@ -786,7 +786,7 @@
       "local": {
         "title": "Local models (not in the recommended list)",
         "pairedMmproj": "Vision projector: {{name}}",
-        "orphanMmproj": "Vision projector file (needs a matching main model to use)"
+        "orphanMmproj": "This is a vision projector file (mmproj) and cannot be used as a model by itself. To import a model, pick the much larger main GGUF file from the same repository."
       }
     },
     "brief": {

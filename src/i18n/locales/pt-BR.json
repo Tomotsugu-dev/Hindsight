@@ -786,7 +786,7 @@
       "local": {
         "title": "Modelos locais (fora da lista recomendada)",
         "pairedMmproj": "Projetor de visão: {{name}}",
-        "orphanMmproj": "Arquivo de projetor de visão (precisa de um modelo principal correspondente)"
+        "orphanMmproj": "Este é um arquivo de projeção visual (mmproj) e não pode ser usado como modelo sozinho. Para importar um modelo, escolha o arquivo GGUF principal, bem maior, do mesmo repositório."
       }
     },
     "brief": {

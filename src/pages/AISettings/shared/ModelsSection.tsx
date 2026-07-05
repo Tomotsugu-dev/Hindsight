@@ -208,11 +208,11 @@ export function ModelsSection() {
   };
 
   const localFilenames = new Set(local.map((m) => m.filename));
-  const isInstalled = (rec: RecommendedModel): boolean => {
-    if (!localFilenames.has(rec.mainFile)) return false;
-    if (rec.mmprojFile && !localFilenames.has(mmprojSaveAs(rec))) return false;
-    return true;
-  };
+  // 已安装只看 main 文件:VLM 移除后全部推理是纯文本,mmproj 不再是使用门槛。
+  // 否则用户手动导入的 main(没有改名版 mmproj)会被推荐卡吞掉又判未安装,
+  // 既不在"本地模型"区出现、又无法选用——只剩个不可点的卸载按钮。
+  const isInstalled = (rec: RecommendedModel): boolean =>
+    localFilenames.has(rec.mainFile);
 
   // 推荐列表占用的落盘文件名（main + mmproj saveAs）。本地文件里不在这个集合的，
   // 就是用户自己导入/手动放进模型目录、但不在推荐列表里的模型——它们不会被任何
@@ -360,12 +360,14 @@ export function ModelsSection() {
         // 已在用 → 清空覆盖（后端 fallback 到 activeMain）
         await api.setStepModel("summary", "", null);
       } else {
-        // mmproj 也用 saveAs（落盘文件名），跟 settings 实际能加载的文件名对齐
-        await api.setStepModel(
-          "summary",
-          rec.mainFile,
-          rec.mmprojFile ? mmprojSaveAs(rec) : null,
-        );
+        // mmproj 用 saveAs（落盘文件名），且只在本地真的存在时才写——
+        // "已安装"只看 main，用户手动导入 main 时 mmproj 多半缺席，
+        // 写个不存在的文件名会让引擎启动时加载失败
+        const mmprojLocal =
+          rec.mmprojFile && localFilenames.has(mmprojSaveAs(rec))
+            ? mmprojSaveAs(rec)
+            : null;
+        await api.setStepModel("summary", rec.mainFile, mmprojLocal);
       }
       await reload();
     } catch (e) {

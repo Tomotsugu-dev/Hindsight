@@ -786,7 +786,7 @@
       "local": {
         "title": "本機模型（不在推薦清單中）",
         "pairedMmproj": "視覺投影：{{name}}",
-        "orphanMmproj": "視覺投影檔案（需搭配對應主模型使用）"
+        "orphanMmproj": "這是視覺投影檔案（mmproj），不能單獨作為模型使用。如需匯入模型，請選擇同倉庫中體積更大的主模型 GGUF 檔案。"
       }
     },
     "brief": {

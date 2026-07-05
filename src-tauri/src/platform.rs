@@ -200,3 +200,242 @@ pub fn idle_secs() -> u64 {
 pub fn idle_secs() -> u64 {
     0
 }
+
+// ─────────────────────────────────────────────────────────────
+// 屏幕不可看状态（息屏 / 锁屏 / 屏保）——挂机判定的硬信号
+//
+// 背景：capture 的挂机判定在键鼠空闲后靠"屏幕活跃探测"豁免被动观看（看视频/
+// 盯编译）。但 AIDA64 传感器面板、跳动的时钟这类"屏幕永远在变"的前台会把
+// 豁免变成永动机——用户离开 9 小时仍被记成使用。息屏/锁屏/屏保是"人必然
+// 不在看"的确定信号，比任何像素启发式都硬，capture tick 见到即无条件封会话。
+// ─────────────────────────────────────────────────────────────
+
+/// 屏幕当前是否处于"不可看"状态（息屏 / 锁屏 / 屏保任一命中）。
+///
+/// Windows：息屏与锁屏来自常驻消息窗口线程接收的系统通知
+/// （`GUID_CONSOLE_DISPLAY_STATE` 电源通知 + WTS 会话锁通知），首次调用时
+/// 惰性启动该线程；屏保用 `SPI_GETSCREENSAVERRUNNING` 即时轮询。
+/// 通知注册失败只降级（恒返 false = 回到今天的行为），不影响其它功能。
+#[cfg(target_os = "windows")]
+pub fn screen_unavailable() -> bool {
+    windows_screen_state::ensure_watcher();
+    windows_screen_state::display_off()
+        || windows_screen_state::session_locked()
+        || windows_screen_state::screensaver_running()
+}
+
+/// macOS：主显示器睡眠 = 息屏（CoreGraphics 直接可查，无需通知线程）。
+/// 锁屏/屏保已由 capture 侧的前台占位进程判定（loginwindow / ScreenSaverEngine）
+/// 覆盖，这里不重复。
+#[cfg(target_os = "macos")]
+pub fn screen_unavailable() -> bool {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGMainDisplayID() -> u32;
+        fn CGDisplayIsAsleep(display: u32) -> i32;
+    }
+    // SAFETY: CoreGraphics 公开 C API，任意线程可调，无指针传递。
+    unsafe { CGDisplayIsAsleep(CGMainDisplayID()) != 0 }
+}
+
+/// 其它平台：无检测（恒可看），挂机判定回退纯键鼠信号。
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn screen_unavailable() -> bool {
+    false
+}
+
+/// 前台是否是桌面本体（Windows：`Progman` / `WorkerW` 窗口类）。
+///
+/// 用途：焦点停在桌面时，"屏幕在变"不代表有人在看——Wallpaper Engine 等动态
+/// 壁纸让桌面永远在变，挂机判定的被动观看豁免对桌面前台不适用。
+#[cfg(target_os = "windows")]
+pub fn is_desktop_foreground() -> bool {
+    use winapi::um::winuser::{GetClassNameW, GetForegroundWindow};
+    // SAFETY: Win32 公开 API；GetForegroundWindow 可能返 null（已判）；
+    // GetClassNameW 写入栈上定长缓冲，返回实际长度。
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() {
+            return false;
+        }
+        let mut buf = [0u16; 16];
+        let len = GetClassNameW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+        if len <= 0 {
+            return false;
+        }
+        let class = String::from_utf16_lossy(&buf[..len as usize]);
+        class == "Progman" || class == "WorkerW"
+    }
+}
+
+/// 非 Windows：桌面前台概念不适用（macOS 桌面焦点是 Finder，正常应用语义）。
+#[cfg(not(target_os = "windows"))]
+pub fn is_desktop_foreground() -> bool {
+    false
+}
+
+/// Windows 息屏/锁屏状态源：隐藏消息窗口线程 + 两个 AtomicBool。
+#[cfg(target_os = "windows")]
+mod windows_screen_state {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Once;
+
+    use winapi::shared::guiddef::{IsEqualGUID, GUID};
+    use winapi::shared::minwindef::{LPARAM, LRESULT, UINT, WPARAM};
+    use winapi::shared::windef::HWND;
+    use winapi::um::libloaderapi::GetModuleHandleW;
+    use winapi::um::winuser::{
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
+        RegisterPowerSettingNotification, SystemParametersInfoW, TranslateMessage,
+        DEVICE_NOTIFY_WINDOW_HANDLE, MSG, PBT_POWERSETTINGCHANGE, POWERBROADCAST_SETTING,
+        SPI_GETSCREENSAVERRUNNING, WM_POWERBROADCAST, WNDCLASSW,
+    };
+
+    /// 显示器电源状态通知的 GUID（winapi 0.3 未导出，值是稳定 ABI）：
+    /// GUID_CONSOLE_DISPLAY_STATE = 6FE69556-704A-47A0-8F24-C28D936FDA47
+    const GUID_CONSOLE_DISPLAY_STATE: GUID = GUID {
+        Data1: 0x6fe6_9556,
+        Data2: 0x704a,
+        Data3: 0x47a0,
+        Data4: [0x8f, 0x24, 0xc2, 0x8d, 0x93, 0x6f, 0xda, 0x47],
+    };
+    /// 会话变更消息与锁/解锁事件码（WinUser.h，稳定 ABI）。
+    const WM_WTSSESSION_CHANGE: UINT = 0x02B1;
+    const WTS_SESSION_LOCK: WPARAM = 0x7;
+    const WTS_SESSION_UNLOCK: WPARAM = 0x8;
+    /// WTSRegisterSessionNotification 的 dwFlags：只关心本会话。
+    const NOTIFY_FOR_THIS_SESSION: u32 = 0;
+
+    static DISPLAY_OFF: AtomicBool = AtomicBool::new(false);
+    static SESSION_LOCKED: AtomicBool = AtomicBool::new(false);
+    static WATCHER: Once = Once::new();
+
+    pub fn display_off() -> bool {
+        DISPLAY_OFF.load(Ordering::Relaxed)
+    }
+
+    pub fn session_locked() -> bool {
+        SESSION_LOCKED.load(Ordering::Relaxed)
+    }
+
+    /// 屏保是否正在运行（即时查询，无需通知）。
+    pub fn screensaver_running() -> bool {
+        let mut running: i32 = 0;
+        // SAFETY: Win32 公开 API，SPI_GETSCREENSAVERRUNNING 写入一个 BOOL。
+        let ok = unsafe {
+            SystemParametersInfoW(
+                SPI_GETSCREENSAVERRUNNING,
+                0,
+                &mut running as *mut i32 as *mut _,
+                0,
+            )
+        };
+        ok != 0 && running != 0
+    }
+
+    /// 惰性启动通知线程（进程生命周期内常驻，无需回收）。
+    pub fn ensure_watcher() {
+        WATCHER.call_once(|| {
+            std::thread::Builder::new()
+                .name("screen-state-watcher".into())
+                .spawn(run_message_window)
+                .map(|_| ())
+                .unwrap_or_else(|e| log::warn!("屏幕状态监听线程启动失败: {e}"));
+        });
+    }
+
+    /// 消息窗口线程体：注册隐藏窗口 → 订阅显示器电源 + 会话锁通知 → 消息循环。
+    /// 任何一步失败都只 log 降级（两个 Atomic 保持 false）。
+    fn run_message_window() {
+        // WTSRegisterSessionNotification 在 wtsapi32.dll——winapi 的 wtsapi32
+        // feature 未导出此函数，手动声明（稳定导出符号）。
+        #[link(name = "wtsapi32")]
+        extern "system" {
+            fn WTSRegisterSessionNotification(hwnd: HWND, dw_flags: u32) -> i32;
+        }
+        // HWND_MESSAGE = -3：message-only window 的父句柄哨兵值。
+        const HWND_MESSAGE: HWND = -3isize as HWND;
+
+        let class_name: Vec<u16> = "hindsight_screen_state\0".encode_utf16().collect();
+        // SAFETY: 标准 Win32 消息窗口样板。类名/窗口名指针在调用期间有效;
+        // wndproc 是本模块的 extern "system" 函数;消息循环单线程运行。
+        unsafe {
+            let hinstance = GetModuleHandleW(std::ptr::null());
+            let wc = WNDCLASSW {
+                lpfnWndProc: Some(wndproc),
+                hInstance: hinstance,
+                lpszClassName: class_name.as_ptr(),
+                ..std::mem::zeroed()
+            };
+            if RegisterClassW(&wc) == 0 {
+                log::warn!("屏幕状态监听: RegisterClassW 失败");
+                return;
+            }
+            let hwnd = CreateWindowExW(
+                0,
+                class_name.as_ptr(),
+                class_name.as_ptr(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                HWND_MESSAGE,
+                std::ptr::null_mut(),
+                hinstance,
+                std::ptr::null_mut(),
+            );
+            if hwnd.is_null() {
+                log::warn!("屏幕状态监听: CreateWindowExW 失败");
+                return;
+            }
+            if RegisterPowerSettingNotification(
+                hwnd as *mut _,
+                &GUID_CONSOLE_DISPLAY_STATE,
+                DEVICE_NOTIFY_WINDOW_HANDLE,
+            )
+            .is_null()
+            {
+                log::warn!("屏幕状态监听: 显示器电源通知注册失败(息屏检测降级)");
+            }
+            if WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) == 0 {
+                log::warn!("屏幕状态监听: 会话锁通知注册失败(锁屏检测降级)");
+            }
+            let mut msg: MSG = std::mem::zeroed();
+            while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+    }
+
+    /// 窗口过程：只消费两类消息,其余全部交回 DefWindowProc。
+    unsafe extern "system" fn wndproc(
+        hwnd: HWND,
+        msg: UINT,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        match msg {
+            WM_POWERBROADCAST if wparam == PBT_POWERSETTINGCHANGE as WPARAM => {
+                let s = &*(lparam as *const POWERBROADCAST_SETTING);
+                if IsEqualGUID(&s.PowerSetting, &GUID_CONSOLE_DISPLAY_STATE) {
+                    // Data 载荷是一个 DWORD：0=息屏 1=亮屏 2=调暗(仍可看,不算息屏)
+                    let state = *(s.Data.as_ptr() as *const u32);
+                    DISPLAY_OFF.store(state == 0, Ordering::Relaxed);
+                    log::debug!("显示器电源状态变更: {state}");
+                }
+                1 // TRUE
+            }
+            WM_WTSSESSION_CHANGE => {
+                match wparam {
+                    WTS_SESSION_LOCK => SESSION_LOCKED.store(true, Ordering::Relaxed),
+                    WTS_SESSION_UNLOCK => SESSION_LOCKED.store(false, Ordering::Relaxed),
+                    _ => {}
+                }
+                0
+            }
+            _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+        }
+    }
+}

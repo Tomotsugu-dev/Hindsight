@@ -57,6 +57,9 @@ pub enum ToolCall {
         title_keyword: Option<String>,
         group_by: GroupBy,
         top_n: usize,
+        metric: StatMetric,
+        /// 会话计数用:相邻活动间隔超过这么多分钟就算一段新会话
+        gap_minutes: u32,
     },
     GetTimeline {
         range: (NaiveDate, NaiveDate),
@@ -71,6 +74,21 @@ pub enum GroupBy {
     Title,
 }
 
+/// 统计口径:时长(默认)还是"用了几次/玩了几次"的会话次数。
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatMetric {
+    /// 累计使用时长(SUM duration_secs)
+    Duration,
+    /// 使用会话次数:相邻活动间隔超过 gap_minutes 就切一段
+    SessionCount,
+}
+
+/// 会话计数的间隔默认值与夹紧区间(分钟)。
+const GAP_DEFAULT_MIN: u32 = 30;
+const GAP_MIN: u32 = 5;
+const GAP_MAX: u32 = 240;
+
 /// 模型给出的原始参数(两种适配器统一走这个宽松壳,校验后变 [`ToolCall`])。
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -82,6 +100,8 @@ pub struct RawParams {
     pub title_keyword: Option<String>,
     pub group_by: Option<GroupBy>,
     pub top_n: Option<usize>,
+    pub metric: Option<StatMetric>,
+    pub gap_minutes: Option<u32>,
 }
 
 /// 第②道墙:工具名 + 参数逐项校验。`today` 用于拒绝未来日期。
@@ -112,6 +132,11 @@ pub fn validate(
                 title_keyword,
                 group_by: raw.group_by.unwrap_or(GroupBy::None),
                 top_n: raw.top_n.unwrap_or(5).clamp(1, TOP_N_MAX),
+                metric: raw.metric.unwrap_or(StatMetric::Duration),
+                gap_minutes: raw
+                    .gap_minutes
+                    .unwrap_or(GAP_DEFAULT_MIN)
+                    .clamp(GAP_MIN, GAP_MAX),
             })
         }
         "get_timeline" => {
@@ -226,6 +251,8 @@ pub async fn execute(ctx: &ToolCtx, call: &ToolCall, next_citation: usize) -> Re
             title_keyword,
             group_by,
             top_n,
+            metric,
+            gap_minutes,
         } => {
             query_stats(
                 ctx,
@@ -234,6 +261,8 @@ pub async fn execute(ctx: &ToolCtx, call: &ToolCall, next_citation: usize) -> Re
                 title_keyword.as_deref(),
                 *group_by,
                 *top_n,
+                *metric,
+                *gap_minutes,
             )
             .await
         }
@@ -328,6 +357,7 @@ async fn search_text(
     Ok(ToolOutput { for_llm, citations })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn query_stats(
     ctx: &ToolCtx,
     (from, to): (NaiveDate, NaiveDate),
@@ -335,6 +365,8 @@ async fn query_stats(
     title_keyword: Option<&str>,
     group_by: GroupBy,
     top_n: usize,
+    metric: StatMetric,
+    gap_minutes: u32,
 ) -> Result<ToolOutput> {
     let (from, to) = (from.to_string(), to.to_string());
     let apps: Vec<String> = apps.iter().map(|a| like_pattern(a)).collect();
@@ -360,48 +392,20 @@ async fn query_stats(
             }
             let params_ref: Vec<&dyn rusqlite::ToSql> = bind.iter().map(|b| b.as_ref()).collect();
 
-            match group_by {
-                GroupBy::None => {
-                    let secs: i64 = conn
-                        .query_row(
-                            &format!(
-                                "SELECT COALESCE(SUM(duration_secs),0) FROM activities WHERE {where_sql}"
-                            ),
-                            params_ref.as_slice(),
-                            |r| r.get(0),
-                        )
-                        .db()?;
-                    Ok(format!("{from} ~ {to} 合计: {}", fmt_secs(secs)))
+            match metric {
+                StatMetric::Duration => {
+                    query_duration(conn, &where_sql, &params_ref, group_by, top_n, &from, &to)
                 }
-                GroupBy::App | GroupBy::Title => {
-                    let dim = if group_by == GroupBy::App {
-                        "process_name"
-                    } else {
-                        "COALESCE(window_title,'(无标题)')"
-                    };
-                    let mut stmt = conn
-                        .prepare(&format!(
-                            "SELECT {dim}, SUM(duration_secs) d FROM activities
-                             WHERE {where_sql} GROUP BY {dim} ORDER BY d DESC LIMIT {top_n}"
-                        ))
-                        .db()?;
-                    let rows = stmt
-                        .query_map(params_ref.as_slice(), |r| {
-                            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
-                        })
-                        .db()?
-                        .collect::<rusqlite::Result<Vec<_>>>()
-                        .db()?;
-                    if rows.is_empty() {
-                        return Ok(format!("{from} ~ {to} 无匹配记录"));
-                    }
-                    let body = rows
-                        .iter()
-                        .map(|(name, secs)| format!("{}: {}", truncate(name, 50), fmt_secs(*secs)))
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    Ok(format!("{from} ~ {to} 按时长排序:\n{body}"))
-                }
+                StatMetric::SessionCount => query_session_count(
+                    conn,
+                    &where_sql,
+                    &params_ref,
+                    group_by,
+                    top_n,
+                    gap_minutes,
+                    &from,
+                    &to,
+                ),
             }
         })
         .await?;
@@ -409,6 +413,185 @@ async fn query_stats(
         for_llm: truncate(&for_llm, RESULT_CHAR_BUDGET),
         citations: Vec::new(),
     })
+}
+
+/// 时长口径:SUM(duration_secs),可分组 top-N。
+fn query_duration(
+    conn: &rusqlite::Connection,
+    where_sql: &str,
+    params: &[&dyn rusqlite::ToSql],
+    group_by: GroupBy,
+    top_n: usize,
+    from: &str,
+    to: &str,
+) -> tokio_rusqlite::Result<String> {
+    match group_by {
+        GroupBy::None => {
+            let secs: i64 = conn
+                .query_row(
+                    &format!(
+                        "SELECT COALESCE(SUM(duration_secs),0) FROM activities WHERE {where_sql}"
+                    ),
+                    params,
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok(format!("{from} ~ {to} 合计: {}", fmt_secs(secs)))
+        }
+        GroupBy::App | GroupBy::Title => {
+            let dim = group_dim(group_by);
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT {dim}, SUM(duration_secs) d FROM activities
+                     WHERE {where_sql} GROUP BY {dim} ORDER BY d DESC LIMIT {top_n}"
+                ))
+                .db()?;
+            let rows = stmt
+                .query_map(params, |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            if rows.is_empty() {
+                return Ok(format!("{from} ~ {to} 无匹配记录"));
+            }
+            let body = rows
+                .iter()
+                .map(|(name, secs)| format!("{}: {}", truncate(name, 50), fmt_secs(*secs)))
+                .collect::<Vec<_>>()
+                .join("\n");
+            Ok(format!("{from} ~ {to} 按时长排序:\n{body}"))
+        }
+    }
+}
+
+/// 会话次数口径:按 started_at 排序取活动流,相邻两条间隔(前一条 ended → 后一条 started)
+/// 超过 gap_minutes 就切一段。分组时每组各自切分并计数。
+/// Hindsight 记录的是前台焦点会话,非进程启动——间隔切分把"Alt-Tab 切走再回来"
+/// 归并成同一次使用,是对"用了几次/玩了几次"最接近的近似。
+#[allow(clippy::too_many_arguments)]
+fn query_session_count(
+    conn: &rusqlite::Connection,
+    where_sql: &str,
+    params: &[&dyn rusqlite::ToSql],
+    group_by: GroupBy,
+    top_n: usize,
+    gap_minutes: u32,
+    from: &str,
+    to: &str,
+) -> tokio_rusqlite::Result<String> {
+    let gap_secs = gap_minutes as i64 * 60;
+    match group_by {
+        GroupBy::None => {
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT started_at, ended_at FROM activities
+                     WHERE {where_sql} ORDER BY started_at"
+                ))
+                .db()?;
+            let rows = stmt
+                .query_map(params, |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            if rows.is_empty() {
+                return Ok(format!("{from} ~ {to} 无匹配记录"));
+            }
+            let n = count_sessions(&rows, gap_secs);
+            Ok(format!(
+                "{from} ~ {to} 使用会话次数: {n} 次(以间隔≥{gap_minutes} 分钟算一次)"
+            ))
+        }
+        GroupBy::App | GroupBy::Title => {
+            let dim = group_dim(group_by);
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT {dim} AS g, started_at, ended_at FROM activities
+                     WHERE {where_sql} ORDER BY g, started_at"
+                ))
+                .db()?;
+            let rows = stmt
+                .query_map(params, |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            if rows.is_empty() {
+                return Ok(format!("{from} ~ {to} 无匹配记录"));
+            }
+            // 按组聚合(rows 已按 g 排序)→ 每组切分计数
+            let mut counts: Vec<(String, usize)> = Vec::new();
+            let mut cur_group: Option<String> = None;
+            let mut cur_rows: Vec<(String, String)> = Vec::new();
+            for (g, s, e) in rows {
+                if cur_group.as_deref() != Some(g.as_str()) {
+                    if let Some(name) = cur_group.take() {
+                        counts.push((name, count_sessions(&cur_rows, gap_secs)));
+                    }
+                    cur_group = Some(g);
+                    cur_rows = Vec::new();
+                }
+                cur_rows.push((s, e));
+            }
+            if let Some(name) = cur_group.take() {
+                counts.push((name, count_sessions(&cur_rows, gap_secs)));
+            }
+            counts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            counts.truncate(top_n);
+            let body = counts
+                .iter()
+                .map(|(name, n)| format!("{}: {n} 次", truncate(name, 50)))
+                .collect::<Vec<_>>()
+                .join("\n");
+            Ok(format!(
+                "{from} ~ {to} 使用会话次数(以间隔≥{gap_minutes} 分钟算一次):\n{body}"
+            ))
+        }
+    }
+}
+
+fn group_dim(group_by: GroupBy) -> &'static str {
+    if group_by == GroupBy::App {
+        "process_name"
+    } else {
+        "COALESCE(window_title,'(无标题)')"
+    }
+}
+
+/// 数会话段:第一条起 1 段,之后每当"本条 started − 上一条 ended > gap_secs"再 +1。
+/// `rows` 是按时间升序的 (started_at, ended_at) RFC3339;时间戳解析失败时保守归并
+/// (不切),宁可少算也不虚高。
+fn count_sessions(rows: &[(String, String)], gap_secs: i64) -> usize {
+    let ts = |s: &str| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|d| d.timestamp())
+    };
+    let mut sessions = 0usize;
+    let mut prev_end: Option<i64> = None;
+    for (start, end) in rows {
+        let (Some(s), Some(e)) = (ts(start), ts(end)) else {
+            // 解析不了:并入当前会话(若还没有会话则起一段)
+            if sessions == 0 {
+                sessions = 1;
+            }
+            continue;
+        };
+        match prev_end {
+            Some(pe) if s - pe <= gap_secs => {} // 间隔内 → 同一会话
+            _ => sessions += 1,                  // 首条 or 超间隔 → 新会话
+        }
+        prev_end = Some(e.max(prev_end.unwrap_or(e)));
+    }
+    sessions
 }
 
 async fn get_timeline(
@@ -558,5 +741,75 @@ mod tests {
             ToolCall::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
             _ => panic!(),
         }
+    }
+
+    #[test]
+    fn stat_metric_and_gap_defaults_and_clamp() {
+        // 不填 → duration + 默认 30 分钟
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({"date_from": "2026-07-01", "date_to": "2026-07-05"})),
+            today(),
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats {
+                metric,
+                gap_minutes,
+                ..
+            } => {
+                assert_eq!(metric, StatMetric::Duration);
+                assert_eq!(gap_minutes, GAP_DEFAULT_MIN);
+            }
+            _ => panic!(),
+        }
+        // session_count + 越界间隔被夹到上界
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "metric": "session_count", "gap_minutes": 9999
+            })),
+            today(),
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats {
+                metric,
+                gap_minutes,
+                ..
+            } => {
+                assert_eq!(metric, StatMetric::SessionCount);
+                assert_eq!(gap_minutes, GAP_MAX);
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn count_sessions_gap_split() {
+        // 三段活动:10:00-10:05,10:20-10:25(距上一段 15min),12:00-12:10(距上段 95min)
+        let rows = vec![
+            (
+                "2026-07-05T10:00:00+09:00".into(),
+                "2026-07-05T10:05:00+09:00".into(),
+            ),
+            (
+                "2026-07-05T10:20:00+09:00".into(),
+                "2026-07-05T10:25:00+09:00".into(),
+            ),
+            (
+                "2026-07-05T12:00:00+09:00".into(),
+                "2026-07-05T12:10:00+09:00".into(),
+            ),
+        ];
+        // 间隔 30min:前两段并成一次(15min<30),第三段另起 → 2 次
+        assert_eq!(count_sessions(&rows, 30 * 60), 2);
+        // 间隔 10min:三段各自独立(15min、95min 都超) → 3 次
+        assert_eq!(count_sessions(&rows, 10 * 60), 3);
+        // 间隔 120min:全部并成一次 → 1 次
+        assert_eq!(count_sessions(&rows, 120 * 60), 1);
+        // 空 → 0
+        assert_eq!(count_sessions(&[], 30 * 60), 0);
     }
 }
