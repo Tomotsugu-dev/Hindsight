@@ -923,6 +923,11 @@
         "confirmTitle": "上传「{{dataset}}」到云端？",
         "confirmNote": "数据仅存放在你自己的 Google Drive 应用数据区（第三方应用不可见），可随时关闭开关并用「清除云端数据」删除。",
         "confirmAction": "我了解风险，开启"
+      },
+      "oauthFallback": {
+        "hint": "浏览器没有自动打开？复制登录链接，粘贴到任意浏览器完成登录。",
+        "copy": "复制登录链接",
+        "copied": "已复制"
       }
     },
     "errors": {

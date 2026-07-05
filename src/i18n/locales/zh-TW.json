@@ -923,6 +923,11 @@
         "confirmTitle": "上傳「{{dataset}}」到雲端？",
         "confirmNote": "資料僅存放在你自己的 Google Drive 應用資料區（第三方應用不可見），可隨時關閉開關並用「清除雲端資料」刪除。",
         "confirmAction": "我了解風險，開啟"
+      },
+      "oauthFallback": {
+        "hint": "瀏覽器沒有自動開啟？複製登入連結，貼到任意瀏覽器完成登入。",
+        "copy": "複製登入連結",
+        "copied": "已複製"
       }
     },
     "errors": {

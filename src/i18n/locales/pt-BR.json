@@ -923,6 +923,11 @@
         "confirmTitle": "Enviar “{{dataset}}” para a nuvem?",
         "confirmNote": "Os dados ficam apenas na área de dados de app do seu próprio Google Drive (invisível a outros apps). Você pode desativar a qualquer momento e removê-los com “Limpar dados na nuvem”.",
         "confirmAction": "Entendo o risco, ativar"
+      },
+      "oauthFallback": {
+        "hint": "O navegador não abriu? Copie o link de login e cole em qualquer navegador.",
+        "copy": "Copiar link de login",
+        "copied": "Copiado"
       }
     },
     "errors": {

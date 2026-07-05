@@ -892,3 +892,23 @@
   line-height: 1.45;
   color: var(--text-muted);
 }
+
+/* ── OAuth 手动兜底(浏览器没弹出来) ── */
+
+.oauthFallback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--status-pending) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-pending) 32%, transparent);
+}
+
+.oauthFallbackText {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-strong);
+}

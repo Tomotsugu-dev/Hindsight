@@ -100,7 +100,16 @@ pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
 }
 
 /// 完整登录流程：返回登录后的 AuthState。
-pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
+///
+/// `on_url(auth_url, opened)`:授权 URL 生成后回调一次——`opened=false` 表示
+/// 打开浏览器的调用已失败,前端应立即显示「复制登录链接」;`opened=true` 也
+/// **不保证浏览器可见**(ShellExecute 成功 ≠ handler 真的弹了窗:默认浏览器
+/// 关联损坏/提权进程/安全软件拦截都静默),前端等几秒仍未完成时同样给出兜底。
+/// 打开失败**不中断流程**——回调监听照常等,用户用任何浏览器打开链接都能完成。
+pub async fn sign_in_with_google(
+    pool: &DbPool,
+    on_url: impl FnOnce(&str, bool),
+) -> Result<AuthState> {
     let (client_id, client_secret) = load_creds(pool).await?;
 
     // 1) PKCE
@@ -118,11 +127,16 @@ pub async fn sign_in_with_google(pool: &DbPool) -> Result<AuthState> {
         .port();
     let redirect_uri = format!("http://127.0.0.1:{port}/callback");
 
-    // 3) 打开浏览器
+    // 3) 打开浏览器(失败只降级为手动链接,不中断)
     let auth_url = build_auth_url(&client_id, &redirect_uri, &challenge, &state);
-    if let Err(e) = open::that(&auth_url) {
-        return Err(Error::OAuthSetup(format!("open browser: {e}")));
-    }
+    let opened = match open::that(&auth_url) {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("打开浏览器失败(等待用户手动打开链接): {e}");
+            false
+        }
+    };
+    on_url(&auth_url, opened);
 
     // 4) 等回调（最多 OAUTH_TIMEOUT_SECS 秒）
     let code_state = timeout(

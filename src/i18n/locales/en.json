@@ -923,6 +923,11 @@
         "confirmTitle": "Upload “{{dataset}}” to the cloud?",
         "confirmNote": "Data is stored only in your own Google Drive app-data area (invisible to other apps). You can turn this off at any time and remove it with “Clear cloud data”.",
         "confirmAction": "I understand the risk, enable"
+      },
+      "oauthFallback": {
+        "hint": "Browser didn’t open? Copy the sign-in link and paste it into any browser.",
+        "copy": "Copy sign-in link",
+        "copied": "Copied"
       }
     },
     "errors": {

@@ -276,6 +276,11 @@ export interface PartialDownload {
 /** 模型下载进度事件名。前端 listen 这个。 */
 export const MODEL_DOWNLOAD_EVENT = "ai://model-download-progress";
 
+/** OAuth 授权 URL 就绪事件：payload = { url, opened }。
+ *  opened=false → 打开浏览器失败，前端立即显示「复制登录链接」兜底；
+ *  opened=true 也不保证浏览器可见，前端延时后仍在等则同样显示兜底。 */
+export const OAUTH_URL_EVENT = "sync://oauth-url";
+
 /** 下载进度阶段。`downloaded` / `total` 只在 downloading 阶段有意义。 */
 export type EngineDownloadPhase =
   | "downloading"

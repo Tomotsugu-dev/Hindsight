@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Check,
   ChevronRight,
   Cloud,
   CloudOff,
+  Copy,
   Eye,
   EyeOff,
   Loader2,
@@ -15,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { listen } from "@tauri-apps/api/event";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import { useSettings } from "../../state/settings";
@@ -22,7 +25,7 @@ import { AppearancePicker } from "../../components/AppearancePicker/AppearancePi
 import { ForgetRemoteDeviceDialog } from "../../components/ForgetRemoteDeviceDialog/ForgetRemoteDeviceDialog";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { logError } from "../../lib/logger";
-import { api, type AuthState, type SyncStatus } from "../../api/hindsight";
+import { api, OAUTH_URL_EVENT, type AuthState, type SyncStatus } from "../../api/hindsight";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SyncOptInDialog } from "./SyncOptInDialog";
 import styles from "./DevicesPage.module.css";
@@ -152,6 +155,11 @@ function CloudSyncCard() {
   const [setupOpen, setSetupOpen] = useState(false);
   // 可选上云:待确认的数据集(开启前弹琥珀警告;关闭直接生效)
   const [optInPending, setOptInPending] = useState<OptDatasetField | null>(null);
+  // OAuth 手动兜底:浏览器打开失败立即显示复制链接;"成功"但几秒内未完成也显示
+  //(ShellExecute 成功不保证浏览器可见:关联损坏/提权/安全软件都静默失败)
+  const [oauthUrl, setOauthUrl] = useState<string | null>(null);
+  const [showOauthFallback, setShowOauthFallback] = useState(false);
+  const [oauthCopied, setOauthCopied] = useState(false);
 
   useEffect(() => {
     api.authStatus().then(setAuth).catch(() => setAuth(null));
@@ -184,6 +192,22 @@ function CloudSyncCard() {
   const onSignIn = async () => {
     setBusy(true);
     setError(null);
+    setOauthUrl(null);
+    setShowOauthFallback(false);
+    setOauthCopied(false);
+    // 等授权 URL 事件:opened=false 立即亮兜底;opened=true 延时 6s 仍在等则亮
+    let fallbackTimer: number | undefined;
+    const unlisten = await listen<{ url: string; opened: boolean }>(
+      OAUTH_URL_EVENT,
+      (e) => {
+        setOauthUrl(e.payload.url);
+        if (!e.payload.opened) {
+          setShowOauthFallback(true);
+        } else {
+          fallbackTimer = window.setTimeout(() => setShowOauthFallback(true), 6000);
+        }
+      },
+    );
     try {
       const next = await api.signInWithGoogle();
       setAuth(next);
@@ -192,7 +216,22 @@ function CloudSyncCard() {
       setError(e instanceof Error ? e.message : String(e));
       refreshAuth();
     } finally {
+      unlisten();
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
       setBusy(false);
+      setOauthUrl(null);
+      setShowOauthFallback(false);
+    }
+  };
+
+  const onCopyOauthUrl = async () => {
+    if (!oauthUrl) return;
+    try {
+      await navigator.clipboard.writeText(oauthUrl);
+      setOauthCopied(true);
+      window.setTimeout(() => setOauthCopied(false), 2000);
+    } catch (e) {
+      logError("devices.copyOauthUrl", e);
     }
   };
 
@@ -447,6 +486,32 @@ function CloudSyncCard() {
           />
         </div>
       </div>
+
+      {/* ── OAuth 手动兜底:浏览器没弹出来时给用户一条活路 ── */}
+      {busy && showOauthFallback && oauthUrl && (
+        <div className={styles.oauthFallback}>
+          <span className={styles.oauthFallbackText}>
+            {t("devices.cloud.oauthFallback.hint")}
+          </span>
+          <button
+            type="button"
+            className={styles.smallBtn}
+            onClick={() => void onCopyOauthUrl()}
+          >
+            {oauthCopied ? (
+              <>
+                <Check size={13} strokeWidth={2.2} />
+                {t("devices.cloud.oauthFallback.copied")}
+              </>
+            ) : (
+              <>
+                <Copy size={13} strokeWidth={1.85} />
+                {t("devices.cloud.oauthFallback.copy")}
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* ── 同步内容:可选上云三挡(仅登录后显示;开启前弹琥珀警告)── */}
       {signedIn && (
