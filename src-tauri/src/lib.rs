@@ -137,6 +137,19 @@ pub fn run() {
                 MINIMIZE_TO_TRAY
                     .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
+                // Windows 自启动自愈:HKCU Run 项在旧版卸载(双装迁移清理)时会被
+                // 连带删除,而它原本只在用户切设置开关时写入。设置说开就每次启动
+                // 重新断言一次——幂等,顺带把路径刷成当前 exe,换安装位置也不失效。
+                // 只做 Windows:macOS 登录项不会被卸载器清理,且 AppleScript 注册
+                // 重复执行的行为不可靠。
+                #[cfg(target_os = "windows")]
+                if cfg.auto_start {
+                    use tauri_plugin_autostart::ManagerExt;
+                    if let Err(e) = handle.autolaunch().enable() {
+                        log::warn!("自启动注册断言失败(可在设置里重新开关一次): {e}");
+                    }
+                }
+
                 // 屏幕记忆库(L2):打开失败不阻塞启动,采集端只是不登记帧
                 let memdb = match memory::MemoryDb::open().await {
                     Ok(db) => Some(db),
