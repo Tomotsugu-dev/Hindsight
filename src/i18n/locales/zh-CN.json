@@ -122,7 +122,7 @@
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
         "ocrResidentLabel": "常驻 OCR",
-        "ocrResidentDescription": "新截图即时可搜，多占约 400MB 内存；关闭则定时批量识别，检索有延迟。",
+        "ocrResidentDescription": "新截图即时可搜，多占约 400MB 内存；仅在接通电源时运行，电池供电自动暂停。关闭则定时批量识别，检索有延迟。",
         "intervalLabel": "采集间隔",
         "intervalDescription": "采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
@@ -137,6 +137,8 @@
         "backfillButton": "回填并识别",
         "backfillRunning": "识别中…",
         "backfillRegistered": "已登记 {{n}} 张，开始识别…",
+        "backfillProgress": "识别中…剩余 {{n}} 张",
+        "backfillBackground": "已登记，后台索引中（可离开本页）",
         "backfillDone": "完成：识别 {{ok}} 张，跳过 {{failed}} 张"
       },
       "workHours": {
@@ -1309,6 +1311,7 @@
       "local": "本地 · {{model}}",
       "none": "未选择模型"
     },
+    "localModelHint": "提示：对话依赖模型的工具调用能力，过小的本地模型可能答非所问；建议选用推理能力更强的本地模型。",
     "backfill": {
       "pending": "有 {{count}} 张截图尚未进入文字索引，对话可能查不到它们。",
       "action": "立即回填",

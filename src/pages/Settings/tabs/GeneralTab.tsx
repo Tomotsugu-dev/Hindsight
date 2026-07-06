@@ -69,10 +69,25 @@ export default function GeneralTab() {
   const runBackfill = async () => {
     setBackfillBusy(true);
     setBackfillMsg("");
+    // 识别期间每 3 秒查一次剩余帧数,实时显示进度;进入终态后停止覆盖
+    let finished = false;
+    const timer = setInterval(() => {
+      void api
+        .memoryPendingStats()
+        .then((s) => {
+          if (!finished && s.total > 0) {
+            setBackfillMsg(
+              t("settings.general.capture.backfillProgress", { n: s.total }),
+            );
+          }
+        })
+        .catch(() => {});
+    }, 3000);
     try {
       const n = await api.memoryBackfill();
       setBackfillMsg(t("settings.general.capture.backfillRegistered", { n }));
       const rep = await api.memoryDigestNow();
+      finished = true;
       setBackfillMsg(
         t("settings.general.capture.backfillDone", {
           ok: rep.processed,
@@ -80,9 +95,16 @@ export default function GeneralTab() {
         }),
       );
     } catch (e) {
-      logError("general.backfill", e);
-      setBackfillMsg(String(e));
+      finished = true;
+      // 常驻批持锁时手动触发报"已在运行"——帧已登记,后台会消化,不算错误
+      if (String(e).includes("已在运行")) {
+        setBackfillMsg(t("settings.general.capture.backfillBackground"));
+      } else {
+        logError("general.backfill", e);
+        setBackfillMsg(String(e));
+      }
     } finally {
+      clearInterval(timer);
       setBackfillBusy(false);
     }
   };

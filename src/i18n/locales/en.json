@@ -122,7 +122,7 @@
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
         "ocrResidentLabel": "Keep OCR resident",
-        "ocrResidentDescription": "New screenshots become searchable in real time (~400 MB extra RAM); off = batch recognition, search lags behind.",
+        "ocrResidentDescription": "New screenshots become searchable in real time (~400 MB extra RAM). Runs only on AC power and pauses automatically on battery; off = batch recognition, search lags behind.",
         "intervalLabel": "Capture interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
@@ -137,6 +137,8 @@
         "backfillButton": "Backfill & recognize",
         "backfillRunning": "Recognizing…",
         "backfillRegistered": "Registered {{n}} frames, recognizing…",
+        "backfillProgress": "Recognizing… {{n}} frames left",
+        "backfillBackground": "Registered; indexing continues in the background (you can leave this page)",
         "backfillDone": "Done: {{ok}} recognized, {{failed}} skipped"
       },
       "workHours": {
@@ -1309,6 +1311,7 @@
       "local": "Local · {{model}}",
       "none": "No model selected"
     },
+    "localModelHint": "Heads-up: chat relies on tool calling, which very small local models may handle unreliably. A more capable local model gives better results.",
     "backfill": {
       "pending": "{{count}} screenshots are not yet in the text index; chat may miss them.",
       "action": "Index now",

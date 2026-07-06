@@ -51,6 +51,9 @@ pub struct PendingStats {
     pub pending_ocr: u64,
     /// 两者之和,前端 banner 的 N
     pub total: u64,
+    /// 消化(手动/常驻批)是否正在进行——前端据此在挂载时直接进入
+    /// "后台索引中"态,而不是显示带按钮的初始态
+    pub digest_running: bool,
 }
 
 /// 两库对账走 Rust 侧集合差,不用 ATTACH:主库是应用唯一写连接,
@@ -117,5 +120,6 @@ pub async fn memory_pending_stats(
         unregistered,
         pending_ocr,
         total: unregistered + pending_ocr,
+        digest_running: digest::is_running(),
     })
 }

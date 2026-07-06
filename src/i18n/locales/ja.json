@@ -122,7 +122,7 @@
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
         "ocrResidentLabel": "OCR を常駐させる",
-        "ocrResidentDescription": "新しいスクリーンショットが即時に検索可能になります（約 400MB 追加使用）。オフの場合は一括認識のため検索に遅延があります。",
+        "ocrResidentDescription": "新しいスクリーンショットが即時に検索可能になります（約 400MB 追加使用）。電源接続時のみ動作し、バッテリー駆動中は自動的に一時停止します。オフの場合は一括認識のため検索に遅延があります。",
         "intervalLabel": "記録の間隔",
         "intervalDescription": "記録間隔。",
         "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",
@@ -137,6 +137,8 @@
         "backfillButton": "取り込んで認識",
         "backfillRunning": "認識中…",
         "backfillRegistered": "{{n}} 枚を登録、認識を開始…",
+        "backfillProgress": "認識中…残り {{n}} 枚",
+        "backfillBackground": "登録済み。バックグラウンドで索引作成中（このページを離れても続行されます）",
         "backfillDone": "完了：{{ok}} 枚を認識、{{failed}} 枚をスキップ"
       },
       "workHours": {
@@ -1309,6 +1311,7 @@
       "local": "ローカル · {{model}}",
       "none": "モデル未選択"
     },
+    "localModelHint": "ヒント：チャットはツール呼び出しに依存しており、小型のローカルモデルでは不安定な場合があります。より高性能なローカルモデルの利用をおすすめします。",
     "backfill": {
       "pending": "{{count}} 枚のスクリーンショットがまだテキスト索引に入っていません。チャットで見つからない可能性があります。",
       "action": "今すぐ取り込む",

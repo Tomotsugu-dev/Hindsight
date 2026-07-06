@@ -641,6 +641,8 @@ export interface MemoryPendingStats {
   pendingOcr: number;
   /** 两者之和，banner 显示的 N */
   total: number;
+  /** 消化（手动/常驻批）正在进行——挂载时据此直接显示"后台索引中" */
+  digestRunning: boolean;
 }
 
 export const api = {

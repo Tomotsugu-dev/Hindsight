@@ -27,8 +27,13 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   const [phase, setPhase] = useState<Phase>("idle");
   const [errMsg, setErrMsg] = useState("");
 
+  // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
+  // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
+  const effective: Phase =
+    phase === "idle" && stats.digestRunning ? "background" : phase;
+
   // 索引进行中轮询剩余数;total 归零时父组件的 stats 更新会让本组件不再渲染
-  const polling = phase === "running" || phase === "background";
+  const polling = effective === "running" || effective === "background";
   useEffect(() => {
     if (!polling) return;
     const timer = setInterval(onRefresh, POLL_MS);
@@ -61,13 +66,14 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     <div className={styles.banner} role="status">
       <DatabaseZap size={14} strokeWidth={2} className={styles.bannerIcon} />
       <span className={styles.bannerText}>
-        {phase === "running" && t("chat.backfill.running", { count: stats.total })}
-        {phase === "background" &&
+        {effective === "running" &&
+          t("chat.backfill.running", { count: stats.total })}
+        {effective === "background" &&
           t("chat.backfill.alreadyRunning", { count: stats.total })}
-        {phase === "failed" && t("chat.backfill.failed", { msg: errMsg })}
-        {phase === "idle" && t("chat.backfill.pending", { count: stats.total })}
+        {effective === "failed" && t("chat.backfill.failed", { msg: errMsg })}
+        {effective === "idle" && t("chat.backfill.pending", { count: stats.total })}
       </span>
-      {(phase === "idle" || phase === "failed") && (
+      {(effective === "idle" || effective === "failed") && (
         <button type="button" className={styles.bannerBtn} onClick={() => void run()}>
           {t("chat.backfill.action")}
         </button>

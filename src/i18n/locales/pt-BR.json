@@ -122,7 +122,7 @@
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
         "ocrResidentLabel": "Manter OCR residente",
-        "ocrResidentDescription": "Novas capturas ficam pesquisáveis em tempo real (~400 MB de RAM extra); desativado = reconhecimento em lote, busca com atraso.",
+        "ocrResidentDescription": "Novas capturas ficam pesquisáveis em tempo real (~400 MB de RAM extra). Executa apenas na tomada e pausa automaticamente na bateria; desativado = reconhecimento em lote, busca com atraso.",
         "intervalLabel": "Intervalo de captura",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
@@ -137,6 +137,8 @@
         "backfillButton": "Indexar e reconhecer",
         "backfillRunning": "Reconhecendo…",
         "backfillRegistered": "{{n}} quadros registrados, reconhecendo…",
+        "backfillProgress": "Reconhecendo… faltam {{n}} quadros",
+        "backfillBackground": "Registrado; a indexação continua em segundo plano (você pode sair desta página)",
         "backfillDone": "Concluído: {{ok}} reconhecidos, {{failed}} ignorados"
       },
       "workHours": {
@@ -1309,6 +1311,7 @@
       "local": "Local · {{model}}",
       "none": "Nenhum modelo selecionado"
     },
+    "localModelHint": "Dica: o chat depende de tool calling, que modelos locais muito pequenos podem executar de forma instável. Um modelo local mais capaz traz melhores resultados.",
     "backfill": {
       "pending": "{{count}} capturas de tela ainda não estão no índice de texto; o chat pode não encontrá-las.",
       "action": "Indexar agora",

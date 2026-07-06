@@ -122,7 +122,7 @@
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
         "ocrResidentLabel": "常駐 OCR",
-        "ocrResidentDescription": "新截圖即時可搜，多佔約 400MB 記憶體；關閉則定時批次辨識，檢索有延遲。",
+        "ocrResidentDescription": "新截圖即時可搜，多佔約 400MB 記憶體；僅在接通電源時運行，電池供電自動暫停。關閉則定時批次辨識，檢索有延遲。",
         "intervalLabel": "採集間隔",
         "intervalDescription": "採集頻率。",
         "intervalHint": "截圖觸發時機：\n• 切換應用程式 → 立即截圖\n• 瀏覽器切換 URL → 立即截圖\n• 同一視窗停留滿設定的間隔 → 截圖",
@@ -137,6 +137,8 @@
         "backfillButton": "回填並辨識",
         "backfillRunning": "辨識中…",
         "backfillRegistered": "已登記 {{n}} 張，開始辨識…",
+        "backfillProgress": "辨識中…剩餘 {{n}} 張",
+        "backfillBackground": "已登記，背景索引中（可離開本頁）",
         "backfillDone": "完成：辨識 {{ok}} 張，跳過 {{failed}} 張"
       },
       "workHours": {
@@ -1309,6 +1311,7 @@
       "local": "本機 · {{model}}",
       "none": "未選擇模型"
     },
+    "localModelHint": "提示：對話依賴模型的工具調用能力，過小的本地模型可能答非所問；建議選用推理能力更強的本地模型。",
     "backfill": {
       "pending": "有 {{count}} 張截圖尚未進入文字索引，對話可能查不到它們。",
       "action": "立即回填",

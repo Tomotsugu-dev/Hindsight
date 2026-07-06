@@ -11,6 +11,7 @@ import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import ModelBadge from "./ModelBadge";
 import BackfillBanner from "./BackfillBanner";
+import { chatUsesCloud } from "./chatRouting";
 import { ChatPrivacyDialog } from "./ChatPrivacyDialog";
 import styles from "./ChatPage.module.css";
 
@@ -75,6 +76,10 @@ export default function ChatPage() {
         <h1 className={styles.title}>{t("chat.title")}</h1>
         <ModelBadge />
       </header>
+
+      {!chatUsesCloud(settings.ai) && (
+        <p className={styles.localHint}>{t("chat.localModelHint")}</p>
+      )}
 
       {pendingStats && (
         <BackfillBanner stats={pendingStats} onRefresh={refreshPendingStats} />

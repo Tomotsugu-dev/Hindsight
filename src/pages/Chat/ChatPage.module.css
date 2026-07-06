@@ -349,3 +349,14 @@
   color: var(--text-strong);
   outline: none;
 }
+
+/* 本地模型工具调用能力提示(仅本地路由时显示) */
+.localHint {
+  margin: 0 0 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--text-secondary) 6%, transparent);
+}
