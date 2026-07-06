@@ -123,6 +123,7 @@ export default function EngineTab() {
         icon={Server}
       >
         <EngineSection />
+        <OcrRuntimeSection />
       </Section>
 
       {/* 段总结引擎参数（ctx 优先）。新字段 null 时降级到旧全局 batchSize/
@@ -200,10 +201,10 @@ function EngineSection() {
 
   useEffect(() => {
     void refresh();
-    const p = listen<EngineDownloadProgress>(
-      ENGINE_DOWNLOAD_EVENT,
-      (ev) => setProgress(ev.payload),
-    );
+    // 只认 llama.cpp 阶段;OCR 组件(stage="runtime")的进度归 OcrRuntimeSection
+    const p = listen<EngineDownloadProgress>(ENGINE_DOWNLOAD_EVENT, (ev) => {
+      if (ev.payload.stage !== "runtime") setProgress(ev.payload);
+    });
     return () => {
       void p.then((unlisten) => unlisten());
     };
@@ -223,7 +224,9 @@ function EngineSection() {
     setError(null);
     setProgress(null);
     try {
-      await api.downloadBinary();
+      // 已安装状态下点的是「重新下载/更新」→ force 强制重下(修复损坏安装);
+      // 未安装则正常下载(后端幂等跳过逻辑不会挡)
+      await api.downloadBinary(installed);
       await refresh();
       // done 信号到达时 progress 已被 listen 设过；保留几百 ms 让用户看到，
       // 然后清空，避免下次操作前停留旧状态
@@ -304,15 +307,12 @@ function EngineSection() {
     return <div className={styles.engineCard}>{t("aiSettings.engine.loading")}</div>;
   }
 
-  // "AI 引擎"是 binary + onnxruntime runtime 一对——两者都装才算 installed。
-  // 任一缺失都按"未安装"处理（下载按钮 + 缺失 badge）。
-  const binaryInstalled = status.installed;
-  const runtimeInstalled = status.embeddingRuntime.installed;
-  const installed = binaryInstalled && runtimeInstalled;
+  // 本卡只管 llama.cpp;OCR 的 onnxruntime 是独立组件(下方 OcrRuntimeSection)
+  const installed = status.installed;
   const accelLabel = humanAccelLabel(status.platformId, t);
-  const version = binaryInstalled ? status.installedVersion : status.currentPin;
+  const version = installed ? status.installedVersion : status.currentPin;
   const stale =
-    binaryInstalled &&
+    installed &&
     status.installedVersion !== null &&
     status.installedVersion !== status.currentPin;
   // Windows 但 CUDA 未检测到：建议先装 NVIDIA CUDA
@@ -511,6 +511,172 @@ function EngineSection() {
       onConfirm={() => void doDelete()}
       onCancel={() => setConfirmingDelete(false)}
     />
+    </>
+  );
+}
+
+/**
+ * 文字识别(OCR)组件卡——onnxruntime 运行时,与 llama.cpp 完全独立。
+ * 只服务屏幕记忆的 OCR:云端 API 用户只装它(~40MB)就能用全部功能。
+ * macOS 走系统 Vision,显示"无需下载"说明,不给任何按钮。
+ */
+function OcrRuntimeSection() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<EngineStatus | null>(null);
+  const [progress, setProgress] = useState<EngineDownloadProgress | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const refresh = async () => {
+    try {
+      setStatus(await api.getEngineStatus());
+    } catch (e) {
+      logError("ocrRuntime.getStatus", e);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+    const p = listen<EngineDownloadProgress>(ENGINE_DOWNLOAD_EVENT, (ev) => {
+      if (ev.payload.stage === "runtime") setProgress(ev.payload);
+    });
+    return () => {
+      void p.then((unlisten) => unlisten());
+    };
+  }, []);
+
+  if (!status) return null;
+  const rt = status.embeddingRuntime;
+  // macOS 用系统 Vision(ANE),零下载零依赖——只放一行说明
+  if (status.platformId.startsWith("macos")) {
+    return (
+      <div className={styles.engineCard}>
+        <div className={styles.engineInfoRow}>
+          <span className={`${styles.engineName} ${styles.engineNameCjk}`}>
+            {t("aiSettings.engine.ocr.name")}
+          </span>
+          <span className={`${styles.engineBadge} ${styles.engineBadgeOk}`}>
+            {t("aiSettings.engine.ocr.macNativeBadge")}
+          </span>
+        </div>
+        <div className={styles.engineDetectedRow}>
+          {t("aiSettings.engine.ocr.macNativeDesc")}
+        </div>
+      </div>
+    );
+  }
+
+  const installed = rt.installed;
+  // 有版本文件但判未装 = 旧 CPU 构建残留(DirectML 迁移),提示升级收益
+  const upgradeHint = !installed && !!rt.installedVersion;
+
+  const onDownload = async () => {
+    setBusy(true);
+    setError(null);
+    setProgress(null);
+    try {
+      await api.downloadOcrRuntime(installed);
+      await refresh();
+      setTimeout(() => setProgress(null), 800);
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+      setProgress(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doDelete = async () => {
+    setConfirmingDelete(false);
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteOcrRuntime();
+      await refresh();
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className={styles.engineCard}>
+        <div className={styles.engineInfoRow}>
+          <span className={`${styles.engineName} ${styles.engineNameCjk}`}>
+            {t("aiSettings.engine.ocr.name")}
+          </span>
+          <span
+            className={styles.engineSize}
+            style={busy ? { visibility: "hidden" } : undefined}
+          >
+            {t("aiSettings.engine.actions.approxSize", {
+              size: Math.round(rt.estimatedBytes / 1024 / 1024),
+            })}
+          </span>
+          <span
+            className={`${styles.engineBadge} ${
+              installed ? styles.engineBadgeOk : styles.engineBadgeWarn
+            }`}
+          >
+            {installed
+              ? t("aiSettings.engine.installed")
+              : t("aiSettings.engine.notInstalled")}
+          </span>
+        </div>
+        <div className={styles.engineDetectedRow}>
+          {upgradeHint
+            ? t("aiSettings.engine.ocr.upgradeHint")
+            : t("aiSettings.engine.ocr.desc")}
+        </div>
+
+        {error ? <div className={styles.engineError}>{error}</div> : null}
+        {progress ? (
+          <EngineProgress key={progress.stage} progress={progress} />
+        ) : null}
+
+        <div className={styles.engineActionsFlat}>
+          <button
+            type="button"
+            className={styles.engineDownloadOutline}
+            onClick={() => void onDownload()}
+            disabled={busy}
+          >
+            {busy ? (
+              <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
+            ) : (
+              <Download size={16} strokeWidth={2.2} />
+            )}
+            <span>
+              {busy
+                ? t("aiSettings.engine.actions.downloading")
+                : installed
+                  ? t("aiSettings.engine.actions.redownload")
+                  : t("aiSettings.engine.ocr.download")}
+            </span>
+          </button>
+          <span className={styles.engineActionsSpacer} aria-hidden="true" />
+          <button
+            type="button"
+            className={styles.engineUninstallOutline}
+            onClick={() => setConfirmingDelete(true)}
+            disabled={busy || !installed}
+          >
+            <Trash2 size={14} strokeWidth={1.85} />
+            {t("aiSettings.engine.actions.uninstall")}
+          </button>
+        </div>
+      </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t("aiSettings.engine.ocr.uninstallConfirmTitle")}
+        message={t("aiSettings.engine.ocr.uninstallConfirmMessage")}
+        variant="danger"
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </>
   );
 }

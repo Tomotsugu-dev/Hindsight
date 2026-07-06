@@ -11,9 +11,15 @@ import { Slider } from "../../../components/FormControls/Slider";
 import { TimeRangeList } from "../../../components/FormControls/TimeRangeList";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
+import { listen } from "@tauri-apps/api/event";
 import { useSettings } from "../../../state/settings";
 import { useLocale, LOCALE_OPTIONS } from "../../../i18n/useLocale";
-import { api } from "../../../api/hindsight";
+import {
+  api,
+  ENGINE_DOWNLOAD_EVENT,
+  type EngineDownloadProgress,
+} from "../../../api/hindsight";
+import { ocrRuntimeReady } from "../../../lib/ocrRuntime";
 import { logError } from "../../../lib/logger";
 import styles from "./GeneralTab.module.css";
 
@@ -28,6 +34,10 @@ export default function GeneralTab() {
   // 历史截图回填：登记 + 立即识别，识别跑完积压才返回（可能数分钟）
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
+  // OCR 组件缺失时的就地引导:记住用户原本要做的动作,确认下载后自动继续
+  const [ocrConfirm, setOcrConfirm] = useState<null | "resident" | "backfill">(
+    null,
+  );
 
   useEffect(() => {
     api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
@@ -66,6 +76,63 @@ export default function GeneralTab() {
     }
   };
 
+  /** 确认下载 OCR 组件(带进度),完成后自动继续用户原本要做的动作。 */
+  const downloadOcrThen = async (kind: "resident" | "backfill") => {
+    setOcrConfirm(null);
+    setBackfillBusy(true);
+    setBackfillMsg("");
+    const unlisten = await listen<EngineDownloadProgress>(
+      ENGINE_DOWNLOAD_EVENT,
+      (ev) => {
+        if (ev.payload.stage !== "runtime") return;
+        if (ev.payload.phase === "downloading") {
+          setBackfillMsg(
+            t("settings.general.capture.ocrDownloading", {
+              mb: Math.round(ev.payload.downloaded / 1024 / 1024),
+            }),
+          );
+        }
+      },
+    );
+    try {
+      await api.downloadOcrRuntime();
+    } catch (e) {
+      logError("general.ocrDownload", e);
+      setBackfillMsg(String(e));
+      return;
+    } finally {
+      unlisten();
+      setBackfillBusy(false);
+    }
+    setBackfillMsg("");
+    if (kind === "resident") {
+      update({ memoryOcrResident: true });
+    } else {
+      await runBackfill();
+    }
+  };
+
+  /** 常驻 OCR 开关:开启方向先确保组件就绪,缺则弹引导(确认下载后自动开启)。 */
+  const onResidentToggle = (v: boolean) => {
+    if (!v) {
+      update({ memoryOcrResident: false });
+      return;
+    }
+    void ocrRuntimeReady().then((ready) => {
+      if (ready) update({ memoryOcrResident: true });
+      else setOcrConfirm("resident");
+    });
+  };
+
+  /** 立即回填按钮:同样先确保组件就绪。 */
+  const onBackfillClick = async () => {
+    if (!(await ocrRuntimeReady())) {
+      setOcrConfirm("backfill");
+      return;
+    }
+    await runBackfill();
+  };
+
   const runBackfill = async () => {
     setBackfillBusy(true);
     setBackfillMsg("");
@@ -99,6 +166,9 @@ export default function GeneralTab() {
       // 常驻批持锁时手动触发报"已在运行"——帧已登记,后台会消化,不算错误
       if (String(e).includes("已在运行")) {
         setBackfillMsg(t("settings.general.capture.backfillBackground"));
+      } else if (String(e).includes("embedding runtime missing")) {
+        // 文字识别运行时缺失/过旧(如 CPU→DirectML 迁移):指路而非裸报错
+        setBackfillMsg(t("settings.general.capture.backfillRuntimeMissing"));
       } else {
         logError("general.backfill", e);
         setBackfillMsg(String(e));
@@ -166,7 +236,7 @@ export default function GeneralTab() {
         >
           <Toggle
             checked={settings.memoryOcrResident}
-            onChange={(v) => update({ memoryOcrResident: v })}
+            onChange={onResidentToggle}
           />
         </Row>
         <Row
@@ -177,7 +247,7 @@ export default function GeneralTab() {
             <button
               type="button"
               className={styles.backfillBtn}
-              onClick={() => void runBackfill()}
+              onClick={() => void onBackfillClick()}
               disabled={backfillBusy}
             >
               {backfillBusy ? (
@@ -298,6 +368,24 @@ export default function GeneralTab() {
         </Row>
       </Section>
 
+      {/* OCR 组件缺失引导:确认即下载(~40MB),完成后自动继续原动作 */}
+      <ConfirmDialog
+        open={ocrConfirm !== null}
+        title={t("settings.general.capture.ocrConfirmTitle")}
+        message={
+          ocrConfirm === "resident"
+            ? t("settings.general.capture.ocrConfirmResident")
+            : t("settings.general.capture.ocrConfirmBackfill")
+        }
+        confirmLabel={t("settings.general.capture.ocrConfirmAccept")}
+        cancelLabel={t("common.cancel")}
+        variant="primary"
+        onConfirm={() => {
+          const kind = ocrConfirm;
+          if (kind) void downloadOcrThen(kind);
+        }}
+        onCancel={() => setOcrConfirm(null)}
+      />
       <ConfirmDialog
         open={pendingDataRoot !== null}
         title={t("settings.general.dataRootDialog.title")}

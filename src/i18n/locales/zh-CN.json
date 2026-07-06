@@ -139,7 +139,13 @@
         "backfillRegistered": "已登记 {{n}} 张，开始识别…",
         "backfillProgress": "识别中…剩余 {{n}} 张",
         "backfillBackground": "已登记，后台索引中（可离开本页）",
-        "backfillDone": "完成：识别 {{ok}} 张，跳过 {{failed}} 张"
+        "backfillDone": "完成：识别 {{ok}} 张，跳过 {{failed}} 张",
+        "backfillRuntimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 AI 设置 → 引擎 页点下载按钮。",
+        "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
+        "ocrConfirmResident": "开启文字索引需要下载文字识别组件（约 40MB），下载完成后自动开启。",
+        "ocrConfirmBackfill": "回填需要下载文字识别组件（约 40MB），下载完成后自动开始回填。",
+        "ocrConfirmAccept": "下载并继续",
+        "ocrDownloading": "正在下载文字识别组件… {{mb}} MB"
       },
       "workHours": {
         "title": "工作时段",
@@ -684,6 +690,16 @@
         "connectedWithModels": "已连接，{{count}} 个模型",
         "idleCountdownSec": "{{sec}} 秒后自动释放显存",
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒后自动释放显存"
+      },
+      "ocr": {
+        "name": "文字识别（OCR）组件",
+        "desc": "屏幕记忆的文字识别使用；识别在 GPU 上运行（DirectML，任意显卡含核显）。",
+        "macNativeBadge": "系统原生",
+        "macNativeDesc": "macOS 使用系统原生识别（Vision），无需下载任何组件。",
+        "upgradeHint": "检测到旧版本组件，重新下载即可升级到 GPU 加速。",
+        "download": "下载组件",
+        "uninstallConfirmTitle": "卸载文字识别（OCR）组件？",
+        "uninstallConfirmMessage": "卸载后屏幕文字索引功能不可用，重新下载即可恢复。已建立的索引不受影响。"
       }
     },
     "summaryParams": {
@@ -1094,7 +1110,7 @@
       "subtitle": "按时段汇总当日活动记录，本地模型生成",
       "runtimeMissing": {
         "title": "需要先下载 AI 引擎",
-        "message": "本地生成总结需要 AI 引擎，下载约 ~80 MB。下载完会自动续上生成。",
+        "message": "本地生成总结需要 AI 引擎（llama.cpp）。下载完成后会自动继续生成。",
         "confirm": "下载并继续",
         "cancel": "取消"
       },
@@ -1167,6 +1183,11 @@
         "stateSkippedNoActivity": "⚪ **跳过** — 这段时间什么都没记录",
         "stateError": "❌ **失败**",
         "stateEmptyContent": "_（空）_"
+      },
+      "cloudOffer": {
+        "title": "改用云端 API 生成？",
+        "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「AI 设置 → 引擎」下载本地引擎。",
+        "confirm": "使用云端生成"
       }
     },
     "debug": {
@@ -1317,7 +1338,12 @@
       "action": "立即回填",
       "running": "正在建立索引…剩余 {{count}} 张",
       "alreadyRunning": "索引任务已在后台运行，剩余 {{count}} 张",
-      "failed": "回填失败：{{msg}}"
+      "failed": "回填失败：{{msg}}",
+      "runtimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 AI 设置 → 引擎 页点下载按钮。",
+      "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
+      "ocrConfirmMessage": "建立文字索引需要下载文字识别组件（约 40MB），下载完成后自动开始索引。",
+      "ocrConfirmAccept": "下载并开始",
+      "downloadingOcr": "正在下载文字识别组件… {{mb}} MB"
     },
     "citations": {
       "showAll": "显示全部 {{count}} 条来源",
@@ -1326,6 +1352,10 @@
     "model": {
       "pickAria": "选择对话模型",
       "empty": "没有可用模型：请配置云端 API 或下载本地模型"
+    },
+    "tokens": {
+      "prompt": "本轮发送给模型的 token(上行)",
+      "completion": "模型生成的 token(下行)"
     }
   }
 }

@@ -147,12 +147,14 @@ impl MemoryDb {
                         degraded        INTEGER NOT NULL DEFAULT 0,
                         created_ts      TEXT NOT NULL,
                         guid            TEXT,            -- 跨设备全局 id
-                        conv_guid       TEXT             -- 所属会话的 guid(跨设备解析用)
+                        conv_guid       TEXT,            -- 所属会话的 guid(跨设备解析用)
+                        prompt_tokens     INTEGER,       -- 本轮上行 token(assistant)
+                        completion_tokens INTEGER        -- 本轮下行 token(assistant)
                     );
                     CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
                         ON chat_messages(conversation_id, id);
 
-                    PRAGMA user_version = 3;",
+                    PRAGMA user_version = 4;",
                 )
                 .db()?;
 
@@ -164,6 +166,8 @@ impl MemoryDb {
                     "ALTER TABLE chat_conversations ADD COLUMN deleted_at TEXT",
                     "ALTER TABLE chat_messages ADD COLUMN guid TEXT",
                     "ALTER TABLE chat_messages ADD COLUMN conv_guid TEXT",
+                    "ALTER TABLE chat_messages ADD COLUMN prompt_tokens INTEGER",
+                    "ALTER TABLE chat_messages ADD COLUMN completion_tokens INTEGER",
                     "ALTER TABLE text_sessions ADD COLUMN guid TEXT",
                     // 会话来源设备:NULL = 本机产出;非 NULL = 从该设备同步而来
                     "ALTER TABLE text_sessions ADD COLUMN origin_device TEXT",
@@ -193,7 +197,7 @@ impl MemoryDb {
                          ON chat_messages(guid);
                      CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_guid
                          ON text_sessions(guid);
-                     PRAGMA user_version = 3;",
+                     PRAGMA user_version = 4;",
                 )
                 .db()?;
                 Ok(())

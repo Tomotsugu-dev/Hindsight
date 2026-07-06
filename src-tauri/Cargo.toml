@@ -1,6 +1,6 @@
 [package]
 name = "hindsight"
-version = "0.8.3"
+version = "0.8.4"
 description = "Privacy-first activity tracking and AI summaries for desktop"
 authors = ["Tomotsugu-dev <heroburnning@gmail.com>"]
 edition = "2021"
@@ -66,6 +66,9 @@ futures-util = "0.3"
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic", "ndarray", "directml"] }
 ndarray = "0.16"
 sys-locale = "0.3"
+fast_image_resize = "6.0.0"
+onnx-protobuf = "0.2.3"
+protobuf = "=3.4.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi", "winreg", "winnt", "winbase"] }
@@ -91,6 +94,19 @@ libc = "0.2"
 # Tauri 命令参数惯例用 String（避免 lifetime 噪音），开了也是噪声多于收益。
 [lints.clippy]
 ptr_arg = "warn"
+
+# dev 下依赖库按 O2 编译（主 crate 仍 O0 可调试）：OCR 的 JPEG 解码/缩放/
+# 归一化走 image/ndarray 等重型库，无优化时慢 10-50 倍，会把 GPU 推理的
+# 加速完全淹没——"npm run tauri dev 里 OCR 巨慢、负载全在 CPU"就是它。
+# 依赖只编一次，日常增量编译速度不受影响。
+[profile.dev.package."*"]
+opt-level = 2
+
+# 主 crate dev 下开 O1:OCR 的像素热点(归一化/裁行)与 ndarray/fast_image_resize
+# 的泛型单态化都编译在主 crate 里,O0 下慢 30+ 倍(实测 det norm 29→946ms),
+# 把 GPU 的提速全部吞掉。O1 保留调试体验,热点恢复到 release 的一半以上。
+[profile.dev]
+opt-level = 1
 
 # 发布构建瘦身：lto + opt=z + 单 codegen unit + strip + abort，
 # 比默认 release 小 ~15-20%。panic=abort 失效 catch_unwind（项目未用）。

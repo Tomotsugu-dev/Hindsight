@@ -451,7 +451,7 @@ async fn optional_datasets_cross_device_roundtrip() {
     crate::chat::store::append_user(&a.mem, conv, "上周看了什么?")
         .await
         .unwrap();
-    crate::chat::store::append_assistant(&a.mem, conv, "看了三个视频 [1]", &[], false)
+    crate::chat::store::append_assistant(&a.mem, conv, "看了三个视频 [1]", &[], false, (200, 80))
         .await
         .unwrap();
 

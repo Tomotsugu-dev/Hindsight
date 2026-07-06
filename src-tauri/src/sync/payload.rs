@@ -172,6 +172,11 @@ pub struct ChatMessagePayload {
     pub citations: Option<String>,
     pub degraded: bool,
     pub created_ts: String,
+    /// 本轮上行/下行 token(assistant 才有;旧端文件缺字段 → None)
+    #[serde(default)]
+    pub prompt_tokens: Option<i64>,
+    #[serde(default)]
+    pub completion_tokens: Option<i64>,
 }
 
 /// `device.<id>.chat.json` 的整体形状:会话(含墓碑)+ 存活会话的全部消息。

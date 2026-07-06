@@ -139,7 +139,13 @@
         "backfillRegistered": "{{n}} quadros registrados, reconhecendo…",
         "backfillProgress": "Reconhecendo… faltam {{n}} quadros",
         "backfillBackground": "Registrado; a indexação continua em segundo plano (você pode sair desta página)",
-        "backfillDone": "Concluído: {{ok}} reconhecidos, {{failed}} ignorados"
+        "backfillDone": "Concluído: {{ok}} reconhecidos, {{failed}} ignorados",
+        "backfillRuntimeMissing": "O componente de reconhecimento de texto (OCR) precisa de atualização (~40MB): vá em Configurações de IA → Motor e clique no botão de download.",
+        "ocrConfirmTitle": "Componente de reconhecimento de texto (OCR) necessário",
+        "ocrConfirmResident": "Ativar a indexação de texto requer baixar o componente de reconhecimento (~40MB). Ele é ativado automaticamente quando o download terminar.",
+        "ocrConfirmBackfill": "O preenchimento requer baixar o componente de reconhecimento (~40MB). Ele começa automaticamente quando o download terminar.",
+        "ocrConfirmAccept": "Baixar e continuar",
+        "ocrDownloading": "Baixando componente de reconhecimento de texto… {{mb}} MB"
       },
       "workHours": {
         "title": "Horário de trabalho",
@@ -684,6 +690,16 @@
         "connectedWithModels": "Conectado — {{count}} modelo(s)",
         "idleCountdownSec": "Libera a VRAM em {{sec}}s",
         "idleCountdownMin": "Libera a VRAM em {{min}}m {{sec}}s"
+      },
+      "ocr": {
+        "name": "Componente de reconhecimento de texto (OCR)",
+        "desc": "Usado pela memória de tela para reconhecimento de texto; roda na GPU (DirectML, qualquer placa incluindo integrada).",
+        "macNativeBadge": "Nativo do sistema",
+        "macNativeDesc": "O macOS usa o reconhecimento nativo do sistema (Vision) — nada para baixar.",
+        "upgradeHint": "Uma versão antiga do componente foi detectada; baixe novamente para atualizar para aceleração por GPU.",
+        "download": "Baixar componente",
+        "uninstallConfirmTitle": "Desinstalar o componente de reconhecimento de texto (OCR)?",
+        "uninstallConfirmMessage": "A indexação de texto da tela ficará indisponível até você baixá-lo novamente. Os índices existentes não são afetados."
       }
     },
     "summaryParams": {
@@ -1094,7 +1110,7 @@
       "subtitle": "Resumo por segmento da linha do tempo de atividades de hoje, gerado por um modelo local.",
       "runtimeMissing": {
         "title": "Mecanismo de IA não instalado",
-        "message": "O mecanismo de IA (~80 MB) é necessário para gerar resumos localmente. A geração será retomada após o download terminar.",
+        "message": "Gerar resumos localmente requer o motor de IA (llama.cpp). A geração continua automaticamente quando o download terminar.",
         "confirm": "Baixar e continuar",
         "cancel": "Cancelar"
       },
@@ -1167,6 +1183,11 @@
         "stateSkippedNoActivity": "⚪ **Ignorado** — nada foi registrado neste intervalo de tempo",
         "stateError": "❌ **Falhou**",
         "stateEmptyContent": "_(vazio)_"
+      },
+      "cloudOffer": {
+        "title": "Gerar com sua API na nuvem?",
+        "message": "Uma API na nuvem já está configurada ({{provider}} · {{model}}), mas os resumos estão definidos para um modelo local e o motor local não está instalado. Ao confirmar, os resumos passarão a usar a API na nuvem — nomes de aplicativos, categorias e a linha do tempo de atividades serão enviados a esse provedor. Você também pode baixar o motor local em Configurações de IA → Motor.",
+        "confirm": "Usar API na nuvem"
       }
     },
     "debug": {
@@ -1317,7 +1338,12 @@
       "action": "Indexar agora",
       "running": "Construindo índice… {{count}} restantes",
       "alreadyRunning": "A indexação está em execução em segundo plano, {{count}} restantes",
-      "failed": "Falha na indexação: {{msg}}"
+      "failed": "Falha na indexação: {{msg}}",
+      "runtimeMissing": "O componente de reconhecimento de texto (OCR) precisa de atualização (~40MB): vá em Configurações de IA → Motor e clique no botão de download.",
+      "ocrConfirmTitle": "Componente de reconhecimento de texto (OCR) necessário",
+      "ocrConfirmMessage": "Construir o índice de texto requer baixar o componente de reconhecimento (~40MB). A indexação começa automaticamente quando o download terminar.",
+      "ocrConfirmAccept": "Baixar e iniciar",
+      "downloadingOcr": "Baixando componente de reconhecimento de texto… {{mb}} MB"
     },
     "citations": {
       "showAll": "Mostrar todas as {{count}} fontes",
@@ -1326,6 +1352,10 @@
     "model": {
       "pickAria": "Escolher modelo do chat",
       "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
+    },
+    "tokens": {
+      "prompt": "Tokens enviados ao modelo neste turno (upstream)",
+      "completion": "Tokens gerados pelo modelo (downstream)"
     }
   }
 }

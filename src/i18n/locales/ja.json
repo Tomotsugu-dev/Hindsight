@@ -139,7 +139,13 @@
         "backfillRegistered": "{{n}} 枚を登録、認識を開始…",
         "backfillProgress": "認識中…残り {{n}} 枚",
         "backfillBackground": "登録済み。バックグラウンドで索引作成中（このページを離れても続行されます）",
-        "backfillDone": "完了：{{ok}} 枚を認識、{{failed}} 枚をスキップ"
+        "backfillDone": "完了：{{ok}} 枚を認識、{{failed}} 枚をスキップ",
+        "backfillRuntimeMissing": "文字認識（OCR）コンポーネントの更新が必要です（約 40MB）：AI 設定 → エンジン でダウンロードボタンを押してください。",
+        "ocrConfirmTitle": "文字認識（OCR）コンポーネントが必要です",
+        "ocrConfirmResident": "テキスト索引を有効にするには文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に有効になります。",
+        "ocrConfirmBackfill": "取り込みには文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に取り込みを開始します。",
+        "ocrConfirmAccept": "ダウンロードして続行",
+        "ocrDownloading": "文字認識コンポーネントをダウンロード中… {{mb}} MB"
       },
       "workHours": {
         "title": "勤務時間",
@@ -684,6 +690,16 @@
         "connectedWithModels": "接続済み — モデル {{count}} 個",
         "idleCountdownSec": "{{sec}} 秒後に VRAM を解放",
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒後に VRAM を解放"
+      },
+      "ocr": {
+        "name": "文字認識（OCR）コンポーネント",
+        "desc": "画面メモリの文字認識に使用；認識は GPU 上で実行されます（DirectML、内蔵 GPU 含む任意のグラフィックカード）。",
+        "macNativeBadge": "システム標準",
+        "macNativeDesc": "macOS はシステム標準の認識（Vision）を使用します——ダウンロードは不要です。",
+        "upgradeHint": "旧バージョンのコンポーネントを検出しました。再ダウンロードで GPU 加速にアップグレードできます。",
+        "download": "コンポーネントをダウンロード",
+        "uninstallConfirmTitle": "文字認識（OCR）コンポーネントをアンインストールしますか？",
+        "uninstallConfirmMessage": "アンインストール後は画面テキスト索引機能が使用できなくなります。再ダウンロードで復元できます。既存の索引には影響しません。"
       }
     },
     "summaryParams": {
@@ -1094,7 +1110,7 @@
       "subtitle": "その日のアクティビティを時間帯ごとに集計し、ローカルモデルで生成します。",
       "runtimeMissing": {
         "title": "AI エンジンが未インストール",
-        "message": "ローカルでサマリーを生成するには AI エンジン（約 80 MB）が必要です。完了後、生成が自動的に続行します。",
+        "message": "ローカルで要約を生成するには AI エンジン（llama.cpp）が必要です。ダウンロード完了後、自動的に生成を続行します。",
         "confirm": "ダウンロードして続行",
         "cancel": "キャンセル"
       },
@@ -1167,6 +1183,11 @@
         "stateSkippedNoActivity": "⚪ **スキップ** — この時間帯には何も記録されていません",
         "stateError": "❌ **失敗**",
         "stateEmptyContent": "_（空）_"
+      },
+      "cloudOffer": {
+        "title": "クラウド API で生成しますか？",
+        "message": "クラウド API は設定済みです（{{provider}} · {{model}}）が、要約は現在ローカルモデルに設定されており、ローカルエンジンは未インストールです。確認すると要約はクラウド API で生成されます——アプリ名・分類・アクティビティのタイムラインがそのプロバイダーに送信されます。「AI 設定 → エンジン」からローカルエンジンをダウンロードすることもできます。",
+        "confirm": "クラウドで生成"
       }
     },
     "debug": {
@@ -1317,7 +1338,12 @@
       "action": "今すぐ取り込む",
       "running": "索引を作成中…残り {{count}} 枚",
       "alreadyRunning": "索引タスクはバックグラウンドで実行中、残り {{count}} 枚",
-      "failed": "取り込みに失敗：{{msg}}"
+      "failed": "取り込みに失敗：{{msg}}",
+      "runtimeMissing": "文字認識（OCR）コンポーネントの更新が必要です（約 40MB）：AI 設定 → エンジン でダウンロードボタンを押してください。",
+      "ocrConfirmTitle": "文字認識（OCR）コンポーネントが必要です",
+      "ocrConfirmMessage": "テキスト索引の作成には文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に索引作成を開始します。",
+      "ocrConfirmAccept": "ダウンロードして開始",
+      "downloadingOcr": "文字認識コンポーネントをダウンロード中… {{mb}} MB"
     },
     "citations": {
       "showAll": "すべての情報源を表示（{{count}} 件）",
@@ -1326,6 +1352,10 @@
     "model": {
       "pickAria": "チャットモデルを選択",
       "empty": "利用可能なモデルがありません：クラウド API を設定するか、ローカルモデルをダウンロードしてください"
+    },
+    "tokens": {
+      "prompt": "このターンでモデルに送信した token(上り)",
+      "completion": "モデルが生成した token(下り)"
     }
   }
 }

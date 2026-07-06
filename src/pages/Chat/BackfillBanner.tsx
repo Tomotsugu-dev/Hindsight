@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { listen } from "@tauri-apps/api/event";
 import { DatabaseZap, Loader2 } from "lucide-react";
-import { api, type MemoryPendingStats } from "../../api/hindsight";
+import {
+  api,
+  ENGINE_DOWNLOAD_EVENT,
+  type EngineDownloadProgress,
+  type MemoryPendingStats,
+} from "../../api/hindsight";
+import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { ocrRuntimeReady } from "../../lib/ocrRuntime";
 import { logError } from "../../lib/logger";
 import styles from "./ChatPage.module.css";
 
@@ -11,7 +19,7 @@ interface BackfillBannerProps {
   onRefresh: () => void;
 }
 
-type Phase = "idle" | "running" | "background" | "failed";
+type Phase = "idle" | "downloading" | "running" | "background" | "failed";
 
 /** 索引进行中(手动触发或后台批)时的进度轮询间隔 */
 const POLL_MS = 3000;
@@ -26,6 +34,9 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>("idle");
   const [errMsg, setErrMsg] = useState("");
+  // OCR 组件缺失时的下载确认弹窗与进度(MB)
+  const [ocrConfirm, setOcrConfirm] = useState(false);
+  const [dlMb, setDlMb] = useState(0);
 
   // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
   // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
@@ -42,7 +53,42 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
 
   if (stats.total <= 0) return null;
 
+  /** 点「立即回填」:先确保 OCR 组件就绪,缺则弹确认(下载完自动继续回填)。 */
   const run = async () => {
+    if (!(await ocrRuntimeReady())) {
+      setOcrConfirm(true);
+      return;
+    }
+    await doRun();
+  };
+
+  /** 确认下载 OCR 组件(banner 上显示进度),完成后自动开始回填。 */
+  const downloadThenRun = async () => {
+    setOcrConfirm(false);
+    setPhase("downloading");
+    setDlMb(0);
+    const unlisten = await listen<EngineDownloadProgress>(
+      ENGINE_DOWNLOAD_EVENT,
+      (ev) => {
+        if (ev.payload.stage === "runtime" && ev.payload.phase === "downloading") {
+          setDlMb(Math.round(ev.payload.downloaded / 1024 / 1024));
+        }
+      },
+    );
+    try {
+      await api.downloadOcrRuntime();
+    } catch (e) {
+      logError("chat.backfill.ocrDownload", e);
+      setErrMsg(String(e));
+      setPhase("failed");
+      return;
+    } finally {
+      unlisten();
+    }
+    await doRun();
+  };
+
+  const doRun = async () => {
     setPhase("running");
     try {
       await api.memoryBackfill();
@@ -54,6 +100,10 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       if (msg.includes("已在运行")) {
         // 帧已登记,后台批会消化;转入后台态继续轮询进度
         setPhase("background");
+      } else if (msg.includes("embedding runtime missing")) {
+        // 文字识别运行时缺失/过旧(如 CPU→DirectML 迁移):指路而非裸报错
+        setErrMsg(t("chat.backfill.runtimeMissing"));
+        setPhase("failed");
       } else {
         logError("chat.backfill", e);
         setErrMsg(msg);
@@ -68,6 +118,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       <span className={styles.bannerText}>
         {effective === "running" &&
           t("chat.backfill.running", { count: stats.total })}
+        {effective === "downloading" &&
+          t("chat.backfill.downloadingOcr", { mb: dlMb })}
         {effective === "background" &&
           t("chat.backfill.alreadyRunning", { count: stats.total })}
         {effective === "failed" && t("chat.backfill.failed", { msg: errMsg })}
@@ -78,9 +130,18 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
           {t("chat.backfill.action")}
         </button>
       )}
-      {polling && (
+      {(polling || effective === "downloading") && (
         <Loader2 size={13} strokeWidth={2.25} className={styles.bannerSpin} />
       )}
+      <ConfirmDialog
+        open={ocrConfirm}
+        title={t("chat.backfill.ocrConfirmTitle")}
+        message={t("chat.backfill.ocrConfirmMessage")}
+        confirmLabel={t("chat.backfill.ocrConfirmAccept")}
+        variant="primary"
+        onConfirm={() => void downloadThenRun()}
+        onCancel={() => setOcrConfirm(false)}
+      />
     </div>
   );
 }

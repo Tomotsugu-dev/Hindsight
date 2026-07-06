@@ -159,6 +159,7 @@ pub async fn chat_ask(
         &answer.text,
         &answer.citations,
         answer.degraded,
+        (answer.prompt_tokens, answer.completion_tokens),
     )
     .await
     .map_err(String::from)?;

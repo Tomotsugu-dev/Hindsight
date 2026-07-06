@@ -169,13 +169,12 @@ where
         let archive_clone = temp_archive.clone();
         let target = dir.join(a.dest);
         let spec = a.spec;
-        let res =
-            tokio::task::spawn_blocking(move || extract_one(&archive_clone, spec, &target))
-                .await
-                .map_err(|e| Error::EngineBinary {
-                    stage: "extract",
-                    details: format!("join: {e}"),
-                })?;
+        let res = tokio::task::spawn_blocking(move || extract_one(&archive_clone, spec, &target))
+            .await
+            .map_err(|e| Error::EngineBinary {
+                stage: "extract",
+                details: format!("join: {e}"),
+            })?;
         if let Err(e) = res {
             let _ = std::fs::remove_file(&temp_archive);
             return Err(e);
@@ -393,11 +392,7 @@ where
 ///     LICENSE
 /// 我们只挑那个 versioned 文件名（dlopen 真正打开的实体文件），重命名为
 /// `default_dylib_name()`。其它内容（headers、licenses）不留——节省 ~10MB 磁盘。
-fn extract_from_zip(
-    archive: &Path,
-    target: &Path,
-    matches: &dyn Fn(&str) -> bool,
-) -> Result<()> {
+fn extract_from_zip(archive: &Path, target: &Path, matches: &dyn Fn(&str) -> bool) -> Result<()> {
     if target.exists() {
         let _ = std::fs::remove_file(target);
     }
@@ -516,8 +511,7 @@ mod tests {
                 continue;
             };
             let target = tmp.join(dest);
-            extract_one(Path::new(&p), ExtractSpec::Exact(entry), &target)
-                .expect("提取失败");
+            extract_one(Path::new(&p), ExtractSpec::Exact(entry), &target).expect("提取失败");
             let len = std::fs::metadata(&target).expect("目标不存在").len();
             eprintln!("{dest}: {len} bytes");
             assert!(len > 1_000_000, "{dest} 太小,匹配到了错误条目?");

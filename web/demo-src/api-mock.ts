@@ -624,11 +624,14 @@ export const api = {
 
   // ─── AI engine ─────────────────────────────
   getEngineStatus: async (): Promise<EngineStatus> => structuredClone(mockEngineStatus),
-  downloadBinary: async (): Promise<void> => {
-    // 模拟两阶段下载（engine → runtime）
+  downloadBinary: async (_force = false): Promise<void> => {
     await simulateEngineDownload();
   },
   deleteBinary: async (): Promise<void> => {},
+  downloadOcrRuntime: async (_force = false): Promise<void> => {
+    // demo 里 runtime 视作已装,直接返回
+  },
+  deleteOcrRuntime: async (): Promise<void> => {},
   openEngineDir: async (): Promise<void> => {},
   getEngineLogs: async (): Promise<string[]> => [
     "[demo] llama-server started on port 8088",
@@ -798,6 +801,8 @@ export const api = {
       citations: [],
       degraded: false,
       createdTs: now,
+      promptTokens: null,
+      completionTokens: null,
     });
     conv.messages.push({
       id: chatNextMsgId++,
@@ -806,6 +811,8 @@ export const api = {
       citations: answer.citations,
       degraded: false,
       createdTs: now,
+      promptTokens: 1284,
+      completionTokens: 236,
     });
     return {
       conversationId: conv.meta.id,
@@ -813,6 +820,8 @@ export const api = {
       citations: answer.citations,
       steps: 2,
       degraded: false,
+      promptTokens: 1284,
+      completionTokens: 236,
     };
   },
   chatListConversations: async (): Promise<ChatConversationMeta[]> =>

@@ -16,6 +16,22 @@ use crate::error::{Error, Result};
 /// `id`/`raw` 只有云端有:`raw` 是模型返回的完整 assistant 消息,回放时必须
 /// 原样带回——thinking 类模型(如 DeepSeek)要求 `reasoning_content` 一并传回,
 /// 自己重构消息会被 400 拒。
+/// 单次 LLM 调用的 token 用量(OpenAI 兼容 usage 字段;缺失时为 0)。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TokenUsage {
+    pub prompt: u64,
+    pub completion: u64,
+}
+
+impl TokenUsage {
+    fn from_resp(resp: &Value) -> Self {
+        Self {
+            prompt: resp["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
+            completion: resp["usage"]["completion_tokens"].as_u64().unwrap_or(0),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum StepOut {
     Call {
@@ -149,14 +165,14 @@ impl ChatLlm {
     }
 
     /// 跑一步:给定 system + 对话,产出"调工具"或"作答"。
-    pub async fn step(&self, system: &str, turns: &[Turn]) -> Result<StepOut> {
+    pub async fn step(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
         match self {
             Self::Cloud { .. } => self.step_cloud(system, turns).await,
             Self::Local { .. } => self.step_local(system, turns).await,
         }
     }
 
-    async fn step_cloud(&self, system: &str, turns: &[Turn]) -> Result<StepOut> {
+    async fn step_cloud(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
         let Self::Cloud {
             base_url,
             model,
@@ -201,6 +217,7 @@ impl ChatLlm {
             req = req.bearer_auth(api_key.trim());
         }
         let resp: Value = send_json(req).await?;
+        let usage = TokenUsage::from_resp(&resp);
         let msg = &resp["choices"][0]["message"];
         if let Some(call) = msg["tool_calls"].get(0) {
             let name = call["function"]["name"]
@@ -216,12 +233,15 @@ impl ChatLlm {
             if let Some(calls) = raw["tool_calls"].as_array_mut() {
                 calls.truncate(1);
             }
-            return Ok(StepOut::Call {
-                name,
-                args,
-                id,
-                raw: Some(raw),
-            });
+            return Ok((
+                StepOut::Call {
+                    name,
+                    args,
+                    id,
+                    raw: Some(raw),
+                },
+                usage,
+            ));
         }
         let content = msg["content"]
             .as_str()
@@ -231,10 +251,10 @@ impl ChatLlm {
         if content.is_empty() {
             return Err(Error::LlmResponse("模型返回空内容".into()));
         }
-        Ok(StepOut::Final(content))
+        Ok((StepOut::Final(content), usage))
     }
 
-    async fn step_local(&self, system: &str, turns: &[Turn]) -> Result<StepOut> {
+    async fn step_local(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
         let Self::Local {
             base_url,
             model,
@@ -273,6 +293,7 @@ impl ChatLlm {
                 .json(&body),
         )
         .await?;
+        let usage = TokenUsage::from_resp(&resp);
         let content = resp["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or_default();
@@ -291,14 +312,17 @@ impl ChatLlm {
             if text.trim().is_empty() {
                 return Err(Error::LlmResponse("answer 为空".into()));
             }
-            return Ok(StepOut::Final(text));
+            return Ok((StepOut::Final(text), usage));
         }
-        Ok(StepOut::Call {
-            name: d.action,
-            args: d.rest,
-            id: None,
-            raw: None,
-        })
+        Ok((
+            StepOut::Call {
+                name: d.action,
+                args: d.rest,
+                id: None,
+                raw: None,
+            },
+            usage,
+        ))
     }
 }
 

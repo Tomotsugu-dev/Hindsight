@@ -29,42 +29,75 @@ struct DownloadProgressPayload {
 
 const ENGINE_DOWNLOAD_PROGRESS_EVENT: &str = "ai://engine-download-progress";
 
-/// 触发 AI 引擎下载——分两阶段：
-///   1. llama.cpp binary（按平台 ~50-150MB）
-///   2. onnxruntime dylib（~30MB，给截图相似度去重 embedding 用）
+/// 下载 llama.cpp 引擎(按平台 ~50-500MB)。**只管 llama.cpp**——OCR 的
+/// onnxruntime 是独立组件,走 [`download_ocr_runtime`]。
 ///
-/// 阶段切换通过事件 payload 的 `stage` 字段告诉前端，进度条文案随之切换。
-/// 阶段 1 失败立即返回；阶段 2 失败时阶段 1 的产物已落盘，下次重跑会重下两份。
+/// 已安装且版本与 PIN 一致时幂等快速返回;`force=true`(「重新下载」按钮)
+/// 强制重下,修复损坏安装用。
 ///
-/// 进度通过 [`ENGINE_DOWNLOAD_PROGRESS_EVENT`] 事件流式推送给前端，命令本身在两阶段
-/// 都结束后才 resolve。失败时返回错误字符串（前端 toast 展示）。
+/// 进度通过 [`ENGINE_DOWNLOAD_PROGRESS_EVENT`] 事件流式推送(stage="engine"),
+/// 命令在下载结束后才 resolve。失败时返回错误字符串(前端 toast 展示)。
 ///
-/// 下载前会主动 stop 当前引擎实例——Windows 上 .exe 在运行时无法被覆盖 / 删除，
+/// 下载前会主动 stop 当前引擎实例——Windows 上 .exe 在运行时无法被覆盖 / 删除,
 /// 不停先就会让 download() 内部 `remove_dir_all` 失败。
 #[tauri::command]
 pub async fn download_binary(
     app: AppHandle,
     supervisor: State<'_, Arc<EngineSupervisor>>,
+    force: Option<bool>,
 ) -> Result<(), String> {
+    let force = force.unwrap_or(false);
     if let Err(e) = supervisor.stop().await {
         log::warn!("download_binary 前 stop 引擎失败（可能本就没跑）: {e}");
     }
 
-    // 阶段 1：llama.cpp binary
+    let binary_ok = !force
+        && binary::status()
+            .map(|s| s.installed && s.installed_version.as_deref() == Some(s.current_pin.as_str()))
+            .unwrap_or(false);
+    if binary_ok {
+        log::info!("llama.cpp 已是 PIN 版本,跳过下载");
+        return Ok(());
+    }
     let app_for_engine = app.clone();
     binary::download(move |phase, downloaded, total| {
         emit_progress(&app_for_engine, phase, downloaded, total, "engine");
     })
     .await
-    .map_err(String::from)?;
+    .map_err(Into::into)
+}
 
-    // 阶段 2：onnxruntime
+/// 下载文字识别(OCR)组件——onnxruntime 运行时,与 llama.cpp 完全独立。
+/// 屏幕记忆的 OCR 专用;Windows 上是 DirectML 构建(~40MB),macOS 走系统
+/// Vision 用不到本命令(前端 OCR 卡直接不显示下载入口)。
+/// 已装且版本匹配时幂等快速返回(force 强制重下,修复损坏安装用)。
+/// 进度复用 [`ENGINE_DOWNLOAD_PROGRESS_EVENT`],stage="runtime"。
+#[tauri::command]
+pub async fn download_ocr_runtime(app: AppHandle, force: Option<bool>) -> Result<(), String> {
+    let force = force.unwrap_or(false);
+    // Windows 上 installed 已含 DirectML.dll 检查:旧 CPU 构建即使版本号
+    // 相同也判未装,迁移场景必然走到下载。
+    let runtime_ok = !force
+        && embedding_runtime::status()
+            .map(|s| s.installed && s.installed_version.as_deref() == Some(s.current_pin.as_str()))
+            .unwrap_or(false);
+    if runtime_ok {
+        log::info!("onnxruntime 已是 PIN 版本,跳过下载");
+        return Ok(());
+    }
     let app_for_runtime = app.clone();
     embedding_runtime::download(move |phase, downloaded, total| {
         emit_progress(&app_for_runtime, phase, downloaded, total, "runtime");
     })
     .await
     .map_err(Into::into)
+}
+
+/// 删除文字识别(OCR)组件。删除失败仅报错——可能因为 ort 已 dlopen 了 dll
+/// 而 Windows 拒 unlink,那时提示用户重启 app 后再删。
+#[tauri::command]
+pub async fn delete_ocr_runtime() -> Result<(), String> {
+    embedding_runtime::delete().await.map_err(String::from)
 }
 
 fn emit_progress(
@@ -86,23 +119,15 @@ fn emit_progress(
     }
 }
 
-/// 删除已安装的 binary + onnxruntime（"AI 引擎"是 binary + runtime 一对）。
+/// 删除已安装的 llama.cpp binary。OCR 组件独立,走 [`delete_ocr_runtime`]。
 ///
-/// 同样要先 stop 引擎，否则 Windows 锁住 .exe 删不掉。
-/// onnxruntime 删除失败仅 warn 不致命——可能因为 ort 已经 dlopen 了 dll 而 Windows 拒
-/// unlink，那时让用户重启 app 后再删。
+/// 要先 stop 引擎，否则 Windows 锁住 .exe 删不掉。
 #[tauri::command]
 pub async fn delete_binary(supervisor: State<'_, Arc<EngineSupervisor>>) -> Result<(), String> {
     if let Err(e) = supervisor.stop().await {
         log::warn!("delete_binary 前 stop 引擎失败（可能本就没跑）: {e}");
     }
-    binary::delete().await.map_err(String::from)?;
-    if let Err(e) = embedding_runtime::delete().await {
-        log::warn!(
-            "delete_binary：onnxruntime 删除失败（可能 dll 已被 dlopen，重启 app 后再试）: {e}"
-        );
-    }
-    Ok(())
+    binary::delete().await.map_err(String::from)
 }
 
 /// 在系统文件管理器里打开 binary 所在目录。

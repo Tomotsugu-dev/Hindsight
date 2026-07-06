@@ -35,6 +35,9 @@ pub struct StoredMessage {
     pub citations: Vec<Citation>,
     pub degraded: bool,
     pub created_ts: String,
+    /// 本轮上行/下行 token(assistant 才有;旧数据与 user 行为 NULL)
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
 }
 
 /// 会话标题 = 首问截断:按字符(防中文截半)取前 24 个,超出加省略号。
@@ -87,7 +90,8 @@ pub async fn get_messages(mem: &MemoryDb, conv_id: i64) -> Result<Vec<StoredMess
         .call(move |conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT id, role, content, citations, degraded, created_ts
+                    "SELECT id, role, content, citations, degraded, created_ts,
+                            prompt_tokens, completion_tokens
                      FROM chat_messages WHERE conversation_id = ?1 ORDER BY id",
                 )
                 .db()?;
@@ -103,6 +107,8 @@ pub async fn get_messages(mem: &MemoryDb, conv_id: i64) -> Result<Vec<StoredMess
                             .unwrap_or_default(),
                         degraded: r.get::<_, i64>(4)? != 0,
                         created_ts: r.get(5)?,
+                        prompt_tokens: r.get(6)?,
+                        completion_tokens: r.get(7)?,
                     })
                 })
                 .db()?
@@ -202,7 +208,7 @@ pub async fn delete_conversation(mem: &MemoryDb, conv_id: i64) -> Result<()> {
 }
 
 pub async fn append_user(mem: &MemoryDb, conv_id: i64, content: &str) -> Result<()> {
-    append(mem, conv_id, "user", content, None, false).await
+    append(mem, conv_id, "user", content, None, false, None).await
 }
 
 pub async fn append_assistant(
@@ -211,9 +217,19 @@ pub async fn append_assistant(
     content: &str,
     citations: &[Citation],
     degraded: bool,
+    tokens: (u64, u64),
 ) -> Result<()> {
     let json = serde_json::to_string(citations)?;
-    append(mem, conv_id, "assistant", content, Some(json), degraded).await
+    append(
+        mem,
+        conv_id,
+        "assistant",
+        content,
+        Some(json),
+        degraded,
+        Some((tokens.0 as i64, tokens.1 as i64)),
+    )
+    .await
 }
 
 async fn append(
@@ -223,6 +239,7 @@ async fn append(
     content: &str,
     citations_json: Option<String>,
     degraded: bool,
+    tokens: Option<(i64, i64)>,
 ) -> Result<()> {
     let content = content.to_string();
     let ts = now_ts();
@@ -232,9 +249,10 @@ async fn append(
             let tx = conn.transaction().db()?;
             tx.execute(
                 "INSERT INTO chat_messages(conversation_id, role, content, citations, degraded,
-                                           created_ts, guid, conv_guid)
+                                           created_ts, guid, conv_guid,
+                                           prompt_tokens, completion_tokens)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                         (SELECT guid FROM chat_conversations WHERE id = ?1))",
+                         (SELECT guid FROM chat_conversations WHERE id = ?1), ?8, ?9)",
                 rusqlite::params![
                     conv_id,
                     role,
@@ -242,7 +260,9 @@ async fn append(
                     citations_json,
                     degraded as i64,
                     ts,
-                    guid
+                    guid,
+                    tokens.map(|t| t.0),
+                    tokens.map(|t| t.1)
                 ],
             )
             .db()?;
@@ -310,7 +330,7 @@ mod tests {
         append_user(&mem, id, "这周我在 Cursor 用了多久?")
             .await
             .unwrap();
-        append_assistant(&mem, id, "共 3 小时 [1]", &[cite(1)], false)
+        append_assistant(&mem, id, "共 3 小时 [1]", &[cite(1)], false, (120, 45))
             .await
             .unwrap();
 
@@ -341,7 +361,7 @@ mod tests {
         let id = create_conversation(&mem, "t").await.unwrap();
         for i in 0..5 {
             append_user(&mem, id, &format!("问 {i}")).await.unwrap();
-            append_assistant(&mem, id, &format!("答 {i}"), &[], false)
+            append_assistant(&mem, id, &format!("答 {i}"), &[], false, (0, 0))
                 .await
                 .unwrap();
         }

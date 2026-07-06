@@ -67,7 +67,7 @@ function offsetToDateStr(dayOffset: number): string {
  */
 export default function DailyTab() {
   const { t } = useTranslation();
-  const { settings } = useSettings();
+  const { settings, reload: reloadSettings } = useSettings();
   const [dayOffset, setDayOffset] = useState(0);
   const [rows, setRows] = useState<Map<number, SegmentSummaryRow>>(new Map());
   // 在跑状态全部从 module-level store 读，组件 unmount 不丢；切走再回来按钮、
@@ -96,6 +96,13 @@ export default function DailyTab() {
   const rawSummaryMain = settings?.ai.summaryMain ?? "";
   const externalEnabled = settings?.ai.externalEnabled ?? false;
   const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
+  // 云端总结真正可跑 = 路由选中云端 + 三元组配齐(endpoint/model 任一缺失时
+  // 后端 External 分支会直接报错,不该拿"下载本地引擎"去引导)
+  const cloudConfigured =
+    externalEnabled &&
+    (settings?.ai.endpoint ?? "").trim() !== "" &&
+    (settings?.ai.model ?? "").trim() !== "";
+  const cloudSummaryReady = cloudRoute && cloudConfigured;
   const localSummaryAvailable =
     (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
     activeMain !== "";
@@ -179,19 +186,23 @@ export default function DailyTab() {
   const [pendingAfterDownload, setPendingAfterDownload] =
     useState<null | (() => Promise<void>)>(null);
 
-  /** 检查 AI 引擎（binary + onnxruntime）是否齐全；齐 → 直接跑 action；
-   *  缺 → 保存 action、弹 ConfirmDialog 引导下载，confirm 后下完再续上。 */
+  /** 本地路由时检查 llama.cpp 引擎是否已装；齐 → 直接跑 action；
+   *  缺 → 保存 action、弹 ConfirmDialog 引导下载，confirm 后下完再续上。
+   *  云端总结配齐并选中时不需要任何本地组件，直接放行；
+   *  onnxruntime 是屏幕记忆 OCR 的依赖，日报单步管线用不到，这里不查。 */
   const requireEngineThen = async (action: () => Promise<void>) => {
-    try {
-      const status = await api.getEngineStatus();
-      if (!status.installed || !status.embeddingRuntime.installed) {
-        // useState setter 接函数会被当成"updater"立即调用——用 () => fn 包一层
-        setPendingAfterDownload(() => action);
-        return;
+    if (!cloudSummaryReady) {
+      try {
+        const status = await api.getEngineStatus();
+        if (!status.installed) {
+          // useState setter 接函数会被当成"updater"立即调用——用 () => fn 包一层
+          setPendingAfterDownload(() => action);
+          return;
+        }
+      } catch (e) {
+        // getEngineStatus 失败 → 保守起见直接 fallthrough 跑 action，让原来的错处理生效
+        logError("DailyTab.requireEngineThen.status", e);
       }
-    } catch (e) {
-      // getEngineStatus 失败 → 保守起见直接 fallthrough 跑 action，让原来的错处理生效
-      logError("DailyTab.requireEngineThen.status", e);
     }
     await action();
   };
@@ -201,7 +212,14 @@ export default function DailyTab() {
     setPendingAfterDownload(null);
     if (!action) return;
     try {
-      await api.downloadBinary();
+      if (cloudConfigured) {
+        // 云端 API 已配齐但总结槽位没选云端——用户点「使用云端生成」:
+        // 把总结切到云端(等价于模型页云端卡点 Text)后直接继续生成
+        await api.setStepModel("summary", SUMMARY_CLOUD_SENTINEL, null);
+        await reloadSettings();
+      } else {
+        await api.downloadBinary();
+      }
       await action();
     } catch (e) {
       setTopError(typeof e === "string" ? e : String(e));
@@ -567,9 +585,24 @@ export default function DailyTab() {
       />
       <ConfirmDialog
         open={pendingAfterDownload !== null}
-        title={t("aiSummary.daily.runtimeMissing.title")}
-        message={t("aiSummary.daily.runtimeMissing.message")}
-        confirmLabel={t("aiSummary.daily.runtimeMissing.confirm")}
+        title={
+          cloudConfigured
+            ? t("aiSummary.daily.cloudOffer.title")
+            : t("aiSummary.daily.runtimeMissing.title")
+        }
+        message={
+          cloudConfigured
+            ? t("aiSummary.daily.cloudOffer.message", {
+                provider: settings?.ai.externalProvider || "cloud",
+                model: settings?.ai.model || "",
+              })
+            : t("aiSummary.daily.runtimeMissing.message")
+        }
+        confirmLabel={
+          cloudConfigured
+            ? t("aiSummary.daily.cloudOffer.confirm")
+            : t("aiSummary.daily.runtimeMissing.confirm")
+        }
         cancelLabel={t("aiSummary.daily.runtimeMissing.cancel")}
         onConfirm={() => void onConfirmDownloadAi()}
         onCancel={() => setPendingAfterDownload(null)}

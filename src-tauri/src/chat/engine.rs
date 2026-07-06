@@ -32,6 +32,10 @@ pub struct ChatAnswer {
     pub steps: u32,
     /// 是否走了降级路径
     pub degraded: bool,
+    /// 本轮全部 LLM 步骤的上行(prompt)token 合计
+    pub prompt_tokens: u64,
+    /// 本轮全部 LLM 步骤的下行(completion)token 合计
+    pub completion_tokens: u64,
 }
 
 /// 历史轮(前端传入,只取最近几轮做指代消解)。
@@ -62,19 +66,23 @@ pub async fn answer(
     let mut seen_calls: std::collections::HashSet<String> = Default::default();
     let mut llm_failures = 0u32;
     let mut steps = 0u32;
+    let mut prompt_tokens = 0u64;
+    let mut completion_tokens = 0u64;
 
     while steps < MAX_STEPS {
         steps += 1;
         let out = match llm.step(&system, &turns).await {
-            Ok(o) => {
+            Ok((o, usage)) => {
                 llm_failures = 0;
+                prompt_tokens += usage.prompt;
+                completion_tokens += usage.completion;
                 o
             }
             Err(e) => {
                 llm_failures += 1;
                 log::warn!("chat LLM 步骤失败({llm_failures}/{MAX_LLM_FAILURES}): {e}");
                 if llm_failures >= MAX_LLM_FAILURES {
-                    return degraded_answer(citations, steps, e);
+                    return degraded_answer(citations, steps, prompt_tokens, completion_tokens, e);
                 }
                 continue;
             }
@@ -88,6 +96,8 @@ pub async fn answer(
                     citations: cited,
                     steps,
                     degraded: false,
+                    prompt_tokens,
+                    completion_tokens,
                 });
             }
             StepOut::Call {
@@ -165,25 +175,35 @@ pub async fn answer(
         "查询步数已用完。请立刻基于以上已有资料作答;资料不足就直接说明没查到什么。".to_string(),
     ));
     match llm.step(&system, &turns).await {
-        Ok(StepOut::Final(text)) => {
+        Ok((StepOut::Final(text), usage)) => {
             let (text, cited) = bind_citations(&text, &citations);
             Ok(ChatAnswer {
                 text,
                 citations: cited,
                 steps: steps + 1,
                 degraded: true,
+                prompt_tokens: prompt_tokens + usage.prompt,
+                completion_tokens: completion_tokens + usage.completion,
             })
         }
-        Ok(StepOut::Call { .. }) | Err(_) => degraded_answer(
+        Ok((StepOut::Call { .. }, _)) | Err(_) => degraded_answer(
             citations,
             steps,
+            prompt_tokens,
+            completion_tokens,
             Error::LlmResponse("步数耗尽且模型未能作答".into()),
         ),
     }
 }
 
 /// 阶梯最底层:不编造,报告失败并保留已查到的证据供前端展示。
-fn degraded_answer(citations: Vec<Citation>, steps: u32, err: Error) -> Result<ChatAnswer> {
+fn degraded_answer(
+    citations: Vec<Citation>,
+    steps: u32,
+    prompt_tokens: u64,
+    completion_tokens: u64,
+    err: Error,
+) -> Result<ChatAnswer> {
     log::warn!("chat 降级作答: {err}");
     let text = if citations.is_empty() {
         "这次没能完成查询(模型或网络出了问题)。可以换个更具体的问法再试,\
@@ -197,6 +217,8 @@ fn degraded_answer(citations: Vec<Citation>, steps: u32, err: Error) -> Result<C
         citations,
         steps,
         degraded: true,
+        prompt_tokens,
+        completion_tokens,
     })
 }
 

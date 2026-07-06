@@ -139,7 +139,13 @@
         "backfillRegistered": "已登記 {{n}} 張，開始辨識…",
         "backfillProgress": "辨識中…剩餘 {{n}} 張",
         "backfillBackground": "已登記，背景索引中（可離開本頁）",
-        "backfillDone": "完成：辨識 {{ok}} 張，跳過 {{failed}} 張"
+        "backfillDone": "完成：辨識 {{ok}} 張，跳過 {{failed}} 張",
+        "backfillRuntimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 AI 設定 → 引擎 頁點下載按鈕。",
+        "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
+        "ocrConfirmResident": "開啟文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開啟。",
+        "ocrConfirmBackfill": "回填需要下載文字辨識元件（約 40MB），下載完成後自動開始回填。",
+        "ocrConfirmAccept": "下載並繼續",
+        "ocrDownloading": "正在下載文字辨識元件… {{mb}} MB"
       },
       "workHours": {
         "title": "工作時段",
@@ -684,6 +690,16 @@
         "connectedWithModels": "已連線，{{count}} 個模型",
         "idleCountdownSec": "{{sec}} 秒後自動釋放視訊記憶體",
         "idleCountdownMin": "{{min}} 分 {{sec}} 秒後自動釋放視訊記憶體"
+      },
+      "ocr": {
+        "name": "文字辨識（OCR）元件",
+        "desc": "螢幕記憶的文字辨識使用；辨識在 GPU 上執行（DirectML，任意顯卡含內顯）。",
+        "macNativeBadge": "系統原生",
+        "macNativeDesc": "macOS 使用系統原生辨識（Vision），無需下載任何元件。",
+        "upgradeHint": "偵測到舊版本元件，重新下載即可升級到 GPU 加速。",
+        "download": "下載元件",
+        "uninstallConfirmTitle": "解除安裝文字辨識（OCR）元件？",
+        "uninstallConfirmMessage": "解除安裝後螢幕文字索引功能不可用，重新下載即可恢復。已建立的索引不受影響。"
       }
     },
     "summaryParams": {
@@ -1094,7 +1110,7 @@
       "subtitle": "按時段彙總當日活動記錄，本地模型生成",
       "runtimeMissing": {
         "title": "需要先下載 AI 引擎",
-        "message": "本地生成總結需要 AI 引擎，下載約 ~80 MB。下載完會自動續上生成。",
+        "message": "本機生成總結需要 AI 引擎（llama.cpp）。下載完成後會自動繼續生成。",
         "confirm": "下載並繼續",
         "cancel": "取消"
       },
@@ -1167,6 +1183,11 @@
         "stateSkippedNoActivity": "⚪ **跳過** — 這段時間什麼都沒記錄",
         "stateError": "❌ **失敗**",
         "stateEmptyContent": "_（空）_"
+      },
+      "cloudOffer": {
+        "title": "改用雲端 API 生成？",
+        "message": "偵測到你已設定雲端 API（{{provider}} · {{model}}），但總結目前設為本機模型，且本機引擎未安裝。確認後總結將改用雲端 API 生成——應用程式名稱、分類與活動時間軸將傳送給該服務商；也可以到「AI 設定 → 引擎」下載本機引擎。",
+        "confirm": "使用雲端生成"
       }
     },
     "debug": {
@@ -1317,7 +1338,12 @@
       "action": "立即回填",
       "running": "正在建立索引…剩餘 {{count}} 張",
       "alreadyRunning": "索引任務已在背景執行，剩餘 {{count}} 張",
-      "failed": "回填失敗：{{msg}}"
+      "failed": "回填失敗：{{msg}}",
+      "runtimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 AI 設定 → 引擎 頁點下載按鈕。",
+      "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
+      "ocrConfirmMessage": "建立文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開始索引。",
+      "ocrConfirmAccept": "下載並開始",
+      "downloadingOcr": "正在下載文字辨識元件… {{mb}} MB"
     },
     "citations": {
       "showAll": "顯示全部 {{count}} 條來源",
@@ -1326,6 +1352,10 @@
     "model": {
       "pickAria": "選擇對話模型",
       "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
+    },
+    "tokens": {
+      "prompt": "本輪傳送給模型的 token(上行)",
+      "completion": "模型生成的 token(下行)"
     }
   }
 }

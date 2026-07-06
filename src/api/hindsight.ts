@@ -608,6 +608,10 @@ export interface ChatAnswer {
   steps: number;
   /** true = 走了降级路径（模型失败/步数耗尽），text 是兜底文案 */
   degraded: boolean;
+  /** 本轮全部 LLM 步骤的上行（prompt）token 合计 */
+  promptTokens: number;
+  /** 本轮全部 LLM 步骤的下行（completion）token 合计 */
+  completionTokens: number;
 }
 
 /** 一次问答的返回：答案平铺 + 会话 id（首条消息隐式建会话，前端靠它接管）。 */
@@ -631,6 +635,9 @@ export interface ChatStoredMessage {
   citations: ChatCitation[];
   degraded: boolean;
   createdTs: string;
+  /** 本轮上行/下行 token（assistant 才有；旧数据与 user 行为 null） */
+  promptTokens: number | null;
+  completionTokens: number | null;
 }
 
 /** 未入索引统计：主库截图全集 vs 记忆库登记/完成情况（近似值）。 */
@@ -787,10 +794,17 @@ export const api = {
       withImage,
     }),
   getEngineStatus: () => invoke<EngineStatus>("get_engine_status"),
-  /** 触发下载；进度通过 listen(ENGINE_DOWNLOAD_EVENT, ...) 拿。
-   *  Promise resolve = 下载 + 校验 + 解压全部成功；reject = 任何一阶段失败。 */
-  downloadBinary: () => invoke<void>("download_binary"),
+  /** 下载 llama.cpp 引擎（只管 llama.cpp，OCR 组件走 downloadOcrRuntime）。
+   *  已装且版本匹配时幂等快速返回；force=true 强制重下（「重新下载」按钮）。
+   *  进度通过 listen(ENGINE_DOWNLOAD_EVENT, ...) 拿，stage="engine"。 */
+  downloadBinary: (force = false) => invoke<void>("download_binary", { force }),
   deleteBinary: () => invoke<void>("delete_binary"),
+  /** 下载文字识别（OCR）组件——onnxruntime 运行时，屏幕记忆专用（~40MB，
+   *  Windows DirectML 构建）。已装且版本匹配时幂等快速返回；force 强制重下。
+   *  进度同 ENGINE_DOWNLOAD_EVENT，stage="runtime"。macOS 走系统 Vision 用不到。 */
+  downloadOcrRuntime: (force = false) =>
+    invoke<void>("download_ocr_runtime", { force }),
+  deleteOcrRuntime: () => invoke<void>("delete_ocr_runtime"),
   openEngineDir: () => invoke<void>("open_engine_dir"),
   /** 拿 llama-server 子进程最近 stderr/stdout（最多 500 行）。调试 tab 用，
    *  看 GPU 加载日志。每次启动会清空 ring，所以拿到的是"本次启动以来"。 */

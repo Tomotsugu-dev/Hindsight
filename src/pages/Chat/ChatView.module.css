@@ -209,6 +209,21 @@
 
 /* ── 助手回答的 Markdown 容器：字号行高与 bubbleText 一致，元素间距收紧 ── */
 
+/* 气泡底部 token 用量:↑ 上行 ↓ 下行,小灰字 */
+.tokenMeta {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.tokenMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .bubbleMd {
   font-size: 13px;
   line-height: 1.6;

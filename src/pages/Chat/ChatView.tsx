@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
+  ArrowDown,
   ArrowUp,
   BarChart3,
   Bot,
@@ -28,6 +29,9 @@ type Message =
       text: string;
       citations: ChatCitation[];
       degraded: boolean;
+      /** 本轮上行/下行 token；旧数据为 null 不显示 */
+      promptTokens: number | null;
+      completionTokens: number | null;
     }
   | { id: string; role: "error"; text: string };
 
@@ -77,6 +81,8 @@ function storedToMessage(m: ChatStoredMessage): Message {
     text: m.content,
     citations: m.citations,
     degraded: m.degraded,
+    promptTokens: m.promptTokens,
+    completionTokens: m.completionTokens,
   };
 }
 
@@ -157,6 +163,8 @@ export default function ChatView({
           text: ans.text,
           citations: ans.citations,
           degraded: ans.degraded,
+          promptTokens: ans.promptTokens,
+          completionTokens: ans.completionTokens,
         },
       ]);
       if (conversationId === null) {
@@ -298,6 +306,18 @@ function MessageBubble({ m, t }: { m: Message; t: TFunction }) {
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
         </div>
         {m.citations.length > 0 && <CitationList citations={m.citations} t={t} />}
+        {m.promptTokens != null && m.completionTokens != null && (
+          <div className={styles.tokenMeta}>
+            <span title={t("chat.tokens.prompt")}>
+              <ArrowUp size={11} strokeWidth={2.2} />
+              {m.promptTokens.toLocaleString()}
+            </span>
+            <span title={t("chat.tokens.completion")}>
+              <ArrowDown size={11} strokeWidth={2.2} />
+              {m.completionTokens.toLocaleString()}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

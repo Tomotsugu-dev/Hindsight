@@ -267,6 +267,8 @@ pub fn run() {
             // --- ai: binary ---
             commands::ai_binary::download_binary,
             commands::ai_binary::delete_binary,
+            commands::ai_binary::download_ocr_runtime,
+            commands::ai_binary::delete_ocr_runtime,
             commands::ai_binary::open_engine_dir,
             // --- ai: 模型管理 ---
             commands::ai_models::list_local_models,

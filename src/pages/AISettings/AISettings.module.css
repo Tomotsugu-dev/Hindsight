@@ -308,6 +308,12 @@
   letter-spacing: -0.01em;
 }
 
+/* CJK 标题变体:中文方块字占满 em,同字号下视觉比拉丁名(llama.cpp,只有
+   x-height)大一圈;降 1px 让两张卡标题视觉等大 */
+.engineNameCjk {
+  font-size: 14px;
+}
+
 /* 第 3 行：5 个按钮平铺一行（下载 / 测试 / 释放显存 / 打开 / 卸载） */
 .engineActionsFlat {
   display: flex;
@@ -591,6 +597,13 @@
 
 .engineWarningBody {
   flex: 1;
+}
+
+/* 标题 + 正文分两行的警示变体(runtime 更新提示用;
+   noCuda 那块是刻意连排的一句话,不套这个) */
+.engineWarningStacked strong {
+  display: block;
+  margin-bottom: 2px;
 }
 
 .engineWarningLink {
