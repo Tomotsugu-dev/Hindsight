@@ -19,6 +19,8 @@ pub mod job_guard;
 pub mod llm;
 pub mod models;
 pub mod ocr;
+#[cfg(target_os = "macos")]
+pub mod ocr_vision;
 pub mod platform;
 pub mod prompt;
 pub mod recommended;

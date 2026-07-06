@@ -202,6 +202,56 @@ pub fn idle_secs() -> u64 {
 }
 
 // ─────────────────────────────────────────────────────────────
+// 电源来源（交流 / 电池）——耗电任务的调度信号
+//
+// 背景：OCR 消化是持续的 CPU 推理负载，设计要求"插电常驻，拔电即退"
+// （docs/design/screen-memory.md §6）。所有实现遵循 fail-open：探测失败
+// 一律按"插电"处理——电源感知是省电优化，探测异常不能反过来卡死消化。
+// ─────────────────────────────────────────────────────────────
+
+/// 当前是否接通外部电源。台式机恒 true；探测失败也返 true（fail-open）。
+#[cfg(target_os = "macos")]
+pub fn on_ac_power() -> bool {
+    // IOKit 电源约定：
+    //   kIOPSTimeRemainingUnlimited = -2.0 → 接通电源
+    //   kIOPSTimeRemainingUnknown   = -1.0 → 电池供电（剩余时间未算出）
+    //   >= 0                              → 电池供电的剩余秒数
+    #[link(name = "IOKit", kind = "framework")]
+    extern "C" {
+        fn IOPSGetTimeRemainingEstimate() -> f64;
+    }
+    // SAFETY: IOKit 公开 C API，无参无指针，任意线程可调，返回 f64。
+    let t = unsafe { IOPSGetTimeRemainingEstimate() };
+    if t.is_nan() {
+        return true; // 异常值按插电（fail-open）
+    }
+    // t > -1.5 ⇔ 明确的电池信号（-1.0 或非负剩余秒）；-2.0 → 插电。
+    t <= -1.5
+}
+
+/// Windows 实现：`GetSystemPowerStatus` 的 ACLineStatus。
+#[cfg(target_os = "windows")]
+pub fn on_ac_power() -> bool {
+    use winapi::um::winbase::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+    // SAFETY: Win32 公开 API；出参结构体是栈上 POD，由系统填充；失败返 0，
+    // 已 early return 按插电处理。
+    unsafe {
+        let mut st: SYSTEM_POWER_STATUS = std::mem::zeroed();
+        if GetSystemPowerStatus(&mut st) == 0 {
+            return true;
+        }
+        // ACLineStatus：0=电池，1=交流，255=未知（非 0 → 按插电，fail-open）
+        st.ACLineStatus != 0
+    }
+}
+
+/// 其它平台：视作恒插电（不启用电源门控）。
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn on_ac_power() -> bool {
+    true
+}
+
+// ─────────────────────────────────────────────────────────────
 // 屏幕不可看状态（息屏 / 锁屏 / 屏保）——挂机判定的硬信号
 //
 // 背景：capture 的挂机判定在键鼠空闲后靠"屏幕活跃探测"豁免被动观看（看视频/

@@ -68,7 +68,7 @@ ndarray = "0.16"
 sys-locale = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi", "winreg", "winnt"] }
+winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi", "winreg", "winnt", "winbase"] }
 # UI Automation：从浏览器地址栏抠 URL，给隐私过滤用
 uiautomation = "0.24"
 
@@ -77,7 +77,9 @@ plist = "1"
 icns = "0.3"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphics"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSData", "NSDictionary"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSData", "NSDictionary", "NSArray", "NSURL", "NSError", "NSEnumerator", "NSValue", "NSRange"] }
+# 系统 Vision framework OCR(ANE)——macOS 原生引擎,零模型下载、零 onnxruntime 依赖
+objc2-vision = "0.3"
 screencapturekit = { version = "2.1", features = ["macos_14_0"] }
 
 # Unix（Linux + macOS）：子进程保护用 setpgid + （Linux）prctl PDEATHSIG

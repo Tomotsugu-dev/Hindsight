@@ -7,6 +7,11 @@
 //! 安装目录：`<data_root>/ai/runtime/libonnxruntime.{dylib,dll,so}`
 //! 跟 `<data_root>/ai/bin/` 同级 ——`ai/` 下"binary（llama.cpp）" + "runtime（ort）"分两个子目录。
 //!
+//! 下载源分平台：macOS/Linux 用 GitHub 官方 CPU 构建；**Windows 用 NuGet 的
+//! DirectML 构建**（onnxruntime.dll + DirectML.dll 双件落同目录），让
+//! `ai/mod.rs` 注册的 DML EP 真正生效——OCR 推理跑 GPU（任意 DX12 显卡含核显），
+//! 不再烧 CPU。见 [`artifacts`]。
+//!
 //! 不做：断点续传、镜像 fallback、并发分片下载——都是 v2 优化项（跟 binary.rs 一致）。
 
 use std::path::{Path, PathBuf};
@@ -22,6 +27,11 @@ const RUNTIME_SUBDIR: &str = "ai/runtime";
 
 /// 当前 PIN 的 onnxruntime 版本——升级时改这一处 + 同步 sha256 表（如启用校验）。
 pub const PINNED_VERSION: &str = "1.22.0";
+
+/// Windows 用 DirectML 构建（NuGet 发布），这是与 ORT 1.22.0 配套的
+/// Microsoft.AI.DirectML 版本（来源：该 nupkg 的 nuspec 依赖声明）。
+/// 升级 PINNED_VERSION 时必须重查 nuspec 同步此值。
+const DIRECTML_VERSION: &str = "1.15.4";
 
 /// 进度节流，跟 binary.rs 对齐。
 const EMIT_INTERVAL: Duration = Duration::from_millis(120);
@@ -82,9 +92,13 @@ pub fn init_dylib_path() {
     }
 }
 
-/// dylib 文件是否已落盘。
+/// dylib 文件是否已落盘。Windows 上还要求 DirectML.dll 同目录就位——
+/// 旧版 CPU 构建的安装（无 DirectML.dll）因此自然判定为未安装，
+/// 引导用户重下一次（~40MB）即完成到 GPU 构建的迁移。
 pub fn is_installed() -> Result<bool> {
-    Ok(dylib_path()?.exists())
+    let ok = dylib_path()?.exists()
+        && (!cfg!(target_os = "windows") || install_root()?.join("DirectML.dll").exists());
+    Ok(ok)
 }
 
 /// 下载 → 解压 → 提取 dylib → 标版本。失败时清理临时文件。
@@ -96,9 +110,7 @@ pub async fn download<F>(mut progress: F) -> Result<()>
 where
     F: FnMut(DownloadPhase, u64, Option<u64>) + Send,
 {
-    let p = platform::detect();
-    let asset = asset_name(p)?;
-    let url = release_url(asset);
+    let arts = artifacts(platform::detect())?;
 
     let dir = install_root()?;
     std::fs::create_dir_all(&dir).map_err(|e| Error::EngineBinary {
@@ -106,51 +118,70 @@ where
         details: format!("path={} err={e}", dir.display()),
     })?;
 
-    let temp_archive = dir.join(format!("{asset}.partial"));
-
-    // ── HEAD 拿大小（前端进度条用）───────────────
+    // ── HEAD 各工件拿总大小（前端进度条用）───────
     let client = reqwest::Client::builder()
         .timeout(DOWNLOAD_TIMEOUT)
         .build()?;
-    let total: Option<u64> = match client.head(&url).send().await {
-        Ok(resp) => resp.content_length(),
-        Err(_) => None,
-    };
-    progress(DownloadPhase::Downloading, 0, total);
-
-    // ── 下载 ─────────────────────────────────────
-    let res = stream_download_with(&client, &url, &temp_archive, &mut progress).await;
-    if let Err(e) = res {
-        let _ = std::fs::remove_file(&temp_archive);
-        return Err(e);
+    let mut sizes: Vec<Option<u64>> = Vec::with_capacity(arts.len());
+    for a in &arts {
+        let size = match client.head(&a.url).send().await {
+            Ok(resp) => resp.content_length(),
+            Err(_) => None,
+        };
+        sizes.push(size);
     }
-    let downloaded_bytes = std::fs::metadata(&temp_archive)
-        .map(|m| m.len())
-        .unwrap_or(0);
-    progress(DownloadPhase::Downloading, downloaded_bytes, total);
+    // 任一工件 HEAD 失败就报未知总量（进度条转不确定态），不影响下载
+    let grand_total: Option<u64> = sizes
+        .iter()
+        .copied()
+        .collect::<Option<Vec<u64>>>()
+        .map(|v| v.iter().sum());
+    progress(DownloadPhase::Downloading, 0, grand_total);
 
-    // ── 校验（可选，v1 跟 binary.rs 一致跳过）───
-    progress(DownloadPhase::Verifying, downloaded_bytes, total);
-    log::info!("onnxruntime sha256 未录入（version={PINNED_VERSION} asset={asset}），跳过校验");
+    // ── 逐工件:下载 → 提取 → 清临时 ─────────────
+    let mut done_bytes: u64 = 0;
+    for a in &arts {
+        let temp_archive = dir.join(format!("{}.partial", a.dest));
 
-    // ── 解压 + 提取 dylib ────────────────────────
-    progress(DownloadPhase::Extracting, downloaded_bytes, total);
-    let archive_clone = temp_archive.clone();
-    let dir_clone = dir.clone();
-    let asset_clone = asset.to_string();
-    let res = tokio::task::spawn_blocking(move || {
-        extract_dylib(&archive_clone, &asset_clone, &dir_clone)
-    })
-    .await
-    .map_err(|e| Error::EngineBinary {
-        stage: "extract",
-        details: format!("join: {e}"),
-    })?;
-    if let Err(e) = res {
+        let base = done_bytes;
+        let mut sub = |phase: DownloadPhase, bytes: u64, _total: Option<u64>| {
+            if matches!(phase, DownloadPhase::Downloading) {
+                progress(DownloadPhase::Downloading, base + bytes, grand_total);
+            }
+        };
+        if let Err(e) = stream_download_with(&client, &a.url, &temp_archive, &mut sub).await {
+            let _ = std::fs::remove_file(&temp_archive);
+            return Err(e);
+        }
+        done_bytes += std::fs::metadata(&temp_archive)
+            .map(|m| m.len())
+            .unwrap_or(0);
+
+        // ── 校验（可选，v1 跟 binary.rs 一致跳过）───
+        progress(DownloadPhase::Verifying, done_bytes, grand_total);
+        log::info!(
+            "onnxruntime 组件 sha256 未录入（version={PINNED_VERSION} dest={}），跳过校验",
+            a.dest
+        );
+
+        // ── 解压 + 提取 ──────────────────────────
+        progress(DownloadPhase::Extracting, done_bytes, grand_total);
+        let archive_clone = temp_archive.clone();
+        let target = dir.join(a.dest);
+        let spec = a.spec;
+        let res =
+            tokio::task::spawn_blocking(move || extract_one(&archive_clone, spec, &target))
+                .await
+                .map_err(|e| Error::EngineBinary {
+                    stage: "extract",
+                    details: format!("join: {e}"),
+                })?;
+        if let Err(e) = res {
+            let _ = std::fs::remove_file(&temp_archive);
+            return Err(e);
+        }
         let _ = std::fs::remove_file(&temp_archive);
-        return Err(e);
     }
-    let _ = std::fs::remove_file(&temp_archive);
 
     write_installed_version(PINNED_VERSION)?;
     progress(DownloadPhase::Done, 0, None);
@@ -179,6 +210,7 @@ pub async fn delete() -> Result<()> {
 // ─────────────────────────────────────────────────────────
 
 /// 平台 → onnxruntime release asset 文件名。GitHub release URL 用这个拼。
+/// Windows 分支仅为穷举保留——实际下载走 [`artifacts`] 的 NuGet DML 路径。
 fn asset_name(p: Platform) -> Result<&'static str> {
     Ok(match p {
         Platform::MacOSArm64Metal => "onnxruntime-osx-arm64-1.22.0.tgz",
@@ -202,13 +234,84 @@ fn default_dylib_name() -> &'static str {
     }
 }
 
-/// "约 30 MB" 的展示——给 UI 显示下载体积量级。
+/// 展示用下载体积量级——Windows 双包(ORT-DML ~18MB + DirectML ~18MB)约 40MB,
+/// 其它平台单包约 30MB。
 fn estimated_bytes() -> u64 {
-    30 * 1024 * 1024
+    if cfg!(target_os = "windows") {
+        40 * 1024 * 1024
+    } else {
+        30 * 1024 * 1024
+    }
 }
 
 fn release_url(asset: &str) -> String {
     format!("https://github.com/microsoft/onnxruntime/releases/download/v{PINNED_VERSION}/{asset}")
+}
+
+/// 一次运行时安装要落盘的单个工件。
+struct Artifact {
+    url: String,
+    /// 归档内怎么找目标文件
+    spec: ExtractSpec,
+    /// install_root 下的落地文件名
+    dest: &'static str,
+}
+
+/// 归档内条目匹配规则。
+#[derive(Clone, Copy)]
+enum ExtractSpec {
+    /// onnxruntime 官方 tarball 里的版本化 dylib(模糊匹配,见 [`dylib_entry_matches`])
+    OnnxDylib,
+    /// NuGet 包(zip)内的精确相对路径(小写比较)
+    Exact(&'static str),
+}
+
+/// 平台 → 工件清单。
+///
+/// - macOS / Linux:GitHub 官方 CPU 构建单件(macOS 的 OCR 默认走 Vision,
+///   此运行时只服务 Paddle 回退与其它 ONNX 用途);
+/// - Windows:NuGet 的 **DirectML 构建** + 配套 DirectML.dll 双件——
+///   `ai/mod.rs` 注册的 DML EP 只有在 dll 带 DML 时才真正生效,否则静默回退 CPU。
+///   两个 DLL 落同一目录:libloading 以 LOAD_WITH_ALTERED_SEARCH_PATH 打开
+///   onnxruntime.dll,其延迟加载的 DirectML.dll 优先在同目录解析。
+///   目前只发 x64 安装包,故硬编码 win-x64;将来出 arm64 包时此处按架构分支。
+fn artifacts(p: Platform) -> Result<Vec<Artifact>> {
+    if cfg!(target_os = "windows") {
+        return Ok(vec![
+            Artifact {
+                url: format!(
+                    "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/{PINNED_VERSION}/microsoft.ml.onnxruntime.directml.{PINNED_VERSION}.nupkg"
+                ),
+                spec: ExtractSpec::Exact("runtimes/win-x64/native/onnxruntime.dll"),
+                dest: "onnxruntime.dll",
+            },
+            Artifact {
+                url: format!(
+                    "https://api.nuget.org/v3-flatcontainer/microsoft.ai.directml/{DIRECTML_VERSION}/microsoft.ai.directml.{DIRECTML_VERSION}.nupkg"
+                ),
+                // 注意精确到 x64-win:包里还有 xbox 变体和 Debug 版
+                spec: ExtractSpec::Exact("bin/x64-win/directml.dll"),
+                dest: "DirectML.dll",
+            },
+        ]);
+    }
+    Ok(vec![Artifact {
+        url: release_url(asset_name(p)?),
+        spec: ExtractSpec::OnnxDylib,
+        dest: default_dylib_name(),
+    }])
+}
+
+/// 按 spec 从归档提取目标文件。NuGet 包一定是 zip;官方发布在
+/// macOS/Linux 上是 tar.gz(Windows 官方 zip 路径已不再使用)。
+fn extract_one(archive: &Path, spec: ExtractSpec, target: &Path) -> Result<()> {
+    match spec {
+        ExtractSpec::Exact(entry) => extract_from_zip(archive, target, &|name: &str| {
+            let lower = name.to_lowercase();
+            lower == entry || lower.ends_with(&format!("/{entry}"))
+        }),
+        ExtractSpec::OnnxDylib => extract_from_tar_gz(archive, target, &dylib_entry_matches),
+    }
 }
 
 fn install_root() -> Result<PathBuf> {
@@ -290,24 +393,14 @@ where
 ///     LICENSE
 /// 我们只挑那个 versioned 文件名（dlopen 真正打开的实体文件），重命名为
 /// `default_dylib_name()`。其它内容（headers、licenses）不留——节省 ~10MB 磁盘。
-fn extract_dylib(archive: &Path, asset_name: &str, dest_dir: &Path) -> Result<()> {
-    let target = dest_dir.join(default_dylib_name());
+fn extract_from_zip(
+    archive: &Path,
+    target: &Path,
+    matches: &dyn Fn(&str) -> bool,
+) -> Result<()> {
     if target.exists() {
-        let _ = std::fs::remove_file(&target);
+        let _ = std::fs::remove_file(target);
     }
-    if asset_name.ends_with(".zip") {
-        extract_dylib_from_zip(archive, &target)
-    } else if asset_name.ends_with(".tgz") || asset_name.ends_with(".tar.gz") {
-        extract_dylib_from_tar_gz(archive, &target)
-    } else {
-        Err(Error::EngineBinary {
-            stage: "extract",
-            details: format!("不识别的压缩格式：{asset_name}"),
-        })
-    }
-}
-
-fn extract_dylib_from_zip(archive: &Path, target: &Path) -> Result<()> {
     let file = std::fs::File::open(archive).map_err(Error::from)?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| Error::EngineBinary {
         stage: "extract",
@@ -322,7 +415,7 @@ fn extract_dylib_from_zip(archive: &Path, target: &Path) -> Result<()> {
             continue;
         }
         let name = entry.name().to_string();
-        if dylib_entry_matches(&name) {
+        if matches(&name) {
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(Error::from)?;
             }
@@ -340,7 +433,14 @@ fn extract_dylib_from_zip(archive: &Path, target: &Path) -> Result<()> {
     })
 }
 
-fn extract_dylib_from_tar_gz(archive: &Path, target: &Path) -> Result<()> {
+fn extract_from_tar_gz(
+    archive: &Path,
+    target: &Path,
+    matches: &dyn Fn(&str) -> bool,
+) -> Result<()> {
+    if target.exists() {
+        let _ = std::fs::remove_file(target);
+    }
     let file = std::fs::File::open(archive).map_err(Error::from)?;
     let gz = flate2::read::GzDecoder::new(file);
     let mut tar = tar::Archive::new(gz);
@@ -354,7 +454,7 @@ fn extract_dylib_from_tar_gz(archive: &Path, target: &Path) -> Result<()> {
         }
         let path_buf = entry.path().map_err(Error::from)?.to_path_buf();
         let name = path_buf.to_string_lossy().to_string();
-        if dylib_entry_matches(&name) {
+        if matches(&name) {
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(Error::from)?;
             }
@@ -387,5 +487,40 @@ fn dylib_entry_matches(entry_name: &str) -> bool {
     } else {
         // Linux tarball: lib/libonnxruntime.so.1.22.0
         lower.contains("/lib/libonnxruntime.so.") && !lower.ends_with("/libonnxruntime.so")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// nupkg 提取冒烟:用真实下载的 NuGet 包验证 Exact 匹配路径与提取逻辑。
+    /// 跑法:
+    /// `ORT_DML_NUPKG=<路径> DIRECTML_NUPKG=<路径> cargo test --lib nupkg_extract -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn nupkg_extract_smoke() {
+        let tmp = std::env::temp_dir().join("hindsight-nupkg-extract-test");
+        let _ = std::fs::create_dir_all(&tmp);
+        let cases = [
+            (
+                "ORT_DML_NUPKG",
+                "runtimes/win-x64/native/onnxruntime.dll",
+                "onnxruntime.dll",
+            ),
+            ("DIRECTML_NUPKG", "bin/x64-win/directml.dll", "DirectML.dll"),
+        ];
+        for (env, entry, dest) in cases {
+            let Some(p) = std::env::var_os(env) else {
+                eprintln!("未设 {env},跳过");
+                continue;
+            };
+            let target = tmp.join(dest);
+            extract_one(Path::new(&p), ExtractSpec::Exact(entry), &target)
+                .expect("提取失败");
+            let len = std::fs::metadata(&target).expect("目标不存在").len();
+            eprintln!("{dest}: {len} bytes");
+            assert!(len > 1_000_000, "{dest} 太小,匹配到了错误条目?");
+        }
     }
 }

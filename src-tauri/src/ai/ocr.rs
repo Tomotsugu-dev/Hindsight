@@ -89,23 +89,81 @@ pub struct OcrLine {
     pub text: String,
 }
 
+/// OCR 引擎门面:macOS 默认走系统 Vision(ANE,零下载、零 onnxruntime 依赖),
+/// 其它平台走 PaddleOCR ONNX。环境变量 `HINDSIGHT_OCR_PADDLE=1` 可在 macOS
+/// 强制回退 Paddle(双引擎质量 A/B 与故障排查用)。
 pub struct OcrEngine {
+    backend: Backend,
+}
+
+enum Backend {
+    #[cfg(target_os = "macos")]
+    Vision(super::ocr_vision::VisionEngine),
+    Paddle(PaddleEngine),
+}
+
+impl OcrEngine {
+    fn use_vision() -> bool {
+        cfg!(target_os = "macos") && std::env::var_os("HINDSIGHT_OCR_PADDLE").is_none()
+    }
+
+    /// 当前后端是否需要 Paddle 模型 + onnxruntime(Vision 后端不需要,
+    /// 模型下载/运行时安装全部跳过)。
+    pub fn needs_models() -> bool {
+        !Self::use_vision()
+    }
+
+    /// 后台/常驻模式加载:保守线程数,不打扰前台使用。
+    pub fn load() -> Result<Self> {
+        Self::load_inner(false)
+    }
+
+    /// 手动全速模式加载:用户点「立即回填」时用,尽快清完积压。
+    pub fn load_fast() -> Result<Self> {
+        Self::load_inner(true)
+    }
+
+    fn load_inner(fast: bool) -> Result<Self> {
+        #[cfg(target_os = "macos")]
+        if Self::use_vision() {
+            log::info!("OCR 引擎:系统 Vision(ANE)");
+            return Ok(Self {
+                backend: Backend::Vision(super::ocr_vision::VisionEngine::new()),
+            });
+        }
+        let threads = if fast {
+            ort_threads_fast()
+        } else {
+            ort_threads()
+        };
+        Ok(Self {
+            backend: Backend::Paddle(PaddleEngine::load_with_threads(threads)?),
+        })
+    }
+
+    /// 识别一张已落盘的截图,返回版面阅读序的行。
+    /// Vision 后端直接吃文件(自带解码);Paddle 后端在此解码后走 ONNX 管线。
+    pub fn recognize_file(&self, path: &std::path::Path) -> Result<Vec<OcrLine>> {
+        match &self.backend {
+            #[cfg(target_os = "macos")]
+            Backend::Vision(v) => v.recognize_file(path),
+            Backend::Paddle(p) => {
+                let img =
+                    image::open(path).map_err(|e| Error::Ocr(format!("读图失败: {e}")))?;
+                p.recognize(&img)
+            }
+        }
+    }
+}
+
+/// PaddleOCR ONNX 后端(det + rec 双模型,onnxruntime CPU)。
+pub(crate) struct PaddleEngine {
     det: Mutex<Session>,
     rec: Mutex<Session>,
     dict: Vec<String>,
 }
 
-impl OcrEngine {
-    /// 后台/常驻模式加载:保守线程数,不打扰前台使用。
-    pub fn load() -> Result<Self> {
-        Self::load_with_threads(ort_threads())
-    }
-
-    /// 手动全速模式加载:用户点「立即回填」时用,尽快清完积压。
-    pub fn load_fast() -> Result<Self> {
-        Self::load_with_threads(ort_threads_fast())
-    }
-
+impl PaddleEngine {
     /// 从 [`model_dir`] 加载两个会话 + 字典。onnxruntime 动态库缺失时返回
     /// [`Error::EmbeddingRuntimeMissing`](统一的下载引导链路)。
     fn load_with_threads(threads: usize) -> Result<Self> {
@@ -492,7 +550,8 @@ mod tests {
         let img = image::open(&img_path).unwrap();
 
         let t0 = std::time::Instant::now();
-        let engine = OcrEngine::load().unwrap();
+        // 定点测 Paddle 后端(macOS 上门面默认给 Vision,这里绕开门面直取)
+        let engine = PaddleEngine::load_with_threads(ort_threads()).unwrap();
         println!("加载: {:?}", t0.elapsed());
 
         let t1 = std::time::Instant::now();

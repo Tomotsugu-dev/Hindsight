@@ -4,6 +4,9 @@
 //! - 常驻:引擎加载一次挂在循环里(~400MB),每 [`TICK_SECS`] 看一眼登记簿,
 //!   有积压就消化;折叠器跨 tick 存活,阅读会话不会被 tick 边界切碎。
 //! - 停止:置停止标志,循环在帧间退出(最多等一帧 ~1s),引擎随任务释放。
+//! - **电源纪律**(docs/design/screen-memory.md §6"插电常驻,拔电即退"):
+//!   电池供电的 tick 不消化并释放引擎;接回电源后下个 tick 懒加载自动恢复、
+//!   补消化积压。探测 fail-open(见 [`crate::platform::on_ac_power`])。
 //!
 //! 由 设置 → 是否常驻 OCR 开关控制,启动期与设置保存时同步启停。
 
@@ -42,6 +45,7 @@ impl ResidentOcr {
         let stop_for_task = Arc::clone(&stop);
         let handle = tokio::spawn(async move {
             let mut pipe = None;
+            let mut was_on_ac = true;
             log::info!("OCR 常驻模式启动");
             loop {
                 for _ in 0..TICK_SECS {
@@ -50,6 +54,20 @@ impl ResidentOcr {
                         return;
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+                // 电源纪律:电池供电时本 tick 不消化,释放引擎省 ~400MB;
+                // 只在状态翻转时打日志,避免每分钟刷屏。
+                if !crate::platform::on_ac_power() {
+                    if was_on_ac {
+                        log::info!("电池供电,常驻 OCR 暂停(插电后自动恢复)");
+                        was_on_ac = false;
+                    }
+                    pipe = None;
+                    continue;
+                }
+                if !was_on_ac {
+                    log::info!("接通电源,常驻 OCR 恢复");
+                    was_on_ac = true;
                 }
                 if pipe.is_none() {
                     match digest::Pipeline::new().await {

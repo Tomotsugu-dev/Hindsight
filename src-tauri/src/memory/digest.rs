@@ -19,6 +19,12 @@ use crate::storage::{DbPool, SqliteResultExt};
 /// 进程内单实例互斥;子进程化时换文件锁。
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// 消化是否正在进行(手动或常驻批任一)。前端 banner/设置页用它在
+/// 重新挂载时恢复"后台索引中"的显示,而不是装作无事发生。
+pub fn is_running() -> bool {
+    RUNNING.load(Ordering::SeqCst)
+}
+
 /// 每轮从登记簿取的帧数;取完一轮再取,直到无积压。
 const BATCH: i64 = 64;
 
@@ -51,7 +57,12 @@ pub struct DigestReport {
 }
 
 /// OCR 模型三件套:缺哪个下哪个。幂等。
+/// Vision 后端(macOS 默认)不需要 Paddle 模型,直接跳过——
+/// 顺带免掉 onnxruntime 安装引导,macOS 用户零下载可用。
 pub async fn ensure_models() -> Result<()> {
+    if !OcrEngine::needs_models() {
+        return Ok(());
+    }
     download_missing(&ocr::model_dir(), &MODEL_SOURCES).await
 }
 
@@ -204,8 +215,12 @@ async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -
     }
     let eng = Arc::clone(&pipe.ocr);
     let lines: Vec<String> = tokio::task::spawn_blocking(move || -> Result<Vec<String>> {
-        let img = image::open(&path).map_err(|e| Error::Ocr(format!("读图失败: {e}")))?;
-        Ok(eng.recognize(&img)?.into_iter().map(|l| l.text).collect())
+        // 解码在引擎内部:Vision 直接吃文件,Paddle 走 image::open
+        Ok(eng
+            .recognize_file(&path)?
+            .into_iter()
+            .map(|l| l.text)
+            .collect())
     })
     .await
     .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??;
