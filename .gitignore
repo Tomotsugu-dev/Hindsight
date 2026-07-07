@@ -64,6 +64,8 @@ __pycache__/
 *.py
 # 例外:scripts/poc/ 评测脚本入仓(其产物 output/ 仍忽略,含真实截图)
 !scripts/poc/*.py
+# 例外:演示数据生成器入仓(生成的数据在 app 数据目录,不在仓库)
+!scripts/demo/*.py
 .python-version
 pyproject.toml
 uv.lock

@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "demo": "python3 scripts/demo/demo.py",
+    "demo:fresh": "python3 scripts/demo/demo.py --fresh",
     "build": "npm run lint && tsc && vite build",
     "build:notest": "tsc && vite build",
     "lint": "eslint src --max-warnings 2",
