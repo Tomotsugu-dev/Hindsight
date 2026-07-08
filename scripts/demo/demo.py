@@ -132,15 +132,25 @@ SEGMENT_SUMMARIES = [
     "草稿,睡前把明天的待办列了出来。",
 ]
 
-CHAT_SEED = [
-    ("user", "我这周在 Aurora 项目上花了多久?", None),
-    (
-        "assistant",
-        "本周你在 Aurora 项目相关工作上共投入约 18.5 小时:其中编码(Cursor)11.2 "
-        "小时,主要集中在数据管线重构;会议与文档 4.6 小时;终端调试 2.7 小时。"
-        "比上周多 3.1 小时,周三是投入最多的一天(5.2 小时)。",
-        None,
-    ),
+# 注入的可提问素材:B 站标题(晚间浏览器时段)与 Hindsight 开发标题(代码时段),
+# 让「看了 B 站多久/几次」「Hindsight 开发花了多久」这类问题有真数据可查。
+BILI_TITLES = [
+    "【硬核】Rust 所有权,一个视频讲透_哔哩哔哩_bilibili",
+    "这个 UI 细节,苹果研究了十年_哔哩哔哩_bilibili",
+    "【4K】东京 CityWalk 雨夜漫步_哔哩哔哩_bilibili",
+    "程序员的一天 Vlog|远程办公_哔哩哔哩_bilibili",
+    "SQLite 是怎么做到零配置的_哔哩哔哩_bilibili",
+    "【整活】用 Excel 跑神经网络_哔哩哔哩_bilibili",
+    "机械键盘轴体横评:茶轴还是红轴_哔哩哔哩_bilibili",
+    "「星野」新专辑全曲解析_哔哩哔哩_bilibili",
+]
+HINDSIGHT_TITLES = [
+    "Hindsight — capture/service.rs",
+    "Hindsight — memory/digest.rs",
+    "Hindsight — ChatView.tsx",
+    "Hindsight — screen-memory.md",
+    "Hindsight — ai/ocr.rs",
+    "Hindsight — SettingsPage.tsx",
 ]
 
 # ───────────────────────── 工具 ─────────────────────────
@@ -238,9 +248,30 @@ def sanitize_main(db, demo_root):
     )
     cur.execute("UPDATE activities SET screenshot_path = NULL, image_hash = NULL")
 
-    # 凭据 / 同步 / 设备:全清
-    for table in ("auth_state", "devices", "sync_outbox", "sync_cursor"):
+    # 注入演示素材:晚间浏览器的 1/3 → B 站;代码类的 2/3 → Hindsight 开发
+    rows = cur.execute(
+        "SELECT id, process_name, local_hour FROM activities WHERE window_title IS NOT NULL"
+    ).fetchall()
+    bili, hs = [], []
+    for i, proc, lh in rows:
+        b = bucket_of(proc)
+        if b == "browser" and lh is not None and 18 <= lh <= 23 and i % 2 == 0:
+            bili.append((pick(BILI_TITLES, f"b{i}"), i))
+        elif b == "code" and i % 3 != 2:
+            hs.append((pick(HINDSIGHT_TITLES, f"h{i}"), i))
+    cur.executemany("UPDATE activities SET window_title = ? WHERE id = ?", bili)
+    cur.executemany("UPDATE activities SET window_title = ? WHERE id = ?", hs)
+
+    # 凭据 / 同步状态:全清。devices 不能删——应用页"本机/设备"列
+    # 靠它连接每台设备的条目,删了整页断链;保留行、只脱敏设备名。
+    for table in ("auth_state", "sync_outbox", "sync_cursor"):
         cur.execute(f"DELETE FROM {table}")
+    devs = cur.execute(
+        "SELECT device_id FROM devices ORDER BY is_self DESC, device_id"
+    ).fetchall()
+    for i, (did,) in enumerate(devs):
+        name = "本机(演示)" if i == 0 else f"演示设备 {chr(64 + i)}"
+        cur.execute("UPDATE devices SET display_name = ? WHERE device_id = ?", (name, did))
 
     # AI 派生物:图描述/嵌入/去重映射基于真实截图,删;段总结文本换语料
     for table in ("ai_image_descriptions", "screenshot_embeddings", "screenshot_dedup_map"):
@@ -347,37 +378,222 @@ def sanitize_memory(db):
         new_lines,
     )
 
-    # Chat:清空真实历史,种一组演示问答(列按实际 schema 动态适配)
-    cur.execute("DELETE FROM chat_messages")
-    cur.execute("DELETE FROM chat_conversations")
-    conv_cols = [r[1] for r in cur.execute("PRAGMA table_info(chat_conversations)")]
-    ts0 = cur.execute(
-        "SELECT COALESCE(MAX(ended_ts), '2026-07-06T09:00:00Z') FROM text_sessions"
-    ).fetchone()[0]
-    conv_vals = {"id": 1, "title": "Aurora 项目投入统计", "created_ts": ts0, "updated_ts": ts0}
-    cols = [c for c in conv_cols if c in conv_vals]
-    cur.execute(
-        f"INSERT INTO chat_conversations({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
-        [conv_vals[c] for c in cols],
-    )
-    msg_cols = [r[1] for r in cur.execute("PRAGMA table_info(chat_messages)")]
-    for role, content, citations in CHAT_SEED:
-        vals = {
-            "conversation_id": 1,
-            "role": role,
-            "content": content,
-            "citations": citations,
-            "degraded": 0,
-            "created_ts": ts0,
-        }
-        cols = [c for c in msg_cols if c in vals]
-        cur.execute(
-            f"INSERT INTO chat_messages({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
-            [vals[c] for c in cols],
-        )
 
     conn.commit()
     conn.close()
+
+
+# ───────────────────────── 今日增密 ─────────────────────────
+
+
+def densify_today(main_db):
+    """把演示库里最忙一天的活动节奏整体搬到今天(截到当前时刻),
+    日报同步搬——现场演示时"今天"不再是残缺的半天。"""
+    from datetime import datetime, date, timedelta
+
+    conn = sqlite3.connect(main_db)
+    cur = conn.cursor()
+    today = date.today().isoformat()
+    src = cur.execute(
+        "SELECT local_date FROM activities WHERE local_date != ? "
+        "GROUP BY local_date ORDER BY SUM(duration_secs) DESC LIMIT 1",
+        (today,),
+    ).fetchone()
+    if not src:
+        conn.close()
+        return
+    src_date = src[0]
+    delta = date.fromisoformat(today) - date.fromisoformat(src_date)
+    now = datetime.now().astimezone()
+
+    cur.execute("DELETE FROM activities WHERE local_date = ?", (today,))
+    rows = cur.execute(
+        "SELECT started_at, ended_at, local_hour, process_name, window_title, "
+        "category_id, device_id, origin, updated_at FROM activities "
+        "WHERE local_date = ? ORDER BY started_at",
+        (src_date,),
+    ).fetchall()
+    inserted = 0
+    for sa, ea, lh, proc, title, cat, dev, origin, upd in rows:
+        try:
+            ns = datetime.fromisoformat(sa) + delta
+            ne = datetime.fromisoformat(ea) + delta
+        except ValueError:
+            continue
+        if ns >= now:
+            continue
+        ne = min(ne, now)
+        dur = int((ne - ns).total_seconds())
+        if dur <= 0:
+            continue
+        cur.execute(
+            "INSERT INTO activities(started_at, ended_at, duration_secs, local_date, "
+            "local_hour, process_name, window_title, category_id, screenshot_path, "
+            "image_hash, device_id, remote_id, updated_at, origin) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)",
+            (ns.isoformat(), ne.isoformat(), dur, today, lh, proc, title, cat, dev, upd, origin),
+        )
+        inserted += 1
+
+    # 日报:今天的段总结,独立挑"最近一个有日报的日子"当模板
+    # (活动最忙的那天不一定生成过日报)
+    cur.execute("DELETE FROM ai_summaries WHERE local_date = ?", (today,))
+    src2 = cur.execute(
+        "SELECT local_date FROM ai_summaries WHERE local_date != ? "
+        "ORDER BY local_date DESC LIMIT 1",
+        (today,),
+    ).fetchone()
+    if src2:
+        cols = [r[1] for r in cur.execute("PRAGMA table_info(ai_summaries)")]
+        others = [c for c in cols if c != "local_date"]
+        cur.execute(
+            f"INSERT INTO ai_summaries(local_date, {', '.join(others)}) "
+            f"SELECT ?, {', '.join(others)} FROM ai_summaries WHERE local_date = ?",
+            (today, src2[0]),
+        )
+    conn.commit()
+    conn.close()
+    print(f"[demo] 今日增密:以 {src_date} 为模板生成 {inserted} 条活动(截至当前时刻)。")
+
+
+def densify_today_memory(mem_db):
+    """记忆库同步增密:把最忙一天的文本会话搬到今天(搜索/时间线证据今天也有货)。"""
+    from datetime import date, datetime, timedelta
+
+    conn = sqlite3.connect(mem_db)
+    cur = conn.cursor()
+    today = date.today().isoformat()
+    src = cur.execute(
+        "SELECT local_date FROM text_sessions WHERE local_date != ? "
+        "GROUP BY local_date ORDER BY COUNT(*) DESC LIMIT 1",
+        (today,),
+    ).fetchone()
+    if not src:
+        conn.close()
+        return
+    src_date = src[0]
+    delta = date.fromisoformat(today) - date.fromisoformat(src_date)
+    now = datetime.now().astimezone()
+
+    old_ids = [r[0] for r in cur.execute(
+        "SELECT id FROM text_sessions WHERE local_date = ?", (today,)
+    )]
+    cur.executemany("DELETE FROM session_lines WHERE session_id = ?", [(i,) for i in old_ids])
+    cur.execute("DELETE FROM text_sessions WHERE local_date = ?", (today,))
+
+    rows = cur.execute(
+        "SELECT id, started_ts, ended_ts, app_id, title, text, origin_device "
+        "FROM text_sessions WHERE local_date = ? ORDER BY started_ts",
+        (src_date,),
+    ).fetchall()
+    copied = 0
+    for sid, sts, ets, app_id, title, text, odev in rows:
+        try:
+            ns = datetime.fromisoformat(sts) + delta
+            ne = datetime.fromisoformat(ets) + delta
+        except ValueError:
+            continue
+        if ns >= now:
+            continue
+        ne = min(ne, now)
+        cur.execute(
+            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, "
+            "text, guid, origin_device) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
+            (today, ns.isoformat(), ne.isoformat(), app_id, title, text, odev),
+        )
+        new_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts) "
+            "SELECT ?, line_no, text, first_path, first_ts FROM session_lines "
+            "WHERE session_id = ?",
+            (new_id, sid),
+        )
+        copied += 1
+    conn.commit()
+    conn.close()
+    print(f"[demo] 记忆增密:今天复制 {copied} 条文本会话(模板 {src_date})。")
+
+
+def seed_chat(mem_db, main_db):
+    """预置两组演示问答,数字从演示库实算——录屏时点开就是对的数。"""
+    from datetime import datetime, timedelta
+
+    c = sqlite3.connect(main_db)
+    today_top = c.execute(
+        "SELECT process_name, ROUND(SUM(duration_secs)/3600.0,1) h FROM activities "
+        "WHERE local_date = date('now','localtime') GROUP BY process_name "
+        "ORDER BY h DESC LIMIT 3"
+    ).fetchall()
+    today_total = c.execute(
+        "SELECT ROUND(SUM(duration_secs)/3600.0,1) FROM activities "
+        "WHERE local_date = date('now','localtime')"
+    ).fetchone()[0] or 0
+    bili = c.execute(
+        "SELECT started_at, duration_secs FROM activities "
+        "WHERE window_title LIKE '%哔哩哔哩%' "
+        "AND local_date >= date('now','localtime','start of month') ORDER BY started_at"
+    ).fetchall()
+    c.close()
+
+    bili_hours = round(sum(d for _, d in bili) / 3600.0, 1)
+    # 「看了几次」= 按 30 分钟断流分组的观看会话数
+    times, last_end = 0, None
+    for sa, dur in bili:
+        try:
+            st = datetime.fromisoformat(sa)
+        except ValueError:
+            continue
+        if last_end is None or (st - last_end) > timedelta(minutes=30):
+            times += 1
+        last_end = st + timedelta(seconds=dur)
+
+    convs = []
+    if today_top:
+        tops = ";".join(f"{i+1}. {n}({h} 小时)" for i, (n, h) in enumerate(today_top))
+        convs.append((
+            "今日应用使用统计",
+            "我今天用得最多的三个应用是什么?各用了多久?",
+            f"今天到目前为止你共使用电脑约 {today_total} 小时,前三名是:{tops}。"
+            f"其中 {today_top[0][0]} 占全天约 "
+            f"{round(today_top[0][1] / today_total * 100) if today_total else 0}%。",
+        ))
+    if bili:
+        convs.append((
+            "B 站观看统计",
+            "这个月我在 B 站看了多久?大概看了多少次?",
+            f"这个月你在 B 站累计观看约 {bili_hours} 小时,分 {times} 次看完,"
+            f"基本集中在晚上 7 点到 11 点之间;看得最多的是技术类和音乐类视频。",
+        ))
+
+    m = sqlite3.connect(mem_db)
+    cur = m.cursor()
+    cur.execute("DELETE FROM chat_messages")
+    cur.execute("DELETE FROM chat_conversations")
+    conv_cols = [r[1] for r in cur.execute("PRAGMA table_info(chat_conversations)")]
+    msg_cols = [r[1] for r in cur.execute("PRAGMA table_info(chat_messages)")]
+    ts0 = cur.execute(
+        "SELECT COALESCE(MAX(ended_ts), '2026-07-07T09:00:00Z') FROM text_sessions"
+    ).fetchone()[0]
+    for idx, (title, q, a) in enumerate(convs, start=1):
+        cv = {"id": idx, "title": title, "created_ts": ts0, "updated_ts": ts0}
+        cols = [x for x in conv_cols if x in cv]
+        cur.execute(
+            f"INSERT INTO chat_conversations({', '.join(cols)}) "
+            f"VALUES ({', '.join('?' * len(cols))})",
+            [cv[x] for x in cols],
+        )
+        for role, content in (("user", q), ("assistant", a)):
+            v = {"conversation_id": idx, "role": role, "content": content,
+                 "citations": None, "degraded": 0, "created_ts": ts0}
+            cols = [x for x in msg_cols if x in v]
+            cur.execute(
+                f"INSERT INTO chat_messages({', '.join(cols)}) "
+                f"VALUES ({', '.join('?' * len(cols))})",
+                [v[x] for x in cols],
+            )
+    m.commit()
+    m.close()
+    print(f"[demo] 预置问答:{len(convs)} 组(数字实算:B站 {bili_hours}h/{times} 次)。")
 
 
 # ───────────────────────── 自查与启动 ─────────────────────────
@@ -455,6 +671,11 @@ def main():
         demo_ai = demo_root / "ai"
         if real_ai.is_dir() and not demo_ai.exists() and os.name == "posix":
             os.symlink(real_ai, demo_ai)
+
+        densify_today(demo_main)
+        if (demo_root / mem_name).is_file():
+            densify_today_memory(demo_root / mem_name)
+            seed_chat(demo_root / mem_name, demo_main)
 
         verify(demo_main, originals)
         print("[demo] 生成完成。")
