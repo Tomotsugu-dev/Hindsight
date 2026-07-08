@@ -15,6 +15,7 @@ use serde::Serialize;
 use super::llm::{ChatLlm, StepOut, Turn};
 use super::tools::{self, Citation, ToolCtx};
 use crate::error::{Error, Result};
+use crate::chat::lang::ChatLang;
 
 /// 循环步数上限(每步 = 一次 LLM 调用;云端/本地同值起步,按 golden 集实测再分级)
 const MAX_STEPS: u32 = 6;
@@ -51,8 +52,9 @@ pub async fn answer(
     question: &str,
     history: &[HistoryTurn],
     today: NaiveDate,
+    lang: ChatLang,
 ) -> Result<ChatAnswer> {
-    let system = system_prompt(today);
+    let system = lang.system_prompt(today);
     let mut turns: Vec<Turn> = Vec::new();
     for h in history.iter().rev().take(6).rev() {
         match h.role.as_str() {
@@ -82,7 +84,14 @@ pub async fn answer(
                 llm_failures += 1;
                 log::warn!("chat LLM 步骤失败({llm_failures}/{MAX_LLM_FAILURES}): {e}");
                 if llm_failures >= MAX_LLM_FAILURES {
-                    return degraded_answer(citations, steps, prompt_tokens, completion_tokens, e);
+                    return degraded_answer(
+                        citations,
+                        steps,
+                        prompt_tokens,
+                        completion_tokens,
+                        e,
+                        lang,
+                    );
                 }
                 continue;
             }
@@ -121,8 +130,7 @@ pub async fn answer(
                 if !seen_calls.insert(dedup_key) {
                     turns.push(Turn::ToolResult {
                         id: call_id,
-                        content: "这个查询刚执行过,结果同上。请换参数,或基于已有资料作答。"
-                            .to_string(),
+                        content: lang.dup_call().to_string(),
                     });
                     continue;
                 }
@@ -133,24 +141,24 @@ pub async fn answer(
                     Err(e) => {
                         turns.push(Turn::ToolResult {
                             id: call_id,
-                            content: format!("参数格式错误: {e}"),
+                            content: lang.args_format_err(&e),
                         });
                         continue;
                     }
                 };
-                let call = match tools::validate(&name, &raw, today) {
+                let call = match tools::validate(&name, &raw, today, lang) {
                     Ok(c) => c,
                     Err(msg) => {
                         turns.push(Turn::ToolResult {
                             id: call_id,
-                            content: format!("参数校验未通过: {msg}"),
+                            content: lang.args_invalid(&msg),
                         });
                         continue;
                     }
                 };
 
                 // 第③④道墙内执行
-                match tools::execute(ctx, &call, citations.len() + 1).await {
+                match tools::execute(ctx, &call, citations.len() + 1, lang).await {
                     Ok(output) => {
                         citations.extend(output.citations);
                         turns.push(Turn::ToolResult {
@@ -162,7 +170,7 @@ pub async fn answer(
                         log::warn!("chat 工具执行失败: {e}");
                         turns.push(Turn::ToolResult {
                             id: call_id,
-                            content: "查询执行失败,请换个方式或直接基于已有资料作答。".to_string(),
+                            content: lang.tool_exec_failed().to_string(),
                         });
                     }
                 }
@@ -171,9 +179,7 @@ pub async fn answer(
     }
 
     // 步数耗尽:带着已有证据强制作答(最后一次 LLM 机会)
-    turns.push(Turn::User(
-        "查询步数已用完。请立刻基于以上已有资料作答;资料不足就直接说明没查到什么。".to_string(),
-    ));
+    turns.push(Turn::User(lang.steps_exhausted().to_string()));
     match llm.step(&system, &turns).await {
         Ok((StepOut::Final(text), usage)) => {
             let (text, cited) = bind_citations(&text, &citations);
@@ -192,6 +198,7 @@ pub async fn answer(
             prompt_tokens,
             completion_tokens,
             Error::LlmResponse("步数耗尽且模型未能作答".into()),
+            lang,
         ),
     }
 }
@@ -203,14 +210,13 @@ fn degraded_answer(
     prompt_tokens: u64,
     completion_tokens: u64,
     err: Error,
+    lang: ChatLang,
 ) -> Result<ChatAnswer> {
     log::warn!("chat 降级作答: {err}");
     let text = if citations.is_empty() {
-        "这次没能完成查询(模型或网络出了问题)。可以换个更具体的问法再试,\
-         比如带上大致时间(\"上周\"、\"7 月 3 日下午\")或关键词。"
-            .to_string()
+        lang.degraded_no_evidence().to_string()
     } else {
-        "模型没能完成归纳,但查到了下面这些相关记录,请直接查看。".to_string()
+        lang.degraded_with_evidence().to_string()
     };
     Ok(ChatAnswer {
         text,
@@ -290,29 +296,6 @@ fn parse_ref_token(token: &str) -> Option<Vec<usize>> {
     Some(nums)
 }
 
-fn system_prompt(today: NaiveDate) -> String {
-    let weekday = match today.format("%u").to_string().as_str() {
-        "1" => "周一",
-        "2" => "周二",
-        "3" => "周三",
-        "4" => "周四",
-        "5" => "周五",
-        "6" => "周六",
-        _ => "周日",
-    };
-    format!(
-        "你是用户的屏幕记忆助手:用户电脑上的活动记录和屏幕文字都被索引,\
-         你通过工具查询它们来回答问题。今天是 {today}({weekday})。\n\
-         规则:\n\
-         1. 相对时间(上周/昨天/上个月)先换算成具体日期再查。\n\
-         2. 一次只调一个工具;搜索没命中就换关键词(同义词/英文/更短)再试。\n\
-         3. 只依据工具返回的资料作答,资料里没有的就说没查到,禁止编造。\n\
-         4. 引用资料时在句尾标注来源编号,如 [3];只能用资料里出现过的编号,\
-         且编号必须真正支撑该句(统计数字来自 query_stats 时不要借搜索结果的编号)。\n\
-         5. 可用简洁的 Markdown 排版(加粗/列表/表格),不要用标题层级。\n\
-         6. 用用户的语言简洁作答;时长换算成小时分钟;提到日期让用户可核对。"
-    )
-}
 
 #[cfg(test)]
 mod tests {
@@ -423,7 +406,7 @@ mod tests {
 
         for (q, history) in golden {
             println!("\n========== Q: {q}");
-            match answer(&llm, &ctx, q, history, today).await {
+            match answer(&llm, &ctx, q, history, today, ChatLang::ZhHans).await {
                 Ok(a) => {
                     println!(
                         "[steps={} degraded={} citations={}]\n{}",

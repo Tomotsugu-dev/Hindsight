@@ -108,7 +108,7 @@ export default function ChatView({
   onConversationTouched,
   ensurePrivacyAck,
 }: ChatViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,7 +153,8 @@ export default function ChatView({
     setInput("");
     setBusy(true);
     try {
-      const ans = await api.chatAsk(trimmed, conversationId);
+      // 界面语言随请求传给后端:回答跟随提问语言,界面语言兜底
+      const ans = await api.chatAsk(trimmed, conversationId, i18n.language);
       if (loadSeq.current !== seq) return; // 期间切了会话,丢弃
       setMessages((prev) => [
         ...prev,

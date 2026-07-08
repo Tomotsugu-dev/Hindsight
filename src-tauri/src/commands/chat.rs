@@ -49,6 +49,7 @@ pub async fn chat_ask(
     mem: State<'_, MemoryState>,
     question: String,
     conversation_id: Option<i64>,
+    locale: Option<String>,
 ) -> Result<ChatAskResult, String> {
     let question = question.trim().to_string();
     if question.is_empty() {
@@ -149,7 +150,9 @@ pub async fn chat_ask(
 
     let ctx = ToolCtx::open_readonly().await.map_err(String::from)?;
     let today = chrono::Local::now().date_naive();
-    let answer = engine::answer(&llm, &ctx, &question, &history, today)
+    // 回答语言:跟随提问语言优先,界面语言(前端 i18n 传入)兜底
+    let lang = crate::chat::lang::ChatLang::from_tag(locale.as_deref());
+    let answer = engine::answer(&llm, &ctx, &question, &history, today, lang)
         .await
         .map_err(String::from)?;
 

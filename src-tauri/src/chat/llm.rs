@@ -70,7 +70,7 @@ pub fn tools_schema() -> Value {
     json!([
         {"type": "function", "function": {
             "name": "search_text",
-            "description": "全文搜索屏幕上出现过的文字(聊天/网页/代码/订单等,逐字索引)。没命中时换同义词、英文或更短的词重试。",
+            "description": "全文搜索屏幕上出现过的文字(聊天/网页/代码/订单等,逐字索引)。返回头部标注总命中数,正文为相关度最高的若干条。没命中时换同义词、英文或更短的词重试。",
             "parameters": {"type": "object", "properties": {
                 "keywords": {"type": "array", "items": {"type": "string"}, "description": "1-3 个关键词,逐字匹配"},
                 "date_from": date("起始日期,可选"),
@@ -93,7 +93,7 @@ pub fn tools_schema() -> Value {
         }},
         {"type": "function", "function": {
             "name": "get_timeline",
-            "description": "列出某时段的屏幕活动会话(时间、应用、标题),回答'某天/某下午在干什么'。",
+            "description": "按小时抽样列出某时段的屏幕活动会话(时间、应用、标题),回答'某天/某下午在干什么'。返回头部标注总条数与覆盖范围,正文是抽样代表,不是全量。",
             "parameters": {"type": "object", "properties": {
                 "date_from": date("起始日期"),
                 "date_to": date("结束日期")

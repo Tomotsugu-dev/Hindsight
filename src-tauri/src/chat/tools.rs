@@ -11,6 +11,8 @@
 //! 所以措辞要能指导模型改参数。
 
 use chrono::NaiveDate;
+
+use super::lang::ChatLang;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tokio_rusqlite::Connection;
@@ -110,21 +112,22 @@ pub fn validate(
     name: &str,
     raw: &RawParams,
     today: NaiveDate,
+    lang: ChatLang,
 ) -> std::result::Result<ToolCall, String> {
     match name {
         "search_text" => {
-            let keywords = clean_keywords(&raw.keywords)?;
-            let range = parse_range_opt(raw, today)?;
+            let keywords = clean_keywords(&raw.keywords, lang)?;
+            let range = parse_range_opt(raw, today, lang)?;
             Ok(ToolCall::SearchText { keywords, range })
         }
         "query_stats" => {
-            let range = parse_range_opt(raw, today)?
-                .ok_or("query_stats 需要 date_from 和 date_to(YYYY-MM-DD)")?;
-            let apps = clean_short_strings(&raw.apps, 5, "apps")?;
+            let range = parse_range_opt(raw, today, lang)?
+                .ok_or_else(|| lang.err_need_range("query_stats"))?;
+            let apps = clean_short_strings(&raw.apps, 5, "apps", lang)?;
             let title_keyword = match raw.title_keyword.as_deref().map(str::trim) {
                 Some("") | None => None,
                 Some(t) if t.chars().count() <= 64 => Some(t.to_string()),
-                Some(_) => return Err("title_keyword 过长(≤64 字符)".into()),
+                Some(_) => return Err(lang.err_title_kw_too_long().into()),
             };
             Ok(ToolCall::QueryStats {
                 range,
@@ -140,43 +143,42 @@ pub fn validate(
             })
         }
         "get_timeline" => {
-            let range = parse_range_opt(raw, today)?
-                .ok_or("get_timeline 需要 date_from 和 date_to(YYYY-MM-DD)")?;
+            let range = parse_range_opt(raw, today, lang)?
+                .ok_or_else(|| lang.err_need_range("get_timeline"))?;
             Ok(ToolCall::GetTimeline { range })
         }
-        other => Err(format!(
-            "未知工具 {other},只能用 search_text / query_stats / get_timeline"
-        )),
+        other => Err(lang.err_unknown_tool(other)),
     }
 }
 
 fn parse_range_opt(
     raw: &RawParams,
     today: NaiveDate,
+    lang: ChatLang,
 ) -> std::result::Result<Option<(NaiveDate, NaiveDate)>, String> {
     let (Some(f), Some(t)) = (raw.date_from.as_deref(), raw.date_to.as_deref()) else {
         return Ok(None);
     };
     let from = NaiveDate::parse_from_str(f.trim(), "%Y-%m-%d")
-        .map_err(|_| format!("date_from 不是有效日期: {f}"))?;
+        .map_err(|_| lang.err_bad_date("date_from", f))?;
     let to = NaiveDate::parse_from_str(t.trim(), "%Y-%m-%d")
-        .map_err(|_| format!("date_to 不是有效日期: {t}"))?;
+        .map_err(|_| lang.err_bad_date("date_to", t))?;
     if from > to {
-        return Err("date_from 晚于 date_to".into());
+        return Err(lang.err_from_after_to().into());
     }
     if (to - from).num_days() > 366 {
-        return Err("时间跨度超过 366 天,请缩小范围".into());
+        return Err(lang.err_range_too_long().into());
     }
     if from > today {
-        return Err("date_from 在未来".into());
+        return Err(lang.err_from_in_future().into());
     }
     Ok(Some((from, to)))
 }
 
-fn clean_keywords(raw: &[String]) -> std::result::Result<Vec<String>, String> {
-    let out = clean_short_strings(raw, 3, "keywords")?;
+fn clean_keywords(raw: &[String], lang: ChatLang) -> std::result::Result<Vec<String>, String> {
+    let out = clean_short_strings(raw, 3, "keywords", lang)?;
     if out.is_empty() {
-        return Err("keywords 不能为空".into());
+        return Err(lang.err_keywords_empty().into());
     }
     Ok(out)
 }
@@ -185,6 +187,7 @@ fn clean_short_strings(
     raw: &[String],
     max_items: usize,
     field: &str,
+    lang: ChatLang,
 ) -> std::result::Result<Vec<String>, String> {
     let mut out = Vec::new();
     for s in raw.iter().take(max_items) {
@@ -193,7 +196,7 @@ fn clean_short_strings(
             continue;
         }
         if t.chars().count() > 64 {
-            return Err(format!("{field} 里有超过 64 字符的项"));
+            return Err(lang.err_item_too_long(field));
         }
         out.push(t.to_string());
     }
@@ -240,10 +243,15 @@ pub struct ToolOutput {
 }
 
 /// 第③道墙:固定查询执行。`next_citation` 是引用编号的起点(engine 维护全局序)。
-pub async fn execute(ctx: &ToolCtx, call: &ToolCall, next_citation: usize) -> Result<ToolOutput> {
+pub async fn execute(
+    ctx: &ToolCtx,
+    call: &ToolCall,
+    next_citation: usize,
+    lang: ChatLang,
+) -> Result<ToolOutput> {
     match call {
         ToolCall::SearchText { keywords, range } => {
-            search_text(ctx, keywords, *range, next_citation).await
+            search_text(ctx, keywords, *range, next_citation, lang).await
         }
         ToolCall::QueryStats {
             range,
@@ -263,10 +271,11 @@ pub async fn execute(ctx: &ToolCtx, call: &ToolCall, next_citation: usize) -> Re
                 *top_n,
                 *metric,
                 *gap_minutes,
+                lang,
             )
             .await
         }
-        ToolCall::GetTimeline { range } => get_timeline(ctx, *range, next_citation).await,
+        ToolCall::GetTimeline { range } => get_timeline(ctx, *range, next_citation, lang).await,
     }
 }
 
@@ -275,6 +284,7 @@ async fn search_text(
     keywords: &[String],
     range: Option<(NaiveDate, NaiveDate)>,
     next_citation: usize,
+    lang: ChatLang,
 ) -> Result<ToolOutput> {
     let fts = fts_literal(keywords);
     let first_kw = like_pattern(&keywords[0]);
@@ -282,9 +292,22 @@ async fn search_text(
         Some((f, t)) => (f.to_string(), t.to_string()),
         None => ("0000-00-00".into(), "9999-99-99".into()),
     };
-    let rows = ctx
+    let (total, rows) = ctx
         .mem
         .call(move |conn| {
+            // 总命中数:必须让模型知道命中规模(8 条窗口外还有没有东西),
+            // 否则它会把"前 8 条"当成"只有 8 条"。
+            let total: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*)
+                     FROM text_sessions_fts
+                     JOIN text_sessions s ON s.id = text_sessions_fts.rowid
+                     WHERE text_sessions_fts MATCH ?1
+                       AND s.local_date BETWEEN ?2 AND ?3",
+                    params![fts, from, to],
+                    |r| r.get(0),
+                )
+                .db()?;
             let mut stmt = conn
                 .prepare(
                     "SELECT s.id, COALESCE(s.app_id,''), COALESCE(s.title,''),
@@ -324,7 +347,7 @@ async fn search_text(
                     .ok();
                 out.push((id, app, title, started, ended, snippet, frame));
             }
-            Ok(out)
+            Ok((total, out))
         })
         .await?;
 
@@ -350,9 +373,10 @@ async fn search_text(
         });
     }
     let for_llm = if lines.is_empty() {
-        "没有命中。可尝试换关键词(同义词/英文/更短的词)再搜。".to_string()
+        lang.search_no_hit().to_string()
     } else {
-        truncate(&lines.join("\n"), RESULT_CHAR_BUDGET)
+        let header = lang.search_header(total, lines.len());
+        truncate(&format!("{header}\n{}", lines.join("\n")), RESULT_CHAR_BUDGET)
     };
     Ok(ToolOutput { for_llm, citations })
 }
@@ -367,6 +391,7 @@ async fn query_stats(
     top_n: usize,
     metric: StatMetric,
     gap_minutes: u32,
+    lang: ChatLang,
 ) -> Result<ToolOutput> {
     let (from, to) = (from.to_string(), to.to_string());
     let apps: Vec<String> = apps.iter().map(|a| like_pattern(a)).collect();
@@ -393,9 +418,9 @@ async fn query_stats(
             let params_ref: Vec<&dyn rusqlite::ToSql> = bind.iter().map(|b| b.as_ref()).collect();
 
             match metric {
-                StatMetric::Duration => {
-                    query_duration(conn, &where_sql, &params_ref, group_by, top_n, &from, &to)
-                }
+                StatMetric::Duration => query_duration(
+                    conn, &where_sql, &params_ref, group_by, top_n, &from, &to, lang,
+                ),
                 StatMetric::SessionCount => query_session_count(
                     conn,
                     &where_sql,
@@ -405,6 +430,7 @@ async fn query_stats(
                     gap_minutes,
                     &from,
                     &to,
+                    lang,
                 ),
             }
         })
@@ -416,6 +442,7 @@ async fn query_stats(
 }
 
 /// 时长口径:SUM(duration_secs),可分组 top-N。
+#[allow(clippy::too_many_arguments)]
 fn query_duration(
     conn: &rusqlite::Connection,
     where_sql: &str,
@@ -424,6 +451,7 @@ fn query_duration(
     top_n: usize,
     from: &str,
     to: &str,
+    lang: ChatLang,
 ) -> tokio_rusqlite::Result<String> {
     match group_by {
         GroupBy::None => {
@@ -436,10 +464,18 @@ fn query_duration(
                     |r| r.get(0),
                 )
                 .db()?;
-            Ok(format!("{from} ~ {to} 合计: {}", fmt_secs(secs)))
+            Ok(lang.stats_total(from, to, &lang.fmt_secs(secs)))
         }
         GroupBy::App | GroupBy::Title => {
             let dim = group_dim(group_by);
+            // 全集组数:让模型知道 top-N 之外还有多少组,别把前 5 当成全部
+            let universe: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(DISTINCT {dim}) FROM activities WHERE {where_sql}"),
+                    params,
+                    |r| r.get(0),
+                )
+                .db()?;
             let mut stmt = conn
                 .prepare(&format!(
                     "SELECT {dim}, SUM(duration_secs) d FROM activities
@@ -454,14 +490,17 @@ fn query_duration(
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
             if rows.is_empty() {
-                return Ok(format!("{from} ~ {to} 无匹配记录"));
+                return Ok(lang.no_match(from, to));
             }
             let body = rows
                 .iter()
-                .map(|(name, secs)| format!("{}: {}", truncate(name, 50), fmt_secs(*secs)))
+                .map(|(name, secs)| {
+                    format!("{}: {}", truncate(name, 50), lang.fmt_secs(*secs))
+                })
                 .collect::<Vec<_>>()
                 .join("\n");
-            Ok(format!("{from} ~ {to} 按时长排序:\n{body}"))
+            let header = lang.duration_header(from, to, universe, rows.len());
+            Ok(format!("{header}\n{body}"))
         }
     }
 }
@@ -480,6 +519,7 @@ fn query_session_count(
     gap_minutes: u32,
     from: &str,
     to: &str,
+    lang: ChatLang,
 ) -> tokio_rusqlite::Result<String> {
     let gap_secs = gap_minutes as i64 * 60;
     match group_by {
@@ -498,12 +538,10 @@ fn query_session_count(
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
             if rows.is_empty() {
-                return Ok(format!("{from} ~ {to} 无匹配记录"));
+                return Ok(lang.no_match(from, to));
             }
             let n = count_sessions(&rows, gap_secs);
-            Ok(format!(
-                "{from} ~ {to} 使用会话次数: {n} 次(以间隔≥{gap_minutes} 分钟算一次)"
-            ))
+            Ok(lang.sessions_total(from, to, n, gap_minutes))
         }
         GroupBy::App | GroupBy::Title => {
             let dim = group_dim(group_by);
@@ -525,7 +563,7 @@ fn query_session_count(
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
             if rows.is_empty() {
-                return Ok(format!("{from} ~ {to} 无匹配记录"));
+                return Ok(lang.no_match(from, to));
             }
             // 按组聚合(rows 已按 g 排序)→ 每组切分计数
             let mut counts: Vec<(String, usize)> = Vec::new();
@@ -545,15 +583,16 @@ fn query_session_count(
                 counts.push((name, count_sessions(&cur_rows, gap_secs)));
             }
             counts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            let universe = counts.len();
             counts.truncate(top_n);
             let body = counts
                 .iter()
-                .map(|(name, n)| format!("{}: {n} 次", truncate(name, 50)))
+                .map(|(name, n)| format!("{}: {}", truncate(name, 50), lang.count_suffix(*n)))
                 .collect::<Vec<_>>()
                 .join("\n");
-            Ok(format!(
-                "{from} ~ {to} 使用会话次数(以间隔≥{gap_minutes} 分钟算一次):\n{body}"
-            ))
+            let header =
+                lang.sessions_grouped_header(from, to, universe, counts.len(), gap_minutes);
+            Ok(format!("{header}\n{body}"))
         }
     }
 }
@@ -594,47 +633,80 @@ fn count_sessions(rows: &[(String, String)], gap_secs: i64) -> usize {
     sessions
 }
 
+/// 每个小时桶最多取几条代表会话(按停留时长选)。
+const TIMELINE_PER_HOUR: i64 = 3;
+
 async fn get_timeline(
     ctx: &ToolCtx,
     (from, to): (NaiveDate, NaiveDate),
     next_citation: usize,
+    lang: ChatLang,
 ) -> Result<ToolOutput> {
+    let single_day = from == to;
     let (from, to) = (from.to_string(), to.to_string());
-    let rows = ctx
+    let (total, span, rows) = ctx
         .mem
         .call(move |conn| {
+            let (total, first, last): (i64, Option<String>, Option<String>) = conn
+                .query_row(
+                    "SELECT COUNT(*), MIN(started_ts), MAX(ended_ts) FROM text_sessions
+                     WHERE local_date BETWEEN ?1 AND ?2",
+                    params![from, to],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .db()?;
+            // 分层抽样:按小时分桶,桶内取停留最长的前 N 条——预算覆盖整段时间轴。
+            // 不能用"ORDER BY started_ts LIMIT 50":活跃日几千条会话时那是"最早的
+            // 半小时",模型会把开头当成全天(2026-07-08 的误报正是这么来的)。
             let mut stmt = conn
                 .prepare(
-                    "SELECT COALESCE(app_id,''), COALESCE(title,''), started_ts, ended_ts
-                     FROM text_sessions
-                     WHERE local_date BETWEEN ?1 AND ?2
-                     ORDER BY started_ts LIMIT ?3",
+                    "SELECT app, title, started_ts, ended_ts FROM (
+                         SELECT COALESCE(app_id,'') AS app, COALESCE(title,'') AS title,
+                                started_ts, ended_ts,
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY substr(started_ts, 1, 13)
+                                    ORDER BY julianday(ended_ts) - julianday(started_ts) DESC
+                                ) AS rn
+                         FROM text_sessions
+                         WHERE local_date BETWEEN ?1 AND ?2
+                     ) WHERE rn <= ?3 ORDER BY started_ts LIMIT ?4",
                 )
                 .db()?;
             let out = stmt
-                .query_map(params![from, to, TIMELINE_LIMIT as i64], |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                        r.get::<_, String>(3)?,
-                    ))
-                })
+                .query_map(
+                    params![from, to, TIMELINE_PER_HOUR, TIMELINE_LIMIT as i64],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, String>(3)?,
+                        ))
+                    },
+                )
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            Ok(out)
+            Ok((total, first.zip(last), out))
         })
         .await?;
 
     let mut citations = Vec::new();
     let mut lines = Vec::new();
+    // 单日范围显示 HH:MM;跨日范围带上 MM-DD,避免不同日期的条目混淆
+    let ts_disp = |ts: &str| -> String {
+        if single_day {
+            ts[11.min(ts.len())..16.min(ts.len())].to_string()
+        } else {
+            ts[5.min(ts.len())..16.min(ts.len())].to_string()
+        }
+    };
     for (i, (app, title, started, ended)) in rows.iter().enumerate() {
         let idx = next_citation + i;
         lines.push(format!(
             "[{idx}] {} ~ {} | {} | {}",
-            &started[11.min(started.len())..16.min(started.len())],
-            &ended[11.min(ended.len())..16.min(ended.len())],
+            ts_disp(started),
+            ts_disp(ended),
             app,
             truncate(title, 50)
         ));
@@ -648,21 +720,23 @@ async fn get_timeline(
         });
     }
     let for_llm = if lines.is_empty() {
-        "该时段没有屏幕记忆会话(可能未开截图或超出保留范围)。".to_string()
+        lang.timeline_empty().to_string()
     } else {
-        truncate(&lines.join("\n"), RESULT_CHAR_BUDGET)
+        // 头部先声明总量与覆盖范围:样本 ≠ 全量,让模型据此下结论
+        let header = match &span {
+            Some((first, last)) if total as usize > rows.len() => lang
+                .timeline_header_sampled(
+                    total,
+                    &first[..16.min(first.len())],
+                    &last[..16.min(last.len())],
+                    rows.len(),
+                    TIMELINE_PER_HOUR,
+                ),
+            _ => lang.timeline_header_all(total),
+        };
+        truncate(&format!("{header}\n{}", lines.join("\n")), RESULT_CHAR_BUDGET)
     };
     Ok(ToolOutput { for_llm, citations })
-}
-
-fn fmt_secs(secs: i64) -> String {
-    let h = secs / 3600;
-    let m = (secs % 3600) / 60;
-    if h > 0 {
-        format!("{h} 小时 {m} 分钟")
-    } else {
-        format!("{m} 分钟")
-    }
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {
@@ -688,13 +762,14 @@ mod tests {
 
     #[test]
     fn validate_rejects_unknown_tool_and_bad_dates() {
-        let e = validate("drop_table", &RawParams::default(), today()).unwrap_err();
+        let e = validate("drop_table", &RawParams::default(), today(), ChatLang::ZhHans).unwrap_err();
         assert!(e.contains("未知工具"));
 
         let e = validate(
             "query_stats",
             &raw(serde_json::json!({"date_from": "2026-07-10", "date_to": "2026-07-01"})),
             today(),
+            ChatLang::ZhHans,
         )
         .unwrap_err();
         assert!(e.contains("晚于"));
@@ -703,6 +778,7 @@ mod tests {
             "query_stats",
             &raw(serde_json::json!({"date_from": "2026-08-01", "date_to": "2026-08-02"})),
             today(),
+            ChatLang::ZhHans,
         )
         .unwrap_err();
         assert!(e.contains("未来"));
@@ -711,6 +787,7 @@ mod tests {
             "query_stats",
             &raw(serde_json::json!({"date_from": "2020-01-01", "date_to": "2026-07-01"})),
             today(),
+            ChatLang::ZhHans,
         )
         .unwrap_err();
         assert!(e.contains("366"));
@@ -735,6 +812,7 @@ mod tests {
                 "group_by": "app", "top_n": 9999
             })),
             today(),
+            ChatLang::ZhHans,
         )
         .unwrap();
         match call {
@@ -750,6 +828,7 @@ mod tests {
             "query_stats",
             &raw(serde_json::json!({"date_from": "2026-07-01", "date_to": "2026-07-05"})),
             today(),
+            ChatLang::ZhHans,
         )
         .unwrap();
         match call {
@@ -771,6 +850,7 @@ mod tests {
                 "metric": "session_count", "gap_minutes": 9999
             })),
             today(),
+            ChatLang::ZhHans,
         )
         .unwrap();
         match call {
@@ -811,5 +891,200 @@ mod tests {
         assert_eq!(count_sessions(&rows, 120 * 60), 1);
         // 空 → 0
         assert_eq!(count_sessions(&[], 30 * 60), 0);
+    }
+}
+
+#[cfg(test)]
+mod behavior_tests {
+    //! 行为级测试:内存库直测 execute(),盯"披露层"——
+    //! 2026-07-08 事故的根因是工具把"第一页"当"全部"喂给模型,
+    //! 这里把三态(全量/抽样/命中规模)钉死成回归。
+    use super::*;
+
+    async fn ctx_with(
+        mem_sql: &'static str,
+        main_sql: &'static str,
+    ) -> ToolCtx {
+        let mem = Connection::open(":memory:").await.unwrap();
+        mem.call(move |c| {
+            c.execute_batch(&format!(
+                "CREATE TABLE text_sessions (
+                     id INTEGER PRIMARY KEY, local_date TEXT, started_ts TEXT,
+                     ended_ts TEXT, app_id TEXT, title TEXT, text TEXT DEFAULT '');
+                 CREATE VIRTUAL TABLE text_sessions_fts USING fts5(
+                     text, content='text_sessions', content_rowid='id', tokenize='trigram');
+                 CREATE TABLE session_lines (
+                     session_id INTEGER, line_no INTEGER, text TEXT,
+                     first_path TEXT, first_ts TEXT);
+                 {mem_sql}
+                 INSERT INTO text_sessions_fts(rowid, text)
+                     SELECT id, text FROM text_sessions;"
+            ))?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let main = Connection::open(":memory:").await.unwrap();
+        main.call(move |c| {
+            c.execute_batch(&format!(
+                "CREATE TABLE activities (
+                     started_at TEXT, ended_at TEXT, duration_secs INTEGER,
+                     local_date TEXT, process_name TEXT, window_title TEXT);
+                 {main_sql}"
+            ))?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        ToolCtx { main, mem }
+    }
+
+    fn day() -> (NaiveDate, NaiveDate) {
+        let d = NaiveDate::from_ymd_opt(2026, 7, 8).unwrap();
+        (d, d)
+    }
+
+    /// 造一天 10 个小时 × 每小时 20 条会话的 INSERT 串。
+    fn dense_day_sql() -> &'static str {
+        use std::sync::OnceLock;
+        static SQL: OnceLock<String> = OnceLock::new();
+        SQL.get_or_init(|| {
+            let mut s = String::new();
+            for h in 9..19 {
+                for m in 0..20 {
+                    s.push_str(&format!(
+                        "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title)
+                         VALUES ('2026-07-08', '2026-07-08T{h:02}:{m:02}:00+09:00',
+                                 '2026-07-08T{h:02}:{m:02}:40+09:00', 'App', '会话 {h}-{m}');\n"
+                    ));
+                }
+            }
+            s
+        })
+    }
+
+    #[tokio::test]
+    async fn timeline_sampling_covers_whole_range_and_discloses_total() {
+        // 泄漏 dense_day_sql 到 'static:测试进程内一次性,可接受
+        let mem: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
+        let ctx = ctx_with(mem, "").await;
+        let out = execute(&ctx, &ToolCall::GetTimeline { range: day() }, 1, ChatLang::ZhHans)
+            .await
+            .unwrap();
+        // 披露:总数与"样本"措辞
+        assert!(out.for_llm.contains("共 200 条会话"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("样本"), "{}", out.for_llm);
+        // 覆盖:10 个小时全部出现(旧实现只会给最早的 50 条 = 前 3 个小时)
+        let hours: std::collections::BTreeSet<&str> = out
+            .for_llm
+            .lines()
+            .skip(1)
+            .filter_map(|l| l.split("] ").nth(1))
+            .map(|rest| &rest[..2])
+            .collect();
+        assert_eq!(hours.len(), 10, "每个小时都要有代表: {hours:?}");
+        // 每小时至多 3 条
+        for h in 9..19 {
+            let prefix = format!("] {h:02}:");
+            let n = out.for_llm.lines().filter(|l| l.contains(&prefix)).count();
+            assert!(n <= 3, "{h} 点出现 {n} 条");
+        }
+        assert!(out.citations.len() <= TIMELINE_LIMIT);
+    }
+
+    #[tokio::test]
+    async fn timeline_headers_localized_english() {
+        let mem: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
+        let ctx = ctx_with(mem, "").await;
+        let out = execute(&ctx, &ToolCall::GetTimeline { range: day() }, 1, ChatLang::En)
+            .await
+            .unwrap();
+        assert!(
+            out.for_llm.contains("200 sessions in this period"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.for_llm.contains("sample"), "{}", out.for_llm);
+        // 骨架(头部行)不应残留中文;正文标题是用户数据,语言不限
+        let header = out.for_llm.lines().next().unwrap();
+        assert!(!header.contains("会话"), "{header}");
+    }
+
+    #[tokio::test]
+    async fn timeline_small_day_lists_all_without_sampling_wording() {
+        let ctx = ctx_with(
+            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title) VALUES
+             ('2026-07-08','2026-07-08T09:00:00+09:00','2026-07-08T09:05:00+09:00','A','t1'),
+             ('2026-07-08','2026-07-08T10:00:00+09:00','2026-07-08T10:05:00+09:00','B','t2');",
+            "",
+        )
+        .await;
+        let out = execute(&ctx, &ToolCall::GetTimeline { range: day() }, 1, ChatLang::ZhHans)
+            .await
+            .unwrap();
+        assert!(out.for_llm.contains("共 2 条会话,全部列出"), "{}", out.for_llm);
+        assert!(!out.for_llm.contains("样本"));
+        assert_eq!(out.citations.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn search_discloses_total_hits_beyond_window() {
+        let mut sql = String::new();
+        for i in 0..20 {
+            sql.push_str(&format!(
+                "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
+                 VALUES ('2026-07-08','2026-07-08T09:{i:02}:00+09:00',
+                         '2026-07-08T09:{i:02}:30+09:00','A','t{i}','keychron 订单第 {i} 条记录');\n"
+            ));
+        }
+        let mem: &'static str = Box::leak(sql.into_boxed_str());
+        let ctx = ctx_with(mem, "").await;
+        let out = execute(
+            &ctx,
+            &ToolCall::SearchText {
+                keywords: vec!["keychron".into()],
+                range: None,
+            },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("共 20 条命中"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("前 8 条"), "{}", out.for_llm);
+        assert_eq!(out.citations.len(), SEARCH_LIMIT);
+    }
+
+    #[tokio::test]
+    async fn stats_grouped_discloses_universe_beyond_top_n() {
+        let mut sql = String::new();
+        for a in 0..8 {
+            sql.push_str(&format!(
+                "INSERT INTO activities VALUES
+                 ('2026-07-08T0{a}:00:00+09:00','2026-07-08T0{a}:30:00+09:00',
+                  {}, '2026-07-08', 'App{a}', 'w');\n",
+                (a + 1) * 600
+            ));
+        }
+        let main: &'static str = Box::leak(sql.into_boxed_str());
+        let ctx = ctx_with("", main).await;
+        let out = execute(
+            &ctx,
+            &ToolCall::QueryStats {
+                range: day(),
+                apps: vec![],
+                title_keyword: None,
+                group_by: GroupBy::App,
+                top_n: 5,
+                metric: StatMetric::Duration,
+                gap_minutes: 30,
+            },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("共 8 组"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("前 5 组"), "{}", out.for_llm);
     }
 }

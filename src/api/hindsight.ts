@@ -949,8 +949,8 @@ export const api = {
   /** Chat 问答：后端 agent 循环（工具查询 + LLM 归纳）跑完一次性返回。
    *  可能长达数十秒，调用方自己管 loading 态。历史由后端从库里读；
    *  conversationId 传 null = 新会话（后端隐式创建并返回 id）。 */
-  chatAsk: (question: string, conversationId: number | null) =>
-    invoke<ChatAskResult>("chat_ask", { question, conversationId }),
+  chatAsk: (question: string, conversationId: number | null, locale?: string) =>
+    invoke<ChatAskResult>("chat_ask", { question, conversationId, locale }),
   /** 会话列表（最近更新在前）。 */
   chatListConversations: () =>
     invoke<ChatConversationMeta[]>("chat_list_conversations"),

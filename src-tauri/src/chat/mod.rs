@@ -6,6 +6,7 @@
 //! - [`engine`] agent 循环器:步数上限、重复去重、降级阶梯、引用绑定。
 
 pub mod engine;
+pub mod lang;
 pub mod llm;
 pub mod store;
 pub mod tools;
