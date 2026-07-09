@@ -178,6 +178,8 @@ pub fn run() {
                 // AI 总结取消信号——单例，前端调 cancel_day_summary 设 true，
                 // summary_runner 每段循环检查；不能中断已在路上的 LLM 单段请求。
                 handle.manage(commands::ai_summary::SummaryCancel::default());
+                // Chat 生成中注册表：同会话并发拒 + 停止按钮取消 + 重开会话恢复状态
+                handle.manage(commands::chat::ChatInflight::default());
                 handle.manage(commands::ai_summary::RunLock::default());
             });
             Ok(())
@@ -280,6 +282,8 @@ pub fn run() {
             commands::screen_memory::memory_pending_stats,
             // --- chat: 屏幕记忆问答 + 会话管理 ---
             commands::chat::chat_ask,
+            commands::chat::chat_inflight,
+            commands::chat::chat_cancel,
             commands::chat::chat_list_conversations,
             commands::chat::chat_get_messages,
             commands::chat::chat_rename_conversation,

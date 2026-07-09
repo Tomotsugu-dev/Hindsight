@@ -1294,20 +1294,30 @@
     "input": {
       "placeholder": "Ask anything…",
       "sendAria": "Send",
-      "sendTooltip": "Send (Enter)"
+      "sendTooltip": "Send (Enter)",
+      "stopAria": "Stop",
+      "stopTooltip": "Stop generating"
     },
     "presets": {
-      "search": {
-        "label": "Search history",
-        "q": "When did I read about ONNX?"
+      "today": {
+        "label": "Today",
+        "q": "What did I do today?"
       },
-      "stat": {
-        "label": "Usage stats",
-        "q": "How long did I use Cursor last week?"
+      "browser": {
+        "label": "Browser",
+        "q": "What did I look at in my browser today?"
       },
-      "timeline": {
-        "label": "Timeline",
-        "q": "What was I doing yesterday afternoon?"
+      "video": {
+        "label": "YouTube",
+        "q": "How long did I spend on YouTube today?"
+      },
+      "mail": {
+        "label": "Email",
+        "q": "How much time did I spend on email today?"
+      },
+      "searchkw": {
+        "label": "Searches",
+        "q": "What did I search for today?"
       }
     },
     "conversations": {

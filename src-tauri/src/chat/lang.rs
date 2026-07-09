@@ -585,6 +585,21 @@ impl ChatLang {
             Self::Pt => "title_keyword é longo demais (máx. 64 caracteres)",
         }
     }
+
+    /// 同会话并发拒的用户可见文案(唯一直接展示给用户而非模型的条目)。
+    pub fn err_conversation_busy(self) -> &'static str {
+        match self {
+            Self::ZhHans => "这个会话正在回答上一个问题,等它完成或点停止后再发。",
+            Self::ZhHant => "這個會話正在回答上一個問題,等它完成或按停止後再發送。",
+            Self::En => {
+                "This conversation is still answering the previous question — wait for it to finish or press Stop."
+            }
+            Self::Ja => "この会話は前の質問に回答中です。完了を待つか、停止を押してから送信してください。",
+            Self::Pt => {
+                "Esta conversa ainda está respondendo à pergunta anterior — aguarde ou pressione Parar."
+            }
+        }
+    }
 }
 
 #[cfg(test)]

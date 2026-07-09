@@ -1294,20 +1294,30 @@
     "input": {
       "placeholder": "Pergunte qualquer coisa…",
       "sendAria": "Enviar",
-      "sendTooltip": "Enviar (Enter)"
+      "sendTooltip": "Enviar (Enter)",
+      "stopAria": "Parar",
+      "stopTooltip": "Parar de gerar"
     },
     "presets": {
-      "search": {
-        "label": "Buscar histórico",
-        "q": "Quando eu li sobre ONNX?"
+      "today": {
+        "label": "Hoje",
+        "q": "O que eu fiz hoje?"
       },
-      "stat": {
-        "label": "Tempo de uso",
-        "q": "Quanto tempo usei o Cursor na semana passada?"
+      "browser": {
+        "label": "Navegador",
+        "q": "O que eu vi no navegador hoje?"
       },
-      "timeline": {
-        "label": "Linha do tempo",
-        "q": "O que eu estava fazendo ontem à tarde?"
+      "video": {
+        "label": "YouTube",
+        "q": "Quanto tempo passei no YouTube hoje?"
+      },
+      "mail": {
+        "label": "E-mail",
+        "q": "Quanto tempo gastei com e-mails hoje?"
+      },
+      "searchkw": {
+        "label": "Pesquisas",
+        "q": "O que eu pesquisei hoje?"
       }
     },
     "conversations": {

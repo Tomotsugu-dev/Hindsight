@@ -67,10 +67,11 @@
 
 .presets {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 4 张卡（固定 3 + 随机位）走 2×2，3 列会让第 4 张孤行 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   width: 100%;
-  max-width: 720px;
+  max-width: 640px;
 }
 
 .presetCard {

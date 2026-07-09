@@ -1294,20 +1294,30 @@
     "input": {
       "placeholder": "何でもどうぞ…",
       "sendAria": "送信",
-      "sendTooltip": "送信（Enter）"
+      "sendTooltip": "送信（Enter）",
+      "stopAria": "停止",
+      "stopTooltip": "生成を停止"
     },
     "presets": {
-      "search": {
-        "label": "履歴検索",
-        "q": "ONNX について調べたのはいつ？"
+      "today": {
+        "label": "今日",
+        "q": "今日は何をしていた？"
       },
-      "stat": {
-        "label": "時間集計",
-        "q": "先週 Cursor をどれくらい使った？"
+      "browser": {
+        "label": "ブラウザ",
+        "q": "今日ブラウザで何を見ていた？"
       },
-      "timeline": {
-        "label": "タイムライン",
-        "q": "昨日の午後は何をしていた？"
+      "video": {
+        "label": "YouTube",
+        "q": "今日 YouTube をどれくらい見た？"
+      },
+      "mail": {
+        "label": "メール",
+        "q": "今日メール処理にどれくらい時間を使った？"
+      },
+      "searchkw": {
+        "label": "検索履歴",
+        "q": "今日どんなキーワードを検索した？"
       }
     },
     "conversations": {

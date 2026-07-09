@@ -614,9 +614,21 @@ export interface ChatAnswer {
   completionTokens: number;
 }
 
-/** 一次问答的返回：答案平铺 + 会话 id（首条消息隐式建会话，前端靠它接管）。 */
+/** 一次问答的返回：答案平铺 + 会话 id（首条消息隐式建会话，前端靠它接管）。
+ *  cancelled = 用户点了停止：answer 各字段是空壳，只需清 loading，不渲染气泡。 */
 export interface ChatAskResult extends ChatAnswer {
   conversationId: number;
+  cancelled: boolean;
+}
+
+/** 一次问答落库完成（或失败/被停止）的广播事件名。组件跳页/关窗后靠它刷新。 */
+export const CHAT_ANSWER_READY_EVENT = "chat:answer-ready";
+
+/** CHAT_ANSWER_READY_EVENT 的载荷。ok=false 表示失败或被停止（有问无答，可重问）。 */
+export interface ChatAnswerReadyPayload {
+  conversationId: number;
+  askId: string;
+  ok: boolean;
 }
 
 /** 会话列表项（按最近更新倒序）。 */
@@ -948,9 +960,19 @@ export const api = {
     invoke<void>("clear_day_segment_summaries", { date, source }),
   /** Chat 问答：后端 agent 循环（工具查询 + LLM 归纳）跑完一次性返回。
    *  可能长达数十秒，调用方自己管 loading 态。历史由后端从库里读；
-   *  conversationId 传 null = 新会话（后端隐式创建并返回 id）。 */
-  chatAsk: (question: string, conversationId: number | null, locale?: string) =>
-    invoke<ChatAskResult>("chat_ask", { question, conversationId, locale }),
+   *  conversationId 传 null = 新会话（后端隐式创建并返回 id）；
+   *  askId 由前端生成，是本次问答的取消句柄（chatCancel 用）。 */
+  chatAsk: (
+    question: string,
+    conversationId: number | null,
+    locale?: string,
+    askId?: string,
+  ) => invoke<ChatAskResult>("chat_ask", { question, conversationId, locale, askId }),
+  /** 会话是否正在生成回答；是则返回该次问答的 askId（停止按钮的取消句柄）。 */
+  chatInflight: (conversationId: number) =>
+    invoke<string | null>("chat_inflight", { conversationId }),
+  /** 停止一次生成。找不到（已完成/已停止）返回 false，幂等。 */
+  chatCancel: (askId: string) => invoke<boolean>("chat_cancel", { askId }),
   /** 会话列表（最近更新在前）。 */
   chatListConversations: () =>
     invoke<ChatConversationMeta[]>("chat_list_conversations"),

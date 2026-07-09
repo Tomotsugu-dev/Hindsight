@@ -1294,20 +1294,30 @@
     "input": {
       "placeholder": "問點什麼…",
       "sendAria": "傳送",
-      "sendTooltip": "傳送（Enter）"
+      "sendTooltip": "傳送（Enter）",
+      "stopAria": "停止",
+      "stopTooltip": "停止生成"
     },
     "presets": {
-      "search": {
-        "label": "搜歷史",
-        "q": "我什麼時候看過關於 ONNX 的內容？"
+      "today": {
+        "label": "今日回顧",
+        "q": "我今天做了什麼？"
       },
-      "stat": {
-        "label": "查數據",
-        "q": "上週我在 Cursor 用了多久？"
+      "browser": {
+        "label": "瀏覽器",
+        "q": "我今天在瀏覽器裡看了什麼？"
       },
-      "timeline": {
-        "label": "看時間軸",
-        "q": "昨天下午我都在做什麼？"
+      "video": {
+        "label": "YouTube",
+        "q": "我今天看了多久 YouTube？"
+      },
+      "mail": {
+        "label": "郵件",
+        "q": "我今天處理郵件花了多少時間？"
+      },
+      "searchkw": {
+        "label": "搜尋紀錄",
+        "q": "今天我搜尋了哪些關鍵字？"
       }
     },
     "conversations": {
