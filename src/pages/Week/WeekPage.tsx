@@ -16,6 +16,7 @@ import { usePeriodInsights } from "../../hooks/usePeriodInsights";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
+  completedDaysOf,
 } from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
@@ -101,12 +102,24 @@ export default function WeekPage() {
     [days],
   );
 
-  const activeDays = useMemo(
-    () => days.filter((d) => d.segments.length > 0).length,
-    [days],
+  // 「日均」统一口径:已完成自然天的总时长 ÷ 已完成天数(今天从分子分母一起
+  // 排除——半天的数据配一天的分母是失真源;过去周期天然 = 全部 7 天)。
+  // 周一(一个完整天都没有)→ undefined:顶部 meta 显示 —,日均 tile 整块隐藏。
+  const completedDays = useMemo(() => completedDaysOf(days), [days]);
+  const completedMinutes = useMemo(
+    () =>
+      Math.round(
+        completedDays.reduce(
+          (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
+          0,
+        ) / 60,
+      ),
+    [completedDays],
   );
-  const avgPerDay = activeDays > 0 ? totalMinutes / activeDays : 0;
-  const avgPerTotalDays = totalMinutes > 0 ? Math.round(totalMinutes / 7) : 0;
+  const avgPerCompletedDay =
+    completedDays.length > 0
+      ? Math.round(completedMinutes / completedDays.length)
+      : undefined;
 
   // 点某天 → 该 day index 高亮，其它淡化；toggle
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -156,6 +169,12 @@ export default function WeekPage() {
   const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
+  // 日均 tile 的 drill 分子:只累计已完成天(饼图/总时长仍是全周口径含今天)
+  const completedCatMinutes = useMemo(
+    () => catMinutesFromSegments(completedDays),
+    [completedDays],
+  );
+  const completedBreakdown = useSuperCategoryBreakdown(completedCatMinutes);
   // 上周完全无数据时是 undefined（tile 显示 —）而不是 0——0 会被渲染成
   // "↑ 满值 比上周" 的假涨幅，跟旁边 vs-prev tile 的 "—" 自相矛盾。
   const prevAvgPerTotalDays = useMemo(
@@ -215,12 +234,17 @@ export default function WeekPage() {
         : null,
     [drilledSlice, prevBreakdown],
   );
-  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类的日均
-  // （分母跟全周口径一致 = 7 天）。上周没有该大类（prevDrilledSlice=null）按 0 算，
-  // 对比语义即"从无到有"。
+  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类的日均，
+  // 分子分母都按已完成天口径（上周是完整周期,分母固定 7）。上周没有该大类
+  // （prevDrilledSlice=null）按 0 算，对比语义即"从无到有"。
   const displayedAvgMinutes = drilledSlice
-    ? Math.round(drilledSlice.minutes / 7)
-    : avgPerTotalDays;
+    ? completedDays.length > 0
+      ? Math.round(
+          (completedBreakdown.slices.find((s) => s.id === drilledSlice.id)
+            ?.minutes ?? 0) / completedDays.length,
+        )
+      : undefined
+    : avgPerCompletedDay;
   const displayedPrevAvgMinutes = drilledSlice
     ? prevBreakdown.total > 0
       ? Math.round((prevDrilledSlice?.minutes ?? 0) / 7)
@@ -244,7 +268,7 @@ export default function WeekPage() {
         <p className={styles.meta}>
           {t("week.meta", {
             range: fmtRange(days),
-            avg: fmtHM(Math.round(avgPerDay)),
+            avg: avgPerCompletedDay != null ? fmtHM(avgPerCompletedDay) : "—",
           })}
         </p>
       </header>

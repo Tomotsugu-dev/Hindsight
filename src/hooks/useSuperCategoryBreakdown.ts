@@ -42,6 +42,15 @@ interface CategoryMinutesInput {
   minutes: number;
 }
 
+/** 严格早于今天的「已完成自然天」。周/月页的"日均"只按完整天算：把进行中的
+ *  今天计入分母（不论按整天还是按小时折算）都会失真——半天的数据配一天的分母。
+ *  过去周期的天全部早于今天，天然全量保留。 */
+export function completedDaysOf<T extends { date: Date }>(days: T[]): T[] {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return days.filter((d) => d.date < startOfToday);
+}
+
 /** 把 HourSlot[] / DaySummary[] 等带 `segments` 的源汇总成 [{id, minutes}, ...]。
  *  给 useSuperCategoryBreakdown 当 input；Today 用 hours, Week/Month 用 days。 */
 export function catMinutesFromSegments(

@@ -16,6 +16,7 @@ import { usePeriodInsights } from "../../hooks/usePeriodInsights";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
+  completedDaysOf,
 } from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
@@ -92,13 +93,25 @@ export default function MonthPage() {
     [days],
   );
 
-  const activeDays = useMemo(
-    () => days.filter((d) => d.segments.length > 0).length,
-    [days],
+  // 「日均」统一口径(与周页一致):已完成自然天的总时长 ÷ 已完成天数——
+  // 今天从分子分母一起排除;过去月份天然 = 当月全部天数。旧版除以"活跃天数"
+  // 会把只用了 10 天电脑的月份日均虚高三倍,且与周页口径互相矛盾。
+  // 每月 1 号(无完整天)→ undefined:顶部 meta 显示 —,日均 tile 整块隐藏。
+  const completedDays = useMemo(() => completedDaysOf(days), [days]);
+  const completedMinutes = useMemo(
+    () =>
+      Math.round(
+        completedDays.reduce(
+          (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
+          0,
+        ) / 60,
+      ),
+    [completedDays],
   );
-  const avgPerDay = activeDays > 0 ? totalMinutes / activeDays : 0;
-  const avgPerTotalDays =
-    totalMinutes > 0 && activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0;
+  const avgPerCompletedDay =
+    completedDays.length > 0
+      ? Math.round(completedMinutes / completedDays.length)
+      : undefined;
 
   // 点某天 → 高亮 + 筛排行；toggle；offset / device 切换时清
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -174,17 +187,20 @@ export default function MonthPage() {
   const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
-  const prevActiveDays = useMemo(
-    () => slideDaysList[0].filter((d) => d.segments.length > 0).length,
-    [slideDaysList],
+  // 日均 tile 的 drill 分子:只累计已完成天(饼图/总时长仍是全月口径含今天)
+  const completedCatMinutes = useMemo(
+    () => catMinutesFromSegments(completedDays),
+    [completedDays],
   );
-  // 上月完全无数据 → undefined（tile 显示 —）而不是 0，避免"↑ 满值 比上月"假涨幅
+  const completedBreakdown = useSuperCategoryBreakdown(completedCatMinutes);
+  // 上月是完整周期,分母 = 上月自然天数。整月无数据 → undefined(tile 显示 —)
+  // 而不是 0,避免"↑ 满值 比上月"假涨幅
   const prevAvgPerTotalDays = useMemo(
     () =>
-      prevBreakdown.total > 0 && prevActiveDays > 0
-        ? Math.round(prevBreakdown.total / prevActiveDays)
+      prevBreakdown.total > 0 && slideDaysList[0].length > 0
+        ? Math.round(prevBreakdown.total / slideDaysList[0].length)
         : undefined,
-    [prevBreakdown.total, prevActiveDays],
+    [prevBreakdown.total, slideDaysList],
   );
 
   // drill 状态下：底部两卡片同步缩进到该大类范围（详见 TodayPage 同名块注释）
@@ -235,16 +251,19 @@ export default function MonthPage() {
     [drilledSlice, prevBreakdown],
   );
   // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类的日均，
-  // 分母跟全月口径一致（activeDays / prevActiveDays = 有数据的天数）。
+  // 分子分母都按已完成天口径(上月是完整周期,分母 = 上月自然天数)。
   // 上月没有该大类（prevDrilledSlice=null）按 0 算，对比语义即"从无到有"。
   const displayedAvgMinutes = drilledSlice
-    ? activeDays > 0
-      ? Math.round(drilledSlice.minutes / activeDays)
-      : 0
-    : avgPerTotalDays;
+    ? completedDays.length > 0
+      ? Math.round(
+          (completedBreakdown.slices.find((s) => s.id === drilledSlice.id)
+            ?.minutes ?? 0) / completedDays.length,
+        )
+      : undefined
+    : avgPerCompletedDay;
   const displayedPrevAvgMinutes = drilledSlice
-    ? prevBreakdown.total > 0 && prevActiveDays > 0
-      ? Math.round((prevDrilledSlice?.minutes ?? 0) / prevActiveDays)
+    ? prevBreakdown.total > 0 && slideDaysList[0].length > 0
+      ? Math.round((prevDrilledSlice?.minutes ?? 0) / slideDaysList[0].length)
       : undefined // 上月整月无数据：显示 — 而非"从无到有"
     : prevAvgPerTotalDays;
   const insights = usePeriodInsights({
@@ -265,7 +284,7 @@ export default function MonthPage() {
         <p className={styles.meta}>
           {t("month.meta", {
             month: fmtMonth(days, offset),
-            avg: fmtHM(Math.round(avgPerDay)),
+            avg: avgPerCompletedDay != null ? fmtHM(avgPerCompletedDay) : "—",
           })}
         </p>
       </header>
