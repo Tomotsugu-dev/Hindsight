@@ -1,7 +1,7 @@
 {
   "name": "hindsight",
   "private": true,
-  "version": "0.8.5",
+  "version": "0.8.6-beta.1",
   "type": "module",
   "engines": {
     "node": ">=20"
