@@ -1872,7 +1872,9 @@ dependencies = [
  "uiautomation",
  "urlencoding",
  "uuid",
+ "webview2-com",
  "winapi",
+ "windows-core 0.61.2",
  "xcap",
  "zip 2.4.2",
 ]

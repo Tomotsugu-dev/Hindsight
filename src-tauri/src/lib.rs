@@ -64,13 +64,9 @@ pub fn run() {
     let mut builder = tauri::Builder::default();
     if !multi_instance_test {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(w) = app.get_webview_window("main") {
-                // 主窗可能正收在托盘里（macOS 下连 Dock 图标都没有）——先恢复 Dock 再唤起
-                platform::set_dock_icon_visible(app, true);
-                let _ = w.unminimize();
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            // 二次启动 = 用户想看到窗口。主窗可能收在托盘（macOS 下连 Dock 图标
+            // 都没有）甚至已被销毁（关窗销毁路线）——统一走"唤起或重建"。
+            bootstrap::show_or_recreate_main(app);
         }));
     } else {
         log::warn!(

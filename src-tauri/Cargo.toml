@@ -74,6 +74,10 @@ protobuf = "=3.4.0"
 winapi = { version = "0.3", features = ["winuser", "shellapi", "wingdi", "errhandlingapi", "libloaderapi", "dwmapi", "jobapi2", "processthreadsapi", "handleapi", "winreg", "winnt", "winbase"] }
 # UI Automation：从浏览器地址栏抠 URL，给隐私过滤用
 uiautomation = "0.24"
+# 托盘态挂起 webview 渲染进程（TrySuspend，Edge 睡眠标签页机制）。
+# 两个 crate 都已在 tauri 依赖树里，版本对齐 Cargo.lock（0.38.2 / 0.61.2），零新增编译面。
+webview2-com = "0.38"
+windows-core = "0.61"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1"

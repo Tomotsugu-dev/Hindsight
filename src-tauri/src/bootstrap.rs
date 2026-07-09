@@ -223,21 +223,116 @@ pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
 
     if let Some(main_window) = handle.get_webview_window("main") {
         platform::apply_window_tweaks(&main_window);
-
-        let win_for_close = main_window.clone();
-        main_window.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) {
-                    api.prevent_close();
-                    let _ = win_for_close.hide();
-                    // macOS：连 Dock 图标一起收，"关窗 = 收进右上角托盘"才成立
-                    platform::set_dock_icon_visible(win_for_close.app_handle(), false);
-                }
-            }
-        });
+        install_window_handlers(&main_window);
     }
 
     install_tray_icon(app)
+}
+
+/// 主窗口「收起态」几何记忆（逻辑坐标 x, y, w, h）。macOS 关窗销毁路线里，
+/// 重建时用它还原用户上次的窗口位置尺寸；只存内存——app 重启回到 tauri.conf
+/// 默认，与旧行为一致。
+static MAIN_GEOMETRY: std::sync::Mutex<Option<(f64, f64, f64, f64)>> =
+    std::sync::Mutex::new(None);
+
+fn remember_geometry(win: &tauri::WebviewWindow) {
+    let (Ok(pos), Ok(size), Ok(scale)) =
+        (win.outer_position(), win.inner_size(), win.scale_factor())
+    else {
+        return;
+    };
+    let p = pos.to_logical::<f64>(scale);
+    let s = size.to_logical::<f64>(scale);
+    *MAIN_GEOMETRY.lock().unwrap() = Some((p.x, p.y, s.width, s.height));
+}
+
+/// 主窗口事件（初建与重建的窗口都要装）。
+///
+/// X 关闭（托盘模式）：
+/// - macOS：记住几何后**放行销毁**——webview 全家（WebContent / Graphics /
+///   AutoFill / Networking 辅助进程，实测约 250MB）整块归还系统；app 靠
+///   `platform::handle_run_event` 的 prevent_exit 留在托盘，重开走
+///   [`show_or_recreate_main`] 重建（进程重生实测秒内）。
+/// - Windows：传统 prevent_close + hide，然后**挂起** webview（TrySuspend，
+///   Edge 睡眠标签页机制）：渲染进程脚本全停、工作集交给 OS 回收。销毁重建
+///   在 WebView2 上是整个浏览器进程族冷启，代价倒挂，故不销毁。
+///
+/// 最小化（仅 Windows 有动作）：挂起；还原：恢复。macOS 最小化时 WKWebView
+/// 自带渲染停止 + 亚秒定时器节流（实测），无需干预。
+///
+/// 非托盘模式：放行关闭，app 正常退出（ExitRequested 不拦）。
+fn install_window_handlers(window: &tauri::WebviewWindow) {
+    let win = window.clone();
+    window.on_window_event(move |event| match event {
+        tauri::WindowEvent::CloseRequested { api, .. }
+            if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) =>
+        {
+            // macOS：连 Dock 图标一起收，"关窗 = 收进右上角托盘"才成立
+            platform::set_dock_icon_visible(win.app_handle(), false);
+            if cfg!(target_os = "macos") {
+                remember_geometry(&win);
+                log::info!("关窗销毁 webview（托盘模式），重开时重建");
+            } else {
+                api.prevent_close();
+                let _ = win.hide();
+                platform::schedule_webview_suspend(&win);
+            }
+        }
+        // Windows：最小化 → 挂起，还原 → 恢复。Resized 高频触发，但 resume
+        // 内部有"确实请求过挂起才动手"的原子门，拖拽缩放不会反复跨线程调 COM。
+        tauri::WindowEvent::Resized(_) => {
+            if win.is_minimized().unwrap_or(false) {
+                platform::schedule_webview_suspend(&win);
+            } else {
+                platform::resume_webview_if_suspended(&win);
+            }
+        }
+        _ => {}
+    });
+}
+
+/// 托盘 / Dock Reopen / 单实例二次启动的「显示主窗口」：窗口还在就恢复并聚焦；
+/// 已被销毁（macOS 关窗销毁路线）就按 tauri.conf 的主窗口配置重建。
+pub fn show_or_recreate_main(app: &AppHandle) {
+    platform::set_dock_icon_visible(app, true);
+    if let Some(w) = app.get_webview_window("main") {
+        platform::resume_webview_if_suspended(&w);
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
+    }
+    let t = std::time::Instant::now();
+    let Some(cfg) = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|c| c.label == "main")
+        .cloned()
+    else {
+        log::error!("重建主窗口失败：配置里没有 label=main 的窗口");
+        return;
+    };
+    let geom = *MAIN_GEOMETRY.lock().unwrap();
+    let built = tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|mut b| {
+        if let Some((x, y, w, h)) = geom {
+            b = b.position(x, y).inner_size(w, h);
+        }
+        b.build()
+    });
+    match built {
+        Ok(w) => {
+            platform::apply_window_tweaks(&w);
+            install_window_handlers(&w);
+            let _ = w.set_focus();
+            log::info!(
+                "主窗口重建完成（Rust 侧 {}ms，前端装载另计）",
+                t.elapsed().as_millis()
+            );
+        }
+        Err(e) => log::error!("重建主窗口失败: {e}"),
+    }
 }
 
 /// 托盘菜单项句柄——存进 app state，让前端切 UI 语言后能 `set_text` 更新文案。
@@ -325,14 +420,9 @@ fn install_tray_icon(app: &mut App) -> tauri::Result<()> {
 
 fn handle_tray_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     match event.id.as_ref() {
-        "show" => {
-            if let Some(w) = app.get_webview_window("main") {
-                // 先恢复 Dock 图标再 show——Accessory 下 set_focus 抢不到前台
-                platform::set_dock_icon_visible(app, true);
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
-        }
+        // show_or_recreate_main 内部先恢复 Dock 图标再 show——Accessory 下
+        // set_focus 抢不到前台
+        "show" => show_or_recreate_main(app),
         "quit" => app.exit(0),
         _ => {}
     }
@@ -347,18 +437,16 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: tauri::tray::Tray
     } = event
     {
         let app = tray.app_handle();
-        if let Some(w) = app.get_webview_window("main") {
-            match w.is_visible() {
-                Ok(true) => {
-                    let _ = w.hide();
-                    platform::set_dock_icon_visible(app, false);
-                }
-                _ => {
-                    platform::set_dock_icon_visible(app, true);
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+        match app.get_webview_window("main") {
+            // 可见且未最小化 → 收起（隐藏 + Windows 挂起）；
+            // 最小化中的窗口走 else 分支：unminimize + 恢复
+            Some(w) if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) => {
+                let _ = w.hide();
+                platform::set_dock_icon_visible(app, false);
+                platform::schedule_webview_suspend(&w);
             }
+            // 隐藏中 / 已销毁（macOS 关窗后）→ 唤起或重建
+            _ => show_or_recreate_main(app),
         }
     }
 }

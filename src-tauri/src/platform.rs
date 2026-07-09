@@ -101,28 +101,25 @@ pub fn set_dock_icon_visible(_app: &tauri::AppHandle, _visible: bool) {}
 ///   里处理，且 Windows 没有 Dock / Reopen 概念。
 #[cfg(target_os = "macos")]
 pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
-    use tauri::Manager;
     match event {
         // code: None 表示用户触发的退出（关窗 / Cmd+Q）；非 None 是 app.exit(code)，
         // 后者是程序主动退出，不阻拦。配合 MINIMIZE_TO_TRAY 才把窗关变成最小化到托盘。
+        //
+        // 关窗销毁路线下这个拦截还多了一层含义：主窗口销毁后 app "没有窗口了"，
+        // 这里的 prevent_exit 正是它能以纯托盘态活下去的原因。
         tauri::RunEvent::ExitRequested {
             api, code: None, ..
         } if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) => {
             api.prevent_exit();
         }
-        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）：所有窗口都隐藏时把主窗调出来。
-        // 正常情况下收进托盘时已切 Accessory、Dock 无图标不会触发 Reopen；这里的
-        // set_dock_icon_visible(true) 是防御——万一 policy 切换失败留下了 Dock 图标，
-        // 点它也能完整恢复（图标 + 窗口）而不是只弹窗口。
+        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）。正常情况下收进托盘时
+        // 已切 Accessory、Dock 无图标不会触发 Reopen；这里是防御——万一 policy
+        // 切换失败留下了 Dock 图标，点它也要能完整恢复（含窗口已销毁时的重建）。
         tauri::RunEvent::Reopen {
             has_visible_windows: false,
             ..
         } => {
-            if let Some(w) = app.get_webview_window("main") {
-                set_dock_icon_visible(app, true);
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            crate::bootstrap::show_or_recreate_main(app);
         }
         _ => {}
     }
@@ -131,6 +128,113 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
 /// 非 macOS 平台：no-op（Reopen 仅 macOS Dock 概念）。
 #[cfg(not(target_os = "macos"))]
 pub fn handle_run_event(_app: &tauri::AppHandle, _event: tauri::RunEvent) {}
+
+// ───────────── webview 电源纪律：Windows 挂起 / 恢复（其余平台 no-op） ─────────────
+//
+// 背景：WKWebView 在窗口隐藏/最小化时自带渲染停止 + 亚秒定时器节流（实测），
+// WebView2 没有任何自动节流——挂托盘后前端定时器全速照跑。这里用官方
+// TrySuspend（Edge 睡眠标签页机制）补齐：脚本整体暂停、渲染进程工作集交给
+// OS 回收；变可见时引擎自动恢复，另加显式 Resume 兜底。
+
+/// 是否发出过挂起请求。作用有二：Resized 高频路径上，恢复分支先过这道原子门，
+/// 拖拽缩放不会反复跨线程调 COM；挂起任务落地前用户又把窗口调出来了，也靠它放弃。
+#[cfg(target_os = "windows")]
+static WEBVIEW_SUSPEND_REQUESTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// 窗口隐藏 / 最小化后延迟挂起 webview。
+///
+/// 延迟 800ms：让隐藏瞬间的在途 IPC 落地，误点隐藏又马上调出时直接放弃。
+/// 官方约束：TrySuspend 前 controller 必须不可见——先 SetIsVisible(false)。
+/// best-effort：DevTools 打开等睡眠条件不满足时引擎拒绝挂起，只是不省内存，
+/// 不影响功能；失败一律降级为日志。
+#[cfg(target_os = "windows")]
+pub fn schedule_webview_suspend(window: &tauri::WebviewWindow) {
+    use std::sync::atomic::Ordering;
+    WEBVIEW_SUSPEND_REQUESTED.store(true, Ordering::Relaxed);
+    let w = window.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if !WEBVIEW_SUSPEND_REQUESTED.load(Ordering::Relaxed) {
+            return; // 期间已被 resume_webview_if_suspended 撤销
+        }
+        let hidden = !w.is_visible().unwrap_or(true) || w.is_minimized().unwrap_or(false);
+        if !hidden {
+            return;
+        }
+        let r = w.with_webview(|pw| unsafe {
+            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+            use webview2_com::TrySuspendCompletedHandler;
+            use windows_core::Interface;
+
+            let controller = pw.controller();
+            let _ = controller.SetIsVisible(false);
+            let Ok(core) = controller.CoreWebView2() else {
+                return;
+            };
+            let Ok(wv3) = core.cast::<ICoreWebView2_3>() else {
+                // WebView2 运行时过旧（< 1.0.774）才会走到这，正常渠道不会
+                log::warn!("WebView2 无 ICoreWebView2_3，跳过挂起");
+                return;
+            };
+            let handler = TrySuspendCompletedHandler::create(Box::new(|hr, ok| {
+                match (hr, ok) {
+                    (Ok(()), true) => log::info!("webview 已挂起，渲染进程内存交还 OS"),
+                    (Ok(()), false) => {
+                        log::info!("webview 挂起被引擎拒绝（睡眠条件不满足），不影响功能");
+                    }
+                    (Err(e), _) => log::warn!("webview 挂起失败: {e}"),
+                }
+                Ok(())
+            }));
+            if let Err(e) = wv3.TrySuspend(&handler) {
+                log::warn!("TrySuspend 调用失败: {e}");
+            }
+        });
+        if let Err(e) = r {
+            log::warn!("with_webview(挂起) 失败: {e}");
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn schedule_webview_suspend(_window: &tauri::WebviewWindow) {}
+
+/// 显示 / 还原窗口时恢复 webview：SetIsVisible(true)（引擎对变可见的 webview
+/// 会自动 resume），再查 IsSuspended 显式 Resume 一次兜底。
+/// 从未请求过挂起时只是一次原子读，零开销。
+#[cfg(target_os = "windows")]
+pub fn resume_webview_if_suspended(window: &tauri::WebviewWindow) {
+    use std::sync::atomic::Ordering;
+    if !WEBVIEW_SUSPEND_REQUESTED.swap(false, Ordering::Relaxed) {
+        return;
+    }
+    let r = window.with_webview(|pw| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+        use windows_core::Interface;
+
+        let controller = pw.controller();
+        let _ = controller.SetIsVisible(true);
+        let Ok(core) = controller.CoreWebView2() else {
+            return;
+        };
+        let Ok(wv3) = core.cast::<ICoreWebView2_3>() else {
+            return;
+        };
+        let mut suspended = windows_core::BOOL(0);
+        if wv3.IsSuspended(&mut suspended).is_ok() && suspended.as_bool() {
+            if let Err(e) = wv3.Resume() {
+                log::warn!("webview 恢复失败: {e}");
+            }
+        }
+    });
+    if let Err(e) = r {
+        log::warn!("with_webview(恢复) 失败: {e}");
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn resume_webview_if_suspended(_window: &tauri::WebviewWindow) {}
 
 /// 用户最后一次鼠标 / 键盘事件距今的秒数。返回 0 = 当前活跃，大数值 = 挂机。
 ///
