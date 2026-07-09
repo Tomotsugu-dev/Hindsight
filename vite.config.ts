@@ -21,17 +21,19 @@ export default defineConfig(async () => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    // 1420、7420 先后被 Hyper-V/WinNAT 动态保留区吃掉(EACCES)→ 迁 5420(当前
-    // 保留区外),并建议用 netsh 管理员保留钉死(见 README/或 git log)。改这里必须同步改
-    // src-tauri/tauri.conf.json 的 build.devUrl，否则 Tauri 连不上 dev server。
-    port: 5420,
+    // 1420、7420、5420 先后被 Hyper-V/WinNAT 动态保留区吃掉(EACCES)。根因:机器的
+    // TCP 动态端口范围若被改低(netsh int ipv4 show dynamicport tcp,默认 49152 起),
+    // 保留块就会随机落在低位区,任何低位端口都可能在重启后中招。41420 位于动态范围
+    // 之外的结构性安全区(15001–49151),保留块抽不到。改这里必须同步改
+    // src-tauri/tauri.conf.json 的 build.devUrl 与 CSP，否则 Tauri 连不上 dev server。
+    port: 41420,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 5421,
+          port: 41421,
         }
       : undefined,
     watch: {

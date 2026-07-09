@@ -5,7 +5,7 @@
   "identifier": "com.tomotsugu.hindsight",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:5420",
+    "devUrl": "http://localhost:41420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -47,7 +47,7 @@
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost data: blob: https://cdn-avatars.huggingface.co",
         "font-src": "'self' data:",
-        "connect-src": "'self' ipc: http://ipc.localhost ws://localhost:5420 http://localhost:5420",
+        "connect-src": "'self' ipc: http://ipc.localhost ws://localhost:41420 http://localhost:41420",
         "media-src": "'self' asset: http://asset.localhost",
         "object-src": "'none'",
         "frame-src": "'none'",
