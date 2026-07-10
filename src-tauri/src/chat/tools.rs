@@ -376,7 +376,10 @@ async fn search_text(
         lang.search_no_hit().to_string()
     } else {
         let header = lang.search_header(total, lines.len());
-        truncate(&format!("{header}\n{}", lines.join("\n")), RESULT_CHAR_BUDGET)
+        truncate(
+            &format!("{header}\n{}", lines.join("\n")),
+            RESULT_CHAR_BUDGET,
+        )
     };
     Ok(ToolOutput { for_llm, citations })
 }
@@ -419,7 +422,14 @@ async fn query_stats(
 
             match metric {
                 StatMetric::Duration => query_duration(
-                    conn, &where_sql, &params_ref, group_by, top_n, &from, &to, lang,
+                    conn,
+                    &where_sql,
+                    &params_ref,
+                    group_by,
+                    top_n,
+                    &from,
+                    &to,
+                    lang,
                 ),
                 StatMetric::SessionCount => query_session_count(
                     conn,
@@ -494,9 +504,7 @@ fn query_duration(
             }
             let body = rows
                 .iter()
-                .map(|(name, secs)| {
-                    format!("{}: {}", truncate(name, 50), lang.fmt_secs(*secs))
-                })
+                .map(|(name, secs)| format!("{}: {}", truncate(name, 50), lang.fmt_secs(*secs)))
                 .collect::<Vec<_>>()
                 .join("\n");
             let header = lang.duration_header(from, to, universe, rows.len());
@@ -724,17 +732,19 @@ async fn get_timeline(
     } else {
         // 头部先声明总量与覆盖范围:样本 ≠ 全量,让模型据此下结论
         let header = match &span {
-            Some((first, last)) if total as usize > rows.len() => lang
-                .timeline_header_sampled(
-                    total,
-                    &first[..16.min(first.len())],
-                    &last[..16.min(last.len())],
-                    rows.len(),
-                    TIMELINE_PER_HOUR,
-                ),
+            Some((first, last)) if total as usize > rows.len() => lang.timeline_header_sampled(
+                total,
+                &first[..16.min(first.len())],
+                &last[..16.min(last.len())],
+                rows.len(),
+                TIMELINE_PER_HOUR,
+            ),
             _ => lang.timeline_header_all(total),
         };
-        truncate(&format!("{header}\n{}", lines.join("\n")), RESULT_CHAR_BUDGET)
+        truncate(
+            &format!("{header}\n{}", lines.join("\n")),
+            RESULT_CHAR_BUDGET,
+        )
     };
     Ok(ToolOutput { for_llm, citations })
 }
@@ -762,7 +772,13 @@ mod tests {
 
     #[test]
     fn validate_rejects_unknown_tool_and_bad_dates() {
-        let e = validate("drop_table", &RawParams::default(), today(), ChatLang::ZhHans).unwrap_err();
+        let e = validate(
+            "drop_table",
+            &RawParams::default(),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap_err();
         assert!(e.contains("未知工具"));
 
         let e = validate(
@@ -901,10 +917,7 @@ mod behavior_tests {
     //! 这里把三态(全量/抽样/命中规模)钉死成回归。
     use super::*;
 
-    async fn ctx_with(
-        mem_sql: &'static str,
-        main_sql: &'static str,
-    ) -> ToolCtx {
+    async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> ToolCtx {
         let mem = Connection::open(":memory:").await.unwrap();
         mem.call(move |c| {
             c.execute_batch(&format!(
@@ -968,9 +981,14 @@ mod behavior_tests {
         // 泄漏 dense_day_sql 到 'static:测试进程内一次性,可接受
         let mem: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
         let ctx = ctx_with(mem, "").await;
-        let out = execute(&ctx, &ToolCall::GetTimeline { range: day() }, 1, ChatLang::ZhHans)
-            .await
-            .unwrap();
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: day() },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
         // 披露:总数与"样本"措辞
         assert!(out.for_llm.contains("共 200 条会话"), "{}", out.for_llm);
         assert!(out.for_llm.contains("样本"), "{}", out.for_llm);
@@ -996,9 +1014,14 @@ mod behavior_tests {
     async fn timeline_headers_localized_english() {
         let mem: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
         let ctx = ctx_with(mem, "").await;
-        let out = execute(&ctx, &ToolCall::GetTimeline { range: day() }, 1, ChatLang::En)
-            .await
-            .unwrap();
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: day() },
+            1,
+            ChatLang::En,
+        )
+        .await
+        .unwrap();
         assert!(
             out.for_llm.contains("200 sessions in this period"),
             "{}",
@@ -1019,10 +1042,19 @@ mod behavior_tests {
             "",
         )
         .await;
-        let out = execute(&ctx, &ToolCall::GetTimeline { range: day() }, 1, ChatLang::ZhHans)
-            .await
-            .unwrap();
-        assert!(out.for_llm.contains("共 2 条会话,全部列出"), "{}", out.for_llm);
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: day() },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(
+            out.for_llm.contains("共 2 条会话,全部列出"),
+            "{}",
+            out.for_llm
+        );
         assert!(!out.for_llm.contains("样本"));
         assert_eq!(out.citations.len(), 2);
     }

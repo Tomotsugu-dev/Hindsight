@@ -50,12 +50,31 @@ impl ChatLang {
             Self::ZhHans => ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][i],
             Self::ZhHant => ["週一", "週二", "週三", "週四", "週五", "週六", "週日"][i],
             Self::En => [
-                "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
             ][i],
-            Self::Ja => ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"][i],
+            Self::Ja => [
+                "月曜日",
+                "火曜日",
+                "水曜日",
+                "木曜日",
+                "金曜日",
+                "土曜日",
+                "日曜日",
+            ][i],
             Self::Pt => [
-                "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
-                "sexta-feira", "sábado", "domingo",
+                "segunda-feira",
+                "terça-feira",
+                "quarta-feira",
+                "quinta-feira",
+                "sexta-feira",
+                "sábado",
+                "domingo",
             ][i],
         }
     }
@@ -344,15 +363,15 @@ impl ChatLang {
             match self {
                 Self::ZhHans => format!("{from} ~ {to} 共 {universe} 组,按时长取前 {shown} 组:"),
                 Self::ZhHant => format!("{from} ~ {to} 共 {universe} 組,按時長取前 {shown} 組:"),
-                Self::En => format!(
-                    "{from} ~ {to}: {universe} groups total; top {shown} by duration:"
-                ),
-                Self::Ja => format!(
-                    "{from} ~ {to}: 全 {universe} グループ中、合計時間の上位 {shown} 件:"
-                ),
-                Self::Pt => format!(
-                    "{from} ~ {to}: {universe} grupos no total; top {shown} por duração:"
-                ),
+                Self::En => {
+                    format!("{from} ~ {to}: {universe} groups total; top {shown} by duration:")
+                }
+                Self::Ja => {
+                    format!("{from} ~ {to}: 全 {universe} グループ中、合計時間の上位 {shown} 件:")
+                }
+                Self::Pt => {
+                    format!("{from} ~ {to}: {universe} grupos no total; top {shown} por duração:")
+                }
             }
         } else {
             match self {
@@ -367,12 +386,8 @@ impl ChatLang {
 
     pub fn sessions_total(self, from: &str, to: &str, n: usize, gap: u32) -> String {
         match self {
-            Self::ZhHans => format!(
-                "{from} ~ {to} 使用会话次数: {n} 次(以间隔≥{gap} 分钟算一次)"
-            ),
-            Self::ZhHant => format!(
-                "{from} ~ {to} 使用會話次數: {n} 次(以間隔≥{gap} 分鐘算一次)"
-            ),
+            Self::ZhHans => format!("{from} ~ {to} 使用会话次数: {n} 次(以间隔≥{gap} 分钟算一次)"),
+            Self::ZhHant => format!("{from} ~ {to} 使用會話次數: {n} 次(以間隔≥{gap} 分鐘算一次)"),
             Self::En => format!(
                 "{from} ~ {to}: {n} usage sessions (a gap of ≥{gap} minutes starts a new session)"
             ),

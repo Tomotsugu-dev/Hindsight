@@ -232,8 +232,7 @@ pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
 /// 主窗口「收起态」几何记忆（逻辑坐标 x, y, w, h）。macOS 关窗销毁路线里，
 /// 重建时用它还原用户上次的窗口位置尺寸；只存内存——app 重启回到 tauri.conf
 /// 默认，与旧行为一致。
-static MAIN_GEOMETRY: std::sync::Mutex<Option<(f64, f64, f64, f64)>> =
-    std::sync::Mutex::new(None);
+static MAIN_GEOMETRY: std::sync::Mutex<Option<(f64, f64, f64, f64)>> = std::sync::Mutex::new(None);
 
 fn remember_geometry(win: &tauri::WebviewWindow) {
     let (Ok(pos), Ok(size), Ok(scale)) =

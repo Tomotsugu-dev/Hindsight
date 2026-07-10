@@ -284,10 +284,7 @@ pub async fn chat_ask(
 /// 会话是否正在生成回答;是则返回该次问答的 ask_id(停止按钮的取消句柄)。
 /// 跳页/关窗后重开会话时,前端靠它恢复"生成中"状态。
 #[tauri::command]
-pub fn chat_inflight(
-    inflight: State<'_, ChatInflight>,
-    conversation_id: i64,
-) -> Option<String> {
+pub fn chat_inflight(inflight: State<'_, ChatInflight>, conversation_id: i64) -> Option<String> {
     inflight
         .0
         .lock()

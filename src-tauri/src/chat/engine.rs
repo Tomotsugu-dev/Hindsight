@@ -14,8 +14,8 @@ use serde::Serialize;
 
 use super::llm::{ChatLlm, StepOut, Turn};
 use super::tools::{self, Citation, ToolCtx};
-use crate::error::{Error, Result};
 use crate::chat::lang::ChatLang;
+use crate::error::{Error, Result};
 
 /// 循环步数上限(每步 = 一次 LLM 调用;云端/本地同值起步,按 golden 集实测再分级)
 const MAX_STEPS: u32 = 6;
@@ -295,7 +295,6 @@ fn parse_ref_token(token: &str) -> Option<Vec<usize>> {
     }
     Some(nums)
 }
-
 
 #[cfg(test)]
 mod tests {
