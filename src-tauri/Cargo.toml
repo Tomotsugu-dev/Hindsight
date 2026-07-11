@@ -1,6 +1,6 @@
 [package]
 name = "hindsight"
-version = "0.8.6-beta.1"
+version = "0.8.6-beta.2"
 description = "Privacy-first activity tracking and AI summaries for desktop"
 authors = ["Tomotsugu-dev <heroburnning@gmail.com>"]
 edition = "2021"
@@ -41,7 +41,12 @@ base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 # Phase 2 - 云同步认证
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# system-proxy：跟随操作系统代理设置（浏览器同款行为，端口/地址从系统设置里读，
+# 不做任何假设）。受限网络用户的代理常以"系统代理"模式运行——浏览器走代理而
+# 本客户端直连被断，OAuth 换 token / 模型下载 / 云同步全部失败。没设代理的用户
+# 零变化；HTTPS 走 CONNECT 隧道，TLS 端到端不拆包；HTTP(S)_PROXY 环境变量仍最高优先。
+# socks：个别工具只往系统设置里写 SOCKS 字段不写 HTTP 字段，补上这类的支持。
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "system-proxy", "socks"] }
 aes-gcm = "0.10"
 rand = "0.8"
 sha2 = "0.10"

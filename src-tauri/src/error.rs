@@ -42,6 +42,18 @@ pub enum Error {
         body: String,
     },
 
+    /// OAuth token 端点在连接层就失败（DNS/TCP/TLS 建连不通，不是 Google 拒绝）。
+    /// 受限网络的典型场景：代理只开了"系统代理"模式而分流规则漏了 googleapis.com，
+    /// 或压根没被接管。文案直接面向用户给自救指引（这条会原样显示在同步设置页）。
+    #[error(
+        "无法连接 Google 服务器（{source}）。如在受限网络：请开启代理的 TUN/增强模式，\
+         或确认 googleapis.com 已加入代理规则"
+    )]
+    OAuthUnreachable {
+        #[source]
+        source: reqwest::Error,
+    },
+
     /// 等 OAuth 回调 3 分钟没等到
     #[error("oauth callback timeout")]
     OAuthTimeout,

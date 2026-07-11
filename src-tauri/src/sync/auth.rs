@@ -431,7 +431,8 @@ async fn refresh_with_google(
                     attempt += 1;
                     continue;
                 }
-                return Err(Error::from(e));
+                // 重试耗尽仍连不上 = 连接层问题（非 Google 拒绝），给带自救指引的文案
+                return Err(Error::OAuthUnreachable { source: e });
             }
         }
     }
@@ -646,7 +647,10 @@ async fn exchange_code(
             ("redirect_uri", redirect_uri),
         ])
         .send()
-        .await?;
+        .await
+        // send 层失败 = 连接根本没建立（DNS/TCP/TLS），不是 Google 拒绝——
+        // 受限网络下"浏览器授权成功、客户端换 token 失败"就是这条路径
+        .map_err(|e| Error::OAuthUnreachable { source: e })?;
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
