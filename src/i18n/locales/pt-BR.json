@@ -223,6 +223,72 @@
         "confirm": "Remover",
         "doneAlsoClear": "Removido: {{count}} arquivo(s) do Drive excluído(s) + os pares foram notificados para limpar o espelho deste dispositivo. Os dados locais também foram limpos.",
         "doneKeepLocal": "Removido: {{count}} arquivo(s) do Drive excluído(s) + os pares foram notificados para limpar o espelho deste dispositivo. Dados locais preservados — faça login em uma nova conta para reenviar."
+      },
+      "export": {
+        "rowLabel": "Exportar dados de uso",
+        "rowDescription": "Exporta estatísticas diárias / semanais / mensais para um arquivo. Registros brutos de atividade não são incluídos.",
+        "rowButton": "Exportar…",
+        "dialogTitle": "Exportar dados de uso",
+        "rangeLabel": "Período",
+        "presets": {
+          "last7": "Últimos 7 dias",
+          "last30": "Últimos 30 dias",
+          "last90": "Últimos 90 dias",
+          "custom": "Personalizado"
+        },
+        "customStartAria": "Data inicial",
+        "customEndAria": "Data final",
+        "customTo": "até",
+        "invalidRange": "A data inicial não pode ser posterior à data final.",
+        "contentLabel": "Conteúdo",
+        "granularity": {
+          "daily": "Estatísticas diárias",
+          "weekly": "Estatísticas semanais",
+          "monthly": "Estatísticas mensais"
+        },
+        "contentHint": "Cada período inclui tempo total, tempo por categoria e tempo por aplicativo. Semanas (seg–dom) e meses são contados como períodos completos do calendário e podem ultrapassar um pouco o intervalo selecionado; registros brutos de atividade e capturas de tela não são incluídos.",
+        "needOneGranularity": "Selecione pelo menos uma granularidade.",
+        "formatLabel": "Formato do arquivo",
+        "recommended": "Recomendado",
+        "formats": {
+          "csv": {
+            "label": "CSV · Planilha",
+            "hint": "Tabela longa e plana que abre diretamente no Excel / Numbers / ferramentas de análise para filtrar e criar tabelas dinâmicas; inclui todos os aplicativos."
+          },
+          "json": {
+            "label": "JSON · Estruturado",
+            "hint": "Os campos mais completos (IDs de categoria, supercategorias, segundos exatos, médias diárias) — ideal para uso programático."
+          },
+          "markdown": {
+            "label": "Markdown · Relatório",
+            "hint": "Relatório formatado e legível, para leitura direta ou para o seu app de notas; as tabelas de aplicativos mantêm apenas o Top {{n}} por período."
+          }
+        },
+        "confirm": "Exportar",
+        "busy": "Exportando…",
+        "doneTitle": "Exportação concluída",
+        "reveal": "Mostrar arquivo",
+        "error": "Falha na exportação: {{message}}",
+        "file": {
+          "title": "Estatísticas de uso do Hindsight ({{start}} – {{end}})",
+          "metaExportedAt": "Exportado em: {{time}}",
+          "metaRange": "Período: {{start}} – {{end}}",
+          "metaNote": "As estatísticas semanais / mensais cobrem semanas (seg–dom) / meses completos do calendário e podem ultrapassar o intervalo selecionado; as tabelas de aplicativos listam apenas o Top {{n}}.",
+          "dailyHeading": "Diário",
+          "weeklyHeading": "Semanal",
+          "monthlyHeading": "Mensal",
+          "dayHeading": "{{date}} ({{weekday}})",
+          "weekHeading": "{{start}} – {{end}}",
+          "monthHeading": "{{month}} ({{start}} – {{end}})",
+          "total": "Total",
+          "dailyAvg": "Média diária",
+          "colCategory": "Categoria",
+          "colDuration": "Tempo",
+          "colShare": "Fração",
+          "colApp": "Aplicativo",
+          "noData": "(sem registros)",
+          "topAppsTitle": "Top {{n}} aplicativos"
+        }
       }
     },
     "privacy": {

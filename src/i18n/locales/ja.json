@@ -223,6 +223,72 @@
         "confirm": "削除",
         "doneAlsoClear": "削除しました：{{count}} 個の Drive ファイルを削除 + 全デバイスにこのデバイスのミラー削除を通知。ローカルデータも一緒に削除されました。",
         "doneKeepLocal": "削除しました：{{count}} 個の Drive ファイルを削除 + 全デバイスにこのデバイスのミラー削除を通知。ローカルデータは保持されています — 新しいアカウントにサインインして再アップロードできます。"
+      },
+      "export": {
+        "rowLabel": "使用データをエクスポート",
+        "rowDescription": "日次 / 週次 / 月次の統計をファイルに書き出します。元の活動記録は含まれません。",
+        "rowButton": "エクスポート…",
+        "dialogTitle": "使用データをエクスポート",
+        "rangeLabel": "期間",
+        "presets": {
+          "last7": "過去 7 日",
+          "last30": "過去 30 日",
+          "last90": "過去 90 日",
+          "custom": "カスタム"
+        },
+        "customStartAria": "開始日",
+        "customEndAria": "終了日",
+        "customTo": "〜",
+        "invalidRange": "開始日は終了日より後にできません。",
+        "contentLabel": "内容",
+        "granularity": {
+          "daily": "日次統計",
+          "weekly": "週次統計",
+          "monthly": "月次統計"
+        },
+        "contentHint": "各期間の合計時間・カテゴリ別時間・アプリ別時間を含みます。週（月〜日）/ 月は暦の期間全体で集計するため、選択範囲を多少はみ出すことがあります。元の活動記録とスクリーンショットは含まれません。",
+        "needOneGranularity": "少なくとも 1 つの粒度を選択してください。",
+        "formatLabel": "ファイル形式",
+        "recommended": "おすすめ",
+        "formats": {
+          "csv": {
+            "label": "CSV · 表形式",
+            "hint": "フラットなロングテーブル。Excel / Numbers / 分析ツールでそのまま開いてフィルタやピボットに使えます。全アプリの項目を含みます。"
+          },
+          "json": {
+            "label": "JSON · 構造化",
+            "hint": "最も完全なフィールド（カテゴリ ID・大分類・正確な秒数・日平均）。プログラムでの読み取りや二次利用に最適。"
+          },
+          "markdown": {
+            "label": "Markdown · レポート",
+            "hint": "整形済みの読みやすいレポート。そのまま読む・ノートアプリに保存する用途向け。アプリ表は各期間 Top {{n}} のみ。"
+          }
+        },
+        "confirm": "エクスポート",
+        "busy": "エクスポート中…",
+        "doneTitle": "エクスポート完了",
+        "reveal": "ファイルを表示",
+        "error": "エクスポートに失敗しました：{{message}}",
+        "file": {
+          "title": "Hindsight 使用統計（{{start}} 〜 {{end}}）",
+          "metaExportedAt": "エクスポート日時：{{time}}",
+          "metaRange": "集計範囲：{{start}} 〜 {{end}}",
+          "metaNote": "週次 / 月次は暦の週（月〜日）/ 月全体で集計するため、選択範囲をはみ出すことがあります。アプリ表は Top {{n}} のみ。",
+          "dailyHeading": "日次統計",
+          "weeklyHeading": "週次統計",
+          "monthlyHeading": "月次統計",
+          "dayHeading": "{{date}}（{{weekday}}）",
+          "weekHeading": "{{start}} 〜 {{end}}",
+          "monthHeading": "{{month}}（{{start}} 〜 {{end}}）",
+          "total": "合計",
+          "dailyAvg": "日平均",
+          "colCategory": "カテゴリ",
+          "colDuration": "時間",
+          "colShare": "割合",
+          "colApp": "アプリ",
+          "noData": "（記録なし）",
+          "topAppsTitle": "アプリ Top {{n}}"
+        }
       }
     },
     "privacy": {

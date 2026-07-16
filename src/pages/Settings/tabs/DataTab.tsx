@@ -8,6 +8,7 @@ import {
   Database,
   DatabaseBackup,
   DatabaseZap,
+  FileDown,
   FolderOpen,
   HardDrive,
   ImageDown,
@@ -21,6 +22,7 @@ import { Slider } from "../../../components/FormControls/Slider";
 import { PathField } from "../../../components/FormControls/PathField";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { RemoveDeviceDialog } from "../../../components/RemoveDeviceDialog/RemoveDeviceDialog";
+import { ExportUsageDialog } from "../../../components/ExportUsageDialog/ExportUsageDialog";
 import { useSettings } from "../../../state/settings";
 import { api, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
@@ -41,10 +43,9 @@ export default function DataTab() {
   const { settings, update } = useSettings();
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   /** 简单确认弹窗只用于 rebuild + shots；remove 走单独的 RemoveDeviceDialog */
-  const [simpleConfirm, setSimpleConfirm] = useState<"db" | "shots" | null>(
-    null,
-  );
+  const [simpleConfirm, setSimpleConfirm] = useState<"db" | "shots" | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   // 哪一个 purge 操作正在跑：null = 三个按钮都空闲。busy 时**所有**三个按钮 disabled，
   // 避免用户连点 / 在一个 destructive op 跑到一半时触发另一个。busy 的那一个按钮显示
   // spinner + busy 文案；其它两个走 :disabled 的灰色路径。
@@ -186,9 +187,7 @@ export default function DataTab() {
           }
           icon={PieChart}
         >
-          <span
-            style={{ fontSize: 13, color: "var(--text-strong)", fontWeight: 600 }}
-          >
+          <span style={{ fontSize: 13, color: "var(--text-strong)", fontWeight: 600 }}>
             {storage ? fmtBytes(total) : "—"}
           </span>
         </Row>
@@ -202,6 +201,16 @@ export default function DataTab() {
             onChange={updateAiModelsPath}
             onPick={pickModelsDir}
           />
+        </Row>
+        <Row
+          label={t("settings.data.export.rowLabel")}
+          description={t("settings.data.export.rowDescription")}
+          icon={FileDown}
+        >
+          <button type="button" className={styles.exportBtn} onClick={() => setExportOpen(true)}>
+            <FileDown size={14} strokeWidth={1.85} />
+            {t("settings.data.export.rowButton")}
+          </button>
         </Row>
       </Section>
 
@@ -313,6 +322,9 @@ export default function DataTab() {
         onConfirm={runRemove}
         onCancel={() => setRemoveOpen(false)}
       />
+
+      {/* ───── 导出使用数据（范围 / 粒度 / 格式配置）───── */}
+      <ExportUsageDialog open={exportOpen} onClose={() => setExportOpen(false)} />
     </>
   );
 }
@@ -337,8 +349,7 @@ function PurgeButton({
 }) {
   const isBusy = busyTarget === target;
   const isLocked = busyTarget !== null && !isBusy;
-  const variantClass =
-    variant === "danger" ? styles.dangerBtn : styles.neutralBtn;
+  const variantClass = variant === "danger" ? styles.dangerBtn : styles.neutralBtn;
   const busyClass = isBusy
     ? variant === "danger"
       ? styles.dangerBtnBusy

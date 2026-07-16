@@ -106,6 +106,36 @@
   }
 }
 
+/* —— 导出使用数据按钮：普通（非破坏性）操作，参照 AISummary 各 tab 的 .exportBtn
+   弱化风格（透明底 + 实线浅边框 + 深色字），不进红色警示语言。 —— */
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    transform 120ms ease-out;
+}
+
+.exportBtn:hover {
+  background: var(--surface-2);
+}
+
+.exportBtn:active {
+  transform: scale(0.97);
+}
+
 /* —— 打开文件夹按钮：与 PathField 的 "选择" 同款灰色 ghost —— */
 .openBtn {
   display: inline-flex;

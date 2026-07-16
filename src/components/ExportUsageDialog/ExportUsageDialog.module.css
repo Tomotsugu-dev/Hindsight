@@ -1,0 +1,354 @@
+/* 复用 RemoveDeviceDialog 的 modal grammar（backdrop / dialog / btn 同款视觉），
+   选中态换成 accent 紫——导出是普通操作，不该用红色警示语言。 */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+  background: rgba(20, 20, 40, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 180ms var(--ease-out);
+}
+
+.dialog {
+  position: relative;
+  z-index: var(--z-modal);
+  min-width: 420px;
+  max-width: 500px;
+  padding: 22px 22px 16px;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 12px 36px rgba(20, 20, 40, 0.22),
+    0 2px 6px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: scaleIn 220ms var(--ease-spring);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+/* ── 表单字段块：label + 控件 + hint / error ── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--status-error);
+  margin: 0;
+}
+
+/* ── 日期范围行：预设 picker + 自定义起止 ── */
+
+.rangeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rangeSep {
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.dateInput {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text-strong);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.02);
+  outline: none;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
+}
+
+.dateInput:focus {
+  border-color: var(--color-accent);
+  background: var(--surface-card);
+}
+
+.dateInput:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── 统计粒度 checkbox 行 ── */
+
+.granRow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.check input:disabled {
+  cursor: not-allowed;
+}
+
+/* ── 格式 radio 卡片（选中 = accent 描边） ── */
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.option:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.optionChecked {
+  border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  background: var(--color-accent-soft);
+}
+
+.optionRadio {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
+
+.optionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.optionLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+/* 「推荐」小徽章：accent 淡底 pill，跟在格式名后面 */
+.recommendBadge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  font-size: 10.5px;
+  font-weight: var(--font-weight-600);
+  color: var(--color-accent);
+  letter-spacing: 0.01em;
+}
+
+.optionHint {
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+/* ── 结果反馈：成功绿条（同 RemoveDeviceDialog .unaffected 语言）+ 错误红字 ── */
+
+.doneBar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(34, 197, 94, 0.08);
+  border-left: 3px solid rgba(34, 197, 94, 0.55);
+  border-radius: var(--radius-xs);
+  font-size: 12.5px;
+  color: var(--text-regular);
+}
+
+.doneIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #16a34a;
+}
+
+.doneBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.donePath {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  word-break: break-all;
+  color: var(--text-soft);
+}
+
+.revealBtn {
+  flex-shrink: 0;
+  align-self: center;
+  height: 26px;
+  padding: 0 10px;
+  background: rgba(0, 0, 0, 0.045);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-strong);
+  cursor: pointer;
+  transition: background-color 180ms ease-out;
+}
+
+.revealBtn:hover {
+  background: rgba(0, 0, 0, 0.075);
+}
+
+.errorBar {
+  font-size: 12.5px;
+  color: var(--status-error);
+  line-height: 1.45;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── 底部按钮（同 RemoveDeviceDialog，主按钮换 accent） ── */
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 100ms ease-out;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnCancel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.btnCancel:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.btnPrimary {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 88%, #000000);
+}
+
+.spinning {
+  animation: exportDialogSpin 0.9s linear infinite;
+}
+
+@keyframes exportDialogSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

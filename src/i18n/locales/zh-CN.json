@@ -223,6 +223,72 @@
         "confirm": "移除",
         "doneAlsoClear": "已撤回 {{count}} 个 Drive 文件 + 通知所有设备清除本机镜像。本机数据已一并清空。",
         "doneKeepLocal": "已撤回 {{count}} 个 Drive 文件 + 通知所有设备清除本机镜像。本机数据已保留，可换账号后重新上传。"
+      },
+      "export": {
+        "rowLabel": "导出使用数据",
+        "rowDescription": "将每日 / 每周 / 每月统计导出为文件，不含原始活动记录。",
+        "rowButton": "导出…",
+        "dialogTitle": "导出使用数据",
+        "rangeLabel": "日期范围",
+        "presets": {
+          "last7": "最近 7 天",
+          "last30": "最近 30 天",
+          "last90": "最近 90 天",
+          "custom": "自定义"
+        },
+        "customStartAria": "开始日期",
+        "customEndAria": "结束日期",
+        "customTo": "至",
+        "invalidRange": "开始日期不能晚于结束日期。",
+        "contentLabel": "导出内容",
+        "granularity": {
+          "daily": "每日统计",
+          "weekly": "每周统计",
+          "monthly": "每月统计"
+        },
+        "contentHint": "各周期含总时长、分类时长与应用时长。周 / 月按完整自然周（周一～周日）/ 自然月统计，可能略超出所选范围；不包含原始活动记录与截图。",
+        "needOneGranularity": "至少勾选一种统计粒度。",
+        "formatLabel": "文件格式",
+        "recommended": "推荐",
+        "formats": {
+          "csv": {
+            "label": "CSV · 表格",
+            "hint": "扁平长表，Excel / Numbers / 数据分析工具可直接打开做筛选与透视；含全部应用条目。"
+          },
+          "json": {
+            "label": "JSON · 结构化",
+            "hint": "字段最完整（分类 ID、大类、精确秒数、日均），适合程序读取或二次开发。"
+          },
+          "markdown": {
+            "label": "Markdown · 报告",
+            "hint": "排版好的可读报告，适合直接阅读或存入笔记软件；每个周期的应用表只列 Top {{n}}。"
+          }
+        },
+        "confirm": "导出",
+        "busy": "导出中…",
+        "doneTitle": "导出完成",
+        "reveal": "显示文件",
+        "error": "导出失败：{{message}}",
+        "file": {
+          "title": "Hindsight 使用统计（{{start}} ～ {{end}}）",
+          "metaExportedAt": "导出时间：{{time}}",
+          "metaRange": "统计范围：{{start}} ～ {{end}}",
+          "metaNote": "周 / 月统计按完整自然周（周一～周日）/ 自然月计算，可能超出所选范围；应用表仅列 Top {{n}}。",
+          "dailyHeading": "每日统计",
+          "weeklyHeading": "每周统计",
+          "monthlyHeading": "每月统计",
+          "dayHeading": "{{date}}（{{weekday}}）",
+          "weekHeading": "{{start}} ～ {{end}}",
+          "monthHeading": "{{month}}（{{start}} ～ {{end}}）",
+          "total": "总计",
+          "dailyAvg": "日均",
+          "colCategory": "分类",
+          "colDuration": "时长",
+          "colShare": "占比",
+          "colApp": "应用",
+          "noData": "（无记录）",
+          "topAppsTitle": "应用 Top {{n}}"
+        }
       }
     },
     "privacy": {
