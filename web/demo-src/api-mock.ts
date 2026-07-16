@@ -61,6 +61,8 @@ export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
 /** OAuth 授权 URL 就绪事件——demo 里永不触发，仅满足消费方 import。 */
 export const OAUTH_URL_EVENT = "sync://oauth-url";
+/** Chat 问答落库完成广播——demo 里永不触发，仅满足消费方 import。 */
+export const CHAT_ANSWER_READY_EVENT = "chat:answer-ready";
 
 // ────────────────────────────────────────────
 // 应用图标 —— 用 Simple Icons CDN 拿品牌 SVG
