@@ -50,7 +50,8 @@
       "apps": "應用程式",
       "devices": "雲同步",
       "settings": "設定",
-      "chat": "對話"
+      "chat": "對話",
+      "search": "搜尋"
     }
   },
   "sidebar": {
@@ -72,6 +73,20 @@
   "windowControls": {
     "minimize": "最小化",
     "close": "關閉"
+  },
+  "search": {
+    "pageTitle": "搜尋",
+    "subtitle": "搜尋螢幕上出現過的文字，定位到當時的截圖與時間。",
+    "placeholder": "輸入關鍵字，如看過的網頁裡的一句話…",
+    "hint": "結果來自截圖的本地文字識別索引；內容需先被截圖並完成識別才能搜到，截圖本身受保留時長限制。",
+    "total": "共 {{count}} 條符合",
+    "initial": "輸入關鍵字，搜尋你螢幕上出現過的內容",
+    "empty": "沒有符合的記錄",
+    "emptyHint": "換個關鍵字試試；只有已被截圖並完成文字識別的內容才能搜到。",
+    "loadMore": "載入更多（還有 {{count}} 條）",
+    "imageGone": "截圖已被清理",
+    "unavailable": "搜尋無法使用：{{message}}",
+    "viewerAlt": "截圖預覽"
   },
   "settings": {
     "pageTitle": "設定",

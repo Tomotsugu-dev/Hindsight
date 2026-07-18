@@ -1,0 +1,333 @@
+/* 屏幕记忆搜索页。页面骨架同 Page.module.css(720 容器);
+   命中卡视觉参照 Chat 证据卡(浅底圆角小卡),放大成可点行 + 缩略图。 */
+
+.page {
+  padding: var(--space-8);
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── 搜索框 ── */
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin-top: var(--space-4);
+  padding: 0 12px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  transition:
+    border-color 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.searchBox:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13.5px;
+  color: var(--text-strong);
+}
+
+.searchInput::placeholder {
+  color: var(--text-faint);
+}
+
+.searchSpin {
+  flex-shrink: 0;
+  color: var(--text-soft);
+  animation: searchSpin 0.9s linear infinite;
+}
+
+@keyframes searchSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.totalLine {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin: 6px 0 0;
+}
+
+.errorLine {
+  font-size: 12.5px;
+  color: var(--status-error);
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── 初始引导 / 空态 ── */
+
+.initial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 72px;
+  color: var(--text-faint);
+}
+
+.initialIcon {
+  color: var(--text-faint);
+}
+
+.initialText {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.initialHint {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0;
+  max-width: 420px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.emptyHint {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+  margin: 4px 0 0;
+}
+
+/* ── 命中列表 ── */
+
+.hitList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: var(--space-4);
+}
+
+/* 整卡可点(打开截图预览):button 语义 + 卡片视觉 */
+.hit {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.hit:hover {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+.hitThumbWrap {
+  flex-shrink: 0;
+  width: 112px;
+  height: 68px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.hitThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hitThumbMissing {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+
+.hitBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.hitHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hitApp {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hitTime {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.hitSnippet {
+  font-size: 12.5px;
+  color: var(--text-regular);
+  line-height: 1.5;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.mark {
+  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  color: var(--text-strong);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* ── 加载更多 ── */
+
+.loadMoreBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: center;
+  height: 30px;
+  margin-top: 10px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-strong);
+  cursor: pointer;
+  transition: background-color 140ms ease-out;
+}
+
+.loadMoreBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.loadMoreBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── 大图预览(lightbox) ── */
+
+.viewerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+  background: rgba(20, 20, 40, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: viewerFadeIn 160ms var(--ease-out);
+  cursor: zoom-out;
+}
+
+.viewerBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(92vw, 1280px);
+  max-height: 92vh;
+}
+
+.viewerImg {
+  max-width: 100%;
+  max-height: calc(92vh - 40px);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  object-fit: contain;
+}
+
+.viewerMissing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 64px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.viewerMeta {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  max-width: 90vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes viewerFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

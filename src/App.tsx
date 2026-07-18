@@ -23,6 +23,7 @@ const WeeklyTab = lazy(() => import("./pages/AISummary/tabs/WeeklyTab"));
 const MonthlyTab = lazy(() => import("./pages/AISummary/tabs/MonthlyTab"));
 const DebugTab = lazy(() => import("./pages/AISummary/tabs/DebugTab"));
 const ChatPage = lazy(() => import("./pages/Chat/ChatPage"));
+const SearchPage = lazy(() => import("./pages/Search/SearchPage"));
 const AISettingsPage = lazy(() => import("./pages/AISettings/AISettingsPage"));
 const EngineTab = lazy(() => import("./pages/AISettings/tabs/EngineTab"));
 const ModelsTab = lazy(() => import("./pages/AISettings/tabs/ModelsTab"));
@@ -99,6 +100,7 @@ function App() {
           <Route path={ROUTES.week} element={<Week />} />
           <Route path={ROUTES.month} element={<Month />} />
           <Route path={ROUTES.chat} element={<ChatPage />} />
+          <Route path={ROUTES.search} element={<SearchPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
             <Route path="week" element={<WeeklyTab />} />

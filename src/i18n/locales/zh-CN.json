@@ -50,7 +50,8 @@
       "apps": "应用",
       "devices": "云同步",
       "settings": "设置",
-      "chat": "对话"
+      "chat": "对话",
+      "search": "搜索"
     }
   },
   "sidebar": {
@@ -72,6 +73,20 @@
   "windowControls": {
     "minimize": "最小化",
     "close": "关闭"
+  },
+  "search": {
+    "pageTitle": "搜索",
+    "subtitle": "搜索屏幕上出现过的文字，定位到当时的截图与时间。",
+    "placeholder": "输入关键词，如看过的网页里的一句话…",
+    "hint": "结果来自截图的本地文字识别索引；内容需先被截图并完成识别才能搜到，截图本身受保留时长限制。",
+    "total": "共 {{count}} 条匹配",
+    "initial": "输入关键词，搜索你屏幕上出现过的内容",
+    "empty": "没有匹配的记录",
+    "emptyHint": "换个关键词试试；只有已被截图并完成文字识别的内容才能搜到。",
+    "loadMore": "加载更多（还有 {{count}} 条）",
+    "imageGone": "截图已被清理",
+    "unavailable": "搜索不可用：{{message}}",
+    "viewerAlt": "截图预览"
   },
   "settings": {
     "pageTitle": "设置",

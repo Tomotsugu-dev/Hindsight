@@ -50,7 +50,8 @@
       "apps": "Aplicativos",
       "devices": "Nuvem",
       "settings": "Ajustes",
-      "chat": "Chat"
+      "chat": "Chat",
+      "search": "Pesquisar"
     }
   },
   "sidebar": {
@@ -72,6 +73,20 @@
   "windowControls": {
     "minimize": "Minimizar",
     "close": "Fechar"
+  },
+  "search": {
+    "pageTitle": "Pesquisar",
+    "subtitle": "Pesquise textos que apareceram na sua tela e vá direto à captura e ao momento.",
+    "placeholder": "Digite palavras-chave, ex. uma frase de uma página que você viu…",
+    "hint": "Os resultados vêm do índice local de OCR das capturas de tela; o conteúdo só se torna pesquisável depois de capturado e reconhecido, e as capturas seguem a configuração de retenção.",
+    "total": "{{count}} correspondências",
+    "initial": "Digite palavras-chave para pesquisar o que apareceu na sua tela",
+    "empty": "Nenhum registro correspondente",
+    "emptyHint": "Tente outras palavras-chave; só é possível encontrar conteúdo que foi capturado e reconhecido.",
+    "loadMore": "Carregar mais (faltam {{count}})",
+    "imageGone": "A captura de tela foi removida",
+    "unavailable": "Pesquisa indisponível: {{message}}",
+    "viewerAlt": "Prévia da captura de tela"
   },
   "settings": {
     "pageTitle": "Configurações",

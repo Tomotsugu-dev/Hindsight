@@ -65,6 +65,214 @@ pub struct PendingStats {
     pub digest_running: bool,
 }
 
+/// 屏幕记忆搜索的一条命中(搜索页一行结果)。
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySearchHit {
+    pub session_id: i64,
+    pub app: String,
+    pub title: String,
+    pub started_ts: String,
+    pub ended_ts: String,
+    /// 首个命中词的上下文窗口(纯文本,无高亮标记——前端按词自行高亮)
+    pub snippet: String,
+    /// 命中行的首现帧(截图绝对路径);可能已被保留策略清理,前端需兜底
+    pub frame_path: Option<String>,
+    /// 首现帧拍摄时刻(RFC3339)
+    pub frame_ts: Option<String>,
+}
+
+/// `memory_search` 的返回:总命中数 + 当前分页窗口。
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySearchResp {
+    pub total: u64,
+    pub hits: Vec<MemorySearchHit>,
+}
+
+/// 搜索词数量上限——防一大段粘贴拼出巨型 SQL;超出的词静默丢弃。
+const SEARCH_MAX_WORDS: usize = 8;
+/// 单词字符数上限,超长截断(trigram 用前缀已足够定位)。
+const SEARCH_MAX_WORD_CHARS: usize = 64;
+/// snippet 窗口:首个命中词往前 / 往后各截的字符数。
+const SNIPPET_BEFORE_CHARS: usize = 20;
+const SNIPPET_AFTER_CHARS: usize = 60;
+
+/// 按字符数截断(不切坏 UTF-8 边界)。
+fn truncate_chars(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
+/// 大小写不敏感(仅 ASCII fold,CJK 原样)的子串定位,返回字符索引。
+/// O(n·m) 滑窗:text 物化列最多几十 KB、m ≤ 64,毫秒内,不值得上索引结构。
+fn find_ci(hay: &[char], needle: &str) -> Option<usize> {
+    let needle: Vec<char> = needle.chars().map(|c| c.to_ascii_lowercase()).collect();
+    if needle.is_empty() || hay.len() < needle.len() {
+        return None;
+    }
+    (0..=hay.len() - needle.len()).find(|&i| {
+        hay[i..i + needle.len()]
+            .iter()
+            .zip(&needle)
+            .all(|(a, b)| a.to_ascii_lowercase() == *b)
+    })
+}
+
+/// 命中上下文:定位首个词,前后各截一段;两端被截断时补省略号。
+/// 会话文本是 OCR 行拼接,换行统一成空格便于单行展示。
+fn make_snippet(text: &str, word: &str) -> String {
+    let flat = text.replace(['\n', '\r'], " ");
+    let chars: Vec<char> = flat.chars().collect();
+    let hit = find_ci(&chars, word).unwrap_or(0);
+    let start = hit.saturating_sub(SNIPPET_BEFORE_CHARS);
+    let end = (hit + word.chars().count() + SNIPPET_AFTER_CHARS).min(chars.len());
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    out.extend(&chars[start..end]);
+    if end < chars.len() {
+        out.push('…');
+    }
+    out
+}
+
+/// 全文搜索屏幕记忆(搜索页):按空白拆词、隐式 AND,命中会话按时间倒序分页。
+///
+/// 两条路径:
+/// - 全部词 ≥ 3 字符 → FTS trigram 索引(快路径)
+/// - 含短词(中文双字词很常见)→ trigram 对 <3 字符的查询词拿不出任何结果,
+///   整个查询退化为物化列 `text` 的 LIKE 全扫——会话行数万级、文本列几十 KB
+///   级,毫秒内完成,可接受
+///
+/// 每条命中附"首个命中词所在行的首现帧"(session_lines 行级留痕),前端用它
+/// 定位到具体截图与时刻。
+#[tauri::command]
+pub async fn memory_search(
+    mem: State<'_, MemoryState>,
+    query: String,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<MemorySearchResp, String> {
+    let db = require(&mem)?;
+    let words: Vec<String> = query
+        .split_whitespace()
+        .take(SEARCH_MAX_WORDS)
+        .map(|w| truncate_chars(w, SEARCH_MAX_WORD_CHARS))
+        .collect();
+    if words.is_empty() {
+        return Ok(MemorySearchResp {
+            total: 0,
+            hits: Vec::new(),
+        });
+    }
+    // limit 上限防前端手滑一次拉全库;offset 由"加载更多"翻页
+    let limit = i64::from(limit.unwrap_or(30).min(200));
+    let offset = i64::from(offset.unwrap_or(0));
+    let use_fts = words.iter().all(|w| w.chars().count() >= 3);
+    let first_word = words[0].clone();
+    let first_like = crate::chat::tools::like_pattern(&first_word);
+
+    let (total, hits) =
+        db.0.call(move |conn| {
+            type Row = (i64, String, String, String, String, String);
+            let row_of = |r: &rusqlite::Row<'_>| -> rusqlite::Result<Row> {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            };
+            const SELECT_COLS: &str = "s.id, COALESCE(s.app_id,''), COALESCE(s.title,''), \
+                                       s.started_ts, s.ended_ts, s.text";
+
+            let (total, rows): (i64, Vec<Row>) = if use_fts {
+                let fts = crate::chat::tools::fts_literal(&words);
+                let total = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH ?1",
+                        rusqlite::params![fts],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                let mut stmt = conn
+                    .prepare(&format!(
+                        "SELECT {SELECT_COLS}
+                         FROM text_sessions_fts
+                         JOIN text_sessions s ON s.id = text_sessions_fts.rowid
+                         WHERE text_sessions_fts MATCH ?1
+                         ORDER BY s.started_ts DESC LIMIT {limit} OFFSET {offset}"
+                    ))
+                    .db()?;
+                let rows = stmt
+                    .query_map(rusqlite::params![fts], row_of)
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                (total, rows)
+            } else {
+                let patterns: Vec<String> = words
+                    .iter()
+                    .map(|w| crate::chat::tools::like_pattern(w))
+                    .collect();
+                let cond = (1..=patterns.len())
+                    .map(|i| format!("s.text LIKE ?{i} ESCAPE '\\'"))
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                let total = conn
+                    .query_row(
+                        &format!("SELECT COUNT(*) FROM text_sessions s WHERE {cond}"),
+                        rusqlite::params_from_iter(patterns.iter()),
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                let mut stmt = conn
+                    .prepare(&format!(
+                        "SELECT {SELECT_COLS} FROM text_sessions s WHERE {cond}
+                         ORDER BY s.started_ts DESC LIMIT {limit} OFFSET {offset}"
+                    ))
+                    .db()?;
+                let rows = stmt
+                    .query_map(rusqlite::params_from_iter(patterns.iter()), row_of)
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                (total, rows)
+            };
+
+            // 每条命中补证据帧:该会话里第一条含首词的行的首现帧(同 chat 搜索工具口径)
+            let mut hits = Vec::with_capacity(rows.len());
+            for (id, app, title, started_ts, ended_ts, text) in rows {
+                let frame: Option<(String, String)> = conn
+                    .query_row(
+                        "SELECT first_path, first_ts FROM session_lines
+                         WHERE session_id = ?1 AND text LIKE ?2 ESCAPE '\\' LIMIT 1",
+                        rusqlite::params![id, first_like],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .ok();
+                hits.push(MemorySearchHit {
+                    session_id: id,
+                    app,
+                    title,
+                    started_ts,
+                    ended_ts,
+                    snippet: make_snippet(&text, &first_word),
+                    frame_path: frame.as_ref().map(|(p, _)| p.clone()),
+                    frame_ts: frame.map(|(_, t)| t),
+                });
+            }
+            Ok((total as u64, hits))
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(MemorySearchResp { total, hits })
+}
+
 /// 两库对账走 Rust 侧集合差,不用 ATTACH:主库是应用唯一写连接,
 /// ATTACH 状态残留与异常路径的 DETACH 都是额外锁面;路径全集最坏
 /// 十万级 ≈ 几 MB、毫秒级,简单无风险。
