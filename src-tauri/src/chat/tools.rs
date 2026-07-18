@@ -207,7 +207,8 @@ fn clean_short_strings(
 
 /// FTS MATCH 注入防护:每个词包成带引号的字符串字面量(内部引号剥除),
 /// 多词以空格连接 = 隐式 AND。模型/用户输入永远进不了 FTS 语法位。
-fn fts_literal(keywords: &[String]) -> String {
+/// pub(crate):搜索页命令([`crate::commands::screen_memory::memory_search`])同款复用。
+pub(crate) fn fts_literal(keywords: &[String]) -> String {
     keywords
         .iter()
         .map(|k| format!("\"{}\"", k.replace('"', " ")))
@@ -215,8 +216,8 @@ fn fts_literal(keywords: &[String]) -> String {
         .join(" ")
 }
 
-/// LIKE 通配符转义(ESCAPE '\')。
-fn like_pattern(s: &str) -> String {
+/// LIKE 通配符转义(ESCAPE '\')。pub(crate) 理由同 [`fts_literal`]。
+pub(crate) fn like_pattern(s: &str) -> String {
     let escaped = s
         .replace('\\', "\\\\")
         .replace('%', "\\%")

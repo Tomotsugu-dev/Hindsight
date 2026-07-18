@@ -56,7 +56,8 @@
       "apps": "Apps",
       "devices": "Cloud Sync",
       "settings": "Settings",
-      "chat": "Chat"
+      "chat": "Chat",
+      "search": "Search"
     }
   },
   "sidebar": {
@@ -78,6 +79,20 @@
   "windowControls": {
     "minimize": "Minimize",
     "close": "Close"
+  },
+  "search": {
+    "pageTitle": "Search",
+    "subtitle": "Search text that has appeared on your screen and jump to the screenshot and moment.",
+    "placeholder": "Type keywords, e.g. a sentence from a page you saw…",
+    "hint": "Results come from the local OCR index of your screenshots; content becomes searchable only after it has been captured and recognized, and screenshots follow the retention setting.",
+    "total": "{{count}} matches",
+    "initial": "Type keywords to search what has appeared on your screen",
+    "empty": "No matching records",
+    "emptyHint": "Try different keywords; only content that was captured and recognized can be found.",
+    "loadMore": "Load more ({{count}} left)",
+    "imageGone": "Screenshot has been cleaned up",
+    "unavailable": "Search unavailable: {{message}}",
+    "viewerAlt": "Screenshot preview"
   },
   "settings": {
     "pageTitle": "Settings",

@@ -654,6 +654,27 @@ export interface ChatStoredMessage {
   completionTokens: number | null;
 }
 
+/** 屏幕记忆搜索的一条命中（搜索页一行结果）。 */
+export interface MemorySearchHit {
+  sessionId: number;
+  app: string;
+  title: string;
+  startedTs: string;
+  endedTs: string;
+  /** 首个命中词的上下文窗口（纯文本，前端按词自行高亮） */
+  snippet: string;
+  /** 命中行首现帧（截图绝对路径）；可能已被保留策略清理，前端需兜底 */
+  framePath: string | null;
+  /** 首现帧拍摄时刻（RFC3339） */
+  frameTs: string | null;
+}
+
+/** memory_search 的返回：总命中数 + 当前分页窗口。 */
+export interface MemorySearchResp {
+  total: number;
+  hits: MemorySearchHit[];
+}
+
 /** 未入索引统计：主库截图全集 vs 记忆库登记/完成情况（近似值）。 */
 export interface MemoryPendingStats {
   /** 主库有截图但尚未登记（需回填） */
@@ -989,6 +1010,10 @@ export const api = {
     invoke<void>("chat_delete_conversation", { conversationId }),
   /** 未入索引截图统计（Chat 页 banner 用）。 */
   memoryPendingStats: () => invoke<MemoryPendingStats>("memory_pending_stats"),
+  /** 全文搜索屏幕记忆（搜索页）：空白拆词隐式 AND，命中会话按时间倒序分页。
+   *  limit 默认 30；offset 配合"加载更多"翻页。 */
+  memorySearch: (query: string, limit?: number, offset?: number) =>
+    invoke<MemorySearchResp>("memory_search", { query, limit, offset }),
   /** 屏幕记忆回填：把主库已有截图的活动登记为待识别帧。幂等，返回登记行数。 */
   memoryBackfill: () => invoke<number>("memory_backfill"),
   /** 手动触发一次消化（OCR→折叠→索引），跑完积压才返回，可能耗时数分钟。

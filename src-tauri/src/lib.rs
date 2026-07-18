@@ -133,6 +133,18 @@ pub fn run() {
                 MINIMIZE_TO_TRAY
                     .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 
+                // 截图目录同 data_root(见 setup 开头):加进 asset 协议白名单,
+                // 搜索页 / 证据卡的截图预览在自定义目录($HOME 之外)下也能加载。
+                // 运行中改截图目录后需重启才对新目录生效,可接受。
+                if !cfg.screenshot_path.trim().is_empty() {
+                    if let Err(e) = handle
+                        .asset_protocol_scope()
+                        .allow_directory(&cfg.screenshot_path, true)
+                    {
+                        log::warn!("把截图目录加入 asset 协议白名单失败(截图预览可能显示不出): {e}");
+                    }
+                }
+
                 // Windows 自启动自愈:HKCU Run 项在旧版卸载(双装迁移清理)时会被
                 // 连带删除,而它原本只在用户切设置开关时写入。设置说开就每次启动
                 // 重新断言一次——幂等,顺带把路径刷成当前 exe,换安装位置也不失效。
@@ -284,6 +296,7 @@ pub fn run() {
             commands::screen_memory::memory_digest_now,
             commands::screen_memory::memory_digest_stop,
             commands::screen_memory::memory_pending_stats,
+            commands::screen_memory::memory_search,
             // --- chat: 屏幕记忆问答 + 会话管理 ---
             commands::chat::chat_ask,
             commands::chat::chat_inflight,
