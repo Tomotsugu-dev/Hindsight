@@ -167,8 +167,13 @@
   transition: background-color 140ms ease-out;
 }
 
-.bannerBtn:hover {
+.bannerBtn:hover:not(:disabled) {
   background: color-mix(in oklab, var(--status-pending) 12%, transparent);
+}
+
+.bannerBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .bannerSpin {

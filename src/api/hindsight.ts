@@ -992,4 +992,7 @@ export const api = {
   /** 手动触发一次消化（OCR→折叠→索引），跑完积压才返回，可能耗时数分钟。
    *  已在运行（常驻 OCR 的定时批）时后端报错。 */
   memoryDigestNow: () => invoke<DigestReport>("memory_digest_now"),
+  /** 请求停止正在进行的手动消化批：翻标志即返回，循环帧间感知、约 1s 内停，
+   *  memoryDigestNow 随即正常 resolve 已处理部分。没在跑时调用也静默成功。 */
+  memoryDigestStop: () => invoke<void>("memory_digest_stop"),
 };

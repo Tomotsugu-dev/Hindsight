@@ -1412,6 +1412,8 @@
     "backfill": {
       "pending": "{{count}} capturas de tela ainda não estão no índice de texto; o chat pode não encontrá-las.",
       "action": "Indexar agora",
+      "stop": "Parar",
+      "stopping": "Parando…",
       "running": "Construindo índice… {{count}} restantes",
       "alreadyRunning": "A indexação está em execução em segundo plano, {{count}} restantes",
       "failed": "Falha na indexação: {{msg}}",

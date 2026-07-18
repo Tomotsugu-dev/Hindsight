@@ -1412,6 +1412,8 @@
     "backfill": {
       "pending": "有 {{count}} 张截图尚未进入文字索引，对话可能查不到它们。",
       "action": "立即回填",
+      "stop": "停止",
+      "stopping": "停止中…",
       "running": "正在建立索引…剩余 {{count}} 张",
       "alreadyRunning": "索引任务已在后台运行，剩余 {{count}} 张",
       "failed": "回填失败：{{msg}}",

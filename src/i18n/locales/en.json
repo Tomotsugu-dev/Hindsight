@@ -1412,6 +1412,8 @@
     "backfill": {
       "pending": "{{count}} screenshots are not yet in the text index; chat may miss them.",
       "action": "Index now",
+      "stop": "Stop",
+      "stopping": "Stopping…",
       "running": "Building index… {{count}} remaining",
       "alreadyRunning": "Indexing is running in the background, {{count}} remaining",
       "failed": "Backfill failed: {{msg}}",

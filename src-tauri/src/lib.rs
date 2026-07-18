@@ -279,6 +279,7 @@ pub fn run() {
             // --- 屏幕记忆(L2/L3) ---
             commands::screen_memory::memory_backfill,
             commands::screen_memory::memory_digest_now,
+            commands::screen_memory::memory_digest_stop,
             commands::screen_memory::memory_pending_stats,
             // --- chat: 屏幕记忆问答 + 会话管理 ---
             commands::chat::chat_ask,

@@ -40,6 +40,15 @@ pub async fn memory_digest_now(
     digest::run(db).await.map_err(String::from)
 }
 
+/// 请求停止正在进行的手动消化批(banner 的停止按钮)。翻标志即返回,
+/// 循环帧间感知、最多一帧(~1s)后停;`memory_digest_now` 随即正常 resolve
+/// 已处理部分的账单。没有批在跑时调用也静默成功(幂等)。
+/// 常驻批不受影响——它的停止走 设置 → 常驻 OCR 开关。
+#[tauri::command]
+pub fn memory_digest_stop() {
+    digest::request_stop();
+}
+
 /// 未入索引统计:主库截图全集 vs 记忆库登记/完成情况的两库对账。
 /// 近似值——文件可能已被保留策略删除(消化时会计入 skipped),可接受。
 #[derive(Debug, serde::Serialize)]

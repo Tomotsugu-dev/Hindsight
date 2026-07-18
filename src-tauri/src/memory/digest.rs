@@ -19,10 +19,22 @@ use crate::storage::{DbPool, SqliteResultExt};
 /// 进程内单实例互斥;子进程化时换文件锁。
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// 手动批([`run`])的停止请求。`memory_digest_stop` 命令置位,[`run`] 开始时
+/// 清零(不让上一次的停止请求殃及下一次)。只作用于手动批——常驻批的停止
+/// 走 [`super::resident::ResidentOcr`] 自己的标志,互不相干。
+static MANUAL_STOP: AtomicBool = AtomicBool::new(false);
+
 /// 消化是否正在进行(手动或常驻批任一)。前端 banner/设置页用它在
 /// 重新挂载时恢复"后台索引中"的显示,而不是装作无事发生。
 pub fn is_running() -> bool {
     RUNNING.load(Ordering::SeqCst)
+}
+
+/// 请求停止正在进行的手动消化批。翻标志即返回;消化循环帧间感知,
+/// 最多再等一帧(~1s)停下,不留半消化状态。没有批在跑时置位也无害——
+/// 下一次 [`run`] 开头会清零。
+pub fn request_stop() {
+    MANUAL_STOP.store(true, Ordering::SeqCst);
 }
 
 /// 每轮从登记簿取的帧数;取完一轮再取,直到无积压。
@@ -142,10 +154,12 @@ impl Pipeline {
 ///
 /// 已在跑时直接返回错误(单实例);任何单帧错误只降级(标失败重试),
 /// 只有引擎级错误(模型加载失败等)才中断整批。
+/// 可被 [`request_stop`] 中断:提前停下时正常返回已处理部分的账单。
 pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
+    // 先清残留再加载引擎:引擎加载可能耗时数秒,期间的停止请求应当生效
+    MANUAL_STOP.store(false, Ordering::SeqCst);
     let mut pipe = Pipeline::new_fast().await?;
-    let never_stop = AtomicBool::new(false);
-    drain(mem, &mut pipe, &never_stop).await
+    drain(mem, &mut pipe, &MANUAL_STOP).await
 }
 
 /// 消化核心:取待处理帧 → OCR → L3 折叠 → (视觉帧)L4 聚簇 → 记账,

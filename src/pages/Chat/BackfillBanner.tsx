@@ -37,6 +37,9 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   // OCR 组件缺失时的下载确认弹窗与进度(MB)
   const [ocrConfirm, setOcrConfirm] = useState(false);
   const [dlMb, setDlMb] = useState(0);
+  // 点过停止(防连点):停止是异步生效的(循环帧间感知,~1s),按住 disabled
+  // 直到本轮 digest resolve 收尾
+  const [stopping, setStopping] = useState(false);
 
   // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
   // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
@@ -92,6 +95,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     setPhase("running");
     try {
       await api.memoryBackfill();
+      // 停止按钮走 memoryDigestStop 翻标志,这里的 digest 感知后正常
+      // resolve 已处理部分,落回 idle 初始态(剩余帧数还在,可再点回填)
       await api.memoryDigestNow();
       setPhase("idle");
       onRefresh();
@@ -109,7 +114,16 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
         setErrMsg(msg);
         setPhase("failed");
       }
+    } finally {
+      setStopping(false);
     }
+  };
+
+  /** 点「停止」:翻后端停止标志即返回,消化循环帧间感知(~1s)后
+   *  digest resolve,上面 doRun 的收尾自然把 banner 落回初始态。 */
+  const stopRun = () => {
+    setStopping(true);
+    api.memoryDigestStop().catch((e) => logError("chat.backfill.stop", e));
   };
 
   return (
@@ -128,6 +142,17 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       {(effective === "idle" || effective === "failed") && (
         <button type="button" className={styles.bannerBtn} onClick={() => void run()}>
           {t("chat.backfill.action")}
+        </button>
+      )}
+      {/* 停止只管本组件触发的手动批;后台常驻批的开关在 设置 → 常驻 OCR */}
+      {effective === "running" && (
+        <button
+          type="button"
+          className={styles.bannerBtn}
+          onClick={stopRun}
+          disabled={stopping}
+        >
+          {stopping ? t("chat.backfill.stopping") : t("chat.backfill.stop")}
         </button>
       )}
       {(polling || effective === "downloading") && (
