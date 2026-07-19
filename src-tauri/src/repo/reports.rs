@@ -238,10 +238,13 @@ pub async fn day_apps(
     let rows: Vec<(String, String, String, i64)> = pool
         .0
         .call(move |conn| {
-            // 按组聚合（不是按 process_name）：同一个组的多个进程名（mac="Code" + win=
-            // "Visual Studio Code"）合并成一行，时长相加。display 用组的 display_name；
-            // icon_process 取组里 MIN(process_name) 当稳定代表（前端 AppIcon 拿它查
+            // 按「显示名 + 分类」聚合：同一个组的多个进程名（mac="Code" + win=
+            // "Visual Studio Code"）合并成一行，时长相加；display 用组的 display_name，
+            // icon_process 取 MIN(process_name) 当稳定代表（前端 AppIcon 拿它查
             // app_icons 表，图标已跨设备同步）。
+            // 不能按 g.id 聚合：两个实体显示名相同时（mac 进程名"QQ音乐" + win 组
+            // display_name"QQ音乐"）会出两行同名——对用户就是同一个应用，必须合并。
+            // 显示名相同但分类不同的仍分开列（语义如此）。
             // 没 group 的进程（理论上 v15 backfill + capture::ensure_group 后不存在）
             // 退化为按 process_name 聚合。
             let sql = format!(
@@ -258,7 +261,7 @@ pub async fn day_apps(
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}
                    AND g.category_id IS NOT 'hidden'
-                 GROUP BY COALESCE(g.id, a.process_name)
+                 GROUP BY COALESCE(g.display_name, a.process_name), COALESCE(c.id, 'other')
                  ORDER BY total DESC
                  LIMIT ?",
                 device.sql_clause()
@@ -400,7 +403,7 @@ pub async fn day_hour_apps(
 
 /// 「点应用 → 详情抽屉」核心：按 `[from, to]` 日期范围 + 粒度，聚合出时间柱(buckets)
 /// 与窗口标题用时(titles)。先解析 icon_process 的 group key（与 [`day_apps`] 的
-/// `GROUP BY COALESCE(g.id, a.process_name)` 同口径），再对同组活动按粒度聚合。
+/// `GROUP BY COALESCE(g.display_name, a.process_name)` 同口径），再对同组活动按粒度聚合。
 async fn app_range_detail(
     pool: &DbPool,
     from: NaiveDate,
@@ -748,7 +751,7 @@ async fn apps_in_range(
     let rows: Vec<(String, String, String, i64)> = pool
         .0
         .call(move |conn| {
-            // 同 day_apps：按组聚合，display = display_name，icon_process = MIN(process_name)
+            // 同 day_apps：按「显示名 + 分类」聚合（同名实体合并），icon_process = MIN(process_name)
             // hidden 分类的活动整段排除（不计入 top apps）
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name)        AS display,
@@ -764,7 +767,7 @@ async fn apps_in_range(
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
                    AND g.category_id IS NOT 'hidden'
-                 GROUP BY COALESCE(g.id, a.process_name)
+                 GROUP BY COALESCE(g.display_name, a.process_name), COALESCE(c.id, 'other')
                  ORDER BY total DESC
                  LIMIT ?",
                 device.sql_clause()
