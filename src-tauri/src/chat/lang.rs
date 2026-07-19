@@ -95,7 +95,10 @@ impl ChatLang {
                  且编号必须真正支撑该句(统计数字来自 query_stats 时不要借搜索结果的编号)。\n\
                  5. 可用简洁的 Markdown 排版(加粗/列表/表格),不要用标题层级。\n\
                  6. 回答语言:跟随用户提问的语言;无法判断时用简体中文。\n\
-                 7. 简洁作答;时长换算成小时分钟;提到日期让用户可核对。"
+                 7. 简洁作答;时长换算成小时分钟;提到日期让用户可核对。\n\
+                 8. 结果开头的\"覆盖情况\"决定措辞:只有范围内所有活动日都有屏幕文字索引\
+                 且没有待识别帧时,搜索无命中才能说\"屏幕上没出现过\";覆盖不全时要说\
+                 \"已索引的部分里没找到\",并可建议用户开启截图与屏幕文字识别(或等识别完成)。"
             ),
             Self::ZhHant => format!(
                 "你是使用者的螢幕記憶助手:使用者電腦上的活動記錄和螢幕文字都被索引,\
@@ -109,7 +112,10 @@ impl ChatLang {
                  且編號必須真正支撐該句(統計數字來自 query_stats 時不要借搜尋結果的編號)。\n\
                  5. 可用簡潔的 Markdown 排版(粗體/清單/表格),不要用標題層級。\n\
                  6. 回答語言:跟隨使用者提問的語言;無法判斷時用繁體中文。\n\
-                 7. 簡潔作答;時長換算成小時分鐘;提到日期讓使用者可核對。"
+                 7. 簡潔作答;時長換算成小時分鐘;提到日期讓使用者可核對。\n\
+                 8. 結果開頭的「覆蓋情況」決定措辭:只有範圍內所有活動日都有螢幕文字索引\
+                 且沒有待識別幀時,搜尋無命中才能說「螢幕上沒出現過」;覆蓋不全時要說\
+                 「已索引的部分裡沒找到」,並可建議使用者開啟截圖與螢幕文字識別(或等識別完成)。"
             ),
             Self::En => format!(
                 "You are the user's screen-memory assistant: activity records and on-screen \
@@ -131,7 +137,13 @@ impl ChatLang {
                  6. Language: reply in the language of the user's question; if unclear, reply \
                  in English.\n\
                  7. Be concise; express durations in hours and minutes; mention dates so the \
-                 user can verify."
+                 user can verify.\n\
+                 8. The \"Coverage\" line at the top of each result governs your wording: only \
+                 when every active day in the range has a screen-text index and no frames \
+                 await recognition may a search miss be stated as \"it never appeared on \
+                 screen\"; with partial coverage, say it was \"not found in the indexed part\", \
+                 and you may suggest enabling screenshots and screen-text recognition (or \
+                 waiting for recognition to finish)."
             ),
             Self::Ja => format!(
                 "あなたはユーザーのスクリーンメモリーアシスタントです。ユーザーの PC 上の\
@@ -148,7 +160,12 @@ impl ChatLang {
                  番号を流用しない)。\n\
                  5. 簡潔な Markdown(太字/リスト/表)は可。見出しは使わない。\n\
                  6. 言語:ユーザーの質問の言語に合わせて回答する。判断できない場合は日本語で。\n\
-                 7. 簡潔に。時間は「時間・分」に換算し、日付を添えて検証できるようにする。"
+                 7. 簡潔に。時間は「時間・分」に換算し、日付を添えて検証できるようにする。\n\
+                 8. 各結果冒頭の「カバレッジ」行が言い回しを決める。範囲内のすべての活動日に\
+                 画面テキスト索引があり、認識待ちフレームがない場合に限り、検索ヒットなしを\
+                 「画面に表示されたことがない」と言ってよい。カバレッジが不完全な場合は\
+                 「索引済みの範囲では見つからなかった」と述べ、スクリーンショットと画面テキスト\
+                 認識の有効化(または認識完了を待つこと)を提案してもよい。"
             ),
             Self::Pt => format!(
                 "Você é o assistente de memória de tela do usuário: os registros de atividade \
@@ -170,7 +187,13 @@ impl ChatLang {
                  6. Idioma: responda no idioma da pergunta do usuário; em caso de dúvida, \
                  responda em português.\n\
                  7. Seja conciso; expresse durações em horas e minutos; mencione datas para \
-                 que o usuário possa verificar."
+                 que o usuário possa verificar.\n\
+                 8. A linha \"Cobertura\" no início de cada resultado governa sua redação: \
+                 somente quando todos os dias ativos do intervalo têm índice de texto de tela \
+                 e nenhum quadro aguarda reconhecimento você pode afirmar que algo \"nunca \
+                 apareceu na tela\"; com cobertura parcial, diga que \"não foi encontrado na \
+                 parte indexada\" e pode sugerir ativar capturas e reconhecimento de texto de \
+                 tela (ou aguardar o reconhecimento terminar)."
             ),
         }
     }
@@ -253,11 +276,11 @@ impl ChatLang {
 
     pub fn timeline_empty(self) -> &'static str {
         match self {
-            Self::ZhHans => "该时段没有屏幕记忆会话(可能未开截图或超出保留范围)。",
-            Self::ZhHant => "該時段沒有螢幕記憶會話(可能未開截圖或超出保留範圍)。",
-            Self::En => "No screen-memory sessions in this period (screenshots may be off, or outside the retention window).",
-            Self::Ja => "この期間にはスクリーンメモリーのセッションがありません(スクリーンショットが無効か、保持期間外の可能性があります)。",
-            Self::Pt => "Nenhuma sessão de memória de tela neste período (capturas podem estar desativadas ou fora da janela de retenção).",
+            Self::ZhHans => "该时段没有活动记录。",
+            Self::ZhHant => "該時段沒有活動記錄。",
+            Self::En => "No activity records in this period.",
+            Self::Ja => "この期間には活動記録がありません。",
+            Self::Pt => "Nenhum registro de atividade neste período.",
         }
     }
 
@@ -271,30 +294,139 @@ impl ChatLang {
     ) -> String {
         match self {
             Self::ZhHans => format!(
-                "该时段共 {total} 条会话,覆盖 {first} ~ {last}。以下为按小时抽样的 {shown} 条(每小时至多 {per_hour} 条,取停留最长;这是样本不是全量,时段总体结论以本行的总数与覆盖范围为准):"
+                "该时段共 {total} 条活动记录,覆盖 {first} ~ {last}。以下为按小时抽样的 {shown} 条(每小时至多 {per_hour} 条,取时长最长;这是样本不是全量,时段总体结论以本行的总数与覆盖范围为准):"
             ),
             Self::ZhHant => format!(
-                "該時段共 {total} 條會話,涵蓋 {first} ~ {last}。以下為按小時抽樣的 {shown} 條(每小時至多 {per_hour} 條,取停留最長;這是樣本不是全量,時段整體結論以本行的總數與涵蓋範圍為準):"
+                "該時段共 {total} 條活動記錄,涵蓋 {first} ~ {last}。以下為按小時抽樣的 {shown} 條(每小時至多 {per_hour} 條,取時長最長;這是樣本不是全量,時段整體結論以本行的總數與涵蓋範圍為準):"
             ),
             Self::En => format!(
-                "{total} sessions in this period, spanning {first} ~ {last}. Below are {shown} sampled entries (up to {per_hour} per hour, longest-dwell first; this is a sample, not the full list — base period-level conclusions on the total and span in this line):"
+                "{total} activity records in this period, spanning {first} ~ {last}. Below are {shown} sampled entries (up to {per_hour} per hour, longest first; this is a sample, not the full list — base period-level conclusions on the total and span in this line):"
             ),
             Self::Ja => format!(
-                "この期間のセッションは計 {total} 件({first} ~ {last})。以下は 1 時間あたり最大 {per_hour} 件(滞在時間の長い順)で抽出した {shown} 件のサンプルです。全量ではないため、期間全体の結論はこの行の総数と範囲を基準にしてください:"
+                "この期間の活動記録は計 {total} 件({first} ~ {last})。以下は 1 時間あたり最大 {per_hour} 件(時間の長い順)で抽出した {shown} 件のサンプルです。全量ではないため、期間全体の結論はこの行の総数と範囲を基準にしてください:"
             ),
             Self::Pt => format!(
-                "{total} sessões neste período, abrangendo {first} ~ {last}. Abaixo, {shown} entradas amostradas (até {per_hour} por hora, maiores permanências primeiro; é uma amostra, não a lista completa — baseie conclusões do período no total e na abrangência desta linha):"
+                "{total} registros de atividade neste período, abrangendo {first} ~ {last}. Abaixo, {shown} entradas amostradas (até {per_hour} por hora, maiores durações primeiro; é uma amostra, não a lista completa — baseie conclusões do período no total e na abrangência desta linha):"
             ),
         }
     }
 
     pub fn timeline_header_all(self, total: i64) -> String {
         match self {
-            Self::ZhHans => format!("该时段共 {total} 条会话,全部列出:"),
-            Self::ZhHant => format!("該時段共 {total} 條會話,全部列出:"),
-            Self::En => format!("{total} sessions in this period, all listed:"),
-            Self::Ja => format!("この期間のセッションは計 {total} 件。すべて列挙します:"),
-            Self::Pt => format!("{total} sessões neste período, todas listadas:"),
+            Self::ZhHans => format!("该时段共 {total} 条活动记录,全部列出:"),
+            Self::ZhHant => format!("該時段共 {total} 條活動記錄,全部列出:"),
+            Self::En => format!("{total} activity records in this period, all listed:"),
+            Self::Ja => format!("この期間の活動記録は計 {total} 件。すべて列挙します:"),
+            Self::Pt => format!("{total} registros de atividade neste período, todos listados:"),
+        }
+    }
+
+    /// 覆盖披露行——拼在 timeline/search 结果最前。三个数字的口径:
+    /// 活动日数来自主库(有没有用电脑),索引日数/待识别帧来自记忆库。
+    /// "没搜到"究竟是"屏幕上没出现过"还是"索引不全",模型只有靠这行才能区分
+    /// (措辞约束见 system_prompt 第 8 条)。
+    pub fn coverage_line(self, activity_days: i64, covered_days: i64, pending: i64) -> String {
+        if activity_days == 0 {
+            return match self {
+                Self::ZhHans => "覆盖情况:该范围内没有活动记录。".into(),
+                Self::ZhHant => "覆蓋情況:該範圍內沒有活動記錄。".into(),
+                Self::En => "Coverage: no activity records in this range.".into(),
+                Self::Ja => "カバレッジ:この範囲に活動記録はありません。".into(),
+                Self::Pt => "Cobertura: nenhum registro de atividade neste intervalo.".into(),
+            };
+        }
+        if covered_days == 0 && pending == 0 {
+            // 一帧都没有:索引从未建立(未开截图/屏幕文字识别),与"识别中"分开表述
+            return match self {
+                Self::ZhHans => format!(
+                    "覆盖情况:范围内 {activity_days} 个活动日均无屏幕文字索引(可能未开启截图或屏幕文字识别)。"
+                ),
+                Self::ZhHant => format!(
+                    "覆蓋情況:範圍內 {activity_days} 個活動日均無螢幕文字索引(可能未開啟截圖或螢幕文字識別)。"
+                ),
+                Self::En => format!(
+                    "Coverage: none of the {activity_days} active day(s) in this range have a screen-text index (screenshots or screen-text recognition may be off)."
+                ),
+                Self::Ja => format!(
+                    "カバレッジ:範囲内の活動日 {activity_days} 日はいずれも画面テキスト索引がありません(スクリーンショットまたは画面テキスト認識が無効の可能性があります)。"
+                ),
+                Self::Pt => format!(
+                    "Cobertura: nenhum dos {activity_days} dia(s) ativo(s) neste intervalo tem índice de texto de tela (capturas ou reconhecimento de texto podem estar desativados)."
+                ),
+            };
+        }
+        let base = match self {
+            Self::ZhHans => format!(
+                "覆盖情况:范围内 {activity_days} 个活动日中 {covered_days} 日有屏幕文字索引"
+            ),
+            Self::ZhHant => format!(
+                "覆蓋情況:範圍內 {activity_days} 個活動日中 {covered_days} 日有螢幕文字索引"
+            ),
+            Self::En => format!(
+                "Coverage: {covered_days} of {activity_days} active day(s) in this range have a screen-text index"
+            ),
+            Self::Ja => format!(
+                "カバレッジ:範囲内の活動日 {activity_days} 日のうち {covered_days} 日に画面テキスト索引があります"
+            ),
+            Self::Pt => format!(
+                "Cobertura: {covered_days} de {activity_days} dia(s) ativo(s) neste intervalo têm índice de texto de tela"
+            ),
+        };
+        if pending > 0 {
+            match self {
+                Self::ZhHans => format!("{base},另有 {pending} 帧截图待识别。"),
+                Self::ZhHant => format!("{base},另有 {pending} 幀截圖待識別。"),
+                Self::En => format!("{base}, with {pending} frame(s) still awaiting recognition."),
+                Self::Ja => format!("{base}。ほかに認識待ちのフレームが {pending} 件あります。"),
+                Self::Pt => format!("{base}, com {pending} quadro(s) aguardando reconhecimento."),
+            }
+        } else {
+            match self {
+                Self::ZhHans | Self::ZhHant | Self::Ja => format!("{base}。"),
+                Self::En | Self::Pt => format!("{base}."),
+            }
+        }
+    }
+
+    /// 搜索的窗口标题层小节头。标题命中 ≠ 屏幕文字命中:只说明该时段用过
+    /// 相关窗口,没有屏幕内文字片段可引用——措辞里必须讲清这个差别。
+    pub fn search_title_header(self, total: i64, shown: usize) -> String {
+        if total as usize > shown {
+            match self {
+                Self::ZhHans => format!(
+                    "窗口标题命中 {total} 条,显示最近 {shown} 条(标题匹配说明当时用过相关窗口,无屏幕内文字片段):"
+                ),
+                Self::ZhHant => format!(
+                    "視窗標題命中 {total} 條,顯示最近 {shown} 條(標題匹配說明當時用過相關視窗,無螢幕內文字片段):"
+                ),
+                Self::En => format!(
+                    "{total} window-title match(es); showing the {shown} most recent (a title match means the window was in use — no on-screen text snippet available):"
+                ),
+                Self::Ja => format!(
+                    "ウィンドウタイトルのヒットは {total} 件。直近の {shown} 件を表示します(タイトル一致は当該ウィンドウを使っていたことを示すのみで、画面内テキストの抜粋はありません):"
+                ),
+                Self::Pt => format!(
+                    "{total} correspondência(s) de título de janela; mostrando as {shown} mais recentes (uma correspondência de título indica que a janela estava em uso — sem trecho de texto da tela):"
+                ),
+            }
+        } else {
+            match self {
+                Self::ZhHans => format!(
+                    "窗口标题命中 {total} 条(标题匹配说明当时用过相关窗口,无屏幕内文字片段):"
+                ),
+                Self::ZhHant => format!(
+                    "視窗標題命中 {total} 條(標題匹配說明當時用過相關視窗,無螢幕內文字片段):"
+                ),
+                Self::En => format!(
+                    "{total} window-title match(es) (a title match means the window was in use — no on-screen text snippet available):"
+                ),
+                Self::Ja => format!(
+                    "ウィンドウタイトルのヒットは {total} 件(タイトル一致は当該ウィンドウを使っていたことを示すのみで、画面内テキストの抜粋はありません):"
+                ),
+                Self::Pt => format!(
+                    "{total} correspondência(s) de título de janela (uma correspondência de título indica que a janela estava em uso — sem trecho de texto da tela):"
+                ),
+            }
         }
     }
 

@@ -24,6 +24,8 @@ use crate::storage::SqliteResultExt;
 const RESULT_CHAR_BUDGET: usize = 4000;
 /// 搜索命中数上限(服务端硬夹紧,模型无法调大)
 const SEARCH_LIMIT: usize = 8;
+/// 搜索的窗口标题层命中显示上限(屏幕文字索引之外的兜底证据层)
+const TITLE_LIMIT: usize = 8;
 /// 时间线会话数上限
 const TIMELINE_LIMIT: usize = 50;
 /// 分组统计 top-N 上限
@@ -279,6 +281,61 @@ pub async fn execute(
     }
 }
 
+/// activities 的报表口径 FROM/JOIN/WHERE 段(?1=from ?2=to,追加条件从 ?3 起编号)。
+/// 与 repo/reports.rs 同口径:组是 cross-OS 同步的真相,显式指派到 hidden 的组剔除,
+/// 未分组的活动(g.category_id 为 NULL)经 NULL-safe 比较照常通过。
+const ACTIVITY_JOIN: &str = "FROM activities a
+     LEFT JOIN app_group_members gm
+       ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+     LEFT JOIN app_groups g
+       ON g.id = gm.group_id AND g.deleted_at IS NULL
+     WHERE a.local_date BETWEEN ?1 AND ?2
+       AND g.category_id IS NOT 'hidden'";
+
+/// 覆盖披露:范围内活动日数(主库)、其中有屏幕文字索引的日数与待识别帧数(记忆库)。
+/// 拼在 timeline/search 结果最前——"没搜到"究竟是"屏幕上没出现过"还是"索引不全",
+/// 模型只有靠这行才能区分,措辞约束在 system_prompt 第 8 条。
+/// 活动日数不做隐藏组过滤:这行回答的是"电脑用没用/索引全不全",不是内容本身。
+async fn coverage_line(ctx: &ToolCtx, from: &str, to: &str, lang: ChatLang) -> Result<String> {
+    let (f, t) = (from.to_string(), to.to_string());
+    let activity_days: i64 = ctx
+        .main
+        .call(move |conn| {
+            conn.query_row(
+                "SELECT COUNT(DISTINCT local_date) FROM activities
+                 WHERE local_date BETWEEN ?1 AND ?2",
+                params![f, t],
+                |r| r.get(0),
+            )
+            .db()
+        })
+        .await?;
+    let (f, t) = (from.to_string(), to.to_string());
+    let (covered_days, pending): (i64, i64) = ctx
+        .mem
+        .call(move |conn| {
+            let covered = conn
+                .query_row(
+                    "SELECT COUNT(DISTINCT local_date) FROM text_sessions
+                     WHERE local_date BETWEEN ?1 AND ?2",
+                    params![f, t],
+                    |r| r.get(0),
+                )
+                .db()?;
+            let pending = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM frames
+                     WHERE ocr_state = 0 AND local_date BETWEEN ?1 AND ?2",
+                    params![f, t],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok((covered, pending))
+        })
+        .await?;
+    Ok(lang.coverage_line(activity_days, covered_days, pending))
+}
+
 async fn search_text(
     ctx: &ToolCtx,
     keywords: &[String],
@@ -292,6 +349,8 @@ async fn search_text(
         Some((f, t)) => (f.to_string(), t.to_string()),
         None => ("0000-00-00".into(), "9999-99-99".into()),
     };
+    let coverage = coverage_line(ctx, &from, &to, lang).await?;
+    let (from2, to2) = (from.clone(), to.clone());
     let (total, rows) = ctx
         .mem
         .call(move |conn| {
@@ -351,6 +410,64 @@ async fn search_text(
         })
         .await?;
 
+    // 标题层:窗口标题 LIKE 全部关键词(AND)。屏幕文字索引之外的兜底证据——
+    // 没开截图/OCR 的用户靠它回答"我用没用过 X";有索引的用户靠它补足
+    // 索引空窗(电池暂停、待识别积压)里的记录。
+    let title_likes: Vec<String> = keywords.iter().map(|k| like_pattern(k)).collect();
+    let (title_total, title_rows) = ctx
+        .main
+        .call(move |conn| {
+            let like_sql = (0..title_likes.len())
+                .map(|i| format!("a.window_title LIKE ?{} ESCAPE '\\'", i + 3))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            let mut bind: Vec<&dyn rusqlite::ToSql> = vec![&from2, &to2];
+            for l in &title_likes {
+                bind.push(l);
+            }
+            let total: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) {ACTIVITY_JOIN} AND {like_sql}"),
+                    bind.as_slice(),
+                    |r| r.get(0),
+                )
+                .db()?;
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT COALESCE(g.display_name, a.process_name),
+                            COALESCE(a.window_title,''),
+                            a.started_at, a.ended_at, NULLIF(a.screenshot_path,'')
+                     {ACTIVITY_JOIN} AND {like_sql}
+                     ORDER BY a.started_at DESC LIMIT {TITLE_LIMIT}"
+                ))
+                .db()?;
+            let hits = stmt
+                .query_map(bind.as_slice(), |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, Option<String>>(4)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            Ok((total, hits))
+        })
+        .await?;
+    // 跨层去重:标题命中若落在已返回的屏幕文字会话时间段内,是同一证据的弱化版,剔除。
+    // 两库时间戳同为本地时区 RFC3339(回填即原样搬运),字符串比较即可。
+    let title_rows: Vec<_> = title_rows
+        .into_iter()
+        .filter(|(_, _, s, _, _)| {
+            !rows.iter().any(|(_, _, _, l2s, l2e, _, _)| {
+                s.as_str() >= l2s.as_str() && s.as_str() <= l2e.as_str()
+            })
+        })
+        .collect();
+
     let mut citations = Vec::new();
     let mut lines = Vec::new();
     for (i, (_id, app, title, started, ended, snippet, frame)) in rows.iter().enumerate() {
@@ -372,15 +489,46 @@ async fn search_text(
             frame_path: frame.as_ref().map(|(p, _)| p.clone()),
         });
     }
-    let for_llm = if lines.is_empty() {
-        lang.search_no_hit().to_string()
-    } else {
-        let header = lang.search_header(total, lines.len());
-        truncate(
-            &format!("{header}\n{}", lines.join("\n")),
-            RESULT_CHAR_BUDGET,
-        )
-    };
+    let mut title_lines = Vec::new();
+    for (j, (app, title, started, ended, shot)) in title_rows.iter().enumerate() {
+        let idx = next_citation + rows.len() + j;
+        title_lines.push(format!(
+            "[{idx}] {} | {} | {} ~ {}",
+            app,
+            truncate(title, 60),
+            &started[..16.min(started.len())],
+            &ended[..16.min(ended.len())],
+        ));
+        citations.push(Citation {
+            index: idx,
+            app: app.clone(),
+            title: title.clone(),
+            started_ts: started.clone(),
+            ended_ts: ended.clone(),
+            frame_path: shot.clone(),
+        });
+    }
+
+    // 组装:覆盖行永远在最前;两层各自报数分节列出;全空才是"没有命中"。
+    let mut sections = vec![coverage];
+    if !lines.is_empty() {
+        sections.push(format!(
+            "{}\n{}",
+            lang.search_header(total, lines.len()),
+            lines.join("\n")
+        ));
+    }
+    if !title_lines.is_empty() {
+        sections.push(format!(
+            "{}\n{}",
+            lang.search_title_header(title_total, title_lines.len()),
+            title_lines.join("\n")
+        ));
+    }
+    if lines.is_empty() && title_lines.is_empty() {
+        sections.push(lang.search_no_hit().to_string());
+    }
+    let for_llm = truncate(&sections.join("\n"), RESULT_CHAR_BUDGET);
     Ok(ToolOutput { for_llm, citations })
 }
 
@@ -641,7 +789,7 @@ fn count_sessions(rows: &[(String, String)], gap_secs: i64) -> usize {
     sessions
 }
 
-/// 每个小时桶最多取几条代表会话(按停留时长选)。
+/// 每个小时桶最多取几条代表活动(按时长选)。
 const TIMELINE_PER_HOUR: i64 = 3;
 
 async fn get_timeline(
@@ -652,33 +800,36 @@ async fn get_timeline(
 ) -> Result<ToolOutput> {
     let single_day = from == to;
     let (from, to) = (from.to_string(), to.to_string());
+    // 主源是主库活动记录:不开截图/OCR 的用户也有完整时间线,电池暂停或
+    // 待识别积压造成的索引空窗也不再啃掉时段尾巴;屏幕文字层的有无由覆盖行披露。
+    let coverage = coverage_line(ctx, &from, &to, lang).await?;
     let (total, span, rows) = ctx
-        .mem
+        .main
         .call(move |conn| {
             let (total, first, last): (i64, Option<String>, Option<String>) = conn
                 .query_row(
-                    "SELECT COUNT(*), MIN(started_ts), MAX(ended_ts) FROM text_sessions
-                     WHERE local_date BETWEEN ?1 AND ?2",
+                    &format!("SELECT COUNT(*), MIN(a.started_at), MAX(a.ended_at) {ACTIVITY_JOIN}"),
                     params![from, to],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .db()?;
-            // 分层抽样:按小时分桶,桶内取停留最长的前 N 条——预算覆盖整段时间轴。
-            // 不能用"ORDER BY started_ts LIMIT 50":活跃日几千条会话时那是"最早的
+            // 分层抽样:按(日,小时)分桶,桶内取时长最长的前 N 条——预算覆盖整段时间轴。
+            // 不能用"ORDER BY started_at LIMIT 50":活跃日几千条活动时那是"最早的
             // 半小时",模型会把开头当成全天(2026-07-08 的误报正是这么来的)。
             let mut stmt = conn
-                .prepare(
-                    "SELECT app, title, started_ts, ended_ts FROM (
-                         SELECT COALESCE(app_id,'') AS app, COALESCE(title,'') AS title,
-                                started_ts, ended_ts,
+                .prepare(&format!(
+                    "SELECT app, title, started_at, ended_at, shot FROM (
+                         SELECT COALESCE(g.display_name, a.process_name) AS app,
+                                COALESCE(a.window_title,'') AS title,
+                                a.started_at, a.ended_at,
+                                NULLIF(a.screenshot_path,'') AS shot,
                                 ROW_NUMBER() OVER (
-                                    PARTITION BY substr(started_ts, 1, 13)
-                                    ORDER BY julianday(ended_ts) - julianday(started_ts) DESC
+                                    PARTITION BY a.local_date, a.local_hour
+                                    ORDER BY a.duration_secs DESC
                                 ) AS rn
-                         FROM text_sessions
-                         WHERE local_date BETWEEN ?1 AND ?2
-                     ) WHERE rn <= ?3 ORDER BY started_ts LIMIT ?4",
-                )
+                         {ACTIVITY_JOIN}
+                     ) WHERE rn <= ?3 ORDER BY started_at LIMIT ?4",
+                ))
                 .db()?;
             let out = stmt
                 .query_map(
@@ -689,6 +840,7 @@ async fn get_timeline(
                             r.get::<_, String>(1)?,
                             r.get::<_, String>(2)?,
                             r.get::<_, String>(3)?,
+                            r.get::<_, Option<String>>(4)?,
                         ))
                     },
                 )
@@ -709,7 +861,7 @@ async fn get_timeline(
             ts[5.min(ts.len())..16.min(ts.len())].to_string()
         }
     };
-    for (i, (app, title, started, ended)) in rows.iter().enumerate() {
+    for (i, (app, title, started, ended, shot)) in rows.iter().enumerate() {
         let idx = next_citation + i;
         lines.push(format!(
             "[{idx}] {} ~ {} | {} | {}",
@@ -724,11 +876,11 @@ async fn get_timeline(
             title: title.clone(),
             started_ts: started.clone(),
             ended_ts: ended.clone(),
-            frame_path: None,
+            frame_path: shot.clone(),
         });
     }
     let for_llm = if lines.is_empty() {
-        lang.timeline_empty().to_string()
+        format!("{coverage}\n{}", lang.timeline_empty())
     } else {
         // 头部先声明总量与覆盖范围:样本 ≠ 全量,让模型据此下结论
         let header = match &span {
@@ -742,7 +894,7 @@ async fn get_timeline(
             _ => lang.timeline_header_all(total),
         };
         truncate(
-            &format!("{header}\n{}", lines.join("\n")),
+            &format!("{coverage}\n{header}\n{}", lines.join("\n")),
             RESULT_CHAR_BUDGET,
         )
     };
@@ -929,6 +1081,9 @@ mod behavior_tests {
                  CREATE TABLE session_lines (
                      session_id INTEGER, line_no INTEGER, text TEXT,
                      first_path TEXT, first_ts TEXT);
+                 CREATE TABLE frames (
+                     path TEXT PRIMARY KEY, ts TEXT, local_date TEXT,
+                     ocr_state INTEGER NOT NULL DEFAULT 0);
                  {mem_sql}
                  INSERT INTO text_sessions_fts(rowid, text)
                      SELECT id, text FROM text_sessions;"
@@ -942,7 +1097,12 @@ mod behavior_tests {
             c.execute_batch(&format!(
                 "CREATE TABLE activities (
                      started_at TEXT, ended_at TEXT, duration_secs INTEGER,
-                     local_date TEXT, process_name TEXT, window_title TEXT);
+                     local_date TEXT, local_hour INTEGER,
+                     process_name TEXT, window_title TEXT, screenshot_path TEXT);
+                 CREATE TABLE app_group_members (
+                     process_name TEXT, group_id TEXT, deleted_at TEXT);
+                 CREATE TABLE app_groups (
+                     id TEXT, display_name TEXT, category_id TEXT, deleted_at TEXT);
                  {main_sql}"
             ))?;
             Ok(())
@@ -957,7 +1117,7 @@ mod behavior_tests {
         (d, d)
     }
 
-    /// 造一天 10 个小时 × 每小时 20 条会话的 INSERT 串。
+    /// 造一天 10 个小时 × 每小时 20 条活动的 INSERT 串(主库)。
     fn dense_day_sql() -> &'static str {
         use std::sync::OnceLock;
         static SQL: OnceLock<String> = OnceLock::new();
@@ -966,9 +1126,11 @@ mod behavior_tests {
             for h in 9..19 {
                 for m in 0..20 {
                     s.push_str(&format!(
-                        "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title)
-                         VALUES ('2026-07-08', '2026-07-08T{h:02}:{m:02}:00+09:00',
-                                 '2026-07-08T{h:02}:{m:02}:40+09:00', 'App', '会话 {h}-{m}');\n"
+                        "INSERT INTO activities(started_at, ended_at, duration_secs,
+                             local_date, local_hour, process_name, window_title)
+                         VALUES ('2026-07-08T{h:02}:{m:02}:00+09:00',
+                                 '2026-07-08T{h:02}:{m:02}:40+09:00', 40,
+                                 '2026-07-08', {h}, 'App', '活动 {h}-{m}');\n"
                     ));
                 }
             }
@@ -979,8 +1141,8 @@ mod behavior_tests {
     #[tokio::test]
     async fn timeline_sampling_covers_whole_range_and_discloses_total() {
         // 泄漏 dense_day_sql 到 'static:测试进程内一次性,可接受
-        let mem: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
-        let ctx = ctx_with(mem, "").await;
+        let main: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
+        let ctx = ctx_with("", main).await;
         let out = execute(
             &ctx,
             &ToolCall::GetTimeline { range: day() },
@@ -990,13 +1152,13 @@ mod behavior_tests {
         .await
         .unwrap();
         // 披露:总数与"样本"措辞
-        assert!(out.for_llm.contains("共 200 条会话"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("共 200 条活动记录"), "{}", out.for_llm);
         assert!(out.for_llm.contains("样本"), "{}", out.for_llm);
         // 覆盖:10 个小时全部出现(旧实现只会给最早的 50 条 = 前 3 个小时)
         let hours: std::collections::BTreeSet<&str> = out
             .for_llm
             .lines()
-            .skip(1)
+            .filter(|l| l.starts_with('['))
             .filter_map(|l| l.split("] ").nth(1))
             .map(|rest| &rest[..2])
             .collect();
@@ -1012,8 +1174,8 @@ mod behavior_tests {
 
     #[tokio::test]
     async fn timeline_headers_localized_english() {
-        let mem: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
-        let ctx = ctx_with(mem, "").await;
+        let main: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
+        let ctx = ctx_with("", main).await;
         let out = execute(
             &ctx,
             &ToolCall::GetTimeline { range: day() },
@@ -1023,23 +1185,25 @@ mod behavior_tests {
         .await
         .unwrap();
         assert!(
-            out.for_llm.contains("200 sessions in this period"),
+            out.for_llm.contains("200 activity records in this period"),
             "{}",
             out.for_llm
         );
         assert!(out.for_llm.contains("sample"), "{}", out.for_llm);
-        // 骨架(头部行)不应残留中文;正文标题是用户数据,语言不限
-        let header = out.for_llm.lines().next().unwrap();
-        assert!(!header.contains("会话"), "{header}");
+        // 骨架(覆盖行 + 头部行)不应残留中文;正文标题是用户数据,语言不限
+        for skel in out.for_llm.lines().take(2) {
+            assert!(!skel.contains("活动") && !skel.contains("覆盖"), "{skel}");
+        }
     }
 
     #[tokio::test]
     async fn timeline_small_day_lists_all_without_sampling_wording() {
         let ctx = ctx_with(
-            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title) VALUES
-             ('2026-07-08','2026-07-08T09:00:00+09:00','2026-07-08T09:05:00+09:00','A','t1'),
-             ('2026-07-08','2026-07-08T10:00:00+09:00','2026-07-08T10:05:00+09:00','B','t2');",
             "",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:05:00+09:00',300,'2026-07-08',9,'A','t1'),
+             ('2026-07-08T10:00:00+09:00','2026-07-08T10:05:00+09:00',300,'2026-07-08',10,'B','t2');",
         )
         .await;
         let out = execute(
@@ -1051,12 +1215,216 @@ mod behavior_tests {
         .await
         .unwrap();
         assert!(
-            out.for_llm.contains("共 2 条会话,全部列出"),
+            out.for_llm.contains("共 2 条活动记录,全部列出"),
             "{}",
             out.for_llm
         );
         assert!(!out.for_llm.contains("样本"));
         assert_eq!(out.citations.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn timeline_excludes_hidden_group_and_uses_display_name() {
+        let ctx = ctx_with(
+            "",
+            "INSERT INTO app_groups VALUES
+                 ('g1','Visual Studio Code','dev',NULL),
+                 ('g2','Secret','hidden',NULL);
+             INSERT INTO app_group_members VALUES
+                 ('Code.exe','g1',NULL), ('secret.exe','g2',NULL);
+             INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'Code.exe','main.rs'),
+             ('2026-07-08T10:00:00+09:00','2026-07-08T10:30:00+09:00',1800,'2026-07-08',10,'secret.exe','diary');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: day() },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(
+            out.for_llm.contains("Visual Studio Code"),
+            "{}",
+            out.for_llm
+        );
+        assert!(!out.for_llm.contains("secret"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("共 1 条活动记录"), "{}", out.for_llm);
+    }
+
+    // ── 覆盖披露边界(设计矩阵 A/B/C/G)──────────────────
+
+    /// A:完全没开截图/OCR 的用户——时间线照常给活动记录,覆盖行讲明索引缺席。
+    #[tokio::test]
+    async fn timeline_works_with_empty_memory_index() {
+        let ctx = ctx_with(
+            "",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: day() },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("共 1 条活动记录"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("均无屏幕文字索引"), "{}", out.for_llm);
+    }
+
+    /// A(搜索面):索引为空时关键词靠窗口标题层兜底命中。
+    #[tokio::test]
+    async fn search_falls_back_to_title_hits_without_index() {
+        let ctx = ctx_with(
+            "",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title, screenshot_path) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:10:00+09:00',600,'2026-07-08',9,
+              'chrome','keychron K3 发货通知','shots/a.jpg');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::SearchText {
+                keywords: vec!["keychron".into()],
+                range: None,
+            },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("窗口标题命中 1 条"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("均无屏幕文字索引"), "{}", out.for_llm);
+        assert!(!out.for_llm.contains("没有命中"), "{}", out.for_llm);
+        assert_eq!(out.citations.len(), 1);
+        assert_eq!(out.citations[0].frame_path.as_deref(), Some("shots/a.jpg"));
+    }
+
+    /// B:截图开了但识别没跑完——覆盖行报待识别帧数,不误判成"未开启"。
+    #[tokio::test]
+    async fn coverage_discloses_pending_frames() {
+        let ctx = ctx_with(
+            "INSERT INTO frames(path, ts, local_date, ocr_state) VALUES
+             ('f1','2026-07-08T09:00:00+09:00','2026-07-08',0),
+             ('f2','2026-07-08T09:01:00+09:00','2026-07-08',0),
+             ('f3','2026-07-08T09:02:00+09:00','2026-07-08',0);",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: day() },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("3 帧截图待识别"), "{}", out.for_llm);
+        assert!(!out.for_llm.contains("未开启"), "{}", out.for_llm);
+    }
+
+    /// C:时有时无的用户——分母是"活动日",分子是"有索引的日"。
+    #[tokio::test]
+    async fn coverage_reports_partial_days() {
+        let ctx = ctx_with(
+            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
+             VALUES ('2026-07-08','2026-07-08T09:00:00+09:00',
+                     '2026-07-08T09:05:00+09:00','A','t','some text');",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-07T09:00:00+09:00','2026-07-07T09:30:00+09:00',1800,'2026-07-07',9,'A','t'),
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
+        )
+        .await;
+        let range = (
+            NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+        );
+        let out = execute(&ctx, &ToolCall::GetTimeline { range }, 1, ChatLang::ZhHans)
+            .await
+            .unwrap();
+        assert!(
+            out.for_llm.contains("2 个活动日中 1 日有屏幕文字索引"),
+            "{}",
+            out.for_llm
+        );
+    }
+
+    /// G:覆盖完整且两层都零命中——才允许模型说"屏幕上没出现过"。
+    #[tokio::test]
+    async fn search_full_coverage_zero_hit_states_no_hit() {
+        let ctx = ctx_with(
+            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
+             VALUES ('2026-07-08','2026-07-08T09:00:00+09:00',
+                     '2026-07-08T09:05:00+09:00','A','notes','完全无关的内容');",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','notes');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::SearchText {
+                keywords: vec!["keychron".into()],
+                range: Some(day()),
+            },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("没有命中"), "{}", out.for_llm);
+        assert!(
+            out.for_llm.contains("1 个活动日中 1 日有屏幕文字索引"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.citations.is_empty());
+    }
+
+    /// 跨层去重:标题命中落在已返回的屏幕文字会话时间段内 → 剔除,段外保留。
+    #[tokio::test]
+    async fn title_hit_inside_returned_session_span_dropped() {
+        let ctx = ctx_with(
+            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
+             VALUES ('2026-07-08','2026-07-08T09:00:00+09:00',
+                     '2026-07-08T10:00:00+09:00','chrome','评测','keychron 键盘评测正文');",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:30:00+09:00','2026-07-08T09:40:00+09:00',600,'2026-07-08',9,
+              'chrome','keychron 评测页'),
+             ('2026-07-08T11:00:00+09:00','2026-07-08T11:10:00+09:00',600,'2026-07-08',11,
+              'chrome','keychron 下单页');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::SearchText {
+                keywords: vec!["keychron".into()],
+                range: Some(day()),
+            },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        // FTS 层 1 条 + 标题层只剩段外的 11:00 那条
+        assert!(out.for_llm.contains("keychron 下单页"), "{}", out.for_llm);
+        assert!(!out.for_llm.contains("keychron 评测页"), "{}", out.for_llm);
+        assert_eq!(out.citations.len(), 2);
+        // 编号连续:FTS 层 [1],标题层 [2]
+        assert_eq!(out.citations[1].index, 2);
+        assert_eq!(out.citations[1].title, "keychron 下单页");
     }
 
     #[tokio::test]
@@ -1092,9 +1460,10 @@ mod behavior_tests {
         let mut sql = String::new();
         for a in 0..8 {
             sql.push_str(&format!(
-                "INSERT INTO activities VALUES
+                "INSERT INTO activities(started_at, ended_at, duration_secs,
+                     local_date, local_hour, process_name, window_title) VALUES
                  ('2026-07-08T0{a}:00:00+09:00','2026-07-08T0{a}:30:00+09:00',
-                  {}, '2026-07-08', 'App{a}', 'w');\n",
+                  {}, '2026-07-08', {a}, 'App{a}', 'w');\n",
                 (a + 1) * 600
             ));
         }
@@ -1118,5 +1487,80 @@ mod behavior_tests {
         .unwrap();
         assert!(out.for_llm.contains("共 8 组"), "{}", out.for_llm);
         assert!(out.for_llm.contains("前 5 组"), "{}", out.for_llm);
+    }
+
+    /// 手动验收(不经过 LLM):直连真实库跑 get_timeline + search_text,
+    /// 打印模型将看到的工具原文——覆盖行、两层命中、总数披露、证据帧数。
+    /// 只读连接,不写任何数据。跑法(在 src-tauri 目录下):
+    ///
+    ///   CHAT_DATE=2026-07-19 CHAT_KW=B站 \
+    ///     cargo test --lib manual_real_db -- --ignored --nocapture
+    ///
+    /// 可选:
+    /// - CHAT_DATE_TO=2026-07-19 跨日范围(默认单日);
+    /// - CHAT_KW 不设则只跑时间线;
+    /// - CHAT_MEM_EMPTY=1 把记忆库换成空库(主库仍真实)——模拟
+    ///   "从没开过截图/OCR"的用户(边界 A),看覆盖行与标题层兜底。
+    #[tokio::test]
+    #[ignore]
+    async fn manual_real_db() {
+        let date = std::env::var("CHAT_DATE").expect("设 CHAT_DATE=YYYY-MM-DD");
+        let from = NaiveDate::parse_from_str(&date, "%Y-%m-%d").expect("CHAT_DATE 格式不对");
+        let to = std::env::var("CHAT_DATE_TO")
+            .ok()
+            .map(|t| NaiveDate::parse_from_str(&t, "%Y-%m-%d").expect("CHAT_DATE_TO 格式不对"))
+            .unwrap_or(from);
+        let ctx = if std::env::var("CHAT_MEM_EMPTY").is_ok() {
+            // 真实主库 + 空记忆库(borrow 测试 schema)= 零截图用户视角
+            let empty = ctx_with("", "").await;
+            let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY;
+            let main = Connection::open_with_flags(crate::storage::db_path().unwrap(), flags)
+                .await
+                .unwrap();
+            ToolCtx {
+                main,
+                mem: empty.mem,
+            }
+        } else {
+            ToolCtx::open_readonly().await.unwrap()
+        };
+
+        let out = execute(
+            &ctx,
+            &ToolCall::GetTimeline { range: (from, to) },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        let with_frame = out
+            .citations
+            .iter()
+            .filter(|c| c.frame_path.is_some())
+            .count();
+        println!("\n── get_timeline({from} ~ {to}) ──────────────");
+        println!("{}", out.for_llm);
+        println!(
+            "(引用 {} 条,其中带证据帧 {} 条)",
+            out.citations.len(),
+            with_frame
+        );
+
+        if let Ok(kw) = std::env::var("CHAT_KW") {
+            let out = execute(
+                &ctx,
+                &ToolCall::SearchText {
+                    keywords: vec![kw.clone()],
+                    range: Some((from, to)),
+                },
+                1,
+                ChatLang::ZhHans,
+            )
+            .await
+            .unwrap();
+            println!("\n── search_text(\"{kw}\", {from} ~ {to}) ──────");
+            println!("{}", out.for_llm);
+            println!("(引用 {} 条)", out.citations.len());
+        }
     }
 }
