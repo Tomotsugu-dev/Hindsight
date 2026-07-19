@@ -241,6 +241,9 @@ pub fn run() {
             commands::storage::get_data_root,
             commands::storage::set_data_root,
             commands::storage::write_text_file,
+            // --- export: 使用统计导出(xlsx 写入 + 「全部」范围起点) ---
+            commands::export::export_usage_xlsx,
+            commands::export::earliest_activity_date,
             // --- devices: 设备列表 ---
             commands::devices::list_devices,
             commands::devices::update_self_device,

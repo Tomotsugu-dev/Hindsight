@@ -576,6 +576,8 @@ export interface AuthState {
 
 export interface SyncStatus {
   running: boolean;
+  /** 此刻是否有一次 push/pull 正在执行(手动或后台 tick);跳页重挂后恢复按钮态用 */
+  syncInFlight: boolean;
   lastPushedAt: string | null;
   lastPulledAt: string | null;
   lastError: string | null;
@@ -995,4 +997,10 @@ export const api = {
   /** 请求停止正在进行的手动消化批：翻标志即返回，循环帧间感知、约 1s 内停，
    *  memoryDigestNow 随即正常 resolve 已处理部分。没在跑时调用也静默成功。 */
   memoryDigestStop: () => invoke<void>("memory_digest_stop"),
+  /** 把前端构建的工作簿规格写成 .xlsx(布局与文案全在前端定,后端逐格写入)。
+   *  path 来自保存对话框。规格形状见 lib/usageXlsx.ts。 */
+  exportUsageXlsx: (path: string, spec: unknown) =>
+    invoke<void>("export_usage_xlsx", { path, spec }),
+  /** 最早一条活动记录的本地日期("YYYY-MM-DD";空库 null)。导出「全部」范围用。 */
+  earliestActivityDate: () => invoke<string | null>("earliest_activity_date"),
 };

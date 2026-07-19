@@ -1,0 +1,215 @@
+/* —— 触发器/面板视觉对齐 SimplePicker(control-bg 触发器 + surface-card 浮层) —— */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fieldBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  background: var(--control-bg);
+  font-size: 12.5px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out);
+}
+
+.fieldBtn:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+}
+
+.fieldBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 日历当前服务的框:accent 描边,一眼可知点日历改的是哪个日期 */
+.fieldBtnActive {
+  background: var(--surface-card);
+  border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border-default));
+}
+
+.fieldIcon {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.sep {
+  color: var(--text-faint);
+  font-size: 12px;
+  user-select: none;
+}
+
+.panel {
+  position: absolute;
+  left: 0;
+  z-index: var(--z-dropdown);
+  width: 252px;
+  padding: 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 1px 0 var(--hairline-hi) inset,
+    0 4px 12px rgba(20, 20, 40, 0.08),
+    0 12px 28px rgba(20, 20, 40, 0.1);
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease-out);
+}
+
+.panel[data-direction="down"] {
+  top: calc(100% + 6px);
+  transform-origin: top center;
+  animation-name: rangeIn;
+}
+
+.panel[data-direction="up"] {
+  bottom: calc(100% + 6px);
+  transform-origin: bottom center;
+  animation-name: rangeIn;
+}
+
+@keyframes rangeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.monthTitle {
+  font-size: 12.5px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 140ms ease-out;
+}
+
+.navBtn:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.weekHead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  font-size: 10.5px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.cell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.cell:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+}
+
+.cell:disabled {
+  color: var(--text-faint);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cellOutside {
+  color: var(--text-faint);
+}
+
+.cellInRange {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  border-radius: 0;
+}
+
+.cellEndpoint {
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: var(--font-weight-600);
+}
+
+.cellEndpoint:hover:not(:disabled) {
+  background: var(--color-accent);
+}
+
+/* 今天:下缘小圆点标记(端点态下点变白保持可见) */
+.cellToday::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.cellEndpoint.cellToday::after {
+  background: #fff;
+}

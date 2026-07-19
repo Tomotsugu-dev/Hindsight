@@ -31,6 +31,12 @@
       "minutes": "min",
       "hours": "h",
       "days": "dias"
+    },
+    "dateRange": {
+      "startAria": "Escolher data inicial",
+      "endAria": "Escolher data final",
+      "prevMonth": "Mês anterior",
+      "nextMonth": "Próximo mês"
     }
   },
   "nav": {
@@ -230,38 +236,26 @@
         "rowButton": "Exportar…",
         "dialogTitle": "Exportar dados de uso",
         "rangeLabel": "Período",
-        "presets": {
-          "last7": "Últimos 7 dias",
-          "last30": "Últimos 30 dias",
-          "last90": "Últimos 90 dias",
-          "custom": "Personalizado"
-        },
-        "customStartAria": "Data inicial",
-        "customEndAria": "Data final",
-        "customTo": "até",
         "invalidRange": "A data inicial não pode ser posterior à data final.",
-        "contentLabel": "Conteúdo",
         "granularity": {
           "daily": "Estatísticas diárias",
           "weekly": "Estatísticas semanais",
           "monthly": "Estatísticas mensais"
         },
-        "contentHint": "Cada período inclui tempo total, tempo por categoria e tempo por aplicativo. Semanas (seg–dom) e meses são contados como períodos completos do calendário e podem ultrapassar um pouco o intervalo selecionado; registros brutos de atividade e capturas de tela não são incluídos.",
-        "needOneGranularity": "Selecione pelo menos uma granularidade.",
         "formatLabel": "Formato do arquivo",
         "recommended": "Recomendado",
         "formats": {
-          "csv": {
-            "label": "CSV · Planilha",
-            "hint": "Tabela longa e plana que abre diretamente no Excel / Numbers / ferramentas de análise para filtrar e criar tabelas dinâmicas; inclui todos os aplicativos."
-          },
           "json": {
             "label": "JSON · Estruturado",
-            "hint": "Os campos mais completos (IDs de categoria, supercategorias, segundos exatos, médias diárias) — ideal para uso programático."
+            "hint": "Dados estruturados completos para leitura por programas e reaproveitamento."
           },
           "markdown": {
             "label": "Markdown · Relatório",
-            "hint": "Relatório formatado e legível, para leitura direta ou para o seu app de notas; as tabelas de aplicativos mantêm apenas o Top {{n}} por período."
+            "hint": "Relatório de texto legível — ideal para ler diretamente ou arquivar no seu app de notas."
+          },
+          "xlsx": {
+            "label": "Excel · Planilha",
+            "hint": "Várias planilhas — visão geral, tendências e detalhes brutos; filtre, ordene e crie gráficos."
           }
         },
         "confirm": "Exportar",
@@ -288,7 +282,51 @@
           "colApp": "Aplicativo",
           "noData": "(sem registros)",
           "topAppsTitle": "Top {{n}} aplicativos"
-        }
+        },
+        "quick": {
+          "today": "Hoje",
+          "week": "Esta semana",
+          "month": "Este mês",
+          "year": "Este ano",
+          "all": "Tudo"
+        },
+        "deviceAll": "Todos os dispositivos",
+        "xlsx": {
+          "sheetOverview": "Visão geral",
+          "sheetTrend": "Tendências de apps",
+          "sheetRaw": "Detalhes",
+          "colDate": "Data",
+          "colWeekday": "Dia da semana",
+          "colTotal": "Total",
+          "colDailyAvg": "Média diária",
+          "colMonth": "Mês",
+          "colStart": "Início",
+          "colEnd": "Fim",
+          "colDuration": "Duração",
+          "colSuperCategory": "Grupo",
+          "colShare": "Participação",
+          "ovTitle": "Estatísticas de uso do Hindsight",
+          "ovRange": "Intervalo",
+          "ovDevice": "Dispositivos",
+          "ovExported": "Exportado em",
+          "ovGranularities": "Granularidades",
+          "ovTotal": "Total",
+          "ovDailyAvg": "Média diária",
+          "ovActiveDays": "Dias ativos",
+          "ovPeakDay": "Dia de pico",
+          "ovUngrouped": "Sem grupo",
+          "trendOther": "Outros",
+          "rawDate": "Data",
+          "rawStart": "Hora de início",
+          "rawApp": "Aplicativo",
+          "rawTitle": "Título da janela",
+          "rawCategory": "Categoria",
+          "rawDevice": "Dispositivo",
+          "rawTruncated": "O número de linhas excede o limite do Excel; apenas as primeiras 1.000.000 linhas foram mantidas.",
+          "note": "Durações no formato h:mm; a média diária considera apenas dias concluídos — o dia de hoje em andamento é excluído.",
+          "noData": "Sem dados"
+        },
+        "included": "Incluirá: {{list}} (escolhido automaticamente pelo intervalo de datas)"
       }
     },
     "privacy": {

@@ -76,57 +76,12 @@
   flex-wrap: wrap;
 }
 
-.rangeSep {
-  font-size: 12.5px;
-  color: var(--text-soft);
-}
-
-.dateInput {
-  height: 32px;
-  padding: 0 8px;
-  font-size: 13px;
-  color: var(--text-strong);
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.02);
-  outline: none;
-  transition:
-    border-color 120ms ease-out,
-    background-color 120ms ease-out;
-}
-
-.dateInput:focus {
-  border-color: var(--color-accent);
-  background: var(--surface-card);
-}
-
 .dateInput:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
 /* ── 统计粒度 checkbox 行 ── */
-
-.granRow {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-}
-
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--text-strong);
-  cursor: pointer;
-}
-
-.check input {
-  accent-color: var(--color-accent);
-  cursor: pointer;
-}
 
 .check input:disabled {
   cursor: not-allowed;
@@ -351,4 +306,43 @@
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* ── 快速范围按钮(今天/本周/本月/今年/全部):点击回填日期框 ── */
+.quickRow {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.quickBtn {
+  height: 24px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    color 140ms ease-out,
+    border-color 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+.quickBtn:hover:not(:disabled) {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.quickBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.quickBtnActive {
+  color: var(--color-accent);
+  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
 }

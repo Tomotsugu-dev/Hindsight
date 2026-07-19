@@ -31,6 +31,12 @@
       "minutes": "分",
       "hours": "時間",
       "days": "日"
+    },
+    "dateRange": {
+      "startAria": "開始日を選択",
+      "endAria": "終了日を選択",
+      "prevMonth": "前の月",
+      "nextMonth": "次の月"
     }
   },
   "nav": {
@@ -230,38 +236,26 @@
         "rowButton": "エクスポート…",
         "dialogTitle": "使用データをエクスポート",
         "rangeLabel": "期間",
-        "presets": {
-          "last7": "過去 7 日",
-          "last30": "過去 30 日",
-          "last90": "過去 90 日",
-          "custom": "カスタム"
-        },
-        "customStartAria": "開始日",
-        "customEndAria": "終了日",
-        "customTo": "〜",
         "invalidRange": "開始日は終了日より後にできません。",
-        "contentLabel": "内容",
         "granularity": {
           "daily": "日次統計",
           "weekly": "週次統計",
           "monthly": "月次統計"
         },
-        "contentHint": "各期間の合計時間・カテゴリ別時間・アプリ別時間を含みます。週（月〜日）/ 月は暦の期間全体で集計するため、選択範囲を多少はみ出すことがあります。元の活動記録とスクリーンショットは含まれません。",
-        "needOneGranularity": "少なくとも 1 つの粒度を選択してください。",
         "formatLabel": "ファイル形式",
         "recommended": "おすすめ",
         "formats": {
-          "csv": {
-            "label": "CSV · 表形式",
-            "hint": "フラットなロングテーブル。Excel / Numbers / 分析ツールでそのまま開いてフィルタやピボットに使えます。全アプリの項目を含みます。"
-          },
           "json": {
             "label": "JSON · 構造化",
-            "hint": "最も完全なフィールド（カテゴリ ID・大分類・正確な秒数・日平均）。プログラムでの読み取りや二次利用に最適。"
+            "hint": "完全なフィールドを持つ構造化データ。プログラムでの読み取りや二次利用に。"
           },
           "markdown": {
             "label": "Markdown · レポート",
-            "hint": "整形済みの読みやすいレポート。そのまま読む・ノートアプリに保存する用途向け。アプリ表は各期間 Top {{n}} のみ。"
+            "hint": "そのまま読めるテキストレポート。ノートアプリへの保存にも適しています。"
+          },
+          "xlsx": {
+            "label": "Excel · 表",
+            "hint": "概要・推移・生データ明細の複数シート。フィルター・並べ替え・グラフ化ができます。"
           }
         },
         "confirm": "エクスポート",
@@ -288,7 +282,51 @@
           "colApp": "アプリ",
           "noData": "（記録なし）",
           "topAppsTitle": "アプリ Top {{n}}"
-        }
+        },
+        "quick": {
+          "today": "今日",
+          "week": "今週",
+          "month": "今月",
+          "year": "今年",
+          "all": "すべて"
+        },
+        "deviceAll": "すべてのデバイス",
+        "xlsx": {
+          "sheetOverview": "概要",
+          "sheetTrend": "アプリ推移",
+          "sheetRaw": "明細",
+          "colDate": "日付",
+          "colWeekday": "曜日",
+          "colTotal": "合計",
+          "colDailyAvg": "1日平均",
+          "colMonth": "月",
+          "colStart": "開始",
+          "colEnd": "終了",
+          "colDuration": "時間",
+          "colSuperCategory": "グループ",
+          "colShare": "割合",
+          "ovTitle": "Hindsight 使用統計",
+          "ovRange": "統計範囲",
+          "ovDevice": "デバイス範囲",
+          "ovExported": "エクスポート日時",
+          "ovGranularities": "含まれる粒度",
+          "ovTotal": "合計",
+          "ovDailyAvg": "1日平均",
+          "ovActiveDays": "アクティブ日数",
+          "ovPeakDay": "ピーク日",
+          "ovUngrouped": "未分類",
+          "trendOther": "その他",
+          "rawDate": "日付",
+          "rawStart": "開始時刻",
+          "rawApp": "アプリ",
+          "rawTitle": "ウィンドウタイトル",
+          "rawCategory": "カテゴリ",
+          "rawDevice": "デバイス",
+          "rawTruncated": "行数が Excel の上限を超えたため、先頭 100 万行のみ保持しています。",
+          "note": "時間は 時:分 形式です。「1日平均」は完了した日のみで計算し、進行中の今日は含みません。",
+          "noData": "データなし"
+        },
+        "included": "含まれる内容:{{list}}(日付範囲から自動選択)"
       }
     },
     "privacy": {

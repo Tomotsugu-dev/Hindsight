@@ -31,6 +31,12 @@
       "minutes": "分鐘",
       "hours": "小時",
       "days": "天"
+    },
+    "dateRange": {
+      "startAria": "選擇開始日期",
+      "endAria": "選擇結束日期",
+      "prevMonth": "上個月",
+      "nextMonth": "下個月"
     }
   },
   "nav": {
@@ -230,38 +236,26 @@
         "rowButton": "匯出…",
         "dialogTitle": "匯出使用資料",
         "rangeLabel": "日期範圍",
-        "presets": {
-          "last7": "最近 7 天",
-          "last30": "最近 30 天",
-          "last90": "最近 90 天",
-          "custom": "自訂"
-        },
-        "customStartAria": "開始日期",
-        "customEndAria": "結束日期",
-        "customTo": "至",
         "invalidRange": "開始日期不能晚於結束日期。",
-        "contentLabel": "匯出內容",
         "granularity": {
           "daily": "每日統計",
           "weekly": "每週統計",
           "monthly": "每月統計"
         },
-        "contentHint": "各週期含總時長、分類時長與應用程式時長。週 / 月按完整自然週（週一～週日）/ 自然月統計，可能略超出所選範圍；不包含原始活動記錄與截圖。",
-        "needOneGranularity": "至少勾選一種統計粒度。",
         "formatLabel": "檔案格式",
         "recommended": "推薦",
         "formats": {
-          "csv": {
-            "label": "CSV · 表格",
-            "hint": "扁平長表，Excel / Numbers / 資料分析工具可直接開啟做篩選與樞紐分析；含全部應用程式條目。"
-          },
           "json": {
             "label": "JSON · 結構化",
-            "hint": "欄位最完整（分類 ID、大類、精確秒數、日均），適合程式讀取或二次開發。"
+            "hint": "欄位完整的結構化資料,適合程式讀取或二次開發。"
           },
           "markdown": {
             "label": "Markdown · 報告",
-            "hint": "排版好的可讀報告，適合直接閱讀或存入筆記軟體；每個週期的應用程式表只列 Top {{n}}。"
+            "hint": "可直接閱讀的文字報告,也適合存入筆記軟體歸檔。"
+          },
+          "xlsx": {
+            "label": "Excel · 表格",
+            "hint": "概覽、趨勢、原始明細多張工作表;可篩選、排序、直接作圖。"
           }
         },
         "confirm": "匯出",
@@ -288,7 +282,51 @@
           "colApp": "應用程式",
           "noData": "（無記錄）",
           "topAppsTitle": "應用程式 Top {{n}}"
-        }
+        },
+        "quick": {
+          "today": "今天",
+          "week": "本週",
+          "month": "本月",
+          "year": "今年",
+          "all": "全部"
+        },
+        "deviceAll": "全部裝置",
+        "xlsx": {
+          "sheetOverview": "概覽",
+          "sheetTrend": "應用程式趨勢",
+          "sheetRaw": "明細",
+          "colDate": "日期",
+          "colWeekday": "星期",
+          "colTotal": "總計",
+          "colDailyAvg": "日均",
+          "colMonth": "月份",
+          "colStart": "起",
+          "colEnd": "止",
+          "colDuration": "時長",
+          "colSuperCategory": "大類",
+          "colShare": "佔比",
+          "ovTitle": "Hindsight 使用統計",
+          "ovRange": "統計範圍",
+          "ovDevice": "裝置範圍",
+          "ovExported": "匯出時間",
+          "ovGranularities": "包含粒度",
+          "ovTotal": "總計",
+          "ovDailyAvg": "日均",
+          "ovActiveDays": "活躍天數",
+          "ovPeakDay": "峰值日",
+          "ovUngrouped": "未歸入",
+          "trendOther": "其他",
+          "rawDate": "日期",
+          "rawStart": "開始時間",
+          "rawApp": "應用程式",
+          "rawTitle": "視窗標題",
+          "rawCategory": "分類",
+          "rawDevice": "裝置",
+          "rawTruncated": "列數超過 Excel 上限,僅保留前 100 萬列。",
+          "note": "說明:時長格式為 時:分;「日均」只按已完成的自然天計算,進行中的今天不計入。",
+          "noData": "無資料"
+        },
+        "included": "將包含:{{list}}(按日期範圍自動選擇)"
       }
     },
     "privacy": {

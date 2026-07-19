@@ -72,6 +72,9 @@ ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dy
 ndarray = "0.16"
 sys-locale = "0.3"
 fast_image_resize = "6.0.0"
+# 使用统计导出为 .xlsx(多 sheet 宽表)。纯 Rust 无 C 依赖;前端出「工作簿规格」,
+# 后端只做无业务的逐格写入,避免给前端塞 1MB 级的 JS 表格库。
+rust_xlsxwriter = "0.79"
 onnx-protobuf = "0.2.3"
 protobuf = "=3.4.0"
 

@@ -31,6 +31,12 @@
       "minutes": "min",
       "hours": "h",
       "days": "days"
+    },
+    "dateRange": {
+      "startAria": "Choose start date",
+      "endAria": "Choose end date",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month"
     }
   },
   "nav": {
@@ -230,38 +236,26 @@
         "rowButton": "Export…",
         "dialogTitle": "Export usage data",
         "rangeLabel": "Date range",
-        "presets": {
-          "last7": "Last 7 days",
-          "last30": "Last 30 days",
-          "last90": "Last 90 days",
-          "custom": "Custom"
-        },
-        "customStartAria": "Start date",
-        "customEndAria": "End date",
-        "customTo": "to",
         "invalidRange": "The start date must not be later than the end date.",
-        "contentLabel": "Content",
         "granularity": {
           "daily": "Daily stats",
           "weekly": "Weekly stats",
           "monthly": "Monthly stats"
         },
-        "contentHint": "Each period includes total time, per-category time and per-app time. Weeks (Mon–Sun) and months are counted as full calendar periods and may extend slightly beyond the selected range; raw activity records and screenshots are not included.",
-        "needOneGranularity": "Select at least one granularity.",
         "formatLabel": "File format",
         "recommended": "Recommended",
         "formats": {
-          "csv": {
-            "label": "CSV · Spreadsheet",
-            "hint": "Flat long table that opens directly in Excel / Numbers / analysis tools for filtering and pivoting; includes every app entry."
-          },
           "json": {
             "label": "JSON · Structured",
-            "hint": "The most complete fields (category IDs, super-categories, exact seconds, daily averages) — best for programmatic use."
+            "hint": "Complete structured data for programs and further processing."
           },
           "markdown": {
             "label": "Markdown · Report",
-            "hint": "A formatted, human-readable report for direct reading or your notes app; app tables keep only the top {{n}} per period."
+            "hint": "A readable text report — great for reading directly or archiving in your notes app."
+          },
+          "xlsx": {
+            "label": "Excel · Spreadsheet",
+            "hint": "Multiple sheets — overview, trends and raw details; filter, sort and chart directly."
           }
         },
         "confirm": "Export",
@@ -288,7 +282,51 @@
           "colApp": "App",
           "noData": "(no records)",
           "topAppsTitle": "Top {{n}} apps"
-        }
+        },
+        "quick": {
+          "today": "Today",
+          "week": "This week",
+          "month": "This month",
+          "year": "This year",
+          "all": "All"
+        },
+        "deviceAll": "All devices",
+        "xlsx": {
+          "sheetOverview": "Overview",
+          "sheetTrend": "App trends",
+          "sheetRaw": "Details",
+          "colDate": "Date",
+          "colWeekday": "Weekday",
+          "colTotal": "Total",
+          "colDailyAvg": "Daily avg",
+          "colMonth": "Month",
+          "colStart": "Start",
+          "colEnd": "End",
+          "colDuration": "Duration",
+          "colSuperCategory": "Group",
+          "colShare": "Share",
+          "ovTitle": "Hindsight usage statistics",
+          "ovRange": "Range",
+          "ovDevice": "Devices",
+          "ovExported": "Exported at",
+          "ovGranularities": "Granularities",
+          "ovTotal": "Total",
+          "ovDailyAvg": "Daily average",
+          "ovActiveDays": "Active days",
+          "ovPeakDay": "Peak day",
+          "ovUngrouped": "Ungrouped",
+          "trendOther": "Other",
+          "rawDate": "Date",
+          "rawStart": "Start time",
+          "rawApp": "App",
+          "rawTitle": "Window title",
+          "rawCategory": "Category",
+          "rawDevice": "Device",
+          "rawTruncated": "Row count exceeds the Excel limit; only the first 1,000,000 rows are kept.",
+          "note": "Durations are shown as h:mm; the daily average only counts completed days — the in-progress today is excluded.",
+          "noData": "No data"
+        },
+        "included": "Will include: {{list}} (chosen automatically from the date range)"
       }
     },
     "privacy": {

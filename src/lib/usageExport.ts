@@ -18,7 +18,10 @@ import { displayCategoryName } from "../utils/categoryName";
  *  - 日均口径同周 / 月页面：只按「严格早于今天的已完成天」算（见 completedDaysOf）
  *  - 全部查询走现有报表命令（get_month_days / get_week_apps / ...），零后端改动 */
 
-export type UsageExportFormat = "csv" | "json" | "markdown";
+export type UsageExportFormat = "json" | "markdown" | "xlsx";
+
+/** 文本格式(renderUsageExport 的定义域);xlsx 走 lib/usageXlsx.ts + 后端写入器。 */
+export type UsageTextFormat = Exclude<UsageExportFormat, "xlsx">;
 
 export interface UsageExportOptions {
   /** 范围起（含），"YYYY-MM-DD" */
@@ -87,7 +90,7 @@ export interface UsageExportData {
   monthly: PeriodStat[] | null;
 }
 
-/** Markdown 是给人读的：应用表只保留 Top N（CSV / JSON 全量）。 */
+/** Markdown 是给人读的：应用表只保留 Top N（xlsx / JSON 全量）。 */
 export const MARKDOWN_TOP_APPS = 10;
 
 /** 「全量应用」的 limit——后端 SQL `LIMIT ?` 必须给个数，取一个远超单周期
@@ -312,12 +315,10 @@ function splitDate(s: string): [number, number, number] {
 
 export function renderUsageExport(
   data: UsageExportData,
-  format: UsageExportFormat,
+  format: UsageTextFormat,
   labels: UsageExportLabels,
 ): string {
   switch (format) {
-    case "csv":
-      return renderCsv(data);
     case "json":
       return renderJson(data);
     case "markdown":
@@ -331,49 +332,6 @@ export function usageExportFilename(
 ): string {
   const ext = format === "markdown" ? "md" : format;
   return `hindsight-usage-${data.rangeStart}_${data.rangeEnd}.${ext}`;
-}
-
-// —— CSV：扁平长表，一行 = 一个周期 × 一条记录（total / category / app）。 ——
-// 表头固定英文（换语言导出结构不变，工具好处理）；名字列是本地化文本。
-// 应用只有整数分钟（后端契约），seconds 列留空。
-
-function csvCell(v: string | number): string {
-  const s = String(v);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function csvRows(
-  periodType: string,
-  start: string,
-  end: string,
-  stat: Pick<PeriodStat, "totalSecs" | "categories" | "apps">,
-): string[] {
-  const row = (vals: (string | number)[]): string => vals.map(csvCell).join(",");
-  const out = [
-    row([periodType, start, end, "total", "", "", Math.round(stat.totalSecs / 60), stat.totalSecs]),
-  ];
-  for (const c of stat.categories) {
-    out.push(row([periodType, start, end, "category", c.name, "", c.minutes, c.secs]));
-  }
-  for (const a of stat.apps) {
-    out.push(row([periodType, start, end, "app", a.name, a.categoryName, a.minutes, ""]));
-  }
-  return out;
-}
-
-function renderCsv(data: UsageExportData): string {
-  const lines = ["period_type,period_start,period_end,record_type,name,category,minutes,seconds"];
-  for (const d of data.daily ?? []) {
-    lines.push(...csvRows("daily", d.date, d.date, d));
-  }
-  for (const w of data.weekly ?? []) {
-    lines.push(...csvRows("weekly", w.start, w.end, w));
-  }
-  for (const m of data.monthly ?? []) {
-    lines.push(...csvRows("monthly", m.start, m.end, m));
-  }
-  // BOM 让 Excel 直接识别 UTF-8（否则中文分类 / 应用名乱码）；CRLF 是 CSV 惯例
-  return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
 
 // —— JSON：字段最全（分类 ID / 大类 / 精确秒 / 日均），给程序处理。 ——

@@ -213,7 +213,7 @@ describe("renderUsageExport", () => {
         date: "2026-06-30",
         totalSecs: 3600,
         categories: [{ id: "code", name: "Co,ding", secs: 3600, minutes: 60 }],
-        // 12 个应用：验证 Markdown 只保留 Top N，CSV 全量
+        // 12 个应用：验证 Markdown 只保留 Top N（xlsx / JSON 才是全量）
         apps: Array.from({ length: 12 }, (_, i) => ({
           name: `App${i + 1}`,
           categoryId: "code",
@@ -225,21 +225,6 @@ describe("renderUsageExport", () => {
     weekly: null,
     monthly: null,
   };
-
-  it("CSV：BOM + CRLF + 引号转义 + 全量应用", () => {
-    const csv = renderUsageExport(fixture, "csv", labels);
-    expect(csv.startsWith("\uFEFF")).toBe(true);
-    expect(csv).toContain("\r\n");
-    const lines = csv.replace("\uFEFF", "").trimEnd().split("\r\n");
-    expect(lines[0]).toBe(
-      "period_type,period_start,period_end,record_type,name,category,minutes,seconds",
-    );
-    // 1 header + 1 total + 1 category + 12 app
-    expect(lines).toHaveLength(15);
-    // 名字含逗号 → 双引号包裹
-    expect(lines[2]).toBe('daily,2026-06-30,2026-06-30,category,"Co,ding",,60,3600');
-    expect(lines[3]).toBe('daily,2026-06-30,2026-06-30,app,App1,"Co,ding",60,');
-  });
 
   it("JSON：可 parse 往返，字段完整", () => {
     const parsed = JSON.parse(renderUsageExport(fixture, "json", labels)) as {
@@ -268,7 +253,7 @@ describe("renderUsageExport", () => {
 describe("usageExportFilename / fmtLocalDate", () => {
   it("文件名按范围 + 扩展名拼接", () => {
     const range = { rangeStart: "2026-06-29", rangeEnd: "2026-07-02" };
-    expect(usageExportFilename(range, "csv")).toBe("hindsight-usage-2026-06-29_2026-07-02.csv");
+    expect(usageExportFilename(range, "xlsx")).toBe("hindsight-usage-2026-06-29_2026-07-02.xlsx");
     expect(usageExportFilename(range, "markdown")).toBe("hindsight-usage-2026-06-29_2026-07-02.md");
   });
 
