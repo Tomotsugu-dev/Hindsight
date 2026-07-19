@@ -33,10 +33,13 @@ export function usePicker(): PickerState {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onMouseDown);
+    // 捕获阶段监听:弹窗(如导出对话框)会在自己面板上 stopPropagation 挡背板
+    // 关闭,冒泡监听在弹窗内部收不到 mousedown——"弹窗内、picker 外"的点击
+    // 就关不掉菜单。捕获阶段自上而下先于一切 stopPropagation 执行,不受影响。
+    document.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousedown", onMouseDown, true);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
