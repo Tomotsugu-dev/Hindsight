@@ -601,6 +601,28 @@ impl ChatLang {
         }
     }
 
+    /// 「问题自立化」改写器的系统提示词(多轮第二问起,先把新问题改写成
+    /// 不依赖上下文的自足问题,再让回答器以零历史状态作答——历史污染物理隔离)。
+    pub fn rewrite_prompt(self, today: NaiveDate) -> String {
+        match self {
+            Self::ZhHans => format!(
+                "你是问题改写器。根据对话记录,把用户的新问题改写成不依赖上下文也能独立理解的自足问题。\n                 规则:\n                 1. 只做指代消解与信息补全:把\"那个应用/它/这些\"等替换为对话中对应的具体名称;                 相对时间词(昨天/上周)可保留,但连环相对(\"再往前一周呢\")必须换算清楚,今天是 {today}。\n                 2. 不回答问题,不添加对话中不存在的信息,不改变提问意图。\n                 3. 保持新问题原本的语言。\n                 4. 若新问题本已自足,原样输出。\n                 只输出最终问题本身,不要任何解释、前缀或引号。"
+            ),
+            Self::ZhHant => format!(
+                "你是問題改寫器。根據對話記錄,把使用者的新問題改寫成不依賴上下文也能獨立理解的自足問題。\n                 規則:\n                 1. 只做指代消解與資訊補全:把「那個應用程式/它/這些」等替換為對話中對應的具體名稱;                 相對時間詞(昨天/上週)可保留,但連環相對(「再往前一週呢」)必須換算清楚,今天是 {today}。\n                 2. 不回答問題,不添加對話中不存在的資訊,不改變提問意圖。\n                 3. 保持新問題原本的語言。\n                 4. 若新問題本已自足,原樣輸出。\n                 只輸出最終問題本身,不要任何解釋、前綴或引號。"
+            ),
+            Self::En => format!(
+                "You are a question rewriter. Using the conversation, rewrite the user's new                  question into a self-contained question that is fully understandable without                  context.\nRules:\n                 1. Only resolve references and fill in missing specifics: replace \"that app /                  it / those\" with the concrete names from the conversation; relative time words                  (yesterday / last week) may stay, but chained relatives (\"and the week before                  that?\") must be resolved — today is {today}.\n                 2. Do not answer the question, do not add information absent from the                  conversation, do not change the intent.\n                 3. Keep the question's original language.\n                 4. If the question is already self-contained, output it unchanged.\n                 Output only the final question — no explanation, prefix or quotes."
+            ),
+            Self::Ja => format!(
+                "あなたは質問リライターです。会話の記録をもとに、ユーザーの新しい質問を、                 文脈なしでも単独で理解できる自足した質問に書き換えてください。\nルール:\n                 1. 指示語の解決と情報の補完のみ行う:「あのアプリ/それ/これら」などを会話中の                 具体的な名前に置き換える。相対的な時間語(昨日/先週)は残してよいが、                 連鎖した相対表現(「そのさらに前の週は?」)は必ず換算する。今日は {today}。\n                 2. 質問に回答しない。会話にない情報を追加しない。意図を変えない。\n                 3. 質問の元の言語を保つ。\n                 4. すでに自足している場合はそのまま出力する。\n                 最終的な質問だけを出力し、説明・前置き・引用符は付けないこと。"
+            ),
+            Self::Pt => format!(
+                "Você é um reescritor de perguntas. Com base na conversa, reescreva a nova                  pergunta do usuário como uma pergunta autossuficiente, compreensível sem                  contexto.\nRegras:\n                 1. Apenas resolva referências e complete informações: substitua \"aquele app /                  ele / esses\" pelos nomes concretos da conversa; palavras de tempo relativo                  (ontem / semana passada) podem ficar, mas relativos encadeados (\"e na semana                  anterior?\") devem ser resolvidos — hoje é {today}.\n                 2. Não responda à pergunta, não adicione informações ausentes da conversa, não                  mude a intenção.\n                 3. Mantenha o idioma original da pergunta.\n                 4. Se a pergunta já for autossuficiente, devolva-a inalterada.\n                 Devolva apenas a pergunta final — sem explicações, prefixos ou aspas."
+            ),
+        }
+    }
+
     /// 同会话并发拒的用户可见文案(唯一直接展示给用户而非模型的条目)。
     pub fn err_conversation_busy(self) -> &'static str {
         match self {
@@ -620,6 +642,21 @@ impl ChatLang {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rewrite_prompt_embeds_today_in_all_langs() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 7, 20).unwrap();
+        for lang in [
+            ChatLang::ZhHans,
+            ChatLang::ZhHant,
+            ChatLang::En,
+            ChatLang::Ja,
+            ChatLang::Pt,
+        ] {
+            let p = lang.rewrite_prompt(today);
+            assert!(p.contains("2026-07-20"), "{lang:?} 缺 today");
+        }
+    }
 
     #[test]
     fn tag_parsing_prefix_and_fallbacks() {

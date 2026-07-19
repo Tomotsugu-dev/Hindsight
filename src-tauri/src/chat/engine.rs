@@ -46,6 +46,105 @@ pub struct HistoryTurn {
     pub content: String,
 }
 
+/// 历史消毒:上一轮的成品答案原文回灌会带毒——
+/// ① 其中的引用标记 [n] 在本轮没有任何对应资料,是悬空指针,而系统提示词又要求
+///   "只用资料里出现过的编号",模型会顺手沿用这些失效编号;
+/// ② 一篇自信的完整报告是"不查工具也能答"的模仿源,第二轮起质量塌方的主因。
+/// 历史的唯一使命是让"上个月呢?"这类指代可解析——剥掉编号、截断长文足矣。
+fn sanitize_history_content(content: &str) -> String {
+    // 去掉 [数字] 形式的引用标记;[abc] 这类非纯数字的中括号原样保留
+    let mut out = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '[' {
+            let mut probe = chars.clone();
+            let mut digits = 0usize;
+            while let Some(d) = probe.peek() {
+                if d.is_ascii_digit() {
+                    digits += 1;
+                    probe.next();
+                } else {
+                    break;
+                }
+            }
+            if digits > 0 && probe.peek() == Some(&']') {
+                probe.next();
+                chars = probe;
+                continue;
+            }
+        }
+        out.push(c);
+    }
+    // 指代解析所需的信息几乎都在开头;截断同时掐灭"模仿上一轮长报告"的源头
+    const MAX_CHARS: usize = 400;
+    if out.chars().count() > MAX_CHARS {
+        let mut truncated: String = out.chars().take(MAX_CHARS).collect();
+        truncated.push('…');
+        truncated
+    } else {
+        out
+    }
+}
+
+/// 改写器输出规整:剥引号/空白;空、过长、多行(通常是解释或直接作答了)
+/// 一律判不可用 → 触发兜底路径。
+fn normalize_rewrite(raw: &str) -> Option<String> {
+    let s = raw
+        .trim()
+        .trim_matches(|c| matches!(c, '"' | '\u{201c}' | '\u{201d}' | '「' | '」' | '『' | '』'))
+        .trim();
+    if s.is_empty() || s.contains('\n') || s.chars().count() > 300 {
+        return None;
+    }
+    Some(s.to_string())
+}
+
+/// 改写器一步的输出上限:一个问题而已,给多了反而纵容它写解释。
+const REWRITE_MAX_TOKENS: u32 = 160;
+
+/// 多轮「问题自立化」:把带指代的新问题改写成自足问题。
+/// 成功 → 回答器以零历史状态作答(每轮都是第一轮,历史污染物理隔离);
+/// 失败/输出可疑 → None,调用方退回"消毒历史 + 原问题"的兜底路径。
+async fn condense_question(
+    llm: &ChatLlm,
+    history: &[HistoryTurn],
+    question: &str,
+    lang: ChatLang,
+    today: NaiveDate,
+) -> (Option<String>, u64, u64) {
+    let mut ctx = String::new();
+    for h in history.iter().rev().take(6).rev() {
+        match h.role.as_str() {
+            // 标签沿用本地后端 transcript 的既有约定(跨语言可读,改写提示词已声明规则)
+            "user" => ctx.push_str(&format!("用户: {}\n", h.content)),
+            _ => ctx.push_str(&format!("助手: {}\n", sanitize_history_content(&h.content))),
+        }
+    }
+    ctx.push_str(&format!("新问题: {question}"));
+    match llm
+        .complete(&lang.rewrite_prompt(today), &ctx, REWRITE_MAX_TOKENS)
+        .await
+    {
+        Ok((raw, usage)) => match normalize_rewrite(&raw) {
+            Some(q) => {
+                log::info!("多轮问题自立化: {question:?} → {q:?}");
+                (Some(q), usage.prompt, usage.completion)
+            }
+            None => {
+                log::warn!(
+                    "改写器输出不可用({} 字符),退回消毒历史直答",
+                    raw.chars().count()
+                );
+                (None, usage.prompt, usage.completion)
+            }
+        },
+        Err(e) => {
+            log::warn!("改写器调用失败,退回消毒历史直答: {e}");
+            (None, 0, 0)
+        }
+    }
+}
+
 pub async fn answer(
     llm: &ChatLlm,
     ctx: &ToolCtx,
@@ -55,21 +154,36 @@ pub async fn answer(
     lang: ChatLang,
 ) -> Result<ChatAnswer> {
     let system = lang.system_prompt(today);
+    let mut prompt_tokens = 0u64;
+    let mut completion_tokens = 0u64;
+
+    // 多轮:先做「问题自立化」——改写成功则回答器零历史(每轮=第一轮,上一轮
+    // 成品答案的失效编号/模仿源在架构上进不了回答器);改写不可用才退回
+    // "消毒历史 + 原问题"的兜底(消毒 = 剥引用编号 + 截断,见 sanitize_history_content)。
     let mut turns: Vec<Turn> = Vec::new();
-    for h in history.iter().rev().take(6).rev() {
-        match h.role.as_str() {
-            "user" => turns.push(Turn::User(h.content.clone())),
-            _ => turns.push(Turn::AssistantText(h.content.clone())),
+    let mut effective_question = question.to_string();
+    if !history.is_empty() {
+        let (rewritten, p, c) = condense_question(llm, history, question, lang, today).await;
+        prompt_tokens += p;
+        completion_tokens += c;
+        match rewritten {
+            Some(q) => effective_question = q,
+            None => {
+                for h in history.iter().rev().take(6).rev() {
+                    match h.role.as_str() {
+                        "user" => turns.push(Turn::User(h.content.clone())),
+                        _ => turns.push(Turn::AssistantText(sanitize_history_content(&h.content))),
+                    }
+                }
+            }
         }
     }
-    turns.push(Turn::User(question.to_string()));
+    turns.push(Turn::User(effective_question));
 
     let mut citations: Vec<Citation> = Vec::new();
     let mut seen_calls: std::collections::HashSet<String> = Default::default();
     let mut llm_failures = 0u32;
     let mut steps = 0u32;
-    let mut prompt_tokens = 0u64;
-    let mut completion_tokens = 0u64;
 
     while steps < MAX_STEPS {
         steps += 1;
@@ -294,6 +408,51 @@ fn parse_ref_token(token: &str) -> Option<Vec<usize>> {
         }
     }
     Some(nums)
+}
+
+#[cfg(test)]
+mod sanitize_tests {
+    use super::sanitize_history_content;
+
+    #[test]
+    fn strips_citation_markers_keeps_other_brackets() {
+        assert_eq!(
+            sanitize_history_content("用了 3 小时 [1][12],详见 [附录] 和 [2]。"),
+            "用了 3 小时 ,详见 [附录] 和 。"
+        );
+    }
+
+    #[test]
+    fn truncates_long_reports() {
+        let long = "长".repeat(500);
+        let out = sanitize_history_content(&long);
+        assert_eq!(out.chars().count(), 401);
+        assert!(out.ends_with('…'));
+    }
+
+    #[test]
+    fn short_clean_text_passes_through() {
+        assert_eq!(
+            sanitize_history_content("上周用了 10 小时"),
+            "上周用了 10 小时"
+        );
+    }
+
+    #[test]
+    fn normalize_rewrite_strips_quotes_and_rejects_suspicious() {
+        use super::normalize_rewrite;
+        assert_eq!(
+            normalize_rewrite("\"我昨天在电脑上做了什么?\"").as_deref(),
+            Some("我昨天在电脑上做了什么?")
+        );
+        assert_eq!(
+            normalize_rewrite("「上週我用了多久 Chrome?」").as_deref(),
+            Some("上週我用了多久 Chrome?")
+        );
+        assert!(normalize_rewrite("").is_none());
+        assert!(normalize_rewrite("问题:xxx\n解释:因为…").is_none());
+        assert!(normalize_rewrite(&"长".repeat(301)).is_none());
+    }
 }
 
 #[cfg(test)]

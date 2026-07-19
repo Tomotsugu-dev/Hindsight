@@ -164,6 +164,55 @@ impl ChatLlm {
         })
     }
 
+    /// 纯文本一问一答(无工具、无 grammar 约束):多轮"问题自立化"改写器用。
+    /// 两端都走 OpenAI 兼容 /chat/completions,只发 system + user 两条消息。
+    pub async fn complete(
+        &self,
+        system: &str,
+        user: &str,
+        max_tokens: u32,
+    ) -> Result<(String, TokenUsage)> {
+        let (base_url, model, api_key, http) = match self {
+            Self::Cloud {
+                base_url,
+                model,
+                api_key,
+                http,
+            } => (base_url, model, api_key.trim(), http),
+            Self::Local {
+                base_url,
+                model,
+                http,
+            } => (base_url, model, "", http),
+        };
+        let body = json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0,
+        });
+        let mut req = http
+            .post(format!("{base_url}/chat/completions"))
+            .json(&body);
+        if !api_key.is_empty() {
+            req = req.bearer_auth(api_key);
+        }
+        let resp: Value = send_json(req).await?;
+        let usage = TokenUsage::from_resp(&resp);
+        let content = resp["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if content.is_empty() {
+            return Err(Error::LlmResponse("模型返回空内容".into()));
+        }
+        Ok((content, usage))
+    }
+
     /// 跑一步:给定 system + 对话,产出"调工具"或"作答"。
     pub async fn step(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
         match self {
