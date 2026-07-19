@@ -90,6 +90,9 @@ const PULL_INTERVAL_SECS: i64 = 60;
 pub struct SyncStatus {
     /// 后台 push/pull 循环是否在跑
     pub running: bool,
+    /// 此刻是否有一次 push/pull 正在执行(手动或后台 tick)。前端用它在
+    /// 跳页重挂后恢复「同步中…」按钮态——纯组件 state 会在卸载时失忆。
+    pub sync_in_flight: bool,
     /// 最近一次 push 成功的 RFC3339 时间
     pub last_pushed_at: Option<String>,
     /// 最近一次 pull 成功的 RFC3339 时间
@@ -119,6 +122,25 @@ pub(super) struct Inner {
     /// 2. purge 类命令经 [`SyncEngine::pause_flushes`] 持有它，让清库与在途 push
     ///    完全互斥（push 先读 outbox 再读表，清库落在两步之间会把空内容传上云）。
     pub(super) flush_gate: Mutex<()>,
+    /// 「此刻在同步」的可观测标志(flush 串行门负责互斥,这个只负责给
+    /// status() 快照读)。sync_now 与后台 tick 的 flush 段都会置位。
+    pub(super) sync_in_flight: std::sync::atomic::AtomicBool,
+}
+
+/// RAII:作用域内置位 sync_in_flight,离开(含错误提前返回)自动清零。
+struct InFlightGuard<'a>(&'a std::sync::atomic::AtomicBool);
+
+impl<'a> InFlightGuard<'a> {
+    fn set(flag: &'a std::sync::atomic::AtomicBool) -> Self {
+        flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        Self(flag)
+    }
+}
+
+impl Drop for InFlightGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 /// 同步引擎对外句柄。一个进程一份；`app.manage(Arc::new(SyncEngine::new))` 注册。
@@ -151,6 +173,7 @@ impl SyncEngine {
                 self_id,
                 handle: Mutex::new(None),
                 status: RwLock::new(SyncStatus::default()),
+                sync_in_flight: std::sync::atomic::AtomicBool::new(false),
                 flush_gate: Mutex::new(()),
             }),
         }
@@ -222,6 +245,10 @@ impl SyncEngine {
     pub async fn status(&self) -> SyncStatus {
         let mut s = self.inner.status.read().await.clone();
         s.running = self.is_running().await;
+        s.sync_in_flight = self
+            .inner
+            .sync_in_flight
+            .load(std::sync::atomic::Ordering::SeqCst);
         s.pending = io::count_outbox(&self.inner.pool).await.unwrap_or(0);
         s.dead_letter = io::count_dead_letter(&self.inner.pool).await.unwrap_or(0);
         s
@@ -229,6 +256,16 @@ impl SyncEngine {
 
     /// UI "立即同步" 按钮：跑一次 push + pull，不等下个 30s tick。
     pub async fn sync_now(&self) -> Result<()> {
+        // 已有一次在跑(手动或后台 tick)→ 明确拒绝而不是排队再跑一遍。
+        // 前端按 syncInFlight 禁用按钮,正常点不到这里;真racing到了给人话。
+        if self
+            .inner
+            .sync_in_flight
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(crate::error::Error::InvalidInput("同步已在进行中"));
+        }
+        let _in_flight = InFlightGuard::set(&self.inner.sync_in_flight);
         // 清掉上次的错误，否则即使这次成功，UI 也会留着旧 last_error
         self.inner.status.write().await.last_error = None;
         push::flush_push(&self.inner).await?;
@@ -245,6 +282,7 @@ impl SyncEngine {
 async fn run_loop(inner: Arc<Inner>) {
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
+        let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
         if let Err(e) = push::flush_push(&inner).await {
             log::warn!("sync push 失败: {e}");
             // SyncIncomplete 表示 push 内部已经把分类好的字符串写进 status.last_error 了；
@@ -268,6 +306,7 @@ async fn run_loop(inner: Arc<Inner>) {
             }
             last_pull = Some(now);
         }
+        drop(_in_flight); // sleep 期间不算"同步中"
 
         tokio::time::sleep(Duration::from_secs(PUSH_INTERVAL_SECS)).await;
     }

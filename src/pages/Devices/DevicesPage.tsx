@@ -266,6 +266,9 @@ function CloudSyncCard() {
   };
 
   // 派生值放到早返回之前，确保所有 hook 调用顺序在每次渲染都一致（rules-of-hooks）。
+  // 「同步中」= 本地 promise 在途(点击瞬间即时反馈)|| 引擎标志(跳页重挂后
+  // 由 10s 轮询 + 挂载即拉恢复——纯组件 state 会失忆,这就是之前"看似被打断"的根源)
+  const syncing = syncBusy || (sync?.syncInFlight ?? false);
   const signedIn = auth?.signedIn ?? false;
   const configured = auth?.configured ?? false;
   // 用户改凭证后 auth.configured 可能没及时更新，所以 UI 也按本地 settings 算一遍
@@ -390,15 +393,15 @@ function CloudSyncCard() {
                 type="button"
                 className={styles.smallBtn}
                 onClick={onSyncNow}
-                disabled={syncBusy}
+                disabled={syncing}
                 title={t("devices.cloud.actions.syncNowTitle")}
               >
                 <RefreshCw
                   size={13}
                   strokeWidth={1.85}
-                  className={syncBusy ? styles.spinning : ""}
+                  className={syncing ? styles.spinning : ""}
                 />
-                {syncBusy
+                {syncing
                   ? t("devices.cloud.actions.syncing")
                   : t("devices.cloud.actions.syncNow")}
               </button>
