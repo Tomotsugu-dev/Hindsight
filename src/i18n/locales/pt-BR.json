@@ -127,7 +127,7 @@
         "enableDescription": "Quando desativada, a captura em segundo plano para (tanto a atividade de janela quanto as capturas de tela).",
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
-        "ocrResidentLabel": "Manter OCR residente",
+        "ocrResidentLabel": "Reconhecimento de texto residente (OCR local)",
         "ocrResidentDescription": "Novas capturas ficam pesquisáveis em tempo real (~400 MB de RAM extra). Executa apenas na tomada e pausa automaticamente na bateria; desativado = reconhecimento em lote, busca com atraso.",
         "intervalLabel": "Intervalo de captura",
         "intervalDescription": "Intervalo de captura.",
@@ -138,7 +138,7 @@
         "screenshotPathLabel": "Pasta de capturas de tela",
         "dataPathLabel": "Pasta de dados",
         "dataPathHint": "Local do banco de dados e da raiz padrão das capturas de tela. Alterar exige reiniciar, e os dados antigos devem ser migrados manualmente.",
-        "backfillLabel": "Indexar capturas antigas",
+        "backfillLabel": "Indexar capturas antigas (OCR local)",
         "backfillDescription": "Adiciona ao índice de texto as capturas feitas antes de ativar a memória de tela, para que o Chat possa pesquisá-las.",
         "backfillButton": "Indexar e reconhecer",
         "backfillRunning": "Reconhecendo…",
@@ -151,7 +151,11 @@
         "ocrConfirmResident": "Ativar a indexação de texto requer baixar o componente de reconhecimento (~40MB). Ele é ativado automaticamente quando o download terminar.",
         "ocrConfirmBackfill": "O preenchimento requer baixar o componente de reconhecimento (~40MB). Ele começa automaticamente quando o download terminar.",
         "ocrConfirmAccept": "Baixar e continuar",
-        "ocrDownloading": "Baixando componente de reconhecimento de texto… {{mb}} MB"
+        "ocrDownloading": "Baixando componente de reconhecimento de texto… {{mb}} MB",
+        "insightLabel": "Insights de tela (nuvem)",
+        "insightOn": "Ativo · {{scope}}",
+        "insightOff": "Inativo",
+        "insightConfigure": "Configurar"
       },
       "workHours": {
         "title": "Horário de trabalho",
@@ -725,7 +729,8 @@
       "models": "Modelos",
       "general": "Geral",
       "prompt": "Prompt",
-      "external": "API na nuvem"
+      "external": "API na nuvem",
+      "insight": "Insights de tela"
     },
     "engine": {
       "sectionTitle": "Mecanismo de IA local",
@@ -909,6 +914,17 @@
         "title": "Modelos locais (fora da lista recomendada)",
         "pairedMmproj": "Projetor de visão: {{name}}",
         "orphanMmproj": "Este é um arquivo de projeção visual (mmproj) e não pode ser usado como modelo sozinho. Para importar um modelo, escolha o arquivo GGUF principal, bem maior, do mesmo repositório."
+      },
+      "assign": {
+        "title": "Tarefas e modelos",
+        "desc": "Qual modelo cada tarefa de IA usa. Modelos locais são gerenciados abaixo; conexões na nuvem em API na nuvem.",
+        "summary": "Relatórios / resumos",
+        "chat": "Chat",
+        "insight": "Insights de tela",
+        "cloudText": "Nuvem · texto",
+        "cloudVision": "Nuvem · visão",
+        "insightConfigured": "Atual: {{model}} (alterar em API na nuvem)",
+        "insightMissing": "Nenhum modelo de visão configurado — defina em API na nuvem"
       }
     },
     "brief": {
@@ -978,7 +994,63 @@
       "groupTextHint": "Resumos de segmento · Chat",
       "testTextButton": "Testar API de texto",
       "testStepConn": "Rede e autenticação",
-      "testStepChat": "Modelo {{model}} responde"
+      "testStepChat": "Modelo {{model}} responde",
+      "groupVisionTitle": "Modelo de visão",
+      "groupVisionHint": "Usado pelos Insights de tela: analisa capturas e gera insights de uma frase com entidades-chave.",
+      "visionReuseLabel": "Reutilizar endpoint de texto",
+      "visionReuseHint": "Usa o endpoint e a chave do modelo de texto acima; basta informar o nome do modelo",
+      "visionModelLabel": "Nome do modelo de visão",
+      "testVisionButton": "Testar chamada de visão",
+      "testStepVision": "Chamada de visão",
+      "visionTestNote": "O teste envia uma imagem sintética gerada localmente — nenhuma captura real é enviada."
+    },
+    "insight": {
+      "sectionTitle": "Insights de tela na nuvem",
+      "sectionDesc": "Envia capturas ao modelo de visão configurado para gerar insights de uma frase e entidades-chave, enriquecendo relatórios e a busca do chat.",
+      "enableLabel": "Ativar insights de tela na nuvem",
+      "enableHint": "Quando ativo, capturas no escopo selecionado são enviadas ao provedor configurado para análise",
+      "needScreenshot": "Ative as capturas de tela primeiro em Configurações → Geral",
+      "visionReady": "Modelo de visão: {{model}} (alterar em API na nuvem)",
+      "visionMissing": "Nenhum modelo de visão configurado — defina em API na nuvem para os insights funcionarem",
+      "scopeTitle": "Escopo de análise",
+      "scopeDesc": "Controla quais capturas são enviadas. Escopo maior preserva mais informação e custa mais.",
+      "scopeLabel": "Escopo",
+      "scope": {
+        "focus": "Só apps em foco",
+        "recommended": "Recomendado",
+        "all": "Todos os apps"
+      },
+      "scopeExplain": {
+        "focus": "Somente apps em foco são analisados (cada quadro distinto, 1280px); os demais nunca são enviados.",
+        "recommended": "Apps em foco quadro a quadro; demais apps amostrados a cada 5 minutos (960px).",
+        "all": "Cada quadro distinto de todos os apps (1280px) — máxima informação, maior custo."
+      },
+      "focusAppsLabel": "Apps em foco",
+      "focusAppsHint": "Capturas destes apps são analisadas quadro a quadro (ex.: WeChat, navegador); digite o nome do processo e Enter",
+      "focusAppsPlaceholder": "Digite o nome do processo e pressione Enter",
+      "removeApp": "Remover {{app}}",
+      "budgetTitle": "Orçamento",
+      "budgetDesc": "Limite diário de quadros analisados; pausa automaticamente até o dia seguinte ao atingir.",
+      "dailyCapLabel": "Limite diário (quadros)",
+      "usageLine": "Hoje: {{done}} / {{cap}} quadros analisados, {{pending}} pendentes",
+      "backfillTitle": "Processar histórico",
+      "backfillDesc": "Analisa capturas anteriores à ativação dos insights. O custo depende do preço do seu modelo; a contagem é exibida antes de confirmar.",
+      "backfillButton": "Analisar capturas antigas…",
+      "backfillProgress": "Processando: {{done}} / {{total}} quadros",
+      "consent": {
+        "title": "Ativar insights de tela na nuvem?",
+        "body": "Capturas dentro do escopo selecionado serão enviadas ao provedor configurado em API na nuvem para análise.",
+        "point1": "Somente capturas dos apps no escopo selecionado são enviadas",
+        "point2": "Apps na lista de privacidade nunca são enviados",
+        "point3": "Os dados vão apenas para o endpoint que você mesmo informou — sem terceiros no caminho",
+        "confirm": "Entendi, ativar"
+      },
+      "backfillConfirm": {
+        "title": "Analisar capturas antigas",
+        "body": "{{frames}} quadros pendentes. Executa sob o escopo e limite diário atuais; pode ser interrompido e retomado.",
+        "empty": "Não há capturas antigas para processar.",
+        "confirm": "Iniciar"
+      }
     }
   },
   "devices": {

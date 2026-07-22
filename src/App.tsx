@@ -29,6 +29,7 @@ const ModelsTab = lazy(() => import("./pages/AISettings/tabs/ModelsTab"));
 const AiGeneralTab = lazy(() => import("./pages/AISettings/tabs/GeneralTab"));
 const PromptTab = lazy(() => import("./pages/AISettings/tabs/PromptTab"));
 const ExternalApiTab = lazy(() => import("./pages/AISettings/tabs/ExternalApiTab"));
+const InsightTab = lazy(() => import("./pages/AISettings/tabs/InsightTab"));
 const Devices = lazy(() => import("./pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
 const AppsPage = lazy(() => import("./pages/Apps/AppsPage"));
@@ -113,6 +114,7 @@ function App() {
             <Route path="general" element={<AiGeneralTab />} />
             <Route path="prompt" element={<PromptTab />} />
             <Route path="external" element={<ExternalApiTab />} />
+            <Route path="insight" element={<InsightTab />} />
           </Route>
           <Route path={ROUTES.devices} element={<Devices />} />
           <Route path={ROUTES.categories} element={<CategoriesPage />} />

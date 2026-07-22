@@ -1,0 +1,183 @@
+/* 云端截图洞察 tab:同意门弹窗 + 重点应用 chips + 回填进度条。
+   其余布局复用 AISettings.module.css 的 Section/Row 体系。 */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg, #000) 55%, transparent);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  width: min(440px, calc(100vw - 48px));
+  background: var(--panel, #1e1e22);
+  border: 1px solid var(--border, #333);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+}
+
+.dialogTitle {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dialogBody {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary, #aaa);
+}
+
+.dialogList {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-secondary, #aaa);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.btnConfirm {
+  background: var(--accent, #3987e5);
+  border-color: var(--accent, #3987e5);
+  color: #fff;
+}
+
+/* 重点应用 chips 编辑器(样式对齐隐私页关键词编辑器的视觉) */
+.chipsWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--accent, #3987e5) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #3987e5) 35%, transparent);
+}
+
+.chipRemove {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  opacity: 0.7;
+}
+
+.chipRemove:hover {
+  opacity: 1;
+}
+
+.chipInput {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  background: var(--input-bg, transparent);
+  color: inherit;
+  font-size: 13px;
+}
+
+.capInput {
+  width: 96px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  background: var(--input-bg, transparent);
+  color: inherit;
+  font-size: 13px;
+  text-align: right;
+}
+
+.usageLine {
+  font-size: 12.5px;
+  color: var(--text-secondary, #aaa);
+  margin-top: 6px;
+}
+
+/* 回填进度 */
+.progressTrack {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border, #333) 60%, transparent);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, #3987e5);
+  transition: width 0.4s ease;
+}
+
+.backfillBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.backfillBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spinning {
+  animation: insightSpin 0.9s linear infinite;
+}
+
+@keyframes insightSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.depLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary, #aaa);
+}
+
+.depWarn {
+  color: var(--warn, #eda100);
+}

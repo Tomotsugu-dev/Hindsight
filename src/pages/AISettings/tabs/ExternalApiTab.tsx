@@ -7,6 +7,7 @@ import {
   EyeOff,
   Info,
   Loader2,
+  ScanEye,
   Type,
   XCircle,
 } from "lucide-react";
@@ -396,6 +397,8 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
 
           </Section>
 
+          <VisionSection ai={ai} updateAi={updateAi} />
+
           <p className={styles.externalPrivacyNote}>
             <Info size={12} strokeWidth={1.85} />
             {t("aiSettings.external.privacyNote")}
@@ -403,5 +406,139 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
         </div>
       </div>
     </>
+  );
+}
+
+/** 视觉模型(截图洞察用):默认复用文本端点,只填模型名;
+ *  取消复用时展开独立 Endpoint / Key。测试发本地合成色块图,不上传真实截图。 */
+function VisionSection({ ai, updateAi }: ExternalApiSectionProps) {
+  const { t } = useTranslation();
+  const [showKey, setShowKey] = useState(false);
+  const [test, setTest] = useState<{
+    running: boolean;
+    status: "idle" | "ok" | "fail";
+    msg: string;
+  }>({ running: false, status: "idle", msg: "" });
+
+  const endpoint = ai.visionReuseText ? ai.endpoint : ai.visionEndpoint;
+  const apiKey = ai.visionReuseText ? ai.apiKey : ai.visionApiKey;
+
+  const runTest = async () => {
+    setTest({ running: true, status: "idle", msg: "" });
+    try {
+      const reply = await api.testAiVision(
+        endpoint.trim(),
+        apiKey.trim() || undefined,
+        ai.visionModel.trim(),
+      );
+      setTest({ running: false, status: "ok", msg: reply });
+    } catch (e) {
+      setTest({ running: false, status: "fail", msg: String(e) });
+    }
+  };
+
+  return (
+    <Section
+      title={t("aiSettings.external.groupVisionTitle")}
+      icon={ScanEye}
+      description={t("aiSettings.external.groupVisionHint")}
+    >
+      <Row
+        label={t("aiSettings.external.visionReuseLabel")}
+        description={t("aiSettings.external.visionReuseHint")}
+      >
+        <Toggle
+          checked={ai.visionReuseText}
+          onChange={(next) => updateAi({ visionReuseText: next })}
+          ariaLabel={t("aiSettings.external.visionReuseLabel")}
+        />
+      </Row>
+      {!ai.visionReuseText ? (
+        <>
+          <Row label={t("aiSettings.external.baseUrlLabel")} block>
+            <input
+              type="text"
+              className={styles.externalInput}
+              value={ai.visionEndpoint}
+              onChange={(e) => updateAi({ visionEndpoint: e.target.value })}
+              placeholder={t("aiSettings.external.baseUrlPlaceholder")}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+          </Row>
+          <Row label={t("aiSettings.external.apiKeyLabel")} block>
+            <div className={styles.externalKeyRow}>
+              <input
+                type={showKey ? "text" : "password"}
+                className={styles.externalInput}
+                value={ai.visionApiKey}
+                onChange={(e) => updateAi({ visionApiKey: e.target.value })}
+                placeholder={t("aiSettings.external.apiKeyPlaceholder")}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+              />
+              <button
+                type="button"
+                className={styles.externalEyeBtn}
+                onClick={() => setShowKey((v) => !v)}
+                aria-label={t("aiSettings.external.apiKeyShow")}
+              >
+                {showKey ? (
+                  <EyeOff size={14} strokeWidth={1.85} />
+                ) : (
+                  <Eye size={14} strokeWidth={1.85} />
+                )}
+              </button>
+            </div>
+          </Row>
+        </>
+      ) : null}
+      <Row label={t("aiSettings.external.visionModelLabel")} block>
+        <input
+          type="text"
+          className={styles.externalInput}
+          value={ai.visionModel}
+          onChange={(e) => updateAi({ visionModel: e.target.value })}
+          placeholder="Qwen/Qwen3-VL-8B-Instruct"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+        />
+      </Row>
+      <div className={styles.externalActionRow}>
+        <button
+          type="button"
+          className={styles.externalTestBtn}
+          onClick={() => void runTest()}
+          disabled={
+            test.running || !endpoint.trim() || !ai.visionModel.trim()
+          }
+        >
+          {test.running ? (
+            <>
+              <Loader2 size={13} strokeWidth={2} className={styles.testSpin} />
+              {t("aiSettings.external.testRunning")}
+            </>
+          ) : (
+            t("aiSettings.external.testVisionButton")
+          )}
+        </button>
+      </div>
+      {test.status !== "idle" ? (
+        <div className={styles.externalTestSteps}>
+          <TestStepRow
+            status={test.status}
+            label={t("aiSettings.external.testStepVision")}
+            msg={test.msg}
+          />
+        </div>
+      ) : null}
+      <p className={styles.externalPrivacyNote}>
+        <Info size={12} strokeWidth={1.85} />
+        {t("aiSettings.external.visionTestNote")}
+      </p>
+    </Section>
   );
 }

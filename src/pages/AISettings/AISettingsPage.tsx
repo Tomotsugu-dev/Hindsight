@@ -4,14 +4,15 @@ import { type TabDef } from "../../components/TabNav/TabNav";
 import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
 import styles from "./AISettingsPage.module.css";
 
-/** 5 个子路由对应 5 个 tab：引擎 / 模型 / 常规 / 提示词 / 云端 API
- *  按 LLM pipeline：运行时（引擎 + 模型 + 参数）→ 数据采样（常规）→ 指令（提示词）→ 调用（云端 API） */
+/** 6 个子路由对应 6 个 tab：引擎 / 模型 / 常规 / 提示词 / 云端 API / 截图洞察
+ *  按 LLM pipeline：运行时（引擎 + 模型 + 参数）→ 数据采样（常规）→ 指令（提示词）→ 调用（云端 API）→ 功能（洞察行为层） */
 const TABS: TabDef[] = [
   { to: "", labelKey: "aiSettings.tabs.engine", end: true },
   { to: "models", labelKey: "aiSettings.tabs.models" },
   { to: "general", labelKey: "aiSettings.tabs.general" },
   { to: "prompt", labelKey: "aiSettings.tabs.prompt" },
   { to: "external", labelKey: "aiSettings.tabs.external" },
+  { to: "insight", labelKey: "aiSettings.tabs.insight" },
 ];
 
 /**

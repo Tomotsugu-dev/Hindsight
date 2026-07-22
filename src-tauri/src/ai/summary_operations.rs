@@ -71,12 +71,15 @@ pub(crate) async fn summarize_segment(
     //（**不写行**——该段下次生成自然重跑），由 runner 统一 emit cancelled 收尾
     cancel: &Arc<AtomicBool>,
 ) -> Result<(SegmentSummaryRow, &'static str)> {
+    // 云端截图洞察(有则注入,无/失败为空——不阻塞总结)
+    let insights = crate::insight::segment_insights(date_str, start_hour, end_hour).await;
     let ctx = SegmentContext {
         label,
         start_hour,
         end_hour,
         top_apps,
         timeline,
+        insights: &insights,
     };
     let system = build_system_prompt(ai);
     let user_text = build_user_prompt(ai, &ctx);

@@ -103,6 +103,23 @@ impl MemoryDb {
                         PRIMARY KEY (session_id, line_no)
                     );
 
+                    -- 云端截图洞察:帧级落库,无聚合层(docs/design/cloud-insight.md §3)
+                    -- state: 0待 1完 2失败(attempts<上限可重试) 3跳过(粗门/策略/隐私)
+                    CREATE TABLE IF NOT EXISTS frame_insights (
+                        path        TEXT PRIMARY KEY,
+                        ts          TEXT NOT NULL,
+                        local_date  TEXT NOT NULL,
+                        app         TEXT,
+                        title       TEXT,
+                        insight     TEXT,
+                        entities    TEXT,
+                        state       INTEGER NOT NULL DEFAULT 0,
+                        attempts    INTEGER NOT NULL DEFAULT 0,
+                        done_at     TEXT    -- 分析完成时刻;日限额按它的日期计数(回填也占额度)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_frame_insights_date
+                        ON frame_insights(local_date, state);
+
                     -- 全文索引:挂在会话文本上,trigram 支持中日文子串、语言无关
                     CREATE VIRTUAL TABLE IF NOT EXISTS text_sessions_fts USING fts5(
                         text, content='text_sessions', content_rowid='id',

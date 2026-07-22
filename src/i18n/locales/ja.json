@@ -127,7 +127,7 @@
         "enableDescription": "オフにするとバックグラウンド記録（ウィンドウ情報 + スクリーンショット）を停止します。",
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
-        "ocrResidentLabel": "OCR を常駐させる",
+        "ocrResidentLabel": "常駐テキスト認識(ローカル OCR)",
         "ocrResidentDescription": "新しいスクリーンショットが即時に検索可能になります（約 400MB 追加使用）。電源接続時のみ動作し、バッテリー駆動中は自動的に一時停止します。オフの場合は一括認識のため検索に遅延があります。",
         "intervalLabel": "記録の間隔",
         "intervalDescription": "記録間隔。",
@@ -138,7 +138,7 @@
         "screenshotPathLabel": "スクリーンショットの保存先",
         "dataPathLabel": "データの保存先",
         "dataPathHint": "データベースとスクリーンショットのデフォルトの保存場所です。変更には再起動が必要で、既存のデータは手動で移行する必要があります。",
-        "backfillLabel": "過去のスクリーンショットを取り込み",
+        "backfillLabel": "過去のスクリーンショットを取り込み(ローカル OCR)",
         "backfillDescription": "画面メモリを有効にする前の古いスクリーンショットをテキスト索引に追加し、チャットで検索できるようにします。",
         "backfillButton": "取り込んで認識",
         "backfillRunning": "認識中…",
@@ -151,7 +151,11 @@
         "ocrConfirmResident": "テキスト索引を有効にするには文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に有効になります。",
         "ocrConfirmBackfill": "取り込みには文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に取り込みを開始します。",
         "ocrConfirmAccept": "ダウンロードして続行",
-        "ocrDownloading": "文字認識コンポーネントをダウンロード中… {{mb}} MB"
+        "ocrDownloading": "文字認識コンポーネントをダウンロード中… {{mb}} MB",
+        "insightLabel": "画面インサイト(クラウド)",
+        "insightOn": "有効 · {{scope}}",
+        "insightOff": "無効",
+        "insightConfigure": "設定"
       },
       "workHours": {
         "title": "勤務時間",
@@ -725,7 +729,8 @@
       "models": "モデル",
       "general": "一般",
       "prompt": "プロンプト",
-      "external": "クラウド API"
+      "external": "クラウド API",
+      "insight": "画面インサイト"
     },
     "engine": {
       "sectionTitle": "ローカル AI エンジン",
@@ -909,6 +914,17 @@
         "title": "ローカルモデル（推奨リストにないもの）",
         "pairedMmproj": "ビジョンプロジェクター：{{name}}",
         "orphanMmproj": "これはビジョン投影ファイル（mmproj）で、単独ではモデルとして使用できません。モデルを取り込むには、同じリポジトリのより大きなメイン GGUF ファイルを選択してください。"
+      },
+      "assign": {
+        "title": "タスクとモデル",
+        "desc": "各 AI タスクが使うモデル。ローカルモデルは下で管理、クラウド接続は「クラウド API」で設定します。",
+        "summary": "日報/要約",
+        "chat": "チャット",
+        "insight": "画面インサイト",
+        "cloudText": "クラウド · テキスト",
+        "cloudVision": "クラウド · 視覚",
+        "insightConfigured": "現在:{{model}}(「クラウド API」で変更)",
+        "insightMissing": "視覚モデル未設定——「クラウド API」で設定してください"
       }
     },
     "brief": {
@@ -978,7 +994,63 @@
       "groupTextHint": "時間帯要約 · チャット",
       "testTextButton": "テキスト API をテスト",
       "testStepConn": "ネットワークと認証",
-      "testStepChat": "モデル {{model}} が応答"
+      "testStepChat": "モデル {{model}} が応答",
+      "groupVisionTitle": "視覚モデル",
+      "groupVisionHint": "「画面インサイト」で使用:スクリーンショットを分析し、一文のインサイトと重要エンティティを生成します。",
+      "visionReuseLabel": "テキスト用エンドポイントを再利用",
+      "visionReuseHint": "上のテキストモデルのエンドポイントと API キーを使用。モデル名のみ入力してください",
+      "visionModelLabel": "視覚モデル名",
+      "testVisionButton": "視覚呼び出しをテスト",
+      "testStepVision": "視覚呼び出し",
+      "visionTestNote": "テストで送信されるのはローカル生成の合成画像です。実際のスクリーンショットは一切アップロードされません。"
+    },
+    "insight": {
+      "sectionTitle": "クラウド画面インサイト",
+      "sectionDesc": "設定したクラウド視覚モデルにスクリーンショットを送り、「何をしているか」の一文と重要エンティティを生成。日報/週報とチャット検索を充実させます。",
+      "enableLabel": "クラウド画面インサイトを有効化",
+      "enableHint": "有効にすると、選択範囲内のスクリーンショットが設定したプロバイダーにアップロードされ分析されます",
+      "needScreenshot": "先に 設定 → 一般 でスクリーンショットを有効にしてください",
+      "visionReady": "視覚モデル:{{model}}(「クラウド API」で変更)",
+      "visionMissing": "視覚モデル未設定——「クラウド API」で設定するとインサイトが動作します",
+      "scopeTitle": "分析範囲",
+      "scopeDesc": "どのスクリーンショットをアップロードするかを決めます。範囲が広いほど情報は充実し、コストも増えます。",
+      "scopeLabel": "範囲",
+      "scope": {
+        "focus": "重点アプリのみ",
+        "recommended": "推奨",
+        "all": "すべてのアプリ"
+      },
+      "scopeExplain": {
+        "focus": "重点アプリのみ分析(全フレーム、1280px)。他のアプリはアップロードされません。",
+        "recommended": "重点アプリは全フレーム。他のアプリは 5 分ごとに 1 フレーム(960px)。",
+        "all": "すべてのアプリの全フレームを分析(1280px)。情報は最も充実、コストは最大。"
+      },
+      "focusAppsLabel": "重点アプリ",
+      "focusAppsHint": "これらのアプリは全フレーム分析されます(例:WeChat、ブラウザ)。プロセス名を入力して Enter で追加",
+      "focusAppsPlaceholder": "アプリのプロセス名を入力して Enter",
+      "removeApp": "{{app}} を削除",
+      "budgetTitle": "予算",
+      "budgetDesc": "1 日あたりの分析フレーム数上限。達すると翌日まで自動停止します。",
+      "dailyCapLabel": "1 日上限(フレーム)",
+      "usageLine": "本日 {{done}} / {{cap}} フレーム分析済み、{{pending}} フレーム待機中",
+      "backfillTitle": "履歴の取り込み",
+      "backfillDesc": "インサイト有効化前のスクリーンショットを分析します。費用は設定モデルの単価次第。確認前にフレーム数を表示します。",
+      "backfillButton": "過去のスクリーンショットを分析…",
+      "backfillProgress": "取り込み中:{{done}} / {{total}} フレーム",
+      "consent": {
+        "title": "クラウド画面インサイトを有効にしますか?",
+        "body": "選択範囲内のスクリーンショットが、「クラウド API」で設定したプロバイダーにアップロードされ分析されます。",
+        "point1": "選択範囲内のアプリのスクリーンショットのみアップロード",
+        "point2": "プライバシーリストのアプリは決してアップロードされません",
+        "point3": "データは自分で入力したエンドポイントにのみ送信され、第三者を経由しません",
+        "confirm": "理解した上で有効にする"
+      },
+      "backfillConfirm": {
+        "title": "過去のスクリーンショットを分析",
+        "body": "{{frames}} フレームが対象です。現在の範囲と 1 日上限に従って実行され、いつでも中断・再開できます。",
+        "empty": "取り込み対象の過去スクリーンショットはありません。",
+        "confirm": "取り込み開始"
+      }
     }
   },
   "devices": {

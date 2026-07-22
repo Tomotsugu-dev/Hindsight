@@ -471,6 +471,14 @@ export interface AiConfig {
   /** 引擎启动级参数：每 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
   ctxSize: number | null;
 
+  /** 视觉模型 ID（云端截图洞察用）。空 = 未配置，洞察功能不可用。 */
+  visionModel: string;
+  /** 视觉调用是否复用文本端点（endpoint + apiKey）。默认 true。 */
+  visionReuseText: boolean;
+  /** 不复用文本端点时的视觉 base URL / Bearer token。 */
+  visionEndpoint: string;
+  visionApiKey: string;
+
   /** 段总结阶段（单段串行）的 batch；null = fallback 到 [batchSize]。 */
   summaryBatchSize: number | null;
   /** 段总结阶段的 `-np`；null = fallback 到 [parallelSlots]。
@@ -543,9 +551,31 @@ export interface Settings {
    *  否则 useSettings.update 的浅合并会把其他子字段擦掉，
    *  后端 #[serde(default)] 又会把缺失字段填回默认值——双重擦除。 */
   ai: AiConfig;
+  /** 云端截图洞察（docs/design/cloud-insight.md）。默认关；开启需同意门。 */
+  insightEnabled: boolean;
+  /** 同意门：确认过"截图将上传至自配服务商"。确认一次永久 true。 */
+  insightConsentAcknowledged: boolean;
+  /** 分析范围："focus"（仅重点应用）/ "recommended"（重点逐帧+其余采样）/ "all" */
+  insightScope: "focus" | "recommended" | "all";
+  /** 重点应用 process_name 列表（逐独立帧、1280px 分析） */
+  insightFocusApps: string[];
+  /** 每日分析帧数上限，超限自动停到次日 */
+  insightDailyFrameCap: number;
+  /** 常驻洞察的水位线（RFC3339）：只处理此后登记的帧；开启时后端自动打点 */
+  insightSinceTs: string | null;
 }
 
 export type SettingsPatch = Partial<Settings>;
+
+/** 云端截图洞察运行状态（设置页轮询 insight_status）。 */
+export interface InsightStatus {
+  /** 今日已分析帧数（按分析时刻计，回填也占额度） */
+  todayDone: number;
+  dailyCap: number;
+  /** 常驻视角的待处理帧数（水位线之后） */
+  pending: number;
+  backfill: { running: boolean; done: number; total: number } | null;
+}
 
 export interface StorageInfo {
   dbBytes: number;
@@ -807,6 +837,15 @@ export const api = {
       model,
       withImage,
     }),
+  // ── 云端截图洞察 ──
+  insightStatus: () => invoke<InsightStatus>("insight_status"),
+  insightBackfillEstimate: () => invoke<number>("insight_backfill_estimate"),
+  /** 启动历史回填；false = 已有回填在跑 */
+  insightBackfillStart: () => invoke<boolean>("insight_backfill_start"),
+  insightBackfillCancel: () => invoke<void>("insight_backfill_cancel"),
+  /** 视觉端点测试：发本地合成色块图（零用户数据），返回模型回复原文；失败 reject */
+  testAiVision: (endpoint: string, apiKey: string | undefined, model: string) =>
+    invoke<string>("test_ai_vision", { endpoint, apiKey, model }),
   getEngineStatus: () => invoke<EngineStatus>("get_engine_status"),
   /** 下载 llama.cpp 引擎（只管 llama.cpp，OCR 组件走 downloadOcrRuntime）。
    *  已装且版本匹配时幂等快速返回；force=true 强制重下（「重新下载」按钮）。

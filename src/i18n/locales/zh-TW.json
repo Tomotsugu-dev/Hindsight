@@ -127,7 +127,7 @@
         "enableDescription": "關閉後停止後臺採集（視窗活動 + 截圖）。",
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
-        "ocrResidentLabel": "常駐 OCR",
+        "ocrResidentLabel": "常駐文字識別(本地 OCR)",
         "ocrResidentDescription": "新截圖即時可搜，多佔約 400MB 記憶體；僅在接通電源時運行，電池供電自動暫停。關閉則定時批次辨識，檢索有延遲。",
         "intervalLabel": "採集間隔",
         "intervalDescription": "採集頻率。",
@@ -138,7 +138,7 @@
         "screenshotPathLabel": "截圖儲存路徑",
         "dataPathLabel": "資料儲存路徑",
         "dataPathHint": "資料庫與預設截圖根目錄所在位置。更改後需重啟應用程式，舊資料需手動遷移。",
-        "backfillLabel": "回填歷史截圖",
+        "backfillLabel": "回填歷史截圖(本地 OCR)",
         "backfillDescription": "把開啟螢幕記憶之前的舊截圖補錄進文字索引，補完即可在「對話」裡搜到。",
         "backfillButton": "回填並辨識",
         "backfillRunning": "辨識中…",
@@ -151,7 +151,11 @@
         "ocrConfirmResident": "開啟文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開啟。",
         "ocrConfirmBackfill": "回填需要下載文字辨識元件（約 40MB），下載完成後自動開始回填。",
         "ocrConfirmAccept": "下載並繼續",
-        "ocrDownloading": "正在下載文字辨識元件… {{mb}} MB"
+        "ocrDownloading": "正在下載文字辨識元件… {{mb}} MB",
+        "insightLabel": "截圖洞察(雲端)",
+        "insightOn": "已開啟 · {{scope}}",
+        "insightOff": "未開啟",
+        "insightConfigure": "設定"
       },
       "workHours": {
         "title": "工作時段",
@@ -725,7 +729,8 @@
       "models": "模型",
       "general": "常規",
       "prompt": "提示詞",
-      "external": "雲端 API"
+      "external": "雲端 API",
+      "insight": "截圖洞察"
     },
     "engine": {
       "sectionTitle": "本地 AI 引擎",
@@ -909,6 +914,17 @@
         "title": "本機模型（不在推薦清單中）",
         "pairedMmproj": "視覺投影：{{name}}",
         "orphanMmproj": "這是視覺投影檔案（mmproj），不能單獨作為模型使用。如需匯入模型，請選擇同倉庫中體積更大的主模型 GGUF 檔案。"
+      },
+      "assign": {
+        "title": "任務與模型",
+        "desc": "每個 AI 任務用哪個模型。本地模型在下方管理;雲端連接在「雲端 API」配置。",
+        "summary": "日報/總結",
+        "chat": "對話(Chat)",
+        "insight": "截圖洞察",
+        "cloudText": "雲端 · 文字",
+        "cloudVision": "雲端 · 視覺",
+        "insightConfigured": "當前:{{model}}(在「雲端 API」中修改)",
+        "insightMissing": "視覺模型未配置——去「雲端 API」填寫"
       }
     },
     "brief": {
@@ -978,7 +994,63 @@
       "groupTextHint": "段總結 · 「對話」ChatBot",
       "testTextButton": "測試文本 API",
       "testStepConn": "網路與認證",
-      "testStepChat": "模型 {{model}} 可用"
+      "testStepChat": "模型 {{model}} 可用",
+      "groupVisionTitle": "視覺模型",
+      "groupVisionHint": "供「截圖洞察」使用:分析截圖畫面,生成一句話洞察與關鍵實體。",
+      "visionReuseLabel": "複用文字端點",
+      "visionReuseHint": "使用上方文字模型的 Endpoint 與 API Key,只需填模型名",
+      "visionModelLabel": "視覺模型名",
+      "testVisionButton": "測試視覺呼叫",
+      "testStepVision": "視覺呼叫",
+      "visionTestNote": "測試傳送的是本地生成的合成色塊圖,不會上傳任何真實截圖。"
+    },
+    "insight": {
+      "sectionTitle": "雲端截圖洞察",
+      "sectionDesc": "把截圖交給你配置的雲端視覺模型,生成「在做什麼」的一句話洞察與關鍵實體,充實日報/週報與對話檢索。",
+      "enableLabel": "啟用雲端截圖洞察",
+      "enableHint": "開啟後,所選範圍內的截圖將上傳至你配置的服務商進行分析",
+      "needScreenshot": "需要先在 設定 → 一般 中開啟螢幕截圖",
+      "visionReady": "視覺模型:{{model}}(在「雲端 API」中修改)",
+      "visionMissing": "視覺模型未配置——去「雲端 API」填寫視覺模型後洞察才會執行",
+      "scopeTitle": "分析範圍",
+      "scopeDesc": "決定哪些截圖會被上傳分析。範圍越大資訊越全,消耗也越多。",
+      "scopeLabel": "範圍",
+      "scope": {
+        "focus": "僅重點應用",
+        "recommended": "推薦",
+        "all": "全部應用"
+      },
+      "scopeExplain": {
+        "focus": "只分析重點應用的截圖(逐獨立幀、1280px),其餘應用不上傳。",
+        "recommended": "重點應用逐幀分析;其餘應用每 5 分鐘取一幀(960px)。",
+        "all": "所有應用逐獨立幀分析(1280px),資訊最全、消耗最高。"
+      },
+      "focusAppsLabel": "重點應用",
+      "focusAppsHint": "這些應用的截圖逐幀分析(如微信、瀏覽器);輸入行程名後 Enter 新增",
+      "focusAppsPlaceholder": "輸入應用行程名,Enter 新增",
+      "removeApp": "移除 {{app}}",
+      "budgetTitle": "預算",
+      "budgetDesc": "每日分析幀數上限,超限自動暫停到次日。",
+      "dailyCapLabel": "每日上限(幀)",
+      "usageLine": "今日已分析 {{done}} / {{cap}} 幀,待處理 {{pending}} 幀",
+      "backfillTitle": "歷史回填",
+      "backfillDesc": "分析開啟洞察之前的存量截圖。費用取決於所配模型單價,確認前會顯示幀數。",
+      "backfillButton": "分析歷史截圖…",
+      "backfillProgress": "回填中:{{done}} / {{total}} 幀",
+      "consent": {
+        "title": "開啟雲端截圖洞察?",
+        "body": "開啟後,所選範圍內的螢幕截圖將上傳至你在「雲端 API」中配置的服務商進行分析。",
+        "point1": "僅上傳你選定範圍內應用的截圖",
+        "point2": "隱私名單中的應用永不上傳",
+        "point3": "資料只發往你自己填寫的端點,本應用不經手任何第三方",
+        "confirm": "我已了解,開啟"
+      },
+      "backfillConfirm": {
+        "title": "分析歷史截圖",
+        "body": "共 {{frames}} 幀待分析。將按當前範圍與每日上限執行,可隨時中斷、斷點續跑。",
+        "empty": "沒有待回填的歷史截圖。",
+        "confirm": "開始回填"
+      }
     }
   },
   "devices": {

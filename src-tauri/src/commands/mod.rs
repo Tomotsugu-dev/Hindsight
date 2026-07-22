@@ -12,6 +12,7 @@ pub mod data;
 pub mod devices;
 pub mod export;
 pub mod icons;
+pub mod insight;
 pub mod screen_memory;
 pub mod settings;
 pub mod storage;

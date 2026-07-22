@@ -311,7 +311,7 @@ async fn coverage_line(ctx: &ToolCtx, from: &str, to: &str, lang: ChatLang) -> R
         })
         .await?;
     let (f, t) = (from.to_string(), to.to_string());
-    let (covered_days, pending): (i64, i64) = ctx
+    let (covered_days, pending, insight_days): (i64, i64, i64) = ctx
         .mem
         .call(move |conn| {
             let covered = conn
@@ -330,10 +330,18 @@ async fn coverage_line(ctx: &ToolCtx, from: &str, to: &str, lang: ChatLang) -> R
                     |r| r.get(0),
                 )
                 .db()?;
-            Ok((covered, pending))
+            let insight = conn
+                .query_row(
+                    "SELECT COUNT(DISTINCT local_date) FROM frame_insights
+                     WHERE state = 1 AND local_date BETWEEN ?1 AND ?2",
+                    params![f, t],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok((covered, pending, insight))
         })
         .await?;
-    Ok(lang.coverage_line(activity_days, covered_days, pending))
+    Ok(lang.coverage_line(activity_days, covered_days, pending, insight_days))
 }
 
 async fn search_text(
@@ -351,6 +359,7 @@ async fn search_text(
     };
     let coverage = coverage_line(ctx, &from, &to, lang).await?;
     let (from2, to2) = (from.clone(), to.clone());
+    let (from3, to3) = (from.clone(), to.clone());
     let (total, rows) = ctx
         .mem
         .call(move |conn| {
@@ -457,6 +466,51 @@ async fn search_text(
             Ok((total, hits))
         })
         .await?;
+    // 洞察层:云端视觉分析的一句话+实体。LIKE 全部关键词(AND),证据为对应帧。
+    let insight_likes: Vec<String> = keywords.iter().map(|k| like_pattern(k)).collect();
+    let (insight_total, insight_rows) = ctx
+        .mem
+        .call(move |conn| {
+            let like_sql = (0..insight_likes.len())
+                .map(|i| format!("(COALESCE(insight,'') || ' ' || COALESCE(entities,'')) LIKE ?{} ESCAPE '\\'", i + 3))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            let mut bind: Vec<&dyn rusqlite::ToSql> = vec![&from3, &to3];
+            for l in &insight_likes {
+                bind.push(l);
+            }
+            let where_sql = format!(
+                "FROM frame_insights WHERE state = 1 AND local_date BETWEEN ?1 AND ?2 AND {like_sql}"
+            );
+            let total: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) {where_sql}"), bind.as_slice(), |r| {
+                    r.get(0)
+                })
+                .db()?;
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT COALESCE(app,''), COALESCE(insight,''), COALESCE(entities,''),
+                            ts, path
+                     {where_sql} ORDER BY ts DESC LIMIT {TITLE_LIMIT}"
+                ))
+                .db()?;
+            let hits = stmt
+                .query_map(bind.as_slice(), |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, String>(4)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            Ok((total, hits))
+        })
+        .await?;
+
     // 跨层去重:标题命中若落在已返回的屏幕文字会话时间段内,是同一证据的弱化版,剔除。
     // 两库时间戳同为本地时区 RFC3339(回填即原样搬运),字符串比较即可。
     let title_rows: Vec<_> = title_rows
@@ -489,9 +543,32 @@ async fn search_text(
             frame_path: frame.as_ref().map(|(p, _)| p.clone()),
         });
     }
+    let mut insight_lines = Vec::new();
+    for (k, (app, insight, entities, ts, path)) in insight_rows.iter().enumerate() {
+        let idx = next_citation + rows.len() + k;
+        let detail = if entities.is_empty() {
+            insight.clone()
+        } else {
+            format!("{insight} | {entities}")
+        };
+        insight_lines.push(format!(
+            "[{idx}] {} | {} | {}",
+            app,
+            truncate(&detail, 90),
+            &ts[..16.min(ts.len())],
+        ));
+        citations.push(Citation {
+            index: idx,
+            app: app.clone(),
+            title: insight.clone(),
+            started_ts: ts.clone(),
+            ended_ts: ts.clone(),
+            frame_path: Some(path.clone()),
+        });
+    }
     let mut title_lines = Vec::new();
     for (j, (app, title, started, ended, shot)) in title_rows.iter().enumerate() {
-        let idx = next_citation + rows.len() + j;
+        let idx = next_citation + rows.len() + insight_lines.len() + j;
         title_lines.push(format!(
             "[{idx}] {} | {} | {} ~ {}",
             app,
@@ -518,6 +595,13 @@ async fn search_text(
             lines.join("\n")
         ));
     }
+    if !insight_lines.is_empty() {
+        sections.push(format!(
+            "{}\n{}",
+            lang.search_insight_header(insight_total, insight_lines.len()),
+            insight_lines.join("\n")
+        ));
+    }
     if !title_lines.is_empty() {
         sections.push(format!(
             "{}\n{}",
@@ -525,7 +609,7 @@ async fn search_text(
             title_lines.join("\n")
         ));
     }
-    if lines.is_empty() && title_lines.is_empty() {
+    if lines.is_empty() && insight_lines.is_empty() && title_lines.is_empty() {
         sections.push(lang.search_no_hit().to_string());
     }
     let for_llm = truncate(&sections.join("\n"), RESULT_CHAR_BUDGET);
@@ -1084,6 +1168,11 @@ mod behavior_tests {
                  CREATE TABLE frames (
                      path TEXT PRIMARY KEY, ts TEXT, local_date TEXT,
                      ocr_state INTEGER NOT NULL DEFAULT 0);
+                 CREATE TABLE frame_insights (
+                     path TEXT PRIMARY KEY, ts TEXT, local_date TEXT,
+                     app TEXT, title TEXT, insight TEXT, entities TEXT,
+                     state INTEGER NOT NULL DEFAULT 0,
+                     attempts INTEGER NOT NULL DEFAULT 0, done_at TEXT);
                  {mem_sql}
                  INSERT INTO text_sessions_fts(rowid, text)
                      SELECT id, text FROM text_sessions;"
@@ -1390,6 +1479,40 @@ mod behavior_tests {
             out.for_llm
         );
         assert!(out.citations.is_empty());
+    }
+
+    /// 洞察层:云端画面洞察命中作为独立小节,证据挂对应帧;覆盖行披露洞察覆盖日。
+    #[tokio::test]
+    async fn search_insight_layer_hits_with_frame_citation() {
+        let ctx = ctx_with(
+            "INSERT INTO frame_insights(path, ts, local_date, app, insight, entities, state)
+             VALUES ('shots/x.jpg','2026-07-08T10:00:00+09:00','2026-07-08','chrome',
+                     '用户在浏览 keychron 键盘评测页面','keychron, 机械键盘', 1);",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T10:00:00+09:00','2026-07-08T10:10:00+09:00',600,'2026-07-08',10,
+              'chrome','评测页');",
+        )
+        .await;
+        let out = execute(
+            &ctx,
+            &ToolCall::SearchText {
+                keywords: vec!["keychron".into()],
+                range: Some(day()),
+            },
+            1,
+            ChatLang::ZhHans,
+        )
+        .await
+        .unwrap();
+        assert!(out.for_llm.contains("画面洞察命中 1 条"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("云端画面洞察"), "{}", out.for_llm);
+        let insight_cite = out
+            .citations
+            .iter()
+            .find(|c| c.frame_path.as_deref() == Some("shots/x.jpg"))
+            .expect("洞察引用应携带帧路径");
+        assert!(insight_cite.title.contains("keychron"));
     }
 
     /// 跨层去重:标题命中落在已返回的屏幕文字会话时间段内 → 剔除,段外保留。

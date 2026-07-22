@@ -127,7 +127,7 @@
         "enableDescription": "When off, background capture stops (both window activity and screenshots).",
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
-        "ocrResidentLabel": "Keep OCR resident",
+        "ocrResidentLabel": "Resident text recognition (local OCR)",
         "ocrResidentDescription": "New screenshots become searchable in real time (~400 MB extra RAM). Runs only on AC power and pauses automatically on battery; off = batch recognition, search lags behind.",
         "intervalLabel": "Capture interval",
         "intervalDescription": "Capture interval.",
@@ -138,7 +138,7 @@
         "screenshotPathLabel": "Screenshots folder",
         "dataPathLabel": "Data folder",
         "dataPathHint": "Location of the database and the default screenshots root. Changing requires a restart, and old data must be migrated manually.",
-        "backfillLabel": "Backfill old screenshots",
+        "backfillLabel": "Backfill old screenshots (local OCR)",
         "backfillDescription": "Index screenshots taken before screen memory was enabled, so Chat can search them.",
         "backfillButton": "Backfill & recognize",
         "backfillRunning": "Recognizing…",
@@ -151,7 +151,11 @@
         "ocrConfirmResident": "Enabling text indexing requires downloading the text recognition component (~40MB). It turns on automatically once the download finishes.",
         "ocrConfirmBackfill": "Backfilling requires downloading the text recognition component (~40MB). Backfill starts automatically once the download finishes.",
         "ocrConfirmAccept": "Download & continue",
-        "ocrDownloading": "Downloading text recognition component… {{mb}} MB"
+        "ocrDownloading": "Downloading text recognition component… {{mb}} MB",
+        "insightLabel": "Screen insights (cloud)",
+        "insightOn": "On · {{scope}}",
+        "insightOff": "Off",
+        "insightConfigure": "Configure"
       },
       "workHours": {
         "title": "Work hours",
@@ -725,7 +729,8 @@
       "models": "Models",
       "general": "General",
       "prompt": "Prompt",
-      "external": "Cloud API"
+      "external": "Cloud API",
+      "insight": "Screen Insights"
     },
     "engine": {
       "sectionTitle": "Local AI engine",
@@ -909,6 +914,17 @@
         "title": "Local models (not in the recommended list)",
         "pairedMmproj": "Vision projector: {{name}}",
         "orphanMmproj": "This is a vision projector file (mmproj) and cannot be used as a model by itself. To import a model, pick the much larger main GGUF file from the same repository."
+      },
+      "assign": {
+        "title": "Tasks & models",
+        "desc": "Which model each AI task uses. Local models are managed below; cloud connections are configured in Cloud API.",
+        "summary": "Reports / summaries",
+        "chat": "Chat",
+        "insight": "Screen insights",
+        "cloudText": "Cloud · text",
+        "cloudVision": "Cloud · vision",
+        "insightConfigured": "Current: {{model}} (change in Cloud API)",
+        "insightMissing": "No vision model configured — set one in Cloud API"
       }
     },
     "brief": {
@@ -978,7 +994,63 @@
       "groupTextHint": "Segment summaries · Chat",
       "testTextButton": "Test text API",
       "testStepConn": "Network & authentication",
-      "testStepChat": "Model {{model}} responds"
+      "testStepChat": "Model {{model}} responds",
+      "groupVisionTitle": "Vision model",
+      "groupVisionHint": "Used by Screen Insights: analyzes screenshots into one-line insights and key entities.",
+      "visionReuseLabel": "Reuse text endpoint",
+      "visionReuseHint": "Use the text model's endpoint and API key above; only the model name is needed",
+      "visionModelLabel": "Vision model name",
+      "testVisionButton": "Test vision call",
+      "testStepVision": "Vision call",
+      "visionTestNote": "The test sends a locally generated synthetic image — no real screenshot is ever uploaded."
+    },
+    "insight": {
+      "sectionTitle": "Cloud screen insights",
+      "sectionDesc": "Sends screenshots to your configured cloud vision model to produce one-line \"what's happening\" insights and key entities, enriching reports and chat search.",
+      "enableLabel": "Enable cloud screen insights",
+      "enableHint": "When on, screenshots in the selected scope are uploaded to your configured provider for analysis",
+      "needScreenshot": "Enable screenshots first in Settings → General",
+      "visionReady": "Vision model: {{model}} (change in Cloud API)",
+      "visionMissing": "No vision model configured — set one in Cloud API before insights can run",
+      "scopeTitle": "Analysis scope",
+      "scopeDesc": "Controls which screenshots are uploaded. Wider scope keeps more information and costs more.",
+      "scopeLabel": "Scope",
+      "scope": {
+        "focus": "Focus apps only",
+        "recommended": "Recommended",
+        "all": "All apps"
+      },
+      "scopeExplain": {
+        "focus": "Only focus apps are analyzed (every distinct frame, 1280px); other apps are never uploaded.",
+        "recommended": "Focus apps frame-by-frame; other apps sampled every 5 minutes (960px).",
+        "all": "Every distinct frame of every app (1280px) — fullest information, highest cost."
+      },
+      "focusAppsLabel": "Focus apps",
+      "focusAppsHint": "Screenshots of these apps are analyzed frame-by-frame (e.g. WeChat, browser); type a process name and press Enter",
+      "focusAppsPlaceholder": "Type an app process name, press Enter",
+      "removeApp": "Remove {{app}}",
+      "budgetTitle": "Budget",
+      "budgetDesc": "Daily analyzed-frame cap; pauses automatically until the next day when reached.",
+      "dailyCapLabel": "Daily cap (frames)",
+      "usageLine": "Today: {{done}} / {{cap}} frames analyzed, {{pending}} pending",
+      "backfillTitle": "Backfill history",
+      "backfillDesc": "Analyze screenshots taken before insights were enabled. Cost depends on your model's pricing; the frame count is shown before confirming.",
+      "backfillButton": "Analyze past screenshots…",
+      "backfillProgress": "Backfilling: {{done}} / {{total}} frames",
+      "consent": {
+        "title": "Enable cloud screen insights?",
+        "body": "Screenshots within the selected scope will be uploaded to the provider you configured in Cloud API for analysis.",
+        "point1": "Only screenshots of apps in your selected scope are uploaded",
+        "point2": "Apps on the privacy list are never uploaded",
+        "point3": "Data goes only to the endpoint you entered yourself — no third party in between",
+        "confirm": "I understand, enable"
+      },
+      "backfillConfirm": {
+        "title": "Analyze past screenshots",
+        "body": "{{frames}} frames pending. Runs under the current scope and daily cap; can be interrupted and resumed anytime.",
+        "empty": "No past screenshots to backfill.",
+        "confirm": "Start backfill"
+      }
     }
   },
   "devices": {

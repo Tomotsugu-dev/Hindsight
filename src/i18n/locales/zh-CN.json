@@ -127,7 +127,7 @@
         "enableDescription": "关闭后停止后台采集（窗口活动 + 截图）。",
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
-        "ocrResidentLabel": "常驻 OCR",
+        "ocrResidentLabel": "常驻文字识别(本地 OCR)",
         "ocrResidentDescription": "新截图即时可搜，多占约 400MB 内存；仅在接通电源时运行，电池供电自动暂停。关闭则定时批量识别，检索有延迟。",
         "intervalLabel": "采集间隔",
         "intervalDescription": "采集频率。",
@@ -138,7 +138,7 @@
         "screenshotPathLabel": "截图保存路径",
         "dataPathLabel": "数据保存路径",
         "dataPathHint": "数据库与默认截图根目录所在位置。更改后需重启应用，旧数据需手动迁移。",
-        "backfillLabel": "回填历史截图",
+        "backfillLabel": "回填历史截图(本地 OCR)",
         "backfillDescription": "把开启屏幕记忆之前的旧截图补录进文字索引，补完即可在「对话」里搜到。",
         "backfillButton": "回填并识别",
         "backfillRunning": "识别中…",
@@ -151,7 +151,11 @@
         "ocrConfirmResident": "开启文字索引需要下载文字识别组件（约 40MB），下载完成后自动开启。",
         "ocrConfirmBackfill": "回填需要下载文字识别组件（约 40MB），下载完成后自动开始回填。",
         "ocrConfirmAccept": "下载并继续",
-        "ocrDownloading": "正在下载文字识别组件… {{mb}} MB"
+        "ocrDownloading": "正在下载文字识别组件… {{mb}} MB",
+        "insightLabel": "截图洞察(云端)",
+        "insightOn": "已开启 · {{scope}}",
+        "insightOff": "未开启",
+        "insightConfigure": "配置"
       },
       "workHours": {
         "title": "工作时段",
@@ -725,7 +729,8 @@
       "models": "模型",
       "general": "常规",
       "prompt": "提示词",
-      "external": "云端 API"
+      "external": "云端 API",
+      "insight": "截图洞察"
     },
     "engine": {
       "sectionTitle": "本地 AI 引擎",
@@ -909,6 +914,17 @@
         "title": "本地模型（不在推荐列表中）",
         "pairedMmproj": "视觉投影：{{name}}",
         "orphanMmproj": "这是视觉投影文件（mmproj），不能单独作为模型使用。如需导入模型，请选择同仓库中体积更大的主模型 GGUF 文件。"
+      },
+      "assign": {
+        "title": "任务与模型",
+        "desc": "每个 AI 任务用哪个模型。本地模型在下方管理;云端连接在「云端 API」配置。",
+        "summary": "日报/总结",
+        "chat": "对话(Chat)",
+        "insight": "截图洞察",
+        "cloudText": "云端 · 文本",
+        "cloudVision": "云端 · 视觉",
+        "insightConfigured": "当前:{{model}}(在「云端 API」中修改)",
+        "insightMissing": "视觉模型未配置——去「云端 API」填写"
       }
     },
     "brief": {
@@ -978,7 +994,63 @@
       "groupTextHint": "段总结 · 「对话」ChatBot",
       "testTextButton": "测试文本 API",
       "testStepConn": "网络与认证",
-      "testStepChat": "模型 {{model}} 可用"
+      "testStepChat": "模型 {{model}} 可用",
+      "groupVisionTitle": "视觉模型",
+      "groupVisionHint": "供「截图洞察」使用:分析截图画面,生成一句话洞察与关键实体。",
+      "visionReuseLabel": "复用文本端点",
+      "visionReuseHint": "使用上方文本模型的 Endpoint 与 API Key,只需填模型名",
+      "visionModelLabel": "视觉模型名",
+      "testVisionButton": "测试视觉调用",
+      "testStepVision": "视觉调用",
+      "visionTestNote": "测试发送的是本地生成的合成色块图,不会上传任何真实截图。"
+    },
+    "insight": {
+      "sectionTitle": "云端截图洞察",
+      "sectionDesc": "把截图交给你配置的云端视觉模型,生成“在做什么”的一句话洞察与关键实体,充实日报/周报与对话检索。",
+      "enableLabel": "启用云端截图洞察",
+      "enableHint": "开启后,所选范围内的截图将上传至你配置的服务商进行分析",
+      "needScreenshot": "需要先在 设置 → 通用 中开启屏幕截图",
+      "visionReady": "视觉模型:{{model}}(在「云端 API」中修改)",
+      "visionMissing": "视觉模型未配置——去「云端 API」填写视觉模型后洞察才会运行",
+      "scopeTitle": "分析范围",
+      "scopeDesc": "决定哪些截图会被上传分析。范围越大信息越全,消耗也越多。",
+      "scopeLabel": "范围",
+      "scope": {
+        "focus": "仅重点应用",
+        "recommended": "推荐",
+        "all": "全部应用"
+      },
+      "scopeExplain": {
+        "focus": "只分析重点应用的截图(逐独立帧、1280px),其余应用不上传。",
+        "recommended": "重点应用逐帧分析;其余应用每 5 分钟取一帧(960px)。",
+        "all": "所有应用逐独立帧分析(1280px),信息最全、消耗最高。"
+      },
+      "focusAppsLabel": "重点应用",
+      "focusAppsHint": "这些应用的截图逐帧分析(如微信、浏览器);输入进程名后回车添加",
+      "focusAppsPlaceholder": "输入应用进程名,回车添加",
+      "removeApp": "移除 {{app}}",
+      "budgetTitle": "预算",
+      "budgetDesc": "每日分析帧数上限,超限自动暂停到次日。",
+      "dailyCapLabel": "每日上限(帧)",
+      "usageLine": "今日已分析 {{done}} / {{cap}} 帧,待处理 {{pending}} 帧",
+      "backfillTitle": "历史回填",
+      "backfillDesc": "分析开启洞察之前的存量截图。费用取决于所配模型单价,确认前会显示帧数。",
+      "backfillButton": "分析历史截图…",
+      "backfillProgress": "回填中:{{done}} / {{total}} 帧",
+      "consent": {
+        "title": "开启云端截图洞察?",
+        "body": "开启后,所选范围内的屏幕截图将上传至你在「云端 API」中配置的服务商进行分析。",
+        "point1": "仅上传你选定范围内应用的截图",
+        "point2": "隐私名单中的应用永不上传",
+        "point3": "数据只发往你自己填写的端点,本应用不经手任何第三方",
+        "confirm": "我已了解,开启"
+      },
+      "backfillConfirm": {
+        "title": "分析历史截图",
+        "body": "共 {{frames}} 帧待分析。将按当前范围与每日上限执行,可随时中断、断点续跑。",
+        "empty": "没有待回填的历史截图。",
+        "confirm": "开始回填"
+      }
     }
   },
   "devices": {

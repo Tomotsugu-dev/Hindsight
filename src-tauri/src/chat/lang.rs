@@ -325,7 +325,31 @@ impl ChatLang {
     /// 活动日数来自主库(有没有用电脑),索引日数/待识别帧来自记忆库。
     /// "没搜到"究竟是"屏幕上没出现过"还是"索引不全",模型只有靠这行才能区分
     /// (措辞约束见 system_prompt 第 8 条)。
-    pub fn coverage_line(self, activity_days: i64, covered_days: i64, pending: i64) -> String {
+    pub fn coverage_line(
+        self,
+        activity_days: i64,
+        covered_days: i64,
+        pending: i64,
+        insight_days: i64,
+    ) -> String {
+        let base = self.coverage_line_base(activity_days, covered_days, pending);
+        if insight_days <= 0 {
+            return base;
+        }
+        match self {
+            Self::ZhHans => format!("{base} 另有 {insight_days} 个活动日有云端画面洞察。"),
+            Self::ZhHant => format!("{base} 另有 {insight_days} 個活動日有雲端畫面洞察。"),
+            Self::En => format!("{base} Cloud screen insights cover {insight_days} active day(s)."),
+            Self::Ja => {
+                format!("{base} また {insight_days} 日分のクラウド画面インサイトがあります。")
+            }
+            Self::Pt => {
+                format!("{base} Insights de tela em nuvem cobrem {insight_days} dia(s) ativo(s).")
+            }
+        }
+    }
+
+    fn coverage_line_base(self, activity_days: i64, covered_days: i64, pending: i64) -> String {
         if activity_days == 0 {
             return match self {
                 Self::ZhHans => "覆盖情况:该范围内没有活动记录。".into(),
@@ -385,6 +409,17 @@ impl ChatLang {
                 Self::ZhHans | Self::ZhHant | Self::Ja => format!("{base}。"),
                 Self::En | Self::Pt => format!("{base}."),
             }
+        }
+    }
+
+    /// 搜索的画面洞察层小节头(云端视觉分析出的一句话+实体,证据为对应帧)。
+    pub fn search_insight_header(self, total: i64, shown: usize) -> String {
+        match self {
+            Self::ZhHans => format!("画面洞察命中 {total} 条,显示最近 {shown} 条(来自云端视觉分析,证据为对应截图帧):"),
+            Self::ZhHant => format!("畫面洞察命中 {total} 條,顯示最近 {shown} 條(來自雲端視覺分析,證據為對應截圖幀):"),
+            Self::En => format!("{total} screen-insight match(es); showing the {shown} most recent (from cloud vision analysis; evidence is the matching frame):"),
+            Self::Ja => format!("画面インサイトのヒットは {total} 件。直近の {shown} 件を表示します(クラウド視覚分析由来。証拠は該当フレーム):"),
+            Self::Pt => format!("{total} correspondência(s) de insight de tela; mostrando as {shown} mais recentes (da análise de visão em nuvem; a evidência é o quadro correspondente):"),
         }
     }
 

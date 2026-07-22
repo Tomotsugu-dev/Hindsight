@@ -96,6 +96,9 @@ pub struct SegmentContext<'a> {
     pub top_apps: &'a [(String, u32, String)],
     /// 逐小时活动时间线：(time_label, 该小时的应用/时长/标题清单)
     pub timeline: &'a [(String, String)],
+    /// 云端截图洞察行(可为空):(HH:MM, "应用 | 一句话 | 实体")。
+    /// 有值时拼进 user prompt 作为"具体在做什么"的补充材料。
+    pub insights: &'a [(String, String)],
 }
 
 /// 组装当次调用的完整 system prompt：
@@ -162,6 +165,16 @@ fn build_user_prompt_zh(ctx: &SegmentContext) -> String {
             "\n请基于这份时间线按时间顺序写这个时段的活动日志。窗口标题是了解具体在做什么的主要线索（文件名 / 网页标题 / 视频标题等），可以据此描述具体活动，但不要推测标题之外的细节。同一活动全篇只写一次（相似条目合并），遵守系统规则的段落与句数上限；严禁逐条复述，严禁把上面的材料（时段/应用列表/时间线行）原样抄进输出——直接从日志正文第一句开始写。",
         );
     }
+    if !ctx.insights.is_empty() {
+        out.push_str(&format!(
+            "\n屏幕画面洞察（云端视觉分析逐帧生成，按时刻排列，共 {} 条）：\n",
+            ctx.insights.len()
+        ));
+        for (t, line) in ctx.insights {
+            out.push_str(&format!("- [{t}] {line}\n"));
+        }
+        out.push_str("这些洞察描述了画面上实际发生的事，比窗口标题更具体，优先用它们充实活动细节；与时间线冲突时以时间线的时长为准。\n");
+    }
     out
 }
 
@@ -193,6 +206,16 @@ fn build_user_prompt_en(ctx: &SegmentContext) -> String {
             "\nWrite this segment's journal entry from the timeline, in time order. Window titles are the primary clue to what was actually done (file names / page titles / video titles); do not speculate beyond them. Each activity appears once (merge similar lines), within the paragraph and sentence caps from the system rules. Never rewrite the lines one-by-one, and never copy the material above (segment line / app list / timeline) into the output — start directly with the first sentence of the journal.",
         );
     }
+    if !ctx.insights.is_empty() {
+        out.push_str(&format!(
+            "\nScreen insights (frame-level cloud vision analysis, in time order, {} lines):\n",
+            ctx.insights.len()
+        ));
+        for (t, line) in ctx.insights {
+            out.push_str(&format!("- [{t}] {line}\n"));
+        }
+        out.push_str("These insights describe what was actually on screen — more specific than window titles; prefer them for concrete detail. When they conflict with the timeline, trust the timeline's durations.\n");
+    }
     out
 }
 
@@ -223,6 +246,16 @@ fn build_user_prompt_ja(ctx: &SegmentContext) -> String {
         out.push_str(
             "\nこのタイムラインに基づき、時系列順にこの時間帯の活動ログを書いてください。ウィンドウタイトル（ファイル名・ページタイトル・動画タイトル）が主要な手がかりです。タイトル以外の細部を推測しないでください。同じ活動は全体で一度だけ（類似行は統合）、システム規則の段落数・文数上限を厳守。1 行ずつ書き写さず、上の材料（時間帯行・アプリ一覧・タイムライン行）を出力にコピーしないでください——ログ本文の最初の一文から直接書き始めてください。",
         );
+    }
+    if !ctx.insights.is_empty() {
+        out.push_str(&format!(
+            "\n画面インサイト（クラウド視覚分析によるフレーム単位の記述、時刻順、全 {} 行）：\n",
+            ctx.insights.len()
+        ));
+        for (t, line) in ctx.insights {
+            out.push_str(&format!("- [{t}] {line}\n"));
+        }
+        out.push_str("これらは画面上で実際に起きていたことの記述で、ウィンドウタイトルより具体的です。活動の詳細にはこちらを優先し、タイムラインと矛盾する場合は時間配分はタイムラインを信頼してください。\n");
     }
     out
 }

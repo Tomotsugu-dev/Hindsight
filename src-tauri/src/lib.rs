@@ -7,6 +7,7 @@ mod commands;
 mod device;
 mod error;
 mod icons;
+mod insight;
 mod memory;
 mod permissions;
 mod platform;
@@ -158,10 +159,16 @@ pub fn run() {
                     bootstrap::init_capture_service(pool.clone(), memdb.clone(), &cfg).await;
                 // OCR 常驻模式:按设置启停(设置保存时由 commands::settings 再同步)
                 let resident = std::sync::Arc::new(memory::resident::ResidentOcr::default());
+                let insight_worker = std::sync::Arc::new(insight::InsightWorker::default());
                 resident
                     .sync(cfg.memory_ocr_resident, memdb.clone())
                     .await;
                 handle.manage(resident);
+                // 云端截图洞察:按设置启停(设置保存时由 commands::settings 再同步)
+                insight_worker
+                    .sync(cfg.insight_enabled, Some(pool.clone()), memdb.clone())
+                    .await;
+                handle.manage(insight_worker);
                 let memdb_for_sync = memdb.clone();
                 handle.manage(commands::screen_memory::MemoryState(memdb));
                 spawn_cleanup_task(pool.clone());
@@ -284,6 +291,12 @@ pub fn run() {
             commands::screen_memory::memory_digest_now,
             commands::screen_memory::memory_digest_stop,
             commands::screen_memory::memory_pending_stats,
+            // --- insight: 云端截图洞察 ---
+            commands::insight::insight_status,
+            commands::insight::insight_backfill_estimate,
+            commands::insight::insight_backfill_start,
+            commands::insight::insight_backfill_cancel,
+            commands::insight::test_ai_vision,
             // --- chat: 屏幕记忆问答 + 会话管理 ---
             commands::chat::chat_ask,
             commands::chat::chat_inflight,

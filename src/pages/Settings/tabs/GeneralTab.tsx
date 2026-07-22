@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
@@ -25,6 +26,7 @@ import styles from "./GeneralTab.module.css";
 
 export default function GeneralTab() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { settings, update } = useSettings();
   const [locale, setLocale] = useLocale();
   const [dataRoot, setDataRoot] = useState<string>("");
@@ -238,6 +240,24 @@ export default function GeneralTab() {
             checked={settings.memoryOcrResident}
             onChange={onResidentToggle}
           />
+        </Row>
+        <Row
+          label={t("settings.general.capture.insightLabel")}
+          description={
+            settings.insightEnabled
+              ? t("settings.general.capture.insightOn", {
+                  scope: t(`aiSettings.insight.scope.${settings.insightScope}`),
+                })
+              : t("settings.general.capture.insightOff")
+          }
+        >
+          <button
+            type="button"
+            className={styles.backfillBtn}
+            onClick={() => navigate("/ai/settings/insight")}
+          >
+            {t("settings.general.capture.insightConfigure")}
+          </button>
         </Row>
         <Row
           label={t("settings.general.capture.backfillLabel")}

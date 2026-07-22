@@ -4,6 +4,7 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::capture::CaptureService;
 use crate::commands::screen_memory::MemoryState;
+use crate::insight::InsightWorker;
 use crate::memory::resident::ResidentOcr;
 use crate::repo::settings::{self, Settings, SettingsPatch};
 use crate::storage::DbPool;
@@ -21,11 +22,13 @@ pub async fn get_settings(pool: State<'_, DbPool>) -> Result<Settings, String> {
 /// / 挂机阈值 / 截图配置），把 minimize_to_tray 同步给 close handler 静态变量，
 /// 把 auto_start 切到操作系统的开机自启。所有变更立刻生效，不需要重启。
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri 命令按 managed state 逐个注入,聚合成 struct 反而失去 DI
 pub async fn update_settings(
     app: AppHandle,
     pool: State<'_, DbPool>,
     svc: State<'_, Arc<CaptureService>>,
     resident: State<'_, Arc<ResidentOcr>>,
+    insight_worker: State<'_, Arc<InsightWorker>>,
     mem: State<'_, MemoryState>,
     sync_engine: State<'_, Arc<SyncEngine>>,
     patch: SettingsPatch,
@@ -36,6 +39,7 @@ pub async fn update_settings(
     let prev_interval = current.capture_interval_seconds;
     let prev_autostart = current.auto_start;
     let prev_resident = current.memory_ocr_resident;
+    let prev_insight = current.insight_enabled;
     let prev_opt_sync = (
         current.sync_ai_summaries,
         current.sync_chat_history,
@@ -92,6 +96,20 @@ pub async fn update_settings(
     // OCR 常驻开关:启停立即生效,不需要重启
     if next.memory_ocr_resident != prev_resident {
         resident.sync(next.memory_ocr_resident, mem.0.clone()).await;
+    }
+
+    // 云端截图洞察开关:同上即时生效。首次开启即打水位线(常驻只吃此后的新帧,
+    // 存量走显式回填);同意门由前端把关(consent 未确认时不发 enabled=true)。
+    // 不提前返回:下面的 pull 游标逻辑必须照走(同一次保存可能还改了上云挡位)。
+    let mut next = next;
+    if next.insight_enabled != prev_insight {
+        if next.insight_enabled && next.insight_since_ts.is_none() {
+            next.insight_since_ts = Some(chrono::Local::now().to_rfc3339());
+            settings::save(&pool, &next).await.map_err(String::from)?;
+        }
+        insight_worker
+            .sync(next.insight_enabled, Some((*pool).clone()), mem.0.clone())
+            .await;
     }
 
     // 可选上云三挡任一从关到开:重置 pull 游标让 Drive 上的历史文件重新入列

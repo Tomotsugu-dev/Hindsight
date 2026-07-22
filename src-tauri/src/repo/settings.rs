@@ -85,6 +85,21 @@ pub struct Settings {
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
+    /// 云端截图洞察(docs/design/cloud-insight.md)。默认关;
+    /// 开启前必须过同意门(insight_consent_acknowledged)。
+    pub insight_enabled: bool,
+    /// 同意门:用户确认过"截图将上传至自配服务商"。确认一次永久 true。
+    pub insight_consent_acknowledged: bool,
+    /// 分析范围:"focus"(仅重点应用逐帧) / "recommended"(重点逐帧+其余 5 分钟一帧)
+    /// / "all"(全应用逐帧)。非法值 sanitize 回 "recommended"。
+    pub insight_scope: String,
+    /// 重点应用 process_name 列表(逐独立帧、1280px 分析)。
+    pub insight_focus_apps: Vec<String>,
+    /// 每日分析帧数上限,超限自动停到次日。
+    pub insight_daily_frame_cap: u32,
+    /// 常驻洞察只处理该时刻(RFC3339)之后登记的帧——开启功能时打点,
+    /// 避免一开启就静默分析整个保留窗的存量截图(那是"历史回填"的事,要显式确认)。
+    pub insight_since_ts: Option<String>,
 }
 
 impl Default for Settings {
@@ -117,6 +132,12 @@ impl Default for Settings {
             sync_chat_history: false,
             sync_screen_memory: false,
             ai: AiConfig::default(),
+            insight_enabled: false,
+            insight_consent_acknowledged: false,
+            insight_scope: "recommended".to_string(),
+            insight_focus_apps: Vec::new(),
+            insight_daily_frame_cap: 2000,
+            insight_since_ts: None,
         }
     }
 }
@@ -172,6 +193,12 @@ pub struct SettingsPatch {
     pub sync_screen_memory: Option<bool>,
     /// AI 配置整组覆盖；前端要么不传（保留旧值），要么传完整新值
     pub ai: Option<AiConfig>,
+    pub insight_enabled: Option<bool>,
+    pub insight_consent_acknowledged: Option<bool>,
+    pub insight_scope: Option<String>,
+    pub insight_focus_apps: Option<Vec<String>>,
+    pub insight_daily_frame_cap: Option<u32>,
+    pub insight_since_ts: Option<Option<String>>,
 }
 
 /// 读 settings_store 单行 + 反序列化。
@@ -365,6 +392,31 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .ai
             .map(|new_ai| crate::ai::config::sanitize(new_ai, &current.ai))
             .unwrap_or(current.ai),
+        insight_enabled: patch.insight_enabled.unwrap_or(current.insight_enabled),
+        insight_consent_acknowledged: patch
+            .insight_consent_acknowledged
+            .unwrap_or(current.insight_consent_acknowledged),
+        insight_scope: patch
+            .insight_scope
+            .map(|v| sanitize_insight_scope(&v))
+            .unwrap_or(current.insight_scope),
+        insight_focus_apps: patch
+            .insight_focus_apps
+            .map(sanitize_keywords)
+            .unwrap_or(current.insight_focus_apps),
+        insight_daily_frame_cap: patch
+            .insight_daily_frame_cap
+            .map(|v| v.clamp(100, 10_000))
+            .unwrap_or(current.insight_daily_frame_cap),
+        insight_since_ts: patch.insight_since_ts.unwrap_or(current.insight_since_ts),
+    }
+}
+
+/// 洞察分析范围收敛到合法集合,非法值回退 recommended。
+fn sanitize_insight_scope(v: &str) -> String {
+    match v {
+        "focus" | "recommended" | "all" => v.to_string(),
+        _ => "recommended".to_string(),
     }
 }
 

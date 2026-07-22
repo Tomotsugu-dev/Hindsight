@@ -115,6 +115,20 @@ pub struct AiConfig {
     /// `None` = 8K 默认。详见 [`Self::batch_size`] 关于 fallback 语义。
     pub ctx_size: Option<u32>,
 
+    /// 视觉模型 ID(云端截图洞察用,docs/design/cloud-insight.md)。
+    /// 空 = 未配置,洞察功能不可用。
+    #[serde(default)]
+    pub vision_model: String,
+    /// 视觉调用是否复用文本端点(endpoint + api_key)。默认 true;
+    /// false 时用下面的独立端点(文本用 DeepSeek、视觉用别家的场景)。
+    #[serde(default = "default_true")]
+    pub vision_reuse_text: bool,
+    /// 不复用文本端点时的视觉 base URL / Bearer token。
+    #[serde(default)]
+    pub vision_endpoint: String,
+    #[serde(default)]
+    pub vision_api_key: String,
+
     /// 段总结阶段的 batch 参数；`None` = fallback 到 [`Self::batch_size`]。
     pub summary_batch_size: Option<u32>,
     /// 段总结阶段的 `-np`；`None` = fallback 到 [`Self::parallel_slots`]。
@@ -124,7 +138,29 @@ pub struct AiConfig {
     pub summary_ctx_size: Option<u32>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl AiConfig {
+    /// 视觉连接三元组(endpoint, api_key, model);未配齐返回 None。
+    /// 复用开关决定 endpoint/key 来源;model 永远独立(文本模型没有视觉能力)。
+    pub fn vision_conn(&self) -> Option<(String, String, String)> {
+        let model = self.vision_model.trim();
+        if model.is_empty() {
+            return None;
+        }
+        let (endpoint, key) = if self.vision_reuse_text {
+            (self.endpoint.trim(), self.api_key.trim())
+        } else {
+            (self.vision_endpoint.trim(), self.vision_api_key.trim())
+        };
+        if endpoint.is_empty() {
+            return None;
+        }
+        Some((endpoint.to_string(), key.to_string(), model.to_string()))
+    }
+
     /// 取段总结阶段的 batch；新字段优先，未设则 fallback 到全局 `batch_size`。
     pub fn summary_batch_size_effective(&self) -> Option<u32> {
         self.summary_batch_size.or(self.batch_size)
@@ -241,6 +277,10 @@ impl Default for AiConfig {
             summary_main: String::new(),
             summary_mmproj: String::new(),
             chat_main: String::new(),
+            vision_model: String::new(),
+            vision_reuse_text: true,
+            vision_endpoint: String::new(),
+            vision_api_key: String::new(),
             prompt_language: lang.to_string(),
             prompt_overrides: PromptOverrides::default(),
             batch_size: None,
