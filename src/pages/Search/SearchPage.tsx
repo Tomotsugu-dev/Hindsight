@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { ImageOff, Loader2, ScanSearch, Search } from "lucide-react";
+import { ImageOff, Loader2, ScanSearch, Search, ZoomIn, ZoomOut } from "lucide-react";
 import { api, type MemorySearchHit } from "../../api/hindsight";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { logError } from "../../lib/logger";
@@ -113,7 +113,12 @@ export default function SearchPage() {
     try {
       const resp = await api.memorySearch(query.trim(), PAGE_SIZE, hits.length);
       if (seqRef.current !== seq) return;
-      setHits((prev) => [...prev, ...resp.hits]);
+      // 常驻 OCR 在持续插入新会话,offset 窗口会漂移——按 sessionId 去重,
+      // 防止"加载更多"重复条目(也避免 React key 冲突)
+      setHits((prev) => {
+        const seen = new Set(prev.map((h) => h.sessionId));
+        return [...prev, ...resp.hits.filter((h) => !seen.has(h.sessionId))];
+      });
       setTotal(resp.total);
     } catch (e) {
       if (seqRef.current === seq) logError("search.loadMore", e);
@@ -137,7 +142,6 @@ export default function SearchPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>{t("search.pageTitle")}</h1>
       <p className={styles.subtitle}>{t("search.subtitle")}</p>
 
       <div className={styles.searchBox}>
@@ -193,37 +197,215 @@ export default function SearchPage() {
         </button>
       )}
 
-      {viewer &&
-        createPortal(
-          <div
-            className={styles.viewerBackdrop}
-            onMouseDown={() => setViewer(null)}
-            role="presentation"
-          >
-            <div className={styles.viewerBody}>
-              {viewer.framePath ? (
-                <img
-                  className={styles.viewerImg}
-                  src={convertFileSrc(viewer.framePath)}
-                  alt={t("search.viewerAlt")}
-                />
-              ) : (
-                <div className={styles.viewerMissing}>
-                  <ImageOff size={32} strokeWidth={1.5} />
-                  {t("search.imageGone")}
-                </div>
-              )}
-              <p className={styles.viewerMeta}>
-                {viewer.app}
-                {viewer.title ? ` · ${viewer.title}` : ""}
-                {" · "}
-                {fmtTs(viewer.frameTs ?? viewer.startedTs)}
-              </p>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {viewer && <Viewer hit={viewer} words={words} onClose={() => setViewer(null)} />}
     </div>
+  );
+}
+
+/** 缩放范围与步进(滚轮/按钮共用)。 */
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 8;
+const ZOOM_STEP = 1.25;
+
+/**
+ * 截图大图预览:滚轮/按钮缩放、拖拽平移、双击复位;
+ * 打开时现场 OCR 该帧定位命中行,画半透明高亮框(历史帧同样可用;
+ * OCR 失败或图已清理则只展示图/占位,优雅降级)。
+ */
+function Viewer({
+  hit,
+  words,
+  onClose,
+}: {
+  hit: MemorySearchHit;
+  words: string[];
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [boxes, setBoxes] = useState<[number, number, number, number][]>([]);
+  const [locating, setLocating] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  /** 大图加载失败(文件已被保留策略清理)→ 降级文字视图 */
+  const [imgGone, setImgGone] = useState(false);
+  const [sessionText, setSessionText] = useState<string | null>(null);
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const showText = !hit.framePath || imgGone;
+
+  // 图不可用 → 拉会话 OCR 全文(图没了字还在)
+  useEffect(() => {
+    if (!showText || sessionText !== null) return;
+    let alive = true;
+    api
+      .memorySessionText(hit.sessionId)
+      .then((text) => {
+        if (alive) setSessionText(text);
+      })
+      .catch((e) => logError("search.sessionText", e));
+    return () => {
+      alive = false;
+    };
+  }, [showText, sessionText, hit.sessionId]);
+
+  // 打开即定位命中行;组件卸载(关闭)后丢弃结果
+  useEffect(() => {
+    if (!hit.framePath) return;
+    let alive = true;
+    setLocating(true);
+    api
+      .memoryLocate(hit.framePath, words)
+      .then((b) => {
+        if (alive) setBoxes(b);
+      })
+      .catch((e) => logError("search.locate", e))
+      .finally(() => {
+        if (alive) setLocating(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // words 随输入框变化,但 viewer 打开期间应按打开时的词定位——只跟 framePath
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hit.framePath]);
+
+  const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  const applyZoom = (factor: number) => {
+    setZoom((z) => {
+      const next = clampZoom(z * factor);
+      if (next === ZOOM_MIN) setPan({ x: 0, y: 0 });
+      return next;
+    });
+  };
+  const reset = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  return createPortal(
+    <div className={styles.viewerBackdrop} onMouseDown={onClose} role="presentation">
+      <div
+        className={styles.viewerBody}
+        role="presentation"
+        onMouseDown={(e) => e.stopPropagation()}
+        onWheel={(e) => applyZoom(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP)}
+      >
+        {!showText ? (
+          <div
+            className={`${styles.viewerCanvas} ${zoom > 1 ? styles.viewerCanvasPannable : ""}`}
+            role="presentation"
+            onPointerDown={(e) => {
+              if (zoom <= 1) return;
+              e.preventDefault();
+              // 指针捕获:光标拖出画布甚至窗口,手势也不断
+              e.currentTarget.setPointerCapture(e.pointerId);
+              dragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+              setDragging(true);
+            }}
+            onPointerMove={(e) => {
+              if (!dragRef.current) return;
+              setPan({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y });
+            }}
+            onPointerUp={(e) => {
+              dragRef.current = null;
+              setDragging(false);
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            }}
+            onPointerCancel={() => {
+              dragRef.current = null;
+              setDragging(false);
+            }}
+            onDoubleClick={reset}
+          >
+            <div
+              className={styles.viewerTransform}
+              style={
+                {
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  transition: dragging ? "none" : undefined,
+                  // 高亮框线宽用它做反向补偿:图放大 8x 时线仍是视觉 1.5px
+                  "--viewer-zoom": zoom,
+                } as React.CSSProperties
+              }
+            >
+              {/* onError 是缺图降级(文件被保留策略清理),不是交互事件 */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+              <img
+                className={styles.viewerImg}
+                src={convertFileSrc(hit.framePath!)}
+                alt={t("search.viewerAlt")}
+                draggable={false}
+                onError={() => setImgGone(true)}
+              />
+              {boxes.map((b, i) => (
+                <div
+                  key={i}
+                  className={styles.viewerMark}
+                  style={{
+                    left: `${b[0] * 100}%`,
+                    top: `${b[1] * 100}%`,
+                    width: `${b[2] * 100}%`,
+                    height: `${b[3] * 100}%`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.viewerText}>
+            <p className={styles.viewerTextNotice}>
+              <ImageOff size={13} strokeWidth={1.8} />
+              {t("search.textFallbackNotice")}
+            </p>
+            <div className={styles.viewerTextBody}>
+              {sessionText === null ? (
+                <Loader2 size={16} strokeWidth={2} className={styles.searchSpin} />
+              ) : (
+                <Highlight text={sessionText} words={words} />
+              )}
+            </div>
+          </div>
+        )}
+        <div className={styles.viewerBar}>
+          <p className={styles.viewerMeta}>
+            {hit.app}
+            {hit.title ? ` · ${hit.title}` : ""}
+            {" · "}
+            {fmtTs(hit.frameTs ?? hit.startedTs)}
+            {locating ? ` · ${t("search.locating")}` : ""}
+          </p>
+          {!showText ? (
+            <div className={styles.viewerZoomCtl}>
+              <button
+                type="button"
+                className={styles.viewerZoomBtn}
+                onClick={() => applyZoom(1 / ZOOM_STEP)}
+                aria-label={t("search.zoomOut")}
+              >
+                <ZoomOut size={14} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className={styles.viewerZoomBtn}
+                onClick={reset}
+                aria-label={t("search.zoomReset")}
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                type="button"
+                className={styles.viewerZoomBtn}
+                onClick={() => applyZoom(ZOOM_STEP)}
+                aria-label={t("search.zoomIn")}
+              >
+                <ZoomIn size={14} strokeWidth={2} />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

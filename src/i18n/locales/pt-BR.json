@@ -56,8 +56,7 @@
       "apps": "Aplicativos",
       "devices": "Nuvem",
       "settings": "Ajustes",
-      "chat": "Chat",
-      "search": "Pesquisar"
+      "chat": "Chat"
     }
   },
   "sidebar": {
@@ -81,7 +80,6 @@
     "close": "Fechar"
   },
   "search": {
-    "pageTitle": "Pesquisar",
     "subtitle": "Pesquise textos que apareceram na sua tela e vá direto à captura e ao momento.",
     "placeholder": "Digite palavras-chave, ex. uma frase de uma página que você viu…",
     "hint": "Os resultados vêm do índice local de OCR das capturas de tela; o conteúdo só se torna pesquisável depois de capturado e reconhecido, e as capturas seguem a configuração de retenção.",
@@ -92,7 +90,12 @@
     "loadMore": "Carregar mais (faltam {{count}})",
     "imageGone": "A captura de tela foi removida",
     "unavailable": "Pesquisa indisponível: {{message}}",
-    "viewerAlt": "Prévia da captura de tela"
+    "viewerAlt": "Prévia da captura de tela",
+    "locating": "localizando…",
+    "zoomIn": "Ampliar",
+    "zoomOut": "Reduzir",
+    "zoomReset": "Redefinir zoom",
+    "textFallbackNotice": "A captura foi removida pela política de retenção; abaixo está o texto reconhecido na época"
   },
   "settings": {
     "pageTitle": "Configurações",
@@ -143,7 +146,7 @@
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
         "ocrResidentLabel": "Manter OCR residente",
-        "ocrResidentDescription": "Novas capturas ficam pesquisáveis em tempo real (~400 MB de RAM extra). Executa apenas na tomada e pausa automaticamente na bateria; desativado = reconhecimento em lote, busca com atraso.",
+        "ocrResidentDescription": "Reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria.",
         "intervalLabel": "Intervalo de captura",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
@@ -1137,7 +1140,8 @@
       "daily": "Diário",
       "week": "Semanal",
       "month": "Mensal",
-      "debug": "Depuração"
+      "debug": "Depuração",
+      "search": "Pesquisar"
     },
     "placeholder": {
       "hint": "Recurso em desenvolvimento."

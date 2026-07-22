@@ -297,6 +297,8 @@ pub fn run() {
             commands::screen_memory::memory_digest_stop,
             commands::screen_memory::memory_pending_stats,
             commands::screen_memory::memory_search,
+            commands::screen_memory::memory_locate,
+            commands::screen_memory::memory_session_text,
             // --- chat: 屏幕记忆问答 + 会话管理 ---
             commands::chat::chat_ask,
             commands::chat::chat_inflight,

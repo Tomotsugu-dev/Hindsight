@@ -56,8 +56,7 @@
       "apps": "Apps",
       "devices": "Cloud Sync",
       "settings": "Settings",
-      "chat": "Chat",
-      "search": "Search"
+      "chat": "Chat"
     }
   },
   "sidebar": {
@@ -81,7 +80,6 @@
     "close": "Close"
   },
   "search": {
-    "pageTitle": "Search",
     "subtitle": "Search text that has appeared on your screen and jump to the screenshot and moment.",
     "placeholder": "Type keywords, e.g. a sentence from a page you saw…",
     "hint": "Results come from the local OCR index of your screenshots; content becomes searchable only after it has been captured and recognized, and screenshots follow the retention setting.",
@@ -92,7 +90,12 @@
     "loadMore": "Load more ({{count}} left)",
     "imageGone": "Screenshot has been cleaned up",
     "unavailable": "Search unavailable: {{message}}",
-    "viewerAlt": "Screenshot preview"
+    "viewerAlt": "Screenshot preview",
+    "locating": "locating matches…",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom",
+    "textFallbackNotice": "The screenshot was cleaned up per the retention policy; below is the screen text recognized at the time"
   },
   "settings": {
     "pageTitle": "Settings",
@@ -143,7 +146,7 @@
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
         "ocrResidentLabel": "Keep OCR resident",
-        "ocrResidentDescription": "New screenshots become searchable in real time (~400 MB extra RAM). Runs only on AC power and pauses automatically on battery; off = batch recognition, search lags behind.",
+        "ocrResidentDescription": "Recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery.",
         "intervalLabel": "Capture interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
@@ -1137,7 +1140,8 @@
       "daily": "Daily",
       "week": "Weekly",
       "month": "Monthly",
-      "debug": "Debug"
+      "debug": "Debug",
+      "search": "Search"
     },
     "placeholder": {
       "hint": "Feature in development."

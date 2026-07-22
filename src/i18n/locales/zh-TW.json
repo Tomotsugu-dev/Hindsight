@@ -56,8 +56,7 @@
       "apps": "應用程式",
       "devices": "雲同步",
       "settings": "設定",
-      "chat": "對話",
-      "search": "搜尋"
+      "chat": "對話"
     }
   },
   "sidebar": {
@@ -81,7 +80,6 @@
     "close": "關閉"
   },
   "search": {
-    "pageTitle": "搜尋",
     "subtitle": "搜尋螢幕上出現過的文字，定位到當時的截圖與時間。",
     "placeholder": "輸入關鍵字，如看過的網頁裡的一句話…",
     "hint": "結果來自截圖的本地文字識別索引；內容需先被截圖並完成識別才能搜到，截圖本身受保留時長限制。",
@@ -92,7 +90,12 @@
     "loadMore": "載入更多（還有 {{count}} 條）",
     "imageGone": "截圖已被清理",
     "unavailable": "搜尋無法使用：{{message}}",
-    "viewerAlt": "截圖預覽"
+    "viewerAlt": "截圖預覽",
+    "locating": "定位命中中…",
+    "zoomIn": "放大",
+    "zoomOut": "縮小",
+    "zoomReset": "重設縮放",
+    "textFallbackNotice": "截圖已按保留策略清理,以下為當時辨識的螢幕文字"
   },
   "settings": {
     "pageTitle": "設定",
@@ -143,7 +146,7 @@
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
         "ocrResidentLabel": "常駐 OCR",
-        "ocrResidentDescription": "新截圖即時可搜，多佔約 400MB 記憶體；僅在接通電源時運行，電池供電自動暫停。關閉則定時批次辨識，檢索有延遲。",
+        "ocrResidentDescription": "即時辨識新截圖（多佔約 400MB 記憶體），電池供電時自動暫停。",
         "intervalLabel": "採集間隔",
         "intervalDescription": "採集頻率。",
         "intervalHint": "截圖觸發時機：\n• 切換應用程式 → 立即截圖\n• 瀏覽器切換 URL → 立即截圖\n• 同一視窗停留滿設定的間隔 → 截圖",
@@ -1137,7 +1140,8 @@
       "daily": "日報",
       "week": "週報",
       "month": "月報",
-      "debug": "除錯"
+      "debug": "除錯",
+      "search": "搜尋"
     },
     "placeholder": {
       "hint": "功能開發中。"

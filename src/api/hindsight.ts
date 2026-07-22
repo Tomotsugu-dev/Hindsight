@@ -1014,6 +1014,13 @@ export const api = {
    *  limit 默认 30；offset 配合"加载更多"翻页。 */
   memorySearch: (query: string, limit?: number, offset?: number) =>
     invoke<MemorySearchResp>("memory_search", { query, limit, offset }),
+  /** 在单帧截图上定位关键词：现场 OCR 该帧，返回含词行的归一化框 [x,y,w,h]。
+   *  历史帧同样可用（框不落库，即时计算）；截图已清理时返回空数组。 */
+  memoryLocate: (path: string, words: string[]) =>
+    invoke<[number, number, number, number][]>("memory_locate", { path, words }),
+  /** 会话 OCR 全文（阅读序行级并集）。截图已清理时 lightbox 的文字降级视图用。 */
+  memorySessionText: (sessionId: number) =>
+    invoke<string>("memory_session_text", { sessionId }),
   /** 屏幕记忆回填：把主库已有截图的活动登记为待识别帧。幂等，返回登记行数。 */
   memoryBackfill: () => invoke<number>("memory_backfill"),
   /** 手动触发一次消化（OCR→折叠→索引），跑完积压才返回，可能耗时数分钟。

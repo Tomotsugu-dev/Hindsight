@@ -169,7 +169,19 @@ pub async fn memory_search(
     // limit 上限防前端手滑一次拉全库;offset 由"加载更多"翻页
     let limit = i64::from(limit.unwrap_or(30).min(200));
     let offset = i64::from(offset.unwrap_or(0));
-    let use_fts = words.iter().all(|w| w.chars().count() >= 3);
+    // 混合路径:≥3 字符的词走 trigram FTS 缩小集合,短词(<3,trigram 拿不出
+    // 结果)只在该集合内 LIKE 过滤。仅当全部是短词时才退化为全表 LIKE 扫——
+    // 文本永久保留,全扫成本随库龄线性涨,能靠 FTS 缩集就绝不全扫。
+    let long_words: Vec<String> = words
+        .iter()
+        .filter(|w| w.chars().count() >= 3)
+        .cloned()
+        .collect();
+    let short_words: Vec<String> = words
+        .iter()
+        .filter(|w| w.chars().count() < 3)
+        .cloned()
+        .collect();
     let first_word = words[0].clone();
     let first_like = crate::chat::tools::like_pattern(&first_word);
 
@@ -189,12 +201,30 @@ pub async fn memory_search(
             const SELECT_COLS: &str = "s.id, COALESCE(s.app_id,''), COALESCE(s.title,''), \
                                        s.started_ts, s.ended_ts, s.text";
 
-            let (total, rows): (i64, Vec<Row>) = if use_fts {
-                let fts = crate::chat::tools::fts_literal(&words);
+            let (total, rows): (i64, Vec<Row>) = if !long_words.is_empty() {
+                // FTS 缩集(长词) + 集合内 LIKE(短词,可为空)
+                let fts = crate::chat::tools::fts_literal(&long_words);
+                let short_patterns: Vec<String> = short_words
+                    .iter()
+                    .map(|w| crate::chat::tools::like_pattern(w))
+                    .collect();
+                // 参数 ?1 = FTS 词串,短词 LIKE 从 ?2 起编号
+                let short_cond = (0..short_patterns.len())
+                    .map(|i| format!(" AND s.text LIKE ?{} ESCAPE '\\'", i + 2))
+                    .collect::<String>();
+                let mut bind: Vec<&dyn rusqlite::ToSql> = vec![&fts];
+                for p in &short_patterns {
+                    bind.push(p);
+                }
                 let total = conn
                     .query_row(
-                        "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH ?1",
-                        rusqlite::params![fts],
+                        &format!(
+                            "SELECT COUNT(*)
+                             FROM text_sessions_fts
+                             JOIN text_sessions s ON s.id = text_sessions_fts.rowid
+                             WHERE text_sessions_fts MATCH ?1{short_cond}"
+                        ),
+                        bind.as_slice(),
                         |r| r.get(0),
                     )
                     .db()?;
@@ -203,17 +233,18 @@ pub async fn memory_search(
                         "SELECT {SELECT_COLS}
                          FROM text_sessions_fts
                          JOIN text_sessions s ON s.id = text_sessions_fts.rowid
-                         WHERE text_sessions_fts MATCH ?1
+                         WHERE text_sessions_fts MATCH ?1{short_cond}
                          ORDER BY s.started_ts DESC LIMIT {limit} OFFSET {offset}"
                     ))
                     .db()?;
                 let rows = stmt
-                    .query_map(rusqlite::params![fts], row_of)
+                    .query_map(bind.as_slice(), row_of)
                     .db()?
                     .collect::<rusqlite::Result<Vec<_>>>()
                     .db()?;
                 (total, rows)
             } else {
+                // 全部是短词:别无选择,物化列 LIKE 全扫
                 let patterns: Vec<String> = words
                     .iter()
                     .map(|w| crate::chat::tools::like_pattern(w))
@@ -271,6 +302,87 @@ pub async fn memory_search(
         .map_err(|e| e.to_string())?;
 
     Ok(MemorySearchResp { total, hits })
+}
+
+/// 会话 OCR 全文(行级并集,阅读序)。截图被保留策略清理后,
+/// lightbox 降级为文字视图时用——"图没了字还在"的兑现。
+#[tauri::command]
+pub async fn memory_session_text(
+    mem: State<'_, MemoryState>,
+    session_id: i64,
+) -> Result<String, String> {
+    let db = require(&mem)?;
+    db.0.call(move |conn| {
+        let text: String = conn
+            .query_row(
+                "SELECT COALESCE(text,'') FROM text_sessions WHERE id = ?1",
+                rusqlite::params![session_id],
+                |r| r.get(0),
+            )
+            .db()?;
+        Ok(text)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 在单帧截图上定位关键词:现场对这一帧跑 OCR,返回文本含任一关键词的行框
+/// (归一化 [x, y, w, h],左上原点)。框不落库——历史帧同样可定位,点开时即时
+/// 计算。macOS Vision 引擎零加载成本;Paddle(Windows)首调需加载 ONNX 会话
+/// (秒级),lightbox 场景可接受。
+///
+/// path 必须是 frames 表登记过的帧——拒绝对任意文件跑 OCR。
+#[tauri::command]
+pub async fn memory_locate(
+    mem: State<'_, MemoryState>,
+    path: String,
+    words: Vec<String>,
+) -> Result<Vec<[f32; 4]>, String> {
+    let db = require(&mem)?;
+    let words: Vec<String> = words
+        .iter()
+        .map(|w| w.trim().to_lowercase())
+        .filter(|w| !w.is_empty())
+        .take(SEARCH_MAX_WORDS)
+        .collect();
+    if words.is_empty() {
+        return Ok(Vec::new());
+    }
+    let p = path.clone();
+    let registered: bool =
+        db.0.call(move |conn| {
+            let n: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM frames WHERE path = ?1",
+                    rusqlite::params![p],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok(n > 0)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    if !registered {
+        return Err("帧未登记".to_string());
+    }
+    let file = std::path::PathBuf::from(&path);
+    if !file.is_file() {
+        return Ok(Vec::new()); // 截图已被保留策略清理:无框,前端只展示图缺占位
+    }
+    tokio::task::spawn_blocking(move || -> Result<Vec<[f32; 4]>, String> {
+        let eng = crate::ai::ocr::OcrEngine::load().map_err(|e| e.to_string())?;
+        let lines = eng.recognize_file(&file).map_err(|e| e.to_string())?;
+        Ok(lines
+            .into_iter()
+            .filter(|l| {
+                let lt = l.text.to_lowercase();
+                words.iter().any(|w| lt.contains(w.as_str()))
+            })
+            .filter_map(|l| l.box_norm)
+            .collect())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// 两库对账走 Rust 侧集合差,不用 ATTACH:主库是应用唯一写连接,

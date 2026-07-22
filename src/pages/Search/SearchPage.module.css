@@ -1,10 +1,9 @@
 /* 屏幕记忆搜索页。页面骨架同 Page.module.css(720 容器);
    命中卡视觉参照 Chat 证据卡(浅底圆角小卡),放大成可点行 + 缩略图。 */
 
+/* 作为 AI 总结页的 tab 内容渲染:外层页壳负责页宽与 padding,
+   这里只管自身纵向排布。 */
 .page {
-  padding: var(--space-8);
-  max-width: 720px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -27,6 +26,11 @@
 /* ── 搜索框 ── */
 
 .searchBox {
+  /* 吸顶:长结果列表滚动时停在悬浮 tab pill(fixed, top 16 + 高度)下方,
+     随时可改词。pill z-index 6(--z-chrome-floattab),这里压低一档。 */
+  position: sticky;
+  top: 60px;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -36,6 +40,7 @@
   border: 1px solid rgba(0, 0, 0, 0.14);
   border-radius: var(--radius-md);
   background: var(--surface-card);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
   transition:
     border-color 140ms ease-out,
     box-shadow 140ms ease-out;
@@ -293,31 +298,132 @@
   max-height: 92vh;
 }
 
-.viewerImg {
-  max-width: 100%;
-  max-height: calc(92vh - 40px);
+/* 缩放画布:裁剪视口,变换层在其中缩放/平移 */
+.viewerCanvas {
+  overflow: hidden;
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  object-fit: contain;
+  max-width: min(92vw, 1280px);
+  max-height: calc(92vh - 48px);
 }
 
-.viewerMissing {
+.viewerCanvasPannable {
+  cursor: grab;
+}
+
+.viewerCanvasPannable:active {
+  cursor: grabbing;
+}
+
+/* 图 + 高亮框同层变换,框永远贴着图 */
+.viewerTransform {
+  position: relative;
+  transform-origin: center center;
+  transition: transform 80ms ease-out;
+}
+
+.viewerImg {
+  max-width: min(92vw, 1280px);
+  max-height: calc(92vh - 48px);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 命中行高亮框(归一化坐标铺在图上)。
+   只描边不填充——高亮永远不能盖住原图文字。
+   线宽/圆角/衬边全部除以缩放系数(--viewer-zoom):框随图定位缩放,
+   但笔画保持视觉恒定,放大 8x 也还是细线,不会变成糊住文字的粗圈。 */
+.viewerMark {
+  position: absolute;
+  border: calc(1.5px / var(--viewer-zoom, 1)) solid rgba(250, 204, 21, 0.95);
+  background: none;
+  border-radius: calc(3px / var(--viewer-zoom, 1));
+  box-shadow: 0 0 0 calc(1px / var(--viewer-zoom, 1)) rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+/* 底部信息条:meta + 缩放控件 */
+.viewerBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 90vw;
+}
+
+.viewerZoomCtl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.viewerZoomBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.viewerZoomBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 截图已清理时的文字降级视图:说明行 + 可滚动可选中的 OCR 全文 */
+.viewerText {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 48px 64px;
+  gap: 0;
+  width: min(92vw, 760px);
+  max-height: calc(92vh - 48px);
   border-radius: var(--radius-md);
   background: var(--surface-card);
+  overflow: hidden;
+  cursor: auto;
+}
+
+.viewerTextNotice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 12px;
   color: var(--text-muted);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.viewerTextBody {
+  padding: 14px 16px;
+  overflow-y: auto;
   font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-regular);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  cursor: text;
 }
 
 .viewerMeta {
   font-size: 12.5px;
   color: rgba(255, 255, 255, 0.85);
   margin: 0;
-  max-width: 90vw;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

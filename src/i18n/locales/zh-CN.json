@@ -56,8 +56,7 @@
       "apps": "应用",
       "devices": "云同步",
       "settings": "设置",
-      "chat": "对话",
-      "search": "搜索"
+      "chat": "对话"
     }
   },
   "sidebar": {
@@ -81,7 +80,6 @@
     "close": "关闭"
   },
   "search": {
-    "pageTitle": "搜索",
     "subtitle": "搜索屏幕上出现过的文字，定位到当时的截图与时间。",
     "placeholder": "输入关键词，如看过的网页里的一句话…",
     "hint": "结果来自截图的本地文字识别索引；内容需先被截图并完成识别才能搜到，截图本身受保留时长限制。",
@@ -92,7 +90,12 @@
     "loadMore": "加载更多（还有 {{count}} 条）",
     "imageGone": "截图已被清理",
     "unavailable": "搜索不可用：{{message}}",
-    "viewerAlt": "截图预览"
+    "viewerAlt": "截图预览",
+    "locating": "定位命中中…",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "zoomReset": "重置缩放",
+    "textFallbackNotice": "截图已按保留策略清理,以下为当时识别的屏幕文字"
   },
   "settings": {
     "pageTitle": "设置",
@@ -143,7 +146,7 @@
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
         "ocrResidentLabel": "常驻 OCR",
-        "ocrResidentDescription": "新截图即时可搜，多占约 400MB 内存；仅在接通电源时运行，电池供电自动暂停。关闭则定时批量识别，检索有延迟。",
+        "ocrResidentDescription": "即时识别新截图（多占约 400MB 内存），电池供电时自动暂停。",
         "intervalLabel": "采集间隔",
         "intervalDescription": "采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
@@ -1137,7 +1140,8 @@
       "daily": "日报",
       "week": "周报",
       "month": "月报",
-      "debug": "调试"
+      "debug": "调试",
+      "search": "搜索"
     },
     "placeholder": {
       "hint": "功能开发中。"

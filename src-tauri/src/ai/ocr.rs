@@ -139,6 +139,9 @@ pub fn model_dir() -> PathBuf {
 #[derive(Debug, Clone)]
 pub struct OcrLine {
     pub text: String,
+    /// 行框,归一化 [x, y, w, h](左上原点,0..1)。None = 后端未提供。
+    /// 消化管线不落库;搜索页 lightbox 现场定位命中行用。
+    pub box_norm: Option<[f32; 4]>,
 }
 
 /// OCR 引擎门面:macOS 默认走系统 Vision(ANE,零下载、零 onnxruntime 依赖),
@@ -362,10 +365,20 @@ impl PaddleEngine {
             boxes.len(),
             units.len()
         );
+        let (iw, ih) = (rgb.width() as f32, rgb.height() as f32);
         Ok(per_box
             .into_iter()
-            .filter(|t| !t.is_empty())
-            .map(|text| OcrLine { text })
+            .zip(&boxes)
+            .filter(|(t, _)| !t.is_empty())
+            .map(|(text, b)| OcrLine {
+                text,
+                box_norm: Some([
+                    b.x0 as f32 / iw,
+                    b.y0 as f32 / ih,
+                    (b.x1 - b.x0) as f32 / iw,
+                    (b.y1 - b.y0) as f32 / ih,
+                ]),
+            })
             .collect())
     }
 

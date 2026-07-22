@@ -56,8 +56,7 @@
       "apps": "アプリ",
       "devices": "同期",
       "settings": "設定",
-      "chat": "チャット",
-      "search": "検索"
+      "chat": "チャット"
     }
   },
   "sidebar": {
@@ -81,7 +80,6 @@
     "close": "閉じる"
   },
   "search": {
-    "pageTitle": "検索",
     "subtitle": "画面に表示された文字を検索し、当時のスクリーンショットと時刻にたどり着けます。",
     "placeholder": "キーワードを入力（見たページの一文など）…",
     "hint": "結果はスクリーンショットのローカル文字認識索引によるものです。撮影と認識が済んだ内容だけが検索でき、スクリーンショット自体は保持期間の設定に従います。",
@@ -92,7 +90,12 @@
     "loadMore": "さらに読み込む（残り {{count}} 件）",
     "imageGone": "スクリーンショットは削除済み",
     "unavailable": "検索を利用できません：{{message}}",
-    "viewerAlt": "スクリーンショットのプレビュー"
+    "viewerAlt": "スクリーンショットのプレビュー",
+    "locating": "一致箇所を特定中…",
+    "zoomIn": "拡大",
+    "zoomOut": "縮小",
+    "zoomReset": "ズームをリセット",
+    "textFallbackNotice": "スクリーンショットは保持ポリシーにより削除済みです。以下は当時認識された画面テキストです"
   },
   "settings": {
     "pageTitle": "設定",
@@ -143,7 +146,7 @@
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
         "ocrResidentLabel": "OCR を常駐させる",
-        "ocrResidentDescription": "新しいスクリーンショットが即時に検索可能になります（約 400MB 追加使用）。電源接続時のみ動作し、バッテリー駆動中は自動的に一時停止します。オフの場合は一括認識のため検索に遅延があります。",
+        "ocrResidentDescription": "新しいスクリーンショットを即時認識（約 400MB 追加使用）。バッテリー駆動中は自動停止。",
         "intervalLabel": "記録の間隔",
         "intervalDescription": "記録間隔。",
         "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",
@@ -1137,7 +1140,8 @@
       "daily": "日次",
       "week": "週次",
       "month": "月次",
-      "debug": "デバッグ"
+      "debug": "デバッグ",
+      "search": "検索"
     },
     "placeholder": {
       "hint": "開発中の機能です。"

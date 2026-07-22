@@ -62,7 +62,7 @@ impl VisionEngine {
 
             // Vision 的 boundingBox 是归一化坐标、原点在**左下**:
             // 阅读序 = 先按 top(1 - y - h)再按 x 排。
-            let mut lines: Vec<(f64, f64, String)> = Vec::new();
+            let mut lines: Vec<(f64, f64, String, [f32; 4])> = Vec::new();
             for obs in results.iter() {
                 let cands = obs.topCandidates(1);
                 let Some(cand) = cands.firstObject() else {
@@ -73,12 +73,27 @@ impl VisionEngine {
                     continue;
                 }
                 let bb = obs.boundingBox();
-                lines.push((1.0 - bb.origin.y - bb.size.height, bb.origin.x, text));
+                let top = 1.0 - bb.origin.y - bb.size.height;
+                lines.push((
+                    top,
+                    bb.origin.x,
+                    text,
+                    // Vision 原点在左下 → 转左上原点的归一化 [x, y, w, h]
+                    [
+                        bb.origin.x as f32,
+                        top as f32,
+                        bb.size.width as f32,
+                        bb.size.height as f32,
+                    ],
+                ));
             }
             lines.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
             Ok(lines
                 .into_iter()
-                .map(|(_, _, text)| OcrLine { text })
+                .map(|(_, _, text, bx)| OcrLine {
+                    text,
+                    box_norm: Some(bx),
+                })
                 .collect())
         }
     }
