@@ -54,6 +54,13 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     return () => clearInterval(timer);
   }, [polling, onRefresh]);
 
+  // background 态的批不归本组件持有(常驻批/别处触发),点停止后没有 promise
+  // 可收尾——批停下后轮询把 digestRunning 拉回 false、离开进行态,在这里复位
+  // stopping。running 态自己的 doRun finally 也会复位,这里只是统一兜底。
+  useEffect(() => {
+    if (!polling) setStopping(false);
+  }, [polling]);
+
   if (stats.total <= 0) return null;
 
   /** 点「立即回填」:先确保 OCR 组件就绪,缺则弹确认(下载完自动继续回填)。 */
@@ -119,8 +126,9 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     }
   };
 
-  /** 点「停止」:翻后端停止标志即返回,消化循环帧间感知(~1s)后
-   *  digest resolve,上面 doRun 的收尾自然把 banner 落回初始态。 */
+  /** 点「停止」:翻后端停止标志即返回,消化循环帧间感知(~1s)后停。
+   *  running 态由 doRun 的收尾把 banner 落回初始态;background 态靠轮询
+   *  看到 digestRunning=false 后离开进行态(stopping 在 polling effect 复位)。 */
   const stopRun = () => {
     setStopping(true);
     api.memoryDigestStop().catch((e) => logError("chat.backfill.stop", e));
@@ -144,8 +152,9 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
           {t("chat.backfill.action")}
         </button>
       )}
-      {/* 停止只管本组件触发的手动批;后台常驻批的开关在 设置 → 常驻 OCR */}
-      {effective === "running" && (
+      {/* 手动批与后台批(常驻/别处触发)的当前轮都能停;常驻模式下个周期
+          仍会继续消化,彻底停走 设置 → 常驻 OCR 开关 */}
+      {polling && (
         <button
           type="button"
           className={styles.bannerBtn}

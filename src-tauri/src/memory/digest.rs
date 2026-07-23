@@ -19,10 +19,13 @@ use crate::storage::{DbPool, SqliteResultExt};
 /// 进程内单实例互斥;子进程化时换文件锁。
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
-/// 手动批([`run`])的停止请求。`memory_digest_stop` 命令置位,[`run`] 开始时
-/// 清零(不让上一次的停止请求殃及下一次)。只作用于手动批——常驻批的停止
-/// 走 [`super::resident::ResidentOcr`] 自己的标志,互不相干。
-static MANUAL_STOP: AtomicBool = AtomicBool::new(false);
+/// 「当前这一批」的停止请求(`memory_digest_stop` 命令置位)。手动批与常驻批的
+/// 当前 drain 都感知它——banner 的停止按钮因此在"后台索引中"态也有效。
+/// [`drain`] 结束时清零(批结束/被停后请求即失效):批开始**前**置位的请求
+/// 依然有效,覆盖"引擎还在加载、第一帧还没跑"的窗口。
+/// 注意语义边界:常驻模式下停的只是当前批,下个周期 tick 仍会继续消化积压;
+/// 彻底停常驻走 设置 → 常驻 OCR 开关([`super::resident::ResidentOcr`])。
+static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 /// 消化是否正在进行(手动或常驻批任一)。前端 banner/设置页用它在
 /// 重新挂载时恢复"后台索引中"的显示,而不是装作无事发生。
@@ -30,11 +33,11 @@ pub fn is_running() -> bool {
     RUNNING.load(Ordering::SeqCst)
 }
 
-/// 请求停止正在进行的手动消化批。翻标志即返回;消化循环帧间感知,
-/// 最多再等一帧(~1s)停下,不留半消化状态。没有批在跑时置位也无害——
-/// 下一次 [`run`] 开头会清零。
+/// 请求停止当前正在进行的消化批(手动批或常驻批的当前轮)。翻标志即返回;
+/// 消化循环帧间感知,最多再等一帧(~1s)停下,不留半消化状态。
+/// 没有批在跑时置位近似无害——最坏让紧接着开始的下一批空停一轮。
 pub fn request_stop() {
-    MANUAL_STOP.store(true, Ordering::SeqCst);
+    STOP_REQUESTED.store(true, Ordering::SeqCst);
 }
 
 /// 每轮从登记簿取的帧数;取完一轮再取,直到无积压。
@@ -156,21 +159,23 @@ impl Pipeline {
 /// 只有引擎级错误(模型加载失败等)才中断整批。
 /// 可被 [`request_stop`] 中断:提前停下时正常返回已处理部分的账单。
 pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
-    // 先清残留再加载引擎:引擎加载可能耗时数秒,期间的停止请求应当生效
-    MANUAL_STOP.store(false, Ordering::SeqCst);
     let mut pipe = Pipeline::new_fast().await?;
-    drain(mem, &mut pipe, &MANUAL_STOP).await
+    let external = AtomicBool::new(false);
+    drain(mem, &mut pipe, &external).await
 }
 
 /// 消化核心:取待处理帧 → OCR → L3 折叠 → (视觉帧)L4 聚簇 → 记账,
-/// 直到登记簿清空或 `stop` 置位。批量与常驻共用——差别只在 [`Pipeline`]
-/// 的生命周期归谁管。`stop` 在帧间检查:停止请求最多等一帧(~1s)即生效,
-/// 且不会留下半消化状态。
+/// 直到登记簿清空、调用方的 `stop` 置位或收到 [`request_stop`]。批量与常驻
+/// 共用——差别只在 [`Pipeline`] 的生命周期归谁管。停止都在帧间检查:
+/// 最多等一帧(~1s)即生效,且不会留下半消化状态。
+/// [`STOP_REQUESTED`] 在批结束时清零:批开始前置位的请求依然有效
+/// (覆盖引擎加载窗口),上一批消费过的请求不会殃及下一批。
 pub async fn drain(mem: &MemoryDb, pipe: &mut Pipeline, stop: &AtomicBool) -> Result<DigestReport> {
     if RUNNING.swap(true, Ordering::SeqCst) {
         return Err(Error::InvalidInput("消化任务已在运行"));
     }
     let result = drain_inner(mem, pipe, stop).await;
+    STOP_REQUESTED.store(false, Ordering::SeqCst);
     RUNNING.store(false, Ordering::SeqCst);
     result
 }
@@ -189,7 +194,7 @@ async fn drain_inner(
             break;
         }
         for frame in batch {
-            if stop.load(Ordering::Relaxed) {
+            if stop.load(Ordering::Relaxed) || STOP_REQUESTED.load(Ordering::Relaxed) {
                 break 'outer;
             }
             match digest_one(mem, pipe, &frame).await {
