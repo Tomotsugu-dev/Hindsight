@@ -997,6 +997,12 @@
       "testTextButton": "测试文本 API",
       "testStepConn": "网络与认证",
       "testStepChat": "模型 {{model}} 可用"
+    },
+    "autoSummary": {
+      "sectionTitle": "自动总结",
+      "sectionDesc": "到期自动生成报告,无需再手动点「开始总结」。",
+      "enableLabel": "自动生成日报与周报",
+      "enableHint": "每天自动补前一天的日报,每周自动补上一周的周报;生成失败不会自动重试。月报功能上线后将自动纳入"
     }
   },
   "devices": {

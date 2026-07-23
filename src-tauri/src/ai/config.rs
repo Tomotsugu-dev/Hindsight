@@ -115,6 +115,11 @@ pub struct AiConfig {
     /// `None` = 8K 默认。详见 [`Self::batch_size`] 关于 fallback 语义。
     pub ctx_size: Option<u32>,
 
+    /// 自动总结:日/周结束后由后台任务自动补齐日报与周报,
+    /// 无需手动点「开始总结」(月报生成器落地后自动纳入)。默认关。
+    #[serde(default)]
+    pub auto_summary: bool,
+
     /// 段总结阶段的 batch 参数；`None` = fallback 到 [`Self::batch_size`]。
     pub summary_batch_size: Option<u32>,
     /// 段总结阶段的 `-np`；`None` = fallback 到 [`Self::parallel_slots`]。
@@ -241,6 +246,7 @@ impl Default for AiConfig {
             summary_main: String::new(),
             summary_mmproj: String::new(),
             chat_main: String::new(),
+            auto_summary: false,
             prompt_language: lang.to_string(),
             prompt_overrides: PromptOverrides::default(),
             batch_size: None,

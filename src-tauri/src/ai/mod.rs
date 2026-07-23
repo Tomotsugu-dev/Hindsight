@@ -12,6 +12,7 @@
 //! - [`summary`] 总结编排 façade（实际实现在 `summary_runner` / `summary_operations` /
 //!   `summary_overrides` / `summary_progress`）
 
+pub mod auto_summary;
 pub mod binary;
 pub mod config;
 pub mod embedding_runtime;

@@ -997,6 +997,12 @@
       "testTextButton": "Testar API de texto",
       "testStepConn": "Rede e autenticação",
       "testStepChat": "Modelo {{model}} responde"
+    },
+    "autoSummary": {
+      "sectionTitle": "Resumos automáticos",
+      "sectionDesc": "Gera relatórios automaticamente ao fim de cada período — sem precisar clicar em \"Gerar\".",
+      "enableLabel": "Gerar relatórios diários e semanais automaticamente",
+      "enableHint": "Preenche o diário de ontem e o semanal da semana passada automaticamente; execuções com falha não são repetidas. Relatórios mensais entram quando disponíveis"
     }
   },
   "devices": {

@@ -997,6 +997,12 @@
       "testTextButton": "テキスト API をテスト",
       "testStepConn": "ネットワークと認証",
       "testStepChat": "モデル {{model}} が応答"
+    },
+    "autoSummary": {
+      "sectionTitle": "自動まとめ",
+      "sectionDesc": "期間が終わるとレポートを自動生成します。「生成開始」を押す必要はありません。",
+      "enableLabel": "日報・週報を自動生成",
+      "enableHint": "前日の日報と先週の週報を自動で補完します。失敗した場合は自動再試行しません。月報は機能提供後に自動対応"
     }
   },
   "devices": {

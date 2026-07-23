@@ -997,6 +997,12 @@
       "testTextButton": "測試文本 API",
       "testStepConn": "網路與認證",
       "testStepChat": "模型 {{model}} 可用"
+    },
+    "autoSummary": {
+      "sectionTitle": "自動總結",
+      "sectionDesc": "到期自動生成報告,無需再手動點「開始總結」。",
+      "enableLabel": "自動生成日報與週報",
+      "enableHint": "每天自動補前一天的日報,每週自動補上一週的週報;生成失敗不會自動重試。月報功能上線後將自動納入"
     }
   },
   "devices": {

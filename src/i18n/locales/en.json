@@ -997,6 +997,12 @@
       "testTextButton": "Test text API",
       "testStepConn": "Network & authentication",
       "testStepChat": "Model {{model}} responds"
+    },
+    "autoSummary": {
+      "sectionTitle": "Auto summaries",
+      "sectionDesc": "Generate reports automatically when a period ends — no more clicking \"Generate\".",
+      "enableLabel": "Auto-generate daily & weekly reports",
+      "enableHint": "Fills in yesterday's daily report and last week's weekly report automatically; failed runs are not retried. Monthly reports will join once available"
     }
   },
   "devices": {

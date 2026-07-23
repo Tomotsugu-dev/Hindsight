@@ -193,6 +193,9 @@ pub fn run() {
                 // Chat 生成中注册表：同会话并发拒 + 停止按钮取消 + 重开会话恢复状态
                 handle.manage(commands::chat::ChatInflight::default());
                 handle.manage(commands::ai_summary::RunLock::default());
+                // 自动总结调度:按 ai.auto_summary 开关自动补昨日日报/上周周报。
+                // 必须在上面全部 manage 之后 spawn——任务内按需取 managed state。
+                ai::auto_summary::spawn(handle.clone());
             });
             Ok(())
         })

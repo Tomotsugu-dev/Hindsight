@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Clock, Filter } from "lucide-react";
+import { CalendarClock, Clock, Filter } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
+import { Toggle } from "../../../components/FormControls/Toggle";
 import { SegmentList } from "../../../components/FormControls/SegmentList";
 import { CategoryChipMultiSelect } from "../../../components/FormControls/CategoryChipMultiSelect";
 import { type AiSegment } from "../../../api/hindsight";
@@ -19,6 +20,23 @@ export default function GeneralTab() {
 
   return (
     <div className={styles.content}>
+      <Section
+        title={t("aiSettings.autoSummary.sectionTitle")}
+        icon={CalendarClock}
+        description={t("aiSettings.autoSummary.sectionDesc")}
+      >
+        <Row
+          label={t("aiSettings.autoSummary.enableLabel")}
+          description={t("aiSettings.autoSummary.enableHint")}
+        >
+          <Toggle
+            checked={ai.autoSummary}
+            onChange={(next) => updateAi({ autoSummary: next })}
+            ariaLabel={t("aiSettings.autoSummary.enableLabel")}
+          />
+        </Row>
+      </Section>
+
       <Section
         title={t("aiSettings.segments.sectionTitle")}
         icon={Clock}

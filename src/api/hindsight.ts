@@ -471,6 +471,10 @@ export interface AiConfig {
   /** 引擎启动级参数：每 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
   ctxSize: number | null;
 
+  /** 自动总结：日/周结束后后台自动补齐日报与周报，无需手动点「开始总结」。
+   *  失败的目标不会自动重试（防坏配置反复烧钱）；月报生成器落地后自动纳入。 */
+  autoSummary: boolean;
+
   /** 段总结阶段（单段串行）的 batch；null = fallback 到 [batchSize]。 */
   summaryBatchSize: number | null;
   /** 段总结阶段的 `-np`；null = fallback 到 [parallelSlots]。
