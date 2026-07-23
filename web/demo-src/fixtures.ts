@@ -846,6 +846,7 @@ export const mockSettings: Settings = {
     batchSize: null,
     parallelSlots: null,
     ctxSize: null,
+    autoSummary: true,
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,
@@ -886,6 +887,7 @@ export const mockAuthState: AuthState = {
 
 export const mockSyncStatus: SyncStatus = {
   running: false,
+  syncInFlight: false,
   lastPushedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
   lastPulledAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
   lastError: null,

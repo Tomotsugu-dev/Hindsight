@@ -25,6 +25,7 @@ import type {
   EngineStatus,
   HourSlot,
   MemoryPendingStats,
+  MemorySearchResp,
   ModelEntry,
   PartialDownload,
   RecommendedModel,
@@ -778,6 +779,8 @@ export const api = {
   chatAsk: async (
     question: string,
     conversationId: number | null,
+    _locale?: string,
+    _askId?: string,
   ): Promise<ChatAskResult> => {
     await sleep(900); // 模拟检索 + 推理耗时
     const now = new Date().toISOString();
@@ -818,6 +821,7 @@ export const api = {
     });
     return {
       conversationId: conv.meta.id,
+      cancelled: false,
       text: answer.text,
       citations: answer.citations,
       steps: 2,
@@ -826,6 +830,8 @@ export const api = {
       completionTokens: 236,
     };
   },
+  chatInflight: async (_conversationId: number): Promise<string | null> => null,
+  chatCancel: async (_askId: string): Promise<boolean> => false,
   chatListConversations: async (): Promise<ChatConversationMeta[]> =>
     chatConvs.map((c) => structuredClone(c.meta)),
   chatGetMessages: async (conversationId: number): Promise<ChatStoredMessage[]> =>
@@ -847,6 +853,7 @@ export const api = {
     unregistered: 0,
     pendingOcr: 0,
     total: 0,
+    digestRunning: false,
   }),
   memoryBackfill: async (): Promise<number> => 0,
   memoryDigestNow: async (): Promise<DigestReport> => ({
@@ -854,9 +861,27 @@ export const api = {
     failed: 0,
     skippedMissingFile: 0,
   }),
+  memoryDigestStop: async (): Promise<void> => {},
+  memorySearch: async (
+    query: string,
+    _limit?: number,
+    offset?: number,
+  ): Promise<MemorySearchResp> => {
+    await sleep(300); // 模拟索引查询耗时
+    if ((offset ?? 0) > 0) return { total: 3, hits: [] };
+    return { total: 3, hits: demoSearchHits(query) };
+  },
+  memoryLocate: async (
+    _path: string,
+    _words: string[],
+  ): Promise<[number, number, number, number][]> => [],
+  memorySessionText: async (_sessionId: number): Promise<string> =>
+    DEMO_SESSION_TEXT,
 
   // ─── 杂项 no-op ──────────────────────────
   writeTextFile: async (_path: string, _content: string): Promise<void> => {},
+  exportUsageXlsx: async (_path: string, _spec: unknown): Promise<void> => {},
+  earliestActivityDate: async (): Promise<string | null> => isoDateOffset(-29),
   setTrayLabels: async (_show: string, _quit: string): Promise<void> => {},
   testAiChat: async (
     _endpoint: string,
@@ -927,6 +952,69 @@ function chatDemoAnswer(question: string): {
     ],
   };
 }
+
+/** 搜索页演示命中:snippet 嵌入查询词保证高亮生效;framePath 为 null 走文字降级视图。 */
+function demoSearchHits(query: string): MemorySearchResp["hits"] {
+  const lng = (i18n.language || "zh-CN").toLowerCase();
+  const zh = lng.startsWith("zh");
+  const today = todayStr();
+  const yesterday = isoDateOffset(-1);
+  const snip = (before: string, after: string) => `${before}${query}${after}`;
+  return [
+    {
+      sessionId: 1,
+      app: "Visual Studio Code",
+      title: "hindsight — src/pages/Chat/ChatPage.tsx",
+      startedTs: `${today}T10:12:00+08:00`,
+      endedTs: `${today}T11:03:00+08:00`,
+      snippet: zh
+        ? snip("…const answer = await api.chatAsk(question) // 处理 ", " 的检索逻辑,附证据卡…")
+        : snip("…const answer = await api.chatAsk(question) // retrieval logic for ", " with evidence cards…"),
+      framePath: null,
+      frameTs: null,
+    },
+    {
+      sessionId: 2,
+      app: "Google Chrome",
+      title: zh ? `${query} — 搜索结果` : `${query} — Search results`,
+      startedTs: `${today}T14:20:00+08:00`,
+      endedTs: `${today}T14:41:00+08:00`,
+      snippet: zh
+        ? snip("…关于 ", " 的文档与讨论:实现方式、常见问题与最佳实践…")
+        : snip("…docs and discussions about ", ": implementation notes, FAQs and best practices…"),
+      framePath: null,
+      frameTs: null,
+    },
+    {
+      sessionId: 3,
+      app: "Obsidian",
+      title: zh ? "工作笔记 — 2026-07" : "Work notes — 2026-07",
+      startedTs: `${yesterday}T16:05:00+08:00`,
+      endedTs: `${yesterday}T16:22:00+08:00`,
+      snippet: zh
+        ? snip("…TODO: 整理 ", " 相关的资料,周五前给出结论…")
+        : snip("…TODO: collect notes on ", " and summarize by Friday…"),
+      framePath: null,
+      frameTs: null,
+    },
+  ];
+}
+
+/** 会话 OCR 全文的演示文本(截图降级视图):模拟一屏编辑器内容。 */
+const DEMO_SESSION_TEXT = [
+  "hindsight — src/pages/Chat/ChatPage.tsx — Visual Studio Code",
+  "EXPLORER    src > pages > Chat > ChatPage.tsx",
+  "import { useState } from \"react\";",
+  "import { api } from \"../../api/hindsight\";",
+  "",
+  "export function ChatPage() {",
+  "  const [question, setQuestion] = useState(\"\");",
+  "  const answer = await api.chatAsk(question, activeId);",
+  "  // 渲染回答气泡与证据卡",
+  "}",
+  "",
+  "PROBLEMS  OUTPUT  TERMINAL      Ln 42, Col 7  UTF-8  TypeScript",
+].join("\n");
 
 /** 应用详情的演示数据:确定性钟形分布(刷新不跳),标题列表用领域合理的假标题。 */
 function mockAppDetail(
