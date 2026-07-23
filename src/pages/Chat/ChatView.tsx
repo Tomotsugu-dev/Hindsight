@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { listen } from "@tauri-apps/api/event";
@@ -265,6 +271,15 @@ export default function ChatView({
     void send(input);
   };
 
+  /** Enter 发送、Shift+Enter 换行(textarea 默认行为);输入法组词中按下的
+   *  Enter 是在确认候选词,不发送。 */
+  const onInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      void send(input);
+    }
+  };
+
   const hasMessages = messages.length > 0;
   // 随机位：挂载时抽一张，之后每次切换会话（含"新对话"）轮换到下一张；
   // 同一空态视图内保持稳定，不随输入重渲染跳变。
@@ -339,13 +354,14 @@ export default function ChatView({
       </div>
 
       <form className={styles.composer} onSubmit={onSubmit}>
-        <input
-          type="text"
+        <textarea
           className={styles.composerInput}
           placeholder={t("chat.input.placeholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onInputKeyDown}
           disabled={busy}
+          rows={1}
           // 进入聊天页即可输入是用户预期，键盘 user 同样受益
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus

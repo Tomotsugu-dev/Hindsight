@@ -186,6 +186,8 @@
   background: color-mix(in oklab, var(--color-accent) 88%, white);
   color: #fff;
   border-bottom-right-radius: 4px;
+  /* 提问支持 Shift+Enter 多行后,气泡里保留用户敲的换行 */
+  white-space: pre-wrap;
 }
 
 .bubbleAssistant {
@@ -443,7 +445,9 @@
 
 .composer {
   display: flex;
-  align-items: center;
+  /* 底对齐:输入框单行时与 32px 的发送按钮等高(视觉同居中),
+     多行长高后按钮贴底不悬空 */
+  align-items: flex-end;
   gap: 8px;
   margin-top: 16px;
   padding: 8px 8px 8px 14px;
@@ -465,12 +469,20 @@
 
 .composerInput {
   flex: 1;
-  height: 32px;
-  padding: 0;
+  /* Shift+Enter 多行:单行(32px)起步随内容长高,到上限后内部滚动。
+     不支持 field-sizing 的浏览器退化为固定单行,换行内容滚动查看 */
+  field-sizing: content;
+  min-height: 32px;
+  max-height: 128px;
+  padding: 6px 0;
   background: transparent;
   border: none;
   outline: none;
+  resize: none;
+  overflow-y: auto;
+  font: inherit;
   font-size: 13.5px;
+  line-height: 20px;
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
