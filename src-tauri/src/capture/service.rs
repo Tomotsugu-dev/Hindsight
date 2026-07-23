@@ -71,29 +71,22 @@ struct CurrentSession {
     last_extend_at: Instant,
 }
 
-/// 屏幕活跃探测状态——挂机判定的第二信号（见 [`screen_probe_active`]）。
+/// 媒体防睡断言状态——挂机判定的第二信号（见 [`keepawake_active`]）。
+/// 取代旧的屏幕帧差探测:断言与截图开关无关(没开截图的用户同样生效),
+/// 且监控类软件(AIDA64 仪表盘)刷屏但不申请断言,误判源随之消除。
 #[derive(Default)]
-struct ScreenProbe {
-    /// 上次探测的 256×144 灰度缩略图；None = 尚无基线（该轮只建基线不判定）
-    prev_thumb: Option<Vec<u8>>,
-    /// 上次真实抓屏的时刻（限频窗口起点，也用于判基线是否过期）
+struct KeepawakeProbe {
+    /// 上次真实查询的时刻（限频窗口起点）
     last_probe_at: Option<Instant>,
     /// 限频窗口内复用的上次判定
     cached_active: bool,
-    /// 最近一次确认"屏幕在变"的墙钟时刻；挂机封口用它修正 ended_at
-    last_change_at: Option<DateTime<Local>>,
+    /// 最近一次确认断言活跃的墙钟时刻；挂机封口用它修正 ended_at
+    last_active_at: Option<DateTime<Local>>,
 }
 
-/// 屏幕活跃探测：两次真实抓屏的最小间隔（秒）。窗口内复用上次判定，
-/// 把被动观看期间的抓屏开销限制在每分钟 3 次以内。
+/// 防睡断言两次真实查询的最小间隔（秒）。系统调用本身微秒级,
+/// 限频只是避免每个 tick 都打一次 syscall 的噪音。
 const PROBE_MIN_GAP_SECS: u64 = 20;
-/// 基线过期线（秒）：上次抓屏太久远（键鼠一直活跃、探测长期没被咨询）时，
-/// 旧缩略图与当前画面的差异不代表"正在变化"，该轮只重建基线。
-const PROBE_BASELINE_STALE_SECS: u64 = 60;
-/// 帧差判定参数，出自 docs/design/screen-memory.md §10 L1 实测定案：
-/// 单像素灰度差 >12 视为变化，变化像素占比 ≥0.10% 判"屏幕在变"。
-const PROBE_PIXEL_TAU: u8 = 12;
-const PROBE_CHANGED_FRACTION: f64 = 0.001;
 
 /// CaptureService 的内部状态。
 ///
@@ -128,7 +121,7 @@ struct Inner {
     current: Mutex<Option<CurrentSession>>,
     /// 屏幕活跃探测状态（挂机第二信号）。锁顺序：叶子锁，可在持有 `current`
     /// 时获取，反向禁止。
-    screen_probe: Mutex<ScreenProbe>,
+    keepawake: Mutex<KeepawakeProbe>,
     /// 上一次 tick 的墙钟时刻——睡眠 gap 检测用。系统睡眠期间 tick 循环不跑
     /// （`Instant` 在 macOS 还会暂停计时），若两次 tick 的墙钟间隔远超轮询周期，
     /// 说明机器睡过去了：当前会话必须按"最后已知活跃时刻"（= 上次 tick）封口，
@@ -167,7 +160,7 @@ impl CaptureService {
                 // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
                 idle_threshold_secs: Mutex::new(180),
                 current: Mutex::new(None),
-                screen_probe: Mutex::new(ScreenProbe::default()),
+                keepawake: Mutex::new(KeepawakeProbe::default()),
                 last_tick_at: Mutex::new(None),
             }),
         }
@@ -398,12 +391,12 @@ async fn tick(inner: &Inner) -> Result<()> {
         return Ok(());
     }
 
-    // 挂机检测：用户多久没动鼠键。但键鼠超阈只是"疑似挂机"——全屏视频/盯编译
-    // 这类被动观看零输入而屏幕在变，不是挂机（否则这类时段只剩开场一帧，
-    // 见 docs/design/screen-memory.md"采集层解耦"）。屏幕也静止才 seal 并 return，
-    // 让真挂机时段不计入使用时长；屏幕在变则落回正常流程，interval-roll 继续补帧。
-    // 已封（current=None）后不再探屏，等键鼠输入自然开新会话——人已离开，
-    // 不必每 20s 白抓一次屏。
+    // 挂机检测：用户多久没动鼠键。但键鼠超阈只是"疑似挂机"——看视频/听歌
+    // 这类被动观看零输入,不是挂机(否则这类时段只剩开场一帧,
+    // 见 docs/design/screen-memory.md"采集层解耦")。判据 = 显示防睡断言:
+    // 播放器在放,OS 里必有"别让屏幕睡"的断言;无断言才 seal 并 return,
+    // 让真挂机时段不计入使用时长。
+    // 已封(current=None)后不再探,等键鼠输入自然开新会话。
     // idle 读一次供两处用：本分支的阈值判断 + 下面 interval-roll 的抑制。
     // 被动观看豁免对桌面前台（Progman/WorkerW）不适用：Wallpaper Engine 等动态
     // 壁纸让桌面永远在变，但没人盯着桌面看——桌面焦点回归纯键鼠挂机语义。
@@ -413,8 +406,8 @@ async fn tick(inner: &Inner) -> Result<()> {
         if inner.current.lock().await.is_none() {
             return Ok(());
         }
-        if !crate::platform::is_desktop_foreground() && screen_probe_active(inner).await {
-            log::debug!("键鼠空闲 {idle_now}s 但屏幕在变（被动观看），会话延续");
+        if !crate::platform::is_desktop_foreground() && keepawake_active(inner).await {
+            log::debug!("键鼠空闲 {idle_now}s 但有显示防睡断言（媒体播放中），会话延续");
         } else {
             let mut cur_lock = inner.current.lock().await;
             if let Some(prev) = cur_lock.take() {
@@ -423,8 +416,8 @@ async fn tick(inner: &Inner) -> Result<()> {
                 // 被动观看后离开，最后一次输入远在观看开始之前，按屏幕算才不会
                 // 把整段观看吞掉。极端组合下 ended_at < started_at 由 seal_session 钳制。
                 let input_end = Local::now() - Duration::seconds(idle_now as i64);
-                let screen_end = inner.screen_probe.lock().await.last_change_at;
-                let real_end = screen_end.map_or(input_end, |t| t.max(input_end));
+                let media_end = inner.keepawake.lock().await.last_active_at;
+                let real_end = media_end.map_or(input_end, |t| t.max(input_end));
                 if let Err(e) = activities::seal_session(&inner.pool, prev.id, real_end).await {
                     log::warn!(
                         "seal_session 失败 (用户挂机 {idle_now}s, id={}): {e}",
@@ -518,12 +511,12 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 触发新会话的两种情况：
     //   1) 焦点切换（不同 app / 不同 url）—— 立即截图
     //   2) 同一焦点停留满 interval_secs —— 周期性补一张图，让长时间停留也有时间序列。
-    //      但用户已经手离鼠键一阵（idle 超过两个轮询周期）时要再探屏幕：
-    //      屏幕也静止才**不 roll**——roll 出来的会话按墙钟封口，会把阈值前的挂机
-    //      秒数（默认最多 180s-30s=150s/次）全记成使用；而屏幕在变 = 被动观看
-    //      （视频/盯编译），照常补帧，否则这类时段只剩开场一帧。
-    //      例外：idle_threshold == 0 = 用户明确关闭挂机检测（"永远算在用"）——
-    //      此时不按 idle 抑制 roll，探屏也省了。
+    //      但用户已经手离鼠键一阵(idle 超过两个轮询周期)时要看防睡断言:
+    //      无断言才**不 roll**——roll 出来的会话按墙钟封口,会把阈值前的挂机
+    //      秒数(默认最多 180s-30s=150s/次)全记成使用;有断言 = 媒体播放中,
+    //      照常补帧,否则这类时段只剩开场一帧。
+    //      例外:idle_threshold == 0 = 用户明确关闭挂机检测("永远算在用")——
+    //      此时不按 idle 抑制 roll,断言也不用查。
     let need_new = match current_lock.as_ref() {
         None => true,
         Some(cur) => {
@@ -532,7 +525,7 @@ async fn tick(inner: &Inner) -> Result<()> {
             } else if cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs {
                 idle_threshold == 0
                     || idle_now < POLL_INTERVAL_SECS * 2
-                    || screen_probe_active(inner).await
+                    || keepawake_active(inner).await
             } else {
                 false
             }
@@ -627,45 +620,23 @@ async fn tick(inner: &Inner) -> Result<()> {
 /// 持续变化。这里抓焦点窗口缩成 256×144 灰度，与上次探测的缩略图逐像素比较，
 /// 纯内存、不编码、不落盘。规则：
 ///
+/// 媒体防睡断言探测（被动观看豁免的唯一信号）：
 /// - 限频 [`PROBE_MIN_GAP_SECS`]，窗口内直接复用上次判定；
-/// - 无基线或基线过期（超过 [`PROBE_BASELINE_STALE_SECS`] 没探过）→ 该轮只建
-///   基线并返回"静止"——旧画面与现在的差异不代表"正在变化"，宁可晚一轮恢复
-///   补帧，不凭空判活跃；
-/// - 截图功能关闭时恒返回"静止"：用户关掉截图 = 不读屏，回到纯键鼠挂机语义；
-/// - 抓屏失败（锁屏/安全桌面/权限）视为静止，放行挂机封口。
-async fn screen_probe_active(inner: &Inner) -> bool {
-    if !inner.screenshot.lock().await.enabled {
-        return false;
-    }
-    let mut probe = inner.screen_probe.lock().await;
+/// - 信号 = [`crate::platform::display_keepawake_active`]：播放器/浏览器播放时
+///   向 OS 申请"别让屏幕睡"，与截图开关无关、静音播放也成立；
+/// - 平台 API 失败视为无断言（fail-closed），放行挂机封口——回到纯键鼠语义。
+async fn keepawake_active(inner: &Inner) -> bool {
+    let mut probe = inner.keepawake.lock().await;
     if let Some(at) = probe.last_probe_at {
         if at.elapsed().as_secs() < PROBE_MIN_GAP_SECS {
             return probe.cached_active;
         }
     }
-    let baseline_fresh = probe
-        .last_probe_at
-        .is_some_and(|at| at.elapsed().as_secs() < PROBE_BASELINE_STALE_SECS);
     probe.last_probe_at = Some(Instant::now());
-    // 持锁抓屏（几十 ms）：tick 是唯一调用方，probe 锁无争用
-    let Some(thumb) = screenshot::capture_focus_thumb().await else {
-        probe.prev_thumb = None;
-        probe.cached_active = false;
-        return false;
-    };
-    let active = baseline_fresh
-        && probe.prev_thumb.as_deref().is_some_and(|prev| {
-            let changed = prev
-                .iter()
-                .zip(thumb.iter())
-                .filter(|&(a, b)| a.abs_diff(*b) > PROBE_PIXEL_TAU)
-                .count();
-            changed as f64 >= thumb.len() as f64 * PROBE_CHANGED_FRACTION
-        });
-    probe.prev_thumb = Some(thumb);
+    let active = crate::platform::display_keepawake_active();
     probe.cached_active = active;
     if active {
-        probe.last_change_at = Some(Local::now());
+        probe.last_active_at = Some(Local::now());
     }
     active
 }

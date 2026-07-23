@@ -593,3 +593,113 @@ mod windows_screen_state {
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// 显示防睡断言:媒体播放的跨平台真值(docs/design/screen-memory.md 采集层)
+// ─────────────────────────────────────────────────────────────
+
+/// 系统当前是否有"别让屏幕睡"的断言(任意进程聚合)。
+///
+/// 播放器/浏览器播放音视频时都会申请(macOS IOPMAssertion /
+/// Windows SetThreadExecutionState(ES_DISPLAY_REQUIRED)),否则屏幕会
+/// 在播放中途睡掉;监控类软件(AIDA64 仪表盘)只是刷屏,不申请。
+/// 因此它是"被动观看"的干净信号:与截图开关无关、静音播放也成立。
+///
+/// 失败一律 false(fail-closed):回退到纯键鼠挂机语义,不会比没有它更差。
+#[cfg(target_os = "macos")]
+pub fn display_keepawake_active() -> bool {
+    use std::ffi::c_void;
+    type CFTypeRef = *const c_void;
+    type CFDictionaryRef = *const c_void;
+    type CFStringRef = *const c_void;
+    #[link(name = "IOKit", kind = "framework")]
+    extern "C" {
+        fn IOPMCopyAssertionsStatus(assertions_status: *mut CFDictionaryRef) -> i32;
+    }
+    extern "C" {
+        fn CFDictionaryGetValue(dict: CFDictionaryRef, key: CFTypeRef) -> CFTypeRef;
+        fn CFStringCreateWithCString(
+            alloc: *const c_void,
+            c_str: *const std::os::raw::c_char,
+            encoding: u32,
+        ) -> CFStringRef;
+        fn CFNumberGetValue(number: CFTypeRef, the_type: i32, value_ptr: *mut c_void) -> bool;
+        fn CFRelease(cf: CFTypeRef);
+    }
+    const KCF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+    const KCF_NUMBER_INT_TYPE: i32 = 9;
+    // 只认用户态播放器申请的 PreventUserIdleDisplaySleep;
+    // InternalPreventDisplaySleep 是系统内部断言,不代表媒体播放。
+    const ASSERTION: &[u8] = b"PreventUserIdleDisplaySleep\0";
+    unsafe {
+        let mut dict: CFDictionaryRef = std::ptr::null();
+        if IOPMCopyAssertionsStatus(&mut dict) != 0 || dict.is_null() {
+            return false;
+        }
+        let key = CFStringCreateWithCString(
+            std::ptr::null(),
+            ASSERTION.as_ptr() as *const std::os::raw::c_char,
+            KCF_STRING_ENCODING_UTF8,
+        );
+        let mut active = false;
+        if !key.is_null() {
+            let val = CFDictionaryGetValue(dict, key);
+            if !val.is_null() {
+                let mut level: i32 = 0;
+                if CFNumberGetValue(
+                    val,
+                    KCF_NUMBER_INT_TYPE,
+                    &mut level as *mut i32 as *mut c_void,
+                ) {
+                    active = level > 0;
+                }
+            }
+            CFRelease(key);
+        }
+        CFRelease(dict);
+        active
+    }
+}
+
+/// Windows:CallNtPowerInformation(SystemExecutionState) 读系统聚合执行态,
+/// 普通权限可用(不需要 powercfg /requests 的管理员位)。ES_DISPLAY_REQUIRED
+/// 位 = 有进程正在申请显示防睡。
+#[cfg(target_os = "windows")]
+pub fn display_keepawake_active() -> bool {
+    use winapi::um::powerbase::CallNtPowerInformation;
+    use winapi::um::winnt::SystemExecutionState;
+    const ES_DISPLAY_REQUIRED: u32 = 0x0000_0002;
+    let mut state: u32 = 0;
+    let rc = unsafe {
+        CallNtPowerInformation(
+            SystemExecutionState,
+            std::ptr::null_mut(),
+            0,
+            &mut state as *mut u32 as *mut _,
+            std::mem::size_of::<u32>() as u32,
+        )
+    };
+    rc == 0 && (state & ES_DISPLAY_REQUIRED) != 0
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn display_keepawake_active() -> bool {
+    false
+}
+
+#[cfg(test)]
+mod keepawake_tests {
+    /// 手动验证(macOS):对照系统断言表看返回值翻转。
+    /// 1. `pmset -g assertions` 确认 PreventUserIdleDisplaySleep 当前为 0,跑测试应打印 false;
+    /// 2. `caffeinate -d &` 挂一个显示防睡断言,再跑应打印 true;kill 后恢复 false。
+    ///
+    /// 跑法:`cargo test --lib keepawake_manual -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn keepawake_manual() {
+        println!(
+            "display_keepawake_active = {}",
+            super::display_keepawake_active()
+        );
+    }
+}
