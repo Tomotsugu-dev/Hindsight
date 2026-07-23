@@ -150,8 +150,12 @@ pub fn run() {
                 // 重新断言一次——幂等,顺带把路径刷成当前 exe,换安装位置也不失效。
                 // 只做 Windows:macOS 登录项不会被卸载器清理,且 AppleScript 注册
                 // 重复执行的行为不可靠。
+                // debug 构建跳过:dev 实例跑这段自愈会把 Run 项刷成 target/debug
+                // 的 exe——开发者测完 dev 直接重启电脑,开机就会拉起一个连不上
+                // vite 的开发构建(裸控制台 + 拒绝连接的空窗)。开发机上的自启
+                // 路径交给安装版下次启动时自愈。
                 #[cfg(target_os = "windows")]
-                if cfg.auto_start {
+                if cfg.auto_start && !cfg!(debug_assertions) {
                     use tauri_plugin_autostart::ManagerExt;
                     if let Err(e) = handle.autolaunch().enable() {
                         log::warn!("自启动注册断言失败(可在设置里重新开关一次): {e}");
