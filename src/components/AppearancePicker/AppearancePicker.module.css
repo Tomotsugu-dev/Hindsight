@@ -62,6 +62,9 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  /* 图标集扩到 60 个(约 9 行):封顶 ~5.5 行内部滚动,不把行撑爆 */
+  max-height: 188px;
+  overflow-y: auto;
 }
 
 .iconBtn {
