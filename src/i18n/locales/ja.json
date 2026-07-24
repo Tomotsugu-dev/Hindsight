@@ -1484,7 +1484,9 @@
       "ocrConfirmTitle": "文字認識（OCR）コンポーネントが必要です",
       "ocrConfirmMessage": "テキスト索引の作成には文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に索引作成を開始します。",
       "ocrConfirmAccept": "ダウンロードして開始",
-      "downloadingOcr": "文字認識コンポーネントをダウンロード中… {{mb}} MB"
+      "downloadingOcr": "文字認識コンポーネントをダウンロード中… {{mb}} MB",
+      "stoppedNotice": "このバッチを停止しました。常駐認識は約 1 分後に再開されます",
+      "disableResident": "常駐 OCR をオフ"
     },
     "citations": {
       "showAll": "すべての情報源を表示（{{count}} 件）",

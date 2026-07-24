@@ -1484,7 +1484,9 @@
       "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
       "ocrConfirmMessage": "建立文字索引需要下载文字识别组件（约 40MB），下载完成后自动开始索引。",
       "ocrConfirmAccept": "下载并开始",
-      "downloadingOcr": "正在下载文字识别组件… {{mb}} MB"
+      "downloadingOcr": "正在下载文字识别组件… {{mb}} MB",
+      "stoppedNotice": "本批已停止;常驻识别约 1 分钟后将继续",
+      "disableResident": "关闭常驻 OCR"
     },
     "citations": {
       "showAll": "显示全部 {{count}} 条来源",

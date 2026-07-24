@@ -1484,7 +1484,9 @@
       "ocrConfirmTitle": "Componente de reconhecimento de texto (OCR) necessário",
       "ocrConfirmMessage": "Construir o índice de texto requer baixar o componente de reconhecimento (~40MB). A indexação começa automaticamente quando o download terminar.",
       "ocrConfirmAccept": "Baixar e iniciar",
-      "downloadingOcr": "Baixando componente de reconhecimento de texto… {{mb}} MB"
+      "downloadingOcr": "Baixando componente de reconhecimento de texto… {{mb}} MB",
+      "stoppedNotice": "Lote interrompido; o reconhecimento residente retoma em cerca de um minuto",
+      "disableResident": "Desativar OCR residente"
     },
     "citations": {
       "showAll": "Mostrar todas as {{count}} fontes",

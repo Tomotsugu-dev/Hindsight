@@ -1484,7 +1484,9 @@
       "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
       "ocrConfirmMessage": "建立文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開始索引。",
       "ocrConfirmAccept": "下載並開始",
-      "downloadingOcr": "正在下載文字辨識元件… {{mb}} MB"
+      "downloadingOcr": "正在下載文字辨識元件… {{mb}} MB",
+      "stoppedNotice": "本批已停止;常駐辨識約 1 分鐘後將繼續",
+      "disableResident": "關閉常駐 OCR"
     },
     "citations": {
       "showAll": "顯示全部 {{count}} 條來源",

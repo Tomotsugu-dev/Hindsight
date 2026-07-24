@@ -1484,7 +1484,9 @@
       "ocrConfirmTitle": "Text recognition (OCR) component required",
       "ocrConfirmMessage": "Building the text index requires downloading the text recognition component (~40MB). Indexing starts automatically once the download finishes.",
       "ocrConfirmAccept": "Download & start",
-      "downloadingOcr": "Downloading text recognition component… {{mb}} MB"
+      "downloadingOcr": "Downloading text recognition component… {{mb}} MB",
+      "stoppedNotice": "Batch stopped; resident recognition resumes in about a minute",
+      "disableResident": "Turn off resident OCR"
     },
     "citations": {
       "showAll": "Show all {{count}} sources",

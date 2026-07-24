@@ -11,6 +11,7 @@ import {
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { ocrRuntimeReady } from "../../lib/ocrRuntime";
 import { logError } from "../../lib/logger";
+import { useSettings } from "../../state/settings";
 import styles from "./ChatPage.module.css";
 
 interface BackfillBannerProps {
@@ -32,6 +33,7 @@ const POLL_MS = 3000;
  */
 export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps) {
   const { t } = useTranslation();
+  const { settings, update } = useSettings();
   const [phase, setPhase] = useState<Phase>("idle");
   const [errMsg, setErrMsg] = useState("");
   // OCR 组件缺失时的下载确认弹窗与进度(MB)
@@ -40,6 +42,12 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   // 点过停止(防连点):停止是异步生效的(循环帧间感知,~1s),按住 disabled
   // 直到本轮 digest resolve 收尾
   const [stopping, setStopping] = useState(false);
+  // 停止后的语义收尾:常驻 OCR 开着时,"停止"只掐当前批,下个 tick(~1 分钟)
+  // 会自己继续——不明说用户会以为停止按钮坏了。批停下后显示过渡态
+  // "本批已停止 · 常驻识别约 1 分钟后将继续 [关闭常驻 OCR]",
+  // 常驻恢复运行(polling 重新为 true)或用户关掉常驻后自动消失。
+  const [stoppedNotice, setStoppedNotice] = useState(false);
+  const residentOn = settings?.memoryOcrResident ?? false;
 
   // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
   // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
@@ -57,9 +65,17 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   // background 态的批不归本组件持有(常驻批/别处触发),点停止后没有 promise
   // 可收尾——批停下后轮询把 digestRunning 拉回 false、离开进行态,在这里复位
   // stopping。running 态自己的 doRun finally 也会复位,这里只是统一兜底。
+  // 离开进行态且刚点过停止 + 常驻开着 → 亮"本批已停止"过渡态;
+  // 进行态恢复(常驻下个 tick 又开跑/用户手动再跑)→ 过渡态失效。
   useEffect(() => {
-    if (!polling) setStopping(false);
-  }, [polling]);
+    if (polling) {
+      setStoppedNotice(false);
+      return;
+    }
+    if (!residentOn) setStoppedNotice(false); // 常驻被(从任何入口)关掉,"将继续"不再成立
+    else if (stopping) setStoppedNotice(true);
+    setStopping(false);
+  }, [polling, stopping, residentOn]);
 
   if (stats.total <= 0) return null;
 
@@ -105,6 +121,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       // 停止按钮走 memoryDigestStop 翻标志,这里的 digest 感知后正常
       // resolve 已处理部分,落回 idle 初始态(剩余帧数还在,可再点回填)
       await api.memoryDigestNow();
+      // 手动批被停止收尾时同样亮过渡态(常驻开着的话下个 tick 会接着跑)
+      if (stopping && residentOn) setStoppedNotice(true);
       setPhase("idle");
       onRefresh();
     } catch (e) {
@@ -145,9 +163,25 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
         {effective === "background" &&
           t("chat.backfill.alreadyRunning", { count: stats.total })}
         {effective === "failed" && t("chat.backfill.failed", { msg: errMsg })}
-        {effective === "idle" && t("chat.backfill.pending", { count: stats.total })}
+        {effective === "idle" &&
+          (stoppedNotice
+            ? t("chat.backfill.stoppedNotice")
+            : t("chat.backfill.pending", { count: stats.total }))}
       </span>
-      {(effective === "idle" || effective === "failed") && (
+      {/* 停止后的过渡态:就地给"彻底停"的逃生门,而不是让停止看起来会诈尸 */}
+      {effective === "idle" && stoppedNotice && (
+        <button
+          type="button"
+          className={styles.bannerBtn}
+          onClick={() => {
+            update({ memoryOcrResident: false });
+            setStoppedNotice(false);
+          }}
+        >
+          {t("chat.backfill.disableResident")}
+        </button>
+      )}
+      {((effective === "idle" && !stoppedNotice) || effective === "failed") && (
         <button type="button" className={styles.bannerBtn} onClick={() => void run()}>
           {t("chat.backfill.action")}
         </button>
