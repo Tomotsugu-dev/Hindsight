@@ -766,3 +766,79 @@
   background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 14%, transparent);
   font-weight: var(--font-weight-600);
 }
+
+/* ── 添加应用的自动补全面板 ─────────────────────────── */
+
+/* 相对锚点:面板贴着输入框下方展开 */
+.appSuggestWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.appSuggestMenu {
+  /* fixed + 运行时坐标:躲开 .appList 的 overflow:hidden 裁剪 */
+  position: fixed;
+  z-index: 9999;
+  min-width: 220px;
+  width: max-content;
+  max-width: 320px;
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--surface-card);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.appSuggestOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+}
+
+.appSuggestOptionHi {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.appSuggestLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appSuggestMeta {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* 现属分类的图标按该分类色染色(文字保持灰,浅色分类不糊) */
+.appSuggestMetaIcon {
+  color: var(--cat-color);
+}
+
+/* 未分类候选的"待收编"标记:accent 小圆点,不抢戏 */
+.appSuggestDot {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0.75;
+}
