@@ -54,6 +54,11 @@ const CPU_MAX_PERCENT_IN_BATCH: f32 = CPU_MAX_PERCENT + 30.0;
 const MEM_MIN_MB: u64 = 3 * 1024;
 /// OCR 引擎加载后的常驻内存量(MB),批中复查内存时加回这一份。
 const ENGINE_MEM_MB: u64 = 400;
+// 批内阈值必须比开工阈值宽松,否则引擎会把自己判死(见模块头注释)。
+// 编译期钉死,防以后有人把两组数调回同一条线。
+const _: () = assert!(CPU_MAX_PERCENT_IN_BATCH > CPU_MAX_PERCENT);
+const _: () = assert!(ENGINE_MEM_MB > 0 && ENGINE_MEM_MB < MEM_MIN_MB);
+
 /// 批进行中资源门复查间隔(秒)。
 const WATCHDOG_SECS: u64 = 5;
 /// 批进行中 CPU 连续超限这么多次(× WATCHDOG_SECS ≈ 15 秒)才停批:
@@ -276,13 +281,5 @@ mod tests {
         assert!(backlog_fires(400, true));
         // 空闲档不影响常规档下限
         assert!(!backlog_fires(400, false));
-    }
-
-    /// 批内阈值必须比开工阈值宽松,否则引擎会把自己判死(见模块头注释)。
-    /// 钉死这条不变量,防以后有人把两组数调回同一条线。
-    #[test]
-    fn in_batch_thresholds_are_looser() {
-        assert!(CPU_MAX_PERCENT_IN_BATCH > CPU_MAX_PERCENT);
-        assert!(ENGINE_MEM_MB > 0 && ENGINE_MEM_MB < MEM_MIN_MB);
     }
 }
