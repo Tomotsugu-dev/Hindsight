@@ -89,9 +89,3 @@ web/demo/
 
 # POC 输出（含真实屏幕内容，勿提交）
 scripts/poc/output/
-
-# 各语言截图工作目录仅本地:README 五语统一引用 docs/intro_zh/imgs
-docs/intro_en/
-docs/intro_ja/
-docs/intro_pt/
-docs/intro_zh-TW/

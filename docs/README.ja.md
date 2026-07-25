@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/daily.png" alt="日次統計" width="800"><br/>
+  <img src="./intro_ja/imgs/daily.png" alt="日次統計" width="800"><br/>
   <sub><b>日次統計</b> · 24 時間の時間帯別積み上げグラフ × アプリ / カテゴリのダブルランキング。今日の時間の行き先が一目で</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/app_detail.png" alt="アプリ詳細" width="800"><br/>
+  <img src="./intro_ja/imgs/app_detail.png" alt="アプリ詳細" width="800"><br/>
   <sub><b>アプリ詳細</b> · アプリをクリックすると、その中で何をしていたかまで見える</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/weekly.png" alt="週次統計" width="800"><br/>
+  <img src="./intro_ja/imgs/weekly.png" alt="週次統計" width="800"><br/>
   <sub><b>週次統計</b> · 一週間の作業状況をひと目で</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/monthly.png" alt="月次統計" width="800"><br/>
+  <img src="./intro_ja/imgs/monthly.png" alt="月次統計" width="800"><br/>
   <sub><b>月次統計</b> · 日別の活動時間とアプリ / カテゴリランキングで、今月の時間の使い道を把握</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/monthly_cal.png" alt="今月の時間構成" width="800"><br/>
+  <img src="./intro_ja/imgs/monthly_cal.png" alt="今月の時間構成" width="800"><br/>
   <sub><b>今月の時間構成</b> · カテゴリ別の時間と割合に加え、合計・日平均・先月比をまとめて表示</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/ai_summary.png" alt="AI サマリー" width="800"><br/>
+  <img src="./intro_ja/imgs/ai_summary.png" alt="AI サマリー" width="800"><br/>
   <sub><b>AI 自動日報</b> · ローカル / クラウドモデルが時間帯ごとに当日の活動をまとめ、日報として出力</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/ai_chatbot.png" alt="AI チャット" width="800"><br/>
+  <img src="./intro_ja/imgs/ai_chatbot.png" alt="AI チャット" width="800"><br/>
   <sub><b>AI チャット</b> · 「今月 XX にどれくらい時間を使った？」と直接聞ける</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/cloud_sync.png" alt="マルチデバイス同期" width="800"><br/>
+  <img src="./intro_ja/imgs/cloud_sync.png" alt="マルチデバイス同期" width="800"><br/>
   <sub><b>マルチデバイス同期</b> · 複数台のパソコンを使う人に</sub>
 </p>
 

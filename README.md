@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/daily.png" alt="Daily stats" width="800"><br/>
+  <img src="./docs/intro_en/imgs/daily.png" alt="Daily stats" width="800"><br/>
   <sub><b>Daily stats</b> · 24-hour stacked timeline × app / category rankings — see where today went at a glance</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/app_detail.png" alt="App detail" width="800"><br/>
+  <img src="./docs/intro_en/imgs/app_detail.png" alt="App detail" width="800"><br/>
   <sub><b>App detail</b> · Click any app to see what you were actually doing inside it</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/weekly.png" alt="Weekly stats" width="800"><br/>
+  <img src="./docs/intro_en/imgs/weekly.png" alt="Weekly stats" width="800"><br/>
   <sub><b>Weekly stats</b> · Your whole week at a glance</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/monthly.png" alt="Monthly stats" width="800"><br/>
+  <img src="./docs/intro_en/imgs/monthly.png" alt="Monthly stats" width="800"><br/>
   <sub><b>Monthly stats</b> · Daily activity bars with app / category rankings — see where this month's time really went</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/monthly_cal.png" alt="Monthly breakdown" width="800"><br/>
+  <img src="./docs/intro_en/imgs/monthly_cal.png" alt="Monthly breakdown" width="800"><br/>
   <sub><b>Monthly breakdown</b> · Time share by category, with totals, daily average, and change vs. last month</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
+  <img src="./docs/intro_en/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
   <sub><b>AI daily report</b> · A local or cloud model rolls up each segment of your day into a written report</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/ai_chatbot.png" alt="AI Chat" width="800"><br/>
+  <img src="./docs/intro_en/imgs/ai_chatbot.png" alt="AI Chat" width="800"><br/>
   <sub><b>AI chat</b> · Just ask, e.g. "How much time did I spend on X this month?"</sub>
 </p>
 
 <p align="center">
-  <img src="./docs/intro_zh/imgs/cloud_sync.png" alt="Multi-device sync" width="800"><br/>
+  <img src="./docs/intro_en/imgs/cloud_sync.png" alt="Multi-device sync" width="800"><br/>
   <sub><b>Multi-device sync</b> · For people who use more than one computer</sub>
 </p>
 
