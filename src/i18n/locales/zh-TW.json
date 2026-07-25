@@ -145,8 +145,11 @@
         "enableDescription": "關閉後停止後臺採集（視窗活動 + 截圖）。",
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
-        "ocrResidentLabel": "常駐 OCR",
-        "ocrResidentDescription": "即時辨識新截圖（多佔約 400MB 記憶體），電池供電時自動暫停。",
+        "ocrModeLabel": "螢幕文字辨識",
+        "ocrModeDescription": "自動：積壓夠多且電腦空閒（插電、前台非遊戲/影音、CPU 記憶體寬裕）時辨識一批，完成後釋放記憶體。常駐：即時辨識新截圖（多佔約 400MB 記憶體），電池供電時自動暫停。",
+        "ocrModeOff": "關閉",
+        "ocrModeAuto": "自動",
+        "ocrModeResident": "常駐",
         "intervalLabel": "採集間隔",
         "intervalDescription": "採集頻率。",
         "intervalHint": "截圖觸發時機：\n• 切換應用程式 → 立即截圖\n• 瀏覽器切換 URL → 立即截圖\n• 同一視窗停留滿設定的間隔 → 截圖",
@@ -1497,8 +1500,8 @@
       "ocrConfirmMessage": "建立文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開始索引。",
       "ocrConfirmAccept": "下載並開始",
       "downloadingOcr": "正在下載文字辨識元件… {{mb}} MB",
-      "stoppedNotice": "本批已停止;常駐辨識約 1 分鐘後將繼續",
-      "disableResident": "關閉常駐 OCR"
+      "stoppedNotice": "本批已停止;背景辨識稍後會繼續",
+      "disableResident": "關閉背景辨識"
     },
     "citations": {
       "showAll": "顯示全部 {{count}} 條來源",

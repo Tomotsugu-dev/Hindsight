@@ -35,9 +35,9 @@ export default function GeneralTab() {
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
   // OCR 组件缺失时的就地引导:记住用户原本要做的动作,确认下载后自动继续
-  const [ocrConfirm, setOcrConfirm] = useState<null | "resident" | "backfill">(
-    null,
-  );
+  const [ocrConfirm, setOcrConfirm] = useState<
+    null | "resident" | "auto" | "backfill"
+  >(null);
 
   useEffect(() => {
     api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
@@ -77,7 +77,7 @@ export default function GeneralTab() {
   };
 
   /** 确认下载 OCR 组件(带进度),完成后自动继续用户原本要做的动作。 */
-  const downloadOcrThen = async (kind: "resident" | "backfill") => {
+  const downloadOcrThen = async (kind: "resident" | "auto" | "backfill") => {
     setOcrConfirm(null);
     setBackfillBusy(true);
     setBackfillMsg("");
@@ -106,21 +106,35 @@ export default function GeneralTab() {
     }
     setBackfillMsg("");
     if (kind === "resident") {
-      update({ memoryOcrResident: true });
+      update({ memoryOcrResident: true, memoryOcrAuto: false });
+    } else if (kind === "auto") {
+      update({ memoryOcrAuto: true, memoryOcrResident: false });
     } else {
       await runBackfill();
     }
   };
 
-  /** 常驻 OCR 开关:开启方向先确保组件就绪,缺则弹引导(确认下载后自动开启)。 */
-  const onResidentToggle = (v: boolean) => {
-    if (!v) {
-      update({ memoryOcrResident: false });
+  /** 当前识别模式(设置两个 bool 的派生值;常驻优先与后端一致)。 */
+  const ocrMode: "off" | "auto" | "resident" = settings.memoryOcrResident
+    ? "resident"
+    : settings.memoryOcrAuto
+      ? "auto"
+      : "off";
+
+  /** 识别模式切换:开启方向先确保组件就绪,缺则弹引导(确认下载后自动开启)。 */
+  const onOcrModeChange = (mode: "off" | "auto" | "resident") => {
+    if (mode === "off") {
+      update({ memoryOcrResident: false, memoryOcrAuto: false });
       return;
     }
     void ocrRuntimeReady().then((ready) => {
-      if (ready) update({ memoryOcrResident: true });
-      else setOcrConfirm("resident");
+      if (!ready) {
+        setOcrConfirm(mode);
+      } else if (mode === "resident") {
+        update({ memoryOcrResident: true, memoryOcrAuto: false });
+      } else {
+        update({ memoryOcrAuto: true, memoryOcrResident: false });
+      }
     });
   };
 
@@ -230,13 +244,25 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
-          label={t("settings.general.capture.ocrResidentLabel")}
-          description={t("settings.general.capture.ocrResidentDescription")}
+          label={t("settings.general.capture.ocrModeLabel")}
+          description={t("settings.general.capture.ocrModeDescription")}
           disabled={!settings.captureEnabled || !settings.screenshotEnabled}
         >
-          <Toggle
-            checked={settings.memoryOcrResident}
-            onChange={onResidentToggle}
+          <SimplePicker
+            value={ocrMode}
+            options={[
+              { value: "off", label: t("settings.general.capture.ocrModeOff") },
+              {
+                value: "auto",
+                label: t("settings.general.capture.ocrModeAuto"),
+              },
+              {
+                value: "resident",
+                label: t("settings.general.capture.ocrModeResident"),
+              },
+            ]}
+            onChange={onOcrModeChange}
+            disabled={!settings.captureEnabled || !settings.screenshotEnabled}
           />
         </Row>
         <Row
@@ -373,9 +399,11 @@ export default function GeneralTab() {
         open={ocrConfirm !== null}
         title={t("settings.general.capture.ocrConfirmTitle")}
         message={
-          ocrConfirm === "resident"
-            ? t("settings.general.capture.ocrConfirmResident")
-            : t("settings.general.capture.ocrConfirmBackfill")
+          // 判 backfill 而非 resident:auto/resident 共用那句模式中立的
+          // "开启文字索引…下载完成后自动开启",将来再加模式也不会漏
+          ocrConfirm === "backfill"
+            ? t("settings.general.capture.ocrConfirmBackfill")
+            : t("settings.general.capture.ocrConfirmResident")
         }
         confirmLabel={t("settings.general.capture.ocrConfirmAccept")}
         cancelLabel={t("common.cancel")}

@@ -145,8 +145,11 @@
         "enableDescription": "When off, background capture stops (both window activity and screenshots).",
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
-        "ocrResidentLabel": "Keep OCR resident",
-        "ocrResidentDescription": "Recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery.",
+        "ocrModeLabel": "Screen-text recognition",
+        "ocrModeDescription": "Auto: when enough frames pile up and the machine is free (on AC, no game/video in front, CPU & RAM to spare), recognizes a batch and releases the memory afterwards. Resident: recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery.",
+        "ocrModeOff": "Off",
+        "ocrModeAuto": "Auto",
+        "ocrModeResident": "Resident",
         "intervalLabel": "Capture interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
@@ -1497,8 +1500,8 @@
       "ocrConfirmMessage": "Building the text index requires downloading the text recognition component (~40MB). Indexing starts automatically once the download finishes.",
       "ocrConfirmAccept": "Download & start",
       "downloadingOcr": "Downloading text recognition component… {{mb}} MB",
-      "stoppedNotice": "Batch stopped; resident recognition resumes in about a minute",
-      "disableResident": "Turn off resident OCR"
+      "stoppedNotice": "Batch stopped; background recognition will resume later",
+      "disableResident": "Turn off background recognition"
     },
     "citations": {
       "showAll": "Show all {{count}} sources",

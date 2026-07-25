@@ -356,6 +356,37 @@ pub fn on_ac_power() -> bool {
 }
 
 // ─────────────────────────────────────────────────────────────
+// 系统资源占用（CPU / 可用内存）——按需 OCR 的让路信号
+//
+// 背景：自动 OCR（[`crate::memory::auto_ocr`]）只该在机器有余力时干活。
+// 两项都走 `sysinfo`（本项目既有依赖，capture::window 用它查进程），跨平台
+// 且无 unsafe——手写 Win32 FFI 在这里换不来任何东西。
+// 与电源探测同一 fail-open 原则：读不出来返回 None，调用方按"门通过"处理
+// ——资源感知是让路优化，探测异常不能反过来卡死消化。
+// ─────────────────────────────────────────────────────────────
+
+/// 全局 CPU 占用百分比（0-100）。CPU 是差分量，按 sysinfo 的约定采两次、
+/// 中间隔 `MINIMUM_CPU_UPDATE_INTERVAL`（用 tokio 让出线程，不阻塞 runtime）。
+/// 读不出（平台不支持时恒 0/NaN）返 None。
+pub async fn cpu_usage_percent() -> Option<f32> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_cpu_usage();
+    tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
+    sys.refresh_cpu_usage();
+    let pct = sys.global_cpu_usage();
+    pct.is_finite().then_some(pct)
+}
+
+/// 当前可用物理内存（MB）。0 视作"读不出"返 None——真机不可能是 0，
+/// 而不支持的平台正是返 0，按 fail-open 该让门通过。
+pub fn available_memory_mb() -> Option<u64> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let mb = sys.available_memory() / (1024 * 1024);
+    (mb > 0).then_some(mb)
+}
+
+// ─────────────────────────────────────────────────────────────
 // 屏幕不可看状态（息屏 / 锁屏 / 屏保）——挂机判定的硬信号
 //
 // 背景：capture 的挂机判定在键鼠空闲后靠"屏幕活跃探测"豁免被动观看（看视频/

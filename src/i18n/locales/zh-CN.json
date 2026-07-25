@@ -145,8 +145,11 @@
         "enableDescription": "关闭后停止后台采集（窗口活动 + 截图）。",
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
-        "ocrResidentLabel": "常驻 OCR",
-        "ocrResidentDescription": "即时识别新截图（多占约 400MB 内存），电池供电时自动暂停。",
+        "ocrModeLabel": "屏幕文字识别",
+        "ocrModeDescription": "自动：积压攒够且电脑空闲（插电、前台非游戏/影音、CPU 内存宽裕）时识别一批，完成后释放内存。常驻：即时识别新截图（多占约 400MB 内存），电池供电时自动暂停。",
+        "ocrModeOff": "关闭",
+        "ocrModeAuto": "自动",
+        "ocrModeResident": "常驻",
         "intervalLabel": "采集间隔",
         "intervalDescription": "采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
@@ -1497,8 +1500,8 @@
       "ocrConfirmMessage": "建立文字索引需要下载文字识别组件（约 40MB），下载完成后自动开始索引。",
       "ocrConfirmAccept": "下载并开始",
       "downloadingOcr": "正在下载文字识别组件… {{mb}} MB",
-      "stoppedNotice": "本批已停止;常驻识别约 1 分钟后将继续",
-      "disableResident": "关闭常驻 OCR"
+      "stoppedNotice": "本批已停止;后台识别稍后会继续",
+      "disableResident": "关闭后台识别"
     },
     "citations": {
       "showAll": "显示全部 {{count}} 条来源",

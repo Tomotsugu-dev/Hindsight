@@ -71,6 +71,23 @@ pub async fn take_pending(db: &MemoryDb, limit: i64) -> Result<Vec<PendingFrame>
     Ok(rows)
 }
 
+/// 待消化帧总数,与 [`take_pending`] 同口径(待处理 + 未超重试上限的失败帧)。
+/// 自动 OCR([`super::auto_ocr`])用它做积压阈值判定。
+pub async fn pending_count(db: &MemoryDb) -> Result<u64> {
+    let n: i64 =
+        db.0.call(move |conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM frames
+                 WHERE ocr_state = 0 OR (ocr_state = 2 AND attempts < ?1)",
+                params![MAX_ATTEMPTS],
+                |r| r.get(0),
+            )
+            .db()
+        })
+        .await?;
+    Ok(n.max(0) as u64)
+}
+
 /// 消化成功:记完成态 + 会话归属。
 pub async fn mark_done(db: &MemoryDb, path: String, session_id: i64) -> Result<()> {
     db.0.call(move |conn| {

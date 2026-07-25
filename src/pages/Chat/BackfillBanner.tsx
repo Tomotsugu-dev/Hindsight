@@ -28,7 +28,7 @@ const POLL_MS = 3000;
 /**
  * 未入索引提示条:有 N 张截图没进文字索引时显示,一键回填。
  * 索引进行期间每 3 秒重查剩余帧数,实时显示进度;剩余归零 banner 自动消失。
- * digest 报"已在运行"(常驻 OCR 定时批持锁)按后台运行处理——帧已登记,
+ * digest 报"已在运行"(常驻/按需的后台批持锁)按后台运行处理——帧已登记,
  * 后台批会消化,同样轮询进度。
  */
 export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps) {
@@ -42,12 +42,15 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   // 点过停止(防连点):停止是异步生效的(循环帧间感知,~1s),按住 disabled
   // 直到本轮 digest resolve 收尾
   const [stopping, setStopping] = useState(false);
-  // 停止后的语义收尾:常驻 OCR 开着时,"停止"只掐当前批,下个 tick(~1 分钟)
-  // 会自己继续——不明说用户会以为停止按钮坏了。批停下后显示过渡态
-  // "本批已停止 · 常驻识别约 1 分钟后将继续 [关闭常驻 OCR]",
-  // 常驻恢复运行(polling 重新为 true)或用户关掉常驻后自动消失。
+  // 停止后的语义收尾:后台识别开着时,"停止"只掐当前批,稍后会自己继续
+  // ——不明说用户会以为停止按钮坏了。批停下后显示过渡态
+  // "本批已停止 · 后台识别稍后会继续 [关闭后台识别]",
+  // 后台恢复运行(polling 重新为 true)或用户关掉后自动消失。
   const [stoppedNotice, setStoppedNotice] = useState(false);
-  const residentOn = settings?.memoryOcrResident ?? false;
+  // 常驻(下个 tick)与按需(下轮评估条件仍满足时)都会自己接着跑,
+  // 对"停止只掐当前批"这件事语义同族,过渡态与逃生门一视同仁。
+  const backgroundOn =
+    (settings?.memoryOcrResident ?? false) || (settings?.memoryOcrAuto ?? false);
 
   // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
   // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
@@ -65,17 +68,18 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   // background 态的批不归本组件持有(常驻批/别处触发),点停止后没有 promise
   // 可收尾——批停下后轮询把 digestRunning 拉回 false、离开进行态,在这里复位
   // stopping。running 态自己的 doRun finally 也会复位,这里只是统一兜底。
-  // 离开进行态且刚点过停止 + 常驻开着 → 亮"本批已停止"过渡态;
-  // 进行态恢复(常驻下个 tick 又开跑/用户手动再跑)→ 过渡态失效。
+  // 离开进行态且刚点过停止 + 后台识别开着 → 亮"本批已停止"过渡态;
+  // 进行态恢复(后台下轮又开跑/用户手动再跑)→ 过渡态失效。
   useEffect(() => {
     if (polling) {
       setStoppedNotice(false);
       return;
     }
-    if (!residentOn) setStoppedNotice(false); // 常驻被(从任何入口)关掉,"将继续"不再成立
+    // 后台识别被(从任何入口)关掉,"稍后会继续"不再成立
+    if (!backgroundOn) setStoppedNotice(false);
     else if (stopping) setStoppedNotice(true);
     setStopping(false);
-  }, [polling, stopping, residentOn]);
+  }, [polling, stopping, backgroundOn]);
 
   if (stats.total <= 0) return null;
 
@@ -121,8 +125,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       // 停止按钮走 memoryDigestStop 翻标志,这里的 digest 感知后正常
       // resolve 已处理部分,落回 idle 初始态(剩余帧数还在,可再点回填)
       await api.memoryDigestNow();
-      // 手动批被停止收尾时同样亮过渡态(常驻开着的话下个 tick 会接着跑)
-      if (stopping && residentOn) setStoppedNotice(true);
+      // 手动批被停止收尾时同样亮过渡态(后台识别开着的话稍后会接着跑)
+      if (stopping && backgroundOn) setStoppedNotice(true);
       setPhase("idle");
       onRefresh();
     } catch (e) {
@@ -174,7 +178,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
           type="button"
           className={styles.bannerBtn}
           onClick={() => {
-            update({ memoryOcrResident: false });
+            // 两档一起关(与设置页 "off" 分支同一份 patch),不必分辨是哪一档
+            update({ memoryOcrResident: false, memoryOcrAuto: false });
             setStoppedNotice(false);
           }}
         >
@@ -186,8 +191,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
           {t("chat.backfill.action")}
         </button>
       )}
-      {/* 手动批与后台批(常驻/别处触发)的当前轮都能停;常驻模式下个周期
-          仍会继续消化,彻底停走 设置 → 常驻 OCR 开关 */}
+      {/* 手动批与后台批(常驻/按需/别处触发)的当前轮都能停;常驻与按需模式
+          稍后仍会继续消化,彻底停走 设置 → 屏幕文字识别 → 关闭 */}
       {polling && (
         <button
           type="button"
