@@ -1,12 +1,12 @@
-
 <p align="center">
-  <img src="../src/assets/logo.png" alt="Hindsight" width="200">
+  <img src="../src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
 <h1 align="center">Hindsight</h1>
 
 <p align="center">
-  <i>你的电脑日记 — 它替你记得每一天。</i>
+  <strong>本地优先的电脑活动日志与 AI 复盘工具</strong><br/>
+  自动记录应用与窗口活动，按日、周、月还原时间去向；无需手动计时，也无需维护项目标签。
 </p>
 
 <p align="center">
@@ -17,14 +17,87 @@
   <a href="https://github.com/Tomotsugu-dev/Hindsight/releases">
     <img alt="GitHub Release" src="https://img.shields.io/github/v/release/Tomotsugu-dev/Hindsight?color=blue&logo=github">
   </a>
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
-  <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/stargazers">
+    <img alt="GitHub Stars" src="https://img.shields.io/github/stars/Tomotsugu-dev/Hindsight?style=flat&logo=github&color=yellow">
+  </a>
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
+  </a>
   <a href="../LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
+<p align="center">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/releases"><b>下载最新版</b></a> ·
+  <a href="#界面预览">界面预览</a> ·
+  <a href="#主要功能">主要功能</a> ·
+  <a href="#快速开始">快速开始</a>
+</p>
 
 ---
+
+## 界面预览
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/e6349610-a742-4ba2-abca-412f00b1673c" controls muted autoplay loop playsinline width="800"></video>
+</p>
+<p align="center">
+  <sub><b>软件预览</b> · 1 分钟看清 Hindsight 的核心交互</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/daily.png" alt="日统计" width="800"><br/>
+  <sub><b>日统计</b> · 24 小时分时段堆叠图 × 应用 / 分类双排行，一眼看清今天的时间去向</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/app_detail.png" alt="应用明细" width="800"><br/>
+  <sub><b>应用明细</b> · 点开任意应用，看到都在应用中做什么</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/weekly.png" alt="周统计" width="800"><br/>
+  <sub><b>周统计</b> · 一周七天的工作情况</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/monthly.png" alt="月统计" width="800"><br/>
+  <sub><b>月统计</b> · 按天展示各类活动时长，结合应用 / 分类排行，看清本月时间主要花在哪里</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/monthly_cal.png" alt="月度占比" width="800"><br/>
+  <sub><b>本月时间结构</b> · 展示各类活动的时长与占比，并汇总总时长、日均时长及较上月变化</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
+  <sub><b>AI 自动写日报</b> · 本地 / 云端模型按时段汇总当天的活动，写成日报</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/ai_chatbot.png" alt="AI 对话" width="800"><br/>
+  <sub><b>AI 对话</b> · 直接问例如「这个月我在 XX 上花了多久」</sub>
+</p>
+
+<p align="center">
+  <img src="./intro_zh/imgs/cloud_sync.png" alt="多设备同步" width="800"><br/>
+  <sub><b>多设备同步</b> · 适合持有多个设备的用户</sub>
+</p>
+
+## 主要功能
+
+- 📊 **看清时间花在哪** — 后台自动记录，分时段柱状图 + 应用排行；按日 / 周 / 月汇总，点开任意应用看标题级明细；可自定义分类（"工作 / 娱乐 / 学习"）
+- 🤖 **AI 自动写日报** — 本地模型按时段把当天的活动写成日报；开启「自动总结」后，前一天的日报和上一周的周报会自动补齐
+- 💬 **AI 对话** — 直接问「我今天干了什么」「这个月在 XX 项目上花了多久」，基于你自己的记录回答
+- 🔍 **屏幕记忆搜索** — 屏幕上出现过的文字都能搜回来，定位到当时的截图与时刻（截图与文字识别默认关闭，按需开启）
+- ☁️ **多设备汇总** — 可选 Google Drive 同步活动数据，多台电脑一处查看（截图始终留在本地）
+- 🔒 **本地·隐私优先** — 数据默认仅存本机
 
 ## 为什么是 Hindsight
 
@@ -35,37 +108,6 @@
 - **[Toggl](https://toggl.com) / [RescueTime](https://www.rescuetime.com) / 各种付费 SaaS** — 这些本质上是给团队和 HR 算「计费工时」用的：仪表盘信息密集，流程围着项目打标签转，数据还要传到对方的云。我要的是「自己跟自己复盘」，方向完全对不上。
 
 为了解决以上这些问题，Hindsight 应运而生。
-
-## 界面预览
-
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/e6349610-a742-4ba2-abca-412f00b1673c" controls muted autoplay loop playsinline width="800"></video>
-</p>
-<p align="center">
-  <sub><i><b>软件预览</b> · 1 分钟看清 Hindsight 的核心交互</i></sub>
-</p>
-
-<p align="center">
-  <img src="./intro_zh/imgs/today.png" alt="今日总览" width="800"><br/>
-  <sub><i><b>今日总览</b> · 24 小时分时段堆叠图 × 应用排行榜，一眼看清今天的时间去向，工作学习节奏</i></sub>
-</p>
-
-<p align="center">
-  <img src="./intro_zh/imgs/monthly.png" alt="月统计" width="800"><br/>
-  <sub><i><b>月统计</b> · 每日柱状 × 月度排行，看清长期工作节奏</i></sub>
-</p>
-
-<p align="center">
-  <img src="./intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
-  <sub><i><b>AI 自动写日报</b> · 本地 LLM 按时段看截图，输出段落式总结；截图始终本地</i></sub>
-</p>
-
-## 主要功能
-
-- 📊 **看清时间花在哪** — 后台自动记录，分时段柱状图 + 应用排行；按周 / 月汇总；可自定义分类（"工作 / 娱乐 / 学习"）
-- 🤖 **AI 自动写日报**（新）— 本地 LLM 读你的截图，按时段写出段落式总结
-- ☁️ **多设备汇总** — 可选 Google Drive 同步活动数据，多台电脑一处查看（截图始终留在本地）
-- 🔒 **完全本地、隐私优先** — 数据默认仅存本机；只在设定的工作时段记录；自动跳过登录 / 密码页截图
 
 ## 快速开始
 
@@ -82,16 +124,6 @@
 下载 `hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel 通用二进制），双击挂载后将 Hindsight 拖入「应用程序」即可正常打开——应用已接入 Apple 开发者证书签名 + 公证，不会再触发 Gatekeeper 警告。
 
 > 所有活动数据 / 截图默认仅存本地。如果开启 Google Drive 同步，只会上传活动元数据，**不会上传截图**。
-
-## 技术栈
-
-| 类别 | 技术 |
-|---|---|
-| 桌面框架 | [Tauri 2](https://tauri.app/) |
-| 前端 | React 19 · TypeScript · Vite |
-| 后端 | Rust · Tokio · SQLite · reqwest |
-| AI 推理 | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI 兼容 API |
-| 同步 | Google Drive API |
 
 ## License
 

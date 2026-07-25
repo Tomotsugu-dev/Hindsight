@@ -1,12 +1,12 @@
-
 <p align="center">
-  <img src="./src/assets/logo.png" alt="Hindsight" width="200">
+  <img src="./src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
 <h1 align="center">Hindsight</h1>
 
 <p align="center">
-  <i>Your computer's diary — it remembers every day for you.</i>
+  <strong>A local-first computer activity log & AI review tool</strong><br/>
+  Automatically records app and window activity and shows where your time went by day, week, and month — no manual timers, no project tags to maintain.
 </p>
 
 <p align="center">
@@ -17,14 +17,87 @@
   <a href="https://github.com/Tomotsugu-dev/Hindsight/releases">
     <img alt="GitHub Release" src="https://img.shields.io/github/v/release/Tomotsugu-dev/Hindsight?color=blue&logo=github">
   </a>
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
-  <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/stargazers">
+    <img alt="GitHub Stars" src="https://img.shields.io/github/stars/Tomotsugu-dev/Hindsight?style=flat&logo=github&color=yellow">
+  </a>
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
+  </a>
   <a href="LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
+<p align="center">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/releases"><b>Download latest</b></a> ·
+  <a href="#interface-preview">Interface Preview</a> ·
+  <a href="#key-features">Key Features</a> ·
+  <a href="#quick-start">Quick Start</a>
+</p>
 
 ---
+
+## Interface Preview
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/fe05771d-718a-418b-80a1-12fd76a826ab" controls muted autoplay loop playsinline width="800"></video>
+</p>
+<p align="center">
+  <sub><b>App preview</b> · Hindsight's core interactions in 1 minute</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/daily.png" alt="Daily stats" width="800"><br/>
+  <sub><b>Daily stats</b> · 24-hour stacked timeline × app / category rankings — see where today went at a glance</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/app_detail.png" alt="App detail" width="800"><br/>
+  <sub><b>App detail</b> · Click any app to see what you were actually doing inside it</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/weekly.png" alt="Weekly stats" width="800"><br/>
+  <sub><b>Weekly stats</b> · Your whole week at a glance</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/monthly.png" alt="Monthly stats" width="800"><br/>
+  <sub><b>Monthly stats</b> · Daily activity bars with app / category rankings — see where this month's time really went</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/monthly_cal.png" alt="Monthly breakdown" width="800"><br/>
+  <sub><b>Monthly breakdown</b> · Time share by category, with totals, daily average, and change vs. last month</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
+  <sub><b>AI daily report</b> · A local or cloud model rolls up each segment of your day into a written report</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/ai_chatbot.png" alt="AI Chat" width="800"><br/>
+  <sub><b>AI chat</b> · Just ask, e.g. "How much time did I spend on X this month?"</sub>
+</p>
+
+<p align="center">
+  <img src="./docs/intro_en/imgs/cloud_sync.png" alt="Multi-device sync" width="800"><br/>
+  <sub><b>Multi-device sync</b> · For people who use more than one computer</sub>
+</p>
+
+## Key Features
+
+- 📊 **See where your time goes** — Automatic background tracking with per-segment histograms + app rankings; daily / weekly / monthly rollups, click any app for title-level detail; customizable categories ("Work / Entertainment / Learning")
+- 🤖 **AI daily report** — A local model writes up each segment of your day; with Auto summary on, yesterday's daily and last week's weekly reports fill in automatically
+- 💬 **AI chat** — Ask "What did I do today?" or "How long did I spend on project X this month?" — answered from your own records
+- 🔍 **Screen memory search** — Find any text that ever appeared on your screen and jump to the screenshot and moment (screenshots and OCR are off by default, enable as needed)
+- ☁️ **Multi-device aggregation** — Optional Google Drive sync of activity data; view all your computers in one place (screenshots never leave the device)
+- 🔒 **Local & privacy-first** — Data stays on your machine by default
 
 ## Why Hindsight
 
@@ -35,37 +108,6 @@ Have you ever closed the laptop at midnight feeling like you "worked all day" bu
 - **[Toggl](https://toggl.com) / [RescueTime](https://www.rescuetime.com) / paid SaaS** — these feel built for teams and HR-style "billable hours" tracking. The dashboards are dense, the flow is project-tagging-first, and the data lives on someone else's servers. Wrong tool for "personal awareness."
 
 To fix exactly these gaps, I built Hindsight.
-
-## Interface Preview
-
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/fe05771d-718a-418b-80a1-12fd76a826ab" controls muted autoplay loop playsinline width="800"></video>
-</p>
-<p align="center">
-  <sub><i><b>App preview</b> · Hindsight's core interactions in 1 minute</i></sub>
-</p>
-
-<p align="center">
-  <img src="./docs/intro_en/imgs/today.png" alt="Today Overview" width="800"><br/>
-  <sub><i><b>Today Overview</b> · 24-hour stacked histogram × app leaderboard — see where your day went and your work / study rhythm at a glance</i></sub>
-</p>
-
-<p align="center">
-  <img src="./docs/intro_en/imgs/monthly.png" alt="Monthly Statistics" width="800"><br/>
-  <sub><i><b>Monthly Stats</b> · Daily bars × monthly ranking — see your long-term work rhythm</i></sub>
-</p>
-
-<p align="center">
-  <img src="./docs/intro_en/imgs/ai_summary.png" alt="AI Summary" width="800"><br/>
-  <sub><i><b>AI auto-daily-report</b> · Local LLM reads screenshots per time segment and outputs a paragraph-style summary; screenshots stay local</i></sub>
-</p>
-
-## Key Features
-
-- 📊 **See where your time goes** — Background auto-tracking with hourly histograms + app rankings; weekly / monthly aggregation; customizable categories ("Work / Entertainment / Learning")
-- 🤖 **AI auto-generated daily report** (new) — Local LLM reads your screenshots and writes a per-segment summary
-- ☁️ **Multi-device aggregation** — Optional Google Drive sync of activity data; view across multiple computers (screenshots stay local)
-- 🔒 **Local-first, privacy-first** — Data stays on your machine by default; records only during your set work hours; auto-skips screenshots of login / password pages
 
 ## Quick Start
 
@@ -82,16 +124,6 @@ Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 Download `hindsight_x.y.z_universal.dmg` (Apple Silicon + Intel universal binary), double-click to mount, then drag Hindsight into the Applications folder. The app is signed with an Apple Developer certificate and notarized, so it opens normally without any Gatekeeper warning.
 
 > All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, **screenshots will not be uploaded**.
-
-## Tech Stack
-
-| Category | Technology |
-|---|---|
-| Desktop framework | [Tauri 2](https://tauri.app/) |
-| Frontend | React 19 · TypeScript · Vite |
-| Backend | Rust · Tokio · SQLite · reqwest |
-| AI inference | [llama.cpp](https://github.com/ggml-org/llama.cpp) · Qwen2.5-VL / Qwen3-VL · OpenAI-compatible API |
-| Sync | Google Drive API |
 
 ## License
 
