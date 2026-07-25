@@ -24,6 +24,7 @@
 
 import argparse
 import hashlib
+import re
 import json
 import os
 import platform
@@ -36,101 +37,255 @@ from pathlib import Path
 # ───────────────────────── 虚构语料 ─────────────────────────
 
 TITLES = {
-    "code": [
-        "Aurora 数据管线 — main.rs",
-        "Aurora 数据管线 — pipeline.py",
-        "billing-service — invoice.ts",
-        "Aurora 控制台 — Dashboard.tsx",
-        "notify-worker — queue.go",
-        "Aurora 数据管线 — schema.sql",
-        "infra-scripts — deploy.sh",
-        "Aurora 控制台 — theme.css",
-    ],
-    "browser": [
-        "Rust 异步运行时对比 — 技术周刊",
-        "SQLite WAL 模式详解 — 开发者博客",
-        "Aurora 项目周报 - Google Docs",
-        "机械键盘选购指南 — 值得买",
-        "Figma 组件库最佳实践",
-        "PostgreSQL 分区表实战 — 掘金",
-        "「星野」新专辑首发 — bilibili",
-        "东京五日游攻略 — 马蜂窝",
-        "Tauri 2.0 发布说明",
-        "GitHub - aurora-lab/pipeline",
-    ],
     "chat": [
-        "Aurora 项目组",
-        "产品评审群",
-        "李维(设计)",
-        "周报提醒",
-        "运维值班群",
-        "陈晨",
+        "Aurora 项目组", "产品评审群", "运维值班群", "周报提醒", "前端小分队",
+        "数据管线告警", "李维(设计)", "陈晨", "王一帆", "赵樱", "林小满",
+        "苏合(PM)", "老许", "招聘协调群", "Aurora 发布窗口", "摸鱼茶话会",
+        "客服工单同步", "家庭群", "羽毛球周三局", "楼下拼咖啡",
+    ],
+    "mail": [
+        "收件箱 - aurora.dev 邮箱", "Q3 目标评审会 - 日历邀请",
+        "【账单】云服务 7 月用量提醒", "Re: 管线延迟 P95 报警阈值",
+        "GitHub 通知摘要", "Aurora 周报 #29", "转发:新办公室工位图",
+        "【物流】您的包裹已发货", "发票开具确认", "Re: Re: 压测窗口协调",
+        "安全提醒:新设备登录", "内推简历:高级后端工程师",
     ],
     "doc": [
-        "季度复盘.docx",
-        "Aurora 架构设计.md",
-        "面试题库整理",
-        "旅行清单",
-        "读书笔记 — 《数据密集型应用》",
-        "会议纪要 2026-07",
+        "Aurora 架构设计.md", "季度复盘.docx", "会议纪要 2026-07", "本周待办",
+        "读书笔记 — 《数据密集型应用》", "面试题库整理", "旅行清单",
+        "管线容量规划草稿", "新人入职指引 v3", "技术分享:WAL 与检查点",
+        "OKR 对齐表", "灰度发布 checklist", "踩坑记录:时区与夏令时",
+        "隐私合规自查清单", "读书笔记 — 《运维之道》", "年度设备采购计划",
     ],
     "media": [
-        "星际旅人 4K — 播放器",
-        "Lo-fi 工作歌单",
-        "纪录片:深海 — 第 2 集",
-        "白噪音 — 雨声",
+        "星际旅人 4K — 播放器", "纪录片:深海 — 第 2 集", "Lo-fi 工作歌单",
+        "白噪音 — 雨声", "「星野」新专辑", "City Pop 精选集",
+        "纪录片:代码改变世界 — 第 1 集", "钢琴练习曲集", "播客:开发者茶话 EP.42",
+        "演唱会 Live 合集", "冥想引导 — 10 分钟", "电影原声带精选",
     ],
     "terminal": [
-        "cargo build --release",
-        "npm run tauri dev",
-        "git rebase -i HEAD~3",
-        "htop",
-        "ssh aurora-staging",
-        "tail -f service.log",
+        "cargo build --release", "npm run tauri dev", "git rebase -i HEAD~3",
+        "htop", "ssh aurora-staging", "tail -f service.log", "docker compose up",
+        "kubectl get pods -n aurora", "pytest -k pipeline", "git bisect run",
+        "rsync 备份脚本", "psql aurora_prod", "cargo clippy --all-targets",
+        "vim deploy.yaml", "brew upgrade", "just release",
     ],
+    "design": [
+        "Aurora 控制台改版稿", "组件库 v2", "图标集整理", "海报草稿 0713",
+        "Logo 微调", "官网首页 hero 图", "移动端适配标注", "配色方案 A/B",
+        "字体对比板", "成片粗剪 0726", "口播字幕对轨", "封面图打样",
+    ],
+    "ai": [
+        "Rust 生命周期报错求解 - Claude", "SQL 窗口函数写法 - ChatGPT",
+        "重构方案对比 - Claude", "正则表达式调试 - ChatGPT",
+        "英文邮件润色 - Claude", "K8s 探针配置 - ChatGPT",
+        "面试自我介绍打磨 - Claude", "旅行行程规划 - ChatGPT",
+        "SQLite 锁争用分析 - Claude", "周报要点提炼 - ChatGPT",
+    ],
+    "sheets": [
+        "管线容量测算.xlsx", "Q3 预算表.xlsx", "值班排班表.xlsx",
+        "招聘漏斗统计.xlsx", "对账单 2026-06.xlsx", "回放耗时记录.xlsx",
+    ],
+    "slides": [
+        "Aurora 里程碑.pptx", "技术分享:向量检索入门.pptx", "团队季度汇报.pptx",
+        "灰度发布方案评审.pptx", "新人培训:数据管线概览.pptx",
+    ],
+    "pdf": [
+        "SQLite 官方文档(打印版).pdf", "Designing Data-Intensive Applications.pdf",
+        "劳动合同模板.pdf", "路由器说明书.pdf", "论文:LSM-Tree 优化综述.pdf",
+        "报销单扫描件.pdf", "签证材料清单.pdf", "显示器色彩校准指南.pdf",
+    ],
+    "game": [
+        "Steam", "星露谷物语", "文明 VI", "糖豆人", "Epic Games Launcher", "棋弈对战",
+    ],
+    "self": ["Hindsight"],
     "default": [
-        "Aurora 项目资料",
-        "本周待办",
-        "收件箱",
-        "设置",
-        "快速笔记",
+        "Aurora 项目资料", "本周待办", "收件箱", "设置", "快速笔记",
+        "文件整理", "下载内容", "系统偏好",
     ],
+}
+
+# 组合式语料:主题 × 站点/结构模板,映射空间几百~上千,
+# 避免"全天几百个真实标题被压进 10 个假值"的循环重复感。
+# 浏览器标题按「题材家族」组合:每个家族配语义匹配的站点池,
+# 避免"镰仓一日游 — 技术周刊"这类乱配;家族列表带权重(技术类出现更多)。
+BROWSER_FAMILIES = [
+    # (题材池, 站点池) —— 技术,权重 ×3
+    (
+        [
+            "Rust 异步运行时对比", "SQLite WAL 模式详解", "PostgreSQL 分区表实战",
+            "Tauri 2.0 发布说明", "一致性哈希图解", "Raft 论文精读笔记",
+            "开源许可证对比", "CRDT 入门", "向量数据库选型",
+            "K8s 探针最佳实践", "Nginx 限流配置", "TLS 证书自动续期",
+            "SQLite 全文检索实践", "Rust 错误处理模式", "WebSocket 断线重连设计",
+            "浏览器渲染管线科普",
+        ],
+        [" — 技术周刊", " — 开发者博客", " - 知乎", " — 掘金",
+         " - Stack Overflow", " - Google 搜索", " - V2EX"],
+    ),
+    (
+        [
+            "机械键盘选购指南", "站立办公桌横评", "降噪耳机怎么选",
+            "人体工学椅对比", "显示器支架推荐", "NAS 硬盘怎么选",
+        ],
+        [" — 值得买", " - 知乎", " - Google 搜索", " — 少数派"],
+    ),
+    (
+        [
+            "东京五日游攻略", "镰仓一日游路线", "京都红叶季时间表",
+            "冲绳自驾注意事项", "大阪美食地图", "富士山周边住宿",
+        ],
+        [" - 知乎", " - Google 搜索", " — 穷游锦囊"],
+    ),
+    (
+        [
+            "健身房新手计划", "跑步心率区间科普", "咖啡手冲参数表",
+            "程序员颈椎保养", "居家办公效率清单", "个税专项扣除说明",
+            "指数基金定投入门", "租房合同避坑指南", "《数据密集型应用》书评",
+            "Figma 组件库最佳实践", "配色理论入门", "字体排印基础",
+        ],
+        [" - 知乎", " — 少数派", " - Google 搜索"],
+    ),
+]
+# 家族抽签权重:技术 ×2、生活 ×2,数码/旅行 ×1(偏日常,大家都看得懂)
+_BROWSER_DECK = [0, 0, 1, 2, 3, 3]
+
+
+# B 站产出按真实库校准(真实约 11.6% 行 / 14.8% 时长 / 113 次每月)。
+# 两级门控:先抽"B 站时段"(某天某小时,BILI_HOUR_PCT),命中时段内的
+# 浏览行大多连片变 B 站(BILI_ROW_PCT)——观看是成段的,不是零星插针,
+# 会话次数与单次时长才像真人。无时段上下文时退回低概率兜底。
+BILI_HOUR_PCT = 40
+BILI_ROW_PCT = 47
+BILI_FALLBACK_PCT = 10
+
+
+def _browser_title(key, ctx=None):
+    h = hashlib.md5(key.encode("utf-8")).hexdigest()
+    if ctx is not None:
+        d, lh = ctx
+        hour_roll = int(hashlib.md5(f"bh|{d}|{lh}".encode("utf-8")).hexdigest()[:6], 16) % 100
+        hit = hour_roll < BILI_HOUR_PCT and int(h[20:26], 16) % 100 < BILI_ROW_PCT
+    else:
+        hit = int(h[20:26], 16) % 100 < BILI_FALLBACK_PCT
+    if hit:
+        return pick(BILI_TITLES, key)
+    topics, sites = BROWSER_FAMILIES[_BROWSER_DECK[int(h[:4], 16) % len(_BROWSER_DECK)]]
+    return topics[int(h[4:12], 16) % len(topics)] + sites[int(h[12:20], 16) % len(sites)]
+
+
+CODE_FILES = [
+    "main.rs", "pipeline.py", "invoice.ts", "Dashboard.tsx", "queue.go",
+    "schema.sql", "deploy.sh", "theme.css", "worker.rs", "api.ts",
+    "ingest.py", "config.toml", "auth.go", "Chart.tsx", "migrate.sql",
+    "Dockerfile", "utils.rs", "hooks.ts", "consumer.py", "README.md",
+    "cache.go", "types.d.ts", "backfill.py", "router.rs",
+]
+CODE_PROJECTS = [
+    "Aurora 数据管线", "Aurora 控制台", "billing-service",
+    "notify-worker", "infra-scripts", "aurora-sdk",
+]
+
+
+def _pick2(key, pool_a, pool_b, joiner="{a}{b}"):
+    h = hashlib.md5(key.encode("utf-8")).hexdigest()
+    a = pool_a[int(h[:8], 16) % len(pool_a)]
+    b = pool_b[int(h[8:16], 16) % len(pool_b)]
+    return joiner.format(a=a, b=b)
+
+
+TITLE_GEN = {
+    "browser": _browser_title,  # 唯一收 ctx 的生成器
+    "code": lambda key: _pick2(key, CODE_FILES, CODE_PROJECTS, "{a} — {b}"),
+    # 游戏窗口标题现实中就是游戏名:直接用进程名(进程名本就保留,去掉 .exe 尾巴),
+    # 避免游戏进程顶着"收件箱"之类乱入标题
+    "game": lambda key: re.sub(r"\.(exe|app)$", "", key.split("|", 1)[0], flags=re.I),
 }
 
 BUCKETS = [
     ("code", ["cursor", "code", "idea", "zed", "studio", "vim", "sublime"]),
     ("browser", ["chrome", "safari", "edge", "firefox", "arc", "brave", "browser"]),
-    ("chat", ["wechat", "weixin", "slack", "discord", "telegram", "qq", "teams", "lark", "dingtalk"]),
-    ("doc", ["word", "pages", "notion", "obsidian", "typora", "onenote", "docs"]),
-    ("media", ["music", "spotify", "iina", "vlc", "quicktime", "player", "netease"]),
-    ("terminal", ["terminal", "iterm", "warp", "alacritty", "kitty", "powershell", "cmd"]),
+    ("chat", ["wechat", "weixin", "微信", "slack", "discord", "telegram", "qq", "teams", "lark", "飞书", "dingtalk", "钉钉"]),
+    ("mail", ["mail", "outlook", "thunderbird", "spark", "airmail"]),
+    ("doc", ["word", "pages", "notion", "obsidian", "typora", "onenote", "docs", "note"]),
+    ("sheets", ["excel", "numbers", "wps表格"]),
+    ("slides", ["powerpoint", "keynote", "wps演示"]),
+    ("design", ["figma", "sketch", "photoshop", "illustrator", "blender", "procreate", "affinity", "capcut", "剪映", "davinci"]),
+    ("ai", ["chatgpt", "claude", "copilot", "gemini", "poe"]),
+    ("pdf", ["preview", "acrobat", "skim", "pdf"]),
+    ("media", ["music", "spotify", "iina", "vlc", "quicktime", "player", "netease", "podcast"]),
+    ("game", ["steam", "epic", "battle.net", "riot", "star rail", "honkai", "genshin", "原神", "崩坏", "wuthering", "league", "cs2", "dota"]),
+    ("terminal", ["terminal", "iterm", "warp", "alacritty", "kitty", "powershell", "cmd", "ターミナル", "终端"]),
+    ("self", ["hindsight"]),
+]
+
+# 签名段落:只种进极少数会话(~千分之一)。搜索演示搜"Keychron"时
+# 命中个位数才像"看过一次订单页",而不是通用背景语料那样命中几千条。
+OCR_RARE = [
+    "订单确认:Keychron K8 机械键盘(茶轴),订单号 AUR-2026-0713,"
+    "实付 ¥399.00,预计 7 月 15 日送达。收货后记得先试打半小时再决定要不要换轴。",
+    "体检预约确认:7 月 30 日上午 8:30,记得前一晚十点后禁食;"
+    "带身份证,常规项目约两小时出报告。",
 ]
 
 OCR_PARAGRAPHS = [
-    "Aurora 数据管线 v2 重构要点:摄取层改为增量拉取,水位线落库;"
-    "转换层拆出独立 worker,失败重试上限 3 次;昨日全量回放耗时 42 分钟。",
-    "订单确认:Keychron K8 机械键盘(茶轴,国际版),订单号 AUR-2026-0713,"
-    "实付 ¥399.00,预计 7 月 15 日送达。收货后记得试一下热插拔轴体。",
-    "会议纪要:确认 Q3 目标为管线延迟 P95 < 5 分钟;风险项是上游接口限流,"
-    "由李维跟进配额申请;下次评审 7 月 18 日。",
-    "面试准备:重点复习一致性哈希、LSM-Tree 写放大、Raft 日志复制;"
-    "候选项目讲 Aurora 的幂等消费设计。",
+    "会议纪要:确认季度汇报定在下月 5 日,PPT 由我负责初稿;"
+    "预算部分等财务的数出来再补;下次对进度是 7 月 18 日。",
     "东京行程草稿:D1 浅草寺-晴空塔,D2 三鹰之森吉卜力(记得提前一个月抢票),"
     "D3 镰仓一日游;酒店定在上野附近,方便坐京成线。",
-    "调试记录:notify-worker 在高并发下偶发重复推送,根因是去重键没包含渠道字段;"
-    "修复后压测 10 万条无重复,准备灰度。",
+    "待办清单:1) 汇报 PPT 补最后两页;2) 给合作方回邮件确认交期;"
+    "3) 订周三羽毛球场;4) 给路由器换 DNS;5) 报销单截止周五。",
+    "报销提醒:6 月差旅共 3 笔待提交,截止 7 月 25 日;"
+    "打车发票记得合并成一个 PDF 上传,住宿发票要附行程单。",
+    "健身记录:本周三练——深蹲 5×5 @70kg,硬拉 3×5 @90kg,"
+    "引体 4×8;下周深蹲加 2.5kg,注意腰带位置。",
+    "快递通知:您的包裹已到菜鸟驿站(编号 8-3-2107),请凭取件码领取;"
+    "另一件从上海发出的包裹预计明天送达。",
+    "租房备忘:看了两套,都是两室一厅;A 套近地铁但朝北,B 套朝南带阳台"
+    "但要多走十分钟;和中介约了周六再看一次 B 套,记得确认物业费。",
+    "菜谱收藏:番茄炖牛腩——牛腩焯水后小火炖 40 分钟再下番茄,"
+    "最后十分钟放土豆;盐要最后放,不然肉柴。",
+    "读书摘录:把大目标拆成够小的下一步,行动的阻力会小很多;"
+    "计划的意义不在于被严格执行,而在于让你知道偏航了多少。",
+    "工作文档:项目时间线更新——需求确认本周五截止,"
+    "下周进入制作期,预留三天给审校;风险项是素材到位时间。",
+    "群公告:本周五团建改为聚餐,地点在公司附近的川菜馆,"
+    "六点半集合;有忌口的同学在接龙里备注一下。",
+    "课程笔记:摄影构图第 3 课——三分法之外,试着用引导线和框架式构图;"
+    "作业是本周拍三张带前景的照片。",
+    "客服回复:您反馈的导出文件乱码问题已确认为老版本缺陷,"
+    "升级到最新版即可解决;给您带来不便非常抱歉。",
+    "周末计划:周六上午骑车去湿地公园,中午在附近吃面;"
+    "周日在家大扫除加换季收纳,晚上把下周的衬衫熨出来。",
 ]
 
-SEGMENT_SUMMARIES = [
-    "上午的时间主要投入在 Aurora 数据管线的重构上:先在 Cursor 中调整了摄取层的"
-    "增量拉取逻辑,随后用终端跑了两轮回放验证,中间穿插查阅了几篇关于 SQLite WAL "
-    "的资料。整体专注度较高,只有零星的群消息打断。",
-    "下午以会议和文档为主:参加了 Q3 目标评审,会后整理会议纪要并更新了架构设计"
-    "文档;晚些时候回到编辑器处理 notify-worker 的重复推送问题,定位到去重键缺少"
-    "渠道字段并完成修复。",
-    "晚间节奏放缓:浏览了机械键盘的选购内容并下了单,之后听着歌单整理了东京行程"
-    "草稿,睡前把明天的待办列了出来。",
-]
+# 时段总结按 segment_idx(0 深夜 / 1 早上 / 2 上午 / 3 下午 / 4 晚上)分组,
+# 组内多变体按行哈希轮换——避免"深夜时段配上『上午…』"的文不对题。
+SEGMENT_SUMMARIES = {
+    0: [
+        "深夜基本没碰电脑。睡前扫了一眼群消息,没有需要马上回的;把手机上没看完的一篇文章加进了稍后读,又确认了明早的闹钟和日程,十二点前就休息了。相比上周偶尔的熬夜,这周睡前不看工作消息的习惯保持得不错,深夜的屏幕时间明显在收缩。",
+        "追完一集纪录片才睡。看完顺手把桌面清了清:散落的截图归进文件夹,两个用完的安装包删掉,下载目录清爽了不少;又把明天要带的文件拖进了随身盘。之后再没有屏幕活动,整段处于休息状态,入睡时间比昨天早了约半小时。",
+    ],
+    1: [
+        "早上以收拾和启动为主。先过了一遍邮箱,广告和通知直接归档,两封需要确认的邮件当场回掉:一封确认了周四的拜访时间,另一封把资料补发了过去。随后把今天的待办列进备忘,按优先级排了序,顺手确认了上午会议的时间和会议室;正式坐下干活前还刷了十分钟新闻,九点前进入状态。",
+        "起来先看了昨晚攒下的群消息,逐条回复了几处约时间的;浏览器里读了两篇公众号文章,一篇讲衣柜换季收纳,一篇讲久坐族的颈椎放松动作,都收藏进了稍后整理的夹子。之后把桌面和下载目录清了清,九点后切入正式工作,节奏平稳没有匆忙感。",
+    ],
+    2: [
+        "上午的大头是季度汇报的 PPT。先把框架和目录定下来,再逐页填数据和配图:上半年的两张对比图重画了一遍,配色统一成公司模板的蓝灰系;中途让同事帮忙核对了两处数字,改掉一处口径不一致。临近午间开了个二十分钟的短会对进度,会后把改动点直接落进演示稿。整体专注度不错,群消息只零星回了几条,PPT 完成度到了七成。",
+        "上午在文档和表格之间来回。先把上周的总结文档改完发出去,补上了两条遗漏的进展;又打开报表核对这个月的数据,发现两个格子填错了行,顺着公式改了回来,和上月的合计对上了。中间抽空回复了几条工作群的讨论,给下午的会议订好了会议室,还把要用的材料提前发给了参会的同事。",
+        "上午一半时间在改自己手头的小工具:一个反复出现的小毛病终于定位到了,是两处设置互相顶掉对方,改好后试了几轮没再复现,顺手把界面上两个不顺眼的间距也调了。另一半时间整理共享文档里的反馈意见,逐条回复标记,过期的附件清理掉;临近午饭把改动记录写进了更新说明。节奏平稳,没有被会议打断。",
+    ],
+    3: [
+        "下午两点开了一小时的例会,确认了这期的分工和时间节点,自己领了汇报材料和两页数据附录。会后把会议纪要整理发到群里,@了两位需要跟进的同事;接着继续改 PPT,把图表的配色和字号统一了一遍,标题层级重新理顺。临下班前把明天要用的材料打包发给同事,收件箱清到只剩两封待回。",
+        "午后先集中处理文档:合作方发来的修订稿逐条过完,能接受的直接接受,有疑问的加了批注等对方确认,前后花了一个多小时。四点后切到浏览器查资料,把下周出差的酒店比了三家,选了离客户近、含早餐的那家订下,又顺手把高铁票改签到早一班。下班前回了一圈消息,今天的事没有拖到明天的。",
+        "下午被两个会切开:前一个聊下期方案,确定了先做样稿再放量的路线;后一个对预算,砍掉了两项优先级不高的开支。会议间隙把演示稿里遗留的批注消完,又把上个月的报销单补交了,发票合并成一个 PDF 传了上去。会议偏多,但每件事都有收尾,下班时桌面和收件箱都是干净的。",
+    ],
+    4: [
+        "晚间节奏放缓。先看了两集剧放松,片尾顺手在购物网站比了比机械键盘的价格,茶轴和红轴的评价各看了几条,加进购物车没急着下单,打算等周末的活动价。睡前把明天的待办列了出来,清了下下载文件夹,把这周拍的照片挑了几张传进相册;十一点半前合上电脑。",
+        "晚上刷了会儿 B 站,看完一个数码测评和一个旅行 vlog,又顺着推荐看了半集美食纪录片。之后把周末的出行路线在地图上标好:上午的公园、中午的面馆、下午的书店连成一条线,查了天气说周六多云适合骑车。十一点前合上电脑休息,屏幕时间比昨晚短。",
+        "晚上先打了两把游戏休整,赢一把输一把,心态平稳退出。随后把白天没看完的文档翻完,给两处数据标了疑问准备明天当面问;又把周四要交的材料检查了一遍格式,目录页码都对上了。睡前刷了刷手机,把闹钟往后调了半小时——明天不用赶早。",
+    ],
+}
 
 # 注入的可提问素材:B 站标题(晚间浏览器时段)与 Hindsight 开发标题(代码时段),
 # 让「看了 B 站多久/几次」「Hindsight 开发花了多久」这类问题有真数据可查。
@@ -143,6 +298,10 @@ BILI_TITLES = [
     "【整活】用 Excel 跑神经网络_哔哩哔哩_bilibili",
     "机械键盘轴体横评:茶轴还是红轴_哔哩哔哩_bilibili",
     "「星野」新专辑全曲解析_哔哩哔哩_bilibili",
+    "自建 NAS 从入门到吃灰_哔哩哔哩_bilibili",
+    "【纪录片】硅谷车库往事 P1_哔哩哔哩_bilibili",
+    "30 天早起挑战真实记录_哔哩哔哩_bilibili",
+    "这把人体工学椅值不值 1500?_哔哩哔哩_bilibili",
 ]
 HINDSIGHT_TITLES = [
     "Hindsight — capture/service.rs",
@@ -151,9 +310,24 @@ HINDSIGHT_TITLES = [
     "Hindsight — screen-memory.md",
     "Hindsight — ai/ocr.rs",
     "Hindsight — SettingsPage.tsx",
+    "Hindsight — chat/tools.rs",
+    "Hindsight — SearchPage.tsx",
+    "Hindsight — repo/reports.rs",
+    "Hindsight — sync/engine/pull.rs",
 ]
 
 # ───────────────────────── 工具 ─────────────────────────
+
+
+def parse_ts(value):
+    """解析库里的 RFC3339 时间戳:秒的小数部分裁到 6 位。
+    (Rust 侧写入纳秒精度,老版本 Python 的 fromisoformat 会直接拒收。)"""
+    from datetime import datetime
+
+    m = re.match(r"^(.*?\.)(\d{7,})([+-].*|Z?)$", value)
+    if m:
+        value = f"{m.group(1)}{m.group(2)[:6]}{m.group(3)}"
+    return datetime.fromisoformat(value)
 
 
 def pick(pool, key):
@@ -169,8 +343,15 @@ def bucket_of(process_name):
     return "default"
 
 
-def fake_title(process_name, original):
-    return pick(TITLES[bucket_of(process_name)], f"{process_name}|{original}")
+def fake_title(process_name, original, ctx=None):
+    """ctx=(local_date, local_hour):给浏览器桶做 B 站时段聚簇用,其余桶忽略。"""
+    b = bucket_of(process_name)
+    key = f"{process_name}|{original}"
+    if b == "browser":
+        return _browser_title(key, ctx)
+    if b in TITLE_GEN:
+        return TITLE_GEN[b](key)
+    return pick(TITLES[b], key)
 
 
 def config_dir():
@@ -240,26 +421,24 @@ def sanitize_main(db, demo_root):
 
     # 活动:标题→语料;截图指针/哈希清空(真实截图绝不进演示档案)
     rows = cur.execute(
-        "SELECT id, process_name, window_title FROM activities WHERE window_title IS NOT NULL"
+        "SELECT id, process_name, window_title, local_date, local_hour "
+        "FROM activities WHERE window_title IS NOT NULL"
     ).fetchall()
     cur.executemany(
         "UPDATE activities SET window_title = ? WHERE id = ?",
-        [(fake_title(p, t), i) for i, p, t in rows],
+        [(fake_title(p, t, (d, lh)), i) for i, p, t, d, lh in rows],
     )
     cur.execute("UPDATE activities SET screenshot_path = NULL, image_hash = NULL")
 
-    # 注入演示素材:晚间浏览器的 1/3 → B 站;代码类的 2/3 → Hindsight 开发
+    # 注入演示素材:代码类的 2/3 → Hindsight 开发("开发花了多久"有货可查)。
+    # B 站标题不再强灌,由 _browser_title 的门控按真实占比自然产出。
     rows = cur.execute(
-        "SELECT id, process_name, local_hour FROM activities WHERE window_title IS NOT NULL"
+        "SELECT id, process_name FROM activities WHERE window_title IS NOT NULL"
     ).fetchall()
-    bili, hs = [], []
-    for i, proc, lh in rows:
-        b = bucket_of(proc)
-        if b == "browser" and lh is not None and 18 <= lh <= 23 and i % 2 == 0:
-            bili.append((pick(BILI_TITLES, f"b{i}"), i))
-        elif b == "code" and i % 3 != 2:
+    hs = []
+    for i, proc in rows:
+        if bucket_of(proc) == "code" and i % 3 != 2:
             hs.append((pick(HINDSIGHT_TITLES, f"h{i}"), i))
-    cur.executemany("UPDATE activities SET window_title = ? WHERE id = ?", bili)
     cur.executemany("UPDATE activities SET window_title = ? WHERE id = ?", hs)
 
     # 凭据 / 同步状态:全清。devices 不能删——应用页"本机/设备"列
@@ -284,7 +463,10 @@ def sanitize_main(db, demo_root):
     ).fetchall()
     cur.executemany(
         "UPDATE ai_summaries SET content = ?, error = NULL WHERE rowid = ?",
-        [(SEGMENT_SUMMARIES[idx % len(SEGMENT_SUMMARIES)], rid) for rid, idx in seg],
+        [
+            (pick(SEGMENT_SUMMARIES.get(idx, SEGMENT_SUMMARIES[3]), f"seg{rid}"), rid)
+            for rid, idx in seg
+        ],
     )
 
     # 设置 JSON:关采集/同步,清一切像凭据的字段,截图路径指向演示目录
@@ -364,6 +546,8 @@ def sanitize_memory(db):
     for sid, app_id, title in sessions:
         n = 2 + int(hashlib.md5(str(sid).encode()).hexdigest(), 16) % 3  # 2-4 段
         paras = list(dict.fromkeys(pick(OCR_PARAGRAPHS, f"{sid}:{i}") for i in range(n)))
+        if int(hashlib.md5(f"rare|{sid}".encode("utf-8")).hexdigest()[:8], 16) % 1200 == 0:
+            paras.append(pick(OCR_RARE, f"rare|{sid}"))
         cur.execute(
             "UPDATE text_sessions SET title = ?, text = ? WHERE id = ?",
             (fake_title(app_id or "", title or ""), "\n".join(paras), sid),
@@ -387,61 +571,113 @@ def sanitize_memory(db):
 
 
 def densify_today(main_db):
-    """把演示库里最忙一天的活动节奏整体搬到今天(截到当前时刻),
-    日报同步搬——现场演示时"今天"不再是残缺的半天。"""
-    from datetime import datetime, date, timedelta
+    """今天固定合成为"标准 8 小时工作日"(09:00-12:30 + 13:30-18:30):
+    取工作类时长最高的历史日(单设备)的活动序列,保留每条时长与切换节奏、
+    长空档压成 3 分钟,重排时间戳搬到今天。不按当前时刻截断——
+    无论何时录屏,"今天"都是一个完整、干净的工作日。"""
+    from datetime import datetime, date, time, timedelta
 
+    WORK_APPS = (
+        "Code", "Visual Studio Code", "Cursor", "Typora", "Microsoft Word",
+        "Microsoft Excel", "Microsoft PowerPoint", "ターミナル", "Terminal",
+        "iTerm2", "Warp", "CapCut", "hindsight",
+    )
     conn = sqlite3.connect(main_db)
     cur = conn.cursor()
-    today = date.today().isoformat()
-    src = cur.execute(
-        "SELECT local_date FROM activities WHERE local_date != ? "
-        "GROUP BY local_date ORDER BY SUM(duration_secs) DESC LIMIT 1",
-        (today,),
-    ).fetchone()
-    if not src:
+    today = date.today()
+    tstr = today.isoformat()
+    marks = ",".join("?" * len(WORK_APPS))
+    cands = cur.execute(
+        f"SELECT local_date, device_id FROM activities WHERE local_date != ? "
+        f"GROUP BY local_date, device_id "
+        f"ORDER BY SUM(CASE WHEN process_name IN ({marks}) THEN duration_secs ELSE 0 END) DESC "
+        f"LIMIT 8",
+        (tstr, *WORK_APPS),
+    ).fetchall()
+    if not cands:
         conn.close()
         return
-    src_date = src[0]
-    delta = date.fromisoformat(today) - date.fromisoformat(src_date)
-    now = datetime.now().astimezone()
+    # 模板日要像真实的开发工作日:第一应用必须是代码编辑器,且不独占全天
+    # (避免选到 Word/PPT 马拉松日,合成出"单应用 48%"的一眼假)
+    src_date, src_dev = cands[0]
+    for d, dev in cands:
+        comp = cur.execute(
+            "SELECT process_name, SUM(duration_secs) FROM activities "
+            "WHERE local_date = ? AND device_id = ? AND local_hour BETWEEN 7 AND 21 "
+            "GROUP BY 1 ORDER BY 2 DESC",
+            (d, dev),
+        ).fetchall()
+        if not comp:
+            continue
+        total = sum(sec for _, sec in comp)
+        top_proc, top_sec = comp[0]
+        if bucket_of(top_proc) == "code" and total > 0 and top_sec / total <= 0.45:
+            src_date, src_dev = d, dev
+            break
 
-    cur.execute("DELETE FROM activities WHERE local_date = ?", (today,))
+    cur.execute("DELETE FROM activities WHERE local_date = ?", (tstr,))
     rows = cur.execute(
-        "SELECT started_at, ended_at, local_hour, process_name, window_title, "
-        "category_id, device_id, origin, updated_at FROM activities "
-        "WHERE local_date = ? ORDER BY started_at",
-        (src_date,),
+        "SELECT started_at, ended_at, duration_secs, process_name, window_title, "
+        "category_id, origin, updated_at FROM activities "
+        "WHERE local_date = ? AND device_id = ? AND local_hour BETWEEN 6 AND 23 "
+        "ORDER BY started_at",
+        (src_date, src_dev),
     ).fetchall()
-    inserted = 0
-    for sa, ea, lh, proc, title, cat, dev, origin, upd in rows:
+
+    tz = datetime.now().astimezone().tzinfo
+    clock = datetime.combine(today, time(9, 0), tz)
+    lunch_start = datetime.combine(today, time(12, 30), tz)
+    lunch_end = datetime.combine(today, time(13, 30), tz)
+    hard_end = datetime.combine(today, time(19, 30), tz)
+    target = 8 * 3600  # 干满 8 小时收工,下班时刻随空档量浮动(上限 19:30)
+    max_gap = timedelta(minutes=3)
+
+    inserted, prev_src_end, lunched, worked = 0, None, False, 0
+    for sa, ea, dur, proc, title, cat, origin, upd in rows:
         try:
-            ns = datetime.fromisoformat(sa) + delta
-            ne = datetime.fromisoformat(ea) + delta
+            ss, se = parse_ts(sa), parse_ts(ea)
         except ValueError:
             continue
-        if ns >= now:
-            continue
-        ne = min(ne, now)
-        dur = int((ne - ns).total_seconds())
-        if dur <= 0:
+        if prev_src_end is not None:
+            gap = ss - prev_src_end
+            if gap > timedelta(0):
+                clock += min(gap, max_gap)
+        prev_src_end = se
+        if not lunched and clock >= lunch_start:
+            clock, lunched = lunch_end, True
+        if worked >= target or clock >= hard_end:
+            break
+        ns = clock
+        ne = ns + timedelta(seconds=dur)
+        cutoff = hard_end if lunched else lunch_start
+        ne = min(ne, cutoff)
+        secs = int((ne - ns).total_seconds())
+        if secs <= 0:
             continue
         cur.execute(
             "INSERT INTO activities(started_at, ended_at, duration_secs, local_date, "
             "local_hour, process_name, window_title, category_id, screenshot_path, "
             "image_hash, device_id, remote_id, updated_at, origin) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)",
-            (ns.isoformat(), ne.isoformat(), dur, today, lh, proc, title, cat, dev, upd, origin),
+            (ns.isoformat(), ne.isoformat(), secs, tstr, ns.hour, proc, title,
+             cat, src_dev, upd, origin),
         )
         inserted += 1
+        worked += secs
+        clock = ne
 
-    # 日报:今天的段总结,独立挑"最近一个有日报的日子"当模板
-    # (活动最忙的那天不一定生成过日报)
-    cur.execute("DELETE FROM ai_summaries WHERE local_date = ?", (today,))
+    total = cur.execute(
+        "SELECT COALESCE(SUM(duration_secs),0) FROM activities WHERE local_date = ?",
+        (tstr,),
+    ).fetchone()[0]
+
+    # 日报:段总结沿用"最近一个有日报的日子"当模板;
+    # 随后把今天没有活动覆盖的时段(如深夜/晚上)内容置空,避免文不对题
+    cur.execute("DELETE FROM ai_summaries WHERE local_date = ?", (tstr,))
     src2 = cur.execute(
         "SELECT local_date FROM ai_summaries WHERE local_date != ? "
         "ORDER BY local_date DESC LIMIT 1",
-        (today,),
+        (tstr,),
     ).fetchone()
     if src2:
         cols = [r[1] for r in cur.execute("PRAGMA table_info(ai_summaries)")]
@@ -449,37 +685,70 @@ def densify_today(main_db):
         cur.execute(
             f"INSERT INTO ai_summaries(local_date, {', '.join(others)}) "
             f"SELECT ?, {', '.join(others)} FROM ai_summaries WHERE local_date = ?",
-            (today, src2[0]),
+            (tstr, src2[0]),
         )
+        # 有活动的时段从语料池按时段补文(模板日可能只生成过部分时段),
+        # 没活动的置空——今天的日报与合成的工作日节奏严格对齐
+        for rid, idx, sh, eh in cur.execute(
+            "SELECT rowid, segment_idx, start_hour, end_hour FROM ai_summaries "
+            "WHERE local_date = ?",
+            (tstr,),
+        ).fetchall():
+            hours = list(range(sh, eh)) if sh < eh else list(range(sh, 24)) + list(range(0, eh))
+            if not hours:
+                continue
+            hm = ",".join("?" * len(hours))
+            active = cur.execute(
+                f"SELECT COALESCE(SUM(duration_secs),0) FROM activities "
+                f"WHERE local_date = ? AND local_hour IN ({hm})",
+                (tstr, *hours),
+            ).fetchone()[0]
+            # 不足 45 分钟的时段按原生"无活动"跳过态落库(UI 显示"什么都没记录"),
+            # 而不是留一张"已生成"的空壳卡片
+            if active >= 45 * 60:
+                cur.execute(
+                    "UPDATE ai_summaries SET content = ?, status = 'ok', error = NULL "
+                    "WHERE rowid = ?",
+                    (pick(SEGMENT_SUMMARIES.get(idx, SEGMENT_SUMMARIES[3]), f"today{idx}"), rid),
+                )
+            else:
+                cur.execute(
+                    "UPDATE ai_summaries SET content = '', status = 'skipped_no_activity', "
+                    "error = NULL WHERE rowid = ?",
+                    (rid,),
+                )
     conn.commit()
     conn.close()
-    print(f"[demo] 今日增密:以 {src_date} 为模板生成 {inserted} 条活动(截至当前时刻)。")
+    print(
+        f"[demo] 今日合成:8 小时工作日模板 {src_date},{inserted} 条活动,"
+        f"合计 {total / 3600:.1f}h。"
+    )
 
 
 def densify_today_memory(mem_db):
-    """记忆库同步增密:把最忙一天的文本会话搬到今天(搜索/时间线证据今天也有货)。"""
-    from datetime import date, datetime, timedelta
+    """记忆库同步:把模板日 9:00-19:30 的文本会话按原时刻搬到今天
+    (跳过午休 12:30-13:30),搜索/时间线证据在"今天"也有货。"""
+    from datetime import date, datetime
 
     conn = sqlite3.connect(mem_db)
     cur = conn.cursor()
-    today = date.today().isoformat()
+    today = date.today()
+    tstr = today.isoformat()
     src = cur.execute(
         "SELECT local_date FROM text_sessions WHERE local_date != ? "
         "GROUP BY local_date ORDER BY COUNT(*) DESC LIMIT 1",
-        (today,),
+        (tstr,),
     ).fetchone()
     if not src:
         conn.close()
         return
     src_date = src[0]
-    delta = date.fromisoformat(today) - date.fromisoformat(src_date)
-    now = datetime.now().astimezone()
 
     old_ids = [r[0] for r in cur.execute(
-        "SELECT id FROM text_sessions WHERE local_date = ?", (today,)
+        "SELECT id FROM text_sessions WHERE local_date = ?", (tstr,)
     )]
     cur.executemany("DELETE FROM session_lines WHERE session_id = ?", [(i,) for i in old_ids])
-    cur.execute("DELETE FROM text_sessions WHERE local_date = ?", (today,))
+    cur.execute("DELETE FROM text_sessions WHERE local_date = ?", (tstr,))
 
     rows = cur.execute(
         "SELECT id, started_ts, ended_ts, app_id, title, text, origin_device "
@@ -489,17 +758,20 @@ def densify_today_memory(mem_db):
     copied = 0
     for sid, sts, ets, app_id, title, text, odev in rows:
         try:
-            ns = datetime.fromisoformat(sts) + delta
-            ne = datetime.fromisoformat(ets) + delta
+            ss, se = parse_ts(sts), parse_ts(ets)
         except ValueError:
             continue
-        if ns >= now:
+        hm = ss.hour * 60 + ss.minute
+        if not (9 * 60 <= hm < 19 * 60 + 30) or (12 * 60 + 30 <= hm < 13 * 60 + 30):
             continue
-        ne = min(ne, now)
+        ns = ss.replace(year=today.year, month=today.month, day=today.day)
+        ne = se.replace(year=today.year, month=today.month, day=today.day)
+        if ne < ns:
+            ne = ns
         cur.execute(
             "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, "
             "text, guid, origin_device) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
-            (today, ns.isoformat(), ne.isoformat(), app_id, title, text, odev),
+            (tstr, ns.isoformat(), ne.isoformat(), app_id, title, text, odev),
         )
         new_id = cur.lastrowid
         cur.execute(
@@ -511,7 +783,7 @@ def densify_today_memory(mem_db):
         copied += 1
     conn.commit()
     conn.close()
-    print(f"[demo] 记忆增密:今天复制 {copied} 条文本会话(模板 {src_date})。")
+    print(f"[demo] 记忆同步:今天 9:00-19:30 复制 {copied} 条文本会话(模板 {src_date})。")
 
 
 def seed_chat(mem_db, main_db):
@@ -540,7 +812,7 @@ def seed_chat(mem_db, main_db):
     times, last_end = 0, None
     for sa, dur in bili:
         try:
-            st = datetime.fromisoformat(sa)
+            st = parse_ts(sa)
         except ValueError:
             continue
         if last_end is None or (st - last_end) > timedelta(minutes=30):
@@ -558,11 +830,26 @@ def seed_chat(mem_db, main_db):
             f"{round(today_top[0][1] / today_total * 100) if today_total else 0}%。",
         ))
     if bili:
+        # 时段话术按实际分布挑:晚间(19-23)/深夜(23-次日 6)/白天,谁多说谁
+        buckets = {"白天": 0, "晚上": 0, "深夜": 0}
+        for sa, dur in bili:
+            try:
+                hr = parse_ts(sa).hour
+            except ValueError:
+                continue
+            key = "深夜" if (hr >= 23 or hr < 6) else ("晚上" if hr >= 19 else "白天")
+            buckets[key] += dur
+        top = sorted(buckets, key=buckets.get, reverse=True)
+        when = (
+            f"多在{top[0]}看,{top[1]}也占一部分"
+            if buckets[top[1]] > buckets[top[0]] * 0.5
+            else f"基本集中在{top[0]}"
+        )
         convs.append((
             "B 站观看统计",
             "这个月我在 B 站看了多久?大概看了多少次?",
             f"这个月你在 B 站累计观看约 {bili_hours} 小时,分 {times} 次看完,"
-            f"基本集中在晚上 7 点到 11 点之间;看得最多的是技术类和音乐类视频。",
+            f"{when};看得最多的是技术和数码类视频,偶尔穿插生活记录。",
         ))
 
     m = sqlite3.connect(mem_db)
