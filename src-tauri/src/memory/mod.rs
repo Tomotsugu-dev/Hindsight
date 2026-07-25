@@ -6,6 +6,7 @@
 //!
 //! 本模块只提供连接与 schema;帧登记见 [`frames`],L3 折叠与 FTS 见 [`sessions`]。
 
+pub mod auto_ocr;
 pub mod digest;
 pub mod frames;
 pub mod resident;

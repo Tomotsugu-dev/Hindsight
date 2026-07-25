@@ -145,8 +145,11 @@
         "enableDescription": "Quando desativada, a captura em segundo plano para (tanto a atividade de janela quanto as capturas de tela).",
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
-        "ocrResidentLabel": "Manter OCR residente",
-        "ocrResidentDescription": "Reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria.",
+        "ocrModeLabel": "Reconhecimento de texto da tela",
+        "ocrModeDescription": "Automático: quando houver acúmulo suficiente e a máquina estiver livre (na tomada, sem jogo/vídeo em primeiro plano, CPU e RAM folgadas), reconhece um lote e libera a memória ao fim. Residente: reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria.",
+        "ocrModeOff": "Desligado",
+        "ocrModeAuto": "Automático",
+        "ocrModeResident": "Residente",
         "intervalLabel": "Intervalo de captura",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
@@ -1497,8 +1500,8 @@
       "ocrConfirmMessage": "Construir o índice de texto requer baixar o componente de reconhecimento (~40MB). A indexação começa automaticamente quando o download terminar.",
       "ocrConfirmAccept": "Baixar e iniciar",
       "downloadingOcr": "Baixando componente de reconhecimento de texto… {{mb}} MB",
-      "stoppedNotice": "Lote interrompido; o reconhecimento residente retoma em cerca de um minuto",
-      "disableResident": "Desativar OCR residente"
+      "stoppedNotice": "Lote interrompido; o reconhecimento em segundo plano será retomado depois",
+      "disableResident": "Desativar reconhecimento em segundo plano"
     },
     "citations": {
       "showAll": "Mostrar todas as {{count}} fontes",
