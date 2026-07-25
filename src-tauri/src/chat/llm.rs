@@ -79,16 +79,18 @@ pub fn tools_schema() -> Value {
         }},
         {"type": "function", "function": {
             "name": "query_stats",
-            "description": "统计应用/内容的使用时长或使用次数。可按应用名过滤(apps)、按窗口标题关键词过滤(title_keyword,如视频名),可分组排行。问'用了多久/花了多少时间'用默认(metric=duration);问'启动/打开/玩了几次'用 metric=session_count。",
+            "description": "统计应用/内容的使用时长或使用次数。可按应用名过滤(apps)、按分类名过滤(categories)、按窗口标题关键词过滤(title_keyword,如视频名),可分组排行(group_by,含按用户分类的工作/娱乐口径),可分桶看趋势(bucket)。问'用了多久/花了多少时间'用默认(metric=duration);问'启动/打开/玩了几次'用 metric=session_count;问'第一次/最近一次用X是什么时候'用 metric=first_last(此口径 date_from 可给很早的日期,如 2020-01-01)。问某类活动(如游戏)的趋势用 categories+bucket,不要自己列举应用名——用户归类过的应用你未必认识。",
             "parameters": {"type": "object", "properties": {
                 "date_from": date("起始日期"),
                 "date_to": date("结束日期"),
                 "apps": {"type": "array", "items": {"type": "string"}, "description": "应用名过滤,可选"},
+                "categories": {"type": "array", "items": {"type": "string"}, "description": "分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到"},
                 "title_keyword": {"type": "string", "description": "窗口标题关键词过滤,可选"},
-                "group_by": {"type": "string", "enum": ["none", "app", "title"], "description": "分组维度,默认 none"},
+                "group_by": {"type": "string", "enum": ["none", "app", "title", "category"], "description": "分组维度,默认 none;category=按用户设置的应用分类(工作/娱乐/游戏等)分组"},
                 "top_n": {"type": "integer", "description": "分组时取前 N,默认 5"},
-                "metric": {"type": "string", "enum": ["duration", "session_count"], "description": "统计口径:duration=累计时长(默认);session_count=使用会话次数"},
-                "gap_minutes": {"type": "integer", "description": "会话计数用:相邻活动间隔超过这么多分钟算一段新会话,默认 30。仅用户明确说'离开X分钟以上算一次'时才填"}
+                "metric": {"type": "string", "enum": ["duration", "session_count", "first_last"], "description": "统计口径:duration=累计时长(默认);session_count=使用会话次数;first_last=最早与最近一次记录的时间(忽略分组/分桶)"},
+                "gap_minutes": {"type": "integer", "description": "会话计数用:相邻活动间隔超过这么多分钟算一段新会话,默认 30。仅用户明确说'离开X分钟以上算一次'时才填"},
+                "bucket": {"type": "string", "enum": ["none", "day", "week", "hour_of_day"], "description": "趋势分桶,与 group_by 互斥:day=逐日(最多 60 天,更长自动按周);week=逐周(行首日期为周一);hour_of_day=按一天 0-23 时聚合看作息分布"}
             }, "required": ["date_from", "date_to"]}
         }},
         {"type": "function", "function": {
@@ -113,11 +115,13 @@ fn local_decision_schema() -> Value {
             "date_from": {"type": "string", "maxLength": 10},
             "date_to": {"type": "string", "maxLength": 10},
             "apps": {"type": "array", "items": {"type": "string", "maxLength": 64}, "maxItems": 5},
+            "categories": {"type": "array", "items": {"type": "string", "maxLength": 64}, "maxItems": 5},
             "title_keyword": {"type": "string", "maxLength": 64},
-            "group_by": {"type": "string", "enum": ["none", "app", "title"]},
+            "group_by": {"type": "string", "enum": ["none", "app", "title", "category"]},
             "top_n": {"type": "integer", "minimum": 1, "maximum": 10},
-            "metric": {"type": "string", "enum": ["duration", "session_count"]},
+            "metric": {"type": "string", "enum": ["duration", "session_count", "first_last"]},
             "gap_minutes": {"type": "integer", "minimum": 5, "maximum": 240},
+            "bucket": {"type": "string", "enum": ["none", "day", "week", "hour_of_day"]},
             "answer": {"type": "string"}
         },
         "required": ["action"]

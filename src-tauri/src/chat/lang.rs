@@ -44,7 +44,9 @@ impl ChatLang {
         }
     }
 
-    fn weekday(self, iso: &str) -> &'static str {
+    /// pub(crate):逐日分桶的结果行也要带本地化星期([`crate::chat::tools`])——
+    /// 实测模型自己换算两周前是星期几会成列出错。
+    pub(crate) fn weekday(self, iso: &str) -> &'static str {
         let i = iso.parse::<usize>().unwrap_or(7) - 1; // %u: 1=周一
         match self {
             Self::ZhHans => ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][i],
@@ -589,6 +591,128 @@ impl ChatLang {
         }
     }
 
+    /// 逐日分桶头部。`gap` = 会话计数口径的间隔分钟(时长口径传 None)。
+    /// "无记录的日子未列出"必须写明:GROUP BY 只产出有活动的日子,
+    /// 模型要知道缺行是零使用而不是数据缺失。
+    pub fn bucket_day_header(self, from: &str, to: &str, n: usize, gap: Option<u32>) -> String {
+        let g = self.gap_clause(gap);
+        match self {
+            Self::ZhHans => {
+                format!("{from} ~ {to} 逐日统计({n} 个有记录的日子;无记录的日子未列出{g}):")
+            }
+            Self::ZhHant => {
+                format!("{from} ~ {to} 逐日統計({n} 個有記錄的日子;無記錄的日子未列出{g}):")
+            }
+            Self::En => format!(
+                "{from} ~ {to}, per-day breakdown ({n} day(s) with records; days without records are omitted{g}):"
+            ),
+            Self::Ja => {
+                format!("{from} ~ {to} 日別集計(記録のある {n} 日。記録のない日は省略{g}):")
+            }
+            Self::Pt => format!(
+                "{from} ~ {to}, detalhamento diário ({n} dia(s) com registros; dias sem registros omitidos{g}):"
+            ),
+        }
+    }
+
+    /// 逐周分桶头部。`auto` = 由逐日自动升级而来(范围超 60 天),要向模型说明
+    /// 免得它以为工具没按参数执行。
+    pub fn bucket_week_header(
+        self,
+        from: &str,
+        to: &str,
+        n: usize,
+        auto: bool,
+        gap: Option<u32>,
+    ) -> String {
+        let g = self.gap_clause(gap);
+        let a = if auto {
+            match self {
+                Self::ZhHans => ";范围超过 60 天,已从逐日自动改为按周汇总",
+                Self::ZhHant => ";範圍超過 60 天,已從逐日自動改為按週彙總",
+                Self::En => "; the range exceeds 60 days, so per-day was switched to per-week automatically",
+                Self::Ja => "。範囲が 60 日を超えたため日別から週別に自動変更",
+                Self::Pt => "; o intervalo excede 60 dias, então o diário mudou automaticamente para semanal",
+            }
+        } else {
+            ""
+        };
+        match self {
+            Self::ZhHans => {
+                format!("{from} ~ {to} 逐周统计({n} 周,每行日期为该周周一{a}{g}):")
+            }
+            Self::ZhHant => {
+                format!("{from} ~ {to} 逐週統計({n} 週,每行日期為該週週一{a}{g}):")
+            }
+            Self::En => format!(
+                "{from} ~ {to}, per-week breakdown ({n} week(s); each row is labeled by its Monday{a}{g}):"
+            ),
+            Self::Ja => {
+                format!("{from} ~ {to} 週別集計({n} 週間。各行の日付はその週の月曜日{a}{g}):")
+            }
+            Self::Pt => format!(
+                "{from} ~ {to}, detalhamento semanal ({n} semana(s); cada linha rotulada pela segunda-feira{a}{g}):"
+            ),
+        }
+    }
+
+    /// 按一天 24 小时聚合的头部(作息分布)。
+    pub fn bucket_hour_header(self, from: &str, to: &str, gap: Option<u32>) -> String {
+        let g = self.gap_clause(gap);
+        match self {
+            Self::ZhHans => {
+                format!("{from} ~ {to} 按一天中的小时聚合(范围内所有天的该小时累计{g}):")
+            }
+            Self::ZhHant => {
+                format!("{from} ~ {to} 按一天中的小時聚合(範圍內所有天的該小時累計{g}):")
+            }
+            Self::En => format!(
+                "{from} ~ {to}, aggregated by hour of day (each hour totals across all days in the range{g}):"
+            ),
+            Self::Ja => {
+                format!("{from} ~ {to} 時間帯別集計(範囲内の全日について同じ時間帯を合算{g}):")
+            }
+            Self::Pt => format!(
+                "{from} ~ {to}, agregado por hora do dia (cada hora soma todos os dias do intervalo{g}):"
+            ),
+        }
+    }
+
+    /// 分桶头部里的会话间隔括注段(时长口径为空串)。
+    fn gap_clause(self, gap: Option<u32>) -> String {
+        let Some(gap) = gap else {
+            return String::new();
+        };
+        match self {
+            Self::ZhHans => format!(";会话以间隔≥{gap} 分钟算一次"),
+            Self::ZhHant => format!(";會話以間隔≥{gap} 分鐘算一次"),
+            Self::En => format!("; a gap of ≥{gap} minutes starts a new session"),
+            Self::Ja => format!("。{gap} 分以上の間隔で 1 回と数える"),
+            Self::Pt => format!("; intervalo ≥{gap} minutos inicia nova sessão"),
+        }
+    }
+
+    /// first_last 口径的单行结论。
+    pub fn first_last_line(self, from: &str, to: &str, first: &str, last: &str, n: i64) -> String {
+        match self {
+            Self::ZhHans => format!(
+                "{from} ~ {to} 范围内共 {n} 条匹配活动:最早一次始于 {first},最近一次止于 {last}"
+            ),
+            Self::ZhHant => format!(
+                "{from} ~ {to} 範圍內共 {n} 條匹配活動:最早一次始於 {first},最近一次止於 {last}"
+            ),
+            Self::En => format!(
+                "{from} ~ {to}: {n} matching activities; the earliest starts at {first}, the latest ends at {last}"
+            ),
+            Self::Ja => format!(
+                "{from} ~ {to} の一致する活動は {n} 件:最初は {first} に開始、直近は {last} に終了"
+            ),
+            Self::Pt => format!(
+                "{from} ~ {to}: {n} atividades correspondentes; a mais antiga começa em {first}, a mais recente termina em {last}"
+            ),
+        }
+    }
+
     pub fn count_suffix(self, n: usize) -> String {
         match self {
             Self::ZhHans => format!("{n} 次"),
@@ -730,6 +854,16 @@ impl ChatLang {
             Self::En => "title_keyword is too long (max 64 characters)",
             Self::Ja => "title_keyword が長すぎます(64 文字以内)",
             Self::Pt => "title_keyword é longo demais (máx. 64 caracteres)",
+        }
+    }
+
+    pub fn err_bucket_with_group(self) -> &'static str {
+        match self {
+            Self::ZhHans => "bucket 与 group_by 不能同时使用:看趋势用 bucket,看排行用 group_by,请去掉其一",
+            Self::ZhHant => "bucket 與 group_by 不能同時使用:看趨勢用 bucket,看排行用 group_by,請去掉其一",
+            Self::En => "bucket and group_by cannot be combined: use bucket for trends, group_by for rankings — drop one of them",
+            Self::Ja => "bucket と group_by は併用できません。推移は bucket、ランキングは group_by を使い、どちらか一方を外してください",
+            Self::Pt => "bucket e group_by não podem ser combinados: use bucket para tendências, group_by para rankings — remova um deles",
         }
     }
 
