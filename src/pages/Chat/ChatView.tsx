@@ -12,14 +12,17 @@ import {
   ArrowDown,
   ArrowUp,
   Bot,
+  ChartPie,
   ChevronDown,
   ChevronUp,
+  Clock,
   Globe,
   History,
   Mail,
   MonitorPlay,
   Search,
   Square,
+  TrendingUp,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -53,10 +56,11 @@ interface PresetItem {
   q: string;
 }
 
-/** 随机位候选池：第 4 张卡从这里抽（都是"今天"口径、点了就有像样结果的问题）。 */
+/** 随机位候选池：第 6 张卡从这里抽（点了就有像样结果的问题）。 */
 const PRESET_POOL = [
   { key: "mail", icon: Mail },
   { key: "searchkw", icon: Search },
+  { key: "hours", icon: Clock },
 ] as const;
 
 // 轮换游标（模块级：跨挂载/跨页面往返也接着轮）。起点随机，之后顺序轮换——
@@ -70,8 +74,9 @@ function nextPoolPick(): (typeof PRESET_POOL)[number] {
 
 /**
  * 空状态下的快捷示例问题，点击直接发送。
- * 固定三张：今日回顾 / 浏览器 / 视频站（简中问 B 站、其余语言问 YouTube，
- * 文案由各语言文件自带）；第 4 张为随机位，进入空态时从候选池抽一张。
+ * 固定五张：今日回顾 / 浏览器 / 视频站（简中问 B 站、其余语言问 YouTube，
+ * 文案由各语言文件自带）/ 时间分配（按分类）/ 每日趋势（逐日分桶）；
+ * 第 6 张为随机位，进入空态时从候选池抽一张。
  */
 function buildPresets(t: TFunction, pool: (typeof PRESET_POOL)[number]): PresetItem[] {
   return [
@@ -89,6 +94,16 @@ function buildPresets(t: TFunction, pool: (typeof PRESET_POOL)[number]): PresetI
       icon: MonitorPlay,
       label: t("chat.presets.video.label"),
       q: t("chat.presets.video.q"),
+    },
+    {
+      icon: ChartPie,
+      label: t("chat.presets.category.label"),
+      q: t("chat.presets.category.q"),
+    },
+    {
+      icon: TrendingUp,
+      label: t("chat.presets.trend.label"),
+      q: t("chat.presets.trend.q"),
     },
     {
       icon: pool.icon,
