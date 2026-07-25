@@ -66,6 +66,8 @@ __pycache__/
 !scripts/poc/*.py
 # 例外:演示数据生成器入仓(生成的数据在 app 数据目录,不在仓库)
 !scripts/demo/*.py
+# 例外:README 多语言截图自动化脚本入仓
+!scripts/shots/*.py
 .python-version
 pyproject.toml
 uv.lock
