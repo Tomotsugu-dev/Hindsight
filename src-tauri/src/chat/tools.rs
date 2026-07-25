@@ -59,11 +59,20 @@ pub enum ToolCall {
         range: (NaiveDate, NaiveDate),
         apps: Vec<String>,
         title_keyword: Option<String>,
+        /// 按分类名过滤(如"游戏")。与 bucket 正交——"游戏时间的周趋势"
+        /// 的正确姿势就是 categories=["游戏"] + bucket=week;没有它,模型只能
+        /// 靠猜应用名列举,认不出用户自定义归类的应用(实测漏算 2 小时)。
+        categories: Vec<String>,
         group_by: GroupBy,
         top_n: usize,
         metric: StatMetric,
         /// 会话计数用:相邻活动间隔超过这么多分钟就算一段新会话
         gap_minutes: u32,
+        /// 趋势分桶(与 group_by 互斥,validate 拦)
+        bucket: Bucket,
+        /// bucket=Week 且由 Day 自动升级而来(范围 > BUCKET_DAY_MAX_DAYS):
+        /// 结果头部要向模型说明,免得它以为工具没按参数执行
+        bucket_auto_week: bool,
     },
     GetTimeline {
         range: (NaiveDate, NaiveDate),
@@ -76,6 +85,8 @@ pub enum GroupBy {
     None,
     App,
     Title,
+    /// 按用户的应用分类(工作/娱乐…)分组;组→分类的指派 join 出来,与报表同口径
+    Category,
 }
 
 /// 统计口径:时长(默认)还是"用了几次/玩了几次"的会话次数。
@@ -86,7 +97,27 @@ pub enum StatMetric {
     Duration,
     /// 使用会话次数:相邻活动间隔超过 gap_minutes 就切一段
     SessionCount,
+    /// 最早/最近一次记录的时间("第一次用 X 是什么时候"):
+    /// MIN/MAX 聚合,忽略分组与分桶,豁免常规日期跨度上限
+    FirstLast,
 }
+
+/// 趋势分桶:把范围切成时间桶看变化,与 group_by(排行)互斥。
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Bucket {
+    None,
+    /// 逐日;范围超 BUCKET_DAY_MAX_DAYS 天时 validate 自动升级为 Week
+    Day,
+    /// 逐周,周一为周起始(与报表口径一致),行首日期为该周周一
+    Week,
+    /// 按一天中的 0-23 时聚合(范围内所有天累计),看作息分布
+    HourOfDay,
+}
+
+/// 逐日分桶的最大跨度:超过则自动按周汇总——60 天 ≈ 60 行是结果预算内
+/// 能完整放下、模型也读得过来的上限。
+const BUCKET_DAY_MAX_DAYS: i64 = 60;
 
 /// 会话计数的间隔默认值与夹紧区间(分钟)。
 const GAP_DEFAULT_MIN: u32 = 30;
@@ -106,6 +137,8 @@ pub struct RawParams {
     pub top_n: Option<usize>,
     pub metric: Option<StatMetric>,
     pub gap_minutes: Option<u32>,
+    pub bucket: Option<Bucket>,
+    pub categories: Vec<String>,
 }
 
 /// 第②道墙:工具名 + 参数逐项校验。`today` 用于拒绝未来日期。
@@ -119,33 +152,63 @@ pub fn validate(
     match name {
         "search_text" => {
             let keywords = clean_keywords(&raw.keywords, lang)?;
-            let range = parse_range_opt(raw, today, lang)?;
+            let range = parse_range_opt(raw, today, RANGE_MAX_DAYS, lang)?;
             Ok(ToolCall::SearchText { keywords, range })
         }
         "query_stats" => {
-            let range = parse_range_opt(raw, today, lang)?
+            let metric = raw.metric.unwrap_or(StatMetric::Duration);
+            // first_last 是 MIN/MAX 聚合,大范围也便宜——豁免常规跨度上限,
+            // 否则"我第一次用 X 是什么时候"这类必须给多年范围的问题会被拒
+            let max_days = if metric == StatMetric::FirstLast {
+                FIRST_LAST_MAX_DAYS
+            } else {
+                RANGE_MAX_DAYS
+            };
+            let range = parse_range_opt(raw, today, max_days, lang)?
                 .ok_or_else(|| lang.err_need_range("query_stats"))?;
             let apps = clean_short_strings(&raw.apps, 5, "apps", lang)?;
+            let categories = clean_short_strings(&raw.categories, 5, "categories", lang)?;
             let title_keyword = match raw.title_keyword.as_deref().map(str::trim) {
                 Some("") | None => None,
                 Some(t) if t.chars().count() <= 64 => Some(t.to_string()),
                 Some(_) => return Err(lang.err_title_kw_too_long().into()),
             };
+            let group_by = raw.group_by.unwrap_or(GroupBy::None);
+            let mut bucket = raw.bucket.unwrap_or(Bucket::None);
+            // 分桶(趋势)与分组(排行)是两种输出形态,叠加会变成矩阵、吃穿结果预算
+            if bucket != Bucket::None && group_by != GroupBy::None {
+                return Err(lang.err_bucket_with_group().into());
+            }
+            let mut bucket_auto_week = false;
+            if bucket == Bucket::Day && (range.1 - range.0).num_days() > BUCKET_DAY_MAX_DAYS {
+                bucket = Bucket::Week;
+                bucket_auto_week = true;
+            }
+            // 分类分组的组数天然少(内置+自定义十几个),默认 top-5 会截掉小类
+            // (实测漏了"其他/设计")——未显式给 top_n 时放宽到上限
+            let top_n_default = if group_by == GroupBy::Category {
+                TOP_N_MAX
+            } else {
+                5
+            };
             Ok(ToolCall::QueryStats {
                 range,
                 apps,
                 title_keyword,
-                group_by: raw.group_by.unwrap_or(GroupBy::None),
-                top_n: raw.top_n.unwrap_or(5).clamp(1, TOP_N_MAX),
-                metric: raw.metric.unwrap_or(StatMetric::Duration),
+                categories,
+                group_by,
+                top_n: raw.top_n.unwrap_or(top_n_default).clamp(1, TOP_N_MAX),
+                metric,
                 gap_minutes: raw
                     .gap_minutes
                     .unwrap_or(GAP_DEFAULT_MIN)
                     .clamp(GAP_MIN, GAP_MAX),
+                bucket,
+                bucket_auto_week,
             })
         }
         "get_timeline" => {
-            let range = parse_range_opt(raw, today, lang)?
+            let range = parse_range_opt(raw, today, RANGE_MAX_DAYS, lang)?
                 .ok_or_else(|| lang.err_need_range("get_timeline"))?;
             Ok(ToolCall::GetTimeline { range })
         }
@@ -153,9 +216,15 @@ pub fn validate(
     }
 }
 
+/// 常规查询的日期跨度上限(一年);first_last 口径的宽限见 [`FIRST_LAST_MAX_DAYS`]。
+const RANGE_MAX_DAYS: i64 = 366;
+/// first_last(MIN/MAX 聚合)的跨度上限:名义上限,只防荒谬输入。
+const FIRST_LAST_MAX_DAYS: i64 = 36600;
+
 fn parse_range_opt(
     raw: &RawParams,
     today: NaiveDate,
+    max_days: i64,
     lang: ChatLang,
 ) -> std::result::Result<Option<(NaiveDate, NaiveDate)>, String> {
     let (Some(f), Some(t)) = (raw.date_from.as_deref(), raw.date_to.as_deref()) else {
@@ -168,7 +237,7 @@ fn parse_range_opt(
     if from > to {
         return Err(lang.err_from_after_to().into());
     }
-    if (to - from).num_days() > 366 {
+    if (to - from).num_days() > max_days {
         return Err(lang.err_range_too_long().into());
     }
     if from > today {
@@ -260,20 +329,26 @@ pub async fn execute(
             range,
             apps,
             title_keyword,
+            categories,
             group_by,
             top_n,
             metric,
             gap_minutes,
+            bucket,
+            bucket_auto_week,
         } => {
             query_stats(
                 ctx,
                 *range,
                 apps,
                 title_keyword.as_deref(),
+                categories,
                 *group_by,
                 *top_n,
                 *metric,
                 *gap_minutes,
+                *bucket,
+                *bucket_auto_week,
                 lang,
             )
             .await
@@ -533,45 +608,106 @@ async fn search_text(
     Ok(ToolOutput { for_llm, citations })
 }
 
+/// 统计查询的基础 FROM 段(别名 a,与既有口径一致:裸活动表、不排 hidden 组)。
+const STATS_FROM: &str = "FROM activities a";
+/// 按分类分组时的 FROM 段:活动 → 组 → 分类两跳 join。分类真相在组上
+/// (g.category_id),活动行上的 a.category_id 是采集时的快照兜底;
+/// hidden 组在 WHERE 里剔除,与报表口径一致。
+const STATS_FROM_CATEGORY: &str = "FROM activities a
+     LEFT JOIN app_group_members gm
+       ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+     LEFT JOIN app_groups g
+       ON g.id = gm.group_id AND g.deleted_at IS NULL
+     LEFT JOIN categories c
+       ON c.id = COALESCE(g.category_id, a.category_id) AND c.deleted_at IS NULL";
+
 #[allow(clippy::too_many_arguments)]
 async fn query_stats(
     ctx: &ToolCtx,
     (from, to): (NaiveDate, NaiveDate),
     apps: &[String],
     title_keyword: Option<&str>,
+    categories: &[String],
     group_by: GroupBy,
     top_n: usize,
     metric: StatMetric,
     gap_minutes: u32,
+    bucket: Bucket,
+    bucket_auto_week: bool,
     lang: ChatLang,
 ) -> Result<ToolOutput> {
     let (from, to) = (from.to_string(), to.to_string());
     let apps: Vec<String> = apps.iter().map(|a| like_pattern(a)).collect();
     let title_like = title_keyword.map(like_pattern);
+    let cats: Vec<String> = categories.iter().map(|c| like_pattern(c)).collect();
     let for_llm = ctx
         .main
         .call(move |conn| {
-            // 动态拼的只有 WHERE 的占位段与 GROUP BY 维度,全部来自白名单枚举,
+            // 动态拼的只有 WHERE 的占位段与 GROUP BY/分桶维度,全部来自白名单枚举,
             // 参数一律绑定——不存在字符串拼接注入面。
-            let mut where_sql = String::from("local_date BETWEEN ?1 AND ?2");
+            let needs_category = group_by == GroupBy::Category || !cats.is_empty();
+            let from_sql = if needs_category {
+                STATS_FROM_CATEGORY
+            } else {
+                STATS_FROM
+            };
+            let mut where_sql = String::from("a.local_date BETWEEN ?1 AND ?2");
+            if needs_category {
+                where_sql.push_str(" AND g.category_id IS NOT 'hidden'");
+            }
             let mut bind: Vec<Box<dyn rusqlite::ToSql>> =
                 vec![Box::new(from.clone()), Box::new(to.clone())];
             if !apps.is_empty() {
-                let ors = vec!["process_name LIKE ? ESCAPE '\\'"; apps.len()].join(" OR ");
+                let ors = vec!["a.process_name LIKE ? ESCAPE '\\'"; apps.len()].join(" OR ");
                 where_sql.push_str(&format!(" AND ({ors})"));
                 for a in &apps {
                     bind.push(Box::new(a.clone()));
                 }
             }
+            if !cats.is_empty() {
+                // 显示名与分类 id 双匹配:模型可能填用户语言的名字("游戏"),
+                // 也可能填英文 builtin id("game")
+                let ors = vec![
+                    "(c.name LIKE ? ESCAPE '\\' \
+                      OR COALESCE(g.category_id, a.category_id) LIKE ? ESCAPE '\\')";
+                    cats.len()
+                ]
+                .join(" OR ");
+                where_sql.push_str(&format!(" AND ({ors})"));
+                for c in &cats {
+                    bind.push(Box::new(c.clone()));
+                    bind.push(Box::new(c.clone()));
+                }
+            }
             if let Some(t) = &title_like {
-                where_sql.push_str(" AND window_title LIKE ? ESCAPE '\\'");
+                where_sql.push_str(" AND a.window_title LIKE ? ESCAPE '\\'");
                 bind.push(Box::new(t.clone()));
             }
             let params_ref: Vec<&dyn rusqlite::ToSql> = bind.iter().map(|b| b.as_ref()).collect();
 
+            // first_last 忽略分组/分桶;bucket 只与 none 分组组合(validate 拦)
+            if metric == StatMetric::FirstLast {
+                return query_first_last(conn, from_sql, &where_sql, &params_ref, &from, &to, lang);
+            }
+            if bucket != Bucket::None {
+                return query_bucket(
+                    conn,
+                    from_sql,
+                    &where_sql,
+                    &params_ref,
+                    bucket,
+                    bucket_auto_week,
+                    metric,
+                    gap_minutes,
+                    &from,
+                    &to,
+                    lang,
+                );
+            }
             match metric {
                 StatMetric::Duration => query_duration(
                     conn,
+                    from_sql,
                     &where_sql,
                     &params_ref,
                     group_by,
@@ -582,6 +718,7 @@ async fn query_stats(
                 ),
                 StatMetric::SessionCount => query_session_count(
                     conn,
+                    from_sql,
                     &where_sql,
                     &params_ref,
                     group_by,
@@ -591,6 +728,7 @@ async fn query_stats(
                     &to,
                     lang,
                 ),
+                StatMetric::FirstLast => unreachable!(),
             }
         })
         .await?;
@@ -604,6 +742,7 @@ async fn query_stats(
 #[allow(clippy::too_many_arguments)]
 fn query_duration(
     conn: &rusqlite::Connection,
+    from_sql: &str,
     where_sql: &str,
     params: &[&dyn rusqlite::ToSql],
     group_by: GroupBy,
@@ -617,7 +756,7 @@ fn query_duration(
             let secs: i64 = conn
                 .query_row(
                     &format!(
-                        "SELECT COALESCE(SUM(duration_secs),0) FROM activities WHERE {where_sql}"
+                        "SELECT COALESCE(SUM(a.duration_secs),0) {from_sql} WHERE {where_sql}"
                     ),
                     params,
                     |r| r.get(0),
@@ -625,20 +764,26 @@ fn query_duration(
                 .db()?;
             Ok(lang.stats_total(from, to, &lang.fmt_secs(secs)))
         }
-        GroupBy::App | GroupBy::Title => {
+        GroupBy::App | GroupBy::Title | GroupBy::Category => {
             let dim = group_dim(group_by);
-            // 全集组数:让模型知道 top-N 之外还有多少组,别把前 5 当成全部
+            // 全集组数:让模型知道 top-N 之外还有多少组,别把前 5 当成全部。
+            // 不足 1 分钟的组整组滤掉——显示出来是"xx: 0 分钟"的噪音行
+            // (实测分类分组冒出过"fun: 0 分钟"),universe 与列表同口径。
             let universe: i64 = conn
                 .query_row(
-                    &format!("SELECT COUNT(DISTINCT {dim}) FROM activities WHERE {where_sql}"),
+                    &format!(
+                        "SELECT COUNT(*) FROM (SELECT 1 {from_sql} WHERE {where_sql}
+                         GROUP BY {dim} HAVING SUM(a.duration_secs) >= 60)"
+                    ),
                     params,
                     |r| r.get(0),
                 )
                 .db()?;
             let mut stmt = conn
                 .prepare(&format!(
-                    "SELECT {dim}, SUM(duration_secs) d FROM activities
-                     WHERE {where_sql} GROUP BY {dim} ORDER BY d DESC LIMIT {top_n}"
+                    "SELECT {dim}, SUM(a.duration_secs) d {from_sql}
+                     WHERE {where_sql} GROUP BY {dim} HAVING d >= 60
+                     ORDER BY d DESC LIMIT {top_n}"
                 ))
                 .db()?;
             let rows = stmt
@@ -669,6 +814,7 @@ fn query_duration(
 #[allow(clippy::too_many_arguments)]
 fn query_session_count(
     conn: &rusqlite::Connection,
+    from_sql: &str,
     where_sql: &str,
     params: &[&dyn rusqlite::ToSql],
     group_by: GroupBy,
@@ -683,8 +829,8 @@ fn query_session_count(
         GroupBy::None => {
             let mut stmt = conn
                 .prepare(&format!(
-                    "SELECT started_at, ended_at FROM activities
-                     WHERE {where_sql} ORDER BY started_at"
+                    "SELECT a.started_at, a.ended_at {from_sql}
+                     WHERE {where_sql} ORDER BY a.started_at"
                 ))
                 .db()?;
             let rows = stmt
@@ -700,45 +846,13 @@ fn query_session_count(
             let n = count_sessions(&rows, gap_secs);
             Ok(lang.sessions_total(from, to, n, gap_minutes))
         }
-        GroupBy::App | GroupBy::Title => {
+        GroupBy::App | GroupBy::Title | GroupBy::Category => {
             let dim = group_dim(group_by);
-            let mut stmt = conn
-                .prepare(&format!(
-                    "SELECT {dim} AS g, started_at, ended_at FROM activities
-                     WHERE {where_sql} ORDER BY g, started_at"
-                ))
-                .db()?;
-            let rows = stmt
-                .query_map(params, |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                    ))
-                })
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?;
+            let rows = fetch_grouped_spans(conn, from_sql, where_sql, params, dim)?;
             if rows.is_empty() {
                 return Ok(lang.no_match(from, to));
             }
-            // 按组聚合(rows 已按 g 排序)→ 每组切分计数
-            let mut counts: Vec<(String, usize)> = Vec::new();
-            let mut cur_group: Option<String> = None;
-            let mut cur_rows: Vec<(String, String)> = Vec::new();
-            for (g, s, e) in rows {
-                if cur_group.as_deref() != Some(g.as_str()) {
-                    if let Some(name) = cur_group.take() {
-                        counts.push((name, count_sessions(&cur_rows, gap_secs)));
-                    }
-                    cur_group = Some(g);
-                    cur_rows = Vec::new();
-                }
-                cur_rows.push((s, e));
-            }
-            if let Some(name) = cur_group.take() {
-                counts.push((name, count_sessions(&cur_rows, gap_secs)));
-            }
+            let mut counts = count_sessions_by_group(rows, gap_secs);
             counts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
             let universe = counts.len();
             counts.truncate(top_n);
@@ -754,12 +868,182 @@ fn query_session_count(
     }
 }
 
-fn group_dim(group_by: GroupBy) -> &'static str {
-    if group_by == GroupBy::App {
-        "process_name"
-    } else {
-        "COALESCE(window_title,'(无标题)')"
+/// 取 (组, started_at, ended_at) 活动流,按组、组内按时间升序——
+/// 分组与分桶的会话计数共用(桶也是一种"组",维度表达式不同而已)。
+fn fetch_grouped_spans(
+    conn: &rusqlite::Connection,
+    from_sql: &str,
+    where_sql: &str,
+    params: &[&dyn rusqlite::ToSql],
+    dim: &str,
+) -> tokio_rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {dim} AS g, a.started_at, a.ended_at {from_sql}
+             WHERE {where_sql} ORDER BY g, a.started_at"
+        ))
+        .db()?;
+    let rows = stmt
+        .query_map(params, |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })
+        .db()?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .db()?;
+    Ok(rows)
+}
+
+/// 按组聚拢再逐组切分计数(输入已按组排序);保持输入的组顺序,排序/截断由调用方定。
+fn count_sessions_by_group(
+    rows: Vec<(String, String, String)>,
+    gap_secs: i64,
+) -> Vec<(String, usize)> {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    let mut cur_group: Option<String> = None;
+    let mut cur_rows: Vec<(String, String)> = Vec::new();
+    for (g, s, e) in rows {
+        if cur_group.as_deref() != Some(g.as_str()) {
+            if let Some(name) = cur_group.take() {
+                counts.push((name, count_sessions(&cur_rows, gap_secs)));
+            }
+            cur_group = Some(g);
+            cur_rows = Vec::new();
+        }
+        cur_rows.push((s, e));
     }
+    if let Some(name) = cur_group.take() {
+        counts.push((name, count_sessions(&cur_rows, gap_secs)));
+    }
+    counts
+}
+
+fn group_dim(group_by: GroupBy) -> &'static str {
+    match group_by {
+        GroupBy::App => "a.process_name",
+        GroupBy::Title => "COALESCE(a.window_title,'(无标题)')",
+        // 显示名:分类表的用户可见名;分类已删/未建行时回落 id;完全未分类归 'other'
+        // (模型按回答语言转述,'other' 与英文 builtin id 同样能被正确理解)
+        GroupBy::Category => "COALESCE(c.name, COALESCE(g.category_id, a.category_id, 'other'))",
+        GroupBy::None => unreachable!("group_dim 只在分组分支被调用"),
+    }
+}
+
+/// 分桶维度表达式(白名单)。Week 的周一换算与报表口径一致:
+/// strftime('%w') 0=周日,(w+6)%7 = 距本周周一的天数。
+fn bucket_dim(bucket: Bucket) -> &'static str {
+    match bucket {
+        Bucket::Day => "a.local_date",
+        Bucket::Week => {
+            "date(a.local_date, '-' || ((strftime('%w', a.local_date) + 6) % 7) || ' days')"
+        }
+        Bucket::HourOfDay => "printf('%02d:00', a.local_hour)",
+        Bucket::None => unreachable!("bucket_dim 只在分桶分支被调用"),
+    }
+}
+
+/// 趋势分桶:每桶一行,按桶(=时间)升序全量列出,不做 top-N——行数天然有界:
+/// day ≤ BUCKET_DAY_MAX_DAYS+1(validate 保证),week ≤ 53,hour_of_day ≤ 24。
+/// 会话计数口径下跨桶边界的一段连续使用(如跨午夜)在两个桶各计一次,
+/// 与"逐桶独立统计"的语义一致。
+#[allow(clippy::too_many_arguments)]
+fn query_bucket(
+    conn: &rusqlite::Connection,
+    from_sql: &str,
+    where_sql: &str,
+    params: &[&dyn rusqlite::ToSql],
+    bucket: Bucket,
+    auto_week: bool,
+    metric: StatMetric,
+    gap_minutes: u32,
+    from: &str,
+    to: &str,
+    lang: ChatLang,
+) -> tokio_rusqlite::Result<String> {
+    let dim = bucket_dim(bucket);
+    // 逐日的行首带本地化星期:实测模型自己换算"两周前的 07-16 是星期几"会成列出错,
+    // 行里直接给出后模型无需再算
+    let label = |b: &str| -> String {
+        if bucket == Bucket::Day {
+            if let Ok(d) = NaiveDate::parse_from_str(b, "%Y-%m-%d") {
+                return format!("{b}({})", lang.weekday(&d.format("%u").to_string()));
+            }
+        }
+        b.to_string()
+    };
+    let lines: Vec<String> = match metric {
+        StatMetric::Duration => {
+            // 不足 1 分钟的桶滤掉,理由同 query_duration 的分组 HAVING:
+            // "某天: 0 分钟"是噪音,滤掉后与"无记录的日子未列出"语义一致
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT {dim} AS b, SUM(a.duration_secs) s {from_sql}
+                     WHERE {where_sql} GROUP BY b HAVING s >= 60 ORDER BY b"
+                ))
+                .db()?;
+            let rows = stmt
+                .query_map(params, |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            rows.iter()
+                .map(|(b, secs)| format!("{}: {}", label(b), lang.fmt_secs(*secs)))
+                .collect()
+        }
+        StatMetric::SessionCount => {
+            let rows = fetch_grouped_spans(conn, from_sql, where_sql, params, dim)?;
+            // 不排序不截断:count_sessions_by_group 保持输入的桶序(=时间升序)
+            count_sessions_by_group(rows, gap_minutes as i64 * 60)
+                .iter()
+                .map(|(b, n)| format!("{}: {}", label(b), lang.count_suffix(*n)))
+                .collect()
+        }
+        StatMetric::FirstLast => unreachable!("first_last 在 query_stats 已先行分派"),
+    };
+    if lines.is_empty() {
+        return Ok(lang.no_match(from, to));
+    }
+    // 会话计数口径把间隔规则并进头部括注
+    let gap = (metric == StatMetric::SessionCount).then_some(gap_minutes);
+    let header = match bucket {
+        Bucket::Day => lang.bucket_day_header(from, to, lines.len(), gap),
+        Bucket::Week => lang.bucket_week_header(from, to, lines.len(), auto_week, gap),
+        Bucket::HourOfDay => lang.bucket_hour_header(from, to, gap),
+        Bucket::None => unreachable!(),
+    };
+    Ok(format!("{header}\n{}", lines.join("\n")))
+}
+
+/// 首末口径:范围内最早开始与最晚结束的活动时间 + 总条数,忽略分组/分桶。
+fn query_first_last(
+    conn: &rusqlite::Connection,
+    from_sql: &str,
+    where_sql: &str,
+    params: &[&dyn rusqlite::ToSql],
+    from: &str,
+    to: &str,
+    lang: ChatLang,
+) -> tokio_rusqlite::Result<String> {
+    let (first, last, n): (Option<String>, Option<String>, i64) = conn
+        .query_row(
+            &format!(
+                "SELECT MIN(a.started_at), MAX(a.ended_at), COUNT(*) {from_sql} WHERE {where_sql}"
+            ),
+            params,
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .db()?;
+    let (Some(first), Some(last)) = (first, last) else {
+        return Ok(lang.no_match(from, to));
+    };
+    // 截到分钟并去掉 T(与搜索结果行同款粒度),模型好读也省字符
+    let fmt = |ts: &str| ts[..16.min(ts.len())].replace('T', " ");
+    Ok(lang.first_last_line(from, to, &fmt(&first), &fmt(&last), n))
 }
 
 /// 数会话段:第一条起 1 段,之后每当"本条 started − 上一条 ended > gap_secs"再 +1。
@@ -1061,6 +1345,120 @@ mod tests {
         // 空 → 0
         assert_eq!(count_sessions(&[], 30 * 60), 0);
     }
+
+    #[test]
+    fn validate_rejects_bucket_with_group() {
+        let e = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "group_by": "app", "bucket": "day"
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap_err();
+        assert!(e.contains("不能同时使用"), "{e}");
+    }
+
+    #[test]
+    fn validate_auto_upgrades_long_day_bucket_to_week() {
+        // 90 天的逐日请求 → 自动改逐周,并带 auto 标志(结果头部要向模型说明)
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-04-01", "date_to": "2026-06-30", "bucket": "day"
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats {
+                bucket,
+                bucket_auto_week,
+                ..
+            } => {
+                assert_eq!(bucket, Bucket::Week);
+                assert!(bucket_auto_week);
+            }
+            _ => panic!(),
+        }
+        // 60 天以内保持逐日
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-06-01", "date_to": "2026-07-01", "bucket": "day"
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats {
+                bucket,
+                bucket_auto_week,
+                ..
+            } => {
+                assert_eq!(bucket, Bucket::Day);
+                assert!(!bucket_auto_week);
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn validate_category_group_defaults_to_max_top_n() {
+        // 分类总数少,未显式给 top_n 时放宽到上限(默认 5 实测截掉了小分类)
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "group_by": "category"
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
+            _ => panic!(),
+        }
+        // 显式给的仍然尊重
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "group_by": "category", "top_n": 3
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats { top_n, .. } => assert_eq!(top_n, 3),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn validate_first_last_exempts_range_cap() {
+        // 同样的多年范围:duration 拒(366 上限,另一测试盯着),first_last 放行
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2020-01-01", "date_to": "2026-07-01",
+                "metric": "first_last"
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats { metric, .. } => assert_eq!(metric, StatMetric::FirstLast),
+            _ => panic!(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1099,11 +1497,14 @@ mod behavior_tests {
                 "CREATE TABLE activities (
                      started_at TEXT, ended_at TEXT, duration_secs INTEGER,
                      local_date TEXT, local_hour INTEGER,
-                     process_name TEXT, window_title TEXT, screenshot_path TEXT);
+                     process_name TEXT, window_title TEXT, screenshot_path TEXT,
+                     category_id TEXT);
                  CREATE TABLE app_group_members (
                      process_name TEXT, group_id TEXT, deleted_at TEXT);
                  CREATE TABLE app_groups (
                      id TEXT, display_name TEXT, category_id TEXT, deleted_at TEXT);
+                 CREATE TABLE categories (
+                     id TEXT, name TEXT, deleted_at TEXT);
                  {main_sql}"
             ))?;
             Ok(())
@@ -1480,6 +1881,9 @@ mod behavior_tests {
                 top_n: 5,
                 metric: StatMetric::Duration,
                 gap_minutes: 30,
+                bucket: Bucket::None,
+                bucket_auto_week: false,
+                categories: vec![],
             },
             1,
             ChatLang::ZhHans,
@@ -1488,6 +1892,213 @@ mod behavior_tests {
         .unwrap();
         assert!(out.for_llm.contains("共 8 组"), "{}", out.for_llm);
         assert!(out.for_llm.contains("前 5 组"), "{}", out.for_llm);
+    }
+
+    /// QueryStats 的全默认构造,测试逐项覆盖自己关心的字段。
+    fn stats_call(range: (NaiveDate, NaiveDate)) -> ToolCall {
+        ToolCall::QueryStats {
+            range,
+            apps: vec![],
+            title_keyword: None,
+            categories: vec![],
+            group_by: GroupBy::None,
+            top_n: 5,
+            metric: StatMetric::Duration,
+            gap_minutes: 30,
+            bucket: Bucket::None,
+            bucket_auto_week: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn stats_category_groups_and_falls_back_to_other() {
+        // work.exe → 组 g1 → 分类 cat1(名"工作");fun.exe 未分组 → 'other';
+        // tiny.exe 的"零星"分类只有 30 秒 → 不足 1 分钟整组滤掉(0 分钟噪音行)
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-08T09:00:00+09:00','2026-07-08T10:00:00+09:00',3600,
+               '2026-07-08', 9, 'work.exe', 'w'),
+              ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
+               '2026-07-08', 11, 'fun.exe', 'f'),
+              ('2026-07-08T12:00:00+09:00','2026-07-08T12:00:30+09:00',30,
+               '2026-07-08', 12, 'tiny.exe', 't');
+            INSERT INTO app_group_members(process_name, group_id) VALUES
+              ('work.exe','g1'), ('tiny.exe','g2');
+            INSERT INTO app_groups(id, display_name, category_id) VALUES
+              ('g1','Work','cat1'), ('g2','Tiny','cat2');
+            INSERT INTO categories(id, name) VALUES ('cat1','工作'), ('cat2','零星');";
+        let ctx = ctx_with("", main).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats { group_by, .. } = &mut call {
+            *group_by = GroupBy::Category;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("工作: 1 小时 0 分钟"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.for_llm.contains("other: 30 分钟"), "{}", out.for_llm);
+        assert!(!out.for_llm.contains("零星"), "{}", out.for_llm);
+    }
+
+    #[tokio::test]
+    async fn stats_bucket_day_lists_days_and_discloses_gaps() {
+        // 7-06 与 7-08 有记录,7-07 空——头部要申明"无记录的日子未列出"
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-06T09:00:00+09:00','2026-07-06T09:40:00+09:00',2400,
+               '2026-07-06', 9, 'App', 'w'),
+              ('2026-07-08T09:00:00+09:00','2026-07-08T10:00:00+09:00',3600,
+               '2026-07-08', 9, 'App', 'w');";
+        let ctx = ctx_with("", main).await;
+        let range = (
+            NaiveDate::from_ymd_opt(2026, 7, 6).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+        );
+        let mut call = stats_call(range);
+        if let ToolCall::QueryStats { bucket, .. } = &mut call {
+            *bucket = Bucket::Day;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("逐日统计(2 个有记录的日子"),
+            "{}",
+            out.for_llm
+        );
+        // 行首带本地化星期(07-06 周一/07-08 周三),模型不用自己换算
+        assert!(
+            out.for_llm.contains("2026-07-06(周一): 40 分钟"),
+            "{}",
+            out.for_llm
+        );
+        assert!(
+            out.for_llm.contains("2026-07-08(周三): 1 小时 0 分钟"),
+            "{}",
+            out.for_llm
+        );
+    }
+
+    #[tokio::test]
+    async fn stats_category_filter_covers_user_assigned_apps() {
+        // Cardinal 被用户归入"游戏"(模型自己列举应用名时不会想到它)——
+        // categories=["游戏"] 过滤必须把它算进来,known.exe 的"浏览"不算
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-08T09:00:00+09:00','2026-07-08T10:00:00+09:00',3600,
+               '2026-07-08', 9, 'Cardinal', 'w'),
+              ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
+               '2026-07-08', 11, 'known.exe', 'f');
+            INSERT INTO app_group_members(process_name, group_id) VALUES
+              ('Cardinal','g1'), ('known.exe','g2');
+            INSERT INTO app_groups(id, display_name, category_id) VALUES
+              ('g1','Cardinal','cat_game'), ('g2','Known','cat_browse');
+            INSERT INTO categories(id, name) VALUES
+              ('cat_game','游戏'), ('cat_browse','浏览');";
+        let ctx = ctx_with("", main).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats { categories, .. } = &mut call {
+            *categories = vec!["游戏".into()];
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("合计: 1 小时 0 分钟"),
+            "{}",
+            out.for_llm
+        );
+    }
+
+    #[tokio::test]
+    async fn stats_bucket_week_labels_rows_by_monday() {
+        // 2026-07-07(周二)与 07-08(周三)同属 07-06(周一)起始的那一周 → 合成一行
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-07T09:00:00+09:00','2026-07-07T09:30:00+09:00',1800,
+               '2026-07-07', 9, 'App', 'w'),
+              ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,
+               '2026-07-08', 9, 'App', 'w');";
+        let ctx = ctx_with("", main).await;
+        let range = (
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
+        );
+        let mut call = stats_call(range);
+        if let ToolCall::QueryStats { bucket, .. } = &mut call {
+            *bucket = Bucket::Week;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(out.for_llm.contains("逐周统计(1 周"), "{}", out.for_llm);
+        assert!(
+            out.for_llm.contains("2026-07-06: 1 小时 0 分钟"),
+            "{}",
+            out.for_llm
+        );
+        // 非自动升级:不出现自动改周的说明
+        assert!(!out.for_llm.contains("自动改为按周"), "{}", out.for_llm);
+    }
+
+    #[tokio::test]
+    async fn stats_bucket_hour_of_day_aggregates_across_days() {
+        // 两天的 9 时各 20 分钟 → "09:00: 40 分钟"一行
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-07T09:00:00+09:00','2026-07-07T09:20:00+09:00',1200,
+               '2026-07-07', 9, 'App', 'w'),
+              ('2026-07-08T09:10:00+09:00','2026-07-08T09:30:00+09:00',1200,
+               '2026-07-08', 9, 'App', 'w');";
+        let ctx = ctx_with("", main).await;
+        let range = (
+            NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+        );
+        let mut call = stats_call(range);
+        if let ToolCall::QueryStats { bucket, .. } = &mut call {
+            *bucket = Bucket::HourOfDay;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("按一天中的小时聚合"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.for_llm.contains("09:00: 40 分钟"), "{}", out.for_llm);
+    }
+
+    #[tokio::test]
+    async fn stats_first_last_reports_span() {
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-05T09:00:00+09:00','2026-07-05T09:30:00+09:00',1800,
+               '2026-07-05', 9, 'App', 'w'),
+              ('2026-07-08T20:00:00+09:00','2026-07-08T21:00:00+09:00',3600,
+               '2026-07-08', 20, 'App', 'w');";
+        let ctx = ctx_with("", main).await;
+        let range = (
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
+        );
+        let mut call = stats_call(range);
+        if let ToolCall::QueryStats { metric, .. } = &mut call {
+            *metric = StatMetric::FirstLast;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(out.for_llm.contains("共 2 条匹配活动"), "{}", out.for_llm);
+        assert!(
+            out.for_llm.contains("最早一次始于 2026-07-05 09:00"),
+            "{}",
+            out.for_llm
+        );
+        assert!(
+            out.for_llm.contains("最近一次止于 2026-07-08 21:00"),
+            "{}",
+            out.for_llm
+        );
     }
 
     /// 手动验收(不经过 LLM):直连真实库跑 get_timeline + search_text,
