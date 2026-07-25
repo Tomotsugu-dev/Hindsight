@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/daily.png" alt="日統計" width="800"><br/>
+  <img src="./intro_zh/imgs/daily.png" alt="日統計" width="800"><br/>
   <sub><b>日統計</b> · 24 小時分時段堆疊圖 × 應用 / 分類雙排行，一眼看清今天的時間去向</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/app_detail.png" alt="應用明細" width="800"><br/>
+  <img src="./intro_zh/imgs/app_detail.png" alt="應用明細" width="800"><br/>
   <sub><b>應用明細</b> · 點開任意應用，看到都在應用中做什麼</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/weekly.png" alt="週統計" width="800"><br/>
+  <img src="./intro_zh/imgs/weekly.png" alt="週統計" width="800"><br/>
   <sub><b>週統計</b> · 一週七天的工作情況</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/monthly.png" alt="月統計" width="800"><br/>
+  <img src="./intro_zh/imgs/monthly.png" alt="月統計" width="800"><br/>
   <sub><b>月統計</b> · 按天展示各類活動時長，結合應用 / 分類排行，看清本月時間主要花在哪裡</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/monthly_cal.png" alt="月度佔比" width="800"><br/>
+  <img src="./intro_zh/imgs/monthly_cal.png" alt="月度佔比" width="800"><br/>
   <sub><b>本月時間結構</b> · 展示各類活動的時長與佔比，並彙總總時長、日均時長及較上月變化</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/ai_summary.png" alt="AI 摘要" width="800"><br/>
+  <img src="./intro_zh/imgs/ai_summary.png" alt="AI 摘要" width="800"><br/>
   <sub><b>AI 自動寫日報</b> · 本機 / 雲端模型按時段彙總當天的活動，寫成日報</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/ai_chatbot.png" alt="AI 對話" width="800"><br/>
+  <img src="./intro_zh/imgs/ai_chatbot.png" alt="AI 對話" width="800"><br/>
   <sub><b>AI 對話</b> · 直接問例如「這個月我在 XX 上花了多久」</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh-TW/imgs/cloud_sync.png" alt="多裝置同步" width="800"><br/>
+  <img src="./intro_zh/imgs/cloud_sync.png" alt="多裝置同步" width="800"><br/>
   <sub><b>多裝置同步</b> · 適合持有多台裝置的使用者</sub>
 </p>
 

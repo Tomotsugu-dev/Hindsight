@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/daily.png" alt="Estatísticas diárias" width="800"><br/>
+  <img src="./intro_zh/imgs/daily.png" alt="Estatísticas diárias" width="800"><br/>
   <sub><b>Estatísticas diárias</b> · Gráfico empilhado de 24 horas × rankings de apps / categorias — veja para onde foi o seu dia num relance</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/app_detail.png" alt="Detalhe do app" width="800"><br/>
+  <img src="./intro_zh/imgs/app_detail.png" alt="Detalhe do app" width="800"><br/>
   <sub><b>Detalhe do app</b> · Clique em qualquer app para ver o que você estava fazendo dentro dele</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/weekly.png" alt="Estatísticas semanais" width="800"><br/>
+  <img src="./intro_zh/imgs/weekly.png" alt="Estatísticas semanais" width="800"><br/>
   <sub><b>Estatísticas semanais</b> · Sua semana inteira num relance</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/monthly.png" alt="Estatísticas mensais" width="800"><br/>
+  <img src="./intro_zh/imgs/monthly.png" alt="Estatísticas mensais" width="800"><br/>
   <sub><b>Estatísticas mensais</b> · Barras diárias com rankings de apps / categorias — veja para onde foi o tempo do mês</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/monthly_cal.png" alt="Estrutura do mês" width="800"><br/>
+  <img src="./intro_zh/imgs/monthly_cal.png" alt="Estrutura do mês" width="800"><br/>
   <sub><b>Estrutura do mês</b> · Tempo e proporção por categoria, com total, média diária e variação em relação ao mês anterior</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/ai_summary.png" alt="Resumo por IA" width="800"><br/>
+  <img src="./intro_zh/imgs/ai_summary.png" alt="Resumo por IA" width="800"><br/>
   <sub><b>Relatório diário por IA</b> · Um modelo local ou na nuvem resume as atividades do dia por período e escreve o diário</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/ai_chatbot.png" alt="Chat com IA" width="800"><br/>
+  <img src="./intro_zh/imgs/ai_chatbot.png" alt="Chat com IA" width="800"><br/>
   <sub><b>Chat com IA</b> · Pergunte direto, por exemplo: "quanto tempo passei em XX este mês?"</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/cloud_sync.png" alt="Sincronização multi-dispositivo" width="800"><br/>
+  <img src="./intro_zh/imgs/cloud_sync.png" alt="Sincronização multi-dispositivo" width="800"><br/>
   <sub><b>Sincronização multi-dispositivo</b> · Para quem usa mais de um computador</sub>
 </p>
 
