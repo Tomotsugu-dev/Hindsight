@@ -89,3 +89,7 @@ web/demo/
 
 # POC 输出（含真实屏幕内容，勿提交）
 scripts/poc/output/
+
+# 演示录制会话(绝对坐标的本机操作轨迹)仅本地
+scripts/shots/*.jsonl
+scripts/shots/*.win.json
