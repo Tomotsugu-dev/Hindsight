@@ -67,7 +67,7 @@
 
 .presets {
   display: grid;
-  /* 4 张卡（固定 3 + 随机位）走 2×2，3 列会让第 4 张孤行 */
+  /* 6 张卡（固定 5 + 随机位）走 2×3，与 4 张时代同宽不破排版 */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   width: 100%;

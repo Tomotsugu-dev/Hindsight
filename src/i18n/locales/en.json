@@ -1440,6 +1440,14 @@
         "label": "YouTube",
         "q": "How long did I spend on YouTube today?"
       },
+      "category": {
+        "label": "Time split",
+        "q": "Which categories did my time go to this week?"
+      },
+      "trend": {
+        "label": "Daily trend",
+        "q": "How long did I use my computer each day over the past two weeks?"
+      },
       "mail": {
         "label": "Email",
         "q": "How much time did I spend on email today?"
@@ -1447,6 +1455,10 @@
       "searchkw": {
         "label": "Searches",
         "q": "What did I search for today?"
+      },
+      "hours": {
+        "label": "Peak hours",
+        "q": "At what hours of the day do I use my computer most?"
       }
     },
     "conversations": {
