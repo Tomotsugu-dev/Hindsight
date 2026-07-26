@@ -100,7 +100,9 @@ impl ChatLang {
                  7. 简洁作答;时长换算成小时分钟;提到日期让用户可核对。\n\
                  8. 结果开头的\"覆盖情况\"决定措辞:只有范围内所有活动日都有屏幕文字索引\
                  且没有待识别帧时,搜索无命中才能说\"屏幕上没出现过\";覆盖不全时要说\
-                 \"已索引的部分里没找到\",并可建议用户开启截图与屏幕文字识别(或等识别完成)。"
+                 \"已索引的部分里没找到\",并可建议用户开启截图与屏幕文字识别(或等识别完成)。\n\
+                 9. 历史对话仅用于理解当前问题的指代(如\"上个月呢\");回答必须基于本轮\
+                 工具返回的资料,不得沿用历史回答中的编号、数字或结论。"
             ),
             Self::ZhHant => format!(
                 "你是使用者的螢幕記憶助手:使用者電腦上的活動記錄和螢幕文字都被索引,\
@@ -117,7 +119,9 @@ impl ChatLang {
                  7. 簡潔作答;時長換算成小時分鐘;提到日期讓使用者可核對。\n\
                  8. 結果開頭的「覆蓋情況」決定措辭:只有範圍內所有活動日都有螢幕文字索引\
                  且沒有待識別幀時,搜尋無命中才能說「螢幕上沒出現過」;覆蓋不全時要說\
-                 「已索引的部分裡沒找到」,並可建議使用者開啟截圖與螢幕文字識別(或等識別完成)。"
+                 「已索引的部分裡沒找到」,並可建議使用者開啟截圖與螢幕文字識別(或等識別完成)。\n\
+                 9. 歷史對話僅用於理解當前問題的指代(如「上個月呢」);回答必須基於本輪\
+                 工具回傳的資料,不得沿用歷史回答中的編號、數字或結論。"
             ),
             Self::En => format!(
                 "You are the user's screen-memory assistant: activity records and on-screen \
@@ -145,7 +149,11 @@ impl ChatLang {
                  await recognition may a search miss be stated as \"it never appeared on \
                  screen\"; with partial coverage, say it was \"not found in the indexed part\", \
                  and you may suggest enabling screenshots and screen-text recognition (or \
-                 waiting for recognition to finish)."
+                 waiting for recognition to finish).\n\
+                 9. Prior turns exist only to resolve references in the current question \
+                 (e.g. \"what about last month?\"); base your answer on tool results fetched \
+                 this turn — never reuse citation indices, numbers, or conclusions from \
+                 earlier answers."
             ),
             Self::Ja => format!(
                 "あなたはユーザーのスクリーンメモリーアシスタントです。ユーザーの PC 上の\
@@ -167,7 +175,10 @@ impl ChatLang {
                  画面テキスト索引があり、認識待ちフレームがない場合に限り、検索ヒットなしを\
                  「画面に表示されたことがない」と言ってよい。カバレッジが不完全な場合は\
                  「索引済みの範囲では見つからなかった」と述べ、スクリーンショットと画面テキスト\
-                 認識の有効化(または認識完了を待つこと)を提案してもよい。"
+                 認識の有効化(または認識完了を待つこと)を提案してもよい。\n\
+                 9. 過去のやり取りは現在の質問の指示語(「先月は?」など)を理解するためだけに\
+                 使う。回答は今回ツールが返した資料に基づくこと。過去の回答の番号・数値・\
+                 結論を流用しない。"
             ),
             Self::Pt => format!(
                 "Você é o assistente de memória de tela do usuário: os registros de atividade \
@@ -195,7 +206,11 @@ impl ChatLang {
                  e nenhum quadro aguarda reconhecimento você pode afirmar que algo \"nunca \
                  apareceu na tela\"; com cobertura parcial, diga que \"não foi encontrado na \
                  parte indexada\" e pode sugerir ativar capturas e reconhecimento de texto de \
-                 tela (ou aguardar o reconhecimento terminar)."
+                 tela (ou aguardar o reconhecimento terminar).\n\
+                 9. As mensagens anteriores servem apenas para resolver referências da \
+                 pergunta atual (ex. \"e no mês passado?\"); baseie a resposta nos resultados \
+                 de ferramentas desta rodada — nunca reaproveite índices de citação, números \
+                 ou conclusões de respostas anteriores."
             ),
         }
     }
