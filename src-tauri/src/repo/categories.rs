@@ -687,4 +687,643 @@ mod tests {
         assert!(!code.apps.iter().any(|p| p == "AppInDeletedGroup"));
         assert!(!code.apps.iter().any(|p| p == "DeletedMember"));
     }
+
+    // ---------- 共享小工具 ----------
+
+    fn cat_input(name: &str, color: &str, icon: &str) -> CategoryInput {
+        CategoryInput {
+            name: name.into(),
+            color: color.into(),
+            icon: icon.into(),
+        }
+    }
+
+    /// 绕过 `deleted_at IS NULL` 过滤直接读原始行（测软删语义必须能看到 tombstone）。
+    /// 返回 (name, color, icon, builtin, sort_order, deleted_at)。
+    async fn raw_cat(
+        pool: &DbPool,
+        id: &str,
+    ) -> Option<(String, String, String, i64, i64, Option<String>)> {
+        let id = id.to_string();
+        pool.0
+            .call(move |conn| {
+                use rusqlite::OptionalExtension;
+                let row = conn
+                    .query_row(
+                        "SELECT name, color, icon, builtin, sort_order, deleted_at
+                           FROM categories WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| {
+                            Ok((
+                                r.get::<_, String>(0)?,
+                                r.get::<_, String>(1)?,
+                                r.get::<_, String>(2)?,
+                                r.get::<_, i64>(3)?,
+                                r.get::<_, i64>(4)?,
+                                r.get::<_, Option<String>>(5)?,
+                            ))
+                        },
+                    )
+                    .optional()?;
+                Ok(row)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn find_cat(pool: &DbPool, id: &str) -> Option<Category> {
+        list(pool).await.unwrap().into_iter().find(|c| c.id == id)
+    }
+
+    async fn list_ids(pool: &DbPool) -> Vec<String> {
+        list(pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|c| c.id)
+            .collect()
+    }
+
+    async fn outbox_count(pool: &DbPool, entity: &str) -> i64 {
+        let e = entity.to_string();
+        pool.0
+            .call(move |conn| {
+                let n = conn.query_row(
+                    "SELECT COUNT(*) FROM sync_outbox WHERE entity = ?1",
+                    rusqlite::params![e],
+                    |r| r.get::<_, i64>(0),
+                )?;
+                Ok(n)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn outbox_total(pool: &DbPool) -> i64 {
+        pool.0
+            .call(|conn| {
+                let n = conn.query_row("SELECT COUNT(*) FROM sync_outbox", [], |r| {
+                    r.get::<_, i64>(0)
+                })?;
+                Ok(n)
+            })
+            .await
+            .unwrap()
+    }
+
+    // ---------- create ----------
+
+    /// 为什么测：前端表单可能提交全空格（用户误敲空格直接确认）。trim 后必须拒绝，
+    /// 否则列表里出现"看不见"的分类，既点不中也删不掉。icon 留空则要兜底成
+    /// 非空默认值——空 icon 前端 map 不到 lucide 组件会渲染裂图。
+    #[tokio::test]
+    async fn create_rejects_blank_name_or_color_and_defaults_blank_icon() {
+        let pool = fresh_test_pool().await;
+        let baseline = list(&pool).await.unwrap().len();
+
+        let err = create(&pool, cat_input("   ", "#123456", "Star"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::InvalidInput(_)), "全空格名必须被拒");
+        let err = create(&pool, cat_input("阅读", "  ", "Star"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::InvalidInput(_)), "全空格颜色必须被拒");
+        // 校验失败不能留下半截行
+        assert_eq!(list(&pool).await.unwrap().len(), baseline);
+
+        let cat = create(&pool, cat_input(" 阅读 ", " #123456 ", "  "))
+            .await
+            .unwrap();
+        let got = find_cat(&pool, &cat.id).await.unwrap();
+        assert_eq!(got.name, "阅读", "名字应 trim 后入库");
+        assert_eq!(got.color, "#123456", "颜色应 trim 后入库");
+        assert!(!got.icon.trim().is_empty(), "空 icon 必须兜底成非空默认值");
+        assert!(!got.builtin, "用户新建的分类不能带 builtin 标志");
+        // create 返回值与 list 读回的一致（前端拿返回值直接插 UI，不再刷新列表）
+        assert_eq!(got.icon, cat.icon);
+    }
+
+    /// 为什么测：sort_order 用 MAX(active)+1 生成。若把软删行也算进 MAX，
+    /// 用户反复"建了删、删了建"会让 sort_order 无限膨胀，跨设备 LWW 合并时
+    /// 新分类和 tombstone 争位置导致顺序错乱。
+    #[tokio::test]
+    async fn create_appends_to_end_and_soft_deleted_rows_do_not_inflate_sort_order() {
+        let pool = fresh_test_pool().await;
+        let a = create(&pool, cat_input("甲", "#111111", "Star"))
+            .await
+            .unwrap();
+        let b = create(&pool, cat_input("乙", "#222222", "Moon"))
+            .await
+            .unwrap();
+        let ids = list_ids(&pool).await;
+        // 新建的排在列表末尾且保持创建序
+        assert_eq!(ids[ids.len() - 2], a.id);
+        assert_eq!(ids[ids.len() - 1], b.id);
+
+        let sort_b = raw_cat(&pool, &b.id).await.unwrap().4;
+        delete(&pool, &b.id).await.unwrap();
+        let c = create(&pool, cat_input("丙", "#333333", "Sun"))
+            .await
+            .unwrap();
+        let sort_c = raw_cat(&pool, &c.id).await.unwrap().4;
+        // 乙软删后它的位置应被回收：丙拿到与乙相同的 sort_order，而不是继续 +1
+        assert_eq!(sort_c, sort_b);
+        assert_eq!(list_ids(&pool).await.last().unwrap(), &c.id);
+    }
+
+    // ---------- update ----------
+
+    /// 为什么测：前端"重命名"弹窗只传 name、调色板只传 color、图标选择器只传 icon。
+    /// patch 里没给的字段绝不能被冲掉；空白字符串（用户清空输入框直接确认）按"不改"处理。
+    #[tokio::test]
+    async fn update_patches_each_field_independently_and_treats_blank_as_keep() {
+        let pool = fresh_test_pool().await;
+        let cat = create(&pool, cat_input("临时", "#111111", "Star"))
+            .await
+            .unwrap();
+
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: Some("改名".into()),
+                color: None,
+                icon: None,
+            },
+        )
+        .await
+        .unwrap();
+        let got = find_cat(&pool, &cat.id).await.unwrap();
+        assert_eq!(got.name, "改名");
+        assert_eq!(got.color, "#111111", "只改 name 不得动 color");
+        assert_eq!(got.icon, "Star", "只改 name 不得动 icon");
+
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: None,
+                color: Some(" #222222 ".into()),
+                icon: None,
+            },
+        )
+        .await
+        .unwrap();
+        let got = find_cat(&pool, &cat.id).await.unwrap();
+        assert_eq!(got.color, "#222222", "color 应 trim 后入库");
+        assert_eq!(got.name, "改名");
+        assert_eq!(got.icon, "Star");
+
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: None,
+                color: None,
+                icon: Some("Moon".into()),
+            },
+        )
+        .await
+        .unwrap();
+        let got = find_cat(&pool, &cat.id).await.unwrap();
+        assert_eq!(got.icon, "Moon");
+        assert_eq!(got.name, "改名");
+        assert_eq!(got.color, "#222222");
+
+        // 三个字段全给空白 → 全部视为"不改"，不能把行清空
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: Some("   ".into()),
+                color: Some(String::new()),
+                icon: Some(" ".into()),
+            },
+        )
+        .await
+        .unwrap();
+        let got = find_cat(&pool, &cat.id).await.unwrap();
+        assert_eq!(
+            (got.name.as_str(), got.color.as_str(), got.icon.as_str()),
+            ("改名", "#222222", "Moon"),
+            "空白 patch 不得清掉任何字段"
+        );
+    }
+
+    /// 为什么测：同步竞态下 update 可能落在已被另一台设备删掉的分类上。
+    /// 期望静默 no-op：既不报错（用户无感），也绝不能把 tombstone 复活，
+    /// 更不能给 no-op 入 outbox（否则重试风暴把垃圾事件推上云）。
+    #[tokio::test]
+    async fn update_ignores_missing_and_soft_deleted_rows() {
+        let pool = fresh_test_pool().await;
+        // 不存在的 id → 静默成功
+        update(
+            &pool,
+            "ghost-id",
+            CategoryPatch {
+                name: Some("X".into()),
+                color: None,
+                icon: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let cat = create(&pool, cat_input("将删", "#111111", "Star"))
+            .await
+            .unwrap();
+        delete(&pool, &cat.id).await.unwrap();
+        let before = outbox_count(&pool, "category").await;
+
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: Some("复活?".into()),
+                color: None,
+                icon: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let row = raw_cat(&pool, &cat.id).await.unwrap();
+        assert!(row.5.is_some(), "update 不得清掉 deleted_at 把分类复活");
+        assert_ne!(row.0, "复活?", "软删行的字段不应被改写");
+        assert_eq!(
+            outbox_count(&pool, "category").await,
+            before,
+            "对软删行的 update 是 no-op，不应入 outbox"
+        );
+    }
+
+    // ---------- delete / 软删语义 ----------
+
+    /// 为什么测：删除必须是软删——跨设备同步靠 tombstone 行传播删除事件；
+    /// 物理删会让另一台设备把该分类原样推回来（"删不掉"复活 bug）。
+    #[tokio::test]
+    async fn soft_delete_hides_from_list_but_keeps_row_and_pushes_tombstone() {
+        let pool = fresh_test_pool().await;
+        let cat = create(&pool, cat_input("短命", "#111111", "Star"))
+            .await
+            .unwrap();
+        delete(&pool, &cat.id).await.unwrap();
+
+        assert!(
+            list(&pool).await.unwrap().iter().all(|c| c.id != cat.id),
+            "软删后不应再出现在 list 里"
+        );
+        let row = raw_cat(&pool, &cat.id)
+            .await
+            .expect("行必须还在（软删不是物理删）");
+        assert!(row.5.is_some(), "deleted_at 必须被打上");
+
+        // outbox 里必须有一条带 deletedAt 的 category 快照，云端才能感知删除
+        let cid = cat.id.clone();
+        let payloads: Vec<String> = pool
+            .0
+            .call(move |conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT payload FROM sync_outbox
+                      WHERE entity = 'category' AND entity_pk = ?1",
+                )?;
+                let rows = stmt.query_map(rusqlite::params![cid], |r| r.get::<_, String>(0))?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                Ok(out)
+            })
+            .await
+            .unwrap();
+        let has_tombstone = payloads.iter().any(|p| {
+            serde_json::from_str::<serde_json::Value>(p)
+                .map(|v| v.get("deletedAt").map(|d| d.is_string()).unwrap_or(false))
+                .unwrap_or(false)
+        });
+        assert!(
+            has_tombstone,
+            "outbox 里必须有带 deletedAt 的 tombstone，实际 payloads={payloads:?}"
+        );
+    }
+
+    /// 为什么测：双端并发删同一分类时，后到的删除请求看到的已是 tombstone / 空行。
+    /// 应静默成功且不再入 outbox，否则每次重放都往云端推垃圾事件。
+    #[tokio::test]
+    async fn delete_missing_or_already_deleted_is_silent_noop() {
+        let pool = fresh_test_pool().await;
+        let before = outbox_count(&pool, "category").await;
+        delete(&pool, "no-such-id").await.unwrap();
+        assert_eq!(
+            outbox_count(&pool, "category").await,
+            before,
+            "删不存在的 id 不应入 outbox"
+        );
+
+        let cat = create(&pool, cat_input("重复删", "#111111", "Star"))
+            .await
+            .unwrap();
+        delete(&pool, &cat.id).await.unwrap();
+        let mid = outbox_count(&pool, "category").await;
+        delete(&pool, &cat.id).await.unwrap(); // 第二次删同一个
+        assert_eq!(
+            outbox_count(&pool, "category").await,
+            mid,
+            "重复删除是 no-op，不应再入 outbox"
+        );
+    }
+
+    // ---------- 内置 / 特殊分类约束 ----------
+
+    /// 为什么测：'hidden' 是"从统计里排除应用"的功能锚点（v27 里唯一 builtin=1 的行）。
+    /// 一旦被删，被隐藏的 app 全部回流进报表——用户特意隐藏的内容重新出现在
+    /// 日报 / AI 总结里，隐私场景直接翻车。但外观（名字/颜色/图标）允许个性化，
+    /// 且改完外观后 builtin 守门必须依然生效。
+    #[tokio::test]
+    async fn builtin_hidden_rejects_delete_but_allows_restyle() {
+        let pool = fresh_test_pool().await;
+        let err = delete(&pool, "hidden").await.unwrap_err();
+        assert!(matches!(err, Error::InvalidInput(_)));
+        let hidden = find_cat(&pool, "hidden")
+            .await
+            .expect("拒绝删除后 hidden 必须原样活着");
+        assert!(hidden.builtin);
+
+        update(
+            &pool,
+            "hidden",
+            CategoryPatch {
+                name: Some("不给看".into()),
+                color: None,
+                icon: None,
+            },
+        )
+        .await
+        .unwrap();
+        let hidden = find_cat(&pool, "hidden").await.unwrap();
+        assert_eq!(hidden.name, "不给看", "内置分类允许改外观");
+        assert!(
+            hidden.builtin,
+            "update 不得清掉 builtin 标志，否则改过名的 hidden 就能被删了"
+        );
+        // 改完名依然不可删
+        assert!(matches!(
+            delete(&pool, "hidden").await.unwrap_err(),
+            Error::InvalidInput(_)
+        ));
+    }
+
+    /// 为什么测：'other' 在 seed 里 builtin=0，光靠 builtin 守门拦不住；但报表 SQL
+    /// 把所有未分类时长 COALESCE 到 'other'，删掉后前端解析不到分类，图表出现
+    /// 无色缺口。这里钉死针对 id 的专门守门分支。
+    #[tokio::test]
+    async fn other_category_rejects_delete_despite_not_builtin() {
+        let pool = fresh_test_pool().await;
+        let other = find_cat(&pool, "other").await.expect("seed 应有 other");
+        // 前提校验：other 确实不是 builtin —— 若某天 seed 改成 builtin=1，
+        // 此测试就该换成测 builtin 分支而不是 id 分支
+        assert!(!other.builtin);
+
+        let err = delete(&pool, "other").await.unwrap_err();
+        assert!(matches!(err, Error::InvalidInput(_)));
+        assert!(
+            find_cat(&pool, "other").await.is_some(),
+            "拒绝删除后 other 必须仍在列表"
+        );
+    }
+
+    // ---------- reorder / sort_order ----------
+
+    /// 为什么测：拖拽重排是高频操作。1) 新顺序必须真实持久化（list 按 sort_order 出）；
+    /// 2) 顺序没变的 reorder 不能重复入 outbox，否则前端每次 render 后补发的
+    /// no-op reorder 都会把全量分类快照推上云。
+    #[tokio::test]
+    async fn reorder_applies_index_order_and_noop_reorder_skips_outbox() {
+        let pool = fresh_test_pool().await;
+        let before = list_ids(&pool).await;
+        assert!(before.len() >= 2, "seed 应至少有两个分类才能测重排");
+        let reversed: Vec<String> = before.iter().rev().cloned().collect();
+
+        reorder(&pool, reversed.clone()).await.unwrap();
+        assert_eq!(list_ids(&pool).await, reversed, "list 顺序应跟随 reorder");
+
+        let n = outbox_count(&pool, "category").await;
+        reorder(&pool, reversed.clone()).await.unwrap(); // 原地不动
+        assert_eq!(
+            outbox_count(&pool, "category").await,
+            n,
+            "顺序没变时不应产生新的 outbox 行"
+        );
+    }
+
+    /// 为什么测：前端列表和 DB 可能瞬时不同步（另一台设备刚删了一个分类，本机还
+    /// 基于旧列表发起拖拽）。带幽灵 id / 已删 id 的 reorder 不应报错、不应打乱
+    /// 其余顺序、更不能把软删行拖活。
+    #[tokio::test]
+    async fn reorder_skips_unknown_and_soft_deleted_ids() {
+        let pool = fresh_test_pool().await;
+        let dead = create(&pool, cat_input("已删", "#111111", "Star"))
+            .await
+            .unwrap();
+        delete(&pool, &dead.id).await.unwrap();
+
+        let live = list_ids(&pool).await;
+        let mut req = vec!["ghost-id".to_string(), dead.id.clone()];
+        req.extend(live.iter().rev().cloned());
+        reorder(&pool, req).await.unwrap();
+
+        let after = list_ids(&pool).await;
+        let expected: Vec<String> = live.iter().rev().cloned().collect();
+        assert_eq!(after, expected, "幽灵 id 应被跳过，其余按索引就位");
+        assert!(
+            after.iter().all(|id| id != &dead.id),
+            "软删行不得因 reorder 复活"
+        );
+    }
+
+    // ---------- 删分类的 cascade：成员归属 ----------
+
+    /// 为什么测：删分类时若不清 app_groups.category_id，组还挂在幽灵分类上——
+    /// "待归类"卡片不出现该 app、报表又解析不到分类，两边都看不见它。
+    /// 期望：组降级回未分类（而不是连坐删组），app_categories 镜像行同步软删。
+    #[tokio::test]
+    async fn delete_returns_member_group_to_unclassified_and_soft_deletes_mirror() {
+        let pool = fresh_test_pool().await;
+        let cat = create(&pool, cat_input("工具", "#111111", "Wrench"))
+            .await
+            .unwrap();
+        assign_app(&pool, "MyTool", &cat.id).await.unwrap();
+        // 前置：绑定成功
+        let got = find_cat(&pool, &cat.id).await.unwrap();
+        assert!(got.apps.iter().any(|p| p == "MyTool"), "绑定应先生效");
+
+        delete(&pool, &cat.id).await.unwrap();
+
+        // 组还活着，但 category_id 被清空（回到未分类，而不是删组）
+        let (g_cat, g_deleted): (Option<String>, Option<String>) = pool
+            .0
+            .call(|conn| {
+                let row = conn.query_row(
+                    "SELECT g.category_id, g.deleted_at
+                       FROM app_group_members m
+                       JOIN app_groups g ON g.id = m.group_id
+                      WHERE m.process_name = 'MyTool'",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
+                Ok(row)
+            })
+            .await
+            .unwrap();
+        assert!(g_deleted.is_none(), "删分类不应连坐删组");
+        assert_eq!(g_cat, None, "组必须回到未分类");
+
+        // app_categories 镜像行软删（保留 tombstone 供同步，不物理删）
+        let mirror: Option<Option<String>> = pool
+            .0
+            .call(|conn| {
+                use rusqlite::OptionalExtension;
+                let row = conn
+                    .query_row(
+                        "SELECT deleted_at FROM app_categories WHERE process_name = 'MyTool'",
+                        [],
+                        |r| r.get::<_, Option<String>>(0),
+                    )
+                    .optional()?;
+                Ok(row)
+            })
+            .await
+            .unwrap();
+        let mirror = mirror.expect("镜像行应保留（软删）而不是物理删");
+        assert!(
+            mirror.is_some(),
+            "镜像行 deleted_at 必须被打上，否则报表继续按旧分类聚合"
+        );
+
+        // 任何分类下都不应再出现 MyTool
+        assert!(list(&pool)
+            .await
+            .unwrap()
+            .iter()
+            .all(|c| !c.apps.iter().any(|p| p == "MyTool")));
+    }
+
+    /// 为什么测：cascade 在本机删除和 sync pull 两条路径上都会被调用；若不幂等，
+    /// 每次 pull 都给同一批 app_categories / app_groups 重复入 outbox，
+    /// 两台设备之间形成推送风暴。
+    #[tokio::test]
+    async fn cascade_second_run_is_noop_without_new_outbox_rows() {
+        let pool = fresh_test_pool().await;
+        let cat = create(&pool, cat_input("循环", "#111111", "Repeat"))
+            .await
+            .unwrap();
+        assign_app(&pool, "LoopApp", &cat.id).await.unwrap();
+        delete(&pool, &cat.id).await.unwrap(); // 内部已完整跑过一次 cascade
+
+        let before = outbox_total(&pool).await;
+        let cid = cat.id.clone();
+        pool.0
+            .call(move |conn| {
+                cascade_category_deletion(conn, &cid, "2026-07-26T00:00:00Z")?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            outbox_total(&pool).await,
+            before,
+            "重复 cascade 不应新增任何 outbox 行"
+        );
+    }
+
+    // ---------- list_unclassified ----------
+
+    async fn insert_activity(
+        pool: &DbPool,
+        process: &str,
+        day_offset: i64,
+        secs: i64,
+        ended: &str,
+    ) {
+        let p = process.to_string();
+        let e = ended.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                                            local_hour, process_name, category_id)
+                     VALUES(?1, ?2, ?3, date('now','localtime', ?4 || ' days'), 9, ?5, 'other')",
+                    rusqlite::params![e, e, secs, day_offset.to_string(), p],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 为什么测："待归类"卡片的判定必须走 app_groups 真实源且守住窗口边界：
+    /// - 已归类 app 不出现（否则用户被反复要求归类同一个 app）；
+    /// - 组指向**已删分类**的 app 要重新出现（cascade 失误 / 远端 tombstone 未级联时的兜底）；
+    /// - 'Unknown' 噪声行、窗口外的老记录都要滤掉；
+    /// - 分钟数是聚合值（整数分钟），排序按用量降序，用户先处理大头。
+    #[tokio::test]
+    async fn list_unclassified_uses_group_truth_window_and_aggregation() {
+        let pool = fresh_test_pool().await;
+
+        // FreeApp：今天 90s + 45s 两段 → 135s = 2 整分钟（截断）
+        insert_activity(&pool, "FreeApp", 0, 90, "2026-07-26T09:00:00Z").await;
+        insert_activity(&pool, "FreeApp", 0, 45, "2026-07-26T10:30:00Z").await;
+        // Unknown：采集兜底名，永远不该让用户归类
+        insert_activity(&pool, "Unknown", 0, 600, "2026-07-26T09:00:00Z").await;
+        // OldApp：10 天前的活动，5 天窗口内不应出现
+        insert_activity(&pool, "OldApp", -10, 600, "2026-07-16T09:00:00Z").await;
+        // CodeApp：已归类到 seed 的 'code'，不应出现
+        insert_activity(&pool, "CodeApp", 0, 600, "2026-07-26T09:00:00Z").await;
+        assign_app(&pool, "CodeApp", "code").await.unwrap();
+        // ZombieApp：归到一个随后被"绕过 cascade"软删的分类 → 应回到待归类
+        insert_activity(&pool, "ZombieApp", 0, 600, "2026-07-26T09:00:00Z").await;
+        let zombie_cat = create(&pool, cat_input("僵尸", "#111111", "Ghost"))
+            .await
+            .unwrap();
+        assign_app(&pool, "ZombieApp", &zombie_cat.id)
+            .await
+            .unwrap();
+        let zid = zombie_cat.id.clone();
+        pool.0
+            .call(move |conn| {
+                // 模拟远端 tombstone 直接落库、没跑 cascade 的失误路径
+                conn.execute(
+                    "UPDATE categories SET deleted_at = '2026-07-26T00:00:00Z' WHERE id = ?1",
+                    rusqlite::params![zid],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let rows = list_unclassified(&pool, 5).await.unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r.process_name.as_str()).collect();
+
+        assert!(names.contains(&"FreeApp"), "无组的 app 应待归类: {names:?}");
+        assert!(
+            names.contains(&"ZombieApp"),
+            "组指向已删分类的 app 应回到待归类: {names:?}"
+        );
+        assert!(!names.contains(&"CodeApp"), "已归类的 app 不应出现");
+        assert!(!names.contains(&"Unknown"), "Unknown 噪声行必须滤掉");
+        assert!(!names.contains(&"OldApp"), "窗口外的老记录必须滤掉");
+
+        let free = rows.iter().find(|r| r.process_name == "FreeApp").unwrap();
+        assert_eq!(free.minutes, 2, "90s+45s=135s 应聚合成 2 整分钟");
+        assert_eq!(
+            free.last_seen_at, "2026-07-26T10:30:00Z",
+            "last_seen 应取两段里较晚的 ended_at"
+        );
+
+        // 排序：ZombieApp 10 分钟 > FreeApp 2 分钟，大头在前
+        let pos_zombie = names.iter().position(|n| *n == "ZombieApp").unwrap();
+        let pos_free = names.iter().position(|n| *n == "FreeApp").unwrap();
+        assert!(pos_zombie < pos_free, "应按分钟数降序: {names:?}");
+    }
 }

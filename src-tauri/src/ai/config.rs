@@ -429,3 +429,627 @@ fn sanitize_hex_color(raw: &str) -> String {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 合法 prompt 语言全集。测试里独立列一份，不引用 sanitize 内部的 match——
+    /// 若产品代码误删某语言，这里会红。
+    const VALID_LANGS: [&str; 5] = ["zh", "tw", "en", "ja", "pt"];
+
+    /// 造一个"干净"的基准配置。基于 Default，但把 prompt_language 固定成 "zh"，
+    /// 避免 Default 里 detect_default_lang 随宿主 locale 变化导致断言不稳定。
+    fn base() -> AiConfig {
+        AiConfig {
+            prompt_language: "zh".to_string(),
+            ..AiConfig::default()
+        }
+    }
+
+    fn seg(label: &str, start: u8, end: u8, color: &str) -> AiSegment {
+        AiSegment {
+            label: label.to_string(),
+            start_hour: start,
+            end_hour: end,
+            color: color.to_string(),
+        }
+    }
+
+    // ---------- sanitize ----------
+
+    #[test]
+    fn sanitize_prompt_language_whitelist_and_fallback() {
+        // 白名单内的值（含带空白）原样保留；名单外一律回退 zh——
+        // prompt 模板按语言取套，落一个未知 tag 会让取模板处 panic 或拿错语言。
+        for lang in VALID_LANGS {
+            let mut next = base();
+            next.prompt_language = format!("  {lang}  ");
+            let out = sanitize(next, &base());
+            assert_eq!(out.prompt_language, lang, "合法语言应 trim 后保留");
+        }
+        for bad in ["fr", "zh-CN", "EN", "", "  ", "日本語"] {
+            let mut next = base();
+            next.prompt_language = bad.to_string();
+            let out = sanitize(next, &base());
+            assert_eq!(out.prompt_language, "zh", "非法语言 {bad:?} 应回退 zh");
+        }
+    }
+
+    #[test]
+    fn sanitize_external_provider_whitelist_and_fallback() {
+        // provider 只影响 UI placeholder，但落库前仍要归一，避免前端拿到未知值渲染错乱
+        for p in [
+            "openai",
+            "deepseek",
+            "openrouter",
+            "together",
+            "groq",
+            "custom",
+        ] {
+            let mut next = base();
+            next.external_provider = format!(" {p} ");
+            let out = sanitize(next, &base());
+            assert_eq!(out.external_provider, p);
+        }
+        for bad in ["azure", "OpenAI", "", "gpt"] {
+            let mut next = base();
+            next.external_provider = bad.to_string();
+            let out = sanitize(next, &base());
+            assert_eq!(
+                out.external_provider, "openai",
+                "非法 provider {bad:?} 应回退 openai"
+            );
+        }
+    }
+
+    #[test]
+    fn sanitize_trims_all_string_fields() {
+        // 这些字段最终会拼 URL / 文件路径 / header，首尾空白会造成难查的 404 或找不到文件
+        let mut next = base();
+        next.endpoint = "  https://api.example.com/v1  ".to_string();
+        next.model = "\tgpt-4o-mini\n".to_string();
+        next.api_key = " sk-abc ".to_string();
+        next.user_brief = "  程序员  ".to_string();
+        next.models_path = " /data/models ".to_string();
+        next.active_main = " main.gguf ".to_string();
+        next.active_mmproj = " mmproj.gguf ".to_string();
+        next.summary_main = " sum.gguf ".to_string();
+        next.summary_mmproj = " sum-mm.gguf ".to_string();
+        next.chat_main = " chat.gguf ".to_string();
+        let out = sanitize(next, &base());
+        assert_eq!(out.endpoint, "https://api.example.com/v1");
+        assert_eq!(out.model, "gpt-4o-mini");
+        assert_eq!(out.api_key, "sk-abc");
+        assert_eq!(out.user_brief, "程序员");
+        assert_eq!(out.models_path, "/data/models");
+        assert_eq!(out.active_main, "main.gguf");
+        assert_eq!(out.active_mmproj, "mmproj.gguf");
+        assert_eq!(out.summary_main, "sum.gguf");
+        assert_eq!(out.summary_mmproj, "sum-mm.gguf");
+        assert_eq!(out.chat_main, "chat.gguf");
+    }
+
+    #[test]
+    fn sanitize_prompt_overrides_trim_edges_keep_inner_indent() {
+        // 用户自定义 prompt 里的内部缩进/换行是有意排版，只能去首尾整体空白；
+        // 纯空白视为"没写覆盖"归空，否则会以空白 prompt 顶掉内置默认。
+        let text = "\n  第一行\n    缩进第二行\n";
+        let mut next = base();
+        next.prompt_overrides.system_zh = text.to_string();
+        next.prompt_overrides.system_en = format!("  {text}  ");
+        next.prompt_overrides.system_ja = "   \n\t  ".to_string(); // 纯空白 → 空
+        next.prompt_overrides.system_pt = "single".to_string();
+        next.prompt_overrides.system_tw = "\t保留\t中间\ttab\t".to_string();
+        let out = sanitize(next, &base());
+        assert_eq!(out.prompt_overrides.system_zh, "第一行\n    缩进第二行");
+        assert_eq!(out.prompt_overrides.system_en, "第一行\n    缩进第二行");
+        assert_eq!(out.prompt_overrides.system_ja, "");
+        assert_eq!(out.prompt_overrides.system_pt, "single");
+        assert_eq!(out.prompt_overrides.system_tw, "保留\t中间\ttab");
+    }
+
+    #[test]
+    fn sanitize_segments_filters_invalid_trims_label_normalizes_color() {
+        // 非法时段（start>=end、end>24）静默丢弃而非整体拒绝——
+        // 让用户拖拽编辑中间态提交时不至于全盘失败
+        let mut next = base();
+        next.segments = vec![
+            seg("  早上  ", 6, 9, " #ABC "), // 合法：label 去空白、颜色归一
+            seg("倒置", 9, 6, ""),           // start > end → 丢
+            seg("零长", 12, 12, ""),         // start == end → 丢
+            seg("越界", 20, 25, ""),         // end > 24 → 丢
+            seg("晚上", 18, 24, "#ff8800"),  // 合法：end==24 是边界允许值
+        ];
+        let out = sanitize(next, &base());
+        assert_eq!(out.segments.len(), 2, "只留两条合法段");
+        assert_eq!(out.segments[0].label, "早上");
+        assert_eq!(out.segments[0].color, "#aabbcc");
+        assert_eq!(out.segments[1].label, "晚上");
+        assert_eq!(out.segments[1].color, "#ff8800");
+    }
+
+    #[test]
+    fn sanitize_segments_all_invalid_falls_back_to_old() {
+        // 全部段都非法时若接受空组，AI 总结将无段可跑；兜底回退旧值
+        let mut old = base();
+        old.segments = vec![seg("旧段", 0, 24, "")];
+        let mut next = base();
+        next.segments = vec![seg("坏", 10, 5, ""), seg("坏2", 3, 30, "")];
+        let out = sanitize(next, &old);
+        assert_eq!(out.segments.len(), 1);
+        assert_eq!(out.segments[0].label, "旧段");
+        assert_eq!(
+            (out.segments[0].start_hour, out.segments[0].end_hour),
+            (0, 24)
+        );
+    }
+
+    #[test]
+    fn sanitize_excluded_categories_trim_and_drop_empty() {
+        // 空串 category id 匹配不到任何分类，留着只会污染 UI 列表
+        let mut next = base();
+        next.excluded_categories = vec![
+            "  work  ".to_string(),
+            "".to_string(),
+            "   ".to_string(),
+            "games".to_string(),
+        ];
+        let out = sanitize(next, &base());
+        assert_eq!(
+            out.excluded_categories,
+            vec!["work".to_string(), "games".to_string()]
+        );
+    }
+
+    #[test]
+    fn sanitize_engine_params_clamped_to_documented_ranges() {
+        // 期望范围独立取自文档约定：batch 32~32768、slots 1~32、ctx 512~262144。
+        // 越界值钳到边界而不是拒绝——保证引擎启动参数永远可用。
+        let mut next = base();
+        next.batch_size = Some(1);
+        next.parallel_slots = Some(0);
+        next.ctx_size = Some(100);
+        next.summary_batch_size = Some(1_000_000);
+        next.summary_parallel_slots = Some(999);
+        next.summary_ctx_size = Some(u32::MAX);
+        let out = sanitize(next, &base());
+        assert_eq!(out.batch_size, Some(32), "batch 下界 32");
+        assert_eq!(out.parallel_slots, Some(1), "slots 下界 1");
+        assert_eq!(out.ctx_size, Some(512), "ctx 下界 512");
+        assert_eq!(out.summary_batch_size, Some(32_768), "batch 上界 32768");
+        assert_eq!(out.summary_parallel_slots, Some(32), "slots 上界 32");
+        assert_eq!(out.summary_ctx_size, Some(262_144), "ctx 上界 262144");
+    }
+
+    #[test]
+    fn sanitize_engine_params_none_stays_none_and_valid_untouched() {
+        // None 语义是"走 llama.cpp 默认"，clamp 不得把它实体化成数字
+        let none_case = sanitize(base(), &base());
+        assert_eq!(none_case.batch_size, None);
+        assert_eq!(none_case.parallel_slots, None);
+        assert_eq!(none_case.ctx_size, None);
+        assert_eq!(none_case.summary_batch_size, None);
+        assert_eq!(none_case.summary_parallel_slots, None);
+        assert_eq!(none_case.summary_ctx_size, None);
+
+        // 合法值（含正好在边界上的）不应被改动
+        let mut next = base();
+        next.batch_size = Some(512);
+        next.parallel_slots = Some(4);
+        next.ctx_size = Some(8192);
+        next.summary_batch_size = Some(32); // 恰在下界
+        next.summary_parallel_slots = Some(32); // 恰在上界
+        next.summary_ctx_size = Some(262_144); // 恰在上界
+        let out = sanitize(next, &base());
+        assert_eq!(out.batch_size, Some(512));
+        assert_eq!(out.parallel_slots, Some(4));
+        assert_eq!(out.ctx_size, Some(8192));
+        assert_eq!(out.summary_batch_size, Some(32));
+        assert_eq!(out.summary_parallel_slots, Some(32));
+        assert_eq!(out.summary_ctx_size, Some(262_144));
+    }
+
+    // ---------- sanitize_hex_color（经 segments 间接进 sanitize，这里直测私有函数） ----------
+
+    #[test]
+    fn hex_color_valid_forms_normalized() {
+        // 统一输出小写 #rrggbb，UI 端比较颜色时不用再做大小写/短格式兼容
+        assert_eq!(sanitize_hex_color("#abc"), "#aabbcc", "#rgb 短格式按位展开");
+        assert_eq!(sanitize_hex_color("#AbC"), "#aabbcc", "短格式大写归小写");
+        assert_eq!(sanitize_hex_color("#FF8800"), "#ff8800", "长格式大写归小写");
+        assert_eq!(sanitize_hex_color("  #1a2b3c  "), "#1a2b3c", "trim 后合法");
+        assert_eq!(sanitize_hex_color(""), "", "空串保持空（= UI 自动渐变）");
+    }
+
+    #[test]
+    fn hex_color_invalid_forms_cleared() {
+        // 非法颜色置空而不是保留原文——空有明确定义（自动渐变），脏值会让 CSS 静默失效
+        assert_eq!(sanitize_hex_color("abc123"), "", "缺 # 前缀");
+        assert_eq!(sanitize_hex_color("#abcd"), "", "长度 4 非法");
+        assert_eq!(sanitize_hex_color("#ab"), "", "长度 2 非法");
+        assert_eq!(sanitize_hex_color("#abcdefa"), "", "长度 7 非法");
+        assert_eq!(sanitize_hex_color("#ggg"), "", "非 hex 字符");
+        assert_eq!(sanitize_hex_color("#12345z"), "", "长格式混入非 hex");
+        assert_eq!(sanitize_hex_color("   "), "", "纯空白 trim 后为空");
+    }
+
+    // ---------- default_segments_for ----------
+
+    #[test]
+    fn default_segments_cover_full_day_seamlessly_for_every_lang() {
+        // 时段是"全天覆盖、无缝衔接"的约定：首段起点 0、末段终点 24、相邻段首尾相接。
+        // 未知语言与空串也必须给出可用组——首启 locale 探测失败不能让默认配置残缺。
+        for lang in ["zh", "tw", "en", "ja", "pt", "ko", ""] {
+            let segs = default_segments_for(lang);
+            assert_eq!(segs.len(), 5, "lang={lang:?} 应为 5 段");
+            assert_eq!(segs[0].start_hour, 0, "lang={lang:?} 首段从 0 点起");
+            assert_eq!(segs[4].end_hour, 24, "lang={lang:?} 末段到 24 点止");
+            for w in segs.windows(2) {
+                assert!(
+                    w[0].start_hour < w[0].end_hour,
+                    "lang={lang:?} 段内 start<end"
+                );
+                assert_eq!(w[0].end_hour, w[1].start_hour, "lang={lang:?} 相邻段无缝");
+            }
+            // 边界值是产品约定的固定五段划分
+            let bounds: Vec<(u8, u8)> = segs.iter().map(|s| (s.start_hour, s.end_hour)).collect();
+            assert_eq!(bounds, vec![(0, 6), (6, 9), (9, 12), (12, 18), (18, 24)]);
+            // 默认色留空 = UI 自动渐变
+            assert!(
+                segs.iter().all(|s| s.color.is_empty()),
+                "lang={lang:?} 默认不带色"
+            );
+        }
+    }
+
+    #[test]
+    fn default_segments_labels_localized_with_zh_fallback() {
+        let zh: Vec<String> = default_segments_for("zh")
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        let en: Vec<String> = default_segments_for("en")
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        let ja: Vec<String> = default_segments_for("ja")
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        let pt: Vec<String> = default_segments_for("pt")
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        // 各语言组彼此不同（真的做了本地化，而不是同一套复制）
+        assert_ne!(zh, en);
+        assert_ne!(zh, ja);
+        assert_ne!(en, pt);
+        // 抽查产品文案锚点：英文组是英文、中文组是中文
+        assert_eq!(en[0], "Late Night");
+        assert_eq!(zh[4], "晚上");
+        assert!(en.iter().all(|l| l.is_ascii()), "英文标签应为纯 ASCII");
+        // tw 尚无独立文案、未知语言亦然——都回退中文组，保证标签永不为空
+        let tw: Vec<String> = default_segments_for("tw")
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        let ko: Vec<String> = default_segments_for("ko")
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        assert_eq!(tw, zh, "tw 回退中文组");
+        assert_eq!(ko, zh, "未知语言回退中文组");
+        assert!(zh.iter().all(|l| !l.is_empty()));
+    }
+
+    // ---------- detect_default_lang ----------
+
+    #[test]
+    fn detect_default_lang_returns_valid_tag_stable_under_sanitize() {
+        // locale 来源是 OS 全局、无注入点，分支覆盖不可行；
+        // 这里只锁输出契约：返回值必须落在合法语言集内，
+        // 且作为 prompt_language 回灌 sanitize 不会被改写（否则首启配置会被静默篡改）。
+        let lang = detect_default_lang();
+        assert!(
+            VALID_LANGS.contains(&lang),
+            "detect_default_lang 返回了名单外的值: {lang:?}"
+        );
+        let mut next = base();
+        next.prompt_language = lang.to_string();
+        let out = sanitize(next, &base());
+        assert_eq!(out.prompt_language, lang, "探测结果必须能原样通过 sanitize");
+    }
+
+    // ---------- AiConfig::default + serde 兼容 ----------
+
+    #[test]
+    fn default_config_key_values() {
+        let d = AiConfig::default();
+        // 隐私底线：默认必须全本地、云端三元组全空
+        assert!(!d.external_enabled);
+        assert!(d.endpoint.is_empty() && d.model.is_empty() && d.api_key.is_empty());
+        assert_eq!(d.external_provider, "openai");
+        // "other" 分类默认排除——杂项噪声不进 AI 分析
+        assert_eq!(d.excluded_categories, vec!["other".to_string()]);
+        assert_eq!(d.segments.len(), 5);
+        assert!(VALID_LANGS.contains(&d.prompt_language.as_str()));
+        assert!(!d.auto_summary);
+        // 引擎参数默认全 None = 跟随 llama.cpp 默认
+        assert!(d.batch_size.is_none() && d.parallel_slots.is_none() && d.ctx_size.is_none());
+        assert!(
+            d.summary_batch_size.is_none()
+                && d.summary_parallel_slots.is_none()
+                && d.summary_ctx_size.is_none()
+        );
+        // 模型槽位默认全空 = 未选择
+        assert!(d.active_main.is_empty() && d.summary_main.is_empty() && d.chat_main.is_empty());
+        assert!(d.models_path.is_empty());
+    }
+
+    #[test]
+    fn serde_empty_object_yields_defaults() {
+        // 旧版本 settings JSON 里没有 ai 字段 → 反序列化 {} 必须等价于 Default，
+        // 这是"无 schema migration"承诺的根基
+        let parsed: AiConfig = serde_json::from_str("{}").expect("{} 应能反序列化");
+        let d = AiConfig::default();
+        assert_eq!(parsed.external_provider, d.external_provider);
+        assert_eq!(parsed.excluded_categories, d.excluded_categories);
+        assert_eq!(parsed.segments.len(), d.segments.len());
+        assert_eq!(parsed.external_enabled, d.external_enabled);
+        assert_eq!(parsed.batch_size, None);
+        assert_eq!(parsed.summary_ctx_size, None);
+        assert!(parsed.summary_main.is_empty() && parsed.chat_main.is_empty());
+    }
+
+    #[test]
+    fn serde_uses_camel_case_keys_both_ways() {
+        // 前端 TS 侧按 camelCase 读写；键名变化会静默丢字段（serde default 兜底掩盖问题）
+        let json = serde_json::to_string(&AiConfig::default()).expect("序列化不应失败");
+        for key in [
+            "\"externalProvider\"",
+            "\"promptLanguage\"",
+            "\"excludedCategories\"",
+            "\"activeMain\"",
+            "\"promptOverrides\"",
+            "\"systemZh\"",
+        ] {
+            assert!(json.contains(key), "序列化输出应含 {key}，实际: {json}");
+        }
+        assert!(
+            !json.contains("\"external_provider\""),
+            "不应出现 snake_case 键"
+        );
+
+        let parsed: AiConfig = serde_json::from_str(
+            r##"{
+                "externalEnabled": true,
+                "externalProvider": "deepseek",
+                "promptLanguage": "ja",
+                "activeMain": "m.gguf",
+                "batchSize": 256,
+                "segments": [{"label": "x", "startHour": 1, "endHour": 2, "color": "#aabbcc"}],
+                "promptOverrides": {"systemJa": "覆盖"}
+            }"##,
+        )
+        .expect("camelCase JSON 应能反序列化");
+        assert!(parsed.external_enabled);
+        assert_eq!(parsed.external_provider, "deepseek");
+        assert_eq!(parsed.prompt_language, "ja");
+        assert_eq!(parsed.active_main, "m.gguf");
+        assert_eq!(parsed.batch_size, Some(256));
+        assert_eq!(parsed.segments.len(), 1);
+        assert_eq!(parsed.segments[0].start_hour, 1);
+        assert_eq!(parsed.prompt_overrides.system_ja, "覆盖");
+    }
+
+    #[test]
+    fn serde_partial_json_keeps_defaults_for_missing_fields() {
+        // 后加的字段（summaryMain / chatMain / autoSummary 等）在老 JSON 里缺失，
+        // 必须落回默认而不是报错——向后兼容的关键路径
+        let parsed: AiConfig = serde_json::from_str(r#"{"model": "gpt-4o-mini", "ctxSize": 4096}"#)
+            .expect("部分字段 JSON 应能反序列化");
+        assert_eq!(parsed.model, "gpt-4o-mini");
+        assert_eq!(parsed.ctx_size, Some(4096));
+        assert_eq!(parsed.external_provider, "openai", "缺失字段保默认");
+        assert!(parsed.summary_main.is_empty());
+        assert!(parsed.chat_main.is_empty());
+        assert!(!parsed.auto_summary);
+        assert_eq!(parsed.summary_batch_size, None);
+    }
+
+    // ---------- effective_* / 云端路由 ----------
+
+    #[test]
+    fn effective_summary_main_fallback_chain() {
+        // 空 / sentinel → active_main；显式文件名 → 用它。
+        // sentinel 走 fallback 是刻意的：本地路径代码（VRAM 估算等）不能把 "__cloud__" 当文件名
+        let mut c = base();
+        c.active_main = "active.gguf".to_string();
+        c.summary_main = String::new();
+        assert_eq!(c.effective_summary_main(), "active.gguf", "空 → fallback");
+        c.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
+        assert_eq!(
+            c.effective_summary_main(),
+            "active.gguf",
+            "sentinel → fallback"
+        );
+        c.summary_main = "  __cloud__  ".to_string();
+        assert_eq!(
+            c.effective_summary_main(),
+            "active.gguf",
+            "带空白 sentinel 也识别"
+        );
+        c.summary_main = "small.gguf".to_string();
+        assert_eq!(c.effective_summary_main(), "small.gguf", "显式文件名优先");
+    }
+
+    #[test]
+    fn effective_summary_mmproj_pairs_with_main() {
+        // mmproj 跟 main 配套：summary_main 显式设置时绝不 fallback 到 active_mmproj——
+        // 把 vision mmproj 强加给文本模型会导致 embedding 错位（首 token 即 EOS）
+        let mut c = base();
+        c.active_mmproj = "vision-mm.gguf".to_string();
+        c.summary_main = String::new();
+        assert_eq!(
+            c.effective_summary_mmproj(),
+            "vision-mm.gguf",
+            "main 空 → 跟随 active 配套"
+        );
+        c.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
+        assert_eq!(
+            c.effective_summary_mmproj(),
+            "vision-mm.gguf",
+            "sentinel 同 fallback 组"
+        );
+        c.summary_main = "text-model.gguf".to_string();
+        c.summary_mmproj = String::new();
+        assert_eq!(
+            c.effective_summary_mmproj(),
+            "",
+            "main 显式且 mmproj 空 = 纯文本，不得借用 active"
+        );
+        c.summary_mmproj = "sum-mm.gguf".to_string();
+        assert_eq!(
+            c.effective_summary_mmproj(),
+            "sum-mm.gguf",
+            "main 显式 → 只看 summary_mmproj"
+        );
+    }
+
+    #[test]
+    fn summary_use_cloud_requires_sentinel_and_enabled() {
+        // 双条件缺一不可：只 sentinel 不 enabled → 本地 fallback（不硬卡）；
+        // 只 enabled 不 sentinel → 用户没选云端，别偷偷上云
+        let mut c = base();
+        c.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
+        c.external_enabled = false;
+        assert!(
+            !c.summary_use_cloud(),
+            "external 未启用时 sentinel 退化为本地"
+        );
+        c.external_enabled = true;
+        assert!(c.summary_use_cloud(), "双条件齐 → 云端");
+        c.summary_main = "local.gguf".to_string();
+        assert!(!c.summary_use_cloud(), "非 sentinel 永不走云");
+        c.summary_main = " __cloud__ ".to_string();
+        assert!(
+            c.summary_use_cloud(),
+            "sentinel 带空白也应识别（未 sanitize 的读取路径）"
+        );
+    }
+
+    #[test]
+    fn chat_cloud_ready_needs_all_three() {
+        // enabled + endpoint + model 三元组缺一不可；api_key 不在必要集里
+        //（部分自建兼容端点无鉴权）
+        let ready = |enabled: bool, ep: &str, model: &str| {
+            let mut c = base();
+            c.external_enabled = enabled;
+            c.endpoint = ep.to_string();
+            c.model = model.to_string();
+            c.chat_cloud_ready()
+        };
+        assert!(ready(true, "https://api.x.com", "m1"));
+        assert!(!ready(false, "https://api.x.com", "m1"), "未启用");
+        assert!(!ready(true, "", "m1"), "缺 endpoint");
+        assert!(!ready(true, "https://api.x.com", ""), "缺 model");
+        assert!(!ready(true, "   ", "m1"), "纯空白 endpoint 等同缺失");
+    }
+
+    #[test]
+    fn chat_use_cloud_three_states() {
+        let mut ready = base();
+        ready.external_enabled = true;
+        ready.endpoint = "https://api.x.com".to_string();
+        ready.model = "m1".to_string();
+
+        // 态 1：显式本地文件名 → 无论云端是否 ready，永远本地
+        let mut c = ready.clone();
+        c.chat_main = "local.gguf".to_string();
+        assert!(!c.chat_use_cloud(), "显式本地永不上云");
+        // 态 2：显式 sentinel → ready 才上云，不 ready 退化本地不硬卡
+        let mut c = ready.clone();
+        c.chat_main = SUMMARY_CLOUD_SENTINEL.to_string();
+        assert!(c.chat_use_cloud(), "sentinel + ready → 云端");
+        c.model = String::new();
+        assert!(!c.chat_use_cloud(), "sentinel 但三元组不齐 → 本地 fallback");
+        // 态 3：空 = 自动 → 跟随 ready 状态
+        let mut c = ready.clone();
+        c.chat_main = String::new();
+        assert!(c.chat_use_cloud(), "自动 + ready → 云端");
+        c.external_enabled = false;
+        assert!(!c.chat_use_cloud(), "自动 + 未配好 → 本地");
+    }
+
+    #[test]
+    fn effective_chat_main_passthrough_chain() {
+        // 显式文件名 → 用它；空/sentinel → 穿透到 step 2 的链（summary_main → active_main）
+        let mut c = base();
+        c.active_main = "active.gguf".to_string();
+        c.summary_main = "sum.gguf".to_string();
+        c.chat_main = "chat.gguf".to_string();
+        assert_eq!(c.effective_chat_main(), "chat.gguf", "显式优先");
+        c.chat_main = String::new();
+        assert_eq!(
+            c.effective_chat_main(),
+            "sum.gguf",
+            "空 → 穿透到 summary_main"
+        );
+        c.chat_main = SUMMARY_CLOUD_SENTINEL.to_string();
+        assert_eq!(c.effective_chat_main(), "sum.gguf", "sentinel → 同空处理");
+        c.summary_main = String::new();
+        assert_eq!(
+            c.effective_chat_main(),
+            "active.gguf",
+            "两级皆空 → 落到 active_main"
+        );
+    }
+
+    #[test]
+    fn summary_engine_params_prefer_new_fields_over_legacy() {
+        // 新 summary_* 字段优先；None 时降级旧全局字段；双 None 保持 None
+        let mut c = base();
+        c.batch_size = Some(128);
+        c.parallel_slots = Some(2);
+        c.ctx_size = Some(4096);
+        c.summary_batch_size = Some(64);
+        c.summary_parallel_slots = Some(1);
+        c.summary_ctx_size = Some(16_384);
+        assert_eq!(c.summary_batch_size_effective(), Some(64));
+        assert_eq!(c.summary_parallel_slots_effective(), Some(1));
+        assert_eq!(c.summary_ctx_size_effective(), Some(16_384));
+
+        c.summary_batch_size = None;
+        c.summary_parallel_slots = None;
+        c.summary_ctx_size = None;
+        assert_eq!(
+            c.summary_batch_size_effective(),
+            Some(128),
+            "fallback 到旧字段"
+        );
+        assert_eq!(c.summary_parallel_slots_effective(), Some(2));
+        assert_eq!(c.summary_ctx_size_effective(), Some(4096));
+
+        let d = base();
+        assert_eq!(d.summary_batch_size_effective(), None, "双 None 保持 None");
+        assert_eq!(d.summary_parallel_slots_effective(), None);
+        assert_eq!(d.summary_ctx_size_effective(), None);
+    }
+
+    #[test]
+    fn summary_max_tokens_half_ctx_with_floor() {
+        // 期望值独立推导：默认 ctx 8192 → 一半 4096；
+        // 32768 → 16384；3000 → 1500 低于 2048 下界 → 2048（reasoning 思考链最低保障）
+        let mut c = base();
+        assert_eq!(c.summary_max_tokens(), 4096, "未设 ctx 按默认 8192 的一半");
+        c.summary_ctx_size = Some(32_768);
+        assert_eq!(c.summary_max_tokens(), 16_384);
+        c.summary_ctx_size = Some(3_000);
+        assert_eq!(c.summary_max_tokens(), 2048, "一半不足 2048 时钳到下界");
+        // summary_ctx 未设时 fallback 用全局 ctx_size
+        c.summary_ctx_size = None;
+        c.ctx_size = Some(16_384);
+        assert_eq!(c.summary_max_tokens(), 8192, "fallback 全局 ctx 的一半");
+    }
+}

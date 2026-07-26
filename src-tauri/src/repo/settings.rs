@@ -384,3 +384,467 @@ fn sanitize_keywords(list: Vec<String>) -> Vec<String> {
         .filter(|s| !s.is_empty() && seen.insert(s.clone()))
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    /// 直接改写 settings_store 的原始 JSON，模拟「老版本写的数据」「损坏数据」
+    /// 等 load 之外的写入来源。
+    async fn put_raw(pool: &DbPool, json: &str) {
+        let json = json.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "UPDATE settings_store SET data = ?1 WHERE id = 1",
+                    rusqlite::params![json],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 读 settings_store 当前原始 JSON，用来验证「回写 / 绝不回写」两类行为。
+    async fn raw_json(pool: &DbPool) -> String {
+        pool.0
+            .call(|conn| {
+                let s: String = conn
+                    .query_row("SELECT data FROM settings_store WHERE id = 1", [], |r| {
+                        r.get(0)
+                    })
+                    .db()?;
+                Ok(s)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 全 None 的 patch。特意从 "{}" 反序列化而不是手写结构体：前端
+    /// update_settings 只传要改的字段子集，如果未来有人往 SettingsPatch 加了
+    /// 非 Option 字段，前端所有「只改一项」的请求都会反序列化失败——这里先炸。
+    fn empty_patch() -> SettingsPatch {
+        serde_json::from_str("{}").expect("空 JSON 应能反序列化成全 None 的 patch")
+    }
+
+    /// settings 是这些配置唯一的持久层，序列化/反序列化任何一个字段不对称，
+    /// 表现都是「用户设置在重启后悄悄丢失」且没人报错。整组自定义值 save→load
+    /// 后必须逐字节等价（用 JSON Value 比较绕开 Settings 没有 PartialEq）。
+    #[tokio::test]
+    async fn save_then_load_roundtrips_every_field() {
+        let pool = fresh_test_pool().await;
+        let custom = Settings {
+            capture_enabled: false,
+            screenshot_enabled: true,
+            capture_interval_seconds: 45,
+            // 路径非空，load 不会触发默认路径回填，往返应原样保留
+            screenshot_path: "/tmp/hs-shots".into(),
+            work_hours_enabled: true,
+            work_ranges: vec![
+                TimeRange {
+                    start: "09:00".into(),
+                    end: "12:30".into(),
+                },
+                // 跨午夜段（end < start）是文档明确允许的形态，必须原样存取
+                TimeRange {
+                    start: "23:30".into(),
+                    end: "01:00".into(),
+                },
+            ],
+            auto_start: true,
+            show_window_on_auto_start: true,
+            retention_days: 90,
+            google_client_id: "cid-123".into(),
+            google_client_secret: "sec-456".into(),
+            privacy_url_keywords: vec!["/checkout".into()],
+            privacy_app_keywords: vec!["微信".into()],
+            minimize_to_tray: false,
+            auto_update_enabled: false,
+            auto_update_interval: "daily".into(),
+            last_update_check_at: Some("2026-07-01T00:00:00+00:00".into()),
+            idle_threshold_seconds: 0,
+            memory_ocr_resident: true,
+            chat_privacy_acknowledged: true,
+            sync_ai_summaries: true,
+            sync_chat_history: true,
+            sync_screen_memory: true,
+            ai: AiConfig {
+                endpoint: "https://api.example.com/v1".into(),
+                model: "test-model".into(),
+                api_key: "sk-test".into(),
+                // false：避免触发 load 里的 cloud sentinel 一次性迁移，
+                // 该迁移有专门测试
+                external_enabled: false,
+                user_brief: "写代码".into(),
+                models_path: "/tmp/hs-models".into(),
+                active_main: "main.gguf".into(),
+                summary_main: "sum.gguf".into(),
+                batch_size: Some(256),
+                summary_ctx_size: Some(4096),
+                ..AiConfig::default()
+            },
+        };
+
+        save(&pool, &custom).await.unwrap();
+        let loaded = load(&pool).await.unwrap();
+
+        assert_eq!(
+            serde_json::to_value(&custom).unwrap(),
+            serde_json::to_value(&loaded).unwrap(),
+            "save→load 往返后应逐字段等价"
+        );
+        // 跨午夜段单独点名：这是最容易被「start 必须 < end 校验」误伤的形态
+        assert_eq!(loaded.work_ranges[1].start, "23:30");
+        assert_eq!(loaded.work_ranges[1].end, "01:00");
+    }
+
+    /// 全新安装：migrations 只塞了 '{}'。首次 load 必须能把空路径补成实际默认
+    /// 并回写持久化——否则每次启动都 dirty 一次，且截图落盘路径为空会写失败。
+    #[tokio::test]
+    async fn first_load_on_fresh_db_fills_paths_and_persists() {
+        let pool = fresh_test_pool().await;
+        let first = load(&pool).await.unwrap();
+
+        // 空路径必须被填成 <data_root>/screenshots，而不是留空
+        assert!(!first.screenshot_path.trim().is_empty());
+        assert!(
+            first.screenshot_path.ends_with("screenshots"),
+            "默认截图路径应指向 screenshots 子目录，实际: {}",
+            first.screenshot_path
+        );
+        assert!(!first.ai.models_path.trim().is_empty());
+
+        // 其余字段走 Default 契约
+        assert_eq!(first.retention_days, Settings::default().retention_days);
+        assert_eq!(first.privacy_url_keywords, default_privacy_url_keywords());
+
+        // 回填结果已落库：老实现只改内存不回写，导致每次启动重复 dirty
+        let v: serde_json::Value = serde_json::from_str(&raw_json(&pool).await).unwrap();
+        assert_eq!(
+            v["screenshotPath"].as_str(),
+            Some(first.screenshot_path.as_str())
+        );
+
+        // 更新后再读一致：第二次 load 不应再产生任何变化
+        let second = load(&pool).await.unwrap();
+        assert_eq!(
+            serde_json::to_value(&first).unwrap(),
+            serde_json::to_value(&second).unwrap()
+        );
+    }
+
+    /// 老版本 JSON 只有当年存在的字段；升级后 load 必须「认识的字段照用、
+    /// 缺的字段回 Default、不认识的字段忽略」，而不是报错把用户设置清零。
+    /// 未知字段那半边对应「用户从新版本降级回旧版本」的场景。
+    #[tokio::test]
+    async fn old_json_missing_and_unknown_fields_fall_back_to_defaults() {
+        let pool = fresh_test_pool().await;
+        put_raw(
+            &pool,
+            r#"{"captureEnabled":false,"captureIntervalSeconds":60,"retentionDays":30,"screenshotPath":"/data/shots","fieldFromTheFuture":{"x":1}}"#,
+        )
+        .await;
+
+        let s = load(&pool).await.unwrap();
+
+        // 老 JSON 里写了的字段：原样生效
+        assert!(!s.capture_enabled);
+        assert_eq!(s.capture_interval_seconds, 60);
+        assert_eq!(s.retention_days, 30);
+        assert_eq!(s.screenshot_path, "/data/shots", "非空路径不应被默认值覆盖");
+
+        // 老 JSON 里缺的字段：回 Default，而不是 bool=false / 数字=0 之类的零值
+        let d = Settings::default();
+        assert_eq!(s.screenshot_enabled, d.screenshot_enabled);
+        assert_eq!(s.minimize_to_tray, d.minimize_to_tray);
+        assert_eq!(s.auto_update_interval, d.auto_update_interval);
+        assert_eq!(s.privacy_url_keywords, default_privacy_url_keywords());
+        assert!(s.work_ranges.is_empty());
+        // 整个 ai 块缺失 → 嵌套结构整组回 Default（models_path 除外，会被回填）
+        assert_eq!(
+            s.ai.external_provider,
+            AiConfig::default().external_provider
+        );
+        assert_eq!(
+            s.ai.excluded_categories,
+            AiConfig::default().excluded_categories
+        );
+        assert!(!s.ai.models_path.trim().is_empty());
+
+        // 回填触发的回写不能弄丢用户已有的显式设置
+        let v: serde_json::Value = serde_json::from_str(&raw_json(&pool).await).unwrap();
+        assert_eq!(v["captureIntervalSeconds"].as_u64(), Some(60));
+        assert_eq!(v["screenshotPath"].as_str(), Some("/data/shots"));
+    }
+
+    /// 真实翻车过的场景：settings JSON 整体解析失败时，旧实现 unwrap_or_default
+    /// + dirty 回写会把用户全部设置一次性覆盖成默认且不可恢复。现在的契约是：
+    /// 内存用默认值让应用能起、DB 原文一字不动、原文另备份一份等救回。
+    #[tokio::test]
+    // 跨测试的 env 串行锁必须罩住整个 async 测试体;每个 #[tokio::test] 独享
+    // 单线程 runtime,不存在同线程等锁的死锁面,std Mutex 正是这里要的语义。
+    #[allow(clippy::await_holding_lock)]
+    async fn corrupt_json_boots_with_defaults_but_never_clobbers_db() {
+        // HINDSIGHT_DATA_DIR 是进程级全局，device.rs 的 env 覆盖测试也在改它；
+        // 必须拿共享锁串行，否则并行调度下双方互相踩对方的目录断言（随机红）。
+        let _env = crate::repo::test_util::lock_data_dir_env();
+        // 把 data_root 指到临时目录，让备份文件写进隔离位置而不是真实数据目录
+        struct EnvGuard(Option<String>);
+        impl Drop for EnvGuard {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
+                    None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
+                }
+            }
+        }
+        let _guard = EnvGuard(std::env::var("HINDSIGHT_DATA_DIR").ok());
+        let tmp = std::env::temp_dir().join(format!(
+            "hindsight-settings-corrupt-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("HINDSIGHT_DATA_DIR", &tmp);
+
+        let pool = fresh_test_pool().await;
+        // 类型错 + 截断（少右括号）：模拟「写了一半掉电」的最恶劣形态
+        let corrupt = r#"{"captureEnabled": "not-a-bool", "retentionDays": 30"#;
+        put_raw(&pool, corrupt).await;
+
+        // 必须 Ok：解析失败只能降级，不能让整个应用起不来
+        let s = load(&pool).await.unwrap();
+        // 整体解析失败 → 全部回默认；retentionDays=30 不应被「部分解析」捡出来
+        let d = Settings::default();
+        assert_eq!(s.retention_days, d.retention_days);
+        assert_eq!(s.capture_enabled, d.capture_enabled);
+
+        // 核心回归：DB 里的原文一字未动（默认值绝不回写覆盖用户仅存的原始 JSON）
+        assert_eq!(raw_json(&pool).await, corrupt);
+
+        // 原文已备份到数据目录，等下一个能读懂它的版本或用户手工救回
+        let backup = tmp.join("settings_store.corrupt.json");
+        assert_eq!(
+            std::fs::read_to_string(&backup).expect("应存在备份文件"),
+            corrupt
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// external_enabled 单开关拆成「配好云端」+「选定云端」两概念后的一次性迁移：
+    /// 老用户开了云端且没选本地模型 → 自动补 sentinel 保持旧行为；
+    /// 已显式选了本地模型的用户 → 保留本地选择，不被迁移抢走。
+    #[tokio::test]
+    async fn cloud_sentinel_migration_respects_explicit_local_choice() {
+        let pool = fresh_test_pool().await;
+
+        // 场景 A：老用户，externalEnabled=true 且 summaryMain 缺失
+        put_raw(
+            &pool,
+            r#"{"screenshotPath":"/sp","ai":{"externalEnabled":true,"endpoint":"https://api.x/v1","model":"m","modelsPath":"/mp"}}"#,
+        )
+        .await;
+        let s = load(&pool).await.unwrap();
+        assert_eq!(s.ai.summary_main, crate::ai::config::SUMMARY_CLOUD_SENTINEL);
+        assert!(
+            s.ai.summary_use_cloud(),
+            "迁移后段总结应实际路由到云端，与旧版行为一致"
+        );
+        // 迁移结果必须持久化，否则每次启动都重复迁移
+        assert!(raw_json(&pool)
+            .await
+            .contains(crate::ai::config::SUMMARY_CLOUD_SENTINEL));
+
+        // 场景 B：用户已显式选了本地 summary 模型
+        put_raw(
+            &pool,
+            r#"{"screenshotPath":"/sp","ai":{"externalEnabled":true,"summaryMain":"local.gguf","modelsPath":"/mp"}}"#,
+        )
+        .await;
+        let s2 = load(&pool).await.unwrap();
+        assert_eq!(s2.ai.summary_main, "local.gguf", "本地选择不应被迁移覆盖");
+        assert!(!s2.ai.summary_use_cloud());
+    }
+
+    /// 日报管线换代后，旧管线时代的 system prompt 覆盖与新输入格式错配
+    /// （实测输出混乱 + 旧示例文本泄漏）。load 要按特征串清掉旧覆盖，
+    /// 但用户后来自己写的干净覆盖必须原样保留——误清等于删用户数据。
+    #[tokio::test]
+    async fn stale_prompt_override_cleared_but_clean_override_kept() {
+        let pool = fresh_test_pool().await;
+        let stale = "请基于以下截图的逐张描述，输出当日总结";
+        let doc = serde_json::json!({
+            "screenshotPath": "/sp",
+            "ai": {
+                "modelsPath": "/mp",
+                "promptOverrides": {
+                    "systemZh": stale,
+                    "systemEn": "my hand-written EN prompt"
+                }
+            }
+        });
+        put_raw(&pool, &doc.to_string()).await;
+
+        let s = load(&pool).await.unwrap();
+        assert_eq!(
+            s.ai.prompt_overrides.system_zh, "",
+            "含旧管线特征串的覆盖应被清空回落内置默认"
+        );
+        assert_eq!(
+            s.ai.prompt_overrides.system_en, "my hand-written EN prompt",
+            "不含特征串的用户覆盖必须保留"
+        );
+        // 清理已持久化：否则只是内存里干净，DB 里的脏覆盖下次启动又回来
+        assert!(!raw_json(&pool).await.contains("逐张描述"));
+    }
+
+    /// settings_store 单行是 migrations 保证的不变量；行丢了属于 DB 损坏级别，
+    /// 必须显式报错。静默回默认会掩盖损坏，且后续 save 的 UPDATE 影响 0 行、
+    /// 用户改的所有设置全部静默丢失。
+    #[tokio::test]
+    async fn load_errors_when_settings_row_missing() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute("DELETE FROM settings_store", []).db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert!(load(&pool).await.is_err());
+    }
+
+    /// 前端传来的数字不做钳制就会出「0 秒截一张图打满 CPU」「保留 0 天等于
+    /// 即时删数据」这类事故。钳制范围以字段文档为准：interval 1..=600、
+    /// retention 1..=365、idle 上限 3600 且 0 是合法的「关闭挂机检测」。
+    #[test]
+    fn apply_patch_clamps_numeric_fields_to_documented_ranges() {
+        let d = Settings::default();
+
+        let mut low = empty_patch();
+        low.capture_interval_seconds = Some(0);
+        low.retention_days = Some(0);
+        low.idle_threshold_seconds = Some(0);
+        let s = apply_patch(d.clone(), low);
+        assert_eq!(s.capture_interval_seconds, 1);
+        assert_eq!(s.retention_days, 1);
+        assert_eq!(
+            s.idle_threshold_seconds, 0,
+            "0 = 关闭挂机检测，不能被钳到 1"
+        );
+
+        let mut high = empty_patch();
+        high.capture_interval_seconds = Some(1_000_000);
+        high.retention_days = Some(100_000);
+        high.idle_threshold_seconds = Some(1_000_000);
+        let s = apply_patch(d, high);
+        assert_eq!(s.capture_interval_seconds, 600);
+        assert_eq!(s.retention_days, 365);
+        assert_eq!(s.idle_threshold_seconds, 3600);
+    }
+
+    /// patch 的语义是「None = 不动」：前端每次只传改动子集，任何字段被
+    /// 误重置都表现为「我只改了 A，B 怎么也变了」。双层 Option 的
+    /// last_update_check_at 另测 Some(None) = 显式清空。
+    #[test]
+    fn apply_patch_none_keeps_current_and_some_none_clears_option() {
+        let current = Settings {
+            capture_interval_seconds: 45,
+            google_client_id: "abc".into(),
+            last_update_check_at: Some("2026-01-01T00:00:00+00:00".into()),
+            ..Settings::default()
+        };
+
+        // 全 None patch：整组设置必须原样不动
+        let unchanged = apply_patch(current.clone(), empty_patch());
+        assert_eq!(
+            serde_json::to_value(&current).unwrap(),
+            serde_json::to_value(&unchanged).unwrap()
+        );
+
+        // 只改两项：目标字段生效，邻居字段不受影响
+        let mut p = empty_patch();
+        p.capture_enabled = Some(false);
+        p.work_ranges = Some(vec![TimeRange {
+            start: "08:00".into(),
+            end: "18:00".into(),
+        }]);
+        p.last_update_check_at = Some(None);
+        let s = apply_patch(current, p);
+        assert!(!s.capture_enabled);
+        assert_eq!(s.work_ranges.len(), 1);
+        assert_eq!(s.work_ranges[0].start, "08:00");
+        assert_eq!(s.last_update_check_at, None, "Some(None) 应显式清空时间戳");
+        assert_eq!(s.google_client_id, "abc");
+        assert_eq!(s.capture_interval_seconds, 45);
+    }
+
+    /// 字符串类输入的净化：interval 收敛到合法枚举集合（打错字回 weekly 而不是
+    /// 存进去让更新检查逻辑瘫痪）、关键词 trim/去空/去重（重复关键词让隐私列表
+    /// 越滚越长）、OAuth id 首尾空格是用户复制粘贴最常见的坑、空路径回默认。
+    #[test]
+    fn apply_patch_sanitizes_string_inputs() {
+        let d = Settings::default();
+
+        let mut p = empty_patch();
+        p.auto_update_interval = Some("hourly".into());
+        p.privacy_url_keywords = Some(vec![
+            " /Login ".into(),
+            "".into(),
+            "   ".into(),
+            "/pay".into(),
+            "/Login".into(),
+        ]);
+        p.google_client_id = Some("  id-x  ".into());
+        p.screenshot_path = Some("   ".into());
+        let s = apply_patch(d.clone(), p);
+        assert_eq!(
+            s.auto_update_interval, "weekly",
+            "非法 interval 应回退 weekly"
+        );
+        assert_eq!(s.privacy_url_keywords, vec!["/Login", "/pay"]);
+        assert_eq!(s.google_client_id, "id-x");
+        assert!(
+            s.screenshot_path.ends_with("screenshots"),
+            "全空白路径应回默认目录而不是存下空路径"
+        );
+
+        // 合法 interval 原样保留，不能被净化误伤
+        let mut p2 = empty_patch();
+        p2.auto_update_interval = Some("onstartup".into());
+        assert_eq!(apply_patch(d, p2).auto_update_interval, "onstartup");
+    }
+
+    /// JSON 字段名就是持久化格式 + 前端契约：谁要是重命名了 rust 字段而没配
+    /// serde rename，老 JSON 会整体「缺字段」静默回默认，前端也拿不到值。
+    /// 用序列化产物点名关键字段，把这种改动变成显式测试失败。
+    #[test]
+    fn timerange_roundtrip_and_wire_field_names_stable() {
+        // TimeRange 纯序列化往返（含跨午夜）
+        let tr = TimeRange {
+            start: "23:30".into(),
+            end: "01:00".into(),
+        };
+        let back: TimeRange = serde_json::from_str(&serde_json::to_string(&tr).unwrap()).unwrap();
+        assert_eq!(back.start, "23:30");
+        assert_eq!(back.end, "01:00");
+        let vt = serde_json::to_value(&tr).unwrap();
+        assert!(vt.get("start").is_some() && vt.get("end").is_some());
+
+        // Settings 顶层 camelCase 字段名抽查
+        let v = serde_json::to_value(Settings::default()).unwrap();
+        for key in [
+            "captureEnabled",
+            "workRanges",
+            "privacyUrlKeywords",
+            "autoUpdateInterval",
+            "ai",
+        ] {
+            assert!(
+                v.get(key).is_some(),
+                "settings JSON 缺 {key} 字段——字段改名会让老数据静默失效"
+            );
+        }
+    }
+}

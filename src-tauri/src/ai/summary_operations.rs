@@ -673,4 +673,649 @@ mod tests {
         assert_eq!(out[0].0, "09:00-10:00");
         assert_eq!(out[1].0, "11:00-12:00");
     }
+
+    // ───────── 以下为补充测试：写路径边界 / 路由分支 / 取消语义 ─────────
+
+    /// 同 [`insert_act`] 但可指定 device_id——测多设备行不误入本机日报用。
+    #[allow(clippy::too_many_arguments)]
+    async fn insert_act_dev(
+        pool: &DbPool,
+        local_date: &str,
+        local_hour: u8,
+        process_name: &str,
+        window_title: &str,
+        duration_secs: i64,
+        device_id: &str,
+    ) {
+        let local_date = local_date.to_string();
+        let process_name = process_name.to_string();
+        let window_title = window_title.to_string();
+        let device_id = device_id.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(
+                        ?1 || 'T' || printf('%02d', ?2) || ':00:00Z',
+                        ?1 || 'T' || printf('%02d', ?2) || ':00:30Z',
+                        ?3, ?1, ?2,
+                        ?4, ?5, 'other', ?6,
+                        ?1 || 'T' || printf('%02d', ?2) || ':00:30Z',
+                        'local'
+                     )",
+                    rusqlite::params![
+                        local_date,
+                        local_hour as i64,
+                        duration_secs,
+                        process_name,
+                        window_title,
+                        device_id,
+                    ],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 拿一个刚刚释放的本地端口——连接必然被拒，用来模拟"引擎没起来/端口配错"。
+    fn free_local_port() -> u16 {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        port
+    }
+
+    /// 起一个只回一发 canned OpenAI 兼容响应的本地假服务，返回端口。
+    /// 读完整个请求（headers + Content-Length body）再回包，避免半途关闭触发 RST。
+    async fn spawn_canned_openai_server(content: &str) -> u16 {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let body = serde_json::json!({
+            "choices": [{
+                "message": { "role": "assistant", "content": content },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 42, "completion_tokens": 17 }
+        })
+        .to_string();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf: Vec<u8> = Vec::new();
+            let mut tmp = [0u8; 4096];
+            loop {
+                let n = sock.read(&mut tmp).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let head = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
+                    let cl = head
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length:"))
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if buf.len() >= pos + 4 + cl {
+                        break;
+                    }
+                }
+            }
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            let _ = sock.shutdown().await;
+        });
+        port
+    }
+
+    /// 停止按钮按下的同一瞬间 LLM 恰好返回：已完成的结果（包括真实错误）不能被
+    /// 吞成 SummaryCancelled——否则用户点了停止就永远看不到真正的失败原因。
+    #[tokio::test]
+    async fn cancellable_ready_result_beats_cancel_flag() {
+        let cancel = Arc::new(AtomicBool::new(true));
+        let ok = cancellable(&cancel, async { Ok::<_, Error>(42u32) }).await;
+        assert_eq!(ok.unwrap(), 42, "已就绪的 Ok 结果应原样返回");
+
+        let err = cancellable(&cancel, async {
+            Err::<u32, _>(Error::InvalidInput("boom"))
+        })
+        .await;
+        assert!(
+            matches!(err, Err(Error::InvalidInput("boom"))),
+            "已就绪的 Err 应透传原错误而非 SummaryCancelled: {err:?}"
+        );
+    }
+
+    /// 引擎挂死不回包时按停止：250ms 轮询必须能打断永远 pending 的 future。
+    /// 这是停止按钮的核心保证——没有它用户只能干等 600s 超时。
+    #[tokio::test]
+    async fn cancellable_pending_future_returns_cancelled() {
+        let cancel = Arc::new(AtomicBool::new(true));
+        let r: Result<u32> = cancellable(&cancel, std::future::pending::<Result<u32>>()).await;
+        assert!(
+            matches!(r, Err(Error::SummaryCancelled)),
+            "挂死 future + cancel 置位应返回 SummaryCancelled: {r:?}"
+        );
+    }
+
+    /// 60s 阈值 off-by-one 会把 59s 显示成"0 分钟"或把 60s 显示成"60s"，
+    /// 模型看到"0 分钟"会写出荒谬的时长描述。
+    #[test]
+    fn secs_human_minute_threshold() {
+        assert_eq!(format_secs_human(59), "59s");
+        assert_eq!(format_secs_human(60), "1 分钟");
+        assert_eq!(format_secs_human(3599), "59 分钟");
+    }
+
+    /// 标题排序必须按字符数而非字节数——中文 4 字 12 字节，按字节排会让 CJK
+    /// 标题系统性挤掉更长的英文标题；重复标题（同窗口反复聚焦）只应出现一次。
+    #[test]
+    fn pick_titles_dedup_char_count_top5() {
+        let titles: Vec<String> = ["abcde", "中文标题", "abcde", "xx"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(pick_titles(&titles), "abcde、中文标题、xx");
+
+        // 6 个不同长度的标题只保留最长 5 个——prompt 体积失控的保险丝
+        let many: Vec<String> = ["aaaaaa", "bbbbb", "cccc", "ddd", "ee", "f"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let out = pick_titles(&many);
+        assert_eq!(out, "aaaaaa、bbbbb、cccc、ddd、ee");
+    }
+
+    /// 碎片应用（<60s 的窗口切换噪音）必须折叠成「其它」而不是逐个罗列，
+    /// 否则一小时几十次 alt-tab 会把 prompt 塞满垃圾条目；同 app 多行要聚合时长。
+    #[test]
+    fn timeline_hours_folds_sub_minute_apps() {
+        let rows: Vec<(u8, String, Option<String>, i64)> = vec![
+            (9, "VSCode".to_string(), Some("a.rs".to_string()), 200),
+            (9, "VSCode".to_string(), Some("a.rs".to_string()), 100),
+            (9, "Finder".to_string(), None, 45),
+            (9, "Preview".to_string(), None, 10),
+            (10, "Spotlight".to_string(), None, 30),
+        ];
+        let out = format_timeline_hours(rows, &[]);
+        assert_eq!(out.len(), 2, "{out:?}");
+
+        // 同 app 两行 200+100 聚合成 5 分钟；重复标题去重只出现一次
+        assert_eq!(out[0].0, "09:00-10:00");
+        assert!(
+            out[0].1.contains("VSCode 5 分钟（a.rs）"),
+            "同 app 时长应聚合、标题应去重: {}",
+            out[0].1
+        );
+        // 45s + 10s 两个碎片折叠：不出现 app 名，只留统计
+        assert!(
+            out[0].1.contains("其它（2 项 · 55s）"),
+            "碎片应折叠成「其它」: {}",
+            out[0].1
+        );
+        assert!(
+            !out[0].1.contains("Finder") && !out[0].1.contains("Preview"),
+            "碎片 app 名不应罗列: {}",
+            out[0].1
+        );
+        // 只有碎片活动的小时也要出条目——否则该小时被静默吞掉，日报出现空洞
+        assert_eq!(out[1].0, "10:00-11:00");
+        assert_eq!(out[1].1, "其它（1 项 · 30s）");
+    }
+
+    /// 纯空白窗口标题（部分 app 全屏时上报空串）不能渲染成「（）」污染 prompt。
+    #[test]
+    fn timeline_hours_skips_blank_titles() {
+        let rows: Vec<(u8, String, Option<String>, i64)> =
+            vec![(9, "Term".to_string(), Some("   ".to_string()), 120)];
+        let out = format_timeline_hours(rows, &[]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].1, "Term 2 分钟", "空白标题不应产生括号");
+    }
+
+    /// 多设备同步后别的设备的 activities 混进本机日报是真实翻车场景。
+    /// 同时带 excluded_categories + DeviceFilter::Only 覆盖 SQL 参数顺序：
+    /// excluded 参数与 device 参数一旦颠倒会静默查错列、结果全错。
+    #[tokio::test]
+    async fn timeline_device_only_filter_with_excluded_categories() {
+        let pool = fresh_test_pool().await;
+        seed_solo_group(&pool, "Slack", "browse").await;
+        seed_solo_group(&pool, "VSCode", "code").await;
+        insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "Slack", "chat", 300).await;
+        // 别的设备上 VSCode 用了 100 分钟——若泄漏进来时长会被显著放大
+        insert_act_dev(
+            &pool,
+            "2026-05-15",
+            9,
+            "VSCode",
+            "other.rs",
+            6000,
+            "other-device",
+        )
+        .await;
+
+        let excluded = vec!["browse".to_string()];
+        let only = DeviceFilter::Only(TEST_SELF_ID.to_string());
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &excluded, &only, &[])
+            .await
+            .unwrap();
+        assert_eq!(out.len(), 1, "{out:?}");
+        let desc = &out[0].1;
+        assert!(
+            desc.contains("VSCode 5 分钟"),
+            "只应统计本机 300s（若混入他机则是 105 分钟）: {desc}"
+        );
+        assert!(!desc.contains("other.rs"), "他机标题不应出现: {desc}");
+        assert!(!desc.contains("Slack"), "browse 分类应同时被排除: {desc}");
+
+        // 对照组：All 应把两台设备聚合（300 + 6000 = 105 分钟）
+        let all = build_activity_timeline(
+            &pool,
+            "2026-05-15",
+            9,
+            10,
+            &excluded,
+            &DeviceFilter::All,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(
+            all[0].1.contains("VSCode 105 分钟"),
+            "All 过滤应聚合全部设备: {}",
+            all[0].1
+        );
+    }
+
+    /// unsealed 心跳行（duration_secs=0）必须被 SQL 层排除——若漏进来会以
+    /// 「其它」碎片形式出现，让模型看到幽灵活动。
+    #[tokio::test]
+    async fn timeline_excludes_unsealed_zero_duration_rows() {
+        let pool = fresh_test_pool().await;
+        insert_act(&pool, "2026-05-15", 9, "Ghost", "beat", 0).await;
+        insert_act(&pool, "2026-05-15", 9, "Real", "work.rs", 120).await;
+
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
+            .await
+            .unwrap();
+        assert_eq!(out.len(), 1, "{out:?}");
+        let desc = &out[0].1;
+        assert!(desc.contains("Real"), "已 seal 行应保留: {desc}");
+        assert!(!desc.contains("Ghost"), "dur=0 行不应出现: {desc}");
+        // 关键：0s 行应被 SQL 排除，而不是折叠成「其它（1 项 · 0s）」
+        assert!(!desc.contains("其它"), "0s 行不应折叠进「其它」: {desc}");
+    }
+
+    /// 段范围是半开区间 [start, end)——写成 <= 会把下一段的第一个小时重复
+    /// 计入两个段，同一小时的活动在日报里出现两次。
+    #[tokio::test]
+    async fn timeline_hour_range_is_half_open() {
+        let pool = fresh_test_pool().await;
+        insert_act(&pool, "2026-05-15", 8, "Early", "e", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "Mid", "m", 300).await;
+        insert_act(&pool, "2026-05-15", 10, "Late", "l", 300).await;
+
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
+            .await
+            .unwrap();
+        assert_eq!(out.len(), 1, "仅 9 点应命中: {out:?}");
+        assert_eq!(out[0].0, "09:00-10:00");
+        assert!(out[0].1.contains("Mid"));
+        assert!(
+            !out[0].1.contains("Early") && !out[0].1.contains("Late"),
+            "边界小时不应混入: {}",
+            out[0].1
+        );
+    }
+
+    /// 历史上 external_enabled 单开关跟 sentinel 打过架：云端没启用时 sentinel
+    /// 必须退化为本地路由（否则日报直接报"配置不全"）；反向 external 配好但
+    /// summary_main 没标 sentinel 也必须走本地。
+    #[test]
+    fn step2_sentinel_without_external_falls_back_local() {
+        let ai = AiConfig {
+            summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
+            external_enabled: false,
+            ..AiConfig::default()
+        };
+        let s = build_step2(&ai, 8080, "qwen.gguf").unwrap();
+        assert!(s.is_local(), "external 未启用时 sentinel 应退化为本地");
+        assert_eq!(s.model_label(), "qwen.gguf");
+
+        let ai2 = AiConfig {
+            external_enabled: true,
+            endpoint: "https://api.example.com/v1".to_string(),
+            model: "gpt-x".to_string(),
+            summary_main: "local.gguf".to_string(),
+            ..AiConfig::default()
+        };
+        let s2 = build_step2(&ai2, 8080, "local.gguf").unwrap();
+        assert!(
+            s2.is_local(),
+            "没标 sentinel 时即使 external 配好也应走本地"
+        );
+    }
+
+    /// 云端路由时落库 model 必须是用户填的云端模型 ID——取成本地 GGUF 文件名
+    /// 会让 DailyTab / 导出 Markdown 显示错误的生成来源。
+    #[test]
+    fn step2_cloud_route_uses_cloud_model_label() {
+        let ai = AiConfig {
+            external_enabled: true,
+            summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
+            endpoint: "https://api.example.com/v1/".to_string(),
+            model: "deepseek-chat".to_string(),
+            ..AiConfig::default()
+        };
+        let s = build_step2(&ai, 8080, "local.gguf").unwrap();
+        assert!(!s.is_local());
+        assert_eq!(s.model_label(), "deepseek-chat");
+    }
+
+    /// 用户选了云端但 endpoint / model 没填全：必须构造期抛错让顶层错误条提示
+    /// 去补配置，而不是悄悄构造一个打空地址的 client 到运行期才失败。
+    #[test]
+    fn step2_cloud_missing_config_errors() {
+        let ai = AiConfig {
+            external_enabled: true,
+            summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
+            endpoint: "   ".to_string(),
+            model: "deepseek-chat".to_string(),
+            ..AiConfig::default()
+        };
+        // 必须是 InvalidInput：顶层错误条按这个类型渲染"去补配置"的引导文案，
+        // 换成别的错误类型用户只会看到一条不可操作的通用报错。
+        assert!(
+            matches!(build_step2(&ai, 0, ""), Err(Error::InvalidInput(_))),
+            "endpoint 全空白应报 InvalidInput"
+        );
+
+        let ai2 = AiConfig {
+            endpoint: "https://api.example.com/v1".to_string(),
+            model: "  ".to_string(),
+            ..ai
+        };
+        assert!(
+            matches!(build_step2(&ai2, 0, ""), Err(Error::InvalidInput(_))),
+            "model 全空白应报 InvalidInput"
+        );
+    }
+
+    /// 重跑同段必须覆盖不叠加——PK (source, date, idx) 语义回归：
+    /// 若重复插行，前端日报同一段会渲染两次。
+    #[tokio::test]
+    async fn skipped_row_upsert_overwrites_not_duplicates() {
+        let pool = fresh_test_pool().await;
+        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "上午", 9, 12, "m1".into())
+            .await
+            .unwrap();
+        // 用户改了段配置后重跑：label / 时段 / 模型都变，应整行覆盖
+        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "早晨", 8, 12, "m2".into())
+            .await
+            .unwrap();
+
+        let rows = ai_summaries::get_day(&pool, "daily", "2026-05-15")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "重跑应覆盖不叠加: {rows:?}");
+        let r = &rows[0];
+        assert_eq!(r.status, "skipped_no_activity");
+        assert_eq!(r.label, "早晨", "第二次的字段应覆盖第一次");
+        assert_eq!(r.start_hour, 8);
+        assert_eq!(r.model, "m2");
+        assert!(r.content.is_empty() && r.error.is_none());
+    }
+
+    /// 用户对从没生成过的日期点"强制刷新"：空库删除必须静默成功，不能报错。
+    #[tokio::test]
+    async fn clear_day_on_empty_db_is_ok() {
+        let pool = fresh_test_pool().await;
+        ai_summaries::clear_day(&pool, "daily", "2026-05-15")
+            .await
+            .expect("空库 clear_day 不应报错");
+        assert!(ai_summaries::get_day(&pool, "daily", "2026-05-15")
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    /// force_refresh 清某天日报时误伤 debug 沙盒或相邻日期会让用户丢历史报告——
+    /// DELETE 少写一个 WHERE 条件就是这个后果。
+    #[tokio::test]
+    async fn clear_day_spares_other_source_and_date() {
+        let pool = fresh_test_pool().await;
+        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "上午", 9, 12, "m".into())
+            .await
+            .unwrap();
+        upsert_skipped_no_activity(&pool, "daily", "2026-05-16", 0, "上午", 9, 12, "m".into())
+            .await
+            .unwrap();
+        upsert_skipped_no_activity(&pool, "debug", "2026-05-15", 0, "上午", 9, 12, "m".into())
+            .await
+            .unwrap();
+
+        ai_summaries::clear_day(&pool, "daily", "2026-05-15")
+            .await
+            .unwrap();
+
+        assert!(
+            ai_summaries::get_day(&pool, "daily", "2026-05-15")
+                .await
+                .unwrap()
+                .is_empty(),
+            "目标 source+日期应被清空"
+        );
+        assert_eq!(
+            ai_summaries::get_day(&pool, "daily", "2026-05-16")
+                .await
+                .unwrap()
+                .len(),
+            1,
+            "相邻日期不应误伤"
+        );
+        assert_eq!(
+            ai_summaries::get_day(&pool, "debug", "2026-05-15")
+                .await
+                .unwrap()
+                .len(),
+            1,
+            "debug 沙盒不应误伤"
+        );
+    }
+
+    /// 引擎没起来/端口配错时 chat 必然失败：该段必须落 status='error' 行并继续
+    ///（前端红色 badge 的数据源），而不是抛 Err 让整轮 daily 中断。
+    #[tokio::test]
+    async fn summarize_segment_chat_failure_writes_error_row() {
+        let pool = fresh_test_pool().await;
+        let port = free_local_port();
+        let step2 = Step2Chat::Local(ChatClient::new(port, "dead.gguf", 1024).unwrap());
+        let supervisor = Arc::new(EngineSupervisor::new());
+        let ai = AiConfig::default();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
+
+        let (row, status) = summarize_segment(
+            &pool,
+            &step2,
+            &supervisor,
+            &ai,
+            "daily",
+            "2026-05-15",
+            "上午",
+            9,
+            12,
+            0,
+            &timeline,
+            &[],
+            "dead.gguf".to_string(),
+            &cancel,
+        )
+        .await
+        .expect("chat 失败不应让 summarize_segment 抛 Err");
+
+        assert_eq!(status, "error");
+        assert_eq!(row.status, "error");
+        assert!(row.content.is_empty(), "失败段不应有正文");
+        assert!(
+            row.error.as_deref().is_some_and(|e| !e.is_empty()),
+            "error 字段应带可读描述: {:?}",
+            row.error
+        );
+
+        let rows = ai_summaries::get_day(&pool, "daily", "2026-05-15")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "error 行必须已落库: {rows:?}");
+        assert_eq!(rows[0].status, "error");
+        assert_eq!(rows[0].model, "dead.gguf", "model 应取传入的 step2_model");
+    }
+
+    /// 幂等重跑：昨天生成时该段无活动落了 skipped，今天重跑（此处走失败路径）
+    /// 必须覆盖同一行——重复跑多少次都只有一行，且状态是最后一次的。
+    #[tokio::test]
+    async fn summarize_segment_rerun_overwrites_previous_row() {
+        let pool = fresh_test_pool().await;
+        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "上午", 9, 12, "m".into())
+            .await
+            .unwrap();
+
+        let port = free_local_port();
+        let step2 = Step2Chat::Local(ChatClient::new(port, "dead.gguf", 1024).unwrap());
+        let supervisor = Arc::new(EngineSupervisor::new());
+        let ai = AiConfig::default();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
+
+        for _ in 0..2 {
+            summarize_segment(
+                &pool,
+                &step2,
+                &supervisor,
+                &ai,
+                "daily",
+                "2026-05-15",
+                "上午",
+                9,
+                12,
+                0,
+                &timeline,
+                &[],
+                "dead.gguf".to_string(),
+                &cancel,
+            )
+            .await
+            .unwrap();
+        }
+
+        let rows = ai_summaries::get_day(&pool, "daily", "2026-05-15")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "skipped + 两次重跑仍应只有一行: {rows:?}");
+        assert_eq!(rows[0].status, "error", "最后一次运行的状态应覆盖 skipped");
+    }
+
+    /// 停止按钮语义：取消**不落行**——该段下次生成自然重跑。若取消也写 error 行，
+    /// 用户按一次停止就会看到一排假错误段。
+    #[tokio::test]
+    async fn summarize_segment_cancelled_writes_no_row() {
+        let pool = fresh_test_pool().await;
+        // 挂起的假服务：backlog 完成握手但永不回包，让请求停在途中等 cancel 打断
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let step2 = Step2Chat::Local(ChatClient::new(port, "m.gguf", 1024).unwrap());
+        let supervisor = Arc::new(EngineSupervisor::new());
+        let ai = AiConfig::default();
+        let cancel = Arc::new(AtomicBool::new(true)); // 预先按下停止
+        let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
+
+        let r = summarize_segment(
+            &pool,
+            &step2,
+            &supervisor,
+            &ai,
+            "daily",
+            "2026-05-15",
+            "上午",
+            9,
+            12,
+            0,
+            &timeline,
+            &[],
+            "m.gguf".to_string(),
+            &cancel,
+        )
+        .await;
+        assert!(
+            matches!(r, Err(Error::SummaryCancelled)),
+            "取消应抛 SummaryCancelled: {r:?}"
+        );
+        assert!(
+            ai_summaries::get_day(&pool, "daily", "2026-05-15")
+                .await
+                .unwrap()
+                .is_empty(),
+            "取消不应留下任何行"
+        );
+        drop(listener);
+    }
+
+    /// chat 成功的主干路径：status='ok' 行落库、正文取 choices[0] 并 trim、
+    /// model 字段用传入的 step2_model——这是日报正常生成的全部落库契约。
+    #[tokio::test]
+    async fn summarize_segment_ok_writes_ok_row_and_trims_content() {
+        let pool = fresh_test_pool().await;
+        let port = spawn_canned_openai_server("  上午主要在写 Hindsight 的单元测试。  ").await;
+        let step2 = Step2Chat::Local(ChatClient::new(port, "qwen.gguf", 1024).unwrap());
+        let supervisor = Arc::new(EngineSupervisor::new());
+        let ai = AiConfig::default();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
+        let top_apps = vec![("VSCode".to_string(), 30u32, "code".to_string())];
+
+        let (row, status) = summarize_segment(
+            &pool,
+            &step2,
+            &supervisor,
+            &ai,
+            "debug",
+            "2026-05-15",
+            "上午",
+            9,
+            12,
+            2,
+            &timeline,
+            &top_apps,
+            "qwen.gguf".to_string(),
+            &cancel,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(status, "ok");
+        assert_eq!(row.status, "ok");
+        assert_eq!(
+            row.content, "上午主要在写 Hindsight 的单元测试。",
+            "正文应取自响应且去掉首尾空白"
+        );
+        assert!(row.error.is_none());
+
+        let rows = ai_summaries::get_day(&pool, "debug", "2026-05-15")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "ok 行必须已落库: {rows:?}");
+        assert_eq!(rows[0].segment_idx, 2);
+        assert_eq!(rows[0].status, "ok");
+        assert_eq!(rows[0].content, row.content);
+        assert_eq!(rows[0].model, "qwen.gguf");
+    }
 }

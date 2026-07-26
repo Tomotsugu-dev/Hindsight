@@ -193,3 +193,245 @@ impl From<Error> for String {
         e.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error as StdError;
+
+    // 断言套路（全模块通用）：先独立拿底层错误自己的 to_string() 当期望值，
+    // 再断言包装后的 Display 包含它 —— 这样既不抄 error.rs 里的格式常量，
+    // 也不依赖第三方库某个版本的具体文案。
+
+    /// io::Error 经 #[from] 进入 Io 变体：Display 透传底层文案，source() 链保留。
+    /// source() 保留是关键行为 —— 上层日志靠它打印完整 cause 链。
+    #[test]
+    fn io_from_preserves_message_and_source() {
+        let inner = std::io::Error::new(std::io::ErrorKind::NotFound, "screenshot dir gone");
+        let inner_msg = inner.to_string();
+        let e: Error = inner.into();
+        assert!(matches!(e, Error::Io(_)));
+        assert!(
+            e.to_string().contains(&inner_msg),
+            "Display 应包含底层 io 错误文案: {e}"
+        );
+        let src = e.source().expect("Io 变体应保留 source");
+        assert!(src.downcast_ref::<std::io::Error>().is_some());
+    }
+
+    /// rusqlite::Error → Sqlite 变体。QueryReturnedNoRows 是最容易稳定构造的变体。
+    #[test]
+    fn sqlite_from_preserves_message_and_source() {
+        let inner = rusqlite::Error::QueryReturnedNoRows;
+        let inner_msg = inner.to_string();
+        let e: Error = inner.into();
+        assert!(matches!(e, Error::Sqlite(_)));
+        assert!(e.to_string().contains(&inner_msg));
+        let src = e.source().expect("Sqlite 变体应保留 source");
+        assert!(src.downcast_ref::<rusqlite::Error>().is_some());
+    }
+
+    /// tokio_rusqlite::Error → Db 变体。ConnectionClosed 无参可直接构造。
+    #[test]
+    fn db_from_tokio_rusqlite() {
+        let inner = tokio_rusqlite::Error::ConnectionClosed;
+        let inner_msg = inner.to_string();
+        let e: Error = inner.into();
+        assert!(matches!(e, Error::Db(_)));
+        assert!(e.to_string().contains(&inner_msg));
+        assert!(e.source().is_some(), "Db 变体应保留 source");
+    }
+
+    /// serde_json::Error → Json 变体。用真实解析失败构造，不手搓错误。
+    #[test]
+    fn json_from_parse_failure() {
+        let inner = serde_json::from_str::<serde_json::Value>("{ not json").unwrap_err();
+        let inner_msg = inner.to_string();
+        let e: Error = inner.into();
+        assert!(matches!(e, Error::Json(_)));
+        assert!(e.to_string().contains(&inner_msg));
+        let src = e.source().expect("Json 变体应保留 source");
+        assert!(src.downcast_ref::<serde_json::Error>().is_some());
+    }
+
+    /// reqwest::Error → Http 变体。技巧：给 RequestBuilder 一个非法 URL，
+    /// 错误在 build() 阶段同步产生，完全不碰网络（CI 无网也稳定）。
+    #[test]
+    fn http_from_reqwest_builder_error() {
+        let inner = reqwest::Client::new()
+            .get("这不是一个URL")
+            .build()
+            .expect_err("非法 URL 必须在 build() 就失败");
+        let inner_msg = inner.to_string();
+        let e: Error = inner.into();
+        assert!(matches!(e, Error::Http(_)));
+        assert!(e.to_string().contains(&inner_msg));
+        let src = e.source().expect("Http 变体应保留 source");
+        assert!(src.downcast_ref::<reqwest::Error>().is_some());
+    }
+
+    /// Utf8Error → SyncUtf8 变体。构造方式对应真实场景：
+    /// ndjson 分块读取把一个多字节汉字从中间截断。
+    #[test]
+    fn sync_utf8_from_invalid_bytes() {
+        let truncated = &"好".as_bytes()[..2]; // 3 字节字符只取前 2 字节 → 非法 UTF-8
+        let inner = std::str::from_utf8(truncated).unwrap_err();
+        let inner_msg = inner.to_string();
+        let e: Error = inner.into();
+        assert!(matches!(e, Error::SyncUtf8(_)));
+        assert!(e.to_string().contains(&inner_msg));
+    }
+
+    /// OAuthHttp：结构体变体三个字段必须全部出现在文案里 ——
+    /// 排障时 endpoint/status/body 缺一个都定位不了问题。
+    #[test]
+    fn oauth_http_display_carries_all_fields() {
+        let e = Error::OAuthHttp {
+            endpoint: "refresh",
+            status: 400,
+            body: "invalid_grant".into(),
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("refresh"));
+        assert!(msg.contains("400"));
+        assert!(msg.contains("invalid_grant"));
+    }
+
+    /// OAuthUnreachable：这条会原样显示给用户，所以断言两点行为 ——
+    /// (1) 自救指引关键词在（代理/googleapis.com）；(2) source 链保留供日志。
+    #[test]
+    fn oauth_unreachable_shows_guidance_and_keeps_source() {
+        let inner = reqwest::Client::new().get("not a url").build().unwrap_err();
+        let inner_msg = inner.to_string();
+        let e = Error::OAuthUnreachable { source: inner };
+        let msg = e.to_string();
+        assert!(msg.contains(&inner_msg), "用户文案里应嵌入底层原因");
+        assert!(msg.contains("googleapis.com"), "自救指引应点名要放行的域名");
+        assert!(msg.contains("代理"), "受限网络场景应提示检查代理");
+        let src = e.source().expect("OAuthUnreachable 应保留 source");
+        assert!(src.downcast_ref::<reqwest::Error>().is_some());
+    }
+
+    /// DriveHttp：同 OAuthHttp，stage/status/body 三要素齐全才可排障。
+    #[test]
+    fn drive_http_display_carries_all_fields() {
+        let e = Error::DriveHttp {
+            stage: "upload",
+            status: 507,
+            body: "storageQuotaExceeded".into(),
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("upload"));
+        assert!(msg.contains("507"));
+        assert!(msg.contains("storageQuotaExceeded"));
+    }
+
+    /// SyncParse：kind 标明是哪个远端文件坏了，source 保留 serde 细节。
+    /// 注意它不是 #[from]，必须手工构造 —— 也顺带验证了字段搭配可用。
+    #[test]
+    fn sync_parse_names_kind_and_keeps_source() {
+        let inner = serde_json::from_str::<serde_json::Value>("[broken").unwrap_err();
+        let inner_msg = inner.to_string();
+        let e = Error::SyncParse {
+            kind: "categories",
+            source: inner,
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("categories"), "文案必须指明是哪类远端文件");
+        assert!(msg.contains(&inner_msg));
+        let src = e.source().expect("SyncParse 应保留 source");
+        assert!(src.downcast_ref::<serde_json::Error>().is_some());
+    }
+
+    /// stage+details 型变体（EngineBinary / ImageProcessing）：
+    /// stage 供 caller 分流重试策略，details 供人读，两者都必须在文案里。
+    #[test]
+    fn stage_details_variants_carry_both_fields() {
+        let e = Error::EngineBinary {
+            stage: "verify",
+            details: "sha256 mismatch".into(),
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("verify") && msg.contains("sha256 mismatch"));
+
+        let e = Error::ImageProcessing {
+            stage: "decode",
+            details: "corrupt png header".into(),
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("decode") && msg.contains("corrupt png header"));
+    }
+
+    /// InvalidInput 与 InvalidInputDyn 对用户是同一类错误，前缀应一致；
+    /// Dyn 版存在的意义就是能携带运行期值，断言该值真的出现在文案里。
+    #[test]
+    fn invalid_input_static_and_dyn_share_shape() {
+        let s = Error::InvalidInput("name empty").to_string();
+        let d = Error::InvalidInputDyn("段下标越界：5".into()).to_string();
+        assert!(s.contains("name empty"));
+        assert!(d.contains("段下标越界：5"), "Dyn 版必须带上运行期值");
+        // 两者前缀一致：取 static 版去掉自身 payload 后的前缀，Dyn 版应以它开头
+        let prefix = s.strip_suffix("name empty").expect("payload 应在结尾");
+        assert!(
+            d.starts_with(prefix),
+            "两个 InvalidInput 变体对外应是同一形状: {s:?} vs {d:?}"
+        );
+    }
+
+    /// 无参"信号型"变体：文案互不相同（上层/用户靠文案区分），
+    /// 且各自带能说明处置方式的关键词。
+    #[test]
+    fn signal_variants_are_distinct_and_meaningful() {
+        let not_signed_in = Error::NotSignedIn.to_string();
+        let timeout = Error::OAuthTimeout.to_string();
+        let scope = Error::DriveScopeInsufficient.to_string();
+        let cancelled = Error::SummaryCancelled.to_string();
+        let runtime_missing = Error::EmbeddingRuntimeMissing.to_string();
+
+        let all = [
+            &not_signed_in,
+            &timeout,
+            &scope,
+            &cancelled,
+            &runtime_missing,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(a, b, "信号型变体文案不可重复，否则上层无法区分");
+            }
+        }
+        // DriveScopeInsufficient 面向用户：必须点出缺的 scope 和自救动作（重新登录）
+        assert!(scope.contains("drive.appdata"));
+        assert!(scope.contains("重新"));
+        // SummaryCancelled 不是失败，文案不应带 error/failed 字样
+        let lower = cancelled.to_lowercase();
+        assert!(!lower.contains("error") && !lower.contains("failed"));
+    }
+
+    /// 动态 payload 变体（DownloadCancelled / Ocr / Other）：运行期信息不可丢。
+    /// Other 是兜底，Display 就是原文 —— 上层拼日志时不应出现多余前缀。
+    #[test]
+    fn dynamic_payload_variants_keep_payload() {
+        assert!(Error::DownloadCancelled("qwen-7b.gguf".into())
+            .to_string()
+            .contains("qwen-7b.gguf"));
+        assert!(Error::Ocr("inference shape mismatch".into())
+            .to_string()
+            .contains("inference shape mismatch"));
+        assert_eq!(
+            Error::Other("raw message".into()).to_string(),
+            "raw message"
+        );
+    }
+
+    /// From<Error> for String 是错误抵达前端的"序列化形态"（Tauri command 的
+    /// Err(String)）：必须与 Display 完全一致，前端看到的就是用户文案本身。
+    #[test]
+    fn into_string_equals_display() {
+        let e = Error::OAuthDenied("access_denied".into());
+        let display = e.to_string();
+        let s: String = e.into();
+        assert_eq!(s, display);
+        assert!(s.contains("access_denied"));
+    }
+}
