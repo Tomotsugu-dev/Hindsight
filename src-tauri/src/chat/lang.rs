@@ -100,9 +100,7 @@ impl ChatLang {
                  7. 简洁作答;时长换算成小时分钟;提到日期让用户可核对。\n\
                  8. 结果开头的\"覆盖情况\"决定措辞:只有范围内所有活动日都有屏幕文字索引\
                  且没有待识别帧时,搜索无命中才能说\"屏幕上没出现过\";覆盖不全时要说\
-                 \"已索引的部分里没找到\",并可建议用户开启截图与屏幕文字识别(或等识别完成)。\n\
-                 9. 历史对话仅用于理解当前问题的指代(如\"上个月呢\");回答必须基于本轮\
-                 工具返回的资料,不得沿用历史回答中的编号、数字或结论。"
+                 \"已索引的部分里没找到\",并可建议用户开启截图与屏幕文字识别(或等识别完成)。"
             ),
             Self::ZhHant => format!(
                 "你是使用者的螢幕記憶助手:使用者電腦上的活動記錄和螢幕文字都被索引,\
@@ -119,9 +117,7 @@ impl ChatLang {
                  7. 簡潔作答;時長換算成小時分鐘;提到日期讓使用者可核對。\n\
                  8. 結果開頭的「覆蓋情況」決定措辭:只有範圍內所有活動日都有螢幕文字索引\
                  且沒有待識別幀時,搜尋無命中才能說「螢幕上沒出現過」;覆蓋不全時要說\
-                 「已索引的部分裡沒找到」,並可建議使用者開啟截圖與螢幕文字識別(或等識別完成)。\n\
-                 9. 歷史對話僅用於理解當前問題的指代(如「上個月呢」);回答必須基於本輪\
-                 工具回傳的資料,不得沿用歷史回答中的編號、數字或結論。"
+                 「已索引的部分裡沒找到」,並可建議使用者開啟截圖與螢幕文字識別(或等識別完成)。"
             ),
             Self::En => format!(
                 "You are the user's screen-memory assistant: activity records and on-screen \
@@ -149,11 +145,7 @@ impl ChatLang {
                  await recognition may a search miss be stated as \"it never appeared on \
                  screen\"; with partial coverage, say it was \"not found in the indexed part\", \
                  and you may suggest enabling screenshots and screen-text recognition (or \
-                 waiting for recognition to finish).\n\
-                 9. Prior turns exist only to resolve references in the current question \
-                 (e.g. \"what about last month?\"); base your answer on tool results fetched \
-                 this turn — never reuse citation indices, numbers, or conclusions from \
-                 earlier answers."
+                 waiting for recognition to finish)."
             ),
             Self::Ja => format!(
                 "あなたはユーザーのスクリーンメモリーアシスタントです。ユーザーの PC 上の\
@@ -175,10 +167,7 @@ impl ChatLang {
                  画面テキスト索引があり、認識待ちフレームがない場合に限り、検索ヒットなしを\
                  「画面に表示されたことがない」と言ってよい。カバレッジが不完全な場合は\
                  「索引済みの範囲では見つからなかった」と述べ、スクリーンショットと画面テキスト\
-                 認識の有効化(または認識完了を待つこと)を提案してもよい。\n\
-                 9. 過去のやり取りは現在の質問の指示語(「先月は?」など)を理解するためだけに\
-                 使う。回答は今回ツールが返した資料に基づくこと。過去の回答の番号・数値・\
-                 結論を流用しない。"
+                 認識の有効化(または認識完了を待つこと)を提案してもよい。"
             ),
             Self::Pt => format!(
                 "Você é o assistente de memória de tela do usuário: os registros de atividade \
@@ -206,24 +195,36 @@ impl ChatLang {
                  e nenhum quadro aguarda reconhecimento você pode afirmar que algo \"nunca \
                  apareceu na tela\"; com cobertura parcial, diga que \"não foi encontrado na \
                  parte indexada\" e pode sugerir ativar capturas e reconhecimento de texto de \
-                 tela (ou aguardar o reconhecimento terminar).\n\
-                 9. As mensagens anteriores servem apenas para resolver referências da \
-                 pergunta atual (ex. \"e no mês passado?\"); baseie a resposta nos resultados \
-                 de ferramentas desta rodada — nunca reaproveite índices de citação, números \
-                 ou conclusões de respostas anteriores."
+                 tela (ou aguardar o reconhecimento terminar)."
             ),
         }
     }
 
     // ── engine 循环内回填给模型的文案 ─────────────────────
 
+    /// 历史使用守则:只在"改写失败、消毒历史真的进上下文"的兜底分支追加进
+    /// system(engine.rs 的 None 臂)。不放 system_prompt 固定规则——主路径
+    /// (首问/改写成功)零历史,放那儿是死条款,每问最多 7 次往返白付 token,
+    /// 还让模型对不存在的"历史对话"做无谓对齐。
+    /// 只禁"数字/结论":引用编号已有双层硬防御(sanitize_history_content 进入
+    /// 侧物理剥除 + bind_citations 输出侧过滤),提示词无需重复管。
+    pub fn history_replay_note(self) -> &'static str {
+        match self {
+            Self::ZhHans => "补充规则:下面的历史对话仅用于理解当前问题的指代(如\"上个月呢\");回答必须基于本轮工具返回的资料,不得沿用历史回答中的数字或结论。",
+            Self::ZhHant => "補充規則:下面的歷史對話僅用於理解當前問題的指代(如「上個月呢」);回答必須基於本輪工具回傳的資料,不得沿用歷史回答中的數字或結論。",
+            Self::En => "Additional rule: the conversation history below exists only to resolve references in the current question (e.g. \"what about last month?\"); base your answer on tool results fetched this turn, and do not carry over numbers or conclusions from earlier answers.",
+            Self::Ja => "補足ルール:以下の対話履歴は現在の質問の指示語(「先月は?」など)を理解するためだけのものです。回答は今回ツールが返した結果に基づき、過去の回答の数値や結論を流用しないでください。",
+            Self::Pt => "Regra adicional: o histórico de conversa abaixo serve apenas para resolver referências da pergunta atual (ex. \"e no mês passado?\"); baseie a resposta nos resultados de ferramentas desta rodada e não reaproveite números ou conclusões de respostas anteriores.",
+        }
+    }
+
     pub fn dup_call(self) -> &'static str {
         match self {
-            Self::ZhHans => "这个查询刚执行过,结果同上。请换参数,或基于已有资料作答。",
-            Self::ZhHant => "這個查詢剛執行過,結果同上。請換參數,或基於既有資料作答。",
-            Self::En => "This exact query was just executed; same result as above. Change the parameters, or answer from the material you already have.",
-            Self::Ja => "この検索は直前に実行済みで、結果は上記と同じです。パラメータを変えるか、既にある資料に基づいて回答してください。",
-            Self::Pt => "Esta mesma consulta acabou de ser executada; o resultado é o mesmo acima. Mude os parâmetros ou responda com o material já obtido.",
+            Self::ZhHans => "这个查询刚执行过,结果同上。请换参数,或基于本轮已返回的资料作答。",
+            Self::ZhHant => "這個查詢剛執行過,結果同上。請換參數,或基於本輪已回傳的資料作答。",
+            Self::En => "This exact query was just executed; same result as above. Change the parameters, or answer from the results already returned this turn.",
+            Self::Ja => "この検索は直前に実行済みで、結果は上記と同じです。パラメータを変えるか、今回すでに返された結果に基づいて回答してください。",
+            Self::Pt => "Esta mesma consulta acabou de ser executada; o resultado é o mesmo acima. Mude os parâmetros ou responda com os resultados já obtidos nesta rodada.",
         }
     }
 
@@ -249,21 +250,24 @@ impl ChatLang {
 
     pub fn tool_exec_failed(self) -> &'static str {
         match self {
-            Self::ZhHans => "查询执行失败,请换个方式或直接基于已有资料作答。",
-            Self::ZhHant => "查詢執行失敗,請換個方式或直接基於既有資料作答。",
-            Self::En => "The query failed to execute. Try a different approach, or answer from the material you already have.",
-            Self::Ja => "検索の実行に失敗しました。別の方法を試すか、既にある資料に基づいて回答してください。",
-            Self::Pt => "A consulta falhou. Tente outra abordagem ou responda com o material já obtido.",
+            Self::ZhHans => "查询执行失败,请换个方式,或直接基于本轮已返回的资料作答。",
+            Self::ZhHant => "查詢執行失敗,請換個方式,或直接基於本輪已回傳的資料作答。",
+            Self::En => "The query failed to execute. Try a different approach, or answer from the results already returned this turn.",
+            Self::Ja => "検索の実行に失敗しました。別の方法を試すか、今回すでに返された結果に基づいて回答してください。",
+            Self::Pt => "A consulta falhou. Tente outra abordagem ou responda com os resultados já obtidos nesta rodada.",
         }
     }
 
+    // 三条回填文案统一限定"本轮工具返回的资料"——旧措辞"(以上)已有资料"在
+    // 兜底路径(消毒历史在上下文里)会被读成"包括上轮答案",作为更靠后的消息
+    // 直接压过历史使用守则,诱导模型复述陈旧结论而不是承认本轮没查到。
     pub fn steps_exhausted(self) -> &'static str {
         match self {
-            Self::ZhHans => "查询步数已用完。请立刻基于以上已有资料作答;资料不足就直接说明没查到什么。",
-            Self::ZhHant => "查詢步數已用完。請立刻基於以上既有資料作答;資料不足就直接說明沒查到什麼。",
-            Self::En => "You are out of query steps. Answer now from the material above; if it is insufficient, state plainly what could not be found.",
-            Self::Ja => "検索ステップを使い切りました。上記の資料に基づいて今すぐ回答してください。不足している場合は、何が見つからなかったかを率直に述べてください。",
-            Self::Pt => "As etapas de consulta acabaram. Responda agora com o material acima; se for insuficiente, diga claramente o que não foi encontrado.",
+            Self::ZhHans => "查询步数已用完。请立刻基于本轮工具返回的资料作答;资料不足就直接说明没查到什么。",
+            Self::ZhHant => "查詢步數已用完。請立刻基於本輪工具回傳的資料作答;資料不足就直接說明沒查到什麼。",
+            Self::En => "You are out of query steps. Answer now from the tool results fetched this turn; if they are insufficient, state plainly what could not be found.",
+            Self::Ja => "検索ステップを使い切りました。今回ツールが返した結果に基づいて今すぐ回答してください。不足している場合は、何が見つからなかったかを率直に述べてください。",
+            Self::Pt => "As etapas de consulta acabaram. Responda agora com os resultados de ferramentas desta rodada; se forem insuficientes, diga claramente o que não foi encontrado.",
         }
     }
 
@@ -963,6 +967,15 @@ mod tests {
             }
             // 插值类:参数必须真的出现在产物里
             assert!(lang.system_prompt(today).contains("2026-07-26"), "{lang:?}");
+            // 规则数对齐:恒 8 条固定规则;历史使用守则不进 system_prompt
+            // (它在 history_replay_note,由 engine 仅在兜底分支追加)。
+            // 任何语言臂漏改/多改规则条目,这里立刻红。
+            let sp = lang.system_prompt(today);
+            assert!(
+                sp.contains("\n8. ") && !sp.contains("\n9. "),
+                "{lang:?} system_prompt 应恰含 1-8 条规则"
+            );
+            assert!(!lang.history_replay_note().is_empty(), "{lang:?}");
             assert!(
                 lang.rewrite_prompt(today).contains("2026-07-26"),
                 "{lang:?}"
@@ -1064,5 +1077,38 @@ mod tests {
         assert!(ChatLang::En.system_prompt(d).contains("reply in English"));
         assert!(ChatLang::ZhHans.system_prompt(d).contains("简体中文"));
         assert!(ChatLang::Ja.system_prompt(d).contains("日本語"));
+    }
+
+    /// 历史使用守则与三条循环回填文案必须限定"本轮"——旧措辞"(以上)已有资料"
+    /// 在兜底路径会被读成"包括上轮答案",诱导复述陈旧结论(code review 实锤)。
+    /// 五语言逐一钉死限定词,防止未来措辞回退。
+    #[test]
+    fn engine_feedback_strings_scope_to_this_turn() {
+        let cases: [(ChatLang, &str); 5] = [
+            (ChatLang::ZhHans, "本轮"),
+            (ChatLang::ZhHant, "本輪"),
+            (ChatLang::En, "this turn"),
+            (ChatLang::Ja, "今回"),
+            // nesta/desta rodada 两种搭配都合法,断言公共词干
+            (ChatLang::Pt, "rodada"),
+        ];
+        for (lang, marker) in cases {
+            assert!(
+                lang.history_replay_note().contains(marker),
+                "{lang:?} history_replay_note 缺本轮限定"
+            );
+            assert!(
+                lang.steps_exhausted().contains(marker),
+                "{lang:?} steps_exhausted 缺本轮限定"
+            );
+            assert!(
+                lang.dup_call().contains(marker),
+                "{lang:?} dup_call 缺本轮限定"
+            );
+            assert!(
+                lang.tool_exec_failed().contains(marker),
+                "{lang:?} tool_exec_failed 缺本轮限定"
+            );
+        }
     }
 }

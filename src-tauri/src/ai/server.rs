@@ -62,7 +62,7 @@ const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(500);
 /// 768 px max_dim 下一张图 ~256 tokens × 12 张 = ~3000 tokens，加 system / user
 /// prompt 和输出空间 (max_tokens=768)，4K 容易超。8K 给足余量；GPU 上 KV cache
 /// 多用一倍 RAM 不痛——5090/Apple Silicon 都装得下，CPU fallback 也可接受。
-const DEFAULT_CTX_SIZE: u32 = 8192;
+pub const DEFAULT_CTX_SIZE: u32 = 8192;
 
 /// 引擎进程的离散状态。
 ///

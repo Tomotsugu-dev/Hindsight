@@ -142,6 +142,13 @@ impl AiConfig {
     pub fn summary_ctx_size_effective(&self) -> Option<u32> {
         self.summary_ctx_size.or(self.ctx_size)
     }
+    /// chat 引擎的每槽 ctx:全局 `ctx_size` 兜底,但不低于 8192——
+    /// 旧配置里的小 ctx(为多槽段总结调的 2048/4096)对单槽聊天会立刻溢出:
+    /// 工具结果预算(tools.rs RESULT_CHAR_BUDGET=4000 字符/条)按 ~8K 窗口设计。
+    /// `None` = 维持引擎默认([`crate::ai::server::DEFAULT_CTX_SIZE`],同为 8K)。
+    pub fn chat_ctx_size_effective(&self) -> Option<u32> {
+        self.ctx_size.map(|c| c.max(8192))
+    }
 
     /// 段总结主权重文件名；空 → fallback 到 `active_main`。
     /// `summary_main == SUMMARY_CLOUD_SENTINEL` 也走 fallback —— 那是"用云端"标记，

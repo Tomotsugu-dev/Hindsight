@@ -51,23 +51,42 @@ pub struct HistoryTurn {
 ///   "只用资料里出现过的编号",模型会顺手沿用这些失效编号;
 /// ② 一篇自信的完整报告是"不查工具也能答"的模仿源,第二轮起质量塌方的主因。
 /// 历史的唯一使命是让"上个月呢?"这类指代可解析——剥掉编号、截断长文足矣。
-fn sanitize_history_content(content: &str) -> String {
-    // 去掉 [数字] 形式的引用标记;[abc] 这类非纯数字的中括号原样保留
+///
+/// user 历史轮也必须消毒(见 [`sanitize_user_history_content`]):用户粘贴的
+/// 长文可能自带 [2] 之类标记,原样回灌后模型复述、恰撞本轮同号证据时
+/// bind_citations 无来源校验会直接错绑。
+fn strip_citation_forms(content: &str) -> String {
+    // 剥引用标记,形态集与 bind_citations **精确等价**(同字符集扫描 + 同一个
+    // parse_ref_token 语法门):[3]、[1,6,9]、[22-37] 这些"能被绑定"的形态全剥
+    // ——漏掉列表/区间会穿透消毒回灌模型,沿用后撞上本轮同号证据即被反绑。
+    // 不能更宽:parse 不认的数字括号([2026-07-13]、[2026-07]、[10 000]、[8-])
+    // 是日期/数值锚点而非可绑定引用,bind 在答案里也原样保留,历史里剥掉反而
+    // 毁了指代消解的原料。[附录]/[abc] 非数字括号同理保留。
     let mut out = String::with_capacity(content.len());
     let mut chars = content.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '[' {
             let mut probe = chars.clone();
-            let mut digits = 0usize;
-            while let Some(d) = probe.peek() {
-                if d.is_ascii_digit() {
-                    digits += 1;
-                    probe.next();
-                } else {
-                    break;
+            let mut token = String::new();
+            let mut numeric_body = true;
+            while let Some(&d) = probe.peek() {
+                match d {
+                    ']' => break,
+                    '0'..='9' | ',' | '-' | ' ' => {
+                        token.push(d);
+                        probe.next();
+                    }
+                    _ => {
+                        numeric_body = false;
+                        break;
+                    }
                 }
             }
-            if digits > 0 && probe.peek() == Some(&']') {
+            if numeric_body
+                && probe.peek() == Some(&']')
+                && token.chars().any(|t| t.is_ascii_digit())
+                && parse_ref_token(&token).is_some()
+            {
                 probe.next();
                 chars = probe;
                 continue;
@@ -75,11 +94,32 @@ fn sanitize_history_content(content: &str) -> String {
         }
         out.push(c);
     }
-    // 指代解析所需的信息几乎都在开头;截断同时掐灭"模仿上一轮长报告"的源头
+    out
+}
+
+/// assistant 历史轮消毒:剥可绑定引用 + **保头**截断——报告的结论与被指代物
+/// (应用名/日期范围)几乎都在开头,截断同时掐灭"模仿上一轮长报告"的源头。
+fn sanitize_history_content(content: &str) -> String {
     const MAX_CHARS: usize = 400;
+    let out = strip_citation_forms(content);
     if out.chars().count() > MAX_CHARS {
         let mut truncated: String = out.chars().take(MAX_CHARS).collect();
         truncated.push('…');
+        truncated
+    } else {
+        out
+    }
+}
+
+/// user 历史轮消毒:剥可绑定引用 + **保尾**截断——粘贴长文的形态是"先贴材料,
+/// 最后一句才是真问题/时间锚点",保头会恰好切掉指代消解最需要的部分。
+fn sanitize_user_history_content(content: &str) -> String {
+    const MAX_CHARS: usize = 400;
+    let out = strip_citation_forms(content);
+    let n = out.chars().count();
+    if n > MAX_CHARS {
+        let mut truncated = String::from("…");
+        truncated.extend(out.chars().skip(n - MAX_CHARS));
         truncated
     } else {
         out
@@ -115,8 +155,14 @@ async fn condense_question(
     let mut ctx = String::new();
     for h in history.iter().rev().take(6).rev() {
         match h.role.as_str() {
-            // 标签沿用本地后端 transcript 的既有约定(跨语言可读,改写提示词已声明规则)
-            "user" => ctx.push_str(&format!("用户: {}\n", h.content)),
+            // 标签沿用本地后端 transcript 的既有约定(跨语言可读,改写提示词已声明规则)。
+            // user 轮同样消毒:粘贴长文里的 [n] 标记与超长内容对改写器同样是污染源。
+            "user" => {
+                ctx.push_str(&format!(
+                    "用户: {}\n",
+                    sanitize_user_history_content(&h.content)
+                ));
+            }
             _ => ctx.push_str(&format!("助手: {}\n", sanitize_history_content(&h.content))),
         }
     }
@@ -153,7 +199,7 @@ pub async fn answer(
     today: NaiveDate,
     lang: ChatLang,
 ) -> Result<ChatAnswer> {
-    let system = lang.system_prompt(today);
+    let mut system = lang.system_prompt(today);
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
 
@@ -169,9 +215,14 @@ pub async fn answer(
         match rewritten {
             Some(q) => effective_question = q,
             None => {
+                // 只有这条分支真的把历史灌进上下文,历史使用守则也只在这里
+                // 追加——主路径零历史,不为死条款付 token。user 轮同样消毒
+                // (剥 [n]/截断),堵住"粘贴文本带失效编号"的注入向量。
+                system.push('\n');
+                system.push_str(lang.history_replay_note());
                 for h in history.iter().rev().take(6).rev() {
                     match h.role.as_str() {
-                        "user" => turns.push(Turn::User(h.content.clone())),
+                        "user" => turns.push(Turn::User(sanitize_user_history_content(&h.content))),
                         _ => turns.push(Turn::AssistantText(sanitize_history_content(&h.content))),
                     }
                 }
@@ -391,7 +442,14 @@ fn bind_citations(text: &str, all: &[Citation]) -> (String, Vec<Citation>) {
     (out, cited)
 }
 
+/// 单个 a-b 区间的宽度上限:引用编号是本轮的小整数(每轮几十条封顶),
+/// 更宽的"区间"只可能是普通文本撞上语法(如用户粘贴的 [1-999999999999])。
+/// 无上限的 `extend(a..=b)` 是 TB 级分配——历史消毒会对用户粘贴文本跑本
+/// 函数,一条毒历史落库后每次提问都物化一次,直接挂死后端。
+const MAX_REF_RANGE_WIDTH: usize = 64;
+
 /// 解析引用 token:逗号分隔项,每项是单编号或 a-b 区间。语法非法返回 None。
+/// strip_citation_forms 与 bind_citations 共用本函数(同一道门,等价性由此保证)。
 fn parse_ref_token(token: &str) -> Option<Vec<usize>> {
     let mut nums = Vec::new();
     for part in token.split(',') {
@@ -399,7 +457,7 @@ fn parse_ref_token(token: &str) -> Option<Vec<usize>> {
         if let Some((a, b)) = part.split_once('-') {
             let a: usize = a.trim().parse().ok()?;
             let b: usize = b.trim().parse().ok()?;
-            if a > b {
+            if a > b || b - a > MAX_REF_RANGE_WIDTH {
                 return None;
             }
             nums.extend(a..=b);
@@ -419,6 +477,56 @@ mod sanitize_tests {
         assert_eq!(
             sanitize_history_content("用了 3 小时 [1][12],详见 [附录] 和 [2]。"),
             "用了 3 小时 ,详见 [附录] 和 。"
+        );
+    }
+
+    /// 回归(code review 实锤):bind_citations 认可并落库的列表/区间形态
+    /// 曾穿透只认 [单数字] 的消毒器,回灌后撞上本轮同号证据会被反绑。
+    /// 消毒与 bind 精确等价(同扫描 + parse_ref_token 门):可绑定形态全剥;
+    /// parse 不认的日期/数值锚点([2026-07-13] 等)必须保留——那是指代消解
+    /// 的原料,bind 在答案里也同样保留它们。
+    #[test]
+    fn strips_bindable_forms_keeps_date_anchors() {
+        assert_eq!(
+            sanitize_history_content("上午在写代码 [2-4],其余在开会 [1,6,9]。"),
+            "上午在写代码 ,其余在开会 。"
+        );
+        assert_eq!(
+            sanitize_history_content("带空格 [1, 6] 也剥。"),
+            "带空格  也剥。"
+        );
+        assert_eq!(
+            sanitize_history_content(
+                "锚点 [2026-07-13] 与 [2026-07]、残缺 [8-]、[10 000]、[附录]、[a1] 都保留。"
+            ),
+            "锚点 [2026-07-13] 与 [2026-07]、残缺 [8-]、[10 000]、[附录]、[a1] 都保留。"
+        );
+    }
+
+    /// 回归(闭合核查实锤 high):无上限区间物化——用户粘贴 [1-999999999999]
+    /// 落库后,每次提问的历史消毒都会尝试 ~TB 级 Vec 分配挂死后端。
+    /// 加宽度门后该 token 判非引用、原样保留,瞬时完成。
+    #[test]
+    fn giant_range_token_is_kept_not_materialized() {
+        assert_eq!(
+            sanitize_history_content("粘贴 [1-999999999999] 与 [1-999] 的文本。"),
+            "粘贴 [1-999999999999] 与 [1-999] 的文本。"
+        );
+        // 合法窄区间仍然剥除
+        assert_eq!(sanitize_history_content("上午 [22-37]。"), "上午 。");
+    }
+
+    /// user 轮保尾截断:粘贴长文"材料在前、真问题在最后",保头会切掉锚点。
+    #[test]
+    fn user_turns_keep_tail_not_head() {
+        use super::sanitize_user_history_content;
+        let paste = format!("{}最后一句才是问题:Figma 用了多久 [3]?", "长".repeat(450));
+        let out = sanitize_user_history_content(&paste);
+        assert_eq!(out.chars().count(), 401);
+        assert!(out.starts_with('…'));
+        assert!(
+            out.contains("Figma 用了多久 ?"),
+            "尾部的真问题必须保留且剥引用: {out}"
         );
     }
 
@@ -492,6 +600,16 @@ mod tests {
         let all = vec![cite(1)];
         let (text, _) = bind_citations("数组 [a] 和 [1] 混排 [", &all);
         assert_eq!(text, "数组 [a] 和 [1] 混排 [");
+    }
+
+    /// 宽度门在 bind 侧同样生效:巨区间判非引用 token,原样留在文本里
+    /// (不物化、不绑定),证据集走"零引用返回全集"的既有分支。
+    #[test]
+    fn bind_leaves_giant_range_as_literal_text() {
+        let all = vec![cite(1), cite(2)];
+        let (text, cited) = bind_citations("范围 [1-999999999999] 只是文本。", &all);
+        assert_eq!(text, "范围 [1-999999999999] 只是文本。");
+        assert_eq!(cited.len(), 2, "无有效引用时保留全部证据(既有行为)");
     }
 
     #[test]
@@ -1073,6 +1191,12 @@ mod loop_tests {
         assert_eq!(msgs.len(), 2, "只许 system + 自足问题,历史不得漏入");
         assert_eq!(msgs[1]["role"], "user");
         assert_eq!(msgs[1]["content"], "上个月我在 Cursor 用了多久?");
+        // ③ 历史使用守则只属于兜底分支:主路径零历史,system 不得携带死条款
+        let sys = msgs[0]["content"].as_str().unwrap();
+        assert!(
+            !sys.contains("补充规则"),
+            "主路径(改写成功)system 不应追加历史守则"
+        );
     }
 
     /// 改写器越权(输出多行解释)→ 判不可用 → 兜底路径:消毒历史 + 原问题
@@ -1118,6 +1242,69 @@ mod loop_tests {
             "历史答案必须消毒后回灌:剥引用编号、保留非编号括注"
         );
         assert_eq!(msgs[3]["content"], "前天呢?");
+        // 历史真进上下文的分支,system 必须带历史使用守则
+        let sys = msgs[0]["content"].as_str().unwrap();
+        assert!(
+            sys.contains("补充规则") && sys.contains("本轮"),
+            "兜底分支 system 应追加 history_replay_note: {sys}"
+        );
+    }
+
+    /// 回归(code review 实锤):user 历史轮曾原样注入(无截断、不剥 [n])——
+    /// 用户粘贴的长文自带失效编号,模型复述后撞上本轮同号证据会被错绑。
+    /// 现在 user 轮与 assistant 轮同样过消毒。
+    #[tokio::test]
+    async fn fallback_sanitizes_user_history_turns_too() {
+        let ctx = fixture_ctx(true, "").await;
+        let pasted = format!(
+            "{}以上是日志[2],里面 [1,6,9] 提到的 Figma 我用了多久?",
+            "长".repeat(450)
+        );
+        let history = vec![
+            HistoryTurn {
+                role: "user".into(),
+                content: pasted,
+            },
+            HistoryTurn {
+                role: "assistant".into(),
+                content: "好的,已总结。".into(),
+            },
+        ];
+        let (port, log) = spawn_scripted_openai(vec![
+            resp_final("改写:xxx\n(多行输出,判不可用)"),
+            resp_final("这周你主要在写文档。"),
+        ])
+        .await;
+        let llm = cloud_llm(port);
+
+        let a = answer(&llm, &ctx, "这周呢?", &history, today(), ChatLang::ZhHans)
+            .await
+            .unwrap();
+        assert_eq!(a.text, "这周你主要在写文档。");
+
+        let reqs = log.lock().unwrap();
+        let msgs = reqs[1]["messages"].as_array().unwrap();
+        assert_eq!(msgs[1]["role"], "user");
+        let user_hist = msgs[1]["content"].as_str().unwrap();
+        assert!(
+            !user_hist.contains("[2]") && !user_hist.contains("[1,6,9]"),
+            "user 历史轮的引用形态标记必须剥除: {user_hist}"
+        );
+        assert!(
+            user_hist.chars().count() == 401 && user_hist.starts_with('…'),
+            "user 历史轮必须保尾截断到 …+400,实际 {} 字符",
+            user_hist.chars().count()
+        );
+        assert!(
+            user_hist.contains("Figma 我用了多久?"),
+            "粘贴长文尾部的真问题必须存活: {user_hist}"
+        );
+        // 改写器上下文里的 user 轮同样消毒
+        let rw_user = reqs[0]["messages"][1]["content"].as_str().unwrap();
+        assert!(
+            !rw_user.contains("[2]") && !rw_user.contains("[1,6,9]"),
+            "改写器上下文的 user 轮也必须消毒: {rw_user}"
+        );
     }
 
     // ── 模型空回复 ───────────────────────────────────────

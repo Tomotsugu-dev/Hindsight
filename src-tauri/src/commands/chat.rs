@@ -27,6 +27,33 @@ use crate::storage::DbPool;
 /// LLM 每步能看到的历史消息条数(user/assistant 各算一条)。
 const HISTORY_TURNS: usize = 6;
 
+/// chat 引擎启动参数:透传用户配置的 ctx(带 8K 下限,见 getter)。
+/// 此前两条启动路径都传 default(),把每槽 ctx 钉死 8K——用户在设置里调大
+/// 也不生效,而两条 4000 字符 CJK 工具结果加系统前缀就能逼近 8K 触发 400。
+/// 聊天是单流交互,不开并行槽;也不继承全局 batch_size——那是为总结预填
+/// 吞吐调的,build_command 会把 --ubatch-size 一并顶大,聊天冷启动的
+/// compute buffer 跟着翻几倍,小显存机器直接 OOM。
+fn chat_engine_overrides(
+    ai: &crate::ai::config::AiConfig,
+) -> crate::ai::server::EngineStartOverrides {
+    crate::ai::server::EngineStartOverrides {
+        batch_size: None,
+        parallel_slots: None,
+        ctx_size: ai.chat_ctx_size_effective(),
+    }
+}
+
+/// 复用已跑引擎的 ctx 够用判定:每槽 ctx(None = 引擎默认 8K)达到聊天
+/// 需求就复用。只看 ctx——batch/slots 只影响启动期性能与显存,不影响已跑
+/// 引擎对聊天的可用性。
+fn engine_ctx_sufficient(
+    loaded: &crate::ai::server::EngineStartOverrides,
+    wanted: &crate::ai::server::EngineStartOverrides,
+) -> bool {
+    use crate::ai::server::DEFAULT_CTX_SIZE;
+    loaded.ctx_size.unwrap_or(DEFAULT_CTX_SIZE) >= wanted.ctx_size.unwrap_or(DEFAULT_CTX_SIZE)
+}
+
 /// 一次问答落库完成(或失败/被停止)时的广播事件。前端不论组件死活都靠它
 /// 得知"答案已就绪,去库里刷新"——一次性返回模式下,promise 的宿主(组件)
 /// 跳页/关窗就没了,这个事件是唯一可靠的送达通道。
@@ -209,23 +236,25 @@ pub async fn chat_ask(
         let mmproj_path = (!mmproj_name.trim().is_empty())
             .then(|| models_dir.join(mmproj_name))
             .filter(|p| p.exists());
-        // 引擎可能正载着别的模型(如段总结刚跑完)——不一致时换模型重启
+        // 复用判定:模型一致 **且** 引擎每槽 ctx 够聊天用(≥ 语义,不做参数
+        // 严格相等)。严格相等会把 None≡Some(8192)、"总结留下的更大 ctx"这些
+        // 本可安全复用的场景全变成 chat↔summary 重启震荡,还会在日报段间隙
+        // 杀掉引擎;而 ctx 不够(手动启动的默认 8K 配大 ctx 用户、总结留下的
+        // 小 ctx 多槽)时必须重启,否则"窗口不够溢出 400"原样回归。
+        let overrides = chat_engine_overrides(ai);
         let needs_restart = supervisor
             .loaded_main()
             .map(|p| p != main_path)
-            .unwrap_or(false);
+            .unwrap_or(false)
+            || !engine_ctx_sufficient(&supervisor.loaded_overrides(), &overrides);
         let port = if needs_restart {
             supervisor
-                .restart_with_overrides(
-                    Some(main_path),
-                    mmproj_path,
-                    crate::ai::server::EngineStartOverrides::default(),
-                )
+                .restart_with_overrides(Some(main_path), mmproj_path, overrides)
                 .await
                 .map_err(String::from)?
         } else {
             supervisor
-                .start(Some(main_path), mmproj_path)
+                .start_with_overrides(Some(main_path), mmproj_path, overrides)
                 .await
                 .map_err(String::from)?
         };
@@ -352,4 +381,66 @@ pub async fn chat_delete_conversation(
     store::delete_conversation(db, conversation_id)
         .await
         .map_err(String::from)
+}
+
+#[cfg(test)]
+mod overrides_tests {
+    use super::chat_engine_overrides;
+    use crate::ai::config::AiConfig;
+
+    /// 回归(code review 实锤):chat 两条启动路径曾传 default() 把 ctx 钉死 8K,
+    /// 用户配置的 ctx_size 对聊天从不生效。现在必须透传。
+    #[test]
+    fn chat_overrides_pass_user_ctx_through() {
+        let ai = AiConfig {
+            ctx_size: Some(16384),
+            batch_size: Some(4096),
+            ..Default::default()
+        };
+        let o = chat_engine_overrides(&ai);
+        assert_eq!(o.ctx_size, Some(16384), "用户 ctx_size 必须透传");
+        assert_eq!(
+            o.batch_size, None,
+            "聊天不继承总结用的大 batch(--ubatch-size 同步顶大,compute buffer 吃显存)"
+        );
+        assert_eq!(o.parallel_slots, None, "聊天单流,不开并行槽");
+
+        // 8K 下限:老配置为多槽总结调的小 ctx,不能让单槽聊天窗口反而缩水
+        let small = AiConfig {
+            ctx_size: Some(2048),
+            ..Default::default()
+        };
+        assert_eq!(chat_engine_overrides(&small).ctx_size, Some(8192));
+
+        let d = chat_engine_overrides(&AiConfig::default());
+        assert_eq!(d.ctx_size, None, "未配置时维持引擎默认(8K)");
+        assert_eq!(d.batch_size, None);
+    }
+
+    /// 复用判定回归:≥ 语义,None≡8192;更大的留驻引擎可复用(不震荡),
+    /// 更小的必须重启(否则溢出 400 回归)。
+    #[test]
+    fn engine_reuse_is_by_ctx_sufficiency_not_strict_equality() {
+        use super::engine_ctx_sufficient;
+        use crate::ai::server::EngineStartOverrides;
+        let ov = |ctx: Option<u32>| EngineStartOverrides {
+            batch_size: None,
+            parallel_slots: None,
+            ctx_size: ctx,
+        };
+        // None ≡ Some(8192):语义相同不得重启
+        assert!(engine_ctx_sufficient(&ov(None), &ov(Some(8192))));
+        assert!(engine_ctx_sufficient(&ov(Some(8192)), &ov(None)));
+        // 总结留下的更大 ctx:够用,复用
+        assert!(engine_ctx_sufficient(&ov(Some(16384)), &ov(Some(8192))));
+        // 手动启动默认 8K,用户要 32K:不够,重启
+        assert!(!engine_ctx_sufficient(&ov(None), &ov(Some(32768))));
+        // 总结留下的小 ctx:不够,重启
+        assert!(!engine_ctx_sufficient(&ov(Some(4096)), &ov(None)));
+        // batch/slots 差异不影响判定
+        let mut summary_left = ov(Some(16384));
+        summary_left.batch_size = Some(4096);
+        summary_left.parallel_slots = Some(4);
+        assert!(engine_ctx_sufficient(&summary_left, &ov(None)));
+    }
 }
