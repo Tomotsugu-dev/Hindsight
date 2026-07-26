@@ -586,6 +586,258 @@ mod tests {
         assert!(v.get("updatedAt").and_then(|x| x.as_str()).is_some());
     }
 
+    /// 测 [`delete_screenshots_older_than`]：只删 `local_date < cutoff`（cutoff =
+    /// 今天 - retention_days）的文件与引用——
+    /// - 3 天前的行：文件删除 + screenshot_path 置 NULL，activities 行本身保留
+    /// - 恰好 cutoff 当天（today-2, retention=2）：严格小于，不删
+    /// - 今天：不删
+    /// - 返回值 = 实际从磁盘删掉的文件数
+    #[tokio::test]
+    async fn delete_screenshots_only_removes_rows_and_files_before_cutoff() {
+        let pool = fresh_test_pool().await;
+        // 真实临时目录 + 真实文件：验证"删对文件、不删错文件"，不是只看 DB
+        let dir =
+            std::env::temp_dir().join(format!("hindsight-shots-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let date = |days_ago: i64| {
+            (Local::now() - Duration::days(days_ago))
+                .format("%Y-%m-%d")
+                .to_string()
+        };
+        let f_old = dir.join("old.jpg");
+        let f_edge = dir.join("edge.jpg");
+        let f_new = dir.join("new.jpg");
+        for f in [&f_old, &f_edge, &f_new] {
+            std::fs::write(f, b"jpg-bytes").unwrap();
+        }
+
+        let id_old = insert_shot_row(&pool, &date(3), Some(f_old.to_string_lossy().into())).await;
+        let id_edge = insert_shot_row(&pool, &date(2), Some(f_edge.to_string_lossy().into())).await;
+        let id_new = insert_shot_row(&pool, &date(0), Some(f_new.to_string_lossy().into())).await;
+
+        let deleted = delete_screenshots_older_than(&pool, 2).await.unwrap();
+        assert_eq!(deleted, 1, "只有 3 天前那一个文件该被删");
+
+        // 磁盘侧：老文件消失，边界/新文件原样
+        assert!(!f_old.exists(), "cutoff 之前的文件应被删除");
+        assert!(
+            f_edge.exists(),
+            "local_date == cutoff（today-2）是严格小于边界，不该删"
+        );
+        assert!(f_new.exists(), "今天的文件不该删");
+
+        // DB 侧：引用与文件一致——被删文件的行 path 置 NULL，行本身保留；其余 path 原样
+        assert_eq!(read_screenshot_path(&pool, id_old).await, None);
+        assert_eq!(
+            read_screenshot_path(&pool, id_edge).await.as_deref(),
+            Some(f_edge.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            read_screenshot_path(&pool, id_new).await.as_deref(),
+            Some(f_new.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            count_rows(&pool).await,
+            3,
+            "清理只动 screenshot_path，不删 activities 行"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 测 retention_days = 0 的 `max(1)` 钳制：0 不是"全部删光"，而是按 1 天算——
+    /// cutoff = 昨天，昨天/今天的文件必须保留，只有前天更早的才删。
+    #[tokio::test]
+    async fn delete_screenshots_clamps_zero_retention_to_one_day() {
+        let pool = fresh_test_pool().await;
+        let dir =
+            std::env::temp_dir().join(format!("hindsight-shots-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let date = |days_ago: i64| {
+            (Local::now() - Duration::days(days_ago))
+                .format("%Y-%m-%d")
+                .to_string()
+        };
+        let f_d2 = dir.join("d2.jpg");
+        let f_d1 = dir.join("d1.jpg");
+        let f_d0 = dir.join("d0.jpg");
+        for f in [&f_d2, &f_d1, &f_d0] {
+            std::fs::write(f, b"jpg").unwrap();
+        }
+        insert_shot_row(&pool, &date(2), Some(f_d2.to_string_lossy().into())).await;
+        insert_shot_row(&pool, &date(1), Some(f_d1.to_string_lossy().into())).await;
+        insert_shot_row(&pool, &date(0), Some(f_d0.to_string_lossy().into())).await;
+
+        let deleted = delete_screenshots_older_than(&pool, 0).await.unwrap();
+        assert_eq!(deleted, 1, "0 应被钳成 1 天：只删前天的");
+        assert!(!f_d2.exists());
+        // 若 0 没被钳制，cutoff 会变成今天 → 昨天的文件被误删。这两条钉死语义
+        assert!(f_d1.exists(), "昨天的文件必须保留（max(1) 语义）");
+        assert!(f_d0.exists(), "今天的文件必须保留");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 磁盘文件已丢失（用户手动删过 / 路径失效）时：返回值不计它（没删成任何文件），
+    /// 但 DB 引用仍要清成 NULL——否则每轮清理都反复尝试同一批死路径。
+    #[tokio::test]
+    async fn delete_screenshots_nulls_reference_even_when_file_missing() {
+        let pool = fresh_test_pool().await;
+        let ghost = std::env::temp_dir().join(format!(
+            "hindsight-shots-test-missing-{}.jpg",
+            uuid::Uuid::new_v4()
+        ));
+        assert!(!ghost.exists());
+        let date = (Local::now() - Duration::days(5))
+            .format("%Y-%m-%d")
+            .to_string();
+        let id = insert_shot_row(&pool, &date, Some(ghost.to_string_lossy().into())).await;
+
+        let deleted = delete_screenshots_older_than(&pool, 2).await.unwrap();
+        assert_eq!(deleted, 0, "文件本就不存在，删除计数应为 0");
+        assert_eq!(
+            read_screenshot_path(&pool, id).await,
+            None,
+            "文件删除失败也要清引用，避免死路径反复重试"
+        );
+    }
+
+    /// 测 [`seal_session`] 的 started_at 解析失败兜底：DB 里的 started_at 是非法
+    /// 时间串（外部写坏/同步来的脏数据）时回退 epoch 0——duration 退化成
+    /// "ended 的 unix 秒数"（巨大但非负），绝不能出现负值或 panic。
+    #[tokio::test]
+    async fn seal_session_garbage_started_at_falls_back_to_epoch_zero() {
+        let pool = fresh_test_pool().await;
+        let id = pool
+            .0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(
+                        'not-a-timestamp', 'not-a-timestamp', 0, '2026-05-15', 10,
+                        'Code', '', 'other', ?1, '2026-05-15T10:00:00Z', 'local'
+                     )",
+                    rusqlite::params![TEST_SELF_ID],
+                )
+                .db()?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .unwrap();
+
+        let ended = Local::now();
+        seal_session(&pool, id, ended).await.unwrap();
+
+        let (ended_at, dur) = read_ended_and_duration(&pool, id).await;
+        assert!(dur >= 0, "解析失败兜底后 duration 不得为负，实际 {dur}");
+        // started 回退 epoch 0 → dur 应恰等于 ended 的 unix 秒数（独立推导的期望值）
+        assert_eq!(dur, ended.timestamp(), "dur 应 = ended - epoch0");
+        assert_eq!(
+            ended_at,
+            ended.to_rfc3339(),
+            "ended_at 应钉成传入的结束时刻"
+        );
+    }
+
+    /// 测 [`seal_session`] 的负跨度钳制：final_ended_at 早于 started_at（挂机
+    /// 回拨分支可能出现）时，ended_at 钳到 started_at、duration 钳 0——
+    /// 不能写出负宽度行。
+    #[tokio::test]
+    async fn seal_session_clamps_negative_span_to_zero() {
+        let pool = fresh_test_pool().await;
+        let info = WindowInfo {
+            app_name: "Code".into(),
+            title: "main.rs".into(),
+            app_path: None,
+            pid: 0,
+        };
+        let captured = Local::now();
+        let id = insert_new(&pool, &info, captured, None).await.unwrap();
+
+        seal_session(&pool, id, captured - Duration::seconds(120))
+            .await
+            .unwrap();
+
+        let (ended_at, dur) = read_ended_and_duration(&pool, id).await;
+        assert_eq!(dur, 0, "负跨度必须钳 0");
+        assert_eq!(
+            ended_at,
+            captured.to_rfc3339(),
+            "ended_at 应钳回 started_at，不能小于它"
+        );
+    }
+
+    /// 插一行 sealed 活动并带 screenshot_path，返回 rowid。给清理测试造数据用。
+    async fn insert_shot_row(pool: &DbPool, local_date: &str, path: Option<String>) -> i64 {
+        let local_date = local_date.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, screenshot_path,
+                        device_id, updated_at, origin
+                     ) VALUES(
+                        ?1 || 'T10:00:00Z', ?1 || 'T10:00:30Z', 30, ?1, 10,
+                        'Code', '', 'other', ?2, ?3, ?1 || 'T10:00:30Z', 'local'
+                     )",
+                    rusqlite::params![local_date, path, TEST_SELF_ID],
+                )
+                .db()?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn read_screenshot_path(pool: &DbPool, id: i64) -> Option<String> {
+        pool.0
+            .call(move |conn| {
+                let p: Option<String> = conn
+                    .query_row(
+                        "SELECT screenshot_path FROM activities WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok(p)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn count_rows(pool: &DbPool) -> i64 {
+        pool.0
+            .call(|conn| {
+                let n: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM activities", [], |r| r.get(0))
+                    .db()?;
+                Ok(n)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn read_ended_and_duration(pool: &DbPool, id: i64) -> (String, i64) {
+        pool.0
+            .call(move |conn| {
+                let row = conn
+                    .query_row(
+                        "SELECT ended_at, duration_secs FROM activities WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)),
+                    )
+                    .db()?;
+                Ok(row)
+            })
+            .await
+            .unwrap()
+    }
+
     async fn read_remote_id(pool: &DbPool, id: i64) -> Option<String> {
         pool.0
             .call(move |conn| {

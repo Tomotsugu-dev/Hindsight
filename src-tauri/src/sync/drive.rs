@@ -336,6 +336,10 @@ pub struct InMemoryDriveStore {
     files: Mutex<HashMap<String, StoredFile>>,
     next_id: AtomicU64,
     clock: Mutex<i64>,
+    /// 测试注入开关：>0 时接下来 N 次 `upsert_by_name` 直接返回 500（模拟 Drive
+    /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
+    /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
+    fail_next_upserts: AtomicU64,
 }
 
 impl InMemoryDriveStore {
@@ -344,7 +348,15 @@ impl InMemoryDriveStore {
             files: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             clock: Mutex::new(0),
+            fail_next_upserts: AtomicU64::new(0),
         }
+    }
+
+    /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
+    /// 仅测试用 —— 验证 push 失败后 outbox 重试不变量。
+    #[allow(dead_code)]
+    pub fn fail_next_upserts(&self, n: u64) {
+        self.fail_next_upserts.store(n, Ordering::SeqCst);
     }
 
     async fn next_modified_time(&self) -> String {
@@ -385,6 +397,19 @@ impl InMemoryDriveStore {
     }
 
     pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
+        // 失败注入：配额 > 0 时原子扣减一次并返回 500。checked_sub 在 0 时返回
+        // None → fetch_update Err → 不注入，走正常路径。
+        if self
+            .fail_next_upserts
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_sub(1))
+            .is_ok()
+        {
+            return Err(Error::DriveHttp {
+                stage: "InMemory upsert (injected failure)",
+                status: 500,
+                body: "injected transient failure".into(),
+            });
+        }
         let mt = self.next_modified_time().await;
         let mut files = self.files.lock().await;
         // 找现有 name 对应的 id

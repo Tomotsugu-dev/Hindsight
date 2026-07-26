@@ -318,7 +318,11 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                 return Ok(Ok(()));
             }
 
-            conn.execute(
+            // 成员改指向 + outbox + 分类镜像必须原子:C 批测试实证过非事务下
+            // 镜像写失败(如 sync 竞争造成悬空 category 撞 FK)会留下"成员已挪、
+            // 分类没跟"的半成品状态。事务化后要么全成,要么全回滚。
+            let tx = conn.transaction().db()?;
+            tx.execute(
                 "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
                  VALUES(?, ?, ?, NULL)
                  ON CONFLICT(process_name) DO UPDATE SET
@@ -330,7 +334,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
             .db()?;
 
             enqueue(
-                conn,
+                &tx,
                 OutboxOp::Upsert,
                 OutboxEntity::AppGroupMember,
                 &src,
@@ -338,7 +342,8 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
             )
             .db()?;
 
-            sync_member_category(conn, &src, &tgt, &now)?;
+            sync_member_category(&tx, &src, &tgt, &now)?;
+            tx.commit().db()?;
 
             Ok(Ok(()))
         })
@@ -374,9 +379,12 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                 return Ok(());
             };
 
+            // 同 merge:每个成员的还原是 5 条写语句,解散锚点组还是多成员循环——
+            // 全部收进一个事务,半途失败不留"一半人还原了"的状态。
+            let tx = conn.transaction().db()?;
             if cur_group == p {
                 let others: Vec<String> = {
-                    let mut stmt = conn
+                    let mut stmt = tx
                         .prepare(
                             "SELECT process_name FROM app_group_members
                              WHERE group_id = ?1 AND deleted_at IS NULL AND process_name <> ?1",
@@ -392,11 +400,12 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
                     out
                 };
                 for o in &others {
-                    restore_solo_group(conn, o, cur_cat.as_deref(), &now)?;
+                    restore_solo_group(&tx, o, cur_cat.as_deref(), &now)?;
                 }
             } else {
-                restore_solo_group(conn, &p, cur_cat.as_deref(), &now)?;
+                restore_solo_group(&tx, &p, cur_cat.as_deref(), &now)?;
             }
+            tx.commit().db()?;
 
             Ok(())
         })
@@ -492,14 +501,17 @@ pub async fn assign_category(
 
     pool.0
         .call(move |conn| {
-            conn.execute(
+            // 组分类 + 全体成员镜像原子化:半途失败时不留"组换了分类、
+            // 部分成员还挂旧分类"的撕裂状态(报表会两边数字对不上)。
+            let tx = conn.transaction().db()?;
+            tx.execute(
                 "UPDATE app_groups SET category_id = ?2, updated_at = ?3
                  WHERE id = ?1",
                 rusqlite::params![id, cat, now],
             )
             .db()?;
             enqueue(
-                conn,
+                &tx,
                 OutboxOp::Upsert,
                 OutboxEntity::AppGroup,
                 &id,
@@ -509,7 +521,7 @@ pub async fn assign_category(
 
             // 把所有成员的 app_categories 同步到组的新分类
             let members: Vec<String> = {
-                let mut stmt = conn
+                let mut stmt = tx
                     .prepare(
                         "SELECT process_name FROM app_group_members
                          WHERE group_id = ?1 AND deleted_at IS NULL",
@@ -525,8 +537,9 @@ pub async fn assign_category(
                 out
             };
             for m in &members {
-                sync_app_category_row(conn, m, cat.as_deref(), &now)?;
+                sync_app_category_row(&tx, m, cat.as_deref(), &now)?;
             }
+            tx.commit().db()?;
             Ok(())
         })
         .await?;
@@ -929,5 +942,487 @@ mod tests {
             })
             .await
             .unwrap()
+    }
+
+    /// 读某成员当前 active 的 group_id（deleted_at IS NULL）；无 active 行返回 None。
+    async fn active_group_of(pool: &DbPool, process_name: &str) -> Option<String> {
+        let pn = process_name.to_string();
+        pool.0
+            .call(move |conn| {
+                let v = conn
+                    .query_row(
+                        "SELECT group_id FROM app_group_members
+                         WHERE process_name = ?1 AND deleted_at IS NULL",
+                        rusqlite::params![pn],
+                        |r| r.get::<_, String>(0),
+                    )
+                    .optional()
+                    .db()?;
+                Ok(v)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 读 app_categories 一行的 (category_id, 是否软删)。行不存在返回 None ——
+    /// 与「行存在但软删」区分开：镜像通道对这两种状态的语义不同。
+    async fn app_category_state(
+        pool: &DbPool,
+        process_name: &str,
+    ) -> Option<(Option<String>, bool)> {
+        let pn = process_name.to_string();
+        pool.0
+            .call(move |conn| {
+                let v = conn
+                    .query_row(
+                        "SELECT category_id, deleted_at IS NOT NULL
+                         FROM app_categories WHERE process_name = ?1",
+                        rusqlite::params![pn],
+                        |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, bool>(1)?)),
+                    )
+                    .optional()
+                    .db()?;
+                Ok(v)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 读 app_groups 一行的 (display_name, category_id, 是否软删)。
+    async fn group_state(pool: &DbPool, id: &str) -> Option<(String, Option<String>, bool)> {
+        let id = id.to_string();
+        pool.0
+            .call(move |conn| {
+                let v = conn
+                    .query_row(
+                        "SELECT display_name, category_id, deleted_at IS NOT NULL
+                         FROM app_groups WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| {
+                            Ok((
+                                r.get::<_, String>(0)?,
+                                r.get::<_, Option<String>>(1)?,
+                                r.get::<_, bool>(2)?,
+                            ))
+                        },
+                    )
+                    .optional()
+                    .db()?;
+                Ok(v)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 测 [`merge`] 成功链路的完整收尾：成员改指向目标组之外，
+    /// [`sync_member_category`] 必须把目标组的 category 镜像进 app_categories，
+    /// 并且 member + app_category 都入 outbox（对端靠它拉到同样状态）。
+    /// 附带边界：目标 category=NULL 时镜像软删；目标软删时拒绝；同组重复 merge 幂等。
+    #[tokio::test]
+    async fn merge_repoints_member_and_mirrors_target_category_with_outbox() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                // 目标组 vscode（分类 code）；源 chrome.exe 自己一个组，
+                // 且旧镜像行是 browse —— merge 后必须被目标分类覆盖，才能证明
+                // sync_member_category 真的跑了，而不是碰巧读到旧值。
+                // 注意：app_categories.category_id 有 REFERENCES categories(id)
+                // 且本仓库的 SQLite 强制 FK，seed 只能用 migrations 预置的分类 id
+                //（code/browse/talk/design/fun/other）。
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('vscode', 'vscode', 'code', ?1, NULL),
+                           ('notes',  'notes',  NULL,   ?1, NULL),
+                           ('dead',   'dead',   'fun',  ?1, ?1),
+                           ('chrome.exe', 'chrome.exe', 'browse', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('chrome.exe', 'chrome.exe', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                     VALUES('chrome.exe', 'browse', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        merge(&pool, "chrome.exe", "vscode").await.unwrap();
+
+        assert_eq!(
+            active_group_of(&pool, "chrome.exe").await.as_deref(),
+            Some("vscode"),
+            "merge 后成员应指向目标组"
+        );
+        assert_eq!(
+            app_category_state(&pool, "chrome.exe").await,
+            Some((Some("code".into()), false)),
+            "镜像行应被目标组分类覆盖（browse → code）且保持 active"
+        );
+        // 裸 INSERT seed 不产生 outbox，所以这里的计数就是 merge 一次的净产出：
+        // 1 条 member + 1 条 app_category（镜像跟随）。
+        let ob = outbox_summary(&pool).await;
+        assert_eq!(
+            ob.member_count, 1,
+            "merge 应写 1 条 app_group_member outbox"
+        );
+        assert_eq!(
+            ob.app_category_count, 1,
+            "sync_member_category 收尾应写 1 条 app_category outbox"
+        );
+
+        // 幂等：已经在目标组，再 merge 一次应是纯 no-op（不写 DB 也不写 outbox）
+        let before = outbox_total(&pool).await;
+        merge(&pool, "chrome.exe", "vscode").await.unwrap();
+        assert_eq!(
+            outbox_total(&pool).await,
+            before,
+            "同组重复 merge 不应产生新 outbox"
+        );
+
+        // 目标组 category=NULL：镜像走软删分支（旧 reports 查不到分类 = 未分类）
+        merge(&pool, "chrome.exe", "notes").await.unwrap();
+        assert_eq!(
+            app_category_state(&pool, "chrome.exe").await,
+            Some((Some("code".into()), true)),
+            "并入无分类组后镜像行应被软删（category 值不清空但 deleted_at 置位）"
+        );
+
+        // 软删的目标组视同不存在：拒绝并且成员不动
+        let err = merge(&pool, "chrome.exe", "dead").await.unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidInput(_)),
+            "目标组软删应返回 InvalidInput，实际: {err:?}"
+        );
+        assert_eq!(
+            active_group_of(&pool, "chrome.exe").await.as_deref(),
+            Some("notes"),
+            "merge 失败后成员应停留在原组"
+        );
+    }
+
+    /// 测 [`unmerge`] → [`restore_solo_group`]：
+    /// - 单成员组已软删 → ON CONFLICT 复活，但**不**覆盖用户改过的 display_name
+    /// - 复活时 category 跟随「拆出前所在组」的分类（用户拆开后分类不丢）
+    /// - 单成员组从未存在 → 新建，display_name = process_name
+    /// - 镜像 + outbox 跟随
+    #[tokio::test]
+    async fn unmerge_revives_solo_group_keeping_display_name_and_carrying_category() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                // vscode 组（分类 code）里有 3 个成员；其中 Code.exe 的单成员组
+                // 之前被软删过，且用户改过名（"我的编辑器"）、挂过旧分类 old-cat ——
+                // 复活时名字必须保住，分类必须换成现组的 code。
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('vscode',   'vscode',     'code',    ?1, NULL),
+                           ('Code.exe', '我的编辑器', 'old-cat', ?1, ?1)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('Code',     'vscode', ?1, NULL),
+                           ('Code.exe', 'vscode', ?1, NULL),
+                           ('OtherApp', 'vscode', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // 1) 复活软删组的路径
+        unmerge(&pool, "Code.exe").await.unwrap();
+
+        let (name, cat, deleted) = group_state(&pool, "Code.exe").await.unwrap();
+        assert!(!deleted, "软删的单成员组应被复活");
+        assert_eq!(name, "我的编辑器", "复活不应覆盖用户改过的 display_name");
+        assert_eq!(
+            cat.as_deref(),
+            Some("code"),
+            "复活组应携带拆出前所在组（vscode）的分类，而非残留的 old-cat"
+        );
+        assert_eq!(
+            active_group_of(&pool, "Code.exe").await.as_deref(),
+            Some("Code.exe"),
+            "成员应回到自己的单成员组"
+        );
+        assert_eq!(
+            app_category_state(&pool, "Code.exe").await,
+            Some((Some("code".into()), false)),
+            "app_categories 镜像应同步为原组分类"
+        );
+        let ob = outbox_summary(&pool).await;
+        assert_eq!(ob.group_count, 1, "复活组应写 1 条 app_group outbox");
+        assert_eq!(ob.member_count, 1, "成员改指向应写 1 条 member outbox");
+        assert_eq!(
+            ob.app_category_count, 1,
+            "镜像跟随应写 1 条 app_category outbox"
+        );
+
+        // 2) 单成员组从未存在 → 全新 INSERT，display_name 用 process_name 本身
+        unmerge(&pool, "OtherApp").await.unwrap();
+        let (name, cat, deleted) = group_state(&pool, "OtherApp").await.unwrap();
+        assert!(!deleted);
+        assert_eq!(
+            name, "OtherApp",
+            "新建单成员组 display_name 应为 process_name"
+        );
+        assert_eq!(cat.as_deref(), Some("code"), "新建组同样携带原组分类");
+        assert_eq!(
+            active_group_of(&pool, "OtherApp").await.as_deref(),
+            Some("OtherApp")
+        );
+
+        // 3) 边界：process_name 没有 active member 行 → 静默 no-op，不写 outbox
+        let before = outbox_total(&pool).await;
+        unmerge(&pool, "从未出现过的进程").await.unwrap();
+        assert_eq!(
+            outbox_total(&pool).await,
+            before,
+            "未知 process_name 的 unmerge 应是 no-op"
+        );
+    }
+
+    /// 测 [`list_groups`] 组装逻辑：
+    /// - 成员指向软删组（组 SELECT 过滤掉了）→ 该成员静默丢弃，不 panic 不串组
+    /// - recent_secs 只算近 7 天窗口，且跨设备按 process_name 求和
+    /// - 组间排序按「组内最大 recent_secs」降序（不是求和、不是首成员）
+    /// - last_device_id 取全历史 ended_at 最大的那条活动的设备
+    #[tokio::test]
+    async fn list_groups_drops_orphan_members_and_sorts_by_max_recent_secs() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                // 组插入顺序故意与期望输出相反（beta 在前），排错了就会暴露。
+                // zombie 是软删组：ghost 成员指向它 → list_groups 的组列表里没有它。
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('beta',   'beta',   NULL, ?1, NULL),
+                           ('alpha',  'alpha',  NULL, ?1, NULL),
+                           ('empty',  'empty',  NULL, ?1, NULL),
+                           ('zombie', 'zombie', NULL, ?1, ?1)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('b1',    'beta',   ?1, NULL),
+                           ('a1',    'alpha',  ?1, NULL),
+                           ('a2',    'alpha',  ?1, NULL),
+                           ('ghost', 'zombie', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                // 活动数据（duration 单位秒）：
+                //   a1: 60(mac, 2h前结束) + 40(win, 1h前结束) → recent 100，last_device=win
+                //   a2: 200(mac) + 300(win) → 跨设备求和 500 → alpha 组内最大值
+                //   b1: 300(今天) + 9999(30 天前，窗口外必须排除；若被计入 beta 会错排第一)
+                //   ghost: 77777 → 即使很大也该整个被丢弃
+                // 注意 alpha 的最大值来自第二个成员 a2 —— 若实现错拿首成员排序会暴露。
+                conn.execute_batch(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                                            local_hour, process_name, category_id, device_id)
+                     VALUES
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'),
+                        60, date('now','localtime'), 9, 'a1', 'work', 'mac'),
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hours'),
+                        40, date('now','localtime'), 10, 'a1', 'work', 'win'),
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'),
+                        200, date('now','localtime'), 9, 'a2', 'work', 'mac'),
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hours'),
+                        300, date('now','localtime'), 10, 'a2', 'work', 'win'),
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hours'),
+                        300, date('now','localtime'), 10, 'b1', 'work', 'mac'),
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 days'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 days'),
+                        9999, date('now','localtime','-30 days'), 10, 'b1', 'work', 'old-box'),
+                       (strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'),
+                        strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hours'),
+                        77777, date('now','localtime'), 10, 'ghost', 'work', 'mac');",
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let groups = list_groups(&pool).await.unwrap();
+
+        // 排序：alpha(max=500) > beta(max=300) > empty(max=0)；zombie 不出现
+        let order: Vec<&str> = groups.iter().map(|g| g.id.as_str()).collect();
+        assert_eq!(
+            order,
+            vec!["alpha", "beta", "empty"],
+            "应按组内最大 recent_secs 降序，且软删组不出现"
+        );
+
+        // ghost 指向软删组 → 任何组里都不该出现（静默丢弃，而不是挂错组）
+        assert!(
+            groups
+                .iter()
+                .flat_map(|g| &g.members)
+                .all(|m| m.process_name != "ghost"),
+            "指向软删组的成员应被丢弃"
+        );
+
+        let alpha = &groups[0];
+        let a1 = alpha
+            .members
+            .iter()
+            .find(|m| m.process_name == "a1")
+            .expect("alpha 应含成员 a1");
+        let a2 = alpha
+            .members
+            .iter()
+            .find(|m| m.process_name == "a2")
+            .expect("alpha 应含成员 a2");
+        assert_eq!(a1.recent_secs, 100, "a1 = 60 + 40");
+        assert_eq!(a2.recent_secs, 500, "a2 跨设备求和 = 200 + 300");
+        assert_eq!(
+            a1.last_device_id.as_deref(),
+            Some("win"),
+            "last_device_id 应取 ended_at 最大那条活动的设备"
+        );
+
+        let beta = &groups[1];
+        assert_eq!(beta.members.len(), 1);
+        assert_eq!(
+            beta.members[0].recent_secs, 300,
+            "30 天前的 9999 秒在 7 天窗口外，必须被排除"
+        );
+
+        // 空组：members 为空但组仍在列表里（排最后）
+        assert!(groups[2].members.is_empty(), "empty 组应无成员但仍返回");
+    }
+
+    /// 回归:merge 的写序列必须原子(C 批审计实锤的部分写入 bug)。
+    ///
+    /// 场景:目标组 category_id 悬空('no-such-cat',app_groups.category_id
+    /// 无 FK 所以 seed 得进去),merge 走到 sync_member_category 给
+    /// app_categories 写镜像时撞 FK(app_categories.category_id 有 FK)。
+    /// 修复前:member 已改指向目标组 + outbox 已 enqueue,只有镜像没写 ——
+    /// 半成品状态。修复后:整个事务回滚,除了返回 Err 什么都没发生。
+    #[tokio::test]
+    async fn merge_rolls_back_entirely_when_mirror_fk_fails() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('tgt-grp', '目标组', 'no-such-cat', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('src-grp', '来源组', NULL, ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('SrcApp', 'src-grp', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let outbox_before = outbox_total(&pool).await;
+
+        let res = merge(&pool, "SrcApp", "tgt-grp").await;
+        assert!(res.is_err(), "镜像 FK 失败应让 merge 整体返回 Err");
+
+        // 回滚核对:成员没被挪走、outbox 没多一行、镜像没写
+        let (member_group, mirror_rows): (String, i64) = pool
+            .0
+            .call(|conn| {
+                let g: String = conn
+                    .query_row(
+                        "SELECT group_id FROM app_group_members WHERE process_name = 'SrcApp'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                let m: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM app_categories WHERE process_name = 'SrcApp'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                Ok((g, m))
+            })
+            .await
+            .unwrap();
+        assert_eq!(member_group, "src-grp", "回滚后成员应仍指向原组");
+        assert_eq!(mirror_rows, 0, "回滚后不应留下 app_categories 镜像行");
+        assert_eq!(
+            outbox_total(&pool).await,
+            outbox_before,
+            "回滚后 outbox 不应有新增行"
+        );
+    }
+
+    /// 回归:assign_category 同样必须原子 —— 组行更新 + outbox 成功后,
+    /// 成员镜像撞 FK,修复前会留下"组换了分类、成员镜像还是旧的"的撕裂。
+    #[tokio::test]
+    async fn assign_category_rolls_back_group_update_when_mirror_fk_fails() {
+        let pool = fresh_test_pool().await;
+        seed_vscode_group(&pool).await;
+        let outbox_before = outbox_total(&pool).await;
+
+        let res = assign_category(&pool, "vscode", Some("no-such-cat".to_string())).await;
+        assert!(
+            res.is_err(),
+            "成员镜像 FK 失败应让 assign_category 整体 Err"
+        );
+
+        let group_cat: Option<String> = pool
+            .0
+            .call(|conn| {
+                let c = conn
+                    .query_row(
+                        "SELECT category_id FROM app_groups WHERE id = 'vscode'",
+                        [],
+                        |r| r.get::<_, Option<String>>(0),
+                    )
+                    .db()?;
+                Ok(c)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            group_cat.as_deref(),
+            Some("code"),
+            "回滚后组的 category_id 应保持原值"
+        );
+        assert_eq!(
+            outbox_total(&pool).await,
+            outbox_before,
+            "回滚后 outbox 不应有新增行"
+        );
     }
 }

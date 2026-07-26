@@ -177,6 +177,12 @@ fn write_raw_sheet(
     spec: &RawSheetSpec,
     mut rows: Vec<RawRow>,
 ) -> Result<(), String> {
+    // headers 由前端经 IPC 传入(RawSheetSpec: Deserialize),属信任边界输入:
+    // 空表头在 add_table 分支会让 `headers.len() - 1` 下溢(debug panic,
+    // release 回绕成 u16::MAX 列),统一提前拒绝。
+    if spec.headers.is_empty() {
+        return Err("raw sheet: headers 不能为空".into());
+    }
     let dur_fmt = Format::new().set_num_format("[h]:mm");
     let date_fmt = Format::new().set_num_format("yyyy-mm-dd");
     let time_fmt = Format::new().set_num_format("hh:mm:ss");
@@ -568,5 +574,235 @@ mod tests {
         assert!(spec.sheets[0].table);
         assert!(matches!(spec.sheets[0].rows[0][5], Cell::Dur(v) if v == 90.0));
         assert!(matches!(spec.sheets[0].rows[0][6], Cell::Pct(v) if v == 0.5));
+    }
+
+    // ═════════════ write_raw_sheet ═════════════
+
+    fn tmp_xlsx(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("hindsight-xlsx-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(format!("{name}-{}.xlsx", std::process::id()))
+    }
+
+    /// 读 xlsx（zip 容器）里一个 entry 的全文。zip crate 是主 crate 现有依赖。
+    fn zip_entry(path: &std::path::Path, name: &str) -> String {
+        use std::io::Read;
+        let mut z = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+        let mut s = String::new();
+        z.by_name(name)
+            .unwrap_or_else(|e| panic!("xlsx 里应有 {name}: {e}"))
+            .read_to_string(&mut s)
+            .unwrap();
+        s
+    }
+
+    fn zip_has_entry(path: &std::path::Path, name: &str) -> bool {
+        let mut z = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+        let found = z.by_name(name).is_ok();
+        found
+    }
+
+    /// 只解压 entry 的前 `limit` 字节——超大 sheet XML（百万行）取头部看 dimension 就够。
+    fn zip_entry_prefix(path: &std::path::Path, name: &str, limit: usize) -> String {
+        use std::io::Read;
+        let mut z = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+        let mut f = z.by_name(name).unwrap();
+        let mut buf = vec![0u8; limit];
+        let mut n = 0;
+        while n < limit {
+            let k = f.read(&mut buf[n..]).unwrap();
+            if k == 0 {
+                break;
+            }
+            n += k;
+        }
+        String::from_utf8_lossy(&buf[..n]).into_owned()
+    }
+
+    fn raw_spec(
+        headers: Vec<String>,
+        category_names: Vec<(String, String)>,
+        note: &str,
+    ) -> RawSheetSpec {
+        RawSheetSpec {
+            name: "明细".into(),
+            headers,
+            start: "2026-01-01".into(),
+            end: "2026-12-31".into(),
+            device_id: None,
+            category_names,
+            truncated_note: note.into(),
+        }
+    }
+
+    fn seven_headers() -> Vec<String> {
+        [
+            "日期",
+            "开始时间",
+            "时长",
+            "应用",
+            "窗口标题",
+            "分类",
+            "设备",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect()
+    }
+
+    /// 真类型单元格：日期/开始时间是数值型 Excel 序列（非文本），时长走
+    /// 分钟→天的时间序列 + `[h]:mm` 格式；分类名有映射用映射、缺失回退原 id；
+    /// 数据落成真正的 Excel Table（表头进 table1.xml）。
+    #[test]
+    fn raw_sheet_writes_typed_cells_category_mapping_and_fallback() {
+        let rows = vec![
+            RawRow {
+                date: "2026-07-18".into(),
+                started: "2026-07-18T10:30:00".into(),
+                minutes: 90.0,
+                app: "QQ音乐".into(),
+                title: "歌单".into(),
+                category_id: "media".into(),
+                device: "MacBook".into(),
+            },
+            RawRow {
+                date: "2026-07-19".into(),
+                started: "not-a-time".into(), // 解析失败 → 该格跳过，不 panic
+                minutes: 0.0,
+                app: "ungrouped.exe".into(),
+                title: String::new(),
+                category_id: "mystery-cat".into(), // 无映射 → 回退原 id
+                device: "dev-b".into(),
+            },
+        ];
+        let spec = raw_spec(
+            seven_headers(),
+            vec![("media".into(), "媒体".into())],
+            "截断说明",
+        );
+        let mut wb = Workbook::new();
+        write_raw_sheet(&mut wb, &spec, rows).unwrap();
+        let path = tmp_xlsx("raw-typed");
+        wb.save(&path).unwrap();
+
+        let sheet = zip_entry(&path, "xl/worksheets/sheet1.xml");
+        // 真日期类型：serial = 距 Excel 纪元 1899-12-30 的天数（数值单元格 <v>）
+        let epoch = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
+        let serial = (chrono::NaiveDate::from_ymd_opt(2026, 7, 18).unwrap() - epoch).num_days();
+        assert!(
+            sheet.contains(&format!("<v>{serial}</v>")),
+            "日期应写成 Excel 序列数值 {serial}"
+        );
+        // 开始时间 10:30 → serial + 0.4375
+        assert!(
+            sheet.contains(&format!("<v>{serial}.4375</v>")),
+            "datetime 应写成 serial+小数"
+        );
+        // 时长 90 分钟 → 90/1440 = 0.0625（Excel 时间序列，仍是数字可排序求和）
+        assert!(sheet.contains("<v>0.0625</v>"), "时长应是分钟/1440 的数值");
+
+        // [h]:mm / hh:mm:ss 数字格式注册在 styles.xml
+        let styles = zip_entry(&path, "xl/styles.xml");
+        assert!(styles.contains("[h]:mm"), "时长格式 [h]:mm 应注册");
+        assert!(styles.contains("hh:mm:ss"), "开始时间格式应注册");
+
+        // 分类名映射 + 缺失回退
+        let sst = zip_entry(&path, "xl/sharedStrings.xml");
+        assert!(sst.contains("媒体"), "media 应映射为显示名");
+        assert!(!sst.contains("<t>media</t>"), "已映射的原 id 不应再出现");
+        assert!(sst.contains("mystery-cat"), "缺映射的分类应回退原 id");
+        for s in ["QQ音乐", "歌单", "MacBook", "ungrouped.exe", "dev-b"] {
+            assert!(sst.contains(s), "字符串列应含 {s}");
+        }
+        assert!(!sst.contains("截断说明"), "未超上限不得写截断注脚");
+
+        // 真 Excel Table：表头进 table1.xml
+        let table = zip_entry(&path, "xl/tables/table1.xml");
+        for h in &spec.headers {
+            assert!(table.contains(h.as_str()), "Table 应含表头 {h}");
+        }
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// 空结果：退化为纯表头（无 Table part、无注脚），dimension 只有第 1 行。
+    #[test]
+    fn raw_sheet_empty_rows_writes_plain_header_no_table() {
+        let spec = raw_spec(seven_headers(), vec![], "NOTE_MARK");
+        let mut wb = Workbook::new();
+        write_raw_sheet(&mut wb, &spec, vec![]).unwrap();
+        let path = tmp_xlsx("raw-empty");
+        wb.save(&path).unwrap();
+
+        assert!(
+            !zip_has_entry(&path, "xl/tables/table1.xml"),
+            "空结果不应生成 Table part"
+        );
+        let sst = zip_entry(&path, "xl/sharedStrings.xml");
+        for h in &spec.headers {
+            assert!(sst.contains(h.as_str()), "普通表头应写出 {h}");
+        }
+        assert!(!sst.contains("NOTE_MARK"), "空结果未截断，不写注脚");
+        let sheet = zip_entry(&path, "xl/worksheets/sheet1.xml");
+        assert!(
+            sheet.contains(r#"ref="A1:G1""#),
+            "只有 7 格表头一行: {}",
+            &sheet[..sheet.len().min(400)]
+        );
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// 超 RAW_ROW_CAP 截断：100 万零 1 行进来 → 数据止步 100 万行 + 表末追加注脚。
+    /// 表头 1 行 + 数据 1_000_000 行 + 注脚 1 行 = dimension 到 1000002。
+    /// 注意：真写百万行，是本文件最重的一条（秒级）。
+    #[test]
+    fn raw_sheet_truncates_at_cap_and_appends_note() {
+        let rows: Vec<RawRow> = (0..RAW_ROW_CAP + 1)
+            .map(|_| RawRow {
+                date: String::new(),    // 解析失败 → 跳过，省体积
+                started: String::new(), // 同上
+                minutes: 0.0,
+                app: String::new(),
+                title: String::new(),
+                category_id: String::new(),
+                device: String::new(),
+            })
+            .collect();
+        let spec = raw_spec(seven_headers(), vec![], "NOTE_TRUNCATED_MARK");
+        let mut wb = Workbook::new();
+        write_raw_sheet(&mut wb, &spec, rows).unwrap();
+        let path = tmp_xlsx("raw-cap");
+        wb.save(&path).unwrap();
+
+        let head = zip_entry_prefix(&path, "xl/worksheets/sheet1.xml", 2048);
+        assert!(
+            head.contains(r#"ref="A1:G1000002""#),
+            "数据应止步 CAP（表头1 + 数据100万 + 注脚1 行）: {head}"
+        );
+        let sst = zip_entry(&path, "xl/sharedStrings.xml");
+        assert!(sst.contains("NOTE_TRUNCATED_MARK"), "截断注脚应写在表末");
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// 回归(原 usize 下溢 bug):headers 为空时,add_table 分支的
+    /// `(spec.headers.len() - 1) as u16` 曾在 debug 下 panic、release 下
+    /// 回绕成 u16::MAX 列。修复后入口统一校验,rows 有无都干净返回 Err。
+    #[test]
+    fn raw_sheet_empty_headers_is_rejected_not_underflow() {
+        let rows = vec![RawRow {
+            date: "2026-07-18".into(),
+            started: "2026-07-18T10:00:00".into(),
+            minutes: 1.0,
+            app: "a".into(),
+            title: "t".into(),
+            category_id: "c".into(),
+            device: "d".into(),
+        }];
+        for rows in [rows, vec![]] {
+            let spec = raw_spec(vec![], vec![], "");
+            let mut wb = Workbook::new();
+            let err = write_raw_sheet(&mut wb, &spec, rows)
+                .expect_err("空 headers 应被入口校验拒绝(修复前是 panic/回绕)");
+            assert!(err.contains("headers"), "错误信息应指明 headers: {err}");
+        }
     }
 }

@@ -243,7 +243,28 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     }
 
     // Pass 2: 其余类型；对平台特定的两类做 OS 过滤。
-    for (i, f) in files.iter().enumerate() {
+    //
+    // FK 依赖排序:同一批内「被引用方」(categories / app_groups)必须先于
+    // 「引用方」(app_categories / app_group_members)合并——push 端 dirty 文件按
+    // HashMap 随机序上传,若子表文件的 modifiedTime 恰好在前,行级 INSERT 会撞
+    // FOREIGN KEY 失败,被 merge_lww_simple 单行降级跳过,而游标照常越过该文件,
+    // 该行从此永不再被拉取(同 tick「新建分类 + 给应用归类」约一半概率踩中,
+    // C 批同步测试实证)。稳定排序:先按依赖层级,层内保持 Drive 的 modifiedTime
+    // 原序;LWW + 幂等 upsert 保证处理顺序重排无副作用,handled[] 前缀游标按
+    // 原始文件序计算,不受遍历顺序影响。
+    let pass2_order: Vec<usize> = {
+        let rank = |name: &str| -> u8 {
+            match parse_filename(name) {
+                Some(ParsedFile::Categories { .. }) | Some(ParsedFile::AppGroups { .. }) => 0,
+                _ => 1,
+            }
+        };
+        let mut idx: Vec<usize> = (0..files.len()).collect();
+        idx.sort_by_key(|&i| rank(&files[i].name));
+        idx
+    };
+    for &i in &pass2_order {
+        let f = &files[i];
         let parsed = match parse_filename(&f.name) {
             Some(p) => p,
             // 不认识的文件名 Pass 1 已 mark handled=true，跳过
@@ -1433,5 +1454,637 @@ mod tests {
             })
             .await
             .unwrap()
+    }
+
+    // ═════════ metadata merge 直测(补测 C 批):fixture / 查询 helper ═════════
+
+    /// 三个梯度时间戳:T_OLD < T_MID < T_NEW,期望值全部手推。
+    const T_OLD: &str = "2026-06-01T00:00:00Z";
+    const T_MID: &str = "2026-06-02T00:00:00Z";
+    const T_NEW: &str = "2026-06-03T00:00:00Z";
+    const REMOTE_DEV: &str = "device-x";
+
+    /// 通用 fixture:一条参数化 SQL(全 String 参数)直写表。
+    async fn exec_sql(pool: &DbPool, sql: &'static str, params: Vec<Option<String>>) {
+        pool.0
+            .call(move |conn| {
+                let refs: Vec<&dyn rusqlite::ToSql> =
+                    params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+                conn.execute(sql, refs.as_slice()).db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    fn s(v: &str) -> Option<String> {
+        Some(v.to_string())
+    }
+
+    /// 读一行的若干 TEXT 列(逐列 Option<String>),行不存在返回 None。
+    async fn read_row(
+        pool: &DbPool,
+        sql: &'static str,
+        key: &str,
+        cols: usize,
+    ) -> Option<Vec<Option<String>>> {
+        let key = key.to_string();
+        pool.0
+            .call(move |conn| {
+                use rusqlite::OptionalExtension;
+                let r = conn
+                    .query_row(sql, rusqlite::params![key], |r| {
+                        (0..cols).map(|i| r.get::<_, Option<String>>(i)).collect()
+                    })
+                    .optional()
+                    .db()?;
+                Ok(r)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// outbox 现有行的 (entity, entity_pk) 列表,按 id 序 —— 断言回灌行为用。
+    async fn outbox_entries(pool: &DbPool) -> Vec<(String, String)> {
+        pool.0
+            .call(|conn| {
+                let mut stmt = conn
+                    .prepare("SELECT entity, entity_pk FROM sync_outbox ORDER BY id")
+                    .db()?;
+                let rows = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                Ok(rows)
+            })
+            .await
+            .unwrap()
+    }
+
+    fn category_body(id: &str, name: &str, updated_at: &str, deleted_at: Option<&str>) -> Vec<u8> {
+        serde_json::to_vec(&vec![CategoryPayload {
+            id: id.into(),
+            name: name.into(),
+            color: "#123456".into(),
+            icon: "Tag".into(),
+            builtin: false,
+            sort_order: 3,
+            updated_at: updated_at.into(),
+            deleted_at: deleted_at.map(String::from),
+        }])
+        .unwrap()
+    }
+
+    // ───────── 任务 2:merge_categories ─────────
+
+    /// 远端 updated_at 较旧(即使带墓碑)不得覆盖本地,更不得触发级联。
+    #[tokio::test]
+    async fn merge_categories_remote_older_does_not_overwrite() {
+        let pool = fresh_test_pool().await;
+        exec_sql(
+            &pool,
+            "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
+             VALUES('work', '本地新名', '#aaaaaa', 'Star', 0, 1, ?1, NULL)",
+            vec![s(T_MID)],
+        )
+        .await;
+
+        // 远端 T_OLD < 本地 T_MID,且远端还带 deleted_at —— LWW 输了就该整行按兵不动
+        merge_categories(
+            &pool,
+            REMOTE_DEV,
+            &category_body("work", "远端旧名", T_OLD, Some(T_OLD)),
+        )
+        .await
+        .unwrap();
+
+        let row = read_row(
+            &pool,
+            "SELECT name, updated_at, deleted_at FROM categories WHERE id = ?1",
+            "work",
+            3,
+        )
+        .await
+        .expect("本地行应仍存在");
+        assert_eq!(
+            row,
+            vec![s("本地新名"), s(T_MID), None],
+            "远端较旧:name / updated_at / deleted_at 都不得被改动"
+        );
+        assert!(
+            outbox_entries(&pool).await.is_empty(),
+            "LWW 输了不得触发级联回灌 outbox"
+        );
+    }
+
+    /// deleted_at 首次出现触发级联:指向该分类的 app_categories 成员被软删 +
+    /// 引用它的 app_groups 回到未分类,两者各回灌一行 outbox;
+    /// 同 body 重复 merge 幂等 —— LWW gate(严格 >)挡住第二次,级联不重跑。
+    #[tokio::test]
+    async fn merge_categories_first_tombstone_cascades_then_idempotent() {
+        let pool = fresh_test_pool().await;
+        exec_sql(
+            &pool,
+            "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
+             VALUES('work', '工作', '#aaaaaa', 'Star', 0, 1, ?1, NULL)",
+            vec![s(T_OLD)],
+        )
+        .await;
+        exec_sql(
+            &pool,
+            "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+             VALUES('Code', 'work', ?1, NULL)",
+            vec![s(T_OLD)],
+        )
+        .await;
+        exec_sql(
+            &pool,
+            "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+             VALUES('grp1', '组一', 'work', ?1, NULL)",
+            vec![s(T_OLD)],
+        )
+        .await;
+
+        let body = category_body("work", "工作", T_NEW, Some(T_NEW));
+        merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
+
+        // 分类本体落墓碑
+        let cat = read_row(
+            &pool,
+            "SELECT updated_at, deleted_at FROM categories WHERE id = ?1",
+            "work",
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(cat, vec![s(T_NEW), s(T_NEW)], "分类应带上远端墓碑");
+
+        // 级联 1:成员 app_categories 被软删,时间戳 = 远端 updated_at
+        let ac = read_row(
+            &pool,
+            "SELECT updated_at, deleted_at FROM app_categories WHERE process_name = ?1",
+            "Code",
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            ac,
+            vec![s(T_NEW), s(T_NEW)],
+            "app_categories 成员应被级联软删"
+        );
+
+        // 级联 2:引用组回到未分类
+        let grp = read_row(
+            &pool,
+            "SELECT category_id, updated_at FROM app_groups WHERE id = ?1",
+            "grp1",
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(grp, vec![None, s(T_NEW)], "引用该分类的组应被清到未分类");
+
+        // 级联产生的本地变更需要推回云端:恰好两行回灌
+        let entries = outbox_entries(&pool).await;
+        assert_eq!(
+            entries,
+            vec![
+                ("app_category".to_string(), "Code".to_string()),
+                ("app_group".to_string(), "grp1".to_string()),
+            ],
+            "级联应各回灌一行 outbox(成员软删 + 组脱钩)"
+        );
+
+        // 同 body 再 merge 一次:LWW 严格 > 挡住,级联不重跑、outbox 不再增长
+        merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
+        assert_eq!(
+            outbox_entries(&pool).await.len(),
+            2,
+            "重复 merge 不得二次级联(outbox 行数应保持 2)"
+        );
+    }
+
+    // ───────── 任务 4:三个 LWW 模板 merge ─────────
+
+    /// merge_app_categories:较新覆盖(含墓碑)/ 较旧保留 / 同 updated_at 严格不覆盖 /
+    /// 本地无行插入。四个 key 一次 merge,期望互相独立。
+    #[tokio::test]
+    async fn merge_app_categories_lww_matrix() {
+        let pool = fresh_test_pool().await;
+        for (proc, ts) in [("A-newer", T_OLD), ("A-older", T_NEW), ("A-equal", T_MID)] {
+            exec_sql(
+                &pool,
+                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                 VALUES(?1, 'code', ?2, NULL)",
+                vec![s(proc), s(ts)],
+            )
+            .await;
+        }
+        let body = serde_json::to_vec(&vec![
+            // 远端更新 + 墓碑 → 覆盖
+            AppCategoryPayload {
+                process_name: "A-newer".into(),
+                category_id: "fun".into(),
+                updated_at: T_MID.into(),
+                deleted_at: Some(T_MID.into()),
+            },
+            // 远端较旧 → 保留本地
+            AppCategoryPayload {
+                process_name: "A-older".into(),
+                category_id: "fun".into(),
+                updated_at: T_MID.into(),
+                deleted_at: None,
+            },
+            // 同 updated_at → 严格 > 不成立,不覆盖
+            AppCategoryPayload {
+                process_name: "A-equal".into(),
+                category_id: "fun".into(),
+                updated_at: T_MID.into(),
+                deleted_at: None,
+            },
+            // 本地无行 → 插入
+            AppCategoryPayload {
+                process_name: "A-missing".into(),
+                category_id: "fun".into(),
+                updated_at: T_OLD.into(),
+                deleted_at: None,
+            },
+        ])
+        .unwrap();
+        merge_app_categories(&pool, REMOTE_DEV, &body)
+            .await
+            .unwrap();
+
+        let get = |p: &'static str| {
+            read_row(
+                &pool,
+                "SELECT category_id, updated_at, deleted_at FROM app_categories WHERE process_name = ?1",
+                p,
+                3,
+            )
+        };
+        assert_eq!(
+            get("A-newer").await.unwrap(),
+            vec![s("fun"), s(T_MID), s(T_MID)],
+            "远端较新应覆盖(含墓碑落地)"
+        );
+        assert_eq!(
+            get("A-older").await.unwrap(),
+            vec![s("code"), s(T_NEW), None],
+            "远端较旧应保留本地"
+        );
+        assert_eq!(
+            get("A-equal").await.unwrap(),
+            vec![s("code"), s(T_MID), None],
+            "同 updated_at 必须严格不覆盖(平局本地赢)"
+        );
+        assert_eq!(
+            get("A-missing").await.unwrap(),
+            vec![s("fun"), s(T_OLD), None],
+            "本地缺行应插入"
+        );
+    }
+
+    /// merge_process_paths:同一套 LWW 矩阵(该表无墓碑列,验证 exe_path/seen_at)。
+    #[tokio::test]
+    async fn merge_process_paths_lww_matrix() {
+        let pool = fresh_test_pool().await;
+        for (proc, ts) in [("P-newer", T_OLD), ("P-older", T_NEW), ("P-equal", T_MID)] {
+            exec_sql(
+                &pool,
+                "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
+                 VALUES(?1, '/local/bin', ?2, ?2)",
+                vec![s(proc), s(ts)],
+            )
+            .await;
+        }
+        let remote_row = |p: &str| ProcessPathPayload {
+            process_name: p.into(),
+            exe_path: "/remote/bin".into(),
+            seen_at: T_MID.into(),
+            updated_at: T_MID.into(),
+        };
+        let body = serde_json::to_vec(&vec![
+            remote_row("P-newer"),
+            remote_row("P-older"),
+            remote_row("P-equal"),
+            remote_row("P-missing"),
+        ])
+        .unwrap();
+        merge_process_paths(&pool, REMOTE_DEV, &body).await.unwrap();
+
+        let get = |p: &'static str| {
+            read_row(
+                &pool,
+                "SELECT exe_path, seen_at, updated_at FROM process_paths WHERE process_name = ?1",
+                p,
+                3,
+            )
+        };
+        assert_eq!(
+            get("P-newer").await.unwrap(),
+            vec![s("/remote/bin"), s(T_MID), s(T_MID)],
+            "远端较新应整行覆盖(exe_path + seen_at 一起换)"
+        );
+        assert_eq!(
+            get("P-older").await.unwrap(),
+            vec![s("/local/bin"), s(T_NEW), s(T_NEW)],
+            "远端较旧应保留本地"
+        );
+        assert_eq!(
+            get("P-equal").await.unwrap(),
+            vec![s("/local/bin"), s(T_MID), s(T_MID)],
+            "同 updated_at 严格不覆盖"
+        );
+        assert_eq!(
+            get("P-missing").await.unwrap(),
+            vec![s("/remote/bin"), s(T_MID), s(T_MID)],
+            "本地缺行应插入"
+        );
+    }
+
+    /// merge_app_group_members:LWW 矩阵(含墓碑换组)。
+    #[tokio::test]
+    async fn merge_app_group_members_lww_matrix() {
+        let pool = fresh_test_pool().await;
+        for g in ["g1", "g2"] {
+            exec_sql(
+                &pool,
+                "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                 VALUES(?1, ?1, NULL, ?2, NULL)",
+                vec![s(g), s(T_OLD)],
+            )
+            .await;
+        }
+        for (proc, ts) in [("M-newer", T_OLD), ("M-older", T_NEW), ("M-equal", T_MID)] {
+            exec_sql(
+                &pool,
+                "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                 VALUES(?1, 'g1', ?2, NULL)",
+                vec![s(proc), s(ts)],
+            )
+            .await;
+        }
+        let remote_row = |p: &str, tomb: bool| AppGroupMemberPayload {
+            process_name: p.into(),
+            group_id: "g2".into(),
+            updated_at: T_MID.into(),
+            deleted_at: tomb.then(|| T_MID.into()),
+        };
+        let body = serde_json::to_vec(&vec![
+            remote_row("M-newer", true),
+            remote_row("M-older", false),
+            remote_row("M-equal", false),
+            remote_row("M-missing", false),
+        ])
+        .unwrap();
+        merge_app_group_members(&pool, REMOTE_DEV, &body)
+            .await
+            .unwrap();
+
+        let get = |p: &'static str| {
+            read_row(
+                &pool,
+                "SELECT group_id, updated_at, deleted_at FROM app_group_members WHERE process_name = ?1",
+                p,
+                3,
+            )
+        };
+        assert_eq!(
+            get("M-newer").await.unwrap(),
+            vec![s("g2"), s(T_MID), s(T_MID)],
+            "远端较新应覆盖(换组 + 墓碑)"
+        );
+        assert_eq!(
+            get("M-older").await.unwrap(),
+            vec![s("g1"), s(T_NEW), None],
+            "远端较旧应保留本地"
+        );
+        assert_eq!(
+            get("M-equal").await.unwrap(),
+            vec![s("g1"), s(T_MID), None],
+            "同 updated_at 严格不覆盖"
+        );
+        assert_eq!(
+            get("M-missing").await.unwrap(),
+            vec![s("g2"), s(T_MID), None],
+            "本地缺行应插入"
+        );
+    }
+
+    // ───────── 任务 5:merge_app_groups 的成员 mirror ─────────
+
+    /// 远端组换分类 → 本地 app_categories 里该组全部 **active** 成员跟着换,
+    /// 软删成员不动;mirror 不回灌 outbox(远端来的变更再推回去会死循环);
+    /// 同 body 重复 merge 被 LWW gate 挡住,mirror 不再触发。
+    #[tokio::test]
+    async fn merge_app_groups_mirrors_active_members_without_outbox() {
+        let pool = fresh_test_pool().await;
+        exec_sql(
+            &pool,
+            "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+             VALUES('grp', '编辑器', 'code', ?1, NULL)",
+            vec![s(T_OLD)],
+        )
+        .await;
+        // m1/m2 active,m3 软删(mirror 必须跳过它)
+        for (proc, deleted) in [("m1", None), ("m2", None), ("m3", s(T_OLD))] {
+            exec_sql(
+                &pool,
+                "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                 VALUES(?1, 'grp', ?2, ?3)",
+                vec![s(proc), s(T_OLD), deleted],
+            )
+            .await;
+            exec_sql(
+                &pool,
+                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
+                 VALUES(?1, 'code', ?2, NULL)",
+                vec![s(proc), s(T_OLD)],
+            )
+            .await;
+        }
+
+        let body = serde_json::to_vec(&vec![AppGroupPayload {
+            id: "grp".into(),
+            display_name: "编辑器".into(),
+            category_id: Some("fun".into()),
+            updated_at: T_MID.into(),
+            deleted_at: None,
+        }])
+        .unwrap();
+        merge_app_groups(&pool, REMOTE_DEV, &body).await.unwrap();
+
+        // 组本体换分类
+        let grp = read_row(
+            &pool,
+            "SELECT category_id, updated_at FROM app_groups WHERE id = ?1",
+            "grp",
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(grp, vec![s("fun"), s(T_MID)]);
+
+        // active 成员的 app_categories 全部 mirror 到新分类
+        let cat_of = |p: &'static str| {
+            read_row(
+                &pool,
+                "SELECT category_id FROM app_categories WHERE process_name = ?1",
+                p,
+                1,
+            )
+        };
+        assert_eq!(cat_of("m1").await.unwrap(), vec![s("fun")]);
+        assert_eq!(cat_of("m2").await.unwrap(), vec![s("fun")]);
+        assert_eq!(
+            cat_of("m3").await.unwrap(),
+            vec![s("code")],
+            "软删成员不参与 mirror"
+        );
+        assert!(
+            outbox_entries(&pool).await.is_empty(),
+            "远端推来的变更 mirror 后不得回灌 outbox(防推回死循环)"
+        );
+
+        // 重复 merge 同 body:LWW 平局 → 组不 apply → mirror 不重跑。
+        // 观察手法:先手动把 m1 改走,若 mirror 重跑会把它改回 'fun'。
+        exec_sql(
+            &pool,
+            "UPDATE app_categories SET category_id = 'design', updated_at = ?1
+             WHERE process_name = 'm1'",
+            vec![s(T_NEW)],
+        )
+        .await;
+        merge_app_groups(&pool, REMOTE_DEV, &body).await.unwrap();
+        assert_eq!(
+            cat_of("m1").await.unwrap(),
+            vec![s("design")],
+            "同 body 重复 merge 不得再次触发 mirror"
+        );
+        assert!(outbox_entries(&pool).await.is_empty());
+    }
+
+    // ───────── 任务 8:merge_app_icons(DB 侧) ─────────
+
+    fn icon_body(rows: Vec<(&str, String, &str)>) -> Vec<u8> {
+        serde_json::to_vec(
+            &rows
+                .into_iter()
+                .map(|(p, b64, ts)| AppIconPayload {
+                    process_name: p.into(),
+                    icon_png_base64: b64,
+                    updated_at: ts.into(),
+                    deleted_at: None,
+                })
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    async fn icon_row(pool: &DbPool, process: &str) -> Option<(Vec<u8>, String)> {
+        let process = process.to_string();
+        pool.0
+            .call(move |conn| {
+                use rusqlite::OptionalExtension;
+                let r = conn
+                    .query_row(
+                        "SELECT icon_png, updated_at FROM app_icons WHERE process_name = ?1",
+                        rusqlite::params![process],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .optional()
+                    .db()?;
+                Ok(r)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 坏 base64 只跳那一行,同文件后续好行照常落库。
+    // 好行应用成功后会写 icon 文件 cache(路径读 HINDSIGHT_DATA_DIR),必须借
+    // env 锁把数据根指到唯一临时目录,不污染真实用户目录。锁横跨 merge 的 await:
+    // #[tokio::test] 单线程 runtime,不自死锁(同 chat/engine.rs 夹具的先例)。
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn merge_app_icons_bad_base64_skips_row_keeps_rest() {
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        let pool = fresh_test_pool().await;
+        let good_bytes: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 9, 8, 7];
+
+        let body = icon_body(vec![
+            ("Icon-bad", "!!!这不是base64!!!".into(), T_MID),
+            ("Icon-good", BASE64.encode(&good_bytes), T_MID),
+        ]);
+
+        let _env_lock = crate::repo::test_util::lock_data_dir_env();
+        let dir =
+            std::env::temp_dir().join(format!("hindsight-pull-icons-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var("HINDSIGHT_DATA_DIR").ok();
+        std::env::set_var("HINDSIGHT_DATA_DIR", &dir);
+        let res = merge_app_icons(&pool, REMOTE_DEV, &body).await;
+        match prev {
+            Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
+            None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
+        }
+        res.unwrap();
+
+        assert!(
+            icon_row(&pool, "Icon-bad").await.is_none(),
+            "坏 base64 行应被跳过,不落库"
+        );
+        assert_eq!(
+            icon_row(&pool, "Icon-good").await.unwrap(),
+            (good_bytes, T_MID.to_string()),
+            "同文件的好行应照常解码落库(字节精确一致)"
+        );
+    }
+
+    /// LWW:远端较旧 / 同 updated_at 都不得覆盖本地已有 icon 字节。
+    /// (两行都走 not-applied 路径,不会碰文件 cache,无需 env 隔离。)
+    #[tokio::test]
+    async fn merge_app_icons_lww_old_or_equal_does_not_overwrite() {
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        let pool = fresh_test_pool().await;
+        let local_bytes: Vec<u8> = vec![1, 1, 2, 3, 5, 8];
+        let remote_bytes: Vec<u8> = vec![9, 9, 9];
+
+        for (proc, ts) in [("I-older", T_NEW), ("I-equal", T_MID)] {
+            let bytes = local_bytes.clone();
+            let proc = proc.to_string();
+            let ts = ts.to_string();
+            pool.0
+                .call(move |conn| {
+                    conn.execute(
+                        "INSERT INTO app_icons(process_name, icon_png, updated_at, deleted_at)
+                         VALUES(?1, ?2, ?3, NULL)",
+                        rusqlite::params![proc, bytes, ts],
+                    )
+                    .db()?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        }
+
+        let body = icon_body(vec![
+            ("I-older", BASE64.encode(&remote_bytes), T_MID), // T_MID < 本地 T_NEW
+            ("I-equal", BASE64.encode(&remote_bytes), T_MID), // 平局
+        ]);
+        merge_app_icons(&pool, REMOTE_DEV, &body).await.unwrap();
+
+        assert_eq!(
+            icon_row(&pool, "I-older").await.unwrap(),
+            (local_bytes.clone(), T_NEW.to_string()),
+            "远端较旧不得覆盖本地字节"
+        );
+        assert_eq!(
+            icon_row(&pool, "I-equal").await.unwrap(),
+            (local_bytes, T_MID.to_string()),
+            "同 updated_at 严格不覆盖(平局本地赢)"
+        );
     }
 }

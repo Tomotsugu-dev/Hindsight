@@ -1171,6 +1171,281 @@ mod tests {
         }
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // C 批:release 下唯一 panic 防线的属性测试
+    //
+    // rec_batch 里 `debug_assert!(batch.len() <= batch_dim)` 在 release 不存在;
+    // 常驻消化 worker 真正依赖的是两条纯函数不变量:
+    //   1) ladder_w(w) >= w         —— 张量宽 >= 行宽,逐像素写入不越界
+    //   2) batch_for(ladder) >= 1   —— 张量批维 >= 1,首个单元写入不越界
+    // 任何一条被将来的参数调整破坏,都是 release 直接 index panic。
+    // ────────────────────────────────────────────────────────────────
+
+    /// 三个执行档位全集(新增档位时这里跟着加,属性测试自动覆盖)。
+    const ALL_TIERS: [RecTier; 3] = [RecTier::DiscreteGpu, RecTier::IntegratedGpu, RecTier::Cpu];
+
+    /// 测试侧独立复述"哪个档位用哪套阶梯"——与 ladder_w 内部的 match 各写一份,
+    /// 谁改了产品侧的映射而没改这里,测试就红,逼人重新审视不变量。
+    fn expected_ladder(tier: RecTier) -> &'static [u32] {
+        match tier {
+            RecTier::DiscreteGpu => &REC_W_LADDER_DISCRETE,
+            _ => &REC_W_LADDER,
+        }
+    }
+
+    /// 不变量 1:对全部可达行宽(prepare_units 把行宽 clamp 到 16..=REC_MAX_W,
+    /// 这里放宽到 1..=REC_MAX_W,顺带覆盖将来 clamp 下限的变动),ladder_w 必须
+    /// 返回 >= w 且属于该档位阶梯集合的值。返回值 < w 意味着 rec_batch 的输入
+    /// 张量宽小于行图宽,enumerate_pixels 写入直接越界。
+    #[test]
+    fn ladder_w_returns_at_least_width_and_in_ladder_set() {
+        for tier in ALL_TIERS {
+            let ladder = expected_ladder(tier);
+            // 阶梯自身的结构前提:严格递增(find 首个 >= w 依赖它),
+            // 且封顶恰为 REC_MAX_W(unwrap_or 的兜底值必须真在集合里,
+            // 否则"兜底"会兜出一个从未分配过批容量的幽灵桶)。
+            assert!(
+                ladder.windows(2).all(|p| p[0] < p[1]),
+                "{tier:?} 阶梯必须严格递增: {ladder:?}"
+            );
+            assert_eq!(
+                *ladder.last().unwrap(),
+                REC_MAX_W,
+                "{tier:?} 阶梯封顶必须 = REC_MAX_W"
+            );
+            for w in 1..=REC_MAX_W {
+                let l = ladder_w(tier, w);
+                assert!(
+                    l >= w,
+                    "{tier:?} w={w} 得阶梯 {l} < 行宽,release 下张量写入越界"
+                );
+                assert!(
+                    ladder.contains(&l),
+                    "{tier:?} w={w} 得 {l},不在阶梯集合 {ladder:?} 里"
+                );
+            }
+        }
+    }
+
+    /// 不变量 2:每个可达宽度经 ladder_w 归桶后,batch_for 给出的桶容量必须 >= 1。
+    /// 若某桶容量为 0:recognize 的分批循环仍会把首个单元 push 进 chunk,flush 时
+    /// rec_batch 以 batch_dim=0 建输入张量,input[[0,..]] 在 release 直接越界 panic
+    /// (debug_assert 已被编译掉)。
+    #[test]
+    fn batch_for_positive_for_every_reachable_bucket() {
+        for tier in ALL_TIERS {
+            for w in 1..=REC_MAX_W {
+                let lad = ladder_w(tier, w);
+                let b = batch_for(tier, lad);
+                assert!(
+                    b >= 1,
+                    "{tier:?} w={w} → 桶 {lad} 容量 {b},release 下常驻 worker 必炸"
+                );
+            }
+        }
+    }
+
+    /// 单批规模上限:批容量与输入张量字节数都要封顶。
+    /// 预算独立推导自模块注释的运营点——独显 640 桶批 32:
+    /// 32 × 3 × 48 × 640 × 4B = 11,796,480 B,是全表最大的一桶;
+    /// 任何桶超过它(或批数超 32)= 批参数调整破坏了内存预算。
+    #[test]
+    fn batch_tensor_bytes_and_count_capped() {
+        let budget_bytes = 32usize * 3 * 48 * 640 * 4;
+        for tier in ALL_TIERS {
+            for &lad in expected_ladder(tier) {
+                let b = batch_for(tier, lad);
+                assert!(b <= 32, "{tier:?} 桶 {lad} 批 {b} 超过全表最大批 32");
+                let bytes = b * 3 * REC_H as usize * lad as usize * 4;
+                assert!(
+                    bytes <= budget_bytes,
+                    "{tier:?} 桶 {lad} 批 {b} 输入张量 {bytes}B 超预算 {budget_bytes}B"
+                );
+            }
+        }
+    }
+
+    /// 串行化本模块所有触碰 `HINDSIGHT_DET_SIDE` 的测试:env var 是进程级全局,
+    /// det_limit_side 每次现读,cargo test 并行时读写方互踩。该 var 仅本模块读写
+    /// (det_side_quality_ab 是 --ignored 的手动测试,不参与并行),锁放模块内即可,
+    /// 不占用 test_util::lock_data_dir_env(那把锁管的是 HINDSIGHT_DATA_DIR)。
+    /// 中毒后取内层 guard:临界区只保护 env,继续跑不放大问题。
+    fn lock_det_side_env() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 兜底清理:测试中途 assert 失败(panic)也要把 env var 摘掉,
+    /// 否则同锁的后续测试读到脏值,一红连环红,掩盖真正的失败点。
+    struct DetSideEnvGuard;
+    impl Drop for DetSideEnvGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("HINDSIGHT_DET_SIDE");
+        }
+    }
+
+    /// det 长边档位表:无 env 覆盖时,核显 1440(召回换算力的权衡档),
+    /// 独显/CPU 1920(存档 2560 → 1920,14px 小字仍 ~10px)。期望用字面量
+    /// 独立写死,不引用产品侧常量——常量被误改时测试要能叫。
+    #[test]
+    fn det_limit_side_tier_defaults() {
+        let _g = lock_det_side_env();
+        let _cleanup = DetSideEnvGuard;
+        std::env::remove_var("HINDSIGHT_DET_SIDE");
+        assert_eq!(det_limit_side(RecTier::DiscreteGpu), 1920);
+        assert_eq!(det_limit_side(RecTier::Cpu), 1920);
+        assert_eq!(det_limit_side(RecTier::IntegratedGpu), 1440);
+    }
+
+    /// `HINDSIGHT_DET_SIDE` 覆盖:合法数字对三个档位一视同仁;解析不动的值
+    /// (非数字/空串)静默回落各档默认——标定时手滑打错,不能炸常驻 worker,
+    /// 也不能悄悄粘在某个错误档位上。
+    #[test]
+    fn det_limit_side_env_override_and_fallback() {
+        let _g = lock_det_side_env();
+        let _cleanup = DetSideEnvGuard;
+        std::env::set_var("HINDSIGHT_DET_SIDE", "1080");
+        for tier in ALL_TIERS {
+            assert_eq!(det_limit_side(tier), 1080, "{tier:?} 未吃到 env 覆盖");
+        }
+        // 非数字:parse 失败 → 回落
+        std::env::set_var("HINDSIGHT_DET_SIDE", "fast");
+        assert_eq!(det_limit_side(RecTier::IntegratedGpu), 1440);
+        assert_eq!(det_limit_side(RecTier::Cpu), 1920);
+        // 空串:同样回落
+        std::env::set_var("HINDSIGHT_DET_SIDE", "");
+        assert_eq!(det_limit_side(RecTier::DiscreteGpu), 1920);
+        // 摘掉后回到默认(DetSideEnvGuard 的清理路径与之等价)
+        std::env::remove_var("HINDSIGHT_DET_SIDE");
+        assert_eq!(det_limit_side(RecTier::IntegratedGpu), 1440);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // 【mid】box 几何边界:能脱离 Session 构造的纯函数部分
+    // (recognize 里的 /iw /ih 归一化本身绑在 Session 上,这里验证它的
+    //  输入前提:prob_map_to_boxes 产出的框永不越出概率图边界,
+    //  prepare_units 的行宽永在 16..=REC_MAX_W 内。)
+    // ────────────────────────────────────────────────────────────────
+
+    /// unclip 扩框在图边缘的钳制:整图高概率时扩框必然顶出四边,产出框必须
+    /// 被钳回 [0, w-1] × [0, h-1]——这是下游归一化坐标落在 0..1 的前提,
+    /// 越界框会让 lightbox 命中行画到画布外。
+    #[test]
+    fn prob_map_boxes_clamped_within_map() {
+        let (w, h) = (20usize, 20usize);
+        let prob = vec![0.9f32; w * h];
+        let boxes = prob_map_to_boxes(&prob, w, h);
+        assert_eq!(boxes.len(), 1);
+        let b = &boxes[0];
+        // 独立推导:d = 20×20×1.5 / (2×(20+20)) = 7.5 → 7;
+        // x0 = 0−7 饱和到 0,x1 = 19+7 钳到 19。
+        assert_eq!((b.x0, b.y0, b.x1, b.y1), (0, 0, 19, 19));
+    }
+
+    /// 碎点与低置信块的过滤:边 < 3 的连通域(噪点)和均值 ≤ box_thresh 0.6 的
+    /// 连通域(过了二值化线但置信不足)都不产框,只留高置信块。
+    #[test]
+    fn prob_map_filters_tiny_and_low_confidence() {
+        let (w, h) = (30usize, 10usize);
+        let mut prob = vec![0f32; w * h];
+        // 2×2 高概率块:概率够但边 < 3 → 过滤
+        for y in 1..3 {
+            for x in 1..3 {
+                prob[y * w + x] = 0.95;
+            }
+        }
+        // 4×4 均值 0.5 块:过了 DET_THRESH 0.3 但 ≤ DET_BOX_THRESH 0.6 → 过滤
+        for y in 1..5 {
+            for x in 10..14 {
+                prob[y * w + x] = 0.5;
+            }
+        }
+        // 4×4 高概率块:唯一幸存者
+        for y in 1..5 {
+            for x in 20..24 {
+                prob[y * w + x] = 0.95;
+            }
+        }
+        let boxes = prob_map_to_boxes(&prob, w, h);
+        assert_eq!(boxes.len(), 1);
+        // 幸存框是 x=20 起的那块(unclip d = 24/16 = 1.5 → 1,x0 = 19)
+        assert_eq!(boxes[0].x0, 19);
+    }
+
+    /// 退化框(宽或高 < 4)必须整个跳过,且跳过不挤乱 box_idx——拼回文本时
+    /// 按原框索引对位,错位 = 文本安到别的框上。正常框验证缩放几何:
+    /// 48×24 → 高 48 时宽 = 48×48/24 = 96。
+    #[test]
+    fn prepare_units_skips_degenerate_boxes() {
+        let rgb = RgbImage::from_pixel(100, 100, image::Rgb([200, 200, 200]));
+        let boxes = vec![
+            TextBox {
+                x0: 0,
+                y0: 0,
+                x1: 2,
+                y1: 50,
+            }, // 宽 3 < 4:跳过
+            TextBox {
+                x0: 0,
+                y0: 0,
+                x1: 50,
+                y1: 2,
+            }, // 高 3 < 4:跳过
+            TextBox {
+                x0: 10,
+                y0: 10,
+                x1: 57,
+                y1: 33,
+            }, // 48×24 正常框
+        ];
+        let units = prepare_units(&rgb, &boxes);
+        assert_eq!(units.len(), 1);
+        assert_eq!(units[0].box_idx, 2);
+        assert_eq!(units[0].strip.dimensions(), (96, 48));
+    }
+
+    /// 行宽下限钳制:4×96 的竖条等比缩放目标宽 = 48×4/96 = 2,必须钳到 16——
+    /// 宽度 < 16 的张量部分 kernel 不支持,且 ladder_w 的可达域约定就是 16 起。
+    #[test]
+    fn prepare_units_clamps_narrow_strip_to_min_width() {
+        let rgb = RgbImage::from_pixel(100, 100, image::Rgb([0, 0, 0]));
+        let boxes = vec![TextBox {
+            x0: 0,
+            y0: 0,
+            x1: 3,
+            y1: 95,
+        }];
+        let units = prepare_units(&rgb, &boxes);
+        assert_eq!(units.len(), 1);
+        assert_eq!(units[0].strip.dimensions(), (16, 48));
+    }
+
+    /// 超长行切段 + 行宽上限钳制:6000×45 的行等比目标宽 6400 > REC_MAX_W,
+    /// 必须切 2 段,每段行宽仍钳在 16..=REC_MAX_W 内——这是 ladder_w 不变量
+    /// (测试 ladder_w_returns_at_least_width_...)覆盖全部真实输入的前提;
+    /// 段宽一旦越过 3200,张量宽防线就被绕过,release 直接越界。
+    #[test]
+    fn prepare_units_splits_overlong_line_and_caps_width() {
+        let rgb = RgbImage::from_pixel(6000, 60, image::Rgb([255, 255, 255]));
+        let boxes = vec![TextBox {
+            x0: 0,
+            y0: 0,
+            x1: 5999,
+            y1: 44,
+        }];
+        let units = prepare_units(&rgb, &boxes);
+        assert_eq!(units.len(), 2, "目标宽 6400 应切成 2 段");
+        for u in &units {
+            assert_eq!(u.box_idx, 0, "段序拼回依赖同一 box_idx");
+            let (sw, sh) = u.strip.dimensions();
+            assert_eq!(sh, 48);
+            assert!(
+                (16..=REC_MAX_W).contains(&sw),
+                "段宽 {sw} 越出 16..=3200,张量宽防线被绕过"
+            );
+        }
+    }
+
     /// 端到端单帧耗时:真实截图,CPU 全程 vs GPU 全程,decode 与推理分段。
     /// 图片:环境变量 OCR_BENCH_IMG 指定,否则自动挑 screenshots 下最新 jpg。
     /// 跑法:`cargo test --release --lib ocr_frame_e2e_bench -- --ignored --nocapture`

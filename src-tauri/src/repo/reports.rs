@@ -1190,6 +1190,417 @@ mod tests {
             .unwrap();
     }
 
+    /// 测 [`device_filter_from_option`]：None / 空串 / 全空白 → All；非空 → Only。
+    /// 这是所有报表 Tauri 命令入口的参数规整口径，错了会把"全设备"误当成某台设备查。
+    #[test]
+    fn device_filter_from_option_normalizes() {
+        assert!(matches!(device_filter_from_option(None), DeviceFilter::All));
+        assert!(matches!(
+            device_filter_from_option(Some(String::new())),
+            DeviceFilter::All
+        ));
+        // 全空白（含 tab）也归 All——前端 select 未选中时可能传占位空白串
+        assert!(matches!(
+            device_filter_from_option(Some("  \t ".into())),
+            DeviceFilter::All
+        ));
+        match device_filter_from_option(Some("device-win".into())) {
+            DeviceFilter::Only(id) => assert_eq!(id, "device-win"),
+            DeviceFilter::All => panic!("非空 id 应得到 Only，不是 All"),
+        }
+        // 两端带空白但中间非空 → 保留原串的 Only（当前契约：只用 trim 判空，不改写 id）
+        match device_filter_from_option(Some(" dev ".into())) {
+            DeviceFilter::Only(id) => assert_eq!(id, " dev ", "id 原样保留，不做 trim 改写"),
+            DeviceFilter::All => panic!("含非空白字符的串不该归 All"),
+        }
+    }
+
+    /// 测 [`app_day_detail`]（Hour 粒度）：
+    /// - 固定 24 桶、key 按 "0".."23" 有序、无活动小时补 0
+    /// - 跨小时会话按真实时钟切片分摊（10:30→11:30 应各给 10/11 点 1800s），
+    ///   而不是按 local_hour 把整段挤进开始桶
+    #[tokio::test]
+    async fn app_day_detail_hour_buckets_split_and_zero_fill() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+
+        // 9:15→9:20 = 300s（单小时内）
+        let s1 = Local
+            .from_local_datetime(&today.and_hms_opt(9, 15, 0).unwrap())
+            .single()
+            .unwrap();
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            &today_str,
+            "Code",
+            s1,
+            s1 + Duration::minutes(5),
+        )
+        .await;
+        // 10:30→11:30 = 跨小时，两头各 1800s
+        let s2 = Local
+            .from_local_datetime(&today.and_hms_opt(10, 30, 0).unwrap())
+            .single()
+            .unwrap();
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            &today_str,
+            "Code",
+            s2,
+            s2 + Duration::hours(1),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let detail = app_day_detail(&pool, 0, "Code".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+
+        assert_eq!(detail.buckets.len(), 24, "小时粒度固定 24 桶");
+        let keys: Vec<&str> = detail.buckets.iter().map(|b| b.key.as_str()).collect();
+        let expect_keys: Vec<String> = (0u8..24).map(|h| h.to_string()).collect();
+        assert_eq!(
+            keys,
+            expect_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            "key 应为有序的 \"0\"..\"23\""
+        );
+        for b in &detail.buckets {
+            let expect = match b.key.as_str() {
+                "9" => 300,
+                "10" | "11" => 1800,
+                _ => 0,
+            };
+            assert_eq!(b.secs, expect, "hour={} 的 secs 不符", b.key);
+        }
+    }
+
+    /// 测 [`app_range_detail`] 的组 key 解析：icon_process 是组内任一成员时，
+    /// 时间柱与标题都应聚合**整个组**（跨 OS 成员 + 跨设备），且不掺入组外应用。
+    /// titles 按用时降序、同标题跨成员合并。
+    #[tokio::test]
+    async fn app_day_detail_resolves_group_and_merges_members() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+
+        // 组 "Visual Studio Code"：成员 mac="Code" + win="Code.exe"
+        pool.0
+            .call(|conn| {
+                let now = "2026-05-15T10:00:00Z";
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('Visual Studio Code', 'Visual Studio Code', 'code', ?1, NULL)",
+                    rusqlite::params![now],
+                )
+                .db()?;
+                for name in ["Code", "Code.exe"] {
+                    conn.execute(
+                        "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                         VALUES(?1, 'Visual Studio Code', ?2, NULL)",
+                        rusqlite::params![name, now],
+                    )
+                    .db()?;
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let s = |h: u32, m: u32| {
+            Local
+                .from_local_datetime(&today.and_hms_opt(h, m, 0).unwrap())
+                .single()
+                .unwrap()
+        };
+        // 本机 Code：10:00→10:05 (300s) 标题 "main.rs"
+        insert_session_titled(
+            &pool,
+            TEST_SELF_ID,
+            &today_str,
+            "Code",
+            "main.rs",
+            s(10, 0),
+            s(10, 5),
+        )
+        .await;
+        // win 端 Code.exe：10:10→10:14 (240s) 标题 "lib.rs"；再补一段同标题 "main.rs" 60s
+        insert_session_titled(
+            &pool,
+            "device-win",
+            &today_str,
+            "Code.exe",
+            "lib.rs",
+            s(10, 10),
+            s(10, 14),
+        )
+        .await;
+        insert_session_titled(
+            &pool,
+            "device-win",
+            &today_str,
+            "Code.exe",
+            "main.rs",
+            s(10, 20),
+            s(10, 21),
+        )
+        .await;
+        // 组外应用同时段活动：绝不能混进 Code 的详情
+        insert_session_titled(
+            &pool,
+            TEST_SELF_ID,
+            &today_str,
+            "Random",
+            "noise",
+            s(10, 0),
+            s(10, 30),
+        )
+        .await;
+
+        // 用 win 侧成员名查询 → 应解析到组、把 mac 侧的量也算上
+        let detail = app_day_detail(&pool, 0, "Code.exe".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+        let h10 = detail.buckets.iter().find(|b| b.key == "10").unwrap();
+        assert_eq!(h10.secs, 300 + 240 + 60, "组内两成员 10 点的量应合并");
+        let total: u32 = detail.buckets.iter().map(|b| b.secs).sum();
+        assert_eq!(total, 600, "组外应用(Random)不该混入");
+
+        // titles：main.rs 跨成员合并 = 300+60 = 360 > lib.rs 240，降序
+        assert_eq!(detail.titles.len(), 2, "标题只该有组内两种");
+        assert_eq!(detail.titles[0].title, "main.rs");
+        assert_eq!(detail.titles[0].secs, 360);
+        assert_eq!(detail.titles[1].title, "lib.rs");
+        assert_eq!(detail.titles[1].secs, 240);
+
+        // 设备过滤：Only(self) 只剩本机 Code 的 300s
+        let only_self = app_day_detail(
+            &pool,
+            0,
+            "Code.exe".into(),
+            DeviceFilter::Only(TEST_SELF_ID.into()),
+        )
+        .await
+        .unwrap();
+        let h10_self = only_self.buckets.iter().find(|b| b.key == "10").unwrap();
+        assert_eq!(h10_self.secs, 300, "Only(self) 不该带上 win 端时长");
+    }
+
+    /// 测 [`app_range_detail`] 无组回退：icon_process 没有任何组成员记录时，
+    /// 组 key 退化为 process_name 本身——只聚合同名进程，不吸入其它无组进程。
+    #[tokio::test]
+    async fn app_day_detail_falls_back_to_process_name_without_group() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+        let s = |h: u32, m: u32| {
+            Local
+                .from_local_datetime(&today.and_hms_opt(h, m, 0).unwrap())
+                .single()
+                .unwrap()
+        };
+        // 两个都没建组（v15 backfill 前的历史数据形态）
+        insert_session_titled(
+            &pool,
+            TEST_SELF_ID,
+            &today_str,
+            "Lonely",
+            "doc",
+            s(14, 0),
+            s(14, 10),
+        )
+        .await;
+        insert_session_titled(
+            &pool,
+            TEST_SELF_ID,
+            &today_str,
+            "OtherApp",
+            "noise",
+            s(14, 0),
+            s(14, 5),
+        )
+        .await;
+
+        let detail = app_day_detail(&pool, 0, "Lonely".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+        let h14 = detail.buckets.iter().find(|b| b.key == "14").unwrap();
+        assert_eq!(h14.secs, 600, "无组时按 process_name 精确匹配");
+        let total: u32 = detail.buckets.iter().map(|b| b.secs).sum();
+        assert_eq!(total, 600, "其它无组进程不该被吸进来");
+        assert_eq!(detail.titles.len(), 1);
+        assert_eq!(detail.titles[0].title, "doc");
+        assert_eq!(detail.titles[0].secs, 600);
+    }
+
+    /// 测 [`app_week_detail`]（Day 粒度）：7 桶按日期有序、空天补 0、
+    /// 范围外（上周日）的同名活动被排除。
+    #[tokio::test]
+    async fn app_week_detail_day_buckets_zero_filled_in_order() {
+        let pool = fresh_test_pool().await;
+        let (monday, _sunday) = week_range(0);
+        let day = |off: i64| {
+            (monday + Duration::days(off))
+                .format("%Y-%m-%d")
+                .to_string()
+        };
+
+        insert_activity(&pool, TEST_SELF_ID, &day(0), "Code", 600).await;
+        insert_activity(&pool, TEST_SELF_ID, &day(2), "Code", 900).await;
+        // 上周日的量：若范围下界写错（>= 变 >，或 monday 计算错）会漏进来
+        insert_activity(&pool, TEST_SELF_ID, &day(-1), "Code", 12345).await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let detail = app_week_detail(&pool, 0, "Code".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(detail.buckets.len(), 7, "周详情固定 7 桶");
+        for (i, b) in detail.buckets.iter().enumerate() {
+            assert_eq!(b.key, day(i as i64), "第 {i} 桶的日期 key 不符");
+            let expect = match i {
+                0 => 600,
+                2 => 900,
+                _ => 0,
+            };
+            assert_eq!(b.secs, expect, "{} 的 secs 不符", b.key);
+        }
+    }
+
+    /// 测 [`app_month_detail`]（Day 粒度）：桶数 = 当月天数，逐日有序补 0。
+    #[tokio::test]
+    async fn app_month_detail_covers_whole_month() {
+        let pool = fresh_test_pool().await;
+        let (first, last) = month_range(0);
+        let n_days = ((last - first).num_days() + 1) as usize;
+        let day = |off: i64| (first + Duration::days(off)).format("%Y-%m-%d").to_string();
+
+        insert_activity(&pool, TEST_SELF_ID, &day(0), "Code", 300).await;
+        insert_activity(&pool, TEST_SELF_ID, &day(14), "Code", 450).await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let detail = app_month_detail(&pool, 0, "Code".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(detail.buckets.len(), n_days, "桶数应等于当月天数(28~31)");
+        for (i, b) in detail.buckets.iter().enumerate() {
+            assert_eq!(b.key, day(i as i64));
+            let expect = match i {
+                0 => 300,
+                14 => 450,
+                _ => 0,
+            };
+            assert_eq!(b.secs, expect, "{} 的 secs 不符", b.key);
+        }
+    }
+
+    /// 测 [`week_apps`]：同一应用跨多天求和成一行，范围外（上周）的量不掺入。
+    #[tokio::test]
+    async fn week_apps_sums_across_days_and_excludes_prev_week() {
+        let pool = fresh_test_pool().await;
+        let (monday, _) = week_range(0);
+        let day = |off: i64| {
+            (monday + Duration::days(off))
+                .format("%Y-%m-%d")
+                .to_string()
+        };
+
+        insert_activity(&pool, TEST_SELF_ID, &day(0), "Code", 300).await;
+        insert_activity(&pool, TEST_SELF_ID, &day(2), "Code", 300).await;
+        // 上周日一大段：若被算进来 minutes 会变 10+100=110，一眼可辨
+        insert_activity(&pool, TEST_SELF_ID, &day(-1), "Code", 6000).await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let apps = week_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
+        assert_eq!(apps.len(), 1, "同一应用跨天应合并成一行");
+        assert_eq!(apps[0].process, "Code");
+        assert_eq!(
+            apps[0].minutes, 10,
+            "300+300=600s=10min，上周的 6000s 不该掺入"
+        );
+        assert_eq!(apps[0].category_id, "code");
+    }
+
+    /// 测 [`month_days`]：行数 = 当月天数、按日期有序，有数据的天分类分钟正确、
+    /// 无数据的天 segments 为空，上月末尾的量不掺入。
+    #[tokio::test]
+    async fn month_days_zero_fills_whole_month() {
+        let pool = fresh_test_pool().await;
+        let (first, last) = month_range(0);
+        let n_days = ((last - first).num_days() + 1) as usize;
+        let day = |off: i64| (first + Duration::days(off)).format("%Y-%m-%d").to_string();
+
+        insert_activity(&pool, TEST_SELF_ID, &day(0), "Code", 300).await; // 5 min
+        insert_activity(&pool, TEST_SELF_ID, &day(9), "Code", 600).await; // 10 min
+        insert_activity(&pool, TEST_SELF_ID, &day(-1), "Code", 999).await; // 上月末，应被排除
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let days = month_days(&pool, 0, DeviceFilter::All).await.unwrap();
+        assert_eq!(days.len(), n_days, "行数应等于当月天数");
+        for (i, d) in days.iter().enumerate() {
+            assert_eq!(d.date, day(i as i64), "第 {i} 行日期不符");
+            match i {
+                0 | 9 => {
+                    let code_min: u32 = d
+                        .segments
+                        .iter()
+                        .filter(|s| s.category_id == "code")
+                        .map(|s| s.minutes)
+                        .sum();
+                    assert_eq!(code_min, if i == 0 { 5 } else { 10 });
+                }
+                _ => assert!(d.segments.is_empty(), "{} 不该有数据", d.date),
+            }
+        }
+    }
+
+    /// 同 [`insert_session_with_times`]，但可指定 window_title——给详情抽屉的
+    /// titles 聚合断言用。
+    #[allow(clippy::too_many_arguments)]
+    async fn insert_session_titled(
+        pool: &DbPool,
+        device_id: &str,
+        local_date: &str,
+        process_name: &str,
+        title: &str,
+        started: DateTime<Local>,
+        ended: DateTime<Local>,
+    ) {
+        let device_id = device_id.to_string();
+        let local_date = local_date.to_string();
+        let process_name = process_name.to_string();
+        let title = title.to_string();
+        let dur = (ended - started).num_seconds().max(0);
+        let local_hour = started.hour() as i64;
+        let started_str = started.to_rfc3339();
+        let ended_str = ended.to_rfc3339();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES(?, ?, ?, ?, ?, ?, ?, 'other', ?, ?, 'local')",
+                    rusqlite::params![
+                        started_str,
+                        ended_str,
+                        dur,
+                        local_date,
+                        local_hour,
+                        process_name,
+                        title,
+                        device_id,
+                        ended_str,
+                    ],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
     async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str) {
         let name = name.to_string();
         let category_id = category_id.to_string();

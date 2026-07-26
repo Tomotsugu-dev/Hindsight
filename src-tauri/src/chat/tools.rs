@@ -1459,6 +1459,131 @@ mod tests {
             _ => panic!(),
         }
     }
+
+    #[test]
+    fn validate_blank_only_keywords_rejected() {
+        // 全是空白/空串的 keywords 清洗后为空——必须报"不能为空",
+        // 否则会拼出空 FTS MATCH 走到 SQL 层才炸,错误信息模型看不懂
+        let e = validate(
+            "search_text",
+            &raw(serde_json::json!({"keywords": [" ", ""]})),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap_err();
+        assert!(e.contains("不能为空"), "{e}");
+    }
+
+    #[test]
+    fn validate_keywords_truncated_to_three_and_trimmed() {
+        // 4 词只取前 3(RESULT 预算与 FTS AND 语义都不欢迎长词列表),且逐项 trim
+        let call = validate(
+            "search_text",
+            &raw(serde_json::json!({"keywords": ["  rust  ", "go", "zig", "c"]})),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::SearchText { keywords, .. } => {
+                assert_eq!(keywords, vec!["rust", "go", "zig"]);
+            }
+            _ => panic!(),
+        }
+        // 截断发生在清洗之前:空白项也占名额,take(3) 后才被丢弃——
+        // 钉住这个顺序,悄悄改成"先清洗再截断"会让第 4 词意外入选
+        let call = validate(
+            "search_text",
+            &raw(serde_json::json!({"keywords": [" ", "a", "b", "c"]})),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::SearchText { keywords, .. } => assert_eq!(keywords, vec!["a", "b"]),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn validate_item_too_long_rejected_field_named() {
+        // 65 字符(按 chars 计)超限;64 恰好放行。错误文案必须点名字段,
+        // 模型才知道该改哪个参数
+        let long = "x".repeat(65);
+        let ok64 = "x".repeat(64);
+        let e = validate(
+            "search_text",
+            &raw(serde_json::json!({"keywords": [long.clone()]})),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap_err();
+        assert!(e.contains("keywords") && e.contains("64"), "{e}");
+
+        let call = validate(
+            "search_text",
+            &raw(serde_json::json!({"keywords": [ok64]})),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::SearchText { keywords, .. } => assert_eq!(keywords.len(), 1),
+            _ => panic!(),
+        }
+
+        // query_stats 的 apps / categories 走同一清洗循环,各自报各自的字段名
+        let e = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "apps": [long.clone()]
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap_err();
+        assert!(e.contains("apps"), "{e}");
+
+        let e = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "categories": [long]
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap_err();
+        assert!(e.contains("categories"), "{e}");
+    }
+
+    #[test]
+    fn validate_apps_categories_cleaned_and_capped_at_five() {
+        // apps 上限 5 项(截断不报错),空项丢弃、逐项 trim;categories 同一循环体。
+        // 与 keywords 一样是"先 take 后清洗":空串占掉一个名额
+        let call = validate(
+            "query_stats",
+            &raw(serde_json::json!({
+                "date_from": "2026-07-01", "date_to": "2026-07-05",
+                "apps": [" A ", "", "B", "C", "D", "E", "F"],
+                "categories": ["  游戏 ", "", "工作"]
+            })),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        match call {
+            ToolCall::QueryStats {
+                apps, categories, ..
+            } => {
+                // take(5) 拿到 [" A ","","B","C","D"],清洗后 4 项;E/F 被截掉
+                assert_eq!(apps, vec!["A", "B", "C", "D"]);
+                assert_eq!(categories, vec!["游戏", "工作"]);
+            }
+            _ => panic!(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2096,6 +2221,210 @@ mod behavior_tests {
         );
         assert!(
             out.for_llm.contains("最近一次止于 2026-07-08 21:00"),
+            "{}",
+            out.for_llm
+        );
+    }
+
+    // ── session_count 整链(内存库直测 execute)─────────────
+    //
+    // 三个 app、间隔已知的活动段;gap=30 分钟时各组会话数手工可推:
+    //   alpha.exe: 09:00-09:05 / 09:20-09:25(隔 15,并)/ 12:00-12:05(隔 155,切)→ 2 次
+    //   beta.exe : 10:30-10:35 / 12:30-12:35(隔 115,切)/ 14:00-14:05(隔 85,切)→ 3 次
+    //   zeta.exe : 15:00-15:05 / 16:00-16:05(隔 55,切)→ 2 次
+    // 不分组的全流(时间升序混排):09:00 块|10:30|12:00+12:30(隔 25,并)|14:00|15:00|16:00 → 6 次
+    const SESSIONS_SQL: &str = "
+        INSERT INTO activities(started_at, ended_at, duration_secs,
+            local_date, local_hour, process_name, window_title) VALUES
+          ('2026-07-08T09:00:00+09:00','2026-07-08T09:05:00+09:00',300,'2026-07-08',9,'alpha.exe','w'),
+          ('2026-07-08T09:20:00+09:00','2026-07-08T09:25:00+09:00',300,'2026-07-08',9,'alpha.exe','w'),
+          ('2026-07-08T12:00:00+09:00','2026-07-08T12:05:00+09:00',300,'2026-07-08',12,'alpha.exe','w'),
+          ('2026-07-08T10:30:00+09:00','2026-07-08T10:35:00+09:00',300,'2026-07-08',10,'beta.exe','w'),
+          ('2026-07-08T12:30:00+09:00','2026-07-08T12:35:00+09:00',300,'2026-07-08',12,'beta.exe','w'),
+          ('2026-07-08T14:00:00+09:00','2026-07-08T14:05:00+09:00',300,'2026-07-08',14,'beta.exe','w'),
+          ('2026-07-08T15:00:00+09:00','2026-07-08T15:05:00+09:00',300,'2026-07-08',15,'zeta.exe','w'),
+          ('2026-07-08T16:00:00+09:00','2026-07-08T16:05:00+09:00',300,'2026-07-08',16,'zeta.exe','w');";
+
+    #[tokio::test]
+    async fn stats_session_count_total_uses_gap_and_wording() {
+        let ctx = ctx_with("", SESSIONS_SQL).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats { metric, .. } = &mut call {
+            *metric = StatMetric::SessionCount;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        // 总次数 + 间隔规则必须一起披露,模型才能向用户解释"次"的口径
+        assert!(
+            out.for_llm.contains("使用会话次数: 6 次"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.for_llm.contains("间隔≥30 分钟"), "{}", out.for_llm);
+        // 统计类结果没有证据卡
+        assert!(out.citations.is_empty());
+
+        // gap 放大到 120 分钟:全流最大间隔 85 分钟 → 全并成 1 次。
+        // 这证明 gap_minutes 真进了切分逻辑,不是只写进文案
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats {
+            metric,
+            gap_minutes,
+            ..
+        } = &mut call
+        {
+            *metric = StatMetric::SessionCount;
+            *gap_minutes = 120;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("使用会话次数: 1 次"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.for_llm.contains("间隔≥120 分钟"), "{}", out.for_llm);
+    }
+
+    #[tokio::test]
+    async fn stats_session_count_grouped_sorts_count_desc_then_name_asc() {
+        let ctx = ctx_with("", SESSIONS_SQL).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats {
+            metric, group_by, ..
+        } = &mut call
+        {
+            *metric = StatMetric::SessionCount;
+            *group_by = GroupBy::App;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        // 每组次数各自独立切分
+        let beta = out.for_llm.find("beta.exe: 3 次").expect(&out.for_llm);
+        let alpha = out.for_llm.find("alpha.exe: 2 次").expect(&out.for_llm);
+        let zeta = out.for_llm.find("zeta.exe: 2 次").expect(&out.for_llm);
+        // 次数降序;同为 2 次的 alpha/zeta 按名字升序——排序稳定,模型两次问答不见"名次漂移"
+        assert!(beta < alpha && alpha < zeta, "{}", out.for_llm);
+        // 3 组 ≤ top_n=5:全量列出,头部不出现"取前 N 组"的截断措辞
+        assert!(out.for_llm.contains("使用会话次数"), "{}", out.for_llm);
+        assert!(!out.for_llm.contains("取前"), "{}", out.for_llm);
+    }
+
+    #[tokio::test]
+    async fn stats_session_count_top_n_truncates_and_discloses_universe() {
+        let ctx = ctx_with("", SESSIONS_SQL).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats {
+            metric,
+            group_by,
+            top_n,
+            ..
+        } = &mut call
+        {
+            *metric = StatMetric::SessionCount;
+            *group_by = GroupBy::App;
+            *top_n = 2;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        // universe 披露:让模型知道前 2 组之外还有第 3 组(2026-07-08 事故的同款教训)
+        assert!(
+            out.for_llm.contains("共 3 组,按次数取前 2 组"),
+            "{}",
+            out.for_llm
+        );
+        assert!(out.for_llm.contains("beta.exe: 3 次"), "{}", out.for_llm);
+        assert!(out.for_llm.contains("alpha.exe: 2 次"), "{}", out.for_llm);
+        // 同次数并列时名字靠后的 zeta 被截掉
+        assert!(!out.for_llm.contains("zeta.exe"), "{}", out.for_llm);
+    }
+
+    // ── apps 过滤的参数绑定 ─────────────────────────────
+
+    #[tokio::test]
+    async fn stats_apps_filter_sums_only_matching() {
+        // 3 个 app,只圈 alpha+beta:合计必须是 3600+1800=5400,gamma 的 600 不掺入
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-08T09:00:00+09:00','2026-07-08T10:00:00+09:00',3600,
+               '2026-07-08', 9, 'alpha.exe', 'w'),
+              ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
+               '2026-07-08', 11, 'beta.exe', 'w'),
+              ('2026-07-08T13:00:00+09:00','2026-07-08T13:10:00+09:00',600,
+               '2026-07-08', 13, 'gamma.exe', 'w');";
+        let ctx = ctx_with("", main).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats { apps, .. } = &mut call {
+            *apps = vec!["alpha".into(), "beta".into()];
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("合计: 1 小时 30 分钟"),
+            "{}",
+            out.for_llm
+        );
+    }
+
+    #[tokio::test]
+    async fn stats_apps_categories_title_bind_positionally() {
+        // apps/categories/title 的占位符全是匿名 '?',正确性完全靠 push 顺序
+        // (apps → categories → title)。三个过滤条件各自只放行部分行,
+        // 交集唯一(work.exe 的"周报"行,3600s):任何两个绑定串位,
+        // 结果都不再是 1 小时(例如 process LIKE '%工作%' 直接空集)。
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-08T09:00:00+09:00','2026-07-08T10:00:00+09:00',3600,
+               '2026-07-08', 9, 'work.exe', '周报 W28'),
+              ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
+               '2026-07-08', 11, 'work.exe', '摸鱼视频'),
+              ('2026-07-08T12:00:00+09:00','2026-07-08T12:20:00+09:00',1200,
+               '2026-07-08', 12, 'workfun.exe', '周报 W28'),
+              ('2026-07-08T13:00:00+09:00','2026-07-08T13:15:00+09:00',900,
+               '2026-07-08', 13, 'other.exe', '周报 W28');
+            INSERT INTO app_group_members(process_name, group_id) VALUES
+              ('work.exe','g1'), ('workfun.exe','g2'), ('other.exe','g3');
+            INSERT INTO app_groups(id, display_name, category_id) VALUES
+              ('g1','Work','cat_work'), ('g2','WorkFun','cat_fun'), ('g3','Other','cat_work');
+            INSERT INTO categories(id, name) VALUES ('cat_work','工作'), ('cat_fun','娱乐');";
+        let ctx = ctx_with("", main).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats {
+            apps,
+            categories,
+            title_keyword,
+            ..
+        } = &mut call
+        {
+            *apps = vec!["work".into()];
+            *categories = vec!["工作".into()];
+            *title_keyword = Some("周报".into());
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("合计: 1 小时 0 分钟"),
+            "{}",
+            out.for_llm
+        );
+    }
+
+    #[tokio::test]
+    async fn stats_apps_like_wildcards_escaped_no_overmatch() {
+        // '100Xzapp.exe' 是给未转义模式设的陷阱:%100%_a% 里 '%' 吃掉 'Xz'、
+        // '_' 吃掉任意一字符就能命中它;转义后只允许字面 '100%_a' 子串。
+        // 合计 1 小时 = 只有字面匹配那行;若转义失效会算出 1.5 小时
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-08T09:00:00+09:00','2026-07-08T10:00:00+09:00',3600,
+               '2026-07-08', 9, '100%_app.exe', 'w'),
+              ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
+               '2026-07-08', 11, '100Xzapp.exe', 'w');";
+        let ctx = ctx_with("", main).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats { apps, .. } = &mut call {
+            *apps = vec!["100%_a".into()];
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("合计: 1 小时 0 分钟"),
             "{}",
             out.for_llm
         );

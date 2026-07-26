@@ -952,4 +952,441 @@ mod tests {
             assert_eq!(count(&pool, table).await, 0, "二次 purge 后 {table} 应为 0");
         }
     }
+
+    // ═════════════ forget_remote_device_impl（桩照抄 e2e 的 InMemoryDriveStore 用法）═════════════
+
+    use crate::sync::drive::{DriveBackend, InMemoryDriveStore};
+
+    /// e2e 同款 fake auth：四列全 Some + expires_at 远未来，让
+    /// `ensure_valid_token` 走"未过期直接复用"分支，零网络调用。
+    async fn inject_fake_auth(pool: &DbPool) {
+        let exp = (chrono::Utc::now() + chrono::Duration::hours(24)).to_rfc3339();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "UPDATE auth_state
+                     SET uid = 'test-uid', email = 'test@example.com',
+                         refresh_token_enc = ?1,
+                         access_token = 'fake-access-token', expires_at = ?2
+                     WHERE id = 1",
+                    rusqlite::params![&[0u8; 16][..], exp],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// InMemory Drive + 显式 self_id 的引擎（不 start，无后台 tick）。
+    fn make_engine(pool: &DbPool, self_id: &str, drive: Arc<InMemoryDriveStore>) -> SyncEngine {
+        SyncEngine::with_backend(
+            pool.clone(),
+            None,
+            DriveBackend::InMemory(drive),
+            self_id.to_string(),
+        )
+    }
+
+    async fn insert_activity_for(pool: &DbPool, device_id: &str, process: &str) {
+        let device_id = device_id.to_string();
+        let process = process.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(
+                        started_at, ended_at, duration_secs, local_date, local_hour,
+                        process_name, window_title, category_id, device_id, updated_at, origin
+                     ) VALUES('2026-05-17T10:00:00Z','2026-05-17T10:00:30Z',30,
+                              '2026-05-17',10,?1,'t','other',?2,
+                              '2026-05-17T10:00:30Z','local')",
+                    rusqlite::params![process, device_id],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn insert_device_row(pool: &DbPool, device_id: &str) {
+        let device_id = device_id.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO devices(device_id, display_name, os, updated_at)
+                     VALUES(?1, ?1, 'macos', '2026-05-17T10:00:00Z')",
+                    rusqlite::params![device_id],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn activities_for(pool: &DbPool, device_id: &str) -> i64 {
+        let device_id = device_id.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM activities WHERE device_id = ?1",
+                    rusqlite::params![device_id],
+                    |r| r.get(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn device_deleted_at(pool: &DbPool, device_id: &str) -> Option<String> {
+        let device_id = device_id.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT deleted_at FROM devices WHERE device_id = ?1",
+                    rusqlite::params![device_id],
+                    |r| r.get(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap()
+    }
+
+    /// Drive 上现存文件名（升序），断言"哪些活着"用。
+    async fn drive_names(store: &InMemoryDriveStore) -> Vec<String> {
+        let mut names: Vec<String> = store
+            .list_appdata_files("")
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        names.sort();
+        names
+    }
+
+    async fn drive_content(store: &InMemoryDriveStore, name: &str) -> Vec<u8> {
+        let id = store
+            .list_appdata_files("")
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("Drive 上应存在 {name}"))
+            .id;
+        store.download(&id).await.unwrap()
+    }
+
+    /// 前置校验：空 / 全空白 id 拒绝；target == self（含 trim 后相等）拒绝并指路
+    /// purge_cloud_data。两类拒绝都发生在任何云端/本地写入之前。
+    #[tokio::test]
+    async fn forget_remote_device_rejects_blank_and_self() {
+        let pool = fresh_test_pool().await;
+        let drive = Arc::new(InMemoryDriveStore::new());
+        let engine = make_engine(&pool, "self-dev", drive.clone());
+
+        for blank in ["", "   ", "\t\n"] {
+            let err = forget_remote_device_impl(&pool, &engine, blank)
+                .await
+                .unwrap_err();
+            assert!(err.contains("不能为空"), "blank={blank:?} err={err}");
+        }
+        for selfish in ["self-dev", "  self-dev  "] {
+            let err = forget_remote_device_impl(&pool, &engine, selfish)
+                .await
+                .unwrap_err();
+            assert!(err.contains("purge_cloud_data"), "id={selfish:?} err={err}");
+        }
+        // 拒绝路径不应产生任何云端写入（tombstone 也不能传）
+        assert!(drive_names(&drive).await.is_empty());
+    }
+
+    /// 未登录直接拒绝——不能只动本机不动云端（下次 pull 会把设备拉回来）。
+    /// 云端文件原样、无 tombstone、本地表不动。
+    #[tokio::test]
+    async fn forget_remote_device_requires_login() {
+        let pool = fresh_test_pool().await; // 不注 fake auth → NotSignedIn
+        let drive = Arc::new(InMemoryDriveStore::new());
+        drive
+            .upsert_by_name("device.ghost.data.2026-05-01.ndjson", b"d")
+            .await
+            .unwrap();
+        insert_device_row(&pool, "ghost").await;
+        insert_activity_for(&pool, "ghost", "Code").await;
+        let engine = make_engine(&pool, "self-dev", drive.clone());
+
+        let err = forget_remote_device_impl(&pool, &engine, "ghost")
+            .await
+            .unwrap_err();
+        assert!(err.contains("需要登录"), "err={err}");
+
+        assert_eq!(
+            drive_names(&drive).await,
+            vec!["device.ghost.data.2026-05-01.ndjson"],
+            "未登录路径不得动云端"
+        );
+        assert_eq!(activities_for(&pool, "ghost").await, 1, "本地表不得动");
+        assert_eq!(device_deleted_at(&pool, "ghost").await, None);
+    }
+
+    /// tombstone 先行：上传失败 = 整个命令失败，此时云端文件、本地 activities、
+    /// devices 全部原样（用户重试即可）。注入配额耗尽后重试立即成功。
+    #[tokio::test]
+    async fn forget_remote_device_tombstone_failure_fails_whole_command() {
+        let pool = fresh_test_pool().await;
+        inject_fake_auth(&pool).await;
+        let drive = Arc::new(InMemoryDriveStore::new());
+        drive
+            .upsert_by_name("device.ghost.data.2026-05-01.ndjson", b"d")
+            .await
+            .unwrap();
+        drive
+            .upsert_by_name("device.ghost.meta.json", b"m")
+            .await
+            .unwrap();
+        insert_device_row(&pool, "ghost").await;
+        insert_activity_for(&pool, "ghost", "Code").await;
+        let engine = make_engine(&pool, "self-dev", drive.clone());
+
+        drive.fail_next_upserts(1); // 第一步 tombstone 上传即 500
+
+        let err = forget_remote_device_impl(&pool, &engine, "ghost")
+            .await
+            .unwrap_err();
+        assert!(err.contains("上传 tombstone 失败"), "err={err}");
+
+        // 整体失败 = 什么都没动
+        assert_eq!(
+            drive_names(&drive).await,
+            vec![
+                "device.ghost.data.2026-05-01.ndjson",
+                "device.ghost.meta.json"
+            ],
+            "tombstone 失败后不得删任何 Drive 文件"
+        );
+        assert_eq!(activities_for(&pool, "ghost").await, 1);
+        assert_eq!(device_deleted_at(&pool, "ghost").await, None);
+
+        // 瞬时故障过去后直接重试成功（deleted 只计 data+meta）
+        let deleted = forget_remote_device_impl(&pool, &engine, "ghost")
+            .await
+            .unwrap();
+        assert_eq!(deleted, 2);
+    }
+
+    /// 完整流程：按 `device.<id>.` 前缀删 Drive 文件（tombstone 本身不删不计数、
+    /// 前缀陷阱 `device.<id>-2.` 不误伤、邻居设备不动）+ 新 tombstone 落盘 +
+    /// 本地 activities 删除 + devices 软删（deleted_at = tombstone 的 clearedAt）。
+    #[tokio::test]
+    async fn forget_remote_device_full_flow_cleans_drive_and_local() {
+        let pool = fresh_test_pool().await;
+        inject_fake_auth(&pool).await;
+        let drive = Arc::new(InMemoryDriveStore::new());
+        // 目标设备：两个数据文件 + 一个旧 tombstone（会被覆盖，不计入 deleted）
+        drive
+            .upsert_by_name("device.ghost.data.2026-05-01.ndjson", b"d1")
+            .await
+            .unwrap();
+        drive
+            .upsert_by_name("device.ghost.meta.json", b"m")
+            .await
+            .unwrap();
+        drive
+            .upsert_by_name("device.ghost.tombstone.json", b"old-tombstone")
+            .await
+            .unwrap();
+        // 邻居设备 + 前缀陷阱："device.ghost-2." 不以 "device.ghost." 开头，不得误删
+        drive
+            .upsert_by_name("device.alive.data.2026-05-01.ndjson", b"a")
+            .await
+            .unwrap();
+        drive
+            .upsert_by_name("device.ghost-2.meta.json", b"trap")
+            .await
+            .unwrap();
+
+        insert_device_row(&pool, "ghost").await;
+        insert_device_row(&pool, "alive").await;
+        insert_activity_for(&pool, "ghost", "Code").await;
+        insert_activity_for(&pool, "ghost", "Slack").await;
+        insert_activity_for(&pool, "alive", "Chrome").await;
+        insert_activity_for(&pool, "self-dev", "Terminal").await;
+
+        let engine = make_engine(&pool, "self-dev", drive.clone());
+        let deleted = forget_remote_device_impl(&pool, &engine, "ghost")
+            .await
+            .unwrap();
+        assert_eq!(deleted, 2, "只计 data+meta，tombstone 不计");
+
+        // Drive：目标数据文件没了；tombstone 是新 payload；邻居 + 陷阱原样
+        assert_eq!(
+            drive_names(&drive).await,
+            vec![
+                "device.alive.data.2026-05-01.ndjson",
+                "device.ghost-2.meta.json",
+                "device.ghost.tombstone.json",
+            ]
+        );
+        let body = drive_content(&drive, "device.ghost.tombstone.json").await;
+        let ts: crate::sync::payload::TombstonePayload =
+            serde_json::from_slice(&body).expect("tombstone 应是合法 TombstonePayload JSON");
+        chrono::DateTime::parse_from_rfc3339(&ts.cleared_at).expect("clearedAt 应是 RFC3339");
+
+        // 本地：目标 activities 全删；其它设备 / self 保留；devices 软删且
+        // deleted_at 精确等于 tombstone 的 clearedAt（同一时刻取值）
+        assert_eq!(activities_for(&pool, "ghost").await, 0);
+        assert_eq!(activities_for(&pool, "alive").await, 1);
+        assert_eq!(activities_for(&pool, "self-dev").await, 1);
+        assert_eq!(
+            device_deleted_at(&pool, "ghost").await.as_deref(),
+            Some(ts.cleared_at.as_str())
+        );
+        assert_eq!(device_deleted_at(&pool, "alive").await, None);
+
+        // 幂等重跑：无前缀文件可删 → Ok(0)，不报错
+        let again = forget_remote_device_impl(&pool, &engine, "ghost")
+            .await
+            .unwrap();
+        assert_eq!(again, 0);
+    }
+
+    // ═════════════ set_data_root 校验 + bootstrap.json 落盘 ═════════════
+
+    /// 空 / 全空白 / 相对路径全部拒绝——这些分支在写 bootstrap.json 之前短路，
+    /// 不触碰任何文件系统状态。
+    #[test]
+    fn set_data_root_rejects_blank_and_relative() {
+        for blank in ["", "   ", "\n\t"] {
+            let err = set_data_root(blank.to_string()).unwrap_err();
+            assert!(err.contains("不能为空"), "input={blank:?} err={err}");
+        }
+        for rel in ["relative/path", "./x", "../up", "just-a-name"] {
+            let err = set_data_root(rel.to_string()).unwrap_err();
+            assert!(err.contains("绝对路径"), "input={rel:?} err={err}");
+        }
+    }
+
+    /// RAII：测试结束（含断言失败 panic）恢复 bootstrap.json 原内容 / 原缺失态，
+    /// 以及 `HINDSIGHT_DATA_DIR` 环境变量原值。
+    struct BootstrapRestore {
+        cfg: std::path::PathBuf,
+        prev_file: Option<Vec<u8>>,
+        dir_existed: bool,
+        prev_env: Option<std::ffi::OsString>,
+    }
+
+    impl Drop for BootstrapRestore {
+        fn drop(&mut self) {
+            match &self.prev_file {
+                Some(bytes) => {
+                    let _ = std::fs::write(&self.cfg, bytes);
+                }
+                None => {
+                    let _ = std::fs::remove_file(&self.cfg);
+                    if !self.dir_existed {
+                        if let Some(parent) = self.cfg.parent() {
+                            let _ = std::fs::remove_dir(parent);
+                        }
+                    }
+                }
+            }
+            match &self.prev_env {
+                Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
+                None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
+            }
+        }
+    }
+
+    /// 校验通过后 bootstrap.json 真实落盘（值为 trim 后的路径），且 data_root() /
+    /// get_data_root 立即读到新值。全程持 `lock_data_dir_env` 串行（读写方跨模块），
+    /// 结束后恢复用户原 bootstrap.json 与环境变量。
+    #[test]
+    fn set_data_root_persists_bootstrap_json_and_takes_effect() {
+        let _env_lock = crate::repo::test_util::lock_data_dir_env();
+
+        let cfg = dirs::config_dir()
+            .expect("测试环境应有 config_dir")
+            .join("Hindsight")
+            .join("bootstrap.json");
+        let prev_file = std::fs::read(&cfg).ok();
+        let _restore = BootstrapRestore {
+            cfg: cfg.clone(),
+            prev_file: prev_file.clone(),
+            dir_existed: cfg.parent().map(|p| p.exists()).unwrap_or(true),
+            prev_env: std::env::var_os("HINDSIGHT_DATA_DIR"),
+        };
+        // data_root() 优先读环境变量；摘掉才能观察 bootstrap.json 的生效
+        std::env::remove_var("HINDSIGHT_DATA_DIR");
+
+        let target =
+            std::env::temp_dir().join(format!("hindsight-data-root-{}", std::process::id()));
+        let target_str = target.to_string_lossy().to_string();
+
+        // 两端带空白：验证落盘的是 trim 后的值
+        set_data_root(format!("  {target_str}  ")).unwrap();
+
+        let body = std::fs::read_to_string(&cfg).expect("bootstrap.json 应已写出");
+        let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(
+            v["data_path"],
+            serde_json::Value::String(target_str.clone()),
+            "data_path 应是 trim 后的绝对路径"
+        );
+        assert_eq!(
+            crate::bootstrap::data_root(),
+            target,
+            "data_root() 应立即读到新值（env 已摘）"
+        );
+        assert_eq!(get_data_root(), target_str, "get_data_root 命令应同步反映");
+    }
+
+    // ═════════════ dir_size ═════════════
+
+    /// 嵌套目录逐层求和；不存在的路径 = 0；传文件路径（read_dir 失败）= 0。
+    #[test]
+    fn dir_size_sums_nested_files_missing_is_zero() {
+        let root = std::env::temp_dir().join(format!("hindsight-dir-size-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("sub").join("deep")).unwrap();
+        std::fs::write(root.join("a.bin"), vec![1u8; 100]).unwrap();
+        std::fs::write(root.join("sub").join("b.bin"), vec![2u8; 50]).unwrap();
+        std::fs::write(root.join("sub").join("deep").join("c.bin"), vec![3u8; 7]).unwrap();
+
+        assert_eq!(dir_size(&root), 157, "100 + 50 + 7 逐层求和");
+        assert_eq!(dir_size(&root.join("nope")), 0, "不存在的路径返回 0");
+        // 指向普通文件：exists 但 read_dir 失败 → 跳过 → 0（现行为：只统计目录）
+        assert_eq!(dir_size(&root.join("a.bin")), 0);
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// 读失败的子目录跳过不中断：0o000 的子目录 read_dir 失败，其内文件不计入，
+    /// 同级可读文件照常统计。root 用户绕过权限位，直接跳过该断言。
+    #[cfg(unix)]
+    #[test]
+    fn dir_size_skips_unreadable_subdir() {
+        use std::os::unix::fs::PermissionsExt;
+        // root 不受权限位约束，注入不了"读失败"
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let root =
+            std::env::temp_dir().join(format!("hindsight-dir-size-locked-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let locked = root.join("locked");
+        std::fs::create_dir_all(&locked).unwrap();
+        std::fs::write(locked.join("hidden.bin"), vec![0u8; 64]).unwrap();
+        std::fs::write(root.join("open.bin"), vec![0u8; 10]).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let got = dir_size(&root);
+
+        // 先恢复权限再断言，断言失败也能清理
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(got, 10, "不可读子目录整体跳过，只计可读的 open.bin");
+    }
 }
