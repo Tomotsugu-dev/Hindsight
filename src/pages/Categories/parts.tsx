@@ -9,6 +9,8 @@ import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { displayAppName } from "../../utils/displayName";
 import { displayCategoryName } from "../../utils/categoryName";
 import { logError } from "../../lib/logger";
+import { ScrollIndicator } from "../../components/ScrollIndicator/ScrollIndicator";
+import { assignMenuLayout, type AssignMenuLayout } from "./menuLayout";
 import styles from "./Categories.module.css";
 
 /** 自动补全候选:Hindsight 记录过的一个进程 + 它的归属信息。 */
@@ -266,11 +268,7 @@ export function AppList({ category }: { category: Category }) {
   );
 }
 
-interface MenuRect {
-  top: number;
-  left: number;
-  width: number;
-}
+type MenuRect = AssignMenuLayout;
 
 export function AssignDropdown({
   categories,
@@ -295,6 +293,7 @@ export function AssignDropdown({
   const [menuRect, setMenuRect] = useState<MenuRect | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -307,16 +306,24 @@ export function AssignDropdown({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    // 页面滚动关菜单(定位会失效),但菜单自身限高可内滚(1A)——
+    // capture 态会捕到菜单内部的滚动事件,必须放行,否则滚动条一动菜单就消失
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) {
+        return;
+      }
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
@@ -327,16 +334,13 @@ export function AssignDropdown({
     }
     if (!btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
-    const estimatedMenuHeight = categories.length * 28 + 8 + 4;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const flipUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
-
-    setMenuRect({
-      top: flipUp ? rect.top - estimatedMenuHeight - 4 : rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-    });
+    setMenuRect(
+      assignMenuLayout({
+        trigger: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
+        viewportHeight: window.innerHeight,
+        optionCount: categories.length + (allowClear && current ? 1 : 0),
+      }),
+    );
     setOpen(true);
   };
 
@@ -386,8 +390,10 @@ export function AssignDropdown({
             top: menuRect.top,
             left: menuRect.left,
             minWidth: menuRect.width,
+            maxHeight: menuRect.maxHeight,
           }}
         >
+          <div ref={scrollRef} className={styles.assignMenuScroll}>
           {allowClear && current && (
             <button
               type="button"
@@ -431,6 +437,9 @@ export function AssignDropdown({
               </button>
             );
           })}
+          </div>
+          {/* 1A:自绘常驻滚动条(WKWebView 画不出自定义原生条,见组件注释) */}
+          <ScrollIndicator targetRef={scrollRef} className={styles.assignMenuTrack} />
         </div>
       )}
     </div>

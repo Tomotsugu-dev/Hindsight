@@ -136,6 +136,11 @@
   z-index: var(--z-dropdown);
   min-width: 280px;
   max-width: 360px;
+  /* 同 1A 防御：分类极多时 chip 面板也不许长过视口，超出内滚
+     （offsetHeight 翻转测量拿到的是限高后的值，定位逻辑不受影响） */
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 10px;
   background: var(--surface-1, #ffffff);
   border: 1px solid rgba(0, 0, 0, 0.08);

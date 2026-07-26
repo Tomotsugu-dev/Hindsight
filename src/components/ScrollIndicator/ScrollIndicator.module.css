@@ -1,0 +1,22 @@
+/* 轨道:纯定位容器,几何(top/bottom/right/width/z-index)由宿主类给。
+   pointer-events 只开在 thumb 上——轨道空白处不拦截页面点击。 */
+.track {
+  position: absolute;
+  pointer-events: none;
+}
+
+.thumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--text-strong) 25%, transparent);
+  pointer-events: auto;
+  cursor: default;
+  transition: background-color 140ms ease-out;
+}
+
+.thumb:hover,
+.thumb[data-active] {
+  background: color-mix(in oklab, var(--text-strong) 48%, transparent);
+}

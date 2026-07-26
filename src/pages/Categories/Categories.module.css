@@ -666,6 +666,11 @@
   z-index: 9999;
   /* 让菜单宽度按最长 option 自动撑开（trigger 是最小宽），避免短词 trigger 下长选项超框 */
   width: max-content;
+  /* 1A：max-height 由 menuLayout.ts 按可用空间算好经内联样式下发（唯一真源）。
+     本层是不滚动的壳,滚动在内层 .assignMenuScroll;滚动条是自绘的
+     .assignMenuThumb——实测 macOS WKWebView 无视 ::-webkit-scrollbar 自定义
+     样式(原生 overlay 条不滚不显示),要常驻可见只能自己画。 */
+  overflow: hidden;
   padding: 4px;
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -678,11 +683,39 @@
   gap: 1px;
 }
 
+/* 内层滚动层:真正的 overflow 容器;原生滚动条两端都藏死(隐藏是双端都
+   可靠的,自定义显示才不可靠),可见性由自绘 thumb 负责 */
+.assignMenu .assignMenuScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.assignMenu .assignMenuScroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 自绘滚动条(ScrollIndicator)的轨道定位:贴菜单右缘,避开上下 padding。
+   thumb 样式/交互在组件里,常驻可见就是"可滚动/还有更多"的提示。 */
+.assignMenuTrack {
+  top: 4px;
+  bottom: 4px;
+  right: 2px;
+  width: 4px;
+}
+
 .assignOption {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 26px;
+  /* 滚动盒限高后,flex 子项默认会被压扁凑高度(行高变形=丑);
+     禁缩,行永远 26px,放不下的走滚动 */
+  flex: none;
   padding: 0 8px;
   background: transparent;
   border: none;

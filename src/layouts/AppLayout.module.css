@@ -58,6 +58,15 @@
   display: none;
 }
 
+/* 2A:窗口右缘滚动指示条的轨道——压在模糊带之上,避开顶部拖拽区/圆角 */
+.pageScrollTrack {
+  top: 40px;
+  bottom: 10px;
+  right: 3px;
+  width: 5px;
+  z-index: calc(var(--z-chrome-blur) + 1);
+}
+
 /* 上下边缘的高斯模糊条带：滚动时文字穿过这层会被柔化 */
 .shell::before,
 .shell::after {
