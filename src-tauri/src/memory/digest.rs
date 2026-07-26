@@ -114,10 +114,16 @@ async fn download_missing(dir: &std::path::Path, sources: &[(&str, &str)]) -> Re
     Ok(())
 }
 
-/// 消化管线的运行态:OCR 引擎 + 折叠器。
+/// 可替换的单帧识别函数:图片路径 → 行文本(阅读序)。生产实现由 [`Pipeline::load`]
+/// 把真 [`OcrEngine`] 包成闭包;测试注入预设文本,让消化循环能在无模型环境下被
+/// 行为级验证。选闭包而非给 OcrEngine 开 trait:digest 只消费"路径→行文本"这一个
+/// 面,缝开在唯一消费点上,引擎内部(Vision/Paddle 双后端)不必为测试重构。
+type Recognizer = Arc<dyn Fn(&std::path::Path) -> Result<Vec<String>> + Send + Sync>;
+
+/// 消化管线的运行态:OCR 识别函数 + 折叠器。
 /// 批量模式一次 run 一个;常驻模式跨 tick 持有(会话连续)。
 pub struct Pipeline {
-    ocr: Arc<OcrEngine>,
+    recognize: Recognizer,
     folder: Folder,
 }
 
@@ -147,9 +153,27 @@ impl Pipeline {
                 .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??,
         );
         Ok(Self {
-            ocr,
+            // 行为与直接持有引擎时逐字一致:调用仍发生在 digest_one 的
+            // spawn_blocking 里,只取每行 text(box_norm 消化管线本就不落库)。
+            // 解码在引擎内部:Vision 直接吃文件,Paddle 走 image::open。
+            recognize: Arc::new(move |path: &std::path::Path| {
+                Ok(ocr
+                    .recognize_file(path)?
+                    .into_iter()
+                    .map(|l| l.text)
+                    .collect())
+            }),
             folder: Folder::default(),
         })
+    }
+
+    /// 测试注入:用假识别函数组装管线,不加载任何模型。
+    #[cfg(test)]
+    fn with_recognizer(recognize: Recognizer) -> Self {
+        Self {
+            recognize,
+            folder: Folder::default(),
+        }
     }
 }
 
@@ -232,17 +256,10 @@ async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -
         frames::mark_done(mem, frame.path.clone(), -1).await?;
         return Ok(false);
     }
-    let eng = Arc::clone(&pipe.ocr);
-    let lines: Vec<String> = tokio::task::spawn_blocking(move || -> Result<Vec<String>> {
-        // 解码在引擎内部:Vision 直接吃文件,Paddle 走 image::open
-        Ok(eng
-            .recognize_file(&path)?
-            .into_iter()
-            .map(|l| l.text)
-            .collect())
-    })
-    .await
-    .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??;
+    let rec = Arc::clone(&pipe.recognize);
+    let lines: Vec<String> = tokio::task::spawn_blocking(move || rec(&path))
+        .await
+        .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??;
 
     let session_id = pipe.folder.fold_frame(mem, frame, &lines).await?;
     frames::mark_done(mem, frame.path.clone(), session_id).await?;
@@ -291,7 +308,677 @@ pub async fn backfill_from_activities(pool: &DbPool, mem: &MemoryDb) -> Result<u
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicUsize;
+
+    use rusqlite::params;
+
     use super::*;
+
+    // ───────────────────────── 测试基建 ─────────────────────────
+
+    /// [`RUNNING`] / [`STOP_REQUESTED`] 是进程级 static,cargo test 并行跑时
+    /// 所有触碰 drain 的测试必须互相串行,否则会看见对方的"已在运行"错误或
+    /// 消费掉对方的停止请求。用异步锁:guard 要横跨整个测试体(含 await 点),
+    /// std 锁跨 await 会触发 clippy::await_holding_lock;拿锁的测试 panic 时
+    /// guard 随栈展开释放,后续测试照常拿锁,无毒化问题。
+    async fn drain_lock() -> tokio::sync::MutexGuard<'static, ()> {
+        static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        LOCK.lock().await
+    }
+
+    /// 每个测试独立的临时目录。帧文件要真实存在:digest_one 先查 is_file,
+    /// 内容无所谓(假识别函数从不读它)。
+    fn scratch_dir(tag: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("hindsight-digest-{tag}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// 造一个空占位"截图"文件,返回其绝对路径字符串(frames.path 直接当路径用)。
+    fn touch(dir: &std::path::Path, name: &str) -> String {
+        let p = dir.join(name);
+        std::fs::write(&p, b"fake-jpg").unwrap();
+        p.to_string_lossy().into_owned()
+    }
+
+    async fn reg(mem: &MemoryDb, path: &str, ts: &str, title: &str) {
+        frames::register(
+            mem,
+            path.to_string(),
+            ts.to_string(),
+            "2026-07-05".to_string(),
+            Some("code".to_string()),
+            Some(title.to_string()),
+        )
+        .await
+        .unwrap();
+    }
+
+    /// 假 OCR:按文件名返回预设行,没预设的路径报识别错;`calls` 记录真实
+    /// 调用次数(验证去重帧/缺图帧根本不进识别)。
+    fn canned(map: &[(&str, &[&str])], calls: Arc<AtomicUsize>) -> Recognizer {
+        let map: HashMap<String, Vec<String>> = map
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.iter().map(|s| s.to_string()).collect()))
+            .collect();
+        Arc::new(move |p: &std::path::Path| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            let name = p.file_name().unwrap().to_string_lossy().into_owned();
+            map.get(&name)
+                .cloned()
+                .ok_or_else(|| Error::Ocr(format!("测试假 OCR 无预设: {name}")))
+        })
+    }
+
+    async fn frame_row(mem: &MemoryDb, path: &str) -> (i64, i64, Option<i64>) {
+        let p = path.to_string();
+        mem.0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT ocr_state, attempts, session_id FROM frames WHERE path = ?1",
+                    [p],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .db()
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn table_counts(mem: &MemoryDb) -> (i64, i64) {
+        mem.0
+            .call(|conn| {
+                let s = conn
+                    .query_row("SELECT COUNT(*) FROM text_sessions", [], |r| r.get(0))
+                    .db()?;
+                let l = conn
+                    .query_row("SELECT COUNT(*) FROM session_lines", [], |r| r.get(0))
+                    .db()?;
+                Ok((s, l))
+            })
+            .await
+            .unwrap()
+    }
+
+    // ───────────────────── 批处理主循环 ─────────────────────
+
+    /// 主路径:登记 3 帧 → 假 OCR → 同标题帧折叠进同一会话、行级并集去重、
+    /// 换标题开新会话、FTS 可检索、帧全部记完成并回填会话归属。
+    /// 期望值独立推导:a 出 2 行,b 与 a 重叠 1 行再新增 1 行 → 会话一共 3 行;
+    /// c 换标题 → 第二个会话 1 行。
+    #[tokio::test]
+    async fn drain_folds_batch_into_sessions_lines_and_fts() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("batch");
+        let a = touch(&dir, "a.jpg");
+        let b = touch(&dir, "b.jpg");
+        let c = touch(&dir, "c.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "阅读笔记").await;
+        reg(&mem, &b, "2026-07-05T10:00:30+09:00", "阅读笔记").await;
+        reg(&mem, &c, "2026-07-05T10:01:00+09:00", "另一篇").await;
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut pipe = Pipeline::with_recognizer(canned(
+            &[
+                ("a.jpg", &["第一行内容足够长", "第二行内容足够长"]),
+                ("b.jpg", &["第二行内容足够长", "第三行内容足够长"]),
+                ("c.jpg", &["另一篇的独立一行"]),
+            ],
+            Arc::clone(&calls),
+        ));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert_eq!(report.processed, 3);
+        assert_eq!(report.failed, 0);
+        assert_eq!(report.skipped_missing_file, 0);
+        assert_eq!(calls.load(Ordering::SeqCst), 3, "每帧恰好识别一次");
+
+        // 帧全部完成,a/b 同会话、c 独立会话
+        let (sa, _, sess_a) = frame_row(&mem, &a).await;
+        let (sb, _, sess_b) = frame_row(&mem, &b).await;
+        let (sc, _, sess_c) = frame_row(&mem, &c).await;
+        assert_eq!((sa, sb, sc), (1, 1, 1));
+        assert_eq!(sess_a, sess_b, "同标题近时帧折叠进同一会话");
+        assert_ne!(sess_a, sess_c, "标题变化开新会话");
+
+        let (sessions, lines) = table_counts(&mem).await;
+        assert_eq!(sessions, 2);
+        assert_eq!(lines, 3 + 1, "行级并集:重复行只落一次");
+
+        // FTS 现场可搜(b 帧新增的行)
+        mem.0
+            .call(|conn| {
+                let hits: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH '三行内容'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .db()?;
+                assert_eq!(hits, 1);
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 重跑幂等:已消化的帧不会被第二次 drain 再碰——识别函数零调用、
+    /// 库里会话/行数不变、账单全零。
+    #[tokio::test]
+    async fn rerun_after_drain_digests_nothing_new() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("idem");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        let calls1 = Arc::new(AtomicUsize::new(0));
+        let mut pipe = Pipeline::with_recognizer(canned(
+            &[("a.jpg", &["这一行有六个字"])],
+            Arc::clone(&calls1),
+        ));
+        let stop = AtomicBool::new(false);
+        assert_eq!(drain(&mem, &mut pipe, &stop).await.unwrap().processed, 1);
+        let before = table_counts(&mem).await;
+
+        // 第二轮:换一个会计数的识别函数,必须一次都不被调用
+        let calls2 = Arc::new(AtomicUsize::new(0));
+        let mut pipe2 = Pipeline::with_recognizer(canned(
+            &[("a.jpg", &["不该出现的行不该出现"])],
+            Arc::clone(&calls2),
+        ));
+        let report = drain(&mem, &mut pipe2, &stop).await.unwrap();
+        assert_eq!(
+            report.processed + report.failed + report.skipped_missing_file,
+            0
+        );
+        assert_eq!(calls2.load(Ordering::SeqCst), 0, "已消化帧不重复识别");
+        assert_eq!(table_counts(&mem).await, before, "库内容原封不动");
+    }
+
+    // ───────────────────── 停止语义 ─────────────────────
+
+    /// 停止批处理的核心语义:帧间感知停止标志,已处理的部分正常落库,
+    /// 未处理的帧保持待消化,下一轮(不置停)能继续清完——停不丢数据。
+    #[tokio::test]
+    async fn external_stop_between_frames_keeps_finished_part() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("stop");
+        let a = touch(&dir, "a.jpg");
+        let b = touch(&dir, "b.jpg");
+        let c = touch(&dir, "c.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+        reg(&mem, &b, "2026-07-05T10:00:30+09:00", "标题").await;
+        reg(&mem, &c, "2026-07-05T10:01:00+09:00", "标题").await;
+
+        // 识别第一帧的同时置位停止(模拟用户在批处理中途按停止按钮)
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_in_rec = Arc::clone(&stop);
+        let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            stop_in_rec.store(true, Ordering::SeqCst);
+            Ok(vec!["第一帧的一行内容".to_string()])
+        }));
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        // 停止在帧间生效:第 1 帧完整落库,第 2/3 帧原样保持待消化
+        assert_eq!(report.processed, 1, "停止前完成的部分照常入账");
+        assert_eq!(frame_row(&mem, &a).await.0, 1);
+        assert_eq!(frame_row(&mem, &b).await.0, 0, "未处理帧不落半消化状态");
+        assert_eq!(frame_row(&mem, &c).await.0, 0);
+        let (sessions, lines) = table_counts(&mem).await;
+        assert_eq!((sessions, lines), (1, 1), "已处理部分的会话/行完整可查");
+
+        // 停止请求不粘滞:清掉外部标志后新一轮把剩余 2 帧清完
+        stop.store(false, Ordering::SeqCst);
+        let mut pipe2 =
+            Pipeline::with_recognizer(Arc::new(|_p| Ok(vec!["后续帧的一行内容".to_string()])));
+        let report2 = drain(&mem, &mut pipe2, &stop).await.unwrap();
+        assert_eq!(report2.processed, 2, "停止只作用于当轮,积压下一轮可继续");
+    }
+
+    /// 批开始前就按下的停止(引擎还在加载、第一帧还没跑的窗口)同样有效:
+    /// 一帧都不处理;且该请求随本轮结束被消费,不殃及下一批。
+    #[tokio::test]
+    async fn stop_requested_before_batch_is_honored_then_consumed() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("prestop");
+        let a = touch(&dir, "a.jpg");
+        let b = touch(&dir, "b.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+        reg(&mem, &b, "2026-07-05T10:00:30+09:00", "标题").await;
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let recognizer = canned(
+            &[
+                ("a.jpg", &["这一行有六个字"]),
+                ("b.jpg", &["这一行有六个字"]),
+            ],
+            Arc::clone(&calls),
+        );
+
+        request_stop();
+        let mut pipe = Pipeline::with_recognizer(Arc::clone(&recognizer));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+        assert_eq!(report.processed, 0, "批前停止请求让整批空转返回");
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "一帧都不进识别");
+        assert_eq!(frame_row(&mem, &a).await.0, 0, "帧保持待消化");
+
+        // 请求已被上一轮消费:新一轮正常消化全部积压
+        let mut pipe2 = Pipeline::with_recognizer(recognizer);
+        let report2 = drain(&mem, &mut pipe2, &stop).await.unwrap();
+        assert_eq!(report2.processed, 2, "停止请求不跨批粘滞");
+    }
+
+    // ───────────────────── 失败帧处理 ─────────────────────
+
+    /// 顽固失败帧:同轮内被反复重试至上限(3 次)后放弃,既不阻塞其它帧,
+    /// 也不把 drain 拖成死循环;且失败帧不切断前后帧的会话折叠。
+    #[tokio::test]
+    async fn failing_frame_retries_capped_and_does_not_block_others() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("fail");
+        let good1 = touch(&dir, "good1.jpg");
+        let bad = touch(&dir, "bad.jpg");
+        let good2 = touch(&dir, "good2.jpg");
+        reg(&mem, &good1, "2026-07-05T10:00:00+09:00", "标题").await;
+        reg(&mem, &bad, "2026-07-05T10:00:30+09:00", "标题").await;
+        reg(&mem, &good2, "2026-07-05T10:01:00+09:00", "标题").await;
+
+        // bad.jpg 无预设 → 假 OCR 永远报错
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut pipe = Pipeline::with_recognizer(canned(
+            &[
+                ("good1.jpg", &["前一帧的一行内容"]),
+                ("good2.jpg", &["后一帧的一行内容"]),
+            ],
+            Arc::clone(&calls),
+        ));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert_eq!(report.processed, 2, "好帧全部消化,不被坏帧卡住");
+        // 同一坏帧在本轮内重试:每次尝试都记一笔失败,直到重试上限
+        assert_eq!(report.failed, frames::MAX_ATTEMPTS as u64);
+        let (state, attempts, _) = frame_row(&mem, &bad).await;
+        assert_eq!(
+            (state, attempts),
+            (2, frames::MAX_ATTEMPTS),
+            "坏帧留失败态与完整重试记录"
+        );
+        // 坏帧識別失败不产生会话残渣;前后好帧同标题近时 → 仍折叠为一个会话
+        let (sessions, lines) = table_counts(&mem).await;
+        assert_eq!((sessions, lines), (1, 2), "失败帧不切断前后帧的折叠");
+
+        // 上限已到:再跑一轮不会又去啃这帧
+        let calls2 = Arc::new(AtomicUsize::new(0));
+        let mut pipe2 = Pipeline::with_recognizer(canned(&[], Arc::clone(&calls2)));
+        let report2 = drain(&mem, &mut pipe2, &stop).await.unwrap();
+        assert_eq!(report2.failed, 0);
+        assert_eq!(calls2.load(Ordering::SeqCst), 0, "放弃的帧不再进识别");
+    }
+
+    /// 瞬时失败(第一次识别报错、之后恢复):同一轮 drain 内就能重试成功,
+    /// 最终帧记完成、文本落库——失败标记是"重试",不是"判死刑"。
+    #[tokio::test]
+    async fn transient_failure_retried_within_same_drain() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("transient");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_in_rec = Arc::clone(&calls);
+        let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            if calls_in_rec.fetch_add(1, Ordering::SeqCst) == 0 {
+                Err(Error::Ocr("第一次识别偶发失败".into()))
+            } else {
+                Ok(vec!["恢复后识别出的一行".to_string()])
+            }
+        }));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert_eq!(report.failed, 1, "首次失败入账");
+        assert_eq!(report.processed, 1, "重试成功后正常入账");
+        let (state, attempts, session_id) = frame_row(&mem, &a).await;
+        assert_eq!(state, 1, "最终是完成态");
+        assert_eq!(attempts, 1, "留有一次失败记录");
+        assert!(session_id.is_some_and(|s| s > 0));
+        assert_eq!(table_counts(&mem).await, (1, 1));
+    }
+
+    /// 图文件已被清理(retention 删除)的帧:不进识别、按完成记(session_id=-1),
+    /// 不产生会话,也绝不留在登记簿里无限重试。
+    #[tokio::test]
+    async fn missing_file_marked_done_without_recognition() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("missing");
+        let ghost = dir.join("deleted.jpg").to_string_lossy().into_owned(); // 从未创建
+        reg(&mem, &ghost, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut pipe = Pipeline::with_recognizer(canned(&[], Arc::clone(&calls)));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert_eq!(report.skipped_missing_file, 1);
+        assert_eq!(report.processed, 0);
+        assert_eq!(report.failed, 0);
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "缺图帧不进识别");
+        let (state, _, session_id) = frame_row(&mem, &ghost).await;
+        assert_eq!(state, 1, "按完成记,不再重试");
+        assert_eq!(session_id, Some(-1), "-1 = 无会话归属的哨兵值");
+        assert_eq!(table_counts(&mem).await, (0, 0), "不产生空会话");
+    }
+
+    // ───────────────────── 单实例互斥 ─────────────────────
+
+    /// "已在运行"互斥:第一轮 drain 卡在识别中时,第二个 drain 立即报错让路,
+    /// 且不能把第一轮的运行标志碰掉;第一轮结束后标志复位。
+    #[tokio::test]
+    async fn second_drain_rejected_while_first_running() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("mutex");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        // 识别函数阻塞在通道上,把第一轮 drain 钉在"正在消化"状态
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let rx = std::sync::Mutex::new(rx);
+        let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            rx.lock().unwrap().recv().unwrap();
+            Ok(vec!["放行后识别出的行".to_string()])
+        }));
+        let mem_bg = mem.clone();
+        let stop_bg = Arc::new(AtomicBool::new(false));
+        let stop_bg2 = Arc::clone(&stop_bg);
+        let first = tokio::spawn(async move { drain(&mem_bg, &mut pipe, &stop_bg2).await });
+
+        // 等第一轮真正进入运行态(拿到 RUNNING)
+        let mut running = false;
+        for _ in 0..200 {
+            if is_running() {
+                running = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(running, "第一轮 drain 应进入运行态");
+
+        // 第二个 drain:立即拒绝,不阻塞不排队
+        let mut pipe2 = Pipeline::with_recognizer(Arc::new(|_p| Ok(vec![])));
+        let stop2 = AtomicBool::new(false);
+        let second = drain(&mem, &mut pipe2, &stop2).await;
+        assert!(
+            matches!(second, Err(Error::InvalidInput(m)) if m.contains("已在运行")),
+            "第二个消化请求应被互斥拒绝: {second:?}"
+        );
+        assert!(is_running(), "被拒的请求不得清掉进行中批次的运行标志");
+
+        // 放行第一轮:正常完成,运行标志复位
+        tx.send(()).unwrap();
+        let report = first.await.unwrap().unwrap();
+        assert_eq!(report.processed, 1, "互斥冲突不影响第一轮的正常完成");
+        assert!(!is_running(), "批结束后运行标志复位");
+    }
+
+    // ───────────────────── 模型下载 ─────────────────────
+
+    /// 本地假文件服务:按 URL 路径回预设 body 并统计命中次数;未知路径回 404。
+    /// 范式照抄 ai/summary_operations.rs 的假 OpenAI 服务(127.0.0.1 canned HTTP)。
+    async fn spawn_file_server(files: Vec<(&'static str, Vec<u8>)>) -> (u16, Arc<AtomicUsize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits_srv = Arc::clone(&hits);
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    return;
+                };
+                // GET 无 body,读到空行即收全请求
+                let mut buf: Vec<u8> = Vec::new();
+                let mut tmp = [0u8; 2048];
+                loop {
+                    if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                    match sock.read(&mut tmp).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                    }
+                }
+                let head = String::from_utf8_lossy(&buf);
+                let path = head.split_whitespace().nth(1).unwrap_or("").to_string();
+                let resp = match files.iter().find(|(p, _)| *p == path) {
+                    Some((_, body)) => {
+                        hits_srv.fetch_add(1, Ordering::SeqCst);
+                        let mut r = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        )
+                        .into_bytes();
+                        r.extend_from_slice(body);
+                        r
+                    }
+                    None => {
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            .to_vec()
+                    }
+                };
+                let _ = sock.write_all(&resp).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        (port, hits)
+    }
+
+    /// 拿一个刚释放的本地端口——连接必然被拒,模拟下载源不可达。
+    fn free_local_port() -> u16 {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        port
+    }
+
+    /// 缺哪个下哪个:已存在的文件绝不重下(内容原样),缺的按源取回;
+    /// 全部就绪后再跑零请求(幂等),且不留 .downloading 中间文件。
+    #[tokio::test]
+    async fn download_missing_only_fetches_absent_files() {
+        let dir = scratch_dir("dl");
+        std::fs::write(dir.join("det.onnx"), b"already-here").unwrap();
+        let (port, hits) = spawn_file_server(vec![
+            ("/det", b"SHOULD-NOT-BE-FETCHED".to_vec()),
+            ("/rec", b"fake-rec-model-bytes".to_vec()),
+        ])
+        .await;
+        let det_url = format!("http://127.0.0.1:{port}/det");
+        let rec_url = format!("http://127.0.0.1:{port}/rec");
+        let sources = [
+            ("det.onnx", det_url.as_str()),
+            ("rec.onnx", rec_url.as_str()),
+        ];
+
+        download_missing(&dir, &sources).await.unwrap();
+        assert_eq!(
+            std::fs::read(dir.join("det.onnx")).unwrap(),
+            b"already-here",
+            "已存在的文件不被覆盖"
+        );
+        assert_eq!(
+            std::fs::read(dir.join("rec.onnx")).unwrap(),
+            b"fake-rec-model-bytes",
+            "缺的文件按源取回"
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "只有缺的那个发起了请求");
+        assert!(
+            !dir.join("rec.onnx.downloading").exists(),
+            "写入走临时文件 + rename,不留中间产物"
+        );
+
+        // 幂等:三件套齐了就零网络
+        download_missing(&dir, &sources).await.unwrap();
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "全部就绪后不再发请求");
+    }
+
+    /// 字典完整性门:条目数不等于预期(上游改版)或不是 UTF-8 → 明确报错,
+    /// 且坏字典绝不落盘;条目数恰好匹配 → 正常写入。
+    #[tokio::test]
+    async fn download_missing_dict_line_guard_and_utf8() {
+        let good_dict = "字\n".repeat(DICT_EXPECTED_LINES);
+        let (port, _) = spawn_file_server(vec![
+            ("/bad", "第一行\n第二行\n第三行\n".as_bytes().to_vec()),
+            ("/binary", vec![0xff, 0xfe, 0x9f, 0x00]),
+            ("/good", good_dict.into_bytes()),
+        ])
+        .await;
+
+        // 条目数不符 → 拒绝使用,不落盘
+        let dir = scratch_dir("dict-bad");
+        let url = format!("http://127.0.0.1:{port}/bad");
+        let err = download_missing(&dir, &[("dict.txt", url.as_str())])
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&DICT_EXPECTED_LINES.to_string()),
+            "错误要说清预期条目数: {msg}"
+        );
+        assert!(!dir.join("dict.txt").exists(), "坏字典不得落盘");
+        assert!(!dir.join("dict.txt.downloading").exists());
+
+        // 非 UTF-8 → 同样拒绝
+        let dir2 = scratch_dir("dict-bin");
+        let url2 = format!("http://127.0.0.1:{port}/binary");
+        let err2 = download_missing(&dir2, &[("dict.txt", url2.as_str())])
+            .await
+            .unwrap_err();
+        assert!(
+            err2.to_string().contains("UTF-8"),
+            "报错点名编码问题: {err2}"
+        );
+        assert!(!dir2.join("dict.txt").exists());
+
+        // 条目数恰好匹配 → 正常写入
+        let dir3 = scratch_dir("dict-good");
+        let url3 = format!("http://127.0.0.1:{port}/good");
+        download_missing(&dir3, &[("dict.txt", url3.as_str())])
+            .await
+            .unwrap();
+        let saved = std::fs::read_to_string(dir3.join("dict.txt")).unwrap();
+        assert_eq!(saved.lines().count(), DICT_EXPECTED_LINES);
+    }
+
+    /// 下载源不可达(拒连)与 404:都返回错误且目标文件不产生——
+    /// 半截模型文件比没有模型更糟(引擎会加载到坏文件)。
+    #[tokio::test]
+    async fn download_missing_network_failures_leave_no_file() {
+        // 拒连
+        let dir = scratch_dir("dl-refused");
+        let url = format!("http://127.0.0.1:{}/rec", free_local_port());
+        let res = download_missing(&dir, &[("rec.onnx", url.as_str())]).await;
+        assert!(res.is_err(), "拒连必须报错: {res:?}");
+        assert!(!dir.join("rec.onnx").exists());
+
+        // 404(源在但路径错/上游下架)
+        let (port, _) = spawn_file_server(vec![]).await;
+        let dir2 = scratch_dir("dl-404");
+        let url2 = format!("http://127.0.0.1:{port}/gone");
+        let err = download_missing(&dir2, &[("rec.onnx", url2.as_str())])
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("rec.onnx"),
+            "错误要点名是哪个文件下载失败: {err}"
+        );
+        assert!(!dir2.join("rec.onnx").exists());
+    }
+
+    // ───────────────────── 历史回填 ─────────────────────
+
+    async fn insert_activity(pool: &DbPool, started: &str, shot: Option<&str>, title: &str) {
+        let (started, shot, title) = (
+            started.to_string(),
+            shot.map(str::to_string),
+            title.to_string(),
+        );
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                        local_hour, process_name, window_title, category_id, screenshot_path)
+                     VALUES (?1, ?1, 30, '2026-07-05', 10, 'code', ?2, 'other', ?3)",
+                    params![started, title, shot],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 历史回填:同一截图的多条活动行归并成一帧(取最早时刻),无截图/空路径
+    /// 的行不登记;重跑幂等(INSERT OR IGNORE,登记簿不膨胀)。
+    #[tokio::test]
+    async fn backfill_registers_each_screenshot_once() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+
+        // 同一截图两条活动行(乱序插入) + 另一截图 + 两条不该回填的行
+        insert_activity(
+            &pool,
+            "2026-07-05T10:05:00+09:00",
+            Some("shots/a.jpg"),
+            "main.rs",
+        )
+        .await;
+        insert_activity(
+            &pool,
+            "2026-07-05T10:00:00+09:00",
+            Some("shots/a.jpg"),
+            "main.rs",
+        )
+        .await;
+        insert_activity(
+            &pool,
+            "2026-07-05T10:07:00+09:00",
+            Some("shots/b.jpg"),
+            "lib.rs",
+        )
+        .await;
+        insert_activity(&pool, "2026-07-05T10:08:00+09:00", None, "无截图").await;
+        insert_activity(&pool, "2026-07-05T10:09:00+09:00", Some(""), "空路径").await;
+
+        let n = backfill_from_activities(&pool, &mem).await.unwrap();
+        assert_eq!(n, 2, "只有带截图的唯一路径被登记");
+
+        let pending = frames::take_pending(&mem, 10).await.unwrap();
+        assert_eq!(pending.len(), 2);
+        // 按 ts 升序:a.jpg 取的是该截图两条活动行的最早时刻
+        assert_eq!(pending[0].path, "shots/a.jpg");
+        assert_eq!(pending[0].ts, "2026-07-05T10:00:00+09:00");
+        assert_eq!(pending[0].title.as_deref(), Some("main.rs"));
+        assert_eq!(pending[1].path, "shots/b.jpg");
+        assert_eq!(pending[1].ts, "2026-07-05T10:07:00+09:00");
+
+        // 幂等:重跑不产生重复登记,已有帧的 ts 不被改写
+        backfill_from_activities(&pool, &mem).await.unwrap();
+        let again = frames::take_pending(&mem, 10).await.unwrap();
+        assert_eq!(again.len(), 2, "重复回填不膨胀登记簿");
+        assert_eq!(again[0].ts, "2026-07-05T10:00:00+09:00");
+    }
 
     /// 端到端:真实主库回填 → 真模型消化 → FTS 检索。
     /// 跑法(release,debug 下 OCR 太慢):

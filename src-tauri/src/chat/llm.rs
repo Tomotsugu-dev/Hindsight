@@ -397,10 +397,10 @@ async fn send_json(req: reqwest::RequestBuilder) -> Result<Value> {
         .await
         .map_err(|e| Error::LlmResponse(format!("读响应失败: {e}")))?;
     if !status.is_success() {
-        return Err(Error::LlmResponse(format!(
-            "HTTP {status}: {}",
-            &text[..text.len().min(300)]
-        )));
+        // 预览按字符截断:错误体可能是中文/多字节(网关中文错误页),
+        // 按字节切 300 会切在字符中间直接 panic(B 档测试实锤的隐患)
+        let preview: String = text.chars().take(300).collect();
+        return Err(Error::LlmResponse(format!("HTTP {status}: {preview}")));
     }
     serde_json::from_str(&text).map_err(|e| Error::LlmResponse(format!("响应不是 JSON: {e}")))
 }
@@ -464,5 +464,505 @@ mod schema_tests {
                 t["function"]["name"]
             );
         }
+    }
+}
+
+/// 云端 HTTP 通路的行为测试:用 127.0.0.1 上的一次性假服务喂 canned 响应,
+/// 覆盖 step_cloud 的解析各形态、非 2xx 透传、畸形响应容错、拒连/挂死路径,
+/// 以及 ai::llm::ExternalChatClient 的空回复归因错误码(云端文本通路的另一半,
+/// 其 [LLM_EMPTY_*] 码是前端本地化提示的契约,产生条件必须钉死)。
+#[cfg(test)]
+mod cloud_http_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// 拿一个刚释放的本地端口——连接必然被拒,模拟"服务没起来/地址配错"。
+    fn free_local_port() -> u16 {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        port
+    }
+
+    /// 起一个一次性 HTTP 假服务:读完整个请求(headers + Content-Length body)
+    /// 再按给定状态行/响应体回包,并把收到的原始请求全文送回测试侧——
+    /// 这样既能断言"响应怎么被解析",也能断言"请求到底发了什么"(鉴权头/报文形状)。
+    /// `status_line` 形如 "200 OK" / "401 Unauthorized"。
+    async fn spawn_http_once(
+        status_line: &str,
+        body: String,
+    ) -> (u16, tokio::sync::oneshot::Receiver<String>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let status_line = status_line.to_string();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf: Vec<u8> = Vec::new();
+            let mut tmp = [0u8; 4096];
+            loop {
+                let n = sock.read(&mut tmp).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let head = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
+                    let cl = head
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length:"))
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if buf.len() >= pos + 4 + cl {
+                        break;
+                    }
+                }
+            }
+            let resp = format!(
+                "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                status_line,
+                body.len(),
+                body
+            );
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            let _ = sock.shutdown().await;
+            let _ = tx.send(String::from_utf8_lossy(&buf).into_owned());
+        });
+        (port, rx)
+    }
+
+    fn cloud_client(port: u16) -> ChatLlm {
+        ChatLlm::cloud(
+            // 带尾斜杠:顺带验证构造期会 trim,不会拼出 //chat/completions
+            &format!("http://127.0.0.1:{port}/v1/"),
+            "test-model".into(),
+            "sk-test".into(),
+        )
+        .unwrap()
+    }
+
+    /// 纯文本作答形态:content 取 choices[0] 并 trim、usage 透传;
+    /// tool_calls 为空数组时不能误判成工具调用(OpenAI 部分兼容端会返 [])。
+    #[tokio::test]
+    async fn step_cloud_final_content_trims_and_reads_usage() {
+        let body = json!({
+            "choices": [{
+                "message": {"role": "assistant", "content": "  今天主要在写测试。 ", "tool_calls": []},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 42, "completion_tokens": 17}
+        })
+        .to_string();
+        let (port, _rx) = spawn_http_once("200 OK", body).await;
+        let (out, usage) = cloud_client(port)
+            .step("系统提示", &[Turn::User("我今天干了啥".into())])
+            .await
+            .unwrap();
+        match out {
+            StepOut::Final(text) => {
+                assert_eq!(text, "今天主要在写测试。", "content 应 trim 后原样返回")
+            }
+            other => panic!("空 tool_calls 数组应走作答分支,实际: {other:?}"),
+        }
+        assert_eq!(
+            (usage.prompt, usage.completion),
+            (42, 17),
+            "usage 应逐字段透传"
+        );
+    }
+
+    /// 工具调用形态:name/args/id 逐项解析;一次多个 tool_calls 只执行第一个,
+    /// 回放用的 raw 必须把多余的 call 截掉——否则回放时孤儿 id 缺 tool 结果被 API 拒。
+    #[tokio::test]
+    async fn step_cloud_tool_call_parses_first_and_truncates_raw() {
+        let body = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {
+                            "name": "query_stats",
+                            "arguments": "{\"date_from\":\"2026-07-01\",\"date_to\":\"2026-07-25\"}"
+                        }},
+                        {"id": "call_2", "type": "function", "function": {
+                            "name": "get_timeline", "arguments": "{}"
+                        }}
+                    ]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 30}
+        })
+        .to_string();
+        let (port, _rx) = spawn_http_once("200 OK", body).await;
+        let (out, usage) = cloud_client(port)
+            .step("s", &[Turn::User("统计一下".into())])
+            .await
+            .unwrap();
+        let StepOut::Call {
+            name,
+            args,
+            id,
+            raw,
+        } = out
+        else {
+            panic!("有 tool_calls 应走调用分支");
+        };
+        assert_eq!(name, "query_stats");
+        assert_eq!(args["date_from"], "2026-07-01");
+        assert_eq!(args["date_to"], "2026-07-25");
+        assert_eq!(id.as_deref(), Some("call_1"), "id 应取第一个 call 的");
+        let raw = raw.expect("云端必须带 raw 供回放");
+        assert_eq!(
+            raw["tool_calls"].as_array().unwrap().len(),
+            1,
+            "raw 只应保留被执行的第一个 call"
+        );
+        assert_eq!(raw["tool_calls"][0]["id"], "call_1");
+        assert_eq!((usage.prompt, usage.completion), (100, 30));
+    }
+
+    /// arguments 不是合法 JSON 时应退化为空对象继续走调用分支(交给下游参数
+    /// 校验报错回填),而不是整个 step 失败——模型偶发写坏参数不该断掉整轮对话。
+    /// usage 字段整个缺失时按 0 计,不报错。
+    #[tokio::test]
+    async fn step_cloud_malformed_arguments_fall_back_to_empty_object() {
+        let body = json!({
+            "choices": [{
+                "message": {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": "c1", "type": "function", "function": {
+                        "name": "search_text", "arguments": "{keywords: 不是JSON"
+                    }}
+                ]},
+                "finish_reason": "tool_calls"
+            }]
+        })
+        .to_string();
+        let (port, _rx) = spawn_http_once("200 OK", body).await;
+        let (out, usage) = cloud_client(port)
+            .step("s", &[Turn::User("搜".into())])
+            .await
+            .unwrap();
+        let StepOut::Call { name, args, .. } = out else {
+            panic!("坏 arguments 仍应走调用分支");
+        };
+        assert_eq!(name, "search_text");
+        assert_eq!(args, json!({}), "解析失败的 arguments 应退化为 {{}}");
+        assert_eq!((usage.prompt, usage.completion), (0, 0), "缺 usage 按 0 计");
+    }
+
+    /// 请求侧契约:system 在首位、四种 Turn 各自渲染成正确的 OpenAI 报文形状、
+    /// 带 raw 的 AssistantCall 原样回放(thinking 模型要求逐字带回)、
+    /// Bearer 鉴权头带上、tools/tool_choice/max_tokens 在 body 里。
+    #[tokio::test]
+    async fn step_cloud_renders_turns_and_auth_into_request() {
+        let body = json!({
+            "choices": [{"message": {"role": "assistant", "content": "好"}, "finish_reason": "stop"}]
+        })
+        .to_string();
+        let (port, rx) = spawn_http_once("200 OK", body).await;
+        let raw_replay = json!({
+            "role": "assistant",
+            "reasoning_content": "思考过程",
+            "tool_calls": [{"id": "cR", "type": "function",
+                "function": {"name": "get_timeline", "arguments": "{}"}}]
+        });
+        let turns = vec![
+            Turn::User("昨天下午在干嘛".into()),
+            Turn::AssistantCall {
+                id: "cR".into(),
+                name: "get_timeline".into(),
+                args: "{}".into(),
+                raw: Some(raw_replay.clone()),
+            },
+            Turn::ToolResult {
+                id: "cR".into(),
+                content: "时间线结果".into(),
+            },
+            Turn::AssistantText("初步答案".into()),
+            Turn::AssistantCall {
+                id: "c9".into(),
+                name: "search_text".into(),
+                args: "{\"keywords\":[\"报销\"]}".into(),
+                raw: None,
+            },
+            Turn::ToolResult {
+                id: "c9".into(),
+                content: "搜索结果".into(),
+            },
+        ];
+        cloud_client(port).step("系统人设", &turns).await.unwrap();
+
+        let req = rx.await.unwrap();
+        let head_end = req.find("\r\n\r\n").unwrap();
+        let head = req[..head_end].to_lowercase();
+        assert!(
+            head.starts_with("post /v1/chat/completions"),
+            "尾斜杠应被 trim: {head}"
+        );
+        assert!(
+            head.contains("authorization: bearer sk-test"),
+            "api_key 非空必须带 Bearer 头"
+        );
+        let body: Value = serde_json::from_str(&req[head_end + 4..]).unwrap();
+        assert_eq!(body["model"], "test-model");
+        assert_eq!(body["tool_choice"], "auto");
+        assert_eq!(body["max_tokens"], 1024);
+        assert_eq!(
+            body["tools"].as_array().unwrap().len(),
+            3,
+            "三个工具定义应随请求下发"
+        );
+        let msgs = body["messages"].as_array().unwrap();
+        assert_eq!(msgs.len(), 7, "system + 6 条 turn");
+        assert_eq!(msgs[0]["role"], "system");
+        assert_eq!(msgs[0]["content"], "系统人设");
+        assert_eq!(msgs[1]["role"], "user");
+        assert_eq!(msgs[2], raw_replay, "带 raw 的 AssistantCall 必须逐字回放");
+        assert_eq!(msgs[3]["role"], "tool");
+        assert_eq!(msgs[3]["tool_call_id"], "cR");
+        assert_eq!(msgs[3]["content"], "时间线结果");
+        assert_eq!(msgs[4]["role"], "assistant");
+        assert_eq!(msgs[4]["content"], "初步答案");
+        assert_eq!(
+            msgs[5]["tool_calls"][0]["id"], "c9",
+            "无 raw 的 call 按 id/name/args 重构"
+        );
+        assert_eq!(msgs[5]["tool_calls"][0]["function"]["name"], "search_text");
+        assert_eq!(msgs[6]["tool_call_id"], "c9");
+    }
+
+    /// 401:状态码与服务端错误说明都要出现在错误信息里——用户配错 key 时
+    /// 必须能从提示里直接看出"鉴权失败 + 服务端原话"。
+    #[tokio::test]
+    async fn step_cloud_401_error_carries_status_and_server_message() {
+        let (port, _rx) = spawn_http_once(
+            "401 Unauthorized",
+            r#"{"error":{"message":"Invalid API key provided"}}"#.into(),
+        )
+        .await;
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("401"), "缺状态码: {err}");
+        assert!(
+            err.contains("Invalid API key provided"),
+            "缺服务端原话: {err}"
+        );
+    }
+
+    /// 429/500 同理透传;chat 通路对 429 不做退避重试(交互式场景等不起),
+    /// 应立刻把限流信息报给用户。
+    #[tokio::test]
+    async fn step_cloud_429_and_500_pass_through_readably() {
+        let (port, _rx) = spawn_http_once(
+            "429 Too Many Requests",
+            r#"{"error":{"message":"rate limited"}}"#.into(),
+        )
+        .await;
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("429") && err.contains("rate limited"),
+            "429 信息不可读: {err}"
+        );
+
+        let (port, _rx) =
+            spawn_http_once("500 Internal Server Error", "上游模型服务不可用".into()).await;
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("500") && err.contains("上游模型服务不可用"),
+            "500 信息不可读: {err}"
+        );
+    }
+
+    /// 非 2xx 的长错误体预览按**字符**截到 300、状态码保留——报错不能无限长,
+    /// 且中文等多字节错误体(网关中文错误页)不得因切在字符中间而 panic。
+    /// 历史:旧实现按字节切片,第 300 字节落在多字节字符中间会崩,B 档测试实锤后修复。
+    #[tokio::test]
+    async fn step_cloud_long_error_body_preview_truncates_on_char_boundary() {
+        // ASCII 契约:恰好保留前 300 个字符
+        let body = "a".repeat(400);
+        let (port, _rx) = spawn_http_once("500 Internal Server Error", body).await;
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("500"), "应报 500: {err}");
+        assert!(
+            err.contains(&"a".repeat(300)) && !err.contains(&"a".repeat(301)),
+            "预览应恰为前 300 字符: {err}"
+        );
+
+        // 多字节回归:299 个 ASCII + 中文,旧实现在此 panic,现应正常截断
+        let tricky = format!("{}错误详情继续", "x".repeat(299));
+        let (port, _rx) = spawn_http_once("500 Internal Server Error", tricky).await;
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("500"), "多字节体也应正常报 500: {err}");
+        assert!(err.contains("错"), "第 300 个字符(错)应被保留: {err}");
+        assert!(!err.contains("误"), "第 301 个字符起应被截断: {err}");
+    }
+
+    /// 2xx 但响应体不是 JSON(网关吐 HTML 错误页等):应报"响应不是 JSON"
+    /// 而不是 panic 或含糊的空内容错误。
+    #[tokio::test]
+    async fn step_cloud_non_json_body_reports_parse_error() {
+        let (port, _rx) = spawn_http_once("200 OK", "<html>Bad Gateway</html>".into()).await;
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("响应不是 JSON"), "畸形体应报解析错误: {err}");
+    }
+
+    /// 缺字段容错:choices 整个缺失,以及 content 只有空白——都应归为
+    /// "模型返回空内容"这一个用户可懂的错误,而不是 panic / unwrap 崩溃。
+    #[tokio::test]
+    async fn step_cloud_missing_choices_or_blank_content_reports_empty() {
+        for body in [json!({}).to_string(), json!({
+            "choices": [{"message": {"role": "assistant", "content": "   "}, "finish_reason": "stop"}]
+        })
+        .to_string()]
+        {
+            let (port, _rx) = spawn_http_once("200 OK", body.clone()).await;
+            let err = cloud_client(port)
+                .step("s", &[Turn::User("q".into())])
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("模型返回空内容"), "body={body} 应报空内容: {err}");
+        }
+    }
+
+    /// 拒连(端口上没有服务):应映射为带"请求失败"前缀的错误——
+    /// 这是"云端地址配错/断网"时用户看到的第一行字。
+    #[tokio::test]
+    async fn step_cloud_connection_refused_maps_to_request_error() {
+        let port = free_local_port();
+        let err = cloud_client(port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("请求失败"), "拒连应报请求失败: {err}");
+    }
+
+    /// 挂死不回包的服务:请求应保持等待(靠 120s 客户端超时兜底),
+    /// 绝不能早退成假成功/假错误。这里断言 500ms 内仍 pending;
+    /// 真实 120s 超时触发需要 tokio test-util 虚拟时钟,本 crate 未启用,不硬测。
+    #[tokio::test]
+    async fn step_cloud_hanging_server_stays_pending() {
+        // backlog 会完成 TCP 握手但应用层永不 accept/回包——最像"服务活着但卡死"
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let client = cloud_client(port);
+        let r = tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            client.step("s", &[Turn::User("q".into())]),
+        )
+        .await;
+        assert!(
+            r.is_err(),
+            "不回包时 500ms 内不应有任何结果(等超时兜底),实际: {r:?}"
+        );
+        drop(listener);
+    }
+
+    // ---- 以下测 ai::llm::ExternalChatClient 的空回复归因(云端文本通路的
+    // [LLM_EMPTY_*] 错误码,前端按码显示本地化解释,产生条件是对外契约)。
+    // 只调用其公开 API,不改动 ai/llm.rs。----
+
+    async fn external_chat_err(body: Value) -> String {
+        let (port, _rx) = spawn_http_once("200 OK", body.to_string()).await;
+        crate::ai::llm::ExternalChatClient::new(
+            &format!("http://127.0.0.1:{port}/v1"),
+            "m".into(),
+            String::new(),
+            4096,
+        )
+        .unwrap()
+        .chat_text("s", "u", &[])
+        .await
+        .unwrap_err()
+        .to_string()
+    }
+
+    /// reasoning_content 非空 + content 空 → 思考链吃光了输出预算,
+    /// 归因 REASONING——即使 finish_reason/usage 同时满足别的码,思考链证据优先。
+    #[tokio::test]
+    async fn external_empty_with_reasoning_is_llm_empty_reasoning() {
+        let err = external_chat_err(json!({
+            "choices": [{
+                "message": {"role": "assistant", "content": "", "reasoning_content": "让我想想…(长思考链)"},
+                "finish_reason": "length"
+            }],
+            "usage": {"prompt_tokens": 800, "completion_tokens": 512}
+        }))
+        .await;
+        assert!(
+            err.contains("[LLM_EMPTY_REASONING]"),
+            "应归因思考链占满: {err}"
+        );
+    }
+
+    /// finish_reason=stop + completion_tokens=0 + 无思考链 → prompt 一进去就 EOS
+    /// (chat template / 模型错配的典型征兆),归因 EOS。
+    #[tokio::test]
+    async fn external_empty_stop_zero_tokens_is_llm_empty_eos() {
+        let err = external_chat_err(json!({
+            "choices": [{
+                "message": {"role": "assistant", "content": ""},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 800, "completion_tokens": 0}
+        }))
+        .await;
+        assert!(err.contains("[LLM_EMPTY_EOS]"), "应归因即时 EOS: {err}");
+    }
+
+    /// finish_reason=length + completion_tokens>0 + content 空 → 生成了 token 却
+    /// 没落进 content(老版 llama-server 思考链塞 content 被截),归因 TRUNCATED。
+    #[tokio::test]
+    async fn external_empty_length_with_tokens_is_llm_empty_truncated() {
+        let err = external_chat_err(json!({
+            "choices": [{
+                "message": {"role": "assistant", "content": ""},
+                "finish_reason": "length"
+            }],
+            "usage": {"prompt_tokens": 800, "completion_tokens": 300}
+        }))
+        .await;
+        assert!(err.contains("[LLM_EMPTY_TRUNCATED]"), "应归因截断: {err}");
+    }
+
+    /// 兜底:没有思考链、finish_reason=stop 但 usage 缺失(部分服务不返)——
+    /// 无法归因到具体成因时给未分类码 [LLM_EMPTY],不能错挂到 EOS/TRUNCATED 上。
+    #[tokio::test]
+    async fn external_empty_unclassifiable_is_plain_llm_empty() {
+        let err = external_chat_err(json!({
+            "choices": [{
+                "message": {"role": "assistant", "content": "  "},
+                "finish_reason": "stop"
+            }]
+        }))
+        .await;
+        assert!(err.contains("[LLM_EMPTY]"), "缺 usage 应落未分类码: {err}");
+        assert!(!err.contains("[LLM_EMPTY_EOS]"), "不能误判成 EOS: {err}");
     }
 }
