@@ -944,3 +944,233 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn table_names(pool: &DbPool) -> Vec<String> {
+        pool.0
+            .call(|conn| {
+                let mut stmt = conn
+                    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                    .unwrap();
+                let names = stmt
+                    .query_map([], |r| r.get::<_, String>(0))
+                    .unwrap()
+                    .map(|x| x.unwrap())
+                    .collect();
+                Ok(names)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn columns(pool: &DbPool, table: &str) -> Vec<String> {
+        let table = table.to_string();
+        pool.0
+            .call(move |conn| {
+                let mut stmt = conn
+                    .prepare(&format!("PRAGMA table_info({table})"))
+                    .unwrap();
+                let cols = stmt
+                    .query_map([], |r| r.get::<_, String>(1))
+                    .unwrap()
+                    .map(|x| x.unwrap())
+                    .collect();
+                Ok(cols)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn count(pool: &DbPool, sql: &str) -> i64 {
+        let sql = sql.to_string();
+        pool.0
+            .call(move |conn| Ok(conn.query_row(&sql, [], |r| r.get::<_, i64>(0)).unwrap()))
+            .await
+            .unwrap()
+    }
+
+    /// 空库全量跑:35 个版本齐、关键表齐、ALTER 链条的关键列在、种子数据就位。
+    /// 任何一条迁移悄悄失效(表名打错/顺序错),这里第一时间红。
+    #[tokio::test]
+    async fn fresh_db_full_run_builds_expected_schema() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM schema_version").await,
+            35
+        );
+
+        let tables = table_names(&pool).await;
+        for t in [
+            "activities",
+            "categories",
+            "app_categories",
+            "process_paths",
+            "settings_store",
+            "devices",
+            "sync_outbox",
+            "sync_cursor",
+            "auth_state",
+            "app_icons",
+            "app_groups",
+            "app_group_members",
+            "ai_summaries",
+            "ai_image_descriptions",
+            "screenshot_embeddings",
+            "super_categories",
+            "screenshot_dedup_map",
+        ] {
+            assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
+        }
+
+        // ALTER 链条抽查:同步三列(v8)+ 分类的图标/排序/大类列(v6/v16/v28)
+        let a = columns(&pool, "activities").await;
+        for c in ["remote_id", "updated_at", "origin"] {
+            assert!(a.iter().any(|x| x == c), "activities 缺列 {c}");
+        }
+        let cat = columns(&pool, "categories").await;
+        for c in [
+            "icon",
+            "sort_order",
+            "updated_at",
+            "deleted_at",
+            "super_category_id",
+        ] {
+            assert!(cat.iter().any(|x| x == c), "categories 缺列 {c}");
+        }
+
+        // 种子:settings 单行、六内置分类带专属图标、hidden(v27)、office(v29)、大类(v28-33)
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM settings_store WHERE id = 1").await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM categories
+                 WHERE id IN ('code','browse','talk','design','fun','other')
+                   AND icon != 'Tag'"
+            )
+            .await,
+            6
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'hidden'").await,
+            1
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'office'").await,
+            1
+        );
+        assert!(count(&pool, "SELECT COUNT(*) FROM super_categories").await >= 4);
+    }
+
+    /// 幂等:重复 run 不报错、不重复应用(版本数不变、分类不重复种)。
+    #[tokio::test]
+    async fn run_twice_is_idempotent() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        run(&pool).await.unwrap();
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM schema_version").await,
+            35
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
+            1
+        );
+    }
+
+    /// 老库续跑:模拟停在 v10(静态段末)的旧安装,带着真实数据升到 35——
+    /// 用户数据不丢、v26 回填 remote_id、v34 清垃圾行、新种子照常落地。
+    #[tokio::test]
+    async fn resumes_from_v10_and_preserves_user_data() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        // 手工把库推进到 v10(与 run 的口径一致:逐版本 + 版本号入账)
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)",
+                )
+                .unwrap();
+                for (i, sql) in MIGRATIONS.iter().enumerate() {
+                    conn.execute_batch(sql).unwrap();
+                    conn.execute(
+                        "INSERT INTO schema_version VALUES (?)",
+                        rusqlite::params![(i + 1) as i64],
+                    )
+                    .unwrap();
+                }
+                // v10 时代的用户数据:一条正常活动、一条 v34 该清的垃圾行、一个自建分类
+                conn.execute_batch(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                        local_hour, process_name, window_title, category_id, device_id)
+                     VALUES ('2025-01-01T09:00:00Z','2025-01-01T10:00:00Z',3600,
+                        '2025-01-01',9,'Code','main.rs','code','local');
+                     INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                        local_hour, process_name, window_title, category_id, device_id)
+                     VALUES ('2025-01-01T11:00:00Z','2025-01-01T11:01:00Z',60,
+                        '2025-01-01',11,'8607797 pid=58750 ]',NULL,'other','local');
+                     INSERT INTO categories(id, name, color, builtin)
+                     VALUES ('mycat','我的分类','#ffffff',0);",
+                )
+                .unwrap();
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM schema_version").await,
+            10
+        );
+
+        run(&pool).await.unwrap();
+
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM schema_version").await,
+            35
+        );
+        // 正常数据完好,且被 v26 回填了 remote_id
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM activities
+                 WHERE process_name = 'Code' AND remote_id IS NOT NULL AND origin = 'local'"
+            )
+            .await,
+            1
+        );
+        // v34:垃圾进程名行被清
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM activities WHERE process_name LIKE '% pid=%'"
+            )
+            .await,
+            0
+        );
+        // 用户自建分类不动;新种子(hidden/office)照常补上
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'mycat'").await,
+            1
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'hidden'").await,
+            1
+        );
+        // v26 的自动回填触发器已挂上
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'trigger' AND name = 'activities_local_remote_id'"
+            )
+            .await,
+            1
+        );
+    }
+}

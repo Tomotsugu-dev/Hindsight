@@ -343,16 +343,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         if wh.enabled && !wh.ranges.is_empty() {
             let now = Local::now();
             let now_minutes = now.hour() as i32 * 60 + now.minute() as i32;
-            let in_range = wh.ranges.iter().any(|r| {
-                let start = parse_hm(&r.start);
-                let end = parse_hm(&r.end);
-                if start <= end {
-                    now_minutes >= start && now_minutes < end
-                } else {
-                    now_minutes >= start || now_minutes < end
-                }
-            });
-            if !in_range {
+            if !in_work_hours(now_minutes, &wh.ranges) {
                 log::debug!("跳过本次采集：当前不在工作时段");
                 // 离开工作时段：seal 当前会话（推到云端） + 清空 current
                 let mut cur_lock = inner.current.lock().await;
@@ -417,7 +408,7 @@ async fn tick(inner: &Inner) -> Result<()> {
                 // 把整段观看吞掉。极端组合下 ended_at < started_at 由 seal_session 钳制。
                 let input_end = Local::now() - Duration::seconds(idle_now as i64);
                 let media_end = inner.keepawake.lock().await.last_active_at;
-                let real_end = media_end.map_or(input_end, |t| t.max(input_end));
+                let real_end = idle_seal_end(input_end, media_end);
                 if let Err(e) = activities::seal_session(&inner.pool, prev.id, real_end).await {
                     log::warn!(
                         "seal_session 失败 (用户挂机 {idle_now}s, id={}): {e}",
@@ -493,14 +484,12 @@ async fn tick(inner: &Inner) -> Result<()> {
     // `url_inherited` 记住"这是继承的旧值"：继承只用于焦点连续性判断，**不能**
     // 拿去做隐私判断——抓取持续失败（如中途撤销自动化权限）时旧 URL 会被无限继承，
     // 屏幕上实际可能已是命中关键词的隐私页面，按旧 URL 判会照常截图。
-    let (url, url_inherited) = match (&fetched_url, current_lock.as_ref()) {
-        (None, Some(cur))
-            if is_browser && cur.focus.app_name == info.app_name && cur.focus.url.is_some() =>
-        {
-            (cur.focus.url.clone(), true)
-        }
-        _ => (fetched_url, false),
-    };
+    let (url, url_inherited) = inherit_url(
+        fetched_url,
+        is_browser,
+        &info.app_name,
+        current_lock.as_ref().map(|c| &c.focus),
+    );
 
     let new_focus = FocusState {
         app_name: info.app_name.clone(),
@@ -519,17 +508,18 @@ async fn tick(inner: &Inner) -> Result<()> {
     //      此时不按 idle 抑制 roll,断言也不用查。
     let need_new = match current_lock.as_ref() {
         None => true,
-        Some(cur) => {
-            if cur.focus != new_focus {
-                true
-            } else if cur.last_extend_at.elapsed().as_secs() as u32 >= interval_secs {
-                idle_threshold == 0
-                    || idle_now < POLL_INTERVAL_SECS * 2
-                    || keepawake_active(inner).await
-            } else {
-                false
-            }
-        }
+        Some(cur) => match roll_decision(
+            cur.focus == new_focus,
+            cur.last_extend_at.elapsed().as_secs() as u32,
+            interval_secs,
+            idle_threshold,
+            idle_now,
+        ) {
+            RollDecision::StartNew => true,
+            RollDecision::Continue => false,
+            // 断言查询有系统调用成本,只有"到点但键鼠已闲"这一种情况才需要问
+            RollDecision::StartNewIfMediaPlaying => keepawake_active(inner).await,
+        },
     };
 
     if need_new {
@@ -648,6 +638,74 @@ fn parse_hm(s: &str) -> i32 {
     h * 60 + m
 }
 
+/// 当前时刻(当日分钟数)是否落在任一工作时段内;跨零点段(如 22:00-06:00)按环形判。
+fn in_work_hours(now_minutes: i32, ranges: &[TimeRange]) -> bool {
+    ranges.iter().any(|r| {
+        let start = parse_hm(&r.start);
+        let end = parse_hm(&r.end);
+        if start <= end {
+            now_minutes >= start && now_minutes < end
+        } else {
+            now_minutes >= start || now_minutes < end
+        }
+    })
+}
+
+/// 同焦点会话的"是否开新会话"决策(纯分类;断言查询留给调用方惰性执行)。
+#[derive(Debug, PartialEq, Eq)]
+enum RollDecision {
+    /// 焦点变了 / 间隔到点且用户仍活跃:立即开新会话
+    StartNew,
+    /// 间隔未到:延续当前会话
+    Continue,
+    /// 间隔到点但键鼠已闲:仅当媒体播放(防睡断言)时才 roll,否则维持现状
+    StartNewIfMediaPlaying,
+}
+
+fn roll_decision(
+    same_focus: bool,
+    elapsed_secs: u32,
+    interval_secs: u32,
+    idle_threshold: u32,
+    idle_now: u64,
+) -> RollDecision {
+    if !same_focus {
+        return RollDecision::StartNew;
+    }
+    if elapsed_secs < interval_secs {
+        return RollDecision::Continue;
+    }
+    if idle_threshold == 0 || idle_now < POLL_INTERVAL_SECS * 2 {
+        RollDecision::StartNew
+    } else {
+        RollDecision::StartNewIfMediaPlaying
+    }
+}
+
+/// 挂机封口时刻 = 最后键鼠输入与媒体断言最后活跃的较晚者(无断言记录按输入算)。
+fn idle_seal_end(
+    input_end: DateTime<Local>,
+    media_end: Option<DateTime<Local>>,
+) -> DateTime<Local> {
+    media_end.map_or(input_end, |t| t.max(input_end))
+}
+
+/// 浏览器 URL 的继承判定:本次没抓到 URL、但同 app 的上个会话有已知 URL 时继承,
+/// 返回 (url, 是否继承)。继承只用于焦点连续性,隐私判断必须把继承视为未知。
+fn inherit_url(
+    fetched: Option<String>,
+    is_browser: bool,
+    app_name: &str,
+    current: Option<&FocusState>,
+) -> (Option<String>, bool) {
+    match (&fetched, current) {
+        (None, Some(cur)) if is_browser && cur.app_name == app_name && cur.url.is_some() => {
+            (cur.url.clone(), true)
+        }
+        _ => (fetched, false),
+    }
+}
+
 /// 隐私关键词是否命中本次焦点。
 ///
 /// fail-closed：浏览器在前台、配置了 URL 关键词、但这次没拿到 URL（连继承都没有，
@@ -722,5 +780,120 @@ async fn take_screenshot(inner: &Inner, expected_pid: u32) -> Option<String> {
             log::warn!("截图失败: {e}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tr(start: &str, end: &str) -> TimeRange {
+        TimeRange {
+            start: start.into(),
+            end: end.into(),
+        }
+    }
+
+    #[test]
+    fn parse_hm_variants() {
+        assert_eq!(parse_hm("09:30"), 570);
+        assert_eq!(parse_hm("00:00"), 0);
+        assert_eq!(parse_hm("23:59"), 23 * 60 + 59);
+        // 残缺/垃圾输入回退 0,不 panic
+        assert_eq!(parse_hm("9"), 540);
+        assert_eq!(parse_hm(""), 0);
+        assert_eq!(parse_hm("ab:cd"), 0);
+    }
+
+    #[test]
+    fn work_hours_normal_range() {
+        let ranges = [tr("09:00", "18:00")];
+        assert!(!in_work_hours(parse_hm("08:59"), &ranges));
+        assert!(in_work_hours(parse_hm("09:00"), &ranges)); // 起点含
+        assert!(in_work_hours(parse_hm("17:59"), &ranges));
+        assert!(!in_work_hours(parse_hm("18:00"), &ranges)); // 终点不含
+    }
+
+    #[test]
+    fn work_hours_overnight_wraps_midnight() {
+        // 22:00-06:00 跨零点:深夜与凌晨都在段内,白天不在
+        let ranges = [tr("22:00", "06:00")];
+        assert!(in_work_hours(parse_hm("23:00"), &ranges));
+        assert!(in_work_hours(parse_hm("01:30"), &ranges));
+        assert!(in_work_hours(parse_hm("22:00"), &ranges));
+        assert!(!in_work_hours(parse_hm("06:00"), &ranges));
+        assert!(!in_work_hours(parse_hm("12:00"), &ranges));
+    }
+
+    #[test]
+    fn work_hours_multiple_ranges_any_hit() {
+        let ranges = [tr("09:00", "12:00"), tr("14:00", "18:00")];
+        assert!(in_work_hours(parse_hm("10:00"), &ranges));
+        assert!(!in_work_hours(parse_hm("13:00"), &ranges)); // 午休缝隙
+        assert!(in_work_hours(parse_hm("14:00"), &ranges));
+    }
+
+    #[test]
+    fn roll_decision_matrix() {
+        use RollDecision::*;
+        // 焦点变了:无条件开新会话(其余参数不看)
+        assert_eq!(roll_decision(false, 0, 30, 180, 999), StartNew);
+        // 同焦点、间隔未到:延续
+        assert_eq!(roll_decision(true, 29, 30, 180, 0), Continue);
+        // 到点且用户活跃(idle < 2 个轮询周期):roll
+        assert_eq!(roll_decision(true, 30, 30, 180, 9), StartNew);
+        // 到点但键鼠已闲:要问媒体断言
+        assert_eq!(roll_decision(true, 30, 30, 180, 10), StartNewIfMediaPlaying);
+        // 挂机检测关闭(阈值 0):永远算在用,直接 roll
+        assert_eq!(roll_decision(true, 30, 30, 0, 9999), StartNew);
+    }
+
+    #[test]
+    fn idle_seal_end_picks_later_signal() {
+        let input = Local::now();
+        // 无媒体记录:按最后输入
+        assert_eq!(idle_seal_end(input, None), input);
+        // 媒体活跃晚于输入(被动观看后离开):按媒体
+        let later = input + Duration::seconds(300);
+        assert_eq!(idle_seal_end(input, Some(later)), later);
+        // 媒体记录早于输入(纯挂机):按输入
+        let earlier = input - Duration::seconds(300);
+        assert_eq!(idle_seal_end(input, Some(earlier)), input);
+    }
+
+    #[test]
+    fn inherit_url_only_for_same_browser_app_with_known_url() {
+        let cur = FocusState {
+            app_name: "Chrome".into(),
+            url: Some("https://a.com".into()),
+        };
+        // 本次没抓到 + 同 app + 有旧 URL:继承,并标记 inherited
+        assert_eq!(
+            inherit_url(None, true, "Chrome", Some(&cur)),
+            (Some("https://a.com".into()), true)
+        );
+        // 抓到了新 URL:直接用,不算继承
+        assert_eq!(
+            inherit_url(Some("https://b.com".into()), true, "Chrome", Some(&cur)),
+            (Some("https://b.com".into()), false)
+        );
+        // 换了 app:不继承(焦点已变,该开新会话)
+        assert_eq!(inherit_url(None, true, "Safari", Some(&cur)), (None, false));
+        // 非浏览器:从不继承
+        assert_eq!(
+            inherit_url(None, false, "Chrome", Some(&cur)),
+            (None, false)
+        );
+        // 没有当前会话:无从继承
+        assert_eq!(inherit_url(None, true, "Chrome", None), (None, false));
+        // 旧会话本来就没 URL:没得继承
+        let no_url = FocusState {
+            app_name: "Chrome".into(),
+            url: None,
+        };
+        assert_eq!(
+            inherit_url(None, true, "Chrome", Some(&no_url)),
+            (None, false)
+        );
     }
 }

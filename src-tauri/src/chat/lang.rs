@@ -909,6 +909,112 @@ impl ChatLang {
 mod tests {
     use super::*;
 
+    /// 五语 × 全部格式化方法的批量烟测:每个变体都产出非空文案,
+    /// 且插值参数(日期/数字/工具名)确实出现在结果里——防"漏改某语言"和
+    /// "占位符没插进去"两类低级错误,一次覆盖全部 match 臂。
+    #[test]
+    fn all_langs_produce_nonempty_interpolated_strings() {
+        const LANGS: [ChatLang; 5] = [
+            ChatLang::ZhHans,
+            ChatLang::ZhHant,
+            ChatLang::En,
+            ChatLang::Ja,
+            ChatLang::Pt,
+        ];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 26).unwrap();
+        for lang in LANGS {
+            // 静态文案:非空即可
+            for s in [
+                lang.dup_call(),
+                lang.tool_exec_failed(),
+                lang.steps_exhausted(),
+                lang.degraded_no_evidence(),
+                lang.degraded_with_evidence(),
+                lang.timeline_empty(),
+                lang.search_no_hit(),
+                lang.err_from_after_to(),
+                lang.err_range_too_long(),
+                lang.err_from_in_future(),
+                lang.err_keywords_empty(),
+                lang.err_title_kw_too_long(),
+                lang.err_bucket_with_group(),
+                lang.err_conversation_busy(),
+            ] {
+                assert!(!s.is_empty(), "{lang:?} 有空文案");
+            }
+            // 七天星期全枚举(越界回退不 panic 由 weekday 内部保证,此处只走合法值)
+            for d in 1..=7 {
+                assert!(!lang.weekday(&d.to_string()).is_empty());
+            }
+            // 插值类:参数必须真的出现在产物里
+            assert!(lang.system_prompt(today).contains("2026-07-26"), "{lang:?}");
+            assert!(
+                lang.rewrite_prompt(today).contains("2026-07-26"),
+                "{lang:?}"
+            );
+            assert!(lang.args_format_err(&"boom").contains("boom"));
+            assert!(lang.args_invalid("bad-arg").contains("bad-arg"));
+            assert!(lang.err_unknown_tool("nope").contains("nope"));
+            assert!(lang.err_need_range("query_stats").contains("query_stats"));
+            assert!(lang
+                .err_bad_date("date_from", "26-07")
+                .contains("date_from"));
+            assert!(lang.err_item_too_long("apps").contains("apps"));
+            let h = lang.timeline_header_sampled(120, "2026-07-01", "2026-07-07", 40, 7);
+            assert!(h.contains("120") && h.contains("40"), "{lang:?}: {h}");
+            assert!(lang.timeline_header_all(9).contains('9'));
+            let cov = lang.coverage_line(30, 12, 3);
+            assert!(cov.contains("12") && cov.contains('3'), "{lang:?}: {cov}");
+            assert!(lang.search_title_header(88, 10).contains("88"));
+            assert!(lang.search_header(77, 5).contains("77"));
+            assert!(lang
+                .stats_total("2026-07-01", "2026-07-07", "1h")
+                .contains("1h"));
+            assert!(lang
+                .no_match("2026-07-01", "2026-07-07")
+                .contains("2026-07-01"));
+            let dh = lang.duration_header("2026-07-01", "2026-07-07", 12, 5);
+            assert!(dh.contains("12"), "{lang:?}: {dh}");
+            let st = lang.sessions_total("2026-07-01", "2026-07-07", 4, 30);
+            assert!(st.contains('4') && st.contains("30"), "{lang:?}: {st}");
+            let sg = lang.sessions_grouped_header("2026-07-01", "2026-07-07", 8, 5, 30);
+            assert!(sg.contains('8'), "{lang:?}: {sg}");
+            // 分桶头部:计数 + gap 括注两种形态
+            let bd = lang.bucket_day_header("2026-07-01", "2026-07-07", 6, None);
+            assert!(bd.contains('6'), "{lang:?}: {bd}");
+            let bdg = lang.bucket_day_header("2026-07-01", "2026-07-07", 6, Some(30));
+            assert!(bdg.contains("30"), "{lang:?}: {bdg}");
+            let bw = lang.bucket_week_header("2026-06-01", "2026-07-07", 5, true, None);
+            assert!(
+                bw.contains('5')
+                    && bw.len()
+                        > lang
+                            .bucket_week_header("2026-06-01", "2026-07-07", 5, false, None)
+                            .len(),
+                "{lang:?}:自动升周说明缺失"
+            );
+            assert!(!lang
+                .bucket_hour_header("2026-07-01", "2026-07-07", Some(15))
+                .is_empty());
+            let fl = lang.first_last_line(
+                "2026-07-01",
+                "2026-07-07",
+                "2026-07-02 09:00",
+                "2026-07-06 21:00",
+                42,
+            );
+            assert!(
+                fl.contains("42") && fl.contains("2026-07-02 09:00"),
+                "{lang:?}: {fl}"
+            );
+            assert!(lang.count_suffix(3).contains('3'));
+            // fmt_secs 的三个量级形态
+            assert!(!lang.fmt_secs(59).is_empty());
+            assert!(!lang.fmt_secs(61 * 60).is_empty());
+            assert!(!lang.fmt_secs(3 * 3600 + 5 * 60).is_empty());
+        }
+    }
+
     #[test]
     fn rewrite_prompt_embeds_today_in_all_langs() {
         let today = chrono::NaiveDate::from_ymd_opt(2026, 7, 20).unwrap();

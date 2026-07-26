@@ -404,3 +404,65 @@ async fn send_json(req: reqwest::RequestBuilder) -> Result<Value> {
     }
     serde_json::from_str(&text).map_err(|e| Error::LlmResponse(format!("响应不是 JSON: {e}")))
 }
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+
+    /// 云端 tools schema 与本地 grammar schema 的枚举必须同步扩展——
+    /// 新维度只加了一边的话,另一条通路会静默退化(模型想用但被 schema 拒)。
+    #[test]
+    fn cloud_and_local_schemas_stay_in_sync() {
+        let tools = tools_schema();
+        let stats = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["function"]["name"] == "query_stats")
+            .expect("query_stats 必须存在");
+        let props = &stats["function"]["parameters"]["properties"];
+        let enum_of = |v: &serde_json::Value| -> Vec<String> {
+            v["enum"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|x| x.as_str().unwrap().to_string())
+                .collect()
+        };
+        let cloud_group = enum_of(&props["group_by"]);
+        let cloud_metric = enum_of(&props["metric"]);
+        let cloud_bucket = enum_of(&props["bucket"]);
+        assert!(cloud_group.contains(&"category".to_string()));
+        assert!(cloud_metric.contains(&"first_last".to_string()));
+        assert!(cloud_bucket.contains(&"hour_of_day".to_string()));
+
+        let local = local_decision_schema();
+        let lp = &local["properties"];
+        assert_eq!(enum_of(&lp["group_by"]), cloud_group);
+        assert_eq!(enum_of(&lp["metric"]), cloud_metric);
+        assert_eq!(enum_of(&lp["bucket"]), cloud_bucket);
+        // categories 两边都有,且本地限制条数
+        assert!(props["categories"].is_object());
+        assert_eq!(lp["categories"]["maxItems"], 5);
+    }
+
+    #[test]
+    fn tools_schema_lists_three_tools_with_required_ranges() {
+        let tools = tools_schema();
+        let names: Vec<&str> = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["search_text", "query_stats", "get_timeline"]);
+        for t in tools.as_array().unwrap() {
+            let req = t["function"]["parameters"]["required"].as_array().unwrap();
+            assert!(
+                req.iter().any(|r| r == "date_from") || t["function"]["name"] == "search_text",
+                "{} 缺日期必填",
+                t["function"]["name"]
+            );
+        }
+    }
+}

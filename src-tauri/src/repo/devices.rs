@@ -166,3 +166,72 @@ pub async fn update_self_meta(
         .await?;
     Ok(row)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    #[tokio::test]
+    async fn upsert_self_preserves_user_edits_and_keeps_single_self() {
+        let pool = fresh_test_pool().await;
+        upsert_self(
+            &pool,
+            "dev-1".into(),
+            "默认名".into(),
+            "#111111".into(),
+            "Monitor".into(),
+            "mac".into(),
+        )
+        .await
+        .unwrap();
+
+        // 用户改名后再次启动 upsert:display_name 不被默认值覆盖,os/last_seen 刷新
+        update_self_meta(&pool, "dev-1".into(), Some("我的电脑".into()), None, None)
+            .await
+            .unwrap();
+        upsert_self(
+            &pool,
+            "dev-1".into(),
+            "默认名v2".into(),
+            "#222222".into(),
+            "Laptop".into(),
+            "win".into(),
+        )
+        .await
+        .unwrap();
+
+        let rows = list_all(&pool).await.unwrap();
+        let me = rows.iter().find(|r| r.device_id == "dev-1").unwrap();
+        assert_eq!(me.display_name, "我的电脑");
+        assert_eq!(me.os.as_deref(), Some("win"));
+        assert!(me.is_self);
+
+        // 换机器 id 再 upsert:self 标志唯一
+        upsert_self(
+            &pool,
+            "dev-2".into(),
+            "第二台".into(),
+            "#333333".into(),
+            "Monitor".into(),
+            "mac".into(),
+        )
+        .await
+        .unwrap();
+        let rows = list_all(&pool).await.unwrap();
+        assert_eq!(rows.iter().filter(|r| r.is_self).count(), 1);
+        assert!(
+            rows.iter()
+                .find(|r| r.device_id == "dev-2")
+                .unwrap()
+                .is_self
+        );
+        assert!(
+            !rows
+                .iter()
+                .find(|r| r.device_id == "dev-1")
+                .unwrap()
+                .is_self
+        );
+    }
+}

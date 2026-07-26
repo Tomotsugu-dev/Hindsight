@@ -630,3 +630,100 @@ pub async fn precheck_week(pool: &DbPool, week_start: NaiveDate) -> Result<WeekP
         days_activity_only,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(
+        date: &str,
+        idx: u32,
+        label: &str,
+        (sh, eh): (u8, u8),
+        content: &str,
+        status: &str,
+    ) -> SegmentSummaryRow {
+        SegmentSummaryRow {
+            source: "daily".into(),
+            local_date: date.into(),
+            segment_idx: idx,
+            label: label.into(),
+            start_hour: sh,
+            end_hour: eh,
+            content: content.into(),
+            model: "test".into(),
+            status: status.into(),
+            error: None,
+            generated_at: "2026-07-26T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn group_days_orders_segments_filters_noise_and_empty_days() {
+        let ws = NaiveDate::from_ymd_opt(2026, 7, 20).unwrap(); // 周一
+        let we = NaiveDate::from_ymd_opt(2026, 7, 26).unwrap();
+        let rows = vec![
+            // 7-21:两个 ok 段,故意乱序给 + 一个 skipped 段(不得混入)
+            row("2026-07-21", 3, "下午", (12, 18), "下午写方案", "ok"),
+            row("2026-07-21", 2, "上午", (9, 12), "上午开会", "ok"),
+            row(
+                "2026-07-21",
+                0,
+                "深夜",
+                (0, 6),
+                "",
+                "skipped_no_screenshots",
+            ),
+            // 7-22:只有 error 段 → 全天不进结果
+            row("2026-07-22", 2, "上午", (9, 12), "boom", "error"),
+            // 7-23:ok 但内容空白 → 视为无内容,不进结果
+            row("2026-07-23", 2, "上午", (9, 12), "   ", "ok"),
+            // 7-25:正常一段
+            row("2026-07-25", 4, "晚上", (18, 24), "看纪录片", "ok"),
+        ];
+        let days = group_days(&rows, ws, we, "zh");
+        // 只剩 7-21 与 7-25,按日期升序
+        assert_eq!(days.len(), 2);
+        assert_eq!(days[0].0, "2026-07-21");
+        assert_eq!(days[1].0, "2026-07-25");
+        // 段按 segment_idx 重排,段头是 [标签 HH:00–HH:00],段间空行分隔
+        let text = &days[0].2;
+        assert!(text.starts_with("[上午 09:00–12:00] 上午开会"), "{text}");
+        assert!(text.contains("\n\n[下午 12:00–18:00] 下午写方案"), "{text}");
+        assert!(!text.contains("深夜"), "{text}");
+        // 星期简写按语言给(7-21 是周二)
+        assert_eq!(days[0].1, "周二");
+    }
+
+    #[test]
+    fn weekly_label_joins_range() {
+        assert_eq!(
+            weekly_label("2026-07-20", "2026-07-26"),
+            "2026-07-20 ~ 2026-07-26"
+        );
+    }
+
+    #[test]
+    fn missing_day_fallback_markers_match_prompt_docs_verbatim() {
+        let apps: Vec<(String, u32, String)> = (0..10)
+            .map(|i| (format!("App{i}"), 30 + i, "工作".to_string()))
+            .collect();
+        // 四语 marker 必须与 weekly_*.md 的教学字符串逐字一致
+        for (lang, marker) in [
+            ("zh", "[当日无日报，仅应用统计]"),
+            ("en", "[No daily report; app stats only]"),
+            ("ja", "[この日は日報なし、アプリ統計のみ]"),
+            ("pt", "[Sem relatório diário; apenas estatísticas de apps]"),
+        ] {
+            let out = format_missing_day_fallback(lang, &apps);
+            assert!(out.starts_with(marker), "{lang}: {out}");
+            // 只取前 8 个应用
+            assert!(
+                out.contains("App7") && !out.contains("App8"),
+                "{lang}: {out}"
+            );
+        }
+        assert!(format_missing_day_fallback("zh", &apps).contains("分钟"));
+        assert!(format_missing_day_fallback("en", &apps).contains("min"));
+    }
+}

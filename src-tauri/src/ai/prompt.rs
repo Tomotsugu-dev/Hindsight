@@ -447,3 +447,116 @@ pub fn weekday_short(lang: &str, weekday: chrono::Weekday) -> &'static str {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::config::AiConfig;
+
+    fn cfg(lang: &str) -> AiConfig {
+        AiConfig {
+            prompt_language: lang.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn system_prompt_uses_builtin_per_lang_and_appends_brief() {
+        // 五语内置文本互不相同且非空
+        let texts: Vec<String> = ["zh", "tw", "en", "ja", "pt"]
+            .iter()
+            .map(|l| build_system_prompt(&cfg(l)))
+            .collect();
+        for t in &texts {
+            assert!(t.len() > 100);
+        }
+        assert_ne!(texts[0], texts[2]);
+        assert_ne!(texts[2], texts[4]);
+
+        // user_brief 拼在末尾,带对应语言的标签
+        let mut c = cfg("en");
+        c.user_brief = "  backend dev  ".into();
+        let out = build_system_prompt(&c);
+        assert!(out.ends_with("About the user: backend dev"), "{out}");
+        // 空简介不留悬空标签
+        let out = build_system_prompt(&cfg("en"));
+        assert!(!out.contains("About the user"));
+    }
+
+    #[test]
+    fn system_prompt_prefers_nonempty_override() {
+        let mut c = cfg("zh");
+        c.prompt_overrides.system_zh = "自定义提示词".into();
+        assert_eq!(build_system_prompt(&c), "自定义提示词");
+        // 别的语言的覆盖不串台:en 仍走内置
+        let mut c = cfg("en");
+        c.prompt_overrides.system_zh = "自定义提示词".into();
+        assert!(build_system_prompt(&c).len() > 100);
+        // 空白覆盖等同未覆盖
+        let mut c = cfg("zh");
+        c.prompt_overrides.system_zh = "   ".into();
+        assert!(build_system_prompt(&c).len() > 100);
+    }
+
+    #[test]
+    fn user_prompt_lang_scaffold_and_content() {
+        let apps = vec![("VS Code".to_string(), 62u32, "code".to_string())];
+        let timeline = vec![(
+            "09:00-10:00".to_string(),
+            "VS Code 50m(main.rs) · Chrome 10m".to_string(),
+        )];
+        let ctx = SegmentContext {
+            label: "上午",
+            start_hour: 9,
+            end_hour: 12,
+            top_apps: &apps,
+            timeline: &timeline,
+        };
+        let zh = build_user_prompt(&cfg("zh"), &ctx);
+        assert!(zh.contains("上午") && zh.contains("VS Code") && zh.contains("09:00-10:00"));
+        // pt 复用英文脚手架(设计如此:葡语 system 主导输出语言)
+        let en = build_user_prompt(&cfg("en"), &ctx);
+        let pt = build_user_prompt(&cfg("pt"), &ctx);
+        assert_eq!(en, pt);
+        let ja = build_user_prompt(&cfg("ja"), &ctx);
+        assert_ne!(ja, en);
+        assert!(ja.contains("VS Code"));
+    }
+
+    #[test]
+    fn weekly_prompts_embed_days_and_apps() {
+        let days = vec![(
+            "2026-07-21".to_string(),
+            "周二".to_string(),
+            "[上午 09:00–12:00] 开会".to_string(),
+        )];
+        let apps = vec![("Chrome".to_string(), 120u32, "browse".to_string())];
+        let ctx = WeeklyContext {
+            week_start: "2026-07-20",
+            week_end: "2026-07-26",
+            days: &days,
+            top_apps: &apps,
+        };
+        for lang in ["zh", "tw", "en", "ja", "pt"] {
+            let sys = build_weekly_system_prompt(&cfg(lang));
+            assert!(sys.len() > 100, "{lang} weekly system 为空");
+            let user = build_weekly_user_prompt(&cfg(lang), &ctx);
+            assert!(
+                user.contains("2026-07-20") && user.contains("Chrome"),
+                "{lang}: {user}"
+            );
+        }
+    }
+
+    #[test]
+    fn weekday_short_all_langs_all_days() {
+        use chrono::Weekday::*;
+        for d in [Mon, Tue, Wed, Thu, Fri, Sat, Sun] {
+            for lang in ["zh", "tw", "en", "ja", "pt"] {
+                assert!(!weekday_short(lang, d).is_empty());
+            }
+        }
+        assert_eq!(weekday_short("zh", Mon), "周一");
+        assert_eq!(weekday_short("en", Sun), "Sun");
+    }
+}

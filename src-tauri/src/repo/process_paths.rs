@@ -86,3 +86,29 @@ pub async fn get_path(pool: &DbPool, process_name: &str) -> Result<Option<String
         .await?;
     Ok(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    #[tokio::test]
+    async fn upsert_then_get_roundtrip_and_update() {
+        let pool = fresh_test_pool().await;
+        assert_eq!(get_path(&pool, "Code").await.unwrap(), None);
+
+        upsert(&pool, "Code", "/apps/Code.app").await.unwrap();
+        assert_eq!(
+            get_path(&pool, "Code").await.unwrap().as_deref(),
+            Some("/apps/Code.app")
+        );
+
+        // 路径变更被更新;重复写同路径幂等不报错
+        upsert(&pool, "Code", "/newpath/Code.app").await.unwrap();
+        upsert(&pool, "Code", "/newpath/Code.app").await.unwrap();
+        assert_eq!(
+            get_path(&pool, "Code").await.unwrap().as_deref(),
+            Some("/newpath/Code.app")
+        );
+    }
+}

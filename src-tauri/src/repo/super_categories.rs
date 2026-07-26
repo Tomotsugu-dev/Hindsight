@@ -259,3 +259,124 @@ pub async fn assign_category(
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    async fn super_of(pool: &DbPool, cat: &str) -> Option<String> {
+        let cat = cat.to_string();
+        pool.0
+            .call(move |conn| {
+                Ok(conn
+                    .query_row(
+                        "SELECT super_category_id FROM categories WHERE id = ?",
+                        [cat],
+                        |r| r.get::<_, Option<String>>(0),
+                    )
+                    .unwrap())
+            })
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn create_appends_update_patches_partially() {
+        let pool = fresh_test_pool().await;
+        let seeded = list(&pool).await.unwrap().len(); // 迁移种子的默认大类
+        let a = create(
+            &pool,
+            SuperCategoryInput {
+                name: "甲".into(),
+                color: "#111111".into(),
+                icon: "Star".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let b = create(
+            &pool,
+            SuperCategoryInput {
+                name: "乙".into(),
+                color: "#222222".into(),
+                icon: "Moon".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let ls = list(&pool).await.unwrap();
+        assert_eq!(ls.len(), seeded + 2);
+        // 新建追加在尾部,顺序保持创建序
+        assert_eq!(ls[ls.len() - 2].id, a.id);
+        assert_eq!(ls[ls.len() - 1].id, b.id);
+
+        // patch 只改给了的字段
+        update(
+            &pool,
+            &a.id,
+            SuperCategoryPatch {
+                name: Some("甲改".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let got = list(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|x| x.id == a.id)
+            .unwrap();
+        assert_eq!(got.name, "甲改");
+        assert_eq!(got.color, "#111111"); // 未给的字段不动
+        assert_eq!(got.icon, "Star");
+    }
+
+    #[tokio::test]
+    async fn reorder_rewrites_sort_order_by_index() {
+        let pool = fresh_test_pool().await;
+        let before = list(&pool).await.unwrap();
+        let reversed: Vec<String> = before.iter().rev().map(|x| x.id.clone()).collect();
+        reorder(&pool, reversed.clone()).await.unwrap();
+        let after: Vec<String> = list(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|x| x.id)
+            .collect();
+        assert_eq!(after, reversed);
+    }
+
+    #[tokio::test]
+    async fn delete_detaches_children_and_hides_super() {
+        let pool = fresh_test_pool().await;
+        let sup = create(
+            &pool,
+            SuperCategoryInput {
+                name: "临时".into(),
+                color: "#333333".into(),
+                icon: "Box".into(),
+            },
+        )
+        .await
+        .unwrap();
+        // 迁移种子里的 code 分类归入新大类
+        assign_category(&pool, "code", Some(sup.id.clone()))
+            .await
+            .unwrap();
+        assert_eq!(
+            super_of(&pool, "code").await.as_deref(),
+            Some(sup.id.as_str())
+        );
+
+        delete(&pool, &sup.id).await.unwrap();
+        // 大类软删后不再列出;子分类回到"未归入"而不是被连坐删除
+        assert!(list(&pool).await.unwrap().iter().all(|x| x.id != sup.id));
+        assert_eq!(super_of(&pool, "code").await, None);
+
+        // 移出大类(assign None)也走得通
+        assign_category(&pool, "code", None).await.unwrap();
+        assert_eq!(super_of(&pool, "code").await, None);
+    }
+}

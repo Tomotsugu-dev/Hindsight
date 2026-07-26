@@ -178,3 +178,25 @@ pub async fn get_blob(pool: &DbPool, process_name: &str) -> Result<Option<Vec<u8
         .await?;
     Ok(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+
+    #[tokio::test]
+    async fn upsert_get_blob_roundtrip_and_overwrite() {
+        let pool = fresh_test_pool().await;
+        assert_eq!(get_blob(&pool, "Code").await.unwrap(), None);
+
+        upsert_local(&pool, "Code", &[1u8, 2, 3]).await.unwrap();
+        assert_eq!(
+            get_blob(&pool, "Code").await.unwrap(),
+            Some(vec![1u8, 2, 3])
+        );
+
+        // 覆盖更新 + 软删标记复活(deleted_at 置回 NULL)
+        upsert_local(&pool, "Code", &[9u8]).await.unwrap();
+        assert_eq!(get_blob(&pool, "Code").await.unwrap(), Some(vec![9u8]));
+    }
+}
