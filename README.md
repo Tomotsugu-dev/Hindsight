@@ -44,7 +44,7 @@
 ## Interface Preview
 
 <p align="center">
-  <video src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.8.10/Hindsight_en_demo.mp4" controls muted autoplay loop playsinline width="800"></video>
+  <video src="https://github.com/user-attachments/assets/169515ed-a9bd-40fe-ba46-7c9c45e5cc95" controls muted autoplay loop playsinline width="800"></video>
 </p>
 <p align="center">
   <sub><b>App preview</b> · Hindsight's core interactions in 1 minute</sub>

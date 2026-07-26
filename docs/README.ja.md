@@ -44,7 +44,7 @@
 ## インターフェースプレビュー
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/d5101400-1b86-4b8a-b218-c3d8de9b6261" controls muted autoplay loop playsinline width="800"></video>
+  <video src="https://github.com/user-attachments/assets/6f07fa04-4f06-4251-bd60-35b72e74afde" controls muted autoplay loop playsinline width="800"></video>
 </p>
 <p align="center">
   <sub><b>アプリプレビュー</b> · Hindsight の主要な操作を 1 分で</sub>
