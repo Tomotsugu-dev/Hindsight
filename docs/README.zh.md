@@ -44,7 +44,7 @@
 ## 界面预览
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/e6349610-a742-4ba2-abca-412f00b1673c" controls muted autoplay loop playsinline width="800"></video>
+  <video src="https://github.com/Tomotsugu-dev/Hindsight/releases/download/v0.8.10/Hindsight_zh_demo.mp4" controls muted autoplay loop playsinline width="800"></video>
 </p>
 <p align="center">
   <sub><b>软件预览</b> · 1 分钟看清 Hindsight 的核心交互</sub>
