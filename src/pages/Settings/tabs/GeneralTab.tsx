@@ -31,6 +31,10 @@ export default function GeneralTab() {
   const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
   // macOS 关闭按钮在窗口左上角；Win/Linux 在右上角。文案要根据平台变。
   const [isMacOS, setIsMacOS] = useState(false);
+  // 按需(自动)识别暂时只在 Windows 提供：Linux 的空闲/电源探测是 stub、
+  // macOS 走系统 Vision 没有常驻引擎，两边的阈值前提都要重新标定
+  // （后端 memory::auto_ocr 同样门控，这里是不给用户看见入口）
+  const [isWindows, setIsWindows] = useState(false);
   // 历史截图回填：登记 + 立即识别，识别跑完积压才返回（可能数分钟）
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
@@ -42,6 +46,7 @@ export default function GeneralTab() {
   useEffect(() => {
     api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
     setIsMacOS(platform() === "macos");
+    setIsWindows(platform() === "windows");
   }, []);
 
   if (!settings) return null;
@@ -114,10 +119,12 @@ export default function GeneralTab() {
     }
   };
 
-  /** 当前识别模式(设置两个 bool 的派生值;常驻优先与后端一致)。 */
+  /** 当前识别模式(设置两个 bool 的派生值;常驻优先与后端一致)。
+   *  非 Windows 上按需模式不启用(后端同样门控),把 auto 显示成"关闭"
+   *  ——否则下拉找不到对应选项会显示空白。 */
   const ocrMode: "off" | "auto" | "resident" = settings.memoryOcrResident
     ? "resident"
-    : settings.memoryOcrAuto
+    : settings.memoryOcrAuto && isWindows
       ? "auto"
       : "off";
 
@@ -245,17 +252,27 @@ export default function GeneralTab() {
         </Row>
         <Row
           label={t("settings.general.capture.ocrModeLabel")}
-          description={t("settings.general.capture.ocrModeDescription")}
+          // 「自动」那句只在提供该档位的平台上说，免得描述里有个下拉里没有的选项
+          description={
+            isWindows
+              ? `${t("settings.general.capture.ocrModeDescAuto")} ${t("settings.general.capture.ocrModeDescResident")}`
+              : t("settings.general.capture.ocrModeDescResident")
+          }
           disabled={!settings.captureEnabled || !settings.screenshotEnabled}
         >
           <SimplePicker
             value={ocrMode}
             options={[
               { value: "off", label: t("settings.general.capture.ocrModeOff") },
-              {
-                value: "auto",
-                label: t("settings.general.capture.ocrModeAuto"),
-              },
+              // 「自动」暂时只在 Windows 提供，其余平台退化成 关闭/常驻 两态
+              ...(isWindows
+                ? [
+                    {
+                      value: "auto" as const,
+                      label: t("settings.general.capture.ocrModeAuto"),
+                    },
+                  ]
+                : []),
               {
                 value: "resident",
                 label: t("settings.general.capture.ocrModeResident"),

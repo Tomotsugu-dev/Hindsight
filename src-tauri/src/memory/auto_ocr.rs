@@ -24,6 +24,16 @@
 //! 自己。沿用开工线会让引擎把自己判死——停批、卸引擎、下轮开工门(读数已
 //! 不含自己)又放行,退化成每分钟白装卸一次 400MB。内存靠把引擎占用加回读数
 //! 对齐口径,CPU 靠单独的批内上限,见常量区。
+//!
+//! **暂时只在 Windows 启用**([`AutoOcr::sync`] 收口,前端同步隐藏该选项):
+//! - Linux:[`crate::platform`] 的 `idle_secs` / `screen_unavailable` /
+//!   `on_ac_power` 全是 stub(恒 0 / false / true),空闲档永远不会触发、
+//!   电源门形同虚设,笔记本拔电照跑;
+//! - macOS:OCR 走系统 Vision(ANE),没有 ~400MB 的常驻引擎,
+//!   [`ENGINE_MEM_MB`] 的迟滞补偿与"避开游戏防抢显卡"的前提都不成立,
+//!   阈值要重新标定才谈得上合适。
+//!
+//! 两个平台都是"参数与前提要重新标定"而非"实现不了";补齐后去掉门控即可。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -260,6 +270,10 @@ impl AutoOcr {
     /// 按设置同步启停(启动期与设置保存时调用)。常驻模式优先:两者都开时
     /// 由调用方传 enabled=false 关掉本模块。
     pub async fn sync(&self, enabled: bool, mem: Option<MemoryDb>, pool: DbPool) {
+        // 非 Windows 一律不启(理由见模块头注释)。收口在这一处:启动期与设置
+        // 保存两条路径都经过它。前端已隐藏该选项,这里兜住"设置从别处被写开"
+        // (手动改库/拷贝数据目录)的情况。
+        let enabled = enabled && cfg!(target_os = "windows");
         match (enabled, mem) {
             (true, Some(db)) => self.start(db, pool).await,
             _ => self.stop().await,
