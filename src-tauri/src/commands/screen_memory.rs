@@ -40,15 +40,17 @@ pub async fn memory_digest_now(
     digest::run(db).await.map_err(String::from)
 }
 
-/// 请求停止当前正在进行的消化批(banner 的停止按钮)——手动批与常驻批的
-/// 当前轮都会停。翻标志即返回,循环帧间感知、最多一帧(~1s)后停;
+/// 请求停止当前正在进行的消化批(banner 的停止按钮)——手动批、常驻批与
+/// 按需批的当前轮都会停。翻标志即返回,循环帧间感知、最多一帧(~1s)后停;
 /// 手动批的 `memory_digest_now` 随即正常 resolve 已处理部分的账单。
 /// 没有批在跑时调用也静默成功(幂等)。
-/// 常驻模式下停的只是当前批,下个周期 tick 仍会继续消化;彻底停走
-/// 设置 → 常驻 OCR 开关。
+/// 常驻模式下停的只是当前批,下个周期 tick 仍会继续消化;按需模式另压一小时
+/// 冷却(见 [`crate::memory::auto_ocr::note_user_stop`])。彻底停走
+/// 设置 → 屏幕文字识别 → 关闭。
 #[tauri::command]
 pub fn memory_digest_stop() {
     digest::request_stop();
+    crate::memory::auto_ocr::note_user_stop();
 }
 
 /// 未入索引统计:主库截图全集 vs 记忆库登记/完成情况的两库对账。

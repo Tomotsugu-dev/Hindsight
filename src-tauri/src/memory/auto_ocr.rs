@@ -36,7 +36,8 @@
 //! 两个平台都是"参数与前提要重新标定"而非"实现不了";补齐后去掉门控即可。
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use tokio::task::JoinHandle;
 
@@ -45,6 +46,11 @@ use crate::storage::DbPool;
 
 /// 调度评估间隔。与常驻模式同节奏,足够及时且开销可忽略。
 const TICK_SECS: u64 = 60;
+/// 用户手动停止后的冷却时长。点「停止」的语义是"现在别占我机器",而下一个
+/// tick 时积压必然还在阈值上、资源门多半也还通过——不设冷却就是一分钟后
+/// 原地复活,停止按钮形同虚设。冷却期内彻底不评估,期满自动恢复;想永久关
+/// 走 设置 → 屏幕文字识别 → 关闭(横幅上有一键入口)。
+const USER_STOP_COOLDOWN: Duration = Duration::from_secs(60 * 60);
 /// 常规档积压阈值(帧)。
 const BACKLOG_NORMAL: u64 = 800;
 /// 空闲档积压阈值(帧)。
@@ -76,6 +82,37 @@ const WATCHDOG_SECS: u64 = 5;
 /// 就停批的代价是引擎白白卸载重载;持续高负载才是真要让路的对象。
 /// 电源/前台/内存不设连击——它们不是抖动型信号,违反即停。
 const CPU_STRIKES_TO_STOP: u32 = 3;
+
+/// 冷却截止时刻(用户手动停止后置位)。放模块级静态而不是 [`AutoOcr`] 字段:
+/// 置位方是 `memory_digest_stop` 命令,它同时服务手动批/常驻批/按需批,
+/// 拿不到本控制器的引用;调度循环也在 spawn 出去的任务里,读静态最直接。
+static COOLDOWN_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// 用户点了「停止」:除了停当前批(由 digest 的停止标志负责),再压 [`USER_STOP_COOLDOWN`]
+/// 不自动开工。由 `memory_digest_stop` 命令调用;非按需模式下调用无副作用
+/// (没有调度循环去读它)。
+pub fn note_user_stop() {
+    *COOLDOWN_UNTIL.lock().unwrap() = Some(Instant::now() + USER_STOP_COOLDOWN);
+}
+
+/// 冷却是否仍在生效。顺手清理已过期的时间戳,避免永远留一个陈旧值。
+fn in_cooldown() -> bool {
+    let mut guard = COOLDOWN_UNTIL.lock().unwrap();
+    match *guard {
+        Some(until) if Instant::now() < until => true,
+        Some(_) => {
+            *guard = None;
+            false
+        }
+        None => false,
+    }
+}
+
+/// 清掉冷却。用户重新选「自动」= 撤回"现在别跑"的意思,不该还被上一次
+/// 停止压着(否则表现为"刚开就不干活",更像坏了)。
+fn clear_cooldown() {
+    *COOLDOWN_UNTIL.lock().unwrap() = None;
+}
 
 /// 按需消化控制器——tauri managed state。start/stop 幂等。
 #[derive(Default)]
@@ -160,6 +197,7 @@ impl AutoOcr {
         if guard.is_some() {
             return;
         }
+        clear_cooldown(); // 重新选「自动」= 撤回上一次"现在别跑"
         let stop = Arc::new(AtomicBool::new(false));
         let stop_for_task = Arc::clone(&stop);
         let handle = tokio::spawn(async move {
@@ -179,6 +217,11 @@ impl AutoOcr {
                         continue;
                     }
                 };
+                // 用户刚点过停止 → 整轮跳过(连积压都不必查)
+                if in_cooldown() {
+                    log::debug!("按需 OCR 冷却中(用户手动停止过),本轮跳过");
+                    continue;
+                }
                 let away = user_away();
                 log::debug!("按需 OCR 本轮评估:积压 {pending} 帧,空闲 {away}");
                 // 手动批/常驻批持锁时先让路:drain 的单实例互斥要等引擎装完才撞上,
@@ -295,5 +338,25 @@ mod tests {
         assert!(backlog_fires(400, true));
         // 空闲档不影响常规档下限
         assert!(!backlog_fires(400, false));
+    }
+
+    /// 用户停止 → 冷却生效;重新选「自动」→ 冷却撤销。
+    /// (串行跑:COOLDOWN_UNTIL 是进程级静态,与其它用例共享)
+    #[test]
+    fn user_stop_sets_cooldown_and_restart_clears_it() {
+        clear_cooldown();
+        assert!(!in_cooldown());
+        note_user_stop();
+        assert!(in_cooldown(), "点过停止后应进入冷却");
+        clear_cooldown();
+        assert!(!in_cooldown(), "重新启用应撤销冷却");
+    }
+
+    /// 过期的时间戳不再算冷却,并被顺手清掉。
+    #[test]
+    fn expired_cooldown_lapses() {
+        *COOLDOWN_UNTIL.lock().unwrap() = Instant::now().checked_sub(Duration::from_secs(1));
+        assert!(!in_cooldown());
+        assert!(COOLDOWN_UNTIL.lock().unwrap().is_none(), "过期后应被清理");
     }
 }

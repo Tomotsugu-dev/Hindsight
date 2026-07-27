@@ -1502,6 +1502,7 @@
       "ocrConfirmAccept": "下載並開始",
       "downloadingOcr": "正在下載文字辨識元件… {{mb}} MB",
       "stoppedNotice": "本批已停止;背景辨識稍後會繼續",
+      "stoppedNoticeAuto": "本批已停止；1 小時內不會自動重新開始，也可直接關掉自動辨識",
       "disableResident": "關閉背景辨識"
     },
     "citations": {

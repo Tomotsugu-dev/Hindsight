@@ -1502,6 +1502,7 @@
       "ocrConfirmAccept": "Download & start",
       "downloadingOcr": "Downloading text recognition component… {{mb}} MB",
       "stoppedNotice": "Batch stopped; background recognition will resume later",
+      "stoppedNoticeAuto": "Batch stopped; it won't start again on its own for an hour — or turn auto recognition off",
       "disableResident": "Turn off background recognition"
     },
     "citations": {

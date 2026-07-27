@@ -1502,6 +1502,7 @@
       "ocrConfirmAccept": "ダウンロードして開始",
       "downloadingOcr": "文字認識コンポーネントをダウンロード中… {{mb}} MB",
       "stoppedNotice": "このバッチを停止しました。バックグラウンド認識は後で再開されます",
+      "stoppedNoticeAuto": "このバッチを停止しました。1 時間は自動で再開しません。自動認識をオフにもできます",
       "disableResident": "バックグラウンド認識をオフ"
     },
     "citations": {
