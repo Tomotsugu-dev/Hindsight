@@ -9,6 +9,7 @@ import { Toggle } from "../../../components/FormControls/Toggle";
 import { PathField } from "../../../components/FormControls/PathField";
 import { Slider } from "../../../components/FormControls/Slider";
 import { TimeRangeList } from "../../../components/FormControls/TimeRangeList";
+import { SegmentedControl } from "../../../components/FormControls/SegmentedControl";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { listen } from "@tauri-apps/api/event";
@@ -260,7 +261,7 @@ export default function GeneralTab() {
           }
           disabled={!settings.captureEnabled || !settings.screenshotEnabled}
         >
-          <SimplePicker
+          <SegmentedControl
             value={ocrMode}
             options={[
               { value: "off", label: t("settings.general.capture.ocrModeOff") },
@@ -280,6 +281,7 @@ export default function GeneralTab() {
             ]}
             onChange={onOcrModeChange}
             disabled={!settings.captureEnabled || !settings.screenshotEnabled}
+            ariaLabel={t("settings.general.capture.ocrModeLabel")}
           />
         </Row>
         <Row
