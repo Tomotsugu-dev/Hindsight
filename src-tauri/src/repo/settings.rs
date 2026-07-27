@@ -473,6 +473,7 @@ mod tests {
             last_update_check_at: Some("2026-07-01T00:00:00+00:00".into()),
             idle_threshold_seconds: 0,
             memory_ocr_resident: true,
+            memory_ocr_auto: true,
             chat_privacy_acknowledged: true,
             sync_ai_summaries: true,
             sync_chat_history: true,
