@@ -1502,6 +1502,7 @@
       "ocrConfirmAccept": "下载并开始",
       "downloadingOcr": "正在下载文字识别组件… {{mb}} MB",
       "stoppedNotice": "本批已停止;后台识别稍后会继续",
+      "stoppedNoticeAuto": "本批已停止；1 小时内不会自动重新开始，也可直接关掉自动识别",
       "disableResident": "关闭后台识别"
     },
     "citations": {

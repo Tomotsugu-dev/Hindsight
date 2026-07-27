@@ -1502,6 +1502,7 @@
       "ocrConfirmAccept": "Baixar e iniciar",
       "downloadingOcr": "Baixando componente de reconhecimento de texto… {{mb}} MB",
       "stoppedNotice": "Lote interrompido; o reconhecimento em segundo plano será retomado depois",
+      "stoppedNoticeAuto": "Lote interrompido; não recomeça sozinho por 1 hora — ou desative o reconhecimento automático",
       "disableResident": "Desativar reconhecimento em segundo plano"
     },
     "citations": {

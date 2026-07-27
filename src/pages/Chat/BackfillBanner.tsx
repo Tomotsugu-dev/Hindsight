@@ -42,15 +42,15 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   // 点过停止(防连点):停止是异步生效的(循环帧间感知,~1s),按住 disabled
   // 直到本轮 digest resolve 收尾
   const [stopping, setStopping] = useState(false);
-  // 停止后的语义收尾:后台识别开着时,"停止"只掐当前批,稍后会自己继续
-  // ——不明说用户会以为停止按钮坏了。批停下后显示过渡态
-  // "本批已停止 · 后台识别稍后会继续 [关闭后台识别]",
+  // 停止后的语义收尾:后台识别开着时,"停止"只掐当前批——不明说用户会以为
+  // 停止按钮坏了。批停下后显示过渡态 + 一键彻底关的逃生门,
   // 后台恢复运行(polling 重新为 true)或用户关掉后自动消失。
   const [stoppedNotice, setStoppedNotice] = useState(false);
-  // 常驻(下个 tick)与按需(下轮评估条件仍满足时)都会自己接着跑,
-  // 对"停止只掐当前批"这件事语义同族,过渡态与逃生门一视同仁。
-  const backgroundOn =
-    (settings?.memoryOcrResident ?? false) || (settings?.memoryOcrAuto ?? false);
+  const residentOn = settings?.memoryOcrResident ?? false;
+  const autoOn = settings?.memoryOcrAuto ?? false;
+  // 两档都会自己接着跑,过渡态与逃生门一视同仁;差别只在"多久之后"——
+  // 常驻是下个 tick(~1 分钟),按需被后端压了一小时冷却,文案分开说。
+  const backgroundOn = residentOn || autoOn;
 
   // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
   // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
@@ -169,7 +169,12 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
         {effective === "failed" && t("chat.backfill.failed", { msg: errMsg })}
         {effective === "idle" &&
           (stoppedNotice
-            ? t("chat.backfill.stoppedNotice")
+            ? // 按需档被压了一小时冷却,说得出确切口径就别含糊
+              t(
+                autoOn
+                  ? "chat.backfill.stoppedNoticeAuto"
+                  : "chat.backfill.stoppedNotice",
+              )
             : t("chat.backfill.pending", { count: stats.total }))}
       </span>
       {/* 停止后的过渡态:就地给"彻底停"的逃生门,而不是让停止看起来会诈尸 */}
