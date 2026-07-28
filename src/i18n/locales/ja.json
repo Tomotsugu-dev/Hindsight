@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
         "ocrModeLabel": "画面テキスト認識",
-        "ocrModeDescAuto": "自動：未処理が溜まり PC が空いているときにまとめて認識し、完了後メモリを解放。",
+        "ocrModeDescAuto": "自動：電源接続中で PC に余裕があるときに未処理をまとめて認識し、完了後メモリを解放。",
         "ocrModeDescResident": "常駐：新しいスクリーンショットを即時認識（約 400MB）。バッテリー時は停止。",
         "ocrModeOff": "オフ",
         "ocrModeAuto": "自動",

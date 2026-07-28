@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
         "ocrModeLabel": "Reconhecimento de texto da tela",
-        "ocrModeDescAuto": "Automático: reconhece um lote quando houver acúmulo e a máquina estiver ociosa, liberando a memória depois.",
+        "ocrModeDescAuto": "Automático: reconhece um lote do acúmulo quando conectado à energia e com folga de recursos, liberando a memória depois.",
         "ocrModeDescResident": "Residente: reconhece novas capturas na hora (~400 MB); pausa na bateria.",
         "ocrModeOff": "Desligado",
         "ocrModeAuto": "Automático",
