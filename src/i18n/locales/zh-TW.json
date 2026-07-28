@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
         "ocrModeLabel": "螢幕文字辨識",
-        "ocrModeDescAuto": "自動：積壓夠多且電腦空閒時辨識一批，用完釋放記憶體。",
+        "ocrModeDescAuto": "自動：接上電源且電腦有餘裕時辨識一批積壓，用完釋放記憶體。",
         "ocrModeDescResident": "常駐：即時辨識新截圖，多佔約 400MB，電池供電時暫停。",
         "ocrModeOff": "關閉",
         "ocrModeAuto": "自動",

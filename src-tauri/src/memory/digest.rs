@@ -40,6 +40,13 @@ pub fn request_stop() {
     STOP_REQUESTED.store(true, Ordering::SeqCst);
 }
 
+/// 消费一个"无主"的停止请求:批已结束后才置位的 [`STOP_REQUESTED`](banner
+/// 轮询有迟滞,陈旧 UI 上点得出停止)没有批去清零,会悬着掐死之后的首个批。
+/// 调用方须先确认 [`is_running`] 为 false——批在跑时该标志归它管。
+pub fn take_stale_stop() -> bool {
+    STOP_REQUESTED.swap(false, Ordering::SeqCst)
+}
+
 /// 每轮从登记簿取的帧数;取完一轮再取,直到无积压。
 const BATCH: i64 = 64;
 

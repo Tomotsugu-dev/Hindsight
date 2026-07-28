@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
         "ocrModeLabel": "Screen-text recognition",
-        "ocrModeDescAuto": "Auto: recognizes a batch once enough piles up and the machine is idle, then frees the memory.",
+        "ocrModeDescAuto": "Auto: recognizes a batch of backlog when plugged in and the machine has headroom, then frees the memory.",
         "ocrModeDescResident": "Resident: recognizes new screenshots instantly (~400 MB); pauses on battery.",
         "ocrModeOff": "Off",
         "ocrModeAuto": "Auto",

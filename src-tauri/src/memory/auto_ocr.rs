@@ -50,6 +50,8 @@ const TICK_SECS: u64 = 60;
 /// tick 时积压必然还在阈值上、资源门多半也还通过——不设冷却就是一分钟后
 /// 原地复活,停止按钮形同虚设。冷却期内彻底不评估,期满自动恢复;想永久关
 /// 走 设置 → 屏幕文字识别 → 关闭(横幅上有一键入口)。
+/// 只存进程内(模块级静态):重启应用视作新会话,自动模式既然还开着就恢复
+/// 正常调度——不值得为这个边界把 Instant 换成落库的墙钟时间戳。
 const USER_STOP_COOLDOWN: Duration = Duration::from_secs(60 * 60);
 /// 常规档积压阈值(帧)。
 const BACKLOG_NORMAL: u64 = 800;
@@ -153,22 +155,24 @@ async fn foreground_is_av(pool: &DbPool) -> bool {
 }
 
 /// 硬信号门:电源/前台分类/内存——非抖动型,单次判定即生效。
+/// 通过返 None,被拦返回拦截者名——开工前的翻转日志与批中的让路日志都要
+/// 点名是哪道门,否则"为什么一直不动/为什么停了"在现场无从诊断。
 /// `engine_loaded_mb` = 调用时引擎已占的内存(开工前 0、批中 [`ENGINE_MEM_MB`]),
 /// 加回读数后两处比的都是"除引擎外还剩多少"(见 [`MEM_MIN_MB`])。
 /// CPU 单独走 [`cpu_busy`](阈值分开,批中还有连击缓冲)。
-async fn hard_gates_pass(pool: &DbPool, engine_loaded_mb: u64) -> bool {
+async fn hard_gate_blocker(pool: &DbPool, engine_loaded_mb: u64) -> Option<&'static str> {
     if !crate::platform::on_ac_power() {
-        return false;
+        return Some("电池供电");
     }
     if foreground_is_av(pool).await {
-        return false;
+        return Some("前台是游戏/影音");
     }
     if let Some(mem_mb) = crate::platform::available_memory_mb() {
         if mem_mb + engine_loaded_mb <= MEM_MIN_MB {
-            return false;
+            return Some("可用内存不足");
         }
     }
-    true
+    None
 }
 
 /// CPU 是否超过给定上限(采样窗见 [`crate::platform::cpu_usage_percent`];
@@ -202,6 +206,10 @@ impl AutoOcr {
         let stop_for_task = Arc::clone(&stop);
         let handle = tokio::spawn(async move {
             log::info!("OCR 按需模式启动");
+            // 被哪道门拦着(达到阈值却没开工时)。只在拦截者变化时打一条 info
+            // ——既让"为什么一直不动"可诊断,又不每分钟刷屏(措辞同 resident
+            // 的电源翻转日志)。
+            let mut last_block: Option<&'static str> = None;
             loop {
                 for _ in 0..TICK_SECS {
                     if stop_for_task.load(Ordering::Relaxed) {
@@ -210,6 +218,17 @@ impl AutoOcr {
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
+                // 消费"无主"的停止请求:批结束后才点下的「停止」(banner 轮询有
+                // 3s 迟滞,陈旧 UI 上点得出来)没有批去清零,会悬着掐死之后的
+                // 首个批。批在跑时该标志归它,不碰。每 tick 消费,悬置最多 60s。
+                if !digest::is_running() && digest::take_stale_stop() {
+                    log::debug!("按需 OCR:消费掉一个无主的停止请求");
+                }
+                // 用户刚点过停止 → 整轮跳过(连积压都不必查)
+                if in_cooldown() {
+                    log::debug!("按需 OCR 冷却中(用户手动停止过),本轮跳过");
+                    continue;
+                }
                 let pending = match frames::pending_count(&mem).await {
                     Ok(n) => n,
                     Err(e) => {
@@ -217,24 +236,35 @@ impl AutoOcr {
                         continue;
                     }
                 };
-                // 用户刚点过停止 → 整轮跳过(连积压都不必查)
-                if in_cooldown() {
-                    log::debug!("按需 OCR 冷却中(用户手动停止过),本轮跳过");
-                    continue;
-                }
                 let away = user_away();
                 log::debug!("按需 OCR 本轮评估:积压 {pending} 帧,空闲 {away}");
-                // 手动批/常驻批持锁时先让路:drain 的单实例互斥要等引擎装完才撞上,
-                // 白装一次 ~400MB 不划算。这是优化性短路不是互斥,残余竞态由
-                // drain 自己的 RUNNING 兜底(下面的 Err 分支)。
-                // 开工前 CPU 单次判定即可:误判尖峰的代价只是推迟到下一轮评估
-                if !backlog_fires(pending, away)
-                    || digest::is_running()
-                    || !hard_gates_pass(&pool, 0).await
-                    || cpu_busy(CPU_MAX_PERCENT).await
-                {
+                if !backlog_fires(pending, away) {
+                    last_block = None; // 没到阈值不算被拦
                     continue;
                 }
+                // 达到阈值后逐门排查。持锁短路放最前(原子读最便宜,还省掉
+                // 后面的 DB 查询和 500ms CPU 采样);这是优化不是互斥,残余
+                // 竞态由 drain 自己的 RUNNING 兜底(下面的 Err 分支)。
+                // 开工前 CPU 单次判定即可:误判尖峰的代价只是推迟到下一轮评估。
+                let block = if digest::is_running() {
+                    Some("其它消化批持锁")
+                } else if let Some(b) = hard_gate_blocker(&pool, 0).await {
+                    Some(b)
+                } else if cpu_busy(CPU_MAX_PERCENT).await {
+                    Some("CPU 占用高")
+                } else {
+                    None
+                };
+                if let Some(b) = block {
+                    if last_block != Some(b) {
+                        log::info!(
+                            "按需 OCR:积压 {pending} 帧已达阈值,被「{b}」拦下,解除后自动开工"
+                        );
+                        last_block = Some(b);
+                    }
+                    continue;
+                }
+                last_block = None;
                 log::info!("按需 OCR 触发:积压 {pending} 帧,加载引擎开始消化");
                 let mut pipe = match digest::Pipeline::new().await {
                     Ok(p) => p,
@@ -258,11 +288,15 @@ impl AutoOcr {
                             if batch_stop.load(Ordering::Relaxed) {
                                 return; // 批已收尾,watchdog 退场
                             }
-                            // 批中读数含引擎自己,内存把它加回去比(见 MEM_MIN_MB)
-                            if outer_stop.load(Ordering::Relaxed)
-                                || !hard_gates_pass(&pool, ENGINE_MEM_MB).await
-                            {
-                                log::info!("按需 OCR 让路:运行条件不再满足,停止本批");
+                            if outer_stop.load(Ordering::Relaxed) {
+                                log::info!("按需 OCR:模式被关闭,停止本批");
+                                batch_stop.store(true, Ordering::Relaxed);
+                                return;
+                            }
+                            // 批中读数含引擎自己,内存把它加回去比(见 MEM_MIN_MB);
+                            // 让路日志点名是哪道门,不然现场没法诊断
+                            if let Some(b) = hard_gate_blocker(&pool, ENGINE_MEM_MB).await {
+                                log::info!("按需 OCR 让路:{b},停止本批");
                                 batch_stop.store(true, Ordering::Relaxed);
                                 return;
                             }
@@ -340,21 +374,18 @@ mod tests {
         assert!(!backlog_fires(400, false));
     }
 
-    /// 用户停止 → 冷却生效;重新选「自动」→ 冷却撤销。
-    /// (串行跑:COOLDOWN_UNTIL 是进程级静态,与其它用例共享)
+    /// 冷却生命周期:停止盖章 → 生效;重新启用 → 撤销;过期 → 失效并被清理。
+    /// (合在一个用例里:COOLDOWN_UNTIL 是进程级静态,拆成多个用例会被
+    /// cargo test 的并行调度互踩成偶发红)
     #[test]
-    fn user_stop_sets_cooldown_and_restart_clears_it() {
+    fn cooldown_lifecycle() {
         clear_cooldown();
         assert!(!in_cooldown());
         note_user_stop();
         assert!(in_cooldown(), "点过停止后应进入冷却");
         clear_cooldown();
         assert!(!in_cooldown(), "重新启用应撤销冷却");
-    }
-
-    /// 过期的时间戳不再算冷却,并被顺手清掉。
-    #[test]
-    fn expired_cooldown_lapses() {
+        // 过期的时间戳不再算冷却,并被顺手清掉
         *COOLDOWN_UNTIL.lock().unwrap() = Instant::now().checked_sub(Duration::from_secs(1));
         assert!(!in_cooldown());
         assert!(COOLDOWN_UNTIL.lock().unwrap().is_none(), "过期后应被清理");

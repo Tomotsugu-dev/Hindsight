@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
         "ocrModeLabel": "屏幕文字识别",
-        "ocrModeDescAuto": "自动：积压攒够且电脑空闲时识别一批，用完释放内存。",
+        "ocrModeDescAuto": "自动：插电且电脑有余力时识别一批积压，用完释放内存。",
         "ocrModeDescResident": "常驻：即时识别新截图，多占约 400MB，电池供电时暂停。",
         "ocrModeOff": "关闭",
         "ocrModeAuto": "自动",
