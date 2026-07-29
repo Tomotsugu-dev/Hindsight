@@ -71,10 +71,6 @@ pub struct Settings {
     /// （多占约 400MB 内存）；false（默认）= 批量模式，仅手动/定时消化时
     /// 加载引擎，用完即释放。
     pub memory_ocr_resident: bool,
-    /// 屏幕记忆的 OCR 按需模式：积压攒够且机器有余力（插电/空闲/前台非游戏
-    /// 影音/CPU 内存宽裕）时自动清一批，批后释放引擎（[`crate::memory::auto_ocr`]）。
-    /// 与常驻互斥，常驻优先；默认 false。前端呈现为 关闭/自动/常驻 三态。
-    pub memory_ocr_auto: bool,
     /// Chat 首次发送前的隐私确认(展示当前路由的模型与发送内容说明)。
     /// 确认过一次即永久 true,不再弹。
     pub chat_privacy_acknowledged: bool,
@@ -116,7 +112,6 @@ impl Default for Settings {
             last_update_check_at: None,
             idle_threshold_seconds: 180,
             memory_ocr_resident: false,
-            memory_ocr_auto: false,
             chat_privacy_acknowledged: false,
             sync_ai_summaries: false,
             sync_chat_history: false,
@@ -171,7 +166,6 @@ pub struct SettingsPatch {
     pub last_update_check_at: Option<Option<String>>,
     pub idle_threshold_seconds: Option<u32>,
     pub memory_ocr_resident: Option<bool>,
-    pub memory_ocr_auto: Option<bool>,
     pub chat_privacy_acknowledged: Option<bool>,
     pub sync_ai_summaries: Option<bool>,
     pub sync_chat_history: Option<bool>,
@@ -359,7 +353,6 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         memory_ocr_resident: patch
             .memory_ocr_resident
             .unwrap_or(current.memory_ocr_resident),
-        memory_ocr_auto: patch.memory_ocr_auto.unwrap_or(current.memory_ocr_auto),
         chat_privacy_acknowledged: patch
             .chat_privacy_acknowledged
             .unwrap_or(current.chat_privacy_acknowledged),
@@ -473,7 +466,6 @@ mod tests {
             last_update_check_at: Some("2026-07-01T00:00:00+00:00".into()),
             idle_threshold_seconds: 0,
             memory_ocr_resident: true,
-            memory_ocr_auto: true,
             chat_privacy_acknowledged: true,
             sync_ai_summaries: true,
             sync_chat_history: true,

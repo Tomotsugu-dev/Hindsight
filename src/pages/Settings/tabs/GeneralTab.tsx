@@ -9,7 +9,6 @@ import { Toggle } from "../../../components/FormControls/Toggle";
 import { PathField } from "../../../components/FormControls/PathField";
 import { Slider } from "../../../components/FormControls/Slider";
 import { TimeRangeList } from "../../../components/FormControls/TimeRangeList";
-import { SegmentedControl } from "../../../components/FormControls/SegmentedControl";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { listen } from "@tauri-apps/api/event";
@@ -32,22 +31,17 @@ export default function GeneralTab() {
   const [pendingDataRoot, setPendingDataRoot] = useState<string | null>(null);
   // macOS 关闭按钮在窗口左上角；Win/Linux 在右上角。文案要根据平台变。
   const [isMacOS, setIsMacOS] = useState(false);
-  // 按需(自动)识别暂时只在 Windows 提供：Linux 的空闲/电源探测是 stub、
-  // macOS 走系统 Vision 没有常驻引擎，两边的阈值前提都要重新标定
-  // （后端 memory::auto_ocr 同样门控，这里是不给用户看见入口）
-  const [isWindows, setIsWindows] = useState(false);
   // 历史截图回填：登记 + 立即识别，识别跑完积压才返回（可能数分钟）
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
   // OCR 组件缺失时的就地引导:记住用户原本要做的动作,确认下载后自动继续
-  const [ocrConfirm, setOcrConfirm] = useState<
-    null | "resident" | "auto" | "backfill"
-  >(null);
+  const [ocrConfirm, setOcrConfirm] = useState<null | "resident" | "backfill">(
+    null,
+  );
 
   useEffect(() => {
     api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
     setIsMacOS(platform() === "macos");
-    setIsWindows(platform() === "windows");
   }, []);
 
   if (!settings) return null;
@@ -83,7 +77,7 @@ export default function GeneralTab() {
   };
 
   /** 确认下载 OCR 组件(带进度),完成后自动继续用户原本要做的动作。 */
-  const downloadOcrThen = async (kind: "resident" | "auto" | "backfill") => {
+  const downloadOcrThen = async (kind: "resident" | "backfill") => {
     setOcrConfirm(null);
     setBackfillBusy(true);
     setBackfillMsg("");
@@ -112,37 +106,21 @@ export default function GeneralTab() {
     }
     setBackfillMsg("");
     if (kind === "resident") {
-      update({ memoryOcrResident: true, memoryOcrAuto: false });
-    } else if (kind === "auto") {
-      update({ memoryOcrAuto: true, memoryOcrResident: false });
+      update({ memoryOcrResident: true });
     } else {
       await runBackfill();
     }
   };
 
-  /** 当前识别模式(设置两个 bool 的派生值;常驻优先与后端一致)。
-   *  非 Windows 上按需模式不启用(后端同样门控),把 auto 显示成"关闭"
-   *  ——否则下拉找不到对应选项会显示空白。 */
-  const ocrMode: "off" | "auto" | "resident" = settings.memoryOcrResident
-    ? "resident"
-    : settings.memoryOcrAuto && isWindows
-      ? "auto"
-      : "off";
-
-  /** 识别模式切换:开启方向先确保组件就绪,缺则弹引导(确认下载后自动开启)。 */
-  const onOcrModeChange = (mode: "off" | "auto" | "resident") => {
-    if (mode === "off") {
-      update({ memoryOcrResident: false, memoryOcrAuto: false });
+  /** 常驻 OCR 开关:开启方向先确保组件就绪,缺则弹引导(确认下载后自动开启)。 */
+  const onResidentToggle = (v: boolean) => {
+    if (!v) {
+      update({ memoryOcrResident: false });
       return;
     }
     void ocrRuntimeReady().then((ready) => {
-      if (!ready) {
-        setOcrConfirm(mode);
-      } else if (mode === "resident") {
-        update({ memoryOcrResident: true, memoryOcrAuto: false });
-      } else {
-        update({ memoryOcrAuto: true, memoryOcrResident: false });
-      }
+      if (ready) update({ memoryOcrResident: true });
+      else setOcrConfirm("resident");
     });
   };
 
@@ -252,36 +230,13 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
-          label={t("settings.general.capture.ocrModeLabel")}
-          // 「自动」那句只在提供该档位的平台上说，免得描述里有个下拉里没有的选项
-          description={
-            isWindows
-              ? `${t("settings.general.capture.ocrModeDescAuto")} ${t("settings.general.capture.ocrModeDescResident")}`
-              : t("settings.general.capture.ocrModeDescResident")
-          }
+          label={t("settings.general.capture.ocrResidentLabel")}
+          description={t("settings.general.capture.ocrResidentDescription")}
           disabled={!settings.captureEnabled || !settings.screenshotEnabled}
         >
-          <SegmentedControl
-            value={ocrMode}
-            options={[
-              { value: "off", label: t("settings.general.capture.ocrModeOff") },
-              // 「自动」暂时只在 Windows 提供，其余平台退化成 关闭/常驻 两态
-              ...(isWindows
-                ? [
-                    {
-                      value: "auto" as const,
-                      label: t("settings.general.capture.ocrModeAuto"),
-                    },
-                  ]
-                : []),
-              {
-                value: "resident",
-                label: t("settings.general.capture.ocrModeResident"),
-              },
-            ]}
-            onChange={onOcrModeChange}
-            disabled={!settings.captureEnabled || !settings.screenshotEnabled}
-            ariaLabel={t("settings.general.capture.ocrModeLabel")}
+          <Toggle
+            checked={settings.memoryOcrResident}
+            onChange={onResidentToggle}
           />
         </Row>
         <Row
@@ -418,11 +373,9 @@ export default function GeneralTab() {
         open={ocrConfirm !== null}
         title={t("settings.general.capture.ocrConfirmTitle")}
         message={
-          // 判 backfill 而非 resident:auto/resident 共用那句模式中立的
-          // "开启文字索引…下载完成后自动开启",将来再加模式也不会漏
-          ocrConfirm === "backfill"
-            ? t("settings.general.capture.ocrConfirmBackfill")
-            : t("settings.general.capture.ocrConfirmResident")
+          ocrConfirm === "resident"
+            ? t("settings.general.capture.ocrConfirmResident")
+            : t("settings.general.capture.ocrConfirmBackfill")
         }
         confirmLabel={t("settings.general.capture.ocrConfirmAccept")}
         cancelLabel={t("common.cancel")}

@@ -178,16 +178,6 @@ pub fn run() {
                     .sync(cfg.memory_ocr_resident, memdb.clone())
                     .await;
                 handle.manage(resident);
-                // OCR 按需模式:同上;常驻优先,两者都开时按需让位
-                let auto_ocr = std::sync::Arc::new(memory::auto_ocr::AutoOcr::default());
-                auto_ocr
-                    .sync(
-                        cfg.memory_ocr_auto && !cfg.memory_ocr_resident,
-                        memdb.clone(),
-                        pool.clone(),
-                    )
-                    .await;
-                handle.manage(auto_ocr);
                 let memdb_for_sync = memdb.clone();
                 handle.manage(commands::screen_memory::MemoryState(memdb));
                 spawn_cleanup_task(pool.clone());

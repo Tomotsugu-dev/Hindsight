@@ -4,7 +4,6 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::capture::CaptureService;
 use crate::commands::screen_memory::MemoryState;
-use crate::memory::auto_ocr::AutoOcr;
 use crate::memory::resident::ResidentOcr;
 use crate::repo::settings::{self, Settings, SettingsPatch};
 use crate::storage::DbPool;
@@ -21,15 +20,12 @@ pub async fn get_settings(pool: State<'_, DbPool>) -> Result<Settings, String> {
 /// 副作用：把 capture 相关字段同步给 `CaptureService`（间隔 / 工作时段 / 隐私关键词
 /// / 挂机阈值 / 截图配置），把 minimize_to_tray 同步给 close handler 静态变量，
 /// 把 auto_start 切到操作系统的开机自启。所有变更立刻生效，不需要重启。
-// Tauri 命令的参数 = 注入的 State 们 + IPC 实参,拆参数结构体不合命令惯例
-#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn update_settings(
     app: AppHandle,
     pool: State<'_, DbPool>,
     svc: State<'_, Arc<CaptureService>>,
     resident: State<'_, Arc<ResidentOcr>>,
-    auto_ocr: State<'_, Arc<AutoOcr>>,
     mem: State<'_, MemoryState>,
     sync_engine: State<'_, Arc<SyncEngine>>,
     patch: SettingsPatch,
@@ -97,15 +93,6 @@ pub async fn update_settings(
     if next.memory_ocr_resident != prev_resident {
         resident.sync(next.memory_ocr_resident, mem.0.clone()).await;
     }
-    // OCR 按需模式:常驻优先,常驻开着时按需让位。sync 幂等,状态未变时 no-op,
-    // 直接按最终期望同步即可
-    auto_ocr
-        .sync(
-            next.memory_ocr_auto && !next.memory_ocr_resident,
-            mem.0.clone(),
-            pool.inner().clone(),
-        )
-        .await;
 
     // 可选上云三挡任一从关到开:重置 pull 游标让 Drive 上的历史文件重新入列
     // (关到开之前这些文件被标 handled 越过了;合并幂等,重拉无害)

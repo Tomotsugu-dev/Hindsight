@@ -532,9 +532,6 @@ export interface Settings {
   /** 屏幕记忆 OCR 常驻模式：true = 引擎常驻内存、新截图准实时消化（约多占
    *  400MB 内存）；false = 批量模式，仅消化时加载、用完即释放。 */
   memoryOcrResident: boolean;
-  /** 屏幕记忆 OCR 按需模式：积压攒够且机器有余力（插电/空闲/前台非游戏影音/
-   *  CPU 内存宽裕）时自动清一批，批后释放引擎。与常驻互斥，常驻优先。 */
-  memoryOcrAuto: boolean;
   /** Chat 首次发送前的隐私确认；确认过一次即永久 true，不再弹。 */
   chatPrivacyAcknowledged: boolean;
   /** 可选上云三挡（默认全 false）。打开 = 该数据集参与云同步的推与拉。 */

@@ -810,7 +810,6 @@ export const mockSettings: Settings = {
   lastUpdateCheckAt: new Date().toISOString(),
   idleThresholdSeconds: 300,
   memoryOcrResident: false,
-  memoryOcrAuto: false,
   chatPrivacyAcknowledged: false,
   syncAiSummaries: false,
   syncChatHistory: false,

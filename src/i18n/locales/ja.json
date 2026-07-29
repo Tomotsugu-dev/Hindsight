@@ -145,12 +145,8 @@
         "enableDescription": "オフにするとバックグラウンド記録（ウィンドウ情報 + スクリーンショット）を停止します。",
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
-        "ocrModeLabel": "画面テキスト認識",
-        "ocrModeDescAuto": "自動：電源接続中で PC に余裕があるときに未処理をまとめて認識し、完了後メモリを解放。",
-        "ocrModeDescResident": "常駐：新しいスクリーンショットを即時認識（約 400MB）。バッテリー時は停止。",
-        "ocrModeOff": "オフ",
-        "ocrModeAuto": "自動",
-        "ocrModeResident": "常駐",
+        "ocrResidentLabel": "OCR を常駐させる",
+        "ocrResidentDescription": "新しいスクリーンショットを即時認識（約 400MB 追加使用）。バッテリー駆動中は自動停止。",
         "intervalLabel": "記録の間隔",
         "intervalDescription": "記録間隔。",
         "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",
@@ -1501,9 +1497,8 @@
       "ocrConfirmMessage": "テキスト索引の作成には文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に索引作成を開始します。",
       "ocrConfirmAccept": "ダウンロードして開始",
       "downloadingOcr": "文字認識コンポーネントをダウンロード中… {{mb}} MB",
-      "stoppedNotice": "このバッチを停止しました。バックグラウンド認識は後で再開されます",
-      "stoppedNoticeAuto": "このバッチを停止しました。1 時間は自動で再開しません。自動認識をオフにもできます",
-      "disableResident": "バックグラウンド認識をオフ"
+      "stoppedNotice": "このバッチを停止しました。常駐認識は約 1 分後に再開されます",
+      "disableResident": "常駐 OCR をオフ"
     },
     "citations": {
       "showAll": "すべての情報源を表示（{{count}} 件）",
