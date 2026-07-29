@@ -1514,10 +1514,17 @@
     },
     "actions": {
       "copy": "複製",
-      "regenerate": "重新回答",
-      "resend": "再問一次",
+      "regenerate": "重試",
       "prevVersion": "上一版回答",
-      "nextVersion": "下一版回答"
+      "nextVersion": "下一版回答",
+      "edit": "編輯",
+      "prevBranch": "上一個分支",
+      "nextBranch": "下一個分支"
+    },
+    "edit": {
+      "hint": "編輯將建立新的對話分支,可用箭頭在分支間切換。",
+      "save": "儲存",
+      "cancel": "取消"
     }
   }
 }

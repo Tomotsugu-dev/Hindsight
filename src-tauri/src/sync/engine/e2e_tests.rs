@@ -448,12 +448,20 @@ async fn optional_datasets_cross_device_roundtrip() {
     let conv = crate::chat::store::create_conversation(&a.mem, "测试会话")
         .await
         .unwrap();
-    crate::chat::store::append_user(&a.mem, conv, "上周看了什么?")
+    crate::chat::store::append_user(&a.mem, conv, "上周看了什么?", None)
         .await
         .unwrap();
-    crate::chat::store::append_assistant(&a.mem, conv, "看了三个视频 [1]", &[], false, (200, 80))
-        .await
-        .unwrap();
+    crate::chat::store::append_assistant(
+        &a.mem,
+        conv,
+        "看了三个视频 [1]",
+        &[],
+        false,
+        (200, 80),
+        None,
+    )
+    .await
+    .unwrap();
 
     // — A: 一条屏幕记忆会话 —
     a.mem

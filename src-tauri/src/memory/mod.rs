@@ -63,6 +63,12 @@ impl MemoryDb {
     async fn init_schema(&self) -> Result<()> {
         self.0
             .call(|conn| {
+                // 启动时的库世代:v5(消息树)的存量串链回填只能跑一次,
+                // 必须以"进程看到的旧版本"门控——下面的幂等批次会把
+                // user_version 直接写成当前世代,不能事后再读。
+                let prev_version: i64 = conn
+                    .query_row("PRAGMA user_version", [], |r| r.get(0))
+                    .db()?;
                 conn.execute_batch(
                     "PRAGMA journal_mode = WAL;
 
@@ -149,12 +155,13 @@ impl MemoryDb {
                         guid            TEXT,            -- 跨设备全局 id
                         conv_guid       TEXT,            -- 所属会话的 guid(跨设备解析用)
                         prompt_tokens     INTEGER,       -- 本轮上行 token(assistant)
-                        completion_tokens INTEGER        -- 本轮下行 token(assistant)
+                        completion_tokens INTEGER,       -- 本轮下行 token(assistant)
+                        parent_guid     TEXT             -- 消息树父指针;NULL = 会话根
                     );
                     CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
                         ON chat_messages(conversation_id, id);
 
-                    PRAGMA user_version = 4;",
+                    PRAGMA user_version = 5;",
                 )
                 .db()?;
 
@@ -168,6 +175,7 @@ impl MemoryDb {
                     "ALTER TABLE chat_messages ADD COLUMN conv_guid TEXT",
                     "ALTER TABLE chat_messages ADD COLUMN prompt_tokens INTEGER",
                     "ALTER TABLE chat_messages ADD COLUMN completion_tokens INTEGER",
+                    "ALTER TABLE chat_messages ADD COLUMN parent_guid TEXT",
                     "ALTER TABLE text_sessions ADD COLUMN guid TEXT",
                     // 会话来源设备:NULL = 本机产出;非 NULL = 从该设备同步而来
                     "ALTER TABLE text_sessions ADD COLUMN origin_device TEXT",
@@ -197,9 +205,24 @@ impl MemoryDb {
                          ON chat_messages(guid);
                      CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_guid
                          ON text_sessions(guid);
-                     PRAGMA user_version = 4;",
+                     PRAGMA user_version = 5;",
                 )
                 .db()?;
+                // ── v5 一次性迁移:存量线性消息串成父子链(树的平凡形态)──
+                // 只在旧世代跑:树世代里 parent_guid 为 NULL 是"会话根/根的
+                // 编辑分支"的合法状态,重跑会把它们错误串到别的消息底下。
+                if prev_version < 5 {
+                    conn.execute(
+                        "UPDATE chat_messages SET parent_guid =
+                             (SELECT m2.guid FROM chat_messages m2
+                               WHERE m2.conversation_id = chat_messages.conversation_id
+                                 AND m2.id < chat_messages.id
+                               ORDER BY m2.id DESC LIMIT 1)
+                           WHERE parent_guid IS NULL",
+                        [],
+                    )
+                    .db()?;
+                }
                 Ok(())
             })
             .await?;

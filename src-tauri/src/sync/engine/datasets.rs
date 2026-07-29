@@ -191,7 +191,7 @@ async fn push_chat(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) ->
             let mut stmt = conn
                 .prepare(
                     "SELECT guid, conv_guid, role, content, citations, degraded, created_ts,
-                            prompt_tokens, completion_tokens
+                            prompt_tokens, completion_tokens, parent_guid
                      FROM chat_messages
                      WHERE guid IS NOT NULL AND conv_guid IS NOT NULL ORDER BY id",
                 )
@@ -208,6 +208,7 @@ async fn push_chat(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) ->
                         created_ts: r.get(6)?,
                         prompt_tokens: r.get(7)?,
                         completion_tokens: r.get(8)?,
+                        parent_guid: r.get(9)?,
                     })
                 })
                 .db()?
@@ -415,8 +416,9 @@ pub(super) async fn merge_chat(mem: &MemoryDb, body: &[u8]) -> Result<()> {
                 tx.execute(
                     "INSERT OR IGNORE INTO chat_messages(
                          conversation_id, role, content, citations, degraded,
-                         created_ts, guid, conv_guid, prompt_tokens, completion_tokens)
-                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+                         created_ts, guid, conv_guid, prompt_tokens, completion_tokens,
+                         parent_guid)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
                     rusqlite::params![
                         conv_id,
                         m.role,
@@ -428,6 +430,7 @@ pub(super) async fn merge_chat(mem: &MemoryDb, body: &[u8]) -> Result<()> {
                         m.conv_guid,
                         m.prompt_tokens,
                         m.completion_tokens,
+                        m.parent_guid,
                     ],
                 )
                 .db()?;

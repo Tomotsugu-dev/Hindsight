@@ -137,6 +137,7 @@ pub async fn chat_ask(
     conversation_id: Option<i64>,
     locale: Option<String>,
     ask_id: Option<String>,
+    parent_guid: Option<String>,
 ) -> Result<ChatAskResult, String> {
     let question = question.trim().to_string();
     if question.is_empty() {
@@ -172,7 +173,10 @@ pub async fn chat_ask(
         db,
         inflight.inner(),
         conv_id,
-        AskInput::New(question),
+        AskInput::New {
+            question,
+            parent: parent_guid,
+        },
         lang,
         ask_id,
     )
@@ -193,6 +197,7 @@ pub async fn chat_regenerate(
     conversation_id: i64,
     locale: Option<String>,
     ask_id: Option<String>,
+    leaf_guid: Option<String>,
 ) -> Result<ChatAskResult, String> {
     let db = require(&mem)?;
     let lang = crate::chat::lang::ChatLang::from_tag(locale.as_deref());
@@ -206,19 +211,24 @@ pub async fn chat_regenerate(
         db,
         inflight.inner(),
         conversation_id,
-        AskInput::Regenerate,
+        AskInput::Regenerate { leaf: leaf_guid },
         lang,
         ask_id,
     )
     .await
 }
 
-/// 一次问答的取材来源:决定 user 行是否落库、历史窗口怎么取。
+/// 一次问答的取材来源:决定 user 行是否落库、历史沿哪条路径取。
 enum AskInput {
-    /// 新提问:读历史后落 user 行。
-    New(String),
-    /// 重新回答最后一条提问:不落新 user 行,历史截到该提问之前。
-    Regenerate,
+    /// 新提问:落 user 行,挂在 parent 下。parent 的约定见
+    /// [`store::history_for_ask`](None=最新叶 / ""=根 / guid=指定挂点)。
+    New {
+        question: String,
+        parent: Option<String>,
+    },
+    /// 重新回答:沿 leaf(None=最新叶)回溯找最近提问,新回答挂 leaf 下,
+    /// 不落新 user 行。
+    Regenerate { leaf: Option<String> },
 }
 
 /// chat_ask / chat_regenerate 的公共主体:注册 in-flight → 按来源取材 →
@@ -260,22 +270,25 @@ async fn run_ask(
         ok: false,
     };
 
-    // 按来源取材。新提问:先读历史(此时本条 user 消息尚未入库,不会自包含)
-    // 再落提问——LLM 失败时提问也保留,重载后显示"有问无答",可再问。
-    let (question, history) = match input {
-        AskInput::New(q) => {
-            let history = store::recent_history(db, conv_id, HISTORY_TURNS)
+    // 按来源取材。新提问:先解析挂点并沿其链读历史(此时本条 user 消息尚未
+    // 入库,不会自包含)再落提问——LLM 失败时提问也保留,重载后显示
+    // "有问无答",可再问。answer_parent = 回答的挂点(新提问/重试的路径叶)。
+    let (question, history, answer_parent) = match input {
+        AskInput::New { question: q, parent } => {
+            let (resolved, history) = store::history_for_ask(db, conv_id, parent, HISTORY_TURNS)
                 .await
                 .map_err(String::from)?;
-            store::append_user(db, conv_id, &q)
+            let user_guid = store::append_user(db, conv_id, &q, resolved.as_deref())
                 .await
                 .map_err(String::from)?;
-            (q, history)
+            (q, history, user_guid)
         }
-        AskInput::Regenerate => store::last_question_with_history(db, conv_id, HISTORY_TURNS)
-            .await
-            .map_err(String::from)?
-            .ok_or_else(|| lang.err_nothing_to_regenerate().to_string())?,
+        AskInput::Regenerate { leaf } => {
+            store::question_for_regenerate(db, conv_id, leaf, HISTORY_TURNS)
+                .await
+                .map_err(String::from)?
+                .ok_or_else(|| lang.err_nothing_to_regenerate().to_string())?
+        }
     };
 
     let cfg = settings::load(pool).await.map_err(String::from)?;
@@ -379,6 +392,7 @@ async fn run_ask(
         &answer.citations,
         answer.degraded,
         (answer.prompt_tokens, answer.completion_tokens),
+        Some(&answer_parent),
     )
     .await
     .map_err(String::from)?;

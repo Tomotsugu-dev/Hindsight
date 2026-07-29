@@ -781,6 +781,7 @@ export const api = {
     conversationId: number | null,
     _locale?: string,
     _askId?: string,
+    parentGuid?: string,
   ): Promise<ChatAskResult> => {
     await sleep(900); // 模拟检索 + 推理耗时
     const now = new Date().toISOString();
@@ -798,7 +799,13 @@ export const api = {
       chatConvs.unshift(conv);
     }
     conv.meta.updatedTs = now;
+    // 消息树:与真实端同一约定("" = 挂根,guid = 挂点,缺省 = 链尾),
+    // demo 里编辑分支因此可完整演示
+    const tip = conv.messages[conv.messages.length - 1];
+    const parent =
+      parentGuid === "" ? null : (parentGuid ?? tip?.guid ?? null);
     const answer = chatDemoAnswer(question);
+    const userGuid = `demo-${chatNextMsgId}`;
     conv.messages.push({
       id: chatNextMsgId++,
       role: "user",
@@ -808,9 +815,11 @@ export const api = {
       createdTs: now,
       promptTokens: null,
       completionTokens: null,
+      guid: userGuid,
+      parentGuid: parent,
     });
     conv.messages.push({
-      id: chatNextMsgId++,
+      id: chatNextMsgId,
       role: "assistant",
       content: answer.text,
       citations: answer.citations,
@@ -818,6 +827,8 @@ export const api = {
       createdTs: now,
       promptTokens: 1284,
       completionTokens: 236,
+      guid: `demo-${chatNextMsgId++}`,
+      parentGuid: userGuid,
     });
     return {
       conversationId: conv.meta.id,
@@ -836,18 +847,26 @@ export const api = {
     conversationId: number,
     _locale?: string,
     _askId?: string,
+    leafGuid?: string,
   ): Promise<ChatAskResult> => {
     await sleep(900);
     const conv = chatConvs.find((c) => c.meta.id === conversationId);
-    const lastUser = conv
-      ? [...conv.messages].reverse().find((msg) => msg.role === "user")
-      : undefined;
-    if (!conv || !lastUser) throw new Error("no question to answer again");
+    if (!conv) throw new Error("no question to answer again");
+    // 与真实端同语义:沿指定叶子(缺省链尾)回溯 parent 找最近提问
+    const byGuid = new Map(conv.messages.map((msg) => [msg.guid, msg]));
+    let cur = leafGuid
+      ? byGuid.get(leafGuid)
+      : conv.messages[conv.messages.length - 1];
+    const leaf = cur;
+    while (cur && cur.role !== "user") {
+      cur = cur.parentGuid ? byGuid.get(cur.parentGuid) : undefined;
+    }
+    if (!cur || !leaf) throw new Error("no question to answer again");
     const now = new Date().toISOString();
     conv.meta.updatedTs = now;
-    const answer = chatDemoAnswer(lastUser.content);
+    const answer = chatDemoAnswer(cur.content);
     conv.messages.push({
-      id: chatNextMsgId++,
+      id: chatNextMsgId,
       role: "assistant",
       content: answer.text,
       citations: answer.citations,
@@ -855,6 +874,8 @@ export const api = {
       createdTs: now,
       promptTokens: 1284,
       completionTokens: 236,
+      guid: `demo-${chatNextMsgId++}`,
+      parentGuid: leaf.guid,
     });
     return {
       conversationId: conv.meta.id,

@@ -40,7 +40,7 @@ pub struct ChatAnswer {
 }
 
 /// 历史轮(前端传入,只取最近几轮做指代消解)。
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct HistoryTurn {
     pub role: String, // "user" | "assistant"
     pub content: String,

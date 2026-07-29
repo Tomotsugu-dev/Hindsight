@@ -1514,10 +1514,17 @@
     },
     "actions": {
       "copy": "Copiar",
-      "regenerate": "Responder novamente",
-      "resend": "Perguntar novamente",
+      "regenerate": "Tentar novamente",
       "prevVersion": "Resposta anterior",
-      "nextVersion": "Próxima resposta"
+      "nextVersion": "Próxima resposta",
+      "edit": "Editar",
+      "prevBranch": "Ramificação anterior",
+      "nextBranch": "Próxima ramificação"
+    },
+    "edit": {
+      "hint": "Editar cria uma nova ramificação da conversa — alterne entre elas com as setas.",
+      "save": "Salvar",
+      "cancel": "Cancelar"
     }
   }
 }

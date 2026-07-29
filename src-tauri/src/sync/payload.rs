@@ -177,6 +177,9 @@ pub struct ChatMessagePayload {
     pub prompt_tokens: Option<i64>,
     #[serde(default)]
     pub completion_tokens: Option<i64>,
+    /// 消息树父指针(提问编辑分支);旧端文件缺字段 → None,对端按线性链兜底
+    #[serde(default)]
+    pub parent_guid: Option<String>,
 }
 
 /// `device.<id>.chat.json` 的整体形状:会话(含墓碑)+ 存活会话的全部消息。

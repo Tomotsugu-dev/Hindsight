@@ -1514,10 +1514,17 @@
     },
     "actions": {
       "copy": "Copy",
-      "regenerate": "Answer again",
-      "resend": "Ask again",
+      "regenerate": "Retry",
       "prevVersion": "Previous answer",
-      "nextVersion": "Next answer"
+      "nextVersion": "Next answer",
+      "edit": "Edit",
+      "prevBranch": "Previous branch",
+      "nextBranch": "Next branch"
+    },
+    "edit": {
+      "hint": "Editing creates a new conversation branch — switch between branches with the arrows.",
+      "save": "Save",
+      "cancel": "Cancel"
     }
   }
 }

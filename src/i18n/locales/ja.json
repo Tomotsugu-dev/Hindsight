@@ -1514,10 +1514,17 @@
     },
     "actions": {
       "copy": "コピー",
-      "regenerate": "回答をやり直す",
-      "resend": "もう一度質問",
+      "regenerate": "再試行",
       "prevVersion": "前の回答",
-      "nextVersion": "次の回答"
+      "nextVersion": "次の回答",
+      "edit": "編集",
+      "prevBranch": "前の分岐",
+      "nextBranch": "次の分岐"
+    },
+    "edit": {
+      "hint": "編集すると新しい会話の分岐が作られます。矢印で分岐を切り替えられます。",
+      "save": "保存",
+      "cancel": "キャンセル"
     }
   }
 }

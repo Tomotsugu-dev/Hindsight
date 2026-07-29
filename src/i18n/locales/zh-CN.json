@@ -1514,10 +1514,17 @@
     },
     "actions": {
       "copy": "复制",
-      "regenerate": "重新回答",
-      "resend": "再问一次",
+      "regenerate": "重试",
       "prevVersion": "上一版回答",
-      "nextVersion": "下一版回答"
+      "nextVersion": "下一版回答",
+      "edit": "编辑",
+      "prevBranch": "上一个分支",
+      "nextBranch": "下一个分支"
+    },
+    "edit": {
+      "hint": "编辑将创建新的对话分支,可用箭头在分支间切换。",
+      "save": "保存",
+      "cancel": "取消"
     }
   }
 }

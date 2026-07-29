@@ -138,6 +138,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* 消息列表永不横滚:内容超宽一律由气泡内的局部滚动(如表格)消化 */
+  overflow-x: hidden;
   padding: 4px 4px 12px;
   scroll-behavior: smooth;
 }
@@ -232,7 +234,7 @@
   align-items: center;
   background: none;
   border: none;
-  padding: 2px;
+  padding: 3px;
   color: var(--text-faint);
   cursor: pointer;
   border-radius: 4px;
@@ -253,24 +255,148 @@
   gap: 2px;
 }
 
+/* 气泡列容器接管 78% 宽度上限(语义与旧版 bubble 直挂 row 时一致),
+   内部气泡撑满容器;error 气泡仍直挂 row,沿用 .bubble 自身的 78%。 */
 .bubbleColUser {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  min-width: 0;
+  max-width: 78%;
+}
+
+/* 助手侧:气泡 + 气泡下方的操作/token 行(ChatGPT 式,行在气泡外) */
+.bubbleColAssistant {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 78%;
+}
+
+.bubbleColUser .bubble,
+.bubbleColAssistant .bubble {
   max-width: 100%;
 }
 
-/* 与助手侧 tokenMeta 同字号同灰度;默认降透明度,悬停该行时亮起 */
+/* 用户侧操作行:常显在气泡下方,与助手侧操作行同灰度 */
 .msgActionsUser {
   display: flex;
   justify-content: flex-end;
-  margin-top: 2px;
-  opacity: 0;
-  transition: opacity 120ms ease;
+  margin-top: 4px;
 }
 
-.bubbleColUser:hover .msgActionsUser {
+/* 助手侧操作行(气泡外下方):版本切换 / 复制 / 重试 */
+.msgActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ── 提问编辑框(Claude 式:原位替换气泡,保存开新分支) ── */
+
+.editBox {
+  width: 78%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.editInput {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: none;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: inherit;
+  color: var(--text-strong);
+}
+
+.editFooter {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editHint {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+.editBtns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editCancel,
+.editSave {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-strong);
+}
+
+.editSave {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.editSave:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* —— 操作行统一悬浮提示:深底白字,悬停片刻后上方弹出(样式对齐 TimeField)—— */
+.tokenMeta [data-tip],
+.msgActions [data-tip],
+.msgActionsUser [data-tip] {
+  position: relative;
+}
+
+.tokenMeta [data-tip]::after,
+.msgActions [data-tip]::after,
+.msgActionsUser [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  background: #1a1a1f;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: var(--font-weight-500);
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(20, 20, 40, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.12s ease;
+}
+
+.tokenMeta [data-tip]:hover::after,
+.msgActions [data-tip]:hover::after,
+.msgActionsUser [data-tip]:hover::after {
   opacity: 1;
+  transition-delay: 0.35s;
 }
 
 .bubbleMd {
@@ -322,6 +448,10 @@
 }
 
 .bubbleMd table {
+  /* 表格不折行,超宽时在气泡内自滚,不把横向滚动条顶给整个消息列表 */
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   margin: 0 0 8px;
   border-collapse: collapse;
   font-size: 12.5px;
