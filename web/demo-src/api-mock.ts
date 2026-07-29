@@ -832,6 +832,41 @@ export const api = {
   },
   chatInflight: async (_conversationId: number): Promise<string | null> => null,
   chatCancel: async (_askId: string): Promise<boolean> => false,
+  chatRegenerate: async (
+    conversationId: number,
+    _locale?: string,
+    _askId?: string,
+  ): Promise<ChatAskResult> => {
+    await sleep(900);
+    const conv = chatConvs.find((c) => c.meta.id === conversationId);
+    const lastUser = conv
+      ? [...conv.messages].reverse().find((msg) => msg.role === "user")
+      : undefined;
+    if (!conv || !lastUser) throw new Error("no question to answer again");
+    const now = new Date().toISOString();
+    conv.meta.updatedTs = now;
+    const answer = chatDemoAnswer(lastUser.content);
+    conv.messages.push({
+      id: chatNextMsgId++,
+      role: "assistant",
+      content: answer.text,
+      citations: answer.citations,
+      degraded: false,
+      createdTs: now,
+      promptTokens: 1284,
+      completionTokens: 236,
+    });
+    return {
+      conversationId: conv.meta.id,
+      cancelled: false,
+      text: answer.text,
+      citations: answer.citations,
+      steps: 2,
+      degraded: false,
+      promptTokens: 1284,
+      completionTokens: 236,
+    };
+  },
   chatListConversations: async (): Promise<ChatConversationMeta[]> =>
     chatConvs.map((c) => structuredClone(c.meta)),
   chatGetMessages: async (conversationId: number): Promise<ChatStoredMessage[]> =>

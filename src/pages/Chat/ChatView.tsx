@@ -13,13 +13,18 @@ import {
   ArrowUp,
   Bot,
   ChartPie,
+  Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Clock,
+  Copy,
   Globe,
   History,
   Mail,
   MonitorPlay,
+  RefreshCw,
   Search,
   Square,
   TrendingUp,
@@ -35,19 +40,20 @@ import {
 } from "../../api/hindsight";
 import styles from "./ChatView.module.css";
 
-/** 消息：用户问题 / 助手回答（含证据引用）/ 出错（仅本地瞬态，不落库）。 */
+/** 助手回答的一个版本(「重新回答」按追加落库,同一提问的多版渲染时折叠切换)。 */
+interface AssistantVersion {
+  text: string;
+  citations: ChatCitation[];
+  degraded: boolean;
+  /** 本轮上行/下行 token；旧数据为 null 不显示 */
+  promptTokens: number | null;
+  completionTokens: number | null;
+}
+
+/** 消息：用户问题 / 助手回答（多版本,含证据引用）/ 出错（仅本地瞬态，不落库）。 */
 type Message =
   | { id: string; role: "user"; text: string }
-  | {
-      id: string;
-      role: "assistant";
-      text: string;
-      citations: ChatCitation[];
-      degraded: boolean;
-      /** 本轮上行/下行 token；旧数据为 null 不显示 */
-      promptTokens: number | null;
-      completionTokens: number | null;
-    }
+  | { id: string; role: "assistant"; versions: AssistantVersion[] }
   | { id: string; role: "error"; text: string };
 
 interface PresetItem {
@@ -122,19 +128,30 @@ function fmtTs(ts: string): string {
   return ts.length >= 16 ? ts.slice(0, 16).replace("T", " ") : ts;
 }
 
-function storedToMessage(m: ChatStoredMessage): Message {
-  if (m.role === "user") {
-    return { id: `db-${m.id}`, role: "user", text: m.content };
+/** 库行 → 渲染消息:连续的 assistant 行折叠成一个多版本组(重新生成的追加式
+ *  落库)。组 id 取首行,重新生成后组保持稳定,不触发整组重挂。 */
+function groupStoredMessages(rows: ChatStoredMessage[]): Message[] {
+  const out: Message[] = [];
+  for (const m of rows) {
+    if (m.role === "user") {
+      out.push({ id: `db-${m.id}`, role: "user", text: m.content });
+      continue;
+    }
+    const v: AssistantVersion = {
+      text: m.content,
+      citations: m.citations,
+      degraded: m.degraded,
+      promptTokens: m.promptTokens,
+      completionTokens: m.completionTokens,
+    };
+    const last = out[out.length - 1];
+    if (last && last.role === "assistant") {
+      last.versions.push(v);
+    } else {
+      out.push({ id: `db-${m.id}`, role: "assistant", versions: [v] });
+    }
   }
-  return {
-    id: `db-${m.id}`,
-    role: "assistant",
-    text: m.content,
-    citations: m.citations,
-    degraded: m.degraded,
-    promptTokens: m.promptTokens,
-    completionTokens: m.completionTokens,
-  };
+  return out;
 }
 
 interface ChatViewProps {
@@ -190,7 +207,7 @@ export default function ChatView({
     api
       .chatGetMessages(conversationId)
       .then((rows) => {
-        if (loadSeq.current === seq) setMessages(rows.map(storedToMessage));
+        if (loadSeq.current === seq) setMessages(groupStoredMessages(rows));
       })
       .catch((e) => {
         if (loadSeq.current === seq) {
@@ -221,7 +238,7 @@ export default function ChatView({
       api
         .chatGetMessages(e.payload.conversationId)
         .then((rows) => {
-          if (loadSeq.current === seq) setMessages(rows.map(storedToMessage));
+          if (loadSeq.current === seq) setMessages(groupStoredMessages(rows));
         })
         .catch(() => {});
     });
@@ -260,9 +277,36 @@ export default function ChatView({
       } else {
         // 以库为准重载(答案已落库;answer-ready 事件路径同样会刷,双方幂等)
         const rows = await api.chatGetMessages(conversationId);
-        if (loadSeq.current === seq) setMessages(rows.map(storedToMessage));
+        if (loadSeq.current === seq) setMessages(groupStoredMessages(rows));
         onConversationTouched();
       }
+    } catch (e) {
+      if (loadSeq.current === seq) {
+        setMessages((prev) => [...prev, { id: uid(), role: "error", text: String(e) }]);
+      }
+    } finally {
+      if (loadSeq.current === seq) {
+        setBusy(false);
+        askIdRef.current = null;
+      }
+    }
+  };
+
+  /** 重新回答最后一条提问:后端追加新版本(不删旧的),前端以库为准重载。 */
+  const regenerate = async () => {
+    if (busy || conversationId === null) return;
+    if (!(await ensurePrivacyAck())) return;
+    const seq = loadSeq.current;
+    const askId = uid();
+    askIdRef.current = askId;
+    setBusy(true);
+    try {
+      const ans = await api.chatRegenerate(conversationId, i18n.language, askId);
+      if (loadSeq.current !== seq) return;
+      if (ans.cancelled) return;
+      const rows = await api.chatGetMessages(conversationId);
+      if (loadSeq.current === seq) setMessages(groupStoredMessages(rows));
+      onConversationTouched();
     } catch (e) {
       if (loadSeq.current === seq) {
         setMessages((prev) => [...prev, { id: uid(), role: "error", text: String(e) }]);
@@ -296,6 +340,14 @@ export default function ChatView({
   };
 
   const hasMessages = messages.length > 0;
+  // 「重新回答」只挂在最后一个助手回答组上(中间的重答会让下游历史失效)
+  let lastAssistantIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") {
+      lastAssistantIdx = i;
+      break;
+    }
+  }
   // 随机位：挂载时抽一张，之后每次切换会话（含"新对话"）轮换到下一张；
   // 同一空态视图内保持稳定，不随输入重渲染跳变。
   const [poolPick, setPoolPick] = useState(nextPoolPick);
@@ -314,8 +366,16 @@ export default function ChatView({
       <div className={styles.body}>
         {hasMessages ? (
           <div ref={listRef} className={styles.messageList}>
-            {messages.map((m) => (
-              <MessageBubble key={m.id} m={m} t={t} />
+            {messages.map((m, i) => (
+              <MessageBubble
+                key={m.id}
+                m={m}
+                t={t}
+                busy={busy}
+                isLastAssistant={i === lastAssistantIdx}
+                onResend={(text) => void send(text)}
+                onRegenerate={() => void regenerate()}
+              />
             ))}
             {busy && (
               <div className={`${styles.bubbleRow} ${styles.bubbleRowAssistant}`}>
@@ -407,11 +467,39 @@ export default function ChatView({
   );
 }
 
-function MessageBubble({ m, t }: { m: Message; t: TFunction }) {
+function MessageBubble({
+  m,
+  t,
+  busy,
+  isLastAssistant,
+  onResend,
+  onRegenerate,
+}: {
+  m: Message;
+  t: TFunction;
+  busy: boolean;
+  isLastAssistant: boolean;
+  onResend: (text: string) => void;
+  onRegenerate: () => void;
+}) {
   if (m.role === "user") {
     return (
       <div className={`${styles.bubbleRow} ${styles.bubbleRowUser}`}>
-        <div className={`${styles.bubble} ${styles.bubbleUser}`}>{m.text}</div>
+        <div className={styles.bubbleColUser}>
+          <div className={`${styles.bubble} ${styles.bubbleUser}`}>{m.text}</div>
+          <div className={styles.msgActionsUser}>
+            <button
+              type="button"
+              className={styles.msgAction}
+              onClick={() => onResend(m.text)}
+              disabled={busy}
+              title={t("chat.actions.resend")}
+              aria-label={t("chat.actions.resend")}
+            >
+              <RefreshCw size={11} strokeWidth={2.2} />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -430,27 +518,119 @@ function MessageBubble({ m, t }: { m: Message; t: TFunction }) {
   }
 
   return (
+    <AssistantBubble
+      m={m}
+      t={t}
+      busy={busy}
+      isLast={isLastAssistant}
+      onRegenerate={onRegenerate}
+    />
+  );
+}
+
+function AssistantBubble({
+  m,
+  t,
+  busy,
+  isLast,
+  onRegenerate,
+}: {
+  m: Extract<Message, { role: "assistant" }>;
+  t: TFunction;
+  busy: boolean;
+  isLast: boolean;
+  onRegenerate: () => void;
+}) {
+  const versions = m.versions;
+  // 版本指针默认最新;重新回答追加版本后自动跳到新版
+  const [idx, setIdx] = useState(versions.length - 1);
+  useEffect(() => {
+    setIdx(versions.length - 1);
+  }, [versions.length]);
+  const v = versions[Math.min(idx, versions.length - 1)];
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard
+      .writeText(v.text)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  };
+
+  return (
     <div className={`${styles.bubbleRow} ${styles.bubbleRowAssistant}`}>
       <span className={styles.assistantAvatar} aria-hidden>
         <Bot size={13} strokeWidth={2} />
       </span>
       <div className={`${styles.bubble} ${styles.bubbleAssistant}`}>
         <div className={styles.bubbleMd}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{v.text}</ReactMarkdown>
         </div>
-        {m.citations.length > 0 && <CitationList citations={m.citations} t={t} />}
-        {m.promptTokens != null && m.completionTokens != null && (
-          <div className={styles.tokenMeta}>
-            <span title={t("chat.tokens.prompt")}>
-              <ArrowUp size={11} strokeWidth={2.2} />
-              {m.promptTokens.toLocaleString()}
+        {v.citations.length > 0 && <CitationList citations={v.citations} t={t} />}
+        <div className={styles.tokenMeta}>
+          {versions.length > 1 && (
+            <span className={styles.versionNav}>
+              <button
+                type="button"
+                className={styles.msgAction}
+                onClick={() => setIdx((i) => Math.max(0, i - 1))}
+                disabled={idx === 0}
+                aria-label={t("chat.actions.prevVersion")}
+              >
+                <ChevronLeft size={12} strokeWidth={2.2} />
+              </button>
+              {idx + 1}/{versions.length}
+              <button
+                type="button"
+                className={styles.msgAction}
+                onClick={() => setIdx((i) => Math.min(versions.length - 1, i + 1))}
+                disabled={idx === versions.length - 1}
+                aria-label={t("chat.actions.nextVersion")}
+              >
+                <ChevronRight size={12} strokeWidth={2.2} />
+              </button>
             </span>
-            <span title={t("chat.tokens.completion")}>
-              <ArrowDown size={11} strokeWidth={2.2} />
-              {m.completionTokens.toLocaleString()}
-            </span>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            className={styles.msgAction}
+            onClick={copy}
+            title={t("chat.actions.copy")}
+            aria-label={t("chat.actions.copy")}
+          >
+            {copied ? (
+              <Check size={11} strokeWidth={2.2} />
+            ) : (
+              <Copy size={11} strokeWidth={2.2} />
+            )}
+          </button>
+          {isLast && (
+            <button
+              type="button"
+              className={styles.msgAction}
+              onClick={onRegenerate}
+              disabled={busy}
+              title={t("chat.actions.regenerate")}
+              aria-label={t("chat.actions.regenerate")}
+            >
+              <RefreshCw size={11} strokeWidth={2.2} />
+            </button>
+          )}
+          {v.promptTokens != null && v.completionTokens != null && (
+            <>
+              <span title={t("chat.tokens.prompt")}>
+                <ArrowUp size={11} strokeWidth={2.2} />
+                {v.promptTokens.toLocaleString()}
+              </span>
+              <span title={t("chat.tokens.completion")}>
+                <ArrowDown size={11} strokeWidth={2.2} />
+                {v.completionTokens.toLocaleString()}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

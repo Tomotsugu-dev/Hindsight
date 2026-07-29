@@ -308,6 +308,7 @@ pub fn run() {
             commands::screen_memory::memory_session_text,
             // --- chat: 屏幕记忆问答 + 会话管理 ---
             commands::chat::chat_ask,
+            commands::chat::chat_regenerate,
             commands::chat::chat_inflight,
             commands::chat::chat_cancel,
             commands::chat::chat_list_conversations,

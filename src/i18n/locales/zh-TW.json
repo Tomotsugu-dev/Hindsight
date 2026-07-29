@@ -1511,6 +1511,13 @@
     "tokens": {
       "prompt": "本輪傳送給模型的 token(上行)",
       "completion": "模型生成的 token(下行)"
+    },
+    "actions": {
+      "copy": "複製",
+      "regenerate": "重新回答",
+      "resend": "再問一次",
+      "prevVersion": "上一版回答",
+      "nextVersion": "下一版回答"
     }
   }
 }

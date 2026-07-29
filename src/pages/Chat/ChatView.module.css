@@ -227,6 +227,52 @@
   gap: 2px;
 }
 
+.msgAction {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.msgAction:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.msgAction:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.versionNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.bubbleColUser {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 100%;
+}
+
+/* 与助手侧 tokenMeta 同字号同灰度;默认降透明度,悬停该行时亮起 */
+.msgActionsUser {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.bubbleColUser:hover .msgActionsUser {
+  opacity: 1;
+}
+
 .bubbleMd {
   font-size: 13px;
   line-height: 1.6;

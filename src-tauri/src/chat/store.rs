@@ -278,6 +278,21 @@ async fn append(
     Ok(())
 }
 
+/// 连续多条 assistant 折叠为最后一条(时间正序输入)。连续段只有一个来源:
+/// 重新生成的追加式落库——同一提问的多版回答,LLM 上下文只该看到最新版,
+/// 旧版(往往正是用户嫌弃的那条)进上下文既毒化后续回答又白吃 token。
+fn collapse_regenerated(rows: Vec<HistoryTurn>) -> Vec<HistoryTurn> {
+    let mut out: Vec<HistoryTurn> = Vec::with_capacity(rows.len());
+    for row in rows {
+        if row.role == "assistant" && out.last().is_some_and(|p| p.role == "assistant") {
+            *out.last_mut().unwrap() = row;
+        } else {
+            out.push(row);
+        }
+    }
+    out
+}
+
 /// 最近 n 条消息作为 LLM 历史(时间正序)。engine 只吃 role/content,引用不进历史。
 pub async fn recent_history(mem: &MemoryDb, conv_id: i64, n: usize) -> Result<Vec<HistoryTurn>> {
     let mut rows = mem
@@ -303,7 +318,56 @@ pub async fn recent_history(mem: &MemoryDb, conv_id: i64, n: usize) -> Result<Ve
         })
         .await?;
     rows.reverse();
-    Ok(rows)
+    Ok(collapse_regenerated(rows))
+}
+
+/// 重新生成用:最后一条 user 提问 + 它**之前**的历史(时间正序,最多 n 条)。
+/// 该提问之后的消息全部截断——上一次的回答不进上下文,避免模型照着旧答案抄。
+/// 会话没有 user 消息时返回 None。
+pub async fn last_question_with_history(
+    mem: &MemoryDb,
+    conv_id: i64,
+    n: usize,
+) -> Result<Option<(String, Vec<HistoryTurn>)>> {
+    let out = mem
+        .0
+        .call(move |conn| {
+            use rusqlite::OptionalExtension;
+            let last: Option<(i64, String)> = conn
+                .query_row(
+                    "SELECT id, content FROM chat_messages
+                     WHERE conversation_id = ?1 AND role = 'user'
+                     ORDER BY id DESC LIMIT 1",
+                    rusqlite::params![conv_id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()
+                .db()?;
+            let Some((last_id, question)) = last else {
+                return Ok(None);
+            };
+            let mut stmt = conn
+                .prepare(
+                    "SELECT role, content FROM chat_messages
+                     WHERE conversation_id = ?1 AND id < ?2
+                     ORDER BY id DESC LIMIT ?3",
+                )
+                .db()?;
+            let mut rows = stmt
+                .query_map(rusqlite::params![conv_id, last_id, n as i64], |r| {
+                    Ok(HistoryTurn {
+                        role: r.get(0)?,
+                        content: r.get(1)?,
+                    })
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            rows.reverse();
+            Ok(Some((question, collapse_regenerated(rows))))
+        })
+        .await?;
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -369,6 +433,59 @@ mod tests {
         let hist = recent_history(&mem, id, 4).await.unwrap();
         let flat: Vec<String> = hist.iter().map(|h| h.content.clone()).collect();
         assert_eq!(flat, vec!["问 3", "答 3", "问 4", "答 4"]);
+    }
+
+    /// 重新生成后的历史折叠:同一提问的多版回答只有最新版进 LLM 上下文。
+    #[tokio::test]
+    async fn history_collapses_regenerated_answers() {
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let id = create_conversation(&mem, "t").await.unwrap();
+        append_user(&mem, id, "问 1").await.unwrap();
+        append_assistant(&mem, id, "答 1 旧版", &[], false, (0, 0)).await.unwrap();
+        append_assistant(&mem, id, "答 1 新版", &[], false, (0, 0)).await.unwrap();
+        append_user(&mem, id, "问 2").await.unwrap();
+
+        let flat: Vec<String> = recent_history(&mem, id, 6)
+            .await
+            .unwrap()
+            .iter()
+            .map(|h| h.content.clone())
+            .collect();
+        assert_eq!(flat, vec!["问 1", "答 1 新版", "问 2"], "旧版回答不进上下文");
+
+        // last_question_with_history 的历史侧走同一折叠
+        let (q, hist) = last_question_with_history(&mem, id, 6)
+            .await
+            .unwrap()
+            .expect("有提问");
+        assert_eq!(q, "问 2");
+        let flat: Vec<String> = hist.iter().map(|h| h.content.clone()).collect();
+        assert_eq!(flat, vec!["问 1", "答 1 新版"]);
+    }
+
+    /// 重新生成的取材:返回最后一条提问,历史截到它之前(旧回答不进上下文)。
+    #[tokio::test]
+    async fn last_question_cuts_history_before_it() {
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let id = create_conversation(&mem, "t").await.unwrap();
+        assert!(
+            last_question_with_history(&mem, id, 6).await.unwrap().is_none(),
+            "空会话没有可重新生成的提问"
+        );
+        append_user(&mem, id, "问 1").await.unwrap();
+        append_assistant(&mem, id, "答 1", &[], false, (0, 0)).await.unwrap();
+        append_user(&mem, id, "问 2").await.unwrap();
+        append_assistant(&mem, id, "答 2(要被截掉)", &[], false, (0, 0))
+            .await
+            .unwrap();
+
+        let (q, hist) = last_question_with_history(&mem, id, 6)
+            .await
+            .unwrap()
+            .expect("有提问");
+        assert_eq!(q, "问 2");
+        let flat: Vec<String> = hist.iter().map(|h| h.content.clone()).collect();
+        assert_eq!(flat, vec!["问 1", "答 1"], "问 2 及其后的回答都不进历史");
     }
 
     #[tokio::test]

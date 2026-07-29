@@ -1511,6 +1511,13 @@
     "tokens": {
       "prompt": "このターンでモデルに送信した token(上り)",
       "completion": "モデルが生成した token(下り)"
+    },
+    "actions": {
+      "copy": "コピー",
+      "regenerate": "回答をやり直す",
+      "resend": "もう一度質問",
+      "prevVersion": "前の回答",
+      "nextVersion": "次の回答"
     }
   }
 }

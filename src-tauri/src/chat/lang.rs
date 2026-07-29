@@ -909,6 +909,16 @@ impl ChatLang {
     }
 
     /// 同会话并发拒的用户可见文案(唯一直接展示给用户而非模型的条目)。
+    pub fn err_nothing_to_regenerate(self) -> &'static str {
+        match self {
+            Self::ZhHans => "这个会话还没有可重新回答的提问。",
+            Self::ZhHant => "這個會話還沒有可重新回答的提問。",
+            Self::En => "This conversation has no question to answer again.",
+            Self::Ja => "この会話にはやり直せる質問がまだありません。",
+            Self::Pt => "Esta conversa ainda não tem uma pergunta para responder novamente.",
+        }
+    }
+
     pub fn err_conversation_busy(self) -> &'static str {
         match self {
             Self::ZhHans => "这个会话正在回答上一个问题,等它完成或点停止后再发。",

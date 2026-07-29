@@ -995,6 +995,10 @@ export const api = {
     locale?: string,
     askId?: string,
   ) => invoke<ChatAskResult>("chat_ask", { question, conversationId, locale, askId }),
+  /** 重新回答会话里最后一条提问:追加新版本落库(不删旧回答),
+   *  上下文历史由后端截断到该提问之前。 */
+  chatRegenerate: (conversationId: number, locale?: string, askId?: string) =>
+    invoke<ChatAskResult>("chat_regenerate", { conversationId, locale, askId }),
   /** 会话是否正在生成回答；是则返回该次问答的 askId（停止按钮的取消句柄）。 */
   chatInflight: (conversationId: number) =>
     invoke<string | null>("chat_inflight", { conversationId }),

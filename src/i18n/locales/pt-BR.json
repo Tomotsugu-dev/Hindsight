@@ -1511,6 +1511,13 @@
     "tokens": {
       "prompt": "Tokens enviados ao modelo neste turno (upstream)",
       "completion": "Tokens gerados pelo modelo (downstream)"
+    },
+    "actions": {
+      "copy": "Copiar",
+      "regenerate": "Responder novamente",
+      "resend": "Perguntar novamente",
+      "prevVersion": "Resposta anterior",
+      "nextVersion": "Próxima resposta"
     }
   }
 }

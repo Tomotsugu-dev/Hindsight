@@ -165,6 +165,77 @@ pub async fn chat_ask(
             .map_err(String::from)?,
     };
 
+    run_ask(
+        app,
+        pool.inner(),
+        supervisor.inner(),
+        db,
+        inflight.inner(),
+        conv_id,
+        AskInput::New(question),
+        lang,
+        ask_id,
+    )
+    .await
+}
+
+/// 重新回答会话里最后一条提问。追加式:不删旧回答,新回答追加在时间线尾部
+/// (前端把连续回答折叠成一个气泡的多版本切换);上下文历史截断到该提问之前,
+/// 上一次的回答不进上下文。
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn chat_regenerate(
+    app: tauri::AppHandle,
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+    mem: State<'_, MemoryState>,
+    inflight: State<'_, ChatInflight>,
+    conversation_id: i64,
+    locale: Option<String>,
+    ask_id: Option<String>,
+) -> Result<ChatAskResult, String> {
+    let db = require(&mem)?;
+    let lang = crate::chat::lang::ChatLang::from_tag(locale.as_deref());
+    let ask_id = ask_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    run_ask(
+        app,
+        pool.inner(),
+        supervisor.inner(),
+        db,
+        inflight.inner(),
+        conversation_id,
+        AskInput::Regenerate,
+        lang,
+        ask_id,
+    )
+    .await
+}
+
+/// 一次问答的取材来源:决定 user 行是否落库、历史窗口怎么取。
+enum AskInput {
+    /// 新提问:读历史后落 user 行。
+    New(String),
+    /// 重新回答最后一条提问:不落新 user 行,历史截到该提问之前。
+    Regenerate,
+}
+
+/// chat_ask / chat_regenerate 的公共主体:注册 in-flight → 按来源取材 →
+/// 路由引擎 → 可取消地跑 agent 循环 → 追加 assistant 行。
+/// 注册必须在取材之前:同会话并发时第二问在落库前就被拒,不产生散问。
+#[allow(clippy::too_many_arguments)]
+async fn run_ask(
+    app: tauri::AppHandle,
+    pool: &DbPool,
+    supervisor: &Arc<EngineSupervisor>,
+    db: &MemoryDb,
+    inflight: &ChatInflight,
+    conv_id: i64,
+    input: AskInput,
+    lang: crate::chat::lang::ChatLang,
+    ask_id: String,
+) -> Result<ChatAskResult, String> {
     // 注册 in-flight:同会话已有生成中的问答 → 明确报忙(本地引擎单槽,
     // 放进去也只是静默排队装死)。注册成功后由 guard 负责摘除 + 广播。
     let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel::<()>();
@@ -182,23 +253,32 @@ pub async fn chat_ask(
         );
     }
     let mut guard = InflightGuard {
-        map: inflight.inner(),
+        map: inflight,
         app: app.clone(),
         conv_id,
         ask_id,
         ok: false,
     };
 
-    // 先读历史(此时本条 user 消息尚未入库,不会自包含),再落提问——
-    // LLM 失败时提问也保留,重载后显示"有问无答",可再问
-    let history = store::recent_history(db, conv_id, HISTORY_TURNS)
-        .await
-        .map_err(String::from)?;
-    store::append_user(db, conv_id, &question)
-        .await
-        .map_err(String::from)?;
+    // 按来源取材。新提问:先读历史(此时本条 user 消息尚未入库,不会自包含)
+    // 再落提问——LLM 失败时提问也保留,重载后显示"有问无答",可再问。
+    let (question, history) = match input {
+        AskInput::New(q) => {
+            let history = store::recent_history(db, conv_id, HISTORY_TURNS)
+                .await
+                .map_err(String::from)?;
+            store::append_user(db, conv_id, &q)
+                .await
+                .map_err(String::from)?;
+            (q, history)
+        }
+        AskInput::Regenerate => store::last_question_with_history(db, conv_id, HISTORY_TURNS)
+            .await
+            .map_err(String::from)?
+            .ok_or_else(|| lang.err_nothing_to_regenerate().to_string())?,
+    };
 
-    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let cfg = settings::load(pool).await.map_err(String::from)?;
     let ai = &cfg.ai;
 
     // 路由走独立的 chat 槽位:chat_main 空 = 自动(云端配好走云端,否则同 step 2);
@@ -273,7 +353,7 @@ pub async fn chat_ask(
     // 会话呈"有问无答"可重问;guard 广播 ok=false 让各处视图清掉打字指示。
     let answer = tokio::select! {
         _ = &mut cancel_rx => {
-            log::info!("chat_ask 被用户停止(会话 {conv_id})");
+            log::info!("问答被用户停止(会话 {conv_id})");
             return Ok(ChatAskResult {
                 conversation_id: conv_id,
                 cancelled: true,
