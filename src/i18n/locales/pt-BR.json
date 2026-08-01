@@ -996,7 +996,13 @@
       "groupTextHint": "Resumos de segmento · Chat",
       "testTextButton": "Testar API de texto",
       "testStepConn": "Rede e autenticação",
-      "testStepChat": "Modelo {{model}} responde"
+      "testStepChat": "Modelo {{model}} responde",
+      "profilesLabel": "Perfis salvos",
+      "saveProfile": "Salvar perfil atual",
+      "saveProfileHint": "Guarda o endpoint, a chave de API e o modelo atuais como um perfil para troca com um clique",
+      "deleteProfileAria": "Excluir perfil {{name}}",
+      "fetchModels": "Buscar modelos disponíveis no endpoint",
+      "modelsFetched": "{{count}} modelos obtidos — digite no campo de modelo para pesquisar"
     },
     "autoSummary": {
       "sectionTitle": "Agendamentos",
@@ -1004,7 +1010,6 @@
       "enableLabel": "Resumo automático",
       "enableHint": "Gera o relatório diário de hoje no horário definido (um dia anterior faltante também é preenchido) e o semanal da semana passada. Falhas não são repetidas; relatórios mensais entrarão quando disponíveis",
       "timeLabel": "Agendar horário",
-      "timeHint": "Cada horário gera/atualiza o relatório de hoje (horários posteriores sobrescrevem); se perdido, recupera na próxima inicialização",
       "ocrDailyLabel": "OCR automático",
       "ocrDailyDescription": "Lê o acúmulo de capturas no horário definido diariamente",
       "addTimeAria": "Adicionar um horário",

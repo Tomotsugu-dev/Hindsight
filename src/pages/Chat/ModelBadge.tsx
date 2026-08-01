@@ -4,6 +4,7 @@ import { Check, ChevronDown, Cloud, HardDrive } from "lucide-react";
 import {
   api,
   SUMMARY_CLOUD_SENTINEL,
+  type ExternalProfile,
   type ModelEntry,
 } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
@@ -14,12 +15,14 @@ import styles from "./ChatPage.module.css";
 /**
  * 当前 Chat 模型 badge + 下拉选择器:
  * - 云端 = 琥珀警告色(数据出设备),本地 = 灰;
- * - 点开可切换:云端 API(已配置时)/ 任一本地 GGUF。写入独立的 chat 槽位
- *   (setStepModel "chat"),不影响段总结的模型选择。
+ * - 点开可切换:任一已保存的云端配置 / 当前未保存的云端配置 / 任一本地 GGUF。
+ *   本地切换写独立的 chat 槽位(setStepModel "chat"),不影响段总结的模型选择;
+ *   选云端配置会把四元组应用为当前激活配置(与设置页「应用配置」一致,
+ *   段总结走云端时也会跟着换模型)。
  */
 export default function ModelBadge() {
   const { t } = useTranslation();
-  const { settings, reload } = useSettings();
+  const { settings, update, reload } = useSettings();
   const [open, setOpen] = useState(false);
   const [localModels, setLocalModels] = useState<ModelEntry[]>([]);
   const wrapRef = useRef<HTMLSpanElement>(null);
@@ -71,6 +74,39 @@ export default function ModelBadge() {
     }
   };
 
+  /** 当前激活的云端四元组是否就是这个已存配置(打勾用,同设置页 chips) */
+  const matchesActive = (p: ExternalProfile) =>
+    p.provider === ai.externalProvider &&
+    p.endpoint === ai.endpoint.trim() &&
+    p.apiKey === ai.apiKey.trim() &&
+    p.model === ai.model.trim();
+
+  const selectProfile = async (p: ExternalProfile) => {
+    setOpen(false);
+    if (cloud && matchesActive(p)) return;
+    try {
+      if (!cloud) {
+        // 本地→云端:chat 槽位切到 sentinel 顺带停掉本地 server(与云端项一致)
+        await api.setStepModel("chat", SUMMARY_CLOUD_SENTINEL, null);
+      }
+      // 四元组 + chatMain + 总开关一次乐观补丁走 debounce 持久化;
+      // update 每次带全量 ai 对象,最后一次 flush 自然盖掉上面的中间写
+      update({
+        ai: {
+          ...ai,
+          chatMain: SUMMARY_CLOUD_SENTINEL,
+          externalEnabled: true,
+          externalProvider: p.provider || "custom",
+          endpoint: p.endpoint,
+          apiKey: p.apiKey,
+          model: p.model,
+        },
+      });
+    } catch (e) {
+      logError("chat.applyProfile", e);
+    }
+  };
+
   return (
     <span ref={wrapRef} className={styles.badgeWrap}>
       <button
@@ -97,11 +133,27 @@ export default function ModelBadge() {
 
       {open && (
         <div className={styles.badgeMenu} role="menu">
-          {chatCloudReady(ai) && (
+          {ai.externalProfiles.map((p, i) => (
+            <button
+              key={`${p.endpoint}|${p.model}|${i}`}
+              type="button"
+              role="menuitem"
+              className={styles.badgeMenuItem}
+              title={p.endpoint}
+              onClick={() => void selectProfile(p)}
+            >
+              <Cloud size={12} strokeWidth={2.2} className={styles.badgeMenuCloudIcon} />
+              <span className={styles.badgeMenuLabel}>{p.name || p.model}</span>
+              {cloud && matchesActive(p) && <Check size={12} strokeWidth={2.4} />}
+            </button>
+          ))}
+          {/* 当前激活的云端配置没存成 profile 时,单独给一项,别让它没入口 */}
+          {chatCloudReady(ai) && !ai.externalProfiles.some(matchesActive) && (
             <button
               type="button"
               role="menuitem"
               className={styles.badgeMenuItem}
+              title={ai.endpoint}
               onClick={() => void select(SUMMARY_CLOUD_SENTINEL)}
             >
               <Cloud size={12} strokeWidth={2.2} className={styles.badgeMenuCloudIcon} />
@@ -126,9 +178,11 @@ export default function ModelBadge() {
               )}
             </button>
           ))}
-          {localModels.length === 0 && !chatCloudReady(ai) && (
-            <p className={styles.badgeMenuEmpty}>{t("chat.model.empty")}</p>
-          )}
+          {localModels.length === 0 &&
+            ai.externalProfiles.length === 0 &&
+            !chatCloudReady(ai) && (
+              <p className={styles.badgeMenuEmpty}>{t("chat.model.empty")}</p>
+            )}
         </div>
       )}
     </span>

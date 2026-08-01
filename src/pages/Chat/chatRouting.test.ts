@@ -49,6 +49,7 @@ function baseAi(patch: Partial<AiConfig> = {}): AiConfig {
     autoSummary: false,
   autoSummaryAt: null,
   autoSummaryTimes: [],
+  externalProfiles: [],
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,

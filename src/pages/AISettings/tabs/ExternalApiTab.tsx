@@ -3,18 +3,21 @@ import { useTranslation } from "react-i18next";
 import {
   Check,
   Cloud,
+  Download,
   Eye,
   EyeOff,
   Info,
   Loader2,
+  Plus,
   Type,
+  X,
   XCircle,
 } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
-import { api, type AiConfig } from "../../../api/hindsight";
+import { api, type AiConfig, type ExternalProfile } from "../../../api/hindsight";
 import { useAiSettings } from "../shared/useAiSettings";
 import styles from "../AISettings.module.css";
 
@@ -155,6 +158,91 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
   const { t } = useTranslation();
   const [showKey, setShowKey] = useState(false);
   const [textTest, setTextTest] = useState<ApiTestState>(TEST_IDLE);
+  // 「拉取模型」:GET /models 的结果灌进 model 输入框的 datalist(原生可搜)
+  const [modelList, setModelList] = useState<string[]>([]);
+  const [modelFetch, setModelFetch] = useState<"idle" | "running" | "ok" | "fail">("idle");
+  const [modelFetchMsg, setModelFetchMsg] = useState("");
+  // 自绘建议下拉(datalist 在 WKWebView 体验极差,弃用):聚焦即开,打字过滤
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+
+  /** 当前激活的四元组是否与某个已存配置一致(chips 高亮用) */
+  const profileMatches = (p: ExternalProfile) =>
+    p.provider === ai.externalProvider &&
+    p.endpoint === ai.endpoint.trim() &&
+    p.apiKey === ai.apiKey.trim() &&
+    p.model === ai.model.trim();
+
+  const applyProfile = (p: ExternalProfile) => {
+    updateAi({
+      externalProvider: p.provider || "custom",
+      endpoint: p.endpoint,
+      apiKey: p.apiKey,
+      model: p.model,
+    });
+    setTextTest(TEST_IDLE);
+    setModelList([]);
+    setModelFetch("idle");
+  };
+
+  const saveCurrentProfile = () => {
+    const endpoint = ai.endpoint.trim();
+    if (!endpoint || ai.externalProfiles.length >= 10) return;
+    if (ai.externalProfiles.some(profileMatches)) return; // 完全相同的不重复存
+    let host = endpoint;
+    try {
+      host = new URL(endpoint).host;
+    } catch {
+      /* 手填的残缺地址就原样展示 */
+    }
+    const name = `${ai.externalProvider} · ${ai.model.trim() || host}`;
+    updateAi({
+      externalProfiles: [
+        ...ai.externalProfiles,
+        {
+          name,
+          provider: ai.externalProvider,
+          endpoint,
+          apiKey: ai.apiKey.trim(),
+          model: ai.model.trim(),
+        },
+      ],
+    });
+  };
+
+  const deleteProfile = (idx: number) => {
+    updateAi({
+      externalProfiles: ai.externalProfiles.filter((_, i) => i !== idx),
+    });
+  };
+
+  /** 拉取云端可用模型:复用 testAiEndpoint(GET /models,上限 500)。 */
+  const fetchModels = async () => {
+    const endpoint = ai.endpoint.trim();
+    if (!endpoint) {
+      setModelFetch("fail");
+      setModelFetchMsg(t("aiSettings.external.missingFields"));
+      return;
+    }
+    setModelFetch("running");
+    setModelFetchMsg("");
+    try {
+      const resp = await api.testAiEndpoint(endpoint, ai.apiKey.trim() || undefined);
+      if (!resp.ok) {
+        setModelFetch("fail");
+        setModelFetchMsg(resp.message);
+        return;
+      }
+      setModelList(resp.models);
+      setModelMenuOpen(resp.models.length > 0);
+      setModelFetch("ok");
+      setModelFetchMsg(
+        t("aiSettings.external.modelsFetched", { count: resp.models.length }),
+      );
+    } catch (e) {
+      setModelFetch("fail");
+      setModelFetchMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const provider = (PROVIDER_KEYS as string[]).includes(ai.externalProvider)
     ? (ai.externalProvider as ProviderKey)
@@ -278,6 +366,35 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
             icon={Type}
             description={t("aiSettings.external.groupTextHint")}
           >
+          {ai.externalProfiles.length > 0 && (
+            <Row label={t("aiSettings.external.profilesLabel")} block>
+              <div className={styles.profileChipRow}>
+                {ai.externalProfiles.map((p, i) => (
+                  <span key={`${p.endpoint}-${i}`} className={styles.profileChip}>
+                    <button
+                      type="button"
+                      className={styles.profileChipBody}
+                      onClick={() => applyProfile(p)}
+                      title={p.endpoint}
+                    >
+                      {p.name || p.endpoint}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.profileChipDel}
+                      onClick={() => deleteProfile(i)}
+                      aria-label={t("aiSettings.external.deleteProfileAria", {
+                        name: p.name || p.endpoint,
+                      })}
+                    >
+                      <X size={10} strokeWidth={2.5} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </Row>
+          )}
+
           <Row label={t("aiSettings.external.providerLabel")}>
             <SimplePicker<ProviderKey>
               value={provider}
@@ -344,19 +461,99 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
           </Row>
 
           <Row label={t("aiSettings.external.modelLabel")} block>
-            <input
-              type="text"
-              className={styles.externalInput}
-              value={ai.model}
-              onChange={(e) => updateAi({ model: e.target.value })}
-              placeholder={modelHint}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoCorrect="off"
-            />
+            <div className={styles.modelComboWrap}>
+              <div className={styles.externalKeyRow}>
+                <input
+                  type="text"
+                  className={styles.externalInput}
+                  value={ai.model}
+                  onChange={(e) => {
+                    updateAi({ model: e.target.value });
+                    if (modelList.length > 0) setModelMenuOpen(true);
+                  }}
+                  onFocus={() => {
+                    if (modelList.length > 0) setModelMenuOpen(true);
+                  }}
+                  onBlur={() => setModelMenuOpen(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setModelMenuOpen(false);
+                  }}
+                  placeholder={modelHint}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+                <button
+                  type="button"
+                  className={styles.externalEyeBtn}
+                  onClick={() => void fetchModels()}
+                  disabled={modelFetch === "running"}
+                  aria-label={t("aiSettings.external.fetchModels")}
+                  title={t("aiSettings.external.fetchModels")}
+                >
+                  {modelFetch === "running" ? (
+                    <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
+                  ) : (
+                    <Download size={14} strokeWidth={1.85} />
+                  )}
+                </button>
+              </div>
+              {modelMenuOpen &&
+                (() => {
+                  const q = ai.model.trim().toLowerCase();
+                  const hits = q
+                    ? modelList.filter((m) => m.toLowerCase().includes(q))
+                    : modelList;
+                  if (hits.length === 0) return null;
+                  return (
+                    <div className={styles.modelSuggestMenu} role="listbox">
+                      {hits.slice(0, 100).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="option"
+                          aria-selected={m === ai.model}
+                          className={styles.modelSuggestOption}
+                          // mousedown + preventDefault:抢在输入框 blur 之前落点
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            updateAi({ model: m });
+                            setModelMenuOpen(false);
+                          }}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+            </div>
+            {modelFetch === "ok" && (
+              <span className={styles.externalTestOk}>{modelFetchMsg}</span>
+            )}
+            {modelFetch === "fail" && (
+              <span className={styles.externalTestFail}>
+                <XCircle size={13} strokeWidth={2} />
+                {modelFetchMsg}
+              </span>
+            )}
           </Row>
 
           <div className={styles.externalActionRow}>
+            <button
+              type="button"
+              className={styles.externalTestBtn}
+              onClick={saveCurrentProfile}
+              disabled={
+                !ai.endpoint.trim() ||
+                ai.externalProfiles.length >= 10 ||
+                ai.externalProfiles.some(profileMatches)
+              }
+              title={t("aiSettings.external.saveProfileHint")}
+            >
+              <Plus size={13} strokeWidth={2.25} />
+              {t("aiSettings.external.saveProfile")}
+            </button>
             <button
               type="button"
               className={styles.externalTestBtn}

@@ -996,7 +996,13 @@
       "groupTextHint": "Segment summaries · Chat",
       "testTextButton": "Test text API",
       "testStepConn": "Network & authentication",
-      "testStepChat": "Model {{model}} responds"
+      "testStepChat": "Model {{model}} responds",
+      "profilesLabel": "Saved profiles",
+      "saveProfile": "Save current profile",
+      "saveProfileHint": "Store the current endpoint, API key and model as a profile for one-click switching",
+      "deleteProfileAria": "Delete profile {{name}}",
+      "fetchModels": "Fetch available models from the endpoint",
+      "modelsFetched": "{{count}} models fetched — type in the model box to search"
     },
     "autoSummary": {
       "sectionTitle": "Schedules",
@@ -1004,7 +1010,6 @@
       "enableLabel": "Auto summary",
       "enableHint": "Generates today's daily report at the set time (a missing previous day is filled in too) and last week's weekly report. Failed runs are not retried; monthly reports will join once available",
       "timeLabel": "Schedule a time",
-      "timeHint": "Each time point generates/refreshes today's report (later points overwrite earlier ones); catches up on next launch if missed",
       "ocrDailyLabel": "Auto OCR",
       "ocrDailyDescription": "Reads the screenshot backlog at the set time daily",
       "addTimeAria": "Add a time point",

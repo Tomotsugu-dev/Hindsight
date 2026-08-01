@@ -996,7 +996,13 @@
       "groupTextHint": "段總結 · 「對話」ChatBot",
       "testTextButton": "測試文本 API",
       "testStepConn": "網路與認證",
-      "testStepChat": "模型 {{model}} 可用"
+      "testStepChat": "模型 {{model}} 可用",
+      "profilesLabel": "已儲存的配置",
+      "saveProfile": "儲存目前配置",
+      "saveProfileHint": "把目前的服務地址、API Key 和模型存為一組,隨時一鍵切換",
+      "deleteProfileAria": "刪除配置 {{name}}",
+      "fetchModels": "從伺服端拉取可用模型",
+      "modelsFetched": "已拉取 {{count}} 個模型,輸入框內可搜尋選擇"
     },
     "autoSummary": {
       "sectionTitle": "定時計劃",
@@ -1004,7 +1010,6 @@
       "enableLabel": "自動總結",
       "enableHint": "每天到點自動生成當天的日報(前一天缺報也會補齊),每週自動補上一週的週報。生成失敗不會自動重試;月報功能上線後將自動納入",
       "timeLabel": "指定處理時間",
-      "timeHint": "每個時間點都會生成/刷新當天日報(後點覆蓋前點);錯過則下次啟動時補上",
       "ocrDailyLabel": "自動 OCR",
       "ocrDailyDescription": "每天到點自動辨識堆積的截圖",
       "addTimeAria": "新增一個時間點",

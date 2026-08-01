@@ -996,7 +996,13 @@
       "groupTextHint": "時間帯要約 · チャット",
       "testTextButton": "テキスト API をテスト",
       "testStepConn": "ネットワークと認証",
-      "testStepChat": "モデル {{model}} が応答"
+      "testStepChat": "モデル {{model}} が応答",
+      "profilesLabel": "保存済み設定",
+      "saveProfile": "現在の設定を保存",
+      "saveProfileHint": "現在のエンドポイント・API キー・モデルをセットで保存し、ワンクリックで切り替え",
+      "deleteProfileAria": "設定 {{name}} を削除",
+      "fetchModels": "エンドポイントから利用可能なモデルを取得",
+      "modelsFetched": "{{count}} 個のモデルを取得しました。入力欄で検索できます"
     },
     "autoSummary": {
       "sectionTitle": "定時スケジュール",
@@ -1004,7 +1010,6 @@
       "enableLabel": "自動サマリー",
       "enableHint": "毎日設定時刻に当日の日報を自動生成します(前日分が未生成なら補完)。週報は先週分を自動補完します。失敗時の自動リトライはありません。月報は機能提供後に自動で対象になります",
       "timeLabel": "処理時刻を指定",
-      "timeHint": "各時刻に当日の日報を生成/更新します(後の時刻が前の内容を上書き)。実行できなかった場合は次回起動時に補完",
       "ocrDailyLabel": "自動 OCR",
       "ocrDailyDescription": "毎日設定時刻に未処理のスクリーンショットを自動認識",
       "addTimeAria": "時刻を追加",

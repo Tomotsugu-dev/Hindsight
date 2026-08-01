@@ -420,6 +420,15 @@ export interface SegmentSummaryRow {
 
 /** AI 子系统的所有用户配置；嵌进 Settings.ai。
  *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
+export interface ExternalProfile {
+  /** 显示名(自动生成:provider · model) */
+  name: string;
+  provider: string;
+  endpoint: string;
+  apiKey: string;
+  model: string;
+}
+
 export interface AiConfig {
   /** 外部云端 API base URL（OpenAI 兼容，不含 /chat/completions）。
    *  仅在 externalEnabled = true 时生效。 */
@@ -478,6 +487,8 @@ export interface AiConfig {
   /** 自动总结：日/周结束后后台自动补齐日报与周报，无需手动点「开始总结」。
    *  失败的目标不会自动重试（防坏配置反复烧钱）；月报生成器落地后自动纳入。 */
   autoSummary: boolean;
+  /** 已保存的云端 API 配置(上限 10;应用 = 拷进激活字段) */
+  externalProfiles: ExternalProfile[];
   /** 自动总结定时(旧单时刻字段,仅兼容读取;写入走 autoSummaryTimes) */
   autoSummaryAt: string | null;
   /** 自动总结时间点列表("HH:MM",保持添加顺序,上限 6);每个点生成/刷新当天日报 */

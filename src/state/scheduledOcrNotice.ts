@@ -21,25 +21,29 @@ const SCHEDULED_OCR_STARTED_EVENT = "memory://scheduled-ocr-started";
 
 let inited = false;
 
+async function notify(pending: number): Promise<void> {
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      granted = (await requestPermission()) === "granted";
+    }
+    if (!granted) return; // 用户拒绝授权:静默,不骚扰
+    sendNotification({
+      title: i18next.t("notifications.scheduledOcr.title"),
+      body: i18next.t("notifications.scheduledOcr.body", {
+        count: pending,
+      }),
+    });
+  } catch (e) {
+    logWarn("scheduledOcrNotice", e);
+  }
+}
+
 /** 应用启动时调用一次;重复调用 no-op。 */
 export function initScheduledOcrNotice(): void {
   if (inited) return;
   inited = true;
-  void listen<{ pending: number }>(SCHEDULED_OCR_STARTED_EVENT, async (ev) => {
-    try {
-      let granted = await isPermissionGranted();
-      if (!granted) {
-        granted = (await requestPermission()) === "granted";
-      }
-      if (!granted) return; // 用户拒绝授权:静默,不骚扰
-      sendNotification({
-        title: i18next.t("notifications.scheduledOcr.title"),
-        body: i18next.t("notifications.scheduledOcr.body", {
-          count: ev.payload.pending,
-        }),
-      });
-    } catch (e) {
-      logWarn("scheduledOcrNotice", e);
-    }
+  void listen<{ pending: number }>(SCHEDULED_OCR_STARTED_EVENT, (ev) => {
+    void notify(ev.payload.pending);
   });
 }

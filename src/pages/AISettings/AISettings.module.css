@@ -1863,3 +1863,103 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* 云端 API:已保存配置 chips */
+.profileChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profileChip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: transparent;
+  overflow: hidden;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
+}
+
+.profileChipBody {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: var(--font-weight-500);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.profileChipDel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 120ms ease-out;
+}
+
+.profileChipDel:hover {
+  color: #d92d20;
+}
+
+/* 模型建议下拉(自绘 combobox;datalist 在 WKWebView 不可用) */
+.modelComboWrap {
+  position: relative;
+  width: 100%;
+}
+
+.modelSuggestMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: var(--z-dropdown);
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  background: var(--surface-card);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  box-shadow:
+    0 6px 18px rgba(20, 20, 40, 0.12),
+    0 1px 2px rgba(20, 20, 40, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.modelSuggestOption {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 120ms ease-out;
+}
+
+.modelSuggestOption:hover,
+.modelSuggestOption[aria-selected="true"] {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}

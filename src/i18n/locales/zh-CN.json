@@ -996,7 +996,13 @@
       "groupTextHint": "段总结 · 「对话」ChatBot",
       "testTextButton": "测试文本 API",
       "testStepConn": "网络与认证",
-      "testStepChat": "模型 {{model}} 可用"
+      "testStepChat": "模型 {{model}} 可用",
+      "profilesLabel": "已保存的配置",
+      "saveProfile": "保存当前配置",
+      "saveProfileHint": "把当前的服务地址、API Key 和模型存为一组,随时一键切换",
+      "deleteProfileAria": "删除配置 {{name}}",
+      "fetchModels": "从服务端拉取可用模型",
+      "modelsFetched": "已拉取 {{count}} 个模型,输入框内可搜索选择"
     },
     "autoSummary": {
       "sectionTitle": "定时计划",
@@ -1004,7 +1010,6 @@
       "enableLabel": "自动总结",
       "enableHint": "每天到点自动生成当天的日报(前一天缺报也会补齐),每周自动补上一周的周报。生成失败不会自动重试;月报功能上线后将自动纳入",
       "timeLabel": "指定处理时间",
-      "timeHint": "每个时间点都会生成/刷新当天日报(后点覆盖前点);错过则下次启动时补上",
       "ocrDailyLabel": "自动 OCR",
       "ocrDailyDescription": "每天到点自动识别堆积的截图",
       "addTimeAria": "添加一个时间点",

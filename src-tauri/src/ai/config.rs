@@ -37,6 +37,20 @@ pub struct AiSegment {
 ///
 /// `#[serde(default)]` 让旧 settings JSON（没有 ai 字段）反序列化时自动填默认值，
 /// 不需要 schema migration。
+/// 云端 API 的一组已保存配置(provider/端点/Key/模型)。
+/// 只是"预设收藏":应用某组 = 把四个字段拷进 AiConfig 的激活字段,
+/// 聊天/总结消费方仍只读激活字段,不感知本列表。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExternalProfile {
+    /// 显示名(前端生成/用户可读),仅用于列表展示
+    pub name: String,
+    pub provider: String,
+    pub endpoint: String,
+    pub api_key: String,
+    pub model: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AiConfig {
@@ -57,6 +71,9 @@ pub struct AiConfig {
     /// Provider 预设标识（"openai" / "deepseek" / "openrouter" / "together" / "groq" / "custom"）。
     /// 后端只用来 sanitize；UI 用它决定 Base URL / Model 的 placeholder。
     pub external_provider: String,
+    /// 已保存的云端 API 配置(上限 10;应用/删除见前端 云端 API 页)。
+    #[serde(default)]
+    pub external_profiles: Vec<ExternalProfile>,
     /// 用户对自己的简短描述，AI 总结时拼进 system prompt
     pub user_brief: String,
     /// 一天的时段划分；UI 上是连续条
@@ -265,6 +282,7 @@ impl Default for AiConfig {
             api_key: String::new(),
             external_enabled: false,
             external_provider: "openai".to_string(),
+            external_profiles: Vec::new(),
             user_brief: String::new(),
             segments: default_segments_for(lang),
             excluded_categories: vec!["other".to_string()],
@@ -395,6 +413,22 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     // batch ≥ 32 是 llama-server 不接受过小值的安全下限
     // ctx 上限给 256K（极限场景，超出基本任何卡都装不下，没必要再大）
     // parallel_slots ≥ 1，给 32 上限避免误填出格的值
+    // 已保存云端配置:字段 trim;端点为空的条目没有意义,丢弃;上限 10
+    next.external_profiles = next
+        .external_profiles
+        .into_iter()
+        .map(|mut p| {
+            p.name = p.name.trim().to_string();
+            p.provider = p.provider.trim().to_string();
+            p.endpoint = p.endpoint.trim().to_string();
+            p.api_key = p.api_key.trim().to_string();
+            p.model = p.model.trim().to_string();
+            p
+        })
+        .filter(|p| !p.endpoint.is_empty())
+        .take(10)
+        .collect();
+
     // 自动总结时间:必须是合法 "HH:MM",否则视为未设置(尽快模式)
     next.auto_summary_at = next.auto_summary_at.and_then(|s| {
         let s = s.trim().to_string();
@@ -509,6 +543,50 @@ mod tests {
     }
 
     // ---------- sanitize ----------
+
+    /// external_profiles:trim、空端点丢弃、上限 10、camelCase 契约、旧配置回落空表。
+    #[test]
+    fn external_profiles_semantics() {
+        let mk = |endpoint: &str, key: &str| ExternalProfile {
+            name: format!(" p-{endpoint} "),
+            provider: "openai".into(),
+            endpoint: endpoint.into(),
+            api_key: key.into(),
+            model: " gpt-4o-mini ".into(),
+        };
+        let old = AiConfig::default();
+
+        let cfg = AiConfig {
+            external_profiles: vec![
+                mk(" https://api.openai.com/v1 ", " sk-1 "),
+                mk("", "sk-孤儿钥匙"), // 空端点:无意义,丢弃
+            ],
+            ..Default::default()
+        };
+        let out = sanitize(cfg, &old).external_profiles;
+        assert_eq!(out.len(), 1, "空端点条目应被丢弃");
+        assert_eq!(out[0].endpoint, "https://api.openai.com/v1", "应 trim");
+        assert_eq!(out[0].api_key, "sk-1");
+        assert_eq!(out[0].model, "gpt-4o-mini");
+
+        // 上限 10
+        let many = AiConfig {
+            external_profiles: (0..12).map(|i| mk(&format!("https://e{i}"), "k")).collect(),
+            ..Default::default()
+        };
+        assert_eq!(sanitize(many, &old).external_profiles.len(), 10);
+
+        // 序列化契约 + 旧配置无字段回落空表
+        let one = AiConfig {
+            external_profiles: vec![mk("https://e", "k")],
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&one).unwrap();
+        assert!(json.contains("\"externalProfiles\""), "{json}");
+        assert!(json.contains("\"apiKey\":\"k\""), "{json}");
+        let parsed: AiConfig = serde_json::from_str("{}").unwrap();
+        assert!(parsed.external_profiles.is_empty());
+    }
 
     /// auto_summary_times:净化(校验/去重/顺序/上限 6)、effective 三态、
     /// 序列化契约与旧配置回落。

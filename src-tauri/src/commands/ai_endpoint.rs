@@ -1,7 +1,7 @@
 //! 外部 OpenAI 兼容端点的连通性测试命令。
 //!
 //! 用户在「AI 设置 → 外部模型」里填 endpoint / api_key 之后点"测试连接"，
-//! 触发 `test_ai_endpoint` 这条命令；返回成功时附最多 10 个可用模型 ID。
+//! 触发 `test_ai_endpoint` 这条命令；返回成功时附可用模型 ID(上限 500)。
 //!
 //! 该模块同时提供 [`fmt_send_err`] —— 把 reqwest::Error 的整条 source chain
 //! 拼成对用户可读的中文错误，被 `crate::ai::llm` 的本地 chat 路径复用。
@@ -81,7 +81,9 @@ pub async fn test_ai_endpoint(
         Err(e) => return Ok(fail(&format!("响应不是 OpenAI 兼容格式：{e}"))),
     };
 
-    let models: Vec<String> = parsed.data.into_iter().map(|m| m.id).take(10).collect();
+    // 500:够住 OpenRouter 这类聚合站的全目录;"拉取模型"下拉与测试
+    // toast 共用这份返回,展示层各自截断
+    let models: Vec<String> = parsed.data.into_iter().map(|m| m.id).take(500).collect();
 
     Ok(TestAiEndpointResp {
         ok: true,

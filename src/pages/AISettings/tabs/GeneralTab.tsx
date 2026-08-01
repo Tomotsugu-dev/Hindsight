@@ -83,7 +83,6 @@ export default function GeneralTab() {
         {ai.autoSummary && (
           <Row
             label={t("aiSettings.autoSummary.timeLabel")}
-            description={t("aiSettings.autoSummary.timeHint")}
             block
             actions={
               <>
