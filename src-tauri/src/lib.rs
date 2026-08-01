@@ -75,6 +75,7 @@ pub fn run() {
     }
     builder
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
@@ -200,6 +201,8 @@ pub fn run() {
                 // 自动总结调度:按 ai.auto_summary 开关自动补昨日日报/上周周报。
                 // 必须在上面全部 manage 之后 spawn——任务内按需取 managed state。
                 ai::auto_summary::spawn(handle.clone());
+                // 定时补识别:settings.memory_ocr_daily_at 设了时刻才实际工作
+                memory::scheduled::spawn(handle.clone());
             });
             Ok(())
         })

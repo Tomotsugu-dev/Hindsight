@@ -58,6 +58,11 @@
   display: none;
 }
 
+/* 全局索引横幅的容器:与各页面的内容留白对齐,横幅自身有 margin-bottom */
+.globalBanner {
+  padding: 16px 32px 0;
+}
+
 /* 2A:窗口右缘滚动指示条的轨道——压在模糊带之上,避开顶部拖拽区/圆角 */
 .pageScrollTrack {
   top: 40px;

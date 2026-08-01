@@ -68,6 +68,31 @@ function ensureListener(): void {
     if (p.source !== "weekly") return;
 
     switch (p.phase) {
+      // OCR 清积压阶段:卡片主体沿用"准备中"形态(stage=engine_starting),
+      // 提示行(enginePhase)给出精确的 OCR 文案与进度
+      case "ocr_engine_starting":
+        snap = Object.freeze({
+          ...snap,
+          generating: true,
+          runningWeek: p.date,
+          stage: "engine_starting",
+          enginePhase: i18next.t("aiSummary.weekly.ocrLoading"),
+        });
+        notify();
+        break;
+      case "ocr_running":
+        snap = Object.freeze({
+          ...snap,
+          generating: true,
+          runningWeek: p.date,
+          stage: "engine_starting",
+          enginePhase: i18next.t("aiSummary.weekly.ocrRunning", {
+            done: p.imageIndex ?? 0,
+            total: p.imagesTotal ?? 0,
+          }),
+        });
+        notify();
+        break;
       case "engine_starting":
         snap = Object.freeze({
           ...snap,

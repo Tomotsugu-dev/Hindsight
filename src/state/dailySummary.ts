@@ -71,6 +71,27 @@ function ensureListener(): void {
     if (p.source !== "daily") return;
 
     switch (p.phase) {
+      case "ocr_engine_starting":
+        snap = Object.freeze({
+          ...snap,
+          generating: true,
+          runningDate: p.date,
+          enginePhase: i18next.t("aiSummary.daily.ocrLoading"),
+        });
+        notify();
+        break;
+      case "ocr_running":
+        snap = Object.freeze({
+          ...snap,
+          generating: true,
+          runningDate: p.date,
+          enginePhase: i18next.t("aiSummary.daily.ocrRunning", {
+            done: p.imageIndex ?? 0,
+            total: p.imagesTotal ?? 0,
+          }),
+        });
+        notify();
+        break;
       case "engine_starting":
         snap = Object.freeze({
           ...snap,

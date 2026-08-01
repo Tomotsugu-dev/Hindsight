@@ -18,6 +18,9 @@ interface RowProps {
   tone?: "primary" | "danger";
   /** label 右侧 info 图标的 hover 提示（多行用 \n 分隔） */
   labelHint?: string;
+  /** label 行最右侧的动作区(如定时计划的 +/− 按钮);block 模式下控件
+   *  在下一行,这个插槽让小按钮留在标题行。 */
+  actions?: ReactNode;
 }
 
 export function Row({
@@ -29,6 +32,7 @@ export function Row({
   icon: Icon,
   tone = "primary",
   labelHint,
+  actions,
 }: RowProps) {
   const labelId = useId();
   return (
@@ -62,6 +66,7 @@ export function Row({
                 </span>
               </button>
             ) : null}
+            {actions ? <span className={styles.actions}>{actions}</span> : null}
           </span>
           {description ? (
             <span className={styles.description}>{description}</span>

@@ -1,0 +1,160 @@
+/* 一天内时刻选择:视觉与 SegmentList 的 24h 段条同语言。 */
+
+.wrap {
+  width: 100%;
+  /* 给标记头顶的时间气泡留空间 */
+  padding-top: 24px;
+}
+
+.bar {
+  position: relative;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  outline: none;
+  /* 同段条的悬浮感 */
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.06));
+}
+
+.bar:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+/* 剪裁层:只有色带在里面裁圆角;handle 和头顶气泡在外面不受剪 */
+.clip {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 小时分隔线:画在色带之上才看得清(压底下会被色带洗掉);
+   0.13 的深度在粉彩底和素底上都可读又不噪。
+   纵向 mask 把每根竖线切成 3px 段 + 3px 空 = 虚线。 */
+.clip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(100% / 24 - 1px),
+    rgba(0, 0, 0, 0.13) calc(100% / 24 - 1px),
+    rgba(0, 0, 0, 0.13) calc(100% / 24)
+  );
+  -webkit-mask-image: repeating-linear-gradient(
+    to bottom,
+    #000 0,
+    #000 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  mask-image: repeating-linear-gradient(
+    to bottom,
+    #000 0,
+    #000 3px,
+    transparent 3px,
+    transparent 6px
+  );
+}
+
+/* 时段底色带:同 SegmentList 的段块取色,但压到半透明——这里是控件衬底,
+   不是主角,全饱和会喧宾夺主(用户反馈)。高光渐变同款保留质感。 */
+.band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.1) 38%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.07) 100%
+  );
+}
+
+.handle {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 12px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--color-accent);
+  /* 白描边:粉彩时段底上保持辨识度(与段条把手的白色语言一致) */
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 1px 4px color-mix(in oklab, var(--color-accent) 45%, transparent);
+  transition: left 120ms ease-out;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bar[data-dragging] .handle {
+  transition: none;
+}
+
+/* 多标记:非活动标记稍降调,正在操作的标记全亮——一眼看出拖的是谁 */
+.handle:not([data-active]) {
+  opacity: 0.62;
+}
+
+.handle:not([data-active]) .bubble {
+  opacity: 0.75;
+}
+
+.bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: var(--font-weight-600);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ticks {
+  position: relative;
+  height: 18px;
+  margin-top: 4px;
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tickMark {
+  width: 1px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.tickLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}

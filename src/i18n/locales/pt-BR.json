@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
         "ocrResidentLabel": "Manter OCR residente",
-        "ocrResidentDescription": "Reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria.",
+        "ocrResidentDescription": "Reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria. Quando ativo, capturas não reconhecidas também são processadas antes dos relatórios diários/semanais.",
         "intervalLabel": "Intervalo de captura",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
@@ -999,10 +999,16 @@
       "testStepChat": "Modelo {{model}} responde"
     },
     "autoSummary": {
-      "sectionTitle": "Resumos automáticos",
-      "sectionDesc": "Gera relatórios automaticamente ao fim de cada período — sem precisar clicar em \"Gerar\".",
-      "enableLabel": "Gerar relatórios diários e semanais automaticamente",
-      "enableHint": "Preenche o diário de ontem e o semanal da semana passada automaticamente; execuções com falha não são repetidas. Relatórios mensais entram quando disponíveis"
+      "sectionTitle": "Agendamentos",
+      "sectionDesc": "Executa no horário: geração de relatórios e OCR de capturas.",
+      "enableLabel": "Resumo automático",
+      "enableHint": "Gera o relatório diário de hoje no horário definido (um dia anterior faltante também é preenchido) e o semanal da semana passada. Falhas não são repetidas; relatórios mensais entrarão quando disponíveis",
+      "timeLabel": "Agendar horário",
+      "timeHint": "Cada horário gera/atualiza o relatório de hoje (horários posteriores sobrescrevem); se perdido, recupera na próxima inicialização",
+      "ocrDailyLabel": "OCR automático",
+      "ocrDailyDescription": "Lê o acúmulo de capturas no horário definido diariamente",
+      "addTimeAria": "Adicionar um horário",
+      "removeTimeAria": "Remover o horário adicionado mais recentemente"
     }
   },
   "devices": {
@@ -1229,7 +1235,9 @@
         "heading": "Semanal · {{weekStart}} ~ {{weekEnd}}",
         "stateError": "❌ **Falhou**",
         "stateEmptyContent": "_(vazio)_"
-      }
+      },
+      "ocrLoading": "Carregando modelo OCR…",
+      "ocrRunning": "Lendo texto das capturas {{done}}/{{total}}…"
     },
     "monthly": {
       "title": "Mensal",
@@ -1317,7 +1325,9 @@
         "title": "Gerar com sua API na nuvem?",
         "message": "Uma API na nuvem já está configurada ({{provider}} · {{model}}), mas os resumos estão definidos para um modelo local e o motor local não está instalado. Ao confirmar, os resumos passarão a usar a API na nuvem — nomes de aplicativos, categorias e a linha do tempo de atividades serão enviados a esse provedor. Você também pode baixar o motor local em Configurações de IA → Motor.",
         "confirm": "Usar API na nuvem"
-      }
+      },
+      "ocrLoading": "Carregando modelo OCR…",
+      "ocrRunning": "Lendo texto das capturas {{done}}/{{total}}…"
     },
     "debug": {
       "scope": {
@@ -1525,6 +1535,12 @@
       "hint": "Editar cria uma nova ramificação da conversa — alterne entre elas com as setas.",
       "save": "Salvar",
       "cancel": "Cancelar"
+    }
+  },
+  "notifications": {
+    "scheduledOcr": {
+      "title": "Hindsight",
+      "body": "OCR agendado iniciado: {{count}} capturas a processar"
     }
   }
 }

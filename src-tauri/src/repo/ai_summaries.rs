@@ -217,6 +217,33 @@ pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()
 }
 
 /// 清空某 source 下某天所有段总结 + 同日逐图描述。`force_refresh` 时调。
+/// 某天某 source 的最近一次生成时刻(MAX(generated_at));无行返回 None。
+/// 自动总结的多时间点用它当账本:生成时刻 ≥ 时间点 = 该点已完成,
+/// 重启不重复、不白烧 LLM。
+pub async fn latest_generated_at(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+) -> Result<Option<String>> {
+    let source = source.to_string();
+    let local_date = local_date.to_string();
+    let out = pool
+        .0
+        .call(move |conn| {
+            let v: Option<String> = conn
+                .query_row(
+                    "SELECT MAX(generated_at) FROM ai_summaries
+                     WHERE source = ?1 AND local_date = ?2",
+                    rusqlite::params![source, local_date],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok(v)
+        })
+        .await?;
+    Ok(out)
+}
+
 pub async fn clear_day(pool: &DbPool, source: &str, local_date: &str) -> Result<()> {
     let src = source.to_string();
     let date = local_date.to_string();

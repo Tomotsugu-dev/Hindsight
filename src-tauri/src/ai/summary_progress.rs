@@ -12,6 +12,11 @@ pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
 /// 进度事件 payload。前端按 `phase` 分发渲染。
 ///
 /// phase 取值：
+/// - `ocr_engine_starting`：总结前的 OCR 清积压阶段开始（可能含 OCR 模型加载）；
+///   `images_total` = 待识别帧总数。零积压时整个 OCR 阶段不发任何事件
+/// - `ocr_running`：OCR 清积压进行中；`images_total` = 总数、`image_index` = 已处理数,
+///   前端渲染 "识别截图文字 x/y…"。结束后无专属完结事件——下一个 phase
+///   (`engine_starting`)到达即表示 OCR 阶段结束
 /// - `engine_starting`：引擎冷启动中（首次加载模型 30-90s）
 /// - `dedup_running`：MobileNet embedding 余弦去重中（首次跑全段 5-10s/千张）；
 ///   `images_total` 是去重前段内总图数，给前端展示"段 X：N 张相似度去重中…"

@@ -43,6 +43,25 @@
   gap: 6px;
 }
 
+/* label 行的动作区(+/− 这类小按钮):推到行最右侧 */
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* 有 actions 时,标题行链路撑满整行宽,margin-left:auto 才有空间可推 */
+.rowBlock .left,
+.rowBlock .text {
+  width: 100%;
+}
+
+.rowBlock .labelLine {
+  display: flex;
+  width: 100%;
+}
+
 .label {
   font-size: 14px;
   font-weight: var(--font-weight-500);

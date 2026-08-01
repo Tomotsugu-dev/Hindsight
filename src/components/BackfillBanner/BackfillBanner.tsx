@@ -8,11 +8,11 @@ import {
   type EngineDownloadProgress,
   type MemoryPendingStats,
 } from "../../api/hindsight";
-import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { ConfirmDialog } from "../ConfirmDialog/ConfirmDialog";
 import { ocrRuntimeReady } from "../../lib/ocrRuntime";
 import { logError } from "../../lib/logger";
 import { useSettings } from "../../state/settings";
-import styles from "./ChatPage.module.css";
+import styles from "./BackfillBanner.module.css";
 
 interface BackfillBannerProps {
   stats: MemoryPendingStats;
@@ -27,6 +27,8 @@ const POLL_MS = 3000;
 
 /**
  * 未入索引提示条:有 N 张截图没进文字索引时显示,一键回填。
+ * 全局挂载于 AppLayout(定时批/常驻批半夜跑起来,用户在任何页面
+ * 都能看到进度和停止按钮),不再只属于聊天页。
  * 索引进行期间每 3 秒重查剩余帧数,实时显示进度;剩余归零 banner 自动消失。
  * digest 报"已在运行"(常驻 OCR 定时批持锁)按后台运行处理——帧已登记,
  * 后台批会消化,同样轮询进度。

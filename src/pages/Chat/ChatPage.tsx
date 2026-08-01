@@ -12,9 +12,9 @@ import { logError } from "../../lib/logger";
 import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import ModelBadge from "./ModelBadge";
-import BackfillBanner from "./BackfillBanner";
 import { chatUsesCloud } from "./chatRouting";
 import { ChatPrivacyDialog } from "./ChatPrivacyDialog";
+import BackfillBanner from "../../components/BackfillBanner/BackfillBanner";
 import styles from "./ChatPage.module.css";
 
 // 最后打开的会话,存 localStorage:跳页回来、甚至 webview 销毁重建(macOS 关窗
@@ -42,7 +42,6 @@ export default function ChatPage() {
   const { settings, update } = useSettings();
   const [conversations, setConversations] = useState<ChatConversationMeta[]>([]);
   const [activeId, setActiveIdState] = useState<number | null>(readLastActive);
-  const [pendingStats, setPendingStats] = useState<MemoryPendingStats | null>(null);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   // 隐私弹窗的挂起 resolver:发送流程 await 它,确认/取消后继续/中止
   const privacyResolver = useRef<((ok: boolean) => void) | null>(null);
@@ -76,10 +75,14 @@ export default function ChatPage() {
     };
   }, [refreshConversations]);
 
+  // 未入索引提示(空闲态的"N 张查不到"只在对话页显示——这里才有语境;
+  // 回填进行中的全局横幅由 AppLayout 负责,本页自带所以布局层避开了聊天路由)
+  const [pendingStats, setPendingStats] = useState<MemoryPendingStats | null>(null);
   const refreshPendingStats = useCallback(() => {
-    api.memoryPendingStats().then(setPendingStats).catch((e) => {
-      logError("chat.pendingStats", e);
-    });
+    api
+      .memoryPendingStats()
+      .then(setPendingStats)
+      .catch((e) => logError("chat.pendingStats", e));
   }, []);
 
   useEffect(() => {

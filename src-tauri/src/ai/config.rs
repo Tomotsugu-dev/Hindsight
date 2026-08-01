@@ -120,6 +120,18 @@ pub struct AiConfig {
     #[serde(default)]
     pub auto_summary: bool,
 
+    /// 自动总结定时(旧单时刻字段,仅兼容历史配置读取;新写入走
+    /// [`Self::auto_summary_times`],前端写 times 时一并置空本字段)。
+    #[serde(default)]
+    pub auto_summary_at: Option<String>,
+
+    /// 自动总结的时间点列表("HH:MM",保持添加顺序,上限 6)。语义:
+    /// **每个时间点都生成/刷新当天日报**(后点覆盖前点,如 12:00 半天版、
+    /// 23:00 全天版);已生成时刻 ≥ 时间点视为该点完成(重启不重复)。
+    /// 空 + 旧字段也空 = 尽快模式(只补前一天,旧行为)。
+    #[serde(default)]
+    pub auto_summary_times: Vec<String>,
+
     /// 段总结阶段的 batch 参数；`None` = fallback 到 [`Self::batch_size`]。
     pub summary_batch_size: Option<u32>,
     /// 段总结阶段的 `-np`；`None` = fallback 到 [`Self::parallel_slots`]。
@@ -146,6 +158,15 @@ impl AiConfig {
     /// 旧配置里的小 ctx(为多槽段总结调的 2048/4096)对单槽聊天会立刻溢出:
     /// 工具结果预算(tools.rs RESULT_CHAR_BUDGET=4000 字符/条)按 ~8K 窗口设计。
     /// `None` = 维持引擎默认([`crate::ai::server::DEFAULT_CTX_SIZE`],同为 8K)。
+    /// 自动总结的**有效**时间点:新列表优先,空则回落旧单时刻字段;
+    /// 两者都空 = 尽快模式(调用方据 is_empty 判定)。
+    pub fn effective_auto_summary_times(&self) -> Vec<String> {
+        if !self.auto_summary_times.is_empty() {
+            return self.auto_summary_times.clone();
+        }
+        self.auto_summary_at.clone().into_iter().collect()
+    }
+
     pub fn chat_ctx_size_effective(&self) -> Option<u32> {
         self.ctx_size.map(|c| c.max(8192))
     }
@@ -254,6 +275,8 @@ impl Default for AiConfig {
             summary_mmproj: String::new(),
             chat_main: String::new(),
             auto_summary: false,
+            auto_summary_at: None,
+            auto_summary_times: Vec::new(),
             prompt_language: lang.to_string(),
             prompt_overrides: PromptOverrides::default(),
             batch_size: None,
@@ -372,6 +395,28 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     // batch ≥ 32 是 llama-server 不接受过小值的安全下限
     // ctx 上限给 256K（极限场景，超出基本任何卡都装不下，没必要再大）
     // parallel_slots ≥ 1，给 32 上限避免误填出格的值
+    // 自动总结时间:必须是合法 "HH:MM",否则视为未设置(尽快模式)
+    next.auto_summary_at = next.auto_summary_at.and_then(|s| {
+        let s = s.trim().to_string();
+        chrono::NaiveTime::parse_from_str(&s, "%H:%M")
+            .ok()
+            .map(|_| s)
+    });
+    // 多时间点:逐项校验、去重保首见、保持添加顺序、上限 6(与定时补识别同规)
+    next.auto_summary_times = {
+        let mut out: Vec<String> = Vec::new();
+        for item in next.auto_summary_times {
+            let t = item.trim().to_string();
+            if chrono::NaiveTime::parse_from_str(&t, "%H:%M").is_ok() && !out.contains(&t) {
+                out.push(t);
+            }
+            if out.len() >= 6 {
+                break;
+            }
+        }
+        out
+    };
+
     next.batch_size = next.batch_size.map(|b| b.clamp(32, 32_768));
     next.parallel_slots = next.parallel_slots.map(|n| n.clamp(1, 32));
     next.ctx_size = next.ctx_size.map(|c| c.clamp(512, 262_144));
@@ -464,6 +509,91 @@ mod tests {
     }
 
     // ---------- sanitize ----------
+
+    /// auto_summary_times:净化(校验/去重/顺序/上限 6)、effective 三态、
+    /// 序列化契约与旧配置回落。
+    #[test]
+    fn auto_summary_times_semantics() {
+        let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mk = |items: &[&str]| AiConfig {
+            auto_summary_times: items.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        let old = AiConfig::default();
+
+        // 净化:非法剔除、重复保首见、保持添加顺序、trim
+        assert_eq!(
+            sanitize(mk(&["23:00", "乱", " 12:00 ", "23:00", "27:00"]), &old).auto_summary_times,
+            v(&["23:00", "12:00"])
+        );
+        // 上限 6
+        assert_eq!(
+            sanitize(
+                mk(&["01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00"]),
+                &old
+            )
+            .auto_summary_times
+            .len(),
+            6
+        );
+
+        // effective:列表优先;空回落旧单字段;都空 = 空(尽快模式)
+        let both = AiConfig {
+            auto_summary_at: Some("03:00".into()),
+            auto_summary_times: v(&["12:00"]),
+            ..Default::default()
+        };
+        assert_eq!(both.effective_auto_summary_times(), v(&["12:00"]));
+        let legacy_only = AiConfig {
+            auto_summary_at: Some("03:00".into()),
+            ..Default::default()
+        };
+        assert_eq!(legacy_only.effective_auto_summary_times(), v(&["03:00"]));
+        assert!(AiConfig::default()
+            .effective_auto_summary_times()
+            .is_empty());
+
+        // 序列化:camelCase + 旧 JSON 无此字段回落空表
+        let json = serde_json::to_string(&mk(&["23:00"])).unwrap();
+        assert!(json.contains("\"autoSummaryTimes\":[\"23:00\"]"), "{json}");
+        let parsed: AiConfig = serde_json::from_str("{}").unwrap();
+        assert!(parsed.auto_summary_times.is_empty());
+    }
+
+    /// auto_summary_at:合法 HH:MM 保留(含 trim),非法清为 None(尽快模式)。
+    #[test]
+    fn sanitize_auto_summary_at_validates_format() {
+        let mk = |v: &str| AiConfig {
+            auto_summary_at: Some(v.to_string()),
+            ..Default::default()
+        };
+        let old = AiConfig::default();
+        assert_eq!(
+            sanitize(mk("03:00"), &old).auto_summary_at.as_deref(),
+            Some("03:00")
+        );
+        assert_eq!(
+            sanitize(mk("  22:30 "), &old).auto_summary_at.as_deref(),
+            Some("22:30"),
+            "前后空白应被 trim 后保留"
+        );
+        assert_eq!(sanitize(mk("25:00"), &old).auto_summary_at, None);
+        assert_eq!(sanitize(mk("凌晨"), &old).auto_summary_at, None);
+        assert_eq!(sanitize(mk(""), &old).auto_summary_at, None);
+        // 未设置维持 None
+        assert_eq!(sanitize(AiConfig::default(), &old).auto_summary_at, None);
+    }
+
+    /// 序列化字段名是 camelCase 的 autoSummaryAt(前端契约)。
+    #[test]
+    fn auto_summary_at_serializes_camel_case() {
+        let cfg = AiConfig {
+            auto_summary_at: Some("03:00".to_string()),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains("\"autoSummaryAt\":\"03:00\""), "{json}");
+    }
 
     #[test]
     fn sanitize_prompt_language_whitelist_and_fallback() {
@@ -862,6 +992,10 @@ mod tests {
         assert!(parsed.summary_main.is_empty());
         assert!(parsed.chat_main.is_empty());
         assert!(!parsed.auto_summary);
+        assert!(
+            parsed.auto_summary_at.is_none(),
+            "旧配置无 autoSummaryAt 字段应回落 None(尽快模式)"
+        );
         assert_eq!(parsed.summary_batch_size, None);
     }
 

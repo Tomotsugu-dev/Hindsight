@@ -18,6 +18,7 @@
     "core:window:allow-start-dragging",
     "core:app:allow-version",
     "opener:default",
+    "notification:default",
     "opener:allow-open-path",
     "os:default",
     "dialog:allow-open",

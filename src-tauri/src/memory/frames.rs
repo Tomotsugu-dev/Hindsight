@@ -41,6 +41,25 @@ pub async fn register(
     Ok(())
 }
 
+/// 积压计数:与 [`take_pending`] 完全同一口径(待处理 + 可重试失败)。
+/// 总结前的 OCR 清积压阶段用它发进度、判终止。
+pub async fn count_pending(db: &MemoryDb) -> Result<u64> {
+    let n =
+        db.0.call(move |conn| {
+            let n: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM frames
+                     WHERE ocr_state = 0 OR (ocr_state = 2 AND attempts < ?1)",
+                    params![MAX_ATTEMPTS],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok(n)
+        })
+        .await?;
+    Ok(n.max(0) as u64)
+}
+
 /// 取一批待消化帧:待处理(0)优先,其次可重试的失败帧(2 且未超重试上限),按时间序。
 pub async fn take_pending(db: &MemoryDb, limit: i64) -> Result<Vec<PendingFrame>> {
     let rows =

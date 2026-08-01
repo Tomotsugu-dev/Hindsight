@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
         "ocrResidentLabel": "Keep OCR resident",
-        "ocrResidentDescription": "Recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery.",
+        "ocrResidentDescription": "Recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery. When on, unrecognized screenshots are also caught up before daily/weekly reports.",
         "intervalLabel": "Capture interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
@@ -999,10 +999,16 @@
       "testStepChat": "Model {{model}} responds"
     },
     "autoSummary": {
-      "sectionTitle": "Auto summaries",
-      "sectionDesc": "Generate reports automatically when a period ends — no more clicking \"Generate\".",
-      "enableLabel": "Auto-generate daily & weekly reports",
-      "enableHint": "Fills in yesterday's daily report and last week's weekly report automatically; failed runs are not retried. Monthly reports will join once available"
+      "sectionTitle": "Schedules",
+      "sectionDesc": "Runs on schedule: report generation and screenshot OCR.",
+      "enableLabel": "Auto summary",
+      "enableHint": "Generates today's daily report at the set time (a missing previous day is filled in too) and last week's weekly report. Failed runs are not retried; monthly reports will join once available",
+      "timeLabel": "Schedule a time",
+      "timeHint": "Each time point generates/refreshes today's report (later points overwrite earlier ones); catches up on next launch if missed",
+      "ocrDailyLabel": "Auto OCR",
+      "ocrDailyDescription": "Reads the screenshot backlog at the set time daily",
+      "addTimeAria": "Add a time point",
+      "removeTimeAria": "Remove the most recently added time point"
     }
   },
   "devices": {
@@ -1229,7 +1235,9 @@
         "heading": "Weekly · {{weekStart}} ~ {{weekEnd}}",
         "stateError": "❌ **Failed**",
         "stateEmptyContent": "_(empty)_"
-      }
+      },
+      "ocrLoading": "Loading OCR model…",
+      "ocrRunning": "Reading screenshot text {{done}}/{{total}}…"
     },
     "monthly": {
       "title": "Monthly",
@@ -1317,7 +1325,9 @@
         "title": "Generate with your cloud API instead?",
         "message": "A cloud API is already configured ({{provider}} · {{model}}), but summaries are currently set to a local model and the local engine isn't installed. Confirm to switch summaries to the cloud API — app names, categories and the activity timeline will be sent to that provider. Alternatively, download the local engine under AI Settings → Engine.",
         "confirm": "Use cloud API"
-      }
+      },
+      "ocrLoading": "Loading OCR model…",
+      "ocrRunning": "Reading screenshot text {{done}}/{{total}}…"
     },
     "debug": {
       "scope": {
@@ -1525,6 +1535,12 @@
       "hint": "Editing creates a new conversation branch — switch between branches with the arrows.",
       "save": "Save",
       "cancel": "Cancel"
+    }
+  },
+  "notifications": {
+    "scheduledOcr": {
+      "title": "Hindsight",
+      "body": "Scheduled OCR started: {{count}} screenshots to process"
     }
   }
 }

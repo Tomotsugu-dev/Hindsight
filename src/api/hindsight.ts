@@ -334,6 +334,8 @@ export interface WeekPrecheckResp {
 }
 
 export type SummaryPhase =
+  | "ocr_engine_starting"
+  | "ocr_running"
   | "engine_starting"
   | "segment_started"
   | "summarizing"
@@ -349,8 +351,10 @@ export interface SummaryProgress {
   phase: SummaryPhase;
   segmentIdx: number | null;
   totalSegments: number;
-  /** 历史遗留字段，纯文本管线下恒为 0 */
+  /** ocr_engine_starting / ocr_running 时 = 待识别帧总数；LLM 各阶段为 0 */
   imagesTotal: number | null;
+  /** ocr_running 时 = 已识别帧数；其它阶段为 null */
+  imageIndex: number | null;
   /** segment_done 时附该段总结正文（直接是 LLM 输出 markdown），其它阶段为 null */
   content: string | null;
   /** segment_done 时落库行的状态："ok" / "skipped_no_screenshots" / "skipped_no_activity" / "error" */
@@ -474,6 +478,10 @@ export interface AiConfig {
   /** 自动总结：日/周结束后后台自动补齐日报与周报，无需手动点「开始总结」。
    *  失败的目标不会自动重试（防坏配置反复烧钱）；月报生成器落地后自动纳入。 */
   autoSummary: boolean;
+  /** 自动总结定时(旧单时刻字段,仅兼容读取;写入走 autoSummaryTimes) */
+  autoSummaryAt: string | null;
+  /** 自动总结时间点列表("HH:MM",保持添加顺序,上限 6);每个点生成/刷新当天日报 */
+  autoSummaryTimes: string[];
 
   /** 段总结阶段（单段串行）的 batch；null = fallback 到 [batchSize]。 */
   summaryBatchSize: number | null;
@@ -532,6 +540,10 @@ export interface Settings {
   /** 屏幕记忆 OCR 常驻模式：true = 引擎常驻内存、新截图准实时消化（约多占
    *  400MB 内存）；false = 批量模式，仅消化时加载、用完即释放。 */
   memoryOcrResident: boolean;
+  /** 定时补识别(旧单时刻字段,仅兼容读取;写入走 memoryOcrDailyTimes) */
+  memoryOcrDailyAt: string | null;
+  /** 定时补识别的时间点列表("HH:MM",保持添加顺序,上限 6);空 = 关 */
+  memoryOcrDailyTimes: string[];
   /** Chat 首次发送前的隐私确认；确认过一次即永久 true，不再弹。 */
   chatPrivacyAcknowledged: boolean;
   /** 可选上云三挡（默认全 false）。打开 = 该数据集参与云同步的推与拉。 */

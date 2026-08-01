@@ -10,6 +10,7 @@ use std::sync::Arc;
 use chrono::{Datelike, Duration, NaiveDate};
 use tauri::{AppHandle, Emitter, State};
 
+use super::screen_memory::MemoryState;
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary::{
     precheck_week, AiOverrides, DaySummaryRunner, SummaryProgress, WeekPrecheckResp,
@@ -62,6 +63,7 @@ pub async fn generate_day_summary(
     supervisor: State<'_, Arc<EngineSupervisor>>,
     cancel: State<'_, SummaryCancel>,
     run_lock: State<'_, RunLock>,
+    mem: State<'_, MemoryState>,
     date: String,
     force_refresh: bool,
     device_id: Option<String>,
@@ -78,6 +80,9 @@ pub async fn generate_day_summary(
     let source = source.unwrap_or_else(|| "daily".to_string());
 
     cancel.0.store(false, Ordering::Relaxed);
+    // 一条龙第一棒:未识别的截图先全部 OCR(尽力而为,零积压零开销;
+    // 进度经同一事件流推给前端)。之后才进 LLM 阶段。
+    crate::ai::ocr_catchup::run(&pool, mem.0.as_ref(), &app, &source, &date, &cancel.0).await;
     let runner = DaySummaryRunner::new(
         (*pool).clone(),
         Arc::clone(&supervisor),
@@ -218,6 +223,7 @@ pub async fn generate_week_summary(
     supervisor: State<'_, Arc<EngineSupervisor>>,
     cancel: State<'_, SummaryCancel>,
     run_lock: State<'_, RunLock>,
+    mem: State<'_, MemoryState>,
     week_start: String,
     force_refresh: bool,
     allow_missing_days: bool,
@@ -231,6 +237,16 @@ pub async fn generate_week_summary(
     let monday_str = monday.format("%Y-%m-%d").to_string();
 
     cancel.0.store(false, Ordering::Relaxed);
+    // 与日报同款:先清 OCR 积压(周报事件用 weekly source + 周一日期)
+    crate::ai::ocr_catchup::run(
+        &pool,
+        mem.0.as_ref(),
+        &app,
+        WEEKLY_SOURCE,
+        &monday_str,
+        &cancel.0,
+    )
+    .await;
     let runner = WeekSummaryRunner::new(
         (*pool).clone(),
         Arc::clone(&supervisor),

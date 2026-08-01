@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
         "ocrResidentLabel": "常駐 OCR",
-        "ocrResidentDescription": "即時辨識新截圖（多佔約 400MB 記憶體），電池供電時自動暫停。",
+        "ocrResidentDescription": "即時辨識新截圖（多佔約 400MB 記憶體），電池供電時自動暫停;開啟後,生成日報/週報前也會先補齊未辨識的截圖。",
         "intervalLabel": "採集間隔",
         "intervalDescription": "採集頻率。",
         "intervalHint": "截圖觸發時機：\n• 切換應用程式 → 立即截圖\n• 瀏覽器切換 URL → 立即截圖\n• 同一視窗停留滿設定的間隔 → 截圖",
@@ -999,10 +999,16 @@
       "testStepChat": "模型 {{model}} 可用"
     },
     "autoSummary": {
-      "sectionTitle": "自動總結",
-      "sectionDesc": "到期自動生成報告,無需再手動點「開始總結」。",
-      "enableLabel": "自動生成日報與週報",
-      "enableHint": "每天自動補前一天的日報,每週自動補上一週的週報;生成失敗不會自動重試。月報功能上線後將自動納入"
+      "sectionTitle": "定時計劃",
+      "sectionDesc": "到點自動執行:生成報告與辨識截圖。",
+      "enableLabel": "自動總結",
+      "enableHint": "每天到點自動生成當天的日報(前一天缺報也會補齊),每週自動補上一週的週報。生成失敗不會自動重試;月報功能上線後將自動納入",
+      "timeLabel": "指定處理時間",
+      "timeHint": "每個時間點都會生成/刷新當天日報(後點覆蓋前點);錯過則下次啟動時補上",
+      "ocrDailyLabel": "自動 OCR",
+      "ocrDailyDescription": "每天到點自動辨識堆積的截圖",
+      "addTimeAria": "新增一個時間點",
+      "removeTimeAria": "移除最近新增的時間點"
     }
   },
   "devices": {
@@ -1229,7 +1235,9 @@
         "heading": "週報 · {{weekStart}} ~ {{weekEnd}}",
         "stateError": "❌ **失敗**",
         "stateEmptyContent": "_（空）_"
-      }
+      },
+      "ocrLoading": "載入 OCR 模型中…",
+      "ocrRunning": "辨識截圖文字 {{done}}/{{total}}…"
     },
     "monthly": {
       "title": "月報",
@@ -1317,7 +1325,9 @@
         "title": "改用雲端 API 生成？",
         "message": "偵測到你已設定雲端 API（{{provider}} · {{model}}），但總結目前設為本機模型，且本機引擎未安裝。確認後總結將改用雲端 API 生成——應用程式名稱、分類與活動時間軸將傳送給該服務商；也可以到「AI 設定 → 引擎」下載本機引擎。",
         "confirm": "使用雲端生成"
-      }
+      },
+      "ocrLoading": "載入 OCR 模型中…",
+      "ocrRunning": "辨識截圖文字 {{done}}/{{total}}…"
     },
     "debug": {
       "scope": {
@@ -1525,6 +1535,12 @@
       "hint": "編輯將建立新的對話分支,可用箭頭在分支間切換。",
       "save": "儲存",
       "cancel": "取消"
+    }
+  },
+  "notifications": {
+    "scheduledOcr": {
+      "title": "Hindsight",
+      "body": "定時補辨識開始:{{count}} 張截圖待處理"
     }
   }
 }

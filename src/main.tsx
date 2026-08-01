@@ -10,6 +10,7 @@ import { SuperCategoriesProvider } from "./state/superCategories";
 import { SettingsProvider } from "./state/settings";
 import { UpdaterProvider } from "./state/updater";
 import { ensureInitialLocale } from "./i18n";
+import { initScheduledOcrNotice } from "./state/scheduledOcrNotice";
 import { applyTheme, getStoredTheme } from "./lib/theme";
 import "./styles/global.css";
 
@@ -25,6 +26,7 @@ applyTheme(getStoredTheme());
 
 // 首启按系统语言设好 locale 再渲染，避免闪一下兜底语言；有显式选择则瞬时 resolve
 void ensureInitialLocale().finally(() => {
+initScheduledOcrNotice();
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       {/* 顶层边界：任何 provider / 路由层抛错都兜在这里，避免整窗白屏 */}

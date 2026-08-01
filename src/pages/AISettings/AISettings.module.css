@@ -1833,3 +1833,33 @@
   color: var(--text-muted);
 }
 
+
+/* 定时计划:时间点 +/− 小按钮(贴在「指定处理时间」标题行尾) */
+.timeDotBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 120ms ease-out,
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
+}
+
+.timeDotBtn:hover:not(:disabled) {
+  color: var(--color-accent);
+  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
+.timeDotBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -20,6 +20,7 @@ pub mod job_guard;
 pub mod llm;
 pub mod models;
 pub mod ocr;
+pub mod ocr_catchup;
 pub mod ocr_patch;
 #[cfg(target_os = "macos")]
 pub mod ocr_vision;

@@ -9,6 +9,7 @@
 pub mod digest;
 pub mod frames;
 pub mod resident;
+pub mod scheduled;
 pub mod sessions;
 
 use std::path::PathBuf;
@@ -134,6 +135,13 @@ impl MemoryDb {
 
                     -- Chat 会话(默认只在本地;guid 供可选上云时跨设备合并,
                     -- deleted_at 软删让删除能传播到其它设备)
+                    -- 定时补识别的持久记账:mark = 'YYYY-MM-DD@HH:MM',
+                    -- 每个时间点每天一行;重启不丢,每天至多一次跨进程成立。
+                    -- 旧日期行由调度器写入新行时顺手清理。
+                    CREATE TABLE IF NOT EXISTS scheduled_ocr_marks (
+                        mark TEXT PRIMARY KEY
+                    );
+
                     CREATE TABLE IF NOT EXISTS chat_conversations (
                         id          INTEGER PRIMARY KEY,
                         title       TEXT NOT NULL,   -- 首问截断自动生成,可重命名

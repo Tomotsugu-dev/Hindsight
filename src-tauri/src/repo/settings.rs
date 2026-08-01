@@ -71,6 +71,15 @@ pub struct Settings {
     /// （多占约 400MB 内存）；false（默认）= 批量模式，仅手动/定时消化时
     /// 加载引擎，用完即释放。
     pub memory_ocr_resident: bool,
+    /// 定时补识别(旧单时刻字段,仅为兼容历史配置保留读取;新写入一律走
+    /// [`Self::memory_ocr_daily_times`],patch 写 times 时本字段被清空)。
+    #[serde(default)]
+    pub memory_ocr_daily_at: Option<String>,
+    /// 定时补识别的时间点列表("HH:MM",**保持添加顺序**,上限 6):每天到达
+    /// 任一时间点即自动批量识别堆积的未处理截图,与常驻开关无关。
+    /// 空(默认)= 功能关闭。当天错过的点下次启动后补;每个点每天至多跑一次。
+    #[serde(default)]
+    pub memory_ocr_daily_times: Vec<String>,
     /// Chat 首次发送前的隐私确认(展示当前路由的模型与发送内容说明)。
     /// 确认过一次即永久 true,不再弹。
     pub chat_privacy_acknowledged: bool,
@@ -85,6 +94,17 @@ pub struct Settings {
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
+}
+
+impl Settings {
+    /// 定时补识别的**有效**时间点:新列表优先;列表为空时回落旧单时刻字段
+    /// (老配置升级不丢定时)。调度器/前端只认这个。
+    pub fn effective_ocr_daily_times(&self) -> Vec<String> {
+        if !self.memory_ocr_daily_times.is_empty() {
+            return self.memory_ocr_daily_times.clone();
+        }
+        self.memory_ocr_daily_at.clone().into_iter().collect()
+    }
 }
 
 impl Default for Settings {
@@ -112,6 +132,8 @@ impl Default for Settings {
             last_update_check_at: None,
             idle_threshold_seconds: 180,
             memory_ocr_resident: false,
+            memory_ocr_daily_at: None,
+            memory_ocr_daily_times: Vec::new(),
             chat_privacy_acknowledged: false,
             sync_ai_summaries: false,
             sync_chat_history: false,
@@ -166,6 +188,12 @@ pub struct SettingsPatch {
     pub last_update_check_at: Option<Option<String>>,
     pub idle_threshold_seconds: Option<u32>,
     pub memory_ocr_resident: Option<bool>,
+    /// 双层 Option:外层 = patch 是否带此字段,内层 = 设为某时刻 / null 清除。
+    /// 裸 Option<Option<T>> 会把 null 解成外层 None(与缺席不可区分),
+    /// 必须走 [`double_option`] 才能保住"null = 显式清除"。
+    #[serde(default, deserialize_with = "double_option")]
+    pub memory_ocr_daily_at: Option<Option<String>>,
+    pub memory_ocr_daily_times: Option<Vec<String>>,
     pub chat_privacy_acknowledged: Option<bool>,
     pub sync_ai_summaries: Option<bool>,
     pub sync_chat_history: Option<bool>,
@@ -353,6 +381,19 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         memory_ocr_resident: patch
             .memory_ocr_resident
             .unwrap_or(current.memory_ocr_resident),
+        // times 与旧单时刻字段互斥:patch 写 times 即清旧字段(避免两处真源)
+        memory_ocr_daily_at: if patch.memory_ocr_daily_times.is_some() {
+            None
+        } else {
+            patch
+                .memory_ocr_daily_at
+                .map(|v| v.and_then(sanitize_hhmm))
+                .unwrap_or(current.memory_ocr_daily_at)
+        },
+        memory_ocr_daily_times: patch
+            .memory_ocr_daily_times
+            .map(sanitize_hhmm_list)
+            .unwrap_or(current.memory_ocr_daily_times),
         chat_privacy_acknowledged: patch
             .chat_privacy_acknowledged
             .unwrap_or(current.chat_privacy_acknowledged),
@@ -369,6 +410,40 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
 }
 
 /// 把 UI 传来的 interval 字符串收敛到合法集合，非法值回退 weekly
+/// 区分「字段缺席」与「显式 null」:字段出现(哪怕是 null)时把内层
+/// Option 包上 Some;缺席走 `#[serde(default)]` 得外层 None。
+fn double_option<'de, T, D>(de: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(de).map(Some)
+}
+
+/// "HH:MM" 校验:合法保留(trim 后),非法归 None(= 关闭定时)。
+fn sanitize_hhmm_list(v: Vec<String>) -> Vec<String> {
+    // 逐项校验、去重保首见、**保持添加顺序**(减号 = 减最近添加),上限 6
+    let mut out: Vec<String> = Vec::new();
+    for item in v {
+        if let Some(t) = sanitize_hhmm(item) {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+        if out.len() >= 6 {
+            break;
+        }
+    }
+    out
+}
+
+fn sanitize_hhmm(v: String) -> Option<String> {
+    let v = v.trim().to_string();
+    chrono::NaiveTime::parse_from_str(&v, "%H:%M")
+        .ok()
+        .map(|_| v)
+}
+
 fn sanitize_interval(v: &str) -> String {
     match v {
         "daily" | "weekly" | "monthly" | "onstartup" => v.to_string(),
@@ -466,6 +541,8 @@ mod tests {
             last_update_check_at: Some("2026-07-01T00:00:00+00:00".into()),
             idle_threshold_seconds: 0,
             memory_ocr_resident: true,
+            memory_ocr_daily_at: Some("03:30".to_string()),
+            memory_ocr_daily_times: vec!["12:00".to_string(), "23:00".to_string()],
             chat_privacy_acknowledged: true,
             sync_ai_summaries: true,
             sync_chat_history: true,
@@ -783,6 +860,96 @@ mod tests {
     /// 字符串类输入的净化：interval 收敛到合法枚举集合（打错字回 weekly 而不是
     /// 存进去让更新检查逻辑瘫痪）、关键词 trim/去空/去重（重复关键词让隐私列表
     /// 越滚越长）、OAuth id 首尾空格是用户复制粘贴最常见的坑、空路径回默认。
+    /// 多时间点:净化(逐项校验/去重保首见/保持添加顺序/上限 6)、
+    /// patch 写 times 即清旧单时刻字段、迁移读取(列表空回落旧字段)。
+    #[test]
+    fn memory_ocr_daily_times_semantics() {
+        let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        // 净化:非法项剔除、重复保首见、顺序保持添加序、trim
+        assert_eq!(
+            sanitize_hhmm_list(v(&["23:00", "凌晨", " 12:00 ", "23:00", "25:00", "09:15"])),
+            v(&["23:00", "12:00", "09:15"])
+        );
+        // 上限 6:超出裁尾
+        assert_eq!(
+            sanitize_hhmm_list(v(&[
+                "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00"
+            ]))
+            .len(),
+            6
+        );
+
+        // patch 写 times → 旧单时刻字段被清空(单一真源)
+        let current = Settings {
+            memory_ocr_daily_at: Some("03:00".into()),
+            ..Settings::default()
+        };
+        let mut p = empty_patch();
+        p.memory_ocr_daily_times = Some(v(&["12:00", "23:00"]));
+        let s2 = apply_patch(current.clone(), p);
+        assert_eq!(s2.memory_ocr_daily_at, None, "写 times 必须清旧字段");
+        assert_eq!(s2.memory_ocr_daily_times, v(&["12:00", "23:00"]));
+
+        // patch 不带 times:两个字段都维持现值
+        let s3 = apply_patch(current, empty_patch());
+        assert_eq!(s3.memory_ocr_daily_at.as_deref(), Some("03:00"));
+        assert!(s3.memory_ocr_daily_times.is_empty());
+
+        // 迁移读取:列表空回落旧字段;列表非空优先列表
+        assert_eq!(s3.effective_ocr_daily_times(), v(&["03:00"]));
+        assert_eq!(s2.effective_ocr_daily_times(), v(&["12:00", "23:00"]));
+        assert!(Settings::default().effective_ocr_daily_times().is_empty());
+    }
+
+    /// 定时补识别时刻的 patch 语义:缺字段保持现值、null 清除、
+    /// 合法 HH:MM 保存(trim)、非法归 None(不让坏值瘫痪调度)。
+    #[test]
+    fn apply_patch_memory_ocr_daily_at_semantics() {
+        let current = Settings {
+            memory_ocr_daily_at: Some("03:00".into()),
+            ..Settings::default()
+        };
+
+        // 缺字段:保持现值
+        let s = apply_patch(current.clone(), empty_patch());
+        assert_eq!(s.memory_ocr_daily_at.as_deref(), Some("03:00"));
+
+        // null:显式清除(关闭定时)
+        let mut p = empty_patch();
+        p.memory_ocr_daily_at = Some(None);
+        assert_eq!(apply_patch(current.clone(), p).memory_ocr_daily_at, None);
+
+        // 合法值:trim 后保存
+        let mut p = empty_patch();
+        p.memory_ocr_daily_at = Some(Some(" 22:15 ".into()));
+        assert_eq!(
+            apply_patch(current.clone(), p)
+                .memory_ocr_daily_at
+                .as_deref(),
+            Some("22:15")
+        );
+
+        // 非法值:归 None 而不是存进去
+        for bad in ["25:00", "3点", "", "12:60"] {
+            let mut p = empty_patch();
+            p.memory_ocr_daily_at = Some(Some(bad.into()));
+            assert_eq!(
+                apply_patch(current.clone(), p).memory_ocr_daily_at,
+                None,
+                "{bad:?} 应被拒"
+            );
+        }
+
+        // JSON 层:缺字段 → 外层 None;null → Some(None)(前端契约)
+        let p: SettingsPatch = serde_json::from_str("{}").unwrap();
+        assert!(p.memory_ocr_daily_at.is_none());
+        let p: SettingsPatch = serde_json::from_str(r#"{"memoryOcrDailyAt": null}"#).unwrap();
+        assert_eq!(p.memory_ocr_daily_at, Some(None));
+        let p: SettingsPatch = serde_json::from_str(r#"{"memoryOcrDailyAt": "07:45"}"#).unwrap();
+        assert_eq!(p.memory_ocr_daily_at, Some(Some("07:45".into())));
+    }
+
     #[test]
     fn apply_patch_sanitizes_string_inputs() {
         let d = Settings::default();

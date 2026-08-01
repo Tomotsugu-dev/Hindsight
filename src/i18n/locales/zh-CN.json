@@ -146,7 +146,7 @@
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
         "ocrResidentLabel": "常驻 OCR",
-        "ocrResidentDescription": "即时识别新截图（多占约 400MB 内存），电池供电时自动暂停。",
+        "ocrResidentDescription": "即时识别新截图（多占约 400MB 内存），电池供电时自动暂停;开启后,生成日报/周报前也会先补齐未识别的截图。",
         "intervalLabel": "采集间隔",
         "intervalDescription": "采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
@@ -999,10 +999,16 @@
       "testStepChat": "模型 {{model}} 可用"
     },
     "autoSummary": {
-      "sectionTitle": "自动总结",
-      "sectionDesc": "到期自动生成报告,无需再手动点「开始总结」。",
-      "enableLabel": "自动生成日报与周报",
-      "enableHint": "每天自动补前一天的日报,每周自动补上一周的周报;生成失败不会自动重试。月报功能上线后将自动纳入"
+      "sectionTitle": "定时计划",
+      "sectionDesc": "到点自动执行:生成报告与识别截图。",
+      "enableLabel": "自动总结",
+      "enableHint": "每天到点自动生成当天的日报(前一天缺报也会补齐),每周自动补上一周的周报。生成失败不会自动重试;月报功能上线后将自动纳入",
+      "timeLabel": "指定处理时间",
+      "timeHint": "每个时间点都会生成/刷新当天日报(后点覆盖前点);错过则下次启动时补上",
+      "ocrDailyLabel": "自动 OCR",
+      "ocrDailyDescription": "每天到点自动识别堆积的截图",
+      "addTimeAria": "添加一个时间点",
+      "removeTimeAria": "移除最近添加的时间点"
     }
   },
   "devices": {
@@ -1229,7 +1235,9 @@
         "heading": "周报 · {{weekStart}} ~ {{weekEnd}}",
         "stateError": "❌ **失败**",
         "stateEmptyContent": "_（空）_"
-      }
+      },
+      "ocrLoading": "加载 OCR 模型中…",
+      "ocrRunning": "识别截图文字 {{done}}/{{total}}…"
     },
     "monthly": {
       "title": "月报",
@@ -1317,7 +1325,9 @@
         "title": "改用云端 API 生成？",
         "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「AI 设置 → 引擎」下载本地引擎。",
         "confirm": "使用云端生成"
-      }
+      },
+      "ocrLoading": "加载 OCR 模型中…",
+      "ocrRunning": "识别截图文字 {{done}}/{{total}}…"
     },
     "debug": {
       "scope": {
@@ -1525,6 +1535,12 @@
       "hint": "编辑将创建新的对话分支,可用箭头在分支间切换。",
       "save": "保存",
       "cancel": "取消"
+    }
+  },
+  "notifications": {
+    "scheduledOcr": {
+      "title": "Hindsight",
+      "body": "定时补识别开始:{{count}} 张截图待处理"
     }
   }
 }

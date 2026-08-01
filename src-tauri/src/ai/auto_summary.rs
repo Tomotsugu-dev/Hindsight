@@ -1,5 +1,6 @@
-//! 自动总结调度:开关(`ai.auto_summary`)打开时,后台周期性补齐
-//! **昨天的日报**与**上一个完整周的周报**,用户不再需要手动点「开始总结」。
+//! 自动总结调度:开关(`ai.auto_summary`)打开时,每天到设定时刻自动生成
+//! **当天的日报**(并补齐缺失的前一天)与**上一个完整周的周报**,
+//! 用户不再需要手动点「开始总结」。
 //!
 //! 设计要点:
 //! - 启动后延迟首查(让采集/引擎先安顿),此后每 [`CHECK_GAP_SECS`] 查一轮;
@@ -55,20 +56,57 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
         return Ok(());
     }
 
-    let today = Local::now().date_naive();
-
-    // ── 日报:昨天(今天还在进行中,不自动跑)──────────────
+    let now = Local::now();
+    let today = now.date_naive();
     let yesterday = today - ChronoDuration::days(1);
+    let times = cfg.ai.effective_auto_summary_times();
+
+    // 定时模式:任一时间点到点即放行本轮;全部未到则整体跳过。
+    // 未配置任何点 = 尽快模式(旧行为:只补前一天,不动进行中的今天)。
+    if !times.is_empty() && !any_point_due(now.time(), &times) {
+        log::debug!("自动总结:未到任何设定时间({}),本轮跳过", times.join("/"));
+        return Ok(());
+    }
+
+    // ── 日报·前一天补漏:只补"从未生成过"的(关机错过设定时刻的场景) ──
     let d_key = format!("d:{yesterday}");
     if !attempted.contains(&d_key)
         && daily_absent(&pool, yesterday).await?
         && has_activity(&pool, yesterday).await?
     {
-        match try_run_daily(app, yesterday).await {
+        match try_run_daily(app, yesterday, false).await {
             RunOutcome::Ran => {
                 attempted.insert(d_key);
             }
             RunOutcome::Busy => log::debug!("自动总结:手动任务进行中,日报让路"),
+        }
+    }
+
+    // ── 日报·当天(仅定时模式):**每个时间点都生成/刷新一次**——
+    //    12:00 出半天版、23:00 覆盖成全天版。账本 = 日报自己的 generated_at:
+    //    生成时刻 ≥ 时间点即该点已完成,重启不重复、不白烧 LLM。
+    //    今天没活动(如凌晨点)自然跳过;失败由 attempted 兜住当天不重试。
+    if !times.is_empty() && has_activity(&pool, today).await? {
+        let last_gen =
+            ai_summaries::latest_generated_at(&pool, "daily", &today.to_string()).await?;
+        for t in due_unsatisfied_points(now, &times, last_gen.as_deref()) {
+            let key = format!("d:{today}@{t}");
+            if attempted.contains(&key) {
+                continue;
+            }
+            // 已有报告则带 force 刷新覆盖;还没有就普通生成
+            let force = !daily_absent(&pool, today).await?;
+            match try_run_daily(app, today, force).await {
+                RunOutcome::Ran => {
+                    attempted.insert(key);
+                }
+                RunOutcome::Busy => {
+                    log::debug!("自动总结:手动任务进行中,日报让路");
+                    break;
+                }
+            }
+            // 一轮只处理一个点:生成本身要跑几分钟,后续点下轮按账本自然判定
+            break;
         }
     }
 
@@ -98,7 +136,7 @@ enum RunOutcome {
     Busy,
 }
 
-async fn try_run_daily(app: &AppHandle, date: NaiveDate) -> RunOutcome {
+async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) -> RunOutcome {
     let run_lock = app.state::<RunLock>();
     let Ok(_guard) = run_lock.0.try_lock() else {
         return RunOutcome::Busy;
@@ -106,6 +144,17 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate) -> RunOutcome {
     log::info!("自动总结:生成 {date} 日报");
     let cancel = app.state::<SummaryCancel>();
     cancel.0.store(false, Ordering::Relaxed);
+    // 与手动路径同款:先清 OCR 积压(前端若开着总结页,同样能看到阶段进度)
+    let mem = app.state::<crate::commands::screen_memory::MemoryState>();
+    crate::ai::ocr_catchup::run(
+        &app.state::<DbPool>(),
+        mem.0.as_ref(),
+        app,
+        "daily",
+        &date.format("%Y-%m-%d").to_string(),
+        &cancel.0,
+    )
+    .await;
     let runner = DaySummaryRunner::new(
         app.state::<DbPool>().inner().clone(),
         Arc::clone(
@@ -116,7 +165,7 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate) -> RunOutcome {
         Arc::clone(&cancel.0),
     );
     if let Err(e) = runner
-        .run("daily", date, DeviceFilter::All, false, None)
+        .run("daily", date, DeviceFilter::All, force_refresh, None)
         .await
     {
         log::warn!("自动总结:{date} 日报失败(本次运行期不再自动重试): {e}");
@@ -132,6 +181,16 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
     log::info!("自动总结:生成 {monday} 起始周的周报(缺日容忍={allow_missing})");
     let cancel = app.state::<SummaryCancel>();
     cancel.0.store(false, Ordering::Relaxed);
+    let mem = app.state::<crate::commands::screen_memory::MemoryState>();
+    crate::ai::ocr_catchup::run(
+        &app.state::<DbPool>(),
+        mem.0.as_ref(),
+        app,
+        WEEKLY_SOURCE,
+        &monday.format("%Y-%m-%d").to_string(),
+        &cancel.0,
+    )
+    .await;
     let runner = WeekSummaryRunner::new(
         app.state::<DbPool>().inner().clone(),
         Arc::clone(
@@ -177,6 +236,48 @@ async fn has_activity(pool: &DbPool, date: NaiveDate) -> Result<bool> {
         .map_err(Into::into)
 }
 
+/// 任一时间点已到(纯函数):放行本轮检查。坏格式项跳过。
+fn any_point_due(now: chrono::NaiveTime, times: &[String]) -> bool {
+    times.iter().any(|raw| {
+        chrono::NaiveTime::parse_from_str(raw.trim(), "%H:%M")
+            .map(|t| now >= t)
+            .unwrap_or(false)
+    })
+}
+
+/// 已到点且**尚未被满足**的时间点(纯函数,配置序):
+/// 满足 = 当天日报最近一次 generated_at(本地时刻)≥ 该时间点。
+/// last_gen 解析失败按已满足处理(宁可漏刷一版,不无限重烧 LLM)。
+fn due_unsatisfied_points(
+    now: chrono::DateTime<chrono::Local>,
+    times: &[String],
+    last_gen: Option<&str>,
+) -> Vec<String> {
+    let last_local: Option<chrono::NaiveDateTime> = last_gen.map(|raw| {
+        chrono::DateTime::parse_from_rfc3339(raw)
+            .map(|dt| dt.with_timezone(&chrono::Local).naive_local())
+            .unwrap_or(chrono::NaiveDateTime::MAX)
+    });
+    let today = now.date_naive();
+    times
+        .iter()
+        .filter(|raw| {
+            let Ok(t) = chrono::NaiveTime::parse_from_str(raw.trim(), "%H:%M") else {
+                return false;
+            };
+            if now.time() < t {
+                return false; // 未到点
+            }
+            let point_dt = today.and_time(t);
+            match last_local {
+                Some(gen) => gen < point_dt, // 生成早于该点 → 该点未满足
+                None => true,                // 从未生成 → 未满足
+            }
+        })
+        .cloned()
+        .collect()
+}
+
 fn align_to_monday(d: NaiveDate) -> NaiveDate {
     use chrono::Datelike;
     d - ChronoDuration::days(d.weekday().num_days_from_monday() as i64)
@@ -185,6 +286,70 @@ fn align_to_monday(d: NaiveDate) -> NaiveDate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// any_point_due:任一到点即放行;坏格式跳过;空表不放行(尽快模式走别的分支)。
+    #[test]
+    fn any_point_due_truth_table() {
+        let t = |h, m| chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
+        let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(!any_point_due(t(23, 59), &[]));
+        assert!(any_point_due(t(12, 0), &v(&["12:00", "23:00"])));
+        assert!(!any_point_due(t(11, 59), &v(&["12:00", "23:00"])));
+        assert!(any_point_due(t(23, 0), &v(&["12:00", "23:00"])));
+        assert!(!any_point_due(t(12, 0), &v(&["25:99"])));
+        assert!(any_point_due(t(9, 30), &v(&[" 09:30 "])));
+    }
+
+    /// due_unsatisfied_points:账本(当天日报 generated_at)判定——
+    /// 生成时刻 ≥ 时间点 = 该点已完成;从未生成全未满足;解析失败视为满足。
+    #[test]
+    fn due_unsatisfied_points_ledger() {
+        use chrono::TimeZone;
+        let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let now = chrono::Local
+            .with_ymd_and_hms(2026, 8, 2, 23, 10, 0)
+            .unwrap();
+        let times = v(&["12:00", "23:00"]);
+
+        // 从未生成:两点都到期且未满足
+        assert_eq!(due_unsatisfied_points(now, &times, None), times);
+
+        // 12:05 生成过:12:00 点已满足,23:00 点未满足
+        let gen_1205 = chrono::Local
+            .with_ymd_and_hms(2026, 8, 2, 12, 5, 0)
+            .unwrap()
+            .to_rfc3339();
+        assert_eq!(
+            due_unsatisfied_points(now, &times, Some(&gen_1205)),
+            v(&["23:00"])
+        );
+
+        // 23:05 生成过:全部满足
+        let gen_2305 = chrono::Local
+            .with_ymd_and_hms(2026, 8, 2, 23, 5, 0)
+            .unwrap()
+            .to_rfc3339();
+        assert!(due_unsatisfied_points(now, &times, Some(&gen_2305)).is_empty());
+
+        // 未到点的不入列:12:30 时 23:00 还没到
+        let noon = chrono::Local
+            .with_ymd_and_hms(2026, 8, 2, 12, 30, 0)
+            .unwrap();
+        assert_eq!(due_unsatisfied_points(noon, &times, None), v(&["12:00"]));
+
+        // 昨天生成的不算满足今天的点
+        let gen_yday = chrono::Local
+            .with_ymd_and_hms(2026, 8, 1, 23, 5, 0)
+            .unwrap()
+            .to_rfc3339();
+        assert_eq!(due_unsatisfied_points(now, &times, Some(&gen_yday)), times);
+
+        // 时间戳解析失败:视为满足(不无限重烧 LLM)
+        assert!(due_unsatisfied_points(now, &times, Some("垃圾时间戳")).is_empty());
+
+        // 坏格式时间点跳过
+        assert!(due_unsatisfied_points(now, &v(&["25:99"]), None).is_empty());
+    }
 
     #[test]
     fn align_to_monday_covers_week() {
