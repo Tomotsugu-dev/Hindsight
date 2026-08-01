@@ -274,7 +274,10 @@ async fn run_ask(
     // 入库,不会自包含)再落提问——LLM 失败时提问也保留,重载后显示
     // "有问无答",可再问。answer_parent = 回答的挂点(新提问/重试的路径叶)。
     let (question, history, answer_parent) = match input {
-        AskInput::New { question: q, parent } => {
+        AskInput::New {
+            question: q,
+            parent,
+        } => {
             let (resolved, history) = store::history_for_ask(db, conv_id, parent, HISTORY_TURNS)
                 .await
                 .map_err(String::from)?;

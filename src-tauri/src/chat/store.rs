@@ -452,9 +452,17 @@ mod tests {
         let u = append_user(&mem, id, "这周我在 Cursor 用了多久?", None)
             .await
             .unwrap();
-        append_assistant(&mem, id, "共 3 小时 [1]", &[cite(1)], false, (120, 45), Some(&u))
-            .await
-            .unwrap();
+        append_assistant(
+            &mem,
+            id,
+            "共 3 小时 [1]",
+            &[cite(1)],
+            false,
+            (120, 45),
+            Some(&u),
+        )
+        .await
+        .unwrap();
 
         let convs = list_conversations(&mem).await.unwrap();
         assert_eq!(convs.len(), 1);
@@ -551,7 +559,11 @@ mod tests {
 
         let (_, hist) = history_for_ask(&mem, id, None, 6).await.unwrap();
         let flat: Vec<String> = hist.iter().map(|h| h.content.clone()).collect();
-        assert_eq!(flat, vec!["问 1", "答 1 新版", "问 2"], "旧版回答不进上下文");
+        assert_eq!(
+            flat,
+            vec!["问 1", "答 1 新版", "问 2"],
+            "旧版回答不进上下文"
+        );
     }
 
     /// 重试的取材:沿路径找最近提问,历史截到它之前;新回答挂在路径叶子下。
