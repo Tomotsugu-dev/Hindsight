@@ -35,6 +35,7 @@ function baseAi(patch: Partial<AiConfig> = {}): AiConfig {
     summaryMain: "",
     summaryMmproj: "",
     chatMain: "",
+    chatThinking: "auto",
     promptLanguage: "zh",
     promptOverrides: {
       systemZh: "",

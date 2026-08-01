@@ -128,17 +128,84 @@ fn local_decision_schema() -> Value {
     })
 }
 
+/// Chat 思考模式偏好(设置 `ai.chat_thinking` 的解析形态)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThinkingMode {
+    Auto,
+    On,
+    Off,
+}
+
+impl ThinkingMode {
+    pub fn from_setting(s: &str) -> Self {
+        match s {
+            "on" => Self::On,
+            "off" => Self::Off,
+            _ => Self::Auto,
+        }
+    }
+}
+
+/// 云端请求体的思考控制注入(字段逐家查证 + `scripts/llm/thinking_probe.py`
+/// 实测,2026-08):
+/// - `Auto` 一个字节都不加——实测 DeepSeek 对未知字段 200 静默忽略,但
+///   OpenAI 对未知参数会 400,零注入是唯一零风险基线;
+/// - deepseek:`thinking.type` enabled/disabled(官方字段;实测 disabled 把
+///   completion 从 ~100 降到个位数 token,延迟同降);
+/// - openrouter:`reasoning.enabled`(不能与顶层 reasoning_effort 混发,否则 400);
+/// - openai:`reasoning_effort` medium/none;
+/// - 其它(together/groq/custom):`chat_template_kwargs.enable_thinking`
+///   (vLLM/SGLang 生态惯例,不认的端点以忽略为主)。
+fn inject_cloud_thinking(body: &mut Value, provider: &str, mode: ThinkingMode) {
+    let on = match mode {
+        ThinkingMode::Auto => return,
+        ThinkingMode::On => true,
+        ThinkingMode::Off => false,
+    };
+    match provider {
+        "deepseek" => {
+            body["thinking"] = json!({"type": if on { "enabled" } else { "disabled" }});
+        }
+        "openrouter" => {
+            body["reasoning"] = json!({"enabled": on});
+        }
+        "openai" => {
+            body["reasoning_effort"] = json!(if on { "medium" } else { "none" });
+        }
+        _ => {
+            body["chat_template_kwargs"] = json!({"enable_thinking": on});
+        }
+    }
+}
+
+/// 本地 llama-server 的思考注入。与云端不同,`Auto` 也注入 false:实测
+/// (Qwen3.5-4B)hybrid 模型默认思考,在 grammar(json_schema)约束 + 有限
+/// max_tokens 下思考吃光预算、决策 JSON 根本没机会输出——"默认不管"在
+/// 本地等于默认坏。`On` 时调用方需同时放大 max_tokens(见
+/// [`LOCAL_THINKING_MAX_TOKENS`]),否则必然空输出。
+fn inject_local_thinking(body: &mut Value, mode: ThinkingMode) {
+    let on = matches!(mode, ThinkingMode::On);
+    body["chat_template_kwargs"] = json!({"enable_thinking": on});
+}
+
+/// 本地开思考时的 max_tokens:完整思考链实测 1-2K token,再留决策 JSON 的份。
+const LOCAL_THINKING_MAX_TOKENS: u32 = 4096;
+
 /// Chat LLM 客户端:云端 or 本地,一个 step 接口。
 pub enum ChatLlm {
     Cloud {
         base_url: String,
         model: String,
         api_key: String,
+        /// 服务商预设(ai.external_provider),思考注入按它分发
+        provider: String,
+        thinking: ThinkingMode,
         http: reqwest::Client,
     },
     Local {
         base_url: String,
         model: String,
+        thinking: ThinkingMode,
         http: reqwest::Client,
     },
 }
@@ -147,7 +214,13 @@ const CHAT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 const MAX_ANSWER_TOKENS: u32 = 1024;
 
 impl ChatLlm {
-    pub fn cloud(endpoint: &str, model: String, api_key: String) -> Result<Self> {
+    pub fn cloud(
+        endpoint: &str,
+        model: String,
+        api_key: String,
+        provider: String,
+        thinking: ThinkingMode,
+    ) -> Result<Self> {
         let base_url = endpoint.trim().trim_end_matches('/').to_string();
         if base_url.is_empty() || model.trim().is_empty() {
             return Err(Error::InvalidInput("云端 API 地址或模型 ID 为空"));
@@ -156,14 +229,17 @@ impl ChatLlm {
             base_url,
             model,
             api_key,
+            provider,
+            thinking,
             http: http_client()?,
         })
     }
 
-    pub fn local(port: u16, model: String) -> Result<Self> {
+    pub fn local(port: u16, model: String, thinking: ThinkingMode) -> Result<Self> {
         Ok(Self::Local {
             base_url: format!("http://127.0.0.1:{port}/v1"),
             model,
+            thinking,
             http: http_client()?,
         })
     }
@@ -182,14 +258,16 @@ impl ChatLlm {
                 model,
                 api_key,
                 http,
+                ..
             } => (base_url, model, api_key.trim(), http),
             Self::Local {
                 base_url,
                 model,
                 http,
+                ..
             } => (base_url, model, "", http),
         };
-        let body = json!({
+        let mut body = json!({
             "model": model,
             "messages": [
                 {"role": "system", "content": system},
@@ -198,6 +276,17 @@ impl ChatLlm {
             "max_tokens": max_tokens,
             "temperature": 0,
         });
+        match self {
+            Self::Cloud {
+                provider, thinking, ..
+            } => inject_cloud_thinking(&mut body, provider, *thinking),
+            Self::Local { thinking, .. } => {
+                inject_local_thinking(&mut body, *thinking);
+                if *thinking == ThinkingMode::On {
+                    body["max_tokens"] = json!(max_tokens.max(LOCAL_THINKING_MAX_TOKENS));
+                }
+            }
+        }
         let mut req = http
             .post(format!("{base_url}/chat/completions"))
             .json(&body);
@@ -230,6 +319,8 @@ impl ChatLlm {
             base_url,
             model,
             api_key,
+            provider,
+            thinking,
             http,
         } = self
         else {
@@ -256,13 +347,14 @@ impl ChatLlm {
                 }
             });
         }
-        let body = json!({
+        let mut body = json!({
             "model": model,
             "messages": messages,
             "tools": tools_schema(),
             "tool_choice": "auto",
             "max_tokens": MAX_ANSWER_TOKENS,
         });
+        inject_cloud_thinking(&mut body, provider, *thinking);
         let mut req = http
             .post(format!("{base_url}/chat/completions"))
             .json(&body);
@@ -311,6 +403,7 @@ impl ChatLlm {
         let Self::Local {
             base_url,
             model,
+            thinking,
             http,
         } = self
         else {
@@ -331,16 +424,23 @@ impl ChatLlm {
             }
         }
         transcript.push_str("请输出下一步决策(JSON):");
-        let body = json!({
+        // 开思考时预算放大:思考链先于 grammar 决策输出,预算不够就只剩思考
+        let max_tokens = if *thinking == ThinkingMode::On {
+            LOCAL_THINKING_MAX_TOKENS
+        } else {
+            MAX_ANSWER_TOKENS
+        };
+        let mut body = json!({
             "model": model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": transcript},
             ],
-            "max_tokens": MAX_ANSWER_TOKENS,
+            "max_tokens": max_tokens,
             // llama-server 扩展参数:按 JSON schema 生成 grammar,采样层强约束
             "json_schema": local_decision_schema(),
         });
+        inject_local_thinking(&mut body, *thinking);
         let resp: Value = send_json(
             http.post(format!("{base_url}/chat/completions"))
                 .json(&body),
@@ -537,8 +637,83 @@ mod cloud_http_tests {
             &format!("http://127.0.0.1:{port}/v1/"),
             "test-model".into(),
             "sk-test".into(),
+            "custom".into(),
+            ThinkingMode::Auto,
         )
         .unwrap()
+    }
+
+    /// 思考注入矩阵(字段口径见 inject_cloud_thinking 注释,均经真机探针实测):
+    /// Auto 必须零注入——不认识字段的服务商(OpenAI)会 400。
+    #[test]
+    fn thinking_injection_matrix() {
+        let base = || json!({"model": "m", "messages": []});
+        // Auto:云端一个字节都不加
+        for p in ["deepseek", "openrouter", "openai", "custom", "together"] {
+            let mut b = base();
+            inject_cloud_thinking(&mut b, p, ThinkingMode::Auto);
+            assert_eq!(b, base(), "Auto 不得注入任何字段(provider={p})");
+        }
+        // deepseek:官方 thinking.type
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "deepseek", ThinkingMode::On);
+        assert_eq!(b["thinking"]["type"], "enabled");
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "deepseek", ThinkingMode::Off);
+        assert_eq!(b["thinking"]["type"], "disabled");
+        // openrouter:reasoning.enabled(不得同时出现顶层 reasoning_effort)
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "openrouter", ThinkingMode::Off);
+        assert_eq!(b["reasoning"]["enabled"], false);
+        assert!(b.get("reasoning_effort").is_none());
+        // openai:reasoning_effort
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "openai", ThinkingMode::On);
+        assert_eq!(b["reasoning_effort"], "medium");
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "openai", ThinkingMode::Off);
+        assert_eq!(b["reasoning_effort"], "none");
+        // 其它/自建:vLLM 生态惯例
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "custom", ThinkingMode::Off);
+        assert_eq!(b["chat_template_kwargs"]["enable_thinking"], false);
+
+        // 本地:Auto/Off 都必须显式关(hybrid 模型默认思考会吃光 grammar
+        // 决策的预算——实测正文为空),On 才开
+        for (mode, want) in [
+            (ThinkingMode::Auto, false),
+            (ThinkingMode::Off, false),
+            (ThinkingMode::On, true),
+        ] {
+            let mut b = base();
+            inject_local_thinking(&mut b, mode);
+            assert_eq!(b["chat_template_kwargs"]["enable_thinking"], want);
+        }
+    }
+
+    /// HTTP 级:deepseek + Off 的 step 请求体真的带上了 thinking.type=disabled。
+    #[tokio::test]
+    async fn step_cloud_sends_thinking_field_for_deepseek() {
+        let body = json!({
+            "choices": [{"message": {"role": "assistant", "content": "好的"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}
+        })
+        .to_string();
+        let (port, rx) = spawn_http_once("200 OK", body).await;
+        let llm = ChatLlm::cloud(
+            &format!("http://127.0.0.1:{port}/v1"),
+            "test-model".into(),
+            String::new(),
+            "deepseek".into(),
+            ThinkingMode::Off,
+        )
+        .unwrap();
+        llm.step("s", &[Turn::User("问".into())]).await.unwrap();
+        let raw = rx.await.unwrap();
+        assert!(
+            raw.contains(r#""thinking":{"type":"disabled"}"#),
+            "请求体应含 deepseek 官方关闭字段,实际:{raw}"
+        );
     }
 
     /// 纯文本作答形态:content 取 choices[0] 并 trim、usage 透传;

@@ -11,12 +11,22 @@ import {
   FolderInput,
   HardDrive,
   Info,
+  Atom,
+  Brain,
+  Code,
+  Eye,
   Loader2,
   Pause,
   Play,
   Plus,
+  Scale,
+  Star,
   Tag,
   Trash2,
+  Type,
+  Wrench,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import {
   api,
@@ -55,7 +65,78 @@ const CAP_CLASS_MAP: Record<string, string> = {
   CODE: styles.capBadgeCode,
   REASONING: styles.capBadgeReasoning,
   DEFAULT: styles.capBadgeDefault,
+  TOOLS: styles.capBadgeTools,
 };
+
+/** 能力 chip 的图标映射:文字标签换成图标,悬浮提示负责解释。
+ *  JSON 新增的未注册 cap 拿不到图标时回退文字显示,不至于变成空胶囊。 */
+const CAP_ICON_MAP: Record<string, LucideIcon> = {
+  TEXT: Type,
+  VISION: Eye,
+  FAST: Zap,
+  BALANCED: Scale,
+  R1: Atom,
+  CODE: Code,
+  REASONING: Brain,
+  DEFAULT: Star,
+  TOOLS: Wrench,
+};
+
+/** 能力/定位 chip 的唯一渲染件:推荐卡的 caps、本地模型的 Tool-use 判定
+ *  都走这里。`cap` 决定色板与图标(未注册 fallback 灰底文字),`label`
+ *  覆盖名称,`asText` 强制文字形态(警示类信息要显性,不适合图标)。
+ *  悬浮提示恒显示——图标不自明,tip = 名称 + 可选说明。 */
+function CapBadge({
+  cap,
+  label,
+  tip,
+  asText = false,
+}: {
+  cap: string;
+  label?: string;
+  tip?: string;
+  asText?: boolean;
+}) {
+  const name = label ?? cap;
+  const Icon = asText ? undefined : CAP_ICON_MAP[cap];
+  return (
+    <span
+      className={`${styles.capBadge} ${Icon ? styles.capBadgeIconOnly : ""} ${CAP_CLASS_MAP[cap] ?? styles.capBadgeUnknown}`}
+      aria-label={name}
+    >
+      {Icon ? <Icon size={12} strokeWidth={2.2} aria-hidden /> : name}
+      <span className={styles.capBadgeTip} role="tooltip">
+        {tip ? `${name} · ${tip}` : name}
+      </span>
+    </span>
+  );
+}
+
+/** 本地文件的工具调用判定 → chip。true = 绿 Tool-use;false = 灰"不支持";
+ *  null(读不出/未安装)不渲染。推荐卡与本地文件卡共用。 */
+function ToolSupportBadge({ supports }: { supports: boolean | null }) {
+  const { t } = useTranslation();
+  if (supports === true) {
+    return (
+      <CapBadge
+        cap="TOOLS"
+        label="Tool-use"
+        tip={t("aiSettings.models.local.toolsTip")}
+      />
+    );
+  }
+  if (supports === false) {
+    return (
+      <CapBadge
+        cap="DEFAULT"
+        asText
+        label={t("aiSettings.models.local.noTools")}
+        tip={t("aiSettings.models.local.noToolsTip")}
+      />
+    );
+  }
+  return null;
+}
 
 /** toolbar 筛选 / 排序的取值；前 3 个跟筛选维度一一对应。 */
 type FilterCap = "all" | "vision" | "text";
@@ -673,6 +754,10 @@ export function ModelsSection() {
             key={rec.mainFile}
             rec={rec}
             installed={isInstalled(rec)}
+            supportsTools={
+              local.find((m) => m.filename === rec.mainFile)?.supportsTools ??
+              null
+            }
             usedForSummary={summaryMain === rec.mainFile}
             busyFiles={busyFiles}
             partialMap={partialMap}
@@ -1034,6 +1119,7 @@ function LocalModelCard({
           <div className={styles.modelCardIdentity}>
             <div className={styles.modelCardNameRow}>
               <span className={styles.modelCardName}>{main.filename}</span>
+              <ToolSupportBadge supports={main.supportsTools} />
               <span className={styles.modelCardSize}>
                 {t("aiSettings.models.card.approxSize", {
                   size: totalGB.toFixed(1),
@@ -1089,6 +1175,7 @@ function LocalModelCard({
 function RecommendedCard({
   rec,
   installed,
+  supportsTools,
   usedForSummary,
   busyFiles,
   partialMap,
@@ -1100,6 +1187,8 @@ function RecommendedCard({
 }: {
   rec: RecommendedModel;
   installed: boolean;
+  /** 已装本地文件的工具调用声明(GGUF 模板判定);未安装/读不出 = null 不标 */
+  supportsTools: boolean | null;
   /** 该模型当前是段总结选择 → Text toggle 显示已激活 */
   usedForSummary: boolean;
   busyFiles: Set<string>;
@@ -1189,29 +1278,22 @@ function RecommendedCard({
                 新加未知 type 会 fallback 到灰色不报错。
                 title 走 i18n `card.capsTooltips.<CAP>`；i18next 找不到 key 时返回 key
                 自身，这里用 `defaultValue: ""` 让未注册的 cap silently 无 tooltip。 */}
-            {rec.caps.length > 0 ? (
+            {rec.caps.length > 0 || (installed && supportsTools !== null) ? (
               <div className={styles.modelCardCaps}>
-                {rec.caps.map((cap) => {
-                  // i18next 默认找不到 key 返回 key 自身——`defaultValue: ""`
-                  // 让未注册的 cap 拿到空串，下面据此决定要不要渲染 tooltip。
-                  const tip = t(
-                    `aiSettings.models.card.capsTooltips.${cap}`,
-                    { defaultValue: "" },
-                  );
-                  return (
-                    <span
-                      key={cap}
-                      className={`${styles.capBadge} ${CAP_CLASS_MAP[cap] ?? styles.capBadgeUnknown}`}
-                    >
-                      {cap}
-                      {tip ? (
-                        <span className={styles.capBadgeTip} role="tooltip">
-                          {tip}
-                        </span>
-                      ) : null}
-                    </span>
-                  );
-                })}
+                {installed && <ToolSupportBadge supports={supportsTools} />}
+                {rec.caps.map((cap) => (
+                  <CapBadge
+                    key={cap}
+                    cap={cap}
+                    // i18next 找不到 key 时返回 key 自身——defaultValue: ""
+                    // 让未注册的 cap 静默无 tooltip
+                    tip={
+                      t(`aiSettings.models.card.capsTooltips.${cap}`, {
+                        defaultValue: "",
+                      }) || undefined
+                    }
+                  />
+                ))}
               </div>
             ) : null}
           </div>

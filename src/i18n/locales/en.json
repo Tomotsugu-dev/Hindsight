@@ -926,7 +926,10 @@
       "local": {
         "title": "Local models (not in the recommended list)",
         "pairedMmproj": "Vision projector: {{name}}",
-        "orphanMmproj": "This is a vision projector file (mmproj) and cannot be used as a model by itself. To import a model, pick the much larger main GGUF file from the same repository."
+        "orphanMmproj": "This is a vision projector file (mmproj) and cannot be used as a model by itself. To import a model, pick the much larger main GGUF file from the same repository.",
+        "toolsTip": "This model's chat template declares tool calling — usable for Chat.",
+        "noTools": "No tool calling",
+        "noToolsTip": "This model's chat template does not declare tool calling, so it cannot be used for Chat; summaries are unaffected."
       }
     },
     "brief": {
@@ -955,6 +958,17 @@
       "sectionTitle": "Time segments",
       "sectionInfo": "AI summaries are produced per segment; screenshots within each segment are sampled by similarity before being sent to the model.",
       "rowLabel": "Segments"
+    },
+    "chat": {
+      "sectionTitle": "Chat",
+      "sectionDesc": "Chat-specific model behavior.",
+      "thinkingLabel": "Thinking mode",
+      "thinkingHint": "Controls whether the chat model produces a reasoning trace. Auto follows the model default (local models default to off so thinking does not crowd out the answer); on/off may not take effect with some cloud providers; enabling thinking locally is much slower.",
+      "thinking": {
+        "off": "Off",
+        "auto": "Auto",
+        "on": "On"
+      }
     },
     "filter": {
       "sectionTitle": "Filters",
@@ -1498,7 +1512,7 @@
       "local": "Local · {{model}}",
       "none": "No model selected"
     },
-    "localModelHint": "Heads-up: chat relies on tool calling, which very small local models may handle unreliably. A more capable local model gives better results.",
+    "localModelNoTools": "The current model {{model}} does not declare tool-calling support — answers may be unreliable, consider switching. Local models without tool-calling support are not shown in the model list.",
     "backfill": {
       "pending": "{{count}} screenshots are not yet in the text index; chat may miss them.",
       "action": "Index now",
@@ -1521,6 +1535,7 @@
     },
     "model": {
       "pickAria": "Choose chat model",
+      "noToolUseModels": "Your downloaded local models do not support tool calling. Chat needs a tool-use capable model — download one with the Tool-use badge in AI Settings → Models.",
       "empty": "No models available: configure a cloud API or download a local model"
     },
     "tokens": {

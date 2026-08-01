@@ -233,6 +233,9 @@ export interface ModelEntry {
   sizeBytes: number;
   /** 文件名包含 mmproj → 是 vision 投影，不是主模型 */
   isMmproj: boolean;
+  /** 对话模板是否声明工具调用（GGUF 头读取）：false = Chat 模型列表隐藏并在
+   *  模型页标注；null = 读不出/mmproj 不适用，fail-open 照常显示 */
+  supportsTools: boolean | null;
 }
 
 /** Hindsight 内置推荐 vision LLM。前端按这张表渲染推荐卡片。 */
@@ -469,6 +472,9 @@ export interface AiConfig {
   /** 对话（Chat）模型槽位：空 = 自动（云端配好走云端，否则同 step 2）；
    *  [`SUMMARY_CLOUD_SENTINEL`] = 明确云端；文件名 = 明确该本地 GGUF。 */
   chatMain: string;
+  /** Chat 思考模式："auto"（默认，云端不注入参数、本地默认关）/ "on" / "off"。
+   *  开关对部分云端服务商可能不生效（best-effort）。 */
+  chatThinking: string;
   /** AI 总结使用的提示词语言："zh" / "tw" / "en" / "ja" / "pt"。
    *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
   promptLanguage: PromptLanguage;

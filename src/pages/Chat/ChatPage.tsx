@@ -12,7 +12,7 @@ import { logError } from "../../lib/logger";
 import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import ModelBadge from "./ModelBadge";
-import { chatUsesCloud } from "./chatRouting";
+import { chatLocalModelName, chatUsesCloud } from "./chatRouting";
 import { ChatPrivacyDialog } from "./ChatPrivacyDialog";
 import BackfillBanner from "../../components/BackfillBanner/BackfillBanner";
 import styles from "./ChatPage.module.css";
@@ -45,6 +45,35 @@ export default function ChatPage() {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   // 隐私弹窗的挂起 resolver:发送流程 await 它,确认/取消后继续/中止
   const privacyResolver = useRef<((ok: boolean) => void) | null>(null);
+  // 当前本地 chat 模型未声明工具调用时 = 模型文件名(顶部黄条警示用);
+  // 这类模型已从模型下拉隐藏,但历史上选中的仍会生效,得指名提醒
+  const [noToolsModel, setNoToolsModel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings || chatUsesCloud(settings.ai)) {
+      setNoToolsModel(null);
+      return;
+    }
+    const name = chatLocalModelName(settings.ai);
+    if (!name) {
+      setNoToolsModel(null);
+      return;
+    }
+    let stale = false;
+    api
+      .listLocalModels()
+      .then((all) => {
+        if (stale) return;
+        const hit = all.find(
+          (m) => m.filename === name && m.supportsTools === false,
+        );
+        setNoToolsModel(hit ? name : null);
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [settings]);
 
   const setActiveId = useCallback((id: number | null) => {
     writeLastActive(id);
@@ -121,8 +150,10 @@ export default function ChatPage() {
         <ModelBadge />
       </header>
 
-      {!chatUsesCloud(settings.ai) && (
-        <p className={styles.localHint}>{t("chat.localModelHint")}</p>
+      {noToolsModel && (
+        <p className={styles.localHint}>
+          {t("chat.localModelNoTools", { model: noToolsModel })}
+        </p>
       )}
 
       {pendingStats && (

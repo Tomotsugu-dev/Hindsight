@@ -926,7 +926,10 @@
       "local": {
         "title": "本地模型（不在推荐列表中）",
         "pairedMmproj": "视觉投影：{{name}}",
-        "orphanMmproj": "这是视觉投影文件（mmproj），不能单独作为模型使用。如需导入模型，请选择同仓库中体积更大的主模型 GGUF 文件。"
+        "orphanMmproj": "这是视觉投影文件（mmproj），不能单独作为模型使用。如需导入模型，请选择同仓库中体积更大的主模型 GGUF 文件。",
+        "toolsTip": "该模型的对话模板声明了工具调用，可用于对话问答。",
+        "noTools": "不支持工具调用",
+        "noToolsTip": "该模型的对话模板未声明工具调用，不能用于对话问答；总结不受影响。"
       }
     },
     "brief": {
@@ -955,6 +958,17 @@
       "sectionTitle": "时段划分",
       "sectionInfo": "AI 按段汇总；段内截图按相似度抽帧再发给模型。",
       "rowLabel": "时段"
+    },
+    "chat": {
+      "sectionTitle": "对话",
+      "sectionDesc": "对话（Chat）专属的模型行为设置。",
+      "thinkingLabel": "思考模式",
+      "thinkingHint": "控制对话模型是否输出思考过程。自动 = 跟随模型默认（本地模型默认关闭，避免思考挤占回答）；开启/关闭对部分云端服务商可能不生效；本地开启思考会显著变慢。",
+      "thinking": {
+        "off": "关闭",
+        "auto": "自动",
+        "on": "开启"
+      }
     },
     "filter": {
       "sectionTitle": "过滤",
@@ -1498,7 +1512,7 @@
       "local": "本地 · {{model}}",
       "none": "未选择模型"
     },
-    "localModelHint": "提示：对话依赖模型的工具调用能力，过小的本地模型可能答非所问；建议选用推理能力更强的本地模型。",
+    "localModelNoTools": "当前模型 {{model}} 未声明工具调用支持，回答可能不可靠，建议更换；不支持工具调用的本地模型不会显示在模型列表中。",
     "backfill": {
       "pending": "有 {{count}} 张截图尚未进入文字索引，对话可能查不到它们。",
       "action": "立即回填",
@@ -1521,6 +1535,7 @@
     },
     "model": {
       "pickAria": "选择对话模型",
+      "noToolUseModels": "已下载的本地模型不支持工具调用；对话需要支持工具调用（Tool-use）的模型，请在「AI 设置 → 模型」下载带 Tool-use 标记的模型。",
       "empty": "没有可用模型：请配置云端 API 或下载本地模型"
     },
     "tokens": {

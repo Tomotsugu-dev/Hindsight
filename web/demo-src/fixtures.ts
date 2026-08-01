@@ -835,6 +835,7 @@ export const mockSettings: Settings = {
     summaryMain: "",
     summaryMmproj: "",
     chatMain: "",
+    chatThinking: "auto",
     promptLanguage: "zh",
     promptOverrides: {
       systemZh: "",
@@ -928,12 +929,14 @@ export const mockLocalModels: ModelEntry[] = [
     path: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
     sizeBytes: 2_100_000_000,
     isMmproj: false,
+    supportsTools: true,
   },
   {
     filename: "mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
     path: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
     sizeBytes: 1_300_000_000,
     isMmproj: true,
+    supportsTools: null,
   },
 ];
 

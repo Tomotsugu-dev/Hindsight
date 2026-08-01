@@ -121,6 +121,10 @@ pub struct ModelEntry {
     pub size_bytes: u64,
     /// 文件名包含 `mmproj` 标记 → vision 投影文件，不是主模型
     pub is_mmproj: bool,
+    /// 对话模板是否声明工具调用(Chat 可用性的作者级信号,见 [`super::gguf`]):
+    /// `Some(false)` = 模板无 tools 分支,Chat 模型列表将其隐藏并在模型页标注;
+    /// `None` = 文件头读不出/mmproj 不适用——fail-open,照常显示。
+    pub supports_tools: Option<bool>,
 }
 
 /// 扫描模型目录，返回所有 `.gguf` 文件。目录不存在时返回空 `Vec`，
@@ -146,13 +150,21 @@ pub async fn list_local(cfg: &AiConfig) -> Result<Vec<ModelEntry>> {
             continue;
         }
         let size_bytes = item.metadata().await.map(|m| m.len()).unwrap_or(0);
+        // 命名约定：`*-mmproj-*.gguf` 或 `mmproj.gguf` 之类，名字里
+        // 必含 mmproj。HF 上 ggml-org / Mungert 等几个主流维护者都用这个
+        let is_mmproj = filename.to_ascii_lowercase().contains("mmproj");
+        // 工具调用声明只对主模型有意义;头部顺序读毫秒级,列表规模下可直读
+        let supports_tools = if is_mmproj {
+            None
+        } else {
+            super::gguf::chat_template_supports_tools(&path)
+        };
         entries.push(ModelEntry {
             filename: filename.to_string(),
             path: path.to_string_lossy().into_owned(),
             size_bytes,
-            // 命名约定：`*-mmproj-*.gguf` 或 `mmproj.gguf` 之类，名字里
-            // 必含 mmproj。HF 上 ggml-org / Mungert 等几个主流维护者都用这个
-            is_mmproj: filename.to_ascii_lowercase().contains("mmproj"),
+            is_mmproj,
+            supports_tools,
         });
     }
 

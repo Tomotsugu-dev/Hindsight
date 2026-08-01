@@ -1244,6 +1244,22 @@
   border-color: color-mix(in oklab, #1e3a8a 22%, transparent);
   color: #1e3a8a;
 }
+
+/* 本地模型的工具调用声明(GGUF 模板判定):翡翠绿 = 对话可用 */
+.capBadgeTools {
+  background: color-mix(in oklab, #047857 11%, transparent);
+  border-color: color-mix(in oklab, #047857 22%, transparent);
+  color: #047857;
+}
+
+/* 图标形态的 chip:方形匀称内边距,图标居中(文字形态保持原 padding) */
+.capBadgeIconOnly {
+  padding: 2px 5px;
+}
+
+.capBadgeIconOnly svg {
+  display: block;
+}
 .capBadgeVision {
   background: color-mix(in oklab, #0f766e 11%, transparent);
   border-color: color-mix(in oklab, #0f766e 22%, transparent);

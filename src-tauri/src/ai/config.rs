@@ -110,6 +110,14 @@ pub struct AiConfig {
     /// 读取走 [`Self::chat_use_cloud`] / [`Self::effective_chat_main`]。
     #[serde(default)]
     pub chat_main: String,
+    /// Chat 思考模式偏好:"auto"(默认)/"on"/"off"。仅作用于对话,不碰总结。
+    /// 云端 auto = 不注入任何参数(模型按服务商默认;实测 DeepSeek 未知字段
+    /// 会被忽略但 OpenAI 会 400,零注入是唯一零风险基线);on/off 按 provider
+    /// 注入各家字段。本地 auto/off 都注入 enable_thinking=false——实测
+    /// (2026-08,Qwen3.5-4B)hybrid 模型默认思考会吃光 token 预算,
+    /// grammar 约束的决策 JSON 根本没机会输出。见 chat::llm::inject_thinking。
+    #[serde(default = "default_chat_thinking")]
+    pub chat_thinking: String,
     /// AI 总结使用的提示词语言（决定模型出哪种语言的总结 + 默认提示词模板用哪套）。
     /// 取值 "zh" / "tw" / "en" / "ja" / "pt"；非法值 sanitize 时回退到 "zh"。
     pub prompt_language: String,
@@ -292,6 +300,7 @@ impl Default for AiConfig {
             summary_main: String::new(),
             summary_mmproj: String::new(),
             chat_main: String::new(),
+            chat_thinking: default_chat_thinking(),
             auto_summary: false,
             auto_summary_at: None,
             auto_summary_times: Vec::new(),
@@ -309,6 +318,10 @@ impl Default for AiConfig {
 
 /// 默认 5 段，覆盖整 24 小时（00-06 / 06-09 / 09-12 / 12-18 / 18-24）；
 /// 标签按用户语言取一套。新装首启时通过 [`detect_default_lang`] 拿系统 locale。
+fn default_chat_thinking() -> String {
+    "auto".to_string()
+}
+
 pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
     let labels: [&str; 5] = match lang {
         "en" => [
@@ -384,6 +397,13 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
             next.external_provider.trim().to_string()
         }
         _ => "openai".to_string(),
+    };
+
+    // chat_thinking:三态白名单,非法回退 "auto"(= 不注入任何思考参数)
+    next.chat_thinking = match next.chat_thinking.trim() {
+        "on" => "on".to_string(),
+        "off" => "off".to_string(),
+        _ => "auto".to_string(),
     };
 
     let valid_segments: Vec<AiSegment> = next

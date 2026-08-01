@@ -25,6 +25,9 @@ export default function ModelBadge() {
   const { settings, update, reload } = useSettings();
   const [open, setOpen] = useState(false);
   const [localModels, setLocalModels] = useState<ModelEntry[]>([]);
+  // 下载过主模型、但全因不支持工具调用被过滤 → 空态要说清"不是没模型,
+  // 是模型不合格",否则用户对着空列表和自己下过的模型对不上号
+  const [hasToollessOnly, setHasToollessOnly] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
 
   // 点外面/Esc 关闭菜单
@@ -55,10 +58,16 @@ export default function ModelBadge() {
     const next = !open;
     setOpen(next);
     if (next) {
-      // 打开时拉本地模型清单(mmproj 是投影文件,不是可选主模型)
+      // 打开时拉本地模型清单。过滤:mmproj 是投影文件;对话模板未声明工具
+      // 调用的模型(Chat 的硬前提)不列——为什么不列在对话页黄条里有说明
       api
         .listLocalModels()
-        .then((all) => setLocalModels(all.filter((m) => !m.isMmproj)))
+        .then((all) => {
+          const mains = all.filter((m) => !m.isMmproj);
+          const usable = mains.filter((m) => m.supportsTools !== false);
+          setLocalModels(usable);
+          setHasToollessOnly(usable.length === 0 && mains.length > 0);
+        })
         .catch((e) => logError("chat.listModels", e));
     }
   };
@@ -181,7 +190,11 @@ export default function ModelBadge() {
           {localModels.length === 0 &&
             ai.externalProfiles.length === 0 &&
             !chatCloudReady(ai) && (
-              <p className={styles.badgeMenuEmpty}>{t("chat.model.empty")}</p>
+              <p className={styles.badgeMenuEmpty}>
+                {hasToollessOnly
+                  ? t("chat.model.noToolUseModels")
+                  : t("chat.model.empty")}
+              </p>
             )}
         </div>
       )}

@@ -926,7 +926,10 @@
       "local": {
         "title": "Modelos locais (fora da lista recomendada)",
         "pairedMmproj": "Projetor de visão: {{name}}",
-        "orphanMmproj": "Este é um arquivo de projeção visual (mmproj) e não pode ser usado como modelo sozinho. Para importar um modelo, escolha o arquivo GGUF principal, bem maior, do mesmo repositório."
+        "orphanMmproj": "Este é um arquivo de projeção visual (mmproj) e não pode ser usado como modelo sozinho. Para importar um modelo, escolha o arquivo GGUF principal, bem maior, do mesmo repositório.",
+        "toolsTip": "O template de conversa deste modelo declara chamadas de ferramentas — utilizável no Chat.",
+        "noTools": "Sem chamadas de ferramentas",
+        "noToolsTip": "O template de conversa deste modelo não declara chamadas de ferramentas, então não pode ser usado no Chat; os resumos não são afetados."
       }
     },
     "brief": {
@@ -955,6 +958,17 @@
       "sectionTitle": "Segmentos de tempo",
       "sectionInfo": "Os resumos de IA são produzidos por segmento; as capturas de tela dentro de cada segmento são amostradas por similaridade antes de serem enviadas ao modelo.",
       "rowLabel": "Segmentos"
+    },
+    "chat": {
+      "sectionTitle": "Chat",
+      "sectionDesc": "Comportamento do modelo específico do Chat.",
+      "thinkingLabel": "Modo de raciocínio",
+      "thinkingHint": "Controla se o modelo de chat produz o processo de raciocínio. Auto segue o padrão do modelo (modelos locais ficam desligados por padrão para o raciocínio não consumir a resposta); ligar/desligar pode não ter efeito em alguns provedores; ativar localmente é bem mais lento.",
+      "thinking": {
+        "off": "Desligado",
+        "auto": "Auto",
+        "on": "Ligado"
+      }
     },
     "filter": {
       "sectionTitle": "Filtros",
@@ -1498,7 +1512,7 @@
       "local": "Local · {{model}}",
       "none": "Nenhum modelo selecionado"
     },
-    "localModelHint": "Dica: o chat depende de tool calling, que modelos locais muito pequenos podem executar de forma instável. Um modelo local mais capaz traz melhores resultados.",
+    "localModelNoTools": "O modelo atual {{model}} não declara suporte a chamadas de ferramentas — as respostas podem ser pouco confiáveis; considere trocar. Modelos locais sem esse suporte não aparecem na lista de modelos.",
     "backfill": {
       "pending": "{{count}} capturas de tela ainda não estão no índice de texto; o chat pode não encontrá-las.",
       "action": "Indexar agora",
@@ -1521,6 +1535,7 @@
     },
     "model": {
       "pickAria": "Escolher modelo do chat",
+      "noToolUseModels": "Os modelos locais baixados não suportam chamadas de ferramentas. O Chat precisa de um modelo com Tool-use — baixe um com o selo Tool-use em Configurações de IA → Modelos.",
       "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
     },
     "tokens": {

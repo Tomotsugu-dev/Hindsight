@@ -627,6 +627,7 @@ mod tests {
     ///   `CHAT_E2E_ENDPOINT=https://... CHAT_E2E_MODEL=... CHAT_E2E_KEY=... \
     ///    cargo test --lib chat::engine::tests::e2e -- --ignored --nocapture`
     /// 本地引擎:先手动起 llama-server,设 CHAT_E2E_PORT + CHAT_E2E_MODEL。
+    /// 思考档位:CHAT_E2E_THINKING=on/off/auto(缺省 auto,同前端设置语义)。
     #[tokio::test]
     #[ignore]
     async fn e2e_golden_questions() {
@@ -634,11 +635,16 @@ mod tests {
             .filter_level(log::LevelFilter::Warn)
             .is_test(true)
             .try_init();
+        let thinking = crate::chat::llm::ThinkingMode::from_setting(
+            &std::env::var("CHAT_E2E_THINKING").unwrap_or_default(),
+        );
         let llm = if let Ok(endpoint) = std::env::var("CHAT_E2E_ENDPOINT") {
             ChatLlm::cloud(
                 &endpoint,
                 std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL"),
                 std::env::var("CHAT_E2E_KEY").unwrap_or_default(),
+                std::env::var("CHAT_E2E_PROVIDER").unwrap_or_else(|_| "custom".into()),
+                thinking,
             )
             .unwrap()
         } else {
@@ -649,6 +655,7 @@ mod tests {
             ChatLlm::local(
                 port,
                 std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL"),
+                thinking,
             )
             .unwrap()
         };
@@ -866,6 +873,8 @@ mod loop_tests {
             &format!("http://127.0.0.1:{port}/v1"),
             "test-model".into(),
             String::new(),
+            "custom".into(),
+            crate::chat::llm::ThinkingMode::Auto,
         )
         .unwrap()
     }

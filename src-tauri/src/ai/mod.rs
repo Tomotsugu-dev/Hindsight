@@ -16,6 +16,7 @@ pub mod auto_summary;
 pub mod binary;
 pub mod config;
 pub mod embedding_runtime;
+pub mod gguf;
 pub mod job_guard;
 pub mod llm;
 pub mod models;
