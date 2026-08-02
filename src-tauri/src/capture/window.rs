@@ -215,6 +215,10 @@ pub(crate) struct WindowCandidate {
 ///
 /// 返回 `None` = 没有可用窗口，或主窗口本身就没标题（例如 QQ音乐的播放器窗口，
 /// CGWindowList / SCK / AX 三套 API 都返回空串）——那种是真·无标题，救不回来。
+///
+/// 非 macOS 上只有单测在用（Windows 走 GetWindowText，没有这套窗口枚举），
+/// 但保持跨平台编译以便测试在所有平台都跑。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn pick_main_window_title(cands: &[WindowCandidate], pid: u32) -> Option<String> {
     let main = cands
         .iter()

@@ -420,7 +420,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
     }
 
-    let mut info = match window::current_window() {
+    let info = match window::current_window() {
         Ok(i) => i,
         Err(e) => {
             log::debug!("跳过本次采集：{e}");
@@ -437,16 +437,23 @@ async fn tick(inner: &Inner) -> Result<()> {
     // FocusState 比较），一次失手就是一整段"无标题"——实测占 Mac 侧记录的 20.3%，
     // Windows 侧只有 0.5%。这里改走截图同款的 SCK 枚举补一次（~100ms，故扔
     // spawn_blocking），只在便宜路径失败时才付这个钱。
+    //
+    // 整块用 cfg 后重新绑定 info，而不是把上面写成 `let mut info`：
+    // 非 macOS 上这段被编掉，那个 mut 就成了未使用（Windows CI 的 -D warnings 会红）。
     #[cfg(target_os = "macos")]
-    if info.title.trim().is_empty() && info.pid > 0 {
-        let pid = info.pid;
-        if let Ok(Some(title)) =
-            tokio::task::spawn_blocking(move || window::macos_recover_title(pid)).await
-        {
-            log::debug!("SCK 补取到标题：{} -> {title}", info.app_name);
-            info.title = title;
+    let info = {
+        let mut info = info;
+        if info.title.trim().is_empty() && info.pid > 0 {
+            let pid = info.pid;
+            if let Ok(Some(title)) =
+                tokio::task::spawn_blocking(move || window::macos_recover_title(pid)).await
+            {
+                log::debug!("SCK 补取到标题：{} -> {title}", info.app_name);
+                info.title = title;
+            }
         }
-    }
+        info
+    };
 
     // 调试字符串残片（如 "8607797 pid=58750 ]"）：进程启动/退出瞬间 AppKit/xcap
     // 偶尔给出的垃圾名。写进 activities 会在前端出现无图标的幽灵应用行，跳过本 tick。
