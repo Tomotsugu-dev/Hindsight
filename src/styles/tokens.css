@@ -66,6 +66,11 @@
   --border-subtle: rgba(0, 0, 0, 0.05);
   --border-default: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.12);
+
+  /* 滚动条:自绘替代系统原生(Windows 原生方块箭头与整体视觉不搭)。
+     滑块偏中性、轨道透明,只在需要时存在感刚够 */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
   /* 卡片 / 按钮顶部那道内高光亮线；暗色下调到很淡，避免亮边过重 */
   --hairline-hi: rgba(255, 255, 255, 0.6);
 
@@ -151,8 +156,11 @@
   --z-chrome-drag: 2020;     /* AppLayout .dragStrip 窗口拖动条（原 5） */
   --z-chrome-floattab: 2030; /* FloatingTabNav 浮动 Tab 副本（原 6） */
   --z-chrome-controls: 2040; /* WindowControls 窗口红绿灯/最小化关闭（原 10） */
-  /* —— Dropdown / popover：浮在页面内容之上的菜单（原 30/50/100，互不为兄弟，统一为一档） */
-  --z-dropdown: 1000;
+  /* —— Dropdown / popover：浮在页面内容之上的菜单（原 30/50/100，互不为兄弟，统一为一档）。
+     必须**高于 .dragStrip(2020)**：那是覆盖窗口顶部 36px 的透明拖动条，压在弹窗上会让
+     弹窗上半部分点不动，一拖还把整个应用窗口拖走（分类页的图标选择器实测中招）。
+     同时保持低于窗口按钮(2040)，否则下拉展开时用户关不掉窗口。 */
+  --z-dropdown: 2035;
   /* —— Modal：遮罩 + 对话框（原 9998/9999） */
   --z-modal-backdrop: 9000;
   --z-modal: 9010;
@@ -204,6 +212,10 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* 深底上黑滑块隐形,转半透明白 */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.34);
   --hairline-hi: rgba(255, 255, 255, 0.05);
 
   /* 控件底转成很淡的白 wash——深底上是一块微微浮起的控件，而不是灰白亮块 */

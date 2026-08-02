@@ -40,7 +40,21 @@ export function AppearancePicker({
   const styleVar = { "--cat-color": color } as CSSProperties;
 
   return (
-    <div ref={ref} className={styles.popover} style={styleVar}>
+    // 下面的 onMouseDown 不是交互入口,只是把事件截在面板内(理由见 div 上的
+    // 注释)。面板本身没有可聚焦语义,加 role/键盘处理反而会误导辅助技术。
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      ref={ref}
+      className={styles.popover}
+      style={styleVar}
+      // 面板是独立浮层,但 DOM 上是分类行 / 大类卡片的后代,而那两层都用
+      // mousedown 启动拖拽、只放行 button|input|[role=button]——面板的空白处、
+      // 「颜色」「图标」标签、图标网格的滚动条都不在放行名单里,按住就等于
+      // 按住了卡片,整组被拖起来。这里把内部 mousedown 截住。
+      // 用 React 合成事件的 stopPropagation:外部点击关闭走的是原生 document
+      // 监听(在 React root 之外),不受影响,仍能正常关闭。
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div className={styles.section}>
         <span className={styles.label}>{t("components.appearancePicker.color")}</span>
         <div className={styles.colorRow}>

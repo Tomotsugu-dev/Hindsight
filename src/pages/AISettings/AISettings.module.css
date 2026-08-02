@@ -1941,7 +1941,7 @@
    top/left/width/max-height 全由 ExternalApiTab 量出来后写在 style 上 */
 .modelSuggestMenu {
   position: fixed;
-  z-index: var(--z-modal);
+  z-index: var(--z-dropdown);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px;

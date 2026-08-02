@@ -65,10 +65,16 @@
   /* 图标集扩到 60 个(约 9 行):封顶 ~5.5 行内部滚动,不把行撑爆 */
   max-height: 188px;
   overflow-y: auto;
+  /* 只允许竖向滚动。CSS 规范里 overflow-y 非 visible 会把 overflow-x 的
+     visible 提升成 auto,格子稍一溢出就冒出一条横向滚动条 */
+  overflow-x: hidden;
 }
 
 .iconBtn {
-  width: 30px;
+  /* 宽度跟着 1fr 列走:写死 30px 时 7 列合计超过面板可用宽度,
+     垂直滚动条再占掉 10px,横向就被撑出来了 */
+  width: 100%;
+  min-width: 0;
   height: 30px;
   display: inline-flex;
   align-items: center;

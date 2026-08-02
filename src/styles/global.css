@@ -168,3 +168,43 @@ a {
     animation-duration: 1ms !important;
   }
 }
+
+/* ── 滚动条统一 ─────────────────────────────────────────────────
+   系统原生滚动条(尤其 Windows 的方块箭头)跟应用视觉完全两套,
+   这里统一成细长圆角滑块:轨道透明、滑块用中性色跟随主题、hover 加深。
+
+   借 border + background-clip 做出"滑块比轨道窄"的留白,不必真去画轨道。
+
+   局部想隐藏滚动条的地方(如 badgeMenu 用 scrollbar-width: none)特异性
+   更高,仍然生效——这里只兜没有单独声明过的容器。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+/* 双向滚动时的交叉角,别露出系统底色 */
+::-webkit-scrollbar-button {
+  display: none;
+}
