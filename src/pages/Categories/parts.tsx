@@ -11,22 +11,15 @@ import { displayCategoryName } from "../../utils/categoryName";
 import { logError } from "../../lib/logger";
 import { ScrollIndicator } from "../../components/ScrollIndicator/ScrollIndicator";
 import { assignMenuLayout, type AssignMenuLayout } from "./menuLayout";
+import {
+  buildAppSuggestions,
+  filterAppSuggestions,
+  SUGGEST_MAX,
+  type AppSuggestion,
+} from "../../lib/appSuggest";
 import styles from "./Categories.module.css";
 
-/** 自动补全候选:Hindsight 记录过的一个进程 + 它的归属信息。 */
-interface AppSuggestion {
-  process: string;
-  display: string;
-  /** 所在应用组的显示名(与 display 不同时作为附加匹配字段) */
-  groupName: string;
-  /** 现属分类 id;null = 未分类 */
-  categoryId: string | null;
-  /** 近 7 天用时,用作默认排序(常用的排前面) */
-  recentSecs: number;
-}
 
-/** 面板最多渲染的候选数(超出滚动)。 */
-const SUGGEST_MAX = 8;
 
 export function AppList({ category }: { category: Category }) {
   const { t } = useTranslation();
@@ -70,43 +63,16 @@ export function AppList({ category }: { category: Category }) {
     };
   }, [adding, groups]);
 
-  // 候选池:全部已记录进程,按近 7 天用时降序;排除已在本分类的
-  const pool = useMemo<AppSuggestion[]>(() => {
-    if (!groups) return [];
-    const inThis = new Set(category.apps);
-    return groups
-      .flatMap((g) =>
-        g.members.map((m) => ({
-          process: m.processName,
-          display: displayAppName(m.processName),
-          groupName: g.displayName,
-          categoryId: g.categoryId,
-          recentSecs: m.recentSecs,
-        })),
-      )
-      .filter((s) => !inThis.has(s.process))
-      // 未分类优先(添加应用的最高频场景是收编新应用),组内再按近 7 天用时;
-      // 已分类的靠输入过滤依然可选(选中即挪移,右侧有现属分类标注)
-      .sort(
-        (a, b) =>
-          Number(a.categoryId !== null) - Number(b.categoryId !== null) ||
-          b.recentSecs - a.recentSecs,
-      );
-  }, [groups, category.apps]);
+  // 候选池 / 输入过滤走共用模块(与设置→隐私的应用关键词同一套规则)
+  const pool = useMemo<AppSuggestion[]>(
+    () => (groups ? buildAppSuggestions(groups, category.apps) : []),
+    [groups, category.apps],
+  );
 
-  // 输入过滤:进程名 / 显示名 / 组名 子串匹配,忽略大小写
-  const matches = useMemo(() => {
-    const q = draft.trim().toLowerCase();
-    const hit = q
-      ? pool.filter(
-          (s) =>
-            s.process.toLowerCase().includes(q) ||
-            s.display.toLowerCase().includes(q) ||
-            s.groupName.toLowerCase().includes(q),
-        )
-      : pool;
-    return hit.slice(0, SUGGEST_MAX);
-  }, [pool, draft]);
+  const matches = useMemo(
+    () => filterAppSuggestions(pool, draft, SUGGEST_MAX),
+    [pool, draft],
+  );
 
   // 输入变化后高亮回到"无",避免指到过滤后错位的项
   useEffect(() => {

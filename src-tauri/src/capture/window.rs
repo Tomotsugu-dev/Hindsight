@@ -120,6 +120,114 @@ fn macos_resolve_focused_window() -> Option<WindowInfo> {
     })
 }
 
+/// SCK 取标题失败后的退避时长。没授 Screen Recording 权限的机器上
+/// `SCShareableContent::get()` 每次都要失败，而它单次开销 ~100ms（CGWindowList
+/// 只要 ~1ms），不退避的话每个 tick 都白烧。
+#[cfg(target_os = "macos")]
+const SCK_TITLE_BACKOFF: std::time::Duration = std::time::Duration::from_secs(300);
+
+#[cfg(target_os = "macos")]
+static SCK_TITLE_BLOCKED_UNTIL: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// 便宜路径（CGWindowList / xcap）取不到标题时的兜底：走截图那条 SCK 枚举。
+///
+/// **为什么值得多花这 ~100ms**：SCK 跨 Space 跨显示器枚举，且按面积挑主窗口，
+/// 不受 z 序和"窗口不在当前 Space"影响。实测口径——同一 tick、同一 PID 下，
+/// 标题取空的会话里有 87.6%（Chrome 93.2%）截图是成功的，说明 SCK 当时找得到
+/// 那个窗口，那么从它上面读 title 就能拿到。
+///
+/// **为什么不直接当主路径**：SCK 单次枚举 ~100ms、CGWindowList ~1ms，而后者在
+/// 稳态下就够用（实测 45 轮忠实复刻 + 299 次采样 0 失败）。只在失败时付费。
+///
+/// 调用方必须在 `spawn_blocking` 里跑（同 [`super::screenshot_macos`]）。
+#[cfg(target_os = "macos")]
+pub fn macos_recover_title(pid: u32) -> Option<String> {
+    use screencapturekit::shareable_content::SCShareableContent;
+
+    {
+        let blocked = SCK_TITLE_BLOCKED_UNTIL.lock().ok()?;
+        if blocked.is_some_and(|until| std::time::Instant::now() < until) {
+            return None;
+        }
+    }
+
+    // SCK 内部大量 autorelease 临时对象；同截图路径包一层 pool，别让它们沉在
+    // 常驻的 blocking 线程上。
+    objc2::rc::autoreleasepool(|_| {
+        let content = match SCShareableContent::get() {
+            Ok(c) => c,
+            Err(e) => {
+                // 没权限 / SCK 不可用：退避，别每 tick 白烧 100ms
+                log::debug!(
+                    "SCK 补取标题失败，退避 {}s：{e:?}",
+                    SCK_TITLE_BACKOFF.as_secs()
+                );
+                if let Ok(mut blocked) = SCK_TITLE_BLOCKED_UNTIL.lock() {
+                    *blocked = Some(std::time::Instant::now() + SCK_TITLE_BACKOFF);
+                }
+                return None;
+            }
+        };
+
+        let cands: Vec<WindowCandidate> = content
+            .windows()
+            .iter()
+            .map(|w| {
+                let frame = w.frame();
+                WindowCandidate {
+                    pid: w
+                        .owning_application()
+                        .map(|app| app.process_id() as u32)
+                        .unwrap_or(0),
+                    layer: w.window_layer(),
+                    on_screen: w.is_on_screen(),
+                    area: frame.width * frame.height,
+                    title: w.title().unwrap_or_default(),
+                }
+            })
+            .collect();
+
+        pick_main_window_title(&cands, pid)
+    })
+}
+
+/// 一个候选窗口的取标题所需属性（[`pick_main_window_title`] 的输入）。
+/// 独立于 SCK 类型定义，好让选择逻辑可以脱离 macOS API 单测。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WindowCandidate {
+    pub pid: u32,
+    pub layer: i32,
+    pub on_screen: bool,
+    pub area: f64,
+    pub title: String,
+}
+
+/// 从候选里挑「这个进程的主窗口」的标题：layer 0 + 在屏 + 面积最大。
+///
+/// 三条过滤与 [`super::screenshot_macos`] 的窗口选择**逐条对齐**——两边必须挑中
+/// 同一个窗口，否则记下的标题和存下的像素来自不同窗口。
+///
+/// 面积最大这条同时解决了实测到的"无标题"元凶：每个 app 名下都挂着一批
+/// 2128×30 / 1710×34 的无名窄条窗口（层级同为 0），按 z 序取第一个会挑中它们、
+/// 读出空标题；按面积取则永远输给真正的主窗口（如 2128×1114）。
+///
+/// 返回 `None` = 没有可用窗口，或主窗口本身就没标题（例如 QQ音乐的播放器窗口，
+/// CGWindowList / SCK / AX 三套 API 都返回空串）——那种是真·无标题，救不回来。
+pub(crate) fn pick_main_window_title(cands: &[WindowCandidate], pid: u32) -> Option<String> {
+    let main = cands
+        .iter()
+        .filter(|w| w.pid == pid && w.layer == 0 && w.on_screen)
+        .max_by(|a, b| {
+            a.area
+                .partial_cmp(&b.area)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })?;
+    let title = main.title.trim();
+    (!title.is_empty()).then(|| title.to_string())
+}
+
 /// xcap 在某些情况下（特别是 UWP 应用）会把完整路径塞进 app_name。
 /// 取最后一段斜杠后的内容作为真正的进程名。
 fn basename(s: &str) -> String {
@@ -176,6 +284,115 @@ pub(crate) fn is_system_idle_proxy(app_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// fixture 尺寸取自实测：主窗口 2128×1114，无名窄条 2128×30 / 1710×34。
+    fn cand(pid: u32, layer: i32, on_screen: bool, w: f64, h: f64, title: &str) -> WindowCandidate {
+        WindowCandidate {
+            pid,
+            layer,
+            on_screen,
+            area: w * h,
+            title: title.into(),
+        }
+    }
+
+    #[test]
+    fn main_window_title_beats_nameless_strips() {
+        // 复现「无标题」的真实场景：同一 PID 名下一堆无名窄条 + 一个真窗口，
+        // 按 z 序取第一个会读到空串，按面积取则拿到真标题。
+        let cands = vec![
+            cand(760, 0, true, 2128.0, 30.0, ""),
+            cand(760, 0, true, 1710.0, 34.0, ""),
+            cand(
+                760,
+                0,
+                true,
+                2128.0,
+                1114.0,
+                "Issue #24 · Tomotsugu-dev/Hindsight",
+            ),
+            cand(760, 0, true, 2128.0, 30.0, ""),
+        ];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("Issue #24 · Tomotsugu-dev/Hindsight")
+        );
+    }
+
+    #[test]
+    fn main_window_title_ignores_other_processes() {
+        let cands = vec![
+            cand(1, 0, true, 3000.0, 2000.0, "别的 app 的大窗口"),
+            cand(760, 0, true, 1200.0, 800.0, "自己的窗口"),
+        ];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("自己的窗口")
+        );
+    }
+
+    #[test]
+    fn main_window_title_skips_non_normal_layer_and_offscreen() {
+        // layer≠0 = dock / menubar / 系统模态之流；on_screen=false = 其它 Space
+        // 或最小化。两者都不该被当成主窗口（与截图路径的过滤一致）。
+        let cands = vec![
+            cand(760, 103, true, 4000.0, 3000.0, "提示气泡"),
+            cand(760, 0, false, 5000.0, 4000.0, "另一个 Space 的窗口"),
+            cand(760, 0, true, 800.0, 600.0, "当前窗口"),
+        ];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("当前窗口")
+        );
+    }
+
+    #[test]
+    fn main_window_title_none_when_genuinely_untitled() {
+        // QQ音乐那种:主窗口本身就没标题，三套 API 都返回空串——救不回来，
+        // 返回 None 让调用方保持"无标题"，别拿窄条的空串冒充"取到了"。
+        let cands = vec![
+            cand(760, 0, true, 1049.0, 709.0, "   "),
+            cand(760, 0, true, 300.0, 200.0, "小面板"),
+        ];
+        assert_eq!(pick_main_window_title(&cands, 760), None);
+    }
+
+    #[test]
+    fn main_window_title_none_when_no_candidate() {
+        assert_eq!(pick_main_window_title(&[], 760), None);
+        let cands = vec![cand(999, 0, true, 100.0, 100.0, "别人的")];
+        assert_eq!(pick_main_window_title(&cands, 760), None);
+    }
+
+    #[test]
+    fn main_window_title_trims_whitespace() {
+        let cands = vec![cand(760, 0, true, 900.0, 700.0, "  带空格的标题  ")];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("带空格的标题")
+        );
+    }
+
+    /// 真机自检（默认 ignore，CI 不跑）：对当前前台 app 跑一遍 SCK 补取，
+    /// 打印拿到的标题。改动 SCK 绑定 / 升级 screencapturekit 后手动验一次：
+    /// `cargo test --lib sck_recover_title_smoke -- --ignored --nocapture`
+    /// 需要跑测试的终端本身有 Screen Recording 权限，否则只会看到 None。
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "需要真实窗口 + Screen Recording 权限，手动跑"]
+    fn sck_recover_title_smoke() {
+        use objc2_app_kit::NSWorkspace;
+        let pid = objc2::rc::autoreleasepool(|_| {
+            let ws = NSWorkspace::sharedWorkspace();
+            ws.frontmostApplication().map(|a| a.processIdentifier())
+        })
+        .unwrap_or(0);
+        assert!(pid > 0, "拿不到前台 app");
+        println!(
+            "前台 pid={pid} SCK 标题={:?}",
+            macos_recover_title(pid as u32)
+        );
+    }
 
     #[test]
     fn garbage_window_name_matches_debug_fragments() {

@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { useCategories } from "../../../state/categories";
 import { useSuperCategories } from "../../../state/superCategories";
 import {
@@ -37,6 +37,15 @@ export default function ListTab() {
     create: createCategory,
   } = useCategories();
   const { create: createSuper } = useSuperCategories();
+  // 新建反馈:表格据此滚到新行、亮一下、直接进改名态。
+  // 不设定时清除——CSS 动画本身会跑完就停,留着这个 id 只影响下一次新建时被替换,
+  // 少一个 timer 就少一类竞态(用户正在改名时被清掉 class 会打断动画)。
+  const [justCreatedCatId, setJustCreatedCatId] = useState<string | null>(null);
+  const [justCreatedSuperId, setJustCreatedSuperId] = useState<string | null>(
+    null,
+  );
+  // 新建期间禁用按钮:create 要等一次全量 refresh,连点会闷声建出好几个「新分类」
+  const [creating, setCreating] = useState<"cat" | "super" | null>(null);
 
   // 每次切回本 tab 强制 refetch ——
   // CategoriesProvider 全局 mount 一次后不会自动重拉，capture 写入 app_group_members 后
@@ -46,21 +55,38 @@ export default function ListTab() {
   }, [refreshCategories]);
 
   const handleNewCategory = async () => {
-    // 新分类用随机色 + 默认 Tag icon，立刻落到「未归入」行；用户在 chip 上双击改名 / 点 icon 改外观
-    await createCategory({
-      name: t("categories.newCategoryDefaultName"),
-      color: pickCategoryColor(),
-      icon: DEFAULT_NEW_ICON,
-    });
+    if (creating) return;
+    setCreating("cat");
+    try {
+      // 新分类用随机色 + 默认 Tag icon，立刻落到「未归入」行；
+      // 记下新 id 交给表格：滚过去 + 着陆高亮 + 名字直接进编辑态
+      const created = await createCategory({
+        name: t("categories.newCategoryDefaultName"),
+        color: pickCategoryColor(),
+        icon: DEFAULT_NEW_ICON,
+      });
+      setJustCreatedSuperId(null);
+      setJustCreatedCatId(created.id);
+    } finally {
+      setCreating(null);
+    }
   };
 
   const handleNewSuper = async () => {
-    // 新大类同理：随机色 + 随机 icon，立刻插入到表格末尾
-    await createSuper({
-      name: t("categories.super.newDefaultName"),
-      color: pickCategoryColor(),
-      icon: pickRandom(SUPER_ICONS.filter((n) => ICON_NAMES.includes(n))),
-    });
+    if (creating) return;
+    setCreating("super");
+    try {
+      // 新大类同理：随机色 + 随机 icon，立刻插入到表格末尾（同样在视口外）
+      const created = await createSuper({
+        name: t("categories.super.newDefaultName"),
+        color: pickCategoryColor(),
+        icon: pickRandom(SUPER_ICONS.filter((n) => ICON_NAMES.includes(n))),
+      });
+      setJustCreatedCatId(null);
+      setJustCreatedSuperId(created.id);
+    } finally {
+      setCreating(null);
+    }
   };
 
   return (
@@ -74,16 +100,26 @@ export default function ListTab() {
             type="button"
             className={styles.createBtn}
             onClick={() => void handleNewCategory()}
+            disabled={creating !== null}
           >
-            <Plus size={14} strokeWidth={2} />
+            {creating === "cat" ? (
+              <Loader2 size={14} strokeWidth={2} className={styles.createSpin} />
+            ) : (
+              <Plus size={14} strokeWidth={2} />
+            )}
             {t("categories.newCategory")}
           </button>
           <button
             type="button"
             className={styles.createBtn}
             onClick={() => void handleNewSuper()}
+            disabled={creating !== null}
           >
-            <Plus size={14} strokeWidth={2} />
+            {creating === "super" ? (
+              <Loader2 size={14} strokeWidth={2} className={styles.createSpin} />
+            ) : (
+              <Plus size={14} strokeWidth={2} />
+            )}
             {t("categories.super.newButton")}
           </button>
         </div>
@@ -92,7 +128,10 @@ export default function ListTab() {
       {loading && categories.length === 0 ? (
         <div className={styles.empty}>{t("categories.loading")}</div>
       ) : (
-        <SuperCategoriesTable />
+        <SuperCategoriesTable
+          justCreatedCatId={justCreatedCatId}
+          justCreatedSuperId={justCreatedSuperId}
+        />
       )}
     </>
   );

@@ -114,3 +114,46 @@
   color: var(--color-accent);
   font-weight: var(--font-weight-semibold);
 }
+
+/* 应用名自动补全面板：视觉与分类页的候选面板同款（同一套补全逻辑，
+   见 src/lib/appSuggest.ts）。fixed 定位躲开设置页滚动容器的裁剪。 */
+.suggestMenu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 220px;
+  width: max-content;
+  max-width: 320px;
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--surface-card);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.suggestOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+}
+
+.suggestOptionHi {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.suggestLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

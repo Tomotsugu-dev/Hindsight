@@ -17,6 +17,7 @@ import { displayCategoryName, displaySuperCategoryName } from "../../utils/categ
 import type { Category, SuperCategory } from "../../api/hindsight";
 import { CategoryRow } from "./CategoryRow";
 import { SuperRow, OrphanRow, BuiltinRow } from "./superRows";
+import { creationScrollTarget } from "./creationFeedback";
 import styles from "./SuperCategoriesTable.module.css";
 import catStyles from "./Categories.module.css";
 
@@ -67,7 +68,16 @@ interface SuperDragState {
  *
  * builtin（hidden）行的 grip mousedown 被 CategoryRow 内部 return 拦掉，不会触发 drag。
  */
-export function SuperCategoriesTable() {
+interface SuperCategoriesTableProps {
+  /** 刚新建的分类 / 大类 id：滚到它、亮一下、进改名态。null = 无新建 */
+  justCreatedCatId?: string | null;
+  justCreatedSuperId?: string | null;
+}
+
+export function SuperCategoriesTable({
+  justCreatedCatId = null,
+  justCreatedSuperId = null,
+}: SuperCategoriesTableProps = {}) {
   const { t } = useTranslation();
   const { categories, reorder: reorderCategories } = useCategories();
   const { supers, assignCategory, reorder: reorderSupers } = useSuperCategories();
@@ -91,6 +101,33 @@ export function SuperCategoriesTable() {
     },
     [],
   );
+
+  // 新建后滚到它：新建按钮在页头，新分类落在下方的「未归入」行、新大类落在表格末尾，
+  // 不滚过去的话用户点完看不到任何变化。
+  // 用 useEffect（不是 layout effect）：子组件的 registerRowRef 也在 effect 里跑，
+  // React 先跑子 effect 再跑父 effect，所以这里读 map 一定拿得到刚挂载的行。
+  const scrolledForRef = useRef<string | null>(null);
+  useEffect(() => {
+    const target = creationScrollTarget(
+      justCreatedCatId,
+      justCreatedSuperId,
+      scrolledForRef.current,
+    );
+    if (!target) return;
+    const el =
+      target.kind === "cat"
+        ? catRowRefs.current.get(target.key)
+        : superRowRefs.current.get(target.key);
+    if (!el) return;
+    scrolledForRef.current = target.key;
+    const reduced = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    el.scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "center",
+    });
+  }, [justCreatedCatId, justCreatedSuperId]);
 
   const [drag, setDrag] = useState<DragState | null>(null);
   // 跨大类 drop 目标：cursor 落在哪个 super 上（≠ sourceSuperKey 时表示要跨）
@@ -490,6 +527,8 @@ export function SuperCategoriesTable() {
           dragging={drag !== null}
           isHot={hotSuperKey === sup.id && drag?.sourceSuperKey !== sup.id}
           draggingCatId={drag?.catId ?? null}
+          justCreatedCatId={justCreatedCatId}
+          justCreated={justCreatedSuperId === sup.id}
           onGripMouseDown={handleGripMouseDown}
           registerRowRef={registerCatRowRef}
           onSuperMouseDown={handleSuperMouseDown}
@@ -505,6 +544,7 @@ export function SuperCategoriesTable() {
         dragging={drag !== null}
         isHot={hotSuperKey === ORPHAN_KEY && drag?.sourceSuperKey !== ORPHAN_KEY}
         draggingCatId={drag?.catId ?? null}
+        justCreatedCatId={justCreatedCatId}
         onGripMouseDown={handleGripMouseDown}
         registerRowRef={registerCatRowRef}
       />

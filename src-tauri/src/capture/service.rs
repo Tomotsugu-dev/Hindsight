@@ -420,7 +420,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
     }
 
-    let info = match window::current_window() {
+    let mut info = match window::current_window() {
         Ok(i) => i,
         Err(e) => {
             log::debug!("跳过本次采集：{e}");
@@ -430,6 +430,22 @@ async fn tick(inner: &Inner) -> Result<()> {
 
     if info.app_name.is_empty() || info.app_name == "Unknown" {
         return Ok(());
+    }
+
+    // macOS 标题兜底：CGWindowList 那条便宜路径（~1ms）在切换 / 跨 Space 等瞬间
+    // 会取不到标题，而标题只在会话开始时取这一次、之后整段沿用（title 不参与
+    // FocusState 比较），一次失手就是一整段"无标题"——实测占 Mac 侧记录的 20.3%，
+    // Windows 侧只有 0.5%。这里改走截图同款的 SCK 枚举补一次（~100ms，故扔
+    // spawn_blocking），只在便宜路径失败时才付这个钱。
+    #[cfg(target_os = "macos")]
+    if info.title.trim().is_empty() && info.pid > 0 {
+        let pid = info.pid;
+        if let Ok(Some(title)) =
+            tokio::task::spawn_blocking(move || window::macos_recover_title(pid)).await
+        {
+            log::debug!("SCK 补取到标题：{} -> {title}", info.app_name);
+            info.title = title;
+        }
     }
 
     // 调试字符串残片（如 "8607797 pid=58750 ]"）：进程启动/退出瞬间 AppKit/xcap

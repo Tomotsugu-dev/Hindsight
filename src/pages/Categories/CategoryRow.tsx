@@ -27,6 +27,9 @@ interface Props {
   ) => void;
   /** 当前是否在被拖（父知道 dragId 时传 true）。被拖期间行半透明占位。 */
   isDragging?: boolean;
+  /** 刚被用户新建出来的那一行：挂着陆动画 + accent 描边，并直接进改名态。
+   *  没有这个反馈的话，新建按钮在视口外建出一行，用户看不到任何变化（issue #19）。 */
+  justCreated?: boolean;
   /** SuperCategoriesTable 把 catId → DOM 收集到全局 Map，用来 drag 开始时快照各 row Y 范围
    *  做"同大类内 reorder hover 命中" */
   registerRowRef?: (id: string, el: HTMLDivElement | null) => void;
@@ -49,11 +52,15 @@ export function CategoryRow({
   category,
   onGripMouseDown,
   isDragging,
+  justCreated,
   registerRowRef,
 }: Props) {
   const { t } = useTranslation();
   const { update, remove } = useCategories();
-  const [editingName, setEditingName] = useState(false);
+  // 新建行一挂载就进改名态：默认名是「新分类」，直接打字即可覆盖。
+  // 用 useState 的惰性初值而不是 effect —— 新分类是全新 mount（key = 新 id），
+  // 初值就够；后续 justCreated 转 false 也不该把用户正在编辑的输入框收掉。
+  const [editingName, setEditingName] = useState(() => justCreated === true);
   const [draftName, setDraftName] = useState(category.name);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -71,7 +78,9 @@ export function CategoryRow({
 
   useEffect(() => {
     if (editingName) {
-      inputRef.current?.focus();
+      // preventScroll：新建行的 focus 发生在父组件平滑滚动之前（子 effect 先跑），
+      // 不拦的话浏览器会先瞬移到该行，把随后的 smooth scroll 变成一次生硬跳变
+      inputRef.current?.focus({ preventScroll: true });
       inputRef.current?.select();
     }
   }, [editingName]);
@@ -114,6 +123,7 @@ export function CategoryRow({
       className={[
         styles.catRow,
         isDragging ? styles.catRowSource : "",
+        justCreated ? styles.catRowJustCreated : "",
       ]
         .filter(Boolean)
         .join(" ")}

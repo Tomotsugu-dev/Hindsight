@@ -24,6 +24,10 @@ interface SuperRowProps {
   dragging: boolean;
   isHot: boolean;
   draggingCatId: string | null;
+  /** 刚新建出来的分类 id：该行做着陆高亮并直接进改名态 */
+  justCreatedCatId: string | null;
+  /** 本大类卡片是否刚被新建：同款高亮 + 直接进改名态 */
+  justCreated?: boolean;
   onGripMouseDown: (
     cat: Category,
     e: ReactMouseEvent<HTMLButtonElement>,
@@ -49,6 +53,8 @@ function SuperRow_({
   dragging,
   isHot,
   draggingCatId,
+  justCreatedCatId,
+  justCreated,
   onGripMouseDown,
   registerRowRef,
   onSuperMouseDown,
@@ -61,7 +67,7 @@ function SuperRow_({
   const Icon = resolveCategoryIcon(sup.icon);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [editingName, setEditingName] = useState(false);
+  const [editingName, setEditingName] = useState(() => justCreated === true);
   const [draftName, setDraftName] = useState(sup.name);
   const inputRef = useRef<HTMLInputElement>(null);
   // 本地 ref → super card DOM；onMouseDown 时把 rect 给父
@@ -69,7 +75,8 @@ function SuperRow_({
 
   useEffect(() => {
     if (editingName) {
-      inputRef.current?.focus();
+      // preventScroll 理由同 CategoryRow：别和父组件的平滑滚动抢
+      inputRef.current?.focus({ preventScroll: true });
       inputRef.current?.select();
     }
   }, [editingName]);
@@ -96,6 +103,7 @@ function SuperRow_({
     dragging ? styles.dropTarget : "",
     isHot ? styles.dropHot : "",
     isSuperDragTarget ? styles.superCardDropHot : "",
+    justCreated ? styles.catRowJustCreated : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -197,6 +205,7 @@ function SuperRow_({
         cats={cats}
         emptyHint={t("categories.super.emptyHint")}
         draggingCatId={draggingCatId}
+        justCreatedCatId={justCreatedCatId}
         onGripMouseDown={onGripMouseDown}
         registerRowRef={registerRowRef}
       />
@@ -232,6 +241,7 @@ interface OrphanRowProps {
   dragging: boolean;
   isHot: boolean;
   draggingCatId: string | null;
+  justCreatedCatId: string | null;
   onGripMouseDown: (
     cat: Category,
     e: ReactMouseEvent<HTMLButtonElement>,
@@ -245,6 +255,7 @@ function OrphanRow_({
   dragging,
   isHot,
   draggingCatId,
+  justCreatedCatId,
   onGripMouseDown,
   registerRowRef,
   rowRef,
@@ -274,6 +285,7 @@ function OrphanRow_({
         cats={cats}
         emptyHint={t("categories.super.orphanEmptyHint")}
         draggingCatId={draggingCatId}
+        justCreatedCatId={justCreatedCatId}
         onGripMouseDown={onGripMouseDown}
         registerRowRef={registerRowRef}
       />
@@ -321,12 +333,14 @@ function SuperBody({
   cats,
   emptyHint,
   draggingCatId,
+  justCreatedCatId,
   onGripMouseDown,
   registerRowRef,
 }: {
   cats: Category[];
   emptyHint: string;
   draggingCatId: string | null;
+  justCreatedCatId: string | null;
   onGripMouseDown: (
     cat: Category,
     e: ReactMouseEvent<HTMLButtonElement>,
@@ -381,6 +395,7 @@ function SuperBody({
           key={cat.id}
           category={cat}
           isDragging={draggingCatId === cat.id}
+          justCreated={justCreatedCatId === cat.id}
           onGripMouseDown={onGripMouseDown}
           registerRowRef={setLocalRowRef}
         />

@@ -177,6 +177,39 @@
   animation: catLand 320ms var(--ease-out);
 }
 
+/* 新建的分类：着陆撞击 + 一圈渐隐的 accent 描边。
+   新建按钮在页头，新分类却落在下方的「未归入」行——不给这一下，用户点完
+   看不到任何变化（issue #19 的反馈）。描边用 outline 而不是 box-shadow：
+   行本身 hover/drag 态已经在用 box-shadow，叠加会互相打架。 */
+@keyframes catJustCreatedRing {
+  0% {
+    outline-color: color-mix(in oklab, var(--color-accent) 85%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 10%, white);
+  }
+  70% {
+    outline-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  }
+  100% {
+    outline-color: transparent;
+    background: transparent;
+  }
+}
+
+.catRowJustCreated {
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  animation:
+    catLand 320ms var(--ease-out),
+    catJustCreatedRing 1600ms var(--ease-out);
+}
+
+/* 减少动态效果：只留描边渐隐，去掉 squish 位移 */
+@media (prefers-reduced-motion: reduce) {
+  .catRowJustCreated {
+    animation: catJustCreatedRing 1600ms var(--ease-out);
+  }
+}
+
 /* grip 拖动手柄：行 hover 才浮现，平时低调 */
 .catDragHandle {
   display: inline-flex;
@@ -534,6 +567,17 @@
 .createBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 新建进行中:create 要等一次全量 refresh,给个转圈别让按钮看着像没反应 */
+@keyframes createSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.createSpin {
+  animation: createSpin 900ms linear infinite;
 }
 
 .createForm {
