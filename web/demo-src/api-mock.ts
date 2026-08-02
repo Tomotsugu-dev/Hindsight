@@ -815,6 +815,8 @@ export const api = {
       createdTs: now,
       promptTokens: null,
       completionTokens: null,
+      reasoningTokens: null,
+      elapsedMs: null,
       guid: userGuid,
       parentGuid: parent,
     });
@@ -827,6 +829,8 @@ export const api = {
       createdTs: now,
       promptTokens: 1284,
       completionTokens: 236,
+      reasoningTokens: 178,
+      elapsedMs: 3800,
       guid: `demo-${chatNextMsgId++}`,
       parentGuid: userGuid,
     });
@@ -839,6 +843,8 @@ export const api = {
       degraded: false,
       promptTokens: 1284,
       completionTokens: 236,
+      reasoningTokens: 178,
+      elapsedMs: 3800,
     };
   },
   chatInflight: async (_conversationId: number): Promise<string | null> => null,
@@ -874,6 +880,8 @@ export const api = {
       createdTs: now,
       promptTokens: 1284,
       completionTokens: 236,
+      reasoningTokens: 178,
+      elapsedMs: 3800,
       guid: `demo-${chatNextMsgId++}`,
       parentGuid: leaf.guid,
     });
@@ -886,6 +894,8 @@ export const api = {
       degraded: false,
       promptTokens: 1284,
       completionTokens: 236,
+      reasoningTokens: 178,
+      elapsedMs: 3800,
     };
   },
   chatListConversations: async (): Promise<ChatConversationMeta[]> =>

@@ -154,7 +154,14 @@ export function AppDetailDrawer({
   const hasData = buckets.some((b) => b.secs > 0) || byTitle.length > 0;
 
   return createPortal(
-    <div className={styles.backdrop} onMouseDown={onClose} role="presentation">
+    // data-keeps-bar-selection:抽屉是从"选中某天"派生出来的,在它里面操作
+    // 不该反过来清掉背后的选中(否则关掉抽屉,榜单已跳回整周口径)
+    <div
+      className={styles.backdrop}
+      onMouseDown={onClose}
+      role="presentation"
+      data-keeps-bar-selection
+    >
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <aside
         ref={panelRef}

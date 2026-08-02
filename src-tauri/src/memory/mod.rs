@@ -164,7 +164,9 @@ impl MemoryDb {
                         conv_guid       TEXT,            -- 所属会话的 guid(跨设备解析用)
                         prompt_tokens     INTEGER,       -- 本轮上行 token(assistant)
                         completion_tokens INTEGER,       -- 本轮下行 token(assistant)
-                        parent_guid     TEXT             -- 消息树父指针;NULL = 会话根
+                        parent_guid     TEXT,            -- 消息树父指针;NULL = 会话根
+                        reasoning_tokens  INTEGER,       -- 其中思考消耗(已含在 completion 内)
+                        elapsed_ms        INTEGER        -- 本轮墙钟耗时(含工具执行,非纯思考)
                     );
                     CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
                         ON chat_messages(conversation_id, id);
@@ -184,6 +186,8 @@ impl MemoryDb {
                     "ALTER TABLE chat_messages ADD COLUMN prompt_tokens INTEGER",
                     "ALTER TABLE chat_messages ADD COLUMN completion_tokens INTEGER",
                     "ALTER TABLE chat_messages ADD COLUMN parent_guid TEXT",
+                    "ALTER TABLE chat_messages ADD COLUMN reasoning_tokens INTEGER",
+                    "ALTER TABLE chat_messages ADD COLUMN elapsed_ms INTEGER",
                     "ALTER TABLE text_sessions ADD COLUMN guid TEXT",
                     // 会话来源设备:NULL = 本机产出;非 NULL = 从该设备同步而来
                     "ALTER TABLE text_sessions ADD COLUMN origin_device TEXT",

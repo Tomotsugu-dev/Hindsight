@@ -457,7 +457,11 @@ async fn optional_datasets_cross_device_roundtrip() {
         "看了三个视频 [1]",
         &[],
         false,
-        (200, 80),
+        crate::chat::store::MsgUsage {
+            prompt: 200,
+            completion: 80,
+            ..Default::default()
+        },
         None,
     )
     .await

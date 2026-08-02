@@ -83,10 +83,10 @@ fn skip_bytes(r: &mut impl Read, n: u64) -> Option<()> {
 /// 跳过一个 metadata 值。类型编号见 GGUF 规范(v2/v3 一致)。
 fn skip_value(r: &mut impl Read, ty: u32) -> Option<()> {
     match ty {
-        0 | 1 | 7 => skip_bytes(r, 1),  // u8 / i8 / bool
-        2..=3 => skip_bytes(r, 2),      // u16 / i16
-        4..=6 => skip_bytes(r, 4),      // u32 / i32 / f32
-        10..=12 => skip_bytes(r, 8),    // u64 / i64 / f64
+        0 | 1 | 7 => skip_bytes(r, 1), // u8 / i8 / bool
+        2..=3 => skip_bytes(r, 2),     // u16 / i16
+        4..=6 => skip_bytes(r, 4),     // u32 / i32 / f32
+        10..=12 => skip_bytes(r, 8),   // u64 / i64 / f64
         8 => {
             let len = read_u64(r)?;
             skip_bytes(r, len)
@@ -146,10 +146,8 @@ mod tests {
     }
 
     fn probe(bytes: &[u8]) -> Option<bool> {
-        let path = std::env::temp_dir().join(format!(
-            "gguf-probe-{}.gguf",
-            uuid::Uuid::new_v4().simple()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("gguf-probe-{}.gguf", uuid::Uuid::new_v4().simple()));
         let mut f = File::create(&path).unwrap();
         f.write_all(bytes).unwrap();
         drop(f);

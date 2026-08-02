@@ -1,11 +1,9 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Brain,
   CalendarClock,
   Clock,
   Filter,
-  MessageSquare,
   Minus,
   Plus,
   ScanText,
@@ -14,7 +12,6 @@ import {
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
-import { SegmentedControl } from "../../../components/FormControls/SegmentedControl";
 import { TimeOfDayPicker } from "../../../components/FormControls/TimeOfDayPicker";
 import { SegmentList } from "../../../components/FormControls/SegmentList";
 import { CategoryChipMultiSelect } from "../../../components/FormControls/CategoryChipMultiSelect";
@@ -211,29 +208,6 @@ export default function GeneralTab() {
           <SegmentList
             segments={ai.segments}
             onChange={(next: AiSegment[]) => updateAi({ segments: next })}
-          />
-        </Row>
-      </Section>
-
-      <Section
-        title={t("aiSettings.chat.sectionTitle")}
-        icon={MessageSquare}
-        description={t("aiSettings.chat.sectionDesc")}
-      >
-        <Row
-          icon={Brain}
-          label={t("aiSettings.chat.thinkingLabel")}
-          description={t("aiSettings.chat.thinkingHint")}
-        >
-          <SegmentedControl
-            value={ai.chatThinking}
-            options={[
-              { value: "off", label: t("aiSettings.chat.thinking.off") },
-              { value: "auto", label: t("aiSettings.chat.thinking.auto") },
-              { value: "on", label: t("aiSettings.chat.thinking.on") },
-            ]}
-            onChange={(next) => updateAi({ chatThinking: next })}
-            ariaLabel={t("aiSettings.chat.thinkingLabel")}
           />
         </Row>
       </Section>

@@ -387,6 +387,8 @@ async fn run_ask(
                     degraded: false,
                     prompt_tokens: 0,
                     completion_tokens: 0,
+                    reasoning_tokens: 0,
+                    elapsed_ms: 0,
                 },
             });
         }
@@ -401,7 +403,12 @@ async fn run_ask(
         &answer.text,
         &answer.citations,
         answer.degraded,
-        (answer.prompt_tokens, answer.completion_tokens),
+        store::MsgUsage {
+            prompt: answer.prompt_tokens,
+            completion: answer.completion_tokens,
+            reasoning: answer.reasoning_tokens,
+            elapsed_ms: answer.elapsed_ms,
+        },
         Some(&answer_parent),
     )
     .await

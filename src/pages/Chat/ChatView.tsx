@@ -13,6 +13,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bot,
+  Brain,
   ChartPie,
   Check,
   ChevronDown,
@@ -41,6 +42,7 @@ import {
   type ChatStoredMessage,
 } from "../../api/hindsight";
 import styles from "./ChatView.module.css";
+import ThinkingToggle from "./ThinkingToggle";
 import { buildThread, type Message } from "./thread";
 
 /** 瞬态气泡:发送中的乐观提问 / 错误(不落库,重载即清)。 */
@@ -465,6 +467,7 @@ export default function ChatView({
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
+        <ThinkingToggle />
         {busy ? (
           <button
             type="button"
@@ -752,6 +755,19 @@ function AssistantBubble({
                 <ArrowDown size={11} strokeWidth={2.2} />
                 {v.completionTokens.toLocaleString()} tokens
               </span>
+              {/* 思考消耗已含在 completion 内,tooltip 里讲明白免得用户以为要相加 */}
+              {v.reasoningTokens != null && v.reasoningTokens > 0 && (
+                <span data-tip={t("chat.tokens.reasoning")}>
+                  <Brain size={11} strokeWidth={2.2} />
+                  {v.reasoningTokens.toLocaleString()} tokens
+                </span>
+              )}
+              {v.elapsedMs != null && v.elapsedMs > 0 && (
+                <span data-tip={t("chat.tokens.elapsed")}>
+                  <Clock size={11} strokeWidth={2.2} />
+                  {(v.elapsedMs / 1000).toFixed(1)}s
+                </span>
+              )}
             </div>
           )}
         </div>

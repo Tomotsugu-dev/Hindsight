@@ -348,7 +348,7 @@ export default function WeekPage() {
       )}
 
       <div className={styles.ranks}>
-        <section className={styles.card}>
+        <section className={styles.card} data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{appsTitle}</h2>
             <div className={styles.cardHeadRight}>
@@ -388,7 +388,7 @@ export default function WeekPage() {
           )}
         </section>
 
-        <section className={styles.card}>
+        <section className={styles.card} data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
             {selectionLabel && (
@@ -405,10 +405,12 @@ export default function WeekPage() {
         </section>
       </div>
 
+      {/* 选中了某一天就按那天看详情:上面的排行已经切成当天数据了,
+          详情再给整周会对不上号(点周五的浏览器,看到的却是全周) */}
       <AppDetailDrawer
         app={selectedApp}
-        scope="week"
-        offset={offset}
+        scope={selectedDayOffset !== null ? "day" : "week"}
+        offset={selectedDayOffset ?? offset}
         deviceId={selectedDeviceId}
         onClose={() => setSelectedApp(null)}
       />

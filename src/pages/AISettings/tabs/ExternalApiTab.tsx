@@ -1,4 +1,11 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -154,6 +161,15 @@ function TestStepRow({
   );
 }
 
+/**
+ * 非文本对话模型的 id 特征:语音(tts/transcribe/whisper/audio/realtime)、
+ * 向量(embedding)、图像(dall-e/image/sora)、审核(moderation)、重排(rerank)。
+ * 这些发到 /chat/completions 必失败,不进模型建议列表。
+ * 边界用 `-`/`_`/`.`/`/` 或首尾,避免误伤名字里含这些词根的对话模型。
+ */
+const NON_CHAT_MODEL_RE =
+  /(^|[-_./])(tts|whisper|transcribe|speech|audio|realtime|embed|embedding|embeddings|moderation|rerank|dall-?e|image|sora|video)([-_./]|$)/i;
+
 function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
   const { t } = useTranslation();
   const [showKey, setShowKey] = useState(false);
@@ -162,8 +178,48 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
   const [modelList, setModelList] = useState<string[]>([]);
   const [modelFetch, setModelFetch] = useState<"idle" | "running" | "ok" | "fail">("idle");
   const [modelFetchMsg, setModelFetchMsg] = useState("");
-  // 自绘建议下拉(datalist 在 WKWebView 体验极差,弃用):聚焦即开,打字过滤
+  // 自绘建议下拉(datalist 在 WKWebView 体验极差,弃用):聚焦即开,打字过滤。
+  // 菜单 portal 到 body + fixed 定位:设置面板是 overflow 滚动容器,
+  // absolute 菜单会被它的底边裁掉半行(同 CategoryFilterDropdown 的路数)
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const modelInputRef = useRef<HTMLInputElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const [modelMenuStyle, setModelMenuStyle] = useState<CSSProperties | null>(null);
+
+  // 定位:量输入框矩形,下方空间不够就翻到上方;高度取实际可用空间
+  useLayoutEffect(() => {
+    if (!modelMenuOpen || !modelInputRef.current) return;
+    const r = modelInputRef.current.getBoundingClientRect();
+    const gap = 6;
+    const margin = 12;
+    const below = window.innerHeight - r.bottom - gap - margin;
+    const above = r.top - gap - margin;
+    const down = below >= 180 || below >= above;
+    setModelMenuStyle({
+      left: r.left,
+      width: r.width,
+      maxHeight: Math.max(120, Math.min(280, down ? below : above)),
+      // 向上弹用 bottom 锚定:打字过滤让条数变化时,菜单不会离开输入框
+      ...(down
+        ? { top: r.bottom + gap }
+        : { bottom: window.innerHeight - r.top + gap }),
+    });
+  }, [modelMenuOpen]);
+
+  // 面板滚动/窗口缩放会让 fixed 菜单飘走,直接关掉(菜单自身的滚动除外)
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const close = (e: Event) => {
+      if (modelMenuRef.current?.contains(e.target as Node)) return;
+      setModelMenuOpen(false);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [modelMenuOpen]);
 
   /** 当前激活的四元组是否与某个已存配置一致(chips 高亮用) */
   const profileMatches = (p: ExternalProfile) =>
@@ -215,7 +271,10 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
     });
   };
 
-  /** 拉取云端可用模型:复用 testAiEndpoint(GET /models,上限 500)。 */
+  /** 拉取云端可用模型:复用 testAiEndpoint(GET /models,上限 500)。
+   *  /models 返回的是端点上的**全部**模型(OpenAI 上 130+),语音/向量/
+   *  图像/审核类发到 /chat/completions 必失败——这个框只填文本模型,
+   *  按 id 特征滤掉,免得用户在一堆 tts/transcribe 里翻找。 */
   const fetchModels = async () => {
     const endpoint = ai.endpoint.trim();
     if (!endpoint) {
@@ -232,11 +291,12 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
         setModelFetchMsg(resp.message);
         return;
       }
-      setModelList(resp.models);
-      setModelMenuOpen(resp.models.length > 0);
+      const usable = resp.models.filter((m) => !NON_CHAT_MODEL_RE.test(m));
+      setModelList(usable);
+      setModelMenuOpen(usable.length > 0);
       setModelFetch("ok");
       setModelFetchMsg(
-        t("aiSettings.external.modelsFetched", { count: resp.models.length }),
+        t("aiSettings.external.modelsFetched", { count: usable.length }),
       );
     } catch (e) {
       setModelFetch("fail");
@@ -464,6 +524,7 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
             <div className={styles.modelComboWrap}>
               <div className={styles.externalKeyRow}>
                 <input
+                  ref={modelInputRef}
                   type="text"
                   className={styles.externalInput}
                   value={ai.model}
@@ -501,12 +562,26 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
               {modelMenuOpen &&
                 (() => {
                   const q = ai.model.trim().toLowerCase();
+                  // 前缀命中排前面:输入 gpt-4o-mini 时精确那条必须在第一行,
+                  // 而不是被 gpt-4o-mini-xxx-2025-12-15 挤下去
                   const hits = q
-                    ? modelList.filter((m) => m.toLowerCase().includes(q))
+                    ? modelList
+                        .filter((m) => m.toLowerCase().includes(q))
+                        .sort((a, b) => {
+                          const rank = (s: string) =>
+                            s.toLowerCase() === q ? 0 : s.toLowerCase().startsWith(q) ? 1 : 2;
+                          return rank(a) - rank(b) || a.localeCompare(b);
+                        })
                     : modelList;
                   if (hits.length === 0) return null;
-                  return (
-                    <div className={styles.modelSuggestMenu} role="listbox">
+                  return createPortal(
+                    <div
+                      ref={modelMenuRef}
+                      className={styles.modelSuggestMenu}
+                      role="listbox"
+                      // 首帧未测量前先藏,避免定位跳一下
+                      style={modelMenuStyle ?? { visibility: "hidden" }}
+                    >
                       {hits.slice(0, 100).map((m) => (
                         <button
                           key={m}
@@ -524,7 +599,8 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
                           {m}
                         </button>
                       ))}
-                    </div>
+                    </div>,
+                    document.body,
                   );
                 })()}
             </div>

@@ -959,17 +959,6 @@
       "sectionInfo": "Os resumos de IA são produzidos por segmento; as capturas de tela dentro de cada segmento são amostradas por similaridade antes de serem enviadas ao modelo.",
       "rowLabel": "Segmentos"
     },
-    "chat": {
-      "sectionTitle": "Chat",
-      "sectionDesc": "Comportamento do modelo específico do Chat.",
-      "thinkingLabel": "Modo de raciocínio",
-      "thinkingHint": "Controla se o modelo de chat produz o processo de raciocínio. Auto segue o padrão do modelo (modelos locais ficam desligados por padrão para o raciocínio não consumir a resposta); ligar/desligar pode não ter efeito em alguns provedores; ativar localmente é bem mais lento.",
-      "thinking": {
-        "off": "Desligado",
-        "auto": "Auto",
-        "on": "Ligado"
-      }
-    },
     "filter": {
       "sectionTitle": "Filtros",
       "rowLabel": "Analisar estas categorias",
@@ -1540,7 +1529,9 @@
     },
     "tokens": {
       "prompt": "Tokens enviados ao modelo neste turno (upstream)",
-      "completion": "Tokens gerados pelo modelo (downstream)"
+      "completion": "Tokens gerados pelo modelo (downstream)",
+      "reasoning": "Tokens de raciocínio (já incluídos na saída)",
+      "elapsed": "Tempo total do turno (inclui as buscas)"
     },
     "actions": {
       "copy": "Copiar",
@@ -1555,6 +1546,19 @@
       "hint": "Editar cria uma nova ramificação da conversa — alterne entre elas com as setas.",
       "save": "Salvar",
       "cancel": "Cancelar"
+    },
+    "thinkingMode": {
+      "label": "Raciocínio",
+      "off": "Desligado",
+      "auto": "Automático",
+      "on": "Ligado",
+      "hint": "Ativar o raciocínio deixa as respostas bem mais lentas",
+      "low": "Baixo",
+      "medium": "Médio",
+      "high": "Alto",
+      "max": "Máximo",
+      "hintLevels": "Quanto maior o esforço, mais lenta a resposta",
+      "hintOpenai": "A API da OpenAI não suporta raciocínio no chat"
     }
   },
   "notifications": {

@@ -647,6 +647,11 @@ export interface ChatAnswer {
   promptTokens: number;
   /** 本轮全部 LLM 步骤的下行（completion）token 合计 */
   completionTokens: number;
+  /** 其中花在思考（reasoning）上的 token；**已含在 completionTokens 内**。
+   *  0 = 没思考，或该端点不报告（本地 llama-server） */
+  reasoningTokens: number;
+  /** 本轮墙钟耗时（毫秒）：含全部 LLM 往返与工具执行，不等于"思考耗时" */
+  elapsedMs: number;
 }
 
 /** 一次问答的返回：答案平铺 + 会话 id（首条消息隐式建会话，前端靠它接管）。
@@ -685,6 +690,10 @@ export interface ChatStoredMessage {
   /** 本轮上行/下行 token（assistant 才有；旧数据与 user 行为 null） */
   promptTokens: number | null;
   completionTokens: number | null;
+  /** 其中思考消耗（已含在 completionTokens 内）；本轮墙钟耗时（毫秒）。
+   *  旧数据为 null */
+  reasoningTokens: number | null;
+  elapsedMs: number | null;
   /** 消息树：自身全局 id 与父指针（null = 会话根）。提问的编辑分支据此组树 */
   guid: string;
   parentGuid: string | null;

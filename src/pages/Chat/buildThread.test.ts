@@ -20,6 +20,8 @@ function row(
     createdTs: "2026-08-01T10:00:00+08:00",
     promptTokens: null,
     completionTokens: null,
+    reasoningTokens: null,
+    elapsedMs: null,
     guid,
     parentGuid,
   };

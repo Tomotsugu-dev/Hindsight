@@ -959,17 +959,6 @@
       "sectionInfo": "AI 按段汇总；段内截图按相似度抽帧再发给模型。",
       "rowLabel": "时段"
     },
-    "chat": {
-      "sectionTitle": "对话",
-      "sectionDesc": "对话（Chat）专属的模型行为设置。",
-      "thinkingLabel": "思考模式",
-      "thinkingHint": "控制对话模型是否输出思考过程。自动 = 跟随模型默认（本地模型默认关闭，避免思考挤占回答）；开启/关闭对部分云端服务商可能不生效；本地开启思考会显著变慢。",
-      "thinking": {
-        "off": "关闭",
-        "auto": "自动",
-        "on": "开启"
-      }
-    },
     "filter": {
       "sectionTitle": "过滤",
       "rowLabel": "分析这些分类",
@@ -1540,7 +1529,9 @@
     },
     "tokens": {
       "prompt": "本轮发送给模型的 token(上行)",
-      "completion": "模型生成的 token(下行)"
+      "completion": "模型生成的 token(下行)",
+      "reasoning": "其中思考消耗(已计入下行 token)",
+      "elapsed": "本轮用时(含查询与多轮推理)"
     },
     "actions": {
       "copy": "复制",
@@ -1555,6 +1546,19 @@
       "hint": "编辑将创建新的对话分支,可用箭头在分支间切换。",
       "save": "保存",
       "cancel": "取消"
+    },
+    "thinkingMode": {
+      "label": "思考模式",
+      "off": "关闭",
+      "auto": "自动",
+      "on": "开启",
+      "hint": "开启思考会显著变慢",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "max": "最强",
+      "hintLevels": "强度越高,响应越慢",
+      "hintOpenai": "OpenAI 官方接口在对话中不支持思考"
     }
   },
   "notifications": {

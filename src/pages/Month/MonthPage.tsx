@@ -373,7 +373,7 @@ export default function MonthPage() {
       )}
 
       <div className={styles.ranks}>
-        <section className={styles.card}>
+        <section className={styles.card} data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{appsTitle}</h2>
             <div className={styles.cardHeadRight}>
@@ -413,7 +413,7 @@ export default function MonthPage() {
           )}
         </section>
 
-        <section className={styles.card}>
+        <section className={styles.card} data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
             {selectionLabel && (
@@ -430,10 +430,11 @@ export default function MonthPage() {
         </section>
       </div>
 
+      {/* 同 WeekPage:选中某天时详情跟着那天走,别回退到整月 */}
       <AppDetailDrawer
         app={selectedApp}
-        scope="month"
-        offset={offset}
+        scope={selectedDayOffset !== null ? "day" : "month"}
+        offset={selectedDayOffset ?? offset}
         deviceId={selectedDeviceId}
         onClose={() => setSelectedApp(null)}
       />

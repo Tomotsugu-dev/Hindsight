@@ -37,6 +37,12 @@ pub struct ChatAnswer {
     pub prompt_tokens: u64,
     /// 本轮全部 LLM 步骤的下行(completion)token 合计
     pub completion_tokens: u64,
+    /// 其中花在思考(reasoning)上的 token 合计;**已含在 completion 内**,
+    /// 不是额外开销。0 = 没思考或该端点不报告(本地 llama-server)
+    pub reasoning_tokens: u64,
+    /// 本轮墙钟耗时:从收到问题到给出答案,含全部 LLM 往返与工具执行。
+    /// 不等同于"思考耗时"——非流式拿不到思考阶段的独立时长,别这么标。
+    pub elapsed_ms: u64,
 }
 
 /// 历史轮(前端传入,只取最近几轮做指代消解)。
@@ -151,7 +157,7 @@ async fn condense_question(
     question: &str,
     lang: ChatLang,
     today: NaiveDate,
-) -> (Option<String>, u64, u64) {
+) -> (Option<String>, crate::chat::llm::TokenUsage) {
     let mut ctx = String::new();
     for h in history.iter().rev().take(6).rev() {
         match h.role.as_str() {
@@ -174,20 +180,36 @@ async fn condense_question(
         Ok((raw, usage)) => match normalize_rewrite(&raw) {
             Some(q) => {
                 log::info!("多轮问题自立化: {question:?} → {q:?}");
-                (Some(q), usage.prompt, usage.completion)
+                (Some(q), usage)
             }
             None => {
                 log::warn!(
                     "改写器输出不可用({} 字符),退回消毒历史直答",
                     raw.chars().count()
                 );
-                (None, usage.prompt, usage.completion)
+                (None, usage)
             }
         },
         Err(e) => {
             log::warn!("改写器调用失败,退回消毒历史直答: {e}");
-            (None, 0, 0)
+            (None, Default::default())
         }
+    }
+}
+
+/// 一轮问答里多次 LLM 往返的用量合计(含改写器、每一步、最后的强制作答)。
+#[derive(Debug, Clone, Copy, Default)]
+struct RunUsage {
+    prompt: u64,
+    completion: u64,
+    reasoning: u64,
+}
+
+impl RunUsage {
+    fn add(&mut self, u: crate::chat::llm::TokenUsage) {
+        self.prompt += u.prompt;
+        self.completion += u.completion;
+        self.reasoning += u.reasoning;
     }
 }
 
@@ -199,9 +221,9 @@ pub async fn answer(
     today: NaiveDate,
     lang: ChatLang,
 ) -> Result<ChatAnswer> {
+    let started = std::time::Instant::now();
     let mut system = lang.system_prompt(today);
-    let mut prompt_tokens = 0u64;
-    let mut completion_tokens = 0u64;
+    let mut usage_total = RunUsage::default();
 
     // 多轮:先做「问题自立化」——改写成功则回答器零历史(每轮=第一轮,上一轮
     // 成品答案的失效编号/模仿源在架构上进不了回答器);改写不可用才退回
@@ -209,9 +231,8 @@ pub async fn answer(
     let mut turns: Vec<Turn> = Vec::new();
     let mut effective_question = question.to_string();
     if !history.is_empty() {
-        let (rewritten, p, c) = condense_question(llm, history, question, lang, today).await;
-        prompt_tokens += p;
-        completion_tokens += c;
+        let (rewritten, used) = condense_question(llm, history, question, lang, today).await;
+        usage_total.add(used);
         match rewritten {
             Some(q) => effective_question = q,
             None => {
@@ -241,22 +262,14 @@ pub async fn answer(
         let out = match llm.step(&system, &turns).await {
             Ok((o, usage)) => {
                 llm_failures = 0;
-                prompt_tokens += usage.prompt;
-                completion_tokens += usage.completion;
+                usage_total.add(usage);
                 o
             }
             Err(e) => {
                 llm_failures += 1;
                 log::warn!("chat LLM 步骤失败({llm_failures}/{MAX_LLM_FAILURES}): {e}");
                 if llm_failures >= MAX_LLM_FAILURES {
-                    return degraded_answer(
-                        citations,
-                        steps,
-                        prompt_tokens,
-                        completion_tokens,
-                        e,
-                        lang,
-                    );
+                    return degraded_answer(citations, steps, usage_total, started, e, lang);
                 }
                 continue;
             }
@@ -270,8 +283,10 @@ pub async fn answer(
                     citations: cited,
                     steps,
                     degraded: false,
-                    prompt_tokens,
-                    completion_tokens,
+                    prompt_tokens: usage_total.prompt,
+                    completion_tokens: usage_total.completion,
+                    reasoning_tokens: usage_total.reasoning,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
                 });
             }
             StepOut::Call {
@@ -348,20 +363,23 @@ pub async fn answer(
     match llm.step(&system, &turns).await {
         Ok((StepOut::Final(text), usage)) => {
             let (text, cited) = bind_citations(&text, &citations);
+            usage_total.add(usage);
             Ok(ChatAnswer {
                 text,
                 citations: cited,
                 steps: steps + 1,
                 degraded: true,
-                prompt_tokens: prompt_tokens + usage.prompt,
-                completion_tokens: completion_tokens + usage.completion,
+                prompt_tokens: usage_total.prompt,
+                completion_tokens: usage_total.completion,
+                reasoning_tokens: usage_total.reasoning,
+                elapsed_ms: started.elapsed().as_millis() as u64,
             })
         }
         Ok((StepOut::Call { .. }, _)) | Err(_) => degraded_answer(
             citations,
             steps,
-            prompt_tokens,
-            completion_tokens,
+            usage_total,
+            started,
             Error::LlmResponse("步数耗尽且模型未能作答".into()),
             lang,
         ),
@@ -372,8 +390,8 @@ pub async fn answer(
 fn degraded_answer(
     citations: Vec<Citation>,
     steps: u32,
-    prompt_tokens: u64,
-    completion_tokens: u64,
+    usage: RunUsage,
+    started: std::time::Instant,
     err: Error,
     lang: ChatLang,
 ) -> Result<ChatAnswer> {
@@ -388,8 +406,10 @@ fn degraded_answer(
         citations,
         steps,
         degraded: true,
-        prompt_tokens,
-        completion_tokens,
+        prompt_tokens: usage.prompt,
+        completion_tokens: usage.completion,
+        reasoning_tokens: usage.reasoning,
+        elapsed_ms: started.elapsed().as_millis() as u64,
     })
 }
 

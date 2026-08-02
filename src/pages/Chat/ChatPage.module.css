@@ -135,6 +135,45 @@
   color: var(--text-faint);
 }
 
+/* ── 思考模式下拉(composer 内右侧,ChatGPT 式):钮面 = 当前档文字 ── */
+
+.thinkWrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.thinkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 32px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+.thinkBtn:hover {
+  color: var(--text-strong);
+  background: var(--surface-2);
+}
+
+/* 必须排在 .badgeMenu 之后:向上弹靠 top:auto 覆盖它的 top 定位 */
+.thinkMenu {
+  top: auto;
+  bottom: calc(100% + 6px);
+  min-width: 150px;
+  max-width: 220px;
+}
+
 
 /* ── 左右两栏 ── */
 

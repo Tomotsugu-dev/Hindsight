@@ -323,7 +323,7 @@ export default function TodayPage() {
       )}
 
       <div className={styles.ranks}>
-        <section className={styles.card}>
+        <section className={styles.card} data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{appsTitle}</h2>
             <div className={styles.cardHeadRight}>
@@ -366,7 +366,7 @@ export default function TodayPage() {
           )}
         </section>
 
-        <section className={styles.card}>
+        <section className={styles.card} data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
             {selectionLabel && (

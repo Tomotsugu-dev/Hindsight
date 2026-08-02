@@ -959,17 +959,6 @@
       "sectionInfo": "AI 按段彙總；段內截圖按相似度抽幀再發給模型。",
       "rowLabel": "時段"
     },
-    "chat": {
-      "sectionTitle": "對話",
-      "sectionDesc": "對話（Chat）專屬的模型行為設定。",
-      "thinkingLabel": "思考模式",
-      "thinkingHint": "控制對話模型是否輸出思考過程。自動 = 跟隨模型預設（本機模型預設關閉，避免思考擠佔回答）；開啟/關閉對部分雲端服務商可能不生效；本機開啟思考會顯著變慢。",
-      "thinking": {
-        "off": "關閉",
-        "auto": "自動",
-        "on": "開啟"
-      }
-    },
     "filter": {
       "sectionTitle": "過濾",
       "rowLabel": "分析這些分類",
@@ -1540,7 +1529,9 @@
     },
     "tokens": {
       "prompt": "本輪傳送給模型的 token(上行)",
-      "completion": "模型生成的 token(下行)"
+      "completion": "模型生成的 token(下行)",
+      "reasoning": "其中思考消耗(已計入下行 token)",
+      "elapsed": "本輪用時(含查詢與多輪推理)"
     },
     "actions": {
       "copy": "複製",
@@ -1555,6 +1546,19 @@
       "hint": "編輯將建立新的對話分支,可用箭頭在分支間切換。",
       "save": "儲存",
       "cancel": "取消"
+    },
+    "thinkingMode": {
+      "label": "思考模式",
+      "off": "關閉",
+      "auto": "自動",
+      "on": "開啟",
+      "hint": "開啟思考會明顯變慢",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "max": "最強",
+      "hintLevels": "強度越高,回應越慢",
+      "hintOpenai": "OpenAI 官方介面在對話中不支援思考"
     }
   },
   "notifications": {

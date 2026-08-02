@@ -110,12 +110,14 @@ pub struct AiConfig {
     /// 读取走 [`Self::chat_use_cloud`] / [`Self::effective_chat_main`]。
     #[serde(default)]
     pub chat_main: String,
-    /// Chat 思考模式偏好:"auto"(默认)/"on"/"off"。仅作用于对话,不碰总结。
-    /// 云端 auto = 不注入任何参数(模型按服务商默认;实测 DeepSeek 未知字段
-    /// 会被忽略但 OpenAI 会 400,零注入是唯一零风险基线);on/off 按 provider
-    /// 注入各家字段。本地 auto/off 都注入 enable_thinking=false——实测
+    /// Chat 思考模式偏好:"auto"(默认)/"off"/强度档 "low"/"medium"/"high"/"max"。
+    /// 仅作用于对话,不碰总结。强度值域各家不同(DeepSeek low/high/max、
+    /// OpenAI/OpenRouter low/medium/high、本地与其它只有开关),UI 按当前
+    /// 服务商展示子集,注入层对值域外残留就近降级。云端 auto = 不注入任何
+    /// 参数(实测 DeepSeek 未知字段被忽略但 OpenAI 会 400,零注入是唯一
+    /// 零风险基线);本地 auto/off 都注入 enable_thinking=false——实测
     /// (2026-08,Qwen3.5-4B)hybrid 模型默认思考会吃光 token 预算,
-    /// grammar 约束的决策 JSON 根本没机会输出。见 chat::llm::inject_thinking。
+    /// grammar 约束的决策 JSON 根本没机会输出。见 chat::llm::inject_cloud_thinking。
     #[serde(default = "default_chat_thinking")]
     pub chat_thinking: String,
     /// AI 总结使用的提示词语言（决定模型出哪种语言的总结 + 默认提示词模板用哪套）。
@@ -391,18 +393,20 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.api_key = next.api_key.trim().to_string();
     next.user_brief = next.user_brief.trim().to_string();
 
-    // external_provider：只接受预设值，非法回退到 "openai"
+    // external_provider：只接受预设值，非法回退到 "openai"。
+    // ⚠️ 必须与前端 ExternalApiTab 的 PROVIDER_KEYS 逐项对齐——少一项,
+    // 用户在下拉里选中它就会被这里打回 "openai"(kimi/kimi-cn 曾如此)。
     next.external_provider = match next.external_provider.trim() {
-        "openai" | "deepseek" | "openrouter" | "together" | "groq" | "custom" => {
-            next.external_provider.trim().to_string()
-        }
+        "openai" | "deepseek" | "kimi" | "kimi-cn" | "openrouter" | "together" | "groq"
+        | "custom" => next.external_provider.trim().to_string(),
         _ => "openai".to_string(),
     };
 
-    // chat_thinking:三态白名单,非法回退 "auto"(= 不注入任何思考参数)
+    // chat_thinking:档位白名单(强度值域各家不同,UI 按服务商展示子集,
+    // 注入层就近降级);"on" 是分档前的旧值,迁移为 "high"。非法回退 "auto"。
     next.chat_thinking = match next.chat_thinking.trim() {
-        "on" => "on".to_string(),
-        "off" => "off".to_string(),
+        "on" => "high".to_string(),
+        v @ ("off" | "low" | "medium" | "high" | "max") => v.to_string(),
         _ => "auto".to_string(),
     };
 
@@ -713,10 +717,15 @@ mod tests {
 
     #[test]
     fn sanitize_external_provider_whitelist_and_fallback() {
-        // provider 只影响 UI placeholder，但落库前仍要归一，避免前端拿到未知值渲染错乱
+        // provider 决定 UI placeholder 与思考参数注入分支,落库前归一避免前端
+        // 拿到未知值渲染错乱。⚠️ 这份清单必须与前端 PROVIDER_KEYS 完全一致:
+        // 曾漏掉 kimi/kimi-cn,用户在下拉里选中 Kimi 会被打回 openai(选不中),
+        // 且思考参数走错分支。
         for p in [
             "openai",
             "deepseek",
+            "kimi",
+            "kimi-cn",
             "openrouter",
             "together",
             "groq",

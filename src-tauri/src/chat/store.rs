@@ -38,6 +38,10 @@ pub struct StoredMessage {
     /// 本轮上行/下行 token(assistant 才有;旧数据与 user 行为 NULL)
     pub prompt_tokens: Option<i64>,
     pub completion_tokens: Option<i64>,
+    /// 其中花在思考上的 token(**已含在 completion 内**);端点不报告时为 0
+    pub reasoning_tokens: Option<i64>,
+    /// 本轮墙钟耗时(毫秒):含全部 LLM 往返与工具执行,不是"思考耗时"
+    pub elapsed_ms: Option<i64>,
     /// 消息树:自身全局 id 与父指针(NULL = 会话根)。前端据此组树、
     /// 渲染提问的编辑分支;发送与重试都带当前路径叶子作挂点。
     pub guid: String,
@@ -95,7 +99,8 @@ pub async fn get_messages(mem: &MemoryDb, conv_id: i64) -> Result<Vec<StoredMess
             let mut stmt = conn
                 .prepare(
                     "SELECT id, role, content, citations, degraded, created_ts,
-                            prompt_tokens, completion_tokens, guid, parent_guid
+                            prompt_tokens, completion_tokens, guid, parent_guid,
+                            reasoning_tokens, elapsed_ms
                      FROM chat_messages WHERE conversation_id = ?1 ORDER BY id",
                 )
                 .db()?;
@@ -115,6 +120,8 @@ pub async fn get_messages(mem: &MemoryDb, conv_id: i64) -> Result<Vec<StoredMess
                         completion_tokens: r.get(7)?,
                         guid: r.get(8)?,
                         parent_guid: r.get(9)?,
+                        reasoning_tokens: r.get(10)?,
+                        elapsed_ms: r.get(11)?,
                     })
                 })
                 .db()?
@@ -223,6 +230,17 @@ pub async fn append_user(
     append(mem, conv_id, "user", content, None, false, None, parent).await
 }
 
+/// 一条回答的用量与耗时(落库 + 前端展示)。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MsgUsage {
+    pub prompt: u64,
+    pub completion: u64,
+    /// 思考消耗,已含在 completion 内
+    pub reasoning: u64,
+    /// 本轮墙钟耗时(毫秒)
+    pub elapsed_ms: u64,
+}
+
 /// 落一条回答,挂在 parent 下(通常是对应提问,重试时是上一版回答)。返回新行 guid。
 #[allow(clippy::too_many_arguments)]
 pub async fn append_assistant(
@@ -231,7 +249,7 @@ pub async fn append_assistant(
     content: &str,
     citations: &[Citation],
     degraded: bool,
-    tokens: (u64, u64),
+    usage: MsgUsage,
     parent: Option<&str>,
 ) -> Result<String> {
     let json = serde_json::to_string(citations)?;
@@ -242,7 +260,7 @@ pub async fn append_assistant(
         content,
         Some(json),
         degraded,
-        Some((tokens.0 as i64, tokens.1 as i64)),
+        Some(usage),
         parent,
     )
     .await
@@ -256,7 +274,7 @@ async fn append(
     content: &str,
     citations_json: Option<String>,
     degraded: bool,
-    tokens: Option<(i64, i64)>,
+    usage: Option<MsgUsage>,
     parent: Option<&str>,
 ) -> Result<String> {
     let content = content.to_string();
@@ -270,9 +288,11 @@ async fn append(
             tx.execute(
                 "INSERT INTO chat_messages(conversation_id, role, content, citations, degraded,
                                            created_ts, guid, conv_guid,
-                                           prompt_tokens, completion_tokens, parent_guid)
+                                           prompt_tokens, completion_tokens, parent_guid,
+                                           reasoning_tokens, elapsed_ms)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                         (SELECT guid FROM chat_conversations WHERE id = ?1), ?8, ?9, ?10)",
+                         (SELECT guid FROM chat_conversations WHERE id = ?1), ?8, ?9, ?10,
+                         ?11, ?12)",
                 rusqlite::params![
                     conv_id,
                     role,
@@ -281,9 +301,11 @@ async fn append(
                     degraded as i64,
                     ts,
                     guid,
-                    tokens.map(|t| t.0),
-                    tokens.map(|t| t.1),
-                    parent
+                    usage.map(|u| u.prompt as i64),
+                    usage.map(|u| u.completion as i64),
+                    parent,
+                    usage.map(|u| u.reasoning as i64),
+                    usage.map(|u| u.elapsed_ms as i64)
                 ],
             )
             .db()?;
@@ -458,7 +480,11 @@ mod tests {
             "共 3 小时 [1]",
             &[cite(1)],
             false,
-            (120, 45),
+            MsgUsage {
+                prompt: 120,
+                completion: 45,
+                ..Default::default()
+            },
             Some(&u),
         )
         .await
@@ -499,9 +525,21 @@ mod tests {
             let u = append_user(&mem, id, &format!("问 {i}"), tip.as_deref())
                 .await
                 .unwrap();
-            let a = append_assistant(&mem, id, &format!("答 {i}"), &[], false, (0, 0), Some(&u))
-                .await
-                .unwrap();
+            let a = append_assistant(
+                &mem,
+                id,
+                &format!("答 {i}"),
+                &[],
+                false,
+                MsgUsage {
+                    prompt: 0,
+                    completion: 0,
+                    ..Default::default()
+                },
+                Some(&u),
+            )
+            .await
+            .unwrap();
             tip = Some(a);
         }
         let (parent, hist) = history_for_ask(&mem, id, None, 4).await.unwrap();
@@ -516,9 +554,21 @@ mod tests {
         let mem = MemoryDb::open_in_memory().await.unwrap();
         let id = create_conversation(&mem, "t").await.unwrap();
         let u1 = append_user(&mem, id, "原始提问", None).await.unwrap();
-        let a1 = append_assistant(&mem, id, "原始回答", &[], false, (0, 0), Some(&u1))
-            .await
-            .unwrap();
+        let a1 = append_assistant(
+            &mem,
+            id,
+            "原始回答",
+            &[],
+            false,
+            MsgUsage {
+                prompt: 0,
+                completion: 0,
+                ..Default::default()
+            },
+            Some(&u1),
+        )
+        .await
+        .unwrap();
         // 编辑首条提问 = 挂根的新分支:挂点解析为 None,历史为空
         let (parent, hist) = history_for_ask(&mem, id, Some(String::new()), 6)
             .await
@@ -526,9 +576,21 @@ mod tests {
         assert_eq!(parent, None);
         assert!(hist.is_empty(), "根分支不该看到旧分支的历史");
         let u2 = append_user(&mem, id, "编辑后的提问", None).await.unwrap();
-        append_assistant(&mem, id, "新分支回答", &[], false, (0, 0), Some(&u2))
-            .await
-            .unwrap();
+        append_assistant(
+            &mem,
+            id,
+            "新分支回答",
+            &[],
+            false,
+            MsgUsage {
+                prompt: 0,
+                completion: 0,
+                ..Default::default()
+            },
+            Some(&u2),
+        )
+        .await
+        .unwrap();
         // 在旧分支叶子上续聊:历史只含旧分支
         let (parent, hist) = history_for_ask(&mem, id, Some(a1.clone()), 6)
             .await
@@ -549,12 +611,36 @@ mod tests {
         let mem = MemoryDb::open_in_memory().await.unwrap();
         let id = create_conversation(&mem, "t").await.unwrap();
         let u1 = append_user(&mem, id, "问 1", None).await.unwrap();
-        let a_old = append_assistant(&mem, id, "答 1 旧版", &[], false, (0, 0), Some(&u1))
-            .await
-            .unwrap();
-        let a_new = append_assistant(&mem, id, "答 1 新版", &[], false, (0, 0), Some(&a_old))
-            .await
-            .unwrap();
+        let a_old = append_assistant(
+            &mem,
+            id,
+            "答 1 旧版",
+            &[],
+            false,
+            MsgUsage {
+                prompt: 0,
+                completion: 0,
+                ..Default::default()
+            },
+            Some(&u1),
+        )
+        .await
+        .unwrap();
+        let a_new = append_assistant(
+            &mem,
+            id,
+            "答 1 新版",
+            &[],
+            false,
+            MsgUsage {
+                prompt: 0,
+                completion: 0,
+                ..Default::default()
+            },
+            Some(&a_old),
+        )
+        .await
+        .unwrap();
         append_user(&mem, id, "问 2", Some(&a_new)).await.unwrap();
 
         let (_, hist) = history_for_ask(&mem, id, None, 6).await.unwrap();
@@ -579,13 +665,37 @@ mod tests {
             "空会话没有可重试的提问"
         );
         let u1 = append_user(&mem, id, "问 1", None).await.unwrap();
-        let a1 = append_assistant(&mem, id, "答 1", &[], false, (0, 0), Some(&u1))
-            .await
-            .unwrap();
+        let a1 = append_assistant(
+            &mem,
+            id,
+            "答 1",
+            &[],
+            false,
+            MsgUsage {
+                prompt: 0,
+                completion: 0,
+                ..Default::default()
+            },
+            Some(&u1),
+        )
+        .await
+        .unwrap();
         let u2 = append_user(&mem, id, "问 2", Some(&a1)).await.unwrap();
-        let a2 = append_assistant(&mem, id, "答 2(重试目标)", &[], false, (0, 0), Some(&u2))
-            .await
-            .unwrap();
+        let a2 = append_assistant(
+            &mem,
+            id,
+            "答 2(重试目标)",
+            &[],
+            false,
+            MsgUsage {
+                prompt: 0,
+                completion: 0,
+                ..Default::default()
+            },
+            Some(&u2),
+        )
+        .await
+        .unwrap();
 
         let (q, hist, leaf) = question_for_regenerate(&mem, id, None, 6)
             .await

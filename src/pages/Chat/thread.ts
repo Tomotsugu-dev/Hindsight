@@ -9,6 +9,9 @@ export interface AssistantVersion {
   /** 本轮上行/下行 token；旧数据为 null 不显示 */
   promptTokens: number | null;
   completionTokens: number | null;
+  /** 思考消耗(已含在 completionTokens 内)与本轮墙钟耗时(毫秒) */
+  reasoningTokens: number | null;
+  elapsedMs: number | null;
 }
 
 /** 当前路径上的一条渲染消息。user 携带编辑分支信息(同父兄弟 = 编辑产生的
@@ -81,6 +84,8 @@ export function buildThread(
         degraded: next.degraded,
         promptTokens: next.promptTokens,
         completionTokens: next.completionTokens,
+        reasoningTokens: next.reasoningTokens,
+        elapsedMs: next.elapsedMs,
       };
       const last = messages[messages.length - 1];
       if (last && last.role === "assistant") {

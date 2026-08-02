@@ -21,6 +21,11 @@ use crate::error::{Error, Result};
 pub struct TokenUsage {
     pub prompt: u64,
     pub completion: u64,
+    /// 思考(reasoning)消耗,已含在 `completion` 里。
+    /// `completion_tokens_details.reasoning_tokens` 是三家通用字段(实测
+    /// DeepSeek / OpenAI / Moonshot 都给),关闭思考时对象整个不返回 = 0。
+    /// 本地 llama-server 不给此字段,恒 0。
+    pub reasoning: u64,
 }
 
 impl TokenUsage {
@@ -28,6 +33,9 @@ impl TokenUsage {
         Self {
             prompt: resp["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
             completion: resp["usage"]["completion_tokens"].as_u64().unwrap_or(0),
+            reasoning: resp["usage"]["completion_tokens_details"]["reasoning_tokens"]
+                .as_u64()
+                .unwrap_or(0),
         }
     }
 }
@@ -129,20 +137,48 @@ fn local_decision_schema() -> Value {
 }
 
 /// Chat 思考模式偏好(设置 `ai.chat_thinking` 的解析形态)。
+/// 强度档的值域各家不同(实测+文档,2026-08):DeepSeek low/high/max、
+/// OpenAI(gpt-5.1+)none/low/medium/high、OpenRouter low/medium/high、
+/// 本地与其它云端只有开关。UI 按当前服务商只展示它真实存在的档位,
+/// 注入层对"切换服务商后残留的值域外档"就近降级,绝不发值域外字面量
+/// (DeepSeek 实测对值域外 effort 200 静默,但不赌其它家)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThinkingMode {
     Auto,
-    On,
     Off,
+    Low,
+    Medium,
+    High,
+    Max,
 }
 
 impl ThinkingMode {
     pub fn from_setting(s: &str) -> Self {
         match s {
-            "on" => Self::On,
+            // "on" 是分档前的旧值(设置可能还没被 sanitize 重写):当高档
+            "on" | "high" => Self::High,
+            "max" => Self::Max,
+            "medium" => Self::Medium,
+            "low" => Self::Low,
             "off" => Self::Off,
             _ => Self::Auto,
         }
+    }
+
+    /// low/medium/high 值域(OpenAI/OpenRouter)的 effort 字面量;
+    /// Max 就近降为 high,Auto/Off 为 None。
+    fn effort_lmh(self) -> Option<&'static str> {
+        match self {
+            Self::Low => Some("low"),
+            Self::Medium => Some("medium"),
+            Self::High | Self::Max => Some("high"),
+            Self::Auto | Self::Off => None,
+        }
+    }
+
+    /// 是否任一强度档(= 要求开思考)。
+    fn wants_thinking(self) -> bool {
+        !matches!(self, Self::Auto | Self::Off)
     }
 }
 
@@ -151,26 +187,60 @@ impl ThinkingMode {
 /// - `Auto` 一个字节都不加——实测 DeepSeek 对未知字段 200 静默忽略,但
 ///   OpenAI 对未知参数会 400,零注入是唯一零风险基线;
 /// - deepseek:`thinking.type` enabled/disabled(官方字段;实测 disabled 把
-///   completion 从 ~100 降到个位数 token,延迟同降);
-/// - openrouter:`reasoning.enabled`(不能与顶层 reasoning_effort 混发,否则 400);
-/// - openai:`reasoning_effort` medium/none;
+///   completion 从 ~100 降到个位数 token,延迟同降)——无强度分档,
+///   高/中/低都发 enabled;
+/// - openrouter:强度档发 `reasoning.effort`(隐含 enabled),关闭发
+///   `reasoning.enabled=false`(不能与顶层 reasoning_effort 混发,否则 400);
+/// - openai:`reasoning_effort` high/medium/low/none;
 /// - 其它(together/groq/custom):`chat_template_kwargs.enable_thinking`
-///   (vLLM/SGLang 生态惯例,不认的端点以忽略为主)。
-fn inject_cloud_thinking(body: &mut Value, provider: &str, mode: ThinkingMode) {
-    let on = match mode {
-        ThinkingMode::Auto => return,
-        ThinkingMode::On => true,
-        ThinkingMode::Off => false,
-    };
+///   (vLLM/SGLang 生态惯例,不认的端点以忽略为主),同样只有开关。
+fn inject_cloud_thinking(body: &mut Value, provider: &str, mode: ThinkingMode, has_tools: bool) {
+    // OpenAI 官方的硬限制(实测 gpt-5.6-luna,2026-08):Chat Completions 里
+    // function tools 与 reasoning_effort≠none **不能共存**,连"不发参数"都
+    // 会撞上(模型默认档非 none)——`Function tools with reasoning_effort are
+    // not supported ... use the Responses API`。Chat 主路径永远带 tools,
+    // 所以这里必须显式发 none,否则 OpenAI 一句话都答不了。
+    // 不带 tools 的调用(问题自立化改写器)不受此限,按用户档位正常下发。
+    if provider == "openai" && has_tools {
+        body["reasoning_effort"] = json!("none");
+        return;
+    }
+    if mode == ThinkingMode::Auto {
+        return;
+    }
+    let on = mode.wants_thinking();
     match provider {
+        // 开关走 thinking.type;强度走独立的 reasoning_effort(实测两参数独立,
+        // disabled 时 effort 被忽略)。官方值域 low/high/max,无 medium——
+        // UI 在 deepseek 下不出"中"档,这里的 Medium 只是切换服务商的残留,
+        // 就近降为 high(=官方默认强度)。
         "deepseek" => {
             body["thinking"] = json!({"type": if on { "enabled" } else { "disabled" }});
+            let ds = match mode {
+                ThinkingMode::Low => Some("low"),
+                ThinkingMode::Medium | ThinkingMode::High => Some("high"),
+                ThinkingMode::Max => Some("max"),
+                ThinkingMode::Auto | ThinkingMode::Off => None,
+            };
+            if let Some(e) = ds {
+                body["reasoning_effort"] = json!(e);
+            }
         }
+        // effort 隐含 enabled;关闭时只发 enabled=false(effort 与其互斥)。
+        // 值域 low/medium/high:Max 残留就近 high
         "openrouter" => {
-            body["reasoning"] = json!({"enabled": on});
+            body["reasoning"] = match mode.effort_lmh() {
+                Some(e) => json!({"effort": e}),
+                None => json!({"enabled": false}),
+            };
         }
-        "openai" => {
-            body["reasoning_effort"] = json!(if on { "medium" } else { "none" });
+        // openai:gpt-5.1+ 值域 none/low/medium/high(none 为关),Max 残留就近 high。
+        // kimi(Moonshot):同款 reasoning_effort 字段,实测 kimi-k3 各档思考量
+        // 单调递增(none 0 字 / low 133 / medium 275 / high 372),且与 tools
+        // 共存无碍——OpenAI 那条 tools 限制不适用于它。
+        // 注意:个别模型(kimi-k2.7-code)强制思考,发 none 会 400。
+        "openai" | "kimi" | "kimi-cn" => {
+            body["reasoning_effort"] = json!(mode.effort_lmh().unwrap_or("none"));
         }
         _ => {
             body["chat_template_kwargs"] = json!({"enable_thinking": on});
@@ -181,15 +251,21 @@ fn inject_cloud_thinking(body: &mut Value, provider: &str, mode: ThinkingMode) {
 /// 本地 llama-server 的思考注入。与云端不同,`Auto` 也注入 false:实测
 /// (Qwen3.5-4B)hybrid 模型默认思考,在 grammar(json_schema)约束 + 有限
 /// max_tokens 下思考吃光预算、决策 JSON 根本没机会输出——"默认不管"在
-/// 本地等于默认坏。`On` 时调用方需同时放大 max_tokens(见
+/// 本地等于默认坏。强度档时调用方需同时放大 max_tokens(见
 /// [`LOCAL_THINKING_MAX_TOKENS`]),否则必然空输出。
 fn inject_local_thinking(body: &mut Value, mode: ThinkingMode) {
-    let on = matches!(mode, ThinkingMode::On);
-    body["chat_template_kwargs"] = json!({"enable_thinking": on});
+    // 本地无强度可言:任一强度档=开(llama-server 只认布尔开关,
+    // 预算也不按档分——4096 实测已被完整思考链吃满,低档只会更早窒息)
+    body["chat_template_kwargs"] = json!({"enable_thinking": mode.wants_thinking()});
 }
 
 /// 本地开思考时的 max_tokens:完整思考链实测 1-2K token,再留决策 JSON 的份。
 const LOCAL_THINKING_MAX_TOKENS: u32 = 4096;
+
+/// 云端非关闭态的 max_tokens:思考 token 计入 completion,实测 DeepSeek
+/// high 档思考 ~5K token、max 档 6K+,1024 会被思考打满、正文截断为空。
+/// Auto 也要用它——DeepSeek 默认思考开,Auto 不注入参数照样思考。
+const CLOUD_THINKING_MAX_TOKENS: u32 = 12288;
 
 /// Chat LLM 客户端:云端 or 本地,一个 step 接口。
 pub enum ChatLlm {
@@ -212,6 +288,18 @@ pub enum ChatLlm {
 
 const CHAT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 const MAX_ANSWER_TOKENS: u32 = 1024;
+
+/// 输出预算的字段名。云端用 OpenAI 现行的 `max_completion_tokens`:实测
+/// (2026-08)gpt-5.6 起对 `max_tokens` 直接 400「not supported with this
+/// model」,而 DeepSeek/Moonshot 两个名字都认——统一发新名字是唯一通吃解。
+/// 本地 llama-server 沿用 `max_tokens`。
+fn budget_key(is_cloud: bool) -> &'static str {
+    if is_cloud {
+        "max_completion_tokens"
+    } else {
+        "max_tokens"
+    }
+}
 
 impl ChatLlm {
     pub fn cloud(
@@ -273,27 +361,34 @@ impl ChatLlm {
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "max_tokens": max_tokens,
             "temperature": 0,
         });
         match self {
             Self::Cloud {
                 provider, thinking, ..
-            } => inject_cloud_thinking(&mut body, provider, *thinking),
+            } => {
+                // 改写器不带 tools,思考档位可原样下发(带 tools 的限制见 step_cloud)
+                inject_cloud_thinking(&mut body, provider, *thinking, false);
+                // 非关闭态给足思考预算(Auto 下 DeepSeek 也默认思考)
+                let budget = if matches!(*thinking, ThinkingMode::Off) {
+                    max_tokens
+                } else {
+                    max_tokens.max(CLOUD_THINKING_MAX_TOKENS)
+                };
+                body[budget_key(true)] = json!(budget);
+            }
             Self::Local { thinking, .. } => {
                 inject_local_thinking(&mut body, *thinking);
-                if *thinking == ThinkingMode::On {
-                    body["max_tokens"] = json!(max_tokens.max(LOCAL_THINKING_MAX_TOKENS));
-                }
+                let budget = if thinking.wants_thinking() {
+                    max_tokens.max(LOCAL_THINKING_MAX_TOKENS)
+                } else {
+                    max_tokens
+                };
+                body[budget_key(false)] = json!(budget);
             }
         }
-        let mut req = http
-            .post(format!("{base_url}/chat/completions"))
-            .json(&body);
-        if !api_key.is_empty() {
-            req = req.bearer_auth(api_key);
-        }
-        let resp: Value = send_json(req).await?;
+        let url = format!("{base_url}/chat/completions");
+        let resp: Value = send_healing(http, &url, api_key, &mut body).await?;
         let usage = TokenUsage::from_resp(&resp);
         let content = resp["choices"][0]["message"]["content"]
             .as_str()
@@ -347,21 +442,23 @@ impl ChatLlm {
                 }
             });
         }
+        // 非关闭态思考 token 挤占 completion 预算(Auto 下 DeepSeek 默认思考,
+        // 实测 1024 会被复杂问题的思考链打满、正文截空)
+        let max_tokens = if matches!(thinking, ThinkingMode::Off) {
+            MAX_ANSWER_TOKENS
+        } else {
+            CLOUD_THINKING_MAX_TOKENS
+        };
         let mut body = json!({
             "model": model,
             "messages": messages,
             "tools": tools_schema(),
             "tool_choice": "auto",
-            "max_tokens": MAX_ANSWER_TOKENS,
         });
-        inject_cloud_thinking(&mut body, provider, *thinking);
-        let mut req = http
-            .post(format!("{base_url}/chat/completions"))
-            .json(&body);
-        if !api_key.trim().is_empty() {
-            req = req.bearer_auth(api_key.trim());
-        }
-        let resp: Value = send_json(req).await?;
+        body[budget_key(true)] = json!(max_tokens);
+        inject_cloud_thinking(&mut body, provider, *thinking, true);
+        let url = format!("{base_url}/chat/completions");
+        let resp: Value = send_healing(http, &url, api_key.trim(), &mut body).await?;
         let usage = TokenUsage::from_resp(&resp);
         let msg = &resp["choices"][0]["message"];
         if let Some(call) = msg["tool_calls"].get(0) {
@@ -425,7 +522,7 @@ impl ChatLlm {
         }
         transcript.push_str("请输出下一步决策(JSON):");
         // 开思考时预算放大:思考链先于 grammar 决策输出,预算不够就只剩思考
-        let max_tokens = if *thinking == ThinkingMode::On {
+        let max_tokens = if thinking.wants_thinking() {
             LOCAL_THINKING_MAX_TOKENS
         } else {
             MAX_ANSWER_TOKENS
@@ -484,6 +581,158 @@ fn http_client() -> Result<reqwest::Client> {
         .timeout(CHAT_TIMEOUT)
         .build()
         .map_err(|e| Error::LlmResponse(format!("HTTP 客户端构造失败: {e}")))
+}
+
+// ── 请求自愈 ────────────────────────────────────────────────────
+//
+// 云端 400 绝大多数是"参数不合这家/这个模型的口味",而**错误信息本身就写明
+// 了该怎么改**。与其为每个 provider 硬编码知识(追不上 API 演进,更盖不住
+// custom 端点的无穷组合),不如按对方的说法改一改重发。OpenAI 兼容生态的
+// 错误措辞高度同构,同一套规则对没见过的端点一样有效。
+//
+// 规则与安全边界经 `scripts/llm/selfheal_probe.py` 验证:mock 侧复现真机
+// 抓到的 400 原文(8 场景全自愈)、边界侧 4 场景全部按预期干净放弃、
+// 真端点 DeepSeek×2 / OpenAI / Moonshot 端到端通过。
+
+/// 自愈重试上限。够用:实测最长的链是"改名 → 补 none"两轮。
+const MAX_HEAL_ROUNDS: u32 = 3;
+
+/// 绝不可为了让请求通过而删掉的字段。删了确实能 200,但功能已经废了——
+/// 例如删 `tools` 后 Chat 失去查库能力却装作一切正常,静默失效比报错更坏。
+const PROTECTED_FIELDS: [&str; 4] = ["model", "messages", "tools", "tool_choice"];
+
+/// 思考控制字段全集(各家口径不同,撤销时一并清掉)。
+const THINKING_FIELDS: [&str; 4] = [
+    "thinking",
+    "reasoning",
+    "reasoning_effort",
+    "chat_template_kwargs",
+];
+
+/// 取错误信息里第 `n` 个单引号包裹的片段(0 起)。
+fn quoted(msg: &str, n: usize) -> Option<&str> {
+    msg.split('\'').nth(n * 2 + 1)
+}
+
+/// 取 `start` 与 `end` 之间的片段。
+fn between<'a>(msg: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let rest = &msg[msg.find(start)? + start.len()..];
+    Some(rest[..rest.find(end)?].trim())
+}
+
+fn remove_field(body: &mut Value, key: &str) -> bool {
+    if PROTECTED_FIELDS.contains(&key) {
+        return false;
+    }
+    body.as_object_mut().and_then(|o| o.remove(key)).is_some()
+}
+
+/// 按 400 的错误信息就地修正请求体。返回 false = 没有规则能修,该放弃。
+fn heal_request(body: &mut Value, err_msg: &str) -> bool {
+    let low = err_msg.to_ascii_lowercase();
+
+    // R2 参数改名:对方直接给了新名字(`'max_tokens' ... use 'max_completion_tokens' instead`)
+    if low.contains("is not supported") && low.contains("instead") {
+        if let (Some(old), Some(new)) = (quoted(err_msg, 0), quoted(err_msg, 1)) {
+            if let Some(o) = body.as_object_mut() {
+                if let Some(v) = o.remove(old) {
+                    o.insert(new.to_string(), v);
+                    return true;
+                }
+            }
+        }
+    }
+
+    // R3 值不被支持:降到错误信息里列出的第一个合法值,拿不到就删字段
+    if low.contains("does not support") {
+        if let Some(param) = quoted(err_msg, 0) {
+            if body.get(param).is_some() {
+                // `Supported values are: 'none', 'low', ...` —— 取第一个
+                let fallback = low
+                    .find("supported values")
+                    .and_then(|i| quoted(&err_msg[i..], 0).map(str::to_string));
+                return match fallback {
+                    Some(v) => {
+                        body[param] = json!(v);
+                        true
+                    }
+                    None => remove_field(body, param),
+                };
+            }
+        }
+    }
+
+    // R4 组合不被支持(`Function tools with reasoning_effort are not supported`):
+    // 把被点名的参数压到安全值。注意"根本没发这个参数"也会被拒——OpenAI 带
+    // tools 时默认档就非 none,所以要**补**上而不只是改。
+    if let Some(param) = between(&low, "with ", " are not supported") {
+        if param == "reasoning_effort" {
+            if body.get(param).and_then(Value::as_str) != Some("none") {
+                body["reasoning_effort"] = json!("none");
+                return true;
+            }
+        } else if remove_field(body, param) {
+            return true;
+        }
+    }
+
+    // R5 模型强制思考(Moonshot `only type=enabled is allowed for this model`,
+    // OpenRouter `Reasoning is mandatory ...`):撤掉全部思考控制,按默认行为跑
+    if low.contains("only type=enabled")
+        || (low.contains("reasoning") && low.contains("mandatory"))
+        || low.contains("cannot be disabled")
+    {
+        let mut hit = false;
+        for f in THINKING_FIELDS {
+            hit |= remove_field(body, f);
+        }
+        if hit {
+            return true;
+        }
+    }
+
+    // R1 未知参数:最通用的一条——对方不认识的字段直接删。受保护字段除外
+    // (端点若连 tools 都不认,应当干净失败,让用户知道它不能用于对话)
+    if low.contains("unknown parameter") {
+        if let Some(p) = quoted(err_msg, 0) {
+            return remove_field(body, p);
+        }
+    }
+
+    false
+}
+
+/// 发请求;400 且能按错误信息修正时自愈重试(见 [`heal_request`])。
+/// 非 400(鉴权/限流/网关)一律不重试——那不是参数问题,重发只是浪费。
+async fn send_healing(
+    http: &reqwest::Client,
+    url: &str,
+    api_key: &str,
+    body: &mut Value,
+) -> Result<Value> {
+    let mut round = 0u32;
+    loop {
+        let mut req = http.post(url).json(&*body);
+        if !api_key.is_empty() {
+            req = req.bearer_auth(api_key);
+        }
+        match send_json(req).await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                let Error::LlmResponse(msg) = &e else {
+                    return Err(e);
+                };
+                if round >= MAX_HEAL_ROUNDS
+                    || !msg.starts_with("HTTP 400")
+                    || !heal_request(body, msg)
+                {
+                    return Err(e);
+                }
+                log::warn!("chat 云端 400,按错误信息自愈后重试(第 {} 轮)", round + 1);
+                round += 1;
+            }
+        }
+    }
 }
 
 async fn send_json(req: reqwest::RequestBuilder) -> Result<Value> {
@@ -651,44 +900,190 @@ mod cloud_http_tests {
         // Auto:云端一个字节都不加
         for p in ["deepseek", "openrouter", "openai", "custom", "together"] {
             let mut b = base();
-            inject_cloud_thinking(&mut b, p, ThinkingMode::Auto);
+            inject_cloud_thinking(&mut b, p, ThinkingMode::Auto, false);
             assert_eq!(b, base(), "Auto 不得注入任何字段(provider={p})");
         }
-        // deepseek:官方 thinking.type
+        // deepseek:thinking.type 开关 + reasoning_effort 强度(官方值域
+        // low/high/max,无 medium——Medium 残留就近 high;实弹验证三档真分档:
+        // 同题思考 2889/6626/9130 字)
+        for (m, want) in [
+            (ThinkingMode::Low, "low"),
+            (ThinkingMode::Medium, "high"),
+            (ThinkingMode::High, "high"),
+            (ThinkingMode::Max, "max"),
+        ] {
+            let mut b = base();
+            inject_cloud_thinking(&mut b, "deepseek", m, false);
+            assert_eq!(b["thinking"]["type"], "enabled");
+            assert_eq!(b["reasoning_effort"], want);
+        }
         let mut b = base();
-        inject_cloud_thinking(&mut b, "deepseek", ThinkingMode::On);
-        assert_eq!(b["thinking"]["type"], "enabled");
-        let mut b = base();
-        inject_cloud_thinking(&mut b, "deepseek", ThinkingMode::Off);
+        inject_cloud_thinking(&mut b, "deepseek", ThinkingMode::Off, false);
         assert_eq!(b["thinking"]["type"], "disabled");
-        // openrouter:reasoning.enabled(不得同时出现顶层 reasoning_effort)
+        assert!(b.get("reasoning_effort").is_none(), "关闭不发强度");
+        // openrouter:强度→reasoning.effort(值域 low/medium/high,Max 残留
+        // 就近 high);关→reasoning.enabled=false;都不得出现顶层 reasoning_effort
+        for (m, want) in [
+            (ThinkingMode::Low, "low"),
+            (ThinkingMode::Medium, "medium"),
+            (ThinkingMode::High, "high"),
+            (ThinkingMode::Max, "high"),
+        ] {
+            let mut b = base();
+            inject_cloud_thinking(&mut b, "openrouter", m, false);
+            assert_eq!(b["reasoning"]["effort"], want);
+            assert!(b.get("reasoning_effort").is_none());
+        }
         let mut b = base();
-        inject_cloud_thinking(&mut b, "openrouter", ThinkingMode::Off);
+        inject_cloud_thinking(&mut b, "openrouter", ThinkingMode::Off, false);
         assert_eq!(b["reasoning"]["enabled"], false);
         assert!(b.get("reasoning_effort").is_none());
-        // openai:reasoning_effort
+        // openai:reasoning_effort 逐档直传(gpt-5.1+ 值域 none/low/medium/high,
+        // Max 残留就近 high),关=none
+        for (m, want) in [
+            (ThinkingMode::Low, "low"),
+            (ThinkingMode::Medium, "medium"),
+            (ThinkingMode::High, "high"),
+            (ThinkingMode::Max, "high"),
+            (ThinkingMode::Off, "none"),
+        ] {
+            let mut b = base();
+            inject_cloud_thinking(&mut b, "openai", m, false);
+            assert_eq!(b["reasoning_effort"], want);
+        }
+        // 其它/自建:vLLM 生态惯例,只有开关
         let mut b = base();
-        inject_cloud_thinking(&mut b, "openai", ThinkingMode::On);
-        assert_eq!(b["reasoning_effort"], "medium");
-        let mut b = base();
-        inject_cloud_thinking(&mut b, "openai", ThinkingMode::Off);
-        assert_eq!(b["reasoning_effort"], "none");
-        // 其它/自建:vLLM 生态惯例
-        let mut b = base();
-        inject_cloud_thinking(&mut b, "custom", ThinkingMode::Off);
+        inject_cloud_thinking(&mut b, "custom", ThinkingMode::Off, false);
         assert_eq!(b["chat_template_kwargs"]["enable_thinking"], false);
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "custom", ThinkingMode::Medium, false);
+        assert_eq!(b["chat_template_kwargs"]["enable_thinking"], true);
 
         // 本地:Auto/Off 都必须显式关(hybrid 模型默认思考会吃光 grammar
-        // 决策的预算——实测正文为空),On 才开
+        // 决策的预算——实测正文为空),任一强度档=开
         for (mode, want) in [
             (ThinkingMode::Auto, false),
             (ThinkingMode::Off, false),
-            (ThinkingMode::On, true),
+            (ThinkingMode::Low, true),
+            (ThinkingMode::Medium, true),
+            (ThinkingMode::High, true),
+            (ThinkingMode::Max, true),
         ] {
             let mut b = base();
             inject_local_thinking(&mut b, mode);
             assert_eq!(b["chat_template_kwargs"]["enable_thinking"], want);
         }
+
+        // 设置值解析:分档前的旧值 "on" 必须继续当"开"用;非法值回 Auto
+        assert_eq!(ThinkingMode::from_setting("on"), ThinkingMode::High);
+        assert_eq!(ThinkingMode::from_setting("max"), ThinkingMode::Max);
+        assert_eq!(ThinkingMode::from_setting("怪值"), ThinkingMode::Auto);
+    }
+
+    /// 自愈规则表。用例的错误文案全部取自真机实测原文
+    /// (scripts/llm/thinking_probe.py + selfheal 原型),不是编的。
+    #[test]
+    fn heal_request_rules_cover_real_world_400s() {
+        let e400 = |s: &str| format!("HTTP 400 Bad Request: {{\"error\":{{\"message\":\"{s}\"}}}}");
+
+        // R2 参数改名:OpenAI gpt-5.6 起拒收 max_tokens
+        let mut b = json!({"model": "m", "max_tokens": 1024});
+        assert!(heal_request(
+            &mut b,
+            &e400("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.")
+        ));
+        assert_eq!(b["max_completion_tokens"], 1024);
+        assert!(b.get("max_tokens").is_none());
+
+        // R1 未知参数:切服务商后残留的别家字段
+        let mut b = json!({"model": "m", "thinking": {"type": "disabled"}});
+        assert!(heal_request(
+            &mut b,
+            &e400("Unknown parameter: 'thinking'.")
+        ));
+        assert!(b.get("thinking").is_none());
+
+        // R3 值不被支持:降到错误信息里列出的第一个合法值
+        let mut b = json!({"model": "m", "reasoning_effort": "minimal"});
+        assert!(heal_request(
+            &mut b,
+            &e400("Unsupported value: 'reasoning_effort' does not support 'minimal' with this model. Supported values are: 'none', 'low', 'medium', 'high'.")
+        ));
+        assert_eq!(b["reasoning_effort"], "none");
+
+        // R4 组合不被支持:参数**不在报文里**也要能补上(OpenAI 默认档非 none)
+        let mut b = json!({"model": "m", "tools": []});
+        assert!(heal_request(
+            &mut b,
+            &e400("Function tools with reasoning_effort are not supported for gpt-5.6-luna in /v1/chat/completions.")
+        ));
+        assert_eq!(b["reasoning_effort"], "none");
+        // 已经是 none 还报同样的错 → 无计可施,不能空转
+        assert!(!heal_request(
+            &mut b,
+            &e400("Function tools with reasoning_effort are not supported for gpt-5.6-luna.")
+        ));
+
+        // R5 模型强制思考(Moonshot kimi-k2.7-code):撤掉全部思考控制
+        let mut b = json!({"model": "m", "reasoning_effort": "none", "tools": []});
+        assert!(heal_request(
+            &mut b,
+            &e400("invalid thinking: only type=enabled is allowed for this model")
+        ));
+        assert!(b.get("reasoning_effort").is_none());
+        assert!(b.get("tools").is_some(), "撤思考不得波及 tools");
+
+        // 无法识别的错误:干净放弃,不瞎改
+        let mut b = json!({"model": "m", "max_tokens": 1});
+        assert!(!heal_request(&mut b, &e400("内部错误 E5012")));
+        assert_eq!(b["max_tokens"], 1);
+    }
+
+    /// 安全边界:能"修好"反而是事故的场景。
+    /// 删掉 tools 请求确实会 200,但 Chat 从此查不了库还装作正常——
+    /// 静默失效比报错更坏,这里必须拒绝修复。
+    #[test]
+    fn heal_request_never_sacrifices_core_fields() {
+        let e400 = |s: &str| format!("HTTP 400 Bad Request: {{\"error\":{{\"message\":\"{s}\"}}}}");
+        for f in PROTECTED_FIELDS {
+            let mut b = json!({"model": "m", "messages": [], "tools": [], "tool_choice": "auto"});
+            assert!(
+                !heal_request(&mut b, &e400(&format!("Unknown parameter: '{f}'."))),
+                "{f} 不该为了让请求通过被删"
+            );
+            assert!(b.get(f).is_some(), "{f} 必须原样保留");
+        }
+    }
+
+    /// OpenAI 的硬限制(实测 gpt-5.6-luna):Chat Completions 里 function tools
+    /// 与 reasoning_effort≠none 不能共存,连"不发参数"都会被拒(默认档非 none)。
+    /// Chat 主路径永远带 tools,所以带 tools 时必须显式发 none——否则一句话都答不了。
+    #[test]
+    fn openai_with_tools_always_disables_reasoning() {
+        let base = || json!({"model": "m", "messages": []});
+        for m in [
+            ThinkingMode::Auto,
+            ThinkingMode::Off,
+            ThinkingMode::Low,
+            ThinkingMode::High,
+            ThinkingMode::Max,
+        ] {
+            let mut b = base();
+            inject_cloud_thinking(&mut b, "openai", m, true);
+            assert_eq!(b["reasoning_effort"], "none", "openai+tools 只能发 none");
+        }
+        // 不带 tools(问题自立化改写器)不受限,档位原样下发
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "openai", ThinkingMode::High, false);
+        assert_eq!(b["reasoning_effort"], "high");
+        // 同为 reasoning_effort 家族的 kimi 不受这条限制:带 tools 也发真实档位
+        // (实测 Moonshot tools + effort=low/medium/high 全部 200)
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "kimi", ThinkingMode::Medium, true);
+        assert_eq!(b["reasoning_effort"], "medium");
+        let mut b = base();
+        inject_cloud_thinking(&mut b, "kimi-cn", ThinkingMode::Off, true);
+        assert_eq!(b["reasoning_effort"], "none");
     }
 
     /// HTTP 级:deepseek + Off 的 step 请求体真的带上了 thinking.type=disabled。
@@ -883,7 +1278,14 @@ mod cloud_http_tests {
         let body: Value = serde_json::from_str(&req[head_end + 4..]).unwrap();
         assert_eq!(body["model"], "test-model");
         assert_eq!(body["tool_choice"], "auto");
-        assert_eq!(body["max_tokens"], 1024);
+        // Auto 也给足思考预算:DeepSeek 在 Auto 下默认思考,1024 会被
+        // 思考链打满、正文截空(实弹见 scripts/llm/thinking_probe.py)。
+        // 字段名必须是 max_completion_tokens:OpenAI 对 max_tokens 直接 400
+        assert_eq!(body["max_completion_tokens"], 12288);
+        assert!(
+            body.get("max_tokens").is_none(),
+            "云端不得再发旧字段名(OpenAI 会 400)"
+        );
         assert_eq!(
             body["tools"].as_array().unwrap().len(),
             3,
