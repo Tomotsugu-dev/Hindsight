@@ -235,6 +235,177 @@ pub async fn purge_with_members(pool: &DbPool, group_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// 取一个组下全部 active member 的 process_name。
+/// 数据清理与软删都要用它当"删谁"的依据,所以顺序上必须最先跑。
+async fn active_member_names(pool: &DbPool, group_id: &str) -> Result<Vec<String>> {
+    let id = group_id.to_string();
+    let names = pool
+        .0
+        .call(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT process_name FROM app_group_members
+                     WHERE group_id = ?1 AND deleted_at IS NULL",
+                )
+                .db()?;
+            let rows = stmt
+                .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))
+                .db()?;
+            let mut out = Vec::new();
+            for r in rows {
+                out.push(r.db()?);
+            }
+            Ok(out)
+        })
+        .await?;
+    Ok(names)
+}
+
+/// **真删**一个应用组的数据:活动记录、图标/路径缓存、截图文件,以及记忆库里的
+/// OCR 文字索引;最后走 [`purge_with_members`] 把组本身软删掉。
+///
+/// 与 [`purge_with_members`] 的区别:那个只清"归类关系",活动数据分文未动——
+/// 应用照样出现在统计里(退回原始进程名),下次运行还会整个回来。这个函数才是
+/// 用户点「删除数据」时期待的语义。
+///
+/// **顺序不可换**:先取成员名单 → 再删数据 → 最后软删组。反过来会先丢掉
+/// "要删谁"的依据。
+///
+/// 明确不做(前端文案已如实告知):
+///   - 不重算已生成的日报 / 周报 / AI 总结(它们是存好的文本);
+///   - 不传播数据删除到其它设备(组的软删仍照既有行为进 outbox);
+///   - `activities` 是同步实体,对端推送的历史理论上可能把数据带回来。
+pub async fn purge_with_data(
+    pool: &DbPool,
+    mem: &crate::memory::MemoryDb,
+    screenshot_root: &std::path::Path,
+    group_id: &str,
+) -> Result<()> {
+    let members = active_member_names(pool, group_id).await?;
+    if members.is_empty() {
+        // 没有成员可删,但组本身仍要处理(可能是建了没用的空组)
+        return purge_with_members(pool, group_id).await;
+    }
+
+    // ── 主库:先收截图路径,再删行 ──
+    let orphan_shots = {
+        let names = members.clone();
+        pool.0
+            .call(move |conn| {
+                let ph = vec!["?"; names.len()].join(",");
+                let params: Vec<&dyn rusqlite::ToSql> =
+                    names.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+
+                // 1) 候选截图(删行之前取,删完就查不到了)
+                let candidates: Vec<String> = {
+                    let mut stmt = conn
+                        .prepare(&format!(
+                            "SELECT DISTINCT screenshot_path FROM activities
+                             WHERE process_name IN ({ph}) AND screenshot_path IS NOT NULL"
+                        ))
+                        .db()?;
+                    let rows = stmt
+                        .query_map(params.as_slice(), |r| r.get::<_, String>(0))
+                        .db()?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r.db()?);
+                    }
+                    out
+                };
+
+                // 2) 删活动与派生缓存
+                for table in ["activities", "app_icons", "process_paths"] {
+                    conn.execute(
+                        &format!("DELETE FROM {table} WHERE process_name IN ({ph})"),
+                        params.as_slice(),
+                    )
+                    .db()?;
+                }
+
+                // 3) 兜底:删完后仍被引用的图不能动。实测当前一条 activity 独占一张图、
+                //    去重映射也从不跨应用,所以这里通常全部通过;留着是防将来去重
+                //    若改成全局图像哈希,免得静默打穿别的应用的证据链。
+                let mut deletable = Vec::new();
+                for path in candidates {
+                    let still_used: Option<i64> = conn
+                        .query_row(
+                            "SELECT 1 FROM activities WHERE screenshot_path = ?1 LIMIT 1",
+                            rusqlite::params![path],
+                            |r| r.get(0),
+                        )
+                        .optional()
+                        .db()?;
+                    if still_used.is_none() {
+                        conn.execute(
+                            "DELETE FROM screenshot_dedup_map
+                             WHERE member_path = ?1 OR rep_path = ?1",
+                            rusqlite::params![path],
+                        )
+                        .db()?;
+                        deletable.push(path);
+                    }
+                }
+                Ok(deletable)
+            })
+            .await?
+    };
+
+    // ── 记忆库:OCR 文字索引。FTS 由 text_sessions 的 AFTER DELETE 触发器自动跟进,
+    //    但 session_lines 没有外键,必须显式先删(否则留下指向空会话的孤儿行) ──
+    {
+        let names = members.clone();
+        mem.0
+            .call(move |conn| {
+                let ph = vec!["?"; names.len()].join(",");
+                let params: Vec<&dyn rusqlite::ToSql> =
+                    names.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+                conn.execute(
+                    &format!(
+                        "DELETE FROM session_lines WHERE session_id IN
+                         (SELECT id FROM text_sessions WHERE app_id IN ({ph}))"
+                    ),
+                    params.as_slice(),
+                )
+                .db()?;
+                conn.execute(
+                    &format!("DELETE FROM text_sessions WHERE app_id IN ({ph})"),
+                    params.as_slice(),
+                )
+                .db()?;
+                conn.execute(
+                    &format!("DELETE FROM frames WHERE app_id IN ({ph})"),
+                    params.as_slice(),
+                )
+                .db()?;
+                Ok(())
+            })
+            .await?;
+    }
+
+    // ── 组与成员软删 + outbox(既有行为) ──
+    purge_with_members(pool, group_id).await?;
+
+    // ── 截图文件。失败只告警:文件删不掉不该让已完成的数据清理失败 ──
+    if !orphan_shots.is_empty() {
+        let root = screenshot_root.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            for rel in orphan_shots {
+                let path = root.join(&rel);
+                if path.exists() {
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        log::warn!("删除截图失败 {}: {e}", path.display());
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|e| Error::Other(format!("截图删除任务失败: {e}")))?;
+    }
+
+    Ok(())
+}
+
 /// 软删一个**空组**。仅对 0 成员的组生效（有成员强制走 unmerge 路径，避免孤儿成员
 /// 突然没有 group_id 可指）。enqueue outbox 让对端也把这个组从列表里去掉。
 /// 幂等：组已被删 / 不存在 → no-op。
@@ -1424,5 +1595,178 @@ mod tests {
             outbox_before,
             "回滚后 outbox 不应有新增行"
         );
+    }
+
+    // ───────────── purge_with_data:真删数据 ─────────────
+
+    /// 造一个应用的完整痕迹:主库活动 + 记忆库 OCR 会话/帧 + 一张截图文件。
+    async fn seed_app_traces(
+        pool: &DbPool,
+        mem: &crate::memory::MemoryDb,
+        root: &std::path::Path,
+        process: &str,
+        shot_rel: &str,
+        text: &str,
+    ) {
+        std::fs::write(root.join(shot_rel), b"fake-png").unwrap();
+        let (p, sr) = (process.to_string(), shot_rel.to_string());
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                                            local_hour, process_name, window_title,
+                                            category_id, screenshot_path)
+                     VALUES('2026-05-15T10:00:00Z','2026-05-15T10:05:00Z',300,'2026-05-15',
+                            10, ?1, 'title', 'other', ?2)",
+                    rusqlite::params![p, sr],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let (p2, sr2, txt) = (process.to_string(), shot_rel.to_string(), text.to_string());
+        mem.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
+                     VALUES('2026-05-15','2026-05-15T10:00:00Z','2026-05-15T10:05:00Z',?1,'t',?2)",
+                    rusqlite::params![p2, txt],
+                )
+                .db()?;
+                let sid = conn.last_insert_rowid();
+                conn.execute(
+                    "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
+                     VALUES(?1, 0, ?2, ?3, '2026-05-15T10:00:00Z')",
+                    rusqlite::params![sid, txt, sr2],
+                )
+                .db()?;
+                // frames.path 是主键:共享截图的测试里两个应用指向同一张图,
+                // 现实中该图只会有一条帧记录,这里用 OR IGNORE 如实模拟
+                conn.execute(
+                    "INSERT OR IGNORE INTO frames(path, ts, local_date, app_id, title, ocr_state)
+                     VALUES(?1,'2026-05-15T10:00:00Z','2026-05-15',?2,'t',1)",
+                    rusqlite::params![sr2, p2],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn count_activities(pool: &DbPool, process: &str) -> i64 {
+        let p = process.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM activities WHERE process_name = ?1",
+                    rusqlite::params![p],
+                    |r| r.get::<_, i64>(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn fts_hits(mem: &crate::memory::MemoryDb, needle: &str) -> i64 {
+        let n = needle.to_string();
+        mem.0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH ?1",
+                    rusqlite::params![n],
+                    |r| r.get::<_, i64>(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 为什么测:「删除数据」承诺清空活动、截图与 OCR 文字索引。三处分属两个
+    /// 数据库 + 文件系统,漏掉任何一处都是"假删除"——尤其 OCR 索引里存着屏幕上
+    /// 出现过的原文,只删活动行的话搜索页照样能搜到。
+    /// 同时必须证明**只删目标应用**:隔壁应用的数据一条都不能少。
+    #[tokio::test]
+    async fn purge_with_data_wipes_all_three_places_and_spares_others() {
+        let pool = fresh_test_pool().await;
+        let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
+        let dir = std::env::temp_dir().join(format!("hs-purge-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        seed_vscode_group(&pool).await;
+        seed_app_traces(&pool, &mem, &dir, "Code", "code.png", "机密文档内容").await;
+        seed_app_traces(
+            &pool,
+            &mem,
+            &dir,
+            "Code.exe",
+            "code-exe.png",
+            "另一台机器上的文字",
+        )
+        .await;
+        // 隔壁应用:不该被波及
+        seed_app_traces(&pool, &mem, &dir, "Chrome", "chrome.png", "浏览器里的文字").await;
+
+        purge_with_data(&pool, &mem, &dir, "vscode").await.unwrap();
+
+        // 主库:组内**两个** member 的活动都清了(多进程名组是跨设备合并的常态)
+        assert_eq!(count_activities(&pool, "Code").await, 0);
+        assert_eq!(count_activities(&pool, "Code.exe").await, 0);
+        assert_eq!(
+            count_activities(&pool, "Chrome").await,
+            1,
+            "隔壁应用不该受影响"
+        );
+
+        // 记忆库:FTS 里搜不到被删应用的原文,隔壁的仍在
+        assert_eq!(
+            fts_hits(&mem, "机密文档内容").await,
+            0,
+            "OCR 文字索引必须清掉"
+        );
+        assert_eq!(
+            fts_hits(&mem, "浏览器里的文字").await,
+            1,
+            "隔壁应用的文字应还在"
+        );
+
+        // 文件系统
+        assert!(!dir.join("code.png").exists(), "截图文件应被删除");
+        assert!(!dir.join("code-exe.png").exists());
+        assert!(dir.join("chrome.png").exists(), "隔壁应用的截图不该被删");
+
+        // 组本身仍按既有语义软删
+        assert!(group_deleted(&pool, "vscode").await);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 为什么测:实测当前一条 activity 独占一张截图、去重映射也从不跨应用,
+    /// 所以正常路径下不会误删别人的图。但万一将来去重改成全局图像哈希,
+    /// 共享就可能出现——这行兜底检查必须挡住,否则会静默打穿别的应用的证据链
+    /// (搜索结果点开看不到原图)。
+    #[tokio::test]
+    async fn purge_with_data_keeps_screenshot_still_referenced_by_others() {
+        let pool = fresh_test_pool().await;
+        let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
+        let dir = std::env::temp_dir().join(format!("hs-purge-shared-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        seed_vscode_group(&pool).await;
+        // 人为让两个应用引用同一张图(现实中不会发生,见函数文档)
+        seed_app_traces(&pool, &mem, &dir, "Code", "shared.png", "甲的文字").await;
+        seed_app_traces(&pool, &mem, &dir, "Chrome", "shared.png", "乙的文字").await;
+
+        purge_with_data(&pool, &mem, &dir, "vscode").await.unwrap();
+
+        assert_eq!(count_activities(&pool, "Code").await, 0);
+        assert!(
+            dir.join("shared.png").exists(),
+            "还被别的应用引用的截图不能删——否则对方的证据卡点开是空的"
+        );
+        assert_eq!(count_activities(&pool, "Chrome").await, 1);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

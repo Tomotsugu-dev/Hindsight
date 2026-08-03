@@ -1,13 +1,21 @@
+import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import ListTab from "./tabs/ListTab";
+import { type TabDef } from "../../components/TabNav/TabNav";
+import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
 import styles from "./Categories.module.css";
 
+// tab 路由元数据；label 通过 t() 动态解析（同 SettingsPage 的写法）
+const TABS: TabDef[] = [
+  { to: "", labelKey: "categories.tabs.list", end: true },
+  { to: "apps", labelKey: "categories.tabs.apps" },
+];
+
 /**
- * 分类页：分类 CRUD（新建 / 改名 / 换色换图标 / 删除 / 拖拽排序），
- * 每条分类展开显示绑定的应用。
+ * 分类页外壳。
  *
- * 原本这里是 tab 外壳（分类 + 应用配对两个 tab），现在「应用配对」拆到独立的
- * /apps 页面（侧边栏「应用」），这里退化成单页直接渲染 ListTab。
+ * 「管理分类」和「给应用归类」本是同一件事的两面——配分类时想看有哪些应用，
+ * 归应用时想看有哪些分类，拆成两个侧栏入口只会让人来回跳。这里用 tab 把它们
+ * 收回一处（曾经就是这个形态，中途拆成独立 /apps 页，现在合回来）。
  */
 export default function CategoriesPage() {
   const { t } = useTranslation();
@@ -16,7 +24,12 @@ export default function CategoriesPage() {
       <header className={styles.header}>
         <h1 className={styles.title}>{t("categories.title")}</h1>
       </header>
-      <ListTab />
+
+      <FloatingTabNav tabs={TABS} ariaLabel={t("categories.title")} />
+
+      <section className={styles.tabContent}>
+        <Outlet />
+      </section>
     </div>
   );
 }

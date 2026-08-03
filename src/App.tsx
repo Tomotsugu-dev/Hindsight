@@ -32,6 +32,7 @@ const PromptTab = lazy(() => import("./pages/AISettings/tabs/PromptTab"));
 const ExternalApiTab = lazy(() => import("./pages/AISettings/tabs/ExternalApiTab"));
 const Devices = lazy(() => import("./pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
+const ListTab = lazy(() => import("./pages/Categories/tabs/ListTab"));
 const AppsPage = lazy(() => import("./pages/Apps/AppsPage"));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("./pages/Settings/tabs/GeneralTab"));
@@ -117,8 +118,15 @@ function App() {
             <Route path="external" element={<ExternalApiTab />} />
           </Route>
           <Route path={ROUTES.devices} element={<Devices />} />
-          <Route path={ROUTES.categories} element={<CategoriesPage />} />
-          <Route path={ROUTES.apps} element={<AppsPage />} />
+          <Route path={ROUTES.categories} element={<CategoriesPage />}>
+            <Route index element={<ListTab />} />
+            <Route path="apps" element={<AppsPage />} />
+          </Route>
+          {/* 旧的独立「应用」页已并入分类页的 tab：老书签 / 外链不落空 */}
+          <Route
+            path={ROUTES.apps}
+            element={<Navigate to={`${ROUTES.categories}/apps`} replace />}
+          />
           <Route path={ROUTES.settings} element={<SettingsPage />}>
             <Route index element={<GeneralTab />} />
             <Route path="appearance" element={<AppearanceTab />} />

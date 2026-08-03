@@ -4,7 +4,6 @@ import {
   MessageSquare,
   Settings,
   LayoutGrid,
-  Layers,
 } from "lucide-react";
 import { CalendarTodayIcon } from "../components/icons/CalendarTodayIcon";
 import { CalendarWeekIcon } from "../components/icons/CalendarWeekIcon";
@@ -21,6 +20,7 @@ export const ROUTES = {
   aiSettings: "/ai/settings",
   devices: "/devices",
   categories: "/categories",
+  /** 旧的独立「应用」页;现已并入 /categories 的 tab,这里只留给重定向用 */
   apps: "/apps",
   settings: "/settings",
 } as const;
@@ -36,7 +36,6 @@ export const NAV_ITEMS: NavItem[] = [
   { path: ROUTES.aiSummary,  labelKey: "nav.items.aiSummary",  icon: Sparkles,          group: "ai",      color: "#d946ef", excludePaths: [ROUTES.aiSettings] },
   { path: ROUTES.aiSettings, labelKey: "nav.items.aiSettings", icon: AiSettingsIcon,    group: "ai",      color: "#a855f7" },
   { path: ROUTES.categories, labelKey: "nav.items.categories", icon: LayoutGrid,        group: "data",    color: "#0ea5e9" },
-  { path: ROUTES.apps,       labelKey: "nav.items.apps",       icon: Layers,            group: "data",    color: "#14b8a6" },
   { path: ROUTES.devices,    labelKey: "nav.items.devices",    icon: Cloud,             group: "data",    color: "#10b981" },
   { path: ROUTES.settings,   labelKey: "nav.items.settings",   icon: Settings,          group: "system",  color: "#64748b" },
 ];

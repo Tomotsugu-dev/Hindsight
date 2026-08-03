@@ -28,11 +28,24 @@ export interface AppsFilter {
 export const DEFAULT_APPS_FILTER: AppsFilter = {
   search: "",
   selectedCategoryIds: [],
-  unassignedOnly: false,
+  /** 默认只看未指派：这一页本质是"把应用归类"的工作台，该出现在这里的是还
+   *  没处理的应用。系统跑过的每个进程都会被记下来，半年前开过一分钟的东西
+   *  也永远占着位置——归了类就自动从列表里退场，比手动删干净且不丢历史。
+   *  想看全部：清掉筛选即可。 */
+  unassignedOnly: true,
   sortBy: "default",
 };
 
 const STORAGE_KEY = "hindsight.apps.filter";
+
+/** 存储结构版本。老用户的 localStorage 里存着 `unassignedOnly: false`，
+ *  光改默认值对他们不生效——而列表最乱的恰恰是这批人。带版本号做一次性
+ *  迁移：读到旧版就把开关拉起来一次，之后完全尊重用户自己的选择。 */
+const FILTER_SCHEMA_VERSION = 2;
+
+interface StoredFilter extends Partial<AppsFilter> {
+  v?: number;
+}
 
 /**
  * Type-safe revival from localStorage：未知字段 / 坏值都回默认。
@@ -42,13 +55,15 @@ function loadFromStorage(): AppsFilter {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_APPS_FILTER;
-    const parsed = JSON.parse(raw) as Partial<AppsFilter>;
+    const parsed = JSON.parse(raw) as StoredFilter;
+    // 旧版存档：把"只看未指派"打开一次(见 FILTER_SCHEMA_VERSION)
+    const legacy = parsed.v !== FILTER_SCHEMA_VERSION;
     return {
       search: typeof parsed.search === "string" ? parsed.search : "",
       selectedCategoryIds: Array.isArray(parsed.selectedCategoryIds)
         ? parsed.selectedCategoryIds.filter((x): x is string => typeof x === "string")
         : [],
-      unassignedOnly: parsed.unassignedOnly === true,
+      unassignedOnly: legacy ? true : parsed.unassignedOnly === true,
       sortBy:
         typeof parsed.sortBy === "string" && VALID_SORT_BYS.includes(parsed.sortBy)
           ? (parsed.sortBy)
@@ -61,7 +76,9 @@ function loadFromStorage(): AppsFilter {
 
 function saveToStorage(filter: AppsFilter): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filter));
+    // 带上版本号,否则每次读都会被当成旧版存档、把用户关掉的开关又打开
+    const payload: StoredFilter = { ...filter, v: FILTER_SCHEMA_VERSION };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // localStorage 满 / 隐私模式 / 等：忽略，session 内仍然有效
   }

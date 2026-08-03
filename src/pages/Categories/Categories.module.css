@@ -919,3 +919,11 @@
   background: var(--color-accent);
   opacity: 0.75;
 }
+
+/* tab 内容容器:与 SettingsPage 同款。ListTab / AppsPage 都返回 fragment,
+   它们的子块直接落在这里,靠这个 gap 撑开彼此间距。 */
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}

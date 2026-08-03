@@ -806,6 +806,11 @@ export const api = {
    *  场景用；不阻塞 `members.length > 0`。详见 `app_groups::purge_with_members`。 */
   purgeAppGroup: (groupId: string) =>
     invoke<void>("purge_app_group", { groupId }),
+  /** **真删**这个应用的数据：活动记录、截图文件、OCR 文字索引一并清掉，最后软删组。
+   *  不可逆；不重算已生成的报表，也不传播数据删除到其它设备。
+   *  详见 `app_groups::purge_with_data`。 */
+  purgeAppGroupData: (groupId: string) =>
+    invoke<void>("purge_app_group_data", { groupId }),
   mergeAppGroup: (processName: string, targetGroupId: string) =>
     invoke<void>("merge_app_group", { processName, targetGroupId }),
   unmergeAppGroup: (processName: string) =>

@@ -53,7 +53,6 @@
       "aiSummary": "AI Summary",
       "aiSettings": "AI Settings",
       "categories": "Categories",
-      "apps": "Apps",
       "devices": "Cloud Sync",
       "settings": "Settings",
       "chat": "Chat"
@@ -642,7 +641,17 @@
         "nameDesc": "Name Z-A"
       },
       "noResults": "No apps match your filter",
-      "clearFilters": "Clear filters"
+      "clearFilters": "Clear filters",
+      "allAssigned": "Every app has a category"
+    },
+    "remove": {
+      "title": "Remove “{{name}}”",
+      "hideName": "Hide (recommended)",
+      "hideDesc": "Excluded from your stats, but all history is kept. To analyse it again, drag it out of “Hidden” under Categories → Manage categories.",
+      "deleteName": "Delete",
+      "deleteDesc": "Deletes this app's recorded time, screenshots and text index. The program will show up here again the next time it runs. Reports already generated are left untouched.",
+      "hideAction": "Hide",
+      "deleteAction": "Delete anyway"
     }
   },
   "categories": {
@@ -727,13 +736,17 @@
         "unmergeTooltip": "Remove from this group"
       },
       "row": {
-        "deleteEmptyTooltip": "Delete this empty row",
-        "deleteEmptyAria": "Delete this empty row"
+        "removeTooltip": "Remove from list",
+        "removeAria": "Remove {{name}} from the list"
       }
     },
     "assign": {
       "label": "Assign",
       "clear": "Clear category"
+    },
+    "tabs": {
+      "list": "Manage categories",
+      "apps": "Assign apps"
     }
   },
   "aiSettings": {

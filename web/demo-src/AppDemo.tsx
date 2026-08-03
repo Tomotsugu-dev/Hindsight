@@ -5,7 +5,7 @@
 // 3. data-platform 强制 "windows"
 
 import { lazy, Suspense, useEffect, useState } from "react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import { SettingsProvider } from "@app/state/settings";
 import { UpdaterProvider } from "@app/state/updater";
@@ -41,6 +41,7 @@ const PromptTab = lazy(() => import("@app/pages/AISettings/tabs/PromptTab"));
 const ExternalApiTab = lazy(() => import("@app/pages/AISettings/tabs/ExternalApiTab"));
 const DevicesPage = lazy(() => import("@app/pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("@app/pages/Categories/CategoriesPage"));
+const ListTab = lazy(() => import("@app/pages/Categories/tabs/ListTab"));
 const AppsPage = lazy(() => import("@app/pages/Apps/AppsPage"));
 const SettingsPage = lazy(() => import("@app/pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
@@ -73,8 +74,15 @@ function DemoLayout() {
             <Route path="external" element={<ExternalApiTab />} />
           </Route>
           <Route path={ROUTES.devices} element={<DevicesPage />} />
-          <Route path={ROUTES.categories} element={<CategoriesPage />} />
-          <Route path={ROUTES.apps} element={<AppsPage />} />
+          <Route path={ROUTES.categories} element={<CategoriesPage />}>
+            <Route index element={<ListTab />} />
+            <Route path="apps" element={<AppsPage />} />
+          </Route>
+          {/* 与主程序一致:旧的独立「应用」页并入分类页 tab 后仍可访问 */}
+          <Route
+            path={ROUTES.apps}
+            element={<Navigate to={`${ROUTES.categories}/apps`} replace />}
+          />
           <Route path={ROUTES.settings} element={<SettingsPage />}>
             <Route index element={<GeneralTab />} />
             <Route path="appearance" element={<AppearanceTab />} />

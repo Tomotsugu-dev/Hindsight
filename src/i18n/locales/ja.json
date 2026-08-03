@@ -53,7 +53,6 @@
       "aiSummary": "AI サマリー",
       "aiSettings": "AI 設定",
       "categories": "分類",
-      "apps": "アプリ",
       "devices": "同期",
       "settings": "設定",
       "chat": "チャット"
@@ -642,7 +641,17 @@
         "nameDesc": "名前 Z-A"
       },
       "noResults": "条件に合うアプリが見つかりません",
-      "clearFilters": "フィルタをクリア"
+      "clearFilters": "フィルタをクリア",
+      "allAssigned": "すべてのアプリが分類済みです"
+    },
+    "remove": {
+      "title": "「{{name}}」を一覧から外す",
+      "hideName": "非表示(推奨)",
+      "hideDesc": "統計には含まれなくなりますが、履歴はすべて残ります。もう一度分析したくなったら「カテゴリ → カテゴリ管理」の「非表示」から取り出せます。",
+      "deleteName": "削除",
+      "deleteDesc": "このアプリの記録時間・スクリーンショット・文字インデックスをすべて削除します。そのプログラムを次に実行すると再び一覧に現れます。作成済みの日報やサマリーはそのまま残ります。",
+      "hideAction": "非表示",
+      "deleteAction": "それでも削除"
     }
   },
   "categories": {
@@ -727,13 +736,17 @@
         "unmergeTooltip": "このグループから外す"
       },
       "row": {
-        "deleteEmptyTooltip": "この空の行を削除",
-        "deleteEmptyAria": "この空の行を削除"
+        "removeTooltip": "一覧から外す",
+        "removeAria": "{{name}} を一覧から外す"
       }
     },
     "assign": {
       "label": "割り当て",
       "clear": "分類を解除"
+    },
+    "tabs": {
+      "list": "カテゴリ管理",
+      "apps": "アプリの割り当て"
     }
   },
   "aiSettings": {

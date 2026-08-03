@@ -1,0 +1,159 @@
+/* 骨架与配色沿用 ConfirmDialog（同一套弹窗语言），只多出「两个选项说明」
+   与「不再提示」两块。 */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+  background: rgba(20, 20, 40, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 180ms var(--ease-out);
+}
+
+.dialog {
+  position: relative;
+  z-index: var(--z-modal);
+  min-width: 340px;
+  max-width: 460px;
+  max-height: 80vh;
+  padding: 22px 22px 16px;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 12px 36px rgba(20, 20, 40, 0.22),
+    0 2px 6px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: scaleIn 220ms var(--ease-spring);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+/* —— 两条路径的说明 —— */
+
+.options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.optionIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-faint);
+}
+
+.optionName {
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  margin: 0 0 2px;
+}
+
+.optionDesc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 100ms ease-out;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btnCancel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.btnCancel:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.btnConfirm {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.btnConfirm:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+}
+
+/* 删除是次要动作:不给实心红(那会把视线拉过去),用描边警示 */
+.btnDanger {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--status-error) 45%, transparent);
+  color: var(--status-error);
+}
+
+.btnDanger:hover {
+  background: color-mix(in oklab, var(--status-error) 10%, transparent);
+  border-color: var(--status-error);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

@@ -53,7 +53,6 @@
       "aiSummary": "AI 总结",
       "aiSettings": "AI 设置",
       "categories": "分类",
-      "apps": "应用",
       "devices": "云同步",
       "settings": "设置",
       "chat": "对话"
@@ -642,7 +641,17 @@
         "nameDesc": "名字 Z-A"
       },
       "noResults": "没找到匹配的应用",
-      "clearFilters": "清除筛选"
+      "clearFilters": "清除筛选",
+      "allAssigned": "所有应用都已分类"
+    },
+    "remove": {
+      "title": "移除「{{name}}」",
+      "hideName": "隐藏(推荐)",
+      "hideDesc": "不再计入统计,但历史数据完整保留。想找回进行分析时,到「分类 → 管理分类」的「隐藏」里把它拖出来即可。",
+      "deleteName": "删除",
+      "deleteDesc": "删除该应用的所有时长数据、截图与文字索引,这个程序下次运行时会重新出现在列表里。不影响已经生成的日报与总结。",
+      "hideAction": "隐藏",
+      "deleteAction": "仍然删除"
     }
   },
   "categories": {
@@ -727,13 +736,17 @@
         "unmergeTooltip": "从该组移出"
       },
       "row": {
-        "deleteEmptyTooltip": "删除此空行",
-        "deleteEmptyAria": "删除此空行"
+        "removeTooltip": "从列表移除",
+        "removeAria": "从列表移除 {{name}}"
       }
     },
     "assign": {
       "label": "指派",
       "clear": "取消分类"
+    },
+    "tabs": {
+      "list": "管理分类",
+      "apps": "归类应用"
     }
   },
   "aiSettings": {

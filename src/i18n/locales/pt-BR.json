@@ -53,7 +53,6 @@
       "aiSummary": "Resumo de IA",
       "aiSettings": "Ajustes IA",
       "categories": "Categorias",
-      "apps": "Aplicativos",
       "devices": "Nuvem",
       "settings": "Ajustes",
       "chat": "Chat"
@@ -642,7 +641,17 @@
         "nameDesc": "Nome Z-A"
       },
       "noResults": "Nenhum aplicativo corresponde ao seu filtro",
-      "clearFilters": "Limpar filtros"
+      "clearFilters": "Limpar filtros",
+      "allAssigned": "Todos os aplicativos já têm categoria"
+    },
+    "remove": {
+      "title": "Remover “{{name}}”",
+      "hideName": "Ocultar (recomendado)",
+      "hideDesc": "Fica fora das estatísticas, mas todo o histórico é preservado. Para analisar de novo, arraste-o para fora de “Oculto” em Categorias → Gerenciar categorias.",
+      "deleteName": "Excluir",
+      "deleteDesc": "Exclui todo o tempo registrado, as capturas e o índice de texto deste aplicativo. O programa reaparece aqui na próxima vez que rodar. Relatórios já gerados não são alterados.",
+      "hideAction": "Ocultar",
+      "deleteAction": "Excluir mesmo assim"
     }
   },
   "categories": {
@@ -727,13 +736,17 @@
         "unmergeTooltip": "Remover deste grupo"
       },
       "row": {
-        "deleteEmptyTooltip": "Excluir esta linha vazia",
-        "deleteEmptyAria": "Excluir esta linha vazia"
+        "removeTooltip": "Remover da lista",
+        "removeAria": "Remover {{name}} da lista"
       }
     },
     "assign": {
       "label": "Atribuir",
       "clear": "Limpar categoria"
+    },
+    "tabs": {
+      "list": "Gerenciar categorias",
+      "apps": "Atribuir apps"
     }
   },
   "aiSettings": {

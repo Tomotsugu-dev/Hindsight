@@ -16,7 +16,13 @@ import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { logError } from "../../lib/logger";
 import { displayAppName } from "../../utils/displayName";
 import { AssignDropdown } from "./parts";
+import { RemoveAppDialog } from "../../components/RemoveAppDialog/RemoveAppDialog";
 import styles from "./Pairing.module.css";
+
+/** 内建「隐藏」分类的 id。报表(repo/reports.rs)与 AI 总结(repo/ai_summaries.rs)
+ *  的 SQL 里都写着 `g.category_id IS NOT 'hidden'`——归到它名下的应用不进任何
+ *  统计。后端把这行守为 builtin,删不掉,所以前端可以安全地硬编码。 */
+const HIDDEN_CATEGORY_ID = "hidden";
 
 /** 把 group + 设备列表换算成「每个 device 列有哪些 member」的 lookup。
  *  必须返回数组：同一台设备上的两个进程合进一组时（拖拽允许），用 find 只取
@@ -166,6 +172,9 @@ export function PairingSection({
     };
   }, [drag, hoverGroupId, refreshCategories]);
 
+  /** 「移除」弹窗:null = 关闭,否则是待处理的那一行 */
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+
   if (isLoading || visibleGroups === null) {
     return <div className={styles.toolbar}>{t("categories.pairing.loading")}</div>;
   }
@@ -205,17 +214,31 @@ export function PairingSection({
     });
   };
 
-  const onDeleteRow = async (groupId: string) => {
-    // 走「强力删除」路径：组 + 所有 member 一起软删。trash 按钮渲染条件已经收紧到
-    // 「所有 device 列都是 emptyDash」，所以这里要删的全是视觉上空的行，没有顾虑。
-    // 严格的 deleteAppGroup（要求 members.length === 0）覆盖不了「有 member 但
-    // 都近 7 天无活动 → 视觉为空」这种用户最常见的清理诉求。
+  /** 隐藏:归入内建 hidden 分类——报表与 AI 总结的 SQL 都排除它,
+   *  数据一条不少,想找回就去分类页把它拖出来。 */
+  const hideRow = async (groupId: string) => {
     try {
-      await api.purgeAppGroup(groupId);
+      await api.assignAppGroupCategory(groupId, HIDDEN_CATEGORY_ID);
+      await Promise.all([reload(), refreshCategories()]);
+    } catch (e) {
+      logError("pairing.hideRow", e);
+    }
+  };
+
+  /** 删除:真删这个应用的活动、截图与 OCR 文字索引,最后软删组。不可逆。 */
+  const onDeleteRow = async (groupId: string) => {
+    try {
+      await api.purgeAppGroupData(groupId);
       await reload();
     } catch (e) {
       logError("pairing.deleteRow", e);
     }
+  };
+
+  /** 点行尾按钮:每次都先讲清两条路的区别。刻意没有「不再提示」——
+   *  记住「删除」等于以后每次点都直接不可逆删数据,不值得。 */
+  const onRemoveClick = (groupId: string, name: string) => {
+    setRemoving({ id: groupId, name });
   };
 
   const onUnmerge = async (processName: string) => {
@@ -395,25 +418,22 @@ export function PairingSection({
             </div>
 
             <div className={styles.deleteCol}>
-              {/*
-                行视觉为空才显示 trash：
-                - members.length === 0：组里完全没成员（建组后没拖任何 process 进来）
-                - 所有 slots === null：member 存在但近 7 天无活动 → membersByDevice
-                  把每列都返回 None → 渲染 emptyDash
-                两种情况都是用户"看着空"的行，合理诉求是让它消失。
-              */}
-              {slots.every((s) => s.length === 0) && (
-                <button
-                  type="button"
-                  className={styles.deleteRowBtn}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => void onDeleteRow(group.id)}
-                  title={t("categories.pairing.row.deleteEmptyTooltip")}
-                  aria-label={t("categories.pairing.row.deleteEmptyAria")}
-                >
-                  <Trash2 size={12} strokeWidth={2.25} />
-                </button>
-              )}
+              {/* 每行都能移除:只跑过一次的程序会永远占着位置,而"看着空的行"
+                  只是其中一种。图标用垃圾桶——用户点这里的意图就是"删掉这行",
+                  换成 EyeOff 反而认不出是干什么的;隐藏只是我们推荐的处理方式,
+                  在弹窗里讲(见 RemoveAppDialog),不占入口的语义。 */}
+              <button
+                type="button"
+                className={styles.deleteRowBtn}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => onRemoveClick(group.id, group.displayName)}
+                title={t("categories.pairing.row.removeTooltip")}
+                aria-label={t("categories.pairing.row.removeAria", {
+                  name: group.displayName,
+                })}
+              >
+                <Trash2 size={12} strokeWidth={2.25} />
+              </button>
             </div>
           </div>
         );
@@ -435,6 +455,22 @@ export function PairingSection({
           </div>,
           document.body,
         )}
+
+      <RemoveAppDialog
+        open={removing !== null}
+        appName={removing?.name ?? ""}
+        onHide={() => {
+          const id = removing?.id;
+          setRemoving(null);
+          if (id) void hideRow(id);
+        }}
+        onDelete={() => {
+          const id = removing?.id;
+          setRemoving(null);
+          if (id) void onDeleteRow(id);
+        }}
+        onCancel={() => setRemoving(null)}
+      />
     </div>
   );
 }

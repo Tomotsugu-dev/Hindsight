@@ -26,6 +26,7 @@ import { Toggle } from "../../../components/FormControls/Toggle";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { api, type AiConfig, type ExternalProfile } from "../../../api/hindsight";
 import { useAiSettings } from "../shared/useAiSettings";
+import { profileLabel } from "../../../utils/profileLabel";
 import styles from "../AISettings.module.css";
 
 /** Provider 预设：选了 provider 就自动填 baseUrl + 把 modelHint 给到输入框 placeholder。
@@ -250,7 +251,13 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
     } catch {
       /* 手填的残缺地址就原样展示 */
     }
-    const name = `${ai.externalProvider} · ${ai.model.trim() || host}`;
+    const name = profileLabel({
+      name: "",
+      provider: ai.externalProvider,
+      endpoint,
+      apiKey: "",
+      model: ai.model.trim() || host,
+    });
     updateAi({
       externalProfiles: [
         ...ai.externalProfiles,
@@ -437,14 +444,14 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
                       onClick={() => applyProfile(p)}
                       title={p.endpoint}
                     >
-                      {p.name || p.endpoint}
+                      {profileLabel(p)}
                     </button>
                     <button
                       type="button"
                       className={styles.profileChipDel}
                       onClick={() => deleteProfile(i)}
                       aria-label={t("aiSettings.external.deleteProfileAria", {
-                        name: p.name || p.endpoint,
+                        name: profileLabel(p),
                       })}
                     >
                       <X size={10} strokeWidth={2.5} />

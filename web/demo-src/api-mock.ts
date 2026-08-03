@@ -961,6 +961,8 @@ export const api = {
   }),
   importModel: async (srcPath: string): Promise<string> => srcPath,
   purgeAppGroup: async (_groupId: string): Promise<void> => {},
+  // demo 不真删数据,只让弹窗跑通(真实端会清活动/截图/OCR 索引)
+  purgeAppGroupData: async (_groupId: string): Promise<void> => {},
   purgeCloudData: async (_keepLocal: boolean): Promise<void> => {},
   forgetRemoteDevice: async (deviceId: string): Promise<void> => {
     const i = state.devices.findIndex((d) => d.deviceId === deviceId && !d.isSelf);

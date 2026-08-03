@@ -53,7 +53,6 @@
       "aiSummary": "AI 總結",
       "aiSettings": "AI 設定",
       "categories": "分類",
-      "apps": "應用程式",
       "devices": "雲同步",
       "settings": "設定",
       "chat": "對話"
@@ -642,7 +641,17 @@
         "nameDesc": "名字 Z-A"
       },
       "noResults": "沒找到匹配的應用程式",
-      "clearFilters": "清除篩選"
+      "clearFilters": "清除篩選",
+      "allAssigned": "所有應用都已分類"
+    },
+    "remove": {
+      "title": "移除「{{name}}」",
+      "hideName": "隱藏(建議)",
+      "hideDesc": "不再計入統計,但歷史資料完整保留。想找回進行分析時,到「分類 → 管理分類」的「隱藏」裡把它拖出來即可。",
+      "deleteName": "刪除",
+      "deleteDesc": "刪除該應用的所有時長資料、螢幕截圖與文字索引,這個程式下次執行時會重新出現在清單裡。不影響已經產生的日報與總結。",
+      "hideAction": "隱藏",
+      "deleteAction": "仍要刪除"
     }
   },
   "categories": {
@@ -727,13 +736,17 @@
         "unmergeTooltip": "從該組移出"
       },
       "row": {
-        "deleteEmptyTooltip": "刪除此空行",
-        "deleteEmptyAria": "刪除此空行"
+        "removeTooltip": "從清單移除",
+        "removeAria": "從清單移除 {{name}}"
       }
     },
     "assign": {
       "label": "指派",
       "clear": "取消分類"
+    },
+    "tabs": {
+      "list": "管理分類",
+      "apps": "歸類應用"
     }
   },
   "aiSettings": {

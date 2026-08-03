@@ -60,11 +60,21 @@ export default function AppsPage() {
   }, [reload, refreshCategories]);
 
   return (
-    <div className={categoriesStyles.page}>
+    // 页面外壳(page 容器 + 标题)由 CategoriesPage 提供,这里只出 tab 内容,
+    // 与同级的 ListTab 保持一致(见它的 fragment + 纯说明 header)
+    <>
       <header className={categoriesStyles.header}>
         <div className={categoriesStyles.headerText}>
-          <h1 className={categoriesStyles.title}>
-            {t("apps.title")}
+          <p className={categoriesStyles.meta}>
+            {t("categories.pairing.instructionPrefix")}
+            <strong className={categoriesStyles.metaEmph}>
+              {t("categories.pairing.instructionEmph")}
+            </strong>
+            {t("categories.pairing.instructionSuffix")}
+            <span className={categoriesStyles.metaUnassigned}>
+              {t("categories.pairing.unassignedHint")}
+            </span>
+            {/* 标题没了,info tip 挂到说明末尾——它解释的本来就是配对规则 */}
             <button
               type="button"
               className={categoriesStyles.infoTip}
@@ -75,16 +85,6 @@ export default function AppsPage() {
                 {t("categories.pairing.infoTipBody")}
               </span>
             </button>
-          </h1>
-          <p className={categoriesStyles.meta}>
-            {t("categories.pairing.instructionPrefix")}
-            <strong className={categoriesStyles.metaEmph}>
-              {t("categories.pairing.instructionEmph")}
-            </strong>
-            {t("categories.pairing.instructionSuffix")}
-            <span className={categoriesStyles.metaUnassigned}>
-              {t("categories.pairing.unassignedHint")}
-            </span>
           </p>
         </div>
       </header>
@@ -110,7 +110,13 @@ export default function AppsPage() {
             内部的"无设备"/"无数据"提示，不抢戏。 */}
         {filteredGroups && filteredGroups.length === 0 && filter.isFiltering ? (
           <div className={filterBarStyles.empty}>
-            {t("apps.filter.noResults")}
+            {/* 默认就是"只看未指派",全部归完类时这里会空——那是把活干完了,
+                别拿"没找到结果"当结论吓人 */}
+            {filter.filter.unassignedOnly &&
+            !filter.filter.search.trim() &&
+            filter.filter.selectedCategoryIds.length === 0
+              ? t("apps.filter.allAssigned")
+              : t("apps.filter.noResults")}
             <button
               type="button"
               className={filterBarStyles.emptyClearBtn}
@@ -129,6 +135,6 @@ export default function AppsPage() {
           />
         )}
       </section>
-    </div>
+    </>
   );
 }

@@ -1,8 +1,13 @@
 //! 跨设备应用配对的 Tauri 命令。
 
+use std::sync::Arc;
+
 use tauri::State;
 
+use crate::capture::CaptureService;
+use crate::commands::screen_memory::MemoryState;
 use crate::repo::app_groups::{self, AppGroup};
+use crate::repo::settings;
 use crate::storage::DbPool;
 
 /// 拉所有应用组（含 display_name + members + category_id）。
@@ -26,6 +31,33 @@ pub async fn purge_app_group(pool: State<'_, DbPool>, group_id: String) -> Resul
     app_groups::purge_with_members(&pool, &group_id)
         .await
         .map_err(Into::into)
+}
+
+/// **真删**一个应用的数据:活动记录、截图文件、OCR 文字索引一并清掉,最后软删组。
+/// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_data`] 的文档。
+///
+/// `run_with_session_cleared`:正在采集这个应用时直接删行,会留下一条永不 seal
+/// 的孤儿会话(指针还指着被删掉的 id)——同 `purge_activities` 的处理。
+#[tauri::command]
+pub async fn purge_app_group_data(
+    pool: State<'_, DbPool>,
+    svc: State<'_, Arc<CaptureService>>,
+    mem: State<'_, MemoryState>,
+    group_id: String,
+) -> Result<(), String> {
+    let memdb = mem
+        .0
+        .as_ref()
+        .ok_or_else(|| "屏幕记忆库不可用(启动时打开失败,详见日志)".to_string())?;
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let root = std::path::PathBuf::from(&cfg.screenshot_path);
+
+    svc.run_with_session_cleared(|| async {
+        app_groups::purge_with_data(&pool, memdb, &root, &group_id)
+            .await
+            .map_err(String::from)
+    })
+    .await
 }
 
 /// 把某 process_name 合并到目标组（让两个 process 在统计上算同一应用）。

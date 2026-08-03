@@ -8,6 +8,7 @@ import {
   type ModelEntry,
 } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { profileLabel } from "../../utils/profileLabel";
 import { logError } from "../../lib/logger";
 import { chatCloudReady, chatLocalModelName, chatUsesCloud } from "./chatRouting";
 import styles from "./ChatPage.module.css";
@@ -152,7 +153,7 @@ export default function ModelBadge() {
               onClick={() => void selectProfile(p)}
             >
               <Cloud size={12} strokeWidth={2.2} className={styles.badgeMenuCloudIcon} />
-              <span className={styles.badgeMenuLabel}>{p.name || p.model}</span>
+              <span className={styles.badgeMenuLabel}>{profileLabel(p)}</span>
               {cloud && matchesActive(p) && <Check size={12} strokeWidth={2.4} />}
             </button>
           ))}
