@@ -114,6 +114,10 @@ pub fn request_stop() {
 /// 每轮从登记簿取的帧数;取完一轮再取,直到无积压。
 const BATCH: i64 = 64;
 
+/// 连续多少帧遇设施故障就中止本批。取 3:够区分"零星抖动"与"设施整体不可用",
+/// 又能把最坏浪费压到三次超时,而不是拿整批去磨一个已经坏掉的识别引擎。
+const INFRA_ABORT_STREAK: u32 = 3;
+
 /// OCR 模型三件套的下载源(官方 ONNX 发布 + PaddleOCR 官方字典)。
 /// 字典条目数与 rec 模型类数强耦合,下载后按 [`DICT_EXPECTED_LINES`] 校验,
 /// 上游改版导致不匹配时明确报错而不是解码出乱码。
@@ -140,6 +144,26 @@ pub struct DigestReport {
     pub processed: u64,
     pub failed: u64,
     pub skipped_missing_file: u64,
+    /// 因基础设施故障(识别超时/崩溃、引擎缺失、DB 抖动)被跳过的帧数。
+    /// 与 `failed` 分开计:这些帧**没有**消耗重试预算,下次还会再试。
+    pub infra_skipped: u64,
+}
+
+/// 帧故障 vs 设施故障。
+///
+/// 判据是"这错误能不能怪这张图":能怪它的才扣该帧的重试预算,怪不到它头上的
+/// (识别进程炸了、引擎没装、数据库抖了)一律不扣——否则设施故障期间经手的每一帧
+/// 都会被连坐烧穿 `MAX_ATTEMPTS`,而它们本身完全正常。2026-07-17 丢掉的 243 帧
+/// 就是这么没的。
+fn is_infra_failure(e: &Error) -> bool {
+    matches!(
+        e,
+        Error::OcrInfra(_)
+            | Error::EmbeddingRuntimeMissing
+            | Error::Io(_)
+            | Error::Db(_)
+            | Error::Sqlite(_)
+    )
 }
 
 /// OCR 模型三件套:缺哪个下哪个。幂等。
@@ -280,29 +304,62 @@ async fn drain_inner(
 ) -> Result<DigestReport> {
     let mut report = DigestReport::default();
     let started = std::time::Instant::now();
+    // 本批内遇设施故障的帧:它们的 ocr_state 没被改动,外层循环会立刻再取到,
+    // 不记下来就是死循环。只在本批内生效,下一批照常重试。
+    let mut infra_deferred: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut consecutive_infra: u32 = 0;
 
     'outer: loop {
         let batch = frames::take_pending(mem, BATCH).await?;
         if batch.is_empty() {
             break;
         }
+        // 整批都是本轮已判设施故障的帧 → 再取一次还是它们,收工
+        if batch.iter().all(|f| infra_deferred.contains(&f.path)) {
+            break;
+        }
         for frame in batch {
             if stop.load(Ordering::Relaxed) || STOP_REQUESTED.load(Ordering::Relaxed) {
                 break 'outer;
+            }
+            if infra_deferred.contains(&frame.path) {
+                continue;
             }
             // 心跳打在每帧**开始前**:一帧最长也就正常识别时间,而卡死的定义
             // 正是"某一帧再也没走完"——从开始计时才能把它和慢帧区分开
             note_progress();
             match digest_one(mem, pipe, &frame).await {
-                Ok(true) => report.processed += 1,
+                Ok(true) => {
+                    report.processed += 1;
+                    consecutive_infra = 0;
+                }
                 Ok(false) => {
                     // 图文件已不在(retention 删除/用户清理):按完成记,别无限重试
                     report.skipped_missing_file += 1;
+                    consecutive_infra = 0;
+                }
+                Err(e) if is_infra_failure(&e) => {
+                    // 设施故障:**不动 attempts**,帧留在待处理里等下一批。
+                    // 这些帧本身没问题,扣它们的重试预算等于替设施故障赔命。
+                    log::warn!("帧消化遇设施故障,不计重试 ({}): {e}", frame.path);
+                    report.infra_skipped += 1;
+                    infra_deferred.insert(frame.path.clone());
+                    consecutive_infra += 1;
+                    if consecutive_infra >= INFRA_ABORT_STREAK {
+                        // 连着坏这么多帧,基本可以断定是设施整体不可用而非零星抖动。
+                        // 继续磨下去只是每帧白等一次超时,不如把这批收了让上层退避。
+                        log::error!(
+                            "连续 {consecutive_infra} 帧遇设施故障,中止本批(已处理 {} 帧)",
+                            report.processed
+                        );
+                        break 'outer;
+                    }
                 }
                 Err(e) => {
                     log::warn!("帧消化失败 ({}): {e}", frame.path);
                     frames::mark_failed(mem, frame.path.clone()).await?;
                     report.failed += 1;
+                    consecutive_infra = 0;
                 }
             }
         }
@@ -329,9 +386,12 @@ async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -
         return Ok(false);
     }
     let rec = Arc::clone(&pipe.recognize);
+    // JoinError = 识别任务 panic 或被取消,是设施故障不是这张图的错。
+    // 记成 Error::Ocr 的话会扣掉该帧一次重试——识别引擎连炸三轮就够让一批
+    // 完全正常的截图被永久放弃。
     let lines: Vec<String> = tokio::task::spawn_blocking(move || rec(&path))
         .await
-        .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??;
+        .map_err(|e| Error::OcrInfra(format!("识别任务异常终止: {e}")))??;
 
     let session_id = pipe.folder.fold_frame(mem, frame, &lines).await?;
     frames::mark_done(mem, frame.path.clone(), session_id).await?;
@@ -726,6 +786,86 @@ mod tests {
         assert_eq!(attempts, 1, "留有一次失败记录");
         assert!(session_id.is_some_and(|s| s > 0));
         assert_eq!(table_counts(&mem).await, (1, 1));
+    }
+
+    /// 设施故障绝不消耗帧的重试预算。
+    ///
+    /// 这条测试是 2026-07-17 事故的回归钉:那天三小时内 243 帧被连续判失败、
+    /// `attempts` 全部烧到 3 而永久放弃,截图随后被保留策略删除,文字永久丢失。
+    /// 那些截图本身完全正常,坏的是识别设施。
+    #[tokio::test]
+    async fn infra_failure_never_burns_retry_budget() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("infra-budget");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        let mut pipe =
+            Pipeline::with_recognizer(Arc::new(|_p| Err(Error::OcrInfra("识别进程超时".into()))));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert_eq!(report.infra_skipped, 1, "记在设施故障账上");
+        assert_eq!(report.failed, 0, "不计入帧失败");
+        let (state, attempts, _) = frame_row(&mem, &a).await;
+        assert_eq!(state, 0, "仍是待处理,没被打成失败态");
+        assert_eq!(attempts, 0, "重试预算分毫未动 ← 事故的关键点");
+
+        // 设施恢复后这一帧还能正常识别——这才是"没丢"的完整含义
+        let mut ok_pipe =
+            Pipeline::with_recognizer(Arc::new(|_p| Ok(vec!["设施恢复后识别出来了".to_string()])));
+        let report2 = drain(&mem, &mut ok_pipe, &stop).await.unwrap();
+        assert_eq!(report2.processed, 1);
+        assert_eq!(frame_row(&mem, &a).await.0, 1, "最终正常完成");
+    }
+
+    /// DB 抖动同样属设施故障。折叠 / 标记完成里的 DB 错误经 `?` 上抛,
+    /// 旧代码一律当帧失败处理——数据库抖一下就够扣掉一批帧的重试预算。
+    #[tokio::test]
+    async fn db_error_classified_as_infra_not_frame() {
+        assert!(is_infra_failure(&Error::Db(
+            tokio_rusqlite::Error::ConnectionClosed
+        )));
+        assert!(is_infra_failure(&Error::OcrInfra("worker 崩溃".into())));
+        assert!(is_infra_failure(&Error::EmbeddingRuntimeMissing));
+        // 这张图本身的问题:该扣就扣
+        assert!(!is_infra_failure(&Error::Ocr("图片解码失败".into())));
+    }
+
+    /// 设施整体不可用时,一批不该拿几十帧去磨:连续三帧设施故障即中止本批,
+    /// 且这些帧全部保持可重试。
+    #[tokio::test]
+    async fn consecutive_infra_failures_abort_batch_without_damage() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("infra-abort");
+        let mut paths = Vec::new();
+        for i in 0..10 {
+            let p = touch(&dir, &format!("f{i}.jpg"));
+            reg(&mem, &p, &format!("2026-07-05T10:00:{i:02}+09:00"), "标题").await;
+            paths.push(p);
+        }
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_in_rec = Arc::clone(&calls);
+        let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            calls_in_rec.fetch_add(1, Ordering::SeqCst);
+            Err(Error::OcrInfra("引擎没反应".into()))
+        }));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            INFRA_ABORT_STREAK as usize,
+            "连败到阈值就收手,不把十帧全磨一遍"
+        );
+        assert_eq!(report.infra_skipped, INFRA_ABORT_STREAK as u64);
+        for p in &paths {
+            let (state, attempts, _) = frame_row(&mem, p).await;
+            assert_eq!((state, attempts), (0, 0), "十帧全部毫发无损");
+        }
     }
 
     /// panic 展开时批次互斥必须被释放。

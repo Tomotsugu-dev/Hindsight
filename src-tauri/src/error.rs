@@ -168,6 +168,15 @@ pub enum Error {
     #[error("ocr failed: {0}")]
     Ocr(String),
 
+    /// OCR **基础设施**故障：识别进程超时 / 崩溃 / 拉不起来、引擎缺失、DB 抖动。
+    ///
+    /// 与 [`Error::Ocr`]（这一张图本身有问题）分开是有代价教训的：两者混为一谈时，
+    /// 一次设施级故障会把当时在处理的每一帧的三次重试预算连续烧光，帧被永久放弃，
+    /// 而截图随后被保留策略删除——2026-07-17 就这样丢了三小时的文字（243 帧，
+    /// `attempts` 全部为 3）。消化循环据此把这类错误走「不计入帧重试」的路径。
+    #[error("ocr infrastructure: {0}")]
+    OcrInfra(String),
+
     /// 模型下载被用户主动取消（点暂停）。**不是 fatal**——`.partial` 文件保留，
     /// 下次再调 `download_from_hf` 同 file 名时走 Range 续传。
     /// caller（download_model command）应把这条单独 catch，让前端表达成"已暂停"

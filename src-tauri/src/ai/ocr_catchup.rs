@@ -26,6 +26,21 @@ use crate::storage::DbPool;
 /// 进度轮询间隔。1s:与常驻 tick(60s)/单帧耗时(~1s)相称,事件流不刷屏。
 const POLL_MS: u64 = 1000;
 
+/// 本阶段的硬上限。超过就放弃清积压、让总结照常进行——总结的材料是活动记录,
+/// 本就不依赖 OCR,没理由被它无限期扣住。测试下压到毫秒级。
+const MAX_WAIT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(600)
+} else {
+    std::time::Duration::from_secs(900)
+};
+
+/// 软上限:积压在这段时间内一帧都没少,说明没人在真的消化(或消化方卡住了)。
+const NO_PROGRESS_WAIT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(300)
+} else {
+    std::time::Duration::from_secs(180)
+};
+
 /// 清积压主入口。`mem = None`(屏幕记忆库不可用)时直接返回。
 /// 永不返回错误——本阶段对总结而言是尽力而为的前置。
 pub async fn run<S: ProgressSink>(
@@ -76,6 +91,13 @@ pub async fn run<S: ProgressSink>(
 
     // 自己起的批;常驻批在跑时为 None(共同消化同一登记簿,不抢锁)
     let mut task: Option<tokio::task::JoinHandle<()>> = None;
+    // 有界等待的两个计时器。没有它们时,只要 digest 的运行标志卡住(实测发生过:
+    // Apple Vision 死锁 + 标志泄漏),这个循环的三个退出条件全部失效——
+    // 别人的批"永远在跑"所以自己不起批,`own_batch_finished` 恒假,pending 只增不减,
+    // 于是每秒轮询、每秒发一个进度事件,日报永远卡在第一阶段出不来。
+    let waiting_since = std::time::Instant::now();
+    let mut last_pending = u64::MAX;
+    let mut last_progress_at = std::time::Instant::now();
 
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -105,6 +127,26 @@ pub async fn run<S: ProgressSink>(
         sink.emit_progress(p);
 
         if pending == 0 {
+            break;
+        }
+
+        // 硬上限:无论外面发生什么,总结不能被这一阶段无限期扣住
+        if waiting_since.elapsed() > MAX_WAIT {
+            log::warn!(
+                "OCR 清积压:等待超过 {:?} 仍剩 {pending} 帧,放弃本阶段,总结继续",
+                MAX_WAIT
+            );
+            break;
+        }
+        // 软上限:积压完全不动 = 有人卡着或压根没人在消化,别陪着空转
+        if pending < last_pending {
+            last_pending = pending;
+            last_progress_at = std::time::Instant::now();
+        } else if last_progress_at.elapsed() > NO_PROGRESS_WAIT {
+            log::warn!(
+                "OCR 清积压:{:?} 内积压毫无进展(剩 {pending} 帧),放弃本阶段,总结继续",
+                NO_PROGRESS_WAIT
+            );
             break;
         }
 
@@ -181,6 +223,46 @@ mod tests {
         assert!(
             sink.0.lock().unwrap().is_empty(),
             "常驻关时有积压也不得发事件/起批"
+        );
+    }
+
+    /// 别人的批"永远在跑"时,本阶段必须自己退出来,不能把总结无限期扣住。
+    ///
+    /// 复现的是实测事故的后半段:digest 的运行标志因 Vision 死锁而卡在 true 之后,
+    /// 这个循环的三个退出条件同时失效(别人在跑所以自己不起批 → 自己的批恒为空 →
+    /// 积压只增不减),于是每秒空转、每秒发一个进度事件,日报永远出不来。
+    /// 现在由硬/软两个上限兜底,与外面的标志是否卡住无关。
+    #[tokio::test]
+    async fn bounded_wait_when_backlog_never_drains() {
+        let (pool, mem) = fixture().await;
+        enable_resident(&pool).await;
+        // 一帧积压,且没有任何人会去消化它(测试环境没有识别引擎)
+        mem.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO frames(path, ts, local_date, ocr_state, attempts)
+                     VALUES('/tmp/never-drains.png', '2026-07-30T10:00:00+08:00', '2026-07-30', 0, 0)",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let sink = RecordingSink(Mutex::new(Vec::new()));
+        let cancel = AtomicBool::new(false);
+        let started = std::time::Instant::now();
+        run(&pool, Some(&mem), &sink, "daily", "2026-07-30", &cancel).await;
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "必须在上限内主动退出,而不是无限等下去"
+        );
+        let events = sink.0.lock().unwrap().len();
+        assert!(
+            events < 30,
+            "事件数受上限约束(实际 {events}),不会每秒刷一条到天荒地老"
         );
     }
 
