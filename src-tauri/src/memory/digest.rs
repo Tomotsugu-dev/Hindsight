@@ -6,7 +6,7 @@
 //! 当前形态:进程内任务(由命令/定时触发)。独立子进程化(`--digest-worker`)时
 //! 把 [`RUNNING`] 换成文件锁即可,消化逻辑本身不变。
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use super::frames::{self, PendingFrame};
@@ -27,10 +27,81 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 /// 彻底停常驻走 设置 → 常驻 OCR 开关([`super::resident::ResidentOcr`])。
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+/// 当前批最近一次「有帧走完」的时刻,单调毫秒(相对进程启动);0 = 本批尚无进度。
+/// 存在的理由:`RUNNING` 只是个 bool,批卡死和批正忙在外部看来完全一样。
+/// 实测事故里 Apple Vision 死锁后,这个子系统对外表现就是"永远在运行"。
+static LAST_PROGRESS_MS: AtomicU64 = AtomicU64::new(0);
+
+/// 单调时钟基准。用 `Instant` 而非墙钟:后者会被系统对时 / 夏令时跳变,
+/// 卡死判定绝不能因为调了下时间就误判。
+fn mono_base() -> &'static std::time::Instant {
+    static BASE: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    BASE.get_or_init(std::time::Instant::now)
+}
+
+fn mono_now_ms() -> u64 {
+    mono_base().elapsed().as_millis() as u64
+}
+
+/// 记一次进度。每帧走完(成功/失败/缺图都算)调用一次——只要循环还在推进,
+/// 就不该被判卡死。
+fn note_progress() {
+    LAST_PROGRESS_MS.store(mono_now_ms(), Ordering::Relaxed);
+}
+
+/// 当前批已经多久没有推进(毫秒)。`None` = 没有批在跑。
+///
+/// 判据是**距上一帧完成**的时间,不是批的总时长:三千张积压跑五十分钟是正常的,
+/// 按批时长判死会把正常长批误杀。
+// 消费方(看门狗判死 + PendingStats 上报)在后续步骤接入;此处先把口径立住,
+// 单测已覆盖其语义。
+#[allow(dead_code)]
+pub fn stalled_ms() -> Option<u64> {
+    if !is_running() {
+        return None;
+    }
+    let last = LAST_PROGRESS_MS.load(Ordering::Relaxed);
+    Some(mono_now_ms().saturating_sub(last))
+}
+
 /// 消化是否正在进行(手动或常驻批任一)。前端 banner/设置页用它在
 /// 重新挂载时恢复"后台索引中"的显示,而不是装作无事发生。
 pub fn is_running() -> bool {
     RUNNING.load(Ordering::SeqCst)
+}
+
+/// 批次互斥的 RAII 守卫。
+///
+/// **为什么必须是 Drop 而不是函数末尾赋值**:旧写法把清零写在 `drain_inner().await`
+/// 之后,一旦 `drain_inner` panic 或它的 future 被丢弃(任务取消 / 运行时关停),
+/// 清零永远不会执行,`RUNNING` 就永久卡在 true。后果不是"少清一个标志"——
+/// 常驻 tick、定时补识别、总结前补识别全部被 `is_running()` 挡在门外,
+/// 而 `ocr_catchup` 会每秒空转一次直到天荒地老,日报再也生成不出来。
+/// 只有重启才能恢复。
+struct BatchGuard;
+
+impl BatchGuard {
+    /// 抢占批次;已有批在跑时返回 `None`。
+    ///
+    /// 被拒绝时**不触碰任何标志**——既有测试
+    /// `second_drain_rejected_while_first_running` 断言了这一点:
+    /// 被拒的调用若顺手清零,就会把正在跑的那一批的互斥给解开。
+    fn acquire() -> Option<Self> {
+        if RUNNING.swap(true, Ordering::SeqCst) {
+            return None;
+        }
+        // 批一开始就记一次进度:否则引擎加载那几秒会被算成"无进展"
+        note_progress();
+        Some(BatchGuard)
+    }
+}
+
+impl Drop for BatchGuard {
+    fn drop(&mut self) {
+        // 顺序与旧写法一致:先清停止请求,再放互斥
+        STOP_REQUESTED.store(false, Ordering::SeqCst);
+        RUNNING.store(false, Ordering::SeqCst);
+    }
 }
 
 /// 请求停止当前正在进行的消化批(手动批或常驻批的当前轮)。翻标志即返回;
@@ -195,13 +266,11 @@ pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
 /// [`STOP_REQUESTED`] 在批结束时清零:批开始前置位的请求依然有效
 /// (覆盖引擎加载窗口),上一批消费过的请求不会殃及下一批。
 pub async fn drain(mem: &MemoryDb, pipe: &mut Pipeline, stop: &AtomicBool) -> Result<DigestReport> {
-    if RUNNING.swap(true, Ordering::SeqCst) {
+    let Some(_guard) = BatchGuard::acquire() else {
         return Err(Error::InvalidInput("消化任务已在运行"));
-    }
-    let result = drain_inner(mem, pipe, stop).await;
-    STOP_REQUESTED.store(false, Ordering::SeqCst);
-    RUNNING.store(false, Ordering::SeqCst);
-    result
+    };
+    // 标志的清零交给 _guard 的 Drop——panic 与 future 被丢弃时同样生效
+    drain_inner(mem, pipe, stop).await
 }
 
 async fn drain_inner(
@@ -221,6 +290,9 @@ async fn drain_inner(
             if stop.load(Ordering::Relaxed) || STOP_REQUESTED.load(Ordering::Relaxed) {
                 break 'outer;
             }
+            // 心跳打在每帧**开始前**:一帧最长也就正常识别时间,而卡死的定义
+            // 正是"某一帧再也没走完"——从开始计时才能把它和慢帧区分开
+            note_progress();
             match digest_one(mem, pipe, &frame).await {
                 Ok(true) => report.processed += 1,
                 Ok(false) => {
@@ -654,6 +726,97 @@ mod tests {
         assert_eq!(attempts, 1, "留有一次失败记录");
         assert!(session_id.is_some_and(|s| s > 0));
         assert_eq!(table_counts(&mem).await, (1, 1));
+    }
+
+    /// panic 展开时批次互斥必须被释放。
+    ///
+    /// 旧写法把清零放在 `drain_inner().await` 之后,展开会直接跳过它,
+    /// `RUNNING` 永久卡 true——常驻 tick、定时补识别、总结前补识别全部被
+    /// `is_running()` 挡住,`ocr_catchup` 每秒空转,日报再也生成不出来,
+    /// 只有重启能恢复。
+    ///
+    /// 注:识别函数自身 panic 走不到这里——它在 `digest_one` 内层
+    /// `spawn_blocking` 里,JoinError 被接住转成 `Error::Ocr` 当帧故障处理
+    /// (顺带烧掉该帧三次重试,这个误分类留给失败分类那一步修)。真正会展开到
+    /// `drain` 的是折叠 / DB 层的 panic,所以这里直接对守卫本身取证。
+    #[tokio::test]
+    async fn panic_unwind_releases_batch_lock() {
+        let _g = drain_lock().await;
+        assert!(!is_running(), "起点干净");
+
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = BatchGuard::acquire().expect("应能抢到批权");
+            assert!(is_running(), "持有守卫期间标志为真");
+            panic!("模拟折叠/DB 层在批中途炸掉");
+        }));
+
+        assert!(caught.is_err(), "确实发生了 panic 展开");
+        assert!(!is_running(), "展开后互斥必须已释放");
+        assert!(stalled_ms().is_none(), "没有批在跑时不报卡死时长");
+
+        // 关键后果验证:下一批还能正常开工
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("panic-guard");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+        let mut pipe = Pipeline::with_recognizer(Arc::new(|_p| Ok(vec!["恢复正常".to_string()])));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+        assert_eq!(report.processed, 1, "panic 之后的批不受影响");
+    }
+
+    /// future 被丢弃(任务取消 / 运行时关停)时,批次互斥同样必须被释放。
+    /// 这是 panic 之外的第二条泄漏路径:`drain` 的 future 停在某个 await 上被
+    /// drop,函数末尾的清零永远等不到执行。
+    #[tokio::test]
+    async fn cancelled_drain_releases_batch_lock() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("cancel-guard");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        // 识别函数卡住不返回(模拟 Vision 死锁)→ drain 停在这一帧上,
+        // 超时后整个 future 被丢弃。用同步阻塞而非 async:识别函数本就是
+        // 同步的、跑在 spawn_blocking 线程上,这样才和真实卡死同形。
+        // recv_timeout 兜底,免得测试结束后还留个永久线程。
+        let (_tx, rx) = std::sync::mpsc::channel::<()>();
+        let rx = std::sync::Mutex::new(rx);
+        let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            let _ = rx
+                .lock()
+                .unwrap()
+                .recv_timeout(std::time::Duration::from_secs(10));
+            Ok(vec![])
+        }));
+        let stop = AtomicBool::new(false);
+
+        let timed = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            drain(&mem, &mut pipe, &stop),
+        )
+        .await;
+        assert!(timed.is_err(), "drain 确实被超时丢弃");
+        assert!(!is_running(), "future 被丢弃后互斥必须已释放");
+    }
+
+    /// 心跳语义:批在跑时报告"距上一帧多久",空闲时不报。
+    /// 判据是距上一帧而非批总时长——三千张积压跑五十分钟属于正常。
+    #[tokio::test]
+    async fn stalled_ms_tracks_frame_progress_not_batch_age() {
+        let _g = drain_lock().await;
+        assert!(stalled_ms().is_none(), "没有批在跑");
+
+        let guard = BatchGuard::acquire().expect("应能抢到批权");
+        let at_start = stalled_ms().expect("批在跑时应有读数");
+        assert!(at_start < 1_000, "刚开批算作刚有过进度,不是一上来就卡死");
+
+        note_progress();
+        assert!(stalled_ms().unwrap() < 1_000, "记一次进度后重新计时");
+
+        drop(guard);
+        assert!(stalled_ms().is_none(), "批结束后不再报");
+        assert!(!is_running());
     }
 
     /// 图文件已被清理(retention 删除)的帧:不进识别、按完成记(session_id=-1),
