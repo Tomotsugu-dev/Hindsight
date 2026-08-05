@@ -298,12 +298,20 @@ mod tests {
             .await
             .unwrap();
 
-        remove_marks(&mem, day, &["22:00".to_string()]).await.unwrap();
+        remove_marks(&mem, day, &["22:00".to_string()])
+            .await
+            .unwrap();
         let left = load_marks(&mem, day).await.unwrap();
-        assert_eq!(left, vec!["2026-08-05@12:00".to_string()], "只退 22:00,12:00 保留");
+        assert_eq!(
+            left,
+            vec!["2026-08-05@12:00".to_string()],
+            "只退 22:00,12:00 保留"
+        );
 
         // 幂等:退不存在的键不报错
-        remove_marks(&mem, day, &["22:00".to_string()]).await.unwrap();
+        remove_marks(&mem, day, &["22:00".to_string()])
+            .await
+            .unwrap();
         assert_eq!(load_marks(&mem, day).await.unwrap().len(), 1);
     }
 

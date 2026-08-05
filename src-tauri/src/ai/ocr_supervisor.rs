@@ -1028,9 +1028,11 @@ mod tests {
             Duration::from_secs(600),
         ));
 
-        let cancelled =
-            tokio::time::timeout(Duration::from_millis(100), s.recognize(Path::new("/x/a.jpg")))
-                .await;
+        let cancelled = tokio::time::timeout(
+            Duration::from_millis(100),
+            s.recognize(Path::new("/x/a.jpg")),
+        )
+        .await;
         assert!(cancelled.is_err(), "外层取消确实发生在应答之前");
 
         // 下一个请求:必须弃掉脏链接、重建后正常——而不是读到那条迟到的旧应答

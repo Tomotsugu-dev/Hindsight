@@ -254,7 +254,11 @@ mod tests {
 
         let f1 = frame("/a/1.jpg", "2026-07-05T10:00:05+09:00", "文档");
         let err = folder
-            .fold_frame(&db, &f1, &lines(&["会话里的第一行完整内容", "后来新增的第二行内容"]))
+            .fold_frame(
+                &db,
+                &f1,
+                &lines(&["会话里的第一行完整内容", "后来新增的第二行内容"]),
+            )
             .await;
         assert!(err.is_err(), "主键冲突应让本次折叠失败");
 
@@ -271,7 +275,11 @@ mod tests {
         .unwrap();
 
         folder
-            .fold_frame(&db, &f1, &lines(&["会话里的第一行完整内容", "后来新增的第二行内容"]))
+            .fold_frame(
+                &db,
+                &f1,
+                &lines(&["会话里的第一行完整内容", "后来新增的第二行内容"]),
+            )
             .await
             .expect("恢复后重试应成功");
         let text = session_text(&db, sid).await;
