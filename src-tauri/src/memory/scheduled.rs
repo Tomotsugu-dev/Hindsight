@@ -66,7 +66,9 @@ async fn check_once(app: &AppHandle) -> crate::error::Result<()> {
     let due = due_times(now.time(), &times, |t| {
         attempted.iter().any(|k| k == &attempt_key(&today, t))
     });
-    if due.is_empty() || digest::is_running() {
+    // 冷却中 = 识别引擎刚被判定不可用:直接让路,**不标记当天已试**——
+    // 定时点每天只有一次机会,不能烧在一个注定失败的批上
+    if due.is_empty() || digest::is_running() || digest::cooldown_remaining_secs().is_some() {
         return Ok(());
     }
 
@@ -82,7 +84,7 @@ async fn check_once(app: &AppHandle) -> crate::error::Result<()> {
     // 回填可能耗时,紧贴开跑前把互斥再验一遍;在跑 = 不标记不通知,
     // 下轮(10 分钟)自然重试。此后才标记+通知+跑——run 的任何失败一律
     // 当天不重试(简单一条规则,无撤销路径)。
-    if digest::is_running() {
+    if digest::is_running() || digest::cooldown_remaining_secs().is_some() {
         log::debug!("定时补识别:别的消化批正在跑,让路下轮");
         return Ok(());
     }

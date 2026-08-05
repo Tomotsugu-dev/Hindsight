@@ -37,6 +37,8 @@ pub async fn memory_digest_now(
     mem: State<'_, MemoryState>,
 ) -> Result<digest::DigestReport, String> {
     let db = require(&mem)?;
+    // 用户主动点「立即回填」= 明确要求再试:撤掉熔断冷却(冷却只拦自动入口)
+    digest::clear_cooldown();
     digest::run(db).await.map_err(String::from)
 }
 

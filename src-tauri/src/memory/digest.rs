@@ -118,6 +118,47 @@ const BATCH: i64 = 64;
 /// 又能把最坏浪费压到三次超时,而不是拿整批去磨一个已经坏掉的识别引擎。
 const INFRA_ABORT_STREAK: u32 = 3;
 
+/// 单帧识别的超时上限。实测正常单帧 ~0.4s(Vision)/ ~1-2s(ORT),观测到的
+/// 合法极端值 37s(引擎被别的进程拖慢时)——90s 给足余量,同时保证引擎挂起
+/// 在一分半内被发现而不是瘫痪到重启。测试压到 500ms:假识别函数要么立即返回
+/// 要么故意永久阻塞,不存在"差一点就完成"的中间态。
+const FRAME_TIMEOUT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(500)
+} else {
+    std::time::Duration::from_secs(90)
+};
+
+/// 连败中止后的冷却时长。没有冷却的话,常驻 tick 每 60s 就会重启一批、
+/// 每批再白等 3 × 90s 超时并多泄漏三根阻塞线程——冷却把"引擎持续挂起"
+/// 场景的损耗压到每 10 分钟一轮。
+const INFRA_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// 冷却截止时刻(单调毫秒;0 = 无冷却)。进程级 static:与 RUNNING 同理,
+/// 三个自动入口(常驻/定时/总结前)都够不到彼此,只能在这儿会合。
+static COOLDOWN_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+
+/// 冷却剩余秒数;`None` = 未在冷却。定时补识别用它避免把"当天唯一一次机会"
+/// 烧在一个注定失败的批上。
+pub fn cooldown_remaining_secs() -> Option<u64> {
+    let until = COOLDOWN_UNTIL_MS.load(Ordering::Relaxed);
+    let now = mono_now_ms();
+    (until > now).then(|| (until - now).div_ceil(1000))
+}
+
+/// 清除冷却。手动「立即回填」调用:用户主动点了就是明确要求再试一次,
+/// 冷却的目的是防自动入口空转,不该拦着人(与被回滚的 auto-ocr 分支同一裁定:
+/// 主动要求即撤回异议)。
+pub fn clear_cooldown() {
+    COOLDOWN_UNTIL_MS.store(0, Ordering::Relaxed);
+}
+
+fn enter_cooldown() {
+    COOLDOWN_UNTIL_MS.store(
+        mono_now_ms() + INFRA_COOLDOWN.as_millis() as u64,
+        Ordering::Relaxed,
+    );
+}
+
 /// OCR 模型三件套的下载源(官方 ONNX 发布 + PaddleOCR 官方字典)。
 /// 字典条目数与 rec 模型类数强耦合,下载后按 [`DICT_EXPECTED_LINES`] 校验,
 /// 上游改版导致不匹配时明确报错而不是解码出乱码。
@@ -290,6 +331,12 @@ pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
 /// [`STOP_REQUESTED`] 在批结束时清零:批开始前置位的请求依然有效
 /// (覆盖引擎加载窗口),上一批消费过的请求不会殃及下一批。
 pub async fn drain(mem: &MemoryDb, pipe: &mut Pipeline, stop: &AtomicBool) -> Result<DigestReport> {
+    // 冷却检查在抢批权之前:冷却中连 RUNNING 都不该闪一下
+    if let Some(rem) = cooldown_remaining_secs() {
+        return Err(Error::OcrInfra(format!(
+            "识别引擎多次无响应,冷却中(剩余 {rem}s);手动「立即回填」可立即重试"
+        )));
+    }
     let Some(_guard) = BatchGuard::acquire() else {
         return Err(Error::InvalidInput("消化任务已在运行"));
     };
@@ -347,10 +394,14 @@ async fn drain_inner(
                     consecutive_infra += 1;
                     if consecutive_infra >= INFRA_ABORT_STREAK {
                         // 连着坏这么多帧,基本可以断定是设施整体不可用而非零星抖动。
-                        // 继续磨下去只是每帧白等一次超时,不如把这批收了让上层退避。
+                        // 继续磨下去只是每帧白等一次超时,不如把这批收了、压上冷却
+                        // 让自动入口退避——不然常驻 tick 每分钟都会回来白等一轮超时。
+                        enter_cooldown();
                         log::error!(
-                            "连续 {consecutive_infra} 帧遇设施故障,中止本批(已处理 {} 帧)",
-                            report.processed
+                            "连续 {consecutive_infra} 帧遇设施故障,中止本批(已处理 {} 帧),\
+                             冷却 {}s 后自动重试",
+                            report.processed,
+                            INFRA_COOLDOWN.as_secs()
                         );
                         break 'outer;
                     }
@@ -389,9 +440,22 @@ async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -
     // JoinError = 识别任务 panic 或被取消,是设施故障不是这张图的错。
     // 记成 Error::Ocr 的话会扣掉该帧一次重试——识别引擎连炸三轮就够让一批
     // 完全正常的截图被永久放弃。
-    let lines: Vec<String> = tokio::task::spawn_blocking(move || rec(&path))
-        .await
-        .map_err(|e| Error::OcrInfra(format!("识别任务异常终止: {e}")))??;
+    //
+    // 超时同理:识别引擎(macOS Vision / Windows ORT+DirectML)挂起时这个调用
+    // 永不返回,而停止请求只在帧间生效——没有超时的话,一次引擎挂起 = 整个
+    // 识别子系统瘫痪到重启为止(两个平台都实测发生过)。超时后 JoinHandle 被
+    // 丢弃,但**阻塞线程无法被取消**,它会继续卡在引擎里,泄漏一根阻塞池线程
+    // ——这是已知代价,由连败熔断 + 冷却把泄漏速率压到可忽略。
+    let join = tokio::task::spawn_blocking(move || rec(&path));
+    let lines: Vec<String> = match tokio::time::timeout(FRAME_TIMEOUT, join).await {
+        Err(_elapsed) => {
+            return Err(Error::OcrInfra(format!(
+                "单帧识别超过 {}s 无响应(引擎挂起),已跳过",
+                FRAME_TIMEOUT.as_secs()
+            )));
+        }
+        Ok(joined) => joined.map_err(|e| Error::OcrInfra(format!("识别任务异常终止: {e}")))??,
+    };
 
     let session_id = pipe.folder.fold_frame(mem, frame, &lines).await?;
     frames::mark_done(mem, frame.path.clone(), session_id).await?;
@@ -456,7 +520,11 @@ mod tests {
     /// guard 随栈展开释放,后续测试照常拿锁,无毒化问题。
     async fn drain_lock() -> tokio::sync::MutexGuard<'static, ()> {
         static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-        LOCK.lock().await
+        let guard = LOCK.lock().await;
+        // 冷却是进程级 static:上一个测试触发的熔断会拦住下一个测试的 drain,
+        // 拿到锁即清,保证每个测试从无冷却状态起步
+        clear_cooldown();
+        guard
     }
 
     /// 每个测试独立的临时目录。帧文件要真实存在:digest_one 先查 is_file,
@@ -866,6 +934,76 @@ mod tests {
             let (state, attempts, _) = frame_row(&mem, p).await;
             assert_eq!((state, attempts), (0, 0), "十帧全部毫发无损");
         }
+    }
+
+    /// 识别函数挂起(永不返回)时,单帧超时把它转成设施故障:批继续、帧无损。
+    ///
+    /// 这是两平台停摆事故的共同解药——macOS Vision 死锁、Windows ORT/DirectML
+    /// 挂起,表现都是"这一帧永不结束"。超时前的旧行为:整个消化子系统瘫痪到
+    /// 重启为止,停止按钮无效(只在帧间生效)。
+    #[tokio::test]
+    async fn hung_recognizer_times_out_as_infra_and_frame_unharmed() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("hang-timeout");
+        let a = touch(&dir, "a.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+
+        // 永久阻塞的识别函数 = 挂起的引擎。3s 兜底:远大于超时档位(500ms),
+        // 又不至于让 tokio 运行时关停时等太久(它会等阻塞任务收尾)
+        let mut pipe = Pipeline::with_recognizer(Arc::new(|_p| {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            Ok(vec![])
+        }));
+        let stop = AtomicBool::new(false);
+        let started = std::time::Instant::now();
+        let report = drain(&mem, &mut pipe, &stop).await.unwrap();
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "超时必须在测试档位(500ms)附近生效,而不是等挂起的线程自己回来"
+        );
+        assert_eq!(report.infra_skipped, 1, "挂起记为设施故障");
+        assert_eq!(report.failed, 0);
+        let (state, attempts, _) = frame_row(&mem, &a).await;
+        assert_eq!((state, attempts), (0, 0), "帧无损:不烧重试、仍待处理");
+    }
+
+    /// 连败中止 → 进入冷却:冷却期 drain 直接拒绝(自动入口退避),
+    /// `clear_cooldown`(手动「立即回填」路径)立即解锁。
+    #[tokio::test]
+    async fn infra_streak_enters_cooldown_and_manual_clear_unblocks() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("cooldown");
+        for i in 0..4 {
+            let p = touch(&dir, &format!("f{i}.jpg"));
+            reg(&mem, &p, &format!("2026-07-05T10:00:{i:02}+09:00"), "标题").await;
+        }
+
+        let mut bad =
+            Pipeline::with_recognizer(Arc::new(|_p| Err(Error::OcrInfra("引擎没反应".into()))));
+        let stop = AtomicBool::new(false);
+        let report = drain(&mem, &mut bad, &stop).await.unwrap();
+        assert_eq!(report.infra_skipped, INFRA_ABORT_STREAK as u64);
+        assert!(
+            cooldown_remaining_secs().is_some(),
+            "连败中止后必须进入冷却"
+        );
+
+        // 冷却期:自动入口的 drain 被拒,且不碰 RUNNING
+        let mut ok_pipe = Pipeline::with_recognizer(Arc::new(|_p| Ok(vec!["正常".to_string()])));
+        let err = drain(&mem, &mut ok_pipe, &stop).await.unwrap_err();
+        assert!(
+            err.to_string().contains("冷却"),
+            "冷却期拒绝并说明原因: {err}"
+        );
+        assert!(!is_running(), "被冷却拒绝的调用不得留下运行标志");
+
+        // 手动路径清冷却 → 立即可跑
+        clear_cooldown();
+        let report2 = drain(&mem, &mut ok_pipe, &stop).await.unwrap();
+        assert_eq!(report2.processed, 4, "清冷却后四帧全部正常识别");
     }
 
     /// panic 展开时批次互斥必须被释放。
