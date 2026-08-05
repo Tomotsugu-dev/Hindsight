@@ -197,6 +197,16 @@ impl OcrSupervisor {
         }
     }
 
+    /// 以指定档位识别:先断言档位再识别。消化管线的闭包用它——
+    /// 没有这层断言的话,手动全速批结束后,常驻批会继续沿用 fast worker
+    /// (Windows 上 Paddle 全速线程数 = 后台识别打扰前台,违背常驻模式约定)。
+    /// 同档零成本(一次原子写);异档只会发生在批边界(批之间由 digest 的
+    /// RUNNING 互斥天然串行),重建代价一批一次。
+    pub async fn recognize_as(&self, path: &Path, fast: bool) -> Result<Vec<OcrLine>> {
+        self.fast.store(fast, Ordering::Relaxed);
+        self.recognize(path).await
+    }
+
     /// 预拉起 + 完成握手。`Pipeline::load` 调它,让 Paddle 的 10-30s 冷启动
     /// 落在"引擎级失败中断整批"的语义里,而不是被算进第一帧的请求超时。
     pub async fn ensure_ready(&self) -> Result<()> {

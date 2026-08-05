@@ -105,7 +105,8 @@ impl Drop for BatchGuard {
 }
 
 /// 请求停止当前正在进行的消化批(手动批或常驻批的当前轮)。翻标志即返回;
-/// 消化循环帧间感知,最多再等一帧(~1s)停下,不留半消化状态。
+/// 消化循环帧间感知:正常再等一帧(~1s)停下;若该帧恰遇引擎挂起,
+/// 最长等到 worker 超时被杀(90s)——仍然有界,不留半消化状态。
 /// 没有批在跑时置位近似无害——最坏让紧接着开始的下一批空停一轮。
 pub fn request_stop() {
     STOP_REQUESTED.store(true, Ordering::SeqCst);
@@ -118,14 +119,16 @@ const BATCH: i64 = 64;
 /// 又能把最坏浪费压到三次超时,而不是拿整批去磨一个已经坏掉的识别引擎。
 const INFRA_ABORT_STREAK: u32 = 3;
 
-/// 单帧识别的外层超时(纵深防线)。主防线在 `ai/ocr_supervisor`:90s 无响应
-/// 即杀 worker 重建。这里取 120s,恒晚于主防线——只有 supervisor 自身出 bug
-/// 卡住时才轮到它,保证消化循环在任何情况下都不可能被一帧钉死。
+/// 单帧识别的外层超时(纵深防线)。主防线在 `ai/ocr_supervisor`:请求 90s
+/// 无响应即杀 worker 重建。supervisor 的最坏合法路径是"上一帧把 worker 拖死
+/// → 本帧重建(Windows Paddle 冷加载,握手上限 120s)→ 请求(90s)" = 210s,
+/// 这里取 240s 恒晚于它——只有 supervisor 自身出 bug 卡住时才轮到,
+/// 保证消化循环在任何情况下都不可能被一帧钉死。
 /// 测试压到 500ms:假识别函数要么立即返回要么故意永久阻塞,无中间态。
 const FRAME_TIMEOUT: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_millis(500)
 } else {
-    std::time::Duration::from_secs(120)
+    std::time::Duration::from_secs(240)
 };
 
 /// 连败中止后的冷却时长。没有冷却的话,常驻 tick 每 60s 就会重启一批、
@@ -298,7 +301,7 @@ impl Pipeline {
                 let sup = Arc::clone(&sup);
                 Box::pin(async move {
                     Ok(sup
-                        .recognize(&path)
+                        .recognize_as(&path, fast)
                         .await?
                         .into_iter()
                         .map(|l| l.text)
