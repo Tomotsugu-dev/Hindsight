@@ -184,7 +184,16 @@ impl OcrSupervisor {
                 )))
             }
             Ok(Ok(WireOutcome::Lines(lines))) => Ok(lines),
-            Ok(Ok(WireOutcome::FrameErr(code, msg))) => Err(err_from_wire(code, &msg)),
+            Ok(Ok(WireOutcome::FrameErr(code, msg))) => {
+                let e = err_from_wire(code, &msg);
+                if matches!(e, Error::OcrInfra(_)) {
+                    // 引擎级错误(设备重置/session 失效同形):旧 session 大概率
+                    // 已废,丢链接让下次请求拿全新 worker——否则每批都撞同一个
+                    // 坏 session,三连败进冷却,循环到重启为止
+                    inner.link = None;
+                }
+                Err(e)
+            }
             Ok(Err(e)) => {
                 inner.link = None;
                 Err(match e {
@@ -678,6 +687,41 @@ mod tests {
             matches!(err, Error::Ocr(_)),
             "管道回来的错误是帧级(烧预算),不是设施级: {err}"
         );
+    }
+
+    /// 引擎级线错误(设备重置/session 失效同形)→ 设施级 + 重建 worker。
+    /// 若归帧级:好帧被烧预算、熔断器被清零、坏 session 永不更换——07-17 重演。
+    #[tokio::test]
+    async fn engine_wire_error_is_infra_and_rebuilds_worker() {
+        let spawns = Arc::new(AtomicUsize::new(0));
+        let spawns2 = Arc::clone(&spawns);
+        let s = sup(Arc::new(move |fast, _logs| {
+            let n = spawns2.fetch_add(1, Ordering::SeqCst);
+            Ok(scripted(fast, move |mut rx, mut tx| async move {
+                send_line(&mut tx, &WireMsg::ready("fake")).await;
+                while let Some(req) = next_req(&mut rx).await {
+                    if n == 0 {
+                        // 第一个 worker:session 坏了,凡问必报引擎错误
+                        send_line(
+                            &mut tx,
+                            &WireMsg::result_err(req.id, ErrCode::Engine, "session 失效".into()),
+                        )
+                        .await;
+                    } else {
+                        send_line(&mut tx, &WireMsg::result_ok(req.id, one_line("新生"))).await;
+                    }
+                }
+            }))
+        }));
+
+        let err = s.recognize(Path::new("/x/a.jpg")).await.unwrap_err();
+        assert!(
+            matches!(err, Error::OcrInfra(_)),
+            "引擎错误必须归设施级(不烧帧预算): {err}"
+        );
+        let ok = s.recognize(Path::new("/x/b.jpg")).await.unwrap();
+        assert_eq!(ok[0].text, "新生", "坏 session 被换掉,新 worker 正常");
+        assert_eq!(spawns.load(Ordering::SeqCst), 2, "确实重建了");
     }
 
     #[tokio::test]

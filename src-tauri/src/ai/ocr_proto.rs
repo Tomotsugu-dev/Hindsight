@@ -186,13 +186,23 @@ impl WireMsg {
     }
 }
 
-/// 把 worker 回来的帧级错误码翻成本 crate 的 [`Error`](crate::error::Error)。
-/// 全部映射为帧级 `Error::Ocr`(消耗该帧重试预算)——经由健康管道回来的错误
-/// 说明 worker 活得好好的,坏的是这张图;设施级错误不从这儿走。
+/// 把 worker 回来的错误码翻成本 crate 的 [`Error`](crate::error::Error)。
+///
+/// 分级即预算:`Decode`/`BadRequest` **确定**怪这张图 → 帧级 `Error::Ocr`
+/// (消耗重试预算);`Engine`(可能是设备重置/session 失效等引擎级故障,
+/// 与单图触发无法区分)与 `ModelsMissing`/`Unknown` → 设施级 `Error::OcrInfra`,
+/// 帧保持待处理、熔断器可感知。宁可让一张真会弄崩推理的图永远留在待处理里
+/// (每批一次廉价失败,可见),也不能让一次引擎故障连坐烧掉一批好帧
+/// (2026-07-17 实际发生:243 帧烧穿预算,截图随保留策略删除,不可恢复)。
 pub fn err_from_wire(code: ErrCode, msg: &str) -> crate::error::Error {
     match code {
         ErrCode::RuntimeMissing => crate::error::Error::EmbeddingRuntimeMissing,
-        _ => crate::error::Error::Ocr(format!("worker: {msg} ({code:?})")),
+        ErrCode::Decode | ErrCode::BadRequest => {
+            crate::error::Error::Ocr(format!("worker: {msg} ({code:?})"))
+        }
+        ErrCode::Engine | ErrCode::ModelsMissing | ErrCode::Unknown => {
+            crate::error::Error::OcrInfra(format!("worker 引擎级错误: {msg} ({code:?})"))
+        }
     }
 }
 
@@ -259,13 +269,29 @@ mod tests {
     }
 
     #[test]
-    fn wire_errors_are_frame_level() {
-        // 走管道回来的错误 = worker 健康、图有问题 → 帧级(烧重试预算)。
-        // 设施级(OcrInfra)只能由父进程在超时/进程死时合成——这条边界错了,
-        // 会重演"设施故障烧光帧预算"的 07-17 事故
-        let e = err_from_wire(ErrCode::Decode, "坏图");
-        assert!(matches!(e, crate::error::Error::Ocr(_)));
-        let e = err_from_wire(ErrCode::RuntimeMissing, "no ort");
-        assert!(matches!(e, crate::error::Error::EmbeddingRuntimeMissing));
+    fn wire_error_grading_protects_frame_budget() {
+        // 确定怪图的 → 帧级(烧重试预算)
+        assert!(matches!(
+            err_from_wire(ErrCode::Decode, "坏图"),
+            crate::error::Error::Ocr(_)
+        ));
+        assert!(matches!(
+            err_from_wire(ErrCode::BadRequest, "缺 path"),
+            crate::error::Error::Ocr(_)
+        ));
+        // 可能是引擎坏的 → 设施级(不烧预算、熔断器可感知)。
+        // 这条边界错了会重演 07-17:引擎故障连坐烧穿一批好帧的预算
+        assert!(matches!(
+            err_from_wire(ErrCode::Engine, "session 失效"),
+            crate::error::Error::OcrInfra(_)
+        ));
+        assert!(matches!(
+            err_from_wire(ErrCode::Unknown, "新版 worker 的新码"),
+            crate::error::Error::OcrInfra(_)
+        ));
+        assert!(matches!(
+            err_from_wire(ErrCode::RuntimeMissing, "no ort"),
+            crate::error::Error::EmbeddingRuntimeMissing
+        ));
     }
 }

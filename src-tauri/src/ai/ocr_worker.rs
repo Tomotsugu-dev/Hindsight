@@ -106,11 +106,22 @@ impl Watchdog {
     }
 }
 
-/// 把引擎错误翻成线上的帧级错误码。设施级错误不在这儿产生——worker 还能
-/// 回话就说明 worker 没坏,坏的只可能是这张图或引擎对这张图的处理。
+/// 把引擎错误翻成线上错误码。分级决定父进程烧不烧该帧的重试预算:
+/// - `Decode` = 图本身读不出来(损坏/半写入/0 尺寸)——**确定**是这张图的问题;
+/// - `Engine` = 推理层错误——设备重置、session 失效等**引擎级**故障也长这样,
+///   与"这张图触发的推理错误"无法区分,父进程按设施处理(不烧帧、重建 worker)。
+///   曾把两者混为帧级:一次引擎故障连坐烧穿 243 帧的重试预算(2026-07-17),
+///   截图随保留策略删除,文字不可恢复。
+///
+/// 判据是错误文本标记("读图失败" = Paddle 解码;"zero-dimension" = Vision
+/// 对 0 尺寸图的报错)——脆弱但生成点都在本仓库内且有测试钉住,
+/// 改动生成点必须同步这里。
 fn wire_code(e: &Error) -> ErrCode {
     match e {
         Error::EmbeddingRuntimeMissing => ErrCode::RuntimeMissing,
+        Error::Ocr(s) if s.contains("读图失败") || s.contains("zero-dimension") => {
+            ErrCode::Decode
+        }
         _ => ErrCode::Engine,
     }
 }
@@ -270,6 +281,9 @@ mod tests {
         fn recognize_file(&self, p: &Path) -> Result<Vec<OcrLine>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let name = p.file_name().unwrap().to_string_lossy().into_owned();
+            if name.contains("unreadable") {
+                return Err(Error::Ocr("读图失败: 半写入的截图".into()));
+            }
             if name.contains("bad") {
                 return Err(Error::Ocr("这张图坏了".into()));
             }
@@ -319,11 +333,30 @@ mod tests {
             msgs[1].classify(),
             super::super::ocr_proto::MsgKind::Result { id: 2, ok: false }
         ));
+        // 推理层错误 → Engine(父进程按设施处理,不烧帧预算)
         assert_eq!(msgs[1].code, Some(ErrCode::Engine));
         assert!(matches!(
             msgs[2].classify(),
             super::super::ocr_proto::MsgKind::Result { id: 3, ok: true }
         ));
+    }
+
+    /// 解码错误(确定怪图)与推理错误(可能是引擎坏)必须分级——
+    /// 这是 07-17 数据丢失事故的第二道回归钉(第一道在 digest 的分类测试里)。
+    #[tokio::test]
+    async fn decode_error_graded_separately_from_engine_error() {
+        let dec =
+            serde_json::to_string(&WireReq::recognize(1, "/a/unreadable.jpg".into())).unwrap();
+        let eng = serde_json::to_string(&WireReq::recognize(2, "/a/bad.jpg".into())).unwrap();
+        let (msgs, served) = drive(&format!(
+            "{dec}
+{eng}
+"
+        ))
+        .await;
+        served.unwrap();
+        assert_eq!(msgs[0].code, Some(ErrCode::Decode), "读图失败 → 帧级");
+        assert_eq!(msgs[1].code, Some(ErrCode::Engine), "推理错误 → 设施级");
     }
 
     #[tokio::test]
