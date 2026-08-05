@@ -23,8 +23,11 @@ pub mod models;
 pub mod ocr;
 pub mod ocr_catchup;
 pub mod ocr_patch;
+pub mod ocr_proto;
+pub mod ocr_supervisor;
 #[cfg(target_os = "macos")]
 pub mod ocr_vision;
+pub mod ocr_worker;
 pub mod platform;
 pub mod prompt;
 pub mod recommended;

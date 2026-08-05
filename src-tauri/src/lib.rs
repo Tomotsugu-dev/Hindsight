@@ -33,6 +33,17 @@ pub static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(true);
 /// 跑 env_logger 初始化、子进程保护、Tauri builder + setup + invoke_handler，最后 block 在 Tauri 主循环。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // OCR worker 分叉:必须在**一切**之前——尤其是单实例插件(它会把重入的
+    // worker 当成第二个实例直接终结)和 Job Object 初始化(worker 该是父进程
+    // Job 的成员,不该自建)。run_worker 永不返回。
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        if argv.iter().any(|a| a == "--ocr-worker") {
+            let fast = argv.iter().any(|a| a == "--fast");
+            ai::ocr_worker::run_worker(fast);
+        }
+    }
+
     // 默认开 hindsight=info（用户可用 RUST_LOG 覆盖）。隐私命中 / 同步错误 / 启动信息
     // 都是 info 级别，普通运行也能在终端看到。
     let _ = env_logger::Builder::from_env(
@@ -112,6 +123,9 @@ pub fn run() {
             // ort load-dynamic 找 onnxruntime DLL 用（OCR 引擎依赖）。
             // 必须在任何 ONNX session 创建之前完成。
             crate::ai::embedding_runtime::init_dylib_path();
+            // OCR worker 空闲回收器:持 Weak,app 活多久它跑多久
+            // JoinHandle 落地即分离(drop 不终止任务),持 Weak 自行退出
+            let _watcher = crate::ai::ocr_supervisor::global().spawn_idle_watcher();
 
             tauri::async_runtime::block_on(async move {
                 // 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
@@ -340,6 +354,10 @@ pub fn run() {
             // app 真正退出前等 llama-server 子进程收尸——避免遗留孤儿进程
             // 一直 hold 着模型在内存里。block_on 是同步等，因为 Exit 已经是 final。
             if matches!(&event, tauri::RunEvent::Exit) {
+                // OCR worker 同步收尸(拿不到锁就交给 stdin EOF 兜底,不硬等)
+                tauri::async_runtime::block_on(async {
+                    ai::ocr_supervisor::global().stop().await;
+                });
                 let s = engine_for_exit.clone();
                 tauri::async_runtime::block_on(async move {
                     let _ = s.stop().await;

@@ -136,11 +136,13 @@ pub fn model_dir() -> PathBuf {
 }
 
 /// 识别出的一行(已按版面阅读序排列)。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OcrLine {
     pub text: String,
     /// 行框,归一化 [x, y, w, h](左上原点,0..1)。None = 后端未提供。
     /// 消化管线不落库;搜索页 lightbox 现场定位命中行用。
+    /// serde:识别在子进程里跑,本类型走 NDJSON 管道回父进程(`ai/ocr_proto.rs`)。
+    #[serde(rename = "box", default, skip_serializing_if = "Option::is_none")]
     pub box_norm: Option<[f32; 4]>,
 }
 
@@ -166,6 +168,15 @@ impl OcrEngine {
     /// 模型下载/运行时安装全部跳过)。
     pub fn needs_models() -> bool {
         !Self::use_vision()
+    }
+
+    /// 后端名(worker 握手行里报给父进程,进日志用)。
+    pub fn backend_name(&self) -> &'static str {
+        match &self.backend {
+            #[cfg(target_os = "macos")]
+            Backend::Vision(_) => "vision",
+            Backend::Paddle(_) => "paddle",
+        }
     }
 
     /// 后台/常驻模式加载:保守线程数,不打扰前台使用。

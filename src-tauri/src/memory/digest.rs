@@ -118,14 +118,14 @@ const BATCH: i64 = 64;
 /// 又能把最坏浪费压到三次超时,而不是拿整批去磨一个已经坏掉的识别引擎。
 const INFRA_ABORT_STREAK: u32 = 3;
 
-/// 单帧识别的超时上限。实测正常单帧 ~0.4s(Vision)/ ~1-2s(ORT),观测到的
-/// 合法极端值 37s(引擎被别的进程拖慢时)——90s 给足余量,同时保证引擎挂起
-/// 在一分半内被发现而不是瘫痪到重启。测试压到 500ms:假识别函数要么立即返回
-/// 要么故意永久阻塞,不存在"差一点就完成"的中间态。
+/// 单帧识别的外层超时(纵深防线)。主防线在 `ai/ocr_supervisor`:90s 无响应
+/// 即杀 worker 重建。这里取 120s,恒晚于主防线——只有 supervisor 自身出 bug
+/// 卡住时才轮到它,保证消化循环在任何情况下都不可能被一帧钉死。
+/// 测试压到 500ms:假识别函数要么立即返回要么故意永久阻塞,无中间态。
 const FRAME_TIMEOUT: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_millis(500)
 } else {
-    std::time::Duration::from_secs(90)
+    std::time::Duration::from_secs(120)
 };
 
 /// 连败中止后的冷却时长。没有冷却的话,常驻 tick 每 60s 就会重启一批、
@@ -250,11 +250,19 @@ async fn download_missing(dir: &std::path::Path, sources: &[(&str, &str)]) -> Re
     Ok(())
 }
 
-/// 可替换的单帧识别函数:图片路径 → 行文本(阅读序)。生产实现由 [`Pipeline::load`]
-/// 把真 [`OcrEngine`] 包成闭包;测试注入预设文本,让消化循环能在无模型环境下被
-/// 行为级验证。选闭包而非给 OcrEngine 开 trait:digest 只消费"路径→行文本"这一个
-/// 面,缝开在唯一消费点上,引擎内部(Vision/Paddle 双后端)不必为测试重构。
-type Recognizer = Arc<dyn Fn(&std::path::Path) -> Result<Vec<String>> + Send + Sync>;
+/// 可替换的单帧识别函数:图片路径 → 行文本(阅读序),**异步**。
+///
+/// 生产实现是对 OCR worker 子进程的一次 IPC(`ai/ocr_supervisor`);测试注入
+/// 预设文本。异步不是风格问题:IPC 若包在 `spawn_blocking` 里同步等,就是在
+/// 阻塞线程上 block_on——和引擎挂死把线程钉死是同一个形状,超时和取消都会失效。
+/// 选闭包而非 trait:digest 只消费"路径→行文本"这一个面,缝开在唯一消费点上。
+type RecognizeFut =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<String>>> + Send>>;
+type Recognizer = Arc<dyn Fn(std::path::PathBuf) -> RecognizeFut + Send + Sync>;
+
+/// 测试夹具用的同步识别函数(见 [`Pipeline::with_recognizer`])。
+#[cfg(test)]
+type SyncRecognizer = Arc<dyn Fn(&std::path::Path) -> Result<Vec<String>> + Send + Sync>;
 
 /// 消化管线的运行态:OCR 识别函数 + 折叠器。
 /// 批量模式一次 run 一个;常驻模式跨 tick 持有(会话连续)。
@@ -264,50 +272,58 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    /// 后台/常驻模式:保守 OCR 线程数,不打扰前台。
+    /// 后台/常驻模式:worker 用保守 OCR 线程数,不打扰前台。
     pub async fn new() -> Result<Self> {
-        Self::load(OcrEngine::load).await
+        Self::load(false).await
     }
 
-    /// 手动全速模式:「立即回填」用,OCR 线程放开到 核数-2 尽快清完积压。
+    /// 手动全速模式:「立即回填」用,worker 线程放开尽快清积压。
     pub async fn new_fast() -> Result<Self> {
-        Self::load(OcrEngine::load_fast).await
+        Self::load(true).await
     }
 
-    /// 加载 OCR 引擎(模型缺失自动下载;设 ORT_DYLIB_PATH 定位 onnxruntime)。
-    async fn load(loader: fn() -> Result<OcrEngine>) -> Result<Self> {
+    /// 组装识别管线:模型缺失先下载(留在父进程——代理配置、可视错误都在这边),
+    /// 然后预拉起 worker 并完成握手。把 Paddle 的 10-30s 冷启动放在这里,
+    /// 是让"引擎起不来"落进「引擎级失败中断整批」的既有语义,
+    /// 而不是被算进第一帧的请求超时。
+    async fn load(fast: bool) -> Result<Self> {
         ensure_models().await?;
-        // ort 的 load-dynamic 靠 ORT_DYLIB_PATH 定位 onnxruntime
-        if let Ok(p) = crate::ai::embedding_runtime::dylib_path() {
-            if p.exists() {
-                std::env::set_var("ORT_DYLIB_PATH", &p);
-            }
-        }
-        let ocr = Arc::new(
-            tokio::task::spawn_blocking(loader)
-                .await
-                .map_err(|e| Error::Ocr(format!("spawn_blocking: {e}")))??,
-        );
+        let sup = Arc::clone(crate::ai::ocr_supervisor::global());
+        sup.set_fast(fast).await;
+        sup.ensure_ready().await?;
         Ok(Self {
-            // 行为与直接持有引擎时逐字一致:调用仍发生在 digest_one 的
-            // spawn_blocking 里,只取每行 text(box_norm 消化管线本就不落库)。
-            // 解码在引擎内部:Vision 直接吃文件,Paddle 走 image::open。
-            recognize: Arc::new(move |path: &std::path::Path| {
-                Ok(ocr
-                    .recognize_file(path)?
-                    .into_iter()
-                    .map(|l| l.text)
-                    .collect())
+            // 每帧一次 IPC:路径过去、行文本回来(box_norm 消化管线本就不落库)。
+            // 超时杀、重建、串行化全在 supervisor 里,这个闭包保持哑。
+            recognize: Arc::new(move |path: std::path::PathBuf| {
+                let sup = Arc::clone(&sup);
+                Box::pin(async move {
+                    Ok(sup
+                        .recognize(&path)
+                        .await?
+                        .into_iter()
+                        .map(|l| l.text)
+                        .collect())
+                })
             }),
             folder: Folder::default(),
         })
     }
 
-    /// 测试注入:用假识别函数组装管线,不加载任何模型。
+    /// 测试注入:用假识别函数组装管线,不拉 worker、不加载任何模型。
+    /// 测试面保持**同步**闭包(既有夹具全部不动);包装器把它扔进
+    /// `spawn_blocking`——与旧生产路径逐字同语义:阻塞型夹具照旧能被
+    /// 外层超时打断,panic 照旧折成 `OcrInfra`。
     #[cfg(test)]
-    fn with_recognizer(recognize: Recognizer) -> Self {
+    fn with_recognizer(sync: SyncRecognizer) -> Self {
         Self {
-            recognize,
+            recognize: Arc::new(move |path: std::path::PathBuf| {
+                let sync = Arc::clone(&sync);
+                Box::pin(async move {
+                    tokio::task::spawn_blocking(move || sync(&path))
+                        .await
+                        .map_err(|e| Error::OcrInfra(format!("识别任务异常终止: {e}")))?
+                })
+            }),
             folder: Folder::default(),
         }
     }
@@ -436,25 +452,18 @@ async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -
         frames::mark_done(mem, frame.path.clone(), -1).await?;
         return Ok(false);
     }
-    let rec = Arc::clone(&pipe.recognize);
-    // JoinError = 识别任务 panic 或被取消,是设施故障不是这张图的错。
-    // 记成 Error::Ocr 的话会扣掉该帧一次重试——识别引擎连炸三轮就够让一批
-    // 完全正常的截图被永久放弃。
-    //
-    // 超时同理:识别引擎(macOS Vision / Windows ORT+DirectML)挂起时这个调用
-    // 永不返回,而停止请求只在帧间生效——没有超时的话,一次引擎挂起 = 整个
-    // 识别子系统瘫痪到重启为止(两个平台都实测发生过)。超时后 JoinHandle 被
-    // 丢弃,但**阻塞线程无法被取消**,它会继续卡在引擎里,泄漏一根阻塞池线程
-    // ——这是已知代价,由连败熔断 + 冷却把泄漏速率压到可忽略。
-    let join = tokio::task::spawn_blocking(move || rec(&path));
-    let lines: Vec<String> = match tokio::time::timeout(FRAME_TIMEOUT, join).await {
+    // 识别是一次对 worker 子进程的 IPC。挂死的主防线在 supervisor(90s 超时
+    // → 杀 worker → 重建);这里的外层超时是纵深:supervisor 自身若有 bug
+    // 卡住,消化循环也绝不能跟着一起死——那正是本次事故的形状。
+    let fut = (pipe.recognize)(path);
+    let lines: Vec<String> = match tokio::time::timeout(FRAME_TIMEOUT, fut).await {
         Err(_elapsed) => {
             return Err(Error::OcrInfra(format!(
-                "单帧识别超过 {}s 无响应(引擎挂起),已跳过",
+                "单帧识别超过 {}s 无响应,已跳过",
                 FRAME_TIMEOUT.as_secs()
             )));
         }
-        Ok(joined) => joined.map_err(|e| Error::OcrInfra(format!("识别任务异常终止: {e}")))??,
+        Ok(r) => r?,
     };
 
     let session_id = pipe.folder.fold_frame(mem, frame, &lines).await?;
@@ -558,7 +567,7 @@ mod tests {
 
     /// 假 OCR:按文件名返回预设行,没预设的路径报识别错;`calls` 记录真实
     /// 调用次数(验证去重帧/缺图帧根本不进识别)。
-    fn canned(map: &[(&str, &[&str])], calls: Arc<AtomicUsize>) -> Recognizer {
+    fn canned(map: &[(&str, &[&str])], calls: Arc<AtomicUsize>) -> SyncRecognizer {
         let map: HashMap<String, Vec<String>> = map
             .iter()
             .map(|(k, v)| (k.to_string(), v.iter().map(|s| s.to_string()).collect()))

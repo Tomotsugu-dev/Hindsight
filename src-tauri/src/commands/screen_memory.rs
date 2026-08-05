@@ -373,20 +373,21 @@ pub async fn memory_locate(
     if !file.is_file() {
         return Ok(Vec::new()); // 截图已被保留策略清理:无框,前端只展示图缺占位
     }
-    tokio::task::spawn_blocking(move || -> Result<Vec<[f32; 4]>, String> {
-        let eng = crate::ai::ocr::OcrEngine::load().map_err(|e| e.to_string())?;
-        let lines = eng.recognize_file(&file).map_err(|e| e.to_string())?;
-        Ok(lines
-            .into_iter()
-            .filter(|l| {
-                let lt = l.text.to_lowercase();
-                words.iter().any(|w| lt.contains(w.as_str()))
-            })
-            .filter_map(|l| l.box_norm)
-            .collect())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    // 走 worker 子进程:与消化循环共用同一把串行锁——并发调用识别是实测的
+    // 挂死放大器,这里以前每次开图还重载一整套引擎(Windows 上秒级),一并治掉。
+    // 最坏排在一帧识别之后(~1s),仍远快于旧的按次加载。
+    let lines = crate::ai::ocr_supervisor::global()
+        .recognize(&file)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(lines
+        .into_iter()
+        .filter(|l| {
+            let lt = l.text.to_lowercase();
+            words.iter().any(|w| lt.contains(w.as_str()))
+        })
+        .filter_map(|l| l.box_norm)
+        .collect())
 }
 
 /// 两库对账走 Rust 侧集合差,不用 ATTACH:主库是应用唯一写连接,
