@@ -92,11 +92,16 @@ impl Folder {
         let cur = self.current.as_mut().expect("上面刚保证过 current 存在");
         cur.last_ts = frame_ts;
 
-        // 行级并集:只追加本会话没见过的行
+        // 行级并集:只追加本会话没见过的行。
+        //
+        // **先落库、后记账**,顺序不可反:`seen` 是跨帧的去重账本。若先记
+        // `seen` 再写库,一旦写库失败(帧按设施故障保留待重试),重试时这些行
+        // 会被 `seen` 判成"已写过"而全部跳过,帧随即被标记完成——OCR 文字
+        // 就此静默永久丢失。收集阶段只查不写,落库成功后才更新账本。
         let mut fresh: Vec<String> = Vec::new();
         for line in lines {
             if let Some(n) = normalize_line(line) {
-                if cur.seen.insert(n.clone()) {
+                if !cur.seen.contains(&n) && !fresh.contains(&n) {
                     fresh.push(n);
                 }
             }
@@ -104,6 +109,9 @@ impl Folder {
         if !fresh.is_empty() {
             append_lines(db, cur.id, cur.next_line_no, &fresh, &frame.path, &frame.ts).await?;
             cur.next_line_no += fresh.len() as i64;
+            for n in fresh {
+                cur.seen.insert(n);
+            }
         } else {
             // 零新行(回看/静止)也要推进会话结束时刻
             touch_session(db, cur.id, &frame.ts).await?;
@@ -211,6 +219,66 @@ mod tests {
         })
         .await
         .unwrap()
+    }
+
+    /// 落库失败后重试,行必须还能补写进库——`seen` 账本只能在落库成功后更新。
+    ///
+    /// 复现方式:预先占住 (session_id, line_no) 主键,让第一次 `append_lines`
+    /// 因约束冲突失败;清掉占位后重试同一帧,断言所有行完整落库。
+    /// 修复前:第一次失败时行已进 `seen`,重试判"全部见过"→ 零行写入,
+    /// 文字静默永久丢失。
+    #[tokio::test]
+    async fn append_failure_then_retry_writes_all_lines() {
+        let db = MemoryDb::open_in_memory().await.unwrap();
+        let mut folder = Folder::default();
+
+        // 先开一个会话(用另一帧),拿到 session id
+        let f0 = frame("/a/0.jpg", "2026-07-05T10:00:00+09:00", "文档");
+        let sid = folder
+            .fold_frame(&db, &f0, &lines(&["会话里的第一行完整内容"]))
+            .await
+            .unwrap();
+
+        // 占住下一个 line_no 的主键,制造落库失败
+        db.0.call(move |conn| {
+            conn.execute(
+                "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
+                 VALUES(?1, 1, '占位', '/x', 't')",
+                [sid],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        let f1 = frame("/a/1.jpg", "2026-07-05T10:00:05+09:00", "文档");
+        let err = folder
+            .fold_frame(&db, &f1, &lines(&["会话里的第一行完整内容", "后来新增的第二行内容"]))
+            .await;
+        assert!(err.is_err(), "主键冲突应让本次折叠失败");
+
+        // 清掉占位(= 故障恢复),重试同一帧
+        db.0.call(move |conn| {
+            conn.execute(
+                "DELETE FROM session_lines WHERE session_id = ?1 AND line_no = 1 AND text = '占位'",
+                [sid],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        folder
+            .fold_frame(&db, &f1, &lines(&["会话里的第一行完整内容", "后来新增的第二行内容"]))
+            .await
+            .expect("恢复后重试应成功");
+        let text = session_text(&db, sid).await;
+        assert!(
+            text.contains("后来新增的第二行内容"),
+            "重试必须把失败那次的行补写进库(修复前这里静默丢失): {text}"
+        );
     }
 
     #[tokio::test]
