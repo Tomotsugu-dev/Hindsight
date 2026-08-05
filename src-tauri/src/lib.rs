@@ -128,11 +128,15 @@ pub fn run() {
             // ort load-dynamic 找 onnxruntime DLL 用（OCR 引擎依赖）。
             // 必须在任何 ONNX session 创建之前完成。
             crate::ai::embedding_runtime::init_dylib_path();
-            // OCR worker 空闲回收器:持 Weak,app 活多久它跑多久
-            // JoinHandle 落地即分离(drop 不终止任务),持 Weak 自行退出
-            let _watcher = crate::ai::ocr_supervisor::global().spawn_idle_watcher();
 
             tauri::async_runtime::block_on(async move {
+                // OCR worker 空闲回收器:持 Weak,app 活多久它跑多久;
+                // JoinHandle 落地即分离(drop 不终止任务)。
+                // **必须在 block_on 里**——它要 tokio::spawn,而 setup 闭包
+                // 本身跑在主线程、不在运行时上下文;放外面 = 启动即 panic,
+                // 且 panic 点在 tao 的 did_finish_launching(不可展开)= 整个
+                // app 直接 abort。0.8.15 就是这样变砖的。
+                let _watcher = crate::ai::ocr_supervisor::global().spawn_idle_watcher();
                 // 平台权限：macOS 上的 Screen Recording。没拿到 xcap 拿不到其它进程
                 // 的窗口，焦点采集功能整个废掉，但不会报错（CG API 静默降级），所以
                 // 必须先在启动早期触发系统弹框请求权限。

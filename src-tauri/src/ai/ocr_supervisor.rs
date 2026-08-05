@@ -273,9 +273,18 @@ impl OcrSupervisor {
     }
 
     /// 空闲回收:持 Weak,监管器没了自己退;拿不到锁(在忙)就跳过本轮。
-    pub fn spawn_idle_watcher(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
+    ///
+    /// 返回 `None` = 不在 tokio 运行时上下文(启动布线错误)。**降级而非 panic**:
+    /// 丢掉空闲回收的代价是 worker 闲置多占些内存,而这里 panic 的代价是
+    /// app 启动直接 abort(0.8.15 的变砖事故;panic 点在 tao 的
+    /// did_finish_launching,不可展开)。布线错误靠 error 日志暴露。
+    pub fn spawn_idle_watcher(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<()>> {
+        let Ok(rt) = tokio::runtime::Handle::try_current() else {
+            log::error!("OCR 空闲回收器未启动:不在 tokio 运行时上下文(启动布线错误)");
+            return None;
+        };
         let weak = Arc::downgrade(self);
-        tokio::spawn(async move {
+        Some(rt.spawn(async move {
             let mut tick = tokio::time::interval(Duration::from_secs(10));
             tick.tick().await; // 吞掉立即触发的第一下
             loop {
@@ -293,7 +302,7 @@ impl OcrSupervisor {
                     log::info!("OCR worker 空闲 {}s,回收进程", idle_ms / 1000);
                 }
             }
-        })
+        }))
     }
 
     /// worker stderr 环形日志(调试页/错误信息用;暂无 UI 消费方,保留 API)。
