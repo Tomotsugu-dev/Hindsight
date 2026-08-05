@@ -52,19 +52,35 @@ const LOG_RING_SIZE: usize = 500;
 type LogRing = std::sync::Mutex<VecDeque<String>>;
 type BoxRead = Box<dyn AsyncRead + Send + Unpin>;
 type BoxWrite = Box<dyn AsyncWrite + Send + Unpin>;
+/// 读端一律经 `Take` 限额:单行字节预算在**读取时**强制。曾经是读完整行后
+/// 才检查长度——无换行的洪水在检查发生前就能把父进程内存撑爆,防护名不副实。
+type CappedReader = BufReader<tokio::io::Take<BoxRead>>;
+
+/// 单行读取预算(超出 [`MAX_LINE_BYTES`] 两字节,便于区分"恰好到顶"与"超限")。
+const LINE_BUDGET: u64 = (MAX_LINE_BYTES as u64) + 2;
+
+fn capped_reader(r: BoxRead) -> CappedReader {
+    use tokio::io::AsyncReadExt;
+    BufReader::new(r.take(LINE_BUDGET))
+}
 type SpawnFn = Arc<dyn Fn(bool, Arc<LogRing>) -> Result<Link> + Send + Sync>;
 
 /// 一条到 worker 的活链接。`child` 带 `kill_on_drop`:**丢弃 Link 即杀进程**,
 /// 这是超时路径的全部杀伤机制——没有单独的 kill 方法可以忘记调。
 pub(crate) struct Link {
     tx: BoxWrite,
-    rx: BufReader<BoxRead>,
+    rx: CappedReader,
     /// 只为 Drop 而持有:`kill_on_drop` 让"丢弃 Link"本身就是杀进程。
     /// 没有任何代码路径需要读它——这正是设计(不存在能忘记调的 kill)。
     #[allow(dead_code)]
     child: Option<tokio::process::Child>,
     fast: bool,
     pid: Option<u32>,
+    /// 请求在飞标记:写出请求前置位,完整收到应答后清位。
+    /// 调用方的 future 若在"已写未读"之间被丢弃(digest 外层兜底超时),
+    /// 管道里会残留一条无人认领的应答——dirty 仍为真,下次取链接时发现
+    /// 即弃之重建,而不是把旧应答误配给新请求(那会白付一轮序号错乱重建)。
+    dirty: bool,
 }
 
 struct Inner {
@@ -150,6 +166,7 @@ impl OcrSupervisor {
         inner.next_id += 1;
 
         let link = inner.link.as_mut().expect("ensure_link 刚保证过");
+        link.dirty = true; // 从现在起到完整收到应答之前,这条链上有在飞请求
         let mut req = serde_json::to_string(&WireReq::recognize(id, path.to_path_buf()))
             .expect("协议类型必可序列化");
         req.push('\n');
@@ -183,8 +200,12 @@ impl OcrSupervisor {
                     self.req_timeout.as_secs()
                 )))
             }
-            Ok(Ok(WireOutcome::Lines(lines))) => Ok(lines),
+            Ok(Ok(WireOutcome::Lines(lines))) => {
+                link.dirty = false;
+                Ok(lines)
+            }
             Ok(Ok(WireOutcome::FrameErr(code, msg))) => {
+                link.dirty = false;
                 let e = err_from_wire(code, &msg);
                 if matches!(e, Error::OcrInfra(_)) {
                     // 引擎级错误(设备重置/session 失效同形):旧 session 大概率
@@ -306,6 +327,12 @@ impl OcrSupervisor {
     }
 
     async fn ensure_link_locked(&self, inner: &mut Inner) -> Result<()> {
+        // dirty = 上一个请求的 future 在"已写未读"之间被丢弃,管道里躺着
+        // 无人认领的应答——这条链不能再用,弃之重建
+        if inner.link.as_ref().is_some_and(|l| l.dirty) {
+            log::warn!("OCR worker 链接残留在飞请求(调用方被取消),弃链重建");
+            inner.link = None;
+        }
         let want_fast = self.fast.load(Ordering::Relaxed);
         if inner.link.as_ref().is_some_and(|l| l.fast == want_fast) {
             return Ok(());
@@ -403,6 +430,14 @@ async fn read_result(link: &mut Link, expect_id: u64) -> Result<WireOutcome> {
         };
         match msg.classify() {
             MsgKind::Result { id, ok } if id == expect_id => {
+                if msg.v != PROTOCOL_V {
+                    // 理论歧义窗口:形似结果的污染行 / 换版残留。版本不合一律
+                    // 按协议错乱处理,绝不当成识别结果采信
+                    return Err(Error::OcrInfra(format!(
+                        "应答协议版本 {} ≠ {PROTOCOL_V}",
+                        msg.v
+                    )));
+                }
                 return Ok(if ok {
                     WireOutcome::Lines(msg.lines)
                 } else {
@@ -427,7 +462,10 @@ async fn read_result(link: &mut Link, expect_id: u64) -> Result<WireOutcome> {
     }
 }
 
-async fn read_line_capped(rx: &mut BufReader<BoxRead>, buf: &mut String) -> Result<usize> {
+async fn read_line_capped(rx: &mut CappedReader, buf: &mut String) -> Result<usize> {
+    // 每行重置限额:Take 在读取层强制预算,无换行的洪水最多读到预算顶就停,
+    // 不可能先撑爆内存再被检查发现
+    rx.get_mut().set_limit(LINE_BUDGET);
     let n = rx
         .read_line(buf)
         .await
@@ -491,10 +529,11 @@ fn spawn_process(fast: bool, logs: Arc<LogRing>) -> Result<Link> {
     let stdout = child.stdout.take().expect("stdout 已 piped");
     Ok(Link {
         tx: Box::new(stdin),
-        rx: BufReader::new(Box::new(stdout)),
+        rx: capped_reader(Box::new(stdout)),
         child: Some(child),
         fast,
         pid,
+        dirty: false,
     })
 }
 
@@ -520,10 +559,11 @@ mod tests {
         let (p_rx, p_tx) = tokio::io::split(parent_io);
         Link {
             tx: Box::new(p_tx),
-            rx: BufReader::new(Box::new(p_rx)),
+            rx: capped_reader(Box::new(p_rx)),
             child: None,
             fast,
             pid: None,
+            dirty: false,
         }
     }
 
@@ -959,6 +999,70 @@ mod tests {
             s.spawns.load(Ordering::Relaxed),
             started.elapsed()
         );
+    }
+
+    /// 调用方 future 在"请求已写出、应答未读"之间被丢弃(digest 外层兜底
+    /// 超时就是这个形状)→ 管道残留无人认领的应答。dirty 位保证下次请求
+    /// 弃链重建,而不是把旧应答误配给新请求、白付一轮序号错乱。
+    #[tokio::test]
+    async fn cancelled_caller_marks_link_dirty_and_next_call_respawns() {
+        let spawns = Arc::new(AtomicUsize::new(0));
+        let spawns2 = Arc::clone(&spawns);
+        let s = Arc::new(OcrSupervisor::with_spawn_and_timeouts(
+            Arc::new(move |fast, _logs| {
+                let n = spawns2.fetch_add(1, Ordering::SeqCst);
+                Ok(scripted(fast, move |mut rx, mut tx| async move {
+                    send_line(&mut tx, &WireMsg::ready("fake")).await;
+                    while let Some(req) = next_req(&mut rx).await {
+                        if n == 0 {
+                            // 第一个 worker:收到请求后拖 300ms 才回——
+                            // 让外层 100ms 取消先落刀,应答滞留在管道里
+                            tokio::time::sleep(Duration::from_millis(300)).await;
+                        }
+                        send_line(&mut tx, &WireMsg::result_ok(req.id, one_line("迟到"))).await;
+                    }
+                }))
+            }),
+            Duration::from_secs(10), // supervisor 自己的超时放大,确保外层取消先发生
+            Duration::from_millis(500),
+            Duration::from_secs(600),
+        ));
+
+        let cancelled =
+            tokio::time::timeout(Duration::from_millis(100), s.recognize(Path::new("/x/a.jpg")))
+                .await;
+        assert!(cancelled.is_err(), "外层取消确实发生在应答之前");
+
+        // 下一个请求:必须弃掉脏链接、重建后正常——而不是读到那条迟到的旧应答
+        let ok = s.recognize(Path::new("/x/b.jpg")).await.unwrap();
+        assert_eq!(ok[0].text, "迟到");
+        assert_eq!(
+            spawns.load(Ordering::SeqCst),
+            2,
+            "脏链接被弃,第二次请求走了新 worker"
+        );
+    }
+
+    /// 无换行的洪水必须在读取层被预算截停,而不是读完才发现超限——
+    /// 修复前 read_line 会先把整条洪水吞进内存。
+    #[tokio::test]
+    async fn newline_less_flood_is_capped_at_read_time() {
+        let s = sup(Arc::new(|fast, _logs| {
+            Ok(scripted(fast, |mut rx, mut tx| async move {
+                send_line(&mut tx, &WireMsg::ready("fake")).await;
+                let _ = next_req(&mut rx).await;
+                // 9MiB 无换行洪水(> MAX_LINE_BYTES = 8MiB)
+                let chunk = vec![b'x'; 1024 * 1024];
+                for _ in 0..9 {
+                    if tx.write_all(&chunk).await.is_err() {
+                        return; // 父侧已断链,洪水写不完是预期
+                    }
+                }
+            }))
+        }));
+        let err = s.recognize(Path::new("/x/flood.jpg")).await.unwrap_err();
+        assert!(matches!(err, Error::OcrInfra(_)));
+        assert!(err.to_string().contains("超限"), "{err}");
     }
 
     #[tokio::test]
