@@ -20,7 +20,11 @@ interface BackfillBannerProps {
   onRefresh: () => void;
 }
 
-type Phase = "idle" | "downloading" | "running" | "background" | "failed";
+/** 本地相位。注意**没有** "background":后台批不归本组件持有,是否在跑
+ *  只能每次从 stats.digestRunning 派生(见 effective)。曾把它放进本地
+ *  state——后端批结束后没有任何路径能把它拉回 idle,横幅永远显示
+ *  "后台运行中",停止按钮点一下就永久卡在"停止中…"。 */
+type Phase = "idle" | "downloading" | "running" | "failed";
 
 /** 索引进行中(手动触发或后台批)时的进度轮询间隔 */
 const POLL_MS = 3000;
@@ -52,8 +56,9 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
   const residentOn = settings?.memoryOcrResident ?? false;
 
   // 后端消化正在跑(常驻批/别处触发的手动批)时,即使本组件刚挂载
-  // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态
-  const effective: Phase =
+  // (比如用户切走再切回来),也直接显示"后台索引中"而不是带按钮的初始态。
+  // background 是纯派生态:digestRunning 一变假,它自动消失,无需任何复位
+  const effective: Phase | "background" =
     phase === "idle" && stats.digestRunning ? "background" : phase;
 
   // 索引进行中轮询剩余数;total 归零时父组件的 stats 更新会让本组件不再渲染
@@ -130,8 +135,10 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     } catch (e) {
       const msg = String(e);
       if (msg.includes("已在运行")) {
-        // 帧已登记,后台批会消化;转入后台态继续轮询进度
-        setPhase("background");
+        // 帧已登记,后台批会消化。落回 idle:只要 digestRunning 为真,
+        // effective 自然派生出 background;批结束它自己消失
+        setPhase("idle");
+        onRefresh();
       } else if (msg.includes("embedding runtime missing")) {
         // 文字识别运行时缺失/过旧(如 CPU→DirectML 迁移):指路而非裸报错
         setErrMsg(t("chat.backfill.runtimeMissing"));
