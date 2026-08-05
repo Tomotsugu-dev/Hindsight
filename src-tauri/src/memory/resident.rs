@@ -69,6 +69,11 @@ impl ResidentOcr {
                     log::info!("接通电源,常驻 OCR 恢复");
                     was_on_ac = true;
                 }
+                if digest::is_running() {
+                    // 别的批(手动/定时)正在跑:本轮让路。此刻建管线会经由
+                    // set_fast 把活批的 worker 杀掉重建——反正 drain 也会被拒
+                    continue;
+                }
                 if pipe.is_none() {
                     match digest::Pipeline::new().await {
                         Ok(p) => pipe = Some(p),

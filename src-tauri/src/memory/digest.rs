@@ -338,9 +338,23 @@ impl Pipeline {
 /// 只有引擎级错误(模型加载失败等)才中断整批。
 /// 可被 [`request_stop`] 中断:提前停下时正常返回已处理部分的账单。
 pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
+    // 批权必须先于管线加载:曾经反过来,后果是"终将被拒的竞争者"在拿到拒绝
+    // 之前就调了 set_fast/ensure_ready——把正在跑的批的 worker 杀掉重建、
+    // Windows 上等于给活批中途塞一次 10-30s 的 Paddle 重载。先抢权,
+    // 输家在碰到 supervisor 之前就出局。
+    // 有意的副作用:模型下载/worker 握手期间 RUNNING 已置位,前端横幅显示
+    // "后台运行中"——比旧行为(下载期间显示空闲)更诚实。
+    if let Some(rem) = cooldown_remaining_secs() {
+        return Err(Error::OcrInfra(format!(
+            "识别引擎多次无响应,冷却中(剩余 {rem}s);手动「立即回填」可立即重试"
+        )));
+    }
+    let Some(_guard) = BatchGuard::acquire() else {
+        return Err(Error::InvalidInput("消化任务已在运行"));
+    };
     let mut pipe = Pipeline::new_fast().await?;
     let external = AtomicBool::new(false);
-    drain(mem, &mut pipe, &external).await
+    drain_inner(mem, &mut pipe, &external).await
 }
 
 /// 消化核心:取待处理帧 → OCR → L3 折叠 → (视觉帧)L4 聚簇 → 记账,

@@ -101,8 +101,38 @@ async fn check_once(app: &AppHandle) -> crate::error::Result<()> {
     );
     match digest::run(mem).await {
         Ok(report) => log::info!("定时补识别完成: {report:?}"),
+        // 被拒 = 批根本没开跑(上面的 is_running 检查与 run 内部抢权之间,
+        // 别的批可能抢先;或恰好进入冷却)。必须退还当天标记——定时点每天
+        // 只有一次机会,不能被一次没发生的运行消耗掉。
+        // 真正开跑后的失败仍不退:当天不重试是既定规则。
+        Err(e)
+            if matches!(e, crate::error::Error::InvalidInput(_))
+                || e.to_string().contains("冷却") =>
+        {
+            log::debug!("定时补识别:抢批失败({e}),退还当天标记,下轮再试");
+            remove_marks(mem, &today, &due).await?;
+        }
         Err(e) => log::warn!("定时补识别失败(今天不再重试): {e}"),
     }
+    Ok(())
+}
+
+/// 退还一组当天标记([`save_marks`] 的逆操作;抢批失败时用)。
+async fn remove_marks(
+    mem: &super::MemoryDb,
+    date: &str,
+    due: &[String],
+) -> crate::error::Result<()> {
+    let keys: Vec<String> = due.iter().map(|t| attempt_key(date, t)).collect();
+    mem.0
+        .call(move |conn| {
+            for k in &keys {
+                conn.execute("DELETE FROM scheduled_ocr_marks WHERE mark = ?1", [k])
+                    .db()?;
+            }
+            Ok(())
+        })
+        .await?;
     Ok(())
 }
 
@@ -256,6 +286,25 @@ mod tests {
             "旧日期应被清"
         );
         assert_eq!(load_marks(&mem, day2).await.unwrap().len(), 1);
+    }
+
+    /// 抢批失败要退还标记:定时点每天一次机会,不能被"没发生的运行"消耗。
+    /// remove_marks 只退指定点,不误伤同日其它点。
+    #[tokio::test]
+    async fn remove_marks_returns_only_the_given_points() {
+        let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
+        let day = "2026-08-05";
+        save_marks(&mem, day, &["12:00".to_string(), "22:00".to_string()])
+            .await
+            .unwrap();
+
+        remove_marks(&mem, day, &["22:00".to_string()]).await.unwrap();
+        let left = load_marks(&mem, day).await.unwrap();
+        assert_eq!(left, vec!["2026-08-05@12:00".to_string()], "只退 22:00,12:00 保留");
+
+        // 幂等:退不存在的键不报错
+        remove_marks(&mem, day, &["22:00".to_string()]).await.unwrap();
+        assert_eq!(load_marks(&mem, day).await.unwrap().len(), 1);
     }
 
     /// 记账键:date@time,同天不同点互不影响。
