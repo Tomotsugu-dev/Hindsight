@@ -201,16 +201,34 @@ impl<E: Recognize> Recognize for HangFirst<E> {
 ///
 /// 初始化顺序有讲究:日志(stderr!stdout 是协议信道)→ ORT dylib 路径
 /// (Paddle 后端建 session 前必须设好)→ 看门狗 → 引擎 → ready 握手 → 主循环。
-pub fn run_worker(fast: bool) -> ! {
+pub fn run_worker(fast: bool, parent_pid: Option<u32>) -> ! {
     let _ = env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("hindsight=info"),
     )
     .target(env_logger::Target::Stderr)
     .try_init();
-    super::embedding_runtime::init_dylib_path();
 
+    // 看门狗先于**一切**文件系统访问:数据目录可能在网络卷上,下面的 dylib
+    // 路径解析可能阻塞在 syscall 里——那个窗口里若父进程已死,必须已有一道
+    // 孤儿网在岗(空闲自退计时从此刻起算)。
     let wd = Watchdog::new();
     wd.spawn_thread();
+
+    // 收养检测(unix):父进程可能在 spawn 与此刻之间死掉——那种情况下
+    // stdin 的读端未必成形,EOF 网不可靠;被收养 = 父已死,直接退。
+    // (Linux 的 PDEATHSIG 设置同样存在设置前父死的窗口,这一步把它补上。)
+    #[cfg(unix)]
+    if let Some(pp) = parent_pid {
+        let actual = std::os::unix::process::parent_id();
+        if actual != pp {
+            eprintln!("[ocr-worker] 已被收养(父 {pp} → {actual}),父进程已死,退出");
+            std::process::exit(0);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = parent_pid; // Windows 由 Job Object kill-on-close 兜底
+
+    super::embedding_runtime::init_dylib_path();
 
     let engine = match if fast {
         OcrEngine::load_fast()

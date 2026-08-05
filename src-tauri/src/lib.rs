@@ -40,7 +40,12 @@ pub fn run() {
         let argv: Vec<String> = std::env::args().collect();
         if argv.iter().any(|a| a == "--ocr-worker") {
             let fast = argv.iter().any(|a| a == "--fast");
-            ai::ocr_worker::run_worker(fast);
+            let parent_pid = argv
+                .iter()
+                .position(|a| a == "--parent-pid")
+                .and_then(|i| argv.get(i + 1))
+                .and_then(|s| s.parse().ok());
+            ai::ocr_worker::run_worker(fast, parent_pid);
         }
     }
 
