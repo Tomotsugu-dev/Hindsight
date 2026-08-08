@@ -167,7 +167,11 @@ impl ExternalChatClient {
         body: &serde_json::Value,
     ) -> Result<(String, ChatUsage)> {
         const RETRY_MAX: u32 = 5;
+        /// 传输层瞬断的重试上限。真格式不兼容也会走到这（分不开）,
+        /// 两次白试的代价可接受;真瞬断两次内基本恢复（实测 4 秒后即成功）。
+        const TRANSIENT_MAX: u32 = 2;
         let mut attempt = 0u32;
+        let mut transient = 0u32;
         loop {
             let mut req = self.http.post(url).json(body);
             if !self.api_key.trim().is_empty() {
@@ -175,6 +179,18 @@ impl ExternalChatClient {
             }
             match send_and_classify(req, Instant::now()).await {
                 SendOutcome::Done(r) => return r,
+                SendOutcome::Transient(e) => {
+                    transient += 1;
+                    if transient > TRANSIENT_MAX {
+                        return Err(e);
+                    }
+                    let wait = Duration::from_secs(2 * u64::from(transient));
+                    log::warn!(
+                        "云端 API 传输层瞬断（第 {transient}/{TRANSIENT_MAX} 次）：{e}；{}s 后原样重试",
+                        wait.as_secs()
+                    );
+                    tokio::time::sleep(wait).await;
+                }
                 SendOutcome::RateLimited(retry_after) => {
                     attempt += 1;
                     if attempt > RETRY_MAX {
@@ -330,6 +346,9 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
         SendOutcome::RateLimited(_) => Err(Error::LlmResponse(
             "服务返回 429 Too Many Requests".to_string(),
         )),
+        // 本地路径重建不了请求（RequestBuilder 一次性），瞬断当普通错误返回；
+        // 本地 llama-server 也基本不存在"连接中途被掐"这回事
+        SendOutcome::Transient(e) => Err(e),
     }
 }
 
@@ -339,15 +358,37 @@ enum SendOutcome {
     Done(Result<(String, ChatUsage)>),
     /// 服务端 429：附 Retry-After 头解析出的等待时长（没给则 None）
     RateLimited(Option<Duration>),
+    /// 传输层瞬时故障（连接建立失败 / 响应体中途被掐）：同一请求原样重试
+    /// 大概率成功——实测 deepseek 晚高峰连续两段失败、4 秒后第三段成功。
+    /// 超时不算：客户端超时本身已等了很久，翻倍重试只会把卡顿放大。
+    Transient(Error),
+}
+
+/// reqwest 错误的 Display 只给最外层（如 "error decoding response body"），
+/// 真实原因（连接被重置 / JSON 语法错在哪）全藏在 source 链里——排障靠它。
+pub(crate) fn error_chain(e: &dyn std::error::Error) -> String {
+    let mut s = e.to_string();
+    let mut cur = e.source();
+    while let Some(c) = cur {
+        s.push_str(" ← ");
+        s.push_str(&c.to_string());
+        cur = c.source();
+    }
+    s
 }
 
 async fn send_and_classify(req: RequestBuilder, t0: Instant) -> SendOutcome {
     let resp = match req.send().await {
         Ok(r) => r,
         Err(e) => {
-            return SendOutcome::Done(Err(Error::LlmResponse(
-                crate::commands::ai_endpoint::fmt_send_err(e),
-            )))
+            // 连接建立失败是秒级失败，重试便宜；超时已经等满时限，不重试。
+            let transient = e.is_connect() && !e.is_timeout();
+            let err = Error::LlmResponse(crate::commands::ai_endpoint::fmt_send_err(e));
+            return if transient {
+                SendOutcome::Transient(err)
+            } else {
+                SendOutcome::Done(Err(err))
+            };
         }
     };
 
@@ -361,15 +402,6 @@ async fn send_and_classify(req: RequestBuilder, t0: Instant) -> SendOutcome {
             .map(Duration::from_secs);
         return SendOutcome::RateLimited(retry_after);
     }
-    SendOutcome::Done(parse_response(resp, status, t0).await)
-}
-
-/// 非 429 的常规收尾：非 2xx 报错；2xx 解析 OpenAI 兼容响应。
-async fn parse_response(
-    resp: reqwest::Response,
-    status: reqwest::StatusCode,
-    t0: Instant,
-) -> Result<(String, ChatUsage)> {
     if !status.is_success() {
         let preview: String = resp
             .text()
@@ -378,14 +410,34 @@ async fn parse_response(
             .chars()
             .take(200)
             .collect();
-        return Err(Error::LlmResponse(format!("服务返回 {status}：{preview}")));
+        return SendOutcome::Done(Err(Error::LlmResponse(format!(
+            "服务返回 {status}：{preview}"
+        ))));
     }
 
-    let parsed: ChatResp = resp
-        .json()
-        .await
-        .map_err(|e| Error::LlmResponse(format!("响应不是 OpenAI 兼容格式：{e}")))?;
+    // 2xx 的响应体读取 + 解析。这一步失败的主要形态是**传输层瞬断**
+    // （连接被服务端/中间层中途掐掉，reqwest 报 "error decoding response body"，
+    // 真正的 JSON 不兼容反而罕见）——实测 deepseek 晚高峰连续失败后紧接着
+    // 同模型成功。归入 Transient 让上层原样重试；超时除外（已等满时限）。
+    // 错误文本带完整原因链：外层 Display 只说"解码失败"，掐连接还是格式错
+    // 全靠 source 链区分。
+    let parsed: ChatResp = match resp.json().await {
+        Ok(p) => p,
+        Err(e) => {
+            let timeout = e.is_timeout();
+            let err = Error::LlmResponse(format!("响应体读取/解析失败：{}", error_chain(&e)));
+            return if timeout {
+                SendOutcome::Done(Err(err))
+            } else {
+                SendOutcome::Transient(err)
+            };
+        }
+    };
+    SendOutcome::Done(parse_response(parsed, t0))
+}
 
+/// 2xx 且响应体已解析后的常规收尾：取首个 choice、算 usage、空内容分类报错。
+fn parse_response(parsed: ChatResp, t0: Instant) -> Result<(String, ChatUsage)> {
     let usage = ChatUsage {
         latency_ms: t0.elapsed().as_millis() as u64,
         prompt_tokens: parsed.usage.as_ref().map(|u| u.prompt_tokens),
@@ -482,4 +534,33 @@ struct ChatMessage {
     /// 思考链占满 max_tokens 时 content 为空、reasoning_content 非空——典型征兆。
     #[serde(default)]
     reasoning_content: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// error_chain 必须逐层展开 source:reqwest 的 "error decoding response body"
+    /// 外层信息为零,真实原因(连接被掐 / serde 语法错)全在链的深处——
+    /// 8 月初 deepseek 晚高峰的间歇失败正是因为看不到链才拖了一周没定位。
+    #[test]
+    fn error_chain_walks_sources() {
+        #[derive(Debug)]
+        struct Outer(std::io::Error);
+        impl std::fmt::Display for Outer {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "error decoding response body")
+            }
+        }
+        impl std::error::Error for Outer {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+        let e = Outer(std::io::Error::other("connection reset by peer"));
+        let s = error_chain(&e);
+        assert!(s.contains("error decoding response body"), "{s}");
+        assert!(s.contains(" ← "), "缺链接符:{s}");
+        assert!(s.contains("connection reset by peer"), "缺底层原因:{s}");
+    }
 }

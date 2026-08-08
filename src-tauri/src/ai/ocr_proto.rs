@@ -94,7 +94,9 @@ pub struct WireMsg {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrCode {
-    /// 图片读不出来(损坏/半写入/0 尺寸)
+    /// 确定可归责这张图的问题:读不出来(损坏/半写入/0 尺寸),或内容令
+    /// 检测器输出异常触发熔断(框数 DET_MAX_BOXES / 单元数 REC_MAX_UNITS,
+    /// 见 ocr.rs)
     Decode,
     /// 引擎推理失败(这一张的问题)
     Engine,

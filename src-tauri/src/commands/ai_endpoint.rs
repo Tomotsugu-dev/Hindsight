@@ -78,7 +78,14 @@ pub async fn test_ai_endpoint(
 
     let parsed: ModelsResp = match resp.json().await {
         Ok(p) => p,
-        Err(e) => return Ok(fail(&format!("响应不是 OpenAI 兼容格式：{e}"))),
+        // 带原因链：外层 Display 只说"解码失败"，连接被掐还是 JSON 格式错
+        // 全在 source 链里，测试端点正是给用户排障用的
+        Err(e) => {
+            return Ok(fail(&format!(
+                "响应体读取/解析失败：{}",
+                crate::ai::llm::error_chain(&e)
+            )))
+        }
     };
 
     // 500:够住 OpenRouter 这类聚合站的全目录;"拉取模型"下拉与测试

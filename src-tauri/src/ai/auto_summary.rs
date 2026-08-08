@@ -29,6 +29,9 @@ use crate::storage::{DbPool, SqliteResultExt};
 const FIRST_CHECK_DELAY_SECS: u64 = 120;
 /// 常规检查间隔(秒)。目标是"日/周结束后不久自动补上",半小时粒度足够。
 const CHECK_GAP_SECS: u64 = 30 * 60;
+/// 设定时间点过后多久醒来检查(秒)。醒得太贴点,同分钟内 now >= t
+/// 可能差几秒;90s 稳过点,又不至于让用户觉得"到点没动静"。
+const POINT_WAKE_BUFFER_SECS: u64 = 90;
 
 /// 后台调度任务。app 退出时随进程终止,无需显式停止。
 pub fn spawn(app: AppHandle) {
@@ -39,9 +42,44 @@ pub fn spawn(app: AppHandle) {
             if let Err(e) = check_once(&app, &mut attempted).await {
                 log::debug!("自动总结本轮跳过: {e}");
             }
-            tokio::time::sleep(std::time::Duration::from_secs(CHECK_GAP_SECS)).await;
+            let gap = next_gap_secs(&app).await;
+            tokio::time::sleep(std::time::Duration::from_secs(gap)).await;
         }
     });
+}
+
+/// 下一轮检查前的睡眠秒数。常规 30 分钟;但若某个设定时间点更近,就睡到
+/// 该点过后 [`POINT_WAKE_BUFFER_SECS`] 再查——纯 30 分钟盲睡叠加每轮生成
+/// 耗时的漂移,实测能把 23:00 的设定点拖到 23:30 才触发(用户 23:19 来问
+/// "怎么还没动")。读设置失败或尽快模式(无设定点)回落常规间隔。
+async fn next_gap_secs(app: &AppHandle) -> u64 {
+    let pool = app.state::<DbPool>();
+    let Ok(cfg) = settings::load(&pool).await else {
+        return CHECK_GAP_SECS;
+    };
+    if !cfg.ai.auto_summary {
+        return CHECK_GAP_SECS;
+    }
+    match secs_until_next_point(Local::now(), &cfg.ai.effective_auto_summary_times()) {
+        Some(d) => (d + POINT_WAKE_BUFFER_SECS).clamp(60, CHECK_GAP_SECS),
+        None => CHECK_GAP_SECS,
+    }
+}
+
+/// 距下一个设定时间点的秒数;点在今天已过则算到明天同一点。
+/// 空表 / 全坏格式返回 None(尽快模式)。
+fn secs_until_next_point(now: chrono::DateTime<Local>, times: &[String]) -> Option<u64> {
+    times
+        .iter()
+        .filter_map(|raw| chrono::NaiveTime::parse_from_str(raw.trim(), "%H:%M").ok())
+        .map(|t| {
+            let mut delta = (now.date_naive().and_time(t) - now.naive_local()).num_seconds();
+            if delta <= 0 {
+                delta += 86_400;
+            }
+            delta as u64
+        })
+        .min()
 }
 
 async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<()> {
@@ -298,6 +336,34 @@ mod tests {
         assert!(any_point_due(t(23, 0), &v(&["12:00", "23:00"])));
         assert!(!any_point_due(t(12, 0), &v(&["25:99"])));
         assert!(any_point_due(t(9, 30), &v(&[" 09:30 "])));
+    }
+
+    /// secs_until_next_point:点前给到点差值(轮询据此收紧),点后滚到
+    /// 明天,多点取最近,空表/坏格式回 None(尽快模式保持 30 分钟常规间隔)。
+    #[test]
+    fn secs_until_next_point_math() {
+        use chrono::TimeZone;
+        let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let at = |h, m| chrono::Local.with_ymd_and_hms(2026, 8, 8, h, m, 0).unwrap();
+
+        // 22:30 → 23:00 点差 30 分钟
+        assert_eq!(
+            secs_until_next_point(at(22, 30), &v(&["23:00"])),
+            Some(1800)
+        );
+        // 23:10 → 今天的点已过,滚到明天 23:00
+        assert_eq!(
+            secs_until_next_point(at(23, 10), &v(&["23:00"])),
+            Some(24 * 3600 - 600)
+        );
+        // 多点取最近的
+        assert_eq!(
+            secs_until_next_point(at(11, 0), &v(&["12:00", "23:00"])),
+            Some(3600)
+        );
+        // 空表 / 坏格式 = 尽快模式
+        assert_eq!(secs_until_next_point(at(11, 0), &[]), None);
+        assert_eq!(secs_until_next_point(at(11, 0), &v(&["25:99"])), None);
     }
 
     /// due_unsatisfied_points:账本(当天日报 generated_at)判定——
