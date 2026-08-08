@@ -33,8 +33,11 @@ pub struct ChatUsage {
 const CHAT_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// 外部 API（OpenAI / DeepSeek / OpenRouter…）超时。
-/// 云端文本聊天一般 5-30s 完，给 90s 容忍偶发慢响应 + 网络抖动。
-const EXTERNAL_CHAT_TIMEOUT: Duration = Duration::from_secs(90);
+/// 本客户端生产路径只有**后台批任务**(段总结/日报周报)在用,不服务交互聊天,
+/// 等得起。曾设 90s:深夜段这类大内容段在 deepseek 晚高峰经常生成超过 90s,
+/// 连续多晚在 ~90s 整被本端掐断报"响应体读取/解析失败 ← operation timed out"
+/// (失败行与前一行 generated_at 恰差 90-99s 是判据)。300s 给长段留足余量。
+const EXTERNAL_CHAT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// llama-server 的 chat 客户端。
 #[derive(Clone)]
@@ -358,9 +361,10 @@ enum SendOutcome {
     Done(Result<(String, ChatUsage)>),
     /// 服务端 429：附 Retry-After 头解析出的等待时长（没给则 None）
     RateLimited(Option<Duration>),
-    /// 传输层瞬时故障（连接建立失败 / 响应体中途被掐）：同一请求原样重试
-    /// 大概率成功——实测 deepseek 晚高峰连续两段失败、4 秒后第三段成功。
-    /// 超时不算：客户端超时本身已等了很久，翻倍重试只会把卡顿放大。
+    /// 传输层瞬时故障（连接建立失败 / 响应体中途被掐 / 响应体读取超时）：
+    /// 同一请求原样重试大概率成功——实测 deepseek 晚高峰段总结失败后,
+    /// 4 秒后的下一次调用即成功。响应体阶段的超时也算瞬断:本客户端只跑
+    /// 后台批任务,多等一轮比让当天的段落空更值;发送阶段的超时仍不重试。
     Transient(Error),
 }
 
@@ -424,13 +428,10 @@ async fn send_and_classify(req: RequestBuilder, t0: Instant) -> SendOutcome {
     let parsed: ChatResp = match resp.json().await {
         Ok(p) => p,
         Err(e) => {
-            let timeout = e.is_timeout();
-            let err = Error::LlmResponse(format!("响应体读取/解析失败：{}", error_chain(&e)));
-            return if timeout {
-                SendOutcome::Done(Err(err))
-            } else {
-                SendOutcome::Transient(err)
-            };
+            return SendOutcome::Transient(Error::LlmResponse(format!(
+                "响应体读取/解析失败：{}",
+                error_chain(&e)
+            )));
         }
     };
     SendOutcome::Done(parse_response(parsed, t0))
