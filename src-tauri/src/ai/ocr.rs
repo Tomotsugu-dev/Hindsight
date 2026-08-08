@@ -467,12 +467,7 @@ impl PaddleEngine {
             t_post.elapsed().as_millis()
         );
         let (rx, ry) = (ow as f32 / tw as f32, oh as f32 / th as f32);
-        for b in &mut boxes {
-            b.x0 = ((b.x0 as f32) * rx) as u32;
-            b.x1 = (((b.x1 as f32) * rx) as u32).min(ow - 1);
-            b.y0 = ((b.y0 as f32) * ry) as u32;
-            b.y1 = (((b.y1 as f32) * ry) as u32).min(oh - 1);
-        }
+        map_boxes_to_original(&mut boxes, rx, ry, ow, oh);
         sort_reading_order(&mut boxes);
         Ok(boxes)
     }
@@ -606,7 +601,13 @@ fn simd_resize_rgb(rgb: &RgbImage, tw: u32, th: u32) -> Result<RgbImage> {
 fn prepare_units(rgb: &RgbImage, boxes: &[TextBox]) -> Vec<RecUnit> {
     let mut units = Vec::with_capacity(boxes.len());
     for (box_idx, b) in boxes.iter().enumerate() {
-        let (w, h) = (b.x1 - b.x0 + 1, b.y1 - b.y0 + 1);
+        // 防御:反转框(上游几何 bug 的形态)在 u32 减法里会静默下溢成
+        // 几十亿的"宽",一个框就能切出 85 万段(issue #26)。这里不信任几何,
+        // checked 减法兜底——即使 map_boxes_to_original 之外再冒出新的来源。
+        let (Some(w), Some(h)) = (b.x1.checked_sub(b.x0), b.y1.checked_sub(b.y0)) else {
+            continue;
+        };
+        let (w, h) = (w + 1, h + 1);
         if w < 4 || h < 4 {
             continue;
         }
@@ -674,6 +675,22 @@ fn prob_map_to_boxes(prob: &[f32], w: usize, h: usize) -> Vec<TextBox> {
         });
     }
     boxes
+}
+
+/// det 概率图坐标 → 原图坐标。概率图按 /128 补白,检测响应可能落在补白区
+/// (大面积渐变/纹理图上实测会发生),映射后坐标越出原图:四个坐标全部
+/// 钳回图内,钳完反转(x0≥x1 / y0≥y1)的框整个丢弃——它不对应图内内容。
+/// 只钳 x1/y1 曾让整框在图外的响应以 x0>x1 的反转形态溜进 prepare_units,
+/// u32 减法下溢出 42.9 亿的"宽",一帧切出 85.9 万个识别单元,Windows 上
+/// 20 秒吃穿 40GB 提交上限(issue #26 毒帧,11 框中 1 框反转)。
+fn map_boxes_to_original(boxes: &mut Vec<TextBox>, rx: f32, ry: f32, ow: u32, oh: u32) {
+    for b in boxes.iter_mut() {
+        b.x0 = (((b.x0 as f32) * rx) as u32).min(ow - 1);
+        b.x1 = (((b.x1 as f32) * rx) as u32).min(ow - 1);
+        b.y0 = (((b.y0 as f32) * ry) as u32).min(oh - 1);
+        b.y1 = (((b.y1 as f32) * ry) as u32).min(oh - 1);
+    }
+    boxes.retain(|b| b.x1 > b.x0 && b.y1 > b.y0);
 }
 
 fn neighbors4(x: usize, y: usize, w: usize, h: usize) -> impl Iterator<Item = usize> {
@@ -817,6 +834,61 @@ mod tests {
             "块阵应产生 1600 框(> 熔断线 {DET_MAX_BOXES}),实际 {}",
             boxes.len()
         );
+    }
+
+    /// issue #26 毒帧根因回归:检测响应落在概率图补白区 → 映射后框在原图之外。
+    /// 只钳 x1/y1 的旧实现让它以 x0=1376 > x1=1327 的反转形态存活(真实毒帧
+    /// 框 6 的实测坐标),u32 下溢后被切成 85.9 万段。四钳 + retain 后:
+    /// 图外框丢弃、越界框钳回、正常框原样。
+    #[test]
+    fn map_boxes_clamps_padding_and_drops_out_of_image() {
+        let mut boxes = vec![
+            TextBox {
+                x0: 1376,
+                y0: 193,
+                x1: 1500,
+                y1: 267,
+            }, // 整框在图外 → 丢弃
+            TextBox {
+                x0: 100,
+                y0: 10,
+                x1: 1400,
+                y1: 50,
+            }, // 右缘越界 → 钳回
+            TextBox {
+                x0: 5,
+                y0: 5,
+                x1: 60,
+                y1: 30,
+            }, // 正常 → 原样
+        ];
+        map_boxes_to_original(&mut boxes, 1.0, 1.0, 1328, 826);
+        assert_eq!(boxes.len(), 2, "图外框必须整个丢弃");
+        assert_eq!((boxes[0].x0, boxes[0].x1), (100, 1327), "越界只钳不丢");
+        assert_eq!((boxes[1].x0, boxes[1].x1), (5, 60));
+    }
+
+    /// 纵深防御:即使上游再冒出新的几何 bug,反转框在 prepare_units 必须被
+    /// 跳过,而不是 u32 减法下溢(release 静默出几十亿的宽,debug 直接 panic
+    /// ——正因如此这条路径从未被既有测试踩到)。
+    #[test]
+    fn prepare_units_skips_inverted_box_without_underflow() {
+        let rgb = RgbImage::from_pixel(100, 100, image::Rgb([200, 200, 200]));
+        let boxes = vec![
+            TextBox {
+                x0: 90,
+                y0: 10,
+                x1: 20,
+                y1: 40,
+            }, // x 反转
+            TextBox {
+                x0: 10,
+                y0: 80,
+                x1: 40,
+                y1: 20,
+            }, // y 反转
+        ];
+        assert!(prepare_units(&rgb, &boxes).is_empty());
     }
 
     /// 真模型冒烟:需要 `<data_root>/ai/ocr/` 三件套 + onnxruntime 已安装。
