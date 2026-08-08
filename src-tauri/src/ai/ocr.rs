@@ -52,6 +52,13 @@ fn det_limit_side(tier: RecTier) -> u32 {
 const DET_THRESH: f32 = 0.3;
 const DET_BOX_THRESH: f32 = 0.6;
 const DET_UNCLIP: f32 = 1.5;
+/// det 输出框数熔断线。真实屏幕文字至多几百行(4K 全屏小字号终端 ~200 行,
+/// 密集表格几百行),超过它几乎必然是检测器对大面积纹理的误检爆炸——
+/// 实测一张 1328×826 的游戏海面截图(细密波纹)误检出的框让 prepare_units
+/// 裁出数十 GB 条带(单条最大 48×REC_MAX_W×3 ≈ 460KB),20 秒吃穿系统
+/// 提交上限拖死整机(issue #26)。超限按帧级错误处理而不是截断识别:
+/// 框全是噪声时"识别前 N 个"只会往索引里灌垃圾文本。
+const DET_MAX_BOXES: usize = 1000;
 /// rec 输入高;宽 = 高 × 纵横比,超过上限的超长行切段识别
 const REC_H: u32 = 48;
 const REC_MAX_W: u32 = 3200;
@@ -447,6 +454,14 @@ impl PaddleEngine {
         // 概率图 → 连通域 → 框(概率图按 pad 后尺寸索引);再按实际内容区映射回原图坐标
         let t_post = std::time::Instant::now();
         let mut boxes = prob_map_to_boxes(&prob, pw as usize, ph as usize);
+        // 误检爆炸熔断:必须在 prepare_units 裁条带之前拦下,框数无界 = 内存无界。
+        // 错误文本是 wire_code 的帧级分级标记,改措辞必须同步 ocr_worker.rs。
+        if boxes.len() > DET_MAX_BOXES {
+            return Err(Error::Ocr(format!(
+                "检测框数量异常: {} 框(熔断线 {DET_MAX_BOXES}),疑似大面积纹理误检",
+                boxes.len()
+            )));
+        }
         log::debug!(
             "det 分段: resize {resize_ms}ms + norm {norm_ms}ms + infer {infer_ms}ms + post {}ms",
             t_post.elapsed().as_millis()
@@ -776,6 +791,32 @@ mod tests {
         let boxes = prob_map_to_boxes(&prob, w, h);
         assert_eq!(boxes.len(), 2);
         assert!(boxes[0].x1 < boxes[1].x0);
+    }
+
+    /// 熔断线的存在依据:细碎纹理(水面波纹/噪点)在概率图上呈大量互不相连的
+    /// 高响应小块,连通域数量轻松破千——每框在 prepare_units 各裁一条最大
+    /// 48×REC_MAX_W×3 ≈ 460KB 的条带,无熔断时即 OOM(issue #26)。
+    /// 这里用 4×4 块阵模拟纹理响应,验证框数确实能远超 DET_MAX_BOXES。
+    #[test]
+    fn prob_map_texture_flood_exceeds_cap() {
+        let (w, h) = (200, 200);
+        let mut prob = vec![0f32; w * h];
+        // 每 5px 周期铺一个 4×4 高响应块:过 bw/bh≥3 与均值分双重过滤
+        for by in 0..40 {
+            for bx in 0..40 {
+                for dy in 0..4 {
+                    for dx in 0..4 {
+                        prob[(by * 5 + dy) * w + bx * 5 + dx] = 0.9;
+                    }
+                }
+            }
+        }
+        let boxes = prob_map_to_boxes(&prob, w, h);
+        assert!(
+            boxes.len() > DET_MAX_BOXES,
+            "块阵应产生 1600 框(> 熔断线 {DET_MAX_BOXES}),实际 {}",
+            boxes.len()
+        );
     }
 
     /// 真模型冒烟:需要 `<data_root>/ai/ocr/` 三件套 + onnxruntime 已安装。
