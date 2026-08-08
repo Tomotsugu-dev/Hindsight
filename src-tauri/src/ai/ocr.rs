@@ -59,6 +59,11 @@ const DET_UNCLIP: f32 = 1.5;
 /// 提交上限拖死整机(issue #26)。超限按帧级错误处理而不是截断识别:
 /// 框全是噪声时"识别前 N 个"只会往索引里灌垃圾文本。
 const DET_MAX_BOXES: usize = 1000;
+/// prepare_units 输出的单元数熔断线(纵深防御)。正常截图几十~几百单元,
+/// 4K 密集表格加超长行切段也只到几千;上万几乎必然是上游几何异常。
+/// DET_MAX_BOXES 拦"框多",这里拦"框少但每框被切成海量段"——issue #26
+/// 的毒帧正是后者:11 框 → 85.9 万单元,框数熔断根本不触发。
+const REC_MAX_UNITS: usize = 10_000;
 /// rec 输入高;宽 = 高 × 纵横比,超过上限的超长行切段识别
 const REC_H: u32 = 48;
 const REC_MAX_W: u32 = 3200;
@@ -334,6 +339,15 @@ impl PaddleEngine {
         // 识别单元 = 一条 48 高的行图(超长行切成多段,段序拼回)
         let t_rec = std::time::Instant::now();
         let units = prepare_units(&rgb, &boxes);
+        // 单元数熔断:框数正常也可能切出海量段(几何异常),必须在 rec 批循环
+        // 吃内存/耗时之前拦下。错误文本是 wire_code 的帧级分级标记,
+        // 改措辞必须同步 ocr_worker.rs。
+        if units.len() > REC_MAX_UNITS {
+            return Err(Error::Ocr(format!(
+                "识别单元数量异常: {} 单元(熔断线 {REC_MAX_UNITS}),疑似检测框几何异常",
+                units.len()
+            )));
+        }
         let crop_ms = t_rec.elapsed().as_millis();
         let mut tm = RecTiming::default();
         let mut texts: Vec<String> = vec![String::new(); units.len()];

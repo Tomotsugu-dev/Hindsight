@@ -119,13 +119,14 @@ impl Watchdog {
 fn wire_code(e: &Error) -> ErrCode {
     match e {
         Error::EmbeddingRuntimeMissing => ErrCode::RuntimeMissing,
-        // "检测框数量异常" = det 误检爆炸熔断(ocr.rs):虽发生在推理后,但归责
-        // 与解码失败同路——确定是这张图的问题,必须烧帧,否则毒帧无限重试
-        // 堵死整个队列(issue #26 的第二半)。
+        // "检测框数量异常"/"识别单元数量异常" = ocr.rs 的两道熔断(框数爆炸 /
+        // 几何异常切出海量段):虽发生在推理后,但归责与解码失败同路——确定是
+        // 这张图的问题,必须烧帧,否则毒帧无限重试堵死整个队列(issue #26)。
         Error::Ocr(s)
             if s.contains("读图失败")
                 || s.contains("zero-dimension")
-                || s.contains("检测框数量异常") =>
+                || s.contains("检测框数量异常")
+                || s.contains("识别单元数量异常") =>
         {
             ErrCode::Decode
         }
@@ -395,6 +396,19 @@ mod tests {
             wire_code(&e),
             ErrCode::Decode,
             "误检爆炸 → 帧级,烧预算后放行队列"
+        );
+    }
+
+    /// 单元数熔断(ocr.rs 的 REC_MAX_UNITS)同样必须帧级归责——issue #26 的
+    /// 毒帧只有 11 框,框数熔断不触发,拦住它的正是这道。归成设施级就会
+    /// 无限重试堵死队列。钉 wire_code 的文本标记,ocr.rs 改措辞在这里断。
+    #[test]
+    fn unit_flood_fuse_graded_as_frame_level() {
+        let e = Error::Ocr("识别单元数量异常: 859004 单元(熔断线 10000),疑似检测框几何异常".into());
+        assert_eq!(
+            wire_code(&e),
+            ErrCode::Decode,
+            "几何异常爆炸 → 帧级,烧预算后放行队列"
         );
     }
 
