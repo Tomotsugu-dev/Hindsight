@@ -6,7 +6,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::capture::{browser_url, privacy, screenshot, window};
+use crate::capture::{browser_url, ignore, privacy, screenshot, window};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
@@ -122,6 +122,9 @@ struct Inner {
     /// 屏幕活跃探测状态（挂机第二信号）。锁顺序：叶子锁，可在持有 `current`
     /// 时获取，反向禁止。
     keepawake: Mutex<KeepawakeProbe>,
+    /// 忽略规则：命中的活动行 `excluded = 1`（照常入库/截图，仅不计入统计）。
+    /// 锁顺序：叶子锁，可在持有 `current` 时获取，反向禁止（同 keepawake）。
+    ignore_rules: Mutex<Vec<ignore::IgnoreRule>>,
     /// 上一次 tick 的墙钟时刻——睡眠 gap 检测用。系统睡眠期间 tick 循环不跑
     /// （`Instant` 在 macOS 还会暂停计时），若两次 tick 的墙钟间隔远超轮询周期，
     /// 说明机器睡过去了：当前会话必须按"最后已知活跃时刻"（= 上次 tick）封口，
@@ -161,6 +164,7 @@ impl CaptureService {
                 idle_threshold_secs: Mutex::new(180),
                 current: Mutex::new(None),
                 keepawake: Mutex::new(KeepawakeProbe::default()),
+                ignore_rules: Mutex::new(Vec::new()),
                 last_tick_at: Mutex::new(None),
             }),
         }
@@ -285,6 +289,12 @@ impl CaptureService {
     /// 更新挂机阈值（秒）。0 = 关闭检测。设置页改完由命令层调一次。
     pub async fn set_idle_threshold(&self, secs: u32) {
         *self.inner.idle_threshold_secs.lock().await = secs.min(3600);
+    }
+
+    /// 全量替换忽略规则。规则增删后由 commands 层调一次同步，新会话即时生效；
+    /// 历史行的标记由 [`activities::reapply_ignore_rules`] 单独重算。
+    pub async fn set_ignore_rules(&self, rules: Vec<ignore::IgnoreRule>) {
+        *self.inner.ignore_rules.lock().await = rules;
     }
 
     /// 更新隐私关键词。设置页改完后由命令层调一次。
@@ -600,7 +610,13 @@ async fn tick(inner: &Inner) -> Result<()> {
                 log::warn!("帧登记失败 ({path}): {e}");
             }
         }
-        let id = activities::insert_new(&inner.pool, &info, now, shot).await?;
+        // 忽略规则：命中的行照常入库（截图/OCR 不受影响），仅打 excluded 标记，
+        // 统计/报表/AI 总结一律跳过。叶子锁（同 keepawake），持 current 时可取。
+        let excluded = {
+            let rules = inner.ignore_rules.lock().await;
+            ignore::is_excluded(&info.app_name, &info.title, &rules)
+        };
+        let id = activities::insert_new(&inner.pool, &info, now, shot, excluded).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
         if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {
             log::warn!("ensure_group 失败 ({}): {e}", info.app_name);

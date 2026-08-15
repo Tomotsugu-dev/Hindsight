@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ai::config::AiConfig;
+use crate::capture::ignore::IgnoreRule;
 use crate::error::Result;
 use crate::storage::SqliteResultExt;
 use crate::storage::{db_path_dir, DbPool};
@@ -94,6 +95,11 @@ pub struct Settings {
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
+    /// 忽略规则：进程 + 标题命中的活动行打 `excluded = 1`——记录/截图/OCR 照常，
+    /// 仅从时长统计、报表、AI 总结与 chat 统计中剔除（语义同内建 hidden 分类，
+    /// 粒度细到窗口标题）。标记与规则都是本机独立的，不参与同步；写路径只有
+    /// add_ignore_rule / remove_ignore_rule 两个命令，不走 SettingsPatch。
+    pub ignore_rules: Vec<IgnoreRule>,
 }
 
 impl Settings {
@@ -139,6 +145,7 @@ impl Default for Settings {
             sync_chat_history: false,
             sync_screen_memory: false,
             ai: AiConfig::default(),
+            ignore_rules: Vec::new(),
         }
     }
 }
@@ -406,6 +413,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .ai
             .map(|new_ai| crate::ai::config::sanitize(new_ai, &current.ai))
             .unwrap_or(current.ai),
+        // ignore_rules 不走 patch：唯一写路径是 add/remove_ignore_rule 两个命令，
+        // 避免设置页整包保存与就地添加互相覆盖
+        ignore_rules: current.ignore_rules,
     }
 }
 
@@ -562,6 +572,17 @@ mod tests {
                 summary_ctx_size: Some(4096),
                 ..AiConfig::default()
             },
+            // 两种形态都走一遍往返：带标题关键词 + 整进程（title_keyword: None）
+            ignore_rules: vec![
+                IgnoreRule {
+                    process_name: "Windows Terminal Host".into(),
+                    title_keyword: Some("Download videos".into()),
+                },
+                IgnoreRule {
+                    process_name: "SomeDownloader".into(),
+                    title_keyword: None,
+                },
+            ],
         };
 
         save(&pool, &custom).await.unwrap();

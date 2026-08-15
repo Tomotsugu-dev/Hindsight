@@ -482,7 +482,12 @@
   },
   "appDetail": {
     "loading": "Loading…",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "ignore": {
+      "button": "Exclude this window from stats",
+      "done": "Ignored — {{count}} past records excluded",
+      "undo": "Undo"
+    }
   },
   "today": {
     "title": "Daily",
@@ -626,6 +631,13 @@
   },
   "apps": {
     "title": "Apps",
+    "ignored": {
+      "title": "Ignored windows",
+      "hint": "Still recorded and captured — just left out of stats; remove to restore. Rules apply to this device only",
+      "wholeApp": "Entire app",
+      "remove": "Remove rule",
+      "removed": "Removed — {{count}} records restored"
+    },
     "filter": {
       "searchPlaceholder": "Search app or process name",
       "categoryTrigger": "Category",

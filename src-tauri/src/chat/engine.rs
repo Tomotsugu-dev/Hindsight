@@ -756,7 +756,7 @@ mod loop_tests {
              started_at TEXT, ended_at TEXT, duration_secs INTEGER,
              local_date TEXT, local_hour INTEGER,
              process_name TEXT, window_title TEXT, screenshot_path TEXT,
-             category_id TEXT);
+             category_id TEXT, excluded INTEGER NOT NULL DEFAULT 0);
          CREATE TABLE app_group_members (
              process_name TEXT, group_id TEXT, deleted_at TEXT);
          CREATE TABLE app_groups (
@@ -926,7 +926,7 @@ mod loop_tests {
             true,
             "INSERT INTO activities VALUES(
                  '2026-07-08T09:00:00+09:00','2026-07-08T10:30:00+09:00',5400,
-                 '2026-07-08',9,'Cursor','engine.rs — Hindsight','','');",
+                 '2026-07-08',9,'Cursor','engine.rs — Hindsight','','',0);",
         )
         .await;
         let (port, log) = spawn_scripted_openai(vec![

@@ -482,7 +482,12 @@
   },
   "appDetail": {
     "loading": "読み込み中…",
-    "untitled": "無題"
+    "untitled": "無題",
+    "ignore": {
+      "button": "このウィンドウを統計から除外",
+      "done": "除外しました — 過去の記録 {{count}} 件を統計から外しました",
+      "undo": "元に戻す"
+    }
   },
   "today": {
     "title": "日次",
@@ -626,6 +631,13 @@
   },
   "apps": {
     "title": "アプリ",
+    "ignored": {
+      "title": "除外中のウィンドウ",
+      "hint": "記録とスクリーンショットは通常どおり、統計にだけ含まれません。削除すれば元に戻ります（このデバイスのみ有効）",
+      "wholeApp": "アプリ全体",
+      "remove": "ルールを削除",
+      "removed": "削除しました — {{count}} 件の記録を統計に戻しました"
+    },
     "filter": {
       "searchPlaceholder": "アプリ名 / プロセス名で検索",
       "categoryTrigger": "分類",

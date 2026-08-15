@@ -145,6 +145,7 @@ pub(crate) fn fetch_raw_rows(
            ON d.device_id = a.device_id
          WHERE a.local_date >= ?1 AND a.local_date <= ?2 {device_clause}
            AND g.category_id IS NOT 'hidden'
+           AND a.excluded = 0
          ORDER BY a.started_at
          LIMIT {}",
         RAW_ROW_CAP + 1

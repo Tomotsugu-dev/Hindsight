@@ -482,7 +482,12 @@
   },
   "appDetail": {
     "loading": "Carregando…",
-    "untitled": "Sem título"
+    "untitled": "Sem título",
+    "ignore": {
+      "button": "Ignorar esta janela nas estatísticas",
+      "done": "Ignorada — {{count}} registros antigos excluídos",
+      "undo": "Desfazer"
+    }
   },
   "today": {
     "title": "Diário",
@@ -626,6 +631,13 @@
   },
   "apps": {
     "title": "Aplicativos",
+    "ignored": {
+      "title": "Janelas ignoradas",
+      "hint": "Continuam registradas e capturadas — só ficam fora das estatísticas; remova para restaurar. Válido apenas neste dispositivo",
+      "wholeApp": "Aplicativo inteiro",
+      "remove": "Remover regra",
+      "removed": "Removida — {{count}} registros restaurados"
+    },
     "filter": {
       "searchPlaceholder": "Pesquisar nome do aplicativo ou do processo",
       "categoryTrigger": "Categoria",

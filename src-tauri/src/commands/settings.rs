@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 
+use crate::capture::ignore::IgnoreRule;
 use crate::capture::CaptureService;
 use crate::commands::screen_memory::MemoryState;
 use crate::memory::resident::ResidentOcr;
@@ -106,4 +107,110 @@ pub async fn update_settings(
     }
 
     Ok(next)
+}
+
+/// add/remove_ignore_rule 的返回：更新后的规则全集 + 本次重算改动的历史行数。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IgnoreRulesResult {
+    pub rules: Vec<IgnoreRule>,
+    /// reapply 改动的 activities 行数，前端 toast 用（"已排除 N 条历史记录"）
+    pub reapplied_rows: u64,
+}
+
+/// 新增一条忽略规则（进程 + 可选标题关键词），幂等：等价规则已存在时不重复添加。
+/// 不走 update_settings 的整包 patch——规则只有 add/remove 这一条写路，
+/// 设置页整包保存不会覆盖就地添加的规则。保存后同步 CaptureService（新会话即时
+/// 生效）并全表重算历史行的 excluded 标记（含 pull 同步来的镜像行）。
+#[tauri::command]
+pub async fn add_ignore_rule(
+    pool: State<'_, DbPool>,
+    svc: State<'_, Arc<CaptureService>>,
+    process_name: String,
+    title_keyword: Option<String>,
+) -> Result<IgnoreRulesResult, String> {
+    let process = process_name.trim().to_string();
+    if process.is_empty() {
+        return Err("进程名不能为空".into());
+    }
+    // Some("") 不静默升级成「忽略整个应用」——那是 None 的语义，必须显式传。
+    // 否则 UI 一次手滑（空输入框提交）就把整个应用从统计里排掉，且无任何提示。
+    let keyword = match title_keyword {
+        None => None,
+        Some(k) => {
+            let k = k.trim().to_string();
+            if k.is_empty() {
+                return Err("标题关键词不能为空；要忽略整个应用请传 null".into());
+            }
+            Some(k)
+        }
+    };
+    let mut cfg = settings::load(&pool).await.map_err(String::from)?;
+    let dup = cfg
+        .ignore_rules
+        .iter()
+        .any(|r| rule_eq(r, &process, keyword.as_deref()));
+    if !dup {
+        cfg.ignore_rules.push(IgnoreRule {
+            process_name: process,
+            title_keyword: keyword,
+        });
+        settings::save(&pool, &cfg).await.map_err(String::from)?;
+    }
+    finish_ignore_rules_change(&pool, &svc, cfg).await
+}
+
+/// 删除一条忽略规则（按 进程+关键词 等价匹配）。幂等：不存在时也返回成功。
+/// 删除后 reapply 会把历史行的标记清回来（可逆是 excluded 相对「不记录」的核心差异）。
+#[tauri::command]
+pub async fn remove_ignore_rule(
+    pool: State<'_, DbPool>,
+    svc: State<'_, Arc<CaptureService>>,
+    process_name: String,
+    title_keyword: Option<String>,
+) -> Result<IgnoreRulesResult, String> {
+    let process = process_name.trim().to_string();
+    let keyword = title_keyword
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty());
+    let mut cfg = settings::load(&pool).await.map_err(String::from)?;
+    let before = cfg.ignore_rules.len();
+    cfg.ignore_rules
+        .retain(|r| !rule_eq(r, &process, keyword.as_deref()));
+    if cfg.ignore_rules.len() != before {
+        settings::save(&pool, &cfg).await.map_err(String::from)?;
+    }
+    finish_ignore_rules_change(&pool, &svc, cfg).await
+}
+
+/// 规则等价比较：进程与关键词都 trim + 全 Unicode lowercase，与
+/// `ignore::is_excluded` 的匹配归一化一致——「看着一样的规则」不会因大小写重复入表。
+fn rule_eq(r: &IgnoreRule, process: &str, keyword: Option<&str>) -> bool {
+    fn norm(s: &str) -> String {
+        s.trim().to_lowercase()
+    }
+    if norm(&r.process_name) != norm(process) {
+        return false;
+    }
+    match (r.title_keyword.as_deref(), keyword) {
+        (None, None) => true,
+        (Some(a), Some(b)) => norm(a) == norm(b),
+        _ => false,
+    }
+}
+
+/// 规则增删后的共同收尾：推给采集服务（新会话即时生效）+ 全表重算历史标记。
+async fn finish_ignore_rules_change(
+    pool: &DbPool,
+    svc: &CaptureService,
+    cfg: Settings,
+) -> Result<IgnoreRulesResult, String> {
+    svc.set_ignore_rules(cfg.ignore_rules.clone()).await;
+    let reapplied = crate::repo::activities::reapply_ignore_rules(pool, &cfg.ignore_rules)
+        .await
+        .map_err(String::from)?;
+    Ok(IgnoreRulesResult {
+        rules: cfg.ignore_rules,
+        reapplied_rows: reapplied,
+    })
 }

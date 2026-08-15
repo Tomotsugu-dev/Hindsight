@@ -522,6 +522,21 @@ export interface PromptOverrides {
   systemTw: string;
 }
 
+/** 忽略规则：进程 + 标题命中的活动行不计入统计（记录/截图照常）。
+ *  与后端 capture::ignore::IgnoreRule 对齐。 */
+export interface IgnoreRule {
+  processName: string;
+  /** 窗口标题子串（忽略大小写）；null = 整个应用不计入统计 */
+  titleKeyword: string | null;
+}
+
+/** add/remove_ignore_rule 的返回：更新后的规则全集 + 本次重算改动的历史行数。 */
+export interface IgnoreRulesResult {
+  rules: IgnoreRule[];
+  /** 本次全表重算改动的 activities 行数（提示文案用） */
+  reappliedRows: number;
+}
+
 export interface Settings {
   captureEnabled: boolean;
   /** 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续 */
@@ -576,6 +591,9 @@ export interface Settings {
    *  否则 useSettings.update 的浅合并会把其他子字段擦掉，
    *  后端 #[serde(default)] 又会把缺失字段填回默认值——双重擦除。 */
   ai: AiConfig;
+  /** 忽略规则（只读展示用）：写入必须走 addIgnoreRule / removeIgnoreRule，
+   *  不要放进 updateSettings 的 patch——后端 SettingsPatch 不认这个字段。 */
+  ignoreRules: IgnoreRule[];
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -827,6 +845,12 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   updateSettings: (patch: SettingsPatch) =>
     invoke<Settings>("update_settings", { patch }),
+  /** 新增忽略规则（幂等：等价规则已存在时不重复添加）。titleKeyword=null = 忽略整个应用。 */
+  addIgnoreRule: (processName: string, titleKeyword: string | null) =>
+    invoke<IgnoreRulesResult>("add_ignore_rule", { processName, titleKeyword }),
+  /** 移除忽略规则（幂等），历史行的排除标记随之恢复。 */
+  removeIgnoreRule: (processName: string, titleKeyword: string | null) =>
+    invoke<IgnoreRulesResult>("remove_ignore_rule", { processName, titleKeyword }),
   getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
   purgeActivities: () => invoke<void>("purge_activities"),
   purgeScreenshots: () => invoke<void>("purge_screenshots"),

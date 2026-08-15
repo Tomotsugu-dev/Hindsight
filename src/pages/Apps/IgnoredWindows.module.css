@@ -1,0 +1,100 @@
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--text-strong);
+}
+
+.title {
+  font-size: 13.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice {
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.proc {
+  font-size: 13px;
+  color: var(--text-strong);
+  flex-shrink: 0;
+}
+
+.kw {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.removeBtn {
+  /* 常态隐身,hover 行才现身——同 AppDetailDrawer 的 ignoreBtn 语义 */
+  opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.row:hover .removeBtn,
+.removeBtn:focus-visible {
+  opacity: 1;
+}
+
+.removeBtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.removeBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

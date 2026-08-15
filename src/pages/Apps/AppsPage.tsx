@@ -5,6 +5,7 @@ import { api, type AppGroup } from "../../api/hindsight";
 import { logError } from "../../lib/logger";
 import { useCategories } from "../../state/categories";
 import { PairingSection } from "../Categories/PairingSection";
+import { IgnoredWindowsSection } from "./IgnoredWindowsSection";
 import categoriesStyles from "../Categories/Categories.module.css";
 import { AppsFilterBar } from "./AppsFilterBar";
 import { applyFilter } from "./filterPipeline";
@@ -135,6 +136,10 @@ export default function AppsPage() {
           />
         )}
       </section>
+
+      {/* 窗口级忽略规则(标题关键词)——与上面的应用级"隐藏"同语义不同粒度,
+          没有规则时组件自己不渲染 */}
+      <IgnoredWindowsSection />
     </>
   );
 }

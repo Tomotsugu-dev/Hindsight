@@ -323,6 +323,7 @@ pub async fn list_segment_top_apps(
                     AND a.local_hour >= ?
                     AND a.local_hour < ?
                     AND g.category_id IS NOT 'hidden'
+                    AND a.excluded = 0
                     {}
                     {}
                   GROUP BY name, cat
@@ -406,6 +407,7 @@ pub async fn list_range_top_apps(
                   WHERE a.local_date >= ?
                     AND a.local_date <= ?
                     AND g.category_id IS NOT 'hidden'
+                    AND a.excluded = 0
                     {}
                     {}
                   GROUP BY name, cat

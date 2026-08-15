@@ -5,6 +5,7 @@
 
 use chrono::{DateTime, Duration, Local, TimeZone, Timelike, Utc};
 
+use crate::capture::ignore::{self, IgnoreRule};
 use crate::capture::WindowInfo;
 use crate::device;
 use crate::error::Result;
@@ -13,11 +14,14 @@ use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 创建一条新的会话记录。device_id = self；updated_at = captured_at；
 /// **不**写 outbox —— 用户明确要求只在会话结束 (seal) 时才推到云端。
+/// `excluded`：忽略规则命中时为 true——行照常落库，仅不计入统计
+/// （本机元数据，不进 seal 的 outbox payload，不参与同步）。
 pub async fn insert_new(
     pool: &DbPool,
     info: &WindowInfo,
     captured_at: DateTime<Local>,
     screenshot_path: Option<String>,
+    excluded: bool,
 ) -> Result<i64> {
     let info = info.clone();
     let started = captured_at.to_rfc3339();
@@ -40,8 +44,8 @@ pub async fn insert_new(
                     started_at, ended_at, duration_secs,
                     local_date, local_hour,
                     process_name, window_title, category_id, screenshot_path,
-                    device_id, updated_at, origin
-                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other', ?, ?, ?, 'local')",
+                    device_id, updated_at, origin, excluded
+                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other', ?, ?, ?, 'local', ?)",
                 rusqlite::params![
                     started,
                     ended,
@@ -52,6 +56,7 @@ pub async fn insert_new(
                     screenshot_path,
                     device_id,
                     updated,
+                    excluded,
                 ],
             )
             .db()?;
@@ -171,6 +176,68 @@ pub async fn seal_session(pool: &DbPool, id: i64, final_ended_at: DateTime<Local
         })
         .await?;
     Ok(())
+}
+
+/// 忽略规则变更后全表重算 `excluded` 标记（双向：新命中置 1，不再命中清 0），
+/// 返回改动行数。匹配在 Rust 里做（与采集期 / pull 合并期同源走
+/// [`ignore::is_excluded`]），不用 SQL LIKE——通配符要转义、SQLite `lower()`
+/// 只认 ASCII，两头的大小写语义会分叉，同一行两处判出不同结果。
+/// 只改 excluded 位：不 bump updated_at、不写 outbox——标记是本机元数据，
+/// 不参与同步，动了 updated_at 反而会经 LWW 干扰对端。
+pub async fn reapply_ignore_rules(pool: &DbPool, rules: &[IgnoreRule]) -> Result<u64> {
+    let rules = rules.to_vec();
+    let changed = pool
+        .0
+        .call(move |conn| {
+            // 全表在 Rust 里算目标值：10 万行级毫秒级完成，且只在规则增删时跑一次。
+            let mut to_set: Vec<i64> = Vec::new();
+            let mut to_clear: Vec<i64> = Vec::new();
+            {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, process_name, COALESCE(window_title, ''), excluded
+                         FROM activities",
+                    )
+                    .db()?;
+                let it = stmt
+                    .query_map([], |r| {
+                        Ok((
+                            r.get::<_, i64>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, i64>(3)?,
+                        ))
+                    })
+                    .db()?;
+                for row in it {
+                    let (id, process, title, cur) = row.db()?;
+                    let want = i64::from(ignore::is_excluded(&process, &title, &rules));
+                    if want != cur {
+                        if want == 1 {
+                            to_set.push(id);
+                        } else {
+                            to_clear.push(id);
+                        }
+                    }
+                }
+            }
+            let changed = (to_set.len() + to_clear.len()) as u64;
+            let tx = conn.transaction().db()?;
+            for (flag, ids) in [(1i64, &to_set), (0i64, &to_clear)] {
+                // 按 500 一批拼 IN 列表，避开 SQLite 变量数上限（旧默认 999）
+                for chunk in ids.chunks(500) {
+                    let ph = vec!["?"; chunk.len()].join(",");
+                    let sql = format!("UPDATE activities SET excluded = {flag} WHERE id IN ({ph})");
+                    let params: Vec<&dyn rusqlite::ToSql> =
+                        chunk.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+                    tx.execute(&sql, params.as_slice()).db()?;
+                }
+            }
+            tx.commit().db()?;
+            Ok(changed)
+        })
+        .await?;
+    Ok(changed)
 }
 
 /// 清理超过 retention_days 的截图文件（jpg），不删 activities 行；只把对应行的 screenshot_path 置 NULL。
@@ -468,13 +535,70 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let _id = insert_new(&pool, &info, captured, None).await.unwrap();
+        let _id = insert_new(&pool, &info, captured, None, false)
+            .await
+            .unwrap();
 
         assert_eq!(
             outbox_activity_count(&pool).await,
             0,
             "insert_new 不该入 outbox（心跳级 push 会把 Drive 吵爆）"
         );
+    }
+
+    /// 忽略规则的全表重算：加规则 → 命中行置 1；删规则 → 清回 0。
+    /// 同进程不同标题的行不许被误伤（规则是 进程+标题 双条件）。
+    #[tokio::test]
+    async fn reapply_ignore_rules_sets_and_clears() {
+        let pool = fresh_test_pool().await;
+        let dl = WindowInfo {
+            app_name: "Windows Terminal Host".into(),
+            title: "✳ Download videos from July 17 onwards with uv".into(),
+            app_path: None,
+            pid: 0,
+        };
+        let vim = WindowInfo {
+            app_name: "Windows Terminal Host".into(),
+            title: "vim main.rs".into(),
+            app_path: None,
+            pid: 0,
+        };
+        let captured = Local::now();
+        let dl_id = insert_new(&pool, &dl, captured, None, false).await.unwrap();
+        let vim_id = insert_new(&pool, &vim, captured, None, false)
+            .await
+            .unwrap();
+
+        let rules = vec![IgnoreRule {
+            process_name: "Windows Terminal Host".into(),
+            title_keyword: Some("Download videos".into()),
+        }];
+        let changed = reapply_ignore_rules(&pool, &rules).await.unwrap();
+        assert_eq!(changed, 1, "只有下载窗口那行该被打标");
+        assert_eq!(excluded_flag(&pool, dl_id).await, 1);
+        assert_eq!(
+            excluded_flag(&pool, vim_id).await,
+            0,
+            "同终端干别的活不受牵连"
+        );
+
+        let changed = reapply_ignore_rules(&pool, &[]).await.unwrap();
+        assert_eq!(changed, 1, "删规则后标记该清回来（可逆）");
+        assert_eq!(excluded_flag(&pool, dl_id).await, 0);
+    }
+
+    async fn excluded_flag(pool: &DbPool, id: i64) -> i64 {
+        pool.0
+            .call(move |conn| {
+                let v: i64 = conn
+                    .query_row("SELECT excluded FROM activities WHERE id = ?", [id], |r| {
+                        r.get(0)
+                    })
+                    .unwrap();
+                Ok(v)
+            })
+            .await
+            .unwrap()
     }
 
     /// 跨设备 LWW 的字符串字典序不变性：
@@ -497,7 +621,9 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let id = insert_new(&pool, &info, captured, None).await.unwrap();
+        let id = insert_new(&pool, &info, captured, None, false)
+            .await
+            .unwrap();
         let insert_updated = read_updated_at(&pool, id).await;
         // 必须 UTC（'+00:00'），否则跨设备 LWW 会因为 +09:00 / +00:00 字典序错乱
         assert!(
@@ -551,7 +677,9 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let id = insert_new(&pool, &info, captured, None).await.unwrap();
+        let id = insert_new(&pool, &info, captured, None, false)
+            .await
+            .unwrap();
         seal_session(&pool, id, captured + Duration::seconds(30))
             .await
             .unwrap();
@@ -756,7 +884,9 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let id = insert_new(&pool, &info, captured, None).await.unwrap();
+        let id = insert_new(&pool, &info, captured, None, false)
+            .await
+            .unwrap();
 
         seal_session(&pool, id, captured - Duration::seconds(120))
             .await

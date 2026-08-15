@@ -157,7 +157,8 @@ pub async fn day_hours(
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}
-                   AND g.category_id IS NOT 'hidden'",
+                   AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0",
                 device.sql_clause()
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
@@ -261,6 +262,7 @@ pub async fn day_apps(
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}
                    AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0
                  GROUP BY COALESCE(g.display_name, a.process_name), COALESCE(c.id, 'other')
                  ORDER BY total DESC
                  LIMIT ?",
@@ -337,7 +339,8 @@ pub async fn day_hour_apps(
                  LEFT JOIN categories c
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date = ? {}
-                   AND g.category_id IS NOT 'hidden'",
+                   AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0",
                 device.sql_clause()
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
@@ -446,6 +449,7 @@ async fn app_range_detail(
                            ON g.id = gm.group_id AND g.deleted_at IS NULL
                          WHERE a.local_date >= ? AND a.local_date <= ?
                            AND COALESCE(g.id, a.process_name) = ?
+                           AND a.excluded = 0
                            {}",
                         device.sql_clause()
                     );
@@ -484,6 +488,7 @@ async fn app_range_detail(
                            ON g.id = gm.group_id AND g.deleted_at IS NULL
                          WHERE a.local_date >= ? AND a.local_date <= ?
                            AND COALESCE(g.id, a.process_name) = ?
+                           AND a.excluded = 0
                            {}
                          GROUP BY k",
                         device.sql_clause()
@@ -518,6 +523,7 @@ async fn app_range_detail(
                    ON g.id = gm.group_id AND g.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ?
                    AND COALESCE(g.id, a.process_name) = ?
+                   AND a.excluded = 0
                    {}
                  GROUP BY t
                  ORDER BY total DESC",
@@ -674,6 +680,7 @@ async fn days_in_range(
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
                    AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0
                  GROUP BY a.local_date, cat",
                 device.sql_clause()
             );
@@ -767,6 +774,7 @@ async fn apps_in_range(
                    ON c.id = g.category_id AND c.deleted_at IS NULL
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
                    AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0
                  GROUP BY COALESCE(g.display_name, a.process_name), COALESCE(c.id, 'other')
                  ORDER BY total DESC
                  LIMIT ?",
@@ -993,6 +1001,30 @@ mod tests {
             })
             .await
             .unwrap();
+    }
+
+    /// 忽略规则打标的行（excluded=1）不进报表口径——day_apps 该只剩没打标的行。
+    #[tokio::test]
+    async fn day_apps_skips_excluded_rows() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        insert_activity(&pool, "dev-a", &today, "Downloader", 600).await;
+        insert_activity(&pool, "dev-a", &today, "Editor", 600).await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE activities SET excluded = 1 WHERE process_name = 'Downloader'",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let rows = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
+        assert_eq!(rows.len(), 1, "excluded 行不该出现在 day_apps");
+        assert_eq!(rows[0].process, "Editor");
     }
 
     /// 测 [`day_hours`]：跨两个小时的 session 应按时钟分桶到对应 HourSlot。

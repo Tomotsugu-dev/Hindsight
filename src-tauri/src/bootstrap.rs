@@ -192,6 +192,7 @@ pub async fn init_capture_service(
     )
     .await;
     svc.set_idle_threshold(cfg.idle_threshold_seconds).await;
+    svc.set_ignore_rules(cfg.ignore_rules.clone()).await;
     if cfg.capture_enabled {
         svc.start().await;
     }

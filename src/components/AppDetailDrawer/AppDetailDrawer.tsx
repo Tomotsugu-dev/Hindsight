@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { EyeOff, X } from "lucide-react";
 import { AppIcon } from "../AppIcon/AppIcon";
 import { EmptyHint } from "../EmptyHint/EmptyHint";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
@@ -9,7 +9,9 @@ import { useAppDetail, type DetailScope } from "../../hooks/useAppDetail";
 import { useDurationFormatter } from "../../utils/duration";
 import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
-import type { DetailBucket } from "../../api/hindsight";
+import { ignoreKeywordFromTitle } from "../../utils/ignoreKeyword";
+import { logError } from "../../lib/logger";
+import { api, type AppGroup, type DetailBucket } from "../../api/hindsight";
 import styles from "./AppDetailDrawer.module.css";
 
 /** 被点击的排行行传进来的最小信息（其余明细抽屉自己拉）。 */
@@ -90,6 +92,100 @@ export function AppDetailDrawer({
 
   useFocusTrap(app !== null, panelRef);
 
+  // —— 忽略窗口（写进 settings 的 ignore 规则，行照常记录仅不计入统计）——
+  // 就地反馈：成功后本地隐藏对应行 + 一条可撤销的通知；真正的过滤在后端
+  // 查询里（excluded=0），下次拉取自然生效。回看/删除的全集在 分类→应用 页。
+  const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
+  const [ignoreNotice, setIgnoreNotice] = useState<{
+    keyword: string;
+    count: number;
+    targets: string[];
+  } | null>(null);
+  const [ignoreBusy, setIgnoreBusy] = useState(false);
+  // 跨 OS 合并组：规则要覆盖组内每个 process_name（mac "Code" + win
+  // "Visual Studio Code"），组列表整个抽屉生命周期拉一次就够。
+  const groupsRef = useRef<AppGroup[] | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+
+  // 换 app 清掉上一个 app 的就地状态
+  useEffect(() => {
+    setIgnoredKeys(new Set());
+    setIgnoreNotice(null);
+  }, [app?.iconProcess]);
+  useEffect(
+    () => () => {
+      if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  const resolveRuleTargets = useCallback(async (iconProcess: string) => {
+    try {
+      if (!groupsRef.current) groupsRef.current = await api.listAppGroups();
+      const g = groupsRef.current.find(
+        (grp) =>
+          grp.id === iconProcess ||
+          grp.members.some((m) => m.processName === iconProcess),
+      );
+      const names = g?.members.map((m) => m.processName) ?? [];
+      return names.length > 0 ? names : [iconProcess];
+    } catch {
+      // 组列表拉不到就退化成只对代表进程建规则——宁可少盖也别整个失败
+      return [iconProcess];
+    }
+  }, []);
+
+  const ignoreTitle = useCallback(
+    async (rawTitle: string) => {
+      if (!app || ignoreBusy) return;
+      const keyword = ignoreKeywordFromTitle(rawTitle);
+      if (!keyword) return;
+      setIgnoreBusy(true);
+      try {
+        const targets = await resolveRuleTargets(app.iconProcess);
+        let count = 0;
+        for (const p of targets) {
+          count += (await api.addIgnoreRule(p, keyword)).reappliedRows;
+        }
+        setIgnoredKeys((prev) => new Set(prev).add(keyword));
+        setIgnoreNotice({ keyword, count, targets });
+        if (noticeTimer.current !== null) {
+          window.clearTimeout(noticeTimer.current);
+        }
+        noticeTimer.current = window.setTimeout(
+          () => setIgnoreNotice(null),
+          8000,
+        );
+      } catch (e) {
+        logError("appDetail.ignore", e);
+      } finally {
+        setIgnoreBusy(false);
+      }
+    },
+    [app, ignoreBusy, resolveRuleTargets],
+  );
+
+  const undoIgnore = useCallback(async () => {
+    const n = ignoreNotice;
+    if (!n || ignoreBusy) return;
+    setIgnoreBusy(true);
+    try {
+      for (const p of n.targets) {
+        await api.removeIgnoreRule(p, n.keyword);
+      }
+      setIgnoredKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(n.keyword);
+        return next;
+      });
+      setIgnoreNotice(null);
+    } catch (e) {
+      logError("appDetail.ignoreUndo", e);
+    } finally {
+      setIgnoreBusy(false);
+    }
+  }, [ignoreNotice, ignoreBusy]);
+
   // Esc 关抽屉
   useEffect(() => {
     if (!app) return;
@@ -116,8 +212,10 @@ export function AppDetailDrawer({
     }
     return [...m.entries()]
       .map(([title, secs]) => ({ title, secs }))
+      // 刚被忽略的行就地隐藏（撤销即恢复）；下次真实拉取由后端 excluded=0 过滤
+      .filter((row) => !ignoredKeys.has(ignoreKeywordFromTitle(row.title)))
       .sort((a, b) => b.secs - a.secs);
-  }, [detail?.titles, app?.name]);
+  }, [detail?.titles, app?.name, ignoredKeys]);
   const titleMax = useMemo(
     () => Math.max(...byTitle.map((x) => x.secs), 1),
     [byTitle],
@@ -252,9 +350,27 @@ export function AppDetailDrawer({
                 )}
               </section>
 
-              {/* 具体在干啥：按窗口标题 */}
-              {byTitle.length > 0 && (
+              {/* 具体在干啥：按窗口标题。忽略掉最后一行后列表会空，
+                  但通知条（含撤销）必须还在——条件里带上 ignoreNotice */}
+              {(byTitle.length > 0 || ignoreNotice) && (
                 <section className={styles.section}>
+                  {ignoreNotice && (
+                    <div className={styles.ignoreNotice} role="status">
+                      <span className={styles.ignoreNoticeText}>
+                        {t("appDetail.ignore.done", {
+                          count: ignoreNotice.count,
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.ignoreUndoBtn}
+                        onClick={() => void undoIgnore()}
+                        disabled={ignoreBusy}
+                      >
+                        {t("appDetail.ignore.undo")}
+                      </button>
+                    </div>
+                  )}
                   <ul className={styles.titleList}>
                     {byTitle.map((row, i) => (
                       <li key={i} className={styles.titleRow}>
@@ -276,6 +392,18 @@ export function AppDetailDrawer({
                         <span className={styles.titleTime}>
                           {fmtSecs(row.secs)}
                         </span>
+                        {row.title !== "" && (
+                          <button
+                            type="button"
+                            className={styles.ignoreBtn}
+                            disabled={ignoreBusy}
+                            aria-label={t("appDetail.ignore.button")}
+                            title={t("appDetail.ignore.button")}
+                            onClick={() => void ignoreTitle(row.title)}
+                          >
+                            <EyeOff size={14} strokeWidth={2} />
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

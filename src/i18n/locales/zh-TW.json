@@ -482,7 +482,12 @@
   },
   "appDetail": {
     "loading": "載入中…",
-    "untitled": "無標題"
+    "untitled": "無標題",
+    "ignore": {
+      "button": "從統計中忽略此視窗",
+      "done": "已忽略，{{count}} 筆歷史記錄已排除",
+      "undo": "復原"
+    }
   },
   "today": {
     "title": "日統計",
@@ -626,6 +631,13 @@
   },
   "apps": {
     "title": "應用程式",
+    "ignored": {
+      "title": "已忽略的視窗",
+      "hint": "照常記錄與截圖，僅不計入統計；移除即恢復，規則僅本機生效",
+      "wholeApp": "整個應用程式",
+      "remove": "移除規則",
+      "removed": "已移除，{{count}} 筆歷史記錄已恢復"
+    },
     "filter": {
       "searchPlaceholder": "搜尋應用程式名 / 程序名",
       "categoryTrigger": "分類",

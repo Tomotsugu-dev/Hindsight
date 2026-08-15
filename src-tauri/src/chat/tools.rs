@@ -359,6 +359,7 @@ pub async fn execute(
 
 /// activities 的报表口径 FROM/JOIN/WHERE 段(?1=from ?2=to,追加条件从 ?3 起编号)。
 /// 与 repo/reports.rs 同口径:组是 cross-OS 同步的真相,显式指派到 hidden 的组剔除,
+/// 忽略规则打标的行(excluded=1)一并剔除,
 /// 未分组的活动(g.category_id 为 NULL)经 NULL-safe 比较照常通过。
 const ACTIVITY_JOIN: &str = "FROM activities a
      LEFT JOIN app_group_members gm
@@ -366,7 +367,8 @@ const ACTIVITY_JOIN: &str = "FROM activities a
      LEFT JOIN app_groups g
        ON g.id = gm.group_id AND g.deleted_at IS NULL
      WHERE a.local_date BETWEEN ?1 AND ?2
-       AND g.category_id IS NOT 'hidden'";
+       AND g.category_id IS NOT 'hidden'
+       AND a.excluded = 0";
 
 /// 覆盖披露:范围内活动日数(主库)、其中有屏幕文字索引的日数与待识别帧数(记忆库)。
 /// 拼在 timeline/search 结果最前——"没搜到"究竟是"屏幕上没出现过"还是"索引不全",
@@ -651,7 +653,7 @@ async fn query_stats(
             } else {
                 STATS_FROM
             };
-            let mut where_sql = String::from("a.local_date BETWEEN ?1 AND ?2");
+            let mut where_sql = String::from("a.local_date BETWEEN ?1 AND ?2 AND a.excluded = 0");
             if needs_category {
                 where_sql.push_str(" AND g.category_id IS NOT 'hidden'");
             }
@@ -1623,7 +1625,7 @@ mod behavior_tests {
                      started_at TEXT, ended_at TEXT, duration_secs INTEGER,
                      local_date TEXT, local_hour INTEGER,
                      process_name TEXT, window_title TEXT, screenshot_path TEXT,
-                     category_id TEXT);
+                     category_id TEXT, excluded INTEGER NOT NULL DEFAULT 0);
                  CREATE TABLE app_group_members (
                      process_name TEXT, group_id TEXT, deleted_at TEXT);
                  CREATE TABLE app_groups (

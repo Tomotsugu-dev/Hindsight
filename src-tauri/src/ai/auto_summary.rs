@@ -256,14 +256,15 @@ async fn weekly_absent(pool: &DbPool, monday: NaiveDate) -> Result<bool> {
     Ok(rows.is_empty())
 }
 
-/// 该日主库是否有活动记录(零活动的日子没有可总结的东西)。
+/// 该日主库是否有活动记录(零活动的日子没有可总结的东西;
+/// excluded 行不算——全被忽略规则打标的日子同样没东西可总结)。
 async fn has_activity(pool: &DbPool, date: NaiveDate) -> Result<bool> {
     let key = date.format("%Y-%m-%d").to_string();
     pool.0
         .call(move |conn| {
             let n: i64 = conn
                 .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM activities WHERE local_date = ?1)",
+                    "SELECT EXISTS(SELECT 1 FROM activities WHERE local_date = ?1 AND excluded = 0)",
                     rusqlite::params![key],
                     |r| r.get(0),
                 )

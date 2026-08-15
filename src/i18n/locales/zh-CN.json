@@ -482,7 +482,12 @@
   },
   "appDetail": {
     "loading": "加载中…",
-    "untitled": "无标题"
+    "untitled": "无标题",
+    "ignore": {
+      "button": "从统计中忽略此窗口",
+      "done": "已忽略，{{count}} 条历史记录已排除",
+      "undo": "撤销"
+    }
   },
   "today": {
     "title": "日统计",
@@ -626,6 +631,13 @@
   },
   "apps": {
     "title": "应用",
+    "ignored": {
+      "title": "已忽略的窗口",
+      "hint": "照常记录与截图，仅不计入统计；移除即恢复，规则仅本机生效",
+      "wholeApp": "整个应用",
+      "remove": "移除规则",
+      "removed": "已移除，{{count}} 条历史记录已恢复"
+    },
     "filter": {
       "searchPlaceholder": "搜索应用名 / 进程名",
       "categoryTrigger": "分类",

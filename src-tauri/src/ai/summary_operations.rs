@@ -259,6 +259,7 @@ pub(crate) async fn build_activity_timeline(
                     AND a.local_hour >= ?
                     AND a.local_hour < ?
                     AND a.duration_secs > 0
+                    AND a.excluded = 0
                     {}
                     {}
                   ORDER BY a.local_hour ASC, a.duration_secs DESC",

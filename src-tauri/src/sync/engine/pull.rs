@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use super::io;
 use super::{format_sync_error, with_token_retry, Inner};
+use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
@@ -185,6 +186,12 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     // 可选数据集的三挡开关:关着的数据集文件标 handled 直接越过
     // (开关翻开时命令层会重置 pull 游标,历史文件会重新入列)
     let opt_cfg = crate::repo::settings::load(&inner.pool).await.ok();
+    // 忽略规则在合并期生效:规则与标记都不同步(对端设备没有本机的规则),
+    // 对端捕获时打不上标,镜像行必须在 INSERT 进本机时按**本机**规则补判。
+    let ignore_rules: Vec<IgnoreRule> = opt_cfg
+        .as_ref()
+        .map(|c| c.ignore_rules.clone())
+        .unwrap_or_default();
     let (sync_ai, sync_chat, sync_mem) = opt_cfg
         .map(|c| {
             (
@@ -382,7 +389,17 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::ActivityDay {
                 device_id,
                 local_date,
-            } => merge_activities(&inner.pool, self_id, &device_id, &local_date, &body).await,
+            } => {
+                merge_activities(
+                    &inner.pool,
+                    self_id,
+                    &device_id,
+                    &local_date,
+                    &body,
+                    &ignore_rules,
+                )
+                .await
+            }
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
             }
@@ -525,6 +542,7 @@ async fn merge_activities(
     device_id: &str,
     local_date: &str,
     body: &[u8],
+    ignore_rules: &[IgnoreRule],
 ) -> Result<()> {
     // ndjson：一行一个 ActivityPayload
     let s = std::str::from_utf8(body).map_err(Error::from)?;
@@ -561,6 +579,14 @@ async fn merge_activities(
         } else {
             row.updated_at.clone()
         };
+        // 本机忽略规则判定:标记只在 INSERT 时写入;已存在行的标记归
+        // reapply_ignore_rules 管,LWW UPDATE 不触碰(对端没有本机规则,
+        // 它推来的更新若带标记只会恒 0,写进来会把本机打的标冲掉)。
+        let excluded = is_excluded(
+            &row.process_name,
+            row.window_title.as_deref().unwrap_or(""),
+            ignore_rules,
+        );
         // 单行 upsert 失败降级为 warn —— 否则一行坏数据会让 flush_pull 把整文件判为
         // 失败（handled[i] 留 false），游标停在前一文件，下次再拉这文件还是坏行 → 永久卡住。
         if let Err(e) = upsert_remote_activity(
@@ -577,6 +603,7 @@ async fn merge_activities(
             row.window_title.as_deref().unwrap_or(""),
             &row.category_id,
             &updated_at,
+            excluded,
         )
         .await
         {
@@ -1152,6 +1179,7 @@ async fn upsert_remote_activity(
     window_title: &str,
     category_id: &str,
     updated_at: &str,
+    excluded: bool,
 ) -> Result<()> {
     // 是否本机自己的 ndjson 拉回来？
     // 配合 v26 migration（local 行 `remote_id = id`）+ pull self-skip 移除后的设计：
@@ -1195,8 +1223,8 @@ async fn upsert_remote_activity(
                             "INSERT INTO activities(
                                id, started_at, ended_at, duration_secs, local_date, local_hour,
                                process_name, window_title, category_id, screenshot_path,
-                               device_id, remote_id, updated_at, origin
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local')",
+                               device_id, remote_id, updated_at, origin, excluded
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local', ?)",
                             rusqlite::params![
                                 explicit_id,
                                 started_at,
@@ -1210,6 +1238,7 @@ async fn upsert_remote_activity(
                                 device_id,
                                 remote_id,
                                 updated_at,
+                                excluded,
                             ],
                         )
                         .db()?;
@@ -1219,8 +1248,8 @@ async fn upsert_remote_activity(
                             "INSERT INTO activities(
                                started_at, ended_at, duration_secs, local_date, local_hour,
                                process_name, window_title, category_id, screenshot_path,
-                               device_id, remote_id, updated_at, origin
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote')",
+                               device_id, remote_id, updated_at, origin, excluded
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?)",
                             rusqlite::params![
                                 started_at,
                                 ended_at,
@@ -1233,6 +1262,7 @@ async fn upsert_remote_activity(
                                 device_id,
                                 remote_id,
                                 updated_at,
+                                excluded,
                             ],
                         )
                         .db()?;
@@ -1287,7 +1317,7 @@ mod tests {
         seed_mirror_rows(&pool, OTHER_DEVICE, &["1", "2", "3", "4", "5"]).await;
 
         let body = ndjson_for_ids(&[1, 2, 3, 6]);
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes())
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
 
@@ -1309,7 +1339,7 @@ mod tests {
         seed_self_rows(&pool, &[1, 2, 3, 4, 5]).await;
 
         let body = ndjson_for_ids(&[1, 2, 3, 6]);
-        merge_activities(&pool, TEST_SELF_ID, TEST_SELF_ID, DAY, body.as_bytes())
+        merge_activities(&pool, TEST_SELF_ID, TEST_SELF_ID, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
 
@@ -1341,7 +1371,7 @@ mod tests {
             payload_line(1),
             payload_line(2),
         );
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes())
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
 
@@ -1357,6 +1387,79 @@ mod tests {
             ],
             "解析失败时 mirror 收敛应跳过：原 5 行全部保留"
         );
+    }
+
+    /// 合并期打标：对端行 INSERT 进本机时按**本机**规则判 excluded；
+    /// 后续更新走 LWW UPDATE（不触碰 excluded 列），标记必须存活。
+    #[tokio::test]
+    async fn merge_activities_tags_excluded_and_lww_update_keeps_it() {
+        let pool = fresh_test_pool().await;
+        let rules = vec![crate::capture::ignore::IgnoreRule {
+            process_name: "Code".into(), // payload_line 固定 process_name = "Code"
+            title_keyword: None,
+        }];
+
+        let body = ndjson_for_ids(&[1]);
+        merge_activities(
+            &pool,
+            TEST_SELF_ID,
+            OTHER_DEVICE,
+            DAY,
+            body.as_bytes(),
+            &rules,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            excluded_of(&pool, OTHER_DEVICE, "1").await,
+            1,
+            "命中本机规则的对端行 INSERT 时就该打标"
+        );
+
+        // 同一行的更新（updated_at 更晚 → 走 LWW UPDATE 分支），这次不带规则——
+        // 模拟"对端不知道本机规则"的真实情况，标记不该被冲掉
+        let newer = ActivityPayload {
+            id: 1,
+            started_at: format!("{DAY}T10:01:00Z"),
+            ended_at: format!("{DAY}T10:05:00Z"),
+            duration_secs: 240,
+            local_date: DAY.into(),
+            local_hour: 10,
+            process_name: "Code".into(),
+            window_title: None,
+            category_id: "other".into(),
+            updated_at: format!("{DAY}T23:59:59Z"),
+        };
+        let body = serde_json::to_string(&newer).unwrap();
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+            .await
+            .unwrap();
+        let (dur, excl) = row_state(&pool, OTHER_DEVICE, "1").await;
+        assert_eq!(dur, 240, "LWW UPDATE 应生效（duration 更新）");
+        assert_eq!(excl, 1, "LWW UPDATE 不触碰 excluded——本机打的标必须存活");
+    }
+
+    async fn excluded_of(pool: &DbPool, device_id: &str, remote_id: &str) -> i64 {
+        row_state(pool, device_id, remote_id).await.1
+    }
+
+    async fn row_state(pool: &DbPool, device_id: &str, remote_id: &str) -> (i64, i64) {
+        let device_id = device_id.to_string();
+        let remote_id = remote_id.to_string();
+        pool.0
+            .call(move |conn| {
+                let v = conn
+                    .query_row(
+                        "SELECT duration_secs, excluded FROM activities
+                         WHERE device_id = ?1 AND remote_id = ?2",
+                        rusqlite::params![device_id, remote_id],
+                        |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+                    )
+                    .unwrap();
+                Ok(v)
+            })
+            .await
+            .unwrap()
     }
 
     fn payload_line(id: i64) -> String {
