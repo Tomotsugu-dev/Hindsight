@@ -13,6 +13,7 @@ use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::ai::openai_compat::{budget_key, heal_request, MAX_HEAL_ROUNDS};
 use crate::error::{Error, Result};
 
 /// 单次 chat 调用的性能数据，给调试 tab 显示用。
@@ -157,7 +158,15 @@ impl ExternalChatClient {
             return Err(Error::InvalidInput("云端 API 不接受图片"));
         }
         let url = format!("{}/chat/completions", self.base_url);
-        let body = build_chat_body(&self.model, system, user_text, &[], self.max_tokens, None);
+        let body = build_chat_body(
+            true,
+            &self.model,
+            system,
+            user_text,
+            &[],
+            self.max_tokens,
+            None,
+        );
         self.post_with_retry(&url, &body).await
     }
 
@@ -169,6 +178,9 @@ impl ExternalChatClient {
         url: &str,
         body: &serde_json::Value,
     ) -> Result<(String, ChatUsage)> {
+        // 自愈会就地改请求体,克隆一份免得影响调用方
+        let mut body = body.clone();
+        let mut heal_rounds = 0u32;
         const RETRY_MAX: u32 = 5;
         /// 传输层瞬断的重试上限。真格式不兼容也会走到这（分不开）,
         /// 两次白试的代价可接受;真瞬断两次内基本恢复（实测 4 秒后即成功）。
@@ -176,12 +188,24 @@ impl ExternalChatClient {
         let mut attempt = 0u32;
         let mut transient = 0u32;
         loop {
-            let mut req = self.http.post(url).json(body);
+            let mut req = self.http.post(url).json(&body);
             if !self.api_key.trim().is_empty() {
                 req = req.bearer_auth(self.api_key.trim());
             }
             match send_and_classify(req, Instant::now()).await {
                 SendOutcome::Done(r) => return r,
+                SendOutcome::BadRequest(e) => {
+                    // 按错误信息改请求体重发。改不动 / 轮数用尽就把 400 抛出去,
+                    // 不做无意义的原样重试。
+                    let Error::LlmResponse(msg) = &e else {
+                        return Err(e);
+                    };
+                    if heal_rounds >= MAX_HEAL_ROUNDS || !heal_request(&mut body, msg) {
+                        return Err(e);
+                    }
+                    heal_rounds += 1;
+                    log::warn!("云端 API 400,按错误信息自愈后重试(第 {heal_rounds} 轮)");
+                }
                 SendOutcome::Transient(e) => {
                     transient += 1;
                     if transient > TRANSIENT_MAX {
@@ -277,6 +301,7 @@ fn build_chat_body_local(
     max_tokens: u32,
 ) -> serde_json::Value {
     let mut body = build_chat_body(
+        false,
         model,
         system,
         user_text,
@@ -289,6 +314,7 @@ fn build_chat_body_local(
 }
 
 fn build_chat_body(
+    is_cloud: bool,
     model: &str,
     system: &str,
     user_text: &str,
@@ -317,12 +343,15 @@ fn build_chat_body(
             { "role": "user",   "content": user_content },
         ],
         "stream": false,
-        // max_tokens 跟用户配的 ctx_size 联动（caller 按 ctx_size/2 算，给 prompt 留另一半）：
-        // - ctx=8K → max_tokens 4K（普通 instruct 模型也用得完只是不会真生成那么多）
-        // - ctx=64K → max_tokens 32K（reasoning 模型思考链 + 答案都有空间）
-        // 写死小值（768 / 4096）让 reasoning 模型一律 length 截断 content 空。
-        "max_tokens": max_tokens,
     });
+    // 输出预算跟用户配的 ctx_size 联动（caller 按 ctx_size/2 算，给 prompt 留另一半）：
+    // - ctx=8K → 4K（普通 instruct 模型也用得完只是不会真生成那么多）
+    // - ctx=64K → 32K（reasoning 模型思考链 + 答案都有空间）
+    // 写死小值（768 / 4096）让 reasoning 模型一律 length 截断 content 空。
+    //
+    // 字段名分云端/本地：OpenAI 自 gpt-5.6 起对 max_tokens 直接 400
+    // 「not supported with this model」。与 chat 共用 budget_key,两边同一份口径。
+    body[budget_key(is_cloud)] = json!(max_tokens);
     // 本地 llama 固定 0.4 偏稳定（避免空话 / 重复）；云端传 None 不发该字段——
     // 各家约束不同（kimi-k2.5 只收 1，发 0.4 直接 400），厂商默认值最安全。
     if let Some(t) = temperature {
@@ -352,6 +381,8 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
         // 本地路径重建不了请求（RequestBuilder 一次性），瞬断当普通错误返回；
         // 本地 llama-server 也基本不存在"连接中途被掐"这回事
         SendOutcome::Transient(e) => Err(e),
+        // 本地 llama-server 的 400 是我们自己发错了参数,自愈没有意义
+        SendOutcome::BadRequest(e) => Err(e),
     }
 }
 
@@ -359,6 +390,9 @@ async fn send_and_parse(req: RequestBuilder, t0: Instant) -> Result<(String, Cha
 /// 让 [`ExternalChatClient::post_with_retry`] 能做限流退避；其余情况走 Done。
 enum SendOutcome {
     Done(Result<(String, ChatUsage)>),
+    /// HTTP 400 = 参数不合这家/这个模型的口味,而错误信息本身写明了怎么改。
+    /// 云端路径按 [`heal_request`] 自愈后重发;本地路径当普通错误。
+    BadRequest(Error),
     /// 服务端 429：附 Retry-After 头解析出的等待时长（没给则 None）
     RateLimited(Option<Duration>),
     /// 传输层瞬时故障（连接建立失败 / 响应体中途被掐 / 响应体读取超时）：
@@ -414,9 +448,13 @@ async fn send_and_classify(req: RequestBuilder, t0: Instant) -> SendOutcome {
             .chars()
             .take(200)
             .collect();
-        return SendOutcome::Done(Err(Error::LlmResponse(format!(
-            "服务返回 {status}：{preview}"
-        ))));
+        let err = Error::LlmResponse(format!("服务返回 {status}：{preview}"));
+        // 400 单独拎出来:参数问题可按对方给的说法改一改重发(见 post_with_retry)。
+        // 其余(鉴权/网关/找不到模型)重发也没用,直接判失败。
+        if status.as_u16() == 400 {
+            return SendOutcome::BadRequest(err);
+        }
+        return SendOutcome::Done(Err(err));
     }
 
     // 2xx 的响应体读取 + 解析。这一步失败的主要形态是**传输层瞬断**
@@ -540,6 +578,60 @@ struct ChatMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 云端与本地的输出预算字段名必须分开:OpenAI 自 gpt-5.6 起对
+    /// `max_tokens` 直接 400,而本地 llama-server 只认 `max_tokens`。
+    /// 这里曾经硬编码 `max_tokens`,导致同一端点下聊天可用、日报每段都 400。
+    #[test]
+    fn cloud_body_uses_max_completion_tokens_local_keeps_max_tokens() {
+        let cloud = build_chat_body(true, "gpt-5.6", "sys", "user", &[], 4096, None);
+        assert_eq!(cloud["max_completion_tokens"], 4096);
+        assert!(
+            cloud.get("max_tokens").is_none(),
+            "云端不能再发旧字段名: {cloud}"
+        );
+
+        let local = build_chat_body_local("qwen", "sys", "user", &[], 768);
+        assert_eq!(local["max_tokens"], 768);
+        assert!(
+            local.get("max_completion_tokens").is_none(),
+            "本地 llama-server 只认 max_tokens: {local}"
+        );
+
+        // 与 chat 侧共用同一份口径——两边分歧正是这条 bug 的根因
+        assert_eq!(budget_key(true), "max_completion_tokens");
+        assert_eq!(budget_key(false), "max_tokens");
+    }
+
+    /// 摘要侧接上自愈后,老网关拒收新字段名也能自救:
+    /// R2(按对方给的新名字改名)与 R1(不认识的字段直接删)都要对摘要请求体生效。
+    #[test]
+    fn summary_body_is_healable_by_shared_rules() {
+        let e400 = |m: &str| format!("HTTP 400 Bad Request: {{\"error\":{{\"message\":\"{m}\"}}}}");
+
+        // 反向场景:端点只认旧名字,让它把新名字改回去
+        let mut b = build_chat_body(true, "m", "sys", "user", &[], 4096, None);
+        assert!(heal_request(
+            &mut b,
+            &e400("Unsupported parameter: 'max_completion_tokens' is not supported with this model. Use 'max_tokens' instead.")
+        ));
+        assert_eq!(b["max_tokens"], 4096);
+        assert!(b.get("max_completion_tokens").is_none());
+
+        // 老兼容网关完全不认识这个字段 → 删掉重发(退化成不限输出长度,可接受)。
+        // 文案取 R1 认的真机格式 `Unknown parameter: '<字段>'`
+        let mut b = build_chat_body(true, "m", "sys", "user", &[], 4096, None);
+        assert!(heal_request(
+            &mut b,
+            &e400("Unknown parameter: 'max_completion_tokens'.")
+        ));
+        assert!(b.get("max_completion_tokens").is_none());
+        // 核心字段一个都不能因为自愈丢掉
+        assert!(
+            b.get("model").is_some() && b.get("messages").is_some(),
+            "{b}"
+        );
+    }
 
     /// error_chain 必须逐层展开 source:reqwest 的 "error decoding response body"
     /// 外层信息为零,真实原因(连接被掐 / serde 语法错)全在链的深处——
