@@ -46,7 +46,7 @@ pub fn chat_template_supports_tools(path: &Path) -> Option<bool> {
             // 不能提前返回:tool_use 变体键可能排在后面
             continue;
         }
-        skip_value(&mut r, ty)?;
+        skip_value(&mut r, ty, 0)?;
     }
     let t = template?;
     Some(t.contains("tools") || t.contains("tool_call"))
@@ -80,8 +80,18 @@ fn skip_bytes(r: &mut impl Read, n: u64) -> Option<()> {
     (copied == n).then_some(())
 }
 
+/// 数组嵌套深度上限。GGUF 规范里数组元素只能是标量或字符串,正常文件深度就是 1,
+/// 留 8 层纯属余量。
+///
+/// 没有上限时 `elem_ty=9(数组), count=1` 每层只消耗 12 字节,几百 KB 的畸形文件
+/// 就能打爆栈:实测 12 MB 的构造文件让整个进程 `SIGABRT`(fatal runtime error:
+/// stack overflow)。而这条路径由 `list_local_models` 触发——用户打开模型页或
+/// 聊天页就会对模型目录下每个 .gguf 跑一遍,且跑在 tokio worker 线程上(栈更小)。
+const MAX_ARRAY_DEPTH: u32 = 8;
+
 /// 跳过一个 metadata 值。类型编号见 GGUF 规范(v2/v3 一致)。
-fn skip_value(r: &mut impl Read, ty: u32) -> Option<()> {
+/// `depth` = 当前数组嵌套层数,超过 [`MAX_ARRAY_DEPTH`] 直接判文件不可解析。
+fn skip_value(r: &mut impl Read, ty: u32, depth: u32) -> Option<()> {
     match ty {
         0 | 1 | 7 => skip_bytes(r, 1), // u8 / i8 / bool
         2..=3 => skip_bytes(r, 2),     // u16 / i16
@@ -92,10 +102,14 @@ fn skip_value(r: &mut impl Read, ty: u32) -> Option<()> {
             skip_bytes(r, len)
         }
         9 => {
+            // 先判深度再读元素类型:超限时立刻放弃,不再往下递归一层
+            if depth >= MAX_ARRAY_DEPTH {
+                return None;
+            }
             let elem_ty = read_u32(r)?;
             let count = read_u64(r)?;
             for _ in 0..count {
-                skip_value(r, elem_ty)?;
+                skip_value(r, elem_ty, depth + 1)?;
             }
             Some(())
         }
@@ -191,6 +205,41 @@ mod tests {
             8,
             string_val("<tool template>"),
         )]);
+        assert_eq!(probe(&b), Some(true));
+    }
+
+    /// 深度嵌套的畸形数组:修复前这里让整个进程 SIGABRT(stack overflow)——
+    /// `elem_ty=9(数组), count=1` 每层只要 12 字节,构造成本极低,而触发面是
+    /// "打开模型页/聊天页"(list_local_models 对目录下每个 .gguf 都跑)。
+    /// 现在应当安静地返回 None(fail-open:文件不可解析,不标注工具支持)。
+    #[test]
+    fn deeply_nested_array_returns_none_instead_of_blowing_stack() {
+        let mut val = Vec::new();
+        // 100 万层足以打爆任何线程栈;修复后在第 8 层就收工
+        for _ in 0..1_000_000u32 {
+            val.extend_from_slice(&9u32.to_le_bytes()); // elem type = array
+            val.extend_from_slice(&1u64.to_le_bytes()); // count = 1
+        }
+        let b = gguf(&[("general.junk", 9, val)]);
+        assert_eq!(probe(&b), None);
+    }
+
+    /// 正常的一层数组(词表就是这个形状)不能被深度上限误伤——
+    /// 上面那条测试若靠"禁止数组"实现就会在这里翻车。
+    #[test]
+    fn single_level_array_still_parses_after_depth_limit() {
+        let b = gguf(&[
+            (
+                "tokenizer.ggml.tokens",
+                9,
+                string_array_val(&["<s>", "</s>", "hi", "there"]),
+            ),
+            (
+                "tokenizer.chat_template",
+                8,
+                string_val("{%- if tools %}x{%- endif %}"),
+            ),
+        ]);
         assert_eq!(probe(&b), Some(true));
     }
 
