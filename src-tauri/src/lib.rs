@@ -365,6 +365,19 @@ pub fn run() {
             // app 真正退出前等 llama-server 子进程收尸——避免遗留孤儿进程
             // 一直 hold 着模型在内存里。block_on 是同步等，因为 Exit 已经是 final。
             if matches!(&event, tauri::RunEvent::Exit) {
+                // 先封存进行中的会话,再收子进程。
+                //
+                // 不封的话:活动行在 insert 时 started_at == ended_at、duration=0,
+                // 会话期间从不延长(全仓唯一写 ended_at 的地方是 seal_session),
+                // 于是下次启动被 purge_orphan_sessions 当"上次没关干净的残留"删掉——
+                // 每一次正常退出都丢掉最后一段(上限 = 采集间隔,挂机时可达挂机阈值)。
+                //
+                // 放在最前面:seal 是一次极短的 DB 写,不该被后面的子进程收尸拖延。
+                // stop() 内含睡眠 gap 钳制,不会把整段睡眠算给最后那个 app。
+                if let Some(svc) = app.try_state::<Arc<capture::CaptureService>>() {
+                    let svc = svc.inner().clone();
+                    tauri::async_runtime::block_on(async move { svc.stop().await });
+                }
                 // OCR worker 同步收尸(拿不到锁就交给 stdin EOF 兜底,不硬等)
                 tauri::async_runtime::block_on(async {
                     ai::ocr_supervisor::global().stop().await;
