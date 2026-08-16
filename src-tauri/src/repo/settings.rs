@@ -209,6 +209,76 @@ pub struct SettingsPatch {
     pub ai: Option<AiConfig>,
 }
 
+/// 备份损坏 settings 前抹掉密钥值。
+///
+/// 备份文件落在数据目录、明文、长期留存,而 settings JSON 里躺着
+/// `googleClientSecret` 和 AI 配置(含预设列表)里的每个 `apiKey`——
+/// 一次解析失败就把它们全部拓到磁盘上。
+///
+/// 只能做文本级替换:走到这里正是因为 JSON 解析失败了,serde 用不了。
+/// 手写扫描而不是引 regex——只为这一处加依赖不值当。
+/// 保留键名与结构(备份的用途是让人看出哪里写坏了),只把值换成 `"***"`。
+fn redact_secrets(raw: &str) -> String {
+    const SECRET_KEYS: [&str; 2] = ["apiKey", "googleClientSecret"];
+    let bytes = raw.as_bytes();
+    let mut out = String::with_capacity(raw.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        // 找 "<key>" 形式的键名(带引号,避免命中正文里同名的裸词)
+        let matched = SECRET_KEYS.iter().find(|k| {
+            let quoted_len = k.len() + 2;
+            i + quoted_len <= bytes.len()
+                && bytes[i] == b'"'
+                && &bytes[i + 1..i + 1 + k.len()] == k.as_bytes()
+                && bytes[i + 1 + k.len()] == b'"'
+        });
+        let Some(key) = matched else {
+            // 不是密钥键:原样抄一个 UTF-8 字符(不能按字节切,会切碎多字节字符)
+            let ch_len = raw[i..].chars().next().map_or(1, |c| c.len_utf8());
+            out.push_str(&raw[i..i + ch_len]);
+            i += ch_len;
+            continue;
+        };
+        // 抄过键名 + 冒号 + 空白,定位到值的起始引号
+        let after_key = i + key.len() + 2;
+        let mut j = after_key;
+        while j < bytes.len() && (bytes[j] as char).is_whitespace() {
+            j += 1;
+        }
+        if j >= bytes.len() || bytes[j] != b':' {
+            // 不是 "key": value 形式(例如出现在字符串正文里),不动
+            out.push_str(&raw[i..after_key]);
+            i = after_key;
+            continue;
+        }
+        j += 1;
+        while j < bytes.len() && (bytes[j] as char).is_whitespace() {
+            j += 1;
+        }
+        if j >= bytes.len() || bytes[j] != b'"' {
+            // 值不是字符串(null / 数字 / 被截断):没有明文可漏,原样保留
+            out.push_str(&raw[i..after_key]);
+            i = after_key;
+            continue;
+        }
+        // 扫到值的收尾引号,跳过 \" 转义
+        let mut k = j + 1;
+        while k < bytes.len() {
+            match bytes[k] {
+                b'\\' => k += 2,
+                b'"' => break,
+                _ => k += 1,
+            }
+        }
+        out.push_str(&raw[i..after_key]);
+        out.push_str(&raw[after_key..j]);
+        out.push_str("\"***\"");
+        // 值被截断(没有收尾引号)时 k 越界,直接收工
+        i = if k < bytes.len() { k + 1 } else { bytes.len() };
+    }
+    out
+}
+
 /// 读 settings_store 单行 + 反序列化。
 /// 缺字段走 `#[serde(default)]` 补默认；空截图路径自动填默认值并写回。
 ///
@@ -235,7 +305,7 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
             log::error!("settings JSON 解析失败（本次使用默认值、不回写）: {e}");
             if let Ok(dir) = crate::storage::db_path_dir() {
                 let backup = dir.join("settings_store.corrupt.json");
-                match std::fs::write(&backup, &data) {
+                match std::fs::write(&backup, redact_secrets(&data)) {
                     Ok(()) => log::error!("原始 settings 已备份到 {}", backup.display()),
                     Err(we) => log::error!("备份原始 settings 失败: {we}"),
                 }
@@ -706,8 +776,9 @@ mod tests {
         std::env::set_var("HINDSIGHT_DATA_DIR", &tmp);
 
         let pool = fresh_test_pool().await;
-        // 类型错 + 截断（少右括号）：模拟「写了一半掉电」的最恶劣形态
-        let corrupt = r#"{"captureEnabled": "not-a-bool", "retentionDays": 30"#;
+        // 类型错 + 截断（少右括号）：模拟「写了一半掉电」的最恶劣形态。
+        // 故意带上密钥字段——备份文件长期明文躺在数据目录，必须脱敏后才落盘。
+        let corrupt = r#"{"captureEnabled": "not-a-bool", "googleClientSecret": "GOCSPX-real-secret", "ai": {"apiKey": "sk-live-DEADBEEF"}, "retentionDays": 30"#;
         put_raw(&pool, corrupt).await;
 
         // 必须 Ok：解析失败只能降级，不能让整个应用起不来
@@ -720,14 +791,64 @@ mod tests {
         // 核心回归：DB 里的原文一字未动（默认值绝不回写覆盖用户仅存的原始 JSON）
         assert_eq!(raw_json(&pool).await, corrupt);
 
-        // 原文已备份到数据目录，等下一个能读懂它的版本或用户手工救回
+        // 原文已备份到数据目录，等下一个能读懂它的版本或用户手工救回；
+        // 但密钥值必须先抹掉——备份是明文长期留存的
         let backup = tmp.join("settings_store.corrupt.json");
-        assert_eq!(
-            std::fs::read_to_string(&backup).expect("应存在备份文件"),
-            corrupt
+        let backed = std::fs::read_to_string(&backup).expect("应存在备份文件");
+        assert!(
+            !backed.contains("GOCSPX-real-secret") && !backed.contains("sk-live-DEADBEEF"),
+            "备份不得含密钥明文: {backed}"
         );
+        // 结构与键名保留(备份的用途是让人看出哪里写坏了),非密钥字段一字不动
+        assert!(
+            backed.contains(r#""googleClientSecret": "***""#),
+            "{backed}"
+        );
+        assert!(backed.contains(r#""apiKey": "***""#), "{backed}");
+        assert!(
+            backed.contains(r#""captureEnabled": "not-a-bool""#),
+            "{backed}"
+        );
+        assert!(backed.contains(r#""retentionDays": 30"#), "{backed}");
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// 脱敏的边界:多字节字符不能被切碎、转义引号不能让扫描提前收尾、
+    /// 非字符串值与"只是碰巧同名的正文"不能被误改。
+    #[test]
+    fn redact_secrets_covers_edge_shapes() {
+        // 值里有转义引号:必须扫到真正的收尾引号
+        let raw = r#"{"apiKey": "sk-a\"b-tail", "userBrief": "写代码"}"#;
+        let out = redact_secrets(raw);
+        assert!(!out.contains("sk-a"), "{out}");
+        assert!(
+            out.contains(r#""userBrief": "写代码""#),
+            "非密钥字段与中文原样保留: {out}"
+        );
+
+        // 中文/emoji 不被按字节切碎
+        let raw = r#"{"userBrief": "写代码🚀日报", "apiKey": "sk-1"}"#;
+        let out = redact_secrets(raw);
+        assert!(out.contains("写代码🚀日报"), "{out}");
+        assert!(out.contains(r#""apiKey": "***""#), "{out}");
+
+        // 非字符串值(null / 数字)没有明文可漏,原样保留
+        let raw = r#"{"apiKey": null, "n": 1}"#;
+        assert_eq!(redact_secrets(raw), raw);
+
+        // 键名出现在别的字符串正文里:不是 "key": value 形式,不动
+        let raw = r#"{"note": "别把 apiKey 写在这里", "x": 1}"#;
+        assert_eq!(redact_secrets(raw), raw);
+
+        // 值被截断(掉电):没有收尾引号也不能 panic,且不能把残缺密钥留下
+        let raw = r#"{"apiKey": "sk-trunc"#;
+        let out = redact_secrets(raw);
+        assert!(!out.contains("sk-trunc"), "{out}");
+
+        // 空输入 / 无密钥输入
+        assert_eq!(redact_secrets(""), "");
+        assert_eq!(redact_secrets("{}"), "{}");
     }
 
     /// external_enabled 单开关拆成「配好云端」+「选定云端」两概念后的一次性迁移：
