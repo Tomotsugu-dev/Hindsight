@@ -108,8 +108,12 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
 
     // ── 日报·前一天补漏:只补"从未生成过"的(关机错过设定时刻的场景) ──
     let d_key = format!("d:{yesterday}");
+    // "从未生成过" 或 "生成过但留下失败段" 都算没补完:后者用 force=false 跑,
+    // 已 ok 的段被 segment_already_ok 跳过,只重试失败的那几段,不白烧额度。
+    // 每个运行期至多试一次(attempted 兜底),永久性失败不会反复烧。
     if !attempted.contains(&d_key)
-        && daily_absent(&pool, yesterday).await?
+        && (daily_absent(&pool, yesterday).await?
+            || ai_summaries::has_error_segment(&pool, "daily", &yesterday.to_string()).await?)
         && has_activity(&pool, yesterday).await?
     {
         match try_run_daily(app, yesterday, false).await {
@@ -125,15 +129,23 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     //    生成时刻 ≥ 时间点即该点已完成,重启不重复、不白烧 LLM。
     //    今天没活动(如凌晨点)自然跳过;失败由 attempted 兜住当天不重试。
     if !times.is_empty() && has_activity(&pool, today).await? {
-        let last_gen =
-            ai_summaries::latest_generated_at(&pool, "daily", &today.to_string()).await?;
+        // 账本只记"生成时刻"、不记结果:部分段失败时,成功段的 generated_at 照样
+        // 把这个时间点标记成已完成,失败段从此永不补跑(实测 8/1、8/3、8/5 各留下
+        // 空段至今)。有失败段时把账本按"未完成"处理,让该点重新入列。
+        let has_err = ai_summaries::has_error_segment(&pool, "daily", &today.to_string()).await?;
+        let last_gen = if has_err {
+            None
+        } else {
+            ai_summaries::latest_generated_at(&pool, "daily", &today.to_string()).await?
+        };
         for t in due_unsatisfied_points(now, &times, last_gen.as_deref()) {
             let key = format!("d:{today}@{t}");
             if attempted.contains(&key) {
                 continue;
             }
-            // 已有报告则带 force 刷新覆盖;还没有就普通生成
-            let force = !daily_absent(&pool, today).await?;
+            // 补失败段(has_err)时 force=false:已 ok 的段跳过,只重试失败的。
+            // 否则维持原语义——已有报告的时间点做整日刷新(12:00 半天版 → 23:00 全天版)。
+            let force = !has_err && !daily_absent(&pool, today).await?;
             match try_run_daily(app, today, force).await {
                 RunOutcome::Ran => {
                     attempted.insert(key);

@@ -244,6 +244,71 @@ pub async fn latest_generated_at(
     Ok(out)
 }
 
+/// 某 source 某天是否存在 status='error' 的段。
+///
+/// 自动总结的账本(`latest_generated_at`)只看"生成时刻",不看结果:部分段失败时
+/// 成功段的 generated_at 照样把时间点标记成已完成,失败段从此永不补跑。
+/// 调度侧用这个函数把"还有失败段"从"已完成"里摘出来。
+pub async fn has_error_segment(pool: &DbPool, source: &str, local_date: &str) -> Result<bool> {
+    let source = source.to_string();
+    let local_date = local_date.to_string();
+    let out = pool
+        .0
+        .call(move |conn| {
+            let n: i64 = conn
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM ai_summaries
+                     WHERE source = ?1 AND local_date = ?2 AND status = 'error')",
+                    rusqlite::params![source, local_date],
+                    |r| r.get(0),
+                )
+                .db()?;
+            Ok(n > 0)
+        })
+        .await?;
+    Ok(out)
+}
+
+/// 删掉 `keep` 之外的段行,返回删除条数。
+///
+/// 用户把段配置从 5 段改成 3 段(或某段起止时刻改得不合法)后,旧的 idx 3/4 会变成
+/// 永远不再更新的孤儿行。以前靠生成前 `clear_day` 整天删掉兜住,但那会让"删除"
+/// 发生在"重建成功"之前——一旦重建失败当天就归零。改为整轮跑完后按实际有效的
+/// 段集合收敛,删除永远在新内容落库之后。
+///
+/// `keep` 为空(段配置全空/全非法)时删掉该天该 source 的全部段。
+pub async fn prune_segments_except(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+    keep: &[u32],
+) -> Result<u64> {
+    let source = source.to_string();
+    let local_date = local_date.to_string();
+    let keep: Vec<i64> = keep.iter().map(|v| *v as i64).collect();
+    let n = pool
+        .0
+        .call(move |conn| {
+            let sql = if keep.is_empty() {
+                "DELETE FROM ai_summaries WHERE source = ?1 AND local_date = ?2".to_string()
+            } else {
+                let ph = vec!["?"; keep.len()].join(",");
+                format!(
+                    "DELETE FROM ai_summaries
+                     WHERE source = ?1 AND local_date = ?2 AND segment_idx NOT IN ({ph})"
+                )
+            };
+            let mut params: Vec<&dyn rusqlite::ToSql> = vec![&source, &local_date];
+            for k in &keep {
+                params.push(k);
+            }
+            let n = conn.execute(&sql, params.as_slice()).db()?;
+            Ok(n as u64)
+        })
+        .await?;
+    Ok(n)
+}
+
 pub async fn clear_day(pool: &DbPool, source: &str, local_date: &str) -> Result<()> {
     let src = source.to_string();
     let date = local_date.to_string();
@@ -568,6 +633,118 @@ mod tests {
             })
             .await
             .unwrap()
+    }
+
+    /// 部分段失败时,调度侧要能把"还有失败段"从"已完成"里摘出来——
+    /// 否则成功段的 generated_at 会把时间点标记成完成,失败段永不补跑
+    /// (线上实测 8/1、8/3、8/5 各留下空段)。
+    #[tokio::test]
+    async fn has_error_segment_detects_partial_failure() {
+        let pool = fresh_test_pool().await;
+        assert!(
+            !has_error_segment(&pool, "daily", "2026-08-05")
+                .await
+                .unwrap(),
+            "空库不该报有失败段"
+        );
+
+        // 两段 ok + 两段 error —— 用户库 8/5 的真实形状
+        for idx in [0u32, 1] {
+            upsert_segment(&pool, &seg("daily", "2026-08-05", idx))
+                .await
+                .unwrap();
+        }
+        for idx in [2u32, 3] {
+            let mut r = seg("daily", "2026-08-05", idx);
+            r.status = "error".into();
+            r.error = Some("endpoint 502".into());
+            upsert_segment(&pool, &r).await.unwrap();
+        }
+        assert!(
+            has_error_segment(&pool, "daily", "2026-08-05")
+                .await
+                .unwrap(),
+            "有 error 段就该为真,哪怕同日还有 ok 段"
+        );
+
+        // latest_generated_at 看不出这件事——正是它单独当账本会漏判的原因
+        assert!(
+            latest_generated_at(&pool, "daily", "2026-08-05")
+                .await
+                .unwrap()
+                .is_some(),
+            "账本只记生成时刻、不记结果"
+        );
+
+        // 别的 source / 别的日子不受影响
+        assert!(!has_error_segment(&pool, "debug", "2026-08-05")
+            .await
+            .unwrap());
+        assert!(!has_error_segment(&pool, "daily", "2026-08-06")
+            .await
+            .unwrap());
+    }
+
+    /// 段配置从 4 段缩到 2 段后,旧的 idx 2/3 是永不更新的孤儿行。
+    /// 旧实现靠"生成前整天删"兜住(重建失败就归零),现在改成整轮跑完按有效段收敛。
+    #[tokio::test]
+    async fn prune_segments_except_keeps_listed_and_spares_others() {
+        let pool = fresh_test_pool().await;
+        for idx in 0u32..4 {
+            upsert_segment(&pool, &seg("daily", "2026-08-05", idx))
+                .await
+                .unwrap();
+        }
+        // 同日别的 source + 同 source 别的日子:都不该被误伤
+        upsert_segment(&pool, &seg("debug", "2026-08-05", 3))
+            .await
+            .unwrap();
+        upsert_segment(&pool, &seg("daily", "2026-08-06", 3))
+            .await
+            .unwrap();
+
+        let n = prune_segments_except(&pool, "daily", "2026-08-05", &[0, 1])
+            .await
+            .unwrap();
+        assert_eq!(n, 2, "只该删掉 idx 2/3");
+        let idxs: Vec<u32> = get_day(&pool, "daily", "2026-08-05")
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.segment_idx)
+            .collect();
+        assert_eq!(idxs, vec![0, 1]);
+        assert_eq!(
+            get_day(&pool, "debug", "2026-08-05").await.unwrap().len(),
+            1
+        );
+        assert_eq!(
+            get_day(&pool, "daily", "2026-08-06").await.unwrap().len(),
+            1
+        );
+
+        // 幂等:再跑一次没得删
+        assert_eq!(
+            prune_segments_except(&pool, "daily", "2026-08-05", &[0, 1])
+                .await
+                .unwrap(),
+            0
+        );
+        // keep 为空 = 段配置全非法 → 该 source 该日清空,别的日子仍不受影响
+        assert_eq!(
+            prune_segments_except(&pool, "daily", "2026-08-05", &[])
+                .await
+                .unwrap(),
+            2
+        );
+        assert!(get_day(&pool, "daily", "2026-08-05")
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            get_day(&pool, "daily", "2026-08-06").await.unwrap().len(),
+            1
+        );
     }
 
     /// 前端渲染依赖 get_day 按 segment_idx 升序——段是按时间排的时间轴。

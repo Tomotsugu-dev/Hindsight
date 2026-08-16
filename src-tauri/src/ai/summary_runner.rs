@@ -169,9 +169,12 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         }
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
-        if force_refresh {
-            ai_summaries::clear_day(&self.pool, source, &date_str).await?;
-        }
+        // 这里**不**前置 clear_day。删在重建之前意味着:模型文件缺失、密钥过期、
+        // 端点不可用时,当天已有的好报告先没了、重建又起不来,归零且无从恢复。
+        // upsert_segment 的 ON CONFLICT 本就原地覆盖,重建不需要先删;删除的唯一
+        // 用途是清理"段配置缩小/改非法"后的孤儿行,那件事挪到整轮跑完后按实际
+        // 有效段集合收敛(见循环后的 prune_segments_except)。
+        // force_refresh 在下面退化为"不复用已 ok 的段",语义不变。
 
         let total_segments = ai.segments.len() as u32;
 
@@ -191,6 +194,8 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             .await?;
         let step2 = build_step2(&ai, port, ai.effective_summary_main())?;
 
+        // 本轮实际有效的段下标——循环结束后用它收敛掉孤儿行
+        let mut kept: Vec<u32> = Vec::new();
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
                 let mut p = SummaryProgress::base(
@@ -204,8 +209,10 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 return Ok(());
             }
             if seg.end_hour <= seg.start_hour {
+                // 非法段:不进 kept,循环后会被 prune 掉(旧实现靠前置 clear_day 顺带清)
                 continue;
             }
+            kept.push(idx as u32);
             // force_refresh=false 时已生成的段 (status=ok) 直接复用
             if !force_refresh
                 && self
@@ -227,6 +234,14 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 device.clone(),
             )
             .await?;
+        }
+
+        // 整轮跑完(未被取消/未提前返错)才收敛:删除永远发生在新内容落库之后。
+        // 失败只告警——清理不掉孤儿段不影响本次生成的结果。
+        match ai_summaries::prune_segments_except(&self.pool, source, &date_str, &kept).await {
+            Ok(n) if n > 0 => log::info!("{source} {date_str}: 清理 {n} 条失效段"),
+            Ok(_) => {}
+            Err(e) => log::warn!("{source} {date_str}: 清理失效段失败(不影响本次结果): {e}"),
         }
 
         let p = SummaryProgress::base(source.to_string(), date_str, "all_done", total_segments);
