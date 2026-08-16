@@ -125,31 +125,64 @@ pub async fn migrate_legacy_db(data_root: &Path) -> Result<()> {
         // 若 peek 出来是 None，老 DB 是真匿名，不动
     }
 
-    // Step 2: 延迟 rename
-    let owner = legacy_owner();
-    if let Some(owner) = owner {
-        let target = data_root.join(format!("hindsight.{owner}.sqlite"));
-        if legacy.exists() && target.exists() {
-            // 冲突：多半是上次 rename 失败（Windows 句柄未释放等）后，那次启动
-            // 已经在 target 位置建了新库。此时**不能**清 legacy_owner——清了下次
-            // 就再也不会尝试迁移，老数据永久搁浅在 hindsight.sqlite 里。
-            // 保留 hint、大声记错误，等 legacy 句柄释放后的下次启动重试。
-            log::error!(
-                "legacy DB 迁移冲突：{} 与 {} 同时存在，升级前的历史数据仍在旧文件中；保留 legacy_owner 下次重试",
-                legacy.display(),
-                target.display()
-            );
-            return Ok(());
+    // Step 2: 延迟 rename。两个库都就位才清 hint——只搬成功一个就清的话，
+    // 剩下那个永远不会再被尝试。
+    if let Some(owner) = legacy_owner() {
+        if migrate_legacy_files(data_root, &owner)? {
+            set_legacy_owner(None)?;
         }
-        if legacy.exists() && !target.exists() {
-            rename_db_files(&legacy, &target)?;
-            log::info!("rename hindsight.sqlite -> hindsight.{owner}.sqlite");
-        }
-        // rename 成功 / legacy 已不存在 → hint 过期，清掉
-        set_legacy_owner(None)?;
     }
 
     Ok(())
+}
+
+/// 把匿名期的库文件搬到 uid 作用域路径。返回 `false` = 有冲突没搬完，
+/// 调用方须保留 `legacy_owner` 下次重试。
+///
+/// 两个库都要搬：主库 `hindsight.sqlite` 早就在搬，而记忆库
+/// `hindsight-memory.sqlite`（见 [`crate::memory::memory_db_path`]）一直漏掉——
+/// 匿名期攒的 OCR 全文索引与全部聊天会话/消息会原地搁浅，登录后
+/// `MemoryDb::open()` 在新路径直接建空库，搜索与聊天历史一次性归零；
+/// 两个可能重新填充的云端数据集默认关着，损失不可逆。
+///
+/// 只碰 `data_root` 下的文件，不读写 `active_user.json`——后者走真实用户配置
+/// 目录，测试碰不得。
+fn migrate_legacy_files(data_root: &Path, owner: &str) -> Result<bool> {
+    let jobs = [
+        (
+            "hindsight.sqlite",
+            format!("hindsight.{owner}.sqlite"),
+            "主库",
+        ),
+        (
+            "hindsight-memory.sqlite",
+            format!("hindsight-memory.{owner}.sqlite"),
+            "记忆库",
+        ),
+    ];
+    let mut all_done = true;
+    for (legacy_name, target_name, what) in jobs {
+        let legacy = data_root.join(legacy_name);
+        let target = data_root.join(&target_name);
+        if !legacy.exists() {
+            continue;
+        }
+        if target.exists() {
+            // 多半是上次 rename 失败（Windows 句柄未释放等）后，那次启动已经在
+            // target 位置建了新库。此时**不能**清 legacy_owner——清了下次就再也
+            // 不会尝试，老数据永久搁浅。保留 hint、大声记错误，等句柄释放后重试。
+            log::error!(
+                "{what}迁移冲突：{} 与 {} 同时存在，升级前的历史数据仍在旧文件中；保留 legacy_owner 下次重试",
+                legacy.display(),
+                target.display()
+            );
+            all_done = false;
+            continue;
+        }
+        rename_db_files(&legacy, &target)?;
+        log::info!("rename {legacy_name} -> {target_name}");
+    }
+    Ok(all_done)
 }
 
 /// sign-in Case A 调：声明当前 `hindsight.sqlite` 归属于这个 uid，
@@ -200,4 +233,124 @@ fn sidecar(p: &Path, suffix: &str) -> PathBuf {
     let mut s = p.as_os_str().to_os_string();
     s.push(suffix);
     PathBuf::from(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 只碰临时 data_root，不触 active_user.json（那个走真实用户配置目录）。
+    fn tmp_root(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "hindsight-account-test-{tag}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn touch(dir: &Path, name: &str, body: &str) {
+        fs::write(dir.join(name), body).unwrap();
+    }
+
+    /// 核心回归：登录后记忆库必须跟主库一起搬。
+    /// 漏搬的话匿名期的 OCR 全文索引 + 全部聊天历史原地搁浅，
+    /// MemoryDb::open() 会在新路径建空库 —— 搜索与聊天记录一次性归零。
+    #[test]
+    fn migrates_both_main_and_memory_db_with_sidecars() {
+        let root = tmp_root("both");
+        touch(&root, "hindsight.sqlite", "main");
+        touch(&root, "hindsight.sqlite-wal", "main-wal");
+        touch(&root, "hindsight-memory.sqlite", "mem");
+        touch(&root, "hindsight-memory.sqlite-wal", "mem-wal");
+        touch(&root, "hindsight-memory.sqlite-shm", "mem-shm");
+
+        assert!(
+            migrate_legacy_files(&root, "uid42").unwrap(),
+            "无冲突应返回 true"
+        );
+
+        assert_eq!(
+            fs::read_to_string(root.join("hindsight.uid42.sqlite")).unwrap(),
+            "main"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("hindsight-memory.uid42.sqlite")).unwrap(),
+            "mem",
+            "记忆库必须一起搬"
+        );
+        // wal/shm 副文件跟随主文件
+        assert_eq!(
+            fs::read_to_string(root.join("hindsight-memory.uid42.sqlite-wal")).unwrap(),
+            "mem-wal"
+        );
+        assert!(root.join("hindsight-memory.uid42.sqlite-shm").exists());
+        assert!(
+            !root.join("hindsight-memory.sqlite").exists(),
+            "旧文件不该留下"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 只有主库的老安装（记忆库还没建过）：不该因为记忆库缺席就判失败。
+    #[test]
+    fn missing_memory_db_is_not_a_conflict() {
+        let root = tmp_root("main-only");
+        touch(&root, "hindsight.sqlite", "main");
+
+        assert!(migrate_legacy_files(&root, "u1").unwrap());
+        assert!(root.join("hindsight.u1.sqlite").exists());
+        assert!(!root.join("hindsight.sqlite").exists());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 记忆库目标已存在（上次搬失败后新库已建）：返回 false 让调用方保留 hint。
+    /// 主库照常搬完 —— 下次启动只补记忆库，整个流程幂等。
+    #[test]
+    fn memory_conflict_reports_incomplete_but_still_moves_main() {
+        let root = tmp_root("conflict");
+        touch(&root, "hindsight.sqlite", "main");
+        touch(&root, "hindsight-memory.sqlite", "old-mem");
+        touch(&root, "hindsight-memory.u9.sqlite", "new-empty-mem");
+
+        assert!(
+            !migrate_legacy_files(&root, "u9").unwrap(),
+            "有冲突必须返回 false，否则 hint 被清、旧数据永久搁浅"
+        );
+        assert!(
+            root.join("hindsight.u9.sqlite").exists(),
+            "主库不受记忆库冲突影响"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("hindsight-memory.sqlite")).unwrap(),
+            "old-mem",
+            "冲突时旧记忆库原地保留，等下次重试"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("hindsight-memory.u9.sqlite")).unwrap(),
+            "new-empty-mem",
+            "不得覆盖已存在的目标"
+        );
+
+        // 幂等：把冲突的新库挪走后重跑，这次应当搬成
+        fs::remove_file(root.join("hindsight-memory.u9.sqlite")).unwrap();
+        assert!(migrate_legacy_files(&root, "u9").unwrap());
+        assert_eq!(
+            fs::read_to_string(root.join("hindsight-memory.u9.sqlite")).unwrap(),
+            "old-mem"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 全新安装（两个库都不存在）：无事可做，不能报错。
+    #[test]
+    fn nothing_to_migrate_is_ok() {
+        let root = tmp_root("empty");
+        assert!(migrate_legacy_files(&root, "u1").unwrap());
+        let _ = fs::remove_dir_all(&root);
+    }
 }
