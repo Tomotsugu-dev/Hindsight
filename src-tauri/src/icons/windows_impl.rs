@@ -139,7 +139,8 @@ unsafe fn extract_inner(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     }
 
     // GDI 给的是 BGRA，转成 image crate 期望的 RGBA
-    for px in pixels.chunks_exact_mut(4) {
+    // （as_chunks_mut：clippy 1.98 起对常量块长的 chunks_exact_mut 报错）
+    for px in pixels.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
 
