@@ -96,6 +96,10 @@ pub struct ActivityPayload {
     pub window_title: Option<String>,
     pub category_id: String,
     pub updated_at: String,
+    /// 浏览器会话的网站域名（v0.8.20+）。老版本写的 ndjson 没这个字段 → None；
+    /// 老版本读到新字段会按 serde 默认行为忽略。None 时不序列化，行宽不变。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url_host: Option<String>,
 }
 
 /// devices 行的 JSON 形式（device.json 同步过来的设备元数据）。

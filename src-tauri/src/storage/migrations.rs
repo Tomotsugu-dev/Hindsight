@@ -874,12 +874,22 @@ const ADD_ACTIVITIES_EXCLUDED_SQL: &str = r#"
     ALTER TABLE activities ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0;
 "#;
 
+/// v37：activities 加 `url_host` 列——浏览器会话的网站域名（只存域名，如
+/// `github.com`，完整 URL 一如既往不落盘），应用详情「按网站」聚合用。
+/// 仅浏览器会话且当次读到地址栏时写入；非浏览器 / 读不到 / 浏览器内部页 /
+/// 命中隐私 URL 关键词 / 用户关闭「记录浏览器网站域名」时为 NULL。
+/// 随 ndjson 同步（对端镜像行也带域名）；历史行无法回填（当时没存 URL）。
+/// 不建索引：只在单应用详情里按 (title, host) 聚合，走既有日期索引即可。
+const ADD_ACTIVITIES_URL_HOST_SQL: &str = r#"
+    ALTER TABLE activities ADD COLUMN url_host TEXT;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 26] = [
+    let extras: [&'static str; 27] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -906,6 +916,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         CLEANUP_GARBAGE_PROCESS_NAMES_SQL,     // v34
         ADD_SCREENSHOT_DEDUP_MAP_SQL,          // v35
         ADD_ACTIVITIES_EXCLUDED_SQL,           // v36
+        ADD_ACTIVITIES_URL_HOST_SQL,           // v37
     ];
     pool.0
         .call(move |conn| {
@@ -1011,7 +1022,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            36
+            37
         );
 
         let tables = table_names(&pool).await;
@@ -1037,9 +1048,9 @@ mod tests {
             assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
         }
 
-        // ALTER 链条抽查:同步三列(v8)+ 忽略标记(v36)+ 分类的图标/排序/大类列(v6/v16/v28)
+        // ALTER 链条抽查:同步三列(v8)+ 忽略标记(v36)+ 网站域名(v37)+ 分类的图标/排序/大类列(v6/v16/v28)
         let a = columns(&pool, "activities").await;
-        for c in ["remote_id", "updated_at", "origin", "excluded"] {
+        for c in ["remote_id", "updated_at", "origin", "excluded", "url_host"] {
             assert!(a.iter().any(|x| x == c), "activities 缺列 {c}");
         }
         let cat = columns(&pool, "categories").await;
@@ -1087,7 +1098,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            36
+            37
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1142,7 +1153,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            36
+            37
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

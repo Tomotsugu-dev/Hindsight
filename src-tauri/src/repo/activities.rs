@@ -22,6 +22,7 @@ pub async fn insert_new(
     captured_at: DateTime<Local>,
     screenshot_path: Option<String>,
     excluded: bool,
+    url_host: Option<String>,
 ) -> Result<i64> {
     let info = info.clone();
     let started = captured_at.to_rfc3339();
@@ -44,8 +45,8 @@ pub async fn insert_new(
                     started_at, ended_at, duration_secs,
                     local_date, local_hour,
                     process_name, window_title, category_id, screenshot_path,
-                    device_id, updated_at, origin, excluded
-                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other', ?, ?, ?, 'local', ?)",
+                    device_id, updated_at, origin, excluded, url_host
+                ) VALUES (?, ?, 0, ?, ?, ?, ?, 'other', ?, ?, ?, 'local', ?, ?)",
                 rusqlite::params![
                     started,
                     ended,
@@ -57,6 +58,7 @@ pub async fn insert_new(
                     device_id,
                     updated,
                     excluded,
+                    url_host,
                 ],
             )
             .db()?;
@@ -535,7 +537,7 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let _id = insert_new(&pool, &info, captured, None, false)
+        let _id = insert_new(&pool, &info, captured, None, false, None)
             .await
             .unwrap();
 
@@ -564,8 +566,10 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let dl_id = insert_new(&pool, &dl, captured, None, false).await.unwrap();
-        let vim_id = insert_new(&pool, &vim, captured, None, false)
+        let dl_id = insert_new(&pool, &dl, captured, None, false, None)
+            .await
+            .unwrap();
+        let vim_id = insert_new(&pool, &vim, captured, None, false, None)
             .await
             .unwrap();
 
@@ -621,7 +625,7 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let id = insert_new(&pool, &info, captured, None, false)
+        let id = insert_new(&pool, &info, captured, None, false, None)
             .await
             .unwrap();
         let insert_updated = read_updated_at(&pool, id).await;
@@ -677,7 +681,7 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let id = insert_new(&pool, &info, captured, None, false)
+        let id = insert_new(&pool, &info, captured, None, false, None)
             .await
             .unwrap();
         seal_session(&pool, id, captured + Duration::seconds(30))
@@ -884,7 +888,7 @@ mod tests {
             pid: 0,
         };
         let captured = Local::now();
-        let id = insert_new(&pool, &info, captured, None, false)
+        let id = insert_new(&pool, &info, captured, None, false, None)
             .await
             .unwrap();
 

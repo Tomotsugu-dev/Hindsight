@@ -352,7 +352,9 @@
         "info": "Ignorar capturas de tela quando a URL na barra de endereços do navegador contém qualquer um destes (não diferencia maiúsculas de minúsculas).",
         "rowLabel": "Palavras-chave de URL",
         "addLabel": "Adicionar fragmento de URL",
-        "placeholder": "ex.: /login"
+        "placeholder": "ex.: /login",
+        "hostLabel": "Registrar domínios de sites",
+        "hostInfo": "Alimenta a visão \"Por site\" nos detalhes do aplicativo. Apenas o domínio (ex.: github.com) é armazenado, nunca a URL completa; páginas que correspondem às palavras-chave acima também não são registradas."
       },
       "app": {
         "title": "Filtro de aplicativos",
@@ -487,6 +489,12 @@
       "button": "Ignorar esta janela nas estatísticas",
       "done": "Ignorada — {{count}} registros antigos excluídos",
       "undo": "Desfazer"
+    },
+    "sites": {
+      "title": "Por site",
+      "unknown": "Sites não identificados",
+      "unknownHint": "Registros anteriores à atualização, navegadores sem acesso à barra de endereços ou configurações sem suporte, como Firefox / Linux",
+      "noHost": "Nenhum site foi identificado neste período: registros anteriores à atualização não têm domínio; ler a barra de endereços exige permissão (macOS: Ajustes do Sistema · Privacidade e Segurança · Automação); Firefox e Linux ainda não são suportados."
     }
   },
   "today": {

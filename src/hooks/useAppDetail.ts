@@ -83,7 +83,7 @@ export function useAppDetail(
       })
       .catch(() => {
         if (cancelled) return;
-        setState({ detail: { buckets: [], titles: [] }, loading: false });
+        setState({ detail: { buckets: [], titles: [], isBrowser: false }, loading: false });
       });
     return () => {
       cancelled = true;

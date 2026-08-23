@@ -77,6 +77,26 @@ pub fn try_get_foreground_browser_url(app_name: &str) -> Option<String> {
     imp::try_get_url(app_name)
 }
 
+/// 统计用的网站域名：只认 http/https,取 host 小写、去掉 `www.` 前缀、不带端口。
+/// 浏览器内部页（chrome:// / about: / file://）、IP 以外的解析失败、空 host 一律 None
+/// ——这些不是"网站"。子域名保留（docs.github.com 与 github.com 分开），不引入
+/// 公共后缀库。完整 URL 永不落盘，落盘的只有这个返回值。
+pub fn host_for_stats(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url.trim()).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str()?.to_ascii_lowercase();
+    let host = host.trim_end_matches('.');
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    // "www." 这种只剩前缀的壳不是网站
+    if host.is_empty() || host == "www" {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
 /// 把平台拿到的字符串规范化成 URL。能解析就返回，否则 None。
 /// Windows / macOS 子模块共用。
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -111,6 +131,40 @@ pub(crate) fn normalize_url(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// host_for_stats:小写、去 www.、去端口、保留子域;非 http(s) 与内部页为 None。
+    #[test]
+    fn host_for_stats_normalizes_and_filters() {
+        assert_eq!(
+            host_for_stats("https://www.GitHub.com/Tomotsugu-dev/Hindsight?x=1"),
+            Some("github.com".into())
+        );
+        assert_eq!(
+            host_for_stats("https://docs.github.com/en"),
+            Some("docs.github.com".into()),
+            "子域名保留,不并入主域"
+        );
+        assert_eq!(
+            host_for_stats("http://localhost:5173/chat"),
+            Some("localhost".into()),
+            "端口不进域名"
+        );
+        assert_eq!(
+            host_for_stats("https://192.168.1.10:8080/"),
+            Some("192.168.1.10".into())
+        );
+        assert_eq!(host_for_stats("https://www./"), None, "去 www. 后为空");
+        for internal in [
+            "chrome://settings",
+            "about:blank",
+            "file:///tmp/a.html",
+            "edge://flags",
+        ] {
+            assert_eq!(host_for_stats(internal), None, "{internal} 不是网站");
+        }
+        assert_eq!(host_for_stats("not a url"), None);
+        assert_eq!(host_for_stats(""), None);
+    }
 
     #[test]
     fn 浏览器名命中() {

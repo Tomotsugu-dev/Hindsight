@@ -115,6 +115,8 @@ struct Inner {
     privacy_url_keywords: Mutex<Vec<String>>,
     /// 应用 / 标题关键词；app_name 或 window title 命中其中一条即跳过截图
     privacy_app_keywords: Mutex<Vec<String>>,
+    /// 「记录浏览器网站域名」开关：关了浏览器会话不再写 url_host(只影响新行)。
+    record_browser_host: Mutex<bool>,
     /// 用户多久不动鼠键就算"挂机"，超过这个秒数 tick 就 seal 当前会话不再延续。
     /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
     idle_threshold_secs: Mutex<u32>,
@@ -159,6 +161,9 @@ impl CaptureService {
                 screenshot: Mutex::new(ScreenshotConfig::default()),
                 privacy_url_keywords: Mutex::new(Vec::new()),
                 privacy_app_keywords: Mutex::new(Vec::new()),
+                // 真实值由 bootstrap 按 settings 推入。默认 false = fail-closed：
+                // 漏推一次最多"少记域名"，绝不会在用户关掉开关后继续记录。
+                record_browser_host: Mutex::new(false),
                 // 真实值由 lib.rs 启动时根据 settings 写入；此处给个安全默认（180s = 3min），
                 // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
                 idle_threshold_secs: Mutex::new(180),
@@ -301,6 +306,11 @@ impl CaptureService {
     pub async fn set_privacy_keywords(&self, url_keywords: Vec<String>, app_keywords: Vec<String>) {
         *self.inner.privacy_url_keywords.lock().await = url_keywords;
         *self.inner.privacy_app_keywords.lock().await = app_keywords;
+    }
+
+    /// 更新「记录浏览器网站域名」开关。设置页改完后由命令层调一次。
+    pub async fn set_record_browser_host(&self, enabled: bool) {
+        *self.inner.record_browser_host.lock().await = enabled;
     }
 
     /// 拉当前运行时状态（today_count 实时查 DB；其它字段从内存读）。
@@ -616,7 +626,18 @@ async fn tick(inner: &Inner) -> Result<()> {
             let rules = inner.ignore_rules.lock().await;
             ignore::is_excluded(&info.app_name, &info.title, &rules)
         };
-        let id = activities::insert_new(&inner.pool, &info, now, shot, excluded).await?;
+        // 网站域名（应用详情「按网站」用）：只存域名，完整 URL 不落盘。
+        // 与截图**共用同一个隐私判定** `skip`（URL 关键词 + 应用/标题关键词，
+        // 任一命中连域名都不留），并同样 fail-closed：`privacy_url` 在继承时为 None
+        // ——继承只证明焦点没变、不证明当前页面；地址栏读取持续失败（如权限被撤）
+        // 时旧 URL 会被无限继承，按它记域名会把整段浏览错记到陈旧网站下。
+        let url_host = if skip {
+            None
+        } else {
+            let enabled = *inner.record_browser_host.lock().await;
+            stats_host(privacy_url, is_browser, enabled)
+        };
+        let id = activities::insert_new(&inner.pool, &info, now, shot, excluded, url_host).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
         if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {
             log::warn!("ensure_group 失败 ({}): {e}", info.app_name);
@@ -727,6 +748,17 @@ fn idle_seal_end(
     media_end: Option<DateTime<Local>>,
 ) -> DateTime<Local> {
     media_end.map_or(input_end, |t| t.max(input_end))
+}
+
+/// 活动行该落哪个网站域名：仅浏览器 + 开关开时取 [`browser_url::host_for_stats`]，
+/// 其余一律 None。隐私关键词命中与"继承的 URL 视为未知"两道闸在调用方
+/// （与截图共用同一个 skip 判定、同一个 privacy_url），这里不重复实现。
+fn stats_host(url: Option<&str>, is_browser: bool, enabled: bool) -> Option<String> {
+    let u = url?;
+    if !is_browser || !enabled {
+        return None;
+    }
+    browser_url::host_for_stats(u)
 }
 
 /// 浏览器 URL 的继承判定:本次没抓到 URL、但同 app 的上个会话有已知 URL 时继承,
@@ -898,6 +930,26 @@ mod tests {
         // 媒体记录早于输入(纯挂机):按输入
         let earlier = input - Duration::seconds(300);
         assert_eq!(idle_seal_end(input, Some(earlier)), input);
+    }
+
+    /// 域名落盘的闸：非浏览器 / 开关关 / 内部页 / 无 URL（未抓到或继承，调用方
+    /// 传 None）→ None；正常网页取规范化域名。隐私关键词那道闸在调用方的 skip 判定里。
+    #[test]
+    fn stats_host_gates() {
+        let u = Some("https://www.GitHub.com/Tomotsugu-dev/Hindsight");
+        assert_eq!(stats_host(u, true, true), Some("github.com".into()));
+        assert_eq!(stats_host(u, false, true), None, "非浏览器不记");
+        assert_eq!(stats_host(u, true, false), None, "开关关不记");
+        assert_eq!(
+            stats_host(Some("chrome://settings"), true, true),
+            None,
+            "内部页不是网站"
+        );
+        assert_eq!(
+            stats_host(None, true, true),
+            None,
+            "继承/未抓到的 URL 由调用方传 None"
+        );
     }
 
     #[test]

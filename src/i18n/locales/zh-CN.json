@@ -352,7 +352,9 @@
         "info": "浏览器地址栏 URL 包含其中任意一条（忽略大小写）时跳过截图。",
         "rowLabel": "URL 关键词",
         "addLabel": "添加 URL 后缀",
-        "placeholder": "如 /login"
+        "placeholder": "如 /login",
+        "hostLabel": "记录浏览器网站域名",
+        "hostInfo": "用于应用详情里的「按网站」统计。只记录域名（如 github.com），不记录完整网址；命中上方关键词的页面也不记录域名。"
       },
       "app": {
         "title": "应用过滤",
@@ -487,6 +489,12 @@
       "button": "从统计中忽略此窗口",
       "done": "已忽略，{{count}} 条历史记录已排除",
       "undo": "撤销"
+    },
+    "sites": {
+      "title": "按网站",
+      "unknown": "未识别网站",
+      "unknownHint": "升级前的记录、未授权读取地址栏，或 Firefox / Linux 等暂不支持读取网址的情况",
+      "noHost": "这段时间没有识别出网站：升级前的记录不含域名；读取地址栏需要授权（macOS：系统设置 · 隐私与安全性 · 自动化）；Firefox 与 Linux 暂不支持。"
     }
   },
   "today": {

@@ -71,6 +71,8 @@ pub struct AppDetail {
     pub buckets: Vec<DetailBucket>,
     /// 按窗口标题聚合的用时（降序）。原始标题，前端再剥 app 名后缀 + 合并。
     pub titles: Vec<TitleUsage>,
+    /// 代表进程是否浏览器——前端据此决定要不要把标题列表按网站分组展示。
+    pub is_browser: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -86,6 +88,9 @@ pub struct DetailBucket {
 pub struct TitleUsage {
     pub title: String,
     pub secs: u32,
+    /// 浏览器会话的网站域名（如 github.com）；非浏览器 / 老记录 / 读不到地址栏
+    /// 时为 None。前端按它把页面行分到「按网站」的各组里。
+    pub host: Option<String>,
 }
 
 /// 详情时间柱的聚合粒度：日报按小时，周 / 月报按天。
@@ -417,6 +422,7 @@ async fn app_range_detail(
 ) -> Result<AppDetail> {
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
+    let name_is_browser = crate::capture::browser_url::is_browser_app(&icon_process);
 
     let (raw_buckets, titles): (std::collections::HashMap<String, u64>, Vec<TitleUsage>) = pool
         .0
@@ -513,9 +519,11 @@ async fn app_range_detail(
                 }
             }
 
-            // 3) 窗口标题用时：按 window_title 聚合（空标题归一为空串），降序
+            // 3) 窗口标题用时：按 (window_title, url_host) 聚合（空标题归一为空串），降序。
+            //    同一标题在不同域名下（如"首页"）分开计——它们本就是不同网站的页面。
             let tsql = format!(
-                "SELECT COALESCE(a.window_title, '') AS t, SUM(a.duration_secs) AS total
+                "SELECT COALESCE(a.window_title, '') AS t, a.url_host AS h,
+                        SUM(a.duration_secs) AS total
                  FROM activities a
                  LEFT JOIN app_group_members gm
                    ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
@@ -525,7 +533,7 @@ async fn app_range_detail(
                    AND COALESCE(g.id, a.process_name) = ?
                    AND a.excluded = 0
                    {}
-                 GROUP BY t
+                 GROUP BY t, h
                  ORDER BY total DESC",
                 device.sql_clause()
             );
@@ -541,7 +549,8 @@ async fn app_range_detail(
                 .query_map(tparams.as_slice(), |r| {
                     Ok(TitleUsage {
                         title: r.get::<_, String>(0)?,
-                        secs: r.get::<_, i64>(1)?.max(0) as u32,
+                        host: r.get::<_, Option<String>>(1)?,
+                        secs: r.get::<_, i64>(2)?.max(0) as u32,
                     })
                 })
                 .db()?;
@@ -576,7 +585,15 @@ async fn app_range_detail(
         }
     };
 
-    Ok(AppDetail { buckets, titles })
+    // 数据优先：有域名的行说明采集侧已把它当浏览器（合并组的代表进程是
+    // MIN(process_name)，可能是组里的非浏览器成员名）；没数据再按名字判——
+    // 给"是浏览器但一个域名都没有"的提示用。
+    let is_browser = name_is_browser || titles.iter().any(|t| t.host.is_some());
+    Ok(AppDetail {
+        buckets,
+        titles,
+        is_browser,
+    })
 }
 
 /// 日报详情：当天按小时聚合（24 桶）。`day_offset = 0` 今天。
@@ -1307,6 +1324,78 @@ mod tests {
             };
             assert_eq!(b.secs, expect, "hour={} 的 secs 不符", b.key);
         }
+    }
+
+    /// 「按网站」分组的原料：titles 行带 url_host，同标题不同域名分开计
+    /// （"首页"在 github 和 youtube 各算各的），无域名的老行照常返回且 host=None；
+    /// 代表进程是浏览器时 is_browser=true，否则 false——前端据此决定是否分组。
+    #[tokio::test]
+    async fn app_day_detail_titles_carry_url_host_and_browser_flag() {
+        let pool = fresh_test_pool().await;
+        let today = Local::now().date_naive().format("%Y-%m-%d").to_string();
+        let d = today.clone();
+        pool.0
+            .call(move |conn| {
+                let rows: [(&str, &str, Option<&str>, i64); 5] = [
+                    (
+                        "Google Chrome",
+                        "Hindsight - GitHub",
+                        Some("github.com"),
+                        120,
+                    ),
+                    ("Google Chrome", "首页", Some("github.com"), 30),
+                    ("Google Chrome", "首页", Some("youtube.com"), 45),
+                    ("Google Chrome", "旧记录", None, 60),
+                    ("Code", "main.rs", None, 50),
+                ];
+                for (i, (p, t, h, secs)) in rows.iter().enumerate() {
+                    let at = format!("{d}T10:0{i}:00Z");
+                    conn.execute(
+                        "INSERT INTO activities(
+                            started_at, ended_at, duration_secs, local_date, local_hour,
+                            process_name, window_title, category_id, device_id,
+                            updated_at, origin, url_host
+                         ) VALUES(?1, ?1, ?2, ?3, 10, ?4, ?5, 'other', 'dev-a', ?1, 'local', ?6)",
+                        rusqlite::params![at, secs, d, p, t, h],
+                    )
+                    .db()?;
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let chrome = app_day_detail(&pool, 0, "Google Chrome".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert!(chrome.is_browser, "Google Chrome 是浏览器");
+        let secs_of = |t: &str, h: Option<&str>| {
+            chrome
+                .titles
+                .iter()
+                .find(|x| x.title == t && x.host.as_deref() == h)
+                .map(|x| x.secs)
+        };
+        assert_eq!(secs_of("Hindsight - GitHub", Some("github.com")), Some(120));
+        assert_eq!(
+            secs_of("首页", Some("github.com")),
+            Some(30),
+            "同标题不同域名分开计"
+        );
+        assert_eq!(secs_of("首页", Some("youtube.com")), Some(45));
+        assert_eq!(
+            secs_of("旧记录", None),
+            Some(60),
+            "无域名行照常返回,host=None"
+        );
+        assert_eq!(chrome.titles.len(), 4, "不掺入组外应用");
+
+        let code = app_day_detail(&pool, 0, "Code".into(), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert!(!code.is_browser, "Code 不是浏览器");
+        assert_eq!(code.titles.len(), 1);
+        assert_eq!(code.titles[0].host, None);
     }
 
     /// 测 [`app_range_detail`] 的组 key 解析：icon_process 是组内任一成员时，

@@ -225,7 +225,7 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
             let mut stmt = conn
                 .prepare(
                     "SELECT id, started_at, ended_at, duration_secs, local_date, local_hour,
-                            process_name, window_title, category_id, updated_at
+                            process_name, window_title, category_id, updated_at, url_host
                      FROM activities
                      WHERE device_id = ?1 AND local_date = ?2
                      ORDER BY id",
@@ -244,6 +244,7 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
                         window_title: r.get(7)?,
                         category_id: r.get(8)?,
                         updated_at: r.get(9)?,
+                        url_host: r.get(10)?,
                     })
                 })
                 .db()?

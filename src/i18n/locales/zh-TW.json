@@ -352,7 +352,9 @@
         "info": "瀏覽器位址列 URL 包含其中任意一條（忽略大小寫）時跳過截圖。",
         "rowLabel": "URL 關鍵詞",
         "addLabel": "新增 URL 字尾",
-        "placeholder": "如 /login"
+        "placeholder": "如 /login",
+        "hostLabel": "記錄瀏覽器網站網域",
+        "hostInfo": "用於應用程式詳情裡的「按網站」統計。只記錄網域（如 github.com），不記錄完整網址；命中上方關鍵詞的頁面也不記錄網域。"
       },
       "app": {
         "title": "應用程式過濾",
@@ -487,6 +489,12 @@
       "button": "從統計中忽略此視窗",
       "done": "已忽略，{{count}} 筆歷史記錄已排除",
       "undo": "復原"
+    },
+    "sites": {
+      "title": "按網站",
+      "unknown": "未識別網站",
+      "unknownHint": "升級前的記錄、未授權讀取位址列，或 Firefox / Linux 等暫不支援讀取網址的情況",
+      "noHost": "這段時間沒有辨識出網站：升級前的記錄不含網域；讀取位址列需要授權（macOS：系統設定 · 隱私權與安全性 · 自動化）；Firefox 與 Linux 暫不支援。"
     }
   },
   "today": {

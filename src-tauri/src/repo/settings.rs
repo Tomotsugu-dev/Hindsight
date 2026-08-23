@@ -54,6 +54,10 @@ pub struct Settings {
     /// 应用过滤：应用名或窗口标题包含其中任意一条（子串忽略大小写）即跳过截图。
     /// 默认空，用户自己加（如 微信、招商银行、特定文件名）
     pub privacy_app_keywords: Vec<String>,
+    /// 记录浏览器网站域名（应用详情「按网站」统计用）。只存域名如 github.com，
+    /// 完整 URL 一律不落盘；命中 privacy_url_keywords 的页面连域名也不记。
+    /// 默认开；关闭只影响之后的新记录。
+    pub record_browser_host: bool,
     /// 关闭按钮（窗口右上角 X）的行为：true=隐藏到托盘，false=直接退出。
     /// 默认 true 是为了避免用户误点导致采集中断。
     pub minimize_to_tray: bool,
@@ -132,6 +136,7 @@ impl Default for Settings {
             google_client_secret: String::new(),
             privacy_url_keywords: default_privacy_url_keywords(),
             privacy_app_keywords: Vec::new(),
+            record_browser_host: true,
             minimize_to_tray: true,
             auto_update_enabled: true,
             auto_update_interval: "weekly".to_string(),
@@ -189,6 +194,7 @@ pub struct SettingsPatch {
     pub google_client_secret: Option<String>,
     pub privacy_url_keywords: Option<Vec<String>>,
     pub privacy_app_keywords: Option<Vec<String>>,
+    pub record_browser_host: Option<bool>,
     pub minimize_to_tray: Option<bool>,
     pub auto_update_enabled: Option<bool>,
     pub auto_update_interval: Option<String>,
@@ -439,6 +445,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .privacy_app_keywords
             .map(sanitize_keywords)
             .unwrap_or(current.privacy_app_keywords),
+        record_browser_host: patch
+            .record_browser_host
+            .unwrap_or(current.record_browser_host),
         minimize_to_tray: patch.minimize_to_tray.unwrap_or(current.minimize_to_tray),
         auto_update_enabled: patch
             .auto_update_enabled
@@ -615,6 +624,7 @@ mod tests {
             google_client_secret: "sec-456".into(),
             privacy_url_keywords: vec!["/checkout".into()],
             privacy_app_keywords: vec!["微信".into()],
+            record_browser_host: false,
             minimize_to_tray: false,
             auto_update_enabled: false,
             auto_update_interval: "daily".into(),

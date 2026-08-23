@@ -352,7 +352,9 @@
         "info": "Skip screenshots when the browser address bar URL contains any of these (case-insensitive).",
         "rowLabel": "URL keywords",
         "addLabel": "Add URL fragment",
-        "placeholder": "e.g. /login"
+        "placeholder": "e.g. /login",
+        "hostLabel": "Record website domains",
+        "hostInfo": "Powers the \"By site\" view in app details. Only the domain (e.g. github.com) is stored, never the full URL; pages matching the keywords above are not recorded either."
       },
       "app": {
         "title": "App filter",
@@ -487,6 +489,12 @@
       "button": "Exclude this window from stats",
       "done": "Ignored — {{count}} past records excluded",
       "undo": "Undo"
+    },
+    "sites": {
+      "title": "By site",
+      "unknown": "Unidentified sites",
+      "unknownHint": "Records from before the upgrade, browsers without address-bar access, or unsupported setups such as Firefox / Linux",
+      "noHost": "No websites were identified in this period: records from before the upgrade have no domain; reading the address bar needs permission (macOS: System Settings · Privacy & Security · Automation); Firefox and Linux are not supported yet."
     }
   },
   "today": {

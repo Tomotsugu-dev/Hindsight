@@ -338,3 +338,113 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* —— 按网站（浏览器应用：域名 → 页面 两级折叠） —— */
+.sectionTitle {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.siteList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.siteHead {
+  /* 整行可点：域名行同时是展开开关 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.siteHead:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.siteHead:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.siteChevron {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+
+.siteChevronOpen {
+  transform: rotate(90deg);
+}
+
+.siteHost {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.siteHostUnknown {
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.siteInfo {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.pageList {
+  /* 页面行缩进到箭头之后，视觉上从属于上面的域名 */
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0 0 0 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.siteHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.siteHint svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .siteChevron {
+    transition: none;
+  }
+}
+
+.siteGroup {
+  display: flex;
+  flex-direction: column;
+}

@@ -191,6 +191,7 @@ pub async fn init_capture_service(
         cfg.privacy_app_keywords.clone(),
     )
     .await;
+    svc.set_record_browser_host(cfg.record_browser_host).await;
     svc.set_idle_threshold(cfg.idle_threshold_seconds).await;
     svc.set_ignore_rules(cfg.ignore_rules.clone()).await;
     if cfg.capture_enabled {

@@ -604,6 +604,7 @@ async fn merge_activities(
             &row.category_id,
             &updated_at,
             excluded,
+            row.url_host.clone(),
         )
         .await
         {
@@ -1180,6 +1181,7 @@ async fn upsert_remote_activity(
     category_id: &str,
     updated_at: &str,
     excluded: bool,
+    url_host: Option<String>,
 ) -> Result<()> {
     // 是否本机自己的 ndjson 拉回来？
     // 配合 v26 migration（local 行 `remote_id = id`）+ pull self-skip 移除后的设计：
@@ -1223,8 +1225,8 @@ async fn upsert_remote_activity(
                             "INSERT INTO activities(
                                id, started_at, ended_at, duration_secs, local_date, local_hour,
                                process_name, window_title, category_id, screenshot_path,
-                               device_id, remote_id, updated_at, origin, excluded
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local', ?)",
+                               device_id, remote_id, updated_at, origin, excluded, url_host
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local', ?, ?)",
                             rusqlite::params![
                                 explicit_id,
                                 started_at,
@@ -1239,6 +1241,7 @@ async fn upsert_remote_activity(
                                 remote_id,
                                 updated_at,
                                 excluded,
+                                url_host,
                             ],
                         )
                         .db()?;
@@ -1248,8 +1251,8 @@ async fn upsert_remote_activity(
                             "INSERT INTO activities(
                                started_at, ended_at, duration_secs, local_date, local_hour,
                                process_name, window_title, category_id, screenshot_path,
-                               device_id, remote_id, updated_at, origin, excluded
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?)",
+                               device_id, remote_id, updated_at, origin, excluded, url_host
+                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?, ?)",
                             rusqlite::params![
                                 started_at,
                                 ended_at,
@@ -1263,6 +1266,7 @@ async fn upsert_remote_activity(
                                 remote_id,
                                 updated_at,
                                 excluded,
+                                url_host,
                             ],
                         )
                         .db()?;
@@ -1270,12 +1274,13 @@ async fn upsert_remote_activity(
                 }
                 Some((id, cur_updated)) => {
                     if updated_at > cur_updated {
+                        // url_host 随行更新：seal 后对端重推同一行，域名应与来源设备一致
                         conn.execute(
                             "UPDATE activities SET
                                started_at = ?, ended_at = ?, duration_secs = ?,
                                local_date = ?, local_hour = ?,
                                process_name = ?, window_title = ?, category_id = ?,
-                               updated_at = ?
+                               updated_at = ?, url_host = ?
                              WHERE id = ?",
                             rusqlite::params![
                                 started_at,
@@ -1287,6 +1292,7 @@ async fn upsert_remote_activity(
                                 window_title,
                                 category_id,
                                 updated_at,
+                                url_host,
                                 id,
                             ],
                         )
@@ -1429,6 +1435,7 @@ mod tests {
             window_title: None,
             category_id: "other".into(),
             updated_at: format!("{DAY}T23:59:59Z"),
+            url_host: None,
         };
         let body = serde_json::to_string(&newer).unwrap();
         merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
@@ -1441,6 +1448,85 @@ mod tests {
 
     async fn excluded_of(pool: &DbPool, device_id: &str, remote_id: &str) -> i64 {
         row_state(pool, device_id, remote_id).await.1
+    }
+
+    async fn host_of(pool: &DbPool, device_id: &str, remote_id: &str) -> Option<String> {
+        let device_id = device_id.to_string();
+        let remote_id = remote_id.to_string();
+        pool.0
+            .call(move |conn| {
+                let v = conn
+                    .query_row(
+                        "SELECT url_host FROM activities WHERE device_id = ?1 AND remote_id = ?2",
+                        rusqlite::params![device_id, remote_id],
+                        |r| r.get::<_, Option<String>>(0),
+                    )
+                    .db()?;
+                Ok(v)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// url_host 随 ndjson 往返：INSERT 带上、LWW UPDATE 跟着来源更新；
+    /// None 时不序列化该字段；老版本写的行（没有 urlHost）解析不报错、落 None。
+    #[tokio::test]
+    async fn merge_activities_carries_url_host() {
+        let pool = fresh_test_pool().await;
+        let mut p = ActivityPayload {
+            id: 7,
+            started_at: format!("{DAY}T10:00:00Z"),
+            ended_at: format!("{DAY}T10:00:30Z"),
+            duration_secs: 30,
+            local_date: DAY.into(),
+            local_hour: 10,
+            process_name: "Google Chrome".into(),
+            window_title: Some("Hindsight - GitHub".into()),
+            category_id: "other".into(),
+            updated_at: format!("{DAY}T10:00:30Z"),
+            url_host: Some("github.com".into()),
+        };
+        let body = serde_json::to_string(&p).unwrap();
+        assert!(body.contains("\"urlHost\":\"github.com\""), "{body}");
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            host_of(&pool, OTHER_DEVICE, "7").await,
+            Some("github.com".into()),
+            "INSERT 应带域名"
+        );
+
+        // 来源设备重推更新的同一行（updated_at 更新）：域名随之更新
+        p.updated_at = format!("{DAY}T11:00:00Z");
+        p.url_host = Some("docs.github.com".into());
+        let body = serde_json::to_string(&p).unwrap();
+        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            host_of(&pool, OTHER_DEVICE, "7").await,
+            Some("docs.github.com".into()),
+            "LWW UPDATE 应更新域名"
+        );
+
+        // None 不序列化；老版本 ndjson 没有该字段也能解析
+        p.url_host = None;
+        assert!(!serde_json::to_string(&p).unwrap().contains("urlHost"));
+        let legacy = format!(
+            r#"{{"id":8,"startedAt":"{DAY}T12:00:00Z","endedAt":"{DAY}T12:00:30Z","durationSecs":30,"localDate":"{DAY}","localHour":12,"processName":"Google Chrome","windowTitle":null,"categoryId":"other","updatedAt":"{DAY}T12:00:30Z"}}"#
+        );
+        merge_activities(
+            &pool,
+            TEST_SELF_ID,
+            OTHER_DEVICE,
+            DAY,
+            legacy.as_bytes(),
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(host_of(&pool, OTHER_DEVICE, "8").await, None);
     }
 
     async fn row_state(pool: &DbPool, device_id: &str, remote_id: &str) -> (i64, i64) {
@@ -1474,6 +1560,7 @@ mod tests {
             window_title: None,
             category_id: "other".into(),
             updated_at: format!("{DAY}T10:0{id}:30Z"),
+            url_host: None,
         };
         serde_json::to_string(&p).unwrap()
     }

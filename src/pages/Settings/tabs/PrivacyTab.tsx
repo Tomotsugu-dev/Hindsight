@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { AppWindow, EyeOff, Globe, Plus, X } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
+import { Toggle } from "../../../components/FormControls/Toggle";
 import { AppIcon } from "../../../components/AppIcon/AppIcon";
 import { useSettings } from "../../../state/settings";
 import { api, type AppGroup } from "../../../api/hindsight";
@@ -246,6 +247,15 @@ export default function PrivacyTab() {
             onChange={(next) => update({ privacyUrlKeywords: next })}
             addLabel={t("settings.privacy.browser.addLabel")}
             placeholder={t("settings.privacy.browser.placeholder")}
+          />
+        </Row>
+        <Row
+          label={t("settings.privacy.browser.hostLabel")}
+          description={t("settings.privacy.browser.hostInfo")}
+        >
+          <Toggle
+            checked={settings.recordBrowserHost}
+            onChange={(v) => update({ recordBrowserHost: v })}
           />
         </Row>
       </Section>

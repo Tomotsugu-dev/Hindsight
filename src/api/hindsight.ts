@@ -29,6 +29,8 @@ export interface AppDetail {
   buckets: DetailBucket[];
   /** 按窗口标题聚合的用时（降序）；原始标题，前端再剥 app 名后缀 + 合并 */
   titles: TitleUsage[];
+  /** 代表进程是否浏览器——是则详情按网站分组展示 */
+  isBrowser: boolean;
 }
 
 export interface DetailBucket {
@@ -40,6 +42,8 @@ export interface DetailBucket {
 export interface TitleUsage {
   title: string;
   secs: number;
+  /** 浏览器会话的网站域名（如 github.com）；非浏览器 / 老记录 / 读不到地址栏为 null */
+  host: string | null;
 }
 
 export interface DaySummaryDto {
@@ -557,6 +561,9 @@ export interface Settings {
   /** 应用过滤：应用名或窗口标题包含其中任意一条（忽略大小写）即跳过截图。
    *  默认空，用户自填（如 微信、招商银行）。 */
   privacyAppKeywords: string[];
+  /** 记录浏览器网站域名（应用详情「按网站」统计用）。只存域名，不存完整网址；
+   *  命中 privacyUrlKeywords 的页面连域名也不记。默认 true，关闭只影响新记录。 */
+  recordBrowserHost: boolean;
   /** 关闭按钮（窗口右上角 X）行为：true=隐藏到系统托盘，false=直接退出。 */
   minimizeToTray: boolean;
   /** 是否自动检查应用更新 */
