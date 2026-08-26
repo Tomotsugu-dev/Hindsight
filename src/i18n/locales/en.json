@@ -273,6 +273,10 @@
           "xlsx": {
             "label": "Excel · Spreadsheet",
             "hint": "Multiple sheets — overview, trends and raw details; filter, sort and chart directly."
+          },
+          "html": {
+            "label": "HTML · Web report",
+            "hint": "A single self-contained page with charts and colours — just double-click it, no internet needed."
           }
         },
         "confirm": "Export",
@@ -298,7 +302,9 @@
           "colShare": "Share",
           "colApp": "App",
           "noData": "(no records)",
-          "topAppsTitle": "Top {{n}} apps"
+          "topAppsTitle": "Top {{n}} apps",
+          "expandAll": "Expand all",
+          "collapseAll": "Collapse all"
         },
         "quick": {
           "today": "Today",

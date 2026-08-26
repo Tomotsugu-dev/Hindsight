@@ -273,6 +273,10 @@
           "xlsx": {
             "label": "Excel · 表",
             "hint": "概要・推移・生データ明細の複数シート。フィルター・並べ替え・グラフ化ができます。"
+          },
+          "html": {
+            "label": "HTML · ウェブレポート",
+            "hint": "グラフと配色を埋め込んだ単一の HTML ファイル。ダブルクリックでブラウザ表示、オフラインでも閲覧できます。"
           }
         },
         "confirm": "エクスポート",
@@ -298,7 +302,9 @@
           "colShare": "割合",
           "colApp": "アプリ",
           "noData": "（記録なし）",
-          "topAppsTitle": "アプリ Top {{n}}"
+          "topAppsTitle": "アプリ Top {{n}}",
+          "expandAll": "すべて展開",
+          "collapseAll": "すべて折りたたむ"
         },
         "quick": {
           "today": "今日",

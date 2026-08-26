@@ -1,0 +1,29 @@
+/* 与并排的 DevicePicker.trigger 同规格(圆角、边框、控件底、过渡),
+   只是收成正方形图标钮——它是次要动作,不该比设备选择器更抢眼。 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--control-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out);
+}
+
+.btn:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+  border-color: color-mix(in oklab, var(--color-accent) 30%, var(--border-default));
+}
+
+.btn:active {
+  transform: scale(0.94);
+}

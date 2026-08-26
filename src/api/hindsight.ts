@@ -849,6 +849,9 @@ export const api = {
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),
   getAppIcon: (processName: string) =>
     invoke<string | null>("get_app_icon", { processName }),
+  /** 导出 HTML 报告用：图标直接返回 base64 data URL，不用再经过文件路径。 */
+  getAppIconDataUrl: (processName: string) =>
+    invoke<string | null>("get_app_icon_data_url", { processName }),
   getSettings: () => invoke<Settings>("get_settings"),
   updateSettings: (patch: SettingsPatch) =>
     invoke<Settings>("update_settings", { patch }),

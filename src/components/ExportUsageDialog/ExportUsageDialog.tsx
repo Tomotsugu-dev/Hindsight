@@ -10,6 +10,7 @@ import { DateRangePicker } from "../DateRangePicker/DateRangePicker";
 import { useDurationFormatter } from "../../utils/duration";
 import { api } from "../../api/hindsight";
 import {
+  collectAppIcons,
   collectUsageData,
   fmtLocalDate,
   renderUsageExport,
@@ -23,23 +24,27 @@ import styles from "./ExportUsageDialog.module.css";
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** 打开时预选的快速范围;默认「本月」。统计页各传自己的周期,
+   *  从日统计点导出就该默认导出今天,而不是让用户再点一次。 */
+  defaultQuick?: QuickKey;
 }
 
 /** 快速范围键(交互定稿):点击把自然周期回填进两个日期框,手改日期即取消高亮。 */
-type QuickKey = "today" | "week" | "month" | "year" | "all";
+export type QuickKey = "today" | "week" | "month" | "year" | "all";
 
 const QUICK_ORDER: QuickKey[] = ["today", "week", "month", "year", "all"];
 
 /** 各格式的 save dialog 文件过滤器。 */
 const SAVE_FILTERS: Record<UsageExportFormat, { name: string; extensions: string[] }> = {
   xlsx: { name: "Excel", extensions: ["xlsx"] },
+  html: { name: "HTML", extensions: ["html"] },
   json: { name: "JSON", extensions: ["json"] },
   markdown: { name: "Markdown", extensions: ["md"] },
 };
 
 /** Markdown 排最前并作为默认：多数用户要的是"能直接看的报告"。xlsx 紧随其后
  *  （多 sheet 宽表，给要在表格软件里看/画图的人）；JSON 留给程序处理。 */
-const FORMAT_ORDER: UsageExportFormat[] = ["markdown", "xlsx", "json"];
+const FORMAT_ORDER: UsageExportFormat[] = ["html", "markdown", "xlsx", "json"];
 
 /** 范围跨度(含两端;"2026-07-18"~"2026-07-19" = 2)。round 抹掉夏令时 ±1h。 */
 function spanDaysOf(start: string, end: string): number {
@@ -73,14 +78,14 @@ function quickRange(key: Exclude<QuickKey, "all">): { start: string; end: string
  * save dialog（默认下载目录）选路径 → 拉统计 → 写盘。只导统计数据，不含原始
  * 活动记录（后端也没有暴露原始记录查询）。
  */
-export function ExportUsageDialog({ open, onClose }: Props) {
+export function ExportUsageDialog({ open, onClose, defaultQuick = "month" }: Props) {
   const { t, i18n } = useTranslation();
   const fmtDuration = useDurationFormatter();
 
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [quick, setQuick] = useState<QuickKey | null>(null);
-  const [format, setFormat] = useState<UsageExportFormat>("markdown");
+  const [format, setFormat] = useState<UsageExportFormat>("html");
   const [busy, setBusy] = useState(false);
   const [donePath, setDonePath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,16 +97,18 @@ export function ExportUsageDialog({ open, onClose }: Props) {
   // 每次打开重置：默认「本月」，清掉上次的结果 / 错误
   useEffect(() => {
     if (open) {
-      const def = quickRange("month");
+      // "all" 的起点要查最早日期(调用方职责),预选退回本月
+      const key = defaultQuick === "all" ? "month" : defaultQuick;
+      const def = quickRange(key);
       setStart(def.start);
       setEnd(def.end);
-      setQuick("month");
-      setFormat("markdown");
+      setQuick(key);
+      setFormat("html");
       setBusy(false);
       setDonePath(null);
       setError(null);
     }
-  }, [open]);
+  }, [open, defaultQuick]);
 
   const rangeValid = start.length > 0 && end.length > 0 && start <= end;
   // 粒度按范围跨度自动推导(勾选框已砍——"范围选今天却导出整月"这类
@@ -190,7 +197,9 @@ export function ExportUsageDialog({ open, onClose }: Props) {
         );
         await api.exportUsageXlsx(chosenPath, spec);
       } else {
-        await api.writeTextFile(chosenPath, renderUsageExport(data, format, labels));
+        // HTML 报告把应用图标内嵌成 data URL;其余格式用不到,跳过收集省时间
+        const icons = format === "html" ? await collectAppIcons(data) : new Map();
+        await api.writeTextFile(chosenPath, renderUsageExport(data, format, labels, icons));
       }
       setDonePath(chosenPath);
     } catch (e) {
@@ -298,7 +307,7 @@ export function ExportUsageDialog({ open, onClose }: Props) {
                 <div className={styles.optionBody}>
                   <div className={styles.optionLabel}>
                     {t(`settings.data.export.formats.${f}.label`)}
-                    {f === "markdown" && (
+                    {f === "html" && (
                       <span className={styles.recommendBadge}>
                         {t("settings.data.export.recommended")}
                       </span>

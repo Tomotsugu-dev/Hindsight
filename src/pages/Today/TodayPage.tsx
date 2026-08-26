@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { ExportUsageButton } from "../../components/ExportUsageButton/ExportUsageButton";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import { PeriodCard } from "../../components/PeriodCard/PeriodCard";
 import { PeriodLegend } from "../../components/PeriodLegend/PeriodLegend";
@@ -261,7 +262,12 @@ export default function TodayPage() {
         onPrev={() => commit(-1)}
         onNext={() => commit(1)}
         onJumpToCurrent={jumpToCurrent}
-        rightExtras={<DevicePicker />}
+        rightExtras={
+          <>
+            <ExportUsageButton defaultQuick="today" />
+            <DevicePicker />
+          </>
+        }
         footer={
           view === "bars" ? (
             <PeriodLegend

@@ -273,6 +273,10 @@
           "xlsx": {
             "label": "Excel · 表格",
             "hint": "概覽、趨勢、原始明細多張工作表;可篩選、排序、直接作圖。"
+          },
+          "html": {
+            "label": "HTML · 網頁報告",
+            "hint": "自帶圖表與配色的單一網頁檔案,連按兩下用瀏覽器開啟,無需連網。"
           }
         },
         "confirm": "匯出",
@@ -298,7 +302,9 @@
           "colShare": "佔比",
           "colApp": "應用程式",
           "noData": "（無記錄）",
-          "topAppsTitle": "應用程式 Top {{n}}"
+          "topAppsTitle": "應用程式 Top {{n}}",
+          "expandAll": "全部展開",
+          "collapseAll": "全部收起"
         },
         "quick": {
           "today": "今天",

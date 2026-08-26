@@ -272,6 +272,7 @@ pub fn run() {
             commands::app_groups::assign_app_group_category,
             // --- icons: 应用图标 ---
             commands::icons::get_app_icon,
+            commands::icons::get_app_icon_data_url,
             // --- settings: 全局设置 ---
             commands::settings::get_settings,
             commands::settings::update_settings,

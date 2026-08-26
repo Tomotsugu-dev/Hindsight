@@ -273,6 +273,10 @@
           "xlsx": {
             "label": "Excel · Planilha",
             "hint": "Várias planilhas — visão geral, tendências e detalhes brutos; filtre, ordene e crie gráficos."
+          },
+          "html": {
+            "label": "HTML · Relatório web",
+            "hint": "Um único arquivo com gráficos e cores — é só dar dois cliques, sem precisar de internet."
           }
         },
         "confirm": "Exportar",
@@ -298,7 +302,9 @@
           "colShare": "Fração",
           "colApp": "Aplicativo",
           "noData": "(sem registros)",
-          "topAppsTitle": "Top {{n}} aplicativos"
+          "topAppsTitle": "Top {{n}} aplicativos",
+          "expandAll": "Expandir tudo",
+          "collapseAll": "Recolher tudo"
         },
         "quick": {
           "today": "Hoje",

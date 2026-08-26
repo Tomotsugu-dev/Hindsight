@@ -13,11 +13,13 @@ vi.mock("../api/hindsight", () => ({
     getWeekDays: vi.fn(),
     getWeekApps: vi.fn(),
     getMonthApps: vi.fn(),
+    getAppIconDataUrl: vi.fn(),
   },
 }));
 
 import { api } from "../api/hindsight";
 import {
+  collectAppIcons,
   collectUsageData,
   fmtLocalDate,
   MARKDOWN_TOP_APPS,
@@ -219,12 +221,215 @@ describe("renderUsageExport", () => {
           categoryId: "code",
           categoryName: "Co,ding",
           minutes: 60 - i,
+          iconProcess: `app${i + 1}.exe`,
         })),
       },
     ],
     weekly: null,
     monthly: null,
   };
+
+  // —— HTML：自包含单文件报告 ——
+
+  it("HTML：单文件自包含,不引用任何外部资源", () => {
+    const html = renderUsageExport(fixture, "html", labels);
+    expect(html.startsWith("<!doctype html>")).toBe(true);
+    expect(html).toContain("<style>");
+    // 离线可读是这个格式存在的理由:一旦引外链,断网/转发后就散架。
+    // 交互脚本允许存在,但必须内联——不许 <script src>。
+    expect(html).toContain("<script>");
+    expect(html).not.toMatch(/<script[^>]*\ssrc=/i);
+    expect(html).not.toMatch(/src=["']https?:/i);
+    expect(html).not.toMatch(/<link[^>]+stylesheet/i);
+  });
+
+  it("HTML：图表用分类自己的颜色,趋势柱与占比条为内联元素", () => {
+    const html = renderUsageExport(fixture, "html", labels);
+    expect(html).toContain("sharebar");
+    expect(html).toContain("trend-inner");
+    // CATS 里 code 分类的颜色必须出现在图表/色块里
+    const codeColor = CATS.find((c) => c.id === "code")!.color;
+    expect(html).toContain(codeColor);
+  });
+
+  it("HTML：应用行嵌入图标 data URL,拿不到图标时用分类色 fallback", () => {
+    const icons = new Map([["app1.exe", "data:image/png;base64,AAAA"]]);
+    const html = renderUsageExport(fixture, "html", labels, icons);
+    // 图标走 <style> 里的类,单元格只留一个短类名引用
+    expect(html).toContain('background-image:url("data:image/png;base64,AAAA")');
+    expect(html).toMatch(/class="app-icon ic\d+"/);
+    // 其余 11 个应用没有 data URL → 走分类色首字符 fallback
+    expect(html).toContain("app-fallback");
+  });
+
+  it("HTML：柱高按总时长精确算,段高是柱内占比", () => {
+    const html = renderUsageExport(fixture, "html", labels);
+    // 整柱高度内联在 stack 上(唯一一根柱 = max → 正好 120px)
+    expect(html).toMatch(/class="stack" style="height:120(\.0)?px"/);
+    // 段不再各给 2px 下限:高度是百分比,细分类多也垫不高柱子
+    expect(html).toMatch(/<i style="height:\d+(\.\d+)?%;background:/);
+    // 日期标签必须定高:空标签塌陷成 0 会让那根柱下沉,整排柱底出锯齿
+    expect(html).toMatch(/\.tlabel\{[^}]*height:15px\}/);
+  });
+
+  it("HTML：悬停明细走自绘浮层,图表元素不挂原生 title", () => {
+    const html = renderUsageExport(fixture, "html", labels);
+    // 柱子 / 占比条段 / 跳转胶囊都带 data-tip,由页尾脚本画浮层
+    expect(html).toContain('data-tip="');
+    expect(html).toContain('document.addEventListener("mouseover"');
+    // 原生 title 裸框退场
+    expect(html).not.toMatch(/<i style="[^"]*" title=/);
+    expect(html).not.toMatch(/<a class="col"[^>]*title=/);
+  });
+
+  it("HTML：柱顶数值抽稀时,最高的柱必须有数", () => {
+    // 40 天,峰值放在 idx=7(不是步长倍数):抽稀不能把最高柱的数字抽掉
+    const day = fixture.daily![0];
+    const many: UsageExportData = {
+      ...fixture,
+      daily: Array.from({ length: 40 }, (_, i) => ({
+        ...day,
+        date: `2026-07-${String(i + 1).padStart(2, "0")}`,
+        totalSecs: i === 7 ? 100_000 : 3_600,
+      })),
+    };
+    const html = renderUsageExport(many, "html", labels);
+    // 100000s = 27.8h,只有峰值柱是这个值
+    expect(html).toContain(">27.8h</span>");
+  });
+
+  it("HTML：同一图标的 base64 全文只出现一次", () => {
+    // 一个应用在 30 天 × 日/周/月里要出现几十上百回。曾经每处一份 base64,
+    // 把一份月报顶到 32 MB —— 这条锁住「只嵌一次」。
+    const day = fixture.daily![0];
+    const many: UsageExportData = {
+      ...fixture,
+      daily: Array.from({ length: 30 }, (_, i) => ({
+        ...day,
+        date: `2026-06-${String(i + 1).padStart(2, "0")}`,
+      })),
+      weekly: Array.from({ length: 4 }, (_, i) => ({
+        start: `2026-06-0${i + 1}`,
+        end: `2026-06-0${i + 7}`,
+        totalSecs: day.totalSecs,
+        dailyAvgSecs: 3600,
+        categories: day.categories,
+        apps: day.apps,
+      })),
+      monthly: [
+        {
+          start: "2026-06-01",
+          end: "2026-06-30",
+          totalSecs: day.totalSecs,
+          dailyAvgSecs: 3600,
+          categories: day.categories,
+          apps: day.apps,
+        },
+      ],
+    };
+    const icons = new Map([["app1.exe", "data:image/png;base64,AAAA"]]);
+    const html = renderUsageExport(many, "html", labels, icons);
+    expect(html.split("base64,AAAA").length - 1).toBe(1);
+    // 35 个周期各引用一次类名
+    expect(html.split('class="app-icon ic0"').length - 1).toBe(35);
+  });
+
+  it("HTML：每个周期都有锚点,顶部与章节里都能直接跳过去", () => {
+    const html = renderUsageExport(fixture, "html", labels);
+    // 吸顶条 → 章节
+    expect(html).toContain('href="#daily"');
+    expect(html).toContain('<section class="section" id="daily">');
+    // 章节里的跳转胶囊 + 趋势柱 → 具体某天的卡片
+    expect(html).toContain('class="jump"');
+    expect(html).toContain('href="#d-2026-06-30"');
+    expect(html).toContain('<div class="pd" id="d-2026-06-30">');
+    // 跳到折叠行时脚本把它自动点开,落地不是一条收着的行
+    expect(html).toContain('addEventListener("hashchange"');
+  });
+
+  it("HTML：一个周期收成一行,默认折叠,展开不靠 <details>", () => {
+    const html = renderUsageExport(fixture, "html", labels);
+    expect(html).toContain('<label class="row"');
+    expect(html).toContain('<input class="tgl" type="checkbox"');
+    // <details> 的折叠内容藏在浏览器 shadow DOM 里,Ctrl+P 摊不平(实测只出汇总行)
+    expect(html).not.toMatch(/<details/i);
+    // 打印时把所有展开区摊开,纸上不该丢明细
+    expect(html).toMatch(/@media print\{[\s\S]*\.det\{display:block\}/);
+
+    // 只有一天时默认摊开;多天时全部收起,一屏扫得完
+    expect(html).toContain('type="checkbox" id="t-d-2026-06-30" checked>');
+    const many: UsageExportData = {
+      ...fixture,
+      daily: Array.from({ length: 5 }, (_, i) => ({
+        ...fixture.daily![0],
+        date: `2026-06-0${i + 1}`,
+      })),
+    };
+    expect(renderUsageExport(many, "html", labels)).not.toContain('checkbox" id="t-d-2026-06-01" checked');
+  });
+
+  it("HTML：用户数据全部转义,不会被当成标签解析", () => {
+    const evil: UsageExportData = {
+      ...fixture,
+      daily: [
+        {
+          date: "2026-06-30",
+          totalSecs: 60,
+          categories: [{ id: "code", name: "<img src=x onerror=alert(1)>", secs: 60, minutes: 1 }],
+          apps: [
+            {
+              name: '"><script>alert(1)</script>',
+              categoryId: "code",
+              categoryName: "a & b",
+              minutes: 1,
+            },
+          ],
+        },
+      ],
+    };
+    const html = renderUsageExport(evil, "html", labels);
+    expect(html).not.toContain("<img src=x");
+    expect(html).not.toContain("<script>alert");
+    expect(html).toContain("&lt;img src=x");
+    expect(html).toContain("a &amp; b");
+  });
+
+  it("HTML：无数据的周期显示占位而不是空白卡片", () => {
+    const empty: UsageExportData = {
+      ...fixture,
+      daily: [{ date: "2026-06-30", totalSecs: 0, categories: [], apps: [] }],
+    };
+    const html = renderUsageExport(empty, "html", labels);
+    expect(html).toContain("noData");
+  });
+
+  it("HTML：文件名用 .html 扩展名", () => {
+    expect(usageExportFilename(fixture, "html")).toBe(
+      "hindsight-usage-2026-06-29_2026-07-02.html",
+    );
+  });
+
+  it("collectAppIcons：只收集会渲染的 Top N 唯一进程,拿不到图标的只跳过", async () => {
+    vi.mocked(api.getAppIconDataUrl).mockImplementation((p: string) =>
+      Promise.resolve(p === "app1.exe" ? "data:image/png;base64,x" : null),
+    );
+    const icons = await collectAppIcons(fixture);
+    expect(icons.get("app1.exe")).toBe("data:image/png;base64,x");
+    // 12 个应用只有 Top 10 会渲染;其余返回 null 不进 map
+    expect([...icons.keys()]).toEqual(["app1.exe"]);
+    expect(vi.mocked(api.getAppIconDataUrl).mock.calls).toHaveLength(10);
+  });
+
+  it("collectAppIcons：无数据的周期不触发图标查询", async () => {
+    vi.mocked(api.getAppIconDataUrl).mockClear();
+    const empty: UsageExportData = {
+      ...fixture,
+      daily: [{ date: "2026-06-30", totalSecs: 0, categories: [], apps: [] }],
+    };
+    const icons = await collectAppIcons(empty);
+    expect(icons.size).toBe(0);
+    expect(api.getAppIconDataUrl).not.toHaveBeenCalled();
+  });
 
   it("JSON：可 parse 往返，字段完整", () => {
     const parsed = JSON.parse(renderUsageExport(fixture, "json", labels)) as {

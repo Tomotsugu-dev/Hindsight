@@ -273,6 +273,10 @@
           "xlsx": {
             "label": "Excel · 表格",
             "hint": "概览、趋势、原始明细多张工作表;可筛选、排序、直接作图。"
+          },
+          "html": {
+            "label": "HTML · 网页报告",
+            "hint": "自带图表与配色的单个网页文件,双击用浏览器打开,无需联网。"
           }
         },
         "confirm": "导出",
@@ -298,7 +302,9 @@
           "colShare": "占比",
           "colApp": "应用",
           "noData": "（无记录）",
-          "topAppsTitle": "应用 Top {{n}}"
+          "topAppsTitle": "应用 Top {{n}}",
+          "expandAll": "全部展开",
+          "collapseAll": "全部收起"
         },
         "quick": {
           "today": "今天",
