@@ -77,6 +77,10 @@ similarity-poc/
 # Claude
 .claude/
 
+# Claude 上下文经 .claude/settings.local.json 的 SessionStart hook 从私有笔记仓库注入
+# （配置见笔记仓库 项目经验/Hindsight/README.md）。下一行防未来误提交本地 CLAUDE.md
+/CLAUDE.md
+
 # deploy doc
 web/README-pi.md
 
