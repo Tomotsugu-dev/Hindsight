@@ -281,6 +281,10 @@ pub struct PromptOverrides {
     /// 繁体中文（台湾）system prompt 覆盖
     #[serde(default)]
     pub system_tw: String,
+    /// Spanish system prompt override. `#[serde(default)]` so settings written by
+    /// versions before Spanish shipped still deserialize (missing field → empty).
+    #[serde(default)]
+    pub system_es: String,
 }
 
 impl Default for AiConfig {
@@ -335,6 +339,7 @@ pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
         ],
         "ja" => ["深夜", "早朝", "午前", "午後", "夜"],
         "pt" => ["Madrugada", "Manhã cedo", "Manhã", "Tarde", "Noite"],
+        "es" => ["Madrugada", "Amanecer", "Mañana", "Tarde", "Noche"],
         _ => ["深夜", "早上", "上午", "下午", "晚上"],
     };
     let ranges: [(u8, u8); 5] = [(0, 6), (6, 9), (9, 12), (12, 18), (18, 24)];
@@ -350,7 +355,8 @@ pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
         .collect()
 }
 
-/// 从系统 locale 推默认 prompt 语言：繁体圈 → "tw"、其余 `zh-*` → "zh"、`ja-*` → "ja"、其它 → "en"。
+/// 从系统 locale 推默认 prompt 语言：繁体圈 → "tw"、其余 `zh-*` → "zh"、`ja-*` → "ja"、
+/// `pt-*` → "pt"、`es-*` → "es"、其它 → "en"。
 /// 仅在首次安装 `AiConfig::default()` 时调一次；用户后续在 UI 改了再不动。
 pub fn detect_default_lang() -> &'static str {
     match sys_locale::get_locale() {
@@ -370,6 +376,8 @@ pub fn detect_default_lang() -> &'static str {
                 "ja"
             } else if l.starts_with("pt") {
                 "pt"
+            } else if l.starts_with("es") {
+                "es"
             } else {
                 "en"
             }
@@ -495,6 +503,7 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         "en" => "en".to_string(),
         "ja" => "ja".to_string(),
         "pt" => "pt".to_string(),
+        "es" => "es".to_string(),
         _ => "zh".to_string(),
     };
     // 覆盖文本不 trim 中间空白（用户可能想保留缩进），仅去前后整体空白

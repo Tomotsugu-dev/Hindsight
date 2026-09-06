@@ -13,6 +13,7 @@ import enText from "../../src-tauri/resources/prompts/system_en.md?raw";
 import jaText from "../../src-tauri/resources/prompts/system_ja.md?raw";
 import ptText from "../../src-tauri/resources/prompts/system_pt.md?raw";
 import twText from "../../src-tauri/resources/prompts/system_tw.md?raw";
+import esText from "../../src-tauri/resources/prompts/system_es.md?raw";
 
 /** 内置默认 system prompt（段总结）——按语言索引。 */
 export const DEFAULT_SYSTEM_PROMPTS: Record<PromptLanguage, string> = {
@@ -21,12 +22,15 @@ export const DEFAULT_SYSTEM_PROMPTS: Record<PromptLanguage, string> = {
   en: enText.trimEnd(),
   ja: jaText.trimEnd(),
   pt: ptText.trimEnd(),
+  es: esText.trimEnd(),
 };
 
-/** 把 PromptLanguage 映射到 PromptOverrides 的字段名。 */
+/** 把 PromptLanguage 映射到 PromptOverrides 的字段名。
+ *  返回类型逐个列出而不是 `keyof PromptOverrides`：漏一种语言时 switch 的
+ *  穷尽性检查会立刻报错，而不是悄悄返回 undefined。 */
 export function overrideKey(
   lang: PromptLanguage,
-): "systemZh" | "systemTw" | "systemEn" | "systemJa" | "systemPt" {
+): "systemZh" | "systemTw" | "systemEn" | "systemJa" | "systemPt" | "systemEs" {
   switch (lang) {
     case "zh":
       return "systemZh";
@@ -38,5 +42,7 @@ export function overrideKey(
       return "systemJa";
     case "pt":
       return "systemPt";
+    case "es":
+      return "systemEs";
   }
 }

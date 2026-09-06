@@ -1,0 +1,1609 @@
+{
+  "tray": {
+    "show": "Mostrar ventana",
+    "quit": "Salir"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "minimize": "Minimizar",
+    "close": "Cerrar",
+    "empty": "Aún no hay datos",
+    "open": "Abrir",
+    "errorBoundary": {
+      "title": "Algo salió mal",
+      "message": "Esta pantalla encontró un error inesperado. Puedes recargar para continuar.",
+      "reload": "Recargar"
+    },
+    "duration": {
+      "minutesShort": "{{count}} min",
+      "hourMinute": "{{hours}} h {{minutes}} min",
+      "minutesPlain": "{{count}} min",
+      "hoursPlain": "{{count}} h",
+      "hoursAndMinutesShort": "{{hours}} h {{minutes}} min",
+      "tickMinutes": "{{count}}min",
+      "tickHours": "{{count}}h"
+    },
+    "units": {
+      "seconds": "s",
+      "minutes": "min",
+      "hours": "h",
+      "days": "días"
+    },
+    "dateRange": {
+      "startAria": "Elegir fecha de inicio",
+      "endAria": "Elegir fecha de fin",
+      "prevMonth": "Mes anterior",
+      "nextMonth": "Mes siguiente"
+    }
+  },
+  "nav": {
+    "groups": {
+      "primary": "Estadísticas",
+      "ai": "IA-beta",
+      "data": "Datos",
+      "system": "Sistema"
+    },
+    "items": {
+      "today": "Diario",
+      "week": "Semanal",
+      "month": "Mensual",
+      "aiSummary": "Resumen de IA",
+      "aiSettings": "Ajustes de IA",
+      "categories": "Categorías",
+      "devices": "Nube",
+      "settings": "Ajustes",
+      "chat": "Chat"
+    }
+  },
+  "sidebar": {
+    "capture": {
+      "ok": "Capturando",
+      "idle": "En pausa",
+      "error": "Error",
+      "resting": "En reposo",
+      "stop": "Detener",
+      "toggleAria": "Alternar la captura"
+    },
+    "sync": {
+      "connected": "Conectado",
+      "signedOut": "Sin sesión",
+      "aria": "Gestionar dispositivos y sincronización en la nube",
+      "title": "Dispositivos / Sincronización en la nube"
+    }
+  },
+  "windowControls": {
+    "minimize": "Minimizar",
+    "close": "Cerrar"
+  },
+  "search": {
+    "subtitle": "Busca textos que aparecieron en tu pantalla y ve directo a la captura y al momento.",
+    "placeholder": "Escribe palabras clave, p. ej. una frase de una página que viste…",
+    "hint": "Los resultados provienen del índice local de OCR de las capturas de pantalla; el contenido solo se puede buscar después de ser capturado y reconocido, y las capturas siguen la configuración de retención.",
+    "total": "{{count}} coincidencias",
+    "initial": "Escribe palabras clave para buscar lo que apareció en tu pantalla",
+    "empty": "Ningún registro coincide",
+    "emptyHint": "Prueba con otras palabras clave; solo se puede encontrar contenido que fue capturado y reconocido.",
+    "loadMore": "Cargar más (quedan {{count}})",
+    "imageGone": "La captura de pantalla se eliminó",
+    "unavailable": "Búsqueda no disponible: {{message}}",
+    "viewerAlt": "Vista previa de la captura de pantalla",
+    "locating": "localizando…",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "zoomReset": "Restablecer zoom",
+    "textFallbackNotice": "La captura se eliminó por la política de retención; abajo está el texto reconocido en su momento"
+  },
+  "settings": {
+    "pageTitle": "Ajustes",
+    "tabs": {
+      "general": "General",
+      "appearance": "Apariencia",
+      "data": "Datos",
+      "privacy": "Privacidad",
+      "about": "Acerca de"
+    },
+    "appearance": {
+      "sectionTitle": "Tema",
+      "description": "Elige la apariencia de la interfaz. Se aplica al instante y se guarda en este dispositivo.",
+      "themes": {
+        "default": {
+          "name": "Predeterminado",
+          "desc": "Barra lateral con degradado suave, paleta clara"
+        },
+        "minimal": {
+          "name": "Minimalista",
+          "desc": "Barra lateral sólida, plana y sin degradado"
+        },
+        "dark": {
+          "name": "Oscuro",
+          "desc": "Fondo oscuro, cómodo de noche"
+        }
+      }
+    },
+    "language": {
+      "sectionTitle": "语言 / Language",
+      "label": "Idioma",
+      "options": {
+        "zhCN": "简体中文",
+        "en": "English"
+      }
+    },
+    "general": {
+      "language": {
+        "title": "Idioma",
+        "label": "Idioma de la interfaz",
+        "description": "Cambia el idioma con el que se muestra la aplicación."
+      },
+      "capture": {
+        "title": "Captura",
+        "description": "Registra periódicamente la ventana en primer plano y una captura de pantalla, para que puedas revisar tu actividad después.",
+        "enableLabel": "Activar la captura",
+        "enableDescription": "Al desactivarla, la captura en segundo plano se detiene (tanto la actividad de ventanas como las capturas de pantalla).",
+        "screenshotEnableLabel": "Activar las capturas de pantalla",
+        "screenshotEnableDescription": "Desactivar esto detiene las capturas de pantalla.",
+        "ocrResidentLabel": "Mantener el OCR residente",
+        "ocrResidentDescription": "Reconoce las capturas nuevas al instante (~400 MB de RAM adicionales); se pausa con la batería. Cuando está activo, las capturas sin reconocer también se procesan antes de los informes diarios y semanales.",
+        "intervalLabel": "Intervalo de captura",
+        "intervalDescription": "Intervalo de captura.",
+        "intervalHint": "Las capturas de pantalla se activan cuando:\n• Cambias de aplicación → se captura de inmediato\n• El navegador cambia de URL → se captura de inmediato\n• La misma ventana permanece en primer plano durante el intervalo configurado → se captura",
+        "idleLabel": "Tiempo de inactividad",
+        "idleDescription": "Considera que te has ausentado tras este tiempo sin actividad de ratón o teclado.",
+        "idleHint": "La detección usa eventos de ratón / teclado / trackpad a nivel de sistema.\nPon 0 para desactivarla (no se activará nunca).",
+        "screenshotPathLabel": "Carpeta de capturas de pantalla",
+        "dataPathLabel": "Carpeta de datos",
+        "dataPathHint": "Ubicación de la base de datos y raíz predeterminada de las capturas de pantalla. Cambiarla exige reiniciar, y los datos antiguos deben migrarse a mano.",
+        "backfillLabel": "Indexar capturas antiguas",
+        "backfillDescription": "Añade al índice de texto las capturas hechas antes de activar la memoria de pantalla, para que el Chat pueda buscarlas.",
+        "backfillButton": "Indexar y reconocer",
+        "backfillRunning": "Reconociendo…",
+        "backfillRegistered": "{{n}} fotogramas registrados, reconociendo…",
+        "backfillProgress": "Reconociendo… quedan {{n}} fotogramas",
+        "backfillBackground": "Registrado; la indexación continúa en segundo plano (puedes salir de esta página)",
+        "backfillDone": "Completado: {{ok}} reconocidos, {{failed}} omitidos",
+        "backfillRuntimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes de IA → Motor y pulsa el botón de descarga.",
+        "ocrConfirmTitle": "Se necesita el componente de reconocimiento de texto (OCR)",
+        "ocrConfirmResident": "Activar la indexación de texto requiere descargar el componente de reconocimiento (~40 MB). Se activa automáticamente cuando termine la descarga.",
+        "ocrConfirmBackfill": "El relleno requiere descargar el componente de reconocimiento (~40 MB). Comienza automáticamente cuando termine la descarga.",
+        "ocrConfirmAccept": "Descargar y continuar",
+        "ocrDownloading": "Descargando el componente de reconocimiento de texto… {{mb}} MB"
+      },
+      "workHours": {
+        "title": "Horario de trabajo",
+        "description": "Capturar actividad solo durante el horario indicado.",
+        "enableLabel": "Activar el horario de trabajo",
+        "rangesLabel": "Intervalos"
+      },
+      "startup": {
+        "title": "Comportamiento al iniciar",
+        "autoStartLabel": "Iniciar con el sistema",
+        "autoStartDescription": "Hindsight se inicia automáticamente después de que inicies sesión.",
+        "showWindowLabel": "Mostrar la ventana principal al iniciar",
+        "showWindowDescription": "Al desactivarlo, se inicia en silencio en la bandeja del sistema.",
+        "minimizeToTrayLabel": "Minimizar a la bandeja del sistema al cerrar",
+        "minimizeToTrayDescriptionMac": "Al desactivarlo, pulsar la X cierra la aplicación.",
+        "minimizeToTrayDescriptionWin": "Al desactivarlo, pulsar la X cierra la aplicación."
+      },
+      "dataRootDialog": {
+        "title": "¿Cambiar la carpeta de datos?",
+        "message": "Nueva ruta: {{path}}\n\nHay que reiniciar para que el cambio surta efecto.\n\nLa base de datos y las capturas de pantalla de la carpeta anterior no se migran automáticamente: si quieres conservar tu historial, copia primero el contenido de {{oldPath}} a la nueva ubicación."
+      }
+    },
+    "data": {
+      "storage": {
+        "title": "Almacenamiento",
+        "description": "Retención de las capturas de pantalla y uso actual. La base de datos nunca se borra automáticamente.",
+        "retentionLabel": "Retención de las capturas de pantalla",
+        "retentionDescription": "Los archivos de captura caducados se eliminan automáticamente (los registros de actividad se conservan).",
+        "currentUsageLabel": "Uso actual",
+        "currentUsageDescription": "Base de datos {{db}} · Capturas de pantalla {{shots}}",
+        "modelsPathLabel": "Carpeta de modelos de IA",
+        "modelsPathHint": "Tras cambiar la ruta, los modelos de la carpeta anterior no se migran: cópialos a mano o vuelve a descargarlos en la nueva ubicación."
+      },
+      "cleanup": {
+        "title": "Limpieza de datos locales",
+        "description": "Borra datos locales o archivos de captura de pantalla para liberar espacio en disco.",
+        "purgeShotsLabel": "Borrar las capturas de pantalla",
+        "purgeShotsDescription": "Eliminar todos los archivos de captura de pantalla guardados.",
+        "purgeShotsOpenTitle": "Abrir la carpeta de capturas de pantalla",
+        "purgeShotsBusy": "Borrando…",
+        "purgeDbLabel": "Borrar los datos",
+        "purgeDbDescription": "Borrar la base de datos local",
+        "purgeDbOpenTitle": "Mostrar la base de datos en el explorador de archivos",
+        "purgeDbBusy": "Borrando…"
+      },
+      "danger": {
+        "title": "Zona de peligro",
+        "description": "Las acciones de abajo afectan a todos los dispositivos y no se pueden deshacer.",
+        "removeDeviceLabel": "Quitar este dispositivo",
+        "removeDeviceDescription": "Quitar de la nube todos los datos de este dispositivo",
+        "removeDeviceBusy": "Quitando…"
+      },
+      "purgeDialog": {
+        "purgeDbTitle": "¿Borrar los datos locales?",
+        "purgeDbMessage": "Se borrará la base de datos local, y la próxima sincronización volverá a descargar todo el historial desde la nube. Los archivos de Drive quedan intactos; los demás dispositivos no se ven afectados.\n\n⚠️ Esto no se puede deshacer.",
+        "purgeDbConfirm": "Borrar",
+        "shotsTitle": "¿Borrar las capturas de pantalla?",
+        "shotsMessage": "Se eliminarán todos los archivos de captura de pantalla guardados. Esto no se puede deshacer.",
+        "shotsConfirm": "Borrar",
+        "error": "La acción falló: {{message}}"
+      },
+      "removeDeviceDialog": {
+        "title": "Quitar este dispositivo de la nube",
+        "intro": "Se eliminarán de la nube todos los datos de este dispositivo. Tras la sincronización, los demás dispositivos también olvidarán los registros de este dispositivo, como si nunca se hubiera conectado a la nube.",
+        "unaffected": "No se ven afectados: los datos propios de los demás dispositivos y los datos nuevos que este dispositivo genere a partir de ahora.",
+        "localQuestion": "¿Y la copia local de este dispositivo?",
+        "alsoClearLabel": "Borrar también los datos locales (predeterminado)",
+        "alsoClearHint": "Todo limpio. Para: dejar un trabajo, vender el equipo, limpieza de privacidad.",
+        "keepLabel": "Conservar la copia local",
+        "keepHint": "Nube limpia, datos locales conservados. Úsalo al cambiar a otra cuenta de Google y migrar los datos locales.",
+        "typeToConfirmPrompt": "Escribe \"{{keyword}}\" para confirmar (no se puede deshacer):",
+        "typeKeyword": "REMOVE",
+        "typePlaceholder": "Escribe aquí",
+        "cancel": "Cancelar",
+        "confirm": "Quitar",
+        "doneAlsoClear": "Quitado: {{count}} archivo(s) de Drive eliminado(s) + se notificó a los demás dispositivos para que borren la copia de este. Los datos locales también se borraron.",
+        "doneKeepLocal": "Quitado: {{count}} archivo(s) de Drive eliminado(s) + se notificó a los demás dispositivos para que borren la copia de este. Datos locales conservados: inicia sesión con una cuenta nueva para volver a subirlos."
+      },
+      "export": {
+        "rowLabel": "Exportar los datos de uso",
+        "rowDescription": "Exporta las estadísticas diarias / semanales / mensuales a un archivo. No se incluyen los registros de actividad en bruto.",
+        "rowButton": "Exportar…",
+        "dialogTitle": "Exportar los datos de uso",
+        "rangeLabel": "Periodo",
+        "invalidRange": "La fecha de inicio no puede ser posterior a la de fin.",
+        "granularity": {
+          "daily": "Estadísticas diarias",
+          "weekly": "Estadísticas semanales",
+          "monthly": "Estadísticas mensuales"
+        },
+        "formatLabel": "Formato del archivo",
+        "recommended": "Recomendado",
+        "formats": {
+          "json": {
+            "label": "JSON · Estructurado",
+            "hint": "Datos estructurados completos, para leer por programa y reutilizar."
+          },
+          "markdown": {
+            "label": "Markdown · Informe",
+            "hint": "Informe de texto legible: ideal para leerlo directamente o archivarlo en tu app de notas."
+          },
+          "xlsx": {
+            "label": "Excel · Hoja de cálculo",
+            "hint": "Varias hojas: resumen, tendencias y detalle en bruto; filtra, ordena y crea gráficos."
+          },
+          "html": {
+            "label": "HTML · Informe web",
+            "hint": "Un solo archivo con gráficos y colores: basta con doble clic, sin necesidad de internet."
+          }
+        },
+        "confirm": "Exportar",
+        "busy": "Exportando…",
+        "doneTitle": "Exportación completada",
+        "reveal": "Mostrar el archivo",
+        "error": "La exportación falló: {{message}}",
+        "file": {
+          "title": "Estadísticas de uso de Hindsight ({{start}} – {{end}})",
+          "metaExportedAt": "Exportado el: {{time}}",
+          "metaRange": "Periodo: {{start}} – {{end}}",
+          "metaNote": "Las estadísticas semanales / mensuales cubren semanas completas (lun–dom) / meses naturales y pueden exceder el intervalo elegido; las tablas de aplicaciones solo listan el Top {{n}}.",
+          "dailyHeading": "Diario",
+          "weeklyHeading": "Semanal",
+          "monthlyHeading": "Mensual",
+          "dayHeading": "{{date}} ({{weekday}})",
+          "weekHeading": "{{start}} – {{end}}",
+          "monthHeading": "{{month}} ({{start}} – {{end}})",
+          "total": "Total",
+          "dailyAvg": "Media diaria",
+          "colCategory": "Categoría",
+          "colDuration": "Tiempo",
+          "colShare": "Proporción",
+          "colApp": "Aplicación",
+          "noData": "(sin registros)",
+          "topAppsTitle": "Top {{n}} aplicaciones",
+          "expandAll": "Expandir todo",
+          "collapseAll": "Contraer todo"
+        },
+        "quick": {
+          "today": "Hoy",
+          "week": "Esta semana",
+          "month": "Este mes",
+          "year": "Este año",
+          "all": "Todo"
+        },
+        "deviceAll": "Todos los dispositivos",
+        "xlsx": {
+          "sheetOverview": "Resumen",
+          "sheetTrend": "Tendencias de apps",
+          "sheetRaw": "Detalle",
+          "colDate": "Fecha",
+          "colWeekday": "Día de la semana",
+          "colTotal": "Total",
+          "colDailyAvg": "Media diaria",
+          "colMonth": "Mes",
+          "colStart": "Inicio",
+          "colEnd": "Fin",
+          "colDuration": "Duración",
+          "colSuperCategory": "Grupo",
+          "colShare": "Participación",
+          "ovTitle": "Estadísticas de uso de Hindsight",
+          "ovRange": "Intervalo",
+          "ovDevice": "Dispositivos",
+          "ovExported": "Exportado el",
+          "ovGranularities": "Granularidades",
+          "ovTotal": "Total",
+          "ovDailyAvg": "Media diaria",
+          "ovActiveDays": "Días activos",
+          "ovPeakDay": "Día pico",
+          "ovUngrouped": "Sin grupo",
+          "trendOther": "Otros",
+          "rawDate": "Fecha",
+          "rawStart": "Hora de inicio",
+          "rawApp": "Aplicación",
+          "rawTitle": "Título de la ventana",
+          "rawCategory": "Categoría",
+          "rawDevice": "Dispositivo",
+          "rawTruncated": "El número de filas supera el límite de Excel; solo se conservaron el primer 1.000.000 de filas.",
+          "note": "Duraciones en formato h:mm; la media diaria solo cuenta días completos: el día de hoy, en curso, queda excluido.",
+          "noData": "Sin datos"
+        },
+        "included": "Se incluirá: {{list}} (elegido automáticamente según el intervalo de fechas)"
+      }
+    },
+    "privacy": {
+      "browser": {
+        "title": "Filtro de navegador",
+        "info": "Omitir las capturas de pantalla cuando la URL de la barra de direcciones contenga alguno de estos términos (no distingue mayúsculas de minúsculas).",
+        "rowLabel": "Palabras clave de URL",
+        "addLabel": "Añadir fragmento de URL",
+        "placeholder": "p. ej. /login",
+        "hostLabel": "Registrar los dominios de los sitios",
+        "hostInfo": "Alimenta la vista «Por sitio» en el detalle de la aplicación. Solo se guarda el dominio (p. ej. github.com), nunca la URL completa; las páginas que coinciden con las palabras clave de arriba tampoco se registran."
+      },
+      "app": {
+        "title": "Filtro de aplicaciones",
+        "info": "Omitir las capturas de pantalla cuando el nombre de la aplicación o el título de la ventana contenga alguno de estos términos (no distingue mayúsculas de minúsculas).",
+        "rowLabel": "Palabras clave de título / aplicación",
+        "addLabel": "Añadir nombre de aplicación",
+        "placeholder": "p. ej. WeChat"
+      },
+      "scope": {
+        "title": "Alcance",
+        "info": "Cuando hay coincidencia, solo se omiten las capturas de pantalla",
+        "noticePrefix": "El filtrado de capturas es un comportamiento solo local, ",
+        "noticeEmph": "no afecta a las capturas ya guardadas",
+        "noticeMiddle": ". Para borrar las capturas del historial, ve a ",
+        "noticeKbd": "Ajustes · Datos · Borrar las capturas de pantalla",
+        "noticeSuffix": "."
+      },
+      "keywordEditor": {
+        "removeAria": "Quitar {{keyword}}",
+        "removeTooltip": "Quitar"
+      }
+    },
+    "about": {
+      "subtitle": "{{version}} · Tauri 2 + React",
+      "update": {
+        "title": "Actualizaciones de la aplicación",
+        "currentVersionLabel": "Versión actual",
+        "checkBtn": "Buscar actualizaciones",
+        "checkingBtn": "Buscando…",
+        "installingBtn": "Actualizando…",
+        "status": {
+          "checking": "Buscando…",
+          "uptodate": "Actualizado",
+          "installing": "Descargando e instalando: la aplicación se reiniciará al terminar…",
+          "error": "Comprueba tu conexión de red"
+        },
+        "autoLabel": "Buscar actualizaciones automáticamente",
+        "intervalLabel": "Frecuencia",
+        "intervals": {
+          "daily": "A diario",
+          "weekly": "Cada semana",
+          "monthly": "Cada mes",
+          "onstartup": "Cada vez que se abre la aplicación"
+        },
+        "dialog": {
+          "title": "Nueva versión v{{version}} disponible",
+          "message": "Pulsa «Actualizar ahora» para descargar e instalar la nueva versión. La aplicación se reiniciará automáticamente al terminar.\n\nNotas de la versión:\n{{body}}",
+          "bodyEmpty": "(ninguna)",
+          "confirm": "Actualizar ahora",
+          "cancel": "Más tarde"
+        }
+      },
+      "info": {
+        "title": "Información",
+        "authorLabel": "Autor",
+        "licenseLabel": "Licencia"
+      },
+      "links": {
+        "title": "Enlaces",
+        "repoLabel": "Repositorio en GitHub",
+        "repoLink": "Ver →",
+        "feedbackLabel": "Comentarios y sugerencias",
+        "feedbackLink": "Enviar →"
+      }
+    }
+  },
+  "components": {
+    "devicePicker": {
+      "all": "Todos los dispositivos",
+      "thisDevice": "Este dispositivo"
+    },
+    "appearancePicker": {
+      "color": "Color",
+      "icon": "Icono"
+    },
+    "slider": {
+      "valueAria": "Valor"
+    },
+    "timeField": {
+      "hourAria": "Hora",
+      "minuteAria": "Minuto",
+      "tooltip": "Rueda del ratón · Teclas de flecha · Escribir números"
+    },
+    "timeRangeList": {
+      "empty": "No hay intervalos definidos: se captura todo el día",
+      "to": "hasta",
+      "removeAria": "Eliminar el intervalo",
+      "addBtn": "Añadir intervalo"
+    },
+    "pathField": {
+      "pickLabel": "Elegir"
+    },
+    "categoryChipMultiSelect": {
+      "loading": "Cargando las categorías…",
+      "empty": "Aún no hay categorías",
+      "excludedTitle": "Excluida: pulsa para volver a incluirla",
+      "includeTitle": "Pulsa para excluirla del análisis"
+    },
+    "rankedList": {
+      "expand": "Mostrar {{count}} más",
+      "collapse": "Contraer"
+    },
+    "segmentList": {
+      "empty": "Aún no hay tramos: pulsa «Añadir tramo» abajo para empezar",
+      "newSegmentLabel": "Nuevo tramo",
+      "addBtn": "Añadir tramo",
+      "leftEdgeAria": "Inicio de la actividad",
+      "betweenAria": "Separador de tramos",
+      "rightEdgeAria": "Fin de la actividad",
+      "removeAria": "Eliminar el tramo",
+      "removeMergeRight": "Eliminar (fusionar el intervalo con el vecino de la derecha)",
+      "removeMergeLeft": "Eliminar (fusionar el intervalo con el vecino de la izquierda)",
+      "swatchAria": "Color {{name}}",
+      "swatchAuto": "Automático",
+      "swatchAutoTitle": "Degradado automático según la hora del día",
+      "swatches": {
+        "blue": "Azul",
+        "lavender": "Lavanda",
+        "lilac": "Lila",
+        "rose": "Rosa",
+        "creamOrange": "Naranja crema",
+        "peach": "Melocotón",
+        "warmYellow": "Amarillo cálido",
+        "mint": "Menta"
+      }
+    }
+  },
+  "appDetail": {
+    "loading": "Cargando…",
+    "untitled": "Sin título",
+    "ignore": {
+      "button": "Excluir esta ventana de las estadísticas",
+      "done": "Excluida: se descartaron {{count}} registros anteriores",
+      "undo": "Deshacer"
+    },
+    "sites": {
+      "title": "Por sitio",
+      "unknown": "Sitios no identificados",
+      "unknownHint": "Registros anteriores a la actualización, navegadores sin acceso a la barra de direcciones o configuraciones sin soporte, como Firefox / Linux",
+      "noHost": "No se identificó ningún sitio en este periodo: los registros anteriores a la actualización no tienen dominio; leer la barra de direcciones requiere permiso (macOS: Ajustes del Sistema · Privacidad y seguridad · Automatización); Firefox y Linux aún no son compatibles."
+    }
+  },
+  "today": {
+    "title": "Diario",
+    "meta": "{{date}} {{weekday}}",
+    "insights": {
+      "vsPrev": {
+        "label": "frente a ayer",
+        "flat": "Igual que ayer"
+      },
+      "peak": "Pico",
+      "dominant": "Principal",
+      "composition": "Desglose"
+    },
+    "chart": {
+      "title": "Actividad de 24 horas",
+      "barTitle": "{{hour}}:00 — {{minutes}} min",
+      "viewToggle": {
+        "bars": "Horas",
+        "pie": "Proporción",
+        "ariaBars": "Cambiar a la vista de distribución de 24 horas",
+        "ariaPie": "Cambiar a la vista de proporción por supercategoría"
+      }
+    },
+    "pie": {
+      "cardTitle": "Proporción del tiempo de hoy",
+      "weekCardTitle": "Proporción del tiempo de esta semana",
+      "monthCardTitle": "Proporción del tiempo de este mes",
+      "donut": {
+        "totalLabel": "Total",
+        "hint": "Pulsa un sector para desglosarlo"
+      },
+      "drill": {
+        "back": "Volver",
+        "categoriesTitle": "Categorías",
+        "appsTitle": "Aplicaciones principales",
+        "topNCount": "Top {{count}}"
+      }
+    },
+    "dayNav": {
+      "prev": "Día anterior",
+      "next": "Día siguiente",
+      "backToToday": "Volver a hoy",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "daysAgo": "Hace {{count}} días",
+      "daysLater": "Dentro de {{count}} días"
+    },
+    "legend": {
+      "workHours": "Horario de trabajo"
+    },
+    "ranks": {
+      "topApps": "Aplicaciones principales",
+      "topCategories": "Categorías principales"
+    },
+    "selection": {
+      "label": "{{hour}}:00–{{hour}}:59"
+    }
+  },
+  "week": {
+    "title": "Semanal",
+    "meta": "{{range}} · {{avg}} de media diaria",
+    "insights": {
+      "vsPrev": {
+        "label": "frente a la semana pasada",
+        "flat": "Igual que la semana pasada"
+      },
+      "peak": "Pico",
+      "dominant": "Principal",
+      "composition": "Desglose",
+      "avg": "Media diaria",
+      "avgVsPrev": "Media frente a sem. pasada"
+    },
+    "rangeSameMonth": "{{startDay}} — {{endDay}}/{{month}}",
+    "rangeCrossMonth": "{{startDay}}/{{startMonth}} — {{endDay}}/{{endMonth}}",
+    "chart": {
+      "title": "Actividad diaria",
+      "barTitle": "{{date}} — {{duration}}"
+    },
+    "weekNav": {
+      "prev": "Semana anterior",
+      "next": "Semana siguiente",
+      "backToThisWeek": "Volver a esta semana",
+      "thisWeek": "Esta semana",
+      "lastWeek": "Semana pasada",
+      "weeksAgo": "Hace {{count}} semanas",
+      "weeksLater": "Dentro de {{count}} semanas"
+    },
+    "selection": {
+      "label": "{{day}}/{{month}}"
+    },
+    "ranks": {
+      "topApps": "Aplicaciones principales de esta semana",
+      "topCategories": "Categorías principales de esta semana"
+    },
+    "dow": {
+      "mon": "Lun",
+      "tue": "Mar",
+      "wed": "Mié",
+      "thu": "Jue",
+      "fri": "Vie",
+      "sat": "Sáb",
+      "sun": "Dom"
+    },
+    "shortDate": "{{day}}/{{month}}"
+  },
+  "month": {
+    "title": "Mensual",
+    "meta": "{{month}} · {{avg}} de media diaria",
+    "insights": {
+      "vsPrev": {
+        "label": "frente al mes pasado",
+        "flat": "Igual que el mes pasado"
+      },
+      "peak": "Pico",
+      "peakDate": "{{day}}/{{month}}",
+      "dominant": "Principal",
+      "composition": "Desglose",
+      "avgVsPrev": "Media frente al mes pasado",
+      "avg": "Media diaria"
+    },
+    "monthLabel": "{{month}} de {{year}}",
+    "chart": {
+      "title": "Actividad diaria"
+    },
+    "monthNav": {
+      "prev": "Mes anterior",
+      "next": "Mes siguiente",
+      "backToThisMonth": "Volver a este mes",
+      "thisMonth": "Este mes",
+      "lastMonth": "Mes pasado",
+      "monthsAgo": "Hace {{count}} meses",
+      "monthsLater": "Dentro de {{count}} meses"
+    },
+    "ranks": {
+      "topApps": "Aplicaciones principales de este mes",
+      "topCategories": "Categorías principales de este mes"
+    },
+    "selection": {
+      "label": "{{day}}/{{month}} {{weekday}}"
+    }
+  },
+  "apps": {
+    "title": "Aplicaciones",
+    "ignored": {
+      "title": "Ventanas excluidas",
+      "hint": "Se siguen registrando y capturando; solo quedan fuera de las estadísticas. Quita la regla para restaurarlas. Solo válido en este dispositivo",
+      "wholeApp": "Aplicación completa",
+      "remove": "Quitar la regla",
+      "removed": "Quitada: se restauraron {{count}} registros"
+    },
+    "filter": {
+      "searchPlaceholder": "Buscar por nombre de aplicación o de proceso",
+      "categoryTrigger": "Categoría",
+      "categoryAll": "Todas",
+      "categoryAllAria": "Mostrar todas las categorías (quitar el filtro)",
+      "categoryUnassigned": "Sin asignar",
+      "sortLabel": "Ordenar",
+      "sort": {
+        "default": "Predeterminado",
+        "durationDesc": "Tiempo ↓",
+        "durationAsc": "Tiempo ↑",
+        "nameAsc": "Nombre A-Z",
+        "nameDesc": "Nombre Z-A"
+      },
+      "noResults": "Ninguna aplicación coincide con tu filtro",
+      "clearFilters": "Quitar los filtros",
+      "allAssigned": "Todas las aplicaciones ya tienen categoría"
+    },
+    "remove": {
+      "title": "Quitar «{{name}}»",
+      "hideName": "Ocultar (recomendado)",
+      "hideDesc": "Queda fuera de las estadísticas, pero se conserva todo el historial. Para volver a analizarla, sácala de «Oculto» en Categorías → Gestionar categorías.",
+      "deleteName": "Eliminar",
+      "deleteDesc": "Elimina todo el tiempo registrado, las capturas y el índice de texto de esta aplicación. El programa volverá a aparecer aquí la próxima vez que se ejecute. Los informes ya generados no cambian.",
+      "hideAction": "Ocultar",
+      "deleteAction": "Eliminar de todos modos"
+    }
+  },
+  "categories": {
+    "title": "Categorías",
+    "intro": "Gestiona las categorías de actividad. Asigna aplicaciones a categorías en la página Aplicaciones.",
+    "newCategory": "Categoría",
+    "newCategoryDefaultName": "Nueva categoría",
+    "loading": "Cargando…",
+    "appsPopover": {
+      "label": "Aplicaciones vinculadas"
+    },
+    "super": {
+      "newButton": "Supercategoría",
+      "newDefaultName": "Grupo nuevo",
+      "defaults": {
+        "work": "Trabajo",
+        "play": "Ocio",
+        "social": "Social",
+        "browse": "Navegación"
+      },
+      "orphanLabel": "Sin grupo",
+      "catCount": "{{count}} categorías",
+      "emptyHint": "Arrastra una categoría hasta la etiqueta de una supercategoría para asignarla",
+      "orphanEmptyHint": "(Todas las categorías están agrupadas)",
+      "deleteAria": "Eliminar la supercategoría",
+      "deleteDialog": {
+        "title": "Eliminar la supercategoría",
+        "message": "¿Eliminar la supercategoría «{{name}}»? Sus categorías volverán a «Sin grupo»; no se eliminarán."
+      }
+    },
+    "defaults": {
+      "code": "Programación",
+      "browse": "Navegación",
+      "talk": "Social",
+      "design": "Diseño",
+      "fun": "Ocio",
+      "other": "Otros",
+      "hidden": "Oculto",
+      "office": "Oficina",
+      "workchat": "Chat de trabajo",
+      "game": "Juegos",
+      "video": "Multimedia"
+    },
+    "list": {
+      "namePlaceholder": "Nombre de la categoría",
+      "renameTooltip": "Haz doble clic para renombrar",
+      "dragHandleAria": "Arrastra para reordenar",
+      "iconBtnAria": "Editar la apariencia",
+      "iconBtnTitle": "Cambiar el color y el icono",
+      "createIconAria": "Elegir color e icono",
+      "renameAria": "Renombrar",
+      "deleteAria": "Eliminar la categoría",
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
+    },
+    "appList": {
+      "empty": "(ninguna aplicación vinculada)",
+      "addPlaceholder": "p. ej. chrome.exe",
+      "add": "Añadir aplicación",
+      "removeAria": "Quitar {{name}}",
+      "removeTooltip": "Quitar"
+    },
+    "deleteDialog": {
+      "title": "Eliminar la categoría",
+      "message": "¿Eliminar la categoría «{{name}}»? Sus aplicaciones volverán a «Otros».",
+      "confirm": "Eliminar"
+    },
+    "pairing": {
+      "sectionTitle": "Emparejamiento de aplicaciones entre dispositivos",
+      "infoTipAria": "Detalles",
+      "infoTipBody": "Una misma aplicación puede tener nombres de proceso distintos en sistemas distintos («Code» en macOS, «Visual Studio Code» en Windows). Sin emparejarlas, el tiempo se cuenta como dos aplicaciones separadas y hay que asignar la categoría en cada dispositivo. Una vez emparejadas, el nombre, la categoría, el icono y el tiempo quedan unificados.",
+      "instructionPrefix": "Dentro de una columna de dispositivo, ",
+      "instructionEmph": "arrastra verticalmente",
+      "instructionSuffix": " para llevar la misma aplicación a una sola fila, unificando nombre, categoría y tiempo combinado.",
+      "unassignedHint": "Las filas sin asignar aparecen resaltadas en amarillo",
+      "loading": "Cargando…",
+      "noDevices": "Aún no hay datos de dispositivos. Vuelve después de capturar un rato.",
+      "header": {
+        "displayName": "Nombre visible"
+      },
+      "chip": {
+        "unmergeTooltip": "Quitar de este grupo"
+      },
+      "row": {
+        "removeTooltip": "Quitar de la lista",
+        "removeAria": "Quitar {{name}} de la lista"
+      }
+    },
+    "assign": {
+      "label": "Asignar",
+      "clear": "Quitar la categoría"
+    },
+    "tabs": {
+      "list": "Gestionar categorías",
+      "apps": "Asignar apps"
+    }
+  },
+  "aiSettings": {
+    "title": "Ajustes de IA",
+    "tabs": {
+      "engine": "Motor",
+      "models": "Modelos",
+      "general": "General",
+      "prompt": "Prompt",
+      "external": "API en la nube"
+    },
+    "engine": {
+      "sectionTitle": "Motor de IA local",
+      "sectionDesc": "Hindsight incluye el motor de inferencia llama.cpp y lo ejecuta todo localmente: las capturas de pantalla nunca se envían a ningún servicio externo.",
+      "loading": "Cargando…",
+      "installed": "Instalado",
+      "notInstalled": "No instalado",
+      "versionAria": "Versión {{version}}",
+      "versionStaleAria": "Versión {{version}} (la más reciente es {{latest}})",
+      "versionLabel": "Versión {{version}}",
+      "versionStaleLabel": " · más reciente {{latest}}",
+      "versionUnknown": "?",
+      "detected": "Se detectó {{accel}}",
+      "accel": {
+        "cuda12": "CUDA 12.4",
+        "cuda13": "CUDA 13.1",
+        "winCpu": "Modo CPU",
+        "macArm": "Apple Silicon · Metal",
+        "macIntel": "Mac Intel",
+        "linuxCpu": "Linux CPU"
+      },
+      "noCuda": {
+        "headline": "No se detectó NVIDIA CUDA.",
+        "prefix": " Los LLM de visión van muy lentos en CPU. Recomendamos instalar antes el",
+        "linkText": " CUDA Toolkit de NVIDIA",
+        "suffix": " (≥ 12.4); Hindsight cambiará automáticamente a la variante acelerada por GPU tras reiniciar."
+      },
+      "uninstallConfirm": "¿Desinstalar el motor de IA local? Los archivos de modelo no se ven afectados.",
+      "uninstallConfirmTitle": "¿Desinstalar el motor de IA local?",
+      "uninstallConfirmMessage": "Los archivos de modelo no se ven afectados.",
+      "actions": {
+        "downloading": "Descargando…",
+        "updating": "Actualizando…",
+        "updateToLatest": "Actualizar a la más reciente",
+        "redownload": "Volver a descargar",
+        "downloadEngine": "Descargar el motor llama",
+        "testConnection": "Probar la conexión",
+        "testTooltipReady": "Inicia el motor (si no está en marcha) y comprueba el endpoint local /v1/models",
+        "testTooltipNotInstalled": "No instalado",
+        "releaseVram": "Liberar la VRAM",
+        "releaseVramTooltip": "Detiene el motor y libera la memoria de la GPU ahora. Se volverá a iniciar automáticamente en el próximo resumen.",
+        "releaseVramTooltipNotInstalled": "El motor no está instalado",
+        "releaseVramTooltipNotRunning": "El motor no está en marcha: no hay nada que liberar",
+        "openFolderTooltipInstalled": "Mostrar la carpeta de instalación en el explorador de archivos",
+        "openFolderTooltipNotInstalled": "No instalado",
+        "uninstallTooltipInstalled": "Desinstalar el motor de IA local",
+        "uninstallTooltipNotInstalled": "No instalado",
+        "uninstall": "Desinstalar llama",
+        "approxSize": "~{{size}} MB"
+      },
+      "runtimeBadge": "runtime v{{version}}",
+      "runtimeBadgeMissing": "falta el runtime",
+      "progress": {
+        "stageEngine": "Motor de IA",
+        "stageRuntime": "Runtime",
+        "downloading": "Descargando… {{size}} MB",
+        "verifying": "Verificando…",
+        "extracting": "Extrayendo…",
+        "done": "✓ Completado"
+      },
+      "runtime": {
+        "running": "En marcha · puerto: {{port}}",
+        "starting": "Iniciando…",
+        "error": "Error",
+        "connectedNoModels": "Conectado (ningún modelo cargado)",
+        "connectedWithModels": "Conectado — {{count}} modelo(s)",
+        "idleCountdownSec": "Libera la VRAM en {{sec}} s",
+        "idleCountdownMin": "Libera la VRAM en {{min}} min {{sec}} s"
+      },
+      "ocr": {
+        "name": "Componente de reconocimiento de texto (OCR)",
+        "desc": "Lo usa la memoria de pantalla para reconocer texto; se ejecuta en la GPU (DirectML, cualquier tarjeta, incluidas las integradas).",
+        "macNativeBadge": "Nativo del sistema",
+        "macNativeDesc": "macOS usa el reconocimiento nativo del sistema (Vision): no hay nada que descargar.",
+        "upgradeHint": "Se detectó una versión antigua del componente; vuelve a descargarlo para actualizar a la aceleración por GPU.",
+        "download": "Descargar el componente",
+        "uninstallConfirmTitle": "¿Desinstalar el componente de reconocimiento de texto (OCR)?",
+        "uninstallConfirmMessage": "La indexación del texto de pantalla no estará disponible hasta que vuelvas a descargarlo. Los índices existentes no se ven afectados."
+      }
+    },
+    "summaryParams": {
+      "sectionTitle": "Parámetros del resumen por tramos"
+    },
+    "engineParams": {
+      "sectionTitle": "Parámetros del motor (al iniciar)",
+      "batch": "Tamaño del lote",
+      "slots": "Slots paralelos",
+      "ctx": "Contexto (por slot)",
+      "vramLabel": "VRAM estimada",
+      "vramBreakdown": "(pesos {{weights}} + caché KV {{kv}} + ~2.0 de sobrecarga · para un modelo de {{params}}B + {{ctx}}K de ctx × {{slots}} slot(s))",
+      "vramSystemDiscrete": "VRAM del sistema: {{total}} GB",
+      "vramSystemUnified": "Memoria unificada de Apple = {{total}} GB",
+      "applyRecommended": "Aplicar lo recomendado",
+      "recommendedAlreadyApplied": "Ya es lo recomendado",
+      "recommendedHint": "Recomendado: slots {{slots}} · ctx {{ctx}} · lote {{batch}}"
+    },
+    "models": {
+      "sectionTitle": "Modelos",
+      "sectionDesc": "El LLM que se usa para la inferencia local; los archivos GGUF se descargan de HuggingFace.",
+      "toolbar": {
+        "capAll": "Todos",
+        "capVision": "Visión",
+        "capText": "Solo texto",
+        "statusAll": "Todos",
+        "statusInstalled": "Descargados",
+        "statusNotInstalled": "Sin descargar",
+        "brandAll": "Todas",
+        "sortDefault": "Orden predeterminado",
+        "sortSizeAsc": "Tamaño ↑",
+        "sortSizeDesc": "Tamaño ↓",
+        "sortName": "Nombre A-Z"
+      },
+      "cloud": {
+        "cardTitle": "Nube · {{provider}}",
+        "modelUnset": "(modelo sin definir)",
+        "summaryConfirmTitle": "¿Enviar los datos del resumen a la nube?",
+        "summaryConfirmMessage": "Con Text en la nube, los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se envían a {{provider}} en cada resumen por tramos. Esta opción no envía las imágenes.",
+        "summaryConfirmAccept": "Lo entiendo, continuar"
+      },
+      "card": {
+        "hfTooltipPrefix": "HuggingFace · ",
+        "hfTooltipAria": "HuggingFace {{repo}}",
+        "approxSize": "~{{size}} GB",
+        "download": "Descargar",
+        "downloading": "Descargando…",
+        "installedBadge": "Descargado",
+        "pause": "Pausar",
+        "pauseTooltip": "Pausa la descarga actual. Los bytes parciales se conservan; al reanudar más tarde, continúa donde lo dejaste.",
+        "resume": "Reanudar",
+        "resumeTooltip": "Reanudar desde los {{size}} MB ya descargados.",
+        "capsTooltips": {
+          "TEXT": "Generación de texto: escribir / continuar / resumir prosa.",
+          "VISION": "Multimodal: entiende entradas de imagen.",
+          "CODE": "Ajustado para código: mejor escribiendo y explicando código.",
+          "FAST": "Ligero (< 1 GB), la velocidad primero; ideal para el primer intento.",
+          "BALANCED": "Tamaño medio, equilibra calidad y velocidad para el uso diario.",
+          "REASONING": "Razonamiento profundo: pensamiento en varios pasos, matemáticas, planificación.",
+          "R1": "Familia DeepSeek R1: modelo de razonamiento entrenado con RL.",
+          "DEFAULT": "La mejor elección de Hindsight: el mejor equilibrio general."
+        },
+        "step2": "Texto",
+        "step2ToggleOnTooltip": "Usar este modelo para los resúmenes por tramos (Text). Sustituye la selección anterior.",
+        "step2ToggleOffTooltip": "Pulsa para quitar la selección de Text (volverá al modelo activo heredado).",
+        "uninstall": "Desinstalar",
+        "uninstallTooltipInstalled": "Eliminar los archivos locales (principal + mmproj)",
+        "uninstallTooltipNotInstalled": "No instalado",
+        "progressMain": "pesos principales",
+        "progressMmproj": "proyector de visión",
+        "progressUnit": "MB",
+        "progressUnknownTotal": "?"
+      },
+      "uninstallConfirm": "¿Desinstalar {{name}}? Esto eliminará los pesos principales{{extra}}: no se puede deshacer.",
+      "uninstallConfirmTitle": "¿Desinstalar {{name}}?",
+      "uninstallConfirmMessage": "Esto eliminará los pesos principales{{extra}}. La acción no se puede deshacer.",
+      "uninstallConfirmExtra": " y el proyector mmproj",
+      "expand": {
+        "more": "Mostrar más modelos ({{count}})",
+        "collapse": "Contraer",
+        "busyTooltip": "Solo se puede contraer cuando terminen las descargas"
+      },
+      "custom": {
+        "expand": "Modelo personalizado de HuggingFace",
+        "collapse": "Contraer el formulario de modelo personalizado",
+        "hint": "Descarga cualquier archivo GGUF de un repositorio de HuggingFace. El archivo debe poder cargarse con llama.cpp; el campo mmproj solo hace falta para los modelos de visión.",
+        "repoLabel": "Repositorio",
+        "repoPlaceholder": "p. ej. bartowski/Llama-3.2-11B-Vision-Instruct-GGUF",
+        "mainFileLabel": "Archivo de pesos principales",
+        "mainFilePlaceholder": "p. ej. Llama-3.2-11B-Vision-Instruct-Q4_K_M.gguf",
+        "mmprojFileLabel": "Archivo mmproj (opcional, solo modelos de visión)",
+        "mmprojFilePlaceholder": "p. ej. mmproj-Llama-3.2-11B-Vision-Instruct-F16.gguf",
+        "errorRequired": "El repositorio y el archivo de pesos principales son obligatorios."
+      },
+      "import": {
+        "button": "Importar un archivo de modelo local",
+        "importing": "Importando {{name}}…",
+        "importingPct": "Importando {{name}} ({{pct}} %)…",
+        "tooltip": "Copia a la carpeta de modelos un archivo GGUF que ya tengas en el disco",
+        "dialogTitle": "Seleccionar archivo(s) de modelo GGUF"
+      },
+      "local": {
+        "title": "Modelos locales (fuera de la lista recomendada)",
+        "pairedMmproj": "Proyector de visión: {{name}}",
+        "orphanMmproj": "Este es un archivo de proyección visual (mmproj) y no puede usarse como modelo por sí solo. Para importar un modelo, elige el archivo GGUF principal, mucho más grande, del mismo repositorio.",
+        "toolsTip": "La plantilla de conversación de este modelo declara llamadas a herramientas: se puede usar en el Chat.",
+        "noTools": "Sin llamadas a herramientas",
+        "noToolsTip": "La plantilla de conversación de este modelo no declara llamadas a herramientas, así que no se puede usar en el Chat; los resúmenes no se ven afectados."
+      }
+    },
+    "brief": {
+      "sectionTitle": "Sobre ti",
+      "sectionInfo": "Se incluye en los resúmenes de IA para ayudar al modelo a entender tu trabajo y tu contexto.",
+      "rowLabel": "Sobre ti (opcional)",
+      "placeholder": "p. ej. Soy desarrollador backend y escribo sobre todo en Rust y TypeScript; los fines de semana trasteo con videojuegos."
+    },
+    "prompt": {
+      "sectionTitle": "Prompts",
+      "sectionDesc": "Dile al modelo cómo escribir los resúmenes. Cada idioma tiene un valor predeterminado integrado; pulsa Guardar tras editar, o Restablecer para volver al predeterminado.",
+      "rowLabel": "Prompt del sistema",
+      "hint": {
+        "dirty": "Cambios sin guardar",
+        "custom": "Usando un prompt personalizado",
+        "default": "Usando el predeterminado integrado"
+      },
+      "actions": {
+        "reset": "Restablecer al predeterminado",
+        "resetTooltip": "Vuelve a rellenar el editor con el predeterminado integrado (pulsa Guardar para aplicarlo)",
+        "save": "Guardar",
+        "saveTooltip": "Guardar la personalización para el idioma actual"
+      }
+    },
+    "segments": {
+      "sectionTitle": "Tramos horarios",
+      "sectionInfo": "Los resúmenes de IA se generan por tramos; las capturas de pantalla de cada tramo se muestrean por similitud antes de enviarse al modelo.",
+      "rowLabel": "Tramos"
+    },
+    "filter": {
+      "sectionTitle": "Filtros",
+      "rowLabel": "Analizar estas categorías",
+      "rowHint": "Pulsa para alternar:\n• A color + icono de categoría = incluida en el análisis de IA\n• Contorno gris + icono de ojo cerrado = excluida"
+    },
+    "external": {
+      "sectionTitle": "API en la nube (opcional)",
+      "sectionDesc": "Genera los resúmenes de periodos y las respuestas del Chat con un modelo en la nube. Las capturas de pantalla nunca se envían.",
+      "enableLabel": "Activar la API en la nube",
+      "enableHint": "Al activarla, los resúmenes por tramos y el Chat llaman a la API configurada abajo; las capturas de pantalla nunca se envían.",
+      "providerLabel": "Proveedor",
+      "provider": {
+        "openai": "OpenAI",
+        "deepseek": "DeepSeek",
+        "kimi": "Kimi (Moonshot global)",
+        "kimi-cn": "Kimi (Moonshot China)",
+        "openrouter": "OpenRouter",
+        "together": "Together",
+        "groq": "Groq",
+        "custom": "Personalizado"
+      },
+      "baseUrlLabel": "Base URL",
+      "baseUrlPlaceholder": "https://api.openai.com/v1",
+      "apiKeyLabel": "API Key",
+      "apiKeyPlaceholder": "sk-...",
+      "apiKeyShow": "Mostrar",
+      "apiKeyHide": "Ocultar",
+      "modelLabel": "ID del modelo de texto",
+      "testButton": "Probar la conexión",
+      "testRunning": "Probando…",
+      "testOk": "Conectado · {{count}} modelos disponibles",
+      "testOkNoModels": "Conectado",
+      "testFail": "Falló la conexión: {{message}}",
+      "missingFields": "Rellena primero la Base URL y el ID del modelo",
+      "privacyNote": "Nota: la API de texto atiende los resúmenes y el Chat: se le envían los nombres de aplicaciones, las categorías, la línea de tiempo de actividad, tus preguntas y el texto de pantalla correspondiente. Las claves de API se guardan en texto plano en los ajustes locales.",
+      "kimiBaseUrlNote": "Las claves de api.moonshot.cn (China) y api.moonshot.ai (global) no son intercambiables: usa el sitio donde se emitió tu clave.",
+      "groupTextTitle": "API de texto",
+      "groupTextHint": "Resúmenes por tramos · Chat",
+      "testTextButton": "Probar la API de texto",
+      "testStepConn": "Red y autenticación",
+      "testStepChat": "El modelo {{model}} responde",
+      "profilesLabel": "Perfiles guardados",
+      "saveProfile": "Guardar el perfil actual",
+      "saveProfileHint": "Guarda el endpoint, la clave de API y el modelo actuales como un perfil, para cambiar con un clic",
+      "deleteProfileAria": "Eliminar el perfil {{name}}",
+      "fetchModels": "Obtener los modelos disponibles en el endpoint",
+      "modelsFetched": "Se obtuvieron {{count}} modelos: escribe en el campo de modelo para buscar"
+    },
+    "autoSummary": {
+      "sectionTitle": "Programaciones",
+      "sectionDesc": "Se ejecuta a la hora indicada: generación de informes y OCR de capturas.",
+      "enableLabel": "Resumen automático",
+      "enableHint": "Genera el informe diario de hoy a la hora indicada (también rellena el día anterior si falta) y el semanal de la semana pasada. Los fallos no se reintentan; los informes mensuales llegarán cuando estén disponibles",
+      "timeLabel": "Programar la hora",
+      "ocrDailyLabel": "OCR automático",
+      "ocrDailyDescription": "Procesa a diario, a la hora indicada, las capturas acumuladas",
+      "addTimeAria": "Añadir una hora",
+      "removeTimeAria": "Quitar la última hora añadida"
+    }
+  },
+  "devices": {
+    "title": "Dispositivos",
+    "meta": "Gestiona el nombre de este dispositivo y el estado de sincronización de los demás.",
+    "sectionSelf": "Este dispositivo",
+    "sectionOthers": "Otros dispositivos",
+    "emptyOthers": "Inicia sesión con la misma cuenta en otro dispositivo para verlo aquí.",
+    "relative": {
+      "justNow": "Ahora mismo",
+      "minutesAgo": "hace {{count}} min",
+      "hoursAgo": "hace {{count}} h",
+      "daysAgo": "hace {{count}} d"
+    },
+    "cloud": {
+      "state": {
+        "connected": "Conectado a Google Drive",
+        "notSignedIn": "Sin conectar",
+        "notConfigured": "Sin configurar"
+      },
+      "desc": {
+        "signInPrompt": "Inicia sesión con Google para sincronizar los datos de actividad entre dispositivos a través de Drive. Las capturas de pantalla nunca se envían.",
+        "configurePrompt": "Antes del primer uso, crea una credencial OAuth en la Google Cloud Console (unos 3 minutos)."
+      },
+      "stats": {
+        "pending": "{{count}} pendiente(s)",
+        "synced": "Sincronizado · {{when}}",
+        "waitingFirst": "Esperando la primera sincronización",
+        "deadLetter": "· {{count}} con fallo"
+      },
+      "editCreds": "Editar las credenciales",
+      "actions": {
+        "syncNow": "Sincronizar ahora",
+        "syncing": "Sincronizando…",
+        "syncNowTitle": "Sincronizar ahora",
+        "signOut": "Cerrar sesión",
+        "signIn": "Volver a iniciar sesión",
+        "signOutTitle": "Cerrar la sesión de esta cuenta",
+        "reauthTitle": "Credenciales caducadas: vuelve a iniciar sesión para renovar el token",
+        "signInWithGoogle": "Iniciar sesión con Google",
+        "signingIn": "Abriendo el navegador…",
+        "configureOAuth": "Configurar OAuth",
+        "restartApp": "Reiniciar la aplicación"
+      },
+      "restartHint": "Has iniciado sesión con una cuenta nueva. Reinicia la aplicación para cambiar a la base de datos local de esa cuenta.",
+      "datasets": {
+        "title": "Qué sincronizar",
+        "hint": "De forma predeterminada solo se sincronizan los datos básicos (estadísticas de uso, categorías). Los elementos de abajo contienen información más sensible y hay que activarlos uno a uno; las imágenes de las capturas nunca salen de este dispositivo.",
+        "summaries": {
+          "label": "Texto de los resúmenes de IA",
+          "desc": "Texto generado de los informes diarios y semanales, para leerlo en otros dispositivos.",
+          "warn": "Al activarlo, el texto completo de tus informes diarios y semanales (incluidos los nombres de archivo, los títulos de páginas y los vídeos mencionados) se enviará al área de datos de aplicación de tu Google Drive y se sincronizará con los demás dispositivos de la misma cuenta."
+        },
+        "chat": {
+          "label": "Historial del chat",
+          "desc": "Conversaciones y mensajes del chat, para continuarlos en otros dispositivos.",
+          "warn": "Al activarlo, todas las conversaciones y mensajes del Chat — incluidas tus preguntas y los fragmentos de texto de pantalla citados en las respuestas — se enviarán al área de datos de aplicación de tu Google Drive y se sincronizarán con los demás dispositivos."
+        },
+        "memory": {
+          "label": "Memoria de pantalla (texto completo)",
+          "desc": "Índice del texto que apareció en tu pantalla, para buscarlo entre dispositivos. Lo más sensible.",
+          "warn": "Al activarlo, todo el texto del índice de memoria de pantalla — el contenido literal que apareció en tu pantalla (conversaciones, correos, código, páginas web, etc.) — se enviará al área de datos de aplicación de tu Google Drive y se sincronizará con los demás dispositivos. Este es el nivel más sensible; confirma que confías en todos los dispositivos de esta cuenta."
+        },
+        "confirmTitle": "¿Enviar «{{dataset}}» a la nube?",
+        "confirmNote": "Los datos se quedan solo en el área de datos de aplicación de tu propio Google Drive (invisible para otras apps). Puedes desactivarlo cuando quieras y borrarlos con «Borrar los datos de la nube».",
+        "confirmAction": "Entiendo el riesgo, activar"
+      },
+      "oauthFallback": {
+        "hint": "¿No se abrió el navegador? Copia el enlace de inicio de sesión y pégalo en cualquier navegador.",
+        "copy": "Copiar el enlace de inicio de sesión",
+        "copied": "Copiado"
+      }
+    },
+    "errors": {
+      "credExpired": "Credenciales caducadas. Vuelve a iniciar sesión.",
+      "transient": "La sincronización encontró un error temporal; reintentando automáticamente…"
+    },
+    "setup": {
+      "header": "Configuración de la credencial OAuth",
+      "collapse": "Contraer",
+      "step1": {
+        "title": "Activa la API de Google Drive",
+        "bodyPrefix": "Pulsa el botón ",
+        "cueEnable": "Enable",
+        "bodySuffix": ".",
+        "openLink": "Abrir Drive API"
+      },
+      "step2": {
+        "title": "Configura la pantalla de consentimiento de OAuth",
+        "bodyPrefix": "La primera vez, pulsa ",
+        "cueStart": "Get started",
+        "bodyMiddle": " → pon un nombre de aplicación y un correo cualesquiera → define Audience como External → vuelve a indicar tu correo en la información de contacto → pulsa ",
+        "cueCreate": "Create",
+        "bodySuffix": ".",
+        "openLink": "Abrir Audience"
+      },
+      "step3": {
+        "title": "Crea el cliente OAuth",
+        "bodyPrefix": "Abre Clients a la izquierda → pulsa ",
+        "cueCreateClient": "+ Create client",
+        "bodySuffix": " arriba → elige Desktop app como tipo de aplicación → ponle el nombre que quieras. A continuación se mostrarán el Client ID y el Client Secret.",
+        "openLink": "Abrir Clients"
+      },
+      "step4": {
+        "title": "Pega abajo el Client ID y el Client Secret",
+        "clientIdLabel": "Client ID",
+        "secretLabel": "Client Secret",
+        "showSecret": "Mostrar el client secret",
+        "hideSecret": "Ocultar el client secret",
+        "show": "Mostrar",
+        "hide": "Ocultar"
+      }
+    },
+    "self": {
+      "tag": "Este dispositivo",
+      "lastActivity": "Última actividad: {{when}}",
+      "todayCount": "{{count}} capturas hoy",
+      "appearanceAria": "Cambiar la apariencia",
+      "appearanceTitle": "Cambiar el color y el icono",
+      "doubleClickToRename": "Haz doble clic para renombrar",
+      "renameAria": "Renombrar",
+      "renameTitle": "Renombrar"
+    },
+    "other": {
+      "lastSync": "Última sincronización: {{when}}",
+      "forgetAria": "Olvidar {{name}} de la nube",
+      "forgetTitle": "Quitar este dispositivo de la nube de forma permanente"
+    },
+    "forgetDialog": {
+      "title": "¿Olvidar «{{name}}» de la nube?",
+      "intro": "Esto elimina de forma permanente todos los datos que este dispositivo tiene en Google Drive, además de todos los registros de actividad vinculados a él en esta y en cualquier otra máquina. Los demás dispositivos borrarán los datos de este la próxima vez que se conecten a la nube.",
+      "unaffected": "Úsalo cuando el dispositivo ya no esté contigo (vendido / perdido / sustituido) y no borraras sus datos de la nube en su momento: los registros que quedan siguen apareciendo en tus otros dispositivos.",
+      "confirm": "Olvidar el dispositivo",
+      "doneToast": "«{{name}}» se quitó de la nube ({{count}} archivos de Drive eliminados).",
+      "error": "No se pudo quitar el dispositivo: {{message}}"
+    }
+  },
+  "aiSummary": {
+    "title": "Resumen de IA",
+    "tabs": {
+      "daily": "Diario",
+      "week": "Semanal",
+      "month": "Mensual",
+      "debug": "Depuración",
+      "search": "Buscar"
+    },
+    "placeholder": {
+      "hint": "Función en desarrollo."
+    },
+    "errors": {
+      "runBusy": "Ya hay otra tarea de generación de IA en marcha. Espera a que termine o pulsa Detener primero.",
+      "llmEmptyReasoning": "El modelo gastó todo el presupuesto pensando y no llegó a escribir la respuesta. Actualiza la aplicación e inténtalo de nuevo (las versiones nuevas desactivan el razonamiento local de forma predeterminada); si persiste, cambia a un modelo sin razonamiento (instruct) o amplía el contexto de este paso.",
+      "llmEmptyEos": "El modelo se detuvo sin generar nada: normalmente el modelo elegido o el proyector de visión (mmproj) no encajan. Elige otro modelo en los Ajustes de IA.",
+      "llmEmptyTruncated": "La respuesta del modelo se cortó antes de producir texto útil (probablemente un modelo de razonamiento). Usa un modelo de texto normal, como Gemma o Qwen3, o amplía el contexto en los Ajustes de IA.",
+      "llmEmpty": "El modelo no devolvió ningún contenido. Prueba con otro modelo en los Ajustes de IA."
+    },
+    "weekly": {
+      "title": "Semanal",
+      "hint": "Resumen semanal de actividad con desglose por fecha y tema.",
+      "subtitle": "Sintetiza los informes diarios de esta semana en una única revisión semanal",
+      "weekNav": {
+        "prevAria": "Semana anterior",
+        "nextAria": "Semana siguiente",
+        "thisWeek": "Esta semana",
+        "lastWeek": "Semana pasada",
+        "thisWeekBack": "Volver a esta semana"
+      },
+      "actions": {
+        "stop": "Detener",
+        "regenerate": "Regenerar",
+        "start": "Generar",
+        "startTooltip": "Crea una revisión semanal a partir de los informes diarios existentes de esta semana: sin capturas de pantalla, mucho más rápido que el diario",
+        "regenerateTooltip": "Regenerar borrará y sustituirá el informe semanal de esta semana",
+        "noModelTooltip": "Elige un modelo de resumen en Ajustes de IA → Modelos, o activa la API en la nube",
+        "delete": "Eliminar",
+        "deleteTooltip": "Borrar el informe semanal de esta semana (no afecta a los informes diarios)",
+        "deleteEmptyTooltip": "Aún no hay informe semanal que eliminar",
+        "deleteConfirmTitle": "¿Eliminar el informe semanal del {{weekStart}}?",
+        "deleteConfirmMessage": "Se borrará el contenido del informe semanal. Los informes diarios no se ven afectados. Esto no se puede deshacer.",
+        "exportMarkdown": "Exportar como Markdown",
+        "exportTooltip": "Exportar el informe semanal actual como archivo Markdown",
+        "exportEmptyTooltip": "Aún no hay informe semanal que exportar",
+        "exportRunningTooltip": "El informe semanal se está generando; expórtalo cuando termine",
+        "dismissError": "Descartar"
+      },
+      "errors": {
+        "noSummaryModel": "Elige un modelo de resumen en Ajustes de IA → Modelos, o activa la API en la nube",
+        "generationFailed": "No se pudo generar el informe semanal",
+        "unknown": "Error desconocido"
+      },
+      "confirm": {
+        "continueAnyway": "Generar de todos modos",
+        "partialMissing": {
+          "title": "Algunos días no tienen informe diario",
+          "message": "{{count}} día(s) de esta semana no tienen informe diario: {{dates}}. Si continúas, esos días usarán solo las estadísticas de aplicaciones en lugar de un informe diario; el resto seguirá usando los informes diarios con normalidad. ¿Continuar?"
+        },
+        "fullMissing": {
+          "title": "Ningún informe diario para esta semana",
+          "message": "Ninguno de los 7 días de esta semana tiene informe diario, pero {{activityCount}} de ellos sí tienen registros de uso de aplicaciones como base. Al generar solo se obtendrá una revisión semanal simplificada basada en las estadísticas de aplicaciones, de calidad claramente inferior a la que se lograría con los informes diarios. ¿Continuar?",
+          "messageNoActivity": "Ninguno de los 7 días de esta semana tiene informe diario, y tampoco hay registros de uso de aplicaciones. La generación probablemente falle. ¿Intentarlo igualmente?"
+        }
+      },
+      "engineLoading": "Cargando el modelo…",
+      "toast": {
+        "exported": "Exportado a {{filename}}"
+      },
+      "card": {
+        "badge": {
+          "empty": "Sin generar",
+          "ok": "Generado",
+          "error": "Falló",
+          "engineStarting": "Cargando el modelo…",
+          "summarizing": "Generando…"
+        },
+        "body": {
+          "empty": "Pulsa «Generar» arriba para sintetizar una revisión semanal a partir de los informes diarios de esta semana.",
+          "engineStarting": "Cargando el modelo: unos 30-90 s la primera vez…",
+          "summarizing": "El modelo está sintetizando los informes diarios de esta semana en una revisión semanal…",
+          "errorLabel": "Falló: "
+        }
+      },
+      "export": {
+        "frontmatterTitle": "Semanal {{weekStart}} ~ {{weekEnd}}",
+        "heading": "Semanal · {{weekStart}} ~ {{weekEnd}}",
+        "stateError": "❌ **Falló**",
+        "stateEmptyContent": "_(vacío)_"
+      },
+      "ocrLoading": "Cargando el modelo de OCR…",
+      "ocrRunning": "Leyendo el texto de las capturas {{done}}/{{total}}…"
+    },
+    "monthly": {
+      "title": "Mensual",
+      "hint": "Tendencias y aspectos destacados del mes. Función en desarrollo."
+    },
+    "daily": {
+      "subtitle": "Resumen por tramos de la línea de tiempo de actividad de hoy, generado por un modelo local.",
+      "runtimeMissing": {
+        "title": "El motor de IA no está instalado",
+        "message": "Generar resúmenes localmente requiere el motor de IA (llama.cpp). La generación continúa automáticamente cuando termine la descarga.",
+        "confirm": "Descargar y continuar",
+        "cancel": "Cancelar"
+      },
+      "dateNav": {
+        "prevAria": "Día anterior",
+        "nextAria": "Día siguiente",
+        "todayBack": "Volver a hoy",
+        "today": "Hoy",
+        "yesterday": "Ayer"
+      },
+      "actions": {
+        "stop": "Detener",
+        "stopping": "Deteniendo…",
+        "regenerate": "Regenerar",
+        "start": "Iniciar el resumen",
+        "startTooltip": "El modelo local resume la línea de tiempo de actividad de cada tramo por turnos; la duración depende del hardware (unos segundos por tramo en GPU, decenas de segundos en CPU).",
+        "regenerateTooltip": "Regenerar borra todos los resúmenes por tramos de este día y los vuelve a ejecutar.",
+        "noModelTooltip": "Elige primero un modelo en Ajustes de IA → Modelos.",
+        "delete": "Eliminar",
+        "deleteTooltip": "Borrar ai_summaries (source=daily) de este día (no se puede deshacer).",
+        "deleteEmptyTooltip": "Aún no hay datos diarios que eliminar.",
+        "deleteConfirmTitle": "¿Eliminar los datos del informe diario del {{date}}?",
+        "deleteConfirmMessage": "Se borrarán todos los resúmenes por tramos de este día. La pestaña Depuración no se ve afectada. Esto no se puede deshacer.",
+        "exportMarkdown": "Exportar Markdown",
+        "exportTooltip": "Exportar como archivo Markdown todos los resúmenes por tramos de la fecha actual.",
+        "exportEmptyTooltip": "Aún no hay resúmenes por tramos que exportar.",
+        "exportRunningTooltip": "Resumen en curso: espera a que termine antes de exportar.",
+        "retry": "Reintentar",
+        "retryTooltip": "Regenerar este tramo",
+        "retryDisabledTooltip": "El resumen del día completo está en marcha; espera a que termine o se detenga antes de reintentar.",
+        "dismissError": "Descartar"
+      },
+      "errors": {
+        "generationFailed": "Falló el resumen",
+        "unknown": "Error desconocido",
+        "noModel": "Elige primero un modelo en Ajustes de IA → Modelos."
+      },
+      "engineLoading": "Cargando el modelo…",
+      "toast": {
+        "exported": "{{filename}} se exportó a tu carpeta de Descargas."
+      },
+      "card": {
+        "badge": {
+          "empty": "Sin generar",
+          "ok": "Generado",
+          "skipped": "Sin capturas de pantalla",
+          "error": "Falló",
+          "summarizing": "Escribiendo el resumen del tramo…"
+        },
+        "body": {
+          "empty": "Pulsa «Iniciar el resumen» arriba para generar este tramo.",
+          "summarizingNoTotal": "Escribiendo el resumen del tramo…",
+          "skipped": "No hay ninguna captura de pantalla en este intervalo (el ordenador estaba apagado / todo estaba en la lista de privacidad / todo estaba en categorías excluidas).",
+          "skippedNoActivity": "No se registró nada en este intervalo (el ordenador estaba apagado / todo estaba en categorías excluidas).",
+          "errorLabel": "Falló: "
+        }
+      },
+      "export": {
+        "frontmatterTitle": "Informe diario — {{dateLabel}}",
+        "heading": "Informe diario — {{dateLabel}} · {{date}}",
+        "intro": "Generado por la IA de Hindsight · {{summary}}",
+        "segmentsCount": "{{count}} tramos",
+        "okCount": "{{count}} generados",
+        "skipCount": "{{count}} omitidos",
+        "errCount": "{{count}} con fallo",
+        "pendingCount": "{{count}} pendientes",
+        "summaryJoin": " · ",
+        "statePending": "⏳ **Sin generar**",
+        "stateSkipped": "⚪ **Omitido**: no hay ninguna captura de pantalla en este intervalo",
+        "stateSkippedNoActivity": "⚪ **Omitido**: no se registró nada en este intervalo",
+        "stateError": "❌ **Falló**",
+        "stateEmptyContent": "_(vacío)_"
+      },
+      "cloudOffer": {
+        "title": "¿Generar con tu API en la nube?",
+        "message": "Ya hay una API en la nube configurada ({{provider}} · {{model}}), pero los resúmenes están puestos en un modelo local y el motor local no está instalado. Al confirmar, los resúmenes pasarán a usar la API en la nube: los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se enviarán a ese proveedor. También puedes descargar el motor local en Ajustes de IA → Motor.",
+        "confirm": "Usar la API en la nube"
+      },
+      "ocrLoading": "Cargando el modelo de OCR…",
+      "ocrRunning": "Leyendo el texto de las capturas {{done}}/{{total}}…"
+    },
+    "debug": {
+      "scope": {
+        "daily": "Diario",
+        "weekly": "Semanal",
+        "monthly": "Mensual"
+      },
+      "dateNav": {
+        "prevDayAria": "Día anterior",
+        "nextDayAria": "Día siguiente",
+        "prevWeekAria": "Semana anterior",
+        "nextWeekAria": "Semana siguiente",
+        "prevMonthAria": "Mes anterior",
+        "nextMonthAria": "Mes siguiente",
+        "todayBack": "Volver a hoy",
+        "thisWeekBack": "Volver a esta semana",
+        "thisMonthBack": "Volver a este mes",
+        "today": "Hoy",
+        "yesterday": "Ayer",
+        "thisWeek": "Esta semana",
+        "lastWeek": "Semana pasada",
+        "weekBeforeLast": "Hace 2 semanas",
+        "weeksAgo": "Hace {{count}} semanas",
+        "thisMonth": "Este mes",
+        "lastMonth": "Mes pasado",
+        "monthsAgo": "Hace {{count}} meses"
+      },
+      "actions": {
+        "stop": "Detener",
+        "start": "Regenerar",
+        "startInfo": "Regenerar los resúmenes por tramos de este día.",
+        "startInfoAria": "Información sobre el alcance de la regeneración",
+        "clearSummaries": "Eliminar",
+        "clearSummariesTooltip": "Borrar todos los resúmenes por tramos de este día (no se puede deshacer).",
+        "clearSummariesConfirm": "¿Eliminar todos los resúmenes por tramos del {{date}}? Esto no se puede deshacer.",
+        "clearSummariesConfirmTitle": "¿Eliminar todos los resúmenes por tramos del {{date}}?",
+        "clearSummariesConfirmMessage": "Esto no se puede deshacer.",
+        "exportSummariesMd": "Exportar Markdown",
+        "exportSummariesMdTooltip": "Exportar como archivo Markdown todos los resúmenes por tramos de este día.",
+        "exportSummariesMdEmptyTooltip": "Aún no hay resúmenes por tramos que exportar.",
+        "exportSaveTitle": "Guardar como Markdown",
+        "exportSavedAt": "Exportado a {{path}}",
+        "exportFailed": "Falló la exportación: {{err}}",
+        "startTooltipPending": "La depuración de {{type}} está pendiente de implementar en el backend.",
+        "startTooltipReady": "Modo de depuración: vuelve a ejecutar cada tramo del día (borra los resultados existentes) y transmite los resúmenes en vivo.",
+        "startTooltipNoModel": "Elige primero un modelo en Ajustes de IA → Modelos."
+      },
+      "errors": {
+        "scopePending": "La depuración de {{type}} está pendiente de implementar en el backend.",
+        "runFailed": "Falló la ejecución de depuración",
+        "noModel": "Elige primero un modelo en Ajustes de IA → Modelos."
+      },
+      "engineLoading": "Cargando el modelo…",
+      "scopePlaceholder": "La depuración de {{type}} está pendiente de implementar en el backend. Vuelve a «Diario» para depurar el flujo de resumen por tramos.",
+      "segPrompt": {
+        "title": "Prompt del resumen por tramos",
+        "description": "Se usa al resumir la línea de tiempo de actividad del tramo. Los cambios solo se aplican a esta ventana.",
+        "label": "Prompt"
+      },
+      "segments": {
+        "title": "Resumen del tramo",
+        "empty": "Aún no hay resúmenes por tramos. Pulsa «Ejecutar» arriba para que el modelo resuma la línea de tiempo de actividad del tramo.",
+        "chipTitle": "Tramo idx={{idx}}",
+        "skippedFallback": "(ninguna captura de pantalla en este tramo)",
+        "skippedNoActivityFallback": "(ninguna actividad en este tramo)",
+        "emptyFallback": "(vacío)"
+      },
+      "events": {
+        "label": "Flujo de eventos (últimos 200)",
+        "empty": "Aún no hay eventos. Aparecerán aquí en cuanto pulses Ejecutar."
+      },
+      "engineLogs": {
+        "label": "Registro del motor",
+        "refresh": "Actualizar",
+        "refreshing": "Actualizando…",
+        "refreshTooltip": "Obtener el stderr / stdout reciente del proceso hijo llama-server.",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "copyTooltip": "Copiar todas las líneas del registro al portapapeles.",
+        "emptyPrefix": "Aún no se ha obtenido ningún registro. Pulsa «Actualizar» arriba para obtenerlo una vez; el contenido solo aparece después de que el motor haya generado un resumen. Busca líneas ",
+        "emptySuffix": " para saber si se está usando la GPU."
+      },
+      "engineBar": {
+        "loading": "Cargando el estado del motor…",
+        "notInstalled": "No instalado",
+        "port": "Puerto: ",
+        "version": "Versión de llama.cpp: ",
+        "accel": "Aceleración: ",
+        "state": "Estado: ",
+        "error": "Error: ",
+        "accelTitle": "ID de la variante del binario: {{id}}"
+      }
+    }
+  },
+  "chat": {
+    "title": "Chat",
+    "thinking": "Buscando…",
+    "error": "Se produjo un error: {{msg}}",
+    "empty": {
+      "title": "¿Qué te gustaría preguntar?",
+      "hint": "Prueba uno de los ejemplos de abajo, o simplemente escribe en la parte inferior."
+    },
+    "input": {
+      "placeholder": "Pregunta lo que quieras…",
+      "sendAria": "Enviar",
+      "sendTooltip": "Enviar (Intro)",
+      "stopAria": "Detener",
+      "stopTooltip": "Detener la generación"
+    },
+    "presets": {
+      "today": {
+        "label": "Hoy",
+        "q": "¿Qué he hecho hoy?"
+      },
+      "browser": {
+        "label": "Navegador",
+        "q": "¿Qué he visto hoy en el navegador?"
+      },
+      "video": {
+        "label": "YouTube",
+        "q": "¿Cuánto tiempo he pasado hoy en YouTube?"
+      },
+      "category": {
+        "label": "Distribución",
+        "q": "¿En qué categorías se ha ido mi tiempo esta semana?"
+      },
+      "trend": {
+        "label": "Tendencia diaria",
+        "q": "¿Cuánto tiempo he usado el ordenador cada día en las últimas dos semanas?"
+      },
+      "mail": {
+        "label": "Correo",
+        "q": "¿Cuánto tiempo he dedicado hoy al correo?"
+      },
+      "searchkw": {
+        "label": "Búsquedas",
+        "q": "¿Qué he buscado hoy?"
+      },
+      "hours": {
+        "label": "Horas punta",
+        "q": "¿A qué horas del día uso más el ordenador?"
+      }
+    },
+    "conversations": {
+      "new": "Conversación nueva",
+      "empty": "Aún no hay conversaciones",
+      "renameAria": "Renombrar la conversación",
+      "deleteAria": "Eliminar la conversación",
+      "deleteTitle": "¿Eliminar esta conversación?",
+      "deleteMessage": "La conversación y todos sus mensajes se eliminarán de forma permanente.",
+      "deleteConfirm": "Eliminar"
+    },
+    "privacy": {
+      "title": "Antes de enviar",
+      "routeCloud": "Modelo en la nube: {{provider}} · {{model}}",
+      "routeLocal": "Modelo local: {{model}}",
+      "body": "Tu pregunta y los fragmentos de texto correspondientes de la memoria de pantalla se enviarán al modelo como contexto.",
+      "bodyCloud": "La API en la nube está configurada: esos datos se enviarán a un proveedor externo.",
+      "confirm": "Entendido, enviar"
+    },
+    "badge": {
+      "cloud": "Nube · {{model}}",
+      "local": "Local · {{model}}",
+      "none": "Ningún modelo seleccionado"
+    },
+    "localModelNoTools": "El modelo actual {{model}} no declara compatibilidad con llamadas a herramientas: las respuestas pueden ser poco fiables; conviene cambiarlo. Los modelos locales sin esa compatibilidad no aparecen en la lista de modelos.",
+    "backfill": {
+      "pending": "{{count}} capturas de pantalla aún no están en el índice de texto; puede que el chat no las encuentre.",
+      "action": "Indexar ahora",
+      "stop": "Detener",
+      "stopping": "Deteniendo…",
+      "running": "Construyendo el índice… quedan {{count}}",
+      "alreadyRunning": "La indexación está en marcha en segundo plano, quedan {{count}}",
+      "failed": "Falló la indexación: {{msg}}",
+      "runtimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes de IA → Motor y pulsa el botón de descarga.",
+      "ocrConfirmTitle": "Se necesita el componente de reconocimiento de texto (OCR)",
+      "ocrConfirmMessage": "Construir el índice de texto requiere descargar el componente de reconocimiento (~40 MB). La indexación empieza automáticamente cuando termine la descarga.",
+      "ocrConfirmAccept": "Descargar e iniciar",
+      "downloadingOcr": "Descargando el componente de reconocimiento de texto… {{mb}} MB",
+      "stoppedNotice": "Lote detenido; el reconocimiento residente se reanuda en aproximadamente un minuto",
+      "disableResident": "Desactivar el OCR residente"
+    },
+    "citations": {
+      "showAll": "Mostrar las {{count}} fuentes",
+      "collapse": "Contraer las fuentes"
+    },
+    "model": {
+      "pickAria": "Elegir el modelo del chat",
+      "noToolUseModels": "Los modelos locales descargados no admiten llamadas a herramientas. El Chat necesita un modelo con Tool-use: descarga uno con la insignia Tool-use en Ajustes de IA → Modelos.",
+      "empty": "No hay modelos disponibles: configura una API en la nube o descarga un modelo local"
+    },
+    "tokens": {
+      "prompt": "Tokens enviados al modelo en este turno (upstream)",
+      "completion": "Tokens generados por el modelo (downstream)",
+      "reasoning": "Tokens de razonamiento (ya incluidos en la salida)",
+      "elapsed": "Tiempo total del turno (incluye las búsquedas)"
+    },
+    "actions": {
+      "copy": "Copiar",
+      "regenerate": "Reintentar",
+      "prevVersion": "Respuesta anterior",
+      "nextVersion": "Respuesta siguiente",
+      "edit": "Editar",
+      "prevBranch": "Rama anterior",
+      "nextBranch": "Rama siguiente"
+    },
+    "edit": {
+      "hint": "Editar crea una rama nueva de la conversación: cambia entre ellas con las flechas.",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "thinkingMode": {
+      "label": "Razonamiento",
+      "off": "Desactivado",
+      "auto": "Automático",
+      "on": "Activado",
+      "hint": "Activar el razonamiento hace las respuestas bastante más lentas",
+      "low": "Bajo",
+      "medium": "Medio",
+      "high": "Alto",
+      "max": "Máximo",
+      "hintLevels": "Cuanto mayor sea el esfuerzo, más lenta será la respuesta",
+      "hintOpenai": "La API de OpenAI no admite el razonamiento en el chat"
+    }
+  },
+  "notifications": {
+    "scheduledOcr": {
+      "title": "Hindsight",
+      "body": "OCR programado iniciado: {{count}} capturas por procesar"
+    }
+  }
+}

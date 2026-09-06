@@ -10,14 +10,15 @@ import zhTW from "./locales/zh-TW.json";
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
 import ptBR from "./locales/pt-BR.json";
+import es from "./locales/es.json";
 
 export const LOCALE_STORAGE_KEY = "hindsight.locale";
 /** 兜底语言：系统 locale 无法识别 / 非 zh,ja 时用 en（比中文通用） */
 export const FALLBACK_LOCALE = "en";
 
-type Supported = "zh-CN" | "zh-TW" | "en" | "ja" | "pt-BR";
+type Supported = "zh-CN" | "zh-TW" | "en" | "ja" | "pt-BR" | "es";
 
-/** 把任意 BCP-47 locale 串映射到支持的五种之一 */
+/** 把任意 BCP-47 locale 串映射到支持的六种之一 */
 function mapToSupported(loc: string | null | undefined): Supported {
   const l = (loc ?? "").toLowerCase();
   // 繁体圈（台湾 / 香港 / 澳门 / 显式 Hant 脚本）→ 繁体；其余中文 → 简体
@@ -25,6 +26,8 @@ function mapToSupported(loc: string | null | undefined): Supported {
   if (l.startsWith("zh")) return "zh-CN";
   if (l.startsWith("ja")) return "ja";
   if (l.startsWith("pt")) return "pt-BR";
+  // 西班牙语不分地区变体：es-ES / es-MX / es-419 等统一走同一份文案
+  if (l.startsWith("es")) return "es";
   return "en";
 }
 
@@ -38,6 +41,7 @@ void i18n.use(initReactI18next).init({
     en: { translation: en },
     ja: { translation: ja },
     "pt-BR": { translation: ptBR },
+    es: { translation: es },
   },
   lng: stored ?? FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,

@@ -68,6 +68,11 @@ impl AiOverrides {
                 "en" => ai.prompt_overrides.system_en = v,
                 "ja" => ai.prompt_overrides.system_ja = v,
                 "pt" => ai.prompt_overrides.system_pt = v,
+                "es" => ai.prompt_overrides.system_es = v,
+                // `tw` was missing here: a Traditional-Chinese user's override
+                // landed in the Simplified field, so it applied to the wrong
+                // language and looked like it had been silently dropped.
+                "tw" => ai.prompt_overrides.system_tw = v,
                 _ => ai.prompt_overrides.system_zh = v,
             }
         }
