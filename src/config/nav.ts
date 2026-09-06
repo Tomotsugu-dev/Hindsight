@@ -2,6 +2,7 @@ import {
   Sparkles,
   Cloud,
   MessageSquare,
+  Search,
   Settings,
   LayoutGrid,
 } from "lucide-react";
@@ -16,6 +17,8 @@ export const ROUTES = {
   week: "/week",
   month: "/month",
   chat: "/chat",
+  /** 屏幕记忆搜索。曾是 /ai/search 的 tab,语义上是"回顾"而非 AI,已独立;旧路径重定向 */
+  search: "/search",
   aiSummary: "/ai",
   aiSettings: "/ai/settings",
   devices: "/devices",
@@ -30,6 +33,9 @@ export const NAV_ITEMS: NavItem[] = [
   { path: ROUTES.today,      labelKey: "nav.items.today",      icon: CalendarTodayIcon, group: "primary", color: "#f97316", end: true },
   { path: ROUTES.week,       labelKey: "nav.items.week",       icon: CalendarWeekIcon,  group: "primary", color: "#3b82f6" },
   { path: ROUTES.month,      labelKey: "nav.items.month",      icon: CalendarMonthIcon, group: "primary", color: "#8b5cf6" },
+  // 回顾:按时间(时间轴)/ 按应用(应用历史)/ 按文字(搜索)找回具体的过去;
+  // 时间轴与应用历史在后续阶段加入,分组结构已就位。
+  { path: ROUTES.search,     labelKey: "nav.items.search",     icon: Search,            group: "recall",  color: "#14b8a6" },
   // /ai 是 AI 总结的根；子页 /ai/week / /ai/debug 也应该让 AI 总结高亮，
   // 但 /ai/settings 是兄弟项（AI 设置）——用 excludePaths 把它从前缀匹配里抠掉
   { path: ROUTES.chat,       labelKey: "nav.items.chat",       icon: MessageSquare,     group: "ai",      color: "#ec4899" },

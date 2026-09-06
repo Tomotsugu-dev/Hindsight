@@ -44,7 +44,8 @@
       "primary": "統計",
       "ai": "AI-beta",
       "data": "資料",
-      "system": "系統"
+      "system": "系統",
+      "recall": "回顧"
     },
     "items": {
       "today": "日統計",
@@ -55,7 +56,8 @@
       "categories": "分類",
       "devices": "雲同步",
       "settings": "設定",
-      "chat": "對話"
+      "chat": "對話",
+      "search": "搜尋"
     }
   },
   "sidebar": {
@@ -94,7 +96,8 @@
     "zoomIn": "放大",
     "zoomOut": "縮小",
     "zoomReset": "重設縮放",
-    "textFallbackNotice": "截圖已按保留策略清理,以下為當時辨識的螢幕文字"
+    "textFallbackNotice": "截圖已按保留策略清理,以下為當時辨識的螢幕文字",
+    "title": "搜尋"
   },
   "settings": {
     "pageTitle": "設定",
@@ -1199,8 +1202,7 @@
       "daily": "日報",
       "week": "週報",
       "month": "月報",
-      "debug": "除錯",
-      "search": "搜尋"
+      "debug": "除錯"
     },
     "placeholder": {
       "hint": "功能開發中。"

@@ -101,13 +101,15 @@ function App() {
           <Route path={ROUTES.week} element={<Week />} />
           <Route path={ROUTES.month} element={<Month />} />
           <Route path={ROUTES.chat} element={<ChatPage />} />
+          <Route path={ROUTES.search} element={<SearchPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
             <Route path="week" element={<WeeklyTab />} />
             <Route path="month" element={<MonthlyTab />} />
             {/* 旧地址重定向:对话已提升为独立页面 */}
             <Route path="chat" element={<Navigate to={ROUTES.chat} replace />} />
-            <Route path="search" element={<SearchPage />} />
+            {/* 旧地址重定向:搜索已归入侧栏「回顾」分区 */}
+            <Route path="search" element={<Navigate to={ROUTES.search} replace />} />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>

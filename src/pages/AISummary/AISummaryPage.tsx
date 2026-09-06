@@ -17,7 +17,6 @@ const TAB_GROUPS: TabDef[][] = [
     { to: "week", labelKey: "aiSummary.tabs.week" },
     { to: "month", labelKey: "aiSummary.tabs.month" },
   ],
-  [{ to: "search", labelKey: "aiSummary.tabs.search" }],
   [{ to: "debug", labelKey: "aiSummary.tabs.debug" }],
 ];
 

@@ -44,7 +44,8 @@
       "primary": "統計",
       "ai": "AI-beta",
       "data": "データ",
-      "system": "システム"
+      "system": "システム",
+      "recall": "振り返り"
     },
     "items": {
       "today": "日次",
@@ -55,7 +56,8 @@
       "categories": "分類",
       "devices": "同期",
       "settings": "設定",
-      "chat": "チャット"
+      "chat": "チャット",
+      "search": "検索"
     }
   },
   "sidebar": {
@@ -94,7 +96,8 @@
     "zoomIn": "拡大",
     "zoomOut": "縮小",
     "zoomReset": "ズームをリセット",
-    "textFallbackNotice": "スクリーンショットは保持ポリシーにより削除済みです。以下は当時認識された画面テキストです"
+    "textFallbackNotice": "スクリーンショットは保持ポリシーにより削除済みです。以下は当時認識された画面テキストです",
+    "title": "検索"
   },
   "settings": {
     "pageTitle": "設定",
@@ -1199,8 +1202,7 @@
       "daily": "日次",
       "week": "週次",
       "month": "月次",
-      "debug": "デバッグ",
-      "search": "検索"
+      "debug": "デバッグ"
     },
     "placeholder": {
       "hint": "開発中の機能です。"

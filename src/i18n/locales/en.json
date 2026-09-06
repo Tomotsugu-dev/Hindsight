@@ -44,7 +44,8 @@
       "primary": "Stats",
       "ai": "AI-beta",
       "data": "Data",
-      "system": "System"
+      "system": "System",
+      "recall": "Recall"
     },
     "items": {
       "today": "Daily",
@@ -55,7 +56,8 @@
       "categories": "Categories",
       "devices": "Cloud Sync",
       "settings": "Settings",
-      "chat": "Chat"
+      "chat": "Chat",
+      "search": "Search"
     }
   },
   "sidebar": {
@@ -94,7 +96,8 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "zoomReset": "Reset zoom",
-    "textFallbackNotice": "The screenshot was cleaned up per the retention policy; below is the screen text recognized at the time"
+    "textFallbackNotice": "The screenshot was cleaned up per the retention policy; below is the screen text recognized at the time",
+    "title": "Search"
   },
   "settings": {
     "pageTitle": "Settings",
@@ -1199,8 +1202,7 @@
       "daily": "Daily",
       "week": "Weekly",
       "month": "Monthly",
-      "debug": "Debug",
-      "search": "Search"
+      "debug": "Debug"
     },
     "placeholder": {
       "hint": "Feature in development."

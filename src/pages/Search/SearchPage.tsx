@@ -141,63 +141,68 @@ export default function SearchPage() {
   const showEmpty = !showInitial && !searching && !error && hits.length === 0;
 
   return (
-    <div className={styles.page}>
-      <p className={styles.subtitle}>{t("search.subtitle")}</p>
+    <div className={styles.shell}>
+      <header className={styles.shellHeader}>
+        <h1 className={styles.shellTitle}>{t("search.title")}</h1>
+      </header>
+      <div className={styles.page}>
+        <p className={styles.subtitle}>{t("search.subtitle")}</p>
 
-      <div className={styles.searchBox}>
-        <Search size={15} strokeWidth={2} className={styles.searchIcon} />
-        <input
-          type="text"
-          className={styles.searchInput}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("search.placeholder")}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus
-        />
-        {searching && <Loader2 size={14} strokeWidth={2.25} className={styles.searchSpin} />}
-      </div>
-
-      {!showInitial && !searching && !error && hits.length > 0 && (
-        <p className={styles.totalLine}>{t("search.total", { count: total })}</p>
-      )}
-      {error && <p className={styles.errorLine}>{t("search.unavailable", { message: error })}</p>}
-
-      {showInitial && (
-        <div className={styles.initial}>
-          <ScanSearch size={36} strokeWidth={1.4} className={styles.initialIcon} />
-          <p className={styles.initialText}>{t("search.initial")}</p>
-          <p className={styles.initialHint}>{t("search.hint")}</p>
+        <div className={styles.searchBox}>
+          <Search size={15} strokeWidth={2} className={styles.searchIcon} />
+          <input
+            type="text"
+            className={styles.searchInput}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("search.placeholder")}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus
+          />
+          {searching && <Loader2 size={14} strokeWidth={2.25} className={styles.searchSpin} />}
         </div>
-      )}
 
-      {showEmpty && <EmptyHint message={t("search.empty")} />}
-      {showEmpty && <p className={styles.emptyHint}>{t("search.emptyHint")}</p>}
+        {!showInitial && !searching && !error && hits.length > 0 && (
+          <p className={styles.totalLine}>{t("search.total", { count: total })}</p>
+        )}
+        {error && <p className={styles.errorLine}>{t("search.unavailable", { message: error })}</p>}
 
-      <div className={styles.hitList}>
-        {hits.map((h) => (
-          <HitCard key={h.sessionId} hit={h} words={words} onOpen={() => setViewer(h)} />
-        ))}
+        {showInitial && (
+          <div className={styles.initial}>
+            <ScanSearch size={36} strokeWidth={1.4} className={styles.initialIcon} />
+            <p className={styles.initialText}>{t("search.initial")}</p>
+            <p className={styles.initialHint}>{t("search.hint")}</p>
+          </div>
+        )}
+
+        {showEmpty && <EmptyHint message={t("search.empty")} />}
+        {showEmpty && <p className={styles.emptyHint}>{t("search.emptyHint")}</p>}
+
+        <div className={styles.hitList}>
+          {hits.map((h) => (
+            <HitCard key={h.sessionId} hit={h} words={words} onOpen={() => setViewer(h)} />
+          ))}
+        </div>
+
+        {hits.length < total && (
+          <button
+            type="button"
+            className={styles.loadMoreBtn}
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+          >
+            {loadingMore ? (
+              <Loader2 size={13} strokeWidth={2.25} className={styles.searchSpin} />
+            ) : null}
+            {t("search.loadMore", { count: total - hits.length })}
+          </button>
+        )}
+
+        {viewer && <Viewer hit={viewer} words={words} onClose={() => setViewer(null)} />}
       </div>
-
-      {hits.length < total && (
-        <button
-          type="button"
-          className={styles.loadMoreBtn}
-          onClick={() => void loadMore()}
-          disabled={loadingMore}
-        >
-          {loadingMore ? (
-            <Loader2 size={13} strokeWidth={2.25} className={styles.searchSpin} />
-          ) : null}
-          {t("search.loadMore", { count: total - hits.length })}
-        </button>
-      )}
-
-      {viewer && <Viewer hit={viewer} words={words} onClose={() => setViewer(null)} />}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import styles from "./Sidebar.module.css";
 // 分组标题 i18n key 映射
 const GROUP_TITLE_KEY: Record<NavGroup, string> = {
   primary: "nav.groups.primary",
+  recall: "nav.groups.recall",
   ai: "nav.groups.ai",
   data: "nav.groups.data",
   system: "nav.groups.system",
@@ -26,7 +27,7 @@ interface PillStyle {
 }
 
 export function Sidebar() {
-  const groups: NavGroup[] = ["primary", "ai", "data", "system"];
+  const groups: NavGroup[] = ["primary", "recall", "ai", "data", "system"];
   const location = useLocation();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();

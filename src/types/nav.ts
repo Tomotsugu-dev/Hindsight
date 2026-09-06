@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
-export type NavGroup = "primary" | "ai" | "data" | "system";
+/** 侧栏分组：统计 / 回顾(按时间、应用、文字找回具体的过去)/ AI / 数据 / 系统 */
+export type NavGroup = "primary" | "recall" | "ai" | "data" | "system";
 
 export interface NavItem {
   /** 路由路径 */

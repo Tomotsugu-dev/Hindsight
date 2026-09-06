@@ -437,3 +437,25 @@
     opacity: 1;
   }
 }
+
+/* —— 独立页外壳(从 AI 总结的 tab 迁出后自带页头,规格同 AISummaryPage.page) —— */
+.shell {
+  padding: 32px 32px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.shellHeader {
+  margin-bottom: 16px;
+}
+
+/* Same spec as AISummaryPage .title: standalone pages share one heading size. */
+.shellTitle {
+  font-size: 24px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  margin: 0;
+}

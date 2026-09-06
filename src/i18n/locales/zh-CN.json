@@ -44,7 +44,8 @@
       "primary": "统计",
       "ai": "AI-beta",
       "data": "数据",
-      "system": "系统"
+      "system": "系统",
+      "recall": "回顾"
     },
     "items": {
       "today": "日统计",
@@ -55,7 +56,8 @@
       "categories": "分类",
       "devices": "云同步",
       "settings": "设置",
-      "chat": "对话"
+      "chat": "对话",
+      "search": "搜索"
     }
   },
   "sidebar": {
@@ -94,7 +96,8 @@
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "zoomReset": "重置缩放",
-    "textFallbackNotice": "截图已按保留策略清理,以下为当时识别的屏幕文字"
+    "textFallbackNotice": "截图已按保留策略清理,以下为当时识别的屏幕文字",
+    "title": "搜索"
   },
   "settings": {
     "pageTitle": "设置",
@@ -1199,8 +1202,7 @@
       "daily": "日报",
       "week": "周报",
       "month": "月报",
-      "debug": "调试",
-      "search": "搜索"
+      "debug": "调试"
     },
     "placeholder": {
       "hint": "功能开发中。"

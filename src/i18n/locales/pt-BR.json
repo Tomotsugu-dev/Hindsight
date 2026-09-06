@@ -44,7 +44,8 @@
       "primary": "Estatísticas",
       "ai": "IA-beta",
       "data": "Dados",
-      "system": "Sistema"
+      "system": "Sistema",
+      "recall": "Retrospectiva"
     },
     "items": {
       "today": "Diário",
@@ -55,7 +56,8 @@
       "categories": "Categorias",
       "devices": "Nuvem",
       "settings": "Ajustes",
-      "chat": "Chat"
+      "chat": "Chat",
+      "search": "Pesquisar"
     }
   },
   "sidebar": {
@@ -94,7 +96,8 @@
     "zoomIn": "Ampliar",
     "zoomOut": "Reduzir",
     "zoomReset": "Redefinir zoom",
-    "textFallbackNotice": "A captura foi removida pela política de retenção; abaixo está o texto reconhecido na época"
+    "textFallbackNotice": "A captura foi removida pela política de retenção; abaixo está o texto reconhecido na época",
+    "title": "Pesquisar"
   },
   "settings": {
     "pageTitle": "Configurações",
@@ -1199,8 +1202,7 @@
       "daily": "Diário",
       "week": "Semanal",
       "month": "Mensal",
-      "debug": "Depuração",
-      "search": "Pesquisar"
+      "debug": "Depuração"
     },
     "placeholder": {
       "hint": "Recurso em desenvolvimento."
