@@ -8,6 +8,7 @@ use rusqlite::{OptionalExtension, ToSql};
 use serde::Serialize;
 
 use crate::error::Result;
+use crate::repo::sql::{FROM_ACTIVITY_GROUP, FROM_ACTIVITY_GROUP_CATEGORY};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
@@ -154,13 +155,7 @@ pub async fn day_hours(
             let sql = format!(
                 "SELECT a.started_at, a.ended_at,
                         COALESCE(c.id, 'other') AS cat
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
-                 LEFT JOIN categories c
-                   ON c.id = g.category_id AND c.deleted_at IS NULL
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date = ? {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0",
@@ -258,13 +253,7 @@ pub async fn day_apps(
                         COALESCE(c.id, 'other')                         AS cat,
                         MIN(a.process_name)                             AS icon_process,
                         SUM(a.duration_secs)                            AS total
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
-                 LEFT JOIN categories c
-                   ON c.id = g.category_id AND c.deleted_at IS NULL
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date = ? {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0
@@ -336,13 +325,7 @@ pub async fn day_hour_apps(
                         COALESCE(c.id, 'other')                         AS cat,
                         a.process_name                                  AS icon_process,
                         a.started_at, a.ended_at
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
-                 LEFT JOIN categories c
-                   ON c.id = g.category_id AND c.deleted_at IS NULL
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date = ? {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0",
@@ -448,11 +431,7 @@ async fn app_range_detail(
                 BucketBy::Hour => {
                     let bsql = format!(
                         "SELECT a.started_at, a.ended_at
-                         FROM activities a
-                         LEFT JOIN app_group_members gm
-                           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                         LEFT JOIN app_groups g
-                           ON g.id = gm.group_id AND g.deleted_at IS NULL
+                         {FROM_ACTIVITY_GROUP}
                          WHERE a.local_date >= ? AND a.local_date <= ?
                            AND COALESCE(g.id, a.process_name) = ?
                            AND a.excluded = 0
@@ -487,11 +466,7 @@ async fn app_range_detail(
                 BucketBy::Day => {
                     let bsql = format!(
                         "SELECT a.local_date AS k, SUM(a.duration_secs) AS total
-                         FROM activities a
-                         LEFT JOIN app_group_members gm
-                           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                         LEFT JOIN app_groups g
-                           ON g.id = gm.group_id AND g.deleted_at IS NULL
+                         {FROM_ACTIVITY_GROUP}
                          WHERE a.local_date >= ? AND a.local_date <= ?
                            AND COALESCE(g.id, a.process_name) = ?
                            AND a.excluded = 0
@@ -524,11 +499,7 @@ async fn app_range_detail(
             let tsql = format!(
                 "SELECT COALESCE(a.window_title, '') AS t, a.url_host AS h,
                         SUM(a.duration_secs) AS total
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
+                 {FROM_ACTIVITY_GROUP}
                  WHERE a.local_date >= ? AND a.local_date <= ?
                    AND COALESCE(g.id, a.process_name) = ?
                    AND a.excluded = 0
@@ -688,13 +659,7 @@ async fn days_in_range(
                 "SELECT a.local_date,
                         COALESCE(c.id, 'other') AS cat,
                         SUM(a.duration_secs) AS total
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
-                 LEFT JOIN categories c
-                   ON c.id = g.category_id AND c.deleted_at IS NULL
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0
@@ -782,13 +747,7 @@ async fn apps_in_range(
                         COALESCE(c.id, 'other')                         AS cat,
                         MIN(a.process_name)                             AS icon_process,
                         SUM(a.duration_secs)                            AS total
-                 FROM activities a
-                 LEFT JOIN app_group_members gm
-                   ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-                 LEFT JOIN app_groups g
-                   ON g.id = gm.group_id AND g.deleted_at IS NULL
-                 LEFT JOIN categories c
-                   ON c.id = g.category_id AND c.deleted_at IS NULL
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0

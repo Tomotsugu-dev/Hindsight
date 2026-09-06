@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use tokio_rusqlite::Connection;
 
 use crate::error::Result;
+use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::SqliteResultExt;
 
 /// 单工具返回给模型的结果字符上限——超出截断,防止一个大会话吃光上下文。
@@ -357,16 +358,16 @@ pub async fn execute(
     }
 }
 
-/// activities 的报表口径 FROM/JOIN/WHERE 段(?1=from ?2=to,追加条件从 ?3 起编号)。
-/// 与 repo/reports.rs 同口径:组是 cross-OS 同步的真相,显式指派到 hidden 的组剔除,
-/// 忽略规则打标的行(excluded=1)一并剔除,
-/// 未分组的活动(g.category_id 为 NULL)经 NULL-safe 比较照常通过。
-const ACTIVITY_JOIN: &str = "FROM activities a
-     LEFT JOIN app_group_members gm
-       ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-     LEFT JOIN app_groups g
-       ON g.id = gm.group_id AND g.deleted_at IS NULL
-     WHERE a.local_date BETWEEN ?1 AND ?2
+/// Report-scope WHERE clause for activities (?1 = from, ?2 = to; extra params
+/// number from ?3). Pair it with [`FROM_ACTIVITY_GROUP`], whose `g` alias it
+/// depends on.
+///
+/// Same shape as repo/reports.rs: the group is the cross-OS source of truth,
+/// groups explicitly assigned to `hidden` are dropped, and rows flagged by an
+/// ignore rule (`excluded = 1`) are dropped too. Ungrouped activities
+/// (`g.category_id` NULL) still pass — `IS NOT` is a NULL-safe comparison, so
+/// only an explicit 'hidden' is excluded.
+const ACTIVITY_WHERE: &str = "WHERE a.local_date BETWEEN ?1 AND ?2
        AND g.category_id IS NOT 'hidden'
        AND a.excluded = 0";
 
@@ -505,7 +506,7 @@ async fn search_text(
             }
             let total: i64 = conn
                 .query_row(
-                    &format!("SELECT COUNT(*) {ACTIVITY_JOIN} AND {like_sql}"),
+                    &format!("SELECT COUNT(*) {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE} AND {like_sql}"),
                     bind.as_slice(),
                     |r| r.get(0),
                 )
@@ -515,7 +516,7 @@ async fn search_text(
                     "SELECT COALESCE(g.display_name, a.process_name),
                             COALESCE(a.window_title,''),
                             a.started_at, a.ended_at, NULLIF(a.screenshot_path,'')
-                     {ACTIVITY_JOIN} AND {like_sql}
+                     {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE} AND {like_sql}
                      ORDER BY a.started_at DESC LIMIT {TITLE_LIMIT}"
                 ))
                 .db()?;
@@ -612,16 +613,25 @@ async fn search_text(
 
 /// 统计查询的基础 FROM 段(别名 a,与既有口径一致:裸活动表、不排 hidden 组)。
 const STATS_FROM: &str = "FROM activities a";
-/// 按分类分组时的 FROM 段:活动 → 组 → 分类两跳 join。分类真相在组上
-/// (g.category_id),活动行上的 a.category_id 是采集时的快照兜底;
-/// hidden 组在 WHERE 里剔除,与报表口径一致。
+/// FROM clause for grouping by category: activity → group → category, two joins.
+///
+/// Deliberately **not** [`crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY`]: that
+/// one joins on `c.id = g.category_id`, leaving `c.*` NULL for an ungrouped
+/// activity, and its callers bucket those with `COALESCE(c.id, 'other')`. Here
+/// the fallback is inside the join, so ungrouped activities reach the real
+/// `other` row and `c.name` is the user's localised label rather than NULL —
+/// which is what the model needs to restate in the answer.
+/// The category lives on the group (`g.category_id`); an activity whose app has
+/// no group falls back to `'other'`. `a.category_id` is a dead column (always
+/// `'other'`, see `repo::activities`) and is deliberately not read here.
+/// Hidden groups are filtered out in WHERE, matching the reports behaviour.
 const STATS_FROM_CATEGORY: &str = "FROM activities a
      LEFT JOIN app_group_members gm
        ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
      LEFT JOIN app_groups g
        ON g.id = gm.group_id AND g.deleted_at IS NULL
      LEFT JOIN categories c
-       ON c.id = COALESCE(g.category_id, a.category_id) AND c.deleted_at IS NULL";
+       ON c.id = COALESCE(g.category_id, 'other') AND c.deleted_at IS NULL";
 
 #[allow(clippy::too_many_arguments)]
 async fn query_stats(
@@ -671,7 +681,7 @@ async fn query_stats(
                 // 也可能填英文 builtin id("game")
                 let ors = vec![
                     "(c.name LIKE ? ESCAPE '\\' \
-                      OR COALESCE(g.category_id, a.category_id) LIKE ? ESCAPE '\\')";
+                      OR COALESCE(g.category_id, 'other') LIKE ? ESCAPE '\\')";
                     cats.len()
                 ]
                 .join(" OR ");
@@ -927,9 +937,11 @@ fn group_dim(group_by: GroupBy) -> &'static str {
     match group_by {
         GroupBy::App => "a.process_name",
         GroupBy::Title => "COALESCE(a.window_title,'(无标题)')",
-        // 显示名:分类表的用户可见名;分类已删/未建行时回落 id;完全未分类归 'other'
-        // (模型按回答语言转述,'other' 与英文 builtin id 同样能被正确理解)
-        GroupBy::Category => "COALESCE(c.name, COALESCE(g.category_id, a.category_id, 'other'))",
+        // Display name: the user-visible name from `categories`; falls back to the
+        // raw id when the category row is deleted or missing, then to 'other' when
+        // the app has no group at all. (The model restates it in the answer's
+        // language, and 'other' reads the same as any English builtin id.)
+        GroupBy::Category => "COALESCE(c.name, g.category_id, 'other')",
         GroupBy::None => unreachable!("group_dim 只在分组分支被调用"),
     }
 }
@@ -1095,7 +1107,7 @@ async fn get_timeline(
         .call(move |conn| {
             let (total, first, last): (i64, Option<String>, Option<String>) = conn
                 .query_row(
-                    &format!("SELECT COUNT(*), MIN(a.started_at), MAX(a.ended_at) {ACTIVITY_JOIN}"),
+                    &format!("SELECT COUNT(*), MIN(a.started_at), MAX(a.ended_at) {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE}"),
                     params![from, to],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
@@ -1114,7 +1126,7 @@ async fn get_timeline(
                                     PARTITION BY a.local_date, a.local_hour
                                     ORDER BY a.duration_secs DESC
                                 ) AS rn
-                         {ACTIVITY_JOIN}
+                         {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE}
                      ) WHERE rn <= ?3 ORDER BY started_at LIMIT ?4",
                 ))
                 .db()?;

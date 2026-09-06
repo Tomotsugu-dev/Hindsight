@@ -11,6 +11,7 @@ use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
+use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,
@@ -72,11 +73,20 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     }
 
     // 把 outbox 行分组到"脏文件"
-    let (groups, ungroupable_ids) = group_outbox(&rows);
+    let (mut groups, ungroupable_ids) = group_outbox(&rows);
     // 没法分组的行（entity 未知 / payload 损坏）立刻 drop：它们永远不可能发出去，
     // 留着会每 30s 重读一次、占 batch 名额、把 pending 计数永久顶高
     if !ungroupable_ids.is_empty() {
         io::delete_outbox_rows(&inner.pool, &ungroupable_ids).await?;
+    }
+    // app_categories.json is derived from app_groups + app_group_members (see
+    // build_app_categories), so a change to either dirties it too. Empty id list
+    // on purpose: sharing row ids across keys would let one key's success delete
+    // rows another key still needs to retry. Cost: a failed upload of the derived
+    // file waits for the next group change instead of retrying on its own.
+    if groups.contains_key(&DirtyKey::AppGroups) || groups.contains_key(&DirtyKey::AppGroupMembers)
+    {
+        groups.entry(DirtyKey::AppCategories).or_default();
     }
     if groups.is_empty() {
         return Ok(());
@@ -267,15 +277,17 @@ async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result
 ///
 /// 6 个共享表 (categories / app_categories / process_paths / app_icons /
 /// app_groups / app_group_members) 的 build_* 函数都是这一模板的实例化。
-async fn build_table_rows<T, F>(pool: &DbPool, sql: &'static str, map: F) -> Result<Vec<u8>>
+async fn build_table_rows<T, F>(pool: &DbPool, sql: &str, map: F) -> Result<Vec<u8>>
 where
     T: serde::Serialize + Send + 'static,
     F: Fn(&rusqlite::Row) -> rusqlite::Result<T> + Send + Sync + 'static,
 {
+    // Owned copy so a `format!`-built query can cross into the 'static closure.
+    let sql = sql.to_string();
     let rows: Vec<T> = pool
         .0
         .call(move |conn| {
-            let mut stmt = conn.prepare(sql).db()?;
+            let mut stmt = conn.prepare(&sql).db()?;
             let rows = stmt
                 .query_map([], |r| map(r))
                 .db()?
@@ -308,11 +320,27 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
     .await
 }
 
+/// Derived from [`FROM_MEMBER_GROUP`]; the local `app_categories` table is no
+/// longer maintained. Still emitted so peers on older builds keep receiving
+/// `process → category`. Live row when the group has a category; tombstone when
+/// member/group is soft-deleted or the group has none. `updated_at = MAX(both)`
+/// so a change on either side wins LWW on the peer.
 async fn build_app_categories(pool: &DbPool) -> Result<Vec<u8>> {
     build_table_rows(
         pool,
-        "SELECT process_name, category_id, updated_at, deleted_at
-         FROM app_categories ORDER BY process_name",
+        &format!(
+            "SELECT gm.process_name,
+                    COALESCE(g.category_id, 'other')                 AS category_id,
+                    MAX(gm.updated_at, g.updated_at)                 AS updated_at,
+                    CASE
+                      WHEN gm.deleted_at IS NOT NULL THEN gm.deleted_at
+                      WHEN g.deleted_at  IS NOT NULL THEN g.deleted_at
+                      WHEN g.category_id IS NULL     THEN MAX(gm.updated_at, g.updated_at)
+                      ELSE NULL
+                    END                                              AS deleted_at
+             {FROM_MEMBER_GROUP}
+             ORDER BY gm.process_name"
+        ),
         |r| {
             Ok(AppCategoryPayload {
                 process_name: r.get(0)?,

@@ -26,6 +26,9 @@ impl OutboxOp {
 pub enum OutboxEntity {
     Activity,
     Category,
+    /// No local producer any more — push derives app_categories.json from
+    /// groups. Kept so the wire kind and `as_str` stay defined.
+    #[allow(dead_code)]
     AppCategory,
     ProcessPath,
     Device,

@@ -16,6 +16,7 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
+use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 应用组的对外快照（包含成员 + category_id + display_name）。
@@ -206,8 +207,6 @@ pub async fn purge_with_members(pool: &DbPool, group_id: &str) -> Result<()> {
                         &serde_json::json!({ "processName": m }).to_string(),
                     )
                     .db()?;
-                    // app_categories 镜像也跟着断（保持 reports 的 LEFT JOIN 一致）
-                    sync_app_category_row(conn, m, None, &now)?;
                 }
             }
 
@@ -513,7 +512,6 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
             )
             .db()?;
 
-            sync_member_category(&tx, &src, &tgt, &now)?;
             tx.commit().db()?;
 
             Ok(Ok(()))
@@ -537,10 +535,11 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
             // 当前组 + category（category 用作复活后的初始值，避免用户拆开后分类丢失）
             let cur: Option<(String, Option<String>)> = conn
                 .query_row(
-                    "SELECT g.id, g.category_id
-                     FROM app_group_members m
-                     JOIN app_groups g ON g.id = m.group_id
-                     WHERE m.process_name = ?1 AND m.deleted_at IS NULL",
+                    &format!(
+                        "SELECT g.id, g.category_id
+                         {FROM_MEMBER_GROUP}
+                         WHERE gm.process_name = ?1 AND gm.deleted_at IS NULL"
+                    ),
                     rusqlite::params![p],
                     |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
                 )
@@ -626,8 +625,6 @@ fn restore_solo_group(
         &serde_json::json!({ "processName": process_name }).to_string(),
     )?;
 
-    // app_categories 跟随：把这个 process_name 的分类同步到 category_id
-    sync_app_category_row(conn, process_name, category_id, now)?;
     Ok(())
 }
 
@@ -670,6 +667,28 @@ pub async fn assign_category(
     let cat = category_id;
     let now = utc_now_rfc3339();
 
+    // app_groups.category_id has no foreign key; the app_categories mirror's FK
+    // used to reject unknown ids for us. Validate explicitly now that the mirror
+    // is gone, so a dangling id can never be written.
+    if let Some(c) = cat.clone() {
+        let exists = pool
+            .0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT 1 FROM categories WHERE id = ?1 AND deleted_at IS NULL",
+                    rusqlite::params![c],
+                    |_| Ok(()),
+                )
+                .optional()
+                .db()
+            })
+            .await?
+            .is_some();
+        if !exists {
+            return Err(Error::InvalidInput("分类不存在或已删除")); // TODO: i18n Error
+        }
+    }
+
     pool.0
         .call(move |conn| {
             // 组分类 + 全体成员镜像原子化:半途失败时不留"组换了分类、
@@ -690,26 +709,6 @@ pub async fn assign_category(
             )
             .db()?;
 
-            // 把所有成员的 app_categories 同步到组的新分类
-            let members: Vec<String> = {
-                let mut stmt = tx
-                    .prepare(
-                        "SELECT process_name FROM app_group_members
-                         WHERE group_id = ?1 AND deleted_at IS NULL",
-                    )
-                    .db()?;
-                let rows = stmt
-                    .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))
-                    .db()?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r.db()?);
-                }
-                out
-            };
-            for m in &members {
-                sync_app_category_row(&tx, m, cat.as_deref(), &now)?;
-            }
             tx.commit().db()?;
             Ok(())
         })
@@ -830,58 +829,15 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
                 &serde_json::json!({ "processName": p }).to_string(),
             )
             .db()?;
-            // 命中内置规则时镜像写一份到 app_categories（list_unclassified / 旧 reports
-            // 走的就是这张表）。否则 UI 的"应用分类"页会一直把这个 app 当未分类。
-            if let Some(cat) = builtin_cat {
-                sync_app_category_row(conn, &p, Some(cat), &now)?;
-            }
             Ok(())
         })
         .await?;
     Ok(())
 }
 
-/// 把某个成员的 app_categories 行同步到给定 category，并写 outbox。
-/// 这是 app_groups → app_categories 的 mirror 通道；让旧 reports 查询能直接用 app_categories。
-fn sync_member_category(
-    conn: &Connection,
-    process_name: &str,
-    target_group_id: &str,
-    now: &str,
-) -> rusqlite::Result<()> {
-    let cat: Option<String> = conn
-        .query_row(
-            "SELECT category_id FROM app_groups WHERE id = ?1",
-            rusqlite::params![target_group_id],
-            |r| r.get::<_, Option<String>>(0),
-        )
-        .optional()?
-        .flatten();
-    sync_app_category_row(conn, process_name, cat.as_deref(), now)
-}
-
-/// 写一行 app_categories（cat=None 则软删），并入 outbox（本端做的修改，需要 push）。
-fn sync_app_category_row(
-    conn: &Connection,
-    process_name: &str,
-    category_id: Option<&str>,
-    now: &str,
-) -> rusqlite::Result<()> {
-    apply_app_category_change(conn, process_name, category_id, now)?;
-    let payload = serde_json::json!({ "processName": process_name }).to_string();
-    enqueue(
-        conn,
-        OutboxOp::Upsert,
-        OutboxEntity::AppCategory,
-        process_name,
-        &payload,
-    )?;
-    Ok(())
-}
-
-/// 纯 SQL 写一行 app_categories（cat=None 则软删），**不**入 outbox。
-/// 给 sync pull 的 mirror 路径用：远端来的变更不需要回推，否则会造成同步死循环。
-/// 本端用户操作走 sync_app_category_row（多一步 enqueue）。
+/// Writes one `app_categories` row (`cat = None` soft-deletes) without touching
+/// the outbox. Only the sync pull path still calls this: the local mirror is no
+/// longer maintained, but rows echoed by older peers are still stored here.
 pub(crate) fn apply_app_category_change(
     conn: &Connection,
     process_name: &str,
