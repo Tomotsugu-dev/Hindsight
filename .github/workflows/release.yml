@@ -141,3 +141,78 @@ jobs:
           # createUpdaterArtifacts: true 已在 tauri.conf.json 里设置，
           # tauri-action 会自动合成跨平台 latest.json 上传到 release
           includeUpdaterJson: true
+
+  # release 页只留英文，应用内保持全语言。
+  #
+  # 为什么是独立 job 而不是改上面的 releaseBody：latest.json 的 notes 字段由
+  # tauri-action 从 release body 派生（实测 v0.8.21 两者逐字节相同），直接把
+  # releaseBody 换成英文会连应用内弹窗的多语言一起砍掉。所以顺序必须是
+  # 「先用全语言建 release → latest.json 落定 → 再改页面正文」，
+  # needs: release 保证两条矩阵腿的 tauri-action 都跑完了才动。
+  #
+  # 动机：<!-- xx --> 标记在 GitHub 上不可见，发布页会把各语言块首尾相接排下来
+  # ——v0.8.21 是 5 段共 10 条 bullet，「【0.8.21】」重复 5 次且无任何分隔，
+  # 语言越多越长。发布页读者以英文为主；需要母语说明的用户在应用内看得到。
+  trim-release-body:
+    name: Trim release body to English
+    needs: release
+    # 一条矩阵腿失败时 release 页仍已建出，长度问题照样存在 —— 只要没被取消就跑
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace body with the English block
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          NOTES_FILE="docs/release-notes/${TAG}.md"
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::warning::release $TAG 不存在（构建可能全失败），跳过裁剪"
+            exit 0
+          fi
+          if [ ! -f "$NOTES_FILE" ]; then
+            echo "::warning::$NOTES_FILE 不存在，保留原 body"
+            exit 0
+          fi
+
+          # 抽 <!-- en --> 到下一个语言标记之间的内容。标记形如 <!-- xx -->，
+          # 用 [a-z][a-z] 而不是 {2}，避免依赖 awk 的 interval 支持。
+          awk '
+            /^<!-- [a-z][a-z] -->$/ { want = ($0 == "<!-- en -->"); next }
+            want { print }
+          ' "$NOTES_FILE" | sed -e '/./,$!d' > /tmp/body_en.md
+          # 去掉尾部空行
+          printf '%s\n' "$(cat /tmp/body_en.md)" > /tmp/body_en.md
+
+          if [ ! -s /tmp/body_en.md ]; then
+            echo "::warning::$NOTES_FILE 里没有 <!-- en --> 块，保留原 body"
+            exit 0
+          fi
+
+          # 页脚：从文件里实际存在的标记推语言清单，加语言时不用回来改这里。
+          # 用 awk 拼接而不是 paste -sd —— paste 的分隔符只吃单字符，
+          # " · " 这种多字符串会被截成一个字符（本地实测）。
+          LANGS=$(grep -oE '^<!-- [a-z][a-z] -->$' "$NOTES_FILE" \
+            | grep -v '<!-- en -->' \
+            | sed -e 's/<!-- //' -e 's/ -->//' \
+            | sed -e 's/^zh$/简体中文/' -e 's/^tw$/繁體中文/' -e 's/^ja$/日本語/' \
+                  -e 's/^pt$/Português/' -e 's/^es$/Español/' \
+            | awk 'NR>1{printf " · "} {printf "%s", $0} END{print ""}')
+          if [ -n "$LANGS" ]; then
+            {
+              echo
+              echo "---"
+              echo
+              echo "These notes are also available in $LANGS — the in-app updater shows them in your interface language."
+            } >> /tmp/body_en.md
+          fi
+
+          gh release edit "$TAG" --notes-file /tmp/body_en.md
+          echo "release body 已裁剪为英文块（$(wc -l < /tmp/body_en.md) 行）"
