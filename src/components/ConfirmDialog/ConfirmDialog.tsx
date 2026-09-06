@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
@@ -7,7 +7,9 @@ import styles from "./ConfirmDialog.module.css";
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  message: string;
+  /** 纯文本按 `pre-wrap` 渲染（换行照原样）；传节点时由调用方自己排版，
+   *  用于更新说明那种需要真列表/加粗的 Markdown 内容。 */
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "primary" | "danger";
@@ -45,11 +47,7 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className={styles.backdrop}
-      onMouseDown={onCancel}
-      role="presentation"
-    >
+    <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
       {/* role="alertdialog" 已是 interactive role，但 ESLint plugin 仍按 div 默认判定 */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
@@ -63,7 +61,14 @@ export function ConfirmDialog({
         <h2 id="confirm-title" className={styles.title}>
           {title}
         </h2>
-        <p className={styles.message}>{message}</p>
+        {/* 节点走 div：Markdown 会渲染出 ul/p 等块级元素，塞进 p 是非法嵌套，
+            浏览器会把它们提到 p 外面，间距全乱。同时关掉 pre-wrap——那是给
+            纯文本换行用的，对已排好版的节点只会多出空白。 */}
+        {typeof message === "string" ? (
+          <p className={styles.message}>{message}</p>
+        ) : (
+          <div className={`${styles.message} ${styles.messageRich}`}>{message}</div>
+        )}
         <div className={styles.actions}>
           <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
             {cancelText}

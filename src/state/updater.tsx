@@ -12,15 +12,12 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ConfirmDialog/ConfirmDialog";
+import { MarkdownText } from "../components/MarkdownText/MarkdownText";
 import { pickReleaseNotesForLang } from "../lib/releaseNotes";
 import { useSettings } from "./settings";
+import styles from "./updater.module.css";
 
-export type UpdatePhase =
-  | "idle"
-  | "checking"
-  | "uptodate"
-  | "installing"
-  | "error";
+export type UpdatePhase = "idle" | "checking" | "uptodate" | "installing" | "error";
 
 interface UpdaterContextValue {
   phase: UpdatePhase;
@@ -38,11 +35,7 @@ const intervalToMs: Record<string, number> = {
   monthly: 30 * 24 * 60 * 60 * 1000,
 };
 
-function shouldAutoCheck(
-  enabled: boolean,
-  interval: string,
-  lastCheckAt: string | null,
-): boolean {
+function shouldAutoCheck(enabled: boolean, interval: string, lastCheckAt: string | null): boolean {
   if (!enabled) return false;
   if (interval === "onstartup") return true;
   if (!lastCheckAt) return true;
@@ -126,12 +119,25 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
         title={t("settings.about.update.dialog.title", {
           version: pendingUpdate?.version ?? "",
         })}
-        message={t("settings.about.update.dialog.message", {
-          // release note 是多语言一坨（带 <!-- xx --> 标记），按界面语言抽对应块
-          body: pendingUpdate?.body
-            ? pickReleaseNotesForLang(pendingUpdate.body, i18n.language)
-            : t("settings.about.update.dialog.bodyEmpty"),
-        })}
+        message={
+          <>
+            <p className={styles.updateIntro}>{t("settings.about.update.dialog.message")}</p>
+            <p className={styles.updateNotesLabel}>
+              {t("settings.about.update.dialog.notesLabel")}
+            </p>
+            {/* release note 本身就是 Markdown（"-" 列表 + 版本号标题）。
+                以前整块被插进一条 i18n 文案当纯文本渲染，列表符号原样显示成
+                短横线。这里交给 MarkdownText 渲染成真正的列表。
+                多语言一坨（带 <!-- xx --> 标记）先按界面语言抽对应块。 */}
+            <MarkdownText
+              text={
+                pendingUpdate?.body
+                  ? pickReleaseNotesForLang(pendingUpdate.body, i18n.language)
+                  : t("settings.about.update.dialog.bodyEmpty")
+              }
+            />
+          </>
+        }
         confirmLabel={t("settings.about.update.dialog.confirm")}
         cancelLabel={t("settings.about.update.dialog.cancel")}
         variant="primary"
@@ -147,7 +153,6 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useUpdater() {
   const ctx = useContext(UpdaterContext);
-  if (!ctx)
-    throw new Error("useUpdater must be used within UpdaterProvider");
+  if (!ctx) throw new Error("useUpdater must be used within UpdaterProvider");
   return ctx;
 }

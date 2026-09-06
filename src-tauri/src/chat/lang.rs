@@ -17,6 +17,7 @@ pub enum ChatLang {
     En,
     Ja,
     Pt,
+    Es,
 }
 
 impl ChatLang {
@@ -39,6 +40,8 @@ impl ChatLang {
             Self::Ja
         } else if t.starts_with("pt") {
             Self::Pt
+        } else if t.starts_with("es") {
+            Self::Es
         } else {
             Self::En
         }
@@ -75,6 +78,15 @@ impl ChatLang {
                 "quarta-feira",
                 "quinta-feira",
                 "sexta-feira",
+                "sábado",
+                "domingo",
+            ][i],
+            Self::Es => [
+                "lunes",
+                "martes",
+                "miércoles",
+                "jueves",
+                "viernes",
                 "sábado",
                 "domingo",
             ][i],
@@ -197,6 +209,38 @@ impl ChatLang {
                  parte indexada\" e pode sugerir ativar capturas e reconhecimento de texto de \
                  tela (ou aguardar o reconhecimento terminar)."
             ),
+            Self::Es => format!(
+                "Eres el asistente de memoria de pantalla del usuario: los registros de \
+                 actividad y el texto que aparece en la pantalla de su ordenador están \
+                 indexados, y respondes consultándolos con herramientas. Hoy es {today} \
+                 ({wd}).\nReglas:\n\
+                 1. Convierte los tiempos relativos (la semana pasada / ayer / el mes pasado) \
+                 en fechas concretas antes de consultar.\n\
+                 2. Llama a una herramienta cada vez; si una búsqueda no encuentra nada, \
+                 reinténtalo con otras palabras clave (sinónimos / otro idioma / términos más \
+                 cortos).\n\
+                 3. Responde solo a partir de los resultados de las herramientas; si algo no \
+                 está en los resultados, di que no lo has encontrado — nunca inventes. Los \
+                 totales y la cobertura indicados en la cabecera de un resultado describen el \
+                 conjunto completo; los elementos listados son solo una muestra — nunca \
+                 afirmes «eso era todo» basándote en la muestra.\n\
+                 4. Cita las fuentes con índices entre corchetes al final de la frase, p. ej. \
+                 [3]; usa solo índices que aparezcan en los resultados, y cada índice debe \
+                 respaldar realmente esa frase (no tomes prestadas citas de búsqueda para \
+                 números que vienen de query_stats).\n\
+                 5. Se permite Markdown sencillo (negrita / listas / tablas); sin títulos.\n\
+                 6. Idioma: responde en el idioma de la pregunta del usuario; si no está \
+                 claro, responde en español.\n\
+                 7. Sé conciso; expresa las duraciones en horas y minutos; menciona las fechas \
+                 para que el usuario pueda verificarlas.\n\
+                 8. La línea «Cobertura» al principio de cada resultado rige tu redacción: \
+                 solo cuando todos los días activos del intervalo tienen índice de texto de \
+                 pantalla y no queda ningún fotograma por reconocer puedes afirmar que algo \
+                 «nunca apareció en pantalla»; con cobertura parcial, di que «no se encontró \
+                 en la parte indexada», y puedes sugerir activar las capturas y el \
+                 reconocimiento de texto de pantalla (o esperar a que termine el \
+                 reconocimiento)."
+            ),
         }
     }
 
@@ -215,6 +259,7 @@ impl ChatLang {
             Self::En => "Additional rule: the conversation history below exists only to resolve references in the current question (e.g. \"what about last month?\"); base your answer on tool results fetched this turn, and do not carry over numbers or conclusions from earlier answers.",
             Self::Ja => "補足ルール:以下の対話履歴は現在の質問の指示語(「先月は?」など)を理解するためだけのものです。回答は今回ツールが返した結果に基づき、過去の回答の数値や結論を流用しないでください。",
             Self::Pt => "Regra adicional: o histórico de conversa abaixo serve apenas para resolver referências da pergunta atual (ex. \"e no mês passado?\"); baseie a resposta nos resultados de ferramentas desta rodada e não reaproveite números ou conclusões de respostas anteriores.",
+            Self::Es => "Regla adicional: el historial de conversación de abajo solo sirve para resolver las referencias de la pregunta actual (p. ej. «¿y el mes pasado?»); basa tu respuesta en los resultados de herramientas obtenidos en esta ronda y no reutilices números ni conclusiones de respuestas anteriores.",
         }
     }
 
@@ -225,6 +270,7 @@ impl ChatLang {
             Self::En => "This exact query was just executed; same result as above. Change the parameters, or answer from the results already returned this turn.",
             Self::Ja => "この検索は直前に実行済みで、結果は上記と同じです。パラメータを変えるか、今回すでに返された結果に基づいて回答してください。",
             Self::Pt => "Esta mesma consulta acabou de ser executada; o resultado é o mesmo acima. Mude os parâmetros ou responda com os resultados já obtidos nesta rodada.",
+            Self::Es => "Esta misma consulta se acaba de ejecutar; el resultado es el mismo de arriba. Cambia los parámetros o responde con los resultados ya obtenidos en esta ronda.",
         }
     }
 
@@ -235,6 +281,7 @@ impl ChatLang {
             Self::En => format!("Malformed arguments: {e}"),
             Self::Ja => format!("引数の形式が不正です: {e}"),
             Self::Pt => format!("Argumentos malformados: {e}"),
+            Self::Es => format!("Argumentos con formato incorrecto: {e}"),
         }
     }
 
@@ -245,6 +292,7 @@ impl ChatLang {
             Self::En => format!("Argument validation failed: {msg}"),
             Self::Ja => format!("引数の検証に失敗しました: {msg}"),
             Self::Pt => format!("Falha na validação dos argumentos: {msg}"),
+            Self::Es => format!("Falló la validación de los argumentos: {msg}"),
         }
     }
 
@@ -255,6 +303,7 @@ impl ChatLang {
             Self::En => "The query failed to execute. Try a different approach, or answer from the results already returned this turn.",
             Self::Ja => "検索の実行に失敗しました。別の方法を試すか、今回すでに返された結果に基づいて回答してください。",
             Self::Pt => "A consulta falhou. Tente outra abordagem ou responda com os resultados já obtidos nesta rodada.",
+            Self::Es => "La consulta no se pudo ejecutar. Prueba otro enfoque o responde con los resultados ya obtenidos en esta ronda.",
         }
     }
 
@@ -268,6 +317,7 @@ impl ChatLang {
             Self::En => "You are out of query steps. Answer now from the tool results fetched this turn; if they are insufficient, state plainly what could not be found.",
             Self::Ja => "検索ステップを使い切りました。今回ツールが返した結果に基づいて今すぐ回答してください。不足している場合は、何が見つからなかったかを率直に述べてください。",
             Self::Pt => "As etapas de consulta acabaram. Responda agora com os resultados de ferramentas desta rodada; se forem insuficientes, diga claramente o que não foi encontrado.",
+            Self::Es => "Se han agotado los pasos de consulta. Responde ahora con los resultados de herramientas de esta ronda; si son insuficientes, di claramente qué no se ha encontrado.",
         }
     }
 
@@ -280,6 +330,7 @@ impl ChatLang {
             Self::En => "The query could not be completed this time (model or network trouble). Try asking again more specifically — for example with a rough time (\"last week\", \"July 3 afternoon\") or a keyword.",
             Self::Ja => "今回は検索を完了できませんでした(モデルまたはネットワークの問題です)。おおよその時期(「先週」「7 月 3 日の午後」)やキーワードを添えて、もう一度試してみてください。",
             Self::Pt => "Não foi possível concluir a consulta desta vez (problema de modelo ou rede). Tente perguntar de forma mais específica — por exemplo, com um período aproximado (\"semana passada\", \"3 de julho à tarde\") ou uma palavra-chave.",
+            Self::Es => "Esta vez no se ha podido completar la consulta (problema del modelo o de la red). Prueba a preguntar de forma más concreta: por ejemplo, con un periodo aproximado («la semana pasada», «el 3 de julio por la tarde») o una palabra clave.",
         }
     }
 
@@ -290,6 +341,7 @@ impl ChatLang {
             Self::En => "The model could not finish summarizing, but these related records were found — please review them directly.",
             Self::Ja => "モデルは要約を完了できませんでしたが、以下の関連記録が見つかりました。直接ご確認ください。",
             Self::Pt => "O modelo não conseguiu concluir o resumo, mas estes registros relacionados foram encontrados — veja-os diretamente.",
+            Self::Es => "El modelo no ha podido terminar el resumen, pero se han encontrado estos registros relacionados: échales un vistazo directamente.",
         }
     }
 
@@ -302,6 +354,7 @@ impl ChatLang {
             Self::En => "No activity records in this period.",
             Self::Ja => "この期間には活動記録がありません。",
             Self::Pt => "Nenhum registro de atividade neste período.",
+            Self::Es => "No hay registros de actividad en este periodo.",
         }
     }
 
@@ -329,6 +382,9 @@ impl ChatLang {
             Self::Pt => format!(
                 "{total} registros de atividade neste período, abrangendo {first} ~ {last}. Abaixo, {shown} entradas amostradas (até {per_hour} por hora, maiores durações primeiro; é uma amostra, não a lista completa — baseie conclusões do período no total e na abrangência desta linha):"
             ),
+            Self::Es => format!(
+                "{total} registros de actividad en este periodo, que abarcan {first} ~ {last}. A continuación, {shown} entradas muestreadas (hasta {per_hour} por hora, las de mayor duración primero; es una muestra, no la lista completa — basa las conclusiones del periodo en el total y el alcance de esta línea):"
+            ),
         }
     }
 
@@ -339,6 +395,7 @@ impl ChatLang {
             Self::En => format!("{total} activity records in this period, all listed:"),
             Self::Ja => format!("この期間の活動記録は計 {total} 件。すべて列挙します:"),
             Self::Pt => format!("{total} registros de atividade neste período, todos listados:"),
+            Self::Es => format!("{total} registros de actividad en este periodo, todos listados:"),
         }
     }
 
@@ -354,6 +411,7 @@ impl ChatLang {
                 Self::En => "Coverage: no activity records in this range.".into(),
                 Self::Ja => "カバレッジ:この範囲に活動記録はありません。".into(),
                 Self::Pt => "Cobertura: nenhum registro de atividade neste intervalo.".into(),
+                Self::Es => "Cobertura: no hay registros de actividad en este intervalo.".into(),
             };
         }
         if covered_days == 0 && pending == 0 {
@@ -374,6 +432,9 @@ impl ChatLang {
                 Self::Pt => format!(
                     "Cobertura: nenhum dos {activity_days} dia(s) ativo(s) neste intervalo tem índice de texto de tela (capturas ou reconhecimento de texto podem estar desativados)."
                 ),
+                Self::Es => format!(
+                    "Cobertura: ninguno de los {activity_days} día(s) activo(s) de este intervalo tiene índice de texto de pantalla (puede que las capturas o el reconocimiento de texto estén desactivados)."
+                ),
             };
         }
         let base = match self {
@@ -392,6 +453,9 @@ impl ChatLang {
             Self::Pt => format!(
                 "Cobertura: {covered_days} de {activity_days} dia(s) ativo(s) neste intervalo têm índice de texto de tela"
             ),
+            Self::Es => format!(
+                "Cobertura: {covered_days} de {activity_days} día(s) activo(s) de este intervalo tienen índice de texto de pantalla"
+            ),
         };
         if pending > 0 {
             match self {
@@ -400,11 +464,14 @@ impl ChatLang {
                 Self::En => format!("{base}, with {pending} frame(s) still awaiting recognition."),
                 Self::Ja => format!("{base}。ほかに認識待ちのフレームが {pending} 件あります。"),
                 Self::Pt => format!("{base}, com {pending} quadro(s) aguardando reconhecimento."),
+                Self::Es => {
+                    format!("{base}, y quedan {pending} fotograma(s) por reconocer.")
+                }
             }
         } else {
             match self {
                 Self::ZhHans | Self::ZhHant | Self::Ja => format!("{base}。"),
-                Self::En | Self::Pt => format!("{base}."),
+                Self::En | Self::Pt | Self::Es => format!("{base}."),
             }
         }
     }
@@ -429,6 +496,9 @@ impl ChatLang {
                 Self::Pt => format!(
                     "{total} correspondência(s) de título de janela; mostrando as {shown} mais recentes (uma correspondência de título indica que a janela estava em uso — sem trecho de texto da tela):"
                 ),
+                Self::Es => format!(
+                    "{total} coincidencia(s) en títulos de ventana; se muestran las {shown} más recientes (una coincidencia de título solo indica que la ventana estaba en uso — sin fragmento de texto de la pantalla):"
+                ),
             }
         } else {
             match self {
@@ -447,6 +517,9 @@ impl ChatLang {
                 Self::Pt => format!(
                     "{total} correspondência(s) de título de janela (uma correspondência de título indica que a janela estava em uso — sem trecho de texto da tela):"
                 ),
+                Self::Es => format!(
+                    "{total} coincidencia(s) en títulos de ventana (una coincidencia de título solo indica que la ventana estaba en uso — sin fragmento de texto de la pantalla):"
+                ),
             }
         }
     }
@@ -458,6 +531,7 @@ impl ChatLang {
             Self::En => "No hits. Try different keywords (synonyms, another language, or shorter terms).",
             Self::Ja => "ヒットしませんでした。別のキーワード(類義語/英語/より短い語)で再検索してください。",
             Self::Pt => "Nenhum resultado. Tente outras palavras-chave (sinônimos, outro idioma ou termos mais curtos).",
+            Self::Es => "Ningún resultado. Prueba con otras palabras clave (sinónimos, otro idioma o términos más cortos).",
         }
     }
 
@@ -479,6 +553,9 @@ impl ChatLang {
                 Self::Pt => format!(
                     "{total} resultados no total; mostrando os {shown} mais relevantes (restrinja com um intervalo de datas para mais cobertura):"
                 ),
+                Self::Es => format!(
+                    "{total} resultados en total; se muestran los {shown} más relevantes (acota con un intervalo de fechas para tener más cobertura):"
+                ),
             }
         } else {
             match self {
@@ -487,6 +564,7 @@ impl ChatLang {
                 Self::En => format!("{total} hits:"),
                 Self::Ja => format!("計 {total} 件ヒット:"),
                 Self::Pt => format!("{total} resultados:"),
+                Self::Es => format!("{total} resultados:"),
             }
         }
     }
@@ -498,6 +576,7 @@ impl ChatLang {
             Self::En => format!("{from} ~ {to} total: {dur}"),
             Self::Ja => format!("{from} ~ {to} 合計: {dur}"),
             Self::Pt => format!("{from} ~ {to} total: {dur}"),
+            Self::Es => format!("{from} ~ {to} total: {dur}"),
         }
     }
 
@@ -508,6 +587,7 @@ impl ChatLang {
             Self::En => format!("{from} ~ {to}: no matching records"),
             Self::Ja => format!("{from} ~ {to} 該当する記録はありません"),
             Self::Pt => format!("{from} ~ {to}: nenhum registro correspondente"),
+            Self::Es => format!("{from} ~ {to}: ningún registro coincide"),
         }
     }
 
@@ -525,6 +605,9 @@ impl ChatLang {
                 Self::Pt => {
                     format!("{from} ~ {to}: {universe} grupos no total; top {shown} por duração:")
                 }
+                Self::Es => {
+                    format!("{from} ~ {to}: {universe} grupos en total; top {shown} por duración:")
+                }
             }
         } else {
             match self {
@@ -533,6 +616,7 @@ impl ChatLang {
                 Self::En => format!("{from} ~ {to}, sorted by duration:"),
                 Self::Ja => format!("{from} ~ {to} 合計時間順:"),
                 Self::Pt => format!("{from} ~ {to}, ordenado por duração:"),
+                Self::Es => format!("{from} ~ {to}, ordenado por duración:"),
             }
         }
     }
@@ -549,6 +633,9 @@ impl ChatLang {
             ),
             Self::Pt => format!(
                 "{from} ~ {to}: {n} sessões de uso (intervalo ≥{gap} minutos inicia nova sessão)"
+            ),
+            Self::Es => format!(
+                "{from} ~ {to}: {n} sesiones de uso (un intervalo ≥{gap} minutos abre una sesión nueva)"
             ),
         }
     }
@@ -607,6 +694,16 @@ impl ChatLang {
                     "{from} ~ {to}: sessões de uso ({s}intervalo ≥{gap} minutos inicia nova sessão):"
                 )
             }
+            Self::Es => {
+                let s = if scope {
+                    format!("{universe} grupos en total, top {shown} por número; ")
+                } else {
+                    String::new()
+                };
+                format!(
+                    "{from} ~ {to}: sesiones de uso ({s}un intervalo ≥{gap} minutos abre una sesión nueva):"
+                )
+            }
         }
     }
 
@@ -631,6 +728,9 @@ impl ChatLang {
             Self::Pt => format!(
                 "{from} ~ {to}, detalhamento diário ({n} dia(s) com registros; dias sem registros omitidos{g}):"
             ),
+            Self::Es => format!(
+                "{from} ~ {to}, desglose diario ({n} día(s) con registros; los días sin registros se omiten{g}):"
+            ),
         }
     }
 
@@ -652,6 +752,7 @@ impl ChatLang {
                 Self::En => "; the range exceeds 60 days, so per-day was switched to per-week automatically",
                 Self::Ja => "。範囲が 60 日を超えたため日別から週別に自動変更",
                 Self::Pt => "; o intervalo excede 60 dias, então o diário mudou automaticamente para semanal",
+                Self::Es => "; el intervalo supera los 60 días, así que el desglose diario pasó automáticamente a semanal",
             }
         } else {
             ""
@@ -671,6 +772,9 @@ impl ChatLang {
             }
             Self::Pt => format!(
                 "{from} ~ {to}, detalhamento semanal ({n} semana(s); cada linha rotulada pela segunda-feira{a}{g}):"
+            ),
+            Self::Es => format!(
+                "{from} ~ {to}, desglose semanal ({n} semana(s); cada fila lleva la etiqueta de su lunes{a}{g}):"
             ),
         }
     }
@@ -694,6 +798,9 @@ impl ChatLang {
             Self::Pt => format!(
                 "{from} ~ {to}, agregado por hora do dia (cada hora soma todos os dias do intervalo{g}):"
             ),
+            Self::Es => format!(
+                "{from} ~ {to}, agregado por hora del día (cada hora suma todos los días del intervalo{g}):"
+            ),
         }
     }
 
@@ -708,6 +815,7 @@ impl ChatLang {
             Self::En => format!("; a gap of ≥{gap} minutes starts a new session"),
             Self::Ja => format!("。{gap} 分以上の間隔で 1 回と数える"),
             Self::Pt => format!("; intervalo ≥{gap} minutos inicia nova sessão"),
+            Self::Es => format!("; un intervalo ≥{gap} minutos abre una sesión nueva"),
         }
     }
 
@@ -729,6 +837,9 @@ impl ChatLang {
             Self::Pt => format!(
                 "{from} ~ {to}: {n} atividades correspondentes; a mais antiga começa em {first}, a mais recente termina em {last}"
             ),
+            Self::Es => format!(
+                "{from} ~ {to}: {n} actividades coincidentes; la más antigua empieza a las {first} y la más reciente termina a las {last}"
+            ),
         }
     }
 
@@ -739,6 +850,7 @@ impl ChatLang {
             Self::En => format!("{n} sessions"),
             Self::Ja => format!("{n} 回"),
             Self::Pt => format!("{n} sessões"),
+            Self::Es => format!("{n} sesiones"),
         }
     }
 
@@ -781,6 +893,13 @@ impl ChatLang {
                     format!("{m} min")
                 }
             }
+            Self::Es => {
+                if h > 0 {
+                    format!("{h} h {m} min")
+                } else {
+                    format!("{m} min")
+                }
+            }
         }
     }
 
@@ -793,6 +912,7 @@ impl ChatLang {
             Self::En => format!("Unknown tool {other}; only search_text / query_stats / get_timeline are available"),
             Self::Ja => format!("不明なツール {other}。search_text / query_stats / get_timeline のみ使用できます"),
             Self::Pt => format!("Ferramenta desconhecida {other}; apenas search_text / query_stats / get_timeline estão disponíveis"),
+            Self::Es => format!("Herramienta desconocida {other}; solo están disponibles search_text / query_stats / get_timeline"),
         }
     }
 
@@ -803,6 +923,7 @@ impl ChatLang {
             Self::En => format!("{tool} requires date_from and date_to (YYYY-MM-DD)"),
             Self::Ja => format!("{tool} には date_from と date_to(YYYY-MM-DD)が必要です"),
             Self::Pt => format!("{tool} requer date_from e date_to (YYYY-MM-DD)"),
+            Self::Es => format!("{tool} requiere date_from y date_to (YYYY-MM-DD)"),
         }
     }
 
@@ -813,6 +934,7 @@ impl ChatLang {
             Self::En => format!("{field} is not a valid date: {val}"),
             Self::Ja => format!("{field} は有効な日付ではありません: {val}"),
             Self::Pt => format!("{field} não é uma data válida: {val}"),
+            Self::Es => format!("{field} no es una fecha válida: {val}"),
         }
     }
 
@@ -823,6 +945,7 @@ impl ChatLang {
             Self::En => "date_from is later than date_to",
             Self::Ja => "date_from が date_to より後になっています",
             Self::Pt => "date_from é posterior a date_to",
+            Self::Es => "date_from es posterior a date_to",
         }
     }
 
@@ -833,6 +956,7 @@ impl ChatLang {
             Self::En => "The range exceeds 366 days; please narrow it",
             Self::Ja => "期間が 366 日を超えています。範囲を狭めてください",
             Self::Pt => "O intervalo excede 366 dias; reduza-o",
+            Self::Es => "El intervalo supera los 366 días; redúcelo",
         }
     }
 
@@ -843,6 +967,7 @@ impl ChatLang {
             Self::En => "date_from is in the future",
             Self::Ja => "date_from が未来の日付です",
             Self::Pt => "date_from está no futuro",
+            Self::Es => "date_from está en el futuro",
         }
     }
 
@@ -853,6 +978,7 @@ impl ChatLang {
             Self::En => "keywords must not be empty",
             Self::Ja => "keywords を空にはできません",
             Self::Pt => "keywords não pode estar vazio",
+            Self::Es => "keywords no puede estar vacío",
         }
     }
 
@@ -863,6 +989,7 @@ impl ChatLang {
             Self::En => format!("{field} contains an item longer than 64 characters"),
             Self::Ja => format!("{field} に 64 文字を超える項目があります"),
             Self::Pt => format!("{field} contém um item com mais de 64 caracteres"),
+            Self::Es => format!("{field} contiene un elemento de más de 64 caracteres"),
         }
     }
 
@@ -873,6 +1000,7 @@ impl ChatLang {
             Self::En => "title_keyword is too long (max 64 characters)",
             Self::Ja => "title_keyword が長すぎます(64 文字以内)",
             Self::Pt => "title_keyword é longo demais (máx. 64 caracteres)",
+            Self::Es => "title_keyword es demasiado largo (máx. 64 caracteres)",
         }
     }
 
@@ -883,6 +1011,7 @@ impl ChatLang {
             Self::En => "bucket and group_by cannot be combined: use bucket for trends, group_by for rankings — drop one of them",
             Self::Ja => "bucket と group_by は併用できません。推移は bucket、ランキングは group_by を使い、どちらか一方を外してください",
             Self::Pt => "bucket e group_by não podem ser combinados: use bucket para tendências, group_by para rankings — remova um deles",
+            Self::Es => "bucket y group_by no se pueden combinar: usa bucket para tendencias y group_by para rankings — quita uno de los dos",
         }
     }
 
@@ -905,6 +1034,21 @@ impl ChatLang {
             Self::Pt => format!(
                 "Você é um reescritor de perguntas. Com base na conversa, reescreva a nova                  pergunta do usuário como uma pergunta autossuficiente, compreensível sem                  contexto.\nRegras:\n                 1. Apenas resolva referências e complete informações: substitua \"aquele app /                  ele / esses\" pelos nomes concretos da conversa; palavras de tempo relativo                  (ontem / semana passada) podem ficar, mas relativos encadeados (\"e na semana                  anterior?\") devem ser resolvidos — hoje é {today}.\n                 2. Não responda à pergunta, não adicione informações ausentes da conversa, não                  mude a intenção.\n                 3. Mantenha o idioma original da pergunta.\n                 4. Se a pergunta já for autossuficiente, devolva-a inalterada.\n                 Devolva apenas a pergunta final — sem explicações, prefixos ou aspas."
             ),
+            Self::Es => format!(
+                "Eres un reescritor de preguntas. A partir de la conversación, reescribe la \
+                 nueva pregunta del usuario como una pregunta autosuficiente, comprensible \
+                 sin contexto.\nReglas:\n\
+                 1. Resuelve solo las referencias y completa lo que falte: sustituye «esa app / \
+                 eso / esos» por los nombres concretos de la conversación; las palabras de \
+                 tiempo relativo (ayer / la semana pasada) pueden quedarse, pero los relativos \
+                 encadenados («¿y la semana anterior a esa?») hay que resolverlos — hoy es \
+                 {today}.\n\
+                 2. No respondas la pregunta, no añadas información que no esté en la \
+                 conversación, no cambies la intención.\n\
+                 3. Mantén el idioma original de la pregunta.\n\
+                 4. Si la pregunta ya es autosuficiente, devuélvela sin cambios.\n\
+                 Devuelve solo la pregunta final: sin explicaciones, prefijos ni comillas."
+            ),
         }
     }
 
@@ -916,6 +1060,7 @@ impl ChatLang {
             Self::En => "This conversation has no question to answer again.",
             Self::Ja => "この会話にはやり直せる質問がまだありません。",
             Self::Pt => "Esta conversa ainda não tem uma pergunta para responder novamente.",
+            Self::Es => "Esta conversación aún no tiene ninguna pregunta que volver a responder.",
         }
     }
 
@@ -930,6 +1075,9 @@ impl ChatLang {
             Self::Pt => {
                 "Esta conversa ainda está respondendo à pergunta anterior — aguarde ou pressione Parar."
             }
+            Self::Es => {
+                "Esta conversación todavía está respondiendo la pregunta anterior: espera a que termine o pulsa Detener."
+            }
         }
     }
 }
@@ -938,17 +1086,18 @@ impl ChatLang {
 mod tests {
     use super::*;
 
-    /// 五语 × 全部格式化方法的批量烟测:每个变体都产出非空文案,
+    /// 六语 × 全部格式化方法的批量烟测:每个变体都产出非空文案,
     /// 且插值参数(日期/数字/工具名)确实出现在结果里——防"漏改某语言"和
     /// "占位符没插进去"两类低级错误,一次覆盖全部 match 臂。
     #[test]
     fn all_langs_produce_nonempty_interpolated_strings() {
-        const LANGS: [ChatLang; 5] = [
+        const LANGS: [ChatLang; 6] = [
             ChatLang::ZhHans,
             ChatLang::ZhHant,
             ChatLang::En,
             ChatLang::Ja,
             ChatLang::Pt,
+            ChatLang::Es,
         ];
         let today = NaiveDate::from_ymd_opt(2026, 7, 26).unwrap();
         for lang in LANGS {
@@ -1062,6 +1211,7 @@ mod tests {
             ChatLang::En,
             ChatLang::Ja,
             ChatLang::Pt,
+            ChatLang::Es,
         ] {
             let p = lang.rewrite_prompt(today);
             assert!(p.contains("2026-07-20"), "{lang:?} 缺 today");
@@ -1076,6 +1226,8 @@ mod tests {
         assert_eq!(ChatLang::from_tag(Some("en-US")), ChatLang::En);
         assert_eq!(ChatLang::from_tag(Some("ja")), ChatLang::Ja);
         assert_eq!(ChatLang::from_tag(Some("pt-BR")), ChatLang::Pt);
+        assert_eq!(ChatLang::from_tag(Some("es")), ChatLang::Es);
+        assert_eq!(ChatLang::from_tag(Some("es-MX")), ChatLang::Es);
         // 旧前端没传 → 维持历史行为(简中);认不出的 → 英文
         assert_eq!(ChatLang::from_tag(None), ChatLang::ZhHans);
         assert_eq!(ChatLang::from_tag(Some("fr")), ChatLang::En);
@@ -1087,6 +1239,7 @@ mod tests {
         assert!(ChatLang::En.system_prompt(d).contains("reply in English"));
         assert!(ChatLang::ZhHans.system_prompt(d).contains("简体中文"));
         assert!(ChatLang::Ja.system_prompt(d).contains("日本語"));
+        assert!(ChatLang::Es.system_prompt(d).contains("en español"));
     }
 
     /// 历史使用守则与三条循环回填文案必须限定"本轮"——旧措辞"(以上)已有资料"
@@ -1094,13 +1247,15 @@ mod tests {
     /// 五语言逐一钉死限定词,防止未来措辞回退。
     #[test]
     fn engine_feedback_strings_scope_to_this_turn() {
-        let cases: [(ChatLang, &str); 5] = [
+        let cases: [(ChatLang, &str); 6] = [
             (ChatLang::ZhHans, "本轮"),
             (ChatLang::ZhHant, "本輪"),
             (ChatLang::En, "this turn"),
             (ChatLang::Ja, "今回"),
             // nesta/desta rodada 两种搭配都合法,断言公共词干
             (ChatLang::Pt, "rodada"),
+            // en/de esta ronda 同理
+            (ChatLang::Es, "ronda"),
         ];
         for (lang, marker) in cases {
             assert!(

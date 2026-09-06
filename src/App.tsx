@@ -41,13 +41,16 @@ const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("./pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
 
-/** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/tw/en/ja/pt）。 */
+/** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/tw/en/ja/pt/es）。
+ *  漏一个分支的代价不是回退到英文，而是**静默落回中文**：AI 日报仍用中文写，
+ *  界面却已经整套换了语言。加新界面语言时必须同步这里。 */
 function i18nToPromptLang(lang: string): PromptLanguage {
   const l = lang.toLowerCase();
   if (/^zh[-_]?(tw|hk|mo|hant)/.test(l)) return "tw";
   if (l.startsWith("en")) return "en";
   if (l.startsWith("ja")) return "ja";
   if (l.startsWith("pt")) return "pt";
+  if (l.startsWith("es")) return "es";
   return "zh";
 }
 

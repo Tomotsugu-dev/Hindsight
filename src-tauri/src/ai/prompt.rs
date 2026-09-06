@@ -25,6 +25,7 @@ const PROMPT_EN: &str = include_str!("../../resources/prompts/system_en.md");
 const PROMPT_JA: &str = include_str!("../../resources/prompts/system_ja.md");
 const PROMPT_PT: &str = include_str!("../../resources/prompts/system_pt.md");
 const PROMPT_TW: &str = include_str!("../../resources/prompts/system_tw.md");
+const PROMPT_ES: &str = include_str!("../../resources/prompts/system_es.md");
 
 // 周报 system prompt（基于一周内日报全文做整周回顾）
 const WEEKLY_ZH: &str = include_str!("../../resources/prompts/weekly_zh.md");
@@ -32,15 +33,16 @@ const WEEKLY_EN: &str = include_str!("../../resources/prompts/weekly_en.md");
 const WEEKLY_JA: &str = include_str!("../../resources/prompts/weekly_ja.md");
 const WEEKLY_PT: &str = include_str!("../../resources/prompts/weekly_pt.md");
 const WEEKLY_TW: &str = include_str!("../../resources/prompts/weekly_tw.md");
+const WEEKLY_ES: &str = include_str!("../../resources/prompts/weekly_es.md");
 
-/// 五语 (zh/tw/en/ja/pt) 之间挑一个 —— 把分散在多处的 match 收敛进单一 helper。
+/// 六语 (zh/tw/en/ja/pt/es) 之间挑一个 —— 把分散在多处的 match 收敛进单一 helper。
 ///
-/// `prompt_language` 在 sanitize 时已被钳到 "zh" / "tw" / "en" / "ja" / "pt"，本函数对
-/// 其它值兜底走 zh（与 sanitize 行为一致）。
+/// `prompt_language` 在 sanitize 时已被钳到 "zh" / "tw" / "en" / "ja" / "pt" / "es"，
+/// 本函数对其它值兜底走 zh（与 sanitize 行为一致）。
 ///
 /// 注：system / image-describe / weekly 这三种 system prompt 的内置默认走本函数选
 /// 专属文本（决定模型输出语言）。而 user prompt 的「脚手架」文案（"Segment:" /
-/// "Top apps:" 等结构性框架）pt 复用英文、tw 复用简体——这些只是喂给模型的结构提示，
+/// "Top apps:" 等结构性框架）pt/es 复用英文、tw 复用简体——这些只是喂给模型的结构提示，
 /// 模型在对应 system prompt 主导下仍输出目标语言，没必要再翻一份。
 fn pick_lang<'a>(
     lang: &str,
@@ -49,12 +51,14 @@ fn pick_lang<'a>(
     en: &'a str,
     ja: &'a str,
     pt: &'a str,
+    es: &'a str,
 ) -> &'a str {
     match lang {
         "tw" => tw,
         "en" => en,
         "ja" => ja,
         "pt" => pt,
+        "es" => es,
         _ => zh,
     }
 }
@@ -71,12 +75,15 @@ fn pick_system_base(ai: &AiConfig) -> &str {
         &ai.prompt_overrides.system_en,
         &ai.prompt_overrides.system_ja,
         &ai.prompt_overrides.system_pt,
+        &ai.prompt_overrides.system_es,
     )
     .trim();
     if !ov.is_empty() {
         ov
     } else {
-        pick_lang(lang, PROMPT_ZH, PROMPT_TW, PROMPT_EN, PROMPT_JA, PROMPT_PT)
+        pick_lang(
+            lang, PROMPT_ZH, PROMPT_TW, PROMPT_EN, PROMPT_JA, PROMPT_PT, PROMPT_ES,
+        )
     }
 }
 
@@ -114,6 +121,7 @@ pub fn build_system_prompt(ai: &AiConfig) -> String {
             "About the user: ",
             "ユーザーについて：",
             "Sobre o usuário: ",
+            "Sobre el usuario: ",
         );
         out.push_str("\n\n");
         out.push_str(label);
@@ -127,8 +135,8 @@ pub fn build_system_prompt(ai: &AiConfig) -> String {
 /// 文案按 system prompt 选的语言走——保证 user 跟 system 在同一语种里。
 pub fn build_user_prompt(ai: &AiConfig, ctx: &SegmentContext) -> String {
     match ai.prompt_language.as_str() {
-        // pt 复用英文脚手架（葡语 system prompt 主导输出语言）
-        "en" | "pt" => build_user_prompt_en(ctx),
+        // pt / es 复用英文脚手架（对应语言的 system prompt 主导输出语言）
+        "en" | "pt" | "es" => build_user_prompt_en(ctx),
         "ja" => build_user_prompt_ja(ctx),
         _ => build_user_prompt_zh(ctx),
     }
@@ -256,7 +264,9 @@ pub struct WeeklyContext<'a> {
 /// MVP 不暴露 weekly 专属覆盖；未来需要时再扩 `weekly_overrides` 字段。
 pub fn build_weekly_system_prompt(ai: &AiConfig) -> String {
     let lang = ai.prompt_language.as_str();
-    let base = pick_lang(lang, WEEKLY_ZH, WEEKLY_TW, WEEKLY_EN, WEEKLY_JA, WEEKLY_PT);
+    let base = pick_lang(
+        lang, WEEKLY_ZH, WEEKLY_TW, WEEKLY_EN, WEEKLY_JA, WEEKLY_PT, WEEKLY_ES,
+    );
     let mut out = String::from(base.trim_end());
     let brief = ai.user_brief.trim();
     if !brief.is_empty() {
@@ -267,6 +277,7 @@ pub fn build_weekly_system_prompt(ai: &AiConfig) -> String {
             "About the user: ",
             "ユーザーについて：",
             "Sobre o usuário: ",
+            "Sobre el usuario: ",
         );
         out.push_str("\n\n");
         out.push_str(label);
@@ -278,8 +289,8 @@ pub fn build_weekly_system_prompt(ai: &AiConfig) -> String {
 /// 周报 user prompt：把一周内每天的日报全文按日期顺序拼起来。
 pub fn build_weekly_user_prompt(ai: &AiConfig, ctx: &WeeklyContext) -> String {
     match ai.prompt_language.as_str() {
-        // pt 复用英文脚手架（葡语 weekly system prompt 主导输出语言）
-        "en" | "pt" => build_weekly_user_prompt_en(ctx),
+        // pt / es 复用英文脚手架（对应语言的 weekly system prompt 主导输出语言）
+        "en" | "pt" | "es" => build_weekly_user_prompt_en(ctx),
         "ja" => build_weekly_user_prompt_ja(ctx),
         _ => build_weekly_user_prompt_zh(ctx),
     }
@@ -426,6 +437,15 @@ pub fn weekday_short(lang: &str, weekday: chrono::Weekday) -> &'static str {
             Fri => "金",
             Sat => "土",
             Sun => "日",
+        },
+        "es" => match weekday {
+            Mon => "Lun",
+            Tue => "Mar",
+            Wed => "Mié",
+            Thu => "Jue",
+            Fri => "Vie",
+            Sat => "Sáb",
+            Sun => "Dom",
         },
         "pt" => match weekday {
             Mon => "Seg",

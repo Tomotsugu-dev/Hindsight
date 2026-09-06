@@ -407,7 +407,8 @@
         },
         "dialog": {
           "title": "發現新版本 v{{version}}",
-          "message": "點選「現在更新」將下載並自動安裝新版本，完成後應用程式會重啟。\n\n更新說明：\n{{body}}",
+          "message": "點擊「立即更新」下載並安裝新版本，完成後應用程式會自動重新啟動。",
+          "notesLabel": "版本說明",
           "bodyEmpty": "（無）",
           "confirm": "現在更新",
           "cancel": "稍後"

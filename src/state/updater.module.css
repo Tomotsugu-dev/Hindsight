@@ -1,0 +1,12 @@
+/* 更新弹窗正文的排版。内容作为节点传给 ConfirmDialog（见其 message 的
+   ReactNode 分支），所以间距由这里自己给，不再依赖 pre-wrap 的换行。 */
+
+.updateIntro {
+  margin: 0 0 12px;
+}
+
+.updateNotesLabel {
+  margin: 0 0 6px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}

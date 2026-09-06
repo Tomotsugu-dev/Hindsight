@@ -54,6 +54,11 @@
   padding-right: 4px;
 }
 
+/* 节点形态（Markdown 等）：块级元素自带间距，pre-wrap 只会多出空白 */
+.messageRich {
+  white-space: normal;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
