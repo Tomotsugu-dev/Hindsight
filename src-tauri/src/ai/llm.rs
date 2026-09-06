@@ -5,7 +5,10 @@
 //!
 //! 错误格式化复用 [`crate::commands::ai_endpoint::fmt_send_err`]，统一错误链给用户看。
 //!
-//! 不做流式：γ 阶段每段一次性出文，简单可靠。流式留给后续优化。
+//! 流式只对**云端**开：非流式请求在生成期间连接零字节流动，大段总结要几分钟，
+//! 系统 TCP 栈会先于客户端超时把它掐掉（实测 `os error 60`）。本地 llama-server
+//! 走 localhost，没有中间设备，保持非流式 —— 一次性出文更简单可靠。
+//! 两条路共用 [`send_and_classify`]，按响应的 content-type 分流。
 
 use std::time::{Duration, Instant};
 
@@ -33,12 +36,22 @@ pub struct ChatUsage {
 /// 比 supervisor 健康检查 (90s) 长，避免引擎刚 ready 就被 chat 超时打回。
 const CHAT_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// 外部 API（OpenAI / DeepSeek / OpenRouter…）超时。
-/// 本客户端生产路径只有**后台批任务**(段总结/日报周报)在用,不服务交互聊天,
-/// 等得起。曾设 90s:深夜段这类大内容段在 deepseek 晚高峰经常生成超过 90s,
-/// 连续多晚在 ~90s 整被本端掐断报"响应体读取/解析失败 ← operation timed out"
-/// (失败行与前一行 generated_at 恰差 90-99s 是判据)。300s 给长段留足余量。
-const EXTERNAL_CHAT_TIMEOUT: Duration = Duration::from_secs(300);
+// 外部 API（OpenAI / DeepSeek / OpenRouter…）的超时口径经历过两轮：
+//   1. 整请求超时 90s → 深夜段这类大内容段生成本就超过 90s，被自己掐断；
+//   2. 整请求超时 300s → 仍失败，且错误链末尾是 `os error 60`(ETIMEDOUT)：
+//      掐连接的是系统 TCP 栈而不是本端计时器，客户端调多大都没用。
+// 病根是非流式请求在生成期间连接**零字节流动**。改流式后连接一直有数据，
+// 于是整请求超时这个概念本身就不适用了 —— 换成下面这对「建连 + 块间空闲」。
+
+/// 云端建连上限。连不上是秒级可判的事，不需要等满读超时。
+const EXTERNAL_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 云端流式的**块间**空闲上限（不是整个请求的上限）。
+///
+/// 流式下服务端持续吐 token，正常间隔在毫秒到数秒之间；连续 60s 一个字节
+/// 都没有，基本可判定连接已死。取值要比"模型思考到首个 token 的时间"宽——
+/// 推理模型（DeepSeek R1 系）首 token 前会先想一会儿，实测在十几秒量级。
+const EXTERNAL_READ_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// llama-server 的 chat 客户端。
 #[derive(Clone)]
@@ -132,8 +145,13 @@ impl ExternalChatClient {
         if model.trim().is_empty() {
             return Err(Error::InvalidInput("云端模型 ID 为空"));
         }
+        // 流式下不能再用 `timeout`（整个请求的上限）：长段生成本来就要几分钟，
+        // 那是正常工作而不是卡死。改用 read_timeout —— 它管"两块数据之间最多
+        // 等多久"，正好对上病根：只要模型还在吐 token 连接就不算死，真断了
+        // 才在一分钟内判失败。connect_timeout 单独兜住"连都连不上"。
         let http = Client::builder()
-            .timeout(EXTERNAL_CHAT_TIMEOUT)
+            .connect_timeout(EXTERNAL_CONNECT_TIMEOUT)
+            .read_timeout(EXTERNAL_READ_TIMEOUT)
             .build()
             .map_err(|e| Error::LlmResponse(format!("HTTP 客户端构造失败：{e}")))?;
         Ok(Self {
@@ -336,14 +354,23 @@ fn build_chat_body(
         json!(arr)
     };
 
+    // 云端走流式：非流式请求在生成期间连接零字节流动，大段总结要几分钟，
+    // 系统 TCP 栈会先于客户端超时掐断（os error 60）。流式让 token 边生成边回。
+    // 本地 llama-server 走 localhost，没有中间设备，保持非流式不动。
+    //
+    // include_usage 三家实测都支持：DeepSeek / 智谱在末块回一次，SiliconFlow
+    // 每块都回（累计值）。不支持的服务商忽略该字段，累加器有自数的兜底。
     let mut body = json!({
         "model": model,
         "messages": [
             { "role": "system", "content": system },
             { "role": "user",   "content": user_content },
         ],
-        "stream": false,
+        "stream": is_cloud,
     });
+    if is_cloud {
+        body["stream_options"] = json!({ "include_usage": true });
+    }
     // 输出预算跟用户配的 ctx_size 联动（caller 按 ctx_size/2 算，给 prompt 留另一半）：
     // - ctx=8K → 4K（普通 instruct 模型也用得完只是不会真生成那么多）
     // - ctx=64K → 32K（reasoning 模型思考链 + 答案都有空间）
@@ -358,6 +385,115 @@ fn build_chat_body(
         body["temperature"] = json!(t);
     }
     body
+}
+
+/// 流式响应里的一块（OpenAI 兼容 `chat.completion.chunk`）。
+///
+/// 字段全 `Option` 且 `default`：三家实测的形状差异不小 —— DeepSeek 会把
+/// `content` / `reasoning_content` 显式写成 `null` 交替出现，智谱不发
+/// `system_fingerprint` / `logprobs`。未知字段一律忽略，缺失与显式 null 等价。
+#[derive(Debug, Default, Deserialize)]
+struct ChatChunk {
+    #[serde(default)]
+    choices: Vec<ChunkChoice>,
+    #[serde(default)]
+    usage: Option<ChatUsageRaw>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ChunkChoice {
+    #[serde(default)]
+    delta: ChunkDelta,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ChunkDelta {
+    #[serde(default)]
+    content: Option<String>,
+    /// 推理模型的思考链。DeepSeek 在思考阶段发它、`content` 为 null，
+    /// 正式作答时反过来 —— 分开累计才能沿用非流式那套空回复归因。
+    #[serde(default)]
+    reasoning_content: Option<String>,
+}
+
+/// SSE 流的累加器：喂进每一行，攒出与非流式等价的结果。
+///
+/// 独立于 IO，因此可以直接单测（真实网络流的形状差异见 `docs/internal/流式传输规划.md`）。
+#[derive(Debug, Default)]
+struct SseAccumulator {
+    content: String,
+    reasoning: String,
+    usage: Option<ChatUsageRaw>,
+    /// 收到 `data: [DONE]` 即为正常收尾；没收到就断流 = 不完整
+    done: bool,
+    /// 自数的 delta 块数：服务商不回 usage 时用它近似 completion_tokens
+    delta_count: u32,
+}
+
+impl SseAccumulator {
+    /// 吃一行。返回 `Err` 表示这行是致命的协议错误；`Ok(())` 表示已处理或可忽略。
+    ///
+    /// 忽略而非报错的情形：空行（SSE 的块分隔）、`event:` / `id:` 等其它字段、
+    /// 解析不出的 data 块。**单块解析失败不该让整次请求失败** —— 厂商偶尔
+    /// 插入自有格式的块，丢掉一块比丢掉整个回答划算。
+    fn push_line(&mut self, line: &str) {
+        let line = line.trim_end_matches('\r');
+        let Some(payload) = line.strip_prefix("data:") else {
+            return; // 空行 / event: / id: / 注释行
+        };
+        let payload = payload.trim();
+        if payload == "[DONE]" {
+            self.done = true;
+            return;
+        }
+        let Ok(chunk) = serde_json::from_str::<ChatChunk>(payload) else {
+            return;
+        };
+        // usage 可能出现多次（SiliconFlow 每块都带，且是累计值）——取最后一次，
+        // 不是累加。DeepSeek / 智谱只在末块给一次，两种形状都被这行覆盖。
+        if chunk.usage.is_some() {
+            self.usage = chunk.usage;
+        }
+        for c in chunk.choices {
+            if let Some(t) = c.delta.content.filter(|s| !s.is_empty()) {
+                self.content.push_str(&t);
+                self.delta_count += 1;
+            }
+            if let Some(t) = c.delta.reasoning_content.filter(|s| !s.is_empty()) {
+                self.reasoning.push_str(&t);
+                self.delta_count += 1;
+            }
+        }
+    }
+
+    /// 收尾成与非流式同构的 [`ChatResp`]，好让 [`parse_response`] 原样复用
+    /// （空回复归因、finish_reason 判定全都不用再写一遍）。
+    ///
+    /// `finish_reason` 取 "stop" 而不是转发服务端的值：SiliconFlow 末块回
+    /// `null`（实测），转发会让下游误判。流走完 = 正常结束，这是唯一可靠的信号。
+    fn finish(self) -> ChatResp {
+        // 没拿到 usage 的服务商：用自数的块数近似 completion_tokens。
+        // 近似值只用于展示，不参与任何计费或截断判断。
+        let usage = self.usage.or(Some(ChatUsageRaw {
+            prompt_tokens: 0,
+            completion_tokens: self.delta_count,
+        }));
+        ChatResp {
+            choices: vec![ChatChoice {
+                message: ChatMessage {
+                    role: "assistant".to_string(),
+                    content: self.content,
+                    reasoning_content: if self.reasoning.is_empty() {
+                        None
+                    } else {
+                        Some(self.reasoning)
+                    },
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage,
+        }
+    }
 }
 
 /// 已经带好 body / 鉴权头的 RequestBuilder → 发出去 → 解析 ChatResp。
@@ -463,16 +599,79 @@ async fn send_and_classify(req: RequestBuilder, t0: Instant) -> SendOutcome {
     // 同模型成功。归入 Transient 让上层原样重试；超时除外（已等满时限）。
     // 错误文本带完整原因链：外层 Display 只说"解码失败"，掐连接还是格式错
     // 全靠 source 链区分。
-    let parsed: ChatResp = match resp.json().await {
-        Ok(p) => p,
-        Err(e) => {
-            return SendOutcome::Transient(Error::LlmResponse(format!(
-                "响应体读取/解析失败：{}",
-                error_chain(&e)
-            )));
+    let is_sse = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("text/event-stream"));
+    let parsed: ChatResp = if is_sse {
+        match read_sse_stream(resp).await {
+            Ok(p) => p,
+            Err(e) => return SendOutcome::Transient(e),
+        }
+    } else {
+        match resp.json().await {
+            Ok(p) => p,
+            Err(e) => {
+                return SendOutcome::Transient(Error::LlmResponse(format!(
+                    "响应体读取/解析失败：{}",
+                    error_chain(&e)
+                )));
+            }
         }
     };
     SendOutcome::Done(parse_response(parsed, t0))
+}
+
+/// 消费 SSE 流，攒成与非流式等价的 [`ChatResp`]。
+///
+/// 为什么值得这么做：非流式请求发出后连接会静默到整段生成完，大时段的段总结
+/// 要几分钟，期间一个字节都不流动 —— 系统 TCP 栈会先于客户端超时把它掐掉
+/// （实测 `Operation timed out (os error 60)`，客户端 300s 根本来不及生效）。
+/// 流式让 token 边生成边回，连接上持续有数据，静默这个前提就不存在了。
+///
+/// 断流（没收到 `data: [DONE]` 就 EOF）判失败而不是留半截：调用方会把返回值
+/// 整段存进 ai_summaries / 聊天记录，半截答案看起来像正常内容，比报错更难发现。
+/// 错误里带上已收字符数，便于分辨"一个字没来"和"快写完了才断"。
+async fn read_sse_stream(resp: reqwest::Response) -> Result<ChatResp> {
+    use futures_util::StreamExt;
+
+    let mut acc = SseAccumulator::default();
+    let mut buf = String::new();
+    let mut stream = resp.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| {
+            Error::LlmResponse(format!(
+                "流式响应中断（已收到 {} 字符）：{}",
+                acc.content.chars().count(),
+                error_chain(&e)
+            ))
+        })?;
+        // 一个网络块可能切在多字节字符中间，也可能带半行 —— 先按 UTF-8 宽松解码
+        // 再按整行切，剩下的半行留在 buf 里等下一块补齐。
+        buf.push_str(&String::from_utf8_lossy(&bytes));
+        while let Some(idx) = buf.find('\n') {
+            let line: String = buf.drain(..=idx).collect();
+            acc.push_line(line.trim_end_matches('\n'));
+        }
+        if acc.done {
+            break;
+        }
+    }
+    // 收尾：流已 EOF 时 buf 里可能还剩最后一行（服务端没发末尾换行）
+    if !acc.done && !buf.is_empty() {
+        let last = std::mem::take(&mut buf);
+        acc.push_line(&last);
+    }
+
+    if !acc.done {
+        return Err(Error::LlmResponse(format!(
+            "流式响应未正常结束（已收到 {} 字符，缺 [DONE]）",
+            acc.content.chars().count()
+        )));
+    }
+    Ok(acc.finish())
 }
 
 /// 2xx 且响应体已解析后的常规收尾：取首个 choice、算 usage、空内容分类报错。
@@ -578,6 +777,167 @@ struct ChatMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 把若干行喂进累加器（模拟真实流的逐行到达）。
+    fn feed(lines: &[&str]) -> SseAccumulator {
+        let mut acc = SseAccumulator::default();
+        for l in lines {
+            acc.push_line(l);
+        }
+        acc
+    }
+
+    /// 基本形态:多块拼接 + [DONE] 收尾。
+    #[test]
+    fn sse_joins_deltas_and_ends_on_done() {
+        let acc = feed(&[
+            r#"data: {"choices":[{"delta":{"role":"assistant","content":"你"}}]}"#,
+            "",
+            r#"data: {"choices":[{"delta":{"content":"好"}}]}"#,
+            "data: [DONE]",
+        ]);
+        assert!(acc.done);
+        let resp = acc.finish();
+        assert_eq!(resp.choices[0].message.content, "你好");
+        // finish_reason 恒为 stop:SiliconFlow 末块实测回 null,转发会让下游误判
+        assert_eq!(resp.choices[0].finish_reason.as_deref(), Some("stop"));
+    }
+
+    /// DeepSeek 形态:content 与 reasoning_content 显式 null 交替出现。
+    /// 分开累计才能沿用非流式那套空回复归因（思考烧完没写答案 = LLM_EMPTY_REASONING）。
+    #[test]
+    fn sse_separates_reasoning_from_content_with_explicit_nulls() {
+        let acc = feed(&[
+            r#"data: {"choices":[{"delta":{"content":null,"reasoning_content":"想"}}]}"#,
+            r#"data: {"choices":[{"delta":{"content":null,"reasoning_content":"一下"}}]}"#,
+            r#"data: {"choices":[{"delta":{"content":"答案","reasoning_content":null}}]}"#,
+            "data: [DONE]",
+        ]);
+        let resp = acc.finish();
+        assert_eq!(resp.choices[0].message.content, "答案");
+        assert_eq!(
+            resp.choices[0].message.reasoning_content.as_deref(),
+            Some("想一下")
+        );
+    }
+
+    /// SiliconFlow 形态:usage 每块都带且是**累计值** —— 取最后一次，不是累加。
+    #[test]
+    fn sse_usage_takes_last_not_sum() {
+        let acc = feed(&[
+            r#"data: {"choices":[{"delta":{"content":"a"}}],"usage":{"prompt_tokens":31,"completion_tokens":1}}"#,
+            r#"data: {"choices":[{"delta":{"content":"b"}}],"usage":{"prompt_tokens":31,"completion_tokens":2}}"#,
+            "data: [DONE]",
+        ]);
+        let u = acc.finish().usage.expect("应有 usage");
+        assert_eq!(u.prompt_tokens, 31);
+        assert_eq!(u.completion_tokens, 2, "累计值取最后一次而不是相加");
+    }
+
+    /// 服务商不回 usage 时用自数的块数近似 completion_tokens（只用于展示）。
+    #[test]
+    fn sse_falls_back_to_counting_deltas_without_usage() {
+        let acc = feed(&[
+            r#"data: {"choices":[{"delta":{"content":"a"}}]}"#,
+            r#"data: {"choices":[{"delta":{"content":"b"}}]}"#,
+            r#"data: {"choices":[{"delta":{"content":"c"}}]}"#,
+            "data: [DONE]",
+        ]);
+        let u = acc.finish().usage.expect("应有兜底 usage");
+        assert_eq!(u.completion_tokens, 3);
+        assert_eq!(u.prompt_tokens, 0, "自数拿不到 prompt 侧，如实填 0");
+    }
+
+    /// 非 data 行与解析不了的块都跳过:空行是 SSE 的块分隔，
+    /// 厂商偶尔插自有格式的块 —— 丢一块比丢整个回答划算。
+    #[test]
+    fn sse_skips_blank_and_unparsable_lines() {
+        let acc = feed(&[
+            "",
+            ": keep-alive comment",
+            "event: message",
+            "data: {not json}",
+            r#"data: {"choices":[{"delta":{"content":"ok"}}]}"#,
+            "data: [DONE]",
+        ]);
+        assert_eq!(acc.finish().choices[0].message.content, "ok");
+    }
+
+    /// 带 \r\n 行尾（部分服务端如此）也要正常吃掉。
+    #[test]
+    fn sse_tolerates_crlf() {
+        let acc = feed(&[
+            "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\r",
+            "data: [DONE]\r",
+        ]);
+        assert!(acc.done);
+        assert_eq!(acc.finish().choices[0].message.content, "x");
+    }
+
+    /// 没收到 [DONE] 就是断流。read_sse_stream 据此判失败而不是留半截 ——
+    /// 半截答案会被原样存进 ai_summaries / 聊天记录，看着像正常内容。
+    #[test]
+    fn sse_without_done_is_incomplete() {
+        let acc = feed(&[r#"data: {"choices":[{"delta":{"content":"半截"}}]}"#]);
+        assert!(!acc.done, "缺 [DONE] 必须判为未完成");
+        assert_eq!(acc.content, "半截", "已收内容仍在，供错误信息报字符数");
+    }
+
+    /// 云端请求必须带 stream + include_usage；本地保持非流式。
+    #[test]
+    fn cloud_body_is_streaming_local_is_not() {
+        let cloud = build_chat_body(true, "m", "sys", "user", &[], 4096, None);
+        assert_eq!(cloud["stream"], serde_json::json!(true));
+        assert_eq!(
+            cloud["stream_options"]["include_usage"],
+            serde_json::json!(true)
+        );
+
+        let local = build_chat_body(false, "m", "sys", "user", &[], 4096, None);
+        assert_eq!(local["stream"], serde_json::json!(false));
+        assert!(
+            local.get("stream_options").is_none(),
+            "本地 llama-server 不发 stream_options"
+        );
+    }
+
+    /// 真机端到端:走完整的 ExternalChatClient 打真实端点，确认流式链路通。
+    /// 单测只覆盖累加器的纯逻辑，证明不了真流能跑 —— 这条补上那一段。
+    /// 跑法:
+    ///   HINDSIGHT_E2E_BASE_URL=https://api.deepseek.com/v1 \
+    ///   HINDSIGHT_E2E_MODEL=deepseek-v4-flash \
+    ///   HINDSIGHT_E2E_KEY=sk-... \
+    ///   cargo test --lib ai::llm::tests::live_ -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn live_cloud_streaming_roundtrip() {
+        let (Ok(base), Ok(model), Ok(key)) = (
+            std::env::var("HINDSIGHT_E2E_BASE_URL"),
+            std::env::var("HINDSIGHT_E2E_MODEL"),
+            std::env::var("HINDSIGHT_E2E_KEY"),
+        ) else {
+            eprintln!("跳过:未设 HINDSIGHT_E2E_* 三个环境变量");
+            return;
+        };
+        let c = ExternalChatClient::new(&base, model, key, 512).expect("客户端构造");
+        let t = std::time::Instant::now();
+        let (text, usage) = c
+            .chat_text("你是一个简洁的助手。", "用一句话说明什么是 TCP 超时。", &[])
+            .await
+            .expect("流式请求应成功");
+        eprintln!(
+            "耗时 {}ms | 内容 {} 字符 | prompt={:?} completion={:?}\n---\n{text}\n---",
+            t.elapsed().as_millis(),
+            text.chars().count(),
+            usage.prompt_tokens,
+            usage.completion_tokens,
+        );
+        assert!(!text.trim().is_empty(), "流式应拼出非空内容");
+        assert!(
+            usage.completion_tokens.unwrap_or(0) > 0,
+            "应拿到 completion_tokens(真值或自数兜底)"
+        );
+    }
 
     /// 云端与本地的输出预算字段名必须分开:OpenAI 自 gpt-5.6 起对
     /// `max_tokens` 直接 400,而本地 llama-server 只认 `max_tokens`。
