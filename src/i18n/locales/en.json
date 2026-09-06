@@ -407,7 +407,8 @@
         },
         "dialog": {
           "title": "New version v{{version}} available",
-          "message": "Click \"Update now\" to download and install the new version. The app will restart automatically when done.\n\nRelease notes:\n{{body}}",
+          "message": "Click \"Update now\" to download and install the new version. The app restarts automatically when it finishes.",
+          "notesLabel": "Release notes",
           "bodyEmpty": "(none)",
           "confirm": "Update now",
           "cancel": "Later"

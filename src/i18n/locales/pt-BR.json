@@ -407,7 +407,8 @@
         },
         "dialog": {
           "title": "Nova versão v{{version}} disponível",
-          "message": "Clique em \"Atualizar agora\" para baixar e instalar a nova versão. O aplicativo será reiniciado automaticamente ao concluir.\n\nNotas da versão:\n{{body}}",
+          "message": "Clique em \"Atualizar agora\" para baixar e instalar a nova versão. O aplicativo será reiniciado automaticamente ao concluir.",
+          "notesLabel": "Notas da versão",
           "bodyEmpty": "(nenhuma)",
           "confirm": "Atualizar agora",
           "cancel": "Depois"

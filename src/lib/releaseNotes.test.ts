@@ -41,4 +41,19 @@ describe("pickReleaseNotesForLang", () => {
     const zhOnly = "<!-- zh -->\n【x】\n- 只有中文";
     expect(pickReleaseNotesForLang(zhOnly, "fr")).toBe("【x】\n- 只有中文");
   });
+
+  it("keeps the markdown intact so the dialog can render it", () => {
+    // 更新弹窗把这个返回值交给 MarkdownText 渲染，所以列表符号必须原样留着。
+    // 早期实现把整块插进一条 i18n 文案当纯文本显示，"-" 就变成了字面短横线。
+    const picked = pickReleaseNotesForLang(BODY, "en");
+    expect(picked.split("\n")).toContain("- English change");
+  });
+
+  it("maps Spanish locales to the es block", () => {
+    const withEs = `${BODY}\n<!-- es -->\n【0.7.7】\n- Cambio en español`;
+    expect(pickReleaseNotesForLang(withEs, "es")).toBe("【0.7.7】\n- Cambio en español");
+    expect(pickReleaseNotesForLang(withEs, "es-MX")).toBe("【0.7.7】\n- Cambio en español");
+    // 版本说明还没写 es 块时回退英文，而不是整坨多语言全塞给用户
+    expect(pickReleaseNotesForLang(BODY, "es")).toBe("【0.7.7】\n- English change");
+  });
 });
