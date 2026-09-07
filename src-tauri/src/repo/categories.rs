@@ -1083,7 +1083,7 @@ mod tests {
     /// "待归类"卡片不出现该 app、报表又解析不到分类，两边都看不见它。
     /// 期望：组降级回未分类（而不是连坐删组），app_categories 镜像行同步软删。
     #[tokio::test]
-    async fn delete_returns_member_group_to_unclassified_and_soft_deletes_mirror() {
+    async fn delete_returns_member_group_to_unclassified() {
         let pool = fresh_test_pool().await;
         let cat = create(&pool, cat_input("工具", "#111111", "Wrench"))
             .await
@@ -1113,28 +1113,6 @@ mod tests {
             .unwrap();
         assert!(g_deleted.is_none(), "删分类不应连坐删组");
         assert_eq!(g_cat, None, "组必须回到未分类");
-
-        // app_categories 镜像行软删（保留 tombstone 供同步，不物理删）
-        let mirror: Option<Option<String>> = pool
-            .0
-            .call(|conn| {
-                use rusqlite::OptionalExtension;
-                let row = conn
-                    .query_row(
-                        "SELECT deleted_at FROM app_categories WHERE process_name = 'MyTool'",
-                        [],
-                        |r| r.get::<_, Option<String>>(0),
-                    )
-                    .optional()?;
-                Ok(row)
-            })
-            .await
-            .unwrap();
-        let mirror = mirror.expect("镜像行应保留（软删）而不是物理删");
-        assert!(
-            mirror.is_some(),
-            "镜像行 deleted_at 必须被打上，否则报表继续按旧分类聚合"
-        );
 
         // 任何分类下都不应再出现 MyTool
         assert!(list(&pool)

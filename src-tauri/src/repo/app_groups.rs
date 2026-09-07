@@ -19,28 +19,35 @@ use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
-/// 应用组的对外快照（包含成员 + category_id + display_name）。
+/// One logical app as the frontend sees it: the `app_groups` row plus its
+/// members (assembled by [`list_groups`], not a column).
+///
+/// A group exists because one app shows up under several process names —
+/// `Google Chrome` on macOS, `chrome.exe` on Windows, both just "Chrome" to the
+/// user — so display name and category live here, not on the process name.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppGroup {
-    /// group_id（首次出现时等于该 process_name；后续 merge 后保持不变）
+    /// The unique ID of the group (initially equal to the first process_name; remains unchanged after merges)
     pub id: String,
-    /// 用户可见的展示名（如 "Visual Studio Code"）
+    /// Display name for the group (e.g., "VsCode")
     pub display_name: String,
-    /// 该组的分类（None = 未分类）
+    /// The category ID of the group (None = unclassified)
     pub category_id: Option<String>,
-    /// 组内成员（process_name + 时长 + 最后出现设备）
+    /// Apps in the group Vec<AppGroupMember>(process_name + recent_secs + last_device_id)
     pub members: Vec<AppGroupMember>,
 }
 
-/// 组内单个 process_name 成员的详情。
+/// Details of a single process_name member within a group.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppGroupMember {
     pub process_name: String,
-    /// 该成员近 7 天累计时长（秒），按 process_name 聚合，跨设备求和
+    /// The total duration (in seconds) of this member over the past 7 days,
+    /// aggregated by process_name and summed across devices
     pub recent_secs: i64,
-    /// 该成员最后一次出现的设备 ID（取最大 ended_at 那条）；UI 拿来分列
+    /// The device ID where this member was last seen
+    /// (take the one with the latest ended_at); UI uses it for column display
     pub last_device_id: Option<String>,
 }
 
