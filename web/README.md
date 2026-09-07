@@ -36,7 +36,7 @@ npx serve web
   https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/...
   ```
   好处：自动跟主分支同步；CDN 全球加速；不用复制图片到 web/。
-- **视频** 使用 GitHub user-attachments CDN URL（README.zh.md 同款）
+- **视频** 使用 GitHub user-attachments CDN URL（docs/intro/zh/README.md 同款）
 - **下载按钮** 默认指向 `releases/latest`，JS 加载后改写为具体安装包直链 + 显示版本和大小
 
 ## 部署 Cloudflare Pages
@@ -92,7 +92,7 @@ Nav 里的 lang switch 改成实际链接 `/en/` / `/ja/`。共用 `styles.css`�
 - 全局配色 token：`styles.css` 顶部 `:root { ... }`
 - 各 section 文案：`index.html` 里有注释 `<!-- ============ XXX ============ -->` 分隔
 - 视频 URL：搜 `user-attachments/assets/df92b5b8` 替换
-- 截图：搜 `intro_zh/imgs/` 替换文件名
+- 截图：搜 `intro/zh/imgs/` 替换文件名
 
 ## 后续可加
 

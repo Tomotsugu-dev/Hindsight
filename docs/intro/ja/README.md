@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../src/assets/logo.png" alt="Hindsight" width="180">
+  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
 <h1 align="center">Hindsight</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="README.zh.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
+  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
   <a href="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml">
     <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
   </a>
-  <a href="../LICENSE">
+  <a href="../../../LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/daily.png" alt="日次統計" width="800"><br/>
+  <img src="./imgs/daily.png" alt="日次統計" width="800"><br/>
   <sub><b>日次統計</b> · 24 時間の時間帯別積み上げグラフ × アプリ / カテゴリのダブルランキング。今日の時間の行き先が一目で</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/app_detail.png" alt="アプリ詳細" width="800"><br/>
+  <img src="./imgs/app_detail.png" alt="アプリ詳細" width="800"><br/>
   <sub><b>アプリ詳細</b> · アプリをクリックすると、その中で何をしていたかまで見える</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/weekly.png" alt="週次統計" width="800"><br/>
+  <img src="./imgs/weekly.png" alt="週次統計" width="800"><br/>
   <sub><b>週次統計</b> · 一週間の作業状況をひと目で</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/monthly.png" alt="月次統計" width="800"><br/>
+  <img src="./imgs/monthly.png" alt="月次統計" width="800"><br/>
   <sub><b>月次統計</b> · 日別の活動時間とアプリ / カテゴリランキングで、今月の時間の使い道を把握</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/monthly_cal.png" alt="今月の時間構成" width="800"><br/>
+  <img src="./imgs/monthly_cal.png" alt="今月の時間構成" width="800"><br/>
   <sub><b>今月の時間構成</b> · カテゴリ別の時間と割合に加え、合計・日平均・先月比をまとめて表示</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/ai_summary.png" alt="AI サマリー" width="800"><br/>
+  <img src="./imgs/ai_summary.png" alt="AI サマリー" width="800"><br/>
   <sub><b>AI 自動日報</b> · ローカル / クラウドモデルが時間帯ごとに当日の活動をまとめ、日報として出力</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/ai_chatbot.png" alt="AI チャット" width="800"><br/>
+  <img src="./imgs/ai_chatbot.png" alt="AI チャット" width="800"><br/>
   <sub><b>AI チャット</b> · 「今月 XX にどれくらい時間を使った？」と直接聞ける</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_ja/imgs/cloud_sync.png" alt="マルチデバイス同期" width="800"><br/>
+  <img src="./imgs/cloud_sync.png" alt="マルチデバイス同期" width="800"><br/>
   <sub><b>マルチデバイス同期</b> · 複数台のパソコンを使う人に</sub>
 </p>
 
@@ -128,6 +128,6 @@
 ## ライセンス
 
 <p align="center">
-  本プロジェクトは<a href="../LICENSE"><b>MITライセンス</b></a>の下でオープンソースとして公開されています。自由に使用、改変、配布できます。<br/>
+  本プロジェクトは<a href="../../../LICENSE"><b>MITライセンス</b></a>の下でオープンソースとして公開されています。自由に使用、改変、配布できます。<br/>
   <sub>© 2026 Hindsight contributors</sub>
 </p>

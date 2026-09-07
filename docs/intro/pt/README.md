@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../src/assets/logo.png" alt="Hindsight" width="180">
+  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
 <h1 align="center">Hindsight</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="README.zh.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
+  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
   <a href="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml">
     <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
   </a>
-  <a href="../LICENSE">
+  <a href="../../../LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/daily.png" alt="Estatísticas diárias" width="800"><br/>
+  <img src="./imgs/daily.png" alt="Estatísticas diárias" width="800"><br/>
   <sub><b>Estatísticas diárias</b> · Gráfico empilhado de 24 horas × rankings de apps / categorias — veja para onde foi o seu dia num relance</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/app_detail.png" alt="Detalhe do app" width="800"><br/>
+  <img src="./imgs/app_detail.png" alt="Detalhe do app" width="800"><br/>
   <sub><b>Detalhe do app</b> · Clique em qualquer app para ver o que você estava fazendo dentro dele</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/weekly.png" alt="Estatísticas semanais" width="800"><br/>
+  <img src="./imgs/weekly.png" alt="Estatísticas semanais" width="800"><br/>
   <sub><b>Estatísticas semanais</b> · Sua semana inteira num relance</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/monthly.png" alt="Estatísticas mensais" width="800"><br/>
+  <img src="./imgs/monthly.png" alt="Estatísticas mensais" width="800"><br/>
   <sub><b>Estatísticas mensais</b> · Barras diárias com rankings de apps / categorias — veja para onde foi o tempo do mês</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/monthly_cal.png" alt="Estrutura do mês" width="800"><br/>
+  <img src="./imgs/monthly_cal.png" alt="Estrutura do mês" width="800"><br/>
   <sub><b>Estrutura do mês</b> · Tempo e proporção por categoria, com total, média diária e variação em relação ao mês anterior</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/ai_summary.png" alt="Resumo por IA" width="800"><br/>
+  <img src="./imgs/ai_summary.png" alt="Resumo por IA" width="800"><br/>
   <sub><b>Relatório diário por IA</b> · Um modelo local ou na nuvem resume as atividades do dia por período e escreve o diário</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/ai_chatbot.png" alt="Chat com IA" width="800"><br/>
+  <img src="./imgs/ai_chatbot.png" alt="Chat com IA" width="800"><br/>
   <sub><b>Chat com IA</b> · Pergunte direto, por exemplo: "quanto tempo passei em XX este mês?"</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_pt/imgs/cloud_sync.png" alt="Sincronização multi-dispositivo" width="800"><br/>
+  <img src="./imgs/cloud_sync.png" alt="Sincronização multi-dispositivo" width="800"><br/>
   <sub><b>Sincronização multi-dispositivo</b> · Para quem usa mais de um computador</sub>
 </p>
 
@@ -128,6 +128,6 @@ Baixe `hindsight_x.y.z_universal.dmg` (binário universal para Apple Silicon + I
 ## Licença
 
 <p align="center">
-  Este projeto é de código aberto sob a <a href="../LICENSE"><b>Licença MIT</b></a>. Sinta-se à vontade para usar, modificar e distribuir.<br/>
+  Este projeto é de código aberto sob a <a href="../../../LICENSE"><b>Licença MIT</b></a>. Sinta-se à vontade para usar, modificar e distribuir.<br/>
   <sub>© 2026 colaboradores do Hindsight</sub>
 </p>

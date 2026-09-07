@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../src/assets/logo.png" alt="Hindsight" width="180">
+  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
 <h1 align="center">Hindsight</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="README.zh.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.pt.md">Português</a>
+  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
   <a href="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml">
     <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
   </a>
-  <a href="../LICENSE">
+  <a href="../../../LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   </a>
 </p>
@@ -51,42 +51,42 @@
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/daily.png" alt="日统计" width="800"><br/>
+  <img src="./imgs/daily.png" alt="日统计" width="800"><br/>
   <sub><b>日统计</b> · 24 小时分时段堆叠图 × 应用 / 分类双排行，一眼看清今天的时间去向</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/app_detail.png" alt="应用明细" width="800"><br/>
+  <img src="./imgs/app_detail.png" alt="应用明细" width="800"><br/>
   <sub><b>应用明细</b> · 点开任意应用，看到都在应用中做什么</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/weekly.png" alt="周统计" width="800"><br/>
+  <img src="./imgs/weekly.png" alt="周统计" width="800"><br/>
   <sub><b>周统计</b> · 一周七天的工作情况</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/monthly.png" alt="月统计" width="800"><br/>
+  <img src="./imgs/monthly.png" alt="月统计" width="800"><br/>
   <sub><b>月统计</b> · 按天展示各类活动时长，结合应用 / 分类排行，看清本月时间主要花在哪里</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/monthly_cal.png" alt="月度占比" width="800"><br/>
+  <img src="./imgs/monthly_cal.png" alt="月度占比" width="800"><br/>
   <sub><b>本月时间结构</b> · 展示各类活动的时长与占比，并汇总总时长、日均时长及较上月变化</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
+  <img src="./imgs/ai_summary.png" alt="AI 总结" width="800"><br/>
   <sub><b>AI 自动写日报</b> · 本地 / 云端模型按时段汇总当天的活动，写成日报</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/ai_chatbot.png" alt="AI 对话" width="800"><br/>
+  <img src="./imgs/ai_chatbot.png" alt="AI 对话" width="800"><br/>
   <sub><b>AI 对话</b> · 直接问例如「这个月我在 XX 上花了多久」</sub>
 </p>
 
 <p align="center">
-  <img src="./intro_zh/imgs/cloud_sync.png" alt="多设备同步" width="800"><br/>
+  <img src="./imgs/cloud_sync.png" alt="多设备同步" width="800"><br/>
   <sub><b>多设备同步</b> · 适合持有多个设备的用户</sub>
 </p>
 
@@ -128,6 +128,6 @@
 ## License
 
 <p align="center">
-  本项目基于 <a href="../LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
+  本项目基于 <a href="../../../LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
   <sub>© 2026 Hindsight contributors</sub>
 </p>
