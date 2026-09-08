@@ -827,12 +827,6 @@ export const api = {
   assignCategoryToSuper: (categoryId: string, superId: string | null) =>
     invoke<void>("assign_category_to_super", { categoryId, superId }),
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
-  deleteAppGroup: (groupId: string) =>
-    invoke<void>("delete_app_group", { groupId }),
-  /** 强力删除：组 + 所有 member 一起软删。给 UI 上「行视觉为空」（成员近 7 天无活动）
-   *  场景用；不阻塞 `members.length > 0`。详见 `app_groups::purge_with_members`。 */
-  purgeAppGroup: (groupId: string) =>
-    invoke<void>("purge_app_group", { groupId }),
   /** **真删**这个应用的数据：活动记录、截图文件、OCR 文字索引一并清掉，最后软删组。
    *  不可逆；不重算已生成的报表，也不传播数据删除到其它设备。
    *  详见 `app_groups::purge_with_data`。 */

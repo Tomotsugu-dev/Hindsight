@@ -263,8 +263,6 @@ pub fn run() {
             commands::super_categories::assign_category_to_super,
             // --- app_groups: 应用分组（多个进程合一组） ---
             commands::app_groups::list_app_groups,
-            commands::app_groups::delete_app_group,
-            commands::app_groups::purge_app_group,
             commands::app_groups::purge_app_group_data,
             commands::app_groups::merge_app_group,
             commands::app_groups::unmerge_app_group,
