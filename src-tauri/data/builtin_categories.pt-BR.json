@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "comment": "Nomes de processo como aparecem em um sistema em português (macOS / Windows). Em tempo de execução é combinado com os outros builtin_categories.*.json em uma única tabela (correspondência exata em minúsculas). Listar apenas nomes localizados que não estejam no .en.json.",
+  "rules": [
+    {
+      "category": "browse",
+      "processNames": []
+    },
+    {
+      "category": "code",
+      "processNames": [
+        "bloco de notas",
+        "prompt de comando"
+      ]
+    },
+    {
+      "category": "talk",
+      "processNames": []
+    },
+    {
+      "category": "design",
+      "processNames": []
+    },
+    {
+      "category": "fun",
+      "processNames": [
+        "música"
+      ]
+    },
+    {
+      "category": "other",
+      "processNames": [
+        "explorador de arquivos",
+        "gerenciador de tarefas",
+        "configurações",
+        "ajustes do sistema", "preferências do sistema",
+        "informações do sistema",
+        "captura de tela",
+        "pré-visualização",
+        "fotos",
+        "ferramenta de captura"
+      ]
+    }
+  ]
+}

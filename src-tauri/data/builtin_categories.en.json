@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "comment": "英文 / 二进制名 / 跨语言通用名。匹配是 lowercase 完全相等。中文系统名见 builtin_categories.zh.json，日文系统名见 builtin_categories.ja.json。三个文件运行时合并到同一查找表。社区贡献请保持 category 顺序：browse / code / talk / design / fun。",
+  "comment": "英文 / 二进制名 / 跨语言通用名。匹配是 lowercase 完全相等。本地化系统名见 builtin_categories.{zh,zh-TW,ja,es,pt-BR}.json。所有文件运行时合并到同一查找表。社区贡献请保持 category 顺序：browse / code / talk / design / fun。",
   "rules": [
     {
       "category": "browse",
