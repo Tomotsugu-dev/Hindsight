@@ -16,9 +16,9 @@ use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
 use crate::capture::privacy;
 use crate::error::{Error, Result};
-use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
+use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 把一个 future 变成"可被停止按钮中断的"：每 250ms 轮询一次 cancel 标志，

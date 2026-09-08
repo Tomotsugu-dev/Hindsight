@@ -1,11 +1,15 @@
-//! 分类表的 repo 层：CRUD + 同步 outbox 入队 + cascade 删除。
+//! Data access for the `categories` table — the user-visible buckets ("Work",
+//! "Browsing", …) that app groups are assigned to: create, update, delete,
+//! reorder, and list each category with the process names under it.
 //!
-//! 所有写入都同步入 outbox 走 push 路径，保证跨设备 LWW；
-//! 内置分类（builtin=1）拒绝删除（必须给所有未分类的 app 一个落点）。
+//! Every write also enqueues a sync-outbox row so the change reaches the user's
+//! other devices (merged there by last-write-wins). Deleting a category sends
+//! its groups back to unclassified; built-in categories and `other` cannot be
+//! deleted, since unclassified time needs somewhere to land.
 
-use std::collections::HashMap;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
@@ -16,7 +20,7 @@ use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Category {
-    /// Category ID: 'work', 'play', etc. for built-in categories; 
+    /// Category ID: 'work', 'play', etc. for built-in categories;
     /// UUID for user-created ones.
     pub id: String,
     /// Display name of the category.
@@ -35,7 +39,7 @@ pub struct Category {
     pub super_category_id: Option<String>,
 }
 
-/// Fields sent from the frontend when creating a new category 
+/// Fields sent from the frontend when creating a new category
 /// (id excluded; the backend generates a UUID).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,14 +58,15 @@ pub struct CategoryPatch {
     pub icon: Option<String>,
 }
 
-/// 未归类应用的一行——给「分类」页面"待归类"卡片用。
+/// A row representing an unclassified app — used for the "Unclassified" card
+/// on the "Categories" page.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnclassifiedApp {
     pub process_name: String,
-    /// 最近 N 天累计使用分钟数
+    /// Total minutes used in the last N days
     pub minutes: u32,
-    /// 最近一次出现的 RFC3339 时间
+    /// RFC3339 timestamp of the last occurrence
     pub last_seen_at: String,
 }
 
@@ -70,13 +75,13 @@ pub struct UnclassifiedApp {
 #[allow(clippy::too_many_arguments)]
 fn category_payload(
     id: &str,
-    name: &str,    // Display name of the category
-    color: &str,    // Hex color `#rrggbb`
-    icon: &str,     // Icon ID (used by the frontend to map to lucide-react icons)
+    name: &str,  // Display name of the category
+    color: &str, // Hex color `#rrggbb`
+    icon: &str,  // Icon ID (used by the frontend to map to lucide-react icons)
     builtin: bool,
-    sort_order: i64,    // Display order of the category
-    updated_at: &str,   // RFC3339 timestamp of the last update
-    deleted_at: Option<&str>,   // RFC3339 deletion tombstone
+    sort_order: i64,          // Display order of the category
+    updated_at: &str,         // RFC3339 timestamp of the last update
+    deleted_at: Option<&str>, // RFC3339 deletion tombstone
 ) -> String {
     serde_json::json!({
         "id": id,
@@ -94,7 +99,6 @@ fn category_payload(
 /// Lists all active categories ordered by `sort_order`, each carrying the
 /// process names currently classified under it.
 pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
-
     let cats = pool
         .0
         .call(|conn| {
@@ -122,7 +126,7 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
             for r in cat_rows {
                 cats.push(r.db()?);
             }
-            
+
             // Fills in the `apps` lists left empty above: each process name is attached to
             // the category its group belongs to.
             let sql = format!(
@@ -137,7 +141,9 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
             let map_rows = stmt2
                 .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
                 .db()?;
-            let index: HashMap<String, usize> = cats.iter().enumerate()
+            let index: HashMap<String, usize> = cats
+                .iter()
+                .enumerate()
                 .map(|(i, c)| (c.id.clone(), i))
                 .collect();
             for r in map_rows {
@@ -153,11 +159,11 @@ pub async fn list(pool: &DbPool) -> Result<Vec<Category>> {
     Ok(cats)
 }
 
-/// Creates a new category: generates UUID, appends to the end, 
+/// Creates a new category: generates UUID, appends to the end,
 /// and enqueues to outbox for sync.
 pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     let id = uuid::Uuid::new_v4().to_string();
-    let name = input.name.trim().to_string();   // Trim "   " → "" to reject empty names
+    let name = input.name.trim().to_string(); // Trim "   " → "" to reject empty names
     let color = input.color.trim().to_string();
     let icon = if input.icon.trim().to_string().is_empty() {
         "Tag".to_string()
@@ -196,7 +202,7 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
             enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload)
                 .db()?;
             Ok(Category {
-                id: id,
+                id,
                 name: n,
                 color: c,
                 icon: i,
@@ -209,7 +215,7 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
     Ok(cat)
 }
 
-/// Update a category's name, color, and icon. 
+/// Update a category's name, color, and icon.
 /// Fields with None or empty strings in the patch remain unchanged.
 /// Built-in categories can also be updated (changing only appearance;
 /// id and builtin flag are not modified).
@@ -226,7 +232,7 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
                     rusqlite::params![id],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
-                .ok();  // TODO: Create a proper error if the category is not found.
+                .ok(); // TODO: Create a proper error if the category is not found.
             let Some((cur_name, cur_color, cur_icon, builtin_i, cur_sort)) = row else {
                 return Ok(());
             };
@@ -298,7 +304,7 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
                         rusqlite::params![id],
                         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                     )
-                    .ok();  // TODO: Create a proper error if the category is not found.
+                    .ok(); // TODO: Create a proper error if the category is not found.
                 let Some((name, color, icon, builtin_i, cur_sort)) = row else {
                     continue;
                 };
@@ -354,18 +360,18 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                     rusqlite::params![id],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
-                .ok();  // TODO: Create a proper error if the category is not found?
+                .ok(); // TODO: Create a proper error if the category is not found?
             let Some((name, color, icon, builtin_i, sort_order)) = row else {
                 return Ok(Ok(()));
             };
             if builtin_i != 0 {
-                return Ok(Err("内置分类不可删除"));     // TODO: i18 Error
+                return Ok(Err("内置分类不可删除")); // TODO: i18 Error
             }
             // `other` has builtin = 0, so the guard above misses it. Reports SQL
             // hardcodes `COALESCE(c.id, 'other')` — deleting the row leaves gaps
             // in the charts.
             if id == "other" {
-                return Ok(Err("「其他」是未分类时长的默认归属，不可删除"));     // TODO: i18 Error
+                return Ok(Err("「其他」是未分类时长的默认归属，不可删除")); // TODO: i18 Error
             }
 
             conn.execute(
@@ -441,10 +447,10 @@ pub async fn assign_app(pool: &DbPool, process_name: &str, category_id: &str) ->
     let p = process_name.trim().to_string();
     let c = category_id.trim().to_string();
     if p.is_empty() {
-        return Err(Error::InvalidInput("应用名不能为空"));  // TODO: i18n Error
+        return Err(Error::InvalidInput("应用名不能为空")); // TODO: i18n Error
     }
     if c.is_empty() {
-        return Err(Error::InvalidInput("分类 ID 不能为空"));  // TODO: i18n Error
+        return Err(Error::InvalidInput("分类 ID 不能为空")); // TODO: i18n Error
     }
     crate::repo::app_groups::assign_category_for_process(pool, &p, Some(c)).await
 }

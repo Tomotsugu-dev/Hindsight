@@ -9,9 +9,9 @@ use serde_json::Value;
 use super::io::{self, OutboxRow};
 use super::{format_sync_error, with_token_retry, Inner};
 use crate::error::{Error, Result};
+use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
-use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::sync::payload::{
     ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
     CategoryPayload, DeviceMetaPayload, ProcessPathPayload,

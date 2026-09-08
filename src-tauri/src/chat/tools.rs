@@ -506,7 +506,9 @@ async fn search_text(
             }
             let total: i64 = conn
                 .query_row(
-                    &format!("SELECT COUNT(*) {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE} AND {like_sql}"),
+                    &format!(
+                        "SELECT COUNT(*) {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE} AND {like_sql}"
+                    ),
                     bind.as_slice(),
                     |r| r.get(0),
                 )
