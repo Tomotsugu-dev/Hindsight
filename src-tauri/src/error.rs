@@ -6,7 +6,7 @@ use thiserror::Error;
 /// - Other 仅作真不知道怎么分类的兜底，不应是主流
 #[derive(Debug, Error)]
 pub enum Error {
-    // ───────────── 基础设施 / 透传 ─────────────
+    // ───────────── Pass-through: another crate's error, carried up as is ─────────────
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 
@@ -25,8 +25,9 @@ pub enum Error {
     #[error("capture: {0}")]
     Capture(String),
 
-    // ───────────── OAuth / 认证 ─────────────
-    /// 用户没登录 Google。push/pull 看到这条会 silently 跳过，不当错误展示。
+    // ───────────── Google sign-in (OAuth) ─────────────
+    /// The user is not signed in to Google. Push and pull skip quietly on this one
+    /// instead of surfacing it as an error.
     #[error("not signed in")]
     NotSignedIn,
 

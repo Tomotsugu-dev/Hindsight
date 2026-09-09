@@ -22,6 +22,8 @@ pub struct CategoryPayload {
     pub name: String,
     pub color: String,
     pub icon: String,
+    /// System category flag — see [`crate::repo::categories::Category`].
+    /// The wire key must stay `builtin`: older peers parse this name.
     pub builtin: bool,
     /// v16 引入；老对端推上来的没这个字段，pull 侧用 #[serde(default)] 兜底。
     #[serde(default)]

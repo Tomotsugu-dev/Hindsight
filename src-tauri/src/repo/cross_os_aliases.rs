@@ -45,7 +45,7 @@ fn aliases() -> &'static HashMap<String, String> {
         let parsed: RawAliases = match serde_json::from_str(ALIASES_JSON) {
             Ok(p) => p,
             Err(e) => {
-                log::error!("cross_os_app_aliases.json 解析失败（跳过）：{e}"); // TODO: i18n Error
+                log::error!("cross_os_app_aliases.json failed to parse (skipped): {e}");
                 return HashMap::new();
             }
         };

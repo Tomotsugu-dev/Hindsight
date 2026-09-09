@@ -475,13 +475,13 @@ pub async fn purge_with_data(
                 let path = root.join(&rel);
                 if path.exists() {
                     if let Err(e) = std::fs::remove_file(&path) {
-                        log::warn!("删除截图失败 {}: {e}", path.display()); // TODO: i18n Error
+                        log::warn!("failed to delete screenshot {}: {e}", path.display());
                     }
                 }
             }
         })
         .await
-        .map_err(|e| Error::Other(format!("截图删除任务失败: {e}")))?; // TODO: i18n Error
+        .map_err(|e| Error::Other(format!("screenshot delete task failed: {e}")))?;
     }
 
     Ok(())
@@ -512,7 +512,7 @@ pub async fn merge(pool: &DbPool, source_process_name: &str, target_group_id: &s
                 .db()?
                 .unwrap_or(false);
             if !tgt_exists {
-                return Ok(Err("目标组不存在或已被删除")); // TODO: i18n Error
+                return Ok(Err("target group does not exist or was deleted"));
             }
 
             // If the source process is already in the target group, no-op.
@@ -599,8 +599,8 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
             };
             if cur_group == p {
                 return Ok(Err(
-                    "锚点进程不能单独拆出；把其他成员拆出，或把它拖到别的组",
-                )); // TODO: i18n Error
+                    "cannot unmerge the process the group is named after; unmerge the other members, or move it into another group",
+                ));
             }
 
             let tx = conn.transaction().db()?;
@@ -724,7 +724,9 @@ pub async fn assign_category(
             .await?
             .is_some();
         if !exists {
-            return Err(Error::InvalidInput("分类不存在或已删除")); // TODO: i18n Error
+            return Err(Error::InvalidInput(
+                "category does not exist or was deleted",
+            ));
         }
     }
 
@@ -1454,6 +1456,109 @@ mod tests {
             outbox_summary(&pool).await.group_count,
             1,
             "改名应入 1 条组 outbox"
+        );
+    }
+
+    /// 测 [`unmerge`] 拒绝组名来源的那个成员：它要回的单成员组就是当前这个组，
+    /// 没有落脚点。返回 `InvalidInput`，一行不动、outbox 不增长。
+    #[tokio::test]
+    async fn unmerge_rejects_the_member_the_group_is_named_after() {
+        let pool = fresh_test_pool().await;
+        seed_vscode_group(&pool).await;
+        // seed 的组里没有和组同名的成员，补一个，它就是组名的来源
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES('vscode', 'vscode', '2026-05-15T10:00:00Z', NULL)",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let before = outbox_total(&pool).await;
+
+        let err = unmerge(&pool, "vscode").await.unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidInput(_)),
+            "组名来源的成员不能拆出，应返回 InvalidInput，实际: {err:?}"
+        );
+
+        for m in ["vscode", "Code", "Code.exe"] {
+            assert_eq!(
+                active_group_of(&pool, m).await.as_deref(),
+                Some("vscode"),
+                "拒绝后三个成员都应留在原组（尤其不能重演旧的「解散」行为）"
+            );
+        }
+        assert_eq!(outbox_total(&pool).await, before, "拒绝不该写任何 outbox");
+    }
+
+    // ───────────── ensure_group:抓屏入口 ─────────────
+
+    /// 测 [`ensure_group`]：抓屏每 tick 调一次的入口，覆盖它的四条路径。
+    /// - 陌生进程名 → 建组 + 成员，各入一条 outbox；
+    /// - 再调一次 → 快速出口，零写入；
+    /// - 成员被软删后再调 → 复活（删过的应用再被抓到会重新出现，出处就是这里）；
+    /// - 别名表命中 → 组 id 用 canonical 名，分类按内置规则填上。
+    #[tokio::test]
+    async fn ensure_group_creates_revives_and_is_idempotent() {
+        let pool = fresh_test_pool().await;
+
+        // 1) 陌生进程名（别名表与内置规则都没有）→ 新建
+        ensure_group(&pool, "Zed").await.unwrap();
+        assert_eq!(
+            group_state(&pool, "Zed").await.unwrap(),
+            ("Zed".to_string(), None, false),
+            "新建组的显示名用进程名本身，无内置分类命中时分类为空"
+        );
+        assert_eq!(active_group_of(&pool, "Zed").await.as_deref(), Some("Zed"));
+        let ob = outbox_summary(&pool).await;
+        assert_eq!(ob.group_count, 1, "建组应入 1 条组 outbox");
+        assert_eq!(ob.member_count, 1, "建成员应入 1 条成员 outbox");
+
+        // 2) 幂等：已有活着的成员行 → 快速出口，不写库不入队
+        let before = outbox_total(&pool).await;
+        ensure_group(&pool, "Zed").await.unwrap();
+        assert_eq!(
+            outbox_total(&pool).await,
+            before,
+            "已存在时应直接返回，不产生新 outbox"
+        );
+
+        // 3) 删过之后再被抓到 → 复活
+        purge_with_members(&pool, "Zed").await.unwrap();
+        assert!(group_deleted(&pool, "Zed").await && member_deleted(&pool, "Zed").await);
+        let before = outbox_total(&pool).await;
+        ensure_group(&pool, "Zed").await.unwrap();
+        assert!(!group_deleted(&pool, "Zed").await, "组应被复活");
+        assert_eq!(
+            active_group_of(&pool, "Zed").await.as_deref(),
+            Some("Zed"),
+            "成员行应被复活并指回自己的组"
+        );
+        assert_eq!(
+            outbox_total(&pool).await - before,
+            2,
+            "复活应入组 + 成员各一条 outbox"
+        );
+
+        // 4) 别名表命中 → 组 id 是 canonical 名，不是进程名本身；
+        //    分类按 canonical 名查内置规则
+        ensure_group(&pool, "chrome.exe").await.unwrap();
+        assert_eq!(
+            active_group_of(&pool, "chrome.exe").await.as_deref(),
+            Some("Google Chrome"),
+            "别名应直接进 canonical 组"
+        );
+        let (name, cat, _) = group_state(&pool, "Google Chrome").await.unwrap();
+        assert_eq!(name, "Google Chrome", "组的显示名用 canonical 名");
+        assert_eq!(
+            cat.as_deref(),
+            Some("browse"),
+            "内置分类按 canonical 名查，别名也能拿到"
         );
     }
 

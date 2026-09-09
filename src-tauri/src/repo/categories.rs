@@ -29,7 +29,10 @@ pub struct Category {
     pub color: String,
     /// Icon ID (used by the frontend to map to lucide-react icons)
     pub icon: String,
-    /// Whether this is a built-in category (cannot be deleted)
+    /// System category: the row belongs to the app, not the user — it cannot be
+    /// deleted, dragged, or filed under a super-category, and the UI draws it in
+    /// its own block. `hidden` is the only one; the seeded defaults (`code`,
+    /// `browse`, …) are ordinary user categories.
     pub builtin: bool,
     /// The list of process names currently classified under this category
     ///  (sorted alphabetically)
@@ -171,10 +174,10 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
         input.icon.trim().to_string()
     };
     if name.is_empty() {
-        return Err(Error::InvalidInput("分类名不能为空"));
+        return Err(Error::InvalidInput("category name must not be empty"));
     }
     if color.is_empty() {
-        return Err(Error::InvalidInput("颜色不能为空"));
+        return Err(Error::InvalidInput("color must not be empty"));
     }
     let n = name.clone();
     let c = color.clone();
@@ -338,8 +341,12 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
 /// Soft-deletes a category: the row stays and gets a `deleted_at` tombstone,
 /// so the deletion can be synced to other devices.
 ///
-/// Two kinds are refused with `Error::InvalidInput`: built-in categories, and
-/// `other` — the implicit bucket that unclassified time falls into.
+/// Exactly two categories are refused with `Error::InvalidInput`:
+///   - `hidden` — the only row carrying the `builtin` flag (see [`Category`]);
+///   - `other` — flag is 0, refused by id instead: reports bucket unclassified
+///     time into it, and the SQL hardcodes the string.
+///
+/// Every other seeded default (`code`, `browse`, …) is deletable.
 ///
 /// Afterwards [`cascade_category_deletion`] nulls `app_groups.category_id` on
 /// every group that pointed at it, so nothing is left referencing a category
@@ -365,13 +372,15 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 return Ok(Ok(()));
             };
             if builtin_i != 0 {
-                return Ok(Err("内置分类不可删除")); // TODO: i18 Error
+                return Ok(Err("built-in categories cannot be deleted"));
             }
             // `other` has builtin = 0, so the guard above misses it. Reports SQL
             // hardcodes `COALESCE(c.id, 'other')` — deleting the row leaves gaps
             // in the charts.
             if id == "other" {
-                return Ok(Err("「其他」是未分类时长的默认归属，不可删除")); // TODO: i18 Error
+                return Ok(Err(
+                    "'other' is where unclassified processes land and cannot be deleted",
+                ));
             }
 
             conn.execute(
@@ -447,10 +456,10 @@ pub async fn assign_app(pool: &DbPool, process_name: &str, category_id: &str) ->
     let p = process_name.trim().to_string();
     let c = category_id.trim().to_string();
     if p.is_empty() {
-        return Err(Error::InvalidInput("应用名不能为空")); // TODO: i18n Error
+        return Err(Error::InvalidInput("app name must not be empty"));
     }
     if c.is_empty() {
-        return Err(Error::InvalidInput("分类 ID 不能为空")); // TODO: i18n Error
+        return Err(Error::InvalidInput("category id must not be empty"));
     }
     crate::repo::app_groups::assign_category_for_process(pool, &p, Some(c)).await
 }
