@@ -93,10 +93,10 @@ pub async fn create(pool: &DbPool, input: SuperCategoryInput) -> Result<SuperCat
     let color = input.color.trim().to_string();
     let icon = input.icon.trim().to_string();
     if name.is_empty() {
-        return Err(Error::InvalidInput("大类名不能为空"));
+        return Err(Error::InvalidInput("super-category name must not be empty"));
     }
     if color.is_empty() {
-        return Err(Error::InvalidInput("颜色不能为空"));
+        return Err(Error::InvalidInput("color must not be empty"));
     }
     let final_icon = if icon.is_empty() {
         "Folder".to_string()

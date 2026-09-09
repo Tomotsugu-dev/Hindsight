@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "comment": "繁體中文系統（macOS / Windows）下的進程顯示名。執行時與其他 builtin_categories.*.json 合併成同一張查表（小寫完全相等）。只列 .en.json / .zh.json 沒有的繁體顯示名。",
+  "rules": [
+    {
+      "category": "browse",
+      "processNames": []
+    },
+    {
+      "category": "code",
+      "processNames": [
+        "記事本",
+        "終端機",
+        "命令提示字元"
+      ]
+    },
+    {
+      "category": "talk",
+      "processNames": [
+        "企業微信"
+      ]
+    },
+    {
+      "category": "design",
+      "processNames": []
+    },
+    {
+      "category": "fun",
+      "processNames": [
+        "音樂",
+        "崩壞3rd",
+        "崩壞：星穹鐵道",
+        "絕區零"
+      ]
+    },
+    {
+      "category": "other",
+      "processNames": [
+        "檔案總管",
+        "工作管理員",
+        "設定",
+        "系統設定",
+        "系統資訊",
+        "截圖",
+        "預覽程式",
+        "檔案",
+        "相片"
+      ]
+    }
+  ]
+}

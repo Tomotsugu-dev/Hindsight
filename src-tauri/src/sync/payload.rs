@@ -22,6 +22,8 @@ pub struct CategoryPayload {
     pub name: String,
     pub color: String,
     pub icon: String,
+    /// System category flag — see [`crate::repo::categories::Category`].
+    /// The wire key must stay `builtin`: older peers parse this name.
     pub builtin: bool,
     /// v16 引入；老对端推上来的没这个字段，pull 侧用 #[serde(default)] 兜底。
     #[serde(default)]
@@ -94,6 +96,11 @@ pub struct ActivityPayload {
     pub local_hour: i64,
     pub process_name: String,
     pub window_title: Option<String>,
+    /// Deprecated: always `'other'` — the real category lives on
+    /// `app_groups.category_id`. Kept because older versions require this field
+    /// when parsing the ndjson; dropping it would silently stop their activity
+    /// sync — every line would fail to parse, get skipped, and their activity
+    /// data would quietly stop updating with no error shown. Do not read it.
     pub category_id: String,
     pub updated_at: String,
     /// 浏览器会话的网站域名（v0.8.20+）。老版本写的 ndjson 没这个字段 → None；

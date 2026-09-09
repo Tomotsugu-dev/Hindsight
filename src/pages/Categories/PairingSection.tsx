@@ -344,6 +344,10 @@ export function PairingSection({
                   {colMembers.map((member) => {
                     const isDraggingThis =
                       drag !== null && drag.processName === member.processName;
+                    // 组 id 就是这个成员的进程名时，「移出」没有落脚点：它要回的
+                    // 单成员组就是当前这个组。后端会拒绝，所以按钮不渲染；
+                    // 想把它移走请拖进别的组。
+                    const isGroupNamesake = member.processName === group.id;
                     return (
                       // 拖拽天然没有键盘等效（要在 dev 网格里拖到另一格），保留鼠标交互
                       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -365,7 +369,7 @@ export function PairingSection({
                         <span className={styles.chipMeta}>
                           {fmtDuration(member.recentSecs)}
                         </span>
-                        {isPaired && !isDraggingThis && (
+                        {isPaired && !isDraggingThis && !isGroupNamesake && (
                           <button
                             type="button"
                             className={styles.chipUnmerge}

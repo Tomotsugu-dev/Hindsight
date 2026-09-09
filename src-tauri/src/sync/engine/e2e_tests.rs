@@ -766,11 +766,13 @@ async fn push_transient_failure_keeps_outbox_then_recovers() {
     assert_eq!(row.duration_secs, 30);
 }
 
-/// 任务 3：7 类 metadata entity 的双设备 roundtrip。
-/// A 端各表插一行 + 手工入 outbox（category / app_category / process_path /
-/// device / app_icon / app_group / app_group_member 全覆盖）→ A sync 推 7 个
-/// 文件 → B sync 拉回 → B 各表字段逐一与 A 写入值相等。
-/// 一条测试同时吃掉 push 构建侧 7 个 build_* 与 pull 合并侧对应 merge_*。
+/// 任务 3：metadata entity 的双设备 roundtrip。
+/// A 端各表插一行 + 手工入 outbox（category / process_path / device / app_icon /
+/// app_group / app_group_member 六类）→ A sync 推文件 → B sync 拉回 → B 各表
+/// 字段逐一与 A 写入值相等。
+/// 第七个文件 app_categories 不是种子来的：本机不再维护那张表，push 在组或成员
+/// 变动时从「成员 ⋈ 组」现算一份给旧版本对端，这里连它的派生结果一并核对。
+/// 一条测试同时吃掉 push 构建侧的 build_* 与 pull 合并侧对应的 merge_*。
 // env 锁横跨整个测试(B merge app_icon 会写 icon 文件 cache,路径读
 // HINDSIGHT_DATA_DIR);#[tokio::test] 是单线程 runtime,持锁跨 await 不自死锁。
 #[allow(clippy::await_holding_lock)]
@@ -785,7 +787,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
 
     // 各表的期望值:时间戳独立、互不相同,B 端逐字段核对
     const T_CAT: &str = "2026-07-01T00:00:01Z";
-    const T_APPCAT: &str = "2026-07-01T00:00:02Z";
     const T_PATH: &str = "2026-07-01T00:00:03Z";
     const T_SEEN: &str = "2026-06-30T09:00:00Z";
     const T_DEV_SEEN: &str = "2026-07-01T00:00:04Z";
@@ -807,12 +808,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                 "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
                  VALUES('cat-e2e', 'E2E 分类', '#abcdef', 'Star', 0, 7, ?1, NULL)",
                 rusqlite::params![T_CAT],
-            )
-            .db()?;
-            conn.execute(
-                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                 VALUES('Proc-E2E', 'cat-e2e', ?1, NULL)",
-                rusqlite::params![T_APPCAT],
             )
             .db()?;
             conn.execute(
@@ -855,10 +850,10 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         .unwrap();
 
     // 分两轮推:被 FK 引用的表(categories / app_groups)先落 Drive,引用方
-    // (app_categories / app_group_members)后落。B 按 modifiedTime 升序合并,
-    // 引用目标必然先到位。若同轮乱序推(push 的 HashMap 随机序),引用方文件
-    // 可能先被合并,行级 FOREIGN KEY 失败仅 warn 且游标照常越过 —— 该缺陷已
-    // 记录为产品 bug,这里不让测试依赖随机顺序。
+    // (app_group_members)后落。B 按 modifiedTime 升序合并,引用目标必然先到位。
+    // 若同轮乱序推(push 的 HashMap 随机序),引用方文件可能先被合并,行级
+    // FOREIGN KEY 失败仅 warn 且游标照常越过 —— 该缺陷已记录为产品 bug,
+    // 这里不让测试依赖随机顺序。
     for (entity, pk) in [
         ("category", "cat-e2e"),
         ("process_path", "Proc-E2E"),
@@ -869,10 +864,7 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         enqueue_entity(&a, entity, pk).await;
     }
     a.engine.sync_now().await.expect("A 第一轮 sync 应成功");
-    for (entity, pk) in [
-        ("app_category", "Proc-E2E"),
-        ("app_group_member", "Proc-E2E"),
-    ] {
+    for (entity, pk) in [("app_group_member", "Proc-E2E")] {
         enqueue_entity(&a, entity, pk).await;
     }
     a.engine.sync_now().await.expect("A 第二轮 sync 应成功");
@@ -880,7 +872,7 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
     assert_eq!(
         drive.list_appdata_files("").await.unwrap().len(),
         7,
-        "7 类 entity 应各产出一个 Drive 文件"
+        "6 类 entity 各一个文件,外加派生的 app_categories 文件(给旧版本对端)"
     );
 
     b.engine.sync_now().await.expect("B sync 应成功");
@@ -898,13 +890,13 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         Option<String>,
     );
     #[allow(clippy::type_complexity)]
-    let (cat, ac, pp, dev, icon, grp, member): (
+    let (cat, pp, dev, icon, grp, member, ac): (
         CatRow,
-        (String, String, Option<String>),
         (String, String, String),
         DevRow,
         (Vec<u8>, String, Option<String>),
         (String, Option<String>, String, Option<String>),
+        (String, String, Option<String>),
         (String, String, Option<String>),
     ) = b
         .pool
@@ -926,14 +918,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                             r.get(6)?,
                         ))
                     },
-                )
-                .db()?;
-            let ac = conn
-                .query_row(
-                    "SELECT category_id, updated_at, deleted_at
-                     FROM app_categories WHERE process_name = 'Proc-E2E'",
-                    [],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .db()?;
             let pp = conn
@@ -987,7 +971,15 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .db()?;
-            Ok((cat, ac, pp, dev, icon, grp, member))
+            let ac = conn
+                .query_row(
+                    "SELECT category_id, updated_at, deleted_at
+                     FROM app_categories WHERE process_name = 'Proc-E2E'",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .db()?;
+            Ok((cat, pp, dev, icon, grp, member, ac))
         })
         .await
         .unwrap();
@@ -1004,11 +996,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
             None
         ),
         "categories 行应逐字段等于 A 写入值"
-    );
-    assert_eq!(
-        ac,
-        ("cat-e2e".into(), T_APPCAT.into(), None),
-        "app_categories 行应逐字段一致(pass 1 先合并 meta 解锁同 OS 过滤)"
     );
     assert_eq!(
         pp,
@@ -1047,6 +1034,13 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         member,
         ("grp-e2e".into(), T_MEMBER.into(), None),
         "app_group_members 行应逐字段一致"
+    );
+    // 派生行的三个字段各对应一条派生规则:组没有分类 → 落到 'other' 且打墓碑;
+    // 时间戳取成员与组里较新的那个(T_MEMBER > T_GRP)。
+    assert_eq!(
+        ac,
+        ("other".into(), T_MEMBER.into(), Some(T_MEMBER.into())),
+        "app_categories 是派生出来的:组无分类时应是带墓碑的 'other' 行"
     );
 
     // pull 不回灌:B 侧合并远端数据不应产生任何 outbox 行(否则会推回死循环)

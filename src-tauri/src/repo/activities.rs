@@ -40,6 +40,10 @@ pub async fn insert_new(
     let id = pool
         .0
         .call(move |conn| {
+            // `category_id` is hardcoded `'other'` and has been since the first
+            // release — the real category lives on `app_groups.category_id`. The
+            // column survives only because the sync payload still carries it for
+            // older versions. Do not write a real id here.
             conn.execute(
                 "INSERT INTO activities(
                     started_at, ended_at, duration_secs,

@@ -16,23 +16,6 @@ pub async fn list_app_groups(pool: State<'_, DbPool>) -> Result<Vec<AppGroup>, S
     app_groups::list_groups(&pool).await.map_err(Into::into)
 }
 
-/// 删除应用组。组内 process 退回各自单成员组（不丢数据）。
-#[tauri::command]
-pub async fn delete_app_group(pool: State<'_, DbPool>, group_id: String) -> Result<(), String> {
-    app_groups::delete(&pool, &group_id)
-        .await
-        .map_err(Into::into)
-}
-
-/// 强力删除应用组：组 + 所有 member 一起软删。给 UI 上「行视觉为空」（成员存在但
-/// 全部近 7 天无活动）场景用。详见 [`app_groups::purge_with_members`]。
-#[tauri::command]
-pub async fn purge_app_group(pool: State<'_, DbPool>, group_id: String) -> Result<(), String> {
-    app_groups::purge_with_members(&pool, &group_id)
-        .await
-        .map_err(Into::into)
-}
-
 /// **真删**一个应用的数据:活动记录、截图文件、OCR 文字索引一并清掉,最后软删组。
 /// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_data`] 的文档。
 ///

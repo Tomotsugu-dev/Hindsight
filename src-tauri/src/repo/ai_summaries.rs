@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::repo::reports::DeviceFilter;
+use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 单段总结的一行（DB <-> 前端共用）。
@@ -377,13 +378,7 @@ pub async fn list_segment_top_apps(
                 "SELECT COALESCE(g.display_name, a.process_name) AS name,
                         SUM(a.duration_secs) AS secs,
                         COALESCE(c.id, 'other') AS cat
-                   FROM activities a
-              LEFT JOIN app_group_members gm
-                     ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-              LEFT JOIN app_groups g
-                     ON g.id = gm.group_id AND g.deleted_at IS NULL
-              LEFT JOIN categories c
-                     ON c.id = g.category_id AND c.deleted_at IS NULL
+                   {FROM_ACTIVITY_GROUP_CATEGORY}
                   WHERE a.local_date = ?
                     AND a.local_hour >= ?
                     AND a.local_hour < ?
@@ -462,13 +457,7 @@ pub async fn list_range_top_apps(
                 "SELECT COALESCE(g.display_name, a.process_name) AS name,
                         SUM(a.duration_secs) AS secs,
                         COALESCE(c.id, 'other') AS cat
-                   FROM activities a
-              LEFT JOIN app_group_members gm
-                     ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-              LEFT JOIN app_groups g
-                     ON g.id = gm.group_id AND g.deleted_at IS NULL
-              LEFT JOIN categories c
-                     ON c.id = g.category_id AND c.deleted_at IS NULL
+                   {FROM_ACTIVITY_GROUP_CATEGORY}
                   WHERE a.local_date >= ?
                     AND a.local_date <= ?
                     AND g.category_id IS NOT 'hidden'

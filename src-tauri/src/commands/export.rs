@@ -15,6 +15,7 @@ use rust_xlsxwriter::{
 use serde::Deserialize;
 use tauri::State;
 
+use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::{DbPool, SqliteResultExt};
 
 /// 一个单元格。`t` 区分类型:
@@ -134,13 +135,9 @@ pub(crate) fn fetch_raw_rows(
                 a.duration_secs,
                 COALESCE(g.display_name, a.process_name)         AS app,
                 COALESCE(a.window_title, '')                     AS title,
-                COALESCE(g.category_id, a.category_id, 'other')  AS cat,
+                COALESCE(g.category_id, 'other')                 AS cat,
                 COALESCE(d.display_name, a.device_id)            AS device
-         FROM activities a
-         LEFT JOIN app_group_members gm
-           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-         LEFT JOIN app_groups g
-           ON g.id = gm.group_id AND g.deleted_at IS NULL
+         {FROM_ACTIVITY_GROUP}
          LEFT JOIN devices d
            ON d.device_id = a.device_id
          WHERE a.local_date >= ?1 AND a.local_date <= ?2 {device_clause}
