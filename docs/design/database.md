@@ -47,7 +47,7 @@ User-visible categories ("Work", "Browsing", …). Bounded by how many the user 
 | id | TEXT | Primary key | Short word for built-ins (`work`, `code`, `browse`, `other`, `hidden`), UUID for user-created ones |
 | name | TEXT | NOT NULL | Display name |
 | color | TEXT | NOT NULL | Hex color `#rrggbb` |
-| builtin | INTEGER | NOT NULL, DEFAULT 0 | 1 for built-in categories, which cannot be deleted. `other` is refused too even though it is seeded with 0: reports bucket unclassified time into it |
+| builtin | INTEGER | NOT NULL, DEFAULT 0 | System category: belongs to the app, so it cannot be deleted, dragged, or filed under a super-category. `hidden` is the only one; the seeded defaults are ordinary user categories. `other` is undeletable too, but by an id check rather than this flag |
 | icon | TEXT | NOT NULL, DEFAULT `'Tag'` | Icon id, mapped to a lucide-react icon by the frontend |
 | sort_order | INTEGER | NOT NULL, DEFAULT 0 | Display order; rewritten when the user drags rows |
 | updated_at | TEXT | NOT NULL, DEFAULT epoch | Last-write-wins timestamp, UTC |
@@ -87,7 +87,7 @@ Indexes: `(group_id)`.
 
 ## app_categories (Deprecated)
 
-**Legacy mirror** of `process_name → category_id`, from before groups existed. Reads stopped using it in **v0.7.0**, when `categories::list` and `list_unclassified` switched to the group chain. Local writes stop in **<next release after v0.8.22>** (branch `fix/categories-mirror-retire`; replace with the version number when it ships): sync push now derives the equivalent file from `app_group_members ⋈ app_groups`, and pull still stores what older peers send so the `app_category` sync entity stays compatible. Nothing reads it.
+**Legacy mirror** of `process_name → category_id`, from before groups existed. Reads stopped using it in **v0.7.0**, when `categories::list` and `list_unclassified` switched to the group chain. Local writes stop in **v0.8.23**: sync push now derives the equivalent file from `app_group_members ⋈ app_groups`, and pull still stores what older peers send so the `app_category` sync entity stays compatible. Nothing reads it.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
