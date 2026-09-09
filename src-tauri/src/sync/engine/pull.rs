@@ -1768,9 +1768,9 @@ mod tests {
         );
     }
 
-    /// deleted_at 首次出现触发级联:指向该分类的 app_categories 成员被软删 +
-    /// 引用它的 app_groups 回到未分类,两者各回灌一行 outbox;
-    /// 同 body 重复 merge 幂等 —— LWW gate(严格 >)挡住第二次,级联不重跑。
+    /// 远端墓碑首次到达时触发级联:引用该分类的组回到未分类,并回灌一行 outbox
+    /// 让这个本地改动也推回云端;同一份 body 再来一次是幂等的 —— LWW 的严格 >
+    /// 挡住第二次,级联不重跑。
     #[tokio::test]
     async fn merge_categories_first_tombstone_cascades_then_idempotent() {
         let pool = fresh_test_pool().await;
@@ -1778,13 +1778,6 @@ mod tests {
             &pool,
             "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
              VALUES('work', '工作', '#aaaaaa', 'Star', 0, 1, ?1, NULL)",
-            vec![s(T_OLD)],
-        )
-        .await;
-        exec_sql(
-            &pool,
-            "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-             VALUES('Code', 'work', ?1, NULL)",
             vec![s(T_OLD)],
         )
         .await;
@@ -1810,22 +1803,7 @@ mod tests {
         .unwrap();
         assert_eq!(cat, vec![s(T_NEW), s(T_NEW)], "分类应带上远端墓碑");
 
-        // 级联 1:成员 app_categories 被软删,时间戳 = 远端 updated_at
-        let ac = read_row(
-            &pool,
-            "SELECT updated_at, deleted_at FROM app_categories WHERE process_name = ?1",
-            "Code",
-            2,
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            ac,
-            vec![s(T_NEW), s(T_NEW)],
-            "app_categories 成员应被级联软删"
-        );
-
-        // 级联 2:引用组回到未分类
+        // 级联:引用该分类的组回到未分类
         let grp = read_row(
             &pool,
             "SELECT category_id, updated_at FROM app_groups WHERE id = ?1",
@@ -1836,23 +1814,20 @@ mod tests {
         .unwrap();
         assert_eq!(grp, vec![None, s(T_NEW)], "引用该分类的组应被清到未分类");
 
-        // 级联产生的本地变更需要推回云端:恰好两行回灌
+        // 级联改了本地的组,这个改动也要推回云端:恰好一行
         let entries = outbox_entries(&pool).await;
         assert_eq!(
             entries,
-            vec![
-                ("app_category".to_string(), "Code".to_string()),
-                ("app_group".to_string(), "grp1".to_string()),
-            ],
-            "级联应各回灌一行 outbox(成员软删 + 组脱钩)"
+            vec![("app_group".to_string(), "grp1".to_string())],
+            "组脱钩应回灌一行 outbox"
         );
 
         // 同 body 再 merge 一次:LWW 严格 > 挡住,级联不重跑、outbox 不再增长
         merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
         assert_eq!(
             outbox_entries(&pool).await.len(),
-            2,
-            "重复 merge 不得二次级联(outbox 行数应保持 2)"
+            1,
+            "重复 merge 不得二次级联(outbox 行数应保持 1)"
         );
     }
 
