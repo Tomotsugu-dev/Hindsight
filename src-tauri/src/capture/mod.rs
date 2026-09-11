@@ -2,10 +2,10 @@ pub mod browser_url;
 #[cfg(target_os = "macos")]
 pub mod bundle;
 pub mod ignore;
-pub mod privacy;
 pub mod screenshot;
 #[cfg(target_os = "macos")]
 pub mod screenshot_macos;
+pub mod screenshot_policy;
 pub mod service;
 pub mod window;
 

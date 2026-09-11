@@ -1,44 +1,40 @@
-//! 忽略规则：决定一条活动行是否**计入统计**。
+//! Ignore rules decide whether an activity counts towards the stats. A match
+//! sets `excluded = 1`, and reports, exports, AI summaries and chat queries all
+//! skip the row — but it is still stored, still screenshotted, and still
+//! uploaded.
 //!
-//! 与 [`super::privacy`] 的区别（两者正交，容易混）：
-//! - privacy 管"要不要截图"——命中则不存图，但活动行照常入库、照常计时；
-//! - 本模块管"算不算时长"——命中则活动行照常入库、照常截图，但 `excluded = 1`，
-//!   所有报表 / 导出 / AI 总结 / chat 查询都跳过它。
+//! Easy to confuse with [`super::screenshot_policy`]; the two are orthogonal.
+//! That one decides whether to keep a screenshot, and time is counted either way.
 //!
-//! 语义等同内建 `hidden` 分类，只是粒度细到**窗口标题**：`hidden` 归的是整个应用，
-//! 这里能只排除某个应用下的某类窗口（典型场景：终端里挂机跑下载，终端本身要留）。
-//!
-//! 可逆：规则删掉后跑一次 [`crate::repo::activities::reapply_ignore_rules`]
-//! 重算全表，历史数据重新计入。
+//! Reversible: delete the rule and run
+//! [`crate::repo::activities::reapply_ignore_rules`] to recompute the flag over
+//! the whole table, and the history counts again.
 
 use serde::{Deserialize, Serialize};
 
-/// 一条忽略规则 = 进程名（精确）+ 窗口标题关键词（子串，可选）。
+/// One ignore rule: a process name (required) plus an optional window-title
+/// keyword. Matched activities are still recorded and still get a screenshot;
+/// only stats, exports and AI summaries skip them.
 ///
-/// 为什么必须带进程名、不允许"纯标题关键词"：标题关键词单独生效的话，
-/// 用户填一个 `Download` 就会把所有应用里带这个词的窗口一起吞掉，
-/// 而被吞掉的时长不报错、不提示，只是统计对不上——静默丢数据是这类
-/// 功能最容易出的事故。
+/// A bare keyword is not allowed: "Download" on its own would swallow matching
+/// windows across every app, with no error and no hint.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct IgnoreRule {
-    /// 进程名。精确匹配，忽略大小写、忽略首尾空白。
+    /// Process name. Exact match, case-insensitive, trimmed.
     pub process_name: String,
-    /// 窗口标题关键词。子串匹配，忽略大小写。
+    /// Window-title keyword: the title must contain it, case-insensitive.
+    /// `None` excludes the whole process.
     ///
-    /// `None` = 整个进程都不计入统计（即 RemoveAppDialog 注释里提到、但一直
-    /// 没实现的「不再记录」的统计版）。
-    ///
-    /// 注意 `Some("")` / `Some("   ")` **不等于** `None`：全空白关键词一律不命中。
-    /// 因为 `contains("")` 恒为 true，把空串当"匹配一切"会让一次 UI 手滑
-    /// 静默排除整个应用；想排除整个应用必须显式传 `None`。
+    /// A blank keyword never matches. Every string contains the empty string,
+    /// so matching literally would exclude the whole app the moment the UI
+    /// sends `Some("")` for an input box the user left empty.
     #[serde(default)]
     pub title_keyword: Option<String>,
 }
 
-/// 当前窗口是否命中任一规则 → 该活动行不计入统计。
-///
-/// 空列表 = 不排除任何东西。
+/// Whether the current window matches any rule, i.e. whether this activity is
+/// left out of the stats. An empty rule list excludes nothing.
 pub fn is_excluded(app_name: &str, title: &str, rules: &[IgnoreRule]) -> bool {
     if rules.is_empty() {
         return false;
@@ -51,16 +47,16 @@ pub fn is_excluded(app_name: &str, title: &str, rules: &[IgnoreRule]) -> bool {
 
     rules.iter().any(|rule| {
         let want = rule.process_name.trim().to_lowercase();
-        // 空进程名的规则视为无效：否则它会匹配所有窗口。
+        // A rule with no process name is invalid: it would match every window.
         if want.is_empty() || want != app {
             return false;
         }
         match rule.title_keyword.as_deref() {
-            // 无标题条件 = 整个进程
+            // No title condition: the whole process.
             None => true,
             Some(kw) => {
                 let kw = kw.trim().to_lowercase();
-                // 全空白关键词不命中（见字段文档）
+                // A blank keyword never matches (see the field doc).
                 !kw.is_empty() && title_lower.contains(&kw)
             }
         }

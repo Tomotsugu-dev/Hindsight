@@ -1,34 +1,23 @@
-//! 隐私过滤：决定本次焦点切换是否要保存截图。
+//! Screenshot policy: decides whether this focus switch gets a screenshot saved.
+//! Backend of the "Privacy" section in settings.
 //!
-//! 命中即跳过截图，活动行 / 应用名 / 时长照常记录。
-//!
-//! 两类关键词：
-//! - **URL 关键词**：浏览器地址栏 URL 子串忽略大小写匹配。url 为 None 时这一路不参与判断
-//! - **应用关键词**：app_name 或窗口标题 子串忽略大小写匹配
-//!
-//! 任意一路命中即跳过。两组列表都为空 = 不过滤。
+//! A match only skips the screenshot — the activity row is still stored, still
+//! timed, and still uploaded. Whether it counts towards the stats is
+//! [`super::ignore`]'s job; the two are orthogonal.
 
-/// 任意关键词命中（子串忽略大小写）即返回 true。
+/// Whether to skip this screenshot: the URL matches `url_keywords`, or the app
+/// name or window title matches `window_keywords`. Substring, case-insensitive;
+/// an empty list or a missing URL simply never matches.
 pub fn should_skip_screenshot(
     app_name: &str,
     title: &str,
     url: Option<&str>,
     url_keywords: &[String],
-    app_keywords: &[String],
+    window_keywords: &[String],
 ) -> bool {
-    if !url_keywords.is_empty() {
-        if let Some(u) = url {
-            if matches_any(u, url_keywords) {
-                return true;
-            }
-        }
-    }
-    if !app_keywords.is_empty()
-        && (matches_any(app_name, app_keywords) || matches_any(title, app_keywords))
-    {
-        return true;
-    }
-    false
+    url.is_some_and(|u| matches_any(u, url_keywords))
+        || matches_any(app_name, window_keywords)
+        || matches_any(title, window_keywords)
 }
 
 pub(crate) fn matches_any(haystack: &str, keywords: &[String]) -> bool {

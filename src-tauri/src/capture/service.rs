@@ -6,7 +6,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::capture::{browser_url, ignore, privacy, screenshot, window};
+use crate::capture::{browser_url, ignore, screenshot, screenshot_policy, window};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
@@ -795,7 +795,7 @@ async fn should_skip_for_privacy(
     if is_browser && url.is_none() && !url_kw.is_empty() {
         return true;
     }
-    privacy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
+    screenshot_policy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
 }
 
 /// 截图后的隐私复核：按"现在"的窗口标题（浏览器再抓一次 URL）重跑同一套隐私规则。
