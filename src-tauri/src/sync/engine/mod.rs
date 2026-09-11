@@ -35,9 +35,10 @@ pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 /// 然后加上稳定前缀给前端识别。原文 e.to_string() 拼在前缀后面，UI 显示时去前缀。
 pub(super) fn format_sync_error(e: &Error) -> String {
     let prefix = match e {
-        // refresh_token 真的失效（用户在 myaccount.google.com 撤销 / token 过期 6 个月）
+        // 400 and 401 are Google saying it no longer accepts this refresh token:
+        // the user revoked the grant, or the token expired.
         Error::OAuthHttp {
-            endpoint: "refresh",
+            operation: "refresh",
             status,
             ..
         } if *status == 400 || *status == 401 => ERR_PREFIX_CRED_EXPIRED,

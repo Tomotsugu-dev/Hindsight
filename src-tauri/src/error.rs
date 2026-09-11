@@ -35,10 +35,15 @@ pub enum Error {
     #[error("oauth not configured: {0}")]
     OAuthNotConfigured(String),
 
-    /// OAuth HTTP 端点返回非 2xx（token 申请 / 续期）
-    #[error("oauth {endpoint} returned {status}: {body}")]
+    /// An OAuth call came back non-2xx: either the first sign-in or a renewal.
+    ///
+    /// `operation` is written by the caller, not read from the response — both
+    /// post to the same URL, so the reply cannot say which one failed, and the
+    /// two need different handling.
+    #[error("oauth {operation} returned {status}: {body}")]
     OAuthHttp {
-        endpoint: &'static str, // "token" / "refresh"
+        /// "token" for the first sign-in, "refresh" for a renewal.
+        operation: &'static str,
         status: u16,
         body: String,
     },
@@ -293,11 +298,11 @@ mod tests {
     }
 
     /// OAuthHttp：结构体变体三个字段必须全部出现在文案里 ——
-    /// 排障时 endpoint/status/body 缺一个都定位不了问题。
+    /// 排障时 operation/status/body 缺一个都定位不了问题。
     #[test]
     fn oauth_http_display_carries_all_fields() {
         let e = Error::OAuthHttp {
-            endpoint: "refresh",
+            operation: "refresh",
             status: 400,
             body: "invalid_grant".into(),
         };
