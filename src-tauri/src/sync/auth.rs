@@ -37,6 +37,7 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use base64::{engine::general_purpose, Engine as _};
 use rand::distributions::Alphanumeric;
 use rand::{Rng, RngCore};
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -291,14 +292,14 @@ async fn read_auth_state(pool: &DbPool) -> Result<(String, Vec<u8>, String, Stri
     )> = pool
         .0
         .call(|conn| {
-            Ok(conn
-                .query_row(
-                    "SELECT uid, refresh_token_enc, access_token, expires_at
-                     FROM auth_state WHERE id = 1",
-                    [],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-                )
-                .ok())
+            conn.query_row(
+                "SELECT uid, refresh_token_enc, access_token, expires_at
+                    FROM auth_state WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()
+            .db()
         })
         .await?;
 
