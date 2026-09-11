@@ -24,7 +24,7 @@
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::OptionalExtension;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
@@ -903,38 +903,6 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
             Ok(())
         })
         .await?;
-    Ok(())
-}
-
-/// Writes one `app_categories` row (`cat = None` soft-deletes) without touching
-/// the outbox. Only the sync pull path still calls this: the local mirror is no
-/// longer maintained, but rows echoed by older peers are still stored here.
-pub(crate) fn apply_app_category_change(
-    conn: &Connection,
-    process_name: &str,
-    category_id: Option<&str>,
-    now: &str,
-) -> rusqlite::Result<()> {
-    match category_id {
-        Some(cat) => {
-            conn.execute(
-                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, NULL)
-                 ON CONFLICT(process_name) DO UPDATE SET
-                   category_id = excluded.category_id,
-                   updated_at  = excluded.updated_at,
-                   deleted_at  = NULL",
-                rusqlite::params![process_name, cat, now],
-            )?;
-        }
-        None => {
-            conn.execute(
-                "UPDATE app_categories SET deleted_at = ?, updated_at = ?
-                 WHERE process_name = ?",
-                rusqlite::params![now, now, process_name],
-            )?;
-        }
-    }
     Ok(())
 }
 

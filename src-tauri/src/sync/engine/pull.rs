@@ -13,8 +13,8 @@ use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
-    ActivityPayload, AppCategoryPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload,
-    CategoryPayload, DeviceMetaPayload, ProcessPathPayload, TombstonePayload,
+    ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
+    DeviceMetaPayload, ProcessPathPayload, TombstonePayload,
 };
 
 /// 解析一个 JSON 数组到 `Vec<T>`，但保留**每行容错**：单行解析失败仅打 warn 跳过，
@@ -57,9 +57,6 @@ enum ParsedFile {
         local_date: String,
     },
     Categories {
-        device_id: String,
-    },
-    AppCategories {
         device_id: String,
     },
     ProcessPaths {
@@ -109,9 +106,6 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
             local_date: day.to_string(),
         }),
         ["device", uuid, "categories", "json"] => Some(ParsedFile::Categories {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "app_categories", "json"] => Some(ParsedFile::AppCategories {
             device_id: uuid.to_string(),
         }),
         ["device", uuid, "process_paths", "json"] => Some(ParsedFile::ProcessPaths {
@@ -311,7 +305,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         let device_id = match &parsed {
             ParsedFile::ActivityDay { device_id, .. }
             | ParsedFile::Categories { device_id }
-            | ParsedFile::AppCategories { device_id }
             | ParsedFile::ProcessPaths { device_id }
             | ParsedFile::AppIcons { device_id }
             | ParsedFile::AppGroups { device_id }
@@ -339,10 +332,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         // 跨 OS 合并要么完全无用（key 对不上），要么坏事（同名 key 撞车，把本机能用的路径覆盖掉，icon 提取失败）。
         // activities / app_icons 不过滤 —— 跨设备聚合活动是核心价值；icon 字节就是要让对方
         // 给从那台机器同步过来的 activity 行渲染图标用的。
-        if matches!(
-            parsed,
-            ParsedFile::AppCategories { .. } | ParsedFile::ProcessPaths { .. }
-        ) {
+        if matches!(parsed, ParsedFile::ProcessPaths { .. }) {
             match remote_device_os(&inner.pool, device_id).await {
                 // OS 已知且确实跨平台：跳过并标 handled（游标可越过——永远不该拉）。
                 Some(os) if os != local_os => {
@@ -402,9 +392,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppCategories { device_id } => {
-                merge_app_categories(&inner.pool, &device_id, &body).await
             }
             ParsedFile::ProcessPaths { device_id } => {
                 merge_process_paths(&inner.pool, &device_id, &body).await
@@ -673,9 +660,8 @@ async fn merge_activities(
 ///    不能 capture 外部变量 —— 这样闭包是 `Copy`，能被循环里每行复用）
 /// 4. 单行 DB 错误降级 warn（per-line skip：一行坏数据不让对端 mirror 永久卡住）
 ///
-/// merge_app_icons / merge_app_groups / merge_categories / merge_activities 不走这个模板，
-/// 因为它们各自有合理的特殊路径（base64 文件 cache / member mirror / cascade
-/// delete / mirror 收敛）。
+/// merge_app_icons / merge_categories / merge_activities 不走这个模板，因为它们各自有
+/// 合理的特殊路径（base64 文件 cache / cascade delete / mirror 收敛）。
 async fn merge_lww_simple<T, F>(
     pool: &DbPool,
     entity: &'static str,
@@ -754,41 +740,6 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
             if just_deleted {
                 crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
             }
-            Ok(())
-        },
-    )
-    .await
-}
-
-async fn merge_app_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    merge_lww_simple(
-        pool,
-        "app_category",
-        body,
-        |row: &AppCategoryPayload| (!row.process_name.is_empty()).then(|| row.process_name.clone()),
-        |conn, row: AppCategoryPayload| {
-            if !is_remote_newer(
-                conn,
-                "SELECT updated_at FROM app_categories WHERE process_name = ?1",
-                rusqlite::params![row.process_name],
-                &row.updated_at,
-            )? {
-                return Ok(());
-            }
-            conn.execute(
-                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, ?)
-                 ON CONFLICT(process_name) DO UPDATE SET
-                   category_id = excluded.category_id,
-                   updated_at = excluded.updated_at,
-                   deleted_at = excluded.deleted_at",
-                rusqlite::params![
-                    row.process_name,
-                    row.category_id,
-                    row.updated_at,
-                    row.deleted_at
-                ],
-            )?;
             Ok(())
         },
     )
@@ -901,110 +852,40 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
 }
 
 async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    let rows: Vec<AppGroupPayload> = parse_rows("app_groups", body)?;
-    for row in rows {
-        if row.id.is_empty() {
-            continue;
-        }
-        // 拿当前本地 category_id 用来对比 —— 远端的分类 LWW 赢了之后，要 mirror 到
-        // app_categories 表里所有成员行（让 reports.rs 的 LEFT JOIN 仍能拿到正确分类）。
-        let id = row.id.clone();
-        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
-        let applied: Option<(Option<String>, Option<String>)> = match pool
-            .0
-            .call(move |conn| {
-                let prev: Option<(String, Option<String>)> = conn
-                    .query_row(
-                        "SELECT updated_at, category_id FROM app_groups WHERE id = ?1",
-                        rusqlite::params![row.id],
-                        |r| Ok((r.get(0)?, r.get(1)?)),
-                    )
-                    .ok();
-                let should_apply = match &prev {
-                    None => true,
-                    Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),
-                };
-                if !should_apply {
-                    return Ok(None);
-                }
-                let prev_cat = prev.map(|(_, c)| c).unwrap_or(None);
-                conn.execute(
-                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                     VALUES(?, ?, ?, ?, ?)
-                     ON CONFLICT(id) DO UPDATE SET
-                       display_name = excluded.display_name,
-                       category_id  = excluded.category_id,
-                       updated_at   = excluded.updated_at,
-                       deleted_at   = excluded.deleted_at",
-                    rusqlite::params![
-                        row.id,
-                        row.display_name,
-                        row.category_id,
-                        row.updated_at,
-                        row.deleted_at
-                    ],
-                )
-                .db()?;
-                Ok(Some((prev_cat, row.category_id)))
-            })
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                log::warn!("app_group {id} merge 失败: {e}");
-                continue;
+    merge_lww_simple(
+        pool,
+        "app_group",
+        body,
+        |row: &AppGroupPayload| (!row.id.is_empty()).then(|| row.id.clone()),
+        |conn, row: AppGroupPayload| {
+            if !is_remote_newer(
+                conn,
+                "SELECT updated_at FROM app_groups WHERE id = ?1",
+                rusqlite::params![row.id],
+                &row.updated_at,
+            )? {
+                return Ok(());
             }
-        };
-
-        // 如果分类变了 —— 把新分类同步到组里所有 (active) 成员的 app_categories 行。
-        // 用本地的 process_name 列表（成员可能是 Mac 风格也可能是 Win 风格），
-        // 每行 enqueue outbox 让其它设备也拿到（同 OS 的对端会收到同样的 app_category 行）。
-        if let Some((prev_cat, next_cat)) = applied {
-            if prev_cat != next_cat {
-                let id_for_mirror = id.clone();
-                let next_for_mirror = next_cat.clone();
-                let now = utc_now_rfc3339();
-                if let Err(e) = pool
-                    .0
-                    .call(move |conn| {
-                        let members: Vec<String> = {
-                            let mut stmt = conn
-                                .prepare(
-                                    "SELECT process_name FROM app_group_members
-                                     WHERE group_id = ?1 AND deleted_at IS NULL",
-                                )
-                                .db()?;
-                            let rows = stmt
-                                .query_map(rusqlite::params![id_for_mirror], |r| {
-                                    r.get::<_, String>(0)
-                                })
-                                .db()?;
-                            let mut out = Vec::new();
-                            for r in rows {
-                                out.push(r.db()?);
-                            }
-                            out
-                        };
-                        for m in &members {
-                            // 远端推过来的分类变更：mirror 到 app_categories 但不入 outbox
-                            // —— 否则会形成「收到对端推 → 本端再推回去」的死循环。
-                            crate::repo::app_groups::apply_app_category_change(
-                                conn,
-                                m,
-                                next_for_mirror.as_deref(),
-                                &now,
-                            )?;
-                        }
-                        Ok(())
-                    })
-                    .await
-                {
-                    log::warn!("app_group {id} 分类 mirror 失败: {e}");
-                }
-            }
-        }
-    }
-    Ok(())
+            conn.execute(
+                "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                 VALUES(?, ?, ?, ?, ?)
+                 ON CONFLICT(id) DO UPDATE SET
+                   display_name = excluded.display_name,
+                   category_id  = excluded.category_id,
+                   updated_at   = excluded.updated_at,
+                   deleted_at   = excluded.deleted_at",
+                rusqlite::params![
+                    row.id,
+                    row.display_name,
+                    row.category_id,
+                    row.updated_at,
+                    row.deleted_at
+                ],
+            )?;
+            Ok(())
+        },
+    )
+    .await
 }
 
 async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
@@ -1838,87 +1719,6 @@ mod tests {
         );
     }
 
-    // ───────── 任务 4:三个 LWW 模板 merge ─────────
-
-    /// merge_app_categories:较新覆盖(含墓碑)/ 较旧保留 / 同 updated_at 严格不覆盖 /
-    /// 本地无行插入。四个 key 一次 merge,期望互相独立。
-    #[tokio::test]
-    async fn merge_app_categories_lww_matrix() {
-        let pool = fresh_test_pool().await;
-        for (proc, ts) in [("A-newer", T_OLD), ("A-older", T_NEW), ("A-equal", T_MID)] {
-            exec_sql(
-                &pool,
-                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                 VALUES(?1, 'code', ?2, NULL)",
-                vec![s(proc), s(ts)],
-            )
-            .await;
-        }
-        let body = serde_json::to_vec(&vec![
-            // 远端更新 + 墓碑 → 覆盖
-            AppCategoryPayload {
-                process_name: "A-newer".into(),
-                category_id: "fun".into(),
-                updated_at: T_MID.into(),
-                deleted_at: Some(T_MID.into()),
-            },
-            // 远端较旧 → 保留本地
-            AppCategoryPayload {
-                process_name: "A-older".into(),
-                category_id: "fun".into(),
-                updated_at: T_MID.into(),
-                deleted_at: None,
-            },
-            // 同 updated_at → 严格 > 不成立,不覆盖
-            AppCategoryPayload {
-                process_name: "A-equal".into(),
-                category_id: "fun".into(),
-                updated_at: T_MID.into(),
-                deleted_at: None,
-            },
-            // 本地无行 → 插入
-            AppCategoryPayload {
-                process_name: "A-missing".into(),
-                category_id: "fun".into(),
-                updated_at: T_OLD.into(),
-                deleted_at: None,
-            },
-        ])
-        .unwrap();
-        merge_app_categories(&pool, REMOTE_DEV, &body)
-            .await
-            .unwrap();
-
-        let get = |p: &'static str| {
-            read_row(
-                &pool,
-                "SELECT category_id, updated_at, deleted_at FROM app_categories WHERE process_name = ?1",
-                p,
-                3,
-            )
-        };
-        assert_eq!(
-            get("A-newer").await.unwrap(),
-            vec![s("fun"), s(T_MID), s(T_MID)],
-            "远端较新应覆盖(含墓碑落地)"
-        );
-        assert_eq!(
-            get("A-older").await.unwrap(),
-            vec![s("code"), s(T_NEW), None],
-            "远端较旧应保留本地"
-        );
-        assert_eq!(
-            get("A-equal").await.unwrap(),
-            vec![s("code"), s(T_MID), None],
-            "同 updated_at 必须严格不覆盖(平局本地赢)"
-        );
-        assert_eq!(
-            get("A-missing").await.unwrap(),
-            vec![s("fun"), s(T_OLD), None],
-            "本地缺行应插入"
-        );
-    }
-
     /// merge_process_paths:同一套 LWW 矩阵(该表无墓碑列,验证 exe_path/seen_at)。
     #[tokio::test]
     async fn merge_process_paths_lww_matrix() {
@@ -2044,99 +1844,6 @@ mod tests {
             vec![s("g2"), s(T_MID), None],
             "本地缺行应插入"
         );
-    }
-
-    // ───────── 任务 5:merge_app_groups 的成员 mirror ─────────
-
-    /// 远端组换分类 → 本地 app_categories 里该组全部 **active** 成员跟着换,
-    /// 软删成员不动;mirror 不回灌 outbox(远端来的变更再推回去会死循环);
-    /// 同 body 重复 merge 被 LWW gate 挡住,mirror 不再触发。
-    #[tokio::test]
-    async fn merge_app_groups_mirrors_active_members_without_outbox() {
-        let pool = fresh_test_pool().await;
-        exec_sql(
-            &pool,
-            "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-             VALUES('grp', '编辑器', 'code', ?1, NULL)",
-            vec![s(T_OLD)],
-        )
-        .await;
-        // m1/m2 active,m3 软删(mirror 必须跳过它)
-        for (proc, deleted) in [("m1", None), ("m2", None), ("m3", s(T_OLD))] {
-            exec_sql(
-                &pool,
-                "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
-                 VALUES(?1, 'grp', ?2, ?3)",
-                vec![s(proc), s(T_OLD), deleted],
-            )
-            .await;
-            exec_sql(
-                &pool,
-                "INSERT INTO app_categories(process_name, category_id, updated_at, deleted_at)
-                 VALUES(?1, 'code', ?2, NULL)",
-                vec![s(proc), s(T_OLD)],
-            )
-            .await;
-        }
-
-        let body = serde_json::to_vec(&vec![AppGroupPayload {
-            id: "grp".into(),
-            display_name: "编辑器".into(),
-            category_id: Some("fun".into()),
-            updated_at: T_MID.into(),
-            deleted_at: None,
-        }])
-        .unwrap();
-        merge_app_groups(&pool, REMOTE_DEV, &body).await.unwrap();
-
-        // 组本体换分类
-        let grp = read_row(
-            &pool,
-            "SELECT category_id, updated_at FROM app_groups WHERE id = ?1",
-            "grp",
-            2,
-        )
-        .await
-        .unwrap();
-        assert_eq!(grp, vec![s("fun"), s(T_MID)]);
-
-        // active 成员的 app_categories 全部 mirror 到新分类
-        let cat_of = |p: &'static str| {
-            read_row(
-                &pool,
-                "SELECT category_id FROM app_categories WHERE process_name = ?1",
-                p,
-                1,
-            )
-        };
-        assert_eq!(cat_of("m1").await.unwrap(), vec![s("fun")]);
-        assert_eq!(cat_of("m2").await.unwrap(), vec![s("fun")]);
-        assert_eq!(
-            cat_of("m3").await.unwrap(),
-            vec![s("code")],
-            "软删成员不参与 mirror"
-        );
-        assert!(
-            outbox_entries(&pool).await.is_empty(),
-            "远端推来的变更 mirror 后不得回灌 outbox(防推回死循环)"
-        );
-
-        // 重复 merge 同 body:LWW 平局 → 组不 apply → mirror 不重跑。
-        // 观察手法:先手动把 m1 改走,若 mirror 重跑会把它改回 'fun'。
-        exec_sql(
-            &pool,
-            "UPDATE app_categories SET category_id = 'design', updated_at = ?1
-             WHERE process_name = 'm1'",
-            vec![s(T_NEW)],
-        )
-        .await;
-        merge_app_groups(&pool, REMOTE_DEV, &body).await.unwrap();
-        assert_eq!(
-            cat_of("m1").await.unwrap(),
-            vec![s("design")],
-            "同 body 重复 merge 不得再次触发 mirror"
-        );
-        assert!(outbox_entries(&pool).await.is_empty());
     }
 
     // ───────── 任务 8:merge_app_icons(DB 侧) ─────────
