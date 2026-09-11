@@ -32,7 +32,7 @@ One row per focus session: the user had `process_name` in the foreground from `s
 | remote_id | TEXT | | The row's `id` on the device that captured it. Local rows get their own `id` via trigger. `(device_id, remote_id)` is the de-duplication key for sync |
 | updated_at | TEXT | NOT NULL, DEFAULT epoch | Last-write-wins timestamp, UTC |
 | origin | TEXT | NOT NULL, DEFAULT `'local'` | `'local'` if captured here, `'remote'` if pulled from another device |
-| excluded | INTEGER | NOT NULL, DEFAULT 0 | 1 when an ignore rule (process + title keywords) matches. Excluded from stats and reports; not synced |
+| excluded | INTEGER | NOT NULL, DEFAULT 0 | 1 when an ignore rule (process + title keywords) matches, and stats, reports, exports and AI summaries skip the row. The column is not in the sync payload — each device tags rows with its own rules, including the ones it pulls — but **the row itself is still uploaded**. See docs/design/data-controls.md |
 | url_host | TEXT | | Browser sessions only: the site's domain (never the full URL). NULL for non-browser sessions or when the "record browser domains" setting is off. Added in v0.8.20 |
 
 Indexes: `(local_date)`, `(local_date, local_hour)`, `(process_name)`, `(device_id)`, `(device_id, remote_id)` UNIQUE.
