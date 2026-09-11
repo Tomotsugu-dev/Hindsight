@@ -10,25 +10,10 @@
 //! 6. 解 id_token JWT 拿 sub（用户的 Google 唯一 ID）+ email
 //! 7. 用「机器 ID + 用户 home 路径」派生 32 字节 AES key 加密 refresh_token，密文落 auth_state 表
 //!
-//! ## 加密 key 的派生（不依赖 OS keyring）
+//! ## The key that encrypts the refresh token
 //!
-//! 历史：v0.4.4 之前 AES key 存在 OS keyring（Windows Credential Manager / macOS Keychain）。
-//! 但实测 Credential Manager 条目会因为 OS / 安全软件 / 自动更新等不可控原因消失，
-//! macOS Keychain 在 ad-hoc 签名换身份时也读不出来——key 一丢，DB 里的 enc 永远解不开，
-//! 用户被迫重新登录。
-//!
-//! 现在改成每次现算：`SHA256("hindsight-auth-v1" || machine_id || user_home)`。
-//! - `machine_id`：Windows 注册表 `MachineGuid` / macOS `IOPlatformUUID` / Linux `/etc/machine-id`，
-//!   重装系统才变；OS 服务 / 安全软件碰不到。
-//! - `user_home`：[`dirs::home_dir`]，删用户账号才变。
-//!
-//! 安全权衡：把 DB 文件搬到别的机器仍然解不开（machine_id 不一样），
-//! 同机器另一个用户也读不出（home 路径不一样）。仅在「攻击者已经能登录该用户、
-//! 能读 APPDATA」的场景下能解密——但这个层面攻击者本来就能直接读 cookie /
-//! 浏览器密码 / 一切，不靠这一层加密防。
-//!
-//! 迁移：从老 keyring 方案升级上来的旧 enc 用新 key 解不开 → [`refresh_and_persist`]
-//! 自动清 `auth_state`，UI 自然回到「未登录」，用户重登一次后此后永不再丢。
+//! Never stored. Recomputed on every use from `SHA256(context ‖ machine_id ‖
+//! user_home)`, see [`derive_master_key`]. Why not the OS keychain: ADR-0002.
 
 use std::time::Duration;
 
@@ -37,6 +22,7 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use base64::{engine::general_purpose, Engine as _};
 use rand::distributions::Alphanumeric;
 use rand::{Rng, RngCore};
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -50,8 +36,13 @@ use crate::storage::SqliteResultExt;
 
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
 const OAUTH_TIMEOUT_SECS: u64 = 180;
-/// AES key 派生的域分隔常量。改这个值会让所有用户被踢出登录（紧急 key rotation 用）。
-const KEY_DERIVATION_SALT: &[u8] = b"hindsight-auth-v1";
+/// The AES key is SHA-256 over three things: this string, the machine id, and
+/// the home path. The last two cannot be chosen, so this string is the only way
+/// to derive a different key. Give every new purpose its own string.
+///
+/// Changing the value signs every user out: the stored token was encrypted with
+/// the old key, and the new one cannot open it.
+const AUTH_KEY_CONTEXT: &[u8] = b"hindsight-auth-v1";
 
 /// OAuth 登录状态对外快照（前端「设备」页面 + auth 命令读）。
 #[derive(Debug, Clone, Serialize)]
@@ -280,8 +271,9 @@ pub async fn force_refresh(pool: &DbPool) -> Result<TokenInfo> {
     refresh_and_persist(pool, uid, &rt_enc).await
 }
 
+/// Partial state is never repaired: writing and clearing are each one UPDATE
+/// covering all five columns, so a missing one can only mean damaged data.
 async fn read_auth_state(pool: &DbPool) -> Result<(String, Vec<u8>, String, String)> {
-    // 4 字段元组对应 auth_state 表 4 列；抽 type alias 反而要看两处才知道字段含义
     #[allow(clippy::type_complexity)]
     let row: Option<(
         Option<String>,
@@ -291,14 +283,14 @@ async fn read_auth_state(pool: &DbPool) -> Result<(String, Vec<u8>, String, Stri
     )> = pool
         .0
         .call(|conn| {
-            Ok(conn
-                .query_row(
-                    "SELECT uid, refresh_token_enc, access_token, expires_at
-                     FROM auth_state WHERE id = 1",
-                    [],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-                )
-                .ok())
+            conn.query_row(
+                "SELECT uid, refresh_token_enc, access_token, expires_at
+                    FROM auth_state WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()
+            .db()
         })
         .await?;
 
@@ -377,8 +369,9 @@ async fn refresh_with_google(
     client_secret: &str,
     refresh_token: &str,
 ) -> Result<GoogleRefreshResp> {
-    // 网络抖动 / Google 端 5xx 是临时错误：指数退避重试 2 次。
-    // 4xx（401/400）是 refresh_token 真的失效——立刻返回，重试无意义。
+    // A dropped connection or a 5xx is Google having a bad moment, so back off
+    // and try twice more. A 400 or 401 means the refresh token itself is dead;
+    // retrying it changes nothing, so give up at once.
     const BACKOFFS_MS: [u64; 2] = [500, 2000];
 
     let client = reqwest::Client::new();
@@ -415,7 +408,7 @@ async fn refresh_with_google(
                 let body = resp.text().await.unwrap_or_default();
                 // 401/400 多半是 refresh_token 失效（用户在 myaccount.google.com 撤销了授权）
                 return Err(Error::OAuthHttp {
-                    endpoint: "refresh",
+                    operation: "refresh",
                     status: status.as_u16(),
                     body,
                 });
@@ -655,7 +648,7 @@ async fn exchange_code(
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
         return Err(Error::OAuthHttp {
-            endpoint: "token",
+            operation: "token",
             status,
             body,
         });
@@ -668,7 +661,7 @@ async fn exchange_code(
 /// 派生 32 字节 AES key：`SHA256(salt || machine_id || user_home)`。
 ///
 /// 每次都现算，不持久化在任何 OS keyring / Keychain / 文件里。三个输入：
-/// - `salt` = [`KEY_DERIVATION_SALT`]：域分隔常量
+/// - `salt` = [`AUTH_KEY_CONTEXT`]：域分隔常量
 /// - `machine_id`：平台特定的稳定标识符（重装系统才变）
 /// - `user_home`：[`dirs::home_dir`]，删用户账号才变
 ///
@@ -677,7 +670,7 @@ fn derive_master_key() -> Result<[u8; 32]> {
     let machine = read_machine_id()?;
     let user = read_user_home_bytes();
     let mut hasher = Sha256::new();
-    hasher.update(KEY_DERIVATION_SALT);
+    hasher.update(AUTH_KEY_CONTEXT);
     hasher.update(b"|machine|");
     hasher.update(&machine);
     hasher.update(b"|user|");

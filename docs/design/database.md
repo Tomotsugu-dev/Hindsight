@@ -117,6 +117,20 @@ Queue of local changes waiting to be pushed to the cloud. Each business write en
 Indexes: `(next_retry_at)`.
 Foreign keys: none.
 
+## sync_cursor
+
+How far the pull side has got. One row per tracked stream; only `drive_files` exists today, holding the `modifiedTime` of the last cloud file that was fully handled. The next pull asks the backend for files strictly newer than that, so a file the cursor has passed is never listed again.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| entity | TEXT | Primary key | Name of the stream. `'drive_files'` is the only one |
+| last_pulled_at | TEXT | NOT NULL, DEFAULT epoch | `modifiedTime` of the last handled file, UTC |
+
+The epoch default doubles as "never pulled", which makes the first sync list everything. Losing or mistyping the key has the same effect: the whole cloud is downloaded again.
+
+Indexes: none beyond the primary key.
+Foreign keys: none.
+
 ## devices
 
 Every device that has ever synced into this account, including this one.
@@ -132,6 +146,28 @@ Every device that has ever synced into this account, including this one.
 | is_self | INTEGER | NOT NULL, DEFAULT 0 | 1 for the current machine |
 | updated_at | TEXT | NOT NULL, DEFAULT epoch | Last-write-wins timestamp, UTC |
 | deleted_at | TEXT | | Soft-delete tombstone, set when the user forgets a remote device |
+
+Indexes: none beyond the primary key.
+Foreign keys: none.
+
+## auth_state
+
+Google sign-in state for this device. Exactly one row, pinned by `CHECK (id = 1)` and inserted empty by the migration, so the row always exists — signed out is every column NULL, never a missing row.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| id | INTEGER | Primary key, `CHECK (id = 1)` | Always 1 |
+| uid | TEXT | | Google account id |
+| email | TEXT | | Account email, shown in the UI |
+| refresh_token_enc | BLOB | | Long-lived refresh token, AES-GCM encrypted under a key derived from the machine id and the user's home directory |
+| access_token | TEXT | | Short-lived token sent with every Drive call |
+| expires_at | TEXT | | When `access_token` stops working, UTC |
+
+A caller counts as signed in only when `uid`, `refresh_token_enc`, `access_token` and `expires_at` are all non-NULL. Any partial state reads as signed out, so nothing downstream has to handle "has an account id but no token".
+
+Signing out NULLs every column and keeps the row. Renewing a token writes only `access_token` and `expires_at`.
+
+Never synced, and it could not be: the encryption key is derived from the machine, so the blob is meaningless anywhere else.
 
 Indexes: none beyond the primary key.
 Foreign keys: none.

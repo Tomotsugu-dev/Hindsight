@@ -17,8 +17,13 @@ use crate::sync::payload::{
     DeviceMetaPayload, ProcessPathPayload, TombstonePayload,
 };
 
-/// 解析一个 JSON 数组到 `Vec<T>`，但保留**每行容错**：单行解析失败仅打 warn 跳过，
-/// 不让整文件因一行坏数据全废。`kind` 仅用于日志。
+/// Turns the contents of one sync file into rows waiting to be merged.
+///
+/// The whole body is not a JSON array → return an error, no rows at all.
+/// A single element does not fit `T` → log it, drop it, carry on.
+///
+/// Dropping is permanent. The split is there so one bad row cannot stall the
+/// whole file.
 fn parse_rows<T: serde::de::DeserializeOwned>(kind: &'static str, body: &[u8]) -> Result<Vec<T>> {
     let arr: Vec<Value> =
         serde_json::from_slice(body).map_err(|e| Error::SyncParse { kind, source: e })?;
@@ -26,14 +31,17 @@ fn parse_rows<T: serde::de::DeserializeOwned>(kind: &'static str, body: &[u8]) -
     for (idx, v) in arr.into_iter().enumerate() {
         match serde_json::from_value::<T>(v) {
             Ok(row) => out.push(row),
-            Err(e) => log::warn!("{kind} 行 {idx} 解析失败: {e}"),
+            Err(e) => log::warn!("{kind}: row {idx} dropped, does not parse: {e}"),
         }
     }
     Ok(out)
 }
 
-/// LWW 比较：拿表里当前 row 的 updated_at，看远端 `new` 是不是更新。row 不存在算"更新"。
-/// 用 `OptionalExtension::optional()` 把 NoRows 转 None —— 不像 `.ok()` 会吞掉真错误。
+/// Timestamps are fixed-format RFC3339 forced to UTC, so comparing the strings
+/// is comparing the times; there is nothing to parse.
+///
+/// Strictly `>`: on equal timestamps the local row wins. That is what keeps two
+/// devices pulling from each other from overwriting one another in circles.
 fn is_remote_newer<P: rusqlite::Params>(
     conn: &rusqlite::Connection,
     select_updated_at_sql: &str,
@@ -49,6 +57,9 @@ fn is_remote_newer<P: rusqlite::Params>(
     })
 }
 
+/// Primary key of a `sync_cursor` row, so this string lives in the user's
+/// database. Change it and the cursor is lost: the next sync re-downloads every
+/// file in the cloud.
 pub(super) const PULL_CURSOR_KEY: &str = "drive_files";
 
 enum ParsedFile {
@@ -74,28 +85,29 @@ enum ParsedFile {
     AppGroupMembers {
         device_id: String,
     },
-    /// `device.<UUID>.tombstone.json` —— 源设备明确告知"在某时刻之前的我的数据请全部清"，
-    /// 对端 pull 时执行 `DELETE WHERE device_id=<owner> AND updated_at < clearedAt`。
-    /// 修补 sync 协议「Drive 文件级删除不传播为 DB 行级 DELETE」的缺陷。
+    /// A device asking every peer to drop everything it wrote before a given
+    /// moment: `DELETE WHERE device_id = <owner> AND updated_at < clearedAt`.
+    /// It exists because the engine only inserts and updates, so a row missing
+    /// from a file carries no meaning — this is the only way to say "delete".
     Tombstone {
         device_id: String,
     },
-    /// 可选上云:AI 总结文本(见 datasets.rs)
+    /// Opt-in upload: AI generated summaries (merged in `datasets.rs`).
     AiSummaries {
         device_id: String,
     },
-    /// 可选上云:聊天历史
+    /// Opt-in upload: chat history.
     Chat {
         device_id: String,
     },
-    /// 可选上云:屏幕记忆全文(按日分片)
+    /// Opt-in upload: screen-memory full text, one file per day.
     MemoryDay {
         device_id: String,
     },
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
-    // 形如：device.<UUID>.<KIND>.json 或 device.<UUID>.activities.<DAY>.ndjson
+    // Two shapes: device.<UUID>.<KIND>.json, and device.<UUID>.activities.<DAY>.ndjson.
     let parts: Vec<&str> = name.split('.').collect();
     if parts.first().copied() != Some("device") {
         return None;
