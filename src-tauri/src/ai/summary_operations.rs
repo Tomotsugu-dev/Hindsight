@@ -14,7 +14,7 @@ use crate::ai::config::AiConfig;
 use crate::ai::llm::{ChatClient, ExternalChatClient, Step2Chat};
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
-use crate::capture::privacy;
+use crate::capture::screenshot_policy;
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
@@ -315,7 +315,7 @@ fn format_timeline_hours(
         if let Some(t) = title {
             let trimmed = t.trim();
             if !trimmed.is_empty() {
-                let display = if privacy::matches_any(trimmed, privacy_app_keywords) {
+                let display = if screenshot_policy::matches_any(trimmed, privacy_app_keywords) {
                     "[私密]".to_string()
                 } else {
                     trimmed.to_string()

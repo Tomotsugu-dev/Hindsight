@@ -186,15 +186,16 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
 
     let cat = pool.0
         .call(move |conn| {
+            let tx = conn.transaction().db()?;
             // New category will be placed at the end: sort_order = max(active sort_order) + 1
-            let next_sort: i64 = conn
+            let next_sort: i64 = tx
                 .query_row(
                     "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE deleted_at IS NULL",
                     [],
                     |r| r.get(0),
                 )
                 .db()?;
-            conn.execute(
+            tx.execute(
                 "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at)
                  VALUES(?, ?, ?, ?, 0, ?, ?)",
                 rusqlite::params![id, n, c, i, next_sort, &updated],
@@ -202,8 +203,9 @@ pub async fn create(pool: &DbPool, input: CategoryInput) -> Result<Category> {
             .db()?;
 
             let payload = category_payload(&id, &n, &c, &i, false, next_sort, &updated, None);
-            enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload)
+            enqueue(&tx, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload)
                 .db()?;
+            tx.commit().db()?;
             Ok(Category {
                 id,
                 name: n,

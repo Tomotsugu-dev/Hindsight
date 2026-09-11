@@ -12,7 +12,7 @@
 //! 调用方包 `spawn_blocking`，不要在 async runtime 直接调。
 //!
 //! 拿不到 URL（未授权 / 浏览器没开 / 平台不支持）一律返回 None；URL 关键词
-//! 那一路在 `privacy::should_skip_screenshot` 里会自动跳过，不影响 app/标题
+//! 那一路在 `screenshot_policy::should_skip_screenshot` 里会自动跳过，不影响 app/标题
 //! 关键词匹配。
 
 #[cfg(target_os = "macos")]
