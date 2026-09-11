@@ -770,8 +770,9 @@ async fn push_transient_failure_keeps_outbox_then_recovers() {
 /// A 端各表插一行 + 手工入 outbox（category / process_path / device / app_icon /
 /// app_group / app_group_member 六类）→ A sync 推文件 → B sync 拉回 → B 各表
 /// 字段逐一与 A 写入值相等。
-/// 第七个文件 app_categories 不是种子来的：本机不再维护那张表，push 在组或成员
-/// 变动时从「成员 ⋈ 组」现算一份给旧版本对端，这里连它的派生结果一并核对。
+/// 第七个文件 app_categories 是单向的：本机不再维护那张表，push 仍从「成员 ⋈ 组」
+/// 现算一份发给旧版本对端，pull 侧则完全不看它。这里两头都钉死——文件必须还在，
+/// B 的表必须是空的。
 /// 一条测试同时吃掉 push 构建侧的 build_* 与 pull 合并侧对应的 merge_*。
 // env 锁横跨整个测试(B merge app_icon 会写 icon 文件 cache,路径读
 // HINDSIGHT_DATA_DIR);#[tokio::test] 是单线程 runtime,持锁跨 await 不自死锁。
@@ -828,10 +829,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                 rusqlite::params![icon_ins, T_ICON],
             )
             .db()?;
-            // 组的 category 故意留 NULL:避免 merge_app_groups 的成员 mirror 在
-            // 本测试里被触发(mirror 会用"当下时间"改写 app_categories.updated_at,
-            // 而文件落盘顺序是 HashMap 随机序,字段级断言会变得不确定)。
-            // mirror 行为由 pull.rs 的直测单独钉死。
             conn.execute(
                 "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
                  VALUES('grp-e2e', 'Proc E2E 组', NULL, ?1, NULL)",
@@ -890,14 +887,14 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         Option<String>,
     );
     #[allow(clippy::type_complexity)]
-    let (cat, pp, dev, icon, grp, member, ac): (
+    let (cat, pp, dev, icon, grp, member, ac_rows): (
         CatRow,
         (String, String, String),
         DevRow,
         (Vec<u8>, String, Option<String>),
         (String, Option<String>, String, Option<String>),
         (String, String, Option<String>),
-        (String, String, Option<String>),
+        i64,
     ) = b
         .pool
         .0
@@ -971,15 +968,10 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .db()?;
-            let ac = conn
-                .query_row(
-                    "SELECT category_id, updated_at, deleted_at
-                     FROM app_categories WHERE process_name = 'Proc-E2E'",
-                    [],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                )
+            let ac_rows: i64 = conn
+                .query_row("SELECT COUNT(*) FROM app_categories", [], |r| r.get(0))
                 .db()?;
-            Ok((cat, pp, dev, icon, grp, member, ac))
+            Ok((cat, pp, dev, icon, grp, member, ac_rows))
         })
         .await
         .unwrap();
@@ -1035,22 +1027,18 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         ("grp-e2e".into(), T_MEMBER.into(), None),
         "app_group_members 行应逐字段一致"
     );
-    // 派生行的三个字段各对应一条派生规则:组没有分类 → 落到 'other' 且打墓碑;
-    // 时间戳取成员与组里较新的那个(T_MEMBER > T_GRP)。
-    assert_eq!(
-        ac,
-        ("other".into(), T_MEMBER.into(), Some(T_MEMBER.into())),
-        "app_categories 是派生出来的:组无分类时应是带墓碑的 'other' 行"
-    );
+    // 上面断言过 A 确实推了 app_categories 文件,这里断言 B 拉完之后一行都没进。
+    // 两条合起来才是「只发不收」:少任何一条都会让停发或者停收悄悄回归。
+    assert_eq!(ac_rows, 0, "app_categories 文件不应再被合并进本机");
 
     // pull 不回灌:B 侧合并远端数据不应产生任何 outbox 行(否则会推回死循环)
     assert_eq!(outbox_count(&b.pool).await, 0, "B pull 后 outbox 应仍为空");
 }
 
 /// 任务 7：OS 过滤 + 游标 stall 三段式。
-/// ① 只有 device-x 的 app_categories 文件、meta 未到 → OS 未知,游标不越过、表不写;
+/// ① 只有 device-x 的 process_paths 文件、meta 未到 → OS 未知,游标不越过、表不写;
 /// ② 补传同 OS meta → 下轮两个文件都合并,游标推进到 meta 的 modifiedTime;
-/// ③ 异 OS 设备 device-y 的 meta + app_categories → 数据文件标 handled 跳过
+/// ③ 异 OS 设备 device-y 的 meta + process_paths → 数据文件标 handled 跳过
 ///    (游标越过),之后永不再合并。
 #[tokio::test]
 async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
@@ -1058,12 +1046,12 @@ async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
     let dev = make_device("device-self", drive_store.clone()).await;
     let local_os = crate::platform::local_os_id();
 
-    let app_cat_body = |process: &str| {
-        serde_json::to_vec(&vec![crate::sync::payload::AppCategoryPayload {
+    let path_body = |process: &str| {
+        serde_json::to_vec(&vec![crate::sync::payload::ProcessPathPayload {
             process_name: process.to_string(),
-            category_id: "code".into(),
+            exe_path: format!("/Applications/{process}"),
+            seen_at: "2026-07-01T00:00:00Z".into(),
             updated_at: "2026-07-01T00:00:00Z".into(),
-            deleted_at: None,
         }])
         .unwrap()
     };
@@ -1079,14 +1067,14 @@ async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
         })
         .unwrap()
     };
-    let has_app_cat = |process: &'static str| {
+    let has_path = |process: &'static str| {
         let pool = dev.pool.clone();
         async move {
             pool.0
                 .call(move |conn| {
                     let n: i64 = conn
                         .query_row(
-                            "SELECT COUNT(*) FROM app_categories WHERE process_name = ?1",
+                            "SELECT COUNT(*) FROM process_paths WHERE process_name = ?1",
                             rusqlite::params![process],
                             |r| r.get(0),
                         )
@@ -1100,17 +1088,11 @@ async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
 
     // ① 数据文件先到,meta 缺席
     drive_store
-        .upsert_by_name(
-            "device.device-x.app_categories.json",
-            &app_cat_body("X-App"),
-        )
+        .upsert_by_name("device.device-x.process_paths.json", &path_body("X-App"))
         .await
         .unwrap();
     dev.engine.sync_now().await.unwrap();
-    assert!(
-        !has_app_cat("X-App").await,
-        "OS 未知时 app_categories 不应合并"
-    );
+    assert!(!has_path("X-App").await, "OS 未知时 process_paths 不应合并");
     assert_eq!(
         super::io::read_cursor(&dev.pool, "drive_files")
             .await
@@ -1132,7 +1114,7 @@ async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
     let t_meta_x = files[1].modified_time.clone(); // 升序:appcat(T1) < meta(T2)
     dev.engine.sync_now().await.unwrap();
     assert!(
-        has_app_cat("X-App").await,
+        has_path("X-App").await,
         "meta 到位且同 OS 后,数据文件应被合并"
     );
     assert_eq!(
@@ -1152,37 +1134,34 @@ async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
         .await
         .unwrap();
     drive_store
-        .upsert_by_name(
-            "device.device-y.app_categories.json",
-            &app_cat_body("Y-App"),
-        )
+        .upsert_by_name("device.device-y.process_paths.json", &path_body("Y-App"))
         .await
         .unwrap();
     let files = drive_store.list_appdata_files("").await.unwrap();
-    let t_appcat_y = files[3].modified_time.clone();
+    let t_path_y = files[3].modified_time.clone();
     dev.engine.sync_now().await.unwrap();
     assert!(
-        !has_app_cat("Y-App").await,
-        "异 OS 的 app_categories 永不合并(key 体系不同,合并有害)"
+        !has_path("Y-App").await,
+        "异 OS 的 process_paths 永不合并(key 体系不同,合并有害)"
     );
     assert_eq!(
         super::io::read_cursor(&dev.pool, "drive_files")
             .await
             .unwrap(),
-        t_appcat_y,
+        t_path_y,
         "异 OS 数据文件应标 handled 让游标越过(不是 stall)"
     );
 
     // 再 sync 一轮:游标已越过,该文件不再入列,结论不变
     dev.engine.sync_now().await.unwrap();
     assert!(
-        !has_app_cat("Y-App").await,
+        !has_path("Y-App").await,
         "游标越过后异 OS 文件永不再被拉取合并"
     );
 }
 
-/// 回归:同一轮 pull 内,引用方文件(app_categories / app_group_members)的
-/// modifiedTime 早于被引用文件(categories / app_groups)时,行不能丢。
+/// 回归:同一轮 pull 内,引用方文件(app_group_members)的 modifiedTime 早于被引用
+/// 文件(app_groups)时,行不能丢。
 ///
 /// 这正是 push HashMap 随机序下约 50% 概率触发的实锤 bug:修复前 Pass 2 按
 /// modifiedTime 升序直走,引用方先合并 → 行级 FK 失败仅 warn → handled=true
@@ -1196,7 +1175,7 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
     let drive = Arc::new(InMemoryDriveStore::new());
     let dev = make_device("device-self", drive.clone()).await;
 
-    // T1: 远端设备 meta,os = 本机 → 解锁 app_categories 的跨 OS 过滤
+    // T1: 远端设备 meta,os = 本机 → 解锁跨 OS 过滤
     let meta = serde_json::to_vec(&serde_json::json!({
         "deviceId": "device-x",
         "displayName": "Device X",
@@ -1212,21 +1191,7 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
         .await
         .unwrap();
 
-    // T2 / T3: 引用方文件先落 Drive(modifiedTime 更早)
-    drive
-        .upsert_by_name(
-            "device.device-x.app_categories.json",
-            serde_json::to_vec(&serde_json::json!([{
-                "processName": "ProcCat-FK",
-                "categoryId": "cat-fk",
-                "updatedAt": "2026-05-15T09:00:01Z",
-                "deletedAt": null,
-            }]))
-            .unwrap()
-            .as_slice(),
-        )
-        .await
-        .unwrap();
+    // T2: 引用方文件先落 Drive(modifiedTime 更早)
     drive
         .upsert_by_name(
             "device.device-x.app_group_members.json",
@@ -1242,25 +1207,7 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
         .await
         .unwrap();
 
-    // T4 / T5: 被引用文件后落 Drive
-    drive
-        .upsert_by_name(
-            "device.device-x.categories.json",
-            serde_json::to_vec(&serde_json::json!([{
-                "id": "cat-fk",
-                "name": "FK 分类",
-                "color": "#123456",
-                "icon": "Star",
-                "builtin": false,
-                "sortOrder": 42,
-                "updatedAt": "2026-05-15T09:00:03Z",
-                "deletedAt": null,
-            }]))
-            .unwrap()
-            .as_slice(),
-        )
-        .await
-        .unwrap();
+    // T3: 被引用文件后落 Drive
     drive
         .upsert_by_name(
             "device.device-x.app_groups.json",
@@ -1286,35 +1233,17 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
             .unwrap_or_else(|| panic!("Drive 应有 {name} 文件"))
     };
     assert!(
-        pos("device.device-x.app_categories.json") < pos("device.device-x.categories.json")
-            && pos("device.device-x.app_group_members.json")
-                < pos("device.device-x.app_groups.json"),
+        pos("device.device-x.app_group_members.json") < pos("device.device-x.app_groups.json"),
         "前置条件:引用方文件的 modifiedTime 必须早于被引用文件"
     );
 
     dev.engine.sync_now().await.expect("sync 应成功");
 
-    // 单轮之后四行必须全部落库(修复前两条引用方行被 FK 吃掉且永不再拉)
-    let (cat_n, ac_cat, grp_n, member_grp): (i64, Option<String>, i64, Option<String>) = dev
+    // 单轮之后两行必须全部落库(修复前引用方行被 FK 吃掉且永不再拉)
+    let (grp_n, member_grp): (i64, Option<String>) = dev
         .pool
         .0
         .call(|conn| {
-            let cat_n: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM categories WHERE id = 'cat-fk' AND deleted_at IS NULL",
-                    [],
-                    |r| r.get(0),
-                )
-                .db()?;
-            let ac_cat: Option<String> = conn
-                .query_row(
-                    "SELECT category_id FROM app_categories
-                     WHERE process_name = 'ProcCat-FK' AND deleted_at IS NULL",
-                    [],
-                    |r| r.get(0),
-                )
-                .optional()
-                .db()?;
             let grp_n: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM app_groups WHERE id = 'grp-fk' AND deleted_at IS NULL",
@@ -1331,18 +1260,12 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
                 )
                 .optional()
                 .db()?;
-            Ok((cat_n, ac_cat, grp_n, member_grp))
+            Ok((grp_n, member_grp))
         })
         .await
         .unwrap();
 
-    assert_eq!(cat_n, 1, "categories 行应落库");
     assert_eq!(grp_n, 1, "app_groups 行应落库");
-    assert_eq!(
-        ac_cat.as_deref(),
-        Some("cat-fk"),
-        "app_categories 行不能因文件序早于 categories 而丢失"
-    );
     assert_eq!(
         member_grp.as_deref(),
         Some("grp-fk"),
