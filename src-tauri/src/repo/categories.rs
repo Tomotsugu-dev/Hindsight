@@ -296,23 +296,24 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
     let updated_at = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
+            let tx = conn.transaction().db()?;
             for (idx, id) in ordered_ids.iter().enumerate() {
                 let new_sort = idx as i64;
-                let row: Option<(String, String, String, i64, i64)> = conn
+                let row: Option<(String, String, String, i64, i64)> = tx
                     .query_row(
                         "SELECT name, color, icon, builtin, sort_order FROM categories
                          WHERE id = ?1 AND deleted_at IS NULL",
                         rusqlite::params![id],
                         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                     )
-                    .ok(); // TODO: Create a proper error if the category is not found.
+                    .optional()?;
                 let Some((name, color, icon, builtin_i, cur_sort)) = row else {
                     continue;
                 };
                 if cur_sort == new_sort {
                     continue; // Don't need to update if the sort order hasn't changed
                 }
-                conn.execute(
+                tx.execute(
                     "UPDATE categories SET sort_order = ?1, updated_at = ?2
                      WHERE id = ?3 AND deleted_at IS NULL",
                     rusqlite::params![new_sort, updated_at, id],
@@ -328,8 +329,9 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
                     &updated_at,
                     None,
                 );
-                enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, id, &payload).db()?;
+                enqueue(&tx, OutboxOp::Upsert, OutboxEntity::Category, id, &payload).db()?;
             }
+            tx.commit().db()?;
             Ok(())
         })
         .await?;
@@ -358,14 +360,15 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     let outcome: std::result::Result<(), &'static str> = pool
         .0
         .call(move |conn| {
-            let row: Option<(String, String, String, i64, i64)> = conn
+            let tx = conn.transaction().db()?;
+            let row: Option<(String, String, String, i64, i64)> = tx
                 .query_row(
                     "SELECT name, color, icon, builtin, sort_order FROM categories
                      WHERE id = ? AND deleted_at IS NULL",
                     rusqlite::params![id],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
-                .ok(); // TODO: Create a proper error if the category is not found?
+                .optional()?;
             let Some((name, color, icon, builtin_i, sort_order)) = row else {
                 return Ok(Ok(()));
             };
@@ -381,7 +384,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 ));
             }
 
-            conn.execute(
+            tx.execute(
                 "UPDATE categories SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
                 rusqlite::params![updated_at, id],
             )
@@ -398,7 +401,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 Some(&updated_at),
             );
             enqueue(
-                conn,
+                &tx,
                 OutboxOp::Upsert,
                 OutboxEntity::Category,
                 &id,
@@ -406,8 +409,9 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
             )
             .db()?;
 
-            cascade_category_deletion(conn, &id, &updated_at)?;
+            cascade_category_deletion(&tx, &id, &updated_at)?;
 
+            tx.commit().db()?;
             Ok(Ok(()))
         })
         .await?;
@@ -420,6 +424,10 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
 ///
 /// Idempotent: every UPDATE is guarded, so a repeat run touches zero rows and
 /// enqueues nothing.
+///
+/// Expects to be called inside a transaction: the tombstone that triggered it
+/// and every group this clears have to land together. The parameter type does
+/// not enforce that yet.
 pub fn cascade_category_deletion(
     conn: &Connection,
     category_id: &str,
@@ -1223,7 +1231,9 @@ mod tests {
         let cid = cat.id.clone();
         pool.0
             .call(move |conn| {
-                cascade_category_deletion(conn, &cid, "2026-07-26T00:00:00Z")?;
+                let tx = conn.transaction()?;
+                cascade_category_deletion(&tx, &cid, "2026-07-26T00:00:00Z")?;
+                tx.commit()?;
                 Ok(())
             })
             .await
