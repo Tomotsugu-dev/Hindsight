@@ -1,6 +1,7 @@
 //! Pull 路径：列 Drive 文件，按 modifiedTime 增量下载，按文件名分发到 merge_*。
 //! merge_* 都做 LWW（updated_at 字典序比较）+ idempotent upsert。
 
+use rusqlite::OptionalExtension;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -39,7 +40,6 @@ fn is_remote_newer<P: rusqlite::Params>(
     key: P,
     new: &str,
 ) -> rusqlite::Result<bool> {
-    use rusqlite::OptionalExtension;
     let cur: Option<String> = conn
         .query_row(select_updated_at_sql, key, |r| r.get(0))
         .optional()?;
@@ -694,7 +694,14 @@ where
         };
         let res = pool
             .0
-            .call(move |conn| apply(conn, row).map_err(tokio_rusqlite::Error::Rusqlite))
+            .call(move |conn| {
+                // 一行一个事务：`apply` 的 LWW 判断、行写入和它连带的 outbox / cascade
+                // 要么全落地要么全不落。半落地是不可恢复的——updated_at 一旦写成远端那个
+                // 值，下次拉到同一个文件 LWW 判断就不成立，剩下那半永远补不上。
+                let tx = conn.transaction().db()?;
+                apply(&tx, row).db()?;
+                tx.commit().db()
+            })
             .await;
         if let Err(e) = res {
             log::warn!("{entity} {label} merge 失败: {e}");
@@ -716,7 +723,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                     rusqlite::params![row.id],
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )
-                .ok();
+                .optional()?;
             let should_apply = match &cur {
                 None => true,
                 Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),

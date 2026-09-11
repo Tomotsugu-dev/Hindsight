@@ -7,7 +7,7 @@
 //! its groups back to unclassified; built-in categories and `other` cannot be
 //! deleted, since unclassified time needs somewhere to land.
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -230,14 +230,15 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
     pool.0
         .call(move |conn| {
             // 读出当前行做基线
-            let row: Option<(String, String, String, i64, i64)> = conn
+            let tx = conn.transaction().db()?;
+            let row: Option<(String, String, String, i64, i64)> = tx
                 .query_row(
                     "SELECT name, color, icon, builtin, sort_order FROM categories
                      WHERE id = ? AND deleted_at IS NULL",
                     rusqlite::params![id],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
-                .ok(); // TODO: Create a proper error if the category is not found.
+                .optional()?;
             let Some((cur_name, cur_color, cur_icon, builtin_i, cur_sort)) = row else {
                 return Ok(());
             };
@@ -260,32 +261,27 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .unwrap_or(cur_icon);
-
-            conn.execute(
-                "UPDATE categories SET name = ?, color = ?, icon = ?, updated_at = ? WHERE id = ?",
-                rusqlite::params![new_name, new_color, new_icon, updated_at, id],
-            )
-            .db()?;
-
-            let payload = category_payload(
-                &id,
-                &new_name,
-                &new_color,
-                &new_icon,
-                builtin_i != 0,
-                cur_sort,
-                &updated_at,
-                None,
-            );
-            enqueue(
-                conn,
-                OutboxOp::Upsert,
-                OutboxEntity::Category,
-                &id,
-                &payload,
-            )
-            .db()?;
-
+            let n = tx
+                .execute(
+                    "UPDATE categories SET name = ?1, color = ?2, icon = ?3, updated_at = ?4
+                        WHERE id = ?5 AND (name IS NOT ?1 OR color IS NOT ?2 OR icon IS NOT ?3)",
+                    rusqlite::params![new_name, new_color, new_icon, updated_at, id],
+                )
+                .db()?;
+            if n > 0 {
+                let payload = category_payload(
+                    &id,
+                    &new_name,
+                    &new_color,
+                    &new_icon,
+                    builtin_i != 0,
+                    cur_sort,
+                    &updated_at,
+                    None,
+                );
+                enqueue(&tx, OutboxOp::Upsert, OutboxEntity::Category, &id, &payload).db()?;
+            }
+            tx.commit().db()?;
             Ok(())
         })
         .await?;
@@ -300,23 +296,24 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
     let updated_at = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
+            let tx = conn.transaction().db()?;
             for (idx, id) in ordered_ids.iter().enumerate() {
                 let new_sort = idx as i64;
-                let row: Option<(String, String, String, i64, i64)> = conn
+                let row: Option<(String, String, String, i64, i64)> = tx
                     .query_row(
                         "SELECT name, color, icon, builtin, sort_order FROM categories
                          WHERE id = ?1 AND deleted_at IS NULL",
                         rusqlite::params![id],
                         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                     )
-                    .ok(); // TODO: Create a proper error if the category is not found.
+                    .optional()?;
                 let Some((name, color, icon, builtin_i, cur_sort)) = row else {
                     continue;
                 };
                 if cur_sort == new_sort {
                     continue; // Don't need to update if the sort order hasn't changed
                 }
-                conn.execute(
+                tx.execute(
                     "UPDATE categories SET sort_order = ?1, updated_at = ?2
                      WHERE id = ?3 AND deleted_at IS NULL",
                     rusqlite::params![new_sort, updated_at, id],
@@ -332,8 +329,9 @@ pub async fn reorder(pool: &DbPool, ordered_ids: Vec<String>) -> Result<()> {
                     &updated_at,
                     None,
                 );
-                enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, id, &payload).db()?;
+                enqueue(&tx, OutboxOp::Upsert, OutboxEntity::Category, id, &payload).db()?;
             }
+            tx.commit().db()?;
             Ok(())
         })
         .await?;
@@ -362,14 +360,15 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     let outcome: std::result::Result<(), &'static str> = pool
         .0
         .call(move |conn| {
-            let row: Option<(String, String, String, i64, i64)> = conn
+            let tx = conn.transaction().db()?;
+            let row: Option<(String, String, String, i64, i64)> = tx
                 .query_row(
                     "SELECT name, color, icon, builtin, sort_order FROM categories
                      WHERE id = ? AND deleted_at IS NULL",
                     rusqlite::params![id],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )
-                .ok(); // TODO: Create a proper error if the category is not found?
+                .optional()?;
             let Some((name, color, icon, builtin_i, sort_order)) = row else {
                 return Ok(Ok(()));
             };
@@ -385,7 +384,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 ));
             }
 
-            conn.execute(
+            tx.execute(
                 "UPDATE categories SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
                 rusqlite::params![updated_at, id],
             )
@@ -402,7 +401,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
                 Some(&updated_at),
             );
             enqueue(
-                conn,
+                &tx,
                 OutboxOp::Upsert,
                 OutboxEntity::Category,
                 &id,
@@ -410,8 +409,9 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
             )
             .db()?;
 
-            cascade_category_deletion(conn, &id, &updated_at)?;
+            cascade_category_deletion(&tx, &id, &updated_at)?;
 
+            tx.commit().db()?;
             Ok(Ok(()))
         })
         .await?;
@@ -424,6 +424,10 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
 ///
 /// Idempotent: every UPDATE is guarded, so a repeat run touches zero rows and
 /// enqueues nothing.
+///
+/// Expects to be called inside a transaction: the tombstone that triggered it
+/// and every group this clears have to land together. The parameter type does
+/// not enforce that yet.
 pub fn cascade_category_deletion(
     conn: &Connection,
     category_id: &str,
@@ -651,18 +655,19 @@ mod tests {
     }
 
     /// 绕过 `deleted_at IS NULL` 过滤直接读原始行（测软删语义必须能看到 tombstone）。
-    /// 返回 (name, color, icon, builtin, sort_order, deleted_at)。
+    /// 返回 (name, color, icon, builtin, sort_order, deleted_at, updated_at)。
+    #[allow(clippy::type_complexity)]
     async fn raw_cat(
         pool: &DbPool,
         id: &str,
-    ) -> Option<(String, String, String, i64, i64, Option<String>)> {
+    ) -> Option<(String, String, String, i64, i64, Option<String>, String)> {
         let id = id.to_string();
         pool.0
             .call(move |conn| {
                 use rusqlite::OptionalExtension;
                 let row = conn
                     .query_row(
-                        "SELECT name, color, icon, builtin, sort_order, deleted_at
+                        "SELECT name, color, icon, builtin, sort_order, deleted_at, updated_at
                            FROM categories WHERE id = ?1",
                         rusqlite::params![id],
                         |r| {
@@ -673,6 +678,7 @@ mod tests {
                                 r.get::<_, i64>(3)?,
                                 r.get::<_, i64>(4)?,
                                 r.get::<_, Option<String>>(5)?,
+                                r.get::<_, String>(6)?,
                             ))
                         },
                     )
@@ -860,6 +866,76 @@ mod tests {
             (got.name.as_str(), got.color.as_str(), got.icon.as_str()),
             ("改名", "#222222", "Moon"),
             "空白 patch 不得清掉任何字段"
+        );
+    }
+
+    /// 为什么测：`updated_at` 是跨设备 LWW 的仲裁者，它表示的应该是「内容最后一次
+    /// 变化」，不是「最后一次被写」。原值重提一遍若刷新它，这台设备就凭空赢下一次
+    /// 比较，把另一台真正改过的名字覆盖掉——用户自己敲的字没了。
+    ///
+    /// 后半段钉的是判断条件必须是「任一字段不同」而非「全部不同」：写成 AND 的话
+    /// 只改一个字段会整条失效，而「字段等于新值」那种断言在改之前也成立，看不出来。
+    #[tokio::test]
+    async fn update_with_unchanged_values_bumps_nothing() {
+        let pool = fresh_test_pool().await;
+        let cat = create(&pool, cat_input("工作", "#aaaaaa", "Star"))
+            .await
+            .unwrap();
+        let before_ts = raw_cat(&pool, &cat.id).await.unwrap().6;
+        let before_outbox = outbox_total(&pool).await;
+
+        // 三个字段原样重提
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: Some("工作".into()),
+                color: Some("#aaaaaa".into()),
+                icon: Some("Star".into()),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            raw_cat(&pool, &cat.id).await.unwrap().6,
+            before_ts,
+            "无变化的更新不得刷新 updated_at —— 它会在 LWW 里凭空赢过对端的真实改动"
+        );
+        assert_eq!(
+            outbox_total(&pool).await,
+            before_outbox,
+            "无变化的更新不得入 outbox"
+        );
+
+        // 只改一个字段：必须生效
+        update(
+            &pool,
+            &cat.id,
+            CategoryPatch {
+                name: Some("本职".into()),
+                color: None,
+                icon: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let got = find_cat(&pool, &cat.id).await.expect("分类应仍在");
+        assert_eq!(
+            (got.name.as_str(), got.color.as_str(), got.icon.as_str()),
+            ("本职", "#aaaaaa", "Star"),
+            "只改一个字段也必须生效，其余不动"
+        );
+        assert_ne!(
+            raw_cat(&pool, &cat.id).await.unwrap().6,
+            before_ts,
+            "真实改动必须刷新 updated_at"
+        );
+        assert_eq!(
+            outbox_total(&pool).await,
+            before_outbox + 1,
+            "真实改动应恰好入一条 outbox"
         );
     }
 
@@ -1155,7 +1231,9 @@ mod tests {
         let cid = cat.id.clone();
         pool.0
             .call(move |conn| {
-                cascade_category_deletion(conn, &cid, "2026-07-26T00:00:00Z")?;
+                let tx = conn.transaction()?;
+                cascade_category_deletion(&tx, &cid, "2026-07-26T00:00:00Z")?;
+                tx.commit()?;
                 Ok(())
             })
             .await

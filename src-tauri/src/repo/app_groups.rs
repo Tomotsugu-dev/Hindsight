@@ -620,46 +620,58 @@ pub async fn unmerge(pool: &DbPool, process_name: &str) -> Result<()> {
 /// its user-defined display name and updates only its category, timestamp, and
 /// deletion state.
 ///
-/// Both the group and member changes are queued for sync.
+/// Both the group and member changes are queued for sync. Takes a transaction
+/// rather than a connection: the two rows and their two outbox entries have to
+/// land together or not at all, and the parameter type is what enforces it.
 fn restore_solo_group(
-    conn: &Connection,
+    tx: &rusqlite::Transaction<'_>,
     process_name: &str,
     category_id: Option<&str>,
     updated_at: &str,
 ) -> rusqlite::Result<()> {
-    conn.execute(
+    // `WHERE` on the conflict branch: a live group that already carries this
+    // category is left alone, so its `updated_at` is not bumped for nothing.
+    let n = tx.execute(
         "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
          VALUES(?, ?, ?, ?, NULL)
          ON CONFLICT(id) DO UPDATE SET
            category_id  = excluded.category_id,
            updated_at   = excluded.updated_at,
-           deleted_at   = NULL",
+           deleted_at   = NULL
+         WHERE app_groups.deleted_at IS NOT NULL
+            OR app_groups.category_id IS NOT excluded.category_id",
         rusqlite::params![process_name, process_name, category_id, updated_at],
     )?;
-    enqueue(
-        conn,
-        OutboxOp::Upsert,
-        OutboxEntity::AppGroup,
-        process_name,
-        &serde_json::json!({ "groupId": process_name }).to_string(),
-    )?;
+    if n > 0 {
+        enqueue(
+            tx,
+            OutboxOp::Upsert,
+            OutboxEntity::AppGroup,
+            process_name,
+            &serde_json::json!({ "groupId": process_name }).to_string(),
+        )?;
+    }
 
-    conn.execute(
+    let n = tx.execute(
         "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
          VALUES(?, ?, ?, NULL)
          ON CONFLICT(process_name) DO UPDATE SET
            group_id   = excluded.group_id,
            updated_at = excluded.updated_at,
-           deleted_at = NULL",
+           deleted_at = NULL
+         WHERE app_group_members.deleted_at IS NOT NULL
+            OR app_group_members.group_id IS NOT excluded.group_id",
         rusqlite::params![process_name, process_name, updated_at],
     )?;
-    enqueue(
-        conn,
-        OutboxOp::Upsert,
-        OutboxEntity::AppGroupMember,
-        process_name,
-        &serde_json::json!({ "processName": process_name }).to_string(),
-    )?;
+    if n > 0 {
+        enqueue(
+            tx,
+            OutboxOp::Upsert,
+            OutboxEntity::AppGroupMember,
+            process_name,
+            &serde_json::json!({ "processName": process_name }).to_string(),
+        )?;
+    }
 
     Ok(())
 }
@@ -674,20 +686,27 @@ pub async fn rename(pool: &DbPool, group_id: &str, new_name: &str) -> Result<()>
     pool.0
         .call(move |conn| {
             let tx = conn.transaction().db()?;
-            tx.execute(
-                "UPDATE app_groups SET display_name = ?2, updated_at = ?3
-                 WHERE id = ?1",
-                rusqlite::params![id, name, updated_at],
-            )
-            .db()?;
-            enqueue(
-                &tx,
-                OutboxOp::Upsert,
-                OutboxEntity::AppGroup,
-                &id,
-                &serde_json::json!({ "groupId": id }).to_string(),
-            )
-            .db()?;
+            // `display_name IS NOT ?2` makes renaming to the current name a no-op.
+            // `updated_at` arbitrates last-write-wins, so it has to mean "the content
+            // changed", not "the row was written": bumping it for an unchanged name
+            // would win the comparison against a peer that really did rename it.
+            let n = tx
+                .execute(
+                    "UPDATE app_groups SET display_name = ?2, updated_at = ?3
+                     WHERE id = ?1 AND display_name IS NOT ?2",
+                    rusqlite::params![id, name, updated_at],
+                )
+                .db()?;
+            if n > 0 {
+                enqueue(
+                    &tx,
+                    OutboxOp::Upsert,
+                    OutboxEntity::AppGroup,
+                    &id,
+                    &serde_json::json!({ "groupId": id }).to_string(),
+                )
+                .db()?;
+            }
             tx.commit().db()?;
             Ok(())
         })
@@ -733,20 +752,27 @@ pub async fn assign_category(
     pool.0
         .call(move |conn| {
             let tx = conn.transaction().db()?;
-            tx.execute(
-                "UPDATE app_groups SET category_id = ?2, updated_at = ?3
-                 WHERE id = ?1",
-                rusqlite::params![id, cat, now],
-            )
-            .db()?;
-            enqueue(
-                &tx,
-                OutboxOp::Upsert,
-                OutboxEntity::AppGroup,
-                &id,
-                &serde_json::json!({ "groupId": id }).to_string(),
-            )
-            .db()?;
+            // `category_id IS NOT ?2` makes re-assigning the same category a no-op,
+            // clearing an already-cleared one included — `IS NOT` is NULL-safe, `!=`
+            // is not. See `rename` for why an unchanged write must not bump
+            // `updated_at`.
+            let n = tx
+                .execute(
+                    "UPDATE app_groups SET category_id = ?2, updated_at = ?3
+                     WHERE id = ?1 AND category_id IS NOT ?2",
+                    rusqlite::params![id, cat, now],
+                )
+                .db()?;
+            if n > 0 {
+                enqueue(
+                    &tx,
+                    OutboxOp::Upsert,
+                    OutboxEntity::AppGroup,
+                    &id,
+                    &serde_json::json!({ "groupId": id }).to_string(),
+                )
+                .db()?;
+            }
 
             tx.commit().db()?;
             Ok(())
