@@ -1,77 +1,133 @@
-# ADR-0002 · 加密 refresh_token 的钥匙不存盘，每次现算
+# ADR-0002 · Derive the `refresh_token` encryption key instead of storing it
 
-- **日期**：2026-09-12（决定于 2026-05-09 落地，本文补记）
-- **状态**：**已采纳**
-- **相关**：commit `aae2748` · commit `ed33a1e` · `sync::auth::derive_master_key`
+- **Date**: 2026-09-12 (implemented on 2026-05-09; recorded retrospectively)
+- **Status**: **Accepted**
+- **Related**: commit `aae2748` · commit `ed33a1e` · `sync::auth::derive_master_key`
 
-## 背景
+## Context
 
-登录 Google 之后会拿到一个 refresh_token。它必须在本机留住，否则每次打开 app 都要重走一遍浏览器授权。明文落库不可接受，所以要加密——加密就多出一个问题：**钥匙放哪。**
+Google sign-in returns a `refresh_token`. Hindsight must retain it locally, or
+the user must repeat browser authorization every time the app starts. Storing it
+in plaintext is unacceptable, so it must be encrypted—which raises a second
+question: **where should the encryption key live?**
 
-钥匙不能和密文放在一起：拷走数据库等于没加密。也不能每次向用户要：没法无人值守地后台同步。常规做法是操作系统钥匙串。
+Keeping the key beside the ciphertext provides no protection when the database
+is copied. Asking the user for it on every launch would prevent unattended
+background sync. The conventional answer is the operating system's credential
+store.
 
-我们用过。两个平台都会在用户毫无操作的情况下把钥匙弄丢；丢掉之后，数据库里的密文永远解不开。重启、重装 app 都没用，只能重新走一遍 OAuth。
+We tried that. On both platforms, the key could become inaccessible without any
+action by the user. Once it was gone, the ciphertext in the database could never
+be decrypted again. Restarting or reinstalling Hindsight did not help; the user
+had to repeat OAuth.
 
-Windows 上，凭据管理器的条目由 DPAPI 加密，主密钥从用户登录密码派生。用户自己改密码，系统还能解开再重新封装；管理员替用户重置（手里没有旧密码）就不行，旧条目从此打不开。微软文档写得很清楚：本机账户没有域控上的备份密钥，唯一的恢复办法是把密码改回重置前那一个。另外还有一类只有用户报告、没有文档说明的情况：配置文件迁移、`VaultSvc` 异常、某几次累积更新之后，条目整批消失。
+On Windows, Credential Manager entries are protected by DPAPI, whose master key
+is derived from the user's login password. When the user changes the password,
+Windows can decrypt and rewrap the master key. When an administrator resets it
+without the old password, Windows cannot, and the old entries become
+inaccessible. Microsoft's documentation states that local accounts have no
+domain backup key; the only recovery is to restore the previous password. Users
+have also reported entire sets of entries disappearing after profile migration,
+`VaultSvc` failures, or some cumulative updates, although these cases are not
+documented well enough to establish a cause.
 
-macOS 上，钥匙串按 Designated Requirement 认「是哪个程序写的」。ad-hoc 签名不产生稳定的 DR，绑的是二进制哈希，改一行代码就变。系统于是把新版本当成另一个程序，上一版写入的钥匙下一版读不出来。
+On macOS, Keychain access control identifies the writing application by its
+Designated Requirement. An ad-hoc signature has no stable requirement because it
+is tied to the binary hash. Changing one line of code changes the identity, so a
+new build cannot read the key written by the previous build.
 
-仓库里先当瞬时故障打过补丁（`aae2748`，2026-05-04）：读失败时不要覆盖旧钥匙。五天后证明不是瞬时的，`ed33a1e`（2026-05-09，v0.4.5-beta）把 `keyring = "3"` 删掉。
+The repository records two attempts to address this. Commit `aae2748`
+(2026-05-04) treated key access as a transient failure and stopped overwriting
+the old key after a failed read. Five days later, commit `ed33a1e` (2026-05-09,
+v0.4.5-beta) removed `keyring = "3"` entirely.
 
-**不做决定的后果**：用户在没做任何操作的情况下被登出，而且这个状态不会自愈。
+**If we make no decision, users can be signed out without taking any action, and
+the failure cannot recover by itself.**
 
-macOS 这条约束在删 keyring 的前一天已经不成立：`8944973` 换上了 Developer ID 签名与公证，DR 从此稳定。今天如果重新考虑钥匙串，需要面对的只剩 Windows 的 DPAPI。
+The macOS constraint had already disappeared one day before keyring was removed:
+commit `8944973` introduced Developer ID signing and notarization, giving the app
+a stable Designated Requirement. If we reconsider the credential store today,
+Windows DPAPI is the remaining blocker.
 
-## 决定
+## Decision
 
-**不存钥匙。** 每次要用，从两样本机固有、且不在数据库里的东西现算：
+**Do not store the key.** Derive it whenever it is needed from two stable,
+machine-local values that are not stored in the database:
 
 ```
-SHA256(用途串 ‖ machine_id ‖ user_home)
+SHA256(purpose_string ‖ machine_id ‖ user_home)
 ```
 
-`machine_id` 取各平台自己的稳定标识（Windows 注册表 `MachineGuid`、macOS `IOPlatformUUID`、Linux `/etc/machine-id`），`user_home` 取用户主目录路径。用途串目前是 `hindsight-auth-v1`。
+`machine_id` is the platform's stable machine identifier: the Windows registry
+`MachineGuid`, macOS `IOPlatformUUID`, or Linux `/etc/machine-id`. `user_home` is
+the user's home-directory path. The current purpose string is
+`hindsight-auth-v1`.
 
-## 理由
+## Alternatives
 
-钥匙串已经试过。剩下能选的里面，现算是唯一既不把明文放进数据库、又不另存一份会丢的东西的办法。
+Derivation is the only remaining option that neither stores plaintext in the
+database nor creates another stored secret that can disappear.
 
-| 方案 | 优点 | 缺点 | 为什么没选 |
+| Option | Benefits | Costs | Why not chosen |
 |---|---|---|---|
-| **现算（选中）** | 没有会丢的东西；数据库文件离开本机就是废数据 | 防不住已经能以该用户身份登录本机的攻击者 | — |
-| 存操作系统钥匙串 | 有系统级保护 | 读不出来时密文永久作废 | **已经试过，失败了**（见背景） |
-| 明文落库 | 最简单 | 拷走数据库即泄露 | 没有任何保护 |
-| 钥匙单独存一个文件 | 简单 | 和密文同机同目录，一起被拷走 | 等于没加密 |
-| 每次让用户输一个密码 | 最强，拿到文件也没用 | 无人值守时没法后台同步 | 与「装上就自动同步」的产品形态冲突 |
+| **Derive on demand (chosen)** | Nothing can be lost; a copied database is useless off the original machine | Does not protect against an attacker logged in as the user | — |
+| Operating-system credential store | System-level protection | Inaccessible keys make the ciphertext permanently useless | **Tried and failed** (see Context) |
+| Store plaintext in the database | Simplest implementation | A copied database exposes the token | Provides no protection |
+| Store the key in a separate file | Simple | The key is copied with the ciphertext | Equivalent to no encryption |
+| Ask the user for a password | Strongest protection against a copied database | Prevents unattended background sync | Conflicts with automatic sync |
 
-## 代价
+## Consequences
 
-**换机器、换用户目录、重装系统都要重登一次。** 这是同一个机制的两面：正因为别人的机器算不出这把钥匙，你自己的另一台也算不出。
+**Moving to another machine, changing the home-directory path, or reinstalling
+the operating system requires signing in again.** This is the other side of the
+same property: if another machine cannot derive the key, neither can the user's
+replacement machine.
 
-**这层加密不防本机沦陷。** 攻击者只要能以该用户身份登录这台机器，机器 ID 和主目录路径都拿得到，钥匙就能算出来。它挡的只有「数据库文件被单独拷走」。真到本机沦陷，攻击者本来就能读浏览器 cookie 和保存的密码，这一层挡不住，也不必挡。
+**This encryption does not protect a compromised local account.** An attacker
+logged in as the user can read the machine ID and home path and derive the key.
+It protects only against the database file being copied in isolation. Once the
+local account is compromised, the attacker can already access browser cookies
+and saved passwords; this layer cannot and is not intended to defend against
+that threat.
 
-**派生输入的稳定性是外部事实，我们控制不了。** 哪天某个平台改了这些标识符的行为，我们只能跟着把那个平台的用户登出一轮。
+**The stability of derivation inputs is an external dependency.** If a platform
+changes the behavior of its machine identifier, users on that platform will
+have to sign in again.
 
-**用途串必须一个用途配一个。** 种子已经固定成「机器 ID + 主目录路径」。将来再派生别的钥匙（比如 ADR-0001 要的删除标签密钥），让两把互不相关的唯一手段就是换用途串。改用途串的**值**等于把所有用户登出，所以它不能随手动。
+**Every purpose requires a distinct purpose string.** The seed is fixed as the
+machine ID plus home path. A separate purpose string is what keeps future keys,
+such as the deletion-tag key proposed by ADR-0001, independent. Changing the
+value of an existing purpose string signs out every user, so it must remain
+stable.
 
-## 对用户数据的影响
+## Impact on user data
 
-- **存量数据**：钥匙串时代的密文用新钥匙解不开。`refresh_and_persist` 检测到解密失败会清空 `auth_state`，界面回到未登录，用户重登一次即可，此后不再丢。这一轮已经在 v0.4.5-beta 真实发生过。
-- **迁移**：无。`auth_state` 表结构没动。
-- **回滚**：装回 v0.4.4 之前的版本，那个版本从钥匙串取钥匙，取不到对应当前密文的那一把，同样走「清空 + 重登」。数据无损，代价是一次重新登录。
-- **不可逆**：无。
+- **Existing data**: Ciphertext from the credential-store era cannot be opened
+  with the derived key. When `refresh_and_persist` detects decryption failure, it
+  clears `auth_state` and returns the UI to the signed-out state. The user signs
+  in once, after which the key remains stable. This transition occurred in
+  v0.4.5-beta.
+- **Migration**: None. The `auth_state` schema does not change.
+- **Rollback**: A version earlier than v0.4.4 reads its key from the credential
+  store and cannot open ciphertext produced with the derived key. It likewise
+  clears the state and requires one sign-in. No user data is lost.
+- **Irreversible effects**: None.
 
-## 后续
+## Follow-up
 
-什么条件下重新考虑：
+Reconsider this decision when:
 
-- **想回头用操作系统钥匙串** → 先看背景末尾：macOS 的理由已经不成立，今天挡路的只剩 Windows 的 DPAPI。真要回头，得先想清楚 Windows 上怎么办，而不是重新评估 macOS。
-- **要防住「本机已沦陷」** → 只能让用户输入的秘密参与派生，代价是放弃无人值守的后台同步。
-- **某个平台的机器标识符变得不稳定** → 那个平台要换派生源，换的时候该平台所有用户会被登出一轮。
-- **需要第二把派生密钥**（ADR-0001 的删除标签）→ 沿用同一个种子，换一个用途串，不要复用 `AUTH_KEY_CONTEXT`。
+- **Returning to the operating-system credential store**: macOS is no longer a
+  blocker; a viable design must first address Windows DPAPI password resets.
+- **Defending against a compromised local account**: a user-provided secret must
+  participate in derivation, at the cost of unattended background sync.
+- **A platform's machine identifier becomes unstable**: replace that platform's
+  derivation input, signing its users out once during the transition.
+- **A second derived key is needed**, such as ADR-0001's deletion tag: reuse the
+  seed with a different purpose string; do not reuse `AUTH_KEY_CONTEXT`.
 
-## 出处
+## References
 
-Windows 侧机制：[DPAPI MasterKey backup failures](https://learn.microsoft.com/en-us/troubleshoot/windows-server/certificates-and-public-key-infrastructure-pki/dpapi-masterkey-backup-failures) · [Windows Data Protection](https://learn.microsoft.com/en-us/previous-versions/ms995355\(v=msdn.10\))
+Windows: [DPAPI MasterKey backup failures](https://learn.microsoft.com/en-us/troubleshoot/windows-server/certificates-and-public-key-infrastructure-pki/dpapi-masterkey-backup-failures) · [Windows Data Protection](https://learn.microsoft.com/en-us/previous-versions/ms995355\(v=msdn.10\))
 
-macOS 侧机制：[Technical Note TN2206: macOS Code Signing In Depth](https://developer.apple.com/library/archive/technotes/tn2206/_index.html) · [Apple 开发者论坛：更换签名证书的后果](https://developer.apple.com/forums/thread/669350)
+macOS: [Technical Note TN2206: macOS Code Signing In Depth](https://developer.apple.com/library/archive/technotes/tn2206/_index.html) · [Apple Developer Forums: consequences of changing a signing certificate](https://developer.apple.com/forums/thread/669350)
