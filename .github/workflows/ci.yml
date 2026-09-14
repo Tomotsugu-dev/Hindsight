@@ -1,32 +1,59 @@
-# PR / push-to-main 质量门禁：在合并前跑前端 lint + 类型检查 + 单测 + 构建，
-# 以及后端 cargo fmt / clippy / test。与 release.yml 互补——release 只在打 tag
-# 时构建产物，这里负责日常回归拦截。
+# Quality gate for pull requests and pushes to main: frontend lint, type check,
+# unit tests and build; backend fmt, clippy and tests. release.yml is separate
+# and only builds artifacts when a tag is pushed.
 #
-# 后端跑在 windows-latest：项目实际目标是 macOS + Windows（release 不含 Linux，
-# 源码含 OS 专属模块），Windows runner 自带 WebView2、无需额外系统依赖。
+# Layout:
+# - `changes` looks at the changed paths first. A change that touches only
+#   docs skips the heavy jobs. A job skipped through `if:` counts as passed for
+#   the required checks on main, while a workflow that never ran would leave
+#   them pending forever, so the path filter lives here and not in `on:`.
+# - clippy runs on Windows so the Windows-only modules keep compiling.
+# - the tests run on macOS: the same crate compiles far faster there than on
+#   the Windows runner, and both are release targets.
+# - debuginfo is off for CI builds. Nothing reads it, and generating it is a
+#   large part of the compile and link time.
 
 name: CI
 
 on:
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
   push:
     branches:
       - main
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
 
-# 同一分支新 push 取消旧的在跑 run，省 CI 额度
+# A new push to the same branch cancels the run still going.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # `code` is true when at least one changed file is neither under docs/
+      # nor a Markdown file.
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+
   frontend:
     name: Frontend (lint + tsc + test + build)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,9 +78,13 @@ jobs:
       - name: Build
         run: npx vite build
 
-  rust:
-    name: Backend (fmt + clippy + test)
+  rust-lint:
+    name: Backend lint (fmt + clippy)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: 0
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +93,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      # tauri_build 会校验 frontendDist(../dist) 存在，所以 cargo 前先产出前端 dist
+      # tauri_build checks that frontendDist (../dist) exists before cargo runs.
       - name: Build frontend (dist for tauri_build)
         run: |
           npm ci
@@ -84,6 +115,35 @@ jobs:
       - name: clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
+
+  rust-test:
+    name: Backend test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # tauri_build checks that frontendDist (../dist) exists before cargo runs.
+      - name: Build frontend (dist for tauri_build)
+        run: |
+          npm ci
+          npx vite build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
 
       - name: test
         working-directory: src-tauri
