@@ -1,67 +1,103 @@
-# ADR-0004 · 删掉 app_categories 表，停止发布，清掉云端本机那份文件
+# ADR-0004 · Drop `app_categories`, stop publishing it, and remove its cloud file
 
-- **日期**：2026-09-14
-- **状态**：**已采纳**
-- **相关**：#32（本机停写）· #36（停止接收）· ADR-0001（删除传播）
+- **Date**: 2026-09-14
+- **Status**: **Accepted**
+- **Related**: #32 (stop local writes) · #36 (stop consuming it) · ADR-0001 (deletion propagation)
 
-## 背景
+## Context
 
-`app_categories` 记的是「进程名 → 分类」，是应用分组出现之前的老结构。它已经被一层层退役到只剩一个空壳：
+`app_categories` stores the mapping from process names to categories. It is a
+legacy structure from before app groups existed and has been retired one layer
+at a time:
 
-| 环节 | 现状 |
+| Stage | Current state |
 |---|---|
-| 本机读取 | v0.7.0 起没有 |
-| 本机写入 | v0.8.23 起没有 |
-| 拉取合并 | #36 起没有 |
-| 推送发布 | **还在**：从应用分组现算一份 `device.<id>.app_categories.json`，发给 v0.7.0 以前的设备 |
-| 删除应用、清空数据 | **都不碰这张表** |
+| Local reads | None since v0.7.0 |
+| Local writes | None since v0.8.23 |
+| Pull and merge | None since #36 |
+| Push and publish | **Still active**: derive `device.<id>.app_categories.json` from app groups for devices older than v0.7.0 |
+| App deletion and data clearing | **Neither touches this table** |
 
-最后一行是问题所在。这张表没人读、没人写，也没人删：用户删掉一个应用、或把它从分组里拆出来，它的进程名会一直留在这张表里。云端本机那份文件同样留着历史进程名。这正是 ADR-0001 要解决的删除残留，而且是一处不需要任何协议设计就能清掉的。
+The final row is the problem. Nothing reads, writes, or deletes this table. When
+a user deletes an app or removes it from a group, its process name remains in
+the table indefinitely. This device's cloud file retains the same historical
+process names. It is one of the deletion remnants addressed by ADR-0001, and it
+can be removed without designing a new protocol.
 
-继续保留它，只是为了让 v0.7.0（2026-05-17）以前的设备还能收到分类。
+The only reason to keep the table is to deliver categories to devices older than
+v0.7.0, released on 2026-05-17.
 
-**不做决定的后果**：删除应用之后，进程名依然留在本机这张表和云端这份文件里，没有任何代码路径能清掉它们。
+**If we make no decision, process names remain in the local table and cloud file
+after app deletion, with no code path capable of removing them.**
 
-## 决定
+## Decision
 
-三件事一起做：
+Make three changes together:
 
-1. **停止发布** `app_categories.json`。
-2. **直接删表**：新增一条迁移 `DROP TABLE IF EXISTS app_categories`。
-3. **删掉云端本机那份文件** `device.<本机>.app_categories.json`。每次启动后第一次推送时检查一次，删掉（或确认不存在）后本次运行不再检查。
+1. **Stop publishing** `app_categories.json`.
+2. **Drop the table immediately** with a new
+   `DROP TABLE IF EXISTS app_categories` migration.
+3. **Delete this device's cloud file**,
+   `device.<this-device-id>.app_categories.json`. Check once during the first
+   push after each startup. After deleting the file or confirming that it does
+   not exist, do not check again during that run.
 
-## 理由
+## Alternatives
 
-| 问题 | 选项 | 为什么选 / 不选 |
+| Question | Option | Why chosen or rejected |
 |---|---|---|
-| 发不发布 | **停止（选中）** | 唯一的受益者是四个月前的旧版本，而代价是一整条派生链路和它带来的残留 |
-| | 继续发布 | 保住旧设备的分类同步，但表和残留都得留着 |
-| 怎么处理表 | **直接删（选中）** | 一步到位，历史进程名立刻消失 |
-| | 先清空、下个版本再删 | 能保住退回 v0.8.22 及更早的路，但要多维护一个版本的空表 |
-| 云端文件 | **删掉本机那份（选中）** | 不删的话本机清干净了，云端仍留着历史进程名 |
-| | 不管 | 省事，但清理不完整 |
+| Continue publishing? | **Stop (chosen)** | The only beneficiaries are versions already four months old, while the cost is an entire derivation path and the remnants it creates |
+| | Continue | Preserves category sync for old devices, but requires keeping both the table and its remnants |
+| How should the table be handled? | **Drop it now (chosen)** | Removes historical process names immediately |
+| | Clear it now and drop it next release | Preserves rollback to v0.8.22 and earlier, but requires maintaining an empty table for another release |
+| What about the cloud file? | **Delete this device's file (chosen)** | Otherwise the local copy is cleaned while historical process names remain in the cloud |
+| | Leave it alone | Simpler, but leaves the cleanup incomplete |
 
-删云端文件的方式考虑过两种：迁移往 outbox 写一行、由 push 执行删除；或同步引擎里放一个开关、启动后第一次推送时执行。选了后者：前者要在 push 的上传循环里加一个「不是上传」的特殊分支，而后者是一段显然一次性的代码，以后整段删掉即可。
+Two mechanisms were considered for cloud deletion: have the migration write an
+outbox row for the push path to execute, or put a one-time switch in the sync
+engine and execute it during the first push after startup. We chose the latter.
+The former would add a non-upload special case to the upload loop; the latter is
+clearly temporary code that can later be removed as one block.
 
-## 代价
+## Consequences
 
-**v0.7.0 以前的设备收不到新的分类。** 它们的分类页靠这份文件填应用列表。发版说明必须写明。
+**Devices older than v0.7.0 no longer receive new categories.** Their category
+page relies on this file to populate the app list. The release notes must state
+this limitation.
 
-**退回 v0.8.22 及更早的版本，给应用分类会报错。** 迁移器不检查「数据库比程序新」，旧版本能照常启动，但这些版本在分类操作里仍会写这张表，表不存在就失败。退回当前发布版 v0.8.23 不受影响：它只有同步代码碰这张表，失败的行记一条警告后跳过。
+**Rolling back to v0.8.22 or earlier makes app categorization fail.** The
+migration runner does not detect that the database is newer than the program, so
+those versions still start, but their categorization path writes to the removed
+table and fails. Rolling back to the then-current release, v0.8.23, still works:
+only its sync code touches the table, and it logs a warning and skips the failed
+row.
 
-**云端只清得掉升级了的设备自己那份。** 每台设备只删 `device.<本机>.app_categories.json`，没升级的设备的那份会一直留着，直到它升级。
+**Cloud cleanup reaches only each upgraded device's own file.** Every device
+deletes only `device.<this-device-id>.app_categories.json`. Files belonging to
+devices that have not upgraded remain until those devices upgrade.
 
-**每次启动多一次列文件请求**，直到那段一次性代码被删掉。
+**Each startup adds one list-files request** until the one-time cleanup code is
+removed.
 
-## 对用户数据的影响
+## Impact on user data
 
-- **存量数据**：本机表连同其中的历史进程名一起删除；没有任何代码在读它，功能不受影响。outbox 里老版本留下的 `app_category` 行会被当作未知实体，记一条警告后删除。
-- **迁移**：新增一条迁移删表，与版本号写入在同一个事务里。新装机会先按历史迁移建表、再删表。
-- **回滚**：退回 v0.8.23 可用，同步日志里会出现表不存在的警告；退回 v0.8.22 及更早，分类操作报错。
-- **不可逆**：删表和删云端文件都不可逆。被删的只是一份没人读的历史副本，分类的真实数据在 `app_groups.category_id`，不受影响。
+- **Existing data**: The local table and its historical process names are
+  deleted. No code reads the table, so functionality is unaffected. Old
+  `app_category` rows left in the outbox are treated as unknown entities, logged
+  with a warning, and removed.
+- **Migration**: A new migration drops the table in the same transaction that
+  records the schema version. A fresh installation creates the table while
+  replaying historical migrations, then drops it.
+- **Rollback**: v0.8.23 remains usable, with missing-table warnings in the sync
+  log. In v0.8.22 and earlier, categorization fails.
+- **Irreversible effects**: Dropping the table and deleting the cloud file cannot
+  be undone. They remove only historical copies that nothing reads; the source
+  of truth for categories remains `app_groups.category_id`.
 
-## 后续
+## Follow-up
 
-- **发版说明**写一条警告：v0.7.0 以前的设备不再收到分类同步。
-- **删除云端文件的那段代码**，在所有活跃设备大概率都升级过之后删掉，代码里用 TODO 指回本 ADR。
-- **ADR-0001**：删除残留少了一处来源。
+- **Release notes**: Warn that devices older than v0.7.0 no longer receive
+  category updates.
+- **Cloud cleanup code**: Remove it after active devices have probably upgraded.
+  Its `TODO` must point back to this ADR.
+- **ADR-0001**: One source of deletion remnants has been eliminated.
