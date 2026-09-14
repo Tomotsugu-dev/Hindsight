@@ -25,6 +25,21 @@ changing those areas. If a decision constrains future work or rejects a
 meaningful alternative, write an ADR using the
 [ADR template](docs/adr/0000-template.md).
 
+## Commit messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+
+```
+<type>(<scope>): <subject>
+
+<body: why the change is needed, not what it does — the diff shows that>
+```
+
+`type` is one of `feat`, `fix`, `refactor`, `test`, `docs`, `perf`, `build`,
+`ci`, `chore`. `scope` is the module the change lives in: `capture`, `storage`,
+`sync`, `repo`, `ai`, `chat`, `memory`, `ui`, `i18n`, `adr`. For example:
+`refactor(sync): stop publishing app_categories.json`.
+
 ## Language and comments
 
 Pull request titles and descriptions, commit messages, review discussions, code
@@ -42,17 +57,21 @@ request instead of burying functional changes in a large translation diff.
 Write comments for the next reader:
 
 - Explain intent, invariants, constraints, units, edge cases, and non-obvious
-  trade-offs. Do not narrate what the next line already says.
-- Use clear sentences and wrap code identifiers in backticks.
-- Use `//!` for crate or module documentation, `///` for item documentation, and
-  `//` for implementation rationale.
-- Start Rust doc comments with a concise summary. For public interfaces, document
-  relevant failure contracts under `# Errors`, `# Panics`, and `# Safety`.
+  trade-offs.
+- Use `//!` for crate or module documentation, `///` for the function, type,
+  field, or constant right below it, and `//` for a fact the code cannot say on
+  its own: a constraint, an order that must not change, the local reason for one
+  line. Design rationale belongs in an ADR or `docs/design/`; leave one sentence
+  of conclusion in the code.
+- Write every comment top-down. The first sentence says who uses the item and
+  what it does; then what it changes; constraints last. A reader who stops after
+  any sentence still has the most important part. For public interfaces,
+  document relevant failure contracts under `# Errors`, `# Panics`, and
+  `# Safety`.
 - Put a nearby `// SAFETY:` comment on every `unsafe` block and `unsafe impl`.
   State the invariant that makes the operation sound.
 - Give `TODO` comments an issue or ADR reference and a condition for removal.
-- Update or remove comments made stale by the same change. Do not add
-  documentation that merely repeats a name or signature.
+- Update or remove comments made stale by the same change.
 
 ## AI-assisted contributions
 
@@ -84,9 +103,12 @@ will be closed without further review.
 - Never commit real activity history, screenshots, databases, window titles,
   OAuth tokens, API keys, machine identifiers, home paths, or other personal
   data. Use synthetic fixtures and redact diagnostic output.
-- Treat any new network request, upload, telemetry, logging, or data-retention
-  behavior as a privacy change. Explain it explicitly before implementation and
-  in the pull request.
+- Never log window titles, URLs, OCR text, tokens, or OAuth responses at `info`
+  or above. The default log filter prints `info` and up, so that detail belongs
+  at `debug`.
+- Treat any new network request, upload, telemetry, or data-retention behavior
+  as a privacy change. Explain it explicitly before implementation and in the
+  pull request.
 - Treat changes to Tauri capabilities or the content security policy as security
   changes. Keep permissions narrow and justify each expansion.
 - Preserve Hindsight's local-first behavior unless an accepted design decision
@@ -117,12 +139,6 @@ User-facing text belongs in the i18n resources, not inline in components. Keep
 locale keys synchronized across the six files in `src/i18n/locales/`. If you
 cannot verify a translation, call that out rather than presenting
 machine-generated wording as reviewed.
-
-### Follow the existing code
-
-Prefer clear, conventional code over clever code. Match the structure, naming,
-and error-handling patterns of the surrounding module. Keep functions focused,
-avoid speculative abstractions, and justify new dependencies.
 
 ## Development and checks
 
@@ -183,8 +199,3 @@ without addressing them. Maintainers may close incomplete or out-of-scope pull
 requests, ask for a large change to be split, or close a pull request that has
 not been self-reviewed. Only maintainers decide when a pull request is ready to
 merge.
-
-## License
-
-By contributing, you agree that your contribution is licensed under the
-repository's MIT License and that you have the right to submit it.
