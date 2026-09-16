@@ -181,7 +181,7 @@ async fn delete_legacy_cloud_files(inner: &Arc<Inner>, token: &mut TokenInfo) ->
         .collect();
     let files = with_token_retry(&inner.pool, token, |tok| {
         let drive = &inner.drive;
-        async move { drive.list_appdata_files(&tok, "").await }
+        async move { drive.list_files(&tok, "").await }
     })
     .await?;
     for file in files.into_iter().filter(|f| names.contains(&f.name)) {

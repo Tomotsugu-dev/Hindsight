@@ -386,7 +386,7 @@ async fn flush_pull_cursor_stops_at_failed_file() {
         .unwrap();
 
     // 三个文件按 modifiedTime 升序排列：T1 < T2 < T3（InMemory 时钟单调）
-    let files_before = drive_store.list_appdata_files("").await.unwrap();
+    let files_before = drive_store.list_files("").await.unwrap();
     assert_eq!(files_before.len(), 3);
     let t1 = files_before[0].modified_time.clone();
 
@@ -685,7 +685,7 @@ async fn push_transient_failure_keeps_outbox_then_recovers() {
 
     // Drive 上不能出现任何文件：唯一一次 upsert 已被注入打断
     assert!(
-        drive.list_appdata_files("").await.unwrap().is_empty(),
+        drive.list_files("").await.unwrap().is_empty(),
         "失败的 push 不应在 Drive 留下半写文件"
     );
 
@@ -749,7 +749,7 @@ async fn push_transient_failure_keeps_outbox_then_recovers() {
     );
 
     // 数据完整落 Drive：ndjson 文件存在且内容就是那一行 activity
-    let files = drive.list_appdata_files("").await.unwrap();
+    let files = drive.list_files("").await.unwrap();
     let ndjson = files
         .iter()
         .find(|f| f.name == format!("device.device-a.activities.{day}.ndjson"))
@@ -855,7 +855,7 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
     a.engine.sync_now().await.expect("A 第二轮 sync 应成功");
     assert_eq!(outbox_count(&a.pool).await, 0, "A 推完 outbox 应清空");
     assert_eq!(
-        drive.list_appdata_files("").await.unwrap().len(),
+        drive.list_files("").await.unwrap().len(),
         5,
         "5 类 entity 各一个文件"
     );
@@ -1018,7 +1018,7 @@ async fn first_push_deletes_own_legacy_cloud_files() {
     a.engine.sync_now().await.expect("A sync 应成功");
 
     let mut names: Vec<String> = drive
-        .list_appdata_files("")
+        .list_files("")
         .await
         .unwrap()
         .into_iter()
@@ -1053,9 +1053,7 @@ async fn peer_process_paths_file_is_ignored() {
         .upsert_by_name("device.device-peer.process_paths.json", body.as_bytes())
         .await
         .unwrap();
-    let file_time = drive.list_appdata_files("").await.unwrap()[0]
-        .modified_time
-        .clone();
+    let file_time = drive.list_files("").await.unwrap()[0].modified_time.clone();
 
     dev.engine.sync_now().await.expect("sync 应成功");
 
@@ -1145,7 +1143,7 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
         .unwrap();
 
     // 前置自检:列表按 modifiedTime 升序,引用方确实排在被引用方前面
-    let files = drive.list_appdata_files("").await.unwrap();
+    let files = drive.list_files("").await.unwrap();
     let pos = |name: &str| {
         files
             .iter()

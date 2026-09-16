@@ -336,7 +336,7 @@ pub(crate) async fn purge_cloud_data_impl(
 
     // 2. 列 Drive 全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
     let files = drive
-        .list_appdata_files(&token.access_token, "")
+        .list_files(&token.access_token, "")
         .await
         .map_err(|e| e.to_string())?;
     let mine: Vec<_> = files
@@ -489,7 +489,7 @@ pub(crate) async fn forget_remote_device_impl(
 
     // 2. 列 Drive 上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
     let files = drive
-        .list_appdata_files(&token.access_token, "")
+        .list_files(&token.access_token, "")
         .await
         .map_err(|e| e.to_string())?;
     let target_files: Vec<_> = files
@@ -1058,7 +1058,7 @@ mod tests {
     /// Drive 上现存文件名（升序），断言"哪些活着"用。
     async fn drive_names(store: &InMemoryDriveStore) -> Vec<String> {
         let mut names: Vec<String> = store
-            .list_appdata_files("")
+            .list_files("")
             .await
             .unwrap()
             .into_iter()
@@ -1070,7 +1070,7 @@ mod tests {
 
     async fn drive_content(store: &InMemoryDriveStore, name: &str) -> Vec<u8> {
         let id = store
-            .list_appdata_files("")
+            .list_files("")
             .await
             .unwrap()
             .into_iter()

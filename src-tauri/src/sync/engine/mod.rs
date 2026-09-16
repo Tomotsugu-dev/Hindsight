@@ -175,7 +175,7 @@ impl SyncEngine {
     /// `mem` = 记忆库句柄(聊天历史/屏幕记忆可选上云用;打开失败传 None)。
     pub fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
         let self_id = crate::device::self_id().unwrap_or("").to_string();
-        Self::with_backend(pool, mem, DriveBackend::Http, self_id)
+        Self::with_backend(pool, mem, DriveBackend::GoogleDrive, self_id)
     }
 
     /// 测试入口：注入自定义 DriveBackend + self_id，同进程跑多个独立设备。

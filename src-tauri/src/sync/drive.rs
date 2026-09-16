@@ -1,6 +1,8 @@
-//! Drive 后端抽象：生产路径打 Google Drive REST，集成测试用 in-memory mock。
+//! The cloud storage sync runs on. Files live in one flat folder and are
+//! addressed by name; the four operations of [`DriveBackend`] are all the
+//! engine needs, and every backend must give them the same meaning.
 //!
-//! 生产实现走 4 个 REST 端点（保留为 [`DriveBackend::Http`] 分支内部 fn）：
+//! `GoogleDrive` talks to the Drive REST API:
 //!
 //!   GET    https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=...
 //!   GET    https://www.googleapis.com/drive/v3/files/<id>?alt=media
@@ -8,16 +10,20 @@
 //!   PATCH  https://www.googleapis.com/upload/drive/v3/files/<id>?uploadType=media
 //!   DELETE https://www.googleapis.com/drive/v3/files/<id>
 //!
-//! 所有 IO 文件都落进 `appDataFolder`：每个 OAuth client 自己的隐藏目录，浏览器看不见，
-//! 多设备共享，不需要 rules / index / region。
+//! Its folder is `appDataFolder`: hidden from the user, private to the OAuth
+//! client, shared by every device signed into the same account with the same
+//! client id.
 //!
-//! [`DriveBackend`] 枚举注入到 [`crate::sync::engine::SyncEngine`]，生产用 `Http`，
-//! 集成测试用 `InMemory`（HashMap 模拟 appDataFolder，时钟 + 唯一 id 单调）。
-//! 见 `src-tauri/tests/sync_two_devices.rs`。
+//! `InMemory` keeps the files in a map for the end-to-end tests, with its own
+//! clock so that modification times only ever move forward.
 
+#[cfg(test)]
 use std::collections::HashMap;
+#[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
 use std::sync::Arc;
+#[cfg(test)]
 use tokio::sync::Mutex;
 
 use rand::Rng;
@@ -29,18 +35,25 @@ use crate::error::{Error, Result};
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
-/// Drive 文件元数据（id + name + 修改时间），不含文件内容。
+/// Drive file metadata (id + name + modified time), without the file content.
 #[derive(Debug, Clone)]
 pub struct FileMeta {
+    /// The backend's own handle for the file, assigned when the file is created
+    /// and opaque to us. Download, overwrite and delete address the file by it.
     pub id: String,
+    /// The name Hindsight gave the file, `device.<device id>.<kind>.json`. It is
+    /// what pull reads to tell what the file holds and which device wrote it.
     pub name: String,
-    /// RFC3339
+    /// Time in RFC3339 format.
     pub modified_time: String,
-    /// 文件大小 (bytes)；保留给将来用于诊断 / "云端用量"展示
+    /// File size in bytes; reserved for future diagnostics / "cloud usage" display.
     #[allow(dead_code)]
     pub size: Option<u64>,
 }
 
+/// One entry of Google's file listing, as it arrives. `size` comes as a string
+/// and is missing for folders; the rest of the engine sees the converted
+/// `FileMeta` instead.
 #[derive(Debug, Deserialize)]
 struct RawFile {
     id: String,
@@ -51,68 +64,74 @@ struct RawFile {
     size: Option<String>,
 }
 
+/// One page of Google's file listing.
 #[derive(Debug, Deserialize)]
 struct ListResp {
     #[serde(default)]
     files: Vec<RawFile>,
+    /// Present only when more files remain; the next request sends it back as
+    /// `pageToken` to get the following page.
     #[serde(rename = "nextPageToken", default)]
     next_page_token: Option<String>,
 }
 
-/// Drive 后端：生产 = HTTP / 测试 = InMemory。
-///
-/// 注入到 [`crate::sync::engine::SyncEngine`]；push/pull 路径只看 trait-like 方法接口，
-/// 不直接打 reqwest。
+/// The cloud behind sync. The sync engine holds one, and push, pull and the
+/// cloud-clearing commands reach the cloud only through its methods.
+/// `InMemory` stands in for a real cloud in tests and is the reference for
+/// what each method must do.
 pub enum DriveBackend {
-    Http,
-    /// 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
-    #[allow(dead_code)]
+    GoogleDrive,
+    /// The tests' stand-in; not compiled into the shipped binary.
+    #[cfg(test)]
     InMemory(Arc<InMemoryDriveStore>),
 }
 
 impl DriveBackend {
-    /// 列 appDataFolder 下、`modified_after` 之后修改过的文件（按 modifiedTime 升序）。
-    /// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
-    pub async fn list_appdata_files(
-        &self,
-        token: &str,
-        modified_after: &str,
-    ) -> Result<Vec<FileMeta>> {
+    /// Lists the files modified strictly after `modified_after`, oldest first;
+    /// an empty string lists everything. Pull passes its cursor here, so
+    /// "strictly after" and the ordering are part of the contract.
+    pub async fn list_files(&self, token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
         match self {
-            DriveBackend::Http => http_list_appdata_files(token, modified_after).await,
-            DriveBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
+            DriveBackend::GoogleDrive => http_list_files(token, modified_after).await,
+            #[cfg(test)]
+            DriveBackend::InMemory(store) => store.list_files(modified_after).await,
         }
     }
 
-    /// 下载文件全部内容。
+    /// Downloads a file's whole content into memory.
     pub async fn download(&self, token: &str, file_id: &str) -> Result<Vec<u8>> {
         match self {
-            DriveBackend::Http => http_download(token, file_id).await,
+            DriveBackend::GoogleDrive => http_download(token, file_id).await,
+            #[cfg(test)]
             DriveBackend::InMemory(store) => store.download(file_id).await,
         }
     }
 
-    /// 按 name upsert：有则更新内容，没有就创建到 appDataFolder。返回文件 id。
+    /// Writes a file by name: replaces the content when the name exists,
+    /// creates the file otherwise. Either way the modification time moves to
+    /// now. Returns the file's id.
     pub async fn upsert_by_name(&self, token: &str, name: &str, content: &[u8]) -> Result<String> {
         match self {
-            DriveBackend::Http => http_upsert_by_name(token, name, content).await,
+            DriveBackend::GoogleDrive => http_upsert_by_name(token, name, content).await,
+            #[cfg(test)]
             DriveBackend::InMemory(store) => store.upsert_by_name(name, content).await,
         }
     }
 
-    /// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
-    /// 404 视为成功（幂等删）。
+    /// Deletes a file for good; there is no trash to recover it from. Deleting
+    /// a file that is already gone counts as success.
     pub async fn delete(&self, token: &str, file_id: &str) -> Result<()> {
         match self {
-            DriveBackend::Http => http_delete(token, file_id).await,
+            DriveBackend::GoogleDrive => http_delete(token, file_id).await,
+            #[cfg(test)]
             DriveBackend::InMemory(store) => store.delete(file_id).await,
         }
     }
 }
 
-// ─────────────── HTTP impl（生产路径，原 pub async fn 移到这里） ───────────────
+// ─────────────── Google Drive ───────────────
 
-async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
+async fn http_list_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
     let client = reqwest::Client::new();
     let mut out = Vec::new();
     let mut page_token: Option<String> = None;
@@ -120,7 +139,6 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
     let q = if modified_after.is_empty() {
         "trashed = false".to_string()
     } else {
-        // 注意：modifiedTime 比较值需要带单引号
         format!("trashed = false and modifiedTime > '{}'", modified_after)
     };
 
@@ -165,7 +183,7 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
 
 async fn http_find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
     let client = reqwest::Client::new();
-    // q 里的单引号需要反斜杠转义
+    // A quote or backslash in the name would break the query, so escape them.
     let escaped = name.replace('\\', "\\\\").replace('\'', "\\'");
     let q = format!(
         "name = '{}' and 'appDataFolder' in parents and trashed = false",
@@ -214,15 +232,14 @@ async fn http_download(token: &str, file_id: &str) -> Result<Vec<u8>> {
 
 async fn http_upsert_by_name(token: &str, name: &str, content: &[u8]) -> Result<String> {
     if let Some(existing) = http_find_by_name(token, name).await? {
-        http_update_media(token, &existing.id, content).await?;
+        update_content(token, &existing.id, content).await?;
         Ok(existing.id)
     } else {
-        http_create_multipart(token, name, content).await
+        create_file(token, name, content).await
     }
 }
 
-async fn http_create_multipart(token: &str, name: &str, content: &[u8]) -> Result<String> {
-    // multipart/related 边界
+async fn create_file(token: &str, name: &str, content: &[u8]) -> Result<String> {
     let boundary = format!("hindsight_{}", rand::thread_rng().gen::<u128>());
     let metadata = json!({
         "name": name,
@@ -262,7 +279,7 @@ async fn http_create_multipart(token: &str, name: &str, content: &[u8]) -> Resul
         .to_string())
 }
 
-async fn http_update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> {
+async fn update_content(token: &str, file_id: &str, content: &[u8]) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .patch(format!("{UPLOAD_BASE}/files/{file_id}"))
@@ -274,7 +291,7 @@ async fn http_update_media(token: &str, file_id: &str, content: &[u8]) -> Result
         .await
         .map_err(net_err("update"))?;
     if !resp.status().is_success() {
-        return Err(http_err("Drive update_media", resp).await);
+        return Err(http_err("Drive update_content", resp).await);
     }
     Ok(())
 }
@@ -293,22 +310,29 @@ async fn http_delete(token: &str, file_id: &str) -> Result<()> {
     Ok(())
 }
 
-// ─────────────── 错误工具 ───────────────
+// ─────────────── Error helpers ───────────────
 
-fn net_err(_stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
-    // reqwest::Error 直接走 #[from]，stage 体现在调用栈的 chain 里足够定位
-    Error::from
+fn net_err(stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
+    move |e: reqwest::Error| {
+        log::error!("Network error at stage: {}", stage);
+        Error::from(e)
+    }
 }
 
-fn parse_err(_stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
-    Error::from
+fn parse_err(stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
+    move |e: reqwest::Error| {
+        log::error!("Parse error at stage: {}", stage);
+        Error::from(e)
+    }
 }
 
 async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
     let status = resp.status().as_u16();
     let body = resp.text().await.unwrap_or_default();
     if status == 403 && body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT") {
-        // 显式 variant，让上层 push/pull 能 match 然后归类成"需要重新登录"
+        // The token is valid but was granted without the Drive permission.
+        // Neither a refresh nor a retry can fix that, only signing in again,
+        // so it gets its own variant instead of the generic DriveHttp.
         return Error::DriveScopeInsufficient;
     }
     Error::DriveHttp {
@@ -318,8 +342,9 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
     }
 }
 
-// ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
+// ─────────────── InMemoryDriveStore ───────────────
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 struct StoredFile {
     name: String,
@@ -331,7 +356,8 @@ struct StoredFile {
 /// - 文件命名空间是扁平的（`device.<uuid>.<kind>...`）
 /// - `upsert_by_name` 推进内部时钟，modifiedTime 单调递增
 /// - `delete` 404 视为 Ok，与 HTTP 实现一致
-/// - `list_appdata_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
+/// - `list_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
+#[cfg(test)]
 pub struct InMemoryDriveStore {
     files: Mutex<HashMap<String, StoredFile>>,
     next_id: AtomicU64,
@@ -342,6 +368,7 @@ pub struct InMemoryDriveStore {
     fail_next_upserts: AtomicU64,
 }
 
+#[cfg(test)]
 impl InMemoryDriveStore {
     pub fn new() -> Self {
         Self {
@@ -354,7 +381,6 @@ impl InMemoryDriveStore {
 
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
     /// 仅测试用 —— 验证 push 失败后 outbox 重试不变量。
-    #[allow(dead_code)]
     pub fn fail_next_upserts(&self, n: u64) {
         self.fail_next_upserts.store(n, Ordering::SeqCst);
     }
@@ -368,7 +394,7 @@ impl InMemoryDriveStore {
         format!("2026-05-15T10:00:00.{:09}Z", *c)
     }
 
-    pub async fn list_appdata_files(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+    pub async fn list_files(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
         let files = self.files.lock().await;
         let mut out: Vec<FileMeta> = files
             .iter()
@@ -437,6 +463,7 @@ impl InMemoryDriveStore {
     }
 }
 
+#[cfg(test)]
 impl Default for InMemoryDriveStore {
     fn default() -> Self {
         Self::new()

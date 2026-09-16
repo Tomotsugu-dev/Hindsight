@@ -177,7 +177,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     let files = with_token_retry(&inner.pool, &mut token, |tok| {
         let cursor_q = cursor_q.clone();
         let drive = &inner.drive;
-        async move { drive.list_appdata_files(&tok, &cursor_q).await }
+        async move { drive.list_files(&tok, &cursor_q).await }
     })
     .await?;
     if files.is_empty() {
