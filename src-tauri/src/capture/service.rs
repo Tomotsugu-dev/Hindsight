@@ -652,7 +652,9 @@ async fn tick(inner: &Inner) -> Result<()> {
 
     if let Some(path) = info.app_path.as_ref() {
         if !path.is_empty() {
-            let _ = process_paths::upsert(&inner.pool, &info.app_name, path).await;
+            if let Err(e) = process_paths::upsert(&inner.pool, &info.app_name, path).await {
+                log::warn!("process path for {} not recorded: {e}", info.app_name);
+            }
         }
     }
 
