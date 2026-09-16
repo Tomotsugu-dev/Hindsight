@@ -486,18 +486,10 @@ pub fn migrate_autostart_launch_agent(app: &AppHandle) {
 #[cfg(not(target_os = "macos"))]
 pub fn migrate_autostart_launch_agent(_app: &AppHandle) {}
 
-/// 后台 backfill 任务：图标 + 内置分类。两个任务都自带"已存在则跳过"，
-/// 重复启动开销很低；fire-and-forget 就行，不阻塞启动。
+/// Runs the startup backfills in the background: pair cross-OS aliases, then
+/// assign built-in categories, in that order. Both skip what already exists,
+/// so every launch after the first costs a few queries. Nothing waits for it.
 pub fn spawn_backfill_tasks(pool: DbPool) {
-    let pool_for_icons = pool.clone();
-    tokio::spawn(async move {
-        match crate::repo::app_icons::backfill_db_from_cache_or_extract(&pool_for_icons).await {
-            Ok(n) if n > 0 => log::info!("icon backfill: 新增 {n} 行 app_icons"),
-            Ok(_) => {}
-            Err(e) => log::warn!("icon backfill 失败: {e}"),
-        }
-    });
-
     tokio::spawn(async move {
         // 必须**顺序**跑：先跨 OS 别名配对，再内置分类回填。pair_existing 会把
         // Win "chrome.exe" 这类默认 solo 组合并到 canonical "Google Chrome"，让

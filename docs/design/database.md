@@ -180,7 +180,6 @@ Everything that touches the table. Check each one before changing its shape:
 |---|---|---|
 | Write | `repo::process_paths::upsert`, called from `capture::service` | Records this device's path on every capture tick that reports one, not only when focus changes. Queues an outbox row only when the path differs from the stored one |
 | Read | `commands::icons::resolve_icon_png`, behind the `get_app_icon` and `get_app_icon_data_url` commands | Last of three fallbacks: extracts the icon from the executable when neither the file cache nor a synced icon has it |
-| Read | `repo::app_icons::backfill_db_from_cache_or_extract`, called at startup from `bootstrap` | Walks every `process_name` and extracts an icon for any that has none, so peers can pull it |
 | Delete | `commands::storage::purge_activities` | Clears the whole table |
 | Delete | `repo::app_groups::purge_with_data` | Deletes the rows of the app being deleted |
 | Sync out | `sync::engine::push::build_process_paths` | Exports the whole table as `device.<id>.process_paths.json` |
