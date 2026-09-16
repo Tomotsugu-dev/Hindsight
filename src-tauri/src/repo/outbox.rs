@@ -23,7 +23,6 @@ impl OutboxOp {
 pub enum OutboxEntity {
     Activity,
     Category,
-    ProcessPath,
     Device,
     AppIcon,
     AppGroup,
@@ -35,7 +34,6 @@ impl OutboxEntity {
         match self {
             OutboxEntity::Activity => "activity",
             OutboxEntity::Category => "category",
-            OutboxEntity::ProcessPath => "process_path",
             OutboxEntity::Device => "device",
             OutboxEntity::AppIcon => "app_icon",
             OutboxEntity::AppGroup => "app_group",

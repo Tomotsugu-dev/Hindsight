@@ -25,10 +25,9 @@ pub struct DeviceRow {
 
 /// Registers this machine's row at startup and queues it for the other devices.
 ///
-/// When the row already exists, only last_seen_at and os are refreshed.
-/// display_name / color / icon are what the user set on the devices page, so a
-/// restart must not overwrite them; os feeds the peers' cross-OS filter, so it
-/// has to be true every time.
+/// When the row already exists, only last_seen_at is refreshed. display_name /
+/// color / icon are what the user set on the devices page, so a restart must not
+/// overwrite them; os is written once, when the row is created.
 pub async fn upsert_self(
     pool: &DbPool,
     device_id: String,
@@ -43,14 +42,11 @@ pub async fn upsert_self(
             conn.execute("UPDATE devices SET is_self = 0", [])
                 .db()?;
 
-            // TODO(ADR-0003): once process paths carry a device or stop syncing, the
-            // cross-OS filter has nothing left to protect and os needs no refreshing.
             conn.execute(
                 "INSERT INTO devices (device_id, display_name, color, icon, os, last_seen_at, is_self, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?6)
                  ON CONFLICT(device_id) DO UPDATE SET
                    last_seen_at = excluded.last_seen_at,
-                   os = excluded.os,
                    is_self = 1,
                    updated_at = excluded.updated_at",
                 rusqlite::params![device_id, default_name, default_color, default_icon, os, now],
@@ -192,7 +188,7 @@ mod tests {
         .await
         .unwrap();
 
-        // 用户改名后再次启动 upsert:display_name 不被默认值覆盖,os/last_seen 刷新
+        // 用户改名后再次启动 upsert:display_name 不被默认值覆盖,os 也不动,只刷新 last_seen
         update_self_meta(&pool, "dev-1".into(), Some("我的电脑".into()), None, None)
             .await
             .unwrap();
@@ -210,7 +206,7 @@ mod tests {
         let rows = list_all(&pool).await.unwrap();
         let me = rows.iter().find(|r| r.device_id == "dev-1").unwrap();
         assert_eq!(me.display_name, "我的电脑");
-        assert_eq!(me.os.as_deref(), Some("win"));
+        assert_eq!(me.os.as_deref(), Some("mac"));
         assert!(me.is_self);
 
         // 换机器 id 再 upsert:self 标志唯一

@@ -3,20 +3,18 @@
 //! icon extraction reads it, since both the Windows exe and the macOS app
 //! bundle are found through the path.
 //!
-//! The table is synced between devices, and a peer's row replaces the local
-//! one for the same process name. ADR-0003 records what that breaks.
+//! Local only. It was synced once, and rows written back then by another
+//! device may remain until the app is used again here (ADR-0003).
 
 use chrono::Local;
 use rusqlite::OptionalExtension;
 
 use crate::error::Result;
-use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// Records where a process's executable is. The capture loop calls it every
 /// time the process is in the foreground. Writes the path and the time it was
-/// last seen; queues the row for sync only when the path changed, so the
-/// frequent calls do not flood the outbox.
+/// last seen.
 pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result<()> {
     let process_name = process_name.to_string();
     let exe_path = exe_path.to_string();
@@ -25,18 +23,7 @@ pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result
 
     pool.0
         .call(move |conn| {
-            let tx = conn.transaction().db()?;
-            // The previous path: no outbox row when it did not change.
-            let prev_exe_path: Option<String> = tx
-                .query_row(
-                    "SELECT exe_path FROM process_paths WHERE process_name = ?",
-                    rusqlite::params![process_name],
-                    |r| r.get(0),
-                )
-                .optional()
-                .db()?;
-
-            tx.execute(
+            conn.execute(
                 "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
                  VALUES(?, ?, ?, ?)
                  ON CONFLICT(process_name) DO UPDATE SET
@@ -46,26 +33,6 @@ pub async fn upsert(pool: &DbPool, process_name: &str, exe_path: &str) -> Result
                 rusqlite::params![process_name, exe_path, seen_at, updated],
             )
             .db()?;
-
-            let path_changed = prev_exe_path.as_deref() != Some(&exe_path);
-            if path_changed {
-                let payload = serde_json::json!({
-                    "processName": process_name,
-                    "exePath": exe_path,
-                    "seenAt": seen_at,
-                    "updatedAt": updated,
-                })
-                .to_string();
-                enqueue(
-                    &tx,
-                    OutboxOp::Upsert,
-                    OutboxEntity::ProcessPath,
-                    &process_name,
-                    &payload,
-                )
-                .db()?;
-            }
-            tx.commit().db()?;
             Ok(())
         })
         .await?;

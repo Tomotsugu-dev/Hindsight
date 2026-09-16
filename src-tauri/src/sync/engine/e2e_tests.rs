@@ -767,8 +767,8 @@ async fn push_transient_failure_keeps_outbox_then_recovers() {
 }
 
 /// 任务 3：metadata entity 的双设备 roundtrip。
-/// A 端各表插一行 + 手工入 outbox（category / process_path / device / app_icon /
-/// app_group / app_group_member 六类）→ A sync 推文件 → B sync 拉回 → B 各表
+/// A 端各表插一行 + 手工入 outbox（category / device / app_icon / app_group /
+/// app_group_member 五类）→ A sync 推文件 → B sync 拉回 → B 各表
 /// 字段逐一与 A 写入值相等。
 /// 一条测试同时吃掉 push 构建侧的 build_* 与 pull 合并侧对应的 merge_*。
 // env 锁横跨整个测试(B merge app_icon 会写 icon 文件 cache,路径读
@@ -785,8 +785,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
 
     // 各表的期望值:时间戳独立、互不相同,B 端逐字段核对
     const T_CAT: &str = "2026-07-01T00:00:01Z";
-    const T_PATH: &str = "2026-07-01T00:00:03Z";
-    const T_SEEN: &str = "2026-06-30T09:00:00Z";
     const T_DEV_SEEN: &str = "2026-07-01T00:00:04Z";
     const T_DEV_UPD: &str = "2026-07-01T00:00:05Z";
     const T_ICON: &str = "2026-07-01T00:00:06Z";
@@ -794,7 +792,7 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
     const T_MEMBER: &str = "2026-07-01T00:00:08Z";
     let icon_bytes: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4];
 
-    // A 本机 OS —— meta 先到 B 才能解锁 process_paths 的 OS 过滤
+    // A 本机 OS,随 meta 同步到 B
     let os = crate::platform::local_os_id().to_string();
 
     let os_ins = os.clone();
@@ -806,12 +804,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                 "INSERT INTO categories(id, name, color, icon, builtin, sort_order, updated_at, deleted_at)
                  VALUES('cat-e2e', 'E2E 分类', '#abcdef', 'Star', 0, 7, ?1, NULL)",
                 rusqlite::params![T_CAT],
-            )
-            .db()?;
-            conn.execute(
-                "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
-                 VALUES('Proc-E2E', '/Applications/ProcE2E.app', ?1, ?2)",
-                rusqlite::params![T_SEEN, T_PATH],
             )
             .db()?;
             conn.execute(
@@ -850,7 +842,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
     // 这里不让测试依赖随机顺序。
     for (entity, pk) in [
         ("category", "cat-e2e"),
-        ("process_path", "Proc-E2E"),
         ("device", "device-a"),
         ("app_icon", "Proc-E2E"),
         ("app_group", "grp-e2e"),
@@ -865,8 +856,8 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
     assert_eq!(outbox_count(&a.pool).await, 0, "A 推完 outbox 应清空");
     assert_eq!(
         drive.list_appdata_files("").await.unwrap().len(),
-        6,
-        "6 类 entity 各一个文件"
+        5,
+        "5 类 entity 各一个文件"
     );
 
     b.engine.sync_now().await.expect("B sync 应成功");
@@ -884,9 +875,8 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
         Option<String>,
     );
     #[allow(clippy::type_complexity)]
-    let (cat, pp, dev, icon, grp, member): (
+    let (cat, dev, icon, grp, member): (
         CatRow,
-        (String, String, String),
         DevRow,
         (Vec<u8>, String, Option<String>),
         (String, Option<String>, String, Option<String>),
@@ -911,14 +901,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                             r.get(6)?,
                         ))
                     },
-                )
-                .db()?;
-            let pp = conn
-                .query_row(
-                    "SELECT exe_path, seen_at, updated_at
-                     FROM process_paths WHERE process_name = 'Proc-E2E'",
-                    [],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .db()?;
             let dev = conn
@@ -964,7 +946,7 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .db()?;
-            Ok((cat, pp, dev, icon, grp, member))
+            Ok((cat, dev, icon, grp, member))
         })
         .await
         .unwrap();
@@ -981,15 +963,6 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
             None
         ),
         "categories 行应逐字段等于 A 写入值"
-    );
-    assert_eq!(
-        pp,
-        (
-            "/Applications/ProcE2E.app".into(),
-            T_SEEN.into(),
-            T_PATH.into()
-        ),
-        "process_paths 行应逐字段一致"
     );
     assert_eq!(
         dev,
@@ -1025,167 +998,85 @@ async fn metadata_seven_entities_cross_device_roundtrip() {
     assert_eq!(outbox_count(&b.pool).await, 0, "B pull 后 outbox 应仍为空");
 }
 
-/// ADR-0004: a device that upgrades from a version which still published
-/// `app_categories.json` deletes its own copy on the first push after launch.
-/// Other devices' copies stay: each device cleans up its own once it upgrades.
+/// ADR-0003 / ADR-0004: a device that upgrades from a version which still
+/// published `app_categories.json` and `process_paths.json` deletes its own
+/// copies on the first push after launch. Other devices' copies stay: each
+/// device cleans up its own once it upgrades.
 #[tokio::test]
-async fn first_push_deletes_own_legacy_app_categories_file() {
+async fn first_push_deletes_own_legacy_cloud_files() {
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
-    drive
-        .upsert_by_name("device.device-a.app_categories.json", b"[]")
-        .await
-        .unwrap();
-    drive
-        .upsert_by_name("device.device-b.app_categories.json", b"[]")
-        .await
-        .unwrap();
+    for name in [
+        "device.device-a.app_categories.json",
+        "device.device-a.process_paths.json",
+        "device.device-b.app_categories.json",
+        "device.device-b.process_paths.json",
+    ] {
+        drive.upsert_by_name(name, b"[]").await.unwrap();
+    }
 
     a.engine.sync_now().await.expect("A sync 应成功");
 
-    let names: Vec<String> = drive
+    let mut names: Vec<String> = drive
         .list_appdata_files("")
         .await
         .unwrap()
         .into_iter()
         .map(|f| f.name)
         .collect();
-    assert!(
-        !names
-            .iter()
-            .any(|n| n == "device.device-a.app_categories.json"),
-        "本机那份 app_categories 文件应被删掉(现有:{names:?})"
-    );
-    assert!(
-        names
-            .iter()
-            .any(|n| n == "device.device-b.app_categories.json"),
-        "别的设备那份不能动(现有:{names:?})"
+    names.sort();
+    assert_eq!(
+        names,
+        vec![
+            "device.device-b.app_categories.json".to_string(),
+            "device.device-b.process_paths.json".to_string(),
+        ],
+        "本机的两份旧文件应被删掉,别的设备的不能动"
     );
 }
 
-/// 任务 7：OS 过滤 + 游标 stall 三段式。
-/// ① 只有 device-x 的 process_paths 文件、meta 未到 → OS 未知,游标不越过、表不写;
-/// ② 补传同 OS meta → 下轮两个文件都合并,游标推进到 meta 的 modifiedTime;
-/// ③ 异 OS 设备 device-y 的 meta + process_paths → 数据文件标 handled 跳过
-///    (游标越过),之后永不再合并。
+/// ADR-0003: a peer's `process_paths.json`, still published by older versions,
+/// is no longer merged. Pull treats the name as unknown, so the table stays
+/// untouched and the cursor moves past the file instead of stalling on it.
 #[tokio::test]
-async fn cross_os_filter_stalls_until_meta_then_skips_foreign_os() {
-    let drive_store = Arc::new(InMemoryDriveStore::new());
-    let dev = make_device("device-self", drive_store.clone()).await;
-    let local_os = crate::platform::local_os_id();
+async fn peer_process_paths_file_is_ignored() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let dev = make_device("device-self", drive.clone()).await;
+    let body = serde_json::json!([{
+        "processName": "Peer-App",
+        "exePath": "/Applications/Peer-App.app",
+        "seenAt": "2026-07-01T00:00:00Z",
+        "updatedAt": "2026-07-01T00:00:00Z",
+    }])
+    .to_string();
+    drive
+        .upsert_by_name("device.device-peer.process_paths.json", body.as_bytes())
+        .await
+        .unwrap();
+    let file_time = drive.list_appdata_files("").await.unwrap()[0]
+        .modified_time
+        .clone();
 
-    let path_body = |process: &str| {
-        serde_json::to_vec(&vec![crate::sync::payload::ProcessPathPayload {
-            process_name: process.to_string(),
-            exe_path: format!("/Applications/{process}"),
-            seen_at: "2026-07-01T00:00:00Z".into(),
-            updated_at: "2026-07-01T00:00:00Z".into(),
-        }])
-        .unwrap()
-    };
-    let meta_body = |device: &str, os: &str| {
-        serde_json::to_vec(&crate::sync::payload::DeviceMetaPayload {
-            device_id: device.to_string(),
-            display_name: device.to_string(),
-            color: "#abc".into(),
-            icon: "Monitor".into(),
-            os: Some(os.to_string()),
-            last_seen_at: None,
-            updated_at: "2026-07-01T00:00:00Z".into(),
+    dev.engine.sync_now().await.expect("sync 应成功");
+
+    let rows: i64 = dev
+        .pool
+        .0
+        .call(|conn| {
+            let n = conn
+                .query_row("SELECT COUNT(*) FROM process_paths", [], |r| r.get(0))
+                .db()?;
+            Ok(n)
         })
-        .unwrap()
-    };
-    let has_path = |process: &'static str| {
-        let pool = dev.pool.clone();
-        async move {
-            pool.0
-                .call(move |conn| {
-                    let n: i64 = conn
-                        .query_row(
-                            "SELECT COUNT(*) FROM process_paths WHERE process_name = ?1",
-                            rusqlite::params![process],
-                            |r| r.get(0),
-                        )
-                        .db()?;
-                    Ok(n > 0)
-                })
-                .await
-                .unwrap()
-        }
-    };
-
-    // ① 数据文件先到,meta 缺席
-    drive_store
-        .upsert_by_name("device.device-x.process_paths.json", &path_body("X-App"))
         .await
         .unwrap();
-    dev.engine.sync_now().await.unwrap();
-    assert!(!has_path("X-App").await, "OS 未知时 process_paths 不应合并");
+    assert_eq!(rows, 0, "对端的路径文件不应再被合并进本机");
     assert_eq!(
         super::io::read_cursor(&dev.pool, "drive_files")
             .await
             .unwrap(),
-        "1970-01-01T00:00:00Z",
-        "游标不能越过 OS 未知的数据文件(否则该文件永久丢失)"
-    );
-
-    // ② 补传本机同 OS 的 meta → 两个文件都应被处理
-    drive_store
-        .upsert_by_name(
-            "device.device-x.meta.json",
-            &meta_body("device-x", local_os),
-        )
-        .await
-        .unwrap();
-    let files = drive_store.list_appdata_files("").await.unwrap();
-    assert_eq!(files.len(), 2);
-    let t_meta_x = files[1].modified_time.clone(); // 升序:appcat(T1) < meta(T2)
-    dev.engine.sync_now().await.unwrap();
-    assert!(
-        has_path("X-App").await,
-        "meta 到位且同 OS 后,数据文件应被合并"
-    );
-    assert_eq!(
-        super::io::read_cursor(&dev.pool, "drive_files")
-            .await
-            .unwrap(),
-        t_meta_x,
-        "两个文件全 handled 后游标应推进到末尾(meta 的 modifiedTime)"
-    );
-
-    // ③ 异 OS 设备:meta 先到(T3)、数据文件后到(T4)
-    drive_store
-        .upsert_by_name(
-            "device.device-y.meta.json",
-            &meta_body("device-y", "alien-os"),
-        )
-        .await
-        .unwrap();
-    drive_store
-        .upsert_by_name("device.device-y.process_paths.json", &path_body("Y-App"))
-        .await
-        .unwrap();
-    let files = drive_store.list_appdata_files("").await.unwrap();
-    let t_path_y = files[3].modified_time.clone();
-    dev.engine.sync_now().await.unwrap();
-    assert!(
-        !has_path("Y-App").await,
-        "异 OS 的 process_paths 永不合并(key 体系不同,合并有害)"
-    );
-    assert_eq!(
-        super::io::read_cursor(&dev.pool, "drive_files")
-            .await
-            .unwrap(),
-        t_path_y,
-        "异 OS 数据文件应标 handled 让游标越过(不是 stall)"
-    );
-
-    // 再 sync 一轮:游标已越过,该文件不再入列,结论不变
-    dev.engine.sync_now().await.unwrap();
-    assert!(
-        !has_path("Y-App").await,
-        "游标越过后异 OS 文件永不再被拉取合并"
+        file_time,
+        "认不出的文件应被越过,游标推进到它的 modifiedTime"
     );
 }
 
