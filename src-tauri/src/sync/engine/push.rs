@@ -13,7 +13,7 @@ use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload, ProcessPathPayload,
+    DeviceMetaPayload,
 };
 
 const PUSH_BATCH_SIZE: usize = 200;
@@ -23,7 +23,6 @@ const PUSH_BATCH_SIZE: usize = 200;
 enum DirtyKey {
     ActivityDay(String), // local_date
     Categories,
-    ProcessPaths,
     DeviceMeta,
     AppIcons,
     AppGroups,
@@ -56,18 +55,18 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         }
     };
 
-    // TODO(ADR-0004): remove once active devices have upgraded past the release
-    // that stopped publishing app_categories.json.
+    // TODO(ADR-0003, ADR-0004): remove once active devices have upgraded past the
+    // releases that stopped publishing these files.
     if !inner
-        .legacy_app_categories_checked
+        .legacy_cloud_files_checked
         .load(std::sync::atomic::Ordering::SeqCst)
     {
-        match delete_legacy_app_categories_file(inner, &mut token).await {
+        match delete_legacy_cloud_files(inner, &mut token).await {
             Ok(()) => inner
-                .legacy_app_categories_checked
+                .legacy_cloud_files_checked
                 .store(true, std::sync::atomic::Ordering::SeqCst),
             Err(e) => {
-                log::warn!("push: old app_categories file not removed, retrying next tick: {e}")
+                log::warn!("push: old cloud files not removed, retrying next tick: {e}")
             }
         }
     }
@@ -161,35 +160,39 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     Ok(())
 }
 
-/// Deletes this device's `app_categories.json` from the cloud. Versions before
-/// this one published it; nothing reads it any more, and it keeps process names
-/// the user may since have removed. Only this device's copy is touched: every
-/// device cleans up its own file once it upgrades.
+/// Cloud files this device no longer publishes, by kind: `app_categories`
+/// (ADR-0004) and `process_paths` (ADR-0003). Older versions left them behind,
+/// nothing reads them any more, and they keep process names and paths the user
+/// may since have removed.
+const LEGACY_CLOUD_FILE_KINDS: [&str; 2] = ["app_categories", "process_paths"];
+
+/// Deletes this device's copies of the files in [`LEGACY_CLOUD_FILE_KINDS`] from
+/// the cloud. Only this device's copies are touched: every device cleans up its
+/// own files once it upgrades.
 ///
-/// TODO(ADR-0004): remove once active devices have upgraded.
-async fn delete_legacy_app_categories_file(
-    inner: &Arc<Inner>,
-    token: &mut TokenInfo,
-) -> Result<()> {
+/// TODO(ADR-0003, ADR-0004): remove once active devices have upgraded.
+async fn delete_legacy_cloud_files(inner: &Arc<Inner>, token: &mut TokenInfo) -> Result<()> {
     if inner.self_id.is_empty() {
         return Ok(());
     }
-    let name = format!("device.{}.app_categories.json", inner.self_id);
+    let names: Vec<String> = LEGACY_CLOUD_FILE_KINDS
+        .iter()
+        .map(|kind| format!("device.{}.{kind}.json", inner.self_id))
+        .collect();
     let files = with_token_retry(&inner.pool, token, |tok| {
         let drive = &inner.drive;
         async move { drive.list_appdata_files(&tok, "").await }
     })
     .await?;
-    let Some(file) = files.into_iter().find(|f| f.name == name) else {
-        return Ok(());
-    };
-    with_token_retry(&inner.pool, token, |tok| {
-        let drive = &inner.drive;
-        let id = file.id.clone();
-        async move { drive.delete(&tok, &id).await }
-    })
-    .await?;
-    log::info!("push: removed {name} from the cloud");
+    for file in files.into_iter().filter(|f| names.contains(&f.name)) {
+        with_token_retry(&inner.pool, token, |tok| {
+            let drive = &inner.drive;
+            let id = file.id.clone();
+            async move { drive.delete(&tok, &id).await }
+        })
+        .await?;
+        log::info!("push: removed {} from the cloud", file.name);
+    }
     Ok(())
 }
 
@@ -216,7 +219,6 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<DirtyKey, Vec<i64>>, Vec<i64>) {
                 }
             },
             "category" => DirtyKey::Categories,
-            "process_path" => DirtyKey::ProcessPaths,
             "device" => DirtyKey::DeviceMeta,
             "app_icon" => DirtyKey::AppIcons,
             "app_group" => DirtyKey::AppGroups,
@@ -236,7 +238,6 @@ fn file_name_for(self_id: &str, key: &DirtyKey) -> String {
     match key {
         DirtyKey::ActivityDay(day) => format!("device.{self_id}.activities.{day}.ndjson"),
         DirtyKey::Categories => format!("device.{self_id}.categories.json"),
-        DirtyKey::ProcessPaths => format!("device.{self_id}.process_paths.json"),
         DirtyKey::DeviceMeta => format!("device.{self_id}.meta.json"),
         DirtyKey::AppIcons => format!("device.{self_id}.icons.json"),
         DirtyKey::AppGroups => format!("device.{self_id}.app_groups.json"),
@@ -248,7 +249,6 @@ async fn build_content(pool: &DbPool, self_id: &str, key: &DirtyKey) -> Result<V
     match key {
         DirtyKey::ActivityDay(day) => build_activities_day(pool, self_id, day).await,
         DirtyKey::Categories => build_categories(pool).await,
-        DirtyKey::ProcessPaths => build_process_paths(pool).await,
         DirtyKey::DeviceMeta => build_device_meta(pool, self_id).await,
         DirtyKey::AppIcons => build_app_icons(pool).await,
         DirtyKey::AppGroups => build_app_groups(pool).await,
@@ -350,23 +350,6 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
                 sort_order: r.get(5)?,
                 updated_at: r.get(6)?,
                 deleted_at: r.get(7)?,
-            })
-        },
-    )
-    .await
-}
-
-async fn build_process_paths(pool: &DbPool) -> Result<Vec<u8>> {
-    build_table_rows(
-        pool,
-        "SELECT process_name, exe_path, seen_at, updated_at
-         FROM process_paths ORDER BY process_name",
-        |r| {
-            Ok(ProcessPathPayload {
-                process_name: r.get(0)?,
-                exe_path: r.get(1)?,
-                seen_at: r.get(2)?,
-                updated_at: r.get(3)?,
             })
         },
     )
@@ -651,11 +634,7 @@ mod tests {
         assert_eq!(meta.display_name, "我的 Mac");
         assert_eq!(meta.color, "#a1b2c3");
         assert_eq!(meta.icon, "Laptop");
-        assert_eq!(
-            meta.os.as_deref(),
-            Some("macos"),
-            "os 必须导出 —— 对端的 process_paths 过滤全靠它"
-        );
+        assert_eq!(meta.os.as_deref(), Some("macos"), "os 随 meta 一起导出");
         assert_eq!(meta.last_seen_at.as_deref(), Some("2026-07-01T08:00:00Z"));
         assert_eq!(meta.updated_at, "2026-07-02T09:00:00Z");
     }

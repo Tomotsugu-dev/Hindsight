@@ -32,16 +32,6 @@ pub struct CategoryPayload {
     pub deleted_at: Option<String>,
 }
 
-/// process_paths 行的 JSON 形式（process_name → exe 路径），跨设备同步本机 exe 位置。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProcessPathPayload {
-    pub process_name: String,
-    pub exe_path: String,
-    pub seen_at: String,
-    pub updated_at: String,
-}
-
 /// app_icons 行的 JSON 形式（PNG 字节 base64 编码后塞进 JSON）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
