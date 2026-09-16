@@ -2,7 +2,7 @@
 
 - **Date**: 2026-09-14 (problem recorded) · 2026-09-16 (decision)
 - **Status**: **Accepted**
-- **Related**: commit `9af557a` (table) · `a694cda` (sync columns) · `3636eb8` (into sync) · `8a65ac3` (cross-OS filter) · `sync::engine::pull::merge_process_paths` · ADR-0005
+- **Related**: commit `9af557a` (table) · `a694cda` (sync columns) · `3636eb8` (into sync) · `8a65ac3` (cross-OS filter) · ADR-0004 (same retirement pattern) · ADR-0005
 
 ## Context
 
@@ -40,64 +40,72 @@ the two paths can survive.
    from the local one, so another outbox row, another upload.
 6. **A pulls and gets B's path.** Back to step 4 in the other direction.
 
-Icons travel in a separate file, `device.<id>.icons.json`, outside this chain.
+### What the path is for
+
+The path has one reader: the last level of icon lookup, which extracts the
+icon from the local executable. Icons themselves travel in their own file,
+`device.<id>.icons.json`: a device that has shown an app has extracted its
+icon and pushed the bytes, and a peer that never ran the app gets the icon
+from those bytes, never from the path. A peer's path would only help when the
+peer failed to extract, the two devices share an OS and an install location,
+and this device never ran the app. That case has not been observed.
 
 ## Decision
 
-**Record which device wrote each row, and never let a peer's row replace this
-device's own.** Concretely:
+**Take `process_paths` out of sync.** It goes back to being a local cache:
 
-1. `process_paths` gains a `device_id` column. One row per process name stays;
-   the key does not change.
-2. `upsert` stamps the row with this device's id.
-3. `merge_process_paths` writes a peer's row under the peer's id (known from
-   the file name) and **skips any row this device wrote itself**.
-4. `build_process_paths` publishes **only this device's rows**, so paths
-   received from others are no longer forwarded.
-
-Rows that exist before the migration are treated as this device's own.
+1. Push stops publishing `device.<id>.process_paths.json`, and `upsert` stops
+   queueing outbox rows.
+2. Pull stops merging the file; the name is skipped like any other unknown
+   name.
+3. On the first push after each launch, the device deletes its own
+   `process_paths.json` from the cloud, the same way ADR-0004 removes
+   `app_categories.json`.
+4. The cross-OS gate and the `devices.os` refresh, which existed only for this
+   file, go with it.
 
 ## Alternatives
 
 | Option | Why not |
 |---|---|
-| **Add an owner column, local rows win (chosen)** | — |
-| Key the table by `(device_id, process_name)` | Keeps every device's path for every app, but this device only needs its own; the extra rows would only add candidates for icon extraction. Not worth rebuilding the table |
-| Stop syncing the table | Simplest, and the same shape as ADR-0004. Loses icon extraction from a peer's path for apps this device has never run, and that value was never measured |
-| Merge with `DO NOTHING` and no owner column | Stops the overwrite, but push would still forward peers' rows, and nothing could tell a forwarded row from an own one |
+| **Stop syncing the table (chosen)** | — |
+| Add an owner column; a peer's row never replaces this device's own; push only own rows | Stops the overwrite, but keeps a column, a migration, a three-way merge and a push filter alive for the one case described above, which nobody has seen |
+| Key the table by `(device_id, process_name)` | Same as above, plus rebuilding the table |
+| Merge with `DO NOTHING` | Stops the overwrite, but push keeps forwarding peers' rows, and nothing can tell a forwarded row from an own one |
 
 ## Consequences
 
-**A device's own path can no longer be overwritten by sync**, and the
-flip-flop stops: a device never publishes a row it did not write, and never
-accepts a row for an app it has recorded itself.
+**The overwrite and the flip-flop stop** on every upgraded device, and one
+sync entity, its cross-OS gate and its e2e tests disappear.
 
-**Peers' paths still arrive for apps this device has never run**, so level 3
-of icon lookup keeps its chance on the same OS. Such a path may not exist
-locally; extraction then returns nothing, as today.
+**Fewer paths leave the machine.** Executable paths carry the login name
+(`C:\Users\alice\...`); they no longer reach the cloud at all.
 
 **Devices on older versions keep overwriting** until they upgrade; the fix
 takes effect only once every device in the account runs it.
 
+**Cloud cleanup reaches only each upgraded device's own file**, as in
+ADR-0004.
+
 ## Data, compatibility, security, and privacy
 
-- **Existing data and migration**: one migration adds the column with an
-  empty default; rows with the empty value count as this device's own. Rows
-  already overwritten cannot be told apart from the data: there is no owner
-  column, and the path-shape cleanup migration v11 used against cross-OS
-  pollution does not apply when both paths have the same shape. They are
-  corrected the next time the app is used locally.
-- **Mixed versions and rollback**: the cloud file keeps its fields; the owner
-  is the file's device prefix, which every version already writes. An older
-  version ignores the new column, so rolling back loses nothing.
-- **Irreversible effects**: none.
-- **Security and privacy**: unchanged; the same paths are synced as before.
+- **Existing data and migration**: none. The table keeps its shape; rows
+  overwritten before the fix stay until the app is used again locally, which
+  writes the right path back. `updated_at` stays but no longer means
+  anything.
+- **Mixed versions and rollback**: an older version resumes publishing and
+  merging on its own; nothing is lost either way. Outbox rows with entity
+  `process_path` left by older versions are logged and deleted like any other
+  unknown entity.
+- **Irreversible effects**: the cloud file is deleted. It is a copy of local
+  data that nothing reads.
+- **Security and privacy**: improved; see above.
 
 ## Follow-up
 
-- Before the fix, a failing end-to-end test: two devices on the same OS
-  record different paths for one app; after a sync round each still holds its
-  own. It is red today.
-- With the owner known, the cross-OS gate and the `devices.os` refresh it
-  depends on are no longer needed for correctness. Decide separately whether
-  to keep them as a filter.
+- End-to-end tests: a peer's `process_paths.json` is no longer merged, this
+  device no longer publishes one, and the first push after launch deletes the
+  stale one.
+- The cloud cleanup is temporary and marked `TODO(ADR-0003)`; remove it once
+  active devices have upgraded.
+- `docs/design/database.md`: update the `process_paths` touchpoints.
