@@ -14,7 +14,7 @@ use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload, ProcessPathPayload, TombstonePayload,
+    DeviceMetaPayload, TombstonePayload,
 };
 
 /// Turns the contents of one sync file into rows waiting to be merged.
@@ -70,9 +70,6 @@ enum ParsedFile {
     Categories {
         device_id: String,
     },
-    ProcessPaths {
-        device_id: String,
-    },
     DeviceMeta {
         device_id: String,
     },
@@ -118,9 +115,6 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
             local_date: day.to_string(),
         }),
         ["device", uuid, "categories", "json"] => Some(ParsedFile::Categories {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "process_paths", "json"] => Some(ParsedFile::ProcessPaths {
             device_id: uuid.to_string(),
         }),
         ["device", uuid, "meta", "json"] => Some(ParsedFile::DeviceMeta {
@@ -213,7 +207,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             )
         })
         .unwrap_or((false, false, false));
-    let local_os = crate::platform::local_os_id();
     let mut applied = 0u64;
     // 每个文件是否「应用 or 主动跳过」。Drive 已按 modifiedTime 升序返回，pull 结束时
     // 游标只推到最长连续 true 前缀的末尾 —— 第一个 false 之后哪怕后面有成功也不推，
@@ -221,8 +214,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     // upsert 路径靠 (device_id, remote_id) 幂等 + LWW updated_at，重复拉无副作用。
     let mut handled = vec![false; files.len()];
 
-    // Pass 1: 只跑 device.meta.json，让 devices.os 在 Pass 2 之前就位。
-    // 否则一台陌生设备首次出现时，我们读 devices.os 是空的，没法做跨 OS 过滤。
+    // Pass 1: device.meta.json only, so a peer's devices row is in place before
+    // any of its data files is merged.
     for (i, f) in files.iter().enumerate() {
         let parsed = match parse_filename(&f.name) {
             Some(p) => p,
@@ -261,7 +254,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         applied += 1;
     }
 
-    // Pass 2: 其余类型；对平台特定的两类做 OS 过滤。
+    // Pass 2: 其余类型。
     //
     // FK 依赖排序:同一批内「被引用方」(categories / app_groups)必须先于
     // 「引用方」(app_group_members)合并——push 端 dirty 文件按
@@ -323,7 +316,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         let device_id = match &parsed {
             ParsedFile::ActivityDay { device_id, .. }
             | ParsedFile::Categories { device_id }
-            | ParsedFile::ProcessPaths { device_id }
             | ParsedFile::AppIcons { device_id }
             | ParsedFile::AppGroups { device_id }
             | ParsedFile::AppGroupMembers { device_id }
@@ -342,41 +334,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         if device_id == self_id && !is_self_activity {
             handled[i] = true;
             continue;
-        }
-
-        // process_paths 是平台特定的：
-        //   Windows tracker 写 process_name = "chrome.exe"，exe_path = "C:\\..."
-        //   macOS tracker  写 process_name = "Google Chrome"，exe_path = "/Applications/.../MacOS/..."
-        // 跨 OS 合并要么完全无用（key 对不上），要么坏事（同名 key 撞车，把本机能用的路径覆盖掉，icon 提取失败）。
-        // activities / app_icons 不过滤 —— 跨设备聚合活动是核心价值；icon 字节就是要让对方
-        // 给从那台机器同步过来的 activity 行渲染图标用的。
-        if matches!(parsed, ParsedFile::ProcessPaths { .. }) {
-            match remote_device_os(&inner.pool, device_id).await {
-                // OS 已知且确实跨平台：跳过并标 handled（游标可越过——永远不该拉）。
-                Some(os) if os != local_os => {
-                    log::debug!(
-                        "跳过跨 OS 文件 {} (远端 os={os}, 本机 {})",
-                        f.name,
-                        local_os
-                    );
-                    handled[i] = true;
-                    continue;
-                }
-                Some(_) => {} // 同 OS：正常处理
-                // OS 未知：多半是对端的 meta 文件还没到（push 是 HashMap 随机序，
-                // process_paths 可能先落 Drive）。**不标 handled**——让游标停在
-                // 这里，下轮 meta 到了再处理；标了 handled 游标越过后（list 用严格
-                // `modifiedTime >`）这份文件永远不会再被拉，同 OS 对端的进程路径
-                // 就永久缺失。
-                None => {
-                    log::debug!(
-                        "暂缓文件 {}（远端 {} 的 OS 未知，等 meta）",
-                        f.name,
-                        device_id
-                    );
-                    continue;
-                }
-            }
         }
 
         let body = match with_token_retry(&inner.pool, &mut token, |tok| {
@@ -410,9 +367,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::ProcessPaths { device_id } => {
-                merge_process_paths(&inner.pool, &device_id, &body).await
             }
             ParsedFile::AppIcons { device_id } => {
                 merge_app_icons(&inner.pool, &device_id, &body).await
@@ -518,27 +472,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         log::info!("sync pull 完成，应用 {} 个远端文件", applied);
     }
     Ok(())
-}
-
-/// 查 devices 表里某个远端设备的 os；没有 device_meta 同步过来时返回 None。
-async fn remote_device_os(pool: &DbPool, device_id: &str) -> Option<String> {
-    let id = device_id.to_string();
-    pool.0
-        .call(move |conn| {
-            let r = conn
-                .query_row(
-                    "SELECT os FROM devices WHERE device_id = ?1",
-                    rusqlite::params![id],
-                    |r| r.get::<_, Option<String>>(0),
-                )
-                .ok()
-                .flatten()
-                .filter(|s| !s.is_empty());
-            Ok(r)
-        })
-        .await
-        .ok()
-        .flatten()
 }
 
 async fn merge_activities(
@@ -758,36 +691,6 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
             if just_deleted {
                 crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
             }
-            Ok(())
-        },
-    )
-    .await
-}
-
-async fn merge_process_paths(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
-    merge_lww_simple(
-        pool,
-        "process_path",
-        body,
-        |row: &ProcessPathPayload| (!row.process_name.is_empty()).then(|| row.process_name.clone()),
-        |conn, row: ProcessPathPayload| {
-            if !is_remote_newer(
-                conn,
-                "SELECT updated_at FROM process_paths WHERE process_name = ?1",
-                rusqlite::params![row.process_name],
-                &row.updated_at,
-            )? {
-                return Ok(());
-            }
-            conn.execute(
-                "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
-                 VALUES(?, ?, ?, ?)
-                 ON CONFLICT(process_name) DO UPDATE SET
-                   exe_path = excluded.exe_path,
-                   seen_at = excluded.seen_at,
-                   updated_at = excluded.updated_at",
-                rusqlite::params![row.process_name, row.exe_path, row.seen_at, row.updated_at],
-            )?;
             Ok(())
         },
     )
@@ -1734,64 +1637,6 @@ mod tests {
             outbox_entries(&pool).await.len(),
             1,
             "重复 merge 不得二次级联(outbox 行数应保持 1)"
-        );
-    }
-
-    /// merge_process_paths:同一套 LWW 矩阵(该表无墓碑列,验证 exe_path/seen_at)。
-    #[tokio::test]
-    async fn merge_process_paths_lww_matrix() {
-        let pool = fresh_test_pool().await;
-        for (proc, ts) in [("P-newer", T_OLD), ("P-older", T_NEW), ("P-equal", T_MID)] {
-            exec_sql(
-                &pool,
-                "INSERT INTO process_paths(process_name, exe_path, seen_at, updated_at)
-                 VALUES(?1, '/local/bin', ?2, ?2)",
-                vec![s(proc), s(ts)],
-            )
-            .await;
-        }
-        let remote_row = |p: &str| ProcessPathPayload {
-            process_name: p.into(),
-            exe_path: "/remote/bin".into(),
-            seen_at: T_MID.into(),
-            updated_at: T_MID.into(),
-        };
-        let body = serde_json::to_vec(&vec![
-            remote_row("P-newer"),
-            remote_row("P-older"),
-            remote_row("P-equal"),
-            remote_row("P-missing"),
-        ])
-        .unwrap();
-        merge_process_paths(&pool, REMOTE_DEV, &body).await.unwrap();
-
-        let get = |p: &'static str| {
-            read_row(
-                &pool,
-                "SELECT exe_path, seen_at, updated_at FROM process_paths WHERE process_name = ?1",
-                p,
-                3,
-            )
-        };
-        assert_eq!(
-            get("P-newer").await.unwrap(),
-            vec![s("/remote/bin"), s(T_MID), s(T_MID)],
-            "远端较新应整行覆盖(exe_path + seen_at 一起换)"
-        );
-        assert_eq!(
-            get("P-older").await.unwrap(),
-            vec![s("/local/bin"), s(T_NEW), s(T_NEW)],
-            "远端较旧应保留本地"
-        );
-        assert_eq!(
-            get("P-equal").await.unwrap(),
-            vec![s("/local/bin"), s(T_MID), s(T_MID)],
-            "同 updated_at 严格不覆盖"
-        );
-        assert_eq!(
-            get("P-missing").await.unwrap(),
-            vec![s("/remote/bin"), s(T_MID), s(T_MID)],
-            "本地缺行应插入"
         );
     }
 

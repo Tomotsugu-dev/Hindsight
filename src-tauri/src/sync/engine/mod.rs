@@ -142,10 +142,10 @@ pub(super) struct Inner {
     /// 「此刻在同步」的可观测标志(flush 串行门负责互斥,这个只负责给
     /// status() 快照读)。sync_now 与后台 tick 的 flush 段都会置位。
     pub(super) sync_in_flight: std::sync::atomic::AtomicBool,
-    /// Set once this run has deleted, or found absent, the cloud copy of this
-    /// device's `app_categories.json`. Push checks it once per launch.
-    /// TODO(ADR-0004): remove together with the cleanup in push.
-    pub(super) legacy_app_categories_checked: std::sync::atomic::AtomicBool,
+    /// Set once this run has deleted, or found absent, this device's cloud copies
+    /// of the files it no longer publishes. Push checks it once per launch.
+    /// TODO(ADR-0003, ADR-0004): remove together with the cleanup in push.
+    pub(super) legacy_cloud_files_checked: std::sync::atomic::AtomicBool,
 }
 
 /// RAII:作用域内置位 sync_in_flight,离开(含错误提前返回)自动清零。
@@ -196,7 +196,7 @@ impl SyncEngine {
                 status: RwLock::new(SyncStatus::default()),
                 sync_in_flight: std::sync::atomic::AtomicBool::new(false),
                 flush_gate: Mutex::new(()),
-                legacy_app_categories_checked: std::sync::atomic::AtomicBool::new(false),
+                legacy_cloud_files_checked: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }

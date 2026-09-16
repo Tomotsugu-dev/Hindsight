@@ -1,91 +1,111 @@
-# ADR-0003 · 同系统设备之间，可执行文件路径互相覆盖
+# ADR-0003 · Devices on the same OS overwrite each other's executable paths
 
-- **日期**：2026-09-14
-- **状态**：提议中（决定待定）
-- **相关**：commit `9af557a`（建表）· `a694cda`（补同步列）· `3636eb8`（进入同步）· `8a65ac3`（跨系统过滤）· `sync::engine::pull::merge_process_paths`
+- **Date**: 2026-09-14 (problem recorded) · 2026-09-16 (decision)
+- **Status**: **Accepted**
+- **Related**: commit `9af557a` (table) · `a694cda` (sync columns) · `3636eb8` (into sync) · `8a65ac3` (cross-OS filter) · ADR-0004 (same retirement pattern) · ADR-0005
 
-## 背景
+## Context
 
-### 现象
+### What the user sees
 
-两台系统相同的电脑装着同一个应用，但装的位置不同。开着同步用一段时间后，**两台电脑记下的都变成了其中一台的安装路径**；两台都在用这个应用时，这条记录在两台之间无限来回改写。
+Two computers on the same OS have the same app installed in different
+places. After syncing for a while, **both computers hold one of the two
+install paths**, and while both are using the app the record flips between
+the two paths without end. Reproduced with the end-to-end sync harness.
 
-Windows 上很容易撞上：按用户安装的应用（Slack、Discord、VS Code 用户版）路径里带着登录用户名。
+Windows hits this easily: per-user installs (Slack, Discord, VS Code user
+setup) carry the login name in the path.
 
 ```
-电脑 A  C:\Users\alice\AppData\Local\slack\slack.exe
-电脑 B  C:\Users\bob\AppData\Local\slack\slack.exe
+Computer A  C:\Users\alice\AppData\Local\slack\slack.exe
+Computer B  C:\Users\bob\AppData\Local\slack\slack.exe
 ```
 
-### 链路
+### The chain
 
-同步的是 `process_paths` 这张表：每台设备把自己的**整张表**打包成一个文件推上云，对端**按进程名**逐行合并，时间戳新的覆盖旧的。这张表一个进程名只能有一行，所以两台的路径只能留下一个。
+The synced table is `process_paths`. Each device publishes its **whole table**
+as one cloud file; a peer merges it **row by row on the process name**, newer
+timestamp wins. The table allows one row per process name, so only one of
+the two paths can survive.
 
-1. **A 记下本机路径。** 抓屏调 `process_paths::upsert`，写入 `slack.exe → C:\Users\alice\...`。路径和表里原值不同，入一条 outbox。
-2. **A 把整张表推上云。** push 把 A 的整张路径表导出成 `device.A.process_paths.json` 上传。
-3. **B 拉到文件，过跨系统闸。** B 查 A 的 `os`，两台都是 Windows，放行。
-4. **B 按进程名合并。** A 的时间戳更新，执行 `ON CONFLICT(process_name) DO UPDATE SET exe_path = excluded.exe_path`，**B 的 `slack.exe` 被改成 A 的路径**。
-5. **B 再用 Slack，写回本机路径。** 抓屏发现表里的路径和本机不同，写回 `C:\Users\bob\...`，又入一条 outbox，推上云。
-6. **A 拉到，被改成 B 的路径。** 回到第 4 步，方向相反；A 再用 Slack 回到第 1 步。
+1. **A records its own path.** Capture calls `process_paths::upsert` with
+   `slack.exe → C:\Users\alice\...`. The path differs from the stored one, so an
+   outbox row is queued.
+2. **A publishes the whole table** as `device.A.process_paths.json`.
+3. **B pulls the file and passes the cross-OS gate.** Both are Windows.
+4. **B merges by process name.** A's timestamp is newer, so
+   `ON CONFLICT(process_name) DO UPDATE SET exe_path = excluded.exe_path`
+   **replaces B's `slack.exe` with A's path**.
+5. **B uses Slack again and writes its own path back.** The stored path differs
+   from the local one, so another outbox row, another upload.
+6. **A pulls and gets B's path.** Back to step 4 in the other direction.
 
-图标本身走另一个文件 `device.<id>.icons.json`，不在这条链路上。
+### What the path is for
 
-### 实测
+The path has one reader: the last level of icon lookup, which extracts the
+icon from the local executable. Icons themselves travel in their own file,
+`device.<id>.icons.json`: a device that has shown an app has extracted its
+icon and pushed the bytes, and a peer that never ran the app gets the icon
+from those bytes, never from the path. A peer's path would only help when the
+peer failed to extract, the two devices share an OS and an install location,
+and this device never ran the app. That case has not been observed.
 
-用 e2e 测试框架复现。写路径用抓屏真正调用的 `process_paths::upsert`，推拉用真正的 `sync_now`，只把 Google Drive 换成内存实现。
+## Decision
 
-- **覆盖**：B 先记下本机路径，A 后记下另一个路径，同步一轮后 B 表里是 A 的路径。
-- **覆盖后的路径在本机用不了**：在 macOS 上对同一个应用调图标提取，B 自己的路径得到 11679 字节，被覆盖后的路径得到 `None`。
-- **来回翻**：连跑三轮，每轮相同。B 用一次入一条 outbox，A 的表被改成 B 的路径；A 用一次，B 的表被改回去。每翻一次重写一次云端文件。
+**Take `process_paths` out of sync.** It goes back to being a local cache:
 
-### 为什么是这个形状
+1. Push stops publishing `device.<id>.process_paths.json`, and `upsert` stops
+   queueing outbox rows.
+2. Pull stops merging the file; the name is skipped like any other unknown
+   name.
+3. On the first push after each launch, the device deletes its own
+   `process_paths.json` from the cloud, the same way ADR-0004 removes
+   `app_categories.json`.
+4. The cross-OS gate and the `devices.os` refresh, which existed only for this
+   file, go with it.
 
-它不是按「跨设备共享」设计出来的，是一张本地缓存表在二十四小时内被拉进了同步：
+## Alternatives
 
-- **2026-05-03 `9af557a`**：作为抓屏的本地缓存建表，`process_name` 做主键。当时没有同步，一台电脑上「一个进程名一个路径」是正确的。
-- **同日 `a694cda`**（*Lay groundwork for cloud sync*）：补上 `updated_at` 列好参与同步合并。**主键没动。**
-- **2026-05-04 `3636eb8`**：路径表进入同步协议。
-- **同日 `8a65ac3`**（*Stop cross-OS sync of platform-specific data*）：发现别的系统的路径混了进来，加了跨系统过滤。
-- **随后迁移 v11**：清理已经混进来的跨系统路径。
+| Option | Why not |
+|---|---|
+| **Stop syncing the table (chosen)** | — |
+| Add an owner column; a peer's row never replaces this device's own; push only own rows | Stops the overwrite, but keeps a column, a migration, a three-way merge and a push filter alive for the one case described above, which nobody has seen |
+| Key the table by `(device_id, process_name)` | Same as above, plus rebuilding the table |
+| Merge with `DO NOTHING` | Stops the overwrite, but push keeps forwarding peers' rows, and nothing can tell a forwarded row from an own one |
 
-当时意识到了「路径是平台相关的」，但只处理了「系统不同」这一种，「系统相同、位置不同」一直没有被挡住。
+## Consequences
 
-### 路径在哪里被用到
+**The overwrite and the flip-flop stop** on every upgraded device, and one
+sync entity, its cross-OS gate and its e2e tests disappear.
 
-图标查找分三级（`commands/icons.rs`）：
+**Fewer paths leave the machine.** Executable paths carry the login name
+(`C:\Users\alice\...`); they no longer reach the cloud at all.
 
-1. 本机文件缓存
-2. 数据库里的图标字节，别的设备同步来的图标走这一级
-3. 从本机可执行文件提取，**只有这一级读路径**
+**Devices on older versions keep overwriting** until they upgrade; the fix
+takes effect only once every device in the account runs it.
 
-**以下是推断，未经实测**：用户实际看到「某个应用图标没了」应该少见。对端从自己的正确路径提取成功后会把图标字节推过来，第 2 级先命中，轮不到错误的路径。
+**Cloud cleanup reaches only each upgraded device's own file**, as in
+ADR-0004.
 
-### 存量数据
+## Data, compatibility, security, and privacy
 
-表里没有「这一行由哪台设备写入」的字段，**已经被覆盖的行无法从数据本身识别出来**。
+- **Existing data and migration**: none. The table keeps its shape; rows
+  overwritten before the fix stay until the app is used again locally, which
+  writes the right path back. `updated_at` stays but no longer means
+  anything.
+- **Mixed versions and rollback**: an older version resumes publishing and
+  merging on its own; nothing is lost either way. Outbox rows with entity
+  `process_path` left by older versions are logged and deleted like any other
+  unknown entity.
+- **Irreversible effects**: the cloud file is deleted. It is a copy of local
+  data that nothing reads.
+- **Security and privacy**: improved; see above.
 
-迁移 v11 清理跨系统污染的办法是看路径形状：macOS 上删掉不以 `/` 开头的路径，Windows 上删掉不以盘符开头的。**这个办法对同系统的污染无效**，因为两台的路径形状完全一样。
+## Follow-up
 
-### 不做决定的后果
-
-每台设备的路径表里，除了最后写入的那一台，其余都是在本机用不了的路径；多台设备同时使用同一个应用时，同步会为这一条记录反复入队、反复重写云端文件。
-
-## 决定
-
-> 待定。
-
-## 理由
-
-> 待定。
-
-## 代价
-
-> 待定。
-
-## 对用户数据的影响
-
-> 待定。任何方案都要面对上面「存量数据」一节的约束。
-
-## 后续
-
-- 动手修之前先写一个失败测试：两台同系统设备各自记下不同路径，同步后断言 B 的路径**没有**被 A 覆盖。它今天是红的。
+- End-to-end tests: a peer's `process_paths.json` is no longer merged, this
+  device no longer publishes one, and the first push after launch deletes the
+  stale one.
+- The cloud cleanup is temporary and marked `TODO(ADR-0003)`; remove it once
+  active devices have upgraded.
+- `docs/design/database.md`: update the `process_paths` touchpoints.
