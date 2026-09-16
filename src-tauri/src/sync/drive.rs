@@ -352,19 +352,22 @@ struct StoredFile {
     modified_time: String,
 }
 
-/// 进程内 HashMap 模拟 Drive appDataFolder。语义精确镜像 Drive REST：
-/// - 文件命名空间是扁平的（`device.<uuid>.<kind>...`）
-/// - `upsert_by_name` 推进内部时钟，modifiedTime 单调递增
-/// - `delete` 404 视为 Ok，与 HTTP 实现一致
-/// - `list_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
+/// 内存里的假云,给端到端测试用,行为与 Google Drive 后端一致——测试才能
+/// 代替真后端跑:
+/// - 扁平命名空间,文件名形如 `device.<uuid>.<kind>...`
+/// - `upsert_by_name` 每写一次推进时钟,modifiedTime 严格递增
+/// - `delete` 删不存在的文件也算成功(幂等)
+/// - `list_files` 按 modifiedTime 升序,只返回严格晚于 `modified_after` 的
 #[cfg(test)]
 pub struct InMemoryDriveStore {
+    /// 云端文件夹:文件 id → 内容。download / delete 都按 id 定位,所以按 id 存。
     files: Mutex<HashMap<String, StoredFile>>,
+    /// 发号器:每建一个文件取一个唯一 id(mock-id-N),模拟 Drive 建文件时分配的 id。
     next_id: AtomicU64,
+    /// 写入序号,每写一次 +1,用来造单调递增的 modifiedTime——不是真实时间。
     clock: Mutex<i64>,
-    /// 测试注入开关：>0 时接下来 N 次 `upsert_by_name` 直接返回 500（模拟 Drive
-    /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
-    /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
+    /// 故障注入:值 >0 时接下来这么多次 upsert 直接返回 500,每次扣 1。
+    /// 用来测 push 上传失败后 outbox 行保留、下一轮重试。
     fail_next_upserts: AtomicU64,
 }
 
@@ -388,9 +391,8 @@ impl InMemoryDriveStore {
     async fn next_modified_time(&self) -> String {
         let mut c = self.clock.lock().await;
         *c += 1;
-        // 单调递增的 RFC3339，方便跟真实 Drive 的字典序一致。
-        // 秒字段固定为 0、只让小数位增长：之前 `{:02}` 填 `*c % 60` 会在第 60 次
-        // 上传时秒位回绕（...00.000060 < ...59.000059），破坏单调性
+        // 这个时间戳只需满足"字符串比大小 = 写入先后"。固定秒位、只让小数位
+        // 递增,字典序就跟写入顺序一致;真实时间无所谓。
         format!("2026-05-15T10:00:00.{:09}Z", *c)
     }
 
