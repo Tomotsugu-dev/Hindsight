@@ -250,11 +250,6 @@ async fn push_memory(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) 
         return Ok(());
     }
     // 有变化的日期 = 存在 ended_ts > prev 的本机会话的日期;首次(epoch)推全部
-    let prev_q = if prev.starts_with("1970-") {
-        String::new()
-    } else {
-        prev.clone()
-    };
     let days: Vec<String> = mem
         .0
         .call(move |conn| {
@@ -266,7 +261,7 @@ async fn push_memory(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) 
                 )
                 .db()?;
             let days = stmt
-                .query_map([prev_q], |r| r.get::<_, String>(0))
+                .query_map([prev], |r| r.get::<_, String>(0))
                 .db()?
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;

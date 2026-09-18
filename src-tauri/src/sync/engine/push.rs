@@ -7,7 +7,7 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::io::{self, OutboxRow};
-use super::{format_sync_error, sync_error_prefix, with_token_retry, Inner};
+use super::{with_token_retry, Inner};
 use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
@@ -36,23 +36,9 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     let _gate = inner.flush_gate.lock().await;
     let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
-        // NotSignedIn 是预期状态，不当错误显示；其它（续期失败 / refresh_token 失效）让用户看见
-        Err(Error::NotSignedIn) => {
-            log::debug!("sync 跳过 push（未登录）");
-            return Ok(());
-        }
-        Err(e) => {
-            // warn carries the error's class but not its text, and the detail goes to
-            // debug: only info and above is printed by default, so start with
-            // RUST_LOG=hindsight=debug to see it. What the user sees goes through status.
-            log::warn!(
-                "sync push: no valid token {}(see status)",
-                sync_error_prefix(&e)
-            );
-            log::debug!("sync push: token error: {e}");
-            inner.status.write().await.last_error = Some(format_sync_error(&e));
-            return Ok(());
-        }
+        // Not signed in is not a failure: there is nothing to push.
+        Err(Error::NotSignedIn) => return Ok(()),
+        Err(e) => return Err(e),
     };
 
     // TODO(ADR-0003, ADR-0004): remove once active devices have upgraded past the
@@ -105,8 +91,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     }
     let mut succeeded_ids: Vec<i64> = Vec::new();
     let mut failed_ids: Vec<i64> = Vec::new();
-    let mut last_err_raw: Option<crate::error::Error> = None;
-    let mut last_err_str: Option<String> = None;
+    let mut last_err: Option<Error> = None;
 
     for (key, ids) in groups {
         let name = file_name_for(self_id, &key);
@@ -115,8 +100,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
             Err(e) => {
                 log::warn!("生成 {} 内容失败: {e}", name);
                 failed_ids.extend(&ids);
-                last_err_str = Some(e.to_string());
-                last_err_raw = Some(e);
+                last_err = Some(e);
                 continue;
             }
         };
@@ -132,8 +116,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
             Err(e) => {
                 log::warn!("上传 {} 失败: {e}", name);
                 failed_ids.extend(&ids);
-                last_err_str = Some(e.to_string());
-                last_err_raw = Some(e);
+                last_err = Some(e);
             }
         }
     }
@@ -145,15 +128,9 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         s.last_error = None;
     }
 
-    if !failed_ids.is_empty() {
-        let err_str = last_err_str.clone().unwrap_or_else(|| "未知错误".into());
-        io::bump_outbox_retry(&inner.pool, &failed_ids, &err_str).await?;
-        if let Some(ref e) = last_err_raw {
-            inner.status.write().await.last_error = Some(format_sync_error(e));
-        }
-        return Err(Error::SyncIncomplete(
-            last_err_str.unwrap_or_else(|| "push 失败".into()),
-        ));
+    if let Some(e) = last_err {
+        io::bump_outbox_retry(&inner.pool, &failed_ids, &e.to_string()).await?;
+        return Err(e);
     }
 
     log::info!("sync push 成功，共 {} 行 outbox 出队", succeeded_ids.len());

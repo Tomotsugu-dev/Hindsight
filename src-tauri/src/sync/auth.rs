@@ -44,7 +44,9 @@ const OAUTH_TIMEOUT_SECS: u64 = 180;
 /// the old key, and the new one cannot open it.
 const AUTH_KEY_CONTEXT: &[u8] = b"hindsight-auth-v1";
 
-/// OAuth 登录状态对外快照（前端「设备」页面 + auth 命令读）。
+/// What the Devices page shows: whether anyone is signed in, which account, whether
+/// the "Sign in with Google" button is enabled, and whether to ask for an app
+/// restart. Returned by `auth_status` and when sign-in completes.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthState {
@@ -59,7 +61,7 @@ pub struct AuthState {
     pub requires_restart: bool,
 }
 
-/// 拉当前登录状态（不联网，只查 DB）。
+/// Get the current authentication state from the local database.
 pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
     let cfg = settings::load(pool).await.unwrap_or_default();
     let configured =
@@ -231,21 +233,16 @@ pub async fn sign_in_with_google(
     current_state(pool).await
 }
 
-/// 拿到一个有效的 Google access_token，过期就用 refresh_token 自动续。
-/// 拉一个仍然有效的 access_token：
-/// - 没登录 → `Error::NotSignedIn`
-/// - 当前未过期 → 直接返回
-/// - 已过期 → 用 DB 里的 refresh_token_enc 解出 refresh_token 调 Google 续一个，写回 DB 再返回
+/// Returns an access token that, by the local clock, stays valid for at least
+/// 10 more minutes. If it is closer to expiry, a new one is fetched from Google
+/// and written to the database first.
 ///
-/// 同时返回当前 uid，方便上层路由。
-///
-/// 缓冲取 10 分钟：本地 expires_at 还剩 ≤10min 就提前续。原来 5 min 在
-/// 笔记本盖盖醒来 / 系统时钟漂移的情况下不够用——access_token 在本地"还有效"
-/// 时，Google 端可能已经把它拒了（401），用户被迫重新登录。
+/// The margin lets the Drive calls made with the token all finish on it, and
+/// absorbs a small difference between the local clock and Google's. Callers
+/// that do not handle 401 rely on it entirely.
 pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
     let (uid, rt_enc, access, expires_at) = read_auth_state(pool).await?;
 
-    // 还在有效期 + 10 分钟以上缓冲 → 直接复用
     if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(&expires_at) {
         let now = chrono::Utc::now();
         let exp_utc = exp.with_timezone(&chrono::Utc);
@@ -257,7 +254,7 @@ pub async fn ensure_valid_token(pool: &DbPool) -> Result<TokenInfo> {
         }
     }
 
-    log::debug!("access_token 即将过期或已过期，调 oauth2 端点续期…");
+    log::debug!("access token is about to expire or has expired, refreshing it");
     refresh_and_persist(pool, uid, &rt_enc).await
 }
 

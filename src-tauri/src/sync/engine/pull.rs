@@ -1,5 +1,8 @@
-//! Pull 路径：列 Drive 文件，按 modifiedTime 增量下载，按文件名分发到 merge_*。
-//! merge_* 都做 LWW（updated_at 字典序比较）+ idempotent upsert。
+//! Pull: merges the files other devices wrote to the cloud into the local
+//! database.
+//!
+//! Every `merge_*` must be idempotent: the cursor stops before the first file
+//! that failed, so the files merged after it are merged again next round.
 
 use rusqlite::OptionalExtension;
 use std::sync::Arc;
@@ -7,10 +10,10 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::io;
-use super::{format_sync_error, sync_error_prefix, with_token_retry, Inner};
+use super::{with_token_retry, Inner};
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::{Error, Result};
-use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
+use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
@@ -103,6 +106,24 @@ enum ParsedFile {
     },
 }
 
+impl ParsedFile {
+    /// The device that wrote the file.
+    fn device_id(&self) -> &str {
+        match self {
+            ParsedFile::ActivityDay { device_id, .. }
+            | ParsedFile::Categories { device_id }
+            | ParsedFile::DeviceMeta { device_id }
+            | ParsedFile::AppIcons { device_id }
+            | ParsedFile::AppGroups { device_id }
+            | ParsedFile::AppGroupMembers { device_id }
+            | ParsedFile::Tombstone { device_id }
+            | ParsedFile::AiSummaries { device_id }
+            | ParsedFile::Chat { device_id }
+            | ParsedFile::MemoryDay { device_id } => device_id,
+        }
+    }
+}
+
 fn parse_filename(name: &str) -> Option<ParsedFile> {
     // Two shapes: device.<UUID>.<KIND>.json, and device.<UUID>.activities.<DAY>.ndjson.
     let parts: Vec<&str> = name.split('.').collect();
@@ -152,32 +173,17 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     let _gate = inner.flush_gate.lock().await;
     let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,
+        // Not signed in is not a failure: there is nothing to pull.
         Err(Error::NotSignedIn) => return Ok(()),
-        Err(e) => {
-            // warn carries the error's class but not its text, and the detail goes to
-            // debug: only info and above is printed by default, so start with
-            // RUST_LOG=hindsight=debug to see it. What the user sees goes through status.
-            log::warn!(
-                "sync pull: no valid token {}(see status)",
-                sync_error_prefix(&e)
-            );
-            log::debug!("sync pull: token error: {e}");
-            inner.status.write().await.last_error = Some(format_sync_error(&e));
-            return Ok(());
-        }
+        Err(e) => return Err(e),
     };
 
     let cursor = io::read_cursor(&inner.pool, PULL_CURSOR_KEY).await?;
-    let cursor_q = if cursor.starts_with("1970-") {
-        String::new()
-    } else {
-        cursor
-    };
 
     let files = with_token_retry(&inner.pool, &mut token, |tok| {
-        let cursor_q = cursor_q.clone();
+        let cursor = cursor.clone();
         let drive = &inner.drive;
-        async move { drive.list_appdata_files(&tok, &cursor_q).await }
+        async move { drive.list_appdata_files(&tok, &cursor).await }
     })
     .await?;
     if files.is_empty() {
@@ -186,19 +192,16 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
     let self_id = inner.self_id.as_str();
     if self_id.is_empty() {
-        log::debug!("sync pull 跳过：self_id 为空（device 未初始化）");
+        log::debug!("sync pull skipped: self_id is empty (device not initialized)");
         return Ok(());
     }
-    // 可选数据集的三挡开关:关着的数据集文件标 handled 直接越过
-    // (开关翻开时命令层会重置 pull 游标,历史文件会重新入列)
+    // Settings: pull reads the optional-dataset switches and the ignore rules.
     let opt_cfg = crate::repo::settings::load(&inner.pool).await.ok();
-    // 忽略规则在合并期生效:规则与标记都不同步(对端设备没有本机的规则),
-    // 对端捕获时打不上标,镜像行必须在 INSERT 进本机时按**本机**规则补判。
     let ignore_rules: Vec<IgnoreRule> = opt_cfg
         .as_ref()
         .map(|c| c.ignore_rules.clone())
         .unwrap_or_default();
-    let (sync_ai, sync_chat, sync_mem) = opt_cfg
+    let (sync_ai, sync_chat, sync_scrn_mem) = opt_cfg
         .map(|c| {
             (
                 c.sync_ai_summaries,
@@ -208,66 +211,17 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         })
         .unwrap_or((false, false, false));
     let mut applied = 0u64;
-    // 每个文件是否「应用 or 主动跳过」。Drive 已按 modifiedTime 升序返回，pull 结束时
-    // 游标只推到最长连续 true 前缀的末尾 —— 第一个 false 之后哪怕后面有成功也不推，
-    // 否则下次 pull 用 `modifiedTime > cursor` 查询会跳过那个失败文件，永久丢数据。
-    // upsert 路径靠 (device_id, remote_id) 幂等 + LWW updated_at，重复拉无副作用。
+    // One flag per file: merged, or deliberately skipped.
     let mut handled = vec![false; files.len()];
 
-    // Pass 1: device.meta.json only, so a peer's devices row is in place before
-    // any of its data files is merged.
-    for (i, f) in files.iter().enumerate() {
-        let parsed = match parse_filename(&f.name) {
-            Some(p) => p,
-            None => {
-                // 不认识的文件名 = 不归我们管，可以跨过
-                handled[i] = true;
-                continue;
-            }
-        };
-        let ParsedFile::DeviceMeta { device_id } = parsed else {
-            // 非 DeviceMeta：留给 Pass 2 处理；这一 pass 不能下结论
-            continue;
-        };
-        if device_id == self_id {
-            handled[i] = true;
-            continue;
-        }
-        let body = match with_token_retry(&inner.pool, &mut token, |tok| {
-            let id = f.id.clone();
-            let drive = &inner.drive;
-            async move { drive.download(&tok, &id).await }
-        })
-        .await
-        {
-            Ok(b) => b,
-            Err(e) => {
-                log::warn!("下载 {} 失败: {e}", f.name);
-                continue;
-            }
-        };
-        if let Err(e) = merge_device_meta(&inner.pool, &device_id, &body).await {
-            log::warn!("merge {} 失败: {e}", f.name);
-            continue;
-        }
-        handled[i] = true;
-        applied += 1;
-    }
-
-    // Pass 2: 其余类型。
-    //
-    // FK 依赖排序:同一批内「被引用方」(categories / app_groups)必须先于
-    // 「引用方」(app_group_members)合并——push 端 dirty 文件按
-    // HashMap 随机序上传,若子表文件的 modifiedTime 恰好在前,行级 INSERT 会撞
-    // FOREIGN KEY 失败,被 merge_lww_simple 单行降级跳过,而游标照常越过该文件,
-    // 该行从此永不再被拉取(同 tick「新建分类 + 给应用归类」约一半概率踩中,
-    // C 批同步测试实证)。稳定排序:先按依赖层级,层内保持 Drive 的 modifiedTime
-    // 原序;LWW + 幂等 upsert 保证处理顺序重排无副作用,handled[] 前缀游标按
-    // 原始文件序计算,不受遍历顺序影响。
-    let pass2_order: Vec<usize> = {
+    // Group files go first: `app_group_members.group_id` is a foreign key, so a
+    // member merged before its group is rejected, and the cursor then moves past
+    // the file for good. Indices are sorted rather than `files` itself because
+    // `handled[i]` must stay in the list order the cursor is computed from.
+    let order: Vec<usize> = {
         let rank = |name: &str| -> u8 {
             match parse_filename(name) {
-                Some(ParsedFile::Categories { .. }) | Some(ParsedFile::AppGroups { .. }) => 0,
+                Some(ParsedFile::AppGroups { .. }) => 0,
                 _ => 1,
             }
         };
@@ -275,24 +229,15 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         idx.sort_by_key(|&i| rank(&files[i].name));
         idx
     };
-    for &i in &pass2_order {
+    for &i in &order {
         let f = &files[i];
-        let parsed = match parse_filename(&f.name) {
-            Some(p) => p,
-            // 不认识的文件名 Pass 1 已 mark handled=true，跳过
-            None => continue,
+        let Some(parsed) = parse_filename(&f.name) else {
+            // A file name this version does not know is not ours to merge; let the cursor pass it.
+            handled[i] = true;
+            continue;
         };
-        if matches!(parsed, ParsedFile::DeviceMeta { .. }) {
-            // Pass 1 已下结论（成功 / self / 失败），不重复处理
-            continue;
-        }
-        if matches!(parsed, ParsedFile::Tombstone { .. }) {
-            // tombstone 留到 Pass 3 处理 —— 确保所有 activity merge 完之后再 DELETE，
-            // 即便存在「旧 ndjson 在 Drive 上残留没被 purge_cloud_data 删干净」的边角
-            // 情况，tombstone 也能把刚刚 merge 进来的过期行清掉
-            continue;
-        }
-        // 可选数据集:开关关着 → 标 handled 越过(不下载);开着 → 走正常下载合并
+        // An optional dataset whose switch is off is marked handled without being
+        // downloaded; with the switch on, it is merged like any other file.
         match &parsed {
             ParsedFile::AiSummaries { .. } if !sync_ai => {
                 handled[i] = true;
@@ -302,36 +247,26 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
                 handled[i] = true;
                 continue;
             }
-            ParsedFile::MemoryDay { .. } if !sync_mem => {
+            ParsedFile::MemoryDay { .. } if !sync_scrn_mem => {
                 handled[i] = true;
                 continue;
             }
-            // 记忆库句柄缺失时这两类没法合并:同样越过,别卡游标
+            // Without the memory database these two cannot be merged; mark them handled
+            // too, so they do not hold the cursor back.
             ParsedFile::Chat { .. } | ParsedFile::MemoryDay { .. } if inner.mem.is_none() => {
                 handled[i] = true;
                 continue;
             }
             _ => {}
         }
-        let device_id = match &parsed {
-            ParsedFile::ActivityDay { device_id, .. }
-            | ParsedFile::Categories { device_id }
-            | ParsedFile::AppIcons { device_id }
-            | ParsedFile::AppGroups { device_id }
-            | ParsedFile::AppGroupMembers { device_id }
-            | ParsedFile::AiSummaries { device_id }
-            | ParsedFile::Chat { device_id }
-            | ParsedFile::MemoryDay { device_id } => device_id.as_str(),
-            ParsedFile::DeviceMeta { .. } | ParsedFile::Tombstone { .. } => unreachable!(),
-        };
-        // 本机自己的 activities ndjson **不**跳过 —— 配合 v26 + upsert_remote_activity
-        // 的 self 分支（显式 id + origin='local'），让「清空本机数据库」后能从 Drive 恢复
-        // 本机自己的历史。其它共享 metadata（categories / app_groups / ...）继续跳过：
-        // - 这些 schema 没 device_id 列，跨设备共享，本机不会"丢"这些数据
-        // - 拉自己的 metadata 文件除了浪费一次 download 没价值
-        let is_self_activity =
-            matches!(parsed, ParsedFile::ActivityDay { .. }) && device_id == self_id;
-        if device_id == self_id && !is_self_activity {
+        // Of this device's own files only the activity days are merged: they are how
+        // its history comes back after the local database is cleared. The rest are
+        // skipped, and its own tombstone must be: removing this device while keeping
+        // local data uploads one, and applying it would delete that data here.
+        // TODO: once "Clear data" no longer rebuilds this device's history from the
+        // cloud, skip its activity days too, and drop the self branch of
+        // `upsert_remote_activity` along with `self_restore_after_local_clear`.
+        if parsed.device_id() == self_id && !matches!(parsed, ParsedFile::ActivityDay { .. }) {
             handled[i] = true;
             continue;
         }
@@ -345,12 +280,15 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         {
             Ok(b) => b,
             Err(e) => {
-                log::warn!("下载 {} 失败: {e}", f.name);
+                log::warn!("download of {} failed: {e}", f.name);
                 continue;
             }
         };
 
         let res = match parsed {
+            ParsedFile::DeviceMeta { device_id } => {
+                merge_device_meta(&inner.pool, &device_id, &body).await
+            }
             ParsedFile::ActivityDay {
                 device_id,
                 local_date,
@@ -381,7 +319,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
                 super::datasets::merge_ai_summaries(&inner.pool, &body).await
             }
             ParsedFile::Chat { .. } => {
-                // 上面的门控已保证 mem 存在
                 super::datasets::merge_chat(inner.mem.as_ref().expect("gated"), &body).await
             }
             ParsedFile::MemoryDay { device_id } => {
@@ -392,63 +329,21 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
                 )
                 .await
             }
-            ParsedFile::DeviceMeta { .. } | ParsedFile::Tombstone { .. } => unreachable!(),
-        };
-        if let Err(e) = res {
-            log::warn!("merge {} 失败: {e}", f.name);
-            continue;
-        }
-        handled[i] = true;
-        applied += 1;
-    }
-
-    // Pass 3: tombstone 清扫 —— 放在最后跑，确保 Pass 2 merge 进来的 activity 行
-    // 之后再做时间戳 DELETE。这样即便 Drive 上 purge_cloud_data 没删干净的旧 ndjson
-    // 残留被 Pass 2 merge 回来，Pass 3 的 `DELETE WHERE updated_at < clearedAt` 还能
-    // 把它们清掉。
-    for (i, f) in files.iter().enumerate() {
-        let parsed = match parse_filename(&f.name) {
-            Some(p) => p,
-            None => continue, // Pass 1 已 mark
-        };
-        let ParsedFile::Tombstone { device_id } = parsed else {
-            continue; // 只处理 tombstone
-        };
-        // 本机自己的 tombstone 不应用：purge_cloud_data(keep_local=true)（切换账号场景）
-        // 会上传 self tombstone 但**保留本地数据**，若在这里执行 DELETE 会把承诺保留的
-        // 本地历史全部删光。keep_local=false 时本地已清空，跳过也是 no-op，语义不变。
-        if device_id == self_id {
-            handled[i] = true;
-            continue;
-        }
-        let body = match with_token_retry(&inner.pool, &mut token, |tok| {
-            let id = f.id.clone();
-            let drive = &inner.drive;
-            async move { drive.download(&tok, &id).await }
-        })
-        .await
-        {
-            Ok(b) => b,
-            Err(e) => {
-                log::warn!("下载 {} 失败: {e}", f.name);
-                continue;
+            ParsedFile::Tombstone { device_id } => {
+                merge_tombstone(&inner.pool, &device_id, &body).await
             }
         };
-        if let Err(e) = merge_tombstone(&inner.pool, &device_id, &body).await {
-            log::warn!("merge tombstone {} 失败: {e}", f.name);
+        if let Err(e) = res {
+            log::warn!("merge of {} failed: {e}", f.name);
             continue;
         }
         handled[i] = true;
         applied += 1;
     }
 
-    // 推 cursor 到最长连续 handled 前缀的 modified_time。第一个失败之后即使后面有成功也不
-    // 推 —— 见 `handled` 声明处的说明。
-    //
-    // 边界：下次 list 用严格 `modifiedTime > cursor`。若首个未处理文件与前缀里最后
-    // 一个已处理文件的 modifiedTime **精确相同**（两设备同毫秒落盘 + 其一瞬时下载
-    // 失败），把 cursor 推到该时间会让失败的那份永远查不出来。因此推进值取前缀中
-    // "严格早于首个未处理文件时间"的最后一个；RFC3339 同构串比大小 = 时间序。
+    // The next list asks for files modified after the cursor, so it may only move
+    // past handled files, and only to a time strictly before the first unhandled
+    // one: a failed file sharing that time would never be listed again.
     let first_unhandled_time = files
         .iter()
         .zip(handled.iter())
@@ -467,9 +362,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     if let Some(t) = cursor_advance {
         io::write_cursor(&inner.pool, PULL_CURSOR_KEY, &t).await?;
     }
-    inner.status.write().await.last_pulled_at = Some(utc_now_rfc3339());
     if applied > 0 {
-        log::info!("sync pull 完成，应用 {} 个远端文件", applied);
+        log::info!("sync pull done, merged {applied} remote files");
     }
     Ok(())
 }
@@ -482,16 +376,12 @@ async fn merge_activities(
     body: &[u8],
     ignore_rules: &[IgnoreRule],
 ) -> Result<()> {
-    // ndjson：一行一个 ActivityPayload
-    let s = std::str::from_utf8(body).map_err(Error::from)?;
-    // 收集本文件出现过的 remote_id（= 源端 activities.id）—— 解析成功 + 字段合法的行才算
-    // 「源端目前存在」。结束后用 NOT IN 把本机 mirror 里这个 (device_id, local_date)
-    // 范围内不在 set 里的行 DELETE 掉，让 mirror 跟源端的全表 rewrite 严格一致。
-    // 这是修补 sync 协议「源端删行 → 对端 mirror 不会自动 DELETE」的关键 ——
-    // 没有这一步，源端 [activities::purge_orphan_sessions] 干掉的孤儿行永久留在对端镜像。
+    let s = std::str::from_utf8(body)?;
+    // Rows present in this file; after the loop, the mirror rows not among them
+    // are deleted.
     let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    // 解析阶段任何一行硬错误就放弃 mirror 收敛，避免半截文件 / 解析 bug 把对端 mirror
-    // 误删一大堆。仅在文件**完整解析无异常**时执行 DELETE 收敛。
+    // Skip that delete when a line failed to parse or `upsert_remote_activity`
+    // failed on it: the local rows no longer match the file.
     let mut parse_clean = true;
 
     for (lineno, line) in s.lines().enumerate() {
@@ -502,31 +392,18 @@ async fn merge_activities(
         let row: ActivityPayload = match serde_json::from_str(line) {
             Ok(r) => r,
             Err(e) => {
-                log::warn!("activities 行 {lineno} 解析失败: {e}");
+                log::warn!("activities line {lineno}: does not parse: {e}");
                 parse_clean = false;
                 continue;
             }
         };
-        if row.id < 0 {
-            continue;
-        }
         let remote_id = row.id.to_string();
         seen_ids.insert(remote_id.clone());
-        let updated_at = if row.updated_at.is_empty() {
-            row.ended_at.clone()
-        } else {
-            row.updated_at.clone()
-        };
-        // 本机忽略规则判定:标记只在 INSERT 时写入;已存在行的标记归
-        // reapply_ignore_rules 管,LWW UPDATE 不触碰(对端没有本机规则,
-        // 它推来的更新若带标记只会恒 0,写进来会把本机打的标冲掉)。
         let excluded = is_excluded(
             &row.process_name,
             row.window_title.as_deref().unwrap_or(""),
             ignore_rules,
         );
-        // 单行 upsert 失败降级为 warn —— 否则一行坏数据会让 flush_pull 把整文件判为
-        // 失败（handled[i] 留 false），游标停在前一文件，下次再拉这文件还是坏行 → 永久卡住。
         if let Err(e) = upsert_remote_activity(
             pool,
             self_id,
@@ -540,22 +417,20 @@ async fn merge_activities(
             &row.process_name,
             row.window_title.as_deref().unwrap_or(""),
             &row.category_id,
-            &updated_at,
+            &row.updated_at,
             excluded,
             row.url_host.clone(),
         )
         .await
         {
-            log::warn!("activities 行 {lineno} upsert 失败: {e}");
+            log::warn!("activities line {lineno}: upsert failed: {e}");
             parse_clean = false;
         }
     }
 
-    // mirror 收敛：本文件该 (device_id, local_date) 下 ndjson 没列出的 mirror 行 DELETE。
-    // 跳过 self_id 防自删 —— self 自己的行不受 mirror 收敛影响（self 的 row 是 local 来源
-    // 不是 mirror，DELETE 它们会丢失本机自己的数据）。这条件配合 v26 + lift self-skip 的
-    // self-pull 场景：本机 pull 自己的 ndjson 时，不收敛自己的行（既然是自己的，DELETE
-    // 任何 < clearedAt 之类的逻辑该走 tombstone 路径，不该走 mirror 收敛）。
+    // Never delete this device's own rows, nor rows another device still has;
+    // delete only the activity rows another device no longer has. Delete nothing
+    // when the file did not fully land.
     let is_self = !self_id.is_empty() && device_id == self_id;
     if !parse_clean || is_self {
         return Ok(());
@@ -566,7 +441,7 @@ async fn merge_activities(
     let deleted = pool
         .0
         .call(move |conn| {
-            // 拼 NOT IN ?,?,... 用动态占位符
+            // SQL cannot bind a list, so one placeholder per id.
             let placeholders: String = if ids_vec.is_empty() {
                 String::new()
             } else {
@@ -575,7 +450,6 @@ async fn merge_activities(
                     .join(",")
             };
             let sql = if placeholders.is_empty() {
-                // 空文件 → 收敛 = 该 (device, local_date) 下所有 mirror 行都 DELETE
                 "DELETE FROM activities
                  WHERE device_id = ?1 AND local_date = ?2"
                     .to_string()
@@ -598,21 +472,24 @@ async fn merge_activities(
         .await?;
     if deleted > 0 {
         log::info!(
-            "mirror 收敛 device={device_id} local_date={local_date}: 删 {deleted} 条已不在源端 ndjson 的旧 mirror 行"
+            "activities of device {device_id} on {local_date}: deleted {deleted} rows no longer in its file"
         );
     }
     Ok(())
 }
 
-/// 简单 LWW upsert 合并模板：
-/// 1. parse_rows 整文件失败 → 抛错（让 flush_pull 的 cursor 别推进）
-/// 2. 单行通过 `pk_for_log` 返 `Some(label)` 才进 upsert；`None` 跳过
-/// 3. 单行的 LWW gate + upsert 由 `apply` 闭包做（只能引用 `T` 自带的字段，
-///    不能 capture 外部变量 —— 这样闭包是 `Copy`，能被循环里每行复用）
-/// 4. 单行 DB 错误降级 warn（per-line skip：一行坏数据不让对端 mirror 永久卡住）
+/// Hands every record in the file to `apply`, which writes it to the local
+/// table, one transaction per record: a record that fails halfway leaves
+/// nothing behind. Otherwise its `updated_at` would already match the file, the
+/// next pull of the same file would skip the record, and the unwritten part
+/// would never be written.
 ///
-/// merge_app_icons / merge_categories / merge_activities 不走这个模板，因为它们各自有
-/// 合理的特殊路径（base64 文件 cache / cascade delete / mirror 收敛）。
+/// A record overwrites the local row only when its `updated_at` is later than
+/// the local row's; otherwise the local row stays. That comparison is `apply`'s
+/// job; this function compares no timestamps.
+///
+/// `apply` cannot capture anything (it must be `Copy`): it is sent to the
+/// database thread once per record.
 async fn merge_lww_simple<T, F>(
     pool: &DbPool,
     entity: &'static str,
@@ -632,16 +509,13 @@ where
         let res = pool
             .0
             .call(move |conn| {
-                // 一行一个事务：`apply` 的 LWW 判断、行写入和它连带的 outbox / cascade
-                // 要么全落地要么全不落。半落地是不可恢复的——updated_at 一旦写成远端那个
-                // 值，下次拉到同一个文件 LWW 判断就不成立，剩下那半永远补不上。
                 let tx = conn.transaction().db()?;
                 apply(&tx, row).db()?;
                 tx.commit().db()
             })
             .await;
         if let Err(e) = res {
-            log::warn!("{entity} {label} merge 失败: {e}");
+            log::warn!("{entity} {label}: merge failed: {e}");
         }
     }
     Ok(())
@@ -668,7 +542,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
             if !should_apply {
                 return Ok(());
             }
-            let prev_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
+            let cur_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
 
             if cur.is_none() {
                 conn.execute(
@@ -685,9 +559,10 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
                 )?;
             }
 
-            // 远端把这个分类删了 —— 跑一次本地 cascade。仅在「之前没删，现在变成删了」的
-            // 边沿触发；幂等 cascade SQL 让重复同步是 no-op。
-            let just_deleted = row.deleted_at.is_some() && prev_deleted.is_none();
+            // The peer deleted this category: clear it from the app groups filed
+            // under it here, and push those groups to the other devices. Done only
+            // the once it goes from present to deleted.
+            let just_deleted = row.deleted_at.is_some() && cur_deleted.is_none();
             if just_deleted {
                 crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
             }
@@ -708,7 +583,7 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
         let icon_bytes = match BASE64.decode(row.icon_png_base64.as_bytes()) {
             Ok(b) => b,
             Err(e) => {
-                log::warn!("app_icon process={process_name} base64 解码失败: {e}");
+                log::warn!("app_icon {process_name}: base64 does not decode: {e}");
                 continue;
             }
         };
@@ -719,7 +594,6 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
         let icon_bytes_db = icon_bytes.clone();
         let updated_at_db = updated_at.clone();
         let deleted_at_db = deleted_at.clone();
-        // 单行失败降级为 warn —— 见 merge_activities 同模式注释。
         let applied: bool = match pool
             .0
             .call(move |conn| {
@@ -747,18 +621,19 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
         {
             Ok(v) => v,
             Err(e) => {
-                log::warn!("app_icon {process_name} merge 失败: {e}");
+                log::warn!("app_icon {process_name}: merge failed: {e}");
                 continue;
             }
         };
 
-        // 把 BLOB 同步落到文件 cache —— 让 UI 后续 get_app_icon 直接命中文件 cache 返回。
-        // 软删（deleted_at != NULL）时反过来：把 cache 文件清掉，避免渲染过期图标。
+        // The cache file holds the PNG in this row's `icon_png`, and is removed when
+        // the row is a tombstone; so it changes only when the row did, and nothing
+        // happens when the record was older than the row.
         if applied {
             let path = match crate::repo::app_icons::icon_cache_path(&process_name) {
                 Ok(p) => p,
                 Err(e) => {
-                    log::warn!("解析 icon cache 路径失败 process={process_name}: {e}");
+                    log::warn!("app_icon {process_name}: no icon cache path: {e}");
                     continue;
                 }
             };
@@ -847,72 +722,48 @@ async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -
     .await
 }
 
-/// 处理 `device.<owner_id>.tombstone.json`：源设备明确告知"在 clearedAt 之前的我的数据
-/// 请全部清"。执行：
-///
-///   DELETE FROM activities WHERE device_id = <owner_id> AND updated_at < clearedAt;
-///
-/// 边角：
-/// - **本机自己的 tombstone**（owner_id == self_id）在 Pass 3 就被跳过、不会走到这里：
-///   purge_cloud_data(keep_local=true) 上传 self tombstone 但保留本地数据，应用它会把
-///   本地历史删光（keep_local=false 时本地已清空，跳过等价 no-op）。
-/// - 幂等：tombstone 永久留在 Drive，对端反复 pull 看到它，每次 DELETE 命中 0
-///   （因为已经删过了）→ no-op。
-/// - 不影响 capture：源端 purge 之后新 capture 的行 `updated_at > clearedAt` →
-///   不被 DELETE 影响。
+/// Handles `device.<owner>.tombstone.json`: that device was removed from the
+/// cloud. Deletes its activity rows held here from before `clearedAt`, then
+/// marks its device card deleted.
 async fn merge_tombstone(pool: &DbPool, owner_device_id: &str, body: &[u8]) -> Result<()> {
     let payload: TombstonePayload = match serde_json::from_slice(body) {
         Ok(p) => p,
         Err(e) => {
-            log::warn!("tombstone 解析失败 (device={owner_device_id}): {e}");
+            log::warn!("tombstone of device {owner_device_id}: does not parse: {e}");
             return Ok(());
         }
     };
     if payload.cleared_at.is_empty() {
-        log::warn!("tombstone clearedAt 为空 (device={owner_device_id})，跳过");
+        log::warn!("tombstone of device {owner_device_id}: clearedAt is empty");
         return Ok(());
     }
     let owner = owner_device_id.to_string();
-    let cleared_at = payload.cleared_at.clone();
+    let cleared_at = payload.cleared_at;
     let deleted = pool
         .0
         .call(move |conn| {
-            let n = conn
+            let tx = conn.transaction().db()?;
+            let n = tx
                 .execute(
                     "DELETE FROM activities
                      WHERE device_id = ?1 AND updated_at < ?2",
                     rusqlite::params![owner, cleared_at],
                 )
                 .db()?;
-            Ok(n)
-        })
-        .await?;
-
-    // tombstone 还顺手把 devices 行 mark deleted_at —— 让 "controller 从云端把
-    // device X 整个移除" 操作传达给所有其它设备：它们 pull 到这个 tombstone 后，
-    // 不光删 activities，还把 "设备页里那个幽灵设备卡" 也清掉。
-    //
-    // 关键防护 `updated_at < cleared_at`：只在该设备 meta 没有在 cleared_at 之后
-    // 刷新过时才软删。场景对比：
-    //   - 死掉的设备：永远不再 push 新 meta，updated_at 永远 < cleared_at，标软删 ✓
-    //   - 还活着的设备触发 purge_cloud_data：随后会继续 push 新 meta，下次 push tick
-    //     上传的 meta.updated_at > cleared_at；pull pass 1 先 upsert meta（同时清空
-    //     deleted_at，见 merge_device_meta 的 ON CONFLICT 子句），pass 3 的 tombstone
-    //     遇到 updated_at > cleared_at 不再命中，最终设备仍然出现在列表 ✓
-    let owner2 = owner_device_id.to_string();
-    let cleared_at2 = payload.cleared_at;
-    pool.0
-        .call(move |conn| {
-            conn.execute(
+            // Marked only if the device has not uploaded its device info since
+            // `clearedAt`: a device still in use keeps uploading it, and
+            // `merge_device_meta` clears `deleted_at` again when that arrives.
+            tx.execute(
                 "UPDATE devices
                  SET deleted_at = ?2, updated_at = ?2
                  WHERE device_id = ?1
                    AND updated_at < ?2
                    AND (deleted_at IS NULL OR deleted_at < ?2)",
-                rusqlite::params![owner2, cleared_at2],
+                rusqlite::params![owner, cleared_at],
             )
             .db()?;
-            Ok(())
+            tx.commit().db()?;
+            Ok(n)
         })
         .await?;
 
@@ -923,21 +774,18 @@ async fn merge_tombstone(pool: &DbPool, owner_device_id: &str, body: &[u8]) -> R
 }
 
 async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Result<()> {
-    // device meta 是单对象，不是数组。空对象当作"还没数据"，跳过。
     let parsed: Value = serde_json::from_slice(body).map_err(|e| Error::SyncParse {
         kind: "device_meta",
         source: e,
     })?;
-    let Value::Object(_) = parsed else {
+    // `{}` is what a device uploads before it has a devices row: nothing to merge.
+    if parsed == serde_json::json!({}) {
         return Ok(());
-    };
-    let row: DeviceMetaPayload = match serde_json::from_value(parsed) {
-        Ok(r) => r,
-        Err(e) => {
-            log::warn!("device_meta 解析失败: {e}");
-            return Ok(());
-        }
-    };
+    }
+    let row: DeviceMetaPayload = serde_json::from_value(parsed).map_err(|e| Error::SyncParse {
+        kind: "device_meta",
+        source: e,
+    })?;
     let device_id = device_id.to_string();
     pool.0
         .call(move |conn| {
@@ -949,11 +797,8 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
             )? {
                 return Ok(());
             }
-            // 收到比本地 updated_at 更新的 meta → 该设备"又活了"：清掉之前
-            // tombstone 留下的 deleted_at 软删标记，让该设备重新出现在设备列表里。
-            // 场景：用户在 A 上跑 purge_cloud_data（清云端但 A 还活着），B 先 pull 到
-            // tombstone 把 A 标 deleted，A 继续 capture 一会儿后又 push 新 meta，
-            // B 下次 pull 到这个新 meta 应该把 A 拉回来。
+            // Newer device info means the device is still in use: clear `deleted_at`,
+            // so a card a tombstone marked deleted comes back.
             conn.execute(
                 "INSERT INTO devices(device_id, display_name, color, icon, os, last_seen_at, is_self, updated_at, deleted_at)
                  VALUES(?, ?, ?, ?, ?, ?, 0, ?, NULL)
@@ -974,6 +819,8 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
     Ok(())
 }
 
+/// Writes one activity row from a file into the local table: inserted when this
+/// device has no such row, overwritten in full when the file's row is newer.
 #[allow(clippy::too_many_arguments)]
 async fn upsert_remote_activity(
     pool: &DbPool,
@@ -992,15 +839,11 @@ async fn upsert_remote_activity(
     excluded: bool,
     url_host: Option<String>,
 ) -> Result<()> {
-    // 是否本机自己的 ndjson 拉回来？
-    // 配合 v26 migration（local 行 `remote_id = id`）+ pull self-skip 移除后的设计：
-    // - mac 在「清空本机数据库」之后下次 pull 会拉到自己的 `device.<mac>.activities.<day>.ndjson`
-    // - 这里 INSERT 必须**用显式 id**（来自 remote_id）+ origin='local'，否则：
-    //   1. id 用 AUTOINCREMENT 拿到新值（如 1）→ 跟 Drive 文件里的原 id（如 42）对不上
-    //   2. 下次 push 走 [build_activities_day]，SELECT 出来的是新本地 id（1）→ rewrite Drive 文件
-    //      变成 id=1 → 对端 Win pull 看到的 remote_id 从 "42" 变 "1" → upsert key 错位 →
-    //      Win 端**重复 INSERT**。整张历史在对端裂成两份。
-    // - 显式 id 保证 push 重写后 Drive 文件 id 字段跟 purge 前一致，跨设备身份对称
+    // Rows from this device's own file are inserted with the id from the file:
+    // push writes the file from the id column, and under another id the other
+    // devices would not recognize the row and would insert it again.
+    // TODO: goes with the "Clear data" TODO in `flush_pull`; once own activity
+    // days are no longer pulled, everything under `is_self` here is dead.
     let is_self = !self_id.is_empty() && device_id == self_id;
     let device_id = device_id.to_string();
     let remote_id = remote_id.to_string();
@@ -1024,8 +867,7 @@ async fn upsert_remote_activity(
             match existing {
                 None => {
                     if is_self {
-                        // 本机自己拉回来：显式 id + origin='local'，保持身份对端可识别 +
-                        // 本机视角的 "local 来源" 语义
+                        // This device's own row: the original id, origin local.
                         let explicit_id: i64 =
                             remote_id.parse().map_err(|e: std::num::ParseIntError| {
                                 tokio_rusqlite::Error::Other(Box::new(e))
@@ -1055,7 +897,7 @@ async fn upsert_remote_activity(
                         )
                         .db()?;
                     } else {
-                        // 对端的数据：本机看做 remote 镜像，auto id
+                        // Another device's row: an id of our own, origin remote.
                         conn.execute(
                             "INSERT INTO activities(
                                started_at, ended_at, duration_secs, local_date, local_hour,
@@ -1083,7 +925,6 @@ async fn upsert_remote_activity(
                 }
                 Some((id, cur_updated)) => {
                     if updated_at > cur_updated {
-                        // url_host 随行更新：seal 后对端重推同一行，域名应与来源设备一致
                         conn.execute(
                             "UPDATE activities SET
                                started_at = ?, ended_at = ?, duration_secs = ?,

@@ -31,7 +31,7 @@ pub enum Error {
     #[error("not signed in")]
     NotSignedIn,
 
-    /// Google OAuth client_id / secret 没配齐
+    /// Google OAuth client_id / secret not configured
     #[error("oauth not configured: {0}")]
     OAuthNotConfigured(String),
 
@@ -124,11 +124,6 @@ pub enum Error {
     /// 取 String 而非 &'static str：消息里要带运行期值（"段下标越界：5"）
     #[error("invalid input: {0}")]
     InvalidInputDyn(String),
-
-    /// sync_now 跑完了但 push/pull 内部记下了 last_error（多半是 token 不可用）。
-    /// 用 String 因为这里聚合的是「内部 push/pull 各自塞回 status 的人类可读信息」，不需要 caller match。
-    #[error("sync incomplete: {0}")]
-    SyncIncomplete(String),
 
     // ───────────── AI 引擎相关 ─────────────
     /// llama.cpp binary 下载 / 校验 / 解压失败。`stage` 用静态字符串区分阶段
