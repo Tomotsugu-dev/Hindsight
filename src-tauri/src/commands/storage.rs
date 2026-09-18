@@ -258,7 +258,6 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
 ///    保证源端本地跟对端最终看到的一致（不留 pre-T 数据让下一次 push 重写回 Drive）
 /// 5. 清 sync_outbox（防 step 3 上传 tombstone 前累积的旧 outbox 行下个 tick push 把
 ///    步骤 4 删的行又造回 Drive；clearedAt 之后新 capture 自然产生新 outbox 行）
-/// 6. 重置 `drive_files` pull 游标
 ///
 /// 返回被实际删除的 Drive 文件数（不含 tombstone 上传 / 本机 DELETE）。
 ///
@@ -267,7 +266,7 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
 ///   - 上传 tombstone 覆盖同名文件，modifiedTime 刷新让对端再次 pull 应用最新 clearedAt
 ///   - 本机 trim 命中 0 行（除非两次点击之间有新 capture，那些是用户自己点的"清掉过去"
 ///     新累积部分，符合"清空过去"语义）
-///   - outbox / cursor 已经是清空 / epoch 状态，UPDATE / DELETE no-op
+///   - outbox 已经是清空状态，DELETE no-op
 #[tauri::command]
 pub async fn purge_cloud_data(
     pool: State<'_, DbPool>,
@@ -352,8 +351,7 @@ pub(crate) async fn purge_cloud_data_impl(
         }
     }
 
-    // 4. 源端本地按同款 clearedAt trim activities + 5. 清 outbox + 6. 重置 cursor，
-    //    打包在一个 pool.0.call 里事务性执行。keep_local=true 时跳过 step 4 + 5 的 outbox 清，
+    // 4. 源端本地按同款 clearedAt trim activities + 5. 清 outbox。keep_local=true 时两步都跳过，
     //    保留所有本机数据 + outbox（"换 Google 账号"场景：用户接下来要登入新账号、自动 push
     //    本机数据到新账号 appDataFolder，需要 outbox 行触发）。
     let self_id_owned = self_id.to_string();
@@ -376,16 +374,6 @@ pub(crate) async fn purge_cloud_data_impl(
                 conn.execute("DELETE FROM sync_outbox", [])
                     .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
             }
-
-            // Step 6: 总是重置 pull cursor —— 不论保留本地与否：
-            // - keep_local=false 时：tombstone 上传后立刻 pull 一下能拉到自己的 tombstone（无副作用）
-            // - keep_local=true  时：换账号后重置游标确保从新账号 appDataFolder 全量 pull
-            conn.execute(
-                "UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
-                 WHERE entity = 'drive_files'",
-                [],
-            )
-            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
             Ok(())
         })
         .await
@@ -710,8 +698,13 @@ mod tests {
     /// fixture 用 1 行 / 表 + 1 个 ~512KB 的 app_icons BLOB 把 DB 撑大几百页；
     /// 这样 VACUUM 后 page_count 显著下降，断言才有意义（小 DB 时 VACUUM 可能维持
     /// 同样 page 数，看不出效果）。
+    // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn purge_activities_impl_clears_derived_tables_keeps_user_data_and_shrinks_db() {
+        let _env_lock = crate::repo::test_util::lock_data_dir_env();
+        let _data_dir = crate::repo::test_util::DataDirOverride::unique_temp();
+
         let pool = fresh_test_pool().await;
         let self_id = crate::device::self_id().unwrap().to_string();
 

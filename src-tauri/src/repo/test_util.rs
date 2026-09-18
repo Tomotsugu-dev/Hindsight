@@ -32,3 +32,30 @@ pub fn lock_data_dir_env() -> std::sync::MutexGuard<'static, ()> {
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
+
+/// RAII：把 `HINDSIGHT_DATA_DIR` 指到唯一临时目录，drop 时恢复原值。
+/// 为什么需要：被测代码会读写 `<data_root>`（合并图标写 `icons/` 缓存、清空数据删
+/// `icons/`），不隔离就会动到真实用户的数据目录。
+/// 构造前必须先持有 [`lock_data_dir_env`]（进程级 env 串行锁）。
+pub struct DataDirOverride {
+    prev: Option<String>,
+}
+
+impl DataDirOverride {
+    pub fn unique_temp() -> Self {
+        let dir = std::env::temp_dir().join(format!("hindsight-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var("HINDSIGHT_DATA_DIR").ok();
+        std::env::set_var("HINDSIGHT_DATA_DIR", &dir);
+        Self { prev }
+    }
+}
+
+impl Drop for DataDirOverride {
+    fn drop(&mut self) {
+        match self.prev.take() {
+            Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
+            None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
+        }
+    }
+}
