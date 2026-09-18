@@ -445,6 +445,8 @@ async fn merge_activities(
 /// the local row's; otherwise the local row stays. That comparison is `apply`'s
 /// job; this function compares no timestamps.
 ///
+/// A record for which `pk_for_log` returns `None` is skipped and never written.
+///
 /// `apply` cannot capture anything (it must be `Copy`): it is sent to the
 /// database thread once per record.
 async fn merge_lww_simple<T, F>(
@@ -499,7 +501,6 @@ async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
             if !should_apply {
                 return Ok(());
             }
-            let cur_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
 
             if cur.is_none() {
                 conn.execute(
@@ -519,7 +520,8 @@ async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
             // The peer deleted this category: clear it from the app groups filed
             // under it here, and push those groups to the other devices. Done only
             // the once it goes from present to deleted.
-            let just_deleted = row.deleted_at.is_some() && cur_deleted.is_none();
+            let cur_deleted = matches!(cur, Some((_, Some(_))));
+            let just_deleted = row.deleted_at.is_some() && !cur_deleted;
             if just_deleted {
                 crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
             }
