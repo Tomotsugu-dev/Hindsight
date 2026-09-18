@@ -710,8 +710,13 @@ mod tests {
     /// fixture 用 1 行 / 表 + 1 个 ~512KB 的 app_icons BLOB 把 DB 撑大几百页；
     /// 这样 VACUUM 后 page_count 显著下降，断言才有意义（小 DB 时 VACUUM 可能维持
     /// 同样 page 数，看不出效果）。
+    // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn purge_activities_impl_clears_derived_tables_keeps_user_data_and_shrinks_db() {
+        let _env_lock = crate::repo::test_util::lock_data_dir_env();
+        let _data_dir = crate::repo::test_util::DataDirOverride::unique_temp();
+
         let pool = fresh_test_pool().await;
         let self_id = crate::device::self_id().unwrap().to_string();
 

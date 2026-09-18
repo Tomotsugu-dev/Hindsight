@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Local, Timelike};
 
+use crate::repo::test_util::DataDirOverride;
 use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::drive::{DriveBackend, InMemoryDriveStore};
 use crate::sync::engine::SyncEngine;
@@ -316,8 +317,13 @@ async fn tombstone_applies_in_file_order() {
 }
 
 /// Test 3：「清空数据」之后本机的历史不再从云端回来；其他设备上的副本原样保留。
+// 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
 #[tokio::test]
 async fn clear_data_does_not_pull_own_history_back() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
     let b = make_device("device-b", drive.clone()).await;
@@ -604,33 +610,6 @@ async fn optional_datasets_cross_device_roundtrip() {
 }
 
 // ───────────────────── 补测 C 批新增(push 失败重试 / metadata 往返 / OS 过滤) ─────────────────────
-
-/// RAII：把 `HINDSIGHT_DATA_DIR` 指到唯一临时目录，drop 时恢复原值。
-/// 为什么需要：merge_app_icons 应用成功后会把 icon 字节写进
-/// `<data_root>/icons/` 文件 cache —— 不隔离的话测试会污染真实用户数据目录。
-/// 构造前必须先持有 `test_util::lock_data_dir_env()`（进程级 env 串行锁）。
-struct DataDirOverride {
-    prev: Option<String>,
-}
-
-impl DataDirOverride {
-    fn unique_temp() -> Self {
-        let dir = std::env::temp_dir().join(format!("hindsight-sync-e2e-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var("HINDSIGHT_DATA_DIR").ok();
-        std::env::set_var("HINDSIGHT_DATA_DIR", &dir);
-        Self { prev }
-    }
-}
-
-impl Drop for DataDirOverride {
-    fn drop(&mut self) {
-        match self.prev.take() {
-            Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
-            None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
-        }
-    }
-}
 
 async fn outbox_count(pool: &DbPool) -> i64 {
     pool.0
