@@ -121,7 +121,7 @@ The `push.*` rows record what each optional dataset looked like at its last uplo
 - `push.chat`: `<max updated_ts>:<row count>` of `chat_conversations`, then `|`, then `<max created_ts>:<row count>` of `chat_messages`. Both tables are in the memory database.
 - `push.memory`: the latest `ended_ts` among this device's own rows in `text_sessions` (memory database). It is also where the next upload starts: only the days with a session that ended after it are uploaded again.
 
-A missing row reads as the epoch, meaning "never": the first pull lists every cloud file, and the first push of a dataset uploads it. Setting `drive_files` back to the epoch makes the next pull go through every cloud file again. The app does this in two places: when an optional dataset is switched on, because while it was off the cursor passed that dataset's files without downloading them; and in `purge_cloud_data`.
+A missing row reads as the epoch, meaning "never": the first pull lists every cloud file, and the first push of a dataset uploads it. Setting `drive_files` back to the epoch makes the next pull go through every cloud file again. The app does this when an optional dataset is switched on, because while it was off the cursor passed that dataset's files without downloading them.
 
 Indexes: none beyond the primary key.
 Foreign keys: none.

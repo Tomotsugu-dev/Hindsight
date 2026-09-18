@@ -359,6 +359,42 @@ async fn clear_data_does_not_pull_own_history_back() {
     );
 }
 
+/// 「清空数据」之后再「从云端移除本设备」：清掉的其他设备历史不会被拉回来。
+// 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
+async fn remove_device_does_not_pull_cleared_history_back() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+
+    let captured = Local::now();
+    for p in ["Code", "Chrome", "Slack"] {
+        insert_sealed(&b, p, captured, 30).await;
+    }
+    b.engine.sync_now().await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&a, "device-b").await, 3);
+
+    crate::commands::storage::purge_activities_impl(&a.pool)
+        .await
+        .expect("purge_activities");
+    assert_eq!(count_for_device(&a, "device-b").await, 0);
+
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, false)
+        .await
+        .expect("purge_cloud_data");
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(
+        count_for_device(&a, "device-b").await,
+        0,
+        "移除本设备后，清空过的 B 的历史不应被拉回来"
+    );
+}
+
 /// Test 5：flush_pull cursor "longest true prefix" 推进逻辑 ——
 /// 中间文件失败时 cursor 应停在前一个成功文件的 modifiedTime，
 /// 不能跨过失败文件推到后面成功的（否则下次 pull 永久丢失失败文件）。
