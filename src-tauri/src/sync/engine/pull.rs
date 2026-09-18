@@ -289,18 +289,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
                 device_id,
                 local_date,
             } => merge_activities(&inner.pool, &device_id, &local_date, &body, &ignore_rules).await,
-            ParsedFile::Categories { device_id } => {
-                merge_categories(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppIcons { device_id } => {
-                merge_app_icons(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppGroups { device_id } => {
-                merge_app_groups(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppGroupMembers { device_id } => {
-                merge_app_group_members(&inner.pool, &device_id, &body).await
-            }
+            ParsedFile::Categories { .. } => merge_categories(&inner.pool, &body).await,
+            ParsedFile::AppIcons { .. } => merge_app_icons(&inner.pool, &body).await,
+            ParsedFile::AppGroups { .. } => merge_app_groups(&inner.pool, &body).await,
+            ParsedFile::AppGroupMembers { .. } => merge_app_group_members(&inner.pool, &body).await,
             ParsedFile::AiSummaries { .. } => {
                 super::datasets::merge_ai_summaries(&inner.pool, &body).await
             }
@@ -503,7 +495,7 @@ where
     Ok(())
 }
 
-async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
     merge_lww_simple(
         pool,
         "category",
@@ -554,7 +546,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
     .await
 }
 
-async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_app_icons(pool: &DbPool, body: &[u8]) -> Result<()> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
     let rows: Vec<AppIconPayload> = parse_rows("app_icons", body)?;
     for row in rows {
@@ -629,7 +621,7 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
     Ok(())
 }
 
-async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_app_groups(pool: &DbPool, body: &[u8]) -> Result<()> {
     merge_lww_simple(
         pool,
         "app_group",
@@ -666,7 +658,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
     .await
 }
 
-async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_app_group_members(pool: &DbPool, body: &[u8]) -> Result<()> {
     merge_lww_simple(
         pool,
         "app_group_member",
@@ -1175,7 +1167,6 @@ mod tests {
     const T_OLD: &str = "2026-06-01T00:00:00Z";
     const T_MID: &str = "2026-06-02T00:00:00Z";
     const T_NEW: &str = "2026-06-03T00:00:00Z";
-    const REMOTE_DEV: &str = "device-x";
 
     /// 通用 fixture:一条参数化 SQL(全 String 参数)直写表。
     async fn exec_sql(pool: &DbPool, sql: &'static str, params: Vec<Option<String>>) {
@@ -1266,7 +1257,6 @@ mod tests {
         // 远端 T_OLD < 本地 T_MID,且远端还带 deleted_at —— LWW 输了就该整行按兵不动
         merge_categories(
             &pool,
-            REMOTE_DEV,
             &category_body("work", "远端旧名", T_OLD, Some(T_OLD)),
         )
         .await
@@ -1313,7 +1303,7 @@ mod tests {
         .await;
 
         let body = category_body("work", "工作", T_NEW, Some(T_NEW));
-        merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
+        merge_categories(&pool, &body).await.unwrap();
 
         // 分类本体落墓碑
         let cat = read_row(
@@ -1346,7 +1336,7 @@ mod tests {
         );
 
         // 同 body 再 merge 一次:LWW 严格 > 挡住,级联不重跑、outbox 不再增长
-        merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
+        merge_categories(&pool, &body).await.unwrap();
         assert_eq!(
             outbox_entries(&pool).await.len(),
             1,
@@ -1389,9 +1379,7 @@ mod tests {
             remote_row("M-missing", false),
         ])
         .unwrap();
-        merge_app_group_members(&pool, REMOTE_DEV, &body)
-            .await
-            .unwrap();
+        merge_app_group_members(&pool, &body).await.unwrap();
 
         let get = |p: &'static str| {
             read_row(
@@ -1481,7 +1469,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let prev = std::env::var("HINDSIGHT_DATA_DIR").ok();
         std::env::set_var("HINDSIGHT_DATA_DIR", &dir);
-        let res = merge_app_icons(&pool, REMOTE_DEV, &body).await;
+        let res = merge_app_icons(&pool, &body).await;
         match prev {
             Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
             None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
@@ -1530,7 +1518,7 @@ mod tests {
             ("I-older", BASE64.encode(&remote_bytes), T_MID), // T_MID < 本地 T_NEW
             ("I-equal", BASE64.encode(&remote_bytes), T_MID), // 平局
         ]);
-        merge_app_icons(&pool, REMOTE_DEV, &body).await.unwrap();
+        merge_app_icons(&pool, &body).await.unwrap();
 
         assert_eq!(
             icon_row(&pool, "I-older").await.unwrap(),
