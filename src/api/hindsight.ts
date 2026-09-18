@@ -639,7 +639,6 @@ export interface SyncStatus {
   /** 此刻是否有一次 push/pull 正在执行(手动或后台 tick);跳页重挂后恢复按钮态用 */
   syncInFlight: boolean;
   lastPushedAt: string | null;
-  lastPulledAt: string | null;
   lastError: string | null;
   pending: number;
   deadLetter: number;

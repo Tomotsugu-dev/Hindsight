@@ -26,15 +26,16 @@ use crate::storage::DbPool;
 use crate::sync::auth::{self, TokenInfo};
 use crate::sync::drive::DriveBackend;
 
-/// `last_error` 前缀：分类后端写进 status 的同步错误，让前端能稳定判别
-/// "需要重新登录" vs "暂时失败"，不再依赖中文本地化字符串匹配。
+/// Prefix of `last_error` when the user has to sign in again. The Devices page
+/// matches these prefixes as written.
 pub(super) const ERR_PREFIX_CRED_EXPIRED: &str = "[CRED_EXPIRED] ";
+/// Prefix of `last_error` when the next round will retry on its own.
 pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 
 /// Classifies a sync error as needing the user to act, or as something the next
 /// tick will retry, and returns the matching prefix. It never looks at the
 /// error's text, so the result is safe to log.
-pub(super) fn sync_error_prefix(e: &Error) -> &'static str {
+fn sync_error_prefix(e: &Error) -> &'static str {
     match e {
         // 400 and 401 are Google saying it no longer accepts this refresh token:
         // the user revoked the grant, or the token expired.
@@ -55,8 +56,18 @@ pub(super) fn sync_error_prefix(e: &Error) -> &'static str {
 
 /// The prefix followed by the full error text, for `status.last_error`. The
 /// frontend reads the prefix to decide whether to offer signing in again.
-pub(super) fn format_sync_error(e: &Error) -> String {
+fn format_sync_error(e: &Error) -> String {
     format!("{}{e}", sync_error_prefix(e))
+}
+
+/// Records a failed push or pull round for the Devices page. The log gets the
+/// error's class at warn and its text only at debug: only info and above is
+/// printed by default, and the text can carry a Google response. Start with
+/// RUST_LOG=hindsight=debug to see it.
+async fn record_round_failure(inner: &Inner, round: &str, e: &Error) {
+    log::warn!("sync {round} failed {}(see status)", sync_error_prefix(e));
+    log::debug!("sync {round}: {e}");
+    inner.status.write().await.last_error = Some(format_sync_error(e));
 }
 
 /// Every Drive call the sync engine makes goes through here. It runs `op` once
@@ -101,46 +112,64 @@ where
 const PUSH_INTERVAL_SECS: u64 = 30;
 const PULL_INTERVAL_SECS: i64 = 60;
 
-/// 同步引擎当前状态的对外快照（前端「设备」页面读）。
+/// What the Devices page shows about sync. Returned by `sync_status`.
 #[derive(Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
-    /// 后台 push/pull 循环是否在跑
+    /// Whether the background sync loop is running.
     pub running: bool,
-    /// 此刻是否有一次 push/pull 正在执行(手动或后台 tick)。前端用它在
-    /// 跳页重挂后恢复「同步中…」按钮态——纯组件 state 会在卸载时失忆。
+    /// Whether a sync round is running right now. The Devices page restores its
+    /// "Syncing…" button state from this after a page switch, since component
+    /// state is lost on unmount.
     pub sync_in_flight: bool,
-    /// 最近一次 push 成功的 RFC3339 时间
+    /// When a push last uploaded something, RFC3339 UTC.
     pub last_pushed_at: Option<String>,
-    /// 最近一次 pull 成功的 RFC3339 时间
-    pub last_pulled_at: Option<String>,
-    /// 最近一次失败原因（成功后清空）；token 失效会落到这里
+    /// The latest failure, prefixed as `ERR_PREFIX_CRED_EXPIRED` and
+    /// `ERR_PREFIX_TRANSIENT` describe. Cleared once a push uploads again.
     pub last_error: Option<String>,
-    /// outbox 待推送行数（含 dead_letter）
+    /// Outbox rows waiting to be pushed, dead letters included.
     pub pending: u64,
-    /// attempts > 10 的死信行数；UI 单独红色提示
+    /// Outbox rows that failed `MAX_ATTEMPTS` times. Push no longer retries them;
+    /// the Devices page counts them as failed.
     pub dead_letter: u64,
 }
 
-/// 内部共享状态：池、Drive 后端、设备身份、后台任务句柄、状态。
-/// push / pull 模块都用 `&Arc<Inner>` 访问。
+/// The sync engine's state: the two databases, the cloud backend, this device's
+/// `device_id`, the background loop's task, the status the Devices page reads,
+/// and the lock and flag that keep two sync rounds from overlapping.
+///
+/// The background loop runs in its own `tokio::spawn`ed task and keeps its own
+/// handle to this state; commands reach the same state through `SyncEngine`.
+/// Hence the `Arc`.
 pub(super) struct Inner {
+    /// The main database: push reads the outbox and the tables it builds files
+    /// from; pull merges downloaded rows back into it.
     pub(super) pool: DbPool,
-    /// 记忆库句柄(聊天历史/屏幕记忆全文的可选上云用);
-    /// None = 启动时打开失败,这两个数据集的推拉静默跳过。
+    /// The memory database, which holds the two optional datasets: chat history
+    /// and screen text. `None` when it failed to open at startup; those two
+    /// datasets then never sync, whatever the settings say.
     pub(super) mem: Option<crate::memory::MemoryDb>,
+    /// The cloud the engine talks to: Google Drive in the app, an in-memory
+    /// stand-in in tests.
     pub(super) drive: DriveBackend,
+    /// This device's `device_id`, a UUID. Every file this device uploads is named
+    /// `device.<self_id>.…`, which is how pull tells other devices' files apart.
     pub(super) self_id: String,
+    /// The background sync loop while it runs; `None` when it is stopped.
     pub(super) handle: Mutex<Option<JoinHandle<()>>>,
+    /// What the Devices page shows: last push and pull times, the latest error,
+    /// rows waiting to be pushed, and dead letters.
     pub(super) status: RwLock<SyncStatus>,
-    /// flush 串行门：flush_push / flush_pull 全程持有。作用有二——
-    /// 1. 「立即同步」与后台 30s tick 不再并发跑 flush_push：并发时慢的一方会用
-    ///    旧内容覆盖 Drive、而新行的 outbox 已被快的一方删除 → 那批数据到不了云端；
-    /// 2. purge 类命令经 [`SyncEngine::pause_flushes`] 持有它，让清库与在途 push
-    ///    完全互斥（push 先读 outbox 再读表，清库落在两步之间会把空内容传上云）。
+    /// Lets only one push or pull pass, or one cloud cleanup (which takes it through
+    /// [`SyncEngine::pause_flushes`]), run at a time. Running them together loses
+    /// data: of two concurrent pushes, the slower overwrites the cloud with older
+    /// content after the faster has deleted the outbox rows for the newer changes,
+    /// so those changes are never uploaded; a cleanup landing between a push's
+    /// outbox read and its table read makes the push upload empty content.
     pub(super) flush_gate: Mutex<()>,
-    /// 「此刻在同步」的可观测标志(flush 串行门负责互斥,这个只负责给
-    /// status() 快照读)。sync_now 与后台 tick 的 flush 段都会置位。
+    /// Whether a sync round (push and pull) is running right now. The Devices page
+    /// shows "Syncing…" from it, and "Sync now" refuses to start while it is set.
+    /// It is only a flag; `flush_gate` does the mutual exclusion.
     pub(super) sync_in_flight: std::sync::atomic::AtomicBool,
     /// Set once this run has deleted, or found absent, this device's cloud copies
     /// of the files it no longer publishes. Push checks it once per launch.
@@ -178,8 +207,8 @@ impl SyncEngine {
         Self::with_backend(pool, mem, DriveBackend::Http, self_id)
     }
 
-    /// 测试入口：注入自定义 DriveBackend + self_id，同进程跑多个独立设备。
-    /// 见 `src-tauri/tests/sync_two_devices.rs`。
+    /// Test entry: takes the backend and the device id, so one process can run
+    /// several independent devices against the in-memory cloud.
     pub fn with_backend(
         pool: DbPool,
         mem: Option<crate::memory::MemoryDb>,
@@ -288,14 +317,15 @@ impl SyncEngine {
             return Err(crate::error::Error::InvalidInput("同步已在进行中"));
         }
         let _in_flight = InFlightGuard::set(&self.inner.sync_in_flight);
-        // 清掉上次的错误，否则即使这次成功，UI 也会留着旧 last_error
+        // Clear the previous error, or the UI keeps showing it after a success.
         self.inner.status.write().await.last_error = None;
-        push::flush_push(&self.inner).await?;
-        pull::flush_pull(&self.inner).await?;
-        // push/pull 内部如果 token 拿不到会写 last_error 但 return Ok；这里统一暴露给 UI
-        let last_err = self.inner.status.read().await.last_error.clone();
-        if let Some(e) = last_err {
-            return Err(crate::error::Error::SyncIncomplete(e));
+        if let Err(e) = push::flush_push(&self.inner).await {
+            record_round_failure(&self.inner, "push", &e).await;
+            return Err(e);
+        }
+        if let Err(e) = pull::flush_pull(&self.inner).await {
+            record_round_failure(&self.inner, "pull", &e).await;
+            return Err(e);
         }
         Ok(())
     }
@@ -306,12 +336,7 @@ async fn run_loop(inner: Arc<Inner>) {
     loop {
         let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
         if let Err(e) = push::flush_push(&inner).await {
-            log::warn!("sync push 失败: {e}");
-            // SyncIncomplete 表示 push 内部已经把分类好的字符串写进 status.last_error 了；
-            // 这里如果用 format_sync_error 再覆盖一次，会拿不到 inner cause，全归 [TRANSIENT]。
-            if !matches!(e, Error::SyncIncomplete(_)) {
-                inner.status.write().await.last_error = Some(format_sync_error(&e));
-            }
+            record_round_failure(&inner, "push", &e).await;
         }
 
         let now = Utc::now();
@@ -321,10 +346,7 @@ async fn run_loop(inner: Arc<Inner>) {
         };
         if should_pull {
             if let Err(e) = pull::flush_pull(&inner).await {
-                log::warn!("sync pull 失败: {e}");
-                if !matches!(e, Error::SyncIncomplete(_)) {
-                    inner.status.write().await.last_error = Some(format_sync_error(&e));
-                }
+                record_round_failure(&inner, "pull", &e).await;
             }
             last_pull = Some(now);
         }

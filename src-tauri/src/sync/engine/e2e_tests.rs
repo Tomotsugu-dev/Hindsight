@@ -312,6 +312,45 @@ async fn purge_cloud_keep_local_preserves_local_data() {
         0,
         "对端仍按 tombstone 清 A 的 mirror（云端语义对外一致）"
     );
+
+    // A 再同步会拉到自己的 tombstone：本机的 tombstone 不执行，承诺保留的数据还在
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(
+        count_for_device(&a, "device-a").await,
+        3,
+        "本机自己的 tombstone 不应执行"
+    );
+}
+
+/// tombstone 跟其它文件一样按 modifiedTime 顺序处理：排在它后面的文件，就算带着
+/// clearedAt 之前的行，也照常合并。这样结果不取决于文件碰巧落在哪一轮 pull。
+#[tokio::test]
+async fn tombstone_applies_in_file_order() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+
+    let captured = Local::now();
+    for p in ["Code", "Chrome"] {
+        insert_sealed(&a, p, captured, 30).await;
+    }
+    a.engine.sync_now().await.unwrap();
+
+    // 别处上传了 A 的 tombstone（比如另一台设备把 A「从云端永久移除」）
+    let cleared_at = crate::storage::utc_now_rfc3339();
+    let tombstone = serde_json::to_vec(&serde_json::json!({ "clearedAt": cleared_at })).unwrap();
+    drive
+        .upsert_by_name("device.device-a.tombstone.json", &tombstone)
+        .await
+        .unwrap();
+
+    // A 其实还开着：又记一段，当天文件整份重写，排到 tombstone 后面，里面仍带着之前的两行
+    insert_sealed(&a, "Slack", captured, 30).await;
+    a.engine.sync_now().await.unwrap();
+
+    // B 第一次拉取，tombstone 和新文件落在同一轮：先执行 tombstone，再合并新文件
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 3);
 }
 
 /// Test 3：A push 5 行 → A clear local + cursor → A sync → A 应从 Drive 恢复 5 行
@@ -356,7 +395,7 @@ async fn flush_pull_cursor_stops_at_failed_file() {
     let drive_store = Arc::new(InMemoryDriveStore::new());
     let dev = make_device("device-self", drive_store.clone()).await;
 
-    // File 1（T1）: meta.json 合法，Pass 1 handles
+    // File 1（T1）: meta.json 合法，合并成功
     let meta_body = serde_json::to_vec(&serde_json::json!({
         "deviceId": "device-d",
         "displayName": "Device D",
@@ -370,7 +409,7 @@ async fn flush_pull_cursor_stops_at_failed_file() {
         .await
         .unwrap();
 
-    // File 2（T2）: categories.json 内容是坏 JSON，Pass 2 merge_categories 失败
+    // File 2（T2）: categories.json 内容是坏 JSON，merge_categories 失败
     drive_store
         .upsert_by_name(
             "device.device-d.categories.json",
@@ -379,7 +418,7 @@ async fn flush_pull_cursor_stops_at_failed_file() {
         .await
         .unwrap();
 
-    // File 3（T3）: app_groups.json 合法（空数组），Pass 2 merge_app_groups 成功
+    // File 3（T3）: app_groups.json 合法（空数组），merge_app_groups 成功
     drive_store
         .upsert_by_name("device.device-d.app_groups.json", b"[]")
         .await
@@ -658,7 +697,7 @@ async fn enqueue_entity(dev: &TestDevice, entity: &str, pk: &str) {
 }
 
 /// 任务 1：push 失败重试不变量。
-/// 注入一次 upsert 失败 → sync_now 必须返回 SyncIncomplete、失败行留在 outbox
+/// 注入一次 upsert 失败 → sync_now 必须原样返回那次 500、失败行留在 outbox
 /// （attempts=1、last_error 已记录、next_retry_at 推到未来）、status.last_error
 /// 带 [TRANSIENT] 前缀、Drive 上不能出现半写文件；解除注入再 sync → 数据完整
 /// 落 Drive、outbox 清空、last_error 清除。
@@ -679,8 +718,8 @@ async fn push_transient_failure_keeps_outbox_then_recovers() {
         .await
         .expect_err("注入 upsert 失败时 sync_now 应报错");
     assert!(
-        matches!(err, crate::error::Error::SyncIncomplete(_)),
-        "应归类为 SyncIncomplete（outbox 尚有滞留行），实际: {err:?}"
+        matches!(err, crate::error::Error::DriveHttp { status: 500, .. }),
+        "sync_now 应原样返回上传时的 500，实际: {err:?}"
     );
 
     // Drive 上不能出现任何文件：唯一一次 upsert 已被注入打断
@@ -1083,10 +1122,10 @@ async fn peer_process_paths_file_is_ignored() {
 /// 回归:同一轮 pull 内,引用方文件(app_group_members)的 modifiedTime 早于被引用
 /// 文件(app_groups)时,行不能丢。
 ///
-/// 这正是 push HashMap 随机序下约 50% 概率触发的实锤 bug:修复前 Pass 2 按
-/// modifiedTime 升序直走,引用方先合并 → 行级 FK 失败仅 warn → handled=true
+/// 这正是 push HashMap 随机序下约 50% 概率触发的实锤 bug:按 modifiedTime 升序
+/// 直走的话,引用方先合并 → 行级 FK 失败仅 warn → handled=true
 /// 让游标越过 → 该行永久丢失(下轮 `modifiedTime >` 不再拉它)。
-/// 修复后 Pass 2 用依赖序(categories / app_groups 先行)遍历,单轮全部落库。
+/// 所以 pull 让 app_groups 先行,单轮全部落库。
 /// 游标推进语义不受遍历顺序影响(handled[] 仍按文件列表原序求最长 true 前缀)。
 #[tokio::test]
 async fn pull_single_round_merges_children_even_when_files_precede_parents() {
@@ -1095,7 +1134,7 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
     let drive = Arc::new(InMemoryDriveStore::new());
     let dev = make_device("device-self", drive.clone()).await;
 
-    // T1: 远端设备 meta,os = 本机 → 解锁跨 OS 过滤
+    // T1: 远端设备 meta
     let meta = serde_json::to_vec(&serde_json::json!({
         "deviceId": "device-x",
         "displayName": "Device X",
