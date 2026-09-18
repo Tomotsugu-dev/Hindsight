@@ -72,9 +72,9 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
 ///   Apps 页显示但 icon / 数据全无的 "phantom" 行（list_groups 不过滤活动存在性）。
 ///   用户点"清空所有活动"的意图就是一切归零；并且跨设备同步会从对端反复复活这些 group。
 ///   outbox 让对端 pull 时同步软删，避免 ping-pong。
-/// - `sync_cursor.drive_files` 重置到 epoch —— DELETE 把 origin='remote' 镜像也清了；
-///   游标不动 → 下次 pull 只看 modifiedTime > cursor 的新文件 → 老镜像永远拉不回。
-///   重置后下次 pull 走全量，对端历史数据自动重新镜像回本机
+/// - The pull cursor stays where it is: cleared history is not pulled back from
+///   the cloud. Other devices' past days reappear only when they rewrite that
+///   day's file, so today comes back soon and earlier days do not.
 ///
 /// 完成 DELETE 后立刻 `VACUUM` —— SQLite `DELETE` 只把页标记 free 不缩文件，
 /// 必须 VACUUM 才能让用户在 Finder / `du` 看到磁盘空间实际释放。VACUUM 不能在
@@ -108,10 +108,10 @@ pub async fn purge_activities(
 /// 抽出来的实际实现，给单测可以直接调用（绕开 Tauri State<> 包装 + CaptureService
 /// 在 test 里构造不便）。语义见 [`purge_activities`] doc。
 pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
-    // Phase 1: 7 张 DELETE + cursor reset + 软删 phantom app_groups/members + outbox
+    // Phase 1: 7 张 DELETE + 软删 phantom app_groups/members + outbox
     pool.0
         .call(|conn| {
-            // ── 派生数据全清 + cursor reset ──
+            // ── 派生数据全清 ──
             conn.execute_batch(
                 "DELETE FROM activities;
                  DELETE FROM process_paths;
@@ -120,9 +120,7 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
                  DELETE FROM ai_summaries;
                  DELETE FROM screenshot_embeddings;
                  DELETE FROM screenshot_dedup_map;
-                 DELETE FROM sync_outbox;
-                 UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
-                  WHERE entity = 'drive_files';",
+                 DELETE FROM sync_outbox;",
             )
             .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
 
@@ -707,7 +705,7 @@ mod tests {
             .unwrap()
     }
 
-    /// 7 张派生表全清 + sync_cursor 重置 + 用户自定义保留 + VACUUM 真的把 page_count 缩了。
+    /// 7 张派生表全清 + sync_cursor 不动 + 用户自定义保留 + VACUUM 真的把 page_count 缩了。
     ///
     /// fixture 用 1 行 / 表 + 1 个 ~512KB 的 app_icons BLOB 把 DB 撑大几百页；
     /// 这样 VACUUM 后 page_count 显著下降，断言才有意义（小 DB 时 VACUUM 可能维持
@@ -774,7 +772,7 @@ mod tests {
                                 '2026-05-17T10:00:00Z')",
                         [],
                     )?;
-                    // sync_cursor 写一个非 epoch 的 cursor 验证被重置
+                    // sync_cursor 写一个非 epoch 的 cursor，验证清空不动它
                     conn.execute(
                         "INSERT OR REPLACE INTO sync_cursor(entity, last_pulled_at)
                          VALUES('drive_files','2026-05-17T10:00:00Z')",
@@ -913,7 +911,7 @@ mod tests {
             "sync_outbox 应仅含 phantom 软删的 outbox 行",
         );
 
-        // ── assert: sync_cursor 重置到 epoch ──
+        // ── assert: sync_cursor 不动 ──
         let cursor: String = pool
             .0
             .call(|conn| {
@@ -926,8 +924,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            cursor, "1970-01-01T00:00:00Z",
-            "drive_files cursor 应重置到 epoch"
+            cursor, "2026-05-17T10:00:00Z",
+            "清空数据不应重置 drive_files 游标"
         );
 
         // ── assert: VACUUM 真的把页数压回去了 ──

@@ -223,7 +223,7 @@
       },
       "purgeDialog": {
         "purgeDbTitle": "Clear local data?",
-        "purgeDbMessage": "The local database will be cleared, and the next sync will re-pull all history from the cloud. Cloud Drive files are untouched; other devices unaffected.\n\n⚠️ This cannot be undone.",
+        "purgeDbMessage": "All data on this device will be deleted.\n\n⚠️ This cannot be undone.",
         "purgeDbConfirm": "Clear",
         "shotsTitle": "Clear screenshots?",
         "shotsMessage": "All saved screenshot files will be deleted. This cannot be undone.",
