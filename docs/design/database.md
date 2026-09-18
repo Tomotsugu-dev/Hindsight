@@ -2,7 +2,7 @@
 
 Hindsight keeps two SQLite files under the data directory (`~/Library/Application Support/Hindsight/` on macOS):
 
-- `hindsight.<uid>.sqlite` — the main database: activities, classification, sync, devices. Covered below.
+- `hindsight.<uid>.sqlite` — the main database: activities, classification, sync, devices, settings. Covered below.
 - `hindsight-memory.<uid>.sqlite` — screen memory: screenshot frames, OCR text sessions, FTS index, chat history. `frames`, `text_sessions` and `session_lines` are covered under *Memory database* below.
 
 Each table below sits under the heading of the file it lives in.
@@ -155,6 +155,26 @@ A caller counts as signed in only when `uid`, `refresh_token_enc`, `access_token
 Signing out NULLs every column and keeps the row. Renewing a token writes only `access_token` and `expires_at`.
 
 Never synced, and it could not be: the encryption key is derived from the machine, so the blob is meaningless anywhere else.
+
+Indexes: none beyond the primary key.
+Foreign keys: none.
+
+## settings_store
+
+Every setting on this device as one JSON document: the Settings page, the Google OAuth client entered on the Devices page, AI configuration and ignore rules. Exactly one row, pinned by `CHECK (id = 1)` and inserted as `'{}'` by the v7 migration, so the row always exists.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| id | INTEGER | Primary key, `CHECK (id = 1)` | Always 1 |
+| data | TEXT | NOT NULL | The `Settings` struct in `src-tauri/src/repo/settings.rs`, serialized as camelCase JSON. The struct is the field list |
+
+A single document instead of a column per setting, so a new setting needs no migration: `Settings` is `#[serde(default)]`, and a key missing from an older document reads as its default. The cost is that SQL cannot address one setting. To change an existing value for every user, a migration edits the JSON in place: v17 appends `/password` to `privacyUrlKeywords`, v23 resets `screenshotEnabled` to false.
+
+At runtime only `repo::settings::load` and `save` query the table. `save` replaces the whole document, so callers load, change and save. `load` fills in a few defaults (an empty screenshot or model directory, legacy AI fields) and writes the result back. If the JSON fails to parse, `load` continues with defaults in memory and does not write them back; it first copies the raw document to `settings_store.corrupt.json` in the data directory, with `apiKey` and `googleClientSecret` masked.
+
+Secrets are plain text here: the AI provider `apiKey` and `googleClientSecret`. Unlike `auth_state.refresh_token_enc`, nothing in this table is encrypted.
+
+Never synced. Each device keeps its own settings, including the three switches that choose which optional datasets sync.
 
 Indexes: none beyond the primary key.
 Foreign keys: none.
