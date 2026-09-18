@@ -381,24 +381,7 @@ async fn merge_activities(
             row.window_title.as_deref().unwrap_or(""),
             ignore_rules,
         );
-        if let Err(e) = upsert_remote_activity(
-            pool,
-            device_id,
-            &remote_id,
-            &row.started_at,
-            &row.ended_at,
-            row.duration_secs,
-            &row.local_date,
-            row.local_hour as u8,
-            &row.process_name,
-            row.window_title.as_deref().unwrap_or(""),
-            &row.category_id,
-            &row.updated_at,
-            excluded,
-            row.url_host.clone(),
-        )
-        .await
-        {
+        if let Err(e) = upsert_remote_activity(pool, device_id, &row, excluded).await {
             log::warn!("activities line {lineno}: upsert failed: {e}");
             parse_clean = false;
         }
@@ -795,32 +778,15 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
 
 /// Writes one activity row from a file into the local table: inserted when this
 /// device has no such row, overwritten in full when the file's row is newer.
-#[allow(clippy::too_many_arguments)]
 async fn upsert_remote_activity(
     pool: &DbPool,
     device_id: &str,
-    remote_id: &str,
-    started_at: &str,
-    ended_at: &str,
-    duration_secs: i64,
-    local_date: &str,
-    local_hour: u8,
-    process_name: &str,
-    window_title: &str,
-    category_id: &str,
-    updated_at: &str,
+    row: &ActivityPayload,
     excluded: bool,
-    url_host: Option<String>,
 ) -> Result<()> {
     let device_id = device_id.to_string();
-    let remote_id = remote_id.to_string();
-    let started_at = started_at.to_string();
-    let ended_at = ended_at.to_string();
-    let local_date = local_date.to_string();
-    let process_name = process_name.to_string();
-    let window_title = window_title.to_string();
-    let category_id = category_id.to_string();
-    let updated_at = updated_at.to_string();
+    let remote_id = row.id.to_string();
+    let row = row.clone();
     pool.0
         .call(move |conn| {
             let existing: Option<(i64, String)> = conn
@@ -831,6 +797,8 @@ async fn upsert_remote_activity(
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .ok();
+            let local_hour = row.local_hour as u8;
+            let window_title = row.window_title.as_deref().unwrap_or("");
             match existing {
                 None => {
                     // A row this device has not seen: insert it under an id of our own.
@@ -841,25 +809,25 @@ async fn upsert_remote_activity(
                            device_id, remote_id, updated_at, origin, excluded, url_host
                          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?, ?)",
                         rusqlite::params![
-                            started_at,
-                            ended_at,
-                            duration_secs,
-                            local_date,
+                            row.started_at,
+                            row.ended_at,
+                            row.duration_secs,
+                            row.local_date,
                             local_hour,
-                            process_name,
+                            row.process_name,
                             window_title,
-                            category_id,
+                            row.category_id,
                             device_id,
                             remote_id,
-                            updated_at,
+                            row.updated_at,
                             excluded,
-                            url_host,
+                            row.url_host,
                         ],
                     )
                     .db()?;
                 }
                 Some((id, cur_updated)) => {
-                    if updated_at > cur_updated {
+                    if row.updated_at > cur_updated {
                         conn.execute(
                             "UPDATE activities SET
                                started_at = ?, ended_at = ?, duration_secs = ?,
@@ -868,16 +836,16 @@ async fn upsert_remote_activity(
                                updated_at = ?, url_host = ?
                              WHERE id = ?",
                             rusqlite::params![
-                                started_at,
-                                ended_at,
-                                duration_secs,
-                                local_date,
+                                row.started_at,
+                                row.ended_at,
+                                row.duration_secs,
+                                row.local_date,
                                 local_hour,
-                                process_name,
+                                row.process_name,
                                 window_title,
-                                category_id,
-                                updated_at,
-                                url_host,
+                                row.category_id,
+                                row.updated_at,
+                                row.url_host,
                                 id,
                             ],
                         )
