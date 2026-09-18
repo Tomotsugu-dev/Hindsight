@@ -106,14 +106,22 @@ Foreign keys: none.
 
 ## sync_cursor
 
-How far the pull side has got. One row per tracked stream; only `drive_files` exists today, holding the `modifiedTime` of the last cloud file that was fully handled. The next pull asks the backend for files strictly newer than that, so a file the cursor has passed is never listed again.
+Where sync has got to: one row for pull, and one per optional dataset for push. The column name only fits the pull row.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| entity | TEXT | Primary key | Name of the stream. `'drive_files'` is the only one |
-| last_pulled_at | TEXT | NOT NULL, DEFAULT epoch | `modifiedTime` of the last handled file, UTC |
+| entity | TEXT | Primary key | `drive_files`, `push.ai_summaries`, `push.chat` or `push.memory` |
+| last_pulled_at | TEXT | NOT NULL, DEFAULT epoch | See below |
 
-The epoch default doubles as "never pulled", which makes the first sync list everything. Losing or mistyping the key has the same effect: the whole cloud is downloaded again.
+`drive_files` is the pull cursor: every cloud file modified at or before this time (`modifiedTime`, UTC, as Google reports it) has been merged or deliberately skipped. The next pull lists only the files modified strictly after it, so the cursor may move only across handled files, and stops strictly before the first file that failed: a failed file at or before the cursor would never be listed again.
+
+The `push.*` rows record what each optional dataset looked like at its last upload. Before each push the value is computed again from the tables; unchanged means nothing is uploaded.
+
+- `push.ai_summaries`: `<max generated_at>:<row count>` of `ai_summaries`.
+- `push.chat`: `<max updated_ts>:<row count>` of `chat_conversations`, then `|`, then `<max created_ts>:<row count>` of `chat_messages`. Both tables are in the memory database.
+- `push.memory`: the latest `ended_ts` among this device's own rows in `text_sessions` (memory database). It is also where the next upload starts: only the days with a session that ended after it are uploaded again.
+
+A missing row reads as the epoch, meaning "never": the first pull lists every cloud file, and the first push of a dataset uploads it. Setting `drive_files` back to the epoch makes the next pull go through every cloud file again. The app does this in two places: when an optional dataset is switched on, because while it was off the cursor passed that dataset's files without downloading them; and in `purge_cloud_data`.
 
 Indexes: none beyond the primary key.
 Foreign keys: none.
