@@ -223,7 +223,7 @@
       },
       "purgeDialog": {
         "purgeDbTitle": "Limpar dados locais?",
-        "purgeDbMessage": "O banco de dados local será limpo, e a próxima sincronização baixará todo o histórico novamente da nuvem. Os arquivos no Drive permanecem intactos; outros dispositivos não são afetados.\n\n⚠️ Isto não pode ser desfeito.",
+        "purgeDbMessage": "Todos os dados deste dispositivo serão excluídos.\n\n⚠️ Isto não pode ser desfeito.",
         "purgeDbConfirm": "Limpar",
         "shotsTitle": "Limpar capturas de tela?",
         "shotsMessage": "Todos os arquivos de captura de tela salvos serão excluídos. Isto não pode ser desfeito.",

@@ -168,44 +168,6 @@ async fn sum_secs_for_device(dev: &TestDevice, device_id: &str) -> i64 {
         .unwrap()
 }
 
-async fn remote_ids_for(dev: &TestDevice, device_id: &str) -> Vec<String> {
-    let device_id = device_id.to_string();
-    dev.pool
-        .0
-        .call(move |conn| {
-            let mut stmt = conn
-                .prepare("SELECT remote_id FROM activities WHERE device_id = ?1 ORDER BY remote_id")
-                .db()?;
-            let rows = stmt
-                .query_map(rusqlite::params![device_id], |r| r.get::<_, String>(0))
-                .db()?
-                .collect::<rusqlite::Result<Vec<String>>>()
-                .db()?;
-            Ok(rows)
-        })
-        .await
-        .unwrap()
-}
-
-/// 直接清本机 activities + 重置 pull cursor，模拟 commands::storage::purge_activities
-/// 的核心 SQL（绕开 Tauri State<>）。
-async fn clear_local_and_cursor(dev: &TestDevice) {
-    dev.pool
-        .0
-        .call(|conn| {
-            conn.execute_batch(
-                "DELETE FROM activities;
-                 DELETE FROM sync_outbox;
-                 UPDATE sync_cursor SET last_pulled_at = '1970-01-01T00:00:00Z'
-                  WHERE entity = 'drive_files';",
-            )
-            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
-            Ok(())
-        })
-        .await
-        .unwrap();
-}
-
 /// Test 1：A push 3 行 → B pull → B 看到 3 行 mirror，self 也保留 3 行；A/B 互不串
 #[tokio::test]
 async fn cross_device_push_pull_basic() {
@@ -353,38 +315,42 @@ async fn tombstone_applies_in_file_order() {
     assert_eq!(count_for_device(&b, "device-a").await, 3);
 }
 
-/// Test 3：A push 5 行 → A clear local + cursor → A sync → A 应从 Drive 恢复 5 行
-/// （v26 + upsert_remote_activity self 分支：显式 id + origin='local'）
+/// Test 3：「清空数据」之后本机的历史不再从云端回来；其他设备上的副本原样保留。
 #[tokio::test]
-async fn self_restore_after_local_clear() {
+async fn clear_data_does_not_pull_own_history_back() {
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
 
     let captured = Local::now();
-    let mut original_ids: Vec<i64> = Vec::new();
-    for p in ["Code", "Chrome", "Slack", "Figma", "Terminal"] {
-        original_ids.push(insert_sealed(&a, p, captured, 30).await);
+    for p in ["Code", "Chrome", "Slack"] {
+        insert_sealed(&a, p, captured, 30).await;
     }
     a.engine.sync_now().await.unwrap();
-    assert_eq!(count_for_device(&a, "device-a").await, 5);
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 3);
 
-    // 模拟「清空本机数据库」
-    clear_local_and_cursor(&a).await;
+    crate::commands::storage::purge_activities_impl(&a.pool)
+        .await
+        .expect("purge_activities");
     assert_eq!(count_for_device(&a, "device-a").await, 0);
 
-    // 再 sync → 应从 Drive 拉回自己的 ndjson 恢复
+    // 再同步两轮，什么都不该回来
+    a.engine.sync_now().await.unwrap();
     a.engine.sync_now().await.unwrap();
     assert_eq!(
         count_for_device(&a, "device-a").await,
-        5,
-        "self-restore 应从 Drive 拉回 5 行"
+        0,
+        "清空后本机历史不应从云端回来"
     );
-    // 恢复出来的 remote_id 集合应该跟原始 id 集合一致（v26 保证 local 行 remote_id = id）
-    let mut got: Vec<String> = remote_ids_for(&a, "device-a").await;
-    let mut want: Vec<String> = original_ids.iter().map(|i| i.to_string()).collect();
-    got.sort();
-    want.sort();
-    assert_eq!(got, want, "恢复后的 remote_id 应与原始 id 一一对应");
+
+    // B 那边 A 的副本一条不少
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        count_for_device(&b, "device-a").await,
+        3,
+        "其他设备上的副本不受影响"
+    );
 }
 
 /// Test 5：flush_pull cursor "longest true prefix" 推进逻辑 ——

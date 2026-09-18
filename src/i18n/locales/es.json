@@ -223,7 +223,7 @@
       },
       "purgeDialog": {
         "purgeDbTitle": "¿Borrar los datos locales?",
-        "purgeDbMessage": "Se borrará la base de datos local, y la próxima sincronización volverá a descargar todo el historial desde la nube. Los archivos de Drive quedan intactos; los demás dispositivos no se ven afectados.\n\n⚠️ Esto no se puede deshacer.",
+        "purgeDbMessage": "Se eliminarán todos los datos de este dispositivo.\n\n⚠️ Esto no se puede deshacer.",
         "purgeDbConfirm": "Borrar",
         "shotsTitle": "¿Borrar las capturas de pantalla?",
         "shotsMessage": "Se eliminarán todos los archivos de captura de pantalla guardados. Esto no se puede deshacer.",

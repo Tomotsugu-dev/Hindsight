@@ -223,7 +223,7 @@
       },
       "purgeDialog": {
         "purgeDbTitle": "清空本机数据？",
-        "purgeDbMessage": "本机数据库将被清空，下次同步会从云端重新拉回所有历史。云端文件完全不动，其它设备不受影响。\n\n⚠️ 此操作不可撤销。",
+        "purgeDbMessage": "本机的所有数据将被删除。\n\n⚠️ 此操作不可撤销。",
         "purgeDbConfirm": "清空",
         "shotsTitle": "清空截图？",
         "shotsMessage": "将删除所有已保存的截图文件。此操作不可撤销。",

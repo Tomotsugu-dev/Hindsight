@@ -259,14 +259,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             }
             _ => {}
         }
-        // Of this device's own files only the activity days are merged: they are how
-        // its history comes back after the local database is cleared. The rest are
-        // skipped, and its own tombstone must be: removing this device while keeping
+        // This device's own files are never merged: its rows are the originals. Its
+        // own tombstone in particular must not be: removing this device while keeping
         // local data uploads one, and applying it would delete that data here.
-        // TODO: once "Clear data" no longer rebuilds this device's history from the
-        // cloud, skip its activity days too, and drop the self branch of
-        // `upsert_remote_activity` along with `self_restore_after_local_clear`.
-        if parsed.device_id() == self_id && !matches!(parsed, ParsedFile::ActivityDay { .. }) {
+        if parsed.device_id() == self_id {
             handled[i] = true;
             continue;
         }
@@ -292,17 +288,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::ActivityDay {
                 device_id,
                 local_date,
-            } => {
-                merge_activities(
-                    &inner.pool,
-                    self_id,
-                    &device_id,
-                    &local_date,
-                    &body,
-                    &ignore_rules,
-                )
-                .await
-            }
+            } => merge_activities(&inner.pool, &device_id, &local_date, &body, &ignore_rules).await,
             ParsedFile::Categories { device_id } => {
                 merge_categories(&inner.pool, &device_id, &body).await
             }
@@ -370,7 +356,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
 async fn merge_activities(
     pool: &DbPool,
-    self_id: &str,
     device_id: &str,
     local_date: &str,
     body: &[u8],
@@ -406,7 +391,6 @@ async fn merge_activities(
         );
         if let Err(e) = upsert_remote_activity(
             pool,
-            self_id,
             device_id,
             &remote_id,
             &row.started_at,
@@ -428,11 +412,9 @@ async fn merge_activities(
         }
     }
 
-    // Never delete this device's own rows, nor rows another device still has;
-    // delete only the activity rows another device no longer has. Delete nothing
-    // when the file did not fully land.
-    let is_self = !self_id.is_empty() && device_id == self_id;
-    if !parse_clean || is_self {
+    // Never delete rows the device still has; delete only the activity rows it
+    // no longer has. Delete nothing when the file did not fully land.
+    if !parse_clean {
         return Ok(());
     }
     let device_id_db = device_id.to_string();
@@ -824,7 +806,6 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
 #[allow(clippy::too_many_arguments)]
 async fn upsert_remote_activity(
     pool: &DbPool,
-    self_id: &str,
     device_id: &str,
     remote_id: &str,
     started_at: &str,
@@ -839,12 +820,6 @@ async fn upsert_remote_activity(
     excluded: bool,
     url_host: Option<String>,
 ) -> Result<()> {
-    // Rows from this device's own file are inserted with the id from the file:
-    // push writes the file from the id column, and under another id the other
-    // devices would not recognize the row and would insert it again.
-    // TODO: goes with the "Clear data" TODO in `flush_pull`; once own activity
-    // days are no longer pulled, everything under `is_self` here is dead.
-    let is_self = !self_id.is_empty() && device_id == self_id;
     let device_id = device_id.to_string();
     let remote_id = remote_id.to_string();
     let started_at = started_at.to_string();
@@ -866,62 +841,30 @@ async fn upsert_remote_activity(
                 .ok();
             match existing {
                 None => {
-                    if is_self {
-                        // This device's own row: the original id, origin local.
-                        let explicit_id: i64 =
-                            remote_id.parse().map_err(|e: std::num::ParseIntError| {
-                                tokio_rusqlite::Error::Other(Box::new(e))
-                            })?;
-                        conn.execute(
-                            "INSERT INTO activities(
-                               id, started_at, ended_at, duration_secs, local_date, local_hour,
-                               process_name, window_title, category_id, screenshot_path,
-                               device_id, remote_id, updated_at, origin, excluded, url_host
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'local', ?, ?)",
-                            rusqlite::params![
-                                explicit_id,
-                                started_at,
-                                ended_at,
-                                duration_secs,
-                                local_date,
-                                local_hour,
-                                process_name,
-                                window_title,
-                                category_id,
-                                device_id,
-                                remote_id,
-                                updated_at,
-                                excluded,
-                                url_host,
-                            ],
-                        )
-                        .db()?;
-                    } else {
-                        // Another device's row: an id of our own, origin remote.
-                        conn.execute(
-                            "INSERT INTO activities(
-                               started_at, ended_at, duration_secs, local_date, local_hour,
-                               process_name, window_title, category_id, screenshot_path,
-                               device_id, remote_id, updated_at, origin, excluded, url_host
-                             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?, ?)",
-                            rusqlite::params![
-                                started_at,
-                                ended_at,
-                                duration_secs,
-                                local_date,
-                                local_hour,
-                                process_name,
-                                window_title,
-                                category_id,
-                                device_id,
-                                remote_id,
-                                updated_at,
-                                excluded,
-                                url_host,
-                            ],
-                        )
-                        .db()?;
-                    }
+                    // A row this device has not seen: insert it under an id of our own.
+                    conn.execute(
+                        "INSERT INTO activities(
+                           started_at, ended_at, duration_secs, local_date, local_hour,
+                           process_name, window_title, category_id, screenshot_path,
+                           device_id, remote_id, updated_at, origin, excluded, url_host
+                         ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?, ?)",
+                        rusqlite::params![
+                            started_at,
+                            ended_at,
+                            duration_secs,
+                            local_date,
+                            local_hour,
+                            process_name,
+                            window_title,
+                            category_id,
+                            device_id,
+                            remote_id,
+                            updated_at,
+                            excluded,
+                            url_host,
+                        ],
+                    )
+                    .db()?;
                 }
                 Some((id, cur_updated)) => {
                     if updated_at > cur_updated {
@@ -959,7 +902,7 @@ async fn upsert_remote_activity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
+    use crate::repo::test_util::fresh_test_pool;
 
     const DAY: &str = "2026-05-15";
     const OTHER_DEVICE: &str = "device-a";
@@ -973,7 +916,7 @@ mod tests {
         seed_mirror_rows(&pool, OTHER_DEVICE, &["1", "2", "3", "4", "5"]).await;
 
         let body = ndjson_for_ids(&[1, 2, 3, 6]);
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+        merge_activities(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
 
@@ -982,36 +925,6 @@ mod tests {
             ids,
             vec!["1".to_string(), "2".into(), "3".into(), "6".into()],
             "ndjson 包含 1/2/3/6，不在的 4/5 应被 mirror 收敛 DELETE"
-        );
-    }
-
-    /// 自身路径 (device_id == self_id)：mirror 收敛**不**触发，
-    /// 自己原有的 mirror 行不该被对端 ndjson 收敛 DELETE。
-    #[tokio::test]
-    async fn merge_activities_self_skips_mirror_convergence() {
-        let pool = fresh_test_pool().await;
-        // 自身路径的 fixture 用 origin='local'（mac 本机刚写的状态），并显式 id
-        // 保证 (device_id, remote_id) 唯一索引下能正确做 UPDATE
-        seed_self_rows(&pool, &[1, 2, 3, 4, 5]).await;
-
-        let body = ndjson_for_ids(&[1, 2, 3, 6]);
-        merge_activities(&pool, TEST_SELF_ID, TEST_SELF_ID, DAY, body.as_bytes(), &[])
-            .await
-            .unwrap();
-
-        let ids = remote_ids_for(&pool, TEST_SELF_ID).await;
-        // 自身路径不收敛：原 1..5 应全部保留，外加新 INSERT 的 6 → 共 6 行
-        assert_eq!(
-            ids,
-            vec![
-                "1".to_string(),
-                "2".into(),
-                "3".into(),
-                "4".into(),
-                "5".into(),
-                "6".into(),
-            ],
-            "self 路径下 mirror 收敛应跳过，4/5 应保留"
         );
     }
 
@@ -1027,7 +940,7 @@ mod tests {
             payload_line(1),
             payload_line(2),
         );
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+        merge_activities(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
 
@@ -1056,16 +969,9 @@ mod tests {
         }];
 
         let body = ndjson_for_ids(&[1]);
-        merge_activities(
-            &pool,
-            TEST_SELF_ID,
-            OTHER_DEVICE,
-            DAY,
-            body.as_bytes(),
-            &rules,
-        )
-        .await
-        .unwrap();
+        merge_activities(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &rules)
+            .await
+            .unwrap();
         assert_eq!(
             excluded_of(&pool, OTHER_DEVICE, "1").await,
             1,
@@ -1088,7 +994,7 @@ mod tests {
             url_host: None,
         };
         let body = serde_json::to_string(&newer).unwrap();
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+        merge_activities(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
         let (dur, excl) = row_state(&pool, OTHER_DEVICE, "1").await;
@@ -1138,7 +1044,7 @@ mod tests {
         };
         let body = serde_json::to_string(&p).unwrap();
         assert!(body.contains("\"urlHost\":\"github.com\""), "{body}");
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+        merge_activities(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
         assert_eq!(
@@ -1151,7 +1057,7 @@ mod tests {
         p.updated_at = format!("{DAY}T11:00:00Z");
         p.url_host = Some("docs.github.com".into());
         let body = serde_json::to_string(&p).unwrap();
-        merge_activities(&pool, TEST_SELF_ID, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+        merge_activities(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
             .await
             .unwrap();
         assert_eq!(
@@ -1166,16 +1072,9 @@ mod tests {
         let legacy = format!(
             r#"{{"id":8,"startedAt":"{DAY}T12:00:00Z","endedAt":"{DAY}T12:00:30Z","durationSecs":30,"localDate":"{DAY}","localHour":12,"processName":"Google Chrome","windowTitle":null,"categoryId":"other","updatedAt":"{DAY}T12:00:30Z"}}"#
         );
-        merge_activities(
-            &pool,
-            TEST_SELF_ID,
-            OTHER_DEVICE,
-            DAY,
-            legacy.as_bytes(),
-            &[],
-        )
-        .await
-        .unwrap();
+        merge_activities(&pool, OTHER_DEVICE, DAY, legacy.as_bytes(), &[])
+            .await
+            .unwrap();
         assert_eq!(host_of(&pool, OTHER_DEVICE, "8").await, None);
     }
 
@@ -1238,32 +1137,6 @@ mod tests {
                             'Code', '', 'other', ?1, ?2, '2026-05-15T10:00:00Z', 'remote'
                          )",
                         rusqlite::params![device_id, r],
-                    )
-                    .db()?;
-                }
-                Ok(())
-            })
-            .await
-            .unwrap();
-    }
-
-    /// 自身路径专用 fixture：origin='local' + 显式 id（对端 ndjson upsert 自己时用 id 对齐）
-    async fn seed_self_rows(pool: &DbPool, ids: &[i64]) {
-        let ids = ids.to_vec();
-        pool.0
-            .call(move |conn| {
-                for id in &ids {
-                    conn.execute(
-                        "INSERT INTO activities(
-                            id, started_at, ended_at, duration_secs, local_date, local_hour,
-                            process_name, window_title, category_id, device_id, remote_id,
-                            updated_at, origin
-                         ) VALUES(
-                            ?1, '2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30, '2026-05-15', 10,
-                            'Code', '', 'other', ?2, ?3,
-                            '2026-05-15T10:00:00Z', 'local'
-                         )",
-                        rusqlite::params![id, TEST_SELF_ID, id.to_string()],
                     )
                     .db()?;
                 }
