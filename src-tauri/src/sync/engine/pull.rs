@@ -289,18 +289,10 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
                 device_id,
                 local_date,
             } => merge_activities(&inner.pool, &device_id, &local_date, &body, &ignore_rules).await,
-            ParsedFile::Categories { device_id } => {
-                merge_categories(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppIcons { device_id } => {
-                merge_app_icons(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppGroups { device_id } => {
-                merge_app_groups(&inner.pool, &device_id, &body).await
-            }
-            ParsedFile::AppGroupMembers { device_id } => {
-                merge_app_group_members(&inner.pool, &device_id, &body).await
-            }
+            ParsedFile::Categories { .. } => merge_categories(&inner.pool, &body).await,
+            ParsedFile::AppIcons { .. } => merge_app_icons(&inner.pool, &body).await,
+            ParsedFile::AppGroups { .. } => merge_app_groups(&inner.pool, &body).await,
+            ParsedFile::AppGroupMembers { .. } => merge_app_group_members(&inner.pool, &body).await,
             ParsedFile::AiSummaries { .. } => {
                 super::datasets::merge_ai_summaries(&inner.pool, &body).await
             }
@@ -389,24 +381,7 @@ async fn merge_activities(
             row.window_title.as_deref().unwrap_or(""),
             ignore_rules,
         );
-        if let Err(e) = upsert_remote_activity(
-            pool,
-            device_id,
-            &remote_id,
-            &row.started_at,
-            &row.ended_at,
-            row.duration_secs,
-            &row.local_date,
-            row.local_hour as u8,
-            &row.process_name,
-            row.window_title.as_deref().unwrap_or(""),
-            &row.category_id,
-            &row.updated_at,
-            excluded,
-            row.url_host.clone(),
-        )
-        .await
-        {
+        if let Err(e) = upsert_remote_activity(pool, device_id, &row, excluded).await {
             log::warn!("activities line {lineno}: upsert failed: {e}");
             parse_clean = false;
         }
@@ -470,6 +445,8 @@ async fn merge_activities(
 /// the local row's; otherwise the local row stays. That comparison is `apply`'s
 /// job; this function compares no timestamps.
 ///
+/// A record for which `pk_for_log` returns `None` is skipped and never written.
+///
 /// `apply` cannot capture anything (it must be `Copy`): it is sent to the
 /// database thread once per record.
 async fn merge_lww_simple<T, F>(
@@ -503,7 +480,7 @@ where
     Ok(())
 }
 
-async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
     merge_lww_simple(
         pool,
         "category",
@@ -524,7 +501,6 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
             if !should_apply {
                 return Ok(());
             }
-            let cur_deleted = cur.as_ref().and_then(|(_, d)| d.clone());
 
             if cur.is_none() {
                 conn.execute(
@@ -544,7 +520,8 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
             // The peer deleted this category: clear it from the app groups filed
             // under it here, and push those groups to the other devices. Done only
             // the once it goes from present to deleted.
-            let just_deleted = row.deleted_at.is_some() && cur_deleted.is_none();
+            let cur_deleted = matches!(cur, Some((_, Some(_))));
+            let just_deleted = row.deleted_at.is_some() && !cur_deleted;
             if just_deleted {
                 crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
             }
@@ -554,7 +531,7 @@ async fn merge_categories(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
     .await
 }
 
-async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_app_icons(pool: &DbPool, body: &[u8]) -> Result<()> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
     let rows: Vec<AppIconPayload> = parse_rows("app_icons", body)?;
     for row in rows {
@@ -629,7 +606,7 @@ async fn merge_app_icons(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result
     Ok(())
 }
 
-async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_app_groups(pool: &DbPool, body: &[u8]) -> Result<()> {
     merge_lww_simple(
         pool,
         "app_group",
@@ -666,7 +643,7 @@ async fn merge_app_groups(pool: &DbPool, _device_id: &str, body: &[u8]) -> Resul
     .await
 }
 
-async fn merge_app_group_members(pool: &DbPool, _device_id: &str, body: &[u8]) -> Result<()> {
+async fn merge_app_group_members(pool: &DbPool, body: &[u8]) -> Result<()> {
     merge_lww_simple(
         pool,
         "app_group_member",
@@ -803,32 +780,15 @@ async fn merge_device_meta(pool: &DbPool, device_id: &str, body: &[u8]) -> Resul
 
 /// Writes one activity row from a file into the local table: inserted when this
 /// device has no such row, overwritten in full when the file's row is newer.
-#[allow(clippy::too_many_arguments)]
 async fn upsert_remote_activity(
     pool: &DbPool,
     device_id: &str,
-    remote_id: &str,
-    started_at: &str,
-    ended_at: &str,
-    duration_secs: i64,
-    local_date: &str,
-    local_hour: u8,
-    process_name: &str,
-    window_title: &str,
-    category_id: &str,
-    updated_at: &str,
+    row: &ActivityPayload,
     excluded: bool,
-    url_host: Option<String>,
 ) -> Result<()> {
     let device_id = device_id.to_string();
-    let remote_id = remote_id.to_string();
-    let started_at = started_at.to_string();
-    let ended_at = ended_at.to_string();
-    let local_date = local_date.to_string();
-    let process_name = process_name.to_string();
-    let window_title = window_title.to_string();
-    let category_id = category_id.to_string();
-    let updated_at = updated_at.to_string();
+    let remote_id = row.id.to_string();
+    let row = row.clone();
     pool.0
         .call(move |conn| {
             let existing: Option<(i64, String)> = conn
@@ -839,6 +799,8 @@ async fn upsert_remote_activity(
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .ok();
+            let local_hour = row.local_hour as u8;
+            let window_title = row.window_title.as_deref().unwrap_or("");
             match existing {
                 None => {
                     // A row this device has not seen: insert it under an id of our own.
@@ -849,25 +811,25 @@ async fn upsert_remote_activity(
                            device_id, remote_id, updated_at, origin, excluded, url_host
                          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'remote', ?, ?)",
                         rusqlite::params![
-                            started_at,
-                            ended_at,
-                            duration_secs,
-                            local_date,
+                            row.started_at,
+                            row.ended_at,
+                            row.duration_secs,
+                            row.local_date,
                             local_hour,
-                            process_name,
+                            row.process_name,
                             window_title,
-                            category_id,
+                            row.category_id,
                             device_id,
                             remote_id,
-                            updated_at,
+                            row.updated_at,
                             excluded,
-                            url_host,
+                            row.url_host,
                         ],
                     )
                     .db()?;
                 }
                 Some((id, cur_updated)) => {
-                    if updated_at > cur_updated {
+                    if row.updated_at > cur_updated {
                         conn.execute(
                             "UPDATE activities SET
                                started_at = ?, ended_at = ?, duration_secs = ?,
@@ -876,16 +838,16 @@ async fn upsert_remote_activity(
                                updated_at = ?, url_host = ?
                              WHERE id = ?",
                             rusqlite::params![
-                                started_at,
-                                ended_at,
-                                duration_secs,
-                                local_date,
+                                row.started_at,
+                                row.ended_at,
+                                row.duration_secs,
+                                row.local_date,
                                 local_hour,
-                                process_name,
+                                row.process_name,
                                 window_title,
-                                category_id,
-                                updated_at,
-                                url_host,
+                                row.category_id,
+                                row.updated_at,
+                                row.url_host,
                                 id,
                             ],
                         )
@@ -1175,7 +1137,6 @@ mod tests {
     const T_OLD: &str = "2026-06-01T00:00:00Z";
     const T_MID: &str = "2026-06-02T00:00:00Z";
     const T_NEW: &str = "2026-06-03T00:00:00Z";
-    const REMOTE_DEV: &str = "device-x";
 
     /// 通用 fixture:一条参数化 SQL(全 String 参数)直写表。
     async fn exec_sql(pool: &DbPool, sql: &'static str, params: Vec<Option<String>>) {
@@ -1266,7 +1227,6 @@ mod tests {
         // 远端 T_OLD < 本地 T_MID,且远端还带 deleted_at —— LWW 输了就该整行按兵不动
         merge_categories(
             &pool,
-            REMOTE_DEV,
             &category_body("work", "远端旧名", T_OLD, Some(T_OLD)),
         )
         .await
@@ -1313,7 +1273,7 @@ mod tests {
         .await;
 
         let body = category_body("work", "工作", T_NEW, Some(T_NEW));
-        merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
+        merge_categories(&pool, &body).await.unwrap();
 
         // 分类本体落墓碑
         let cat = read_row(
@@ -1346,7 +1306,7 @@ mod tests {
         );
 
         // 同 body 再 merge 一次:LWW 严格 > 挡住,级联不重跑、outbox 不再增长
-        merge_categories(&pool, REMOTE_DEV, &body).await.unwrap();
+        merge_categories(&pool, &body).await.unwrap();
         assert_eq!(
             outbox_entries(&pool).await.len(),
             1,
@@ -1389,9 +1349,7 @@ mod tests {
             remote_row("M-missing", false),
         ])
         .unwrap();
-        merge_app_group_members(&pool, REMOTE_DEV, &body)
-            .await
-            .unwrap();
+        merge_app_group_members(&pool, &body).await.unwrap();
 
         let get = |p: &'static str| {
             read_row(
@@ -1481,7 +1439,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let prev = std::env::var("HINDSIGHT_DATA_DIR").ok();
         std::env::set_var("HINDSIGHT_DATA_DIR", &dir);
-        let res = merge_app_icons(&pool, REMOTE_DEV, &body).await;
+        let res = merge_app_icons(&pool, &body).await;
         match prev {
             Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
             None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
@@ -1530,7 +1488,7 @@ mod tests {
             ("I-older", BASE64.encode(&remote_bytes), T_MID), // T_MID < 本地 T_NEW
             ("I-equal", BASE64.encode(&remote_bytes), T_MID), // 平局
         ]);
-        merge_app_icons(&pool, REMOTE_DEV, &body).await.unwrap();
+        merge_app_icons(&pool, &body).await.unwrap();
 
         assert_eq!(
             icon_row(&pool, "I-older").await.unwrap(),
