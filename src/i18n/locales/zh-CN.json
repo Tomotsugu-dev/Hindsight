@@ -219,7 +219,8 @@
         "description": "下面的操作影响所有设备，且无法撤销。",
         "removeDeviceLabel": "移除本设备",
         "removeDeviceDescription": "从云端移除本设备的所有数据",
-        "removeDeviceBusy": "移除中…"
+        "removeDeviceBusy": "移除中…",
+        "removeDeviceNeedsSignIn": "需要先登录 Google 账号。"
       },
       "purgeDialog": {
         "purgeDbTitle": "清空本机数据？",
@@ -232,20 +233,20 @@
       },
       "removeDeviceDialog": {
         "title": "从云端移除本设备",
-        "intro": "本设备在云端的所有数据会被删除。其它设备同步后也会忘掉本设备的记录——就像本设备从未连过云端。",
-        "unaffected": "不影响：其它设备自己的数据、本设备以后产生的新数据。",
+        "intro": "本设备在云端的所有数据会被删除，其它设备同步后也会删掉本设备的记录。移除后本设备会退出登录。",
+        "unaffected": "不影响：其它设备自己的数据。",
         "localQuestion": "本机的本地副本怎么处理？",
         "alsoClearLabel": "也一并清空（默认）",
-        "alsoClearHint": "彻底干净。适合：离职、卖机器、隐私清理。",
+        "alsoClearHint": "同时清空本机的数据和截图。",
         "keepLabel": "保留本机副本",
-        "keepHint": "云端清，本地数据原样保留。适合接下来要换 Google 账号、把本机数据迁移到新账号。",
+        "keepHint": "云端删除，本机数据原样保留。",
         "typeToConfirmPrompt": "输入「{{keyword}}」确认此操作（不可恢复）：",
         "typeKeyword": "移除",
         "typePlaceholder": "在此输入",
         "cancel": "取消",
         "confirm": "移除",
-        "doneAlsoClear": "已撤回 {{count}} 个 Drive 文件 + 通知所有设备清除本机镜像。本机数据已一并清空。",
-        "doneKeepLocal": "已撤回 {{count}} 个 Drive 文件 + 通知所有设备清除本机镜像。本机数据已保留，可换账号后重新上传。"
+        "doneAlsoClear": "已从云端删除 {{count}} 个文件，本机的数据和截图也已清空，已退出登录。",
+        "doneKeepLocal": "已从云端删除 {{count}} 个文件，本机数据已保留，已退出登录。"
       },
       "export": {
         "rowLabel": "导出使用数据",

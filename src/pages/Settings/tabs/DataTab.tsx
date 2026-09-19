@@ -24,7 +24,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { RemoveDeviceDialog } from "../../../components/RemoveDeviceDialog/RemoveDeviceDialog";
 import { ExportUsageDialog } from "../../../components/ExportUsageDialog/ExportUsageDialog";
 import { useSettings } from "../../../state/settings";
-import { api, type StorageInfo } from "../../../api/hindsight";
+import { api, type AuthState, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
 import styles from "./DataTab.module.css";
 
@@ -63,6 +63,18 @@ export default function DataTab() {
     const t = setInterval(refreshStorage, 30_000);
     return () => clearInterval(t);
   }, []);
+
+  // 「移除本设备」要先登录：打开页面时取一次登录状态，窗口聚焦时再刷
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  useEffect(() => {
+    const fetchAuth = () => {
+      api.authStatus().then(setAuth).catch(() => setAuth(null));
+    };
+    fetchAuth();
+    window.addEventListener("focus", fetchAuth);
+    return () => window.removeEventListener("focus", fetchAuth);
+  }, []);
+  const signedIn = auth?.signedIn ?? false;
 
   if (!settings) return null;
 
@@ -277,7 +289,11 @@ export default function DataTab() {
       >
         <Row
           label={t("settings.data.danger.removeDeviceLabel")}
-          description={t("settings.data.danger.removeDeviceDescription")}
+          description={
+            signedIn
+              ? t("settings.data.danger.removeDeviceDescription")
+              : t("settings.data.danger.removeDeviceNeedsSignIn")
+          }
           icon={Cloud}
           tone="danger"
         >
@@ -287,6 +303,7 @@ export default function DataTab() {
             busyTarget={busyTarget}
             busyLabel={t("settings.data.danger.removeDeviceBusy")}
             idleLabel={t("settings.data.danger.removeDeviceLabel")}
+            disabled={!signedIn}
             onClick={() => setRemoveOpen(true)}
           />
         </Row>
@@ -338,6 +355,7 @@ function PurgeButton({
   busyTarget,
   busyLabel,
   idleLabel,
+  disabled = false,
   onClick,
 }: {
   target: PurgeTarget;
@@ -345,6 +363,7 @@ function PurgeButton({
   busyTarget: PurgeTarget | null;
   busyLabel: string;
   idleLabel: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   const isBusy = busyTarget === target;
@@ -360,7 +379,7 @@ function PurgeButton({
       type="button"
       className={`${variantClass} ${busyClass}`}
       onClick={onClick}
-      disabled={isBusy || isLocked}
+      disabled={disabled || isBusy || isLocked}
       aria-busy={isBusy}
     >
       {isBusy ? (

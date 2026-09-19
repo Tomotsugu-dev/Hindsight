@@ -219,7 +219,8 @@
         "description": "Actions below affect every device and cannot be undone.",
         "removeDeviceLabel": "Remove this device",
         "removeDeviceDescription": "Remove all of this device's data from cloud",
-        "removeDeviceBusy": "Removing…"
+        "removeDeviceBusy": "Removing…",
+        "removeDeviceNeedsSignIn": "Sign in to your Google account first."
       },
       "purgeDialog": {
         "purgeDbTitle": "Clear local data?",
@@ -232,20 +233,20 @@
       },
       "removeDeviceDialog": {
         "title": "Remove this device from cloud",
-        "intro": "All of this device's data in the cloud will be deleted. After syncing, other devices will also forget the records about this device — as if this device had never connected to the cloud.",
-        "unaffected": "Unaffected: other devices' own data, and new data produced on this device from now on.",
+        "intro": "All of this device's data in the cloud will be deleted, and other devices will delete this device's records the next time they sync. This device is signed out afterwards.",
+        "unaffected": "Unaffected: other devices' own data.",
         "localQuestion": "What about this device's local copy?",
         "alsoClearLabel": "Also clear local (default)",
-        "alsoClearHint": "Completely clean. For: leaving a job, selling the machine, privacy cleanup.",
+        "alsoClearHint": "Also clears this device's data and screenshots.",
         "keepLabel": "Keep local copy",
-        "keepHint": "Cloud cleared, local data preserved. Use this when switching to a different Google account and migrating local data over.",
+        "keepHint": "Deleted from the cloud; local data stays as it is.",
         "typeToConfirmPrompt": "Type \"{{keyword}}\" to confirm (cannot be undone):",
         "typeKeyword": "REMOVE",
         "typePlaceholder": "Type here",
         "cancel": "Cancel",
         "confirm": "Remove",
-        "doneAlsoClear": "Removed: {{count}} Drive file(s) deleted + peers notified to clear this device's mirror. Local data also cleared.",
-        "doneKeepLocal": "Removed: {{count}} Drive file(s) deleted + peers notified to clear this device's mirror. Local data preserved — sign in to a new account to re-upload."
+        "doneAlsoClear": "Deleted {{count}} file(s) from the cloud. This device's data and screenshots were also cleared. You are signed out.",
+        "doneKeepLocal": "Deleted {{count}} file(s) from the cloud. Local data kept. You are signed out."
       },
       "export": {
         "rowLabel": "Export usage data",
