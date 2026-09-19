@@ -14,24 +14,28 @@ use crate::repo::settings;
 use crate::storage::{db_path, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::engine::SyncEngine;
 
-/// `get_storage_info` 命令的返回。前端「设置 → 数据」面板拿来渲染当前空间占用。
+/// [`get_storage_info`] Command's return structure.
+/// Used by the front-end "Settings → Data" panel to render current storage usage.
+///
+/// TODO: the memory database (`hindsight-memory.<uid>.sqlite`, screen text and
+/// chat history) is not counted; it can be much larger than `db_bytes`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageInfo {
-    /// hindsight.sqlite 文件大小（字节）。文件不存在或读取失败返回 0
+    /// hindsight.sqlite's size in bytes
     pub db_bytes: u64,
-    /// 截图目录递归统计的总字节数（含子目录）
+    /// Screenshots directory's total size in bytes (including subdirectories)
     pub screenshots_bytes: u64,
-    /// hindsight.sqlite 的绝对路径——前端可点开复制
+    /// hindsight.sqlite's absolute path
     pub db_path: String,
-    /// 截图目录绝对路径
+    /// screenshots directory's absolute path
     pub screenshots_path: String,
 }
 
-/// 拉一次 DB 与截图目录的字节占用 + 路径。
+/// Sizes and paths of the database file and the screenshots directory.
 ///
-/// 截图目录递归统计有可能慢（万张截图），故用 `spawn_blocking` 不堵 runtime；
-/// DB 文件单一，`tokio::fs::metadata` 一次 stat 即可。
+/// Summing the screenshots directory walks every file and can take a while,
+/// so it runs on a blocking thread.
 #[tauri::command]
 pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
@@ -54,43 +58,21 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
     })
 }
 
-/// 清空**本机**所有捕获 / 派生数据（不动云端 Drive，不动其它用户自定义：settings /
-/// categories / devices / auth_state）。
+/// "Clear data": deletes what this device captured and everything derived from
+/// it. The cloud is not touched.
 ///
-/// **清的表**（7 张硬删 + 2 张软删 + 1 个 cursor 重置）：
-/// - `activities` —— 焦点会话原始流水
-/// - `process_paths` —— process_name → exe path 映射
-/// - `app_icons` —— icon BLOB 缓存（每张 50KB～300KB，是占用大头 ← v0.6.7 之前漏了这张
-///   导致用户点完按钮 sqlite 还 20+ MB）
-/// - `ai_image_descriptions` —— step 1 逐图描述
-/// - `ai_summaries` —— step 2 段总结
-/// - `screenshot_embeddings` —— MobileNet dedup 缓存
-/// - `sync_outbox` —— 必须清，下个 push tick 否则会按"现状"重写 ndjson 把对应天写成空，
-///   **意外删除云端数据**
-/// - `app_group_members` / `app_groups` —— **软删**（带 outbox enqueue）：清空 activities 后
-///   每个 member 的 process_name 都失去对应活动，每个 group 也再无 active 成员，即变成
-///   Apps 页显示但 icon / 数据全无的 "phantom" 行（list_groups 不过滤活动存在性）。
-///   用户点"清空所有活动"的意图就是一切归零；并且跨设备同步会从对端反复复活这些 group。
-///   outbox 让对端 pull 时同步软删，避免 ping-pong。
-/// - The pull cursor stays where it is: cleared history is not pulled back from
-///   the cloud. Other devices' past days reappear only when they rewrite that
-///   day's file, so today comes back soon and earlier days do not.
+/// Left alone: categories, app groups, settings, devices, the sign-in state and
+/// the pull cursor — the user's rules and the sync state.
 ///
-/// 完成 DELETE 后立刻 `VACUUM` —— SQLite `DELETE` 只把页标记 free 不缩文件，
-/// 必须 VACUUM 才能让用户在 Finder / `du` 看到磁盘空间实际释放。VACUUM 不能在
-/// transaction 内执行，所以分两个 `pool.0.call` 块。
-///
-/// 末尾清 icon 文件 cache 目录 `<data_root>/icons/`：`app_icons` 表清了但文件缓存
-/// 还在的话，下次 `getAppIcon` 走 Layer 1 还是命中老 PNG（见
-/// [`crate::commands::icons::get_app_icon`]），等于白清。
-///
-/// 整个清库过程包在 `svc.run_with_session_cleared` 里：进入时丢弃当前活跃会话
-/// （否则下一 tick 会去 UPDATE 已被删除的行），且持锁期间 tick 无法插入新行。
-///
-/// 幂等：连续多次调用每次效果一致（DELETE 空表 / VACUUM 已紧凑过 / UPDATE 已是 epoch
-/// 的 cursor / fs 删已不存在的目录 都是 no-op）。
+/// `sync_outbox` must go too: left behind, the next push would rewrite the day
+/// files from the now empty table and delete the cloud copies as well.
+/// The pull cursor stays, so the cleared history is not pulled back.
+/// `VACUUM` after the deletes, or the file does not shrink; it cannot run inside
+/// a transaction, hence its own `call`.
+/// The `icons/` cache directory goes with `app_icons`, or icons would keep
+/// coming from the old files.
 #[tauri::command]
-pub async fn purge_activities(
+pub async fn purge_local_data(
     pool: State<'_, DbPool>,
     svc: State<'_, Arc<CaptureService>>,
     engine: State<'_, Arc<SyncEngine>>,
@@ -101,18 +83,24 @@ pub async fn purge_activities(
     // 2. run_with_session_cleared：持 capture 会话锁清指针——否则并发 tick 可能在
     //    DELETE 之后插入新行又被 reset 清掉指针，留一条永不 seal 的孤儿行。
     let _sync_guard = engine.pause_flushes().await;
-    svc.run_with_session_cleared(|| async { purge_activities_impl(&pool).await })
+    svc.run_with_session_cleared(|| async { purge_local_data_impl(&pool).await })
         .await
 }
 
-/// 抽出来的实际实现，给单测可以直接调用（绕开 Tauri State<> 包装 + CaptureService
-/// 在 test 里构造不便）。语义见 [`purge_activities`] doc。
-pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
-    // Phase 1: 7 张 DELETE + 软删 phantom app_groups/members + outbox
+/// The implementation, callable without Tauri's `State` wrappers.
+///
+/// TODO: the memory database is left untouched — `frames`, the OCR text in
+/// `text_sessions` / `session_lines` and its index, and the chat history — so
+/// the Search page still finds everything from before the clear.
+pub(crate) async fn purge_local_data_impl(pool: &DbPool) -> Result<(), String> {
+    // Delete all data except user's settings
     pool.0
         .call(|conn| {
-            // ── 派生数据全清 ──
-            conn.execute_batch(
+            let tx = conn
+                .transaction()
+                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            // ── Delete all derived data ──
+            tx.execute_batch(
                 "DELETE FROM activities;
                  DELETE FROM process_paths;
                  DELETE FROM app_icons;
@@ -123,12 +111,14 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
                  DELETE FROM sync_outbox;",
             )
             .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            tx.commit()
+                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
             Ok(())
         })
         .await
         .map_err(|e| e.to_string())?;
 
-    // Phase 2: VACUUM —— 必须在 transaction 外执行（SQLite 硬限制），分一个独立 call() 块
+    // VACUUM cannot run inside a transaction, so it gets its own call.
     pool.0
         .call(|conn| {
             conn.execute_batch("VACUUM")
@@ -138,11 +128,69 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    // Phase 3: 清 icon 文件 cache 目录（best-effort，目录不存在 / 删失败都不抛错）
+    // Clear icon file cache directory (best-effort, no error if the directory doesn't exist or deletion fails)
     if let Ok(data_root) = crate::storage::db_path_dir() {
         let icons_dir = data_root.join("icons");
         let _ = tokio::fs::remove_dir_all(&icons_dir).await;
     }
+    Ok(())
+}
+
+/// "Clear screenshots": deletes every file in the screenshots directory and
+/// the references to them (`activities.screenshot_path`, `screenshot_dedup_map`).
+///
+/// The references go first, in one transaction. A file that then fails to
+/// delete is logged and left behind; nothing points at it any more.
+#[tauri::command]
+pub async fn purge_screenshots(pool: State<'_, DbPool>) -> Result<(), String> {
+    purge_screenshots_impl(&pool).await
+}
+
+/// The implementation, callable without Tauri's `State` wrappers.
+pub(crate) async fn purge_screenshots_impl(pool: &DbPool) -> Result<(), String> {
+    let cfg = settings::load(pool).await.map_err(String::from)?;
+    if cfg.screenshot_path.trim().is_empty() {
+        return Err("Screenshot path is not set".into());
+    }
+    let screenshot_path = std::path::PathBuf::from(&cfg.screenshot_path);
+
+    pool.0
+        .call(|conn| {
+            let tx = conn.transaction().db()?;
+            tx.execute(
+                "UPDATE activities SET screenshot_path = NULL WHERE screenshot_path IS NOT NULL",
+                [],
+            )
+            .db()?;
+            tx.execute("DELETE FROM screenshot_dedup_map", []).db()?;
+            tx.commit().db()?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        if !screenshot_path.exists() {
+            return Ok(());
+        }
+        for entry in std::fs::read_dir(&screenshot_path)
+            .map_err(|e| e.to_string())?
+            .flatten()
+        {
+            let path = entry.path();
+            let res = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            if let Err(e) = res {
+                log::warn!("Failed to delete screenshot {}: {}", path.display(), e);
+            }
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
 
     Ok(())
 }
@@ -186,8 +234,8 @@ pub(crate) async fn purge_cloud_data_impl(
     let prefix = format!("device.{self_id}.");
     let drive = engine.drive();
 
-    // 挡住并发 push/pull：清理进行到一半时后台 tick 把刚删的文件重新传回 Drive
-    // （"复活"）或用半清状态覆盖，全流程持串行门。
+    // Held until this function returns: a push landing mid-way would upload
+    // this device's files again right after they were deleted.
     let _gate = engine.pause_flushes().await;
 
     // 1. **先上传 tombstone**（覆盖任何旧版本，modifiedTime 刷新让对端 pull 看到）。
@@ -230,7 +278,7 @@ pub(crate) async fn purge_cloud_data_impl(
     //    否则下一 tick 会去更新已被删掉的行。
     if !keep_local {
         let clear_local = || async {
-            purge_activities_impl(pool).await?;
+            purge_local_data_impl(pool).await?;
             purge_screenshots_impl(pool).await
         };
         match svc {
@@ -432,63 +480,6 @@ pub async fn open_screenshots_dir(pool: State<'_, DbPool>) -> Result<(), String>
     Ok(())
 }
 
-/// 删除截图目录下所有文件 + 把 activities.screenshot_path 全置 NULL。
-///
-/// 文件删除是 best-effort：单个文件删失败 log warn 继续，不阻塞整体。
-/// DB 行的 path 引用先清，即使物理文件删除失败也不会下次反复尝试。
-#[tauri::command]
-pub async fn purge_screenshots(pool: State<'_, DbPool>) -> Result<(), String> {
-    purge_screenshots_impl(&pool).await
-}
-
-/// 抽出来的实际实现，给 `purge_cloud_data_impl` 和测试直接调用（绕开 Tauri State<> 包装）。
-pub(crate) async fn purge_screenshots_impl(pool: &DbPool) -> Result<(), String> {
-    let cfg = settings::load(pool).await.map_err(String::from)?;
-    if cfg.screenshot_path.trim().is_empty() {
-        return Err("截图路径未设置".into());
-    }
-    let dir = std::path::PathBuf::from(&cfg.screenshot_path);
-
-    pool.0
-        .call(|conn| {
-            conn.execute(
-                "UPDATE activities SET screenshot_path = NULL WHERE screenshot_path IS NOT NULL",
-                [],
-            )
-            .db()?;
-            // 截图文件即将被删，member/rep 映射全部失去指向，一并清
-            conn.execute("DELETE FROM screenshot_dedup_map", []).db()?;
-            Ok(())
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        if !dir.exists() {
-            return Ok(());
-        }
-        for entry in std::fs::read_dir(&dir)
-            .map_err(|e| e.to_string())?
-            .flatten()
-        {
-            let path = entry.path();
-            let res = if path.is_dir() {
-                std::fs::remove_dir_all(&path)
-            } else {
-                std::fs::remove_file(&path)
-            };
-            if let Err(e) = res {
-                log::warn!("删除截图失败 {}: {}", path.display(), e);
-            }
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-
-    Ok(())
-}
-
 /// 递归统计目录下所有文件字节数（含子目录），失败的子节点跳过。
 fn dir_size(path: &Path) -> u64 {
     if !path.exists() {
@@ -570,7 +561,7 @@ mod tests {
     // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
     #[allow(clippy::await_holding_lock)]
     #[tokio::test]
-    async fn purge_activities_impl_clears_derived_tables_keeps_user_data_and_shrinks_db() {
+    async fn purge_local_data_impl_clears_derived_tables_keeps_user_data_and_shrinks_db() {
         let _env_lock = crate::repo::test_util::lock_data_dir_env();
         let _data_dir = crate::repo::test_util::DataDirOverride::unique_temp();
 
@@ -678,10 +669,9 @@ mod tests {
         assert!(categories_before > 0, "builtin categories 应该已 seed");
 
         // ── act ──
-        purge_activities_impl(&pool).await.unwrap();
+        purge_local_data_impl(&pool).await.unwrap();
 
-        // ── assert: 6 张硬删表全空（sync_outbox 单独看：被清后又被 phantom 软删
-        //    enqueue 入队，所以不再为 0） ──
+        // ── assert: 7 张硬删表全空 ──
         for table in [
             "activities",
             "process_paths",
@@ -769,9 +759,8 @@ mod tests {
             "VACUUM 后逻辑 DB 应明显缩水: before={bytes_before} after={bytes_after}",
         );
 
-        // ── 幂等 ──：再跑一次不出错；6 张表仍为空；
-        //    sync_outbox 这次回到 0（无 active phantom 可软删，无 enqueue）
-        purge_activities_impl(&pool).await.unwrap();
+        // ── 幂等 ──：再跑一次不出错；7 张表仍为空
+        purge_local_data_impl(&pool).await.unwrap();
         for table in [
             "activities",
             "process_paths",

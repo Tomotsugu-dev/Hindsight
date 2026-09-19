@@ -377,9 +377,9 @@ async fn clear_data_does_not_pull_own_history_back() {
     b.engine.sync_now().await.unwrap();
     assert_eq!(count_for_device(&b, "device-a").await, 3);
 
-    crate::commands::storage::purge_activities_impl(&a.pool)
+    crate::commands::storage::purge_local_data_impl(&a.pool)
         .await
-        .expect("purge_activities");
+        .expect("purge_local_data");
     assert_eq!(count_for_device(&a, "device-a").await, 0);
 
     // 再同步两轮，什么都不该回来
@@ -423,9 +423,9 @@ async fn clear_data_keeps_other_devices_groups() {
     a.engine.sync_now().await.unwrap();
     b.engine.sync_now().await.unwrap();
 
-    crate::commands::storage::purge_activities_impl(&a.pool)
+    crate::commands::storage::purge_local_data_impl(&a.pool)
         .await
-        .expect("purge_activities");
+        .expect("purge_local_data");
     a.engine.sync_now().await.unwrap();
     b.engine.sync_now().await.unwrap();
 
@@ -474,9 +474,9 @@ async fn remove_device_does_not_pull_cleared_history_back() {
     a.engine.sync_now().await.unwrap();
     assert_eq!(count_for_device(&a, "device-b").await, 3);
 
-    crate::commands::storage::purge_activities_impl(&a.pool)
+    crate::commands::storage::purge_local_data_impl(&a.pool)
         .await
-        .expect("purge_activities");
+        .expect("purge_local_data");
     assert_eq!(count_for_device(&a, "device-b").await, 0);
 
     crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false)

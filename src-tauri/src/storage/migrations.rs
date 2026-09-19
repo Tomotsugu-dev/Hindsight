@@ -853,7 +853,7 @@ const CLEANUP_GARBAGE_PROCESS_NAMES_SQL: &str = r#"
 
 /// v35：截图去重"合并留痕"表。dedup 丢帧时记 member → representative 归属，
 /// 让搜索/回溯能把被合并帧折算回代表帧的时间段，也给将来补 OCR/描述留账。
-/// 本地派生数据：不同步、purge_activities / 清空截图时一并清。
+/// 本地派生数据：不同步、purge_local_data / 清空截图时一并清。
 const ADD_SCREENSHOT_DEDUP_MAP_SQL: &str = r#"
     CREATE TABLE IF NOT EXISTS screenshot_dedup_map (
         member_path TEXT PRIMARY KEY,

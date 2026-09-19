@@ -20,7 +20,7 @@ pub async fn list_app_groups(pool: State<'_, DbPool>) -> Result<Vec<AppGroup>, S
 /// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_data`] 的文档。
 ///
 /// `run_with_session_cleared`:正在采集这个应用时直接删行,会留下一条永不 seal
-/// 的孤儿会话(指针还指着被删掉的 id)——同 `purge_activities` 的处理。
+/// 的孤儿会话(指针还指着被删掉的 id)——同 `purge_local_data` 的处理。
 #[tauri::command]
 pub async fn purge_app_group_data(
     pool: State<'_, DbPool>,

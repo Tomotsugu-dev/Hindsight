@@ -280,7 +280,7 @@ pub fn run() {
             bootstrap::set_tray_labels,
             // --- storage: 存储 / 数据目录 ---
             commands::storage::get_storage_info,
-            commands::storage::purge_activities,
+            commands::storage::purge_local_data,
             commands::storage::purge_screenshots,
             commands::storage::purge_cloud_data,
             commands::storage::forget_remote_device,

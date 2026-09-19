@@ -257,7 +257,7 @@ impl CaptureService {
 
     /// 在**持有会话锁**的前提下执行清库类操作。
     ///
-    /// `purge_activities` 这类"DELETE 全表"若与 tick 并发：tick 可能在 DELETE 之后
+    /// `purge_local_data` 这类"DELETE 全表"若与 tick 并发：tick 可能在 DELETE 之后
     /// 插入新行、又被随后的 `reset_session` 清掉指针——留下一条永远不会被 seal 的
     /// dur=0 孤儿行（用户刚清完库就多出一条脏数据）。tick 的插入/延长路径都必须先
     /// 拿 `current` 锁（见 [`tick`]），所以整个闭包期间持锁即可完全互斥。
