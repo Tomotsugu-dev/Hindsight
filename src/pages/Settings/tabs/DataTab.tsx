@@ -78,7 +78,9 @@ export default function DataTab() {
 
   if (!settings) return null;
 
-  const total = storage ? storage.dbBytes + storage.screenshotsBytes : 0;
+  const total = storage
+    ? storage.dbBytes + storage.memoryDbBytes + storage.screenshotsBytes
+    : 0;
 
   const runSimple = async (which: "db" | "shots") => {
     setSimpleConfirm(null);
@@ -193,6 +195,7 @@ export default function DataTab() {
             storage
               ? t("settings.data.storage.currentUsageDescription", {
                   db: fmtBytes(storage.dbBytes),
+                  mem: fmtBytes(storage.memoryDbBytes),
                   shots: fmtBytes(storage.screenshotsBytes),
                 })
               : undefined

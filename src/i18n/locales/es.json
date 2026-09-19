@@ -198,7 +198,7 @@
         "retentionLabel": "Retención de las capturas de pantalla",
         "retentionDescription": "Los archivos de captura caducados se eliminan automáticamente (los registros de actividad se conservan).",
         "currentUsageLabel": "Uso actual",
-        "currentUsageDescription": "Base de datos {{db}} · Capturas de pantalla {{shots}}",
+        "currentUsageDescription": "Actividad {{db}} · Texto de pantalla (OCR) {{mem}} · Capturas de pantalla {{shots}}",
         "modelsPathLabel": "Carpeta de modelos de IA",
         "modelsPathHint": "Tras cambiar la ruta, los modelos de la carpeta anterior no se migran: cópialos a mano o vuelve a descargarlos en la nueva ubicación."
       },

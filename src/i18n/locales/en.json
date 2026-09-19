@@ -198,7 +198,7 @@
         "retentionLabel": "Screenshot retention",
         "retentionDescription": "Expired screenshot files are deleted automatically (activity records are kept).",
         "currentUsageLabel": "Current usage",
-        "currentUsageDescription": "Database {{db}} · Screenshots {{shots}}",
+        "currentUsageDescription": "Activity {{db}} · Screen text (OCR) {{mem}} · Screenshots {{shots}}",
         "modelsPathLabel": "AI models folder",
         "modelsPathHint": "After changing the path, models in the old folder are not migrated — copy them over manually, or re-download them in the new location."
       },

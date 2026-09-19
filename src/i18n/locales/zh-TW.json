@@ -198,7 +198,7 @@
         "retentionLabel": "截圖保留",
         "retentionDescription": "到期的截圖檔案將被自動刪除（活動記錄本身保留）。",
         "currentUsageLabel": "當前佔用",
-        "currentUsageDescription": "資料庫 {{db}} · 截圖 {{shots}}",
+        "currentUsageDescription": "活動記錄 {{db}} · 截圖文字（OCR）{{mem}} · 截圖 {{shots}}",
         "modelsPathLabel": "AI 模型儲存路徑",
         "modelsPathHint": "切換路徑後，舊目錄裡的模型不會自動遷移——要麼手動拷過去，要麼在新路徑裡重新下載。"
       },
