@@ -16,14 +16,13 @@ use crate::sync::engine::SyncEngine;
 
 /// [`get_storage_info`] Command's return structure.
 /// Used by the front-end "Settings → Data" panel to render current storage usage.
-///
-/// TODO: the memory database (`hindsight-memory.<uid>.sqlite`, screen text and
-/// chat history) is not counted; it can be much larger than `db_bytes`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageInfo {
     /// hindsight.sqlite's size in bytes
     pub db_bytes: u64,
+    /// hindsight-memory.sqlite's size in bytes (screen text and chat history)
+    pub memory_db_bytes: u64,
     /// Screenshots directory's total size in bytes (including subdirectories)
     pub screenshots_bytes: u64,
     /// hindsight.sqlite's absolute path
@@ -42,6 +41,10 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
     let db = db_path().map_err(String::from)?;
 
     let db_bytes = tokio::fs::metadata(&db).await.map(|m| m.len()).unwrap_or(0);
+    let memory_db_bytes = match crate::memory::memory_db_path() {
+        Ok(p) => tokio::fs::metadata(&p).await.map(|m| m.len()).unwrap_or(0),
+        Err(_) => 0,
+    };
     let shots_path = std::path::PathBuf::from(&cfg.screenshot_path);
     let shots_bytes = tokio::task::spawn_blocking({
         let p = shots_path.clone();
@@ -52,6 +55,7 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
 
     Ok(StorageInfo {
         db_bytes,
+        memory_db_bytes,
         screenshots_bytes: shots_bytes,
         db_path: db.to_string_lossy().to_string(),
         screenshots_path: cfg.screenshot_path,

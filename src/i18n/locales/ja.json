@@ -198,7 +198,7 @@
         "retentionLabel": "スクリーンショット保持",
         "retentionDescription": "期限切れのスクリーンショットファイルは自動的に削除されます (アクティビティ記録は保持)。",
         "currentUsageLabel": "現在の使用量",
-        "currentUsageDescription": "データベース {{db}} · スクリーンショット {{shots}}",
+        "currentUsageDescription": "アクティビティ {{db}} · 画面テキスト（OCR）{{mem}} · スクリーンショット {{shots}}",
         "modelsPathLabel": "AI モデルの保存先",
         "modelsPathHint": "保存先を変更しても、旧フォルダ内のモデルは自動で移行されません。手動でコピーするか、新しいパスで再ダウンロードしてください。"
       },

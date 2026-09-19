@@ -609,6 +609,7 @@ export type SettingsPatch = Partial<Settings>;
 
 export interface StorageInfo {
   dbBytes: number;
+  memoryDbBytes: number;
   screenshotsBytes: number;
   dbPath: string;
   screenshotsPath: string;

@@ -198,7 +198,7 @@
         "retentionLabel": "Retenção de capturas de tela",
         "retentionDescription": "Os arquivos de captura de tela expirados são excluídos automaticamente (os registros de atividade são mantidos).",
         "currentUsageLabel": "Uso atual",
-        "currentUsageDescription": "Banco de dados {{db}} · Capturas de tela {{shots}}",
+        "currentUsageDescription": "Atividade {{db}} · Texto de tela (OCR) {{mem}} · Capturas de tela {{shots}}",
         "modelsPathLabel": "Pasta de modelos de IA",
         "modelsPathHint": "Após alterar o caminho, os modelos na pasta antiga não são migrados — copie-os manualmente ou baixe-os novamente no novo local."
       },
