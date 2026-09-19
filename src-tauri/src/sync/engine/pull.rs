@@ -167,9 +167,6 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
 }
 
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
-    // Acquire the sync mutex (RAII): ensures only one pull/push runs at a time
-    // and prevents concurrent conflicts with purge operations.
-    // `_gate` holds the lock until `flush_pull` exits and drops it.
     let _gate = inner.flush_gate.lock().await;
     let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
         Ok(t) => t,

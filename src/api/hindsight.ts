@@ -857,7 +857,7 @@ export const api = {
   removeIgnoreRule: (processName: string, titleKeyword: string | null) =>
     invoke<IgnoreRulesResult>("remove_ignore_rule", { processName, titleKeyword }),
   getStorageInfo: () => invoke<StorageInfo>("get_storage_info"),
-  purgeActivities: () => invoke<void>("purge_activities"),
+  purgeLocalData: () => invoke<void>("purge_local_data"),
   purgeScreenshots: () => invoke<void>("purge_screenshots"),
   /** 删除本机推过的所有 Drive 同步文件 + 上传 tombstone 通知对端清镜像。
    *  返回实际删除的 Drive 文件数。

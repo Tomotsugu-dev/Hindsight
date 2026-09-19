@@ -242,7 +242,7 @@ impl SyncEngine {
     }
 
     /// 暂停 push/pull：等在途 flush 结束并挡住新的，直到返回的 guard 被 drop。
-    /// purge_activities / purge_cloud_data 这类"动表"的命令在整个清理期间持有它。
+    /// purge_local_data / purge_cloud_data 这类"动表"的命令在整个清理期间持有它。
     pub async fn pause_flushes(&self) -> tokio::sync::MutexGuard<'_, ()> {
         self.inner.flush_gate.lock().await
     }

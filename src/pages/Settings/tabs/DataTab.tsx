@@ -85,7 +85,7 @@ export default function DataTab() {
     setBusyTarget(which);
     try {
       if (which === "db") {
-        await api.purgeActivities();
+        await api.purgeLocalData();
       } else {
         await api.purgeScreenshots();
       }
