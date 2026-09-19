@@ -400,6 +400,60 @@ async fn clear_data_does_not_pull_own_history_back() {
     );
 }
 
+/// 「清空数据」删的是数据，不是规则：其他设备上的分组和成员不受影响。
+// 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
+async fn clear_data_keeps_other_devices_groups() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+
+    // 两台都用过 Code：各自建了分组和成员
+    let captured = Local::now();
+    for dev in [&a, &b] {
+        crate::repo::app_groups::ensure_group(&dev.pool, "Code")
+            .await
+            .unwrap();
+        insert_sealed(dev, "Code", captured, 30).await;
+    }
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    crate::commands::storage::purge_activities_impl(&a.pool)
+        .await
+        .expect("purge_activities");
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    let (live_groups, live_members): (i64, i64) = b
+        .pool
+        .0
+        .call(|conn| {
+            // 分组 id 不一定等于进程名（别名表可能把 Code 归到规范名下），从成员表找
+            let g = conn.query_row(
+                "SELECT COUNT(*) FROM app_groups g
+                 JOIN app_group_members m ON m.group_id = g.id
+                 WHERE m.process_name = 'Code' AND g.deleted_at IS NULL",
+                [],
+                |r| r.get(0),
+            )?;
+            let m = conn.query_row(
+                "SELECT COUNT(*) FROM app_group_members WHERE process_name = 'Code' AND deleted_at IS NULL",
+                [],
+                |r| r.get(0),
+            )?;
+            Ok((g, m))
+        })
+        .await
+        .unwrap();
+    assert_eq!(live_groups, 1, "A 清空数据后，B 的分组不应被删");
+    assert_eq!(live_members, 1, "A 清空数据后，B 的成员不应被删");
+}
+
 /// 「清空数据」之后再「从云端移除本设备」，重新登录同一个账号：清掉的其他设备历史不会被拉回来。
 // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
 #[allow(clippy::await_holding_lock)]
