@@ -238,54 +238,31 @@ pub(crate) async fn purge_activities_impl(pool: &DbPool) -> Result<(), String> {
     Ok(())
 }
 
-/// 清空**云端**数据 —— 完整语义是**"所有设备（含本机）忘记我此刻之前由本机捕获的数据"**。
+/// 「从云端移除本设备」：删掉本设备在云端的全部文件，只留一个墓碑
+/// （`device.<self>.tombstone.json`，`clearedAt` = 此刻）。其它设备拉到墓碑后，
+/// 删掉本设备的记录、把设备卡片标成已删除。最后退出登录，之后不再有东西推上去。
 ///
-/// 历史：早期实现只删 Drive 不动本机，后来发现对端 mirror 永久保留对称性破坏；
-/// 加 tombstone 让对端 trim；又发现源端本地保留 pre-clearedAt 的旧行 + 全量 push
-/// rewrite 会把这些行重新写回 Drive，对端 trim 后看到的比源端少 —— 本机 9 min /
-/// 对端 4 min 这种 asymmetric 状态。最终走 **Option C**：源端、对端、Drive 三处
-/// 完全对称，clearedAt 统一为操作时刻。源端 post-clearedAt 的新 capture 完全不受影响，
-/// 继续 push / sync 正常。
+/// `keep_local` 为 false 时本机也跑一遍「清空数据」和「清空截图」；为 true 时本机不动。
+/// 没登录直接返回错误。返回从云端删掉的文件数。
 ///
-/// 流程：
-/// 1. 拿 OAuth token；未登录直接返回错误
-/// 2. List Drive 上 `device.<self_id>.*`（**不含** tombstone 本身），逐个 [`drive::delete`]
-///    （404 视为成功）
-/// 3. 上传新 tombstone `device.<self_id>.tombstone.json`，记录 `clearedAt = now()`，
-///    对端 pull → [`merge_tombstone`] → DELETE 对端的 pre-clearedAt mirror 行
-/// 4. **同款 trim 应用到源端本地**：
-///    `DELETE FROM activities WHERE device_id = <self> AND updated_at < clearedAt`
-///    保证源端本地跟对端最终看到的一致（不留 pre-T 数据让下一次 push 重写回 Drive）
-/// 5. 清 sync_outbox（防 step 3 上传 tombstone 前累积的旧 outbox 行下个 tick push 把
-///    步骤 4 删的行又造回 Drive；clearedAt 之后新 capture 自然产生新 outbox 行）
-///
-/// 返回被实际删除的 Drive 文件数（不含 tombstone 上传 / 本机 DELETE）。
-///
-/// 幂等：连点 N 次，每次 clearedAt 更新到当下 now：
-///   - Drive list 返回 0 个（除 tombstone），无 DELETE 请求
-///   - 上传 tombstone 覆盖同名文件，modifiedTime 刷新让对端再次 pull 应用最新 clearedAt
-///   - 本机 trim 命中 0 行（除非两次点击之间有新 capture，那些是用户自己点的"清掉过去"
-///     新累积部分，符合"清空过去"语义）
-///   - outbox 已经是清空状态，DELETE no-op
+/// 顺序：先传墓碑再删文件。墓碑是其它设备知道要删的唯一信号，传失败就整个失败，
+/// 此时什么都还没动，重试即可。单个文件删失败只记日志：其它设备靠墓碑照样删，
+/// 只是云端多占点空间。全程持同步的门，中途不会有推送把刚删的文件传回去。
 #[tauri::command]
 pub async fn purge_cloud_data(
     pool: State<'_, DbPool>,
     engine: State<'_, Arc<SyncEngine>>,
+    svc: State<'_, Arc<CaptureService>>,
     keep_local: bool,
 ) -> Result<u64, String> {
-    purge_cloud_data_impl(&pool, &engine, keep_local).await
+    purge_cloud_data_impl(&pool, &engine, Some(&svc), keep_local).await
 }
 
-/// 抽出来的实际实现，给集成测试可以直接调用（绕开 Tauri State<> 包装）。
-///
-/// `keep_local`：
-/// - `false`（默认 / 推荐）：对称语义，本机也按同款 clearedAt trim 旧数据，源端 / 对端 / Drive 三处一致。
-///   适用：离职 / 卖机器 / 永久删除本设备贡献。
-/// - `true`：仅删 Drive + 上传 tombstone + 通知对端清，**本机数据完整保留**。
-///   适用：换 Google 账号 —— 撤回当前账号云端后退出登录、登入新账号、自动 push 本机数据到新账号。
+/// 抽出来的实际实现，给测试直接调用（绕开 Tauri State<> 包装）。测试没有采集服务，`svc` 传 `None`。
 pub(crate) async fn purge_cloud_data_impl(
     pool: &DbPool,
     engine: &SyncEngine,
+    svc: Option<&CaptureService>,
     keep_local: bool,
 ) -> Result<u64, String> {
     let self_id = engine.self_id();
@@ -293,20 +270,9 @@ pub(crate) async fn purge_cloud_data_impl(
         return Err("self_id 未初始化".into());
     }
 
-    // 没登录时（无 OAuth token）：云端步骤无意义，但用户依然期望"移除本设备"按钮
-    // 至少把本机数据清干净 —— 直接降级到 [`purge_activities_impl`]（同款 7 张表
-    // DELETE + VACUUM + 清 icon cache）。`keep_local` 在这条路径下被忽略，因为
-    // "保留本机数据等下次换账号 push" 这个语义只在登录态下成立。
-    let token = match crate::sync::auth::ensure_valid_token(pool).await {
-        Ok(t) => t,
-        Err(_) => {
-            log::info!(
-                "purge_cloud_data: 未登录，跳过云端步骤，降级到本机彻底清理 (purge_activities_impl)"
-            );
-            purge_activities_impl(pool).await?;
-            return Ok(0);
-        }
-    };
+    let token = crate::sync::auth::ensure_valid_token(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let prefix = format!("device.{self_id}.");
     let drive = engine.drive();
@@ -351,31 +317,20 @@ pub(crate) async fn purge_cloud_data_impl(
         }
     }
 
-    // 4. 源端本地按同款 clearedAt trim activities + 5. 清 outbox。keep_local=true 时两步都跳过，
-    //    保留所有本机数据 + outbox（"换 Google 账号"场景：用户接下来要登入新账号、自动 push
-    //    本机数据到新账号 appDataFolder，需要 outbox 行触发）。
-    let self_id_owned = self_id.to_string();
-    let cleared_at_for_db = cleared_at.clone();
-    pool.0
-        .call(move |conn| {
-            if !keep_local {
-                // Step 4: 源端 self-trim —— 跟对端 pull 应用 tombstone 时的 DELETE 完全一致。
-                // 这一刀确保下次 push tick 把 build_activities_day 全表重写到 Drive 时，
-                // pre-clearedAt 的行**不在源端本地了**，不会被 push 回到 Drive，
-                // 跟 tombstone 通知对端的语义保持对称。
-                conn.execute(
-                    "DELETE FROM activities
-                     WHERE device_id = ?1 AND updated_at < ?2",
-                    rusqlite::params![self_id_owned, cleared_at_for_db],
-                )
-                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+    // 4. 「也一并清空」：跑一遍清空数据 + 清空截图。丢掉采集中的会话，
+    //    否则下一 tick 会去更新已被删掉的行。
+    if !keep_local {
+        let clear_local = || async {
+            purge_activities_impl(pool).await?;
+            purge_screenshots_impl(pool).await
+        };
+        match svc {
+            Some(svc) => svc.run_with_session_cleared(clear_local).await?,
+            None => clear_local().await?,
+        }
+    }
 
-                // Step 5: 清 outbox（已被 trim 的行对应的 outbox 行不再有意义）
-                conn.execute("DELETE FROM sync_outbox", [])
-                    .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
-            }
-            Ok(())
-        })
+    crate::sync::auth::sign_out(pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -574,7 +529,12 @@ pub async fn open_screenshots_dir(pool: State<'_, DbPool>) -> Result<(), String>
 /// DB 行的 path 引用先清，即使物理文件删除失败也不会下次反复尝试。
 #[tauri::command]
 pub async fn purge_screenshots(pool: State<'_, DbPool>) -> Result<(), String> {
-    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    purge_screenshots_impl(&pool).await
+}
+
+/// 抽出来的实际实现，给 `purge_cloud_data_impl` 和测试直接调用（绕开 Tauri State<> 包装）。
+pub(crate) async fn purge_screenshots_impl(pool: &DbPool) -> Result<(), String> {
+    let cfg = settings::load(pool).await.map_err(String::from)?;
     if cfg.screenshot_path.trim().is_empty() {
         return Err("截图路径未设置".into());
     }

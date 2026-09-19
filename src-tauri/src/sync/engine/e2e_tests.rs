@@ -169,6 +169,13 @@ async fn sum_secs_for_device(dev: &TestDevice, device_id: &str) -> i64 {
         .unwrap()
 }
 
+async fn signed_in(dev: &TestDevice) -> bool {
+    crate::sync::auth::current_state(&dev.pool)
+        .await
+        .unwrap()
+        .signed_in
+}
+
 /// Test 1：A push 3 行 → B pull → B 看到 3 行 mirror，self 也保留 3 行；A/B 互不串
 #[tokio::test]
 async fn cross_device_push_pull_basic() {
@@ -209,8 +216,13 @@ async fn cross_device_push_pull_basic() {
 }
 
 /// Test 2：A push 5 行 → B pull (mirror 5) → A purge_cloud_data → B sync → B mirror 清空
+// 一并清空会删 <数据目录> 下的 icons 和 screenshots，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
 #[tokio::test]
 async fn tombstone_clear_cloud() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
     let b = make_device("device-b", drive.clone()).await;
@@ -223,13 +235,19 @@ async fn tombstone_clear_cloud() {
     b.engine.sync_now().await.unwrap();
     assert_eq!(count_for_device(&b, "device-a").await, 5);
 
-    // A 调 purge_cloud_data —— 删 Drive 上自己的文件 + 上传 tombstone + 本机 trim
-    // keep_local=false 走对称 trim（默认行为，离职/卖机器场景）
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, false)
+    // 截图目录里放一张，验证「一并清空」连截图一起删
+    let shots_dir = crate::storage::db_path_dir().unwrap().join("screenshots");
+    std::fs::create_dir_all(&shots_dir).unwrap();
+    let shot = shots_dir.join("a.png");
+    std::fs::write(&shot, b"png").unwrap();
+
+    // A 调 purge_cloud_data —— 删 Drive 上自己的文件 + 上传 tombstone + 本机一并清空
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false)
         .await
         .expect("purge_cloud_data");
-    // 本机已被 trim
     assert_eq!(count_for_device(&a, "device-a").await, 0);
+    assert!(!shot.exists(), "一并清空应删掉截图");
+    assert!(!signed_in(&a).await, "移除本设备后应已退出登录");
 
     // B sync → pull tombstone → trim B 的 A-mirror
     b.engine.sync_now().await.unwrap();
@@ -237,6 +255,27 @@ async fn tombstone_clear_cloud() {
         count_for_device(&b, "device-a").await,
         0,
         "B 的 A-mirror 应被 tombstone 触发 DELETE 干净"
+    );
+}
+
+/// 没登录时「从云端移除本设备」直接报错，本机什么都不动。
+#[tokio::test]
+async fn remove_device_requires_sign_in() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let captured = Local::now();
+    for p in ["Code", "Chrome", "Slack"] {
+        insert_sealed(&a, p, captured, 30).await;
+    }
+    crate::sync::auth::sign_out(&a.pool).await.unwrap();
+
+    let res =
+        crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false).await;
+    assert!(res.is_err(), "没登录时应返回错误");
+    assert_eq!(
+        count_for_device(&a, "device-a").await,
+        3,
+        "本机数据不应被动"
     );
 }
 
@@ -257,7 +296,7 @@ async fn purge_cloud_keep_local_preserves_local_data() {
     assert_eq!(count_for_device(&b, "device-a").await, 3);
 
     // keep_local=true：本机数据不动
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, true)
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, true)
         .await
         .expect("purge_cloud_data keep_local");
 
@@ -267,6 +306,7 @@ async fn purge_cloud_keep_local_preserves_local_data() {
         3,
         "keep_local=true 时本机数据必须完整保留"
     );
+    assert!(!signed_in(&a).await, "移除本设备后应已退出登录");
 
     // B sync → pull tombstone → B 的 A-mirror 仍被清（对端不知道本机要保留）
     b.engine.sync_now().await.unwrap();
@@ -276,7 +316,8 @@ async fn purge_cloud_keep_local_preserves_local_data() {
         "对端仍按 tombstone 清 A 的 mirror（云端语义对外一致）"
     );
 
-    // A 再同步会拉到自己的 tombstone：本机的 tombstone 不执行，承诺保留的数据还在
+    // A 重新登录同一个账号再同步，会拉到自己的 tombstone：本机的 tombstone 不执行，承诺保留的数据还在
+    inject_fake_auth(&a.pool).await;
     a.engine.sync_now().await.unwrap();
     assert_eq!(
         count_for_device(&a, "device-a").await,
@@ -359,7 +400,7 @@ async fn clear_data_does_not_pull_own_history_back() {
     );
 }
 
-/// 「清空数据」之后再「从云端移除本设备」：清掉的其他设备历史不会被拉回来。
+/// 「清空数据」之后再「从云端移除本设备」，重新登录同一个账号：清掉的其他设备历史不会被拉回来。
 // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
 #[allow(clippy::await_holding_lock)]
 #[tokio::test]
@@ -384,9 +425,10 @@ async fn remove_device_does_not_pull_cleared_history_back() {
         .expect("purge_activities");
     assert_eq!(count_for_device(&a, "device-b").await, 0);
 
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, false)
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false)
         .await
         .expect("purge_cloud_data");
+    inject_fake_auth(&a.pool).await;
     a.engine.sync_now().await.unwrap();
     assert_eq!(
         count_for_device(&a, "device-b").await,
