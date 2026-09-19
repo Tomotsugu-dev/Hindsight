@@ -219,7 +219,8 @@
         "description": "下面的操作影響所有裝置，且無法撤銷。",
         "removeDeviceLabel": "移除本裝置",
         "removeDeviceDescription": "從雲端移除本裝置的所有資料",
-        "removeDeviceBusy": "移除中…"
+        "removeDeviceBusy": "移除中…",
+        "removeDeviceNeedsSignIn": "需要先登入 Google 帳號。"
       },
       "purgeDialog": {
         "purgeDbTitle": "清空本機資料？",

@@ -219,7 +219,8 @@
         "description": "Actions below affect every device and cannot be undone.",
         "removeDeviceLabel": "Remove this device",
         "removeDeviceDescription": "Remove all of this device's data from cloud",
-        "removeDeviceBusy": "Removing…"
+        "removeDeviceBusy": "Removing…",
+        "removeDeviceNeedsSignIn": "Sign in to your Google account first."
       },
       "purgeDialog": {
         "purgeDbTitle": "Clear local data?",

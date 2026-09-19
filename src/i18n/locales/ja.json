@@ -219,7 +219,8 @@
         "description": "下記の操作はすべてのデバイスに影響し、取り消せません。",
         "removeDeviceLabel": "このデバイスを削除",
         "removeDeviceDescription": "このデバイスのデータをクラウドから削除",
-        "removeDeviceBusy": "削除中…"
+        "removeDeviceBusy": "削除中…",
+        "removeDeviceNeedsSignIn": "先に Google アカウントにサインインしてください。"
       },
       "purgeDialog": {
         "purgeDbTitle": "ローカルデータを削除しますか?",

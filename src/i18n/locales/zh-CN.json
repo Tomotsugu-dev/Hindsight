@@ -219,7 +219,8 @@
         "description": "下面的操作影响所有设备，且无法撤销。",
         "removeDeviceLabel": "移除本设备",
         "removeDeviceDescription": "从云端移除本设备的所有数据",
-        "removeDeviceBusy": "移除中…"
+        "removeDeviceBusy": "移除中…",
+        "removeDeviceNeedsSignIn": "需要先登录 Google 账号。"
       },
       "purgeDialog": {
         "purgeDbTitle": "清空本机数据？",

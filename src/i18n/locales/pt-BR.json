@@ -219,7 +219,8 @@
         "description": "As ações abaixo afetam todos os dispositivos e não podem ser desfeitas.",
         "removeDeviceLabel": "Remover este dispositivo",
         "removeDeviceDescription": "Remover todos os dados deste dispositivo da nuvem",
-        "removeDeviceBusy": "Removendo…"
+        "removeDeviceBusy": "Removendo…",
+        "removeDeviceNeedsSignIn": "Faça login na sua conta Google primeiro."
       },
       "purgeDialog": {
         "purgeDbTitle": "Limpar dados locais?",
