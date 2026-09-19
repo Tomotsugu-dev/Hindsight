@@ -74,25 +74,44 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
 #[tauri::command]
 pub async fn purge_local_data(
     pool: State<'_, DbPool>,
+    mem: State<'_, crate::commands::screen_memory::MemoryState>,
     svc: State<'_, Arc<CaptureService>>,
     engine: State<'_, Arc<SyncEngine>>,
 ) -> Result<(), String> {
-    // 两把并发保护，缺一不可：
-    // 1. pause_flushes：等在途 push/pull tick 结束并挡住新 tick——否则 push 若已读完
-    //    outbox、还没读表，会把清空后的表内容（空 ndjson）写上 Drive，云端备份被抹掉。
-    // 2. run_with_session_cleared：持 capture 会话锁清指针——否则并发 tick 可能在
-    //    DELETE 之后插入新行又被 reset 清掉指针，留一条永不 seal 的孤儿行。
+    // Two locks, both needed:
+    // 1. pause_flushes: waits for a push or pull in flight and blocks new ones.
+    //    A push that has read the outbox but not yet the tables would otherwise
+    //    upload empty day files and delete the cloud copies.
+    // 2. run_with_session_cleared: drops the capture loop's current session
+    //    while holding its lock. Otherwise a tick could insert a new row after
+    //    the DELETE and before the pointer reset, leaving a row that is never
+    //    sealed.
     let _sync_guard = engine.pause_flushes().await;
-    svc.run_with_session_cleared(|| async { purge_local_data_impl(&pool).await })
+    svc.run_with_session_cleared(|| async { purge_local_data_impl(&pool, mem.0.as_ref()).await })
         .await
 }
 
 /// The implementation, callable without Tauri's `State` wrappers.
 ///
-/// TODO: the memory database is left untouched — `frames`, the OCR text in
-/// `text_sessions` / `session_lines` and its index, and the chat history — so
-/// the Search page still finds everything from before the clear.
-pub(crate) async fn purge_local_data_impl(pool: &DbPool) -> Result<(), String> {
+/// The memory database is cleared too: frames, the OCR text with its index,
+/// and the chat history.
+pub(crate) async fn purge_local_data_impl(
+    pool: &DbPool,
+    mem: Option<&crate::memory::MemoryDb>,
+) -> Result<(), String> {
+    // Take the digest slot before deleting anything: a batch mid-way would
+    // append OCR lines to sessions that no longer exist.
+    let _hold = match mem {
+        Some(_) => Some(
+            crate::memory::digest::hold(std::time::Duration::from_secs(30))
+                .await
+                .ok_or_else(|| {
+                    "Screen text is still being indexed; stop it and try again".to_string()
+                })?,
+        ),
+        None => None,
+    };
+
     // Delete all data except user's settings
     pool.0
         .call(|conn| {
@@ -117,7 +136,6 @@ pub(crate) async fn purge_local_data_impl(pool: &DbPool) -> Result<(), String> {
         })
         .await
         .map_err(|e| e.to_string())?;
-
     // VACUUM cannot run inside a transaction, so it gets its own call.
     pool.0
         .call(|conn| {
@@ -127,6 +145,33 @@ pub(crate) async fn purge_local_data_impl(pool: &DbPool) -> Result<(), String> {
         })
         .await
         .map_err(|e| e.to_string())?;
+
+    // Memory database: frames, OCR text (the FTS index follows by trigger), chat.
+    if let Some(mem) = mem {
+        mem.0
+            .call(|conn| {
+                let tx = conn.transaction().db()?;
+                tx.execute_batch(
+                    "DELETE FROM session_lines;
+                     DELETE FROM text_sessions;
+                     DELETE FROM frames;
+                     DELETE FROM chat_messages;
+                     DELETE FROM chat_conversations;",
+                )
+                .db()?;
+                tx.commit().db()?;
+                Ok(())
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+        mem.0
+            .call(|conn| {
+                conn.execute_batch("VACUUM").db()?;
+                Ok(())
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+    }
 
     // Clear icon file cache directory (best-effort, no error if the directory doesn't exist or deletion fails)
     if let Ok(data_root) = crate::storage::db_path_dir() {
@@ -208,11 +253,12 @@ pub(crate) async fn purge_screenshots_impl(pool: &DbPool) -> Result<(), String> 
 #[tauri::command]
 pub async fn purge_cloud_data(
     pool: State<'_, DbPool>,
+    mem: State<'_, crate::commands::screen_memory::MemoryState>,
     engine: State<'_, Arc<SyncEngine>>,
     svc: State<'_, Arc<CaptureService>>,
     keep_local: bool,
 ) -> Result<u64, String> {
-    purge_cloud_data_impl(&pool, &engine, Some(&svc), keep_local).await
+    purge_cloud_data_impl(&pool, &engine, Some(&svc), mem.0.as_ref(), keep_local).await
 }
 
 /// 抽出来的实际实现，给测试直接调用（绕开 Tauri State<> 包装）。测试没有采集服务，`svc` 传 `None`。
@@ -220,6 +266,7 @@ pub(crate) async fn purge_cloud_data_impl(
     pool: &DbPool,
     engine: &SyncEngine,
     svc: Option<&CaptureService>,
+    mem: Option<&crate::memory::MemoryDb>,
     keep_local: bool,
 ) -> Result<u64, String> {
     let self_id = engine.self_id();
@@ -278,7 +325,7 @@ pub(crate) async fn purge_cloud_data_impl(
     //    否则下一 tick 会去更新已被删掉的行。
     if !keep_local {
         let clear_local = || async {
-            purge_local_data_impl(pool).await?;
+            purge_local_data_impl(pool, mem).await?;
             purge_screenshots_impl(pool).await
         };
         match svc {
@@ -669,7 +716,7 @@ mod tests {
         assert!(categories_before > 0, "builtin categories 应该已 seed");
 
         // ── act ──
-        purge_local_data_impl(&pool).await.unwrap();
+        purge_local_data_impl(&pool, None).await.unwrap();
 
         // ── assert: 7 张硬删表全空 ──
         for table in [
@@ -760,7 +807,7 @@ mod tests {
         );
 
         // ── 幂等 ──：再跑一次不出错；7 张表仍为空
-        purge_local_data_impl(&pool).await.unwrap();
+        purge_local_data_impl(&pool, None).await.unwrap();
         for table in [
             "activities",
             "process_paths",
