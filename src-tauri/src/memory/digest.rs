@@ -112,6 +112,25 @@ pub fn request_stop() {
     STOP_REQUESTED.store(true, Ordering::SeqCst);
 }
 
+/// Holds the batch slot without running a batch: no digest can start while the
+/// guard lives. A batch already running is asked to stop and waited for, up to
+/// `timeout`; `None` if it did not stop in time.
+pub struct Hold(BatchGuard);
+
+pub async fn hold(timeout: std::time::Duration) -> Option<Hold> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if let Some(guard) = BatchGuard::acquire() {
+            return Some(Hold(guard));
+        }
+        request_stop();
+        if std::time::Instant::now() >= deadline {
+            return None;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+}
+
 /// 每轮从登记簿取的帧数;取完一轮再取,直到无积压。
 const BATCH: i64 = 64;
 
@@ -528,6 +547,21 @@ pub async fn backfill_from_activities(pool: &DbPool, mem: &MemoryDb) -> Result<u
     Ok(n)
 }
 
+/// [`RUNNING`] / [`STOP_REQUESTED`] 是进程级 static,cargo test 并行跑时
+/// 所有触碰 drain 或 [`hold`] 的测试(本模块的、清空数据的 e2e)必须互相串行,
+/// 否则会看见对方的"已在运行"错误或消费掉对方的停止请求。用异步锁:guard 要
+/// 横跨整个测试体(含 await 点),std 锁跨 await 会触发 clippy::await_holding_lock;
+/// 拿锁的测试 panic 时 guard 随栈展开释放,后续测试照常拿锁,无毒化问题。
+#[cfg(test)]
+pub(crate) async fn drain_lock() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let guard = LOCK.lock().await;
+    // 冷却是进程级 static:上一个测试触发的熔断会拦住下一个测试的 drain,
+    // 拿到锁即清,保证每个测试从无冷却状态起步
+    clear_cooldown();
+    guard
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -538,20 +572,6 @@ mod tests {
     use super::*;
 
     // ───────────────────────── 测试基建 ─────────────────────────
-
-    /// [`RUNNING`] / [`STOP_REQUESTED`] 是进程级 static,cargo test 并行跑时
-    /// 所有触碰 drain 的测试必须互相串行,否则会看见对方的"已在运行"错误或
-    /// 消费掉对方的停止请求。用异步锁:guard 要横跨整个测试体(含 await 点),
-    /// std 锁跨 await 会触发 clippy::await_holding_lock;拿锁的测试 panic 时
-    /// guard 随栈展开释放,后续测试照常拿锁,无毒化问题。
-    async fn drain_lock() -> tokio::sync::MutexGuard<'static, ()> {
-        static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-        let guard = LOCK.lock().await;
-        // 冷却是进程级 static:上一个测试触发的熔断会拦住下一个测试的 drain,
-        // 拿到锁即清,保证每个测试从无冷却状态起步
-        clear_cooldown();
-        guard
-    }
 
     /// 每个测试独立的临时目录。帧文件要真实存在:digest_one 先查 is_file,
     /// 内容无所谓(假识别函数从不读它)。
@@ -1198,6 +1218,60 @@ mod tests {
         let report = first.await.unwrap().unwrap();
         assert_eq!(report.processed, 1, "互斥冲突不影响第一轮的正常完成");
         assert!(!is_running(), "批结束后运行标志复位");
+    }
+
+    /// 清空数据用的 [`hold`]:有批在跑时让它停、等它停下再占住槽位;占着期间新批被拒;
+    /// 放开后槽位复位。
+    #[tokio::test]
+    async fn hold_waits_for_running_batch_then_blocks_new_ones() {
+        let _g = drain_lock().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = scratch_dir("hold");
+        let a = touch(&dir, "a.jpg");
+        let b = touch(&dir, "b.jpg");
+        reg(&mem, &a, "2026-07-05T10:00:00+09:00", "标题").await;
+        reg(&mem, &b, "2026-07-05T10:00:05+09:00", "标题").await;
+
+        // 识别函数阻塞在通道上,把一批钉在"正在消化"状态
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let rx = std::sync::Mutex::new(rx);
+        let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            rx.lock().unwrap().recv().unwrap();
+            Ok(vec!["放行后识别出的行".to_string()])
+        }));
+        let mem_bg = mem.clone();
+        let stop_bg = Arc::new(AtomicBool::new(false));
+        let stop_bg2 = Arc::clone(&stop_bg);
+        let batch = tokio::spawn(async move { drain(&mem_bg, &mut pipe, &stop_bg2).await });
+        for _ in 0..200 {
+            if is_running() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(is_running(), "批应进入运行态");
+
+        // hold 拿不到槽位就请求停止并等待;放行一帧后,批在下一帧前停下
+        let holder = tokio::spawn(hold(std::time::Duration::from_secs(5)));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(!holder.is_finished(), "批还在跑,hold 应等待");
+        tx.send(()).unwrap();
+        let held = holder.await.unwrap().expect("批停下后 hold 应拿到槽位");
+        let report = batch.await.unwrap().unwrap();
+        assert_eq!(report.processed, 1, "批应在第二帧前停下");
+        assert!(is_running(), "hold 期间槽位被占");
+
+        // 占着期间,新批立即被拒
+        let mut pipe2 = Pipeline::with_recognizer(Arc::new(|_p| Ok(vec![])));
+        let stop2 = AtomicBool::new(false);
+        let second = drain(&mem, &mut pipe2, &stop2).await;
+        assert!(
+            matches!(second, Err(Error::InvalidInput(m)) if m.contains("已在运行")),
+            "hold 期间的消化请求应被拒: {second:?}"
+        );
+
+        drop(held);
+        assert!(!is_running(), "hold 放开后槽位复位");
     }
 
     // ───────────────────── 模型下载 ─────────────────────

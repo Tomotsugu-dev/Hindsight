@@ -222,6 +222,7 @@ async fn cross_device_push_pull_basic() {
 async fn tombstone_clear_cloud() {
     let _env_lock = crate::repo::test_util::lock_data_dir_env();
     let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
 
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
@@ -242,7 +243,7 @@ async fn tombstone_clear_cloud() {
     std::fs::write(&shot, b"png").unwrap();
 
     // A 调 purge_cloud_data —— 删 Drive 上自己的文件 + 上传 tombstone + 本机一并清空
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false)
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, Some(&a.mem), false)
         .await
         .expect("purge_cloud_data");
     assert_eq!(count_for_device(&a, "device-a").await, 0);
@@ -269,8 +270,14 @@ async fn remove_device_requires_sign_in() {
     }
     crate::sync::auth::sign_out(&a.pool).await.unwrap();
 
-    let res =
-        crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false).await;
+    let res = crate::commands::storage::purge_cloud_data_impl(
+        &a.pool,
+        &a.engine,
+        None,
+        Some(&a.mem),
+        false,
+    )
+    .await;
     assert!(res.is_err(), "没登录时应返回错误");
     assert_eq!(
         count_for_device(&a, "device-a").await,
@@ -296,7 +303,7 @@ async fn purge_cloud_keep_local_preserves_local_data() {
     assert_eq!(count_for_device(&b, "device-a").await, 3);
 
     // keep_local=true：本机数据不动
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, true)
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, Some(&a.mem), true)
         .await
         .expect("purge_cloud_data keep_local");
 
@@ -364,6 +371,7 @@ async fn tombstone_applies_in_file_order() {
 async fn clear_data_does_not_pull_own_history_back() {
     let _env_lock = crate::repo::test_util::lock_data_dir_env();
     let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
 
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
@@ -377,7 +385,7 @@ async fn clear_data_does_not_pull_own_history_back() {
     b.engine.sync_now().await.unwrap();
     assert_eq!(count_for_device(&b, "device-a").await, 3);
 
-    crate::commands::storage::purge_local_data_impl(&a.pool)
+    crate::commands::storage::purge_local_data_impl(&a.pool, Some(&a.mem))
         .await
         .expect("purge_local_data");
     assert_eq!(count_for_device(&a, "device-a").await, 0);
@@ -407,6 +415,7 @@ async fn clear_data_does_not_pull_own_history_back() {
 async fn clear_data_keeps_other_devices_groups() {
     let _env_lock = crate::repo::test_util::lock_data_dir_env();
     let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
 
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
@@ -423,7 +432,7 @@ async fn clear_data_keeps_other_devices_groups() {
     a.engine.sync_now().await.unwrap();
     b.engine.sync_now().await.unwrap();
 
-    crate::commands::storage::purge_local_data_impl(&a.pool)
+    crate::commands::storage::purge_local_data_impl(&a.pool, Some(&a.mem))
         .await
         .expect("purge_local_data");
     a.engine.sync_now().await.unwrap();
@@ -454,6 +463,78 @@ async fn clear_data_keeps_other_devices_groups() {
     assert_eq!(live_members, 1, "A 清空数据后，B 的成员不应被删");
 }
 
+/// 「清空数据」连记忆库一起清：帧登记、OCR 文字和它的全文索引、聊天记录。
+// 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
+async fn clear_data_clears_memory_db() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
+
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+
+    // 一条帧登记 + 一条 OCR 会话（含行级留痕）
+    a.mem
+        .0
+        .call(|conn| {
+            conn.execute_batch(
+                "INSERT INTO frames(path, ts, local_date, app_id, title, ocr_state)
+                 VALUES ('2026-07-05/a.jpg', '2026-07-05T10:00:00+09:00', '2026-07-05', 'code', '标题甲', 1);
+                 INSERT INTO text_sessions(id, local_date, started_ts, ended_ts, app_id, title, text)
+                 VALUES (1, '2026-07-05', 't0', 't1', 'code', '标题甲', '秘密订单编号八八四二');
+                 INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
+                 VALUES (1, 0, '秘密订单编号八八四二', '2026-07-05/a.jpg', '2026-07-05T10:00:00+09:00');",
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    // 一段聊天
+    let conv = crate::chat::store::create_conversation(&a.mem, "测试会话")
+        .await
+        .unwrap();
+    crate::chat::store::append_user(&a.mem, conv, "上周看了什么?", None)
+        .await
+        .unwrap();
+
+    crate::commands::storage::purge_local_data_impl(&a.pool, Some(&a.mem))
+        .await
+        .expect("purge_local_data");
+
+    let counts: Vec<(&str, i64)> = a
+        .mem
+        .0
+        .call(|conn| {
+            let mut out = Vec::new();
+            for table in [
+                "frames",
+                "text_sessions",
+                "session_lines",
+                "chat_conversations",
+                "chat_messages",
+            ] {
+                let n: i64 =
+                    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))?;
+                out.push((table, n));
+            }
+            let hits: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH '秘密'",
+                [],
+                |r| r.get(0),
+            )?;
+            out.push(("text_sessions_fts", hits));
+            Ok(out)
+        })
+        .await
+        .unwrap();
+    for (table, n) in counts {
+        assert_eq!(n, 0, "清空数据后 {table} 应为空");
+    }
+}
+
 /// 「清空数据」之后再「从云端移除本设备」，重新登录同一个账号：清掉的其他设备历史不会被拉回来。
 // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
 #[allow(clippy::await_holding_lock)]
@@ -461,6 +542,7 @@ async fn clear_data_keeps_other_devices_groups() {
 async fn remove_device_does_not_pull_cleared_history_back() {
     let _env_lock = crate::repo::test_util::lock_data_dir_env();
     let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
 
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
@@ -474,12 +556,12 @@ async fn remove_device_does_not_pull_cleared_history_back() {
     a.engine.sync_now().await.unwrap();
     assert_eq!(count_for_device(&a, "device-b").await, 3);
 
-    crate::commands::storage::purge_local_data_impl(&a.pool)
+    crate::commands::storage::purge_local_data_impl(&a.pool, Some(&a.mem))
         .await
         .expect("purge_local_data");
     assert_eq!(count_for_device(&a, "device-b").await, 0);
 
-    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, false)
+    crate::commands::storage::purge_cloud_data_impl(&a.pool, &a.engine, None, Some(&a.mem), false)
         .await
         .expect("purge_cloud_data");
     inject_fake_auth(&a.pool).await;
