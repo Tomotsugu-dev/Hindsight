@@ -233,20 +233,20 @@
       },
       "removeDeviceDialog": {
         "title": "從雲端移除本裝置",
-        "intro": "本裝置在雲端的所有資料會被刪除。其它裝置同步後也會忘掉本裝置的記錄——就像本裝置從未連過雲端。",
-        "unaffected": "不影響：其它裝置自己的資料、本裝置以後產生的新資料。",
+        "intro": "本裝置在雲端的所有資料會被刪除，其它裝置同步後也會刪掉本裝置的記錄。移除後本裝置會登出。",
+        "unaffected": "不影響：其它裝置自己的資料。",
         "localQuestion": "本機的本地副本怎麼處理？",
         "alsoClearLabel": "也一併清空（預設）",
-        "alsoClearHint": "徹底乾淨。適合：離職、賣機器、隱私清理。",
+        "alsoClearHint": "同時清空本機的資料和截圖。",
         "keepLabel": "保留本機副本",
-        "keepHint": "雲端清，本地資料原樣保留。適合接下來要換 Google 賬號、把本機資料遷移到新賬號。",
+        "keepHint": "雲端刪除，本機資料原樣保留。",
         "typeToConfirmPrompt": "輸入「{{keyword}}」確認此操作（不可恢復）：",
         "typeKeyword": "移除",
         "typePlaceholder": "在此輸入",
         "cancel": "取消",
         "confirm": "移除",
-        "doneAlsoClear": "已撤回 {{count}} 個 Drive 檔案 + 通知所有裝置清除本機映象。本機資料已一併清空。",
-        "doneKeepLocal": "已撤回 {{count}} 個 Drive 檔案 + 通知所有裝置清除本機映象。本機資料已保留，可換賬號後重新上傳。"
+        "doneAlsoClear": "已從雲端刪除 {{count}} 個檔案，本機的資料和截圖也已清空，已登出。",
+        "doneKeepLocal": "已從雲端刪除 {{count}} 個檔案，本機資料已保留，已登出。"
       },
       "export": {
         "rowLabel": "匯出使用資料",

@@ -233,20 +233,20 @@
       },
       "removeDeviceDialog": {
         "title": "Remover este dispositivo da nuvem",
-        "intro": "Todos os dados deste dispositivo na nuvem serão excluídos. Após a sincronização, os outros dispositivos também esquecerão os registros sobre este dispositivo — como se este dispositivo nunca tivesse se conectado à nuvem.",
-        "unaffected": "Não afetados: os dados próprios dos outros dispositivos e os novos dados produzidos neste dispositivo a partir de agora.",
+        "intro": "Todos os dados deste dispositivo na nuvem serão excluídos, e os outros dispositivos excluirão os registros deste dispositivo na próxima sincronização. Depois disso, este dispositivo é desconectado da conta.",
+        "unaffected": "Não afetados: os dados próprios dos outros dispositivos.",
         "localQuestion": "E quanto à cópia local deste dispositivo?",
         "alsoClearLabel": "Também limpar dados locais (padrão)",
-        "alsoClearHint": "Completamente limpo. Para: sair de um emprego, vender a máquina, limpeza de privacidade.",
+        "alsoClearHint": "Também limpa os dados e as capturas de tela deste dispositivo.",
         "keepLabel": "Manter cópia local",
-        "keepHint": "Nuvem limpa, dados locais preservados. Use isto ao trocar para uma conta Google diferente e migrar os dados locais.",
+        "keepHint": "Excluído da nuvem; os dados locais ficam como estão.",
         "typeToConfirmPrompt": "Digite \"{{keyword}}\" para confirmar (não pode ser desfeito):",
         "typeKeyword": "REMOVE",
         "typePlaceholder": "Digite aqui",
         "cancel": "Cancelar",
         "confirm": "Remover",
-        "doneAlsoClear": "Removido: {{count}} arquivo(s) do Drive excluído(s) + os pares foram notificados para limpar o espelho deste dispositivo. Os dados locais também foram limpos.",
-        "doneKeepLocal": "Removido: {{count}} arquivo(s) do Drive excluído(s) + os pares foram notificados para limpar o espelho deste dispositivo. Dados locais preservados — faça login em uma nova conta para reenviar."
+        "doneAlsoClear": "{{count}} arquivo(s) excluído(s) da nuvem. Os dados e as capturas de tela deste dispositivo também foram limpos. Você foi desconectado.",
+        "doneKeepLocal": "{{count}} arquivo(s) excluído(s) da nuvem. Dados locais mantidos. Você foi desconectado."
       },
       "export": {
         "rowLabel": "Exportar dados de uso",

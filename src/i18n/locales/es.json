@@ -233,20 +233,20 @@
       },
       "removeDeviceDialog": {
         "title": "Quitar este dispositivo de la nube",
-        "intro": "Se eliminarán de la nube todos los datos de este dispositivo. Tras la sincronización, los demás dispositivos también olvidarán los registros de este dispositivo, como si nunca se hubiera conectado a la nube.",
-        "unaffected": "No se ven afectados: los datos propios de los demás dispositivos y los datos nuevos que este dispositivo genere a partir de ahora.",
+        "intro": "Se eliminarán de la nube todos los datos de este dispositivo, y los demás dispositivos eliminarán sus registros en la próxima sincronización. Después, este dispositivo cerrará la sesión.",
+        "unaffected": "No se ven afectados: los datos propios de los demás dispositivos.",
         "localQuestion": "¿Y la copia local de este dispositivo?",
         "alsoClearLabel": "Borrar también los datos locales (predeterminado)",
-        "alsoClearHint": "Todo limpio. Para: dejar un trabajo, vender el equipo, limpieza de privacidad.",
+        "alsoClearHint": "También borra los datos y las capturas de pantalla de este dispositivo.",
         "keepLabel": "Conservar la copia local",
-        "keepHint": "Nube limpia, datos locales conservados. Úsalo al cambiar a otra cuenta de Google y migrar los datos locales.",
+        "keepHint": "Eliminado de la nube; los datos locales se quedan como están.",
         "typeToConfirmPrompt": "Escribe \"{{keyword}}\" para confirmar (no se puede deshacer):",
         "typeKeyword": "REMOVE",
         "typePlaceholder": "Escribe aquí",
         "cancel": "Cancelar",
         "confirm": "Quitar",
-        "doneAlsoClear": "Quitado: {{count}} archivo(s) de Drive eliminado(s) + se notificó a los demás dispositivos para que borren la copia de este. Los datos locales también se borraron.",
-        "doneKeepLocal": "Quitado: {{count}} archivo(s) de Drive eliminado(s) + se notificó a los demás dispositivos para que borren la copia de este. Datos locales conservados: inicia sesión con una cuenta nueva para volver a subirlos."
+        "doneAlsoClear": "Se eliminaron {{count}} archivo(s) de la nube. También se borraron los datos y las capturas de este dispositivo. Se cerró la sesión.",
+        "doneKeepLocal": "Se eliminaron {{count}} archivo(s) de la nube. Datos locales conservados. Se cerró la sesión."
       },
       "export": {
         "rowLabel": "Exportar los datos de uso",
