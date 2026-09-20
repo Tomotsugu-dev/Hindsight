@@ -63,7 +63,14 @@ fn is_remote_newer<P: rusqlite::Params>(
 /// Primary key of a `sync_cursor` row, so this string lives in the user's
 /// database. Change it and the cursor is lost: the next sync re-downloads every
 /// file in the cloud.
-pub(super) const PULL_CURSOR_KEY: &str = "drive_files";
+pub(super) const CURSOR_CORE: &str = "drive_files";
+
+/// One cursor per optional dataset, so turning a switch on fills in that
+/// dataset's history without re-merging everything else (ADR-0006). The
+/// `pull.` prefix keeps them apart from the `push.*` fingerprints.
+const CURSOR_AI_SUMMARIES: &str = "pull.ai_summaries";
+const CURSOR_CHAT: &str = "pull.chat";
+const CURSOR_MEMORY: &str = "pull.memory";
 
 enum ParsedFile {
     ActivityDay {
@@ -122,6 +129,17 @@ impl ParsedFile {
             | ParsedFile::MemoryDay { device_id } => device_id,
         }
     }
+
+    /// Which stream owns the file: the cursor that advances past it, and the
+    /// only stream allowed to merge it.
+    fn cursor_key(&self) -> &'static str {
+        match self {
+            ParsedFile::AiSummaries { .. } => CURSOR_AI_SUMMARIES,
+            ParsedFile::Chat { .. } => CURSOR_CHAT,
+            ParsedFile::MemoryDay { .. } => CURSOR_MEMORY,
+            _ => CURSOR_CORE,
+        }
+    }
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
@@ -175,18 +193,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    let cursor = io::read_cursor(&inner.pool, PULL_CURSOR_KEY).await?;
-
-    let files = with_token_retry(&inner.pool, &mut token, |tok| {
-        let cursor = cursor.clone();
-        let drive = &inner.drive;
-        async move { drive.list_appdata_files(&tok, &cursor).await }
-    })
-    .await?;
-    if files.is_empty() {
-        return Ok(());
-    }
-
     let self_id = inner.self_id.as_str();
     if self_id.is_empty() {
         log::debug!("sync pull skipped: self_id is empty (device not initialized)");
@@ -207,8 +213,74 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             )
         })
         .unwrap_or((false, false, false));
+
+    // The streams that run this round. A dataset runs only with its switch on,
+    // and chat and screen memory also need the memory database. A stream that
+    // does not run leaves its cursor where it is, so turning its switch on later
+    // resumes from there.
+    let has_mem = inner.mem.is_some();
+    let mut streams: Vec<(&'static str, String)> = Vec::new();
+    for (key, enabled) in [
+        (CURSOR_CORE, true),
+        (CURSOR_AI_SUMMARIES, sync_ai),
+        (CURSOR_CHAT, sync_chat && has_mem),
+        (CURSOR_MEMORY, sync_scrn_mem && has_mem),
+    ] {
+        if enabled {
+            streams.push((key, io::read_cursor(&inner.pool, key).await?));
+        }
+    }
+
+    // One listing per round, from the earliest cursor among those streams; each
+    // stream then takes the files after its own.
+    let since = streams
+        .iter()
+        .map(|(_, cursor)| cursor.as_str())
+        .min()
+        .expect("the core stream always runs")
+        .to_string();
+    let files = with_token_retry(&inner.pool, &mut token, |tok| {
+        let since = since.clone();
+        let drive = &inner.drive;
+        async move { drive.list_appdata_files(&tok, &since).await }
+    })
+    .await?;
+    if files.is_empty() {
+        return Ok(());
+    }
+
     let mut applied = 0u64;
-    // One flag per file: merged, or deliberately skipped.
+    for (key, cursor) in &streams {
+        applied += pull_stream(
+            inner,
+            &mut token,
+            key,
+            cursor,
+            &files,
+            self_id,
+            &ignore_rules,
+        )
+        .await?;
+    }
+    if applied > 0 {
+        log::info!("sync pull done, merged {applied} remote files");
+    }
+    Ok(())
+}
+
+/// Merges the files of one stream: those it owns, newer than its cursor, and
+/// written by another device. Returns how many it merged.
+async fn pull_stream(
+    inner: &Arc<Inner>,
+    token: &mut TokenInfo,
+    cursor_key: &str,
+    cursor: &str,
+    files: &[crate::sync::drive::FileMeta],
+    self_id: &str,
+    ignore_rules: &[IgnoreRule],
+) -> Result<u64> {
+    let mut applied = 0u64;
+    // One flag per file: merged, or not this stream's to merge.
     let mut handled = vec![false; files.len()];
 
     // Group files go first: `app_group_members.group_id` is a foreign key, so a
@@ -233,28 +305,11 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             handled[i] = true;
             continue;
         };
-        // An optional dataset whose switch is off is marked handled without being
-        // downloaded; with the switch on, it is merged like any other file.
-        match &parsed {
-            ParsedFile::AiSummaries { .. } if !sync_ai => {
-                handled[i] = true;
-                continue;
-            }
-            ParsedFile::Chat { .. } if !sync_chat => {
-                handled[i] = true;
-                continue;
-            }
-            ParsedFile::MemoryDay { .. } if !sync_scrn_mem => {
-                handled[i] = true;
-                continue;
-            }
-            // Without the memory database these two cannot be merged; mark them handled
-            // too, so they do not hold the cursor back.
-            ParsedFile::Chat { .. } | ParsedFile::MemoryDay { .. } if inner.mem.is_none() => {
-                handled[i] = true;
-                continue;
-            }
-            _ => {}
+        // Another stream's file, or one this stream merged in an earlier round:
+        // nothing to do, but its cursor may pass.
+        if parsed.cursor_key() != cursor_key || f.modified_time.as_str() <= cursor {
+            handled[i] = true;
+            continue;
         }
         // This device's own files are never merged: its rows are the originals. Its
         // own tombstone in particular must not be: removing this device while keeping
@@ -264,7 +319,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             continue;
         }
 
-        let body = match with_token_retry(&inner.pool, &mut token, |tok| {
+        let body = match with_token_retry(&inner.pool, token, |tok| {
             let id = f.id.clone();
             let drive = &inner.drive;
             async move { drive.download(&tok, &id).await }
@@ -285,7 +340,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
             ParsedFile::ActivityDay {
                 device_id,
                 local_date,
-            } => merge_activities(&inner.pool, &device_id, &local_date, &body, &ignore_rules).await,
+            } => merge_activities(&inner.pool, &device_id, &local_date, &body, ignore_rules).await,
             ParsedFile::Categories { .. } => merge_categories(&inner.pool, &body).await,
             ParsedFile::AppIcons { .. } => merge_app_icons(&inner.pool, &body).await,
             ParsedFile::AppGroups { .. } => merge_app_groups(&inner.pool, &body).await,
@@ -335,12 +390,9 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         })
         .last();
     if let Some(t) = cursor_advance {
-        io::write_cursor(&inner.pool, PULL_CURSOR_KEY, &t).await?;
+        io::write_cursor(&inner.pool, cursor_key, &t).await?;
     }
-    if applied > 0 {
-        log::info!("sync pull done, merged {applied} remote files");
-    }
-    Ok(())
+    Ok(applied)
 }
 
 async fn merge_activities(

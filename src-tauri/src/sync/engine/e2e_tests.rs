@@ -57,6 +57,26 @@ async fn enable_optional_sync(dev: &TestDevice) {
     crate::repo::settings::save(&dev.pool, &cfg).await.unwrap();
 }
 
+/// 只打开 AI 总结这一挡（测试用:直接写 settings）。
+async fn enable_ai_summaries_sync(dev: &TestDevice) {
+    let mut cfg = crate::repo::settings::load(&dev.pool).await.unwrap();
+    cfg.sync_ai_summaries = true;
+    crate::repo::settings::save(&dev.pool, &cfg).await.unwrap();
+}
+
+async fn ai_summary_count(dev: &TestDevice) -> i64 {
+    dev.pool
+        .0
+        .call(|conn| {
+            let n: i64 = conn
+                .query_row("SELECT COUNT(*) FROM ai_summaries", [], |r| r.get(0))
+                .db()?;
+            Ok(n)
+        })
+        .await
+        .unwrap()
+}
+
 /// INSERT 一行 fake auth_state，让 [`auth::ensure_valid_token`] 走"未过期"分支
 /// 直接返回 fake-access-token，绕开 OAuth refresh 网络调用。
 ///
@@ -570,6 +590,60 @@ async fn remove_device_does_not_pull_cleared_history_back() {
         count_for_device(&a, "device-b").await,
         0,
         "移除本设备后，清空过的 B 的历史不应被拉回来"
+    );
+}
+
+/// 打开可选数据集开关：只把这一类的历史补上，别的类不受影响。
+/// 清空过数据的机器尤其看得出来——其它设备的活动记录不该跟着回来。
+// 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
+async fn turning_on_a_dataset_pulls_only_that_dataset() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
+
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+
+    // B 开着 AI 总结同步：推上去一条活动 + 一份日报
+    enable_ai_summaries_sync(&b).await;
+    insert_sealed(&b, "Code", Local::now(), 30).await;
+    b.pool
+        .0
+        .call(|conn| {
+            conn.execute(
+                "INSERT INTO ai_summaries(source, local_date, segment_idx, label, start_hour,
+                                          end_hour, content, model, status, error, generated_at)
+                 VALUES ('daily','2026-07-05',0,'深夜',0,6,'凌晨在写代码','m','ok',NULL,
+                         '2026-07-05T10:00:00Z')",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    // A 的开关关着：拉到 B 的活动，跳过 B 的日报
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&a, "device-b").await, 1);
+    assert_eq!(ai_summary_count(&a).await, 0, "开关关着不该拉到日报");
+
+    // A 清空数据后打开 AI 总结开关，再同步
+    crate::commands::storage::purge_local_data_impl(&a.pool, Some(&a.mem))
+        .await
+        .expect("purge_local_data");
+    enable_ai_summaries_sync(&a).await;
+    a.engine.sync_now().await.unwrap();
+
+    assert_eq!(ai_summary_count(&a).await, 1, "打开开关后应补上 B 的日报");
+    assert_eq!(
+        count_for_device(&a, "device-b").await,
+        0,
+        "清空过的活动记录不该跟着回来"
     );
 }
 
