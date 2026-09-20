@@ -10,11 +10,10 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::io;
-use super::{with_token_retry, Inner};
+use super::Inner;
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
-use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
     DeviceMetaPayload, TombstonePayload,
@@ -186,12 +185,10 @@ fn parse_filename(name: &str) -> Option<ParsedFile> {
 
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     let _gate = inner.flush_gate.lock().await;
-    let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
-        Ok(t) => t,
-        // Not signed in is not a failure: there is nothing to pull.
-        Err(Error::NotSignedIn) => return Ok(()),
-        Err(e) => return Err(e),
-    };
+    // Not signed in is not a failure: there is nothing to pull.
+    if !inner.cloud.ensure_credential().await? {
+        return Ok(());
+    }
 
     let self_id = inner.self_id.as_str();
     if self_id.is_empty() {
@@ -239,28 +236,14 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         .min()
         .expect("the core stream always runs")
         .to_string();
-    let files = with_token_retry(&inner.pool, &mut token, |tok| {
-        let since = since.clone();
-        let drive = &inner.drive;
-        async move { drive.list_appdata_files(&tok, &since).await }
-    })
-    .await?;
+    let files = inner.cloud.list(&since).await?;
     if files.is_empty() {
         return Ok(());
     }
 
     let mut applied = 0u64;
     for (key, cursor) in &streams {
-        applied += pull_stream(
-            inner,
-            &mut token,
-            key,
-            cursor,
-            &files,
-            self_id,
-            &ignore_rules,
-        )
-        .await?;
+        applied += pull_stream(inner, key, cursor, &files, self_id, &ignore_rules).await?;
     }
     if applied > 0 {
         log::info!("sync pull done, merged {applied} remote files");
@@ -272,7 +255,6 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 /// written by another device. Returns how many it merged.
 async fn pull_stream(
     inner: &Arc<Inner>,
-    token: &mut TokenInfo,
     cursor_key: &str,
     cursor: &str,
     files: &[crate::sync::drive::FileMeta],
@@ -319,13 +301,7 @@ async fn pull_stream(
             continue;
         }
 
-        let body = match with_token_retry(&inner.pool, token, |tok| {
-            let id = f.id.clone();
-            let drive = &inner.drive;
-            async move { drive.download(&tok, &id).await }
-        })
-        .await
-        {
+        let body = match inner.cloud.download(&f.id).await {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("download of {} failed: {e}", f.name);

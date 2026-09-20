@@ -12,7 +12,6 @@ mod push;
 #[cfg(test)]
 mod e2e_tests;
 
-use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,8 +22,7 @@ use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
-use crate::sync::auth::{self, TokenInfo};
-use crate::sync::drive::DriveBackend;
+use crate::sync::drive::CloudBackend;
 
 /// Prefix of `last_error` when the user has to sign in again. The Devices page
 /// matches these prefixes as written.
@@ -70,45 +68,6 @@ async fn record_round_failure(inner: &Inner, round: &str, e: &Error) {
     inner.status.write().await.last_error = Some(format_sync_error(e));
 }
 
-/// Every Drive call the sync engine makes goes through here. It runs `op` once
-/// with the current access token and returns whatever `op` returns. If Google
-/// answers 401, it refreshes the token and runs `op` once more, returning that
-/// second result.
-///
-/// The new token is written back to `token`, so the caller's later Drive calls
-/// use it too.
-///
-/// One retry only. If the refresh itself fails, that error is returned and `op`
-/// is not run again.
-///
-/// Why this layer exists: `ensure_valid_token` only checks the expiry time
-/// stored locally, and Google can reject a token before that (wake from sleep,
-/// clock drift, rotation on Google's side). One refresh fixes it; the user
-/// should not have to sign in again.
-pub(super) async fn with_token_retry<F, Fut, T>(
-    pool: &DbPool,
-    token: &mut TokenInfo,
-    mut op: F,
-) -> Result<T>
-where
-    F: FnMut(String) -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
-    match op(token.access_token.clone()).await {
-        Err(Error::DriveHttp {
-            status: 401,
-            stage,
-            body,
-        }) => {
-            log::info!("drive {stage}: 401, refreshing the access token and retrying once");
-            log::debug!("drive {stage}: 401 body: {body}");
-            *token = auth::force_refresh(pool).await?;
-            op(token.access_token.clone()).await
-        }
-        other => other,
-    }
-}
-
 const PUSH_INTERVAL_SECS: u64 = 30;
 const PULL_INTERVAL_SECS: i64 = 60;
 
@@ -150,8 +109,8 @@ pub(super) struct Inner {
     /// datasets then never sync, whatever the settings say.
     pub(super) mem: Option<crate::memory::MemoryDb>,
     /// The cloud the engine talks to: Google Drive in the app, an in-memory
-    /// stand-in in tests.
-    pub(super) drive: DriveBackend,
+    /// stand-in in tests. It holds its own credential; the engine never sees one.
+    pub(super) cloud: CloudBackend,
     /// This device's `device_id`, a UUID. Every file this device uploads is named
     /// `device.<self_id>.…`, which is how pull tells other devices' files apart.
     pub(super) self_id: String,
@@ -199,12 +158,13 @@ pub struct SyncEngine {
 }
 
 impl SyncEngine {
-    /// 生产入口：用全局 `device::self_id()` + HTTP Drive。`device::ensure_loaded()`
+    /// 生产入口：用全局 `device::self_id()` + Google Drive。`device::ensure_loaded()`
     /// 必须先跑过；未初始化时 self_id 退化为空串（push/pull 内部会跳过实际工作）。
     /// `mem` = 记忆库句柄(聊天历史/屏幕记忆可选上云用;打开失败传 None)。
     pub fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
         let self_id = crate::device::self_id().unwrap_or("").to_string();
-        Self::with_backend(pool, mem, DriveBackend::Http, self_id)
+        let cloud = CloudBackend::drive(pool.clone());
+        Self::with_backend(pool, mem, cloud, self_id)
     }
 
     /// Test entry: takes the backend and the device id, so one process can run
@@ -212,14 +172,14 @@ impl SyncEngine {
     pub fn with_backend(
         pool: DbPool,
         mem: Option<crate::memory::MemoryDb>,
-        drive: DriveBackend,
+        cloud: CloudBackend,
         self_id: String,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 pool,
                 mem,
-                drive,
+                cloud,
                 self_id,
                 handle: Mutex::new(None),
                 status: RwLock::new(SyncStatus::default()),
@@ -236,9 +196,9 @@ impl SyncEngine {
         self.inner.flush_gate.lock().await
     }
 
-    /// 借出当前 Drive 后端引用。给 `purge_cloud_data` 这类 command-layer 入口走。
-    pub fn drive(&self) -> &DriveBackend {
-        &self.inner.drive
+    /// 借出当前云后端引用。给 `purge_cloud_data` 这类 command-layer 入口走。
+    pub fn cloud(&self) -> &CloudBackend {
+        &self.inner.cloud
     }
 
     /// 借出当前设备身份。给 command-layer 入口（`purge_cloud_data` 等）走，

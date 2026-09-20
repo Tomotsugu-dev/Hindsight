@@ -1,6 +1,6 @@
-//! Drive 后端抽象：生产路径打 Google Drive REST，集成测试用 in-memory mock。
+//! 云后端：列、下载、写、删云上的文件。引擎只调这四个动作，不知道对面是谁。
 //!
-//! 生产实现走 4 个 REST 端点（保留为 [`DriveBackend::Http`] 分支内部 fn）：
+//! 生产路径是 Google Drive REST 的 4 个端点（[`DriveClient`] 分支内部 fn）：
 //!
 //!   GET    https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=...
 //!   GET    https://www.googleapis.com/drive/v3/files/<id>?alt=media
@@ -8,15 +8,20 @@
 //!   PATCH  https://www.googleapis.com/upload/drive/v3/files/<id>?uploadType=media
 //!   DELETE https://www.googleapis.com/drive/v3/files/<id>
 //!
-//! 所有 IO 文件都落进 `appDataFolder`：每个 OAuth client 自己的隐藏目录，浏览器看不见，
+//! 所有文件都落进 `appDataFolder`：每个 OAuth client 自己的隐藏目录，浏览器看不见，
 //! 多设备共享，不需要 rules / index / region。
 //!
-//! [`DriveBackend`] 枚举注入到 [`crate::sync::engine::SyncEngine`]，生产用 `Http`，
-//! 集成测试用 `InMemory`（HashMap 模拟 appDataFolder，时钟 + 唯一 id 单调）。
-//! 见 `src-tauri/tests/sync_two_devices.rs`。
+//! 凭证由后端自己取：[`DriveClient`] 持一份 `DbPool`，每次请求前从 `auth_state`
+//! 读 access token，Drive 答 401 就刷新后重试一次。**约束：后端只读凭证那张表，
+//! 业务表（outbox、cursor、activities）是引擎的事。**
+//!
+//! [`CloudBackend`] 注入到 [`crate::sync::engine::SyncEngine`]，生产用 `Drive`，
+//! 集成测试用 `InMemory`（HashMap 模拟 appDataFolder，时钟 + 唯一 id 单调），
+//! 见 `engine/e2e_tests.rs`。
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::future::Future;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -25,6 +30,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::error::{Error, Result};
+use crate::storage::DbPool;
+use crate::sync::auth;
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
@@ -59,53 +66,146 @@ struct ListResp {
     next_page_token: Option<String>,
 }
 
-/// Drive 后端：生产 = HTTP / 测试 = InMemory。
+/// 云后端：生产 = Google Drive / 测试 = InMemory。
 ///
-/// 注入到 [`crate::sync::engine::SyncEngine`]；push/pull 路径只看 trait-like 方法接口，
-/// 不直接打 reqwest。
-pub enum DriveBackend {
-    Http,
+/// 注入到 [`crate::sync::engine::SyncEngine`]；push/pull 只调这四个方法，
+/// 不直接打 reqwest，也不经手凭证。
+pub enum CloudBackend {
+    Drive(DriveClient),
     /// 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
     #[allow(dead_code)]
     InMemory(Arc<InMemoryDriveStore>),
 }
 
-impl DriveBackend {
-    /// 列 appDataFolder 下、`modified_after` 之后修改过的文件（按 modifiedTime 升序）。
-    /// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
-    pub async fn list_appdata_files(
-        &self,
-        token: &str,
-        modified_after: &str,
-    ) -> Result<Vec<FileMeta>> {
+impl CloudBackend {
+    /// 生产入口：打 Google Drive，凭证从 `pool` 的 `auth_state` 表取。
+    pub fn drive(pool: DbPool) -> Self {
+        CloudBackend::Drive(DriveClient { pool })
+    }
+
+    /// 备好这一轮要用的凭证。会读本地凭证表，必要时刷新。
+    ///
+    /// `Ok(false)` = 没登录这个后端，push / pull 整轮跳过，不算失败；
+    /// `Err` = 凭证在但拿不到能用的（刷新被拒等），整轮失败，UI 上要出错误条幅。
+    pub async fn ensure_credential(&self) -> Result<bool> {
         match self {
-            DriveBackend::Http => http_list_appdata_files(token, modified_after).await,
-            DriveBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
+            CloudBackend::Drive(c) => c.ensure_credential().await,
+            CloudBackend::InMemory(store) => Ok(store.signed_in()),
+        }
+    }
+
+    /// 列 `modified_after` 之后修改过的文件（按修改时间升序）。
+    /// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
+    pub async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+        match self {
+            CloudBackend::Drive(c) => c.list(modified_after).await,
+            CloudBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
         }
     }
 
     /// 下载文件全部内容。
-    pub async fn download(&self, token: &str, file_id: &str) -> Result<Vec<u8>> {
+    pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         match self {
-            DriveBackend::Http => http_download(token, file_id).await,
-            DriveBackend::InMemory(store) => store.download(file_id).await,
+            CloudBackend::Drive(c) => c.download(file_id).await,
+            CloudBackend::InMemory(store) => store.download(file_id).await,
         }
     }
 
-    /// 按 name upsert：有则更新内容，没有就创建到 appDataFolder。返回文件 id。
-    pub async fn upsert_by_name(&self, token: &str, name: &str, content: &[u8]) -> Result<String> {
+    /// 按 name upsert：有则更新内容，没有就创建。返回文件 id。
+    pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         match self {
-            DriveBackend::Http => http_upsert_by_name(token, name, content).await,
-            DriveBackend::InMemory(store) => store.upsert_by_name(name, content).await,
+            CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
+            CloudBackend::InMemory(store) => store.upsert_by_name(name, content).await,
         }
     }
 
-    /// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
-    /// 404 视为成功（幂等删）。
-    pub async fn delete(&self, token: &str, file_id: &str) -> Result<()> {
+    /// 删除一个文件。404 视为成功（幂等删）。
+    pub async fn delete(&self, file_id: &str) -> Result<()> {
         match self {
-            DriveBackend::Http => http_delete(token, file_id).await,
-            DriveBackend::InMemory(store) => store.delete(file_id).await,
+            CloudBackend::Drive(c) => c.delete(file_id).await,
+            CloudBackend::InMemory(store) => store.delete(file_id).await,
+        }
+    }
+}
+
+// ─────────────── DriveClient：Google Drive 后端 ───────────────
+
+/// Google Drive 后端。`pool` 只用来读写 `auth_state`（access token 和它的过期时间）。
+pub struct DriveClient {
+    pool: DbPool,
+}
+
+impl DriveClient {
+    /// 三种结果对应 `auth_state` 的三种状态：四列齐且 token 可用 / 四列不齐（没登录）/
+    /// 四列齐但刷新被 Google 拒（授权被撤销、refresh token 过期）。
+    async fn ensure_credential(&self) -> Result<bool> {
+        match auth::ensure_valid_token(&self.pool).await {
+            Ok(_) => Ok(true),
+            Err(Error::NotSignedIn) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+        self.with_token_retry(|tok| {
+            let after = modified_after.to_string();
+            async move { http_list_appdata_files(&tok, &after).await }
+        })
+        .await
+    }
+
+    async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
+        self.with_token_retry(|tok| {
+            let id = file_id.to_string();
+            async move { http_download(&tok, &id).await }
+        })
+        .await
+    }
+
+    async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
+        self.with_token_retry(|tok| {
+            let name = name.to_string();
+            let content = content.to_vec();
+            async move { http_upsert_by_name(&tok, &name, &content).await }
+        })
+        .await
+    }
+
+    async fn delete(&self, file_id: &str) -> Result<()> {
+        self.with_token_retry(|tok| {
+            let id = file_id.to_string();
+            async move { http_delete(&tok, &id).await }
+        })
+        .await
+    }
+
+    /// 带着当前 access token 跑一次 `op`；Drive 答 401 就刷新 token 再跑一次，
+    /// 返回第二次的结果。只重试一次；刷新本身失败就返回那个错误，`op` 不再跑。
+    ///
+    /// 这层存在的理由：`ensure_valid_token` 只看本地存的过期时间，Google 可能在那
+    /// 之前就拒绝一个 token（睡眠唤醒、时钟漂移、Google 侧轮换）。刷新一次就能过，
+    /// 不该让用户重新登录。
+    ///
+    /// 刷新出来的新 token 由 `force_refresh` 写回 `auth_state`，所以本轮后面的调用
+    /// 各自 `ensure_valid_token` 时读到的就是新的。
+    async fn with_token_retry<F, Fut, T>(&self, mut op: F) -> Result<T>
+    where
+        F: FnMut(String) -> Fut,
+        Fut: Future<Output = Result<T>>,
+    {
+        let token = auth::ensure_valid_token(&self.pool).await?;
+        match op(token.access_token).await {
+            Err(Error::DriveHttp {
+                status: 401,
+                stage,
+                body,
+            }) => {
+                log::info!("drive {stage}: 401, refreshing the access token and retrying once");
+                log::debug!("drive {stage}: 401 body: {body}");
+                let fresh = auth::force_refresh(&self.pool).await?;
+                op(fresh.access_token).await
+            }
+            other => other,
         }
     }
 }
@@ -340,6 +440,10 @@ pub struct InMemoryDriveStore {
     /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
     /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
     fail_next_upserts: AtomicU64,
+    /// 这个假云端认不认当前用户。默认 true；[`Self::sign_out`] 置 false，
+    /// 让 `ensure_credential` 走"没登录"分支。真后端从自己的凭证表判断，
+    /// 假后端没有那张表，所以由测试直接拨。
+    signed_in: AtomicBool,
 }
 
 impl InMemoryDriveStore {
@@ -349,7 +453,18 @@ impl InMemoryDriveStore {
             next_id: AtomicU64::new(1),
             clock: Mutex::new(0),
             fail_next_upserts: AtomicU64::new(0),
+            signed_in: AtomicBool::new(true),
         }
+    }
+
+    /// 让这个假云端当作用户没登录。仅测试用。
+    #[allow(dead_code)]
+    pub fn sign_out(&self) {
+        self.signed_in.store(false, Ordering::SeqCst);
+    }
+
+    fn signed_in(&self) -> bool {
+        self.signed_in.load(Ordering::SeqCst)
     }
 
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
