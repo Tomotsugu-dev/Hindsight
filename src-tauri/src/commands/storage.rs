@@ -278,12 +278,11 @@ pub(crate) async fn purge_cloud_data_impl(
         return Err("self_id 未初始化".into());
     }
 
-    let token = crate::sync::auth::ensure_valid_token(pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
     let prefix = format!("device.{self_id}.");
-    let drive = engine.drive();
+    let cloud = engine.cloud();
+    if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
+        return Err(crate::error::Error::NotSignedIn.to_string());
+    }
 
     // Held until this function returns: a push landing mid-way would upload
     // this device's files again right after they were deleted.
@@ -300,16 +299,13 @@ pub(crate) async fn purge_cloud_data_impl(
         cleared_at: cleared_at.clone(),
     })
     .map_err(|e| e.to_string())?;
-    drive
-        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+    cloud
+        .upsert_by_name(&tombstone_name, &tombstone_payload)
         .await
         .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
 
-    // 2. 列 Drive 全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
-    let files = drive
-        .list_appdata_files(&token.access_token, "")
-        .await
-        .map_err(|e| e.to_string())?;
+    // 2. 列云端全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
+    let files = cloud.list("").await.map_err(|e| e.to_string())?;
     let mine: Vec<_> = files
         .iter()
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
@@ -319,7 +315,7 @@ pub(crate) async fn purge_cloud_data_impl(
     //    tombstone 的 clearedAt trim 掉，只是 Drive 上多占点空间）
     let mut deleted = 0u64;
     for f in &mine {
-        match drive.delete(&token.access_token, &f.id).await {
+        match cloud.delete(&f.id).await {
             Ok(()) => deleted += 1,
             Err(e) => log::warn!("purge_cloud_data: delete {} 失败: {e}", f.name),
         }
@@ -409,14 +405,21 @@ pub(crate) async fn forget_remote_device_impl(
         return Err("不能用 forget_remote_device 清自己，请用 purge_cloud_data".into());
     }
 
-    // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
-    let token = crate::sync::auth::ensure_valid_token(pool)
-        .await
-        .map_err(|e| format!("需要登录后才能从云端移除远端设备：{e}"))?;
-
     let prefix = format!("device.{target_id}.");
     let tombstone_name = format!("device.{target_id}.tombstone.json");
-    let drive = engine.drive();
+    let cloud = engine.cloud();
+
+    // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
+    let signed_in = cloud
+        .ensure_credential()
+        .await
+        .map_err(|e| format!("需要登录后才能从云端移除远端设备：{e}"))?;
+    if !signed_in {
+        return Err(format!(
+            "需要登录后才能从云端移除远端设备：{}",
+            crate::error::Error::NotSignedIn
+        ));
+    }
 
     // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
     let _gate = engine.pause_flushes().await;
@@ -431,16 +434,13 @@ pub(crate) async fn forget_remote_device_impl(
         cleared_at: cleared_at.clone(),
     })
     .map_err(|e| e.to_string())?;
-    drive
-        .upsert_by_name(&token.access_token, &tombstone_name, &tombstone_payload)
+    cloud
+        .upsert_by_name(&tombstone_name, &tombstone_payload)
         .await
         .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
 
-    // 2. 列 Drive 上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
-    let files = drive
-        .list_appdata_files(&token.access_token, "")
-        .await
-        .map_err(|e| e.to_string())?;
+    // 2. 列云端上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
+    let files = cloud.list("").await.map_err(|e| e.to_string())?;
     let target_files: Vec<_> = files
         .iter()
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
@@ -449,7 +449,7 @@ pub(crate) async fn forget_remote_device_impl(
     // 3. 逐个 DELETE；单文件失败不抛，让能删的尽量删完（漏删的对端也会被 tombstone trim）
     let mut deleted = 0u64;
     for f in &target_files {
-        match drive.delete(&token.access_token, &f.id).await {
+        match cloud.delete(&f.id).await {
             Ok(()) => deleted += 1,
             Err(e) => log::warn!("forget_remote_device: delete {} 失败: {e}", f.name),
         }
@@ -827,7 +827,7 @@ mod tests {
 
     // ═════════════ forget_remote_device_impl（桩照抄 e2e 的 InMemoryDriveStore 用法）═════════════
 
-    use crate::sync::drive::{DriveBackend, InMemoryDriveStore};
+    use crate::sync::drive::{CloudBackend, InMemoryDriveStore};
 
     /// e2e 同款 fake auth：四列全 Some + expires_at 远未来，让
     /// `ensure_valid_token` 走"未过期直接复用"分支，零网络调用。
@@ -855,7 +855,7 @@ mod tests {
         SyncEngine::with_backend(
             pool.clone(),
             None,
-            DriveBackend::InMemory(drive),
+            CloudBackend::InMemory(drive),
             self_id.to_string(),
         )
     }
@@ -986,6 +986,7 @@ mod tests {
             .upsert_by_name("device.ghost.data.2026-05-01.ndjson", b"d")
             .await
             .unwrap();
+        drive.sign_out();
         insert_device_row(&pool, "ghost").await;
         insert_activity_for(&pool, "ghost", "Code").await;
         let engine = make_engine(&pool, "self-dev", drive.clone());

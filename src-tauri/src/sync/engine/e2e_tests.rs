@@ -18,7 +18,7 @@ use chrono::{DateTime, Duration, Local, Timelike};
 
 use crate::repo::test_util::DataDirOverride;
 use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
-use crate::sync::drive::{DriveBackend, InMemoryDriveStore};
+use crate::sync::drive::{CloudBackend, InMemoryDriveStore};
 use crate::sync::engine::SyncEngine;
 
 struct TestDevice {
@@ -37,7 +37,7 @@ async fn make_device(self_id: &str, drive: Arc<InMemoryDriveStore>) -> TestDevic
     let engine = Arc::new(SyncEngine::with_backend(
         pool.clone(),
         Some(mem.clone()),
-        DriveBackend::InMemory(drive),
+        CloudBackend::InMemory(drive),
         self_id.to_string(),
     ));
     TestDevice {
@@ -289,6 +289,7 @@ async fn remove_device_requires_sign_in() {
         insert_sealed(&a, p, captured, 30).await;
     }
     crate::sync::auth::sign_out(&a.pool).await.unwrap();
+    drive.sign_out();
 
     let res = crate::commands::storage::purge_cloud_data_impl(
         &a.pool,

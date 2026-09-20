@@ -1,6 +1,8 @@
-//! Drive 后端抽象：生产路径打 Google Drive REST，集成测试用 in-memory mock。
+//! The cloud storage sync runs on. Files live in one flat folder and are
+//! addressed by name; the operations of [`CloudBackend`] are all the engine
+//! needs, and every backend must give them the same meaning.
 //!
-//! 生产实现走 4 个 REST 端点（保留为 [`DriveBackend::Http`] 分支内部 fn）：
+//! `Drive` talks to the Google Drive REST API:
 //!
 //!   GET    https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=...
 //!   GET    https://www.googleapis.com/drive/v3/files/<id>?alt=media
@@ -8,16 +10,26 @@
 //!   PATCH  https://www.googleapis.com/upload/drive/v3/files/<id>?uploadType=media
 //!   DELETE https://www.googleapis.com/drive/v3/files/<id>
 //!
-//! 所有 IO 文件都落进 `appDataFolder`：每个 OAuth client 自己的隐藏目录，浏览器看不见，
-//! 多设备共享，不需要 rules / index / region。
+//! Its folder is `appDataFolder`: hidden from the user, private to the OAuth
+//! client, shared by every device signed into the same account with the same
+//! client id.
 //!
-//! [`DriveBackend`] 枚举注入到 [`crate::sync::engine::SyncEngine`]，生产用 `Http`，
-//! 集成测试用 `InMemory`（HashMap 模拟 appDataFolder，时钟 + 唯一 id 单调）。
-//! 见 `src-tauri/tests/sync_two_devices.rs`。
+//! Each backend carries its own credential: [`DriveClient`] holds a `DbPool`,
+//! reads the access token from `auth_state` before every request and refreshes
+//! it once when Drive answers 401. That table is the only one a backend reads;
+//! the outbox, the cursors and the activity tables belong to the engine.
+//!
+//! `InMemory` keeps the files in a map for the end-to-end tests, with its own
+//! clock so that modification times only ever move forward.
 
+#[cfg(test)]
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::future::Future;
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(test)]
 use std::sync::Arc;
+#[cfg(test)]
 use tokio::sync::Mutex;
 
 use rand::Rng;
@@ -25,22 +37,31 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::error::{Error, Result};
+use crate::storage::DbPool;
+use crate::sync::auth;
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
-/// Drive 文件元数据（id + name + 修改时间），不含文件内容。
+/// Cloud file metadata (id + name + modified time), without the file content.
 #[derive(Debug, Clone)]
 pub struct FileMeta {
+    /// The backend's own handle for the file, assigned when the file is created
+    /// and opaque to us. Download, overwrite and delete address the file by it.
     pub id: String,
+    /// The name Hindsight gave the file, `device.<device id>.<kind>.json`. It is
+    /// what pull reads to tell what the file holds and which device wrote it.
     pub name: String,
-    /// RFC3339
+    /// Time in RFC3339 format.
     pub modified_time: String,
-    /// 文件大小 (bytes)；保留给将来用于诊断 / "云端用量"展示
+    /// File size in bytes; reserved for future diagnostics / "cloud usage" display.
     #[allow(dead_code)]
     pub size: Option<u64>,
 }
 
+/// One entry of Google's file listing, as it arrives. `size` comes as a string
+/// and is missing for folders; the rest of the engine sees the converted
+/// `FileMeta` instead.
 #[derive(Debug, Deserialize)]
 struct RawFile {
     id: String,
@@ -51,66 +72,171 @@ struct RawFile {
     size: Option<String>,
 }
 
+/// One page of Google's file listing.
 #[derive(Debug, Deserialize)]
 struct ListResp {
     #[serde(default)]
     files: Vec<RawFile>,
+    /// Present only when more files remain; the next request sends it back as
+    /// `pageToken` to get the following page.
     #[serde(rename = "nextPageToken", default)]
     next_page_token: Option<String>,
 }
 
-/// Drive 后端：生产 = HTTP / 测试 = InMemory。
-///
-/// 注入到 [`crate::sync::engine::SyncEngine`]；push/pull 路径只看 trait-like 方法接口，
-/// 不直接打 reqwest。
-pub enum DriveBackend {
-    Http,
-    /// 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
-    #[allow(dead_code)]
+/// The cloud behind sync. The sync engine holds one, and push, pull and the
+/// cloud-clearing commands reach the cloud only through its methods.
+/// `InMemory` stands in for a real cloud in tests and is the reference for
+/// what each method must do.
+pub enum CloudBackend {
+    Drive(DriveClient),
+    /// The tests' stand-in; not compiled into the shipped binary.
+    #[cfg(test)]
     InMemory(Arc<InMemoryDriveStore>),
 }
 
-impl DriveBackend {
-    /// 列 appDataFolder 下、`modified_after` 之后修改过的文件（按 modifiedTime 升序）。
-    /// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
-    pub async fn list_appdata_files(
-        &self,
-        token: &str,
-        modified_after: &str,
-    ) -> Result<Vec<FileMeta>> {
+impl CloudBackend {
+    /// The backend the app runs on: Google Drive, with the credential taken
+    /// from `pool`'s `auth_state` table.
+    pub fn drive(pool: DbPool) -> Self {
+        CloudBackend::Drive(DriveClient { pool })
+    }
+
+    /// Readies the credential this round needs, reading the local credential
+    /// table and refreshing when that is due.
+    ///
+    /// `Ok(false)` means the user is not signed in to this backend: push and
+    /// pull skip the round and it does not count as a failure. `Err` means a
+    /// credential is there but no usable one came of it, a refused refresh for
+    /// instance; the round fails and the Devices page shows the error.
+    pub async fn ensure_credential(&self) -> Result<bool> {
         match self {
-            DriveBackend::Http => http_list_appdata_files(token, modified_after).await,
-            DriveBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
+            CloudBackend::Drive(c) => c.ensure_credential().await,
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => Ok(store.signed_in()),
         }
     }
 
-    /// 下载文件全部内容。
-    pub async fn download(&self, token: &str, file_id: &str) -> Result<Vec<u8>> {
+    /// Lists the files modified strictly after `modified_after`, oldest first;
+    /// an empty string lists everything. Pull passes its cursor here, so
+    /// "strictly after" and the ordering are part of the contract.
+    pub async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
         match self {
-            DriveBackend::Http => http_download(token, file_id).await,
-            DriveBackend::InMemory(store) => store.download(file_id).await,
+            CloudBackend::Drive(c) => c.list(modified_after).await,
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
         }
     }
 
-    /// 按 name upsert：有则更新内容，没有就创建到 appDataFolder。返回文件 id。
-    pub async fn upsert_by_name(&self, token: &str, name: &str, content: &[u8]) -> Result<String> {
+    /// Downloads a file's whole content into memory.
+    pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         match self {
-            DriveBackend::Http => http_upsert_by_name(token, name, content).await,
-            DriveBackend::InMemory(store) => store.upsert_by_name(name, content).await,
+            CloudBackend::Drive(c) => c.download(file_id).await,
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => store.download(file_id).await,
         }
     }
 
-    /// 删除一个文件（永久删，不进回收站——appDataFolder 里没有回收站概念）。
-    /// 404 视为成功（幂等删）。
-    pub async fn delete(&self, token: &str, file_id: &str) -> Result<()> {
+    /// Writes a file by name: replaces the content when the name exists,
+    /// creates the file otherwise. Either way the modification time moves to
+    /// now. Returns the file's id.
+    pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         match self {
-            DriveBackend::Http => http_delete(token, file_id).await,
-            DriveBackend::InMemory(store) => store.delete(file_id).await,
+            CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => store.upsert_by_name(name, content).await,
+        }
+    }
+
+    /// Deletes a file for good; there is no trash to recover it from. Deleting
+    /// a file that is already gone counts as success.
+    pub async fn delete(&self, file_id: &str) -> Result<()> {
+        match self {
+            CloudBackend::Drive(c) => c.delete(file_id).await,
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => store.delete(file_id).await,
         }
     }
 }
 
-// ─────────────── HTTP impl（生产路径，原 pub async fn 移到这里） ───────────────
+// ─────────────── Google Drive ───────────────
+
+/// The Google Drive backend. `pool` serves one purpose: reading and writing
+/// `auth_state`, which holds the access token and when it expires.
+pub struct DriveClient {
+    pool: DbPool,
+}
+
+impl DriveClient {
+    async fn ensure_credential(&self) -> Result<bool> {
+        match auth::ensure_valid_token(&self.pool).await {
+            Ok(_) => Ok(true),
+            Err(Error::NotSignedIn) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+        self.with_token_retry(|tok| {
+            let after = modified_after.to_string();
+            async move { http_list_appdata_files(&tok, &after).await }
+        })
+        .await
+    }
+
+    async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
+        self.with_token_retry(|tok| {
+            let id = file_id.to_string();
+            async move { http_download(&tok, &id).await }
+        })
+        .await
+    }
+
+    async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
+        self.with_token_retry(|tok| {
+            let name = name.to_string();
+            let content = content.to_vec();
+            async move { http_upsert_by_name(&tok, &name, &content).await }
+        })
+        .await
+    }
+
+    async fn delete(&self, file_id: &str) -> Result<()> {
+        self.with_token_retry(|tok| {
+            let id = file_id.to_string();
+            async move { http_delete(&tok, &id).await }
+        })
+        .await
+    }
+
+    /// Why the retry exists: `ensure_valid_token` only checks the expiry time
+    /// stored locally, and Google can reject a token before that — wake from
+    /// sleep, clock drift, rotation on Google's side.
+    ///
+    /// `force_refresh` writes the new token to `auth_state`, so the later calls
+    /// of the same round read it back from there.
+    async fn with_token_retry<F, Fut, T>(&self, mut op: F) -> Result<T>
+    where
+        F: FnMut(String) -> Fut,
+        Fut: Future<Output = Result<T>>,
+    {
+        let token = auth::ensure_valid_token(&self.pool).await?;
+        match op(token.access_token).await {
+            Err(Error::DriveHttp {
+                status: 401,
+                stage,
+                body,
+            }) => {
+                log::info!("drive {stage}: 401, refreshing the access token and retrying once");
+                log::debug!("drive {stage}: 401 body: {body}");
+                let fresh = auth::force_refresh(&self.pool).await?;
+                op(fresh.access_token).await
+            }
+            other => other,
+        }
+    }
+}
+
+// ─────────────── Drive REST calls ───────────────
 
 async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
     let client = reqwest::Client::new();
@@ -120,7 +246,6 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
     let q = if modified_after.is_empty() {
         "trashed = false".to_string()
     } else {
-        // 注意：modifiedTime 比较值需要带单引号
         format!("trashed = false and modifiedTime > '{}'", modified_after)
     };
 
@@ -165,7 +290,7 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
 
 async fn http_find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
     let client = reqwest::Client::new();
-    // q 里的单引号需要反斜杠转义
+    // A quote or backslash in the name would break the query, so escape them.
     let escaped = name.replace('\\', "\\\\").replace('\'', "\\'");
     let q = format!(
         "name = '{}' and 'appDataFolder' in parents and trashed = false",
@@ -293,7 +418,7 @@ async fn http_delete(token: &str, file_id: &str) -> Result<()> {
     Ok(())
 }
 
-// ─────────────── 错误工具 ───────────────
+// ─────────────── Error helpers ───────────────
 
 fn net_err(_stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
     // reqwest::Error 直接走 #[from]，stage 体现在调用栈的 chain 里足够定位
@@ -320,6 +445,7 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
 
 // ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 struct StoredFile {
     name: String,
@@ -332,6 +458,7 @@ struct StoredFile {
 /// - `upsert_by_name` 推进内部时钟，modifiedTime 单调递增
 /// - `delete` 404 视为 Ok，与 HTTP 实现一致
 /// - `list_appdata_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
+#[cfg(test)]
 pub struct InMemoryDriveStore {
     files: Mutex<HashMap<String, StoredFile>>,
     next_id: AtomicU64,
@@ -340,8 +467,12 @@ pub struct InMemoryDriveStore {
     /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
     /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
     fail_next_upserts: AtomicU64,
+    /// 这个假云端认不认当前用户。真后端从自己的凭证表判断，假后端没有那张表，
+    /// 所以由测试用 [`Self::sign_out`] 直接拨。
+    signed_in: AtomicBool,
 }
 
+#[cfg(test)]
 impl InMemoryDriveStore {
     pub fn new() -> Self {
         Self {
@@ -349,7 +480,18 @@ impl InMemoryDriveStore {
             next_id: AtomicU64::new(1),
             clock: Mutex::new(0),
             fail_next_upserts: AtomicU64::new(0),
+            signed_in: AtomicBool::new(true),
         }
+    }
+
+    /// 让这个假云端当作用户没登录。仅测试用。
+    #[allow(dead_code)]
+    pub fn sign_out(&self) {
+        self.signed_in.store(false, Ordering::SeqCst);
+    }
+
+    fn signed_in(&self) -> bool {
+        self.signed_in.load(Ordering::SeqCst)
     }
 
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
@@ -437,6 +579,7 @@ impl InMemoryDriveStore {
     }
 }
 
+#[cfg(test)]
 impl Default for InMemoryDriveStore {
     fn default() -> Self {
         Self::new()

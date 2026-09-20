@@ -25,12 +25,11 @@
 use std::sync::Arc;
 
 use super::io;
-use super::{with_token_retry, Inner};
+use super::Inner;
 use crate::error::Result;
 use crate::memory::MemoryDb;
 use crate::repo::settings::Settings;
 use crate::storage::{DbPool, SqliteResultExt};
-use crate::sync::auth::TokenInfo;
 use crate::sync::payload::{
     AiSummaryPayload, ChatConversationPayload, ChatFilePayload, ChatMessagePayload,
     MemorySessionPayload,
@@ -44,31 +43,27 @@ const CURSOR_MEMORY: &str = "push.memory";
 
 /// 每轮 push 调一次:对启用的数据集做水位线检测,变了才上传。
 /// 单个数据集失败只记 warn(下一轮水位线仍不同会重试),不阻塞其它数据集。
-pub(super) async fn push_optional(
-    inner: &Arc<Inner>,
-    token: &mut TokenInfo,
-    cfg: &Settings,
-) -> Result<()> {
+pub(super) async fn push_optional(inner: &Arc<Inner>, cfg: &Settings) -> Result<()> {
     let self_id = inner.self_id.as_str();
     if self_id.is_empty() {
         return Ok(());
     }
 
     if cfg.sync_ai_summaries {
-        if let Err(e) = push_ai_summaries(inner, token).await {
+        if let Err(e) = push_ai_summaries(inner).await {
             log::warn!("push ai_summaries 失败: {e}");
         }
     }
     if cfg.sync_chat_history {
         if let Some(mem) = &inner.mem {
-            if let Err(e) = push_chat(inner, token, mem).await {
+            if let Err(e) = push_chat(inner, mem).await {
                 log::warn!("push chat 失败: {e}");
             }
         }
     }
     if cfg.sync_screen_memory {
         if let Some(mem) = &inner.mem {
-            if let Err(e) = push_memory(inner, token, mem).await {
+            if let Err(e) = push_memory(inner, mem).await {
                 log::warn!("push memory 失败: {e}");
             }
         }
@@ -76,23 +71,12 @@ pub(super) async fn push_optional(
     Ok(())
 }
 
-async fn upload(
-    inner: &Arc<Inner>,
-    token: &mut TokenInfo,
-    name: &str,
-    content: Vec<u8>,
-) -> Result<()> {
-    with_token_retry(&inner.pool, token, |tok| {
-        let name = name.to_string();
-        let content = content.clone();
-        let drive = &inner.drive;
-        async move { drive.upsert_by_name(&tok, &name, &content).await }
-    })
-    .await?;
+async fn upload(inner: &Arc<Inner>, name: &str, content: Vec<u8>) -> Result<()> {
+    inner.cloud.upsert_by_name(name, &content).await?;
     Ok(())
 }
 
-async fn push_ai_summaries(inner: &Arc<Inner>, token: &mut TokenInfo) -> Result<()> {
+async fn push_ai_summaries(inner: &Arc<Inner>) -> Result<()> {
     let watermark: String = inner
         .pool
         .0
@@ -142,13 +126,13 @@ async fn push_ai_summaries(inner: &Arc<Inner>, token: &mut TokenInfo) -> Result<
         })
         .await?;
     let name = format!("device.{}.ai_summaries.json", inner.self_id);
-    upload(inner, token, &name, serde_json::to_vec(&rows)?).await?;
+    upload(inner, &name, serde_json::to_vec(&rows)?).await?;
     io::write_cursor(&inner.pool, CURSOR_AI, &watermark).await?;
     log::info!("push ai_summaries: {} 行", rows.len());
     Ok(())
 }
 
-async fn push_chat(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) -> Result<()> {
+async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
     let watermark: String = mem
         .0
         .call(|conn| {
@@ -222,7 +206,7 @@ async fn push_chat(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) ->
         })
         .await?;
     let name = format!("device.{}.chat.json", inner.self_id);
-    upload(inner, token, &name, serde_json::to_vec(&payload)?).await?;
+    upload(inner, &name, serde_json::to_vec(&payload)?).await?;
     io::write_cursor(&inner.pool, CURSOR_CHAT, &watermark).await?;
     log::info!(
         "push chat: {} 会话 / {} 消息",
@@ -232,7 +216,7 @@ async fn push_chat(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) ->
     Ok(())
 }
 
-async fn push_memory(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) -> Result<()> {
+async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
     // 水位线 = 本机产出会话的最大 ended_ts(折叠只会推进它)
     let watermark: String = mem
         .0
@@ -306,7 +290,7 @@ async fn push_memory(inner: &Arc<Inner>, token: &mut TokenInfo, mem: &MemoryDb) 
             out.push(b'\n');
         }
         let name = format!("device.{}.memory.{day}.ndjson", inner.self_id);
-        upload(inner, token, &name, out).await?;
+        upload(inner, &name, out).await?;
     }
     io::write_cursor(&inner.pool, CURSOR_MEMORY, &watermark).await?;
     if !days.is_empty() {

@@ -7,10 +7,9 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::io::{self, OutboxRow};
-use super::{with_token_retry, Inner};
+use super::Inner;
 use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
-use crate::sync::auth::{self, TokenInfo};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
     DeviceMetaPayload,
@@ -34,12 +33,10 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     // 并发 push 的危害：慢的一方用旧表内容覆盖 Drive、而新行的 outbox 已被快的一方
     // 删掉 → 那批数据到不了云端；与 purge 并发：读完 outbox 后表被清 → 空内容上云。
     let _gate = inner.flush_gate.lock().await;
-    let mut token: TokenInfo = match auth::ensure_valid_token(&inner.pool).await {
-        Ok(t) => t,
-        // Not signed in is not a failure: there is nothing to push.
-        Err(Error::NotSignedIn) => return Ok(()),
-        Err(e) => return Err(e),
-    };
+    // Not signed in is not a failure: there is nothing to push.
+    if !inner.cloud.ensure_credential().await? {
+        return Ok(());
+    }
 
     // TODO(ADR-0003, ADR-0004): remove once active devices have upgraded past the
     // releases that stopped publishing these files.
@@ -47,7 +44,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
         .legacy_cloud_files_checked
         .load(std::sync::atomic::Ordering::SeqCst)
     {
-        match delete_legacy_cloud_files(inner, &mut token).await {
+        match delete_legacy_cloud_files(inner).await {
             Ok(()) => inner
                 .legacy_cloud_files_checked
                 .store(true, std::sync::atomic::Ordering::SeqCst),
@@ -61,7 +58,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     // 放在 outbox 早退之前保证每轮 push tick 都有机会跑到。
     match crate::repo::settings::load(&inner.pool).await {
         Ok(cfg) => {
-            if let Err(e) = super::datasets::push_optional(inner, &mut token, &cfg).await {
+            if let Err(e) = super::datasets::push_optional(inner, &cfg).await {
                 log::warn!("push 可选数据集失败: {e}");
             }
         }
@@ -104,13 +101,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
                 continue;
             }
         };
-        let upsert_res = with_token_retry(&inner.pool, &mut token, |tok| {
-            let name = name.clone();
-            let content = content.clone();
-            let drive = &inner.drive;
-            async move { drive.upsert_by_name(&tok, &name, &content).await }
-        })
-        .await;
+        let upsert_res = inner.cloud.upsert_by_name(&name, &content).await;
         match upsert_res {
             Ok(_) => succeeded_ids.extend(&ids),
             Err(e) => {
@@ -148,7 +139,7 @@ const LEGACY_CLOUD_FILE_KINDS: [&str; 2] = ["app_categories", "process_paths"];
 /// own files once it upgrades.
 ///
 /// TODO(ADR-0003, ADR-0004): remove once active devices have upgraded.
-async fn delete_legacy_cloud_files(inner: &Arc<Inner>, token: &mut TokenInfo) -> Result<()> {
+async fn delete_legacy_cloud_files(inner: &Arc<Inner>) -> Result<()> {
     if inner.self_id.is_empty() {
         return Ok(());
     }
@@ -156,18 +147,9 @@ async fn delete_legacy_cloud_files(inner: &Arc<Inner>, token: &mut TokenInfo) ->
         .iter()
         .map(|kind| format!("device.{}.{kind}.json", inner.self_id))
         .collect();
-    let files = with_token_retry(&inner.pool, token, |tok| {
-        let drive = &inner.drive;
-        async move { drive.list_appdata_files(&tok, "").await }
-    })
-    .await?;
+    let files = inner.cloud.list("").await?;
     for file in files.into_iter().filter(|f| names.contains(&f.name)) {
-        with_token_retry(&inner.pool, token, |tok| {
-            let drive = &inner.drive;
-            let id = file.id.clone();
-            async move { drive.delete(&tok, &id).await }
-        })
-        .await?;
+        inner.cloud.delete(&file.id).await?;
         log::info!("push: removed {} from the cloud", file.name);
     }
     Ok(())
