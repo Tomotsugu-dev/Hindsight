@@ -1,6 +1,6 @@
-//! 同步引擎：登录后台跑两件事
-//!   - push：每 30 秒把 sync_outbox 翻成"哪些文件脏了"，对每个脏文件全量重写到 Drive appDataFolder
-//!   - pull：每 60 秒列 Drive 上其他设备的文件，按 modifiedTime 增量下载并 LWW merge 到本地
+//! 同步引擎：登录后台跑两件事，间隔由后端定（Drive：push 每 30 秒、pull 每 60 秒）
+//!   - push：把 sync_outbox 翻成"哪些文件脏了"，对每个脏文件全量重写到云端
+//!   - pull：列云端上其他设备的文件，按修改时间增量下载并 LWW merge 到本地
 //!
 //! 失败走指数退避（最多 1 小时），attempts > 10 留在 outbox 作为 dead-letter，UI 可以看见。
 
@@ -13,7 +13,6 @@ mod push;
 mod e2e_tests;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -47,7 +46,7 @@ fn sync_error_prefix(e: &Error) -> &'static str {
         // scope 不足：当前 token 没 drive.appdata 权限，必须重新走同意页
         Error::DriveScopeInsufficient => ERR_PREFIX_CRED_EXPIRED,
         // 其它：网络超时、Drive 5xx、refresh 端点 5xx 等。
-        // 后台 30s tick 会自动重试，UI 不必催用户重新登录。
+        // 后台下一个 tick 会自动重试，UI 不必催用户重新登录。
         _ => ERR_PREFIX_TRANSIENT,
     }
 }
@@ -67,9 +66,6 @@ async fn record_round_failure(inner: &Inner, round: &str, e: &Error) {
     log::debug!("sync {round}: {e}");
     inner.status.write().await.last_error = Some(format_sync_error(e));
 }
-
-const PUSH_INTERVAL_SECS: u64 = 30;
-const PULL_INTERVAL_SECS: i64 = 60;
 
 /// What the Devices page shows about sync. Returned by `sync_status`.
 #[derive(Default, Clone, Serialize)]
@@ -254,7 +250,7 @@ impl SyncEngine {
         s
     }
 
-    /// UI "立即同步" 按钮：跑一次 push + pull，不等下个 30s tick。
+    /// UI "立即同步" 按钮：跑一次 push + pull，不等下个 tick。
     pub async fn sync_now(&self) -> Result<()> {
         // 已有一次在跑(手动或后台 tick)→ 明确拒绝而不是排队再跑一遍。
         // 前端按 syncInFlight 禁用按钮,正常点不到这里;真racing到了给人话。
@@ -281,6 +277,9 @@ impl SyncEngine {
 }
 
 async fn run_loop(inner: Arc<Inner>) {
+    let tick = inner.cloud.push_interval();
+    let pull_every = chrono::Duration::from_std(inner.cloud.pull_interval())
+        .expect("a backend's pull interval is minutes, not centuries");
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
         let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
@@ -291,7 +290,7 @@ async fn run_loop(inner: Arc<Inner>) {
         let now = Utc::now();
         let should_pull = match last_pull {
             None => true,
-            Some(t) => (now - t).num_seconds() >= PULL_INTERVAL_SECS,
+            Some(t) => now - t >= pull_every,
         };
         if should_pull {
             if let Err(e) = pull::flush_pull(&inner).await {
@@ -301,6 +300,6 @@ async fn run_loop(inner: Arc<Inner>) {
         }
         drop(_in_flight); // sleep 期间不算"同步中"
 
-        tokio::time::sleep(Duration::from_secs(PUSH_INTERVAL_SECS)).await;
+        tokio::time::sleep(tick).await;
     }
 }
