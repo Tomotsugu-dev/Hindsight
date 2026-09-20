@@ -22,10 +22,14 @@
 //! `InMemory` keeps the files in a map for the end-to-end tests, with its own
 //! clock so that modification times only ever move forward.
 
+#[cfg(test)]
 use std::collections::HashMap;
 use std::future::Future;
+#[cfg(test)]
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(test)]
 use std::sync::Arc;
+#[cfg(test)]
 use tokio::sync::Mutex;
 
 use rand::Rng;
@@ -85,9 +89,8 @@ struct ListResp {
 /// what each method must do.
 pub enum CloudBackend {
     Drive(DriveClient),
-    /// The tests' stand-in; the shipped binary never matches this arm, which
-    /// clippy reports as dead code.
-    #[allow(dead_code)]
+    /// The tests' stand-in; not compiled into the shipped binary.
+    #[cfg(test)]
     InMemory(Arc<InMemoryDriveStore>),
 }
 
@@ -108,6 +111,7 @@ impl CloudBackend {
     pub async fn ensure_credential(&self) -> Result<bool> {
         match self {
             CloudBackend::Drive(c) => c.ensure_credential().await,
+            #[cfg(test)]
             CloudBackend::InMemory(store) => Ok(store.signed_in()),
         }
     }
@@ -118,6 +122,7 @@ impl CloudBackend {
     pub async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
         match self {
             CloudBackend::Drive(c) => c.list(modified_after).await,
+            #[cfg(test)]
             CloudBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
         }
     }
@@ -126,6 +131,7 @@ impl CloudBackend {
     pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         match self {
             CloudBackend::Drive(c) => c.download(file_id).await,
+            #[cfg(test)]
             CloudBackend::InMemory(store) => store.download(file_id).await,
         }
     }
@@ -136,6 +142,7 @@ impl CloudBackend {
     pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         match self {
             CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
+            #[cfg(test)]
             CloudBackend::InMemory(store) => store.upsert_by_name(name, content).await,
         }
     }
@@ -145,6 +152,7 @@ impl CloudBackend {
     pub async fn delete(&self, file_id: &str) -> Result<()> {
         match self {
             CloudBackend::Drive(c) => c.delete(file_id).await,
+            #[cfg(test)]
             CloudBackend::InMemory(store) => store.delete(file_id).await,
         }
     }
@@ -437,6 +445,7 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
 
 // ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 struct StoredFile {
     name: String,
@@ -449,6 +458,7 @@ struct StoredFile {
 /// - `upsert_by_name` 推进内部时钟，modifiedTime 单调递增
 /// - `delete` 404 视为 Ok，与 HTTP 实现一致
 /// - `list_appdata_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
+#[cfg(test)]
 pub struct InMemoryDriveStore {
     files: Mutex<HashMap<String, StoredFile>>,
     next_id: AtomicU64,
@@ -462,6 +472,7 @@ pub struct InMemoryDriveStore {
     signed_in: AtomicBool,
 }
 
+#[cfg(test)]
 impl InMemoryDriveStore {
     pub fn new() -> Self {
         Self {
@@ -568,6 +579,7 @@ impl InMemoryDriveStore {
     }
 }
 
+#[cfg(test)]
 impl Default for InMemoryDriveStore {
     fn default() -> Self {
         Self::new()
