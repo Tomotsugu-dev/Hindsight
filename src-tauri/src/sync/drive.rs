@@ -44,6 +44,12 @@ use crate::sync::auth;
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
+/// Drive's sync cadence: the intervals sync has always run at. Drive filters
+/// listings server-side and has no request budget worth counting, so there is
+/// nothing to hold back for.
+const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(30);
+const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(60);
+
 /// Cloud file metadata (id + name + modified time), without the file content.
 #[derive(Debug, Clone)]
 pub struct FileMeta {
@@ -112,6 +118,26 @@ impl CloudBackend {
             CloudBackend::Drive(_) => Duration::ZERO,
             #[cfg(test)]
             CloudBackend::InMemory(_) => Duration::ZERO,
+        }
+    }
+
+    /// How long the background loop sleeps between ticks. Every tick pushes;
+    /// a tick also pulls once `pull_interval` has passed since the last pull.
+    /// A backend that counts requests (WebDAV, ADR-0007 §3) sets minutes.
+    pub fn push_interval(&self) -> Duration {
+        match self {
+            CloudBackend::Drive(_) => DRIVE_PUSH_INTERVAL,
+            #[cfg(test)]
+            CloudBackend::InMemory(_) => DRIVE_PUSH_INTERVAL,
+        }
+    }
+
+    /// The least time between two pulls; see [`Self::push_interval`].
+    pub fn pull_interval(&self) -> Duration {
+        match self {
+            CloudBackend::Drive(_) => DRIVE_PULL_INTERVAL,
+            #[cfg(test)]
+            CloudBackend::InMemory(_) => DRIVE_PULL_INTERVAL,
         }
     }
 

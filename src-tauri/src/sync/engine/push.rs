@@ -73,7 +73,7 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     // 把 outbox 行分组到"脏文件"
     let (groups, ungroupable_ids) = group_outbox(&rows);
     // 没法分组的行（entity 未知 / payload 损坏）立刻 drop：它们永远不可能发出去，
-    // 留着会每 30s 重读一次、占 batch 名额、把 pending 计数永久顶高
+    // 留着会每个 tick 重读一次、占 batch 名额、把 pending 计数永久顶高
     if !ungroupable_ids.is_empty() {
         io::delete_outbox_rows(&inner.pool, &ungroupable_ids).await?;
     }
