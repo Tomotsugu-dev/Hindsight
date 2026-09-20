@@ -6,6 +6,7 @@
 
 use rusqlite::OptionalExtension;
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -366,9 +367,28 @@ async fn pull_stream(
         })
         .last();
     if let Some(t) = cursor_advance {
+        let t = rewind_cursor(&t, inner.cloud.time_precision())?;
         io::write_cursor(&inner.pool, cursor_key, &t).await?;
     }
     Ok(applied)
+}
+
+/// Rewinds the cursor for backends whose timestamps have only coarse precision.
+/// Without the rewind, a file written in the same second as the last handled
+/// file could be skipped by the next listing.
+///
+/// The result keeps the backend's RFC3339 format so string comparison remains
+/// valid. An invalid cursor means the backend returned an invalid timestamp.
+fn rewind_cursor(cursor: &str, back: Duration) -> Result<String> {
+    if back.is_zero() {
+        return Ok(cursor.to_string());
+    }
+    let parsed = chrono::DateTime::parse_from_rfc3339(cursor)
+        .map_err(|_| Error::SyncTimeFormat(cursor.to_string()))?;
+    let back = chrono::Duration::from_std(back).expect("a backend's time precision is tiny");
+    Ok((parsed - back)
+        .with_timezone(&chrono::Utc)
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 
 async fn merge_activities(
@@ -893,6 +913,31 @@ mod tests {
 
     const DAY: &str = "2026-05-15";
     const OTHER_DEVICE: &str = "device-a";
+
+    /// 精度为 0 时原串返回，一个字节都不碰——Drive 的毫秒时间戳格式不能被改写。
+    #[test]
+    fn rewind_cursor_zero_precision_returns_input_untouched() {
+        let cursor = "2026-05-15T10:00:00.123456789Z";
+        assert_eq!(rewind_cursor(cursor, Duration::ZERO).unwrap(), cursor);
+    }
+
+    /// 秒级精度退一秒，结果保持「秒 + Z」的形状，能跟后端返回的字符串按字典序比。
+    #[test]
+    fn rewind_cursor_one_second_keeps_rfc3339_shape() {
+        assert_eq!(
+            rewind_cursor("2026-05-15T10:00:00Z", Duration::from_secs(1)).unwrap(),
+            "2026-05-15T09:59:59Z"
+        );
+    }
+
+    /// 解析不了的游标是后端的 bug，要整轮报错，不能悄悄跳过退格。
+    #[test]
+    fn rewind_cursor_unparseable_is_an_error() {
+        assert!(matches!(
+            rewind_cursor("not-a-time", Duration::from_secs(1)),
+            Err(Error::SyncTimeFormat(_))
+        ));
+    }
 
     /// 跨设备路径 (device_id != self_id)：
     /// - ndjson 中的 id 全部覆盖到 mirror（UPDATE 已存在 / INSERT 新行）

@@ -116,6 +116,11 @@ pub enum Error {
     #[error("sync ndjson utf8: {0}")]
     SyncUtf8(#[from] std::str::Utf8Error),
 
+    /// 后端给的文件修改时间不是 RFC3339。游标按字符串比较，格式错了整套增量拉取
+    /// 都不可信，所以是整轮失败，不是跳过一个文件。
+    #[error("sync: cloud modified time is not RFC3339: {0}")]
+    SyncTimeFormat(String),
+
     // ───────────── 用户输入 ─────────────
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
