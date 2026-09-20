@@ -230,17 +230,6 @@ impl SyncEngine {
         }
     }
 
-    /// 重置 pull 游标到 epoch:可选数据集开关从关到开时调,让 Drive 上的
-    /// 历史文件重新入列(所有 merge 都幂等,重拉无害,只多几次 download)。
-    pub async fn reset_pull_cursor(&self) -> Result<()> {
-        io::write_cursor(
-            &self.inner.pool,
-            pull::PULL_CURSOR_KEY,
-            "1970-01-01T00:00:00Z",
-        )
-        .await
-    }
-
     /// 暂停 push/pull：等在途 flush 结束并挡住新的，直到返回的 guard 被 drop。
     /// purge_local_data / purge_cloud_data 这类"动表"的命令在整个清理期间持有它。
     pub async fn pause_flushes(&self) -> tokio::sync::MutexGuard<'_, ()> {

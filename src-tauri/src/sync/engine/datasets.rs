@@ -18,8 +18,9 @@
 //! - memory:会话按 guid 合并,ended_ts 更新则覆盖 text/title(FTS 触发器自动跟进),
 //!   远端行标 origin_device = 源设备,永不回推(push 只导 origin_device IS NULL)。
 //!
-//! 开关语义:settings 三挡分别门控各自数据集的**推与拉**。开关从关到开时
-//! 命令层会重置 pull 游标,让历史文件重新入列(合并幂等,重拉无害)。
+//! 开关语义:settings 三挡分别门控各自数据集的**推与拉**。拉取时每一类有自己的
+//! 游标(`pull.ai_summaries` / `pull.chat` / `pull.memory`,见 ADR-0006):开关关着
+//! 那一类不拉、游标不动,打开后从停下的地方接着拉,历史文件自然补上。
 
 use std::sync::Arc;
 

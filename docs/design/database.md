@@ -106,14 +106,16 @@ Foreign keys: none.
 
 ## sync_cursor
 
-Where sync has got to: one row for pull, and one per optional dataset for push. The column name only fits the pull row.
+Where sync has got to: one row per pull stream, and one per optional dataset for push. The column name only fits the pull rows.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| entity | TEXT | Primary key | `drive_files`, `push.ai_summaries`, `push.chat` or `push.memory` |
+| entity | TEXT | Primary key | `drive_files`, `pull.ai_summaries`, `pull.chat`, `pull.memory`, `push.ai_summaries`, `push.chat` or `push.memory` |
 | last_pulled_at | TEXT | NOT NULL, DEFAULT epoch | See below |
 
-`drive_files` is the pull cursor: every cloud file modified at or before this time (`modifiedTime`, UTC, as Google reports it) has been merged or deliberately skipped. The next pull lists only the files modified strictly after it, so the cursor may move only across handled files, and stops strictly before the first file that failed: a failed file at or before the cursor would never be listed again.
+The four `drive_files` / `pull.*` rows are the pull cursors, one per stream: `drive_files` covers activities, categories, app groups, members, icons, device meta and tombstones, and each `pull.*` row covers one optional dataset (ADR-0006). For its own kind of file, a cursor says that every cloud file modified at or before this time (`modifiedTime`, UTC, as Google reports it) has been merged or deliberately skipped. A stream runs only while its dataset's switch is on; while it is off its cursor stays put, so turning the switch on resumes from there instead of re-merging everything.
+
+Each round lists files once, from the earliest cursor among the streams that run, and a stream's cursor may move only across the files it has handled, stopping strictly before the first file of its own kind that failed: a failed file at or before the cursor would never be listed again.
 
 The `push.*` rows record what each optional dataset looked like at its last upload. Before each push the value is computed again from the tables; unchanged means nothing is uploaded.
 
@@ -121,7 +123,7 @@ The `push.*` rows record what each optional dataset looked like at its last uplo
 - `push.chat`: `<max updated_ts>:<row count>` of `chat_conversations`, then `|`, then `<max created_ts>:<row count>` of `chat_messages`. Both tables are in the memory database.
 - `push.memory`: the latest `ended_ts` among this device's own rows in `text_sessions` (memory database). It is also where the next upload starts: only the days with a session that ended after it are uploaded again.
 
-A missing row reads as the epoch, meaning "never": the first pull lists every cloud file, and the first push of a dataset uploads it. Setting `drive_files` back to the epoch makes the next pull go through every cloud file again. The app does this when an optional dataset is switched on, because while it was off the cursor passed that dataset's files without downloading them.
+A missing row reads as the epoch, meaning "never": a row appears the first time that cursor or fingerprint is written. So a new install pulls every cloud file, a dataset switched on for the first time pulls its whole history, and the first push of a dataset uploads it. Nothing sets a cursor back.
 
 Indexes: none beyond the primary key.
 Foreign keys: none.
