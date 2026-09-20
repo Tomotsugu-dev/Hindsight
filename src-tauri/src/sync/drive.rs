@@ -29,6 +29,7 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(test)]
 use std::sync::Arc;
+use std::time::Duration;
 #[cfg(test)]
 use tokio::sync::Mutex;
 
@@ -99,6 +100,19 @@ impl CloudBackend {
     /// from `pool`'s `auth_state` table.
     pub fn drive(pool: DbPool) -> Self {
         CloudBackend::Drive(DriveClient { pool })
+    }
+
+    /// How much pull should rewind its cursor to avoid missing files that share
+    /// the same timestamp.
+    ///
+    /// Drive uses zero because its timestamps are precise enough, and pull already
+    /// stops before failed files instead of advancing past them.
+    pub fn time_precision(&self) -> Duration {
+        match self {
+            CloudBackend::Drive(_) => Duration::ZERO,
+            #[cfg(test)]
+            CloudBackend::InMemory(_) => Duration::ZERO,
+        }
     }
 
     /// Readies the credential this round needs, reading the local credential
