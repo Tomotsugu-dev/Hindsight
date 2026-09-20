@@ -1,6 +1,8 @@
-//! 云后端：列、下载、写、删云上的文件。引擎只调这四个动作，不知道对面是谁。
+//! The cloud storage sync runs on. Files live in one flat folder and are
+//! addressed by name; the operations of [`CloudBackend`] are all the engine
+//! needs, and every backend must give them the same meaning.
 //!
-//! 生产路径是 Google Drive REST 的 4 个端点（[`DriveClient`] 分支内部 fn）：
+//! `Drive` talks to the Google Drive REST API:
 //!
 //!   GET    https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=...
 //!   GET    https://www.googleapis.com/drive/v3/files/<id>?alt=media
@@ -8,16 +10,17 @@
 //!   PATCH  https://www.googleapis.com/upload/drive/v3/files/<id>?uploadType=media
 //!   DELETE https://www.googleapis.com/drive/v3/files/<id>
 //!
-//! 所有文件都落进 `appDataFolder`：每个 OAuth client 自己的隐藏目录，浏览器看不见，
-//! 多设备共享，不需要 rules / index / region。
+//! Its folder is `appDataFolder`: hidden from the user, private to the OAuth
+//! client, shared by every device signed into the same account with the same
+//! client id.
 //!
-//! 凭证由后端自己取：[`DriveClient`] 持一份 `DbPool`，每次请求前从 `auth_state`
-//! 读 access token，Drive 答 401 就刷新后重试一次。**约束：后端只读凭证那张表，
-//! 业务表（outbox、cursor、activities）是引擎的事。**
+//! Each backend carries its own credential: [`DriveClient`] holds a `DbPool`,
+//! reads the access token from `auth_state` before every request and refreshes
+//! it once when Drive answers 401. That table is the only one a backend reads;
+//! the outbox, the cursors and the activity tables belong to the engine.
 //!
-//! [`CloudBackend`] 注入到 [`crate::sync::engine::SyncEngine`]，生产用 `Drive`，
-//! 集成测试用 `InMemory`（HashMap 模拟 appDataFolder，时钟 + 唯一 id 单调），
-//! 见 `engine/e2e_tests.rs`。
+//! `InMemory` keeps the files in a map for the end-to-end tests, with its own
+//! clock so that modification times only ever move forward.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -36,18 +39,25 @@ use crate::sync::auth;
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
-/// Drive 文件元数据（id + name + 修改时间），不含文件内容。
+/// Cloud file metadata (id + name + modified time), without the file content.
 #[derive(Debug, Clone)]
 pub struct FileMeta {
+    /// The backend's own handle for the file, assigned when the file is created
+    /// and opaque to us. Download, overwrite and delete address the file by it.
     pub id: String,
+    /// The name Hindsight gave the file, `device.<device id>.<kind>.json`. It is
+    /// what pull reads to tell what the file holds and which device wrote it.
     pub name: String,
-    /// RFC3339
+    /// Time in RFC3339 format.
     pub modified_time: String,
-    /// 文件大小 (bytes)；保留给将来用于诊断 / "云端用量"展示
+    /// File size in bytes; reserved for future diagnostics / "cloud usage" display.
     #[allow(dead_code)]
     pub size: Option<u64>,
 }
 
+/// One entry of Google's file listing, as it arrives. `size` comes as a string
+/// and is missing for folders; the rest of the engine sees the converted
+/// `FileMeta` instead.
 #[derive(Debug, Deserialize)]
 struct RawFile {
     id: String,
@@ -58,35 +68,43 @@ struct RawFile {
     size: Option<String>,
 }
 
+/// One page of Google's file listing.
 #[derive(Debug, Deserialize)]
 struct ListResp {
     #[serde(default)]
     files: Vec<RawFile>,
+    /// Present only when more files remain; the next request sends it back as
+    /// `pageToken` to get the following page.
     #[serde(rename = "nextPageToken", default)]
     next_page_token: Option<String>,
 }
 
-/// 云后端：生产 = Google Drive / 测试 = InMemory。
-///
-/// 注入到 [`crate::sync::engine::SyncEngine`]；push/pull 只调这四个方法，
-/// 不直接打 reqwest，也不经手凭证。
+/// The cloud behind sync. The sync engine holds one, and push, pull and the
+/// cloud-clearing commands reach the cloud only through its methods.
+/// `InMemory` stands in for a real cloud in tests and is the reference for
+/// what each method must do.
 pub enum CloudBackend {
     Drive(DriveClient),
-    /// 仅集成测试用；生产 binary 不会 match 到这条 → clippy 误报 dead_code
+    /// The tests' stand-in; the shipped binary never matches this arm, which
+    /// clippy reports as dead code.
     #[allow(dead_code)]
     InMemory(Arc<InMemoryDriveStore>),
 }
 
 impl CloudBackend {
-    /// 生产入口：打 Google Drive，凭证从 `pool` 的 `auth_state` 表取。
+    /// The backend the app runs on: Google Drive, with the credential taken
+    /// from `pool`'s `auth_state` table.
     pub fn drive(pool: DbPool) -> Self {
         CloudBackend::Drive(DriveClient { pool })
     }
 
-    /// 备好这一轮要用的凭证。会读本地凭证表，必要时刷新。
+    /// Readies the credential this round needs, reading the local credential
+    /// table and refreshing when that is due.
     ///
-    /// `Ok(false)` = 没登录这个后端，push / pull 整轮跳过，不算失败；
-    /// `Err` = 凭证在但拿不到能用的（刷新被拒等），整轮失败，UI 上要出错误条幅。
+    /// `Ok(false)` means the user is not signed in to this backend: push and
+    /// pull skip the round and it does not count as a failure. `Err` means a
+    /// credential is there but no usable one came of it, a refused refresh for
+    /// instance; the round fails and the Devices page shows the error.
     pub async fn ensure_credential(&self) -> Result<bool> {
         match self {
             CloudBackend::Drive(c) => c.ensure_credential().await,
@@ -94,8 +112,9 @@ impl CloudBackend {
         }
     }
 
-    /// 列 `modified_after` 之后修改过的文件（按修改时间升序）。
-    /// `modified_after` 为空字符串或 `1970-01-01T00:00:00Z` 时，列全部。
+    /// Lists the files modified strictly after `modified_after`, oldest first;
+    /// an empty string lists everything. Pull passes its cursor here, so
+    /// "strictly after" and the ordering are part of the contract.
     pub async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
         match self {
             CloudBackend::Drive(c) => c.list(modified_after).await,
@@ -103,7 +122,7 @@ impl CloudBackend {
         }
     }
 
-    /// 下载文件全部内容。
+    /// Downloads a file's whole content into memory.
     pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         match self {
             CloudBackend::Drive(c) => c.download(file_id).await,
@@ -111,7 +130,9 @@ impl CloudBackend {
         }
     }
 
-    /// 按 name upsert：有则更新内容，没有就创建。返回文件 id。
+    /// Writes a file by name: replaces the content when the name exists,
+    /// creates the file otherwise. Either way the modification time moves to
+    /// now. Returns the file's id.
     pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         match self {
             CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
@@ -119,7 +140,8 @@ impl CloudBackend {
         }
     }
 
-    /// 删除一个文件。404 视为成功（幂等删）。
+    /// Deletes a file for good; there is no trash to recover it from. Deleting
+    /// a file that is already gone counts as success.
     pub async fn delete(&self, file_id: &str) -> Result<()> {
         match self {
             CloudBackend::Drive(c) => c.delete(file_id).await,
@@ -128,16 +150,15 @@ impl CloudBackend {
     }
 }
 
-// ─────────────── DriveClient：Google Drive 后端 ───────────────
+// ─────────────── Google Drive ───────────────
 
-/// Google Drive 后端。`pool` 只用来读写 `auth_state`（access token 和它的过期时间）。
+/// The Google Drive backend. `pool` serves one purpose: reading and writing
+/// `auth_state`, which holds the access token and when it expires.
 pub struct DriveClient {
     pool: DbPool,
 }
 
 impl DriveClient {
-    /// 三种结果对应 `auth_state` 的三种状态：四列齐且 token 可用 / 四列不齐（没登录）/
-    /// 四列齐但刷新被 Google 拒（授权被撤销、refresh token 过期）。
     async fn ensure_credential(&self) -> Result<bool> {
         match auth::ensure_valid_token(&self.pool).await {
             Ok(_) => Ok(true),
@@ -179,15 +200,12 @@ impl DriveClient {
         .await
     }
 
-    /// 带着当前 access token 跑一次 `op`；Drive 答 401 就刷新 token 再跑一次，
-    /// 返回第二次的结果。只重试一次；刷新本身失败就返回那个错误，`op` 不再跑。
+    /// Why the retry exists: `ensure_valid_token` only checks the expiry time
+    /// stored locally, and Google can reject a token before that — wake from
+    /// sleep, clock drift, rotation on Google's side.
     ///
-    /// 这层存在的理由：`ensure_valid_token` 只看本地存的过期时间，Google 可能在那
-    /// 之前就拒绝一个 token（睡眠唤醒、时钟漂移、Google 侧轮换）。刷新一次就能过，
-    /// 不该让用户重新登录。
-    ///
-    /// 刷新出来的新 token 由 `force_refresh` 写回 `auth_state`，所以本轮后面的调用
-    /// 各自 `ensure_valid_token` 时读到的就是新的。
+    /// `force_refresh` writes the new token to `auth_state`, so the later calls
+    /// of the same round read it back from there.
     async fn with_token_retry<F, Fut, T>(&self, mut op: F) -> Result<T>
     where
         F: FnMut(String) -> Fut,
@@ -210,7 +228,7 @@ impl DriveClient {
     }
 }
 
-// ─────────────── HTTP impl（生产路径，原 pub async fn 移到这里） ───────────────
+// ─────────────── Drive REST calls ───────────────
 
 async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
     let client = reqwest::Client::new();
@@ -220,7 +238,6 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
     let q = if modified_after.is_empty() {
         "trashed = false".to_string()
     } else {
-        // 注意：modifiedTime 比较值需要带单引号
         format!("trashed = false and modifiedTime > '{}'", modified_after)
     };
 
@@ -265,7 +282,7 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
 
 async fn http_find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
     let client = reqwest::Client::new();
-    // q 里的单引号需要反斜杠转义
+    // A quote or backslash in the name would break the query, so escape them.
     let escaped = name.replace('\\', "\\\\").replace('\'', "\\'");
     let q = format!(
         "name = '{}' and 'appDataFolder' in parents and trashed = false",
@@ -393,7 +410,7 @@ async fn http_delete(token: &str, file_id: &str) -> Result<()> {
     Ok(())
 }
 
-// ─────────────── 错误工具 ───────────────
+// ─────────────── Error helpers ───────────────
 
 fn net_err(_stage: &'static str) -> impl Fn(reqwest::Error) -> Error {
     // reqwest::Error 直接走 #[from]，stage 体现在调用栈的 chain 里足够定位
@@ -440,9 +457,8 @@ pub struct InMemoryDriveStore {
     /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
     /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
     fail_next_upserts: AtomicU64,
-    /// 这个假云端认不认当前用户。默认 true；[`Self::sign_out`] 置 false，
-    /// 让 `ensure_credential` 走"没登录"分支。真后端从自己的凭证表判断，
-    /// 假后端没有那张表，所以由测试直接拨。
+    /// 这个假云端认不认当前用户。真后端从自己的凭证表判断，假后端没有那张表，
+    /// 所以由测试用 [`Self::sign_out`] 直接拨。
     signed_in: AtomicBool,
 }
 
