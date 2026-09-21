@@ -18,7 +18,8 @@ use chrono::{DateTime, Duration, Local, Timelike};
 
 use crate::repo::test_util::DataDirOverride;
 use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
-use crate::sync::drive::{CloudBackend, InMemoryDriveStore};
+use crate::sync::cloud::CloudBackend;
+use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::engine::SyncEngine;
 
 struct TestDevice {

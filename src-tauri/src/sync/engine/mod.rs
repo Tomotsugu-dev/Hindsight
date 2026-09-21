@@ -21,7 +21,7 @@ use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
-use crate::sync::drive::CloudBackend;
+use crate::sync::cloud::CloudBackend;
 
 /// Prefix of `last_error` when the user has to sign in again. The Devices page
 /// matches these prefixes as written.
