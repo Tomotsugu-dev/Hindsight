@@ -9,9 +9,10 @@ use quick_xml::NsReader;
 
 use crate::error::{Error, Result};
 
-// ─────────────── Directory Layout（ADR-0007 §1） ───────────────
+// ─────────────── Directory Layout (ADR-0007 §1) ───────────────
 //
-// 路径相对于同步根目录（服务器上的 `/hindsight/`），根由客户端拼。
+// Paths are relative to the sync root (`/hindsight/` on the server); the
+// client prepends the root.
 //
 //   device.<id>.activities.<day>.ndjson  ↔  <id>/activities/<year>/<day>.ndjson
 //   device.<id>.memory.<day>.ndjson      ↔  <id>/memory/<year>/<day>.ndjson

@@ -258,7 +258,7 @@ async fn pull_stream(
     inner: &Arc<Inner>,
     cursor_key: &str,
     cursor: &str,
-    files: &[crate::sync::drive::FileMeta],
+    files: &[crate::sync::cloud::FileMeta],
     self_id: &str,
     ignore_rules: &[IgnoreRule],
 ) -> Result<u64> {

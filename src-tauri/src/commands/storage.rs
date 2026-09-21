@@ -827,7 +827,8 @@ mod tests {
 
     // ═════════════ forget_remote_device_impl（桩照抄 e2e 的 InMemoryDriveStore 用法）═════════════
 
-    use crate::sync::drive::{CloudBackend, InMemoryDriveStore};
+    use crate::sync::cloud::CloudBackend;
+    use crate::sync::drive::InMemoryDriveStore;
 
     /// e2e 同款 fake auth：四列全 Some + expires_at 远未来，让
     /// `ensure_valid_token` 走"未过期直接复用"分支，零网络调用。

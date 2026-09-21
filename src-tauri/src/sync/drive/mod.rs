@@ -1,7 +1,3 @@
-//! The cloud storage sync runs on. Files live in one flat folder and are
-//! addressed by name; the operations of [`CloudBackend`] are all the engine
-//! needs, and every backend must give them the same meaning.
-//!
 //! `Drive` talks to the Google Drive REST API:
 //!
 //!   GET    https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=...
@@ -18,20 +14,15 @@
 //! reads the access token from `auth_state` before every request and refreshes
 //! it once when Drive answers 401. That table is the only one a backend reads;
 //! the outbox, the cursors and the activity tables belong to the engine.
-//!
-//! `InMemory` keeps the files in a map for the end-to-end tests, with its own
-//! clock so that modification times only ever move forward.
 
 #[cfg(test)]
-use std::collections::HashMap;
+mod fake;
+
+#[cfg(test)]
+pub use fake::InMemoryDriveStore;
+
 use std::future::Future;
-#[cfg(test)]
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-#[cfg(test)]
-use std::sync::Arc;
 use std::time::Duration;
-#[cfg(test)]
-use tokio::sync::Mutex;
 
 use rand::Rng;
 use serde::Deserialize;
@@ -40,6 +31,7 @@ use serde_json::json;
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::auth;
+use crate::sync::cloud::FileMeta;
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
@@ -47,24 +39,8 @@ const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 /// Drive's sync cadence: the intervals sync has always run at. Drive filters
 /// listings server-side and has no request budget worth counting, so there is
 /// nothing to hold back for.
-const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(30);
-const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(60);
-
-/// Cloud file metadata (id + name + modified time), without the file content.
-#[derive(Debug, Clone)]
-pub struct FileMeta {
-    /// The backend's own handle for the file, assigned when the file is created
-    /// and opaque to us. Download, overwrite and delete address the file by it.
-    pub id: String,
-    /// The name Hindsight gave the file, `device.<device id>.<kind>.json`. It is
-    /// what pull reads to tell what the file holds and which device wrote it.
-    pub name: String,
-    /// Time in RFC3339 format.
-    pub modified_time: String,
-    /// File size in bytes; reserved for future diagnostics / "cloud usage" display.
-    #[allow(dead_code)]
-    pub size: Option<u64>,
-}
+pub(super) const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(30);
+pub(super) const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(60);
 
 /// One entry of Google's file listing, as it arrives. `size` comes as a string
 /// and is missing for folders; the rest of the engine sees the converted
@@ -90,116 +66,6 @@ struct ListResp {
     next_page_token: Option<String>,
 }
 
-/// The cloud behind sync. The sync engine holds one, and push, pull and the
-/// cloud-clearing commands reach the cloud only through its methods.
-/// `InMemory` stands in for a real cloud in tests and is the reference for
-/// what each method must do.
-pub enum CloudBackend {
-    Drive(DriveClient),
-    /// The tests' stand-in; not compiled into the shipped binary.
-    #[cfg(test)]
-    InMemory(Arc<InMemoryDriveStore>),
-}
-
-impl CloudBackend {
-    /// The backend the app runs on: Google Drive, with the credential taken
-    /// from `pool`'s `auth_state` table.
-    pub fn drive(pool: DbPool) -> Self {
-        CloudBackend::Drive(DriveClient { pool })
-    }
-
-    /// How much pull should rewind its cursor to avoid missing files that share
-    /// the same timestamp.
-    ///
-    /// Drive uses zero because its timestamps are precise enough, and pull already
-    /// stops before failed files instead of advancing past them.
-    pub fn time_precision(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(_) => Duration::ZERO,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => Duration::ZERO,
-        }
-    }
-
-    /// How long the background loop sleeps between ticks. Every tick pushes;
-    /// a tick also pulls once `pull_interval` has passed since the last pull.
-    /// A backend that counts requests (WebDAV, ADR-0007 §3) sets minutes.
-    pub fn push_interval(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(_) => DRIVE_PUSH_INTERVAL,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => DRIVE_PUSH_INTERVAL,
-        }
-    }
-
-    /// The least time between two pulls; see [`Self::push_interval`].
-    pub fn pull_interval(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(_) => DRIVE_PULL_INTERVAL,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => DRIVE_PULL_INTERVAL,
-        }
-    }
-
-    /// Readies the credential this round needs, reading the local credential
-    /// table and refreshing when that is due.
-    ///
-    /// `Ok(false)` means the user is not signed in to this backend: push and
-    /// pull skip the round and it does not count as a failure. `Err` means a
-    /// credential is there but no usable one came of it, a refused refresh for
-    /// instance; the round fails and the Devices page shows the error.
-    pub async fn ensure_credential(&self) -> Result<bool> {
-        match self {
-            CloudBackend::Drive(c) => c.ensure_credential().await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => Ok(store.signed_in()),
-        }
-    }
-
-    /// Lists the files modified strictly after `modified_after`, oldest first;
-    /// an empty string lists everything. Pull passes its cursor here, so
-    /// "strictly after" and the ordering are part of the contract.
-    pub async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
-        match self {
-            CloudBackend::Drive(c) => c.list(modified_after).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.list_appdata_files(modified_after).await,
-        }
-    }
-
-    /// Downloads a file's whole content into memory.
-    pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
-        match self {
-            CloudBackend::Drive(c) => c.download(file_id).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.download(file_id).await,
-        }
-    }
-
-    /// Writes a file by name: replaces the content when the name exists,
-    /// creates the file otherwise. Either way the modification time moves to
-    /// now. Returns the file's id.
-    pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
-        match self {
-            CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.upsert_by_name(name, content).await,
-        }
-    }
-
-    /// Deletes a file for good; there is no trash to recover it from. Deleting
-    /// a file that is already gone counts as success.
-    pub async fn delete(&self, file_id: &str) -> Result<()> {
-        match self {
-            CloudBackend::Drive(c) => c.delete(file_id).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.delete(file_id).await,
-        }
-    }
-}
-
-// ─────────────── Google Drive ───────────────
-
 /// The Google Drive backend. `pool` serves one purpose: reading and writing
 /// `auth_state`, which holds the access token and when it expires.
 pub struct DriveClient {
@@ -207,7 +73,11 @@ pub struct DriveClient {
 }
 
 impl DriveClient {
-    async fn ensure_credential(&self) -> Result<bool> {
+    pub(super) fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+
+    pub(super) async fn ensure_credential(&self) -> Result<bool> {
         match auth::ensure_valid_token(&self.pool).await {
             Ok(_) => Ok(true),
             Err(Error::NotSignedIn) => Ok(false),
@@ -215,7 +85,7 @@ impl DriveClient {
         }
     }
 
-    async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+    pub(super) async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
         self.with_token_retry(|tok| {
             let after = modified_after.to_string();
             async move { http_list_appdata_files(&tok, &after).await }
@@ -223,7 +93,7 @@ impl DriveClient {
         .await
     }
 
-    async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
+    pub(super) async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
             async move { http_download(&tok, &id).await }
@@ -231,7 +101,7 @@ impl DriveClient {
         .await
     }
 
-    async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
+    pub(super) async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         self.with_token_retry(|tok| {
             let name = name.to_string();
             let content = content.to_vec();
@@ -240,7 +110,7 @@ impl DriveClient {
         .await
     }
 
-    async fn delete(&self, file_id: &str) -> Result<()> {
+    pub(super) async fn delete(&self, file_id: &str) -> Result<()> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
             async move { http_delete(&tok, &id).await }
@@ -480,148 +350,5 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
         stage,
         status,
         body,
-    }
-}
-
-// ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
-
-#[cfg(test)]
-#[derive(Debug, Clone)]
-struct StoredFile {
-    name: String,
-    content: Vec<u8>,
-    modified_time: String,
-}
-
-/// 进程内 HashMap 模拟 Drive appDataFolder。语义精确镜像 Drive REST：
-/// - 文件命名空间是扁平的（`device.<uuid>.<kind>...`）
-/// - `upsert_by_name` 推进内部时钟，modifiedTime 单调递增
-/// - `delete` 404 视为 Ok，与 HTTP 实现一致
-/// - `list_appdata_files` 按 modifiedTime 升序 + 支持 modified_after 过滤
-#[cfg(test)]
-pub struct InMemoryDriveStore {
-    files: Mutex<HashMap<String, StoredFile>>,
-    next_id: AtomicU64,
-    clock: Mutex<i64>,
-    /// 测试注入开关：>0 时接下来 N 次 `upsert_by_name` 直接返回 500（模拟 Drive
-    /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
-    /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
-    fail_next_upserts: AtomicU64,
-    /// 这个假云端认不认当前用户。真后端从自己的凭证表判断，假后端没有那张表，
-    /// 所以由测试用 [`Self::sign_out`] 直接拨。
-    signed_in: AtomicBool,
-}
-
-#[cfg(test)]
-impl InMemoryDriveStore {
-    pub fn new() -> Self {
-        Self {
-            files: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(1),
-            clock: Mutex::new(0),
-            fail_next_upserts: AtomicU64::new(0),
-            signed_in: AtomicBool::new(true),
-        }
-    }
-
-    /// 让这个假云端当作用户没登录。仅测试用。
-    #[allow(dead_code)]
-    pub fn sign_out(&self) {
-        self.signed_in.store(false, Ordering::SeqCst);
-    }
-
-    fn signed_in(&self) -> bool {
-        self.signed_in.load(Ordering::SeqCst)
-    }
-
-    /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
-    /// 仅测试用 —— 验证 push 失败后 outbox 重试不变量。
-    #[allow(dead_code)]
-    pub fn fail_next_upserts(&self, n: u64) {
-        self.fail_next_upserts.store(n, Ordering::SeqCst);
-    }
-
-    async fn next_modified_time(&self) -> String {
-        let mut c = self.clock.lock().await;
-        *c += 1;
-        // 单调递增的 RFC3339，方便跟真实 Drive 的字典序一致。
-        // 秒字段固定为 0、只让小数位增长：之前 `{:02}` 填 `*c % 60` 会在第 60 次
-        // 上传时秒位回绕（...00.000060 < ...59.000059），破坏单调性
-        format!("2026-05-15T10:00:00.{:09}Z", *c)
-    }
-
-    pub async fn list_appdata_files(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
-        let files = self.files.lock().await;
-        let mut out: Vec<FileMeta> = files
-            .iter()
-            .filter(|(_, f)| modified_after.is_empty() || f.modified_time.as_str() > modified_after)
-            .map(|(id, f)| FileMeta {
-                id: id.clone(),
-                name: f.name.clone(),
-                modified_time: f.modified_time.clone(),
-                size: Some(f.content.len() as u64),
-            })
-            .collect();
-        out.sort_by(|a, b| a.modified_time.cmp(&b.modified_time));
-        Ok(out)
-    }
-
-    pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
-        let files = self.files.lock().await;
-        match files.get(file_id) {
-            Some(f) => Ok(f.content.clone()),
-            None => Err(Error::DriveHttp {
-                stage: "InMemory download",
-                status: 404,
-                body: format!("file_id {file_id} not found"),
-            }),
-        }
-    }
-
-    pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
-        // 失败注入：配额 > 0 时原子扣减一次并返回 500。checked_sub 在 0 时返回
-        // None → fetch_update Err → 不注入，走正常路径。
-        if self
-            .fail_next_upserts
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_sub(1))
-            .is_ok()
-        {
-            return Err(Error::DriveHttp {
-                stage: "InMemory upsert (injected failure)",
-                status: 500,
-                body: "injected transient failure".into(),
-            });
-        }
-        let mt = self.next_modified_time().await;
-        let mut files = self.files.lock().await;
-        // 找现有 name 对应的 id
-        let existing_id = files
-            .iter()
-            .find(|(_, f)| f.name == name)
-            .map(|(id, _)| id.clone());
-        let id = existing_id
-            .unwrap_or_else(|| format!("mock-id-{}", self.next_id.fetch_add(1, Ordering::SeqCst)));
-        files.insert(
-            id.clone(),
-            StoredFile {
-                name: name.to_string(),
-                content: content.to_vec(),
-                modified_time: mt,
-            },
-        );
-        Ok(id)
-    }
-
-    pub async fn delete(&self, file_id: &str) -> Result<()> {
-        let mut files = self.files.lock().await;
-        files.remove(file_id);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-impl Default for InMemoryDriveStore {
-    fn default() -> Self {
-        Self::new()
     }
 }
