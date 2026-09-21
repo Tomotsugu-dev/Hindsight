@@ -2,7 +2,7 @@
 
 - **Date**: 2026-09-20
 - **Status**: **Accepted**
-- **Related**: ADR-0002 (deriving the sync key from the backend's credential) · ADR-0005 (whole-file rewrites) · ADR-0006 (one pull cursor per dataset) · `sync::drive::DriveBackend`
+- **Related**: ADR-0002 (deriving the sync key from the backend's credential) · ADR-0005 (whole-file rewrites) · ADR-0006 (one pull cursor per dataset) · `sync::drive::DriveBackend` · ADR-0008 replaces the directory-walking pull of §1
 
 ## Context
 
