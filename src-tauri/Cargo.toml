@@ -53,6 +53,9 @@ rand = "0.8"
 sha2 = "0.10"
 urlencoding = "2"
 url = "2"
+# quick-xml：解析 WebDAV `PROPFIND` 返回的 multistatus XML。plist（tauri 的依赖）已经把
+# 同一版本拉进依赖树，这里只是声明直接依赖，编译时间和体积零增量。
+quick-xml = "0.39"
 open = "5"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"

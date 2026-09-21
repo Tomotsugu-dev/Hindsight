@@ -121,6 +121,12 @@ pub enum Error {
     #[error("sync: cloud modified time is not RFC3339: {0}")]
     SyncTimeFormat(String),
 
+    /// A WebDAV `PROPFIND` response that is not the multistatus XML the
+    /// protocol defines: the server answered with something else, or the
+    /// body was cut short.
+    #[error("webdav: cannot read the PROPFIND response: {0}")]
+    WebDavParse(String),
+
     // ───────────── 用户输入 ─────────────
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
