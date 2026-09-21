@@ -103,6 +103,21 @@ pub enum Error {
     #[error("drive scope insufficient：当前登录缺少 drive.appdata 权限，请重新【用 Google 登录】")]
     DriveScopeInsufficient,
 
+    // ───────────── WebDAV ─────────────
+    /// `stage` records which action was being performed
+    /// (propfind / get / put / move / mkcol / delete)
+    /// ADR-0007 defines the error classification for WebDAV responses.
+    #[error("webdav {stage} returned {status}: {body}")]
+    WebDavHttp {
+        stage: &'static str,
+        status: u16,
+        body: String,
+    },
+
+    /// 对端清单的 `version` 不认识：那台设备跑的是更新的版本。不按现在的格式硬解。
+    #[error("webdav manifest version {0} is not supported")]
+    WebDavManifestVersion(u32),
+
     // ───────────── 同步合并阶段 ─────────────
     /// 远端 JSON payload 解析失败（categories.json / app_groups.json 等）
     #[error("sync parse {kind} JSON: {source}")]

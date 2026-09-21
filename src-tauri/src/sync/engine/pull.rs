@@ -379,7 +379,7 @@ async fn pull_stream(
 ///
 /// The result keeps the backend's RFC3339 format so string comparison remains
 /// valid. An invalid cursor means the backend returned an invalid timestamp.
-fn rewind_cursor(cursor: &str, back: Duration) -> Result<String> {
+pub(crate) fn rewind_cursor(cursor: &str, back: Duration) -> Result<String> {
     if back.is_zero() {
         return Ok(cursor.to_string());
     }
