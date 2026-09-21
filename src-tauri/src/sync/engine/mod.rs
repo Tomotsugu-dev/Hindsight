@@ -12,6 +12,8 @@ mod push;
 #[cfg(test)]
 mod e2e_tests;
 
+pub(crate) use pull::rewind_cursor;
+
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};

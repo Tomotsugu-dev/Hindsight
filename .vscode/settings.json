@@ -1,4 +1,5 @@
 {
+  "rust-analyzer.linkedProjects": ["src-tauri/Cargo.toml"],
   "files.exclude": {
     "**/node_modules": true,
     "**/dist": true,
