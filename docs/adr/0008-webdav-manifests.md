@@ -1,7 +1,7 @@
 # ADR-0008 · WebDAV pull reads per-device manifests instead of listing directories
 
 - **Date**: 2026-09-21
-- **Status**: Proposed
+- **Status**: Superseded by ADR-0009
 - **Related**: ADR-0005 (whole-file rewrites) · ADR-0006 (one cursor per dataset) · ADR-0007 (WebDAV backend; this ADR replaces its directory-walking pull, the layout stands) · PR #56 (cursor rewind)
 
 ## Context

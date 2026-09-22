@@ -63,7 +63,7 @@ fn is_remote_newer<P: rusqlite::Params>(
 /// Primary key of a `sync_cursor` row, so this string lives in the user's
 /// database. Change it and the cursor is lost: the next sync re-downloads every
 /// file in the cloud.
-pub(super) const CURSOR_CORE: &str = "drive_files";
+pub(crate) const CURSOR_CORE: &str = "drive_files";
 
 /// One cursor per optional dataset, so turning a switch on fills in that
 /// dataset's history without re-merging everything else (ADR-0006). The
@@ -140,6 +140,12 @@ impl ParsedFile {
             _ => CURSOR_CORE,
         }
     }
+}
+
+/// The dataset a cloud file belongs to, named by its cursor key; `None` for a
+/// name this version does not know.
+pub(crate) fn flat_name_to_dataset(name: &str) -> Option<&'static str> {
+    parse_filename(name).map(|parsed| parsed.cursor_key())
 }
 
 fn parse_filename(name: &str) -> Option<ParsedFile> {
@@ -229,15 +235,13 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         }
     }
 
-    // One listing per round, from the earliest cursor among those streams; each
-    // stream then takes the files after its own.
-    let since = streams
+    // One listing per round for all the running streams; each stream then
+    // takes the files after its own cursor.
+    let cursors: Vec<(&str, &str)> = streams
         .iter()
-        .map(|(_, cursor)| cursor.as_str())
-        .min()
-        .expect("the core stream always runs")
-        .to_string();
-    let files = inner.cloud.list(&since).await?;
+        .map(|(key, cursor)| (*key, cursor.as_str()))
+        .collect();
+    let files = inner.cloud.list(&cursors).await?;
     if files.is_empty() {
         return Ok(());
     }
