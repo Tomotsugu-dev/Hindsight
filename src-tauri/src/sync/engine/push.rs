@@ -37,7 +37,12 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     if !inner.cloud.ensure_credential().await? {
         return Ok(());
     }
+    let round = push_round(inner).await;
+    let ended = inner.cloud.end_push_round().await;
+    round.and(ended)
+}
 
+async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     // TODO(ADR-0003, ADR-0004): remove once active devices have upgraded past the
     // releases that stopped publishing these files.
     if !inner
@@ -147,7 +152,7 @@ async fn delete_legacy_cloud_files(inner: &Arc<Inner>) -> Result<()> {
         .iter()
         .map(|kind| format!("device.{}.{kind}.json", inner.self_id))
         .collect();
-    let files = inner.cloud.list("").await?;
+    let files = inner.cloud.list_all().await?;
     for file in files.into_iter().filter(|f| names.contains(&f.name)) {
         inner.cloud.delete(&file.id).await?;
         log::info!("push: removed {} from the cloud", file.name);

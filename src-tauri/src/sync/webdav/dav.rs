@@ -73,6 +73,11 @@ impl HttpDav {
         })
     }
 
+    /// The server's host name, such as `dav.jianguoyun.com`.
+    pub(crate) fn host(&self) -> &str {
+        self.root.host_str().unwrap_or("")
+    }
+
     /// relative file path → absolute URL.
     fn file_path_to_url(&self, path: &str) -> Result<Url> {
         let path = path.trim_start_matches('/');
@@ -177,6 +182,76 @@ impl DavOps for HttpDav {
             Ok(_) => Ok(()),
             Err(Error::WebDavHttp { status: 404, .. }) => Ok(()),
             Err(e) => Err(e),
+        }
+    }
+}
+
+// ─────────────── Dav：生产还是假的 ───────────────
+
+/// 生产走 HTTP，测试走假服务器。用枚举不用泛型：`CloudBackend` 里要放一个具体类型，
+/// 端到端测试要让两台设备共用同一个假服务器。
+pub(crate) enum Dav {
+    Http(HttpDav),
+    #[cfg(test)]
+    Fake(std::sync::Arc<super::fake::FakeDav>),
+}
+
+impl Dav {
+    #[cfg(test)]
+    pub(crate) fn fake(&self) -> &super::fake::FakeDav {
+        match self {
+            Dav::Fake(f) => f,
+            Dav::Http(_) => panic!("not a fake server"),
+        }
+    }
+}
+
+impl DavOps for Dav {
+    async fn propfind(&self, dir: &str) -> Result<Vec<DavEntry>> {
+        match self {
+            Dav::Http(d) => d.propfind(dir).await,
+            #[cfg(test)]
+            Dav::Fake(d) => d.propfind(dir).await,
+        }
+    }
+
+    async fn get(&self, path: &str) -> Result<Vec<u8>> {
+        match self {
+            Dav::Http(d) => d.get(path).await,
+            #[cfg(test)]
+            Dav::Fake(d) => d.get(path).await,
+        }
+    }
+
+    async fn put(&self, path: &str, body: Vec<u8>) -> Result<()> {
+        match self {
+            Dav::Http(d) => d.put(path, body).await,
+            #[cfg(test)]
+            Dav::Fake(d) => d.put(path, body).await,
+        }
+    }
+
+    async fn mv(&self, from: &str, to: &str) -> Result<()> {
+        match self {
+            Dav::Http(d) => d.mv(from, to).await,
+            #[cfg(test)]
+            Dav::Fake(d) => d.mv(from, to).await,
+        }
+    }
+
+    async fn mkcol(&self, dir: &str) -> Result<()> {
+        match self {
+            Dav::Http(d) => d.mkcol(dir).await,
+            #[cfg(test)]
+            Dav::Fake(d) => d.mkcol(dir).await,
+        }
+    }
+
+    async fn delete(&self, path: &str) -> Result<()> {
+        match self {
+            Dav::Http(d) => d.delete(path).await,
+            #[cfg(test)]
+            Dav::Fake(d) => d.delete(path).await,
         }
     }
 }

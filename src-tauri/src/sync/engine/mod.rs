@@ -12,7 +12,7 @@ mod push;
 #[cfg(test)]
 mod e2e_tests;
 
-pub(crate) use pull::rewind_cursor;
+pub(crate) use pull::{flat_name_to_dataset, rewind_cursor, CURSOR_CORE};
 
 use std::sync::Arc;
 
@@ -43,12 +43,18 @@ fn sync_error_prefix(e: &Error) -> &'static str {
             status,
             ..
         } if *status == 400 || *status == 401 => ERR_PREFIX_CRED_EXPIRED,
-        // AES 解不开：本地密钥 / 密文已损坏，重新登录是唯一出路
+        // AES cannot decrypt: the local key or the ciphertext is damaged, and
+        // signing in again is the only way out.
         Error::Crypto(_) => ERR_PREFIX_CRED_EXPIRED,
-        // scope 不足：当前 token 没 drive.appdata 权限，必须重新走同意页
+        // Scope missing: the token has no drive.appdata permission, and only
+        // the consent page can grant it.
         Error::DriveScopeInsufficient => ERR_PREFIX_CRED_EXPIRED,
-        // 其它：网络超时、Drive 5xx、refresh 端点 5xx 等。
-        // 后台下一个 tick 会自动重试，UI 不必催用户重新登录。
+        // WebDAV 401: the user name or app password is wrong or was revoked.
+        // There is no refresh; the user has to enter it again (ADR-0007).
+        Error::WebDavHttp { status: 401, .. } => ERR_PREFIX_CRED_EXPIRED,
+        // Everything else is retried by the next tick.
+        // TODO: WebDAV 507 (out of space) should stop retrying and tell the
+        // user; that needs a third prefix (ADR-0007 error table).
         _ => ERR_PREFIX_TRANSIENT,
     }
 }

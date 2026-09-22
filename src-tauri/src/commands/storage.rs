@@ -305,7 +305,7 @@ pub(crate) async fn purge_cloud_data_impl(
         .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
 
     // 2. 列云端全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
-    let files = cloud.list("").await.map_err(|e| e.to_string())?;
+    let files = cloud.list_all().await.map_err(|e| e.to_string())?;
     let mine: Vec<_> = files
         .iter()
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
@@ -440,7 +440,7 @@ pub(crate) async fn forget_remote_device_impl(
         .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
 
     // 2. 列云端上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
-    let files = cloud.list("").await.map_err(|e| e.to_string())?;
+    let files = cloud.list_all().await.map_err(|e| e.to_string())?;
     let target_files: Vec<_> = files
         .iter()
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
