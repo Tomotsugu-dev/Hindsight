@@ -1,39 +1,39 @@
 //! The WebDAV backend's pure half: nothing here talks to a server. Paths
 //! follow the layout of ADR-0007 §1 and are relative to the sync root.
 
-#![allow(dead_code)]
-
 use quick_xml::events::Event;
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::NsReader;
 
 use crate::error::{Error, Result};
+use crate::sync::file_name::FileName;
 
 // ─────────────── Directory Layout (ADR-0007 §1) ───────────────
 //
 // Paths are relative to the sync root (`/hindsight/` on the server); the
-// client prepends the root.
+// client prepends the root. Which names exist, and which kinds are day
+// files, is `file_name.rs`'s business; this module only places them.
 //
-//   device.<id>.activities.<day>.ndjson  ↔  <id>/activities/<year>/<day>.ndjson
-//   device.<id>.memory.<day>.ndjson      ↔  <id>/memory/<year>/<day>.ndjson
-//   device.<id>.<kind>.json              ↔  <id>/<kind>.json
+//   device.<id>.<kind>.<date>.ndjson  ↔  <id>/<kind>/<year>/<date>.ndjson
+//   device.<id>.<kind>.json           ↔  <id>/<kind>.json
 
 /// Converts the engine's flat file name into a WebDAV path.
 /// Returns `None` for names that do not match the sync file format.
 pub(crate) fn flat_name_to_path(flat_name: &str) -> Option<String> {
-    let parts: Vec<&str> = flat_name.split('.').collect();
-    match parts.as_slice() {
-        // device.<id>.(activities|memory).<day>.ndjson  ->  <id>/(activities|memory)/<year>/<day>.ndjson
-        ["device", id, kind @ ("activities" | "memory"), day, "ndjson"]
-            if is_valid_path(id) && is_day(day) =>
-        {
-            Some(format!("{id}/{kind}/{}/{day}.ndjson", &day[..4])) // Extract year from day
-        }
-        // device.<id>.<kind>.json  ->  <id>/<kind>.json
-        ["device", id, kind, "json"] if is_valid_path(id) && is_valid_path(kind) => {
-            Some(format!("{id}/{kind}.json"))
-        }
-        _ => None,
+    let FileName { device_id, kind } = FileName::parse(flat_name)?;
+    if !is_valid_path(&device_id) {
+        return None;
+    }
+    let segment = kind.segment();
+    match kind.date() {
+        // <id>/<kind>/<year>/<date>.ndjson
+        Some(date) if is_date(date) => Some(format!(
+            "{device_id}/{segment}/{}/{date}.ndjson",
+            &date[..4]
+        )),
+        Some(_) => None,
+        // <id>/<kind>.json
+        None => Some(format!("{device_id}/{segment}.json")),
     }
 }
 
@@ -41,18 +41,24 @@ pub(crate) fn flat_name_to_path(flat_name: &str) -> Option<String> {
 /// Returns `None` for paths that do not correspond to the sync file layout.
 pub(crate) fn path_to_flat_name(path: &str) -> Option<String> {
     let parts: Vec<&str> = path.split('/').collect();
-    match parts.as_slice() {
-        // <id>/(activities|memory)/<year>/<day>.ndjson  ->  device.<id>.(activities|memory).<day>.ndjson
-        [id, kind @ ("activities" | "memory"), year, file] if is_valid_path(id) => {
-            let day = file.strip_suffix(".ndjson")?;
-            (is_day(day) && &day[..4] == *year).then(|| format!("device.{id}.{kind}.{day}.ndjson"))
+    let flat_name = match parts.as_slice() {
+        // <id>/<kind>/<year>/<date>.ndjson  ->  device.<id>.<kind>.<date>.ndjson
+        [id, kind, year, file] if is_valid_path(id) => {
+            let date = file.strip_suffix(".ndjson")?;
+            if !is_date(date) || &date[..4] != *year {
+                return None;
+            }
+            format!("device.{id}.{kind}.{date}.ndjson")
         }
+        // <id>/<kind>.json  ->  device.<id>.<kind>.json
         [id, file] if is_valid_path(id) => {
             let kind = file.strip_suffix(".json")?;
-            is_valid_path(kind).then(|| format!("device.{id}.{kind}.json"))
+            format!("device.{id}.{kind}.json")
         }
-        _ => None,
-    }
+        _ => return None,
+    };
+    // The tree may hold files the engine never wrote; only names it knows come back.
+    FileName::parse(&flat_name).map(|_| flat_name)
 }
 
 /// Returns a temporary upload path in the same directory as the final path.
@@ -70,7 +76,7 @@ fn is_valid_path(s: &str) -> bool {
 }
 
 /// Return true if the string is in the format `YYYY-MM-DD`
-fn is_day(s: &str) -> bool {
+fn is_date(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 10
         && b.iter().enumerate().all(|(i, c)| {
@@ -259,7 +265,7 @@ mod tests {
         );
     }
 
-    /// 引擎不写的名字不给路径：前缀不对、日期不成形、设备 id 带点或为空。
+    /// 引擎不写的名字不给路径：前缀不对、日期不成形、设备 id 带点或为空、不认识的种类。
     #[test]
     fn flat_name_to_path_rejects_names_the_engine_never_writes() {
         assert_eq!(flat_name_to_path("readme.txt"), None);
@@ -269,6 +275,7 @@ mod tests {
         );
         assert_eq!(flat_name_to_path("device.a.b.categories.json"), None);
         assert_eq!(flat_name_to_path("device..categories.json"), None);
+        assert_eq!(flat_name_to_path("device.abc.notes.json"), None);
     }
 
     /// 扁平名 → 路径 → 扁平名回到原样，每种文件各走一遍。
@@ -284,7 +291,8 @@ mod tests {
         }
     }
 
-    /// 列目录会看到、但不能当成同步文件的东西：临时名、目录本身、放错年份的日文件、多余层级。
+    /// 列目录会看到、但不能当成同步文件的东西：临时名、目录本身、放错年份的日文件、
+    /// 多余层级、不认识的种类。
     #[test]
     fn path_to_flat_name_skips_what_a_listing_must_ignore() {
         assert_eq!(
@@ -292,6 +300,11 @@ mod tests {
             None
         );
         assert_eq!(path_to_flat_name("abc/.tmp-categories.json"), None);
+        assert_eq!(path_to_flat_name("abc/notes.json"), None);
+        assert_eq!(
+            path_to_flat_name("abc/categories/2026/2026-09-20.ndjson"),
+            None
+        );
         assert_eq!(path_to_flat_name("abc/activities/2026"), None);
         assert_eq!(
             path_to_flat_name("abc/activities/2025/2026-09-20.ndjson"),

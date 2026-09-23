@@ -53,7 +53,7 @@ pub(crate) enum Dataset {
 
 impl FileKind {
     /// Return string segment representing the file kind in the file name.
-    fn segment(&self) -> &'static str {
+    pub(crate) fn segment(&self) -> &'static str {
         match self {
             FileKind::Activities(_) => "activities",
             FileKind::Categories => "categories",
@@ -74,6 +74,14 @@ impl FileKind {
             FileKind::Chat => Dataset::Chat,
             FileKind::Memory(_) => Dataset::Memory,
             _ => Dataset::Core,
+        }
+    }
+
+    /// The date a day file covers; `None` for the kinds that are one file per table.
+    pub(crate) fn date(&self) -> Option<&str> {
+        match self {
+            FileKind::Activities(date) | FileKind::Memory(date) => Some(date),
+            _ => None,
         }
     }
 }
