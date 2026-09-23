@@ -2,7 +2,7 @@
 
 - **Date**: 2026-09-20
 - **Status**: **Accepted**
-- **Related**: ADR-0002 (deriving the sync key from the backend's credential) · ADR-0005 (whole-file rewrites) · ADR-0006 (one pull cursor per dataset) · `sync::drive::DriveBackend` · ADR-0008 replaces the directory-walking pull of §1 · ADR-0009 replaces the upload method of §6: the method now depends on the server
+- **Related**: ADR-0002 (deriving the sync key from the backend's credential) · ADR-0005 (whole-file rewrites) · ADR-0006 (one pull cursor per dataset) · `sync::drive::DriveBackend` · ADR-0008 replaces the directory-walking pull of §1 · ADR-0009 replaces the upload method of §6: the method now depends on the server · ADR-0010 replaces the Drive interval of §3: Drive now syncs every 5 minutes too · ADR-0011 replaces §2 and the notes on the new database, the password and the sync key: a backend switch keeps the local database
 
 ## Context
 
