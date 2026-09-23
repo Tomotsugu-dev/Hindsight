@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ExportUsageButton } from "../../components/ExportUsageButton/ExportUsageButton";
@@ -27,8 +27,9 @@ import {
   AppDetailDrawer,
   type AppDetailTarget,
 } from "../../components/AppDetailDrawer/AppDetailDrawer";
-import { ViewToggle, type StatsView } from "../../components/ViewToggle/ViewToggle";
+import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
+import { getStatsView, setStatsView, subscribeStatsView } from "../../state/statsView";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeekPage.module.css";
 
@@ -56,8 +57,9 @@ export default function WeekPage() {
   const { days, apps } = useMemo(() => getWeek(offset), [getWeek, offset]);
 
   /** 「时段 / 占比」segmented + drill state（跟 TodayPage 同款，见那边注释；
-   *  切周不清 drill——钉着大类翻上/下周对比才是动线） */
-  const [view, setView] = useState<StatsView>("bars");
+   *  切周不清 drill——钉着大类翻上/下周对比才是动线）。
+   *  view 本页独立记忆并持久化（state/statsView.ts，scope="week"）。 */
+  const view = useSyncExternalStore(subscribeStatsView, () => getStatsView("week"));
   const [drillId, setDrillId] = useState<string | null>(null);
   useEffect(() => {
     setDrillId(null);
@@ -279,7 +281,7 @@ export default function WeekPage() {
         headLeftExtras={
           <ViewToggle
             view={view}
-            onChange={(v) => withViewTransition(() => setView(v))}
+            onChange={(v) => withViewTransition(() => setStatsView("week", v))}
           />
         }
         pillLabel={weekLabel(offset)}

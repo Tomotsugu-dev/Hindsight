@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { BarChart3, PieChart } from "lucide-react";
 import styles from "./ViewToggle.module.css";
+import type { StatsView } from "../../state/statsView";
 
-export type StatsView = "bars" | "pie";
+// 类型真源在 state/statsView.ts；这里再导出，消费方一处 import 拿组件 + 类型。
+export type { StatsView };
 
 interface Props {
   view: StatsView;
