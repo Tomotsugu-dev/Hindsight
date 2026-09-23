@@ -30,6 +30,7 @@ use crate::error::Result;
 use crate::memory::MemoryDb;
 use crate::repo::settings::Settings;
 use crate::storage::{DbPool, SqliteResultExt};
+use crate::sync::file_name::{FileKind, FileName};
 use crate::sync::payload::{
     AiSummaryPayload, ChatConversationPayload, ChatFilePayload, ChatMessagePayload,
     MemorySessionPayload,
@@ -71,8 +72,14 @@ pub(super) async fn push_optional(inner: &Arc<Inner>, cfg: &Settings) -> Result<
     Ok(())
 }
 
-async fn upload(inner: &Arc<Inner>, name: &str, content: Vec<u8>) -> Result<()> {
-    inner.cloud.upsert_by_name(name, &content).await?;
+/// Uploads one of this device's files.
+async fn upload(inner: &Arc<Inner>, kind: FileKind, content: Vec<u8>) -> Result<()> {
+    let name = FileName {
+        device_id: inner.self_id.clone(),
+        kind,
+    }
+    .to_file_name();
+    inner.cloud.upsert_by_name(&name, &content).await?;
     Ok(())
 }
 
@@ -125,8 +132,7 @@ async fn push_ai_summaries(inner: &Arc<Inner>) -> Result<()> {
             Ok(rows)
         })
         .await?;
-    let name = format!("device.{}.ai_summaries.json", inner.self_id);
-    upload(inner, &name, serde_json::to_vec(&rows)?).await?;
+    upload(inner, FileKind::AiSummaries, serde_json::to_vec(&rows)?).await?;
     io::write_cursor(&inner.pool, CURSOR_AI, &watermark).await?;
     log::info!("push ai_summaries: {} 行", rows.len());
     Ok(())
@@ -205,8 +211,7 @@ async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             })
         })
         .await?;
-    let name = format!("device.{}.chat.json", inner.self_id);
-    upload(inner, &name, serde_json::to_vec(&payload)?).await?;
+    upload(inner, FileKind::Chat, serde_json::to_vec(&payload)?).await?;
     io::write_cursor(&inner.pool, CURSOR_CHAT, &watermark).await?;
     log::info!(
         "push chat: {} 会话 / {} 消息",
@@ -289,8 +294,7 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             out.extend_from_slice(serde_json::to_string(row)?.as_bytes());
             out.push(b'\n');
         }
-        let name = format!("device.{}.memory.{day}.ndjson", inner.self_id);
-        upload(inner, &name, out).await?;
+        upload(inner, FileKind::Memory(day.clone()), out).await?;
     }
     io::write_cursor(&inner.pool, CURSOR_MEMORY, &watermark).await?;
     if !days.is_empty() {

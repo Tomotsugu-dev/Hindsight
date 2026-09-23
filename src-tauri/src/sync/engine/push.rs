@@ -10,23 +10,13 @@ use super::io::{self, OutboxRow};
 use super::Inner;
 use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
+use crate::sync::file_name::{FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
     DeviceMetaPayload,
 };
 
 const PUSH_BATCH_SIZE: usize = 200;
-
-/// Outbox entity 行翻成 dirty key —— 同一个 dirty key 触发对应文件的全量重写。
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum DirtyKey {
-    ActivityDay(String), // local_date
-    Categories,
-    DeviceMeta,
-    AppIcons,
-    AppGroups,
-    AppGroupMembers,
-}
 
 pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     // 串行门：与另一个 flush_push（「立即同步」vs 后台 tick）以及 purge 类命令互斥。
@@ -95,9 +85,13 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     let mut failed_ids: Vec<i64> = Vec::new();
     let mut last_err: Option<Error> = None;
 
-    for (key, ids) in groups {
-        let name = file_name_for(self_id, &key);
-        let content = match build_content(&inner.pool, self_id, &key).await {
+    for (kind, ids) in groups {
+        let name = FileName {
+            device_id: self_id.to_string(),
+            kind: kind.clone(),
+        }
+        .to_file_name();
+        let content = match build_content(&inner.pool, self_id, &kind).await {
             Ok(c) => c,
             Err(e) => {
                 log::warn!("生成 {} 内容失败: {e}", name);
@@ -160,11 +154,12 @@ async fn delete_legacy_cloud_files(inner: &Arc<Inner>) -> Result<()> {
     Ok(())
 }
 
+/// Outbox 行按它们要重写的文件分组：同一个文件只重写一次。
 /// 返回 (可分组的脏文件映射, 没法分组必须直接 drop 的行 id)。
 /// 没法分组的行如果不删，会在每个 batch 里既进不了 succeeded 也进不了 failed，
 /// 永远留在 outbox（读取按 id ASC，它们还总排在最前面）。
-fn group_outbox(rows: &[OutboxRow]) -> (HashMap<DirtyKey, Vec<i64>>, Vec<i64>) {
-    let mut groups: HashMap<DirtyKey, Vec<i64>> = HashMap::new();
+fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
+    let mut groups: HashMap<FileKind, Vec<i64>> = HashMap::new();
     let mut ungroupable: Vec<i64> = Vec::new();
     for row in rows {
         let key = match row.entity.as_str() {
@@ -175,18 +170,18 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<DirtyKey, Vec<i64>>, Vec<i64>) {
                         .and_then(|v| v.as_str())
                         .map(String::from)
                 }) {
-                Some(d) => DirtyKey::ActivityDay(d),
+                Some(d) => FileKind::Activities(d),
                 None => {
                     log::warn!("outbox row {} 是 activity 但 payload 缺 localDate", row.id);
                     ungroupable.push(row.id);
                     continue;
                 }
             },
-            "category" => DirtyKey::Categories,
-            "device" => DirtyKey::DeviceMeta,
-            "app_icon" => DirtyKey::AppIcons,
-            "app_group" => DirtyKey::AppGroups,
-            "app_group_member" => DirtyKey::AppGroupMembers,
+            "category" => FileKind::Categories,
+            "device" => FileKind::DeviceMeta,
+            "app_icon" => FileKind::AppIcons,
+            "app_group" => FileKind::AppGroups,
+            "app_group_member" => FileKind::AppGroupMembers,
             _ => {
                 log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
                 ungroupable.push(row.id);
@@ -198,25 +193,19 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<DirtyKey, Vec<i64>>, Vec<i64>) {
     (groups, ungroupable)
 }
 
-fn file_name_for(self_id: &str, key: &DirtyKey) -> String {
-    match key {
-        DirtyKey::ActivityDay(day) => format!("device.{self_id}.activities.{day}.ndjson"),
-        DirtyKey::Categories => format!("device.{self_id}.categories.json"),
-        DirtyKey::DeviceMeta => format!("device.{self_id}.meta.json"),
-        DirtyKey::AppIcons => format!("device.{self_id}.icons.json"),
-        DirtyKey::AppGroups => format!("device.{self_id}.app_groups.json"),
-        DirtyKey::AppGroupMembers => format!("device.{self_id}.app_group_members.json"),
-    }
-}
-
-async fn build_content(pool: &DbPool, self_id: &str, key: &DirtyKey) -> Result<Vec<u8>> {
-    match key {
-        DirtyKey::ActivityDay(day) => build_activities_day(pool, self_id, day).await,
-        DirtyKey::Categories => build_categories(pool).await,
-        DirtyKey::DeviceMeta => build_device_meta(pool, self_id).await,
-        DirtyKey::AppIcons => build_app_icons(pool).await,
-        DirtyKey::AppGroups => build_app_groups(pool).await,
-        DirtyKey::AppGroupMembers => build_app_group_members(pool).await,
+/// The whole content of one outbox-driven file, built from the tables. The
+/// optional datasets are not outbox-driven; `datasets.rs` builds those.
+async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<Vec<u8>> {
+    match kind {
+        FileKind::Activities(day) => build_activities_day(pool, self_id, day).await,
+        FileKind::Categories => build_categories(pool).await,
+        FileKind::DeviceMeta => build_device_meta(pool, self_id).await,
+        FileKind::AppIcons => build_app_icons(pool).await,
+        FileKind::AppGroups => build_app_groups(pool).await,
+        FileKind::AppGroupMembers => build_app_group_members(pool).await,
+        FileKind::Tombstone | FileKind::AiSummaries | FileKind::Chat | FileKind::Memory(_) => {
+            Err(Error::Other(format!("{kind:?} is not an outbox file")))
+        }
     }
 }
 
@@ -504,7 +493,7 @@ mod tests {
     }
 
     /// 测 [`group_outbox`]：同一 local_date 的 5 条 outbox 应塌成 1 个
-    /// `DirtyKey::ActivityDay(date)` 键，5 个 row id 全部进 value。
+    /// `FileKind::Activities(date)` 键，5 个 row id 全部进 value。
     /// 防"push 把同一天 ndjson 重写 5 次"的回归（早期 bug 引起 Drive quota 抖动）。
     #[test]
     fn group_outbox_collapses_same_local_date() {
@@ -525,12 +514,12 @@ mod tests {
         assert_eq!(
             groups.len(),
             1,
-            "5 行同一 local_date 应只产生 1 个 DirtyKey"
+            "5 行同一 local_date 应只产生 1 个 FileKind"
         );
         assert!(ungroupable.is_empty(), "合法行不应进 ungroupable");
         let ids = groups
-            .get(&DirtyKey::ActivityDay("2026-05-15".into()))
-            .expect("ActivityDay key should exist");
+            .get(&FileKind::Activities("2026-05-15".into()))
+            .expect("Activities key should exist");
         let mut ids = ids.clone();
         ids.sort();
         assert_eq!(
@@ -540,7 +529,7 @@ mod tests {
         );
     }
 
-    /// 不同 local_date 的 outbox 行应进入不同的 DirtyKey 桶。
+    /// 不同 local_date 的 outbox 行应进入不同的 FileKind 桶。
     #[test]
     fn group_outbox_splits_different_local_dates() {
         let make_row = |id: i64, date: &str| OutboxRow {
@@ -557,13 +546,13 @@ mod tests {
         assert_eq!(groups.len(), 2);
         assert!(ungroupable.is_empty(), "合法行不应进 ungroupable");
         let mut d1 = groups
-            .get(&DirtyKey::ActivityDay("2026-05-15".into()))
+            .get(&FileKind::Activities("2026-05-15".into()))
             .unwrap()
             .clone();
         d1.sort();
         assert_eq!(d1, vec![1, 3]);
         let d2 = groups
-            .get(&DirtyKey::ActivityDay("2026-05-16".into()))
+            .get(&FileKind::Activities("2026-05-16".into()))
             .unwrap()
             .clone();
         assert_eq!(d2, vec![2]);
