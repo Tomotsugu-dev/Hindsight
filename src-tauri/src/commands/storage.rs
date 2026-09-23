@@ -13,6 +13,7 @@ use crate::capture::CaptureService;
 use crate::repo::settings;
 use crate::storage::{db_path, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::engine::SyncEngine;
+use crate::sync::file_name::{FileKind, FileName};
 
 /// [`get_storage_info`] Command's return structure.
 /// Used by the front-end "Settings → Data" panel to render current storage usage.
@@ -278,7 +279,7 @@ pub(crate) async fn purge_cloud_data_impl(
         return Err("self_id 未初始化".into());
     }
 
-    let prefix = format!("device.{self_id}.");
+    let prefix = FileName::device_prefix(self_id);
     let cloud = engine.cloud();
     if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
         return Err(crate::error::Error::NotSignedIn.to_string());
@@ -294,7 +295,11 @@ pub(crate) async fn purge_cloud_data_impl(
     //    但对端永远不知道"的静默半成功。现在 tombstone 失败 = 整个命令失败，
     //    此时什么都还没删，用户直接重试即可。
     let cleared_at = utc_now_rfc3339();
-    let tombstone_name = format!("device.{self_id}.tombstone.json");
+    let tombstone_name = FileName {
+        device_id: self_id.to_string(),
+        kind: FileKind::Tombstone,
+    }
+    .to_file_name();
     let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
         cleared_at: cleared_at.clone(),
     })
@@ -305,7 +310,7 @@ pub(crate) async fn purge_cloud_data_impl(
         .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
 
     // 2. 列云端全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
-    let files = cloud.list("").await.map_err(|e| e.to_string())?;
+    let files = cloud.list_all().await.map_err(|e| e.to_string())?;
     let mine: Vec<_> = files
         .iter()
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
@@ -334,7 +339,7 @@ pub(crate) async fn purge_cloud_data_impl(
         }
     }
 
-    crate::sync::auth::sign_out(pool)
+    crate::sync::drive::auth::sign_out(pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -405,8 +410,12 @@ pub(crate) async fn forget_remote_device_impl(
         return Err("不能用 forget_remote_device 清自己，请用 purge_cloud_data".into());
     }
 
-    let prefix = format!("device.{target_id}.");
-    let tombstone_name = format!("device.{target_id}.tombstone.json");
+    let prefix = FileName::device_prefix(target_id);
+    let tombstone_name = FileName {
+        device_id: target_id.to_string(),
+        kind: FileKind::Tombstone,
+    }
+    .to_file_name();
     let cloud = engine.cloud();
 
     // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
@@ -440,7 +449,7 @@ pub(crate) async fn forget_remote_device_impl(
         .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
 
     // 2. 列云端上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
-    let files = cloud.list("").await.map_err(|e| e.to_string())?;
+    let files = cloud.list_all().await.map_err(|e| e.to_string())?;
     let target_files: Vec<_> = files
         .iter()
         .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)

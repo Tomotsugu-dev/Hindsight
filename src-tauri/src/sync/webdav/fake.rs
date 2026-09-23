@@ -2,6 +2,8 @@
 //! 的路径是 409，`mkcol` 已存在是 405，`get` 不存在是 404，`delete` 不存在算成功。
 //! 每次写入推进一个秒级时钟，测试要制造「同一秒」时可以把时钟按住。
 //! 每次调用都记下来，测试据此断言「发了哪些请求、按什么顺序」。
+//! [`FakeDav::without_root`] 是新开的账号：同步根目录还不存在。
+//! [`FakeDav::refuse_move_overwrite`] 让它像坚果云那样不许 `MOVE` 覆盖已有的文件。
 
 #![cfg(test)]
 
@@ -38,6 +40,8 @@ struct State {
     /// 服务器时钟：从固定起点数过去的秒数。
     clock: u64,
     hold_clock: bool,
+    /// 像坚果云那样，`MOVE` 到已存在的文件回 409。
+    refuse_move_overwrite: bool,
     calls: Vec<Call>,
 }
 
@@ -62,9 +66,26 @@ impl FakeDav {
                 dirs,
                 clock: 0,
                 hold_clock: false,
+                refuse_move_overwrite: false,
                 calls: Vec::new(),
             }),
         }
+    }
+
+    /// 新开的账号：同步根目录还不存在，要有人 `MKCOL` 它。
+    pub(crate) fn without_root() -> Self {
+        let dav = Self::new();
+        dav.state
+            .try_lock()
+            .expect("nobody else holds it yet")
+            .dirs
+            .clear();
+        dav
+    }
+
+    /// 直接拿走一个文件，不记调用：模拟「服务器上这个文件暂时读不到」。
+    pub(crate) async fn take_file(&self, path: &str) -> Option<Vec<u8>> {
+        self.state.lock().await.files.remove(path).map(|f| f.body)
     }
 
     /// 直接放一个文件进去，缺的父目录一并建好；不记调用、时钟照常推进。
@@ -93,6 +114,11 @@ impl FakeDav {
     /// 按住时钟：之后的写入都落在同一秒，直到放开。
     pub(crate) async fn hold_clock(&self, hold: bool) {
         self.state.lock().await.hold_clock = hold;
+    }
+
+    /// 像坚果云那样不许 `MOVE` 覆盖已有的文件。
+    pub(crate) async fn refuse_move_overwrite(&self, refuse: bool) {
+        self.state.lock().await.refuse_move_overwrite = refuse;
     }
 
     pub(crate) async fn calls(&self) -> Vec<Call> {
@@ -209,6 +235,9 @@ impl DavOps for FakeDav {
         if !st.dirs.contains(parent_of(to)) {
             return Err(http_err("move", 409, to));
         }
+        if st.refuse_move_overwrite && st.files.contains_key(to) {
+            return Err(http_err("move", 409, to));
+        }
         let Some(mut f) = st.files.remove(from) else {
             return Err(http_err("move", 404, from));
         };
@@ -224,7 +253,8 @@ impl DavOps for FakeDav {
         if st.dirs.contains(dir) || st.files.contains_key(dir) {
             return Err(http_err("mkcol", 405, dir));
         }
-        if !st.dirs.contains(parent_of(dir)) {
+        // 根目录的上一级是用户填的地址，一直在
+        if !dir.is_empty() && !st.dirs.contains(parent_of(dir)) {
             return Err(http_err("mkcol", 409, dir));
         }
         st.dirs.insert(dir.to_string());
@@ -282,6 +312,23 @@ mod tests {
             dav.mkcol("x/y").await,
             Err(Error::WebDavHttp { status: 409, .. })
         ));
+    }
+
+    /// 新账号：列根目录是 404，往里 PUT 是 409；`MKCOL` 根目录之后才能用。
+    #[tokio::test]
+    async fn a_new_account_has_no_root_until_mkcol() {
+        let dav = FakeDav::without_root();
+        assert!(matches!(
+            dav.propfind("").await,
+            Err(Error::WebDavHttp { status: 404, .. })
+        ));
+        assert!(matches!(
+            dav.put("a.json", b"{}".to_vec()).await,
+            Err(Error::WebDavHttp { status: 409, .. })
+        ));
+        dav.mkcol("").await.unwrap();
+        dav.put("a.json", b"{}".to_vec()).await.unwrap();
+        assert_eq!(dav.propfind("").await.unwrap().len(), 2);
     }
 
     /// 列一层：第一条是目录自己，然后是子目录和文件，都带前缀；不下钻。

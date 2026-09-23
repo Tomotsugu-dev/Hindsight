@@ -15,6 +15,7 @@ use super::Inner;
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
+use crate::sync::file_name::{Dataset, FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
     DeviceMetaPayload, TombstonePayload,
@@ -63,7 +64,7 @@ fn is_remote_newer<P: rusqlite::Params>(
 /// Primary key of a `sync_cursor` row, so this string lives in the user's
 /// database. Change it and the cursor is lost: the next sync re-downloads every
 /// file in the cloud.
-pub(super) const CURSOR_CORE: &str = "drive_files";
+pub(crate) const CURSOR_CORE: &str = "drive_files";
 
 /// One cursor per optional dataset, so turning a switch on fills in that
 /// dataset's history without re-merging everything else (ADR-0006). The
@@ -72,116 +73,21 @@ const CURSOR_AI_SUMMARIES: &str = "pull.ai_summaries";
 const CURSOR_CHAT: &str = "pull.chat";
 const CURSOR_MEMORY: &str = "pull.memory";
 
-enum ParsedFile {
-    ActivityDay {
-        device_id: String,
-        local_date: String,
-    },
-    Categories {
-        device_id: String,
-    },
-    DeviceMeta {
-        device_id: String,
-    },
-    AppIcons {
-        device_id: String,
-    },
-    AppGroups {
-        device_id: String,
-    },
-    AppGroupMembers {
-        device_id: String,
-    },
-    /// A device asking every peer to drop everything it wrote before a given
-    /// moment: `DELETE WHERE device_id = <owner> AND updated_at < clearedAt`.
-    /// It exists because the engine only inserts and updates, so a row missing
-    /// from a file carries no meaning — this is the only way to say "delete".
-    Tombstone {
-        device_id: String,
-    },
-    /// Opt-in upload: AI generated summaries (merged in `datasets.rs`).
-    AiSummaries {
-        device_id: String,
-    },
-    /// Opt-in upload: chat history.
-    Chat {
-        device_id: String,
-    },
-    /// Opt-in upload: screen-memory full text, one file per day.
-    MemoryDay {
-        device_id: String,
-    },
-}
-
-impl ParsedFile {
-    /// The device that wrote the file.
-    fn device_id(&self) -> &str {
-        match self {
-            ParsedFile::ActivityDay { device_id, .. }
-            | ParsedFile::Categories { device_id }
-            | ParsedFile::DeviceMeta { device_id }
-            | ParsedFile::AppIcons { device_id }
-            | ParsedFile::AppGroups { device_id }
-            | ParsedFile::AppGroupMembers { device_id }
-            | ParsedFile::Tombstone { device_id }
-            | ParsedFile::AiSummaries { device_id }
-            | ParsedFile::Chat { device_id }
-            | ParsedFile::MemoryDay { device_id } => device_id,
-        }
-    }
-
-    /// Which stream owns the file: the cursor that advances past it, and the
-    /// only stream allowed to merge it.
-    fn cursor_key(&self) -> &'static str {
-        match self {
-            ParsedFile::AiSummaries { .. } => CURSOR_AI_SUMMARIES,
-            ParsedFile::Chat { .. } => CURSOR_CHAT,
-            ParsedFile::MemoryDay { .. } => CURSOR_MEMORY,
-            _ => CURSOR_CORE,
-        }
+/// The `sync_cursor` key of a dataset's pull cursor: the cursor that advances
+/// past the dataset's files, and the only stream allowed to merge them.
+fn cursor_key_of(dataset: Dataset) -> &'static str {
+    match dataset {
+        Dataset::Core => CURSOR_CORE,
+        Dataset::AiSummaries => CURSOR_AI_SUMMARIES,
+        Dataset::Chat => CURSOR_CHAT,
+        Dataset::Memory => CURSOR_MEMORY,
     }
 }
 
-fn parse_filename(name: &str) -> Option<ParsedFile> {
-    // Two shapes: device.<UUID>.<KIND>.json, and device.<UUID>.activities.<DAY>.ndjson.
-    let parts: Vec<&str> = name.split('.').collect();
-    if parts.first().copied() != Some("device") {
-        return None;
-    }
-    match parts.as_slice() {
-        ["device", uuid, "activities", day, "ndjson"] => Some(ParsedFile::ActivityDay {
-            device_id: uuid.to_string(),
-            local_date: day.to_string(),
-        }),
-        ["device", uuid, "categories", "json"] => Some(ParsedFile::Categories {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "meta", "json"] => Some(ParsedFile::DeviceMeta {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "icons", "json"] => Some(ParsedFile::AppIcons {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "app_groups", "json"] => Some(ParsedFile::AppGroups {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "app_group_members", "json"] => Some(ParsedFile::AppGroupMembers {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "tombstone", "json"] => Some(ParsedFile::Tombstone {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "ai_summaries", "json"] => Some(ParsedFile::AiSummaries {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "chat", "json"] => Some(ParsedFile::Chat {
-            device_id: uuid.to_string(),
-        }),
-        ["device", uuid, "memory", _day, "ndjson"] => Some(ParsedFile::MemoryDay {
-            device_id: uuid.to_string(),
-        }),
-        _ => None,
-    }
+/// The dataset a cloud file belongs to, named by its cursor key; `None` for a
+/// name this version does not know.
+pub(crate) fn flat_name_to_dataset(name: &str) -> Option<&'static str> {
+    FileName::parse(name).map(|file| cursor_key_of(file.kind.dataset()))
 }
 
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
@@ -229,15 +135,13 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         }
     }
 
-    // One listing per round, from the earliest cursor among those streams; each
-    // stream then takes the files after its own.
-    let since = streams
+    // One listing per round for all the running streams; each stream then
+    // takes the files after its own cursor.
+    let cursors: Vec<(&str, &str)> = streams
         .iter()
-        .map(|(_, cursor)| cursor.as_str())
-        .min()
-        .expect("the core stream always runs")
-        .to_string();
-    let files = inner.cloud.list(&since).await?;
+        .map(|(key, cursor)| (*key, cursor.as_str()))
+        .collect();
+    let files = inner.cloud.list(&cursors).await?;
     if files.is_empty() {
         return Ok(());
     }
@@ -272,8 +176,11 @@ async fn pull_stream(
     // `handled[i]` must stay in the list order the cursor is computed from.
     let order: Vec<usize> = {
         let rank = |name: &str| -> u8 {
-            match parse_filename(name) {
-                Some(ParsedFile::AppGroups { .. }) => 0,
+            match FileName::parse(name) {
+                Some(FileName {
+                    kind: FileKind::AppGroups,
+                    ..
+                }) => 0,
                 _ => 1,
             }
         };
@@ -283,21 +190,21 @@ async fn pull_stream(
     };
     for &i in &order {
         let f = &files[i];
-        let Some(parsed) = parse_filename(&f.name) else {
+        let Some(FileName { device_id, kind }) = FileName::parse(&f.name) else {
             // A file name this version does not know is not ours to merge; let the cursor pass it.
             handled[i] = true;
             continue;
         };
         // Another stream's file, or one this stream merged in an earlier round:
         // nothing to do, but its cursor may pass.
-        if parsed.cursor_key() != cursor_key || f.modified_time.as_str() <= cursor {
+        if cursor_key_of(kind.dataset()) != cursor_key || f.modified_time.as_str() <= cursor {
             handled[i] = true;
             continue;
         }
         // This device's own files are never merged: its rows are the originals. Its
         // own tombstone in particular must not be: removing this device while keeping
         // local data uploads one, and applying it would delete that data here.
-        if parsed.device_id() == self_id {
+        if device_id == self_id {
             handled[i] = true;
             continue;
         }
@@ -310,25 +217,27 @@ async fn pull_stream(
             }
         };
 
-        let res = match parsed {
-            ParsedFile::DeviceMeta { device_id } => {
-                merge_device_meta(&inner.pool, &device_id, &body).await
+        let res = match kind {
+            FileKind::DeviceMeta => merge_device_meta(&inner.pool, &device_id, &body).await,
+            FileKind::Activities(local_date) => {
+                merge_activities(
+                    &inner.pool,
+                    &device_id,
+                    &local_date.to_string(),
+                    &body,
+                    ignore_rules,
+                )
+                .await
             }
-            ParsedFile::ActivityDay {
-                device_id,
-                local_date,
-            } => merge_activities(&inner.pool, &device_id, &local_date, &body, ignore_rules).await,
-            ParsedFile::Categories { .. } => merge_categories(&inner.pool, &body).await,
-            ParsedFile::AppIcons { .. } => merge_app_icons(&inner.pool, &body).await,
-            ParsedFile::AppGroups { .. } => merge_app_groups(&inner.pool, &body).await,
-            ParsedFile::AppGroupMembers { .. } => merge_app_group_members(&inner.pool, &body).await,
-            ParsedFile::AiSummaries { .. } => {
-                super::datasets::merge_ai_summaries(&inner.pool, &body).await
-            }
-            ParsedFile::Chat { .. } => {
+            FileKind::Categories => merge_categories(&inner.pool, &body).await,
+            FileKind::AppIcons => merge_app_icons(&inner.pool, &body).await,
+            FileKind::AppGroups => merge_app_groups(&inner.pool, &body).await,
+            FileKind::AppGroupMembers => merge_app_group_members(&inner.pool, &body).await,
+            FileKind::AiSummaries => super::datasets::merge_ai_summaries(&inner.pool, &body).await,
+            FileKind::Chat => {
                 super::datasets::merge_chat(inner.mem.as_ref().expect("gated"), &body).await
             }
-            ParsedFile::MemoryDay { device_id } => {
+            FileKind::Memory(_) => {
                 super::datasets::merge_memory_sessions(
                     inner.mem.as_ref().expect("gated"),
                     &device_id,
@@ -336,9 +245,7 @@ async fn pull_stream(
                 )
                 .await
             }
-            ParsedFile::Tombstone { device_id } => {
-                merge_tombstone(&inner.pool, &device_id, &body).await
-            }
+            FileKind::Tombstone => merge_tombstone(&inner.pool, &device_id, &body).await,
         };
         if let Err(e) = res {
             log::warn!("merge of {} failed: {e}", f.name);

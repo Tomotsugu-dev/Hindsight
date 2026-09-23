@@ -1,6 +1,7 @@
 //! Outbox + sync_cursor 的低层 SQL 操作。push/pull 路径共用。
 
 use rand::Rng;
+use rusqlite::OptionalExtension;
 
 use crate::error::Result;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
@@ -136,19 +137,20 @@ pub(super) async fn count_dead_letter(pool: &DbPool) -> Result<u64> {
     Ok(n.max(0) as u64)
 }
 
+/// A missing row is a cursor that has not started yet: 1970. Any other failure
+/// is an error; read as 1970, it would make pull merge every cloud file again.
 pub(super) async fn read_cursor(pool: &DbPool, entity: &str) -> Result<String> {
     let entity = entity.to_string();
-    let cursor = pool
+    let cursor: Option<String> = pool
         .0
         .call(move |conn| {
-            let r: Option<String> = conn
-                .query_row(
-                    "SELECT last_pulled_at FROM sync_cursor WHERE entity = ?",
-                    [&entity],
-                    |r| r.get(0),
-                )
-                .ok();
-            Ok(r)
+            conn.query_row(
+                "SELECT last_pulled_at FROM sync_cursor WHERE entity = ?",
+                [&entity],
+                |r| r.get(0),
+            )
+            .optional()
+            .db()
         })
         .await?;
     Ok(cursor.unwrap_or_else(|| "1970-01-01T00:00:00Z".into()))
@@ -265,6 +267,21 @@ mod tests {
         let pool = fresh_test_pool().await;
         let cursor = read_cursor(&pool, "drive_files").await.unwrap();
         assert_eq!(cursor, "1970-01-01T00:00:00Z");
+    }
+
+    /// 读游标时数据库出错要报错，不能当成「没有游标」从 1970 开始：那样下一轮会把云上
+    /// 的文件全部重新合并，清空过的数据会跟着回来。
+    #[tokio::test]
+    async fn read_cursor_reports_a_database_error() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute("DROP TABLE sync_cursor", []).db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert!(read_cursor(&pool, "drive_files").await.is_err());
     }
 
     /// `write_cursor` UPSERT：第二次写覆盖第一次的值。

@@ -7,7 +7,8 @@
 //! - fake auth token（直接 INSERT auth_state 表，绕过 OAuth）
 //!
 //! 共享：
-//! - 一个 [`InMemoryDriveStore`]（模拟 Drive appDataFolder）
+//! - 一个 [`InMemoryDriveStore`]（模拟 Drive appDataFolder）；文件末尾 WebDAV 一节
+//!   换成一个假 WebDAV 服务器 [`FakeDav`]
 //!
 //! 跟 Plan B/C 的 `#[cfg(test)] mod tests` 不同 —— 那些测的是 pure 函数；这里测的是
 //! "多个 SyncEngine 互相 push/pull 时整体行为正确"。
@@ -21,6 +22,7 @@ use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::cloud::CloudBackend;
 use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::engine::SyncEngine;
+use crate::sync::webdav::{Call, FakeDav, WebDavClient};
 
 struct TestDevice {
     pool: DbPool,
@@ -191,7 +193,7 @@ async fn sum_secs_for_device(dev: &TestDevice, device_id: &str) -> i64 {
 }
 
 async fn signed_in(dev: &TestDevice) -> bool {
-    crate::sync::auth::current_state(&dev.pool)
+    crate::sync::drive::auth::current_state(&dev.pool)
         .await
         .unwrap()
         .signed_in
@@ -289,7 +291,7 @@ async fn remove_device_requires_sign_in() {
     for p in ["Code", "Chrome", "Slack"] {
         insert_sealed(&a, p, captured, 30).await;
     }
-    crate::sync::auth::sign_out(&a.pool).await.unwrap();
+    crate::sync::drive::auth::sign_out(&a.pool).await.unwrap();
     drive.sign_out();
 
     let res = crate::commands::storage::purge_cloud_data_impl(
@@ -1465,4 +1467,209 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
         Some("grp-fk"),
         "app_group_members 行不能因文件序早于 app_groups 而丢失"
     );
+}
+
+// ─────────────── WebDAV（ADR-0007、ADR-0008） ───────────────
+//
+// 几台设备共用一个假 WebDAV 服务器，引擎走真的 push / pull；pull 靠 manifest 文件找改动。
+
+async fn make_webdav_device(self_id: &str, dav: Arc<FakeDav>) -> TestDevice {
+    let pool = DbPool::open_in_memory().await.unwrap();
+    migrations::run(&pool).await.unwrap();
+    let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
+    let client = WebDavClient::with_fake_server(dav, pool.clone(), self_id.to_string());
+    let engine = Arc::new(SyncEngine::with_backend(
+        pool.clone(),
+        Some(mem.clone()),
+        CloudBackend::WebDav(Box::new(client)),
+        self_id.to_string(),
+    ));
+    TestDevice {
+        pool,
+        mem,
+        engine,
+        self_id: self_id.to_string(),
+    }
+}
+
+/// 某台设备某天的活动日文件在服务器上的路径（相对同步根目录）。
+fn webdav_day_file(device_id: &str, day: DateTime<Local>) -> String {
+    format!(
+        "{device_id}/activities/{}/{}.ndjson",
+        day.format("%Y"),
+        day.format("%Y-%m-%d")
+    )
+}
+
+/// 调用记录里第 `from` 条往后的 GET 路径。
+async fn gets_since(dav: &FakeDav, from: usize) -> Vec<String> {
+    dav.calls().await[from..]
+        .iter()
+        .filter_map(|c| match c {
+            Call::Get(path) => Some(path.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A push 3 行 → B pull 到 3 行；云上是 A 的日文件加根目录的 manifest 文件。
+#[tokio::test]
+async fn webdav_cross_device_push_pull_basic() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+
+    let captured = Local::now();
+    insert_sealed(&a, "Code", captured, 30).await;
+    insert_sealed(&a, "Chrome", captured, 60).await;
+    insert_sealed(&a, "Slack", captured, 45).await;
+    a.engine.sync_now().await.expect("A sync_now");
+    b.engine.sync_now().await.expect("B sync_now");
+
+    assert_eq!(count_for_device(&b, "device-a").await, 3);
+    assert_eq!(sum_secs_for_device(&b, "device-a").await, 135);
+    assert_eq!(count_for_device(&a, "device-b").await, 0);
+    assert!(dav
+        .file(&webdav_day_file("device-a", captured))
+        .await
+        .is_some());
+    assert!(dav.file("manifest.device-a.json").await.is_some());
+}
+
+/// 合并完、进度也记下之后，什么都没变的一轮只发一个 PROPFIND（ADR-0008）：
+/// push 没东西不发请求，pull 看 manifest 文件的时间没变就不 GET。
+#[tokio::test]
+async fn webdav_idle_round_sends_one_propfind() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap(); // 报出、合并
+    b.engine.sync_now().await.unwrap(); // 游标过了 manifest 时间：记下进度
+
+    let before = dav.calls().await.len();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(&dav.calls().await[before..], &[Call::Propfind("".into())]);
+    assert_eq!(count_for_device(&b, "device-a").await, 1);
+}
+
+/// A 两个日文件只改了一个：B 只 GET manifest 文件和改了的那个。
+#[tokio::test]
+async fn webdav_pulls_only_the_files_that_changed() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    let today = Local::now();
+    let yesterday = today - Duration::days(1);
+    insert_sealed(&a, "Code", yesterday, 30).await;
+    insert_sealed(&a, "Code", today, 30).await;
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    insert_sealed(&a, "Chrome", today, 60).await;
+    a.engine.sync_now().await.unwrap();
+    let before = dav.calls().await.len();
+    b.engine.sync_now().await.unwrap();
+
+    assert_eq!(
+        gets_since(&dav, before).await,
+        vec![
+            "manifest.device-a.json".to_string(),
+            webdav_day_file("device-a", today)
+        ]
+    );
+    assert_eq!(count_for_device(&b, "device-a").await, 3);
+}
+
+/// 下载失败的文件下一轮重试：失败的那几轮不能把进度记过去（ADR-0008 Pull 一节）。
+#[tokio::test]
+async fn webdav_a_failed_download_is_retried() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    let captured = Local::now();
+    insert_sealed(&a, "Code", captured, 30).await;
+    a.engine.sync_now().await.unwrap();
+
+    // 服务器上 A 的日文件暂时读不到：B 连着两轮下载失败
+    let day = webdav_day_file("device-a", captured);
+    let body = dav.take_file(&day).await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 0);
+
+    // 文件回来了，下一轮补上
+    dav.seed_file(&day, &body).await;
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 1);
+}
+
+/// B 的 AI 总结开关关着时先同步过，打开开关后要补上 A 的日报，而清空过的活动不能跟着
+/// 回来（ADR-0006：开关打开后只有这类数据从停下的地方接着拉）。
+// 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
+async fn webdav_turning_on_a_dataset_pulls_its_history() {
+    let _env_lock = crate::repo::test_util::lock_data_dir_env();
+    let _data_dir = DataDirOverride::unique_temp();
+    let _digest = crate::memory::digest::drain_lock().await;
+
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+
+    // A 开着 AI 总结同步：推上去一条活动 + 一份日报
+    enable_ai_summaries_sync(&a).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.pool
+        .0
+        .call(|conn| {
+            conn.execute(
+                "INSERT INTO ai_summaries(source, local_date, segment_idx, label, start_hour,
+                                          end_hour, content, model, status, error, generated_at)
+                 VALUES ('daily','2026-07-05',0,'深夜',0,6,'凌晨在写代码','m','ok',NULL,
+                         '2026-07-05T10:00:00Z')",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+
+    // B 的开关关着：拉到活动、跳过日报；第二轮记下进度
+    b.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 1);
+    assert_eq!(ai_summary_count(&b).await, 0, "开关关着不该拉到日报");
+
+    // B 清空数据后打开 AI 总结开关，再同步
+    crate::commands::storage::purge_local_data_impl(&b.pool, Some(&b.mem))
+        .await
+        .expect("purge_local_data");
+    enable_ai_summaries_sync(&b).await;
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(ai_summary_count(&b).await, 1, "打开开关后应补上 A 的日报");
+    assert_eq!(
+        count_for_device(&b, "device-a").await,
+        0,
+        "清空过的活动记录不该跟着回来"
+    );
+}
+
+/// 新开的账号，云上还没有同步根目录：两台设备照常同步。
+#[tokio::test]
+async fn webdav_sync_works_on_a_new_account() {
+    let dav = Arc::new(FakeDav::without_root());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+
+    b.engine.sync_now().await.expect("B 先同步：云上什么都没有");
+    a.engine.sync_now().await.expect("A 第一次上传");
+    b.engine.sync_now().await.expect("B 拉到 A");
+    assert_eq!(count_for_device(&b, "device-a").await, 1);
 }
