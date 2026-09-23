@@ -11,4 +11,6 @@
 - 状态本身需要 SSR-safe 的初始化、跟着组件挂载/卸载、或天然嵌套于一个 React 子树 → Provider（`.tsx`）
 - 状态是事件流（如 Tauri event listener）+ 跨整个 app 的全局值，且不需要 Provider 包装 → 模块级 store（`.ts`）。这样切侧栏 unmount 不会丢监听。
 
+**界面偏好**（视图切换、筛选）只存本机的 localStorage，不进同步。各页分开记的，一页一个键，比如 `statsView.ts`。
+
 **错误处理**：所有这些文件的 catch 都走 `lib/logger.ts` 的 `logError(scope, err)`，scope 命名格式 `area.action`（如 `settings.load`、`devices.renameSelf`）。
