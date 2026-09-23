@@ -23,7 +23,7 @@ use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
-use crate::sync::cloud::CloudBackend;
+use crate::sync::cloud::{CloudBackend, FailureKind};
 
 /// Prefix of `last_error` when the user has to sign in again. The Devices page
 /// matches these prefixes as written.
@@ -31,38 +31,19 @@ pub(super) const ERR_PREFIX_CRED_EXPIRED: &str = "[CRED_EXPIRED] ";
 /// Prefix of `last_error` when the next round will retry on its own.
 pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 
-/// Classifies a sync error as needing the user to act, or as something the next
-/// tick will retry, and returns the matching prefix. It never looks at the
-/// error's text, so the result is safe to log.
-fn sync_error_prefix(e: &Error) -> &'static str {
-    match e {
-        // 400 and 401 are Google saying it no longer accepts this refresh token:
-        // the user revoked the grant, or the token expired.
-        Error::OAuthHttp {
-            operation: "refresh",
-            status,
-            ..
-        } if *status == 400 || *status == 401 => ERR_PREFIX_CRED_EXPIRED,
-        // AES cannot decrypt: the local key or the ciphertext is damaged, and
-        // signing in again is the only way out.
-        Error::Crypto(_) => ERR_PREFIX_CRED_EXPIRED,
-        // Scope missing: the token has no drive.appdata permission, and only
-        // the consent page can grant it.
-        Error::DriveScopeInsufficient => ERR_PREFIX_CRED_EXPIRED,
-        // WebDAV 401: the user name or app password is wrong or was revoked.
-        // There is no refresh; the user has to enter it again (ADR-0007).
-        Error::WebDavHttp { status: 401, .. } => ERR_PREFIX_CRED_EXPIRED,
-        // Everything else is retried by the next tick.
-        // TODO: WebDAV 507 (out of space) should stop retrying and tell the
-        // user; that needs a third prefix (ADR-0007 error table).
-        _ => ERR_PREFIX_TRANSIENT,
+/// The prefix the Devices page matches for each kind of failure. The backend
+/// decides the kind; see [`CloudBackend::failure_kind`].
+fn sync_error_prefix(kind: FailureKind) -> &'static str {
+    match kind {
+        FailureKind::CredentialInvalid => ERR_PREFIX_CRED_EXPIRED,
+        FailureKind::Transient => ERR_PREFIX_TRANSIENT,
     }
 }
 
 /// The prefix followed by the full error text, for `status.last_error`. The
 /// frontend reads the prefix to decide whether to offer signing in again.
-fn format_sync_error(e: &Error) -> String {
-    format!("{}{e}", sync_error_prefix(e))
+fn format_sync_error(kind: FailureKind, e: &Error) -> String {
+    format!("{}{e}", sync_error_prefix(kind))
 }
 
 /// Records a failed push or pull round for the Devices page. The log gets the
@@ -70,9 +51,13 @@ fn format_sync_error(e: &Error) -> String {
 /// printed by default, and the text can carry a Google response. Start with
 /// RUST_LOG=hindsight=debug to see it.
 async fn record_round_failure(inner: &Inner, round: &str, e: &Error) {
-    log::warn!("sync {round} failed {}(see status)", sync_error_prefix(e));
+    let kind = inner.cloud.failure_kind(e);
+    log::warn!(
+        "sync {round} failed {}(see status)",
+        sync_error_prefix(kind)
+    );
     log::debug!("sync {round}: {e}");
-    inner.status.write().await.last_error = Some(format_sync_error(e));
+    inner.status.write().await.last_error = Some(format_sync_error(kind, e));
 }
 
 /// What the Devices page shows about sync. Returned by `sync_status`.

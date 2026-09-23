@@ -32,7 +32,7 @@ use serde_json::json;
 
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
-use crate::sync::cloud::FileMeta;
+use crate::sync::cloud::{FailureKind, FileMeta};
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
@@ -65,6 +65,26 @@ struct ListResp {
     /// `pageToken` to get the following page.
     #[serde(rename = "nextPageToken", default)]
     next_page_token: Option<String>,
+}
+
+pub(crate) fn failure_kind(e: &Error) -> FailureKind {
+    match e {
+        // 400 and 401 are Google saying it no longer accepts this refresh token:
+        // the user revoked the grant, or the token expired.
+        Error::OAuthHttp {
+            operation: "refresh",
+            status,
+            ..
+        } if *status == 400 || *status == 401 => FailureKind::CredentialInvalid,
+        // AES cannot decrypt: the local key or the ciphertext is damaged, and
+        // signing in again is the only way out.
+        Error::Crypto(_) => FailureKind::CredentialInvalid,
+        // Scope missing: the token has no drive.appdata permission, and only
+        // the consent page can grant it.
+        Error::DriveScopeInsufficient => FailureKind::CredentialInvalid,
+        // Everything else is retried by the next tick.
+        _ => FailureKind::Transient,
+    }
 }
 
 /// The Google Drive backend. `pool` serves one purpose: reading and writing
@@ -351,5 +371,43 @@ async fn http_err(stage: &'static str, resp: reqwest::Response) -> Error {
         stage,
         status,
         body,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn oauth(operation: &'static str, status: u16) -> Error {
+        Error::OAuthHttp {
+            operation,
+            status,
+            body: String::new(),
+        }
+    }
+
+    /// 要用户重新登录的只有三种：refresh 被 Google 拒（400 / 401）、本地解不开密、
+    /// 权限不够。其余的，包括第一次换 token 时的 401 和 Drive 的 500，都等下一轮重试。
+    #[test]
+    fn failure_kind_asks_to_sign_in_only_for_a_dead_credential() {
+        use FailureKind::{CredentialInvalid, Transient};
+        assert_eq!(failure_kind(&oauth("refresh", 400)), CredentialInvalid);
+        assert_eq!(failure_kind(&oauth("refresh", 401)), CredentialInvalid);
+        assert_eq!(
+            failure_kind(&Error::Crypto("aes decrypt")),
+            CredentialInvalid
+        );
+        assert_eq!(
+            failure_kind(&Error::DriveScopeInsufficient),
+            CredentialInvalid
+        );
+        assert_eq!(failure_kind(&oauth("token", 401)), Transient);
+        assert_eq!(failure_kind(&oauth("refresh", 500)), Transient);
+        let drive_500 = Error::DriveHttp {
+            stage: "Drive list",
+            status: 500,
+            body: String::new(),
+        };
+        assert_eq!(failure_kind(&drive_500), Transient);
     }
 }

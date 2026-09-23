@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::storage::DbPool;
 #[cfg(test)]
 use crate::sync::drive::InMemoryDriveStore;
@@ -31,6 +31,14 @@ pub struct FileMeta {
     /// File size in bytes; reserved for future diagnostics / "cloud usage" display.
     #[allow(dead_code)]
     pub size: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureKind {
+    /// The credential no longer works: the user has to sign in again.
+    CredentialInvalid,
+    /// Anything else: the next round retries on its own.
+    Transient,
 }
 
 /// The cloud behind sync. The sync engine holds one, and push, pull and the
@@ -117,6 +125,17 @@ impl CloudBackend {
             CloudBackend::WebDav(c) => c.ensure_credential().await,
             #[cfg(test)]
             CloudBackend::InMemory(store) => Ok(store.signed_in()),
+        }
+    }
+
+    /// Sorts an error from a sync round into a [`FailureKind`]. It never looks
+    /// at the error's text, so the result is safe to log.
+    pub fn failure_kind(&self, e: &Error) -> FailureKind {
+        match self {
+            CloudBackend::Drive(_) => drive::failure_kind(e),
+            CloudBackend::WebDav(_) => webdav::failure_kind(e),
+            #[cfg(test)]
+            CloudBackend::InMemory(_) => drive::failure_kind(e),
         }
     }
 

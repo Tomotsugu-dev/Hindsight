@@ -28,7 +28,7 @@ use manifest::{manifest_path, manifest_to_device_id, Manifest};
 
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
-use crate::sync::cloud::FileMeta;
+use crate::sync::cloud::{FailureKind, FileMeta};
 use crate::sync::engine::{flat_name_to_dataset, rewind_cursor};
 
 /// WebDAV Server only provides modification times with second precision (ADR-0007 §4).
@@ -49,6 +49,18 @@ pub(crate) enum UploadMethod {
     /// `PUT` to a `.tmp-` name, then `MOVE` onto the file name. For servers
     /// whose `PUT` can leave a half-written file behind, such as Nextcloud.
     TempThenMove,
+}
+
+pub(crate) fn failure_kind(e: &Error) -> FailureKind {
+    match e {
+        // WebDAV 401: the user name or app password is wrong or was revoked.
+        // There is no refresh; the user has to enter it again (ADR-0007).
+        Error::WebDavHttp { status: 401, .. } => FailureKind::CredentialInvalid,
+        // Everything else is retried by the next tick.
+        // TODO: WebDAV 507 (out of space) should stop retrying and tell the
+        // user; that needs a third kind (ADR-0007 error table).
+        _ => FailureKind::Transient,
+    }
 }
 
 /// Nutstore's WebDAV host.
@@ -980,6 +992,19 @@ mod tests {
         assert_eq!(m.files.len(), 1);
         assert_eq!(m.files["categories.json"], 1);
         assert!(dav.file("me/icons.json").await.is_none());
+    }
+
+    /// 401 要用户重新填账号密码；别的状态码等下一轮重试。
+    #[test]
+    fn failure_kind_asks_to_sign_in_only_for_401() {
+        let http = |status| Error::WebDavHttp {
+            stage: "propfind",
+            status,
+            body: String::new(),
+        };
+        assert_eq!(failure_kind(&http(401)), FailureKind::CredentialInvalid);
+        assert_eq!(failure_kind(&http(403)), FailureKind::Transient);
+        assert_eq!(failure_kind(&http(507)), FailureKind::Transient);
     }
 
     // ───── 各家服务器的上传方式 ─────
