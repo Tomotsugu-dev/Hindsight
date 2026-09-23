@@ -564,7 +564,7 @@ const RESET_DRIVE_FILES_CURSOR_SQL: &str = r#"
 ///
 /// 第二段：兜底重新 enqueue 每个 (origin='local', local_date) 一条 outbox。覆盖
 /// "outbox 行从未产生" 的 edge case —— 比如 v9 切后端 + v13 backfill 之后某些天数据漏入。
-/// 不是幂等的（INSERT 不带 OR IGNORE），但 push.group_outbox 按 ActivityDay(date) 把
+/// 不是幂等的（INSERT 不带 OR IGNORE），但 push.group_outbox 按 Activities(date) 把
 /// 同天的重复行塌成一次 build + 一次上传，最终 Drive 状态正确。
 ///
 /// 一次性副作用：升级后下个 push tick 会一口气把所有死信对应的 ndjson 重推 Drive，
