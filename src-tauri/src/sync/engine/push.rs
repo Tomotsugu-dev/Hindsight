@@ -168,11 +168,11 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
                 .and_then(|p| {
                     p.get("localDate")
                         .and_then(|v| v.as_str())
-                        .map(String::from)
+                        .and_then(|s| s.parse::<chrono::NaiveDate>().ok())
                 }) {
                 Some(d) => FileKind::Activities(d),
                 None => {
-                    log::warn!("outbox row {} 是 activity 但 payload 缺 localDate", row.id);
+                    log::warn!("outbox row {} has no usable localDate", row.id);
                     ungroupable.push(row.id);
                     continue;
                 }
@@ -197,7 +197,7 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
 /// optional datasets are not outbox-driven; `datasets.rs` builds those.
 async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<Vec<u8>> {
     match kind {
-        FileKind::Activities(day) => build_activities_day(pool, self_id, day).await,
+        FileKind::Activities(date) => build_activities_day(pool, self_id, &date.to_string()).await,
         FileKind::Categories => build_categories(pool).await,
         FileKind::DeviceMeta => build_device_meta(pool, self_id).await,
         FileKind::AppIcons => build_app_icons(pool).await,
@@ -518,7 +518,7 @@ mod tests {
         );
         assert!(ungroupable.is_empty(), "合法行不应进 ungroupable");
         let ids = groups
-            .get(&FileKind::Activities("2026-05-15".into()))
+            .get(&FileKind::Activities("2026-05-15".parse().unwrap()))
             .expect("Activities key should exist");
         let mut ids = ids.clone();
         ids.sort();
@@ -546,13 +546,13 @@ mod tests {
         assert_eq!(groups.len(), 2);
         assert!(ungroupable.is_empty(), "合法行不应进 ungroupable");
         let mut d1 = groups
-            .get(&FileKind::Activities("2026-05-15".into()))
+            .get(&FileKind::Activities("2026-05-15".parse().unwrap()))
             .unwrap()
             .clone();
         d1.sort();
         assert_eq!(d1, vec![1, 3]);
         let d2 = groups
-            .get(&FileKind::Activities("2026-05-16".into()))
+            .get(&FileKind::Activities("2026-05-16".parse().unwrap()))
             .unwrap()
             .clone();
         assert_eq!(d2, vec![2]);

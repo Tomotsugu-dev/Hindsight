@@ -259,6 +259,10 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
         })
         .await?;
     for day in &days {
+        let Ok(date) = day.parse::<chrono::NaiveDate>() else {
+            log::warn!("push memory: local_date {day:?} is not a date, skipped");
+            continue;
+        };
         let d = day.clone();
         let rows: Vec<MemorySessionPayload> = mem
             .0
@@ -294,7 +298,7 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             out.extend_from_slice(serde_json::to_string(row)?.as_bytes());
             out.push(b'\n');
         }
-        upload(inner, FileKind::Memory(day.clone()), out).await?;
+        upload(inner, FileKind::Memory(date), out).await?;
     }
     io::write_cursor(&inner.pool, CURSOR_MEMORY, &watermark).await?;
     if !days.is_empty() {

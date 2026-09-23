@@ -27,11 +27,10 @@ pub(crate) fn flat_name_to_path(flat_name: &str) -> Option<String> {
     let segment = kind.segment();
     match kind.date() {
         // <id>/<kind>/<year>/<date>.ndjson
-        Some(date) if is_date(date) => Some(format!(
+        Some(date) => Some(format!(
             "{device_id}/{segment}/{}/{date}.ndjson",
-            &date[..4]
+            date.format("%Y")
         )),
-        Some(_) => None,
         // <id>/<kind>.json
         None => Some(format!("{device_id}/{segment}.json")),
     }
@@ -45,7 +44,7 @@ pub(crate) fn path_to_flat_name(path: &str) -> Option<String> {
         // <id>/<kind>/<year>/<date>.ndjson  ->  device.<id>.<kind>.<date>.ndjson
         [id, kind, year, file] if is_valid_path(id) => {
             let date = file.strip_suffix(".ndjson")?;
-            if !is_date(date) || &date[..4] != *year {
+            if date.get(..4)? != *year {
                 return None;
             }
             format!("device.{id}.{kind}.{date}.ndjson")
@@ -73,20 +72,6 @@ pub(crate) fn temporary_upload_path(path: &str) -> String {
 /// non-empty and does not contain '.' or '/'.
 fn is_valid_path(s: &str) -> bool {
     !s.is_empty() && !s.contains(['.', '/'])
-}
-
-/// Return true if the string is in the format `YYYY-MM-DD`
-fn is_date(s: &str) -> bool {
-    let b = s.as_bytes();
-    b.len() == 10
-        && b.iter().enumerate().all(|(i, c)| {
-            // 4th and 7th characters must be '-'
-            if i == 4 || i == 7 {
-                *c == b'-'
-            } else {
-                c.is_ascii_digit()
-            }
-        })
 }
 
 // ─────────────── Date Handling ───────────────

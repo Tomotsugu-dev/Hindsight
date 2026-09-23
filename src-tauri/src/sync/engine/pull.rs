@@ -220,7 +220,14 @@ async fn pull_stream(
         let res = match kind {
             FileKind::DeviceMeta => merge_device_meta(&inner.pool, &device_id, &body).await,
             FileKind::Activities(local_date) => {
-                merge_activities(&inner.pool, &device_id, &local_date, &body, ignore_rules).await
+                merge_activities(
+                    &inner.pool,
+                    &device_id,
+                    &local_date.to_string(),
+                    &body,
+                    ignore_rules,
+                )
+                .await
             }
             FileKind::Categories => merge_categories(&inner.pool, &body).await,
             FileKind::AppIcons => merge_app_icons(&inner.pool, &body).await,

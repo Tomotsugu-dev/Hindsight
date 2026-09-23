@@ -11,6 +11,8 @@
 //! device.<device-id>.<kind>.<YYYY-MM-DD>.ndjson   one file per day
 //! ```
 
+use chrono::NaiveDate;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FileName {
     pub(crate) device_id: String,
@@ -19,8 +21,8 @@ pub(crate) struct FileName {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum FileKind {
-    /// One file per day; the `String` is the date the rows belong to, `YYYY-MM-DD`.
-    Activities(String),
+    /// One file per day: the date the rows belong to.
+    Activities(NaiveDate),
     Categories,
     DeviceMeta,
     AppIcons,
@@ -35,9 +37,8 @@ pub(crate) enum FileKind {
     AiSummaries,
     /// Opt-in upload: chat history.
     Chat,
-    /// Opt-in upload: screen-memory full text, one file per day; the `String` is
-    /// the date, `YYYY-MM-DD`.
-    Memory(String),
+    /// Opt-in upload: screen-memory full text, one file per day.
+    Memory(NaiveDate),
 }
 
 /// Which dataset a file belongs to. A dataset is a group of files pulled together,
@@ -78,9 +79,9 @@ impl FileKind {
     }
 
     /// The date a day file covers; `None` for the kinds that are one file per table.
-    pub(crate) fn date(&self) -> Option<&str> {
+    pub(crate) fn date(&self) -> Option<NaiveDate> {
         match self {
-            FileKind::Activities(date) | FileKind::Memory(date) => Some(date),
+            FileKind::Activities(date) | FileKind::Memory(date) => Some(*date),
             _ => None,
         }
     }
@@ -103,9 +104,9 @@ impl FileName {
         let parts: Vec<&str> = name.split('.').collect();
         let (device_id, kind) = match parts.as_slice() {
             ["device", id, "activities", date, "ndjson"] => {
-                (id, FileKind::Activities(date.to_string()))
+                (id, FileKind::Activities(parse_date(date)?))
             }
-            ["device", id, "memory", date, "ndjson"] => (id, FileKind::Memory(date.to_string())),
+            ["device", id, "memory", date, "ndjson"] => (id, FileKind::Memory(parse_date(date)?)),
             ["device", id, segment, "json"] => {
                 let kind = match *segment {
                     "categories" => FileKind::Categories,
@@ -134,6 +135,14 @@ impl FileName {
     }
 }
 
+/// The date in a day file's name, exactly as [`FileName::to_file_name`] writes
+/// it: `YYYY-MM-DD`. chrono alone would also take `2026-9-5`, which would not
+/// round-trip.
+fn parse_date(s: &str) -> Option<NaiveDate> {
+    let date = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
+    (date.to_string() == s).then_some(date)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,11 +154,15 @@ mod tests {
         }
     }
 
+    fn date(s: &str) -> NaiveDate {
+        s.parse().unwrap()
+    }
+
     /// 每一种文件起的名字都认得回来，一个字都不差。
     #[test]
     fn every_kind_survives_a_round_trip() {
         let kinds = [
-            FileKind::Activities("2026-09-23".into()),
+            FileKind::Activities(date("2026-09-23")),
             FileKind::Categories,
             FileKind::DeviceMeta,
             FileKind::AppIcons,
@@ -158,7 +171,7 @@ mod tests {
             FileKind::Tombstone,
             FileKind::AiSummaries,
             FileKind::Chat,
-            FileKind::Memory("2026-09-23".into()),
+            FileKind::Memory(date("2026-09-23")),
         ];
         for kind in kinds {
             let f = file(kind);
@@ -170,11 +183,11 @@ mod tests {
     #[test]
     fn names_keep_the_shape_other_versions_read() {
         assert_eq!(
-            file(FileKind::Activities("2026-09-23".into())).to_file_name(),
+            file(FileKind::Activities(date("2026-09-23"))).to_file_name(),
             "device.abc.activities.2026-09-23.ndjson"
         );
         assert_eq!(
-            file(FileKind::Memory("2026-09-23".into())).to_file_name(),
+            file(FileKind::Memory(date("2026-09-23"))).to_file_name(),
             "device.abc.memory.2026-09-23.ndjson"
         );
         assert_eq!(
@@ -192,7 +205,7 @@ mod tests {
         assert_eq!(FileName::device_prefix("abc"), "device.abc.");
     }
 
-    /// 不是同步文件的名字、这个版本不认识的种类，都是 `None`。
+    /// 不是同步文件的名字、这个版本不认识的种类、不成日期的日期，都是 `None`。
     #[test]
     fn unknown_names_are_none() {
         for name in [
@@ -200,6 +213,8 @@ mod tests {
             "device.abc.notes.json",
             "device.abc.activities.json",
             "device.abc.categories.2026-09-23.ndjson",
+            "device.abc.activities.2026-13-45.ndjson",
+            "device.abc.activities.2026-9-5.ndjson",
             "manifest.abc.json",
         ] {
             assert_eq!(FileName::parse(name), None, "{name}");
@@ -212,11 +227,11 @@ mod tests {
         assert_eq!(FileKind::AiSummaries.dataset(), Dataset::AiSummaries);
         assert_eq!(FileKind::Chat.dataset(), Dataset::Chat);
         assert_eq!(
-            FileKind::Memory("2026-09-23".into()).dataset(),
+            FileKind::Memory(date("2026-09-23")).dataset(),
             Dataset::Memory
         );
         assert_eq!(
-            FileKind::Activities("2026-09-23".into()).dataset(),
+            FileKind::Activities(date("2026-09-23")).dataset(),
             Dataset::Core
         );
         assert_eq!(FileKind::Tombstone.dataset(), Dataset::Core);
