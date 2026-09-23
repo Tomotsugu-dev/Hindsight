@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
@@ -14,8 +14,9 @@ import {
   AppDetailDrawer,
   type AppDetailTarget,
 } from "../../components/AppDetailDrawer/AppDetailDrawer";
-import { ViewToggle, type StatsView } from "../../components/ViewToggle/ViewToggle";
+import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
+import { getStatsView, setStatsView, subscribeStatsView } from "../../state/statsView";
 import { useDayCache } from "../../hooks/useDayCache";
 import { useHourApps } from "../../hooks/useHourApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
@@ -57,8 +58,9 @@ export default function TodayPage() {
   const { settings } = useSettings();
   const fmtHM = useDurationFormatter();
 
-  /** 「时段 / 占比」segmented；默认 "bars" 保留现有行为。 */
-  const [view, setView] = useState<StatsView>("bars");
+  /** 「时段 / 占比」segmented；本页独立记忆并持久化（state/statsView.ts，scope="today"），
+   *  切页往返与重启后保留用户在本页上次选的视图，不受 Week/Month 影响。默认 "bars"。 */
+  const view = useSyncExternalStore(subscribeStatsView, () => getStatsView("today"));
   /** 占比 drill：当前选中的 super-id；null 表示列表层。 */
   const [drillId, setDrillId] = useState<string | null>(null);
   // 切设备 / 切视图 → 自动回列表层。view 进 deps 是为了：用户在占比里
@@ -247,7 +249,7 @@ export default function TodayPage() {
         headLeftExtras={
           <ViewToggle
             view={view}
-            onChange={(v) => withViewTransition(() => setView(v))}
+            onChange={(v) => withViewTransition(() => setStatsView("today", v))}
           />
         }
         pillLabel={dayLabel(offset)}
