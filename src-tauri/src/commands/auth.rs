@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::storage::DbPool;
-use crate::sync::auth::{self, AuthState};
+use crate::sync::drive::auth::{self, AuthState};
 use crate::sync::engine::SyncEngine;
 
 /// OAuth 授权 URL 就绪事件:payload = { url, opened }。

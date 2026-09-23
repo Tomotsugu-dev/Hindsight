@@ -193,7 +193,7 @@ async fn sum_secs_for_device(dev: &TestDevice, device_id: &str) -> i64 {
 }
 
 async fn signed_in(dev: &TestDevice) -> bool {
-    crate::sync::auth::current_state(&dev.pool)
+    crate::sync::drive::auth::current_state(&dev.pool)
         .await
         .unwrap()
         .signed_in
@@ -291,7 +291,7 @@ async fn remove_device_requires_sign_in() {
     for p in ["Code", "Chrome", "Slack"] {
         insert_sealed(&a, p, captured, 30).await;
     }
-    crate::sync::auth::sign_out(&a.pool).await.unwrap();
+    crate::sync::drive::auth::sign_out(&a.pool).await.unwrap();
     drive.sign_out();
 
     let res = crate::commands::storage::purge_cloud_data_impl(

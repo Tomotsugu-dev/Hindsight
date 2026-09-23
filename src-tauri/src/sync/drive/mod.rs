@@ -15,6 +15,8 @@
 //! it once when Drive answers 401. That table is the only one a backend reads;
 //! the outbox, the cursors and the activity tables belong to the engine.
 
+pub mod auth;
+mod auth_callback;
 #[cfg(test)]
 mod fake;
 
@@ -30,7 +32,6 @@ use serde_json::json;
 
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
-use crate::sync::auth;
 use crate::sync::cloud::FileMeta;
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";

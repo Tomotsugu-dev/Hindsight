@@ -334,7 +334,7 @@ pub(crate) async fn purge_cloud_data_impl(
         }
     }
 
-    crate::sync::auth::sign_out(pool)
+    crate::sync::drive::auth::sign_out(pool)
         .await
         .map_err(|e| e.to_string())?;
 
