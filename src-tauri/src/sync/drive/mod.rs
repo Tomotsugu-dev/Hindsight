@@ -37,11 +37,9 @@ use crate::sync::cloud::{FailureKind, FileMeta};
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
-/// Drive's sync cadence: the intervals sync has always run at. Drive filters
-/// listings server-side and has no request budget worth counting, so there is
-/// nothing to hold back for.
-pub(super) const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(30);
-pub(super) const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(60);
+/// Drive's sync cadence: 5 minutes.
+pub(super) const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(300);
+pub(super) const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(300);
 
 /// One entry of Google's file listing, as it arrives. `size` comes as a string
 /// and is missing for folders; the rest of the engine sees the converted
