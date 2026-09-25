@@ -12,7 +12,7 @@ mod push;
 #[cfg(test)]
 mod e2e_tests;
 
-pub(crate) use pull::{flat_name_to_dataset, rewind_cursor, CURSOR_CORE};
+pub(crate) use pull::rewind_cursor;
 
 use std::sync::Arc;
 

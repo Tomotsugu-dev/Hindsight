@@ -44,12 +44,25 @@ pub(crate) enum FileKind {
 /// Which dataset a file belongs to. A dataset is a group of files pulled together,
 /// each with its own pull cursor; Core is always on, the other three are switched
 /// on by the user in settings (ADR-0006).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Dataset {
     Core,
     AiSummaries,
     Chat,
     Memory,
+}
+
+impl Dataset {
+    /// The dataset's name in `sync_cursor`: the `chat` in `push.chat`, and the key
+    /// of WebDAV bookmarks. Users' databases hold it, so it must not change.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Dataset::Core => "core",
+            Dataset::AiSummaries => "ai_summaries",
+            Dataset::Chat => "chat",
+            Dataset::Memory => "memory",
+        }
+    }
 }
 
 impl FileKind {

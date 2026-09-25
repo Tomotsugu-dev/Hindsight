@@ -1,7 +1,8 @@
 //! The WebDAV backend (ADR-0007, ADR-0008). [`WebDavClient`] is what the
 //! engine sees: it reads the peers' manifests to find changes, downloads and
-//! deletes. Its own state lives in `sync_cursor` under `webdav.` keys, which
-//! the engine never reads.
+//! deletes. Its names in `sync_cursor` all start with `webdav.<host>.`
+//! (ADR-0011 §3). The bookmarks and the changes not yet written into the
+//! manifest file are its own; the engine never reads them.
 
 // Removed when the client is wired in (ADR-0007 follow-up 3).
 #![allow(dead_code)]
@@ -16,13 +17,14 @@ mod manifest;
 #[cfg(test)]
 pub(crate) use fake::{Call, FakeDav};
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use account_hash::cursor_name_prefix;
 use dav::{Dav, DavOps, HttpDav};
 use layout::{flat_name_to_path, path_to_flat_name, temporary_upload_path};
 use manifest::{manifest_path, manifest_to_device_id, Manifest};
@@ -30,7 +32,8 @@ use manifest::{manifest_path, manifest_to_device_id, Manifest};
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::cloud::{FailureKind, FileMeta};
-use crate::sync::engine::{flat_name_to_dataset, rewind_cursor};
+use crate::sync::engine::rewind_cursor;
+use crate::sync::file_name::{Dataset, FileName};
 
 /// WebDAV Server only provides modification times with second precision (ADR-0007 §4).
 pub(crate) const TIME_PRECISION: Duration = Duration::from_secs(1);
@@ -78,20 +81,23 @@ fn upload_method_for(host: &str) -> UploadMethod {
 
 /// The WebDAV backend. `pool` serves one purpose: reading and writing this
 /// device's own rows in `sync_cursor` — its progress on each peer's manifest
-/// (`webdav.peer.*`) and the changes not yet written into its own manifest
-/// file (`webdav.pending`).
+/// (`peer.*`) and the changes not yet written into its own manifest file
+/// (`pending`).
 pub(crate) struct WebDavClient {
     dav: Dav,
     upload_method: UploadMethod,
     pool: DbPool,
     self_id: String,
+    /// The prefix of this server's names in `sync_cursor`, e.g.,
+    /// `webdav.dav.jianguoyun.com.`.
+    name_prefix: String,
     /// When the last manifest upload attempt ended. A failed attempt counts: the
     /// server may have written the file and only the response was lost.
     last_manifest_attempt: Mutex<Option<Instant>>,
 }
 
 /// This device's own files uploaded or deleted and not yet written into the
-/// manifest file. Every change goes straight to the `webdav.pending`
+/// manifest file. Every change goes straight to the `pending`
 /// row of `sync_cursor`, so closing the app loses nothing;
 /// [`WebDavClient::end_push_round`] clears it once the manifest file is written.
 /// Paths are relative to the device directory, like the manifest file's keys.
@@ -113,12 +119,14 @@ impl WebDavClient {
         upload_method: UploadMethod,
         pool: DbPool,
         self_id: String,
+        name_prefix: String,
     ) -> Self {
         Self {
             dav,
             upload_method,
             pool,
             self_id,
+            name_prefix,
             last_manifest_attempt: Mutex::new(None),
         }
     }
@@ -131,7 +139,13 @@ impl WebDavClient {
         pool: DbPool,
         self_id: String,
     ) -> Self {
-        Self::new(Dav::Fake(dav), UploadMethod::TempThenMove, pool, self_id)
+        Self::new(
+            Dav::Fake(dav),
+            UploadMethod::TempThenMove,
+            pool,
+            self_id,
+            "webdav.fake.".into(),
+        )
     }
 
     pub(crate) fn connect(
@@ -143,7 +157,14 @@ impl WebDavClient {
     ) -> Result<Self> {
         let http = HttpDav::new(server_url, username, password)?;
         let upload_method = upload_method_for(http.host());
-        Ok(Self::new(Dav::Http(http), upload_method, pool, self_id))
+        let name_prefix = cursor_name_prefix(server_url)?;
+        Ok(Self::new(
+            Dav::Http(http),
+            upload_method,
+            pool,
+            self_id,
+            name_prefix,
+        ))
     }
 
     /// WebDAV doesn't have a concept of logging in;
@@ -153,12 +174,15 @@ impl WebDavClient {
         Ok(true)
     }
 
+    pub(crate) fn name_prefix(&self) -> &str {
+        &self.name_prefix
+    }
+
     /// Finds the peers' files the running datasets still have to merge, per
-    /// ADR-0008. `streams` names each running dataset by its cursor key, with
-    /// its local cursor: how far the engine merged; a dataset not in it is
-    /// left alone. Each file's `modified_time` is the server time of its
-    /// manifest.
-    pub(crate) async fn list(&self, streams: &[(&str, &str)]) -> Result<Vec<FileMeta>> {
+    /// ADR-0008. `streams` lists each running dataset with its local cursor:
+    /// how far the engine merged; a dataset not in it is left alone. Each
+    /// file's `modified_time` is the server time of its manifest.
+    pub(crate) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
         let entries = match self.dav.propfind("").await {
             Ok(entries) => entries,
             // A new account: nobody has pushed, so there is nothing to pull.
@@ -185,13 +209,13 @@ impl WebDavClient {
             };
 
             // The running datasets that have not recorded this version yet.
-            let mut bookmarks = read_bookmarks(&self.pool, device_id).await?;
-            let behind: Vec<(&str, &str)> = streams
+            let mut bookmarks = self.read_bookmarks(device_id).await?;
+            let behind: Vec<(Dataset, &str)> = streams
                 .iter()
                 .copied()
                 .filter(|(dataset, _)| {
                     bookmarks
-                        .get(*dataset)
+                        .get(dataset.name())
                         .is_none_or(|b| b.manifest_time != manifest_time)
                 })
                 .collect();
@@ -219,12 +243,12 @@ impl WebDavClient {
             // files; one short of it gets the files above its bookmark's count.
             let merged_cursor = rewind_cursor(&manifest_time, TIME_PRECISION)?;
             // Dataset → the count its bookmark holds; files above it get merged.
-            let mut need_merge: BTreeMap<&str, u64> = BTreeMap::new();
+            let mut need_merge: HashMap<Dataset, u64> = HashMap::new();
             let mut bookmark_changed = false;
             for (dataset, local_cursor) in &behind {
                 if *local_cursor >= merged_cursor.as_str() {
                     bookmarks.insert(
-                        dataset.to_string(),
+                        dataset.name().to_string(),
                         Bookmark {
                             processed: manifest.latest_push_count(),
                             manifest_time: manifest_time.clone(),
@@ -232,12 +256,12 @@ impl WebDavClient {
                     );
                     bookmark_changed = true;
                 } else {
-                    let processed = bookmarks.get(*dataset).map_or(0, |b| b.processed);
-                    need_merge.insert(dataset, processed);
+                    let processed = bookmarks.get(dataset.name()).map_or(0, |b| b.processed);
+                    need_merge.insert(*dataset, processed);
                 }
             }
             if bookmark_changed {
-                write_bookmarks(&self.pool, device_id, &bookmarks).await?;
+                self.write_bookmarks(device_id, &bookmarks).await?;
             }
 
             for (file, push_count) in &manifest.files {
@@ -246,11 +270,11 @@ impl WebDavClient {
                     log::debug!("webdav: {file_path} is not a sync file, skipped");
                     continue;
                 };
-                let Some(dataset) = flat_name_to_dataset(&name) else {
+                let Some(dataset) = FileName::parse(&name).map(|f| f.kind.dataset()) else {
                     log::debug!("webdav: {name} is not a file this version knows, skipped");
                     continue;
                 };
-                let Some(processed) = need_merge.get(dataset) else {
+                let Some(processed) = need_merge.get(&dataset) else {
                     continue;
                 };
                 if push_count <= processed {
@@ -285,10 +309,10 @@ impl WebDavClient {
         };
         self.upload(&path, content).await?;
         if let Some(device_relative_path) = self.path_to_device_relative_path(&path) {
-            let mut pending = load_pending(&self.pool).await?;
+            let mut pending = self.load_pending().await?;
             pending.removed.remove(device_relative_path);
             pending.uploaded.insert(device_relative_path.to_string());
-            store_pending(&self.pool, &pending).await?;
+            self.store_pending(&pending).await?;
         }
         Ok(path)
     }
@@ -296,10 +320,10 @@ impl WebDavClient {
     pub(crate) async fn delete(&self, file_id: &str) -> Result<()> {
         self.dav.delete(file_id).await?;
         if let Some(device_relative_path) = self.path_to_device_relative_path(file_id) {
-            let mut pending = load_pending(&self.pool).await?;
+            let mut pending = self.load_pending().await?;
             pending.uploaded.remove(device_relative_path);
             pending.removed.insert(device_relative_path.to_string());
-            store_pending(&self.pool, &pending).await?;
+            self.store_pending(&pending).await?;
         }
         Ok(())
     }
@@ -318,7 +342,7 @@ impl WebDavClient {
     /// If the upload fails, nothing changes locally, and the next round tries
     /// again with the same pending changes.
     pub(crate) async fn end_push_round(&self) -> Result<()> {
-        let pending = load_pending(&self.pool).await?;
+        let pending = self.load_pending().await?;
         if pending.is_empty() {
             return Ok(());
         }
@@ -344,7 +368,7 @@ impl WebDavClient {
         *last_attempt = Some(Instant::now());
         uploaded?;
 
-        clear_pending(&self.pool).await
+        self.clear_pending().await
     }
 
     /// Root-relative path → device-relative path, which is the key in the
@@ -443,9 +467,6 @@ fn href_to_relative_path(href: &str) -> Option<String> {
 
 // ─────────────── Local state in sync_cursor ───────────────
 
-/// `sync_cursor` key of the changes not yet written into the manifest.
-const PENDING_KEY: &str = "webdav.pending";
-
 /// How far one dataset got with one peer's manifest file: `processed` is the
 /// push count it merged up to, `manifest_time` the server time of the manifest
 /// version that was recorded at. That version is not fetched again for it.
@@ -455,59 +476,72 @@ struct Bookmark {
     manifest_time: String,
 }
 
-/// One row per peer, `webdav.peer.<device id>`: its bookmarks by dataset,
-/// keyed by the engine's cursor key, as JSON. A dataset with no bookmark has
-/// never run against that peer.
-fn peer_key(device_id: &str) -> String {
-    format!("webdav.peer.{device_id}")
-}
-
-async fn read_bookmarks(pool: &DbPool, device_id: &str) -> Result<BTreeMap<String, Bookmark>> {
-    match load_state(pool, &peer_key(device_id)).await? {
-        Some(json) => serde_json::from_str(&json).map_err(|e| Error::SyncParse {
-            kind: "webdav bookmarks",
-            source: e,
-        }),
-        None => Ok(BTreeMap::new()),
+impl WebDavClient {
+    /// One row per peer holds its bookmarks as JSON, keyed by dataset name
+    /// (e.g., `core`). A dataset with no bookmark has not synced with that peer
+    /// yet.
+    fn bookmarks_name(&self, device_id: &str) -> String {
+        format!("{}peer.{device_id}", self.name_prefix)
     }
-}
 
-async fn write_bookmarks(
-    pool: &DbPool,
-    device_id: &str,
-    bookmarks: &BTreeMap<String, Bookmark>,
-) -> Result<()> {
-    store_state(
-        pool,
-        &peer_key(device_id),
-        &serde_json::to_string(bookmarks)?,
-    )
-    .await
-}
-
-async fn load_pending(pool: &DbPool) -> Result<PendingChanges> {
-    match load_state(pool, PENDING_KEY).await? {
-        Some(json) => serde_json::from_str(&json).map_err(|e| Error::SyncParse {
-            kind: "webdav pending changes",
-            source: e,
-        }),
-        None => Ok(PendingChanges::default()),
+    fn pending_changes_name(&self) -> String {
+        format!("{}pending", self.name_prefix)
     }
-}
 
-async fn store_pending(pool: &DbPool, pending: &PendingChanges) -> Result<()> {
-    store_state(pool, PENDING_KEY, &serde_json::to_string(pending)?).await
-}
+    async fn read_bookmarks(&self, device_id: &str) -> Result<BTreeMap<String, Bookmark>> {
+        match load_state(&self.pool, &self.bookmarks_name(device_id)).await? {
+            Some(json) => serde_json::from_str(&json).map_err(|e| Error::SyncParse {
+                kind: "webdav bookmarks",
+                source: e,
+            }),
+            None => Ok(BTreeMap::new()),
+        }
+    }
 
-async fn clear_pending(pool: &DbPool) -> Result<()> {
-    pool.0
-        .call(|conn| {
-            conn.execute("DELETE FROM sync_cursor WHERE entity = ?1", [PENDING_KEY])
-                .db()?;
-            Ok(())
-        })
-        .await?;
-    Ok(())
+    async fn write_bookmarks(
+        &self,
+        device_id: &str,
+        bookmarks: &BTreeMap<String, Bookmark>,
+    ) -> Result<()> {
+        store_state(
+            &self.pool,
+            &self.bookmarks_name(device_id),
+            &serde_json::to_string(bookmarks)?,
+        )
+        .await
+    }
+
+    async fn load_pending(&self) -> Result<PendingChanges> {
+        match load_state(&self.pool, &self.pending_changes_name()).await? {
+            Some(json) => serde_json::from_str(&json).map_err(|e| Error::SyncParse {
+                kind: "webdav pending changes",
+                source: e,
+            }),
+            None => Ok(PendingChanges::default()),
+        }
+    }
+
+    async fn store_pending(&self, pending: &PendingChanges) -> Result<()> {
+        store_state(
+            &self.pool,
+            &self.pending_changes_name(),
+            &serde_json::to_string(pending)?,
+        )
+        .await
+    }
+
+    async fn clear_pending(&self) -> Result<()> {
+        let name = self.pending_changes_name();
+        self.pool
+            .0
+            .call(move |conn| {
+                conn.execute("DELETE FROM sync_cursor WHERE entity = ?1", [&name])
+                    .db()?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
 }
 
 /// Return the `last_pulled_at` value associated with the given key from the `sync_cursor` table.
@@ -554,7 +588,6 @@ mod tests {
     use super::fake::{Call, FakeDav};
     use super::*;
     use crate::repo::test_util::fresh_test_pool;
-    use crate::sync::engine::CURSOR_CORE as CORE;
 
     const EPOCH: &str = "1970-01-01T00:00:00Z";
 
@@ -564,7 +597,7 @@ mod tests {
 
     /// 只跑核心数据集的一轮拉取，游标是 `cursor`。
     async fn list_core(client: &WebDavClient, cursor: &str) -> Vec<FileMeta> {
-        client.list(&[(CORE, cursor)]).await.unwrap()
+        client.list(&[(Dataset::Core, cursor)]).await.unwrap()
     }
 
     async fn seed_manifest(dav: &FakeDav, device: &str, files: &[(&str, u64)]) -> String {
@@ -601,18 +634,40 @@ mod tests {
     /// 一台对端一行，里面按数据集各一个书签，写进去读出来一样；没有记录时是空的。
     #[tokio::test]
     async fn bookmarks_roundtrip_in_sync_cursor() {
-        let pool = fresh_test_pool().await;
-        assert!(read_bookmarks(&pool, "abc").await.unwrap().is_empty());
+        let dav = Arc::new(FakeDav::new());
+        let client = client(&dav).await;
+        assert!(client.read_bookmarks("abc").await.unwrap().is_empty());
         let mut marks = BTreeMap::new();
         marks.insert(
-            CORE.to_string(),
+            Dataset::Core.name().to_string(),
             Bookmark {
                 processed: 4,
                 manifest_time: "2026-05-15T10:00:03Z".into(),
             },
         );
-        write_bookmarks(&pool, "abc", &marks).await.unwrap();
-        assert_eq!(read_bookmarks(&pool, "abc").await.unwrap(), marks);
+        client.write_bookmarks("abc", &marks).await.unwrap();
+        assert_eq!(client.read_bookmarks("abc").await.unwrap(), marks);
+    }
+
+    /// 书签和待登记改动的名字也带这台服务器的前缀。
+    #[tokio::test]
+    async fn own_names_start_with_the_host() {
+        let client = WebDavClient::connect(
+            "https://dav.jianguoyun.com/dav/",
+            "a",
+            "b",
+            fresh_test_pool().await,
+            "me".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            client.bookmarks_name("abc"),
+            "webdav.dav.jianguoyun.com.peer.abc"
+        );
+        assert_eq!(
+            client.pending_changes_name(),
+            "webdav.dav.jianguoyun.com.pending"
+        );
     }
 
     // ───── 读路径 ─────
@@ -679,7 +734,7 @@ mod tests {
         let cursor = rewind_cursor(&t, TIME_PRECISION).unwrap();
         assert!(list_core(&client, &cursor).await.is_empty());
         assert_eq!(
-            read_bookmarks(&client.pool, "abc").await.unwrap()[CORE],
+            client.read_bookmarks("abc").await.unwrap()[Dataset::Core.name()],
             Bookmark {
                 processed: 1,
                 manifest_time: t.clone()
@@ -705,7 +760,7 @@ mod tests {
         )
         .await;
         let client = client(&dav).await;
-        let ai = flat_name_to_dataset("device.abc.ai_summaries.json").unwrap();
+        let ai = Dataset::AiSummaries;
 
         // 只有核心在跑：只报核心的文件
         let names: Vec<String> = list_core(&client, EPOCH)
@@ -718,19 +773,22 @@ mod tests {
         assert!(list_core(&client, &cursor).await.is_empty());
 
         // AI 开了：只报 AI 的文件
-        let files = client.list(&[(CORE, &cursor), (ai, EPOCH)]).await.unwrap();
+        let files = client
+            .list(&[(Dataset::Core, &cursor), (ai, EPOCH)])
+            .await
+            .unwrap();
         let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(names, vec!["device.abc.ai_summaries.json"]);
         assert_eq!(files[0].modified_time, t);
 
         // AI 也推进后：一个 GET 都不发
         client
-            .list(&[(CORE, &cursor), (ai, &cursor)])
+            .list(&[(Dataset::Core, &cursor), (ai, &cursor)])
             .await
             .unwrap();
         let before = dav.calls().await.len();
         assert!(client
-            .list(&[(CORE, &cursor), (ai, &cursor)])
+            .list(&[(Dataset::Core, &cursor), (ai, &cursor)])
             .await
             .unwrap()
             .is_empty());
@@ -1044,6 +1102,7 @@ mod tests {
             UploadMethod::DirectPut,
             fresh_test_pool().await,
             "me".into(),
+            "webdav.fake.".into(),
         );
         client
             .upsert_by_name("device.me.categories.json", b"[]")

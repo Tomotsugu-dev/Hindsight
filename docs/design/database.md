@@ -110,10 +110,21 @@ Where sync has got to: one row per pull stream, and one per optional dataset for
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| entity | TEXT | Primary key | `drive_files`, `pull.ai_summaries`, `pull.chat`, `pull.memory`, `push.ai_summaries`, `push.chat`, `push.memory`, `webdav.peer.<device id>` or `webdav.pending` |
+| entity | TEXT | Primary key | The row's name; see the table below |
 | last_pulled_at | TEXT | NOT NULL, DEFAULT epoch | See below |
 
-The four `drive_files` / `pull.*` rows are the pull cursors, one per stream: `drive_files` covers activities, categories, app groups, members, icons, device meta and tombstones, and each `pull.*` row covers one optional dataset (ADR-0006). For its own kind of file, a cursor says that every cloud file modified at or before this time (`modifiedTime`, UTC, as Google reports it) has been merged or deliberately skipped. A stream runs only while its dataset's switch is on; while it is off its cursor stays put, so turning the switch on resumes from there instead of re-merging everything.
+Each backend keeps its own rows, so one backend never reads another's progress, and switching backends clears nothing (ADR-0011 §3):
+
+| Rows | Drive | A WebDAV server |
+|---|---|---|
+| Pull cursors | `drive_files`, `pull.ai_summaries`, `pull.chat`, `pull.memory` | `webdav.<host>.pull.core`, `webdav.<host>.pull.ai_summaries`, … |
+| Push fingerprints | `push.ai_summaries`, `push.chat`, `push.memory` | `webdav.<host>.push.ai_summaries`, … |
+| Bookmarks | — | `webdav.<host>.peer.<device id>` |
+| Pending changes | — | `webdav.<host>.pending` |
+
+Drive's names are the ones it had before WebDAV. Existing databases hold them, so they must not change. `<host>` is the server's host, with the port only when it is not the default, e.g. `dav.jianguoyun.com`.
+
+The pull cursors are one per stream: the core one (`drive_files` on Drive) covers activities, categories, app groups, members, icons, device meta and tombstones, and each other `pull.*` row covers one optional dataset (ADR-0006). For its own kind of file, a cursor says that every cloud file modified at or before this time (UTC, as the backend reports it: Drive's `modifiedTime`, or a WebDAV manifest's server time) has been merged or deliberately skipped. A stream runs only while its dataset's switch is on; while it is off its cursor stays put, so turning the switch on resumes from there instead of re-merging everything.
 
 Each round lists files once, from the earliest cursor among the streams that run, and a stream's cursor may move only across the files it has handled, stopping strictly before the first file of its own kind that failed: a failed file at or before the cursor would never be listed again.
 
@@ -123,14 +134,14 @@ The `push.*` rows record what each optional dataset looked like at its last uplo
 - `push.chat`: `<max updated_ts>:<row count>` of `chat_conversations`, then `|`, then `<max created_ts>:<row count>` of `chat_messages`. Both tables are in the memory database.
 - `push.memory`: the latest `ended_ts` among this device's own rows in `text_sessions` (memory database). It is also where the next upload starts: only the days with a session that ended after it are uploaded again.
 
-The two `webdav.*` rows exist only with WebDAV, and the engine never reads them (ADR-0009):
+The bookmark and pending rows exist only on WebDAV, and the engine never reads them (ADR-0009):
 
-- `webdav.peer.<device id>`: that peer's bookmarks, as JSON. The keys are pull cursor names, and each value is `{processed, manifest_time}`: the peer's push count this dataset has merged up to, and the server time of the manifest version it was recorded at. A missing key means that dataset has not synced with this peer yet.
-- `webdav.pending`: this device's files that were uploaded or deleted but not yet written into its own manifest, as JSON `{uploaded, removed}`, with paths relative to the device directory. The row is deleted once the manifest is written.
+- `peer.<device id>`: that peer's bookmarks, as JSON. The keys are dataset names (`core`, `ai_summaries`, `chat`, `memory`), and each value is `{processed, manifest_time}`: the peer's push count this dataset has merged up to, and the server time of the manifest version it was recorded at. A missing key means that dataset has not synced with this peer yet.
+- `pending`: this device's files that were uploaded or deleted but not yet written into its own manifest, as JSON `{uploaded, removed}`, with paths relative to the device directory. The row is deleted once the manifest is written.
 
 On WebDAV the listing does not go by time: the engine passes every stream's cursor, and the bookmarks decide which files are reported.
 
-A missing row reads as the epoch, meaning "never": a row appears the first time that cursor or fingerprint is written. So a new install pulls every cloud file, a dataset switched on for the first time pulls its whole history, and the first push of a dataset uploads it. Nothing sets a cursor back.
+A missing row reads as the epoch, meaning "never": a row appears the first time that cursor or fingerprint is written. So a new install, or a backend used for the first time, pulls every cloud file, a dataset switched on for the first time pulls its whole history, and the first push of a dataset uploads it. Nothing sets a cursor back.
 
 Indexes: none beyond the primary key.
 Foreign keys: none.

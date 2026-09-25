@@ -1,5 +1,5 @@
-//! How this device recognizes a WebDAV account, and which row name prefix its
-//! server uses in `sync_cursor` (ADR-0011 §5).
+//! How this device recognizes a WebDAV account, and which prefix its server's
+//! names carry in `sync_cursor` (ADR-0011 §5).
 
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -19,9 +19,9 @@ pub(crate) fn account_hash(server_url: &str, user: &str) -> Result<String> {
     Ok(format!("{WEBDAV_DB_PREFIX}{hex}"))
 }
 
-/// The prefix of this server's row names in `sync_cursor`, e.g.,
+/// The prefix of this server's names in `sync_cursor`, e.g.,
 /// `webdav.dav.jianguoyun.com.`.
-pub(crate) fn cursor_row_prefix(server_url: &str) -> Result<String> {
+pub(crate) fn cursor_name_prefix(server_url: &str) -> Result<String> {
     Ok(format!(
         "webdav.{}.",
         host_and_port(&parse_server_url(server_url)?)
@@ -91,15 +91,15 @@ mod tests {
         assert_ne!(a, other_user);
     }
 
-    /// 行名前缀：域名转小写，默认端口去掉，非默认端口留着。
+    /// 名字前缀：域名转小写，默认端口去掉，非默认端口留着。
     #[test]
-    fn cursor_row_prefix_keeps_only_a_non_default_port() {
+    fn cursor_name_prefix_keeps_only_a_non_default_port() {
         assert_eq!(
-            cursor_row_prefix("HTTPS://DAV.jianguoyun.com:443/dav/").unwrap(),
+            cursor_name_prefix("HTTPS://DAV.jianguoyun.com:443/dav/").unwrap(),
             "webdav.dav.jianguoyun.com."
         );
         assert_eq!(
-            cursor_row_prefix("https://cloud.example.com:8443/remote.php/dav/").unwrap(),
+            cursor_name_prefix("https://cloud.example.com:8443/remote.php/dav/").unwrap(),
             "webdav.cloud.example.com:8443."
         );
     }

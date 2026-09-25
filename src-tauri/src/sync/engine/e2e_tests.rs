@@ -1673,3 +1673,56 @@ async fn webdav_sync_works_on_a_new_account() {
     b.engine.sync_now().await.expect("B 拉到 A");
     assert_eq!(count_for_device(&b, "device-a").await, 1);
 }
+
+/// 同一个库先用 Drive 同步过、再连 WebDAV：WebDAV 从头拉，AI 总结整份推上去，Drive 的
+/// 进度一行不动（ADR-0011 §3）。要是 WebDAV 还读 Drive 的那几行，B 会跳过 A 的文件，
+/// 也不推 AI 总结。
+#[tokio::test]
+async fn webdav_keeps_its_progress_apart_from_drive() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.sync_now().await.unwrap();
+
+    // B 用 Drive 时留下的进度：游标比 A 的 manifest 文件时间晚；AI 总结推到过 Drive，
+    // 指纹跟现在一样
+    enable_ai_summaries_sync(&b).await;
+    b.pool
+        .0
+        .call(|conn| {
+            conn.execute(
+                "INSERT INTO ai_summaries(source, local_date, segment_idx, label, start_hour,
+                                          end_hour, content, model, status, error, generated_at)
+                 VALUES ('daily','2026-07-05',0,'深夜',0,6,'凌晨在写代码','m','ok',NULL,
+                         '2026-07-05T10:00:00Z')",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let drive_progress = [
+        ("drive_files", "2099-01-01T00:00:00Z"),
+        ("push.ai_summaries", "2026-07-05T10:00:00Z:1"),
+    ];
+    for (name, value) in drive_progress {
+        super::io::write_cursor(&b.pool, name, value).await.unwrap();
+    }
+
+    b.engine.sync_now().await.unwrap();
+
+    assert_eq!(count_for_device(&b, "device-a").await, 1, "A 的活动要拉到");
+    assert!(
+        dav.file("device-b/ai_summaries.json").await.is_some(),
+        "AI 总结要推到 WebDAV"
+    );
+    for (name, value) in drive_progress {
+        assert_eq!(
+            super::io::read_cursor(&b.pool, name).await.unwrap(),
+            value,
+            "{name}"
+        );
+    }
+}
