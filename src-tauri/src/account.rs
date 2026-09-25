@@ -193,7 +193,7 @@ pub fn claim_legacy_for(uid: &str) -> io::Result<()> {
 
 /// Starts the name of a WebDAV account's database, `hindsight.webdav-<hash>.sqlite`
 /// (ADR-0011 §5).
-const WEBDAV_DB_PREFIX: &str = "webdav-";
+pub(crate) const WEBDAV_DB_PREFIX: &str = "webdav-";
 
 /// Records the Google uid in the database's file name as its Drive account,
 /// unless one is already recorded (ADR-0011). A signed-out database has lost its

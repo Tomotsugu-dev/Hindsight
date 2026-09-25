@@ -6,6 +6,7 @@
 // Removed when the client is wired in (ADR-0007 follow-up 3).
 #![allow(dead_code)]
 
+pub(crate) mod account_hash;
 mod dav;
 #[cfg(test)]
 mod fake;

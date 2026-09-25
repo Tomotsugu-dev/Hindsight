@@ -124,7 +124,7 @@ The account hash has this format:
 webdav-<first 16 hexadecimal characters of SHA-256>
 ```
 
-The hash input is the normalized URL, followed by a newline and the normalized username. Normalize them as follows:
+The hash input is the normalized URL and the normalized username, each written as `<byte length>:<content>,` (a netstring) and joined, for example `30:https://dav.jianguoyun.com/dav,15:you@example.com,`. With the lengths written out, two different pairs never join into the same string. Normalize them as follows:
 
 - URL: lowercase the scheme and hostname, remove the default port, and remove the trailing `/`.
 - Username: trim surrounding whitespace and convert to lowercase.
