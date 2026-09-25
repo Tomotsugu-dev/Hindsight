@@ -1,5 +1,7 @@
 //! 平台特定的系统集成。
 
+use crate::error::{Error, Result};
+
 /// 在系统文件管理器中打开指定目录。
 pub fn open_in_file_manager(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
@@ -685,6 +687,130 @@ pub fn display_keepawake_active() -> bool {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn display_keepawake_active() -> bool {
     false
+}
+
+// ─────────────────────────────────────────────────────────────
+// Machine id: an input of the local key (sync::local_key, ADR-0002).
+// The returned bytes must never change: if they do, no stored token can be
+// decrypted and every user is signed out.
+// ─────────────────────────────────────────────────────────────
+
+/// Returns Windows' `MachineGuid` from the registry, which changes only when
+/// Windows is reinstalled.
+#[cfg(target_os = "windows")]
+pub fn read_machine_id() -> Result<Vec<u8>> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::shared::minwindef::HKEY;
+    use winapi::um::winnt::{KEY_READ, KEY_WOW64_64KEY, REG_SZ};
+    use winapi::um::winreg::{RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY_LOCAL_MACHINE};
+
+    fn to_wide(s: &str) -> Vec<u16> {
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+
+    // SAFETY: every winapi call gets the arguments MSDN documents, and `buf`
+    // holds a GUID string (38 characters plus the null).
+    unsafe {
+        let subkey = to_wide("SOFTWARE\\Microsoft\\Cryptography");
+        let value = to_wide("MachineGuid");
+        let mut hkey: HKEY = std::ptr::null_mut();
+        // Without KEY_WOW64_64KEY, a 32-bit process reads SOFTWARE\WOW6432Node,
+        // which has no MachineGuid.
+        let r = RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            subkey.as_ptr(),
+            0,
+            KEY_READ | KEY_WOW64_64KEY,
+            &mut hkey,
+        );
+        if r != 0 {
+            return Err(Error::Other(format!(
+                "RegOpenKeyExW HKLM\\SOFTWARE\\Microsoft\\Cryptography failed: {r}"
+            )));
+        }
+        let mut buf = [0u16; 128];
+        let mut size: u32 = std::mem::size_of_val(&buf) as u32;
+        let mut ty: u32 = 0;
+        let r = RegQueryValueExW(
+            hkey,
+            value.as_ptr(),
+            std::ptr::null_mut(),
+            &mut ty,
+            buf.as_mut_ptr() as *mut u8,
+            &mut size,
+        );
+        RegCloseKey(hkey);
+        if r != 0 {
+            return Err(Error::Other(format!(
+                "RegQueryValueExW MachineGuid failed: {r}"
+            )));
+        }
+        if ty != REG_SZ {
+            return Err(Error::Other(format!(
+                "MachineGuid has registry type {ty}, expected REG_SZ"
+            )));
+        }
+        // `size` is in bytes and counts the trailing null.
+        let chars = (size as usize / 2).saturating_sub(1);
+        let s = String::from_utf16_lossy(&buf[..chars]);
+        Ok(s.into_bytes())
+    }
+}
+
+/// Returns the logic board's `IOPlatformUUID`, which changes only with a new
+/// logic board.
+#[cfg(target_os = "macos")]
+pub fn read_machine_id() -> Result<Vec<u8>> {
+    let out = std::process::Command::new("ioreg")
+        .args(["-d2", "-c", "IOPlatformExpertDevice"])
+        .output()
+        .map_err(|e| Error::Other(format!("spawn ioreg failed: {e}")))?;
+    if !out.status.success() {
+        return Err(Error::Other(format!(
+            "ioreg exited with status {:?}",
+            out.status.code()
+        )));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // Format：`    "IOPlatformUUID" = "ABC-123-..."`
+    for line in stdout.lines() {
+        if !line.contains("IOPlatformUUID") {
+            continue;
+        }
+        // Split the line by `"` and take the 4th part as the UUID.
+        let parts: Vec<&str> = line.split('"').collect();
+        if parts.len() >= 4 {
+            let uuid = parts[3].trim();
+            if !uuid.is_empty() {
+                return Ok(uuid.as_bytes().to_vec());
+            }
+        }
+    }
+    Err(Error::Other(
+        "ioreg output did not contain IOPlatformUUID".to_string(),
+    ))
+}
+
+/// Returns `/etc/machine-id`, or D-Bus's copy on systems without systemd.
+#[cfg(target_os = "linux")]
+pub fn read_machine_id() -> Result<Vec<u8>> {
+    std::fs::read_to_string("/etc/machine-id")
+        .or_else(|_| std::fs::read_to_string("/var/lib/dbus/machine-id"))
+        .map(|s| s.trim().as_bytes().to_vec())
+        .map_err(|e| Error::Other(format!("read machine-id failed: {e}")))
+}
+
+/// Other Unix systems, such as FreeBSD: `/etc/machine-id` if it exists,
+/// otherwise an error.
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+pub fn read_machine_id() -> Result<Vec<u8>> {
+    std::fs::read_to_string("/etc/machine-id")
+        .map(|s| s.trim().as_bytes().to_vec())
+        .map_err(|e| Error::Other(format!("read /etc/machine-id failed: {e}")))
 }
 
 #[cfg(test)]

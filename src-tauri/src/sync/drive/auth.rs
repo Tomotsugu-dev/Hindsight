@@ -9,19 +9,12 @@
 //!    → 拿 access_token + refresh_token + id_token
 //! 6. 解 id_token JWT 拿 sub（用户的 Google 唯一 ID）+ email
 //! 7. 用「机器 ID + 用户 home 路径」派生 32 字节 AES key 加密 refresh_token，密文落 auth_state 表
-//!
-//! ## The key that encrypts the refresh token
-//!
-//! Never stored. Recomputed on every use from `SHA256(context ‖ machine_id ‖
-//! user_home)`, see [`derive_master_key`]. Why not the OS keychain: ADR-0002.
 
 use std::time::Duration;
 
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
 use base64::{engine::general_purpose, Engine as _};
 use rand::distributions::Alphanumeric;
-use rand::{Rng, RngCore};
+use rand::Rng;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -33,16 +26,10 @@ use crate::error::{Error, Result};
 use crate::repo::settings;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
+use crate::sync::local_key::{aes_decrypt, aes_encrypt, derive_master_key};
 
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
 const OAUTH_TIMEOUT_SECS: u64 = 180;
-/// The AES key is SHA-256 over three things: this string, the machine id, and
-/// the home path. The last two cannot be chosen, so this string is the only way
-/// to derive a different key. Give every new purpose its own string.
-///
-/// Changing the value signs every user out: the stored token was encrypted with
-/// the old key, and the new one cannot open it.
-const AUTH_KEY_CONTEXT: &[u8] = b"hindsight-auth-v1";
 
 /// What the Devices page shows: whether anyone is signed in, which account, whether
 /// the "Sign in with Google" button is enabled, and whether to ask for an app
@@ -651,191 +638,4 @@ async fn exchange_code(
         });
     }
     Ok(resp.json::<GoogleTokenResp>().await?)
-}
-
-// ───────────── 内部：派生 key + AES-GCM ─────────────
-
-/// 派生 32 字节 AES key：`SHA256(salt || machine_id || user_home)`。
-///
-/// 每次都现算，不持久化在任何 OS keyring / Keychain / 文件里。三个输入：
-/// - `salt` = [`AUTH_KEY_CONTEXT`]：域分隔常量
-/// - `machine_id`：平台特定的稳定标识符（重装系统才变）
-/// - `user_home`：[`dirs::home_dir`]，删用户账号才变
-///
-/// 见模块顶部说明的「为什么不再用 keyring」段落。
-fn derive_master_key() -> Result<[u8; 32]> {
-    let machine = read_machine_id()?;
-    let user = read_user_home_bytes();
-    let mut hasher = Sha256::new();
-    hasher.update(AUTH_KEY_CONTEXT);
-    hasher.update(b"|machine|");
-    hasher.update(&machine);
-    hasher.update(b"|user|");
-    hasher.update(&user);
-    let result = hasher.finalize();
-    let mut k = [0u8; 32];
-    k.copy_from_slice(&result);
-    Ok(k)
-}
-
-/// 用户身份：home 目录路径的 utf-8 字节。
-/// Windows: `C:\Users\xxx`；macOS: `/Users/xxx`；Linux: `/home/xxx`。
-/// 删 / 改用户账号才会变；HOME 临时被覆盖也无所谓——`dirs::home_dir` 在 Windows
-/// 走 `KNOWNFOLDERID_Profile` SHGetKnownFolderPath，不依赖环境变量。
-fn read_user_home_bytes() -> Vec<u8> {
-    dirs::home_dir()
-        .map(|p| {
-            p.into_os_string()
-                .to_string_lossy()
-                .into_owned()
-                .into_bytes()
-        })
-        .unwrap_or_default()
-}
-
-/// Windows 实现：读注册表 `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`。
-/// 该值在 Windows 安装时一次性生成，重装系统才变；任何用户都可读，OS 服务不会清。
-#[cfg(target_os = "windows")]
-fn read_machine_id() -> Result<Vec<u8>> {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-    use winapi::shared::minwindef::HKEY;
-    use winapi::um::winnt::{KEY_READ, KEY_WOW64_64KEY, REG_SZ};
-    use winapi::um::winreg::{RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY_LOCAL_MACHINE};
-
-    fn to_wide(s: &str) -> Vec<u16> {
-        OsStr::new(s)
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect()
-    }
-
-    // SAFETY: 全部 winapi 入口都按 MSDN 文档传参；buf 长度足够 GUID 字符串（38 + null）。
-    unsafe {
-        let subkey = to_wide("SOFTWARE\\Microsoft\\Cryptography");
-        let value = to_wide("MachineGuid");
-        let mut hkey: HKEY = std::ptr::null_mut();
-        // KEY_WOW64_64KEY：32 位进程跑在 64 位 Windows 时强制读 64 位视图，
-        // 否则被 WOW64 重定向到 SOFTWARE\WOW6432Node 拿不到 MachineGuid
-        let r = RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE,
-            subkey.as_ptr(),
-            0,
-            KEY_READ | KEY_WOW64_64KEY,
-            &mut hkey,
-        );
-        if r != 0 {
-            return Err(Error::Other(format!(
-                "RegOpenKeyExW HKLM\\SOFTWARE\\Microsoft\\Cryptography failed: {r}"
-            )));
-        }
-        let mut buf = [0u16; 128];
-        let mut size: u32 = std::mem::size_of_val(&buf) as u32;
-        let mut ty: u32 = 0;
-        let r = RegQueryValueExW(
-            hkey,
-            value.as_ptr(),
-            std::ptr::null_mut(),
-            &mut ty,
-            buf.as_mut_ptr() as *mut u8,
-            &mut size,
-        );
-        RegCloseKey(hkey);
-        if r != 0 {
-            return Err(Error::Other(format!(
-                "RegQueryValueExW MachineGuid failed: {r}"
-            )));
-        }
-        if ty != REG_SZ {
-            return Err(Error::Other(format!(
-                "MachineGuid 注册表值类型 {ty}，期望 REG_SZ"
-            )));
-        }
-        // size 是字节数，含尾部 null。换算成 u16 数量并去掉 null。
-        let chars = (size as usize / 2).saturating_sub(1);
-        let s = String::from_utf16_lossy(&buf[..chars]);
-        Ok(s.into_bytes())
-    }
-}
-
-/// macOS 实现：从 IOKit 注册表读 `IOPlatformUUID`（板载唯一标识，主板换才变）。
-/// 命令行 `ioreg -d2 -c IOPlatformExpertDevice` 是 Apple 自带的工具，每台 macOS 都有；
-/// 不引第三方 IOKit binding crate，shell 解析最简单。
-#[cfg(target_os = "macos")]
-fn read_machine_id() -> Result<Vec<u8>> {
-    let out = std::process::Command::new("ioreg")
-        .args(["-d2", "-c", "IOPlatformExpertDevice"])
-        .output()
-        .map_err(|e| Error::Other(format!("spawn ioreg failed: {e}")))?;
-    if !out.status.success() {
-        return Err(Error::Other(format!(
-            "ioreg exited with status {:?}",
-            out.status.code()
-        )));
-    }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    // 行格式：`    "IOPlatformUUID" = "ABC-123-..."`
-    for line in stdout.lines() {
-        if !line.contains("IOPlatformUUID") {
-            continue;
-        }
-        // 第 4 个 `"` 切分 → 取 UUID 子串
-        let parts: Vec<&str> = line.split('"').collect();
-        if parts.len() >= 4 {
-            let uuid = parts[3].trim();
-            if !uuid.is_empty() {
-                return Ok(uuid.as_bytes().to_vec());
-            }
-        }
-    }
-    Err(Error::Other(
-        "ioreg 输出里没找到 IOPlatformUUID".to_string(),
-    ))
-}
-
-/// Linux 实现：systemd 风格的 `/etc/machine-id`，无 systemd 的退化到 dbus 同款。
-#[cfg(target_os = "linux")]
-fn read_machine_id() -> Result<Vec<u8>> {
-    std::fs::read_to_string("/etc/machine-id")
-        .or_else(|_| std::fs::read_to_string("/var/lib/dbus/machine-id"))
-        .map(|s| s.trim().as_bytes().to_vec())
-        .map_err(|e| Error::Other(format!("read machine-id failed: {e}")))
-}
-
-/// 其它 unix（FreeBSD 等）：`/etc/machine-id` 走通就用，否则报错。
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
-fn read_machine_id() -> Result<Vec<u8>> {
-    std::fs::read_to_string("/etc/machine-id")
-        .map(|s| s.trim().as_bytes().to_vec())
-        .map_err(|e| Error::Other(format!("read /etc/machine-id failed: {e}")))
-}
-
-fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let ct = cipher
-        .encrypt(nonce, plaintext)
-        .map_err(|_| Error::Crypto("aes encrypt"))?;
-
-    // 输出格式：[12 字节 nonce][密文+tag]
-    let mut out = Vec::with_capacity(12 + ct.len());
-    out.extend_from_slice(&nonce_bytes);
-    out.extend_from_slice(&ct);
-    Ok(out)
-}
-
-/// AES-256-GCM 解密。`ciphertext` 头 12 字节是 nonce，剩下是 ciphertext+tag。
-/// `key` 来自 [`derive_master_key`]——同一个 (machine_id, user_home) 组合永远给同一把 key。
-fn aes_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
-    if ciphertext.len() < 13 {
-        return Err(Error::Crypto("ciphertext too short"));
-    }
-    let (nonce_bytes, ct) = ciphertext.split_at(12);
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
-    let nonce = Nonce::from_slice(nonce_bytes);
-    cipher
-        .decrypt(nonce, ct)
-        .map_err(|_| Error::Crypto("aes decrypt"))
 }
