@@ -42,7 +42,7 @@ For example, a user moves from Drive account A to WebDAV, then signs in to Drive
 When switching from one backend to another, do these four things in one transaction on the current database:
 
 1. Save the new backend and its credentials, and record the account for that backend.
-2. Clear the old state in `sync_cursor`: the four pull cursors, the three push fingerprints, the WebDAV bookmarks and the pending changes.
+2. Clear the four pull cursors and the three push fingerprints in `sync_cursor`. Keep the WebDAV bookmarks and pending changes: the database is the same, so the data merged from this WebDAV account is still there, and a database has only one WebDAV account. Coming back to it downloads only the files added while the database was away.
 3. Refill the outbox: one row for each day this device has activity, and one row for each of the five single files. Push rewrites whole files (ADR-0005), so one row per file is enough.
 4. Delete the old backend's credentials: the Google token or the WebDAV password.
 
@@ -59,7 +59,7 @@ Sync progress cannot be shared between backends, above all because they record t
 
 For example, the old Drive cursor may read `11:05:01`. After switching to WebDAV, comparing it with the server time of a peer's manifest can make the version the peer published at `10:55` look already processed. The bookmark is updated, no file is downloaded, and the older days are never found later.
 
-With the cursors and bookmarks cleared, the new backend builds its own progress from the start, and no data is skipped silently. Syncing from the start deletes nothing on this device; it only uploads and checks the existing data again.
+With the cursors cleared, the new backend rebuilds its progress from its own times, and no data is skipped silently. Syncing from the start deletes nothing on this device; it only uploads and checks the existing data again.
 
 This step must be in the same transaction as saving the new backend. If the app crashes after the new backend is saved but before the cursors are cleared, the next start judges the new backend's data by the old cursors. All of this state is in the main database, so one transaction protects it.
 
@@ -133,7 +133,7 @@ The function that computes the id must be tested with fixed inputs and outputs. 
 
 - **Existing data and migration**: The migration only adds six columns to `auth_state`. A database whose file name carries a Google uid (only a database that has signed in to Google has one) gets `backend = drive` and `drive_account = <that uid>`, whether or not it is signed out now. An anonymous database leaves both empty.
 - **Mixed versions and rollback**: The migration only adds columns, and older versions read the existing columns by name, so they are not affected. Older versions do not support WebDAV. A user on WebDAV who rolls back to an older version is shown as signed out, and can keep using Drive after signing in to Google again.
-- **Irreversible effects**: The cursors and bookmarks cleared by a backend switch cannot be recovered, but the next round rebuilds them. No data on this device is deleted.
+- **Irreversible effects**: The cursors and push fingerprints cleared by a backend switch cannot be recovered, but the next round rebuilds them. No data on this device is deleted.
 - **Security and privacy**: Only the encrypted WebDAV password is stored. The account id is a hash, so file names do not show the server address or the user name. WebDAV must still use HTTPS, as ADR-0007 requires.
 
 ## Follow-up
