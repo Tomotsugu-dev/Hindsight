@@ -30,15 +30,11 @@ use crate::error::Result;
 use crate::memory::MemoryDb;
 use crate::repo::settings::Settings;
 use crate::storage::{DbPool, SqliteResultExt};
-use crate::sync::file_name::{FileKind, FileName};
+use crate::sync::file_name::{Dataset, FileKind, FileName};
 use crate::sync::payload::{
     AiSummaryPayload, ChatConversationPayload, ChatFilePayload, ChatMessagePayload,
     MemorySessionPayload,
 };
-
-const CURSOR_AI: &str = "push.ai_summaries";
-const CURSOR_CHAT: &str = "push.chat";
-const CURSOR_MEMORY: &str = "push.memory";
 
 // ───────────────────────────── push ─────────────────────────────
 
@@ -96,7 +92,8 @@ async fn push_ai_summaries(inner: &Arc<Inner>) -> Result<()> {
             .db()
         })
         .await?;
-    if io::read_cursor(&inner.pool, CURSOR_AI).await? == watermark {
+    let name = inner.cloud.push_fingerprint_name(Dataset::AiSummaries);
+    if io::read_cursor(&inner.pool, &name).await? == watermark {
         return Ok(());
     }
     let rows: Vec<AiSummaryPayload> = inner
@@ -133,7 +130,7 @@ async fn push_ai_summaries(inner: &Arc<Inner>) -> Result<()> {
         })
         .await?;
     upload(inner, FileKind::AiSummaries, serde_json::to_vec(&rows)?).await?;
-    io::write_cursor(&inner.pool, CURSOR_AI, &watermark).await?;
+    io::write_cursor(&inner.pool, &name, &watermark).await?;
     log::info!("push ai_summaries: {} 行", rows.len());
     Ok(())
 }
@@ -154,7 +151,8 @@ async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             .db()
         })
         .await?;
-    if io::read_cursor(&inner.pool, CURSOR_CHAT).await? == watermark {
+    let name = inner.cloud.push_fingerprint_name(Dataset::Chat);
+    if io::read_cursor(&inner.pool, &name).await? == watermark {
         return Ok(());
     }
     let payload: ChatFilePayload = mem
@@ -212,7 +210,7 @@ async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
         })
         .await?;
     upload(inner, FileKind::Chat, serde_json::to_vec(&payload)?).await?;
-    io::write_cursor(&inner.pool, CURSOR_CHAT, &watermark).await?;
+    io::write_cursor(&inner.pool, &name, &watermark).await?;
     log::info!(
         "push chat: {} 会话 / {} 消息",
         payload.conversations.len(),
@@ -222,7 +220,8 @@ async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
 }
 
 async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
-    // 水位线 = 本机产出会话的最大 ended_ts(折叠只会推进它)
+    // Watermark: the latest `ended_ts` of this device's own sessions. Folding
+    // frames into a session only moves it later.
     let watermark: String = mem
         .0
         .call(|conn| {
@@ -235,11 +234,13 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             .db()
         })
         .await?;
-    let prev = io::read_cursor(&inner.pool, CURSOR_MEMORY).await?;
+    let name = inner.cloud.push_fingerprint_name(Dataset::Memory);
+    let prev = io::read_cursor(&inner.pool, &name).await?;
     if prev == watermark || watermark.is_empty() {
         return Ok(());
     }
-    // 有变化的日期 = 存在 ended_ts > prev 的本机会话的日期;首次(epoch)推全部
+    // The changed days: those with a session of this device that ended after
+    // `prev`. On the first push `prev` is the epoch, so every day goes.
     let days: Vec<String> = mem
         .0
         .call(move |conn| {
@@ -300,7 +301,7 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
         }
         upload(inner, FileKind::Memory(date), out).await?;
     }
-    io::write_cursor(&inner.pool, CURSOR_MEMORY, &watermark).await?;
+    io::write_cursor(&inner.pool, &name, &watermark).await?;
     if !days.is_empty() {
         log::info!("push memory: {} 天的会话文件", days.len());
     }

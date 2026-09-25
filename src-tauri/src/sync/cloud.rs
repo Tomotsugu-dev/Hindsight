@@ -14,7 +14,7 @@ use crate::storage::DbPool;
 #[cfg(test)]
 use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::drive::{self, DriveClient};
-use crate::sync::engine::CURSOR_CORE;
+use crate::sync::file_name::Dataset;
 use crate::sync::webdav::{self, WebDavClient};
 
 /// Cloud file metadata (id + name + modified time), without the file content.
@@ -139,13 +139,52 @@ impl CloudBackend {
         }
     }
 
+    /// What a dataset's pull cursor on this backend is called in `sync_cursor`.
+    /// Each backend has its own names, so no backend reads another's progress
+    /// (ADR-0011 §3).
+    pub fn pull_cursor_name(&self, dataset: Dataset) -> String {
+        // Existing databases hold this name. Renamed, the old row would not be
+        // found and every cloud file would be downloaded again.
+        if self.is_drive() && dataset == Dataset::Core {
+            return "drive_files".to_string();
+        }
+        format!("{}pull.{}", self.name_prefix(), dataset.name())
+    }
+
+    /// The same for an optional dataset's push fingerprint.
+    pub fn push_fingerprint_name(&self, dataset: Dataset) -> String {
+        format!("{}push.{}", self.name_prefix(), dataset.name())
+    }
+
+    /// The prefix of this backend's names in `sync_cursor`, e.g.,
+    /// `webdav.dav.jianguoyun.com.`. Drive has none: its names existed before
+    /// each backend got its own.
+    fn name_prefix(&self) -> &str {
+        match self {
+            CloudBackend::Drive(_) => "",
+            CloudBackend::WebDav(c) => c.name_prefix(),
+            #[cfg(test)]
+            CloudBackend::InMemory(_) => "",
+        }
+    }
+
+    /// Drive, or `InMemory`, which stands in for Drive in tests.
+    fn is_drive(&self) -> bool {
+        match self {
+            CloudBackend::Drive(_) => true,
+            CloudBackend::WebDav(_) => false,
+            #[cfg(test)]
+            CloudBackend::InMemory(_) => true,
+        }
+    }
+
     /// Lists the files the running datasets still have to merge, oldest first.
-    /// `streams` names each running dataset by its cursor key, with the cursor
-    /// it got to. Drive lists everything modified strictly after the earliest
-    /// cursor; WebDAV reads the peers' manifests and answers per dataset. Pull
-    /// passes its cursors here, so "strictly after" and the ordering are part
-    /// of the contract.
-    pub async fn list(&self, streams: &[(&str, &str)]) -> Result<Vec<FileMeta>> {
+    /// `streams` lists each running dataset with the cursor it got to. Drive
+    /// lists everything modified strictly after the earliest cursor; WebDAV
+    /// reads the peers' manifests and answers per dataset. Pull passes its
+    /// cursors here, so "strictly after" and the ordering are part of the
+    /// contract.
+    pub async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
         match self {
             CloudBackend::Drive(c) => c.list(earliest_cursor(streams)).await,
             CloudBackend::WebDav(c) => c.list(streams).await,
@@ -160,7 +199,7 @@ impl CloudBackend {
     /// from the very start. On WebDAV that is what a first pull of the core
     /// dataset sees, the peers' files, not this device's own.
     pub async fn list_all(&self) -> Result<Vec<FileMeta>> {
-        self.list(&[(CURSOR_CORE, "")]).await
+        self.list(&[(Dataset::Core, "")]).await
     }
 
     /// Downloads a file's whole content into memory.
@@ -210,10 +249,54 @@ impl CloudBackend {
 
 /// The earliest of the streams' cursors: a listing by time from there covers
 /// every stream.
-fn earliest_cursor<'a>(streams: &[(&str, &'a str)]) -> &'a str {
+fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
     streams
         .iter()
         .map(|(_, cursor)| *cursor)
         .min()
         .unwrap_or("")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repo::test_util::fresh_test_pool;
+    use Dataset::{AiSummaries, Chat, Core, Memory};
+
+    /// Drive 的七个名字钉死：老用户的数据库里存的就是这些，改一个就找不到原来那一行。
+    /// 坚果云的名字都带自己的前缀，跟 Drive 的不会重。
+    #[tokio::test]
+    async fn each_backend_has_its_own_names() {
+        let drive = CloudBackend::drive(fresh_test_pool().await);
+        assert_eq!(
+            [Core, AiSummaries, Chat, Memory].map(|d| drive.pull_cursor_name(d)),
+            [
+                "drive_files",
+                "pull.ai_summaries",
+                "pull.chat",
+                "pull.memory"
+            ]
+        );
+        assert_eq!(
+            [AiSummaries, Chat, Memory].map(|d| drive.push_fingerprint_name(d)),
+            ["push.ai_summaries", "push.chat", "push.memory"]
+        );
+
+        let nutstore = CloudBackend::webdav(
+            "https://dav.jianguoyun.com/dav/",
+            "a",
+            "b",
+            fresh_test_pool().await,
+            "me".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            nutstore.pull_cursor_name(Core),
+            "webdav.dav.jianguoyun.com.pull.core"
+        );
+        assert_eq!(
+            nutstore.push_fingerprint_name(Chat),
+            "webdav.dav.jianguoyun.com.push.chat"
+        );
+    }
 }

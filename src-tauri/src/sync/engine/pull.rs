@@ -61,35 +61,6 @@ fn is_remote_newer<P: rusqlite::Params>(
     })
 }
 
-/// Primary key of a `sync_cursor` row, so this string lives in the user's
-/// database. Change it and the cursor is lost: the next sync re-downloads every
-/// file in the cloud.
-pub(crate) const CURSOR_CORE: &str = "drive_files";
-
-/// One cursor per optional dataset, so turning a switch on fills in that
-/// dataset's history without re-merging everything else (ADR-0006). The
-/// `pull.` prefix keeps them apart from the `push.*` fingerprints.
-const CURSOR_AI_SUMMARIES: &str = "pull.ai_summaries";
-const CURSOR_CHAT: &str = "pull.chat";
-const CURSOR_MEMORY: &str = "pull.memory";
-
-/// The `sync_cursor` key of a dataset's pull cursor: the cursor that advances
-/// past the dataset's files, and the only stream allowed to merge them.
-fn cursor_key_of(dataset: Dataset) -> &'static str {
-    match dataset {
-        Dataset::Core => CURSOR_CORE,
-        Dataset::AiSummaries => CURSOR_AI_SUMMARIES,
-        Dataset::Chat => CURSOR_CHAT,
-        Dataset::Memory => CURSOR_MEMORY,
-    }
-}
-
-/// The dataset a cloud file belongs to, named by its cursor key; `None` for a
-/// name this version does not know.
-pub(crate) fn flat_name_to_dataset(name: &str) -> Option<&'static str> {
-    FileName::parse(name).map(|file| cursor_key_of(file.kind.dataset()))
-}
-
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     let _gate = inner.flush_gate.lock().await;
     // Not signed in is not a failure: there is nothing to pull.
@@ -123,23 +94,24 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     // does not run leaves its cursor where it is, so turning its switch on later
     // resumes from there.
     let has_mem = inner.mem.is_some();
-    let mut streams: Vec<(&'static str, String)> = Vec::new();
-    for (key, enabled) in [
-        (CURSOR_CORE, true),
-        (CURSOR_AI_SUMMARIES, sync_ai),
-        (CURSOR_CHAT, sync_chat && has_mem),
-        (CURSOR_MEMORY, sync_scrn_mem && has_mem),
+    let mut streams: Vec<(Dataset, String)> = Vec::new();
+    for (dataset, enabled) in [
+        (Dataset::Core, true),
+        (Dataset::AiSummaries, sync_ai),
+        (Dataset::Chat, sync_chat && has_mem),
+        (Dataset::Memory, sync_scrn_mem && has_mem),
     ] {
         if enabled {
-            streams.push((key, io::read_cursor(&inner.pool, key).await?));
+            let name = inner.cloud.pull_cursor_name(dataset);
+            streams.push((dataset, io::read_cursor(&inner.pool, &name).await?));
         }
     }
 
     // One listing per round for all the running streams; each stream then
     // takes the files after its own cursor.
-    let cursors: Vec<(&str, &str)> = streams
+    let cursors: Vec<(Dataset, &str)> = streams
         .iter()
-        .map(|(key, cursor)| (*key, cursor.as_str()))
+        .map(|(dataset, cursor)| (*dataset, cursor.as_str()))
         .collect();
     let files = inner.cloud.list(&cursors).await?;
     if files.is_empty() {
@@ -147,8 +119,8 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     }
 
     let mut applied = 0u64;
-    for (key, cursor) in &streams {
-        applied += pull_stream(inner, key, cursor, &files, self_id, &ignore_rules).await?;
+    for (dataset, cursor) in &streams {
+        applied += pull_stream(inner, *dataset, cursor, &files, self_id, &ignore_rules).await?;
     }
     if applied > 0 {
         log::info!("sync pull done, merged {applied} remote files");
@@ -160,7 +132,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 /// written by another device. Returns how many it merged.
 async fn pull_stream(
     inner: &Arc<Inner>,
-    cursor_key: &str,
+    dataset: Dataset,
     cursor: &str,
     files: &[crate::sync::cloud::FileMeta],
     self_id: &str,
@@ -197,7 +169,7 @@ async fn pull_stream(
         };
         // Another stream's file, or one this stream merged in an earlier round:
         // nothing to do, but its cursor may pass.
-        if cursor_key_of(kind.dataset()) != cursor_key || f.modified_time.as_str() <= cursor {
+        if kind.dataset() != dataset || f.modified_time.as_str() <= cursor {
             handled[i] = true;
             continue;
         }
@@ -275,7 +247,8 @@ async fn pull_stream(
         .last();
     if let Some(t) = cursor_advance {
         let t = rewind_cursor(&t, inner.cloud.time_precision())?;
-        io::write_cursor(&inner.pool, cursor_key, &t).await?;
+        let name = inner.cloud.pull_cursor_name(dataset);
+        io::write_cursor(&inner.pool, &name, &t).await?;
     }
     Ok(applied)
 }
