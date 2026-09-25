@@ -24,7 +24,7 @@ use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use account_hash::cursor_row_prefix;
+use account_hash::cursor_name_prefix;
 use dav::{Dav, DavOps, HttpDav};
 use layout::{flat_name_to_path, path_to_flat_name, temporary_upload_path};
 use manifest::{manifest_path, manifest_to_device_id, Manifest};
@@ -157,7 +157,7 @@ impl WebDavClient {
     ) -> Result<Self> {
         let http = HttpDav::new(server_url, username, password)?;
         let upload_method = upload_method_for(http.host());
-        let name_prefix = cursor_row_prefix(server_url)?;
+        let name_prefix = cursor_name_prefix(server_url)?;
         Ok(Self::new(
             Dav::Http(http),
             upload_method,

@@ -66,13 +66,13 @@ impl CloudBackend {
     /// WebDAV, with the server address and app password the user entered.
     #[allow(dead_code)]
     pub fn webdav(
-        base: &str,
+        server_url: &str,
         username: &str,
         password: &str,
         pool: DbPool,
         self_id: String,
     ) -> Result<Self> {
-        let client = WebDavClient::connect(base, username, password, pool, self_id)?;
+        let client = WebDavClient::connect(server_url, username, password, pool, self_id)?;
         Ok(CloudBackend::WebDav(Box::new(client)))
     }
 
