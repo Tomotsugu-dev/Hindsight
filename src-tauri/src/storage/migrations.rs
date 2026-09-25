@@ -892,12 +892,25 @@ const DROP_APP_CATEGORIES_SQL: &str = r#"
     DROP TABLE IF EXISTS app_categories;
 "#;
 
+/// v39: adds five columns to `auth_state`: the kind of backend this database uses
+/// now, its Drive account, the WebDAV server and user name currently connected,
+/// and the encrypted WebDAV password (ADR-0011). Existing databases get their
+/// Drive account from their file name at startup, in
+/// [`crate::account::backfill_drive_account`].
+const ADD_AUTH_STATE_ACCOUNTS_SQL: &str = r#"
+    ALTER TABLE auth_state ADD COLUMN backend TEXT CHECK (backend IN ('drive', 'webdav'));
+    ALTER TABLE auth_state ADD COLUMN drive_account TEXT;
+    ALTER TABLE auth_state ADD COLUMN webdav_url TEXT;
+    ALTER TABLE auth_state ADD COLUMN webdav_user TEXT;
+    ALTER TABLE auth_state ADD COLUMN webdav_password_enc BLOB;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 28] = [
+    let extras: [&'static str; 29] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -926,6 +939,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         ADD_ACTIVITIES_EXCLUDED_SQL,           // v36
         ADD_ACTIVITIES_URL_HOST_SQL,           // v37
         DROP_APP_CATEGORIES_SQL,               // v38
+        ADD_AUTH_STATE_ACCOUNTS_SQL,           // v39
     ];
     pool.0
         .call(move |conn| {
@@ -1031,7 +1045,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            38
+            39
         );
 
         let tables = table_names(&pool).await;
@@ -1075,6 +1089,16 @@ mod tests {
         ] {
             assert!(cat.iter().any(|x| x == c), "categories 缺列 {c}");
         }
+        let auth = columns(&pool, "auth_state").await;
+        for c in [
+            "backend",
+            "drive_account",
+            "webdav_url",
+            "webdav_user",
+            "webdav_password_enc",
+        ] {
+            assert!(auth.iter().any(|x| x == c), "auth_state 缺列 {c}");
+        }
 
         // 种子:settings 单行、六内置分类带专属图标、hidden(v27)、office(v29)、大类(v28-33)
         assert_eq!(
@@ -1110,7 +1134,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            38
+            39
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1165,7 +1189,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            38
+            39
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

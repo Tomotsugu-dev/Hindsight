@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::storage::DbPool;
+use crate::storage::{DbPool, SqliteResultExt};
 
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -189,6 +189,33 @@ fn migrate_legacy_files(data_root: &Path, owner: &str) -> Result<bool> {
 /// 下次启动时 startup migration 会把文件 rename 到 `hindsight.<uid>.sqlite`。
 pub fn claim_legacy_for(uid: &str) -> io::Result<()> {
     set_legacy_owner(Some(uid))
+}
+
+/// Starts the name of a WebDAV account's database, `hindsight.webdav-<hash>.sqlite`
+/// (ADR-0011 §5).
+const WEBDAV_DB_PREFIX: &str = "webdav-";
+
+/// Records the Google uid in the database's file name as its Drive account,
+/// unless one is already recorded (ADR-0011). A signed-out database has lost its
+/// `uid`, so the file name is the only place left to read the account from.
+pub async fn backfill_drive_account(pool: &DbPool, db_uid: Option<&str>) -> Result<()> {
+    // Skip WebDAV databases.
+    let Some(uid) = db_uid.filter(|u| !u.starts_with(WEBDAV_DB_PREFIX)) else {
+        return Ok(());
+    };
+    let uid = uid.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE auth_state SET drive_account = ?1, backend = COALESCE(backend, 'drive')
+                  WHERE id = 1 AND drive_account IS NULL",
+                [&uid],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
 }
 
 async fn peek_auth_state_uid(path: &Path) -> Option<String> {
@@ -352,5 +379,54 @@ mod tests {
         let root = tmp_root("empty");
         assert!(migrate_legacy_files(&root, "u1").unwrap());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 启动时补 Drive 账号：文件名是 Google uid 的库补上；匿名库、WebDAV 的库、
+    /// 已经记过账号的库都不动。
+    #[tokio::test]
+    async fn backfill_drive_account_fills_only_google_databases() {
+        // (库文件名里的 uid, 原来的 backend, 原来的 drive_account, 期望的两列)
+        type Row = (Option<&'static str>, Option<&'static str>);
+        let cases: [(Option<&str>, Row, Row); 4] = [
+            (Some("1053"), (None, None), (Some("drive"), Some("1053"))),
+            (None, (None, None), (None, None)),
+            (Some("webdav-3f2a9c01d4e8b7a6"), (None, None), (None, None)),
+            (
+                Some("1053"),
+                (Some("webdav"), Some("1053")),
+                (Some("webdav"), Some("1053")),
+            ),
+        ];
+        for (db_uid, (backend, account), want) in cases {
+            let pool = crate::repo::test_util::fresh_test_pool().await;
+            pool.0
+                .call(move |conn| {
+                    conn.execute(
+                        "UPDATE auth_state SET backend = ?1, drive_account = ?2 WHERE id = 1",
+                        rusqlite::params![backend, account],
+                    )
+                    .db()?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            backfill_drive_account(&pool, db_uid).await.unwrap();
+
+            let got: (Option<String>, Option<String>) = pool
+                .0
+                .call(|conn| {
+                    conn.query_row(
+                        "SELECT backend, drive_account FROM auth_state WHERE id = 1",
+                        [],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .db()
+                })
+                .await
+                .unwrap();
+            let want = (want.0.map(String::from), want.1.map(String::from));
+            assert_eq!(got, want, "db_uid = {db_uid:?}");
+        }
     }
 }

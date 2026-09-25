@@ -123,6 +123,7 @@ pub async fn init_database(dev_meta: &DeviceMeta) -> crate::error::Result<DbPool
 
     let pool = DbPool::open(&path).await?;
     storage::migrations::run(&pool).await?;
+    account::backfill_drive_account(&pool, account::active_uid().as_deref()).await?;
 
     devices::upsert_self(
         &pool,
