@@ -92,3 +92,26 @@ pub(crate) fn aes_decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> 
         .decrypt(nonce, ct)
         .map_err(|_| Error::Crypto("aes decrypt"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const KEY: [u8; 32] = [7; 32];
+
+    /// 加密后再解密，回到原文。
+    #[test]
+    fn decrypt_returns_what_encrypt_took() {
+        let sealed = aes_encrypt(&KEY, b"refresh-token").unwrap();
+        assert_eq!(aes_decrypt(&KEY, &sealed).unwrap(), b"refresh-token");
+    }
+
+    /// 密文改一个字节就解不开：GCM 的校验值对不上。
+    #[test]
+    fn one_changed_byte_fails_to_decrypt() {
+        let mut sealed = aes_encrypt(&KEY, b"refresh-token").unwrap();
+        let last = sealed.len() - 1;
+        sealed[last] ^= 1;
+        assert!(aes_decrypt(&KEY, &sealed).is_err());
+    }
+}
