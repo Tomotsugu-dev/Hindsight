@@ -156,7 +156,7 @@ Foreign keys: none.
 
 ## auth_state
 
-Google sign-in state for this device. Exactly one row, pinned by `CHECK (id = 1)` and inserted empty by the migration, so the row always exists — signed out is every column NULL, never a missing row.
+Sign-in state for this device: which backend and which Drive account this database belongs to (ADR-0011), and the credentials. Exactly one row, pinned by `CHECK (id = 1)` and inserted empty by the migration, so the row always exists — signed out is NULL credential columns, never a missing row.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
@@ -166,10 +166,15 @@ Google sign-in state for this device. Exactly one row, pinned by `CHECK (id = 1)
 | refresh_token_enc | BLOB | | Long-lived refresh token, AES-GCM encrypted under a key derived from the machine id and the user's home directory |
 | access_token | TEXT | | Short-lived token sent with every Drive call |
 | expires_at | TEXT | | When `access_token` stops working, UTC |
+| backend | TEXT | `CHECK (backend IN ('drive', 'webdav'))` | The kind of backend this database syncs with now; NULL if it has never synced (v39) |
+| drive_account | TEXT | | This database's Drive account, a Google uid. Kept after signing out; databases older than v39 get it from their file name at startup (v39) |
+| webdav_url | TEXT | | The WebDAV server currently connected (v39) |
+| webdav_user | TEXT | | The user name on that server (v39) |
+| webdav_password_enc | BLOB | | The WebDAV password, encrypted like `refresh_token_enc` (v39) |
 
-A caller counts as signed in only when `uid`, `refresh_token_enc`, `access_token` and `expires_at` are all non-NULL. Any partial state reads as signed out, so nothing downstream has to handle "has an account id but no token".
+A caller counts as signed in to Google only when `uid`, `refresh_token_enc`, `access_token` and `expires_at` are all non-NULL. Any partial state reads as signed out, so nothing downstream has to handle "has an account id but no token".
 
-Signing out NULLs every column and keeps the row. Renewing a token writes only `access_token` and `expires_at`.
+Signing out of Google NULLs `uid`, `email` and the three token columns and keeps the row; `backend` and `drive_account` stay, so the next sign-in can tell whether it is the same account. Renewing a token writes only `access_token` and `expires_at`.
 
 Never synced, and it could not be: the encryption key is derived from the machine, so the blob is meaningless anywhere else.
 

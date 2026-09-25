@@ -33,6 +33,17 @@ pub(crate) trait DavOps: Send + Sync {
 
 // ─────────────── HttpDav ───────────────
 
+/// Parses the server address the user entered, e.g., `https://dav.jianguoyun.com/dav/`.
+/// It must be HTTPS (ADR-0007).
+pub(crate) fn parse_server_url(server_url: &str) -> Result<Url> {
+    let url = Url::parse(server_url.trim())
+        .map_err(|e| Error::InvalidInputDyn(format!("WebDAV URL is invalid: {e}")))?;
+    if url.scheme() != "https" {
+        return Err(Error::InvalidInputDyn("WebDAV URL must be https".into()));
+    }
+    Ok(url)
+}
+
 /// `PROPFIND`'s request body.
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <D:propfind xmlns:D="DAV:"><D:prop><D:getlastmodified/><D:getcontentlength/><D:resourcetype/></D:prop></D:propfind>"#;
@@ -47,14 +58,10 @@ pub(crate) struct HttpDav {
 }
 
 impl HttpDav {
-    /// `base` is the server address provided by the user (e.g., `https://dav.jianguoyun.com/dav/`),
+    /// `server_url` is the server address provided by the user (e.g., `https://dav.jianguoyun.com/dav/`),
     /// must be HTTPS (ADR-0007). The root directory is fixed as [`ROOT_DIR`].
-    pub(crate) fn new(base: &str, username: &str, password: &str) -> Result<Self> {
-        let mut base = Url::parse(base.trim())
-            .map_err(|e| Error::InvalidInputDyn(format!("WebDAV URL is invalid: {e}")))?;
-        if base.scheme() != "https" {
-            return Err(Error::InvalidInputDyn("WebDAV URL must be https".into()));
-        }
+    pub(crate) fn new(server_url: &str, username: &str, password: &str) -> Result<Self> {
+        let mut base = parse_server_url(server_url)?;
         // `join` follows URL resolution rules: `…/dav` + `hindsight/` gives
         // `…/hindsight/`, because `dav` is taken as a file name and replaced;
         // only `…/dav/` + `hindsight/` gives `…/dav/hindsight/`. Users often

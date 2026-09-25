@@ -1,147 +1,187 @@
-# ADR-0011 · Switching backends and WebDAV accounts
+# ADR-0011 · Switching sync backends and WebDAV accounts
 
 - **Date**: 2026-09-23
 - **Status**: **Accepted**
-- **Related**: Supersedes ADR-0007 §2 ("switching backends is switching accounts") and what ADR-0007 says about the new database, the password and the sync key · ADR-0002 (local key) · ADR-0005 (whole-file rewrites) · ADR-0006 (one pull cursor per dataset) · ADR-0009 (WebDAV bookmarks)
+- **Related**: Supersedes ADR-0007 §2 ("switching backends is switching accounts") and its guidance on new databases, passwords, and sync keys · ADR-0002 (local key) · ADR-0005 (whole-file rewrites) · ADR-0006 (one pull cursor per dataset) · ADR-0009 (WebDAV bookmarks)
 
 ## Context
 
-The rule so far has been one local database per account. Switching Google accounts switches to another database, so the data of two accounts never mix.
+The existing rule is "one local database per account." When a user switches Google accounts, the app opens a different database so data from the two accounts never mix.
 
-With WebDAV, a backend and an account are no longer the same thing: a user may move from Google Drive to WebDAV, and back again. The old design treated switching backends as switching accounts and started an empty database each time. The history and screen memory stayed behind in the old database, out of sight after the switch, and the old database kept taking disk space.
+With WebDAV, switching backends does not necessarily mean switching accounts. A user may switch from Google Drive to WebDAV, then switch back. The old design treated these as the same operation and created an empty database when switching to a backend the user had not used before. As a result, history and screen memory stayed in the old database and became unavailable after the switch, while another database took up additional disk space.
 
-ADR-0007 also left open how a WebDAV account is identified and where its password is stored:
+ADR-0007 also left two questions unanswered: how to identify a WebDAV account and where to store its password.
 
-- The password cannot go into the ordinary settings, because `get_settings` returns the whole settings object to the frontend.
-- The local key of ADR-0002 only encrypts credentials stored on this machine; it is not a sync key. Cloud files are not encrypted with it.
+- The WebDAV password cannot be stored in ordinary settings because `get_settings` returns the entire settings object to the frontend.
+- The local key defined in ADR-0002 encrypts credentials stored on this device; it is not a cloud sync key. Cloud files are not encrypted with it.
 
 ## Decision
 
-### 1. Tell switching backends apart from switching accounts
+### 1. Distinguish switching backends from switching accounts
 
-The two are handled differently:
+In this ADR, a "backend" means Drive or a specific WebDAV server. Different WebDAV servers, such as Nutstore and Nextcloud, count as different backends and are distinguished by their normalized hostnames (see §5).
 
-- **Switching backends**: keep the current local database, clear the old backend's sync progress, and let the new backend sync this device's data and the cloud's data again.
-- **Switching accounts on the same backend**: the current database cannot be kept. Create or open another database, so the two accounts' data do not mix.
+The two kinds of switch are handled differently:
+
+- **Switching backends**: Keep using the current local database. Each backend has its own sync progress. Sync from the beginning the first time a backend is used; when returning to it, resume from where it was left.
+- **Switching accounts on the same backend**: Do not keep using the current database. Create or open a different one so data from the two accounts cannot mix.
 
 Examples:
 
 | Change | Local database |
 |---|---|
-| Drive account A → WebDAV account W | Keep the current one; clear the progress and sync again |
-| WebDAV account W → Drive account A | Keep the current one; clear the progress and sync again |
+| Drive account A → Nutstore account a | Keep the current database |
+| Nutstore account a → Nextcloud account n | Keep the current database |
+| Nutstore account a → Drive account A | Keep the current database |
 | Drive account A → Drive account B | Create or open B's database |
-| WebDAV account W → WebDAV account X | Create or open X's database |
+| Nutstore account a → Nutstore account b | Create or open b's database |
 
-Each local database remembers at most one Drive account and one WebDAV account. A user moving back and forth between the two backends therefore stays in the same database; only a different account on the same backend switches databases.
+Each local database records at most one account for each backend. A user can therefore switch between backends and keep using the same database. The database changes only when the account changes on the same backend.
 
-For example, a user moves from Drive account A to WebDAV, then signs in to Drive account B. B is not A, the Drive account this database recorded, so B gets another database; A's database is not reused.
+For example, a user switches from Drive account A to WebDAV, then signs in to Drive account B. Because B differs from the Drive account A recorded in the current database, the app must create or open another database for B instead of reusing A's.
 
-### 2. A backend switch happens all at once
+When an anonymous database (`hindsight.sqlite`) connects to any backend for the first time, keep using it and claim it for that account, as with the first Google sign-in. Record the account, then rename the database on the next startup to use the account-specific filename: `hindsight.<uid>.sqlite` for Drive or `hindsight.<account-hash>.sqlite` for WebDAV (see §5). Without the rename, the app cannot find this database by account if the user later switches accounts on the same backend and then switches back.
 
-When switching from one backend to another, do these four things in one transaction on the current database:
+### 2. Perform backend switches in one transaction
+
+When switching from one backend to another, perform all three steps in a single transaction on the current local database:
 
 1. Save the new backend and its credentials, and record the account for that backend.
-2. Clear the old state in `sync_cursor`: the four pull cursors, the three push fingerprints, the WebDAV bookmarks and the pending changes.
-3. Refill the outbox: one row for each day this device has activity, and one row for each of the five single files. Push rewrites whole files (ADR-0005), so one row per file is enough.
-4. Delete the old backend's credentials: the Google token or the WebDAV password.
+2. Refill the outbox with one pending item for each of these files:
+	- Activities are stored by day in `activities.<date>.ndjson`; add one item for each date with activity on this device.
+	- Add one item for each of the five whole-table files: categories (`categories.json`), device metadata (`meta.json`), app icons (`icons.json`), app groups (`app_groups.json`), and group members (`app_group_members.json`).
 
-Once the transaction commits, the normal push and pull loop does the rest:
+	Push rewrites each file from its table (ADR-0005), so one pending item per file is enough.
+3. Delete the old backend's credentials: the Google token or the WebDAV password.
 
-- Push uploads this device's data to the new backend.
-- Pull checks and merges the new backend's cloud data from the start.
+All files in step 2 must be uploaded again on every switch. Their push progress is not tracked per backend; they share one outbox queue. Each local write adds a pending item, and whichever backend receives the push removes that item. When switching back to a previously used backend, the other backend has already removed the pending items, so the app cannot tell which files the returning backend is missing.
 
-Merging is an upsert, so processing the same data twice creates no duplicates.
+The three optional datasets (AI summaries, chat history, and screen memory) do not use the outbox and are not re-uploaded in step 2. On each push, the app computes their push fingerprints directly from the tables and compares them with the per-backend fingerprints described in §3. It uploads a dataset only when its fingerprint differs, then stores the new fingerprint.
 
-### 3. Why a backend switch must sync again
+As a result, the first push to a backend uploads each dataset in full because no fingerprint has been recorded for it yet. When returning to a previously used backend, only data changed since the last time it was used is uploaded. AI summaries and chat history each use a single file, so any change causes the whole file to be uploaded again.
 
-Sync progress cannot be shared between backends, above all because they record times and find files differently.
+After the transaction commits, the regular sync process completes the remaining work:
 
-For example, the old Drive cursor may read `11:05:01`. After switching to WebDAV, comparing it with the server time of a peer's manifest can make the version the peer published at `10:55` look already processed. The bookmark is updated, no file is downloaded, and the older days are never found later.
+- Push uploads the data already on this device to the new backend.
+- Pull merges data according to that backend's own progress: from the beginning on first use, or from where it was left when returning to a previously used backend.
 
-With the cursors and bookmarks cleared, the new backend builds its own progress from the start, and no data is skipped silently. Syncing from the start deletes nothing on this device; it only uploads and checks the existing data again.
+Data is merged using upserts, so processing it more than once does not create duplicate records.
 
-This step must be in the same transaction as saving the new backend. If the app crashes after the new backend is saved but before the cursors are cleared, the next start judges the new backend's data by the old cursors. All of this state is in the main database, so one transaction protects it.
+These three steps must be in the same transaction. If the app crashes after saving the new backend but before refilling the outbox, this device's history may never be uploaded to the new backend. All of this state is stored in the main database, so one transaction can ensure the steps either all complete or all roll back.
 
-### 4. What account information is stored
+### 3. Keep separate sync progress for each backend
 
-`auth_state` gains six columns:
+`sync_cursor` stores sync progress separately for each backend:
 
-- `backend`: the backend this database uses now, `drive` or `webdav`; empty if it has never synced.
-- `drive_account`: this database's Drive account, the Google uid.
-- `webdav_account`: this database's WebDAV account, the id defined in §5.
-- `webdav_url`
-- `webdav_user`
-- `webdav_password_enc`
+- Drive continues to use its existing rows: four pull cursors (`drive_files`, `pull.*`) and three push fingerprints (`push.*`).
+- Each WebDAV server uses a set of rows prefixed with `webdav.<host>.`: pull cursors (`pull.*`), push fingerprints (`push.*`), bookmarks (`peer.*`), pending changes (`pending`), and the account for that server (`account`; see §4).
 
-The two account columns do not change once written: switching backends does not overwrite them, and after switching accounts the new database has its own. Signing out deletes only the credentials (the Google token or the WebDAV password) and keeps `backend` and both account columns, so the next connection can still tell whether it is the same account.
+For example, a local database that has used Nutstore might have these rows in `sync_cursor`. `entity` is the row name, and `last_pulled_at` stores its value. The column name is historical; WebDAV rows may store values other than timestamps:
 
-The WebDAV password is encrypted with the local key of ADR-0002, the same protection as the Google refresh token.
+| `entity` | `last_pulled_at` |
+|---|---|
+| `webdav.dav.jianguoyun.com.account` | `webdav-3f2a…` (account hash for this server) |
+| `webdav.dav.jianguoyun.com.pull.core` | `2026-10-01T10:00:00Z` (pull cursor for the core dataset) |
+| `webdav.dav.jianguoyun.com.peer.<device-id>` | The bookmark for that peer device, as JSON |
 
-### 5. The WebDAV account id
+Do not clear any backend's sync progress when switching backends.
 
-The WebDAV account id has this form:
+Different backends must not share cursors because cursor timestamps come from their respective servers. Sharing cursors would cause the following problems:
+
+- **Switching from Drive to WebDAV**: Comparing a Drive cursor such as `11:05:01` with the manifest timestamp on Nutstore could make a version published by a peer at `10:55` appear to have already been processed. The app would update the bookmark without downloading the file, and data for those earlier dates would never be discovered later.
+- **Rolling back to an older version**: Older versions recognize only Drive rows. If WebDAV writes a Nutstore timestamp into those rows, an older version may use it after the user signs back in to Google to ask Drive "which files changed after this time?" Files uploaded to Drive by other devices in the meantime could be skipped.
+- **Switching between WebDAV servers**: Their timestamps differ, and push counts in their bookmarks are independent; neither can be compared across servers.
+
+Keeping progress separate lets older versions resume from the point at which Drive was left and catch up on intervening changes. When returning to a previously used backend, the app also avoids downloading data it has already merged.
+
+### 4. Account information to store
+
+Add five columns to `auth_state`:
+
+- `backend`: The kind of backend this database currently uses, either `drive` or `webdav`; empty if it has never synced.
+- `drive_account`: This database's Drive account, identified by its Google uid.
+- `webdav_url`, `webdav_user`: The current WebDAV server and username.
+- `webdav_password_enc`: The password for the current WebDAV account.
+
+The account used by this local database on each WebDAV server is recorded in that server's `webdav.<host>.account` row in `sync_cursor`. Its value is the account hash defined in §5.
+
+Switching backends does not change the account identities recorded in the local database. If the same WebDAV account uses a different URL or username spelling, update `webdav_url` and `webdav_user`; the account hash stays the same. When switching to a different account, its local database records its own account information.
+
+Signing out deletes only the credentials (the Google token or WebDAV password); retain the other account information. The app can then determine on the next connection whether it is the same account.
+
+Encrypt the WebDAV password with the local key from ADR-0002, using the same protection as for the Google refresh token.
+
+### 5. WebDAV account hashes and server host prefixes
+
+Unlike Google, WebDAV servers do not provide a uid for each account. The app therefore computes an account hash locally to recognize the same account. The server does not know this value; it is used in two places on this device:
+
+- The filename of a local database created for or claimed by the account: `hindsight.<account-hash>.sqlite`.
+- The account's `webdav.<host>.account` row in `sync_cursor`, which is used on the next connection to determine whether it is the same account (see §4).
+
+The account hash has this format:
 
 ```text
-webdav-<first 16 hex characters of SHA-256>
+webdav-<first 16 hexadecimal characters of SHA-256>
 ```
 
-The hash input is:
+The hash input is the normalized URL and the normalized username, each written as `<byte length>:<content>,` (a netstring) and joined, for example `30:https://dav.jianguoyun.com/dav,15:you@example.com,`. With the lengths written out, two different pairs never join into the same string. Normalize them as follows:
 
-```text
-normalized URL + newline + normalized user name
-```
+- URL: lowercase the scheme and hostname, remove the default port, and remove the trailing `/`.
+- Username: trim surrounding whitespace and convert to lowercase.
 
-Normalization:
+For example, these two connections produce the same account hash:
 
-- URL: lowercase the scheme and host, drop the default port, drop the trailing `/`.
-- User name: trim the surrounding whitespace and lowercase it.
+| URL | Username |
+|---|---|
+| `HTTPS://DAV.jianguoyun.com:443/dav/` | `You@Example.com` |
+| `https://dav.jianguoyun.com/dav` | `you@example.com` |
 
-For example, these two connections are the same WebDAV account:
+The `<host>` in row names from §3 comes from the normalized URL. Keep non-default ports, for example `dav.jianguoyun.com` and `cloud.example.com:8443`.
 
-```text
-HTTPS://DAV.jianguoyun.com:443/dav/
-https://dav.jianguoyun.com/dav
-```
-
-The function that computes the id must be tested with fixed inputs and outputs. If the rule ever changes, existing users get a new id after a restart, are taken for a new account, and land in an empty database.
+The account-hash and server-host-prefix functions must have tests with fixed inputs and outputs. If either rule changes unintentionally, existing users could get a new account hash after restarting and be mistaken for a new account, opening an empty database. The app could also fail to find their existing sync progress and download data again.
 
 ## Alternatives
 
-- **Create a new database on every backend switch**: the two backends' data never mix, but after the switch the user cannot see the history and screen memory in the old database, and it takes extra disk space.
-- **Derive the account id from the user name and password**: changing the password gives a new id and an empty database. The password's hash would also stay on disk as part of a file name, where it can be cracked offline.
-- **Use only the user name**: after moving to another server, the database keeps the old account's cursors and bookmarks and may skip files on the new server.
-- **Remember only the last account per database**: a backend switch overwrites it. After moving from Drive account A to WebDAV and then signing in to Drive account B, the app cannot tell that B is a different account and reuses A's database.
-- **Record outside the databases (`active_user.json`) which database each account belongs to**: this closes "one WebDAV account used by two databases" (see Consequences), but it keeps state outside the database, and that state cannot share a transaction with the backend switch. The case only happens when a database is given a password that another database already uses; it is not worth it.
-- **Store a random account id in the cloud**: avoids the problems of URL spelling and password changes, but adds a protocol file. Normalizing the URL and the user name is enough for now.
+- **Create a new database on every backend switch** (the former ADR-0007 approach): Data from different backends stays separate, but after switching the user cannot see the history and screen memory in the old database, and the extra database takes up disk space.
+- **Build the account hash from the username alone, or from the username and password**: With only the username, accounts with the same name on different servers (for example, `admin`) get the same hash and open the same local database. Including the password means a password change leads to an empty database; its hash would also appear in the filename and could be targeted for offline cracking.
+- **Share one set of cursors across all backends and clear it on a switch**: Returning to a previously used backend requires downloading already merged files again. After rolling back to an older version, it may use a timestamp written by WebDAV to query Drive and miss files uploaded by other devices in the meantime (see §3).
+- **Keep the old backend's credentials when switching**: Switching back would not require signing in again, but the app would need to handle two backends being signed in at once, both in the UI and in its state logic. It would also need to store another secret. A Nutstore app password can access the entire account.
 
 ## Consequences
 
 ### Benefits
 
-- Switching between Google Drive and WebDAV loses no local history and does not create another set of databases.
-- The same WebDAV account keeps the same local database when its URL is written differently or its password changes.
-- With the old cursors cleared, the new backend builds its progress from the start and skips no data because of the old backend's state.
+- Switching between Google Drive and WebDAV, or changing WebDAV providers (for example, from Nutstore to Nextcloud), preserves local history without creating another database for the new backend.
+- The same WebDAV account continues to use the same local database when its URL spelling or password changes.
+- Each backend has independent sync progress, so a timestamp from one backend is never used to evaluate files on another. Sync can resume when returning to a previously used backend, and rolling back to an older version does not cause Drive files to be missed.
 
 ### Costs and risks
 
-- The first switch to a backend uploads this device's history again and pulls the cloud data again. On a device with a lot of history, that round uses noticeable network traffic.
-- Other devices still on the old backend do not see the data on the new backend; they sync again only after they switch to the same backend.
-- One WebDAV account can be used by two local databases. For example, A's database has switched to WebDAV account W; later W is also entered in the database of Drive account B. B's database has no WebDAV record, so it is kept: A's data on W is pulled into it, and B's data is uploaded to W. This only happens if W's password is entered in B's database.
+- Every backend switch re-uploads this device's activities and five whole-table files (see §2). The first time a backend is used, the app also downloads all of its data. This can generate substantial network traffic on devices with extensive history.
+- Other devices still using the old backend will not see data on the new one. They must switch to the same backend to resume syncing with it.
+- The same WebDAV account can be used by two local databases. For example, local database A has switched to WebDAV account W. Later, the user enters W in the local database for Drive account B. Because B's database has no record of W, the app keeps using B's database: it pulls A's data from W into B's database and uploads B's data to W. This can happen only if the user enters W's password in B's database.
 
 ## Data, compatibility, security, and privacy
 
-- **Existing data and migration**: The migration only adds six columns to `auth_state`. A database whose file name carries a Google uid (only a database that has signed in to Google has one) gets `backend = drive` and `drive_account = <that uid>`, whether or not it is signed out now. An anonymous database leaves both empty.
-- **Mixed versions and rollback**: The migration only adds columns, and older versions read the existing columns by name, so they are not affected. Older versions do not support WebDAV. A user on WebDAV who rolls back to an older version is shown as signed out, and can keep using Drive after signing in to Google again.
-- **Irreversible effects**: The cursors and bookmarks cleared by a backend switch cannot be recovered, but the next round rebuilds them. No data on this device is deleted.
-- **Security and privacy**: Only the encrypted WebDAV password is stored. The account id is a hash, so file names do not show the server address or the user name. WebDAV must still use HTTPS, as ADR-0007 requires.
+- **Existing data and migration**: The database migration adds five columns to `auth_state`. For a local database whose filename contains a Google uid (meaning it has signed in to Google), initialize `backend = drive` and `drive_account = <that uid>`, whether or not the user is currently signed out. Leave both columns empty for anonymous databases. Existing cursor and push-fingerprint rows belong to Drive and keep their names. WebDAV has not shipped yet, so its new rows need no migration.
+- **Mixed versions and rollback**: The migration only adds columns, so older versions that read existing fields by column name are unaffected. Older versions do not support WebDAV. After a user rolls back from WebDAV, the older version shows them as signed out. Once they sign in to Google again, syncing can resume from the progress recorded when they left Drive.
+
+	Records created on this device while using WebDAV will not be uploaded to Drive by the older version, because their outbox rows were removed after being pushed to WebDAV. When the app is upgraded again, if `backend` is still `webdav` but the local database contains a Google token, the user signed in to Drive using the older version. In that case, handle the transition as a switch from WebDAV to Drive and run the transaction in §2: refill the outbox to upload records created while using WebDAV, and delete the WebDAV password.
+- **Irreversible effects**: None. Switching backends does not delete sync progress or business data on this device.
+- **Security and privacy**: Only the encrypted WebDAV password is stored. The account hash contains no plaintext, so filenames do not directly expose the server address or username. WebDAV must still use HTTPS, as required by ADR-0007.
 
 ## Follow-up
 
-Implementation order:
+Implement in this order:
 
-1. Move the three AES functions used for local encryption out of the Google module.
+1. Move the three AES functions required for local encryption out of the Google module.
 2. Add the `auth_state` migration.
-3. Implement the WebDAV account id, with tests for the normalization rules.
-4. Implement the connect command and the backend switch transaction.
-5. Change the Google sign-in flow to decide by `auth_state.drive_account`, as in §1, instead of the uid in `active_user.json`.
+3. Implement the WebDAV account hash and server host prefix, with tests using fixed inputs and outputs to lock down the normalization rules.
+4. Store sync progress separately by backend: keep the existing row names for Drive and use the `webdav.<host>.` prefix for each WebDAV server. The backend determines the row names.
+5. Implement the connect command and backend-switch transaction.
+6. Update the Google sign-in flow to identify the account using `auth_state.drive_account`, as described in §1, instead of the uid in `active_user.json`.
+
+Write a separate ADR later to unify the push mechanism: track a push cursor for each backend and remove the outbox. Then a backend switch will not need to refill the outbox; each backend can track which data it is missing. This depends on two changes:
+
+- Use `updated_at` to determine which activity dates have changed. First, replace hard deletes (such as `purge_orphan_sessions`) with soft deletes; otherwise, the cursor cannot see deleted rows. As with pull cursors, the cursor must also look back over a time window to avoid missing records if the system clock moves backwards.
+- Split AI summaries and chat history into per-day files, so only files for changed days need to be uploaded. This changes cloud filenames, so compatibility is needed for older versions that recognize only `ai_summaries.json` and `chat.json`.
