@@ -134,13 +134,13 @@ impl WebDavClient {
     }
 
     pub(crate) fn connect(
-        base: &str,
+        server_url: &str,
         username: &str,
         password: &str,
         pool: DbPool,
         self_id: String,
     ) -> Result<Self> {
-        let http = HttpDav::new(base, username, password)?;
+        let http = HttpDav::new(server_url, username, password)?;
         let upload_method = upload_method_for(http.host());
         Ok(Self::new(Dav::Http(http), upload_method, pool, self_id))
     }
