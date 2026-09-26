@@ -602,9 +602,6 @@ export const api = {
   signOut: async (): Promise<void> => {
     state.authState = structuredClone(mockAuthState);
   },
-  restartApp: async (): Promise<void> => {
-    if (typeof window !== "undefined") window.location.reload();
-  },
   syncStatus: async (): Promise<SyncStatus> => structuredClone(state.syncStatus),
   syncNow: async (): Promise<void> => {
     state.syncStatus.running = true;

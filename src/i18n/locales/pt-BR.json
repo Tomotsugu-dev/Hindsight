@@ -1099,10 +1099,8 @@
         "reauthTitle": "Credenciais expiradas — faça login novamente para atualizar o token",
         "signInWithGoogle": "Fazer login com o Google",
         "signingIn": "Abrindo o navegador…",
-        "configureOAuth": "Configurar OAuth",
-        "restartApp": "Reiniciar aplicativo"
+        "configureOAuth": "Configurar OAuth"
       },
-      "restartHint": "Login feito em uma nova conta. Reinicie o aplicativo para mudar para o banco de dados local dessa conta.",
       "datasets": {
         "title": "O que sincronizar",
         "hint": "Por padrão, apenas dados básicos (estatísticas de uso, categorias) são sincronizados. Os itens abaixo contêm informações mais sensíveis e precisam ser ativados individualmente; as imagens de captura de tela nunca saem deste dispositivo.",

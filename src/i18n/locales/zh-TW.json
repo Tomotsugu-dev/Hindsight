@@ -1099,10 +1099,8 @@
         "reauthTitle": "憑證失效，重新登入重新整理 token",
         "signInWithGoogle": "用 Google 登入",
         "signingIn": "瀏覽器中…",
-        "configureOAuth": "配置 OAuth",
-        "restartApp": "重啟 app"
+        "configureOAuth": "配置 OAuth"
       },
-      "restartHint": "已登入到新的賬號，需要重啟 app 才能切換到該賬號的本地資料庫。",
       "datasets": {
         "title": "同步內容",
         "hint": "預設只同步使用統計與分類等基礎資料。以下內容包含更敏感的資訊，需單獨開啟；截圖圖片本體永不上雲。",

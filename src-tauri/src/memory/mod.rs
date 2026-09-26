@@ -27,7 +27,7 @@ pub struct MemoryDb(pub Connection);
 /// 记忆库文件路径:与主库同目录,按账号隔离(`hindsight-memory.<uid>.sqlite`)。
 pub fn memory_db_path() -> Result<PathBuf> {
     let dir = crate::storage::db_path_dir()?;
-    let name = match crate::account::active_uid() {
+    let name = match crate::account::db_uid() {
         Some(uid) => format!("hindsight-memory.{uid}.sqlite"),
         None => "hindsight-memory.sqlite".to_string(),
     };

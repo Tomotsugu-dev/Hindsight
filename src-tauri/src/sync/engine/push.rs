@@ -24,11 +24,11 @@ pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
     // 删掉 → 那批数据到不了云端；与 purge 并发：读完 outbox 后表被清 → 空内容上云。
     let _gate = inner.flush_gate.lock().await;
     // Not signed in is not a failure: there is nothing to push.
-    if !inner.cloud.ensure_credential().await? {
+    if !inner.cloud().ensure_credential().await? {
         return Ok(());
     }
     let round = push_round(inner).await;
-    let ended = inner.cloud.end_push_round().await;
+    let ended = inner.cloud().end_push_round().await;
     round.and(ended)
 }
 
@@ -100,7 +100,7 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
                 continue;
             }
         };
-        let upsert_res = inner.cloud.upsert_by_name(&name, &content).await;
+        let upsert_res = inner.cloud().upsert_by_name(&name, &content).await;
         match upsert_res {
             Ok(_) => succeeded_ids.extend(&ids),
             Err(e) => {
@@ -146,9 +146,9 @@ async fn delete_legacy_cloud_files(inner: &Arc<Inner>) -> Result<()> {
         .iter()
         .map(|kind| format!("device.{}.{kind}.json", inner.self_id))
         .collect();
-    let files = inner.cloud.list_all().await?;
+    let files = inner.cloud().list_all().await?;
     for file in files.into_iter().filter(|f| names.contains(&f.name)) {
-        inner.cloud.delete(&file.id).await?;
+        inner.cloud().delete(&file.id).await?;
         log::info!("push: removed {} from the cloud", file.name);
     }
     Ok(())

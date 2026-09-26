@@ -1729,8 +1729,8 @@ async fn webdav_keeps_its_progress_apart_from_drive() {
     }
 }
 
-/// 用 Drive 推完一轮（outbox 清空了）再换到 WebDAV：本机的每一天和整表文件都重新传到
-/// WebDAV 上，存下的密码也能解开（ADR-0011 §2）。
+/// 用 Drive 推完一轮（outbox 清空了）再换到 WebDAV，不重启：同一个引擎的下一轮就把
+/// 本机的每一天和整表文件都传到 WebDAV 上，存下的密码也能解开（ADR-0011 §2）。
 #[tokio::test]
 async fn switching_to_webdav_uploads_this_devices_history() {
     let drive = Arc::new(InMemoryDriveStore::new());
@@ -1751,20 +1751,18 @@ async fn switching_to_webdav_uploads_this_devices_history() {
         user: "me",
         password: "app-password",
     };
-    switch_backend(&a.pool, "device-a", to_webdav)
-        .await
-        .unwrap();
-
-    // 重启后按 auth_state 建的是 WebDAV；这里换成连假服务器的同一个库
+    // 跟连接命令一样：暂停同步，写库，换上新后端（这里连假服务器）
     let dav = Arc::new(FakeDav::new());
     let client = WebDavClient::with_fake_server(dav.clone(), a.pool.clone(), "device-a".into());
-    let engine = SyncEngine::with_backend(
-        a.pool.clone(),
-        Some(a.mem.clone()),
-        CloudBackend::WebDav(Box::new(client)),
-        "device-a".into(),
-    );
-    engine.sync_now().await.unwrap();
+    {
+        let _paused = a.engine.pause_flushes().await;
+        switch_backend(&a.pool, "device-a", to_webdav)
+            .await
+            .unwrap();
+        a.engine
+            .replace_cloud(CloudBackend::WebDav(Box::new(client)));
+    }
+    a.engine.sync_now().await.unwrap();
 
     for path in [
         webdav_day_file("device-a", yesterday),

@@ -14,8 +14,6 @@ use crate::sync::webdav::account_hash::{account_hash, server_host};
 
 /// The backend to switch to, with its credentials.
 pub(crate) enum NewBackend<'a> {
-    // Google sign-in switches with it next (ADR-0011 follow-up 6).
-    #[allow(dead_code)]
     Drive {
         uid: &'a str,
         email: &'a str,
@@ -30,8 +28,10 @@ pub(crate) enum NewBackend<'a> {
     },
 }
 
-/// Switches to another backend. Call it while sync is paused, and restart the
-/// app as soon as it returns.
+/// Switches to another backend. Call it while sync is paused. Once it returns,
+/// and before sync resumes, hand the new backend to the sync engine
+/// ([`SyncEngine::replace_cloud`](crate::sync::engine::SyncEngine::replace_cloud))
+/// or restart the app.
 pub(crate) async fn switch_backend(pool: &DbPool, self_id: &str, to: NewBackend<'_>) -> Result<()> {
     let statements = credential_statements(to)?;
     let self_id = self_id.to_string();
@@ -61,6 +61,43 @@ pub(crate) async fn update_credentials(pool: &DbPool, to: NewBackend<'_>) -> Res
         })
         .await?;
     Ok(())
+}
+
+/// Repairs this state: the new version switched to WebDAV, an older version then
+/// signed in to Google, and the app was upgraded again. Older versions do not
+/// know `backend`, so it is still `webdav`, yet the database holds a Google
+/// token. The new version clears the Google token when it switches to WebDAV,
+/// so the two together can only come from an older version. Handle it as a
+/// switch from WebDAV back to Drive (ADR-0011, "Mixed versions and rollback"):
+/// refill the outbox so the records made while on WebDAV reach Drive, and delete
+/// the WebDAV password. Called at startup, before sync starts; returns whether it
+/// switched.
+pub(crate) async fn switch_to_drive_if_old_version_signed_in(
+    pool: &DbPool,
+    self_id: &str,
+) -> Result<bool> {
+    let self_id = self_id.to_string();
+    let switched = pool
+        .0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            let changed = tx
+                .execute(
+                    "UPDATE auth_state
+                        SET backend = 'drive', drive_account = uid, webdav_password_enc = NULL
+                      WHERE id = 1 AND backend = 'webdav'
+                        AND uid IS NOT NULL AND refresh_token_enc IS NOT NULL",
+                    [],
+                )
+                .db()?;
+            if changed == 1 {
+                enqueue_every_file(&tx, &self_id).db()?;
+            }
+            tx.commit().db()?;
+            Ok(changed == 1)
+        })
+        .await?;
+    Ok(switched)
 }
 
 type Statement = (&'static str, Vec<Value>);
@@ -518,6 +555,72 @@ mod tests {
         assert_eq!(auth.0, "You@Example.com");
         let password = aes_decrypt(&derive_master_key().unwrap(), &auth.1).unwrap();
         assert_eq!(password, b"new-password");
+        assert!(outbox(&pool).await.is_empty());
+    }
+
+    /// 新版换到 WebDAV，退回旧版登录 Google，再升级回来：换回 Drive，删掉 WebDAV 密码，
+    /// 本机的两天加五个整表文件重新进 outbox。
+    #[tokio::test]
+    async fn a_google_sign_in_by_an_old_version_switches_back_to_drive() {
+        let pool = signed_in_to_drive().await;
+        switch_backend(&pool, "me", to_nutstore()).await.unwrap();
+        // 推到 WebDAV 以后 outbox 清空；旧版登录 Google 只写这几列，不动 backend
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "DELETE FROM sync_outbox;
+                     UPDATE auth_state
+                        SET uid = 'g-1', email = 'a@example.com', refresh_token_enc = x'00',
+                            access_token = 'token', expires_at = '2099-01-01T00:00:00Z';",
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        assert!(switch_to_drive_if_old_version_signed_in(&pool, "me")
+            .await
+            .unwrap());
+
+        let auth = query(
+            &pool,
+            "SELECT backend, drive_account, webdav_password_enc IS NULL FROM auth_state",
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, bool>(2)?,
+                ))
+            },
+        )
+        .await;
+        assert_eq!(auth, vec![("drive".to_string(), "g-1".to_string(), true)]);
+        assert_eq!(outbox(&pool).await, every_file_of_me());
+    }
+
+    /// 只用着 WebDAV，没有 Google 的 token：什么都不动。
+    #[tokio::test]
+    async fn webdav_without_a_google_token_is_left_alone() {
+        let pool = signed_in_to_drive().await;
+        switch_backend(&pool, "me", to_nutstore()).await.unwrap();
+        pool.0
+            .call(|conn| {
+                conn.execute("DELETE FROM sync_outbox", []).db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        assert!(!switch_to_drive_if_old_version_signed_in(&pool, "me")
+            .await
+            .unwrap());
+
+        let backend = query(&pool, "SELECT backend FROM auth_state", |r| {
+            r.get::<_, String>(0)
+        })
+        .await;
+        assert_eq!(backend, vec!["webdav".to_string()]);
         assert!(outbox(&pool).await.is_empty());
     }
 

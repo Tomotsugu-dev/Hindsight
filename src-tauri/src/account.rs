@@ -18,7 +18,7 @@
 //! 提示用户重启；重启后 [`db_path`] 自动指向新 DB。
 //!
 //! ## 字段语义
-//! - `uid`：当前激活的 Google uid。决定 `db_path()` 返回哪个 DB。
+//! - `uid`：当前激活的 Google uid。决定启动时开哪个 DB（见 [`db_uid`]）。
 //! - `legacy_owner`：`hindsight.sqlite`（无 uid 后缀的文件）的真正归属者；
 //!   存在时下次启动会把这个文件 rename 到 `hindsight.<legacy_owner>.sqlite`。
 //!   为啥要单独记录：用 auth_state.uid 当 peek heuristic 的话，"sign-in 后
@@ -28,6 +28,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -77,7 +78,8 @@ fn write_file(body: &ActiveUserFile) -> io::Result<()> {
     Ok(())
 }
 
-/// 当前激活的 Google uid。返回 None = 匿名/未登录态。
+/// The account this database belongs to: a Google uid, or `webdav-<hash>` for a
+/// WebDAV account. `None` when it belongs to no account yet.
 pub fn active_uid() -> Option<String> {
     read_file().uid.filter(|u| !u.trim().is_empty())
 }
@@ -88,6 +90,33 @@ pub fn set_active_uid(uid: Option<&str>) -> io::Result<()> {
     let mut body = read_file();
     body.uid = uid.map(str::to_string);
     write_file(&body)
+}
+
+/// The account of the database this run has open, set at startup and fixed for
+/// the run. For example:
+/// - `hindsight.sqlite` is open and Google account A signs in for the first
+///   time: `active_uid` becomes A's uid at once, but the file is renamed to
+///   `hindsight.<A's uid>.sqlite` only at the next startup, so for this run it
+///   stays `None`.
+/// - `hindsight.<A's uid>.sqlite` is open and the backend switches to Nutstore:
+///   the file stays the same, and both it and `active_uid` are A's uid.
+/// - `hindsight.<A's uid>.sqlite` is open and Google account B signs in: the
+///   app writes to `hindsight.<B's uid>.sqlite` and restarts; after the restart
+///   it is B's uid.
+static DB_UID: OnceLock<Option<String>> = OnceLock::new();
+
+/// Called once at startup, before the databases are opened.
+pub fn set_db_uid_for_this_run() {
+    let _ = DB_UID.set(active_uid());
+}
+
+/// The uid in the file name of the database this run opened; `None` for
+/// `hindsight.sqlite`. Until it is set (in tests), it is `active_uid`.
+pub fn db_uid() -> Option<String> {
+    match DB_UID.get() {
+        Some(uid) => uid.clone(),
+        None => active_uid(),
+    }
 }
 
 fn legacy_owner() -> Option<String> {
@@ -185,8 +214,10 @@ fn migrate_legacy_files(data_root: &Path, owner: &str) -> Result<bool> {
     Ok(all_done)
 }
 
-/// sign-in Case A 调：声明当前 `hindsight.sqlite` 归属于这个 uid，
-/// 下次启动时 startup migration 会把文件 rename 到 `hindsight.<uid>.sqlite`。
+/// Records that `hindsight.sqlite` belongs to this uid, as `legacyOwner` in
+/// `active_user.json`. The file is open for this run and cannot be renamed;
+/// [`migrate_legacy_db`] renames it to `hindsight.<uid>.sqlite` at the next
+/// startup, before the databases are opened.
 pub fn claim_legacy_for(uid: &str) -> io::Result<()> {
     set_legacy_owner(Some(uid))
 }

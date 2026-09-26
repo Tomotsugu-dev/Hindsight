@@ -75,7 +75,7 @@ async fn upload(inner: &Arc<Inner>, kind: FileKind, content: Vec<u8>) -> Result<
         kind,
     }
     .to_file_name();
-    inner.cloud.upsert_by_name(&name, &content).await?;
+    inner.cloud().upsert_by_name(&name, &content).await?;
     Ok(())
 }
 
@@ -92,7 +92,7 @@ async fn push_ai_summaries(inner: &Arc<Inner>) -> Result<()> {
             .db()
         })
         .await?;
-    let name = inner.cloud.push_fingerprint_name(Dataset::AiSummaries);
+    let name = inner.cloud().push_fingerprint_name(Dataset::AiSummaries);
     if io::read_cursor(&inner.pool, &name).await? == watermark {
         return Ok(());
     }
@@ -151,7 +151,7 @@ async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             .db()
         })
         .await?;
-    let name = inner.cloud.push_fingerprint_name(Dataset::Chat);
+    let name = inner.cloud().push_fingerprint_name(Dataset::Chat);
     if io::read_cursor(&inner.pool, &name).await? == watermark {
         return Ok(());
     }
@@ -234,7 +234,7 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
             .db()
         })
         .await?;
-    let name = inner.cloud.push_fingerprint_name(Dataset::Memory);
+    let name = inner.cloud().push_fingerprint_name(Dataset::Memory);
     let prev = io::read_cursor(&inner.pool, &name).await?;
     if prev == watermark || watermark.is_empty() {
         return Ok(());
