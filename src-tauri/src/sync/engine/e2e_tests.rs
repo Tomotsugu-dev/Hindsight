@@ -22,7 +22,7 @@ use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::cloud::CloudBackend;
 use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::engine::SyncEngine;
-use crate::sync::webdav::{Call, FakeDav, WebDavClient};
+use crate::sync::webdav::{save_test_credentials, Call, FakeDav, WebDavClient};
 
 struct TestDevice {
     pool: DbPool,
@@ -1476,6 +1476,7 @@ async fn pull_single_round_merges_children_even_when_files_precede_parents() {
 async fn make_webdav_device(self_id: &str, dav: Arc<FakeDav>) -> TestDevice {
     let pool = DbPool::open_in_memory().await.unwrap();
     migrations::run(&pool).await.unwrap();
+    save_test_credentials(&pool, "me", "app-password").await;
     let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
     let client = WebDavClient::with_fake_server(dav, pool.clone(), self_id.to_string());
     let engine = Arc::new(SyncEngine::with_backend(

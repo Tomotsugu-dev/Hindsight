@@ -9,8 +9,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use rusqlite::OptionalExtension;
+
 use crate::error::{Error, Result};
-use crate::storage::DbPool;
+use crate::storage::{DbPool, SqliteResultExt};
 #[cfg(test)]
 use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::drive::{self, DriveClient};
@@ -47,9 +49,7 @@ pub enum FailureKind {
 /// what each method must do.
 pub enum CloudBackend {
     Drive(DriveClient),
-    /// WebDAV: Nutstore, Nextcloud and the like (ADR-0007, ADR-0008). Not
-    /// built by the app until the settings can choose it (follow-up 3).
-    #[allow(dead_code)]
+    /// WebDAV: Nutstore, Nextcloud and the like (ADR-0007, ADR-0008).
     WebDav(Box<WebDavClient>),
     /// The tests' stand-in; not compiled into the shipped binary.
     #[cfg(test)]
@@ -57,22 +57,38 @@ pub enum CloudBackend {
 }
 
 impl CloudBackend {
-    /// The backend the app runs on: Google Drive, with the credential taken
-    /// from `pool`'s `auth_state` table.
+    /// Builds the backend at startup: WebDAV when `auth_state` records WebDAV and
+    /// its address, Drive otherwise. A Drive that is not signed in skips every
+    /// round (ADR-0011 §2).
+    pub async fn from_auth_state(pool: DbPool, self_id: String) -> Result<Self> {
+        let webdav_url: Option<String> = pool
+            .0
+            .call(|conn| {
+                conn.query_row(
+                    "SELECT webdav_url FROM auth_state
+                      WHERE id = 1 AND backend = 'webdav' AND webdav_url IS NOT NULL",
+                    [],
+                    |r| r.get(0),
+                )
+                .optional()
+                .db()
+            })
+            .await?;
+        match webdav_url {
+            Some(url) => Self::webdav(&url, pool, self_id),
+            None => Ok(Self::drive(pool)),
+        }
+    }
+
+    /// Google Drive, with the credential taken from `pool`'s `auth_state` table.
     pub fn drive(pool: DbPool) -> Self {
         CloudBackend::Drive(DriveClient::new(pool))
     }
 
-    /// WebDAV, with the server address and app password the user entered.
-    #[allow(dead_code)]
-    pub fn webdav(
-        server_url: &str,
-        username: &str,
-        password: &str,
-        pool: DbPool,
-        self_id: String,
-    ) -> Result<Self> {
-        let client = WebDavClient::connect(server_url, username, password, pool, self_id)?;
+    /// WebDAV at the server address the user entered. The user name and
+    /// password are read from `pool`'s `auth_state` table every round.
+    pub fn webdav(server_url: &str, pool: DbPool, self_id: String) -> Result<Self> {
+        let client = WebDavClient::connect(server_url, pool, self_id)?;
         Ok(CloudBackend::WebDav(Box::new(client)))
     }
 
@@ -284,8 +300,6 @@ mod tests {
 
         let nutstore = CloudBackend::webdav(
             "https://dav.jianguoyun.com/dav/",
-            "a",
-            "b",
             fresh_test_pool().await,
             "me".into(),
         )
@@ -298,5 +312,45 @@ mod tests {
             nutstore.push_fingerprint_name(Chat),
             "webdav.dav.jianguoyun.com.push.chat"
         );
+    }
+
+    /// 启动时按 `auth_state` 建后端：记着 WebDAV 和地址才建 WebDAV，其余都是 Drive。
+    #[tokio::test]
+    async fn startup_builds_the_saved_backend() {
+        let pool = fresh_test_pool().await;
+        let set = |sql: &'static str| {
+            let pool = pool.clone();
+            async move {
+                pool.0
+                    .call(move |conn| {
+                        conn.execute(sql, []).db()?;
+                        Ok(())
+                    })
+                    .await
+                    .unwrap()
+            }
+        };
+        let build = || CloudBackend::from_auth_state(pool.clone(), "me".into());
+
+        // 从没同步过
+        assert!(matches!(build().await.unwrap(), CloudBackend::Drive(_)));
+
+        set("UPDATE auth_state SET backend = 'webdav', webdav_url = 'https://dav.jianguoyun.com/dav/'")
+            .await;
+        let nutstore = build().await.unwrap();
+        assert!(matches!(nutstore, CloudBackend::WebDav(_)));
+        assert_eq!(
+            nutstore.pull_cursor_name(Core),
+            "webdav.dav.jianguoyun.com.pull.core"
+        );
+
+        // 记着 WebDAV 却没有地址：建不出来，当成 Drive
+        set("UPDATE auth_state SET webdav_url = NULL").await;
+        assert!(matches!(build().await.unwrap(), CloudBackend::Drive(_)));
+
+        // 换回了 Drive，WebDAV 的地址还留着
+        set("UPDATE auth_state SET backend = 'drive', webdav_url = 'https://dav.jianguoyun.com/dav/'")
+            .await;
+        assert!(matches!(build().await.unwrap(), CloudBackend::Drive(_)));
     }
 }
