@@ -109,10 +109,11 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
                 failed_ids.extend(&ids);
                 // A failure the user has to fix (out of space, expired account,
                 // invalid credential) stops the other files too: end the round
-                // here instead of sending requests that will fail.
-                let needs_user = inner.cloud().failure_kind(&e) != FailureKind::Transient;
+                // here instead of sending requests that will fail. So does a
+                // server that asks us to slow down (ServerBusy).
+                let stop = inner.cloud().failure_kind(&e) != FailureKind::Transient;
                 last_err = Some(e);
-                if needs_user {
+                if stop {
                     break;
                 }
             }

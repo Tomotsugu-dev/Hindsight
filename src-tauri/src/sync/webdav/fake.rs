@@ -44,6 +44,8 @@ struct State {
     refuse_move_overwrite: bool,
     /// 设了就让每个 `PUT` 回这个状态码和响应体，比如空间满的 507。
     fail_puts: Option<(u16, String)>,
+    /// 设了就让这个目录下的 `GET` 回这个状态码；目录外的（比如根目录的 manifest 文件）照常。
+    fail_gets_under: Option<(String, u16)>,
     calls: Vec<Call>,
 }
 
@@ -70,6 +72,7 @@ impl FakeDav {
                 hold_clock: false,
                 refuse_move_overwrite: false,
                 fail_puts: None,
+                fail_gets_under: None,
                 calls: Vec::new(),
             }),
         }
@@ -128,6 +131,12 @@ impl FakeDav {
     pub(crate) async fn fail_puts(&self, failure: Option<(u16, &str)>) {
         self.state.lock().await.fail_puts =
             failure.map(|(status, body)| (status, body.to_string()));
+    }
+
+    /// `Some((目录, 状态码))` 让之后这个目录下的 `GET` 都这样失败，`None` 恢复正常。
+    pub(crate) async fn fail_gets_under(&self, failure: Option<(&str, u16)>) {
+        self.state.lock().await.fail_gets_under =
+            failure.map(|(dir, status)| (dir.to_string(), status));
     }
 
     pub(crate) async fn calls(&self) -> Vec<Call> {
@@ -221,6 +230,11 @@ impl DavOps for FakeDav {
     async fn get(&self, path: &str) -> Result<Vec<u8>> {
         let mut st = self.state.lock().await;
         st.calls.push(Call::Get(path.to_string()));
+        if let Some((dir, status)) = &st.fail_gets_under {
+            if path.starts_with(dir.as_str()) {
+                return Err(http_err("get", *status, path));
+            }
+        }
         st.files
             .get(path)
             .map(|f| f.body.clone())

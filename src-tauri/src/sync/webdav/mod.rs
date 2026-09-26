@@ -69,6 +69,9 @@ pub(crate) fn failure_kind(e: &Error) -> FailureKind {
         Error::WebDavHttp {
             status: 403, body, ..
         } if body.contains("AccountExpired") => FailureKind::AccountExpired,
+        Error::WebDavHttp {
+            status: 429 | 503, ..
+        } => FailureKind::ServerBusy,
         // Everything else is retried by the next tick.
         _ => FailureKind::Transient,
     }
@@ -1186,9 +1189,9 @@ mod tests {
         assert_eq!(failure_kind(&http(403)), FailureKind::Transient);
     }
 
-    /// 507 是空间满；403 只有响应体里有 AccountExpired 才是账号过期。
+    /// 507 是空间满；403 只有响应体里有 AccountExpired 才是账号过期；429、503 是服务器忙。
     #[test]
-    fn failure_kind_tells_out_of_space_and_account_expired() {
+    fn failure_kind_sorts_507_403_429_503() {
         let put = |status, body: &str| Error::WebDavHttp {
             stage: "put",
             status,
@@ -1203,6 +1206,8 @@ mod tests {
             failure_kind(&put(403, "<s:exception>OperationNotAllowed</s:exception>")),
             FailureKind::Transient
         );
+        assert_eq!(failure_kind(&put(429, "")), FailureKind::ServerBusy);
+        assert_eq!(failure_kind(&put(503, "")), FailureKind::ServerBusy);
     }
 
     // ───── 各家服务器的上传方式 ─────

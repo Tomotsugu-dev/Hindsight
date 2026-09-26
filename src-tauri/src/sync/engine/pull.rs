@@ -15,6 +15,7 @@ use super::Inner;
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
+use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{Dataset, FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
@@ -183,6 +184,12 @@ async fn pull_stream(
 
         let body = match inner.cloud().download(&f.id).await {
             Ok(b) => b,
+            // The server asks us to slow down: download nothing more this round,
+            // and the cursor stops here.
+            Err(e) if inner.cloud().failure_kind(&e) == FailureKind::ServerBusy => {
+                log::warn!("download of {} failed, the server is busy: {e}", f.name);
+                break;
+            }
             Err(e) => {
                 log::warn!("download of {} failed: {e}", f.name);
                 continue;

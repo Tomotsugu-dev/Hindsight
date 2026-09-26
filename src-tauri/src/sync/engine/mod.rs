@@ -42,7 +42,7 @@ fn sync_error_prefix(kind: FailureKind) -> &'static str {
         FailureKind::CredentialInvalid => ERR_PREFIX_CRED_EXPIRED,
         FailureKind::OutOfSpace => ERR_PREFIX_OUT_OF_SPACE,
         FailureKind::AccountExpired => ERR_PREFIX_ACCOUNT_EXPIRED,
-        FailureKind::Transient => ERR_PREFIX_TRANSIENT,
+        FailureKind::ServerBusy | FailureKind::Transient => ERR_PREFIX_TRANSIENT,
     }
 }
 
