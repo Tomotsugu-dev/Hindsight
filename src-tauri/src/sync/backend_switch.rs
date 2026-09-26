@@ -1,5 +1,6 @@
-//! Switching backends (ADR-0011 §2): saving the new backend and its credentials,
-//! deleting the old backend's credentials, and marking every file of this device
+//! Switching the sync backend ([`CloudBackend`](crate::sync::cloud::CloudBackend):
+//! Google Drive or a WebDAV server; ADR-0011 §2): saving the new backend's
+//! credentials, deleting the old backend's, and marking every file of this device
 //! for upload again, all in one transaction.
 
 // Removed once the connect command calls `switch_backend` (ADR-0011 follow-up 5).
