@@ -220,14 +220,6 @@ impl Dav {
             Dav::Fake(_) => {}
         }
     }
-
-    #[cfg(test)]
-    pub(crate) fn fake(&self) -> &super::fake::FakeDav {
-        match self {
-            Dav::Fake(f) => f,
-            Dav::Http(_) => panic!("not a fake server"),
-        }
-    }
 }
 
 impl DavOps for Dav {

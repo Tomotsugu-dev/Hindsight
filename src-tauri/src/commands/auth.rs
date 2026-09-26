@@ -1,9 +1,14 @@
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::storage::DbPool;
+use crate::account;
+use crate::storage::{db_path_for, migrations, DbPool};
+use crate::sync::backend_switch::{
+    decide_connect_action, switch_backend, update_credentials, ConnectAction, NewBackend,
+};
 use crate::sync::drive::auth::{self, AuthState};
 use crate::sync::engine::SyncEngine;
+use crate::sync::webdav::{self, account_hash::account_hash};
 
 /// OAuth 授权 URL 就绪事件:payload = { url, opened }。
 /// opened=false → 前端立即显示「复制登录链接」;true → 等几秒未完成再显示兜底。
@@ -59,4 +64,50 @@ pub async fn sign_out(pool: State<'_, DbPool>) -> Result<(), String> {
 #[tauri::command]
 pub fn restart_app(app: AppHandle) {
     app.restart();
+}
+
+/// Connects to a WebDAV account (ADR-0011). If only the current account's
+/// password changed, it updates it and returns. Otherwise it writes the new
+/// backend while sync is paused and restarts the app, so it does not return.
+#[tauri::command]
+pub async fn connect_webdav(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    engine: State<'_, Arc<SyncEngine>>,
+    server_url: String,
+    user: String,
+    password: String,
+) -> Result<(), String> {
+    webdav::test_login(&server_url, &user, &password).await?;
+    let to = NewBackend::WebDav {
+        server_url: &server_url,
+        user: &user,
+        password: &password,
+    };
+    let active_uid = account::active_uid();
+    let action = decide_connect_action(&pool, active_uid.as_deref(), &to).await?;
+    if action == ConnectAction::UpdateCredentials {
+        update_credentials(&pool, to).await?;
+        engine.clear_last_error().await;
+        return Ok(());
+    }
+
+    let _paused = engine.pause_flushes().await;
+    let uid = account_hash(&server_url, &user)?;
+    match action {
+        ConnectAction::UseThisDatabase => switch_backend(&pool, engine.self_id(), to).await?,
+        ConnectAction::ClaimThisDatabase => {
+            switch_backend(&pool, engine.self_id(), to).await?;
+            account::set_active_uid(Some(&uid)).map_err(|e| e.to_string())?;
+            account::claim_legacy_for(&uid).map_err(|e| e.to_string())?;
+        }
+        ConnectAction::SwitchDatabase => {
+            let other = DbPool::open(&db_path_for(Some(&uid))?).await?;
+            migrations::run(&other).await?;
+            switch_backend(&other, engine.self_id(), to).await?;
+            account::set_active_uid(Some(&uid)).map_err(|e| e.to_string())?;
+        }
+        ConnectAction::UpdateCredentials => {}
+    }
+    app.restart()
 }

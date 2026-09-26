@@ -24,11 +24,18 @@ impl DbPool {
     }
 }
 
-/// 当前生效的 SQLite 文件路径。多账号时按 `active_uid` 选 `hindsight.<uid>.sqlite`，
-/// 未登录走匿名 `hindsight.sqlite`。
+/// The SQLite file in use: `hindsight.<uid>.sqlite` for the active account
+/// (`active_uid`), or `hindsight.sqlite` when the database belongs to no account
+/// yet.
 pub fn db_path() -> Result<PathBuf> {
+    db_path_for(crate::account::active_uid().as_deref())
+}
+
+/// Where an account's database lives: `hindsight.<uid>.sqlite`. `None` gives
+/// `hindsight.sqlite`, the database that belongs to no account yet.
+pub fn db_path_for(uid: Option<&str>) -> Result<PathBuf> {
     let dir = db_path_dir()?;
-    let name = match crate::account::active_uid() {
+    let name = match uid {
         Some(uid) => format!("hindsight.{uid}.sqlite"),
         None => "hindsight.sqlite".to_string(),
     };
