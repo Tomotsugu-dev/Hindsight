@@ -1610,6 +1610,57 @@ async fn webdav_a_failed_download_is_retried() {
     assert_eq!(count_for_device(&b, "device-a").await, 1);
 }
 
+/// 云端空间满（507）或坚果云账号过期（403 + AccountExpired）：这一轮传第一个文件失败
+/// 就停下，设备页拿到对应的前缀，outbox 行不加重试次数；用户处理好以后，下一轮照常传上去。
+#[tokio::test]
+async fn webdav_out_of_space_or_expired_account_waits_for_the_user() {
+    for (status, body, prefix) in [
+        (507, "", "[OUT_OF_SPACE] "),
+        (
+            403,
+            "<s:exception>AccountExpired</s:exception>",
+            "[ACCOUNT_EXPIRED] ",
+        ),
+    ] {
+        let dav = Arc::new(FakeDav::new());
+        let a = make_webdav_device("device-a", dav.clone()).await;
+        let today = Local::now();
+        let yesterday = today - Duration::days(1);
+        insert_sealed(&a, "Code", yesterday, 30).await;
+        insert_sealed(&a, "Code", today, 30).await;
+        dav.fail_puts(Some((status, body))).await;
+
+        a.engine.sync_now().await.expect_err("传不上去，这一轮报错");
+        let puts = dav
+            .calls()
+            .await
+            .iter()
+            .filter(|c| matches!(c, Call::Put(_)))
+            .count();
+        assert_eq!(puts, 1, "{status}：第一个文件失败就停下");
+        let last_error = a.engine.status().await.last_error.unwrap();
+        assert!(last_error.starts_with(prefix), "{last_error}");
+        let attempts: i64 = a
+            .pool
+            .0
+            .call(|conn| {
+                conn.query_row("SELECT MAX(attempts) FROM sync_outbox", [], |r| r.get(0))
+                    .db()
+            })
+            .await
+            .unwrap();
+        assert_eq!(attempts, 0, "{status}：不算重试次数");
+
+        // 用户清理了空间或续了费
+        dav.fail_puts(None).await;
+        a.engine.sync_now().await.unwrap();
+        for day in [yesterday, today] {
+            assert!(dav.file(&webdav_day_file("device-a", day)).await.is_some());
+        }
+        assert_eq!(a.engine.status().await.pending, 0);
+    }
+}
+
 /// B 的 AI 总结开关关着时先同步过，打开开关后要补上 A 的日报，而清空过的活动不能跟着
 /// 回来（ADR-0006：开关打开后只有这类数据从停下的地方接着拉）。
 // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。

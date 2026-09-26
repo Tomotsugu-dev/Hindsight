@@ -1131,6 +1131,8 @@
     },
     "errors": {
       "credExpired": "Credentials expired. Please sign in again.",
+      "outOfSpace": "The cloud storage is full. Free up space or upgrade your plan, and sync will continue on its own.",
+      "accountExpired": "The cloud account has expired. Renew it, and sync will continue on its own.",
       "transient": "Sync hit a transient error; retrying automatically…"
     },
     "setup": {

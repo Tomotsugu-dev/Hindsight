@@ -10,6 +10,7 @@ use super::io::{self, OutboxRow};
 use super::Inner;
 use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
+use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
@@ -106,7 +107,14 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
             Err(e) => {
                 log::warn!("上传 {} 失败: {e}", name);
                 failed_ids.extend(&ids);
+                // A failure the user has to fix (out of space, expired account,
+                // invalid credential) stops the other files too: end the round
+                // here instead of sending requests that will fail.
+                let needs_user = inner.cloud().failure_kind(&e) != FailureKind::Transient;
                 last_err = Some(e);
+                if needs_user {
+                    break;
+                }
             }
         }
     }
@@ -119,7 +127,12 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     }
 
     if let Some(e) = last_err {
-        io::bump_outbox_retry(&inner.pool, &failed_ids, &e.to_string()).await?;
+        // Only a failure the next round may fix on its own counts as a retry.
+        // Counting the others would move these rows to dead letters after 10
+        // rounds, and they would never upload even after the user fixes it.
+        if inner.cloud().failure_kind(&e) == FailureKind::Transient {
+            io::bump_outbox_retry(&inner.pool, &failed_ids, &e.to_string()).await?;
+        }
         return Err(e);
     }
 

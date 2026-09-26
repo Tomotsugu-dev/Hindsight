@@ -1131,6 +1131,8 @@
     },
     "errors": {
       "credExpired": "Credenciais expiradas. Faça login novamente.",
+      "outOfSpace": "O armazenamento na nuvem está cheio. Libere espaço ou amplie seu plano, e a sincronização continuará sozinha.",
+      "accountExpired": "A conta na nuvem expirou. Renove-a, e a sincronização continuará sozinha.",
       "transient": "A sincronização encontrou um erro temporário; tentando novamente de forma automática…"
     },
     "setup": {

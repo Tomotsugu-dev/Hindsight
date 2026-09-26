@@ -1131,6 +1131,8 @@
     },
     "errors": {
       "credExpired": "Credenciales caducadas. Vuelve a iniciar sesión.",
+      "outOfSpace": "El almacenamiento en la nube está lleno. Libera espacio o amplía tu plan y la sincronización continuará sola.",
+      "accountExpired": "La cuenta en la nube ha caducado. Renuévala y la sincronización continuará sola.",
       "transient": "La sincronización encontró un error temporal; reintentando automáticamente…"
     },
     "setup": {
