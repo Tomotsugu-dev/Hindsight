@@ -1131,6 +1131,8 @@
     },
     "errors": {
       "credExpired": "登录凭证失效，请重新登录。",
+      "outOfSpace": "云端空间已满。清理空间或扩容后，同步会自动继续。",
+      "accountExpired": "云端账号已过期。续费后，同步会自动继续。",
       "transient": "同步暂时失败，正在自动重试…"
     },
     "setup": {

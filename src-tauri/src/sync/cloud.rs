@@ -39,6 +39,15 @@ pub struct FileMeta {
 pub enum FailureKind {
     /// The credential no longer works: the user has to sign in again.
     CredentialInvalid,
+    /// The cloud is out of space: retrying cannot upload anything until the user
+    /// frees space or upgrades.
+    OutOfSpace,
+    /// The cloud account has expired (Nutstore): retrying cannot upload anything
+    /// until the user renews it.
+    AccountExpired,
+    /// The server asks us to slow down (429, 503): send no more requests this
+    /// round and try again in the next one (ADR-0007 error table).
+    ServerBusy,
     /// Anything else: the next round retries on its own.
     Transient,
 }

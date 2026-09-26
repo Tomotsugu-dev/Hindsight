@@ -28,6 +28,10 @@ use crate::sync::cloud::{CloudBackend, FailureKind};
 /// Prefix of `last_error` when the user has to sign in again. The Devices page
 /// matches these prefixes as written.
 pub(super) const ERR_PREFIX_CRED_EXPIRED: &str = "[CRED_EXPIRED] ";
+/// Prefix of `last_error` when the cloud is out of space.
+pub(super) const ERR_PREFIX_OUT_OF_SPACE: &str = "[OUT_OF_SPACE] ";
+/// Prefix of `last_error` when the cloud account has expired.
+pub(super) const ERR_PREFIX_ACCOUNT_EXPIRED: &str = "[ACCOUNT_EXPIRED] ";
 /// Prefix of `last_error` when the next round will retry on its own.
 pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 
@@ -36,7 +40,9 @@ pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 fn sync_error_prefix(kind: FailureKind) -> &'static str {
     match kind {
         FailureKind::CredentialInvalid => ERR_PREFIX_CRED_EXPIRED,
-        FailureKind::Transient => ERR_PREFIX_TRANSIENT,
+        FailureKind::OutOfSpace => ERR_PREFIX_OUT_OF_SPACE,
+        FailureKind::AccountExpired => ERR_PREFIX_ACCOUNT_EXPIRED,
+        FailureKind::ServerBusy | FailureKind::Transient => ERR_PREFIX_TRANSIENT,
     }
 }
 

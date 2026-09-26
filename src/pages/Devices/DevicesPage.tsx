@@ -288,18 +288,18 @@ function CloudSyncCard() {
 
   // 后端 last_error 用稳定前缀分类：
   //   [CRED_EXPIRED] —— refresh_token 真失效 / AES 密文解不开 / scope 不足，必须用户重登
-  //   [TRANSIENT]    —— 网络抖动 / Drive 5xx / keyring 临时读失败，下个 30s tick 自动重试
+  //   [OUT_OF_SPACE] —— 云端空间满了，用户清理或扩容后自动继续
+  //   [ACCOUNT_EXPIRED] —— 云端账号过期了（坚果云），用户续费后自动继续
+  //   [TRANSIENT]    —— 网络抖动 / Drive 5xx / keyring 临时读失败，下一轮自动重试
   // 只有 CRED_EXPIRED 才把"退出"换成"重新登录"，避免一个网络抖动就催用户重登。
-  const authExpired =
-    signedIn &&
-    !!sync?.lastError &&
-    sync.lastError.startsWith("[CRED_EXPIRED]");
-  const transientError =
-    signedIn &&
-    !!sync?.lastError &&
-    sync.lastError.startsWith("[TRANSIENT]");
+  const errorPrefixed = (prefix: string) =>
+    signedIn && !!sync?.lastError && sync.lastError.startsWith(prefix);
+  const authExpired = errorPrefixed("[CRED_EXPIRED]");
+  const outOfSpace = errorPrefixed("[OUT_OF_SPACE]");
+  const accountExpired = errorPrefixed("[ACCOUNT_EXPIRED]");
+  const transientError = errorPrefixed("[TRANSIENT]");
   const lastErrorDisplay = sync?.lastError?.replace(
-    /^\[(?:CRED_EXPIRED|TRANSIENT)\]\s*/,
+    /^\[(?:CRED_EXPIRED|OUT_OF_SPACE|ACCOUNT_EXPIRED|TRANSIENT)\]\s*/,
     "",
   );
 
@@ -574,9 +574,13 @@ function CloudSyncCard() {
         <div className={styles.syncError}>
           {authExpired
             ? t("devices.errors.credExpired")
-            : transientError
-              ? t("devices.errors.transient")
-              : lastErrorDisplay}
+            : outOfSpace
+              ? t("devices.errors.outOfSpace")
+              : accountExpired
+                ? t("devices.errors.accountExpired")
+                : transientError
+                  ? t("devices.errors.transient")
+                  : lastErrorDisplay}
         </div>
       )}
     </div>
