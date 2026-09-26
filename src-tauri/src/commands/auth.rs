@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::account;
 use crate::storage::{db_path_for, migrations, DbPool};
 use crate::sync::backend_switch::{
-    decide_connect_action, switch_backend, update_credentials, ConnectAction, NewBackend,
+    self, decide_connect_action, switch_backend, update_credentials, ConnectAction, NewBackend,
 };
 use crate::sync::cloud::CloudBackend;
 use crate::sync::drive::auth::{self, AuthState};
@@ -67,12 +67,10 @@ pub async fn sign_in_with_google(
     auth::current_state(&pool).await.map_err(Into::into)
 }
 
-/// Signs out of Google: clears the uid, email and tokens in `auth_state`. The
-/// key that encrypts the token is derived on this machine and never stored, so
-/// there is no key to delete.
+/// Signs out of the current sync backend, Google Drive or WebDAV.
 #[tauri::command]
 pub async fn sign_out(pool: State<'_, DbPool>) -> Result<(), String> {
-    auth::sign_out(&pool).await.map_err(Into::into)
+    backend_switch::sign_out(&pool).await.map_err(Into::into)
 }
 
 /// Connects to a WebDAV account (ADR-0011 §1). Switching to another account's

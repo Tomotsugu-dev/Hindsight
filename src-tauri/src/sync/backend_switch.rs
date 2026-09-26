@@ -63,6 +63,29 @@ pub(crate) async fn update_credentials(pool: &DbPool, to: NewBackend<'_>) -> Res
     Ok(())
 }
 
+/// Signs out: clears the credential columns (Google's uid, email and tokens,
+/// and the WebDAV password). `backend`, `drive_account`, and the WebDAV address
+/// and user name stay, so the next connection can tell whether it is the same
+/// account (ADR-0011). Only the current backend has credentials: the other
+/// backend's were deleted when the backend was switched.
+pub(crate) async fn sign_out(pool: &DbPool) -> Result<()> {
+    pool.0
+        .call(|conn| {
+            conn.execute(
+                "UPDATE auth_state
+                    SET uid = NULL, email = NULL,
+                        refresh_token_enc = NULL, access_token = NULL, expires_at = NULL,
+                        webdav_password_enc = NULL
+                  WHERE id = 1",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// Repairs this state: the new version switched to WebDAV, an older version then
 /// signed in to Google, and the app was upgraded again. Older versions do not
 /// know `backend`, so it is still `webdav`, yet the database holds a Google
@@ -622,6 +645,67 @@ mod tests {
         .await;
         assert_eq!(backend, vec!["webdav".to_string()]);
         assert!(outbox(&pool).await.is_empty());
+    }
+
+    /// 退出登录只删凭证：WebDAV 删密码、Google 删 token，账号记录都留着；再连同一个账号
+    /// 只更新凭证，不重新上传。
+    #[tokio::test]
+    async fn signing_out_deletes_only_the_credentials() {
+        let pool = signed_in_to_drive().await;
+        switch_backend(&pool, "me", to_nutstore()).await.unwrap();
+        sign_out(&pool).await.unwrap();
+        let auth = query(
+            &pool,
+            "SELECT backend, webdav_url, webdav_user, webdav_password_enc IS NULL FROM auth_state",
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, bool>(3)?,
+                ))
+            },
+        )
+        .await;
+        assert_eq!(
+            auth,
+            vec![(
+                "webdav".to_string(),
+                URL.to_string(),
+                "you@example.com".to_string(),
+                true
+            )]
+        );
+        assert_eq!(
+            decide_connect_action(&pool, Some("g-1"), &to_nutstore())
+                .await
+                .unwrap(),
+            ConnectAction::UpdateCredentials
+        );
+
+        let pool = signed_in_to_drive().await;
+        sign_out(&pool).await.unwrap();
+        let auth = query(
+            &pool,
+            "SELECT backend, drive_account,
+                    uid IS NULL AND refresh_token_enc IS NULL AND access_token IS NULL
+               FROM auth_state",
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, bool>(2)?,
+                ))
+            },
+        )
+        .await;
+        assert_eq!(auth, vec![("drive".to_string(), "g-1".to_string(), true)]);
+        assert_eq!(
+            decide_connect_action(&pool, Some("g-1"), &drive("g-1"))
+                .await
+                .unwrap(),
+            ConnectAction::UpdateCredentials
+        );
     }
 
     /// 先执行 `sql` 摆好库的状态，再判断换到 `to` 要做哪件事。

@@ -292,7 +292,9 @@ async fn remove_device_requires_sign_in() {
     for p in ["Code", "Chrome", "Slack"] {
         insert_sealed(&a, p, captured, 30).await;
     }
-    crate::sync::drive::auth::sign_out(&a.pool).await.unwrap();
+    crate::sync::backend_switch::sign_out(&a.pool)
+        .await
+        .unwrap();
     drive.sign_out();
 
     let res = crate::commands::storage::purge_cloud_data_impl(

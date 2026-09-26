@@ -356,15 +356,9 @@ async fn refresh_with_google(
     }
 }
 
-/// 退出登录：清 DB `auth_state`。
-///
-/// 派生 key 方案下不需要也无法"删 key"——key 是从 machine_id + home 现算的，
-/// 不在任何地方持久化。清掉 DB 里的 `refresh_token_enc` 就等于"忘记"凭证。
-pub async fn sign_out(pool: &DbPool) -> Result<()> {
-    clear_auth_state(pool).await
-}
-
-/// 清空 `auth_state` 表的所有 token 字段。给 [`sign_out`] 跟解密失败时的自动恢复共用。
+/// Called when this machine cannot decrypt the refresh token: clears the Google
+/// sign-in, so the Devices page shows "not signed in" and the user signs in
+/// again.
 async fn clear_auth_state(pool: &DbPool) -> Result<()> {
     pool.0
         .call(|conn| {
