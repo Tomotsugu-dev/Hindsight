@@ -1099,10 +1099,8 @@
         "reauthTitle": "Credentials expired — sign in again to refresh the token",
         "signInWithGoogle": "Sign in with Google",
         "signingIn": "Opening browser…",
-        "configureOAuth": "Configure OAuth",
-        "restartApp": "Restart app"
+        "configureOAuth": "Configure OAuth"
       },
-      "restartHint": "Signed in to a new account. Restart the app to switch to that account's local database.",
       "datasets": {
         "title": "What to sync",
         "hint": "By default only basic data (usage stats, categories) is synced. The items below contain more sensitive information and must be enabled individually; screenshot images themselves never leave this device.",

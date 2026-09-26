@@ -1099,10 +1099,8 @@
         "reauthTitle": "Credenciales caducadas: vuelve a iniciar sesión para renovar el token",
         "signInWithGoogle": "Iniciar sesión con Google",
         "signingIn": "Abriendo el navegador…",
-        "configureOAuth": "Configurar OAuth",
-        "restartApp": "Reiniciar la aplicación"
+        "configureOAuth": "Configurar OAuth"
       },
-      "restartHint": "Has iniciado sesión con una cuenta nueva. Reinicia la aplicación para cambiar a la base de datos local de esa cuenta.",
       "datasets": {
         "title": "Qué sincronizar",
         "hint": "De forma predeterminada solo se sincronizan los datos básicos (estadísticas de uso, categorías). Los elementos de abajo contienen información más sensible y hay que activarlos uno a uno; las imágenes de las capturas nunca salen de este dispositivo.",

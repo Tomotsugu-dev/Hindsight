@@ -579,20 +579,6 @@ function CloudSyncCard() {
               : lastErrorDisplay}
         </div>
       )}
-      {auth?.requiresRestart && (
-        <div className={styles.syncError}>
-          {t("devices.cloud.restartHint")}
-          <button
-            type="button"
-            className={styles.smallBtn}
-            style={{ marginLeft: 8 }}
-            onClick={() => api.restartApp().catch(() => {})}
-          >
-            <RefreshCw size={13} strokeWidth={1.85} />
-            {t("devices.cloud.actions.restartApp")}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
