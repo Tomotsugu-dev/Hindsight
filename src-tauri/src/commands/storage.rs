@@ -12,6 +12,7 @@ use tauri::State;
 use crate::capture::CaptureService;
 use crate::repo::settings;
 use crate::storage::{db_path, utc_now_rfc3339, DbPool, SqliteResultExt};
+use crate::sync::cloud::CloudBackend;
 use crate::sync::engine::SyncEngine;
 use crate::sync::file_name::{FileKind, FileName};
 
@@ -285,6 +286,7 @@ pub(crate) async fn purge_cloud_data_impl(
     // this device's files again right after they were deleted.
     let _gate = engine.pause_flushes().await;
     let cloud = engine.cloud();
+    refuse_on_webdav(&cloud)?;
     if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
         return Err(crate::error::Error::NotSignedIn.to_string());
     }
@@ -344,6 +346,18 @@ pub(crate) async fn purge_cloud_data_impl(
         .map_err(|e| e.to_string())?;
 
     Ok(deleted)
+}
+
+/// Fails on WebDAV, so the commands that clear cloud data do nothing there.
+/// WebDAV cannot do it yet: this device's own files cannot be listed, so the
+/// command would delete nothing and still report success; deleting another
+/// device's files means changing its manifest, which only that device may write
+/// (ADR-0008).
+fn refuse_on_webdav(cloud: &CloudBackend) -> Result<(), String> {
+    match cloud {
+        CloudBackend::WebDav(_) => Err("Clearing cloud data is not supported on WebDAV yet".into()),
+        _ => Ok(()),
+    }
 }
 
 /// 从云端永久移除一台已经不在自己手里的远端设备。
@@ -420,6 +434,7 @@ pub(crate) async fn forget_remote_device_impl(
     // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
     let _gate = engine.pause_flushes().await;
     let cloud = engine.cloud();
+    refuse_on_webdav(&cloud)?;
 
     // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
     let signed_in = cloud
@@ -1012,6 +1027,39 @@ mod tests {
             "未登录路径不得动云端"
         );
         assert_eq!(activities_for(&pool, "ghost").await, 1, "本地表不得动");
+        assert_eq!(device_deleted_at(&pool, "ghost").await, None);
+    }
+
+    /// WebDAV 上两个清云端命令都在动手之前拒绝：假服务器一个请求都没收到，本地数据不动。
+    #[tokio::test]
+    async fn clearing_cloud_data_is_refused_on_webdav() {
+        use crate::sync::webdav::{FakeDav, WebDavClient};
+
+        let pool = fresh_test_pool().await;
+        insert_device_row(&pool, "ghost").await;
+        insert_activity_for(&pool, "ghost", "Code").await;
+        insert_activity_for(&pool, "self-dev", "Code").await;
+        let dav = Arc::new(FakeDav::new());
+        let client = WebDavClient::with_fake_server(dav.clone(), pool.clone(), "self-dev".into());
+        let engine = SyncEngine::with_backend(
+            pool.clone(),
+            None,
+            CloudBackend::WebDav(Box::new(client)),
+            "self-dev".into(),
+        );
+
+        let err = purge_cloud_data_impl(&pool, &engine, None, None, false)
+            .await
+            .unwrap_err();
+        assert!(err.contains("WebDAV"), "err={err}");
+        let err = forget_remote_device_impl(&pool, &engine, "ghost")
+            .await
+            .unwrap_err();
+        assert!(err.contains("WebDAV"), "err={err}");
+
+        assert!(dav.calls().await.is_empty(), "不该发出任何请求");
+        assert_eq!(activities_for(&pool, "self-dev").await, 1);
+        assert_eq!(activities_for(&pool, "ghost").await, 1);
         assert_eq!(device_deleted_at(&pool, "ghost").await, None);
     }
 
