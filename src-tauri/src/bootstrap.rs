@@ -23,6 +23,7 @@ use crate::repo::devices;
 use crate::repo::settings::Settings;
 use crate::storage::SqliteResultExt;
 use crate::storage::{db_path, DbPool};
+use crate::sync::backend_switch::switch_to_drive_if_old_version_signed_in;
 use crate::sync::engine::SyncEngine;
 use crate::{account, platform, storage};
 
@@ -125,6 +126,9 @@ pub async fn init_database(dev_meta: &DeviceMeta) -> crate::error::Result<DbPool
     let pool = DbPool::open(&path).await?;
     storage::migrations::run(&pool).await?;
     account::backfill_drive_account(&pool, account::active_uid().as_deref()).await?;
+    if switch_to_drive_if_old_version_signed_in(&pool, &dev_meta.device_id).await? {
+        log::info!("sync: an older version signed in to Google here; switched back to Drive");
+    }
 
     devices::upsert_self(
         &pool,
