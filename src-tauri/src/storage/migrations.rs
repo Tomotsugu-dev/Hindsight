@@ -905,12 +905,22 @@ const ADD_AUTH_STATE_ACCOUNTS_SQL: &str = r#"
     ALTER TABLE auth_state ADD COLUMN webdav_password_enc BLOB;
 "#;
 
+/// v40: creates `webdav_accounts`, which records the account this database has
+/// used on each WebDAV server, one row per server (ADR-0011 §4).
+const WEBDAV_ACCOUNTS_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS webdav_accounts (
+        host TEXT PRIMARY KEY,
+        url  TEXT NOT NULL,
+        user TEXT NOT NULL
+    );
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 29] = [
+    let extras: [&'static str; 30] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -940,6 +950,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         ADD_ACTIVITIES_URL_HOST_SQL,           // v37
         DROP_APP_CATEGORIES_SQL,               // v38
         ADD_AUTH_STATE_ACCOUNTS_SQL,           // v39
+        WEBDAV_ACCOUNTS_TABLE_SQL,             // v40
     ];
     pool.0
         .call(move |conn| {
@@ -1045,7 +1056,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            39
+            40
         );
 
         let tables = table_names(&pool).await;
@@ -1066,6 +1077,7 @@ mod tests {
             "screenshot_embeddings",
             "super_categories",
             "screenshot_dedup_map",
+            "webdav_accounts",
         ] {
             assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
         }
@@ -1134,7 +1146,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            39
+            40
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1189,7 +1201,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            39
+            40
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

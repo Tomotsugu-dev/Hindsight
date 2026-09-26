@@ -194,6 +194,19 @@ Never synced, and it could not be: the encryption key is derived from the machin
 Indexes: none beyond the primary key.
 Foreign keys: none.
 
+## webdav_accounts
+
+Which account this database has used on each WebDAV server, one row per server (ADR-0011 §4). `auth_state` holds only the server in use now; this table keeps the others too. When the user connects to a server again, the app normalizes the address and user name they entered and compares them with this row to tell whether it is the same account. A backend switch to WebDAV writes the row. Never synced.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| host | TEXT | Primary key | The server's host, with the port only when it is not the default, e.g. `dav.jianguoyun.com` (v40) |
+| url | TEXT | NOT NULL | The server address, as the user last entered it (v40) |
+| user | TEXT | NOT NULL | The user name, as the user last entered it (v40) |
+
+Indexes: none beyond the primary key.
+Foreign keys: none.
+
 ## settings_store
 
 Every setting on this device as one JSON document: the Settings page, the Google OAuth client entered on the Devices page, AI configuration and ignore rules. Exactly one row, pinned by `CHECK (id = 1)` and inserted as `'{}'` by the v7 migration, so the row always exists.
