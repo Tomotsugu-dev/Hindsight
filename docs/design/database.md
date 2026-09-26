@@ -89,12 +89,14 @@ Indexes: `(group_id)`.
 
 Queue of local changes waiting to be pushed to the cloud. Each business write enqueues a row in the same transaction, so a persisted change is always sync-reachable. Rows are deleted after a successful push.
 
+A backend switch enqueues a row for every file of this device, one per day with activity plus one per whole-table file, so the new backend gets all of this device's data (ADR-0011 §2).
+
 | Field | Type | Constraints | Description |
 |---|---|---|---|
 | id | INTEGER | Primary key, autoincrement | |
 | op | TEXT | NOT NULL | Always `'upsert'`, and nothing reads it: push only uses `entity` and `payload`. Deletions are upserts carrying `deletedAt` |
 | entity | TEXT | NOT NULL | Which cloud file the next push rewrites: `activity`, `category`, `app_group`, `app_group_member`, `device`, `app_icon`. A row with any other entity, such as `app_category` or `process_path` left behind by older versions, is logged and deleted |
-| entity_pk | TEXT | NOT NULL | Primary key of the changed row |
+| entity_pk | TEXT | NOT NULL | Primary key of the changed row. A backend switch writes the day for `activity` and `*` for the rest. Push never reads it |
 | payload | TEXT | NOT NULL | JSON. Push reads it only for `activity`, to take `localDate` and pick the day's file; for every other entity it is ignored. It is never sent to other devices — push rebuilds each file from the tables |
 | created_at | TEXT | NOT NULL | |
 | attempts | INTEGER | NOT NULL, DEFAULT 0 | Failed push attempts so far |

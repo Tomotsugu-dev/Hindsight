@@ -66,3 +66,37 @@ pub fn enqueue(
     )?;
     Ok(())
 }
+
+/// Used on a backend switch: makes the next push upload all of this device's
+/// data to the new backend (ADR-0011 §2). One row for each day with activity on
+/// this device, and one for each whole-table file.
+///
+/// Days are picked the same way push builds day files: by the `device_id`
+/// column only.
+pub fn enqueue_every_file(conn: &Connection, self_id: &str) -> rusqlite::Result<()> {
+    let mut stmt =
+        conn.prepare("SELECT DISTINCT local_date FROM activities WHERE device_id = ?1")?;
+    let days = stmt
+        .query_map([self_id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for day in days {
+        let payload = serde_json::json!({ "localDate": day }).to_string();
+        enqueue(
+            conn,
+            OutboxOp::Upsert,
+            OutboxEntity::Activity,
+            &day,
+            &payload,
+        )?;
+    }
+    for entity in [
+        OutboxEntity::Category,
+        OutboxEntity::Device,
+        OutboxEntity::AppIcon,
+        OutboxEntity::AppGroup,
+        OutboxEntity::AppGroupMember,
+    ] {
+        enqueue(conn, OutboxOp::Upsert, entity, "*", "{}")?;
+    }
+    Ok(())
+}
