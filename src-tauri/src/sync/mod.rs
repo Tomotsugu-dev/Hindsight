@@ -1,4 +1,4 @@
-mod backend_switch;
+pub(crate) mod backend_switch;
 pub mod cloud;
 pub mod drive;
 pub mod engine;

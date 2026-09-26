@@ -4,9 +4,6 @@
 //! (ADR-0011 §3). The bookmarks and the changes not yet written into the
 //! manifest file are its own; the engine never reads them.
 
-// Removed once the connect command uses the account hash (ADR-0011 follow-up 5).
-#![allow(dead_code)]
-
 pub(crate) mod account_hash;
 mod dav;
 #[cfg(test)]
@@ -81,6 +78,19 @@ fn upload_method_for(host: &str) -> UploadMethod {
         UploadMethod::DirectPut
     } else {
         UploadMethod::TempThenMove
+    }
+}
+
+/// Tries the login before connecting, by listing the sync root with this user
+/// name and password. The server answers 401 when either is wrong. A missing
+/// root (404) still counts as a success: no device has uploaded to a new account
+/// yet.
+pub(crate) async fn test_login(server_url: &str, user: &str, password: &str) -> Result<()> {
+    let http = HttpDav::new(server_url)?;
+    http.set_credentials(user.to_string(), password.to_string());
+    match http.propfind("").await {
+        Ok(_) | Err(Error::WebDavHttp { status: 404, .. }) => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
@@ -1441,6 +1451,18 @@ mod tests {
         );
 
         probe_cleanup(&base, &user, &pass).await;
+    }
+
+    /// 试连：密码对就通过；密码错了，服务器回 401。只列目录，不写东西。
+    #[tokio::test]
+    #[ignore = "打真服务器：要网络和三个环境变量"]
+    async fn probe_test_login_tells_a_wrong_password() {
+        let (url, user, pass) = probe_account();
+        test_login(&url, &user, &pass).await.unwrap();
+        assert_eq!(
+            status_of(test_login(&url, &user, "wrong-password").await),
+            Some(401)
+        );
     }
 
     /// 两台设备走真服务器，从新账号开始：A 上传、写 manifest 文件，B 列出来、下载；

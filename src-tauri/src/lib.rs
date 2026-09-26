@@ -299,6 +299,7 @@ pub fn run() {
             commands::auth::sign_in_with_google,
             commands::auth::sign_out,
             commands::auth::restart_app,
+            commands::auth::connect_webdav,
             // --- sync: 云同步 ---
             commands::sync::sync_status,
             commands::sync::sync_now,
