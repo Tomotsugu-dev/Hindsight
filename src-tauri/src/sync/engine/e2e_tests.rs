@@ -19,6 +19,7 @@ use chrono::{DateTime, Duration, Local, Timelike};
 
 use crate::repo::test_util::DataDirOverride;
 use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
+use crate::sync::backend_switch::{switch_backend, NewBackend};
 use crate::sync::cloud::CloudBackend;
 use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::engine::SyncEngine;
@@ -1725,5 +1726,52 @@ async fn webdav_keeps_its_progress_apart_from_drive() {
             value,
             "{name}"
         );
+    }
+}
+
+/// 用 Drive 推完一轮（outbox 清空了）再换到 WebDAV：本机的每一天和整表文件都重新传到
+/// WebDAV 上，存下的密码也能解开（ADR-0011 §2）。
+#[tokio::test]
+async fn switching_to_webdav_uploads_this_devices_history() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive).await;
+    let today = Local::now();
+    let yesterday = today - Duration::days(1);
+    insert_sealed(&a, "Code", yesterday, 30).await;
+    insert_sealed(&a, "Code", today, 30).await;
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(
+        a.engine.status().await.pending,
+        0,
+        "推到 Drive 后 outbox 清空"
+    );
+
+    let to_webdav = NewBackend::WebDav {
+        server_url: "https://dav.example.com/dav/",
+        user: "me",
+        password: "app-password",
+    };
+    switch_backend(&a.pool, "device-a", to_webdav)
+        .await
+        .unwrap();
+
+    // 重启后按 auth_state 建的是 WebDAV；这里换成连假服务器的同一个库
+    let dav = Arc::new(FakeDav::new());
+    let client = WebDavClient::with_fake_server(dav.clone(), a.pool.clone(), "device-a".into());
+    let engine = SyncEngine::with_backend(
+        a.pool.clone(),
+        Some(a.mem.clone()),
+        CloudBackend::WebDav(Box::new(client)),
+        "device-a".into(),
+    );
+    engine.sync_now().await.unwrap();
+
+    for path in [
+        webdav_day_file("device-a", yesterday),
+        webdav_day_file("device-a", today),
+        "device-a/categories.json".to_string(),
+        "device-a/meta.json".to_string(),
+    ] {
+        assert!(dav.file(&path).await.is_some(), "{path}");
     }
 }

@@ -89,12 +89,14 @@ Indexes: `(group_id)`.
 
 Queue of local changes waiting to be pushed to the cloud. Each business write enqueues a row in the same transaction, so a persisted change is always sync-reachable. Rows are deleted after a successful push.
 
+A backend switch enqueues a row for every file of this device, one per day with activity plus one per whole-table file, so the new backend gets all of this device's data (ADR-0011 §2).
+
 | Field | Type | Constraints | Description |
 |---|---|---|---|
 | id | INTEGER | Primary key, autoincrement | |
 | op | TEXT | NOT NULL | Always `'upsert'`, and nothing reads it: push only uses `entity` and `payload`. Deletions are upserts carrying `deletedAt` |
 | entity | TEXT | NOT NULL | Which cloud file the next push rewrites: `activity`, `category`, `app_group`, `app_group_member`, `device`, `app_icon`. A row with any other entity, such as `app_category` or `process_path` left behind by older versions, is logged and deleted |
-| entity_pk | TEXT | NOT NULL | Primary key of the changed row |
+| entity_pk | TEXT | NOT NULL | Primary key of the changed row. A backend switch writes the day for `activity` and `*` for the rest. Push never reads it |
 | payload | TEXT | NOT NULL | JSON. Push reads it only for `activity`, to take `localDate` and pick the day's file; for every other entity it is ignored. It is never sent to other devices — push rebuilds each file from the tables |
 | created_at | TEXT | NOT NULL | |
 | attempts | INTEGER | NOT NULL, DEFAULT 0 | Failed push attempts so far |
@@ -190,6 +192,19 @@ Signing out of Google NULLs `uid`, `email` and the three token columns and keeps
 At startup the app builds WebDAV when `backend` is `webdav` and `webdav_url` is set, and Drive otherwise. WebDAV reads `webdav_user` and `webdav_password_enc` at the start of every round, and counts as signed in only when both are non-NULL. A password that does not decrypt on this machine fails the round as an invalid credential, so the Devices page asks for it again.
 
 Never synced, and it could not be: the encryption key is derived from the machine, so the blob is meaningless anywhere else.
+
+Indexes: none beyond the primary key.
+Foreign keys: none.
+
+## webdav_accounts
+
+Which account this database has used on each WebDAV server, one row per server (ADR-0011 §4). `auth_state` holds only the server in use now; this table keeps the others too. When the user connects to a server again, the app normalizes the address and user name they entered and compares them with this row to tell whether it is the same account. A backend switch to WebDAV writes the row. Never synced.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| host | TEXT | Primary key | The server's host, with the port only when it is not the default, e.g. `dav.jianguoyun.com` (v40) |
+| url | TEXT | NOT NULL | The server address, as the user last entered it (v40) |
+| user | TEXT | NOT NULL | The user name, as the user last entered it (v40) |
 
 Indexes: none beyond the primary key.
 Foreign keys: none.

@@ -22,10 +22,13 @@ pub(crate) fn account_hash(server_url: &str, user: &str) -> Result<String> {
 /// The prefix of this server's names in `sync_cursor`, e.g.,
 /// `webdav.dav.jianguoyun.com.`.
 pub(crate) fn cursor_name_prefix(server_url: &str) -> Result<String> {
-    Ok(format!(
-        "webdav.{}.",
-        host_and_port(&parse_server_url(server_url)?)
-    ))
+    Ok(format!("webdav.{}.", server_host(server_url)?))
+}
+
+/// `HTTPS://DAV.jianguoyun.com:443/dav/` gives `dav.jianguoyun.com`. Every
+/// spelling of the same server gives the same value.
+pub(crate) fn server_host(server_url: &str) -> Result<String> {
+    Ok(host_and_port(&parse_server_url(server_url)?))
 }
 
 /// `30:https://dav.jianguoyun.com/dav,`. The length counts bytes, so it stays right
