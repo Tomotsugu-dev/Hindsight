@@ -24,11 +24,11 @@ impl DbPool {
     }
 }
 
-/// The SQLite file in use: `hindsight.<uid>.sqlite` for the active account
-/// (`active_uid`), or `hindsight.sqlite` when the database belongs to no account
-/// yet.
+/// The main database file this run uses: `hindsight.<uid>.sqlite`, or
+/// `hindsight.sqlite` when the database belongs to no account yet. The uid is
+/// [`crate::account::db_uid`].
 pub fn db_path() -> Result<PathBuf> {
-    db_path_for(crate::account::active_uid().as_deref())
+    db_path_for(crate::account::db_uid().as_deref())
 }
 
 /// Where an account's database lives: `hindsight.<uid>.sqlite`. `None` gives

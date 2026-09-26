@@ -108,6 +108,7 @@ pub async fn init_self_identity() -> io::Result<DeviceMeta> {
     if let Err(e) = account::migrate_legacy_db(&root).await {
         log::warn!("legacy DB 迁移失败（继续使用现有 DB）: {e}");
     }
+    account::set_db_uid_for_this_run();
     if let Some(uid) = account::active_uid() {
         log::info!("active_uid: {uid}");
     }
