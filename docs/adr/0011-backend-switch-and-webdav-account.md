@@ -76,13 +76,12 @@ After the transaction commits, the app restarts immediately and builds the new b
 `sync_cursor` stores sync progress separately for each backend:
 
 - Drive continues to use its existing rows: four pull cursors (`drive_files`, `pull.*`) and three push fingerprints (`push.*`).
-- Each WebDAV server uses a set of rows prefixed with `webdav.<host>.`: pull cursors (`pull.*`), push fingerprints (`push.*`), bookmarks (`peer.*`), pending changes (`pending`), and the account for that server (`account`; see §4).
+- Each WebDAV server uses a set of rows prefixed with `webdav.<host>.`: pull cursors (`pull.*`), push fingerprints (`push.*`), bookmarks (`peer.*`), and the changes not yet written into the manifest file (`pending`).
 
 For example, a local database that has used Nutstore might have these rows in `sync_cursor`. `entity` is the row name, and `last_pulled_at` stores its value. The column name is historical; WebDAV rows may store values other than timestamps:
 
 | `entity` | `last_pulled_at` |
 |---|---|
-| `webdav.dav.jianguoyun.com.account` | `webdav-3f2a…` (account hash for this server) |
 | `webdav.dav.jianguoyun.com.pull.core` | `2026-10-01T10:00:00Z` (pull cursor for the core dataset) |
 | `webdav.dav.jianguoyun.com.peer.<device-id>` | The bookmark for that peer device, as JSON |
 
@@ -105,9 +104,15 @@ Add five columns to `auth_state`:
 - `webdav_url`, `webdav_user`: The current WebDAV server and username.
 - `webdav_password_enc`: The password for the current WebDAV account.
 
-The account used by this local database on each WebDAV server is recorded in that server's `webdav.<host>.account` row in `sync_cursor`. Its value is the account hash defined in §5.
+Also add a `webdav_accounts` table that records which account this local database has used on each WebDAV server, one row per server, in plain text:
 
-Switching backends does not change the account identities recorded in the local database. If the same WebDAV account uses a different URL or username spelling, update `webdav_url` and `webdav_user`; the account hash stays the same. When switching to a different account, its local database records its own account information.
+| host | url | user |
+|---|---|---|
+| `dav.jianguoyun.com` | `https://dav.jianguoyun.com/dav/` | `you@example.com` |
+
+`host` is the normalized hostname (see §5). `url` and `user` are spelled as the user entered them at the last connection. When the user connects to the server again, normalize the address and username they entered and compare them with this row to determine whether it is the same account.
+
+Switching backends does not change the accounts recorded in the local database. If the same WebDAV account uses a different URL or username spelling, update `webdav_url`, `webdav_user`, and the server's row in `webdav_accounts`: after normalization they are the same, so it is still the same account. When switching to a different account, that account's own local database records its account information.
 
 Signing out deletes only the credentials (the Google token or WebDAV password); retain the other account information. The app can then determine on the next connection whether it is the same account.
 
@@ -115,10 +120,7 @@ Encrypt the WebDAV password with the local key from ADR-0002, using the same pro
 
 ### 5. WebDAV account hashes and server host prefixes
 
-Unlike Google, WebDAV servers do not provide a uid for each account. The app therefore computes an account hash locally to recognize the same account. The server does not know this value; it is used in two places on this device:
-
-- The filename of a local database created for or claimed by the account: `hindsight.<account-hash>.sqlite`.
-- The account's `webdav.<host>.account` row in `sync_cursor`, which is used on the next connection to determine whether it is the same account (see §4).
+Google gives each account a uid; WebDAV servers do not. Local database filenames must still tell accounts apart, so the app computes an account hash for each WebDAV account and uses it only in the filename: `hindsight.<account-hash>.sqlite`. The filename uses the hash rather than plain text so that it does not expose the server address or username.
 
 The account hash has this format:
 
@@ -138,7 +140,7 @@ For example, these two connections produce the same account hash:
 | `HTTPS://DAV.jianguoyun.com:443/dav/` | `You@Example.com` |
 | `https://dav.jianguoyun.com/dav` | `you@example.com` |
 
-The `<host>` in row names from §3 comes from the normalized URL. Keep non-default ports, for example `dav.jianguoyun.com` and `cloud.example.com:8443`.
+The `<host>` in the row names in §3 and `webdav_accounts.host` both come from the normalized URL. Keep non-default ports, for example `dav.jianguoyun.com` and `cloud.example.com:8443`.
 
 The account-hash and server-host-prefix functions must have tests with fixed inputs and outputs. If either rule changes unintentionally, existing users could get a new account hash after restarting and be mistaken for a new account, opening an empty database. The app could also fail to find their existing sync progress and download data again.
 
@@ -166,12 +168,12 @@ The account-hash and server-host-prefix functions must have tests with fixed inp
 
 ## Data, compatibility, security, and privacy
 
-- **Existing data and migration**: The database migration adds five columns to `auth_state`. For a local database whose filename contains a Google uid (meaning it has signed in to Google), initialize `backend = drive` and `drive_account = <that uid>`, whether or not the user is currently signed out. Leave both columns empty for anonymous databases. Existing cursor and push-fingerprint rows belong to Drive and keep their names. WebDAV has not shipped yet, so its new rows need no migration.
+- **Existing data and migration**: The database migrations add five columns to `auth_state` (v39) and create the `webdav_accounts` table (v40). For a local database whose filename contains a Google uid (meaning it has signed in to Google), initialize `backend = drive` and `drive_account = <that uid>`, whether or not the user is currently signed out. Leave both columns empty for anonymous databases. Existing cursor and push-fingerprint rows belong to Drive and keep their names. WebDAV has not shipped yet, so its new rows need no migration.
 - **Mixed versions and rollback**: The migration only adds columns, so older versions that read existing fields by column name are unaffected. Older versions do not support WebDAV. After a user rolls back from WebDAV, the older version shows them as signed out. Once they sign in to Google again, syncing can resume from the progress recorded when they left Drive.
 
 	Records created on this device while using WebDAV will not be uploaded to Drive by the older version, because their outbox rows were removed after being pushed to WebDAV. When the app is upgraded again, if `backend` is still `webdav` but the local database contains a Google token, the user signed in to Drive using the older version. In that case, handle the transition as a switch from WebDAV to Drive and run the transaction in §2: refill the outbox to upload records created while using WebDAV, and delete the WebDAV password.
 - **Irreversible effects**: None. Switching backends does not delete sync progress or business data on this device.
-- **Security and privacy**: Only the encrypted WebDAV password is stored. The account hash contains no plaintext, so filenames do not directly expose the server address or username. WebDAV must still use HTTPS, as required by ADR-0007.
+- **Security and privacy**: Only the encrypted WebDAV password is stored. The account hash contains no plaintext, so filenames do not directly expose the server address or username. Like `auth_state`, `webdav_accounts` stores addresses and usernames in plain text; both stay in the database on this device and are never uploaded. WebDAV must still use HTTPS, as required by ADR-0007.
 
 ## Follow-up
 
