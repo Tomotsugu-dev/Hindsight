@@ -14,8 +14,6 @@ use crate::sync::webdav::account_hash::{account_hash, server_host};
 
 /// The backend to switch to, with its credentials.
 pub(crate) enum NewBackend<'a> {
-    // Google sign-in switches with it next (ADR-0011 follow-up 6).
-    #[allow(dead_code)]
     Drive {
         uid: &'a str,
         email: &'a str,

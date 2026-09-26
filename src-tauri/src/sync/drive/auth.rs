@@ -8,7 +8,8 @@
 //! 5. 用 code + code_verifier 调 https://oauth2.googleapis.com/token
 //!    → 拿 access_token + refresh_token + id_token
 //! 6. 解 id_token JWT 拿 sub（用户的 Google 唯一 ID）+ email
-//! 7. 用「机器 ID + 用户 home 路径」派生 32 字节 AES key 加密 refresh_token，密文落 auth_state 表
+//! 7. 返回账号和 token；refresh_token 加密后写进 auth_state 表，由换后端的事务做
+//!    （`backend_switch`）
 
 use std::time::Duration;
 
@@ -26,14 +27,14 @@ use crate::error::{Error, Result};
 use crate::repo::settings;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
-use crate::sync::local_key::{aes_decrypt, aes_encrypt, derive_master_key};
+use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
 const OAUTH_TIMEOUT_SECS: u64 = 180;
 
-/// What the Devices page shows: whether anyone is signed in, which account, whether
-/// the "Sign in with Google" button is enabled, and whether to ask for an app
-/// restart. Returned by `auth_status` and when sign-in completes.
+/// What the Devices page shows: whether anyone is signed in, which account, and
+/// whether the "Sign in with Google" button is enabled. Returned by `auth_status`
+/// and when sign-in completes.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthState {
@@ -42,10 +43,6 @@ pub struct AuthState {
     pub email: Option<String>,
     /// Google OAuth client_id / client_secret 是否齐全（决定 UI 上"用 Google 登录"按钮是否可点）
     pub configured: bool,
-    /// 多账号场景下登录到了不同账号，需要用户重启 app 才能切到新账号的 DB。
-    /// `current_state` 永远返回 false；只有 `sign_in_with_google` 在切账号时会置 true。
-    #[serde(default)]
-    pub requires_restart: bool,
 }
 
 /// Get the current authentication state from the local database.
@@ -75,11 +72,18 @@ pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
         uid: if uid.is_empty() { None } else { Some(uid) },
         email: if email.is_empty() { None } else { Some(email) },
         configured,
-        requires_restart: false,
     })
 }
 
-/// 完整登录流程：返回登录后的 AuthState。
+pub struct GoogleSignIn {
+    pub uid: String,
+    pub email: String,
+    pub refresh_token: String,
+    pub access_token: String,
+    pub expires_at: String,
+}
+
+/// 走完 Google 登录，返回账号和 token；写库由换后端的事务做（ADR-0011 §2）。
 ///
 /// `on_url(auth_url, opened)`:授权 URL 生成后回调一次——`opened=false` 表示
 /// 打开浏览器的调用已失败,前端应立即显示「复制登录链接」;`opened=true` 也
@@ -89,7 +93,7 @@ pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
 pub async fn sign_in_with_google(
     pool: &DbPool,
     on_url: impl FnOnce(&str, bool),
-) -> Result<AuthState> {
+) -> Result<GoogleSignIn> {
     let (client_id, client_secret) = load_creds(pool).await?;
 
     // 1) PKCE
@@ -146,78 +150,15 @@ pub async fn sign_in_with_google(
     let refresh_token = google
         .refresh_token
         .ok_or(Error::OAuthMissingRefreshToken)?;
-
-    // 7) 加密存储
-    let key = derive_master_key()?;
-    let enc = aes_encrypt(&key, refresh_token.as_bytes())?;
-
-    let access = google.access_token.clone();
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(google.expires_in);
-    let expires_at_str = expires_at.to_rfc3339();
 
-    // 多账号分流：currently active uid vs 这次登的 uid
-    //   None    → Case A: 第一次登录（匿名 DB）。把 token 写进当前 pool，标记 active_uid，
-    //             下次启动 startup migration 把 hindsight.sqlite 改名 hindsight.<uid>.sqlite。
-    //   uid 同  → Case B: 同账号续期/重新登。直接更新 auth_state，无重启。
-    //   uid 不同 → Case C: 切账号。当前 pool 是旧账号的 DB，不能写新 token；同时把旧账号
-    //             auth_state 清掉避免后台 sync 继续推到旧 Drive。更新 active_uid，告诉用户
-    //             重启 app；重启后开新 DB，需要再做一次 OAuth 把 token 写进去。
-    let prev_active = crate::account::active_uid();
-    let switching = matches!(&prev_active, Some(prev) if prev != &uid);
-
-    if switching {
-        log::info!(
-            "Google 登录到不同账号：{:?} -> {uid}，需要重启",
-            prev_active
-        );
-        // 旧 DB 里的 auth_state 清掉，立刻停止后台 sync 推到旧 Drive
-        pool.0
-            .call(|conn| {
-                conn.execute(
-                    "UPDATE auth_state SET uid = NULL, email = NULL,
-                       refresh_token_enc = NULL, access_token = NULL, expires_at = NULL
-                     WHERE id = 1",
-                    [],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await?;
-        crate::account::set_active_uid(Some(&uid))?;
-        let mut s = current_state(pool).await?;
-        s.requires_restart = true;
-        s.uid = Some(uid);
-        s.email = if email.is_empty() { None } else { Some(email) };
-        s.signed_in = true;
-        return Ok(s);
-    }
-
-    // Case A / B：写当前 pool
-    let uid_db = uid.clone();
-    let email_db = email.clone();
-    pool.0
-        .call(move |conn| {
-            conn.execute(
-                "UPDATE auth_state SET
-                   uid = ?1, email = ?2, refresh_token_enc = ?3,
-                   access_token = ?4, expires_at = ?5
-                 WHERE id = 1",
-                rusqlite::params![uid_db, email_db, enc, access, expires_at_str],
-            )
-            .db()?;
-            Ok(())
-        })
-        .await?;
-
-    if prev_active.is_none() {
-        // Case A：把 active_uid 立起来 + 声明 hindsight.sqlite 归属于这个 uid。
-        // 下次启动 startup migration 会把文件 rename 为 hindsight.<uid>.sqlite。
-        crate::account::set_active_uid(Some(&uid))?;
-        crate::account::claim_legacy_for(&uid)?;
-    }
-
-    log::info!("Google 登录成功 uid={uid}");
-    current_state(pool).await
+    Ok(GoogleSignIn {
+        uid,
+        email,
+        refresh_token,
+        access_token: google.access_token,
+        expires_at: expires_at.to_rfc3339(),
+    })
 }
 
 /// Returns an access token that, by the local clock, stays valid for at least
