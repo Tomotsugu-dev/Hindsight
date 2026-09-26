@@ -1,7 +1,10 @@
-//! The key that encrypts the refresh token.
+//! The key that encrypts the credentials kept on this device: the Google
+//! refresh token and the WebDAV password.
 //!
-//! Never stored. Recomputed on every use from `SHA256(context ‖ machine_id ‖
-//! user_home)`, see [`derive_master_key`]. Why not the OS keychain: ADR-0002.
+//! Never stored. Derived from `SHA256(context ‖ machine_id ‖ user_home)`, see
+//! [`derive_master_key`]. Why not the OS keychain: ADR-0002.
+
+use std::sync::OnceLock;
 
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
@@ -21,8 +24,10 @@ const AUTH_KEY_CONTEXT: &[u8] = b"hindsight-auth-v1";
 
 /// Derives the 32-byte AES key: `SHA256(context || machine_id || user_home)`.
 ///
-/// Recomputed on every call and never stored, whether in an OS keyring, the
-/// Keychain or a file. The three inputs:
+/// Computed once per launch and kept in memory: the machine id does not change
+/// while the app runs, and reading it runs an external command (`ioreg` on
+/// macOS). Never written to an OS keyring, the Keychain or a file. The three
+/// inputs:
 /// - `context` = [`AUTH_KEY_CONTEXT`]: a domain-separation constant
 /// - `machine_id`: the platform's stable machine identifier; it changes only
 ///   when the system is reinstalled or the hardware changes
@@ -31,6 +36,10 @@ const AUTH_KEY_CONTEXT: &[u8] = b"hindsight-auth-v1";
 ///
 /// Why not a keyring: see the module documentation.
 pub(crate) fn derive_master_key() -> Result<[u8; 32]> {
+    static KEY: OnceLock<[u8; 32]> = OnceLock::new();
+    if let Some(key) = KEY.get() {
+        return Ok(*key);
+    }
     let machine = read_machine_id()?;
     let user = read_user_home_bytes();
     let mut hasher = Sha256::new();
@@ -42,7 +51,7 @@ pub(crate) fn derive_master_key() -> Result<[u8; 32]> {
     let result = hasher.finalize();
     let mut k = [0u8; 32];
     k.copy_from_slice(&result);
-    Ok(k)
+    Ok(*KEY.get_or_init(|| k))
 }
 
 /// Returns the current user's home directory path as UTF-8 bytes.
@@ -102,16 +111,16 @@ mod tests {
     /// 加密后再解密，回到原文。
     #[test]
     fn decrypt_returns_what_encrypt_took() {
-        let sealed = aes_encrypt(&KEY, b"refresh-token").unwrap();
-        assert_eq!(aes_decrypt(&KEY, &sealed).unwrap(), b"refresh-token");
+        let encrypted = aes_encrypt(&KEY, b"refresh-token").unwrap();
+        assert_eq!(aes_decrypt(&KEY, &encrypted).unwrap(), b"refresh-token");
     }
 
     /// 密文改一个字节就解不开：GCM 的校验值对不上。
     #[test]
     fn one_changed_byte_fails_to_decrypt() {
-        let mut sealed = aes_encrypt(&KEY, b"refresh-token").unwrap();
-        let last = sealed.len() - 1;
-        sealed[last] ^= 1;
-        assert!(aes_decrypt(&KEY, &sealed).is_err());
+        let mut encrypted = aes_encrypt(&KEY, b"refresh-token").unwrap();
+        let last = encrypted.len() - 1;
+        encrypted[last] ^= 1;
+        assert!(aes_decrypt(&KEY, &encrypted).is_err());
     }
 }
