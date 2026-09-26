@@ -30,8 +30,10 @@ pub(crate) enum NewBackend<'a> {
     },
 }
 
-/// Switches to another backend. Call it while sync is paused, and restart the
-/// app as soon as it returns.
+/// Switches to another backend. Call it while sync is paused. Once it returns,
+/// and before sync resumes, hand the new backend to the sync engine
+/// ([`SyncEngine::replace_cloud`](crate::sync::engine::SyncEngine::replace_cloud))
+/// or restart the app.
 pub(crate) async fn switch_backend(pool: &DbPool, self_id: &str, to: NewBackend<'_>) -> Result<()> {
     let statements = credential_statements(to)?;
     let self_id = self_id.to_string();

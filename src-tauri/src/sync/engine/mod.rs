@@ -51,7 +51,7 @@ fn format_sync_error(kind: FailureKind, e: &Error) -> String {
 /// printed by default, and the text can carry a Google response. Start with
 /// RUST_LOG=hindsight=debug to see it.
 async fn record_round_failure(inner: &Inner, round: &str, e: &Error) {
-    let kind = inner.cloud.failure_kind(e);
+    let kind = inner.cloud().failure_kind(e);
     log::warn!(
         "sync {round} failed {}(see status)",
         sync_error_prefix(kind)
@@ -97,10 +97,10 @@ pub(super) struct Inner {
     /// and screen text. `None` when it failed to open at startup; those two
     /// datasets then never sync, whatever the settings say.
     pub(super) mem: Option<crate::memory::MemoryDb>,
-    /// The cloud the engine talks to: Google Drive or WebDAV in the app, as
-    /// `auth_state` said at startup; an in-memory stand-in in tests. It holds
-    /// its own credential; the engine never sees one.
-    pub(super) cloud: CloudBackend,
+    /// The cloud backend sync uses: Google Drive or WebDAV. Replacing it takes
+    /// `flush_gate`, which a push or pull round holds from start to end, so a
+    /// round uses one backend throughout.
+    pub(super) cloud: std::sync::Mutex<Arc<CloudBackend>>,
     /// This device's `device_id`, a UUID. Every file this device uploads is named
     /// `device.<self_id>.…`, which is how pull tells other devices' files apart.
     pub(super) self_id: String,
@@ -124,6 +124,12 @@ pub(super) struct Inner {
     /// of the files it no longer publishes. Push checks it once per launch.
     /// TODO(ADR-0003, ADR-0004): remove together with the cleanup in push.
     pub(super) legacy_cloud_files_checked: std::sync::atomic::AtomicBool,
+}
+
+impl Inner {
+    pub(super) fn cloud(&self) -> Arc<CloudBackend> {
+        Arc::clone(&self.cloud.lock().unwrap())
+    }
 }
 
 /// RAII:作用域内置位 sync_in_flight,离开(含错误提前返回)自动清零。
@@ -173,7 +179,7 @@ impl SyncEngine {
             inner: Arc::new(Inner {
                 pool,
                 mem,
-                cloud,
+                cloud: std::sync::Mutex::new(Arc::new(cloud)),
                 self_id,
                 handle: Mutex::new(None),
                 status: RwLock::new(SyncStatus::default()),
@@ -190,9 +196,16 @@ impl SyncEngine {
         self.inner.flush_gate.lock().await
     }
 
-    /// 借出当前云后端引用。给 `purge_cloud_data` 这类 command-layer 入口走。
-    pub fn cloud(&self) -> &CloudBackend {
-        &self.inner.cloud
+    /// 同步现在用的后端，给清云端的命令用。要在暂停同步以后取：先取再暂停的话，中间
+    /// 换了后端，命令会删到旧后端上。
+    pub fn cloud(&self) -> Arc<CloudBackend> {
+        self.inner.cloud()
+    }
+
+    /// 换掉同步用的后端。换后端的事务提交后、恢复同步之前调用，这样下一轮就用新后端，
+    /// 不用重启。
+    pub fn replace_cloud(&self, cloud: CloudBackend) {
+        *self.inner.cloud.lock().unwrap() = Arc::new(cloud);
     }
 
     /// 借出当前设备身份。给 command-layer 入口（`purge_cloud_data` 等）走，
@@ -275,9 +288,6 @@ impl SyncEngine {
 }
 
 async fn run_loop(inner: Arc<Inner>) {
-    let tick = inner.cloud.push_interval();
-    let pull_every = chrono::Duration::from_std(inner.cloud.pull_interval())
-        .expect("a backend's pull interval is minutes, not centuries");
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
         let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
@@ -285,6 +295,9 @@ async fn run_loop(inner: Arc<Inner>) {
             record_round_failure(&inner, "push", &e).await;
         }
 
+        // 间隔每轮都问：两轮之间可能换了后端。
+        let pull_every = chrono::Duration::from_std(inner.cloud().pull_interval())
+            .expect("a backend's pull interval is minutes, not centuries");
         let now = Utc::now();
         let should_pull = match last_pull {
             None => true,
@@ -298,6 +311,6 @@ async fn run_loop(inner: Arc<Inner>) {
         }
         drop(_in_flight); // sleep 期间不算"同步中"
 
-        tokio::time::sleep(tick).await;
+        tokio::time::sleep(inner.cloud().push_interval()).await;
     }
 }

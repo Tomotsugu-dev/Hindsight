@@ -280,14 +280,14 @@ pub(crate) async fn purge_cloud_data_impl(
     }
 
     let prefix = FileName::device_prefix(self_id);
-    let cloud = engine.cloud();
-    if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
-        return Err(crate::error::Error::NotSignedIn.to_string());
-    }
 
     // Held until this function returns: a push landing mid-way would upload
     // this device's files again right after they were deleted.
     let _gate = engine.pause_flushes().await;
+    let cloud = engine.cloud();
+    if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
+        return Err(crate::error::Error::NotSignedIn.to_string());
+    }
 
     // 1. **先上传 tombstone**（覆盖任何旧版本，modifiedTime 刷新让对端 pull 看到）。
     //    顺序是关键：tombstone 是"对端请清掉这台设备镜像"的唯一信号——若像旧实现
@@ -416,6 +416,9 @@ pub(crate) async fn forget_remote_device_impl(
         kind: FileKind::Tombstone,
     }
     .to_file_name();
+
+    // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
+    let _gate = engine.pause_flushes().await;
     let cloud = engine.cloud();
 
     // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
@@ -429,9 +432,6 @@ pub(crate) async fn forget_remote_device_impl(
             crate::error::Error::NotSignedIn
         ));
     }
-
-    // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
-    let _gate = engine.pause_flushes().await;
 
     // 1. **先上传 tombstone**（覆盖任何旧版本）。其它机器 pull 后按 cleared_at trim
     //    activities + mark devices.deleted_at。顺序同 purge_cloud_data_impl：tombstone

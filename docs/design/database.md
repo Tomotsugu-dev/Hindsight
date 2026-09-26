@@ -189,7 +189,7 @@ A caller counts as signed in to Google only when `uid`, `refresh_token_enc`, `ac
 
 Signing out of Google NULLs `uid`, `email` and the three token columns and keeps the row; `backend` and `drive_account` stay, so the next sign-in can tell whether it is the same account. Renewing a token writes only `access_token` and `expires_at`.
 
-At startup the app builds WebDAV when `backend` is `webdav` and `webdav_url` is set, and Drive otherwise. WebDAV reads `webdav_user` and `webdav_password_enc` at the start of every round, and counts as signed in only when both are non-NULL. A password that does not decrypt on this machine fails the round as an invalid credential, so the Devices page asks for it again.
+At startup the app builds WebDAV when `backend` is `webdav` and `webdav_url` is set, and Drive otherwise. A backend switch replaces it while sync is paused, without a restart. WebDAV reads `webdav_user` and `webdav_password_enc` at the start of every round, and counts as signed in only when both are non-NULL. A password that does not decrypt on this machine fails the round as an invalid credential, so the Devices page asks for it again.
 
 Never synced, and it could not be: the encryption key is derived from the machine, so the blob is meaningless anywhere else.
 

@@ -64,7 +64,7 @@ fn is_remote_newer<P: rusqlite::Params>(
 pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
     let _gate = inner.flush_gate.lock().await;
     // Not signed in is not a failure: there is nothing to pull.
-    if !inner.cloud.ensure_credential().await? {
+    if !inner.cloud().ensure_credential().await? {
         return Ok(());
     }
 
@@ -102,7 +102,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         (Dataset::Memory, sync_scrn_mem && has_mem),
     ] {
         if enabled {
-            let name = inner.cloud.pull_cursor_name(dataset);
+            let name = inner.cloud().pull_cursor_name(dataset);
             streams.push((dataset, io::read_cursor(&inner.pool, &name).await?));
         }
     }
@@ -113,7 +113,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         .iter()
         .map(|(dataset, cursor)| (*dataset, cursor.as_str()))
         .collect();
-    let files = inner.cloud.list(&cursors).await?;
+    let files = inner.cloud().list(&cursors).await?;
     if files.is_empty() {
         return Ok(());
     }
@@ -181,7 +181,7 @@ async fn pull_stream(
             continue;
         }
 
-        let body = match inner.cloud.download(&f.id).await {
+        let body = match inner.cloud().download(&f.id).await {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("download of {} failed: {e}", f.name);
@@ -246,8 +246,8 @@ async fn pull_stream(
         })
         .last();
     if let Some(t) = cursor_advance {
-        let t = rewind_cursor(&t, inner.cloud.time_precision())?;
-        let name = inner.cloud.pull_cursor_name(dataset);
+        let t = rewind_cursor(&t, inner.cloud().time_precision())?;
+        let name = inner.cloud().pull_cursor_name(dataset);
         io::write_cursor(&inner.pool, &name, &t).await?;
     }
     Ok(applied)

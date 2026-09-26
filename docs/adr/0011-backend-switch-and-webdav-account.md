@@ -69,7 +69,9 @@ Data is merged using upserts, so processing it more than once does not create du
 
 These three steps must be in the same transaction. If the app crashes after saving the new backend but before refilling the outbox, this device's history may never be uploaded to the new backend. All of this state is stored in the main database, so one transaction can ensure the steps either all complete or all roll back.
 
-After the transaction commits, the app restarts immediately and builds the new backend from `auth_state.backend`. Sync stays paused from the start of the transaction until the restart. Otherwise, a push round on the old backend could run in between: it would upload the files in the refilled outbox to the old backend and remove their pending items, so the new backend would never receive those files.
+The transaction runs while sync is paused. The new backend is built before the transaction; if it cannot be built, nothing is written. After the transaction commits and before sync resumes, the new backend replaces the one the sync engine uses, so the next round already uses the new backend and the app does not restart. No push on the old backend can run in between either, so none can upload the refilled outbox to the old backend and then delete those outbox rows.
+
+Switching to another account's database still restarts the app, because the database is opened at startup.
 
 ### 3. Keep separate sync progress for each backend
 
@@ -161,7 +163,7 @@ The account-hash and server-host-prefix functions must have tests with fixed inp
 
 ### Costs and risks
 
-- Switching backends restarts the app once.
+- Switching to another account's database restarts the app once.
 - Every backend switch re-uploads this device's activities and five whole-table files (see §2). The first time a backend is used, the app also downloads all of its data. This can generate substantial network traffic on devices with extensive history.
 - Other devices still using the old backend will not see data on the new one. They must switch to the same backend to resume syncing with it.
 - The same WebDAV account can be used by two local databases. For example, local database A has switched to WebDAV account W. Later, the user enters W in the local database for Drive account B. Because B's database has no record of W, the app keeps using B's database: it pulls A's data from W into B's database and uploads B's data to W. This can happen only if the user enters W's password in B's database.
