@@ -53,14 +53,15 @@ pub(crate) struct HttpDav {
     /// URL of the sync root, ending with `/`,
     /// e.g., `https://dav.jianguoyun.com/dav/hindsight/`.
     root: Url,
-    username: String,
-    password: String,
+    /// User name and password. `WebDavClient::ensure_credential` puts them here
+    /// at the start of each round, read from `auth_state`; empty until then.
+    credentials: std::sync::Mutex<(String, String)>,
 }
 
 impl HttpDav {
     /// `server_url` is the server address provided by the user (e.g., `https://dav.jianguoyun.com/dav/`),
     /// must be HTTPS (ADR-0007). The root directory is fixed as [`ROOT_DIR`].
-    pub(crate) fn new(server_url: &str, username: &str, password: &str) -> Result<Self> {
+    pub(crate) fn new(server_url: &str) -> Result<Self> {
         let mut base = parse_server_url(server_url)?;
         // `join` follows URL resolution rules: `…/dav` + `hindsight/` gives
         // `…/hindsight/`, because `dav` is taken as a file name and replaced;
@@ -75,9 +76,17 @@ impl HttpDav {
         Ok(Self {
             client: reqwest::Client::new(),
             root,
-            username: username.to_string(),
-            password: password.to_string(),
+            credentials: Default::default(),
         })
+    }
+
+    pub(crate) fn set_credentials(&self, user: String, password: String) {
+        *self.credentials.lock().unwrap() = (user, password);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn credentials(&self) -> (String, String) {
+        self.credentials.lock().unwrap().clone()
     }
 
     /// The server's host name, such as `dav.jianguoyun.com`.
@@ -112,10 +121,8 @@ impl HttpDav {
         stage: &'static str,
         req: reqwest::RequestBuilder,
     ) -> Result<reqwest::Response> {
-        let resp = req
-            .basic_auth(&self.username, Some(&self.password))
-            .send()
-            .await?;
+        let (user, password) = self.credentials.lock().unwrap().clone();
+        let resp = req.basic_auth(user, Some(password)).send().await?;
         if resp.status().is_success() {
             return Ok(resp);
         }
@@ -204,6 +211,16 @@ pub(crate) enum Dav {
 }
 
 impl Dav {
+    /// Sets the user name and password for this round. The fake server does not
+    /// check them.
+    pub(crate) fn set_credentials(&self, user: String, password: String) {
+        match self {
+            Dav::Http(d) => d.set_credentials(user, password),
+            #[cfg(test)]
+            Dav::Fake(_) => {}
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn fake(&self) -> &super::fake::FakeDav {
         match self {
@@ -268,7 +285,7 @@ mod tests {
     use super::*;
 
     fn dav(base: &str) -> HttpDav {
-        HttpDav::new(base, "alice", "secret").unwrap()
+        HttpDav::new(base).unwrap()
     }
 
     /// 根目录 = 用户地址 + `hindsight/`；用户地址没尾斜杠也一样。
@@ -287,7 +304,7 @@ mod tests {
     /// 明文 HTTP 拒绝（ADR-0007）。
     #[test]
     fn plain_http_is_refused() {
-        assert!(HttpDav::new("http://dav.example.com/dav/", "a", "b").is_err());
+        assert!(HttpDav::new("http://dav.example.com/dav/").is_err());
     }
 
     /// 相对路径逐段编码，目录 URL 带尾斜杠，空目录就是根。

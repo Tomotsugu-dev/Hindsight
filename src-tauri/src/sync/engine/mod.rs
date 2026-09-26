@@ -97,8 +97,9 @@ pub(super) struct Inner {
     /// and screen text. `None` when it failed to open at startup; those two
     /// datasets then never sync, whatever the settings say.
     pub(super) mem: Option<crate::memory::MemoryDb>,
-    /// The cloud the engine talks to: Google Drive in the app, an in-memory
-    /// stand-in in tests. It holds its own credential; the engine never sees one.
+    /// The cloud the engine talks to: Google Drive or WebDAV in the app, as
+    /// `auth_state` said at startup; an in-memory stand-in in tests. It holds
+    /// its own credential; the engine never sees one.
     pub(super) cloud: CloudBackend,
     /// This device's `device_id`, a UUID. Every file this device uploads is named
     /// `device.<self_id>.…`, which is how pull tells other devices' files apart.
@@ -147,12 +148,16 @@ pub struct SyncEngine {
 }
 
 impl SyncEngine {
-    /// 生产入口：用全局 `device::self_id()` + Google Drive。`device::ensure_loaded()`
-    /// 必须先跑过；未初始化时 self_id 退化为空串（push/pull 内部会跳过实际工作）。
-    /// `mem` = 记忆库句柄(聊天历史/屏幕记忆可选上云用;打开失败传 None)。
-    pub fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
+    /// Used at app startup: the backend is built from `auth_state`.
+    pub async fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
         let self_id = crate::device::self_id().unwrap_or("").to_string();
-        let cloud = CloudBackend::drive(pool.clone());
+        let cloud = match CloudBackend::from_auth_state(pool.clone(), self_id.clone()).await {
+            Ok(cloud) => cloud,
+            Err(e) => {
+                log::warn!("sync: the saved backend cannot be built, using Drive: {e}");
+                CloudBackend::drive(pool.clone())
+            }
+        };
         Self::with_backend(pool, mem, cloud, self_id)
     }
 

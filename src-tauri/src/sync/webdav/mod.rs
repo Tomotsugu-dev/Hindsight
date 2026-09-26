@@ -4,7 +4,7 @@
 //! (ADR-0011 §3). The bookmarks and the changes not yet written into the
 //! manifest file are its own; the engine never reads them.
 
-// Removed when the client is wired in (ADR-0007 follow-up 3).
+// Removed once the connect command uses the account hash (ADR-0011 follow-up 5).
 #![allow(dead_code)]
 
 pub(crate) mod account_hash;
@@ -34,6 +34,7 @@ use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::cloud::{FailureKind, FileMeta};
 use crate::sync::engine::rewind_cursor;
 use crate::sync::file_name::{Dataset, FileName};
+use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
 /// WebDAV Server only provides modification times with second precision (ADR-0007 §4).
 pub(crate) const TIME_PRECISION: Duration = Duration::from_secs(1);
@@ -60,6 +61,10 @@ pub(crate) fn failure_kind(e: &Error) -> FailureKind {
         // WebDAV 401: the user name or app password is wrong or was revoked.
         // There is no refresh; the user has to enter it again (ADR-0007).
         Error::WebDavHttp { status: 401, .. } => FailureKind::CredentialInvalid,
+        // The saved password does not decrypt: the local key has changed (the
+        // database was copied to another machine, or the system was
+        // reinstalled). Entering the password again is the only way out.
+        Error::Crypto(_) => FailureKind::CredentialInvalid,
         // Everything else is retried by the next tick.
         // TODO: WebDAV 507 (out of space) should stop retrying and tell the
         // user; that needs a third kind (ADR-0007 error table).
@@ -79,7 +84,8 @@ fn upload_method_for(host: &str) -> UploadMethod {
     }
 }
 
-/// The WebDAV backend. `pool` serves one purpose: reading and writing this
+/// The WebDAV backend. `pool` serves two purposes: reading the credentials from
+/// `auth_state` at the start of each round, and reading and writing this
 /// device's own rows in `sync_cursor` — its progress on each peer's manifest
 /// (`peer.*`) and the changes not yet written into its own manifest file
 /// (`pending`).
@@ -148,14 +154,8 @@ impl WebDavClient {
         )
     }
 
-    pub(crate) fn connect(
-        server_url: &str,
-        username: &str,
-        password: &str,
-        pool: DbPool,
-        self_id: String,
-    ) -> Result<Self> {
-        let http = HttpDav::new(server_url, username, password)?;
+    pub(crate) fn connect(server_url: &str, pool: DbPool, self_id: String) -> Result<Self> {
+        let http = HttpDav::new(server_url)?;
         let upload_method = upload_method_for(http.host());
         let name_prefix = cursor_name_prefix(server_url)?;
         Ok(Self::new(
@@ -167,10 +167,16 @@ impl WebDavClient {
         ))
     }
 
-    /// WebDAV doesn't have a concept of logging in;
-    /// if the credentials are set in the configuration,
-    /// it is considered logged in.
+    /// Reads the user name and password from `auth_state` at the start of each
+    /// round. No password means the user signed out: this round does not sync.
     pub(crate) async fn ensure_credential(&self) -> Result<bool> {
+        let Some((user, password_enc)) = read_credentials(&self.pool).await? else {
+            return Ok(false);
+        };
+        let password = aes_decrypt(&derive_master_key()?, &password_enc)?;
+        let password = String::from_utf8(password)
+            .map_err(|_| Error::Crypto("webdav password utf-8 decode"))?;
+        self.dav.set_credentials(user, password);
         Ok(true)
     }
 
@@ -465,6 +471,48 @@ fn href_to_relative_path(href: &str) -> Option<String> {
     Some(decoded[path_start..].to_string())
 }
 
+// ─────────────── Credentials in auth_state ───────────────
+
+/// The user name and the encrypted password (ADR-0011 §4). Signed in only when
+/// both are there.
+async fn read_credentials(pool: &DbPool) -> Result<Option<(String, Vec<u8>)>> {
+    let credentials: Option<(Option<String>, Option<Vec<u8>>)> = pool
+        .0
+        .call(|conn| {
+            conn.query_row(
+                "SELECT webdav_user, webdav_password_enc FROM auth_state WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .db()
+        })
+        .await?;
+    Ok(match credentials {
+        Some((Some(user), Some(password_enc))) => Some((user, password_enc)),
+        _ => None,
+    })
+}
+
+/// 测试用：存下用户名和用本机密钥加密的密码，下一次 `ensure_credential` 就会读到。
+#[cfg(test)]
+pub(crate) async fn save_test_credentials(pool: &DbPool, user: &str, password: &str) {
+    let key = derive_master_key().unwrap();
+    let password_enc = crate::sync::local_key::aes_encrypt(&key, password.as_bytes()).unwrap();
+    let user = user.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE auth_state SET webdav_user = ?1, webdav_password_enc = ?2 WHERE id = 1",
+                rusqlite::params![user, password_enc],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+}
+
 // ─────────────── Local state in sync_cursor ───────────────
 
 /// How far one dataset got with one peer's manifest file: `processed` is the
@@ -654,8 +702,6 @@ mod tests {
     async fn own_names_start_with_the_host() {
         let client = WebDavClient::connect(
             "https://dav.jianguoyun.com/dav/",
-            "a",
-            "b",
             fresh_test_pool().await,
             "me".into(),
         )
@@ -668,6 +714,62 @@ mod tests {
             client.pending_changes_name(),
             "webdav.dav.jianguoyun.com.pending"
         );
+    }
+
+    // ───── 登录 ─────
+
+    /// 没存密码：已经退出，这一轮不同步。
+    #[tokio::test]
+    async fn no_saved_password_means_signed_out() {
+        let dav = Arc::new(FakeDav::new());
+        let client = client(&dav).await;
+        assert!(!client.ensure_credential().await.unwrap());
+    }
+
+    /// 存着能解开的密码：解出来的用户名和密码交给这一轮的请求。
+    #[tokio::test]
+    async fn saved_credentials_reach_the_requests() {
+        let client = WebDavClient::connect(
+            "https://dav.jianguoyun.com/dav/",
+            fresh_test_pool().await,
+            "me".into(),
+        )
+        .unwrap();
+        save_test_credentials(&client.pool, "you@example.com", "app-password").await;
+        assert!(client.ensure_credential().await.unwrap());
+        let Dav::Http(http) = &client.dav else {
+            panic!("connect builds an HTTP client");
+        };
+        assert_eq!(
+            http.credentials(),
+            ("you@example.com".to_string(), "app-password".to_string())
+        );
+    }
+
+    /// 密码是别的机器的密钥加密的（库被拷了过来）：解不开，报凭证失效，让用户重新填。
+    #[tokio::test]
+    async fn a_password_encrypted_elsewhere_is_a_dead_credential() {
+        let dav = Arc::new(FakeDav::new());
+        let client = client(&dav).await;
+        let encrypted_elsewhere =
+            crate::sync::local_key::aes_encrypt(&[9; 32], b"app-password").unwrap();
+        client
+            .pool
+            .0
+            .call(move |conn| {
+                conn.execute(
+                    "UPDATE auth_state SET webdav_user = 'me', webdav_password_enc = ?1
+                      WHERE id = 1",
+                    [encrypted_elsewhere],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let err = client.ensure_credential().await.unwrap_err();
+        assert_eq!(failure_kind(&err), FailureKind::CredentialInvalid);
     }
 
     // ───── 读路径 ─────
@@ -1053,15 +1155,19 @@ mod tests {
         assert!(dav.file("me/icons.json").await.is_none());
     }
 
-    /// 401 要用户重新填账号密码；别的状态码等下一轮重试。
+    /// 要用户重新填密码的只有两种：401，和存着的密码解不开。别的都等下一轮重试。
     #[test]
-    fn failure_kind_asks_to_sign_in_only_for_401() {
+    fn failure_kind_asks_to_sign_in_only_for_a_dead_credential() {
         let http = |status| Error::WebDavHttp {
             stage: "propfind",
             status,
             body: String::new(),
         };
         assert_eq!(failure_kind(&http(401)), FailureKind::CredentialInvalid);
+        assert_eq!(
+            failure_kind(&Error::Crypto("aes decrypt")),
+            FailureKind::CredentialInvalid
+        );
         assert_eq!(failure_kind(&http(403)), FailureKind::Transient);
         assert_eq!(failure_kind(&http(507)), FailureKind::Transient);
     }
@@ -1072,19 +1178,12 @@ mod tests {
     #[tokio::test]
     async fn connect_picks_the_upload_method_from_the_address() {
         let pool = fresh_test_pool().await;
-        let nutstore = WebDavClient::connect(
-            "https://dav.jianguoyun.com/dav/",
-            "a",
-            "b",
-            pool.clone(),
-            "me".into(),
-        )
-        .unwrap();
+        let nutstore =
+            WebDavClient::connect("https://dav.jianguoyun.com/dav/", pool.clone(), "me".into())
+                .unwrap();
         assert_eq!(nutstore.upload_method, UploadMethod::DirectPut);
         let other = WebDavClient::connect(
             "https://cloud.example.com/remote.php/dav/files/a/",
-            "a",
-            "b",
             pool,
             "me".into(),
         )
@@ -1276,7 +1375,8 @@ mod tests {
     async fn probe_real_server_follows_the_fake_servers_rules() {
         let (url, user, pass) = probe_account();
         let base = probe_setup(&url, "rules", &user, &pass).await;
-        let dav = HttpDav::new(&base, &user, &pass).unwrap();
+        let dav = HttpDav::new(&base).unwrap();
+        dav.set_credentials(user.clone(), pass.clone());
 
         // 新账号：根目录还不存在
         assert_eq!(status_of(dav.propfind("").await), Some(404));
@@ -1350,11 +1450,18 @@ mod tests {
     async fn probe_two_clients_sync_through_the_real_server() {
         let (url, user, pass) = probe_account();
         let base = probe_setup(&url, "sync", &user, &pass).await;
-        let connect = |id: &str, pool| {
-            WebDavClient::connect(&base, &user, &pass, pool, id.to_string()).unwrap()
+        let signed_in = |id: &'static str| {
+            let (base, user, pass) = (base.clone(), user.clone(), pass.clone());
+            async move {
+                let pool = fresh_test_pool().await;
+                save_test_credentials(&pool, &user, &pass).await;
+                let client = WebDavClient::connect(&base, pool, id.to_string()).unwrap();
+                assert!(client.ensure_credential().await.unwrap());
+                client
+            }
         };
-        let a = connect("probe-a", fresh_test_pool().await);
-        let b = connect("probe-b", fresh_test_pool().await);
+        let a = signed_in("probe-a").await;
+        let b = signed_in("probe-b").await;
 
         assert!(list_core(&b, EPOCH).await.is_empty());
         a.upsert_by_name("device.probe-a.categories.json", b"[]")
