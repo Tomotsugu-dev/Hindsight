@@ -880,10 +880,13 @@ export const mockDevices: DeviceRow[] = [
 ];
 
 export const mockAuthState: AuthState = {
+  backend: "drive",
   signedIn: false,
   uid: null,
   email: null,
   configured: false,
+  webdavUrl: null,
+  webdavUser: null,
 };
 
 export const mockSyncStatus: SyncStatus = {

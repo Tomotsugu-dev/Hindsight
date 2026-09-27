@@ -626,11 +626,17 @@ export interface DeviceRow {
 }
 
 export interface AuthState {
+  /** 同步用的后端 */
+  backend: "drive" | "webdav";
+  /** 这个后端有没有凭证：Drive 看 Google 登录，WebDAV 看密码 */
   signedIn: boolean;
   uid: string | null;
   email: string | null;
-  /** OAuth 凭证是否齐全（决定登录按钮是否可点） */
+  /** Google OAuth 凭证是否齐全（决定「用 Google 登录」是否可点） */
   configured: boolean;
+  /** WebDAV 的地址和用户名；退出登录后也留着 */
+  webdavUrl: string | null;
+  webdavUser: string | null;
 }
 
 export interface SyncStatus {
@@ -885,6 +891,9 @@ export const api = {
   authStatus: () => invoke<AuthState>("auth_status"),
   signInWithGoogle: () => invoke<AuthState>("sign_in_with_google"),
   signOut: () => invoke<void>("sign_out"),
+  /** 连接 WebDAV 账号。先试登录，密码错了什么都不保存；换到另一个账号的库时应用会重启。 */
+  connectWebdav: (serverUrl: string, user: string, password: string) =>
+    invoke<void>("connect_webdav", { serverUrl, user, password }),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncNow: () => invoke<void>("sync_now"),
   /** 测试 AI 端点连通性：GET {endpoint}/models。

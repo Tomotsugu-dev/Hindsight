@@ -220,7 +220,8 @@
         "removeDeviceLabel": "Remove this device",
         "removeDeviceDescription": "Remove all of this device's data from cloud",
         "removeDeviceBusy": "Removing…",
-        "removeDeviceNeedsSignIn": "Sign in to your Google account first."
+        "removeDeviceNeedsSignIn": "Sign in to your Google account first.",
+        "removeDeviceNotOnWebdav": "Not available on WebDAV yet."
       },
       "purgeDialog": {
         "purgeDbTitle": "Clear local data?",
@@ -1074,13 +1075,11 @@
     },
     "cloud": {
       "state": {
-        "connected": "Connected to Google Drive",
-        "notSignedIn": "Not connected",
-        "notConfigured": "Not configured"
+        "connectedTo": "Connected to {{name}}",
+        "notSignedIn": "Not connected"
       },
       "desc": {
-        "signInPrompt": "Sign in with Google to sync activity data across devices via Drive. Screenshots are never uploaded.",
-        "configurePrompt": "Before first use, create an OAuth credential in Google Cloud Console (about 3 minutes)."
+        "choosePrompt": "Choose a cloud service to sync activity data across devices. Screenshots are never uploaded."
       },
       "stats": {
         "pending": "{{count}} pending",
@@ -1099,7 +1098,47 @@
         "reauthTitle": "Credentials expired — sign in again to refresh the token",
         "signInWithGoogle": "Sign in with Google",
         "signingIn": "Opening browser…",
-        "configureOAuth": "Configure OAuth"
+        "configureOAuth": "Configure OAuth",
+        "change": "Change",
+        "changeTitle": "Change sync service"
+      },
+      "services": {
+        "googleDrive": {
+          "name": "Google Drive",
+          "desc": "Sync with your Google account."
+        },
+        "webdav": {
+          "name": "WebDAV",
+          "desc": "Nutstore, Nextcloud and other WebDAV services."
+        },
+        "nutstore": {
+          "name": "Nutstore"
+        }
+      },
+      "chooser": {
+        "header": "Choose a sync service",
+        "current": "In use",
+        "pick": "Choose",
+        "changeAccount": "Change account",
+        "back": "Back",
+        "notice": "After the change, this device's records are uploaded again to the new cloud. Your other devices must change too to keep syncing with each other. Data in the old cloud is not deleted."
+      },
+      "webdav": {
+        "hint": "For Nutstore, the address is {{url}}. Use an app password created in the account settings on Nutstore's website, not your sign-in password.",
+        "url": "Server address",
+        "user": "User name",
+        "password": "App password",
+        "showPassword": "Show app password",
+        "hidePassword": "Hide app password",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "signedOutPrompt": "Signed out of {{account}}. Enter the app password to connect again.",
+        "errors": {
+          "wrongPassword": "The user name or app password is wrong.",
+          "notHttps": "The address must start with https://.",
+          "invalidUrl": "This address is not valid.",
+          "other": "Could not connect: {{message}}"
+        }
       },
       "datasets": {
         "title": "What to sync",

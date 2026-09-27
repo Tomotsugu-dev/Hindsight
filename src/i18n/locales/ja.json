@@ -220,7 +220,8 @@
         "removeDeviceLabel": "このデバイスを削除",
         "removeDeviceDescription": "このデバイスのデータをクラウドから削除",
         "removeDeviceBusy": "削除中…",
-        "removeDeviceNeedsSignIn": "先に Google アカウントにサインインしてください。"
+        "removeDeviceNeedsSignIn": "先に Google アカウントにサインインしてください。",
+        "removeDeviceNotOnWebdav": "WebDAV ではまだ使えません。"
       },
       "purgeDialog": {
         "purgeDbTitle": "ローカルデータを削除しますか?",
@@ -1074,13 +1075,11 @@
     },
     "cloud": {
       "state": {
-        "connected": "Google Drive に接続中",
-        "notSignedIn": "未接続",
-        "notConfigured": "未設定"
+        "connectedTo": "{{name}} に接続中",
+        "notSignedIn": "未接続"
       },
       "desc": {
-        "signInPrompt": "Google アカウントでログインすると、Drive 経由でアクティビティデータを複数デバイス間で同期します。スクリーンショットはアップロードされません。",
-        "configurePrompt": "初回利用前に、Google Cloud Console で OAuth 認証情報を作成する必要があります (約 3 分)。"
+        "choosePrompt": "クラウドサービスを選ぶと、複数のデバイス間でアクティビティデータを同期します。スクリーンショットはアップロードされません。"
       },
       "stats": {
         "pending": "保留中 {{count}} 件",
@@ -1099,7 +1098,47 @@
         "reauthTitle": "認証情報の有効期限が切れました。再ログインでトークンを更新してください",
         "signInWithGoogle": "Google でログイン",
         "signingIn": "ブラウザを開いています…",
-        "configureOAuth": "OAuth を設定"
+        "configureOAuth": "OAuth を設定",
+        "change": "変更",
+        "changeTitle": "同期サービスを変更"
+      },
+      "services": {
+        "googleDrive": {
+          "name": "Google Drive",
+          "desc": "Google アカウントで同期します。"
+        },
+        "webdav": {
+          "name": "WebDAV",
+          "desc": "Nutstore（坚果云）、Nextcloud など WebDAV に対応したサービス。"
+        },
+        "nutstore": {
+          "name": "Nutstore（坚果云）"
+        }
+      },
+      "chooser": {
+        "header": "同期サービスを選択",
+        "current": "使用中",
+        "pick": "選択",
+        "changeAccount": "アカウントを変更",
+        "back": "戻る",
+        "notice": "変更すると、このデバイスの記録は新しいクラウドにもう一度アップロードされます。互いに同期を続けるには、ほかのデバイスも同じサービスに変更してください。元のクラウドのデータは削除されません。"
+      },
+      "webdav": {
+        "hint": "Nutstore（坚果云）のアドレスは {{url}} です。パスワードには、ログインパスワードではなく、Nutstore のウェブサイトのアカウント設定で作成したアプリパスワードを使ってください。",
+        "url": "サーバーのアドレス",
+        "user": "ユーザー名",
+        "password": "アプリパスワード",
+        "showPassword": "アプリパスワードを表示",
+        "hidePassword": "アプリパスワードを隠す",
+        "connect": "接続",
+        "connecting": "接続中…",
+        "signedOutPrompt": "{{account}} からログアウトしました。アプリパスワードを入力すると再接続できます。",
+        "errors": {
+          "wrongPassword": "ユーザー名またはアプリパスワードが正しくありません。",
+          "notHttps": "アドレスは https:// で始めてください。",
+          "invalidUrl": "アドレスの形式が正しくありません。",
+          "other": "接続できませんでした：{{message}}"
+        }
       },
       "datasets": {
         "title": "同期する内容",

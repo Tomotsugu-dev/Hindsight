@@ -48,9 +48,11 @@ export function Sidebar() {
     };
   }, []);
   const signedIn = auth?.signedIn ?? false;
-  // 同步行文案：登录后显示邮箱（缺省 fallback 已连接），未登录显示"未登录"
+  // 同步行文案：登录后显示账号（Google 的邮箱，WebDAV 的用户名；缺省 fallback 已连接），
+  // 未登录显示"未登录"
+  const account = auth?.backend === "webdav" ? auth.webdavUser : auth?.email;
   const syncLabel = signedIn
-    ? auth?.email ?? t("sidebar.sync.connected")
+    ? account ?? t("sidebar.sync.connected")
     : t("sidebar.sync.signedOut");
 
   const captureUI: "ok" | "idle" | "error" = !status

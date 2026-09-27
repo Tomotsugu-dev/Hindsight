@@ -220,7 +220,8 @@
         "removeDeviceLabel": "移除本设备",
         "removeDeviceDescription": "从云端移除本设备的所有数据",
         "removeDeviceBusy": "移除中…",
-        "removeDeviceNeedsSignIn": "需要先登录 Google 账号。"
+        "removeDeviceNeedsSignIn": "需要先登录 Google 账号。",
+        "removeDeviceNotOnWebdav": "WebDAV 上暂不支持。"
       },
       "purgeDialog": {
         "purgeDbTitle": "清空本机数据？",
@@ -1074,13 +1075,11 @@
     },
     "cloud": {
       "state": {
-        "connected": "已连接 Google Drive",
-        "notSignedIn": "未连接",
-        "notConfigured": "未配置"
+        "connectedTo": "已连接 {{name}}",
+        "notSignedIn": "未连接"
       },
       "desc": {
-        "signInPrompt": "用 Google 账号登录，活动数据通过 Drive 在多设备间同步。截图不上传。",
-        "configurePrompt": "首次使用前需要在 Google Cloud Console 创建一个 OAuth 凭证（约 3 分钟）。"
+        "choosePrompt": "选一个云服务，在多台设备间同步活动数据。截图不上传。"
       },
       "stats": {
         "pending": "待发送 {{count}}",
@@ -1099,7 +1098,47 @@
         "reauthTitle": "凭证失效，重新登录刷新 token",
         "signInWithGoogle": "用 Google 登录",
         "signingIn": "浏览器中…",
-        "configureOAuth": "配置 OAuth"
+        "configureOAuth": "配置 OAuth",
+        "change": "更换",
+        "changeTitle": "更换同步服务"
+      },
+      "services": {
+        "googleDrive": {
+          "name": "Google Drive",
+          "desc": "用 Google 账号同步。"
+        },
+        "webdav": {
+          "name": "WebDAV",
+          "desc": "坚果云、Nextcloud 等支持 WebDAV 的网盘。"
+        },
+        "nutstore": {
+          "name": "坚果云"
+        }
+      },
+      "chooser": {
+        "header": "选择同步服务",
+        "current": "正在使用",
+        "pick": "选择",
+        "changeAccount": "换账号",
+        "back": "返回",
+        "notice": "更换后，本机的记录会重新上传到新的云；其他设备也要换过来，才能继续互相同步。原来那边的数据不会删。"
+      },
+      "webdav": {
+        "hint": "坚果云的地址是 {{url}}。密码请用在坚果云网页的账户设置里生成的应用密码，不是登录密码。",
+        "url": "服务器地址",
+        "user": "用户名",
+        "password": "应用密码",
+        "showPassword": "显示应用密码",
+        "hidePassword": "隐藏应用密码",
+        "connect": "连接",
+        "connecting": "连接中…",
+        "signedOutPrompt": "已退出 {{account}}，输入应用密码即可重新连接。",
+        "errors": {
+          "wrongPassword": "用户名或应用密码不对。",
+          "notHttps": "地址要以 https:// 开头。",
+          "invalidUrl": "地址格式不对。",
+          "other": "连接失败：{{message}}"
+        }
       },
       "datasets": {
         "title": "同步内容",

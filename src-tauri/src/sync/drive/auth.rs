@@ -17,7 +17,7 @@ use base64::{engine::general_purpose, Engine as _};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use rusqlite::OptionalExtension;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
@@ -31,49 +31,6 @@ use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
 const OAUTH_TIMEOUT_SECS: u64 = 180;
-
-/// What the Devices page shows: whether anyone is signed in, which account, and
-/// whether the "Sign in with Google" button is enabled. Returned by `auth_status`
-/// and when sign-in completes.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthState {
-    pub signed_in: bool,
-    pub uid: Option<String>,
-    pub email: Option<String>,
-    /// Google OAuth client_id / client_secret 是否齐全（决定 UI 上"用 Google 登录"按钮是否可点）
-    pub configured: bool,
-}
-
-/// Get the current authentication state from the local database.
-pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
-    let cfg = settings::load(pool).await.unwrap_or_default();
-    let configured =
-        !cfg.google_client_id.trim().is_empty() && !cfg.google_client_secret.trim().is_empty();
-
-    let row: Option<(String, String)> = pool
-        .0
-        .call(|conn| {
-            let r = conn
-                .query_row("SELECT uid, email FROM auth_state WHERE id = 1", [], |r| {
-                    Ok((
-                        r.get::<_, Option<String>>(0)?.unwrap_or_default(),
-                        r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                    ))
-                })
-                .ok();
-            Ok(r)
-        })
-        .await?;
-    let (uid, email) = row.unwrap_or_default();
-    let signed_in = !uid.is_empty();
-    Ok(AuthState {
-        signed_in,
-        uid: if uid.is_empty() { None } else { Some(uid) },
-        email: if email.is_empty() { None } else { Some(email) },
-        configured,
-    })
-}
 
 pub struct GoogleSignIn {
     pub uid: String,

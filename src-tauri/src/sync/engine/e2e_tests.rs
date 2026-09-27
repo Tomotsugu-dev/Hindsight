@@ -194,7 +194,7 @@ async fn sum_secs_for_device(dev: &TestDevice, device_id: &str) -> i64 {
 }
 
 async fn signed_in(dev: &TestDevice) -> bool {
-    crate::sync::drive::auth::current_state(&dev.pool)
+    crate::sync::backend_switch::current_state(&dev.pool)
         .await
         .unwrap()
         .signed_in
