@@ -1137,6 +1137,7 @@
           "wrongPassword": "El nombre de usuario o la contraseña de aplicación no son correctos.",
           "notHttps": "La dirección debe empezar por https://.",
           "invalidUrl": "La dirección no es válida.",
+          "serverBusy": "La nube está limitando el acceso: demasiadas solicitudes en poco tiempo, o el servicio no está disponible temporalmente. Vuelve a intentar la conexión más tarde.",
           "other": "No se pudo conectar: {{message}}"
         }
       },
@@ -1172,6 +1173,7 @@
       "credExpired": "Credenciales caducadas. Vuelve a iniciar sesión.",
       "outOfSpace": "El almacenamiento en la nube está lleno. Libera espacio o amplía tu plan y la sincronización continuará sola.",
       "accountExpired": "La cuenta en la nube ha caducado. Renuévala y la sincronización continuará sola.",
+      "serverBusy": "La nube está limitando el acceso: demasiadas solicitudes en poco tiempo, o el servicio no está disponible temporalmente. La sincronización continuará sola en un rato.",
       "transient": "La sincronización encontró un error temporal; reintentando automáticamente…"
     },
     "setup": {

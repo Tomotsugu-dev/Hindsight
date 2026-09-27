@@ -32,6 +32,9 @@ pub(super) const ERR_PREFIX_CRED_EXPIRED: &str = "[CRED_EXPIRED] ";
 pub(super) const ERR_PREFIX_OUT_OF_SPACE: &str = "[OUT_OF_SPACE] ";
 /// Prefix of `last_error` when the cloud account has expired.
 pub(super) const ERR_PREFIX_ACCOUNT_EXPIRED: &str = "[ACCOUNT_EXPIRED] ";
+/// Prefix of `last_error` when the cloud is rate-limiting or briefly
+/// unavailable. Nutstore answers 503 when it rate-limits.
+pub(super) const ERR_PREFIX_SERVER_BUSY: &str = "[SERVER_BUSY] ";
 /// Prefix of `last_error` when the next round will retry on its own.
 pub(super) const ERR_PREFIX_TRANSIENT: &str = "[TRANSIENT] ";
 
@@ -42,7 +45,8 @@ fn sync_error_prefix(kind: FailureKind) -> &'static str {
         FailureKind::CredentialInvalid => ERR_PREFIX_CRED_EXPIRED,
         FailureKind::OutOfSpace => ERR_PREFIX_OUT_OF_SPACE,
         FailureKind::AccountExpired => ERR_PREFIX_ACCOUNT_EXPIRED,
-        FailureKind::ServerBusy | FailureKind::Transient => ERR_PREFIX_TRANSIENT,
+        FailureKind::ServerBusy => ERR_PREFIX_SERVER_BUSY,
+        FailureKind::Transient => ERR_PREFIX_TRANSIENT,
     }
 }
 
@@ -318,5 +322,22 @@ async fn run_loop(inner: Arc<Inner>) {
         drop(_in_flight); // sleep 期间不算"同步中"
 
         tokio::time::sleep(inner.cloud().push_interval()).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 「云同步」页按前缀选提示：限流要有自己的前缀，不能和「下一轮自动重试」混在一起。
+    #[test]
+    fn server_busy_has_its_own_prefix() {
+        let e = Error::WebDavHttp {
+            stage: "propfind",
+            status: 503,
+            body: "BlockedTemporarily".to_string(),
+        };
+        assert!(format_sync_error(FailureKind::ServerBusy, &e).starts_with("[SERVER_BUSY] "));
+        assert!(format_sync_error(FailureKind::Transient, &e).starts_with("[TRANSIENT] "));
     }
 }
