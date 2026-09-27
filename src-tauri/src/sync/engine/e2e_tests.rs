@@ -1661,8 +1661,8 @@ async fn webdav_out_of_space_or_expired_account_waits_for_the_user() {
     }
 }
 
-/// 服务器忙（503）：push 传第一个文件失败就停下，outbox 行不加重试次数，设备页显示暂时
-/// 失败；pull 下第一个文件失败就停下，游标不动。服务器好了，下一轮都补上。
+/// 服务器忙（503）：push 传第一个文件失败就停下，outbox 行不加重试次数，设备页显示云端
+/// 限制了访问；pull 下第一个文件失败就停下，游标不动。服务器好了，下一轮都补上。
 #[tokio::test]
 async fn webdav_a_busy_server_ends_the_round() {
     let dav = Arc::new(FakeDav::new());
@@ -1682,7 +1682,7 @@ async fn webdav_a_busy_server_ends_the_round() {
         .count();
     assert_eq!(puts, 1, "第一个文件失败就停下");
     let last_error = a.engine.status().await.last_error.unwrap();
-    assert!(last_error.starts_with("[TRANSIENT] "), "{last_error}");
+    assert!(last_error.starts_with("[SERVER_BUSY] "), "{last_error}");
     let attempts: i64 = a
         .pool
         .0

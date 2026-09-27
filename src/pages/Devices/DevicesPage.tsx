@@ -290,8 +290,11 @@ function CloudSyncCard({
       // 拉到新的远端活动后，让 device 列表也刷一下
       void reloadDevices();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      refreshSync();
+      // 失败的一轮已被引擎分好类记进 lastError，交给下面按前缀显示提示；
+      // 没记下来的（比如「同步已在进行中」）才原样显示。
+      const status = await api.syncStatus().catch(() => null);
+      if (status) setSync(status);
+      if (!status?.lastError) setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSyncBusy(false);
     }
@@ -332,6 +335,7 @@ function CloudSyncCard({
   //   [CRED_EXPIRED] —— refresh_token 真失效 / AES 密文解不开 / scope 不足，必须用户重登
   //   [OUT_OF_SPACE] —— 云端空间满了，用户清理或扩容后自动继续
   //   [ACCOUNT_EXPIRED] —— 云端账号过期了（坚果云），用户续费后自动继续
+  //   [SERVER_BUSY]  —— 云端限流或暂时不可用（坚果云限流回 503），过一阵自动继续
   //   [TRANSIENT]    —— 网络抖动 / Drive 5xx / keyring 临时读失败，下一轮自动重试
   // 只有 CRED_EXPIRED 才把"退出"换成"重新登录"，避免一个网络抖动就催用户重登。
   const errorPrefixed = (prefix: string) =>
@@ -339,9 +343,10 @@ function CloudSyncCard({
   const authExpired = errorPrefixed("[CRED_EXPIRED]");
   const outOfSpace = errorPrefixed("[OUT_OF_SPACE]");
   const accountExpired = errorPrefixed("[ACCOUNT_EXPIRED]");
+  const serverBusy = errorPrefixed("[SERVER_BUSY]");
   const transientError = errorPrefixed("[TRANSIENT]");
   const lastErrorDisplay = sync?.lastError?.replace(
-    /^\[(?:CRED_EXPIRED|OUT_OF_SPACE|ACCOUNT_EXPIRED|TRANSIENT)\]\s*/,
+    /^\[(?:CRED_EXPIRED|OUT_OF_SPACE|ACCOUNT_EXPIRED|SERVER_BUSY|TRANSIENT)\]\s*/,
     "",
   );
 
@@ -647,9 +652,11 @@ function CloudSyncCard({
               ? t("devices.errors.outOfSpace")
               : accountExpired
                 ? t("devices.errors.accountExpired")
-                : transientError
-                  ? t("devices.errors.transient")
-                  : lastErrorDisplay}
+                : serverBusy
+                  ? t("devices.errors.serverBusy")
+                  : transientError
+                    ? t("devices.errors.transient")
+                    : lastErrorDisplay}
         </div>
       )}
     </div>

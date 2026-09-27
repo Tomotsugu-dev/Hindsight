@@ -36,9 +36,17 @@ describe("webdavAccountLabel", () => {
 });
 
 describe("connectErrorKind", () => {
-  it("认出后端的三种错误", () => {
+  it("认出后端的四种错误", () => {
     expect(connectErrorKind("webdav propfind returned 401: Unauthorized")).toBe(
       "wrongPassword",
+    );
+    expect(
+      connectErrorKind(
+        "webdav propfind returned 503: <s:exception>BlockedTemporarily</s:exception>",
+      ),
+    ).toBe("serverBusy");
+    expect(connectErrorKind("webdav propfind returned 429: Too Many Requests")).toBe(
+      "serverBusy",
     );
     expect(connectErrorKind("invalid input: WebDAV URL must be https")).toBe("notHttps");
     expect(
@@ -49,6 +57,7 @@ describe("connectErrorKind", () => {
   it("其他错误原样显示", () => {
     expect(connectErrorKind("http: error sending request")).toBe("other");
     expect(connectErrorKind("webdav propfind returned 4010: x")).toBe("other");
+    expect(connectErrorKind("webdav propfind returned 5030: x")).toBe("other");
   });
 });
 

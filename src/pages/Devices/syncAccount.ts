@@ -33,10 +33,17 @@ export function webdavAccountLabel(url: string | null, user: string | null): str
 }
 
 /** 连接 WebDAV 失败时给用户看哪句话；认不出的原样显示。 */
-export type ConnectErrorKind = "wrongPassword" | "notHttps" | "invalidUrl" | "other";
+export type ConnectErrorKind =
+  | "wrongPassword"
+  | "serverBusy"
+  | "notHttps"
+  | "invalidUrl"
+  | "other";
 
 export function connectErrorKind(message: string): ConnectErrorKind {
   if (/returned 401\b/.test(message)) return "wrongPassword";
+  // 429 / 503：云端限流或暂时不可用（坚果云限流回 503）。
+  if (/returned (?:429|503)\b/.test(message)) return "serverBusy";
   if (message.includes("must be https")) return "notHttps";
   if (message.includes("URL is invalid")) return "invalidUrl";
   return "other";

@@ -1190,6 +1190,7 @@ mod tests {
     }
 
     /// 507 是空间满；403 只有响应体里有 AccountExpired 才是账号过期；429、503 是服务器忙。
+    /// 坚果云限流就回 503，响应体是 BlockedTemporarily。
     #[test]
     fn failure_kind_sorts_507_403_429_503() {
         let put = |status, body: &str| Error::WebDavHttp {
@@ -1208,6 +1209,14 @@ mod tests {
         );
         assert_eq!(failure_kind(&put(429, "")), FailureKind::ServerBusy);
         assert_eq!(failure_kind(&put(503, "")), FailureKind::ServerBusy);
+        assert_eq!(
+            failure_kind(&put(
+                503,
+                "<s:exception>BlockedTemporarily</s:exception>\
+                 <s:message>Too many requests are received recently</s:message>"
+            )),
+            FailureKind::ServerBusy
+        );
     }
 
     // ───── 各家服务器的上传方式 ─────

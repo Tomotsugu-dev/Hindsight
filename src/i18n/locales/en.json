@@ -1137,6 +1137,7 @@
           "wrongPassword": "The user name or app password is wrong.",
           "notHttps": "The address must start with https://.",
           "invalidUrl": "This address is not valid.",
+          "serverBusy": "The cloud is limiting access: too many requests in a short time, or the service is briefly unavailable. Try connecting again later.",
           "other": "Could not connect: {{message}}"
         }
       },
@@ -1172,6 +1173,7 @@
       "credExpired": "Credentials expired. Please sign in again.",
       "outOfSpace": "The cloud storage is full. Free up space or upgrade your plan, and sync will continue on its own.",
       "accountExpired": "The cloud account has expired. Renew it, and sync will continue on its own.",
+      "serverBusy": "The cloud is limiting access: too many requests in a short time, or the service is briefly unavailable. Sync will continue on its own after a while.",
       "transient": "Sync hit a transient error; retrying automatically…"
     },
     "setup": {
