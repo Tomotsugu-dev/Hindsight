@@ -4,7 +4,9 @@
   "rules": [
     {
       "category": "browse",
-      "processNames": []
+      "processNames": [
+        "qq瀏覽器"
+      ]
     },
     {
       "category": "code",
@@ -25,18 +27,33 @@
       "processNames": []
     },
     {
-      "category": "fun",
+      "category": "office",
       "processNames": [
-        "音樂",
+        "郵件",
+        "備忘錄",
+        "行事曆", "日曆",
+        "提醒事項",
+        "騰訊文檔"
+      ]
+    },
+    {
+      "category": "game",
+      "processNames": [
         "崩壞3rd",
         "崩壞：星穹鐵道",
         "絕區零"
       ]
     },
     {
+      "category": "video",
+      "processNames": [
+        "音樂"
+      ]
+    },
+    {
       "category": "other",
       "processNames": [
-        "檔案總管",
+        "檔案總管", "windows 檔案總管",
         "工作管理員",
         "設定",
         "系統設定",
@@ -44,7 +61,9 @@
         "截圖",
         "預覽程式",
         "檔案",
-        "相片"
+        "相片",
+        "活動監視器",
+        "計算機"
       ]
     }
   ]
