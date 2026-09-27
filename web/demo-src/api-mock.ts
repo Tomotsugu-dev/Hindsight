@@ -592,6 +592,7 @@ export const api = {
   signInWithGoogle: async (): Promise<AuthState> => {
     // 模拟登录成功
     state.authState = {
+      ...structuredClone(mockAuthState),
       signedIn: true,
       uid: "demo-uid",
       email: "demo@hindsight.app",
@@ -601,6 +602,16 @@ export const api = {
   },
   signOut: async (): Promise<void> => {
     state.authState = structuredClone(mockAuthState);
+  },
+  connectWebdav: async (serverUrl: string, user: string): Promise<void> => {
+    // 模拟连接成功
+    state.authState = {
+      ...structuredClone(mockAuthState),
+      backend: "webdav",
+      signedIn: true,
+      webdavUrl: serverUrl,
+      webdavUser: user,
+    };
   },
   syncStatus: async (): Promise<SyncStatus> => structuredClone(state.syncStatus),
   syncNow: async (): Promise<void> => {

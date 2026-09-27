@@ -300,6 +300,76 @@
   cursor: not-allowed;
 }
 
+/* —— 选择同步服务：两张并排的服务卡 —— */
+.serviceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.serviceCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.serviceCardCurrent {
+  border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border-default));
+}
+
+.serviceName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.serviceName svg {
+  color: var(--color-accent);
+}
+
+.serviceDesc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.serviceFoot {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.serviceCurrent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent);
+}
+
+/* WebDAV 连接表单 */
+.davForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 表单底部的「连接」按钮，靠右放 */
+.davSubmit {
+  align-self: flex-end;
+}
+
 /* auth 状态还没拿到时占位——尺寸跟 .smallBtn 同高，宽度按 "Sync Now" 文案估的。
    静态淡灰底 + 轻 pulse 动画，避免渲染出错误的 connectBtn(蓝)/smallBtn(灰) 然后秒切。 */
 .syncActionsSkeleton {
@@ -354,11 +424,16 @@
 .setupWrap {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 360ms var(--ease-out);
+  /* 收起时抵掉卡片 16px 的间隔：高度为 0 的面板也占一格间隔，不抵掉就空出一块 */
+  margin-top: -16px;
+  transition:
+    grid-template-rows 360ms var(--ease-out),
+    margin-top 360ms var(--ease-out);
 }
 
 .setupWrapOpen {
   grid-template-rows: 1fr;
+  margin-top: 0;
 }
 
 .setupInner {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowLeftRight,
   Check,
   ChevronRight,
   Cloud,
@@ -13,8 +14,10 @@ import {
   LogOut,
   Pencil,
   RefreshCw,
+  Server,
   Settings2,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { listen } from "@tauri-apps/api/event";
@@ -28,6 +31,12 @@ import { logError } from "../../lib/logger";
 import { api, OAUTH_URL_EVENT, type AuthState, type SyncStatus } from "../../api/hindsight";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SyncOptInDialog } from "./SyncOptInDialog";
+import {
+  connectErrorKind,
+  NUTSTORE_DAV_URL,
+  serviceKind,
+  webdavAccountLabel,
+} from "./syncAccount";
 import styles from "./DevicesPage.module.css";
 
 /** 可选上云三挡的字段名(settings 布尔键)。 */
@@ -49,6 +58,15 @@ export default function DevicesPage() {
   const [forgetTarget, setForgetTarget] = useState<Device | null>(null);
   // 正在跑后端 forget 的设备 id（按 id 锁，避免多张卡都被禁用）
   const [forgetBusyId, setForgetBusyId] = useState<string | null>(null);
+
+  // 同步账号：云同步卡片要用，「从云端移除」按钮也要看后端（WebDAV 上还不能移除）
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  useEffect(() => {
+    api.authStatus().then(setAuth).catch(() => setAuth(null));
+  }, []);
+  const refreshAuth = () => {
+    api.authStatus().then(setAuth).catch(() => setAuth(null));
+  };
 
   const runForget = async () => {
     if (!forgetTarget) return;
@@ -80,7 +98,7 @@ export default function DevicesPage() {
         <p className={styles.meta}>{t("devices.meta")}</p>
       </header>
 
-      <CloudSyncCard />
+      <CloudSyncCard auth={auth} setAuth={setAuth} refreshAuth={refreshAuth} />
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("devices.sectionSelf")}</h2>
@@ -104,6 +122,7 @@ export default function DevicesPage() {
               key={d.id}
               device={d}
               busy={forgetBusyId === d.id}
+              canForget={auth?.backend !== "webdav"}
               onForget={() => setForgetTarget(d)}
             />
           ))
@@ -142,17 +161,28 @@ function useFmtRelative() {
   };
 }
 
-function CloudSyncCard() {
+function CloudSyncCard({
+  auth,
+  setAuth,
+  refreshAuth,
+}: {
+  auth: AuthState | null;
+  setAuth: (next: AuthState | null) => void;
+  refreshAuth: () => void;
+}) {
   const { t } = useTranslation();
   const fmtRelative = useFmtRelative();
   const { settings, update } = useSettings();
   const { reload: reloadDevices } = useDeviceFilter();
-  const [auth, setAuth] = useState<AuthState | null>(null);
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  // 「选择同步服务」面板：没登录时一直开着，登录后点「更换」才开。
+  // 面板里显示两张服务卡，或者 WebDAV 的连接表单
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [chooserView, setChooserView] = useState<ChooserView>("cards");
   // 可选上云:待确认的数据集(开启前弹琥珀警告;关闭直接生效)
   const [optInPending, setOptInPending] = useState<OptDatasetField | null>(null);
   // OAuth 手动兜底:浏览器打开失败立即显示复制链接;"成功"但几秒内未完成也显示
@@ -162,7 +192,6 @@ function CloudSyncCard() {
   const [oauthCopied, setOauthCopied] = useState(false);
 
   useEffect(() => {
-    api.authStatus().then(setAuth).catch(() => setAuth(null));
     const fetchSync = () => {
       api.syncStatus().then(setSync).catch(() => {});
     };
@@ -171,19 +200,22 @@ function CloudSyncCard() {
     return () => window.clearInterval(t);
   }, []);
 
-  // 没填凭证 → 默认展开设置面板；填好且未登录 → 收起
-  // 仅订阅 configured / signedIn 两个字段的变化，整个 auth 对象引用变更不应触发
+  // 没登录：打开选择面板；上次用的是 WebDAV 就直接显示 WebDAV 表单，地址和用户名已填好。
+  // 登录后：收起所有面板。仅订阅这两个字段的变化，整个 auth 对象引用变更不应触发
   useEffect(() => {
     if (auth && !auth.signedIn) {
-      setSetupOpen(!auth.configured);
+      setChooserOpen(true);
+      setChooserView(auth.backend === "webdav" ? "webdav" : "cards");
     } else if (auth?.signedIn) {
+      setChooserOpen(false);
       setSetupOpen(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth?.configured, auth?.signedIn]);
+  }, [auth?.signedIn, auth?.backend]);
 
-  const refreshAuth = () => {
-    api.authStatus().then(setAuth).catch(() => setAuth(null));
+  const openChooser = (view: ChooserView) => {
+    setChooserView(view);
+    setChooserOpen(true);
   };
   const refreshSync = () => {
     api.syncStatus().then(setSync).catch(() => {});
@@ -276,13 +308,23 @@ function CloudSyncCard() {
     settings?.googleClientId.trim() && settings?.googleClientSecret.trim()
   );
   const canSignIn = configured || credsFilled;
+  const onWebdav = auth?.backend === "webdav";
+  const serviceName = t(`devices.cloud.services.${serviceKind(auth)}.name`);
+  const webdavAccount = webdavAccountLabel(
+    auth?.webdavUrl ?? null,
+    auth?.webdavUser ?? null,
+  );
+  // 选 Google：有 OAuth 凭证就直接登录，没有就先展开凭证面板
+  const onPickGoogle = canSignIn ? onSignIn : () => setSetupOpen(true);
+  // 凭证失效时的「重新登录」：Google 重走 OAuth，WebDAV 重新填密码
+  const onReauth = onWebdav ? () => openChooser("webdav") : onSignIn;
 
   // 当填好凭证后，刷新一下 auth 让 configured 同步过来（用于按钮可点态）
   useEffect(() => {
     if (credsFilled && !configured && !signedIn) {
       api.authStatus().then(setAuth).catch(() => {});
     }
-  }, [credsFilled, configured, signedIn]);
+  }, [credsFilled, configured, signedIn, setAuth]);
 
   if (!settings) return null;
 
@@ -324,17 +366,19 @@ function CloudSyncCard() {
         <div className={styles.syncBody}>
           <div className={styles.syncTitle}>
             {signedIn
-              ? t("devices.cloud.state.connected")
-              : canSignIn
-                ? t("devices.cloud.state.notSignedIn")
-                : t("devices.cloud.state.notConfigured")}
+              ? t("devices.cloud.state.connectedTo", { name: serviceName })
+              : t("devices.cloud.state.notSignedIn")}
           </div>
           <div className={styles.syncMeta}>
             {signedIn
-              ? auth?.email ?? auth?.uid ?? ""
-              : canSignIn
-                ? t("devices.cloud.desc.signInPrompt")
-                : t("devices.cloud.desc.configurePrompt")}
+              ? onWebdav
+                ? webdavAccount
+                : auth?.email ?? auth?.uid ?? ""
+              : onWebdav
+                ? t("devices.cloud.webdav.signedOutPrompt", {
+                    account: webdavAccount,
+                  })
+                : t("devices.cloud.desc.choosePrompt")}
           </div>
           {signedIn && sync && (
             <div className={styles.syncStats}>
@@ -369,7 +413,7 @@ function CloudSyncCard() {
               )}
             </div>
           )}
-          {!signedIn && canSignIn && !setupOpen && (
+          {!signedIn && canSignIn && !setupOpen && !onWebdav && (
             <button
               type="button"
               className={styles.editCredsLink}
@@ -389,6 +433,18 @@ function CloudSyncCard() {
             />
           ) : signedIn ? (
             <>
+              <button
+                type="button"
+                className={styles.smallBtn}
+                onClick={() =>
+                  chooserOpen ? setChooserOpen(false) : openChooser("cards")
+                }
+                disabled={busy}
+                title={t("devices.cloud.actions.changeTitle")}
+              >
+                <ArrowLeftRight size={13} strokeWidth={1.85} />
+                {t("devices.cloud.actions.change")}
+              </button>
               <button
                 type="button"
                 className={styles.smallBtn}
@@ -426,7 +482,7 @@ function CloudSyncCard() {
                 className={`${styles.smallBtn} ${
                   authExpired ? styles.smallBtnAccent : styles.smallBtnDanger
                 }`}
-                onClick={authExpired ? onSignIn : onSignOut}
+                onClick={authExpired ? onReauth : onSignOut}
                 disabled={busy}
                 title={
                   authExpired
@@ -447,36 +503,49 @@ function CloudSyncCard() {
                 )}
               </button>
             </>
-          ) : canSignIn ? (
-            <button
-              type="button"
-              className={styles.connectBtn}
-              onClick={onSignIn}
-              disabled={busy}
-            >
-              <LogIn size={13} strokeWidth={2} />
-              {busy
-                ? t("devices.cloud.actions.signingIn")
-                : t("devices.cloud.actions.signInWithGoogle")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={styles.connectBtn}
-              onClick={() => setSetupOpen(true)}
-            >
-              <Settings2 size={13} strokeWidth={2} />
-              {t("devices.cloud.actions.configureOAuth")}
-            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div
+        className={`${styles.setupWrap} ${chooserOpen ? styles.setupWrapOpen : ""}`}
+        aria-hidden={!chooserOpen}
+      >
+        <div className={styles.setupInner}>
+          {chooserOpen && (
+            <ServiceChooser
+              current={signedIn ? (onWebdav ? "webdav" : "drive") : null}
+              view={chooserView}
+              onViewChange={setChooserView}
+              googleLabel={
+                busy
+                  ? t("devices.cloud.actions.signingIn")
+                  : canSignIn
+                    ? t("devices.cloud.actions.signInWithGoogle")
+                    : t("devices.cloud.actions.configureOAuth")
+              }
+              googleBusy={busy}
+              onPickGoogle={onPickGoogle}
+              initialUrl={auth?.webdavUrl ?? ""}
+              initialUser={auth?.webdavUser ?? ""}
+              onConnected={() => {
+                setChooserOpen(false);
+                setError(null);
+                refreshAuth();
+                refreshSync();
+                void reloadDevices();
+              }}
+              onCollapse={signedIn ? () => setChooserOpen(false) : undefined}
+            />
           )}
         </div>
       </div>
 
       <div
         className={`${styles.setupWrap} ${
-          setupOpen && !signedIn ? styles.setupWrapOpen : ""
+          setupOpen && (!signedIn || onWebdav) ? styles.setupWrapOpen : ""
         }`}
-        aria-hidden={!setupOpen || signedIn}
+        aria-hidden={!setupOpen || (signedIn && !onWebdav)}
       >
         <div className={styles.setupInner}>
           <SetupPanel
@@ -765,6 +834,272 @@ function SetupPanel({
   );
 }
 
+/** 「选择同步服务」面板里显示两张服务卡，还是 WebDAV 的连接表单。 */
+type ChooserView = "cards" | "webdav";
+
+/** 选择同步服务：Google Drive 和 WebDAV 两张卡；选了 WebDAV 换成它的连接表单。 */
+function ServiceChooser({
+  current,
+  view,
+  onViewChange,
+  googleLabel,
+  googleBusy,
+  onPickGoogle,
+  initialUrl,
+  initialUser,
+  onConnected,
+  onCollapse,
+}: {
+  /** 正在用的服务；没登录时是 null */
+  current: "drive" | "webdav" | null;
+  view: ChooserView;
+  onViewChange: (view: ChooserView) => void;
+  /** Google 卡的按钮文字：登录中 / 用 Google 登录 / 配置 OAuth */
+  googleLabel: string;
+  googleBusy: boolean;
+  onPickGoogle: () => void;
+  initialUrl: string;
+  initialUser: string;
+  onConnected: () => void;
+  /** 登录后才能收起；没登录时面板一直开着 */
+  onCollapse?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className={styles.setupPanel}>
+      <div className={styles.setupHeader}>
+        <ArrowLeftRight size={13} strokeWidth={2} />
+        <span>{t("devices.cloud.chooser.header")}</span>
+        {view === "webdav" ? (
+          <button
+            type="button"
+            className={styles.setupClose}
+            onClick={() => onViewChange("cards")}
+          >
+            {t("devices.cloud.chooser.back")}
+          </button>
+        ) : (
+          onCollapse && (
+            <button type="button" className={styles.setupClose} onClick={onCollapse}>
+              {t("devices.setup.collapse")}
+            </button>
+          )
+        )}
+      </div>
+      {view === "cards" ? (
+        <>
+          <div className={styles.serviceGrid}>
+            <ServiceCard
+              icon={Cloud}
+              name={t("devices.cloud.services.googleDrive.name")}
+              desc={t("devices.cloud.services.googleDrive.desc")}
+              current={current === "drive"}
+              actionLabel={
+                current === "drive" ? t("devices.cloud.chooser.changeAccount") : googleLabel
+              }
+              onAction={onPickGoogle}
+              disabled={googleBusy}
+            />
+            <ServiceCard
+              icon={Server}
+              name={t("devices.cloud.services.webdav.name")}
+              desc={t("devices.cloud.services.webdav.desc")}
+              current={current === "webdav"}
+              actionLabel={
+                current === "webdav"
+                  ? t("devices.cloud.chooser.changeAccount")
+                  : t("devices.cloud.chooser.pick")
+              }
+              onAction={() => onViewChange("webdav")}
+            />
+          </div>
+          {current && (
+            <div className={styles.stepDesc}>{t("devices.cloud.chooser.notice")}</div>
+          )}
+        </>
+      ) : (
+        <WebDavForm
+          initialUrl={initialUrl}
+          initialUser={initialUser}
+          onConnected={onConnected}
+        />
+      )}
+    </div>
+  );
+}
+
+function ServiceCard({
+  icon: Icon,
+  name,
+  desc,
+  current,
+  actionLabel,
+  onAction,
+  disabled,
+}: {
+  icon: LucideIcon;
+  name: string;
+  desc: string;
+  current: boolean;
+  actionLabel: string;
+  onAction: () => void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className={`${styles.serviceCard} ${current ? styles.serviceCardCurrent : ""}`}>
+      <div className={styles.serviceName}>
+        <Icon size={15} strokeWidth={1.85} />
+        {name}
+      </div>
+      <div className={styles.serviceDesc}>{desc}</div>
+      <div className={styles.serviceFoot}>
+        {current && (
+          <span className={styles.serviceCurrent}>
+            <Check size={12} strokeWidth={2.4} />
+            {t("devices.cloud.chooser.current")}
+          </span>
+        )}
+        <button
+          type="button"
+          className={current ? styles.smallBtn : styles.connectBtn}
+          onClick={onAction}
+          disabled={disabled}
+        >
+          {actionLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 连接 WebDAV：地址、用户名、应用密码。后端先试登录，连不上什么都不保存。 */
+function WebDavForm({
+  initialUrl,
+  initialUser,
+  onConnected,
+}: {
+  initialUrl: string;
+  initialUser: string;
+  onConnected: () => void;
+}) {
+  const { t } = useTranslation();
+  const [url, setUrl] = useState(initialUrl);
+  const [user, setUser] = useState(initialUser);
+  const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canConnect =
+    url.trim() !== "" && user.trim() !== "" && password !== "" && !busy;
+
+  const onConnect = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.connectWebdav(url.trim(), user.trim(), password);
+      onConnected();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      const kind = connectErrorKind(message);
+      setError(
+        kind === "other"
+          ? t("devices.cloud.webdav.errors.other", { message })
+          : t(`devices.cloud.webdav.errors.${kind}`),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className={styles.davForm}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (canConnect) void onConnect();
+      }}
+    >
+      <div className={styles.stepDesc}>
+        {t("devices.cloud.webdav.hint", { url: NUTSTORE_DAV_URL })}
+      </div>
+      <label className={styles.credField}>
+        <span className={styles.credLabel}>{t("devices.cloud.webdav.url")}</span>
+        <input
+          type="url"
+          className={styles.credInput}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder={NUTSTORE_DAV_URL}
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </label>
+      <label className={styles.credField}>
+        <span className={styles.credLabel}>{t("devices.cloud.webdav.user")}</span>
+        <input
+          type="text"
+          className={styles.credInput}
+          value={user}
+          onChange={(e) => setUser(e.target.value)}
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </label>
+      <label className={styles.credField}>
+        <span className={styles.credLabel}>{t("devices.cloud.webdav.password")}</span>
+        <div className={styles.credInputWrap}>
+          <input
+            type={passwordVisible ? "text" : "password"}
+            className={`${styles.credInput} ${styles.credInputWithBtn}`}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className={styles.credEyeBtn}
+            onClick={() => setPasswordVisible((v) => !v)}
+            aria-label={
+              passwordVisible
+                ? t("devices.cloud.webdav.hidePassword")
+                : t("devices.cloud.webdav.showPassword")
+            }
+            title={
+              passwordVisible
+                ? t("devices.setup.step4.hide")
+                : t("devices.setup.step4.show")
+            }
+            tabIndex={-1}
+          >
+            {passwordVisible ? (
+              <EyeOff size={14} strokeWidth={1.85} />
+            ) : (
+              <Eye size={14} strokeWidth={1.85} />
+            )}
+          </button>
+        </div>
+      </label>
+      {error && <div className={styles.syncError}>{error}</div>}
+      <button
+        type="submit"
+        className={`${styles.connectBtn} ${styles.davSubmit}`}
+        disabled={!canConnect}
+      >
+        {busy ? (
+          <Loader2 size={13} strokeWidth={2} className={styles.spinning} />
+        ) : (
+          <LogIn size={13} strokeWidth={2} />
+        )}
+        {busy
+          ? t("devices.cloud.webdav.connecting")
+          : t("devices.cloud.webdav.connect")}
+      </button>
+    </form>
+  );
+}
+
 function SelfRow({
   device,
   onRename,
@@ -905,11 +1240,14 @@ function SelfRow({
 function OtherRow({
   device,
   busy,
+  canForget,
   onForget,
 }: {
   device: Device;
   /** 正在跑 forget_remote_device —— 按钮 disable + 显示 spinner */
   busy: boolean;
+  /** WebDAV 上还不能从云端移除设备，不显示按钮 */
+  canForget: boolean;
   onForget: () => void;
 }) {
   const { t } = useTranslation();
@@ -933,20 +1271,22 @@ function OtherRow({
         </div>
       </div>
       <div className={styles.deviceActions}>
-        <button
-          type="button"
-          className={styles.actionBtn}
-          onClick={onForget}
-          disabled={busy}
-          aria-label={t("devices.other.forgetAria", { name: device.name })}
-          title={t("devices.other.forgetTitle")}
-        >
-          {busy ? (
-            <Loader2 size={14} strokeWidth={1.85} className={styles.spinning} />
-          ) : (
-            <Trash2 size={14} strokeWidth={1.85} />
-          )}
-        </button>
+        {canForget && (
+          <button
+            type="button"
+            className={styles.actionBtn}
+            onClick={onForget}
+            disabled={busy}
+            aria-label={t("devices.other.forgetAria", { name: device.name })}
+            title={t("devices.other.forgetTitle")}
+          >
+            {busy ? (
+              <Loader2 size={14} strokeWidth={1.85} className={styles.spinning} />
+            ) : (
+              <Trash2 size={14} strokeWidth={1.85} />
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

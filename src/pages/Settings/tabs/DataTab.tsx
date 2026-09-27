@@ -26,6 +26,7 @@ import { ExportUsageDialog } from "../../../components/ExportUsageDialog/ExportU
 import { useSettings } from "../../../state/settings";
 import { api, type AuthState, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
+import { canClearCloud } from "../../Devices/syncAccount";
 import styles from "./DataTab.module.css";
 
 function fmtBytes(n: number): string {
@@ -74,7 +75,8 @@ export default function DataTab() {
     window.addEventListener("focus", fetchAuth);
     return () => window.removeEventListener("focus", fetchAuth);
   }, []);
-  const signedIn = auth?.signedIn ?? false;
+  const canRemove = canClearCloud(auth);
+  const onWebdav = auth?.backend === "webdav";
 
   if (!settings) return null;
 
@@ -293,9 +295,11 @@ export default function DataTab() {
         <Row
           label={t("settings.data.danger.removeDeviceLabel")}
           description={
-            signedIn
-              ? t("settings.data.danger.removeDeviceDescription")
-              : t("settings.data.danger.removeDeviceNeedsSignIn")
+            onWebdav
+              ? t("settings.data.danger.removeDeviceNotOnWebdav")
+              : canRemove
+                ? t("settings.data.danger.removeDeviceDescription")
+                : t("settings.data.danger.removeDeviceNeedsSignIn")
           }
           icon={Cloud}
           tone="danger"
@@ -306,7 +310,7 @@ export default function DataTab() {
             busyTarget={busyTarget}
             busyLabel={t("settings.data.danger.removeDeviceBusy")}
             idleLabel={t("settings.data.danger.removeDeviceLabel")}
-            disabled={!signedIn}
+            disabled={!canRemove}
             onClick={() => setRemoveOpen(true)}
           />
         </Row>

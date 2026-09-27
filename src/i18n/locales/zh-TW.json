@@ -220,7 +220,8 @@
         "removeDeviceLabel": "移除本裝置",
         "removeDeviceDescription": "從雲端移除本裝置的所有資料",
         "removeDeviceBusy": "移除中…",
-        "removeDeviceNeedsSignIn": "需要先登入 Google 帳號。"
+        "removeDeviceNeedsSignIn": "需要先登入 Google 帳號。",
+        "removeDeviceNotOnWebdav": "WebDAV 上暫不支援。"
       },
       "purgeDialog": {
         "purgeDbTitle": "清空本機資料？",
@@ -1074,13 +1075,11 @@
     },
     "cloud": {
       "state": {
-        "connected": "已連線 Google Drive",
-        "notSignedIn": "未連線",
-        "notConfigured": "未配置"
+        "connectedTo": "已連線 {{name}}",
+        "notSignedIn": "未連線"
       },
       "desc": {
-        "signInPrompt": "用 Google 賬號登入，活動資料通過 Drive 在多裝置間同步。截圖不上傳。",
-        "configurePrompt": "首次使用前需要在 Google Cloud Console 建立一個 OAuth 憑證（約 3 分鐘）。"
+        "choosePrompt": "選一個雲端服務，在多台裝置間同步活動資料。截圖不上傳。"
       },
       "stats": {
         "pending": "待發送 {{count}}",
@@ -1099,7 +1098,47 @@
         "reauthTitle": "憑證失效，重新登入重新整理 token",
         "signInWithGoogle": "用 Google 登入",
         "signingIn": "瀏覽器中…",
-        "configureOAuth": "配置 OAuth"
+        "configureOAuth": "配置 OAuth",
+        "change": "更換",
+        "changeTitle": "更換同步服務"
+      },
+      "services": {
+        "googleDrive": {
+          "name": "Google Drive",
+          "desc": "用 Google 帳號同步。"
+        },
+        "webdav": {
+          "name": "WebDAV",
+          "desc": "堅果雲、Nextcloud 等支援 WebDAV 的雲端硬碟。"
+        },
+        "nutstore": {
+          "name": "堅果雲"
+        }
+      },
+      "chooser": {
+        "header": "選擇同步服務",
+        "current": "正在使用",
+        "pick": "選擇",
+        "changeAccount": "換帳號",
+        "back": "返回",
+        "notice": "更換後，本機的紀錄會重新上傳到新的雲端；其他裝置也要換過來，才能繼續互相同步。原來那邊的資料不會刪除。"
+      },
+      "webdav": {
+        "hint": "堅果雲的地址是 {{url}}。密碼請用在堅果雲網頁的帳號設定裡產生的應用程式密碼，不是登入密碼。",
+        "url": "伺服器地址",
+        "user": "使用者名稱",
+        "password": "應用程式密碼",
+        "showPassword": "顯示應用程式密碼",
+        "hidePassword": "隱藏應用程式密碼",
+        "connect": "連線",
+        "connecting": "連線中…",
+        "signedOutPrompt": "已登出 {{account}}，輸入應用程式密碼即可重新連線。",
+        "errors": {
+          "wrongPassword": "使用者名稱或應用程式密碼不對。",
+          "notHttps": "地址要以 https:// 開頭。",
+          "invalidUrl": "地址格式不對。",
+          "other": "連線失敗：{{message}}"
+        }
       },
       "datasets": {
         "title": "同步內容",

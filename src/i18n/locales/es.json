@@ -220,7 +220,8 @@
         "removeDeviceLabel": "Quitar este dispositivo",
         "removeDeviceDescription": "Quitar de la nube todos los datos de este dispositivo",
         "removeDeviceBusy": "Quitando…",
-        "removeDeviceNeedsSignIn": "Inicia sesión con tu cuenta de Google primero."
+        "removeDeviceNeedsSignIn": "Inicia sesión con tu cuenta de Google primero.",
+        "removeDeviceNotOnWebdav": "Aún no está disponible con WebDAV."
       },
       "purgeDialog": {
         "purgeDbTitle": "¿Borrar los datos locales?",
@@ -1074,13 +1075,11 @@
     },
     "cloud": {
       "state": {
-        "connected": "Conectado a Google Drive",
-        "notSignedIn": "Sin conectar",
-        "notConfigured": "Sin configurar"
+        "connectedTo": "Conectado a {{name}}",
+        "notSignedIn": "Sin conectar"
       },
       "desc": {
-        "signInPrompt": "Inicia sesión con Google para sincronizar los datos de actividad entre dispositivos a través de Drive. Las capturas de pantalla nunca se envían.",
-        "configurePrompt": "Antes del primer uso, crea una credencial OAuth en la Google Cloud Console (unos 3 minutos)."
+        "choosePrompt": "Elige un servicio en la nube para sincronizar los datos de actividad entre dispositivos. Las capturas de pantalla nunca se envían."
       },
       "stats": {
         "pending": "{{count}} pendiente(s)",
@@ -1099,7 +1098,47 @@
         "reauthTitle": "Credenciales caducadas: vuelve a iniciar sesión para renovar el token",
         "signInWithGoogle": "Iniciar sesión con Google",
         "signingIn": "Abriendo el navegador…",
-        "configureOAuth": "Configurar OAuth"
+        "configureOAuth": "Configurar OAuth",
+        "change": "Cambiar",
+        "changeTitle": "Cambiar el servicio de sincronización"
+      },
+      "services": {
+        "googleDrive": {
+          "name": "Google Drive",
+          "desc": "Sincroniza con tu cuenta de Google."
+        },
+        "webdav": {
+          "name": "WebDAV",
+          "desc": "Nutstore, Nextcloud y otros servicios WebDAV."
+        },
+        "nutstore": {
+          "name": "Nutstore"
+        }
+      },
+      "chooser": {
+        "header": "Elige un servicio de sincronización",
+        "current": "En uso",
+        "pick": "Elegir",
+        "changeAccount": "Cambiar de cuenta",
+        "back": "Volver",
+        "notice": "Tras el cambio, los registros de este dispositivo se vuelven a subir a la nueva nube. Tus otros dispositivos también deben cambiar para seguir sincronizándose entre sí. Los datos de la nube anterior no se borran."
+      },
+      "webdav": {
+        "hint": "En Nutstore, la dirección es {{url}}. Usa una contraseña de aplicación creada en la configuración de la cuenta del sitio web de Nutstore, no tu contraseña de inicio de sesión.",
+        "url": "Dirección del servidor",
+        "user": "Nombre de usuario",
+        "password": "Contraseña de aplicación",
+        "showPassword": "Mostrar la contraseña de aplicación",
+        "hidePassword": "Ocultar la contraseña de aplicación",
+        "connect": "Conectar",
+        "connecting": "Conectando…",
+        "signedOutPrompt": "Se cerró la sesión de {{account}}. Introduce la contraseña de aplicación para volver a conectar.",
+        "errors": {
+          "wrongPassword": "El nombre de usuario o la contraseña de aplicación no son correctos.",
+          "notHttps": "La dirección debe empezar por https://.",
+          "invalidUrl": "La dirección no es válida.",
+          "other": "No se pudo conectar: {{message}}"
+        }
       },
       "datasets": {
         "title": "Qué sincronizar",
