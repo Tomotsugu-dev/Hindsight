@@ -5,9 +5,11 @@
 
 use rusqlite::types::Value;
 use rusqlite::OptionalExtension;
+use serde::Serialize;
 
 use crate::error::Result;
 use crate::repo::outbox::enqueue_every_file;
+use crate::repo::settings;
 use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::local_key::{aes_encrypt, derive_master_key};
 use crate::sync::webdav::account_hash::{account_hash, server_host};
@@ -84,6 +86,91 @@ pub(crate) async fn sign_out(pool: &DbPool) -> Result<()> {
         })
         .await?;
     Ok(())
+}
+
+/// The sync account the Devices page shows: which backend is in use, whether it
+/// is signed in, which account is connected, and whether "Sign in with Google"
+/// can be used. Returned by `auth_status` and after a Google sign-in.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthState {
+    pub backend: BackendKind,
+    /// Whether this backend has credentials: a Google uid on Drive, a password
+    /// on WebDAV.
+    pub signed_in: bool,
+    pub uid: Option<String>,
+    pub email: Option<String>,
+    /// Whether both the Google OAuth client ID and client secret are filled in.
+    pub configured: bool,
+    /// The WebDAV address and user name, which stay after signing out (ADR-0011).
+    pub webdav_url: Option<String>,
+    pub webdav_user: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendKind {
+    Drive,
+    WebDav,
+}
+
+pub async fn current_state(pool: &DbPool) -> Result<AuthState> {
+    let cfg = settings::load(pool).await.unwrap_or_default();
+    let configured =
+        !cfg.google_client_id.trim().is_empty() && !cfg.google_client_secret.trim().is_empty();
+
+    type Row = (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        bool,
+    );
+    let row: Option<Row> = pool
+        .0
+        .call(|conn| {
+            conn.query_row(
+                "SELECT backend, uid, email, webdav_url, webdav_user,
+                        webdav_password_enc IS NOT NULL
+                   FROM auth_state WHERE id = 1",
+                [],
+                |r| {
+                    Ok((
+                        r.get(0)?,
+                        r.get(1)?,
+                        r.get(2)?,
+                        r.get(3)?,
+                        r.get(4)?,
+                        r.get(5)?,
+                    ))
+                },
+            )
+            .optional()
+            .db()
+        })
+        .await?;
+    let (backend, uid, email, webdav_url, webdav_user, has_password) = row.unwrap_or_default();
+
+    let non_empty = |s: Option<String>| s.filter(|s| !s.is_empty());
+    let uid = non_empty(uid);
+    let backend = match backend.as_deref() {
+        Some("webdav") => BackendKind::WebDav,
+        _ => BackendKind::Drive,
+    };
+    let signed_in = match backend {
+        BackendKind::Drive => uid.is_some(),
+        BackendKind::WebDav => has_password,
+    };
+    Ok(AuthState {
+        backend,
+        signed_in,
+        uid,
+        email: non_empty(email),
+        configured,
+        webdav_url: non_empty(webdav_url),
+        webdav_user: non_empty(webdav_user),
+    })
 }
 
 /// Repairs this state: the new version switched to WebDAV, an older version then
@@ -706,6 +793,43 @@ mod tests {
                 .unwrap(),
             ConnectAction::UpdateCredentials
         );
+    }
+
+    /// 设备页看到的账号跟着库走：没同步过是 Drive、未登录；登着 Google 有邮箱；换到坚果云
+    /// 有地址和用户名；退出后还是 WebDAV、未登录，地址和用户名留着。
+    #[tokio::test]
+    async fn the_devices_page_sees_the_backend_in_use() {
+        let fresh = current_state(&fresh_test_pool().await).await.unwrap();
+        assert_eq!(
+            (fresh.backend, fresh.signed_in),
+            (BackendKind::Drive, false)
+        );
+
+        let pool = signed_in_to_drive().await;
+        let google = current_state(&pool).await.unwrap();
+        assert_eq!(
+            (google.backend, google.signed_in),
+            (BackendKind::Drive, true)
+        );
+        assert_eq!(google.email.as_deref(), Some("a@example.com"));
+
+        switch_backend(&pool, "me", to_nutstore()).await.unwrap();
+        let nutstore = current_state(&pool).await.unwrap();
+        assert_eq!(
+            (nutstore.backend, nutstore.signed_in),
+            (BackendKind::WebDav, true)
+        );
+        assert_eq!(nutstore.webdav_url.as_deref(), Some(URL));
+        assert_eq!(nutstore.webdav_user.as_deref(), Some("you@example.com"));
+        assert_eq!(nutstore.uid, None);
+
+        sign_out(&pool).await.unwrap();
+        let signed_out = current_state(&pool).await.unwrap();
+        assert_eq!(
+            (signed_out.backend, signed_out.signed_in),
+            (BackendKind::WebDav, false)
+        );
+        assert_eq!(signed_out.webdav_user.as_deref(), Some("you@example.com"));
     }
 
     /// 先执行 `sql` 摆好库的状态，再判断换到 `to` 要做哪件事。

@@ -4,10 +4,11 @@ use tauri::{AppHandle, Emitter, State};
 use crate::account;
 use crate::storage::{db_path_for, migrations, DbPool};
 use crate::sync::backend_switch::{
-    self, decide_connect_action, switch_backend, update_credentials, ConnectAction, NewBackend,
+    self, decide_connect_action, switch_backend, update_credentials, AuthState, ConnectAction,
+    NewBackend,
 };
 use crate::sync::cloud::CloudBackend;
-use crate::sync::drive::auth::{self, AuthState};
+use crate::sync::drive::auth;
 use crate::sync::engine::SyncEngine;
 use crate::sync::webdav::{self, account_hash::account_hash};
 
@@ -26,11 +27,12 @@ struct OauthUrlPayload {
     opened: bool,
 }
 
-/// The Google sign-in state: whether signed in, the uid and email, and whether
-/// Google sign-in is configured.
+/// The sync account the Devices page shows; see [`AuthState`].
 #[tauri::command]
 pub async fn auth_status(pool: State<'_, DbPool>) -> Result<AuthState, String> {
-    auth::current_state(&pool).await.map_err(Into::into)
+    backend_switch::current_state(&pool)
+        .await
+        .map_err(Into::into)
 }
 
 /// Signs in with Google (a local listener and the browser's consent page), then
@@ -64,7 +66,9 @@ pub async fn sign_in_with_google(
     };
     let cloud = CloudBackend::drive((*pool).clone());
     switch_to_account(&app, &pool, &engine, to, &google.uid, cloud).await?;
-    auth::current_state(&pool).await.map_err(Into::into)
+    backend_switch::current_state(&pool)
+        .await
+        .map_err(Into::into)
 }
 
 /// Signs out of the current sync backend, Google Drive or WebDAV.
