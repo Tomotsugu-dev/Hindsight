@@ -1502,20 +1502,23 @@ mod tests {
         let pool = fresh_test_pool().await;
 
         // 1) 陌生进程名（别名表与内置规则都没有）→ 新建
-        ensure_group(&pool, "Zed").await.unwrap();
+        ensure_group(&pool, "UnlistedApp").await.unwrap();
         assert_eq!(
-            group_state(&pool, "Zed").await.unwrap(),
-            ("Zed".to_string(), None, false),
+            group_state(&pool, "UnlistedApp").await.unwrap(),
+            ("UnlistedApp".to_string(), None, false),
             "新建组的显示名用进程名本身，无内置分类命中时分类为空"
         );
-        assert_eq!(active_group_of(&pool, "Zed").await.as_deref(), Some("Zed"));
+        assert_eq!(
+            active_group_of(&pool, "UnlistedApp").await.as_deref(),
+            Some("UnlistedApp")
+        );
         let ob = outbox_summary(&pool).await;
         assert_eq!(ob.group_count, 1, "建组应入 1 条组 outbox");
         assert_eq!(ob.member_count, 1, "建成员应入 1 条成员 outbox");
 
         // 2) 幂等：已有活着的成员行 → 快速出口，不写库不入队
         let before = outbox_total(&pool).await;
-        ensure_group(&pool, "Zed").await.unwrap();
+        ensure_group(&pool, "UnlistedApp").await.unwrap();
         assert_eq!(
             outbox_total(&pool).await,
             before,
@@ -1523,14 +1526,16 @@ mod tests {
         );
 
         // 3) 删过之后再被抓到 → 复活
-        purge_with_members(&pool, "Zed").await.unwrap();
-        assert!(group_deleted(&pool, "Zed").await && member_deleted(&pool, "Zed").await);
+        purge_with_members(&pool, "UnlistedApp").await.unwrap();
+        assert!(
+            group_deleted(&pool, "UnlistedApp").await && member_deleted(&pool, "UnlistedApp").await
+        );
         let before = outbox_total(&pool).await;
-        ensure_group(&pool, "Zed").await.unwrap();
-        assert!(!group_deleted(&pool, "Zed").await, "组应被复活");
+        ensure_group(&pool, "UnlistedApp").await.unwrap();
+        assert!(!group_deleted(&pool, "UnlistedApp").await, "组应被复活");
         assert_eq!(
-            active_group_of(&pool, "Zed").await.as_deref(),
-            Some("Zed"),
+            active_group_of(&pool, "UnlistedApp").await.as_deref(),
+            Some("UnlistedApp"),
             "成员行应被复活并指回自己的组"
         );
         assert_eq!(
