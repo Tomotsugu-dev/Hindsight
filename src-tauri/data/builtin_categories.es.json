@@ -22,7 +22,19 @@
       "processNames": []
     },
     {
-      "category": "fun",
+      "category": "office",
+      "processNames": [
+        "notas",
+        "calendario",
+        "recordatorios"
+      ]
+    },
+    {
+      "category": "game",
+      "processNames": []
+    },
+    {
+      "category": "video",
       "processNames": [
         "música"
       ]
@@ -30,7 +42,7 @@
     {
       "category": "other",
       "processNames": [
-        "explorador de archivos",
+        "explorador de archivos", "explorador de windows",
         "administrador de tareas",
         "configuración",
         "ajustes del sistema", "preferencias del sistema",
@@ -38,7 +50,9 @@
         "captura de pantalla",
         "vista previa",
         "fotos",
-        "recortes", "herramienta recortes"
+        "recortes", "herramienta recortes",
+        "monitor de actividad",
+        "calculadora"
       ]
     }
   ]

@@ -22,7 +22,19 @@
       "processNames": []
     },
     {
-      "category": "fun",
+      "category": "office",
+      "processNames": [
+        "notas",
+        "calendário",
+        "lembretes"
+      ]
+    },
+    {
+      "category": "game",
+      "processNames": []
+    },
+    {
+      "category": "video",
       "processNames": [
         "música"
       ]
@@ -38,7 +50,9 @@
         "captura de tela",
         "pré-visualização",
         "fotos",
-        "ferramenta de captura"
+        "ferramenta de captura",
+        "monitor de atividade",
+        "calculadora"
       ]
     }
   ]
