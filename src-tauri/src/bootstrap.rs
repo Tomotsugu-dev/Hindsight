@@ -349,7 +349,7 @@ pub struct TrayMenu {
     quit: tauri::menu::MenuItem<tauri::Wry>,
 }
 
-/// 托盘文案按语言取一套。启动时 lang 来自 [`crate::ai::config::detect_default_lang`]，
+/// 托盘文案按语言取一套。启动时 lang 来自 [`crate::platform::system_language`]，
 /// 运行时由前端经 [`set_tray_labels`] 传 i18n 译文覆盖。
 fn tray_labels(lang: &str) -> (&'static str, &'static str) {
     match lang {
@@ -378,7 +378,7 @@ fn install_tray_icon(app: &mut App) -> tauri::Result<()> {
     use tauri::tray::TrayIconBuilder;
 
     // 启动时按系统 locale 取初始文案；webview 加载后前端会 set_tray_labels 同步到实际 UI 语言
-    let (show_label, quit_label) = tray_labels(crate::ai::config::detect_default_lang());
+    let (show_label, quit_label) = tray_labels(crate::platform::system_language());
     let show_item = MenuItemBuilder::with_id("show", show_label).build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", quit_label).build(app)?;
     let menu = MenuBuilder::new(app)

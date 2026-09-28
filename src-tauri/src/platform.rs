@@ -28,6 +28,36 @@ pub fn local_os_id() -> &'static str {
     std::env::consts::OS
 }
 
+/// 系统语言，对应到应用支持的六种之一：繁体圈（台湾 / 香港 / 澳门 / Hant 脚本）→ "tw"、
+/// 其余中文 → "zh"、日语 → "ja"、葡萄牙语 → "pt"、西班牙语 → "es"；读不到或不在这几种里 → "en"。
+pub fn system_language() -> &'static str {
+    match sys_locale::get_locale() {
+        Some(loc) => {
+            let l = loc.to_ascii_lowercase();
+            if l.starts_with("zh") {
+                let hant = [
+                    "zh-tw", "zh_tw", "zh-hk", "zh_hk", "zh-mo", "zh_mo", "zh-hant", "zh_hant",
+                ];
+                // If the locale matches any of the traditional Chinese variants, return "tw".
+                if hant.iter().any(|p| l.starts_with(p)) {
+                    "tw"
+                } else {
+                    "zh"
+                }
+            } else if l.starts_with("ja") {
+                "ja"
+            } else if l.starts_with("pt") {
+                "pt"
+            } else if l.starts_with("es") {
+                "es"
+            } else {
+                "en"
+            }
+        }
+        None => "en",
+    }
+}
+
 /// 在创建主窗口后立即调用：应用平台特定的窗口微调。
 ///
 /// Windows 11 22H2+：通过 DWM 把窗口处理成圆角，阴影自动跟着圆角走，
