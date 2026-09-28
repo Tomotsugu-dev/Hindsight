@@ -1,28 +1,85 @@
-//! OAuth loopback 回调页 HTML —— 浏览器拿到 code 之后看到的 "登录成功" / "登录失败" 页面。
-//!
-//! 配色与 `src/styles/tokens.css` 对齐：
-//! - accent: #6c5ce7（深紫）
-//! - 背景：sidebar 同款 lavender → pink → peach 径向渐变
-//! - 字体 Inter / 中文 fallback；过渡曲线 cubic-bezier(0.22, 1, 0.36, 1)
-//!
-//! 为什么把它从 auth.rs 拆出来：原文件 600+ 行，一半是这页 HTML 字面量，
-//! 把 OAuth 流程逻辑挤在底下不容易找。
+//! Local callback page for Google OAuth, displaying the sign-in result in the system language.
 
-/// 把字符串里的 HTML 特殊字符 (`& < >`) 转义成实体，防止注入到 [`render`] 出来的页面里。
-pub fn html_escape(s: &str) -> String {
+/// Replace `&`, `<`, and `>` with HTML entities so the browser displays them as text instead of treating them as tags.
+fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
 }
 
-/// 生成 OAuth 回调成功 / 失败页 HTML。
-/// 浏览器在 OAuth 跳回 loopback 时显示这一页（成功后用户手动关页面，或 5 秒后自动关）。
-pub fn render(success: bool, message: &str) -> String {
-    let title = if success {
-        "登录成功"
-    } else {
-        "登录失败"
-    };
+/// Language-specific text for the page.
+struct PageText {
+    /// The value for the `<html lang>` attribute.
+    html_lang: &'static str,
+    signed_in: &'static str,
+    sign_in_failed: &'static str,
+    close_hint: &'static str,
+}
+
+/// Returns the appropriate set of page text based on
+/// the language code from [`crate::platform::system_language`].
+fn page_text(lang: &str) -> PageText {
+    match lang {
+        "zh" => PageText {
+            html_lang: "zh-CN",
+            signed_in: "登录成功",
+            sign_in_failed: "登录失败",
+            close_hint: "可以关闭此页，回到 Hindsight。",
+        },
+        "tw" => PageText {
+            html_lang: "zh-TW",
+            signed_in: "登入成功",
+            sign_in_failed: "登入失敗",
+            close_hint: "可以關閉此頁，回到 Hindsight。",
+        },
+        "ja" => PageText {
+            html_lang: "ja",
+            signed_in: "ログインしました",
+            sign_in_failed: "ログインできませんでした",
+            close_hint: "このページを閉じて、Hindsight に戻ってください。",
+        },
+        "pt" => PageText {
+            html_lang: "pt-BR",
+            signed_in: "Login concluído",
+            sign_in_failed: "Não foi possível entrar",
+            close_hint: "Você pode fechar esta página e voltar ao Hindsight.",
+        },
+        "es" => PageText {
+            html_lang: "es",
+            signed_in: "Sesión iniciada",
+            sign_in_failed: "No se pudo iniciar sesión",
+            close_hint: "Puedes cerrar esta página y volver a Hindsight.",
+        },
+        _ => PageText {
+            html_lang: "en",
+            signed_in: "Signed in",
+            sign_in_failed: "Sign-in failed",
+            close_hint: "You can close this page and go back to Hindsight.",
+        },
+    }
+}
+
+/// The page displayed in the browser when sign-in is successful.
+pub fn success_page() -> String {
+    let text = page_text(crate::platform::system_language());
+    render(text.html_lang, true, text.signed_in, text.close_hint)
+}
+
+/// The page displayed in the browser when sign-in fails;
+/// `error` is the error code returned by Google, escaped and displayed as-is.
+pub fn failure_page(error: &str) -> String {
+    let text = page_text(crate::platform::system_language());
+    render(
+        text.html_lang,
+        false,
+        text.sign_in_failed,
+        &html_escape(error),
+    )
+}
+
+/// Renders the callback page HTML.
+/// This page is displayed in the browser when OAuth redirects back to the loopback URL.
+fn render(html_lang: &str, success: bool, title: &str, message: &str) -> String {
     let (icon_color, icon_bg) = if success {
         ("#6c5ce7", "rgba(108, 92, 231, 0.13)")
     } else {
@@ -37,7 +94,7 @@ pub fn render(success: bool, message: &str) -> String {
     };
     format!(
         r#"<!doctype html>
-<html lang="zh">
+<html lang="{html_lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -124,10 +181,40 @@ pub fn render(success: bool, message: &str) -> String {
   </div>
 </body>
 </html>"#,
+        html_lang = html_lang,
         title = title,
         icon_color = icon_color,
         icon_bg = icon_bg,
         icon_svg = icon_svg,
         message = message,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 六种语言各有自己的一套文字；认不出的语言代码用英文。
+    #[test]
+    fn page_text_follows_the_language_code() {
+        for (lang, html_lang) in [
+            ("zh", "zh-CN"),
+            ("tw", "zh-TW"),
+            ("ja", "ja"),
+            ("pt", "pt-BR"),
+            ("es", "es"),
+            ("en", "en"),
+        ] {
+            assert_eq!(page_text(lang).html_lang, html_lang);
+        }
+        assert_eq!(page_text("fr").signed_in, "Signed in");
+    }
+
+    /// 失败页里的错误码要转义：Google 回传的内容不能当 HTML 插进页面。
+    #[test]
+    fn failure_page_escapes_the_error() {
+        let html = failure_page("<script>alert(1)</script>");
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(!html.contains("<script>"));
+    }
 }

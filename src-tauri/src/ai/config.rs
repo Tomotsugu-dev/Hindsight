@@ -289,7 +289,7 @@ pub struct PromptOverrides {
 
 impl Default for AiConfig {
     fn default() -> Self {
-        let lang = detect_default_lang();
+        let lang = crate::platform::system_language();
         Self {
             endpoint: String::new(),
             model: String::new(),
@@ -323,7 +323,7 @@ impl Default for AiConfig {
 }
 
 /// 默认 5 段，覆盖整 24 小时（00-06 / 06-09 / 09-12 / 12-18 / 18-24）；
-/// 标签按用户语言取一套。新装首启时通过 [`detect_default_lang`] 拿系统 locale。
+/// 标签按用户语言取一套。新装首启时通过 [`crate::platform::system_language`] 拿系统语言。
 fn default_chat_thinking() -> String {
     "auto".to_string()
 }
@@ -353,37 +353,6 @@ pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
             color: String::new(),
         })
         .collect()
-}
-
-/// 从系统 locale 推默认 prompt 语言：繁体圈 → "tw"、其余 `zh-*` → "zh"、`ja-*` → "ja"、
-/// `pt-*` → "pt"、`es-*` → "es"、其它 → "en"。
-/// 仅在首次安装 `AiConfig::default()` 时调一次；用户后续在 UI 改了再不动。
-pub fn detect_default_lang() -> &'static str {
-    match sys_locale::get_locale() {
-        Some(loc) => {
-            let l = loc.to_ascii_lowercase();
-            if l.starts_with("zh") {
-                // 繁体圈（台湾 / 香港 / 澳门 / Hant 脚本）→ 繁体提示词
-                let hant = [
-                    "zh-tw", "zh_tw", "zh-hk", "zh_hk", "zh-mo", "zh_mo", "zh-hant", "zh_hant",
-                ];
-                if hant.iter().any(|p| l.starts_with(p)) {
-                    "tw"
-                } else {
-                    "zh"
-                }
-            } else if l.starts_with("ja") {
-                "ja"
-            } else if l.starts_with("pt") {
-                "pt"
-            } else if l.starts_with("es") {
-                "es"
-            } else {
-                "en"
-            }
-        }
-        None => "en",
-    }
 }
 
 /// 把用户提交的 AiConfig 钳到合法范围。
@@ -555,10 +524,10 @@ mod tests {
 
     /// 合法 prompt 语言全集。测试里独立列一份，不引用 sanitize 内部的 match——
     /// 若产品代码误删某语言，这里会红。
-    const VALID_LANGS: [&str; 5] = ["zh", "tw", "en", "ja", "pt"];
+    const VALID_LANGS: [&str; 6] = ["zh", "tw", "en", "ja", "pt", "es"];
 
     /// 造一个"干净"的基准配置。基于 Default，但把 prompt_language 固定成 "zh"，
-    /// 避免 Default 里 detect_default_lang 随宿主 locale 变化导致断言不稳定。
+    /// 避免 Default 里 system_language 随宿主 locale 变化导致断言不稳定。
     fn base() -> AiConfig {
         AiConfig {
             prompt_language: "zh".to_string(),
@@ -996,17 +965,17 @@ mod tests {
         assert!(zh.iter().all(|l| !l.is_empty()));
     }
 
-    // ---------- detect_default_lang ----------
+    // ---------- system_language ----------
 
     #[test]
-    fn detect_default_lang_returns_valid_tag_stable_under_sanitize() {
+    fn system_language_returns_valid_tag_stable_under_sanitize() {
         // locale 来源是 OS 全局、无注入点，分支覆盖不可行；
         // 这里只锁输出契约：返回值必须落在合法语言集内，
         // 且作为 prompt_language 回灌 sanitize 不会被改写（否则首启配置会被静默篡改）。
-        let lang = detect_default_lang();
+        let lang = crate::platform::system_language();
         assert!(
             VALID_LANGS.contains(&lang),
-            "detect_default_lang 返回了名单外的值: {lang:?}"
+            "system_language 返回了名单外的值: {lang:?}"
         );
         let mut next = base();
         next.prompt_language = lang.to_string();
