@@ -524,7 +524,7 @@ mod tests {
 
     /// 合法 prompt 语言全集。测试里独立列一份，不引用 sanitize 内部的 match——
     /// 若产品代码误删某语言，这里会红。
-    const VALID_LANGS: [&str; 5] = ["zh", "tw", "en", "ja", "pt"];
+    const VALID_LANGS: [&str; 6] = ["zh", "tw", "en", "ja", "pt", "es"];
 
     /// 造一个"干净"的基准配置。基于 Default，但把 prompt_language 固定成 "zh"，
     /// 避免 Default 里 system_language 随宿主 locale 变化导致断言不稳定。
