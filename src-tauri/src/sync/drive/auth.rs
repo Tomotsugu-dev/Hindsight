@@ -468,9 +468,9 @@ async fn accept_callback(listener: TcpListener) -> Result<CodeState> {
         }
 
         let body = if let Some(ref e) = error {
-            super::auth_callback::render(false, &super::auth_callback::html_escape(e))
+            super::auth_callback::failure_page(e)
         } else {
-            super::auth_callback::render(true, "可以关闭此页，回到 Hindsight。")
+            super::auth_callback::success_page()
         };
         let resp = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
