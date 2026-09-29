@@ -162,9 +162,13 @@ async fn pair_one(pool: &DbPool, process_name: &str, canonical: &str) -> Result<
 
             // Step 1: create the canonical group, or revive it if tombstoned; a live one
             // is left alone so the user's rename and category survive.
+            // A rule's category that no longer exists is stored as NULL, so the
+            // backfill can still fill it later.
             tx.execute(
                 "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, ?, NULL)
+                 VALUES(?1, ?2,
+                        (SELECT id FROM categories WHERE id = ?3 AND deleted_at IS NULL),
+                        ?4, NULL)
                  ON CONFLICT(id) DO UPDATE SET
                    deleted_at = NULL,
                    updated_at = excluded.updated_at
@@ -283,6 +287,40 @@ mod tests {
 
         let still_custom = group_id_of_member(&pool, "Code").await.unwrap();
         assert_eq!(still_custom, "my-tools");
+    }
+
+    /// 规则指向的分类已删除时，配对新建的 canonical 组分类留空。
+    #[tokio::test]
+    async fn pair_existing_leaves_category_empty_when_rule_category_is_deleted() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE categories SET deleted_at = '2026-05-15T10:00:00Z' WHERE id = 'code'",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        seed_solo_groups(&pool, &[("Code.exe", "Code.exe")]).await;
+
+        pair_existing(&pool).await.unwrap();
+
+        let cat: Option<String> = pool
+            .0
+            .call(|conn| {
+                conn.query_row(
+                    "SELECT category_id FROM app_groups WHERE id = 'Visual Studio Code'",
+                    [],
+                    |r| r.get(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        assert_eq!(cat, None, "code 已删，canonical 组的分类应留空");
     }
 
     async fn seed_solo_groups(pool: &DbPool, groups: &[(&str, &str)]) {
