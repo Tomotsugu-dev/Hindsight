@@ -85,12 +85,13 @@ sequenceDiagram
     X->>S: GET manifest.X.json
     S-->>X: Old manifest,<br/>highest push count M
     X->>D: One transaction:<br/>save the account and password,<br/>queue all records for upload,<br/>clear the old push fingerprints,<br/>task "Rebuild manifest"<br/>(push count M+1),<br/>task "Delete own tombstone"
-    X->>S: DELETE tombstone.X.json
-    S-->>X: Deleted, or 404<br/>(already gone)
-    X->>D: Clear the<br/>"Delete own tombstone" task
+    Note over S,B: Until the tombstone is deleted,<br/>B does not read X's manifest
     X->>S: Upload all records
     X->>S: Write the manifest:<br/>only the files uploaded this time,<br/>push count M+1
     X->>D: One transaction: clear the<br/>"Upload manifest" and<br/>"Rebuild manifest" tasks
+    X->>S: DELETE tombstone.X.json
+    S-->>X: Deleted, or 404<br/>(already gone)
+    X->>D: Clear the<br/>"Delete own tombstone" task
     B->>S: Pull: list the sync root
     S-->>B: No tombstone
     B->>B: Show X again
@@ -110,14 +111,14 @@ Every operation first records a **task** in a local transaction, then changes th
 | A: "Forget X" | Write the tombstone again, delete `X/`, then delete X's activities and screen memory. |
 | X: "Remove this device" | Write the tombstone again, delete `X/`, handle local data by the saved choice, then sign out. While the task is pending, X does not treat its own tombstone as "Removed". |
 | X: "Removed" | Delete `X/`. Then, in one transaction: clear the "Upload manifest" task, clear the password and sign out, record a notice that the device was removed, and clear the "Removed" task. Local data is kept. |
-| X: "Delete own tombstone" | Delete the tombstone. Only after it succeeds or returns 404, clear the task and start uploading again. While the task is pending, X does not treat its own tombstone as "Removed". |
+| X: "Delete own tombstone" | Delete the tombstone only after the "Rebuild manifest" task is cleared. After it succeeds or returns 404, clear the task. While the task is pending, X does not treat its own tombstone as "Removed". |
 
 Two more tasks are not in the table:
 
 - **Upload manifest**: an existing mechanism (`PendingChanges`). It is one row in the local database that lists the files uploaded or deleted this round but not yet in the manifest. It is cleared after the manifest is written.
 - **Rebuild manifest**: recorded when X signs in again. It makes the next manifest write drop the old file list. After that write, it is cleared in the same transaction as **Upload manifest**.
 
-If the app crashes before the transaction that records a task commits, nothing has changed in the cloud or on the device, and the user can click again. After the commit, it does not matter where it stopped: the next round does all the steps again. Signing in again works the same way. If the app crashes before the transaction commits, the user clicks **Connect** again. If deleting the tombstone fails, the next round retries it first and uploads nothing until the tombstone is gone.
+If the app crashes before the transaction that records a task commits, nothing has changed in the cloud or on the device, and the user can click again. After the commit, it does not matter where it stopped: the next round does all the steps again. Signing in again works the same way. If the app crashes before the transaction commits, the user clicks **Connect** again. After the commit, the next round continues from where it stopped, and the tombstone is deleted last.
 
 While a "Forget X" or "Remove this device" task is pending, the UI shows "Removing from the cloud". WebDAV deletes the whole directory in one request and gets no file count, so the completion message does not say how many files were deleted.
 
@@ -148,7 +149,8 @@ When another device sees the tombstone, it deletes **all of X's activities and s
 - **Mark the removal in X's manifest**: X overwrites its own manifest in its next round.
 - **Delete X's files one by one**: about 400 requests for a year of files, which hits Nutstore's rate limit. One `DELETE` of `X/` also frees the space at once.
 - **Delete X's manifest and copy its push count into the tombstone**: after A reads the manifest, X may push one more round. Devices with a newer bookmark would then skip X's re-uploaded files. Keeping the manifest avoids this: only X writes it, and its highest push count includes X's last round before removal.
-- **Change the cloud first and record the task after**: after a crash, nothing shows that the operation is unfinished. A removal could leave `X/` behind, and signing in again could delete the tombstone without uploading again.
+- **Change the cloud first and record the task after**: after a crash, nothing shows that the operation is unfinished. A removal could leave `X/` behind, and signing in again could keep the old manifest's file list.
+- **Delete the tombstone first when signing in again**: while the tombstone exists, other devices do not read X's manifest. If X deleted it first and crashed after writing the manifest, the retry would write push count M+1 again, and devices whose bookmark already reached M+1 would skip those files. Other devices would also try to download deleted files listed in the old manifest. Deleting it last means they only ever see the finished manifest.
 - **Check the tombstone again before writing the manifest**: not needed. Each round pushes first, then pulls, so listing the sync root during the pull always comes after this round's uploads. If X sees the tombstone, X deletes `X/` itself. If not, A's later `DELETE X/` deletes those files (see the two diagrams under "Forget X on A"). This depends on push before pull: if the pull ever runs first, a check after the uploads is needed again.
 
 ## Consequences
@@ -163,8 +165,8 @@ The main trade-off: removal needs no extra requests per round, but the tombstone
   - If X shuts down after uploading and before pulling, the `X/` it recreated stays until X runs again.
   - If X never comes back, the tombstone and the old manifest stay in the cloud (a few KB). ADR-0008 (each device writes only its own manifest) still holds; the one addition is that the removing device deletes X's data directory.
   - Categories and app groups that X changed are not undone by the removal, the same as with Drive.
-  - Signing in again deletes the tombstone before uploading again. Until X writes its new manifest, other devices may try to download deleted files listed in the old manifest. These downloads fail and are retried each round.
-  - If A removes X again at almost the same moment X signs in again, X's "Delete own tombstone" task may delete A's new tombstone and undo that removal. This is a known race.
+  - When X signs in again, the tombstone stays until the re-upload is done. With rate limits this can take several rounds, and every device hides X in the meantime.
+  - If X deletes the tombstone and crashes before clearing the task, and A removes X again at that moment, X's retry deletes A's new tombstone and undoes that removal. During the re-upload A cannot see X, so it cannot remove it; only this small window remains. This is a known race.
 
 ## Data, compatibility, security, and privacy
 
@@ -177,5 +179,5 @@ The main trade-off: removal needs no extra requests per round, but the tombstone
 
 - Tests cover a retry after a failure at every step of the four tasks in the table.
 - Tests cover both orders of A writing the tombstone and X listing the sync root. In both, no file X uploaded in that round stays in the cloud.
-- After X signs in again, its push count continues from the old manifest, and the rebuilt manifest has no deleted old paths.
+- After X signs in again, its push count continues from the old manifest, and the rebuilt manifest has no deleted old paths. If the app crashes after writing the manifest and before deleting the tombstone, other devices still download all re-uploaded files after the retry.
 - On a real device: one directory `DELETE` fully clears `X/` on Nutstore, and another device sees the tombstone in its next round after it is written.
