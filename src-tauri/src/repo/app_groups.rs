@@ -869,9 +869,13 @@ pub async fn ensure_group(pool: &DbPool, process_name: &str) -> Result<()> {
             let tx = conn.transaction().db()?;
             // If the group exists, only revive a tombstone; leave name and category
             // alone, the user may have changed them.
+            // A rule's category that no longer exists is stored as NULL, so the
+            // backfill can still fill it later.
             tx.execute(
                 "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                 VALUES(?, ?, ?, ?, NULL)
+                 VALUES(?1, ?2,
+                        (SELECT id FROM categories WHERE id = ?3 AND deleted_at IS NULL),
+                        ?4, NULL)
                  ON CONFLICT(id) DO UPDATE SET
                    deleted_at = NULL,
                    updated_at = excluded.updated_at
@@ -1508,6 +1512,31 @@ mod tests {
             group_state(&pool, "word").await.unwrap().1,
             None,
             "office 不存在，Word 不补"
+        );
+    }
+
+    /// 规则指向的分类已删除时，新建的组分类留空，以后还能被补分类处理。
+    #[tokio::test]
+    async fn ensure_group_leaves_category_empty_when_rule_category_is_deleted() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE categories SET deleted_at = '2026-05-15T10:00:00Z' WHERE id = 'design'",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        ensure_group(&pool, "Figma").await.unwrap();
+
+        assert_eq!(
+            group_state(&pool, "Figma").await.unwrap().1,
+            None,
+            "design 已删，Figma 的分类应留空"
         );
     }
 
