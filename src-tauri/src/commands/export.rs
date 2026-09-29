@@ -135,7 +135,7 @@ pub(crate) fn fetch_raw_rows(
                 a.duration_secs,
                 COALESCE(g.display_name, a.process_name)         AS app,
                 COALESCE(a.window_title, '')                     AS title,
-                COALESCE(g.category_id, 'other')                 AS cat,
+                COALESCE(NULLIF(g.category_id, 'none'), 'other') AS cat,
                 COALESCE(d.display_name, a.device_id)            AS device
          {FROM_ACTIVITY_GROUP}
          LEFT JOIN devices d
@@ -550,6 +550,37 @@ mod tests {
         assert_eq!(rows[1].app, "ungrouped.exe");
         assert_eq!(rows[1].title, "");
         assert_eq!(rows[1].device, "dev-b");
+    }
+
+    /// 用户选了未分类的组（存成 none）导出时和没分组的一样记成 'other'，不出现 none。
+    #[tokio::test]
+    async fn fetch_raw_rows_exports_user_uncategorized_as_other() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "INSERT INTO app_groups(id, display_name, category_id) VALUES
+                       ('g1', 'Steam', 'none');
+                     INSERT INTO app_group_members(group_id, process_name) VALUES
+                       ('g1', 'steam');
+                     INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                       local_hour, process_name, window_title, category_id, device_id) VALUES
+                       ('2026-07-18T10:00:00+09:00', '2026-07-18T10:05:00+09:00', 300,
+                        '2026-07-18', 10, 'steam', 's', 'other', 'dev-a');",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let rows = pool
+            .0
+            .call(|conn| Ok(fetch_raw_rows(conn, "2026-07-01", "2026-07-31", None).unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].category_id, "other");
     }
 
     /// 前端 JSON 形态(adjacently tagged)能反序列化,新类型齐备。

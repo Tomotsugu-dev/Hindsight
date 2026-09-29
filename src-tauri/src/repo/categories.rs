@@ -470,8 +470,8 @@ pub async fn assign_app(pool: &DbPool, process_name: &str, category_id: &str) ->
     crate::repo::app_groups::assign_category_for_process(pool, &p, Some(c)).await
 }
 
-/// Unassigns a category from an app. Goes through the app_groups channel: sets the
-/// group's category_id to NULL.
+/// Unassigns an app's category by marking its group as user-uncategorized
+/// (see [`crate::repo::app_groups::UNCATEGORIZED_BY_USER`]).
 pub async fn unassign_app(pool: &DbPool, process_name: &str) -> Result<()> {
     crate::repo::app_groups::assign_category_for_process(pool, process_name, None).await
 }
