@@ -12,7 +12,7 @@
 //!     groups that still have no category.
 
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use crate::error::Result;
@@ -97,6 +97,15 @@ pub async fn backfill_builtin_categories(pool: &DbPool) -> Result<u64> {
     let pending: Vec<(String, String)> = pool
         .0
         .call(move |conn| {
+            // Only groups whose category still exists: assign_category rejects a deleted or missing one.
+            let live_categories: HashSet<String> = conn
+                .prepare("SELECT id FROM categories WHERE deleted_at IS NULL")
+                .db()?
+                .query_map([], |r| r.get::<_, String>(0))
+                .db()?
+                .collect::<rusqlite::Result<_>>()
+                .db()?;
+
             let mut stmt = conn
                 .prepare(
                     "SELECT id, display_name FROM app_groups
@@ -110,9 +119,9 @@ pub async fn backfill_builtin_categories(pool: &DbPool) -> Result<u64> {
                 .collect();
             Ok(rows
                 .into_iter()
-                .filter_map(|(id, display)| {
-                    match_builtin_category(&display).map(|cat| (id, cat.to_string()))
-                })
+                .filter_map(|(id, display)| match_builtin_category(&display).map(|cat| (id, cat)))
+                .filter(|(_, cat)| live_categories.contains(*cat))
+                .map(|(id, cat)| (id, cat.to_string()))
                 .collect())
         })
         .await?;

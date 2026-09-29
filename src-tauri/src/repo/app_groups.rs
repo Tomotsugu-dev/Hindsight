@@ -1467,6 +1467,50 @@ mod tests {
         );
     }
 
+    /// 规则指向的分类不在库里时（被用户删了，或迁移时因同名没建），
+    /// 补分类跳过这个组，其他组照常补，整轮不报错。
+    #[tokio::test]
+    async fn backfill_skips_groups_whose_category_is_missing() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                // Figma → design（已软删）；Word → office（整行不存在）；Steam → game（还在）。
+                conn.execute_batch(
+                    "UPDATE categories SET deleted_at = '2026-05-15T10:00:00Z' WHERE id = 'design';
+                     DELETE FROM categories WHERE id = 'office';
+                     INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at) VALUES
+                       ('figma', 'Figma', NULL, '2026-05-15T10:00:00Z', NULL),
+                       ('word', 'Microsoft Word', NULL, '2026-05-15T10:00:00Z', NULL),
+                       ('steam', 'Steam', NULL, '2026-05-15T10:00:00Z', NULL);",
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let filled = crate::repo::builtin_categories::backfill_builtin_categories(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(filled, 1, "只有 Steam 能补上");
+        assert_eq!(
+            group_state(&pool, "steam").await.unwrap().1.as_deref(),
+            Some("game"),
+            "Steam 应补成 game"
+        );
+        assert_eq!(
+            group_state(&pool, "figma").await.unwrap().1,
+            None,
+            "design 已删，Figma 不补"
+        );
+        assert_eq!(
+            group_state(&pool, "word").await.unwrap().1,
+            None,
+            "office 不存在，Word 不补"
+        );
+    }
+
     /// 用户选的未分类在库里是 none，返回给界面的是空值，前端只认 null。
     #[tokio::test]
     async fn list_groups_returns_user_uncategorized_as_none_value() {
