@@ -633,7 +633,7 @@ const STATS_FROM_CATEGORY: &str = "FROM activities a
      LEFT JOIN app_groups g
        ON g.id = gm.group_id AND g.deleted_at IS NULL
      LEFT JOIN categories c
-       ON c.id = COALESCE(g.category_id, 'other') AND c.deleted_at IS NULL";
+       ON c.id = COALESCE(NULLIF(g.category_id, 'none'), 'other') AND c.deleted_at IS NULL";
 
 #[allow(clippy::too_many_arguments)]
 async fn query_stats(
@@ -683,7 +683,7 @@ async fn query_stats(
                 // 也可能填英文 builtin id("game")
                 let ors = vec![
                     "(c.name LIKE ? ESCAPE '\\' \
-                      OR COALESCE(g.category_id, 'other') LIKE ? ESCAPE '\\')";
+                      OR COALESCE(NULLIF(g.category_id, 'none'), 'other') LIKE ? ESCAPE '\\')";
                     cats.len()
                 ]
                 .join(" OR ");
@@ -943,7 +943,7 @@ fn group_dim(group_by: GroupBy) -> &'static str {
         // raw id when the category row is deleted or missing, then to 'other' when
         // the app has no group at all. (The model restates it in the answer's
         // language, and 'other' reads the same as any English builtin id.)
-        GroupBy::Category => "COALESCE(c.name, g.category_id, 'other')",
+        GroupBy::Category => "COALESCE(c.name, NULLIF(g.category_id, 'none'), 'other')",
         GroupBy::None => unreachable!("group_dim 只在分组分支被调用"),
     }
 }
@@ -2082,6 +2082,33 @@ mod behavior_tests {
         );
         assert!(out.for_llm.contains("other: 30 分钟"), "{}", out.for_llm);
         assert!(!out.for_llm.contains("零星"), "{}", out.for_llm);
+    }
+
+    #[tokio::test]
+    async fn stats_category_counts_user_uncategorized_as_other() {
+        // steam 的组被用户设成未分类（存成 none），要和没分组的 fun.exe 一起算进 'other'，
+        // 不能单独冒出一个叫 none 的分类
+        let main = "
+            INSERT INTO activities(started_at, ended_at, duration_secs,
+                local_date, local_hour, process_name, window_title) VALUES
+              ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,
+               '2026-07-08', 9, 'steam', 's'),
+              ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
+               '2026-07-08', 11, 'fun.exe', 'f');
+            INSERT INTO app_group_members(process_name, group_id) VALUES ('steam','g1');
+            INSERT INTO app_groups(id, display_name, category_id) VALUES ('g1','Steam','none');";
+        let ctx = ctx_with("", main).await;
+        let mut call = stats_call(day());
+        if let ToolCall::QueryStats { group_by, .. } = &mut call {
+            *group_by = GroupBy::Category;
+        }
+        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        assert!(
+            out.for_llm.contains("other: 1 小时 0 分钟"),
+            "{}",
+            out.for_llm
+        );
+        assert!(!out.for_llm.contains("none"), "{}", out.for_llm);
     }
 
     #[tokio::test]

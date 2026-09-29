@@ -32,6 +32,9 @@ use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
+/// Stores a user-selected “Uncategorized” as `none`, distinct from `NULL` awaiting backfill.
+pub const UNCATEGORIZED_BY_USER: &str = "none";
+
 /// One logical app as the frontend sees it: the `app_groups` row plus its
 /// members (assembled by [`list_groups`], not a column).
 ///
@@ -91,7 +94,9 @@ pub async fn list_groups(pool: &DbPool) -> Result<Vec<AppGroup>> {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
-                        r.get::<_, Option<String>>(2)?,
+                        // The UI treats only null as unassigned.
+                        r.get::<_, Option<String>>(2)?
+                            .filter(|c| c != UNCATEGORIZED_BY_USER),
                     ))
                 })
                 .db()?;
@@ -724,11 +729,13 @@ pub async fn assign_category(
     category_id: Option<String>,
 ) -> Result<()> {
     let id = group_id.to_string();
-    let cat = category_id;
+    // "Unassigned" is stored as none; see [`UNCATEGORIZED_BY_USER`].
+    let cat = category_id.unwrap_or_else(|| UNCATEGORIZED_BY_USER.to_string());
     let now = utc_now_rfc3339();
 
     // No foreign key on `app_groups.category_id`, so check the id here.
-    if let Some(c) = cat.clone() {
+    if cat != UNCATEGORIZED_BY_USER {
+        let c = cat.clone();
         let exists = pool
             .0
             .call(move |conn| {
@@ -1426,12 +1433,66 @@ mod tests {
 
         assign_category(&pool, "vscode", None).await.unwrap();
         let (_, cat, _) = group_state(&pool, "vscode").await.unwrap();
-        assert_eq!(cat, None, "None 应清掉分类");
+        assert_eq!(
+            cat.as_deref(),
+            Some(UNCATEGORIZED_BY_USER),
+            "选未分类应存成 none"
+        );
         assert_eq!(
             outbox_summary(&pool).await.group_count,
             2,
             "清分类应再入 1 条组 outbox"
         );
+    }
+
+    /// 用户把按预设进了「游戏」的 Steam 改成未分类，
+    /// 重启时的补分类不能再把它放回「游戏」。
+    #[tokio::test]
+    async fn backfill_keeps_uncategorized_chosen_by_user() {
+        let pool = fresh_test_pool().await;
+        seed_steam_in_game(&pool).await;
+
+        assign_category(&pool, "steam", None).await.unwrap();
+        let chosen = group_state(&pool, "steam").await.unwrap().1;
+
+        let filled = crate::repo::builtin_categories::backfill_builtin_categories(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(filled, 0, "用户选的未分类不应被补分类");
+        assert_eq!(
+            group_state(&pool, "steam").await.unwrap().1,
+            chosen,
+            "补分类后应保持用户选的未分类"
+        );
+    }
+
+    /// 用户选的未分类在库里是 none，返回给界面的是空值，前端只认 null。
+    #[tokio::test]
+    async fn list_groups_returns_user_uncategorized_as_none_value() {
+        let pool = fresh_test_pool().await;
+        seed_steam_in_game(&pool).await;
+        assign_category(&pool, "steam", None).await.unwrap();
+
+        let groups = list_groups(&pool).await.unwrap();
+        let steam = groups.iter().find(|g| g.id == "steam").unwrap();
+        assert_eq!(steam.category_id, None, "none 应返回成空值");
+    }
+
+    /// 造一个按预设进了「游戏」的 Steam 组（显示名能命中内置规则）。
+    async fn seed_steam_in_game(pool: &DbPool) {
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                     VALUES('steam', 'Steam', 'game', '2026-05-15T10:00:00Z', NULL)",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 
     /// 测 [`rename`]：只改显示名，分类不动，入 1 条组 outbox。
