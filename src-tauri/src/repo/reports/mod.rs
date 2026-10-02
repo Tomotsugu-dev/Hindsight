@@ -2,7 +2,8 @@
 //! shown after opening an app.
 //!
 //! The Daily, Weekly and Monthly pages share this code. Each file has the following role:
-//! - `by_hour.rs`: splits activity records by hour to calculate app rankings for the Daily page.
+//! - `by_hour.rs`: splits activity records by hour to calculate each hour's time per category
+//!   and the app ranking for a selected hour, for the Daily page.
 //! - `by_date.rs`: queries daily time per category and app rankings within a date range for the
 //!   Daily, Weekly and Monthly pages.
 //! - `app_detail.rs`: queries the details shown after clicking an app, for daily, weekly and

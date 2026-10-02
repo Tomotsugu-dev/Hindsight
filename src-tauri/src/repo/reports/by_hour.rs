@@ -291,7 +291,7 @@ mod tests {
         }
     }
 
-    /// 测 [`day_hour_apps`]：local_hour 过滤后只返该小时内的应用。
+    /// 测 [`day_hour_apps`]：只返回在这一小时里有用时的应用。
     #[tokio::test]
     async fn day_hour_apps_filters_by_hour() {
         let pool = fresh_test_pool().await;
