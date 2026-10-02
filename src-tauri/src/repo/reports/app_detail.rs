@@ -9,7 +9,7 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_local, slice_by_hour};
+use super::time::{parse_time_in_local, slice_by_hour};
 use super::{AppDetail, DetailBucket, DeviceFilter, TitleUsage};
 
 /// How the detail time bars are grouped: by hour on the Daily page, by day on the Weekly and
@@ -87,7 +87,8 @@ pub async fn app_range_detail(
                         .db()?;
                     for row in session_rows {
                         let (started, ended) = row.db()?;
-                        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended))
+                        let (Some(s), Some(e)) =
+                            (parse_time_in_local(&started), parse_time_in_local(&ended))
                         else {
                             continue;
                         };
