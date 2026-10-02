@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: () => Promise.resolve(null),
 }));
 
-import { dtoToDaySummary, type HourSegment } from "./hindsight";
+import { dtoToDaySummary, type CategoryTime } from "./hindsight";
 
 describe("dtoToDaySummary", () => {
   afterEach(() => {
@@ -31,7 +31,7 @@ describe("dtoToDaySummary", () => {
   });
 
   it("segments 原样透传", () => {
-    const segments: HourSegment[] = [
+    const segments: CategoryTime[] = [
       { categoryId: "work", secs: 1800 },
     ];
     const out = dtoToDaySummary({ date: "2024-06-15", segments });

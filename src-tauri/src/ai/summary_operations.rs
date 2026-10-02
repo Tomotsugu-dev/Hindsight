@@ -270,7 +270,7 @@ pub(crate) async fn build_activity_timeline(
             for cat in &excluded {
                 params.push(cat);
             }
-            if let Some(extra) = dev.extra_param() {
+            if let Some(extra) = dev.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;

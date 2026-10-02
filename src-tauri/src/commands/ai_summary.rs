@@ -17,7 +17,7 @@ use crate::ai::summary::{
     WeekSummaryRunner, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,
 };
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
-use crate::repo::reports::device_filter_from_option;
+use crate::repo::reports::DeviceFilter;
 use crate::storage::DbPool;
 
 /// AI 总结流程的取消信号——管 lib.rs `manage` 的全局单例。
@@ -76,7 +76,7 @@ pub async fn generate_day_summary(
     };
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
-    let device = device_filter_from_option(device_id);
+    let device = DeviceFilter::from_option(device_id);
     let source = source.unwrap_or_else(|| "daily".to_string());
 
     cancel.0.store(false, Ordering::Relaxed);
@@ -123,7 +123,7 @@ pub async fn retry_summary_segment(
     };
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
-    let device = device_filter_from_option(device_id);
+    let device = DeviceFilter::from_option(device_id);
     let source = source.unwrap_or_else(|| "daily".to_string());
 
     cancel.0.store(false, Ordering::Relaxed);

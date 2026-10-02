@@ -11,7 +11,7 @@ import type {
   Category,
   AppUsage,
   HourSlot,
-  HourSegment,
+  CategoryTime,
   Settings,
   DeviceRow,
   AuthState,
@@ -582,8 +582,8 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
       const cat = def?.category ?? "other";
       segMap.set(cat, (segMap.get(cat) ?? 0) + a.minutes);
     }
-    const segments: HourSegment[] = Array.from(segMap.entries()).map(
-      ([categoryId, minutes]) => ({ categoryId, minutes, secs: minutes * 60 }),
+    const segments: CategoryTime[] = Array.from(segMap.entries()).map(
+      ([categoryId, minutes]) => ({ categoryId, secs: minutes * 60 }),
     );
     hours.push({ hour: h, segments });
   }
@@ -599,7 +599,7 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
     .map(([process, minutes]) => {
       const def = APPS.find((x) => x.process === process);
       return {
-        process,
+        displayName: process,
         categoryId: def?.category ?? "other",
         minutes,
         iconProcess: process,

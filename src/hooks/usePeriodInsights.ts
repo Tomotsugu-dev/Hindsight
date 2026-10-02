@@ -41,7 +41,7 @@ interface UseInsightsArgs<T extends SegmentSource> {
 }
 
 function sumMinutes(sources: SegmentSource[]): number {
-  // 累秒后取整——与 top-apps / 页面头部总时长同口径（见 HourSegment.secs 注释）
+  // 累秒后取整——与 top-apps / 页面头部总时长同口径（见 CategoryTime.secs 注释）
   let secs = 0;
   for (const src of sources) {
     for (const seg of src.segments) secs += seg.secs;

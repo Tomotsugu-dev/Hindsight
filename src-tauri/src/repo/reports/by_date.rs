@@ -9,7 +9,7 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::{AppUsage, DaySummary, DeviceFilter, HourSegment};
+use super::{AppUsage, CategoryTime, DaySummary, DeviceFilter};
 
 /// Each category's time on each day of a date range, for drawing a bar chart with one bar per day:
 /// one entry per day from `from` to `to`, each bar split by category, with empty `segments` on days
@@ -42,7 +42,7 @@ pub async fn day_category_time(
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&from_str);
             params.push(&to_str);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
@@ -77,11 +77,11 @@ pub async fn day_category_time(
     // TODO: `cur` (the current day) needs a clearer name, or a change for accurate day splitting.
     while cur <= to {
         let key = cur.format("%Y-%m-%d").to_string();
-        let mut segs: Vec<HourSegment> = buckets
+        let mut segs: Vec<CategoryTime> = buckets
             .remove(&key)
             .unwrap_or_default()
             .into_iter()
-            .map(|(category_id, secs)| HourSegment { category_id, secs })
+            .map(|(category_id, secs)| CategoryTime { category_id, secs })
             .collect();
         // Descending: see the comment on the same pattern above
         segs.sort_by_key(|s| std::cmp::Reverse(s.secs));
@@ -131,7 +131,7 @@ pub async fn top_apps(
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&from_str);
             params.push(&to_str);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             params.push(&limit);
@@ -156,8 +156,8 @@ pub async fn top_apps(
 
     Ok(rows
         .into_iter()
-        .map(|(process, cat, icon_process, secs)| AppUsage {
-            process,
+        .map(|(display_name, cat, icon_process, secs)| AppUsage {
+            display_name,
             category_id: cat,
             minutes: (secs as f64 / 60.0).round() as u32,
             icon_process,
@@ -196,7 +196,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(all.len(), 1, "All 视角应只有一行");
-        assert_eq!(all[0].process, "Code");
+        assert_eq!(all[0].display_name, "Code");
         assert_eq!(all[0].minutes, 8);
         assert_eq!(all[0].category_id, "code");
 
@@ -256,7 +256,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "cross-OS 别名应合并成一行，不是两行");
-        assert_eq!(rows[0].process, "Visual Studio Code");
+        assert_eq!(rows[0].display_name, "Visual Studio Code");
         assert_eq!(rows[0].minutes, 8);
         assert_eq!(rows[0].category_id, "code");
         // icon_process 是 MIN(process_name)，二选一即可
@@ -291,7 +291,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "excluded 行不该出现在 top_apps");
-        assert_eq!(rows[0].process, "Editor");
+        assert_eq!(rows[0].display_name, "Editor");
     }
 
     /// 测 [`day_category_time`]（本周）：今天的 DaySummary 应 SUM 多设备 (All) 或单设备 (Only) 时长。
@@ -351,11 +351,11 @@ mod tests {
             .unwrap();
         assert!(apps.len() >= 3, "应至少 3 行");
         // 降序：Code (5) > Chrome (3) > Slack (1)
-        assert_eq!(apps[0].process, "Code");
+        assert_eq!(apps[0].display_name, "Code");
         assert_eq!(apps[0].minutes, 5);
-        assert_eq!(apps[1].process, "Chrome");
+        assert_eq!(apps[1].display_name, "Chrome");
         assert_eq!(apps[1].minutes, 3);
-        assert_eq!(apps[2].process, "Slack");
+        assert_eq!(apps[2].display_name, "Slack");
         assert_eq!(apps[2].minutes, 1);
 
         // limit 钉死
@@ -363,8 +363,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(top_2.len(), 2);
-        assert_eq!(top_2[0].process, "Code");
-        assert_eq!(top_2[1].process, "Chrome");
+        assert_eq!(top_2[0].display_name, "Code");
+        assert_eq!(top_2[1].display_name, "Chrome");
     }
 
     /// 测 [`top_apps`]（本周）：同一应用跨多天求和成一行，范围外（上周）的量不掺入。
@@ -388,7 +388,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(apps.len(), 1, "同一应用跨天应合并成一行");
-        assert_eq!(apps[0].process, "Code");
+        assert_eq!(apps[0].display_name, "Code");
         assert_eq!(
             apps[0].minutes, 10,
             "300+300=600s=10min，上周的 6000s 不该掺入"

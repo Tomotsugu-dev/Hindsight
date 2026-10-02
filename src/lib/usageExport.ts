@@ -179,7 +179,7 @@ function totalSecsOfDays(days: DaySummaryDto[]): number {
 
 function appStats(apps: AppUsage[], catName: (id: string) => string): AppStat[] {
   return apps.map((a) => ({
-    name: a.process,
+    name: a.displayName,
     categoryId: a.categoryId,
     categoryName: catName(a.categoryId),
     minutes: a.minutes,

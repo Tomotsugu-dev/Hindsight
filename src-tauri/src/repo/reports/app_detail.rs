@@ -76,7 +76,7 @@ pub async fn app_range_detail(
                     bparams.push(&from_str);
                     bparams.push(&to_str);
                     bparams.push(&group_key);
-                    if let Some(extra) = device.extra_param() {
+                    if let Some(extra) = device.sql_param() {
                         bparams.push(extra);
                     }
                     let mut bstmt = conn.prepare(&bsql).db()?;
@@ -117,7 +117,7 @@ pub async fn app_range_detail(
                     bparams.push(&from_str);
                     bparams.push(&to_str);
                     bparams.push(&group_key);
-                    if let Some(extra) = device.extra_param() {
+                    if let Some(extra) = device.sql_param() {
                         bparams.push(extra);
                     }
                     let mut bstmt = conn.prepare(&bsql).db()?;
@@ -156,7 +156,7 @@ pub async fn app_range_detail(
             tparams.push(&from_str);
             tparams.push(&to_str);
             tparams.push(&group_key);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 tparams.push(extra);
             }
             let mut tstmt = conn.prepare(&tsql).db()?;
