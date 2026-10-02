@@ -6,7 +6,7 @@
 use tauri::State;
 
 use crate::repo::reports::{
-    self, device_filter_from_option, AppDetail, AppUsage, DaySummary, HourSlot,
+    self, device_filter_from_option, AppDetail, AppUsage, BucketBy, DaySummary, HourSlot,
 };
 use crate::storage::DbPool;
 
@@ -73,11 +73,14 @@ pub async fn get_app_day_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    reports::app_day_detail(
+    let day = reports::day_date(day_offset);
+    reports::app_range_detail(
         &pool,
-        day_offset,
+        day,
+        day,
         icon_process,
         device_filter_from_option(device_id),
+        BucketBy::Hour,
     )
     .await
     .map_err(Into::into)
@@ -91,11 +94,14 @@ pub async fn get_app_week_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    reports::app_week_detail(
+    let (from, to) = reports::week_range(week_offset);
+    reports::app_range_detail(
         &pool,
-        week_offset,
+        from,
+        to,
         icon_process,
         device_filter_from_option(device_id),
+        BucketBy::Day,
     )
     .await
     .map_err(Into::into)
@@ -109,11 +115,14 @@ pub async fn get_app_month_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    reports::app_month_detail(
+    let (from, to) = reports::month_range(month_offset);
+    reports::app_range_detail(
         &pool,
-        month_offset,
+        from,
+        to,
         icon_process,
         device_filter_from_option(device_id),
+        BucketBy::Day,
     )
     .await
     .map_err(Into::into)

@@ -22,7 +22,7 @@ mod by_hour;
 mod test_seed;
 mod time;
 
-pub use app_detail::{app_day_detail, app_month_detail, app_week_detail};
+pub use app_detail::{app_range_detail, BucketBy};
 pub use by_date::{day_category_time, top_apps};
 pub use by_hour::{day_hour_apps, day_hours};
 pub use time::{day_date, month_range, week_range};
