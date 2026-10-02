@@ -102,10 +102,10 @@ impl InMemoryDriveStore {
 
     pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         // 失败注入：配额 > 0 时原子扣减一次并返回 500。checked_sub 在 0 时返回
-        // None → fetch_update Err → 不注入，走正常路径。
+        // None → try_update Err → 不注入，走正常路径。
         if self
             .fail_next_upserts
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_sub(1))
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_sub(1))
             .is_ok()
         {
             return Err(Error::DriveHttp {
