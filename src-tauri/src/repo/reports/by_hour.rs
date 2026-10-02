@@ -1,7 +1,7 @@
 //! Reports computed by splitting records at clock hours: the 24 hour bars on the Daily page, and
 //! the app ranking after clicking an hour bar.
 
-use chrono::{Duration, Local};
+use chrono::NaiveDate;
 use rusqlite::ToSql;
 
 use crate::error::Result;
@@ -12,16 +12,13 @@ use crate::storage::SqliteResultExt;
 use super::time::{parse_local, slice_by_hour};
 use super::{AppUsage, DeviceFilter, HourSegment, HourSlot};
 
-/// Time per category for each of the 24 hours of a day. `day_offset = 0` is today, -1 is
-/// yesterday.
+/// Time per category for each of the 24 hours of a day.
 pub async fn day_hours(
     pool: &DbPool,
-    day_offset: i32,
+    day: NaiveDate,
     device: DeviceFilter,
 ) -> Result<Vec<HourSlot>> {
-    let date = (Local::now() + Duration::days(day_offset as i64))
-        .format("%Y-%m-%d")
-        .to_string();
+    let date = day.format("%Y-%m-%d").to_string();
 
     let rows: Vec<(String, String, String)> = pool
         .0
@@ -102,20 +99,18 @@ pub async fn day_hours(
 /// Returns the app ranking within one hour of a day, by time, most first.
 ///
 /// - `pool`: database connection pool.
-/// - `day_offset`: days from today; `0` is today, `-1` is yesterday.
+/// - `day`: the day to query, in NaiveDate format.
 /// - `hour`: the hour to query, `0`–`23`.
 /// - `limit`: the most apps to return.
 /// - `device`: device filter.
 pub async fn day_hour_apps(
     pool: &DbPool,
-    day_offset: i32,
+    day: NaiveDate,
     hour: i32,
     limit: u32,
     device: DeviceFilter,
 ) -> Result<Vec<AppUsage>> {
-    let date = (Local::now() + Duration::days(day_offset as i64))
-        .format("%Y-%m-%d")
-        .to_string();
+    let date = day.format("%Y-%m-%d").to_string();
 
     // (display, cat, icon_process, started, ended); adding up happens after slicing
     let rows: Vec<(String, String, String, String, String)> = pool
@@ -200,7 +195,7 @@ mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{insert_session_with_times, seed_solo_group};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::TimeZone;
+    use chrono::{Duration, Local, TimeZone};
 
     /// 结束时间不是合法时间文本的记录不计入 [`day_hours`]，同一天的其它记录照常计入。
     #[tokio::test]
@@ -230,7 +225,9 @@ mod tests {
             .await
             .unwrap();
 
-        let slots = day_hours(&pool, -1, DeviceFilter::All).await.unwrap();
+        let slots = day_hours(&pool, yesterday, DeviceFilter::All)
+            .await
+            .unwrap();
         let total: u64 = slots.iter().flat_map(|s| &s.segments).map(|s| s.secs).sum();
         assert_eq!(
             total, 1800,
@@ -256,7 +253,7 @@ mod tests {
         insert_session_with_times(&pool, TEST_SELF_ID, &today_str, "Code", started, ended).await;
         seed_solo_group(&pool, "Code", "code").await;
 
-        let slots = day_hours(&pool, 0, DeviceFilter::All).await.unwrap();
+        let slots = day_hours(&pool, today, DeviceFilter::All).await.unwrap();
         assert_eq!(slots.len(), 24);
 
         let h10 = slots.iter().find(|s| s.hour == 10).unwrap();
@@ -313,13 +310,13 @@ mod tests {
         seed_solo_group(&pool, "Code", "code").await;
         seed_solo_group(&pool, "Chrome", "browse").await;
 
-        let h10 = day_hour_apps(&pool, 0, 10, 50, DeviceFilter::All)
+        let h10 = day_hour_apps(&pool, today, 10, 50, DeviceFilter::All)
             .await
             .unwrap();
         assert_eq!(h10.len(), 1, "hour=10 只应有 Code");
         assert_eq!(h10[0].process, "Code");
 
-        let h11 = day_hour_apps(&pool, 0, 11, 50, DeviceFilter::All)
+        let h11 = day_hour_apps(&pool, today, 11, 50, DeviceFilter::All)
             .await
             .unwrap();
         assert_eq!(h11.len(), 1, "hour=11 只应有 Chrome");

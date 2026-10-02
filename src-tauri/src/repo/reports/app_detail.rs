@@ -220,7 +220,7 @@ mod tests {
     use crate::repo::reports::test_seed::{
         insert_activity, insert_session_titled, insert_session_with_times, seed_solo_group,
     };
-    use crate::repo::reports::time::{day_date, month_range, week_range};
+    use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use chrono::{Local, TimeZone};
 
@@ -299,7 +299,7 @@ mod tests {
     #[tokio::test]
     async fn app_range_detail_titles_carry_url_host_and_browser_flag() {
         let pool = fresh_test_pool().await;
-        let day = day_date(0);
+        let day = Local::now().date_naive();
         let today = day.format("%Y-%m-%d").to_string();
         let d = today.clone();
         pool.0
@@ -559,7 +559,7 @@ mod tests {
     #[tokio::test]
     async fn app_range_detail_week_day_buckets_zero_filled_in_order() {
         let pool = fresh_test_pool().await;
-        let (monday, sunday) = week_range(0);
+        let (monday, sunday) = week_range(Local::now().date_naive(), 0);
         let day = |off: i64| {
             (monday + Duration::days(off))
                 .format("%Y-%m-%d")
@@ -598,7 +598,7 @@ mod tests {
     #[tokio::test]
     async fn app_range_detail_month_covers_whole_month() {
         let pool = fresh_test_pool().await;
-        let (first, last) = month_range(0);
+        let (first, last) = month_range(Local::now().date_naive(), 0);
         let n_days = ((last - first).num_days() + 1) as usize;
         let day = |off: i64| (first + Duration::days(off)).format("%Y-%m-%d").to_string();
 

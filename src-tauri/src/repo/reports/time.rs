@@ -1,7 +1,7 @@
 //! Time helpers: parse an activity's start and end times, split a time range at clock hours, and
 //! work out the start and end dates of a day, week or month.
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, Duration, Local, Months, NaiveDate, TimeZone, Timelike};
 
 /// Converts a stored time string (RFC 3339) to this machine's time zone. Logs an error and returns
 /// None if the format is wrong.
@@ -32,9 +32,7 @@ pub(super) fn slice_by_hour(start: DateTime<Local>, end: DateTime<Local>) -> Vec
             .map(|t| t + Duration::hours(1))
             .unwrap_or(end);
         let chunk_end = if next_hour < end { next_hour } else { end };
-        // TODO: Remove `.max(0)`. The loop guarantees `chunk_end > cur`, so the difference is never
-        // negative; a test (10:30→11:30 in `app_detail.rs`) covers splitting across hours.
-        let secs = (chunk_end - cur).num_seconds().max(0) as u64;
+        let secs = (chunk_end - cur).num_seconds() as u64;
         if secs > 0 {
             out.push((hour, secs));
         }
@@ -43,51 +41,72 @@ pub(super) fn slice_by_hour(start: DateTime<Local>, end: DateTime<Local>) -> Vec
     out
 }
 
-/// The date of one day. `day_offset = 0` is today, -1 is yesterday.
-// TODO: Count calendar days instead: `Local::now().date_naive() + Duration::days(..)`. This moves
-// n × 24 hours from now, so where daylight saving time is used, clicking "yesterday" at 23:30 on
-// the day the clocks go back still gives today. Two places in `by_hour.rs` and one in
-// `app_detail.rs` use the same expression; change them to call this function. This changes
-// behavior, so do it in its own commit, test first.
-pub fn day_date(day_offset: i32) -> NaiveDate {
-    (Local::now() + Duration::days(day_offset as i64)).date_naive()
+/// The date of one day. Adds calendar days instead of moving in 24-hour steps: a day with a clock
+/// change has 23 or 25 hours.
+/// - `today`: today's date.
+/// - `day_offset`: days from today; 0 is today, -1 is yesterday.
+pub fn day_date(today: NaiveDate, day_offset: i32) -> NaiveDate {
+    today + Duration::days(day_offset as i64)
 }
 
-// TODO: Add a doc comment that says what it does, and rename the function.
-pub fn week_range(week_offset: i32) -> (NaiveDate, NaiveDate) {
-    let today = Local::now().date_naive();
+/// The start and end dates of one week: Monday to Sunday.
+/// - `today`: today's date.
+/// - `week_offset`: weeks from this week; 0 is this week, -1 is last week.
+pub fn week_range(today: NaiveDate, week_offset: i32) -> (NaiveDate, NaiveDate) {
     let dow = today.weekday().num_days_from_monday() as i64;
     let monday = today - Duration::days(dow) + Duration::days(week_offset as i64 * 7);
     let sunday = monday + Duration::days(6);
     (monday, sunday)
 }
 
-// TODO: Add a doc comment that says what it does.
-pub fn month_range(month_offset: i32) -> (NaiveDate, NaiveDate) {
-    let today = Local::now().date_naive();
-    let mut year = today.year();
-    let mut month = today.month() as i32 + month_offset;
-    // TODO: There should already be a mature way to add a month offset to a date.
-    while month <= 0 {
-        month += 12;
-        year -= 1;
-    }
-    while month > 12 {
-        month -= 12;
-        year += 1;
-    }
-    // TODO: Check whether panicking here is reasonable.
-    let first = NaiveDate::from_ymd_opt(year, month as u32, 1)
-        .expect("month_range: year/month must be within chrono's valid range");
-    // TODO: Could be clearer: finish normalizing the year and month first (a modulo would do),
-    // then write the if/else.
-    let next = if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1).expect("month_range: rolls over to January")
+/// The start and end dates of one month: the 1st to the last day.
+/// - `today`: today's date.
+/// - `month_offset`: months from this month; 0 is this month, -1 is last month.
+pub fn month_range(today: NaiveDate, month_offset: i32) -> (NaiveDate, NaiveDate) {
+    let this_month = today.with_day(1).expect("every month has a day 1");
+    let months = Months::new(month_offset.unsigned_abs());
+    // Panics only beyond the dates chrono can represent (about ±260,000 years); an offset from a
+    // page never gets there.
+    let from = if month_offset < 0 {
+        this_month - months
     } else {
-        NaiveDate::from_ymd_opt(year, (month + 1) as u32, 1)
-            .expect("month_range: month + 1 must be within 1..=12")
+        this_month + months
     };
-    let last = next - Duration::days(1);
-    // TODO: Name these `from` and `to`, as elsewhere in this module.
-    (first, last)
+    let to = from + Months::new(1) - Duration::days(1);
+    (from, to)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    /// 起止是那个月的 1 号到月底：本月、跨年往前、二月（含闰年）、往前 13 个月、往后跨年。
+    #[test]
+    fn month_range_covers_whole_months() {
+        let cases = [
+            // (今天, 偏移, 起, 止)
+            (date(2026, 10, 2), 0, date(2026, 10, 1), date(2026, 10, 31)),
+            (date(2026, 1, 15), -1, date(2025, 12, 1), date(2025, 12, 31)),
+            (date(2026, 3, 31), -1, date(2026, 2, 1), date(2026, 2, 28)),
+            (date(2024, 3, 10), -1, date(2024, 2, 1), date(2024, 2, 29)),
+            (
+                date(2026, 1, 15),
+                -13,
+                date(2024, 12, 1),
+                date(2024, 12, 31),
+            ),
+            (date(2026, 12, 5), 1, date(2027, 1, 1), date(2027, 1, 31)),
+        ];
+        for (today, offset, from, to) in cases {
+            assert_eq!(
+                month_range(today, offset),
+                (from, to),
+                "{today} 偏移 {offset}"
+            );
+        }
+    }
 }
