@@ -1,11 +1,14 @@
 //! Data for the Daily, Weekly and Monthly pages: time per category, app rankings, and the details
 //! shown after opening an app.
 //!
-//! Files:
-//! - `day.rs`: Daily.
-//! - `range.rs`: Weekly and Monthly, queried by start and end date.
-//! - `app_detail.rs`: details after opening an app, for day, week and month.
-//! - `time.rs`: time helpers shared by `day.rs` and `app_detail.rs`.
+//! The Daily, Weekly and Monthly pages share this code. Each file has the following role:
+//! - `by_hour.rs`: splits activity records by hour to calculate app rankings for the Daily page.
+//! - `by_date.rs`: queries daily time per category and app rankings within a date range for the
+//!   Daily, Weekly and Monthly pages.
+//! - `app_detail.rs`: queries the details shown after clicking an app, for daily, weekly and
+//!   monthly time ranges.
+//! - `time.rs`: provides helpers for parsing times, splitting time ranges by hour, and calculating
+//!   date ranges.
 //!
 //! Every query must do two things: follow [`DeviceFilter`] to add up all devices or show one;
 //! leave out "Ignored windows" (`a.excluded = 0`).
@@ -13,15 +16,16 @@
 use serde::Serialize;
 
 mod app_detail;
-mod day;
-mod range;
+mod by_date;
+mod by_hour;
 #[cfg(test)]
 mod test_seed;
 mod time;
 
 pub use app_detail::{app_day_detail, app_month_detail, app_week_detail};
-pub use day::{day_apps, day_hour_apps, day_hours};
-pub use range::{month_apps, month_days, week_apps, week_days};
+pub use by_date::{day_category_time, top_apps};
+pub use by_hour::{day_hour_apps, day_hours};
+pub use time::{day_date, month_range, week_range};
 
 // TODO: Rename to `CategorySegment`. `DaySummary` also uses it for each category's time in a day,
 // not only in an hour. The frontend has a type with the same name in `src/api/hindsight.ts`;
@@ -36,8 +40,8 @@ pub struct HourSegment {
     /// devices are combined.
     // TODO: Remove this field and send only `secs`. The Daily, Weekly and Monthly bar charts on
     // the frontend (HourlyChart, WeeklyBarChart, DailyBarChart) all add it up; change them to add
-    // up `secs` and convert to minutes at the end. Sort categories by `secs` in `day.rs` and
-    // `range.rs` as well.
+    // up `secs` and convert to minutes at the end. Sort categories by `secs` in `by_hour.rs` and
+    // `by_date.rs` as well.
     pub minutes: u32,
     /// Seconds before rounding.
     pub secs: u64,

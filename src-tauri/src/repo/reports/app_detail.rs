@@ -9,8 +9,7 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::range::{month_range, week_range};
-use super::time::{parse_local, slice_by_hour};
+use super::time::{month_range, parse_local, slice_by_hour, week_range};
 use super::{AppDetail, DetailBucket, DeviceFilter, TitleUsage};
 
 /// How the detail time bars are grouped: by hour on the Daily page, by day on the Weekly and
@@ -24,7 +23,7 @@ enum BucketBy {
 /// Core of the details drawer opened by clicking an app: for the `[from, to]` date range and a
 /// grouping, adds up the time bars (buckets) and the time per window title (titles). First finds
 /// the group key of icon_process (the same rule as `GROUP BY COALESCE(g.display_name,
-/// a.process_name)` in [`day_apps`](super::day_apps)), then adds up that group's activities.
+/// a.process_name)` in [`top_apps`](super::top_apps)), then adds up that group's activities.
 async fn app_range_detail(
     pool: &DbPool,
     from: NaiveDate,

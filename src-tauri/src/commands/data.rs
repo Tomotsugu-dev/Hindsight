@@ -31,9 +31,11 @@ pub async fn get_day_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    reports::day_apps(
+    let day = reports::day_date(day_offset);
+    reports::top_apps(
         &pool,
-        day_offset,
+        day,
+        day,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
     )
@@ -124,7 +126,8 @@ pub async fn get_week_days(
     week_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
-    reports::week_days(&pool, week_offset, device_filter_from_option(device_id))
+    let (from, to) = reports::week_range(week_offset);
+    reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
 }
@@ -137,9 +140,11 @@ pub async fn get_week_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    reports::week_apps(
+    let (from, to) = reports::week_range(week_offset);
+    reports::top_apps(
         &pool,
-        week_offset,
+        from,
+        to,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
     )
@@ -154,7 +159,8 @@ pub async fn get_month_days(
     month_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
-    reports::month_days(&pool, month_offset, device_filter_from_option(device_id))
+    let (from, to) = reports::month_range(month_offset);
+    reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
 }
@@ -167,9 +173,11 @@ pub async fn get_month_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    reports::month_apps(
+    let (from, to) = reports::month_range(month_offset);
+    reports::top_apps(
         &pool,
-        month_offset,
+        from,
+        to,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
     )

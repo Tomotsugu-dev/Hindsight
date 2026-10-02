@@ -206,7 +206,7 @@ impl CaptureService {
         // session 永远拿不回 ended_at —— current_lock 是 in-memory 的，进程一退就丢，
         // 留在 DB 里的 duration_secs=0 + ended_at=started_at 的孤儿行就这么僵着。
         // 这里 spawn 后台 tick 之前先一刀切删掉所有这种孤儿，避免：
-        //   1. day_apps / day_hours 的 SUM 不变（孤儿贡献本来就是 0），但 PairingSection
+        //   1. top_apps / day_hours 的 SUM 不变（孤儿贡献本来就是 0），但 PairingSection
         //      之类按行展示的 UI 会看到一堆 dur=0 的诡异历史
         //   2. push 把它们当今天/历史日的有效行上传 Drive，对端 mirror 进 DB 占空间
         //

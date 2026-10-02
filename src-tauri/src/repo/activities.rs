@@ -324,7 +324,7 @@ pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -
 ///
 /// 副作用：
 /// - **本地 DELETE**：所有匹配的行直接删（不软删，本表没 deleted_at 列）。
-///   pure 0 时长的行没数据价值，删了 day_apps SUM 不变（贡献本来就是 0）。
+///   pure 0 时长的行没数据价值，删了 top_apps SUM 不变（贡献本来就是 0）。
 /// - **触发 push 同步**：每个受影响的 local_date 入一个 outbox 行，下次 push tick
 ///   走 [`crate::sync::engine::push::build_activities_day`] 全量重写当天 ndjson 到 Drive。
 ///   对端 pull 收到 [`crate::sync::engine::pull::merge_activities`] 的 mirror 收敛
