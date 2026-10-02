@@ -14,6 +14,8 @@ use super::{AppUsage, CategoryTime, DaySummary, DeviceFilter};
 /// Each category's time on each day of a date range, for drawing a bar chart with one bar per day:
 /// one entry per day from `from` to `to`, each bar split by category, with empty `segments` on days
 /// with no activity. A record counts toward the day it started, even if it runs past midnight.
+// TODO: Decide whether records crossing midnight should split their time across dates. Changing
+// this also affects the date ranges used by app rankings and details; handle it separately.
 pub async fn day_category_time(
     pool: &DbPool,
     from: NaiveDate,
@@ -73,10 +75,9 @@ pub async fn day_category_time(
     }
 
     let mut out = Vec::new();
-    let mut cur = from;
-    // TODO: `cur` (the current day) needs a clearer name, or a change for accurate day splitting.
-    while cur <= to {
-        let key = cur.format("%Y-%m-%d").to_string();
+    let mut cur_date = from;
+    while cur_date <= to {
+        let key = cur_date.format("%Y-%m-%d").to_string();
         let mut segs: Vec<CategoryTime> = buckets
             .remove(&key)
             .unwrap_or_default()
@@ -89,7 +90,7 @@ pub async fn day_category_time(
             date: key,
             segments: segs,
         });
-        cur += Duration::days(1);
+        cur_date += Duration::days(1);
     }
 
     Ok(out)

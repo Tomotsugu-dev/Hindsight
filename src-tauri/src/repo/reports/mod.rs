@@ -96,6 +96,7 @@ pub struct DetailBucket {
     pub secs: u32,
 }
 
+/// Total time for one window title and website (if present), aggregated across activity records.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TitleUsage {
