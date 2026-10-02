@@ -5,6 +5,7 @@ import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
 import { formatAxisTick } from "../../utils/duration";
 import type { HourSlot } from "../../api/hindsight";
+import { barMinutes, barSecs } from "../../lib/segments";
 import styles from "./HourlyChart.module.css";
 
 export interface WorkRange {
@@ -45,7 +46,7 @@ export function HourlyChart({
     if (externalMax !== undefined) return externalMax;
     if (!hours.length) return 60;
     const peak = hours.reduce(
-      (m, h) => Math.max(m, h.segments.reduce((s, x) => s + x.minutes, 0)),
+      (m, h) => Math.max(m, barMinutes(h.segments)),
       0,
     );
     return peak <= 60 ? 60 : Math.ceil(peak / 15) * 15;
@@ -144,7 +145,8 @@ function HourBar({
   dimmed: boolean;
   onClick?: (hour: number) => void;
 }) {
-  const total = slot.segments.reduce((s, x) => s + x.minutes, 0);
+  const total = barMinutes(slot.segments);
+  const totalSecs = barSecs(slot.segments);
   const heightPct = Math.min((total / maxMinutes) * 100, 100);
   const interactive = !!onClick;
   const isDark = useIsDark();
@@ -183,7 +185,7 @@ function HourBar({
                 key={seg.categoryId}
                 className={styles.segment}
                 style={{
-                  height: `${(seg.minutes / total) * 100}%`,
+                  height: `${(seg.secs / totalSecs) * 100}%`,
                   background: color,
                 }}
               />

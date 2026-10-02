@@ -4,6 +4,7 @@ import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
 import { displayCategoryName } from "../../utils/categoryName";
 import type { DaySummary } from "../../api/hindsight";
+import { barMinutes, barSecs } from "../../lib/segments";
 import styles from "./WeeklyBarChart.module.css";
 
 interface WeeklyBarChartProps {
@@ -53,7 +54,7 @@ export function WeeklyBarChart({
   const fmtDate = (d: Date): string =>
     t("week.shortDate", { month: d.getMonth() + 1, day: d.getDate() });
 
-  const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
+  const totals = days.map((d) => barMinutes(d.segments));
   const maxTotal = Math.max(0, ...totals);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -63,6 +64,7 @@ export function WeeklyBarChart({
     <div className={styles.chart}>
       {days.map((day, i) => {
         const total = totals[i];
+        const totalSecs = barSecs(day.segments);
         const widthPct = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
         const isToday = day.date.toDateString() === today.toDateString();
         const selected = selectedIndex === i;
@@ -96,15 +98,15 @@ export function WeeklyBarChart({
                         key={seg.categoryId}
                         className={styles.segment}
                         style={{
-                          width: `${(seg.minutes / total) * 100}%`,
+                          width: `${(seg.secs / totalSecs) * 100}%`,
                           background: cat
                             ? adjustCategoryColor(cat.color, isDark)
                             : "var(--cat-fallback, #9ca3af)",
                         }}
                         title={
                           cat
-                            ? `${displayCategoryName(cat, t)} · ${fmtTotal(seg.minutes)}`
-                            : fmtTotal(seg.minutes)
+                            ? `${displayCategoryName(cat, t)} · ${fmtTotal(barMinutes([seg]))}`
+                            : fmtTotal(barMinutes([seg]))
                         }
                       />
                     );

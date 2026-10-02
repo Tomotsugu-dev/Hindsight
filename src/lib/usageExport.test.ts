@@ -98,13 +98,13 @@ describe("collectUsageData", () => {
       if (mo === -1)
         return Promise.resolve(
           monthOf(2026, 6, {
-            "2026-06-30": [{ categoryId: "code", minutes: 60, secs: 3600 }],
+            "2026-06-30": [{ categoryId: "code", secs: 3600 }],
           }),
         );
       if (mo === 0)
         return Promise.resolve(
           monthOf(2026, 7, {
-            "2026-07-01": [{ categoryId: "browse", minutes: 30, secs: 1800 }],
+            "2026-07-01": [{ categoryId: "browse", secs: 1800 }],
           }),
         );
       throw new Error(`unexpected month offset: ${mo}`);
@@ -118,12 +118,12 @@ describe("collectUsageData", () => {
       if (weekOffset === -2)
         return Promise.resolve(
           monthOf(2026, 6, {
-            "2026-06-30": [{ categoryId: "code", minutes: 60, secs: 3600 }],
+            "2026-06-30": [{ categoryId: "code", secs: 3600 }],
           })
             .slice(28) // 6/29、6/30
             .concat(
               monthOf(2026, 7, {
-                "2026-07-01": [{ categoryId: "browse", minutes: 30, secs: 1800 }],
+                "2026-07-01": [{ categoryId: "browse", secs: 1800 }],
               }).slice(0, 5), // 7/1 ~ 7/5
             ),
         );

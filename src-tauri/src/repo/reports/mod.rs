@@ -36,14 +36,6 @@ pub use time::{day_date, month_range, week_range};
 #[serde(rename_all = "camelCase")]
 pub struct HourSegment {
     pub category_id: String,
-    /// Minutes after rounding, for bar charts only. Each bucket is rounded on its own, so adding
-    /// them drifts from the real total; add up `secs` instead. An hour bucket can exceed 60 when
-    /// devices are combined.
-    // TODO: Remove this field and send only `secs`. The Daily, Weekly and Monthly bar charts on
-    // the frontend (HourlyChart, WeeklyBarChart, DailyBarChart) all add it up; change them to add
-    // up `secs` and convert to minutes at the end. Sort categories by `secs` in `by_hour.rs` and
-    // `by_date.rs` as well.
-    pub minutes: u32,
     /// Seconds before rounding.
     pub secs: u64,
 }
@@ -54,7 +46,7 @@ pub struct HourSegment {
 pub struct HourSlot {
     /// 0..=23
     pub hour: u8,
-    /// Sorted by `minutes`, most first; empty when the hour has no activity.
+    /// Sorted by `secs`, most first; empty when the hour has no activity.
     pub segments: Vec<HourSegment>,
 }
 
@@ -64,7 +56,7 @@ pub struct HourSlot {
 pub struct DaySummary {
     /// Date as `YYYY-MM-DD`
     pub date: String,
-    /// The day's minutes, split by category
+    /// The day's time split by category, sorted by `secs`, most first
     pub segments: Vec<HourSegment>,
 }
 

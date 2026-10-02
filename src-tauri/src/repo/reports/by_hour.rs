@@ -83,16 +83,12 @@ pub async fn day_hours(
                 .iter()
                 .map(|(cat, secs)| HourSegment {
                     category_id: cat.clone(),
-                    minutes: ((*secs as f64 / 60.0).round() as u32),
                     secs: *secs,
                 })
-                // Filter by secs, not minutes: pieces under 30s round to 0 minutes, but their
-                // secs still count toward the frontend totals (the HourSegment.secs contract);
-                // dropping them would not match top apps
                 .filter(|s| s.secs > 0)
                 .collect();
             // Descending: sort_by_key with Reverse(...)
-            segs.sort_by_key(|s| std::cmp::Reverse(s.minutes));
+            segs.sort_by_key(|s| std::cmp::Reverse(s.secs));
             HourSlot {
                 hour: h,
                 segments: segs,
@@ -264,22 +260,22 @@ mod tests {
         assert_eq!(slots.len(), 24);
 
         let h10 = slots.iter().find(|s| s.hour == 10).unwrap();
-        let h10_code: u32 = h10
+        let h10_code: u64 = h10
             .segments
             .iter()
             .filter(|s| s.category_id == "code")
-            .map(|s| s.minutes)
+            .map(|s| s.secs)
             .sum();
-        assert_eq!(h10_code, 30, "10 点应有 30 分钟 code");
+        assert_eq!(h10_code, 1800, "10 点应有 30 分钟 code");
 
         let h11 = slots.iter().find(|s| s.hour == 11).unwrap();
-        let h11_code: u32 = h11
+        let h11_code: u64 = h11
             .segments
             .iter()
             .filter(|s| s.category_id == "code")
-            .map(|s| s.minutes)
+            .map(|s| s.secs)
             .sum();
-        assert_eq!(h11_code, 30, "11 点应有 30 分钟 code");
+        assert_eq!(h11_code, 1800, "11 点应有 30 分钟 code");
 
         // 其它小时不该出现 code 段
         for h in [9u8, 12, 13] {

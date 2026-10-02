@@ -4,6 +4,7 @@ import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
 import { formatAxisTick, useDurationFormatter } from "../../utils/duration";
 import type { DaySummary } from "../../api/hindsight";
+import { barMinutes, barSecs } from "../../lib/segments";
 import styles from "./DailyBarChart.module.css";
 
 interface DailyBarChartProps {
@@ -37,7 +38,7 @@ export function DailyBarChart({
   const { getCategory } = useCategories();
   const isDark = useIsDark();
   const fmtHM = useDurationFormatter();
-  const totals = days.map((d) => d.segments.reduce((s, x) => s + x.minutes, 0));
+  const totals = days.map((d) => barMinutes(d.segments));
   const maxTotal = Math.max(0, ...totals);
   const yMax = niceYMax(maxTotal);
 
@@ -84,7 +85,8 @@ export function DailyBarChart({
 
           <div className={styles.bars}>
             {days.map((day, i) => {
-              const total = day.segments.reduce((s, x) => s + x.minutes, 0);
+              const total = totals[i];
+              const totalSecs = barSecs(day.segments);
               const heightPct = (total / yMax) * 100;
               const interactive = !!onIndexClick;
               const selected = selectedIndex === i;
@@ -120,7 +122,7 @@ export function DailyBarChart({
                           key={seg.categoryId}
                           className={styles.segment}
                           style={{
-                            height: `${(seg.minutes / total) * 100}%`,
+                            height: `${(seg.secs / totalSecs) * 100}%`,
                             background: color,
                           }}
                         />

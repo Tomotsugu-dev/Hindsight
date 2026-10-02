@@ -22,7 +22,7 @@ export interface PeriodInsights {
 }
 
 interface SegmentSource {
-  segments: { categoryId: string; minutes: number; secs: number }[];
+  segments: { categoryId: string; secs: number }[];
 }
 
 interface UseInsightsArgs<T extends SegmentSource> {
