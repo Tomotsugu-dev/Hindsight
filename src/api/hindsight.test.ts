@@ -32,7 +32,7 @@ describe("dtoToDaySummary", () => {
 
   it("segments 原样透传", () => {
     const segments: HourSegment[] = [
-      { categoryId: "work", minutes: 30, secs: 1800 },
+      { categoryId: "work", secs: 1800 },
     ];
     const out = dtoToDaySummary({ date: "2024-06-15", segments });
     expect(out.segments).toBe(segments);

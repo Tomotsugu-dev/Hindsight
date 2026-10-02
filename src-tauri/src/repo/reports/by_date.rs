@@ -66,9 +66,6 @@ pub async fn day_category_time(
     let mut buckets: std::collections::HashMap<String, std::collections::HashMap<String, u64>> =
         std::collections::HashMap::new();
     for (date, cat, secs) in rows {
-        // Drop only rows with secs == 0. Pieces under 30s round to 0 minutes, but their secs must
-        // stay, or the frontend's totals and daily averages (summed from secs) won't match the
-        // SQL SUM of top apps
         if secs <= 0 {
             continue;
         }
@@ -84,14 +81,10 @@ pub async fn day_category_time(
             .remove(&key)
             .unwrap_or_default()
             .into_iter()
-            .map(|(category_id, secs)| HourSegment {
-                category_id,
-                minutes: (secs as f64 / 60.0).round() as u32,
-                secs,
-            })
+            .map(|(category_id, secs)| HourSegment { category_id, secs })
             .collect();
         // Descending: see the comment on the same pattern above
-        segs.sort_by_key(|s| std::cmp::Reverse(s.minutes));
+        segs.sort_by_key(|s| std::cmp::Reverse(s.secs));
         out.push(DaySummary {
             date: key,
             segments: segs,
@@ -317,25 +310,25 @@ mod tests {
             .await
             .unwrap();
         let today_all = all.iter().find(|d| d.date == today_str).unwrap();
-        let code_all: u32 = today_all
+        let code_all: u64 = today_all
             .segments
             .iter()
             .filter(|s| s.category_id == "code")
-            .map(|s| s.minutes)
+            .map(|s| s.secs)
             .sum();
-        assert_eq!(code_all, 8, "All 视角 today 应 5+3 = 8 分钟 code");
+        assert_eq!(code_all, 480, "All 视角 today 应 5+3 = 8 分钟 code");
 
         let only_self = day_category_time(&pool, from, to, DeviceFilter::Only(TEST_SELF_ID.into()))
             .await
             .unwrap();
         let today_self = only_self.iter().find(|d| d.date == today_str).unwrap();
-        let code_self: u32 = today_self
+        let code_self: u64 = today_self
             .segments
             .iter()
             .filter(|s| s.category_id == "code")
-            .map(|s| s.minutes)
+            .map(|s| s.secs)
             .sum();
-        assert_eq!(code_self, 5, "Only self 视角 today 应 5 分钟");
+        assert_eq!(code_self, 300, "Only self 视角 today 应 5 分钟");
     }
 
     /// 测 [`top_apps`]（本月）：top N 按总时长降序。
@@ -425,13 +418,13 @@ mod tests {
             assert_eq!(d.date, day(i as i64), "第 {i} 行日期不符");
             match i {
                 0 | 9 => {
-                    let code_min: u32 = d
+                    let code_secs: u64 = d
                         .segments
                         .iter()
                         .filter(|s| s.category_id == "code")
-                        .map(|s| s.minutes)
+                        .map(|s| s.secs)
                         .sum();
-                    assert_eq!(code_min, if i == 0 { 5 } else { 10 });
+                    assert_eq!(code_secs, if i == 0 { 300 } else { 600 });
                 }
                 _ => assert!(d.segments.is_empty(), "{} 不该有数据", d.date),
             }
