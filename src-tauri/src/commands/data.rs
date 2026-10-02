@@ -6,7 +6,7 @@
 use tauri::State;
 
 use crate::repo::reports::{
-    self, device_filter_from_option, AppDetail, AppUsage, DaySummary, HourSlot,
+    self, device_filter_from_option, AppDetail, AppUsage, BucketBy, DaySummary, HourSlot,
 };
 use crate::storage::DbPool;
 
@@ -23,7 +23,8 @@ pub async fn get_day_hours(
         .map_err(Into::into)
 }
 
-/// 拉某天的 top 应用列表（按使用时长降序），`limit` 默认 10。
+/// Top apps for one day, by total time, most first. `day_offset = 0` is today; `limit` defaults
+/// to 10.
 #[tauri::command]
 pub async fn get_day_apps(
     pool: State<'_, DbPool>,
@@ -31,9 +32,11 @@ pub async fn get_day_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    reports::day_apps(
+    let day = reports::day_date(day_offset);
+    reports::top_apps(
         &pool,
-        day_offset,
+        day,
+        day,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
     )
@@ -41,8 +44,8 @@ pub async fn get_day_apps(
     .map_err(Into::into)
 }
 
-/// 拉某天某小时（local_hour = ?）的 top 应用列表，给「日」页面"点小时柱子→筛选"用。
-/// `hour` 在 0..=23；其它行为同 [`get_day_apps`]。
+/// Top apps within one hour of a day, for clicking an hour bar on the Daily page. A record that
+/// crosses the hour counts only its part inside this hour. `hour` is 0–23; `limit` defaults to 10.
 #[tauri::command]
 pub async fn get_hour_apps(
     pool: State<'_, DbPool>,
@@ -62,8 +65,9 @@ pub async fn get_hour_apps(
     .map_err(Into::into)
 }
 
-/// 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时。`icon_process` 传排行行里的
-/// 稳定代表 process_name（合并组里任一成员名都行）。日报按小时聚合。
+/// The details drawer opened by clicking an app: time bars and time per window title. The Daily
+/// page gets 24 bars, one per hour. `icon_process` is the `iconProcess` of the clicked ranking row;
+/// any member process name of the group works.
 #[tauri::command]
 pub async fn get_app_day_detail(
     pool: State<'_, DbPool>,
@@ -71,17 +75,20 @@ pub async fn get_app_day_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    reports::app_day_detail(
+    let day = reports::day_date(day_offset);
+    reports::app_range_detail(
         &pool,
-        day_offset,
+        day,
+        day,
         icon_process,
         device_filter_from_option(device_id),
+        BucketBy::Hour,
     )
     .await
     .map_err(Into::into)
 }
 
-/// 周报版：本周(周一~周日)按天聚合。
+/// Same as [`get_app_day_detail`], for the Weekly page: one bar per day, Monday to Sunday.
 #[tauri::command]
 pub async fn get_app_week_detail(
     pool: State<'_, DbPool>,
@@ -89,17 +96,20 @@ pub async fn get_app_week_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    reports::app_week_detail(
+    let (from, to) = reports::week_range(week_offset);
+    reports::app_range_detail(
         &pool,
-        week_offset,
+        from,
+        to,
         icon_process,
         device_filter_from_option(device_id),
+        BucketBy::Day,
     )
     .await
     .map_err(Into::into)
 }
 
-/// 月报版：当月按天聚合。
+/// Same as [`get_app_day_detail`], for the Monthly page: one bar per day of the month.
 #[tauri::command]
 pub async fn get_app_month_detail(
     pool: State<'_, DbPool>,
@@ -107,29 +117,34 @@ pub async fn get_app_month_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    reports::app_month_detail(
+    let (from, to) = reports::month_range(month_offset);
+    reports::app_range_detail(
         &pool,
-        month_offset,
+        from,
+        to,
         icon_process,
         device_filter_from_option(device_id),
+        BucketBy::Day,
     )
     .await
     .map_err(Into::into)
 }
 
-/// 拉某周 7 天的逐日汇总（每天一条）。`week_offset = 0` 本周。
+/// Each category's time per day of a week, one entry per day from Monday to Sunday.
+/// `week_offset = 0` is this week.
 #[tauri::command]
 pub async fn get_week_days(
     pool: State<'_, DbPool>,
     week_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
-    reports::week_days(&pool, week_offset, device_filter_from_option(device_id))
+    let (from, to) = reports::week_range(week_offset);
+    reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
 }
 
-/// 拉某周的 top 应用聚合，跨 7 天汇总。
+/// Top apps for a week, totaled over the 7 days, most first. `limit` defaults to 10.
 #[tauri::command]
 pub async fn get_week_apps(
     pool: State<'_, DbPool>,
@@ -137,9 +152,11 @@ pub async fn get_week_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    reports::week_apps(
+    let (from, to) = reports::week_range(week_offset);
+    reports::top_apps(
         &pool,
-        week_offset,
+        from,
+        to,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
     )
@@ -147,19 +164,20 @@ pub async fn get_week_apps(
     .map_err(Into::into)
 }
 
-/// 拉某月每天的汇总（30 / 31 条），给「月」页面热力图用。
+/// Each category's time per day of a month, one entry per day. `month_offset = 0` is this month.
 #[tauri::command]
 pub async fn get_month_days(
     pool: State<'_, DbPool>,
     month_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
-    reports::month_days(&pool, month_offset, device_filter_from_option(device_id))
+    let (from, to) = reports::month_range(month_offset);
+    reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
 }
 
-/// 拉某月的 top 应用聚合，跨整月汇总。
+/// Top apps for a month, totaled over the month, most first. `limit` defaults to 10.
 #[tauri::command]
 pub async fn get_month_apps(
     pool: State<'_, DbPool>,
@@ -167,9 +185,11 @@ pub async fn get_month_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    reports::month_apps(
+    let (from, to) = reports::month_range(month_offset);
+    reports::top_apps(
         &pool,
-        month_offset,
+        from,
+        to,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
     )

@@ -1,5 +1,5 @@
-//! Reports for one day: the hour bars and app ranking on the Daily page, and the app ranking
-//! after clicking an hour.
+//! Reports computed by splitting records at clock hours: the 24 hour bars on the Daily page, and
+//! the app ranking after clicking an hour bar.
 
 use chrono::{Duration, Local};
 use rusqlite::ToSql;
@@ -103,76 +103,6 @@ pub async fn day_hours(
     Ok(slots)
 }
 
-/// Top apps for a day, by time, most first; processes in one group are merged into one row.
-/// `limit` sets how many rows come back.
-pub async fn day_apps(
-    pool: &DbPool,
-    day_offset: i32,
-    limit: u32,
-    device: DeviceFilter,
-) -> Result<Vec<AppUsage>> {
-    let date = (Local::now() + Duration::days(day_offset as i64))
-        .format("%Y-%m-%d")
-        .to_string();
-
-    let rows: Vec<(String, String, String, i64)> = pool
-        .0
-        .call(move |conn| {
-            // Merge by display name, not by group: two groups with the same display name are the
-            // same app to the user. Rows with different categories stay separate.
-            // `MIN(process_name)` only makes sure the same process name is picked every time, for
-            // the icon lookup.
-            let sql = format!(
-                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
-                        COALESCE(c.id, 'other')                         AS cat,
-                        MIN(a.process_name)                             AS icon_process,
-                        SUM(a.duration_secs)                            AS total
-                 {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date = ? {}
-                   AND g.category_id IS NOT 'hidden'
-                   AND a.excluded = 0
-                 GROUP BY COALESCE(g.display_name, a.process_name), COALESCE(c.id, 'other')
-                 ORDER BY total DESC
-                 LIMIT ?",
-                device.sql_clause()
-            );
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&date);
-            if let Some(extra) = device.extra_param() {
-                params.push(extra);
-            }
-            params.push(&limit);
-            let mut stmt = conn.prepare(&sql).db()?;
-            let it = stmt
-                .query_map(params.as_slice(), |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                        r.get::<_, i64>(3)?,
-                    ))
-                })
-                .db()?;
-            let mut out = Vec::new();
-            for r in it {
-                out.push(r.db()?);
-            }
-            Ok(out)
-        })
-        .await?;
-
-    Ok(rows
-        .into_iter()
-        .map(|(process, cat, icon_process, secs)| AppUsage {
-            process,
-            category_id: cat,
-            minutes: ((secs as f64 / 60.0).round() as u32),
-            icon_process,
-        })
-        .filter(|a| a.minutes > 0)
-        .collect())
-}
-
 /// Returns the app ranking within one hour of a day, by time, most first.
 ///
 /// - `pool`: database connection pool.
@@ -272,122 +202,9 @@ pub async fn day_hour_apps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::reports::test_seed::{
-        insert_activity, insert_session_with_times, seed_solo_group,
-    };
+    use crate::repo::reports::test_seed::{insert_session_with_times, seed_solo_group};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use chrono::TimeZone;
-
-    /// 测 [`day_apps`] 跨设备 SUM：
-    /// - `DeviceFilter::All` 合并两端时长到 1 行
-    /// - `DeviceFilter::Only(...)` 只算指定设备
-    ///
-    /// 钉死「今日总览」上方设备 chip 切换的数字一致性。
-    #[tokio::test]
-    async fn day_apps_aggregates_correctly_across_devices() {
-        let pool = fresh_test_pool().await;
-        let today = Local::now().format("%Y-%m-%d").to_string();
-
-        // 同一进程 "Code" 在 self（5 分钟）和 device-win（3 分钟）各贡献时长
-        insert_activity(&pool, TEST_SELF_ID, &today, "Code", 300).await;
-        insert_activity(&pool, "device-win", &today, "Code", 180).await;
-        // 简单 1:1 组：组 id = process_name = "Code"，category=code
-        seed_solo_group(&pool, "Code", "code").await;
-
-        // All: 5 + 3 = 8 分钟
-        let all = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
-        assert_eq!(all.len(), 1, "All 视角应只有一行");
-        assert_eq!(all[0].process, "Code");
-        assert_eq!(all[0].minutes, 8);
-        assert_eq!(all[0].category_id, "code");
-
-        // Only self: 只 5 分钟
-        let only_self = day_apps(&pool, 0, 50, DeviceFilter::Only(TEST_SELF_ID.into()))
-            .await
-            .unwrap();
-        assert_eq!(only_self.len(), 1);
-        assert_eq!(only_self[0].minutes, 5);
-
-        // Only win: 只 3 分钟
-        let only_win = day_apps(&pool, 0, 50, DeviceFilter::Only("device-win".into()))
-            .await
-            .unwrap();
-        assert_eq!(only_win.len(), 1);
-        assert_eq!(only_win[0].minutes, 3);
-    }
-
-    /// 测 [`day_apps`] 跨 OS 别名合并：mac="Code" + Win="Code.exe" 共享
-    /// canonical 组 "Visual Studio Code" → All 视角下应合并成 1 行。
-    ///
-    /// 钉死："两台机器各显示 5min / 3min" 而不是合并的 "8min" 这条 bug 重现。
-    #[tokio::test]
-    async fn day_apps_merges_cross_os_aliases_into_one_row() {
-        let pool = fresh_test_pool().await;
-        let today = Local::now().format("%Y-%m-%d").to_string();
-
-        // mac 视角的 "Code" 5 分钟 + Win 视角的 "Code.exe" 3 分钟
-        insert_activity(&pool, TEST_SELF_ID, &today, "Code", 300).await;
-        insert_activity(&pool, "device-win", &today, "Code.exe", 180).await;
-
-        // 一个 canonical 组，两个成员都指向它
-        pool.0
-            .call(|conn| {
-                let now = "2026-05-15T10:00:00Z";
-                conn.execute(
-                    "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
-                     VALUES('Visual Studio Code', 'Visual Studio Code', 'code', ?1, NULL)",
-                    rusqlite::params![now],
-                )
-                .db()?;
-                for name in ["Code", "Code.exe"] {
-                    conn.execute(
-                        "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
-                         VALUES(?1, 'Visual Studio Code', ?2, NULL)",
-                        rusqlite::params![name, now],
-                    )
-                    .db()?;
-                }
-                Ok(())
-            })
-            .await
-            .unwrap();
-
-        let rows = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
-        assert_eq!(rows.len(), 1, "cross-OS 别名应合并成一行，不是两行");
-        assert_eq!(rows[0].process, "Visual Studio Code");
-        assert_eq!(rows[0].minutes, 8);
-        assert_eq!(rows[0].category_id, "code");
-        // icon_process 是 MIN(process_name)，二选一即可
-        assert!(
-            rows[0].icon_process == "Code" || rows[0].icon_process == "Code.exe",
-            "icon_process 应是组内某个真实成员名: got {}",
-            rows[0].icon_process
-        );
-    }
-
-    /// 忽略规则打标的行（excluded=1）不进报表口径——day_apps 该只剩没打标的行。
-    #[tokio::test]
-    async fn day_apps_skips_excluded_rows() {
-        let pool = fresh_test_pool().await;
-        let today = Local::now().format("%Y-%m-%d").to_string();
-        insert_activity(&pool, "dev-a", &today, "Downloader", 600).await;
-        insert_activity(&pool, "dev-a", &today, "Editor", 600).await;
-        pool.0
-            .call(|conn| {
-                conn.execute(
-                    "UPDATE activities SET excluded = 1 WHERE process_name = 'Downloader'",
-                    [],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await
-            .unwrap();
-
-        let rows = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
-        assert_eq!(rows.len(), 1, "excluded 行不该出现在 day_apps");
-        assert_eq!(rows[0].process, "Editor");
-    }
 
     /// 结束时间不是合法时间文本的记录不计入 [`day_hours`]，同一天的其它记录照常计入。
     #[tokio::test]
@@ -474,7 +291,7 @@ mod tests {
         }
     }
 
-    /// 测 [`day_hour_apps`]：local_hour 过滤后只返该小时内的应用。
+    /// 测 [`day_hour_apps`]：只返回在这一小时里有用时的应用。
     #[tokio::test]
     async fn day_hour_apps_filters_by_hour() {
         let pool = fresh_test_pool().await;

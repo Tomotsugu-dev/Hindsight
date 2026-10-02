@@ -1,7 +1,7 @@
 //! Details for one app: the time bars and window titles in the drawer opened by clicking an app,
 //! for a day, a week or a month.
 
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Duration, NaiveDate};
 use rusqlite::{OptionalExtension, ToSql};
 
 use crate::error::Result;
@@ -9,14 +9,13 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::range::{month_range, week_range};
 use super::time::{parse_local, slice_by_hour};
 use super::{AppDetail, DetailBucket, DeviceFilter, TitleUsage};
 
 /// How the detail time bars are grouped: by hour on the Daily page, by day on the Weekly and
 /// Monthly pages.
 #[derive(Debug, Clone, Copy)]
-enum BucketBy {
+pub enum BucketBy {
     Hour,
     Day,
 }
@@ -24,8 +23,8 @@ enum BucketBy {
 /// Core of the details drawer opened by clicking an app: for the `[from, to]` date range and a
 /// grouping, adds up the time bars (buckets) and the time per window title (titles). First finds
 /// the group key of icon_process (the same rule as `GROUP BY COALESCE(g.display_name,
-/// a.process_name)` in [`day_apps`](super::day_apps)), then adds up that group's activities.
-async fn app_range_detail(
+/// a.process_name)` in [`top_apps`](super::top_apps)), then adds up that group's activities.
+pub async fn app_range_detail(
     pool: &DbPool,
     from: NaiveDate,
     to: NaiveDate,
@@ -215,57 +214,22 @@ async fn app_range_detail(
     })
 }
 
-/// Details on the Daily page: the day by hour (24 buckets). `day_offset = 0` is today.
-pub async fn app_day_detail(
-    pool: &DbPool,
-    day_offset: i32,
-    icon_process: String,
-    device: DeviceFilter,
-) -> Result<AppDetail> {
-    let date = (Local::now() + Duration::days(day_offset as i64)).date_naive();
-    app_range_detail(pool, date, date, icon_process, device, BucketBy::Hour).await
-}
-
-/// Details on the Weekly page: Monday to Sunday by day (7 buckets). `week_offset = 0` is this
-/// week.
-pub async fn app_week_detail(
-    pool: &DbPool,
-    week_offset: i32,
-    icon_process: String,
-    device: DeviceFilter,
-) -> Result<AppDetail> {
-    // TODO: Check whether `week_range` and `month_range` can become one function.
-    let (monday, sunday) = week_range(week_offset);
-    app_range_detail(pool, monday, sunday, icon_process, device, BucketBy::Day).await
-}
-
-/// Details on the Monthly page: each day of the month (28–31 buckets). `month_offset = 0` is this
-/// month.
-pub async fn app_month_detail(
-    pool: &DbPool,
-    month_offset: i32,
-    icon_process: String,
-    device: DeviceFilter,
-) -> Result<AppDetail> {
-    let (first, last) = month_range(month_offset);
-    app_range_detail(pool, first, last, icon_process, device, BucketBy::Day).await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{
         insert_activity, insert_session_titled, insert_session_with_times, seed_solo_group,
     };
+    use crate::repo::reports::time::{day_date, month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::TimeZone;
+    use chrono::{Local, TimeZone};
 
-    /// 测 [`app_day_detail`]（Hour 粒度）：
+    /// 测 [`app_range_detail`]（某一天，Hour 粒度）：
     /// - 固定 24 桶、key 按 "0".."23" 有序、无活动小时补 0
     /// - 跨小时会话按真实时钟切片分摊（10:30→11:30 应各给 10/11 点 1800s），
     ///   而不是按 local_hour 把整段挤进开始桶
     #[tokio::test]
-    async fn app_day_detail_hour_buckets_split_and_zero_fill() {
+    async fn app_range_detail_hour_buckets_split_and_zero_fill() {
         let pool = fresh_test_pool().await;
         let today = Local::now().date_naive();
         let today_str = today.format("%Y-%m-%d").to_string();
@@ -300,9 +264,16 @@ mod tests {
         .await;
         seed_solo_group(&pool, "Code", "code").await;
 
-        let detail = app_day_detail(&pool, 0, "Code".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let detail = app_range_detail(
+            &pool,
+            today,
+            today,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(detail.buckets.len(), 24, "小时粒度固定 24 桶");
         let keys: Vec<&str> = detail.buckets.iter().map(|b| b.key.as_str()).collect();
@@ -326,9 +297,10 @@ mod tests {
     /// （"首页"在 github 和 youtube 各算各的），无域名的老行照常返回且 host=None；
     /// 代表进程是浏览器时 is_browser=true，否则 false——前端据此决定是否分组。
     #[tokio::test]
-    async fn app_day_detail_titles_carry_url_host_and_browser_flag() {
+    async fn app_range_detail_titles_carry_url_host_and_browser_flag() {
         let pool = fresh_test_pool().await;
-        let today = Local::now().date_naive().format("%Y-%m-%d").to_string();
+        let day = day_date(0);
+        let today = day.format("%Y-%m-%d").to_string();
         let d = today.clone();
         pool.0
             .call(move |conn| {
@@ -361,9 +333,16 @@ mod tests {
             .await
             .unwrap();
 
-        let chrome = app_day_detail(&pool, 0, "Google Chrome".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let chrome = app_range_detail(
+            &pool,
+            day,
+            day,
+            "Google Chrome".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
         assert!(chrome.is_browser, "Google Chrome 是浏览器");
         let secs_of = |t: &str, h: Option<&str>| {
             chrome
@@ -386,9 +365,16 @@ mod tests {
         );
         assert_eq!(chrome.titles.len(), 4, "不掺入组外应用");
 
-        let code = app_day_detail(&pool, 0, "Code".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let code = app_range_detail(
+            &pool,
+            day,
+            day,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
         assert!(!code.is_browser, "Code 不是浏览器");
         assert_eq!(code.titles.len(), 1);
         assert_eq!(code.titles[0].host, None);
@@ -398,7 +384,7 @@ mod tests {
     /// 时间柱与标题都应聚合**整个组**（跨 OS 成员 + 跨设备），且不掺入组外应用。
     /// titles 按用时降序、同标题跨成员合并。
     #[tokio::test]
-    async fn app_day_detail_resolves_group_and_merges_members() {
+    async fn app_range_detail_resolves_group_and_merges_members() {
         let pool = fresh_test_pool().await;
         let today = Local::now().date_naive();
         let today_str = today.format("%Y-%m-%d").to_string();
@@ -477,9 +463,16 @@ mod tests {
         .await;
 
         // 用 win 侧成员名查询 → 应解析到组、把 mac 侧的量也算上
-        let detail = app_day_detail(&pool, 0, "Code.exe".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let detail = app_range_detail(
+            &pool,
+            today,
+            today,
+            "Code.exe".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
         let h10 = detail.buckets.iter().find(|b| b.key == "10").unwrap();
         assert_eq!(h10.secs, 300 + 240 + 60, "组内两成员 10 点的量应合并");
         let total: u32 = detail.buckets.iter().map(|b| b.secs).sum();
@@ -493,11 +486,13 @@ mod tests {
         assert_eq!(detail.titles[1].secs, 240);
 
         // 设备过滤：Only(self) 只剩本机 Code 的 300s
-        let only_self = app_day_detail(
+        let only_self = app_range_detail(
             &pool,
-            0,
+            today,
+            today,
             "Code.exe".into(),
             DeviceFilter::Only(TEST_SELF_ID.into()),
+            BucketBy::Hour,
         )
         .await
         .unwrap();
@@ -508,7 +503,7 @@ mod tests {
     /// 测 [`app_range_detail`] 无组回退：icon_process 没有任何组成员记录时，
     /// 组 key 退化为 process_name 本身——只聚合同名进程，不吸入其它无组进程。
     #[tokio::test]
-    async fn app_day_detail_falls_back_to_process_name_without_group() {
+    async fn app_range_detail_falls_back_to_process_name_without_group() {
         let pool = fresh_test_pool().await;
         let today = Local::now().date_naive();
         let today_str = today.format("%Y-%m-%d").to_string();
@@ -540,9 +535,16 @@ mod tests {
         )
         .await;
 
-        let detail = app_day_detail(&pool, 0, "Lonely".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let detail = app_range_detail(
+            &pool,
+            today,
+            today,
+            "Lonely".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
         let h14 = detail.buckets.iter().find(|b| b.key == "14").unwrap();
         assert_eq!(h14.secs, 600, "无组时按 process_name 精确匹配");
         let total: u32 = detail.buckets.iter().map(|b| b.secs).sum();
@@ -552,12 +554,12 @@ mod tests {
         assert_eq!(detail.titles[0].secs, 600);
     }
 
-    /// 测 [`app_week_detail`]（Day 粒度）：7 桶按日期有序、空天补 0、
+    /// 测 [`app_range_detail`]（本周，Day 粒度）：7 桶按日期有序、空天补 0、
     /// 范围外（上周日）的同名活动被排除。
     #[tokio::test]
-    async fn app_week_detail_day_buckets_zero_filled_in_order() {
+    async fn app_range_detail_week_day_buckets_zero_filled_in_order() {
         let pool = fresh_test_pool().await;
-        let (monday, _sunday) = week_range(0);
+        let (monday, sunday) = week_range(0);
         let day = |off: i64| {
             (monday + Duration::days(off))
                 .format("%Y-%m-%d")
@@ -570,9 +572,16 @@ mod tests {
         insert_activity(&pool, TEST_SELF_ID, &day(-1), "Code", 12345).await;
         seed_solo_group(&pool, "Code", "code").await;
 
-        let detail = app_week_detail(&pool, 0, "Code".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let detail = app_range_detail(
+            &pool,
+            monday,
+            sunday,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
         assert_eq!(detail.buckets.len(), 7, "周详情固定 7 桶");
         for (i, b) in detail.buckets.iter().enumerate() {
             assert_eq!(b.key, day(i as i64), "第 {i} 桶的日期 key 不符");
@@ -585,9 +594,9 @@ mod tests {
         }
     }
 
-    /// 测 [`app_month_detail`]（Day 粒度）：桶数 = 当月天数，逐日有序补 0。
+    /// 测 [`app_range_detail`]（本月，Day 粒度）：桶数 = 当月天数，逐日有序补 0。
     #[tokio::test]
-    async fn app_month_detail_covers_whole_month() {
+    async fn app_range_detail_month_covers_whole_month() {
         let pool = fresh_test_pool().await;
         let (first, last) = month_range(0);
         let n_days = ((last - first).num_days() + 1) as usize;
@@ -597,9 +606,16 @@ mod tests {
         insert_activity(&pool, TEST_SELF_ID, &day(14), "Code", 450).await;
         seed_solo_group(&pool, "Code", "code").await;
 
-        let detail = app_month_detail(&pool, 0, "Code".into(), DeviceFilter::All)
-            .await
-            .unwrap();
+        let detail = app_range_detail(
+            &pool,
+            first,
+            last,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
         assert_eq!(detail.buckets.len(), n_days, "桶数应等于当月天数(28~31)");
         for (i, b) in detail.buckets.iter().enumerate() {
             assert_eq!(b.key, day(i as i64));
