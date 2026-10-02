@@ -9,13 +9,12 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
+use super::time::{parse_stored_time, split_by_date};
 use super::{AppUsage, CategoryTime, DaySummary, DeviceFilter};
 
 /// Each category's time on each day of a date range, for drawing a bar chart with one bar per day:
 /// one entry per day from `from` to `to`, each bar split by category, with empty `segments` on days
-/// with no activity. A record counts toward the day it started, even if it runs past midnight.
-// TODO: Decide whether records crossing midnight should split their time across dates. Changing
-// this also affects the date ranges used by app rankings and details; handle it separately.
+/// with no activity. A record that runs past midnight is split at midnight.
 pub async fn day_category_time(
     pool: &DbPool,
     from: NaiveDate,
@@ -25,17 +24,21 @@ pub async fn day_category_time(
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
 
-    let rows: Vec<(String, String, i64)> = pool
+    // <local_date, category, total seconds> for activities that do not cross midnight.
+    // <category, started_at, ended_at> for activities that cross midnight.
+    let (rows, crossing) = pool
         .0
         .call(move |conn| {
             // As in day_hours: get the category through group → category, filtering out deleted
             // categories and the "Hidden" category
+            // Activities that do not cross midnight (end date equals local_date)
             let sql = format!(
                 "SELECT a.local_date,
                         COALESCE(c.id, 'other') AS cat,
                         SUM(a.duration_secs) AS total
                  {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND substr(a.ended_at, 1, 10) = a.local_date
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0
                  GROUP BY a.local_date, cat",
@@ -48,20 +51,50 @@ pub async fn day_category_time(
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
-            let it = stmt
-                .query_map(params.as_slice(), |r| {
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
                     Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
                     ))
                 })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            let mut out = Vec::new();
-            for r in it {
-                out.push(r.db()?);
+
+            // Activities that cross midnight (end date not equal to local_date)
+            let sql = format!(
+                "SELECT COALESCE(c.id, 'other') AS cat, a.started_at, a.ended_at
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
+                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND substr(a.ended_at, 1, 10) <> a.local_date
+                   AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0",
+                device.sql_clause()
+            );
+
+            // Activities that cross midnight may start as early as the day before `from`.
+            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&crossing_from_str);
+            params.push(&to_str);
+            if let Some(extra) = device.sql_param() {
+                params.push(extra);
             }
-            Ok(out)
+            let mut stmt = conn.prepare(&sql).db()?;
+            let crossing = stmt
+                .query_map(params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            Ok((rows, crossing))
         })
         .await?;
 
@@ -71,7 +104,22 @@ pub async fn day_category_time(
         if secs <= 0 {
             continue;
         }
-        buckets.entry(date).or_default().insert(cat, secs as u64);
+        *buckets.entry(date).or_default().entry(cat).or_insert(0) += secs as u64;
+    }
+    for (cat, started, ended) in crossing {
+        let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
+            continue;
+        };
+        for (date, secs) in split_by_date(s, e) {
+            if date < from || date > to {
+                continue;
+            }
+            *buckets
+                .entry(date.format("%Y-%m-%d").to_string())
+                .or_default()
+                .entry(cat.clone())
+                .or_insert(0) += secs;
+        }
     }
 
     let mut out = Vec::new();
@@ -170,10 +218,32 @@ pub async fn top_apps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::reports::test_seed::{insert_activity, seed_solo_group};
+    use crate::repo::reports::test_seed::{
+        insert_activity, insert_session_with_times, seed_solo_group,
+    };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::Local;
+    use chrono::{DateTime, Local, TimeZone};
+
+    fn local(month: u32, day: u32, hour: u32, min: u32) -> DateTime<Local> {
+        Local
+            .from_local_datetime(
+                &NaiveDate::from_ymd_opt(2026, month, day)
+                    .unwrap()
+                    .and_hms_opt(hour, min, 0)
+                    .unwrap(),
+            )
+            .single()
+            .unwrap()
+    }
+
+    fn code_secs(day: &DaySummary) -> u64 {
+        day.segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.secs)
+            .sum()
+    }
 
     /// 测 [`top_apps`] 跨设备 SUM：
     /// - `DeviceFilter::All` 合并两端时长到 1 行
@@ -330,6 +400,68 @@ mod tests {
             .map(|s| s.secs)
             .sum();
         assert_eq!(code_self, 300, "Only self 视角 today 应 5 分钟");
+    }
+
+    /// 跨午夜的记录按日期拆开：10-01 23:50 → 10-02 00:10，两天各算 600 秒。
+    #[tokio::test]
+    async fn day_category_time_splits_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local(10, 1, 23, 50),
+            local(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let from = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let days = day_category_time(&pool, from, from + Duration::days(1), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(days.len(), 2);
+        assert_eq!(code_secs(&days[0]), 600, "10-01 只算 23:50 到午夜");
+        assert_eq!(code_secs(&days[1]), 600, "10-02 算午夜到 00:10");
+    }
+
+    /// 跨午夜的记录只计入范围内的日期：范围前一天开始的，凌晨那部分算进范围第一天；
+    /// 范围最后一天开始的，次日那部分不在范围内。
+    #[tokio::test]
+    async fn day_category_time_keeps_only_dates_in_range_for_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-09-30",
+            "Code",
+            local(9, 30, 23, 50),
+            local(10, 1, 0, 10),
+        )
+        .await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-02",
+            "Code",
+            local(10, 2, 23, 50),
+            local(10, 3, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let from = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let days = day_category_time(&pool, from, from + Duration::days(1), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(days.len(), 2, "结果只有范围内的两天");
+        assert_eq!(
+            code_secs(&days[0]),
+            600,
+            "10-01 算前一晚拖过来的 00:00 到 00:10"
+        );
+        assert_eq!(code_secs(&days[1]), 600, "10-02 只算 23:50 到午夜");
     }
 
     /// 测 [`top_apps`]（本月）：top N 按总时长降序。

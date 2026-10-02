@@ -9,7 +9,7 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_local, slice_by_hour};
+use super::time::{parse_time_in_local, slice_by_hour};
 use super::{AppUsage, CategoryTime, DeviceFilter, HourSlot};
 
 /// Time per category for each of the 24 hours of a day.
@@ -61,7 +61,8 @@ pub async fn day_hours(
         std::array::from_fn(|_| std::collections::HashMap::new());
 
     for (started, ended, cat) in rows {
-        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended)) else {
+        let (Some(s), Some(e)) = (parse_time_in_local(&started), parse_time_in_local(&ended))
+        else {
             continue;
         };
         if e <= s {
@@ -157,7 +158,8 @@ pub async fn day_hour_apps(
     let mut agg: std::collections::HashMap<String, (String, String, u64)> =
         std::collections::HashMap::new();
     for (display, cat, icon_process, started, ended) in rows {
-        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended)) else {
+        let (Some(s), Some(e)) = (parse_time_in_local(&started), parse_time_in_local(&ended))
+        else {
             continue;
         };
         if e <= s {
