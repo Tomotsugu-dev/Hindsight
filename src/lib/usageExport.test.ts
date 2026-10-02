@@ -73,13 +73,13 @@ const CATS: Category[] = [
 ];
 
 const CODE_APP: AppUsage = {
-  process: "Code",
+  displayName: "Code",
   categoryId: "code",
   minutes: 60,
   iconProcess: "code.exe",
 };
 const CHROME_APP: AppUsage = {
-  process: "Chrome",
+  displayName: "Chrome",
   categoryId: "browse",
   minutes: 30,
   iconProcess: "chrome.exe",

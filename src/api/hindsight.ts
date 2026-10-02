@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { logError } from "../lib/logger";
 
-export interface HourSegment {
+/** One category's time in an hour or a day. */
+export interface CategoryTime {
   categoryId: string;
   /** Seconds before rounding. Add these up and convert to minutes only at the end. */
   secs: number;
@@ -9,12 +10,12 @@ export interface HourSegment {
 
 export interface HourSlot {
   hour: number;
-  segments: HourSegment[];
+  segments: CategoryTime[];
 }
 
 export interface AppUsage {
-  /** 显示名：组的 display_name（合并组内多个进程名） */
-  process: string;
+  /** App name shown to the user: the group's display name, or the process name when ungrouped. */
+  displayName: string;
   categoryId: string;
   minutes: number;
   /** AppIcon 用来查图标的代表 process_name；合并组里取一个稳定成员名 */
@@ -46,12 +47,12 @@ export interface TitleUsage {
 
 export interface DaySummaryDto {
   date: string;
-  segments: HourSegment[];
+  segments: CategoryTime[];
 }
 
 export interface DaySummary {
   date: Date;
-  segments: HourSegment[];
+  segments: CategoryTime[];
 }
 
 export function dtoToDaySummary(dto: DaySummaryDto): DaySummary {

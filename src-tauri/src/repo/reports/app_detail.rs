@@ -9,61 +9,61 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_local, slice_by_hour};
+use super::time::{parse_time_in_local, slice_by_hour};
 use super::{AppDetail, DetailBucket, DeviceFilter, TitleUsage};
 
 /// How the detail time bars are grouped: by hour on the Daily page, by day on the Weekly and
-/// Monthly pages.
+/// Monthly pages. Each bucket holds the total seconds for one clock hour or one activity date.
 #[derive(Debug, Clone, Copy)]
 pub enum BucketBy {
     Hour,
     Day,
 }
 
-/// Core of the details drawer opened by clicking an app: for the `[from, to]` date range and a
-/// grouping, adds up the time bars (buckets) and the time per window title (titles). First finds
-/// the group key of icon_process (the same rule as `GROUP BY COALESCE(g.display_name,
-/// a.process_name)` in [`top_apps`](super::top_apps)), then adds up that group's activities.
+/// Time bars and time per window title for one app in the inclusive `[from, to]` date range.
+/// `representative_process` is a member process name, usually the ranking row's `iconProcess`.
+/// Its group membership selects the app group; without a membership, only that process is used.
+/// `bucket_by` controls whether the time bars are grouped by hour or by activity date.
 pub async fn app_range_detail(
     pool: &DbPool,
     from: NaiveDate,
     to: NaiveDate,
-    icon_process: String,
+    representative_process: String,
     device: DeviceFilter,
     bucket_by: BucketBy,
 ) -> Result<AppDetail> {
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
-    let name_is_browser = crate::capture::browser_url::is_browser_app(&icon_process);
+    let representative_is_browser =
+        crate::capture::browser_url::is_browser_app(&representative_process);
 
-    let (raw_buckets, titles): (std::collections::HashMap<String, u64>, Vec<TitleUsage>) = pool
+    let (secs_by_bucket, titles): (std::collections::HashMap<String, u64>, Vec<TitleUsage>) = pool
         .0
         .call(move |conn| {
-            // 1) The process's group key; falls back to the process name if it has no group
-            // TODO: `icon_process` needs a clearer name.
+            // 1) Query by the member's group ID, falling back to the process name when ungrouped.
             let group_key: String = conn
                 .query_row(
                     "SELECT group_id FROM app_group_members
                      WHERE process_name = ?1 AND deleted_at IS NULL",
-                    rusqlite::params![icon_process],
+                    rusqlite::params![representative_process],
                     |r| r.get::<_, String>(0),
                 )
                 .optional()
                 .db()?
-                .unwrap_or_else(|| icon_process.clone());
+                .unwrap_or_else(|| representative_process.clone());
 
             // 2) Time bars. By hour, rows can't be grouped by local_hour: it is the hour the
             //    session *started* and is not updated when the session is sealed (see the note on
             //    day_hour_apps), so a session crossing an hour lands whole in its first hour and
             //    won't match the day_hours bars. So, as there, fetch the rows and split them by
             //    clock hour with slice_by_hour in Rust. By day, local_date is still summed in SQL.
-            let mut raw: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
-            // TODO: Say what `raw` is for: the match below fills it with the time bars, by hour
-            // or by day.
-            // TODO: Confusing name; find out what "bucket" means here.
+            // Sparse totals keyed by hour ("0".."23") or date ("YYYY-MM-DD"). Missing keys get
+            // zero seconds when the ordered time bars are built below.
+            let mut secs_by_bucket: std::collections::HashMap<String, u64> =
+                std::collections::HashMap::new();
             match bucket_by {
                 BucketBy::Hour => {
-                    let bsql = format!(
+                    let session_sql = format!(
                         "SELECT a.started_at, a.ended_at
                          {FROM_ACTIVITY_GROUP}
                          WHERE a.local_date >= ? AND a.local_date <= ?
@@ -72,63 +72,61 @@ pub async fn app_range_detail(
                            {}",
                         device.sql_clause()
                     );
-                    let mut bparams: Vec<&dyn ToSql> = Vec::new();
-                    bparams.push(&from_str);
-                    bparams.push(&to_str);
-                    bparams.push(&group_key);
-                    if let Some(extra) = device.extra_param() {
-                        bparams.push(extra);
+                    let mut session_params: Vec<&dyn ToSql> = Vec::new();
+                    session_params.push(&from_str);
+                    session_params.push(&to_str);
+                    session_params.push(&group_key);
+                    if let Some(device_id) = device.sql_param() {
+                        session_params.push(device_id);
                     }
-                    let mut bstmt = conn.prepare(&bsql).db()?;
-                    let bit = bstmt
-                        .query_map(bparams.as_slice(), |r| {
+                    let mut session_stmt = conn.prepare(&session_sql).db()?;
+                    let session_rows = session_stmt
+                        .query_map(session_params.as_slice(), |r| {
                             Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
                         })
                         .db()?;
-                    for row in bit {
+                    for row in session_rows {
                         let (started, ended) = row.db()?;
-                        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended))
+                        let (Some(s), Some(e)) =
+                            (parse_time_in_local(&started), parse_time_in_local(&ended))
                         else {
                             continue;
                         };
                         if e <= s {
                             continue;
                         }
-                        for (h, secs) in slice_by_hour(s, e) {
-                            *raw.entry(h.to_string()).or_insert(0) += secs;
+                        for (hour, secs) in slice_by_hour(s, e) {
+                            *secs_by_bucket.entry(hour.to_string()).or_insert(0) += secs;
                         }
                     }
                 }
                 BucketBy::Day => {
-                    // TODO: Remove `AS k` and `AS total` and write `GROUP BY a.local_date`. Rust
-                    // reads columns by position, not by name; only `GROUP BY` uses `k`, and
-                    // nothing uses `total`.
-                    let bsql = format!(
-                        "SELECT a.local_date AS k, SUM(a.duration_secs) AS total
+                    let day_sql = format!(
+                        "SELECT a.local_date, SUM(a.duration_secs)
                          {FROM_ACTIVITY_GROUP}
                          WHERE a.local_date >= ? AND a.local_date <= ?
                            AND COALESCE(g.id, a.process_name) = ?
                            AND a.excluded = 0
                            {}
-                         GROUP BY k",
+                         GROUP BY a.local_date",
                         device.sql_clause()
                     );
-                    let mut bparams: Vec<&dyn ToSql> = Vec::new();
-                    bparams.push(&from_str);
-                    bparams.push(&to_str);
-                    bparams.push(&group_key);
-                    if let Some(extra) = device.extra_param() {
-                        bparams.push(extra);
+                    let mut day_params: Vec<&dyn ToSql> = Vec::new();
+                    day_params.push(&from_str);
+                    day_params.push(&to_str);
+                    day_params.push(&group_key);
+                    if let Some(device_id) = device.sql_param() {
+                        day_params.push(device_id);
                     }
-                    let mut bstmt = conn.prepare(&bsql).db()?;
-                    let bit = bstmt
-                        .query_map(bparams.as_slice(), |r| {
+                    let mut day_stmt = conn.prepare(&day_sql).db()?;
+                    let day_rows = day_stmt
+                        .query_map(day_params.as_slice(), |r| {
                             Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?.max(0) as u64))
                         })
                         .db()?;
-                    for row in bit {
-                        let (k, secs) = row.db()?;
-                        raw.insert(k, secs);
+                    for row in day_rows {
+                        let (date, secs) = row.db()?;
+                        secs_by_bucket.insert(date, secs);
                     }
                 }
             }
@@ -136,33 +134,30 @@ pub async fn app_range_detail(
             // 3) Time per window title: grouped by (window_title, url_host), with a missing title
             //    as an empty string, most first. The same title on different sites (e.g. "Home")
             //    is counted separately: they are pages of different sites.
-            // TODO: Rename the aliases `t` and `h` to `title` and `host`. Keep the aliases here:
-            // `GROUP BY` uses them so it doesn't repeat the `COALESCE`, and `ORDER BY` uses
-            // `total`. `tsql` is not a clear name either: the `t` is for title, but title of what?
-            // TODO: Explain when the window title can be empty.
-            let tsql = format!(
-                "SELECT COALESCE(a.window_title, '') AS t, a.url_host AS h,
+            // A window can be untitled, title reads can fail, and synced records can omit the
+            // title. Keep those records in the totals, treating NULL titles as empty strings.
+            let window_title_sql = format!(
+                "SELECT COALESCE(a.window_title, '') AS title, a.url_host AS host,
                         SUM(a.duration_secs) AS total
                  {FROM_ACTIVITY_GROUP}
                  WHERE a.local_date >= ? AND a.local_date <= ?
                    AND COALESCE(g.id, a.process_name) = ?
                    AND a.excluded = 0
                    {}
-                 GROUP BY t, h
+                 GROUP BY title, host
                  ORDER BY total DESC",
                 device.sql_clause()
             );
-            let mut tparams: Vec<&dyn ToSql> = Vec::new();
-            tparams.push(&from_str);
-            tparams.push(&to_str);
-            tparams.push(&group_key);
-            if let Some(extra) = device.extra_param() {
-                tparams.push(extra);
+            let mut window_title_params: Vec<&dyn ToSql> = Vec::new();
+            window_title_params.push(&from_str);
+            window_title_params.push(&to_str);
+            window_title_params.push(&group_key);
+            if let Some(device_id) = device.sql_param() {
+                window_title_params.push(device_id);
             }
-            let mut tstmt = conn.prepare(&tsql).db()?;
-            // TODO: Odd name again. Why `TitleUsage`?
-            let tit = tstmt
-                .query_map(tparams.as_slice(), |r| {
+            let mut window_title_stmt = conn.prepare(&window_title_sql).db()?;
+            let window_title_rows = window_title_stmt
+                .query_map(window_title_params.as_slice(), |r| {
                     Ok(TitleUsage {
                         title: r.get::<_, String>(0)?,
                         host: r.get::<_, Option<String>>(1)?,
@@ -171,33 +166,31 @@ pub async fn app_range_detail(
                 })
                 .db()?;
             let mut titles = Vec::new();
-            for row in tit {
+            for row in window_title_rows {
                 titles.push(row.db()?);
             }
 
-            Ok((raw, titles))
+            Ok((secs_by_bucket, titles))
         })
         .await?;
 
     // 4) Spread the sparse totals into a full, ordered row of bars, empty ones as 0, ready to draw
     let buckets = match bucket_by {
         BucketBy::Hour => (0u8..24)
-            .map(|h| {
-                let key = h.to_string();
-                let secs = raw_buckets.get(&key).copied().unwrap_or(0) as u32;
+            .map(|hour| {
+                let key = hour.to_string();
+                let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
                 DetailBucket { key, secs }
             })
             .collect(),
         BucketBy::Day => {
             let mut out = Vec::new();
-            // TODO: Make it clear this is the current day; `from` and `to` mean something
-            // different here too.
-            let mut cur = from;
-            while cur <= to {
-                let key = cur.format("%Y-%m-%d").to_string();
-                let secs = raw_buckets.get(&key).copied().unwrap_or(0) as u32;
+            let mut current_date = from;
+            while current_date <= to {
+                let key = current_date.format("%Y-%m-%d").to_string();
+                let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
                 out.push(DetailBucket { key, secs });
-                cur += Duration::days(1);
+                current_date += Duration::days(1);
             }
             out
         }
@@ -206,7 +199,7 @@ pub async fn app_range_detail(
     // Data first: a row with a site means capture already treated the app as a browser (the
     // merged group's representative is MIN(process_name), which may be a non-browser member).
     // With no such rows, fall back to the name, for the "a browser, but no sites at all" hint.
-    let is_browser = name_is_browser || titles.iter().any(|t| t.host.is_some());
+    let is_browser = representative_is_browser || titles.iter().any(|t| t.host.is_some());
     Ok(AppDetail {
         buckets,
         titles,
@@ -380,7 +373,7 @@ mod tests {
         assert_eq!(code.titles[0].host, None);
     }
 
-    /// 测 [`app_range_detail`] 的组 key 解析：icon_process 是组内任一成员时，
+    /// 测 [`app_range_detail`] 的组 key 解析：代表进程是组内任一成员时，
     /// 时间柱与标题都应聚合**整个组**（跨 OS 成员 + 跨设备），且不掺入组外应用。
     /// titles 按用时降序、同标题跨成员合并。
     #[tokio::test]
@@ -500,7 +493,7 @@ mod tests {
         assert_eq!(h10_self.secs, 300, "Only(self) 不该带上 win 端时长");
     }
 
-    /// 测 [`app_range_detail`] 无组回退：icon_process 没有任何组成员记录时，
+    /// 测 [`app_range_detail`] 无组回退：代表进程没有任何组成员记录时，
     /// 组 key 退化为 process_name 本身——只聚合同名进程，不吸入其它无组进程。
     #[tokio::test]
     async fn app_range_detail_falls_back_to_process_name_without_group() {

@@ -42,6 +42,7 @@ import type {
   WeekPrecheckResp,
   AiOverrides,
 } from "@app/api/hindsight";
+import { barMinutes } from "@app/lib/segments";
 
 // 重新导出原 api 模块里的 helper 函数（DTO → 内部类型转换）
 // 主仓库代码会直接 import { dtoToDaySummary } from "@app/api/hindsight"
@@ -218,7 +219,7 @@ export const api = {
     const hourCategoryIds = new Set(slot.segments.map((s) => s.categoryId));
     const hourApps = day.apps.filter((a) => hourCategoryIds.has(a.categoryId));
     // 估算 minute 比例（粗略，仅 demo 视觉用）
-    const hourTotal = slot.segments.reduce((s, x) => s + x.minutes, 0);
+    const hourTotal = barMinutes(slot.segments);
     const dayTotal = day.apps.reduce((s, a) => s + a.minutes, 0);
     const scale = dayTotal > 0 ? hourTotal / dayTotal : 0;
     const scaled = hourApps.map((a) => ({
@@ -250,15 +251,14 @@ export const api = {
       const segMap = new Map<string, number>();
       for (const slot of day.hours) {
         for (const seg of slot.segments) {
-          segMap.set(seg.categoryId, (segMap.get(seg.categoryId) ?? 0) + seg.minutes);
+          segMap.set(seg.categoryId, (segMap.get(seg.categoryId) ?? 0) + seg.secs);
         }
       }
       result.push({
         date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-        segments: Array.from(segMap.entries()).map(([categoryId, minutes]) => ({
+        segments: Array.from(segMap.entries()).map(([categoryId, secs]) => ({
           categoryId,
-          minutes,
-          secs: minutes * 60,
+          secs,
         })),
       });
     }
@@ -281,9 +281,9 @@ export const api = {
       const offset = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
-        const cur = map.get(a.process);
+        const cur = map.get(a.displayName);
         if (cur) cur.minutes += a.minutes;
-        else map.set(a.process, { ...a });
+        else map.set(a.displayName, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -321,15 +321,14 @@ export const api = {
       const segMap = new Map<string, number>();
       for (const slot of day.hours) {
         for (const seg of slot.segments) {
-          segMap.set(seg.categoryId, (segMap.get(seg.categoryId) ?? 0) + seg.minutes);
+          segMap.set(seg.categoryId, (segMap.get(seg.categoryId) ?? 0) + seg.secs);
         }
       }
       result.push({
         date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-        segments: Array.from(segMap.entries()).map(([categoryId, minutes]) => ({
+        segments: Array.from(segMap.entries()).map(([categoryId, secs]) => ({
           categoryId,
-          minutes,
-          secs: minutes * 60,
+          secs,
         })),
       });
     }
@@ -355,9 +354,9 @@ export const api = {
       if (offset > 0) continue;
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
-        const cur = map.get(a.process);
+        const cur = map.get(a.displayName);
         if (cur) cur.minutes += a.minutes;
-        else map.set(a.process, { ...a });
+        else map.set(a.displayName, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);

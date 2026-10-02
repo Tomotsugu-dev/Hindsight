@@ -28,13 +28,10 @@ pub use by_date::{day_category_time, top_apps};
 pub use by_hour::{day_hour_apps, day_hours};
 pub use time::{day_date, month_range, week_range};
 
-// TODO: Rename to `CategorySegment`. `DaySummary` also uses it for each category's time in a day,
-// not only in an hour. The frontend has a type with the same name in `src/api/hindsight.ts`;
-// rename both.
-/// One category's time in a bucket (an hour or a day).
+/// One category's time in an hour or a day.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HourSegment {
+pub struct CategoryTime {
     pub category_id: String,
     /// Seconds before rounding.
     pub secs: u64,
@@ -47,7 +44,7 @@ pub struct HourSlot {
     /// 0..=23
     pub hour: u8,
     /// Sorted by `secs`, most first; empty when the hour has no activity.
-    pub segments: Vec<HourSegment>,
+    pub segments: Vec<CategoryTime>,
 }
 
 /// One day's time per category. Used by the per-day heat map on the Weekly and Monthly pages.
@@ -57,20 +54,15 @@ pub struct DaySummary {
     /// Date as `YYYY-MM-DD`
     pub date: String,
     /// The day's time split by category, sorted by `secs`, most first
-    pub segments: Vec<HourSegment>,
+    pub segments: Vec<CategoryTime>,
 }
 
 /// One app's total usage (one row in the top apps list).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppUsage {
-    /// Display name: the group's display_name (e.g. "Visual Studio Code"); members of one group
-    /// are merged into one row
-    // TODO: Rename to `display_name`. It holds the group's display name, not a process name; the
-    // process name is in `icon_process`. This is the key sent to the frontend, so also change the
-    // type in `src/api/hindsight.ts` and the code that reads it (usePeriodRankings, PieDrillDetail,
-    // usageExport).
-    pub process: String,
+    /// App name shown to the user: the group's display name, or the process name when ungrouped.
+    pub display_name: String,
     pub category_id: String,
     pub minutes: u32,
     /// The process_name AppIcon uses to look up the icon: a stable member name picked from the
@@ -104,6 +96,7 @@ pub struct DetailBucket {
     pub secs: u32,
 }
 
+/// Total time for one window title and website (if present), aggregated across activity records.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TitleUsage {
@@ -123,7 +116,19 @@ pub enum DeviceFilter {
 }
 
 impl DeviceFilter {
-    /// Adds the device condition to the SQL, if there is one
+    /// Converts a command's optional device ID into a filter. `None`, empty strings and strings
+    /// containing only whitespace select all devices. Other IDs are preserved as supplied.
+    pub fn from_option(id: Option<String>) -> Self {
+        match id {
+            None => Self::All,
+            Some(s) if s.trim().is_empty() => Self::All,
+            Some(s) => Self::Only(s),
+        }
+    }
+
+    /// Adds the device condition to the SQL, if there is one.
+    /// The activities table must be aliased `a`. When the clause contains `?`, bind
+    /// [`Self::sql_param`] at that placeholder's position in the SQL parameter list.
     pub(crate) fn sql_clause(&self) -> &'static str {
         match self {
             DeviceFilter::All => "",
@@ -131,13 +136,8 @@ impl DeviceFilter {
         }
     }
 
-    /// Works with [`DeviceFilter::sql_clause`] to give the prepared statement its extra parameter,
-    /// if there is one.
-    // TODO: Rename to `sql_param` so it reads as a pair with `sql_clause`: it is the value for the
-    // `?` in that fragment. Add two rules to the `sql_clause` doc: the activities table must be
-    // aliased `a`; the parameter must go into the list at the fragment's position in the SQL.
-    // Other callers are in `ai/summary_operations.rs` and `repo/ai_summaries.rs`; change them too.
-    pub(crate) fn extra_param(&self) -> Option<&String> {
+    /// The value for the `?` placeholder in [`Self::sql_clause`], or `None` for all devices.
+    pub(crate) fn sql_param(&self) -> Option<&String> {
         match self {
             DeviceFilter::All => None,
             DeviceFilter::Only(id) => Some(id),
@@ -145,43 +145,30 @@ impl DeviceFilter {
     }
 }
 
-/// Turns the `Option<String>` device filter from a Tauri command into a [`DeviceFilter`].
-/// `None` / empty / all whitespace → All; any other string → Only.
-// TODO: Move into `impl DeviceFilter` as `DeviceFilter::from_option`. Not `impl From`: an empty
-// string becomes All, and `.into()` would hide that. Callers are in `commands/data.rs` and
-// `commands/ai_summary.rs`.
-pub fn device_filter_from_option(id: Option<String>) -> DeviceFilter {
-    match id {
-        None => DeviceFilter::All,
-        Some(s) if s.trim().is_empty() => DeviceFilter::All,
-        Some(s) => DeviceFilter::Only(s),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// 测 [`device_filter_from_option`]：None / 空串 / 全空白 → All；非空 → Only。
+    /// 测 [`DeviceFilter::from_option`]：None / 空串 / 全空白 → All；非空 → Only。
     /// 这是所有报表 Tauri 命令入口的参数规整口径，错了会把"全设备"误当成某台设备查。
     #[test]
-    fn device_filter_from_option_normalizes() {
-        assert!(matches!(device_filter_from_option(None), DeviceFilter::All));
+    fn from_option_normalizes_device_filter() {
+        assert!(matches!(DeviceFilter::from_option(None), DeviceFilter::All));
         assert!(matches!(
-            device_filter_from_option(Some(String::new())),
+            DeviceFilter::from_option(Some(String::new())),
             DeviceFilter::All
         ));
         // 全空白（含 tab）也归 All——前端 select 未选中时可能传占位空白串
         assert!(matches!(
-            device_filter_from_option(Some("  \t ".into())),
+            DeviceFilter::from_option(Some("  \t ".into())),
             DeviceFilter::All
         ));
-        match device_filter_from_option(Some("device-win".into())) {
+        match DeviceFilter::from_option(Some("device-win".into())) {
             DeviceFilter::Only(id) => assert_eq!(id, "device-win"),
             DeviceFilter::All => panic!("非空 id 应得到 Only，不是 All"),
         }
         // 两端带空白但中间非空 → 保留原串的 Only（当前契约：只用 trim 判空，不改写 id）
-        match device_filter_from_option(Some(" dev ".into())) {
+        match DeviceFilter::from_option(Some(" dev ".into())) {
             DeviceFilter::Only(id) => assert_eq!(id, " dev ", "id 原样保留，不做 trim 改写"),
             DeviceFilter::All => panic!("含非空白字符的串不该归 All"),
         }

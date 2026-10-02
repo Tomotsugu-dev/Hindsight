@@ -9,11 +9,12 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::{AppUsage, DaySummary, DeviceFilter, HourSegment};
+use super::time::{parse_stored_time, split_by_date};
+use super::{AppUsage, CategoryTime, DaySummary, DeviceFilter};
 
 /// Each category's time on each day of a date range, for drawing a bar chart with one bar per day:
 /// one entry per day from `from` to `to`, each bar split by category, with empty `segments` on days
-/// with no activity. A record counts toward the day it started, even if it runs past midnight.
+/// with no activity. A record that runs past midnight is split at midnight.
 pub async fn day_category_time(
     pool: &DbPool,
     from: NaiveDate,
@@ -23,17 +24,21 @@ pub async fn day_category_time(
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
 
-    let rows: Vec<(String, String, i64)> = pool
+    // <local_date, category, total seconds> for activities that do not cross midnight.
+    // <category, started_at, ended_at> for activities that cross midnight.
+    let (rows, crossing) = pool
         .0
         .call(move |conn| {
             // As in day_hours: get the category through group → category, filtering out deleted
             // categories and the "Hidden" category
+            // Activities that do not cross midnight (end date equals local_date)
             let sql = format!(
                 "SELECT a.local_date,
                         COALESCE(c.id, 'other') AS cat,
                         SUM(a.duration_secs) AS total
                  {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND substr(a.ended_at, 1, 10) = a.local_date
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0
                  GROUP BY a.local_date, cat",
@@ -42,24 +47,54 @@ pub async fn day_category_time(
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&from_str);
             params.push(&to_str);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
-            let it = stmt
-                .query_map(params.as_slice(), |r| {
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
                     Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
                     ))
                 })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            let mut out = Vec::new();
-            for r in it {
-                out.push(r.db()?);
+
+            // Activities that cross midnight (end date not equal to local_date)
+            let sql = format!(
+                "SELECT COALESCE(c.id, 'other') AS cat, a.started_at, a.ended_at
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
+                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND substr(a.ended_at, 1, 10) <> a.local_date
+                   AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0",
+                device.sql_clause()
+            );
+
+            // Activities that cross midnight may start as early as the day before `from`.
+            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&crossing_from_str);
+            params.push(&to_str);
+            if let Some(extra) = device.sql_param() {
+                params.push(extra);
             }
-            Ok(out)
+            let mut stmt = conn.prepare(&sql).db()?;
+            let crossing = stmt
+                .query_map(params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            Ok((rows, crossing))
         })
         .await?;
 
@@ -69,19 +104,33 @@ pub async fn day_category_time(
         if secs <= 0 {
             continue;
         }
-        buckets.entry(date).or_default().insert(cat, secs as u64);
+        *buckets.entry(date).or_default().entry(cat).or_insert(0) += secs as u64;
+    }
+    for (cat, started, ended) in crossing {
+        let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
+            continue;
+        };
+        for (date, secs) in split_by_date(s, e) {
+            if date < from || date > to {
+                continue;
+            }
+            *buckets
+                .entry(date.format("%Y-%m-%d").to_string())
+                .or_default()
+                .entry(cat.clone())
+                .or_insert(0) += secs;
+        }
     }
 
     let mut out = Vec::new();
-    let mut cur = from;
-    // TODO: `cur` (the current day) needs a clearer name, or a change for accurate day splitting.
-    while cur <= to {
-        let key = cur.format("%Y-%m-%d").to_string();
-        let mut segs: Vec<HourSegment> = buckets
+    let mut cur_date = from;
+    while cur_date <= to {
+        let key = cur_date.format("%Y-%m-%d").to_string();
+        let mut segs: Vec<CategoryTime> = buckets
             .remove(&key)
             .unwrap_or_default()
             .into_iter()
-            .map(|(category_id, secs)| HourSegment { category_id, secs })
+            .map(|(category_id, secs)| CategoryTime { category_id, secs })
             .collect();
         // Descending: see the comment on the same pattern above
         segs.sort_by_key(|s| std::cmp::Reverse(s.secs));
@@ -89,7 +138,7 @@ pub async fn day_category_time(
             date: key,
             segments: segs,
         });
-        cur += Duration::days(1);
+        cur_date += Duration::days(1);
     }
 
     Ok(out)
@@ -131,7 +180,7 @@ pub async fn top_apps(
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&from_str);
             params.push(&to_str);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             params.push(&limit);
@@ -156,8 +205,8 @@ pub async fn top_apps(
 
     Ok(rows
         .into_iter()
-        .map(|(process, cat, icon_process, secs)| AppUsage {
-            process,
+        .map(|(display_name, cat, icon_process, secs)| AppUsage {
+            display_name,
             category_id: cat,
             minutes: (secs as f64 / 60.0).round() as u32,
             icon_process,
@@ -169,10 +218,32 @@ pub async fn top_apps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::reports::test_seed::{insert_activity, seed_solo_group};
+    use crate::repo::reports::test_seed::{
+        insert_activity, insert_session_with_times, seed_solo_group,
+    };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::Local;
+    use chrono::{DateTime, Local, TimeZone};
+
+    fn local(month: u32, day: u32, hour: u32, min: u32) -> DateTime<Local> {
+        Local
+            .from_local_datetime(
+                &NaiveDate::from_ymd_opt(2026, month, day)
+                    .unwrap()
+                    .and_hms_opt(hour, min, 0)
+                    .unwrap(),
+            )
+            .single()
+            .unwrap()
+    }
+
+    fn code_secs(day: &DaySummary) -> u64 {
+        day.segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.secs)
+            .sum()
+    }
 
     /// 测 [`top_apps`] 跨设备 SUM：
     /// - `DeviceFilter::All` 合并两端时长到 1 行
@@ -196,7 +267,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(all.len(), 1, "All 视角应只有一行");
-        assert_eq!(all[0].process, "Code");
+        assert_eq!(all[0].display_name, "Code");
         assert_eq!(all[0].minutes, 8);
         assert_eq!(all[0].category_id, "code");
 
@@ -256,7 +327,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "cross-OS 别名应合并成一行，不是两行");
-        assert_eq!(rows[0].process, "Visual Studio Code");
+        assert_eq!(rows[0].display_name, "Visual Studio Code");
         assert_eq!(rows[0].minutes, 8);
         assert_eq!(rows[0].category_id, "code");
         // icon_process 是 MIN(process_name)，二选一即可
@@ -291,7 +362,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "excluded 行不该出现在 top_apps");
-        assert_eq!(rows[0].process, "Editor");
+        assert_eq!(rows[0].display_name, "Editor");
     }
 
     /// 测 [`day_category_time`]（本周）：今天的 DaySummary 应 SUM 多设备 (All) 或单设备 (Only) 时长。
@@ -331,6 +402,68 @@ mod tests {
         assert_eq!(code_self, 300, "Only self 视角 today 应 5 分钟");
     }
 
+    /// 跨午夜的记录按日期拆开：10-01 23:50 → 10-02 00:10，两天各算 600 秒。
+    #[tokio::test]
+    async fn day_category_time_splits_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local(10, 1, 23, 50),
+            local(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let from = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let days = day_category_time(&pool, from, from + Duration::days(1), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(days.len(), 2);
+        assert_eq!(code_secs(&days[0]), 600, "10-01 只算 23:50 到午夜");
+        assert_eq!(code_secs(&days[1]), 600, "10-02 算午夜到 00:10");
+    }
+
+    /// 跨午夜的记录只计入范围内的日期：范围前一天开始的，凌晨那部分算进范围第一天；
+    /// 范围最后一天开始的，次日那部分不在范围内。
+    #[tokio::test]
+    async fn day_category_time_keeps_only_dates_in_range_for_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-09-30",
+            "Code",
+            local(9, 30, 23, 50),
+            local(10, 1, 0, 10),
+        )
+        .await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-02",
+            "Code",
+            local(10, 2, 23, 50),
+            local(10, 3, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let from = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let days = day_category_time(&pool, from, from + Duration::days(1), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(days.len(), 2, "结果只有范围内的两天");
+        assert_eq!(
+            code_secs(&days[0]),
+            600,
+            "10-01 算前一晚拖过来的 00:00 到 00:10"
+        );
+        assert_eq!(code_secs(&days[1]), 600, "10-02 只算 23:50 到午夜");
+    }
+
     /// 测 [`top_apps`]（本月）：top N 按总时长降序。
     #[tokio::test]
     async fn top_apps_top_n_correct() {
@@ -351,11 +484,11 @@ mod tests {
             .unwrap();
         assert!(apps.len() >= 3, "应至少 3 行");
         // 降序：Code (5) > Chrome (3) > Slack (1)
-        assert_eq!(apps[0].process, "Code");
+        assert_eq!(apps[0].display_name, "Code");
         assert_eq!(apps[0].minutes, 5);
-        assert_eq!(apps[1].process, "Chrome");
+        assert_eq!(apps[1].display_name, "Chrome");
         assert_eq!(apps[1].minutes, 3);
-        assert_eq!(apps[2].process, "Slack");
+        assert_eq!(apps[2].display_name, "Slack");
         assert_eq!(apps[2].minutes, 1);
 
         // limit 钉死
@@ -363,8 +496,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(top_2.len(), 2);
-        assert_eq!(top_2[0].process, "Code");
-        assert_eq!(top_2[1].process, "Chrome");
+        assert_eq!(top_2[0].display_name, "Code");
+        assert_eq!(top_2[1].display_name, "Chrome");
     }
 
     /// 测 [`top_apps`]（本周）：同一应用跨多天求和成一行，范围外（上周）的量不掺入。
@@ -388,7 +521,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(apps.len(), 1, "同一应用跨天应合并成一行");
-        assert_eq!(apps[0].process, "Code");
+        assert_eq!(apps[0].display_name, "Code");
         assert_eq!(
             apps[0].minutes, 10,
             "300+300=600s=10min，上周的 6000s 不该掺入"

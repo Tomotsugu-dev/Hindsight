@@ -7,7 +7,7 @@ use chrono::Local;
 use tauri::State;
 
 use crate::repo::reports::{
-    self, device_filter_from_option, AppDetail, AppUsage, BucketBy, DaySummary, HourSlot,
+    self, AppDetail, AppUsage, BucketBy, DaySummary, DeviceFilter, HourSlot,
 };
 use crate::storage::DbPool;
 
@@ -20,7 +20,7 @@ pub async fn get_day_hours(
     device_id: Option<String>,
 ) -> Result<Vec<HourSlot>, String> {
     let day = reports::day_date(Local::now().date_naive(), day_offset);
-    reports::day_hours(&pool, day, device_filter_from_option(device_id))
+    reports::day_hours(&pool, day, DeviceFilter::from_option(device_id))
         .await
         .map_err(Into::into)
 }
@@ -40,7 +40,7 @@ pub async fn get_day_apps(
         day,
         day,
         limit.unwrap_or(10),
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
     )
     .await
     .map_err(Into::into)
@@ -62,7 +62,7 @@ pub async fn get_hour_apps(
         day,
         hour,
         limit.unwrap_or(10),
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
     )
     .await
     .map_err(Into::into)
@@ -84,7 +84,7 @@ pub async fn get_app_day_detail(
         day,
         day,
         icon_process,
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
         BucketBy::Hour,
     )
     .await
@@ -105,7 +105,7 @@ pub async fn get_app_week_detail(
         from,
         to,
         icon_process,
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
         BucketBy::Day,
     )
     .await
@@ -126,7 +126,7 @@ pub async fn get_app_month_detail(
         from,
         to,
         icon_process,
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
         BucketBy::Day,
     )
     .await
@@ -142,7 +142,7 @@ pub async fn get_week_days(
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
     let (from, to) = reports::week_range(Local::now().date_naive(), week_offset);
-    reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
+    reports::day_category_time(&pool, from, to, DeviceFilter::from_option(device_id))
         .await
         .map_err(Into::into)
 }
@@ -161,7 +161,7 @@ pub async fn get_week_apps(
         from,
         to,
         limit.unwrap_or(10),
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
     )
     .await
     .map_err(Into::into)
@@ -175,7 +175,7 @@ pub async fn get_month_days(
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
     let (from, to) = reports::month_range(Local::now().date_naive(), month_offset);
-    reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
+    reports::day_category_time(&pool, from, to, DeviceFilter::from_option(device_id))
         .await
         .map_err(Into::into)
 }
@@ -194,7 +194,7 @@ pub async fn get_month_apps(
         from,
         to,
         limit.unwrap_or(10),
-        device_filter_from_option(device_id),
+        DeviceFilter::from_option(device_id),
     )
     .await
     .map_err(Into::into)

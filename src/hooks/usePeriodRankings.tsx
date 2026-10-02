@@ -41,7 +41,7 @@ export function usePeriodRankings(
       if (!a.categoryId) continue;
       const list = topAppsByCat.get(a.categoryId) ?? [];
       // AppStack 拿这串去查图标，必须用 iconProcess（合并组里的稳定代表名）；
-      // a.process 是组的 display_name，可能跟 app_icons 表里的 key 不一致。
+      // a.displayName 是组的 display_name，可能跟 app_icons 表里的 key 不一致。
       list.push(a.iconProcess);
       topAppsByCat.set(a.categoryId, list);
     }
@@ -67,8 +67,8 @@ export function usePeriodRankings(
       const cat = getCategory(a.categoryId);
       const color = cat?.color ?? "#94a3b8";
       return {
-        id: a.process,
-        name: displayAppName(a.process),
+        id: a.displayName,
+        name: displayAppName(a.displayName),
         subtitle: cat ? displayCategoryName(cat, t) : undefined,
         color,
         minutes: a.minutes,

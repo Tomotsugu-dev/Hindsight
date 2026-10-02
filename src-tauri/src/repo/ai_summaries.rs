@@ -401,7 +401,7 @@ pub async fn list_segment_top_apps(
             for cat in &excluded {
                 params.push(cat);
             }
-            if let Some(extra) = dev.extra_param() {
+            if let Some(extra) = dev.sql_param() {
                 params.push(extra);
             }
             let lim = limit as i64;
@@ -476,7 +476,7 @@ pub async fn list_range_top_apps(
             for cat in &excluded {
                 params.push(cat);
             }
-            if let Some(extra) = dev.extra_param() {
+            if let Some(extra) = dev.sql_param() {
                 params.push(extra);
             }
             let lim = limit as i64;

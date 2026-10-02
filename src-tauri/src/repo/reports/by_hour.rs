@@ -9,8 +9,8 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_local, slice_by_hour};
-use super::{AppUsage, DeviceFilter, HourSegment, HourSlot};
+use super::time::{parse_time_in_local, slice_by_hour};
+use super::{AppUsage, CategoryTime, DeviceFilter, HourSlot};
 
 /// Time per category for each of the 24 hours of a day.
 pub async fn day_hours(
@@ -36,7 +36,7 @@ pub async fn day_hours(
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&date);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
@@ -61,7 +61,8 @@ pub async fn day_hours(
         std::array::from_fn(|_| std::collections::HashMap::new());
 
     for (started, ended, cat) in rows {
-        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended)) else {
+        let (Some(s), Some(e)) = (parse_time_in_local(&started), parse_time_in_local(&ended))
+        else {
             continue;
         };
         if e <= s {
@@ -76,9 +77,9 @@ pub async fn day_hours(
         .map(|h| {
             // No longer capped at 60: with devices combined, an hour can exceed 60 minutes; the
             // frontend scales the Y axis by device count (max = 60 × deviceCount)
-            let mut segs: Vec<HourSegment> = buckets[h as usize]
+            let mut segs: Vec<CategoryTime> = buckets[h as usize]
                 .iter()
-                .map(|(cat, secs)| HourSegment {
+                .map(|(cat, secs)| CategoryTime {
                     category_id: cat.clone(),
                     secs: *secs,
                 })
@@ -129,7 +130,7 @@ pub async fn day_hour_apps(
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&date);
-            if let Some(extra) = device.extra_param() {
+            if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
@@ -157,7 +158,8 @@ pub async fn day_hour_apps(
     let mut agg: std::collections::HashMap<String, (String, String, u64)> =
         std::collections::HashMap::new();
     for (display, cat, icon_process, started, ended) in rows {
-        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended)) else {
+        let (Some(s), Some(e)) = (parse_time_in_local(&started), parse_time_in_local(&ended))
+        else {
             continue;
         };
         if e <= s {
@@ -177,12 +179,14 @@ pub async fn day_hour_apps(
 
     let mut list: Vec<AppUsage> = agg
         .into_iter()
-        .map(|(process, (category_id, icon_process, secs))| AppUsage {
-            process,
-            category_id,
-            minutes: ((secs as f64 / 60.0).round() as u32),
-            icon_process,
-        })
+        .map(
+            |(display_name, (category_id, icon_process, secs))| AppUsage {
+                display_name,
+                category_id,
+                minutes: ((secs as f64 / 60.0).round() as u32),
+                icon_process,
+            },
+        )
         .filter(|a| a.minutes > 0)
         .collect();
     list.sort_by_key(|a| std::cmp::Reverse(a.minutes));
@@ -314,12 +318,12 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(h10.len(), 1, "hour=10 只应有 Code");
-        assert_eq!(h10[0].process, "Code");
+        assert_eq!(h10[0].display_name, "Code");
 
         let h11 = day_hour_apps(&pool, today, 11, 50, DeviceFilter::All)
             .await
             .unwrap();
         assert_eq!(h11.len(), 1, "hour=11 只应有 Chrome");
-        assert_eq!(h11[0].process, "Chrome");
+        assert_eq!(h11[0].display_name, "Chrome");
     }
 }
