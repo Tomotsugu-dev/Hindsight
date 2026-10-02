@@ -32,9 +32,7 @@ pub(super) fn slice_by_hour(start: DateTime<Local>, end: DateTime<Local>) -> Vec
             .map(|t| t + Duration::hours(1))
             .unwrap_or(end);
         let chunk_end = if next_hour < end { next_hour } else { end };
-        // TODO: Remove `.max(0)`. The loop guarantees `chunk_end > cur`, so the difference is never
-        // negative; a test (10:30→11:30 in `app_detail.rs`) covers splitting across hours.
-        let secs = (chunk_end - cur).num_seconds().max(0) as u64;
+        let secs = (chunk_end - cur).num_seconds() as u64;
         if secs > 0 {
             out.push((hour, secs));
         }
