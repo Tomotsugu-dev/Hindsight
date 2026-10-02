@@ -88,8 +88,10 @@ async fn app_range_detail(
                         .db()?;
                     for row in bit {
                         let (started, ended) = row.db()?;
-                        let s = parse_local(&started);
-                        let e = parse_local(&ended);
+                        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended))
+                        else {
+                            continue;
+                        };
                         if e <= s {
                             continue;
                         }

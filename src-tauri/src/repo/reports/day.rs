@@ -64,8 +64,9 @@ pub async fn day_hours(
         std::array::from_fn(|_| std::collections::HashMap::new());
 
     for (started, ended, cat) in rows {
-        let s = parse_local(&started);
-        let e = parse_local(&ended);
+        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended)) else {
+            continue;
+        };
         if e <= s {
             continue;
         }
@@ -235,8 +236,9 @@ pub async fn day_hour_apps(
     let mut agg: std::collections::HashMap<String, (String, String, u64)> =
         std::collections::HashMap::new();
     for (display, cat, icon_process, started, ended) in rows {
-        let s = parse_local(&started);
-        let e = parse_local(&ended);
+        let (Some(s), Some(e)) = (parse_local(&started), parse_local(&ended)) else {
+            continue;
+        };
         if e <= s {
             continue;
         }
@@ -385,6 +387,42 @@ mod tests {
         let rows = day_apps(&pool, 0, 50, DeviceFilter::All).await.unwrap();
         assert_eq!(rows.len(), 1, "excluded 行不该出现在 day_apps");
         assert_eq!(rows[0].process, "Editor");
+    }
+
+    /// 结束时间不是合法时间文本的记录不计入 [`day_hours`]，同一天的其它记录照常计入。
+    #[tokio::test]
+    async fn day_hours_skips_row_with_bad_end_time() {
+        let pool = fresh_test_pool().await;
+        // 用昨天：坏的结束时间若被当成「现在」，这条会从昨天 10 点一直算到现在
+        let yesterday = Local::now().date_naive() - Duration::days(1);
+        let date = yesterday.format("%Y-%m-%d").to_string();
+        let at = |h, m| {
+            Local
+                .from_local_datetime(&yesterday.and_hms_opt(h, m, 0).unwrap())
+                .single()
+                .unwrap()
+        };
+        insert_session_with_times(&pool, TEST_SELF_ID, &date, "Code", at(9, 0), at(9, 30)).await;
+        insert_session_with_times(&pool, TEST_SELF_ID, &date, "Chrome", at(10, 0), at(10, 30))
+            .await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE activities SET ended_at = 'not-a-time' WHERE process_name = 'Chrome'",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let slots = day_hours(&pool, -1, DeviceFilter::All).await.unwrap();
+        let total: u64 = slots.iter().flat_map(|s| &s.segments).map(|s| s.secs).sum();
+        assert_eq!(
+            total, 1800,
+            "只应计入 Code 的 30 分钟，结束时间坏掉的 Chrome 不计"
+        );
     }
 
     /// 测 [`day_hours`]：跨两个小时的 session 应按时钟分桶到对应 HourSlot。
