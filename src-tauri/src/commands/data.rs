@@ -3,6 +3,7 @@
 //! 全部命令薄壳：参数适配 + 错误转换；真实 SQL 在 [`crate::repo::reports`]。
 //! `device_id = None` 表示"所有设备聚合"，传字符串则按 device 过滤。
 
+use chrono::Local;
 use tauri::State;
 
 use crate::repo::reports::{
@@ -10,15 +11,16 @@ use crate::repo::reports::{
 };
 use crate::storage::DbPool;
 
-/// 拉某天 24 小时的使用时长分布（每小时一条），给「日」页面顶部柱状图用。
-/// `day_offset = 0` 是今天，-1 是昨天，依此类推。
+/// Time per category for each of the 24 hours of a day, for the bars at the top of the Daily
+/// page. `day_offset = 0` is today, -1 is yesterday, and so on.
 #[tauri::command]
 pub async fn get_day_hours(
     pool: State<'_, DbPool>,
     day_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<HourSlot>, String> {
-    reports::day_hours(&pool, day_offset, device_filter_from_option(device_id))
+    let day = reports::day_date(Local::now().date_naive(), day_offset);
+    reports::day_hours(&pool, day, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
 }
@@ -32,7 +34,7 @@ pub async fn get_day_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    let day = reports::day_date(day_offset);
+    let day = reports::day_date(Local::now().date_naive(), day_offset);
     reports::top_apps(
         &pool,
         day,
@@ -54,9 +56,10 @@ pub async fn get_hour_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
+    let day = reports::day_date(Local::now().date_naive(), day_offset);
     reports::day_hour_apps(
         &pool,
-        day_offset,
+        day,
         hour,
         limit.unwrap_or(10),
         device_filter_from_option(device_id),
@@ -75,7 +78,7 @@ pub async fn get_app_day_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    let day = reports::day_date(day_offset);
+    let day = reports::day_date(Local::now().date_naive(), day_offset);
     reports::app_range_detail(
         &pool,
         day,
@@ -96,7 +99,7 @@ pub async fn get_app_week_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    let (from, to) = reports::week_range(week_offset);
+    let (from, to) = reports::week_range(Local::now().date_naive(), week_offset);
     reports::app_range_detail(
         &pool,
         from,
@@ -117,7 +120,7 @@ pub async fn get_app_month_detail(
     icon_process: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
-    let (from, to) = reports::month_range(month_offset);
+    let (from, to) = reports::month_range(Local::now().date_naive(), month_offset);
     reports::app_range_detail(
         &pool,
         from,
@@ -138,7 +141,7 @@ pub async fn get_week_days(
     week_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
-    let (from, to) = reports::week_range(week_offset);
+    let (from, to) = reports::week_range(Local::now().date_naive(), week_offset);
     reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
@@ -152,7 +155,7 @@ pub async fn get_week_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    let (from, to) = reports::week_range(week_offset);
+    let (from, to) = reports::week_range(Local::now().date_naive(), week_offset);
     reports::top_apps(
         &pool,
         from,
@@ -171,7 +174,7 @@ pub async fn get_month_days(
     month_offset: i32,
     device_id: Option<String>,
 ) -> Result<Vec<DaySummary>, String> {
-    let (from, to) = reports::month_range(month_offset);
+    let (from, to) = reports::month_range(Local::now().date_naive(), month_offset);
     reports::day_category_time(&pool, from, to, device_filter_from_option(device_id))
         .await
         .map_err(Into::into)
@@ -185,7 +188,7 @@ pub async fn get_month_apps(
     limit: Option<u32>,
     device_id: Option<String>,
 ) -> Result<Vec<AppUsage>, String> {
-    let (from, to) = reports::month_range(month_offset);
+    let (from, to) = reports::month_range(Local::now().date_naive(), month_offset);
     reports::top_apps(
         &pool,
         from,

@@ -170,7 +170,7 @@ pub async fn top_apps(
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{insert_activity, seed_solo_group};
-    use crate::repo::reports::time::{day_date, month_range, week_range};
+    use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use chrono::Local;
 
@@ -182,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn top_apps_aggregates_correctly_across_devices() {
         let pool = fresh_test_pool().await;
-        let day = day_date(0);
+        let day = Local::now().date_naive();
         let today = day.format("%Y-%m-%d").to_string();
 
         // 同一进程 "Code" 在 self（5 分钟）和 device-win（3 分钟）各贡献时长
@@ -222,7 +222,7 @@ mod tests {
     #[tokio::test]
     async fn top_apps_merges_cross_os_aliases_into_one_row() {
         let pool = fresh_test_pool().await;
-        let day = day_date(0);
+        let day = Local::now().date_naive();
         let today = day.format("%Y-%m-%d").to_string();
 
         // mac 视角的 "Code" 5 分钟 + Win 视角的 "Code.exe" 3 分钟
@@ -271,7 +271,7 @@ mod tests {
     #[tokio::test]
     async fn top_apps_skips_excluded_rows() {
         let pool = fresh_test_pool().await;
-        let day = day_date(0);
+        let day = Local::now().date_naive();
         let today = day.format("%Y-%m-%d").to_string();
         insert_activity(&pool, "dev-a", &today, "Downloader", 600).await;
         insert_activity(&pool, "dev-a", &today, "Editor", 600).await;
@@ -300,7 +300,7 @@ mod tests {
         let pool = fresh_test_pool().await;
         let today = Local::now().date_naive();
         let today_str = today.format("%Y-%m-%d").to_string();
-        let (from, to) = week_range(0);
+        let (from, to) = week_range(Local::now().date_naive(), 0);
 
         insert_activity(&pool, TEST_SELF_ID, &today_str, "Code", 300).await; // 5 min self
         insert_activity(&pool, "device-win", &today_str, "Code", 180).await; // 3 min win
@@ -337,7 +337,7 @@ mod tests {
         let pool = fresh_test_pool().await;
         let today = Local::now().date_naive();
         let today_str = today.format("%Y-%m-%d").to_string();
-        let (from, to) = month_range(0);
+        let (from, to) = month_range(Local::now().date_naive(), 0);
 
         insert_activity(&pool, TEST_SELF_ID, &today_str, "Code", 300).await; // 5 min
         insert_activity(&pool, TEST_SELF_ID, &today_str, "Chrome", 180).await; // 3 min
@@ -371,7 +371,7 @@ mod tests {
     #[tokio::test]
     async fn top_apps_sums_across_days_and_excludes_prev_week() {
         let pool = fresh_test_pool().await;
-        let (monday, sunday) = week_range(0);
+        let (monday, sunday) = week_range(Local::now().date_naive(), 0);
         let day = |off: i64| {
             (monday + Duration::days(off))
                 .format("%Y-%m-%d")
@@ -401,7 +401,7 @@ mod tests {
     #[tokio::test]
     async fn day_category_time_zero_fills_whole_month() {
         let pool = fresh_test_pool().await;
-        let (first, last) = month_range(0);
+        let (first, last) = month_range(Local::now().date_naive(), 0);
         let n_days = ((last - first).num_days() + 1) as usize;
         let day = |off: i64| (first + Duration::days(off)).format("%Y-%m-%d").to_string();
 
