@@ -2,16 +2,16 @@
 
 use chrono::{DateTime, Datelike, Duration, Local, TimeZone, Timelike};
 
-/// Converts a stored time string (RFC 3339) to this machine's time zone. Returns the current time
-/// if parsing fails.
-// TODO: On a parse failure, log an error and return None; callers skip the row. Returning the
-// current time makes the row vanish (bad start) or stretch to now (bad end). Bad strings can only
-// come from sync: `pull.rs` stores the cloud times as they are, without checking the format.
-// First write a failing test: when the end time is a bad string, `day_hours` must not count it.
-pub(super) fn parse_local(s: &str) -> DateTime<Local> {
-    DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&Local))
-        .unwrap_or_else(|_| Local::now())
+/// Converts a stored time string (RFC 3339) to this machine's time zone. Logs an error and returns
+/// None if the format is wrong.
+pub(super) fn parse_local(s: &str) -> Option<DateTime<Local>> {
+    match DateTime::parse_from_rfc3339(s) {
+        Ok(dt) => Some(dt.with_timezone(&Local)),
+        Err(e) => {
+            log::error!("activity time is not RFC 3339: {s:?}: {e}");
+            None
+        }
+    }
 }
 
 /// Splits a time range at local clock hours and returns `(hour, seconds)` for each piece, for the
