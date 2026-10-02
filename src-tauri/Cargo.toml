@@ -106,6 +106,11 @@ screencapturekit = { version = "2.1", features = ["macos_14_0"] }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Tests only, not in the installer: neither this machine nor CI changes clocks, so testing dates
+# across daylight saving time needs a time zone that does, such as New York.
+[dev-dependencies]
+chrono-tz = "0.10"
+
 # CI / 本地开发期 lint。新成员加进来时 clippy 即报，不再依赖手动审计。
 # 不开 needless_pass_by_value：Tauri callback 强制按值签名（MenuEvent / TrayIconEvent）、
 # Tauri 命令参数惯例用 String（避免 lifetime 噪音），开了也是噪声多于收益。

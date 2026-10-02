@@ -44,13 +44,15 @@ pub(super) fn slice_by_hour(start: DateTime<Local>, end: DateTime<Local>) -> Vec
 }
 
 /// The date of one day. `day_offset = 0` is today, -1 is yesterday.
-// TODO: Count calendar days instead: `Local::now().date_naive() + Duration::days(..)`. This moves
-// n × 24 hours from now, so where daylight saving time is used, clicking "yesterday" at 23:30 on
-// the day the clocks go back still gives today. Two places in `by_hour.rs` and one in
-// `app_detail.rs` use the same expression; change them to call this function. This changes
-// behavior, so do it in its own commit, test first.
 pub fn day_date(day_offset: i32) -> NaiveDate {
-    (Local::now() + Duration::days(day_offset as i64)).date_naive()
+    day_date_at(Local::now(), day_offset)
+}
+
+/// Same as [`day_date`], but the caller passes in "now", so a test can use a time in another time
+/// zone. Adds calendar days instead of moving in 24-hour steps: a day with a clock change has 23
+/// or 25 hours, so moving by hours lands on the neighboring day.
+fn day_date_at<Tz: TimeZone>(now: DateTime<Tz>, day_offset: i32) -> NaiveDate {
+    now.date_naive() + Duration::days(day_offset as i64)
 }
 
 // TODO: Add a doc comment that says what it does, and rename the function.
@@ -90,4 +92,38 @@ pub fn month_range(month_offset: i32) -> (NaiveDate, NaiveDate) {
     let last = next - Duration::days(1);
     // TODO: Name these `from` and `to`, as elsewhere in this module.
     (first, last)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono_tz::America::New_York;
+
+    /// 纽约 2026-11-01 凌晨钟往回拨 1 小时，这一天有 25 小时。
+    /// 当晚 23:30 点「昨天」，应该是 10-31，不能还是 11-01。
+    #[test]
+    fn day_date_counts_calendar_days_on_fall_back_day() {
+        let now = New_York
+            .with_ymd_and_hms(2026, 11, 1, 23, 30, 0)
+            .single()
+            .unwrap();
+        assert_eq!(
+            day_date_at(now, -1),
+            NaiveDate::from_ymd_opt(2026, 10, 31).unwrap()
+        );
+    }
+
+    /// 纽约 2026-03-08 凌晨钟往前拨 1 小时，这一天只有 23 小时。
+    /// 3-09 00:30 点「昨天」，应该是 03-08，不能跳到 03-07。
+    #[test]
+    fn day_date_counts_calendar_days_after_spring_forward() {
+        let now = New_York
+            .with_ymd_and_hms(2026, 3, 9, 0, 30, 0)
+            .single()
+            .unwrap();
+        assert_eq!(
+            day_date_at(now, -1),
+            NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()
+        );
+    }
 }

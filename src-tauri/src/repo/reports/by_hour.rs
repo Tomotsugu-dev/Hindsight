@@ -1,7 +1,6 @@
 //! Reports computed by splitting records at clock hours: the 24 hour bars on the Daily page, and
 //! the app ranking after clicking an hour bar.
 
-use chrono::{Duration, Local};
 use rusqlite::ToSql;
 
 use crate::error::Result;
@@ -9,7 +8,7 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_local, slice_by_hour};
+use super::time::{day_date, parse_local, slice_by_hour};
 use super::{AppUsage, DeviceFilter, HourSegment, HourSlot};
 
 /// Time per category for each of the 24 hours of a day. `day_offset = 0` is today, -1 is
@@ -19,9 +18,7 @@ pub async fn day_hours(
     day_offset: i32,
     device: DeviceFilter,
 ) -> Result<Vec<HourSlot>> {
-    let date = (Local::now() + Duration::days(day_offset as i64))
-        .format("%Y-%m-%d")
-        .to_string();
+    let date = day_date(day_offset).format("%Y-%m-%d").to_string();
 
     let rows: Vec<(String, String, String)> = pool
         .0
@@ -113,9 +110,7 @@ pub async fn day_hour_apps(
     limit: u32,
     device: DeviceFilter,
 ) -> Result<Vec<AppUsage>> {
-    let date = (Local::now() + Duration::days(day_offset as i64))
-        .format("%Y-%m-%d")
-        .to_string();
+    let date = day_date(day_offset).format("%Y-%m-%d").to_string();
 
     // (display, cat, icon_process, started, ended); adding up happens after slicing
     let rows: Vec<(String, String, String, String, String)> = pool
@@ -200,7 +195,7 @@ mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{insert_session_with_times, seed_solo_group};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::TimeZone;
+    use chrono::{Duration, Local, TimeZone};
 
     /// 结束时间不是合法时间文本的记录不计入 [`day_hours`]，同一天的其它记录照常计入。
     #[tokio::test]
