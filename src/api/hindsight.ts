@@ -783,18 +783,18 @@ export const api = {
     deviceId?: string,
   ) =>
     invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
-  getAppDayDetail: (dayOffset: number, iconProcess: string, deviceId?: string) =>
-    invoke<AppDetail>("get_app_day_detail", { dayOffset, iconProcess, deviceId }),
-  getAppWeekDetail: (weekOffset: number, iconProcess: string, deviceId?: string) =>
-    invoke<AppDetail>("get_app_week_detail", { weekOffset, iconProcess, deviceId }),
+  getAppDayDetail: (dayOffset: number, groupId: string, deviceId?: string) =>
+    invoke<AppDetail>("get_app_day_detail", { dayOffset, groupId, deviceId }),
+  getAppWeekDetail: (weekOffset: number, groupId: string, deviceId?: string) =>
+    invoke<AppDetail>("get_app_week_detail", { weekOffset, groupId, deviceId }),
   getAppMonthDetail: (
     monthOffset: number,
-    iconProcess: string,
+    groupId: string,
     deviceId?: string,
   ) =>
     invoke<AppDetail>("get_app_month_detail", {
       monthOffset,
-      iconProcess,
+      groupId,
       deviceId,
     }),
   getWeekDays: (weekOffset: number, deviceId?: string) =>
