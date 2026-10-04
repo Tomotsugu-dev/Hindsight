@@ -160,8 +160,7 @@ pub async fn top_apps(
     let (rows, crossing) = pool
         .0
         .call(move |conn| {
-            // Merge by display name, not by group: two groups with the same display name are the
-            // same app to the user. Rows with different categories stay separate.
+            // One row per group ID; a process without a group is its own row
             // `MIN(process_name)` only makes sure the same process name is picked every time, for
             // the icon lookup.
             // Activities that do not cross midnight (end date equals local_date)
@@ -174,13 +173,14 @@ pub async fn top_apps(
                        AND a.excluded = 0
                      GROUP BY a.process_name
                  )
-                 SELECT COALESCE(g.display_name, p.process_name)        AS display,
+                 SELECT COALESCE(g.id, p.process_name)                  AS group_id,
+                        COALESCE(g.display_name, p.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
                         MIN(p.process_name)                             AS icon_process,
                         SUM(p.secs)                                     AS total
                  {FROM_PROCESS_GROUP_CATEGORY}
                  WHERE g.category_id IS NOT 'hidden'
-                 GROUP BY COALESCE(g.display_name, p.process_name), COALESCE(c.id, 'other')",
+                 GROUP BY group_id, display, cat",
                 device.sql_clause()
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
@@ -196,7 +196,8 @@ pub async fn top_apps(
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, i64>(3)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
                     ))
                 })
                 .db()?
@@ -205,7 +206,8 @@ pub async fn top_apps(
 
             // Activities that cross midnight (end date not equal to local_date)
             let sql = format!(
-                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                "SELECT COALESCE(g.id, a.process_name)                  AS group_id,
+                        COALESCE(g.display_name, a.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
                         a.process_name, a.started_at, a.ended_at
                  {FROM_ACTIVITY_GROUP_CATEGORY}
@@ -232,6 +234,7 @@ pub async fn top_apps(
                         row.get::<_, String>(2)?,
                         row.get::<_, String>(3)?,
                         row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
                     ))
                 })
                 .db()?
@@ -241,13 +244,20 @@ pub async fn top_apps(
         })
         .await?;
 
-    // (display name, category) → (representative_process, seconds)
-    let mut totals: std::collections::HashMap<(String, String), (String, i64)> =
+    // group id → (seconds, the row; minutes are filled in at the end)
+    let mut totals: std::collections::HashMap<String, (i64, AppUsage)> =
         std::collections::HashMap::new();
-    for (display, cat, icon_process, secs) in rows {
-        totals.insert((display, cat), (icon_process, secs));
+    for (group_id, display_name, category_id, icon_process, secs) in rows {
+        let app = AppUsage {
+            group_id: group_id.clone(),
+            display_name,
+            category_id,
+            minutes: 0,
+            icon_process,
+        };
+        totals.insert(group_id, (secs, app));
     }
-    for (display, cat, process, started, ended) in crossing {
+    for (group_id, display_name, category_id, process, started, ended) in crossing {
         let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
             continue;
         };
@@ -259,31 +269,34 @@ pub async fn top_apps(
         if secs == 0 {
             continue;
         }
-        let total = totals
-            .entry((display, cat))
-            .or_insert_with(|| (process.clone(), 0));
+        let (total, app) = totals.entry(group_id.clone()).or_insert_with(|| {
+            let app = AppUsage {
+                group_id,
+                display_name,
+                category_id,
+                minutes: 0,
+                icon_process: process.clone(),
+            };
+            (0, app)
+        });
         // Keep the smallest process name, as `MIN(process_name)` does in the query
-        if process < total.0 {
-            total.0 = process;
+        if process < app.icon_process {
+            app.icon_process = process;
         }
-        total.1 += secs;
+        *total += secs;
     }
 
     let mut apps: Vec<(i64, AppUsage)> = totals
-        .into_iter()
-        .map(|((display_name, category_id), (icon_process, secs))| {
-            let app = AppUsage {
-                display_name,
-                category_id,
-                minutes: (secs as f64 / 60.0).round() as u32,
-                icon_process,
-            };
+        .into_values()
+        .map(|(secs, mut app)| {
+            app.minutes = (secs as f64 / 60.0).round() as u32;
             (secs, app)
         })
         .collect();
     let most_first = |a: &(i64, AppUsage), b: &(i64, AppUsage)| {
         b.0.cmp(&a.0)
             .then_with(|| a.1.display_name.cmp(&b.1.display_name))
+            .then_with(|| a.1.group_id.cmp(&b.1.group_id))
     };
     // Keep the top `limit` apps by seconds, then sort only those
     let limit = limit as usize;
@@ -303,7 +316,7 @@ pub async fn top_apps(
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{
-        insert_activity, insert_session_with_times, local_time, seed_solo_group,
+        insert_activity, insert_session_with_times, local_time, seed_group, seed_solo_group,
     };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
@@ -740,5 +753,27 @@ mod tests {
         assert_eq!(top.len(), 1);
         assert_eq!(top[0].display_name, "Code");
         assert_eq!(top[0].minutes, 20);
+    }
+
+    /// 两个分组显示名相同、但没合并：排行里是两行，不按名字合成一行。
+    #[tokio::test]
+    async fn top_apps_lists_unmerged_groups_with_the_same_name_separately() {
+        let pool = fresh_test_pool().await;
+        let day = Local::now().date_naive();
+        let today = day.format("%Y-%m-%d").to_string();
+        insert_activity(&pool, TEST_SELF_ID, &today, "Notes", 300).await;
+        insert_activity(&pool, "device-win", &today, "notes.exe", 180).await;
+        seed_group(&pool, "Notes", "Notes", "code", &["Notes"]).await;
+        seed_group(&pool, "notes.exe", "Notes", "code", &["notes.exe"]).await;
+
+        let apps = top_apps(&pool, day, day, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(apps.len(), 2, "没合并的两个组应该是两行");
+        assert_eq!(apps[0].minutes, 5);
+        assert_eq!(apps[1].minutes, 3);
+        assert!(apps.iter().all(|a| a.display_name == "Notes"));
+        let ids: Vec<&str> = apps.iter().map(|a| a.group_id.as_str()).collect();
+        assert_eq!(ids, vec!["Notes", "notes.exe"]);
     }
 }

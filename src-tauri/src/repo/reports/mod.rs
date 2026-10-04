@@ -63,6 +63,9 @@ pub struct DaySummary {
 pub struct AppUsage {
     /// App name shown to the user: the group's display name, or the process name when ungrouped.
     pub display_name: String,
+    /// The group ID this row adds up. A process without a group counts as its own group, with its
+    /// process name as the group ID.
+    pub group_id: String,
     pub category_id: String,
     pub minutes: u32,
     /// The process_name AppIcon uses to look up the icon: a stable member name picked from the
