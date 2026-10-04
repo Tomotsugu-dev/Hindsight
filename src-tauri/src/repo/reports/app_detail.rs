@@ -57,6 +57,52 @@ pub async fn app_range_detail(
                 .db()?
                 .unwrap_or_else(|| representative_process.clone());
 
+            // Activities that cross midnight (end date not equal to local_date)
+            let crossing_sql = format!(
+                "SELECT COALESCE(a.window_title, '') AS title, a.url_host AS host,
+                        a.started_at, a.ended_at
+                 {FROM_ACTIVITY_GROUP}
+                 WHERE a.local_date >= ? AND a.local_date <= ?
+                   AND substr(a.ended_at, 1, 10) <> a.local_date
+                   AND COALESCE(g.id, a.process_name) = ?
+                   AND a.excluded = 0
+                   {}",
+                device.sql_clause()
+            );
+            // Activities that cross midnight may start as early as the day before `from`.
+            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let mut crossing_params: Vec<&dyn ToSql> =
+                vec![&crossing_from_str, &to_str, &group_key];
+            if let Some(device_id) = device.sql_param() {
+                crossing_params.push(device_id);
+            }
+            let mut crossing_stmt = conn.prepare(&crossing_sql).db()?;
+            let crossing_rows = crossing_stmt
+                .query_map(crossing_params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            // (title, host, the parts in range as (date, seconds))
+            let crossing = crossing_rows
+                .into_iter()
+                .filter_map(|(title, host, started, ended)| {
+                    let (s, e) = (parse_stored_time(&started)?, parse_stored_time(&ended)?);
+                    let parts = split_by_date(s, e)
+                        .into_iter()
+                        .filter(|(date, ..)| *date >= from && *date <= to)
+                        .map(|(date, s, e)| (date, (e - s).num_seconds()))
+                        .collect::<Vec<_>>();
+                    Some((title, host, parts))
+                })
+                .collect::<Vec<_>>();
+
             // 2) Time bars. By hour, rows can't be grouped by local_hour: it is the hour the
             //    session *started* and is not updated when the session is sealed (see the note on
             //    day_hour_apps), so a session crossing an hour lands whole in its first hour and
@@ -117,6 +163,7 @@ pub async fn app_range_detail(
                         "SELECT a.local_date, SUM(a.duration_secs)
                          {FROM_ACTIVITY_GROUP}
                          WHERE a.local_date >= ? AND a.local_date <= ?
+                           AND substr(a.ended_at, 1, 10) = a.local_date
                            AND COALESCE(g.id, a.process_name) = ?
                            AND a.excluded = 0
                            {}
@@ -138,7 +185,14 @@ pub async fn app_range_detail(
                         .db()?;
                     for row in day_rows {
                         let (date, secs) = row.db()?;
-                        secs_by_bucket.insert(date, secs);
+                        *secs_by_bucket.entry(date).or_insert(0) += secs;
+                    }
+                    for (_, _, parts) in &crossing {
+                        for (date, secs) in parts {
+                            *secs_by_bucket
+                                .entry(date.format("%Y-%m-%d").to_string())
+                                .or_insert(0) += *secs as u64;
+                        }
                     }
                 }
             }
@@ -153,11 +207,11 @@ pub async fn app_range_detail(
                         SUM(a.duration_secs) AS total
                  {FROM_ACTIVITY_GROUP}
                  WHERE a.local_date >= ? AND a.local_date <= ?
+                   AND substr(a.ended_at, 1, 10) = a.local_date
                    AND COALESCE(g.id, a.process_name) = ?
                    AND a.excluded = 0
                    {}
-                 GROUP BY title, host
-                 ORDER BY total DESC",
+                 GROUP BY title, host",
                 device.sql_clause()
             );
             let mut window_title_params: Vec<&dyn ToSql> = Vec::new();
@@ -169,18 +223,41 @@ pub async fn app_range_detail(
             }
             let mut window_title_stmt = conn.prepare(&window_title_sql).db()?;
             let window_title_rows = window_title_stmt
-                .query_map(window_title_params.as_slice(), |r| {
-                    Ok(TitleUsage {
-                        title: r.get::<_, String>(0)?,
-                        host: r.get::<_, Option<String>>(1)?,
-                        secs: r.get::<_, i64>(2)?.max(0) as u32,
-                    })
+                .query_map(window_title_params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
                 })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            let mut titles = Vec::new();
-            for row in window_title_rows {
-                titles.push(row.db()?);
+            let mut secs_by_title: std::collections::HashMap<(String, Option<String>), i64> =
+                window_title_rows
+                    .into_iter()
+                    .map(|(title, host, secs)| ((title, host), secs))
+                    .collect();
+            for (title, host, parts) in crossing {
+                let secs: i64 = parts.iter().map(|(_, secs)| secs).sum();
+                if secs > 0 {
+                    *secs_by_title.entry((title, host)).or_insert(0) += secs;
+                }
             }
+            let mut titles: Vec<TitleUsage> = secs_by_title
+                .into_iter()
+                .map(|((title, host), secs)| TitleUsage {
+                    title,
+                    host,
+                    secs: secs.max(0) as u32,
+                })
+                .collect();
+            titles.sort_by(|a, b| {
+                b.secs
+                    .cmp(&a.secs)
+                    .then_with(|| a.title.cmp(&b.title))
+                    .then_with(|| a.host.cmp(&b.host))
+            });
 
             Ok((secs_by_bucket, titles))
         })
@@ -365,6 +442,70 @@ mod tests {
         )
         .await;
         assert!(matches!(result, Err(Error::InvalidInputDyn(_))));
+    }
+
+    /// 周统计、月统计的应用详情：跨午夜的记录按日期拆开，10-01 和 10-02 各 600 秒。
+    #[tokio::test]
+    async fn app_range_detail_day_buckets_split_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let detail = app_range_detail(
+            &pool,
+            oct1,
+            oct1 + Duration::days(1),
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        let secs: Vec<u32> = detail.buckets.iter().map(|b| b.secs).collect();
+        assert_eq!(secs, vec![600, 600]);
+    }
+
+    /// 窗口标题也只算当天那段：日统计看 10-01 和 10-02，main.rs 各 600 秒。
+    #[tokio::test]
+    async fn app_range_detail_titles_split_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_titled(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            "main.rs",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        for day in [oct1, oct1 + Duration::days(1)] {
+            let detail = app_range_detail(
+                &pool,
+                day,
+                day,
+                "Code".into(),
+                DeviceFilter::All,
+                BucketBy::Hour,
+            )
+            .await
+            .unwrap();
+            assert_eq!(detail.titles.len(), 1, "{day} 应该有 main.rs");
+            assert_eq!(detail.titles[0].title, "main.rs");
+            assert_eq!(detail.titles[0].secs, 600, "{day} 只算当天那 10 分钟");
+        }
     }
 
     /// 「按网站」分组的原料：titles 行带 url_host，同标题不同域名分开计
