@@ -1,39 +1,11 @@
-/* 外壳同 AI 总结页：标题 + tab + 内容 */
+/* 外壳同 AI 总结页：标题行（右边 tab）+ 内容 */
 .page {
   padding: 32px 32px 48px;
   max-width: 800px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-}
-
-/* 标题和小字在左，「统计 ｜ 搜索」在右，跟日统计一样只占一块 */
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.headerText {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* TabNav 自带的下边距是给「标签条独占一行」用的，放进标题行就不要了 */
-.headerTabs nav {
-  margin-bottom: 0;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
+  gap: 24px;
 }
 
 .tabContent {
@@ -155,10 +127,13 @@
   overflow-x: clip;
 }
 
+/* 三张卡一样高；卡里的列表撑满标题下面剩下的高度，多了在里面滚动，
+   不会因为某一张内容多把别的卡拉高、底下留一块空白 */
 .track {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: calc((100% - 16px) / 2);
+  grid-auto-rows: 440px;
   gap: 16px;
   align-items: stretch;
   /* 终点前冲过一点再回来，就是回弹 */
@@ -174,10 +149,21 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .detailSlot > section {
   flex: 1;
+}
+
+.track .card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.track .cardHead {
+  flex-shrink: 0;
 }
 
 /* —— 卡片 —— */
@@ -242,13 +228,21 @@
   background: var(--surface-2);
 }
 
-/* —— 窗口详情卡：头部照应用详情抽屉 —— */
+/* —— 窗口详情卡：头部一项一行 —— */
 .detailHead {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 12px 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* 第一行：图标、名字和分类、关闭 */
+.detailHeadTop {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 12px 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .detailHeadText {
@@ -269,19 +263,35 @@
   white-space: nowrap;
 }
 
-.detailSub {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  font-size: 12px;
-  color: var(--text-muted);
+/* 截断了也能看全名：鼠标停上去换成多行 */
+.detailName:hover {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .detailCat {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 首次 / 最近使用：只在空格处换行，日期不会被拆开 */
+.detailDates {
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: keep-all;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 最后一行：总时长在左，选中某天时「当天详情」在右 */
+.detailTotalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 26px;
 }
 
 .catDot {
@@ -292,8 +302,7 @@
 }
 
 .detailTotal {
-  flex-shrink: 0;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
@@ -319,12 +328,6 @@
 .closeBtn:hover {
   background: rgba(0, 0, 0, 0.06);
   color: var(--text-strong);
-}
-
-.detailActions {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 16px 0;
 }
 
 /* WindowTitles 的外层：卡片里不再套一层卡，只给内边距 */

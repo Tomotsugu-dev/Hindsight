@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { type TabDef } from "../../components/TabNav/TabNav";
-import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import styles from "./AISettingsPage.module.css";
 
 /** 5 个子路由对应 5 个 tab：引擎 / 模型 / 常规 / 提示词 / 云端 API
@@ -15,18 +15,14 @@ const TABS: TabDef[] = [
 ];
 
 /**
- * AI 设置页外壳：标题 + 5 个 tab + Outlet。
- * 跟 SettingsPage / AISummaryPage 同构（共享 components/TabNav）。
+ * AI 设置页外壳：标题行（右边 5 个 tab）+ Outlet。
+ * 跟 SettingsPage / AISummaryPage 同构（共享 components/PageHeader）。
  */
 export default function AISettingsPage() {
   const { t } = useTranslation();
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t("aiSettings.title")}</h1>
-      </header>
-
-      <FloatingTabNav tabs={TABS} ariaLabel={t("aiSettings.title")} />
+      <PageHeader title={t("aiSettings.title")} tabs={TABS} />
 
       <Outlet />
     </div>

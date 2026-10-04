@@ -93,55 +93,56 @@ export function AppDetailCard({
 
   return (
     <section className={styles.card}>
+      {/* 一项一行：名字、分类、首次和最近使用、总时长；卡片窄，挤在一行会把名字和日期都截断 */}
       <header className={styles.detailHead}>
-        <AppIcon processName={app.iconProcess} fallbackColor={app.color} size={34} />
-        <div className={styles.detailHeadText}>
-          <div className={styles.detailName} title={app.name}>
-            {app.name}
-          </div>
-          <div className={styles.detailSub}>
+        <div className={styles.detailHeadTop}>
+          <AppIcon processName={app.iconProcess} fallbackColor={app.color} size={34} />
+          <div className={styles.detailHeadText}>
+            {/* 名字放不下时截断；鼠标停上去展开成多行显示全名（应用里 title 提示不显示） */}
+            <div className={styles.detailName} title={app.name}>
+              {app.name}
+            </div>
             {app.categoryLabel && (
               <span className={styles.detailCat}>
                 <span className={styles.catDot} style={{ background: app.color }} aria-hidden />
                 {app.categoryLabel}
               </span>
             )}
-            {activeKeys.length > 0 && (
-              <span>
-                {t("history.app.firstLast", {
-                  first: fmtDay(activeKeys[0]),
-                  last: fmtDay(activeKeys[activeKeys.length - 1]),
-                })}
-              </span>
-            )}
           </div>
-        </div>
-        <div className={styles.detailTotal}>{fmtHM(Math.round(totalSecs / 60))}</div>
-        <button
-          type="button"
-          className={styles.closeBtn}
-          onClick={onClose}
-          aria-label={t("common.close")}
-          title={t("common.close")}
-        >
-          <X size={18} strokeWidth={2} />
-        </button>
-      </header>
-
-      {selectedDay !== null && (
-        <div className={styles.detailActions}>
-          <button type="button" className={styles.textBtn} onClick={() => setDrawerOpen(true)}>
-            {t("history.app.dayDetail")}
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={onClose}
+            aria-label={t("common.close")}
+            title={t("common.close")}
+          >
+            <X size={18} strokeWidth={2} />
           </button>
         </div>
-      )}
+        {activeKeys.length > 0 && (
+          <div className={styles.detailDates}>
+            {t("history.app.firstLast", {
+              first: fmtDay(activeKeys[0]),
+              last: fmtDay(activeKeys[activeKeys.length - 1]),
+            })}
+          </div>
+        )}
+        <div className={styles.detailTotalRow}>
+          <span className={styles.detailTotal}>{fmtHM(Math.round(totalSecs / 60))}</span>
+          {selectedDay !== null && (
+            <button type="button" className={styles.textBtn} onClick={() => setDrawerOpen(true)}>
+              {t("history.app.dayDetail")}
+            </button>
+          )}
+        </div>
+      </header>
 
       {loading ? (
         <div className={styles.loading}>{t("history.loading")}</div>
       ) : (detail?.titles ?? []).length === 0 ? (
         <EmptyHint />
       ) : (
-        <ScrollBox maxHeight={420}>
+        <ScrollBox fill>
           <WindowTitles
             // 换应用、换范围时展开和忽略的就地状态回到默认
             key={`${app.groupId}|${scope.from}|${scope.to}|${deviceId ?? ""}`}

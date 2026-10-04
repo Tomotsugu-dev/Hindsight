@@ -9,7 +9,10 @@ import styles from "./ScrollBox.module.css";
 
 interface ScrollBoxProps {
   children: ReactNode;
-  maxHeight: number;
+  /** 固定高度（px）；传了 fill 时不用 */
+  maxHeight?: number;
+  /** 不用固定高度，撑满 flex 父容器剩下的高度（父容器要定高、纵向 flex） */
+  fill?: boolean;
   /** 上下渐隐区域的高度（px） */
   fadeSize?: number;
   className?: string;
@@ -22,6 +25,7 @@ interface ScrollBoxProps {
 export function ScrollBox({
   children,
   maxHeight,
+  fill = false,
   fadeSize = 24,
   className,
 }: ScrollBoxProps) {
@@ -51,6 +55,7 @@ export function ScrollBox({
 
   const cls = [
     styles.box,
+    fill ? styles.fill : "",
     atTop ? styles.atTop : "",
     atBottom ? styles.atBottom : "",
     className ?? "",
@@ -64,8 +69,9 @@ export function ScrollBox({
       className={cls}
       style={
         {
-          height: `${maxHeight}px`,
-          minHeight: `${maxHeight}px`,
+          ...(fill || maxHeight === undefined
+            ? {}
+            : { height: `${maxHeight}px`, minHeight: `${maxHeight}px` }),
           "--fade-size": `${fadeSize}px`,
         } as CSSProperties
       }
