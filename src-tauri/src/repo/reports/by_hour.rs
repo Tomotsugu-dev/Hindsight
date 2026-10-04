@@ -1,7 +1,7 @@
 //! Reports computed by splitting records at clock hours: the 24 hour bars on the Daily page, and
 //! the app ranking after clicking an hour bar.
 
-use chrono::NaiveDate;
+use chrono::{Duration, Local, NaiveDate};
 use rusqlite::ToSql;
 
 use crate::error::Result;
@@ -9,7 +9,7 @@ use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_time_in_local, slice_by_hour};
+use super::time::{parse_stored_time, slice_by_hour, split_by_date};
 use super::{AppUsage, CategoryTime, DeviceFilter, HourSlot};
 
 /// Time per category for each of the 24 hours of a day.
@@ -25,35 +25,39 @@ pub async fn day_hours(
         .call(move |conn| {
             // `IS NOT` keeps activities with no group (`g.category_id` is NULL) and drops only
             // those in "Hidden".
+            // Activities assigned to this day,
+            // plus previous-day activities that cross midnight into it.
             let sql = format!(
                 "SELECT a.started_at, a.ended_at,
                         COALESCE(c.id, 'other') AS cat
                  {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date = ? {}
+                 WHERE (a.local_date = ?
+                        OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?)) {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0",
                 device.sql_clause()
             );
+            let prev_date = (day - Duration::days(1)).format("%Y-%m-%d").to_string();
             let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&date);
+            params.push(&prev_date);
             params.push(&date);
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
-            let it = stmt
-                .query_map(params.as_slice(), |r| {
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
                     Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
                     ))
                 })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            let mut out = Vec::new();
-            for r in it {
-                out.push(r.db()?);
-            }
-            Ok(out)
+            Ok(rows)
         })
         .await?;
 
@@ -61,14 +65,16 @@ pub async fn day_hours(
         std::array::from_fn(|_| std::collections::HashMap::new());
 
     for (started, ended, cat) in rows {
-        let (Some(s), Some(e)) = (parse_time_in_local(&started), parse_time_in_local(&ended))
+        let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
+            continue;
+        };
+        let Some((_, s, e)) = split_by_date(s, e)
+            .into_iter()
+            .find(|(date, ..)| *date == day)
         else {
             continue;
         };
-        if e <= s {
-            continue;
-        }
-        for (hour, secs) in slice_by_hour(s, e) {
+        for (hour, secs) in slice_by_hour(s.with_timezone(&Local), e.with_timezone(&Local)) {
             *buckets[hour as usize].entry(cat.clone()).or_insert(0) += secs;
         }
     }
@@ -117,39 +123,43 @@ pub async fn day_hour_apps(
     let rows: Vec<(String, String, String, String, String)> = pool
         .0
         .call(move |conn| {
+            // Activities assigned to this day,
+            // plus previous-day activities that cross midnight into it.
             let sql = format!(
                 "SELECT COALESCE(g.display_name, a.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
                         a.process_name                                  AS icon_process,
                         a.started_at, a.ended_at
                  {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date = ? {}
+                 WHERE (a.local_date = ?
+                        OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?)) {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0",
                 device.sql_clause()
             );
+            let prev_date = (day - Duration::days(1)).format("%Y-%m-%d").to_string();
             let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&date);
+            params.push(&prev_date);
             params.push(&date);
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
             let mut stmt = conn.prepare(&sql).db()?;
-            let it = stmt
-                .query_map(params.as_slice(), |r| {
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
                     Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                        r.get::<_, String>(3)?,
-                        r.get::<_, String>(4)?,
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
                     ))
                 })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            let mut out = Vec::new();
-            for r in it {
-                out.push(r.db()?);
-            }
-            Ok(out)
+            Ok(rows)
         })
         .await?;
 
@@ -158,14 +168,16 @@ pub async fn day_hour_apps(
     let mut agg: std::collections::HashMap<String, (String, String, u64)> =
         std::collections::HashMap::new();
     for (display, cat, icon_process, started, ended) in rows {
-        let (Some(s), Some(e)) = (parse_time_in_local(&started), parse_time_in_local(&ended))
+        let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
+            continue;
+        };
+        let Some((_, s, e)) = split_by_date(s, e)
+            .into_iter()
+            .find(|(date, ..)| *date == day)
         else {
             continue;
         };
-        if e <= s {
-            continue;
-        }
-        let hour_secs: u64 = slice_by_hour(s, e)
+        let hour_secs: u64 = slice_by_hour(s.with_timezone(&Local), e.with_timezone(&Local))
             .into_iter()
             .filter(|(h, _)| *h as i32 == hour)
             .map(|(_, secs)| secs)
@@ -197,9 +209,35 @@ pub async fn day_hour_apps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::reports::test_seed::{insert_session_with_times, seed_solo_group};
+    use crate::repo::reports::test_seed::{insert_session_with_times, local_time, seed_solo_group};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use chrono::{Duration, Local, TimeZone};
+
+    fn code_secs_at(slots: &[HourSlot], hour: u8) -> u64 {
+        slots
+            .iter()
+            .find(|s| s.hour == hour)
+            .unwrap()
+            .segments
+            .iter()
+            .filter(|s| s.category_id == "code")
+            .map(|s| s.secs)
+            .sum()
+    }
+
+    /// 10-01 23:50 → 10-02 00:10 的 Code，给下面两个测试用。
+    async fn seed_code_crossing_midnight(pool: &DbPool) {
+        insert_session_with_times(
+            pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(pool, "Code", "code").await;
+    }
 
     /// 结束时间不是合法时间文本的记录不计入 [`day_hours`]，同一天的其它记录照常计入。
     #[tokio::test]
@@ -325,5 +363,55 @@ mod tests {
             .unwrap();
         assert_eq!(h11.len(), 1, "hour=11 只应有 Chrome");
         assert_eq!(h11[0].display_name, "Chrome");
+    }
+
+    /// 跨午夜的记录画在各自那天：10-01 的 23 点和 10-02 的 0 点各 600 秒，10-01 的 0 点没有。
+    #[tokio::test]
+    async fn day_hours_splits_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        seed_code_crossing_midnight(&pool).await;
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+
+        let first = day_hours(&pool, oct1, DeviceFilter::All).await.unwrap();
+        assert_eq!(
+            code_secs_at(&first, 23),
+            600,
+            "10-01 的 23 点算 23:50 到午夜"
+        );
+        assert_eq!(
+            code_secs_at(&first, 0),
+            0,
+            "10-02 凌晨的时间不该画在 10-01 的 0 点"
+        );
+
+        let next = day_hours(&pool, oct1 + Duration::days(1), DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(code_secs_at(&next, 0), 600, "10-02 的 0 点算午夜到 00:10");
+    }
+
+    /// 点小时柱看排行时，跨午夜的记录只出现在它真正所在的那一小时。
+    #[tokio::test]
+    async fn day_hour_apps_splits_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        seed_code_crossing_midnight(&pool).await;
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+
+        let first_23 = day_hour_apps(&pool, oct1, 23, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(first_23.len(), 1);
+        assert_eq!(first_23[0].minutes, 10, "10-01 的 23 点：Code 10 分钟");
+
+        let first_0 = day_hour_apps(&pool, oct1, 0, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert!(first_0.is_empty(), "10-02 凌晨的时间不该算进 10-01 的 0 点");
+
+        let next_0 = day_hour_apps(&pool, oct1 + Duration::days(1), 0, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(next_0.len(), 1, "10-02 的 0 点应该有前一晚拖过来的 Code");
+        assert_eq!(next_0[0].minutes, 10);
     }
 }

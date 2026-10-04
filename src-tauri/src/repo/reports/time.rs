@@ -18,13 +18,7 @@ pub(super) fn parse_stored_time(s: &str) -> Option<DateTime<FixedOffset>> {
     }
 }
 
-/// Converts a stored time string (RFC 3339) to this machine's time zone. Logs an error and returns
-/// None if the format is wrong.
-pub(super) fn parse_time_in_local(s: &str) -> Option<DateTime<Local>> {
-    parse_stored_time(s).map(|dt| dt.with_timezone(&Local))
-}
-
-/// Splits an activity interval at midnight and returns the seconds assigned to each date.
+/// Splits an activity interval at midnight and returns each date's part as `(date, start, end)`.
 ///
 /// Uses `start`'s UTC offset as the local time zone for the whole interval, converting `end` to
 /// the same offset before splitting. This keeps the dates consistent with the stored `local_date`
@@ -32,18 +26,18 @@ pub(super) fn parse_time_in_local(s: &str) -> Option<DateTime<Local>> {
 pub(super) fn split_by_date(
     start: DateTime<FixedOffset>,
     end: DateTime<FixedOffset>,
-) -> Vec<(NaiveDate, u64)> {
+) -> Vec<(NaiveDate, DateTime<FixedOffset>, DateTime<FixedOffset>)> {
     let mut out = Vec::new();
-    let mut cur = start.naive_local();
-    let end = end.with_timezone(&start.timezone()).naive_local();
+    let mut cur = start;
+    let end = end.with_timezone(&start.timezone());
     // Loop over each day, splitting at midnight.
     // For example, a time range from 10-2 23:59:50 to 10-4 00:00:20 will be split into
-    // three chunks: (10-2, 10) and (10-3, 86400) and (10-4, 20).
+    // three chunks: 10-2 23:59:50 to midnight, all of 10-3, and 10-4 midnight to 00:00:20.
     while cur < end {
-        let date = cur.date();
-        let next_midnight = (date + Duration::days(1)).and_time(NaiveTime::MIN);
+        let time_delta = cur.time() - NaiveTime::MIN;
+        let next_midnight = cur - time_delta + Duration::days(1);
         let chunk_end = next_midnight.min(end);
-        out.push((date, (chunk_end - cur).num_seconds() as u64));
+        out.push((cur.date_naive(), cur, chunk_end));
         cur = chunk_end;
     }
     out
@@ -122,27 +116,38 @@ mod tests {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
     }
 
+    /// [`split_by_date`] 的每一段换成秒数，方便对照。
+    fn secs_by_date(
+        start: DateTime<FixedOffset>,
+        end: DateTime<FixedOffset>,
+    ) -> Vec<(NaiveDate, i64)> {
+        split_by_date(start, end)
+            .into_iter()
+            .map(|(date, s, e)| (date, (e - s).num_seconds()))
+            .collect()
+    }
+
     /// 同一天内不切；跨一次午夜切成两段；刚好在午夜结束的，次日没有时间。
     #[test]
     fn split_by_date_cuts_at_midnight() {
         let d1 = date(2026, 10, 1);
         let d2 = date(2026, 10, 2);
         assert_eq!(
-            split_by_date(
+            secs_by_date(
                 at("2026-10-01T10:00:00+09:00"),
                 at("2026-10-01T10:30:00+09:00")
             ),
             vec![(d1, 1800)]
         );
         assert_eq!(
-            split_by_date(
+            secs_by_date(
                 at("2026-10-01T23:50:00+09:00"),
                 at("2026-10-02T00:10:00+09:00")
             ),
             vec![(d1, 600), (d2, 600)]
         );
         assert_eq!(
-            split_by_date(
+            secs_by_date(
                 at("2026-10-01T23:50:00+09:00"),
                 at("2026-10-02T00:00:00+09:00")
             ),
@@ -150,11 +155,26 @@ mod tests {
         );
     }
 
+    /// 每段带着自己的起止时刻：午夜前那段止于午夜，午夜后那段从午夜开始。
+    #[test]
+    fn split_by_date_returns_the_times_of_each_part() {
+        let start = at("2026-10-01T23:50:00+09:00");
+        let midnight = at("2026-10-02T00:00:00+09:00");
+        let end = at("2026-10-02T00:10:00+09:00");
+        assert_eq!(
+            split_by_date(start, end),
+            vec![
+                (date(2026, 10, 1), start, midnight),
+                (date(2026, 10, 2), midnight, end),
+            ]
+        );
+    }
+
     /// 跨三个日期时，中间那天是整整 86400 秒；空区间和倒挂的区间没有任何段。
     #[test]
     fn split_by_date_covers_every_date_in_between() {
         assert_eq!(
-            split_by_date(
+            secs_by_date(
                 at("2026-10-01T23:00:00+09:00"),
                 at("2026-10-03T01:00:00+09:00")
             ),
@@ -175,14 +195,14 @@ mod tests {
     #[test]
     fn split_by_date_uses_the_offset_of_the_start() {
         assert_eq!(
-            split_by_date(
+            secs_by_date(
                 at("2026-10-01T23:50:00+09:00"),
                 at("2026-10-01T15:10:00+00:00")
             ),
             vec![(date(2026, 10, 1), 600), (date(2026, 10, 2), 600)]
         );
         assert_eq!(
-            split_by_date(
+            secs_by_date(
                 at("2026-03-07T23:30:00-05:00"),
                 at("2026-03-08T03:30:00-04:00")
             ),
