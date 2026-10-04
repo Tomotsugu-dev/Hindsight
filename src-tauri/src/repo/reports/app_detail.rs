@@ -74,17 +74,15 @@ pub async fn app_range_detail(
                         "SELECT a.started_at, a.ended_at
                          {FROM_ACTIVITY_GROUP}
                          WHERE (a.local_date = ?
-                                OR (a.local_date = ? AND substr(a.ended_at, 1, 10) <> a.local_date))
+                                OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?))
                            AND COALESCE(g.id, a.process_name) = ?
                            AND a.excluded = 0
                            {}",
                         device.sql_clause()
                     );
                     let prev_date = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
-                    let mut session_params: Vec<&dyn ToSql> = Vec::new();
-                    session_params.push(&from_str);
-                    session_params.push(&prev_date);
-                    session_params.push(&group_key);
+                    let mut session_params: Vec<&dyn ToSql> =
+                        vec![&from_str, &prev_date, &from_str, &group_key];
                     if let Some(device_id) = device.sql_param() {
                         session_params.push(device_id);
                     }

@@ -32,7 +32,7 @@ pub async fn day_hours(
                         COALESCE(c.id, 'other') AS cat
                  {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE (a.local_date = ?
-                        OR (a.local_date = ? AND substr(a.ended_at, 1, 10) <> a.local_date)) {}
+                        OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?)) {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0",
                 device.sql_clause()
@@ -41,6 +41,7 @@ pub async fn day_hours(
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&date);
             params.push(&prev_date);
+            params.push(&date);
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
@@ -131,7 +132,7 @@ pub async fn day_hour_apps(
                         a.started_at, a.ended_at
                  {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE (a.local_date = ?
-                        OR (a.local_date = ? AND substr(a.ended_at, 1, 10) <> a.local_date)) {}
+                        OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?)) {}
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0",
                 device.sql_clause()
@@ -140,6 +141,7 @@ pub async fn day_hour_apps(
             let mut params: Vec<&dyn ToSql> = Vec::new();
             params.push(&date);
             params.push(&prev_date);
+            params.push(&date);
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
