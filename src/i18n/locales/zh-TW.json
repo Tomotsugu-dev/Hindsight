@@ -50,6 +50,7 @@
       "today": "日統計",
       "week": "周統計",
       "month": "月統計",
+      "history": "全部歷史",
       "aiSummary": "AI 總結",
       "aiSettings": "AI 設定",
       "categories": "分類",
@@ -644,6 +645,46 @@
     },
     "selection": {
       "label": "{{month}}月{{day}}日 {{weekday}}"
+    }
+  },
+  "history": {
+    "title": "全部歷史",
+    "meta": "共 {{total}} · {{since}} 起",
+    "empty": "還沒有任何記錄",
+    "loading": "載入中…",
+    "tabs": {
+      "stats": "統計",
+      "search": "搜尋"
+    },
+    "chartTabs": {
+      "year": "年表",
+      "month": "月表"
+    },
+    "chart": {
+      "title": "每日活動",
+      "hint": "在熱力圖上拖過幾格，就只看這幾天",
+      "resetZoom": "重設縮放"
+    },
+    "nav": {
+      "prevYear": "前一年",
+      "nextYear": "後一年",
+      "backToThisYear": "回到今年"
+    },
+    "heatmap": {
+      "less": "少",
+      "more": "多",
+      "cell": "{{date}} · {{duration}}"
+    },
+    "superCategories": "大類",
+    "apps": "應用程式",
+    "path": {
+      "label": "目前範圍",
+      "all": "全部",
+      "clearDay": "取消選取這一天"
+    },
+    "app": {
+      "firstLast": "首次使用 {{first}} · 最近使用 {{last}}",
+      "dayDetail": "當天詳情"
     }
   },
   "apps": {
@@ -1242,8 +1283,7 @@
       "daily": "日報",
       "week": "週報",
       "month": "月報",
-      "debug": "除錯",
-      "search": "搜尋"
+      "debug": "除錯"
     },
     "placeholder": {
       "hint": "功能開發中。"

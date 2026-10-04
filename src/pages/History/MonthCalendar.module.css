@@ -1,0 +1,73 @@
+.wrap {
+  padding: 14px 16px 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.weekday {
+  padding-bottom: 2px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  height: 58px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--text-muted) 8%, transparent);
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cell:disabled {
+  cursor: default;
+}
+
+.cell:hover:not(:disabled) {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
+.cell:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.cellSelected,
+.cellSelected:hover:not(:disabled) {
+  outline: 2px solid var(--text-strong);
+  outline-offset: 1px;
+}
+
+.cellOutside {
+  background: transparent;
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.date {
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+  font-variant-numeric: tabular-nums;
+}
+
+.time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-regular);
+  font-variant-numeric: tabular-nums;
+}

@@ -52,6 +52,11 @@
   outline-offset: -2px;
 }
 
+.rowSelected,
+.rowSelected:hover {
+  background: var(--color-accent-soft);
+}
+
 .rank {
   width: 16px;
   text-align: center;

@@ -50,6 +50,7 @@
       "today": "Diário",
       "week": "Semanal",
       "month": "Mensal",
+      "history": "Histórico",
       "aiSummary": "Resumo de IA",
       "aiSettings": "Ajustes IA",
       "categories": "Categorias",
@@ -644,6 +645,46 @@
     },
     "selection": {
       "label": "{{month}}/{{day}} {{weekday}}"
+    }
+  },
+  "history": {
+    "title": "Todo o histórico",
+    "meta": "{{total}} no total · desde {{since}}",
+    "empty": "Ainda não há registros",
+    "loading": "Carregando…",
+    "tabs": {
+      "stats": "Estatísticas",
+      "search": "Pesquisar"
+    },
+    "chartTabs": {
+      "year": "Ano",
+      "month": "Mês"
+    },
+    "chart": {
+      "title": "Atividade diária",
+      "hint": "Arraste sobre o mapa de calor para ver só esses dias",
+      "resetZoom": "Redefinir zoom"
+    },
+    "nav": {
+      "prevYear": "Ano anterior",
+      "nextYear": "Próximo ano",
+      "backToThisYear": "Voltar a este ano"
+    },
+    "heatmap": {
+      "less": "Menos",
+      "more": "Mais",
+      "cell": "{{date}} · {{duration}}"
+    },
+    "superCategories": "Supercategorias",
+    "apps": "Aplicativos",
+    "path": {
+      "label": "Escopo atual",
+      "all": "Tudo",
+      "clearDay": "Limpar o dia selecionado"
+    },
+    "app": {
+      "firstLast": "Primeiro uso: {{first}} · Último uso: {{last}}",
+      "dayDetail": "Detalhes do dia"
     }
   },
   "apps": {
@@ -1242,8 +1283,7 @@
       "daily": "Diário",
       "week": "Semanal",
       "month": "Mensal",
-      "debug": "Depuração",
-      "search": "Pesquisar"
+      "debug": "Depuração"
     },
     "placeholder": {
       "hint": "Recurso em desenvolvimento."

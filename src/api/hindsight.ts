@@ -805,6 +805,20 @@ export const api = {
     invoke<DaySummaryDto[]>("get_month_days", { monthOffset, deviceId }),
   getMonthApps: (monthOffset: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_month_apps", { monthOffset, limit, deviceId }),
+  /** 全部历史页：from..to（含两端，"YYYY-MM-DD"）每天各分类的时长，每天一项 */
+  getRangeCategoryTime: (from: string, to: string, deviceId?: string) =>
+    invoke<DaySummaryDto[]>("get_range_category_time", { from, to, deviceId }),
+  /** 全部历史页：from..to 内每个应用的总时长，不截断 */
+  getRangeApps: (from: string, to: string, deviceId?: string) =>
+    invoke<AppUsage[]>("get_range_apps", { from, to, deviceId }),
+  /** 全部历史页：一个应用在 from..to 内每天的时长 + 窗口标题用时 */
+  getAppRangeDetail: (
+    from: string,
+    to: string,
+    groupId: string,
+    deviceId?: string,
+  ) =>
+    invoke<AppDetail>("get_app_range_detail", { from, to, groupId, deviceId }),
   listCategories: () => invoke<Category[]>("list_categories"),
   createCategory: (input: CategoryInput) =>
     invoke<Category>("create_category", { input }),

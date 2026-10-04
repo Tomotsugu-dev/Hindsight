@@ -50,6 +50,7 @@
       "today": "Daily",
       "week": "Weekly",
       "month": "Monthly",
+      "history": "All time",
       "aiSummary": "AI Summary",
       "aiSettings": "AI Settings",
       "categories": "Categories",
@@ -644,6 +645,46 @@
     },
     "selection": {
       "label": "{{month}}/{{day}} {{weekday}}"
+    }
+  },
+  "history": {
+    "title": "All time",
+    "meta": "{{total}} in total · since {{since}}",
+    "empty": "Nothing recorded yet",
+    "loading": "Loading…",
+    "tabs": {
+      "stats": "Stats",
+      "search": "Search"
+    },
+    "chartTabs": {
+      "year": "Year",
+      "month": "Month"
+    },
+    "chart": {
+      "title": "Daily activity",
+      "hint": "Drag across the heatmap to show only those days",
+      "resetZoom": "Reset zoom"
+    },
+    "nav": {
+      "prevYear": "Previous year",
+      "nextYear": "Next year",
+      "backToThisYear": "Back to this year"
+    },
+    "heatmap": {
+      "less": "Less",
+      "more": "More",
+      "cell": "{{date}} · {{duration}}"
+    },
+    "superCategories": "Super-categories",
+    "apps": "Apps",
+    "path": {
+      "label": "Current scope",
+      "all": "All",
+      "clearDay": "Clear the selected day"
+    },
+    "app": {
+      "firstLast": "First used {{first}} · Last used {{last}}",
+      "dayDetail": "Day details"
     }
   },
   "apps": {
@@ -1242,8 +1283,7 @@
       "daily": "Daily",
       "week": "Weekly",
       "month": "Monthly",
-      "debug": "Debug",
-      "search": "Search"
+      "debug": "Debug"
     },
     "placeholder": {
       "hint": "Feature in development."
