@@ -245,6 +245,9 @@ pub fn run() {
             commands::data::get_week_apps,
             commands::data::get_month_days,
             commands::data::get_month_apps,
+            commands::data::get_range_category_time,
+            commands::data::get_range_apps,
+            commands::data::get_app_range_detail,
             // --- categories: 分类管理 ---
             commands::categories::list_categories,
             commands::categories::create_category,

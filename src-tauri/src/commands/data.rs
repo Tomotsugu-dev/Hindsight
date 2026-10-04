@@ -1,9 +1,10 @@
-//! 报表查询 Tauri 命令——给前端「日 / 周 / 月」页面用。
+//! Tauri commands for the report pages: Daily, Weekly, Monthly and All time.
 //!
-//! 全部命令薄壳：参数适配 + 错误转换；真实 SQL 在 [`crate::repo::reports`]。
-//! `device_id = None` 表示"所有设备聚合"，传字符串则按 device 过滤。
+//! Each command is a thin wrapper that adapts arguments and converts errors; the SQL lives in
+//! [`crate::repo::reports`]. `device_id = None` adds up all devices; a string filters to that
+//! device.
 
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use tauri::State;
 
 use crate::repo::reports::{
@@ -194,6 +195,60 @@ pub async fn get_month_apps(
         to,
         limit.unwrap_or(10),
         DeviceFilter::from_option(device_id),
+    )
+    .await
+    .map_err(Into::into)
+}
+
+/// The All time page: time spent in each category for every day from `from` to `to`.
+#[tauri::command]
+pub async fn get_range_category_time(
+    pool: State<'_, DbPool>,
+    from: NaiveDate,
+    to: NaiveDate,
+    device_id: Option<String>,
+) -> Result<Vec<DaySummary>, String> {
+    reports::day_category_time(&pool, from, to, DeviceFilter::from_option(device_id))
+        .await
+        .map_err(Into::into)
+}
+
+/// The All time page: time spent in each app from `from` to `to`.
+#[tauri::command]
+pub async fn get_range_apps(
+    pool: State<'_, DbPool>,
+    from: NaiveDate,
+    to: NaiveDate,
+    device_id: Option<String>,
+) -> Result<Vec<AppUsage>, String> {
+    reports::top_apps(
+        &pool,
+        from,
+        to,
+        u32::MAX,
+        DeviceFilter::from_option(device_id),
+    )
+    .await
+    .map_err(Into::into)
+}
+
+/// The All time page: an app's time and window titles for each day from `from` to `to`.
+/// `group_id` is the `groupId` from that app's row in the app ranking.
+#[tauri::command]
+pub async fn get_app_range_detail(
+    pool: State<'_, DbPool>,
+    from: NaiveDate,
+    to: NaiveDate,
+    group_id: String,
+    device_id: Option<String>,
+) -> Result<AppDetail, String> {
+    reports::app_range_detail(
+        &pool,
+        from,
+        to,
+        group_id,
+        DeviceFilter::from_option(device_id),
+        BucketBy::Day,
     )
     .await
     .map_err(Into::into)
