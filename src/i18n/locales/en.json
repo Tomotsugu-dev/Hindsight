@@ -669,7 +669,7 @@
     },
     "chart": {
       "title": "Daily activity",
-      "hint": "Drag across the heatmap to show only those days",
+      "hint": "Try dragging across a few days on the heatmap to zoom in on your usage for that period",
       "resetZoom": "Reset zoom"
     },
     "nav": {

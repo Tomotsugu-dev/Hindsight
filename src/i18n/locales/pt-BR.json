@@ -669,7 +669,7 @@
     },
     "chart": {
       "title": "Atividade diária",
-      "hint": "Arraste sobre o mapa de calor para ver só esses dias",
+      "hint": "Experimente arrastar sobre alguns dias no mapa de calor para ampliar seu uso nesse período",
       "resetZoom": "Redefinir zoom"
     },
     "nav": {
