@@ -185,7 +185,7 @@ export function PieDrillDetail({
                 {topApps.map((a) => {
                   const pct = sliceTotal > 0 ? Math.round((a.minutes / sliceTotal) * 100) : 0;
                   return (
-                    <li key={a.displayName} className={styles.drillRow}>
+                    <li key={a.groupId} className={styles.drillRow}>
                       <span className={styles.appIconWrap}>
                         <AppIcon
                           processName={a.iconProcess}

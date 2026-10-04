@@ -281,9 +281,9 @@ export const api = {
       const offset = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
-        const cur = map.get(a.displayName);
+        const cur = map.get(a.groupId);
         if (cur) cur.minutes += a.minutes;
-        else map.set(a.displayName, { ...a });
+        else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -354,9 +354,9 @@ export const api = {
       if (offset > 0) continue;
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
-        const cur = map.get(a.displayName);
+        const cur = map.get(a.groupId);
         if (cur) cur.minutes += a.minutes;
-        else map.set(a.displayName, { ...a });
+        else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
