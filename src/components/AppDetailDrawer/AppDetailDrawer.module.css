@@ -448,3 +448,29 @@
   display: flex;
   flex-direction: column;
 }
+
+/* 传了 limit 时的「展开剩余 N 项 / 收起」 */
+.moreBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 2px 8px 2px 4px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.moreBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-strong);
+}
+
+.pageList + .moreBtn {
+  margin: 0 0 6px 22px;
+}
