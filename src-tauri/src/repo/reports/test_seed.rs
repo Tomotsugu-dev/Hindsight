@@ -1,9 +1,22 @@
 //! 报表测试共用的造数据函数。
 
-use chrono::{DateTime, Local, Timelike};
+use chrono::{DateTime, Local, NaiveDate, TimeZone, Timelike};
 
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
+
+/// 本机时区下 2026 年某月某日的某时某分。
+pub(super) fn local_time(month: u32, day: u32, hour: u32, min: u32) -> DateTime<Local> {
+    Local
+        .from_local_datetime(
+            &NaiveDate::from_ymd_opt(2026, month, day)
+                .unwrap()
+                .and_hms_opt(hour, min, 0)
+                .unwrap(),
+        )
+        .single()
+        .unwrap()
+}
 
 pub(super) async fn insert_activity(
     pool: &DbPool,

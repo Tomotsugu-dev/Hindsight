@@ -38,6 +38,7 @@ pub async fn day_category_time(
                         SUM(a.duration_secs) AS total
                  {FROM_ACTIVITY_GROUP_CATEGORY}
                  WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   -- Keep activities that end on their local_date; e.g. 23:50 to 00:10 is handled below.
                    AND substr(a.ended_at, 1, 10) = a.local_date
                    AND g.category_id IS NOT 'hidden'
                    AND a.excluded = 0
@@ -110,7 +111,7 @@ pub async fn day_category_time(
         let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
             continue;
         };
-        for (date, secs) in split_by_date(s, e) {
+        for (date, s, e) in split_by_date(s, e) {
             if date < from || date > to {
                 continue;
             }
@@ -118,7 +119,7 @@ pub async fn day_category_time(
                 .entry(date.format("%Y-%m-%d").to_string())
                 .or_default()
                 .entry(cat.clone())
-                .or_insert(0) += secs;
+                .or_insert(0) += (e - s).num_seconds() as u64;
         }
     }
 
@@ -219,23 +220,11 @@ pub async fn top_apps(
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{
-        insert_activity, insert_session_with_times, seed_solo_group,
+        insert_activity, insert_session_with_times, local_time, seed_solo_group,
     };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::{DateTime, Local, TimeZone};
-
-    fn local(month: u32, day: u32, hour: u32, min: u32) -> DateTime<Local> {
-        Local
-            .from_local_datetime(
-                &NaiveDate::from_ymd_opt(2026, month, day)
-                    .unwrap()
-                    .and_hms_opt(hour, min, 0)
-                    .unwrap(),
-            )
-            .single()
-            .unwrap()
-    }
+    use chrono::Local;
 
     fn code_secs(day: &DaySummary) -> u64 {
         day.segments
@@ -411,8 +400,8 @@ mod tests {
             TEST_SELF_ID,
             "2026-10-01",
             "Code",
-            local(10, 1, 23, 50),
-            local(10, 2, 0, 10),
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
         )
         .await;
         seed_solo_group(&pool, "Code", "code").await;
@@ -436,8 +425,8 @@ mod tests {
             TEST_SELF_ID,
             "2026-09-30",
             "Code",
-            local(9, 30, 23, 50),
-            local(10, 1, 0, 10),
+            local_time(9, 30, 23, 50),
+            local_time(10, 1, 0, 10),
         )
         .await;
         insert_session_with_times(
@@ -445,8 +434,8 @@ mod tests {
             TEST_SELF_ID,
             "2026-10-02",
             "Code",
-            local(10, 2, 23, 50),
-            local(10, 3, 0, 10),
+            local_time(10, 2, 23, 50),
+            local_time(10, 3, 0, 10),
         )
         .await;
         seed_solo_group(&pool, "Code", "code").await;

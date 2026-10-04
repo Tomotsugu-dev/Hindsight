@@ -1,15 +1,15 @@
 //! Details for one app: the time bars and window titles in the drawer opened by clicking an app,
 //! for a day, a week or a month.
 
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, Local, NaiveDate};
 use rusqlite::{OptionalExtension, ToSql};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
-use super::time::{parse_time_in_local, slice_by_hour};
+use super::time::{parse_stored_time, slice_by_hour, split_by_date};
 use super::{AppDetail, DetailBucket, DeviceFilter, TitleUsage};
 
 /// How the detail time bars are grouped: by hour on the Daily page, by day on the Weekly and
@@ -32,6 +32,11 @@ pub async fn app_range_detail(
     device: DeviceFilter,
     bucket_by: BucketBy,
 ) -> Result<AppDetail> {
+    if matches!(bucket_by, BucketBy::Hour) && from != to {
+        return Err(Error::InvalidInputDyn(format!(
+            "hour bars cover one day, got {from} to {to}"
+        )));
+    }
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
     let representative_is_browser =
@@ -63,18 +68,22 @@ pub async fn app_range_detail(
                 std::collections::HashMap::new();
             match bucket_by {
                 BucketBy::Hour => {
+                    // Activities assigned to this day,
+                    // plus previous-day activities that cross midnight into it.
                     let session_sql = format!(
                         "SELECT a.started_at, a.ended_at
                          {FROM_ACTIVITY_GROUP}
-                         WHERE a.local_date >= ? AND a.local_date <= ?
+                         WHERE (a.local_date = ?
+                                OR (a.local_date = ? AND substr(a.ended_at, 1, 10) <> a.local_date))
                            AND COALESCE(g.id, a.process_name) = ?
                            AND a.excluded = 0
                            {}",
                         device.sql_clause()
                     );
+                    let prev_date = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
                     let mut session_params: Vec<&dyn ToSql> = Vec::new();
                     session_params.push(&from_str);
-                    session_params.push(&to_str);
+                    session_params.push(&prev_date);
                     session_params.push(&group_key);
                     if let Some(device_id) = device.sql_param() {
                         session_params.push(device_id);
@@ -88,14 +97,19 @@ pub async fn app_range_detail(
                     for row in session_rows {
                         let (started, ended) = row.db()?;
                         let (Some(s), Some(e)) =
-                            (parse_time_in_local(&started), parse_time_in_local(&ended))
+                            (parse_stored_time(&started), parse_stored_time(&ended))
                         else {
                             continue;
                         };
-                        if e <= s {
+                        let Some((_, s, e)) = split_by_date(s, e)
+                            .into_iter()
+                            .find(|(date, ..)| *date == from)
+                        else {
                             continue;
-                        }
-                        for (hour, secs) in slice_by_hour(s, e) {
+                        };
+                        for (hour, secs) in
+                            slice_by_hour(s.with_timezone(&Local), e.with_timezone(&Local))
+                        {
                             *secs_by_bucket.entry(hour.to_string()).or_insert(0) += secs;
                         }
                     }
@@ -211,7 +225,8 @@ pub async fn app_range_detail(
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{
-        insert_activity, insert_session_titled, insert_session_with_times, seed_solo_group,
+        insert_activity, insert_session_titled, insert_session_with_times, local_time,
+        seed_solo_group,
     };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
@@ -284,6 +299,74 @@ mod tests {
             };
             assert_eq!(b.secs, expect, "hour={} 的 secs 不符", b.key);
         }
+    }
+
+    /// 日统计的应用详情：跨午夜的记录画在各自那天，10-01 的 23 点和 10-02 的 0 点各 600 秒，
+    /// 10-01 的 0 点没有。
+    #[tokio::test]
+    async fn app_range_detail_hour_buckets_split_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let secs_at = |detail: &AppDetail, hour: &str| {
+            detail.buckets.iter().find(|b| b.key == hour).unwrap().secs
+        };
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let first = app_range_detail(
+            &pool,
+            oct1,
+            oct1,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
+        assert_eq!(secs_at(&first, "23"), 600, "10-01 的 23 点算 23:50 到午夜");
+        assert_eq!(
+            secs_at(&first, "0"),
+            0,
+            "10-02 凌晨的时间不该画在 10-01 的 0 点"
+        );
+
+        let oct2 = oct1 + Duration::days(1);
+        let next = app_range_detail(
+            &pool,
+            oct2,
+            oct2,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await
+        .unwrap();
+        assert_eq!(secs_at(&next, "0"), 600, "10-02 的 0 点算午夜到 00:10");
+    }
+
+    /// 按小时只算一天：`from` 和 `to` 不是同一天就报错。
+    #[tokio::test]
+    async fn app_range_detail_hour_rejects_more_than_one_day() {
+        let pool = fresh_test_pool().await;
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let result = app_range_detail(
+            &pool,
+            oct1,
+            oct1 + Duration::days(1),
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Hour,
+        )
+        .await;
+        assert!(matches!(result, Err(Error::InvalidInputDyn(_))));
     }
 
     /// 「按网站」分组的原料：titles 行带 url_host，同标题不同域名分开计
