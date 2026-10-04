@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { type TabDef } from "../../components/TabNav/TabNav";
-import { FloatingTabNav } from "../../components/TabNav/FloatingTabNav";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import styles from "./SettingsPage.module.css";
 
 // tab 路由元数据；label 通过 t() 动态解析
@@ -18,11 +18,7 @@ export default function SettingsPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t("settings.pageTitle")}</h1>
-      </header>
-
-      <FloatingTabNav tabs={TABS} ariaLabel={t("settings.pageTitle")} />
+      <PageHeader title={t("settings.pageTitle")} tabs={TABS} />
 
       <section className={styles.tabContent}>
         <Outlet />

@@ -1,39 +1,11 @@
-/* 外壳同 AI 总结页：标题 + tab + 内容 */
+/* 外壳同 AI 总结页：标题行（右边 tab）+ 内容 */
 .page {
   padding: 32px 32px 48px;
   max-width: 800px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-}
-
-/* 标题和小字在左，「统计 ｜ 搜索」在右，跟日统计一样只占一块 */
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.headerText {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* TabNav 自带的下边距是给「标签条独占一行」用的，放进标题行就不要了 */
-.headerTabs nav {
-  margin-bottom: 0;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
+  gap: 24px;
 }
 
 .tabContent {

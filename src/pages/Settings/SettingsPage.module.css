@@ -4,18 +4,7 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-}
-
-.header {
-  margin-bottom: 16px;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
+  gap: 24px;
 }
 
 .tabContent {
