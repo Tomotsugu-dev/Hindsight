@@ -67,7 +67,7 @@ export function usePeriodRankings(
       const cat = getCategory(a.categoryId);
       const color = cat?.color ?? "#94a3b8";
       return {
-        id: a.displayName,
+        id: a.groupId,
         name: displayAppName(a.displayName),
         subtitle: cat ? displayCategoryName(cat, t) : undefined,
         color,

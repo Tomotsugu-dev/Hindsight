@@ -16,6 +16,9 @@ export interface HourSlot {
 export interface AppUsage {
   /** App name shown to the user: the group's display name, or the process name when ungrouped. */
   displayName: string;
+  /** The app group this row adds up; an ungrouped process is its own group, keyed by its name.
+   * Two unmerged groups can share a display name, so use this, not `displayName`, as the key. */
+  groupId: string;
   categoryId: string;
   minutes: number;
   /** AppIcon 用来查图标的代表 process_name；合并组里取一个稳定成员名 */

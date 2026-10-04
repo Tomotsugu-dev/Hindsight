@@ -600,6 +600,7 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
       const def = APPS.find((x) => x.process === process);
       return {
         displayName: process,
+        groupId: process,
         categoryId: def?.category ?? "other",
         minutes,
         iconProcess: process,

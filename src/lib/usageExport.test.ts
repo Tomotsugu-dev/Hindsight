@@ -74,12 +74,14 @@ const CATS: Category[] = [
 
 const CODE_APP: AppUsage = {
   displayName: "Code",
+  groupId: "Code",
   categoryId: "code",
   minutes: 60,
   iconProcess: "code.exe",
 };
 const CHROME_APP: AppUsage = {
   displayName: "Chrome",
+  groupId: "Chrome",
   categoryId: "browse",
   minutes: 30,
   iconProcess: "chrome.exe",

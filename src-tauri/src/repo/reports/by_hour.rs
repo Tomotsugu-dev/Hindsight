@@ -119,14 +119,15 @@ pub async fn day_hour_apps(
 ) -> Result<Vec<AppUsage>> {
     let date = day.format("%Y-%m-%d").to_string();
 
-    // (display, cat, icon_process, started, ended); adding up happens after slicing
-    let rows: Vec<(String, String, String, String, String)> = pool
+    // (group id, display, cat, icon_process, started, ended); adding up happens after slicing
+    let rows = pool
         .0
         .call(move |conn| {
             // Activities assigned to this day,
             // plus previous-day activities that cross midnight into it.
             let sql = format!(
-                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                "SELECT COALESCE(g.id, a.process_name)                  AS group_id,
+                        COALESCE(g.display_name, a.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
                         a.process_name                                  AS icon_process,
                         a.started_at, a.ended_at
@@ -154,6 +155,7 @@ pub async fn day_hour_apps(
                         row.get::<_, String>(2)?,
                         row.get::<_, String>(3)?,
                         row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
                     ))
                 })
                 .db()?
@@ -163,11 +165,11 @@ pub async fn day_hour_apps(
         })
         .await?;
 
-    // Add up the sliced seconds within the target hour by display; icon_process is the first
+    // Add up the sliced seconds within the target hour by group; icon_process is the first
     // member name seen for the group
-    let mut agg: std::collections::HashMap<String, (String, String, u64)> =
+    let mut agg: std::collections::HashMap<String, (u64, AppUsage)> =
         std::collections::HashMap::new();
-    for (display, cat, icon_process, started, ended) in rows {
+    for (group_id, display_name, category_id, icon_process, started, ended) in rows {
         let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
             continue;
         };
@@ -185,20 +187,25 @@ pub async fn day_hour_apps(
         if hour_secs == 0 {
             continue;
         }
-        let entry = agg.entry(display).or_insert((cat, icon_process, 0));
-        entry.2 += hour_secs;
+        let (total, _) = agg.entry(group_id.clone()).or_insert_with(|| {
+            let app = AppUsage {
+                group_id,
+                display_name,
+                category_id,
+                minutes: 0,
+                icon_process,
+            };
+            (0, app)
+        });
+        *total += hour_secs;
     }
 
     let mut list: Vec<AppUsage> = agg
-        .into_iter()
-        .map(
-            |(display_name, (category_id, icon_process, secs))| AppUsage {
-                display_name,
-                category_id,
-                minutes: ((secs as f64 / 60.0).round() as u32),
-                icon_process,
-            },
-        )
+        .into_values()
+        .map(|(secs, mut app)| {
+            app.minutes = (secs as f64 / 60.0).round() as u32;
+            app
+        })
         .filter(|a| a.minutes > 0)
         .collect();
     list.sort_by_key(|a| std::cmp::Reverse(a.minutes));
@@ -209,7 +216,9 @@ pub async fn day_hour_apps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::reports::test_seed::{insert_session_with_times, local_time, seed_solo_group};
+    use crate::repo::reports::test_seed::{
+        insert_session_with_times, local_time, seed_group, seed_solo_group,
+    };
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use chrono::{Duration, Local, TimeZone};
 
@@ -413,5 +422,41 @@ mod tests {
             .unwrap();
         assert_eq!(next_0.len(), 1, "10-02 的 0 点应该有前一晚拖过来的 Code");
         assert_eq!(next_0[0].minutes, 10);
+    }
+
+    /// 两个分组显示名相同、但没合并：点小时柱看到的排行也是两行。
+    #[tokio::test]
+    async fn day_hour_apps_lists_unmerged_groups_with_the_same_name_separately() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Notes",
+            local_time(10, 1, 10, 0),
+            local_time(10, 1, 10, 30),
+        )
+        .await;
+        insert_session_with_times(
+            &pool,
+            "device-win",
+            "2026-10-01",
+            "notes.exe",
+            local_time(10, 1, 10, 0),
+            local_time(10, 1, 10, 20),
+        )
+        .await;
+        seed_group(&pool, "Notes", "Notes", "code", &["Notes"]).await;
+        seed_group(&pool, "notes.exe", "Notes", "code", &["notes.exe"]).await;
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let apps = day_hour_apps(&pool, oct1, 10, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(apps.len(), 2, "没合并的两个组应该是两行");
+        assert_eq!(apps[0].minutes, 30);
+        assert_eq!(apps[1].minutes, 20);
+        let ids: Vec<&str> = apps.iter().map(|a| a.group_id.as_str()).collect();
+        assert_eq!(ids, vec!["Notes", "notes.exe"]);
     }
 }

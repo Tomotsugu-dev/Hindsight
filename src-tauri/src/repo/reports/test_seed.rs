@@ -135,6 +135,41 @@ pub(super) async fn insert_session_titled(
         .unwrap();
 }
 
+/// 建一个分组：指定组 id、显示名、分类和成员进程名。
+pub(super) async fn seed_group(
+    pool: &DbPool,
+    id: &str,
+    display_name: &str,
+    category_id: &str,
+    members: &[&str],
+) {
+    let id = id.to_string();
+    let display_name = display_name.to_string();
+    let category_id = category_id.to_string();
+    let members: Vec<String> = members.iter().map(|m| m.to_string()).collect();
+    pool.0
+        .call(move |conn| {
+            let now = "2026-05-15T10:00:00Z";
+            conn.execute(
+                "INSERT INTO app_groups(id, display_name, category_id, updated_at, deleted_at)
+                 VALUES(?1, ?2, ?3, ?4, NULL)",
+                rusqlite::params![id, display_name, category_id, now],
+            )
+            .db()?;
+            for member in &members {
+                conn.execute(
+                    "INSERT INTO app_group_members(process_name, group_id, updated_at, deleted_at)
+                     VALUES(?1, ?2, ?3, NULL)",
+                    rusqlite::params![member, id, now],
+                )
+                .db()?;
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
+}
+
 pub(super) async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str) {
     let name = name.to_string();
     let category_id = category_id.to_string();
