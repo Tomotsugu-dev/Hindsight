@@ -405,7 +405,7 @@ export default function StatsTab() {
               <span className={styles.cardTotal}>{fmtHM(scopedBreakdown.total)}</span>
             </header>
             {superItems.length > 0 ? (
-              <ScrollBox maxHeight={360}>
+              <ScrollBox fill>
                 <RankedList
                   items={superItems}
                   selectedId={superId}
@@ -425,7 +425,7 @@ export default function StatsTab() {
               <span className={styles.cardTotal}>{fmtHM(appsMinutes)}</span>
             </header>
             {appRanks.length > 0 ? (
-              <ScrollBox maxHeight={360}>
+              <ScrollBox fill>
                 <RankedList
                   items={appRanks}
                   selectedId={activeApp?.groupId ?? null}

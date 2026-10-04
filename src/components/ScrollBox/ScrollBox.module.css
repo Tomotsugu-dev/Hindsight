@@ -23,6 +23,12 @@
   display: none;
 }
 
+/* 撑满 flex 父容器剩下的高度；min-height: 0 才能比内容矮、在里面滚动 */
+.fill {
+  flex: 1;
+  min-height: 0;
+}
+
 /* 已滚到顶 → 顶端不再渐隐 */
 .box.atTop {
   mask-image: linear-gradient(
