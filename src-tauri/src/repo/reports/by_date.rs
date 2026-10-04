@@ -5,7 +5,7 @@ use chrono::{Duration, NaiveDate};
 use rusqlite::ToSql;
 
 use crate::error::Result;
-use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
+use crate::repo::sql::{FROM_ACTIVITY_GROUP_CATEGORY, FROM_PROCESS_GROUP_CATEGORY};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
@@ -157,25 +157,30 @@ pub async fn top_apps(
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
 
-    let rows: Vec<(String, String, String, i64)> = pool
+    let (rows, crossing) = pool
         .0
         .call(move |conn| {
             // Merge by display name, not by group: two groups with the same display name are the
             // same app to the user. Rows with different categories stay separate.
             // `MIN(process_name)` only makes sure the same process name is picked every time, for
             // the icon lookup.
+            // Activities that do not cross midnight (end date equals local_date)
             let sql = format!(
-                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                "WITH per_process AS MATERIALIZED (
+                     SELECT a.process_name, SUM(a.duration_secs) AS secs
+                     FROM activities a
+                     WHERE a.local_date >= ? AND a.local_date <= ? {}
+                       AND substr(a.ended_at, 1, 10) = a.local_date
+                       AND a.excluded = 0
+                     GROUP BY a.process_name
+                 )
+                 SELECT COALESCE(g.display_name, p.process_name)        AS display,
                         COALESCE(c.id, 'other')                         AS cat,
-                        MIN(a.process_name)                             AS icon_process,
-                        SUM(a.duration_secs)                            AS total
-                 {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date >= ? AND a.local_date <= ? {}
-                   AND g.category_id IS NOT 'hidden'
-                   AND a.excluded = 0
-                 GROUP BY COALESCE(g.display_name, a.process_name), COALESCE(c.id, 'other')
-                 ORDER BY total DESC
-                 LIMIT ?",
+                        MIN(p.process_name)                             AS icon_process,
+                        SUM(p.secs)                                     AS total
+                 {FROM_PROCESS_GROUP_CATEGORY}
+                 WHERE g.category_id IS NOT 'hidden'
+                 GROUP BY COALESCE(g.display_name, p.process_name), COALESCE(c.id, 'other')",
                 device.sql_clause()
             );
             let mut params: Vec<&dyn ToSql> = Vec::new();
@@ -184,35 +189,113 @@ pub async fn top_apps(
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
-            params.push(&limit);
             let mut stmt = conn.prepare(&sql).db()?;
-            let it = stmt
-                .query_map(params.as_slice(), |r| {
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
                     Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                        r.get::<_, i64>(3)?,
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
                     ))
                 })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
                 .db()?;
-            let mut out = Vec::new();
-            for r in it {
-                out.push(r.db()?);
+
+            // Activities that cross midnight (end date not equal to local_date)
+            let sql = format!(
+                "SELECT COALESCE(g.display_name, a.process_name)        AS display,
+                        COALESCE(c.id, 'other')                         AS cat,
+                        a.process_name, a.started_at, a.ended_at
+                 {FROM_ACTIVITY_GROUP_CATEGORY}
+                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                   AND substr(a.ended_at, 1, 10) <> a.local_date
+                   AND g.category_id IS NOT 'hidden'
+                   AND a.excluded = 0",
+                device.sql_clause()
+            );
+            // Activities that cross midnight may start as early as the day before `from`.
+            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let mut params: Vec<&dyn ToSql> = Vec::new();
+            params.push(&crossing_from_str);
+            params.push(&to_str);
+            if let Some(extra) = device.sql_param() {
+                params.push(extra);
             }
-            Ok(out)
+            let mut stmt = conn.prepare(&sql).db()?;
+            let crossing = stmt
+                .query_map(params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            Ok((rows, crossing))
         })
         .await?;
 
-    Ok(rows
+    // (display name, category) → (representative_process, seconds)
+    let mut totals: std::collections::HashMap<(String, String), (String, i64)> =
+        std::collections::HashMap::new();
+    for (display, cat, icon_process, secs) in rows {
+        totals.insert((display, cat), (icon_process, secs));
+    }
+    for (display, cat, process, started, ended) in crossing {
+        let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
+            continue;
+        };
+        let secs: i64 = split_by_date(s, e)
+            .into_iter()
+            .filter(|(date, ..)| *date >= from && *date <= to)
+            .map(|(_, s, e)| (e - s).num_seconds())
+            .sum();
+        if secs == 0 {
+            continue;
+        }
+        let total = totals
+            .entry((display, cat))
+            .or_insert_with(|| (process.clone(), 0));
+        // Keep the smallest process name, as `MIN(process_name)` does in the query
+        if process < total.0 {
+            total.0 = process;
+        }
+        total.1 += secs;
+    }
+
+    let mut apps: Vec<(i64, AppUsage)> = totals
         .into_iter()
-        .map(|(display_name, cat, icon_process, secs)| AppUsage {
-            display_name,
-            category_id: cat,
-            minutes: (secs as f64 / 60.0).round() as u32,
-            icon_process,
+        .map(|((display_name, category_id), (icon_process, secs))| {
+            let app = AppUsage {
+                display_name,
+                category_id,
+                minutes: (secs as f64 / 60.0).round() as u32,
+                icon_process,
+            };
+            (secs, app)
         })
-        .filter(|a| a.minutes > 0)
+        .collect();
+    let most_first = |a: &(i64, AppUsage), b: &(i64, AppUsage)| {
+        b.0.cmp(&a.0)
+            .then_with(|| a.1.display_name.cmp(&b.1.display_name))
+    };
+    // Keep the top `limit` apps by seconds, then sort only those
+    let limit = limit as usize;
+    if apps.len() > limit {
+        apps.select_nth_unstable_by(limit, most_first);
+        apps.truncate(limit);
+    }
+    apps.sort_by(most_first);
+    Ok(apps
+        .into_iter()
+        .map(|(_, app)| app)
+        .filter(|app| app.minutes > 0)
         .collect())
 }
 
@@ -551,5 +634,111 @@ mod tests {
                 _ => assert!(d.segments.is_empty(), "{} 不该有数据", d.date),
             }
         }
+    }
+
+    /// 日统计的排行：10-01 23:50 → 10-02 00:10 的 Code，两天各算 10 分钟。
+    #[tokio::test]
+    async fn top_apps_splits_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let oct2 = oct1 + Duration::days(1);
+        let first = top_apps(&pool, oct1, oct1, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].minutes, 10, "10-01 只算 23:50 到午夜");
+        let next = top_apps(&pool, oct2, oct2, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(next.len(), 1, "10-02 应该有前一晚拖过来的 Code");
+        assert_eq!(next[0].minutes, 10);
+    }
+
+    /// 范围两头跨午夜的记录只算范围内的部分：09-30 23:30 → 10-01 00:10 算 10 分钟，
+    /// 10-02 23:50 → 10-03 00:20 也算 10 分钟。
+    #[tokio::test]
+    async fn top_apps_counts_only_the_part_in_range() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-09-30",
+            "Code",
+            local_time(9, 30, 23, 30),
+            local_time(10, 1, 0, 10),
+        )
+        .await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-02",
+            "Code",
+            local_time(10, 2, 23, 50),
+            local_time(10, 3, 0, 20),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let from = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let apps = top_apps(&pool, from, from + Duration::days(1), 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].minutes, 20, "两头各 10 分钟");
+    }
+
+    /// 跨午夜那段加回去以后才排名次：10-02 当天 Chrome 15 分钟、Code 10 分钟，Code 还有前一晚
+    /// 23:50 到 00:10 拖过来的 10 分钟，合计 20 分钟，只取第一名时应该是 Code。
+    #[tokio::test]
+    async fn top_apps_ranks_after_adding_the_part_after_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-02",
+            "Chrome",
+            local_time(10, 2, 10, 0),
+            local_time(10, 2, 10, 15),
+        )
+        .await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-02",
+            "Code",
+            local_time(10, 2, 9, 0),
+            local_time(10, 2, 9, 10),
+        )
+        .await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Chrome", "browse").await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let oct2 = NaiveDate::from_ymd_opt(2026, 10, 2).unwrap();
+        let top = top_apps(&pool, oct2, oct2, 1, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(top.len(), 1);
+        assert_eq!(top[0].display_name, "Code");
+        assert_eq!(top[0].minutes, 20);
     }
 }

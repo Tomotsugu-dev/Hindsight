@@ -40,6 +40,19 @@ pub const FROM_ACTIVITY_GROUP_CATEGORY: &str = "FROM activities a
      LEFT JOIN categories c
        ON c.id = g.category_id AND c.deleted_at IS NULL";
 
+/// The joins of [`FROM_ACTIVITY_GROUP_CATEGORY`] over per-process totals instead of single
+/// activities. The caller defines `per_process` with a `process_name` column. Adding up first
+/// means the joins run once per process, not once per activity.
+///
+/// Aliases: `p` = per_process; `gm`, `g` and `c` as above.
+pub const FROM_PROCESS_GROUP_CATEGORY: &str = "FROM per_process p
+     LEFT JOIN app_group_members gm
+       ON gm.process_name = p.process_name AND gm.deleted_at IS NULL
+     LEFT JOIN app_groups g
+       ON g.id = gm.group_id AND g.deleted_at IS NULL
+     LEFT JOIN categories c
+       ON c.id = g.category_id AND c.deleted_at IS NULL";
+
 /// `FROM` clause pairing every group membership with its group.
 ///
 /// Aliases: `gm` = app_group_members, `g` = app_groups. Inner join, no
