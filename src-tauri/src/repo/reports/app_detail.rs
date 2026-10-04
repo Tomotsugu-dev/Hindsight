@@ -2,10 +2,10 @@
 //! for a day, a week or a month.
 
 use chrono::{Duration, Local, NaiveDate};
-use rusqlite::{OptionalExtension, ToSql};
+use rusqlite::ToSql;
 
 use crate::error::{Error, Result};
-use crate::repo::sql::FROM_ACTIVITY_GROUP;
+use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
@@ -21,14 +21,13 @@ pub enum BucketBy {
 }
 
 /// Time bars and time per window title for one app in the inclusive `[from, to]` date range.
-/// `representative_process` is a member process name, usually the ranking row's `iconProcess`.
-/// Its group membership selects the app group; without a membership, only that process is used.
+/// `group_id` selects the app, as in [`AppUsage::group_id`](super::AppUsage::group_id).
 /// `bucket_by` controls whether the time bars are grouped by hour or by activity date.
 pub async fn app_range_detail(
     pool: &DbPool,
     from: NaiveDate,
     to: NaiveDate,
-    representative_process: String,
+    group_id: String,
     device: DeviceFilter,
     bucket_by: BucketBy,
 ) -> Result<AppDetail> {
@@ -39,43 +38,53 @@ pub async fn app_range_detail(
     }
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
-    let representative_is_browser =
-        crate::capture::browser_url::is_browser_app(&representative_process);
 
-    let (secs_by_bucket, titles): (std::collections::HashMap<String, u64>, Vec<TitleUsage>) = pool
+    let (secs_by_bucket, titles, has_browser_member) = pool
         .0
         .call(move |conn| {
-            // 1) Query by the member's group ID, falling back to the process name when ungrouped.
-            let group_key: String = conn
-                .query_row(
-                    "SELECT group_id FROM app_group_members
-                     WHERE process_name = ?1 AND deleted_at IS NULL",
-                    rusqlite::params![representative_process],
-                    |r| r.get::<_, String>(0),
-                )
-                .optional()
+            // 1) Resolve the app identifier to process names: use active group members, or the
+            //    identifier itself when it represents a standalone process.
+            let mut process_stmt = conn
+                .prepare(&format!(
+                    "SELECT gm.process_name {FROM_MEMBER_GROUP}
+                      WHERE gm.group_id = ?1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL
+                     UNION
+                     SELECT ?1 WHERE NOT EXISTS (
+                         SELECT 1 {FROM_MEMBER_GROUP}
+                          WHERE gm.process_name = ?1
+                            AND gm.deleted_at IS NULL AND g.deleted_at IS NULL)"
+                ))
+                .db()?;
+            let processes = process_stmt
+                .query_map([&group_id], |row| row.get::<_, String>(0))
                 .db()?
-                .unwrap_or_else(|| representative_process.clone());
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            let has_browser_member = processes
+                .iter()
+                .any(|p| crate::capture::browser_url::is_browser_app(p));
+            // Read through the date index and only compare process names. The `+` keeps SQLite off the
+            // process name index, which would read the app's whole history even for one day.
+            let process_filter = format!(
+                "+a.process_name IN ({})",
+                vec!["?"; processes.len()].join(", ")
+            );
 
             // Activities that cross midnight (end date not equal to local_date)
             let crossing_sql = format!(
                 "SELECT COALESCE(a.window_title, '') AS title, a.url_host AS host,
                         a.started_at, a.ended_at
-                 {FROM_ACTIVITY_GROUP}
+                 FROM activities a
                  WHERE a.local_date >= ? AND a.local_date <= ?
                    AND substr(a.ended_at, 1, 10) <> a.local_date
-                   AND COALESCE(g.id, a.process_name) = ?
+                   AND {process_filter}
                    AND a.excluded = 0
                    {}",
                 device.sql_clause()
             );
             // Activities that cross midnight may start as early as the day before `from`.
             let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
-            let mut crossing_params: Vec<&dyn ToSql> =
-                vec![&crossing_from_str, &to_str, &group_key];
-            if let Some(device_id) = device.sql_param() {
-                crossing_params.push(device_id);
-            }
+            let crossing_params = bind(vec![&crossing_from_str, &to_str], &processes, &device);
             let mut crossing_stmt = conn.prepare(&crossing_sql).db()?;
             let crossing_rows = crossing_stmt
                 .query_map(crossing_params.as_slice(), |row| {
@@ -118,20 +127,17 @@ pub async fn app_range_detail(
                     // plus previous-day activities that cross midnight into it.
                     let session_sql = format!(
                         "SELECT a.started_at, a.ended_at
-                         {FROM_ACTIVITY_GROUP}
+                         FROM activities a
                          WHERE (a.local_date = ?
                                 OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?))
-                           AND COALESCE(g.id, a.process_name) = ?
+                           AND {process_filter}
                            AND a.excluded = 0
                            {}",
                         device.sql_clause()
                     );
                     let prev_date = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
-                    let mut session_params: Vec<&dyn ToSql> =
-                        vec![&from_str, &prev_date, &from_str, &group_key];
-                    if let Some(device_id) = device.sql_param() {
-                        session_params.push(device_id);
-                    }
+                    let session_params =
+                        bind(vec![&from_str, &prev_date, &from_str], &processes, &device);
                     let mut session_stmt = conn.prepare(&session_sql).db()?;
                     let session_rows = session_stmt
                         .query_map(session_params.as_slice(), |r| {
@@ -161,22 +167,16 @@ pub async fn app_range_detail(
                 BucketBy::Day => {
                     let day_sql = format!(
                         "SELECT a.local_date, SUM(a.duration_secs)
-                         {FROM_ACTIVITY_GROUP}
+                         FROM activities a
                          WHERE a.local_date >= ? AND a.local_date <= ?
                            AND substr(a.ended_at, 1, 10) = a.local_date
-                           AND COALESCE(g.id, a.process_name) = ?
+                           AND {process_filter}
                            AND a.excluded = 0
                            {}
                          GROUP BY a.local_date",
                         device.sql_clause()
                     );
-                    let mut day_params: Vec<&dyn ToSql> = Vec::new();
-                    day_params.push(&from_str);
-                    day_params.push(&to_str);
-                    day_params.push(&group_key);
-                    if let Some(device_id) = device.sql_param() {
-                        day_params.push(device_id);
-                    }
+                    let day_params = bind(vec![&from_str, &to_str], &processes, &device);
                     let mut day_stmt = conn.prepare(&day_sql).db()?;
                     let day_rows = day_stmt
                         .query_map(day_params.as_slice(), |r| {
@@ -205,22 +205,16 @@ pub async fn app_range_detail(
             let window_title_sql = format!(
                 "SELECT COALESCE(a.window_title, '') AS title, a.url_host AS host,
                         SUM(a.duration_secs) AS total
-                 {FROM_ACTIVITY_GROUP}
+                 FROM activities a
                  WHERE a.local_date >= ? AND a.local_date <= ?
                    AND substr(a.ended_at, 1, 10) = a.local_date
-                   AND COALESCE(g.id, a.process_name) = ?
+                   AND {process_filter}
                    AND a.excluded = 0
                    {}
                  GROUP BY title, host",
                 device.sql_clause()
             );
-            let mut window_title_params: Vec<&dyn ToSql> = Vec::new();
-            window_title_params.push(&from_str);
-            window_title_params.push(&to_str);
-            window_title_params.push(&group_key);
-            if let Some(device_id) = device.sql_param() {
-                window_title_params.push(device_id);
-            }
+            let window_title_params = bind(vec![&from_str, &to_str], &processes, &device);
             let mut window_title_stmt = conn.prepare(&window_title_sql).db()?;
             let window_title_rows = window_title_stmt
                 .query_map(window_title_params.as_slice(), |row| {
@@ -259,7 +253,7 @@ pub async fn app_range_detail(
                     .then_with(|| a.host.cmp(&b.host))
             });
 
-            Ok((secs_by_bucket, titles))
+            Ok((secs_by_bucket, titles, has_browser_member))
         })
         .await?;
 
@@ -285,10 +279,8 @@ pub async fn app_range_detail(
         }
     };
 
-    // Data first: a row with a site means capture already treated the app as a browser (the
-    // merged group's representative is MIN(process_name), which may be a non-browser member).
-    // With no such rows, fall back to the name, for the "a browser, but no sites at all" hint.
-    let is_browser = representative_is_browser || titles.iter().any(|t| t.host.is_some());
+    // A browser if any process in the group is one, or any record has a site
+    let is_browser = has_browser_member || titles.iter().any(|t| t.host.is_some());
     Ok(AppDetail {
         buckets,
         titles,
@@ -296,11 +288,26 @@ pub async fn app_range_detail(
     })
 }
 
+/// Builds the bound values for an app-detail SQL query. The SQL placeholders must be ordered as
+/// date values, one value for each process name, then the optional device ID.
+fn bind<'a>(
+    dates: Vec<&'a dyn ToSql>,
+    processes: &'a [String],
+    device: &'a DeviceFilter,
+) -> Vec<&'a dyn ToSql> {
+    let mut params = dates;
+    params.extend(processes.iter().map(|p| p as &dyn ToSql));
+    if let Some(device_id) = device.sql_param() {
+        params.push(device_id);
+    }
+    params
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{
-        insert_activity, insert_session_titled, insert_session_with_times, local_time,
+        insert_activity, insert_session_titled, insert_session_with_times, local_time, seed_group,
         seed_solo_group,
     };
     use crate::repo::reports::time::{month_range, week_range};
@@ -595,11 +602,10 @@ mod tests {
         assert_eq!(code.titles[0].host, None);
     }
 
-    /// 测 [`app_range_detail`] 的组 key 解析：代表进程是组内任一成员时，
-    /// 时间柱与标题都应聚合**整个组**（跨 OS 成员 + 跨设备），且不掺入组外应用。
-    /// titles 按用时降序、同标题跨成员合并。
+    /// 测 [`app_range_detail`] 按分组 ID 查：时间柱与标题都聚合**整个组**（跨 OS 成员 + 跨设备），
+    /// 且不掺入组外应用。titles 按用时降序、同标题跨成员合并。
     #[tokio::test]
-    async fn app_range_detail_resolves_group_and_merges_members() {
+    async fn app_range_detail_merges_all_members_of_the_group() {
         let pool = fresh_test_pool().await;
         let today = Local::now().date_naive();
         let today_str = today.format("%Y-%m-%d").to_string();
@@ -677,12 +683,12 @@ mod tests {
         )
         .await;
 
-        // 用 win 侧成员名查询 → 应解析到组、把 mac 侧的量也算上
+        // 用分组 ID 查 → mac 和 win 两个成员的量都算上
         let detail = app_range_detail(
             &pool,
             today,
             today,
-            "Code.exe".into(),
+            "Visual Studio Code".into(),
             DeviceFilter::All,
             BucketBy::Hour,
         )
@@ -705,7 +711,7 @@ mod tests {
             &pool,
             today,
             today,
-            "Code.exe".into(),
+            "Visual Studio Code".into(),
             DeviceFilter::Only(TEST_SELF_ID.into()),
             BucketBy::Hour,
         )
@@ -713,6 +719,31 @@ mod tests {
         .unwrap();
         let h10_self = only_self.buckets.iter().find(|b| b.key == "10").unwrap();
         assert_eq!(h10_self.secs, 300, "Only(self) 不该带上 win 端时长");
+    }
+
+    /// 两个分组显示名相同、但没合并：按其中一个的分组 ID 查，只算这一组。
+    #[tokio::test]
+    async fn app_range_detail_counts_only_its_own_group_among_same_name_groups() {
+        let pool = fresh_test_pool().await;
+        let day = Local::now().date_naive();
+        let today = day.format("%Y-%m-%d").to_string();
+        insert_activity(&pool, TEST_SELF_ID, &today, "Notes", 300).await;
+        insert_activity(&pool, "device-win", &today, "notes.exe", 180).await;
+        seed_group(&pool, "Notes", "Notes", "code", &["Notes"]).await;
+        seed_group(&pool, "notes.exe", "Notes", "code", &["notes.exe"]).await;
+
+        let detail = app_range_detail(
+            &pool,
+            day,
+            day,
+            "notes.exe".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        let total: u32 = detail.buckets.iter().map(|b| b.secs).sum();
+        assert_eq!(total, 180, "只算 notes.exe 这一组");
     }
 
     /// 测 [`app_range_detail`] 无组回退：代表进程没有任何组成员记录时，

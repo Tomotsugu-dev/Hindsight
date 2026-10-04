@@ -69,13 +69,12 @@ pub async fn get_hour_apps(
 }
 
 /// The details drawer opened by clicking an app: time bars and time per window title. The Daily
-/// page gets 24 bars, one per hour. `icon_process` is the `iconProcess` of the clicked ranking row;
-/// any member process name of the group works.
+/// page gets 24 bars, one per hour. `group_id` is the `groupId` of the clicked ranking row.
 #[tauri::command]
 pub async fn get_app_day_detail(
     pool: State<'_, DbPool>,
     day_offset: i32,
-    icon_process: String,
+    group_id: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
     let day = reports::day_date(Local::now().date_naive(), day_offset);
@@ -83,7 +82,7 @@ pub async fn get_app_day_detail(
         &pool,
         day,
         day,
-        icon_process,
+        group_id,
         DeviceFilter::from_option(device_id),
         BucketBy::Hour,
     )
@@ -96,7 +95,7 @@ pub async fn get_app_day_detail(
 pub async fn get_app_week_detail(
     pool: State<'_, DbPool>,
     week_offset: i32,
-    icon_process: String,
+    group_id: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
     let (from, to) = reports::week_range(Local::now().date_naive(), week_offset);
@@ -104,7 +103,7 @@ pub async fn get_app_week_detail(
         &pool,
         from,
         to,
-        icon_process,
+        group_id,
         DeviceFilter::from_option(device_id),
         BucketBy::Day,
     )
@@ -117,7 +116,7 @@ pub async fn get_app_week_detail(
 pub async fn get_app_month_detail(
     pool: State<'_, DbPool>,
     month_offset: i32,
-    icon_process: String,
+    group_id: String,
     device_id: Option<String>,
 ) -> Result<AppDetail, String> {
     let (from, to) = reports::month_range(Local::now().date_naive(), month_offset);
@@ -125,7 +124,7 @@ pub async fn get_app_month_detail(
         &pool,
         from,
         to,
-        icon_process,
+        group_id,
         DeviceFilter::from_option(device_id),
         BucketBy::Day,
     )
