@@ -467,6 +467,9 @@
       "expand": "展开剩余 {{count}} 项",
       "collapse": "收起"
     },
+    "insightTiles": {
+      "appShare": "占所属分类"
+    },
     "segmentList": {
       "empty": "还没有段，点下面 “添加段” 开始",
       "newSegmentLabel": "新段",
@@ -542,7 +545,11 @@
         "categoriesTitle": "分类构成",
         "appsTitle": "主要应用",
         "topNCount": "Top {{count}}"
-      }
+      },
+      "others": "其他 {{count}} 个",
+      "ringsUp": "上一个小类",
+      "ringsDown": "下一个小类",
+      "wheelHint": "尝试一下滚动鼠标滚轮？"
     },
     "dayNav": {
       "prev": "前一天",
@@ -662,7 +669,7 @@
     },
     "chart": {
       "title": "每日活动",
-      "hint": "在热力图上拖过几格，就只看这几天",
+      "hint": "试着在热力图上拖选几天，就能放大查看这段时间的使用情况",
       "resetZoom": "重置缩放"
     },
     "nav": {

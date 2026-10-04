@@ -467,6 +467,9 @@
       "expand": "残り {{count}} 件を表示",
       "collapse": "閉じる"
     },
+    "insightTiles": {
+      "appShare": "分類内の割合"
+    },
     "segmentList": {
       "empty": "セグメントがまだありません。下の「セグメントを追加」をクリックして始めてください",
       "newSegmentLabel": "新しいセグメント",
@@ -542,7 +545,11 @@
         "categoriesTitle": "分類構成",
         "appsTitle": "主なアプリ",
         "topNCount": "Top {{count}}"
-      }
+      },
+      "others": "その他 {{count}} 件",
+      "ringsUp": "前の分類",
+      "ringsDown": "次の分類",
+      "wheelHint": "マウスホイールを回してみては？"
     },
     "dayNav": {
       "prev": "前の日",
@@ -662,7 +669,7 @@
     },
     "chart": {
       "title": "日ごとのアクティビティ",
-      "hint": "ヒートマップをドラッグすると、その期間だけを表示します",
+      "hint": "ヒートマップで数日をドラッグして選ぶと、その期間の使い方を拡大して見られます",
       "resetZoom": "ズームをリセット"
     },
     "nav": {

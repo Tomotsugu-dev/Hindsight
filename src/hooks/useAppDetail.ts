@@ -37,6 +37,11 @@ interface State {
   loading: boolean;
 }
 
+interface Stored extends State {
+  /** 这份结果是哪组参数的；参数变了、effect 还没跑的那一次渲染里拿它判断结果是不是旧的 */
+  key: string | null;
+}
+
 /** `groupId === null` = 没选 app（抽屉关着）→ 不请求、返回 null。 */
 export function useAppDetail(
   scope: DetailScope,
@@ -45,7 +50,8 @@ export function useAppDetail(
   deviceId?: string,
 ): State {
   const cacheRef = useRef<Map<string, { detail: AppDetail; at: number }>>(new Map());
-  const [state, setState] = useState<State>({ detail: null, loading: false });
+  const [state, setState] = useState<Stored>({ detail: null, loading: false, key: null });
+  const currentKey = groupId === null ? null : cacheKey(scope, offset, groupId, deviceId);
 
   // 跨午夜失效：缓存键是相对 offset，后端按查询时刻的 now 解析——过夜后同一个
   // key 指向的日历日变了，不清会把昨天的详情当今天的展示（同 createUsageCache）。
@@ -58,18 +64,18 @@ export function useAppDetail(
 
   useEffect(() => {
     if (groupId === null) {
-      setState({ detail: null, loading: false });
+      setState({ detail: null, loading: false, key: null });
       return;
     }
     const key = cacheKey(scope, offset, groupId, deviceId);
     const cached = cacheRef.current.get(key);
     if (cached && !(offset === 0 && Date.now() - cached.at > TODAY_TTL_MS)) {
-      setState({ detail: cached.detail, loading: false });
+      setState({ detail: cached.detail, loading: false, key });
       return;
     }
 
     let cancelled = false;
-    setState({ detail: null, loading: true });
+    setState({ detail: null, loading: true, key });
     fetchDetail(scope, offset, groupId, deviceId)
       .then((detail) => {
         if (cancelled) return;
@@ -79,16 +85,20 @@ export function useAppDetail(
           const oldest = cache.keys().next().value;
           if (oldest !== undefined) cache.delete(oldest);
         }
-        setState({ detail, loading: false });
+        setState({ detail, loading: false, key });
       })
       .catch(() => {
         if (cancelled) return;
-        setState({ detail: { buckets: [], titles: [], isBrowser: false }, loading: false });
+        setState({ detail: { buckets: [], titles: [], isBrowser: false }, loading: false, key });
       });
     return () => {
       cancelled = true;
     };
   }, [scope, offset, groupId, deviceId]);
 
-  return state;
+  // 换了应用或范围、effect 还没跑：手上的是上一组参数的结果，不能拿出去用
+  if (state.key !== currentKey) {
+    return { detail: null, loading: currentKey !== null };
+  }
+  return { detail: state.detail, loading: state.loading };
 }

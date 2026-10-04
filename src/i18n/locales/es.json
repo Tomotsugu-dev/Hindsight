@@ -467,6 +467,9 @@
       "expand": "Mostrar {{count}} más",
       "collapse": "Contraer"
     },
+    "insightTiles": {
+      "appShare": "Parte de su categoría"
+    },
     "segmentList": {
       "empty": "Aún no hay tramos: pulsa «Añadir tramo» abajo para empezar",
       "newSegmentLabel": "Nuevo tramo",
@@ -542,7 +545,11 @@
         "categoriesTitle": "Categorías",
         "appsTitle": "Aplicaciones principales",
         "topNCount": "Top {{count}}"
-      }
+      },
+      "others": "{{count}} más",
+      "ringsUp": "Categoría anterior",
+      "ringsDown": "Categoría siguiente",
+      "wheelHint": "¿Y si giras la rueda del ratón?"
     },
     "dayNav": {
       "prev": "Día anterior",
@@ -662,7 +669,7 @@
     },
     "chart": {
       "title": "Actividad diaria",
-      "hint": "Arrastra sobre el mapa de calor para ver solo esos días",
+      "hint": "Prueba a arrastrar sobre unos días del mapa de calor para ampliar tu uso en ese periodo",
       "resetZoom": "Restablecer zoom"
     },
     "nav": {

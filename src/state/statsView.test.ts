@@ -1,5 +1,5 @@
 // node 环境手工桩 localStorage（同 theme.test.ts；vitest 配置保持纯函数策略）。
-// readInitial 在模块导入时按 scope 各读一次，所以用 resetModules + 动态 import 让
+// 存的值在模块导入时按 scope 各读一次，所以用 resetModules + 动态 import 让
 // 每个用例拿到一份「按当前存储值重新初始化」的 store——这正是切页往返 / 重启后
 // 恢复各页视图走的路径。
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -66,5 +66,18 @@ describe("statsView", () => {
     m.setStatsView("today", "bars"); // 退订后：值变了但不再通知
     expect(m.getStatsView("today")).toBe("bars");
     expect(seen).toEqual(["pie"]);
+  });
+
+  it("占比视图的层：默认大类那层；存过的各页独立恢复（切页往返后还停在小类同心环）", async () => {
+    store.set("hindsight.stats.pieDepth.week", "cats");
+    store.set("hindsight.stats.pieDepth.month", "rings"); // 非法值 → 回退
+    const m = await freshImport();
+    expect(m.getPieDepth("today")).toBe("supers");
+    expect(m.getPieDepth("week")).toBe("cats");
+    expect(m.getPieDepth("month")).toBe("supers");
+
+    m.setPieDepth("today", "cats");
+    expect(store.get("hindsight.stats.pieDepth.today")).toBe("cats");
+    expect(m.getStatsView("today")).toBe("bars"); // 跟视图各存各的
   });
 });
