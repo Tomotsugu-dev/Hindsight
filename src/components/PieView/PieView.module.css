@@ -6,12 +6,30 @@
   padding: var(--space-5, 20px) var(--space-5, 20px) var(--space-5, 20px);
 }
 
+/* 小类同心环那一层的环更大 */
+.body[data-depth="cats"] {
+  grid-template-columns: 290px 1fr;
+}
+
 .donutWrap {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2, 8px);
   /* 比 donut size 略大让 drop-shadow 有展示空间 */
   padding: var(--space-2, 8px);
+}
+
+/* 只有大类那一层环下面的提示：往下滚还有一层 */
+.wheelHint {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-faint);
+  text-align: center;
 }
 
 /* —— super-cat 列表 ——
@@ -161,6 +179,77 @@
   font-size: var(--font-size-xs, 11px);
   color: var(--text-muted);
   font-weight: var(--font-weight-500);
+}
+
+/* —— 圆环下面那排小类：图标 · 名字 · 占比，按占比从多到少，放不下就换行 —— */
+.tags {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-3, 12px) 0 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklab, var(--row-color) 8%, transparent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-strong);
+  transition:
+    background-color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out),
+    opacity 180ms var(--ease-out);
+}
+
+.tag:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--row-color) 35%, transparent);
+}
+
+.tag[data-active] {
+  background: var(--surface-card);
+  border-color: color-mix(in oklab, var(--row-color) 55%, transparent);
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--row-color) 18%, transparent);
+}
+
+.tag[data-dim] {
+  opacity: 0.4;
+}
+
+.tag:disabled {
+  cursor: default;
+}
+
+.tagIcon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--row-color);
+  flex-shrink: 0;
+}
+
+.tagName {
+  font-weight: var(--font-weight-600);
+  white-space: nowrap;
+}
+
+.tagPct {
+  font-weight: var(--font-weight-700);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
 /* 空态 */

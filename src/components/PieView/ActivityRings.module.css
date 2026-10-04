@@ -1,0 +1,170 @@
+.wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 4px 14px rgba(20, 20, 40, 0.08));
+}
+
+/* 停在应用上时整个圆环一起往里缩；transform-origin 由内联样式给圆心 */
+.shrink {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 引线：从应用那段往外画到气泡（pathLength=1，dash 从 1 收到 0），缩完才开始 */
+.leader {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: grow 100ms ease-out 120ms both;
+}
+
+/* 引线头上的应用图标气泡：引线画到头时从小弹到稍大再回到原大小 */
+.bubble {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid;
+  border-radius: 50%;
+  background: var(--surface-card-elevated);
+  box-shadow: 0 4px 12px rgba(20, 20, 40, 0.16);
+  pointer-events: none;
+  animation: chipPop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both;
+}
+
+/* 小类比圈数多时右下角的「↑ 1–4 / 9 ↓」：圆环外的角落本来是空的 */
+.pager {
+  position: absolute;
+  right: -10px;
+  bottom: -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagerText {
+  padding: 0 2px;
+}
+
+.pagerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pagerBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.pagerBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 外框：大类的分段细线，正中压一个大类图标；变淡放在整组上，图标跟着一起淡 */
+.frameGroup {
+  transition: opacity 200ms var(--ease-out);
+}
+
+.frame {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-width 200ms var(--ease-out);
+}
+
+.interactive {
+  cursor: pointer;
+}
+
+.dim {
+  opacity: 0.3;
+}
+
+/* 停在应用上时，应用所属的大类、小类那段：比 dim 亮一点，但仍是淡化的背景 */
+.faded {
+  opacity: 0.55;
+}
+
+.ring {
+  transition: opacity 200ms var(--ease-out);
+}
+
+.track {
+  fill: none;
+}
+
+/* 进度环：从 12 点顺时针长出来（pathLength=1，dash 从 1 收到 0），一圈接一圈错开 */
+.progress {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 钉住大类时那一个完整圆环的各段：一段接一段画出来 */
+.segment {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: grow 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: opacity 200ms var(--ease-out);
+}
+
+@keyframes grow {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 起点图标：跟着各自那一圈一起弹出来 */
+.chip {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chipPop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes chipPop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.centerBig {
+  font-weight: var(--font-weight-700);
+  fill: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.centerSmall {
+  font-weight: var(--font-weight-500);
+  fill: var(--text-muted);
+}

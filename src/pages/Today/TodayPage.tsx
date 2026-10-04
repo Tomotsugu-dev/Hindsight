@@ -16,7 +16,14 @@ import {
 } from "../../components/AppDetailDrawer/AppDetailDrawer";
 import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
-import { getStatsView, setStatsView, subscribeStatsView } from "../../state/statsView";
+import {
+  getPieDepth,
+  getStatsView,
+  setPieDepth,
+  setStatsView,
+  subscribeStatsView,
+  type PieDepth,
+} from "../../state/statsView";
 import { useDayCache } from "../../hooks/useDayCache";
 import { useHourApps } from "../../hooks/useHourApps";
 import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
@@ -24,6 +31,7 @@ import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
 import { usePeriodInsights } from "../../hooks/usePeriodInsights";
+import { useAppFocus } from "../../hooks/useAppFocus";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
@@ -63,6 +71,15 @@ export default function TodayPage() {
   const view = useSyncExternalStore(subscribeStatsView, () => getStatsView("today"));
   /** 占比 drill：当前选中的 super-id；null 表示列表层。 */
   const [drillId, setDrillId] = useState<string | null>(null);
+  /** 占比视图里选中的小类：下方应用列表只列它的应用。换钉住的大类时清掉，其余跟 drillId 一样 */
+  const [catId, setCatId] = useState<string | null>(null);
+  /** 占比视图显示哪一层，跟 view 一样存在页面外面，切页回来还在。
+   *  回到只有大类的那一层时选中的小类看不见了，一起清掉 */
+  const pieDepth = useSyncExternalStore(subscribeStatsView, () => getPieDepth("today"));
+  const changePieDepth = (d: PieDepth) => {
+    setPieDepth("today", d);
+    if (d === "supers") setCatId(null);
+  };
   // 切设备 / 切视图 → 自动回列表层。view 进 deps 是为了：用户在占比里
   // pin 了某大类后切回时段视图，drill 状态在 UI 上已不可见但仍 pinned，再切回
   // 占比会"幽灵高亮"在上次的大类上。切视图时清掉，回占比是干净的列表层。
@@ -72,6 +89,7 @@ export default function TodayPage() {
   // 安全），翻回有数据的时期 drill 又恢复。
   useEffect(() => {
     setDrillId(null);
+    setCatId(null);
   }, [selectedDeviceId, view]);
 
   // 日期切换 pill 的本地化文案
@@ -89,9 +107,12 @@ export default function TodayPage() {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   // 点应用 → 详情抽屉的目标；null = 关闭。切日 / 切设备时一并关掉（旧 app 明细失效）。
   const [selectedApp, setSelectedApp] = useState<AppDetailTarget | null>(null);
+  // 鼠标停在哪个应用上（占比视图下圆环和统计卡片突出它）
+  const [hoverAppId, setHoverAppId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedHour(null);
     setSelectedApp(null);
+    setHoverAppId(null);
   }, [offset, selectedDeviceId]);
   const handleHourClick = (h: number) =>
     setSelectedHour((prev) => (prev === h ? null : h));
@@ -185,12 +206,19 @@ export default function TodayPage() {
     () => (drilledSlice ? new Set(drilledSlice.cats.map((c) => c.id)) : null),
     [drilledSlice],
   );
+  // 选中的小类在这一天没有活动时查不到 → 落回大类视角，翻回有数据的一天又恢复
+  const pickedCat =
+    catId !== null
+      ? (currBreakdown.slices.flatMap((s) => s.cats).find((c) => c.id === catId) ?? null)
+      : null;
   const displayedAppRanks = useMemo(
     () =>
-      childCatIds
-        ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
-        : appRanks,
-    [appRanks, childCatIds],
+      pickedCat
+        ? appRanks.filter((r) => r.categoryId === pickedCat.id)
+        : childCatIds
+          ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+          : appRanks,
+    [appRanks, childCatIds, pickedCat],
   );
   const displayedCategoryRanks = useMemo(
     () =>
@@ -199,7 +227,7 @@ export default function TodayPage() {
         : categoryRanks,
     [categoryRanks, childCatIds],
   );
-  const appsTitle = drilledSlice
+  const appsTitle = pickedCat || drilledSlice
     ? t("today.pie.drill.appsTitle")
     : t("today.ranks.topApps");
   const categoriesTitle = drilledSlice
@@ -228,6 +256,30 @@ export default function TodayPage() {
     drill: drilledSlice
       ? { slice: drilledSlice, prevSlice: prevDrilledSlice }
       : undefined,
+  });
+
+  // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字
+  const prevApps = useMemo(() => getDay(offset - 1).apps, [getDay, offset]);
+  const prevTotalMinutes = useMemo(
+    () =>
+      Math.round(
+        prevHoursData.reduce((sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0), 0) /
+          60,
+      ),
+    [prevHoursData],
+  );
+  const peakLabelForHourKey = useCallback((key: string) => `${key.padStart(2, "0")}:00`, []);
+  const appFocus = useAppFocus({
+    hoverId: hoverAppId,
+    enabled: view === "pie",
+    apps,
+    prevApps,
+    prevTotal: prevTotalMinutes,
+    slices: currBreakdown.slices,
+    scope: "day",
+    offset,
+    deviceId: selectedDeviceId,
+    peakLabel: peakLabelForHourKey,
   });
 
   return (
@@ -298,6 +350,7 @@ export default function TodayPage() {
                   slices={prevBreakdown.slices}
                   total={prevBreakdown.total}
                   interactive={false}
+                  depth={pieDepth}
                 />,
                 // 当前 slide 始终是 PieView；点击 toggle drillId，pin 住高亮，下方两卡按它过滤
                 <PieView
@@ -307,15 +360,22 @@ export default function TodayPage() {
                   // drill 跨周期保留后 drillId 可能在当前周期没有对应切片（ghost）——
                   // 直接传会让 PieView 把所有行/圆环置灰且无高亮。解析得到才 pin。
                   pinnedId={drilledSlice ? drillId : null}
-                  onDrill={(id) =>
-                    setDrillId((prev) => (prev === id ? null : id))
-                  }
+                  onDrill={(id) => {
+                    setDrillId((prev) => (prev === id ? null : id));
+                    setCatId(null);
+                  }}
+                  focusApp={appFocus.focusApp}
+                  pickedCatId={pickedCat?.id ?? null}
+                  onCatPick={(id) => setCatId((prev) => (prev === id ? null : id))}
+                  depth={pieDepth}
+                  onDepthChange={changePieDepth}
                 />,
                 <PieView
                   key={`pie-next-${offset + 1}`}
                   slices={nextBreakdown.slices}
                   total={nextBreakdown.total}
                   interactive={false}
+                  depth={pieDepth}
                 />,
               ]
         }
@@ -324,9 +384,10 @@ export default function TodayPage() {
       {/* 仅占比视图显示：tile 是饼图的数字摘要（drill 联动 / 主力 / 构成） */}
       {view === "pie" && (
         <InsightTiles
-          insights={insights}
+          insights={appFocus.insights ?? insights}
           scope="today"
           drilledSlice={drilledSlice}
+          accentColor={appFocus.color}
         />
       )}
 
@@ -340,6 +401,7 @@ export default function TodayPage() {
               )}
               {/* 总活动时间：
                   - 选中某小时 → 该小时总时长（跟下方 apps 列表 scope 一致）
+                  - 否则选中小类时 → 该小类小计
                   - 否则 drill 时 → 该大类小计
                   - 否则 → 全日总时长
                   选中优先于 drill，因为用户对"选了再看时间"的直觉是"那个小时多少分钟" */}
@@ -347,9 +409,11 @@ export default function TodayPage() {
                 {fmtHM(
                   selectedHour !== null
                     ? scopedMinutes
-                    : drilledSlice
-                      ? drilledSlice.minutes
-                      : totalMinutes,
+                    : pickedCat
+                      ? pickedCat.minutes
+                      : drilledSlice
+                        ? drilledSlice.minutes
+                        : totalMinutes,
                 )}
               </span>
             </div>
@@ -358,6 +422,9 @@ export default function TodayPage() {
             <ScrollBox maxHeight={280}>
               <RankedList
                 items={displayedAppRanks}
+                onItemHover={
+                  view === "pie" ? (item) => setHoverAppId(item?.id ?? null) : undefined
+                }
                 onItemClick={(item) =>
                   setSelectedApp({
                     name: item.name,

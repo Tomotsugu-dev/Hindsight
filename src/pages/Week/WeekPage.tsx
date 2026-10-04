@@ -14,6 +14,7 @@ import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
 import { usePeriodInsights } from "../../hooks/usePeriodInsights";
+import { useAppFocus } from "../../hooks/useAppFocus";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
@@ -29,7 +30,14 @@ import {
 } from "../../components/AppDetailDrawer/AppDetailDrawer";
 import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
-import { getStatsView, setStatsView, subscribeStatsView } from "../../state/statsView";
+import {
+  getPieDepth,
+  getStatsView,
+  setPieDepth,
+  setStatsView,
+  subscribeStatsView,
+  type PieDepth,
+} from "../../state/statsView";
 import type { DaySummary } from "../../api/hindsight";
 import styles from "./WeekPage.module.css";
 
@@ -61,8 +69,17 @@ export default function WeekPage() {
    *  view 本页独立记忆并持久化（state/statsView.ts，scope="week"）。 */
   const view = useSyncExternalStore(subscribeStatsView, () => getStatsView("week"));
   const [drillId, setDrillId] = useState<string | null>(null);
+  /** 占比视图里选中的小类（跟 TodayPage 同款） */
+  const [catId, setCatId] = useState<string | null>(null);
+  /** 占比视图显示哪一层（跟 TodayPage 同款） */
+  const pieDepth = useSyncExternalStore(subscribeStatsView, () => getPieDepth("week"));
+  const changePieDepth = (d: PieDepth) => {
+    setPieDepth("week", d);
+    if (d === "supers") setCatId(null);
+  };
   useEffect(() => {
     setDrillId(null);
+    setCatId(null);
   }, [selectedDeviceId, view]);
 
   // 周日期范围文案
@@ -128,9 +145,12 @@ export default function WeekPage() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   // 点应用 → 详情抽屉；切周 / 切设备时关掉
   const [selectedApp, setSelectedApp] = useState<AppDetailTarget | null>(null);
+  // 鼠标停在哪个应用上（占比视图下圆环和统计卡片突出它）
+  const [hoverAppId, setHoverAppId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedIndex(null);
     setSelectedApp(null);
+    setHoverAppId(null);
   }, [offset, selectedDeviceId]);
   const handleDayClick = (i: number) =>
     setSelectedIndex((prev) => (prev === i ? null : i));
@@ -203,12 +223,18 @@ export default function WeekPage() {
     () => (drilledSlice ? new Set(drilledSlice.cats.map((c) => c.id)) : null),
     [drilledSlice],
   );
+  const pickedCat =
+    catId !== null
+      ? (currBreakdown.slices.flatMap((s) => s.cats).find((c) => c.id === catId) ?? null)
+      : null;
   const displayedAppRanks = useMemo(
     () =>
-      childCatIds
-        ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
-        : appRanks,
-    [appRanks, childCatIds],
+      pickedCat
+        ? appRanks.filter((r) => r.categoryId === pickedCat.id)
+        : childCatIds
+          ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+          : appRanks,
+    [appRanks, childCatIds, pickedCat],
   );
   const displayedCategoryRanks = useMemo(
     () =>
@@ -217,7 +243,7 @@ export default function WeekPage() {
         : categoryRanks,
     [categoryRanks, childCatIds],
   );
-  const appsTitle = drilledSlice
+  const appsTitle = pickedCat || drilledSlice
     ? t("today.pie.drill.appsTitle")
     : t("week.ranks.topApps");
   const categoriesTitle = drilledSlice
@@ -262,6 +288,35 @@ export default function WeekPage() {
     drill: drilledSlice
       ? { slice: drilledSlice, prevSlice: prevDrilledSlice }
       : undefined,
+  });
+
+  // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字（日均按上周 7 天算）
+  const prevApps = useMemo(() => getWeek(offset - 1).apps, [getWeek, offset]);
+  const prevTotalMinutes = useMemo(
+    () =>
+      Math.round(
+        prevDaysData.reduce((sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0), 0) /
+          60,
+      ),
+    [prevDaysData],
+  );
+  const peakLabelForDayKey = useCallback(
+    (key: string) => t(`week.dow.${DOW_KEYS[new Date(`${key}T00:00:00`).getDay()]}`),
+    [t],
+  );
+  const appFocusAvg = useMemo(() => ({ prevDays: 7 }), []);
+  const appFocus = useAppFocus({
+    hoverId: hoverAppId,
+    enabled: view === "pie",
+    apps,
+    prevApps,
+    prevTotal: prevTotalMinutes,
+    slices: currBreakdown.slices,
+    scope: "week",
+    offset,
+    deviceId: selectedDeviceId,
+    peakLabel: peakLabelForDayKey,
+    avg: appFocusAvg,
   });
 
   return (
@@ -321,6 +376,7 @@ export default function WeekPage() {
                   slices={prevBreakdown.slices}
                   total={prevBreakdown.total}
                   interactive={false}
+                  depth={pieDepth}
                 />,
                 // 当前 slide 始终是 PieView；点击 toggle drillId（详见 TodayPage 同名块）
                 <PieView
@@ -330,15 +386,22 @@ export default function WeekPage() {
                   // drill 跨周期保留后 drillId 可能在当前周期没有对应切片（ghost）——
                   // 直接传会让 PieView 把所有行/圆环置灰且无高亮。解析得到才 pin。
                   pinnedId={drilledSlice ? drillId : null}
-                  onDrill={(id) =>
-                    setDrillId((prev) => (prev === id ? null : id))
-                  }
+                  onDrill={(id) => {
+                    setDrillId((prev) => (prev === id ? null : id));
+                    setCatId(null);
+                  }}
+                  focusApp={appFocus.focusApp}
+                  pickedCatId={pickedCat?.id ?? null}
+                  onCatPick={(id) => setCatId((prev) => (prev === id ? null : id))}
+                  depth={pieDepth}
+                  onDepthChange={changePieDepth}
                 />,
                 <PieView
                   key={`pie-next-${offset + 1}`}
                   slices={nextBreakdown.slices}
                   total={nextBreakdown.total}
                   interactive={false}
+                  depth={pieDepth}
                 />,
               ]
         }
@@ -347,11 +410,12 @@ export default function WeekPage() {
       {/* 仅占比视图显示：tile 是饼图的数字摘要（drill 联动 / 主力 / 构成） */}
       {view === "pie" && (
         <InsightTiles
-          insights={insights}
+          insights={appFocus.insights ?? insights}
           scope="week"
           drilledSlice={drilledSlice}
-          avgMinutes={displayedAvgMinutes}
-          prevAvgMinutes={displayedPrevAvgMinutes}
+          accentColor={appFocus.color}
+          avgMinutes={appFocus.insights ? appFocus.avgMinutes : displayedAvgMinutes}
+          prevAvgMinutes={appFocus.insights ? appFocus.prevAvgMinutes : displayedPrevAvgMinutes}
         />
       )}
 
@@ -364,14 +428,16 @@ export default function WeekPage() {
                 <span className={styles.selectionLabel}>{selectionLabel}</span>
               )}
               {/* 总活动时间（跟 TodayPage 同款语义）：
-                  选中某天 → 该天总时长；否则 drill → 大类小计；否则全周。 */}
+                  选中某天 → 该天总时长；否则选中小类 → 小类小计；否则 drill → 大类小计；否则全周。 */}
               <span className={styles.cardTotal}>
                 {fmtHM(
                   selectedIndex !== null
                     ? scopedMinutes
-                    : drilledSlice
-                      ? drilledSlice.minutes
-                      : totalMinutes,
+                    : pickedCat
+                      ? pickedCat.minutes
+                      : drilledSlice
+                        ? drilledSlice.minutes
+                        : totalMinutes,
                 )}
               </span>
             </div>
@@ -380,6 +446,9 @@ export default function WeekPage() {
             <ScrollBox maxHeight={280}>
               <RankedList
                 items={displayedAppRanks}
+                onItemHover={
+                  view === "pie" ? (item) => setHoverAppId(item?.id ?? null) : undefined
+                }
                 onItemClick={(item) =>
                   setSelectedApp({
                     name: item.name,

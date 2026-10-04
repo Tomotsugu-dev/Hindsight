@@ -8,12 +8,13 @@ export interface PeriodInsights {
   /** 当期峰值 slot 的展示文本 + 该 slot 分钟数。null = 当期空 */
   peak: { label: string; minutes: number } | null;
   /**
-   * 第三 tile：默认 = 主力大类，drill 时 = 当前大类下 top 小分类。
+   * 第三 tile：默认 = 主力大类，drill 时 = 当前大类下 top 小分类，
+   * 鼠标停在某个应用上时 = 这个应用占所属小类的比例（见 useAppFocus）。
    * kind 区分 label 走哪个 i18n key。
    */
   third:
     | {
-        kind: "dominant" | "composition";
+        kind: "dominant" | "composition" | "appShare";
         name: string;
         color: string;
         pct: number;

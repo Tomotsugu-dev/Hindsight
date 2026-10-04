@@ -467,6 +467,9 @@
       "expand": "Mostrar mais {{count}}",
       "collapse": "Recolher"
     },
+    "insightTiles": {
+      "appShare": "Parte da sua categoria"
+    },
     "segmentList": {
       "empty": "Nenhum segmento ainda — clique em \"Adicionar segmento\" abaixo para começar",
       "newSegmentLabel": "Novo segmento",
@@ -542,7 +545,11 @@
         "categoriesTitle": "Categorias",
         "appsTitle": "Principais aplicativos",
         "topNCount": "Top {{count}}"
-      }
+      },
+      "others": "{{count}} outros",
+      "ringsUp": "Categoria anterior",
+      "ringsDown": "Próxima categoria",
+      "wheelHint": "Que tal girar a roda do mouse?"
     },
     "dayNav": {
       "prev": "Dia anterior",

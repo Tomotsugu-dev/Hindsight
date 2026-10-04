@@ -467,6 +467,9 @@
       "expand": "Show {{count}} more",
       "collapse": "Collapse"
     },
+    "insightTiles": {
+      "appShare": "Share of its category"
+    },
     "segmentList": {
       "empty": "No segments yet — click \"Add segment\" below to start",
       "newSegmentLabel": "New segment",
@@ -542,7 +545,11 @@
         "categoriesTitle": "Categories",
         "appsTitle": "Top apps",
         "topNCount": "Top {{count}}"
-      }
+      },
+      "others": "{{count}} others",
+      "ringsUp": "Previous category",
+      "ringsDown": "Next category",
+      "wheelHint": "Try scrolling the mouse wheel?"
     },
     "dayNav": {
       "prev": "Previous day",
