@@ -361,6 +361,7 @@ export default function TodayPage() {
                 onItemClick={(item) =>
                   setSelectedApp({
                     name: item.name,
+                    groupId: item.id,
                     iconProcess: item.iconProcess ?? item.id,
                     categoryLabel: item.subtitle,
                     color: item.color,

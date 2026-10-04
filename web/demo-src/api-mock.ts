@@ -768,19 +768,19 @@ export const api = {
   // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
   getAppDayDetail: async (
     _dayOffset: number,
-    iconProcess: string,
+    groupId: string,
     _deviceId?: string,
-  ): Promise<AppDetail> => mockAppDetail("hours", 24, iconProcess),
+  ): Promise<AppDetail> => mockAppDetail("hours", 24, groupId),
   getAppWeekDetail: async (
     _weekOffset: number,
-    iconProcess: string,
+    groupId: string,
     _deviceId?: string,
-  ): Promise<AppDetail> => mockAppDetail("days", 7, iconProcess),
+  ): Promise<AppDetail> => mockAppDetail("days", 7, groupId),
   getAppMonthDetail: async (
     _monthOffset: number,
-    iconProcess: string,
+    groupId: string,
     _deviceId?: string,
-  ): Promise<AppDetail> => mockAppDetail("days", 30, iconProcess),
+  ): Promise<AppDetail> => mockAppDetail("days", 30, groupId),
 
   // ─── Chat（演示回答） ────────────────────
   chatAsk: async (

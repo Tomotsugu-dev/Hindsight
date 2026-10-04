@@ -408,6 +408,7 @@ export default function MonthPage() {
                 onItemClick={(item) =>
                   setSelectedApp({
                     name: item.name,
+                    groupId: item.id,
                     iconProcess: item.iconProcess ?? item.id,
                     categoryLabel: item.subtitle,
                     color: item.color,

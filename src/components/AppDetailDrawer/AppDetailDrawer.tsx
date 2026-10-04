@@ -27,7 +27,9 @@ function siteKey(g: SiteGroup): string {
 export interface AppDetailTarget {
   /** 显示名 */
   name: string;
-  /** 稳定代表 process_name —— 后端据此解析 app_group 拉明细 */
+  /** 分组 ID —— 后端按它拉明细 */
+  groupId: string;
+  /** 组里一个真实的 process_name，用来查图标 */
   iconProcess: string;
   /** 分类显示名（来自排行行 subtitle）；可无 */
   categoryLabel?: string;
@@ -96,7 +98,7 @@ export function AppDetailDrawer({
   const { detail, loading } = useAppDetail(
     scope,
     offset,
-    app?.iconProcess ?? null,
+    app?.groupId ?? null,
     deviceId,
   );
 
@@ -124,11 +126,11 @@ export function AppDetailDrawer({
   useEffect(() => {
     setIgnoredKeys(new Set());
     setIgnoreNotice(null);
-  }, [app?.iconProcess]);
+  }, [app?.groupId]);
   // 展开状态还要跟着时间范围走：换天/换设备后组的集合都变了，回到默认态
   useEffect(() => {
     setOpenKeys(null);
-  }, [app?.iconProcess, scope, offset, deviceId]);
+  }, [app?.groupId, scope, offset, deviceId]);
   useEffect(
     () => () => {
       if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
@@ -136,21 +138,20 @@ export function AppDetailDrawer({
     [],
   );
 
-  const resolveRuleTargets = useCallback(async (iconProcess: string) => {
-    try {
-      if (!groupsRef.current) groupsRef.current = await api.listAppGroups();
-      const g = groupsRef.current.find(
-        (grp) =>
-          grp.id === iconProcess ||
-          grp.members.some((m) => m.processName === iconProcess),
-      );
-      const names = g?.members.map((m) => m.processName) ?? [];
-      return names.length > 0 ? names : [iconProcess];
-    } catch {
-      // 组列表拉不到就退化成只对代表进程建规则——宁可少盖也别整个失败
-      return [iconProcess];
-    }
-  }, []);
+  const resolveRuleTargets = useCallback(
+    async (groupId: string, iconProcess: string) => {
+      try {
+        if (!groupsRef.current) groupsRef.current = await api.listAppGroups();
+        const g = groupsRef.current.find((grp) => grp.id === groupId);
+        const names = g?.members.map((m) => m.processName) ?? [];
+        return names.length > 0 ? names : [iconProcess];
+      } catch {
+        // 组列表拉不到就退化成只对代表进程建规则——宁可少盖也别整个失败
+        return [iconProcess];
+      }
+    },
+    [],
+  );
 
   const ignoreTitle = useCallback(
     async (rawTitle: string) => {
@@ -159,7 +160,7 @@ export function AppDetailDrawer({
       if (!keyword) return;
       setIgnoreBusy(true);
       try {
-        const targets = await resolveRuleTargets(app.iconProcess);
+        const targets = await resolveRuleTargets(app.groupId, app.iconProcess);
         let count = 0;
         for (const p of targets) {
           count += (await api.addIgnoreRule(p, keyword)).reappliedRows;

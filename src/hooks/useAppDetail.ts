@@ -1,5 +1,5 @@
 // 给「点应用 → 详情抽屉」用：按 scope(day/week/month) lazy fetch 选中 app 的聚合详情
-// （时间柱 + 窗口标题用时）。缓存按 (scope, offset, iconProcess, deviceId) 全键，LRU 淘汰。
+// （时间柱 + 窗口标题用时）。缓存按 (scope, offset, groupId, deviceId) 全键，LRU 淘汰。
 
 import { useEffect, useRef, useState } from "react";
 import { api, type AppDetail } from "../api/hindsight";
@@ -14,22 +14,22 @@ const TODAY_TTL_MS = 30_000;
 function cacheKey(
   scope: DetailScope,
   offset: number,
-  iconProcess: string,
+  groupId: string,
   deviceId: string | undefined,
 ): string {
-  return `${scope}|${offset}|${iconProcess}|${deviceId ?? ""}`;
+  return `${scope}|${offset}|${groupId}|${deviceId ?? ""}`;
 }
 
 function fetchDetail(
   scope: DetailScope,
   offset: number,
-  iconProcess: string,
+  groupId: string,
   deviceId?: string,
 ): Promise<AppDetail> {
-  if (scope === "week") return api.getAppWeekDetail(offset, iconProcess, deviceId);
+  if (scope === "week") return api.getAppWeekDetail(offset, groupId, deviceId);
   if (scope === "month")
-    return api.getAppMonthDetail(offset, iconProcess, deviceId);
-  return api.getAppDayDetail(offset, iconProcess, deviceId);
+    return api.getAppMonthDetail(offset, groupId, deviceId);
+  return api.getAppDayDetail(offset, groupId, deviceId);
 }
 
 interface State {
@@ -37,11 +37,11 @@ interface State {
   loading: boolean;
 }
 
-/** `iconProcess === null` = 没选 app（抽屉关着）→ 不请求、返回 null。 */
+/** `groupId === null` = 没选 app（抽屉关着）→ 不请求、返回 null。 */
 export function useAppDetail(
   scope: DetailScope,
   offset: number,
-  iconProcess: string | null,
+  groupId: string | null,
   deviceId?: string,
 ): State {
   const cacheRef = useRef<Map<string, { detail: AppDetail; at: number }>>(new Map());
@@ -57,11 +57,11 @@ export function useAppDetail(
   }
 
   useEffect(() => {
-    if (iconProcess === null) {
+    if (groupId === null) {
       setState({ detail: null, loading: false });
       return;
     }
-    const key = cacheKey(scope, offset, iconProcess, deviceId);
+    const key = cacheKey(scope, offset, groupId, deviceId);
     const cached = cacheRef.current.get(key);
     if (cached && !(offset === 0 && Date.now() - cached.at > TODAY_TTL_MS)) {
       setState({ detail: cached.detail, loading: false });
@@ -70,7 +70,7 @@ export function useAppDetail(
 
     let cancelled = false;
     setState({ detail: null, loading: true });
-    fetchDetail(scope, offset, iconProcess, deviceId)
+    fetchDetail(scope, offset, groupId, deviceId)
       .then((detail) => {
         if (cancelled) return;
         const cache = cacheRef.current;
@@ -88,7 +88,7 @@ export function useAppDetail(
     return () => {
       cancelled = true;
     };
-  }, [scope, offset, iconProcess, deviceId]);
+  }, [scope, offset, groupId, deviceId]);
 
   return state;
 }
