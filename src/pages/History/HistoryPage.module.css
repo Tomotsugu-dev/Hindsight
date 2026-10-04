@@ -1,0 +1,336 @@
+/* 外壳同 AI 总结页：标题 + tab + 内容 */
+.page {
+  padding: 32px 32px 48px;
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 标题和小字在左，「统计 ｜ 搜索」在右，跟日统计一样只占一块 */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* TabNav 自带的下边距是给「标签条独占一行」用的，放进标题行就不要了 */
+.headerTabs nav {
+  margin-bottom: 0;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 搜索页不往里放东西，空着时连 gap 也不要占 */
+.meta:empty {
+  display: none;
+}
+
+/* 换范围时应用列表先留着旧的，变淡表示在更新 */
+.stale {
+  opacity: 0.6;
+  transition: opacity 150ms ease-out;
+}
+
+.loading {
+  padding: 40px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* —— 路径：全部 › 大类 › 应用，后面跟放大的那段、选中的那天 —— */
+/* 跟在卡片标题后面，左边一道竖线隔开 */
+.path {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-default);
+  font-size: 12px;
+}
+
+.crumb {
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.crumb:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+}
+
+.crumb:disabled {
+  color: var(--text-strong);
+  font-weight: var(--font-weight-500);
+  cursor: default;
+}
+
+.crumbSep {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.crumbCurrent {
+  padding: 2px 6px;
+  color: var(--text-strong);
+  font-weight: var(--font-weight-500);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 4px 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chipClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chipClear:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+/* —— 下面三张卡：大类、应用、窗口详情排在一条轨道上，一屏露两张 ——
+   左右多出去的卡被裁掉；只裁横向，卡片下方的阴影还在 */
+.carousel {
+  overflow-x: clip;
+}
+
+.track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 16px) / 2);
+  gap: 16px;
+  align-items: stretch;
+  /* 终点前冲过一点再回来，就是回弹 */
+  transition: transform 560ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* 左移一张卡加一道缝：轨道宽 = 两张卡 + 一道缝，所以是 50% + 8px */
+.trackShifted {
+  transform: translateX(calc(-50% - 8px));
+}
+
+.detailSlot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.detailSlot > section {
+  flex: 1;
+}
+
+/* —— 卡片 —— */
+.card {
+  min-width: 0;
+  background: var(--surface-card-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 8px 20px rgba(20, 20, 40, 0.06);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.cardTotal {
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.superIcon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: var(--row-color);
+  background: color-mix(in oklab, var(--row-color) 14%, transparent);
+}
+
+.textBtn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.textBtn:hover {
+  background: var(--surface-2);
+}
+
+/* —— 窗口详情卡：头部照应用详情抽屉 —— */
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.detailHeadText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detailName {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailSub {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.detailCat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.catDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.detailTotal {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.closeBtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.detailActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px 0;
+}
+
+/* WindowTitles 的外层：卡片里不再套一层卡，只给内边距 */
+.titlesBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 14px;
+}

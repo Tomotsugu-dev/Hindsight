@@ -185,6 +185,19 @@ function isoDateOffset(dayOffset: number): string {
   return ymd(d);
 }
 
+/** "YYYY-MM-DD" 的 from..to → 每一天相对今天的 dayOffset（含两端） */
+function rangeOffsets(from: string, to: string): number[] {
+  const offsetOf = (key: string) => {
+    const [y, m, d] = key.split("-").map((s) => parseInt(s, 10));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((new Date(y, m - 1, d).getTime() - today.getTime()) / 86400000);
+  };
+  const out: number[] = [];
+  for (let o = offsetOf(from); o <= offsetOf(to); o++) out.push(o);
+  return out;
+}
+
 
 // ────────────────────────────────────────────
 // api 对象 —— 跟原 hindsight.ts 同样接口
@@ -361,6 +374,40 @@ export const api = {
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
     return limit ? sorted.slice(0, limit) : sorted;
+  },
+
+  // ─── 全部历史（from..to 是 "YYYY-MM-DD"，演示数据按天拼出来） ───
+  getRangeCategoryTime: async (
+    from: string,
+    to: string,
+    deviceId?: string,
+  ): Promise<DaySummaryDto[]> =>
+    rangeOffsets(from, to).map((offset) => {
+      const segMap = new Map<string, number>();
+      for (const slot of mockDayFor(offset, deviceId).hours) {
+        for (const seg of slot.segments) {
+          segMap.set(seg.categoryId, (segMap.get(seg.categoryId) ?? 0) + seg.secs);
+        }
+      }
+      return {
+        date: isoDateOffset(offset),
+        segments: Array.from(segMap, ([categoryId, secs]) => ({ categoryId, secs })),
+      };
+    }),
+  getRangeApps: async (
+    from: string,
+    to: string,
+    deviceId?: string,
+  ): Promise<AppUsage[]> => {
+    const map = new Map<string, AppUsage>();
+    for (const offset of rangeOffsets(from, to)) {
+      for (const a of mockDayFor(offset, deviceId).apps) {
+        const cur = map.get(a.groupId);
+        if (cur) cur.minutes += a.minutes;
+        else map.set(a.groupId, { ...a });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
   },
 
   // ─── 分类 ──────────────────────────────────
@@ -781,6 +828,13 @@ export const api = {
     groupId: string,
     _deviceId?: string,
   ): Promise<AppDetail> => mockAppDetail("days", 30, groupId),
+  getAppRangeDetail: async (
+    from: string,
+    to: string,
+    groupId: string,
+    _deviceId?: string,
+  ): Promise<AppDetail> =>
+    mockAppDetail("days", rangeOffsets(from, to).length, groupId),
 
   // ─── Chat（演示回答） ────────────────────
   chatAsk: async (

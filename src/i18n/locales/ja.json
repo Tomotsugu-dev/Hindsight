@@ -50,6 +50,7 @@
       "today": "日次",
       "week": "週次",
       "month": "月次",
+      "history": "全履歴",
       "aiSummary": "AI サマリー",
       "aiSettings": "AI 設定",
       "categories": "分類",
@@ -644,6 +645,46 @@
     },
     "selection": {
       "label": "{{month}}月{{day}}日（{{weekday}}）"
+    }
+  },
+  "history": {
+    "title": "全履歴",
+    "meta": "合計 {{total}} · {{since}} から",
+    "empty": "まだ記録がありません",
+    "loading": "読み込み中…",
+    "tabs": {
+      "stats": "統計",
+      "search": "検索"
+    },
+    "chartTabs": {
+      "year": "年別",
+      "month": "月別"
+    },
+    "chart": {
+      "title": "日ごとのアクティビティ",
+      "hint": "ヒートマップをドラッグすると、その期間だけを表示します",
+      "resetZoom": "ズームをリセット"
+    },
+    "nav": {
+      "prevYear": "前の年",
+      "nextYear": "次の年",
+      "backToThisYear": "今年に戻る"
+    },
+    "heatmap": {
+      "less": "少",
+      "more": "多",
+      "cell": "{{date}} · {{duration}}"
+    },
+    "superCategories": "大分類",
+    "apps": "アプリ",
+    "path": {
+      "label": "現在の範囲",
+      "all": "すべて",
+      "clearDay": "日付の選択を解除"
+    },
+    "app": {
+      "firstLast": "初回 {{first}} · 最終 {{last}}",
+      "dayDetail": "その日の詳細"
     }
   },
   "apps": {
@@ -1242,8 +1283,7 @@
       "daily": "日次",
       "week": "週次",
       "month": "月次",
-      "debug": "デバッグ",
-      "search": "検索"
+      "debug": "デバッグ"
     },
     "placeholder": {
       "hint": "開発中の機能です。"

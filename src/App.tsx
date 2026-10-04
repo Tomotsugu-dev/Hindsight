@@ -17,6 +17,8 @@ import {
 const Today = lazy(() => import("./pages/Today/TodayPage"));
 const Week = lazy(() => import("./pages/Week/WeekPage"));
 const Month = lazy(() => import("./pages/Month/MonthPage"));
+const History = lazy(() => import("./pages/History/HistoryPage"));
+const HistoryStatsTab = lazy(() => import("./pages/History/StatsTab"));
 const AISummaryPage = lazy(() => import("./pages/AISummary/AISummaryPage"));
 const DailyTab = lazy(() => import("./pages/AISummary/tabs/DailyTab"));
 const WeeklyTab = lazy(() => import("./pages/AISummary/tabs/WeeklyTab"));
@@ -103,6 +105,10 @@ function App() {
           <Route path={ROUTES.today} element={<Today />} />
           <Route path={ROUTES.week} element={<Week />} />
           <Route path={ROUTES.month} element={<Month />} />
+          <Route path={ROUTES.history} element={<History />}>
+            <Route index element={<HistoryStatsTab />} />
+            <Route path="search" element={<SearchPage />} />
+          </Route>
           <Route path={ROUTES.chat} element={<ChatPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
@@ -110,7 +116,11 @@ function App() {
             <Route path="month" element={<MonthlyTab />} />
             {/* 旧地址重定向:对话已提升为独立页面 */}
             <Route path="chat" element={<Navigate to={ROUTES.chat} replace />} />
-            <Route path="search" element={<SearchPage />} />
+            {/* 旧地址重定向:搜索已搬到全部历史 */}
+            <Route
+              path="search"
+              element={<Navigate to={`${ROUTES.history}/search`} replace />}
+            />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
