@@ -17,6 +17,9 @@
   <a href="https://github.com/Tomotsugu-dev/Hindsight/releases">
     <img alt="GitHub Release" src="https://img.shields.io/github/v/release/Tomotsugu-dev/Hindsight?color=blue&logo=github">
   </a>
+  <a href="https://github.com/Tomotsugu-dev/Hindsight/releases">
+    <img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/Tomotsugu-dev/Hindsight/total?style=flat&logo=github&color=brightgreen">
+  </a>
   <a href="https://github.com/Tomotsugu-dev/Hindsight/stargazers">
     <img alt="GitHub Stars" src="https://img.shields.io/github/stars/Tomotsugu-dev/Hindsight?style=flat&logo=github&color=yellow">
   </a>
