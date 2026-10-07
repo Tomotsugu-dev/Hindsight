@@ -10,6 +10,7 @@ pub mod outbox;
 pub mod process_paths;
 pub mod reports;
 pub mod settings;
+pub mod site_rules;
 pub mod sql;
 pub mod super_categories;
 

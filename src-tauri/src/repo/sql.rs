@@ -60,3 +60,31 @@ pub const FROM_PROCESS_GROUP_CATEGORY: &str = "FROM per_process p
 /// needs the soft-deleted ones too, to emit tombstones.
 pub const FROM_MEMBER_GROUP: &str = "FROM app_group_members gm
      JOIN app_groups g ON g.id = gm.group_id";
+
+/// Finds the category each website counts toward, that is, the website rule that applies
+/// to it: its own rule if it has one, otherwise the nearest parent domain's
+/// (`live.bilibili.com` without a rule falls under `bilibili.com`).
+///
+/// Usage: `hosts_sql` gives the websites to look up (one column, no duplicates); the result
+/// is `host_rule(host, rule_host, category_id)`, without the websites no rule applies to.
+/// Put the returned SQL after `WITH RECURSIVE`.
+pub fn matching_rule_host_sql(hosts_sql: &str) -> String {
+    format!(
+        "hosts(host) AS ({hosts_sql}),
+         up(host, cand) AS (
+             SELECT host, host FROM hosts
+             UNION ALL
+             SELECT host, substr(cand, instr(cand, '.') + 1) FROM up
+              WHERE instr(cand, '.') > 0
+                AND NOT EXISTS (SELECT 1 FROM site_rules r
+                                 WHERE r.host = up.cand AND r.browser = '' AND r.device = ''
+                                   AND r.deleted_at IS NULL)
+         ),
+         host_rule(host, rule_host, category_id) AS (
+             SELECT up.host, r.host, r.category_id
+               FROM up JOIN site_rules r
+                 ON r.host = up.cand AND r.browser = '' AND r.device = ''
+                AND r.deleted_at IS NULL
+         )"
+    )
+}

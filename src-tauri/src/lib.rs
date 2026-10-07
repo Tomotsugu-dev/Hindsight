@@ -257,6 +257,10 @@ pub fn run() {
             commands::categories::assign_app_to_category,
             commands::categories::unassign_app,
             commands::categories::list_unclassified_apps,
+            // --- site_rules: website rules (ADR-0013) ---
+            commands::site_rules::list_sites,
+            commands::site_rules::set_site_rule,
+            commands::site_rules::remove_site_rule,
             // --- super_categories: 大类容器（v28，本地 only，sync 暂未接入） ---
             commands::super_categories::list_super_categories,
             commands::super_categories::create_super_category,
