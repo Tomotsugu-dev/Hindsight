@@ -7,7 +7,7 @@
 //! its groups back to unclassified; built-in categories and `other` cannot be
 //! deleted, since unclassified time needs somewhere to land.
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -427,12 +427,8 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
 ///
 /// Idempotent: every UPDATE is guarded, so a repeat run touches zero rows and
 /// enqueues nothing.
-///
-/// Expects to be called inside a transaction: the tombstone that triggered it
-/// and every group this clears have to land together. The parameter type does
-/// not enforce that yet.
 pub fn cascade_category_deletion(
-    conn: &Connection,
+    conn: &Transaction,
     category_id: &str,
     now: &str,
 ) -> rusqlite::Result<()> {

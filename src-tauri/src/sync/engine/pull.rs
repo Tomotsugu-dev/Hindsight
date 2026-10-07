@@ -390,7 +390,7 @@ async fn merge_lww_simple<T, F>(
 ) -> Result<()>
 where
     T: serde::de::DeserializeOwned + Send + 'static,
-    F: Fn(&rusqlite::Connection, T) -> rusqlite::Result<()> + Send + Sync + Copy + 'static,
+    F: Fn(&rusqlite::Transaction, T) -> rusqlite::Result<()> + Send + Sync + Copy + 'static,
 {
     let rows: Vec<T> = parse_rows(entity, body)?;
     for row in rows {
