@@ -14,6 +14,7 @@ pub mod export;
 pub mod icons;
 pub mod screen_memory;
 pub mod settings;
+pub mod site_rules;
 pub mod storage;
 pub mod super_categories;
 pub mod sync;

@@ -14,6 +14,8 @@
 //! Every query must do two things: follow [`DeviceFilter`] to add up all devices or show one;
 //! leave out "Ignored windows" (`a.excluded = 0`).
 
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 mod app_detail;
@@ -72,6 +74,76 @@ pub struct AppUsage {
     /// merged group, so the frontend can look it up with any process_name in the group (icons are
     /// synced across devices).
     pub icon_process: String,
+    /// This app's time split by the category it actually counts toward, most first. Website
+    /// rules can split a browser's time across several categories; filtering apps by category
+    /// uses this.
+    pub by_category: Vec<CategoryTime>,
+}
+
+/// Accumulates usage by app group.
+///
+/// The outer map is keyed by app group ID (`group_id`). Each value contains, in order:
+///
+/// 1. `u64`: the app's accumulated total seconds.
+/// 2. [`AppUsage`]: app name, group ID, assigned category and icon process.
+///    Its `minutes` and `by_category` fields are filled by [`Self::finish`].
+/// 3. `HashMap<String, u64>`: effective category ID → accumulated seconds in that category.
+///    Website rules can split a browser's time across several categories.
+#[derive(Default)]
+pub(super) struct AppTotals(HashMap<String, (u64, AppUsage, HashMap<String, u64>)>);
+
+impl AppTotals {
+    /// Adds a duration to an app. `app_category` is the app's assigned category; `category` is
+    /// the category this duration counts toward. The lexically smallest process name in a group
+    /// is retained for stable icon lookup.
+    pub(super) fn add(
+        &mut self,
+        group_id: String,
+        display_name: String,
+        app_category: String,
+        category: String,
+        process: String,
+        secs: u64,
+    ) {
+        let (total, app, by_category) = self.0.entry(group_id.clone()).or_insert_with(|| {
+            let app = AppUsage {
+                display_name,
+                group_id,
+                category_id: app_category,
+                minutes: 0,
+                icon_process: process.clone(),
+                by_category: Vec::new(),
+            };
+            (0, app, HashMap::new())
+        });
+        if process < app.icon_process {
+            app.icon_process = process;
+        }
+        *total += secs;
+        *by_category.entry(category).or_insert(0) += secs;
+    }
+
+    /// Returns each app's total seconds and completed [`AppUsage`] record.
+    /// Category durations are sorted from longest to shortest; callers rank the apps.
+    pub(super) fn finish(self) -> Vec<(u64, AppUsage)> {
+        self.0
+            .into_values()
+            .map(|(secs, mut app, by_category)| {
+                app.minutes = (secs as f64 / 60.0).round() as u32;
+                let mut by_category: Vec<CategoryTime> = by_category
+                    .into_iter()
+                    .map(|(category_id, secs)| CategoryTime { category_id, secs })
+                    .collect();
+                by_category.sort_by(|a, b| {
+                    b.secs
+                        .cmp(&a.secs)
+                        .then_with(|| a.category_id.cmp(&b.category_id))
+                });
+                app.by_category = by_category;
+                (secs, app)
+            })
+            .collect()
+    }
 }
 
 /// Data for the details drawer opened by clicking an app: a row of time bars, plus window titles
