@@ -47,6 +47,43 @@ pub(super) async fn insert_activity(
         .unwrap();
 }
 
+/// 同 [`insert_activity`]，但带网站域名（`url_host`），给网站规则的测试用。
+pub(super) async fn insert_visit(
+    pool: &DbPool,
+    local_date: &str,
+    process_name: &str,
+    url_host: Option<&str>,
+    duration_secs: i64,
+) {
+    let local_date = local_date.to_string();
+    let process_name = process_name.to_string();
+    let url_host = url_host.map(str::to_string);
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "INSERT INTO activities(
+                    started_at, ended_at, duration_secs, local_date, local_hour,
+                    process_name, window_title, category_id, device_id, updated_at, origin,
+                    url_host
+                 ) VALUES(
+                    ?1 || 'T10:00:00Z', ?1 || 'T10:00:30Z', ?2, ?1, 10,
+                    ?3, '', 'other', ?4, ?1 || 'T10:00:30Z', 'local', ?5
+                 )",
+                rusqlite::params![
+                    local_date,
+                    duration_secs,
+                    process_name,
+                    crate::repo::test_util::TEST_SELF_ID,
+                    url_host
+                ],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+}
+
 /// 给 day_hours / day_hour_apps 测试用：插一行 sealed activity 但用真实的 local 时区
 /// started_at / ended_at（不再用固定的 'T10:00:00Z' UTC 串）。
 pub(super) async fn insert_session_with_times(

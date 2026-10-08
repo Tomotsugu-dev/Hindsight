@@ -22,6 +22,8 @@ pub const FROM_ACTIVITY_GROUP: &str = "FROM activities a
      LEFT JOIN app_groups g
        ON g.id = gm.group_id AND g.deleted_at IS NULL";
 
+// TODO: 统计已经改用 from_stats_category_sql，会套上网站规则；AI 总结、对话工具、导出还在用
+// 这个常量，网站规则对它们不生效（ADR-0013 决定 4）。以后合并成一个。
 /// [`FROM_ACTIVITY_GROUP`] plus the category that group is assigned to.
 ///
 /// Adds alias `c` = categories. This join is LEFT as well, so `c.id IS NULL`
@@ -35,19 +37,6 @@ pub const FROM_ACTIVITY_GROUP: &str = "FROM activities a
 pub const FROM_ACTIVITY_GROUP_CATEGORY: &str = "FROM activities a
      LEFT JOIN app_group_members gm
        ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-     LEFT JOIN app_groups g
-       ON g.id = gm.group_id AND g.deleted_at IS NULL
-     LEFT JOIN categories c
-       ON c.id = g.category_id AND c.deleted_at IS NULL";
-
-/// The joins of [`FROM_ACTIVITY_GROUP_CATEGORY`] over per-process totals instead of single
-/// activities. The caller defines `per_process` with a `process_name` column. Adding up first
-/// means the joins run once per process, not once per activity.
-///
-/// Aliases: `p` = per_process; `gm`, `g` and `c` as above.
-pub const FROM_PROCESS_GROUP_CATEGORY: &str = "FROM per_process p
-     LEFT JOIN app_group_members gm
-       ON gm.process_name = p.process_name AND gm.deleted_at IS NULL
      LEFT JOIN app_groups g
        ON g.id = gm.group_id AND g.deleted_at IS NULL
      LEFT JOIN categories c
@@ -86,5 +75,54 @@ pub fn matching_rule_host_sql(hosts_sql: &str) -> String {
                  ON r.host = up.cand AND r.browser = '' AND r.device = ''
                 AND r.deleted_at IS NULL
          )"
+    )
+}
+
+/// Generates the leading `WITH RECURSIVE` clause required by statistics queries.
+///
+/// It collects non-null domains visited in the given date range from `activities`,
+/// finds the applicable website rule for each (preferring an exact match, then the
+/// nearest parent domain), and defines the `host_rule(host, rule_host, category_id)`
+/// CTE for [`from_stats_category_sql`] to join.
+///
+/// The returned SQL has two `?` parameters, bound in order: start date and end date.
+pub fn host_rule_with_sql() -> String {
+    format!(
+        "WITH RECURSIVE {}",
+        matching_rule_host_sql(
+            "SELECT DISTINCT url_host FROM activities
+              WHERE url_host IS NOT NULL AND local_date >= ? AND local_date <= ?"
+        )
+    )
+}
+
+/// Generates a reusable `FROM … LEFT JOIN …` fragment for statistics queries.
+///
+/// Using `source` as the input relation, it resolves the “process → app group → category”
+/// and “domain → website rule → category” paths, exposing the final category as `c`.
+///
+/// It contains no `SELECT` or `WHERE` clause; callers must first use
+/// [`host_rule_with_sql`] to define the `host_rule` CTE.
+pub fn from_stats_category_sql(source: &str) -> String {
+    format!(
+        "FROM {source} a
+         -- Resolve each process to its app group and assigned category.
+         LEFT JOIN app_group_members gm
+           ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
+         LEFT JOIN app_groups g
+           ON g.id = gm.group_id AND g.deleted_at IS NULL
+         -- Keep the app group's assigned category only if it has not been soft-deleted.
+         LEFT JOIN categories ac
+           ON ac.id = g.category_id AND ac.deleted_at IS NULL
+         -- Join the precomputed matching website rule and its live category.
+         LEFT JOIN host_rule hr ON hr.host = a.url_host
+         LEFT JOIN categories rc
+           ON rc.id = hr.category_id AND rc.deleted_at IS NULL
+         -- Resolve the effective category: hidden apps stay hidden; otherwise prefer a live
+         -- website-rule category and fall back to the app group's category.
+         LEFT JOIN categories c
+           ON c.id = CASE WHEN g.category_id = 'hidden' THEN 'hidden'
+                          ELSE COALESCE(rc.id, g.category_id) END
+          AND c.deleted_at IS NULL"
     )
 }
