@@ -26,3 +26,15 @@ use windows_impl as imp;
 pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
     imp::extract_png(exe_path)
 }
+
+/// Scales `img` down to fit `max_px` × `max_px`, keeping its proportions. A smaller image is
+/// returned as it is: enlarging adds no detail.
+///
+/// Triangle: on icons this small, sharper filters such as Lanczos3 look no different and
+/// cost more.
+pub(crate) fn shrink_to_fit(img: image::DynamicImage, max_px: u32) -> image::DynamicImage {
+    if img.width() <= max_px && img.height() <= max_px {
+        return img;
+    }
+    img.resize(max_px, max_px, image::imageops::FilterType::Triangle)
+}

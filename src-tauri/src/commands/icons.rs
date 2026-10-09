@@ -118,11 +118,7 @@ fn shrink_icon_png(bytes: &[u8]) -> Vec<u8> {
     if img.width() <= EXPORT_ICON_PX && img.height() <= EXPORT_ICON_PX {
         return bytes.to_vec();
     }
-    let small = img.resize(
-        EXPORT_ICON_PX,
-        EXPORT_ICON_PX,
-        image::imageops::FilterType::Lanczos3,
-    );
+    let small = crate::icons::shrink_to_fit(img, EXPORT_ICON_PX);
     let mut out = Vec::new();
     match small.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png) {
         Ok(()) => out,
