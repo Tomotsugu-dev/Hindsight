@@ -53,6 +53,40 @@
   color: var(--text-faint);
 }
 
+/* Open/close button of a group; rows without one keep an empty slot of the same width. */
+.toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+}
+
+button.toggle {
+  cursor: pointer;
+}
+
+button.toggle:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+button.toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Subdomains sit one step in from their parent domain. */
+.childSite {
+  padding-left: 26px;
+}
+
 .siteText {
   display: flex;
   flex-direction: column;
