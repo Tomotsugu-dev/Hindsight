@@ -833,6 +833,7 @@
       "searchPlaceholder": "搜索网站",
       "header": {
         "site": "网站",
+        "domainCount_other": "共 {{count}} 个域名",
         "last30d": "近 30 天",
         "total": "全部",
         "category": "分类"
@@ -847,7 +848,29 @@
       "empty": "还没有记录到网站时间。只有开启「记录浏览器网站域名」时才会记录域名。",
       "openPrivacy": "打开隐私设置",
       "noResults": "没找到匹配的网站",
-      "clearSearch": "清除搜索"
+      "clearSearch": "清除搜索",
+      "allAssigned": "所有网站都已分类",
+      "sort": {
+        "default": "默认",
+        "recentDesc": "近 30 天 ↓",
+        "recentAsc": "近 30 天 ↑",
+        "totalDesc": "累计时长 ↓",
+        "totalAsc": "累计时长 ↑",
+        "nameAsc": "域名 A-Z",
+        "nameDesc": "域名 Z-A"
+      },
+      "icons": {
+        "label": "自动下载网站图标",
+        "confirmTitle": "开启网站图标下载？",
+        "confirmAction": "开启下载",
+        "saveFailed": "开关未能保存，请重试。",
+        "loadFailed": "图标暂时无法加载，网站分类仍可使用。",
+        "retry": "重试",
+        "previewLabel": "YouTube 图标示例",
+        "beforeDownload": "下载前",
+        "afterDownload": "下载后",
+        "trafficNote": "注意：下载一个网站图标约消耗 10～20 KB 流量。"
+      }
     }
   },
   "aiSettings": {

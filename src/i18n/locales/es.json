@@ -833,6 +833,8 @@
       "searchPlaceholder": "Buscar sitios",
       "header": {
         "site": "Sitio",
+        "domainCount_one": "{{count}} dominio en total",
+        "domainCount_other": "{{count}} dominios en total",
         "last30d": "Últimos 30 días",
         "total": "Todo el tiempo",
         "category": "Categoría"
@@ -849,7 +851,29 @@
       "empty": "Todavía no hay tiempo registrado en sitios. Los dominios solo se registran mientras “Registrar los dominios de los sitios” esté activado.",
       "openPrivacy": "Abrir los ajustes de privacidad",
       "noResults": "Ningún sitio coincide con tu búsqueda",
-      "clearSearch": "Borrar la búsqueda"
+      "clearSearch": "Borrar la búsqueda",
+      "allAssigned": "Todos los sitios tienen categoría",
+      "sort": {
+        "default": "Predeterminado",
+        "recentDesc": "Últimos 30 días ↓",
+        "recentAsc": "Últimos 30 días ↑",
+        "totalDesc": "Total ↓",
+        "totalAsc": "Total ↑",
+        "nameAsc": "Dominio A-Z",
+        "nameDesc": "Dominio Z-A"
+      },
+      "icons": {
+        "label": "Descargar iconos de sitios automáticamente",
+        "confirmTitle": "¿Activar la descarga de iconos de sitios?",
+        "confirmAction": "Activar descargas",
+        "saveFailed": "No se pudo guardar la configuración. Inténtalo de nuevo.",
+        "loadFailed": "No se pudieron cargar los iconos. La clasificación de sitios sigue disponible.",
+        "retry": "Reintentar",
+        "previewLabel": "Ejemplo del icono de YouTube",
+        "beforeDownload": "Antes",
+        "afterDownload": "Después",
+        "trafficNote": "Nota: descargar un icono de sitio consume unos 10–20 KB de datos."
+      }
     }
   },
   "aiSettings": {

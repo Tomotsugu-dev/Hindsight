@@ -833,6 +833,7 @@
       "searchPlaceholder": "サイトを検索",
       "header": {
         "site": "サイト",
+        "domainCount_other": "全 {{count}} ドメイン",
         "last30d": "過去 30 日",
         "total": "全期間",
         "category": "分類"
@@ -847,7 +848,29 @@
       "empty": "まだサイトの時間が記録されていません。「ウェブサイトのドメインを記録」がオンのときだけドメインが記録されます。",
       "openPrivacy": "プライバシー設定を開く",
       "noResults": "検索に一致するサイトはありません",
-      "clearSearch": "検索をクリア"
+      "clearSearch": "検索をクリア",
+      "allAssigned": "すべてのサイトが分類済みです",
+      "sort": {
+        "default": "デフォルト",
+        "recentDesc": "過去 30 日 ↓",
+        "recentAsc": "過去 30 日 ↑",
+        "totalDesc": "累計時間 ↓",
+        "totalAsc": "累計時間 ↑",
+        "nameAsc": "ドメイン A-Z",
+        "nameDesc": "ドメイン Z-A"
+      },
+      "icons": {
+        "label": "サイトアイコンを自動ダウンロード",
+        "confirmTitle": "サイトアイコンのダウンロードを有効にしますか？",
+        "confirmAction": "ダウンロードを有効にする",
+        "saveFailed": "設定を保存できませんでした。もう一度お試しください。",
+        "loadFailed": "アイコンを読み込めませんでした。サイトの分類は引き続き利用できます。",
+        "retry": "再試行",
+        "previewLabel": "YouTube のアイコン例",
+        "beforeDownload": "ダウンロード前",
+        "afterDownload": "ダウンロード後",
+        "trafficNote": "注意：サイトアイコン1つのダウンロードで約10～20KBの通信量を消費します。"
+      }
     }
   },
   "aiSettings": {

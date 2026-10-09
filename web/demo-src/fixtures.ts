@@ -807,6 +807,7 @@ export const mockSettings: Settings = {
   googleClientSecret: "",
   privacyUrlKeywords: ["login", "signin", "password", "auth"],
   privacyAppKeywords: ["KeePass", "1Password"],
+  downloadSiteIcons: false,
   minimizeToTray: true,
   autoUpdateEnabled: true,
   autoUpdateInterval: "daily",
