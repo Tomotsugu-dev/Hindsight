@@ -823,7 +823,31 @@
     },
     "tabs": {
       "list": "管理分类",
-      "apps": "归类应用"
+      "apps": "归类应用",
+      "sites": "归类网站"
+    },
+    "sites": {
+      "intro": "给浏览器中的每个域名单独指定分类。",
+      "infoTipAria": "网站归类说明",
+      "infoTipBody": "未设置的域名默认沿用浏览器所属的分类，未设置的子域名默认沿用母域名的分类。",
+      "searchPlaceholder": "搜索网站",
+      "header": {
+        "site": "网站",
+        "last30d": "近 30 天",
+        "total": "全部",
+        "category": "分类"
+      },
+      "follows": "沿用 {{host}}",
+      "expand": "展开子域名",
+      "collapse": "收起子域名",
+      "subdomains_other": "{{count}} 个子域名",
+      "otherCategory_other": "{{count}} 个另有分类",
+      "removeRule": "取消规则",
+      "loading": "加载中…",
+      "empty": "还没有记录到网站时间。只有开启「记录浏览器网站域名」时才会记录域名。",
+      "openPrivacy": "打开隐私设置",
+      "noResults": "没找到匹配的网站",
+      "clearSearch": "清除搜索"
     }
   },
   "aiSettings": {

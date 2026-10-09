@@ -23,6 +23,9 @@ export interface AppUsage {
   minutes: number;
   /** AppIcon 用来查图标的代表 process_name；合并组里取一个稳定成员名 */
   iconProcess: string;
+  /** This app's time in each category it counts toward, most first. Website rules can split a
+   * browser's time across categories, so filter apps by category with this, not `categoryId`. */
+  byCategory: CategoryTime[];
 }
 
 /** 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时（日/周/月共用）。 */
@@ -137,6 +140,19 @@ export interface AppGroup {
   displayName: string;
   categoryId: string | null;
   members: AppGroupMember[];
+}
+
+/** One row of the website classification tab (ADR-0013). */
+export interface SiteRow {
+  host: string;
+  /** Minutes in the last 30 days, today included */
+  minutes30d: number;
+  minutesTotal: number;
+  /** The category from the website's own rule or a parent domain's rule; null when no
+   *  rule applies and the time counts toward the browser's category */
+  categoryId: string | null;
+  /** The parent domain the category is inherited from; null for an own rule or no rule */
+  follows: string | null;
 }
 
 export interface CaptureStatus {
@@ -860,6 +876,12 @@ export const api = {
     invoke<void>("rename_app_group", { groupId, displayName }),
   assignAppGroupCategory: (groupId: string, categoryId: string | null) =>
     invoke<void>("assign_app_group_category", { groupId, categoryId }),
+  listSites: () => invoke<SiteRow[]>("list_sites"),
+  /** Assigns a website and its subdomains to a category, on all browsers and devices. */
+  setSiteRule: (host: string, categoryId: string) =>
+    invoke<void>("set_site_rule", { host, categoryId }),
+  /** Removes the website's own rule; a parent domain's rule or the browser's category applies again. */
+  removeSiteRule: (host: string) => invoke<void>("remove_site_rule", { host }),
   startCapture: () => invoke<void>("start_capture"),
   stopCapture: () => invoke<void>("stop_capture"),
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),

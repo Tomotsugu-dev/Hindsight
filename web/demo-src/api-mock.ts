@@ -32,6 +32,7 @@ import type {
   SegmentSummaryRow,
   Settings,
   SettingsPatch,
+  SiteRow,
   StorageInfo,
   SuperCategory,
   SuperCategoryInput,
@@ -161,6 +162,22 @@ function loadState(): MutableState {
 
 const state = loadState();
 
+/** Demo website time as [last 30 days, all time] in minutes. Rules stay in memory only. */
+const demoSiteMinutes: Record<string, [number, number]> = {
+  "github.com": [1260, 5400],
+  "bilibili.com": [520, 3100],
+  "youtube.com": [410, 2600],
+  "stackoverflow.com": [340, 1900],
+  "docs.rs": [210, 880],
+  "live.bilibili.com": [140, 600],
+  "mail.google.com": [95, 720],
+};
+const demoSiteRules = new Map<string, string>([
+  ["github.com", "code"],
+  ["stackoverflow.com", "code"],
+  ["bilibili.com", "fun"],
+]);
+
 function persist() {
   const selfDevice = state.devices.find((d) => d.isSelf);
   persistence.save({
@@ -235,10 +252,10 @@ export const api = {
     const hourTotal = barMinutes(slot.segments);
     const dayTotal = day.apps.reduce((s, a) => s + a.minutes, 0);
     const scale = dayTotal > 0 ? hourTotal / dayTotal : 0;
-    const scaled = hourApps.map((a) => ({
-      ...a,
-      minutes: Math.max(1, Math.round(a.minutes * scale * 2)),
-    }));
+    const scaled = hourApps.map((a) => {
+      const minutes = Math.max(1, Math.round(a.minutes * scale * 2));
+      return { ...a, minutes, byCategory: [{ categoryId: a.categoryId, secs: minutes * 60 }] };
+    });
     scaled.sort((a, b) => b.minutes - a.minutes);
     return limit ? scaled.slice(0, limit) : scaled;
   },
@@ -295,8 +312,10 @@ export const api = {
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -368,8 +387,10 @@ export const api = {
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -403,8 +424,10 @@ export const api = {
     for (const offset of rangeOffsets(from, to)) {
       for (const a of mockDayFor(offset, deviceId).apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     return Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -553,6 +576,40 @@ export const api = {
       g.categoryId = categoryId;
       persist();
     }
+  },
+
+  // ─── Website rules ────────────────────────
+  listSites: async (): Promise<SiteRow[]> => {
+    const hosts = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
+    const rows = [...hosts].map((host): SiteRow => {
+      const [minutes30d, minutesTotal] = demoSiteMinutes[host] ?? [0, 0];
+      // Longest matching domain: the host itself first, then each parent domain.
+      const labels = host.split(".");
+      let ruleHost: string | null = null;
+      for (let i = 0; i < labels.length - 1 && ruleHost === null; i++) {
+        const candidate = labels.slice(i).join(".");
+        if (demoSiteRules.has(candidate)) ruleHost = candidate;
+      }
+      return {
+        host,
+        minutes30d,
+        minutesTotal,
+        categoryId: ruleHost ? (demoSiteRules.get(ruleHost) ?? null) : null,
+        follows: ruleHost && ruleHost !== host ? ruleHost : null,
+      };
+    });
+    return rows.sort(
+      (a, b) =>
+        b.minutes30d - a.minutes30d ||
+        b.minutesTotal - a.minutesTotal ||
+        a.host.localeCompare(b.host),
+    );
+  },
+  setSiteRule: async (host: string, categoryId: string): Promise<void> => {
+    demoSiteRules.set(host, categoryId);
+  },
+  removeSiteRule: async (host: string): Promise<void> => {
+    demoSiteRules.delete(host);
   },
 
   // ─── Capture ───────────────────────────────

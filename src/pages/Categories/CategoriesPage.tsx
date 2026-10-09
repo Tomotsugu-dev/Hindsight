@@ -8,6 +8,7 @@ import styles from "./Categories.module.css";
 const TABS: TabDef[] = [
   { to: "", labelKey: "categories.tabs.list", end: true },
   { to: "apps", labelKey: "categories.tabs.apps" },
+  { to: "sites", labelKey: "categories.tabs.sites" },
 ];
 
 /**

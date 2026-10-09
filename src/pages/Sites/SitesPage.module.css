@@ -1,0 +1,142 @@
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Website / last 30 days / all time / category. The header shares the row template. */
+.headerRow,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 112px 176px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.headerRow {
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.row {
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-radius: var(--radius-md);
+  transition: background-color 140ms ease-out;
+}
+
+.rowEven {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.siteCol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.siteIcon {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+/* Open/close button of a group; rows without one keep an empty slot of the same width. */
+.toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+}
+
+button.toggle {
+  cursor: pointer;
+}
+
+button.toggle:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+button.toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Subdomains sit one step in from their parent domain. */
+.childSite {
+  padding-left: 26px;
+}
+
+.siteText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.host,
+.follows {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host {
+  font-size: 13px;
+  font-weight: var(--font-weight-500);
+  color: var(--text-strong);
+}
+
+.follows {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.alignEnd {
+  text-align: right;
+}
+
+.num {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+  font-feature-settings: "tnum";
+}
+
+.categoryCol {
+  display: flex;
+  min-width: 0;
+}
+
+.status {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.statusLink {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-600);
+}

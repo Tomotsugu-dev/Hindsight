@@ -598,12 +598,14 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
   const apps: AppUsage[] = Array.from(appMap.entries())
     .map(([process, minutes]) => {
       const def = APPS.find((x) => x.process === process);
+      const categoryId = def?.category ?? "other";
       return {
         displayName: process,
         groupId: process,
-        categoryId: def?.category ?? "other",
+        categoryId,
         minutes,
         iconProcess: process,
+        byCategory: [{ categoryId, secs: minutes * 60 }],
       };
     })
     .sort((a, b) => b.minutes - a.minutes);

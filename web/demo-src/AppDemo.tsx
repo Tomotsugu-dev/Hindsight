@@ -43,6 +43,7 @@ const DevicesPage = lazy(() => import("@app/pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("@app/pages/Categories/CategoriesPage"));
 const ListTab = lazy(() => import("@app/pages/Categories/tabs/ListTab"));
 const AppsPage = lazy(() => import("@app/pages/Apps/AppsPage"));
+const SitesPage = lazy(() => import("@app/pages/Sites/SitesPage"));
 const SettingsPage = lazy(() => import("@app/pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
 const AppearanceTab = lazy(() => import("@app/pages/Settings/tabs/AppearanceTab"));
@@ -77,6 +78,7 @@ function DemoLayout() {
           <Route path={ROUTES.categories} element={<CategoriesPage />}>
             <Route index element={<ListTab />} />
             <Route path="apps" element={<AppsPage />} />
+            <Route path="sites" element={<SitesPage />} />
           </Route>
           {/* 与主程序一致:旧的独立「应用」页并入分类页 tab 后仍可访问 */}
           <Route

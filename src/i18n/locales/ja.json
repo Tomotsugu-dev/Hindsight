@@ -823,7 +823,31 @@
     },
     "tabs": {
       "list": "カテゴリ管理",
-      "apps": "アプリの割り当て"
+      "apps": "アプリの割り当て",
+      "sites": "サイトの割り当て"
+    },
+    "sites": {
+      "intro": "ブラウザ内の各ドメインに個別の分類を割り当てます。",
+      "infoTipAria": "サイト分類について",
+      "infoTipBody": "分類を設定していないドメインはブラウザの分類に従い、分類を設定していないサブドメインは親ドメインの分類に従います。",
+      "searchPlaceholder": "サイトを検索",
+      "header": {
+        "site": "サイト",
+        "last30d": "過去 30 日",
+        "total": "全期間",
+        "category": "分類"
+      },
+      "follows": "{{host}} に従う",
+      "expand": "サブドメインを表示",
+      "collapse": "サブドメインを隠す",
+      "subdomains_other": "サブドメイン {{count}} 件",
+      "otherCategory_other": "{{count}} 件は別の分類",
+      "removeRule": "ルールを解除",
+      "loading": "読み込み中…",
+      "empty": "まだサイトの時間が記録されていません。「ウェブサイトのドメインを記録」がオンのときだけドメインが記録されます。",
+      "openPrivacy": "プライバシー設定を開く",
+      "noResults": "検索に一致するサイトはありません",
+      "clearSearch": "検索をクリア"
     }
   },
   "aiSettings": {

@@ -823,7 +823,33 @@
     },
     "tabs": {
       "list": "Gerenciar categorias",
-      "apps": "Atribuir apps"
+      "apps": "Atribuir apps",
+      "sites": "Atribuir sites"
+    },
+    "sites": {
+      "intro": "Dê a cada domínio do navegador uma categoria própria.",
+      "infoTipAria": "Como funcionam as categorias de sites",
+      "infoTipBody": "Um domínio sem categoria segue a categoria do navegador. Um subdomínio sem categoria segue a categoria do domínio pai.",
+      "searchPlaceholder": "Pesquisar sites",
+      "header": {
+        "site": "Site",
+        "last30d": "Últimos 30 dias",
+        "total": "Todo o período",
+        "category": "Categoria"
+      },
+      "follows": "Segue {{host}}",
+      "expand": "Mostrar subdomínios",
+      "collapse": "Ocultar subdomínios",
+      "subdomains_one": "{{count}} subdomínio",
+      "subdomains_other": "{{count}} subdomínios",
+      "otherCategory_one": "{{count}} em outra categoria",
+      "otherCategory_other": "{{count}} em outras categorias",
+      "removeRule": "Remover regra",
+      "loading": "Carregando…",
+      "empty": "Nenhum tempo em sites registrado ainda. Os domínios só são registrados enquanto “Registrar domínios de sites” estiver ativado.",
+      "openPrivacy": "Abrir configurações de privacidade",
+      "noResults": "Nenhum site corresponde à sua pesquisa",
+      "clearSearch": "Limpar pesquisa"
     }
   },
   "aiSettings": {

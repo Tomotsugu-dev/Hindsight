@@ -78,6 +78,7 @@ const CODE_APP: AppUsage = {
   categoryId: "code",
   minutes: 60,
   iconProcess: "code.exe",
+  byCategory: [{ categoryId: "code", secs: 3600 }],
 };
 const CHROME_APP: AppUsage = {
   displayName: "Chrome",
@@ -85,6 +86,7 @@ const CHROME_APP: AppUsage = {
   categoryId: "browse",
   minutes: 30,
   iconProcess: "chrome.exe",
+  byCategory: [{ categoryId: "browse", secs: 1800 }],
 };
 
 describe("collectUsageData", () => {
