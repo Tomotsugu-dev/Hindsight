@@ -31,6 +31,8 @@ const DailyTab = lazy(() => import("@app/pages/AISummary/tabs/DailyTab"));
 const WeeklyTab = lazy(() => import("@app/pages/AISummary/tabs/WeeklyTab"));
 const MonthlyTab = lazy(() => import("@app/pages/AISummary/tabs/MonthlyTab"));
 const ChatPage = lazy(() => import("@app/pages/Chat/ChatPage"));
+const HistoryPage = lazy(() => import("@app/pages/History/HistoryPage"));
+const HistoryStatsTab = lazy(() => import("@app/pages/History/StatsTab"));
 const SearchPage = lazy(() => import("@app/pages/Search/SearchPage"));
 const DebugTab = lazy(() => import("@app/pages/AISummary/tabs/DebugTab"));
 const AISettingsPage = lazy(() => import("@app/pages/AISettings/AISettingsPage"));
@@ -59,12 +61,16 @@ function DemoLayout() {
           <Route path={ROUTES.today} element={<TodayPage />} />
           <Route path={ROUTES.week} element={<WeekPage />} />
           <Route path={ROUTES.month} element={<MonthPage />} />
+          <Route path={ROUTES.history} element={<HistoryPage />}>
+            <Route index element={<HistoryStatsTab />} />
+            <Route path="search" element={<SearchPage />} />
+          </Route>
           <Route path={ROUTES.chat} element={<ChatPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
             <Route path="week" element={<WeeklyTab />} />
             <Route path="month" element={<MonthlyTab />} />
-            <Route path="search" element={<SearchPage />} />
+            <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
