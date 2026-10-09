@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ai::config::AiConfig;
+use crate::ai::download_sources::DownloadSources;
 use crate::capture::ignore::IgnoreRule;
 use crate::error::Result;
 use crate::storage::SqliteResultExt;
@@ -61,6 +62,8 @@ pub struct Settings {
     /// Downloads website icons for the Websites tab from the websites themselves (ADR-0014).
     /// Off by default: turning it on is what lets Hindsight contact the websites.
     pub download_site_icons: bool,
+    /// Download addresses for AI models, the engine and OCR components.
+    pub download_sources: DownloadSources,
     /// 关闭按钮（窗口右上角 X）的行为：true=隐藏到托盘，false=直接退出。
     /// 默认 true 是为了避免用户误点导致采集中断。
     pub minimize_to_tray: bool,
@@ -141,6 +144,7 @@ impl Default for Settings {
             privacy_app_keywords: Vec::new(),
             record_browser_host: true,
             download_site_icons: false,
+            download_sources: DownloadSources::default(),
             minimize_to_tray: true,
             auto_update_enabled: true,
             auto_update_interval: "weekly".to_string(),
@@ -200,6 +204,7 @@ pub struct SettingsPatch {
     pub privacy_app_keywords: Option<Vec<String>>,
     pub record_browser_host: Option<bool>,
     pub download_site_icons: Option<bool>,
+    pub download_sources: Option<DownloadSources>,
     pub minimize_to_tray: Option<bool>,
     pub auto_update_enabled: Option<bool>,
     pub auto_update_interval: Option<String>,
@@ -456,6 +461,7 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         download_site_icons: patch
             .download_site_icons
             .unwrap_or(current.download_site_icons),
+        download_sources: patch.download_sources.unwrap_or(current.download_sources),
         minimize_to_tray: patch.minimize_to_tray.unwrap_or(current.minimize_to_tray),
         auto_update_enabled: patch
             .auto_update_enabled
@@ -634,6 +640,12 @@ mod tests {
             privacy_app_keywords: vec!["微信".into()],
             record_browser_host: false,
             download_site_icons: true,
+            download_sources: DownloadSources {
+                mode: crate::ai::download_sources::DownloadSourceMode::Custom,
+                huggingface_url: "https://models.example/hf".into(),
+                github_proxy_url: "https://downloads.example/github".into(),
+                nuget_url: "https://packages.example/nuget".into(),
+            },
             minimize_to_tray: false,
             auto_update_enabled: false,
             auto_update_interval: "daily".into(),

@@ -1,6 +1,7 @@
 //! AI 总结相关后端代码。
 //!
 //! - [`config`] AI 用户配置（嵌进 Settings.ai）
+//! - [`download_sources`] 模型、引擎、OCR 组件的下载地址
 //! - [`platform`] 当前主机 → llama.cpp release asset 路由
 //! - [`binary`] 引擎二进制下载 / 校验 / 安装
 //! - [`server`] llama-server 子进程管理（启动 / 停止 / health / idle 收回）
@@ -15,6 +16,7 @@
 pub mod auto_summary;
 pub mod binary;
 pub mod config;
+pub mod download_sources;
 pub mod embedding_runtime;
 pub mod gguf;
 pub mod job_guard;

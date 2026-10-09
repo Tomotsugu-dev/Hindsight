@@ -24,6 +24,7 @@ import type {
   SuperCategory,
   UnclassifiedApp,
 } from "@app/api/hindsight";
+import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
 
 // ────────────────────────────────────────────
 // 分类（8 个内置 + 跟主应用一致的 id）
@@ -808,6 +809,7 @@ export const mockSettings: Settings = {
   privacyUrlKeywords: ["login", "signin", "password", "auth"],
   privacyAppKeywords: ["KeePass", "1Password"],
   downloadSiteIcons: false,
+  downloadSources: { ...DEFAULT_DOWNLOAD_SOURCES },
   minimizeToTray: true,
   autoUpdateEnabled: true,
   autoUpdateInterval: "daily",
@@ -959,6 +961,7 @@ export const mockRecommendedModels: RecommendedModel[] = [
     vision: true,
     brand: "Qwen",
     caps: ["VISION", "TEXT", "DEFAULT"],
+    released: "2025-01-26",
   },
 ];
 

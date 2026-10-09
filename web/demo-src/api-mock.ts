@@ -46,6 +46,7 @@ import type {
   AiOverrides,
 } from "@app/api/hindsight";
 import { barMinutes } from "@app/lib/segments";
+import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
 import youtubeIcon from "@app/assets/site-icons/youtube.svg";
 
 // 重新导出原 api 模块里的 helper 函数（DTO → 内部类型转换）
@@ -624,6 +625,7 @@ export const api = {
     // 让 /en/、/ja/ 看到对应语言的默认值。
     const s = structuredClone(state.settings);
     s.downloadSiteIcons ??= false;
+    s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
     const lng = (i18n.language || "zh-CN").toLowerCase();
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);

@@ -981,9 +981,6 @@
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 檔案下載自 HuggingFace。",
       "toolbar": {
-        "capAll": "所有",
-        "capVision": "Vision",
-        "capText": "純文本",
         "statusAll": "所有",
         "statusInstalled": "已下載",
         "statusNotInstalled": "未下載",
@@ -991,7 +988,8 @@
         "sortDefault": "預設順序",
         "sortSizeAsc": "體積 ↑",
         "sortSizeDesc": "體積 ↓",
-        "sortName": "名稱 A-Z"
+        "sortName": "名稱 A-Z",
+        "sortReleased": "發布時間"
       },
       "cloud": {
         "cardTitle": "雲端 · {{provider}}",
@@ -1012,14 +1010,14 @@
         "resume": "繼續",
         "resumeTooltip": "從已下的 {{size}} MB 繼續。",
         "capsTooltips": {
-          "TEXT": "文本能力——能生成 / 續寫 / 總結文字。",
-          "VISION": "多模態——能識別影像內容。",
-          "CODE": "程式碼任務調優——生成 / 解釋程式碼更準。",
-          "FAST": "輕量級 < 1GB，速度優先，首選試用。",
-          "BALANCED": "中等體積，質量與速度均衡，日常通用。",
-          "REASONING": "深度推理——擅長多步思考、數學、規劃。",
-          "R1": "DeepSeek R1 系——RL 訓練的推理模型。",
-          "DEFAULT": "Hindsight 推薦首選，平衡性最好。"
+          "TEXT": "文本生成",
+          "VISION": "視覺能力",
+          "CODE": "程式碼",
+          "FAST": "速度優先",
+          "BALANCED": "均衡",
+          "REASONING": "有思考能力",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "推薦首選"
         },
         "step2": "Text",
         "step2ToggleOnTooltip": "把這個模型設為段總結（Text）使用。會替換之前的選擇。",
@@ -1154,6 +1152,29 @@
       "ocrDailyDescription": "每天到點自動辨識堆積的截圖",
       "addTimeAria": "新增一個時間點",
       "removeTimeAria": "移除最近新增的時間點"
+    },
+    "downloadSources": {
+      "title": "下載來源",
+      "description": "用於模型、AI 引擎和 OCR 元件。無法連線至官方來源時可切換鏡像；變更只影響之後開始的下載。",
+      "sourceLabel": "下載方式",
+      "modes": {
+        "official": "官方來源",
+        "mirror": "鏡像來源",
+        "custom": "自訂鏡像"
+      },
+      "officialDescription": "直接從 Hugging Face 和 GitHub 下載。",
+      "mirrorDescription": "預設使用第三方提供的 HF-Mirror、GH-Proxy 和華為雲 NuGet 鏡像。",
+      "huggingfaceLabel": "Hugging Face 鏡像網址",
+      "huggingfaceHelp": "填寫鏡像站的基礎網址，例如 https://hf-mirror.com。",
+      "githubLabel": "GitHub 下載代理網址",
+      "githubHelp": "代理需支援在網址後附加完整的 GitHub 下載連結。",
+      "save": "儲存網址",
+      "saving": "正在儲存下載來源…",
+      "saveFailed": "無法儲存下載來源，請重試。",
+      "invalidUrl": "請輸入有效的 HTTP 或 HTTPS 網址，不要包含登入資訊、查詢參數或片段。",
+      "change": "變更下載來源",
+      "nugetLabel": "NuGet 套件下載網址",
+      "nugetHelp": "填寫 NuGet 的套件下載基礎網址（PackageBaseAddress），用於 Windows OCR 元件。"
     }
   },
   "devices": {

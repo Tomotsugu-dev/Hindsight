@@ -981,9 +981,6 @@
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 文件下载自 HuggingFace。",
       "toolbar": {
-        "capAll": "所有",
-        "capVision": "Vision",
-        "capText": "纯文本",
         "statusAll": "所有",
         "statusInstalled": "已下载",
         "statusNotInstalled": "未下载",
@@ -991,7 +988,8 @@
         "sortDefault": "默认顺序",
         "sortSizeAsc": "体积 ↑",
         "sortSizeDesc": "体积 ↓",
-        "sortName": "名称 A-Z"
+        "sortName": "名称 A-Z",
+        "sortReleased": "发布时间"
       },
       "cloud": {
         "cardTitle": "云端 · {{provider}}",
@@ -1012,14 +1010,14 @@
         "resume": "继续",
         "resumeTooltip": "从已下的 {{size}} MB 继续。",
         "capsTooltips": {
-          "TEXT": "文本能力——能生成 / 续写 / 总结文字。",
-          "VISION": "多模态——能识别图像内容。",
-          "CODE": "代码任务调优——生成 / 解释代码更准。",
-          "FAST": "轻量级 < 1GB，速度优先，首选试用。",
-          "BALANCED": "中等体积，质量与速度均衡，日常通用。",
-          "REASONING": "深度推理——擅长多步思考、数学、规划。",
-          "R1": "DeepSeek R1 系——RL 训练的推理模型。",
-          "DEFAULT": "Hindsight 推荐首选，平衡性最好。"
+          "TEXT": "文本生成",
+          "VISION": "视觉能力",
+          "CODE": "代码",
+          "FAST": "速度优先",
+          "BALANCED": "均衡",
+          "REASONING": "有思考能力",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "推荐首选"
         },
         "step2": "Text",
         "step2ToggleOnTooltip": "把这个模型设为段总结（Text）使用。会替换之前的选择。",
@@ -1154,6 +1152,29 @@
       "ocrDailyDescription": "每天到点自动识别堆积的截图",
       "addTimeAria": "添加一个时间点",
       "removeTimeAria": "移除最近添加的时间点"
+    },
+    "downloadSources": {
+      "title": "下载源",
+      "description": "用于模型、AI 引擎和 OCR 组件。访问官方源困难时可切换镜像；更改只影响之后开始的下载。",
+      "sourceLabel": "下载方式",
+      "modes": {
+        "official": "官方源",
+        "mirror": "镜像源",
+        "custom": "自定义镜像"
+      },
+      "officialDescription": "直接从 Hugging Face 和 GitHub 下载。",
+      "mirrorDescription": "预设使用第三方提供的 HF-Mirror、GH-Proxy 和华为云 NuGet 镜像。",
+      "huggingfaceLabel": "Hugging Face 镜像地址",
+      "huggingfaceHelp": "填写镜像站的基础地址，例如 https://hf-mirror.com。",
+      "githubLabel": "GitHub 下载代理地址",
+      "githubHelp": "代理需支持在地址后追加完整的 GitHub 下载链接。",
+      "save": "保存地址",
+      "saving": "正在保存下载源…",
+      "saveFailed": "下载源保存失败，请重试。",
+      "invalidUrl": "请输入有效的 HTTP 或 HTTPS 地址，不要包含登录信息、查询参数或片段。",
+      "change": "更改下载源",
+      "nugetLabel": "NuGet 包下载地址",
+      "nugetHelp": "填写 NuGet 的包下载基础地址（PackageBaseAddress），用于 Windows OCR 组件。"
     }
   },
   "devices": {
