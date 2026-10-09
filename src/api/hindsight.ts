@@ -291,6 +291,8 @@ export interface RecommendedModel {
    *  定位类 `FAST` / `BALANCED` / `REASONING` / `R1`；
    *  标记类 `DEFAULT`（首推）。识别不出的 type 走 fallback 灰色。 */
   caps: string[];
+  /** 模型发布时间，`YYYY-MM-DD`。空串表示未知。 */
+  released: string;
 }
 
 /** 下载 GGUF 时的进度事件 payload。`file` 字段标识哪个文件（main / mmproj）。 */

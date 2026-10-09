@@ -6,7 +6,6 @@ import {
   ArrowUpDown,
   ChevronDown,
   Cloud,
-  Cpu,
   Download,
   FolderInput,
   HardDrive,
@@ -138,10 +137,9 @@ function ToolSupportBadge({ supports }: { supports: boolean | null }) {
   return null;
 }
 
-/** toolbar 筛选 / 排序的取值；前 3 个跟筛选维度一一对应。 */
-type FilterCap = "all" | "vision" | "text";
+/** toolbar 筛选 / 排序的取值。 */
 type FilterStatus = "all" | "installed" | "not-installed";
-type SortKey = "default" | "size-asc" | "size-desc" | "name";
+type SortKey = "default" | "size-asc" | "size-desc" | "name" | "released";
 
 /** mmproj 落盘文件名 = `<mainFile_stem>__<hfMmprojName>`。
  *  HF 上不同 rec 的 mmproj 常常同名（unsloth 系列都是 mmproj-F16.gguf），落盘必须给唯一名
@@ -245,8 +243,7 @@ export function ModelsSection() {
   const [customMainFile, setCustomMainFile] = useState("");
   const [customMmprojFile, setCustomMmprojFile] = useState("");
 
-  // toolbar 状态：默认 4 项都是"全部 / 默认"，相当于不过滤、不重排
-  const [filterCap, setFilterCap] = useState<FilterCap>("all");
+  // toolbar 状态：默认都是"全部 / 默认"，相当于不过滤、不重排
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterBrand, setFilterBrand] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("default");
@@ -353,11 +350,6 @@ export function ModelsSection() {
   /** 应用 filter+sort 之后的展示用列表。"default" 排序保留 JSON 作者意图（"轻→重"）。 */
   const displayed = useMemo<RecommendedModel[]>(() => {
     let list = recommended;
-    if (filterCap !== "all") {
-      list = list.filter((r) =>
-        filterCap === "vision" ? r.vision : !r.vision,
-      );
-    }
     if (filterStatus !== "all") {
       list = list.filter((r) =>
         filterStatus === "installed" ? isInstalled(r) : !isInstalled(r),
@@ -375,6 +367,9 @@ export function ModelsSection() {
             return b.mainBytes + b.mmprojBytes - (a.mainBytes + a.mmprojBytes);
           case "name":
             return a.displayName.localeCompare(b.displayName);
+          case "released":
+            // 新的在前。没有日期的排到最后。同一天保持原来的先后。
+            return (b.released || "0000").localeCompare(a.released || "0000");
           default:
             return 0;
         }
@@ -384,7 +379,7 @@ export function ModelsSection() {
     // isInstalled 闭包依赖 localFilenames，不入 deps（恒等比较拿不到稳定引用）；
     // 改 local 会触发 recommended 引用变化时一起 re-render，等价
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recommended, filterCap, filterStatus, filterBrand, sortKey, local]);
+  }, [recommended, filterStatus, filterBrand, sortKey, local]);
 
   const onDownloadRecommended = async (rec: RecommendedModel) => {
     if (busyRecs.has(rec.mainFile)) return; // 防重复点
@@ -612,12 +607,7 @@ export function ModelsSection() {
     }
   };
 
-  // 静态选项常量——能力 / 状态 / 排序的取值固定，i18n 文案随当前 t() 解析
-  const capOptions: SimplePickerOption<FilterCap>[] = [
-    { value: "all", label: t("aiSettings.models.toolbar.capAll") },
-    { value: "vision", label: t("aiSettings.models.toolbar.capVision") },
-    { value: "text", label: t("aiSettings.models.toolbar.capText") },
-  ];
+  // 静态选项常量——状态 / 排序的取值固定，i18n 文案随当前 t() 解析
   const statusOptions: SimplePickerOption<FilterStatus>[] = [
     { value: "all", label: t("aiSettings.models.toolbar.statusAll") },
     {
@@ -637,6 +627,7 @@ export function ModelsSection() {
       label: t("aiSettings.models.toolbar.sortSizeDesc"),
     },
     { value: "name", label: t("aiSettings.models.toolbar.sortName") },
+    { value: "released", label: t("aiSettings.models.toolbar.sortReleased") },
   ];
 
   return (
@@ -644,21 +635,6 @@ export function ModelsSection() {
       {error ? <div className={styles.engineError}>{error}</div> : null}
 
       <div className={styles.modelsToolbar}>
-        <div
-          className={styles.modelsToolbarItem}
-          title={t("aiSettings.models.toolbar.capAll")}
-        >
-          <Cpu
-            size={14}
-            strokeWidth={2}
-            className={styles.modelsToolbarIcon}
-          />
-          <SimplePicker<FilterCap>
-            value={filterCap}
-            options={capOptions}
-            onChange={setFilterCap}
-          />
-        </div>
         <div
           className={styles.modelsToolbarItem}
           title={t("aiSettings.models.toolbar.statusAll")}

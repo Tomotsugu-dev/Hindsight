@@ -961,6 +961,7 @@ export const mockRecommendedModels: RecommendedModel[] = [
     vision: true,
     brand: "Qwen",
     caps: ["VISION", "TEXT", "DEFAULT"],
+    released: "2025-01-26",
   },
 ];
 

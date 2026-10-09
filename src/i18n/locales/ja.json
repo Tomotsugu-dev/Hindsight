@@ -981,9 +981,6 @@
       "sectionTitle": "モデル",
       "sectionDesc": "ローカル推論に使う LLM。GGUF ファイルは HuggingFace からダウンロードします。",
       "toolbar": {
-        "capAll": "すべて",
-        "capVision": "Vision",
-        "capText": "テキスト",
         "statusAll": "すべて",
         "statusInstalled": "ダウンロード済み",
         "statusNotInstalled": "未ダウンロード",
@@ -991,7 +988,8 @@
         "sortDefault": "デフォルト順",
         "sortSizeAsc": "サイズ ↑",
         "sortSizeDesc": "サイズ ↓",
-        "sortName": "名前 A-Z"
+        "sortName": "名前 A-Z",
+        "sortReleased": "公開日"
       },
       "cloud": {
         "cardTitle": "クラウド · {{provider}}",
@@ -1012,14 +1010,14 @@
         "resume": "再開",
         "resumeTooltip": "ダウンロード済み {{size}} MB から再開します。",
         "capsTooltips": {
-          "TEXT": "テキスト能力——生成・要約・補完。",
-          "VISION": "マルチモーダル——画像入力を理解。",
-          "CODE": "コード特化——コードの生成・解説が得意。",
-          "FAST": "軽量 < 1GB、速度優先；お試しに最適。",
-          "BALANCED": "中サイズ、品質と速度のバランス；日常用途向け。",
-          "REASONING": "深い推論——多段思考・数学・計画立案が得意。",
-          "R1": "DeepSeek R1 系——RL で訓練された推論モデル。",
-          "DEFAULT": "Hindsight 一推し；総合バランス最良。"
+          "TEXT": "文章を生成",
+          "VISION": "画像を見る",
+          "CODE": "コード",
+          "FAST": "速さ優先",
+          "BALANCED": "バランス",
+          "REASONING": "思考できる",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "おすすめ"
         },
         "step2": "Text",
         "step2ToggleOnTooltip": "このモデルを時間帯要約（Text）に割り当てます。前の選択を置き換えます。",

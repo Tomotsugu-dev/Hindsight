@@ -984,9 +984,6 @@
       "sectionTitle": "Modelos",
       "sectionDesc": "LLM usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
       "toolbar": {
-        "capAll": "Todos",
-        "capVision": "Visão",
-        "capText": "Apenas texto",
         "statusAll": "Todos",
         "statusInstalled": "Baixados",
         "statusNotInstalled": "Não baixados",
@@ -994,7 +991,8 @@
         "sortDefault": "Ordem padrão",
         "sortSizeAsc": "Tamanho ↑",
         "sortSizeDesc": "Tamanho ↓",
-        "sortName": "Nome A-Z"
+        "sortName": "Nome A-Z",
+        "sortReleased": "Data de lançamento"
       },
       "cloud": {
         "cardTitle": "Nuvem · {{provider}}",
@@ -1015,14 +1013,14 @@
         "resume": "Retomar",
         "resumeTooltip": "Retomar a partir de {{size}} MB já baixados.",
         "capsTooltips": {
-          "TEXT": "Geração de texto — escrever / continuar / resumir prosa.",
-          "VISION": "Multimodal — entende entrada de imagem.",
-          "CODE": "Ajustado para código — melhor em escrever e explicar código.",
-          "FAST": "Leve (< 1GB), velocidade em primeiro lugar; ótimo para a primeira tentativa.",
-          "BALANCED": "Tamanho médio, equilibra qualidade e velocidade para o uso diário.",
-          "REASONING": "Raciocínio profundo — pensamento de várias etapas, matemática, planejamento.",
-          "R1": "Família DeepSeek R1 — modelo de raciocínio treinado por RL.",
-          "DEFAULT": "A melhor escolha do Hindsight — o melhor equilíbrio geral."
+          "TEXT": "Gera texto",
+          "VISION": "Lê imagens",
+          "CODE": "Código",
+          "FAST": "Prioriza a velocidade",
+          "BALANCED": "Equilibrado",
+          "REASONING": "Consegue raciocinar",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "Recomendado"
         },
         "step2": "Texto",
         "step2ToggleOnTooltip": "Use este modelo para resumos de segmento (Text). Substitui a seleção anterior.",
