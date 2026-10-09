@@ -180,6 +180,13 @@ const demoSiteRules = new Map<string, string>([
   ["stackoverflow.com", "code"],
   ["bilibili.com", "fun"],
 ]);
+const DEMO_SITE_ICON_URLS: SiteIconPaths = {
+  "github.com": LOCAL_ICON("sites/github"),
+  "bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "live.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "youtube.com": youtubeIcon,
+  "mail.google.com": LOCAL_ICON("sites/gmail"),
+};
 const demoSiteIcons: SiteIconPaths = {};
 
 function persist() {
@@ -624,14 +631,13 @@ export const api = {
   },
   downloadSiteIcons: async (hosts: string[]): Promise<SiteIconDownloadRound> => {
     if (!state.settings.downloadSiteIcons) return { icons: {}, remaining: 0 };
-    const due = [...new Set(hosts)].filter((host) => !demoSiteIcons[host]);
+    const due = [...new Set(hosts)].filter(
+      (host) => !demoSiteIcons[host] && DEMO_SITE_ICON_URLS[host] !== undefined,
+    );
     const icons: SiteIconPaths = {};
-    // Synthetic icons let the demo show downloads without contacting any websites.
+    // Bundled website icons keep this demo offline. Missing icons keep the globe placeholder.
     for (const host of due.slice(0, 12)) {
-      const letter = host.charAt(0).toUpperCase();
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="7" fill="#6366f1"/><text x="16" y="22" text-anchor="middle" font-family="sans-serif" font-size="21" fill="white">${letter}</text></svg>`;
-      icons[host] =
-        host === "youtube.com" ? youtubeIcon : `data:image/svg+xml,${encodeURIComponent(svg)}`;
+      icons[host] = DEMO_SITE_ICON_URLS[host];
       demoSiteIcons[host] = icons[host];
     }
     return { icons, remaining: Math.max(0, due.length - 12) };
