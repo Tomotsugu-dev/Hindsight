@@ -58,6 +58,9 @@ pub struct Settings {
     /// 完整 URL 一律不落盘；命中 privacy_url_keywords 的页面连域名也不记。
     /// 默认开；关闭只影响之后的新记录。
     pub record_browser_host: bool,
+    /// Downloads website icons for the Websites tab from the websites themselves (ADR-0014).
+    /// Off by default: turning it on is what lets Hindsight contact the websites.
+    pub download_site_icons: bool,
     /// 关闭按钮（窗口右上角 X）的行为：true=隐藏到托盘，false=直接退出。
     /// 默认 true 是为了避免用户误点导致采集中断。
     pub minimize_to_tray: bool,
@@ -137,6 +140,7 @@ impl Default for Settings {
             privacy_url_keywords: default_privacy_url_keywords(),
             privacy_app_keywords: Vec::new(),
             record_browser_host: true,
+            download_site_icons: false,
             minimize_to_tray: true,
             auto_update_enabled: true,
             auto_update_interval: "weekly".to_string(),
@@ -195,6 +199,7 @@ pub struct SettingsPatch {
     pub privacy_url_keywords: Option<Vec<String>>,
     pub privacy_app_keywords: Option<Vec<String>>,
     pub record_browser_host: Option<bool>,
+    pub download_site_icons: Option<bool>,
     pub minimize_to_tray: Option<bool>,
     pub auto_update_enabled: Option<bool>,
     pub auto_update_interval: Option<String>,
@@ -448,6 +453,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         record_browser_host: patch
             .record_browser_host
             .unwrap_or(current.record_browser_host),
+        download_site_icons: patch
+            .download_site_icons
+            .unwrap_or(current.download_site_icons),
         minimize_to_tray: patch.minimize_to_tray.unwrap_or(current.minimize_to_tray),
         auto_update_enabled: patch
             .auto_update_enabled
@@ -625,6 +633,7 @@ mod tests {
             privacy_url_keywords: vec!["/checkout".into()],
             privacy_app_keywords: vec!["微信".into()],
             record_browser_host: false,
+            download_site_icons: true,
             minimize_to_tray: false,
             auto_update_enabled: false,
             auto_update_interval: "daily".into(),
@@ -740,6 +749,8 @@ mod tests {
         assert_eq!(s.auto_update_interval, d.auto_update_interval);
         assert_eq!(s.privacy_url_keywords, default_privacy_url_keywords());
         assert!(s.work_ranges.is_empty());
+        // 升级上来的用户没打开过，就不能去请求网站（ADR-0014）
+        assert!(!s.download_site_icons);
         // 整个 ai 块缺失 → 嵌套结构整组回 Default（models_path 除外，会被回填）
         assert_eq!(
             s.ai.external_provider,
