@@ -1154,6 +1154,29 @@
       "ocrDailyDescription": "毎日設定時刻に未処理のスクリーンショットを自動認識",
       "addTimeAria": "時刻を追加",
       "removeTimeAria": "最後に追加した時刻を削除"
+    },
+    "downloadSources": {
+      "title": "ダウンロード元",
+      "description": "モデル、AI エンジン、OCR コンポーネントに適用されます。公式サイトに接続しにくい場合はミラーに切り替えられます。変更は新しいダウンロードに適用されます。",
+      "sourceLabel": "ダウンロード元",
+      "modes": {
+        "official": "公式",
+        "mirror": "ミラー",
+        "custom": "カスタムミラー"
+      },
+      "officialDescription": "Hugging Face と GitHub から直接ダウンロードします。",
+      "mirrorDescription": "プリセットは第三者が提供する HF-Mirror、GH-Proxy、Huawei Cloud の NuGet ミラーを使います。",
+      "huggingfaceLabel": "Hugging Face ミラー URL",
+      "huggingfaceHelp": "https://hf-mirror.com など、ミラーのベース URL を入力します。",
+      "githubLabel": "GitHub ダウンロードプロキシ URL",
+      "githubHelp": "完全な GitHub ダウンロード URL を後ろに付ける形式のプロキシを指定します。",
+      "save": "アドレスを保存",
+      "saving": "ダウンロード元を保存中…",
+      "saveFailed": "ダウンロード元を保存できませんでした。再試行してください。",
+      "invalidUrl": "認証情報、クエリパラメーター、フラグメントを含まない HTTP または HTTPS アドレスを入力してください。",
+      "change": "ダウンロード元を変更",
+      "nugetLabel": "NuGet パッケージダウンロード URL",
+      "nugetHelp": "Windows の OCR コンポーネント用の NuGet パッケージベースアドレス（PackageBaseAddress）を入力します。"
     }
   },
   "devices": {

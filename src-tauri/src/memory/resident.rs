@@ -36,7 +36,7 @@ struct Running {
 impl ResidentOcr {
     /// 启动常驻循环。已在跑则 no-op。引擎在首个 tick 里懒加载,
     /// 加载失败(模型下载失败/运行时缺失)只告警并在下个 tick 重试。
-    pub async fn start(&self, mem: MemoryDb) {
+    pub async fn start(&self, mem: MemoryDb, pool: crate::storage::DbPool) {
         let mut guard = self.inner.lock().await;
         if guard.is_some() {
             return;
@@ -75,7 +75,14 @@ impl ResidentOcr {
                     continue;
                 }
                 if pipe.is_none() {
-                    match digest::Pipeline::new().await {
+                    let sources = match crate::repo::settings::load(&pool).await {
+                        Ok(settings) => settings.download_sources,
+                        Err(err) => {
+                            log::warn!("常驻 OCR 读取下载设置失败: {err}");
+                            continue;
+                        }
+                    };
+                    match digest::Pipeline::new(&sources).await {
                         Ok(p) => pipe = Some(p),
                         Err(err) => {
                             log::warn!("常驻 OCR 引擎加载失败,下个周期重试: {err}");
@@ -106,9 +113,9 @@ impl ResidentOcr {
     }
 
     /// 按设置同步启停(启动期与设置保存时调用)。
-    pub async fn sync(&self, enabled: bool, mem: Option<MemoryDb>) {
+    pub async fn sync(&self, enabled: bool, mem: Option<MemoryDb>, pool: crate::storage::DbPool) {
         match (enabled, mem) {
-            (true, Some(db)) => self.start(db).await,
+            (true, Some(db)) => self.start(db, pool).await,
             _ => self.stop().await,
         }
     }

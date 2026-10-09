@@ -1157,6 +1157,29 @@
       "ocrDailyDescription": "Reads the screenshot backlog at the set time daily",
       "addTimeAria": "Add a time point",
       "removeTimeAria": "Remove the most recently added time point"
+    },
+    "downloadSources": {
+      "title": "Download sources",
+      "description": "For models, the AI engine and OCR components. Switch to a mirror if official downloads are hard to reach. Changes apply to new downloads.",
+      "sourceLabel": "Download source",
+      "modes": {
+        "official": "Official",
+        "mirror": "Mirrors",
+        "custom": "Custom mirrors"
+      },
+      "officialDescription": "Download directly from Hugging Face and GitHub.",
+      "mirrorDescription": "The preset uses third-party HF-Mirror, GH-Proxy and Huawei Cloud NuGet mirrors.",
+      "huggingfaceLabel": "Hugging Face mirror URL",
+      "huggingfaceHelp": "Enter the mirror base URL, such as https://hf-mirror.com.",
+      "githubLabel": "GitHub download proxy URL",
+      "githubHelp": "The proxy must accept the full GitHub download URL appended to its address.",
+      "save": "Save addresses",
+      "saving": "Saving download sources…",
+      "saveFailed": "Could not save download sources. Please try again.",
+      "invalidUrl": "Enter an HTTP or HTTPS address without login details, query parameters or a fragment.",
+      "change": "Change download source",
+      "nugetLabel": "NuGet package download URL",
+      "nugetHelp": "Enter the NuGet package base address (PackageBaseAddress) for Windows OCR components."
     }
   },
   "devices": {

@@ -106,11 +106,17 @@ pub fn is_installed() -> Result<bool> {
 /// `progress` 回调阶段语义跟 [`super::binary::download`] 一致：
 /// - `Downloading`: 已下字节累计 + content_length（节流 ~120ms）
 /// - `Verifying` / `Extracting` / `Done`: 单点信号
-pub async fn download<F>(mut progress: F) -> Result<()>
+pub async fn download<F>(
+    sources: &crate::download_sources::DownloadSources,
+    mut progress: F,
+) -> Result<()>
 where
     F: FnMut(DownloadPhase, u64, Option<u64>) + Send,
 {
-    let arts = artifacts(platform::detect())?;
+    let mut arts = artifacts(platform::detect())?;
+    for artifact in &mut arts {
+        artifact.url = sources.url(&artifact.url)?;
+    }
 
     let dir = install_root()?;
     std::fs::create_dir_all(&dir).map_err(|e| Error::EngineBinary {

@@ -1157,6 +1157,29 @@
       "ocrDailyDescription": "Procesa a diario, a la hora indicada, las capturas acumuladas",
       "addTimeAria": "Añadir una hora",
       "removeTimeAria": "Quitar la última hora añadida"
+    },
+    "downloadSources": {
+      "title": "Fuentes de descarga",
+      "description": "Para modelos, el motor de IA y los componentes de OCR. Usa un espejo si es difícil acceder a las fuentes oficiales. El cambio se aplica a las nuevas descargas.",
+      "sourceLabel": "Fuente de descarga",
+      "modes": {
+        "official": "Oficial",
+        "mirror": "Espejos",
+        "custom": "Espejos personalizados"
+      },
+      "officialDescription": "Descargar directamente desde Hugging Face y GitHub.",
+      "mirrorDescription": "La opción predefinida usa espejos de terceros: HF-Mirror, GH-Proxy y NuGet de Huawei Cloud.",
+      "huggingfaceLabel": "URL del espejo de Hugging Face",
+      "huggingfaceHelp": "Introduce la URL base del espejo, como https://hf-mirror.com.",
+      "githubLabel": "URL del proxy de descarga de GitHub",
+      "githubHelp": "El proxy debe aceptar la URL completa de descarga de GitHub después de su dirección.",
+      "save": "Guardar direcciones",
+      "saving": "Guardando fuentes de descarga…",
+      "saveFailed": "No se pudieron guardar las fuentes de descarga. Inténtalo de nuevo.",
+      "invalidUrl": "Introduce una dirección HTTP o HTTPS sin datos de inicio de sesión, parámetros ni fragmentos.",
+      "change": "Cambiar fuente de descarga",
+      "nugetLabel": "URL de descarga de paquetes NuGet",
+      "nugetHelp": "Introduce la dirección base de paquetes NuGet (PackageBaseAddress) para los componentes de OCR de Windows."
     }
   },
   "devices": {

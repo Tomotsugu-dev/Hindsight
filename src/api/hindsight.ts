@@ -570,6 +570,13 @@ export interface IgnoreRulesResult {
   reappliedRows: number;
 }
 
+export interface DownloadSources {
+  mode: "official" | "mirror" | "custom";
+  huggingfaceUrl: string;
+  githubProxyUrl: string;
+  nugetUrl: string;
+}
+
 export interface Settings {
   captureEnabled: boolean;
   /** 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续 */
@@ -595,6 +602,7 @@ export interface Settings {
   recordBrowserHost: boolean;
   /** Allows this device to download website icons. Off by default; cached icons stay visible. */
   downloadSiteIcons: boolean;
+  downloadSources: DownloadSources;
   /** 关闭按钮（窗口右上角 X）行为：true=隐藏到系统托盘，false=直接退出。 */
   minimizeToTray: boolean;
   /** 是否自动检查应用更新 */

@@ -6,7 +6,7 @@
 //! 安装目录：`<data_root>/ai/bin/<platform_id>/build/bin/llama-server[.exe]`
 //! 沿用 `bootstrap::data_root` 控制的根；用户改 data_root 后下载位置自然跟着搬。
 //!
-//! 不做：断点续传、镜像 fallback、并发分片下载——全是 v2 优化项。
+//! 下载源由设置选择；失败后保留半成品，重试时尝试续传。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -14,6 +14,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::ai::platform::{self, Platform};
+use crate::download_sources::DownloadSources;
 use crate::error::{Error, Result};
 
 const ENGINE_SUBDIR: &str = "ai/bin";
@@ -129,19 +130,19 @@ fn has_cudart_runtime(dir: &Path) -> bool {
 /// - `Verifying` / `Extracting` / `Done`: `(0, None)` 单点信号
 ///
 /// 调用方拿到 `Done` 即知安装完成。
-pub async fn download<F>(mut progress: F) -> Result<()>
+pub async fn download<F>(sources: &DownloadSources, mut progress: F) -> Result<()>
 where
     F: FnMut(DownloadPhase, u64, Option<u64>) + Send,
 {
     let p = platform::detect();
     let tag = platform::PINNED_TAG;
     let main_asset = platform::release_asset_name(p, tag);
-    let main_url = release_url(tag, &main_asset);
+    let main_url = sources.url(&release_url(tag, &main_asset))?;
 
     // 准备要下的 asset 列表：主 zip 必下；CUDA 平台再加一个 cudart runtime zip。
     let mut assets: Vec<(String, String)> = vec![(main_asset.clone(), main_url)];
     if let Some(cudart) = platform::cuda_runtime_asset_name(p) {
-        let url = release_url(tag, cudart);
+        let url = sources.url(&release_url(tag, cudart))?;
         assets.push((cudart.to_string(), url));
     }
 
