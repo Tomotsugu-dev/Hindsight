@@ -400,15 +400,24 @@ export function ActivityRings({
     // 其次是 tagCatId 那个小类占这个大类的比例（它并进了「其他」也显示它自己）；
     // 都没有时：这个大类占全部时间的比例、名字、时长
     center = hoveredSeg
-      ? { big: pct(hoveredSeg.minutes, pinned.minutes), small: [short(nameOf(hoveredSeg))] }
+      ? {
+          big: pct(hoveredSeg.minutes, pinned.minutes),
+          small: [short(nameOf(hoveredSeg)), fmtHM(hoveredSeg.minutes)],
+        }
       : tagCat
-        ? { big: pct(tagCat.minutes, pinned.minutes), small: [short(tagCat.name)] }
+        ? {
+            big: pct(tagCat.minutes, pinned.minutes),
+            small: [short(tagCat.name), fmtHM(tagCat.minutes)],
+          }
         : {
             big: pct(pinned.minutes, total),
             small: [short(pinned.name), fmtHM(pinned.minutes)],
           };
   } else if (litCat) {
-    center = { big: pct(litCat.minutes, total), small: [short(litCat.name)] };
+    center = {
+      big: pct(litCat.minutes, total),
+      small: [short(litCat.name), fmtHM(litCat.minutes)],
+    };
   }
   const smallLines = center?.small ?? [];
   // 有几行小字，大字就往上挪多少，整块在圆心里居中
