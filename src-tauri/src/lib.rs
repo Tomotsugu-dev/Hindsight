@@ -261,6 +261,9 @@ pub fn run() {
             commands::site_rules::list_sites,
             commands::site_rules::set_site_rule,
             commands::site_rules::remove_site_rule,
+            // --- site_icons: website icons (ADR-0014) ---
+            commands::site_icons::get_site_icons,
+            commands::site_icons::download_site_icons,
             // --- super_categories: 大类容器（v28，本地 only，sync 暂未接入） ---
             commands::super_categories::list_super_categories,
             commands::super_categories::create_super_category,
