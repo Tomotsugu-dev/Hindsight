@@ -29,7 +29,7 @@ Activity records store facts; website rules are stored separately. Each session'
 2. **Apply only rules that apply to all browsers and all devices in this release.** Both `browser` and `device` use `NOT NULL DEFAULT ''`. Empty strings mean all browsers and all devices. This release only creates and applies rules with both fields empty; rules with non-empty fields are still stored and synced. Defining the rule's identity now reduces the cost of changing the primary key later, at the cost of retaining and filtering two fields this release does not otherwise use. The priority of rules for specific browsers or devices, and how they handle app group changes, are left to a future design.
 3. **Classify at query time without rewriting activity records.** Current rules can change historical classifications where domains were recorded. Removing a rule recalculates statistics using the remaining rules, avoiding large history rewrites and sync uploads whenever a rule changes. A hidden browser takes precedence; website rules use the longest matching domain; each session is counted once.
 4. **Share one definition of the effective category across statistics and exports; leave AI on the existing definition for now.** Top categories, rings in the Share view, category rankings on the All time page, and the raw data sheet in exports resolve the effective category through one query fragment rather than duplicating the logic. AI summaries and chat tools continue to use app categories. The query fragment they currently share with statistics stays unchanged to avoid unreviewed behavior changes; statistics move to the new one. These two query paths are temporary and will be unified later.
-5. **Include rules in core sync.** Rules sync automatically when cloud sync is enabled, without a separate switch. Each device uploads a complete snapshot, `device.<device_id>.site_rules.json` (ADR-0005). Records with the same key are merged by `updated_at`. Removing a rule retains a `deleted_at` marker so other devices remove it too. Deleting a category marks its related rules as deleted in the same transaction.
+5. **Sync rules automatically when cloud sync is enabled.** Rules have an independent pull stream that is always enabled, without a separate switch. Each device uploads a complete snapshot, `device.<device_id>.site_rules.json` (ADR-0005). Records with the same key are merged by `updated_at`. Removing a rule retains a `deleted_at` marker so other devices remove it too. Deleting a category marks its related rules as deleted in the same transaction.
 
 ## Alternatives
 
@@ -42,9 +42,9 @@ Activity records store facts; website rules are stored separately. Each session'
 
 ## Get existing website rules after an upgrade
 
-The work computer has already upgraded and assigned bilibili to Entertainment. The home computer still runs an older version and skips this rule. Later sync rounds only check new changes. Even after the home computer upgrades, it may never receive this rule if it has not changed again.
+The work computer has already upgraded and assigned bilibili to Entertainment. The home computer still runs an older version and skips this rule. Its shared pull cursor moves past the file. After an upgrade, that cursor would still miss the rule if the file has not changed again.
 
-After an upgrade, fetch all existing website rules from the cloud once. Fetch only these rules, without downloading activity history again, so history the user cleared does not return.
+Website rules use their own always-enabled pull stream (ADR-0006). Its missing cursor defaults to 1970, so the first pull after an upgrade fetches the existing rules. Activity history keeps its own progress, so history the user cleared does not return.
 
 ```mermaid
 sequenceDiagram
@@ -58,13 +58,13 @@ sequenceDiagram
     S-->>H: The work computer added a website rule
     H->>H: Website classification<br/>unsupported, skip
     Note over H: Upgrade to the new version<br/>Rule unchanged, so<br/>normal sync may miss it
-    H->>S: Also fetch all<br/>existing website rules
+    H->>S: Pull website rules<br/>from their initial cursor
     S-->>H: Return website rules<br/>from all devices
     H->>H: Save rules, count<br/>bilibili as Entertainment
-    Note over H: Repeat this once for each<br/>newly supported sync file type
+    Note over H: Save rule pull progress;<br/>later pulls fetch only new changes
 ```
 
-After all rules have been downloaded and saved successfully, record that the website rules have been fetched and resume syncing only new changes. Retry on failure. Future sync additions, such as super-categories, can use the same approach.
+Rule pull progress is stored separately for each backend: `pull.site_rules` on Drive and the same name with the backend prefix on WebDAV. The existing pull flow advances the cursor only past handled files, so failed files are retried. Each stream's cursor only moves forward, even when another stream lists older files. Future sync additions can use the same independent-cursor approach.
 
 ## Costs, data, and compatibility
 

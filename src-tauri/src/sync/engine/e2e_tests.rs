@@ -23,6 +23,7 @@ use crate::sync::backend_switch::{switch_backend, NewBackend};
 use crate::sync::cloud::CloudBackend;
 use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::engine::SyncEngine;
+use crate::sync::file_name::Dataset;
 use crate::sync::webdav::{save_test_credentials, Call, FakeDav, WebDavClient};
 
 struct TestDevice {
@@ -1842,6 +1843,9 @@ async fn switching_to_webdav_uploads_this_devices_history() {
     let yesterday = today - Duration::days(1);
     insert_sealed(&a, "Code", yesterday, 30).await;
     insert_sealed(&a, "Code", today, 30).await;
+    crate::repo::site_rules::set(&a.pool, "example.com", "code")
+        .await
+        .unwrap();
     a.engine.sync_now().await.unwrap();
     assert_eq!(
         a.engine.status().await.pending,
@@ -1872,7 +1876,624 @@ async fn switching_to_webdav_uploads_this_devices_history() {
         webdav_day_file("device-a", today),
         "device-a/categories.json".to_string(),
         "device-a/meta.json".to_string(),
+        "device-a/site_rules.json".to_string(),
     ] {
         assert!(dav.file(&path).await.is_some(), "{path}");
     }
+}
+
+// Website rules: normal sync, upgrades and backend switches.
+
+fn site_rule_body(host: &str, category: &str) -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!([{
+        "host": host, "browser": "", "device": "", "categoryId": category,
+        "updatedAt": "2026-10-01T00:00:00Z", "deletedAt": null,
+    }]))
+    .unwrap()
+}
+
+async fn stored_site_rule(pool: &DbPool, host: &str) -> (String, Option<String>) {
+    let host = host.to_string();
+    pool.0.call(move |conn| {
+        conn.query_row(
+            "SELECT category_id, deleted_at FROM site_rules WHERE host = ?1 AND browser = '' AND device = ''",
+            [host], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).db()
+    }).await.unwrap()
+}
+
+async fn exercise_site_rule_changes(a: &TestDevice, b: &TestDevice) {
+    use crate::repo::site_rules;
+    site_rules::set(&a.pool, "example.com", "code")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("code".into(), None)
+    );
+
+    site_rules::set(&b.pool, "example.com", "video")
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&a.pool, "example.com").await,
+        ("video".into(), None)
+    );
+
+    site_rules::remove(&a.pool, "example.com").await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert!(stored_site_rule(&b.pool, "example.com").await.1.is_some());
+
+    site_rules::set(&b.pool, "example.com", "code")
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&a.pool, "example.com").await,
+        ("code".into(), None)
+    );
+
+    crate::repo::categories::delete(&a.pool, "code")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert!(stored_site_rule(&b.pool, "example.com").await.1.is_some());
+    b.engine.sync_now().await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    assert!(stored_site_rule(&a.pool, "example.com").await.1.is_some());
+}
+
+#[tokio::test]
+async fn site_rules_changes_sync_both_ways_on_drive() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive).await;
+    exercise_site_rule_changes(&a, &b).await;
+}
+
+#[tokio::test]
+async fn site_rules_changes_sync_both_ways_on_webdav() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav).await;
+    exercise_site_rule_changes(&a, &b).await;
+}
+
+#[tokio::test]
+async fn site_rules_keep_reserved_scopes_when_pushed_by_another_device() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    crate::repo::site_rules::set(&a.pool, "example.com", "code")
+        .await
+        .unwrap();
+    a.pool.0.call(|conn| {
+        conn.execute_batch(
+            "INSERT INTO site_rules(host, browser, device, category_id, updated_at, deleted_at) VALUES
+             ('example.com', 'Chrome', '', 'video', '2026-10-01T00:00:00Z', NULL),
+             ('example.com', '', 'device-a', 'code', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z');",
+        ).db()
+    }).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    crate::repo::site_rules::set(&b.pool, "other.example", "video")
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    let file = drive
+        .list_appdata_files("")
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|f| f.name == "device.device-b.site_rules.json")
+        .unwrap();
+    let rows: Vec<crate::sync::payload::SiteRulePayload> =
+        serde_json::from_slice(&drive.download(&file.id).await.unwrap()).unwrap();
+    assert_eq!(rows.len(), 4);
+    let scoped = rows.iter().find(|r| r.browser == "Chrome").unwrap();
+    assert_eq!(
+        (
+            scoped.host.as_str(),
+            scoped.device.as_str(),
+            scoped.category_id.as_str()
+        ),
+        ("example.com", "", "video")
+    );
+    let deleted = rows.iter().find(|r| r.device == "device-a").unwrap();
+    assert_eq!(deleted.deleted_at.as_deref(), Some("2026-10-01T00:00:00Z"));
+}
+
+#[tokio::test]
+async fn site_rule_received_before_its_category_becomes_effective_later() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let b = make_device("device-b", drive.clone()).await;
+    let captured = Local::now().with_hour(10).unwrap();
+    let day = captured.date_naive();
+    insert_sealed(&b, "Chrome", captured, 30).await;
+    b.pool
+        .0
+        .call(|conn| {
+            conn.execute("UPDATE activities SET url_host = 'example.com'", [])
+                .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    drive
+        .upsert_by_name(
+            "device.device-a.site_rules.json",
+            &site_rule_body("example.com", "arrives-later"),
+        )
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("arrives-later".into(), None)
+    );
+    let report = crate::repo::reports::day_category_time(
+        &b.pool,
+        day,
+        day,
+        crate::repo::reports::DeviceFilter::All,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report[0].segments[0].category_id, "other");
+
+    let categories = serde_json::to_vec(&serde_json::json!([{
+        "id": "arrives-later", "name": "Later", "color": "#123456", "icon": "Tag",
+        "builtin": false, "sortOrder": 0, "updatedAt": "2026-10-01T00:00:00Z",
+    }]))
+    .unwrap();
+    drive
+        .upsert_by_name("device.device-a.categories.json", &categories)
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    let report = crate::repo::reports::day_category_time(
+        &b.pool,
+        day,
+        day,
+        crate::repo::reports::DeviceFilter::All,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report[0].segments[0].category_id, "arrives-later");
+}
+
+#[tokio::test]
+async fn site_rules_first_pull_retries_and_preserves_progress_after_restart() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.sync_now().await.unwrap();
+    drive
+        .upsert_by_name("device.device-a.site_rules.json", b"bad JSON")
+        .await
+        .unwrap();
+    drive
+        .upsert_by_name(
+            "device.device-b.site_rules.json",
+            b"own invalid file is skipped",
+        )
+        .await
+        .unwrap();
+    super::io::write_cursor(&b.pool, "drive_files", "2099-01-01T00:00:00Z")
+        .await
+        .unwrap();
+    let rule_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+
+    b.engine.sync_now().await.unwrap();
+    let failed_file = drive
+        .list_appdata_files("")
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|file| file.name == "device.device-a.site_rules.json")
+        .unwrap();
+    assert!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap() < failed_file.modified_time
+    );
+    assert_eq!(
+        super::io::read_cursor(&b.pool, "drive_files")
+            .await
+            .unwrap(),
+        "2099-01-01T00:00:00Z"
+    );
+    drive
+        .upsert_by_name(
+            "device.device-a.site_rules.json",
+            &site_rule_body("example.com", "code"),
+        )
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("code".into(), None)
+    );
+    assert_eq!(count_for_device(&b, "device-a").await, 0);
+    assert_eq!(
+        super::io::read_cursor(&b.pool, "drive_files")
+            .await
+            .unwrap(),
+        "2099-01-01T00:00:00Z"
+    );
+    let saved_progress = super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap();
+    assert!(saved_progress.as_str() > "1970-01-01T00:00:00Z");
+
+    let restarted = SyncEngine::with_backend(
+        b.pool.clone(),
+        Some(b.mem.clone()),
+        CloudBackend::InMemory(drive.clone()),
+        "device-b".into(),
+    );
+    restarted.sync_now().await.unwrap();
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap(),
+        saved_progress
+    );
+    let newer = serde_json::to_vec(&serde_json::json!([{
+        "host": "example.com", "categoryId": "video", "updatedAt": "2026-10-02T00:00:00Z",
+    }]))
+    .unwrap();
+    drive
+        .upsert_by_name("device.device-a.site_rules.json", &newer)
+        .await
+        .unwrap();
+    restarted.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("video".into(), None)
+    );
+    assert!(super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap() > saved_progress);
+    assert_eq!(count_for_device(&b, "device-a").await, 0);
+    assert_eq!(
+        super::io::read_cursor(&b.pool, "drive_files")
+            .await
+            .unwrap(),
+        "2099-01-01T00:00:00Z"
+    );
+}
+
+#[tokio::test]
+async fn site_rules_pull_retries_database_failures_without_blocking_core() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let b = make_device("device-b", drive.clone()).await;
+    let body = serde_json::to_vec(&serde_json::json!([
+        {"host": "first.example", "categoryId": "code", "updatedAt": "2026-10-01T00:00:00Z"},
+        {"host": "second.example", "categoryId": "video", "updatedAt": "2026-10-01T00:00:00Z"},
+    ]))
+    .unwrap();
+    drive
+        .upsert_by_name("device.device-a.site_rules.json", &body)
+        .await
+        .unwrap();
+    drive
+        .upsert_by_name("device.device-a.categories.json", b"[]")
+        .await
+        .unwrap();
+    let core_file = drive
+        .list_appdata_files("")
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|file| file.name == "device.device-a.categories.json")
+        .unwrap();
+    let rule_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
+    b.pool
+        .0
+        .call(|conn| {
+            conn.execute_batch(
+                "CREATE TRIGGER reject_second_rule BEFORE INSERT ON site_rules
+             WHEN NEW.host = 'second.example'
+             BEGIN SELECT RAISE(ABORT, 'injected database failure'); END;",
+            )
+            .db()
+        })
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    let rows: i64 = b
+        .pool
+        .0
+        .call(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM site_rules", [], |r| r.get(0))
+                .db()
+        })
+        .await
+        .unwrap();
+    assert_eq!(rows, 0);
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+    assert_eq!(
+        super::io::read_cursor(&b.pool, "drive_files")
+            .await
+            .unwrap(),
+        core_file.modified_time
+    );
+    b.pool
+        .0
+        .call(|conn| conn.execute_batch("DROP TRIGGER reject_second_rule").db())
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "first.example").await,
+        ("code".into(), None)
+    );
+    assert_eq!(
+        stored_site_rule(&b.pool, "second.example").await,
+        ("video".into(), None)
+    );
+    assert!(
+        super::io::read_cursor(&b.pool, &rule_cursor)
+            .await
+            .unwrap()
+            .as_str()
+            > "1970-01-01T00:00:00Z"
+    );
+}
+
+#[tokio::test]
+async fn site_rules_pull_continues_when_a_core_file_fails() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let b = make_device("device-b", drive.clone()).await;
+    drive
+        .upsert_by_name("device.device-a.categories.json", b"bad JSON")
+        .await
+        .unwrap();
+    drive
+        .upsert_by_name(
+            "device.device-a.site_rules.json",
+            &site_rule_body("example.com", "code"),
+        )
+        .await
+        .unwrap();
+
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("code".into(), None)
+    );
+    assert_eq!(
+        super::io::read_cursor(&b.pool, "drive_files")
+            .await
+            .unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+    let rule_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
+    assert!(
+        super::io::read_cursor(&b.pool, &rule_cursor)
+            .await
+            .unwrap()
+            .as_str()
+            > "1970-01-01T00:00:00Z"
+    );
+}
+
+#[tokio::test]
+async fn site_rules_empty_webdav_stream_remembers_the_manifest_until_rules_arrive() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.sync_now().await.unwrap();
+    let core_cursor = b.engine.cloud().pull_cursor_name(Dataset::Core);
+    super::io::write_cursor(&b.pool, &core_cursor, "2099-01-01T00:00:00Z")
+        .await
+        .unwrap();
+    b.engine
+        .cloud()
+        .list(&[(Dataset::Core, "2099-01-01T00:00:00Z")])
+        .await
+        .unwrap();
+
+    b.engine.sync_now().await.unwrap();
+    let before = dav.calls().await.len();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(&dav.calls().await[before..], &[Call::Propfind("".into())]);
+
+    crate::repo::site_rules::set(&a.pool, "example.com", "code")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("code".into(), None)
+    );
+    assert_eq!(count_for_device(&b, "device-a").await, 0);
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &core_cursor).await.unwrap(),
+        "2099-01-01T00:00:00Z"
+    );
+}
+
+#[tokio::test]
+async fn site_rules_first_pull_on_webdav_uses_its_own_bookmark_and_retries() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    crate::repo::site_rules::set(&a.pool, "example.com", "code")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    let core_cursor = b.engine.cloud().pull_cursor_name(Dataset::Core);
+    let rule_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
+    super::io::write_cursor(&b.pool, &core_cursor, "2099-01-01T00:00:00Z")
+        .await
+        .unwrap();
+    assert!(b
+        .engine
+        .cloud()
+        .list(&[(Dataset::Core, "2099-01-01T00:00:00Z")])
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(b
+        .engine
+        .cloud()
+        .list_all()
+        .await
+        .unwrap()
+        .iter()
+        .any(|file| file.name == "device.device-a.site_rules.json"));
+
+    let before = dav.calls().await.len();
+    dav.fail_gets_under(Some(("manifest.device-a.json", 500)))
+        .await;
+    assert!(b.engine.sync_now().await.is_err());
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+    dav.fail_gets_under(None).await;
+    let body = dav.take_file("device-a/site_rules.json").await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+    dav.seed_file("device-a/site_rules.json", &body).await;
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "example.com").await,
+        ("code".into(), None)
+    );
+    assert_eq!(count_for_device(&b, "device-a").await, 0);
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &core_cursor).await.unwrap(),
+        "2099-01-01T00:00:00Z"
+    );
+    assert!(
+        super::io::read_cursor(&b.pool, &rule_cursor)
+            .await
+            .unwrap()
+            .as_str()
+            > "1970-01-01T00:00:00Z"
+    );
+    assert!(gets_since(&dav, before)
+        .await
+        .iter()
+        .all(|path| path == "manifest.device-a.json" || path == "device-a/site_rules.json"));
+
+    b.engine.sync_now().await.unwrap();
+    let before = dav.calls().await.len();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(&dav.calls().await[before..], &[Call::Propfind("".into())]);
+}
+
+#[tokio::test]
+async fn site_rules_pull_retries_older_peer_after_a_manifest_download_failure() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let c = make_webdav_device("device-c", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    crate::repo::site_rules::set(&a.pool, "older.example", "code")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    crate::repo::site_rules::set(&c.pool, "newer.example", "video")
+        .await
+        .unwrap();
+    c.engine.sync_now().await.unwrap();
+    let rule_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
+
+    dav.fail_gets_under(Some(("manifest.device-a.json", 500)))
+        .await;
+    assert!(b.engine.sync_now().await.is_err());
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &rule_cursor).await.unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+    dav.fail_gets_under(None).await;
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "older.example").await,
+        ("code".into(), None)
+    );
+    assert_eq!(
+        stored_site_rule(&b.pool, "newer.example").await,
+        ("video".into(), None)
+    );
+}
+
+#[tokio::test]
+async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    drive
+        .upsert_by_name(
+            "device.device-a.site_rules.json",
+            &site_rule_body("drive.example", "code"),
+        )
+        .await
+        .unwrap();
+    let b = make_device("device-b", drive.clone()).await;
+    super::io::write_cursor(&b.pool, "drive_files", "2099-01-01T00:00:00Z")
+        .await
+        .unwrap();
+
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    crate::repo::site_rules::set(&a.pool, "webdav.example", "video")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    save_test_credentials(&b.pool, "me", "app-password").await;
+    let client = WebDavClient::with_fake_server(dav, b.pool.clone(), "device-b".into());
+    b.engine
+        .replace_cloud(CloudBackend::WebDav(Box::new(client)));
+    let webdav_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "webdav.example").await,
+        ("video".into(), None)
+    );
+    let webdav_progress = super::io::read_cursor(&b.pool, &webdav_cursor)
+        .await
+        .unwrap();
+    assert!(webdav_progress.as_str() > "1970-01-01T00:00:00Z");
+    assert_eq!(
+        super::io::read_cursor(&b.pool, "pull.site_rules")
+            .await
+            .unwrap(),
+        "1970-01-01T00:00:00Z"
+    );
+
+    b.engine.replace_cloud(CloudBackend::InMemory(drive));
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        stored_site_rule(&b.pool, "drive.example").await,
+        ("code".into(), None)
+    );
+    assert!(
+        super::io::read_cursor(&b.pool, "pull.site_rules")
+            .await
+            .unwrap()
+            .as_str()
+            > "1970-01-01T00:00:00Z"
+    );
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &webdav_cursor)
+            .await
+            .unwrap(),
+        webdav_progress
+    );
 }

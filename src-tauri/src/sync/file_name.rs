@@ -24,6 +24,7 @@ pub(crate) enum FileKind {
     /// One file per day: the date the rows belong to.
     Activities(NaiveDate),
     Categories,
+    SiteRules,
     DeviceMeta,
     AppIcons,
     AppGroups,
@@ -42,11 +43,12 @@ pub(crate) enum FileKind {
 }
 
 /// Which dataset a file belongs to. A dataset is a group of files pulled together,
-/// each with its own pull cursor; Core is always on, the other three are switched
-/// on by the user in settings (ADR-0006).
+/// each with its own pull cursor. Core and website rules are always on;
+/// AI summaries, chat and memory follow their settings switches (ADR-0006).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Dataset {
     Core,
+    SiteRules,
     AiSummaries,
     Chat,
     Memory,
@@ -58,6 +60,7 @@ impl Dataset {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Dataset::Core => "core",
+            Dataset::SiteRules => "site_rules",
             Dataset::AiSummaries => "ai_summaries",
             Dataset::Chat => "chat",
             Dataset::Memory => "memory",
@@ -71,6 +74,7 @@ impl FileKind {
         match self {
             FileKind::Activities(_) => "activities",
             FileKind::Categories => "categories",
+            FileKind::SiteRules => "site_rules",
             FileKind::DeviceMeta => "meta",
             FileKind::AppIcons => "icons",
             FileKind::AppGroups => "app_groups",
@@ -84,6 +88,7 @@ impl FileKind {
 
     pub(crate) fn dataset(&self) -> Dataset {
         match self {
+            FileKind::SiteRules => Dataset::SiteRules,
             FileKind::AiSummaries => Dataset::AiSummaries,
             FileKind::Chat => Dataset::Chat,
             FileKind::Memory(_) => Dataset::Memory,
@@ -123,6 +128,7 @@ impl FileName {
             ["device", id, segment, "json"] => {
                 let kind = match *segment {
                     "categories" => FileKind::Categories,
+                    "site_rules" => FileKind::SiteRules,
                     "meta" => FileKind::DeviceMeta,
                     "icons" => FileKind::AppIcons,
                     "app_groups" => FileKind::AppGroups,
@@ -177,6 +183,7 @@ mod tests {
         let kinds = [
             FileKind::Activities(date("2026-09-23")),
             FileKind::Categories,
+            FileKind::SiteRules,
             FileKind::DeviceMeta,
             FileKind::AppIcons,
             FileKind::AppGroups,
@@ -215,6 +222,10 @@ mod tests {
             file(FileKind::AppGroupMembers).to_file_name(),
             "device.abc.app_group_members.json"
         );
+        assert_eq!(
+            file(FileKind::SiteRules).to_file_name(),
+            "device.abc.site_rules.json"
+        );
         assert_eq!(FileName::device_prefix("abc"), "device.abc.");
     }
 
@@ -248,5 +259,6 @@ mod tests {
             Dataset::Core
         );
         assert_eq!(FileKind::Tombstone.dataset(), Dataset::Core);
+        assert_eq!(FileKind::SiteRules.dataset(), Dataset::SiteRules);
     }
 }

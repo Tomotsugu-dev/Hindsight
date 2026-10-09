@@ -19,7 +19,7 @@ use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{Dataset, FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload, TombstonePayload,
+    DeviceMetaPayload, SiteRulePayload, TombstonePayload,
 };
 
 /// Turns the contents of one sync file into rows waiting to be merged.
@@ -90,14 +90,13 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         })
         .unwrap_or((false, false, false));
 
-    // The streams that run this round. A dataset runs only with its switch on,
-    // and chat and screen memory also need the memory database. A stream that
-    // does not run leaves its cursor where it is, so turning its switch on later
-    // resumes from there.
+    // Core and website rules always run. Optional datasets follow their switches;
+    // chat and screen memory also need the memory database.
     let has_mem = inner.mem.is_some();
     let mut streams: Vec<(Dataset, String)> = Vec::new();
     for (dataset, enabled) in [
         (Dataset::Core, true),
+        (Dataset::SiteRules, true),
         (Dataset::AiSummaries, sync_ai),
         (Dataset::Chat, sync_chat && has_mem),
         (Dataset::Memory, sync_scrn_mem && has_mem),
@@ -209,6 +208,7 @@ async fn pull_stream(
                 .await
             }
             FileKind::Categories => merge_categories(&inner.pool, &body).await,
+            FileKind::SiteRules => merge_site_rules(&inner.pool, &body).await,
             FileKind::AppIcons => merge_app_icons(&inner.pool, &body).await,
             FileKind::AppGroups => merge_app_groups(&inner.pool, &body).await,
             FileKind::AppGroupMembers => merge_app_group_members(&inner.pool, &body).await,
@@ -254,8 +254,11 @@ async fn pull_stream(
         .last();
     if let Some(t) = cursor_advance {
         let t = rewind_cursor(&t, inner.cloud().time_precision())?;
-        let name = inner.cloud().pull_cursor_name(dataset);
-        io::write_cursor(&inner.pool, &name, &t).await?;
+        // Keep this stream's progress when another stream is behind.
+        if t.as_str() > cursor {
+            let name = inner.cloud().pull_cursor_name(dataset);
+            io::write_cursor(&inner.pool, &name, &t).await?;
+        }
     }
     Ok(applied)
 }
@@ -461,6 +464,38 @@ async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
         },
     )
     .await
+}
+
+async fn merge_site_rules(pool: &DbPool, body: &[u8]) -> Result<()> {
+    // Apply the whole snapshot atomically so failed files can be retried.
+    let rows: Vec<SiteRulePayload> =
+        serde_json::from_slice(body).map_err(|source| Error::SyncParse {
+            kind: "site_rules",
+            source,
+        })?;
+    pool.0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            for row in rows {
+                tx.execute(
+                    "INSERT INTO site_rules(host, browser, device, category_id, updated_at, deleted_at)
+                     VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+                     ON CONFLICT(host, browser, device) DO UPDATE SET
+                         category_id = excluded.category_id,
+                         updated_at = excluded.updated_at,
+                         deleted_at = excluded.deleted_at
+                     WHERE excluded.updated_at > site_rules.updated_at",
+                    rusqlite::params![
+                        row.host, row.browser, row.device, row.category_id,
+                        row.updated_at, row.deleted_at,
+                    ],
+                )
+                .db()?;
+            }
+            tx.commit().db()
+        })
+        .await?;
+    Ok(())
 }
 
 async fn merge_app_icons(pool: &DbPool, body: &[u8]) -> Result<()> {
@@ -1165,6 +1200,60 @@ mod tests {
             deleted_at: deleted_at.map(String::from),
         }])
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn merge_site_rules_uses_the_full_key_and_keeps_newer_changes() {
+        let pool = fresh_test_pool().await;
+        let body = |category: &str, updated: &str, deleted: Option<&str>| {
+            serde_json::to_vec(&serde_json::json!([{
+                "host": "example.com", "categoryId": category,
+                "updatedAt": updated, "deletedAt": deleted,
+            }]))
+            .unwrap()
+        };
+        merge_site_rules(&pool, &body("code", T_MID, None))
+            .await
+            .unwrap();
+        for updated in [T_OLD, T_MID] {
+            merge_site_rules(&pool, &body("video", updated, Some(updated)))
+                .await
+                .unwrap();
+            assert_eq!(
+                read_row(&pool, "SELECT category_id, updated_at, deleted_at FROM site_rules WHERE host = ?1 AND browser = '' AND device = ''", "example.com", 3).await.unwrap(),
+                vec![s("code"), s(T_MID), None],
+            );
+        }
+        merge_site_rules(&pool, &body("video", T_NEW, Some(T_NEW)))
+            .await
+            .unwrap();
+        merge_site_rules(&pool, &body("code", T_MID, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            read_row(&pool, "SELECT category_id, updated_at, deleted_at FROM site_rules WHERE host = ?1 AND browser = '' AND device = ''", "example.com", 3).await.unwrap(),
+            vec![s("video"), s(T_NEW), s(T_NEW)],
+        );
+
+        let scoped = serde_json::to_vec(&serde_json::json!([
+            {"host": "example.com", "browser": "Chrome", "device": "", "categoryId": "not-here-yet", "updatedAt": T_NEW},
+            {"host": "example.com", "browser": "", "device": "device-a", "categoryId": "code", "updatedAt": T_NEW},
+        ])).unwrap();
+        merge_site_rules(&pool, &scoped).await.unwrap();
+        let scopes: Vec<(String, String, String)> = pool.0.call(|conn| {
+            let mut stmt = conn.prepare("SELECT browser, device, category_id FROM site_rules ORDER BY browser, device").db()?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).db()?.collect::<rusqlite::Result<Vec<_>>>().db()?;
+            Ok(rows)
+        }).await.unwrap();
+        assert_eq!(
+            scopes,
+            vec![
+                ("".into(), "".into(), "video".into()),
+                ("".into(), "device-a".into(), "code".into()),
+                ("Chrome".into(), "".into(), "not-here-yet".into()),
+            ]
+        );
+        assert!(outbox_entries(&pool).await.is_empty());
     }
 
     // ───────── 任务 2:merge_categories ─────────
