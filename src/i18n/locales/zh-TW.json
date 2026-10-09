@@ -823,7 +823,27 @@
     },
     "tabs": {
       "list": "管理分類",
-      "apps": "歸類應用"
+      "apps": "歸類應用",
+      "sites": "歸類網站"
+    },
+    "sites": {
+      "intro": "為網站單獨指定分類：在任何瀏覽器裡造訪它及其子網域的時間，都計入這個分類。沒有規則的網站按瀏覽器的分類統計。",
+      "infoTipAria": "網站歸類說明",
+      "infoTipBody": "只有記錄了網域的時間才能按網站歸類。規則在你的所有裝置上生效，並隨雲同步。選「隱藏」可把網站排除在統計之外。AI 總結和對話仍按應用程式分類。",
+      "searchPlaceholder": "搜尋網站",
+      "header": {
+        "site": "網站",
+        "last30d": "近 30 天",
+        "total": "全部",
+        "category": "分類"
+      },
+      "follows": "沿用 {{host}}",
+      "removeRule": "取消規則",
+      "loading": "載入中…",
+      "empty": "還沒有記錄到網站時間。只有開啟「記錄瀏覽器網站網域」時才會記錄網域。",
+      "openPrivacy": "開啟隱私設定",
+      "noResults": "沒找到匹配的網站",
+      "clearSearch": "清除搜尋"
     }
   },
   "aiSettings": {

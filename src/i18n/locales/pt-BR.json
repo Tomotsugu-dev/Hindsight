@@ -823,7 +823,27 @@
     },
     "tabs": {
       "list": "Gerenciar categorias",
-      "apps": "Atribuir apps"
+      "apps": "Atribuir apps",
+      "sites": "Atribuir sites"
+    },
+    "sites": {
+      "intro": "Dê a um site uma categoria própria: o tempo nele e nos seus subdomínios conta para essa categoria em qualquer navegador. Sites sem regra contam para a categoria do navegador.",
+      "infoTipAria": "Como funcionam as categorias de sites",
+      "infoTipBody": "Só o tempo registrado com domínio pode ser classificado. As regras valem em todos os seus dispositivos e são sincronizadas pela nuvem. Escolha Oculto para deixar um site fora das estatísticas. Os resumos de IA e o chat continuam usando as categorias dos aplicativos.",
+      "searchPlaceholder": "Pesquisar sites",
+      "header": {
+        "site": "Site",
+        "last30d": "Últimos 30 dias",
+        "total": "Todo o período",
+        "category": "Categoria"
+      },
+      "follows": "Segue {{host}}",
+      "removeRule": "Remover regra",
+      "loading": "Carregando…",
+      "empty": "Nenhum tempo em sites registrado ainda. Os domínios só são registrados enquanto “Registrar domínios de sites” estiver ativado.",
+      "openPrivacy": "Abrir configurações de privacidade",
+      "noResults": "Nenhum site corresponde à sua pesquisa",
+      "clearSearch": "Limpar pesquisa"
     }
   },
   "aiSettings": {

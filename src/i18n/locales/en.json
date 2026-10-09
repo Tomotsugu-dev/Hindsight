@@ -823,7 +823,27 @@
     },
     "tabs": {
       "list": "Manage categories",
-      "apps": "Assign apps"
+      "apps": "Assign apps",
+      "sites": "Assign websites"
+    },
+    "sites": {
+      "intro": "Give a website its own category: time on it and its subdomains counts toward that category in every browser. Websites without a rule count toward the browser's category.",
+      "infoTipAria": "How website categories work",
+      "infoTipBody": "Only time recorded with a domain can be classified. Rules apply on all your devices and sync with cloud sync. Choose Hidden to leave a website out of statistics. AI summaries and chat still use app categories.",
+      "searchPlaceholder": "Search websites",
+      "header": {
+        "site": "Website",
+        "last30d": "Last 30 days",
+        "total": "All time",
+        "category": "Category"
+      },
+      "follows": "Follows {{host}}",
+      "removeRule": "Remove rule",
+      "loading": "Loading…",
+      "empty": "No website time recorded yet. Domains are recorded only while “Record website domains” is on.",
+      "openPrivacy": "Open privacy settings",
+      "noResults": "No websites match your search",
+      "clearSearch": "Clear search"
     }
   },
   "aiSettings": {
