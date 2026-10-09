@@ -33,6 +33,8 @@ import type {
   Settings,
   SettingsPatch,
   SiteRow,
+  SiteIconPaths,
+  SiteIconDownloadRound,
   StorageInfo,
   SuperCategory,
   SuperCategoryInput,
@@ -44,6 +46,7 @@ import type {
   AiOverrides,
 } from "@app/api/hindsight";
 import { barMinutes } from "@app/lib/segments";
+import youtubeIcon from "@app/assets/site-icons/youtube.svg";
 
 // 重新导出原 api 模块里的 helper 函数（DTO → 内部类型转换）
 // 主仓库代码会直接 import { dtoToDaySummary } from "@app/api/hindsight"
@@ -177,6 +180,14 @@ const demoSiteRules = new Map<string, string>([
   ["stackoverflow.com", "code"],
   ["bilibili.com", "fun"],
 ]);
+const DEMO_SITE_ICON_URLS: SiteIconPaths = {
+  "github.com": LOCAL_ICON("sites/github"),
+  "bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "live.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "youtube.com": youtubeIcon,
+  "mail.google.com": LOCAL_ICON("sites/gmail"),
+};
+const demoSiteIcons: SiteIconPaths = {};
 
 function persist() {
   const selfDevice = state.devices.find((d) => d.isSelf);
@@ -611,6 +622,26 @@ export const api = {
   removeSiteRule: async (host: string): Promise<void> => {
     demoSiteRules.delete(host);
   },
+  getSiteIcons: async (): Promise<SiteIconPaths> => {
+    const listed = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
+    for (const host of Object.keys(demoSiteIcons)) {
+      if (!listed.has(host)) delete demoSiteIcons[host];
+    }
+    return { ...demoSiteIcons };
+  },
+  downloadSiteIcons: async (hosts: string[]): Promise<SiteIconDownloadRound> => {
+    if (!state.settings.downloadSiteIcons) return { icons: {}, remaining: 0 };
+    const due = [...new Set(hosts)].filter(
+      (host) => !demoSiteIcons[host] && DEMO_SITE_ICON_URLS[host] !== undefined,
+    );
+    const icons: SiteIconPaths = {};
+    // Bundled website icons keep this demo offline. Missing icons keep the globe placeholder.
+    for (const host of due.slice(0, 12)) {
+      icons[host] = DEMO_SITE_ICON_URLS[host];
+      demoSiteIcons[host] = icons[host];
+    }
+    return { icons, remaining: Math.max(0, due.length - 12) };
+  },
 
   // ─── Capture ───────────────────────────────
   startCapture: async (): Promise<void> => {
@@ -636,6 +667,7 @@ export const api = {
     // demo 的 AI 系统提示词语言 + "あなたについて / About you" 简介都按当前 i18n 切，
     // 让 /en/、/ja/ 看到对应语言的默认值。
     const s = structuredClone(state.settings);
+    s.downloadSiteIcons ??= false;
     const lng = (i18n.language || "zh-CN").toLowerCase();
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);

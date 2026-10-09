@@ -66,29 +66,40 @@ export function AppsFilterBar({
           onToggleUnassigned={onToggleUnassigned}
           onReset={onResetCategories}
         />
-        <SortDropdown value={sortBy} onChange={onSortChange} />
+        <SortDropdown
+          value={sortBy}
+          onChange={onSortChange}
+          label={t("apps.filter.sortLabel")}
+          options={SORT_OPTIONS.map((value) => ({
+            value,
+            label: t(`apps.filter.sort.${camelCase(value)}`),
+          }))}
+        />
       </div>
     </div>
   );
 }
 
-interface SortDropdownProps {
-  value: AppsSortBy;
-  onChange: (v: AppsSortBy) => void;
+interface SortDropdownProps<T extends string> {
+  value: T;
+  onChange: (v: T) => void;
+  label: string;
+  options: { value: T; label: string }[];
 }
 
-function SortDropdown({ value, onChange }: SortDropdownProps) {
-  const { t } = useTranslation();
+/** Sorting control shared by application and website classification. */
+export function SortDropdown<T extends string>({
+  value,
+  onChange,
+  label,
+  options,
+}: SortDropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(
-    null,
-  );
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const labelOf = (v: AppsSortBy): string => t(`apps.filter.sort.${camelCase(v)}`);
-
-  // 定位 + 把菜单宽度对齐 trigger 自身宽度
+  // Position the menu next to the trigger and keep it inside the viewport.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const tr = triggerRef.current.getBoundingClientRect();
@@ -106,7 +117,7 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
     setMenuPos({ top, left, width: menuW });
   }, [open]);
 
-  // 外击 + Esc
+  // Clicking outside or pressing Escape closes the menu.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -138,8 +149,10 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
         aria-expanded={open}
         aria-haspopup="true"
       >
-        <span className={styles.triggerLabel}>{t("apps.filter.sortLabel")}:</span>
-        <span className={styles.triggerValue}>{labelOf(value)}</span>
+        <span className={styles.triggerLabel}>{label}:</span>
+        <span className={styles.triggerValue}>
+          {options.find((option) => option.value === value)?.label}
+        </span>
         <ChevronDown size={14} strokeWidth={2} className={styles.triggerChevron} />
       </button>
 
@@ -150,27 +163,27 @@ function SortDropdown({ value, onChange }: SortDropdownProps) {
             className={styles.sortMenu}
             style={
               menuPos
-                ? ({
+                ? {
                     top: menuPos.top,
                     left: menuPos.left,
                     width: menuPos.width,
-                  })
+                  }
                 : { visibility: "hidden" }
             }
           >
-            {SORT_OPTIONS.map((opt) => (
+            {options.map((option) => (
               <button
-                key={opt}
+                key={option.value}
                 type="button"
                 className={`${styles.sortItem} ${
-                  opt === value ? styles.sortItemActive : ""
+                  option.value === value ? styles.sortItemActive : ""
                 }`}
                 onClick={() => {
-                  onChange(opt);
+                  onChange(option.value);
                   setOpen(false);
                 }}
               >
-                {labelOf(opt)}
+                {option.label}
               </button>
             ))}
           </div>,

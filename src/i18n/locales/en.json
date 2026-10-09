@@ -833,6 +833,8 @@
       "searchPlaceholder": "Search websites",
       "header": {
         "site": "Website",
+        "domainCount_one": "{{count}} domain total",
+        "domainCount_other": "{{count}} domains total",
         "last30d": "Last 30 days",
         "total": "All time",
         "category": "Category"
@@ -849,7 +851,29 @@
       "empty": "No website time recorded yet. Domains are recorded only while “Record website domains” is on.",
       "openPrivacy": "Open privacy settings",
       "noResults": "No websites match your search",
-      "clearSearch": "Clear search"
+      "clearSearch": "Clear search",
+      "allAssigned": "Every website has a category",
+      "sort": {
+        "default": "Default",
+        "recentDesc": "Last 30 days ↓",
+        "recentAsc": "Last 30 days ↑",
+        "totalDesc": "All time ↓",
+        "totalAsc": "All time ↑",
+        "nameAsc": "Domain A-Z",
+        "nameDesc": "Domain Z-A"
+      },
+      "icons": {
+        "label": "Automatically download website icons",
+        "confirmTitle": "Enable website icon downloads?",
+        "confirmAction": "Enable downloads",
+        "saveFailed": "Could not save this setting. Please try again.",
+        "loadFailed": "Icons could not be loaded. Website classification is still available.",
+        "retry": "Retry",
+        "previewLabel": "YouTube icon example",
+        "beforeDownload": "Before",
+        "afterDownload": "After",
+        "trafficNote": "Note: Downloading one website icon uses about 10–20 KB of data."
+      }
     }
   },
   "aiSettings": {

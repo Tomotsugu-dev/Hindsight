@@ -155,6 +155,15 @@ export interface SiteRow {
   follows: string | null;
 }
 
+/** Local website icon paths, keyed by host. */
+export type SiteIconPaths = Record<string, string>;
+
+/** Newly downloaded icons and the number of websites still waiting for a download. */
+export interface SiteIconDownloadRound {
+  icons: SiteIconPaths;
+  remaining: number;
+}
+
 export interface CaptureStatus {
   running: boolean;
   todayCount: number;
@@ -584,6 +593,8 @@ export interface Settings {
   /** 记录浏览器网站域名（应用详情「按网站」统计用）。只存域名，不存完整网址；
    *  命中 privacyUrlKeywords 的页面连域名也不记。默认 true，关闭只影响新记录。 */
   recordBrowserHost: boolean;
+  /** Allows this device to download website icons. Off by default; cached icons stay visible. */
+  downloadSiteIcons: boolean;
   /** 关闭按钮（窗口右上角 X）行为：true=隐藏到系统托盘，false=直接退出。 */
   minimizeToTray: boolean;
   /** 是否自动检查应用更新 */
@@ -882,6 +893,9 @@ export const api = {
     invoke<void>("set_site_rule", { host, categoryId }),
   /** Removes the website's own rule; a parent domain's rule or the browser's category applies again. */
   removeSiteRule: (host: string) => invoke<void>("remove_site_rule", { host }),
+  getSiteIcons: () => invoke<SiteIconPaths>("get_site_icons"),
+  downloadSiteIcons: (hosts: string[]) =>
+    invoke<SiteIconDownloadRound>("download_site_icons", { hosts }),
   startCapture: () => invoke<void>("start_capture"),
   stopCapture: () => invoke<void>("stop_capture"),
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),

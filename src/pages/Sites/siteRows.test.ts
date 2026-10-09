@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SiteRow } from "../../api/hindsight";
-import { filterGroups, groupSites, ruleSource } from "./siteRows";
+import { filterGroups, groupSites, ruleSource, sortGroups } from "./siteRows";
 
 const row = (host: string, patch: Partial<SiteRow> = {}): SiteRow => ({
   host,
@@ -109,5 +109,125 @@ describe("filterGroups", () => {
 
   it("shows nothing when no website matches", () => {
     expect(shown("youtube")).toEqual([]);
+  });
+});
+
+describe("website category filters", () => {
+  const groups = groupSites([
+    row("google.com", { categoryId: "browse" }),
+    row("mail.google.com", { categoryId: "browse", follows: "google.com" }),
+    row("gemini.google.com", { categoryId: "ai" }),
+    row("youtube.com", { categoryId: "fun" }),
+    row("github.com"),
+  ]);
+
+  it("accepts several categories, including categories inherited from a parent", () => {
+    const visible = filterGroups(groups, "", { selectedCategoryIds: ["browse", "fun"] });
+    expect(visible.map((v) => [v.group.root.host, v.children.map((c) => c.host)])).toEqual([
+      ["google.com", ["mail.google.com"]],
+      ["youtube.com", []],
+    ]);
+  });
+
+  it("opens a parent for a matching child without including nonmatching siblings", () => {
+    const [visible] = filterGroups(groups, "", { selectedCategoryIds: ["ai"] });
+    expect(visible.group.root.host).toBe("google.com");
+    expect(visible.children.map((c) => c.host)).toEqual(["gemini.google.com"]);
+    expect(visible.forceOpen).toBe(true);
+    expect(visible.rootMatches).toBe(false);
+  });
+
+  it("does not include children from other categories when their parent matches", () => {
+    const [visible] = filterGroups(groups, "google", { selectedCategoryIds: ["browse"] });
+    expect(visible.rootMatches).toBe(true);
+    expect(visible.children.map((c) => c.host)).toEqual(["mail.google.com"]);
+  });
+
+  it("combines the website search with the selected categories", () => {
+    expect(filterGroups(groups, "youtube", { selectedCategoryIds: ["browse"] })).toEqual([]);
+    const visible = filterGroups(groups, " MAIL ", { selectedCategoryIds: ["browse"] });
+    expect(visible[0].children.map((c) => c.host)).toEqual(["mail.google.com"]);
+    expect(visible[0].forceOpen).toBe(true);
+  });
+
+  it("unassigned mode takes precedence over selected categories", () => {
+    const visible = filterGroups(groups, "", {
+      selectedCategoryIds: ["browse"],
+      unassignedOnly: true,
+    });
+    expect(visible.map((v) => v.group.root.host)).toEqual(["github.com"]);
+  });
+
+  it("keeps an assigned parent only as context for an unassigned child", () => {
+    const input = groupSites([row("example.com", { categoryId: "work" }), row("new.example.com")]);
+    const [visible] = filterGroups(input, "", { unassignedOnly: true });
+    expect(visible.rootMatches).toBe(false);
+    expect(visible.forceOpen).toBe(true);
+    expect(visible.children.map((c) => c.host)).toEqual(["new.example.com"]);
+  });
+
+  it("does not change the original groups while filtering", () => {
+    const original = structuredClone(groups);
+    filterGroups(groups, "", { selectedCategoryIds: ["ai"] });
+    expect(groups).toEqual(original);
+  });
+});
+
+describe("website sorting", () => {
+  const groups = filterGroups(
+    groupSites([
+      row("example.com", { minutes30d: 10, minutesTotal: 100 }),
+      row("b.example.com", { minutes30d: 70, minutesTotal: 200 }),
+      row("a.example.com", { minutes30d: 20, minutesTotal: 400 }),
+      row("youtube.com", { minutes30d: 50, minutesTotal: 900 }),
+    ]),
+    "",
+  );
+  const hosts = (sortBy: Parameters<typeof sortGroups>[1]) =>
+    sortGroups(groups, sortBy).map((group) => group.group.root.host);
+
+  it("sorts by the matching group's recent time, including its subdomains", () => {
+    expect(hosts("recentDesc")).toEqual(["example.com", "youtube.com"]);
+    expect(hosts("recentAsc")).toEqual(["youtube.com", "example.com"]);
+  });
+
+  it("can sort by all-time usage independently of recent usage", () => {
+    expect(hosts("totalDesc")).toEqual(["youtube.com", "example.com"]);
+    expect(hosts("totalAsc")).toEqual(["example.com", "youtube.com"]);
+  });
+
+  it("sorts both parent domains and subdomains alphabetically", () => {
+    const ascending = sortGroups(groups, "nameAsc");
+    expect(ascending.map((v) => v.group.root.host)).toEqual(["example.com", "youtube.com"]);
+    expect(ascending[0].children.map((c) => c.host)).toEqual(["a.example.com", "b.example.com"]);
+    const descending = sortGroups(groups, "nameDesc");
+    expect(descending.map((v) => v.group.root.host)).toEqual(["youtube.com", "example.com"]);
+    expect(descending[1].children.map((c) => c.host)).toEqual(["b.example.com", "a.example.com"]);
+  });
+
+  it("does not include a parent kept only as context in the filtered sorting total", () => {
+    const filtered = filterGroups(
+      groupSites([
+        row("example.com", { categoryId: "browse", minutes30d: 5000 }),
+        row("work.example.com", { categoryId: "work", minutes30d: 10 }),
+        row("github.com", { categoryId: "work", minutes30d: 100 }),
+      ]),
+      "",
+      { selectedCategoryIds: ["work"] },
+    );
+    expect(sortGroups(filtered, "recentDesc").map((v) => v.group.root.host)).toEqual([
+      "github.com",
+      "example.com",
+    ]);
+  });
+
+  it("sorts child rows by time and keeps the default order and input untouched", () => {
+    const original = structuredClone(groups);
+    expect(sortGroups(groups, "recentAsc")[1].children.map((c) => c.host)).toEqual([
+      "a.example.com",
+      "b.example.com",
+    ]);
+    expect(sortGroups(groups, "default")).toEqual(original);
+    expect(groups).toEqual(original);
   });
 });

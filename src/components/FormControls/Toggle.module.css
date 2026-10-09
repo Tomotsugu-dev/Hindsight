@@ -43,6 +43,11 @@
   transform: translateX(16px);
 }
 
+.toggle:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* 暗色：关闭态 track 是 12% 黑、thumb 是深色 surface-card → 暗底上整个开关看不见。
    关闭态 track 改淡白（可见）、thumb 改亮白（深/紫 track 上都清晰）；开启态 accent 紫
    由 :not(.on) 排除、保持原样。亮色不动。 */

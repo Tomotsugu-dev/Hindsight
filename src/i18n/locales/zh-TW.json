@@ -833,6 +833,7 @@
       "searchPlaceholder": "搜尋網站",
       "header": {
         "site": "網站",
+        "domainCount_other": "共 {{count}} 個網域",
         "last30d": "近 30 天",
         "total": "全部",
         "category": "分類"
@@ -847,7 +848,29 @@
       "empty": "還沒有記錄到網站時間。只有開啟「記錄瀏覽器網站網域」時才會記錄網域。",
       "openPrivacy": "開啟隱私設定",
       "noResults": "沒找到匹配的網站",
-      "clearSearch": "清除搜尋"
+      "clearSearch": "清除搜尋",
+      "allAssigned": "所有網站都已分類",
+      "sort": {
+        "default": "預設",
+        "recentDesc": "近 30 天 ↓",
+        "recentAsc": "近 30 天 ↑",
+        "totalDesc": "累計時長 ↓",
+        "totalAsc": "累計時長 ↑",
+        "nameAsc": "網域 A-Z",
+        "nameDesc": "網域 Z-A"
+      },
+      "icons": {
+        "label": "自動下載網站圖示",
+        "confirmTitle": "開啟網站圖示下載？",
+        "confirmAction": "開啟下載",
+        "saveFailed": "無法儲存開關設定，請重試。",
+        "loadFailed": "圖示暫時無法載入，網站分類仍可使用。",
+        "retry": "重試",
+        "previewLabel": "YouTube 圖示範例",
+        "beforeDownload": "下載前",
+        "afterDownload": "下載後",
+        "trafficNote": "注意：下載一個網站圖示約消耗 10～20 KB 網路流量。"
+      }
     }
   },
   "aiSettings": {

@@ -833,6 +833,8 @@
       "searchPlaceholder": "Pesquisar sites",
       "header": {
         "site": "Site",
+        "domainCount_one": "{{count}} domínio no total",
+        "domainCount_other": "{{count}} domínios no total",
         "last30d": "Últimos 30 dias",
         "total": "Todo o período",
         "category": "Categoria"
@@ -849,7 +851,29 @@
       "empty": "Nenhum tempo em sites registrado ainda. Os domínios só são registrados enquanto “Registrar domínios de sites” estiver ativado.",
       "openPrivacy": "Abrir configurações de privacidade",
       "noResults": "Nenhum site corresponde à sua pesquisa",
-      "clearSearch": "Limpar pesquisa"
+      "clearSearch": "Limpar pesquisa",
+      "allAssigned": "Todos os sites já têm categoria",
+      "sort": {
+        "default": "Padrão",
+        "recentDesc": "Últimos 30 dias ↓",
+        "recentAsc": "Últimos 30 dias ↑",
+        "totalDesc": "Total ↓",
+        "totalAsc": "Total ↑",
+        "nameAsc": "Domínio A-Z",
+        "nameDesc": "Domínio Z-A"
+      },
+      "icons": {
+        "label": "Baixar ícones dos sites automaticamente",
+        "confirmTitle": "Ativar o download de ícones dos sites?",
+        "confirmAction": "Ativar downloads",
+        "saveFailed": "Não foi possível salvar a configuração. Tente novamente.",
+        "loadFailed": "Não foi possível carregar os ícones. A classificação de sites continua disponível.",
+        "retry": "Tentar novamente",
+        "previewLabel": "Exemplo de ícone do YouTube",
+        "beforeDownload": "Antes",
+        "afterDownload": "Depois",
+        "trafficNote": "Atenção: baixar um ícone de site consome cerca de 10–20 KB de dados."
+      }
     }
   },
   "aiSettings": {

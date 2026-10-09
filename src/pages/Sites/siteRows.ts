@@ -76,25 +76,75 @@ export interface VisibleGroup {
   group: SiteGroup;
   /** The children to list when the group is open */
   children: SiteRow[];
-  /** The search matched only children, so the group opens to show them. */
+  /** Only children matched the filters, so the group opens to show them. */
   forceOpen: boolean;
+  /** Whether the parent itself matches, rather than just providing context for its children. */
+  rootMatches: boolean;
+}
+
+export type SiteSortBy =
+  | "default"
+  | "recentDesc"
+  | "recentAsc"
+  | "totalDesc"
+  | "totalAsc"
+  | "nameAsc"
+  | "nameDesc";
+
+interface CategoryFilter {
+  selectedCategoryIds?: readonly string[];
+  unassignedOnly?: boolean;
 }
 
 /**
- * Applies the search, ignoring case. A group whose website matches keeps all its children; a
- * group where only some children match shows just those, opened.
+ * Applies search and category filters to individual websites, including inherited categories.
+ * A matching child keeps its parent as context and opens the group. Nonmatching children are hidden.
  */
-export function filterGroups(groups: SiteGroup[], search: string): VisibleGroup[] {
+export function filterGroups(
+  groups: SiteGroup[],
+  search: string,
+  { selectedCategoryIds = [], unassignedOnly = false }: CategoryFilter = {},
+): VisibleGroup[] {
   const needle = search.trim().toLowerCase();
-  const matches = (row: SiteRow) => row.host.toLowerCase().includes(needle);
+  const selected = new Set(selectedCategoryIds);
+  const matches = (row: SiteRow) => {
+    const categoryMatches = unassignedOnly
+      ? row.categoryId === null
+      : selected.size === 0 || (row.categoryId !== null && selected.has(row.categoryId));
+    return categoryMatches && row.host.toLowerCase().includes(needle);
+  };
   const visible: VisibleGroup[] = [];
   for (const group of groups) {
-    if (!needle || matches(group.root)) {
-      visible.push({ group, children: group.children, forceOpen: false });
-      continue;
-    }
+    const rootMatches = matches(group.root);
     const children = group.children.filter(matches);
-    if (children.length > 0) visible.push({ group, children, forceOpen: true });
+    if (rootMatches || children.length > 0) {
+      visible.push({ group, children, forceOpen: !rootMatches, rootMatches });
+    }
   }
   return visible;
+}
+
+/** Sorts matching groups and their children without changing the original website list. */
+export function sortGroups(groups: VisibleGroup[], sortBy: SiteSortBy): VisibleGroup[] {
+  if (sortBy === "default") return groups;
+  const descending = sortBy === "recentDesc" || sortBy === "totalDesc" || sortBy === "nameDesc";
+  const direction = descending ? -1 : 1;
+  const names = sortBy === "nameAsc" || sortBy === "nameDesc";
+  const field = sortBy === "totalAsc" || sortBy === "totalDesc" ? "minutesTotal" : "minutes30d";
+  const compareRows = (a: SiteRow, b: SiteRow) => {
+    const difference = names ? a.host.localeCompare(b.host) : a[field] - b[field];
+    return direction * difference || a.host.localeCompare(b.host);
+  };
+  const total = (group: VisibleGroup) =>
+    (group.rootMatches ? group.group.root[field] : 0) +
+    group.children.reduce((sum, child) => sum + child[field], 0);
+
+  return groups
+    .map((group) => ({ ...group, children: [...group.children].sort(compareRows) }))
+    .sort((a, b) => {
+      const difference = names
+        ? a.group.root.host.localeCompare(b.group.root.host)
+        : total(a) - total(b);
+      return direction * difference || a.group.root.host.localeCompare(b.group.root.host);
+    });
 }
