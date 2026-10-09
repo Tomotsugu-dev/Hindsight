@@ -156,10 +156,13 @@ export function InsightTiles({
           <div className={styles.label}>{t(`${scope}.insights.avgVsPrev`)}</div>
         </div>
       )}
-      <div className={styles.tile}>
-        {cValue}
-        <div className={styles.label}>{cLabel}</div>
-      </div>
+      {/* No breakdown tile for a picked category; the grid keeps its columns, so nothing moves. */}
+      {third !== undefined && (
+        <div className={styles.tile}>
+          {cValue}
+          <div className={styles.label}>{cLabel}</div>
+        </div>
+      )}
     </div>
   );
 }

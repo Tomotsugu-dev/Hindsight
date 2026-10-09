@@ -30,7 +30,7 @@ import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
-import { usePeriodInsights } from "../../hooks/usePeriodInsights";
+import { insightDrill, usePeriodInsights } from "../../hooks/usePeriodInsights";
 import { useAppFocus } from "../../hooks/useAppFocus";
 import {
   useSuperCategoryBreakdown,
@@ -236,17 +236,20 @@ export default function TodayPage() {
     : t("today.ranks.topCategories");
 
   // 顶部洞察行：当期 vs 上期 · 峰值小时 · 主力大类
-  // drill 时该大类视角；上期同 super-cat lookup
+  // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
   const peakLabelForHour = useCallback(
     (slot: HourSlot) => `${String(slot.hour).padStart(2, "0")}:00`,
     [],
   );
-  const prevDrilledSlice = useMemo(
+  const drill = useMemo(
     () =>
-      drilledSlice
-        ? prevBreakdown.slices.find((s) => s.id === drilledSlice.id) ?? null
-        : null,
-    [drilledSlice, prevBreakdown],
+      insightDrill(
+        currBreakdown.slices,
+        prevBreakdown.slices,
+        drilledSlice?.id ?? null,
+        pickedCat?.id ?? null,
+      ),
+    [currBreakdown, prevBreakdown, drilledSlice, pickedCat],
   );
   const insights = usePeriodInsights({
     curr: hours,
@@ -254,9 +257,7 @@ export default function TodayPage() {
     buildPeakLabel: peakLabelForHour,
     topSlice: currBreakdown.slices[0] ?? null,
     currTotal: totalMinutes,
-    drill: drilledSlice
-      ? { slice: drilledSlice, prevSlice: prevDrilledSlice }
-      : undefined,
+    drill,
   });
 
   // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字
