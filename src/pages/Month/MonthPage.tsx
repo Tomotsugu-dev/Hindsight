@@ -13,7 +13,11 @@ import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
-import { usePeriodInsights } from "../../hooks/usePeriodInsights";
+import {
+  drillMinutes,
+  insightDrill,
+  usePeriodInsights,
+} from "../../hooks/usePeriodInsights";
 import { useAppFocus } from "../../hooks/useAppFocus";
 import {
   useSuperCategoryBreakdown,
@@ -264,7 +268,7 @@ export default function MonthPage() {
     : t("month.ranks.topCategories");
 
   // 顶部洞察行：当期 vs 上月 · 峰值日 · 主力大类
-  // drill 时该大类视角；上期同 super-cat lookup
+  // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
   const peakLabelForDay = useCallback(
     (day: DaySummary) =>
       t("month.insights.peakDate", {
@@ -273,27 +277,33 @@ export default function MonthPage() {
       }),
     [t],
   );
-  const prevDrilledSlice = useMemo(
+  const drill = useMemo(
     () =>
-      drilledSlice
-        ? prevBreakdown.slices.find((s) => s.id === drilledSlice.id) ?? null
-        : null,
-    [drilledSlice, prevBreakdown],
+      insightDrill(
+        currBreakdown.slices,
+        prevBreakdown.slices,
+        drilledSlice?.id ?? null,
+        pickedCat?.id ?? null,
+      ),
+    [currBreakdown, prevBreakdown, drilledSlice, pickedCat],
   );
-  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类的日均，
+  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类（或选中小类）的日均，
   // 分子分母都按已完成天口径(上月是完整周期,分母 = 上月自然天数)。
-  // 上月没有该大类（prevDrilledSlice=null）按 0 算，对比语义即"从无到有"。
-  const displayedAvgMinutes = drilledSlice
+  // 上月没有它按 0 算，对比语义即"从无到有"。
+  const displayedAvgMinutes = drill
     ? completedDays.length > 0
       ? Math.round(
-          (completedBreakdown.slices.find((s) => s.id === drilledSlice.id)
-            ?.minutes ?? 0) / completedDays.length,
+          drillMinutes(
+            completedBreakdown.slices,
+            drilledSlice?.id ?? null,
+            pickedCat?.id ?? null,
+          ) / completedDays.length,
         )
       : undefined
     : avgPerCompletedDay;
-  const displayedPrevAvgMinutes = drilledSlice
+  const displayedPrevAvgMinutes = drill
     ? prevBreakdown.total > 0 && slideDaysList[0].length > 0
-      ? Math.round((prevDrilledSlice?.minutes ?? 0) / slideDaysList[0].length)
+      ? Math.round(drill.prevMinutes / slideDaysList[0].length)
       : undefined // 上月整月无数据：显示 — 而非"从无到有"
     : prevAvgPerTotalDays;
   const insights = usePeriodInsights({
@@ -302,9 +312,7 @@ export default function MonthPage() {
     buildPeakLabel: peakLabelForDay,
     topSlice: currBreakdown.slices[0] ?? null,
     currTotal: totalMinutes,
-    drill: drilledSlice
-      ? { slice: drilledSlice, prevSlice: prevDrilledSlice }
-      : undefined,
+    drill,
   });
 
   // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字（日均按上月天数算）
