@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ai::config::AiConfig;
-use crate::capture::ignore::IgnoreRule;
 use crate::ai::download_sources::DownloadSources;
+use crate::capture::ignore::IgnoreRule;
 use crate::error::Result;
 use crate::storage::SqliteResultExt;
 use crate::storage::{db_path_dir, DbPool};

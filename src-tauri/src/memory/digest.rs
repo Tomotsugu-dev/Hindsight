@@ -316,7 +316,10 @@ impl Pipeline {
     /// 然后预拉起 worker 并完成握手。把 Paddle 的 10-30s 冷启动放在这里,
     /// 是让"引擎起不来"落进「引擎级失败中断整批」的既有语义,
     /// 而不是被算进第一帧的请求超时。
-    async fn load(fast: bool, sources: &crate::ai::download_sources::DownloadSources) -> Result<Self> {
+    async fn load(
+        fast: bool,
+        sources: &crate::ai::download_sources::DownloadSources,
+    ) -> Result<Self> {
         ensure_models(sources).await?;
         let sup = Arc::clone(crate::ai::ocr_supervisor::global());
         sup.set_fast(fast).await;
@@ -1566,9 +1569,12 @@ mod tests {
             .unwrap();
         println!("回填 {n} 帧,保留 {date} 的部分");
 
-        let report = run(&mem, &crate::ai::download_sources::DownloadSources::default())
-            .await
-            .unwrap();
+        let report = run(
+            &mem,
+            &crate::ai::download_sources::DownloadSources::default(),
+        )
+        .await
+        .unwrap();
         println!("消化账单: {report:?}");
 
         let (sessions, lines, hits): (i64, i64, i64) = mem

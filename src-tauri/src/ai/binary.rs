@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-use crate::ai::platform::{self, Platform};
 use crate::ai::download_sources::DownloadSources;
+use crate::ai::platform::{self, Platform};
 use crate::error::{Error, Result};
 
 const ENGINE_SUBDIR: &str = "ai/bin";
