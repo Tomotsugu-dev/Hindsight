@@ -99,7 +99,7 @@ async fn check_once(app: &AppHandle) -> crate::error::Result<()> {
         SCHEDULED_OCR_STARTED_EVENT,
         serde_json::json!({ "pending": pending }),
     );
-    match digest::run(mem).await {
+    match digest::run(mem, &cfg.download_sources).await {
         Ok(report) => log::info!("定时补识别完成: {report:?}"),
         // 被拒 = 批根本没开跑(上面的 is_running 检查与 run 内部抢权之间,
         // 别的批可能抢先;或恰好进入冷却)。必须退还当天标记——定时点每天

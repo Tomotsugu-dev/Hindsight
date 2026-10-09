@@ -199,7 +199,7 @@ pub fn run() {
                 // OCR 常驻模式:按设置启停(设置保存时由 commands::settings 再同步)
                 let resident = std::sync::Arc::new(memory::resident::ResidentOcr::default());
                 resident
-                    .sync(cfg.memory_ocr_resident, memdb.clone())
+                    .sync(cfg.memory_ocr_resident, memdb.clone(), pool.clone())
                     .await;
                 handle.manage(resident);
                 let memdb_for_sync = memdb.clone();

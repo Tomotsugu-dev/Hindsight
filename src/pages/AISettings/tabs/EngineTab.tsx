@@ -27,6 +27,7 @@ import {
   type EngineStatus,
 } from "../../../api/hindsight";
 import { useAiSettings } from "../shared/useAiSettings";
+import { DownloadSourcesSection } from "../shared/DownloadSourcesSection";
 import {
   ENGINE_BATCH_OPTIONS,
   ENGINE_CTX_OPTIONS,
@@ -117,6 +118,7 @@ export default function EngineTab() {
 
   return (
     <div className={styles.content}>
+      <DownloadSourcesSection />
       <Section
         title={t("aiSettings.engine.sectionTitle")}
         description={t("aiSettings.engine.sectionDesc")}

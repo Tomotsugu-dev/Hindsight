@@ -291,6 +291,8 @@ export interface RecommendedModel {
    *  定位类 `FAST` / `BALANCED` / `REASONING` / `R1`；
    *  标记类 `DEFAULT`（首推）。识别不出的 type 走 fallback 灰色。 */
   caps: string[];
+  /** 模型发布时间，`YYYY-MM-DD`。空串表示未知。 */
+  released: string;
 }
 
 /** 下载 GGUF 时的进度事件 payload。`file` 字段标识哪个文件（main / mmproj）。 */
@@ -570,6 +572,13 @@ export interface IgnoreRulesResult {
   reappliedRows: number;
 }
 
+export interface DownloadSources {
+  mode: "official" | "mirror" | "custom";
+  huggingfaceUrl: string;
+  githubProxyUrl: string;
+  nugetUrl: string;
+}
+
 export interface Settings {
   captureEnabled: boolean;
   /** 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续 */
@@ -595,6 +604,7 @@ export interface Settings {
   recordBrowserHost: boolean;
   /** Allows this device to download website icons. Off by default; cached icons stay visible. */
   downloadSiteIcons: boolean;
+  downloadSources: DownloadSources;
   /** 关闭按钮（窗口右上角 X）行为：true=隐藏到系统托盘，false=直接退出。 */
   minimizeToTray: boolean;
   /** 是否自动检查应用更新 */

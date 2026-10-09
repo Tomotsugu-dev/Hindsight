@@ -98,6 +98,7 @@ pub async fn download_model(
     let file_for_emit = local_name.clone();
     let path = models::download_from_hf(
         &cfg.ai,
+        &cfg.download_sources,
         &repo,
         &file,
         save_as.as_deref(),
