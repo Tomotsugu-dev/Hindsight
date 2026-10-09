@@ -23,6 +23,7 @@ impl OutboxOp {
 pub enum OutboxEntity {
     Activity,
     Category,
+    SiteRule,
     Device,
     AppIcon,
     AppGroup,
@@ -34,6 +35,7 @@ impl OutboxEntity {
         match self {
             OutboxEntity::Activity => "activity",
             OutboxEntity::Category => "category",
+            OutboxEntity::SiteRule => "site_rule",
             OutboxEntity::Device => "device",
             OutboxEntity::AppIcon => "app_icon",
             OutboxEntity::AppGroup => "app_group",
@@ -91,6 +93,7 @@ pub fn enqueue_every_file(conn: &Connection, self_id: &str) -> rusqlite::Result<
     }
     for entity in [
         OutboxEntity::Category,
+        OutboxEntity::SiteRule,
         OutboxEntity::Device,
         OutboxEntity::AppIcon,
         OutboxEntity::AppGroup,

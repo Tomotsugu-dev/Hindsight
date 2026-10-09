@@ -452,11 +452,14 @@ pub fn cascade_category_deletion(
     }
 
     // Soft-delete website rules that point to this category.
-    conn.execute(
+    let removed_rules = conn.execute(
         "UPDATE site_rules SET deleted_at = ?2, updated_at = ?2
          WHERE category_id = ?1 AND deleted_at IS NULL",
         rusqlite::params![category_id, now],
     )?;
+    if removed_rules > 0 {
+        enqueue(conn, OutboxOp::Upsert, OutboxEntity::SiteRule, "*", "{}")?;
+    }
 
     Ok(())
 }

@@ -14,7 +14,7 @@ use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload,
+    DeviceMetaPayload, SiteRulePayload,
 };
 
 const PUSH_BATCH_SIZE: usize = 200;
@@ -192,6 +192,7 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
                 }
             },
             "category" => FileKind::Categories,
+            "site_rule" => FileKind::SiteRules,
             "device" => FileKind::DeviceMeta,
             "app_icon" => FileKind::AppIcons,
             "app_group" => FileKind::AppGroups,
@@ -213,6 +214,7 @@ async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<
     match kind {
         FileKind::Activities(date) => build_activities_day(pool, self_id, &date.to_string()).await,
         FileKind::Categories => build_categories(pool).await,
+        FileKind::SiteRules => build_site_rules(pool).await,
         FileKind::DeviceMeta => build_device_meta(pool, self_id).await,
         FileKind::AppIcons => build_app_icons(pool).await,
         FileKind::AppGroups => build_app_groups(pool).await,
@@ -313,6 +315,25 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
                 sort_order: r.get(5)?,
                 updated_at: r.get(6)?,
                 deleted_at: r.get(7)?,
+            })
+        },
+    )
+    .await
+}
+
+async fn build_site_rules(pool: &DbPool) -> Result<Vec<u8>> {
+    build_table_rows(
+        pool,
+        "SELECT host, browser, device, category_id, updated_at, deleted_at
+         FROM site_rules ORDER BY host, browser, device",
+        |r| {
+            Ok(SiteRulePayload {
+                host: r.get(0)?,
+                browser: r.get(1)?,
+                device: r.get(2)?,
+                category_id: r.get(3)?,
+                updated_at: r.get(4)?,
+                deleted_at: r.get(5)?,
             })
         },
     )

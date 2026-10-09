@@ -12,6 +12,7 @@ use rusqlite::OptionalExtension;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
+use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::repo::sql::matching_rule_host_sql;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
@@ -147,33 +148,26 @@ pub async fn set(pool: &DbPool, host: &str, category_id: &str) -> Result<()> {
         return Err(Error::InvalidInput("category id must not be empty"));
     }
 
-    // Reject a missing or deleted category: the database would store the rule anyway,
-    // and the rule would have no effect in statistics
-    let c = cat.clone();
-    let cat_exists = pool
+    let now = utc_now_rfc3339();
+    let outcome = pool
         .0
         .call(move |conn| {
-            conn.query_row(
-                "SELECT 1 FROM categories WHERE id = ?1 AND deleted_at IS NULL",
-                rusqlite::params![c],
-                |_| Ok(()),
-            )
-            .optional()
-            .db()
-        })
-        .await?
-        .is_some();
-    if !cat_exists {
-        return Err(Error::InvalidInput(
-            "category does not exist or was deleted",
-        ));
-    }
-
-    let now = utc_now_rfc3339();
-    pool.0
-        .call(move |conn| {
-            conn.execute(
-                "INSERT INTO site_rules(host, category_id, updated_at)
+            let tx = conn.transaction().db()?;
+            let category_exists = tx
+                .query_row(
+                    "SELECT 1 FROM categories WHERE id = ?1 AND deleted_at IS NULL",
+                    [&cat],
+                    |_| Ok(()),
+                )
+                .optional()
+                .db()?
+                .is_some();
+            if !category_exists {
+                return Ok(Err("category does not exist or was deleted"));
+            }
+            let changed = tx
+                .execute(
+                    "INSERT INTO site_rules(host, category_id, updated_at)
                  VALUES(?1, ?2, ?3)
                  ON CONFLICT(host, browser, device) DO UPDATE
                     SET category_id = excluded.category_id,
@@ -181,13 +175,17 @@ pub async fn set(pool: &DbPool, host: &str, category_id: &str) -> Result<()> {
                         deleted_at = NULL
                   WHERE site_rules.category_id IS NOT excluded.category_id
                      OR site_rules.deleted_at IS NOT NULL",
-                rusqlite::params![host, cat, now],
-            )
-            .db()?;
-            Ok(())
+                    rusqlite::params![host, cat, now],
+                )
+                .db()?;
+            if changed > 0 {
+                enqueue(&tx, OutboxOp::Upsert, OutboxEntity::SiteRule, &host, "{}").db()?;
+            }
+            tx.commit().db()?;
+            Ok(Ok(()))
         })
         .await?;
-    Ok(())
+    outcome.map_err(Error::InvalidInput)
 }
 
 /// Removes the website's own rule by setting `deleted_at`. The row stays so that sync can
@@ -197,13 +195,18 @@ pub async fn remove(pool: &DbPool, host: &str) -> Result<()> {
     let now = utc_now_rfc3339();
     pool.0
         .call(move |conn| {
-            conn.execute(
-                "UPDATE site_rules SET deleted_at = ?2, updated_at = ?2
+            let tx = conn.transaction().db()?;
+            let changed = tx
+                .execute(
+                    "UPDATE site_rules SET deleted_at = ?2, updated_at = ?2
                  WHERE host = ?1 AND browser = '' AND device = '' AND deleted_at IS NULL",
-                rusqlite::params![host, now],
-            )
-            .db()?;
-            Ok(())
+                    rusqlite::params![host, now],
+                )
+                .db()?;
+            if changed > 0 {
+                enqueue(&tx, OutboxOp::Upsert, OutboxEntity::SiteRule, &host, "{}").db()?;
+            }
+            tx.commit().db()
         })
         .await?;
     Ok(())
@@ -283,13 +286,28 @@ mod tests {
             .unwrap()
     }
 
-    /// 设置、改分类、取消、取消后重新设置；同一个分类再设一次不动 updated_at。
+    async fn rule_outbox_count(pool: &DbPool) -> i64 {
+        pool.0
+            .call(|conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM sync_outbox WHERE entity = 'site_rule'",
+                    [],
+                    |r| r.get(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 设置、改分类、取消、取消后重新设置；没有变化时不动时间戳，也不入同步队列。
     #[tokio::test]
     async fn set_change_remove_and_set_again() {
         let pool = fresh_test_pool().await;
         visit(&pool, TODAY, "bilibili.com", 600, false).await;
 
         set(&pool, "bilibili.com", "video").await.unwrap();
+        assert_eq!(rule_outbox_count(&pool).await, 1);
         assert_eq!(
             row(&pool, "bilibili.com")
                 .await
@@ -302,17 +320,22 @@ mod tests {
         set(&pool, "bilibili.com", "code").await.unwrap();
         let (cat, updated, _) = stored(&pool, "bilibili.com").await.unwrap();
         assert_eq!(cat, "code");
+        assert_eq!(rule_outbox_count(&pool).await, 2);
 
         set(&pool, "bilibili.com", "code").await.unwrap();
         let (_, updated_again, _) = stored(&pool, "bilibili.com").await.unwrap();
         assert_eq!(updated, updated_again, "没改东西的写入不能动 updated_at");
+        assert_eq!(rule_outbox_count(&pool).await, 2);
 
         remove(&pool, "bilibili.com").await.unwrap();
         let (_, _, deleted) = stored(&pool, "bilibili.com").await.unwrap();
         assert!(deleted.is_some(), "取消是软删，行还在");
+        assert_eq!(rule_outbox_count(&pool).await, 3);
         assert_eq!(row(&pool, "bilibili.com").await.unwrap().category_id, None);
 
         remove(&pool, "bilibili.com").await.unwrap();
+        remove(&pool, "no-rule.example").await.unwrap();
+        assert_eq!(rule_outbox_count(&pool).await, 3);
 
         set(&pool, "bilibili.com", "video").await.unwrap();
         let (cat, _, deleted) = stored(&pool, "bilibili.com").await.unwrap();
@@ -321,6 +344,7 @@ mod tests {
             ("video", None),
             "取消后重新设置要恢复"
         );
+        assert_eq!(rule_outbox_count(&pool).await, 4);
     }
 
     /// 子域名跟随母域名的规则；长得像但不是子域名的不算；子域名自己有规则时不再跟随，
@@ -430,7 +454,53 @@ mod tests {
 
         let (_, _, deleted) = stored(&pool, "github.com").await.unwrap();
         assert!(deleted.is_some());
+        assert_eq!(rule_outbox_count(&pool).await, 2);
+        crate::repo::categories::delete(&pool, "code")
+            .await
+            .unwrap();
+        assert_eq!(rule_outbox_count(&pool).await, 2);
         assert_eq!(row(&pool, "github.com").await.unwrap().category_id, None);
+    }
+
+    #[tokio::test]
+    async fn rule_changes_roll_back_when_outbox_write_fails() {
+        let pool = fresh_test_pool().await;
+        set(&pool, "github.com", "code").await.unwrap();
+        let before = stored(&pool, "github.com").await.unwrap();
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "CREATE TRIGGER reject_rule_outbox BEFORE INSERT ON sync_outbox
+                     WHEN NEW.entity = 'site_rule'
+                     BEGIN SELECT RAISE(ABORT, 'injected outbox failure'); END;",
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+
+        assert!(set(&pool, "github.com", "video").await.is_err());
+        assert_eq!(stored(&pool, "github.com").await.unwrap(), before);
+        assert!(remove(&pool, "github.com").await.is_err());
+        assert_eq!(stored(&pool, "github.com").await.unwrap(), before);
+        assert!(crate::repo::categories::delete(&pool, "code")
+            .await
+            .is_err());
+        assert_eq!(stored(&pool, "github.com").await.unwrap(), before);
+        assert_eq!(rule_outbox_count(&pool).await, 1);
+        let category_is_live: bool = pool
+            .0
+            .call(|conn| {
+                conn.query_row(
+                    "SELECT deleted_at IS NULL FROM categories WHERE id = 'code'",
+                    [],
+                    |r| r.get(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        assert!(category_is_live);
     }
 
     /// 域名去掉首尾空格、转小写再存；空域名、空分类、不存在的分类都拒绝。

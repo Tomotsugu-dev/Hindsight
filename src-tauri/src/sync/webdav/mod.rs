@@ -255,8 +255,8 @@ impl WebDavClient {
                     }
                 },
                 Err(e) => {
-                    log::warn!("webdav: manifest of {device_id} not fetched: {e}");
-                    continue;
+                    // An incomplete listing must not advance the streams' cursors.
+                    return Err(e);
                 }
             };
 
@@ -270,7 +270,13 @@ impl WebDavClient {
             let mut need_merge: HashMap<Dataset, u64> = HashMap::new();
             let mut bookmark_changed = false;
             for (dataset, local_cursor) in &behind {
-                if *local_cursor >= merged_cursor.as_str() {
+                let has_files = manifest.files.keys().any(|file| {
+                    path_to_flat_name(&format!("{device_id}/{file}"))
+                        .and_then(|name| FileName::parse(&name))
+                        .is_some_and(|name| name.kind.dataset() == *dataset)
+                });
+                // An empty dataset has nothing to merge from this manifest.
+                if !has_files || *local_cursor >= merged_cursor.as_str() {
                     bookmarks.insert(
                         dataset.name().to_string(),
                         Bookmark {
