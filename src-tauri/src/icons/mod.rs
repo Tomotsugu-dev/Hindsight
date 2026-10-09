@@ -2,6 +2,8 @@ use std::path::Path;
 
 use crate::error::Result;
 
+pub(crate) mod site;
+
 #[cfg(target_os = "macos")]
 mod macos_impl;
 #[cfg(target_os = "windows")]
