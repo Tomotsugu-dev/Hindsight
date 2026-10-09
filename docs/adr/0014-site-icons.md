@@ -39,6 +39,7 @@ sequenceDiagram
 | Download succeeds | Saved as `<domain>.png` |
 | Download fails or the format is not supported (such as SVG) | An empty `<domain>.failed` file is left, and the website is not tried again for 7 days. The page shows the globe icon. |
 | Clear data | The whole `site-icons/` folder is deleted, together with the activity records |
+| A website is no longer listed (the data of an app or a device was deleted) | Its icon and `.failed` file are deleted the next time the page opens |
 
 ## Decisions and rationale
 
@@ -74,3 +75,4 @@ sequenceDiagram
 - When `favicon.ico` fails, the icon address is read from the home page. After both fail, the website is not tried again for 7 days.
 - ICO, PNG, and JPEG are converted to 32×32 PNG; SVG is recorded as a failure.
 - After Clear data, the `site-icons/` folder is gone.
+- After all history of a website is deleted, opening the page deletes its icon.
