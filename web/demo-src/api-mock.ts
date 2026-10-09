@@ -252,10 +252,10 @@ export const api = {
     const hourTotal = barMinutes(slot.segments);
     const dayTotal = day.apps.reduce((s, a) => s + a.minutes, 0);
     const scale = dayTotal > 0 ? hourTotal / dayTotal : 0;
-    const scaled = hourApps.map((a) => ({
-      ...a,
-      minutes: Math.max(1, Math.round(a.minutes * scale * 2)),
-    }));
+    const scaled = hourApps.map((a) => {
+      const minutes = Math.max(1, Math.round(a.minutes * scale * 2));
+      return { ...a, minutes, byCategory: [{ categoryId: a.categoryId, secs: minutes * 60 }] };
+    });
     scaled.sort((a, b) => b.minutes - a.minutes);
     return limit ? scaled.slice(0, limit) : scaled;
   },
@@ -312,8 +312,10 @@ export const api = {
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -385,8 +387,10 @@ export const api = {
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -420,8 +424,10 @@ export const api = {
     for (const offset of rangeOffsets(from, to)) {
       for (const a of mockDayFor(offset, deviceId).apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     return Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);

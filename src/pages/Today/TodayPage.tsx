@@ -38,6 +38,7 @@ import {
 } from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
+import { appsInCategories } from "../../utils/appCategoryTime";
 import type { HourSlot } from "../../api/hindsight";
 import styles from "./TodayPage.module.css";
 
@@ -197,7 +198,7 @@ export default function TodayPage() {
 
   // drill 状态下：底部两卡片同步缩进到该大类范围
   // - 标题改为「主要应用」/「分类构成」（复用 PieDrillDetail 已有 i18n key）
-  // - app 排行只留 categoryId 命中该大类 cats 的；category 排行只留该大类下属
+  // - app 排行只留在这些分类里有时间的应用，只显示这部分时间；category 排行只留该大类下属
   const drilledSlice =
     drillId !== null
       ? currBreakdown.slices.find((s) => s.id === drillId) ?? null
@@ -214,9 +215,9 @@ export default function TodayPage() {
   const displayedAppRanks = useMemo(
     () =>
       pickedCat
-        ? appRanks.filter((r) => r.categoryId === pickedCat.id)
+        ? appsInCategories(appRanks, new Set([pickedCat.id]))
         : childCatIds
-          ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+          ? appsInCategories(appRanks, childCatIds)
           : appRanks,
     [appRanks, childCatIds, pickedCat],
   );

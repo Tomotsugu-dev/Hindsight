@@ -275,7 +275,7 @@ export function ActivityRings({
       ? (() => {
           const [a0, a1] = singleSegs[focusSegIndex];
           const seg = single.segments[focusSegIndex];
-          const frac = Math.min(1, focus.minutes / Math.max(seg.minutes, 1));
+          const frac = Math.min(1, focus.categoryMinutes / Math.max(seg.minutes, 1));
           return { a0, end: a0 + (a1 - a0) * frac };
         })()
       : null;

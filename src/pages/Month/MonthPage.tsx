@@ -39,6 +39,7 @@ import {
   type PieDepth,
 } from "../../state/statsView";
 import type { DaySummary } from "../../api/hindsight";
+import { appsInCategories } from "../../utils/appCategoryTime";
 import styles from "./MonthPage.module.css";
 
 /** 见 WeekPage 同名函数：days[i].date → 相对今天的 dayOffset。 */
@@ -242,9 +243,9 @@ export default function MonthPage() {
   const displayedAppRanks = useMemo(
     () =>
       pickedCat
-        ? appRanks.filter((r) => r.categoryId === pickedCat.id)
+        ? appsInCategories(appRanks, new Set([pickedCat.id]))
         : childCatIds
-          ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+          ? appsInCategories(appRanks, childCatIds)
           : appRanks,
     [appRanks, childCatIds, pickedCat],
   );

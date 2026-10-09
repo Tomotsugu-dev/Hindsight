@@ -17,6 +17,7 @@ import {
 } from "../../hooks/useSuperCategoryBreakdown";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { useDurationFormatter } from "../../utils/duration";
+import { appsInCategories } from "../../utils/appCategoryTime";
 import type { AppUsage, DaySummaryDto } from "../../api/hindsight";
 import { AppDetailCard, type HistoryApp } from "./AppDetailCard";
 import { Heatmap } from "./Heatmap";
@@ -184,12 +185,11 @@ export default function StatsTab() {
     [scopedBreakdown.slices],
   );
 
-  // —— 应用：拉这个范围的；选了大类就只留这个大类下的 ——
+  // —— 应用：拉这个范围的；选了大类就只留在这个大类里有时间的，只显示这部分时间 ——
   const appsLoad = useRangeApps(scopeFrom, scopeTo, selectedDeviceId);
   const scopedApps = appsLoad.data ?? appsLoad.latest ?? NO_APPS;
   const shownApps = useMemo(
-    () =>
-      superCatIds ? scopedApps.filter((a) => superCatIds.has(a.categoryId)) : scopedApps,
+    () => (superCatIds ? appsInCategories(scopedApps, superCatIds) : scopedApps),
     [scopedApps, superCatIds],
   );
   const { appRanks } = usePeriodRankings(scopedDays, shownApps);

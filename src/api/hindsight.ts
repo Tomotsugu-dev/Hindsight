@@ -23,6 +23,9 @@ export interface AppUsage {
   minutes: number;
   /** AppIcon 用来查图标的代表 process_name；合并组里取一个稳定成员名 */
   iconProcess: string;
+  /** This app's time in each category it counts toward, most first. Website rules can split a
+   * browser's time across categories, so filter apps by category with this, not `categoryId`. */
+  byCategory: CategoryTime[];
 }
 
 /** 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时（日/周/月共用）。 */

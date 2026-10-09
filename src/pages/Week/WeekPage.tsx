@@ -39,6 +39,7 @@ import {
   type PieDepth,
 } from "../../state/statsView";
 import type { DaySummary } from "../../api/hindsight";
+import { appsInCategories } from "../../utils/appCategoryTime";
 import styles from "./WeekPage.module.css";
 
 /** Sun..Sat → mon..sun key（i18n 里是星期一开头）。 */
@@ -230,9 +231,9 @@ export default function WeekPage() {
   const displayedAppRanks = useMemo(
     () =>
       pickedCat
-        ? appRanks.filter((r) => r.categoryId === pickedCat.id)
+        ? appsInCategories(appRanks, new Set([pickedCat.id]))
         : childCatIds
-          ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+          ? appsInCategories(appRanks, childCatIds)
           : appRanks,
     [appRanks, childCatIds, pickedCat],
   );
