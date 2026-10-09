@@ -8,7 +8,7 @@
 
 mod fetch;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -51,6 +51,23 @@ pub(crate) fn icon_paths_by_host(dir: &Path) -> HashMap<String, String> {
             Some((host, path.to_string_lossy().into_owned()))
         })
         .collect()
+}
+
+/// Deletes the files in `dir` (the `site-icons/` folder) whose website is not in `listed`.
+///
+/// `listed` is the set of websites the page still lists. A website leaves the list when its
+/// history is deleted, and its icon would still show that it was visited. A file's website is
+/// its name without the last extension, so a leftover `.png.tmp` is deleted too.
+pub(crate) fn prune(dir: &Path, listed: &HashSet<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for path in entries.filter_map(|entry| Some(entry.ok()?.path())) {
+        let host = path.file_stem().and_then(|s| s.to_str());
+        if !host.is_some_and(|h| listed.contains(h)) {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
 
 /// What one call downloaded.
@@ -181,6 +198,28 @@ mod tests {
         assert!(needs_download(&dir, "bilibili.com", now), "两种文件都没有");
         assert!(!needs_download(&dir, "localhost", now), "本地地址");
         assert!(!needs_download(&dir, "../etc", now), "不能当文件名的");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// 删了 Chrome 连同它的数据：只在 Chrome 里出现过的 bilibili、openai 不在列表里了，
+    /// 它们的图标和失败记号跟着删；github 还在列表里，留着。崩溃留下的临时文件也删掉。
+    #[test]
+    fn prune_deletes_websites_no_longer_listed() {
+        let dir = temp_dir();
+        std::fs::write(dir.join("bilibili.com.png"), ico(32)).unwrap();
+        std::fs::write(dir.join("github.com.png"), ico(32)).unwrap();
+        std::fs::write(dir.join("github.com.png.tmp"), b"half").unwrap();
+        failed_days_ago(&dir, "openai.com", 1);
+        let listed = HashSet::from(["github.com".to_string()]);
+
+        prune(&dir, &listed);
+
+        let mut left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["github.com.png"]);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
