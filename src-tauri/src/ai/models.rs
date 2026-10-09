@@ -365,7 +365,7 @@ where
 /// progress 回调里 emit 的 file 字段也应该用 `save_as`，让前端能按落盘名索引。
 pub async fn download_from_hf<F>(
     cfg: &AiConfig,
-    sources: &crate::download_sources::DownloadSources,
+    sources: &crate::ai::download_sources::DownloadSources,
     repo: &str,
     hf_file: &str,
     save_as: Option<&str>,

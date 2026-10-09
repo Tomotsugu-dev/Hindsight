@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ai::config::AiConfig;
 use crate::capture::ignore::IgnoreRule;
-use crate::download_sources::DownloadSources;
+use crate::ai::download_sources::DownloadSources;
 use crate::error::Result;
 use crate::storage::SqliteResultExt;
 use crate::storage::{db_path_dir, DbPool};
@@ -641,7 +641,7 @@ mod tests {
             record_browser_host: false,
             download_site_icons: true,
             download_sources: DownloadSources {
-                mode: crate::download_sources::DownloadSourceMode::Custom,
+                mode: crate::ai::download_sources::DownloadSourceMode::Custom,
                 huggingface_url: "https://models.example/hf".into(),
                 github_proxy_url: "https://downloads.example/github".into(),
                 nuget_url: "https://packages.example/nuget".into(),

@@ -107,7 +107,7 @@ pub fn is_installed() -> Result<bool> {
 /// - `Downloading`: 已下字节累计 + content_length（节流 ~120ms）
 /// - `Verifying` / `Extracting` / `Done`: 单点信号
 pub async fn download<F>(
-    sources: &crate::download_sources::DownloadSources,
+    sources: &crate::ai::download_sources::DownloadSources,
     mut progress: F,
 ) -> Result<()>
 where

@@ -232,7 +232,7 @@ fn is_infra_failure(e: &Error) -> bool {
 /// OCR 模型三件套:缺哪个下哪个。幂等。
 /// Vision 后端(macOS 默认)不需要 Paddle 模型,直接跳过——
 /// 顺带免掉 onnxruntime 安装引导,macOS 用户零下载可用。
-pub async fn ensure_models(sources: &crate::download_sources::DownloadSources) -> Result<()> {
+pub async fn ensure_models(sources: &crate::ai::download_sources::DownloadSources) -> Result<()> {
     if !OcrEngine::needs_models() {
         return Ok(());
     }
@@ -303,12 +303,12 @@ pub struct Pipeline {
 
 impl Pipeline {
     /// 后台/常驻模式:worker 用保守 OCR 线程数,不打扰前台。
-    pub async fn new(sources: &crate::download_sources::DownloadSources) -> Result<Self> {
+    pub async fn new(sources: &crate::ai::download_sources::DownloadSources) -> Result<Self> {
         Self::load(false, sources).await
     }
 
     /// 手动全速模式:「立即回填」用,worker 线程放开尽快清积压。
-    pub async fn new_fast(sources: &crate::download_sources::DownloadSources) -> Result<Self> {
+    pub async fn new_fast(sources: &crate::ai::download_sources::DownloadSources) -> Result<Self> {
         Self::load(true, sources).await
     }
 
@@ -316,7 +316,7 @@ impl Pipeline {
     /// 然后预拉起 worker 并完成握手。把 Paddle 的 10-30s 冷启动放在这里,
     /// 是让"引擎起不来"落进「引擎级失败中断整批」的既有语义,
     /// 而不是被算进第一帧的请求超时。
-    async fn load(fast: bool, sources: &crate::download_sources::DownloadSources) -> Result<Self> {
+    async fn load(fast: bool, sources: &crate::ai::download_sources::DownloadSources) -> Result<Self> {
         ensure_models(sources).await?;
         let sup = Arc::clone(crate::ai::ocr_supervisor::global());
         sup.set_fast(fast).await;
@@ -366,7 +366,7 @@ impl Pipeline {
 /// 可被 [`request_stop`] 中断:提前停下时正常返回已处理部分的账单。
 pub async fn run(
     mem: &MemoryDb,
-    sources: &crate::download_sources::DownloadSources,
+    sources: &crate::ai::download_sources::DownloadSources,
 ) -> Result<DigestReport> {
     // 批权必须先于管线加载:曾经反过来,后果是"终将被拒的竞争者"在拿到拒绝
     // 之前就调了 set_fast/ensure_ready——把正在跑的批的 worker 杀掉重建、
@@ -1566,7 +1566,7 @@ mod tests {
             .unwrap();
         println!("回填 {n} 帧,保留 {date} 的部分");
 
-        let report = run(&mem, &crate::download_sources::DownloadSources::default())
+        let report = run(&mem, &crate::ai::download_sources::DownloadSources::default())
             .await
             .unwrap();
         println!("消化账单: {report:?}");

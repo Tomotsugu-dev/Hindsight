@@ -5,7 +5,6 @@ mod capture;
 mod chat;
 mod commands;
 mod device;
-mod download_sources;
 mod error;
 mod icons;
 mod memory;
