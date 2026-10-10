@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """录你自己的演示操作,之后精确回放——录屏素材就用回放那一遍,每条完全一致。
 
-    uv run scripts/shots/rec.py record            # 3 秒倒计时后开录;按 F10 停止并保存
-    uv run scripts/shots/rec.py play              # 3 秒倒计时后原速回放;Esc 随时中止
-    uv run scripts/shots/rec.py play --speed 1.2  # 加速回放(剪辑觉得拖沓时)
-    uv run scripts/shots/rec.py record --file take2.jsonl   # 多条 take 各存各的
+    uv run scripts/shots/readme/rec.py record            # 3 秒倒计时后开录;按 F10 停止并保存
+    uv run scripts/shots/readme/rec.py play              # 3 秒倒计时后原速回放;Esc 随时中止
+    uv run scripts/shots/readme/rec.py play --speed 1.2  # 加速回放(剪辑觉得拖沓时)
+    uv run scripts/shots/readme/rec.py record --file take2.jsonl   # 多条 take 各存各的
 
 说明:
   - 只录鼠标:移动的完整平滑轨迹 + 点击,逐事件原时序回放。
   - 不录键盘——需要打字的镜头(比如对话提问)提前把结果准备好,纯鼠标巡场。
-  - 会话文件默认 scripts/shots/tour_session.jsonl,仅本地(已 gitignore)。
+  - 会话文件默认 scripts/shots/readme/tour_session.jsonl,仅本地(已 gitignore)。
   - 回放务必走本脚本(rec.py play),别直接 `humanmouse play`——原生 CLI
     没有窗口复位,窗口挪过 20px 就整场点空。
   - 底层录的是绝对屏幕坐标,但录制时会同时存一份窗口锚点(位置+尺寸,

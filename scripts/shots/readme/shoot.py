@@ -7,12 +7,12 @@
     # 1) 起演示实例(数据先生成好),在应用里切到目标语言
     npm run demo
     # 2) 跑一种语言的全套截图(uv 会按下方内联声明自动备好依赖)
-    uv run scripts/shots/shoot.py --lang zh
+    uv run scripts/shots/readme/shoot.py --lang zh
     # 3) 在应用里切下一种语言,再跑
-    uv run scripts/shots/shoot.py --lang en
+    uv run scripts/shots/readme/shoot.py --lang en
 
 坐标校准(换电脑 / 改窗口大小 / UI 改版后跑一次):
-    uv run scripts/shots/shoot.py --where
+    uv run scripts/shots/readme/shoot.py --where
     # 鼠标悬停到目标上,终端每 0.5 秒打印一行「窗口相对坐标」,
     # 把数字填进下面的 COORDS 即可。所有点击坐标都是相对应用窗口左上角的,
     # 窗口挪动不影响,窗口"缩放"才需要重校。
@@ -41,16 +41,16 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = Path(__file__).resolve().parents[3]
 
 # ───────────────────────── 配置 ─────────────────────────
 
 LANG_DIRS = {
-    "zh": REPO / "docs/intro_zh/imgs",
-    "zh-tw": REPO / "docs/intro_zh-TW/imgs",
-    "en": REPO / "docs/intro_en/imgs",
-    "ja": REPO / "docs/intro_ja/imgs",
-    "pt": REPO / "docs/intro_pt/imgs",
+    "zh": REPO / "docs/intro/zh/imgs",
+    "zh-tw": REPO / "docs/intro/zh-TW/imgs",
+    "en": REPO / "docs/intro/en/imgs",
+    "ja": REPO / "docs/intro/ja/imgs",
+    "pt": REPO / "docs/intro/pt/imgs",
 }
 
 # 点击坐标,全部是【窗口相对】像素(逻辑分辨率,非 Retina 物理像素)。

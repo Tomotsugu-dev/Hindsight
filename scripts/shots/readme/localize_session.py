@@ -6,12 +6,12 @@
 按 zh 录的轨迹在别的语言下就点空。侧边栏图标行、内容行不漂移,原样保留。
 
 用法:
-    uv run scripts/shots/localize_session.py            # 默认吃 tour_session.jsonl
-    uv run scripts/shots/localize_session.py --file take2.jsonl
+    uv run scripts/shots/readme/localize_session.py            # 默认吃 tour_session.jsonl
+    uv run scripts/shots/readme/localize_session.py --file take2.jsonl
 
 产物:tour_session_{zh,tw,en,ja,pt}.jsonl + 同名 .win.json(锚点原样复制)。
 回放:切好界面语言后
-    uv run scripts/shots/rec.py play --file scripts/shots/tour_session_en.jsonl
+    uv run scripts/shots/readme/rec.py play --file scripts/shots/readme/tour_session_en.jsonl
 
 变换规则:
   - 语言敏感点击吸附到该语言控件中心 x(y 保留)——比保留"点边缘"的
