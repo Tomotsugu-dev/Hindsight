@@ -84,11 +84,13 @@ const LOCAL_ICON = (name: string) => `/demo/icons/${name}.png`;
 const APP_ICON_URLS: Record<string, string> = {
   // 编程（VS Code + Cursor 用本地 PNG —— Simple Icons CDN 没收录 VS Code）
   "code.exe": LOCAL_ICON("vscode"),
+  code: LOCAL_ICON("vscode"),
   "cursor.exe": LOCAL_ICON("cursor"),
   "windowsterminal.exe": LOCAL_ICON("terminal"),
   "rustrover.exe": "https://cdn.simpleicons.org/rust/000000",
   // 浏览（Chrome 用本地 PNG，多彩 logo CDN 单色版没法还原）
   "chrome.exe": LOCAL_ICON("chrome"),
+  "google chrome": LOCAL_ICON("chrome"),
   "firefox.exe": "https://cdn.simpleicons.org/firefox/FF7139",
   "msedge.exe": LOCAL_ICON("edge"),
   // 沟通（Teams 用本地 PNG，多层紫色 logo 比 CDN 单色更准）
@@ -98,8 +100,10 @@ const APP_ICON_URLS: Record<string, string> = {
   // 学习
   "obsidian.exe": "https://cdn.simpleicons.org/obsidian/7C3AED",
   "notion.exe": "https://cdn.simpleicons.org/notion/000000",
+  notion: "https://cdn.simpleicons.org/notion/000000",
   // 娱乐
   "spotify.exe": "https://cdn.simpleicons.org/spotify/1DB954",
+  spotify: "https://cdn.simpleicons.org/spotify/1DB954",
   "discord.exe": "https://cdn.simpleicons.org/discord/5865F2",
   "steam.exe": "https://cdn.simpleicons.org/steam/000000",
   // 系统（其他分类）
@@ -169,24 +173,59 @@ const state = loadState();
 /** Demo website time as [last 30 days, all time] in minutes. Rules stay in memory only. */
 const demoSiteMinutes: Record<string, [number, number]> = {
   "github.com": [1260, 5400],
+  "gist.github.com": [60, 240],
+  "docs.github.com": [45, 300],
   "bilibili.com": [520, 3100],
-  "youtube.com": [410, 2600],
-  "stackoverflow.com": [340, 1900],
-  "docs.rs": [210, 880],
   "live.bilibili.com": [140, 600],
+  "search.bilibili.com": [40, 180],
+  "space.bilibili.com": [30, 150],
+  "youtube.com": [410, 2600],
+  "chatgpt.com": [380, 1500],
+  "stackoverflow.com": [340, 1900],
+  "claude.ai": [300, 1100],
+  "google.com": [70, 420],
+  "docs.google.com": [120, 500],
   "mail.google.com": [95, 720],
+  "gemini.google.com": [60, 200],
+  "notion.so": [210, 900],
+  "docs.rs": [210, 880],
+  "zhihu.com": [150, 640],
+  "developer.mozilla.org": [90, 400],
+  "outlook.live.com": [80, 500],
 };
 const demoSiteRules = new Map<string, string>([
   ["github.com", "code"],
   ["stackoverflow.com", "code"],
+  ["docs.rs", "code"],
+  ["developer.mozilla.org", "code"],
   ["bilibili.com", "video"],
+  ["youtube.com", "video"],
+  ["docs.google.com", "office"],
+  ["mail.google.com", "office"],
+  ["notion.so", "office"],
+  ["outlook.live.com", "office"],
 ]);
 const DEMO_SITE_ICON_URLS: SiteIconPaths = {
   "github.com": LOCAL_ICON("sites/github"),
+  "gist.github.com": LOCAL_ICON("sites/github"),
+  "docs.github.com": LOCAL_ICON("sites/github"),
   "bilibili.com": LOCAL_ICON("sites/bilibili"),
   "live.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "search.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "space.bilibili.com": LOCAL_ICON("sites/bilibili"),
   "youtube.com": youtubeIcon,
+  "chatgpt.com": LOCAL_ICON("sites/chatgpt"),
+  "stackoverflow.com": LOCAL_ICON("sites/stackoverflow"),
+  "claude.ai": LOCAL_ICON("sites/claude"),
+  "google.com": LOCAL_ICON("sites/google"),
+  "docs.google.com": LOCAL_ICON("sites/google"),
   "mail.google.com": LOCAL_ICON("sites/gmail"),
+  "gemini.google.com": LOCAL_ICON("sites/google"),
+  "notion.so": LOCAL_ICON("sites/notion"),
+  "docs.rs": LOCAL_ICON("sites/docsrs"),
+  "zhihu.com": LOCAL_ICON("sites/zhihu"),
+  "developer.mozilla.org": LOCAL_ICON("sites/mdn"),
+  "outlook.live.com": LOCAL_ICON("sites/outlook"),
 };
 const demoSiteIcons: SiteIconPaths = {};
 

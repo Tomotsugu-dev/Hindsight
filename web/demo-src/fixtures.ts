@@ -829,7 +829,8 @@ export const mockSettings: Settings = {
   googleClientSecret: "",
   privacyUrlKeywords: ["login", "signin", "password", "auth"],
   privacyAppKeywords: ["KeePass", "1Password"],
-  downloadSiteIcons: false,
+  // 演示版默认打开：图标来自 demo 自带的素材，不会联网
+  downloadSiteIcons: true,
   downloadSources: { ...DEFAULT_DOWNLOAD_SOURCES },
   minimizeToTray: true,
   autoUpdateEnabled: true,
@@ -1002,6 +1003,8 @@ export const mockAppGroups: AppGroup[] = [
     members: [
       { processName: "Code.exe", recentSecs: 18 * H, lastDeviceId: "demo-self" },
       { processName: "cursor.exe", recentSecs: 6 * H, lastDeviceId: "demo-self" },
+      // 同一个应用在 MacBook 上的进程名不同，配对后跟 Windows 上的排在同一行
+      { processName: "Code", recentSecs: 6 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
@@ -1018,6 +1021,7 @@ export const mockAppGroups: AppGroup[] = [
     categoryId: "browse",
     members: [
       { processName: "chrome.exe", recentSecs: 22 * H, lastDeviceId: "demo-self" },
+      { processName: "Google Chrome", recentSecs: 8 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
@@ -1057,7 +1061,8 @@ export const mockAppGroups: AppGroup[] = [
     displayName: "Notion",
     categoryId: "office",
     members: [
-      { processName: "Notion.exe", recentSecs: 2 * H, lastDeviceId: "demo-mac" },
+      { processName: "Notion.exe", recentSecs: 3 * H, lastDeviceId: "demo-self" },
+      { processName: "Notion", recentSecs: 2 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
@@ -1066,6 +1071,7 @@ export const mockAppGroups: AppGroup[] = [
     categoryId: "video",
     members: [
       { processName: "Spotify.exe", recentSecs: 12 * H, lastDeviceId: "demo-self" },
+      { processName: "Spotify", recentSecs: 3 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
