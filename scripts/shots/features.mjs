@@ -4,6 +4,7 @@
  *
  * npm run shots:features
  * npm run shots:features -- --only month-pie,categories --theme dark
+ * npm run shots:features -- --only search-results,search-preview
  *
  * 截的是网页 demo，用它自带的演示数据；按 macOS 窗口画（`?platform=macos`，带红绿灯），
  * 尺寸取 src-tauri/tauri.macos.conf.json 里的原生窗口尺寸。要截哪几张见 SHOTS。
@@ -58,6 +59,23 @@ const SHOTS = [
   { doc: "classification-app-management", file: "apps", page: "categories", tab: "apps" },
   // 「分类」页的「归类网站」
   { doc: "classification-app-management", file: "sites", page: "categories", tab: "sites" },
+  // 「全部历史 → 搜索」：搜索 OCR，再打开维基百科的文字识别词条截图。
+  {
+    doc: "screen-memory-search",
+    file: "search-results",
+    page: "search",
+    query: "OCR",
+    resultTitle: "Optical character recognition — Wikipedia",
+  },
+  {
+    doc: "screen-memory-search",
+    file: "search-preview",
+    page: "search",
+    query: "OCR",
+    resultTitle: "Optical character recognition — Wikipedia",
+    preview: true,
+    highlights: true,
+  },
 ];
 
 async function options() {
@@ -200,9 +218,48 @@ async function openHistory(page, shot, labels) {
   await ranking.locator("xpath=ancestor::section[1]").locator("ol > li").first().waitFor();
 }
 
+/**
+ * 搜索页：用 demo 已有的 OCR 文字搜索，等待结果、缩略图和截图预览加载完成。
+ * resultTitle 指定要展示的结果，preview 为 true 时打开它的截图预览。
+ */
+async function openSearch(page, shot, labels) {
+  await disableAnimations(page);
+  await page.getByRole("link", { name: labels.nav.items.history, exact: true }).click();
+  await page.getByRole("link", { name: labels.history.tabs.search, exact: true }).click();
+  await page.getByPlaceholder(labels.search.placeholder, { exact: true }).fill(shot.query);
+  const result = page.getByRole("button").filter({
+    has: page.getByText(`Google Chrome · ${shot.resultTitle}`, { exact: true }),
+  });
+  await result.waitFor({ state: "visible" });
+  // 列表缩略图使用 lazy loading，等结果里的真实图片加载后再截图。
+  await page.waitForFunction(() => {
+    const images = [...document.querySelectorAll("main button img")];
+    return images.length > 0 && images.every((img) => img.complete && img.naturalWidth > 0);
+  });
+  if (!shot.preview) return;
+  await result.click();
+  const image = page.getByRole("img", { name: labels.search.viewerAlt, exact: true });
+  await image.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    (alt) => {
+      const img = [...document.images].find((item) => item.alt === alt);
+      return img?.complete && img.naturalWidth > 0;
+    },
+    labels.search.viewerAlt,
+  );
+  await page.getByText(labels.search.locating, { exact: false }).waitFor({ state: "hidden" });
+  if (shot.highlights) {
+    await image.locator("..").locator(":scope > div").first().waitFor({ state: "visible" });
+  }
+}
+
 /** 打开 shot 要的那一页：先把视图和占比层写进 localStorage，重新载入后应用才会读到。 */
 async function openPage(page, shot, labels) {
   const scope = scopes[shot.page];
+  if (shot.page === "search") {
+    await openSearch(page, shot, labels);
+    return;
+  }
   if (shot.page === "categories") {
     await openCategories(page, shot, labels);
     return;
