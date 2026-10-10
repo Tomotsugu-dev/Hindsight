@@ -5,7 +5,7 @@
 - [开始使用](#开始使用)
 - [活动记录与统计](./activity-record.md)
 - [分类与应用管理](./classification-app-management.md)
-- [屏幕记忆与搜索](#屏幕记忆与搜索)
+- [屏幕记忆与搜索](./screen-memory-search.md)
 - [AI 总结与对话](#ai-总结与对话)
 - [AI 配置](#ai-配置)
 - [云同步与设备管理](#云同步与设备管理)
