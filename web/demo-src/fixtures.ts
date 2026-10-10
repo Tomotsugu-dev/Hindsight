@@ -2,7 +2,8 @@
 // 给 demo 用，不参与主 Tauri build。
 //
 // 设计要点：
-// - 按 offset 生成的循环数据（近 30 天覆盖 month 视图，全年覆盖 history 年热力图），按"工作日 vs 周末"两种 pattern 生成
+// - Cyclic day data generated per offset (last 30 days cover the month view,
+//   full year covers the All-time heatmap), weekday vs weekend patterns
 // - 8 个内置分类，跟主应用 builtin 分类对齐（id 名一致）
 // - apps 名用真实进程名（Code.exe / chrome.exe 等），让 RankedList 显示自然
 // - 1 套 AI 段总结预生成内容（5 段，每段 ~150 字真实文本）
@@ -27,7 +28,8 @@ import type {
 import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
 
 // ────────────────────────────────────────────
-// 分类 id / 名称跟主应用默认分类一致（编程、办公、工作沟通、浏览、社交、影音、游戏）
+// Category ids match the app defaults (code, office, workchat, browse,
+// talk, video, game)
 // ────────────────────────────────────────────
 
 export const mockCategories: Category[] = [
@@ -633,7 +635,8 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
 }
 
 // ────────────────────────────────────────────
-// 按 offset 取天数据（offset 0 = today，负数往前；history 年视图会取到 -364）
+// Day data by offset (0 = today, negative = past days; the All-time year
+// view reaches back to -364)
 // ────────────────────────────────────────────
 
 export interface DayData {

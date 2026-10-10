@@ -1035,7 +1035,8 @@ export const api = {
   // ─── 杂项 no-op ──────────────────────────
   writeTextFile: async (_path: string, _content: string): Promise<void> => {},
   exportUsageXlsx: async (_path: string, _spec: unknown): Promise<void> => {},
-  // 演示"从第一天用到今天"：往回铺 365 天，当年热力图全年有色
+  // Demo pretends the user has a full year of history, so the All-time
+  // heatmap renders every month with color.
   earliestActivityDate: async (): Promise<string | null> => isoDateOffset(-364),
   setTrayLabels: async (_show: string, _quit: string): Promise<void> => {},
   testAiChat: async (
