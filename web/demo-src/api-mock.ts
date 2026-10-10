@@ -179,7 +179,7 @@ const demoSiteMinutes: Record<string, [number, number]> = {
 const demoSiteRules = new Map<string, string>([
   ["github.com", "code"],
   ["stackoverflow.com", "code"],
-  ["bilibili.com", "fun"],
+  ["bilibili.com", "video"],
 ]);
 const DEMO_SITE_ICON_URLS: SiteIconPaths = {
   "github.com": LOCAL_ICON("sites/github"),
@@ -1035,7 +1035,9 @@ export const api = {
   // ─── 杂项 no-op ──────────────────────────
   writeTextFile: async (_path: string, _content: string): Promise<void> => {},
   exportUsageXlsx: async (_path: string, _spec: unknown): Promise<void> => {},
-  earliestActivityDate: async (): Promise<string | null> => isoDateOffset(-29),
+  // Demo pretends the user has a full year of history, so the All-time
+  // heatmap renders every month with color.
+  earliestActivityDate: async (): Promise<string | null> => isoDateOffset(-364),
   setTrayLabels: async (_show: string, _quit: string): Promise<void> => {},
   testAiChat: async (
     _endpoint: string,
