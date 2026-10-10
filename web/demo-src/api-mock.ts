@@ -1065,9 +1065,16 @@ export const api = {
     return { total: hits.length, hits: hits.slice(start, start + size) };
   },
   memoryLocate: async (
-    _path: string,
-    _words: string[],
-  ): Promise<[number, number, number, number][]> => [],
+    path: string,
+    words: string[],
+  ): Promise<[number, number, number, number][]> => {
+    const screen = DEMO_SCREENS.find((s) => s.frame === path);
+    const terms = words.map((word) => word.trim().toLowerCase()).filter(Boolean);
+    // 与正式端一致：返回包含检索词的文字行位置，由搜索页绘制高亮框。
+    return (screen?.lines ?? [])
+      .filter((line) => terms.some((word) => line.text.toLowerCase().includes(word)))
+      .map((line) => line.box);
+  },
   memorySessionText: async (sessionId: number): Promise<string> =>
     DEMO_SCREENS.find((s) => s.sessionId === sessionId)?.text ?? "",
 
@@ -1165,6 +1172,7 @@ const DEMO_SCREENS: {
   end: string;
   frame: string;
   text: string;
+  lines?: { text: string; box: [number, number, number, number] }[];
 }[] = [
   {
     sessionId: 1,
@@ -1216,6 +1224,21 @@ const DEMO_SCREENS: {
     start: "16:05",
     end: "16:22",
     frame: "/demo/screenshots/wikipedia-ocr.jpg",
+    // 原始图片为 1440 × 900；坐标对应实际含 OCR 的三行文字，按图片尺寸归一化。
+    lines: [
+      {
+        text: "Optical character recognition (OCR) or optical character reader is",
+        box: [264 / 1440, 210 / 900, 566 / 1440, 25 / 900],
+      },
+      {
+        text: "(OCR) with a portable scanner",
+        box: [875 / 1440, 431 / 900, 215 / 1440, 24 / 900],
+      },
+      {
+        text: "OCR is a field of research in pattern recognition, artificial intelligence and computer vision.",
+        box: [264 / 1440, 538 / 900, 720 / 1440, 26 / 900],
+      },
+    ],
     text: [
       "Optical character recognition",
       "Optical character recognition (OCR) or optical character reader is the electronic or mechanical conversion of images of typed, handwritten or printed text into machine-encoded text, whether from a scanned document, a photo of a document, a scene photo (for example the text on signs and billboards in a landscape photo) or from subtitle text superimposed on an image (for example: from a television broadcast).",
