@@ -243,6 +243,30 @@ pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
 /// 默认，与旧行为一致。
 static MAIN_GEOMETRY: std::sync::Mutex<Option<(f64, f64, f64, f64)>> = std::sync::Mutex::new(None);
 
+pub const AUTOSTART_ARG: &str = "--autostart";
+
+/// Identifies Windows autostart, including a second launch handled by the single-instance plugin.
+pub fn is_autostart(args: &[String]) -> bool {
+    args.iter().skip(1).any(|arg| arg == AUTOSTART_ARG)
+}
+
+fn should_show_main_on_startup(autostart: bool, show_on_autostart: bool) -> bool {
+    !autostart || show_on_autostart
+}
+
+/// Shows manual launches and applies the saved window preference to autostart on either platform.
+/// The configured window starts hidden to avoid a flash before settings are loaded.
+pub fn apply_startup_visibility(app: &AppHandle, cfg: &Settings, autostart: bool) {
+    if should_show_main_on_startup(autostart, cfg.show_window_on_auto_start) {
+        show_or_recreate_main(app);
+    } else {
+        platform::set_dock_icon_visible(app, false);
+        if let Some(window) = app.get_webview_window("main") {
+            platform::schedule_webview_suspend(&window);
+        }
+    }
+}
+
 fn remember_geometry(win: &tauri::WebviewWindow) {
     let (Ok(pos), Ok(size), Ok(scale)) =
         (win.outer_position(), win.inner_size(), win.scale_factor())
@@ -299,8 +323,8 @@ fn install_window_handlers(window: &tauri::WebviewWindow) {
     });
 }
 
-/// 托盘 / Dock Reopen / 单实例二次启动的「显示主窗口」：窗口还在就恢复并聚焦；
-/// 已被销毁（macOS 关窗销毁路线）就按 tauri.conf 的主窗口配置重建。
+/// Shows and focuses the main window, resuming it or rebuilding it after macOS closes it.
+/// Rebuilt windows are visible even though the initial startup window is hidden.
 pub fn show_or_recreate_main(app: &AppHandle) {
     platform::set_dock_icon_visible(app, true);
     if let Some(w) = app.get_webview_window("main") {
@@ -324,6 +348,7 @@ pub fn show_or_recreate_main(app: &AppHandle) {
     };
     let geom = *MAIN_GEOMETRY.lock().unwrap();
     let built = tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|mut b| {
+        b = b.visible(true);
         if let Some((x, y, w, h)) = geom {
             b = b.position(x, y).inner_size(w, h);
         }
@@ -520,4 +545,49 @@ pub fn spawn_backfill_tasks(pool: DbPool) {
             Err(e) => log::warn!("builtin category backfill 失败: {e}"),
         }
     });
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::{is_autostart, should_show_main_on_startup, AUTOSTART_ARG};
+
+    fn argv(flags: &[&str]) -> Vec<String> {
+        std::iter::once("hindsight.exe")
+            .chain(flags.iter().copied())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn manual_launch_shows_window_with_either_saved_preference() {
+        assert!(should_show_main_on_startup(false, false));
+        assert!(should_show_main_on_startup(false, true));
+    }
+
+    #[test]
+    fn autostart_respects_the_saved_window_preference() {
+        assert!(!should_show_main_on_startup(true, false));
+        assert!(should_show_main_on_startup(true, true));
+    }
+
+    #[test]
+    fn only_the_exact_autostart_argument_suppresses_manual_relaunch() {
+        assert!(is_autostart(&argv(&["--other", AUTOSTART_ARG])));
+        assert!(!is_autostart(&argv(&["--autostart=false"])));
+        assert!(!is_autostart(&argv(&["--other"])));
+        assert!(!is_autostart(&[AUTOSTART_ARG.to_owned()]));
+    }
+
+    #[test]
+    fn initial_main_window_is_hidden_until_startup_policy_runs() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let main = config["app"]["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|window| window["label"].as_str().unwrap_or("main") == "main")
+            .unwrap();
+        assert_eq!(main["visible"], false);
+    }
 }

@@ -67,9 +67,8 @@ pub fn run() {
     let engine_supervisor = Arc::new(EngineSupervisor::new());
     let engine_for_exit = engine_supervisor.clone();
 
-    // 单实例守门：第二个进程一启动就把现有窗口拉到前台再自己退出。
-    // 必须在 .setup 之前的最前面注册——后续 plugin / setup 都默认假设
-    // "整个进程内 capture / DB / sync 单例运行"。
+    // Manual relaunches show the existing window; repeated autostart stays silent.
+    // Register this before setup so capture, database, and sync remain singletons.
     //
     // 本地多设备同步测试场景（[`docs/internal/local-multi-device-test.md`]）需要
     // 同一台机器跑两个独立实例 → 设 `HINDSIGHT_MULTI_INSTANCE=1` 跳过 single instance
@@ -79,10 +78,10 @@ pub fn run() {
         .unwrap_or(false);
     let mut builder = tauri::Builder::default();
     if !multi_instance_test {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // 二次启动 = 用户想看到窗口。主窗可能收在托盘（macOS 下连 Dock 图标
-            // 都没有）甚至已被销毁（关窗销毁路线）——统一走"唤起或重建"。
-            bootstrap::show_or_recreate_main(app);
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !bootstrap::is_autostart(&args) {
+                bootstrap::show_or_recreate_main(app);
+            }
         }));
     } else {
         log::warn!(
@@ -103,10 +102,18 @@ pub fn run() {
         // 老安装的 LaunchAgent plist 由 bootstrap::migrate_autostart_launch_agent 清理。
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::AppleScript,
-            None,
+            // AppleScript login items do not forward command-line arguments.
+            if cfg!(target_os = "windows") {
+                Some(vec![bootstrap::AUTOSTART_ARG])
+            } else {
+                None
+            },
         ))
         .setup(move |app| {
             let handle = app.handle().clone();
+            // Read the macOS launch event on the main thread before async setup.
+            let autostart = bootstrap::is_autostart(&std::env::args().collect::<Vec<_>>())
+                || platform::launched_at_login();
 
             // asset 协议默认 scope 只放行 $HOME/**（见 tauri.conf.json）。用户把数据
             // 目录改到 $HOME 之外（比如别的盘）后，<data_root>/icons/*.png 落在 scope
@@ -226,6 +233,7 @@ pub fn run() {
                 ai::auto_summary::spawn(handle.clone());
                 // 定时补识别:settings.memory_ocr_daily_at 设了时刻才实际工作
                 memory::scheduled::spawn(handle.clone());
+                bootstrap::apply_startup_visibility(&handle, &cfg, autostart);
             });
             Ok(())
         })

@@ -122,15 +122,49 @@ pub fn set_dock_icon_visible(app: &tauri::AppHandle, visible: bool) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_dock_icon_visible(_app: &tauri::AppHandle, _visible: bool) {}
 
-/// Tauri 的 `App::run()` 回调。按平台分发系统级事件：
-///
-/// - macOS：
-///   - `ExitRequested`：拦截 Cmd+Q / 关闭最后一个窗口触发的隐式退出，让 app 留在 Dock。
-///     `code=Some(_)` 是程序显式 `app.exit()`（托盘"退出"），放行。
-///   - `Reopen`：所有窗口都隐藏后点 Dock 图标，手动 show + focus 主窗口。
-///     不处理这个事件，用户会觉得 app "卡死"——点 Dock 没反应。
-/// - Windows：no-op。点关闭按钮的窗口隐藏逻辑已在 `WindowEvent::CloseRequested`
-///   里处理，且 Windows 没有 Dock / Reopen 概念。
+/// Reads macOS login-item metadata during launch or reopen event dispatch on the main thread.
+#[cfg(target_os = "macos")]
+pub fn launched_at_login() -> bool {
+    use objc2::runtime::AnyObject;
+    use objc2::{msg_send, MainThreadMarker};
+    use objc2_foundation::NSAppleEventManager;
+
+    if MainThreadMarker::new().is_none() {
+        return false;
+    }
+    let manager = NSAppleEventManager::sharedAppleEventManager();
+    // SAFETY: These Foundation selectors use u32 Apple-event codes and object pointers.
+    // The current event and its descriptor are borrowed only during dispatch on the
+    // main thread; neither is retained, mutated, or allowed to escape this call.
+    unsafe {
+        let event: *mut AnyObject = msg_send![&*manager, currentAppleEvent];
+        let Some(event) = event.as_ref() else {
+            return false;
+        };
+        let event_id: u32 = msg_send![event, eventID];
+        let data: *mut AnyObject =
+            msg_send![event, paramDescriptorForKeyword: u32::from_be_bytes(*b"prdt")];
+        let launch_kind = data.as_ref().map(|data| msg_send![data, enumCodeValue]);
+        is_login_event(event_id, launch_kind)
+    }
+}
+
+/// Other platforms identify autostart through command-line arguments.
+#[cfg(not(target_os = "macos"))]
+pub fn launched_at_login() -> bool {
+    false
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn is_login_event(event_id: u32, launch_kind: Option<u32>) -> bool {
+    matches!(event_id, id if id == u32::from_be_bytes(*b"oapp") || id == u32::from_be_bytes(*b"rapp"))
+        && launch_kind == Some(u32::from_be_bytes(*b"lgit"))
+}
+
+/// Routes app events to platform integrations.
+/// macOS keeps implicit exits in the tray when configured and restores manual Dock
+/// reopens; login-item reopens preserve the chosen startup visibility.
+/// Windows handles close requests in the window handler and needs no action here.
 #[cfg(target_os = "macos")]
 pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     match event {
@@ -144,13 +178,12 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
         } if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) => {
             api.prevent_exit();
         }
-        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）。正常情况下收进托盘时
-        // 已切 Accessory、Dock 无图标不会触发 Reopen；这里是防御——万一 policy
-        // 切换失败留下了 Dock 图标，点它也要能完整恢复（含窗口已销毁时的重建）。
+        // A manual Dock reopen restores the window, including after it was destroyed.
+        // Login-item events must not turn a silent startup into a visible window.
         tauri::RunEvent::Reopen {
             has_visible_windows: false,
             ..
-        } => {
+        } if !launched_at_login() => {
             crate::bootstrap::show_or_recreate_main(app);
         }
         _ => {}
@@ -267,6 +300,32 @@ pub fn resume_webview_if_suspended(window: &tauri::WebviewWindow) {
 
 #[cfg(not(target_os = "windows"))]
 pub fn resume_webview_if_suspended(_window: &tauri::WebviewWindow) {}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::is_login_event;
+
+    #[test]
+    fn macos_login_launch_and_reopen_are_identified_by_system_metadata() {
+        let login = Some(u32::from_be_bytes(*b"lgit"));
+        assert!(is_login_event(u32::from_be_bytes(*b"oapp"), login));
+        assert!(is_login_event(u32::from_be_bytes(*b"rapp"), login));
+    }
+
+    #[test]
+    fn macos_manual_launch_reopen_and_service_launch_remain_distinct() {
+        assert!(!is_login_event(u32::from_be_bytes(*b"oapp"), None));
+        assert!(!is_login_event(u32::from_be_bytes(*b"rapp"), None));
+        assert!(!is_login_event(
+            u32::from_be_bytes(*b"oapp"),
+            Some(u32::from_be_bytes(*b"svit")),
+        ));
+        assert!(!is_login_event(
+            u32::from_be_bytes(*b"odoc"),
+            Some(u32::from_be_bytes(*b"lgit")),
+        ));
+    }
+}
 
 /// 用户最后一次鼠标 / 键盘事件距今的秒数。返回 0 = 当前活跃，大数值 = 挂机。
 ///
