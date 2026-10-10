@@ -2,7 +2,7 @@
 // 给 demo 用，不参与主 Tauri build。
 //
 // 设计要点：
-// - 30 天循环数据（覆盖 month 视图），按"工作日 vs 周末"两种 pattern 生成
+// - 按 offset 生成的循环数据（近 30 天覆盖 month 视图，全年覆盖 history 年热力图），按"工作日 vs 周末"两种 pattern 生成
 // - 8 个内置分类，跟主应用 builtin 分类对齐（id 名一致）
 // - apps 名用真实进程名（Code.exe / chrome.exe 等），让 RankedList 显示自然
 // - 1 套 AI 段总结预生成内容（5 段，每段 ~150 字真实文本）
@@ -27,7 +27,7 @@ import type {
 import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
 
 // ────────────────────────────────────────────
-// 分类（8 个内置 + 跟主应用一致的 id）
+// 分类 id / 名称跟主应用默认分类一致（编程、办公、工作沟通、浏览、社交、影音、游戏）
 // ────────────────────────────────────────────
 
 export const mockCategories: Category[] = [
@@ -38,6 +38,24 @@ export const mockCategories: Category[] = [
     icon: "Code",
     builtin: false,
     apps: ["Code.exe", "cursor.exe", "WindowsTerminal.exe", "RustRover.exe"],
+    superCategoryId: "work",
+  },
+  {
+    id: "office",
+    name: "办公",
+    color: "#0ea5e9",
+    icon: "Briefcase",
+    builtin: false,
+    apps: ["Obsidian.exe", "Notion.exe"],
+    superCategoryId: "work",
+  },
+  {
+    id: "workchat",
+    name: "工作沟通",
+    color: "#14b8a6",
+    icon: "MessageCircle",
+    builtin: false,
+    apps: ["Teams.exe"],
     superCategoryId: "work",
   },
   {
@@ -55,25 +73,25 @@ export const mockCategories: Category[] = [
     color: "#34d399",
     icon: "MessageCircle",
     builtin: false,
-    apps: ["Telegram.exe", "Teams.exe", "WeChat.exe"],
+    apps: ["Telegram.exe", "Discord.exe", "WeChat.exe"],
     superCategoryId: "social",
   },
   {
-    id: "study",
-    name: "学习",
-    color: "#f59e0b",
-    icon: "BookOpen",
+    id: "video",
+    name: "影音",
+    color: "#a855f7",
+    icon: "Film",
     builtin: false,
-    apps: ["Obsidian.exe", "Notion.exe"],
-    superCategoryId: "work",
+    apps: ["Spotify.exe"],
+    superCategoryId: "play",
   },
   {
-    id: "fun",
-    name: "娱乐",
-    color: "#ec4899",
+    id: "game",
+    name: "游戏",
+    color: "#fb7185",
     icon: "Gamepad2",
     builtin: false,
-    apps: ["Spotify.exe", "Steam.exe", "Discord.exe"],
+    apps: ["Steam.exe"],
     superCategoryId: "play",
   },
   {
@@ -111,12 +129,12 @@ const APPS: AppDef[] = [
   { process: "chrome.exe", category: "browse" },
   { process: "firefox.exe", category: "browse" },
   { process: "Telegram.exe", category: "talk" },
-  { process: "Teams.exe", category: "talk" },
-  { process: "Obsidian.exe", category: "study" },
-  { process: "Notion.exe", category: "study" },
-  { process: "Spotify.exe", category: "fun" },
-  { process: "Discord.exe", category: "fun" },
-  { process: "Steam.exe", category: "fun" },
+  { process: "Discord.exe", category: "talk" },
+  { process: "Teams.exe", category: "workchat" },
+  { process: "Obsidian.exe", category: "office" },
+  { process: "Notion.exe", category: "office" },
+  { process: "Spotify.exe", category: "video" },
+  { process: "Steam.exe", category: "game" },
 ];
 
 // ────────────────────────────────────────────
@@ -615,7 +633,7 @@ function buildDay(plan: DayPlan): { hours: HourSlot[]; apps: AppUsage[] } {
 }
 
 // ────────────────────────────────────────────
-// 30 天数据（offset 0 = today，-1 = 昨天 ... -29 = 29 天前）
+// 按 offset 取天数据（offset 0 = today，负数往前；history 年视图会取到 -364）
 // ────────────────────────────────────────────
 
 export interface DayData {
@@ -1018,7 +1036,7 @@ export const mockAppGroups: AppGroup[] = [
   {
     id: "g-teams",
     displayName: "Microsoft Teams",
-    categoryId: "talk",
+    categoryId: "workchat",
     members: [
       { processName: "Teams.exe", recentSecs: 5 * H, lastDeviceId: "demo-self" },
     ],
@@ -1026,7 +1044,7 @@ export const mockAppGroups: AppGroup[] = [
   {
     id: "g-obsidian",
     displayName: "Obsidian",
-    categoryId: "study",
+    categoryId: "office",
     members: [
       { processName: "Obsidian.exe", recentSecs: 7 * H, lastDeviceId: "demo-mac" },
     ],
@@ -1034,7 +1052,7 @@ export const mockAppGroups: AppGroup[] = [
   {
     id: "g-notion",
     displayName: "Notion",
-    categoryId: "study",
+    categoryId: "office",
     members: [
       { processName: "Notion.exe", recentSecs: 2 * H, lastDeviceId: "demo-mac" },
     ],
@@ -1042,7 +1060,7 @@ export const mockAppGroups: AppGroup[] = [
   {
     id: "g-spotify",
     displayName: "Spotify",
-    categoryId: "fun",
+    categoryId: "video",
     members: [
       { processName: "Spotify.exe", recentSecs: 12 * H, lastDeviceId: "demo-self" },
     ],
@@ -1050,7 +1068,7 @@ export const mockAppGroups: AppGroup[] = [
   {
     id: "g-discord",
     displayName: "Discord",
-    categoryId: "fun",
+    categoryId: "talk",
     members: [
       { processName: "Discord.exe", recentSecs: 4 * H, lastDeviceId: "demo-mac" },
     ],
@@ -1058,7 +1076,7 @@ export const mockAppGroups: AppGroup[] = [
   {
     id: "g-steam",
     displayName: "Steam",
-    categoryId: "fun",
+    categoryId: "game",
     members: [
       { processName: "Steam.exe", recentSecs: 1 * H + 1800, lastDeviceId: "demo-self" },
     ],
