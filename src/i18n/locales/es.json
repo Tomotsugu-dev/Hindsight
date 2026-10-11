@@ -1760,11 +1760,5 @@
       "hintLevels": "Cuanto mayor sea el esfuerzo, más lenta será la respuesta",
       "hintOpenai": "La API de OpenAI no admite el razonamiento en el chat"
     }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "OCR programado iniciado: {{count}} capturas por procesar"
-    }
   }
 }

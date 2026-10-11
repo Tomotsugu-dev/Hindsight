@@ -1757,11 +1757,5 @@
       "hintLevels": "強度が高いほど応答は遅くなります",
       "hintOpenai": "OpenAI 公式 API は対話での思考に非対応"
     }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "定時キャッチアップ OCR 開始:未処理スクリーンショット {{count}} 枚"
-    }
   }
 }

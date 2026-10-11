@@ -1757,11 +1757,5 @@
       "hintLevels": "强度越高,响应越慢",
       "hintOpenai": "OpenAI 官方接口在对话中不支持思考"
     }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "定时补识别开始:{{count}} 张截图待处理"
-    }
   }
 }
