@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "Activar las capturas de pantalla",
         "screenshotEnableDescription": "Desactivar esto detiene las capturas de pantalla.",
         "ocrResidentLabel": "Mantener el OCR residente",
-        "ocrResidentDescription": "Reconoce las capturas nuevas al instante (~400 MB de RAM adicionales); se pausa con la batería. Cuando está activo, las capturas sin reconocer también se procesan antes de los informes diarios y semanales.",
-        "intervalLabel": "Intervalo de captura",
+        "ocrResidentDescription": "Procesa las capturas nuevas en tiempo real y consume recursos adicionales",
+        "ocrResidentHintMac": "El proceso de reconocimiento se libera tras aproximadamente 1 minuto inactivo.\nSe pausa automáticamente cuando el portátil no está conectado a la corriente.",
+        "ocrResidentHintWin": "Usa unos 400 MB de memoria, además de consumir CPU / GPU adicionales.\nSe pausa automáticamente cuando el portátil no está conectado a la corriente.",
+        "intervalLabel": "Intervalo de captura de pantalla",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "Las capturas de pantalla se activan cuando:\n• Cambias de aplicación → se captura de inmediato\n• El navegador cambia de URL → se captura de inmediato\n• La misma ventana permanece en primer plano durante el intervalo configurado → se captura",
         "idleLabel": "Tiempo de inactividad",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "Comportamiento al iniciar",
         "autoStartLabel": "Iniciar con el sistema",
-        "autoStartDescription": "Hindsight se inicia automáticamente después de que inicies sesión.",
-        "showWindowLabel": "Mostrar la ventana principal al iniciar",
-        "showWindowDescription": "Al desactivarlo, se inicia en silencio en la bandeja del sistema.",
-        "minimizeToTrayLabel": "Minimizar a la bandeja del sistema al cerrar",
-        "minimizeToTrayDescriptionMac": "Al desactivarlo, pulsar la X cierra la aplicación.",
-        "minimizeToTrayDescriptionWin": "Al desactivarlo, pulsar la X cierra la aplicación."
+        "silentStartLabel": "Inicio silencioso",
+        "minimizeToTrayLabel": "Minimizar a la bandeja del sistema al cerrar"
       },
       "dataRootDialog": {
         "title": "¿Cambiar la carpeta de datos?",
@@ -362,8 +360,8 @@
         "rowLabel": "Palabras clave de URL",
         "addLabel": "Añadir fragmento de URL",
         "placeholder": "p. ej. /login",
-        "hostLabel": "Registrar los dominios de los sitios",
-        "hostInfo": "Alimenta la vista «Por sitio» en el detalle de la aplicación. Solo se guarda el dominio (p. ej. github.com), nunca la URL completa; las páginas que coinciden con las palabras clave de arriba tampoco se registran."
+        "hostLabel": "No guardar las URL completas",
+        "hostInfo": "Solo se registra el dominio (p. ej. github.com), nunca la URL completa"
       },
       "app": {
         "title": "Filtro de aplicaciones",
@@ -848,7 +846,7 @@
       "otherCategory_other": "{{count}} en otras categorías",
       "removeRule": "Quitar la regla",
       "loading": "Cargando…",
-      "empty": "Todavía no hay tiempo registrado en sitios. Los dominios solo se registran mientras “Registrar los dominios de los sitios” esté activado.",
+      "empty": "Todavía no hay tiempo registrado en sitios. Los dominios solo se registran mientras “No guardar las URL completas” esté activado.",
       "openPrivacy": "Abrir los ajustes de privacidad",
       "noResults": "Ningún sitio coincide con tu búsqueda",
       "clearSearch": "Borrar la búsqueda",
@@ -965,7 +963,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "Parámetros del resumen por tramos"
+      "sectionTitle": "Ajustes de generación del informe diario"
     },
     "engineParams": {
       "sectionTitle": "Parámetros del motor (al iniciar)",
@@ -1148,10 +1146,10 @@
     "autoSummary": {
       "sectionTitle": "Programaciones",
       "sectionDesc": "Se ejecuta a la hora indicada: generación de informes y OCR de capturas.",
-      "enableLabel": "Resumen automático",
-      "enableHint": "Genera el informe diario de hoy a la hora indicada (también rellena el día anterior si falta) y el semanal de la semana pasada. Los fallos no se reintentan; los informes mensuales llegarán cuando estén disponibles",
+      "enableLabel": "Resumen programado",
+      "enableHint": "Genera automáticamente el informe diario del día a la hora indicada, todos los días",
       "timeLabel": "Programar la hora",
-      "ocrDailyLabel": "OCR automático",
+      "ocrDailyLabel": "OCR programado",
       "ocrDailyDescription": "Procesa a diario, a la hora indicada, las capturas acumuladas",
       "addTimeAria": "Añadir una hora",
       "removeTimeAria": "Quitar la última hora añadida"
