@@ -1760,11 +1760,5 @@
       "hintLevels": "Quanto maior o esforço, mais lenta a resposta",
       "hintOpenai": "A API da OpenAI não suporta raciocínio no chat"
     }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "OCR agendado iniciado: {{count}} capturas a processar"
-    }
   }
 }

@@ -1757,11 +1757,5 @@
       "hintLevels": "強度越高,回應越慢",
       "hintOpenai": "OpenAI 官方介面在對話中不支援思考"
     }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "定時補辨識開始:{{count}} 張截圖待處理"
-    }
   }
 }

@@ -1760,11 +1760,5 @@
       "hintLevels": "Higher effort means slower responses",
       "hintOpenai": "OpenAI's API doesn't support thinking in chat"
     }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "Scheduled OCR started: {{count}} screenshots to process"
-    }
   }
 }
