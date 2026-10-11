@@ -122,15 +122,79 @@ pub fn set_dock_icon_visible(app: &tauri::AppHandle, visible: bool) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_dock_icon_visible(_app: &tauri::AppHandle, _visible: bool) {}
 
-/// Tauri 的 `App::run()` 回调。按平台分发系统级事件：
+/// Auto start argument for Windows platform.
+pub const AUTOSTART_ARG: &str = "--autostart";
+
+/// Returns whether this process was launched as a macOS login item.
 ///
-/// - macOS：
-///   - `ExitRequested`：拦截 Cmd+Q / 关闭最后一个窗口触发的隐式退出，让 app 留在 Dock。
-///     `code=Some(_)` 是程序显式 `app.exit()`（托盘"退出"），放行。
-///   - `Reopen`：所有窗口都隐藏后点 Dock 图标，手动 show + focus 主窗口。
-///     不处理这个事件，用户会觉得 app "卡死"——点 Dock 没反应。
-/// - Windows：no-op。点关闭按钮的窗口隐藏逻辑已在 `WindowEvent::CloseRequested`
-///   里处理，且 Windows 没有 Dock / Reopen 概念。
+/// macOS login items cannot pass command-line arguments. Instead, the system
+/// attaches `keyAELaunchedAsLogInItem` (`lgit`) to the initial `kAEOpenApplication` (`oapp`)
+/// Apple Event when launching an application at login.
+///
+/// Ports `wasLaunchedAtLogin` from [LaunchAtLogin-Modern]:
+///
+/// ```swift
+/// let event = NSAppleEventManager.shared().currentAppleEvent
+/// return event?.eventID == kAEOpenApplication
+///     && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+/// ```
+///
+/// Returns `false` if the event is unavailable or parsing fails.
+///
+/// Must be called synchronously inside the setup closure: the event is only
+/// readable while the launch callback is running.
+///
+/// [LaunchAtLogin-Modern]: https://github.com/sindresorhus/LaunchAtLogin-Modern
+#[cfg(target_os = "macos")]
+pub fn launched_by_autostart() -> bool {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+
+    // Four-character codes (FourCC / OSType) defined in AppleEvents.h and AERegistry.h.
+    const K_AE_OPEN_APPLICATION: u32 = u32::from_be_bytes(*b"oapp");
+    const KEY_AE_PROP_DATA: u32 = u32::from_be_bytes(*b"prdt");
+    const KEY_AE_LAUNCHED_AS_LOGIN_ITEM: u32 = u32::from_be_bytes(*b"lgit");
+
+    let Some(cls) = AnyClass::get(c"NSAppleEventManager") else {
+        return false;
+    };
+    // SAFETY: Selectors exist on NSAppleEventManager and NSAppleEventDescriptor with
+    // matching signatures (AEEventID, AEKeyword, and OSType are UInt32).
+    // Nullable object returns are safely handled via Option<Retained<_>>.
+    unsafe {
+        let mgr: Option<Retained<AnyObject>> = msg_send![cls, sharedAppleEventManager];
+        let Some(mgr) = mgr else { return false };
+        let event: Option<Retained<AnyObject>> = msg_send![&*mgr, currentAppleEvent];
+        let Some(event) = event else { return false };
+        let event_id: u32 = msg_send![&*event, eventID];
+        if event_id != K_AE_OPEN_APPLICATION {
+            return false;
+        }
+        let prop: Option<Retained<AnyObject>> =
+            msg_send![&*event, paramDescriptorForKeyword: KEY_AE_PROP_DATA];
+        let Some(prop) = prop else { return false };
+        let code: u32 = msg_send![&*prop, enumCodeValue];
+        code == KEY_AE_LAUNCHED_AS_LOGIN_ITEM
+    }
+}
+
+/// Non-macOS: autostart registrations (e.g. Windows Run registry key) pass [`AUTOSTART_ARG`].
+#[cfg(not(target_os = "macos"))]
+pub fn launched_by_autostart() -> bool {
+    std::env::args().any(|a| a == AUTOSTART_ARG)
+}
+
+/// Tauri's `App::run()` callback. Dispatches platform-specific system events:
+///
+/// - macOS:
+///   - `ExitRequested`: intercepts implicit exits triggered by closing the last window or Cmd+Q,
+///     keeping the app alive in the background/tray. Explicit `app.exit()` calls (`code = Some(_)`)
+///     are allowed through.
+///   - `Reopen`: restores and focuses the main window when clicking the Dock icon while all windows
+///     are hidden, avoiding an unresponsive appearance.
+/// - Non-macOS: no-op (closing behavior is handled in `WindowEvent::CloseRequested`; Windows has
+///   no Dock or Reopen concept).
 #[cfg(target_os = "macos")]
 pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     match event {
@@ -144,9 +208,9 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
         } if crate::MINIMIZE_TO_TRAY.load(std::sync::atomic::Ordering::Relaxed) => {
             api.prevent_exit();
         }
-        // 用户从 Dock 重新点 app icon（macOS Reopen 事件）。正常情况下收进托盘时
-        // 已切 Accessory、Dock 无图标不会触发 Reopen；这里是防御——万一 policy
-        // 切换失败留下了 Dock 图标，点它也要能完整恢复（含窗口已销毁时的重建）。
+        // User clicked the app icon in the Dock (macOS Reopen event). When minimized to tray,
+        // the app normally switches to Accessory policy without a Dock icon; this serves as a fallback
+        // in case the policy switch failed, ensuring the main window is restored or recreated.
         tauri::RunEvent::Reopen {
             has_visible_windows: false,
             ..
@@ -157,7 +221,7 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     }
 }
 
-/// 非 macOS 平台：no-op（Reopen 仅 macOS Dock 概念）。
+/// Non-macOS: no-op (Reopen is a macOS Dock concept).
 #[cfg(not(target_os = "macos"))]
 pub fn handle_run_event(_app: &tauri::AppHandle, _event: tauri::RunEvent) {}
 

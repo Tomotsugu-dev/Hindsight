@@ -299,6 +299,12 @@ fn install_window_handlers(window: &tauri::WebviewWindow) {
     });
 }
 
+/// Whether this launch should stay silent: only when it was started by autostart
+/// and the user did not ask to show the window.
+pub fn silent_autostart(launched_by_autostart: bool, show_window_on_auto_start: bool) -> bool {
+    launched_by_autostart && !show_window_on_auto_start
+}
+
 /// 托盘 / Dock Reopen / 单实例二次启动的「显示主窗口」：窗口还在就恢复并聚焦；
 /// 已被销毁（macOS 关窗销毁路线）就按 tauri.conf 的主窗口配置重建。
 pub fn show_or_recreate_main(app: &AppHandle) {
@@ -324,6 +330,9 @@ pub fn show_or_recreate_main(app: &AppHandle) {
     };
     let geom = *MAIN_GEOMETRY.lock().unwrap();
     let built = tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|mut b| {
+        // tauri.conf sets the main window to be hidden by default,
+        // so we explicitly make it visible here.
+        b = b.visible(true);
         if let Some((x, y, w, h)) = geom {
             b = b.position(x, y).inner_size(w, h);
         }
@@ -520,4 +529,28 @@ pub fn spawn_backfill_tasks(pool: DbPool) {
             Err(e) => log::warn!("builtin category backfill 失败: {e}"),
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::silent_autostart;
+
+    // 用户手动启动：不管「静默启动」开没开，都要看到窗口
+    #[test]
+    fn manual_launch_is_never_silent() {
+        assert!(!silent_autostart(false, false));
+        assert!(!silent_autostart(false, true));
+    }
+
+    // 开机拉起 + 设置要求显示：窗口照常出现
+    #[test]
+    fn autostart_is_not_silent_when_setting_asks_for_window() {
+        assert!(!silent_autostart(true, true));
+    }
+
+    // 开机拉起 + 设置不要求显示：窗口不出现，只留托盘
+    #[test]
+    fn autostart_is_silent_when_setting_does_not_ask_for_window() {
+        assert!(silent_autostart(true, false));
+    }
 }
