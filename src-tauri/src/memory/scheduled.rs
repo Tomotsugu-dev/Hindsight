@@ -16,17 +16,12 @@
 
 use chrono::Local;
 use tauri::{AppHandle, Manager};
-
-use tauri::Emitter;
+use tauri_plugin_notification::NotificationExt;
 
 use super::digest;
 use crate::commands::screen_memory::MemoryState;
 use crate::repo::settings;
 use crate::storage::{DbPool, SqliteResultExt};
-
-/// 定时批开跑时发给前端的事件;前端据此弹系统通知(文案走 i18n)。
-/// payload: `{ "pending": u64 }`。
-pub const SCHEDULED_OCR_STARTED_EVENT: &str = "memory://scheduled-ocr-started";
 
 /// 启动后首查延迟(秒):避开启动期的采集初始化。
 const FIRST_CHECK_DELAY_SECS: u64 = 90;
@@ -94,11 +89,7 @@ async fn check_once(app: &AppHandle) -> crate::error::Result<()> {
         "定时补识别:到点({}),{pending} 帧待识别,开始清积压",
         due.join("/")
     );
-    // 系统级提示由前端弹(文案走界面语言的 i18n);窗口收进托盘时监听仍在
-    let _ = app.emit(
-        SCHEDULED_OCR_STARTED_EVENT,
-        serde_json::json!({ "pending": pending }),
-    );
+    notify_started(app, pending);
     match digest::run(mem, &cfg.download_sources).await {
         Ok(report) => log::info!("定时补识别完成: {report:?}"),
         // 被拒 = 批根本没开跑(上面的 is_running 检查与 run 内部抢权之间,
@@ -115,6 +106,31 @@ async fn check_once(app: &AppHandle) -> crate::error::Result<()> {
         Err(e) => log::warn!("定时补识别失败(今天不再重试): {e}"),
     }
     Ok(())
+}
+
+/// Show an automatic OCR started notification with the number of screenshots awaiting recognition.
+fn notify_started(app: &AppHandle, pending: u64) {
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title("Hindsight")
+        .body(started_body(crate::platform::system_language(), pending))
+        .show()
+    {
+        log::warn!("自动 OCR 通知没弹出来: {e}");
+    }
+}
+
+/// Notification text localized by the operating system language (one of the six codes returned by [`crate::platform::system_language`]).
+fn started_body(lang: &str, pending: u64) -> String {
+    match lang {
+        "tw" => format!("自動 OCR 開始：{pending} 張截圖待辨識"),
+        "en" => format!("Auto OCR started: {pending} screenshots to read"),
+        "ja" => format!("自動 OCR を開始しました：未処理のスクリーンショット {pending} 枚"),
+        "pt" => format!("OCR automático iniciado: {pending} capturas a ler"),
+        "es" => format!("OCR automático iniciado: {pending} capturas por procesar"),
+        _ => format!("自动 OCR 开始：{pending} 张截图待识别"),
+    }
 }
 
 /// 退还一组当天标记([`save_marks`] 的逆操作;抢批失败时用)。
@@ -323,5 +339,20 @@ mod tests {
             attempt_key("2026-08-01", "12:00"),
             attempt_key("2026-08-01", "23:00")
         );
+    }
+
+    /// 通知正文：六种界面语言各一句，都带待识别张数；不认识的语言按简体中文。
+    #[test]
+    fn started_body_per_language() {
+        assert_eq!(started_body("zh", 120), "自动 OCR 开始：120 张截图待识别");
+        assert_eq!(started_body("tw", 120), "自動 OCR 開始：120 張截圖待辨識");
+        assert_eq!(
+            started_body("en", 120),
+            "Auto OCR started: 120 screenshots to read"
+        );
+        assert!(started_body("ja", 120).contains("120"));
+        assert!(started_body("pt", 120).contains("120"));
+        assert!(started_body("es", 120).contains("120"));
+        assert_eq!(started_body("xx", 3), started_body("zh", 3));
     }
 }
