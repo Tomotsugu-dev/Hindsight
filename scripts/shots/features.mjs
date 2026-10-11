@@ -76,6 +76,47 @@ const SHOTS = [
     preview: true,
     highlights: true,
   },
+  // 「AI 总结 → 日报」：demo 自带当天分时段的报告
+  { doc: "ai-summary-and-chat", file: "daily-report", page: "aiSummary", ready: "HourlyChart" },
+  // 「对话」：问一个问题，回答和来源出来后截图。
+  // 这个问题要和 web/demo-src/api-mock.ts 里的 DEMO_PROJECT_QUESTION 一致，demo 才会给出像样的回答。
+  {
+    doc: "ai-summary-and-chat",
+    file: "chat",
+    page: "chat",
+    question: "这周我在 Hindsight 项目上花了多少时间？",
+  },
+  // 「AI 设置 → 常规」：只要时段划分和过滤，定时计划不要。滚到底，裁掉侧栏。
+  {
+    doc: "ai-configuration",
+    file: "summary-settings",
+    page: "aiSettings",
+    tab: "general",
+    scrollToEnd: true,
+    sections: ["aiSettings.segments.sectionTitle", "aiSettings.filter.sectionTitle"],
+  },
+  // 日统计页面在三种主题下的样子，全窗口
+  {
+    doc: "interface-and-appearance",
+    file: "day-default",
+    page: "day",
+    view: "bars",
+    theme: "default",
+  },
+  {
+    doc: "interface-and-appearance",
+    file: "day-minimal",
+    page: "day",
+    view: "bars",
+    theme: "minimal",
+  },
+  {
+    doc: "interface-and-appearance",
+    file: "day-dark",
+    page: "day",
+    view: "bars",
+    theme: "dark",
+  },
 ];
 
 async function options() {
@@ -253,11 +294,68 @@ async function openSearch(page, shot, labels) {
   }
 }
 
+/** 「AI 总结」页：默认就是日报；等报告里 shot.ready 这段文字出来（= 分时段内容渲染完）。 */
+async function openAiSummary(page, shot, labels) {
+  await disableAnimations(page);
+  await page.getByRole("link", { name: labels.nav.items.aiSummary, exact: true }).click();
+  await page
+    .getByRole("heading", { level: 1, name: labels.aiSummary.title, exact: true })
+    .waitFor();
+  await page.getByText(shot.ready, { exact: false }).first().waitFor();
+}
+
+/** 「AI 设置」页：shot.tab 为 general 时切到「常规」标签，等「分析这些分类」那一行出来。 */
+async function openAiSettings(page, shot, labels) {
+  await disableAnimations(page);
+  await page.getByRole("link", { name: labels.nav.items.aiSettings, exact: true }).click();
+  await page
+    .getByRole("heading", { level: 1, name: labels.aiSettings.title, exact: true })
+    .waitFor();
+  if (shot.tab === "general") {
+    await page.getByRole("link", { name: labels.aiSettings.tabs.general, exact: true }).click();
+    await page.getByText(labels.aiSettings.filter.rowLabel, { exact: true }).waitFor();
+  }
+}
+
+/**
+ * 「对话」页：把 shot.question 填进输入框发送，等回答里第一条来源出现再截图。
+ */
+async function openChat(page, shot, labels) {
+  await disableAnimations(page);
+  await page.getByRole("link", { name: labels.nav.items.chat, exact: true }).click();
+  const input = page.getByPlaceholder(labels.chat.input.placeholder, { exact: true });
+  await input.fill(shot.question);
+  await input.press("Enter");
+  const source = page.getByText("Visual Studio Code · ", { exact: false }).first();
+  await source.waitFor();
+  // 回答出来后消息列表会滚到最底，提问被顶到上面；滚回去，提问和回答一起入镜。
+  await source.evaluate((element) => {
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      if (node.scrollHeight > node.clientHeight && getComputedStyle(node).overflowY !== "visible") {
+        node.scrollTop = 0;
+        return;
+      }
+    }
+  });
+}
+
 /** 打开 shot 要的那一页：先把视图和占比层写进 localStorage，重新载入后应用才会读到。 */
 async function openPage(page, shot, labels) {
   const scope = scopes[shot.page];
   if (shot.page === "search") {
     await openSearch(page, shot, labels);
+    return;
+  }
+  if (shot.page === "aiSummary") {
+    await openAiSummary(page, shot, labels);
+    return;
+  }
+  if (shot.page === "aiSettings") {
+    await openAiSettings(page, shot, labels);
+    return;
+  }
+  if (shot.page === "chat") {
+    await openChat(page, shot, labels);
     return;
   }
   if (shot.page === "categories") {
@@ -351,6 +449,33 @@ async function cardsClip(page, shot, labels) {
   return { x: main.x, y: 0, width: main.width, height: (cardsBottom + next.y) / 2 };
 }
 
+/**
+ * 不要侧栏，只截 shot.sections 里第一个到最后一个设置块之间的范围，上下各留一点边距。
+ * sections 里写的是设置块标题在界面文案里的路径，如 "aiSettings.filter.sectionTitle"。
+ */
+async function sectionsClip(page, shot, labels) {
+  await page
+    .locator("aside")
+    .first()
+    .evaluate((aside) => {
+      aside.style.visibility = "hidden";
+    });
+  const main = await page.locator("main").boundingBox();
+  const box = async (path) =>
+    page
+      .getByRole("heading", {
+        name: path.split(".").reduce((node, key) => node[key], labels),
+        exact: true,
+      })
+      .locator("xpath=ancestor::section[1]")
+      .boundingBox();
+  const first = await box(shot.sections[0]);
+  const last = await box(shot.sections[shot.sections.length - 1]);
+  const pad = 12;
+  const top = first.y - pad;
+  return { x: main.x, y: top, width: main.width, height: last.y + last.height + pad - top };
+}
+
 async function main() {
   const args = await options();
   if (!args) return;
@@ -385,7 +510,10 @@ async function main() {
     await context.addInitScript(
       ({ lang, theme }) => {
         localStorage.setItem("hindsight.locale", lang);
-        localStorage.setItem("hindsight.theme", theme);
+        // 只在还没存过时写：每张图要换主题时由下面的循环改，重新载入后不能被覆盖回来。
+        if (localStorage.getItem("hindsight.theme") === null) {
+          localStorage.setItem("hindsight.theme", theme);
+        }
         // 使用应用已有的无动画回退，避免截图落在切换动画中间。
         Object.defineProperty(document, "startViewTransition", {
           configurable: true,
@@ -404,6 +532,14 @@ async function main() {
     });
 
     for (const shot of args.shots) {
+      // 每张图都从重新载入的页面开始，上一张图留下的弹窗、选中状态不会带进来。
+      // shot.theme 指定这张图用的主题，没指定就用命令行的 --theme；
+      // 主题是页面载入时读的，所以先写进存储再载入。
+      await page.evaluate(
+        (value) => localStorage.setItem("hindsight.theme", value),
+        shot.theme ?? args.theme,
+      );
+      await page.reload({ waitUntil: "networkidle" });
       await openPage(page, shot, labels);
       if (shot.pick) await pick(page, shot.pick, labels);
       await page.waitForFunction(
@@ -411,9 +547,9 @@ async function main() {
           document.fonts.status === "loaded" &&
           [...document.images].every((image) => image.complete),
       );
-      await page.locator("main").evaluate((element) => {
-        element.scrollTop = 0;
-      });
+      await page.locator("main").evaluate((element, toEnd) => {
+        element.scrollTop = toEnd ? element.scrollHeight : 0;
+      }, Boolean(shot.scrollToEnd));
       // 鼠标移到角落，免得停在某一行上触发悬停效果。
       await page.mouse.move(args.width - 1, args.height - 1);
       // 字体、窗口尺寸及圆环完成布局后再截图。
@@ -424,8 +560,17 @@ async function main() {
       const output = path.join(args.out, shot.doc, `${shot.file}.png`);
       const clip = shot.toCards
         ? await cardsClip(page, shot, labels)
-        : { x: 0, y: 0, width: args.width, height: args.height };
+        : shot.sections
+          ? await sectionsClip(page, shot, labels)
+          : { x: 0, y: 0, width: args.width, height: args.height };
       await page.screenshot({ path: output, animations: "disabled", clip });
+      // 裁剪时藏起来的侧栏要还原，下一张图还要靠它切页面。
+      await page
+        .locator("aside")
+        .first()
+        .evaluate((aside) => {
+          aside.style.visibility = "";
+        });
       console.log(
         `已保存 ${path.relative(repo, output)}（${Math.round(clip.width * 2)} × ${Math.round(clip.height * 2)}）`,
       );
