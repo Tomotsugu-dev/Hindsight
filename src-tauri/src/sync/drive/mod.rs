@@ -32,7 +32,7 @@ use serde_json::json;
 
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
-use crate::sync::cloud::{FailureKind, FileMeta};
+use crate::sync::cloud::{http_client, FailureKind, FileMeta};
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
@@ -168,7 +168,7 @@ impl DriveClient {
 // ─────────────── Drive REST calls ───────────────
 
 async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut out = Vec::new();
     let mut page_token: Option<String> = None;
 
@@ -218,7 +218,7 @@ async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Ve
 }
 
 async fn http_find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     // A quote or backslash in the name would break the query, so escape them.
     let escaped = name.replace('\\', "\\\\").replace('\'', "\\'");
     let q = format!(
@@ -251,7 +251,7 @@ async fn http_find_by_name(token: &str, name: &str) -> Result<Option<FileMeta>> 
 }
 
 async fn http_download(token: &str, file_id: &str) -> Result<Vec<u8>> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let resp = client
         .get(format!("{DRIVE_BASE}/files/{file_id}"))
         .bearer_auth(token)
@@ -293,7 +293,7 @@ async fn http_create_multipart(token: &str, name: &str, content: &[u8]) -> Resul
     body.extend_from_slice(content);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let resp = client
         .post(format!("{UPLOAD_BASE}/files"))
         .bearer_auth(token)
@@ -317,7 +317,7 @@ async fn http_create_multipart(token: &str, name: &str, content: &[u8]) -> Resul
 }
 
 async fn http_update_media(token: &str, file_id: &str, content: &[u8]) -> Result<()> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let resp = client
         .patch(format!("{UPLOAD_BASE}/files/{file_id}"))
         .bearer_auth(token)
@@ -334,7 +334,7 @@ async fn http_update_media(token: &str, file_id: &str, content: &[u8]) -> Result
 }
 
 async fn http_delete(token: &str, file_id: &str) -> Result<()> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let resp = client
         .delete(format!("{DRIVE_BASE}/files/{file_id}"))
         .bearer_auth(token)
