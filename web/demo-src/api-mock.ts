@@ -1118,11 +1118,58 @@ const chatConvs: DemoConv[] = [];
 let chatNextConvId = 1;
 let chatNextMsgId = 1;
 
+// 给功能文档截图用的一问一答：原样输入这个问题才会命中，其他问题仍是下面的占位回答。
+// scripts/shots/features.mjs 里 chat 那张图问的就是它，两处要一致。
+const DEMO_PROJECT_QUESTION = "这周我在 Hindsight 项目上花了多少时间？";
+
+// 分项取自周统计里 Code、cursor、chrome 的本周时长，都不超过它们。
+const DEMO_PROJECT_ANSWER_ZH = [
+  "这周你在 Hindsight 项目上共花了约 **12 小时 36 分钟**：",
+  "",
+  "| 应用 | 时长 |",
+  "| --- | --- |",
+  "| Visual Studio Code | 7 小时 48 分 [1] |",
+  "| Cursor | 3 小时 20 分 [2] |",
+  "| Google Chrome | 1 小时 28 分 [3] |",
+].join("\n");
+
 function chatDemoAnswer(question: string): {
   text: string;
   citations: ChatStoredMessage["citations"];
 } {
   const lng = (i18n.language || "zh-CN").toLowerCase();
+  if (question === DEMO_PROJECT_QUESTION && lng.startsWith("zh") && !lng.startsWith("zh-tw")) {
+    const day = todayStr();
+    return {
+      text: DEMO_PROJECT_ANSWER_ZH,
+      citations: [
+        {
+          index: 1,
+          app: "Visual Studio Code",
+          title: "hindsight — src/pages/Chat/ChatPage.tsx",
+          startedTs: `${day}T10:12:00+08:00`,
+          endedTs: `${day}T11:03:00+08:00`,
+          framePath: null,
+        },
+        {
+          index: 2,
+          app: "Cursor",
+          title: "hindsight — web/demo-src/fixtures.ts",
+          startedTs: `${day}T14:20:00+08:00`,
+          endedTs: `${day}T15:30:00+08:00`,
+          framePath: null,
+        },
+        {
+          index: 3,
+          app: "Google Chrome",
+          title: "Hindsight — README",
+          startedTs: `${day}T16:20:00+08:00`,
+          endedTs: `${day}T16:41:00+08:00`,
+          framePath: "/demo/screenshots/github-readme.jpg",
+        },
+      ],
+    };
+  }
   const q = question.length > 40 ? `${question.slice(0, 40)}…` : question;
   const text =
     lng.startsWith("zh-tw") || lng.startsWith("zh-hk")
