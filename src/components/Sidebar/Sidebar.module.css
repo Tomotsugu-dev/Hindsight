@@ -115,11 +115,11 @@
   backface-visibility: hidden;
 }
 
-/* 测量完成后才挂上"丝滑+惯性+弹跳"的过渡 */
+/* Add the slide transition only after the pill has been measured */
 .pillAnimated {
   transition:
-    transform 460ms var(--ease-spring),
-    height 460ms var(--ease-spring),
+    transform 360ms var(--ease-spring-soft),
+    height 360ms var(--ease-spring-soft),
     width 360ms var(--ease-out),
     left 360ms var(--ease-out),
     opacity 220ms var(--ease-out);
