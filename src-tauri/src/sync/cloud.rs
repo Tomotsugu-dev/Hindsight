@@ -282,11 +282,49 @@ fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
         .unwrap_or("")
 }
 
+/// Maximum time to wait for a connection to the server.
+const MAX_WAIT_TO_CONNECT: Duration = Duration::from_secs(30);
+/// Maximum time to wait for the server to respond.
+const MAX_WAIT_FOR_REPLY: Duration = Duration::from_secs(300);
+
+/// Builds an HTTP client with timeouts: requests will fail if the server does not respond.
+pub(crate) fn http_client() -> reqwest::Client {
+    build_http_client(MAX_WAIT_FOR_REPLY)
+}
+
+fn build_http_client(max_wait_for_reply: Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(MAX_WAIT_TO_CONNECT)
+        .read_timeout(max_wait_for_reply)
+        .build()
+        .expect("failed to build HTTP client")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::repo::test_util::fresh_test_pool;
     use Dataset::{AiSummaries, Chat, Core, Memory, SiteRules};
+
+    /// 服务器接了连接却一直不回：请求要在读超时后失败，不能一直等下去。
+    #[tokio::test]
+    async fn request_fails_when_server_never_answers() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            // 拿住连接不放，也不回任何东西
+            let (_sock, _) = listener.accept().await.unwrap();
+            std::future::pending::<()>().await;
+        });
+
+        let request = build_http_client(Duration::from_millis(300))
+            .get(format!("http://127.0.0.1:{port}/"))
+            .send();
+        let result = tokio::time::timeout(Duration::from_secs(5), request)
+            .await
+            .expect("5 秒内请求还在等，没有超时");
+        assert!(result.unwrap_err().is_timeout());
+    }
 
     /// Drive 的游标名字钉死：老用户的数据库里存的就是这些，改一个就找不到原来那一行。
     /// 坚果云的名字都带自己的前缀，跟 Drive 的不会重。

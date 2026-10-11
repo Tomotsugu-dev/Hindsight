@@ -27,6 +27,7 @@ use crate::error::{Error, Result};
 use crate::repo::settings;
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
+use crate::sync::cloud::http_client;
 use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
 const OAUTH_SCOPE: &str = "openid email https://www.googleapis.com/auth/drive.appdata";
@@ -256,7 +257,7 @@ async fn refresh_with_google(
     // retrying it changes nothing, so give up at once.
     const BACKOFFS_MS: [u64; 2] = [500, 2000];
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut attempt = 0usize;
     loop {
         let send_res = client
@@ -504,7 +505,7 @@ async fn exchange_code(
     verifier: &str,
     redirect_uri: &str,
 ) -> Result<GoogleTokenResp> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let resp = client
         .post("https://oauth2.googleapis.com/token")
         .form(&[

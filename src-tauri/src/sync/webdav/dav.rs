@@ -9,6 +9,7 @@ use url::Url;
 
 use super::layout::{parse_multistatus, DavEntry};
 use crate::error::{Error, Result};
+use crate::sync::cloud::http_client;
 
 /// Name of the sync root directory on the server,
 /// appended to the user-provided base URL.
@@ -74,7 +75,7 @@ impl HttpDav {
             .join(ROOT_DIR)
             .map_err(|e| Error::InvalidInputDyn(format!("WebDAV URL is invalid: {e}")))?;
         Ok(Self {
-            client: reqwest::Client::new(),
+            client: http_client(),
             root,
             credentials: Default::default(),
         })
