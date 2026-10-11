@@ -232,6 +232,11 @@ export default function GeneralTab() {
         <Row
           label={t("settings.general.capture.ocrResidentLabel")}
           description={t("settings.general.capture.ocrResidentDescription")}
+          labelHint={
+            isMacOS
+              ? t("settings.general.capture.ocrResidentHintMac")
+              : t("settings.general.capture.ocrResidentHintWin")
+          }
           disabled={!settings.captureEnabled || !settings.screenshotEnabled}
         >
           <Toggle
@@ -336,7 +341,6 @@ export default function GeneralTab() {
       <Section title={t("settings.general.startup.title")} icon={Rocket}>
         <Row
           label={t("settings.general.startup.autoStartLabel")}
-          description={t("settings.general.startup.autoStartDescription")}
         >
           <Toggle
             checked={settings.autoStart}
@@ -344,22 +348,16 @@ export default function GeneralTab() {
           />
         </Row>
         <Row
-          label={t("settings.general.startup.showWindowLabel")}
-          description={t("settings.general.startup.showWindowDescription")}
+          label={t("settings.general.startup.silentStartLabel")}
           disabled={!settings.autoStart}
         >
           <Toggle
-            checked={settings.showWindowOnAutoStart}
-            onChange={(v) => update({ showWindowOnAutoStart: v })}
+            checked={!settings.showWindowOnAutoStart}
+            onChange={(v) => update({ showWindowOnAutoStart: !v })}
           />
         </Row>
         <Row
           label={t("settings.general.startup.minimizeToTrayLabel")}
-          description={
-            isMacOS
-              ? t("settings.general.startup.minimizeToTrayDescriptionMac")
-              : t("settings.general.startup.minimizeToTrayDescriptionWin")
-          }
         >
           <Toggle
             checked={settings.minimizeToTray}

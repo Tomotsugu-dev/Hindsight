@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "啟用截圖",
         "screenshotEnableDescription": "關閉後將停止截圖。",
         "ocrResidentLabel": "常駐 OCR",
-        "ocrResidentDescription": "即時辨識新截圖（多佔約 400MB 記憶體），電池供電時自動暫停;開啟後,生成日報/週報前也會先補齊未辨識的截圖。",
-        "intervalLabel": "採集間隔",
+        "ocrResidentDescription": "即時處理新的截圖，會消耗額外的資源",
+        "ocrResidentHintMac": "閒置約 1 分鐘後釋放辨識程序。\n筆記型電腦沒有接上電源時自動暫停。",
+        "ocrResidentHintWin": "約佔用 400MB 記憶體，並消耗額外的 CPU / GPU 資源。\n筆記型電腦沒有接上電源時自動暫停。",
+        "intervalLabel": "截圖採集間隔",
         "intervalDescription": "採集頻率。",
         "intervalHint": "截圖觸發時機：\n• 切換應用程式 → 立即截圖\n• 瀏覽器切換 URL → 立即截圖\n• 同一視窗停留滿設定的間隔 → 截圖",
         "idleLabel": "閒置閾值",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "啟動行為",
         "autoStartLabel": "開機自動啟動",
-        "autoStartDescription": "登入系統後由 Hindsight 自動執行。",
-        "showWindowLabel": "啟動時顯示主視窗",
-        "showWindowDescription": "關閉後靜默啟動。",
-        "minimizeToTrayLabel": "關閉後最小化到右下角托盤",
-        "minimizeToTrayDescriptionMac": "關閉後點 X 直接退出應用程式。",
-        "minimizeToTrayDescriptionWin": "關閉後點 X 直接退出應用程式。"
+        "silentStartLabel": "靜默啟動",
+        "minimizeToTrayLabel": "關閉後最小化到右下角托盤"
       },
       "dataRootDialog": {
         "title": "切換資料儲存路徑？",
@@ -362,8 +360,8 @@
         "rowLabel": "URL 關鍵詞",
         "addLabel": "新增 URL 字尾",
         "placeholder": "如 /login",
-        "hostLabel": "記錄瀏覽器網站網域",
-        "hostInfo": "用於應用程式詳情裡的「按網站」統計。只記錄網域（如 github.com），不記錄完整網址；命中上方關鍵詞的頁面也不記錄網域。"
+        "hostLabel": "不儲存完整網址",
+        "hostInfo": "只記錄網域（如 github.com），不記錄完整網址"
       },
       "app": {
         "title": "應用程式過濾",
@@ -845,7 +843,7 @@
       "otherCategory_other": "{{count}} 個另有分類",
       "removeRule": "取消規則",
       "loading": "載入中…",
-      "empty": "還沒有記錄到網站時間。只有開啟「記錄瀏覽器網站網域」時才會記錄網域。",
+      "empty": "還沒有記錄到網站時間。只有開啟「不儲存完整網址」時才會記錄網域。",
       "openPrivacy": "開啟隱私設定",
       "noResults": "沒找到匹配的網站",
       "clearSearch": "清除搜尋",
@@ -962,7 +960,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "段總結引數"
+      "sectionTitle": "日報生成設定"
     },
     "engineParams": {
       "sectionTitle": "引擎引數（啟動時）",
@@ -1145,10 +1143,10 @@
     "autoSummary": {
       "sectionTitle": "定時計劃",
       "sectionDesc": "到點自動執行:生成報告與辨識截圖。",
-      "enableLabel": "自動總結",
-      "enableHint": "每天到點自動生成當天的日報(前一天缺報也會補齊),每週自動補上一週的週報。生成失敗不會自動重試;月報功能上線後將自動納入",
+      "enableLabel": "定時總結",
+      "enableHint": "每天到點自動生成當天的日報",
       "timeLabel": "指定處理時間",
-      "ocrDailyLabel": "自動 OCR",
+      "ocrDailyLabel": "定時 OCR",
       "ocrDailyDescription": "每天到點自動辨識堆積的截圖",
       "addTimeAria": "新增一個時間點",
       "removeTimeAria": "移除最近新增的時間點"

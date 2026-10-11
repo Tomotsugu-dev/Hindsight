@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
         "ocrResidentLabel": "Keep OCR resident",
-        "ocrResidentDescription": "Recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery. When on, unrecognized screenshots are also caught up before daily/weekly reports.",
-        "intervalLabel": "Capture interval",
+        "ocrResidentDescription": "Processes new screenshots in real time and uses extra resources",
+        "ocrResidentHintMac": "The recognition process is released after about 1 minute idle.\nPauses automatically when a laptop is not plugged in.",
+        "ocrResidentHintWin": "Uses about 400 MB of memory, plus extra CPU / GPU resources.\nPauses automatically when a laptop is not plugged in.",
+        "intervalLabel": "Screenshot interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
         "idleLabel": "Idle timeout",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "Startup behavior",
         "autoStartLabel": "Launch on system startup",
-        "autoStartDescription": "Hindsight starts automatically after you log in.",
-        "showWindowLabel": "Show main window on startup",
-        "showWindowDescription": "When off, start silently in the tray.",
-        "minimizeToTrayLabel": "Minimize to tray on close",
-        "minimizeToTrayDescriptionMac": "When off, clicking X quits the app.",
-        "minimizeToTrayDescriptionWin": "When off, clicking X quits the app."
+        "silentStartLabel": "Start silently",
+        "minimizeToTrayLabel": "Minimize to tray on close"
       },
       "dataRootDialog": {
         "title": "Switch data folder?",
@@ -362,8 +360,8 @@
         "rowLabel": "URL keywords",
         "addLabel": "Add URL fragment",
         "placeholder": "e.g. /login",
-        "hostLabel": "Record website domains",
-        "hostInfo": "Powers the \"By site\" view in app details. Only the domain (e.g. github.com) is stored, never the full URL; pages matching the keywords above are not recorded either."
+        "hostLabel": "Don't store full URLs",
+        "hostInfo": "Only the domain (e.g. github.com) is recorded, never the full URL"
       },
       "app": {
         "title": "App filter",
@@ -848,7 +846,7 @@
       "otherCategory_other": "{{count}} in other categories",
       "removeRule": "Remove rule",
       "loading": "Loading…",
-      "empty": "No website time recorded yet. Domains are recorded only while “Record website domains” is on.",
+      "empty": "No website time recorded yet. Domains are recorded only while “Don't store full URLs” is on.",
       "openPrivacy": "Open privacy settings",
       "noResults": "No websites match your search",
       "clearSearch": "Clear search",
@@ -965,7 +963,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "Segment summary params"
+      "sectionTitle": "Daily report generation settings"
     },
     "engineParams": {
       "sectionTitle": "Engine parameters (on launch)",
@@ -1148,10 +1146,10 @@
     "autoSummary": {
       "sectionTitle": "Schedules",
       "sectionDesc": "Runs on schedule: report generation and screenshot OCR.",
-      "enableLabel": "Auto summary",
-      "enableHint": "Generates today's daily report at the set time (a missing previous day is filled in too) and last week's weekly report. Failed runs are not retried; monthly reports will join once available",
+      "enableLabel": "Scheduled summary",
+      "enableHint": "Generates the day's daily report automatically at the set time each day",
       "timeLabel": "Schedule a time",
-      "ocrDailyLabel": "Auto OCR",
+      "ocrDailyLabel": "Scheduled OCR",
       "ocrDailyDescription": "Reads the screenshot backlog at the set time daily",
       "addTimeAria": "Add a time point",
       "removeTimeAria": "Remove the most recently added time point"
