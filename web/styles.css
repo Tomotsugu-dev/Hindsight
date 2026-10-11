@@ -156,6 +156,12 @@ h4 {
   margin-bottom: 32px;
 }
 
+.intro a {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .lead {
   margin-bottom: 32px;
 }
