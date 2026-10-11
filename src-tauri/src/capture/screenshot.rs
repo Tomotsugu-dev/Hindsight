@@ -5,6 +5,10 @@ use image::{codecs::jpeg::JpegEncoder, DynamicImage, ExtendedColorType, ImageEnc
 
 use crate::error::{Error, Result};
 
+/// Screenshots smaller than this size in either width or height are not saved:
+/// the macOS OCR engine rejects images that are too small.
+const MIN_SIDE_PX: u32 = 16;
+
 /// 截当前激活窗口 → 缩放到 `max_width × max_height`（保持比例 + letterbox 透明）→
 /// JPEG 编码 → 写到 `dir/<HHMMSS_NNN>.jpg`。返回写入的绝对路径。
 /// 同步图像处理放在 `spawn_blocking` 里跑，不堵 Tokio runtime。
@@ -38,9 +42,28 @@ fn capture_blocking(
         Some(img) => img,
         None => return Ok(None),
     };
+    save_image(dir, rgba, max_width, max_height, jpeg_quality)
+}
 
+/// Resize the image and save it as a JPEG, returning the saved path.
+/// If the resized image is too small, it is not saved and `None` is returned.
+fn save_image(
+    dir: &Path,
+    rgba: image::RgbaImage,
+    max_width: u32,
+    max_height: u32,
+    jpeg_quality: u8,
+) -> Result<Option<String>> {
     let img = DynamicImage::ImageRgba8(rgba);
     let normalized = fit_within(img, max_width, max_height);
+    if normalized.width() < MIN_SIDE_PX || normalized.height() < MIN_SIDE_PX {
+        log::debug!(
+            "跳过截图：{}×{} 太小",
+            normalized.width(),
+            normalized.height()
+        );
+        return Ok(None);
+    }
     let rgb = normalized.to_rgb8();
 
     let now = Local::now();
@@ -124,4 +147,42 @@ fn fit_within(img: DynamicImage, max_w: u32, max_h: u32) -> DynamicImage {
         return img;
     }
     img.resize(max_w, max_h, image::imageops::FilterType::Lanczos3)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fresh_dir() -> PathBuf {
+        std::env::temp_dir().join(format!("hindsight-shot-{}", uuid::Uuid::new_v4().simple()))
+    }
+
+    /// 1×1 的图不保存，连日期目录都不建。
+    #[test]
+    fn tiny_image_is_not_saved() {
+        let dir = fresh_dir();
+        let saved = save_image(&dir, image::RgbaImage::new(1, 1), 1280, 800, 80).unwrap();
+        assert_eq!(saved, None);
+        assert!(!dir.exists());
+    }
+
+    /// 缩小后才变小的也不保存：2000×20 装进 1280×800，高只剩 12 像素。
+    #[test]
+    fn image_too_small_after_scaling_is_not_saved() {
+        let dir = fresh_dir();
+        let saved = save_image(&dir, image::RgbaImage::new(2000, 20), 1280, 800, 80).unwrap();
+        assert_eq!(saved, None);
+        assert!(!dir.exists());
+    }
+
+    /// 正好 16×16 的照常保存。
+    #[test]
+    fn image_at_the_limit_is_saved() {
+        let dir = fresh_dir();
+        let saved = save_image(&dir, image::RgbaImage::new(16, 16), 1280, 800, 80)
+            .unwrap()
+            .expect("16×16 应该保存");
+        assert!(Path::new(&saved).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
