@@ -838,6 +838,8 @@ export const mockSettings: Settings = {
   lastUpdateCheckAt: new Date().toISOString(),
   idleThresholdSeconds: 300,
   memoryOcrResident: false,
+  memoryOcrDailyAt: null,
+  memoryOcrDailyTimes: [],
   chatPrivacyAcknowledged: false,
   syncAiSummaries: false,
   syncChatHistory: false,
@@ -856,7 +858,8 @@ export const mockSettings: Settings = {
       { label: "晚上", startHour: 18, endHour: 22, color: "" },
       { label: "深夜", startHour: 22, endHour: 24, color: "" },
     ],
-    excludedCategories: [],
+    // 与真实默认一致：「其他」不参与分析
+    excludedCategories: ["other"],
     modelsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models",
     activeMain: "Qwen3.5-9B-Q4_K_M.gguf",
     activeMmproj: "",
@@ -876,6 +879,8 @@ export const mockSettings: Settings = {
     parallelSlots: null,
     ctxSize: null,
     autoSummary: true,
+    autoSummaryAt: null,
+    autoSummaryTimes: ["23:00"],
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,
@@ -937,7 +942,8 @@ export const mockEngineStatus: EngineStatus = {
   currentPin: "b4720",
   platformId: "win-cuda-12.4-x64",
   assetName: "llama-b4720-bin-win-cuda-cu12.4-x64.zip",
-  estimatedBytes: 220 * 1024 * 1024,
+  // 与真实的 CUDA 12.4 版估算一致（主程序加 cudart 运行库）
+  estimatedBytes: 605 * 1024 * 1024,
   runtime: {
     state: "running",
     port: 8088,
