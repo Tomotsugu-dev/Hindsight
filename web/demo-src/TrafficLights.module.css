@@ -1,0 +1,30 @@
+/* 在 macOS 27 上按应用的窗口样式（Overlay 标题栏、隐藏标题）量的：
+   按钮 14 px，第一个在 (9, 9)，相邻两个相距 23 px。 */
+.lights {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  z-index: 10;
+  display: flex;
+  gap: 9px;
+  pointer-events: none;
+}
+
+.lights span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+}
+
+.close {
+  background: #ff5f57;
+}
+
+.minimize {
+  background: #febc2e;
+}
+
+.zoom {
+  background: #28c840;
+}

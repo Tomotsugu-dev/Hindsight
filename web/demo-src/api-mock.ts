@@ -32,6 +32,9 @@ import type {
   SegmentSummaryRow,
   Settings,
   SettingsPatch,
+  SiteRow,
+  SiteIconPaths,
+  SiteIconDownloadRound,
   StorageInfo,
   SuperCategory,
   SuperCategoryInput,
@@ -43,6 +46,8 @@ import type {
   AiOverrides,
 } from "@app/api/hindsight";
 import { barMinutes } from "@app/lib/segments";
+import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
+import youtubeIcon from "@app/assets/site-icons/youtube.svg";
 
 // 重新导出原 api 模块里的 helper 函数（DTO → 内部类型转换）
 // 主仓库代码会直接 import { dtoToDaySummary } from "@app/api/hindsight"
@@ -79,11 +84,13 @@ const LOCAL_ICON = (name: string) => `/demo/icons/${name}.png`;
 const APP_ICON_URLS: Record<string, string> = {
   // 编程（VS Code + Cursor 用本地 PNG —— Simple Icons CDN 没收录 VS Code）
   "code.exe": LOCAL_ICON("vscode"),
+  code: LOCAL_ICON("vscode"),
   "cursor.exe": LOCAL_ICON("cursor"),
   "windowsterminal.exe": LOCAL_ICON("terminal"),
   "rustrover.exe": "https://cdn.simpleicons.org/rust/000000",
   // 浏览（Chrome 用本地 PNG，多彩 logo CDN 单色版没法还原）
   "chrome.exe": LOCAL_ICON("chrome"),
+  "google chrome": LOCAL_ICON("chrome"),
   "firefox.exe": "https://cdn.simpleicons.org/firefox/FF7139",
   "msedge.exe": LOCAL_ICON("edge"),
   // 沟通（Teams 用本地 PNG，多层紫色 logo 比 CDN 单色更准）
@@ -93,8 +100,10 @@ const APP_ICON_URLS: Record<string, string> = {
   // 学习
   "obsidian.exe": "https://cdn.simpleicons.org/obsidian/7C3AED",
   "notion.exe": "https://cdn.simpleicons.org/notion/000000",
+  notion: "https://cdn.simpleicons.org/notion/000000",
   // 娱乐
   "spotify.exe": "https://cdn.simpleicons.org/spotify/1DB954",
+  spotify: "https://cdn.simpleicons.org/spotify/1DB954",
   "discord.exe": "https://cdn.simpleicons.org/discord/5865F2",
   "steam.exe": "https://cdn.simpleicons.org/steam/000000",
   // 系统（其他分类）
@@ -121,6 +130,7 @@ import {
   mockUnclassifiedApps,
   mockDayFor,
   dailySegmentsForLocale,
+  selfDeviceNameForLocale,
   userBriefForLocale,
 } from "./fixtures";
 import { persistence } from "./persistence";
@@ -161,6 +171,68 @@ function loadState(): MutableState {
 
 const state = loadState();
 
+/** mockDevices 里本机的默认名字；没改过名才跟着界面语言换。 */
+const DEFAULT_SELF_DEVICE_NAME = mockDevices.find((d) => d.isSelf)?.displayName;
+
+/** Demo website time as [last 30 days, all time] in minutes. Rules stay in memory only. */
+const demoSiteMinutes: Record<string, [number, number]> = {
+  "github.com": [1260, 5400],
+  "gist.github.com": [60, 240],
+  "docs.github.com": [45, 300],
+  "bilibili.com": [520, 3100],
+  "live.bilibili.com": [140, 600],
+  "search.bilibili.com": [40, 180],
+  "space.bilibili.com": [30, 150],
+  "youtube.com": [410, 2600],
+  "chatgpt.com": [380, 1500],
+  "stackoverflow.com": [340, 1900],
+  "claude.ai": [300, 1100],
+  "google.com": [70, 420],
+  "docs.google.com": [120, 500],
+  "mail.google.com": [95, 720],
+  "gemini.google.com": [60, 200],
+  "notion.so": [210, 900],
+  "docs.rs": [210, 880],
+  "zhihu.com": [150, 640],
+  "developer.mozilla.org": [90, 400],
+  "outlook.live.com": [80, 500],
+};
+const demoSiteRules = new Map<string, string>([
+  ["github.com", "code"],
+  ["stackoverflow.com", "code"],
+  ["docs.rs", "code"],
+  ["developer.mozilla.org", "code"],
+  ["bilibili.com", "video"],
+  ["youtube.com", "video"],
+  ["docs.google.com", "office"],
+  ["mail.google.com", "office"],
+  ["notion.so", "office"],
+  ["outlook.live.com", "office"],
+]);
+const DEMO_SITE_ICON_URLS: SiteIconPaths = {
+  "github.com": LOCAL_ICON("sites/github"),
+  "gist.github.com": LOCAL_ICON("sites/github"),
+  "docs.github.com": LOCAL_ICON("sites/github"),
+  "bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "live.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "search.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "space.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "youtube.com": youtubeIcon,
+  "chatgpt.com": LOCAL_ICON("sites/chatgpt"),
+  "stackoverflow.com": LOCAL_ICON("sites/stackoverflow"),
+  "claude.ai": LOCAL_ICON("sites/claude"),
+  "google.com": LOCAL_ICON("sites/google"),
+  "docs.google.com": LOCAL_ICON("sites/google"),
+  "mail.google.com": LOCAL_ICON("sites/gmail"),
+  "gemini.google.com": LOCAL_ICON("sites/google"),
+  "notion.so": LOCAL_ICON("sites/notion"),
+  "docs.rs": LOCAL_ICON("sites/docsrs"),
+  "zhihu.com": LOCAL_ICON("sites/zhihu"),
+  "developer.mozilla.org": LOCAL_ICON("sites/mdn"),
+  "outlook.live.com": LOCAL_ICON("sites/outlook"),
+};
+const demoSiteIcons: SiteIconPaths = {};
+
 function persist() {
   const selfDevice = state.devices.find((d) => d.isSelf);
   persistence.save({
@@ -198,24 +270,16 @@ function rangeOffsets(from: string, to: string): number[] {
   return out;
 }
 
-
 // ────────────────────────────────────────────
 // api 对象 —— 跟原 hindsight.ts 同样接口
 // ────────────────────────────────────────────
 
 export const api = {
   // ─── 时段数据 ──────────────────────────────
-  getDayHours: async (
-    dayOffset: number,
-    deviceId?: string,
-  ): Promise<HourSlot[]> => {
+  getDayHours: async (dayOffset: number, deviceId?: string): Promise<HourSlot[]> => {
     return mockDayFor(dayOffset, deviceId).hours;
   },
-  getDayApps: async (
-    dayOffset: number,
-    limit?: number,
-    deviceId?: string,
-  ): Promise<AppUsage[]> => {
+  getDayApps: async (dayOffset: number, limit?: number, deviceId?: string): Promise<AppUsage[]> => {
     const apps = mockDayFor(dayOffset, deviceId).apps;
     return limit ? apps.slice(0, limit) : apps;
   },
@@ -235,18 +299,15 @@ export const api = {
     const hourTotal = barMinutes(slot.segments);
     const dayTotal = day.apps.reduce((s, a) => s + a.minutes, 0);
     const scale = dayTotal > 0 ? hourTotal / dayTotal : 0;
-    const scaled = hourApps.map((a) => ({
-      ...a,
-      minutes: Math.max(1, Math.round(a.minutes * scale * 2)),
-    }));
+    const scaled = hourApps.map((a) => {
+      const minutes = Math.max(1, Math.round(a.minutes * scale * 2));
+      return { ...a, minutes, byCategory: [{ categoryId: a.categoryId, secs: minutes * 60 }] };
+    });
     scaled.sort((a, b) => b.minutes - a.minutes);
     return limit ? scaled.slice(0, limit) : scaled;
   },
 
-  getWeekDays: async (
-    weekOffset: number,
-    deviceId?: string,
-  ): Promise<DaySummaryDto[]> => {
+  getWeekDays: async (weekOffset: number, deviceId?: string): Promise<DaySummaryDto[]> => {
     // weekOffset=0 → 本周一到周日
     const today = new Date();
     const dow = today.getDay() || 7; // 周一=1 周日=7
@@ -256,9 +317,7 @@ export const api = {
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const offsetFromToday = Math.round(
-        (d.getTime() - today.getTime()) / (24 * 3600 * 1000),
-      );
+      const offsetFromToday = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
       const day = mockDayFor(offsetFromToday, deviceId);
       // 全日聚合
       const segMap = new Map<string, number>();
@@ -295,33 +354,26 @@ export const api = {
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
     return limit ? sorted.slice(0, limit) : sorted;
   },
 
-  getMonthDays: async (
-    monthOffset: number,
-    deviceId?: string,
-  ): Promise<DaySummaryDto[]> => {
+  getMonthDays: async (monthOffset: number, deviceId?: string): Promise<DaySummaryDto[]> => {
     // monthOffset=0 → 本月 1 日到月末
     const today = new Date();
     const target = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-    const daysInMonth = new Date(
-      target.getFullYear(),
-      target.getMonth() + 1,
-      0,
-    ).getDate();
+    const daysInMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
     const result: DaySummaryDto[] = [];
     for (let i = 0; i < daysInMonth; i++) {
       const d = new Date(target);
       d.setDate(1 + i);
-      const offsetFromToday = Math.round(
-        (d.getTime() - today.getTime()) / (24 * 3600 * 1000),
-      );
+      const offsetFromToday = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
       // 未来日期返空
       if (offsetFromToday > 0) {
         result.push({
@@ -354,11 +406,7 @@ export const api = {
   ): Promise<AppUsage[]> => {
     const today = new Date();
     const target = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-    const daysInMonth = new Date(
-      target.getFullYear(),
-      target.getMonth() + 1,
-      0,
-    ).getDate();
+    const daysInMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
     const map = new Map<string, AppUsage>();
     for (let i = 0; i < daysInMonth; i++) {
       const d = new Date(target);
@@ -368,8 +416,10 @@ export const api = {
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     const sorted = Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -394,17 +444,15 @@ export const api = {
         segments: Array.from(segMap, ([categoryId, secs]) => ({ categoryId, secs })),
       };
     }),
-  getRangeApps: async (
-    from: string,
-    to: string,
-    deviceId?: string,
-  ): Promise<AppUsage[]> => {
+  getRangeApps: async (from: string, to: string, deviceId?: string): Promise<AppUsage[]> => {
     const map = new Map<string, AppUsage>();
     for (const offset of rangeOffsets(from, to)) {
       for (const a of mockDayFor(offset, deviceId).apps) {
         const cur = map.get(a.groupId);
-        if (cur) cur.minutes += a.minutes;
-        else map.set(a.groupId, { ...a });
+        if (cur) {
+          cur.minutes += a.minutes;
+          cur.byCategory = [{ categoryId: cur.categoryId, secs: cur.minutes * 60 }];
+        } else map.set(a.groupId, { ...a });
       }
     }
     return Array.from(map.values()).sort((a, b) => b.minutes - a.minutes);
@@ -440,17 +488,14 @@ export const api = {
     persist();
   },
   reorderCategories: async (orderedIds: string[]): Promise<void> => {
-    state.categories.sort(
-      (a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id),
-    );
+    state.categories.sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
     persist();
   },
 
   // ─── 大类（super-category）—— v28+ ────────
   // 主仓库的 useSuperCategoriesProvider 启动时无条件调 listSuperCategories；
   // demo 必须实现这一组，否则 useSuperCategories 抛错 → 整树 unmount
-  listSuperCategories: async (): Promise<SuperCategory[]> =>
-    structuredClone(state.superCategories),
+  listSuperCategories: async (): Promise<SuperCategory[]> => structuredClone(state.superCategories),
   createSuperCategory: async (input: SuperCategoryInput): Promise<SuperCategory> => {
     const s: SuperCategory = {
       id: `sup-${Date.now()}`,
@@ -462,10 +507,7 @@ export const api = {
     state.superCategories.push(s);
     return s;
   },
-  updateSuperCategory: async (
-    id: string,
-    patch: SuperCategoryPatch,
-  ): Promise<void> => {
+  updateSuperCategory: async (id: string, patch: SuperCategoryPatch): Promise<void> => {
     const s = state.superCategories.find((x) => x.id === id);
     if (s) {
       if (patch.name !== undefined) s.name = patch.name;
@@ -474,9 +516,7 @@ export const api = {
     }
   },
   reorderSuperCategories: async (orderedIds: string[]): Promise<void> => {
-    state.superCategories.sort(
-      (a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id),
-    );
+    state.superCategories.sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
   },
   deleteSuperCategory: async (id: string): Promise<void> => {
     state.superCategories = state.superCategories.filter((x) => x.id !== id);
@@ -486,10 +526,7 @@ export const api = {
     }
     persist();
   },
-  assignCategoryToSuper: async (
-    categoryId: string,
-    superId: string | null,
-  ): Promise<void> => {
+  assignCategoryToSuper: async (categoryId: string, superId: string | null): Promise<void> => {
     const c = state.categories.find((x) => x.id === categoryId);
     if (c) {
       c.superCategoryId = superId;
@@ -544,15 +581,66 @@ export const api = {
       persist();
     }
   },
-  assignAppGroupCategory: async (
-    groupId: string,
-    categoryId: string | null,
-  ): Promise<void> => {
+  assignAppGroupCategory: async (groupId: string, categoryId: string | null): Promise<void> => {
     const g = state.appGroups.find((x) => x.id === groupId);
     if (g) {
       g.categoryId = categoryId;
       persist();
     }
+  },
+
+  // ─── Website rules ────────────────────────
+  listSites: async (): Promise<SiteRow[]> => {
+    const hosts = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
+    const rows = [...hosts].map((host): SiteRow => {
+      const [minutes30d, minutesTotal] = demoSiteMinutes[host] ?? [0, 0];
+      // Longest matching domain: the host itself first, then each parent domain.
+      const labels = host.split(".");
+      let ruleHost: string | null = null;
+      for (let i = 0; i < labels.length - 1 && ruleHost === null; i++) {
+        const candidate = labels.slice(i).join(".");
+        if (demoSiteRules.has(candidate)) ruleHost = candidate;
+      }
+      return {
+        host,
+        minutes30d,
+        minutesTotal,
+        categoryId: ruleHost ? (demoSiteRules.get(ruleHost) ?? null) : null,
+        follows: ruleHost && ruleHost !== host ? ruleHost : null,
+      };
+    });
+    return rows.sort(
+      (a, b) =>
+        b.minutes30d - a.minutes30d ||
+        b.minutesTotal - a.minutesTotal ||
+        a.host.localeCompare(b.host),
+    );
+  },
+  setSiteRule: async (host: string, categoryId: string): Promise<void> => {
+    demoSiteRules.set(host, categoryId);
+  },
+  removeSiteRule: async (host: string): Promise<void> => {
+    demoSiteRules.delete(host);
+  },
+  getSiteIcons: async (): Promise<SiteIconPaths> => {
+    const listed = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
+    for (const host of Object.keys(demoSiteIcons)) {
+      if (!listed.has(host)) delete demoSiteIcons[host];
+    }
+    return { ...demoSiteIcons };
+  },
+  downloadSiteIcons: async (hosts: string[]): Promise<SiteIconDownloadRound> => {
+    if (!state.settings.downloadSiteIcons) return { icons: {}, remaining: 0 };
+    const due = [...new Set(hosts)].filter(
+      (host) => !demoSiteIcons[host] && DEMO_SITE_ICON_URLS[host] !== undefined,
+    );
+    const icons: SiteIconPaths = {};
+    // Bundled website icons keep this demo offline. Missing icons keep the globe placeholder.
+    for (const host of due.slice(0, 12)) {
+      icons[host] = DEMO_SITE_ICON_URLS[host];
+      demoSiteIcons[host] = icons[host];
+    }
+    return { icons, remaining: Math.max(0, due.length - 12) };
   },
 
   // ─── Capture ───────────────────────────────
@@ -579,6 +667,8 @@ export const api = {
     // demo 的 AI 系统提示词语言 + "あなたについて / About you" 简介都按当前 i18n 切，
     // 让 /en/、/ja/ 看到对应语言的默认值。
     const s = structuredClone(state.settings);
+    s.downloadSiteIcons ??= false;
+    s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
     const lng = (i18n.language || "zh-CN").toLowerCase();
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);
@@ -602,8 +692,7 @@ export const api = {
     dbBytes: 42 * 1024 * 1024,
     screenshotsBytes: 1.2 * 1024 * 1024 * 1024,
     dbPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\hindsight.db",
-    screenshotsPath:
-      "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\screenshots",
+    screenshotsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\screenshots",
   }),
   purgeActivities: async (): Promise<void> => {
     // eslint-disable-next-line no-console
@@ -614,17 +703,18 @@ export const api = {
     console.warn("[demo] purgeScreenshots 在 demo 模式下不会真的清除数据");
   },
   openScreenshotsDir: async (): Promise<void> => {},
-  getDataRoot: async (): Promise<string> =>
-    "C:\\Users\\demo\\AppData\\Roaming\\Hindsight",
+  getDataRoot: async (): Promise<string> => "C:\\Users\\demo\\AppData\\Roaming\\Hindsight",
   setDataRoot: async (_path: string): Promise<void> => {},
 
   // ─── Devices ───────────────────────────────
-  listDevices: async (): Promise<DeviceRow[]> => structuredClone(state.devices),
-  updateSelfDevice: async (
-    name?: string,
-    color?: string,
-    icon?: string,
-  ): Promise<DeviceRow> => {
+  listDevices: async (): Promise<DeviceRow[]> =>
+    structuredClone(state.devices).map((d) =>
+      // 没改过名的本机，名字跟着界面语言走
+      d.isSelf && d.displayName === DEFAULT_SELF_DEVICE_NAME
+        ? { ...d, displayName: selfDeviceNameForLocale(i18n.language || "zh-CN") }
+        : d,
+    ),
+  updateSelfDevice: async (name?: string, color?: string, icon?: string): Promise<DeviceRow> => {
     const self = state.devices.find((d) => d.isSelf);
     if (self) {
       if (name !== undefined) self.displayName = name;
@@ -670,10 +760,7 @@ export const api = {
   },
 
   // ─── AI external endpoint ──────────────────
-  testAiEndpoint: async (
-    _endpoint: string,
-    _apiKey?: string,
-  ): Promise<TestAiEndpointResp> => ({
+  testAiEndpoint: async (_endpoint: string, _apiKey?: string): Promise<TestAiEndpointResp> => ({
     ok: true,
     models: ["gpt-4o-mini", "gpt-4o", "deepseek-chat"],
     message: "Demo 模式 · 假返回",
@@ -716,10 +803,7 @@ export const api = {
   },
   cancelModelDownload: async (_file: string): Promise<void> => {},
   listPartialDownloads: async (): Promise<PartialDownload[]> => [],
-  setActiveModel: async (
-    mainFile: string,
-    mmprojFile: string | null,
-  ): Promise<void> => {
+  setActiveModel: async (mainFile: string, mmprojFile: string | null): Promise<void> => {
     state.settings.ai.activeMain = mainFile;
     state.settings.ai.activeMmproj = mmprojFile ?? "";
     persist();
@@ -760,10 +844,7 @@ export const api = {
     await simulateSegmentRetry(date, segmentIdx, source);
   },
   cancelDaySummary: async (): Promise<void> => {},
-  getDaySummary: async (
-    date: string,
-    source: string = "daily",
-  ): Promise<SegmentSummaryRow[]> => {
+  getDaySummary: async (date: string, source: string = "daily"): Promise<SegmentSummaryRow[]> => {
     const key = `${source}:${date}`;
     // 只有 daily 段总结按当前 i18n 语言动态返回；其它 source（weekly/monthly）保持
     // 落在 state 里的拷贝。这样切语言后日报立刻跟随，不需要清缓存。
@@ -806,10 +887,7 @@ export const api = {
   clearDaySummary: async (date: string, source: string = "daily"): Promise<void> => {
     state.daySummaries.delete(`${source}:${date}`);
   },
-  clearDaySegmentSummaries: async (
-    date: string,
-    source: string = "daily",
-  ): Promise<void> => {
+  clearDaySegmentSummaries: async (date: string, source: string = "daily"): Promise<void> => {
     state.daySummaries.delete(`${source}:${date}`);
   },
   // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
@@ -833,8 +911,7 @@ export const api = {
     to: string,
     groupId: string,
     _deviceId?: string,
-  ): Promise<AppDetail> =>
-    mockAppDetail("days", rangeOffsets(from, to).length, groupId),
+  ): Promise<AppDetail> => mockAppDetail("days", rangeOffsets(from, to).length, groupId),
 
   // ─── Chat（演示回答） ────────────────────
   chatAsk: async (
@@ -863,8 +940,7 @@ export const api = {
     // 消息树:与真实端同一约定("" = 挂根,guid = 挂点,缺省 = 链尾),
     // demo 里编辑分支因此可完整演示
     const tip = conv.messages[conv.messages.length - 1];
-    const parent =
-      parentGuid === "" ? null : (parentGuid ?? tip?.guid ?? null);
+    const parent = parentGuid === "" ? null : (parentGuid ?? tip?.guid ?? null);
     const answer = chatDemoAnswer(question);
     const userGuid = `demo-${chatNextMsgId}`;
     conv.messages.push({
@@ -921,9 +997,7 @@ export const api = {
     if (!conv) throw new Error("no question to answer again");
     // 与真实端同语义:沿指定叶子(缺省链尾)回溯 parent 找最近提问
     const byGuid = new Map(conv.messages.map((msg) => [msg.guid, msg]));
-    let cur = leafGuid
-      ? byGuid.get(leafGuid)
-      : conv.messages[conv.messages.length - 1];
+    let cur = leafGuid ? byGuid.get(leafGuid) : conv.messages[conv.messages.length - 1];
     const leaf = cur;
     while (cur && cur.role !== "user") {
       cur = cur.parentGuid ? byGuid.get(cur.parentGuid) : undefined;
@@ -991,24 +1065,35 @@ export const api = {
   memoryDigestStop: async (): Promise<void> => {},
   memorySearch: async (
     query: string,
-    _limit?: number,
+    limit?: number,
     offset?: number,
   ): Promise<MemorySearchResp> => {
     await sleep(300); // 模拟索引查询耗时
-    if ((offset ?? 0) > 0) return { total: 3, hits: [] };
-    return { total: 3, hits: demoSearchHits(query) };
+    const hits = demoSearchHits(query);
+    const start = offset ?? 0;
+    const size = limit ?? hits.length;
+    return { total: hits.length, hits: hits.slice(start, start + size) };
   },
   memoryLocate: async (
-    _path: string,
-    _words: string[],
-  ): Promise<[number, number, number, number][]> => [],
-  memorySessionText: async (_sessionId: number): Promise<string> =>
-    DEMO_SESSION_TEXT,
+    path: string,
+    words: string[],
+  ): Promise<[number, number, number, number][]> => {
+    const screen = DEMO_SCREENS.find((s) => s.frame === path);
+    const terms = words.map((word) => word.trim().toLowerCase()).filter(Boolean);
+    // 与正式端一致：返回包含检索词的文字行位置，由搜索页绘制高亮框。
+    return (screen?.lines ?? [])
+      .filter((line) => terms.some((word) => line.text.toLowerCase().includes(word)))
+      .map((line) => line.box);
+  },
+  memorySessionText: async (sessionId: number): Promise<string> =>
+    DEMO_SCREENS.find((s) => s.sessionId === sessionId)?.text ?? "",
 
   // ─── 杂项 no-op ──────────────────────────
   writeTextFile: async (_path: string, _content: string): Promise<void> => {},
   exportUsageXlsx: async (_path: string, _spec: unknown): Promise<void> => {},
-  earliestActivityDate: async (): Promise<string | null> => isoDateOffset(-29),
+  // Demo pretends the user has a full year of history, so the All-time
+  // heatmap renders every month with color.
+  earliestActivityDate: async (): Promise<string | null> => isoDateOffset(-364),
   setTrayLabels: async (_show: string, _quit: string): Promise<void> => {},
   testAiChat: async (
     _endpoint: string,
@@ -1043,21 +1128,133 @@ const chatConvs: DemoConv[] = [];
 let chatNextConvId = 1;
 let chatNextMsgId = 1;
 
+// 给功能文档截图用的一问一答，每种界面语言一份：原样输入这个问题才会命中，
+// 其他问题仍是下面的占位回答。scripts/shots/features.mjs 里 chat 那张图问的就是它们，
+// 两处要一致。分项取自周统计里 Code、cursor、chrome 的本周时长，都不超过它们。
+const DEMO_PROJECT_ANSWERS: { question: string; answer: string }[] = [
+  {
+    question: "这周我在 Hindsight 项目上花了多少时间？",
+    answer: [
+      "这周你在 Hindsight 项目上共花了约 **12 小时 36 分钟**：",
+      "",
+      "| 应用 | 时长 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 小时 48 分 [1] |",
+      "| Cursor | 3 小时 20 分 [2] |",
+      "| Google Chrome | 1 小时 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "這週我在 Hindsight 專案上花了多少時間？",
+    answer: [
+      "這週你在 Hindsight 專案上共花了約 **12 小時 36 分鐘**：",
+      "",
+      "| 應用程式 | 時長 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 小時 48 分 [1] |",
+      "| Cursor | 3 小時 20 分 [2] |",
+      "| Google Chrome | 1 小時 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "How much time did I spend on the Hindsight project this week?",
+    answer: [
+      "This week you spent about **12 h 36 min** on the Hindsight project:",
+      "",
+      "| App | Time |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "今週、Hindsight プロジェクトにどのくらい時間を使いましたか？",
+    answer: [
+      "今週は Hindsight プロジェクトに約 **12 時間 36 分** を使いました：",
+      "",
+      "| アプリ | 時間 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 時間 48 分 [1] |",
+      "| Cursor | 3 時間 20 分 [2] |",
+      "| Google Chrome | 1 時間 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "Quanto tempo passei no projeto Hindsight esta semana?",
+    answer: [
+      "Esta semana você passou cerca de **12 h 36 min** no projeto Hindsight:",
+      "",
+      "| App | Tempo |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "¿Cuánto tiempo dediqué al proyecto Hindsight esta semana?",
+    answer: [
+      "Esta semana dedicaste unas **12 h 36 min** al proyecto Hindsight:",
+      "",
+      "| App | Tiempo |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+];
+
 function chatDemoAnswer(question: string): {
   text: string;
   citations: ChatStoredMessage["citations"];
 } {
   const lng = (i18n.language || "zh-CN").toLowerCase();
+  const worked = DEMO_PROJECT_ANSWERS.find((entry) => entry.question === question);
+  if (worked) {
+    const day = todayStr();
+    return {
+      text: worked.answer,
+      citations: [
+        {
+          index: 1,
+          app: "Visual Studio Code",
+          title: "hindsight — src/pages/Chat/ChatPage.tsx",
+          startedTs: `${day}T10:12:00+08:00`,
+          endedTs: `${day}T11:03:00+08:00`,
+          framePath: null,
+        },
+        {
+          index: 2,
+          app: "Cursor",
+          title: "hindsight — web/demo-src/fixtures.ts",
+          startedTs: `${day}T14:20:00+08:00`,
+          endedTs: `${day}T15:30:00+08:00`,
+          framePath: null,
+        },
+        {
+          index: 3,
+          app: "Google Chrome",
+          title: "Hindsight — README",
+          startedTs: `${day}T16:20:00+08:00`,
+          endedTs: `${day}T16:41:00+08:00`,
+          framePath: "/demo/screenshots/github-readme.jpg",
+        },
+      ],
+    };
+  }
   const q = question.length > 40 ? `${question.slice(0, 40)}…` : question;
-  const text = lng.startsWith("zh-tw") || lng.startsWith("zh-hk")
-    ? `這是展示環境的範例回答。正式版會檢索你的**活動記錄**與**螢幕文字索引**來回答「${q}」:先用統計工具彙總相關應用程式的使用時長與次數,再用全文搜尋找出螢幕上出現過的相關內容,並附上可核對的證據卡 [1,2]。`
-    : lng.startsWith("zh")
-    ? `这是演示环境的示例回答。正式版会检索你的**活动记录**与**屏幕文字索引**来回答「${q}」:先用统计工具汇总相关应用的使用时长与次数,再用全文搜索找出屏幕上出现过的相关内容,并附上可核对的证据卡 [1,2]。`
-    : lng.startsWith("ja")
-      ? `これはデモ環境のサンプル回答です。製品版では**アクティビティ記録**と**画面テキスト索引**を検索して「${q}」に回答します:統計ツールで使用時間や回数を集計し、全文検索で画面に表示された内容を見つけ、検証可能な出典カード [1,2] を添付します。`
-      : lng.startsWith("pt")
-        ? `Esta é uma resposta de demonstração. Na versão real, eu pesquisaria seu **registro de atividades** e o **índice de texto da tela** para responder "${q}": agregando tempo de uso com ferramentas de estatística e buscando conteúdo que apareceu na tela, com cartões de evidência verificáveis [1,2].`
-        : `This is a sample answer in the demo environment. The real app would search your **activity records** and **screen-text index** to answer "${q}": aggregating app usage with the stats tool, then full-text searching what appeared on screen, with verifiable evidence cards [1,2].`;
+  const text =
+    lng.startsWith("zh-tw") || lng.startsWith("zh-hk")
+      ? `這是展示環境的範例回答。正式版會檢索你的**活動記錄**與**螢幕文字索引**來回答「${q}」:先用統計工具彙總相關應用程式的使用時長與次數,再用全文搜尋找出螢幕上出現過的相關內容,並附上可核對的證據卡 [1,2]。`
+      : lng.startsWith("zh")
+        ? `这是演示环境的示例回答。正式版会检索你的**活动记录**与**屏幕文字索引**来回答「${q}」:先用统计工具汇总相关应用的使用时长与次数,再用全文搜索找出屏幕上出现过的相关内容,并附上可核对的证据卡 [1,2]。`
+        : lng.startsWith("ja")
+          ? `これはデモ環境のサンプル回答です。製品版では**アクティビティ記録**と**画面テキスト索引**を検索して「${q}」に回答します:統計ツールで使用時間や回数を集計し、全文検索で画面に表示された内容を見つけ、検証可能な出典カード [1,2] を添付します。`
+          : lng.startsWith("pt")
+            ? `Esta é uma resposta de demonstração. Na versão real, eu pesquisaria seu **registro de atividades** e o **índice de texto da tela** para responder "${q}": agregando tempo de uso com ferramentas de estatística e buscando conteúdo que apareceu na tela, com cartões de evidência verificáveis [1,2].`
+            : `This is a sample answer in the demo environment. The real app would search your **activity records** and **screen-text index** to answer "${q}": aggregating app usage with the stats tool, then full-text searching what appeared on screen, with verifiable evidence cards [1,2].`;
   const today = todayStr();
   return {
     text,
@@ -1073,84 +1270,163 @@ function chatDemoAnswer(question: string): {
       {
         index: 2,
         app: "Google Chrome",
-        title: "llama.cpp server docs — GitHub",
+        title: "Hindsight — README",
         startedTs: `${today}T14:20:00+08:00`,
         endedTs: `${today}T14:41:00+08:00`,
-        framePath: null,
+        framePath: "/demo/screenshots/github-readme.jpg",
       },
     ],
   };
 }
 
-/** 搜索页演示命中:snippet 嵌入查询词保证高亮生效;framePath 为 null 走文字降级视图。 */
-function demoSearchHits(query: string): MemorySearchResp["hits"] {
-  const lng = (i18n.language || "zh-CN").toLowerCase();
-  const zh = lng.startsWith("zh");
-  const today = todayStr();
-  const yesterday = isoDateOffset(-1);
-  const snip = (before: string, after: string) => `${before}${query}${after}`;
-  return [
-    {
-      sessionId: 1,
-      app: "Visual Studio Code",
-      title: "hindsight — src/pages/Chat/ChatPage.tsx",
-      startedTs: `${today}T10:12:00+08:00`,
-      endedTs: `${today}T11:03:00+08:00`,
-      snippet: zh
-        ? snip("…const answer = await api.chatAsk(question) // 处理 ", " 的检索逻辑,附证据卡…")
-        : snip("…const answer = await api.chatAsk(question) // retrieval logic for ", " with evidence cards…"),
-      framePath: null,
-      frameTs: null,
-    },
-    {
-      sessionId: 2,
-      app: "Google Chrome",
-      title: zh ? `${query} — 搜索结果` : `${query} — Search results`,
-      startedTs: `${today}T14:20:00+08:00`,
-      endedTs: `${today}T14:41:00+08:00`,
-      snippet: zh
-        ? snip("…关于 ", " 的文档与讨论:实现方式、常见问题与最佳实践…")
-        : snip("…docs and discussions about ", ": implementation notes, FAQs and best practices…"),
-      framePath: null,
-      frameTs: null,
-    },
-    {
-      sessionId: 3,
-      app: "Obsidian",
-      title: zh ? "工作笔记 — 2026-07" : "Work notes — 2026-07",
-      startedTs: `${yesterday}T16:05:00+08:00`,
-      endedTs: `${yesterday}T16:22:00+08:00`,
-      snippet: zh
-        ? snip("…TODO: 整理 ", " 相关的资料,周五前给出结论…")
-        : snip("…TODO: collect notes on ", " and summarize by Friday…"),
-      framePath: null,
-      frameTs: null,
-    },
-  ];
+/**
+ * Screen-text index for the demo search. Each entry is one captured page:
+ * the JPEG is a real screenshot, and `text` is the wording on that page,
+ * so a query only hits when those words were actually on screen.
+ */
+const DEMO_SCREENS: {
+  sessionId: number;
+  app: string;
+  title: string;
+  dayOffset: number;
+  start: string;
+  end: string;
+  frame: string;
+  text: string;
+  lines?: { text: string; box: [number, number, number, number] }[];
+}[] = [
+  {
+    sessionId: 1,
+    app: "Google Chrome",
+    title: "Tomotsugu-dev/Hindsight — GitHub",
+    dayOffset: 0,
+    start: "14:08",
+    end: "14:16",
+    frame: "/demo/screenshots/github-files.jpg",
+    text: [
+      "Tomotsugu-dev / Hindsight",
+      "Local-first desktop activity tracker — see where your hours go, with on-device AI daily summaries and optional multi-device sync",
+      "hindsight.kyosweb.com",
+      "activity-tracker ai cross-platform daily-reports llm local-first privacy screen-time time-tracker",
+      ".github/workflows .vscode docs scripts src-tauri src web CONTRIBUTING.md",
+      "chore(vscode): point rust-analyzer at src-tauri/Cargo.toml",
+      "feat(ui): add website icons, filters, and sorting to the Websites tab",
+      "Hindsight v0.9.1",
+    ].join("\n"),
+  },
+  {
+    sessionId: 2,
+    app: "Google Chrome",
+    title: "Hindsight — README",
+    dayOffset: 0,
+    start: "14:20",
+    end: "14:41",
+    frame: "/demo/screenshots/github-readme.jpg",
+    text: [
+      "Local & privacy-first — Data stays on your machine by default",
+      "Why Hindsight",
+      'Have you ever closed the laptop at midnight feeling like you "worked all day" but couldn\'t say what you actually got done? A while back I went hunting for a tracker to fix exactly that. Tried a bunch — none of them stuck:',
+      "ActivityWatch — open-source, privacy-first, technically ticks all the right boxes. Honest take: the UI just doesn't pull me in. I'd install it, look at it once, never open it again.",
+      "WorkReview — couldn't find one with both (a) cross-device visibility and (b) an hourly timeline like iPhone's Screen Time. I really wanted that \"what was I doing at 3pm\" zoomable view for desktop, and nothing had it the way I wanted.",
+      'Toggl / RescueTime / paid SaaS — these feel built for teams and HR-style "billable hours" tracking. The dashboards are dense, the flow is project-tagging-first, and the data lives on someone else\'s servers. Wrong tool for "personal awareness."',
+      "To fix exactly these gaps, I built Hindsight.",
+      "Quick Start. Download the installer for your platform from Releases and install it.",
+      "Windows. Download hindsight_x.y.z_x64-setup.exe and double-click to install.",
+      'First launch will trigger "Windows protected your PC" — the installer is not yet signed with an EV code-signing certificate, so SmartScreen will block it. Click "More info" → "Run anyway" to continue.',
+      "macOS. Download hindsight_x.y.z_universal.dmg (Apple Silicon + Intel universal binary), double-click to mount, then drag Hindsight into the Applications folder. The app is signed with an Apple Developer certificate and notarized, so it opens normally without any Gatekeeper warning.",
+      "All activity data and screenshots are stored locally by default. If you enable Google Drive sync, only activity metadata will be uploaded, screenshots will not be uploaded.",
+    ].join("\n"),
+  },
+  {
+    sessionId: 3,
+    app: "Google Chrome",
+    title: "Optical character recognition — Wikipedia",
+    dayOffset: -1,
+    start: "16:05",
+    end: "16:22",
+    frame: "/demo/screenshots/wikipedia-ocr.jpg",
+    // 原始图片为 1440 × 900；坐标对应实际含 OCR 的三行文字，按图片尺寸归一化。
+    lines: [
+      {
+        text: "Optical character recognition (OCR) or optical character reader is",
+        box: [264 / 1440, 210 / 900, 566 / 1440, 25 / 900],
+      },
+      {
+        text: "(OCR) with a portable scanner",
+        box: [875 / 1440, 431 / 900, 215 / 1440, 24 / 900],
+      },
+      {
+        text: "OCR is a field of research in pattern recognition, artificial intelligence and computer vision.",
+        box: [264 / 1440, 538 / 900, 720 / 1440, 26 / 900],
+      },
+    ],
+    text: [
+      "Optical character recognition",
+      "Optical character recognition (OCR) or optical character reader is the electronic or mechanical conversion of images of typed, handwritten or printed text into machine-encoded text, whether from a scanned document, a photo of a document, a scene photo (for example the text on signs and billboards in a landscape photo) or from subtitle text superimposed on an image (for example: from a television broadcast).",
+      "Widely used as a form of data entry from printed paper data records – whether passport documents, invoices, bank statements, computerized receipts, business cards, mail, printed data, or any suitable documentation – it is a common method of digitizing printed texts so that they can be electronically edited, searched, stored more compactly, displayed online, and used in machine processes such as cognitive computing, machine translation, text-to-speech, key data and text mining. OCR is a field of research in pattern recognition, artificial intelligence and computer vision.",
+      "History. Early optical character recognition may be traced to technologies involving telegraphy and creating reading devices for the blind. In 1915, Hyman Eli Goldberg was granted a patent for a device that read perforated or conductive-ink characters and converted them into standard telegraph code (US Patent 1165663). Concurrently, Edmund Fournier d'Albe developed the Optophone, a handheld scanner that when moved across a printed page, produced tones that corresponded to specific letters or characters.",
+    ].join("\n"),
+  },
+  {
+    sessionId: 4,
+    app: "Google Chrome",
+    title: "Getting Started — The Rust Programming Language",
+    dayOffset: -1,
+    start: "11:02",
+    end: "11:40",
+    frame: "/demo/screenshots/rust-book.jpg",
+    text: [
+      "The Rust Programming Language",
+      "Getting Started",
+      "Let's start your Rust journey! There's a lot to learn, but every journey starts somewhere. In this chapter, we'll discuss:",
+      "Installing Rust on Linux, macOS, and Windows",
+      "Writing a program that prints Hello, world!",
+      "Using cargo, Rust's package manager and build system",
+      "Foreword Introduction Installation Hello, World! Hello, Cargo!",
+      "Programming a Guessing Game Common Programming Concepts Understanding Ownership",
+    ].join("\n"),
+  },
+];
+
+/** A short window of the screen text around the first query word. */
+function snippetAround(text: string, word: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  const at = flat.toLowerCase().indexOf(word.toLowerCase());
+  const start = at < 0 ? 0 : Math.max(0, at - 36);
+  const end = Math.min(flat.length, (at < 0 ? 0 : at) + word.length + 88);
+  const slice = flat.slice(start, end);
+  return `${start > 0 ? "…" : ""}${slice}${end < flat.length ? "…" : ""}`;
 }
 
-/** 会话 OCR 全文的演示文本(截图降级视图):模拟一屏编辑器内容。 */
-const DEMO_SESSION_TEXT = [
-  "hindsight — src/pages/Chat/ChatPage.tsx — Visual Studio Code",
-  "EXPLORER    src > pages > Chat > ChatPage.tsx",
-  "import { useState } from \"react\";",
-  "import { api } from \"../../api/hindsight\";",
-  "",
-  "export function ChatPage() {",
-  "  const [question, setQuestion] = useState(\"\");",
-  "  const answer = await api.chatAsk(question, activeId);",
-  "  // 渲染回答气泡与证据卡",
-  "}",
-  "",
-  "PROBLEMS  OUTPUT  TERMINAL      Ln 42, Col 7  UTF-8  TypeScript",
-].join("\n");
+/** Hits whose screen text contains every word of the query. */
+function demoSearchHits(query: string): MemorySearchResp["hits"] {
+  const words = query
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return [];
+  const today = todayStr();
+  return DEMO_SCREENS.filter((s) => words.every((w) => s.text.toLowerCase().includes(w))).map(
+    (s) => {
+      const day = s.dayOffset === 0 ? today : isoDateOffset(s.dayOffset);
+      const startedTs = `${day}T${s.start}:00+08:00`;
+      return {
+        sessionId: s.sessionId,
+        app: s.app,
+        title: s.title,
+        startedTs,
+        endedTs: `${day}T${s.end}:00+08:00`,
+        snippet: snippetAround(s.text, words[0]),
+        framePath: s.frame,
+        frameTs: startedTs,
+      };
+    },
+  );
+}
 
 /** 应用详情的演示数据:确定性钟形分布(刷新不跳),标题列表用领域合理的假标题。 */
-function mockAppDetail(
-  kind: "hours" | "days",
-  count: number,
-  iconProcess: string,
-): AppDetail {
+function mockAppDetail(kind: "hours" | "days", count: number, iconProcess: string): AppDetail {
   const buckets = Array.from({ length: count }, (_, i) => {
     const key = kind === "hours" ? String(i) : isoDateOffset(i - count + 1);
     // 小时粒度:工作时段高、深夜为 0;天粒度:伪随机但确定

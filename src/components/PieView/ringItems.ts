@@ -20,6 +20,9 @@ export interface RingFocusApp {
   /** 所属小类的颜色 */
   color: string;
   minutes: number;
+  /** The part of `minutes` in `categoryId`; website rules can move the rest to other
+   * categories. Sizes the app's arc inside its category's segment. */
+  categoryMinutes: number;
 }
 
 /** 一个完整圆环上的一段：一个小类，或者合起来的「其他」 */

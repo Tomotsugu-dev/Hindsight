@@ -36,14 +36,22 @@ export function usePeriodRankings(
         );
       }
     }
-    const topAppsByCat = new Map<string, string[]>();
+    // An app is listed under every category it has time in, ranked by that time:
+    // Chrome shows under Video when a website rule moves Bilibili there.
+    const appsByCat = new Map<string, { iconProcess: string; secs: number }[]>();
     for (const a of apps) {
-      if (!a.categoryId) continue;
-      const list = topAppsByCat.get(a.categoryId) ?? [];
-      // AppStack 拿这串去查图标，必须用 iconProcess（合并组里的稳定代表名）；
-      // a.displayName 是组的 display_name，可能跟 app_icons 表里的 key 不一致。
-      list.push(a.iconProcess);
-      topAppsByCat.set(a.categoryId, list);
+      for (const c of a.byCategory) {
+        const list = appsByCat.get(c.categoryId) ?? [];
+        // AppStack 拿这串去查图标，必须用 iconProcess（合并组里的稳定代表名）；
+        // a.displayName 是组的 display_name，可能跟 app_icons 表里的 key 不一致。
+        list.push({ iconProcess: a.iconProcess, secs: c.secs });
+        appsByCat.set(c.categoryId, list);
+      }
+    }
+    const topAppsByCat = new Map<string, string[]>();
+    for (const [catId, list] of appsByCat) {
+      list.sort((x, y) => y.secs - x.secs);
+      topAppsByCat.set(catId, list.map((x) => x.iconProcess));
     }
     return categories
       .map((c) => ({
@@ -75,6 +83,7 @@ export function usePeriodRankings(
         leading: <AppIcon processName={a.iconProcess} fallbackColor={color} size={26} />,
         categoryId: a.categoryId,
         iconProcess: a.iconProcess,
+        byCategory: a.byCategory,
       };
     });
   }, [apps, getCategory, t]);

@@ -232,11 +232,19 @@ fn is_infra_failure(e: &Error) -> bool {
 /// OCR 模型三件套:缺哪个下哪个。幂等。
 /// Vision 后端(macOS 默认)不需要 Paddle 模型,直接跳过——
 /// 顺带免掉 onnxruntime 安装引导,macOS 用户零下载可用。
-pub async fn ensure_models() -> Result<()> {
+pub async fn ensure_models(sources: &crate::ai::download_sources::DownloadSources) -> Result<()> {
     if !OcrEngine::needs_models() {
         return Ok(());
     }
-    download_missing(&ocr::model_dir(), &MODEL_SOURCES).await
+    let mapped: Vec<(&str, String)> = MODEL_SOURCES
+        .iter()
+        .map(|(name, url)| Ok((*name, sources.url(url)?)))
+        .collect::<Result<_>>()?;
+    let urls: Vec<(&str, &str)> = mapped
+        .iter()
+        .map(|(name, url)| (*name, url.as_str()))
+        .collect();
+    download_missing(&ocr::model_dir(), &urls).await
 }
 
 async fn download_missing(dir: &std::path::Path, sources: &[(&str, &str)]) -> Result<()> {
@@ -295,21 +303,24 @@ pub struct Pipeline {
 
 impl Pipeline {
     /// 后台/常驻模式:worker 用保守 OCR 线程数,不打扰前台。
-    pub async fn new() -> Result<Self> {
-        Self::load(false).await
+    pub async fn new(sources: &crate::ai::download_sources::DownloadSources) -> Result<Self> {
+        Self::load(false, sources).await
     }
 
     /// 手动全速模式:「立即回填」用,worker 线程放开尽快清积压。
-    pub async fn new_fast() -> Result<Self> {
-        Self::load(true).await
+    pub async fn new_fast(sources: &crate::ai::download_sources::DownloadSources) -> Result<Self> {
+        Self::load(true, sources).await
     }
 
     /// 组装识别管线:模型缺失先下载(留在父进程——代理配置、可视错误都在这边),
     /// 然后预拉起 worker 并完成握手。把 Paddle 的 10-30s 冷启动放在这里,
     /// 是让"引擎起不来"落进「引擎级失败中断整批」的既有语义,
     /// 而不是被算进第一帧的请求超时。
-    async fn load(fast: bool) -> Result<Self> {
-        ensure_models().await?;
+    async fn load(
+        fast: bool,
+        sources: &crate::ai::download_sources::DownloadSources,
+    ) -> Result<Self> {
+        ensure_models(sources).await?;
         let sup = Arc::clone(crate::ai::ocr_supervisor::global());
         sup.set_fast(fast).await;
         sup.ensure_ready().await?;
@@ -356,7 +367,10 @@ impl Pipeline {
 /// 已在跑时直接返回错误(单实例);任何单帧错误只降级(标失败重试),
 /// 只有引擎级错误(模型加载失败等)才中断整批。
 /// 可被 [`request_stop`] 中断:提前停下时正常返回已处理部分的账单。
-pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
+pub async fn run(
+    mem: &MemoryDb,
+    sources: &crate::ai::download_sources::DownloadSources,
+) -> Result<DigestReport> {
     // 批权必须先于管线加载:曾经反过来,后果是"终将被拒的竞争者"在拿到拒绝
     // 之前就调了 set_fast/ensure_ready——把正在跑的批的 worker 杀掉重建、
     // Windows 上等于给活批中途塞一次 10-30s 的 Paddle 重载。先抢权,
@@ -371,7 +385,7 @@ pub async fn run(mem: &MemoryDb) -> Result<DigestReport> {
     let Some(_guard) = BatchGuard::acquire() else {
         return Err(Error::InvalidInput("消化任务已在运行"));
     };
-    let mut pipe = Pipeline::new_fast().await?;
+    let mut pipe = Pipeline::new_fast(sources).await?;
     let external = AtomicBool::new(false);
     drain_inner(mem, &mut pipe, &external).await
 }
@@ -1555,7 +1569,12 @@ mod tests {
             .unwrap();
         println!("回填 {n} 帧,保留 {date} 的部分");
 
-        let report = run(&mem).await.unwrap();
+        let report = run(
+            &mem,
+            &crate::ai::download_sources::DownloadSources::default(),
+        )
+        .await
+        .unwrap();
         println!("消化账单: {report:?}");
 
         let (sessions, lines, hits): (i64, i64, i64) = mem

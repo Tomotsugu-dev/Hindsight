@@ -15,7 +15,7 @@ use rust_xlsxwriter::{
 use serde::Deserialize;
 use tauri::State;
 
-use crate::repo::sql::FROM_ACTIVITY_GROUP;
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::{DbPool, SqliteResultExt};
 
 /// 一个单元格。`t` 区分类型:
@@ -69,7 +69,7 @@ pub struct SheetSpec {
 /// 「明细」sheet 的规格:原始活动记录由**后端直查直写**——十几万行经 IPC JSON
 /// 转运是几十 MB 的荒谬绕路,这是对"前端出规格"架构的一次明确豁免。
 /// 文案(sheet 名/表头/分类显示名)仍由前端传入,本模块保持零语言知识。
-/// 口径与统计一致:应用显示名走分组,分组分类为 hidden 的行不导出。
+/// 口径与统计一致:应用显示名走分组,分类按网站规则算,算出来是 hidden 的行不导出。
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RawSheetSpec {
@@ -116,7 +116,7 @@ fn minutes_to_excel(min: f64) -> f64 {
 }
 
 /// 查明细行(同步,拿 rusqlite 连接直查——单测也走这里)。
-/// 口径与 reports 的应用聚合一致:显示名走分组、hidden 分组整行排除;
+/// 口径与 reports 一致:显示名走分组,分类按网站规则算,算出来是 hidden 的行不导出;
 /// 多取 1 行用于探测"是否超过上限"。
 pub(crate) fn fetch_raw_rows(
     conn: &rusqlite::Connection,
@@ -129,23 +129,27 @@ pub(crate) fn fetch_raw_rows(
     } else {
         ""
     };
+    // host_rule_with_sql 的两个 `?` 排在最前,SQLite 把它们编成 ?1、?2,正好是起止日期。
     let sql = format!(
-        "SELECT a.local_date,
-                substr(a.started_at, 1, 19)                      AS started,
+        "{with}
+         SELECT a.local_date,
+                substr(a.started_at, 1, 19)              AS started,
                 a.duration_secs,
-                COALESCE(g.display_name, a.process_name)         AS app,
-                COALESCE(a.window_title, '')                     AS title,
-                COALESCE(NULLIF(g.category_id, 'none'), 'other') AS cat,
-                COALESCE(d.display_name, a.device_id)            AS device
-         {FROM_ACTIVITY_GROUP}
+                COALESCE(g.display_name, a.process_name) AS app,
+                COALESCE(a.window_title, '')             AS title,
+                COALESCE(c.id, 'other')                  AS cat,
+                COALESCE(d.display_name, a.device_id)    AS device
+         {from}
          LEFT JOIN devices d
            ON d.device_id = a.device_id
          WHERE a.local_date >= ?1 AND a.local_date <= ?2 {device_clause}
-           AND g.category_id IS NOT 'hidden'
+           AND c.id IS NOT 'hidden'
            AND a.excluded = 0
          ORDER BY a.started_at
          LIMIT {}",
-        RAW_ROW_CAP + 1
+        RAW_ROW_CAP + 1,
+        with = host_rule_with_sql(),
+        from = from_stats_category_sql("activities"),
     );
     let mut stmt = conn.prepare(&sql)?;
     let map = |r: &rusqlite::Row| {
@@ -581,6 +585,55 @@ mod tests {
             .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].category_id, "other");
+    }
+
+    /// 明细的分类跟统计一样按网站规则算:子域名跟着母域名的规则,规则是「隐藏」的网站不导出,
+    /// 没有规则的网站还是浏览器的分类。
+    #[tokio::test]
+    async fn fetch_raw_rows_applies_site_rules() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "INSERT INTO app_groups(id, display_name, category_id) VALUES
+                       ('g1', 'Chrome', 'browse');
+                     INSERT INTO app_group_members(group_id, process_name) VALUES
+                       ('g1', 'chrome');
+                     INSERT INTO site_rules(host, category_id, updated_at) VALUES
+                       ('bilibili.com', 'video', '2026-07-01T00:00:00Z'),
+                       ('secret.com', 'hidden', '2026-07-01T00:00:00Z');
+                     INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                       local_hour, process_name, window_title, category_id, device_id,
+                       url_host) VALUES
+                       ('2026-07-18T10:00:00+09:00', '2026-07-18T10:05:00+09:00', 300,
+                        '2026-07-18', 10, 'chrome', 'live', 'other', 'dev-a',
+                        'live.bilibili.com'),
+                       ('2026-07-18T11:00:00+09:00', '2026-07-18T11:05:00+09:00', 300,
+                        '2026-07-18', 11, 'chrome', 'secret', 'other', 'dev-a', 'secret.com'),
+                       ('2026-07-18T12:00:00+09:00', '2026-07-18T12:05:00+09:00', 300,
+                        '2026-07-18', 12, 'chrome', 'code', 'other', 'dev-a', 'github.com');",
+                )
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // 限定设备时多一个 ?3,规则那段的 ?1、?2 不能错位
+        for device in [None, Some("dev-a")] {
+            let rows = pool
+                .0
+                .call(move |conn| {
+                    Ok(fetch_raw_rows(conn, "2026-07-01", "2026-07-31", device).unwrap())
+                })
+                .await
+                .unwrap();
+            let cats: Vec<(&str, &str)> = rows
+                .iter()
+                .map(|r| (r.title.as_str(), r.category_id.as_str()))
+                .collect();
+            assert_eq!(cats, vec![("live", "video"), ("code", "browse")]);
+        }
     }
 
     /// 前端 JSON 形态(adjacently tagged)能反序列化,新类型齐备。

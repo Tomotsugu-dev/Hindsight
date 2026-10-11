@@ -479,7 +479,7 @@ mod tests {
         rows
     }
 
-    /// 本机的两天加五个整表文件；对端那天不在里面。
+    /// 本机的两天加六个整表文件；对端那天不在里面。
     fn every_file_of_me() -> Vec<(String, String)> {
         [
             ("activity", r#"{"localDate":"2026-09-01"}"#),
@@ -489,13 +489,14 @@ mod tests {
             ("app_icon", "{}"),
             ("category", "{}"),
             ("device", "{}"),
+            ("site_rule", "{}"),
         ]
         .map(|(e, p)| (e.to_string(), p.to_string()))
         .to_vec()
     }
 
     /// 三件事都做了：存下服务器和加密的密码、清掉 Google 的登录信息、记下这台服务器上
-    /// 用的账号、本机的两天加五个整表文件进 outbox。对端那天不进。
+    /// 用的账号、本机的两天加六个整表文件进 outbox。对端那天不进。
     #[tokio::test]
     async fn switching_to_webdav_saves_the_server_and_marks_every_file() {
         let pool = signed_in_to_drive().await;

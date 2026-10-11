@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "Activar las capturas de pantalla",
         "screenshotEnableDescription": "Desactivar esto detiene las capturas de pantalla.",
         "ocrResidentLabel": "Mantener el OCR residente",
-        "ocrResidentDescription": "Reconoce las capturas nuevas al instante (~400 MB de RAM adicionales); se pausa con la batería. Cuando está activo, las capturas sin reconocer también se procesan antes de los informes diarios y semanales.",
-        "intervalLabel": "Intervalo de captura",
+        "ocrResidentDescription": "Procesa las capturas nuevas en tiempo real y consume recursos adicionales",
+        "ocrResidentHintMac": "El proceso de reconocimiento se libera tras aproximadamente 1 minuto inactivo.\nSe pausa automáticamente cuando el portátil no está conectado a la corriente.",
+        "ocrResidentHintWin": "Usa unos 400 MB de memoria, además de consumir CPU / GPU adicionales.\nSe pausa automáticamente cuando el portátil no está conectado a la corriente.",
+        "intervalLabel": "Intervalo de captura de pantalla",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "Las capturas de pantalla se activan cuando:\n• Cambias de aplicación → se captura de inmediato\n• El navegador cambia de URL → se captura de inmediato\n• La misma ventana permanece en primer plano durante el intervalo configurado → se captura",
         "idleLabel": "Tiempo de inactividad",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "Comportamiento al iniciar",
         "autoStartLabel": "Iniciar con el sistema",
-        "autoStartDescription": "Hindsight se inicia automáticamente después de que inicies sesión.",
-        "showWindowLabel": "Mostrar la ventana principal al iniciar",
-        "showWindowDescription": "Al desactivarlo, se inicia en silencio en la bandeja del sistema.",
-        "minimizeToTrayLabel": "Minimizar a la bandeja del sistema al cerrar",
-        "minimizeToTrayDescriptionMac": "Al desactivarlo, pulsar la X cierra la aplicación.",
-        "minimizeToTrayDescriptionWin": "Al desactivarlo, pulsar la X cierra la aplicación."
+        "silentStartLabel": "Inicio silencioso",
+        "minimizeToTrayLabel": "Minimizar a la bandeja del sistema al cerrar"
       },
       "dataRootDialog": {
         "title": "¿Cambiar la carpeta de datos?",
@@ -362,8 +360,8 @@
         "rowLabel": "Palabras clave de URL",
         "addLabel": "Añadir fragmento de URL",
         "placeholder": "p. ej. /login",
-        "hostLabel": "Registrar los dominios de los sitios",
-        "hostInfo": "Alimenta la vista «Por sitio» en el detalle de la aplicación. Solo se guarda el dominio (p. ej. github.com), nunca la URL completa; las páginas que coinciden con las palabras clave de arriba tampoco se registran."
+        "hostLabel": "No guardar las URL completas",
+        "hostInfo": "Solo se registra el dominio (p. ej. github.com), nunca la URL completa"
       },
       "app": {
         "title": "Filtro de aplicaciones",
@@ -823,7 +821,57 @@
     },
     "tabs": {
       "list": "Gestionar categorías",
-      "apps": "Asignar apps"
+      "apps": "Asignar apps",
+      "sites": "Asignar sitios"
+    },
+    "sites": {
+      "intro": "Da a cada dominio del navegador su propia categoría.",
+      "infoTipAria": "Cómo funcionan las categorías de sitios",
+      "infoTipBody": "Un dominio sin categoría sigue la categoría del navegador. Un subdominio sin categoría sigue la categoría de su dominio principal.",
+      "searchPlaceholder": "Buscar sitios",
+      "header": {
+        "site": "Sitio",
+        "domainCount_one": "{{count}} dominio en total",
+        "domainCount_other": "{{count}} dominios en total",
+        "last30d": "Últimos 30 días",
+        "total": "Todo el tiempo",
+        "category": "Categoría"
+      },
+      "follows": "Sigue a {{host}}",
+      "expand": "Mostrar subdominios",
+      "collapse": "Ocultar subdominios",
+      "subdomains_one": "{{count}} subdominio",
+      "subdomains_other": "{{count}} subdominios",
+      "otherCategory_one": "{{count}} en otra categoría",
+      "otherCategory_other": "{{count}} en otras categorías",
+      "removeRule": "Quitar la regla",
+      "loading": "Cargando…",
+      "empty": "Todavía no hay tiempo registrado en sitios. Los dominios solo se registran mientras “No guardar las URL completas” esté activado.",
+      "openPrivacy": "Abrir los ajustes de privacidad",
+      "noResults": "Ningún sitio coincide con tu búsqueda",
+      "clearSearch": "Borrar la búsqueda",
+      "allAssigned": "Todos los sitios tienen categoría",
+      "sort": {
+        "default": "Predeterminado",
+        "recentDesc": "Últimos 30 días ↓",
+        "recentAsc": "Últimos 30 días ↑",
+        "totalDesc": "Total ↓",
+        "totalAsc": "Total ↑",
+        "nameAsc": "Dominio A-Z",
+        "nameDesc": "Dominio Z-A"
+      },
+      "icons": {
+        "label": "Descargar iconos de sitios automáticamente",
+        "confirmTitle": "¿Activar la descarga de iconos de sitios?",
+        "confirmAction": "Activar descargas",
+        "saveFailed": "No se pudo guardar la configuración. Inténtalo de nuevo.",
+        "loadFailed": "No se pudieron cargar los iconos. La clasificación de sitios sigue disponible.",
+        "retry": "Reintentar",
+        "previewLabel": "Ejemplo del icono de YouTube",
+        "beforeDownload": "Antes",
+        "afterDownload": "Después",
+        "trafficNote": "Nota: descargar un icono de sitio consume unos 10–20 KB de datos."
+      }
     }
   },
   "aiSettings": {
@@ -915,7 +963,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "Parámetros del resumen por tramos"
+      "sectionTitle": "Ajustes de generación del informe diario"
     },
     "engineParams": {
       "sectionTitle": "Parámetros del motor (al iniciar)",
@@ -934,9 +982,6 @@
       "sectionTitle": "Modelos",
       "sectionDesc": "El LLM que se usa para la inferencia local; los archivos GGUF se descargan de HuggingFace.",
       "toolbar": {
-        "capAll": "Todos",
-        "capVision": "Visión",
-        "capText": "Solo texto",
         "statusAll": "Todos",
         "statusInstalled": "Descargados",
         "statusNotInstalled": "Sin descargar",
@@ -944,7 +989,8 @@
         "sortDefault": "Orden predeterminado",
         "sortSizeAsc": "Tamaño ↑",
         "sortSizeDesc": "Tamaño ↓",
-        "sortName": "Nombre A-Z"
+        "sortName": "Nombre A-Z",
+        "sortReleased": "Fecha de publicación"
       },
       "cloud": {
         "cardTitle": "Nube · {{provider}}",
@@ -965,14 +1011,14 @@
         "resume": "Reanudar",
         "resumeTooltip": "Reanudar desde los {{size}} MB ya descargados.",
         "capsTooltips": {
-          "TEXT": "Generación de texto: escribir / continuar / resumir prosa.",
-          "VISION": "Multimodal: entiende entradas de imagen.",
-          "CODE": "Ajustado para código: mejor escribiendo y explicando código.",
-          "FAST": "Ligero (< 1 GB), la velocidad primero; ideal para el primer intento.",
-          "BALANCED": "Tamaño medio, equilibra calidad y velocidad para el uso diario.",
-          "REASONING": "Razonamiento profundo: pensamiento en varios pasos, matemáticas, planificación.",
-          "R1": "Familia DeepSeek R1: modelo de razonamiento entrenado con RL.",
-          "DEFAULT": "La mejor elección de Hindsight: el mejor equilibrio general."
+          "TEXT": "Genera texto",
+          "VISION": "Lee imágenes",
+          "CODE": "Código",
+          "FAST": "Prioriza la velocidad",
+          "BALANCED": "Equilibrado",
+          "REASONING": "Puede razonar",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "Recomendado"
         },
         "step2": "Texto",
         "step2ToggleOnTooltip": "Usar este modelo para los resúmenes por tramos (Text). Sustituye la selección anterior.",
@@ -1100,13 +1146,36 @@
     "autoSummary": {
       "sectionTitle": "Programaciones",
       "sectionDesc": "Se ejecuta a la hora indicada: generación de informes y OCR de capturas.",
-      "enableLabel": "Resumen automático",
-      "enableHint": "Genera el informe diario de hoy a la hora indicada (también rellena el día anterior si falta) y el semanal de la semana pasada. Los fallos no se reintentan; los informes mensuales llegarán cuando estén disponibles",
+      "enableLabel": "Resumen programado",
+      "enableHint": "Genera automáticamente el informe diario del día a la hora indicada, todos los días",
       "timeLabel": "Programar la hora",
-      "ocrDailyLabel": "OCR automático",
+      "ocrDailyLabel": "OCR programado",
       "ocrDailyDescription": "Procesa a diario, a la hora indicada, las capturas acumuladas",
       "addTimeAria": "Añadir una hora",
       "removeTimeAria": "Quitar la última hora añadida"
+    },
+    "downloadSources": {
+      "title": "Fuentes de descarga",
+      "description": "Para modelos, el motor de IA y los componentes de OCR. Usa un espejo si es difícil acceder a las fuentes oficiales. El cambio se aplica a las nuevas descargas.",
+      "sourceLabel": "Fuente de descarga",
+      "modes": {
+        "official": "Oficial",
+        "mirror": "Espejos",
+        "custom": "Espejos personalizados"
+      },
+      "officialDescription": "Descargar directamente desde Hugging Face y GitHub.",
+      "mirrorDescription": "La opción predefinida usa espejos de terceros: HF-Mirror, GH-Proxy y NuGet de Huawei Cloud.",
+      "huggingfaceLabel": "URL del espejo de Hugging Face",
+      "huggingfaceHelp": "Introduce la URL base del espejo, como https://hf-mirror.com.",
+      "githubLabel": "URL del proxy de descarga de GitHub",
+      "githubHelp": "El proxy debe aceptar la URL completa de descarga de GitHub después de su dirección.",
+      "save": "Guardar direcciones",
+      "saving": "Guardando fuentes de descarga…",
+      "saveFailed": "No se pudieron guardar las fuentes de descarga. Inténtalo de nuevo.",
+      "invalidUrl": "Introduce una dirección HTTP o HTTPS sin datos de inicio de sesión, parámetros ni fragmentos.",
+      "change": "Cambiar fuente de descarga",
+      "nugetLabel": "URL de descarga de paquetes NuGet",
+      "nugetHelp": "Introduce la dirección base de paquetes NuGet (PackageBaseAddress) para los componentes de OCR de Windows."
     }
   },
   "devices": {
@@ -1688,12 +1757,6 @@
       "max": "Máximo",
       "hintLevels": "Cuanto mayor sea el esfuerzo, más lenta será la respuesta",
       "hintOpenai": "La API de OpenAI no admite el razonamiento en el chat"
-    }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "OCR programado iniciado: {{count}} capturas por procesar"
     }
   }
 }

@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "启用截图",
         "screenshotEnableDescription": "关闭后将停止截图。",
         "ocrResidentLabel": "常驻 OCR",
-        "ocrResidentDescription": "即时识别新截图（多占约 400MB 内存），电池供电时自动暂停;开启后,生成日报/周报前也会先补齐未识别的截图。",
-        "intervalLabel": "采集间隔",
+        "ocrResidentDescription": "实时处理新的截图，会消耗额外的资源",
+        "ocrResidentHintMac": "闲置约 1 分钟后释放识别进程。\n笔记本电脑没有接上电源时自动暂停。",
+        "ocrResidentHintWin": "约占用 400MB 内存，并消耗额外的 CPU / GPU 资源。\n笔记本电脑没有接上电源时自动暂停。",
+        "intervalLabel": "截图采集间隔",
         "intervalDescription": "采集频率。",
         "intervalHint": "截图触发时机：\n• 切换应用 → 立即截图\n• 浏览器切换 URL → 立即截图\n• 同一窗口停留满设定的间隔 → 截图",
         "idleLabel": "闲置阈值",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "启动行为",
         "autoStartLabel": "开机自动启动",
-        "autoStartDescription": "登录系统后由 Hindsight 自动运行。",
-        "showWindowLabel": "启动时显示主窗口",
-        "showWindowDescription": "关闭后静默启动。",
-        "minimizeToTrayLabel": "关闭后最小化到右下角托盘",
-        "minimizeToTrayDescriptionMac": "关闭后点 X 直接退出应用。",
-        "minimizeToTrayDescriptionWin": "关闭后点 X 直接退出应用。"
+        "silentStartLabel": "静默启动",
+        "minimizeToTrayLabel": "关闭后最小化到右下角托盘"
       },
       "dataRootDialog": {
         "title": "切换数据保存路径？",
@@ -362,8 +360,8 @@
         "rowLabel": "URL 关键词",
         "addLabel": "添加 URL 后缀",
         "placeholder": "如 /login",
-        "hostLabel": "记录浏览器网站域名",
-        "hostInfo": "用于应用详情里的「按网站」统计。只记录域名（如 github.com），不记录完整网址；命中上方关键词的页面也不记录域名。"
+        "hostLabel": "不保存完整网址",
+        "hostInfo": "只记录域名（如 github.com），不记录完整网址"
       },
       "app": {
         "title": "应用过滤",
@@ -823,7 +821,54 @@
     },
     "tabs": {
       "list": "管理分类",
-      "apps": "归类应用"
+      "apps": "归类应用",
+      "sites": "归类网站"
+    },
+    "sites": {
+      "intro": "给浏览器中的每个域名单独指定分类。",
+      "infoTipAria": "网站归类说明",
+      "infoTipBody": "未设置的域名默认沿用浏览器所属的分类，未设置的子域名默认沿用母域名的分类。",
+      "searchPlaceholder": "搜索网站",
+      "header": {
+        "site": "网站",
+        "domainCount_other": "共 {{count}} 个域名",
+        "last30d": "近 30 天",
+        "total": "全部",
+        "category": "分类"
+      },
+      "follows": "沿用 {{host}}",
+      "expand": "展开子域名",
+      "collapse": "收起子域名",
+      "subdomains_other": "{{count}} 个子域名",
+      "otherCategory_other": "{{count}} 个另有分类",
+      "removeRule": "取消规则",
+      "loading": "加载中…",
+      "empty": "还没有记录到网站时间。只有开启「不保存完整网址」时才会记录域名。",
+      "openPrivacy": "打开隐私设置",
+      "noResults": "没找到匹配的网站",
+      "clearSearch": "清除搜索",
+      "allAssigned": "所有网站都已分类",
+      "sort": {
+        "default": "默认",
+        "recentDesc": "近 30 天 ↓",
+        "recentAsc": "近 30 天 ↑",
+        "totalDesc": "累计时长 ↓",
+        "totalAsc": "累计时长 ↑",
+        "nameAsc": "域名 A-Z",
+        "nameDesc": "域名 Z-A"
+      },
+      "icons": {
+        "label": "自动下载网站图标",
+        "confirmTitle": "开启网站图标下载？",
+        "confirmAction": "开启下载",
+        "saveFailed": "开关未能保存，请重试。",
+        "loadFailed": "图标暂时无法加载，网站分类仍可使用。",
+        "retry": "重试",
+        "previewLabel": "YouTube 图标示例",
+        "beforeDownload": "下载前",
+        "afterDownload": "下载后",
+        "trafficNote": "注意：下载一个网站图标约消耗 10～20 KB 流量。"
+      }
     }
   },
   "aiSettings": {
@@ -915,7 +960,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "段总结参数"
+      "sectionTitle": "日报生成设置"
     },
     "engineParams": {
       "sectionTitle": "引擎参数（启动时）",
@@ -934,9 +979,6 @@
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 文件下载自 HuggingFace。",
       "toolbar": {
-        "capAll": "所有",
-        "capVision": "Vision",
-        "capText": "纯文本",
         "statusAll": "所有",
         "statusInstalled": "已下载",
         "statusNotInstalled": "未下载",
@@ -944,7 +986,8 @@
         "sortDefault": "默认顺序",
         "sortSizeAsc": "体积 ↑",
         "sortSizeDesc": "体积 ↓",
-        "sortName": "名称 A-Z"
+        "sortName": "名称 A-Z",
+        "sortReleased": "发布时间"
       },
       "cloud": {
         "cardTitle": "云端 · {{provider}}",
@@ -965,14 +1008,14 @@
         "resume": "继续",
         "resumeTooltip": "从已下的 {{size}} MB 继续。",
         "capsTooltips": {
-          "TEXT": "文本能力——能生成 / 续写 / 总结文字。",
-          "VISION": "多模态——能识别图像内容。",
-          "CODE": "代码任务调优——生成 / 解释代码更准。",
-          "FAST": "轻量级 < 1GB，速度优先，首选试用。",
-          "BALANCED": "中等体积，质量与速度均衡，日常通用。",
-          "REASONING": "深度推理——擅长多步思考、数学、规划。",
-          "R1": "DeepSeek R1 系——RL 训练的推理模型。",
-          "DEFAULT": "Hindsight 推荐首选，平衡性最好。"
+          "TEXT": "文本生成",
+          "VISION": "视觉能力",
+          "CODE": "代码",
+          "FAST": "速度优先",
+          "BALANCED": "均衡",
+          "REASONING": "有思考能力",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "推荐首选"
         },
         "step2": "Text",
         "step2ToggleOnTooltip": "把这个模型设为段总结（Text）使用。会替换之前的选择。",
@@ -1100,13 +1143,36 @@
     "autoSummary": {
       "sectionTitle": "定时计划",
       "sectionDesc": "到点自动执行:生成报告与识别截图。",
-      "enableLabel": "自动总结",
-      "enableHint": "每天到点自动生成当天的日报(前一天缺报也会补齐),每周自动补上一周的周报。生成失败不会自动重试;月报功能上线后将自动纳入",
+      "enableLabel": "定时总结",
+      "enableHint": "每天到点自动生成当天的日报",
       "timeLabel": "指定处理时间",
-      "ocrDailyLabel": "自动 OCR",
+      "ocrDailyLabel": "定时 OCR",
       "ocrDailyDescription": "每天到点自动识别堆积的截图",
       "addTimeAria": "添加一个时间点",
       "removeTimeAria": "移除最近添加的时间点"
+    },
+    "downloadSources": {
+      "title": "下载源",
+      "description": "用于模型、AI 引擎和 OCR 组件。访问官方源困难时可切换镜像；更改只影响之后开始的下载。",
+      "sourceLabel": "下载方式",
+      "modes": {
+        "official": "官方源",
+        "mirror": "镜像源",
+        "custom": "自定义镜像"
+      },
+      "officialDescription": "直接从 Hugging Face 和 GitHub 下载。",
+      "mirrorDescription": "预设使用第三方提供的 HF-Mirror、GH-Proxy 和华为云 NuGet 镜像。",
+      "huggingfaceLabel": "Hugging Face 镜像地址",
+      "huggingfaceHelp": "填写镜像站的基础地址，例如 https://hf-mirror.com。",
+      "githubLabel": "GitHub 下载代理地址",
+      "githubHelp": "代理需支持在地址后追加完整的 GitHub 下载链接。",
+      "save": "保存地址",
+      "saving": "正在保存下载源…",
+      "saveFailed": "下载源保存失败，请重试。",
+      "invalidUrl": "请输入有效的 HTTP 或 HTTPS 地址，不要包含登录信息、查询参数或片段。",
+      "change": "更改下载源",
+      "nugetLabel": "NuGet 包下载地址",
+      "nugetHelp": "填写 NuGet 的包下载基础地址（PackageBaseAddress），用于 Windows OCR 组件。"
     }
   },
   "devices": {
@@ -1688,12 +1754,6 @@
       "max": "最强",
       "hintLevels": "强度越高,响应越慢",
       "hintOpenai": "OpenAI 官方接口在对话中不支持思考"
-    }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "定时补识别开始:{{count}} 张截图待处理"
     }
   }
 }

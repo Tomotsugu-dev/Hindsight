@@ -30,7 +30,7 @@ import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
-import { usePeriodInsights } from "../../hooks/usePeriodInsights";
+import { insightDrill, usePeriodInsights } from "../../hooks/usePeriodInsights";
 import { useAppFocus } from "../../hooks/useAppFocus";
 import {
   useSuperCategoryBreakdown,
@@ -38,6 +38,7 @@ import {
 } from "../../hooks/useSuperCategoryBreakdown";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
+import { appsInCategories } from "../../utils/appCategoryTime";
 import type { HourSlot } from "../../api/hindsight";
 import styles from "./TodayPage.module.css";
 
@@ -197,7 +198,7 @@ export default function TodayPage() {
 
   // drill 状态下：底部两卡片同步缩进到该大类范围
   // - 标题改为「主要应用」/「分类构成」（复用 PieDrillDetail 已有 i18n key）
-  // - app 排行只留 categoryId 命中该大类 cats 的；category 排行只留该大类下属
+  // - app 排行只留在这些分类里有时间的应用，只显示这部分时间；category 排行只留该大类下属
   const drilledSlice =
     drillId !== null
       ? currBreakdown.slices.find((s) => s.id === drillId) ?? null
@@ -214,9 +215,9 @@ export default function TodayPage() {
   const displayedAppRanks = useMemo(
     () =>
       pickedCat
-        ? appRanks.filter((r) => r.categoryId === pickedCat.id)
+        ? appsInCategories(appRanks, new Set([pickedCat.id]))
         : childCatIds
-          ? appRanks.filter((r) => r.categoryId && childCatIds.has(r.categoryId))
+          ? appsInCategories(appRanks, childCatIds)
           : appRanks,
     [appRanks, childCatIds, pickedCat],
   );
@@ -235,17 +236,20 @@ export default function TodayPage() {
     : t("today.ranks.topCategories");
 
   // 顶部洞察行：当期 vs 上期 · 峰值小时 · 主力大类
-  // drill 时该大类视角；上期同 super-cat lookup
+  // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
   const peakLabelForHour = useCallback(
     (slot: HourSlot) => `${String(slot.hour).padStart(2, "0")}:00`,
     [],
   );
-  const prevDrilledSlice = useMemo(
+  const drill = useMemo(
     () =>
-      drilledSlice
-        ? prevBreakdown.slices.find((s) => s.id === drilledSlice.id) ?? null
-        : null,
-    [drilledSlice, prevBreakdown],
+      insightDrill(
+        currBreakdown.slices,
+        prevBreakdown.slices,
+        drilledSlice?.id ?? null,
+        pickedCat?.id ?? null,
+      ),
+    [currBreakdown, prevBreakdown, drilledSlice, pickedCat],
   );
   const insights = usePeriodInsights({
     curr: hours,
@@ -253,9 +257,7 @@ export default function TodayPage() {
     buildPeakLabel: peakLabelForHour,
     topSlice: currBreakdown.slices[0] ?? null,
     currTotal: totalMinutes,
-    drill: drilledSlice
-      ? { slice: drilledSlice, prevSlice: prevDrilledSlice }
-      : undefined,
+    drill,
   });
 
   // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字

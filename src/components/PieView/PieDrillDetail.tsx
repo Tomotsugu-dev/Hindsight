@@ -7,6 +7,7 @@ import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
 import { displayAppName } from "../../utils/displayName";
+import { appsInCategories } from "../../utils/appCategoryTime";
 import { Donut } from "./Donut";
 import styles from "./PieDrillDetail.module.css";
 
@@ -60,14 +61,12 @@ export function PieDrillDetail({
   // 分类构成已经在 BreakdownSlice.cats 里按 minutes 降序；直接 map
   const catBreakdown = slice.cats;
 
-  // Top N apps：从原始 AppUsage 按 categoryId 命中本 slice 的 cats 筛 + 降序
-  const topApps = useMemo(() => {
-    const supCatIds = new Set(slice.cats.map((c) => c.id));
-    return apps
-      .filter((a) => supCatIds.has(a.categoryId))
-      .sort((a, b) => b.minutes - a.minutes)
-      .slice(0, TOP_APPS_LIMIT);
-  }, [apps, slice.cats]);
+  // Top N apps：在本 slice 的 cats 里有时间的应用，按这部分时间降序
+  const topApps = useMemo(
+    () =>
+      appsInCategories(apps, new Set(slice.cats.map((c) => c.id))).slice(0, TOP_APPS_LIMIT),
+    [apps, slice.cats],
+  );
 
   const handleBack = () => withViewTransition(onBack);
 

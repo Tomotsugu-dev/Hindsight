@@ -2,7 +2,7 @@
 // 跟主 main.tsx 的差异：
 // 1. 用 MemoryRouter 而不是 BrowserRouter（iframe 内 URL bar 无意义，避免 base path 问题）
 // 2. 不挂 WindowControls（iframe 内无窗口控件需要）
-// 3. data-platform 强制 "windows"
+// 3. data-platform 强制 "windows"；`?platform=macos` 时按 macOS 窗口画（见 MACOS_WINDOW）
 
 import { lazy, Suspense, useEffect, useState } from "react";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -21,6 +21,13 @@ import "@app/styles/tokens.css";
 import "@app/styles/utilities.css";
 
 import styles from "./AppDemo.module.css";
+import { TrafficLights } from "./TrafficLights";
+
+/** `?platform=macos`：像 macOS 应用一样给左上角的红绿灯留出位置，并由 demo 画出来。
+ *  文档截图用（scripts/shots/stats.mjs）。 */
+const MACOS_WINDOW =
+  typeof location !== "undefined" &&
+  new URLSearchParams(location.search).get("platform") === "macos";
 
 // Stage 4: 全部 8 个 sidebar 项接入真页面
 const TodayPage = lazy(() => import("@app/pages/Today/TodayPage"));
@@ -31,6 +38,8 @@ const DailyTab = lazy(() => import("@app/pages/AISummary/tabs/DailyTab"));
 const WeeklyTab = lazy(() => import("@app/pages/AISummary/tabs/WeeklyTab"));
 const MonthlyTab = lazy(() => import("@app/pages/AISummary/tabs/MonthlyTab"));
 const ChatPage = lazy(() => import("@app/pages/Chat/ChatPage"));
+const HistoryPage = lazy(() => import("@app/pages/History/HistoryPage"));
+const HistoryStatsTab = lazy(() => import("@app/pages/History/StatsTab"));
 const SearchPage = lazy(() => import("@app/pages/Search/SearchPage"));
 const DebugTab = lazy(() => import("@app/pages/AISummary/tabs/DebugTab"));
 const AISettingsPage = lazy(() => import("@app/pages/AISettings/AISettingsPage"));
@@ -43,6 +52,7 @@ const DevicesPage = lazy(() => import("@app/pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("@app/pages/Categories/CategoriesPage"));
 const ListTab = lazy(() => import("@app/pages/Categories/tabs/ListTab"));
 const AppsPage = lazy(() => import("@app/pages/Apps/AppsPage"));
+const SitesPage = lazy(() => import("@app/pages/Sites/SitesPage"));
 const SettingsPage = lazy(() => import("@app/pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
 const AppearanceTab = lazy(() => import("@app/pages/Settings/tabs/AppearanceTab"));
@@ -58,12 +68,16 @@ function DemoLayout() {
           <Route path={ROUTES.today} element={<TodayPage />} />
           <Route path={ROUTES.week} element={<WeekPage />} />
           <Route path={ROUTES.month} element={<MonthPage />} />
+          <Route path={ROUTES.history} element={<HistoryPage />}>
+            <Route index element={<HistoryStatsTab />} />
+            <Route path="search" element={<SearchPage />} />
+          </Route>
           <Route path={ROUTES.chat} element={<ChatPage />} />
           <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
             <Route index element={<DailyTab />} />
             <Route path="week" element={<WeeklyTab />} />
             <Route path="month" element={<MonthlyTab />} />
-            <Route path="search" element={<SearchPage />} />
+            <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
@@ -77,6 +91,7 @@ function DemoLayout() {
           <Route path={ROUTES.categories} element={<CategoriesPage />}>
             <Route index element={<ListTab />} />
             <Route path="apps" element={<AppsPage />} />
+            <Route path="sites" element={<SitesPage />} />
           </Route>
           {/* 与主程序一致:旧的独立「应用」页并入分类页 tab 后仍可访问 */}
           <Route
@@ -95,6 +110,7 @@ function DemoLayout() {
       <div className={styles.sidebarHost}>
         <Sidebar />
       </div>
+      {MACOS_WINDOW && <TrafficLights />}
     </div>
   );
 }
@@ -133,7 +149,7 @@ function useFitScale(): { scale: number; designHeight: number } {
 export function AppDemo() {
   // 设置 body[data-platform]——主应用某些 CSS 按这个区分平台
   if (typeof document !== "undefined") {
-    document.body.dataset.platform = "windows";
+    document.body.dataset.platform = MACOS_WINDOW ? "macos" : "windows";
   }
 
   const { scale, designHeight } = useFitScale();

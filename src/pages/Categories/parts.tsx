@@ -241,6 +241,7 @@ export function AssignDropdown({
   currentCategoryId,
   onPick,
   allowClear = false,
+  clearLabel,
 }: {
   categories: Category[];
   /** 当前已选中的 category id；用于在 trigger 上显示当前分类名 + 颜色 */
@@ -249,6 +250,8 @@ export function AssignDropdown({
   onPick: (categoryId: string | null) => void | Promise<void>;
   /** 是否在下拉里加一行「取消分类」（仅在已分类时有意义）*/
   allowClear?: boolean;
+  /** Text of the clear option when clearing means something other than "Clear category" */
+  clearLabel?: string;
 }) {
   const { t } = useTranslation();
   const current =
@@ -371,7 +374,7 @@ export function AssignDropdown({
               }}
             >
               <span className={styles.assignOptionLabel}>
-                {t("categories.assign.clear")}
+                {clearLabel ?? t("categories.assign.clear")}
               </span>
             </button>
           )}

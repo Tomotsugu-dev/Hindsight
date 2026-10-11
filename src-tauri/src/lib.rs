@@ -199,7 +199,7 @@ pub fn run() {
                 // OCR 常驻模式:按设置启停(设置保存时由 commands::settings 再同步)
                 let resident = std::sync::Arc::new(memory::resident::ResidentOcr::default());
                 resident
-                    .sync(cfg.memory_ocr_resident, memdb.clone())
+                    .sync(cfg.memory_ocr_resident, memdb.clone(), pool.clone())
                     .await;
                 handle.manage(resident);
                 let memdb_for_sync = memdb.clone();
@@ -257,6 +257,13 @@ pub fn run() {
             commands::categories::assign_app_to_category,
             commands::categories::unassign_app,
             commands::categories::list_unclassified_apps,
+            // --- site_rules: website rules (ADR-0013) ---
+            commands::site_rules::list_sites,
+            commands::site_rules::set_site_rule,
+            commands::site_rules::remove_site_rule,
+            // --- site_icons: website icons (ADR-0014) ---
+            commands::site_icons::get_site_icons,
+            commands::site_icons::download_site_icons,
             // --- super_categories: 大类容器（v28，本地 only，sync 暂未接入） ---
             commands::super_categories::list_super_categories,
             commands::super_categories::create_super_category,

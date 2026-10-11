@@ -36,6 +36,7 @@ const Devices = lazy(() => import("./pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
 const ListTab = lazy(() => import("./pages/Categories/tabs/ListTab"));
 const AppsPage = lazy(() => import("./pages/Apps/AppsPage"));
+const SitesPage = lazy(() => import("./pages/Sites/SitesPage"));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 const GeneralTab = lazy(() => import("./pages/Settings/tabs/GeneralTab"));
 const AppearanceTab = lazy(() => import("./pages/Settings/tabs/AppearanceTab"));
@@ -134,6 +135,7 @@ function App() {
           <Route path={ROUTES.categories} element={<CategoriesPage />}>
             <Route index element={<ListTab />} />
             <Route path="apps" element={<AppsPage />} />
+            <Route path="sites" element={<SitesPage />} />
           </Route>
           {/* 旧的独立「应用」页已并入分类页的 tab：老书签 / 外链不落空 */}
           <Route

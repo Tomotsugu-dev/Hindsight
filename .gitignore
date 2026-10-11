@@ -67,7 +67,7 @@ __pycache__/
 # 例外:演示数据生成器入仓(生成的数据在 app 数据目录,不在仓库)
 !scripts/demo/*.py
 # 例外:README 多语言截图自动化脚本入仓
-!scripts/shots/*.py
+!scripts/shots/readme/*.py
 .python-version
 pyproject.toml
 uv.lock
@@ -95,5 +95,8 @@ web/demo/
 scripts/poc/output/
 
 # 演示录制会话(绝对坐标的本机操作轨迹)仅本地
-scripts/shots/*.jsonl
-scripts/shots/*.win.json
+scripts/shots/readme/*.jsonl
+scripts/shots/readme/*.win.json
+
+# 文档站构建产物：npm run build:docs 由 docs/features 生成，不入仓
+web/docs/

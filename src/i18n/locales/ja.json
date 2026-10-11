@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "スクリーンショットを有効化",
         "screenshotEnableDescription": "オフにするとスクリーンショットが停止します。",
         "ocrResidentLabel": "OCR を常駐させる",
-        "ocrResidentDescription": "新しいスクリーンショットを即時認識（約 400MB 追加使用）。バッテリー駆動中は自動停止。オンにすると、日報/週報の生成前にも未認識のスクリーンショットを補完します。",
-        "intervalLabel": "記録の間隔",
+        "ocrResidentDescription": "新しいスクリーンショットをリアルタイムで処理し、追加のリソースを消費します",
+        "ocrResidentHintMac": "約 1 分間アイドルが続くと認識プロセスを解放します。\nノートパソコンが電源に接続されていないときは自動で一時停止します。",
+        "ocrResidentHintWin": "約 400MB のメモリを使用するほか、CPU / GPU のリソースも追加で消費します。\nノートパソコンが電源に接続されていないときは自動で一時停止します。",
+        "intervalLabel": "スクリーンショットの取得間隔",
         "intervalDescription": "記録間隔。",
         "intervalHint": "スクリーンショットの取得タイミング:\n• アプリ切り替え → 即時取得\n• ブラウザの URL 変更 → 即時取得\n• 同じウィンドウに設定間隔以上とどまる → 取得",
         "idleLabel": "アイドル時間",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "起動時の動作",
         "autoStartLabel": "システム起動時に自動起動",
-        "autoStartDescription": "ログイン後に Hindsight が自動的に起動します。",
-        "showWindowLabel": "起動時にメインウィンドウを表示",
-        "showWindowDescription": "オフにするとトレイに常駐し静かに起動します。",
-        "minimizeToTrayLabel": "閉じるときにトレイへ最小化",
-        "minimizeToTrayDescriptionMac": "オフにすると X クリックでアプリが終了します。",
-        "minimizeToTrayDescriptionWin": "オフにすると X クリックでアプリが終了します。"
+        "silentStartLabel": "サイレント起動",
+        "minimizeToTrayLabel": "閉じるときにトレイへ最小化"
       },
       "dataRootDialog": {
         "title": "データの保存先を変更しますか?",
@@ -362,8 +360,8 @@
         "rowLabel": "URL キーワード",
         "addLabel": "URL の一部を追加",
         "placeholder": "例: /login",
-        "hostLabel": "ウェブサイトのドメインを記録",
-        "hostInfo": "アプリ詳細の「サイト別」表示に使います。ドメイン（例: github.com）のみを記録し、完全な URL は記録しません。上のキーワードに一致するページはドメインも記録しません。"
+        "hostLabel": "完全な URL を保存しない",
+        "hostInfo": "ドメイン（例: github.com）のみを記録し、完全な URL は記録しません"
       },
       "app": {
         "title": "アプリフィルター",
@@ -823,7 +821,54 @@
     },
     "tabs": {
       "list": "カテゴリ管理",
-      "apps": "アプリの割り当て"
+      "apps": "アプリの割り当て",
+      "sites": "サイトの割り当て"
+    },
+    "sites": {
+      "intro": "ブラウザ内の各ドメインに個別の分類を割り当てます。",
+      "infoTipAria": "サイト分類について",
+      "infoTipBody": "分類を設定していないドメインはブラウザの分類に従い、分類を設定していないサブドメインは親ドメインの分類に従います。",
+      "searchPlaceholder": "サイトを検索",
+      "header": {
+        "site": "サイト",
+        "domainCount_other": "全 {{count}} ドメイン",
+        "last30d": "過去 30 日",
+        "total": "全期間",
+        "category": "分類"
+      },
+      "follows": "{{host}} に従う",
+      "expand": "サブドメインを表示",
+      "collapse": "サブドメインを隠す",
+      "subdomains_other": "サブドメイン {{count}} 件",
+      "otherCategory_other": "{{count}} 件は別の分類",
+      "removeRule": "ルールを解除",
+      "loading": "読み込み中…",
+      "empty": "まだサイトの時間が記録されていません。「完全な URL を保存しない」がオンのときだけドメインが記録されます。",
+      "openPrivacy": "プライバシー設定を開く",
+      "noResults": "検索に一致するサイトはありません",
+      "clearSearch": "検索をクリア",
+      "allAssigned": "すべてのサイトが分類済みです",
+      "sort": {
+        "default": "デフォルト",
+        "recentDesc": "過去 30 日 ↓",
+        "recentAsc": "過去 30 日 ↑",
+        "totalDesc": "累計時間 ↓",
+        "totalAsc": "累計時間 ↑",
+        "nameAsc": "ドメイン A-Z",
+        "nameDesc": "ドメイン Z-A"
+      },
+      "icons": {
+        "label": "サイトアイコンを自動ダウンロード",
+        "confirmTitle": "サイトアイコンのダウンロードを有効にしますか？",
+        "confirmAction": "ダウンロードを有効にする",
+        "saveFailed": "設定を保存できませんでした。もう一度お試しください。",
+        "loadFailed": "アイコンを読み込めませんでした。サイトの分類は引き続き利用できます。",
+        "retry": "再試行",
+        "previewLabel": "YouTube のアイコン例",
+        "beforeDownload": "ダウンロード前",
+        "afterDownload": "ダウンロード後",
+        "trafficNote": "注意：サイトアイコン1つのダウンロードで約10～20KBの通信量を消費します。"
+      }
     }
   },
   "aiSettings": {
@@ -915,7 +960,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "セグメント要約パラメータ"
+      "sectionTitle": "日報生成の設定"
     },
     "engineParams": {
       "sectionTitle": "エンジン パラメータ（起動時）",
@@ -934,9 +979,6 @@
       "sectionTitle": "モデル",
       "sectionDesc": "ローカル推論に使う LLM。GGUF ファイルは HuggingFace からダウンロードします。",
       "toolbar": {
-        "capAll": "すべて",
-        "capVision": "Vision",
-        "capText": "テキスト",
         "statusAll": "すべて",
         "statusInstalled": "ダウンロード済み",
         "statusNotInstalled": "未ダウンロード",
@@ -944,7 +986,8 @@
         "sortDefault": "デフォルト順",
         "sortSizeAsc": "サイズ ↑",
         "sortSizeDesc": "サイズ ↓",
-        "sortName": "名前 A-Z"
+        "sortName": "名前 A-Z",
+        "sortReleased": "公開日"
       },
       "cloud": {
         "cardTitle": "クラウド · {{provider}}",
@@ -965,14 +1008,14 @@
         "resume": "再開",
         "resumeTooltip": "ダウンロード済み {{size}} MB から再開します。",
         "capsTooltips": {
-          "TEXT": "テキスト能力——生成・要約・補完。",
-          "VISION": "マルチモーダル——画像入力を理解。",
-          "CODE": "コード特化——コードの生成・解説が得意。",
-          "FAST": "軽量 < 1GB、速度優先；お試しに最適。",
-          "BALANCED": "中サイズ、品質と速度のバランス；日常用途向け。",
-          "REASONING": "深い推論——多段思考・数学・計画立案が得意。",
-          "R1": "DeepSeek R1 系——RL で訓練された推論モデル。",
-          "DEFAULT": "Hindsight 一推し；総合バランス最良。"
+          "TEXT": "文章を生成",
+          "VISION": "画像を見る",
+          "CODE": "コード",
+          "FAST": "速さ優先",
+          "BALANCED": "バランス",
+          "REASONING": "思考できる",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "おすすめ"
         },
         "step2": "Text",
         "step2ToggleOnTooltip": "このモデルを時間帯要約（Text）に割り当てます。前の選択を置き換えます。",
@@ -1100,13 +1143,36 @@
     "autoSummary": {
       "sectionTitle": "定時スケジュール",
       "sectionDesc": "設定時刻に自動実行:レポート生成とスクリーンショット認識。",
-      "enableLabel": "自動サマリー",
-      "enableHint": "毎日設定時刻に当日の日報を自動生成します(前日分が未生成なら補完)。週報は先週分を自動補完します。失敗時の自動リトライはありません。月報は機能提供後に自動で対象になります",
+      "enableLabel": "定時サマリー",
+      "enableHint": "毎日設定時刻に当日の日報を自動生成します",
       "timeLabel": "処理時刻を指定",
-      "ocrDailyLabel": "自動 OCR",
+      "ocrDailyLabel": "定時 OCR",
       "ocrDailyDescription": "毎日設定時刻に未処理のスクリーンショットを自動認識",
       "addTimeAria": "時刻を追加",
       "removeTimeAria": "最後に追加した時刻を削除"
+    },
+    "downloadSources": {
+      "title": "ダウンロード元",
+      "description": "モデル、AI エンジン、OCR コンポーネントに適用されます。公式サイトに接続しにくい場合はミラーに切り替えられます。変更は新しいダウンロードに適用されます。",
+      "sourceLabel": "ダウンロード元",
+      "modes": {
+        "official": "公式",
+        "mirror": "ミラー",
+        "custom": "カスタムミラー"
+      },
+      "officialDescription": "Hugging Face と GitHub から直接ダウンロードします。",
+      "mirrorDescription": "プリセットは第三者が提供する HF-Mirror、GH-Proxy、Huawei Cloud の NuGet ミラーを使います。",
+      "huggingfaceLabel": "Hugging Face ミラー URL",
+      "huggingfaceHelp": "https://hf-mirror.com など、ミラーのベース URL を入力します。",
+      "githubLabel": "GitHub ダウンロードプロキシ URL",
+      "githubHelp": "完全な GitHub ダウンロード URL を後ろに付ける形式のプロキシを指定します。",
+      "save": "アドレスを保存",
+      "saving": "ダウンロード元を保存中…",
+      "saveFailed": "ダウンロード元を保存できませんでした。再試行してください。",
+      "invalidUrl": "認証情報、クエリパラメーター、フラグメントを含まない HTTP または HTTPS アドレスを入力してください。",
+      "change": "ダウンロード元を変更",
+      "nugetLabel": "NuGet パッケージダウンロード URL",
+      "nugetHelp": "Windows の OCR コンポーネント用の NuGet パッケージベースアドレス（PackageBaseAddress）を入力します。"
     }
   },
   "devices": {
@@ -1688,12 +1754,6 @@
       "max": "最大",
       "hintLevels": "強度が高いほど応答は遅くなります",
       "hintOpenai": "OpenAI 公式 API は対話での思考に非対応"
-    }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "定時キャッチアップ OCR 開始:未処理スクリーンショット {{count}} 枚"
     }
   }
 }

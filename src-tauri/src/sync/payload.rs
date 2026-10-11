@@ -32,6 +32,20 @@ pub struct CategoryPayload {
     pub deleted_at: Option<String>,
 }
 
+/// A website rule, identified by its host, browser and device scope.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteRulePayload {
+    pub host: String,
+    #[serde(default)]
+    pub browser: String,
+    #[serde(default)]
+    pub device: String,
+    pub category_id: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
 /// app_icons 行的 JSON 形式（PNG 字节 base64 编码后塞进 JSON）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

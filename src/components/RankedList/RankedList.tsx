@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import type { CategoryTime } from "../../api/hindsight";
 import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
 import { useTranslation } from "react-i18next";
@@ -25,6 +26,8 @@ export interface RankedItem {
   categoryId?: string;
   /** 仅 app 排行用：稳定代表 process_name，点击行查当天该 app 明细时传给后端 */
   iconProcess?: string;
+  /** App rankings only: the app's time in each category, for filtering by category. */
+  byCategory?: CategoryTime[];
 }
 
 interface RankedListProps {

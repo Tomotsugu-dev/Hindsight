@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
         "ocrResidentLabel": "Manter OCR residente",
-        "ocrResidentDescription": "Reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria. Quando ativo, capturas não reconhecidas também são processadas antes dos relatórios diários/semanais.",
-        "intervalLabel": "Intervalo de captura",
+        "ocrResidentDescription": "Processa novas capturas em tempo real e consome recursos adicionais",
+        "ocrResidentHintMac": "O processo de reconhecimento é liberado após cerca de 1 minuto ocioso.\nPausa automaticamente quando o notebook não está conectado à energia.",
+        "ocrResidentHintWin": "Usa cerca de 400 MB de memória, além de consumir CPU / GPU adicionais.\nPausa automaticamente quando o notebook não está conectado à energia.",
+        "intervalLabel": "Intervalo de captura de tela",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
         "idleLabel": "Tempo limite de inatividade",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "Comportamento de inicialização",
         "autoStartLabel": "Iniciar com o sistema",
-        "autoStartDescription": "O Hindsight inicia automaticamente após você fazer login.",
-        "showWindowLabel": "Mostrar janela principal na inicialização",
-        "showWindowDescription": "Quando desativado, inicia silenciosamente na bandeja do sistema.",
-        "minimizeToTrayLabel": "Minimizar para a bandeja do sistema ao fechar",
-        "minimizeToTrayDescriptionMac": "Quando desativado, clicar no X encerra o aplicativo.",
-        "minimizeToTrayDescriptionWin": "Quando desativado, clicar no X encerra o aplicativo."
+        "silentStartLabel": "Iniciar silenciosamente",
+        "minimizeToTrayLabel": "Minimizar para a bandeja do sistema ao fechar"
       },
       "dataRootDialog": {
         "title": "Trocar a pasta de dados?",
@@ -362,8 +360,8 @@
         "rowLabel": "Palavras-chave de URL",
         "addLabel": "Adicionar fragmento de URL",
         "placeholder": "ex.: /login",
-        "hostLabel": "Registrar domínios de sites",
-        "hostInfo": "Alimenta a visão \"Por site\" nos detalhes do aplicativo. Apenas o domínio (ex.: github.com) é armazenado, nunca a URL completa; páginas que correspondem às palavras-chave acima também não são registradas."
+        "hostLabel": "Não salvar URLs completas",
+        "hostInfo": "Apenas o domínio (ex.: github.com) é registrado, nunca a URL completa"
       },
       "app": {
         "title": "Filtro de aplicativos",
@@ -823,7 +821,57 @@
     },
     "tabs": {
       "list": "Gerenciar categorias",
-      "apps": "Atribuir apps"
+      "apps": "Atribuir apps",
+      "sites": "Atribuir sites"
+    },
+    "sites": {
+      "intro": "Dê a cada domínio do navegador uma categoria própria.",
+      "infoTipAria": "Como funcionam as categorias de sites",
+      "infoTipBody": "Um domínio sem categoria segue a categoria do navegador. Um subdomínio sem categoria segue a categoria do domínio pai.",
+      "searchPlaceholder": "Pesquisar sites",
+      "header": {
+        "site": "Site",
+        "domainCount_one": "{{count}} domínio no total",
+        "domainCount_other": "{{count}} domínios no total",
+        "last30d": "Últimos 30 dias",
+        "total": "Todo o período",
+        "category": "Categoria"
+      },
+      "follows": "Segue {{host}}",
+      "expand": "Mostrar subdomínios",
+      "collapse": "Ocultar subdomínios",
+      "subdomains_one": "{{count}} subdomínio",
+      "subdomains_other": "{{count}} subdomínios",
+      "otherCategory_one": "{{count}} em outra categoria",
+      "otherCategory_other": "{{count}} em outras categorias",
+      "removeRule": "Remover regra",
+      "loading": "Carregando…",
+      "empty": "Nenhum tempo em sites registrado ainda. Os domínios só são registrados enquanto “Não salvar URLs completas” estiver ativado.",
+      "openPrivacy": "Abrir configurações de privacidade",
+      "noResults": "Nenhum site corresponde à sua pesquisa",
+      "clearSearch": "Limpar pesquisa",
+      "allAssigned": "Todos os sites já têm categoria",
+      "sort": {
+        "default": "Padrão",
+        "recentDesc": "Últimos 30 dias ↓",
+        "recentAsc": "Últimos 30 dias ↑",
+        "totalDesc": "Total ↓",
+        "totalAsc": "Total ↑",
+        "nameAsc": "Domínio A-Z",
+        "nameDesc": "Domínio Z-A"
+      },
+      "icons": {
+        "label": "Baixar ícones dos sites automaticamente",
+        "confirmTitle": "Ativar o download de ícones dos sites?",
+        "confirmAction": "Ativar downloads",
+        "saveFailed": "Não foi possível salvar a configuração. Tente novamente.",
+        "loadFailed": "Não foi possível carregar os ícones. A classificação de sites continua disponível.",
+        "retry": "Tentar novamente",
+        "previewLabel": "Exemplo de ícone do YouTube",
+        "beforeDownload": "Antes",
+        "afterDownload": "Depois",
+        "trafficNote": "Atenção: baixar um ícone de site consome cerca de 10–20 KB de dados."
+      }
     }
   },
   "aiSettings": {
@@ -915,7 +963,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "Parâmetros de resumo de segmento"
+      "sectionTitle": "Ajustes de geração do relatório diário"
     },
     "engineParams": {
       "sectionTitle": "Parâmetros do mecanismo (na inicialização)",
@@ -934,9 +982,6 @@
       "sectionTitle": "Modelos",
       "sectionDesc": "LLM usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
       "toolbar": {
-        "capAll": "Todos",
-        "capVision": "Visão",
-        "capText": "Apenas texto",
         "statusAll": "Todos",
         "statusInstalled": "Baixados",
         "statusNotInstalled": "Não baixados",
@@ -944,7 +989,8 @@
         "sortDefault": "Ordem padrão",
         "sortSizeAsc": "Tamanho ↑",
         "sortSizeDesc": "Tamanho ↓",
-        "sortName": "Nome A-Z"
+        "sortName": "Nome A-Z",
+        "sortReleased": "Data de lançamento"
       },
       "cloud": {
         "cardTitle": "Nuvem · {{provider}}",
@@ -965,14 +1011,14 @@
         "resume": "Retomar",
         "resumeTooltip": "Retomar a partir de {{size}} MB já baixados.",
         "capsTooltips": {
-          "TEXT": "Geração de texto — escrever / continuar / resumir prosa.",
-          "VISION": "Multimodal — entende entrada de imagem.",
-          "CODE": "Ajustado para código — melhor em escrever e explicar código.",
-          "FAST": "Leve (< 1GB), velocidade em primeiro lugar; ótimo para a primeira tentativa.",
-          "BALANCED": "Tamanho médio, equilibra qualidade e velocidade para o uso diário.",
-          "REASONING": "Raciocínio profundo — pensamento de várias etapas, matemática, planejamento.",
-          "R1": "Família DeepSeek R1 — modelo de raciocínio treinado por RL.",
-          "DEFAULT": "A melhor escolha do Hindsight — o melhor equilíbrio geral."
+          "TEXT": "Gera texto",
+          "VISION": "Lê imagens",
+          "CODE": "Código",
+          "FAST": "Prioriza a velocidade",
+          "BALANCED": "Equilibrado",
+          "REASONING": "Consegue raciocinar",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "Recomendado"
         },
         "step2": "Texto",
         "step2ToggleOnTooltip": "Use este modelo para resumos de segmento (Text). Substitui a seleção anterior.",
@@ -1100,13 +1146,36 @@
     "autoSummary": {
       "sectionTitle": "Agendamentos",
       "sectionDesc": "Executa no horário: geração de relatórios e OCR de capturas.",
-      "enableLabel": "Resumo automático",
-      "enableHint": "Gera o relatório diário de hoje no horário definido (um dia anterior faltante também é preenchido) e o semanal da semana passada. Falhas não são repetidas; relatórios mensais entrarão quando disponíveis",
+      "enableLabel": "Resumo agendado",
+      "enableHint": "Gera automaticamente o relatório diário do dia no horário definido, todos os dias",
       "timeLabel": "Agendar horário",
-      "ocrDailyLabel": "OCR automático",
+      "ocrDailyLabel": "OCR agendado",
       "ocrDailyDescription": "Lê o acúmulo de capturas no horário definido diariamente",
       "addTimeAria": "Adicionar um horário",
       "removeTimeAria": "Remover o horário adicionado mais recentemente"
+    },
+    "downloadSources": {
+      "title": "Fontes de download",
+      "description": "Para modelos, o motor de IA e os componentes de OCR. Use um espelho se as fontes oficiais forem difíceis de acessar. A mudança vale para novos downloads.",
+      "sourceLabel": "Fonte de download",
+      "modes": {
+        "official": "Oficial",
+        "mirror": "Espelhos",
+        "custom": "Espelhos personalizados"
+      },
+      "officialDescription": "Baixar diretamente do Hugging Face e do GitHub.",
+      "mirrorDescription": "O padrão usa espelhos de terceiros: HF-Mirror, GH-Proxy e NuGet da Huawei Cloud.",
+      "huggingfaceLabel": "URL do espelho do Hugging Face",
+      "huggingfaceHelp": "Informe a URL base do espelho, como https://hf-mirror.com.",
+      "githubLabel": "URL do proxy de download do GitHub",
+      "githubHelp": "O proxy deve aceitar a URL completa de download do GitHub após seu endereço.",
+      "save": "Salvar endereços",
+      "saving": "Salvando fontes de download…",
+      "saveFailed": "Não foi possível salvar as fontes de download. Tente novamente.",
+      "invalidUrl": "Informe um endereço HTTP ou HTTPS sem dados de login, parâmetros ou fragmentos.",
+      "change": "Alterar fonte de download",
+      "nugetLabel": "URL de download de pacotes NuGet",
+      "nugetHelp": "Informe o endereço base dos pacotes NuGet (PackageBaseAddress) para os componentes de OCR do Windows."
     }
   },
   "devices": {
@@ -1688,12 +1757,6 @@
       "max": "Máximo",
       "hintLevels": "Quanto maior o esforço, mais lenta a resposta",
       "hintOpenai": "A API da OpenAI não suporta raciocínio no chat"
-    }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "OCR agendado iniciado: {{count}} capturas a processar"
     }
   }
 }

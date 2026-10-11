@@ -37,6 +37,7 @@ pub async fn update_settings(
     let prev_resident = current.memory_ocr_resident;
 
     let next = settings::apply_patch(current, patch);
+    next.download_sources.validate().map_err(String::from)?;
     settings::save(&pool, &next).await.map_err(String::from)?;
 
     // 关闭按钮行为切换：同步给 close handler 读的 static，下次点 X 立即生效，
@@ -86,7 +87,13 @@ pub async fn update_settings(
 
     // OCR 常驻开关:启停立即生效,不需要重启
     if next.memory_ocr_resident != prev_resident {
-        resident.sync(next.memory_ocr_resident, mem.0.clone()).await;
+        resident
+            .sync(
+                next.memory_ocr_resident,
+                mem.0.clone(),
+                pool.inner().clone(),
+            )
+            .await;
     }
 
     Ok(next)

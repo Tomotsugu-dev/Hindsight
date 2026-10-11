@@ -5,12 +5,12 @@ use chrono::{Duration, NaiveDate};
 use rusqlite::ToSql;
 
 use crate::error::Result;
-use crate::repo::sql::{FROM_ACTIVITY_GROUP_CATEGORY, FROM_PROCESS_GROUP_CATEGORY};
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
 use super::time::{parse_stored_time, split_by_date};
-use super::{AppUsage, CategoryTime, DaySummary, DeviceFilter};
+use super::{AppTotals, AppUsage, CategoryTime, DaySummary, DeviceFilter};
 
 /// Each category's time on each day of a date range, for drawing a bar chart with one bar per day:
 /// one entry per day from `from` to `to`, each bar split by category, with empty `segments` on days
@@ -29,25 +29,26 @@ pub async fn day_category_time(
     let (rows, crossing) = pool
         .0
         .call(move |conn| {
-            // As in day_hours: get the category through group → category, filtering out deleted
-            // categories and the "Hidden" category
+            // As in day_hours: the category the time counts toward, website rules applied,
+            // filtering out deleted categories and the "Hidden" category
             // Activities that do not cross midnight (end date equals local_date)
             let sql = format!(
-                "SELECT a.local_date,
+                "{with}
+                 SELECT a.local_date,
                         COALESCE(c.id, 'other') AS cat,
                         SUM(a.duration_secs) AS total
-                 {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                 {from}
+                 WHERE a.local_date >= ? AND a.local_date <= ? {device}
                    -- Keep activities that end on their local_date; e.g. 23:50 to 00:10 is handled below.
                    AND substr(a.ended_at, 1, 10) = a.local_date
-                   AND g.category_id IS NOT 'hidden'
+                   AND c.id IS NOT 'hidden'
                    AND a.excluded = 0
                  GROUP BY a.local_date, cat",
-                device.sql_clause()
+                with = host_rule_with_sql(),
+                from = from_stats_category_sql("activities"),
+                device = device.sql_clause(),
             );
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&from_str);
-            params.push(&to_str);
+            let mut params: Vec<&dyn ToSql> = vec![&from_str, &to_str, &from_str, &to_str];
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
@@ -66,20 +67,22 @@ pub async fn day_category_time(
 
             // Activities that cross midnight (end date not equal to local_date)
             let sql = format!(
-                "SELECT COALESCE(c.id, 'other') AS cat, a.started_at, a.ended_at
-                 {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                "{with}
+                 SELECT COALESCE(c.id, 'other') AS cat, a.started_at, a.ended_at
+                 {from}
+                 WHERE a.local_date >= ? AND a.local_date <= ? {device}
                    AND substr(a.ended_at, 1, 10) <> a.local_date
-                   AND g.category_id IS NOT 'hidden'
+                   AND c.id IS NOT 'hidden'
                    AND a.excluded = 0",
-                device.sql_clause()
+                with = host_rule_with_sql(),
+                from = from_stats_category_sql("activities"),
+                device = device.sql_clause(),
             );
 
             // Activities that cross midnight may start as early as the day before `from`.
             let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&crossing_from_str);
-            params.push(&to_str);
+            let mut params: Vec<&dyn ToSql> =
+                vec![&crossing_from_str, &to_str, &crossing_from_str, &to_str];
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
@@ -160,32 +163,35 @@ pub async fn top_apps(
     let (rows, crossing) = pool
         .0
         .call(move |conn| {
-            // One row per group ID; a process without a group is its own row
             // `MIN(process_name)` only makes sure the same process name is picked every time, for
             // the icon lookup.
             // Activities that do not cross midnight (end date equals local_date)
             let sql = format!(
-                "WITH per_process AS MATERIALIZED (
-                     SELECT a.process_name, SUM(a.duration_secs) AS secs
+                "{with},
+                 per_process AS MATERIALIZED (
+                     SELECT a.process_name, a.url_host, SUM(a.duration_secs) AS secs
                      FROM activities a
-                     WHERE a.local_date >= ? AND a.local_date <= ? {}
+                     WHERE a.local_date >= ? AND a.local_date <= ? {device}
                        AND substr(a.ended_at, 1, 10) = a.local_date
                        AND a.excluded = 0
-                     GROUP BY a.process_name
+                     -- Keep the host so later website rules can classify each subtotal.
+                     -- A browser process can visit sites in different categories.
+                     GROUP BY a.process_name, a.url_host
                  )
-                 SELECT COALESCE(g.id, p.process_name)                  AS group_id,
-                        COALESCE(g.display_name, p.process_name)        AS display,
+                 SELECT COALESCE(g.id, a.process_name)                  AS group_id,
+                        COALESCE(g.display_name, a.process_name)        AS display,
+                        COALESCE(ac.id, 'other')                        AS app_cat,
                         COALESCE(c.id, 'other')                         AS cat,
-                        MIN(p.process_name)                             AS icon_process,
-                        SUM(p.secs)                                     AS total
-                 {FROM_PROCESS_GROUP_CATEGORY}
-                 WHERE g.category_id IS NOT 'hidden'
-                 GROUP BY group_id, display, cat",
-                device.sql_clause()
+                        MIN(a.process_name)                             AS icon_process,
+                        SUM(a.secs)                                     AS total
+                 {from}
+                 WHERE c.id IS NOT 'hidden'
+                 GROUP BY group_id, display, app_cat, cat",
+                with = host_rule_with_sql(),
+                from = from_stats_category_sql("per_process"),
+                device = device.sql_clause(),
             );
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&from_str);
-            params.push(&to_str);
+            let mut params: Vec<&dyn ToSql> = vec![&from_str, &to_str, &from_str, &to_str];
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
@@ -197,7 +203,8 @@ pub async fn top_apps(
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
                         row.get::<_, String>(3)?,
-                        row.get::<_, i64>(4)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, i64>(5)?,
                     ))
                 })
                 .db()?
@@ -206,22 +213,25 @@ pub async fn top_apps(
 
             // Activities that cross midnight (end date not equal to local_date)
             let sql = format!(
-                "SELECT COALESCE(g.id, a.process_name)                  AS group_id,
+                "{with}
+                 SELECT COALESCE(g.id, a.process_name)                  AS group_id,
                         COALESCE(g.display_name, a.process_name)        AS display,
+                        COALESCE(ac.id, 'other')                        AS app_cat,
                         COALESCE(c.id, 'other')                         AS cat,
                         a.process_name, a.started_at, a.ended_at
-                 {FROM_ACTIVITY_GROUP_CATEGORY}
-                 WHERE a.local_date >= ? AND a.local_date <= ? {}
+                 {from}
+                 WHERE a.local_date >= ? AND a.local_date <= ? {device}
                    AND substr(a.ended_at, 1, 10) <> a.local_date
-                   AND g.category_id IS NOT 'hidden'
+                   AND c.id IS NOT 'hidden'
                    AND a.excluded = 0",
-                device.sql_clause()
+                with = host_rule_with_sql(),
+                from = from_stats_category_sql("activities"),
+                device = device.sql_clause(),
             );
             // Activities that cross midnight may start as early as the day before `from`.
             let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&crossing_from_str);
-            params.push(&to_str);
+            let mut params: Vec<&dyn ToSql> =
+                vec![&crossing_from_str, &to_str, &crossing_from_str, &to_str];
             if let Some(extra) = device.sql_param() {
                 params.push(extra);
             }
@@ -235,6 +245,7 @@ pub async fn top_apps(
                         row.get::<_, String>(3)?,
                         row.get::<_, String>(4)?,
                         row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
                     ))
                 })
                 .db()?
@@ -244,20 +255,20 @@ pub async fn top_apps(
         })
         .await?;
 
-    // group id → (seconds, the row; minutes are filled in at the end)
-    let mut totals: std::collections::HashMap<String, (i64, AppUsage)> =
-        std::collections::HashMap::new();
-    for (group_id, display_name, category_id, icon_process, secs) in rows {
-        let app = AppUsage {
-            group_id: group_id.clone(),
-            display_name,
-            category_id,
-            minutes: 0,
-            icon_process,
-        };
-        totals.insert(group_id, (secs, app));
+    let mut totals = AppTotals::default();
+    for (group_id, display_name, app_cat, cat, icon_process, secs) in rows {
+        if secs > 0 {
+            totals.add(
+                group_id,
+                display_name,
+                app_cat,
+                cat,
+                icon_process,
+                secs as u64,
+            );
+        }
     }
-    for (group_id, display_name, category_id, process, started, ended) in crossing {
+    for (group_id, display_name, app_cat, cat, process, started, ended) in crossing {
         let (Some(s), Some(e)) = (parse_stored_time(&started), parse_stored_time(&ended)) else {
             continue;
         };
@@ -266,34 +277,14 @@ pub async fn top_apps(
             .filter(|(date, ..)| *date >= from && *date <= to)
             .map(|(_, s, e)| (e - s).num_seconds())
             .sum();
-        if secs == 0 {
+        if secs <= 0 {
             continue;
         }
-        let (total, app) = totals.entry(group_id.clone()).or_insert_with(|| {
-            let app = AppUsage {
-                group_id,
-                display_name,
-                category_id,
-                minutes: 0,
-                icon_process: process.clone(),
-            };
-            (0, app)
-        });
-        // Keep the smallest process name, as `MIN(process_name)` does in the query
-        if process < app.icon_process {
-            app.icon_process = process;
-        }
-        *total += secs;
+        totals.add(group_id, display_name, app_cat, cat, process, secs as u64);
     }
 
-    let mut apps: Vec<(i64, AppUsage)> = totals
-        .into_values()
-        .map(|(secs, mut app)| {
-            app.minutes = (secs as f64 / 60.0).round() as u32;
-            (secs, app)
-        })
-        .collect();
-    let most_first = |a: &(i64, AppUsage), b: &(i64, AppUsage)| {
+    let mut apps: Vec<(u64, AppUsage)> = totals.finish();
+    let most_first = |a: &(u64, AppUsage), b: &(u64, AppUsage)| {
         b.0.cmp(&a.0)
             .then_with(|| a.1.display_name.cmp(&b.1.display_name))
             .then_with(|| a.1.group_id.cmp(&b.1.group_id))
@@ -316,7 +307,8 @@ pub async fn top_apps(
 mod tests {
     use super::*;
     use crate::repo::reports::test_seed::{
-        insert_activity, insert_session_with_times, local_time, seed_group, seed_solo_group,
+        insert_activity, insert_session_with_times, insert_visit, local_time, seed_group,
+        seed_solo_group,
     };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
@@ -775,5 +767,148 @@ mod tests {
         assert!(apps.iter().all(|a| a.display_name == "Notes"));
         let ids: Vec<&str> = apps.iter().map(|a| a.group_id.as_str()).collect();
         assert_eq!(ids, vec!["Notes", "notes.exe"]);
+    }
+
+    // —— 网站规则（ADR-0013）——
+
+    /// 一天里 Chrome（「浏览」）的四段会话：bilibili.com 10 分、live.bilibili.com 5 分、
+    /// github.com 20 分、没读到地址栏 5 分，共 40 分。
+    async fn seed_chrome_day(pool: &DbPool, chrome_category: &str) -> NaiveDate {
+        let day = Local::now().date_naive();
+        let today = day.format("%Y-%m-%d").to_string();
+        seed_solo_group(pool, "Chrome", chrome_category).await;
+        insert_visit(pool, &today, "Chrome", Some("bilibili.com"), 600).await;
+        insert_visit(pool, &today, "Chrome", Some("live.bilibili.com"), 300).await;
+        insert_visit(pool, &today, "Chrome", Some("github.com"), 1200).await;
+        insert_visit(pool, &today, "Chrome", None, 300).await;
+        day
+    }
+
+    /// 某一天各分类的秒数，按分类名排好，方便断言。
+    async fn category_secs(pool: &DbPool, day: NaiveDate) -> Vec<(String, u64)> {
+        let mut segs: Vec<(String, u64)> = day_category_time(pool, day, day, DeviceFilter::All)
+            .await
+            .unwrap()
+            .remove(0)
+            .segments
+            .into_iter()
+            .map(|s| (s.category_id, s.secs))
+            .collect();
+        segs.sort();
+        segs
+    }
+
+    fn secs(pairs: &[(&str, u64)]) -> Vec<(String, u64)> {
+        pairs.iter().map(|(c, s)| (c.to_string(), *s)).collect()
+    }
+
+    /// 设规则只是把网站的时间从浏览器的分类挪到规则的分类，子域名跟着母域名，总时长不变；
+    /// 应用排行里 Chrome 还是一行、时长不变、标的是它自己的分类，各分类时长加起来等于总时长。
+    #[tokio::test]
+    async fn site_rule_moves_time_without_changing_totals() {
+        let pool = fresh_test_pool().await;
+        let day = seed_chrome_day(&pool, "browse").await;
+        assert_eq!(category_secs(&pool, day).await, secs(&[("browse", 2400)]));
+
+        crate::repo::site_rules::set(&pool, "bilibili.com", "video")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            category_secs(&pool, day).await,
+            secs(&[("browse", 1500), ("video", 900)])
+        );
+        let apps = top_apps(&pool, day, day, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(apps.len(), 1);
+        assert_eq!(
+            (apps[0].display_name.as_str(), apps[0].minutes),
+            ("Chrome", 40)
+        );
+        assert_eq!(
+            apps[0].category_id, "browse",
+            "应用一行标的是应用自己的分类"
+        );
+        let by_category: Vec<(&str, u64)> = apps[0]
+            .by_category
+            .iter()
+            .map(|c| (c.category_id.as_str(), c.secs))
+            .collect();
+        assert_eq!(by_category, vec![("browse", 1500), ("video", 900)]);
+    }
+
+    /// 浏览器在「隐藏」时，有规则的网站也不计。
+    #[tokio::test]
+    async fn hidden_browser_ignores_site_rules() {
+        let pool = fresh_test_pool().await;
+        let day = seed_chrome_day(&pool, "hidden").await;
+        crate::repo::site_rules::set(&pool, "bilibili.com", "video")
+            .await
+            .unwrap();
+
+        assert_eq!(category_secs(&pool, day).await, Vec::new());
+        assert!(top_apps(&pool, day, day, 50, DeviceFilter::All)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    /// 网站设成「隐藏」只藏这个网站（连同子域名），浏览器的其余时间照算。
+    #[tokio::test]
+    async fn hidden_site_only_hides_that_site() {
+        let pool = fresh_test_pool().await;
+        let day = seed_chrome_day(&pool, "browse").await;
+        crate::repo::site_rules::set(&pool, "bilibili.com", "hidden")
+            .await
+            .unwrap();
+
+        assert_eq!(category_secs(&pool, day).await, secs(&[("browse", 1500)]));
+        let apps = top_apps(&pool, day, day, 50, DeviceFilter::All)
+            .await
+            .unwrap();
+        assert_eq!(apps[0].minutes, 25, "藏掉的网站不计，Chrome 那一行相应减少");
+    }
+
+    /// 规则指向的分类已被删除（比如同步先后顺序造成的），按没有规则算，回到浏览器的分类。
+    #[tokio::test]
+    async fn rule_with_deleted_category_falls_back_to_browser() {
+        let pool = fresh_test_pool().await;
+        let day = seed_chrome_day(&pool, "browse").await;
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "INSERT INTO site_rules(host, category_id, updated_at)
+                       VALUES ('bilibili.com', 'game', '2026-10-07T00:00:00Z');
+                     UPDATE categories SET deleted_at = '2026-10-07T00:00:00Z' WHERE id = 'game';",
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(category_secs(&pool, day).await, secs(&[("browse", 2400)]));
+    }
+
+    /// 只限某个浏览器的规则，统计时不套用。
+    #[tokio::test]
+    async fn browser_specific_rule_is_not_applied() {
+        let pool = fresh_test_pool().await;
+        let day = seed_chrome_day(&pool, "browse").await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO site_rules(host, browser, category_id, updated_at)
+                     VALUES ('bilibili.com', 'Chrome', 'video', '2026-10-07T00:00:00Z')",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(category_secs(&pool, day).await, secs(&[("browse", 2400)]));
     }
 }

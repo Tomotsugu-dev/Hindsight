@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { AppUsage } from "../api/hindsight";
 import type { RingFocusApp } from "../components/PieView/ringItems";
 import { useCategories } from "../state/categories";
+import { secsIn } from "../utils/appCategoryTime";
 import { displayCategoryName } from "../utils/categoryName";
 import { displayAppName } from "../utils/displayName";
 import { useAppDetail, type DetailScope } from "./useAppDetail";
@@ -87,9 +88,13 @@ export function useAppFocus({
 
     const cat = getCategory(app.categoryId);
     const color = cat?.color ?? "#94a3b8";
+    // Share of its category: only the app's time in that category counts, since website rules
+    // can move part of a browser's time to other categories.
+    const ownCat = new Set([app.categoryId]);
+    const ownMinutes = Math.round(secsIn(app.byCategory, ownCat) / 60);
     const catMinutes =
       slices.flatMap((s) => s.cats).find((c) => c.id === app.categoryId)?.minutes ??
-      apps.filter((a) => a.categoryId === app.categoryId).reduce((sum, a) => sum + a.minutes, 0);
+      Math.round(apps.reduce((sum, a) => sum + secsIn(a.byCategory, ownCat), 0) / 60);
 
     const focusApp: RingFocusApp = {
       groupId: app.groupId,
@@ -98,6 +103,7 @@ export function useAppFocus({
       categoryId: app.categoryId,
       color,
       minutes: app.minutes,
+      categoryMinutes: ownMinutes,
     };
 
     const prevMinutes = prevApps.find((a) => a.groupId === app.groupId)?.minutes ?? 0;
@@ -115,7 +121,7 @@ export function useAppFocus({
               kind: "appShare",
               name: displayCategoryName(cat, t),
               color,
-              pct: Math.round((app.minutes / catMinutes) * 100),
+              pct: Math.round((ownMinutes / catMinutes) * 100),
             }
           : null,
     };

@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "Enable screenshots",
         "screenshotEnableDescription": "Turning this off stops screenshots.",
         "ocrResidentLabel": "Keep OCR resident",
-        "ocrResidentDescription": "Recognizes new screenshots instantly (~400 MB extra RAM); pauses on battery. When on, unrecognized screenshots are also caught up before daily/weekly reports.",
-        "intervalLabel": "Capture interval",
+        "ocrResidentDescription": "Processes new screenshots in real time and uses extra resources",
+        "ocrResidentHintMac": "The recognition process is released after about 1 minute idle.\nPauses automatically when a laptop is not plugged in.",
+        "ocrResidentHintWin": "Uses about 400 MB of memory, plus extra CPU / GPU resources.\nPauses automatically when a laptop is not plugged in.",
+        "intervalLabel": "Screenshot interval",
         "intervalDescription": "Capture interval.",
         "intervalHint": "Screenshots trigger when:\n• Switching apps → captured immediately\n• Browser changes URL → captured immediately\n• Same window stays focused for the configured interval → captured",
         "idleLabel": "Idle timeout",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "Startup behavior",
         "autoStartLabel": "Launch on system startup",
-        "autoStartDescription": "Hindsight starts automatically after you log in.",
-        "showWindowLabel": "Show main window on startup",
-        "showWindowDescription": "When off, start silently in the tray.",
-        "minimizeToTrayLabel": "Minimize to tray on close",
-        "minimizeToTrayDescriptionMac": "When off, clicking X quits the app.",
-        "minimizeToTrayDescriptionWin": "When off, clicking X quits the app."
+        "silentStartLabel": "Start silently",
+        "minimizeToTrayLabel": "Minimize to tray on close"
       },
       "dataRootDialog": {
         "title": "Switch data folder?",
@@ -362,8 +360,8 @@
         "rowLabel": "URL keywords",
         "addLabel": "Add URL fragment",
         "placeholder": "e.g. /login",
-        "hostLabel": "Record website domains",
-        "hostInfo": "Powers the \"By site\" view in app details. Only the domain (e.g. github.com) is stored, never the full URL; pages matching the keywords above are not recorded either."
+        "hostLabel": "Don't store full URLs",
+        "hostInfo": "Only the domain (e.g. github.com) is recorded, never the full URL"
       },
       "app": {
         "title": "App filter",
@@ -823,7 +821,57 @@
     },
     "tabs": {
       "list": "Manage categories",
-      "apps": "Assign apps"
+      "apps": "Assign apps",
+      "sites": "Assign websites"
+    },
+    "sites": {
+      "intro": "Give each domain in your browser its own category.",
+      "infoTipAria": "How website categories work",
+      "infoTipBody": "A domain without a category follows its browser's category. A subdomain without a category follows its parent domain's category.",
+      "searchPlaceholder": "Search websites",
+      "header": {
+        "site": "Website",
+        "domainCount_one": "{{count}} domain total",
+        "domainCount_other": "{{count}} domains total",
+        "last30d": "Last 30 days",
+        "total": "All time",
+        "category": "Category"
+      },
+      "follows": "Follows {{host}}",
+      "expand": "Show subdomains",
+      "collapse": "Hide subdomains",
+      "subdomains_one": "{{count}} subdomain",
+      "subdomains_other": "{{count}} subdomains",
+      "otherCategory_one": "{{count}} in another category",
+      "otherCategory_other": "{{count}} in other categories",
+      "removeRule": "Remove rule",
+      "loading": "Loading…",
+      "empty": "No website time recorded yet. Domains are recorded only while “Don't store full URLs” is on.",
+      "openPrivacy": "Open privacy settings",
+      "noResults": "No websites match your search",
+      "clearSearch": "Clear search",
+      "allAssigned": "Every website has a category",
+      "sort": {
+        "default": "Default",
+        "recentDesc": "Last 30 days ↓",
+        "recentAsc": "Last 30 days ↑",
+        "totalDesc": "All time ↓",
+        "totalAsc": "All time ↑",
+        "nameAsc": "Domain A-Z",
+        "nameDesc": "Domain Z-A"
+      },
+      "icons": {
+        "label": "Automatically download website icons",
+        "confirmTitle": "Enable website icon downloads?",
+        "confirmAction": "Enable downloads",
+        "saveFailed": "Could not save this setting. Please try again.",
+        "loadFailed": "Icons could not be loaded. Website classification is still available.",
+        "retry": "Retry",
+        "previewLabel": "YouTube icon example",
+        "beforeDownload": "Before",
+        "afterDownload": "After",
+        "trafficNote": "Note: Downloading one website icon uses about 10–20 KB of data."
+      }
     }
   },
   "aiSettings": {
@@ -915,7 +963,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "Segment summary params"
+      "sectionTitle": "Daily report generation settings"
     },
     "engineParams": {
       "sectionTitle": "Engine parameters (on launch)",
@@ -934,9 +982,6 @@
       "sectionTitle": "Models",
       "sectionDesc": "LLM used for local inference; GGUF files are downloaded from HuggingFace.",
       "toolbar": {
-        "capAll": "All",
-        "capVision": "Vision",
-        "capText": "Text only",
         "statusAll": "All",
         "statusInstalled": "Downloaded",
         "statusNotInstalled": "Not downloaded",
@@ -944,7 +989,8 @@
         "sortDefault": "Default order",
         "sortSizeAsc": "Size ↑",
         "sortSizeDesc": "Size ↓",
-        "sortName": "Name A-Z"
+        "sortName": "Name A-Z",
+        "sortReleased": "Release date"
       },
       "cloud": {
         "cardTitle": "Cloud · {{provider}}",
@@ -965,14 +1011,14 @@
         "resume": "Resume",
         "resumeTooltip": "Resume from {{size}} MB already downloaded.",
         "capsTooltips": {
-          "TEXT": "Text generation — write / continue / summarize prose.",
-          "VISION": "Multimodal — understands image input.",
-          "CODE": "Code-tuned — better at writing and explaining code.",
-          "FAST": "Lightweight (< 1GB), speed first; great for first try.",
-          "BALANCED": "Mid-size, balances quality and speed for everyday use.",
-          "REASONING": "Deep reasoning — multi-step thinking, math, planning.",
-          "R1": "DeepSeek R1 family — RL-trained reasoning model.",
-          "DEFAULT": "Hindsight's top pick — best overall balance."
+          "TEXT": "Generates text",
+          "VISION": "Reads images",
+          "CODE": "Code",
+          "FAST": "Speed first",
+          "REASONING": "Can think",
+          "BALANCED": "Balanced",
+          "R1": "DeepSeek R1",
+          "DEFAULT": "Recommended"
         },
         "step2": "Text",
         "step2ToggleOnTooltip": "Use this model for segment summaries (Text). Replaces the previous selection.",
@@ -1100,13 +1146,36 @@
     "autoSummary": {
       "sectionTitle": "Schedules",
       "sectionDesc": "Runs on schedule: report generation and screenshot OCR.",
-      "enableLabel": "Auto summary",
-      "enableHint": "Generates today's daily report at the set time (a missing previous day is filled in too) and last week's weekly report. Failed runs are not retried; monthly reports will join once available",
+      "enableLabel": "Scheduled summary",
+      "enableHint": "Generates the day's daily report automatically at the set time each day",
       "timeLabel": "Schedule a time",
-      "ocrDailyLabel": "Auto OCR",
+      "ocrDailyLabel": "Scheduled OCR",
       "ocrDailyDescription": "Reads the screenshot backlog at the set time daily",
       "addTimeAria": "Add a time point",
       "removeTimeAria": "Remove the most recently added time point"
+    },
+    "downloadSources": {
+      "title": "Download sources",
+      "description": "For models, the AI engine and OCR components. Switch to a mirror if official downloads are hard to reach. Changes apply to new downloads.",
+      "sourceLabel": "Download source",
+      "modes": {
+        "official": "Official",
+        "mirror": "Mirrors",
+        "custom": "Custom mirrors"
+      },
+      "officialDescription": "Download directly from Hugging Face and GitHub.",
+      "mirrorDescription": "The preset uses third-party HF-Mirror, GH-Proxy and Huawei Cloud NuGet mirrors.",
+      "huggingfaceLabel": "Hugging Face mirror URL",
+      "huggingfaceHelp": "Enter the mirror base URL, such as https://hf-mirror.com.",
+      "githubLabel": "GitHub download proxy URL",
+      "githubHelp": "The proxy must accept the full GitHub download URL appended to its address.",
+      "save": "Save addresses",
+      "saving": "Saving download sources…",
+      "saveFailed": "Could not save download sources. Please try again.",
+      "invalidUrl": "Enter an HTTP or HTTPS address without login details, query parameters or a fragment.",
+      "change": "Change download source",
+      "nugetLabel": "NuGet package download URL",
+      "nugetHelp": "Enter the NuGet package base address (PackageBaseAddress) for Windows OCR components."
     }
   },
   "devices": {
@@ -1688,12 +1757,6 @@
       "max": "Max",
       "hintLevels": "Higher effort means slower responses",
       "hintOpenai": "OpenAI's API doesn't support thinking in chat"
-    }
-  },
-  "notifications": {
-    "scheduledOcr": {
-      "title": "Hindsight",
-      "body": "Scheduled OCR started: {{count}} screenshots to process"
     }
   }
 }

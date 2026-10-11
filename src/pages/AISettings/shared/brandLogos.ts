@@ -3,6 +3,7 @@
 // 本地映射命中时优先用，没命中的品牌（如个人微调作者）回退 logoUrl。
 import deepseekLogo from "../../../assets/model-logos/deepseek.svg";
 import gemmaLogo from "../../../assets/model-logos/gemma.svg";
+import metaLogo from "../../../assets/model-logos/meta.svg";
 import openaiLogo from "../../../assets/model-logos/openai.svg";
 import qwenLogo from "../../../assets/model-logos/qwen.svg";
 import zaiLogo from "../../../assets/model-logos/zai.svg";
@@ -11,6 +12,7 @@ import zaiLogo from "../../../assets/model-logos/zai.svg";
 export const BRAND_LOGOS: Record<string, string> = {
   DeepSeek: deepseekLogo,
   Google: gemmaLogo,
+  Meta: metaLogo,
   OpenAI: openaiLogo,
   Qwen: qwenLogo,
   "Z.AI": zaiLogo,

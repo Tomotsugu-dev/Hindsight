@@ -365,6 +365,7 @@ where
 /// progress 回调里 emit 的 file 字段也应该用 `save_as`，让前端能按落盘名索引。
 pub async fn download_from_hf<F>(
     cfg: &AiConfig,
+    sources: &crate::ai::download_sources::DownloadSources,
     repo: &str,
     hf_file: &str,
     save_as: Option<&str>,
@@ -400,6 +401,8 @@ where
         }
     }
 
+    let url = sources.url(&hf_url(repo, hf_file))?;
+
     // 检测半成品续传：partial 存在 + 已下字节数 > 0 → Range request 续
     let resume_from = match tokio::fs::metadata(&temp).await {
         Ok(m) if m.len() > 0 => Some(m.len()),
@@ -422,7 +425,6 @@ where
     // 因为前端 cancel 命令传的是落盘名（progress event 也按落盘名 emit）
     let cancel = register_cancel(local_name);
 
-    let url = hf_url(repo, hf_file);
     let result = stream_to_file(&url, &temp, resume_from, &cancel, &mut progress).await;
     clear_cancel(local_name);
     inflight_set()

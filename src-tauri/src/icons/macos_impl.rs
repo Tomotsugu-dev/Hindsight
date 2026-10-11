@@ -76,7 +76,7 @@ fn extract_via_nsworkspace(path: &Path) -> Option<Vec<u8>> {
     if img.width() <= MAX_DIM && img.height() <= MAX_DIM {
         return Some(png);
     }
-    let resized = img.resize(MAX_DIM, MAX_DIM, image::imageops::FilterType::Triangle);
+    let resized = super::shrink_to_fit(img, MAX_DIM);
     let mut buf = std::io::Cursor::new(Vec::new());
     resized.write_to(&mut buf, image::ImageFormat::Png).ok()?;
     Some(buf.into_inner())
@@ -144,9 +144,8 @@ fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
             }
         }
     }
-    let (src_w, src_img) = match best {
-        Some(b) => b,
-        None => return Ok(None),
+    let Some((_, src_img)) = best else {
+        return Ok(None);
     };
 
     // icns 变体可能是 RGB / GrayAlpha / Gray，统一转 RGBA 让 image crate 接住
@@ -157,12 +156,7 @@ fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
             None => return Ok(None),
         };
 
-    // Triangle filter：速度 / 质量平衡好；CatmullRom / Lanczos3 在小图标上视觉差异不明显，多耗 CPU
-    let final_img = if src_w > MAX_DIM {
-        dyn_img.resize(MAX_DIM, MAX_DIM, image::imageops::FilterType::Triangle)
-    } else {
-        dyn_img
-    };
+    let final_img = super::shrink_to_fit(dyn_img, MAX_DIM);
 
     let mut buf = std::io::Cursor::new(Vec::new());
     final_img

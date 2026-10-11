@@ -43,6 +43,7 @@ const ENGINE_DOWNLOAD_PROGRESS_EVENT: &str = "ai://engine-download-progress";
 #[tauri::command]
 pub async fn download_binary(
     app: AppHandle,
+    pool: State<'_, crate::storage::DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
     force: Option<bool>,
 ) -> Result<(), String> {
@@ -59,8 +60,11 @@ pub async fn download_binary(
         log::info!("llama.cpp 已是 PIN 版本,跳过下载");
         return Ok(());
     }
+    let cfg = crate::repo::settings::load(&pool)
+        .await
+        .map_err(String::from)?;
     let app_for_engine = app.clone();
-    binary::download(move |phase, downloaded, total| {
+    binary::download(&cfg.download_sources, move |phase, downloaded, total| {
         emit_progress(&app_for_engine, phase, downloaded, total, "engine");
     })
     .await
@@ -73,7 +77,11 @@ pub async fn download_binary(
 /// 已装且版本匹配时幂等快速返回(force 强制重下,修复损坏安装用)。
 /// 进度复用 [`ENGINE_DOWNLOAD_PROGRESS_EVENT`],stage="runtime"。
 #[tauri::command]
-pub async fn download_ocr_runtime(app: AppHandle, force: Option<bool>) -> Result<(), String> {
+pub async fn download_ocr_runtime(
+    app: AppHandle,
+    pool: State<'_, crate::storage::DbPool>,
+    force: Option<bool>,
+) -> Result<(), String> {
     let force = force.unwrap_or(false);
     // Windows 上 installed 已含 DirectML.dll 检查:旧 CPU 构建即使版本号
     // 相同也判未装,迁移场景必然走到下载。
@@ -85,8 +93,11 @@ pub async fn download_ocr_runtime(app: AppHandle, force: Option<bool>) -> Result
         log::info!("onnxruntime 已是 PIN 版本,跳过下载");
         return Ok(());
     }
+    let cfg = crate::repo::settings::load(&pool)
+        .await
+        .map_err(String::from)?;
     let app_for_runtime = app.clone();
-    embedding_runtime::download(move |phase, downloaded, total| {
+    embedding_runtime::download(&cfg.download_sources, move |phase, downloaded, total| {
         emit_progress(&app_for_runtime, phase, downloaded, total, "runtime");
     })
     .await

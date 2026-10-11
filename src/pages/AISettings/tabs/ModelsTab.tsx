@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { DownloadSourcesLink } from "../shared/DownloadSourcesSection";
 import { Bot } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { ModelsSection } from "../shared/ModelsSection";
@@ -13,6 +14,7 @@ export default function ModelsTab() {
   const { t } = useTranslation();
   return (
     <div className={styles.content}>
+      <DownloadSourcesLink />
       <Section
         title={t("aiSettings.models.sectionTitle")}
         description={t("aiSettings.models.sectionDesc")}

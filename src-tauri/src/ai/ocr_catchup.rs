@@ -55,14 +55,14 @@ pub async fn run<S: ProgressSink>(
 
     // 意愿 gate:常驻 OCR 关 = 用户不要自动识别,直接退——支持"截图但
     // 不用 OCR"的用户,点日报绝不被强制 OCR(手动回填不受影响)。
-    match crate::repo::settings::load(pool).await {
-        Ok(cfg) if cfg.memory_ocr_resident => {}
+    let download_sources = match crate::repo::settings::load(pool).await {
+        Ok(cfg) if cfg.memory_ocr_resident => cfg.download_sources,
         Ok(_) => return,
         Err(e) => {
             log::warn!("OCR 清积压:设置读取失败,跳过本阶段: {e}");
             return;
         }
-    }
+    };
 
     // 幂等回填:主库里有截图、登记簿还没登的行先补上——"全部未识别的图"
     // 以主库为准,不能只看登记簿存量。
@@ -159,8 +159,9 @@ pub async fn run<S: ProgressSink>(
         }
         if task.is_none() && !digest::is_running() {
             let m = mem.clone();
+            let sources = download_sources.clone();
             task = Some(tokio::spawn(async move {
-                match digest::run(&m).await {
+                match digest::run(&m, &sources).await {
                     Ok(report) => log::info!("OCR 清积压批完成: {report:?}"),
                     Err(e) => log::warn!("OCR 清积压批失败: {e}"),
                 }

@@ -76,7 +76,8 @@ pub async fn get_storage_info(pool: State<'_, DbPool>) -> Result<StorageInfo, St
 /// `VACUUM` after the deletes, or the file does not shrink; it cannot run inside
 /// a transaction, hence its own `call`.
 /// The `icons/` cache directory goes with `app_icons`, or icons would keep
-/// coming from the old files.
+/// coming from the old files. `site-icons/` goes too: it shows which websites
+/// were visited.
 #[tauri::command]
 pub async fn purge_local_data(
     pool: State<'_, DbPool>,
@@ -183,6 +184,9 @@ pub(crate) async fn purge_local_data_impl(
     if let Ok(data_root) = crate::storage::db_path_dir() {
         let icons_dir = data_root.join("icons");
         let _ = tokio::fs::remove_dir_all(&icons_dir).await;
+    }
+    if let Ok(site_icons) = crate::icons::site::dir() {
+        let _ = tokio::fs::remove_dir_all(&site_icons).await;
     }
     Ok(())
 }
@@ -742,9 +746,15 @@ mod tests {
             "fixture 应当至少 400KB: got {bytes_before}"
         );
         assert!(categories_before > 0, "builtin categories 应该已 seed");
+        // 网站图标：看得出去过哪些网站，要跟着删（ADR-0014）
+        let site_icons = crate::icons::site::dir().unwrap();
+        std::fs::create_dir_all(&site_icons).unwrap();
+        std::fs::write(site_icons.join("github.com.png"), b"png").unwrap();
 
         // ── act ──
         purge_local_data_impl(&pool, None).await.unwrap();
+
+        assert!(!site_icons.exists(), "site-icons/ 目录应被删掉");
 
         // ── assert: 7 张硬删表全空 ──
         for table in [

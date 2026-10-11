@@ -64,6 +64,10 @@ pub struct Recommended {
     /// 由 JSON 维护者按模型实测特性填；前端拿到不认识的 type 会按 default fallback 色显示。
     #[serde(default)]
     pub caps: Vec<String>,
+    /// 模型发布时间，`YYYY-MM-DD`。取官方模型卡在 Hugging Face 上的创建日。
+    /// 空串表示未知，排序时排到最后。
+    #[serde(default)]
+    pub released: String,
 }
 
 #[derive(Debug, Deserialize)]

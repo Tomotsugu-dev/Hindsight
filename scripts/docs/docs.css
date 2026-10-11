@@ -1,0 +1,328 @@
+/* 文档站样式：复用 /styles.css 的配色 token、重置与顶栏，这里只补文档特有的部分 */
+
+/* ---------- 顶栏 ---------- */
+.nav-inner {
+  gap: 16px;
+}
+
+.docs-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg-warm);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+
+.docs-tag:hover {
+  color: var(--accent-hover);
+}
+
+.nav-search {
+  position: relative;
+  flex: 1;
+  max-width: 380px;
+  margin: 0 auto;
+  --pagefind-ui-scale: 0.85;
+  --pagefind-ui-primary: var(--accent-hover);
+  --pagefind-ui-text: var(--text);
+  --pagefind-ui-background: #fff;
+  --pagefind-ui-border: var(--border);
+  --pagefind-ui-border-width: 1px;
+  --pagefind-ui-border-radius: 10px;
+  --pagefind-ui-font: var(--font-cn);
+}
+
+.nav-search .pagefind-ui__drawer {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(560px, 92vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+}
+
+.lang-menu {
+  position: relative;
+  font-size: 13px;
+}
+
+.lang-menu summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+
+.lang-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.lang-menu summary:hover {
+  color: var(--text);
+}
+
+.lang-menu ul {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 150px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 200;
+}
+
+.lang-menu li a,
+.lang-menu li .lang-active {
+  display: block;
+  padding: 7px 12px;
+  border-radius: 8px;
+}
+
+.lang-menu li a {
+  color: var(--text-mute);
+}
+
+.lang-menu li a:hover {
+  background: var(--bg-warm);
+  color: var(--accent-hover);
+}
+
+.lang-menu .lang-active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---------- 布局 ---------- */
+.doc-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 56px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 32px 0;
+}
+
+.doc-side {
+  position: sticky;
+  top: 88px;
+  align-self: start;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doc-side a {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-mute);
+}
+
+.doc-side a:hover {
+  background: var(--bg-warm);
+  color: var(--text);
+}
+
+.doc-side a[aria-current="page"] {
+  background: var(--bg-warm);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.doc-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px - 40px);
+}
+
+.doc-footer {
+  margin-top: auto;
+  padding: 48px 0 28px;
+  font-size: 13px;
+  color: var(--text-faded);
+}
+
+/* ---------- 正文 ---------- */
+.doc-body {
+  max-width: 780px;
+  line-height: 1.75;
+}
+
+.doc-body [align="center"] {
+  text-align: center;
+}
+
+.doc-body h1 {
+  font-size: 34px;
+  margin: 0 0 20px;
+}
+
+.doc-body h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  scroll-margin-top: 88px;
+}
+
+.doc-body h3 {
+  font-size: 19px;
+  margin: 32px 0 12px;
+  scroll-margin-top: 88px;
+}
+
+.doc-body h4 {
+  font-size: 16px;
+  margin: 24px 0 10px;
+  scroll-margin-top: 88px;
+}
+
+.doc-body p,
+.doc-body ul,
+.doc-body ol,
+.doc-body table,
+.doc-body blockquote {
+  margin: 0 0 14px;
+}
+
+.doc-body ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+
+.doc-body ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+
+.doc-body li > ul,
+.doc-body li > ol {
+  margin: 4px 0;
+}
+
+.doc-body a {
+  color: var(--accent-hover);
+}
+
+.doc-body a:hover {
+  text-decoration: underline;
+}
+
+.doc-body img {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.doc-body img:not([width]) {
+  border: 1px solid var(--border);
+  border-radius: var(--r-img);
+  box-shadow: var(--shadow-sm);
+}
+
+.doc-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.doc-body th,
+.doc-body td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.doc-body th {
+  background: var(--bg-warm);
+  font-weight: 600;
+}
+
+.doc-body blockquote {
+  padding: 10px 16px;
+  background: var(--bg-warm);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  color: var(--text-mute);
+}
+
+.doc-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.doc-body code {
+  padding: 2px 6px;
+  background: var(--bg-warm);
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.doc-body pre {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  background: var(--bg-warm);
+  border-radius: 10px;
+}
+
+.doc-body pre code {
+  padding: 0;
+  background: none;
+}
+
+.doc-body hr {
+  margin: 32px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 900px) {
+  .doc-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px 20px 0;
+  }
+
+  .doc-side {
+    position: static;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .doc-side a {
+    border: 1px solid var(--border);
+  }
+
+  .nav-inner {
+    padding: 0 20px;
+  }
+
+  .nav-name,
+  .nav-github {
+    display: none;
+  }
+
+  .doc-body h1 {
+    font-size: 28px;
+  }
+}

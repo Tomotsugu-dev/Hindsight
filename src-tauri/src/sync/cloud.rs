@@ -220,11 +220,11 @@ impl CloudBackend {
         }
     }
 
-    /// Every file, for the commands that clear the cloud: the core dataset
-    /// from the very start. On WebDAV that is what a first pull of the core
-    /// dataset sees, the peers' files, not this device's own.
+    /// Lists the always-on datasets from the start for commands that clear the cloud.
+    /// On WebDAV this lists peers' files, not this device's own.
     pub async fn list_all(&self) -> Result<Vec<FileMeta>> {
-        self.list(&[(Dataset::Core, "")]).await
+        self.list(&[(Dataset::Core, ""), (Dataset::SiteRules, "")])
+            .await
     }
 
     /// Downloads a file's whole content into memory.
@@ -286,17 +286,18 @@ fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
 mod tests {
     use super::*;
     use crate::repo::test_util::fresh_test_pool;
-    use Dataset::{AiSummaries, Chat, Core, Memory};
+    use Dataset::{AiSummaries, Chat, Core, Memory, SiteRules};
 
-    /// Drive 的七个名字钉死：老用户的数据库里存的就是这些，改一个就找不到原来那一行。
+    /// Drive 的游标名字钉死：老用户的数据库里存的就是这些，改一个就找不到原来那一行。
     /// 坚果云的名字都带自己的前缀，跟 Drive 的不会重。
     #[tokio::test]
     async fn each_backend_has_its_own_names() {
         let drive = CloudBackend::drive(fresh_test_pool().await);
         assert_eq!(
-            [Core, AiSummaries, Chat, Memory].map(|d| drive.pull_cursor_name(d)),
+            [Core, SiteRules, AiSummaries, Chat, Memory].map(|d| drive.pull_cursor_name(d)),
             [
                 "drive_files",
+                "pull.site_rules",
                 "pull.ai_summaries",
                 "pull.chat",
                 "pull.memory"
@@ -320,6 +321,10 @@ mod tests {
         assert_eq!(
             nutstore.push_fingerprint_name(Chat),
             "webdav.dav.jianguoyun.com.push.chat"
+        );
+        assert_eq!(
+            nutstore.pull_cursor_name(SiteRules),
+            "webdav.dav.jianguoyun.com.pull.site_rules"
         );
     }
 
