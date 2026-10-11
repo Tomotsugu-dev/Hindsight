@@ -122,6 +122,69 @@ pub fn set_dock_icon_visible(app: &tauri::AppHandle, visible: bool) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_dock_icon_visible(_app: &tauri::AppHandle, _visible: bool) {}
 
+/// Auto start argument for Windows platform.
+pub const AUTOSTART_ARG: &str = "--autostart";
+
+/// Returns whether this process was launched as a macOS login item.
+///
+/// macOS login items cannot pass command-line arguments. Instead, the system
+/// attaches `keyAELaunchedAsLogInItem` (`lgit`) to the initial `kAEOpenApplication` (`oapp`)
+/// Apple Event when launching an application at login.
+///
+/// Ports `wasLaunchedAtLogin` from [LaunchAtLogin-Modern]:
+///
+/// ```swift
+/// let event = NSAppleEventManager.shared().currentAppleEvent
+/// return event?.eventID == kAEOpenApplication
+///     && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+/// ```
+///
+/// Returns `false` if the event is unavailable or parsing fails.
+///
+/// Must be called synchronously inside the setup closure: the event is only
+/// readable while the launch callback is running.
+///
+/// [LaunchAtLogin-Modern]: https://github.com/sindresorhus/LaunchAtLogin-Modern
+#[cfg(target_os = "macos")]
+pub fn launched_by_autostart() -> bool {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+
+    // Four-character codes (FourCC / OSType) defined in AppleEvents.h and AERegistry.h.
+    const K_AE_OPEN_APPLICATION: u32 = u32::from_be_bytes(*b"oapp");
+    const KEY_AE_PROP_DATA: u32 = u32::from_be_bytes(*b"prdt");
+    const KEY_AE_LAUNCHED_AS_LOGIN_ITEM: u32 = u32::from_be_bytes(*b"lgit");
+
+    let Some(cls) = AnyClass::get(c"NSAppleEventManager") else {
+        return false;
+    };
+    // SAFETY: Selectors exist on NSAppleEventManager and NSAppleEventDescriptor with
+    // matching signatures (AEEventID, AEKeyword, and OSType are UInt32).
+    // Nullable object returns are safely handled via Option<Retained<_>>.
+    unsafe {
+        let mgr: Option<Retained<AnyObject>> = msg_send![cls, sharedAppleEventManager];
+        let Some(mgr) = mgr else { return false };
+        let event: Option<Retained<AnyObject>> = msg_send![&*mgr, currentAppleEvent];
+        let Some(event) = event else { return false };
+        let event_id: u32 = msg_send![&*event, eventID];
+        if event_id != K_AE_OPEN_APPLICATION {
+            return false;
+        }
+        let prop: Option<Retained<AnyObject>> =
+            msg_send![&*event, paramDescriptorForKeyword: KEY_AE_PROP_DATA];
+        let Some(prop) = prop else { return false };
+        let code: u32 = msg_send![&*prop, enumCodeValue];
+        code == KEY_AE_LAUNCHED_AS_LOGIN_ITEM
+    }
+}
+
+/// Non-macOS: autostart registrations (e.g. Windows Run registry key) pass [`AUTOSTART_ARG`].
+#[cfg(not(target_os = "macos"))]
+pub fn launched_by_autostart() -> bool {
+    std::env::args().any(|a| a == AUTOSTART_ARG)
+}
+
 /// Tauri 的 `App::run()` 回调。按平台分发系统级事件：
 ///
 /// - macOS：

@@ -101,12 +101,16 @@ pub fn run() {
         // 且那一栏按代码签名的开发者名分组显示（用户看到的是 "Youyan Xu" 而不是
         // Hindsight）。登录项模式显示 app 名 + 图标，在「登录时打开」一栏。
         // 老安装的 LaunchAgent plist 由 bootstrap::migrate_autostart_launch_agent 清理。
+        // The Windows Run entry carries AUTOSTART_ARG so a launch at login can be
+        // recognized. macOS login items do not pass it; see platform::launched_by_autostart.
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::AppleScript,
-            None,
+            Some(vec![platform::AUTOSTART_ARG]),
         ))
         .setup(move |app| {
             let handle = app.handle().clone();
+
+            let launched_by_autostart = platform::launched_by_autostart();
 
             // asset 协议默认 scope 只放行 $HOME/**（见 tauri.conf.json）。用户把数据
             // 目录改到 $HOME 之外（比如别的盘）后，<data_root>/icons/*.png 落在 scope
@@ -156,6 +160,15 @@ pub fn run() {
                 let cfg = settings::load(&pool).await.expect("读取设置");
                 MINIMIZE_TO_TRAY
                     .store(cfg.minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
+
+                // Whether to show the app's main window when the computer starts up
+                if bootstrap::silent_autostart(launched_by_autostart, cfg.show_window_on_auto_start)
+                {
+                    // Do not show in the macOS Dock
+                    platform::set_dock_icon_visible(&handle, false);
+                } else {
+                    bootstrap::show_or_recreate_main(&handle);
+                }
 
                 // 截图目录同 data_root(见 setup 开头):加进 asset 协议白名单,
                 // 搜索页 / 证据卡的截图预览在自定义目录($HOME 之外)下也能加载。
