@@ -130,6 +130,7 @@ import {
   mockUnclassifiedApps,
   mockDayFor,
   dailySegmentsForLocale,
+  selfDeviceNameForLocale,
   userBriefForLocale,
 } from "./fixtures";
 import { persistence } from "./persistence";
@@ -169,6 +170,9 @@ function loadState(): MutableState {
 }
 
 const state = loadState();
+
+/** mockDevices 里本机的默认名字；没改过名才跟着界面语言换。 */
+const DEFAULT_SELF_DEVICE_NAME = mockDevices.find((d) => d.isSelf)?.displayName;
 
 /** Demo website time as [last 30 days, all time] in minutes. Rules stay in memory only. */
 const demoSiteMinutes: Record<string, [number, number]> = {
@@ -703,7 +707,13 @@ export const api = {
   setDataRoot: async (_path: string): Promise<void> => {},
 
   // ─── Devices ───────────────────────────────
-  listDevices: async (): Promise<DeviceRow[]> => structuredClone(state.devices),
+  listDevices: async (): Promise<DeviceRow[]> =>
+    structuredClone(state.devices).map((d) =>
+      // 没改过名的本机，名字跟着界面语言走
+      d.isSelf && d.displayName === DEFAULT_SELF_DEVICE_NAME
+        ? { ...d, displayName: selfDeviceNameForLocale(i18n.language || "zh-CN") }
+        : d,
+    ),
   updateSelfDevice: async (name?: string, color?: string, icon?: string): Promise<DeviceRow> => {
     const self = state.devices.find((d) => d.isSelf);
     if (self) {
@@ -1118,30 +1128,94 @@ const chatConvs: DemoConv[] = [];
 let chatNextConvId = 1;
 let chatNextMsgId = 1;
 
-// 给功能文档截图用的一问一答：原样输入这个问题才会命中，其他问题仍是下面的占位回答。
-// scripts/shots/features.mjs 里 chat 那张图问的就是它，两处要一致。
-const DEMO_PROJECT_QUESTION = "这周我在 Hindsight 项目上花了多少时间？";
-
-// 分项取自周统计里 Code、cursor、chrome 的本周时长，都不超过它们。
-const DEMO_PROJECT_ANSWER_ZH = [
-  "这周你在 Hindsight 项目上共花了约 **12 小时 36 分钟**：",
-  "",
-  "| 应用 | 时长 |",
-  "| --- | --- |",
-  "| Visual Studio Code | 7 小时 48 分 [1] |",
-  "| Cursor | 3 小时 20 分 [2] |",
-  "| Google Chrome | 1 小时 28 分 [3] |",
-].join("\n");
+// 给功能文档截图用的一问一答，每种界面语言一份：原样输入这个问题才会命中，
+// 其他问题仍是下面的占位回答。scripts/shots/features.mjs 里 chat 那张图问的就是它们，
+// 两处要一致。分项取自周统计里 Code、cursor、chrome 的本周时长，都不超过它们。
+const DEMO_PROJECT_ANSWERS: { question: string; answer: string }[] = [
+  {
+    question: "这周我在 Hindsight 项目上花了多少时间？",
+    answer: [
+      "这周你在 Hindsight 项目上共花了约 **12 小时 36 分钟**：",
+      "",
+      "| 应用 | 时长 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 小时 48 分 [1] |",
+      "| Cursor | 3 小时 20 分 [2] |",
+      "| Google Chrome | 1 小时 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "這週我在 Hindsight 專案上花了多少時間？",
+    answer: [
+      "這週你在 Hindsight 專案上共花了約 **12 小時 36 分鐘**：",
+      "",
+      "| 應用程式 | 時長 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 小時 48 分 [1] |",
+      "| Cursor | 3 小時 20 分 [2] |",
+      "| Google Chrome | 1 小時 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "How much time did I spend on the Hindsight project this week?",
+    answer: [
+      "This week you spent about **12 h 36 min** on the Hindsight project:",
+      "",
+      "| App | Time |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "今週、Hindsight プロジェクトにどのくらい時間を使いましたか？",
+    answer: [
+      "今週は Hindsight プロジェクトに約 **12 時間 36 分** を使いました：",
+      "",
+      "| アプリ | 時間 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 時間 48 分 [1] |",
+      "| Cursor | 3 時間 20 分 [2] |",
+      "| Google Chrome | 1 時間 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "Quanto tempo passei no projeto Hindsight esta semana?",
+    answer: [
+      "Esta semana você passou cerca de **12 h 36 min** no projeto Hindsight:",
+      "",
+      "| App | Tempo |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "¿Cuánto tiempo dediqué al proyecto Hindsight esta semana?",
+    answer: [
+      "Esta semana dedicaste unas **12 h 36 min** al proyecto Hindsight:",
+      "",
+      "| App | Tiempo |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+];
 
 function chatDemoAnswer(question: string): {
   text: string;
   citations: ChatStoredMessage["citations"];
 } {
   const lng = (i18n.language || "zh-CN").toLowerCase();
-  if (question === DEMO_PROJECT_QUESTION && lng.startsWith("zh") && !lng.startsWith("zh-tw")) {
+  const worked = DEMO_PROJECT_ANSWERS.find((entry) => entry.question === question);
+  if (worked) {
     const day = todayStr();
     return {
-      text: DEMO_PROJECT_ANSWER_ZH,
+      text: worked.answer,
       citations: [
         {
           index: 1,

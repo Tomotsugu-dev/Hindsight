@@ -79,12 +79,20 @@ const SHOTS = [
   // 「AI 总结 → 日报」：demo 自带当天分时段的报告
   { doc: "ai-summary-and-chat", file: "daily-report", page: "aiSummary", ready: "HourlyChart" },
   // 「对话」：问一个问题，回答和来源出来后截图。
-  // 这个问题要和 web/demo-src/api-mock.ts 里的 DEMO_PROJECT_QUESTION 一致，demo 才会给出像样的回答。
+  // 每种语言的问题要和 web/demo-src/api-mock.ts 里的 DEMO_PROJECT_ANSWERS 一致，
+  // demo 才会给出像样的回答。
   {
     doc: "ai-summary-and-chat",
     file: "chat",
     page: "chat",
-    question: "这周我在 Hindsight 项目上花了多少时间？",
+    questions: {
+      "zh-CN": "这周我在 Hindsight 项目上花了多少时间？",
+      "zh-TW": "這週我在 Hindsight 專案上花了多少時間？",
+      en: "How much time did I spend on the Hindsight project this week?",
+      ja: "今週、Hindsight プロジェクトにどのくらい時間を使いましたか？",
+      "pt-BR": "Quanto tempo passei no projeto Hindsight esta semana?",
+      es: "¿Cuánto tiempo dediqué al proyecto Hindsight esta semana?",
+    },
   },
   // 「AI 设置 → 常规」：只要时段划分和过滤，定时计划不要。滚到底，裁掉侧栏。
   {
@@ -318,13 +326,13 @@ async function openAiSettings(page, shot, labels) {
 }
 
 /**
- * 「对话」页：把 shot.question 填进输入框发送，等回答里第一条来源出现再截图。
+ * 「对话」页：把 shot.questions 里当前语言的问题填进输入框发送，等回答里第一条来源出现再截图。
  */
-async function openChat(page, shot, labels) {
+async function openChat(page, shot, labels, lang) {
   await disableAnimations(page);
   await page.getByRole("link", { name: labels.nav.items.chat, exact: true }).click();
   const input = page.getByPlaceholder(labels.chat.input.placeholder, { exact: true });
-  await input.fill(shot.question);
+  await input.fill(shot.questions[lang]);
   await input.press("Enter");
   const source = page.getByText("Visual Studio Code · ", { exact: false }).first();
   await source.waitFor();
@@ -340,7 +348,7 @@ async function openChat(page, shot, labels) {
 }
 
 /** 打开 shot 要的那一页：先把视图和占比层写进 localStorage，重新载入后应用才会读到。 */
-async function openPage(page, shot, labels) {
+async function openPage(page, shot, labels, lang) {
   const scope = scopes[shot.page];
   if (shot.page === "search") {
     await openSearch(page, shot, labels);
@@ -355,7 +363,7 @@ async function openPage(page, shot, labels) {
     return;
   }
   if (shot.page === "chat") {
-    await openChat(page, shot, labels);
+    await openChat(page, shot, labels, lang);
     return;
   }
   if (shot.page === "categories") {
@@ -540,7 +548,7 @@ async function main() {
         shot.theme ?? args.theme,
       );
       await page.reload({ waitUntil: "networkidle" });
-      await openPage(page, shot, labels);
+      await openPage(page, shot, labels, args.lang);
       if (shot.pick) await pick(page, shot.pick, labels);
       await page.waitForFunction(
         () =>

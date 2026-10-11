@@ -797,6 +797,16 @@ export function userBriefForLocale(locale: string): string {
   return "Full-stack engineer, mostly working on React + Rust projects.";
 }
 
+/** 本机设备的默认名字（mockDevices 里写的是中文）。按当前 i18n 切；用户改过名就不会走到这里。 */
+export function selfDeviceNameForLocale(locale: string): string {
+  const lng = (locale || "").toLowerCase();
+  if (lng.startsWith("zh")) return "我的工作站";
+  if (lng.startsWith("ja")) return "マイワークステーション";
+  if (lng.startsWith("pt")) return "Minha estação de trabalho";
+  if (lng.startsWith("es")) return "Mi estación de trabajo";
+  return "My workstation";
+}
+
 /** 默认（中文）。api-mock 初始化 state 时用；运行时通过 dailySegmentsForLocale 按 i18n 切。 */
 export const mockDailySegments: SegmentSummaryRow[] = buildSegments(
   SEG_LABELS_ZH,
