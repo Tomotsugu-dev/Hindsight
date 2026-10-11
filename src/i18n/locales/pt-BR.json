@@ -146,8 +146,10 @@
         "screenshotEnableLabel": "Ativar capturas de tela",
         "screenshotEnableDescription": "Desativar isto interrompe as capturas de tela.",
         "ocrResidentLabel": "Manter OCR residente",
-        "ocrResidentDescription": "Reconhece novas capturas na hora (~400 MB de RAM extra); pausa na bateria. Quando ativo, capturas não reconhecidas também são processadas antes dos relatórios diários/semanais.",
-        "intervalLabel": "Intervalo de captura",
+        "ocrResidentDescription": "Processa novas capturas em tempo real e consome recursos adicionais",
+        "ocrResidentHintMac": "O processo de reconhecimento é liberado após cerca de 1 minuto ocioso.\nPausa automaticamente quando o notebook não está conectado à energia.",
+        "ocrResidentHintWin": "Usa cerca de 400 MB de memória, além de consumir CPU / GPU adicionais.\nPausa automaticamente quando o notebook não está conectado à energia.",
+        "intervalLabel": "Intervalo de captura de tela",
         "intervalDescription": "Intervalo de captura.",
         "intervalHint": "As capturas de tela são acionadas quando:\n• Troca de aplicativos → capturada imediatamente\n• O navegador muda de URL → capturada imediatamente\n• A mesma janela permanece em foco pelo intervalo configurado → capturada",
         "idleLabel": "Tempo limite de inatividade",
@@ -180,12 +182,8 @@
       "startup": {
         "title": "Comportamento de inicialização",
         "autoStartLabel": "Iniciar com o sistema",
-        "autoStartDescription": "O Hindsight inicia automaticamente após você fazer login.",
-        "showWindowLabel": "Mostrar janela principal na inicialização",
-        "showWindowDescription": "Quando desativado, inicia silenciosamente na bandeja do sistema.",
-        "minimizeToTrayLabel": "Minimizar para a bandeja do sistema ao fechar",
-        "minimizeToTrayDescriptionMac": "Quando desativado, clicar no X encerra o aplicativo.",
-        "minimizeToTrayDescriptionWin": "Quando desativado, clicar no X encerra o aplicativo."
+        "silentStartLabel": "Iniciar silenciosamente",
+        "minimizeToTrayLabel": "Minimizar para a bandeja do sistema ao fechar"
       },
       "dataRootDialog": {
         "title": "Trocar a pasta de dados?",
@@ -362,8 +360,8 @@
         "rowLabel": "Palavras-chave de URL",
         "addLabel": "Adicionar fragmento de URL",
         "placeholder": "ex.: /login",
-        "hostLabel": "Registrar domínios de sites",
-        "hostInfo": "Alimenta a visão \"Por site\" nos detalhes do aplicativo. Apenas o domínio (ex.: github.com) é armazenado, nunca a URL completa; páginas que correspondem às palavras-chave acima também não são registradas."
+        "hostLabel": "Não salvar URLs completas",
+        "hostInfo": "Apenas o domínio (ex.: github.com) é registrado, nunca a URL completa"
       },
       "app": {
         "title": "Filtro de aplicativos",
@@ -848,7 +846,7 @@
       "otherCategory_other": "{{count}} em outras categorias",
       "removeRule": "Remover regra",
       "loading": "Carregando…",
-      "empty": "Nenhum tempo em sites registrado ainda. Os domínios só são registrados enquanto “Registrar domínios de sites” estiver ativado.",
+      "empty": "Nenhum tempo em sites registrado ainda. Os domínios só são registrados enquanto “Não salvar URLs completas” estiver ativado.",
       "openPrivacy": "Abrir configurações de privacidade",
       "noResults": "Nenhum site corresponde à sua pesquisa",
       "clearSearch": "Limpar pesquisa",
@@ -965,7 +963,7 @@
       }
     },
     "summaryParams": {
-      "sectionTitle": "Parâmetros de resumo de segmento"
+      "sectionTitle": "Ajustes de geração do relatório diário"
     },
     "engineParams": {
       "sectionTitle": "Parâmetros do mecanismo (na inicialização)",
@@ -1148,10 +1146,10 @@
     "autoSummary": {
       "sectionTitle": "Agendamentos",
       "sectionDesc": "Executa no horário: geração de relatórios e OCR de capturas.",
-      "enableLabel": "Resumo automático",
-      "enableHint": "Gera o relatório diário de hoje no horário definido (um dia anterior faltante também é preenchido) e o semanal da semana passada. Falhas não são repetidas; relatórios mensais entrarão quando disponíveis",
+      "enableLabel": "Resumo agendado",
+      "enableHint": "Gera automaticamente o relatório diário do dia no horário definido, todos os dias",
       "timeLabel": "Agendar horário",
-      "ocrDailyLabel": "OCR automático",
+      "ocrDailyLabel": "OCR agendado",
       "ocrDailyDescription": "Lê o acúmulo de capturas no horário definido diariamente",
       "addTimeAria": "Adicionar um horário",
       "removeTimeAria": "Remover o horário adicionado mais recentemente"
