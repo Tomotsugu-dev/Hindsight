@@ -11,11 +11,11 @@
 
 用法:
     npm run demo                       # 起演示实例,切好语言,准备好对话结果
-    uv run scripts/shots/tour.py --plan    # 只打印时间轴,不动鼠标
-    uv run scripts/shots/tour.py           # 正式巡场(先给 3 秒切到录屏)
+    uv run scripts/shots/readme/tour.py --plan    # 只打印时间轴,不动鼠标
+    uv run scripts/shots/readme/tour.py           # 正式巡场(先给 3 秒切到录屏)
 
 坐标:复用 shoot.py 的 COORDS(窗口相对,960×720 基准),本文件只补
-巡场特有的几个控件。换窗口尺寸后用 `uv run scripts/shots/shoot.py --where`
+巡场特有的几个控件。换窗口尺寸后用 `uv run scripts/shots/readme/shoot.py --where`
 悬停读数重校。
 
 节奏:--speed 调鼠标移动速度(默认 1.1,无声视频节奏偏快);停留时长在

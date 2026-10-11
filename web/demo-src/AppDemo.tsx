@@ -2,7 +2,7 @@
 // 跟主 main.tsx 的差异：
 // 1. 用 MemoryRouter 而不是 BrowserRouter（iframe 内 URL bar 无意义，避免 base path 问题）
 // 2. 不挂 WindowControls（iframe 内无窗口控件需要）
-// 3. data-platform 强制 "windows"
+// 3. data-platform 强制 "windows"；`?platform=macos` 时按 macOS 窗口画（见 MACOS_WINDOW）
 
 import { lazy, Suspense, useEffect, useState } from "react";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -21,6 +21,13 @@ import "@app/styles/tokens.css";
 import "@app/styles/utilities.css";
 
 import styles from "./AppDemo.module.css";
+import { TrafficLights } from "./TrafficLights";
+
+/** `?platform=macos`：像 macOS 应用一样给左上角的红绿灯留出位置，并由 demo 画出来。
+ *  文档截图用（scripts/shots/stats.mjs）。 */
+const MACOS_WINDOW =
+  typeof location !== "undefined" &&
+  new URLSearchParams(location.search).get("platform") === "macos";
 
 // Stage 4: 全部 8 个 sidebar 项接入真页面
 const TodayPage = lazy(() => import("@app/pages/Today/TodayPage"));
@@ -103,6 +110,7 @@ function DemoLayout() {
       <div className={styles.sidebarHost}>
         <Sidebar />
       </div>
+      {MACOS_WINDOW && <TrafficLights />}
     </div>
   );
 }
@@ -141,7 +149,7 @@ function useFitScale(): { scale: number; designHeight: number } {
 export function AppDemo() {
   // 设置 body[data-platform]——主应用某些 CSS 按这个区分平台
   if (typeof document !== "undefined") {
-    document.body.dataset.platform = "windows";
+    document.body.dataset.platform = MACOS_WINDOW ? "macos" : "windows";
   }
 
   const { scale, designHeight } = useFitScale();

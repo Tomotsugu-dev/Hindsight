@@ -797,6 +797,16 @@ export function userBriefForLocale(locale: string): string {
   return "Full-stack engineer, mostly working on React + Rust projects.";
 }
 
+/** 本机设备的默认名字（mockDevices 里写的是中文）。按当前 i18n 切；用户改过名就不会走到这里。 */
+export function selfDeviceNameForLocale(locale: string): string {
+  const lng = (locale || "").toLowerCase();
+  if (lng.startsWith("zh")) return "我的工作站";
+  if (lng.startsWith("ja")) return "マイワークステーション";
+  if (lng.startsWith("pt")) return "Minha estação de trabalho";
+  if (lng.startsWith("es")) return "Mi estación de trabajo";
+  return "My workstation";
+}
+
 /** 默认（中文）。api-mock 初始化 state 时用；运行时通过 dailySegmentsForLocale 按 i18n 切。 */
 export const mockDailySegments: SegmentSummaryRow[] = buildSegments(
   SEG_LABELS_ZH,
@@ -829,7 +839,8 @@ export const mockSettings: Settings = {
   googleClientSecret: "",
   privacyUrlKeywords: ["login", "signin", "password", "auth"],
   privacyAppKeywords: ["KeePass", "1Password"],
-  downloadSiteIcons: false,
+  // 演示版默认打开：图标来自 demo 自带的素材，不会联网
+  downloadSiteIcons: true,
   downloadSources: { ...DEFAULT_DOWNLOAD_SOURCES },
   minimizeToTray: true,
   autoUpdateEnabled: true,
@@ -837,6 +848,8 @@ export const mockSettings: Settings = {
   lastUpdateCheckAt: new Date().toISOString(),
   idleThresholdSeconds: 300,
   memoryOcrResident: false,
+  memoryOcrDailyAt: null,
+  memoryOcrDailyTimes: [],
   chatPrivacyAcknowledged: false,
   syncAiSummaries: false,
   syncChatHistory: false,
@@ -855,7 +868,8 @@ export const mockSettings: Settings = {
       { label: "晚上", startHour: 18, endHour: 22, color: "" },
       { label: "深夜", startHour: 22, endHour: 24, color: "" },
     ],
-    excludedCategories: [],
+    // 与真实默认一致：「其他」不参与分析
+    excludedCategories: ["other"],
     modelsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models",
     activeMain: "Qwen3.5-9B-Q4_K_M.gguf",
     activeMmproj: "",
@@ -875,6 +889,8 @@ export const mockSettings: Settings = {
     parallelSlots: null,
     ctxSize: null,
     autoSummary: true,
+    autoSummaryAt: null,
+    autoSummaryTimes: ["23:00"],
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,
@@ -936,7 +952,8 @@ export const mockEngineStatus: EngineStatus = {
   currentPin: "b4720",
   platformId: "win-cuda-12.4-x64",
   assetName: "llama-b4720-bin-win-cuda-cu12.4-x64.zip",
-  estimatedBytes: 220 * 1024 * 1024,
+  // 与真实的 CUDA 12.4 版估算一致（主程序加 cudart 运行库）
+  estimatedBytes: 605 * 1024 * 1024,
   runtime: {
     state: "running",
     port: 8088,
@@ -1002,6 +1019,8 @@ export const mockAppGroups: AppGroup[] = [
     members: [
       { processName: "Code.exe", recentSecs: 18 * H, lastDeviceId: "demo-self" },
       { processName: "cursor.exe", recentSecs: 6 * H, lastDeviceId: "demo-self" },
+      // 同一个应用在 MacBook 上的进程名不同，配对后跟 Windows 上的排在同一行
+      { processName: "Code", recentSecs: 6 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
@@ -1018,6 +1037,7 @@ export const mockAppGroups: AppGroup[] = [
     categoryId: "browse",
     members: [
       { processName: "chrome.exe", recentSecs: 22 * H, lastDeviceId: "demo-self" },
+      { processName: "Google Chrome", recentSecs: 8 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
@@ -1057,7 +1077,8 @@ export const mockAppGroups: AppGroup[] = [
     displayName: "Notion",
     categoryId: "office",
     members: [
-      { processName: "Notion.exe", recentSecs: 2 * H, lastDeviceId: "demo-mac" },
+      { processName: "Notion.exe", recentSecs: 3 * H, lastDeviceId: "demo-self" },
+      { processName: "Notion", recentSecs: 2 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {
@@ -1066,6 +1087,7 @@ export const mockAppGroups: AppGroup[] = [
     categoryId: "video",
     members: [
       { processName: "Spotify.exe", recentSecs: 12 * H, lastDeviceId: "demo-self" },
+      { processName: "Spotify", recentSecs: 3 * H, lastDeviceId: "demo-mac" },
     ],
   },
   {

@@ -84,11 +84,13 @@ const LOCAL_ICON = (name: string) => `/demo/icons/${name}.png`;
 const APP_ICON_URLS: Record<string, string> = {
   // 编程（VS Code + Cursor 用本地 PNG —— Simple Icons CDN 没收录 VS Code）
   "code.exe": LOCAL_ICON("vscode"),
+  code: LOCAL_ICON("vscode"),
   "cursor.exe": LOCAL_ICON("cursor"),
   "windowsterminal.exe": LOCAL_ICON("terminal"),
   "rustrover.exe": "https://cdn.simpleicons.org/rust/000000",
   // 浏览（Chrome 用本地 PNG，多彩 logo CDN 单色版没法还原）
   "chrome.exe": LOCAL_ICON("chrome"),
+  "google chrome": LOCAL_ICON("chrome"),
   "firefox.exe": "https://cdn.simpleicons.org/firefox/FF7139",
   "msedge.exe": LOCAL_ICON("edge"),
   // 沟通（Teams 用本地 PNG，多层紫色 logo 比 CDN 单色更准）
@@ -98,8 +100,10 @@ const APP_ICON_URLS: Record<string, string> = {
   // 学习
   "obsidian.exe": "https://cdn.simpleicons.org/obsidian/7C3AED",
   "notion.exe": "https://cdn.simpleicons.org/notion/000000",
+  notion: "https://cdn.simpleicons.org/notion/000000",
   // 娱乐
   "spotify.exe": "https://cdn.simpleicons.org/spotify/1DB954",
+  spotify: "https://cdn.simpleicons.org/spotify/1DB954",
   "discord.exe": "https://cdn.simpleicons.org/discord/5865F2",
   "steam.exe": "https://cdn.simpleicons.org/steam/000000",
   // 系统（其他分类）
@@ -126,6 +130,7 @@ import {
   mockUnclassifiedApps,
   mockDayFor,
   dailySegmentsForLocale,
+  selfDeviceNameForLocale,
   userBriefForLocale,
 } from "./fixtures";
 import { persistence } from "./persistence";
@@ -166,27 +171,65 @@ function loadState(): MutableState {
 
 const state = loadState();
 
+/** mockDevices 里本机的默认名字；没改过名才跟着界面语言换。 */
+const DEFAULT_SELF_DEVICE_NAME = mockDevices.find((d) => d.isSelf)?.displayName;
+
 /** Demo website time as [last 30 days, all time] in minutes. Rules stay in memory only. */
 const demoSiteMinutes: Record<string, [number, number]> = {
   "github.com": [1260, 5400],
+  "gist.github.com": [60, 240],
+  "docs.github.com": [45, 300],
   "bilibili.com": [520, 3100],
-  "youtube.com": [410, 2600],
-  "stackoverflow.com": [340, 1900],
-  "docs.rs": [210, 880],
   "live.bilibili.com": [140, 600],
+  "search.bilibili.com": [40, 180],
+  "space.bilibili.com": [30, 150],
+  "youtube.com": [410, 2600],
+  "chatgpt.com": [380, 1500],
+  "stackoverflow.com": [340, 1900],
+  "claude.ai": [300, 1100],
+  "google.com": [70, 420],
+  "docs.google.com": [120, 500],
   "mail.google.com": [95, 720],
+  "gemini.google.com": [60, 200],
+  "notion.so": [210, 900],
+  "docs.rs": [210, 880],
+  "zhihu.com": [150, 640],
+  "developer.mozilla.org": [90, 400],
+  "outlook.live.com": [80, 500],
 };
 const demoSiteRules = new Map<string, string>([
   ["github.com", "code"],
   ["stackoverflow.com", "code"],
+  ["docs.rs", "code"],
+  ["developer.mozilla.org", "code"],
   ["bilibili.com", "video"],
+  ["youtube.com", "video"],
+  ["docs.google.com", "office"],
+  ["mail.google.com", "office"],
+  ["notion.so", "office"],
+  ["outlook.live.com", "office"],
 ]);
 const DEMO_SITE_ICON_URLS: SiteIconPaths = {
   "github.com": LOCAL_ICON("sites/github"),
+  "gist.github.com": LOCAL_ICON("sites/github"),
+  "docs.github.com": LOCAL_ICON("sites/github"),
   "bilibili.com": LOCAL_ICON("sites/bilibili"),
   "live.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "search.bilibili.com": LOCAL_ICON("sites/bilibili"),
+  "space.bilibili.com": LOCAL_ICON("sites/bilibili"),
   "youtube.com": youtubeIcon,
+  "chatgpt.com": LOCAL_ICON("sites/chatgpt"),
+  "stackoverflow.com": LOCAL_ICON("sites/stackoverflow"),
+  "claude.ai": LOCAL_ICON("sites/claude"),
+  "google.com": LOCAL_ICON("sites/google"),
+  "docs.google.com": LOCAL_ICON("sites/google"),
   "mail.google.com": LOCAL_ICON("sites/gmail"),
+  "gemini.google.com": LOCAL_ICON("sites/google"),
+  "notion.so": LOCAL_ICON("sites/notion"),
+  "docs.rs": LOCAL_ICON("sites/docsrs"),
+  "zhihu.com": LOCAL_ICON("sites/zhihu"),
+  "developer.mozilla.org": LOCAL_ICON("sites/mdn"),
+  "outlook.live.com": LOCAL_ICON("sites/outlook"),
 };
 const demoSiteIcons: SiteIconPaths = {};
 
@@ -664,7 +707,13 @@ export const api = {
   setDataRoot: async (_path: string): Promise<void> => {},
 
   // ─── Devices ───────────────────────────────
-  listDevices: async (): Promise<DeviceRow[]> => structuredClone(state.devices),
+  listDevices: async (): Promise<DeviceRow[]> =>
+    structuredClone(state.devices).map((d) =>
+      // 没改过名的本机，名字跟着界面语言走
+      d.isSelf && d.displayName === DEFAULT_SELF_DEVICE_NAME
+        ? { ...d, displayName: selfDeviceNameForLocale(i18n.language || "zh-CN") }
+        : d,
+    ),
   updateSelfDevice: async (name?: string, color?: string, icon?: string): Promise<DeviceRow> => {
     const self = state.devices.find((d) => d.isSelf);
     if (self) {
@@ -1026,9 +1075,16 @@ export const api = {
     return { total: hits.length, hits: hits.slice(start, start + size) };
   },
   memoryLocate: async (
-    _path: string,
-    _words: string[],
-  ): Promise<[number, number, number, number][]> => [],
+    path: string,
+    words: string[],
+  ): Promise<[number, number, number, number][]> => {
+    const screen = DEMO_SCREENS.find((s) => s.frame === path);
+    const terms = words.map((word) => word.trim().toLowerCase()).filter(Boolean);
+    // 与正式端一致：返回包含检索词的文字行位置，由搜索页绘制高亮框。
+    return (screen?.lines ?? [])
+      .filter((line) => terms.some((word) => line.text.toLowerCase().includes(word)))
+      .map((line) => line.box);
+  },
   memorySessionText: async (sessionId: number): Promise<string> =>
     DEMO_SCREENS.find((s) => s.sessionId === sessionId)?.text ?? "",
 
@@ -1072,11 +1128,122 @@ const chatConvs: DemoConv[] = [];
 let chatNextConvId = 1;
 let chatNextMsgId = 1;
 
+// 给功能文档截图用的一问一答，每种界面语言一份：原样输入这个问题才会命中，
+// 其他问题仍是下面的占位回答。scripts/shots/features.mjs 里 chat 那张图问的就是它们，
+// 两处要一致。分项取自周统计里 Code、cursor、chrome 的本周时长，都不超过它们。
+const DEMO_PROJECT_ANSWERS: { question: string; answer: string }[] = [
+  {
+    question: "这周我在 Hindsight 项目上花了多少时间？",
+    answer: [
+      "这周你在 Hindsight 项目上共花了约 **12 小时 36 分钟**：",
+      "",
+      "| 应用 | 时长 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 小时 48 分 [1] |",
+      "| Cursor | 3 小时 20 分 [2] |",
+      "| Google Chrome | 1 小时 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "這週我在 Hindsight 專案上花了多少時間？",
+    answer: [
+      "這週你在 Hindsight 專案上共花了約 **12 小時 36 分鐘**：",
+      "",
+      "| 應用程式 | 時長 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 小時 48 分 [1] |",
+      "| Cursor | 3 小時 20 分 [2] |",
+      "| Google Chrome | 1 小時 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "How much time did I spend on the Hindsight project this week?",
+    answer: [
+      "This week you spent about **12 h 36 min** on the Hindsight project:",
+      "",
+      "| App | Time |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "今週、Hindsight プロジェクトにどのくらい時間を使いましたか？",
+    answer: [
+      "今週は Hindsight プロジェクトに約 **12 時間 36 分** を使いました：",
+      "",
+      "| アプリ | 時間 |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 時間 48 分 [1] |",
+      "| Cursor | 3 時間 20 分 [2] |",
+      "| Google Chrome | 1 時間 28 分 [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "Quanto tempo passei no projeto Hindsight esta semana?",
+    answer: [
+      "Esta semana você passou cerca de **12 h 36 min** no projeto Hindsight:",
+      "",
+      "| App | Tempo |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+  {
+    question: "¿Cuánto tiempo dediqué al proyecto Hindsight esta semana?",
+    answer: [
+      "Esta semana dedicaste unas **12 h 36 min** al proyecto Hindsight:",
+      "",
+      "| App | Tiempo |",
+      "| --- | --- |",
+      "| Visual Studio Code | 7 h 48 min [1] |",
+      "| Cursor | 3 h 20 min [2] |",
+      "| Google Chrome | 1 h 28 min [3] |",
+    ].join("\n"),
+  },
+];
+
 function chatDemoAnswer(question: string): {
   text: string;
   citations: ChatStoredMessage["citations"];
 } {
   const lng = (i18n.language || "zh-CN").toLowerCase();
+  const worked = DEMO_PROJECT_ANSWERS.find((entry) => entry.question === question);
+  if (worked) {
+    const day = todayStr();
+    return {
+      text: worked.answer,
+      citations: [
+        {
+          index: 1,
+          app: "Visual Studio Code",
+          title: "hindsight — src/pages/Chat/ChatPage.tsx",
+          startedTs: `${day}T10:12:00+08:00`,
+          endedTs: `${day}T11:03:00+08:00`,
+          framePath: null,
+        },
+        {
+          index: 2,
+          app: "Cursor",
+          title: "hindsight — web/demo-src/fixtures.ts",
+          startedTs: `${day}T14:20:00+08:00`,
+          endedTs: `${day}T15:30:00+08:00`,
+          framePath: null,
+        },
+        {
+          index: 3,
+          app: "Google Chrome",
+          title: "Hindsight — README",
+          startedTs: `${day}T16:20:00+08:00`,
+          endedTs: `${day}T16:41:00+08:00`,
+          framePath: "/demo/screenshots/github-readme.jpg",
+        },
+      ],
+    };
+  }
   const q = question.length > 40 ? `${question.slice(0, 40)}…` : question;
   const text =
     lng.startsWith("zh-tw") || lng.startsWith("zh-hk")
@@ -1126,6 +1293,7 @@ const DEMO_SCREENS: {
   end: string;
   frame: string;
   text: string;
+  lines?: { text: string; box: [number, number, number, number] }[];
 }[] = [
   {
     sessionId: 1,
@@ -1177,6 +1345,21 @@ const DEMO_SCREENS: {
     start: "16:05",
     end: "16:22",
     frame: "/demo/screenshots/wikipedia-ocr.jpg",
+    // 原始图片为 1440 × 900；坐标对应实际含 OCR 的三行文字，按图片尺寸归一化。
+    lines: [
+      {
+        text: "Optical character recognition (OCR) or optical character reader is",
+        box: [264 / 1440, 210 / 900, 566 / 1440, 25 / 900],
+      },
+      {
+        text: "(OCR) with a portable scanner",
+        box: [875 / 1440, 431 / 900, 215 / 1440, 24 / 900],
+      },
+      {
+        text: "OCR is a field of research in pattern recognition, artificial intelligence and computer vision.",
+        box: [264 / 1440, 538 / 900, 720 / 1440, 26 / 900],
+      },
+    ],
     text: [
       "Optical character recognition",
       "Optical character recognition (OCR) or optical character reader is the electronic or mechanical conversion of images of typed, handwritten or printed text into machine-encoded text, whether from a scanned document, a photo of a document, a scene photo (for example the text on signs and billboards in a landscape photo) or from subtitle text superimposed on an image (for example: from a television broadcast).",
