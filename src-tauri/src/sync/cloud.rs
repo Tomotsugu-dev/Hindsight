@@ -223,8 +223,12 @@ impl CloudBackend {
     /// Lists the always-on datasets from the start for commands that clear the cloud.
     /// On WebDAV this lists peers' files, not this device's own.
     pub async fn list_all(&self) -> Result<Vec<FileMeta>> {
-        self.list(&[(Dataset::Core, ""), (Dataset::SiteRules, "")])
-            .await
+        self.list(&[
+            (Dataset::Core, ""),
+            (Dataset::SiteRules, ""),
+            (Dataset::SuperCategories, ""),
+        ])
+        .await
     }
 
     /// Downloads a file's whole content into memory.
@@ -304,7 +308,7 @@ fn build_http_client(max_wait_for_reply: Duration) -> reqwest::Client {
 mod tests {
     use super::*;
     use crate::repo::test_util::fresh_test_pool;
-    use Dataset::{AiSummaries, Chat, Core, Memory, SiteRules};
+    use Dataset::{AiSummaries, Chat, Core, Memory, SiteRules, SuperCategories};
 
     /// 服务器接了连接却一直不回：请求要在读超时后失败，不能一直等下去。
     #[tokio::test]
@@ -332,10 +336,12 @@ mod tests {
     async fn each_backend_has_its_own_names() {
         let drive = CloudBackend::drive(fresh_test_pool().await);
         assert_eq!(
-            [Core, SiteRules, AiSummaries, Chat, Memory].map(|d| drive.pull_cursor_name(d)),
+            [Core, SiteRules, SuperCategories, AiSummaries, Chat, Memory]
+                .map(|d| drive.pull_cursor_name(d)),
             [
                 "drive_files",
                 "pull.site_rules",
+                "pull.super_categories",
                 "pull.ai_summaries",
                 "pull.chat",
                 "pull.memory"
@@ -363,6 +369,10 @@ mod tests {
         assert_eq!(
             nutstore.pull_cursor_name(SiteRules),
             "webdav.dav.jianguoyun.com.pull.site_rules"
+        );
+        assert_eq!(
+            nutstore.pull_cursor_name(SuperCategories),
+            "webdav.dav.jianguoyun.com.pull.super_categories"
         );
     }
 

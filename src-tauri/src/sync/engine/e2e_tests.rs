@@ -917,6 +917,274 @@ async fn outbox_count(pool: &DbPool) -> i64 {
         .unwrap()
 }
 
+/// 大类跨设备同步:A 用真实的 repo 写入口,B 只 sync。
+async fn super_row(dev: &TestDevice, id: &str) -> Option<(String, i64, Option<String>)> {
+    let id = id.to_string();
+    dev.pool
+        .0
+        .call(move |conn| {
+            use rusqlite::OptionalExtension;
+            conn.query_row(
+                "SELECT name, sort_order, deleted_at FROM super_categories WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()
+            .db()
+        })
+        .await
+        .unwrap()
+}
+
+async fn cat_super(dev: &TestDevice, cat: &str) -> Option<String> {
+    let cat = cat.to_string();
+    dev.pool
+        .0
+        .call(move |conn| {
+            conn.query_row(
+                "SELECT super_category_id FROM categories WHERE id = ?1",
+                [cat],
+                |r| r.get(0),
+            )
+            .db()
+        })
+        .await
+        .unwrap()
+}
+
+/// updated_at 是秒级、同步用严格 `>` 比较:两次写之间隔开一秒,避免同秒平局。
+async fn tick() {
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+}
+
+fn new_super(name: &str) -> crate::repo::super_categories::SuperCategoryInput {
+    crate::repo::super_categories::SuperCategoryInput {
+        name: name.into(),
+        color: "#123456".into(),
+        icon: "Box".into(),
+    }
+}
+
+#[tokio::test]
+async fn super_category_create_assign_unassign_syncs_to_peer() {
+    use crate::repo::super_categories as sc;
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    let sup = sc::create(&a.pool, new_super("甲")).await.unwrap();
+    sc::assign_category(&a.pool, "code", Some(sup.id.clone()))
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    let row = super_row(&b, &sup.id).await.expect("B 应收到新大类");
+    assert_eq!(row.0, "甲");
+    assert_eq!(row.1, sup.sort_order);
+    assert_eq!(row.2, None);
+    assert_eq!(
+        cat_super(&b, "code").await.as_deref(),
+        Some(sup.id.as_str())
+    );
+    assert_eq!(outbox_count(&b.pool).await, 0, "合并对端数据不回灌 outbox");
+
+    // 移出大类(大类本身没删)也要同步过去
+    tick().await;
+    sc::assign_category(&a.pool, "code", None).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(cat_super(&b, "code").await, None);
+    assert!(super_row(&b, &sup.id).await.is_some());
+}
+
+#[tokio::test]
+async fn super_category_rename_and_reorder_sync_with_lww() {
+    use crate::repo::super_categories as sc;
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    let x = sc::create(&a.pool, new_super("X")).await.unwrap();
+    sc::create(&a.pool, new_super("Y")).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    // B 改名,A 收到
+    tick().await;
+    sc::update(
+        &b.pool,
+        &x.id,
+        sc::SuperCategoryPatch {
+            name: Some("X2".into()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    b.engine.sync_now().await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(super_row(&a, &x.id).await.unwrap().0, "X2");
+
+    // A 之后重排,B 收到;冲突时后写的赢
+    tick().await;
+    let mut order: Vec<String> = sc::list(&a.pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.id)
+        .collect();
+    order.reverse();
+    sc::reorder(&a.pool, order.clone()).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    let on_b: Vec<String> = sc::list(&b.pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(on_b, order);
+}
+
+#[tokio::test]
+async fn super_category_delete_syncs_and_detaches_children_on_peer() {
+    use crate::repo::super_categories as sc;
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    let sup = sc::create(&a.pool, new_super("临时")).await.unwrap();
+    sc::assign_category(&a.pool, "code", Some(sup.id.clone()))
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        cat_super(&b, "code").await.as_deref(),
+        Some(sup.id.as_str())
+    );
+
+    tick().await;
+    sc::delete(&a.pool, &sup.id).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    assert!(
+        super_row(&b, &sup.id).await.unwrap().2.is_some(),
+        "B 上是墓碑"
+    );
+    assert_eq!(cat_super(&b, "code").await, None);
+    assert!(sc::list(&b.pool)
+        .await
+        .unwrap()
+        .iter()
+        .all(|s| s.id != sup.id));
+
+    // 再同步一轮:稳定,不回弹、不回灌
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(cat_super(&a, "code").await, None);
+    assert_eq!(outbox_count(&a.pool).await, 0);
+    assert_eq!(outbox_count(&b.pool).await, 0);
+}
+
+/// 老版本对端推的分类文件没有 `superCategoryId`:新设备保留本地归类,不清空。
+#[tokio::test]
+async fn category_file_from_an_old_peer_keeps_local_super_category() {
+    use crate::repo::super_categories as sc;
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let b = make_device("device-b", drive.clone()).await;
+    let sup = sc::create(&b.pool, new_super("甲")).await.unwrap();
+    sc::assign_category(&b.pool, "code", Some(sup.id.clone()))
+        .await
+        .unwrap();
+    b.pool
+        .0
+        .call(|conn| conn.execute("DELETE FROM sync_outbox", []).db())
+        .await
+        .unwrap();
+
+    let body = serde_json::json!([{
+        "id": "code", "name": "Code (old peer)", "color": "#111111", "icon": "Code",
+        "builtin": true, "sortOrder": 1,
+        "updatedAt": "2099-01-01T00:00:00Z", "deletedAt": null
+    }]);
+    drive
+        .upsert_by_name(
+            "device.device-old.categories.json",
+            &serde_json::to_vec(&body).unwrap(),
+        )
+        .await
+        .unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    let name: String = b
+        .pool
+        .0
+        .call(|conn| {
+            conn.query_row("SELECT name FROM categories WHERE id = 'code'", [], |r| {
+                r.get(0)
+            })
+            .db()
+        })
+        .await
+        .unwrap();
+    assert_eq!(name, "Code (old peer)", "老对端的改动照常合并");
+    assert_eq!(
+        cat_super(&b, "code").await.as_deref(),
+        Some(sup.id.as_str())
+    );
+}
+
+/// 旧版本不认识大类文件,Core 游标已经越过它。升级后大类走自己的游标,照样拉得到;
+/// 活动历史不重新下载。
+async fn super_category_skipped_by_an_older_version_arrives(a: &TestDevice, b: &TestDevice) {
+    use crate::repo::super_categories as sc;
+    insert_sealed(a, "Code", Local::now(), 30).await;
+    let sup = sc::create(&a.pool, new_super("甲")).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+    let core_cursor = b.engine.cloud().pull_cursor_name(Dataset::Core);
+    super::io::write_cursor(&b.pool, &core_cursor, "2099-01-01T00:00:00Z")
+        .await
+        .unwrap();
+
+    b.engine.sync_now().await.unwrap();
+    let row = super_row(b, &sup.id).await.expect("升级后应拉到大类");
+    assert_eq!(row.0, "甲");
+    assert_eq!(
+        count_for_device(b, "device-a").await,
+        0,
+        "活动历史不重新下载"
+    );
+    assert_eq!(
+        super::io::read_cursor(&b.pool, &core_cursor).await.unwrap(),
+        "2099-01-01T00:00:00Z"
+    );
+}
+
+#[tokio::test]
+async fn super_category_skipped_by_an_older_version_arrives_on_drive() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    super_category_skipped_by_an_older_version_arrives(&a, &b).await;
+}
+
+#[tokio::test]
+async fn super_category_skipped_by_an_older_version_arrives_on_webdav() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let b = make_webdav_device("device-b", dav.clone()).await;
+    super_category_skipped_by_an_older_version_arrives(&a, &b).await;
+    // 清空云端的命令靠 list_all 找文件,大类文件也要在里面
+    assert!(b
+        .engine
+        .cloud()
+        .list_all()
+        .await
+        .unwrap()
+        .iter()
+        .any(|file| file.name == "device.device-a.super_categories.json"));
+}
+
 /// 直接 INSERT 一条非 activity 的 outbox 行（payload 对这些 entity 无用，给 "{}"）。
 async fn enqueue_entity(dev: &TestDevice, entity: &str, pk: &str) {
     let entity = entity.to_string();

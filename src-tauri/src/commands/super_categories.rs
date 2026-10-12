@@ -1,6 +1,7 @@
-//! 大类（super-category）的 Tauri 命令。CRUD + 拖拽排序 + 给分类指派大类。
+//! Tauri commands for super-categories: CRUD, drag-to-reorder, and assigning categories to them.
 //!
-//! v1：所有写都是单设备本地写，不上 outbox。多设备同步是 TODO。
+//! Commands only call the repo layer; the repo enqueues the outbox rows in the same
+//! transaction, so changes sync to the other devices.
 
 use tauri::State;
 
@@ -50,7 +51,9 @@ pub async fn delete_super_category(pool: State<'_, DbPool>, id: String) -> Resul
         .map_err(Into::into)
 }
 
-/// 把某分类归到某大类。`super_id = None` / 空字符串 = 移出大类回到「未归入」。
+/// Assigns a category to a super-category.
+///
+/// A `super_id` of `None` or an empty string removes it, back to "unassigned".
 #[tauri::command]
 pub async fn assign_category_to_super(
     pool: State<'_, DbPool>,
