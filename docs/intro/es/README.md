@@ -54,42 +54,42 @@
 </p>
 
 <p align="center">
-  <img src="../en/imgs/daily.png" alt="Estadísticas diarias" width="800"><br/>
+  <img src="./imgs/daily.png" alt="Estadísticas diarias" width="800"><br/>
   <sub><b>Estadísticas diarias</b> · Cronología apilada de 24 horas y clasificaciones por aplicación y categoría: descubre de un vistazo en qué has empleado el día</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/app_detail.png" alt="Detalle de la aplicación" width="800"><br/>
+  <img src="./imgs/app_detail.png" alt="Detalle de la aplicación" width="800"><br/>
   <sub><b>Detalle de la aplicación</b> · Haz clic en cualquier aplicación para ver qué estabas haciendo en ella</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/weekly.png" alt="Estadísticas semanales" width="800"><br/>
+  <img src="./imgs/weekly.png" alt="Estadísticas semanales" width="800"><br/>
   <sub><b>Estadísticas semanales</b> · Toda tu semana de un vistazo</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/monthly.png" alt="Estadísticas mensuales" width="800"><br/>
+  <img src="./imgs/monthly.png" alt="Estadísticas mensuales" width="800"><br/>
   <sub><b>Estadísticas mensuales</b> · Barras de actividad diaria con clasificaciones por aplicación y categoría: descubre en qué has empleado realmente el tiempo este mes</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/monthly_cal.png" alt="Desglose mensual" width="800"><br/>
+  <img src="./imgs/monthly_cal.png" alt="Desglose mensual" width="800"><br/>
   <sub><b>Desglose mensual</b> · Proporción de tiempo por categoría, con el total, la media diaria y la variación respecto al mes anterior</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/ai_summary.png" alt="Resumen con IA" width="800"><br/>
+  <img src="./imgs/ai_summary.png" alt="Resumen con IA" width="800"><br/>
   <sub><b>Informe diario con IA</b> · Un modelo local o en la nube resume cada franja del día en un informe escrito</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/ai_chatbot.png" alt="Chat con IA" width="800"><br/>
+  <img src="./imgs/ai_chatbot.png" alt="Chat con IA" width="800"><br/>
   <sub><b>Chat con IA</b> · Solo tienes que preguntar, por ejemplo: «¿Cuánto tiempo he dedicado a X este mes?»</sub>
 </p>
 
 <p align="center">
-  <img src="../en/imgs/cloud_sync.png" alt="Sincronización entre dispositivos" width="800"><br/>
+  <img src="./imgs/cloud_sync.png" alt="Sincronización entre dispositivos" width="800"><br/>
   <sub><b>Sincronización entre dispositivos</b> · Para quienes usan más de un ordenador</sub>
 </p>
 
