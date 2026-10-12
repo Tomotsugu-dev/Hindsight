@@ -67,6 +67,12 @@
     transform 100ms ease-out;
 }
 
+.iconBtn {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
 .checkBtn:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.07);
 }
