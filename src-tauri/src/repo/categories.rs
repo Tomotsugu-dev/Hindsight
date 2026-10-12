@@ -243,19 +243,19 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
                 return Ok(());
             };
 
-            let new_name = patch
+            let next_name = patch
                 .name
                 .as_ref()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .unwrap_or(cur_name);
-            let new_color = patch
+            let next_color = patch
                 .color
                 .as_ref()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .unwrap_or(cur_color);
-            let new_icon = patch
+            let next_icon = patch
                 .icon
                 .as_ref()
                 .map(|s| s.trim().to_string())
@@ -265,15 +265,15 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
                 .execute(
                     "UPDATE categories SET name = ?1, color = ?2, icon = ?3, updated_at = ?4
                         WHERE id = ?5 AND (name IS NOT ?1 OR color IS NOT ?2 OR icon IS NOT ?3)",
-                    rusqlite::params![new_name, new_color, new_icon, updated_at, id],
+                    rusqlite::params![next_name, next_color, next_icon, updated_at, id],
                 )
                 .db()?;
             if n > 0 {
                 let payload = category_payload(
                     &id,
-                    &new_name,
-                    &new_color,
-                    &new_icon,
+                    &next_name,
+                    &next_color,
+                    &next_icon,
                     builtin_i != 0,
                     cur_sort,
                     &updated_at,

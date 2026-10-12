@@ -14,12 +14,13 @@ use super::io;
 use super::Inner;
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::{Error, Result};
+use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{Dataset, FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload, SiteRulePayload, TombstonePayload,
+    DeviceMetaPayload, SiteRulePayload, SuperCategoryPayload, TombstonePayload,
 };
 
 /// Turns the contents of one sync file into rows waiting to be merged.
@@ -90,13 +91,14 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         })
         .unwrap_or((false, false, false));
 
-    // Core and website rules always run. Optional datasets follow their switches;
-    // chat and screen memory also need the memory database.
+    // Core, website rules and super-categories always run. Optional datasets follow
+    // their switches; chat and screen memory also need the memory database.
     let has_mem = inner.mem.is_some();
     let mut streams: Vec<(Dataset, String)> = Vec::new();
     for (dataset, enabled) in [
         (Dataset::Core, true),
         (Dataset::SiteRules, true),
+        (Dataset::SuperCategories, true),
         (Dataset::AiSummaries, sync_ai),
         (Dataset::Chat, sync_chat && has_mem),
         (Dataset::Memory, sync_scrn_mem && has_mem),
@@ -208,6 +210,7 @@ async fn pull_stream(
                 .await
             }
             FileKind::Categories => merge_categories(&inner.pool, &body).await,
+            FileKind::SuperCategories => merge_super_categories(&inner.pool, &body).await,
             FileKind::SiteRules => merge_site_rules(&inner.pool, &body).await,
             FileKind::AppIcons => merge_app_icons(&inner.pool, &body).await,
             FileKind::AppGroups => merge_app_groups(&inner.pool, &body).await,
@@ -451,6 +454,13 @@ async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
                     rusqlite::params![row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at, row.id],
                 )?;
             }
+            // Absent key = older peer: keep the local super-category.
+            if let Some(super_id) = &row.super_category_id {
+                conn.execute(
+                    "UPDATE categories SET super_category_id = ?1 WHERE id = ?2",
+                    rusqlite::params![super_id, row.id],
+                )?;
+            }
 
             // The peer deleted this category: clear it from the app groups filed
             // under it here, and push those groups to the other devices. Done only
@@ -459,6 +469,67 @@ async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
             let just_deleted = row.deleted_at.is_some() && !cur_deleted;
             if just_deleted {
                 crate::repo::categories::cascade_category_deletion(conn, &row.id, &row.updated_at)?;
+            }
+            Ok(())
+        },
+    )
+    .await
+}
+
+/// Last write wins per row on `updated_at`, so `sort_order` is merged row by
+/// row too: two devices reordering at once end with whichever wrote later.
+async fn merge_super_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
+    merge_lww_simple(
+        pool,
+        "super_category",
+        body,
+        |row: &SuperCategoryPayload| (!row.id.is_empty()).then(|| row.id.clone()),
+        |conn, row: SuperCategoryPayload| {
+            let cur: Option<(String, Option<String>)> = conn
+                .query_row(
+                    "SELECT updated_at, deleted_at FROM super_categories WHERE id = ?1",
+                    rusqlite::params![row.id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            let should_apply = match &cur {
+                None => true,
+                Some((cur_upd, _)) => row.updated_at.as_str() > cur_upd.as_str(),
+            };
+            if !should_apply {
+                return Ok(());
+            }
+            conn.execute(
+                "INSERT INTO super_categories(id, name, color, icon, sort_order, updated_at, deleted_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name, color = excluded.color, icon = excluded.icon,
+                    sort_order = excluded.sort_order, updated_at = excluded.updated_at,
+                    deleted_at = excluded.deleted_at",
+                rusqlite::params![
+                    row.id, row.name, row.color, row.icon, row.sort_order, row.updated_at,
+                    row.deleted_at
+                ],
+            )?;
+
+            // Deleted on the peer: detach the categories filed under it here and
+            // push them on. Only on the present -> deleted step, so a repeat is a no-op.
+            let cur_deleted = matches!(cur, Some((_, Some(_))));
+            if row.deleted_at.is_some() && !cur_deleted {
+                let children: Vec<String> = {
+                    let mut stmt =
+                        conn.prepare("SELECT id FROM categories WHERE super_category_id = ?1")?;
+                    let rows = stmt.query_map([&row.id], |r| r.get::<_, String>(0))?;
+                    rows.collect::<rusqlite::Result<Vec<_>>>()?
+                };
+                for child in &children {
+                    conn.execute(
+                        "UPDATE categories SET super_category_id = NULL, updated_at = ?1
+                         WHERE id = ?2",
+                        rusqlite::params![row.updated_at, child],
+                    )?;
+                    enqueue(conn, OutboxOp::Upsert, OutboxEntity::Category, child, "{}")?;
+                }
             }
             Ok(())
         },
@@ -1198,8 +1269,149 @@ mod tests {
             sort_order: 3,
             updated_at: updated_at.into(),
             deleted_at: deleted_at.map(String::from),
+            super_category_id: None,
         }])
         .unwrap()
+    }
+
+    fn super_body(
+        id: &str,
+        name: &str,
+        sort: i64,
+        updated_at: &str,
+        deleted_at: Option<&str>,
+    ) -> Vec<u8> {
+        serde_json::to_vec(&vec![SuperCategoryPayload {
+            id: id.into(),
+            name: name.into(),
+            color: "#abcdef".into(),
+            icon: "Box".into(),
+            sort_order: sort,
+            updated_at: updated_at.into(),
+            deleted_at: deleted_at.map(String::from),
+        }])
+        .unwrap()
+    }
+
+    const SUPER_SQL: &str =
+        "SELECT name, CAST(sort_order AS TEXT), updated_at, deleted_at FROM super_categories WHERE id = ?1";
+
+    #[tokio::test]
+    async fn merge_super_categories_inserts_then_lww() {
+        let pool = fresh_test_pool().await;
+        merge_super_categories(&pool, &super_body("s1", "A", 1, T_MID, None))
+            .await
+            .unwrap();
+        let row = read_row(&pool, SUPER_SQL, "s1", 4).await.unwrap();
+        assert_eq!(row[0].as_deref(), Some("A"));
+
+        // 更旧的不覆盖
+        merge_super_categories(&pool, &super_body("s1", "Old", 9, T_OLD, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            read_row(&pool, SUPER_SQL, "s1", 4).await.unwrap()[0].as_deref(),
+            Some("A")
+        );
+
+        // 更新的覆盖(含 sort_order)
+        merge_super_categories(&pool, &super_body("s1", "New", 7, T_NEW, None))
+            .await
+            .unwrap();
+        let row = read_row(&pool, SUPER_SQL, "s1", 4).await.unwrap();
+        assert_eq!(row[0].as_deref(), Some("New"));
+        assert_eq!(row[1].as_deref(), Some("7"));
+
+        // 合并对端数据不回灌 outbox
+        assert!(outbox_entries(&pool).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn merge_super_categories_tombstone_detaches_children_once() {
+        let pool = fresh_test_pool().await;
+        merge_super_categories(&pool, &super_body("s1", "A", 1, T_OLD, None))
+            .await
+            .unwrap();
+        exec_sql(
+            &pool,
+            "UPDATE categories SET super_category_id = 's1' WHERE id = 'code'",
+            vec![],
+        )
+        .await;
+
+        let tomb = super_body("s1", "A", 1, T_NEW, Some(T_NEW));
+        merge_super_categories(&pool, &tomb).await.unwrap();
+        let cat = read_row(
+            &pool,
+            "SELECT super_category_id, updated_at FROM categories WHERE id = ?1",
+            "code",
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(cat[0], None);
+        assert_eq!(cat[1].as_deref(), Some(T_NEW));
+        assert_eq!(
+            outbox_entries(&pool).await,
+            vec![("category".to_string(), "code".to_string())]
+        );
+
+        // 幂等:重放同一份文件不再产生新的出箱行
+        merge_super_categories(&pool, &tomb).await.unwrap();
+        assert_eq!(outbox_entries(&pool).await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn merge_categories_super_category_id_absent_null_or_value() {
+        let pool = fresh_test_pool().await;
+        let cat_sql = "SELECT super_category_id FROM categories WHERE id = ?1";
+        let body = |extra: serde_json::Value, ts: &str| {
+            let mut v = serde_json::json!({
+                "id": "code", "name": "Code", "color": "#123456", "icon": "Tag",
+                "builtin": false, "sortOrder": 3, "updatedAt": ts, "deletedAt": null
+            });
+            v.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            serde_json::to_vec(&vec![v]).unwrap()
+        };
+        exec_sql(
+            &pool,
+            "UPDATE categories SET updated_at = ?1 WHERE id = 'code'",
+            vec![s(T_OLD)],
+        )
+        .await;
+
+        // 带值:写入
+        merge_categories(
+            &pool,
+            &body(serde_json::json!({"superCategoryId": "work"}), T_MID),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            read_row(&pool, cat_sql, "code", 1).await.unwrap()[0].as_deref(),
+            Some("work")
+        );
+
+        // 老对端没这个字段:保持本地值
+        merge_categories(&pool, &body(serde_json::json!({}), T_NEW))
+            .await
+            .unwrap();
+        assert_eq!(
+            read_row(&pool, cat_sql, "code", 1).await.unwrap()[0].as_deref(),
+            Some("work")
+        );
+
+        // 显式 null:移出大类
+        let t_newer = "2026-06-04T00:00:00Z";
+        merge_categories(
+            &pool,
+            &body(serde_json::json!({"superCategoryId": null}), t_newer),
+        )
+        .await
+        .unwrap();
+        assert_eq!(read_row(&pool, cat_sql, "code", 1).await.unwrap()[0], None);
     }
 
     #[tokio::test]

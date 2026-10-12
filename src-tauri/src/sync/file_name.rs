@@ -24,6 +24,7 @@ pub(crate) enum FileKind {
     /// One file per day: the date the rows belong to.
     Activities(NaiveDate),
     Categories,
+    SuperCategories,
     SiteRules,
     DeviceMeta,
     AppIcons,
@@ -43,12 +44,13 @@ pub(crate) enum FileKind {
 }
 
 /// Which dataset a file belongs to. A dataset is a group of files pulled together,
-/// each with its own pull cursor. Core and website rules are always on;
-/// AI summaries, chat and memory follow their settings switches (ADR-0006).
+/// each with its own pull cursor. Core, website rules and super-categories are
+/// always on; AI summaries, chat and memory follow their settings switches (ADR-0006).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Dataset {
     Core,
     SiteRules,
+    SuperCategories,
     AiSummaries,
     Chat,
     Memory,
@@ -61,6 +63,7 @@ impl Dataset {
         match self {
             Dataset::Core => "core",
             Dataset::SiteRules => "site_rules",
+            Dataset::SuperCategories => "super_categories",
             Dataset::AiSummaries => "ai_summaries",
             Dataset::Chat => "chat",
             Dataset::Memory => "memory",
@@ -74,6 +77,7 @@ impl FileKind {
         match self {
             FileKind::Activities(_) => "activities",
             FileKind::Categories => "categories",
+            FileKind::SuperCategories => "super_categories",
             FileKind::SiteRules => "site_rules",
             FileKind::DeviceMeta => "meta",
             FileKind::AppIcons => "icons",
@@ -89,6 +93,7 @@ impl FileKind {
     pub(crate) fn dataset(&self) -> Dataset {
         match self {
             FileKind::SiteRules => Dataset::SiteRules,
+            FileKind::SuperCategories => Dataset::SuperCategories,
             FileKind::AiSummaries => Dataset::AiSummaries,
             FileKind::Chat => Dataset::Chat,
             FileKind::Memory(_) => Dataset::Memory,
@@ -128,6 +133,7 @@ impl FileName {
             ["device", id, segment, "json"] => {
                 let kind = match *segment {
                     "categories" => FileKind::Categories,
+                    "super_categories" => FileKind::SuperCategories,
                     "site_rules" => FileKind::SiteRules,
                     "meta" => FileKind::DeviceMeta,
                     "icons" => FileKind::AppIcons,
@@ -183,6 +189,7 @@ mod tests {
         let kinds = [
             FileKind::Activities(date("2026-09-23")),
             FileKind::Categories,
+            FileKind::SuperCategories,
             FileKind::SiteRules,
             FileKind::DeviceMeta,
             FileKind::AppIcons,
@@ -223,6 +230,10 @@ mod tests {
             "device.abc.app_group_members.json"
         );
         assert_eq!(
+            file(FileKind::SuperCategories).to_file_name(),
+            "device.abc.super_categories.json"
+        );
+        assert_eq!(
             file(FileKind::SiteRules).to_file_name(),
             "device.abc.site_rules.json"
         );
@@ -260,5 +271,9 @@ mod tests {
         );
         assert_eq!(FileKind::Tombstone.dataset(), Dataset::Core);
         assert_eq!(FileKind::SiteRules.dataset(), Dataset::SiteRules);
+        assert_eq!(
+            FileKind::SuperCategories.dataset(),
+            Dataset::SuperCategories
+        );
     }
 }

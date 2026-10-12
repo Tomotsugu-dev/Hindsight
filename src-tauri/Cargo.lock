@@ -1865,6 +1865,7 @@ dependencies = [
  "screencapturekit",
  "serde",
  "serde_json",
+ "serde_with",
  "sha2",
  "sys-locale",
  "sysinfo",

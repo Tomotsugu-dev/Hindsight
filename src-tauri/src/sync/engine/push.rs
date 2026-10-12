@@ -14,7 +14,7 @@ use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{FileKind, FileName};
 use crate::sync::payload::{
     ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload, SiteRulePayload,
+    DeviceMetaPayload, SiteRulePayload, SuperCategoryPayload,
 };
 
 const PUSH_BATCH_SIZE: usize = 200;
@@ -192,6 +192,7 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
                 }
             },
             "category" => FileKind::Categories,
+            "super_category" => FileKind::SuperCategories,
             "site_rule" => FileKind::SiteRules,
             "device" => FileKind::DeviceMeta,
             "app_icon" => FileKind::AppIcons,
@@ -214,6 +215,7 @@ async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<
     match kind {
         FileKind::Activities(date) => build_activities_day(pool, self_id, &date.to_string()).await,
         FileKind::Categories => build_categories(pool).await,
+        FileKind::SuperCategories => build_super_categories(pool).await,
         FileKind::SiteRules => build_site_rules(pool).await,
         FileKind::DeviceMeta => build_device_meta(pool, self_id).await,
         FileKind::AppIcons => build_app_icons(pool).await,
@@ -303,7 +305,8 @@ where
 async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
     build_table_rows(
         pool,
-        "SELECT id, name, color, icon, builtin, sort_order, updated_at, deleted_at
+        "SELECT id, name, color, icon, builtin, sort_order, updated_at, deleted_at,
+                super_category_id
          FROM categories ORDER BY id",
         |r| {
             Ok(CategoryPayload {
@@ -315,6 +318,27 @@ async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
                 sort_order: r.get(5)?,
                 updated_at: r.get(6)?,
                 deleted_at: r.get(7)?,
+                super_category_id: Some(r.get(8)?),
+            })
+        },
+    )
+    .await
+}
+
+async fn build_super_categories(pool: &DbPool) -> Result<Vec<u8>> {
+    build_table_rows(
+        pool,
+        "SELECT id, name, color, icon, sort_order, updated_at, deleted_at
+         FROM super_categories ORDER BY id",
+        |r| {
+            Ok(SuperCategoryPayload {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                color: r.get(2)?,
+                icon: r.get(3)?,
+                sort_order: r.get(4)?,
+                updated_at: r.get(5)?,
+                deleted_at: r.get(6)?,
             })
         },
     )
@@ -630,5 +654,77 @@ mod tests {
         let pool = fresh_test_pool().await;
         let body = build_device_meta(&pool, TEST_SELF_ID).await.unwrap();
         assert_eq!(body, b"{}".to_vec(), "无 devices 行应返回空 JSON 对象");
+    }
+
+    #[tokio::test]
+    async fn build_super_categories_exports_rows_with_tombstones() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO super_categories(id, name, color, icon, sort_order, updated_at, deleted_at)
+                     VALUES('zz', 'Gone', '#000000', 'Box', 9, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z')",
+                    [],
+                )
+                .unwrap();
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let bytes = build_content(&pool, TEST_SELF_ID, &FileKind::SuperCategories)
+            .await
+            .unwrap();
+        let rows: Vec<SuperCategoryPayload> = serde_json::from_slice(&bytes).unwrap();
+        assert!(rows
+            .iter()
+            .any(|r| r.id == "work" && r.deleted_at.is_none()));
+        let gone = rows.iter().find(|r| r.id == "zz").unwrap();
+        assert_eq!(gone.deleted_at.as_deref(), Some("2026-06-01T00:00:00Z"));
+    }
+
+    #[tokio::test]
+    async fn build_categories_carries_super_category_id() {
+        let pool = fresh_test_pool().await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE categories SET super_category_id = 'work' WHERE id = 'code'",
+                    [],
+                )
+                .unwrap();
+                conn.execute(
+                    "UPDATE categories SET super_category_id = NULL WHERE id = 'other'",
+                    [],
+                )
+                .unwrap();
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let bytes = build_categories(&pool).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let find = |id: &str| {
+            v.as_array()
+                .unwrap()
+                .iter()
+                .find(|c| c["id"] == id)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(find("code")["superCategoryId"], "work");
+        // 显式 null 必须写出来,对端才能区分"移出大类"和"老版本没这个字段"
+        assert!(find("other").get("superCategoryId").unwrap().is_null());
+    }
+
+    #[test]
+    fn group_outbox_routes_super_category() {
+        let rows = vec![OutboxRow {
+            id: 1,
+            entity: "super_category".into(),
+            payload: "{}".into(),
+        }];
+        let (groups, bad) = group_outbox(&rows);
+        assert!(bad.is_empty());
+        assert_eq!(groups.get(&FileKind::SuperCategories), Some(&vec![1]));
     }
 }

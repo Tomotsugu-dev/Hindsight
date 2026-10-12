@@ -28,6 +28,7 @@ pub enum OutboxEntity {
     AppIcon,
     AppGroup,
     AppGroupMember,
+    SuperCategory,
 }
 
 impl OutboxEntity {
@@ -40,6 +41,7 @@ impl OutboxEntity {
             OutboxEntity::AppIcon => "app_icon",
             OutboxEntity::AppGroup => "app_group",
             OutboxEntity::AppGroupMember => "app_group_member",
+            OutboxEntity::SuperCategory => "super_category",
         }
     }
 }
@@ -98,6 +100,7 @@ pub fn enqueue_every_file(conn: &Connection, self_id: &str) -> rusqlite::Result<
         OutboxEntity::AppIcon,
         OutboxEntity::AppGroup,
         OutboxEntity::AppGroupMember,
+        OutboxEntity::SuperCategory,
     ] {
         enqueue(conn, OutboxOp::Upsert, entity, "*", "{}")?;
     }

@@ -30,6 +30,28 @@ pub struct CategoryPayload {
     pub sort_order: i64,
     pub updated_at: String,
     pub deleted_at: Option<String>,
+    /// Which super-category the category sits in. Three states on the wire:
+    /// key absent (an older peer: leave the local value alone), `null` (not in
+    /// any super-category), or an id.
+    #[serde(
+        default,
+        with = "::serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub super_category_id: Option<Option<String>>,
+}
+
+/// One super-category row, tombstones included.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuperCategoryPayload {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub icon: String,
+    pub sort_order: i64,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
 }
 
 /// A website rule, identified by its host, browser and device scope.
