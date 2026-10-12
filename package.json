@@ -23,6 +23,7 @@
     "preview:demo": "vite preview --config web/vite.config.ts",
     "build:docs": "node scripts/docs/build.mjs && pagefind --site web/docs --output-path web/docs/pagefind",
     "shots:features": "node scripts/shots/features.mjs",
+    "shots:readme": "node scripts/shots/readme/shoot.mjs",
     "tauri": "tauri",
     "release": "node scripts/release.mjs",
     "tauri:build:mac": "set -a; . ./.env.local; set +a; tauri build"

@@ -21,11 +21,13 @@ import type {
   ModelEntry,
   RecommendedModel,
   SegmentSummaryRow,
+  AiSegment,
   AppGroup,
   SuperCategory,
   UnclassifiedApp,
 } from "@app/api/hindsight";
 import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
+import { retranslateDefaultSegments } from "@app/utils/defaultSegments";
 
 // ────────────────────────────────────────────
 // Category ids match the app defaults (code, office, workchat, browse,
@@ -727,51 +729,69 @@ const SEG_MODEL = "qwen2.5-vl-3b-instruct-q4_k_m.gguf";
 
 const SEG_CONTENT_ZH = [
   "深夜时段基本无活动。00:30 短暂打开 Chrome 看了几篇技术文章后合上电脑。",
+  "早上活动不多。7 点多在 Chrome 里看了会儿新闻和 Hacker News，吃早饭时在 Telegram 回了几条消息。",
   "上午集中精力在 VS Code 中完成 React 组件的渲染性能问题排查——主要在 Today 页的 HourlyChart 上做 useMemo 优化。中间被 Telegram 打断 3 次（产品同事关于本周 demo 准备的对齐讨论），但每次都很简短。Chrome 主要用来查 React 18 → 19 的 useTransition 行为变化、看 MDN 的 web-perf 文档。临近午饭前提交了 1 次代码，标题 \"perf(today): memoize hourly aggregation\"。",
   "下午切到 Cursor 启动新 feature 开发——landing page 嵌入真 React demo 的架构原型。Windows Terminal 频繁使用（npm / git / vite），主要在迭代 vite.config.demo.ts 配置。Obsidian 里整理了一份 hero 区设计稿的间距 token 备忘。期间在 Telegram 跟前端 team lead 讨论了「是 iframe 还是 shadow DOM 嵌入 demo」的取舍，最终倾向 iframe 方案。",
-  "傍晚转到 Obsidian 整理本周思考笔记——主要是 demo 架构决策的存档。短暂打开 Notion 看了一会儿团队周报。Spotify 一直在放歌（lo-fi study mix），晚饭后看了 30 分钟 YouTube 关于 Tauri 2 自动更新机制的 talk。",
-  "夜间回到 VS Code 推了一版 demo 的 fixtures，然后切 Steam 玩了一会儿独立游戏放松。Discord 跟朋友闲聊。23:30 左右把 Steam 关掉准备睡觉。",
+  "傍晚转到 Obsidian 整理本周思考笔记——主要是 demo 架构决策的存档。短暂打开 Notion 看了一会儿团队周报。Spotify 一直在放歌（lo-fi study mix），晚饭后看了 30 分钟 YouTube 关于 Tauri 2 自动更新机制的 talk。夜间回到 VS Code 推了一版 demo 的 fixtures，然后切 Steam 玩了一会儿独立游戏放松。Discord 跟朋友闲聊。23:30 左右把 Steam 关掉准备睡觉。",
 ];
 
 const SEG_CONTENT_EN = [
   "Almost no activity during the late-night window. Briefly opened Chrome around 00:30 to skim a couple of tech articles, then closed the laptop.",
+  "A light start. A little after 7, skimmed the news and Hacker News in Chrome, and answered a few Telegram messages over breakfast.",
   "Focused morning in VS Code, drilling into a React rendering perf issue on the Today page's HourlyChart — mostly tightening useMemo dependencies. Got pulled into Telegram three times for short syncs with the product team about this week's demo prep. Chrome was for reading up on React 18 → 19 useTransition behavior changes and the MDN web-perf docs. Pushed one commit just before lunch: \"perf(today): memoize hourly aggregation\".",
   "Switched to Cursor in the afternoon to start a new feature — prototyping the architecture for embedding a real React demo in the landing page. Windows Terminal was busy with npm / git / vite, mostly iterating on vite.config.demo.ts. Used Obsidian to jot down spacing tokens for the hero mockup. Had a short Telegram thread with the front-end lead weighing iframe vs shadow DOM for embedding the demo — landed on iframe.",
-  "Evening shifted to Obsidian for weekly reflection notes — mainly archiving demo architecture decisions. Quick peek at Notion for the team weekly. Spotify ran a lo-fi study mix in the background. After dinner, watched ~30 minutes of a YouTube talk on Tauri 2's auto-updater design.",
-  "Back in VS Code at night, pushed a new pass on the demo fixtures, then unwound with an indie game on Steam. Chatted on Discord with friends. Closed Steam around 23:30 and called it.",
+  "Evening shifted to Obsidian for weekly reflection notes — mainly archiving demo architecture decisions. Quick peek at Notion for the team weekly. Spotify ran a lo-fi study mix in the background. After dinner, watched ~30 minutes of a YouTube talk on Tauri 2's auto-updater design. Back in VS Code at night, pushed a new pass on the demo fixtures, then unwound with an indie game on Steam. Chatted on Discord with friends. Closed Steam around 23:30 and called it.",
 ];
 
 const SEG_CONTENT_JA = [
   "深夜帯はほぼアクティビティなし。00:30 ごろ Chrome を少し開き、技術記事を数本だけ流し読みしてラップトップを閉じました。",
+  "朝は軽めのスタート。7 時過ぎに Chrome でニュースと Hacker News を眺め、朝食をとりながら Telegram で数件返信。",
   "午前は VS Code に集中、Today ページの HourlyChart の React レンダリング性能調査に取り組み、主に useMemo の依存配列を整理しました。途中で Telegram に 3 回呼ばれ、プロダクトチームと今週のデモ準備について短い同期。Chrome は React 18 → 19 の useTransition の挙動変更と MDN の web-perf ドキュメント参照に使用。昼食前にコミット 1 件、メッセージは「perf(today): memoize hourly aggregation」。",
   "午後は Cursor に切り替えて新機能の開発に着手——ランディングページに本物の React デモを埋め込むアーキテクチャの試作です。Windows Terminal が npm / git / vite で頻繁に活躍し、主に vite.config.demo.ts を反復調整。Obsidian にヒーローのデザインスペーシングトークンをメモ。Telegram でフロントエンドリードと「埋め込みは iframe か shadow DOM か」のトレードオフを議論し、最終的に iframe 案に着地。",
-  "夕方は Obsidian で週次の振り返りメモを整理——主にデモのアーキテクチャ決定のアーカイブです。Notion でチーム週報を軽く確認。Spotify は背景で lo-fi study mix を流しっぱなし。夕食後は Tauri 2 の自動更新機構に関する YouTube トークを 30 分ほど視聴。",
-  "夜は VS Code に戻ってデモ fixtures を一回し更新。その後 Steam でインディーゲームを軽くプレイしてリラックス。Discord で友人と雑談。23:30 ごろに Steam を閉じて就寝へ。",
+  "夕方は Obsidian で週次の振り返りメモを整理——主にデモのアーキテクチャ決定のアーカイブです。Notion でチーム週報を軽く確認。Spotify は背景で lo-fi study mix を流しっぱなし。夕食後は Tauri 2 の自動更新機構に関する YouTube トークを 30 分ほど視聴。夜は VS Code に戻ってデモ fixtures を一回し更新。その後 Steam でインディーゲームを軽くプレイしてリラックス。Discord で友人と雑談。23:30 ごろに Steam を閉じて就寝へ。",
 ];
 
-const SEG_LABELS_ZH = ["深夜", "上午", "下午", "晚上", "深夜"];
-const SEG_LABELS_EN = ["Late night", "Morning", "Afternoon", "Evening", "Late night"];
-const SEG_LABELS_JA = ["深夜", "午前", "午後", "夜", "深夜"];
-
-const SEG_HOURS: Array<{ startHour: number; endHour: number }> = [
-  { startHour: 0, endHour: 6 },
-  { startHour: 6, endHour: 12 },
-  { startHour: 12, endHour: 18 },
-  { startHour: 18, endHour: 22 },
-  { startHour: 22, endHour: 24 },
+const SEG_CONTENT_TW = [
+  "深夜時段幾乎沒有活動。00:30 短暫開啟 Chrome 看了幾篇技術文章後就闔上電腦。",
+  "早上活動不多。7 點多在 Chrome 看了一下新聞和 Hacker News，吃早餐時在 Telegram 回了幾則訊息。",
+  "上午專注在 VS Code 裡排查 React 元件的渲染效能問題——主要是替 Today 頁的 HourlyChart 做 useMemo 最佳化。中間被 Telegram 打斷 3 次（產品同事討論本週 demo 準備的對齊），但每次都很簡短。Chrome 主要用來查 React 18 → 19 的 useTransition 行為變化、看 MDN 的 web-perf 文件。快到午飯前提交了 1 次程式碼，標題 \"perf(today): memoize hourly aggregation\"。",
+  "下午切到 Cursor 開始新功能開發——讓 landing page 嵌入真正 React demo 的架構原型。Windows Terminal 用得很頻繁（npm / git / vite），主要在反覆調整 vite.config.demo.ts 設定。在 Obsidian 整理了一份 hero 區設計稿的間距 token 備忘。期間在 Telegram 與前端 team lead 討論「用 iframe 還是 shadow DOM 嵌入 demo」的取捨，最後傾向 iframe 方案。",
+  "傍晚轉到 Obsidian 整理本週思考筆記——主要是 demo 架構決策的存檔。短暫開啟 Notion 看了一下團隊週報。Spotify 一直在播歌（lo-fi study mix），晚飯後看了 30 分鐘 YouTube 上關於 Tauri 2 自動更新機制的演講。夜間回到 VS Code 推了一版 demo 的 fixtures，然後切到 Steam 玩了一下獨立遊戲放鬆。Discord 跟朋友閒聊。23:30 左右關掉 Steam 準備睡覺。",
 ];
 
-function buildSegments(
-  labels: readonly string[],
-  contents: readonly string[],
-): SegmentSummaryRow[] {
-  return labels.map((label, i) => ({
+const SEG_CONTENT_PT = [
+  "Quase nenhuma atividade na madrugada. Por volta das 00:30, abri o Chrome rapidamente para ler alguns artigos técnicos e depois fechei o notebook.",
+  "Começo tranquilo. Pouco depois das 7h, passei os olhos nas notícias e no Hacker News pelo Chrome e respondi algumas mensagens no Telegram durante o café da manhã.",
+  "Manhã focada no VS Code, investigando um problema de desempenho de renderização em React no HourlyChart da página Today — principalmente ajustando as dependências do useMemo. Fui interrompido três vezes no Telegram por conversas rápidas com o time de produto sobre a preparação do demo desta semana. O Chrome serviu para ler sobre as mudanças de comportamento do useTransition do React 18 → 19 e a documentação de web-perf da MDN. Fiz um commit pouco antes do almoço: \"perf(today): memoize hourly aggregation\".",
+  "À tarde, mudei para o Cursor e comecei uma nova funcionalidade — um protótipo da arquitetura para incorporar um demo real em React na landing page. O Windows Terminal ficou ocupado com npm / git / vite, principalmente iterando sobre o vite.config.demo.ts. Usei o Obsidian para anotar os tokens de espaçamento do mockup do hero. Tive uma conversa curta no Telegram com o líder de front-end sobre iframe vs shadow DOM para incorporar o demo — acabamos escolhendo iframe.",
+  "No fim da tarde, passei para o Obsidian para escrever notas de reflexão da semana — principalmente registrando as decisões de arquitetura do demo. Dei uma olhada rápida no Notion para ver o semanal da equipe. O Spotify tocou um mix de lo-fi para estudar ao fundo. Depois do jantar, assisti a cerca de 30 minutos de uma palestra no YouTube sobre o design do atualizador automático do Tauri 2. À noite voltei ao VS Code e enviei mais uma rodada de ajustes nos fixtures do demo, depois relaxei com um jogo indie no Steam. Conversei com amigos no Discord. Fechei o Steam por volta das 23:30 e fui dormir.",
+];
+
+const SEG_CONTENT_ES = [
+  "Casi sin actividad durante la madrugada. Hacia las 00:30 abrí Chrome un momento para hojear un par de artículos técnicos y luego cerré el portátil.",
+  "Un comienzo tranquilo. Poco después de las 7, ojeé las noticias y Hacker News en Chrome y respondí algunos mensajes de Telegram mientras desayunaba.",
+  "Mañana enfocada en VS Code, investigando un problema de rendimiento de renderizado de React en el HourlyChart de la página Today — sobre todo ajustando las dependencias de useMemo. Me interrumpieron tres veces en Telegram con charlas breves con el equipo de producto sobre la preparación del demo de esta semana. Chrome sirvió para leer sobre los cambios de comportamiento de useTransition de React 18 → 19 y la documentación de web-perf de MDN. Hice un commit poco antes del almuerzo: \"perf(today): memoize hourly aggregation\".",
+  "Por la tarde cambié a Cursor para empezar una nueva funcionalidad — un prototipo de la arquitectura para incrustar un demo real de React en la landing page. Windows Terminal estuvo muy activo con npm / git / vite, sobre todo iterando sobre vite.config.demo.ts. Usé Obsidian para apuntar los tokens de espaciado del mockup del hero. Tuve una charla breve en Telegram con el líder de front-end sobre iframe vs shadow DOM para incrustar el demo — nos quedamos con iframe.",
+  "Al caer la tarde pasé a Obsidian para escribir notas de reflexión de la semana — sobre todo archivando las decisiones de arquitectura del demo. Eché un vistazo rápido a Notion para ver el semanal del equipo. Spotify puso de fondo una mezcla lo-fi para estudiar. Después de cenar vi unos 30 minutos de una charla de YouTube sobre el diseño del actualizador automático de Tauri 2. De noche volví a VS Code y subí otra ronda de cambios a los fixtures del demo; luego me relajé con un juego indie en Steam. Charlé con amigos en Discord. Cerré Steam hacia las 23:30 y me fui a dormir.",
+];
+
+/** 和真实应用在中文系统上首次启动时的默认时段一样（config.rs 的 default_segments_for）。 */
+const DEFAULT_AI_SEGMENTS: AiSegment[] = [
+  { label: "深夜", startHour: 0, endHour: 6, color: "" },
+  { label: "早上", startHour: 6, endHour: 9, color: "" },
+  { label: "上午", startHour: 9, endHour: 12, color: "" },
+  { label: "下午", startHour: 12, endHour: 18, color: "" },
+  { label: "晚上", startHour: 18, endHour: 24, color: "" },
+];
+
+function buildSegments(locale: string, contents: readonly string[]): SegmentSummaryRow[] {
+  return retranslateDefaultSegments(DEFAULT_AI_SEGMENTS, locale).map((seg, i) => ({
     source: "daily",
     localDate: todayStr(),
     segmentIdx: i,
-    label,
-    startHour: SEG_HOURS[i].startHour,
-    endHour: SEG_HOURS[i].endHour,
+    label: seg.label,
+    startHour: seg.startHour,
+    endHour: seg.endHour,
     content: contents[i],
     model: SEG_MODEL,
     status: "ok",
@@ -783,9 +803,12 @@ function buildSegments(
 /** 按当前 i18n locale 返回 5 段总结。fallback = en。 */
 export function dailySegmentsForLocale(locale: string): SegmentSummaryRow[] {
   const lng = (locale || "").toLowerCase();
-  if (lng.startsWith("zh")) return buildSegments(SEG_LABELS_ZH, SEG_CONTENT_ZH);
-  if (lng.startsWith("ja")) return buildSegments(SEG_LABELS_JA, SEG_CONTENT_JA);
-  return buildSegments(SEG_LABELS_EN, SEG_CONTENT_EN);
+  if (/^zh[-_]?(tw|hk|mo|hant)/.test(lng)) return buildSegments(lng, SEG_CONTENT_TW);
+  if (lng.startsWith("zh")) return buildSegments(lng, SEG_CONTENT_ZH);
+  if (lng.startsWith("ja")) return buildSegments(lng, SEG_CONTENT_JA);
+  if (lng.startsWith("pt")) return buildSegments(lng, SEG_CONTENT_PT);
+  if (lng.startsWith("es")) return buildSegments(lng, SEG_CONTENT_ES);
+  return buildSegments(lng, SEG_CONTENT_EN);
 }
 
 /** AI 设置里的 "About you / あなたについて / 关于你" 用户简介。按当前 i18n 切。 */
@@ -808,10 +831,7 @@ export function selfDeviceNameForLocale(locale: string): string {
 }
 
 /** 默认（中文）。api-mock 初始化 state 时用；运行时通过 dailySegmentsForLocale 按 i18n 切。 */
-export const mockDailySegments: SegmentSummaryRow[] = buildSegments(
-  SEG_LABELS_ZH,
-  SEG_CONTENT_ZH,
-);
+export const mockDailySegments: SegmentSummaryRow[] = buildSegments("zh-CN", SEG_CONTENT_ZH);
 
 function todayStr(): string {
   const d = new Date();
@@ -861,13 +881,7 @@ export const mockSettings: Settings = {
     externalEnabled: false,
     externalProvider: "openai",
     userBrief: "全栈开发者，主要做 React + Rust 项目。",
-    segments: [
-      { label: "深夜", startHour: 0, endHour: 6, color: "" },
-      { label: "上午", startHour: 6, endHour: 12, color: "" },
-      { label: "下午", startHour: 12, endHour: 18, color: "" },
-      { label: "晚上", startHour: 18, endHour: 22, color: "" },
-      { label: "深夜", startHour: 22, endHour: 24, color: "" },
-    ],
+    segments: DEFAULT_AI_SEGMENTS.map((seg) => ({ ...seg })),
     // 与真实默认一致：「其他」不参与分析
     excludedCategories: ["other"],
     modelsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models",
