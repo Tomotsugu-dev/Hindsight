@@ -1,8 +1,8 @@
-//! 跨设备同步的 app icon 数据。
+//! Application icon storage and synchronization.
 //!
-//! 本机提取出来的 PNG 字节存这里 + 文件 cache + outbox；其它设备 pull 后也写这里。
-//! 读取时 process_name 精确匹配 —— Win 和 mac 进程名不冲突，各自上传各自的，对方拿到
-//! 后能给从那台设备同步过来的 activity 行渲染出图标。
+//! PNG bytes are stored in the `app_icons` table and synced to other devices.
+//! The `icons/` directory holds PNG files for display in the frontend.
+//! Icons extracted on this device are added to the outbox for synchronization.
 
 use std::path::{Path, PathBuf};
 
@@ -12,8 +12,8 @@ use crate::error::Result;
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
 use crate::storage::{db_path_dir, utc_now_rfc3339, DbPool, SqliteResultExt};
 
-/// Where the icon cache keeps a process's PNG: `<data_root>/icons/<name>.png`,
-/// with the name made file-safe by `sanitize`.
+/// Returns the path where a process's cached PNG should be stored:
+/// `<data_root>/icons/<name>.png`, with the name made file-safe by `sanitize`.
 pub fn icon_cache_path(process_name: &str) -> Result<PathBuf> {
     let dir = db_path_dir()?.join("icons");
     Ok(dir.join(format!("{}.png", sanitize(process_name))))
