@@ -47,7 +47,7 @@
 ## Vista previa de la interfaz
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/169515ed-a9bd-40fe-ba46-7c9c45e5cc95" controls muted autoplay loop playsinline width="800"></video>
+  <video src="https://github.com/user-attachments/assets/52ae7b55-3fb3-439d-9a1d-ee590ac82e6c" controls muted autoplay loop playsinline width="800"></video>
 </p>
 <p align="center">
   <sub><b>Vista previa de la aplicación</b> · Las interacciones principales de Hindsight en 1 minuto</sub>

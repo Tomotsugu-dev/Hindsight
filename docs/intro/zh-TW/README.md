@@ -47,7 +47,7 @@
 ## 介面預覽
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/71c610f9-d0ac-4cee-9511-82842c8e6580" controls muted autoplay loop playsinline width="800"></video>
+  <video src="https://github.com/user-attachments/assets/ce2ec848-a095-4c07-afac-c1b764f4862b" controls muted autoplay loop playsinline width="800"></video>
 </p>
 <p align="center">
   <sub><b>軟體預覽</b> · 1 分鐘看清 Hindsight 的核心互動</sub>
