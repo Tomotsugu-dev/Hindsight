@@ -277,7 +277,7 @@ pub fn run() {
             // --- site_icons: website icons (ADR-0014) ---
             commands::site_icons::get_site_icons,
             commands::site_icons::download_site_icons,
-            // --- super_categories: 大类容器（v28，本地 only，sync 暂未接入） ---
+            // --- super_categories: 大类容器（v28，写入经 outbox 云同步） ---
             commands::super_categories::list_super_categories,
             commands::super_categories::create_super_category,
             commands::super_categories::update_super_category,
