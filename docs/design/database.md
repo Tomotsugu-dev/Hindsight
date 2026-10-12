@@ -57,6 +57,23 @@ User-visible categories ("Work", "Browsing", …). Bounded by how many the user 
 Indexes: none beyond the primary key.
 Foreign keys: none.
 
+## super_categories
+
+Containers that group categories for display; they do not affect statistics. Synced as one whole-table file, `super_categories.json`.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| id | TEXT | Primary key | Short word for the seeded defaults (`work`, `play`, `social`, `browse`), UUID for user-created ones |
+| name | TEXT | NOT NULL | Display name |
+| color | TEXT | NOT NULL | Hex color `#rrggbb` |
+| icon | TEXT | NOT NULL | lucide icon name |
+| sort_order | INTEGER | NOT NULL | Display order; last-write-wins per row, so two devices reordering at once end with the later write |
+| updated_at | TEXT | NOT NULL, DEFAULT epoch | Last-write-wins timestamp, UTC. The seeded defaults keep the epoch, so a user's edit on any device beats them |
+| deleted_at | TEXT | | Soft-delete tombstone. A peer that receives it detaches the categories filed under it |
+
+Indexes: none beyond the primary key.
+Foreign keys: none.
+
 ## app_groups
 
 One logical app as the user thinks of it ("Chrome"), regardless of how many process names it runs under. Classification lives here.
@@ -126,7 +143,7 @@ Each backend keeps its own rows, so one backend never reads another's progress, 
 
 Drive's names are the ones it had before WebDAV. Existing databases hold them, so they must not change. `<host>` is the server's host, with the port only when it is not the default, e.g. `dav.jianguoyun.com`.
 
-The pull cursors are one per stream: the core one (`drive_files` on Drive) covers activities, categories, app groups, members, icons, device meta and tombstones, and each other `pull.*` row covers one optional dataset (ADR-0006). For its own kind of file, a cursor says that every cloud file modified at or before this time (UTC, as the backend reports it: Drive's `modifiedTime`, or a WebDAV manifest's server time) has been merged or deliberately skipped. A stream runs only while its dataset's switch is on; while it is off its cursor stays put, so turning the switch on resumes from there instead of re-merging everything.
+The pull cursors are one per stream: the core one (`drive_files` on Drive) covers activities, categories, app groups, members, icons, device meta and tombstones. Website rules and super-categories each have their own always-on stream, so a device that upgrades still fetches the files its older version skipped (ADR-0013). Each other `pull.*` row covers one optional dataset (ADR-0006). For its own kind of file, a cursor says that every cloud file modified at or before this time (UTC, as the backend reports it: Drive's `modifiedTime`, or a WebDAV manifest's server time) has been merged or deliberately skipped. A stream runs only while its dataset's switch is on; while it is off its cursor stays put, so turning the switch on resumes from there instead of re-merging everything.
 
 Each round lists files once, from the earliest cursor among the streams that run, and a stream's cursor may move only across the files it has handled, stopping strictly before the first file of its own kind that failed: a failed file at or before the cursor would never be listed again.
 

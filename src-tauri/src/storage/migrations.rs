@@ -821,7 +821,7 @@ const SEED_DEFAULT_WORKCHAT_SQL: &str = r#"
 /// - `categories.super_category_id TEXT NULL`：NULL = 未归入大类 = "未归入"行渲染。
 ///   不加 FK constraint：大类软删后悬挂引用应该被 LEFT JOIN 回退到 orphan，
 ///   而不是 cascade 把分类删掉。
-/// - sort_order / updated_at / deleted_at 全套——为日后接入 sync 留好接口（v28 暂不上 outbox）。
+/// - sort_order / updated_at / deleted_at 全套——为日后接入 sync 留好接口（v43 起上 outbox）。
 const ADD_SUPER_CATEGORIES_SQL: &str = r#"
     CREATE TABLE IF NOT EXISTS super_categories (
         id          TEXT PRIMARY KEY,
@@ -938,12 +938,23 @@ const SITE_RULES_TABLE_SQL: &str = r#"
     );
 "#;
 
+/// v43: super-categories start syncing. Existing devices queue the two whole-table
+/// files that changed shape (`super_categories` is new; `categories` now carries
+/// `superCategoryId`) so their current data reaches the other devices. A fresh
+/// install has no activities yet and queues nothing.
+const BACKFILL_SUPER_CATEGORY_OUTBOX_SQL: &str = r#"
+    INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+    SELECT 'upsert', e.entity, '*', '{}', '1970-01-01T00:00:00+00:00', 0, '1970-01-01T00:00:00+00:00'
+    FROM (SELECT 'super_category' AS entity UNION ALL SELECT 'category') AS e
+    WHERE EXISTS (SELECT 1 FROM activities);
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 32] = [
+    let extras: [&'static str; 33] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -976,6 +987,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         WEBDAV_ACCOUNTS_TABLE_SQL,             // v40
         RESET_GROUPS_ON_DELETED_FUN_SQL,       // v41
         SITE_RULES_TABLE_SQL,                  // v42
+        BACKFILL_SUPER_CATEGORY_OUTBOX_SQL,    // v43
     ];
     pool.0
         .call(move |conn| {
@@ -1081,7 +1093,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            42
+            43
         );
 
         let tables = table_names(&pool).await;
@@ -1251,6 +1263,35 @@ mod tests {
         );
     }
 
+    /// v43:有历史数据的老用户升级时,大类整表和分类整表各排一次队;全新安装不排。
+    #[tokio::test]
+    async fn v43_backfills_outbox_only_for_existing_users() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        let sql = "SELECT COUNT(*) FROM sync_outbox
+                   WHERE entity_pk = '*' AND entity IN ('super_category', 'category')";
+        assert_eq!(count(&pool, sql).await, 0, "全新安装不排队");
+
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                        local_hour, process_name, window_title, category_id, device_id,
+                        remote_id, updated_at, origin)
+                     VALUES('2026-05-15T10:00:00Z','2026-05-15T10:00:30Z',30,'2026-05-15',10,
+                        'Code','','other','d','r','2026-05-15T10:00:00Z','local')",
+                    [],
+                )
+                .db()?;
+                conn.execute_batch(BACKFILL_SUPER_CATEGORY_OUTBOX_SQL)
+                    .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(count(&pool, sql).await, 2);
+    }
+
     /// 幂等:重复 run 不报错、不重复应用(版本数不变、分类不重复种)。
     #[tokio::test]
     async fn run_twice_is_idempotent() {
@@ -1259,7 +1300,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            42
+            43
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1314,7 +1355,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            42
+            43
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(
