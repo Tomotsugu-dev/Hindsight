@@ -1,6 +1,11 @@
-# 功能文档截图
+# 文档截图
 
-`features.mjs` 使用网页 demo 自带的数据和真实页面组件截图。窗口尺寸来自 `src-tauri/tauri.macos.conf.json`，带 macOS 红绿灯；以 2 倍像素保存，默认输出 1920 × 1440 的整窗口图片。
+两个脚本都使用网页 demo 自带的数据和真实页面组件截图，构建 demo、打开页面、截图这些步骤共用 `web-demo.mjs`：
+
+- `features.mjs`：给 `docs/features/zh` 下的功能文档截图。
+- `readme/shoot.mjs`：给 README 截介绍图，见最后一节。
+
+窗口尺寸来自 `src-tauri/tauri.macos.conf.json`，带 macOS 红绿灯；以 2 倍像素保存，默认输出 1920 × 1440 的整窗口图片。
 
 在仓库根目录运行。需要已安装项目依赖，以及 Google Chrome 或 Playwright Chromium。
 
@@ -41,3 +46,30 @@ npm run shots:features -- --only search-results,search-preview --lang en --out d
 | `--date` | 演示数据的日期，格式为 `YYYY-MM-DD` | 东京当天 |
 
 截图配置集中在 `features.mjs` 的 `SHOTS` 数组中。搜索截图的 `query` 指定关键词，`resultTitle` 指定结果标题，`preview: true` 表示打开该结果的截图预览，`highlights: true` 表示等待高亮框出现后再截图。
+
+## README 介绍图
+
+```sh
+# 一次生成所有语言 README 用的图（6 种语言 × 8 张），保存到 docs/intro/<语言目录>/imgs
+npm run shots:readme
+
+# 只生成某几种语言
+npm run shots:readme -- --lang ja,en
+
+# 只重新生成其中几张
+npm run shots:readme -- --only daily,cloud_sync
+```
+
+文件名就是 README 里引用的名字：`daily`、`app_detail`、`weekly`、`monthly`、`monthly_cal`、`ai_summary`、`ai_chatbot`、`cloud_sync`。`cloud_sync` 会像用户一样填一组假凭证登录 demo，拍的是登录后的样子。
+
+| 参数 | 用途 | 默认值 |
+| --- | --- | --- |
+| `--only` | 要生成的截图名称，以逗号分隔 | 全部截图 |
+| `--lang` | 界面语言，以逗号分隔 | `zh-CN,zh-TW,en,ja,pt-BR,es` |
+| `--out` | 输出根目录，图保存到 `<语言目录>/imgs` | `docs/intro` |
+| `--theme` | `minimal`、`default` 或 `dark` | `minimal` |
+| `--date` | 演示数据的日期，格式为 `YYYY-MM-DD` | 东京最近一个周日 |
+
+语言对应的目录：`zh-CN` → `zh`，`zh-TW` → `zh-TW`，`en` → `en`，`ja` → `ja`，`pt-BR` → `pt`，`es` → `es`。
+
+默认日期取周日，是因为演示数据里今天以后没有记录，周统计要这天才七天都满；月统计在月初只会有前几天的柱子。

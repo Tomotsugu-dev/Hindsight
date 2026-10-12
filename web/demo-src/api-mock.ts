@@ -47,6 +47,7 @@ import type {
 } from "@app/api/hindsight";
 import { barMinutes } from "@app/lib/segments";
 import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
+import { isDefaultSegments, retranslateDefaultSegments } from "@app/utils/defaultSegments";
 import youtubeIcon from "@app/assets/site-icons/youtube.svg";
 
 // 重新导出原 api 模块里的 helper 函数（DTO → 内部类型转换）
@@ -251,6 +252,15 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** 本地时间带时区的 RFC 3339，跟后端写进对话记录的时间同一格式；会话列表直接截出「月-日 时:分」显示 */
+function localTs(): string {
+  const d = new Date();
+  const pad = (n: number) => String(Math.abs(n)).padStart(2, "0");
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sign}${pad(Math.trunc(offset / 60))}:${pad(offset % 60)}`;
+}
+
 function isoDateOffset(dayOffset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dayOffset);
@@ -318,6 +328,14 @@ export const api = {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       const offsetFromToday = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
+      // 未来日期返空
+      if (offsetFromToday > 0) {
+        result.push({
+          date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+          segments: [],
+        });
+        continue;
+      }
       const day = mockDayFor(offsetFromToday, deviceId);
       // 全日聚合
       const segMap = new Map<string, number>();
@@ -351,6 +369,7 @@ export const api = {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       const offset = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
+      if (offset > 0) continue;
       const day = mockDayFor(offset, deviceId);
       for (const a of day.apps) {
         const cur = map.get(a.groupId);
@@ -672,6 +691,10 @@ export const api = {
     const lng = (i18n.language || "zh-CN").toLowerCase();
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);
+    // 时段没改过就换成当前语言的默认名字；真实应用切语言时在 App.tsx 里做同样的事
+    if (isDefaultSegments(s.ai.segments)) {
+      s.ai.segments = retranslateDefaultSegments(s.ai.segments, lng);
+    }
     // 清空 promptOverrides，确保 PromptTab fallback 到 DEFAULT_SYSTEM_PROMPTS[lang]
     s.ai.promptOverrides = {
       systemZh: "",
@@ -922,7 +945,7 @@ export const api = {
     parentGuid?: string,
   ): Promise<ChatAskResult> => {
     await sleep(900); // 模拟检索 + 推理耗时
-    const now = new Date().toISOString();
+    const now = localTs();
     let conv = chatConvs.find((c) => c.meta.id === conversationId);
     if (!conv) {
       conv = {
@@ -1003,7 +1026,7 @@ export const api = {
       cur = cur.parentGuid ? byGuid.get(cur.parentGuid) : undefined;
     }
     if (!cur || !leaf) throw new Error("no question to answer again");
-    const now = new Date().toISOString();
+    const now = localTs();
     conv.meta.updatedTs = now;
     const answer = chatDemoAnswer(cur.content);
     conv.messages.push({
@@ -1041,7 +1064,7 @@ export const api = {
     const conv = chatConvs.find((c) => c.meta.id === conversationId);
     if (conv) {
       conv.meta.title = title;
-      conv.meta.updatedTs = new Date().toISOString();
+      conv.meta.updatedTs = localTs();
     }
   },
   chatDeleteConversation: async (conversationId: number): Promise<void> => {
