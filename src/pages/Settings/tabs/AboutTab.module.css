@@ -49,6 +49,19 @@
   opacity: 0.7;
 }
 
+/* A bare version number does not read as a link on its own, unlike the other link texts. */
+.versionLink {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 160ms ease-out;
+}
+
+.versionLink:hover {
+  opacity: 1;
+  text-decoration-color: var(--color-accent);
+}
+
 .checkBtn {
   display: inline-flex;
   align-items: center;
@@ -65,12 +78,6 @@
     background-color 180ms ease-out,
     color 180ms ease-out,
     transform 100ms ease-out;
-}
-
-.iconBtn {
-  width: 28px;
-  padding: 0;
-  justify-content: center;
 }
 
 .checkBtn:hover:not(:disabled) {

@@ -1,0 +1,89 @@
+/* Same box as ConfirmDialog's .dialog, but wider and with a fixed height, so the version list
+   and the notes each scroll on their own and switching versions does not resize the dialog. */
+.dialog {
+  position: relative;
+  z-index: var(--z-modal);
+  width: 640px;
+  height: min(520px, 80vh);
+  padding: 22px 22px 16px;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 12px 36px rgba(20, 20, 40, 0.22),
+    0 2px 6px rgba(20, 20, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: scaleIn 220ms var(--ease-spring);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.versions {
+  flex: none;
+  width: 112px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 8px;
+  border-right: 1px solid var(--border-default);
+}
+
+.version {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: var(--font-weight-500);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-regular);
+  text-align: left;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.version:hover {
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+.versionActive,
+.versionActive:hover {
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-600);
+}
+
+.notes {
+  flex: 1;
+  min-width: 0;
+}
+
+.notesVersion {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  letter-spacing: -0.012em;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

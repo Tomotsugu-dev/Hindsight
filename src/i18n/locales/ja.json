@@ -392,8 +392,7 @@
         "checkBtn": "アップデートを確認",
         "checkingBtn": "確認中…",
         "installingBtn": "更新中…",
-        "changelogBtn": "更新履歴",
-        "changelogTitle": "v{{version}} の更新履歴",
+        "changelogTitle": "更新履歴",
         "changelogEmpty": "このバージョンには更新履歴が含まれていません。",
         "status": {
           "checking": "確認中…",

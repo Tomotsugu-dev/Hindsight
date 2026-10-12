@@ -392,8 +392,7 @@
         "checkBtn": "Check for updates",
         "checkingBtn": "Checking…",
         "installingBtn": "Updating…",
-        "changelogBtn": "Release notes",
-        "changelogTitle": "Release notes for v{{version}}",
+        "changelogTitle": "Release notes",
         "changelogEmpty": "No release notes are bundled with this version.",
         "status": {
           "checking": "Checking…",

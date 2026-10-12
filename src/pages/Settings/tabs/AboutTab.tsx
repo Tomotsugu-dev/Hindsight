@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  FileText,
   Info,
   Link2,
   MessageSquare,
@@ -14,8 +13,6 @@ import { UpdateIcon } from "../../../components/icons/UpdateIcon";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 import { ReleaseNotesDialog } from "../../../components/ReleaseNotesDialog/ReleaseNotesDialog";
-import { loadBundledReleaseNotes } from "../../../lib/bundledReleaseNotes";
-import { pickReleaseNotesForLang } from "../../../lib/releaseNotes";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -54,12 +51,9 @@ const GithubMark = forwardRef<SVGSVGElement, LucideProps>(
 GithubMark.displayName = "GithubMark";
 
 export default function AboutTab() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [appVersion, setAppVersion] = useState<string>("");
-  // Release notes dialog. `notes` is null while loading; a version with no bundled notes shows
-  // the changelogEmpty text.
   const [notesOpen, setNotesOpen] = useState(false);
-  const [notes, setNotes] = useState<string | null>(null);
   const { settings, update: updateSettings } = useSettings();
   const { phase, errorMsg, checkNow } = useUpdater();
 
@@ -80,20 +74,6 @@ export default function AboutTab() {
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => {});
   }, []);
-
-  const openNotes = () => {
-    setNotes(null);
-    setNotesOpen(true);
-    void loadBundledReleaseNotes(appVersion)
-      .then((raw) =>
-        setNotes(
-          raw
-            ? pickReleaseNotesForLang(raw, i18n.language)
-            : t("settings.about.update.changelogEmpty"),
-        ),
-      )
-      .catch(() => setNotes(t("settings.about.update.changelogEmpty")));
-  };
 
   if (!settings) return null;
 
@@ -134,17 +114,13 @@ export default function AboutTab() {
           label={t("settings.about.update.currentVersionLabel")}
           description={statusText}
         >
-          <span className={styles.value}>{appVersion || "—"}</span>
           <button
             type="button"
-            className={`${styles.checkBtn} ${styles.iconBtn}`}
-            onClick={openNotes}
-            disabled={!appVersion}
-            // Icon only; the name lives in aria-label and the hover title.
-            aria-label={t("settings.about.update.changelogBtn")}
-            title={t("settings.about.update.changelogBtn")}
+            className={`${styles.link} ${styles.versionLink}`}
+            onClick={() => setNotesOpen(true)}
+            title={t("settings.about.update.changelogTitle")}
           >
-            <FileText size={14} strokeWidth={1.85} />
+            {appVersion || "—"}
           </button>
           <button
             type="button"
@@ -231,12 +207,9 @@ export default function AboutTab() {
           </a>
         </Row>
       </Section>
-      <ReleaseNotesDialog
-        open={notesOpen}
-        title={t("settings.about.update.changelogTitle", { version: appVersion })}
-        text={notes}
-        onClose={() => setNotesOpen(false)}
-      />
+      {notesOpen && (
+        <ReleaseNotesDialog version={appVersion} onClose={() => setNotesOpen(false)} />
+      )}
     </>
   );
 }
