@@ -99,14 +99,7 @@ export default function AboutTab() {
           aria-hidden
           draggable={false}
         />
-        <div className={styles.heroText}>
-          <div className={styles.appName}>Hindsight</div>
-          <div className={styles.version}>
-            {t("settings.about.subtitle", {
-              version: appVersion || "0.1.0",
-            })}
-          </div>
-        </div>
+        <div className={styles.appName}>Hindsight</div>
       </div>
 
       <Section title={t("settings.about.update.title")} icon={UpdateIcon}>

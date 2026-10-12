@@ -385,7 +385,6 @@
       }
     },
     "about": {
-      "subtitle": "{{version}} · Tauri 2 + React",
       "update": {
         "title": "应用更新",
         "currentVersionLabel": "当前版本",
