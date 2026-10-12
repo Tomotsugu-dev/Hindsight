@@ -622,6 +622,10 @@ export const api = {
   removeSiteRule: async (host: string): Promise<void> => {
     demoSiteRules.delete(host);
   },
+  // The demo never goes online; rejecting matches a failed fetch.
+  fetchReleaseNotes: async (_version: string): Promise<string> => {
+    throw new Error("offline in demo");
+  },
   getSiteIcons: async (): Promise<SiteIconPaths> => {
     const listed = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
     for (const host of Object.keys(demoSiteIcons)) {

@@ -903,6 +903,10 @@ export const api = {
     invoke<void>("set_site_rule", { host, categoryId }),
   /** Removes the website's own rule; a parent domain's rule or the browser's category applies again. */
   removeSiteRule: (host: string) => invoke<void>("remove_site_rule", { host }),
+  /** Fetches a version's raw release notes (all language blocks) from GitHub. Rejects when offline
+   * or when that version has no Release. */
+  fetchReleaseNotes: (version: string) =>
+    invoke<string>("fetch_release_notes", { version }),
   getSiteIcons: () => invoke<SiteIconPaths>("get_site_icons"),
   downloadSiteIcons: (hosts: string[]) =>
     invoke<SiteIconDownloadRound>("download_site_icons", { hosts }),

@@ -392,6 +392,9 @@
         "checkBtn": "Buscar actualizaciones",
         "checkingBtn": "Buscando…",
         "installingBtn": "Actualizando…",
+        "changelogBtn": "Notas de la versión",
+        "changelogTitle": "Notas de la versión v{{version}}",
+        "changelogEmpty": "Esta versión no incluye notas de la versión.",
         "status": {
           "checking": "Buscando…",
           "uptodate": "Actualizado",

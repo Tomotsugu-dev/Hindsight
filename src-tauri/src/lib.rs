@@ -274,6 +274,8 @@ pub fn run() {
             commands::site_rules::list_sites,
             commands::site_rules::set_site_rule,
             commands::site_rules::remove_site_rule,
+            // --- release_notes: GitHub Release notes fallback for the About page ---
+            commands::release_notes::fetch_release_notes,
             // --- site_icons: website icons (ADR-0014) ---
             commands::site_icons::get_site_icons,
             commands::site_icons::download_site_icons,

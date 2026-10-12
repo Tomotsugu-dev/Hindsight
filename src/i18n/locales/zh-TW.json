@@ -392,6 +392,9 @@
         "checkBtn": "檢查更新",
         "checkingBtn": "檢查中…",
         "installingBtn": "更新中…",
+        "changelogBtn": "更新日誌",
+        "changelogTitle": "v{{version}} 更新日誌",
+        "changelogEmpty": "此版本沒有附帶更新日誌。",
         "status": {
           "checking": "正在檢查…",
           "uptodate": "已是最新版本",
