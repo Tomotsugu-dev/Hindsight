@@ -385,13 +385,14 @@
       }
     },
     "about": {
-      "subtitle": "{{version}} · Tauri 2 + React",
       "update": {
         "title": "Atualizações do aplicativo",
         "currentVersionLabel": "Versão atual",
         "checkBtn": "Verificar atualizações",
         "checkingBtn": "Verificando…",
         "installingBtn": "Atualizando…",
+        "changelogTitle": "Notas da versão",
+        "changelogEmpty": "Esta versão não inclui notas de versão.",
         "status": {
           "checking": "Verificando…",
           "uptodate": "Atualizado",

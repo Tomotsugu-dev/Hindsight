@@ -14,22 +14,11 @@
   user-select: none;
 }
 
-.heroText {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .appName {
   font-size: 22px;
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.012em;
-}
-
-.version {
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 .value {
@@ -47,6 +36,19 @@
 
 .link:hover {
   opacity: 0.7;
+}
+
+/* A bare version number does not read as a link on its own, unlike the other link texts. */
+.versionLink {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 160ms ease-out;
+}
+
+.versionLink:hover {
+  opacity: 1;
+  text-decoration-color: var(--color-accent);
 }
 
 .checkBtn {

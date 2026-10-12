@@ -385,13 +385,14 @@
       }
     },
     "about": {
-      "subtitle": "{{version}} · Tauri 2 + React",
       "update": {
         "title": "アプリのアップデート",
         "currentVersionLabel": "現在のバージョン",
         "checkBtn": "アップデートを確認",
         "checkingBtn": "確認中…",
         "installingBtn": "更新中…",
+        "changelogTitle": "更新履歴",
+        "changelogEmpty": "このバージョンには更新履歴が含まれていません。",
         "status": {
           "checking": "確認中…",
           "uptodate": "最新です",
