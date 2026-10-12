@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a>
+  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a> · <a href="../es/README.md">Español</a>
 </p>
 
 <p align="center">
@@ -95,22 +95,12 @@
 
 ## 主要功能
 
-- 📊 **看清時間花在哪** — 背景自動記錄，分時段長條圖 + 應用排行；按日 / 週 / 月彙總，點開任意應用看標題級明細；可自訂分類（「工作 / 娛樂 / 學習」）
-- 🤖 **AI 自動寫日報** — 本機模型按時段把當天的活動寫成日報；開啟「自動總結」後，前一天的日報和上一週的週報會自動補齊
+- 📊 **看清時間花在哪** — 在背景自動記錄電腦活動，並以多種圖表呈現，也可依活動類別（娛樂、工作等）統計
+- 🤖 **AI 自動寫日報** — 本機模型按時段彙整當天的活動，寫成日報
 - 💬 **AI 對話** — 直接問「我今天做了什麼」「這個月在 XX 專案上花了多久」，基於你自己的記錄回答
 - 🔍 **螢幕記憶搜尋** — 螢幕上出現過的文字都能搜回來，定位到當時的截圖與時刻（截圖與文字辨識預設關閉，按需開啟）
-- ☁️ **多裝置彙總** — 可選 Google Drive 同步活動資料，多台電腦一處檢視（截圖始終留在本機）
+- ☁️ **多裝置彙總** — 可選擇透過 Google Drive 或 WebDAV 同步活動資料，整合多台裝置的資料進行統計分析
 - 🔒 **本機·隱私優先** — 資料預設僅存本機
-
-## 為什麼是 Hindsight
-
-你是不是也常常凌晨闔上電腦，覺得自己「忙了一整天」，卻說不上今天到底做成了什麼？前陣子我想找個時間追蹤工具來解決這個問題，市面上挑了一圈都沒用下去：
-
-- **[ActivityWatch](https://github.com/ActivityWatch/activitywatch)** — 開源、隱私優先，功能上挑不出毛病。但老實說，它的介面沒什麼吸引力，裝完打開看過一次，之後就再也沒點開過。
-- **[WorkReview](https://github.com/wm94i/Work-Review)** — 我想要兩件事同時滿足：一是能跨裝置彙總，二是像 iPhone「螢幕使用時間」那樣按小時縮放的時間軸，讓我直接看到「下午 3 點我在做什麼」。桌面端沒有一款做到讓我滿意。
-- **[Toggl](https://toggl.com) / [RescueTime](https://www.rescuetime.com) / 各種付費 SaaS** — 這些本質上是給團隊和 HR 算「計費工時」用的：儀表板資訊密集，流程繞著專案貼標籤轉，資料還要傳到對方的雲端。我要的是「自己跟自己覆盤」，方向完全對不上。
-
-為了解決以上這些問題，Hindsight 應運而生。
 
 ## 快速開始
 
@@ -124,9 +114,7 @@
 
 ### MacOS
 
-下載 `hindsight_x.y.z_universal.dmg`（Apple Silicon + Intel 通用二進位檔），按兩下掛載後將 Hindsight 拖入「應用程式」即可正常開啟——應用程式已接入 Apple 開發者憑證簽署 + 公證，不會再觸發 Gatekeeper 警告。
-
-> 所有活動資料 / 截圖預設僅存本機。如果開啟 Google Drive 同步，只會上傳活動中繼資料，**不會上傳截圖**。
+下載 `hindsight_x.y.z_universal.dmg`，按兩下掛載後將 Hindsight 拖入「應用程式」即可。
 
 ## License
 
