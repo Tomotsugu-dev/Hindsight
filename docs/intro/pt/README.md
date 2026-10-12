@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a>
+  <a href="../zh/README.md">简体中文</a> · <a href="../zh-TW/README.md">繁體中文</a> · <a href="../../../README.md">English</a> · <a href="../ja/README.md">日本語</a> · <a href="../pt/README.md">Português</a> · <a href="../es/README.md">Español</a>
 </p>
 
 <p align="center">
@@ -95,22 +95,12 @@
 
 ## Principais recursos
 
-- 📊 **Veja para onde vai o seu tempo** — Registro automático em segundo plano, com gráficos por período + ranking de apps; agregação diária / semanal / mensal, clique em qualquer app para ver detalhes por título de janela; categorias personalizáveis ("Trabalho / Entretenimento / Estudo")
-- 🤖 **Relatório diário por IA** — Um modelo local escreve o diário do dia por período; com o Resumo automático ativado, o diário de ontem e o semanal da semana passada são preenchidos sozinhos
+- 📊 **Veja para onde vai o seu tempo** — Registra automaticamente a atividade do computador em segundo plano, exibe os dados em vários gráficos e permite consultar estatísticas por categoria (trabalho, entretenimento etc.)
+- 🤖 **Relatório diário por IA** — Um modelo local resume as atividades do dia por período e as transforma em um relatório diário
 - 💬 **Chat com IA** — Pergunte "o que eu fiz hoje?" ou "quanto tempo passei no projeto X este mês?" — respondido com base nos seus próprios registros
 - 🔍 **Busca na memória de tela** — Encontre qualquer texto que já apareceu na sua tela e vá direto à captura e ao momento (capturas e OCR vêm desativados por padrão, ative se quiser)
-- ☁️ **Agregação multi-dispositivo** — Sincronização opcional dos dados de atividade via Google Drive; veja todos os seus computadores num lugar só (as capturas nunca saem do aparelho)
+- ☁️ **Agregação multi-dispositivo** — Sincronize opcionalmente os dados de atividade pelo Google Drive ou WebDAV e combine dados de vários dispositivos para análise
 - 🔒 **Local e privado por padrão** — Os dados ficam apenas na sua máquina
-
-## Por que o Hindsight
-
-Você já fechou o notebook à meia-noite com a sensação de ter "trabalhado o dia inteiro", mas sem conseguir dizer o que de fato terminou? Há um tempo, saí à procura de um rastreador justamente para resolver isso. Testei vários — nenhum me conquistou:
-
-- **[ActivityWatch](https://github.com/ActivityWatch/activitywatch)** — código aberto, foco em privacidade, no papel marca todos os pontos certos. Sendo sincero: a interface simplesmente não me prende. Eu instalava, olhava uma vez e nunca mais abria.
-- **[WorkReview](https://github.com/wm94i/Work-Review)** — não achei nenhum que tivesse, ao mesmo tempo, (a) visão entre dispositivos e (b) uma linha do tempo por hora, como o Tempo de Uso do iPhone. Eu queria muito aquela visão ampliável de "o que eu estava fazendo às 15h" no desktop, e nada fazia isso do jeito que eu queria.
-- **[Toggl](https://toggl.com) / [RescueTime](https://www.rescuetime.com) / SaaS pagos** — parecem feitos para equipes e para o controle de "horas faturáveis" no estilo RH. Os painéis são densos, o fluxo gira em torno de etiquetar projetos, e os dados ficam no servidor dos outros. Ferramenta errada para "autoconsciência pessoal".
-
-Foi para preencher exatamente essas lacunas que criei o Hindsight.
 
 ## Começo rápido
 
@@ -124,9 +114,7 @@ Baixe `hindsight_x.y.z_x64-setup.exe` e clique duas vezes para instalar.
 
 ### macOS
 
-Baixe `hindsight_x.y.z_universal.dmg` (binário universal para Apple Silicon + Intel), clique duas vezes para montar e arraste o Hindsight para a pasta Aplicativos. O app é assinado com um certificado de desenvolvedor Apple e passou pela autenticação da Apple (notarization), então abre normalmente, sem nenhum aviso do Gatekeeper.
-
-> Por padrão, todos os dados de atividade e capturas de tela ficam armazenados localmente. Se você ativar a sincronização com o Google Drive, apenas os metadados de atividade serão enviados — **as capturas de tela não são enviadas**.
+Baixe `hindsight_x.y.z_universal.dmg`, clique duas vezes para montar e arraste o Hindsight para a pasta Aplicativos.
 
 ## Licença
 
