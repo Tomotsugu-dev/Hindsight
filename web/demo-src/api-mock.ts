@@ -702,6 +702,7 @@ export const api = {
       systemJa: "",
       systemPt: "",
       systemTw: "",
+      systemEs: "",
     };
     return s;
   },
@@ -713,6 +714,7 @@ export const api = {
   },
   getStorageInfo: async (): Promise<StorageInfo> => ({
     dbBytes: 42 * 1024 * 1024,
+    memoryDbBytes: 18 * 1024 * 1024,
     screenshotsBytes: 1.2 * 1024 * 1024 * 1024,
     dbPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\hindsight.db",
     screenshotsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\screenshots",
@@ -778,7 +780,6 @@ export const api = {
     setTimeout(() => {
       state.syncStatus.running = false;
       state.syncStatus.lastPushedAt = new Date().toISOString();
-      state.syncStatus.lastPulledAt = new Date().toISOString();
     }, 1500);
   },
 
@@ -1467,10 +1468,11 @@ function mockAppDetail(kind: "hours" | "days", count: number, iconProcess: strin
   return {
     buckets,
     titles: [
-      { title: `hindsight — ${name}`, secs: 5400 },
-      { title: `docs / design notes — ${name}`, secs: 2700 },
-      { title: "GitHub — Pull Request #42", secs: 1500 },
+      { title: `hindsight — ${name}`, secs: 5400, host: null },
+      { title: `docs / design notes — ${name}`, secs: 2700, host: null },
+      { title: "GitHub — Pull Request #42", secs: 1500, host: null },
     ],
+    isBrowser: false,
   };
 }
 
