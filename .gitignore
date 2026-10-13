@@ -68,6 +68,8 @@ __pycache__/
 !scripts/demo/*.py
 # 例外:README 多语言截图自动化脚本入仓
 !scripts/shots/readme/*.py
+# 例外:资源占用测试脚本入仓
+!scripts/resource-bench/*.py
 .python-version
 pyproject.toml
 uv.lock
@@ -97,6 +99,12 @@ scripts/poc/output/
 # 演示录制会话(绝对坐标的本机操作轨迹)仅本地
 scripts/shots/readme/*.jsonl
 scripts/shots/readme/*.win.json
+
+# 资源占用测试的产物和编译出的辅助程序
+scripts/resource-bench/run/
+scripts/resource-bench/docs/
+scripts/resource-bench/axctl
+scripts/resource-bench/activity
 
 # 文档站构建产物：npm run build:docs 由 docs/features 生成，不入仓
 web/docs/
