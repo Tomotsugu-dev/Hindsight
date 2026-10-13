@@ -9,7 +9,7 @@ Each table below sits under the heading of the file it lives in.
 
 # Main database (`hindsight.<uid>.sqlite`)
 
-Schema changes are applied by `src-tauri/src/storage/migrations.rs` (append-only, tracked in `schema_version`). Timestamps are RFC3339 strings; `updated_at` columns are UTC and drive last-write-wins merging during sync; `deleted_at` columns are soft-delete tombstones (ordinary writes never physically delete rows, so the deletion can be synced; app deletion via `purge_with_data` is the one exception).
+Schema changes are applied by `src-tauri/src/storage/migrations.rs` (append-only, tracked in `schema_version`). Runs in WAL mode with `synchronous = NORMAL`, set in `DbPool::open`: capture commits several times every 5 seconds, and the default rollback journal made each commit write its pages twice and wait for two fsyncs. Timestamps are RFC3339 strings; `updated_at` columns are UTC and drive last-write-wins merging during sync; `deleted_at` columns are soft-delete tombstones (ordinary writes never physically delete rows, so the deletion can be synced; app deletion via `purge_with_data` is the one exception).
 
 ## activities
 
@@ -254,7 +254,7 @@ Executable path per process name, recorded by capture so an icon can be extracte
 |---|---|---|---|
 | process_name | TEXT | Primary key | Process name as reported by the OS |
 | exe_path | TEXT | NOT NULL | Absolute path of the executable on this device |
-| seen_at | TEXT | NOT NULL | When the path was recorded |
+| seen_at | TEXT | NOT NULL | When the path was last recorded; nothing reads it |
 | updated_at | TEXT | NOT NULL, DEFAULT epoch | Left over from sync; nothing reads it |
 
 No `deleted_at`: the table cannot tombstone. App deletion physically deletes the row.
@@ -265,7 +265,7 @@ Everything that touches the table. Check each one before changing its shape:
 
 | Kind | Function | What it does |
 |---|---|---|
-| Write | `repo::process_paths::upsert`, called from `capture::service` | Records this device's path on every capture tick that reports one, not only when focus changes |
+| Write | `repo::process_paths::upsert`, called from `capture::service` | Records this device's path when capture starts a new activity |
 | Read | `commands::icons::resolve_icon_png`, behind the `get_app_icon` and `get_app_icon_data_url` commands | Last of three fallbacks: extracts the icon from the executable when neither the file cache nor a synced icon has it |
 | Delete | `commands::storage::purge_activities` | Clears the whole table |
 | Delete | `repo::app_groups::purge_with_data` | Deletes the rows of the app being deleted |

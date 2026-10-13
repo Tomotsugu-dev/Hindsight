@@ -642,6 +642,13 @@ async fn tick(inner: &Inner) -> Result<()> {
         if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {
             log::warn!("ensure_group 失败 ({}): {e}", info.app_name);
         }
+        // A path only changes with the app, so record it once per new activity,
+        // not every tick.
+        if let Some(path) = info.app_path.as_ref().filter(|p| !p.is_empty()) {
+            if let Err(e) = process_paths::upsert(&inner.pool, &info.app_name, path).await {
+                log::warn!("process path for {} not recorded: {e}", info.app_name);
+            }
+        }
         *current_lock = Some(CurrentSession {
             id,
             focus: new_focus,
@@ -649,14 +656,6 @@ async fn tick(inner: &Inner) -> Result<()> {
         });
     }
     drop(current_lock);
-
-    if let Some(path) = info.app_path.as_ref() {
-        if !path.is_empty() {
-            if let Err(e) = process_paths::upsert(&inner.pool, &info.app_name, path).await {
-                log::warn!("process path for {} not recorded: {e}", info.app_name);
-            }
-        }
-    }
 
     let mut last_at = inner.last_capture_at.lock().await;
     *last_at = Some(now.to_rfc3339());
