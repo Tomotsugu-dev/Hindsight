@@ -1,7 +1,7 @@
 # ADR-0013 · Website category rules: storage and synchronization
 
 - **Date**: 2026-10-07
-- **Status**: Proposed
+- **Status**: **Accepted**
 - **Related**: issue #31 · [ADR-0005](0005-push-rewrites-whole-files.md) · [ADR-0006](0006-per-dataset-pull-cursors.md)
 
 Browser activity is categorized by application, so different websites cannot be classified by purpose. This proposal stores website rules separately, applies them when querying statistics, and follows the existing sync approach.

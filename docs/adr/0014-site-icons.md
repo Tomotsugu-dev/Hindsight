@@ -1,7 +1,7 @@
 # ADR-0014 · Website icons: downloaded from the website, stored on this device
 
 - **Date**: 2026-10-09
-- **Status**: Proposed
+- **Status**: **Accepted**
 - **Related**: issue #31 · [ADR-0013](0013-site-category-rules.md)
 
 The Websites tab shows only addresses, so users have to read each one to recognize a website. With this proposal, once the user turns on a switch, Hindsight requests the icon from the website itself and stores it on this device. Icons are not synced. The switch is off by default.
