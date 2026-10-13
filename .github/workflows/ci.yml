@@ -72,6 +72,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Type check the web demo
+        run: npx tsc --noEmit -p web
+
       - name: Unit tests
         run: npm test
 
