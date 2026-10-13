@@ -254,7 +254,7 @@ Executable path per process name, recorded by capture so an icon can be extracte
 |---|---|---|---|
 | process_name | TEXT | Primary key | Process name as reported by the OS |
 | exe_path | TEXT | NOT NULL | Absolute path of the executable on this device |
-| seen_at | TEXT | NOT NULL | When the path was recorded |
+| seen_at | TEXT | NOT NULL | When the path was last recorded; nothing reads it |
 | updated_at | TEXT | NOT NULL, DEFAULT epoch | Left over from sync; nothing reads it |
 
 No `deleted_at`: the table cannot tombstone. App deletion physically deletes the row.
@@ -265,7 +265,7 @@ Everything that touches the table. Check each one before changing its shape:
 
 | Kind | Function | What it does |
 |---|---|---|
-| Write | `repo::process_paths::upsert`, called from `capture::service` | Records this device's path on every capture tick that reports one, not only when focus changes |
+| Write | `repo::process_paths::upsert`, called from `capture::service` | Records this device's path when capture starts a new activity |
 | Read | `commands::icons::resolve_icon_png`, behind the `get_app_icon` and `get_app_icon_data_url` commands | Last of three fallbacks: extracts the icon from the executable when neither the file cache nor a synced icon has it |
 | Delete | `commands::storage::purge_activities` | Clears the whole table |
 | Delete | `repo::app_groups::purge_with_data` | Deletes the rows of the app being deleted |
