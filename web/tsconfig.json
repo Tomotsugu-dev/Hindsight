@@ -1,0 +1,9 @@
+// The demo: the app's pages on a mock backend. Checked on its own so the mock keeps up with the
+// API types (the root config only covers src/).
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": { "@app/*": ["../src/*"] }
+  },
+  "include": ["demo-src"]
+}
