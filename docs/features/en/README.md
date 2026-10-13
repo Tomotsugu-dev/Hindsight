@@ -25,3 +25,4 @@ Hindsight tracks computer usage: it records the apps and windows you use in the 
 | [Data Management](./data-management.md) | Export data and clear records you no longer want to keep |
 | [Interface and Appearance](./interface-and-appearance.md) | Startup, language, and theme settings |
 | [Privacy Settings](./privacy-setting.md) | Privacy filter settings |
+| [Resource Usage](./resource-usage.md) | Memory and CPU usage while running |

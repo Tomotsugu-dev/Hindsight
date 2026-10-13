@@ -25,3 +25,4 @@ Hindsight registra el uso del ordenador: guarda en segundo plano las aplicacione
 | [Gestión de datos](./data-management.md) | Exportar datos y borrar los registros que no quieras conservar |
 | [Interfaz y apariencia](./interface-and-appearance.md) | Ajustes de inicio, idioma y tema |
 | [Ajustes de privacidad](./privacy-setting.md) | Ajustes de los filtros de privacidad |
+| [Uso de recursos](./resource-usage.md) | Uso de memoria y CPU durante la ejecución |

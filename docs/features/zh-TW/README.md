@@ -25,3 +25,4 @@ Hindsight 是一款電腦使用情況記錄工具：在背景記錄你使用的�
 | [資料管理](./data-management.md) | 匯出資料，清理不想保留的記錄 |
 | [介面與外觀](./interface-and-appearance.md) | 啟動、語言、主題相關設定 |
 | [隱私設定](./privacy-setting.md) | 隱私條件匹配相關設定 |
+| [資源使用量](./resource-usage.md) | 執行時的記憶體與 CPU 使用量 |

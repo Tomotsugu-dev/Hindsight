@@ -25,3 +25,4 @@ Hindsight はパソコンの使用状況を記録するツールです。使用�
 | [データ管理](./data-management.md) | データをエクスポートし、不要な記録を削除 |
 | [インターフェースと外観](./interface-and-appearance.md) | 起動・言語・テーマの設定 |
 | [プライバシー設定](./privacy-setting.md) | プライバシーフィルターの設定 |
+| [リソース使用量](./resource-usage.md) | 実行中のメモリとCPUの使用量 |
