@@ -271,8 +271,10 @@ async fn peek_auth_state_uid(path: &Path) -> Option<String> {
     row?.flatten().filter(|s| !s.trim().is_empty())
 }
 
-/// 重命名主 DB 文件，连带 SQLite 的 `-wal` / `-shm` 副文件一起。
-/// 副文件不存在时跳过；副文件 rename 失败不影响主文件成功（SQLite 下次打开会重建 wal/shm）。
+/// Renames a database file together with SQLite's `-wal` and `-shm` files.
+/// The main file moves first. A side file that fails to move is logged and left
+/// behind: SQLite rebuilds `-shm`, but changes in `-wal` that were not yet copied
+/// into the main file are lost.
 fn rename_db_files(src: &Path, dst: &Path) -> Result<()> {
     fs::rename(src, dst)?;
     for suffix in ["-wal", "-shm"] {

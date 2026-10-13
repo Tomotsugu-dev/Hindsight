@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use tokio_rusqlite::Connection;
 
 use crate::error::Result;
+use crate::storage::SqliteResultExt;
 
 /// SQLite 连接池——对 `tokio_rusqlite::Connection` 的薄包装。
 /// 一个进程一份，作为 Tauri State 注入；命令通过 `State<'_, DbPool>` 拿。
@@ -9,9 +10,20 @@ use crate::error::Result;
 pub struct DbPool(pub Connection);
 
 impl DbPool {
-    /// 打开（或新建）SQLite 数据库；不跑 migrations，调用方需另调 [`crate::storage::migrations::run`]。
+    /// Opens (or creates) the database. Does not run migrations: call
+    /// [`crate::storage::migrations::run`] next.
+    ///
+    /// WAL: capture commits several times every 5 seconds, and in the default
+    /// rollback journal each commit writes its pages twice and waits for two
+    /// fsyncs. `synchronous = NORMAL` drops the fsync per commit; a power cut can
+    /// lose the last commits but leaves the file intact.
     pub async fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path).await?;
+        conn.call(|c| {
+            c.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")
+                .db()
+        })
+        .await?;
         Ok(Self(conn))
     }
 
@@ -47,4 +59,40 @@ pub fn db_path_dir() -> Result<PathBuf> {
     let dir = crate::bootstrap::data_root();
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 主库按 WAL + NORMAL 打开；WAL 记在文件头里，不经 DbPool 再打开（如旧版本）也还是 WAL。
+    #[tokio::test]
+    async fn open_uses_wal_and_normal_sync() {
+        let dir = std::env::temp_dir().join(format!("hindsight-pool-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("main.sqlite");
+
+        let pool = DbPool::open(&path).await.unwrap();
+        let (mode, sync): (String, i64) = pool
+            .0
+            .call(|c| {
+                let mode = c.query_row("PRAGMA journal_mode", [], |r| r.get(0)).db()?;
+                let sync = c.query_row("PRAGMA synchronous", [], |r| r.get(0)).db()?;
+                Ok((mode, sync))
+            })
+            .await
+            .unwrap();
+        assert_eq!(mode, "wal");
+        assert_eq!(sync, 1, "1 = NORMAL");
+        pool.0.close().await.unwrap();
+
+        let raw = rusqlite::Connection::open(&path).unwrap();
+        let mode: String = raw
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

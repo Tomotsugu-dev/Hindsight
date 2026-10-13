@@ -9,7 +9,7 @@ Each table below sits under the heading of the file it lives in.
 
 # Main database (`hindsight.<uid>.sqlite`)
 
-Schema changes are applied by `src-tauri/src/storage/migrations.rs` (append-only, tracked in `schema_version`). Timestamps are RFC3339 strings; `updated_at` columns are UTC and drive last-write-wins merging during sync; `deleted_at` columns are soft-delete tombstones (ordinary writes never physically delete rows, so the deletion can be synced; app deletion via `purge_with_data` is the one exception).
+Schema changes are applied by `src-tauri/src/storage/migrations.rs` (append-only, tracked in `schema_version`). Runs in WAL mode with `synchronous = NORMAL`, set in `DbPool::open`: capture commits several times every 5 seconds, and the default rollback journal made each commit write its pages twice and wait for two fsyncs. Timestamps are RFC3339 strings; `updated_at` columns are UTC and drive last-write-wins merging during sync; `deleted_at` columns are soft-delete tombstones (ordinary writes never physically delete rows, so the deletion can be synced; app deletion via `purge_with_data` is the one exception).
 
 ## activities
 
