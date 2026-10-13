@@ -191,8 +191,9 @@ description must include:
 - privacy, security, migration, data loss, sync, and rollback impact where
   relevant;
 - screenshots or a short recording for visible UI changes;
-- the required AI-assistance declaration;
-- confirmation that the final diff received a line-by-line self-review.
+- the required AI-assistance declaration.
+
+The template in `.github/pull_request_template.md` has a section for each.
 
 Resolve review threads and requested changes rather than marking them resolved
 without addressing them. Maintainers may close incomplete or out-of-scope pull
