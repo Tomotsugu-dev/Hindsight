@@ -2,7 +2,7 @@
   <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
-<h1 align="center">Hindsight 完整功能说明</h1>
+<h1 align="center">Hindsight 功能&特性</h1>
 
 <p align="center">
   <a href="https://hindsight.kyosweb.com">官网</a> ·
@@ -25,3 +25,4 @@ Hindsight 是一个电脑使用情况记录工具：会在后台记录你使用�
 | [数据管理](./data-management.md) | 导出数据，清理不想保留的记录 |
 | [界面与外观](./interface-and-appearance.md) | 启动，语言，主题相关设置 |
 | [隐私设置](./privacy-setting.md) | 隐私命中相关设置 |
+| [资源占用](./resource-usage.md) | 运行时占多少内存和 CPU |
