@@ -2,7 +2,7 @@
   <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
 </p>
 
-<h1 align="center">Hindsight 完整功能说明</h1>
+<h1 align="center">Hindsight 功能&特性</h1>
 
 <p align="center">
   <a href="https://hindsight.kyosweb.com">官网</a> ·
