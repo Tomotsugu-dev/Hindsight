@@ -59,12 +59,12 @@ Os números representam os dispositivos e as condições de uso destes testes; o
 
 | Configuração | Janela principal | Memória média / pico | CPU média / pico | GPU | Capturas | OCR |
 | --- | --- | --- | --- | --- | --- | --- |
-| Capturas e OCR contínuo desativados (padrão) | Aberta | 145 / 152 MB | 2,0% / 9% | 0 | 0 | 0 |
-| Capturas e OCR contínuo desativados (padrão) | Fechada | 25 / 28 MB | 0,3% / 8% | 0 | 0 | 0 |
-| Apenas capturas ativadas | Aberta | 145 / 155 MB | 3,5% / 31% | 0 | 16 | 0 |
-| Apenas capturas ativadas | Fechada | 26 / 38 MB | 2,4% / 34% | 0 | 16 | 0 |
-| Capturas e OCR contínuo ativados | Aberta | 400 / 405 MB | 4,1% / 31% | 0,23% | 16 | 16 |
-| Capturas e OCR contínuo ativados | Fechada | 280 / 297 MB | 3,0% / 38% | 0,25% | 16 | 16 |
+| Capturas e OCR contínuo desativados (padrão) | 🟠 Fechada | 25 / 28 MB | 0,3% / 8% | 0 | 0 | 0 |
+| Apenas capturas ativadas | 🟠 Fechada | 26 / 38 MB | 2,4% / 34% | 0 | 16 | 0 |
+| Capturas e OCR contínuo ativados | 🟠 Fechada | 280 / 297 MB | 3,0% / 38% | 0,25% | 16 | 16 |
+| Capturas e OCR contínuo desativados (padrão) | 🟢 Aberta | 145 / 152 MB | 2,0% / 9% | 0 | 0 | 0 |
+| Apenas capturas ativadas | 🟢 Aberta | 145 / 155 MB | 3,5% / 31% | 0 | 16 | 0 |
+| Capturas e OCR contínuo ativados | 🟢 Aberta | 400 / 405 MB | 4,1% / 31% | 0,23% | 16 | 16 |
 
 > 1. O pico é o maior valor entre as amostras coletadas a cada 2 segundos.
 > 2. As duas últimas colunas mostram quantas capturas foram feitas e quantas foram processadas pelo OCR durante os 5 minutos de medição.
@@ -95,12 +95,12 @@ Os números representam os dispositivos e as condições de uso destes testes; o
 
 | Configuração | Janela principal | Memória média / pico | CPU média / pico | GPU | Potência | Capturas | OCR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Capturas e OCR contínuo desativados (padrão) | Aberta | 181 / 290 MB | 3,6% / 12% | 0,06% | 5 mW | 0 | 0 |
-| Capturas e OCR contínuo desativados (padrão) | Fechada | 40 / 54 MB | 0,2% / 5% | 0 | 0,7 mW | 0 | 0 |
-| Apenas capturas ativadas | Aberta | 193 / 304 MB | 3,9% / 18% | 0,07% | 31 mW | 17 | 0 |
-| Apenas capturas ativadas | Fechada | 48 / 64 MB | 0,7% / 7% | 0 | 29 mW | 16 | 0 |
-| Capturas e OCR contínuo ativados | Aberta | 256 / 347 MB | 4,5% / 25% | 0,06% | 34 mW | 16 | 16 |
-| Capturas e OCR contínuo ativados | Fechada | 112 / 144 MB | 1,5% / 31% | 0 | 39 mW | 16 | 16 |
+| Capturas e OCR contínuo desativados (padrão) | 🟠 Fechada | 40 / 54 MB | 0,2% / 5% | 0 | 0,7 mW | 0 | 0 |
+| Apenas capturas ativadas | 🟠 Fechada | 48 / 64 MB | 0,7% / 7% | 0 | 29 mW | 16 | 0 |
+| Capturas e OCR contínuo ativados | 🟠 Fechada | 112 / 144 MB | 1,5% / 31% | 0 | 39 mW | 16 | 16 |
+| Capturas e OCR contínuo desativados (padrão) | 🟢 Aberta | 181 / 290 MB | 3,6% / 12% | 0,06% | 5 mW | 0 | 0 |
+| Apenas capturas ativadas | 🟢 Aberta | 193 / 304 MB | 3,9% / 18% | 0,07% | 31 mW | 17 | 0 |
+| Capturas e OCR contínuo ativados | 🟢 Aberta | 256 / 347 MB | 4,5% / 25% | 0,06% | 34 mW | 16 | 16 |
 
 > 1. O pico é o maior valor entre as amostras coletadas a cada 2 segundos.
 > 2. As duas últimas colunas mostram quantas capturas foram feitas e quantas foram processadas pelo OCR durante os 5 minutos de medição.

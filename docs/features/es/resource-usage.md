@@ -59,12 +59,12 @@ Las cifras corresponden a los equipos y las condiciones de uso de estas pruebas;
 
 | Ajustes | Ventana principal | Memoria promedio / máximo | CPU promedio / máximo | GPU | Capturas | OCR |
 | --- | --- | --- | --- | --- | --- | --- |
-| Capturas y OCR en segundo plano desactivados (predeterminado) | Abierta | 145 / 152 MB | 2,0% / 9% | 0 | 0 | 0 |
-| Capturas y OCR en segundo plano desactivados (predeterminado) | Cerrada | 25 / 28 MB | 0,3% / 8% | 0 | 0 | 0 |
-| Solo capturas | Abierta | 145 / 155 MB | 3,5% / 31% | 0 | 16 | 0 |
-| Solo capturas | Cerrada | 26 / 38 MB | 2,4% / 34% | 0 | 16 | 0 |
-| Capturas y OCR en segundo plano | Abierta | 400 / 405 MB | 4,1% / 31% | 0,23% | 16 | 16 |
-| Capturas y OCR en segundo plano | Cerrada | 280 / 297 MB | 3,0% / 38% | 0,25% | 16 | 16 |
+| Capturas y OCR en segundo plano desactivados (predeterminado) | 🟠 Cerrada | 25 / 28 MB | 0,3% / 8% | 0 | 0 | 0 |
+| Solo capturas | 🟠 Cerrada | 26 / 38 MB | 2,4% / 34% | 0 | 16 | 0 |
+| Capturas y OCR en segundo plano | 🟠 Cerrada | 280 / 297 MB | 3,0% / 38% | 0,25% | 16 | 16 |
+| Capturas y OCR en segundo plano desactivados (predeterminado) | 🟢 Abierta | 145 / 152 MB | 2,0% / 9% | 0 | 0 | 0 |
+| Solo capturas | 🟢 Abierta | 145 / 155 MB | 3,5% / 31% | 0 | 16 | 0 |
+| Capturas y OCR en segundo plano | 🟢 Abierta | 400 / 405 MB | 4,1% / 31% | 0,23% | 16 | 16 |
 
 > 1. El máximo es la lectura más alta entre las muestras tomadas cada 2 segundos.
 > 2. Las dos últimas columnas indican cuántas capturas se tomaron y cuántas se procesaron con OCR durante los 5 minutos de medición.
@@ -95,12 +95,12 @@ Las cifras corresponden a los equipos y las condiciones de uso de estas pruebas;
 
 | Ajustes | Ventana principal | Memoria promedio / máximo | CPU promedio / máximo | GPU | Potencia | Capturas | OCR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Capturas y OCR en segundo plano desactivados (predeterminado) | Abierta | 181 / 290 MB | 3,6% / 12% | 0,06% | 5 mW | 0 | 0 |
-| Capturas y OCR en segundo plano desactivados (predeterminado) | Cerrada | 40 / 54 MB | 0,2% / 5% | 0 | 0,7 mW | 0 | 0 |
-| Solo capturas | Abierta | 193 / 304 MB | 3,9% / 18% | 0,07% | 31 mW | 17 | 0 |
-| Solo capturas | Cerrada | 48 / 64 MB | 0,7% / 7% | 0 | 29 mW | 16 | 0 |
-| Capturas y OCR en segundo plano | Abierta | 256 / 347 MB | 4,5% / 25% | 0,06% | 34 mW | 16 | 16 |
-| Capturas y OCR en segundo plano | Cerrada | 112 / 144 MB | 1,5% / 31% | 0 | 39 mW | 16 | 16 |
+| Capturas y OCR en segundo plano desactivados (predeterminado) | 🟠 Cerrada | 40 / 54 MB | 0,2% / 5% | 0 | 0,7 mW | 0 | 0 |
+| Solo capturas | 🟠 Cerrada | 48 / 64 MB | 0,7% / 7% | 0 | 29 mW | 16 | 0 |
+| Capturas y OCR en segundo plano | 🟠 Cerrada | 112 / 144 MB | 1,5% / 31% | 0 | 39 mW | 16 | 16 |
+| Capturas y OCR en segundo plano desactivados (predeterminado) | 🟢 Abierta | 181 / 290 MB | 3,6% / 12% | 0,06% | 5 mW | 0 | 0 |
+| Solo capturas | 🟢 Abierta | 193 / 304 MB | 3,9% / 18% | 0,07% | 31 mW | 17 | 0 |
+| Capturas y OCR en segundo plano | 🟢 Abierta | 256 / 347 MB | 4,5% / 25% | 0,06% | 34 mW | 16 | 16 |
 
 > 1. El máximo es la lectura más alta entre las muestras tomadas cada 2 segundos.
 > 2. Las dos últimas columnas indican cuántas capturas se tomaron y cuántas se procesaron con OCR durante los 5 minutos de medición.
