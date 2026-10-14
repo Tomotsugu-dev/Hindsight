@@ -30,7 +30,10 @@ def counter_total(rs, field, roles=None):
         last[p] = v
     return sum(last[p] - v0 for p, v0 in first.items())
 
-HS = {'main', 'ocr_worker', 'webkit_WebContent', 'webkit_GPU', 'webkit_Networking'}
+# bench_win.py writes a commit column; on Windows every non-system role is Hindsight's
+WIN = 'commit' in rows[0]
+HS = ({r['role'] for r in rows if not r['role'].startswith('sys_')} if WIN
+      else {'main', 'ocr_worker', 'webkit_WebContent', 'webkit_GPU', 'webkit_Networking'})
 
 out = {}
 for ph in phases:
@@ -60,7 +63,15 @@ for ph in phases:
         for a, b in zip(ts, ts[1:]):
             tick_cpu[b] += (s[b] - s[a]) / (b - a) * 100
     peaks = sorted(tick_cpu.values())
-    gpu = counter_total([r for r in hs if r['gpu_ns'] != ''], 'gpu_ns') / 1e9 / dur * 100
+    if WIN:
+        # gpu_pct is already a rate over the last 10 s: sum over processes per tick, then average
+        tick_gpu = defaultdict(float)
+        for r in hs:
+            if r['gpu_pct'] != '':
+                tick_gpu[r['t']] += num(r['gpu_pct'])
+        gpu = sum(tick_gpu.values()) / len(tick_gpu) if tick_gpu else 0
+    else:
+        gpu = counter_total([r for r in hs if r['gpu_ns'] != ''], 'gpu_ns') / 1e9 / dur * 100
     energy_mw = counter_total(hs, 'energy_nj') / 1e6 / dur
     disk_w = counter_total(hs, 'disk_w') / MB / dur * 3600
     disk_r = counter_total(hs, 'disk_r') / MB / dur * 3600
@@ -88,6 +99,16 @@ for ph in phases:
         'sys_gpu_util_mean_pct': round(sum(gu) / len(gu), 1) if gu else None,
         'screenshots': ph['shots'], 'ocr_done': ph['ocr_done'], 'ocr_pending_end': ph['ocr_pending_end'],
     }
+    if WIN:
+        # no energy or wakeup counters on Windows; dwm stands in for WindowServer
+        commit = defaultdict(float)
+        for r in hs:
+            commit[r['t']] += num(r['commit'])
+        for k in ('energy_mw', 'wakeups_per_s', 'sys_windowserver_cpu_pct', 'sys_replayd_cpu_pct',
+                  'sys_gpu_util_mean_pct'):
+            del out[name][k]
+        out[name]['commit_mb_mean'] = round(sum(commit.values()) / len(commit) / MB, 1) if commit else 0
+        out[name]['sys_dwm_cpu_pct'] = round(counter_total(sysr, 'cpu_s', {'sys_dwm'}) / dur * 100, 2)
 
 json.dump(out, open(os.path.join(RUN, 'summary.json'), 'w'), indent=1, ensure_ascii=False)
 for k, v in out.items():
