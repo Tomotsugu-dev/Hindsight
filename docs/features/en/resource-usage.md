@@ -1,18 +1,33 @@
 # Resource Usage
 
-Hindsight’s memory and CPU usage mainly depend on three things: whether screenshots are enabled, whether background OCR is enabled, and whether the main window is open.
+Hindsight’s memory and CPU usage mainly depend on three things: whether screenshots are enabled, whether background OCR is enabled, and whether the main window is being displayed.
 
 - [Windows results](#windows-results)
 - [macOS results](#macos-results)
 - [Test conditions](#test-conditions)
 - [Detailed data](#detailed-data)
   - [Windows data](#windows-data)
-  - [macOS data](#macos-data)
     - [Each configuration](#each-configuration)
     - [Per process](#per-process)
     - [Short peaks](#short-peaks)
+  - [macOS data](#macos-data)
+    - [Each configuration](#each-configuration-1)
+    - [Per process](#per-process-1)
+    - [Short peaks](#short-peaks-1)
 
 ## Windows results
+
+| Settings | Main window open | Main window closed |
+| --- | --- | --- |
+| Screenshots and background OCR off (default) | About 145 MB memory, 2.0% CPU | About 25 MB memory, 0.3% CPU |
+| Screenshots only | About 145 MB memory, 3.5% CPU | About 26 MB memory, 2.4% CPU |
+| Screenshots and background OCR | About 400 MB memory, 4.1% CPU | About 280 MB memory, 3.0% CPU |
+
+> 1. Memory figures use the same metric as Task Manager’s “Memory” column: the private working set.
+> 2. CPU usage is the average; 100% means one core is fully utilized.
+> 3. Power was not measured because Windows does not provide per-process power consumption data.
+> 4. GPU usage is negligible, less than 0.3% in total.
+> 5. When the main window is closed, the Windows version keeps its web processes in a suspended state. Their memory usage drops from around 130 MB to under 10 MB within about 30 seconds.
 
 ## macOS results
 
@@ -28,23 +43,57 @@ Hindsight’s memory and CPU usage mainly depend on three things: whether screen
 
 ## Test conditions
 
-- MacBook Air with Apple M5, 24 GB memory, macOS 27, plugged in.
-- Hindsight 0.9.3, screenshot interval of 30 seconds.
-- During the test, text was typed automatically in a text editor, and the active app was switched every 10–25 seconds.
+- Windows: desktop PC with an AMD Ryzen 9 9950X3D, 64 GB memory, Windows 11 Pro, Hindsight 0.9.4, and a screenshot interval of 30 seconds. During the test, text was typed automatically in Notepad, with the active app switching between Notepad, File Explorer, and Calculator.
+- macOS: MacBook Air with Apple M5, 24 GB memory, macOS 27, plugged in, running Hindsight 0.9.3 with a screenshot interval of 30 seconds. During the test, text was typed automatically in TextEdit.
+- The active app was switched every 10–25 seconds.
 - Each configuration ran for 2 minutes before measurements were taken for 5 minutes.
 - Hindsight was restarted before each configuration. Memory usage may be higher after a long continuous run.
 
-These figures reflect this device and this test; results will vary on other computers.
+These figures reflect the devices and usage patterns tested here; results will vary on other computers.
 
 ## Detailed data
 
 ### Windows data
 
+#### Each configuration
+
+| Settings | Main window | Memory average / peak | CPU average / peak | GPU | Screenshots | OCR |
+| --- | --- | --- | --- | --- | --- | --- |
+| Screenshots and background OCR off (default) | Open | 145 / 152 MB | 2.0% / 9% | 0 | 0 | 0 |
+| Screenshots and background OCR off (default) | Closed | 25 / 28 MB | 0.3% / 8% | 0 | 0 | 0 |
+| Screenshots only | Open | 145 / 155 MB | 3.5% / 31% | 0 | 16 | 0 |
+| Screenshots only | Closed | 26 / 38 MB | 2.4% / 34% | 0 | 16 | 0 |
+| Screenshots and background OCR | Open | 400 / 405 MB | 4.1% / 31% | 0.23% | 16 | 16 |
+| Screenshots and background OCR | Closed | 280 / 297 MB | 3.0% / 38% | 0.25% | 16 | 16 |
+
+> 1. Peaks are the highest readings from samples taken every 2 seconds.
+> 2. The last two columns count screenshots captured and screenshots processed by OCR during the 5-minute measurement period.
+
+#### Per process
+
+| Process | When it runs | Average memory (peak) | Average CPU |
+| --- | --- | --- | --- |
+| Hindsight main process | Always | About 17 MB (28 MB) | 1.8%–2.4% with screenshots enabled; about 0.3% when disabled |
+| Text recognition process | When background OCR is enabled | About 255 MB (270 MB) | 0.9%–1.0% |
+| Main window web processes (7 in total) | Always | 127–129 MB (137 MB) with the window open; 7–9 MB (12 MB) when closed | 1.3%–1.7% with the window open; about 0 when closed |
+
+> 1. The web processes belong to the system’s WebView2 runtime, which displays the main window.
+> 2. The text recognition process also has a commit size of about 2.3 GB, shown on Task Manager’s “Details” tab. Most of this does not occupy physical memory.
+
+#### Short peaks
+
+| Activity | CPU peak |
+| --- | --- |
+| Capturing one screenshot | About 21%–34% in the main process |
+| Recognizing text in one screenshot | About 30%–38% in the text recognition process |
+
+> Peaks are averages over 2 seconds. Instantaneous peaks can be higher and last for less time.
+
 ### macOS data
 
 #### Each configuration
 
-| Settings | Main window | Memory average / peak | CPU average / peak | GPU | Power | Screenshots | Recognitions |
+| Settings | Main window | Memory average / peak | CPU average / peak | GPU | Power | Screenshots | OCR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Screenshots and background OCR off (default) | Open | 181 / 290 MB | 3.6% / 12% | 0.06% | 5 mW | 0 | 0 |
 | Screenshots and background OCR off (default) | Closed | 40 / 54 MB | 0.2% / 5% | 0 | 0.7 mW | 0 | 0 |
@@ -54,7 +103,7 @@ These figures reflect this device and this test; results will vary on other comp
 | Screenshots and background OCR | Closed | 112 / 144 MB | 1.5% / 31% | 0 | 39 mW | 16 | 16 |
 
 > 1. Peaks are the highest readings from samples taken every 2 seconds.
-> 2. Screenshot and recognition counts are totals for the 5-minute measurement period.
+> 2. The last two columns count screenshots captured and screenshots processed by OCR during the 5-minute measurement period.
 
 #### Per process
 
