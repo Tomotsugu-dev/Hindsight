@@ -165,7 +165,7 @@ flowchart LR
   class P plugin
 ```
 
-两条线里，WebView 都用 `hindsight-plugin://<插件 id>/<版本>/<文件>` 这种网址要文件。插件 id 和版本来自插件列表，插件列表由 plugins 表查出。插件文件读取模块不查表，只从插件库里这个版本的文件夹读出文件，交给 WebView。
+两条线里，WebView 都用 `hindsight-plugin://<插件 id>.localhost/<版本>/<文件>` 这种网址要文件。插件 id 和版本来自插件列表，插件列表由 plugins 表查出。插件文件读取模块不查表，只从插件库里这个版本的文件夹读出文件，交给 WebView。
 
 插件的代码运行以后，请求数据走 ③，接收事件走 ④。
 

@@ -23,7 +23,7 @@ sequenceDiagram
   H->>M: invoke<br/>要插件列表
   M-->>H: hindsight-focus<br/>0.1.0
   H->>H: 每个插件<br/>建一个沙箱 iframe
-  H->>F: hindsight-plugin://<br/>hindsight-focus/0.1.0/<br/>background.js
+  H->>F: hindsight-plugin://<br/>hindsight-focus.localhost/<br/>0.1.0/background.js
   F->>D: 读 hindsight-focus/0.1.0/<br/>background.js
   D-->>F: 脚本文件
   F-->>H: 脚本文件 +<br/>内容安全策略
@@ -35,5 +35,6 @@ sequenceDiagram
 
 - 一个后台插件都没有，就不开插件后台窗口，不用插件的用户不多占内存。
 - 建窗口时把 `background_throttling` 设成 `Disabled`，否则窗口看不见时插件的定时器会停（Windows 上不支持，要另测）。
+- 插件 id 放在主机名里，不同插件的网页来源不同。末尾加 `.localhost`：Windows 上网址会被改写成 `http://hindsight-plugin.hindsight-focus.localhost/…`，以 `.localhost` 结尾的才算安全上下文。
 - 文件路径要限制在网址里那个版本文件夹（`<id>/<版本>/`）里，挡掉 `../` 这类往上跳的路径。
 - 插件文件读取模块用 Tauri 的自定义协议实现，在应用启动时注册一次，和 `lib.rs` 里现有的 `.plugin(...)` 注册放在一起。

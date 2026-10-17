@@ -165,7 +165,7 @@ flowchart LR
   class P plugin
 ```
 
-In both flows, the WebView asks for files with URLs like `hindsight-plugin://<plugin id>/<version>/<file>`. The plugin id and version come from the plugin list, which is read from the `plugins` table. The plugin file reader does not read the table. It only reads the file from that version's folder in the plugin library and hands it to the WebView.
+In both flows, the WebView asks for files with URLs like `hindsight-plugin://<plugin id>.localhost/<version>/<file>`. The plugin id and version come from the plugin list, which is read from the `plugins` table. The plugin file reader does not read the table. It only reads the file from that version's folder in the plugin library and hands it to the WebView.
 
 Once plugin code is running, it requests data through ③ and receives events through ④.
 

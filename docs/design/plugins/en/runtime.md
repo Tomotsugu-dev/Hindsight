@@ -23,7 +23,7 @@ sequenceDiagram
   H->>M: invoke<br/>get the plugin list
   M-->>H: hindsight-focus<br/>0.1.0
   H->>H: One sandboxed<br/>iframe per plugin
-  H->>F: hindsight-plugin://<br/>hindsight-focus/0.1.0/<br/>background.js
+  H->>F: hindsight-plugin://<br/>hindsight-focus.localhost/<br/>0.1.0/background.js
   F->>D: Read hindsight-focus/<br/>0.1.0/background.js
   D-->>F: Script file
   F-->>H: Script file<br/>+ CSP
@@ -35,5 +35,6 @@ sequenceDiagram
 
 - If no plugin runs in the background, do not open the plugin background window. Users who use no plugins do not pay the memory cost.
 - When creating the window, set `background_throttling` to `Disabled`. Otherwise plugin timers stop while the window is hidden. Windows does not support this setting; test it there separately.
+- Put the plugin id in the host name, so pages of different plugins have different origins. End it with `.localhost`: on Windows the URL is rewritten to `http://hindsight-plugin.hindsight-focus.localhost/…`, and only a host ending in `.localhost` counts as a secure context.
 - Keep file paths inside the version folder in the URL (`<id>/<version>/`). Block paths like `../` that climb up.
 - Build the plugin file reader as a Tauri custom protocol. Register it once at app startup, next to the existing `.plugin(...)` calls in `lib.rs`.
