@@ -18,7 +18,8 @@ pub async fn plugin_open_market(pool: State<'_, DbPool>) -> Result<Market, Strin
     if let Err(e) = install::remove_leftovers(&pool, &plugins_dir()).await {
         log::warn!("plugins: cannot remove leftovers: {e}");
     }
-    market::list(&pool, &plugin_zips_dir())
+    let online = market::fetch_online(market::PLUGINS_JSON_URL).await;
+    market::list(&pool, &plugin_zips_dir(), online)
         .await
         .map_err(Into::into)
 }

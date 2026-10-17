@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
+use crate::plugins::market::{InstallKind, OnlinePlugin, OnlineVersion};
+
 /// 一个测试一个空文件夹，放 zip 和插件库，测完删掉。
 pub struct TempDir(pub PathBuf);
 
@@ -61,6 +63,27 @@ pub fn focus_zip(dir: &TempDir, version: &str) -> PathBuf {
         &[("manifest.json", &manifest), ("background.js", version)],
     );
     path
+}
+
+/// 线上列表里的一个插件，只有 id 和各个版本号要紧。
+pub fn online_plugin(id: &str, versions: &[&str]) -> OnlinePlugin {
+    OnlinePlugin {
+        id: id.into(),
+        name: id.into(),
+        author: "someone".into(),
+        description: String::new(),
+        repo: format!("someone/{id}"),
+        versions: versions
+            .iter()
+            .map(|version| OnlineVersion {
+                version: version.to_string(),
+                url: format!("https://example.com/{id}-{version}.zip"),
+                sha256: String::new(),
+                permissions: vec!["stats.read".into()],
+                kind: InstallKind::default(),
+            })
+            .collect(),
+    }
 }
 
 /// 文件夹里的名字，排好序。

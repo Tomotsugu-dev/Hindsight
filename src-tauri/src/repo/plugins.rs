@@ -117,8 +117,8 @@ pub async fn set_enabled(pool: &DbPool, id: &str, enabled: bool) -> Result<()> {
 /// Removes a plugin record from the database.
 ///
 /// The database row is deleted before removing the plugin directory from disk: if a crash occurs
-/// midway, the orphaned directory will have no matching database record and can be cleaned up on
-/// the next startup.
+/// midway, the orphaned directory will have no matching database record and can be cleaned up the
+/// next time the plugin market opens.
 pub async fn remove(pool: &DbPool, id: &str) -> Result<()> {
     let id = id.to_string();
     pool.0

@@ -234,6 +234,11 @@ pub enum Error {
     #[error("plugin already installed: {0}")]
     PluginAlreadyInstalled(String),
 
+    /// plugins.json has a `format_version` this version does not know: it was written for a newer
+    /// Hindsight.
+    #[error("plugins.json format version {0} is not supported")]
+    PluginsJsonFormatVersion(u32),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

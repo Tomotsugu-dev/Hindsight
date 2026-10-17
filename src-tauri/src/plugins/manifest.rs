@@ -68,7 +68,7 @@ fn check_id(id: &str) -> Result<()> {
 }
 
 /// Checks that the version is valid: `number.number.number`, for example `0.1.0`.
-fn check_version(version: &str) -> Result<()> {
+pub fn check_version(version: &str) -> Result<()> {
     let parts: Vec<&str> = version.split('.').collect();
     let ok = parts.len() == 3
         && parts
