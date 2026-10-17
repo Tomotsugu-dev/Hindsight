@@ -379,6 +379,12 @@ pub fn run() {
             commands::ai_summary::get_week_summary,
             commands::ai_summary::clear_week_summary,
             commands::ai_summary::precheck_week_summary,
+            // --- plugins: plugin market and installed plugins ---
+            commands::plugins::plugin_open_market,
+            commands::plugins::plugin_install,
+            commands::plugins::plugin_uninstall,
+            commands::plugins::plugin_set_enabled,
+            commands::plugins::plugin_open_zips_folder,
         ])
         .build(tauri::generate_context!())
         // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime

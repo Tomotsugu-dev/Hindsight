@@ -17,6 +17,11 @@ static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Returns the checked manifest from the zip without unpacking it. Used to show the plugin's
 /// details in the frontend before it is installed.
+///
+/// # Errors
+///
+/// - The zip or its manifest.json is not valid: [`Error::PluginPackage`],
+///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
 pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
     read_checked_manifest(&mut open(zip_path)?)
 }
@@ -24,6 +29,14 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 /// Installs a plugin from a zip. If another version is installed, this is an update, and a
 /// downgrade counts too. `approved` is the permissions the user approved; they are stored in the
 /// table as they are.
+///
+/// Deletes the zip after a successful install. If the install fails, the zip is kept.
+///
+/// # Errors
+///
+/// - The same version is already installed: [`Error::PluginAlreadyInstalled`]
+/// - The zip or its manifest.json is not valid: [`Error::PluginPackage`],
+///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
 pub async fn install(
     pool: &DbPool,
     plugins_dir: &Path,
@@ -79,12 +92,18 @@ pub async fn install(
             );
         }
     }
+    // If the zip cannot be deleted, only log it.
+    if let Err(e) = fs::remove_file(zip_path) {
+        log::warn!("cannot delete installed zip {}: {e}", zip_path.display());
+    }
     Ok(())
 }
 
 /// Uninstalls a plugin.
 ///
 /// `delete_data`: whether to delete the plugin's own data files.
+///
+/// Files that cannot be deleted are only logged, not reported as errors.
 pub async fn uninstall(
     pool: &DbPool,
     plugins_dir: &Path,
@@ -232,79 +251,15 @@ fn extract(archive: &mut ZipArchive<File>, dest: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use std::io::Write;
-    use std::path::PathBuf;
 
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
 
+    use crate::plugins::test_util::{focus_zip, manifest_json, names, write_zip, TempDir};
     use crate::repo::test_util::fresh_test_pool;
 
-    /// 一个测试一个空文件夹，放 zip 和插件库，测完删掉。
-    struct TempDir(PathBuf);
-
-    impl TempDir {
-        fn new() -> Self {
-            let dir = std::env::temp_dir().join(format!(
-                "hindsight-plugins-{}",
-                uuid::Uuid::new_v4().simple()
-            ));
-            fs::create_dir_all(&dir).unwrap();
-            Self(dir)
-        }
-
-        fn plugins(&self) -> PathBuf {
-            self.0.join("plugins")
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
-    fn manifest_json(version: &str) -> String {
-        serde_json::json!({
-            "id": "hindsight-focus",
-            "name": "Focus",
-            "version": version,
-            "permissions": ["stats.read", "focus.changed", "focus.category"],
-            "ui_location": "none",
-            "runs_in_background": true
-        })
-        .to_string()
-    }
-
-    fn write_zip(path: &Path, files: &[(&str, &str)]) {
-        let mut zip = ZipWriter::new(File::create(path).unwrap());
-        for (name, body) in files {
-            zip.start_file(*name, SimpleFileOptions::default()).unwrap();
-            zip.write_all(body.as_bytes()).unwrap();
-        }
-        zip.finish().unwrap();
-    }
-
-    /// 专注插件的 zip，background.js 的内容就是版本号，方便看装的是哪一版。
-    fn focus_zip(dir: &TempDir, version: &str) -> PathBuf {
-        let path = dir.0.join(format!("focus-{version}.zip"));
-        let manifest = manifest_json(version);
-        write_zip(
-            &path,
-            &[("manifest.json", &manifest), ("background.js", version)],
-        );
-        path
-    }
-
-    fn names(dir: &Path) -> Vec<String> {
-        let mut names: Vec<String> = fs::read_dir(dir)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-            .collect();
-        names.sort();
-        names
-    }
-
-    /// 装上以后：文件在 <id>/<version>/ 下，临时文件夹已经改名；表里存的是用户同意的权限，不是清单申请的。
+    /// 装上以后：文件在 <id>/<version>/ 下，临时文件夹已经改名；表里存的是用户同意的权限，不是清单申请的；
+    /// zip 删掉了。
     #[tokio::test]
     async fn install_puts_files_then_row() {
         let dir = TempDir::new();
@@ -314,6 +269,8 @@ mod tests {
         install(&pool, &dir.plugins(), &zip, vec!["stats.read".into()])
             .await
             .unwrap();
+
+        assert!(!zip.exists());
 
         let script = dir
             .plugins()
@@ -327,19 +284,22 @@ mod tests {
         assert_eq!(row.permissions, ["stats.read"]);
     }
 
-    /// 同一个版本再装一次：报「已经装了 0.1.0」。
+    /// 同一个版本再装一次：报「已经装了 0.1.0」，zip 不删。
     #[tokio::test]
     async fn same_version_is_rejected() {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
-        let zip = focus_zip(&dir, "0.1.0");
-        install(&pool, &dir.plugins(), &zip, vec![]).await.unwrap();
+        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
+            .await
+            .unwrap();
 
+        let zip = focus_zip(&dir, "0.1.0");
         let again = install(&pool, &dir.plugins(), &zip, vec![]).await;
         assert!(
             matches!(&again, Err(Error::PluginAlreadyInstalled(v)) if v == "0.1.0"),
             "{again:?}"
         );
+        assert!(zip.exists());
     }
 
     /// 更新到 0.2.0：表换成新版本，旧版本的文件夹删掉。再装回 0.1.0（降级）也一样。
@@ -368,7 +328,7 @@ mod tests {
     }
 
     /// 坏的包：缺清单、缺后台脚本、路径跑出去、符号链接。
-    /// 都报包错误，且是因为各自的原因；表里没有这一行，插件库里也没有这个插件的文件夹。
+    /// 都报包错误，且是因为各自的原因；表里没有这一行，插件库里也没有这个插件的文件夹；zip 不删。
     #[tokio::test]
     async fn bad_packages_install_nothing() {
         let dir = TempDir::new();
@@ -411,6 +371,7 @@ mod tests {
             );
             assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
             assert!(!dir.plugins().join("hindsight-focus").exists(), "{reason}");
+            assert!(path.exists(), "{reason}");
         }
     }
 

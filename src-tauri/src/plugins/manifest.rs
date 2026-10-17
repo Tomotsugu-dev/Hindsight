@@ -1,7 +1,7 @@
 //! manifest.json in a plugin package. It is read once at install, and the checked values are
 //! copied into the plugins table.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
@@ -19,7 +19,8 @@ const PERMISSIONS: [(&str, Option<&str>); 6] = [
 const UI_LOCATIONS: [&str; 3] = ["sidebar", "window", "none"];
 
 /// The contents of manifest.json.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "camelCase"))]
 pub struct Manifest {
     pub id: String,
     pub name: String,

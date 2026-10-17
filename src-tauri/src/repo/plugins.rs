@@ -1,12 +1,14 @@
 //! Repository layer for the plugins table: manages installation, updates, uninstallation, and toggle state.
 
 use rusqlite::OptionalExtension;
+use serde::Serialize;
 
 use crate::error::Result;
 use crate::storage::{DbPool, SqliteResultExt};
 
 /// One row of the plugins table.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Plugin {
     pub id: String,
     pub name: String,
