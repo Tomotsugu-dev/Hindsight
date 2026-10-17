@@ -9,6 +9,7 @@ use crate::storage::{DbPool, SqliteResultExt};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plugin {
     pub id: String,
+    pub name: String,
     pub version: String,
     pub enabled: bool,
     /// Permissions the user approved, such as `stats.read`
@@ -20,7 +21,7 @@ pub struct Plugin {
 }
 
 const COLUMNS: &str =
-    "id, version, enabled, permissions, ui_location, runs_in_background, installed_at";
+    "id, name, version, enabled, permissions, ui_location, runs_in_background, installed_at";
 
 /// Inserts a new plugin or updates an existing plugin's metadata.
 ///
@@ -33,15 +34,17 @@ pub async fn save(pool: &DbPool, plugin: Plugin) -> Result<()> {
             conn.execute(
                 &format!(
                     "INSERT INTO plugins({COLUMNS})
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                      ON CONFLICT(id) DO UPDATE
-                        SET version = excluded.version,
+                        SET name = excluded.name,
+                            version = excluded.version,
                             permissions = excluded.permissions,
                             ui_location = excluded.ui_location,
                             runs_in_background = excluded.runs_in_background"
                 ),
                 rusqlite::params![
                     plugin.id,
+                    plugin.name,
                     plugin.version,
                     plugin.enabled,
                     permissions,
@@ -127,17 +130,18 @@ pub async fn remove(pool: &DbPool, id: &str) -> Result<()> {
 }
 
 fn from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Plugin> {
-    let permissions: String = r.get(3)?;
+    let permissions: String = r.get(4)?;
     Ok(Plugin {
         id: r.get(0)?,
-        version: r.get(1)?,
-        enabled: r.get(2)?,
+        name: r.get(1)?,
+        version: r.get(2)?,
+        enabled: r.get(3)?,
         permissions: serde_json::from_str(&permissions).map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
+            rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
         })?,
-        ui_location: r.get(4)?,
-        runs_in_background: r.get(5)?,
-        installed_at: r.get(6)?,
+        ui_location: r.get(5)?,
+        runs_in_background: r.get(6)?,
+        installed_at: r.get(7)?,
     })
 }
 
@@ -149,6 +153,7 @@ mod tests {
     fn focus(version: &str) -> Plugin {
         Plugin {
             id: "hindsight-focus".into(),
+            name: "Focus".into(),
             version: version.into(),
             enabled: true,
             permissions: vec!["stats.read".into(), "focus.changed".into()],
@@ -180,7 +185,7 @@ mod tests {
         assert_eq!(get(&pool, "not-installed").await.unwrap(), None);
     }
 
-    /// 更新：版本、权限、页面位置、后台运行换成新的；用户关掉的开关和安装时间不变。
+    /// 更新：名字、版本、权限、页面位置、后台运行换成新的；用户关掉的开关和安装时间不变。
     #[tokio::test]
     async fn update_keeps_switch_and_install_time() {
         let pool = fresh_test_pool().await;
@@ -188,6 +193,7 @@ mod tests {
         set_enabled(&pool, "hindsight-focus", false).await.unwrap();
 
         let mut newer = focus("0.2.0");
+        newer.name = "Focus Timer".into();
         newer.permissions.push("notifications".into());
         newer.ui_location = "window".into();
         newer.runs_in_background = false;
@@ -195,6 +201,7 @@ mod tests {
         save(&pool, newer.clone()).await.unwrap();
 
         let got = get(&pool, "hindsight-focus").await.unwrap().unwrap();
+        assert_eq!(got.name, "Focus Timer");
         assert_eq!(got.version, "0.2.0");
         assert_eq!(got.permissions, newer.permissions);
         assert_eq!(got.ui_location, "window");

@@ -955,6 +955,7 @@ const BACKFILL_SUPER_CATEGORY_OUTBOX_SQL: &str = r#"
 const PLUGINS_TABLE_SQL: &str = r#"
     CREATE TABLE IF NOT EXISTS plugins (
         id                 TEXT PRIMARY KEY,
+        name               TEXT NOT NULL,
         version            TEXT NOT NULL,
         enabled            INTEGER NOT NULL DEFAULT 1,
         permissions        TEXT NOT NULL DEFAULT '[]',
