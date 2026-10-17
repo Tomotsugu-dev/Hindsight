@@ -226,6 +226,14 @@ pub enum Error {
     #[error("plugin unknown permission: {0}")]
     PluginUnknownPermission(String),
 
+    /// The plugin zip cannot be read, is missing a file, or has an entry that cannot be unpacked.
+    #[error("plugin package: {0}")]
+    PluginPackage(String),
+
+    /// This version is already installed.
+    #[error("plugin already installed: {0}")]
+    PluginAlreadyInstalled(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),
