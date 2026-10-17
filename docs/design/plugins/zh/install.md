@@ -16,24 +16,27 @@ sequenceDiagram
   participant G as 插件管理模块
   participant IDX as 官方仓库<br/>plugins.json
   participant REL as 插件作者仓库<br/>Release
+  participant Z as plugin-zips/
   participant D as 插件库
   participant R as repo/
   participant W as 插件后台窗口管理模块
-  M->>G: invoke plugin_install<br/>hindsight-focus<br/>+ 用户同意的权限
-  G->>IDX: 读列表
-  IDX-->>G: 版本、地址、SHA-256
+  M->>G: invoke<br/>plugin_install_online<br/>hindsight-focus 0.1.0<br/>+ 用户同意的权限
+  G->>IDX: 再读一次列表
+  IDX-->>G: 地址、SHA-256
   G->>REL: 下载 zip
   REL-->>G: zip
-  G->>G: 算 SHA-256 比对<br/>不对就停
+  G->>G: 比对 SHA-256<br/>清单的 id、版本<br/>和列表不一样就停
+  G->>Z: 存进 plugin-zips/
   G->>G: 读清单，检查<br/>id、版本、权限
   G->>D: 解压到临时目录
   G->>D: 临时目录改名为<br/>hindsight-focus/0.1.0
   G->>R: 一个事务<br/>写 plugins 表
+  G->>Z: 删掉 zip
   G->>W: 它要在后台运行<br/>运行它
   G-->>M: 装好了
 ```
 
-- SHA-256 对不上就停，什么都不写。
+- 下载的 zip 存进 `plugin-zips/`，后面和本地 zip 安装是同一条路：装好后删掉；装失败留着，下次打开市场页时列在本地 zip 栏里。
 - **先放文件，最后写表。**
   - 中途崩了，最多留下一个表里没有的目录，下次打开插件市场时删掉（见下面的「清理残留」）。
   - 反过来先写表的话，崩了就是表里有记录、文件却不在。

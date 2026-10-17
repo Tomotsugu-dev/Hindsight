@@ -16,24 +16,27 @@ sequenceDiagram
   participant G as Plugin manager
   participant IDX as Official repo<br/>plugins.json
   participant REL as Author's repo<br/>Releases
+  participant Z as plugin-zips/
   participant D as Plugin library
   participant R as repo/
   participant W as Background<br/>window manager
-  M->>G: invoke plugin_install<br/>hindsight-focus<br/>+ approved permissions
-  G->>IDX: Read the list
-  IDX-->>G: Version, URL,<br/>SHA-256
+  M->>G: invoke<br/>plugin_install_online<br/>hindsight-focus 0.1.0<br/>+ approved permissions
+  G->>IDX: Read the list again
+  IDX-->>G: URL, SHA-256
   G->>REL: Download the zip
   REL-->>G: zip
-  G->>G: Check SHA-256<br/>stop if it differs
+  G->>G: Check SHA-256,<br/>manifest id and version<br/>stop if they differ<br/>from the list
+  G->>Z: Save to plugin-zips/
   G->>G: Read the manifest<br/>check id, version,<br/>permissions
   G->>D: Unzip to a<br/>temp folder
   G->>D: Rename the temp folder<br/>to hindsight-focus/0.1.0
   G->>R: One transaction<br/>writes the plugins table
+  G->>Z: Delete the zip
   G->>W: It runs in the<br/>background: run it
   G-->>M: Installed
 ```
 
-- If the SHA-256 differs, stop and write nothing.
+- The downloaded zip is saved to `plugin-zips/`. From there it takes the same path as a local zip: it is deleted after a successful install. If the install fails, it stays and is listed in the local zip column the next time the market page opens.
 - **Files first, table last.**
   - If the app crashes midway, at most a folder that is not in the table is left. It is deleted the next time the plugin market opens (see "Removing leftovers" below).
   - If the table were written first, a crash would leave a row in the table with no files.
