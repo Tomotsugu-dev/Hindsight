@@ -1,9 +1,11 @@
 //! The plugin packages listed on the plugin market page.
 
 use std::cmp::{Ordering, Reverse};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -23,6 +25,18 @@ const PLUGINS_JSON_FORMAT_VERSION: u32 = 1;
 
 /// The timeout for network requests from the market page.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The size limit of a plugin zip.
+const MAX_ZIP_BYTES: u64 = 500 * 1024 * 1024;
+
+/// The timeout for connecting to the server when downloading a zip.
+const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The longest allowed gap between two pieces of data when downloading a zip.
+const DOWNLOAD_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The plugins being downloaded, each recorded by its `.partial` file. See [`DownloadLock`].
+static DOWNLOADING: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
 
 /// Items listed on the plugin market page.
 #[derive(Debug, Serialize)]
@@ -271,11 +285,272 @@ fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
     Ok(file.plugins)
 }
 
+/// Finds `version` of plugin `id` in the online list.
+///
+/// # Errors
+///
+/// Returns [`Error::PluginDownload`] if the list does not have this plugin or this version.
+pub fn find_version<'a>(
+    online: &'a [OnlinePlugin],
+    id: &str,
+    version: &str,
+) -> Result<&'a OnlineVersion> {
+    online
+        .iter()
+        .find(|p| p.id == id)
+        .and_then(|p| p.versions.iter().find(|v| v.version == version))
+        .ok_or_else(|| Error::PluginDownload(format!("{id} {version} is not in plugins.json")))
+}
+
+/// Downloads this version of plugin `id` to `zips_dir` and returns the path of the checked zip.
+///
+/// The zip is first written as `.<id>.partial` and renamed to `<id>-<version>.zip` only after
+/// the checks pass, so every `.zip` in the folder is complete and checked. If the checks fail,
+/// the `.partial` file is deleted. A plugin downloads only one version at a time, so the
+/// `.partial` name has no version.
+///
+/// # Errors
+///
+/// Returns [`Error::PluginDownload`] if the plugin is already downloading, the file is larger
+/// than 500 MB, the SHA-256 does not match, or the id or version in the zip's manifest is
+/// different from the list.
+pub async fn download(zips_dir: &Path, id: &str, version: &OnlineVersion) -> Result<PathBuf> {
+    // The id and version come from the online list and must not point outside the folder
+    let partial = zip_path(zips_dir, &format!(".{id}.partial"))?;
+    let zip = zip_path(zips_dir, &format!("{id}-{}.zip", version.version))?;
+    let Some(_lock) = DownloadLock::try_lock(&partial) else {
+        return Err(Error::PluginDownload(format!(
+            "{id} is already downloading"
+        )));
+    };
+    fs::create_dir_all(zips_dir)?;
+    let checked = match save(&version.url, &partial, &version.sha256).await {
+        Ok(()) => check_manifest(&partial, id, &version.version),
+        Err(e) => Err(e),
+    };
+    if let Err(e) = checked {
+        let _ = fs::remove_file(&partial);
+        return Err(e);
+    }
+    fs::rename(&partial, &zip)?;
+    Ok(zip)
+}
+
+/// The download lock of one plugin. Taking it adds the plugin's `.partial` to [`DOWNLOADING`],
+/// and dropping it removes it.
+struct DownloadLock(PathBuf);
+
+impl DownloadLock {
+    /// Takes the download lock. Returns `None` without waiting if the plugin is already
+    /// downloading.
+    fn try_lock(partial: &Path) -> Option<Self> {
+        if !DOWNLOADING.lock().unwrap().insert(partial.to_path_buf()) {
+            return None;
+        }
+        Some(Self(partial.to_path_buf()))
+    }
+}
+
+impl Drop for DownloadLock {
+    fn drop(&mut self) {
+        DOWNLOADING.lock().unwrap().remove(&self.0);
+    }
+}
+
+/// Downloads `url` into `path` while computing its SHA-256, then compares it with `sha256`.
+async fn save(url: &str, path: &Path, sha256: &str) -> Result<()> {
+    use futures_util::StreamExt;
+    use sha2::{Digest, Sha256};
+    use tokio::io::AsyncWriteExt;
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(DOWNLOAD_CONNECT_TIMEOUT)
+        .read_timeout(DOWNLOAD_READ_TIMEOUT)
+        .build()?;
+    let response = client.get(url).send().await?.error_for_status()?;
+    let too_big = || Error::PluginDownload(format!("larger than {MAX_ZIP_BYTES} bytes"));
+    if response.content_length().is_some_and(|n| n > MAX_ZIP_BYTES) {
+        return Err(too_big());
+    }
+    let mut file = tokio::fs::File::create(path).await?;
+    let mut hasher = Sha256::new();
+    let mut size: u64 = 0;
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        size += chunk.len() as u64;
+        if size > MAX_ZIP_BYTES {
+            return Err(too_big());
+        }
+        hasher.update(&chunk);
+        file.write_all(&chunk).await?;
+    }
+    file.flush().await?;
+    let actual = format!("{:x}", hasher.finalize());
+    if !actual.eq_ignore_ascii_case(sha256) {
+        return Err(Error::PluginDownload(format!(
+            "sha256 does not match: plugins.json says {sha256}, the file is {actual}"
+        )));
+    }
+    Ok(())
+}
+
+/// Checks that the downloaded zip is a valid plugin package and that the id and version in its
+/// manifest match the online list.
+fn check_manifest(path: &Path, id: &str, version: &str) -> Result<()> {
+    let manifest = install::read_manifest(path)?;
+    if manifest.id != id || manifest.version != version {
+        return Err(Error::PluginDownload(format!(
+            "the zip is {} {}, plugins.json says {id} {version}",
+            manifest.id, manifest.version
+        )));
+    }
+    Ok(())
+}
+
+/// Deletes the `.partial` files left by unfinished downloads.
+///
+/// Skips the plugins being downloaded.
+pub fn remove_partial_downloads(zips_dir: &Path) -> Result<()> {
+    // Held until done, so no plugin can take its download lock between checking and deleting
+    let downloading = DOWNLOADING.lock().unwrap();
+    let entries = match fs::read_dir(zips_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().is_some_and(|ext| ext == "partial") && !downloading.contains(&path) {
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::test_util::{focus_zip, online_plugin, write_zip, TempDir};
+    use crate::plugins::test_util::{focus_zip, names, online_plugin, serve, write_zip, TempDir};
     use crate::repo::test_util::fresh_test_pool;
+
+    /// 一个能下载的版本：地址指向本机的服务，SHA-256 按 `body` 算。
+    async fn served_version(version: &str, body: Vec<u8>) -> OnlineVersion {
+        use sha2::{Digest, Sha256};
+        OnlineVersion {
+            version: version.into(),
+            sha256: format!("{:x}", Sha256::digest(&body)),
+            url: serve(body).await,
+            permissions: vec![],
+            kind: InstallKind::default(),
+        }
+    }
+
+    /// 下载：核对通过后改名成 <id>-<version>.zip，不留 .partial。
+    #[tokio::test]
+    async fn download_saves_checked_zip() {
+        let dir = TempDir::new();
+        let body = fs::read(focus_zip(&dir, "0.1.0")).unwrap();
+        let zips = dir.0.join("plugin-zips");
+        let version = served_version("0.1.0", body).await;
+
+        let zip = download(&zips, "hindsight-focus", &version).await.unwrap();
+
+        assert_eq!(zip, zips.join("hindsight-focus-0.1.0.zip"));
+        assert_eq!(names(&zips), ["hindsight-focus-0.1.0.zip"]);
+    }
+
+    /// SHA-256 对不上、清单的版本跟列表不一样：报下载错误，各有各的原因，文件夹里什么都不留。
+    #[tokio::test]
+    async fn download_rejects_changed_files() {
+        let dir = TempDir::new();
+        let body = fs::read(focus_zip(&dir, "0.1.0")).unwrap();
+        let zips = dir.0.join("plugin-zips");
+        let mut changed = served_version("0.1.0", body.clone()).await;
+        changed.sha256 = "0".repeat(64);
+        let wrong_version = served_version("0.2.0", body).await;
+
+        for (reason, version) in [("sha256", changed), ("the zip is", wrong_version)] {
+            let result = download(&zips, "hindsight-focus", &version).await;
+            assert!(
+                matches!(&result, Err(Error::PluginDownload(m)) if m.contains(reason)),
+                "{reason}: {result:?}"
+            );
+            assert!(names(&zips).is_empty(), "{reason}");
+        }
+    }
+
+    /// 列表里的 id 带 `/`：拼不出文件名，不下载，文件夹外面什么都不写。
+    #[tokio::test]
+    async fn download_rejects_id_with_slash() {
+        let dir = TempDir::new();
+        let zips = dir.0.join("plugin-zips");
+        let version = served_version("0.1.0", b"x".to_vec()).await;
+
+        let result = download(&zips, "../evil", &version).await;
+
+        assert!(
+            matches!(result, Err(Error::InvalidInputDyn(_))),
+            "{result:?}"
+        );
+        assert!(!dir.0.join("evil-0.1.0.zip").exists());
+    }
+
+    /// 找版本：列表里没有这个插件、或没有这个版本，报下载错误。
+    #[test]
+    fn find_version_in_online_list() {
+        let online = vec![online_plugin("focus", &["0.1.0", "0.2.0"])];
+        let found = find_version(&online, "focus", "0.2.0").unwrap();
+        assert_eq!(found.version, "0.2.0");
+        for (id, version) in [("focus", "0.3.0"), ("notes", "0.1.0")] {
+            assert!(
+                matches!(
+                    find_version(&online, id, version),
+                    Err(Error::PluginDownload(_))
+                ),
+                "{id} {version}"
+            );
+        }
+    }
+
+    /// 同一个插件正在下载（哪个版本都算）：再下报下载错误，正在下的 .partial 不动。
+    #[tokio::test]
+    async fn download_rejects_plugin_already_downloading() {
+        let dir = TempDir::new();
+        let partial = dir.0.join(".hindsight-focus.partial");
+        fs::write(&partial, "half").unwrap();
+        let _lock = DownloadLock::try_lock(&partial).unwrap();
+        let online = online_plugin("hindsight-focus", &["0.2.0"]);
+
+        let result = download(&dir.0, "hindsight-focus", &online.versions[0]).await;
+
+        assert!(
+            matches!(&result, Err(Error::PluginDownload(m)) if m.contains("already downloading")),
+            "{result:?}"
+        );
+        assert_eq!(fs::read_to_string(&partial).unwrap(), "half");
+    }
+
+    /// 清理：正在下载的插件的 .partial 跳过，别的 .partial 删掉，.zip 不动；下载结束后再清理就删掉。
+    #[test]
+    fn partial_downloads_skip_plugins_being_downloaded() {
+        let dir = TempDir::new();
+        let focus = dir.0.join(".hindsight-focus.partial");
+        fs::write(&focus, "").unwrap();
+        fs::write(dir.0.join(".notes.partial"), "").unwrap();
+        focus_zip(&dir, "0.1.0");
+
+        let lock = DownloadLock::try_lock(&focus).unwrap();
+        remove_partial_downloads(&dir.0).unwrap();
+        assert_eq!(
+            names(&dir.0),
+            [".hindsight-focus.partial", "focus-0.1.0.zip"]
+        );
+
+        drop(lock);
+        remove_partial_downloads(&dir.0).unwrap();
+        assert_eq!(names(&dir.0), ["focus-0.1.0.zip"]);
+    }
 
     /// 已安装的全列；本地 zip 全列，标上装它是什么；同一个版本已经装了的带上安装时会报的错。
     #[tokio::test]

@@ -382,6 +382,7 @@ pub fn run() {
             // --- plugins: plugin market and installed plugins ---
             commands::plugins::plugin_open_market,
             commands::plugins::plugin_install,
+            commands::plugins::plugin_install_online,
             commands::plugins::plugin_uninstall,
             commands::plugins::plugin_set_enabled,
             commands::plugins::plugin_open_zips_folder,

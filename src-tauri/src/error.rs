@@ -239,6 +239,11 @@ pub enum Error {
     #[error("plugins.json format version {0} is not supported")]
     PluginsJsonFormatVersion(u32),
 
+    /// Downloading from the plugin market failed: the list does not have this version, the file
+    /// is too large, or the SHA-256 or manifest does not match.
+    #[error("plugin download: {0}")]
+    PluginDownload(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

@@ -12,11 +12,14 @@ use crate::storage::DbPool;
 /// First deletes what a crash in the middle left behind. If this fails, it is only logged and no
 /// error is returned.
 ///
-/// See [`market::list`] and [`install::remove_leftovers`].
+/// See [`market::list`], [`install::remove_leftovers`] and [`market::remove_partial_downloads`].
 #[tauri::command]
 pub async fn plugin_open_market(pool: State<'_, DbPool>) -> Result<Market, String> {
     if let Err(e) = install::remove_leftovers(&pool, &plugins_dir()).await {
         log::warn!("plugins: cannot remove leftovers: {e}");
+    }
+    if let Err(e) = market::remove_partial_downloads(&plugin_zips_dir()) {
+        log::warn!("plugins: cannot remove partial downloads: {e}");
     }
     let online = market::fetch_online(market::PLUGINS_JSON_URL).await;
     market::list(&pool, &plugin_zips_dir(), online)
@@ -34,6 +37,26 @@ pub async fn plugin_install(
     approved: Vec<String>,
 ) -> Result<(), String> {
     let zip = market::zip_path(&plugin_zips_dir(), &file_name)?;
+    install::install(&pool, &plugins_dir(), &zip, approved)
+        .await
+        .map_err(Into::into)
+}
+
+/// Downloads `version` of plugin `id` from the plugin market, then installs it.
+///
+/// Takes only the id and version. The download URL and SHA-256 are read again from the online
+/// list: the check only works if both come from the same list.
+/// See [`market::download`] and [`install::install`].
+#[tauri::command]
+pub async fn plugin_install_online(
+    pool: State<'_, DbPool>,
+    id: String,
+    version: String,
+    approved: Vec<String>,
+) -> Result<(), String> {
+    let online = market::fetch_online(market::PLUGINS_JSON_URL).await?;
+    let target = market::find_version(&online, &id, &version)?;
+    let zip = market::download(&plugin_zips_dir(), &id, target).await?;
     install::install(&pool, &plugins_dir(), &zip, approved)
         .await
         .map_err(Into::into)
