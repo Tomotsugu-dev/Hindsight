@@ -12,12 +12,12 @@ Example: the focus plugin asks "how long was each category used today".
 
 ```mermaid
 sequenceDiagram
-  participant P as Plugin iframe
+  participant P as Plugin<br/>background Worker
   participant B as Forwarder
   participant A as Plugin API
   participant R as repo/
-  P->>B: postMessage<br/>stats.today_by_category
-  B->>B: Identify hindsight-focus<br/>by the message source
+  P->>B: postMessage<br/>stats.today_by_category<br/>passed on by the launcher
+  B->>B: Identify the plugin<br/>by the message source<br/>hindsight-focus.localhost
   B->>A: invoke plugin_call<br/>plugin id + method<br/>+ params
   A->>R: Does hindsight-focus<br/>have stats.read?
   R-->>A: Yes

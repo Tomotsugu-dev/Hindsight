@@ -139,7 +139,7 @@ Both are JavaScript. They run in a WebView (the web engine built into the OS), a
 
 **Flow A: when the app starts, run the background scripts**
 
-The user can close the main window. So the app opens a separate hidden window that only runs the plugins' background scripts. This is the plugin background window.
+The user can close the main window. So the app opens a separate hidden window that only runs the plugins' background scripts. This is the plugin background window. In this window each plugin has an iframe with Hindsight's own launcher, and the launcher runs `background.js` in a separate Worker thread. So one hung plugin does not stop the others (see [② Running plugins](runtime.md)).
 
 ```mermaid
 flowchart LR
@@ -165,7 +165,7 @@ flowchart LR
   class P plugin
 ```
 
-In both flows, the WebView asks for files with URLs like `hindsight-plugin://<plugin id>.localhost/<version>/<file>`. The plugin id and version come from the plugin list, which is read from the `plugins` table. The plugin file reader does not read the table. It only reads the file from that version's folder in the plugin library and hands it to the WebView.
+In both flows, the WebView asks for files with URLs like `hindsight-plugin://<plugin id>.localhost/<version>/<file>`. The plugin id and version come from the plugin list, which is read from the `plugins` table. The plugin file reader does not read the table. It only reads the file from that version's folder in the plugin library and hands it to the WebView. The only exception is the launcher, which is written in Rust.
 
 Once plugin code is running, it requests data through ③ and receives events through ④.
 

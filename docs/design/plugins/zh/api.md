@@ -12,12 +12,12 @@
 
 ```mermaid
 sequenceDiagram
-  participant P as 插件 iframe
+  participant P as 插件后台<br/>Worker
   participant B as 转发层
   participant A as 插件接口
   participant R as repo/
-  P->>B: postMessage<br/>stats.today_by_category
-  B->>B: 按消息来源<br/>认出 hindsight-focus
+  P->>B: postMessage<br/>stats.today_by_category<br/>经启动器转发
+  B->>B: 按消息来源<br/>hindsight-focus.localhost<br/>认出插件
   B->>A: invoke plugin_call<br/>插件 id + 方法 + 参数
   A->>R: hindsight-focus<br/>有 stats.read 吗
   R-->>A: 有

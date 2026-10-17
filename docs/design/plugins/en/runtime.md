@@ -2,31 +2,56 @@
 
 Overview: [Plugin backend architecture](plugins-architecture.md).
 
-**This doc designs**: how installed plugins start running. It covers two things:
+**This doc designs**: how installed plugins start running. It covers three things:
 
 - at startup, how the app opens the plugin background window and loads the plugins that run in the background;
+- when one plugin hangs, how it avoids stopping the other plugins and the app;
 - when the WebView asks for a plugin's file, how the plugin file reader hands it over.
+
+## What is in the plugin background window
+
+```mermaid
+flowchart TB
+  subgraph BG["Background window"]
+    subgraph MAIN["Main thread, shared"]
+      R["Forwarder<br/>Hindsight's JS"]
+      L1["iframe: hindsight-focus<br/>launcher"]
+      L2["iframe: pomodoro<br/>launcher"]
+    end
+    W1["Worker thread<br/>background.js of<br/>hindsight-focus"]
+    W2["Worker thread<br/>background.js of<br/>pomodoro"]
+  end
+  L1 -->|"starts"| W1
+  L2 -->|"starts"| W2
+```
+
+- **One Worker per plugin**: all iframes share one main thread, so if one plugin hangs, all of them stop. A Worker is a separate thread, so a hung Worker can be stopped on its own.
+- **One iframe per plugin** (a page inside another page): a Worker can only be started with a script from the same origin. The iframe opens at the plugin's own origin, so storage is separate between plugins and between a plugin and Hindsight, and the Worker uses the CSP from the plugin file reader.
+- **Hindsight provides each plugin's launcher**: the launcher runs on the shared main thread, so it cannot hold the author's code. It only starts the Worker, passes messages, and stops the Worker.
+- **Not one window per plugin**: each window is one process and uses several times more memory. Tauri also injects its call interface and key into each window's main page.
+
+## At startup
 
 ```mermaid
 sequenceDiagram
-  participant S as Startup
   participant M as Background<br/>window manager
   participant R as repo/
   participant H as Forwarder<br/>in the plugin<br/>background window
-  participant F as Plugin file reader
-  participant D as Plugin library
-  S->>M: After migrations<br/>and capture start
+  participant L as Launcher<br/>one iframe<br/>per plugin
+  participant F as Plugin<br/>file reader
+  Note over M: After migrations<br/>and capture start
   M->>R: Which enabled plugins<br/>run in the background?
   R-->>M: hindsight-focus
-  Note over M: If none do,<br/>do not open the window.<br/>This saves a WebView.
+  Note over M: If none do,<br/>do not open the window
   M->>H: Create the plugin<br/>background window
   H->>M: invoke<br/>get the plugin list
   M-->>H: hindsight-focus<br/>0.1.0
-  H->>H: One sandboxed<br/>iframe per plugin
-  H->>F: hindsight-plugin://<br/>hindsight-focus.localhost/<br/>0.1.0/background.js
-  F->>D: Read hindsight-focus/<br/>0.1.0/background.js
-  D-->>F: Script file
-  F-->>H: Script file<br/>+ CSP
+  H->>L: Create an iframe<br/>at hindsight-focus's<br/>own origin
+  L->>F: Ask for the launcher
+  F-->>L: Hindsight's own<br/>launcher + CSP
+  L->>F: new Worker<br/>ask for background.js
+  F-->>L: background.js from<br/>the plugin library<br/>+ CSP
+  Note over L: background.js runs<br/>in a Worker thread
 ```
 
 > Content Security Policy (CSP): a rule sent along with a web page. It tells the WebView what the page may and may not do, for example no network access. If plugin JS tries to send data to an outside website, the WebView itself blocks the request.
@@ -37,4 +62,5 @@ sequenceDiagram
 - When creating the window, set `background_throttling` to `Disabled`. Otherwise plugin timers stop while the window is hidden. Windows does not support this setting; test it there separately.
 - Put the plugin id in the host name, so pages of different plugins have different origins. End it with `.localhost`: on Windows the URL is rewritten to `http://hindsight-plugin.hindsight-focus.localhost/…`, and only a host ending in `.localhost` counts as a secure context.
 - Keep file paths inside the version folder in the URL (`<id>/<version>/`). Block paths like `../` that climb up.
+- The launcher's URL is `…/<version>/_launcher.html`, and its script is `_launcher.js` in the same folder (the CSP does not allow inline scripts). For these two names, the plugin file reader returns content written in Rust and does not read the plugin library. This puts the launcher at the plugin's own origin, and `new Worker("background.js")` points to the script of that version.
 - Build the plugin file reader as a Tauri custom protocol. Register it once at app startup, next to the existing `.plugin(...)` calls in `lib.rs`.

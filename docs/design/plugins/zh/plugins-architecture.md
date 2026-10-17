@@ -139,7 +139,7 @@ flowchart LR
 
 **线 A：主程序启动时，运行后台脚本**
 
-主窗口会被用户关掉，所以主程序另开一个不显示的窗口，专门运行各插件的后台脚本，叫插件后台窗口。
+主窗口会被用户关掉，所以主程序另开一个不显示的窗口，专门运行各插件的后台脚本，叫插件后台窗口。窗口里每个插件一个 iframe，里面是 Hindsight 自带的启动器，由它把 `background.js` 放进一个单独的 Worker 线程运行：一个插件卡死，不会拖住别的插件（见 [② 运行插件程序](runtime.md)）。
 
 ```mermaid
 flowchart LR
@@ -165,7 +165,7 @@ flowchart LR
   class P plugin
 ```
 
-两条线里，WebView 都用 `hindsight-plugin://<插件 id>.localhost/<版本>/<文件>` 这种网址要文件。插件 id 和版本来自插件列表，插件列表由 plugins 表查出。插件文件读取模块不查表，只从插件库里这个版本的文件夹读出文件，交给 WebView。
+两条线里，WebView 都用 `hindsight-plugin://<插件 id>.localhost/<版本>/<文件>` 这种网址要文件。插件 id 和版本来自插件列表，插件列表由 plugins 表查出。插件文件读取模块不查表，只从插件库里这个版本的文件夹读出文件，交给 WebView；唯一的例外是启动器，它写在 Rust 里。
 
 插件的代码运行以后，请求数据走 ③，接收事件走 ④。
 

@@ -85,4 +85,4 @@ The plugin's background script receives events pushed by Hindsight (see [④ Rec
 | `links.open` | Open a URL in the browser | Low | Later |
 | `clipboard.write` | Write text to the clipboard, such as copying a weekly report | Low | Later |
 
-- `network`: the manifest also lists `network_hosts`, such as `["api.example.com"]`, and the install confirmation page shows these addresses to the user. Rust sends the requests and allows only these addresses. A plugin cannot send requests itself: the Worker that runs a background script inherits the CSP of the forwarder page. All plugins share that one CSP, so it cannot allow different addresses for different plugins.
+- `network`: the manifest also lists `network_hosts`, such as `["api.example.com"]`, and the install confirmation page shows these addresses to the user. Rust sends the requests and allows only these addresses. A plugin cannot send requests itself: the CSP comes from the plugin file reader and is the same for all plugins, so it cannot allow different addresses for different plugins (see [② Running plugins](runtime.md)).
