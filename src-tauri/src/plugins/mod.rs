@@ -1,5 +1,6 @@
 //! Plugins: installing and running third-party plugins. For the design, see docs/design/plugins/.
 
+pub mod file_reader;
 pub mod install;
 pub mod manifest;
 pub mod market;

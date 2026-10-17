@@ -53,9 +53,9 @@ pub fn parse(json: &[u8]) -> Result<Manifest> {
 /// Checks that the plugin id is valid. The id is a folder name in the plugin library.
 ///
 /// Only lowercase letters, digits and `-` are allowed, and `-` cannot be first or last.
-/// At most 64 characters. `..` and `/` cannot appear.
-fn check_id(id: &str) -> Result<()> {
-    let ok = (1..=64).contains(&id.len())
+/// `..` and `/` cannot appear. Maximum length is 63 characters.
+pub fn check_id(id: &str) -> Result<()> {
+    let ok = (1..=63).contains(&id.len())
         && id
             .bytes()
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -153,11 +153,11 @@ mod tests {
         assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
     }
 
-    /// id：能跑出插件库的、大写的、`-` 开头结尾的、超过 64 个字符的都拒绝。
+    /// id：能跑出插件库的、大写的、`-` 开头结尾的、超过 63 个字符的都拒绝。
     #[test]
     fn id_rules() {
-        let longest = "a".repeat(64);
-        let too_long = "a".repeat(65);
+        let longest = "a".repeat(63);
+        let too_long = "a".repeat(64);
         for ok in ["hindsight-focus", "a", "focus2", &longest] {
             assert!(check_id(ok).is_ok(), "{ok} 应该通过");
         }
