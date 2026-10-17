@@ -55,19 +55,24 @@ sequenceDiagram
   M->>G: Market page opens<br/>scan local zips
   G->>Z: Read only the<br/>manifest of each zip
   Z-->>G: Manifests
-  G-->>M: Names, requested<br/>permissions, reasons<br/>for broken packages
+  G-->>M: Names, requested<br/>permissions, reasons<br/>for zips that<br/>cannot be installed
   Note over M: Shown together<br/>with the plugins<br/>in the list
-  M->>G: invoke plugin_install<br/>zip path<br/>+ approved permissions
+  M->>G: invoke plugin_install<br/>zip file name<br/>+ approved permissions
   G->>G: Read the manifest<br/>check id, version,<br/>permissions
   G->>D: Unzip to a temp folder<br/>rename to<br/>hindsight-focus/0.1.0
   G->>R: One transaction<br/>writes the plugins table
+  G->>Z: Delete the zip
   G->>W: It runs in the<br/>background: run it
   G-->>M: Installed
 ```
 
 - How it differs from a market install: there is no list, so the requested permissions can only come from the manifest in the zip. There is also no SHA-256 to check, because the user put the file there.
 - Use a separate folder. Do not scan the Downloads folder: it has many unrelated zips, and going through it every time the market page opens means touching the user's files. Do not use the plugin library either: removing leftovers deletes what is not in the table.
-- List broken packages too, with the reason, such as no background.js. Plugin authors can see what went wrong while testing.
+- List zips that cannot be installed too, with the reason:
+  - Broken packages, such as one with no background.js. Plugin authors can see what went wrong while testing.
+  - The same version is already installed. The reason is the error the install would return: "plugin already installed: 0.1.0". If a plugin author packs the plugin again without changing the version, they can see why it cannot be installed.
+- The frontend sends only the file name. The backend joins it to `plugin-zips/` and rejects a name with `/` or `..`. The zip is deleted after the install, so a full path could make it delete the wrong file.
+- After the install, the zip is deleted, so `plugin-zips/` usually holds only zips that are not installed yet. If the install fails, the zip is kept. If the zip cannot be deleted, this is only logged, and the next time the market page opens, the zip is listed with the reason "already installed".
 - From the manifest check on, it is the same as a market install: files first, table last.
 
 ## Updating
