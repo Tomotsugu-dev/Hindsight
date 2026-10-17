@@ -10,6 +10,7 @@ mod icons;
 mod memory;
 mod permissions;
 mod platform;
+mod plugins;
 mod repo;
 mod storage;
 mod sync;

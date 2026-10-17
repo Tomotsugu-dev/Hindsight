@@ -217,6 +217,15 @@ pub enum Error {
     #[error("summary cancelled")]
     SummaryCancelled,
 
+    // ───────────── Plugins ─────────────
+    /// manifest.json is not valid JSON or breaks a rule.
+    #[error("plugin manifest: {0}")]
+    PluginManifest(String),
+
+    /// The manifest has a permission this version of Hindsight does not know.
+    #[error("plugin unknown permission: {0}")]
+    PluginUnknownPermission(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),
