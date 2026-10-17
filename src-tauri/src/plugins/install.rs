@@ -1,4 +1,4 @@
-//! Installs and updates plugins.
+//! Installs, updates and uninstalls plugins, and cleans up what a crash in the middle left behind.
 
 use std::fs::{self, File};
 use std::io::{self, Read};
@@ -10,6 +10,10 @@ use crate::error::{Error, Result};
 use crate::plugins::manifest::{self, Manifest};
 use crate::repo::plugins::{self as repo, Plugin};
 use crate::storage::{utc_now_rfc3339, DbPool};
+
+/// Install, uninstall and leftover removal must not run at the same time, to avoid race
+/// conditions.
+static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Returns the checked manifest from the zip without unpacking it. Used to show the plugin's
 /// details in the frontend before it is installed.
@@ -26,6 +30,7 @@ pub async fn install(
     zip_path: &Path,
     approved: Vec<String>,
 ) -> Result<()> {
+    let _lock = LOCK.lock().await;
     let mut archive = open(zip_path)?;
     let manifest = read_checked_manifest(&mut archive)?;
     let old = repo::get(pool, &manifest.id).await?;
@@ -63,7 +68,8 @@ pub async fn install(
     .await?;
 
     // The table now points to the new version, so the install has succeeded. If the old version
-    // cannot be deleted, do not return an error; the startup cleanup deletes it.
+    // cannot be deleted, do not return an error; it is removed the next time the plugin market
+    // opens.
     if let Some(old) = old {
         if let Err(e) = fs::remove_dir_all(plugin_dir.join(&old.version)) {
             log::warn!(
@@ -72,6 +78,90 @@ pub async fn install(
                 old.version
             );
         }
+    }
+    Ok(())
+}
+
+/// Uninstalls a plugin.
+///
+/// `delete_data`: whether to delete the plugin's own data files.
+pub async fn uninstall(
+    pool: &DbPool,
+    plugins_dir: &Path,
+    id: &str,
+    delete_data: bool,
+) -> Result<()> {
+    let _lock = LOCK.lock().await;
+    // The folder name is the id from the table. Its format was checked at install, so it cannot
+    // be a name like `..` that reaches outside the plugin library.
+    let Some(plugin) = repo::get(pool, id).await? else {
+        return Ok(());
+    };
+    repo::remove(pool, &plugin.id).await?;
+    let plugin_dir = plugins_dir.join(&plugin.id);
+    let removed = if delete_data {
+        fs::remove_dir_all(&plugin_dir)
+    } else {
+        remove_versions(&plugin_dir, None)
+    };
+    // The row is gone, so the uninstall has succeeded. Version folders that cannot be deleted are
+    // removed the next time the plugin market opens.
+    if let Err(e) = removed {
+        log::warn!("plugin {}: cannot delete its files: {e}", plugin.id);
+    }
+    Ok(())
+}
+
+/// Deletes what a crash in the middle of an install, update or uninstall left behind.
+///
+/// The `plugins` table in the database is the truth, and the plugin library is tidied to match
+/// it: temp folders are deleted whole; each plugin keeps only the version in the table, and
+/// plugins not in the table are deleted; each plugin's own data is kept.
+pub async fn remove_leftovers(pool: &DbPool, plugins_dir: &Path) -> Result<()> {
+    let _lock = LOCK.lock().await;
+    let installed = repo::list(pool).await?;
+    let entries = match fs::read_dir(plugins_dir) {
+        Ok(entries) => entries,
+        // No plugin has been installed yet
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let name = entry.file_name();
+        // A file at the top of the plugin library is most likely Finder's `.DS_Store`
+        if !entry.file_type()?.is_dir() {
+            fs::remove_file(entry.path())?;
+            continue;
+        }
+        // A folder starting with `.tmp-` is a temp folder left by a crash during unpacking.
+        // Delete all of it.
+        if name.to_string_lossy().starts_with(".tmp-") {
+            fs::remove_dir_all(entry.path())?;
+            continue;
+        }
+        let keep = installed
+            .iter()
+            .find(|p| name == p.id.as_str())
+            .map(|p| p.version.as_str());
+        remove_versions(&entry.path(), keep)?;
+    }
+    Ok(())
+}
+
+/// Deletes the version folders in a plugin folder and keeps the plugin's database file.
+/// `keep`: the version to keep; if it is `None`, all versions are deleted.
+/// If the plugin folder is empty afterwards, it is deleted too.
+fn remove_versions(plugin_dir: &Path, keep: Option<&str>) -> io::Result<()> {
+    for version in fs::read_dir(plugin_dir)? {
+        let version = version?;
+        let kept = keep.is_some_and(|v| version.file_name() == v);
+        if version.file_type()?.is_dir() && !kept {
+            fs::remove_dir_all(version.path())?;
+        }
+    }
+    if fs::read_dir(plugin_dir)?.next().is_none() {
+        fs::remove_dir(plugin_dir)?;
     }
     Ok(())
 }
@@ -322,5 +412,94 @@ mod tests {
             assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
             assert!(!dir.plugins().join("hindsight-focus").exists(), "{reason}");
         }
+    }
+
+    /// 卸载并删数据：表里的行和整个插件文件夹（包括插件自己的数据库）都删掉；
+    /// 没装的插件再卸载也不报错。
+    #[tokio::test]
+    async fn uninstall_and_delete_data() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let focus_dir = dir.plugins().join("hindsight-focus");
+        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
+            .await
+            .unwrap();
+        fs::write(focus_dir.join("data.sqlite"), "").unwrap();
+
+        uninstall(&pool, &dir.plugins(), "hindsight-focus", true)
+            .await
+            .unwrap();
+        assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
+        assert!(!focus_dir.exists());
+
+        uninstall(&pool, &dir.plugins(), "hindsight-focus", true)
+            .await
+            .unwrap();
+    }
+
+    /// 卸载但保留数据：版本文件夹删掉，data.sqlite 留着；重装同一个插件，数据还在。
+    #[tokio::test]
+    async fn uninstall_and_keep_data() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let focus_dir = dir.plugins().join("hindsight-focus");
+        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
+            .await
+            .unwrap();
+        fs::write(focus_dir.join("data.sqlite"), "goal: 6h").unwrap();
+
+        uninstall(&pool, &dir.plugins(), "hindsight-focus", false)
+            .await
+            .unwrap();
+        assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
+        assert_eq!(names(&focus_dir), ["data.sqlite"]);
+
+        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
+            .await
+            .unwrap();
+        assert_eq!(names(&focus_dir), ["0.1.0", "data.sqlite"]);
+        assert_eq!(
+            fs::read_to_string(focus_dir.join("data.sqlite")).unwrap(),
+            "goal: 6h"
+        );
+    }
+
+    /// 清理残留：临时文件夹、根目录下的文件删掉；每个插件只留表里那个版本；
+    /// 表里没有的插件版本全删，留下的数据不动，删空了的插件文件夹也删掉。
+    #[tokio::test]
+    async fn remove_leftovers_keeps_only_what_the_table_says() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let plugins = dir.plugins();
+        let focus_dir = plugins.join("hindsight-focus");
+        let kept_dir = plugins.join("uninstalled-kept-data");
+        install(&pool, &plugins, &focus_zip(&dir, "0.2.0"), vec![])
+            .await
+            .unwrap();
+        fs::create_dir_all(focus_dir.join("0.1.0")).unwrap();
+        fs::write(focus_dir.join("data.sqlite"), "").unwrap();
+        fs::create_dir_all(kept_dir.join("0.1.0")).unwrap();
+        fs::write(kept_dir.join("data.sqlite"), "").unwrap();
+        fs::create_dir_all(plugins.join("half-installed").join("0.1.0")).unwrap();
+        fs::create_dir_all(plugins.join(".tmp-abc")).unwrap();
+        fs::write(plugins.join(".tmp-abc").join("manifest.json"), "").unwrap();
+        fs::write(plugins.join(".DS_Store"), "").unwrap();
+
+        remove_leftovers(&pool, &plugins).await.unwrap();
+
+        assert_eq!(
+            names(&plugins),
+            ["hindsight-focus", "uninstalled-kept-data"]
+        );
+        assert_eq!(names(&focus_dir), ["0.2.0", "data.sqlite"]);
+        assert_eq!(names(&kept_dir), ["data.sqlite"]);
+    }
+
+    /// 还没装过插件，插件库文件夹都不存在：什么也不做，不报错。
+    #[tokio::test]
+    async fn remove_leftovers_without_plugins_folder() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        remove_leftovers(&pool, &dir.plugins()).await.unwrap();
     }
 }
