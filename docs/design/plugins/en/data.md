@@ -13,6 +13,7 @@ Overview: [Plugin backend architecture](plugins-architecture.md).
 erDiagram
   plugins {
     TEXT id PK "hindsight-focus"
+    TEXT name "Focus"
     TEXT version "0.1.0"
     INTEGER enabled "1 on / 0 off"
     TEXT permissions "JSON array"
@@ -22,7 +23,8 @@ erDiagram
   }
 ```
 
-- `ui_location` and `runs_in_background` are copied from `manifest.json` at install time. At runtime the app reads only the table, not the manifest.
+- `name`, `ui_location` and `runs_in_background` are copied from `manifest.json` at install time. At runtime the app reads only the table, not the manifest.
+- `name`: the name the plugin shows, used by the sidebar entry and the plugin list.
 - `ui_location`: where the plugin page shows:
   - `sidebar`: adds an entry to the main window's sidebar
   - `window`: opens a separate window when clicked
@@ -56,6 +58,8 @@ flowchart LR
 ## Uninstalling
 
 1. Delete this plugin's row from the `plugins` table in one transaction.
-2. Delete the whole `plugins/hindsight-focus/` folder: the code and the database together.
+2. Delete the files. The user chooses whether to delete the data:
+   - Delete the data: delete the whole `plugins/hindsight-focus/` folder, the code and the database together.
+   - Keep the data: delete only the version folders and keep `data.sqlite`. If the same plugin is installed again later, it can keep using the data.
 
-This works like install: the table is the source of truth. Delete the row first, then the files. If the app crashes in between, a folder that is not in the table is left. The startup cleanup deletes it next time.
+This works like install: the table is the source of truth. Delete the row first, then the files. If the app crashes in between, the version folders of a plugin that is not in the table are left. They are deleted the next time the plugin market opens. The data is not touched, because the user may have chosen to keep it.

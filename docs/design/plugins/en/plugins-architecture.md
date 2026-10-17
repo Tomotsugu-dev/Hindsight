@@ -69,7 +69,7 @@ flowchart TB
 
 ## 2. The four jobs of plugins/
 
-**The problem**: in Figure 1, `plugins/` is just a box. We need to decide two things: what a plugin looks like when the backend gets it, and how `plugins/` splits into parts and what each part does. Details for each job: [Plugin market](market.md), [① Installing plugins](install.md), [② Running plugins](runtime.md), [③ Requesting data](api.md), [④ Receiving events](events.md), [Plugin data](data.md).
+**The problem**: in Figure 1, `plugins/` is just a box. We need to decide two things: what a plugin looks like when the backend gets it, and how `plugins/` splits into parts and what each part does. Details for each job: [Plugin market](market.md), [① Installing plugins](install.md), [② Running plugins](runtime.md), [③ Requesting data](api.md), [④ Receiving events](events.md), [Plugin data](data.md), [Plugin permissions](permissions.md).
 
 ### Plugin package format
 
@@ -123,7 +123,7 @@ Details: [① Installing plugins](install.md). Where plugins come from: [Plugin 
 
 ```mermaid
 flowchart LR
-  U["User approves<br/>permissions and<br/>clicks Install<br/>on the market page"] --> M1["Plugin manager<br/>downloads the plugin,<br/>compares permissions<br/>with the manifest"] --> M2["Puts it in the<br/>plugin library"] --> M3["Writes the<br/>plugins table"] --> M4["Tells the background<br/>window manager<br/>to run its<br/>background script"]
+  U["User approves<br/>permissions and<br/>clicks Install<br/>on the market page"] --> M1["Plugin manager<br/>downloads the plugin,<br/>checks the manifest"] --> M2["Puts it in the<br/>plugin library"] --> M3["Writes the<br/>plugins table"] --> M4["Tells the background<br/>window manager<br/>to run its<br/>background script"]
 ```
 
 ### ② Running plugins

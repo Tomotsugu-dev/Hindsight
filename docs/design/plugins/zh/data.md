@@ -13,6 +13,7 @@
 erDiagram
   plugins {
     TEXT id PK "hindsight-focus"
+    TEXT name "专注"
     TEXT version "0.1.0"
     INTEGER enabled "1 开 / 0 关"
     TEXT permissions "JSON 数组"
@@ -22,7 +23,8 @@ erDiagram
   }
 ```
 
-- `ui_location`、`runs_in_background` 安装时从 `manifest.json` 抄进来。运行时只查表，不再读 manifest。
+- `name`、`ui_location`、`runs_in_background` 安装时从 `manifest.json` 抄进来。运行时只查表，不再读 manifest。
+- `name`：插件显示的名字，侧边栏入口和插件列表用它。
 - `ui_location`：控制页面显示在哪：
   - `sidebar` 在主窗口侧边栏加一个入口
   - `window` 点开时弹出独立窗口
@@ -56,6 +58,8 @@ flowchart LR
 ## 卸载
 
 1. 一个事务里删掉 plugins 表里这一行。
-2. 删掉整个 `plugins/hindsight-focus/`：代码和数据库一起删。
+2. 删掉文件，用户选删不删数据：
+   - 删数据：删掉整个 `plugins/hindsight-focus/`，代码和数据库一起删；
+   - 不删数据：只删版本文件夹，`data.sqlite` 留着。以后重装同一个插件，数据还能接着用。
 
-和安装同一个道理，表说了算：先删表里的行，再删文件。崩在中间，留下的是一个表里没有的文件夹，下次启动清理时删掉。
+和安装同一个道理，表说了算：先删表里的行，再删文件。崩在中间，留下的是表里没有的插件的版本文件夹，下次打开插件市场时删掉；数据不动，因为用户可能选了保留。

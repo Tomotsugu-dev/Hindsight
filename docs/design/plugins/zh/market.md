@@ -49,5 +49,5 @@ flowchart LR
 ```
 
 - `version`、`url`、`sha256` 写在列表里，作者每发一个新版本，都要提 PR 改这三项。
-- `permissions` 让市场页在下载前就能把权限给用户看。用户同意的权限传给安装，和下载到的清单比对（见 [① 插件安装](install.md)）。
+- `permissions` 让市场页在下载前就能把权限给用户看。用户同意的权限传给安装，存进 plugins 表（见 [① 插件安装](install.md)）。
 - Hindsight 拿已装的版本和列表里的比，列表里的新就提示更新。

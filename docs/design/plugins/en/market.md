@@ -49,5 +49,5 @@ One record per plugin:
 ```
 
 - `version`, `url` and `sha256` are in the list. Each time the author releases a new version, they open a PR to change these three fields.
-- `permissions` lets the market page show the permissions to the user before the download. The install compares the ones the user approved with the downloaded manifest (see [① Installing plugins](install.md)).
+- `permissions` lets the market page show the permissions to the user before the download. The ones the user approved are passed to the install and stored in the plugins table (see [① Installing plugins](install.md)).
 - Hindsight compares the installed version with the one in the list. If the list has a newer version, it offers an update.
