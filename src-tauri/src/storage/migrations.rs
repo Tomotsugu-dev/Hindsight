@@ -949,12 +949,27 @@ const BACKFILL_SUPER_CATEGORY_OUTBOX_SQL: &str = r#"
     WHERE EXISTS (SELECT 1 FROM activities);
 "#;
 
+/// v44：装好的插件，一行一个。`permissions` 是用户同意的权限（JSON 数组），
+/// 不是清单里申请的。只在本机，不同步。
+/// `ui_location` 不加 CHECK：以后加新的页面位置不用迁移。
+const PLUGINS_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS plugins (
+        id                 TEXT PRIMARY KEY,
+        version            TEXT NOT NULL,
+        enabled            INTEGER NOT NULL DEFAULT 1,
+        permissions        TEXT NOT NULL DEFAULT '[]',
+        ui_location        TEXT NOT NULL,
+        runs_in_background INTEGER NOT NULL,
+        installed_at       TEXT NOT NULL
+    );
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 33] = [
+    let extras: [&'static str; 34] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -988,6 +1003,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         RESET_GROUPS_ON_DELETED_FUN_SQL,       // v41
         SITE_RULES_TABLE_SQL,                  // v42
         BACKFILL_SUPER_CATEGORY_OUTBOX_SQL,    // v43
+        PLUGINS_TABLE_SQL,                     // v44
     ];
     pool.0
         .call(move |conn| {
@@ -1093,7 +1109,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            43
+            44
         );
 
         let tables = table_names(&pool).await;
@@ -1116,6 +1132,7 @@ mod tests {
             "screenshot_dedup_map",
             "webdav_accounts",
             "site_rules",
+            "plugins",
         ] {
             assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
         }
@@ -1300,7 +1317,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            43
+            44
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1355,7 +1372,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            43
+            44
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(
