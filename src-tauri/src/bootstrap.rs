@@ -364,6 +364,9 @@ fn tray_labels(lang: &str) -> (&'static str, &'static str) {
     match lang {
         "ja" => ("メインウィンドウを表示", "終了"),
         "en" => ("Show Window", "Quit"),
+        "tw" => ("顯示主視窗", "退出"),
+        "pt" => ("Mostrar janela", "Sair"),
+        "es" => ("Mostrar ventana", "Salir"),
         _ => ("显示主窗口", "退出"),
     }
 }
@@ -533,7 +536,37 @@ pub fn spawn_backfill_tasks(pool: DbPool) {
 
 #[cfg(test)]
 mod tests {
-    use super::silent_autostart;
+    use super::{silent_autostart, tray_labels};
+
+    // system_language 返回的每种语言，托盘文案都和前端的 tray.show / tray.quit 一样。
+    // 前端加了新语言、这里没跟上时，语言数对不上，测试挂掉
+    #[test]
+    fn tray_labels_match_every_system_language() {
+        let cases = [
+            ("zh", ("显示主窗口", "退出")),
+            ("tw", ("顯示主視窗", "退出")),
+            ("ja", ("メインウィンドウを表示", "終了")),
+            ("pt", ("Mostrar janela", "Sair")),
+            ("es", ("Mostrar ventana", "Salir")),
+            ("en", ("Show Window", "Quit")),
+        ];
+        for (lang, labels) in cases {
+            assert_eq!(tray_labels(lang), labels, "{lang}");
+        }
+
+        let locales = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/i18n/locales");
+        let count = std::fs::read_dir(locales)
+            .unwrap()
+            .filter(|entry| {
+                entry.as_ref().unwrap().path().extension() == Some(std::ffi::OsStr::new("json"))
+            })
+            .count();
+        assert_eq!(
+            count,
+            cases.len(),
+            "前端的语言数变了：tray_labels 和 system_language 也要加上新语言"
+        );
+    }
 
     // 用户手动启动：不管「静默启动」开没开，都要看到窗口
     #[test]
