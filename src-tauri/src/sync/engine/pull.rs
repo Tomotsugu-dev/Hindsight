@@ -447,11 +447,12 @@ async fn merge_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
                     rusqlite::params![row.id, row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at],
                 )?;
             } else {
+                // Names do not sync: keep the local name (ADR-0015).
                 conn.execute(
-                    "UPDATE categories SET name = ?, color = ?, icon = ?, builtin = ?,
+                    "UPDATE categories SET color = ?, icon = ?, builtin = ?,
                                             sort_order = ?, updated_at = ?, deleted_at = ?
                      WHERE id = ?",
-                    rusqlite::params![row.name, row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at, row.id],
+                    rusqlite::params![row.color, row.icon, row.builtin as i64, row.sort_order, row.updated_at, row.deleted_at, row.id],
                 )?;
             }
             // Absent key = older peer: keep the local super-category.
@@ -499,11 +500,12 @@ async fn merge_super_categories(pool: &DbPool, body: &[u8]) -> Result<()> {
             if !should_apply {
                 return Ok(());
             }
+            // Names do not sync: an existing row keeps its local name (ADR-0015).
             conn.execute(
                 "INSERT INTO super_categories(id, name, color, icon, sort_order, updated_at, deleted_at)
                  VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name, color = excluded.color, icon = excluded.icon,
+                    color = excluded.color, icon = excluded.icon,
                     sort_order = excluded.sort_order, updated_at = excluded.updated_at,
                     deleted_at = excluded.deleted_at",
                 rusqlite::params![
@@ -1314,12 +1316,12 @@ mod tests {
             Some("A")
         );
 
-        // 更新的覆盖(含 sort_order)
+        // 更新的覆盖 sort_order,名字保留本机的
         merge_super_categories(&pool, &super_body("s1", "New", 7, T_NEW, None))
             .await
             .unwrap();
         let row = read_row(&pool, SUPER_SQL, "s1", 4).await.unwrap();
-        assert_eq!(row[0].as_deref(), Some("New"));
+        assert_eq!(row[0].as_deref(), Some("A"));
         assert_eq!(row[1].as_deref(), Some("7"));
 
         // 合并对端数据不回灌 outbox
@@ -1469,6 +1471,43 @@ mod tests {
     }
 
     // ───────── 任务 2:merge_categories ─────────
+
+    /// 已有的分类:对端较新的行覆盖其他字段,名字保留本机的。本机没有的分类用对端的名字新建。
+    #[tokio::test]
+    async fn merge_categories_keeps_local_name() {
+        let pool = fresh_test_pool().await;
+        exec_sql(
+            &pool,
+            "UPDATE categories SET name = 'Coding', color = '#aaaaaa', updated_at = ?1 WHERE id = 'code'",
+            vec![s(T_OLD)],
+        )
+        .await;
+
+        merge_categories(&pool, &category_body("code", "コーディング", T_NEW, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            read_row(
+                &pool,
+                "SELECT name, color, updated_at FROM categories WHERE id = ?1",
+                "code",
+                3
+            )
+            .await
+            .unwrap(),
+            vec![s("Coding"), s("#123456"), s(T_NEW)]
+        );
+
+        merge_categories(&pool, &category_body("c1", "健身", T_NEW, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            read_row(&pool, "SELECT name FROM categories WHERE id = ?1", "c1", 1)
+                .await
+                .unwrap(),
+            vec![s("健身")]
+        );
+    }
 
     /// 远端 updated_at 较旧(即使带墓碑)不得覆盖本地,更不得触发级联。
     #[tokio::test]

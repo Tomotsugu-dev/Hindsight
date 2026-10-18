@@ -9,11 +9,9 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import { useSuperCategories } from "../../state/superCategories";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
-import { displayCategoryName, displaySuperCategoryName } from "../../utils/categoryName";
 import type { Category, SuperCategory } from "../../api/hindsight";
 import { CategoryRow } from "./CategoryRow";
 import { SuperRow, OrphanRow, BuiltinRow } from "./superRows";
@@ -78,7 +76,6 @@ export function SuperCategoriesTable({
   justCreatedCatId = null,
   justCreatedSuperId = null,
 }: SuperCategoriesTableProps = {}) {
-  const { t } = useTranslation();
   const { categories, reorder: reorderCategories } = useCategories();
   const { supers, assignCategory, reorder: reorderSupers } = useSuperCategories();
 
@@ -579,7 +576,7 @@ export function SuperCategoriesTable({
               <FlyIcon size={20} strokeWidth={1.85} />
             </span>
             <span className={catStyles.catFlyName}>
-              {displayCategoryName({ id: drag.catId, name: drag.displayName }, t)}
+              {drag.displayName}
             </span>
           </div>,
           document.body,
@@ -622,10 +619,7 @@ export function SuperCategoriesTable({
               </span>
               <div className={styles.superNameWrap}>
                 <span className={styles.superName}>
-                  {displaySuperCategoryName(
-                    { id: superDrag.superId, name: superDrag.displayName },
-                    t,
-                  )}
+                  {superDrag.displayName}
                 </span>
               </div>
             </div>

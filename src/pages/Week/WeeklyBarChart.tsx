@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
 import { useIsDark } from "../../hooks/useTheme";
 import { adjustCategoryColor } from "../../utils/categoryColor";
-import { displayCategoryName } from "../../utils/categoryName";
 import type { DaySummary } from "../../api/hindsight";
 import { barMinutes, barSecs } from "../../lib/segments";
 import styles from "./WeeklyBarChart.module.css";
@@ -105,7 +104,7 @@ export function WeeklyBarChart({
                         }}
                         title={
                           cat
-                            ? `${displayCategoryName(cat, t)} · ${fmtTotal(barMinutes([seg]))}`
+                            ? `${cat.name} ·${fmtTotal(barMinutes([seg]))}`
                             : fmtTotal(barMinutes([seg]))
                         }
                       />

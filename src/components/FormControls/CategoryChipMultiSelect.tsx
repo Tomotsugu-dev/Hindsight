@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { EyeOff } from "lucide-react";
 import { api, type Category } from "../../api/hindsight";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
-import { displayCategoryName } from "../../utils/categoryName";
 import styles from "./CategoryChipMultiSelect.module.css";
 
 interface Props {
@@ -79,7 +78,7 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
             }
           >
             <Icon size={13} strokeWidth={2} />
-            <span className={styles.name}>{displayCategoryName(c, t)}</span>
+            <span className={styles.name}>{c.name}</span>
           </button>
         );
       })}

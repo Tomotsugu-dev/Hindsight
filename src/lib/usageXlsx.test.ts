@@ -18,7 +18,6 @@ function fixture(): UsageExportData {
     rangeEnd: "2026-07-19",
     superCategories: [{ id: "work", name: "工作", color: "#111", icon: "X", sortOrder: 0 }],
     categories: [
-      // name 故意不等于内置默认名 → displayCategoryName 直接用 name,绕开 i18n
       {
         id: "code",
         name: "Coding",

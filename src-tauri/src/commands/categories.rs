@@ -3,10 +3,12 @@
 //! 命令薄壳：参数 / 返回值校验由 [`crate::repo::categories`] 层做，本文件只把
 //! crate Error 适配成 String 给前端。
 
+use std::collections::HashMap;
+
 use tauri::State;
 
 use crate::repo::categories::{self, Category, CategoryInput, CategoryPatch, UnclassifiedApp};
-use crate::storage::DbPool;
+use crate::storage::{migrations, DbPool};
 
 /// 拉所有分类（包括内置和用户自建），按 sort_order 升序。
 #[tauri::command]
@@ -84,6 +86,21 @@ pub async fn list_unclassified_apps(
     days_back: Option<u32>,
 ) -> Result<Vec<UnclassifiedApp>, String> {
     categories::list_unclassified(&pool, days_back.unwrap_or(7))
+        .await
+        .map_err(Into::into)
+}
+
+/// Translates the default categories and super-categories that still have their original
+/// Chinese names into the UI language.
+///
+/// See [`migrations::translate_default_names`].
+#[tauri::command]
+pub async fn translate_default_category_names(
+    pool: State<'_, DbPool>,
+    categories: HashMap<String, String>,
+    super_categories: HashMap<String, String>,
+) -> Result<(), String> {
+    migrations::translate_default_names(&pool, categories, super_categories)
         .await
         .map_err(Into::into)
 }

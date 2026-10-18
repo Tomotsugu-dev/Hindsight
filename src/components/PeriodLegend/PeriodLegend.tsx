@@ -1,6 +1,4 @@
-import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
-import { displayCategoryName } from "../../utils/categoryName";
 import styles from "./PeriodLegend.module.css";
 
 interface PeriodLegendProps {
@@ -11,7 +9,6 @@ interface PeriodLegendProps {
 /** 卡片底部图例：分类色块 + 名字 (+ 可选工作时段条带)。
  *  抽自 Today/Week/Month 三页内嵌的 Legend 函数。 */
 export function PeriodLegend({ workHoursLabel }: PeriodLegendProps) {
-  const { t } = useTranslation();
   const { categories } = useCategories();
   return (
     <div className={styles.legend}>
@@ -22,7 +19,7 @@ export function PeriodLegend({ workHoursLabel }: PeriodLegendProps) {
             style={{ background: c.color }}
             aria-hidden
           />
-          {displayCategoryName(c, t)}
+          {c.name}
         </span>
       ))}
       {workHoursLabel ? (

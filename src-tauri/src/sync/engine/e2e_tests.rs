@@ -998,7 +998,7 @@ async fn super_category_create_assign_unassign_syncs_to_peer() {
 }
 
 #[tokio::test]
-async fn super_category_rename_and_reorder_sync_with_lww() {
+async fn super_category_rename_stays_local_and_reorder_syncs() {
     use crate::repo::super_categories as sc;
     let drive = Arc::new(InMemoryDriveStore::new());
     let a = make_device("device-a", drive.clone()).await;
@@ -1008,7 +1008,7 @@ async fn super_category_rename_and_reorder_sync_with_lww() {
     a.engine.sync_now().await.unwrap();
     b.engine.sync_now().await.unwrap();
 
-    // B 改名,A 收到
+    // B 改名,A 上的名字不变
     tick().await;
     sc::update(
         &b.pool,
@@ -1022,7 +1022,7 @@ async fn super_category_rename_and_reorder_sync_with_lww() {
     .unwrap();
     b.engine.sync_now().await.unwrap();
     a.engine.sync_now().await.unwrap();
-    assert_eq!(super_row(&a, &x.id).await.unwrap().0, "X2");
+    assert_eq!(super_row(&a, &x.id).await.unwrap().0, "X");
 
     // A 之后重排,B 收到;冲突时后写的赢
     tick().await;
@@ -1116,18 +1116,21 @@ async fn category_file_from_an_old_peer_keeps_local_super_category() {
         .unwrap();
     b.engine.sync_now().await.unwrap();
 
-    let name: String = b
+    let (name, color): (String, String) = b
         .pool
         .0
         .call(|conn| {
-            conn.query_row("SELECT name FROM categories WHERE id = 'code'", [], |r| {
-                r.get(0)
-            })
+            conn.query_row(
+                "SELECT name, color FROM categories WHERE id = 'code'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
             .db()
         })
         .await
         .unwrap();
-    assert_eq!(name, "Code (old peer)", "老对端的改动照常合并");
+    assert_eq!(color, "#111111", "老对端的改动照常合并");
+    assert_eq!(name, "编程", "名字除外");
     assert_eq!(
         cat_super(&b, "code").await.as_deref(),
         Some(sup.id.as_str())

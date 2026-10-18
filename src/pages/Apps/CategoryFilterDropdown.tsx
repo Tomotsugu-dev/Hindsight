@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import type { Category } from "../../api/hindsight";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
-import { displayCategoryName } from "../../utils/categoryName";
 import styles from "./AppsFilterBar.module.css";
 
 interface Props {
@@ -171,7 +170,7 @@ export function CategoryFilterDropdown({
                     onClick={() => onToggleCategory(c.id)}
                   >
                     <Icon size={13} strokeWidth={2} className={styles.catChipIcon} />
-                    {displayCategoryName(c, t)}
+                    {c.name}
                   </button>
                 );
               })}
