@@ -1,11 +1,9 @@
 import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import { AppIcon } from "../components/AppIcon/AppIcon";
 import { AppStack } from "../components/AppStack/AppStack";
 import { useCategories } from "../state/categories";
 import type { AppUsage } from "../api/hindsight";
 import { displayAppName } from "../utils/displayName";
-import { displayCategoryName } from "../utils/categoryName";
 import type { RankedItem } from "../components/RankedList/RankedList";
 
 /** Shape shared by every ranking source (hour slots / day summaries): only the categoryId and
@@ -23,7 +21,6 @@ export function usePeriodRankings(
   segmentSources: SegmentSource[],
   apps: AppUsage[],
 ): { categoryRanks: RankedItem[]; appRanks: RankedItem[] } {
-  const { t } = useTranslation();
   const { categories, getCategory } = useCategories();
 
   const categoryRanks = useMemo<RankedItem[]>(() => {
@@ -56,7 +53,7 @@ export function usePeriodRankings(
     return categories
       .map((c) => ({
         id: c.id,
-        name: displayCategoryName(c, t),
+        name: c.name,
         color: c.color,
         minutes: Math.round((totals.get(c.id) ?? 0) / 60),
         extras: (
@@ -68,7 +65,7 @@ export function usePeriodRankings(
       }))
       .filter((c) => c.minutes > 0)
       .sort((a, b) => b.minutes - a.minutes);
-  }, [segmentSources, apps, categories, t]);
+  }, [segmentSources, apps, categories]);
 
   const appRanks = useMemo<RankedItem[]>(() => {
     return apps.map((a) => {
@@ -77,7 +74,7 @@ export function usePeriodRankings(
       return {
         id: a.groupId,
         name: displayAppName(a.displayName),
-        subtitle: cat ? displayCategoryName(cat, t) : undefined,
+        subtitle: cat?.name,
         color,
         minutes: a.minutes,
         leading: <AppIcon processName={a.iconProcess} fallbackColor={color} size={26} />,
@@ -86,7 +83,7 @@ export function usePeriodRankings(
         byCategory: a.byCategory,
       };
     });
-  }, [apps, getCategory, t]);
+  }, [apps, getCategory]);
 
   return { categoryRanks, appRanks };
 }

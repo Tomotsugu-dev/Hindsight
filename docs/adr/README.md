@@ -21,3 +21,4 @@ Each ADR records one decision: the problem, what we chose, and why. Start a new 
 | [0012](0012-webdav-device-tombstone.md) | WebDAV: remove a device with a tombstone | 🟢 | ⬜ | [中文](zh/0012-webdav-device-tombstone.md) |
 | [0013](0013-site-category-rules.md) | Website category rules | 🟢 | ✅ | [中文](zh/0013-site-category-rules.md) |
 | [0014](0014-site-icons.md) | Website icons | 🟢 | ✅ | [中文](zh/0014-site-icons.md) |
+| [0015](0015-default-category-names-follow-language.md) | Translate default category names once; names no longer sync | 🟡 | ⬜ | [中文](zh/0015-default-category-names-follow-language.md) |

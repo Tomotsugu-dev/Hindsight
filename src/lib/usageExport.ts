@@ -6,7 +6,6 @@ import {
   type DaySummaryDto,
   type SuperCategory,
 } from "../api/hindsight";
-import { displayCategoryName } from "../utils/categoryName";
 
 /** 「设置 → 数据 → 导出使用数据」的核心逻辑：按日期范围拉统计 + 序列化成文件文本。
  *
@@ -197,10 +196,7 @@ function dailyAvgSecs(days: DaySummaryDto[], todayStr: string): number | null {
 
 /** 按选项拉全部统计数据。调用量 ≈ 范围天数（每日应用）+ 每周 2 次 + 每月 2 次，
  *  本地 SQLite 单次毫秒级，90 天范围约一两秒。 */
-export async function collectUsageData(
-  opts: UsageExportOptions,
-  labels: UsageExportLabels,
-): Promise<UsageExportData> {
+export async function collectUsageData(opts: UsageExportOptions): Promise<UsageExportData> {
   const today = startOfDay(new Date());
   const todayStr = fmtLocalDate(today);
   const start = new Date(...splitDate(opts.start));
@@ -217,7 +213,7 @@ export async function collectUsageData(
   const catById = new Map(categories.map((c) => [c.id, c]));
   const catName = (id: string): string => {
     const cat = catById.get(id);
-    return cat ? displayCategoryName(cat, labels.t) : id;
+    return cat ? cat.name : id;
   };
 
   // —— 涉及的自然月：daily 与 monthly 共用同一批 get_month_days 结果 ——

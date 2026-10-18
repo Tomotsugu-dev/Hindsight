@@ -196,9 +196,11 @@ pub async fn update(pool: &DbPool, id: &str, patch: SuperCategoryPatch) -> Resul
                 .filter(|s| !s.is_empty())
                 .unwrap_or(cur_icon);
 
+            // A new name sets is_default_name to 0 (ADR-0015).
             tx.execute(
-                "UPDATE super_categories SET name = ?, color = ?, icon = ?, updated_at = ?
-                 WHERE id = ?",
+                "UPDATE super_categories SET name = ?1, color = ?2, icon = ?3, updated_at = ?4,
+                                             is_default_name = is_default_name AND name IS ?1
+                 WHERE id = ?5",
                 rusqlite::params![next_name, next_color, next_icon, updated, id],
             )
             .db()?;
@@ -389,6 +391,38 @@ mod tests {
         assert_eq!(got.name, "甲改");
         assert_eq!(got.color, "#111111"); // 未给的字段不动
         assert_eq!(got.icon, "Star");
+    }
+
+    /// 用户改名后 is_default_name 变成 0。
+    #[tokio::test]
+    async fn update_rename_clears_is_default_name() {
+        let pool = fresh_test_pool().await;
+        let flag = |pool: DbPool| async move {
+            pool.0
+                .call(|conn| {
+                    Ok(conn
+                        .query_row(
+                            "SELECT is_default_name FROM super_categories WHERE id = 'work'",
+                            [],
+                            |r| r.get::<_, bool>(0),
+                        )
+                        .unwrap())
+                })
+                .await
+                .unwrap()
+        };
+        assert!(flag(pool.clone()).await);
+        update(
+            &pool,
+            "work",
+            SuperCategoryPatch {
+                name: Some("Job".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!flag(pool.clone()).await);
     }
 
     #[tokio::test]

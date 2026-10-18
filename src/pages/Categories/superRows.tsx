@@ -13,7 +13,6 @@ import { useSuperCategories } from "../../state/superCategories";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
-import { displaySuperCategoryName } from "../../utils/categoryName";
 import type { Category, SuperCategory } from "../../api/hindsight";
 import { CategoryRow } from "./CategoryRow";
 import styles from "./SuperCategoriesTable.module.css";
@@ -185,7 +184,7 @@ function SuperRow_({
                 }
               }}
             >
-              {displaySuperCategoryName(sup, t)}
+              {sup.name}
             </span>
           )}
         </div>
@@ -214,7 +213,7 @@ function SuperRow_({
         open={confirmOpen}
         title={t("categories.super.deleteDialog.title")}
         message={t("categories.super.deleteDialog.message", {
-          name: displaySuperCategoryName(sup, t),
+          name: sup.name,
         })}
         confirmLabel={t("categories.deleteDialog.confirm")}
         variant="danger"
