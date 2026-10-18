@@ -16,9 +16,9 @@ sequenceDiagram
   participant B as 转发层
   participant A as 插件接口
   participant R as repo/
-  P->>B: hindsight.call<br/>stats.today_by_category<br/>经启动器转发
+  P->>B: hindsight.call<br/>stats.day_by_category<br/>经启动器转发
   B->>B: 看消息来自<br/>哪个 iframe<br/>认出插件
-  B->>A: invoke plugin_call<br/>插件 id + 方法 + 参数
+  B->>A: invoke plugin_call<br/>插件 id + 方法 + 参数<br/>+ 主界面选的设备
   A->>R: hindsight-focus<br/>有 stats.read 吗
   R-->>A: 有
   Note over A: 没有就在这里<br/>返回错误
@@ -30,7 +30,7 @@ sequenceDiagram
 ```
 
 - 插件的所有调用都走一个命令 `plugin_call`，用方法名区分要做什么：
-  - 读 Hindsight 的数据：`stats.today_by_category`
+  - 读 Hindsight 的数据：`stats.day_by_category`
   - 发通知：`notifications.send`，用现有的 `tauri-plugin-notification`
   - 读写插件自己的数据库：`db.execute`、`db.query`，见 [插件的数据](data.md)
 - 方法名就是对插件公开的接口。权限只在一处查，加接口也不用加命令。
@@ -39,3 +39,16 @@ sequenceDiagram
 - 为避免插件绕过转发层、直接调 `invoke`：加入 Tauri 的密钥。
 - 查数据复用 `repo/` 现有的函数，不为插件另写一套 SQL。
 - 返回前换成公开格式。内部结构体以后改名、加字段，不会弄坏已经发布的插件。
+
+## 第一版的方法
+
+| 方法 | 要的权限 | 参数 | 返回 |
+|---|---|---|---|
+| `stats.day_by_category` | `stats.read` 加一档 | `{ "date": "2026-10-19", "devices": "selected" }`，`devices` 可以不传 | `[{ "id": "code", "name": "Coding", "seconds": 12600, "superCategory": { "id": "work", "name": "Work" } }]`，用时多的在前；没归入大类的，`superCategory` 是 `null` |
+| `notifications.send` | `notifications` | `{ "body": "已经看了 10 分钟 YouTube" }` | 无 |
+
+- 大类的时长由插件自己按 `superCategory` 加总，和主界面的算法一样。
+- 能读哪些日子看档位（见 [插件权限](permissions.md)）。「今天」「本周」「本月」按本机日期算。读不到就报错，错误里是能读到这天的那一档。
+- 算哪些设备由插件自己说：`devices` 不传或者是 `"this"`，只算本机；是 `"selected"`，按主界面选的设备算，要 `devices.read`，没有就报错。不会悄悄换成别的范围，插件拿到的数一定是它要的那种。
+- 主界面选的设备由转发层每次转发时带上，插件改不了。
+- 通知的标题固定是插件名，插件不能冒充 Hindsight 发通知。不限频率，插件刷屏的话用户可以把它关掉。

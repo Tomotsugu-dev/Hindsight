@@ -50,13 +50,13 @@ The outer level is the format version. `plugins` has one record per plugin, and 
           "version": "0.2.0",
           "url": "https://github.com/someone/hindsight-focus/releases/download/0.2.0/hindsight-focus-0.2.0.zip",
           "sha256": "…",
-          "permissions": ["stats.read", "focus.changed", "focus.category", "notifications"]
+          "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category", "notifications"]
         },
         {
           "version": "0.1.0",
           "url": "https://github.com/someone/hindsight-focus/releases/download/0.1.0/hindsight-focus-0.1.0.zip",
           "sha256": "…",
-          "permissions": ["stats.read", "focus.changed", "focus.category"]
+          "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category"]
         }
       ]
     }

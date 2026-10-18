@@ -31,8 +31,16 @@ Status:
 
 | Permission | What it allows | Risk | Status |
 |---|---|---|---|
-| `stats.read` | Read how long each category and each app was used per day and per hour, for days, weeks and months. No window titles, URLs or websites | Low | MVP |
+| `stats.read` | Read how long each category and each app was used per day and per hour. Results include category names and the names of their super-categories. No window titles, URLs or websites. Must be requested with one of the four ranges below | Low | MVP |
+| `stats.today` | Read today only | Low | MVP |
+| `stats.week` | Read this week: Monday to today | Low | MVP |
+| `stats.month` | Read this month: the 1st to today, and this week too | Low | MVP |
+| `stats.history` | Read every day | Low | MVP |
+| `devices.read` | Count statistics by the devices selected in the main window: all devices, or one of them. Without it, only this computer counts | Low | MVP |
 | `stats.sites` | Read how long each website was used, such as github.com for 2 hours. No full URLs | Medium | Later |
+
+- Each range includes the narrower ones: a plugin with a wider range can also read every day a narrower range can.
+- Requesting `stats.read` without a range fails the manifest check. So the install confirmation page always shows the user how far back the plugin can read.
 
 ### Reading details
 
