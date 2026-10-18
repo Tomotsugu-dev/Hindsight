@@ -59,12 +59,12 @@ These figures reflect the devices and usage patterns tested here; results will v
 
 | Settings | Main window | Memory average / peak | CPU average / peak | GPU | Screenshots | OCR |
 | --- | --- | --- | --- | --- | --- | --- |
-| Screenshots and background OCR off (default) | Open | 145 / 152 MB | 2.0% / 9% | 0 | 0 | 0 |
-| Screenshots and background OCR off (default) | Closed | 25 / 28 MB | 0.3% / 8% | 0 | 0 | 0 |
-| Screenshots only | Open | 145 / 155 MB | 3.5% / 31% | 0 | 16 | 0 |
-| Screenshots only | Closed | 26 / 38 MB | 2.4% / 34% | 0 | 16 | 0 |
-| Screenshots and background OCR | Open | 400 / 405 MB | 4.1% / 31% | 0.23% | 16 | 16 |
-| Screenshots and background OCR | Closed | 280 / 297 MB | 3.0% / 38% | 0.25% | 16 | 16 |
+| Screenshots and background OCR off (default) | 🟠 Closed | 25 / 28 MB | 0.3% / 8% | 0 | 0 | 0 |
+| Screenshots only | 🟠 Closed | 26 / 38 MB | 2.4% / 34% | 0 | 16 | 0 |
+| Screenshots and background OCR | 🟠 Closed | 280 / 297 MB | 3.0% / 38% | 0.25% | 16 | 16 |
+| Screenshots and background OCR off (default) | 🟢 Open | 145 / 152 MB | 2.0% / 9% | 0 | 0 | 0 |
+| Screenshots only | 🟢 Open | 145 / 155 MB | 3.5% / 31% | 0 | 16 | 0 |
+| Screenshots and background OCR | 🟢 Open | 400 / 405 MB | 4.1% / 31% | 0.23% | 16 | 16 |
 
 > 1. Peaks are the highest readings from samples taken every 2 seconds.
 > 2. The last two columns count screenshots captured and screenshots processed by OCR during the 5-minute measurement period.
@@ -95,12 +95,12 @@ These figures reflect the devices and usage patterns tested here; results will v
 
 | Settings | Main window | Memory average / peak | CPU average / peak | GPU | Power | Screenshots | OCR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Screenshots and background OCR off (default) | Open | 181 / 290 MB | 3.6% / 12% | 0.06% | 5 mW | 0 | 0 |
-| Screenshots and background OCR off (default) | Closed | 40 / 54 MB | 0.2% / 5% | 0 | 0.7 mW | 0 | 0 |
-| Screenshots only | Open | 193 / 304 MB | 3.9% / 18% | 0.07% | 31 mW | 17 | 0 |
-| Screenshots only | Closed | 48 / 64 MB | 0.7% / 7% | 0 | 29 mW | 16 | 0 |
-| Screenshots and background OCR | Open | 256 / 347 MB | 4.5% / 25% | 0.06% | 34 mW | 16 | 16 |
-| Screenshots and background OCR | Closed | 112 / 144 MB | 1.5% / 31% | 0 | 39 mW | 16 | 16 |
+| Screenshots and background OCR off (default) | 🟠 Closed | 40 / 54 MB | 0.2% / 5% | 0 | 0.7 mW | 0 | 0 |
+| Screenshots only | 🟠 Closed | 48 / 64 MB | 0.7% / 7% | 0 | 29 mW | 16 | 0 |
+| Screenshots and background OCR | 🟠 Closed | 112 / 144 MB | 1.5% / 31% | 0 | 39 mW | 16 | 16 |
+| Screenshots and background OCR off (default) | 🟢 Open | 181 / 290 MB | 3.6% / 12% | 0.06% | 5 mW | 0 | 0 |
+| Screenshots only | 🟢 Open | 193 / 304 MB | 3.9% / 18% | 0.07% | 31 mW | 17 | 0 |
+| Screenshots and background OCR | 🟢 Open | 256 / 347 MB | 4.5% / 25% | 0.06% | 34 mW | 16 | 16 |
 
 > 1. Peaks are the highest readings from samples taken every 2 seconds.
 > 2. The last two columns count screenshots captured and screenshots processed by OCR during the 5-minute measurement period.
