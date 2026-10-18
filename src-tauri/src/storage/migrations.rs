@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::error::Result;
 use crate::storage::{DbPool, SqliteResultExt};
 
@@ -949,12 +951,30 @@ const BACKFILL_SUPER_CATEGORY_OUTBOX_SQL: &str = r#"
     WHERE EXISTS (SELECT 1 FROM activities);
 "#;
 
+/// v44: adds `is_default_name` to categories and super-categories. 1 means the name is still
+/// the original Chinese name from a migration. It becomes 0 when the name is translated into
+/// the UI language, or when the user renames the category (ADR-0015).
+const ADD_IS_DEFAULT_NAME_SQL: &str = r#"
+    ALTER TABLE categories ADD COLUMN is_default_name INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE super_categories ADD COLUMN is_default_name INTEGER NOT NULL DEFAULT 0;
+
+    UPDATE categories SET is_default_name = 1
+     WHERE (id, name) IN (VALUES
+         ('code', '编程'), ('browse', '浏览'), ('talk', '社交'), ('design', '设计'),
+         ('fun', '娱乐'), ('other', '其他'), ('hidden', '隐藏'), ('office', '办公'),
+         ('workchat', '工作沟通'), ('game', '游戏'), ('video', '影音'));
+
+    UPDATE super_categories SET is_default_name = 1
+     WHERE (id, name) IN (VALUES
+         ('work', '工作'), ('play', '娱乐'), ('social', '社交'), ('browse', '浏览'));
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 33] = [
+    let extras: [&'static str; 34] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -988,6 +1008,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         RESET_GROUPS_ON_DELETED_FUN_SQL,       // v41
         SITE_RULES_TABLE_SQL,                  // v42
         BACKFILL_SUPER_CATEGORY_OUTBOX_SQL,    // v43
+        ADD_IS_DEFAULT_NAME_SQL,               // v44
     ];
     pool.0
         .call(move |conn| {
@@ -1032,6 +1053,42 @@ pub async fn run(pool: &DbPool) -> Result<()> {
                 tx.commit().db()?;
             }
             Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// Translates the categories and super-categories whose `is_default_name` is 1 into the UI
+/// language, and sets it to 0.
+///
+/// The second step of v44: migrations do not know the UI language, so the frontend sends the
+/// translated names after it starts. `categories` and `super_categories` map an id to its
+/// translated name; an empty name is skipped. Does not change `updated_at` and adds nothing
+/// to the outbox (ADR-0015).
+pub async fn translate_default_names(
+    pool: &DbPool,
+    categories: HashMap<String, String>,
+    super_categories: HashMap<String, String>,
+) -> Result<()> {
+    pool.0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            for (table, names) in [
+                ("categories", categories),
+                ("super_categories", super_categories),
+            ] {
+                let sql = format!(
+                    "UPDATE {table} SET name = ?1, is_default_name = 0
+                      WHERE id = ?2 AND is_default_name = 1"
+                );
+                for (id, name) in names {
+                    let name = name.trim();
+                    if !name.is_empty() {
+                        tx.execute(&sql, rusqlite::params![name, id]).db()?;
+                    }
+                }
+            }
+            tx.commit().db()
         })
         .await?;
     Ok(())
@@ -1093,7 +1150,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            43
+            44
         );
 
         let tables = table_names(&pool).await;
@@ -1174,6 +1231,24 @@ mod tests {
             1
         );
         assert!(count(&pool, "SELECT COUNT(*) FROM super_categories").await >= 4);
+
+        // v44:全新安装的默认分类、默认大类都还是中文原名
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM categories WHERE is_default_name = 1"
+            )
+            .await,
+            11
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM super_categories WHERE is_default_name = 1"
+            )
+            .await,
+            4
+        );
     }
 
     /// v41:分类还是已删的 fun 的组改回空值,其他组不动,updated_at 都不变。
@@ -1292,6 +1367,75 @@ mod tests {
         assert_eq!(count(&pool, sql).await, 2);
     }
 
+    /// v44 第二步:只换 is_default_name 为 1 的,换完变成 0,updated_at 不变,不进 outbox;
+    /// 改过名的、没给译名的、译名为空的不动。换过一次,再换成别的语言也不动。
+    #[tokio::test]
+    async fn translate_default_names_once() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "UPDATE categories SET name = 'UI', is_default_name = 0 WHERE id = 'design'",
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        let outbox_before = count(&pool, "SELECT COUNT(*) FROM sync_outbox").await;
+        let names = |pairs: &[(&str, &str)]| -> HashMap<String, String> {
+            pairs
+                .iter()
+                .map(|(id, name)| (id.to_string(), name.to_string()))
+                .collect()
+        };
+
+        translate_default_names(
+            &pool,
+            names(&[("code", "Coding"), ("design", "Design"), ("other", " ")]),
+            names(&[("work", "Work")]),
+        )
+        .await
+        .unwrap();
+        translate_default_names(&pool, names(&[("code", "コーディング")]), names(&[]))
+            .await
+            .unwrap();
+
+        for (sql, why) in [
+            (
+                "SELECT COUNT(*) FROM categories WHERE id = 'code' AND name = 'Coding'
+                   AND is_default_name = 0 AND updated_at = '1970-01-01T00:00:00Z'",
+                "只换一次,updated_at 不变",
+            ),
+            (
+                "SELECT COUNT(*) FROM categories WHERE id = 'design' AND name = 'UI'",
+                "改过名的不动",
+            ),
+            (
+                "SELECT COUNT(*) FROM categories
+                 WHERE id = 'other' AND name = '其他' AND is_default_name = 1",
+                "译名为空的不换",
+            ),
+            (
+                "SELECT COUNT(*) FROM categories
+                 WHERE id = 'browse' AND name = '浏览' AND is_default_name = 1",
+                "没给译名的不换",
+            ),
+            (
+                "SELECT COUNT(*) FROM super_categories
+                 WHERE id = 'work' AND name = 'Work' AND is_default_name = 0",
+                "大类也换",
+            ),
+        ] {
+            assert_eq!(count(&pool, sql).await, 1, "{why}");
+        }
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM sync_outbox").await,
+            outbox_before,
+            "不进 outbox"
+        );
+    }
+
     /// 幂等:重复 run 不报错、不重复应用(版本数不变、分类不重复种)。
     #[tokio::test]
     async fn run_twice_is_idempotent() {
@@ -1300,7 +1444,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            43
+            44
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1339,7 +1483,8 @@ mod tests {
                      VALUES ('2025-01-01T11:00:00Z','2025-01-01T11:01:00Z',60,
                         '2025-01-01',11,'8607797 pid=58750 ]',NULL,'other','local');
                      INSERT INTO categories(id, name, color, builtin)
-                     VALUES ('mycat','我的分类','#ffffff',0);",
+                     VALUES ('mycat','我的分类','#ffffff',0);
+                     UPDATE categories SET name = 'UI' WHERE id = 'design';",
                 )
                 .unwrap();
                 Ok(())
@@ -1355,7 +1500,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            43
+            44
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(
@@ -1391,6 +1536,24 @@ mod tests {
                 &pool,
                 "SELECT COUNT(*) FROM sqlite_master
                  WHERE type = 'trigger' AND name = 'activities_local_remote_id'"
+            )
+            .await,
+            1
+        );
+        // v44:改过名的默认分类、自建分类是 0,还是中文原名的是 1
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM categories
+                 WHERE id IN ('design', 'mycat') AND is_default_name = 0"
+            )
+            .await,
+            2
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM categories WHERE id = 'code' AND is_default_name = 1"
             )
             .await,
             1

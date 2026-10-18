@@ -261,9 +261,11 @@ pub async fn update(pool: &DbPool, id: &str, patch: CategoryPatch) -> Result<()>
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .unwrap_or(cur_icon);
+            // A new name sets is_default_name to 0 (ADR-0015).
             let n = tx
                 .execute(
-                    "UPDATE categories SET name = ?1, color = ?2, icon = ?3, updated_at = ?4
+                    "UPDATE categories SET name = ?1, color = ?2, icon = ?3, updated_at = ?4,
+                                           is_default_name = is_default_name AND name IS ?1
                         WHERE id = ?5 AND (name IS NOT ?1 OR color IS NOT ?2 OR icon IS NOT ?3)",
                     rusqlite::params![next_name, next_color, next_icon, updated_at, id],
                 )
@@ -730,6 +732,40 @@ mod tests {
             })
             .await
             .unwrap()
+    }
+
+    async fn is_default_name(pool: &DbPool, id: &str) -> bool {
+        let id = id.to_string();
+        pool.0
+            .call(move |conn| {
+                let v = conn.query_row(
+                    "SELECT is_default_name FROM categories WHERE id = ?1",
+                    rusqlite::params![id],
+                    |r| r.get::<_, bool>(0),
+                )?;
+                Ok(v)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 用户改名后 is_default_name 变成 0;只改颜色不变。
+    #[tokio::test]
+    async fn update_clears_is_default_name_only_on_rename() {
+        let pool = fresh_test_pool().await;
+        let patch = |name: Option<&str>, color: Option<&str>| CategoryPatch {
+            name: name.map(String::from),
+            color: color.map(String::from),
+            icon: None,
+        };
+        update(&pool, "code", patch(None, Some("#000000")))
+            .await
+            .unwrap();
+        assert!(is_default_name(&pool, "code").await, "只改颜色不变");
+        update(&pool, "code", patch(Some("Dev"), None))
+            .await
+            .unwrap();
+        assert!(!is_default_name(&pool, "code").await, "改名后变成 0");
     }
 
     // ---------- create ----------
