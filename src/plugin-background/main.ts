@@ -21,6 +21,31 @@ function show(plugins: BackgroundPlugin[]) {
   }
 }
 
+/** A `hindsight.call()` from a plugin's Worker, passed on by its launcher. */
+type PluginRequest = { id: number; method: string; params?: unknown };
+
+function isRequest(data: unknown): data is PluginRequest {
+  if (typeof data !== "object" || data === null) return false;
+  const { id, method } = data as Record<string, unknown>;
+  return typeof id === "number" && typeof method === "string";
+}
+
+// The plugin is the one whose iframe sent the message. The browser sets event.source, so a
+// plugin cannot claim to be another plugin
+window.addEventListener("message", (event) => {
+  const entry = [...frames].find(([, f]) => f.frame.contentWindow === event.source);
+  if (!entry || !isRequest(event.data)) return;
+  const [pluginId, { frame }] = entry;
+  const { id, method, params } = event.data;
+  // "*": the iframe always holds Hindsight's launcher, and plugin code cannot navigate it.
+  // If the plugin was turned off in the meantime, contentWindow is null and the reply is dropped
+  const reply = (message: object) => frame.contentWindow?.postMessage(message, "*");
+  invoke("plugin_call", { pluginId, method, params: params ?? null }).then(
+    (result) => reply({ id, result }),
+    (error) => reply({ id, error: String(error) }),
+  );
+});
+
 async function start() {
   let changed = false;
   // Listen before asking for the list, so a change in between is not missed

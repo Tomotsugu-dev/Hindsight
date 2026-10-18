@@ -400,6 +400,7 @@ pub fn run() {
             commands::plugins::plugin_set_enabled,
             commands::plugins::plugin_open_zips_folder,
             commands::plugins::plugin_background_list,
+            commands::plugins::plugin_call,
         ])
         .build(tauri::generate_context!())
         // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime

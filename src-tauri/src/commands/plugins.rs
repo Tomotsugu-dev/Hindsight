@@ -2,6 +2,7 @@
 
 use tauri::{AppHandle, State};
 
+use crate::plugins::api;
 use crate::plugins::background_window::{self, BackgroundPlugin};
 use crate::plugins::market::{self, Market};
 use crate::plugins::{install, plugin_zips_dir, plugins_dir};
@@ -103,6 +104,24 @@ pub async fn plugin_background_list(
     pool: State<'_, DbPool>,
 ) -> Result<Vec<BackgroundPlugin>, String> {
     background_window::list(&pool).await.map_err(Into::into)
+}
+
+/// The only entry to the plugin API: plugin `plugin_id` calls `method`.
+///
+/// `plugin_id` is filled in by Hindsight's forwarder, not reported by the plugin itself.
+///
+/// See [`api::call`].
+#[tauri::command]
+pub async fn plugin_call(
+    pool: State<'_, DbPool>,
+    plugin_id: String,
+    method: String,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    log::debug!("plugins: {plugin_id} calls {method}");
+    api::call(&pool, &plugin_id, &method, params)
+        .await
+        .map_err(Into::into)
 }
 
 /// Opens the local plugin zip folder in the file manager, creating it if it does not exist.

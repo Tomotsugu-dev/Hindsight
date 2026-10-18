@@ -63,15 +63,40 @@ const FRAME_ANCESTORS: &str = if tauri::is_dev() {
 /// The launcher page. The CSP does not allow inline scripts, so the script is in `_launcher.js`.
 const LAUNCHER_HTML: &str = r#"<!doctype html><script src="_launcher.js"></script>"#;
 
-/// The launcher script: runs `background.js` in a Worker, and passes messages between the Worker
+/// The launcher script: runs [`WORKER_JS`] in a Worker, and passes messages between the Worker
 /// and the parent page.
 ///
 /// `"*"`: the parent page can only be a Hindsight page, see [`FRAME_ANCESTORS`].
-const LAUNCHER_JS: &str = r#"const worker = new Worker("background.js");
+const LAUNCHER_JS: &str = r#"const worker = new Worker("_worker.js");
 worker.onmessage = (e) => parent.postMessage(e.data, "*");
 onmessage = (e) => {
   if (e.source === parent) worker.postMessage(e.data);
 };
+"#;
+
+/// The script that runs first in the Worker: defines `hindsight.call()`, then loads the plugin's
+/// `background.js`.
+///
+/// Wrapped in `{}` so that its variable names do not clash with those in `background.js`.
+const WORKER_JS: &str = r#"{
+  const pending = new Map();
+  let nextId = 1;
+  self.hindsight = {
+    call(method, params) {
+      const id = nextId++;
+      postMessage({ id, method, params });
+      return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+    },
+  };
+  addEventListener("message", (e) => {
+    const call = pending.get(e.data?.id);
+    if (!call) return;
+    pending.delete(e.data.id);
+    if ("error" in e.data) call.reject(new Error(e.data.error));
+    else call.resolve(e.data.result);
+  });
+}
+importScripts("background.js");
 "#;
 
 /// Returns the launcher URL of version `version` of plugin `id`.
@@ -102,13 +127,14 @@ pub fn read(plugins_dir: &Path, uri: &Uri) -> Response<Vec<u8>> {
     }
 }
 
-/// Returns the launcher's content when the URL is `_launcher.html` or `_launcher.js` in the
-/// version folder.
+/// Returns the launcher's content when the URL is `_launcher.html`, `_launcher.js` or
+/// `_worker.js` in the version folder.
 fn launcher_file(uri: &Uri) -> Option<&'static str> {
     let (_version, file) = uri.path().strip_prefix('/')?.split_once('/')?;
     match file {
         "_launcher.html" => Some(LAUNCHER_HTML),
         "_launcher.js" => Some(LAUNCHER_JS),
+        "_worker.js" => Some(WORKER_JS),
         _ => None,
     }
 }
@@ -243,7 +269,7 @@ mod tests {
         }
     }
 
-    /// 版本文件夹下的启动器两个文件用 Rust 里写的内容，插件包里的同名文件不算。都带 CSP。
+    /// 版本文件夹下的启动器三个文件用 Rust 里写的内容，插件包里的同名文件不算。都带 CSP。
     #[test]
     fn launcher_comes_from_hindsight() {
         let dir = TempDir::new();
@@ -259,6 +285,11 @@ mod tests {
             (
                 "/0.1.0/_launcher.js",
                 LAUNCHER_JS,
+                "text/javascript; charset=utf-8",
+            ),
+            (
+                "/0.1.0/_worker.js",
+                WORKER_JS,
                 "text/javascript; charset=utf-8",
             ),
         ] {

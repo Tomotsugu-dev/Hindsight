@@ -87,6 +87,7 @@ fn open(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::test_util::plugin_row;
     use crate::repo::test_util::fresh_test_pool;
 
     /// 只列出开着、要在后台运行的插件。
@@ -98,17 +99,9 @@ mod tests {
             ("turned-off", false, true),
             ("page-only", true, false),
         ] {
-            let plugin = repo::Plugin {
-                id: id.into(),
-                name: id.into(),
-                version: "0.1.0".into(),
-                enabled,
-                permissions: vec![],
-                ui_location: "sidebar".into(),
-                runs_in_background,
-                installed_at: "2026-10-18T00:00:00+00:00".into(),
-            };
-            repo::save(&pool, plugin).await.unwrap();
+            repo::save(&pool, plugin_row(id, enabled, runs_in_background))
+                .await
+                .unwrap();
         }
 
         assert_eq!(

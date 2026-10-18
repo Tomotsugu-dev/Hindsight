@@ -8,6 +8,7 @@ use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
 use crate::plugins::market::{InstallKind, OnlinePlugin, OnlineVersion};
+use crate::repo::plugins::Plugin;
 
 /// 一个测试一个空文件夹，放 zip 和插件库，测完删掉。
 pub struct TempDir(pub PathBuf);
@@ -30,6 +31,20 @@ impl TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// plugins 表里的一行，版本 0.1.0，没有权限。
+pub fn plugin_row(id: &str, enabled: bool, runs_in_background: bool) -> Plugin {
+    Plugin {
+        id: id.into(),
+        name: id.into(),
+        version: "0.1.0".into(),
+        enabled,
+        permissions: vec![],
+        ui_location: "sidebar".into(),
+        runs_in_background,
+        installed_at: "2026-10-18T00:00:00+00:00".into(),
     }
 }
 

@@ -244,6 +244,14 @@ pub enum Error {
     #[error("plugin download: {0}")]
     PluginDownload(String),
 
+    /// The plugin is not installed, or it is turned off.
+    #[error("plugin not enabled: {0}")]
+    PluginNotEnabled(String),
+
+    /// The plugin API has no method with this name.
+    #[error("plugin unknown method: {0}")]
+    PluginUnknownMethod(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),
