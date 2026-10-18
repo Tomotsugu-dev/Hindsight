@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties, type PointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { ZoomOut } from "lucide-react";
 import { useDurationFormatter } from "../../utils/duration";
@@ -61,6 +68,13 @@ export function Heatmap({
     () => buildHeatmap(range, secsByDay, from, to),
     [range, secsByDay, from, to],
   );
+
+  // A new range (days dragged out, zoom reset, another year) remounts the grid and plays the
+  // range-in animation. Not on the first render, so opening the page does not animate
+  const rangeKey = `${range.from}~${range.to}`;
+  const firstRangeKey = useRef(rangeKey);
+  const rangeChanged = useRef(false);
+  if (rangeKey !== firstRangeKey.current) rangeChanged.current = true;
 
   // 松手可能在热力图外面，所以挂在 window 上
   useEffect(() => {
@@ -132,7 +146,10 @@ export function Heatmap({
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.body}>
+      <div
+        key={rangeKey}
+        className={`${styles.body} ${rangeChanged.current ? styles.rangeIn : ""}`}
+      >
         <div className={styles.months} style={columns}>
           {monthCols.map(({ date, col }) => (
             <span key={col} style={{ gridColumnStart: col + 1 }}>
