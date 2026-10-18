@@ -185,7 +185,7 @@ export function ExportUsageDialog({ open, onClose, defaultQuick = "month" }: Pro
     setBusy(true);
     try {
       const labels = { t, locale: i18n.language, fmtDuration };
-      const data = await collectUsageData({ start, end, daily, weekly, monthly }, labels);
+      const data = await collectUsageData({ start, end, daily, weekly, monthly });
       if (format === "xlsx") {
         const spec = buildUsageWorkbook(
           data,

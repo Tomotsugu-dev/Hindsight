@@ -2,10 +2,6 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../state/categories";
 import { useSuperCategories } from "../state/superCategories";
-import {
-  displayCategoryName,
-  displaySuperCategoryName,
-} from "../utils/categoryName";
 
 /** 用于 donut 展开层的小分类条目（同大类内按 minutes 降序） */
 export interface BreakdownCat {
@@ -94,7 +90,7 @@ export function useSuperCategoryBreakdown(catMinutes: CategoryMinutesInput[]): {
     for (const sup of supers) {
       sliceMap.set(sup.id, {
         id: sup.id,
-        name: displaySuperCategoryName(sup, t),
+        name: sup.name,
         color: sup.color,
         icon: sup.icon,
         minutes: 0,
@@ -129,7 +125,7 @@ export function useSuperCategoryBreakdown(catMinutes: CategoryMinutesInput[]): {
       slice.minutes += cm.minutes;
       slice.cats.push({
         id: cat.id,
-        name: displayCategoryName(cat, t),
+        name: cat.name,
         color: cat.color,
         minutes: cm.minutes,
       });

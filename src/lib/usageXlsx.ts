@@ -1,5 +1,4 @@
 import type { UsageExportData, UsageExportLabels } from "./usageExport";
-import { displayCategoryName } from "../utils/categoryName";
 
 /** 「导出使用数据 → Excel 表格」的工作簿规格构建器(纯函数,vitest 直测)。
  *
@@ -359,7 +358,7 @@ export function buildUsageWorkbook(
     start: rawRange.start,
     end: rawRange.end,
     deviceId: rawRange.deviceId,
-    categoryNames: data.categories.map((c) => [c.id, displayCategoryName(c, t)]),
+    categoryNames: data.categories.map((c) => [c.id, c.name]),
     truncatedNote: k("rawTruncated"),
   };
 

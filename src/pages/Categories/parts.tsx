@@ -7,7 +7,6 @@ import { api, type AppGroup, type Category } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { displayAppName } from "../../utils/displayName";
-import { displayCategoryName } from "../../utils/categoryName";
 import { logError } from "../../lib/logger";
 import { ScrollIndicator } from "../../components/ScrollIndicator/ScrollIndicator";
 import { assignMenuLayout, type AssignMenuLayout } from "./menuLayout";
@@ -209,7 +208,7 @@ export function AppList({ category }: { category: Category }) {
                             className={styles.appSuggestMetaIcon}
                             aria-hidden
                           />
-                          {displayCategoryName(cat, t)}
+                          {cat.name}
                         </span>
                       )
                     )}
@@ -340,7 +339,7 @@ export function AssignDropdown({
               className={styles.assignOptionIcon}
               aria-hidden
             />
-            <span className={styles.assignBtnLabel}>{displayCategoryName(current, t)}</span>
+            <span className={styles.assignBtnLabel}>{current.name}</span>
           </>
         ) : (
           <>
@@ -402,7 +401,7 @@ export function AssignDropdown({
                   className={styles.assignOptionIcon}
                   aria-hidden
                 />
-                <span className={styles.assignOptionLabel}>{displayCategoryName(c, t)}</span>
+                <span className={styles.assignOptionLabel}>{c.name}</span>
               </button>
             );
           })}

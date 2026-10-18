@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import type { AppUsage } from "../api/hindsight";
 import type { RingFocusApp } from "../components/PieView/ringItems";
 import { useCategories } from "../state/categories";
 import { secsIn } from "../utils/appCategoryTime";
-import { displayCategoryName } from "../utils/categoryName";
 import { displayAppName } from "../utils/displayName";
 import { useAppDetail, type DetailScope } from "./useAppDetail";
 import type { PeriodInsights } from "./usePeriodInsights";
@@ -70,7 +68,6 @@ export function useAppFocus({
   peakLabel,
   avg,
 }: Args): AppFocus {
-  const { t } = useTranslation();
   const { getCategory } = useCategories();
 
   // 停住 SETTLE_MS 才换；从一行移到下一行中间那一下 null 也就跳过了
@@ -119,7 +116,7 @@ export function useAppFocus({
         cat && catMinutes > 0
           ? {
               kind: "appShare",
-              name: displayCategoryName(cat, t),
+              name: cat.name,
               color,
               pct: Math.round((ownMinutes / catMinutes) * 100),
             }
@@ -141,5 +138,5 @@ export function useAppFocus({
     const prevAvgMinutes =
       prevTotal > 0 && avg.prevDays > 0 ? Math.round(prevMinutes / avg.prevDays) : undefined;
     return { focusApp, insights, avgMinutes, prevAvgMinutes, color };
-  }, [app, apps, prevApps, prevTotal, slices, detail, peakLabel, avg, getCategory, t]);
+  }, [app, apps, prevApps, prevTotal, slices, detail, peakLabel, avg, getCategory]);
 }

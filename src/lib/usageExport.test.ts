@@ -51,7 +51,6 @@ function monthOf(
 }
 
 const CATS: Category[] = [
-  // name 故意不等于内置默认名 → displayCategoryName 直接用 name，绕开 i18n
   {
     id: "code",
     name: "Coding",
@@ -145,10 +144,13 @@ describe("collectUsageData", () => {
   });
 
   it("范围跨两个月：daily 按范围裁剪，weekly / monthly 整自然周期", async () => {
-    const data = await collectUsageData(
-      { start: "2026-06-29", end: "2026-07-02", daily: true, weekly: true, monthly: true },
-      labels,
-    );
+    const data = await collectUsageData({
+      start: "2026-06-29",
+      end: "2026-07-02",
+      daily: true,
+      weekly: true,
+      monthly: true,
+    });
 
     // —— daily：6/29 ~ 7/2 共 4 天，空天保留（totalSecs=0）——
     expect(data.daily?.map((d) => d.date)).toEqual([
@@ -194,10 +196,13 @@ describe("collectUsageData", () => {
   });
 
   it("end 晚于今天时截断到今天；未勾选的粒度为 null", async () => {
-    const data = await collectUsageData(
-      { start: "2026-07-01", end: "2026-12-31", daily: false, weekly: false, monthly: true },
-      labels,
-    );
+    const data = await collectUsageData({
+      start: "2026-07-01",
+      end: "2026-12-31",
+      daily: false,
+      weekly: false,
+      monthly: true,
+    });
     expect(data.rangeEnd).toBe("2026-07-16");
     expect(data.daily).toBeNull();
     expect(data.weekly).toBeNull();

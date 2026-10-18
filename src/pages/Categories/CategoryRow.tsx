@@ -9,7 +9,6 @@ import { useTranslation } from "react-i18next";
 import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
-import { displayCategoryName } from "../../utils/categoryName";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import type { Category } from "../../api/hindsight";
@@ -197,7 +196,7 @@ export function CategoryRow({
               }}
               title={t("categories.list.renameTooltip")}
             >
-              {displayCategoryName(category, t)}
+              {category.name}
             </span>
           )}
         </div>
@@ -242,7 +241,7 @@ export function CategoryRow({
           open={confirmOpen}
           title={t("categories.deleteDialog.title")}
           message={t("categories.deleteDialog.message", {
-            name: displayCategoryName(category, t),
+            name: category.name,
           })}
           confirmLabel={t("categories.deleteDialog.confirm")}
           variant="danger"

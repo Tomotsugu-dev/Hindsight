@@ -136,6 +136,19 @@ import {
 } from "./fixtures";
 import { persistence } from "./persistence";
 
+// 演示数据里还是中文原名的默认分类、默认大类，按当前页面语言显示。真实应用第一次启动时
+// 由后端换一次名（ADR-0015）；demo 要在 /en/、/ja/ 这些页面之间切换，所以读的时候换。
+function withPageLanguageNames<T extends { id: string; name: string }>(
+  items: T[],
+  originals: readonly { id: string; name: string }[],
+  key: string,
+): T[] {
+  return items.map((item) => {
+    const original = originals.find((o) => o.id === item.id);
+    return original?.name === item.name ? { ...item, name: i18n.t(`${key}.${item.id}`) } : item;
+  });
+}
+
 // ────────────────────────────────────────────
 // 内部状态 —— 从 fixtures 初始化 + localStorage 覆盖
 // ────────────────────────────────────────────
@@ -478,7 +491,8 @@ export const api = {
   },
 
   // ─── 分类 ──────────────────────────────────
-  listCategories: async (): Promise<Category[]> => structuredClone(state.categories),
+  listCategories: async (): Promise<Category[]> =>
+    withPageLanguageNames(structuredClone(state.categories), mockCategories, "categories.defaults"),
   createCategory: async (input: CategoryInput): Promise<Category> => {
     const c: Category = {
       id: `c-${Date.now()}`,
@@ -514,7 +528,12 @@ export const api = {
   // ─── 大类（super-category）—— v28+ ────────
   // 主仓库的 useSuperCategoriesProvider 启动时无条件调 listSuperCategories；
   // demo 必须实现这一组，否则 useSuperCategories 抛错 → 整树 unmount
-  listSuperCategories: async (): Promise<SuperCategory[]> => structuredClone(state.superCategories),
+  listSuperCategories: async (): Promise<SuperCategory[]> =>
+    withPageLanguageNames(
+      structuredClone(state.superCategories),
+      mockSuperCategories,
+      "categories.super.defaults",
+    ),
   createSuperCategory: async (input: SuperCategoryInput): Promise<SuperCategory> => {
     const s: SuperCategory = {
       id: `sup-${Date.now()}`,
@@ -567,6 +586,10 @@ export const api = {
   },
   listUnclassifiedApps: async (_daysBack?: number): Promise<UnclassifiedApp[]> =>
     structuredClone(mockUnclassifiedApps),
+  translateDefaultCategoryNames: async (
+    _categories: Record<string, string>,
+    _superCategories: Record<string, string>,
+  ): Promise<void> => {},
 
   // ─── App groups ───────────────────────────
   listAppGroups: async (): Promise<AppGroup[]> => structuredClone(state.appGroups),
