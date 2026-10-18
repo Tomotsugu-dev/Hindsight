@@ -232,6 +232,8 @@ pub fn run() {
                 spawn_cleanup_task(pool.clone());
                 bootstrap::spawn_backfill_tasks(pool.clone());
                 let sync_engine = bootstrap::init_sync_engine(pool.clone(), memdb_for_sync).await;
+                // Plugin background window, see plugins::background_window
+                plugins::background_window::refresh(&handle, &pool).await;
 
                 handle.manage(pool);
                 handle.manage(svc);
@@ -397,6 +399,7 @@ pub fn run() {
             commands::plugins::plugin_uninstall,
             commands::plugins::plugin_set_enabled,
             commands::plugins::plugin_open_zips_folder,
+            commands::plugins::plugin_background_list,
         ])
         .build(tauri::generate_context!())
         // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime

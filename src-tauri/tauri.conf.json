@@ -38,7 +38,7 @@
         "connect-src": "'self' ipc: http://ipc.localhost",
         "media-src": "'self' asset: http://asset.localhost",
         "object-src": "'none'",
-        "frame-src": "'none'",
+        "frame-src": "hindsight-plugin: http://*.localhost",
         "base-uri": "'self'",
         "form-action": "'self'"
       },
@@ -51,7 +51,7 @@
         "connect-src": "'self' ipc: http://ipc.localhost ws://localhost:41420 http://localhost:41420",
         "media-src": "'self' asset: http://asset.localhost",
         "object-src": "'none'",
-        "frame-src": "'none'",
+        "frame-src": "hindsight-plugin: http://*.localhost",
         "base-uri": "'self'",
         "form-action": "'self'"
       },

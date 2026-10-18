@@ -74,6 +74,15 @@ onmessage = (e) => {
 };
 "#;
 
+/// Returns the launcher URL of version `version` of plugin `id`.
+pub fn launcher_url(id: &str, version: &str) -> String {
+    if cfg!(windows) {
+        format!("http://{SCHEME}.{id}.localhost/{version}/_launcher.html")
+    } else {
+        format!("{SCHEME}://{id}.localhost/{version}/_launcher.html")
+    }
+}
+
 /// Reads a file from the plugin library `plugins_dir` by URL and returns the response for the
 /// WebView.
 ///
@@ -270,6 +279,16 @@ mod tests {
                 "{path}"
             );
         }
+    }
+
+    /// launcher_url 拼出来的 URL 读得到启动器。Windows 上的 URL 要先经 Tauri 换回来，这里不测。
+    #[cfg(not(windows))]
+    #[test]
+    fn launcher_url_reads_the_launcher() {
+        let dir = TempDir::new();
+        let plugins = library(&dir);
+        let response = get(&plugins, &launcher_url("hindsight-focus", "0.1.0"));
+        assert_eq!(response.body(), LAUNCHER_HTML.as_bytes());
     }
 
     /// 读不到的一律 404：主机名、版本不对，跑出版本文件夹，文件不存在。
