@@ -56,6 +56,38 @@ function pageTitle(md, source, isIndex) {
   return tokens[i + 1].content;
 }
 
+// 页内目录：h2–h4，id 已由 heading_ids 规则写好
+function headings(tokens) {
+  return tokens.flatMap((t, i) =>
+    t.type === "heading_open" && ["h2", "h3", "h4"].includes(t.tag)
+      ? [{
+          level: Number(t.tag[1]),
+          id: t.attrGet("id"),
+          text: tokens[i + 1].children
+            .filter((c) => c.type === "text" || c.type === "code_inline")
+            .map((c) => c.content)
+            .join(""),
+        }]
+      : [],
+  );
+}
+
+// 正文开头写给 GitHub 看的目录（第一个 h2 之前、链接全是本页锚点的列表）：
+// 网站桌面端左栏已有同样的目录，加个 class 让 CSS 藏掉
+function markInlineToc(tokens) {
+  const h2 = tokens.findIndex((t) => t.type === "heading_open" && t.tag === "h2");
+  const start = tokens.findIndex((t, i) => t.type === "bullet_list_open" && t.level === 0 && (h2 < 0 || i < h2));
+  if (start < 0) return;
+  const end = tokens.findIndex((t, i) => i > start && t.type === "bullet_list_close" && t.level === 0);
+  const links = tokens
+    .slice(start, end)
+    .flatMap((t) => t.children ?? [])
+    .filter((c) => c.type === "link_open");
+  if (links.length && links.every((l) => l.attrGet("href").startsWith("#"))) {
+    tokens[start].attrJoin("class", "doc-inline-toc");
+  }
+}
+
 function rewriteLinks(html, slug) {
   return html
     .replace(/(href=")\.\/([a-z-]+)\.md(#[^"]*)?"/g, (_, h, page, hash = "") => `${h}/docs/${slug}/${page}/${hash}"`)
@@ -64,10 +96,20 @@ function rewriteLinks(html, slug) {
     .replace(/<img /g, '<img loading="lazy" ');
 }
 
-function renderPage({ lang, key, title, body, pages, isIndex }) {
+function renderPage({ lang, key, title, body, toc, pages, isIndex }) {
   const url = (k) => `/docs/${lang.slug}/${k ? `${k}/` : ""}`;
+  // 当前页下面挂它的小节；只有一个小节时不挂
+  const tocList = toc.length > 1
+    ? `\n        <ul class="doc-toc">\n          ${toc
+        .map((h) => `<li class="toc-h${h.level}"><a href="#${escapeHtml(h.id)}">${escapeHtml(h.text)}</a></li>`)
+        .join("\n          ")}\n        </ul>`
+    : "";
   const side = [{ key: "", title: pages.index }, ...pages.list]
-    .map((p) => `<a href="${url(p.key)}"${p.key === key ? ' aria-current="page"' : ""}>${escapeHtml(p.title)}</a>`)
+    .map((p) =>
+      p.key === key
+        ? `<a href="${url(p.key)}" aria-current="page">${escapeHtml(p.title)}</a>${tocList}`
+        : `<a href="${url(p.key)}">${escapeHtml(p.title)}</a>`,
+    )
     .join("\n        ");
   const langItems = LANGS.map((l) =>
     l === lang
@@ -83,7 +125,7 @@ function renderPage({ lang, key, title, body, pages, isIndex }) {
   <link rel="icon" type="image/png" href="/docs/assets/logo.png">
   <link rel="stylesheet" href="/styles.css?v=2">
   <link rel="stylesheet" href="/docs/pagefind/pagefind-ui.css">
-  <link rel="stylesheet" href="/docs/docs.css?v=1">
+  <link rel="stylesheet" href="/docs/docs.css?v=3">
 </head>
 <body>
   <header class="nav">
@@ -126,6 +168,41 @@ ${body}
   <script src="/docs/pagefind/pagefind-ui.js"></script>
   <script>
     new PagefindUI({ element: "#search", baseUrl: "/docs/", showImages: false, showSubResults: true });
+
+    // 页内目录：高亮正在读的小节，并让左栏跟着滚到它
+    (function () {
+      var links = document.querySelectorAll(".doc-toc a");
+      if (!links.length) return;
+      var side = document.querySelector(".doc-side");
+      var heads = Array.prototype.map.call(links, function (a) {
+        return document.getElementById(decodeURIComponent(a.hash.slice(1)));
+      });
+      var current = null;
+      var pending = false;
+      function update() {
+        pending = false;
+        var i = 0;
+        for (var k = 0; k < heads.length; k++) {
+          if (heads[k].getBoundingClientRect().top <= 100) i = k;
+        }
+        // 到底时最后几个短小节到不了顶部，直接算最后一个
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) i = heads.length - 1;
+        if (links[i] === current) return;
+        if (current) current.classList.remove("active");
+        current = links[i];
+        current.classList.add("active");
+        var r = current.getBoundingClientRect();
+        var s = side.getBoundingClientRect();
+        if (r.top < s.top || r.bottom > s.bottom) side.scrollTop += r.top - s.top - s.height / 2;
+      }
+      window.addEventListener("scroll", function () {
+        if (!pending) {
+          pending = true;
+          requestAnimationFrame(update);
+        }
+      }, { passive: true });
+      update();
+    })();
   </script>
 </body>
 </html>
@@ -180,8 +257,10 @@ function build() {
     };
     const emit = (key, source, isIndex) => {
       const title = isIndex ? pages.index : pages.list.find((p) => p.key === key).title;
-      const body = rewriteLinks(md.render(source), lang.slug);
-      const html = renderPage({ lang, key, title, body, pages, isIndex });
+      const tokens = md.parse(source, {});
+      markInlineToc(tokens);
+      const body = rewriteLinks(md.renderer.render(tokens, md.options, {}), lang.slug);
+      const html = renderPage({ lang, key, title, body, toc: headings(tokens), pages, isIndex });
       const file = path.join(OUT, lang.slug, key, "index.html");
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, html);
