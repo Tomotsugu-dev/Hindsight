@@ -16,8 +16,8 @@ sequenceDiagram
   participant B as 转发层
   participant A as 插件接口
   participant R as repo/
-  P->>B: postMessage<br/>stats.today_by_category<br/>经启动器转发
-  B->>B: 按消息来源<br/>hindsight-focus.localhost<br/>认出插件
+  P->>B: hindsight.call<br/>stats.today_by_category<br/>经启动器转发
+  B->>B: 看消息来自<br/>哪个 iframe<br/>认出插件
   B->>A: invoke plugin_call<br/>插件 id + 方法 + 参数
   A->>R: hindsight-focus<br/>有 stats.read 吗
   R-->>A: 有
@@ -34,7 +34,8 @@ sequenceDiagram
   - 发通知：`notifications.send`，用现有的 `tauri-plugin-notification`
   - 读写插件自己的数据库：`db.execute`、`db.query`，见 [插件的数据](data.md)
 - 方法名就是对插件公开的接口。权限只在一处查，加接口也不用加命令。
-- 插件 id 由转发层标，不让插件自己报。插件自己报的话，就能冒充别的插件。
+- 插件调 `hindsight.call(方法, 参数)`。这个函数由 Hindsight 先在 Worker 里定义好，再加载插件的 `background.js`。插件不用自己给消息编号，消息格式是内部细节，以后可以跟着 Hindsight 一起改。
+- 插件 id 由转发层标：看消息来自哪个 iframe，这是浏览器填的，插件改不了。不让插件自己报，否则就能冒充别的插件。
 - 为避免插件绕过转发层、直接调 `invoke`：加入 Tauri 的密钥。
 - 查数据复用 `repo/` 现有的函数，不为插件另写一套 SQL。
 - 返回前换成公开格式。内部结构体以后改名、加字段，不会弄坏已经发布的插件。

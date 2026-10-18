@@ -62,5 +62,9 @@ sequenceDiagram
 - When creating the window, set `background_throttling` to `Disabled`. Otherwise plugin timers stop while the window is hidden. Windows does not support this setting; test it there separately.
 - Put the plugin id in the host name, so pages of different plugins have different origins. End it with `.localhost`: on Windows the URL is rewritten to `http://hindsight-plugin.hindsight-focus.localhost/…`, and only a host ending in `.localhost` counts as a secure context.
 - Keep file paths inside the version folder in the URL (`<id>/<version>/`). Block paths like `../` that climb up.
-- The launcher's URL is `…/<version>/_launcher.html`, and its script is `_launcher.js` in the same folder (the CSP does not allow inline scripts). For these two names, the plugin file reader returns content written in Rust and does not read the plugin library. This puts the launcher at the plugin's own origin, and `new Worker("background.js")` points to the script of that version.
+- The plugin background uses four files. Their URLs are all under `hindsight-plugin://<plugin id>.localhost/<version>/`:
+  - Hindsight writes three of them in Rust. For these names, the plugin file reader returns them directly and does not read the plugin library:
+    1. `_launcher.html`, `_launcher.js`: the launcher (the CSP does not allow inline scripts, so it is split into two files).
+    2. `_worker.js`: defines `hindsight.call()`, then loads `background.js`.
+  - `background.js`: the script written by the plugin author.
 - Build the plugin file reader as a Tauri custom protocol. Register it once at app startup, next to the existing `.plugin(...)` calls in `lib.rs`.

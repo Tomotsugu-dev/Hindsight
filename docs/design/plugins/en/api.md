@@ -16,8 +16,8 @@ sequenceDiagram
   participant B as Forwarder
   participant A as Plugin API
   participant R as repo/
-  P->>B: postMessage<br/>stats.today_by_category<br/>passed on by the launcher
-  B->>B: Identify the plugin<br/>by the message source<br/>hindsight-focus.localhost
+  P->>B: hindsight.call<br/>stats.today_by_category<br/>passed on by the launcher
+  B->>B: Identify the plugin<br/>by the iframe the<br/>message came from
   B->>A: invoke plugin_call<br/>plugin id + method<br/>+ params
   A->>R: Does hindsight-focus<br/>have stats.read?
   R-->>A: Yes
@@ -34,7 +34,8 @@ sequenceDiagram
   - send a notification: `notifications.send`, using the existing `tauri-plugin-notification`
   - read and write the plugin's own database: `db.execute`, `db.query`; see [Plugin data](data.md)
 - The method names are the public API for plugins. Permissions are checked in one place, and a new API does not need a new command.
-- The forwarder adds the plugin id. The plugin does not report its own id. If it did, it could pretend to be another plugin.
+- A plugin calls `hindsight.call(method, params)`. Hindsight defines this function in the Worker first, then loads the plugin's `background.js`. The plugin does not number its messages itself. The message format is an internal detail and can change together with Hindsight.
+- The forwarder adds the plugin id: it looks at which iframe the message came from. The browser sets this, and the plugin cannot change it. The plugin does not report its own id. If it did, it could pretend to be another plugin.
 - To stop a plugin from skipping the forwarder and calling `invoke` directly, we rely on Tauri's invoke key.
 - Reading data reuses the existing functions in `repo/`. We do not write a separate set of SQL for plugins.
 - Convert to the public format before returning. Then renaming internal structs or adding fields to them later will not break published plugins.

@@ -62,5 +62,9 @@ sequenceDiagram
 - 建窗口时把 `background_throttling` 设成 `Disabled`，否则窗口看不见时插件的定时器会停（Windows 上不支持，要另测）。
 - 插件 id 放在主机名里，不同插件的网页来源不同。末尾加 `.localhost`：Windows 上网址会被改写成 `http://hindsight-plugin.hindsight-focus.localhost/…`，以 `.localhost` 结尾的才算安全上下文。
 - 文件路径要限制在网址里那个版本文件夹（`<id>/<版本>/`）里，挡掉 `../` 这类往上跳的路径。
-- 启动器的网址是 `…/<版本>/_launcher.html`，脚本是同目录的 `_launcher.js`（CSP 不许内联脚本）。插件文件读取模块看到这两个名字，返回写在 Rust 里的内容，不读插件库。这样启动器在插件自己的来源下，`new Worker("background.js")` 也正好指向这个版本的脚本。
+- 插件后台用到四个文件，网址都在 `hindsight-plugin://<插件 id>.localhost/<版本>/` 下：
+  - Hindsight 写的三个写在 Rust 里，插件文件读取模块看到这三个名字直接返回，不读插件库：
+    1. `_launcher.html`、`_launcher.js`：启动器，（CSP 不许内联脚本，所以分成两个文件）。
+    2. `_worker.js`：定义 `hindsight.call()`，再加载 `background.js`。
+  - `background.js`：插件作者写的脚本。
 - 插件文件读取模块用 Tauri 的自定义协议实现，在应用启动时注册一次，和 `lib.rs` 里现有的 `.plugin(...)` 注册放在一起。
