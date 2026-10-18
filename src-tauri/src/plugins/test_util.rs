@@ -48,6 +48,13 @@ pub fn plugin_row(id: &str, enabled: bool, runs_in_background: bool) -> Plugin {
     }
 }
 
+/// 开着的插件，带这些权限。
+pub fn plugin_with_permissions(id: &str, permissions: &[&str]) -> Plugin {
+    let mut row = plugin_row(id, true, true);
+    row.permissions = permissions.iter().map(|p| p.to_string()).collect();
+    row
+}
+
 pub fn manifest_json(version: &str) -> String {
     serde_json::json!({
         "id": "hindsight-focus",

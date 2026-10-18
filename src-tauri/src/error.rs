@@ -252,6 +252,10 @@ pub enum Error {
     #[error("plugin unknown method: {0}")]
     PluginUnknownMethod(String),
 
+    /// The plugin does not have the permission the method needs. Holds the permission name.
+    #[error("plugin has no permission: {0}")]
+    PluginNoPermission(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

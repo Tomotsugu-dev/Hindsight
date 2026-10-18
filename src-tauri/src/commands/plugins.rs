@@ -1,7 +1,9 @@
 //! Tauri commands for plugins: opening the plugin market, installing, uninstalling, and toggling plugins.
 
 use tauri::{AppHandle, State};
+use tauri_plugin_notification::NotificationExt;
 
+use crate::error::Error;
 use crate::plugins::api;
 use crate::plugins::background_window::{self, BackgroundPlugin};
 use crate::plugins::market::{self, Market};
@@ -108,18 +110,30 @@ pub async fn plugin_background_list(
 
 /// The only entry to the plugin API: plugin `plugin_id` calls `method`.
 ///
-/// `plugin_id` is filled in by Hindsight's forwarder, not reported by the plugin itself.
+/// `plugin_id` and `device` (the device selected in the main window) are filled in by
+/// Hindsight's forwarder. The plugin does not report them itself.
 ///
 /// See [`api::call`].
 #[tauri::command]
 pub async fn plugin_call(
+    app: AppHandle,
     pool: State<'_, DbPool>,
     plugin_id: String,
     method: String,
     params: serde_json::Value,
+    device: Option<String>,
 ) -> Result<serde_json::Value, String> {
     log::debug!("plugins: {plugin_id} calls {method}");
-    api::call(&pool, &plugin_id, &method, params)
+    let notify = |title: &str, body: &str| {
+        app.notification()
+            .builder()
+            .title(title)
+            .body(body)
+            .show()
+            .map_err(|e| Error::Other(format!("notification: {e}")))
+    };
+    let self_id = crate::device::self_id()?;
+    api::call(&pool, &plugin_id, &method, params, device, self_id, notify)
         .await
         .map_err(Into::into)
 }
