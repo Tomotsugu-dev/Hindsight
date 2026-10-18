@@ -60,18 +60,47 @@ const FRAME_ANCESTORS: &str = if tauri::is_dev() {
     "frame-ancestors tauri://localhost"
 };
 
+/// The launcher page. The CSP does not allow inline scripts, so the script is in `_launcher.js`.
+const LAUNCHER_HTML: &str = r#"<!doctype html><script src="_launcher.js"></script>"#;
+
+/// The launcher script: runs `background.js` in a Worker, and passes messages between the Worker
+/// and the parent page.
+///
+/// `"*"`: the parent page can only be a Hindsight page, see [`FRAME_ANCESTORS`].
+const LAUNCHER_JS: &str = r#"const worker = new Worker("background.js");
+worker.onmessage = (e) => parent.postMessage(e.data, "*");
+onmessage = (e) => {
+  if (e.source === parent) worker.postMessage(e.data);
+};
+"#;
+
 /// Reads a file from the plugin library `plugins_dir` by URL and returns the response for the
 /// WebView.
 ///
 /// Returns 404 if the URL is wrong, the path leaves the version folder, or the file does not
 /// exist. The reason is written only to the debug log.
 pub fn read(plugins_dir: &Path, uri: &Uri) -> Response<Vec<u8>> {
-    match file_path(plugins_dir, uri).and_then(|path| Ok(fs::read(path)?)) {
+    let data = file_path(plugins_dir, uri).and_then(|path| match launcher_file(uri) {
+        Some(text) => Ok(text.into()),
+        None => Ok(fs::read(path)?),
+    });
+    match data {
         Ok(data) => ok(data, uri.path()),
         Err(e) => {
             log::debug!("plugins: cannot read {uri}: {e}");
             not_found()
         }
+    }
+}
+
+/// Returns the launcher's content when the URL is `_launcher.html` or `_launcher.js` in the
+/// version folder.
+fn launcher_file(uri: &Uri) -> Option<&'static str> {
+    let (_version, file) = uri.path().strip_prefix('/')?.split_once('/')?;
+    match file {
+        "_launcher.html" => Some(LAUNCHER_HTML),
+        "_launcher.js" => Some(LAUNCHER_JS),
+        _ => None,
     }
 }
 
@@ -202,6 +231,44 @@ mod tests {
                 .unwrap();
             assert!(csp.contains("connect-src 'self'"), "{path}: {csp}");
             assert!(csp.ends_with(FRAME_ANCESTORS), "{path}: {csp}");
+        }
+    }
+
+    /// 版本文件夹下的启动器两个文件用 Rust 里写的内容，插件包里的同名文件不算。都带 CSP。
+    #[test]
+    fn launcher_comes_from_hindsight() {
+        let dir = TempDir::new();
+        let plugins = library(&dir);
+        let version = plugins.join("hindsight-focus").join("0.1.0");
+        fs::write(version.join("_launcher.js"), "fake()").unwrap();
+        for (path, body, content_type) in [
+            (
+                "/0.1.0/_launcher.html",
+                LAUNCHER_HTML,
+                "text/html; charset=utf-8",
+            ),
+            (
+                "/0.1.0/_launcher.js",
+                LAUNCHER_JS,
+                "text/javascript; charset=utf-8",
+            ),
+        ] {
+            let uri = format!("hindsight-plugin://hindsight-focus.localhost{path}");
+            let response = get(&plugins, &uri);
+
+            assert_eq!(response.status(), StatusCode::OK, "{path}");
+            assert_eq!(response.body(), body.as_bytes(), "{path}");
+            assert_eq!(
+                response.headers()[header::CONTENT_TYPE],
+                content_type,
+                "{path}"
+            );
+            assert!(
+                response
+                    .headers()
+                    .contains_key(header::CONTENT_SECURITY_POLICY),
+                "{path}"
+            );
         }
     }
 
