@@ -18,7 +18,7 @@ pub(super) fn local_time(month: u32, day: u32, hour: u32, min: u32) -> DateTime<
         .unwrap()
 }
 
-pub(super) async fn insert_activity(
+pub(crate) async fn insert_activity(
     pool: &DbPool,
     device_id: &str,
     local_date: &str,
@@ -207,7 +207,7 @@ pub(super) async fn seed_group(
         .unwrap();
 }
 
-pub(super) async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str) {
+pub(crate) async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str) {
     let name = name.to_string();
     let category_id = category_id.to_string();
     pool.0
