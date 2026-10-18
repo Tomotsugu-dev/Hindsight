@@ -7,8 +7,13 @@ use crate::error::{Error, Result};
 
 /// Permissions this version knows, and the permission each one must be requested with.
 /// For all permissions, see docs/design/plugins/en/permissions.md.
-const PERMISSIONS: [(&str, Option<&str>); 6] = [
+const PERMISSIONS: [(&str, Option<&str>); 11] = [
     ("stats.read", None),
+    ("stats.today", Some("stats.read")),
+    ("stats.week", Some("stats.read")),
+    ("stats.month", Some("stats.read")),
+    ("stats.history", Some("stats.read")),
+    ("devices.read", None),
     ("notifications", None),
     ("focus.changed", None),
     ("focus.app", Some("focus.changed")),
@@ -92,6 +97,20 @@ fn check_permissions(permissions: &[String]) -> Result<()> {
             Some(_) => {}
         }
     }
+    // On the install page, the user must see how far back the plugin can read. The ranges are
+    // the permissions that need stats.read
+    let has = |name: &str| permissions.iter().any(|p| p == name);
+    let ranges: Vec<&str> = PERMISSIONS
+        .iter()
+        .filter(|(_, needs)| *needs == Some("stats.read"))
+        .map(|(name, _)| *name)
+        .collect();
+    if has("stats.read") && !ranges.iter().any(|r| has(r)) {
+        return Err(Error::PluginManifest(format!(
+            "stats.read needs one of {}",
+            ranges.join(", ")
+        )));
+    }
     Ok(())
 }
 
@@ -105,7 +124,7 @@ mod tests {
             "id": "hindsight-focus",
             "name": "Focus",
             "version": "0.1.0",
-            "permissions": ["stats.read", "focus.changed", "focus.category"],
+            "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category"],
             "ui_location": "sidebar",
             "runs_in_background": true
         })
@@ -124,10 +143,7 @@ mod tests {
         assert_eq!(m.id, "hindsight-focus");
         assert_eq!(m.name, "Focus");
         assert_eq!(m.version, "0.1.0");
-        assert_eq!(
-            m.permissions,
-            ["stats.read", "focus.changed", "focus.category"]
-        );
+        assert_eq!(json!(m.permissions), focus()["permissions"]);
         assert_eq!(m.ui_location, "sidebar");
         assert!(m.runs_in_background);
     }
@@ -216,6 +232,18 @@ mod tests {
         assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
 
         v["permissions"] = json!(["focus.changed", "focus.app", "focus.title"]);
+        assert!(parse_value(&v).is_ok());
+    }
+
+    /// stats.read 要配一档；档位要和 stats.read 一起申请。
+    #[test]
+    fn stats_read_needs_a_range() {
+        let mut v = focus();
+        for bad in [json!(["stats.read"]), json!(["stats.week"])] {
+            v["permissions"] = bad;
+            assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
+        }
+        v["permissions"] = json!(["stats.read", "stats.week"]);
         assert!(parse_value(&v).is_ok());
     }
 }

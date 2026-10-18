@@ -53,7 +53,7 @@ pub fn manifest_json(version: &str) -> String {
         "id": "hindsight-focus",
         "name": "Focus",
         "version": version,
-        "permissions": ["stats.read", "focus.changed", "focus.category"],
+        "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category"],
         "ui_location": "none",
         "runs_in_background": true
     })
