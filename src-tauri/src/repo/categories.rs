@@ -358,7 +358,7 @@ pub async fn delete(pool: &DbPool, id: &str) -> Result<()> {
     let updated_at = utc_now_rfc3339();
     // `Ok(Err(msg))` = business rejection, turned into `Error::InvalidInput` below.
     // Real db failures still go through `?`, so `InvalidInput` never ends up
-    // wrapped in `tokio_rusqlite::Error::Other`.
+    // wrapped in `DbError::Other`.
     let outcome: std::result::Result<(), &'static str> = pool
         .0
         .call(move |conn| {

@@ -533,7 +533,7 @@ mod tests {
                        ('2026-07-19T09:00:00+09:00', '2026-07-19T09:10:00+09:00', 600,
                         '2026-07-19', 9, 'ungrouped.exe', NULL, 'other', 'dev-b');",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(())
             })
             .await
@@ -572,7 +572,7 @@ mod tests {
                        ('2026-07-18T10:00:00+09:00', '2026-07-18T10:05:00+09:00', 300,
                         '2026-07-18', 10, 'steam', 's', 'other', 'dev-a');",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(())
             })
             .await
@@ -613,7 +613,7 @@ mod tests {
                        ('2026-07-18T12:00:00+09:00', '2026-07-18T12:05:00+09:00', 300,
                         '2026-07-18', 12, 'chrome', 'code', 'other', 'dev-a', 'github.com');",
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+                .db()?;
                 Ok(())
             })
             .await

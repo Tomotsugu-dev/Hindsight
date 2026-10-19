@@ -11,7 +11,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     #[error("db: {0}")]
-    Db(#[from] tokio_rusqlite::Error),
+    Db(#[from] crate::storage::DbError),
 
     #[error("sql: {0}")]
     Sqlite(#[from] rusqlite::Error),
@@ -267,10 +267,10 @@ mod tests {
         assert!(src.downcast_ref::<rusqlite::Error>().is_some());
     }
 
-    /// tokio_rusqlite::Error → Db 变体。ConnectionClosed 无参可直接构造。
+    /// DbError → Db 变体。ConnectionClosed 无参可直接构造。
     #[test]
-    fn db_from_tokio_rusqlite() {
-        let inner = tokio_rusqlite::Error::ConnectionClosed;
+    fn db_from_db_error() {
+        let inner = crate::storage::DbError::ConnectionClosed;
         let inner_msg = inner.to_string();
         let e: Error = inner.into();
         assert!(matches!(e, Error::Db(_)));

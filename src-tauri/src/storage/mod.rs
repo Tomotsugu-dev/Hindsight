@@ -1,9 +1,9 @@
-//! 存储层：连接池 + schema 迁移 + 通用 DB helper trait。
+//! Storage: the database connection and pool, schema migrations, and a shared DB helper trait.
 //!
-//! [`SqliteResultExt`] 让 `rusqlite::Result<T>` 接进 `tokio_rusqlite::Result<T>` 时
-//! 少写一遍 `.map_err(tokio_rusqlite::Error::Rusqlite)`。
+//! With [`SqliteResultExt`], a `rusqlite::Result<T>` goes into a [`DbResult<T>`] without writing
+//! `.map_err(DbError::Rusqlite)` each time.
 //!
-//! 用法：
+//! Usage:
 //! ```ignore
 //! use crate::storage::SqliteResultExt;
 //!
@@ -11,25 +11,27 @@
 //! conn.execute("INSERT INTO t VALUES(?)", params![v]).db()?;
 //! ```
 //!
-//! 等价于 `.map_err(tokio_rusqlite::Error::Rusqlite)?`，没有任何运行时开销
-//! （单态化后就是同一段代码），唯一目的是把噪声从 SQL 调用点上拿掉。
+//! It is the same as `.map_err(DbError::Rusqlite)?` and costs nothing at run time: after
+//! monomorphization it is the same code. Its only purpose is to keep the noise out of SQL calls.
 
+pub mod connection;
 pub mod migrations;
 pub mod pool;
 
+pub use connection::{Connection, DbError, DbResult};
 pub use pool::{db_path, db_path_dir, db_path_for, DbPool};
 
-/// 让 `rusqlite::Result<T>` 通过 `.db()?` 一步转成 `tokio_rusqlite::Result<T>`。
-/// 详见模块顶部说明。
+/// Turns a `rusqlite::Result<T>` into a [`DbResult<T>`] in one step with `.db()?`. See the
+/// module docs.
 pub trait SqliteResultExt<T> {
-    /// rusqlite::Result<T> → tokio_rusqlite::Result<T>
-    fn db(self) -> tokio_rusqlite::Result<T>;
+    /// rusqlite::Result<T> → DbResult<T>
+    fn db(self) -> DbResult<T>;
 }
 
 impl<T> SqliteResultExt<T> for rusqlite::Result<T> {
     #[inline]
-    fn db(self) -> tokio_rusqlite::Result<T> {
-        self.map_err(tokio_rusqlite::Error::Rusqlite)
+    fn db(self) -> DbResult<T> {
+        self.map_err(DbError::Rusqlite)
     }
 }
 

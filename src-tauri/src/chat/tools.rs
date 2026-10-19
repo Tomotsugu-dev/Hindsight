@@ -15,11 +15,10 @@ use chrono::NaiveDate;
 use super::lang::ChatLang;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use tokio_rusqlite::Connection;
 
 use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
-use crate::storage::SqliteResultExt;
+use crate::storage::{Connection, DbResult, SqliteResultExt};
 
 /// 单工具返回给模型的结果字符上限——超出截断,防止一个大会话吃光上下文。
 const RESULT_CHAR_BUDGET: usize = 4000;
@@ -764,7 +763,7 @@ fn query_duration(
     from: &str,
     to: &str,
     lang: ChatLang,
-) -> tokio_rusqlite::Result<String> {
+) -> DbResult<String> {
     match group_by {
         GroupBy::None => {
             let secs: i64 = conn
@@ -837,7 +836,7 @@ fn query_session_count(
     from: &str,
     to: &str,
     lang: ChatLang,
-) -> tokio_rusqlite::Result<String> {
+) -> DbResult<String> {
     let gap_secs = gap_minutes as i64 * 60;
     match group_by {
         GroupBy::None => {
@@ -890,7 +889,7 @@ fn fetch_grouped_spans(
     where_sql: &str,
     params: &[&dyn rusqlite::ToSql],
     dim: &str,
-) -> tokio_rusqlite::Result<Vec<(String, String, String)>> {
+) -> DbResult<Vec<(String, String, String)>> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {dim} AS g, a.started_at, a.ended_at {from_sql}
@@ -978,7 +977,7 @@ fn query_bucket(
     from: &str,
     to: &str,
     lang: ChatLang,
-) -> tokio_rusqlite::Result<String> {
+) -> DbResult<String> {
     let dim = bucket_dim(bucket);
     // 逐日的行首带本地化星期:实测模型自己换算"两周前的 07-16 是星期几"会成列出错,
     // 行里直接给出后模型无需再算
@@ -1044,7 +1043,7 @@ fn query_first_last(
     from: &str,
     to: &str,
     lang: ChatLang,
-) -> tokio_rusqlite::Result<String> {
+) -> DbResult<String> {
     let (first, last, n): (Option<String>, Option<String>, i64) = conn
         .query_row(
             &format!(
