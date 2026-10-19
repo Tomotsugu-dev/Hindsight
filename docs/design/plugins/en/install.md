@@ -20,14 +20,14 @@ sequenceDiagram
   participant D as Plugin library
   participant R as repo/
   participant W as Background<br/>window manager
-  M->>G: invoke<br/>plugin_install_online<br/>hindsight-focus 0.1.0<br/>+ approved permissions
+  M->>G: invoke<br/>plugin_install_online<br/>hindsight-focus 0.1.0<br/>+ approved permissions<br/>and disk space
   G->>IDX: Read the list again
   IDX-->>G: URL, SHA-256
   G->>REL: Download the zip
   REL-->>G: zip
   G->>G: Check SHA-256,<br/>manifest id and version<br/>stop if they differ<br/>from the list
   G->>Z: Save to plugin-zips/
-  G->>G: Read the manifest<br/>check id, version,<br/>permissions
+  G->>G: Read the manifest<br/>check id, version,<br/>permissions<br/>and disk space
   G->>D: Unzip to a<br/>temp folder
   G->>D: Rename the temp folder<br/>to hindsight-focus/0.1.0
   G->>R: One transaction<br/>writes the plugins table
@@ -41,7 +41,8 @@ sequenceDiagram
   - If the app crashes midway, at most a folder that is not in the table is left. It is deleted the next time the plugin market opens (see "Removing leftovers" below).
   - If the table were written first, a crash would leave a row in the table with no files.
 - Unzip to a temp folder first, then rename it. On the same disk, a rename happens in one step, so the plugin library never holds a half-unzipped plugin folder.
-- The table stores the permissions the user approved, passed in by the market page. They are not compared with the ones the manifest asks for. The plugin API and the event dispatcher check only the table, so however much the manifest asks for, the plugin cannot get what the user did not approve.
+- The table stores the permissions and the disk space the user approved, passed in by the market page. They are not compared with what the manifest asks for. The plugin API and the event dispatcher check only the table, so however much the manifest asks for, the plugin cannot get what the user did not approve.
+- The approved disk space comes from the frontend, so the manifest checks did not see it. The install checks again that it is between 1 MB and 10 GB.
 
 ## Installing a local zip
 
@@ -58,10 +59,10 @@ sequenceDiagram
   M->>G: Market page opens<br/>scan local zips
   G->>Z: Read only the<br/>manifest of each zip
   Z-->>G: Manifests
-  G-->>M: Names, requested<br/>permissions, reasons<br/>for zips that<br/>cannot be installed
+  G-->>M: Names, requested<br/>permissions and<br/>disk space, reasons<br/>for zips that<br/>cannot be installed
   Note over M: Shown together<br/>with the plugins<br/>in the list
-  M->>G: invoke plugin_install<br/>zip file name<br/>+ approved permissions
-  G->>G: Read the manifest<br/>check id, version,<br/>permissions
+  M->>G: invoke plugin_install<br/>zip file name<br/>+ approved permissions<br/>and disk space
+  G->>G: Read the manifest<br/>check id, version,<br/>permissions<br/>and disk space
   G->>D: Unzip to a temp folder<br/>rename to<br/>hindsight-focus/0.1.0
   G->>R: One transaction<br/>writes the plugins table
   G->>Z: Delete the zip
@@ -69,7 +70,7 @@ sequenceDiagram
   G-->>M: Installed
 ```
 
-- How it differs from a market install: there is no list, so the requested permissions can only come from the manifest in the zip. There is also no SHA-256 to check, because the user put the file there.
+- How it differs from a market install: there is no list, so the requested permissions and disk space can only come from the manifest in the zip. There is also no SHA-256 to check, because the user put the file there.
 - Use a separate folder. Do not scan the Downloads folder: it has many unrelated zips, and going through it every time the market page opens means touching the user's files. Do not use the plugin library either: removing leftovers deletes what is not in the table.
 - List zips that cannot be installed too, with the reason:
   - Broken packages, such as one with no background.js. Plugin authors can see what went wrong while testing.

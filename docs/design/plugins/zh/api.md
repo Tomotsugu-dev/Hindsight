@@ -46,6 +46,8 @@ sequenceDiagram
 |---|---|---|---|
 | `stats.day_by_category` | `stats.read` 加一档 | `{ "date": "2026-10-19", "devices": "selected" }`，`devices` 可以不传 | `[{ "id": "code", "name": "Coding", "seconds": 12600, "superCategory": { "id": "work", "name": "Work" } }]`，用时多的在前；没归入大类的，`superCategory` 是 `null` |
 | `notifications.send` | `notifications` | `{ "body": "已经看了 10 分钟 YouTube" }` | 无 |
+| `db.execute` | 不要权限，要用户同意的磁盘容量 | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`，`params` 可以不传 | `{ "changes": 1, "lastInsertRowid": 1 }` |
+| `db.query` | 同上 | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`，每行一个对象，键是列名；最多 10 MB |
 
 - 大类的时长由插件自己按 `superCategory` 加总，和主界面的算法一样。
 - 能读哪些日子看档位（见 [插件权限](permissions.md)）。「今天」「本周」「本月」按本机日期算。读不到就报错，错误里是能读到这天的那一档。

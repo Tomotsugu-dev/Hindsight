@@ -13,7 +13,7 @@ Overview: [Plugin backend architecture](plugins-architecture.md).
 - A name is `<area>.<action>`, such as `stats.read`. An event permission has the same name as its event, such as `focus.changed`.
 - Some permissions only add fields to another permission. For example, `focus.app` only adds the app name to `focus.changed` events. Such a permission must be requested together with the one it depends on. Requesting it alone fails the manifest check.
 - A permission gives only the fields it lists. Data returned to plugins uses separate structs (see [③ Requesting data](api.md)).
-- Reading and writing the plugin's own database needs no permission (see [Plugin data](data.md)).
+- Reading and writing the plugin's own database needs no permission. But the plugin must ask for disk space with `storage_mb` in its manifest, and can use the database only after the user approves it on the install page (see [Plugin data](data.md)).
 - Risk levels:
   - **Low**: only times or totals; it does not show what the user actually did;
   - **Medium**: shows when the user used which app or website;

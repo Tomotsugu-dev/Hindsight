@@ -50,7 +50,8 @@ flowchart LR
           "version": "0.2.0",
           "url": "https://github.com/someone/hindsight-focus/releases/download/0.2.0/hindsight-focus-0.2.0.zip",
           "sha256": "…",
-          "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category", "notifications"]
+          "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category", "notifications"],
+          "storage_mb": 10
         },
         {
           "version": "0.1.0",
@@ -66,7 +67,7 @@ flowchart LR
 
 - `format_version` 是这个文件结构的版本。
 - 同一个 `id` 的插件有新版本时，提 PR 在 `versions` 里加一条，旧版本可以选择保留。
-- 每个版本自带 `permissions`，因为不同版本申请的权限可能不一样。市场页在下载前就把这个版本的权限给用户看，用户同意的权限传给安装，存进 plugins 表（见 [① 插件安装](install.md)）。
+- 每个版本自带 `permissions` 和 `storage_mb`，因为不同版本申请的可能不一样。`storage_mb` 是给插件自己的库申请的磁盘容量（MB），不用库的插件不写，上面的 0.1.0 就没写。市场页在下载前就把这个版本的权限和磁盘容量给用户看，用户同意的传给安装，存进 plugins 表（见 [① 插件安装](install.md)）。
 
 ## 市场页的三栏
 

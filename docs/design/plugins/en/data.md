@@ -17,6 +17,7 @@ erDiagram
     TEXT version "0.1.0"
     INTEGER enabled "1 on / 0 off"
     TEXT permissions "JSON array"
+    INTEGER storage_mb "disk space in MB, NULL if none asked for"
     TEXT ui_location "sidebar / window / none"
     INTEGER runs_in_background "runs in the background or not"
     TEXT installed_at "install time"
@@ -30,6 +31,7 @@ erDiagram
   - `window`: opens a separate window when clicked
   - `none`: no page
 - `runs_in_background`: whether the plugin runs in the background.
+- `permissions` and `storage_mb` hold what the user approved, not what the manifest asks for (see [① Installing plugins](install.md)).
 
 ## Each plugin's own database
 
@@ -45,15 +47,24 @@ erDiagram
 
 ```mermaid
 flowchart LR
-  P["Plugin JS<br/>db.execute<br/>create tables,<br/>write, query"] --> B["Forwarder<br/>adds the plugin id"] --> A["Plugin API<br/>opens this plugin's<br/>data.sqlite"] --> C{"Authorizer callback<br/>checks each<br/>statement"}
+  P["Plugin JS<br/>db.execute<br/>create tables,<br/>write, query"] --> B["Forwarder<br/>adds the plugin id"] --> A["Plugin API<br/>opens this plugin's<br/>data.sqlite"] --> C{"Authorizer callback<br/>checks each<br/>action"}
   C -->|"allowed"| OK["Runs it, result<br/>goes back to the plugin"]
   C -->|"ATTACH etc."| X["Denied"]
 ```
 
-- `data.sqlite` is not in a version folder. The plugin file reader never hands it out, and the WebView cannot get it by URL.
-- Before running SQL, Rust checks each statement with SQLite's authorizer callback. It denies `ATTACH`, `DETACH` and loading extensions. Otherwise a plugin could run `ATTACH '…/hindsight.db'` and read every activity record in the main database.
-- Reading and writing its own database needs no permission. Permissions control reading Hindsight's data, such as `stats.read`.
+- **A plugin can reach only its own file**: Rust picks the file to open from the plugin id, and the plugin passes only SQL and parameters. When SQLite compiles a statement, the authorizer callback checks each action against an allow list. It allows only actions on tables in this database. It denies `ATTACH`, `PRAGMA`s that change settings for the whole process, and loading extensions. Otherwise a plugin could run `ATTACH '…/hindsight.db'` and read every activity record in the main database.
+- **Not in a version folder**: the plugin file reader never hands it out, and the WebView cannot get it by URL. Updating the plugin does not touch the data.
+- **Opened for each call and closed after it**: no file stays open, so uninstalling can delete it. For the same reason, the connection's temp database is denied too: a table in it would not outlive one call, so plugins have no use for it.
+- **One statement per call**: more than one is an error. The app does not run the first one and silently drop the rest.
+- **Disk space is capped at what the user approved**: the plugin asks for `storage_mb` in its manifest, and the number the user approves is stored in the plugins table. Without it, the plugin cannot use `db.*`. Reading and writing its own database needs no permission. Permissions control reading Hindsight's data, such as `stats.read`.
+- **Memory and CPU are capped for each call**: plugin SQL runs in the same process as capture, and one plugin must not slow down activity recording. The size of one value, the run time and the size of the result all have limits. All plugins together open at most 4 databases at a time, and other calls wait. Intermediate results, such as for sorting, go to disk. For the values, see `plugins/api/db.rs`.
+- **Limits can only go up**: if a limit goes down, rows that already hold larger values can no longer be read or changed.
 - Plugin databases do not sync. They stay on this machine.
+
+### Known risks
+
+- Intermediate results, such as for sorting, write temp files to disk with no size limit. Only the run time limit bounds them.
+- A plugin that keeps calling can hold about 260 MB of memory all the time. Later, the forwarder will limit how often a plugin can call.
 
 ## Uninstalling
 

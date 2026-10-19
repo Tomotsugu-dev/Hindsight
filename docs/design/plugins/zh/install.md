@@ -20,14 +20,14 @@ sequenceDiagram
   participant D as 插件库
   participant R as repo/
   participant W as 插件后台窗口管理模块
-  M->>G: invoke<br/>plugin_install_online<br/>hindsight-focus 0.1.0<br/>+ 用户同意的权限
+  M->>G: invoke<br/>plugin_install_online<br/>hindsight-focus 0.1.0<br/>+ 用户同意的权限<br/>和磁盘容量
   G->>IDX: 再读一次列表
   IDX-->>G: 地址、SHA-256
   G->>REL: 下载 zip
   REL-->>G: zip
   G->>G: 比对 SHA-256<br/>清单的 id、版本<br/>和列表不一样就停
   G->>Z: 存进 plugin-zips/
-  G->>G: 读清单，检查<br/>id、版本、权限
+  G->>G: 读清单，检查<br/>id、版本、权限<br/>和磁盘容量
   G->>D: 解压到临时目录
   G->>D: 临时目录改名为<br/>hindsight-focus/0.1.0
   G->>R: 一个事务<br/>写 plugins 表
@@ -41,7 +41,8 @@ sequenceDiagram
   - 中途崩了，最多留下一个表里没有的目录，下次打开插件市场时删掉（见下面的「清理残留」）。
   - 反过来先写表的话，崩了就是表里有记录、文件却不在。
 - 先解压到临时目录再改名。同一个磁盘上改名是一步完成的，插件库里不会出现解压了一半的插件文件夹。
-- 表里存的是市场页传进来的、用户同意的权限，不和清单里申请的比对。插件接口和事件分发模块只查表，清单申请得再多，用户没同意的也拿不到。
+- 表里存的是市场页传进来的、用户同意的权限和磁盘容量，不和清单里申请的比对。插件接口和事件分发模块只查表，清单申请得再多，用户没同意的也拿不到。
+- 用户同意的磁盘容量是前端传来的，没经过清单检查，安装时再查一次在 1 MB 到 10 GB 之间。
 
 ## 本地 zip 安装
 
@@ -58,10 +59,10 @@ sequenceDiagram
   M->>G: 打开市场页<br/>扫描本地 zip
   G->>Z: 每个 zip<br/>只读清单
   Z-->>G: 清单
-  G-->>M: 名字、申请的权限<br/>装不了的带上原因
+  G-->>M: 名字、申请的权限<br/>和磁盘容量<br/>装不了的带上原因
   Note over M: 和列表里的插件<br/>一起显示
-  M->>G: invoke plugin_install<br/>zip 文件名<br/>+ 用户同意的权限
-  G->>G: 读清单，检查<br/>id、版本、权限
+  M->>G: invoke plugin_install<br/>zip 文件名<br/>+ 用户同意的权限<br/>和磁盘容量
+  G->>G: 读清单，检查<br/>id、版本、权限<br/>和磁盘容量
   G->>D: 解压到临时目录<br/>改名为<br/>hindsight-focus/0.1.0
   G->>R: 一个事务<br/>写 plugins 表
   G->>Z: 删掉 zip
@@ -69,7 +70,7 @@ sequenceDiagram
   G-->>M: 装好了
 ```
 
-- 和市场安装的区别：没有列表，申请的权限只能从 zip 里的清单读；也没有 SHA-256 可比，文件是用户自己放进来的。
+- 和市场安装的区别：没有列表，申请的权限和磁盘容量只能从 zip 里的清单读；也没有 SHA-256 可比，文件是用户自己放进来的。
 - 用单独的文件夹：不扫「下载」文件夹，那里有很多无关的 zip，每次打开市场页都翻一遍也碰了用户的文件。也不放进插件库：清理残留时会删掉表里没有的东西。
 - 装不了的也列出来，带上原因：
   - 坏包，比如没有 background.js。插件作者调试时能看到错在哪。
