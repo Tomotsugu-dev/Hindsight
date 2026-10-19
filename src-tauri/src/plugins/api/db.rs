@@ -255,6 +255,9 @@ async fn run<T: Send + 'static>(
         .storage_mb
         .ok_or_else(|| Error::PluginNoPermission("storage_mb".into()))?;
     let path = db_path(plugins_dir, plugin);
+    // TODO: While the call waits here, the plugin may be disabled, uninstalled or given new disk
+    // space, but this still uses the row read before the wait. Read the plugins row again after
+    // getting a slot
     let permit = OPEN_DATABASES
         .acquire()
         .await
