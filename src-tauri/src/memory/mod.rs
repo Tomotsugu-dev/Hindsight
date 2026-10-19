@@ -14,10 +14,8 @@ pub mod sessions;
 
 use std::path::PathBuf;
 
-use tokio_rusqlite::Connection;
-
 use crate::error::Result;
-use crate::storage::SqliteResultExt;
+use crate::storage::{Connection, DbError, SqliteResultExt};
 
 /// 记忆库连接——与主库 [`crate::storage::DbPool`] 同样的薄包装,独立类型
 /// 防止两个库的连接在函数签名里互相传错。
@@ -195,7 +193,7 @@ impl MemoryDb {
                     if let Err(e) = conn.execute(sql, []) {
                         let msg = e.to_string();
                         if !msg.contains("duplicate column") {
-                            return Err(tokio_rusqlite::Error::Rusqlite(e));
+                            return Err(DbError::Rusqlite(e));
                         }
                     }
                 }

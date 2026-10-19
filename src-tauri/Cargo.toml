@@ -28,8 +28,9 @@ xcap = "0.4"
 
 # Phase 1
 tokio = { version = "1", features = ["full"] }
-tokio-rusqlite = "0.6"
-rusqlite = { version = "0.32", features = ["bundled"] }
+tokio-rusqlite = "0.8"
+# fallible_uint: read and write u64 and usize, with an error when a value does not fit in i64
+rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 dirs = "5"
