@@ -15,6 +15,15 @@ use crate::storage::{utc_now_rfc3339, DbPool};
 /// conditions.
 static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+/// The largest manifest.json allowed, in bytes.
+const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
+
+/// The largest total size of all files after unpacking, in bytes.
+const MAX_UNPACKED_BYTES: u64 = 100 * 1024 * 1024;
+
+/// The most entries a package may have. Folders count too.
+const MAX_ENTRIES: usize = 1000;
+
 /// Returns the checked manifest from the zip without unpacking it. Used to show the plugin's
 /// details in the frontend before it is installed.
 ///
@@ -22,6 +31,7 @@ static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 ///
 /// - The zip or its manifest.json is not valid: [`Error::PluginPackage`],
 ///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
+/// - manifest.json is larger than 64 KB: [`Error::PluginPackage`]
 pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
     read_checked_manifest(&mut open(zip_path)?)
 }
@@ -42,6 +52,8 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 /// - The same version is already installed: [`Error::PluginAlreadyInstalled`]
 /// - The zip or its manifest.json is not valid: [`Error::PluginPackage`],
 ///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
+/// - manifest.json is larger than 64 KB, the zip has more than 1000 entries, or the files are
+///   larger than 100 MB unpacked: [`Error::PluginPackage`]
 /// - `storage_mb` is not between 1 MB and 10 GB: [`Error::PluginManifest`]
 pub async fn install(
     pool: &DbPool,
@@ -65,7 +77,14 @@ pub async fn install(
     // Unpack into a temp folder, then rename it. On the same disk a rename happens in one step,
     // so the plugin library never has a half-unpacked version.
     let tmp = plugins_dir.join(format!(".tmp-{}", uuid::Uuid::new_v4().simple()));
-    extract(&mut archive, &tmp)?;
+    if let Err(e) = extract(&mut archive, &tmp) {
+        // The half-unpacked files can be as large as 100 MB, so delete them now instead of
+        // waiting until the plugin market is opened next time
+        if let Err(e) = fs::remove_dir_all(&tmp) {
+            log::warn!("cannot delete temp folder {}: {e}", tmp.display());
+        }
+        return Err(e);
+    }
     let plugin_dir = plugins_dir.join(&manifest.id);
     let version_dir = plugin_dir.join(&manifest.version);
     // The table does not have this version, so a folder here was left by an install that did
@@ -207,11 +226,18 @@ fn open(zip_path: &Path) -> Result<ZipArchive<File>> {
 /// the zip.
 fn read_checked_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
     let mut json = Vec::new();
-    // Read manifest.json directly from the archive.
+    // Read manifest.json directly from the archive. Reading 1 byte past the limit shows whether
+    // the file is over it
     archive
         .by_name("manifest.json")
         .map_err(|e| Error::PluginPackage(format!("manifest.json: {e}")))?
+        .take(MAX_MANIFEST_BYTES + 1)
         .read_to_end(&mut json)?;
+    if json.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err(Error::PluginPackage(
+            "manifest.json is larger than 64 KB".into(),
+        ));
+    }
     let manifest = manifest::parse(&json)?;
     let has = |name: &str| archive.file_names().any(|n| n == name);
     // If the plugin runs in the background or has a page, its entry file must be in the zip:
@@ -228,7 +254,13 @@ fn read_checked_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
 
 /// Unpacks the zip into `dest`.
 fn extract(archive: &mut ZipArchive<File>, dest: &Path) -> Result<()> {
+    if archive.len() > MAX_ENTRIES {
+        return Err(Error::PluginPackage(format!(
+            "more than {MAX_ENTRIES} entries"
+        )));
+    }
     fs::create_dir_all(dest)?;
+    let mut left = MAX_UNPACKED_BYTES;
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -253,7 +285,16 @@ fn extract(archive: &mut ZipArchive<File>, dest: &Path) -> Result<()> {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            io::copy(&mut entry, &mut File::create(&path)?)?;
+            // Count the bytes actually written. Reading 1 byte past what is left shows whether
+            // the files are over the limit
+            let copied = io::copy(
+                &mut entry.by_ref().take(left + 1),
+                &mut File::create(&path)?,
+            )?;
+            if copied > left {
+                return Err(Error::PluginPackage("larger than 100 MB unpacked".into()));
+            }
+            left -= copied;
         }
     }
     Ok(())
@@ -359,8 +400,9 @@ mod tests {
         assert_eq!(row.version, "0.1.0");
     }
 
-    /// 坏的包：缺清单、缺后台脚本、路径跑出去、符号链接。
-    /// 都报包错误，且是因为各自的原因；表里没有这一行，插件库里也没有这个插件的文件夹；zip 不删。
+    /// 坏的包：缺清单、缺后台脚本、路径跑出去、符号链接、清单太大、条目太多、解压后太大。
+    /// 都报包错误，且是因为各自的原因；表里没有这一行，插件库里也没有这个插件的文件夹，
+    /// 解了一半的临时文件夹也删掉了；zip 不删。
     #[tokio::test]
     async fn bad_packages_install_nothing() {
         let dir = TempDir::new();
@@ -395,6 +437,38 @@ mod tests {
         zip.finish().unwrap();
         zips.push(("symlink", symlink));
 
+        // 清单超过 64 KB。不认识的字段本来会被忽略，但先被大小挡住
+        let mut big = serde_json::from_str::<serde_json::Value>(&manifest).unwrap();
+        big["padding"] = "x".repeat(64 * 1024).into();
+        let path = dir.0.join("big-manifest.zip");
+        write_zip(
+            &path,
+            &[("manifest.json", &big.to_string()), ("background.js", "x")],
+        );
+        zips.push(("64 KB", path));
+
+        // 1002 个条目
+        let extra: Vec<String> = (0..1000).map(|i| format!("f{i}.js")).collect();
+        let mut files = vec![("manifest.json", manifest.as_str()), ("background.js", "x")];
+        files.extend(extra.iter().map(|name| (name.as_str(), "x")));
+        let path = dir.0.join("many-entries.zip");
+        write_zip(&path, &files);
+        zips.push(("entries", path));
+
+        // 每个文件都不到 100 MB，加起来超过
+        let half = "0".repeat((MAX_UNPACKED_BYTES / 2 + 1) as usize);
+        let path = dir.0.join("too-large.zip");
+        write_zip(
+            &path,
+            &[
+                ("manifest.json", &manifest),
+                ("background.js", "x"),
+                ("a.js", &half),
+                ("b.js", &half),
+            ],
+        );
+        zips.push(("100 MB", path));
+
         for (reason, path) in zips {
             let result = install(&pool, &dir.plugins(), &path, vec![], None).await;
             assert!(
@@ -403,6 +477,10 @@ mod tests {
             );
             assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
             assert!(!dir.plugins().join("hindsight-focus").exists(), "{reason}");
+            assert!(
+                !dir.plugins().exists() || names(&dir.plugins()).is_empty(),
+                "{reason}"
+            );
             assert!(path.exists(), "{reason}");
         }
     }
