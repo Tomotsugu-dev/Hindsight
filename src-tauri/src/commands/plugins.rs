@@ -124,7 +124,7 @@ pub async fn plugin_call(
     method: String,
     params: serde_json::Value,
     device: Option<String>,
-) -> Result<serde_json::Value, String> {
+) -> Result<Box<serde_json::value::RawValue>, String> {
     log::debug!("plugins: {plugin_id} calls {method}");
     let notify = |title: &str, body: &str| {
         app.notification()
@@ -134,8 +134,14 @@ pub async fn plugin_call(
             .show()
             .map_err(|e| Error::Other(format!("notification: {e}")))
     };
-    let self_id = crate::device::self_id()?;
-    api::call(&pool, &plugin_id, &method, params, device, self_id, notify)
+    let plugins_dir = plugins_dir();
+    let host = api::Host {
+        pool: &pool,
+        plugins_dir: &plugins_dir,
+        self_id: crate::device::self_id()?,
+        notify,
+    };
+    api::call(host, &plugin_id, &method, params, device)
         .await
         .map_err(Into::into)
 }
