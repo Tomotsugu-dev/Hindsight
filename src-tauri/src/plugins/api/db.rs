@@ -72,10 +72,15 @@ const ALLOWED_PRAGMAS: [&str; 6] = [
 /// internally.
 const READ_ONLY_PRAGMAS: [&str; 2] = ["data_version", "page_size"];
 
+/// The virtual tables that plugins may create.
+const ALLOWED_MODULES: [&str; 2] = ["fts5", "rtree"];
+
 /// The built-in functions that are denied for plugins.
-const DENIED_FUNCTIONS: [&str; 5] = [
+const DENIED_FUNCTIONS: [&str; 6] = [
     // Loads any shared library
     "load_extension",
+    // Returns the address of a tokenizer in memory
+    "fts3_tokenizer",
     // These aggregate functions collect their result in memory, and check the limit for one
     // value only at the end
     "json_group_array",
@@ -328,9 +333,11 @@ fn authorize(ctx: AuthContext<'_>) -> Authorization {
         | AlterTable { .. }
         | Reindex { .. }
         | Analyze { .. } => true,
-        // Virtual tables: the only compiled-in modules are full-text search, R-tree and dbstat,
-        // and they read and write only this database
-        CreateVtable { .. } | DropVtable { .. } => true,
+        // Full-text search has only FTS5. FTS3, FTS4, dbstat and the other compiled-in modules
+        // are denied
+        CreateVtable { module_name, .. } | DropVtable { module_name, .. } => ALLOWED_MODULES
+            .iter()
+            .any(|m| module_name.eq_ignore_ascii_case(m)),
         // Most built-in functions only compute values and never touch files. The exceptions are
         // in DENIED_FUNCTIONS
         Function { function_name } => !DENIED_FUNCTIONS
@@ -829,6 +836,34 @@ mod tests {
             focus.select(found).await.unwrap(),
             json!([{ "body": "专注 25 分钟" }])
         );
+
+        focus.exec("DROP TABLE notes").await.unwrap();
+        focus.exec("DROP TABLE boxes").await.unwrap();
+    }
+
+    /// 只能建 FTS5 和 R 树，别的虚拟表换大小写也建不了；FTS3 的分词器函数拒绝。
+    #[tokio::test]
+    async fn rejects_other_virtual_tables() {
+        let dir = TempDir::new();
+        let focus = Installed::new(&dir, "hindsight-focus");
+
+        for sql in [
+            "CREATE VIRTUAL TABLE a USING fts3(body)",
+            "CREATE VIRTUAL TABLE b USING FTS4(body)",
+            "CREATE VIRTUAL TABLE c USING fts3tokenize(simple)",
+            "CREATE VIRTUAL TABLE d USING dbstat",
+        ] {
+            let err = focus.exec(sql).await.unwrap_err().to_string();
+            assert!(err.contains("authoriz"), "{sql}: {err}");
+        }
+        // 参数从 ? 传进来时，这个函数才交出地址，插件的 params 正是这样传的
+        let err = focus
+            .query_with(json!({ "sql": "SELECT fts3_tokenizer(?) AS p", "params": ["simple"] }))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("authoriz"), "{err}");
+        let left = "SELECT count(*) AS n FROM sqlite_schema";
+        assert_eq!(focus.select(left).await.unwrap(), json!([{ "n": 0 }]));
     }
 
     /// 所有插件同时最多打开 4 个库：名额用完时，新的调用等别人还了名额才跑。
