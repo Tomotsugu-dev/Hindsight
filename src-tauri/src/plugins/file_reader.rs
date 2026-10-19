@@ -66,9 +66,29 @@ const LAUNCHER_HTML: &str = r#"<!doctype html><script src="_launcher.js"></scrip
 /// The launcher script: runs [`WORKER_JS`] in a Worker, and passes messages between the Worker
 /// and the parent page.
 ///
+/// Heartbeat: pings the Worker every 10 seconds, and stops it when two pings in a row get no
+/// reply, so that a plugin stuck in a loop does not keep a CPU core busy.
+///
 /// `"*"`: the parent page can only be a Hindsight page, see [`FRAME_ANCESTORS`].
 const LAUNCHER_JS: &str = r#"const worker = new Worker("_worker.js");
-worker.onmessage = (e) => parent.postMessage(e.data, "*");
+let missed = 0;
+const heartbeat = setInterval(() => {
+  if (missed === 2) {
+    clearInterval(heartbeat);
+    worker.terminate();
+    console.warn("plugin stopped: no reply to two pings");
+    return;
+  }
+  missed += 1;
+  worker.postMessage({ ping: true });
+}, 10000);
+worker.onmessage = (e) => {
+  if (e.data?.pong) {
+    missed = 0;
+    return;
+  }
+  parent.postMessage(e.data, "*");
+};
 onmessage = (e) => {
   if (e.source === parent) worker.postMessage(e.data);
 };
@@ -76,6 +96,8 @@ onmessage = (e) => {
 
 /// The script that runs first in the Worker: defines `hindsight.call()` and `hindsight.on()`, then
 /// loads the plugin's `background.js`.
+///
+/// It also answers the launcher's pings, see [`LAUNCHER_JS`].
 ///
 /// Wrapped in `{}` so that its variable names do not clash with those in `background.js`.
 const WORKER_JS: &str = r#"{
@@ -94,6 +116,10 @@ const WORKER_JS: &str = r#"{
     },
   };
   addEventListener("message", (e) => {
+    if (e.data?.ping) {
+      postMessage({ pong: true });
+      return;
+    }
     if (typeof e.data?.eventName === "string") {
       for (const callback of listeners.get(e.data.eventName) ?? []) {
         try {

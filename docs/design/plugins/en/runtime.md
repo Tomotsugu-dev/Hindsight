@@ -28,6 +28,7 @@ flowchart TB
 - **One Worker per plugin**: all iframes share one main thread, so if one plugin hangs, all of them stop. A Worker is a separate thread, so a hung Worker can be stopped on its own.
 - **One iframe per plugin** (a page inside another page): a Worker can only be started with a script from the same origin. The iframe opens at the plugin's own origin, so storage is separate between plugins and between a plugin and Hindsight, and the Worker uses the CSP from the plugin file reader.
 - **Hindsight provides each plugin's launcher**: the launcher runs on the shared main thread, so it cannot hold the author's code. It only starts the Worker, passes messages, and stops the Worker.
+- **Heartbeat**: the launcher pings the Worker every 10 seconds, and stops it when two pings in a row get no reply. The plugin background is hidden, so when a plugin is stuck in a loop, the user cannot see which plugin is using the CPU.
 - **Not one window per plugin**: each window is one process and uses several times more memory. Tauri also injects its call interface and key into each window's main page.
 
 ## At startup
