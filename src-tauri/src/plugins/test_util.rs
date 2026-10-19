@@ -7,8 +7,10 @@ use std::path::{Path, PathBuf};
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
+use crate::plugins::install;
 use crate::plugins::market::{InstallKind, OnlinePlugin, OnlineVersion};
 use crate::repo::plugins::Plugin;
+use crate::storage::DbPool;
 
 /// 一个测试一个空文件夹，放 zip 和插件库，测完删掉。
 pub struct TempDir(pub PathBuf);
@@ -34,7 +36,7 @@ impl Drop for TempDir {
     }
 }
 
-/// plugins 表里的一行，版本 0.1.0，没有权限。
+/// plugins 表里的一行，版本 0.1.0，没有权限，没有磁盘容量。
 pub fn plugin_row(id: &str, enabled: bool, runs_in_background: bool) -> Plugin {
     Plugin {
         id: id.into(),
@@ -42,6 +44,7 @@ pub fn plugin_row(id: &str, enabled: bool, runs_in_background: bool) -> Plugin {
         version: "0.1.0".into(),
         enabled,
         permissions: vec![],
+        storage_mb: None,
         ui_location: "sidebar".into(),
         runs_in_background,
         installed_at: "2026-10-18T00:00:00+00:00".into(),
@@ -87,6 +90,13 @@ pub fn focus_zip(dir: &TempDir, version: &str) -> PathBuf {
     path
 }
 
+/// 装上专注插件的这个版本，不给权限，也不给磁盘容量。
+pub async fn install_focus(pool: &DbPool, dir: &TempDir, version: &str) {
+    install::install(pool, &dir.plugins(), &focus_zip(dir, version), vec![], None)
+        .await
+        .unwrap();
+}
+
 /// 线上列表里的一个插件，只有 id 和各个版本号要紧。
 pub fn online_plugin(id: &str, versions: &[&str]) -> OnlinePlugin {
     OnlinePlugin {
@@ -102,6 +112,7 @@ pub fn online_plugin(id: &str, versions: &[&str]) -> OnlinePlugin {
                 url: format!("https://example.com/{id}-{version}.zip"),
                 sha256: String::new(),
                 permissions: vec!["stats.read".into()],
+                storage_mb: None,
                 kind: InstallKind::default(),
             })
             .collect(),

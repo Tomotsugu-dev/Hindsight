@@ -27,8 +27,13 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 }
 
 /// Installs a plugin from a zip. If another version is installed, this is an update, and a
-/// downgrade counts too. `approved` is the permissions the user approved; they are stored in the
-/// table as they are.
+/// downgrade counts too.
+///
+/// - `approved`: the permissions the user approved
+/// - `storage_mb`: the disk space the user approved, in MB. `None` if the user approved none
+///
+/// Both are stored in the table as they are. They are not compared with what the manifest asks
+/// for.
 ///
 /// Deletes the zip after a successful install. If the install fails, the zip is kept.
 ///
@@ -37,12 +42,18 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 /// - The same version is already installed: [`Error::PluginAlreadyInstalled`]
 /// - The zip or its manifest.json is not valid: [`Error::PluginPackage`],
 ///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
+/// - `storage_mb` is not between 1 MB and 10 GB: [`Error::PluginManifest`]
 pub async fn install(
     pool: &DbPool,
     plugins_dir: &Path,
     zip_path: &Path,
     approved: Vec<String>,
+    storage_mb: Option<u32>,
 ) -> Result<()> {
+    // The approved disk space comes from the frontend.
+    if let Some(mb) = storage_mb {
+        manifest::check_storage_mb(mb)?;
+    }
     let _lock = LOCK.lock().await;
     let mut archive = open(zip_path)?;
     let manifest = read_checked_manifest(&mut archive)?;
@@ -73,6 +84,7 @@ pub async fn install(
             version: manifest.version,
             enabled: true,
             permissions: approved,
+            storage_mb,
             ui_location: manifest.ui_location,
             runs_in_background: manifest.runs_in_background,
             installed_at: utc_now_rfc3339(),
@@ -255,20 +267,28 @@ mod tests {
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
 
-    use crate::plugins::test_util::{focus_zip, manifest_json, names, write_zip, TempDir};
+    use crate::plugins::test_util::{
+        focus_zip, install_focus, manifest_json, names, write_zip, TempDir,
+    };
     use crate::repo::test_util::fresh_test_pool;
 
-    /// 装上以后：文件在 <id>/<version>/ 下，临时文件夹已经改名；表里存的是用户同意的权限，不是清单申请的；
-    /// zip 删掉了。
+    /// 装上以后：文件在 <id>/<version>/ 下，临时文件夹已经改名；表里存的是用户同意的权限和容量，
+    /// 不是清单申请的；zip 删掉了。
     #[tokio::test]
     async fn install_puts_files_then_row() {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
         let zip = focus_zip(&dir, "0.1.0");
 
-        install(&pool, &dir.plugins(), &zip, vec!["stats.read".into()])
-            .await
-            .unwrap();
+        install(
+            &pool,
+            &dir.plugins(),
+            &zip,
+            vec!["stats.read".into()],
+            Some(200),
+        )
+        .await
+        .unwrap();
 
         assert!(!zip.exists());
 
@@ -282,6 +302,26 @@ mod tests {
         let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
         assert_eq!(row.version, "0.1.0");
         assert_eq!(row.permissions, ["stats.read"]);
+        assert_eq!(row.storage_mb, Some(200));
+    }
+
+    /// 容量是 0 或超过 10 GB：报清单错误，什么都不装，zip 不删。
+    #[tokio::test]
+    async fn bad_storage_installs_nothing() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let zip = focus_zip(&dir, "0.1.0");
+
+        for mb in [0, manifest::MAX_STORAGE_MB + 1] {
+            let result = install(&pool, &dir.plugins(), &zip, vec![], Some(mb)).await;
+            assert!(
+                matches!(&result, Err(Error::PluginManifest(_))),
+                "{mb}: {result:?}"
+            );
+            assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
+            assert!(!dir.plugins().exists());
+            assert!(zip.exists());
+        }
     }
 
     /// 同一个版本再装一次：报「已经装了 0.1.0」，zip 不删。
@@ -289,12 +329,10 @@ mod tests {
     async fn same_version_is_rejected() {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
 
         let zip = focus_zip(&dir, "0.1.0");
-        let again = install(&pool, &dir.plugins(), &zip, vec![]).await;
+        let again = install(&pool, &dir.plugins(), &zip, vec![], None).await;
         assert!(
             matches!(&again, Err(Error::PluginAlreadyInstalled(v)) if v == "0.1.0"),
             "{again:?}"
@@ -308,20 +346,14 @@ mod tests {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
         let focus_dir = dir.plugins().join("hindsight-focus");
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
 
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.2.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.2.0").await;
         assert_eq!(names(&focus_dir), ["0.2.0"]);
         let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
         assert_eq!(row.version, "0.2.0");
 
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
         assert_eq!(names(&focus_dir), ["0.1.0"]);
         let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
         assert_eq!(row.version, "0.1.0");
@@ -364,7 +396,7 @@ mod tests {
         zips.push(("symlink", symlink));
 
         for (reason, path) in zips {
-            let result = install(&pool, &dir.plugins(), &path, vec![]).await;
+            let result = install(&pool, &dir.plugins(), &path, vec![], None).await;
             assert!(
                 matches!(&result, Err(Error::PluginPackage(m)) if m.contains(reason)),
                 "{reason}: {result:?}"
@@ -382,9 +414,7 @@ mod tests {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
         let focus_dir = dir.plugins().join("hindsight-focus");
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
         fs::write(focus_dir.join("data.sqlite"), "").unwrap();
 
         uninstall(&pool, &dir.plugins(), "hindsight-focus", true)
@@ -404,9 +434,7 @@ mod tests {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
         let focus_dir = dir.plugins().join("hindsight-focus");
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
         fs::write(focus_dir.join("data.sqlite"), "goal: 6h").unwrap();
 
         uninstall(&pool, &dir.plugins(), "hindsight-focus", false)
@@ -415,9 +443,7 @@ mod tests {
         assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
         assert_eq!(names(&focus_dir), ["data.sqlite"]);
 
-        install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
         assert_eq!(names(&focus_dir), ["0.1.0", "data.sqlite"]);
         assert_eq!(
             fs::read_to_string(focus_dir.join("data.sqlite")).unwrap(),
@@ -434,9 +460,7 @@ mod tests {
         let plugins = dir.plugins();
         let focus_dir = plugins.join("hindsight-focus");
         let kept_dir = plugins.join("uninstalled-kept-data");
-        install(&pool, &plugins, &focus_zip(&dir, "0.2.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.2.0").await;
         fs::create_dir_all(focus_dir.join("0.1.0")).unwrap();
         fs::write(focus_dir.join("data.sqlite"), "").unwrap();
         fs::create_dir_all(kept_dir.join("0.1.0")).unwrap();

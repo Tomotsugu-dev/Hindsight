@@ -40,9 +40,10 @@ pub async fn plugin_install(
     pool: State<'_, DbPool>,
     file_name: String,
     approved: Vec<String>,
+    storage_mb: Option<u32>,
 ) -> Result<(), String> {
     let zip = market::zip_path(&plugin_zips_dir(), &file_name)?;
-    install::install(&pool, &plugins_dir(), &zip, approved).await?;
+    install::install(&pool, &plugins_dir(), &zip, approved, storage_mb).await?;
     background_window::refresh(&app, &pool).await;
     Ok(())
 }
@@ -59,11 +60,12 @@ pub async fn plugin_install_online(
     id: String,
     version: String,
     approved: Vec<String>,
+    storage_mb: Option<u32>,
 ) -> Result<(), String> {
     let online = market::fetch_online(market::PLUGINS_JSON_URL).await?;
     let target = market::find_version(&online, &id, &version)?;
     let zip = market::download(&plugin_zips_dir(), &id, target).await?;
-    install::install(&pool, &plugins_dir(), &zip, approved).await?;
+    install::install(&pool, &plugins_dir(), &zip, approved, storage_mb).await?;
     background_window::refresh(&app, &pool).await;
     Ok(())
 }

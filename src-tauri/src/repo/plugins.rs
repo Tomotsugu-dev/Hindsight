@@ -16,14 +16,17 @@ pub struct Plugin {
     pub enabled: bool,
     /// Permissions the user approved, such as `stats.read`
     pub permissions: Vec<String>,
+    /// The disk space the user approved, in MB. `None` if the plugin asked for none; then it
+    /// cannot use its own database
+    pub storage_mb: Option<u32>,
     /// Where the plugin page shows: `sidebar`, `window` or `none`
     pub ui_location: String,
     pub runs_in_background: bool,
     pub installed_at: String,
 }
 
-const COLUMNS: &str =
-    "id, name, version, enabled, permissions, ui_location, runs_in_background, installed_at";
+const COLUMNS: &str = "id, name, version, enabled, permissions, ui_location, runs_in_background, \
+                       installed_at, storage_mb";
 
 /// Inserts a new plugin or updates an existing plugin's metadata.
 ///
@@ -36,13 +39,14 @@ pub async fn save(pool: &DbPool, plugin: Plugin) -> Result<()> {
             conn.execute(
                 &format!(
                     "INSERT INTO plugins({COLUMNS})
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                      ON CONFLICT(id) DO UPDATE
                         SET name = excluded.name,
                             version = excluded.version,
                             permissions = excluded.permissions,
                             ui_location = excluded.ui_location,
-                            runs_in_background = excluded.runs_in_background"
+                            runs_in_background = excluded.runs_in_background,
+                            storage_mb = excluded.storage_mb"
                 ),
                 rusqlite::params![
                     plugin.id,
@@ -52,7 +56,8 @@ pub async fn save(pool: &DbPool, plugin: Plugin) -> Result<()> {
                     permissions,
                     plugin.ui_location,
                     plugin.runs_in_background,
-                    plugin.installed_at
+                    plugin.installed_at,
+                    plugin.storage_mb
                 ],
             )
             .db()?;
@@ -144,6 +149,7 @@ fn from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Plugin> {
         ui_location: r.get(5)?,
         runs_in_background: r.get(6)?,
         installed_at: r.get(7)?,
+        storage_mb: r.get(8)?,
     })
 }
 
@@ -159,6 +165,7 @@ mod tests {
             version: version.into(),
             enabled: true,
             permissions: vec!["stats.read".into(), "focus.changed".into()],
+            storage_mb: Some(10),
             ui_location: "sidebar".into(),
             runs_in_background: true,
             installed_at: "2026-10-17T00:00:00+00:00".into(),
@@ -187,7 +194,7 @@ mod tests {
         assert_eq!(get(&pool, "not-installed").await.unwrap(), None);
     }
 
-    /// 更新：名字、版本、权限、页面位置、后台运行换成新的；用户关掉的开关和安装时间不变。
+    /// 更新：名字、版本、权限、容量、页面位置、后台运行换成新的；用户关掉的开关和安装时间不变。
     #[tokio::test]
     async fn update_keeps_switch_and_install_time() {
         let pool = fresh_test_pool().await;
@@ -197,6 +204,7 @@ mod tests {
         let mut newer = focus("0.2.0");
         newer.name = "Focus Timer".into();
         newer.permissions.push("notifications".into());
+        newer.storage_mb = Some(200);
         newer.ui_location = "window".into();
         newer.runs_in_background = false;
         newer.installed_at = "2026-10-20T00:00:00+00:00".into();
@@ -206,6 +214,7 @@ mod tests {
         assert_eq!(got.name, "Focus Timer");
         assert_eq!(got.version, "0.2.0");
         assert_eq!(got.permissions, newer.permissions);
+        assert_eq!(got.storage_mb, Some(200));
         assert_eq!(got.ui_location, "window");
         assert!(!got.runs_in_background);
         assert!(!got.enabled, "更新不能把用户关掉的插件重新打开");

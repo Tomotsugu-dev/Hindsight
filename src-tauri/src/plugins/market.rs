@@ -246,6 +246,9 @@ pub struct OnlineVersion {
     pub url: String,
     pub sha256: String,
     pub permissions: Vec<String>,
+    /// The requested disk space for this version (MB).
+    /// The marketplace shows this to the user before downloading. If not specified, it is `None`.
+    pub storage_mb: Option<u32>,
     /// How this version relates to the installed version. It is not in plugins.json; [`list`]
     /// sets it
     #[serde(skip_deserializing)]
@@ -431,7 +434,9 @@ pub fn remove_partial_downloads(zips_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::test_util::{focus_zip, names, online_plugin, serve, write_zip, TempDir};
+    use crate::plugins::test_util::{
+        focus_zip, install_focus, names, online_plugin, serve, write_zip, TempDir,
+    };
     use crate::repo::test_util::fresh_test_pool;
 
     /// 一个能下载的版本：地址指向本机的服务，SHA-256 按 `body` 算。
@@ -442,6 +447,7 @@ mod tests {
             sha256: format!("{:x}", Sha256::digest(&body)),
             url: serve(body).await,
             permissions: vec![],
+            storage_mb: None,
             kind: InstallKind::default(),
         }
     }
@@ -557,9 +563,7 @@ mod tests {
     async fn list_marks_local_zips() {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
-        install::install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
         // 没改版本号，又打了一次包
         focus_zip(&dir, "0.1.0");
         focus_zip(&dir, "0.2.0");
@@ -608,6 +612,7 @@ mod tests {
                     version: version.into(),
                     enabled: true,
                     permissions: vec![],
+                    storage_mb: None,
                     ui_location: "none".into(),
                     runs_in_background: true,
                     installed_at: "2026-10-18T00:00:00+00:00".into(),
@@ -659,9 +664,7 @@ mod tests {
     async fn list_without_online_keeps_the_rest() {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
-        install::install(&pool, &dir.plugins(), &focus_zip(&dir, "0.1.0"), vec![])
-            .await
-            .unwrap();
+        install_focus(&pool, &dir, "0.1.0").await;
         focus_zip(&dir, "0.2.0");
 
         let market = list(&pool, &dir.0, Err(Error::PluginsJsonFormatVersion(2)))
@@ -678,7 +681,7 @@ mod tests {
         assert_eq!(market.local_zips.len(), 1);
     }
 
-    /// 认识的格式：按顺序读出每个插件，不认识的字段忽略。
+    /// 认识的格式：按顺序读出每个插件，不认识的字段忽略；版本没写容量是 None。
     #[test]
     fn parses_plugins_json_format_1() {
         let json = serde_json::json!({
@@ -693,7 +696,13 @@ mod tests {
                     "version": "0.1.0",
                     "url": "https://example.com/hindsight-focus-0.1.0.zip",
                     "sha256": "abc",
-                    "permissions": ["stats.read"]
+                    "permissions": ["stats.read"],
+                    "storage_mb": 50
+                }, {
+                    "version": "0.0.1",
+                    "url": "https://example.com/hindsight-focus-0.0.1.zip",
+                    "sha256": "def",
+                    "permissions": []
                 }],
                 "homepage": "https://example.com"
             }]
@@ -705,6 +714,8 @@ mod tests {
         assert_eq!(plugins[0].id, "hindsight-focus");
         assert_eq!(plugins[0].versions[0].version, "0.1.0");
         assert_eq!(plugins[0].versions[0].permissions, ["stats.read"]);
+        assert_eq!(plugins[0].versions[0].storage_mb, Some(50));
+        assert_eq!(plugins[0].versions[1].storage_mb, None);
     }
 
     /// 不认识的格式：报格式错误，不硬解。

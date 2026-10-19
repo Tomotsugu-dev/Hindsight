@@ -23,6 +23,9 @@ const PERMISSIONS: [(&str, Option<&str>); 11] = [
 
 const UI_LOCATIONS: [&str; 3] = ["sidebar", "window", "none"];
 
+/// Maximum disk space a plugin can request: 10 GB.
+pub const MAX_STORAGE_MB: u32 = 10 * 1024;
+
 /// The contents of manifest.json.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all(serialize = "camelCase"))]
@@ -32,6 +35,9 @@ pub struct Manifest {
     pub version: String,
     /// Permissions the plugin asks for (not always the ones the user approved)
     pub permissions: Vec<String>,
+    /// Disk space (MB) the plugin requests for its own database.
+    /// If omitted, this is `None` and the plugin cannot use its database.
+    pub storage_mb: Option<u32>,
     pub ui_location: String,
     pub runs_in_background: bool,
 }
@@ -52,7 +58,24 @@ pub fn parse(json: &[u8]) -> Result<Manifest> {
         )));
     }
     check_permissions(&manifest.permissions)?;
+    if let Some(mb) = manifest.storage_mb {
+        check_storage_mb(mb)?;
+    }
     Ok(manifest)
+}
+
+/// Checks that the disk capacity requested by the plugin or approved by the user is between 1 MB and [`MAX_STORAGE_MB`].
+///
+/// # Errors
+///
+/// - If the capacity is outside this range: [`Error::PluginManifest`]
+pub fn check_storage_mb(mb: u32) -> Result<()> {
+    if !(1..=MAX_STORAGE_MB).contains(&mb) {
+        return Err(Error::PluginManifest(format!(
+            "storage_mb must be 1 to {MAX_STORAGE_MB}, not {mb}"
+        )));
+    }
+    Ok(())
 }
 
 /// Checks that the plugin id is valid. The id is a folder name in the plugin library.
@@ -233,6 +256,25 @@ mod tests {
 
         v["permissions"] = json!(["focus.changed", "focus.app", "focus.title"]);
         assert!(parse_value(&v).is_ok());
+    }
+
+    /// 磁盘容量：不写是 None；1 MB 到 10 GB 之间通过；0、超过 10 GB、负数、小数都拒绝。
+    #[test]
+    fn storage_mb_rules() {
+        assert_eq!(parse_value(&focus()).unwrap().storage_mb, None);
+        for ok in [1, 200, MAX_STORAGE_MB] {
+            let mut v = focus();
+            v["storage_mb"] = json!(ok);
+            assert_eq!(parse_value(&v).unwrap().storage_mb, Some(ok));
+        }
+        for bad in [json!(0), json!(MAX_STORAGE_MB + 1), json!(-1), json!(1.5)] {
+            let mut v = focus();
+            v["storage_mb"] = bad.clone();
+            assert!(
+                matches!(parse_value(&v), Err(Error::PluginManifest(_))),
+                "{bad} 应该被拒绝"
+            );
+        }
     }
 
     /// stats.read 要配一档；档位要和 stats.read 一起申请。
