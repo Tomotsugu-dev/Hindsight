@@ -96,8 +96,7 @@ enum Devices {
     Selected,
 }
 
-/// One item returned by `stats.day_by_category`. This is a public format: renaming a field
-/// breaks published plugins.
+/// One item returned by `stats.day_by_category`.
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CategorySeconds {
@@ -185,6 +184,7 @@ mod tests {
     }
 
     /// 返回 id、库里的名字、秒数和所在的大类，用时多的在前；没归入大类的是 null。
+    /// 插件按这些键取值，返回的 JSON 整个锁在这里，改了已发布的插件就读错。
     #[tokio::test]
     async fn day_by_category_returns_names_seconds_and_super_category() {
         let pool = fresh_test_pool().await;
