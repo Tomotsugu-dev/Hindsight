@@ -72,6 +72,18 @@ const ALLOWED_PRAGMAS: [&str; 6] = [
 /// internally.
 const READ_ONLY_PRAGMAS: [&str; 2] = ["data_version", "page_size"];
 
+/// The built-in functions that are denied for plugins.
+const DENIED_FUNCTIONS: [&str; 5] = [
+    // Loads any shared library
+    "load_extension",
+    // These aggregate functions collect their result in memory, and check the limit for one
+    // value only at the end
+    "json_group_array",
+    "jsonb_group_array",
+    "json_group_object",
+    "jsonb_group_object",
+];
+
 const BAD_PARAMS: &str = "db.execute and db.query need { sql, params? }, and params can hold only null, numbers, strings and booleans";
 const ONE_STATEMENT: &str = "db.execute and db.query run exactly one SQL statement";
 const RESULT_TOO_BIG: &str =
@@ -319,9 +331,11 @@ fn authorize(ctx: AuthContext<'_>) -> Authorization {
         // Virtual tables: the only compiled-in modules are full-text search, R-tree and dbstat,
         // and they read and write only this database
         CreateVtable { .. } | DropVtable { .. } => true,
-        // Built-in functions only compute values and never touch files. load_extension would
-        // load any dynamic library
-        Function { function_name } => !function_name.eq_ignore_ascii_case("load_extension"),
+        // Most built-in functions only compute values and never touch files. The exceptions are
+        // in DENIED_FUNCTIONS
+        Function { function_name } => !DENIED_FUNCTIONS
+            .iter()
+            .any(|f| function_name.eq_ignore_ascii_case(f)),
         // Some PRAGMAs change settings of the whole process, so only the listed ones pass. A
         // PRAGMA written as a function comes through here too
         Pragma {
@@ -523,6 +537,32 @@ mod tests {
         focus.exec("CREATE TABLE t (x)").await.unwrap();
         let sql = "SELECT name FROM pragma_table_info('t')";
         assert_eq!(focus.select(sql).await.unwrap(), json!([{ "name": "x" }]));
+    }
+
+    /// 把结果攒在内存里的 JSON 聚合函数都拒绝，写成窗口函数、换大小写也一样；
+    /// group_concat 和普通的 JSON 函数照常能用。
+    #[tokio::test]
+    async fn rejects_json_aggregates() {
+        let dir = TempDir::new();
+        let focus = Installed::new(&dir, "hindsight-focus");
+        focus.exec("CREATE TABLE t (k, v)").await.unwrap();
+        focus.exec("INSERT INTO t VALUES ('a', 1)").await.unwrap();
+
+        for sql in [
+            "SELECT json_group_array(v) FROM t",
+            "SELECT jsonb_group_array(v) FROM t",
+            "SELECT json_group_object(k, v) FROM t",
+            "SELECT jsonb_group_object(k, v) FROM t",
+            "SELECT JSON_GROUP_ARRAY(v) OVER () FROM t",
+        ] {
+            let err = focus.select(sql).await.unwrap_err().to_string();
+            assert!(err.contains("authoriz"), "{sql}: {err}");
+        }
+        let sql = "SELECT group_concat(v) AS s, json_object('k', k) AS o FROM t";
+        assert_eq!(
+            focus.select(sql).await.unwrap(),
+            json!([{ "s": "1", "o": "{\"k\":\"a\"}" }])
+        );
     }
 
     /// 一次只执行一条语句：多条、空的都报错，第一条也不执行。

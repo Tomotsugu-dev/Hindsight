@@ -64,7 +64,7 @@ flowchart LR
 ### Known risks
 
 - Intermediate results, such as for sorting, write temp files to disk with no size limit. Only the run time limit bounds them.
-- A plugin that keeps calling can hold about 260 MB of memory all the time. Later, the forwarder will limit how often a plugin can call.
+- One call has no hard memory limit. Only the other limits keep it down. A plugin that keeps calling can hold a few hundred MB all the time. Later, the forwarder will limit how often a plugin can call.
 
 ## Uninstalling
 
