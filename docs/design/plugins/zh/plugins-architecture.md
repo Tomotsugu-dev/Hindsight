@@ -193,11 +193,11 @@ flowchart LR
   C["capture/<br/>捕获焦点切换事件"] --> E["事件分发模块<br/>查 plugins 表<br/>谁开着、有 focus.changed"] --> T["按权限组装<br/>插件能看的字段"] --> H["推给插件后台窗口里的<br/>background.js"]
 ```
 
-> focus.changed: 前台应用或浏览器网址变了时收到事件，只带时间。收不收事件只看这一个权限
+> focus.changed: 前台应用或浏览器网址变了、用户离开时收到事件，只带时间。收不收事件只看这一个权限
 >
 > focus.app: 事件里加上应用名
 >
 > focus.category: 事件里加上分类
 >
-> focus.title: 事件里加上窗口标题和网址
+> focus.title: 事件里加上窗口标题和网站域名
 

@@ -219,8 +219,12 @@ pub fn run() {
                         None
                     }
                 };
+                // The queue of focus changes, see plugins::events::focus. Capture runs every 5 seconds,
+                // so the queue is full only if nothing is taken from it for 5 minutes
+                let (focus_tx, focus_rx) = tokio::sync::mpsc::channel(64);
                 let svc =
-                    bootstrap::init_capture_service(pool.clone(), memdb.clone(), &cfg).await;
+                    bootstrap::init_capture_service(pool.clone(), memdb.clone(), &cfg, focus_tx)
+                        .await;
                 // OCR 常驻模式:按设置启停(设置保存时由 commands::settings 再同步)
                 let resident = std::sync::Arc::new(memory::resident::ResidentOcr::default());
                 resident
@@ -234,6 +238,12 @@ pub fn run() {
                 let sync_engine = bootstrap::init_sync_engine(pool.clone(), memdb_for_sync).await;
                 // Plugin background window, see plugins::background_window
                 plugins::background_window::refresh(&handle, &pool).await;
+                // Send focus changes to plugins, see plugins::events::focus
+                tauri::async_runtime::spawn(plugins::events::focus::run(
+                    handle.clone(),
+                    pool.clone(),
+                    focus_rx,
+                ));
 
                 handle.manage(pool);
                 handle.manage(svc);

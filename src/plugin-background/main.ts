@@ -50,7 +50,16 @@ window.addEventListener("message", (event) => {
   );
 });
 
+/** An event from Rust for one plugin, such as `focus.changed`. See plugins/events/. */
+type PluginEvent = { toPluginId: string; eventName: string; data: unknown };
+
 async function start() {
+  // The launcher passes it on to the Worker, where hindsight.on() callbacks get it. An event that
+  // comes before the plugin's iframe is open is dropped: a focus event is out of date by the next one
+  await listen<PluginEvent>("plugin-event", ({ payload }) => {
+    const { toPluginId, eventName, data } = payload;
+    frames.get(toPluginId)?.frame.contentWindow?.postMessage({ eventName, data }, "*");
+  });
   let changed = false;
   // Listen before asking for the list, so a change in between is not missed
   await listen<BackgroundPlugin[]>("plugins-changed", (event) => {

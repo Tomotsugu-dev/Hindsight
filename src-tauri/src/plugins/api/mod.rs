@@ -112,7 +112,7 @@ impl Method {
 }
 
 /// Checks whether the plugin has a permission.
-fn has_permission(plugin: &Plugin, permission: &str) -> bool {
+pub(super) fn has_permission(plugin: &Plugin, permission: &str) -> bool {
     plugin.permissions.iter().any(|p| p == permission)
 }
 

@@ -78,11 +78,10 @@
 
 | 权限 | 能做什么 | 风险 | 状态 |
 |---|---|---|---|
-| `focus.changed` | 前台应用或浏览器网址变了时收到事件。事件里只有时间。没有这个权限就收不到焦点事件 | 低 | MVP |
+| `focus.changed` | 前台应用或浏览器网址变了、用户离开时收到事件。事件里只有时间。没有这个权限就收不到焦点事件 | 低 | MVP |
 | `focus.app` | 事件里加应用名。要和 `focus.changed` 一起申请 | 中 | MVP |
 | `focus.category` | 事件里加分类。要和 `focus.changed` 一起申请 | 低 | MVP |
-| `focus.title` | 事件里加窗口标题和网址。要和 `focus.changed` 一起申请 | 高 | MVP |
-| `idle.changed` | 用户离开（键鼠空闲超过设置的时间）和回来时收到事件。事件里只有时间 | 低 | 以后 |
+| `focus.title` | 事件里加窗口标题和网站域名。要和 `focus.changed` 一起申请 | 高 | MVP |
 
 ### 系统能力
 

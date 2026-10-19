@@ -12,7 +12,7 @@ use crate::storage::DbPool;
 
 /// Label of the plugin background window. `capabilities/plugin-background.json` uses the same
 /// label.
-const LABEL: &str = "plugin-background";
+pub(super) const LABEL: &str = "plugin-background";
 
 /// Name of the event sent to the plugin background window when the plugin list changes.
 const CHANGED_EVENT: &str = "plugins-changed";

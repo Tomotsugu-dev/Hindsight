@@ -193,10 +193,10 @@ flowchart LR
   C["capture/<br/>detects a<br/>focus change"] --> E["Event dispatcher<br/>reads the plugins table:<br/>which enabled plugins<br/>have focus.changed"] --> T["Builds the event<br/>with only the fields<br/>the plugin may see"] --> H["Pushes it to<br/>background.js in the<br/>plugin background window"]
 ```
 
-> focus.changed: get an event when the foreground app or browser URL changes. The event has only the time. This one permission decides whether a plugin gets events at all.
+> focus.changed: get an event when the foreground app or browser URL changes, or when the user goes away. The event has only the time. This one permission decides whether a plugin gets events at all.
 >
 > focus.app: adds the app name to the event.
 >
 > focus.category: adds the category to the event.
 >
-> focus.title: adds the window title and URL to the event.
+> focus.title: adds the window title and website domain to the event.

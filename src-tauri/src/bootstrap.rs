@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use tauri::{App, AppHandle, Manager};
 
-use crate::capture::CaptureService;
+use crate::capture::{CaptureService, FocusChange};
 use crate::device::{self, DeviceMeta};
 use crate::repo::devices;
 use crate::repo::settings::Settings;
@@ -171,11 +171,13 @@ pub async fn init_capture_service(
     pool: DbPool,
     memory: Option<crate::memory::MemoryDb>,
     cfg: &Settings,
+    focus_tx: tokio::sync::mpsc::Sender<FocusChange>,
 ) -> Arc<CaptureService> {
     let svc = Arc::new(CaptureService::new(
         pool,
         memory,
         cfg.capture_interval_seconds,
+        focus_tx,
     ));
     svc.set_work_hours(cfg.work_hours_enabled, cfg.work_ranges.clone())
         .await;

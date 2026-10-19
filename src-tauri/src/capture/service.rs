@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use chrono::{DateTime, Duration, Local, Timelike};
 use serde::Serialize;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use crate::capture::{browser_url, ignore, screenshot, screenshot_policy, window};
@@ -65,6 +65,56 @@ struct FocusState {
     url: Option<String>,
 }
 
+/// A message for subscribers when the focus changes.
+#[derive(Clone)]
+pub enum FocusChange {
+    /// The focus moved to a window
+    Window(FocusedWindow),
+    /// The user went away, and the statistics stop counting
+    Away {
+        /// When the user went away
+        at: DateTime<Local>,
+    },
+}
+
+/// The window the focus moved to. It holds the same data as the new session that starts with
+/// the change.
+#[derive(Clone)]
+pub struct FocusedWindow {
+    /// When the focus changed to this
+    pub at: DateTime<Local>,
+    pub app_name: String,
+    pub title: String,
+    /// The same domain as the activity row stores. None if the window matches a privacy keyword,
+    /// or if the user turned off recording website domains
+    pub url_host: Option<String>,
+    /// The title or the URL matches a privacy keyword
+    pub private: bool,
+    /// Matches an ignore rule, so it is not counted in the statistics
+    pub excluded: bool,
+    /// Only for checking whether the focus changed. It holds the full URL, so it is not handed out
+    focus: FocusState,
+}
+
+#[cfg(test)]
+impl FocusedWindow {
+    /// 测试用：焦点按应用名和域名算。
+    pub fn for_test(app_name: &str, title: &str, url_host: Option<&str>) -> Self {
+        Self {
+            at: Local::now(),
+            app_name: app_name.into(),
+            title: title.into(),
+            url_host: url_host.map(Into::into),
+            private: false,
+            excluded: false,
+            focus: FocusState {
+                app_name: app_name.into(),
+                url: url_host.map(Into::into),
+            },
+        }
+    }
+}
+
 struct CurrentSession {
     id: i64,
     focus: FocusState,
@@ -121,6 +171,9 @@ struct Inner {
     /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
     idle_threshold_secs: Mutex<u32>,
     current: Mutex<Option<CurrentSession>>,
+    /// Sends focus changes, see [`FocusSender`]. Lock order: a leaf lock. It can be taken while
+    /// holding `current`, but not the other way round.
+    focus_tx: Mutex<FocusSender>,
     /// 屏幕活跃探测状态（挂机第二信号）。锁顺序：叶子锁，可在持有 `current`
     /// 时获取，反向禁止。
     keepawake: Mutex<KeepawakeProbe>,
@@ -146,9 +199,15 @@ pub struct CaptureService {
 }
 
 impl CaptureService {
-    /// 创建采集服务。`interval_secs` 是同一焦点持续多少秒后强制补一张截图，
-    /// 启动后由 `set_interval` 跟 settings 同步。
-    pub fn new(pool: DbPool, memory: Option<MemoryDb>, interval_secs: u32) -> Self {
+    /// Creates the capture service. `interval_secs` is how long the same focus stays before
+    /// another screenshot is taken. After the start, `set_interval` keeps it in sync with the
+    /// settings. Each focus change, and each time the user goes away, is sent to `focus_tx`.
+    pub fn new(
+        pool: DbPool,
+        memory: Option<MemoryDb>,
+        interval_secs: u32,
+        focus_tx: mpsc::Sender<FocusChange>,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 pool,
@@ -168,6 +227,10 @@ impl CaptureService {
                 // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
                 idle_threshold_secs: Mutex::new(180),
                 current: Mutex::new(None),
+                focus_tx: Mutex::new(FocusSender {
+                    tx: focus_tx,
+                    last: None,
+                }),
                 keepawake: Mutex::new(KeepawakeProbe::default()),
                 ignore_rules: Mutex::new(Vec::new()),
                 last_tick_at: Mutex::new(None),
@@ -252,6 +315,7 @@ impl CaptureService {
             if let Err(e) = activities::seal_session(&self.inner.pool, prev.id, end).await {
                 log::warn!("stop: seal_session 失败 (id={}): {e}", prev.id);
             }
+            self.inner.focus_tx.lock().await.away(end);
         }
     }
 
@@ -354,6 +418,7 @@ async fn tick(inner: &Inner) -> Result<()> {
                 if let Err(e) = activities::seal_session(&inner.pool, prev_sess.id, prev).await {
                     log::warn!("seal_session 失败 (睡眠 gap, id={}): {e}", prev_sess.id);
                 }
+                inner.focus_tx.lock().await.away(prev);
             }
         }
     }
@@ -374,6 +439,7 @@ async fn tick(inner: &Inner) -> Result<()> {
                     {
                         log::warn!("seal_session 失败 (离开工作时段, id={}): {e}", prev.id);
                     }
+                    inner.focus_tx.lock().await.away(now);
                 }
                 return Ok(());
             }
@@ -398,6 +464,7 @@ async fn tick(inner: &Inner) -> Result<()> {
             if let Err(e) = activities::seal_session(&inner.pool, prev.id, end).await {
                 log::warn!("seal_session 失败 (息屏/锁屏, id={}): {e}", prev.id);
             }
+            inner.focus_tx.lock().await.away(end);
         }
         return Ok(());
     }
@@ -435,6 +502,7 @@ async fn tick(inner: &Inner) -> Result<()> {
                         prev.id
                     );
                 }
+                inner.focus_tx.lock().await.away(real_end);
             }
             return Ok(());
         }
@@ -497,6 +565,7 @@ async fn tick(inner: &Inner) -> Result<()> {
                     prev.id
                 );
             }
+            inner.focus_tx.lock().await.away(Local::now());
         }
         return Ok(());
     }
@@ -637,6 +706,15 @@ async fn tick(inner: &Inner) -> Result<()> {
             let enabled = *inner.record_browser_host.lock().await;
             stats_host(privacy_url, is_browser, enabled)
         };
+        inner.focus_tx.lock().await.window(FocusedWindow {
+            at: now,
+            app_name: info.app_name.clone(),
+            title: info.title.clone(),
+            url_host: url_host.clone(),
+            private: skip,
+            excluded,
+            focus: new_focus.clone(),
+        });
         let id = activities::insert_new(&inner.pool, &info, now, shot, excluded, url_host).await?;
         // 保证这个 process_name 有对应的 app_group / member（首次见到的应用建单成员组）
         if let Err(e) = app_groups::ensure_group(&inner.pool, &info.app_name).await {
@@ -663,6 +741,61 @@ async fn tick(inner: &Inner) -> Result<()> {
     *last_err = None;
 
     Ok(())
+}
+
+/// Sends focus changes. It remembers the last window sent, so that the same focus is not sent
+/// twice, and so that the time of going away is never before that window.
+struct FocusSender {
+    tx: mpsc::Sender<FocusChange>,
+    /// The focus and the time of the last window sent. None if nothing was sent yet, or if the
+    /// last change sent was going away
+    last: Option<(FocusState, DateTime<Local>)>,
+}
+
+impl FocusSender {
+    /// Sends the window if its focus is not the same as the last one. Returns `true` if it was
+    /// sent.
+    ///
+    /// The same focus is not sent again: a new session also starts when the same focus stays for
+    /// a full interval and gets another screenshot.
+    fn window(&mut self, window: FocusedWindow) -> bool {
+        if self
+            .last
+            .as_ref()
+            .is_some_and(|(focus, _)| *focus == window.focus)
+        {
+            return false;
+        }
+        self.last = Some((window.focus.clone(), window.at));
+        self.send(FocusChange::Window(window))
+    }
+
+    /// Sends an "away" focus change when the user goes away. Returns `true` if it was sent.
+    ///
+    /// Sends nothing if no window was sent yet, or if the last change was already going away:
+    /// plugins think nothing is in focus, so there is nothing to go away from.
+    fn away(&mut self, at: DateTime<Local>) -> bool {
+        // Take last out, so that it is None afterwards: the last change sent is going away
+        let Some((_, last_at)) = self.last.take() else {
+            return false;
+        };
+        // The time of going away comes from the last input. If a window came to the front by
+        // itself while the user was away, that time is before the window started. Clamp it to
+        // the start, so that the window gets 0 seconds, as in the statistics
+        self.send(FocusChange::Away {
+            at: at.max(last_at),
+        })
+    }
+
+    /// Puts the change into the queue without waiting. If the queue is full, the change is
+    /// dropped.
+    fn send(&self, change: FocusChange) -> bool {
+        if let Err(e) = self.tx.try_send(change) {
+            log::warn!("capture: focus change dropped: {e}");
+            return false;
+        }
+        true
+    }
 }
 
 /// 屏幕是否仍在变化——挂机判定的第二信号。
@@ -864,6 +997,78 @@ mod tests {
             start: start.into(),
             end: end.into(),
         }
+    }
+
+    /// 一次切换：焦点按应用名和完整网址算，域名只取到 `/` 之前。
+    fn window(app: &str, url: Option<&str>, title: &str) -> FocusedWindow {
+        FocusedWindow {
+            at: Local::now(),
+            app_name: app.into(),
+            title: title.into(),
+            url_host: url.map(|u| u.split('/').next().unwrap().into()),
+            private: false,
+            excluded: false,
+            focus: FocusState {
+                app_name: app.into(),
+                url: url.map(Into::into),
+            },
+        }
+    }
+
+    fn sender(capacity: usize) -> (FocusSender, mpsc::Receiver<FocusChange>) {
+        let (tx, rx) = mpsc::channel(capacity);
+        (FocusSender { tx, last: None }, rx)
+    }
+
+    /// 队列里的每一条，窗口用标题表示，离开是 "away"。
+    fn received(rx: &mut mpsc::Receiver<FocusChange>) -> Vec<String> {
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .map(|c| match c {
+                FocusChange::Window(w) => w.title,
+                FocusChange::Away { .. } => "away".into(),
+            })
+            .collect()
+    }
+
+    /// 焦点变了才推：只改了标题不算，同一网站换了页面算；推出去的每一条都按顺序收到。
+    #[test]
+    fn window_only_when_the_focus_changes() {
+        let (mut s, mut rx) = sender(8);
+        assert!(s.window(window("Code", None, "a.rs")));
+        assert!(!s.window(window("Code", None, "b.rs")));
+        let first = window("Chrome", Some("youtube.com/watch?v=1"), "第一个视频");
+        let second = window("Chrome", Some("youtube.com/watch?v=2"), "第二个视频");
+        assert!(s.window(first));
+        assert!(s.window(second));
+        assert_eq!(received(&mut rx), ["a.rs", "第一个视频", "第二个视频"]);
+    }
+
+    /// 离开只推一次，回来时焦点和离开前一样也推；离开的时刻早于上一条时钳到上一条。
+    #[test]
+    fn away_once_and_never_before_the_last_window() {
+        let (mut s, mut rx) = sender(8);
+        // 还没推过窗口，没有可离开的
+        assert!(!s.away(Local::now()));
+
+        let code = window("Code", None, "a.rs");
+        let code_at = code.at;
+        s.window(code);
+        assert!(s.away(code_at - Duration::minutes(1)));
+        assert!(!s.away(code_at + Duration::minutes(5)));
+        assert!(s.window(window("Code", None, "a.rs")));
+
+        let got: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert!(matches!(got[1], FocusChange::Away { at } if at == code_at));
+        assert_eq!(got.len(), 3);
+    }
+
+    /// 队列排满时丢掉这一条，不等待。
+    #[test]
+    fn a_full_queue_drops_the_change() {
+        let (mut s, mut rx) = sender(1);
+        assert!(s.window(window("Code", None, "a.rs")));
+        assert!(!s.window(window("Chrome", None, "GitHub")));
+        assert_eq!(received(&mut rx), ["a.rs"]);
     }
 
     #[test]

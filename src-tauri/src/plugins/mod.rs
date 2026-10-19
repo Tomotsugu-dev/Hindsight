@@ -2,6 +2,7 @@
 
 pub mod api;
 pub mod background_window;
+pub mod events;
 pub mod file_reader;
 pub mod install;
 pub mod manifest;

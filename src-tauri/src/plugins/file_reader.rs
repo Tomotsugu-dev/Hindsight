@@ -74,12 +74,13 @@ onmessage = (e) => {
 };
 "#;
 
-/// The script that runs first in the Worker: defines `hindsight.call()`, then loads the plugin's
-/// `background.js`.
+/// The script that runs first in the Worker: defines `hindsight.call()` and `hindsight.on()`, then
+/// loads the plugin's `background.js`.
 ///
 /// Wrapped in `{}` so that its variable names do not clash with those in `background.js`.
 const WORKER_JS: &str = r#"{
   const pending = new Map();
+  const listeners = new Map();
   let nextId = 1;
   self.hindsight = {
     call(method, params) {
@@ -87,8 +88,22 @@ const WORKER_JS: &str = r#"{
       postMessage({ id, method, params });
       return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
     },
+    on(name, callback) {
+      if (!listeners.has(name)) listeners.set(name, []);
+      listeners.get(name).push(callback);
+    },
   };
   addEventListener("message", (e) => {
+    if (typeof e.data?.eventName === "string") {
+      for (const callback of listeners.get(e.data.eventName) ?? []) {
+        try {
+          callback(e.data.data);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      return;
+    }
     const call = pending.get(e.data?.id);
     if (!call) return;
     pending.delete(e.data.id);

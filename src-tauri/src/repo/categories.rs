@@ -13,7 +13,10 @@ use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
-use crate::repo::sql::{FROM_ACTIVITY_GROUP_CATEGORY, FROM_MEMBER_GROUP};
+use crate::repo::sql::{
+    from_stats_category_sql, matching_rule_host_sql, FROM_ACTIVITY_GROUP_CATEGORY,
+    FROM_MEMBER_GROUP,
+};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// A `categories` row plus the process names currently classified under it.
@@ -531,6 +534,55 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
             last_seen_at,
         })
         .collect())
+}
+
+/// The category of a focused window, and the super-category it is in. See [`classify`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusCategory {
+    pub id: String,
+    pub name: String,
+    /// The id and name of the super-category
+    pub super_category: Option<(String, String)>,
+}
+
+/// Finds the category of an app and website: first a website rule for `url_host`, then the
+/// category of the app's group. If neither has one, it is `other`.
+pub async fn classify(
+    pool: &DbPool,
+    process_name: &str,
+    url_host: Option<&str>,
+) -> Result<Option<FocusCategory>> {
+    let process_name = process_name.to_string();
+    let url_host = url_host.map(str::to_string);
+    let category = pool
+        .0
+        .call(move |conn| {
+            let sql = format!(
+                "WITH RECURSIVE {hosts}
+                 SELECT k.id, k.name, s.id, s.name
+                 {from}
+                 JOIN categories k ON k.id = COALESCE(c.id, 'other') AND k.deleted_at IS NULL
+                 LEFT JOIN super_categories s
+                   ON s.id = k.super_category_id AND s.deleted_at IS NULL",
+                hosts = matching_rule_host_sql("SELECT ?1"),
+                from = from_stats_category_sql("(SELECT ?2 AS process_name, ?1 AS url_host)"),
+            );
+            conn.prepare_cached(&sql)
+                .db()?
+                .query_row(rusqlite::params![url_host, process_name], |r| {
+                    let super_id: Option<String> = r.get(2)?;
+                    let super_name: Option<String> = r.get(3)?;
+                    Ok(FocusCategory {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        super_category: super_id.zip(super_name),
+                    })
+                })
+                .optional()
+                .db()
+        })
+        .await?;
+    Ok(category)
 }
 
 #[cfg(test)]
@@ -1372,5 +1424,37 @@ mod tests {
         let pos_zombie = names.iter().position(|n| *n == "ZombieApp").unwrap();
         let pos_free = names.iter().position(|n| *n == "FreeApp").unwrap();
         assert!(pos_zombie < pos_free, "应按分钟数降序: {names:?}");
+    }
+
+    /// 和统计页一样算：应用所在组的分类带上大类；网站规则压过应用的分类，
+    /// 子域名用上一级的规则；隐藏的应用是 hidden；没归类的是 other。
+    #[tokio::test]
+    async fn classify_matches_the_statistics() {
+        let pool = fresh_test_pool().await;
+        assign_app(&pool, "Code", "code").await.unwrap();
+        assign_app(&pool, "Chrome", "browse").await.unwrap();
+        assign_app(&pool, "Secret", "hidden").await.unwrap();
+        crate::repo::site_rules::set(&pool, "youtube.com", "talk")
+            .await
+            .unwrap();
+        let of = |app: &'static str, host: Option<&'static str>| {
+            let pool = pool.clone();
+            async move {
+                let c = classify(&pool, app, host).await.unwrap().unwrap();
+                (c.id, c.super_category.map(|(id, _)| id))
+            }
+        };
+
+        assert_eq!(of("Code", None).await, ("code".into(), Some("work".into())));
+        assert_eq!(
+            of("Chrome", Some("github.com")).await,
+            ("browse".into(), Some("browse".into()))
+        );
+        assert_eq!(
+            of("Chrome", Some("www.youtube.com")).await,
+            ("talk".into(), Some("social".into()))
+        );
+        assert_eq!(of("Secret", None).await.0, "hidden");
+        assert_eq!(of("NeverSeen", None).await, ("other".into(), None));
     }
 }

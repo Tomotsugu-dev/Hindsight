@@ -9,5 +9,5 @@ pub mod screenshot_policy;
 pub mod service;
 pub mod window;
 
-pub use service::{CaptureService, CaptureStatus};
+pub use service::{CaptureService, CaptureStatus, FocusChange, FocusedWindow};
 pub use window::WindowInfo;

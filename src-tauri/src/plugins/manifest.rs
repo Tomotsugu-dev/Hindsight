@@ -58,6 +58,11 @@ pub fn parse(json: &[u8]) -> Result<Manifest> {
         )));
     }
     check_permissions(&manifest.permissions)?;
+    if !manifest.runs_in_background && manifest.permissions.iter().any(|p| p == "focus.changed") {
+        return Err(Error::PluginManifest(
+            "focus.changed needs runs_in_background".into(),
+        ));
+    }
     if let Some(mb) = manifest.storage_mb {
         check_storage_mb(mb)?;
     }
@@ -255,6 +260,19 @@ mod tests {
         assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
 
         v["permissions"] = json!(["focus.changed", "focus.app", "focus.title"]);
+        assert!(parse_value(&v).is_ok());
+    }
+
+    /// 不在后台运行的插件收不到事件，申请 focus.changed 就拒绝。
+    #[test]
+    fn focus_changed_needs_a_background_script() {
+        let mut v = focus();
+        v["runs_in_background"] = json!(false);
+        assert!(
+            matches!(parse_value(&v), Err(Error::PluginManifest(m)) if m.contains("runs_in_background"))
+        );
+
+        v["permissions"] = json!(["stats.read", "stats.today"]);
         assert!(parse_value(&v).is_ok());
     }
 
