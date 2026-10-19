@@ -953,7 +953,7 @@ mod tests {
     #[tokio::test]
     async fn db_error_classified_as_infra_not_frame() {
         assert!(is_infra_failure(&Error::Db(
-            tokio_rusqlite::Error::ConnectionClosed
+            crate::storage::DbError::ConnectionClosed
         )));
         assert!(is_infra_failure(&Error::OcrInfra("worker 崩溃".into())));
         assert!(is_infra_failure(&Error::EmbeddingRuntimeMissing));

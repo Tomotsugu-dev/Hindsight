@@ -11,7 +11,7 @@ use tauri::State;
 
 use crate::capture::CaptureService;
 use crate::repo::settings;
-use crate::storage::{db_path, utc_now_rfc3339, DbPool, SqliteResultExt};
+use crate::storage::{db_path, utc_now_rfc3339, DbError, DbPool, SqliteResultExt};
 use crate::sync::cloud::CloudBackend;
 use crate::sync::engine::SyncEngine;
 use crate::sync::file_name::{FileKind, FileName};
@@ -124,7 +124,7 @@ pub(crate) async fn purge_local_data_impl(
         .call(|conn| {
             let tx = conn
                 .transaction()
-                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+                .map_err(|e| DbError::Other(Box::new(e)))?;
             // ── Delete all derived data ──
             tx.execute_batch(
                 "DELETE FROM activities;
@@ -136,9 +136,8 @@ pub(crate) async fn purge_local_data_impl(
                  DELETE FROM screenshot_dedup_map;
                  DELETE FROM sync_outbox;",
             )
-            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
-            tx.commit()
-                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            .map_err(|e| DbError::Other(Box::new(e)))?;
+            tx.commit().map_err(|e| DbError::Other(Box::new(e)))?;
             Ok(())
         })
         .await
@@ -147,7 +146,7 @@ pub(crate) async fn purge_local_data_impl(
     pool.0
         .call(|conn| {
             conn.execute_batch("VACUUM")
-                .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+                .map_err(|e| DbError::Other(Box::new(e)))?;
             Ok(())
         })
         .await
@@ -402,7 +401,7 @@ pub async fn forget_remote_device(
                     "DELETE FROM text_sessions WHERE origin_device = ?1",
                     rusqlite::params![target],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)
+                .db()
             })
             .await;
         match res {
@@ -492,14 +491,14 @@ pub(crate) async fn forget_remote_device_impl(
                 "DELETE FROM activities WHERE device_id = ?1",
                 rusqlite::params![target_owned],
             )
-            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            .map_err(|e| DbError::Other(Box::new(e)))?;
             conn.execute(
                 "UPDATE devices
                  SET deleted_at = ?2, updated_at = ?2
                  WHERE device_id = ?1",
                 rusqlite::params![target_owned, cleared_at_for_db],
             )
-            .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+            .map_err(|e| DbError::Other(Box::new(e)))?;
             Ok(())
         })
         .await

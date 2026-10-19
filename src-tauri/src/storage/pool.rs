@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
-use tokio_rusqlite::Connection;
 
 use crate::error::Result;
-use crate::storage::SqliteResultExt;
+use crate::storage::{Connection, SqliteResultExt};
 
-/// SQLite 连接池——对 `tokio_rusqlite::Connection` 的薄包装。
-/// 一个进程一份，作为 Tauri State 注入；命令通过 `State<'_, DbPool>` 拿。
+/// The SQLite connection pool: a thin wrapper around [`Connection`].
+/// There is one per process, passed in as Tauri State. Commands get it through
+/// `State<'_, DbPool>`.
 #[derive(Clone)]
 pub struct DbPool(pub Connection);
 
