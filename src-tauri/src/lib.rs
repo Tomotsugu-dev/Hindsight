@@ -108,6 +108,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::AppleScript,
             Some(vec![platform::AUTOSTART_ARG]),
         ))
+        .plugin(plugins::navigation::guard())
         // Plugin file reader, see plugins::file_reader. Files are read on another thread so the
         // UI does not freeze
         .register_asynchronous_uri_scheme_protocol(

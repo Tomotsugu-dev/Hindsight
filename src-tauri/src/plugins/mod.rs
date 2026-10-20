@@ -8,6 +8,7 @@ pub mod icon;
 pub mod install;
 pub mod manifest;
 pub mod market;
+pub mod navigation;
 pub mod pages;
 #[cfg(test)]
 mod test_util;

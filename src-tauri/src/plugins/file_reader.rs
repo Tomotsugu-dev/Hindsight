@@ -49,15 +49,14 @@ const CSP: &[&str] = &[
     "form-action 'none'",
 ];
 
-/// Only Hindsight's own pages can put a plugin page in a frame.
-const FRAME_ANCESTORS: &str = if tauri::is_dev() {
+/// The address of Hindsight's own pages.
+pub(super) const HINDSIGHT_ORIGIN: &str = if tauri::is_dev() {
     // With `tauri dev`, Hindsight's pages come from `devUrl` in tauri.conf.json
-    "frame-ancestors http://localhost:41420"
+    "http://localhost:41420"
 } else if cfg!(windows) {
-    // The address of Hindsight's pages on Windows
-    "frame-ancestors http://tauri.localhost"
+    "http://tauri.localhost"
 } else {
-    "frame-ancestors tauri://localhost"
+    "tauri://localhost"
 };
 
 /// The launcher page. The CSP does not allow inline scripts, so the script is in `_launcher.js`.
@@ -69,7 +68,7 @@ const LAUNCHER_HTML: &str = r#"<!doctype html><script src="_launcher.js"></scrip
 /// Heartbeat: pings the Worker every 10 seconds, and stops it when two pings in a row get no
 /// reply, so that a plugin stuck in a loop does not keep a CPU core busy.
 ///
-/// `"*"`: the parent page can only be a Hindsight page, see [`FRAME_ANCESTORS`].
+/// `"*"`: the parent page can only be a Hindsight page, see [`ok`].
 const LAUNCHER_JS: &str = r#"const worker = new Worker("_worker.js");
 let missed = 0;
 const heartbeat = setInterval(() => {
@@ -146,7 +145,7 @@ importScripts("background.js");
 /// The plugin page is inside a Hindsight page and cannot call Rust itself. It sends each request
 /// to the parent page with postMessage. The forwarder there calls `plugin_call` and sends the
 /// result back. `"*"` does not limit which page gets the message: the plugin page can only be
-/// inside a Hindsight page (see [`FRAME_ANCESTORS`]), so the receiver is always Hindsight.
+/// inside a Hindsight page (see [`ok`]), so the receiver is always Hindsight.
 ///
 /// There is no `hindsight.on()`: events go only to the background script.
 ///
@@ -276,7 +275,8 @@ fn ok(data: Vec<u8>, path: &str) -> Response<Vec<u8>> {
     } else {
         mime
     };
-    let csp = format!("{}; {FRAME_ANCESTORS}", CSP.join("; "));
+    // Only Hindsight's own pages can put a plugin page in an iframe
+    let csp = format!("{}; frame-ancestors {HINDSIGHT_ORIGIN}", CSP.join("; "));
     Response::builder()
         .header(header::CONTENT_TYPE, content_type)
         .header(header::CONTENT_SECURITY_POLICY, csp)
@@ -349,7 +349,10 @@ mod tests {
                 .to_str()
                 .unwrap();
             assert!(csp.contains("connect-src 'self'"), "{path}: {csp}");
-            assert!(csp.ends_with(FRAME_ANCESTORS), "{path}: {csp}");
+            assert!(
+                csp.ends_with(&format!("frame-ancestors {HINDSIGHT_ORIGIN}")),
+                "{path}: {csp}"
+            );
         }
     }
 
