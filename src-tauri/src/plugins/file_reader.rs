@@ -140,6 +140,39 @@ const WORKER_JS: &str = r#"{
 importScripts("background.js");
 "#;
 
+/// The script plugin pages use to ask for data. A page loads it with
+/// `<script src="../_page.js"></script>`, and can then call `hindsight.call()`.
+///
+/// The plugin page is inside a Hindsight page and cannot call Rust itself. It sends each request
+/// to the parent page with postMessage. The forwarder there calls `plugin_call` and sends the
+/// result back. `"*"` does not limit which page gets the message: the plugin page can only be
+/// inside a Hindsight page (see [`FRAME_ANCESTORS`]), so the receiver is always Hindsight.
+///
+/// There is no `hindsight.on()`: events go only to the background script.
+///
+/// Wrapped in `{}`: all scripts on a page share top-level names. Without the braces, a `pending`
+/// in the plugin's own script would be a duplicate declaration.
+const PAGE_JS: &str = r#"{
+  const pending = new Map();
+  let nextId = 1;
+  window.hindsight = {
+    call(method, params) {
+      const id = nextId++;
+      parent.postMessage({ id, method, params }, "*");
+      return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+    },
+  };
+  addEventListener("message", (e) => {
+    if (e.source !== parent) return;
+    const call = pending.get(e.data?.id);
+    if (!call) return;
+    pending.delete(e.data.id);
+    if ("error" in e.data) call.reject(new Error(e.data.error));
+    else call.resolve(e.data.result);
+  });
+}
+"#;
+
 /// Returns the launcher URL of version `version` of plugin `id`.
 pub fn launcher_url(id: &str, version: &str) -> String {
     if cfg!(windows) {
@@ -155,7 +188,7 @@ pub fn launcher_url(id: &str, version: &str) -> String {
 /// Returns 404 if the URL is wrong, the path leaves the version folder, or the file does not
 /// exist. The reason is written only to the debug log.
 pub fn read(plugins_dir: &Path, uri: &Uri) -> Response<Vec<u8>> {
-    let data = file_path(plugins_dir, uri).and_then(|path| match launcher_file(uri) {
+    let data = file_path(plugins_dir, uri).and_then(|path| match hindsight_file(uri) {
         Some(text) => Ok(text.into()),
         None => Ok(fs::read(path)?),
     });
@@ -168,14 +201,15 @@ pub fn read(plugins_dir: &Path, uri: &Uri) -> Response<Vec<u8>> {
     }
 }
 
-/// Returns the launcher's content when the URL is `_launcher.html`, `_launcher.js` or
-/// `_worker.js` in the version folder.
-fn launcher_file(uri: &Uri) -> Option<&'static str> {
+/// Returns the file's contents when the URL points to a file Hindsight writes itself. For any
+/// other file it returns `None`, and the caller reads the file from the plugin package.
+fn hindsight_file(uri: &Uri) -> Option<&'static str> {
     let (_version, file) = uri.path().strip_prefix('/')?.split_once('/')?;
     match file {
         "_launcher.html" => Some(LAUNCHER_HTML),
         "_launcher.js" => Some(LAUNCHER_JS),
         "_worker.js" => Some(WORKER_JS),
+        "_page.js" => Some(PAGE_JS),
         _ => None,
     }
 }
@@ -310,9 +344,10 @@ mod tests {
         }
     }
 
-    /// 版本文件夹下的启动器三个文件用 Rust 里写的内容，插件包里的同名文件不算。都带 CSP。
+    /// 版本文件夹下的启动器三个文件和 `_page.js` 用 Rust 里写的内容，插件包里的同名文件不算。
+    /// 都带 CSP。
     #[test]
-    fn launcher_comes_from_hindsight() {
+    fn hindsight_files_come_from_hindsight() {
         let dir = TempDir::new();
         let plugins = library(&dir);
         let version = plugins.join("hindsight-focus").join("0.1.0");
@@ -333,6 +368,7 @@ mod tests {
                 WORKER_JS,
                 "text/javascript; charset=utf-8",
             ),
+            ("/0.1.0/_page.js", PAGE_JS, "text/javascript; charset=utf-8"),
         ] {
             let uri = format!("hindsight-plugin://hindsight-focus.localhost{path}");
             let response = get(&plugins, &uri);
