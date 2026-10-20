@@ -20,7 +20,9 @@ export function useFocusTrap(
 
     if (!container.contains(document.activeElement)) {
       const first = container.querySelector<HTMLElement>(FOCUSABLE);
-      (first ?? container).focus();
+      // The first focusable can be at the bottom of a long body, and the dialog should still
+      // open at the top
+      (first ?? container).focus({ preventScroll: true });
     }
 
     const onKeyDown = (e: KeyboardEvent) => {

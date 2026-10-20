@@ -166,6 +166,13 @@
   flex-shrink: 0;
 }
 
+.iconImage {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
 .tone_primary {
   background: color-mix(in oklab, var(--color-accent) 13%, transparent);
   color: var(--color-accent);

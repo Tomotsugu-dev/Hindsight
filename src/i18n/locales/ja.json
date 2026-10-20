@@ -44,7 +44,8 @@
       "primary": "統計",
       "ai": "AI-beta",
       "data": "データ",
-      "system": "システム"
+      "system": "システム",
+      "plugins": "プラグイン"
     },
     "items": {
       "today": "日次",
@@ -104,6 +105,7 @@
       "appearance": "外観",
       "data": "データ",
       "privacy": "プライバシー",
+      "plugins": "プラグイン",
       "about": "情報"
     },
     "appearance": {
@@ -360,8 +362,8 @@
         "rowLabel": "URL キーワード",
         "addLabel": "URL の一部を追加",
         "placeholder": "例: /login",
-        "hostLabel": "完全な URL を保存しない",
-        "hostInfo": "ドメイン（例: github.com）のみを記録し、完全な URL は記録しません"
+        "hostLabel": "サイトのドメインを記録",
+        "hostInfo": "アクセスしたサイトのドメイン（例: github.com）を記録し、サイト別の統計に使います。"
       },
       "app": {
         "title": "アプリフィルター",
@@ -1755,6 +1757,79 @@
       "max": "最大",
       "hintLevels": "強度が高いほど応答は遅くなります",
       "hintOpenai": "OpenAI 公式 API は対話での思考に非対応"
+    }
+  },
+  "plugins": {
+    "newBadge": "新",
+    "loading": "プラグイン一覧を読み込み中…",
+    "loadFailed": "プラグイン一覧を読み込めません：{{error}}",
+    "working": "処理中…",
+    "opensIn": {
+      "main": "サイドバー",
+      "window": "別ウィンドウ"
+    },
+    "installed": {
+      "title": "インストール済みのプラグイン",
+      "empty": "（なし）",
+      "background": "バックグラウンドで動作",
+      "enabled": "プラグインを有効にする",
+      "update": "v{{version}} に更新",
+      "current": "v{{version}}（現在）",
+      "show": "表示",
+      "uninstall": "アンインストール"
+    },
+    "market": {
+      "title": "プラグインマーケット",
+      "empty": "マーケットにほかのプラグインはまだありません。",
+      "offline": "プラグインマーケットに接続できません：{{error}}",
+      "install": "インストール"
+    },
+    "local": {
+      "title": "ファイルからインストール",
+      "description": "プラグインの zip をプラグインフォルダに入れてから、ここに戻ってインストールします。",
+      "openFolder": "フォルダを開く",
+      "refresh": "再読み込み",
+      "empty": "フォルダにプラグインの zip がありません。"
+    },
+    "install": {
+      "title": "「{{name}}」をインストールしますか？",
+      "trustTitle": "{{author}} を信頼しますか？",
+      "notOfficial": "{{name}} は Hindsight 公式のプラグインではありません。作者は {{author}} です。",
+      "notFromMarket": "{{name}} はプラグインマーケットからダウンロードしたものではなく、Hindsight の審査を受けていません。",
+      "leakRisk": "このプラグインは、個人情報の漏えいなどにつながるおそれがあります。",
+      "trustOnly": "よく確かめて、作者を信頼できる場合にのみインストールしてください。",
+      "confirm": "信頼してインストール",
+      "permissions": "このプラグインは次の権限を求めます：",
+      "noPermissions": "このプラグインはあなたのデータを何も読みません。",
+      "highRisk": "高リスク",
+      "storage": "最大 {{mb}} MB のディスク容量",
+      "background": "バックグラウンドで動作する権限",
+      "agree": "チェックすると、プラグインにこれらの権限を与えることに同意したことになります",
+      "agreeRisk": "チェックすると、上記のリスクを理解し、プラグインにこれらの権限を与えることに同意したことになります"
+    },
+    "uninstall": {
+      "title": "{{name}} をアンインストールしますか？",
+      "deleteData": "このプラグインが保存したデータも削除する"
+    },
+    "page": {
+      "kind": "プラグイン",
+      "manage": "管理",
+      "gone": "このプラグインは無効化またはアンインストールされました。"
+    },
+    "permissions": {
+      "stats_read": "分類・アプリごとの使用時間（ウィンドウタイトルと URL を除く）を読む権限",
+      "stats_today": "今日の、分類・アプリごとの日ごとの使用状況を読む権限",
+      "stats_week": "今週の、分類・アプリごとの日ごとの使用状況を読む権限",
+      "stats_month": "今月の、分類・アプリごとの日ごとの使用状況を読む権限",
+      "stats_history": "すべての期間の、分類・アプリごとの日ごとの使用状況を読む権限",
+      "devices_read": "ほかのデバイスの統計や名前などの情報を読む権限",
+      "categories_read": "すべての分類の名前と、それぞれが属する大分類を読む権限",
+      "super_categories_read": "すべての大分類の名前を読む権限",
+      "notifications": "システム通知を送る権限",
+      "focus_changed": "アプリの切り替えと離席のイベントを読む権限",
+      "focus_app": "アプリの切り替えイベントと、切り替え先のアプリ名を読む権限",
+      "focus_category": "切り替え先のアプリがどの分類に属するかを読む権限",
+      "focus_title": "アプリのウィンドウタイトルとサイトのドメインを読む権限"
     }
   }
 }

@@ -23,7 +23,9 @@ tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-os = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# raw_value: plugin query results are written as JSON text while they are read, so their size can
+# be limited in bytes
+serde_json = { version = "1", features = ["raw_value"] }
 serde_with = "3"
 xcap = "0.4"
 
@@ -31,7 +33,8 @@ xcap = "0.4"
 tokio = { version = "1", features = ["full"] }
 tokio-rusqlite = "0.8"
 # fallible_uint: read and write u64 and usize, with an error when a value does not fit in i64
-rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
+# hooks: the authorizer and the time limit for plugin SQL. limits: the limits on plugin databases
+rusqlite = { version = "0.40", features = ["bundled", "fallible_uint", "hooks", "limits"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 dirs = "5"

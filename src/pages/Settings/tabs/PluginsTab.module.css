@@ -1,0 +1,308 @@
+.hint {
+  margin: 0;
+  padding: var(--space-3) 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--status-error-soft);
+  font-size: var(--font-size-sm);
+  color: var(--status-error);
+  overflow-wrap: anywhere;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Same look as the open-folder buttons in the Data tab */
+.btn,
+.btnPrimary,
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    transform 120ms ease-out;
+}
+
+.btn {
+  background: rgba(0, 0, 0, 0.045);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+
+.btn:hover {
+  background: rgba(0, 0, 0, 0.075);
+}
+
+.btnPrimary {
+  background: var(--color-accent);
+  border: 1px solid transparent;
+  color: #fff;
+}
+
+.btnPrimary:hover {
+  filter: brightness(1.08);
+}
+
+.btnDanger {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--status-error);
+}
+
+.btnDanger:hover {
+  background: var(--status-error-soft);
+}
+
+.btn:active,
+.btnPrimary:active,
+.btnDanger:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled,
+.btnPrimary:disabled,
+.btnDanger:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+:global([data-theme="dark"]) .btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global([data-theme="dark"]) .btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Plugin market: two cards a row, cards in a row as tall as the tallest */
+.marketGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.marketCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.marketHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.marketIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.marketIcon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Same as the row icons */
+.marketIconFallback {
+  background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+  color: var(--color-accent);
+}
+
+.marketTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.marketName,
+.marketMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketName {
+  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+}
+
+.marketMeta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* At most two lines. It fills the free height, so the buttons in a row line up at the bottom */
+.marketDesc {
+  display: -webkit-box;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-regular);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.marketFoot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Install dialog */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.details p {
+  margin: 0;
+}
+
+.callout {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--status-pending-soft);
+  color: var(--text-regular);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.callout p {
+  margin: 0;
+}
+
+.calloutIcon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--status-pending);
+}
+
+.callout > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.calloutRisk {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-strong);
+}
+
+.asks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.permissions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  counter-reset: permission;
+}
+
+/* A flex item shows no list marker, so the number comes from a counter */
+.permissions li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  counter-increment: permission;
+}
+
+.permissions li::before {
+  content: counter(permission) ".";
+  flex: none;
+  min-width: 1.4em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.permissions li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.risk {
+  flex: none;
+  margin-left: auto;
+  margin-top: 1px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--status-error-soft);
+  color: var(--status-error);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.consent input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--color-accent);
+}
+
+/* Uninstall dialog */
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}

@@ -7,6 +7,7 @@ pub mod categories;
 pub mod cross_os_aliases;
 pub mod devices;
 pub mod outbox;
+pub mod plugins;
 pub mod process_paths;
 pub mod reports;
 pub mod settings;

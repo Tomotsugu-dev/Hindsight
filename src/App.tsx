@@ -43,6 +43,8 @@ const AppearanceTab = lazy(() => import("./pages/Settings/tabs/AppearanceTab"));
 const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("./pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
+const PluginsTab = lazy(() => import("./pages/Settings/tabs/PluginsTab"));
+const PluginPage = lazy(() => import("./pages/Plugin/PluginPage"));
 
 /** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/tw/en/ja/pt/es）。
  *  漏一个分支的代价不是回退到英文，而是**静默落回中文**：AI 日报仍用中文写，
@@ -147,8 +149,10 @@ function App() {
             <Route path="appearance" element={<AppearanceTab />} />
             <Route path="data" element={<DataTab />} />
             <Route path="privacy" element={<PrivacyTab />} />
+            <Route path="plugins" element={<PluginsTab />} />
             <Route path="about" element={<AboutTab />} />
           </Route>
+          <Route path={`${ROUTES.plugin}/:id`} element={<PluginPage />} />
         </Route>
       </Routes>
     </Suspense>

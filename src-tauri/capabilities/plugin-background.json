@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "plugin-background",
+  "description": "The plugin background window. It only listens for plugin list changes.",
+  "windows": ["plugin-background"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

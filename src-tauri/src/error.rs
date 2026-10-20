@@ -217,6 +217,50 @@ pub enum Error {
     #[error("summary cancelled")]
     SummaryCancelled,
 
+    // ───────────── Plugins ─────────────
+    /// manifest.json is not valid JSON or breaks a rule.
+    #[error("plugin manifest: {0}")]
+    PluginManifest(String),
+
+    /// The manifest has a permission this version of Hindsight does not know.
+    #[error("plugin unknown permission: {0}")]
+    PluginUnknownPermission(String),
+
+    /// The plugin zip cannot be read, is missing a file, or has an entry that cannot be unpacked.
+    #[error("plugin package: {0}")]
+    PluginPackage(String),
+
+    /// This version is already installed.
+    #[error("plugin already installed: {0}")]
+    PluginAlreadyInstalled(String),
+
+    /// plugins.json has a `format_version` this version does not know: it was written for a newer
+    /// Hindsight.
+    #[error("plugins.json format version {0} is not supported")]
+    PluginsJsonFormatVersion(u32),
+
+    /// Downloading from the plugin market failed: the list does not have this version, the file
+    /// is too large, or the SHA-256 or manifest does not match.
+    #[error("plugin download: {0}")]
+    PluginDownload(String),
+
+    /// The plugin is not installed, or it is turned off.
+    #[error("plugin not enabled: {0}")]
+    PluginNotEnabled(String),
+
+    /// The plugin has no page to open: it is not installed, is turned off, or its package has no
+    /// page.
+    #[error("plugin has no page: {0}")]
+    PluginNoPage(String),
+
+    /// The plugin API has no method with this name.
+    #[error("plugin unknown method: {0}")]
+    PluginUnknownMethod(String),
+
+    /// The plugin does not have the permission the method needs. Holds the permission name.
+    #[error("plugin has no permission: {0}")]
+    PluginNoPermission(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

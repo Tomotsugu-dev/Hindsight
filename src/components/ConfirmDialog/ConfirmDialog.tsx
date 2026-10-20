@@ -2,16 +2,22 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
+import { ScrollIndicator } from "../ScrollIndicator/ScrollIndicator";
 import styles from "./ConfirmDialog.module.css";
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
+  centerTitle?: boolean;
+  /** Shown under the title, and stays in view when the message scrolls */
+  notice?: ReactNode;
   /** Optional body. Strings preserve line breaks; nodes can contain rich content. */
   message?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "primary" | "danger";
+  /** Grays out the confirm button, and Enter does nothing */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -19,10 +25,13 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   open,
   title,
+  centerTitle = false,
+  notice,
   message,
   confirmLabel,
   cancelLabel,
   variant = "primary",
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -34,14 +43,15 @@ export function ConfirmDialog({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
-      if (e.key === "Enter") onConfirm();
+      if (e.key === "Enter" && !confirmDisabled) onConfirm();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onCancel, onConfirm]);
+  }, [open, onCancel, onConfirm, confirmDisabled]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(open, dialogRef);
+  const messageRef = useRef<HTMLDivElement>(null);
 
   if (!open) return null;
 
@@ -57,16 +67,27 @@ export function ConfirmDialog({
         aria-labelledby="confirm-title"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 id="confirm-title" className={styles.title}>
+        <h2
+          id="confirm-title"
+          className={`${styles.title} ${centerTitle ? styles.titleCenter : ""}`}
+        >
           {title}
         </h2>
-        {/* Rich content uses a div so block elements remain valid; strings preserve line breaks. */}
-        {message != null &&
-          (typeof message === "string" ? (
-            <p className={styles.message}>{message}</p>
-          ) : (
-            <div className={`${styles.message} ${styles.messageRich}`}>{message}</div>
-          ))}
+        {notice}
+        {message != null && (
+          <div className={styles.messageWrap}>
+            <div ref={messageRef} className={styles.messageScroll}>
+              {/* Rich content uses a div so block elements remain valid; strings preserve line breaks. */}
+              {typeof message === "string" ? (
+                <p className={styles.message}>{message}</p>
+              ) : (
+                <div className={`${styles.message} ${styles.messageRich}`}>{message}</div>
+              )}
+            </div>
+            {/* The scrollbar of a long message is always in view, so the user knows to scroll */}
+            <ScrollIndicator targetRef={messageRef} className={styles.messageTrack} />
+          </div>
+        )}
         <div className={styles.actions}>
           <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
             {cancelText}
@@ -74,6 +95,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`${styles.btn} ${variant === "danger" ? styles.btnDanger : styles.btnConfirm}`}
+            disabled={confirmDisabled}
             onClick={onConfirm}
             // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践（屏幕阅读器、键盘 user 都期望）
             // eslint-disable-next-line jsx-a11y/no-autofocus

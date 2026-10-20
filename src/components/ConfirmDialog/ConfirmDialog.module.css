@@ -16,8 +16,8 @@
   z-index: var(--z-modal);
   min-width: 320px;
   max-width: 440px;
-  /* max-height 限定不超出视口；超出部分由内部 .message 自滚动，
-     让 title 钉顶 / actions 钉底始终可见。 */
+  /* Stays inside the window. What does not fit scrolls in .messageScroll, so the title and the
+     buttons are always in view */
   max-height: 80vh;
   padding: 22px 22px 16px;
   background: var(--surface-card);
@@ -40,18 +40,46 @@
   margin: 0;
 }
 
+.titleCenter {
+  text-align: center;
+}
+
+/* A flex item is no shorter than its content unless min-height is 0, so without it a long
+   message pushes the dialog past max-height */
+.messageWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* A long message, such as release notes, scrolls on its own. The native scrollbar is hidden: on
+   macOS it shows only while scrolling, so ScrollIndicator draws one that is always there */
+.messageScroll {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+  scrollbar-width: none;
+}
+
+.messageScroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* In the dialog's right padding, so it does not cover the text */
+.messageTrack {
+  top: 0;
+  bottom: 0;
+  right: -10px;
+  width: 4px;
+}
+
 .message {
   font-size: 13px;
   color: var(--text-regular);
   line-height: 1.5;
   margin: 0;
   white-space: pre-wrap;
-  /* 内容多时（如更新说明几十行）单独滚动；min-height: 0 是 flex 子项允许收缩的必需值，
-     不写就因为 flex item 默认 min-height:auto 撑爆父容器。 */
-  overflow-y: auto;
-  min-height: 0;
-  /* 给滚动内容点呼吸空间，跟标题 / 按钮区分 */
-  padding-right: 4px;
 }
 
 /* 节点形态（Markdown 等）：块级元素自带间距，pre-wrap 只会多出空白 */
@@ -87,6 +115,12 @@
 
 .btn:active {
   transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .btnCancel {

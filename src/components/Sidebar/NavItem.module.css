@@ -41,6 +41,13 @@
   flex-shrink: 0;
 }
 
+.image {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
 .icon {
   /* 去掉每项品牌色：图标跟随 .item 文字色（平时 muted、hover strong、选中 on-pill），
      整条侧栏统一为中性单色，选中态靠高亮条 + 图标/文字一起提亮来区分。 */
@@ -64,4 +71,26 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 280ms var(--ease-out);
+}
+
+/* A plugin whose page opens in its own window: a button that looks like the links */
+.button {
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 「新」: shown until the user opens Settings → Plugins */
+.badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--status-error);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
 }

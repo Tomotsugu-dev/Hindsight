@@ -1,0 +1,46 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Hindsight's bar: below the window's drag strip, so the user always sees whose page this is */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 40px var(--space-6) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--font-size-sm);
+}
+
+.title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kind {
+  font-weight: var(--font-weight-regular);
+  color: var(--text-muted);
+}
+
+.manage {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.manage:hover {
+  color: var(--text-strong);
+}
+
+.frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: transparent;
+}

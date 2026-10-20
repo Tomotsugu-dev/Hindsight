@@ -7,15 +7,32 @@ interface NavItemProps {
   to: string;
   label: string;
   Icon: LucideIcon;
+  /** An image shown instead of `Icon`, such as a plugin's own icon */
+  iconSrc?: string;
   /** 图标主题色 */
   color: string;
   /** 路径是否完全匹配（用于首页 "/"）*/
   end?: boolean;
   /** 这些路径前缀不算激活；用于 /ai 排除 /ai/settings */
   excludePaths?: string[];
+  /** Short text after the label, such as 「新」 */
+  badge?: string;
+  /** When set, the item is a button that runs this instead of a link to `to`. Used by plugins
+   * whose page opens in its own window */
+  onClick?: () => void;
 }
 
-export function NavItem({ to, label, Icon, color, end, excludePaths }: NavItemProps) {
+export function NavItem({
+  to,
+  label,
+  Icon,
+  iconSrc,
+  color,
+  end,
+  excludePaths,
+  badge,
+  onClick,
+}: NavItemProps) {
   const location = useLocation();
   const path = location.pathname;
   const cssVar = { "--icon-color": color } as CSSProperties;
@@ -26,7 +43,9 @@ export function NavItem({ to, label, Icon, color, end, excludePaths }: NavItemPr
   // 用 Link + 手动 aria-current 而不是 NavLink，保证 Sidebar 的 querySelector
   // 跟我们这里的 isActive 计算 100% 一致。
   let isActive: boolean;
-  if (excludePaths && excludePaths.length > 0) {
+  if (onClick) {
+    isActive = false;
+  } else if (excludePaths && excludePaths.length > 0) {
     const isPrefix = path === to || path.startsWith(to + "/");
     const inExclude = excludePaths.some(
       (e) => path === e || path.startsWith(e + "/"),
@@ -38,6 +57,34 @@ export function NavItem({ to, label, Icon, color, end, excludePaths }: NavItemPr
     isActive = path === to || path.startsWith(to + "/");
   }
 
+  const content = (
+    <>
+      <span className={styles.iconWrap} aria-hidden>
+        {iconSrc ? (
+          <img className={styles.image} src={iconSrc} alt="" />
+        ) : (
+          <Icon className={styles.icon} size={18} strokeWidth={1.85} />
+        )}
+      </span>
+      <span className={styles.label} data-sb-label>
+        {label}
+      </span>
+      {badge ? <span className={styles.badge}>{badge}</span> : null}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        style={cssVar}
+        className={`${styles.item} ${styles.button}`}
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
   return (
     <Link
       to={to}
@@ -45,12 +92,7 @@ export function NavItem({ to, label, Icon, color, end, excludePaths }: NavItemPr
       className={`${styles.item} ${isActive ? styles.active : ""}`}
       aria-current={isActive ? "page" : undefined}
     >
-      <span className={styles.iconWrap} aria-hidden>
-        <Icon className={styles.icon} size={18} strokeWidth={1.85} />
-      </span>
-      <span className={styles.label} data-sb-label>
-        {label}
-      </span>
+      {content}
     </Link>
   );
 }

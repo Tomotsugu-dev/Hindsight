@@ -969,12 +969,34 @@ const ADD_IS_DEFAULT_NAME_SQL: &str = r#"
          ('work', '工作'), ('play', '娱乐'), ('social', '社交'), ('browse', '浏览'));
 "#;
 
+/// v45: installed plugins, one row each. `permissions` is the permissions the user approved (a
+/// JSON array), not the ones the manifest asks for. `storage_mb` is the disk space the user
+/// approved, in MB, and NULL if the plugin asked for none. Only on this machine; not synced.
+const PLUGINS_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS plugins (
+        id                 TEXT PRIMARY KEY,
+        name               TEXT NOT NULL,
+        version            TEXT NOT NULL,
+        enabled            INTEGER NOT NULL DEFAULT 1,
+        permissions        TEXT NOT NULL DEFAULT '[]',
+        storage_mb         INTEGER,
+        has_page           INTEGER NOT NULL,
+        opens_in           TEXT,
+        window_x           INTEGER,
+        window_y           INTEGER,
+        window_width       INTEGER NOT NULL,
+        window_height      INTEGER NOT NULL,
+        runs_in_background INTEGER NOT NULL,
+        installed_at       TEXT NOT NULL
+    );
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 34] = [
+    let extras: [&'static str; 35] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -1009,6 +1031,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         SITE_RULES_TABLE_SQL,                  // v42
         BACKFILL_SUPER_CATEGORY_OUTBOX_SQL,    // v43
         ADD_IS_DEFAULT_NAME_SQL,               // v44
+        PLUGINS_TABLE_SQL,                     // v45
     ];
     pool.0
         .call(move |conn| {
@@ -1150,7 +1173,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            44
+            45
         );
 
         let tables = table_names(&pool).await;
@@ -1173,6 +1196,7 @@ mod tests {
             "screenshot_dedup_map",
             "webdav_accounts",
             "site_rules",
+            "plugins",
         ] {
             assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
         }
@@ -1444,7 +1468,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            44
+            45
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1500,7 +1524,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            44
+            45
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

@@ -69,7 +69,7 @@ flowchart TB
 
 ## 2. The four jobs of plugins/
 
-**The problem**: in Figure 1, `plugins/` is just a box. We need to decide two things: what a plugin looks like when the backend gets it, and how `plugins/` splits into parts and what each part does. Details for each job: [Plugin market](market.md), [① Installing plugins](install.md), [② Running plugins](runtime.md), [③ Requesting data](api.md), [④ Receiving events](events.md), [Plugin data](data.md).
+**The problem**: in Figure 1, `plugins/` is just a box. We need to decide two things: what a plugin looks like when the backend gets it, and how `plugins/` splits into parts and what each part does. Details for each job: [Plugin market](market.md), [① Installing plugins](install.md), [② Running plugins](runtime.md), [③ Requesting data](api.md), [④ Receiving events](events.md), [Plugin data](data.md), [Plugin permissions](permissions.md).
 
 ### Plugin package format
 
@@ -123,7 +123,7 @@ Details: [① Installing plugins](install.md). Where plugins come from: [Plugin 
 
 ```mermaid
 flowchart LR
-  U["User approves<br/>permissions and<br/>clicks Install<br/>on the market page"] --> M1["Plugin manager<br/>downloads the plugin,<br/>compares permissions<br/>with the manifest"] --> M2["Puts it in the<br/>plugin library"] --> M3["Writes the<br/>plugins table"] --> M4["Tells the background<br/>window manager<br/>to run its<br/>background script"]
+  U["User approves<br/>permissions and<br/>clicks Install<br/>on the market page"] --> M1["Plugin manager<br/>downloads the plugin,<br/>checks the manifest"] --> M2["Puts it in the<br/>plugin library"] --> M3["Writes the<br/>plugins table"] --> M4["Tells the background<br/>window manager<br/>to run its<br/>background script"]
 ```
 
 ### ② Running plugins
@@ -139,7 +139,7 @@ Both are JavaScript. They run in a WebView (the web engine built into the OS), a
 
 **Flow A: when the app starts, run the background scripts**
 
-The user can close the main window. So the app opens a separate hidden window that only runs the plugins' background scripts. This is the plugin background window.
+The user can close the main window. So the app opens a separate hidden window that only runs the plugins' background scripts. This is the plugin background window. In this window each plugin has an iframe with Hindsight's own launcher, and the launcher runs `background.js` in a separate Worker thread. So one hung plugin does not stop the others (see [② Running plugins](runtime.md)).
 
 ```mermaid
 flowchart LR
@@ -165,7 +165,7 @@ flowchart LR
   class P plugin
 ```
 
-In both flows, the WebView asks for files with URLs like `hindsight-plugin://<plugin id>/<version>/<file>`. The plugin id and version come from the plugin list, which is read from the `plugins` table. The plugin file reader does not read the table. It only reads the file from that version's folder in the plugin library and hands it to the WebView.
+In both flows, the WebView asks for files with URLs like `hindsight-plugin://<plugin id>.localhost/<version>/<file>`. The plugin id and version come from the plugin list, which is read from the `plugins` table. The plugin file reader does not read the table. It only reads the file from that version's folder in the plugin library and hands it to the WebView. The only exception is the launcher, which is written in Rust.
 
 Once plugin code is running, it requests data through ③ and receives events through ④.
 
@@ -193,10 +193,10 @@ flowchart LR
   C["capture/<br/>detects a<br/>focus change"] --> E["Event dispatcher<br/>reads the plugins table:<br/>which enabled plugins<br/>have focus.changed"] --> T["Builds the event<br/>with only the fields<br/>the plugin may see"] --> H["Pushes it to<br/>background.js in the<br/>plugin background window"]
 ```
 
-> focus.changed: get an event when the foreground app or browser URL changes. The event has only the time. This one permission decides whether a plugin gets events at all.
+> focus.changed: get an event when the foreground app or browser URL changes, or when the user goes away. The event has only the time. This one permission decides whether a plugin gets events at all.
 >
 > focus.app: adds the app name to the event.
 >
 > focus.category: adds the category to the event.
 >
-> focus.title: adds the window title and URL to the event.
+> focus.title: adds the window title and website domain to the event.

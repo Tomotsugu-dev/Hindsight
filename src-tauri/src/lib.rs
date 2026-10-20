@@ -10,6 +10,7 @@ mod icons;
 mod memory;
 mod permissions;
 mod platform;
+mod plugins;
 mod repo;
 mod storage;
 mod sync;
@@ -107,6 +108,18 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::AppleScript,
             Some(vec![platform::AUTOSTART_ARG]),
         ))
+        .plugin(plugins::navigation::guard())
+        // Plugin file reader, see plugins::file_reader. Files are read on another thread so the
+        // UI does not freeze
+        .register_asynchronous_uri_scheme_protocol(
+            plugins::file_reader::SCHEME,
+            |_ctx, request, responder| {
+                let uri = request.uri().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    responder.respond(plugins::file_reader::read(&plugins::plugins_dir(), &uri));
+                });
+            },
+        )
         .setup(move |app| {
             let handle = app.handle().clone();
 
@@ -207,8 +220,12 @@ pub fn run() {
                         None
                     }
                 };
+                // The queue of focus changes, see plugins::events::focus. Capture runs every 5 seconds,
+                // so the queue is full only if nothing is taken from it for 5 minutes
+                let (focus_tx, focus_rx) = tokio::sync::mpsc::channel(64);
                 let svc =
-                    bootstrap::init_capture_service(pool.clone(), memdb.clone(), &cfg).await;
+                    bootstrap::init_capture_service(pool.clone(), memdb.clone(), &cfg, focus_tx)
+                        .await;
                 // OCR 常驻模式:按设置启停(设置保存时由 commands::settings 再同步)
                 let resident = std::sync::Arc::new(memory::resident::ResidentOcr::default());
                 resident
@@ -220,6 +237,14 @@ pub fn run() {
                 spawn_cleanup_task(pool.clone());
                 bootstrap::spawn_backfill_tasks(pool.clone());
                 let sync_engine = bootstrap::init_sync_engine(pool.clone(), memdb_for_sync).await;
+                // Plugin background window, see plugins::background_window
+                plugins::background_window::refresh(&handle, &pool).await;
+                // Send focus changes to plugins, see plugins::events::focus
+                tauri::async_runtime::spawn(plugins::events::focus::run(
+                    handle.clone(),
+                    pool.clone(),
+                    focus_rx,
+                ));
 
                 handle.manage(pool);
                 handle.manage(svc);
@@ -379,6 +404,19 @@ pub fn run() {
             commands::ai_summary::get_week_summary,
             commands::ai_summary::clear_week_summary,
             commands::ai_summary::precheck_week_summary,
+            // --- plugins: plugin market and installed plugins ---
+            commands::plugins::plugin_open_market,
+            commands::plugins::plugin_install,
+            commands::plugins::plugin_install_online,
+            commands::plugins::plugin_uninstall,
+            commands::plugins::plugin_set_enabled,
+            commands::plugins::plugin_open_zips_folder,
+            commands::plugins::plugin_background_list,
+            commands::plugins::plugin_pages,
+            commands::plugins::plugin_icons,
+            commands::plugins::plugin_set_opens_in,
+            commands::plugins::plugin_open_window,
+            commands::plugins::plugin_call,
         ])
         .build(tauri::generate_context!())
         // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime

@@ -44,7 +44,8 @@
       "primary": "Estadísticas",
       "ai": "IA-beta",
       "data": "Datos",
-      "system": "Sistema"
+      "system": "Sistema",
+      "plugins": "Plugins"
     },
     "items": {
       "today": "Diario",
@@ -104,6 +105,7 @@
       "appearance": "Apariencia",
       "data": "Datos",
       "privacy": "Privacidad",
+      "plugins": "Plugins",
       "about": "Acerca de"
     },
     "appearance": {
@@ -360,8 +362,8 @@
         "rowLabel": "Palabras clave de URL",
         "addLabel": "Añadir fragmento de URL",
         "placeholder": "p. ej. /login",
-        "hostLabel": "No guardar las URL completas",
-        "hostInfo": "Solo se registra el dominio (p. ej. github.com), nunca la URL completa"
+        "hostLabel": "Registrar los dominios de los sitios",
+        "hostInfo": "Registra los dominios de los sitios que visitas (p. ej. github.com), para las estadísticas por sitio."
       },
       "app": {
         "title": "Filtro de aplicaciones",
@@ -1758,6 +1760,79 @@
       "max": "Máximo",
       "hintLevels": "Cuanto mayor sea el esfuerzo, más lenta será la respuesta",
       "hintOpenai": "La API de OpenAI no admite el razonamiento en el chat"
+    }
+  },
+  "plugins": {
+    "newBadge": "Nuevo",
+    "loading": "Cargando plugins…",
+    "loadFailed": "No se pudieron cargar los plugins: {{error}}",
+    "working": "Procesando…",
+    "opensIn": {
+      "main": "En la barra lateral",
+      "window": "En su propia ventana"
+    },
+    "installed": {
+      "title": "Plugins instalados",
+      "empty": "(ninguno)",
+      "background": "Se ejecuta en segundo plano",
+      "enabled": "Activar plugin",
+      "update": "Actualizar a v{{version}}",
+      "current": "v{{version}} (actual)",
+      "show": "Mostrar",
+      "uninstall": "Desinstalar"
+    },
+    "market": {
+      "title": "Tienda de plugins",
+      "empty": "Todavía no hay otros plugins en la tienda.",
+      "offline": "No se pudo conectar con la tienda de plugins: {{error}}",
+      "install": "Instalar"
+    },
+    "local": {
+      "title": "Instalar desde un archivo",
+      "description": "Pon el zip del plugin en la carpeta de plugins y vuelve aquí para instalarlo.",
+      "openFolder": "Abrir carpeta",
+      "refresh": "Actualizar",
+      "empty": "No hay zips de plugins en la carpeta."
+    },
+    "install": {
+      "title": "¿Instalar «{{name}}»?",
+      "trustTitle": "¿Confías en {{author}}?",
+      "notOfficial": "{{name}} no es un plugin oficial de Hindsight. Su autor es {{author}}.",
+      "notFromMarket": "{{name}} no se descargó de la tienda de plugins y Hindsight no lo ha revisado.",
+      "leakRisk": "Este plugin puede provocar filtraciones de información personal.",
+      "trustOnly": "Revísalo con cuidado e instálalo solo si confías en su autor.",
+      "confirm": "Confiar e instalar",
+      "permissions": "Este plugin pedirá los siguientes permisos:",
+      "noPermissions": "Este plugin no lee ninguno de tus datos.",
+      "highRisk": "Alto riesgo",
+      "storage": "Hasta {{mb}} MB de espacio en disco",
+      "background": "Permiso para ejecutarse en segundo plano",
+      "agree": "Al marcar, aceptas darle estos permisos al plugin",
+      "agreeRisk": "Al marcar, confirmas que conoces los riesgos anteriores y aceptas darle estos permisos al plugin"
+    },
+    "uninstall": {
+      "title": "¿Desinstalar {{name}}?",
+      "deleteData": "Borrar también los datos que guardó este plugin"
+    },
+    "page": {
+      "kind": "Plugin",
+      "manage": "Gestionar",
+      "gone": "Este plugin se desactivó o se desinstaló."
+    },
+    "permissions": {
+      "stats_read": "Permiso para leer cuánto tiempo se usó cada categoría y aplicación (sin títulos de ventana ni URL)",
+      "stats_today": "Permiso para leer el uso diario de cada categoría y aplicación de hoy",
+      "stats_week": "Permiso para leer el uso diario de cada categoría y aplicación de esta semana",
+      "stats_month": "Permiso para leer el uso diario de cada categoría y aplicación de este mes",
+      "stats_history": "Permiso para leer el uso diario de cada categoría y aplicación de todas las fechas",
+      "devices_read": "Permiso para leer las estadísticas, los nombres y otra información de otros dispositivos",
+      "categories_read": "Permiso para leer los nombres de todas las categorías y las supercategorías a las que pertenecen",
+      "super_categories_read": "Permiso para leer los nombres de todas las supercategorías",
+      "notifications": "Permiso para enviar notificaciones del sistema",
+      "focus_changed": "Permiso para leer eventos cuando cambias de aplicación o dejas el ordenador",
+      "focus_app": "Permiso para leer eventos de cambio de aplicación y el nombre de la aplicación a la que cambias",
+      "focus_category": "Permiso para leer a qué categoría pertenece la aplicación a la que cambias",
+      "focus_title": "Permiso para leer títulos de ventana de las aplicaciones y dominios de sitios web"
     }
   }
 }

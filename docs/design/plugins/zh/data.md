@@ -13,21 +13,23 @@
 erDiagram
   plugins {
     TEXT id PK "hindsight-focus"
+    TEXT name "专注"
     TEXT version "0.1.0"
     INTEGER enabled "1 开 / 0 关"
     TEXT permissions "JSON 数组"
-    TEXT ui_location "sidebar / window / none"
+    INTEGER storage_mb "磁盘容量 MB，没申请是 NULL"
+    INTEGER has_page "有没有页面"
+    TEXT opens_in "main / window，NULL 是不在侧边栏显示"
+    INTEGER window_x "独立窗口的位置"
+    INTEGER window_y
+    INTEGER window_width "独立窗口的大小"
+    INTEGER window_height
     INTEGER runs_in_background "要不要在后台一直运行"
     TEXT installed_at "安装时间"
   }
 ```
 
-- `ui_location`、`runs_in_background` 安装时从 `manifest.json` 抄进来。运行时只查表，不再读 manifest。
-- `ui_location`：控制页面显示在哪：
-  - `sidebar` 在主窗口侧边栏加一个入口
-  - `window` 点开时弹出独立窗口
-  - `none` 没有页面
-- `runs_in_background`：程序是否在后台运行。
+- `permissions`、`storage_mb` 存的是用户同意的，不是清单申请的（见 [① 插件安装](install.md)）。
 
 ## 插件自己的数据库
 
@@ -43,19 +45,25 @@ erDiagram
 
 ```mermaid
 flowchart LR
-  P["插件 JS<br/>db.execute<br/>建表、写入、查询"] --> B["转发层<br/>标上插件 id"] --> A["插件接口<br/>打开这个插件的<br/>data.sqlite"] --> C{"授权回调<br/>逐条检查"}
+  P["插件 JS<br/>db.execute<br/>建表、写入、查询"] --> B["转发层<br/>标上插件 id"] --> A["插件接口<br/>打开这个插件的<br/>data.sqlite"] --> C{"授权回调<br/>逐个动作检查"}
   C -->|"放行"| OK["执行，结果交回插件"]
   C -->|"ATTACH 等"| X["拒绝"]
 ```
 
-- `data.sqlite` 不在版本文件夹里，插件文件读取模块不会交出它，WebView 用网址也拿不到。
-- Rust 执行前用 SQLite 的授权回调逐条检查，拒绝 `ATTACH`、`DETACH` 和加载扩展。否则插件写一句 `ATTACH '…/hindsight.db'`，就能读到主库里的全部活动记录。
-- 读写自己的数据库不需要权限。权限管的是读 Hindsight 的数据，比如 `stats.read`。
+- **只碰得到自己的文件**：打开哪个文件由 Rust 按插件 id 定，插件只传 SQL 和参数。SQLite 编译语句时，授权回调按白名单逐个动作检查，只放行用这个库里的表的动作；`ATTACH`、会改进程设置的 `PRAGMA`、加载扩展都拒绝。否则插件写一句 `ATTACH '…/hindsight.db'`，就能读到主库里的全部活动记录。
+- **不在版本文件夹里**：插件文件读取模块不会交出它，WebView 用网址也拿不到；更新插件时数据不动。
+- **每次调用打开一次、用完就关**：不留着打开的文件，卸载时才删得掉。所以连接自带的临时库也一起拒绝：建在里面的表活不过一次调用，插件用不上。
+- **一次调用只执行一条语句**：多条就报错，不会只执行第一条、悄悄丢掉后面的。
+- **磁盘按用户同意的容量封顶**：插件在清单里申请 `storage_mb`，用户同意的数存进 plugins 表，没有就用不了 `db.*`。读写自己的数据库不要权限，权限管的是读 Hindsight 的数据，比如 `stats.read`。
+- **内存和 CPU 按每次调用封顶**：插件的 SQL 和采集跑在同一个进程里，一个插件不能拖慢记录活动。一个值的大小、执行时间、返回结果的大小都有上限，所有插件同时最多打开 4 个库，多的排队；排序这类中间结果落到磁盘上。具体的值见 `plugins/api/db.rs`。
+- **上限只能往大放**：往小收的话，已经存过大值的行就读不出、改不了了。
 - 插件的数据库不参与同步，只留在本机。
 
 ## 卸载
 
 1. 一个事务里删掉 plugins 表里这一行。
-2. 删掉整个 `plugins/hindsight-focus/`：代码和数据库一起删。
+2. 删掉文件，用户选删不删数据：
+   - 删数据：删掉整个 `plugins/hindsight-focus/`，代码和数据库一起删；
+   - 不删数据：只删版本文件夹，`data.sqlite` 留着。以后重装同一个插件，数据还能接着用。
 
-和安装同一个道理，表说了算：先删表里的行，再删文件。崩在中间，留下的是一个表里没有的文件夹，下次启动清理时删掉。
+和安装同一个道理，表说了算：先删表里的行，再删文件。崩在中间，留下的是表里没有的插件的版本文件夹，下次打开插件市场时删掉；数据不动，因为用户可能选了保留。

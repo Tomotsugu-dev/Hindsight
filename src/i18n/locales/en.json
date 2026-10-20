@@ -44,7 +44,8 @@
       "primary": "Stats",
       "ai": "AI-beta",
       "data": "Data",
-      "system": "System"
+      "system": "System",
+      "plugins": "Plugins"
     },
     "items": {
       "today": "Daily",
@@ -104,6 +105,7 @@
       "appearance": "Appearance",
       "data": "Data",
       "privacy": "Privacy",
+      "plugins": "Plugins",
       "about": "About"
     },
     "appearance": {
@@ -360,8 +362,8 @@
         "rowLabel": "URL keywords",
         "addLabel": "Add URL fragment",
         "placeholder": "e.g. /login",
-        "hostLabel": "Don't store full URLs",
-        "hostInfo": "Only the domain (e.g. github.com) is recorded, never the full URL"
+        "hostLabel": "Record website domains",
+        "hostInfo": "Records the domains of the sites you visit (e.g. github.com), for the By site statistics."
       },
       "app": {
         "title": "App filter",
@@ -1758,6 +1760,79 @@
       "max": "Max",
       "hintLevels": "Higher effort means slower responses",
       "hintOpenai": "OpenAI's API doesn't support thinking in chat"
+    }
+  },
+  "plugins": {
+    "newBadge": "New",
+    "loading": "Loading plugins…",
+    "loadFailed": "Cannot load plugins: {{error}}",
+    "working": "Working…",
+    "opensIn": {
+      "main": "In the sidebar",
+      "window": "In its own window"
+    },
+    "installed": {
+      "title": "Installed plugins",
+      "empty": "(none)",
+      "background": "Runs in the background",
+      "enabled": "Enable plugin",
+      "update": "Update to v{{version}}",
+      "current": "v{{version}} (current)",
+      "show": "Show",
+      "uninstall": "Uninstall"
+    },
+    "market": {
+      "title": "Plugin market",
+      "empty": "No other plugins in the market yet.",
+      "offline": "Cannot reach the plugin market: {{error}}",
+      "install": "Install"
+    },
+    "local": {
+      "title": "Install from a file",
+      "description": "Put a plugin zip in the plugin folder, then come back here to install it.",
+      "openFolder": "Open folder",
+      "refresh": "Refresh",
+      "empty": "No plugin zips in the folder."
+    },
+    "install": {
+      "title": "Install “{{name}}”?",
+      "trustTitle": "Do you trust {{author}}?",
+      "notOfficial": "{{name}} is not an official Hindsight plugin. Its author is {{author}}.",
+      "notFromMarket": "{{name}} was not downloaded from the plugin market, and Hindsight has not reviewed it.",
+      "leakRisk": "This plugin may leak your personal information.",
+      "trustOnly": "Check it carefully, and install it only if you trust its author.",
+      "confirm": "Trust and install",
+      "permissions": "This plugin will ask for:",
+      "noPermissions": "This plugin reads none of your data.",
+      "highRisk": "High risk",
+      "storage": "Up to {{mb}} MB of disk space",
+      "background": "Permission to run in the background",
+      "agree": "I agree to give the plugin these permissions",
+      "agreeRisk": "I understand the risks above, and I agree to give the plugin these permissions"
+    },
+    "uninstall": {
+      "title": "Uninstall {{name}}?",
+      "deleteData": "Also delete the data this plugin saved"
+    },
+    "page": {
+      "kind": "Plugin",
+      "manage": "Manage",
+      "gone": "This plugin was turned off or uninstalled."
+    },
+    "permissions": {
+      "stats_read": "Permission to read how long each category and app was used (no window titles or URLs)",
+      "stats_today": "Permission to read today's daily use of each category and app",
+      "stats_week": "Permission to read this week's daily use of each category and app",
+      "stats_month": "Permission to read this month's daily use of each category and app",
+      "stats_history": "Permission to read the daily use of each category and app on all dates",
+      "devices_read": "Permission to read the statistics, names and other information of other devices",
+      "categories_read": "Permission to read the names of all categories and the super-categories they belong to",
+      "super_categories_read": "Permission to read the names of all super-categories",
+      "notifications": "Permission to send system notifications",
+      "focus_changed": "Permission to read events when you switch apps or leave the computer",
+      "focus_app": "Permission to read app switch events and the name of the app you switch to",
+      "focus_category": "Permission to read which category the app you switch to belongs to",
+      "focus_title": "Permission to read app window titles and website domains"
     }
   }
 }

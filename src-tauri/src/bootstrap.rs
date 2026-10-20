@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use tauri::{App, AppHandle, Manager};
 
-use crate::capture::CaptureService;
+use crate::capture::{CaptureService, FocusChange};
 use crate::device::{self, DeviceMeta};
 use crate::repo::devices;
 use crate::repo::settings::Settings;
@@ -171,11 +171,13 @@ pub async fn init_capture_service(
     pool: DbPool,
     memory: Option<crate::memory::MemoryDb>,
     cfg: &Settings,
+    focus_tx: tokio::sync::mpsc::Sender<FocusChange>,
 ) -> Arc<CaptureService> {
     let svc = Arc::new(CaptureService::new(
         pool,
         memory,
         cfg.capture_interval_seconds,
+        focus_tx,
     ));
     svc.set_work_hours(cfg.work_hours_enabled, cfg.work_ranges.clone())
         .await;
@@ -268,7 +270,7 @@ fn remember_geometry(win: &tauri::WebviewWindow) {
 /// 最小化（仅 Windows 有动作）：挂起；还原：恢复。macOS 最小化时 WKWebView
 /// 自带渲染停止 + 亚秒定时器节流（实测），无需干预。
 ///
-/// 非托盘模式：放行关闭，app 正常退出（ExitRequested 不拦）。
+/// 非托盘模式：关主窗口就退出 app。插件后台窗口开着时，app 不会自己退出。
 fn install_window_handlers(window: &tauri::WebviewWindow) {
     let win = window.clone();
     window.on_window_event(move |event| match event {
@@ -286,6 +288,7 @@ fn install_window_handlers(window: &tauri::WebviewWindow) {
                 platform::schedule_webview_suspend(&win);
             }
         }
+        tauri::WindowEvent::CloseRequested { .. } => win.app_handle().exit(0),
         // Windows：最小化 → 挂起，还原 → 恢复。Resized 高频触发，但 resume
         // 内部有"确实请求过挂起才动手"的原子门，拖拽缩放不会反复跨线程调 COM。
         tauri::WindowEvent::Resized(_) => {

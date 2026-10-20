@@ -1,13 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Cloud, CloudOff } from "lucide-react";
+import { Cloud, CloudOff, Puzzle } from "lucide-react";
 import { NAV_ITEMS, ROUTES } from "../../config/nav";
 import type { NavGroup } from "../../types/nav";
 import { NavItem } from "./NavItem";
 import { StatusFooter } from "./StatusFooter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import { api, type AuthState } from "../../api/hindsight";
+import { usePluginPages } from "../../state/pluginPages";
+import { usePluginIcons } from "../../state/pluginIcons";
+import { usePluginsSeen } from "../../state/pluginsSeen";
 import logoUrl from "../../assets/logo.png";
 import styles from "./Sidebar.module.css";
 
@@ -31,6 +34,12 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { status, toggle } = useCaptureStatus();
+  const pluginsSeen = usePluginsSeen();
+  // Only pages that open in the main window are here; the others open in their own window from the
+  // settings
+  const pluginPages = (usePluginPages() ?? []).filter((p) => p.opensIn === "main");
+  const pluginKey = pluginPages.map((p) => p.id).join(",");
+  const pluginIcons = usePluginIcons();
 
   // 云同步登录状态：周期性刷新 + 窗口聚焦时立刻刷一次
   const [auth, setAuth] = useState<AuthState | null>(null);
@@ -82,7 +91,8 @@ export function Sidebar() {
       height: active.offsetHeight,
       visible: true,
     });
-  }, [location.pathname]);
+    // The plugin group can show up above the active item after the first render
+  }, [location.pathname, pluginKey]);
 
   useEffect(() => {
     if (pill.visible && !animated) {
@@ -169,22 +179,47 @@ export function Sidebar() {
           if (items.length === 0) return null;
 
           return (
-            <div key={group} className={styles.section}>
-              <div className={styles.sectionTitle}>{t(GROUP_TITLE_KEY[group])}</div>
-              <div className={styles.sectionItems}>
-                {items.map((item) => (
-                  <NavItem
-                    key={item.path}
-                    to={item.path}
-                    label={t(item.labelKey)}
-                    Icon={item.icon}
-                    color={item.color}
-                    end={item.end}
-                    excludePaths={item.excludePaths}
-                  />
-                ))}
+            <Fragment key={group}>
+              <div className={styles.section}>
+                <div className={styles.sectionTitle}>{t(GROUP_TITLE_KEY[group])}</div>
+                <div className={styles.sectionItems}>
+                  {items.map((item) => (
+                    <NavItem
+                      key={item.path}
+                      to={item.path}
+                      label={t(item.labelKey)}
+                      Icon={item.icon}
+                      color={item.color}
+                      end={item.end}
+                      excludePaths={item.excludePaths}
+                      badge={
+                        item.path === ROUTES.settings && !pluginsSeen
+                          ? t("plugins.newBadge")
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+              {/* Plugins go under 统计; the group is left out when no plugin has a place here */}
+              {group === "primary" && pluginPages.length > 0 ? (
+                <div className={styles.section}>
+                  <div className={styles.sectionTitle}>{t("nav.groups.plugins")}</div>
+                  <div className={styles.sectionItems}>
+                    {pluginPages.map((page) => (
+                      <NavItem
+                        key={page.id}
+                        to={`${ROUTES.plugin}/${page.id}`}
+                        label={page.name}
+                        Icon={Puzzle}
+                        iconSrc={pluginIcons[page.id]}
+                        color="#eab308"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </Fragment>
           );
         })}
       </nav>

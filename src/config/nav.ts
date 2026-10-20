@@ -25,6 +25,10 @@ export const ROUTES = {
   /** 旧的独立「应用」页;现已并入 /categories 的 tab,这里只留给重定向用 */
   apps: "/apps",
   settings: "/settings",
+  /** A plugin page in the main window: /plugins/<plugin id> */
+  plugin: "/plugins",
+  /** The plugin market and installed plugins */
+  settingsPlugins: "/settings/plugins",
 } as const;
 
 // 注：label 已改为 labelKey（i18n 翻译键），渲染时由组件通过 t() 解析

@@ -22,7 +22,7 @@ mod app_detail;
 mod by_date;
 mod by_hour;
 #[cfg(test)]
-mod test_seed;
+pub(crate) mod test_seed;
 mod time;
 
 pub use app_detail::{app_range_detail, BucketBy};
