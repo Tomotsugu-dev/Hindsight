@@ -647,6 +647,8 @@ async fn tick(inner: &Inner) -> Result<()> {
         let privacy_url = if url_inherited { None } else { url.as_deref() };
         let skip = should_skip_for_privacy(inner, &info, privacy_url, is_browser).await;
         if skip {
+            // TODO: the full URL and title are logged at info level, but the logging rule allows
+            // them only at debug
             log::info!(
                 "隐私过滤命中，跳过截图 app={} title={:?} url={:?} (inherited={url_inherited})",
                 info.app_name,
