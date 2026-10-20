@@ -77,10 +77,19 @@ pub fn manifest_json(version: &str) -> String {
 }
 
 pub fn write_zip(path: &Path, files: &[(&str, &str)]) {
+    let files: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|&(name, body)| (name, body.as_bytes()))
+        .collect();
+    write_zip_bytes(path, &files);
+}
+
+/// 和 [`write_zip`] 一样，但内容是字节，用来放 PNG 这类不是文本的文件。
+pub fn write_zip_bytes(path: &Path, files: &[(&str, &[u8])]) {
     let mut zip = ZipWriter::new(File::create(path).unwrap());
     for (name, body) in files {
         zip.start_file(*name, SimpleFileOptions::default()).unwrap();
-        zip.write_all(body.as_bytes()).unwrap();
+        zip.write_all(body).unwrap();
     }
     zip.finish().unwrap();
 }
@@ -122,6 +131,7 @@ pub fn online_plugin(id: &str, versions: &[&str]) -> OnlinePlugin {
                 kind: InstallKind::default(),
             })
             .collect(),
+        icon_url: None,
     }
 }
 

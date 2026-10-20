@@ -7,6 +7,7 @@ use std::path::Path;
 use zip::ZipArchive;
 
 use crate::error::{Error, Result};
+use crate::plugins::icon;
 use crate::plugins::manifest::{self, Manifest};
 use crate::repo::plugins::{self as repo, Plugin, UiSettings};
 use crate::storage::{utc_now_rfc3339, DbPool};
@@ -32,6 +33,7 @@ const MAX_ENTRIES: usize = 1000;
 /// - The zip or its manifest.json is not valid: [`Error::PluginPackage`],
 ///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
 /// - manifest.json is larger than 64 KB: [`Error::PluginPackage`]
+/// - icon.png is larger than 256 KB or is not a PNG file: [`Error::PluginPackage`]
 pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
     read_checked_manifest(&mut open(zip_path)?)
 }
@@ -54,6 +56,7 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 ///   [`Error::PluginManifest`], [`Error::PluginUnknownPermission`]
 /// - manifest.json is larger than 64 KB, the zip has more than 1000 entries, or the files are
 ///   larger than 100 MB unpacked: [`Error::PluginPackage`]
+/// - icon.png is larger than 256 KB or is not a PNG file: [`Error::PluginPackage`]
 /// - `storage_mb` is not between 1 MB and 10 GB: [`Error::PluginManifest`]
 pub async fn install(
     pool: &DbPool,
@@ -232,7 +235,7 @@ fn open(zip_path: &Path) -> Result<ZipArchive<File>> {
 /// Reads the manifest and checks it.
 ///
 /// Checks that the fields follow the rules and that the entry files the manifest asks for are in
-/// the zip.
+/// the zip. Also checks the icon if the package has one, see [`icon::check`].
 fn read_checked_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
     let mut json = Vec::new();
     // Read manifest.json directly from the archive. Reading 1 byte past the limit shows whether
@@ -252,6 +255,7 @@ fn read_checked_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
     if manifest.runs_in_background && !archive.file_names().any(|n| n == "background.js") {
         return Err(Error::PluginPackage("no background.js".into()));
     }
+    icon::check(archive)?;
     Ok(manifest)
 }
 
@@ -312,7 +316,7 @@ mod tests {
     use zip::ZipWriter;
 
     use crate::plugins::test_util::{
-        focus_zip, install_focus, manifest_json, names, write_zip, TempDir,
+        focus_zip, install_focus, manifest_json, names, write_zip, write_zip_bytes, TempDir,
     };
     use crate::repo::test_util::fresh_test_pool;
 
@@ -452,7 +456,8 @@ mod tests {
         assert_eq!(row.version, "0.1.0");
     }
 
-    /// 坏的包：缺清单、缺后台脚本、路径跑出去、符号链接、清单太大、条目太多、解压后太大。
+    /// 坏的包：缺清单、缺后台脚本、路径跑出去、符号链接、清单太大、条目太多、解压后太大、
+    /// 图标不是 PNG、图标太大。
     /// 都报包错误，且是因为各自的原因；表里没有这一行，插件库里也没有这个插件的文件夹，
     /// 解了一半的临时文件夹也删掉了；zip 不删。
     #[tokio::test]
@@ -520,6 +525,24 @@ mod tests {
             ],
         );
         zips.push(("100 MB", path));
+
+        // 图标是 SVG 改了个名字；图标开头是 PNG，但超过 256 KB
+        let too_big_png = [b"\x89PNG\r\n\x1a\n".as_slice(), &[0; 256 * 1024]].concat();
+        for (reason, icon) in [
+            ("not a PNG", b"<svg></svg>".as_slice()),
+            ("256 KB", &too_big_png),
+        ] {
+            let path = dir.0.join(format!("bad-icon-{}.zip", icon.len()));
+            write_zip_bytes(
+                &path,
+                &[
+                    ("manifest.json", manifest.as_bytes()),
+                    ("background.js", b"x"),
+                    ("icon.png", icon),
+                ],
+            );
+            zips.push((reason, path));
+        }
 
         for (reason, path) in zips {
             let result = install(&pool, &dir.plugins(), &path, vec![], None).await;

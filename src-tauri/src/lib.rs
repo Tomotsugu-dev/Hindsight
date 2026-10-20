@@ -412,6 +412,7 @@ pub fn run() {
             commands::plugins::plugin_open_zips_folder,
             commands::plugins::plugin_background_list,
             commands::plugins::plugin_pages,
+            commands::plugins::plugin_icons,
             commands::plugins::plugin_set_opens_in,
             commands::plugins::plugin_open_window,
             commands::plugins::plugin_call,

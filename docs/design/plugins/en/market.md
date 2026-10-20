@@ -25,7 +25,8 @@ flowchart LR
   MKT -->|"2. downloads the zip<br/>from the URL in the list"| REL[("Author's repo<br/>Releases")]
 ```
 
-- The official repo holds only one list file, `plugins.json`. It holds no plugin code. The zip lives in the Releases of the author's own repo.
+- The official repo holds only the list file `plugins.json` and the plugin icons `icons/<id>.png`. It holds no plugin code. The zip lives in the Releases of the author's own repo.
+- The market page reads icons from the official repo, not from the authors' servers. Otherwise, opening the market page would send a request to every author's server. After install, the plugin uses `icon.png` from its package. PR review checks that the two are the same image.
 - The official repo is separate from the main Hindsight repo. Publishing PRs do not mix with app code and do not run the main repo's CI.
 - PR review keeps plugin ids unique.
 - The market page reads the list once when the user opens it. It does not fetch the list in the background on a timer.

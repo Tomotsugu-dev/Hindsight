@@ -4,6 +4,7 @@ pub mod api;
 pub mod background_window;
 pub mod events;
 pub mod file_reader;
+pub mod icon;
 pub mod install;
 pub mod manifest;
 pub mod market;

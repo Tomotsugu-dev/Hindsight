@@ -12,13 +12,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::plugins::install;
-use crate::plugins::manifest::{check_version, Manifest};
+use crate::plugins::manifest::{check_id, check_version, Manifest};
 use crate::repo::plugins::{self as repo, Plugin};
 use crate::storage::DbPool;
 
 /// The URL of the online plugin list.
 pub const PLUGINS_JSON_URL: &str =
     "https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/main/plugins.json";
+
+/// The folder of plugin icons in the official repository. A plugin's icon is `<id>.png` in it.
+const ICONS_URL: &str =
+    "https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/main/icons/";
 
 /// The current plugins.json format version.
 const PLUGINS_JSON_FORMAT_VERSION: u32 = 1;
@@ -236,6 +240,11 @@ pub struct OnlinePlugin {
     /// The author's repository, such as `someone/hindsight-focus`
     pub repo: String,
     pub versions: Vec<OnlineVersion>,
+    /// The URL of this plugin's icon in the official repository. It is not in plugins.json; it is
+    /// made from the id when the list is parsed. `None` if the id is not valid. If the repository
+    /// has no such image, the frontend shows the default icon
+    #[serde(skip_deserializing)]
+    pub icon_url: Option<String>,
 }
 
 /// One version of an online plugin.
@@ -274,7 +283,7 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
     parse_plugins_json(&body)
 }
 
-/// Parses plugins.json.
+/// Parses plugins.json, then fills in each plugin's icon URL from its id.
 ///
 /// # Errors
 ///
@@ -285,7 +294,15 @@ fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
     if file.format_version != PLUGINS_JSON_FORMAT_VERSION {
         return Err(Error::PluginsJsonFormatVersion(file.format_version));
     }
-    Ok(file.plugins)
+    let mut plugins = file.plugins;
+    for plugin in &mut plugins {
+        // The id goes into the URL. An id with `/` or `..` would point outside the official
+        // repository
+        plugin.icon_url = check_id(&plugin.id)
+            .is_ok()
+            .then(|| format!("{ICONS_URL}{}.png", plugin.id));
+    }
+    Ok(plugins)
 }
 
 /// Finds `version` of plugin `id` in the online list.
@@ -709,6 +726,31 @@ mod tests {
         assert_eq!(plugins[0].versions[0].permissions, ["stats.read"]);
         assert_eq!(plugins[0].versions[0].storage_mb, Some(50));
         assert_eq!(plugins[0].versions[1].storage_mb, None);
+    }
+
+    /// 图标地址按 id 拼，指向官方仓库的 icons/；id 格式不对的不给地址，插件照样列出来。
+    #[test]
+    fn icon_urls_come_from_valid_ids() {
+        let json = serde_json::json!({
+            "format_version": 1,
+            "plugins": [
+                { "id": "pomodoro", "name": "", "author": "", "description": "", "repo": "",
+                  "versions": [] },
+                { "id": "../../evil", "name": "", "author": "", "description": "", "repo": "",
+                  "versions": [] }
+            ]
+        });
+
+        let plugins = parse_plugins_json(json.to_string().as_bytes()).unwrap();
+
+        let urls: Vec<Option<&str>> = plugins.iter().map(|p| p.icon_url.as_deref()).collect();
+        assert_eq!(
+            urls,
+            [
+                Some("https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/main/icons/pomodoro.png"),
+                None
+            ]
+        );
     }
 
     /// 不认识的格式：报格式错误，不硬解。

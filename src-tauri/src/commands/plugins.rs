@@ -1,11 +1,15 @@
 //! Tauri commands for plugins: opening the plugin market, installing, uninstalling, and toggling plugins.
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use tauri::{AppHandle, State};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::error::Error;
 use crate::plugins::api;
 use crate::plugins::background_window::{self, BackgroundPlugin};
+use crate::plugins::icon;
 use crate::plugins::market::{self, Market};
 use crate::plugins::pages::{self, PluginPage};
 use crate::plugins::{self, install, manifest, plugin_zips_dir, plugins_dir};
@@ -107,6 +111,16 @@ pub async fn plugin_set_enabled(
 #[tauri::command]
 pub async fn plugin_pages(pool: State<'_, DbPool>) -> Result<Vec<PluginPage>, String> {
     pages::list(&pool).await.map_err(Into::into)
+}
+
+/// Returns the icon path of each installed plugin, by plugin id. The frontend turns each path
+/// into an asset URL with `convertFileSrc`, the same way as app icons.
+///
+/// See [`icon::paths`].
+#[tauri::command]
+pub async fn plugin_icons(pool: State<'_, DbPool>) -> Result<HashMap<String, PathBuf>, String> {
+    let installed = repo::list(&pool).await?;
+    Ok(icon::paths(&plugins_dir(), &installed))
 }
 
 /// Changes where a plugin page opens: `main`, `window`, or `None` (not shown in the sidebar).
