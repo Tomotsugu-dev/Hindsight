@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use super::{send, PluginEvent};
 use crate::capture::{FocusChange, FocusedWindow};
 use crate::error::Result;
+use crate::plugins::api::categories::{CategoryRef, SuperCategoryRef};
 use crate::plugins::api::has_permission;
 use crate::repo::categories::{self, FocusCategory};
 use crate::repo::plugins::{self as repo, Plugin};
@@ -27,24 +28,6 @@ pub(super) struct FocusEvent {
     title: Option<String>,
     /// The domain of the website. Needs `focus.title`
     host: Option<String>,
-}
-
-/// The id, name and super-category of a category, in the same format as in
-/// `stats.day_by_category`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CategoryRef {
-    id: String,
-    name: String,
-    /// `null` if the category is in no super-category
-    super_category: Option<SuperCategoryRef>,
-}
-
-/// The id and name of a super-category.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-struct SuperCategoryRef {
-    id: String,
-    name: String,
 }
 
 impl From<&FocusCategory> for CategoryRef {

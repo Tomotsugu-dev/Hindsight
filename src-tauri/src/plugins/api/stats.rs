@@ -6,6 +6,7 @@ use chrono::{Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::categories::SuperCategoryRef;
 use super::{check_granted, has_permission};
 use crate::error::{Error, Result};
 use crate::repo::plugins::Plugin;
@@ -106,13 +107,6 @@ struct CategorySeconds {
     /// The super-category the category is in. `None` if it is in none, which the plugin gets as
     /// `null`
     super_category: Option<SuperCategoryRef>,
-}
-
-/// The id and name of a super-category.
-#[derive(Debug, PartialEq, Serialize)]
-struct SuperCategoryRef {
-    id: String,
-    name: String,
 }
 
 /// Checks that the plugin's range can read the day `date`.

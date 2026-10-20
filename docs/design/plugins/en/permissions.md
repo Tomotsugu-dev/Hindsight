@@ -37,6 +37,8 @@ Status:
 | `stats.month` | Read this month: the 1st to today, and this week too | Low | MVP |
 | `stats.history` | Read every day | Low | MVP |
 | `devices.read` | Count statistics by the devices selected in the main window: all devices, or one of them. Without it, only this computer counts | Low | MVP |
+| `categories.read` | List the names of all categories and of their super-categories, without how long they were used | Low | MVP |
+| `super_categories.read` | List the names of all super-categories | Low | MVP |
 | `stats.sites` | Read how long each website was used, such as github.com for 2 hours. No full URLs | Medium | Later |
 
 - Each range includes the narrower ones: a plugin with a wider range can also read every day a narrower range can.

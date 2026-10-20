@@ -30,7 +30,7 @@ sequenceDiagram
 ```
 
 - 插件的所有调用都走一个命令 `plugin_call`，用方法名区分要做什么：
-  - 读 Hindsight 的数据：`stats.day_by_category`
+  - 读 Hindsight 的数据：`stats.day_by_category`、`categories.list`、`super_categories.list`
   - 发通知：`notifications.send`，用现有的 `tauri-plugin-notification`
   - 读写插件自己的数据库：`db.execute`、`db.query`，见 [插件的数据](data.md)
 - 方法名就是对插件公开的接口。权限只在一处查，加接口也不用加命令。
@@ -45,11 +45,15 @@ sequenceDiagram
 | 方法 | 要的权限 | 参数 | 返回 |
 |---|---|---|---|
 | `stats.day_by_category` | `stats.read` 加一档 | `{ "date": "2026-10-19", "devices": "selected" }`，`devices` 可以不传 | `[{ "id": "code", "name": "Coding", "seconds": 12600, "superCategory": { "id": "work", "name": "Work" } }]`，用时多的在前；没归入大类的，`superCategory` 是 `null` |
+| `categories.list` | `categories.read` | 无 | `[{ "id": "code", "name": "Coding", "superCategory": { "id": "work", "name": "Work" } }]`，顺序和主界面一样；没归入大类的，`superCategory` 是 `null` |
+| `super_categories.list` | `super_categories.read` | 无 | `[{ "id": "work", "name": "Work" }]`，顺序和主界面一样 |
 | `notifications.send` | `notifications` | `{ "body": "已经看了 10 分钟 YouTube" }` | 无 |
 | `db.execute` | 不要权限，要用户同意的磁盘容量 | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`，`params` 可以不传 | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | 同上 | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`，每行一个对象，键是列名；最多 10 MB |
 
 - 大类的时长由插件自己按 `superCategory` 加总，和主界面的算法一样。
+- `categories.list`、`super_categories.list` 给插件的设置页列出全部分类和大类，让用户挑：读统计只能看到用过的分类。
+- 分类和大类各要一个权限：只用大类的插件，看不到用户的全部分类。
 - 能读哪些日子看档位（见 [插件权限](permissions.md)）。「今天」「本周」「本月」按本机日期算。读不到就报错，错误里是能读到这天的那一档。
 - 算哪些设备由插件自己说：`devices` 不传或者是 `"this"`，只算本机；是 `"selected"`，按主界面选的设备算，要 `devices.read`，没有就报错。不会悄悄换成别的范围，插件拿到的数一定是它要的那种。
 - 主界面选的设备由转发层每次转发时带上，插件改不了。

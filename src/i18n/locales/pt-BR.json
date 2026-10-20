@@ -1819,6 +1819,8 @@
       "stats_month": "Este mês",
       "stats_history": "Todos os dias",
       "devices_read": "Contar pelo dispositivo que você escolhe na janela principal",
+      "categories_read": "Ver os nomes de todas as categorias e suas supercategorias",
+      "super_categories_read": "Ver os nomes de todas as supercategorias",
       "notifications": "Enviar notificações do sistema",
       "focus_changed": "Saber quando você troca de app ou se afasta (só o horário)",
       "focus_app": "Saber para qual app você trocou",

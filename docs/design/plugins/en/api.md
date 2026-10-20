@@ -30,7 +30,7 @@ sequenceDiagram
 ```
 
 - All plugin calls go through one command, `plugin_call`. The method name says what to do:
-  - read Hindsight data: `stats.day_by_category`
+  - read Hindsight data: `stats.day_by_category`, `categories.list`, `super_categories.list`
   - send a notification: `notifications.send`, using the existing `tauri-plugin-notification`
   - read and write the plugin's own database: `db.execute`, `db.query`; see [Plugin data](data.md)
 - The method names are the public API for plugins. Permissions are checked in one place, and a new API does not need a new command.
@@ -45,11 +45,15 @@ sequenceDiagram
 | Method | Permissions needed | Parameters | Returns |
 |---|---|---|---|
 | `stats.day_by_category` | `stats.read` and one range | `{ "date": "2026-10-19", "devices": "selected" }`; `devices` is optional | `[{ "id": "code", "name": "Coding", "seconds": 12600, "superCategory": { "id": "work", "name": "Work" } }]`, longest first. For a category in no super-category, `superCategory` is `null` |
+| `categories.list` | `categories.read` | None | `[{ "id": "code", "name": "Coding", "superCategory": { "id": "work", "name": "Work" } }]`, in the order of the main window. For a category in no super-category, `superCategory` is `null` |
+| `super_categories.list` | `super_categories.read` | None | `[{ "id": "work", "name": "Work" }]`, in the order of the main window |
 | `notifications.send` | `notifications` | `{ "body": "10 minutes on YouTube already" }` | Nothing |
 | `db.execute` | No permission; needs the disk space the user approved | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`; `params` is optional | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | Same as above | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`, one object per row, keyed by column name; at most 10 MB |
 
 - A plugin adds up super-category times itself by `superCategory`, the same way the main window does.
+- `categories.list` and `super_categories.list` let a plugin's settings page list every category and super-category for the user to choose from. Statistics show only the categories that were used.
+- Categories and super-categories each need their own permission, so a plugin that uses only super-categories cannot see all of the user's categories.
 - The range decides which days a plugin can read (see [Plugin permissions](permissions.md)). "Today", "this week" and "this month" use this computer's date. If the plugin cannot read a day, the call fails, and the error names the range that can read it.
 - The plugin says which devices to count. If `devices` is missing or `"this"`, only this computer counts. If it is `"selected"`, the devices selected in the main window count. This needs `devices.read`, and the call fails without it. The range is never changed quietly, so the plugin always gets the numbers it asked for.
 - The forwarder adds the device selected in the main window to every call. The plugin cannot change it.

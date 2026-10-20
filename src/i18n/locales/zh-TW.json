@@ -1816,6 +1816,8 @@
       "stats_month": "能讀本月",
       "stats_history": "能讀所有日子",
       "devices_read": "按你在主介面選的裝置統計",
+      "categories_read": "讀取全部分類的名稱和所屬的大類",
+      "super_categories_read": "讀取全部大類的名稱",
       "notifications": "傳送系統通知",
       "focus_changed": "在你切換應用程式、離開電腦時收到通知（只有時間）",
       "focus_app": "知道你切換到了哪個應用程式",

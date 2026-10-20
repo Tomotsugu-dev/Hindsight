@@ -1816,6 +1816,8 @@
       "stats_month": "今月まで",
       "stats_history": "すべての日",
       "devices_read": "メイン画面で選んだデバイスで集計する",
+      "categories_read": "すべての分類の名前と、その大分類を見る",
+      "super_categories_read": "すべての大分類の名前を見る",
       "notifications": "システム通知を送る",
       "focus_changed": "アプリの切り替えや離席を知る（時刻のみ）",
       "focus_app": "切り替え先のアプリを知る",

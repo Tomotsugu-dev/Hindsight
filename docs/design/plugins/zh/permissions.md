@@ -37,6 +37,8 @@
 | `stats.month` | 能读本月：1 号到今天，也包括本周 | 低 | MVP |
 | `stats.history` | 能读所有日子 | 低 | MVP |
 | `devices.read` | 统计可以按主界面选的设备算：所有设备，或者其中一台。没有这个权限只能算本机 | 低 | MVP |
+| `categories.read` | 列出全部分类的名字和所在大类的名字，不带用了多久 | 低 | MVP |
+| `super_categories.read` | 列出全部大类的名字 | 低 | MVP |
 | `stats.sites` | 读每个网站用了多久，比如 github.com 2 小时。没有具体网址 | 中 | 以后 |
 
 - 四档一档包一档：有宽的一档，窄的那几档能读的日子也都能读。

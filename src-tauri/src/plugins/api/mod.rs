@@ -1,6 +1,7 @@
 //! Plugin API: a plugin calls `hindsight.call()`, the forwarder adds the plugin id and calls
 //! `plugin_call`, and the call ends up here. For the design, see docs/design/plugins/en/api.md.
 
+pub(super) mod categories;
 mod db;
 mod notifications;
 mod stats;
@@ -63,6 +64,8 @@ pub async fn call(
         Method::DayByCategory => {
             stats::day_by_category(pool, &plugin, params, device, self_id).await?
         }
+        Method::ListCategories => categories::list(pool).await?,
+        Method::ListSuperCategories => categories::list_super(pool).await?,
         Method::SendNotification => notifications::send(&plugin, params, notify)?,
         Method::DbExecute => db::execute(plugins_dir, &plugin, params).await?,
         // The rows are written as JSON text while they are read, so the size can be limited in
@@ -76,6 +79,10 @@ pub async fn call(
 enum Method {
     /// `stats.day_by_category`
     DayByCategory,
+    /// `categories.list`
+    ListCategories,
+    /// `super_categories.list`
+    ListSuperCategories,
     /// `notifications.send`
     SendNotification,
     /// `db.execute`
@@ -93,6 +100,8 @@ impl Method {
     fn parse(name: &str) -> Result<Self> {
         match name {
             "stats.day_by_category" => Ok(Self::DayByCategory),
+            "categories.list" => Ok(Self::ListCategories),
+            "super_categories.list" => Ok(Self::ListSuperCategories),
             "notifications.send" => Ok(Self::SendNotification),
             "db.execute" => Ok(Self::DbExecute),
             "db.query" => Ok(Self::DbQuery),
@@ -105,6 +114,8 @@ impl Method {
     fn permission(&self) -> Option<&'static str> {
         match self {
             Self::DayByCategory => Some("stats.read"),
+            Self::ListCategories => Some("categories.read"),
+            Self::ListSuperCategories => Some("super_categories.read"),
             Self::SendNotification => Some("notifications"),
             Self::DbExecute | Self::DbQuery => None,
         }
@@ -197,6 +208,8 @@ mod tests {
 
         for (method, permission) in [
             ("stats.day_by_category", "stats.read"),
+            ("categories.list", "categories.read"),
+            ("super_categories.list", "super_categories.read"),
             ("notifications.send", "notifications"),
         ] {
             let err = call_simple(&pool, "no-permissions", method, Value::Null)
