@@ -27,7 +27,7 @@
     <img alt="Integración continua" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
   </a>
   <a href="../../../LICENSE">
-    <img alt="Licencia" src="https://img.shields.io/badge/license-MIT-green">
+    <img alt="Licencia" src="https://img.shields.io/badge/license-GPL--3.0-green">
   </a>
 </p>
 <p align="center">
@@ -119,6 +119,7 @@ Descarga `hindsight_x.y.z_universal.dmg`, haz doble clic para montar la imagen y
 ## Licencia
 
 <p align="center">
-  Este proyecto es de código abierto y se distribuye bajo la <a href="../../../LICENSE"><b>Licencia MIT</b></a>. Puedes usarlo, modificarlo y distribuirlo libremente.<br/>
+  Este proyecto se distribuye bajo la <a href="../../../LICENSE"><b>GPL 3.0</b></a>. Se permite su uso, modificación y redistribución según sus términos.<br/>
+  Consulta la <a href="../../../CONTRIBUTING.md#license">guía de contribución</a> sobre permisos MIT anteriores y licencias de terceros.<br/>
   <sub>© 2026 colaboradores de Hindsight</sub>
 </p>

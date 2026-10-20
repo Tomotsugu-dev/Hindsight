@@ -72,6 +72,11 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
+    "licenseFile": "../LICENSE",
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../CONTRIBUTING.md": "CONTRIBUTING.md"
+    },
     "targets": ["nsis", "app", "deb", "rpm", "dmg"],
     "icon": [
       "icons/32x32.png",

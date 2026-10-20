@@ -176,7 +176,7 @@ export default function AboutTab() {
           <span className={styles.value}>Tomotsugu-dev</span>
         </Row>
         <Row label={t("settings.about.info.licenseLabel")} icon={Scale}>
-          <span className={styles.value}>MIT</span>
+          <span className={styles.value}>GPL 3.0</span>
         </Row>
       </Section>
 
