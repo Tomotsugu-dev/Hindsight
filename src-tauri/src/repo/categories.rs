@@ -541,8 +541,10 @@ pub async fn list_unclassified(pool: &DbPool, days_back: u32) -> Result<Vec<Uncl
 pub struct FocusCategory {
     pub id: String,
     pub name: String,
-    /// The id and name of the super-category
-    pub super_category: Option<(String, String)>,
+    /// Hex color `#rrggbb`
+    pub color: String,
+    /// The id, name and color of the super-category
+    pub super_category: Option<(String, String, String)>,
 }
 
 /// Finds the category of an app and website: first a website rule for `url_host`, then the
@@ -559,7 +561,7 @@ pub async fn classify(
         .call(move |conn| {
             let sql = format!(
                 "WITH RECURSIVE {hosts}
-                 SELECT k.id, k.name, s.id, s.name
+                 SELECT k.id, k.name, k.color, s.id, s.name, s.color
                  {from}
                  JOIN categories k ON k.id = COALESCE(c.id, 'other') AND k.deleted_at IS NULL
                  LEFT JOIN super_categories s
@@ -570,12 +572,17 @@ pub async fn classify(
             conn.prepare_cached(&sql)
                 .db()?
                 .query_row(rusqlite::params![url_host, process_name], |r| {
-                    let super_id: Option<String> = r.get(2)?;
-                    let super_name: Option<String> = r.get(3)?;
+                    let super_id: Option<String> = r.get(3)?;
+                    let super_name: Option<String> = r.get(4)?;
+                    let super_color: Option<String> = r.get(5)?;
                     Ok(FocusCategory {
                         id: r.get(0)?,
                         name: r.get(1)?,
-                        super_category: super_id.zip(super_name),
+                        color: r.get(2)?,
+                        super_category: super_id
+                            .zip(super_name)
+                            .zip(super_color)
+                            .map(|((id, name), color)| (id, name, color)),
                     })
                 })
                 .optional()
@@ -1441,7 +1448,7 @@ mod tests {
             let pool = pool.clone();
             async move {
                 let c = classify(&pool, app, host).await.unwrap().unwrap();
-                (c.id, c.super_category.map(|(id, _)| id))
+                (c.id, c.super_category.map(|(id, _, _)| id))
             }
         };
 

@@ -14,6 +14,7 @@ use serde_json::Value;
 use crate::error::{Error, Result};
 use crate::repo::plugins::{self as repo, Plugin};
 use crate::storage::DbPool;
+use categories::{CategoryRef, SuperCategoryRef};
 
 /// What a call needs from the app. It is the same for every call.
 pub struct Host<'a, N> {
@@ -64,8 +65,8 @@ pub async fn call(
         Method::DayByCategory => {
             stats::day_by_category(pool, &plugin, params, device, self_id).await?
         }
-        Method::ListCategories => categories::list(pool).await?,
-        Method::ListSuperCategories => categories::list_super(pool).await?,
+        Method::ListCategories => serde_json::to_value(CategoryRef::list(pool).await?)?,
+        Method::ListSuperCategories => serde_json::to_value(SuperCategoryRef::list(pool).await?)?,
         Method::SendNotification => notifications::send(&plugin, params, notify)?,
         Method::DbExecute => db::execute(plugins_dir, &plugin, params).await?,
         // The rows are written as JSON text while they are read, so the size can be limited in

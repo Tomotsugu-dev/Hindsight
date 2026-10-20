@@ -4,69 +4,76 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::error::Result;
 use crate::repo::{categories, super_categories};
 use crate::storage::DbPool;
 
-/// A category as a plugin gets it: its id, name and super-category. `categories.list` and the
-/// `focus.changed` event both use this format.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// A category as a plugin gets it: its id, name, color and super-category. `categories.list`,
+/// `stats.day_by_category` and the `focus.changed` event all use this format.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CategoryRef {
     pub(crate) id: String,
     pub(crate) name: String,
+    /// Hex color `#rrggbb`, the same as in the main window
+    pub(crate) color: String,
     /// `null` if the category is in no super-category
     pub(crate) super_category: Option<SuperCategoryRef>,
 }
 
-/// A super-category as a plugin gets it: its id and name.
+/// A super-category as a plugin gets it: its id, name and color.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(crate) struct SuperCategoryRef {
     pub(crate) id: String,
     pub(crate) name: String,
+    /// Hex color `#rrggbb`
+    pub(crate) color: String,
 }
 
-/// `categories.list`: every category with its super-category, in the order of the main window. A
-/// plugin's settings page uses it to let the user choose.
-pub(super) async fn list(pool: &DbPool) -> Result<Value> {
-    let names: HashMap<String, String> = super_categories::list(pool)
-        .await?
-        .into_iter()
-        .map(|s| (s.id, s.name))
-        .collect();
-    let categories: Vec<CategoryRef> = categories::list(pool)
-        .await?
-        .into_iter()
-        .map(|c| CategoryRef {
-            // Missing only if the super-category was deleted between the two queries
-            super_category: c.super_category_id.and_then(|id| {
-                let name = names.get(&id)?.clone();
-                Some(SuperCategoryRef { id, name })
-            }),
-            id: c.id,
-            name: c.name,
-        })
-        .collect();
-    Ok(serde_json::to_value(categories)?)
+impl CategoryRef {
+    /// Every category, in the order of the main window. `categories.list` returns it as it is,
+    /// and a plugin's settings page uses it to let the user choose.
+    pub(super) async fn list(pool: &DbPool) -> Result<Vec<Self>> {
+        let supers: HashMap<String, SuperCategoryRef> = SuperCategoryRef::list(pool)
+            .await?
+            .into_iter()
+            .map(|s| (s.id.clone(), s))
+            .collect();
+        Ok(categories::list(pool)
+            .await?
+            .into_iter()
+            .map(|c| Self {
+                // Missing only if the super-category was deleted between the two queries
+                super_category: c.super_category_id.and_then(|id| supers.get(&id).cloned()),
+                id: c.id,
+                name: c.name,
+                color: c.color,
+            })
+            .collect())
+    }
 }
 
-/// `super_categories.list`: every super-category, in the order of the main window.
-pub(super) async fn list_super(pool: &DbPool) -> Result<Value> {
-    let supers: Vec<SuperCategoryRef> = super_categories::list(pool)
-        .await?
-        .into_iter()
-        .map(|s| SuperCategoryRef {
-            id: s.id,
-            name: s.name,
-        })
-        .collect();
-    Ok(serde_json::to_value(supers)?)
+impl SuperCategoryRef {
+    /// Every super-category, in the order of the main window. `super_categories.list` returns it
+    /// as it is.
+    pub(super) async fn list(pool: &DbPool) -> Result<Vec<Self>> {
+        Ok(super_categories::list(pool)
+            .await?
+            .into_iter()
+            .map(|s| Self {
+                id: s.id,
+                name: s.name,
+                color: s.color,
+            })
+            .collect())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::*;
     use crate::repo::test_util::fresh_test_pool;
 
@@ -80,7 +87,7 @@ mod tests {
             .unwrap_or_else(|| panic!("no {id}: {list}"))
     }
 
-    /// 列出全部分类：带所在的大类，没归入大类的是 null；只有 id、名字和大类，不带应用。
+    /// 列出全部分类：带所在的大类，没归入大类的是 null；只有 id、名字、颜色和大类，不带应用。
     /// 插件按这些键取值，JSON 整个锁在这里。
     #[tokio::test]
     async fn list_returns_every_category_with_its_super_category() {
@@ -99,23 +106,29 @@ mod tests {
         .await
         .unwrap();
 
-        let got = list(&pool).await.unwrap();
+        let got = serde_json::to_value(CategoryRef::list(&pool).await.unwrap()).unwrap();
 
         assert_eq!(
             find(&got, "code"),
             serde_json::json!({
                 "id": "code",
                 "name": "编程",
-                "superCategory": { "id": "work", "name": "工作" },
+                "color": "#a78bfa",
+                "superCategory": { "id": "work", "name": "工作", "color": "#8b5cf6" },
             })
         );
         assert_eq!(
             find(&got, &job_hunting.id),
-            serde_json::json!({ "id": job_hunting.id, "name": "求职", "superCategory": null })
+            serde_json::json!({
+                "id": job_hunting.id,
+                "name": "求职",
+                "color": "#000000",
+                "superCategory": null,
+            })
         );
     }
 
-    /// 列出全部大类，里面没有分类的大类也列出来；只有 id 和名字。
+    /// 列出全部大类，里面没有分类的大类也列出来；只有 id、名字和颜色。
     #[tokio::test]
     async fn list_super_returns_every_super_category() {
         let pool = fresh_test_pool().await;
@@ -130,15 +143,15 @@ mod tests {
         .await
         .unwrap();
 
-        let got = list_super(&pool).await.unwrap();
+        let got = serde_json::to_value(SuperCategoryRef::list(&pool).await.unwrap()).unwrap();
 
         assert_eq!(
             find(&got, "work"),
-            serde_json::json!({ "id": "work", "name": "工作" })
+            serde_json::json!({ "id": "work", "name": "工作", "color": "#8b5cf6" })
         );
         assert_eq!(
             find(&got, &empty.id),
-            serde_json::json!({ "id": empty.id, "name": "副业" })
+            serde_json::json!({ "id": empty.id, "name": "副业", "color": "#000000" })
         );
     }
 }

@@ -6,12 +6,11 @@ use chrono::{Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::categories::SuperCategoryRef;
+use super::categories::CategoryRef;
 use super::{check_granted, has_permission};
 use crate::error::{Error, Result};
 use crate::repo::plugins::Plugin;
 use crate::repo::reports::{day_category_time, month_range, week_range, DeviceFilter};
-use crate::repo::{categories, super_categories};
 use crate::storage::DbPool;
 
 /// `stats.day_by_category`: how long each category was used on `date`, longest first.
@@ -45,33 +44,27 @@ pub(super) async fn day_by_category(
             selected_device(device, self_id)
         }
     };
-    // Category id → (name, id of its super-category)
-    let categories: HashMap<String, (String, Option<String>)> = categories::list(pool)
+    let categories: HashMap<String, CategoryRef> = CategoryRef::list(pool)
         .await?
         .into_iter()
-        .map(|c| (c.id, (c.name, c.super_category_id)))
-        .collect();
-    let super_names: HashMap<String, String> = super_categories::list(pool)
-        .await?
-        .into_iter()
-        .map(|s| (s.id, s.name))
+        .map(|c| (c.id.clone(), c))
         .collect();
     let days = day_category_time(pool, date, date, device).await?;
     let items: Vec<CategorySeconds> = days
         .into_iter()
         .flat_map(|d| d.segments)
         .map(|s| {
-            // Missing only if a category or super-category was deleted between the queries
-            let (name, super_id) = categories.get(&s.category_id).cloned().unwrap_or_default();
-            let super_category = super_id.and_then(|id| {
-                let name = super_names.get(&id)?.clone();
-                Some(SuperCategoryRef { id, name })
-            });
+            // Missing only if the category was deleted between the queries
+            let category = categories
+                .get(&s.category_id)
+                .cloned()
+                .unwrap_or(CategoryRef {
+                    id: s.category_id,
+                    ..Default::default()
+                });
             CategorySeconds {
-                id: s.category_id,
-                name,
+                category,
                 seconds: s.secs,
-                super_category,
             }
         })
         .collect();
@@ -97,16 +90,12 @@ enum Devices {
     Selected,
 }
 
-/// One item returned by `stats.day_by_category`.
+/// One item returned by `stats.day_by_category`: the category's fields and `seconds`, side by side.
 #[derive(Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct CategorySeconds {
-    id: String,
-    name: String,
+    #[serde(flatten)]
+    category: CategoryRef,
     seconds: u64,
-    /// The super-category the category is in. `None` if it is in none, which the plugin gets as
-    /// `null`
-    super_category: Option<SuperCategoryRef>,
 }
 
 /// Checks that the plugin's range can read the day `date`.
@@ -155,6 +144,7 @@ mod tests {
     use crate::plugins::test_util::plugin_with_permissions;
     use crate::repo::reports::test_seed::{insert_activity, seed_solo_group};
     use crate::repo::test_util::fresh_test_pool;
+    use crate::repo::{categories, super_categories};
 
     const SELF_ID: &str = "this-mac";
 
@@ -177,7 +167,7 @@ mod tests {
         day_by_category(pool, &plugin, params, ui_device.map(String::from), SELF_ID).await
     }
 
-    /// 返回 id、库里的名字、秒数和所在的大类，用时多的在前；没归入大类的是 null。
+    /// 返回 id、库里的名字、颜色、秒数和所在的大类，用时多的在前；没归入大类的是 null。
     /// 插件按这些键取值，返回的 JSON 整个锁在这里，改了已发布的插件就读错。
     #[tokio::test]
     async fn day_by_category_returns_names_seconds_and_super_category() {
@@ -211,12 +201,19 @@ mod tests {
         assert_eq!(
             got,
             serde_json::json!([
-                { "id": job_hunting.id, "name": "求职", "seconds": 1200, "superCategory": null },
+                {
+                    "id": job_hunting.id,
+                    "name": "求职",
+                    "color": "#000000",
+                    "seconds": 1200,
+                    "superCategory": null,
+                },
                 {
                     "id": "code",
                     "name": "编程",
+                    "color": "#a78bfa",
                     "seconds": 600,
-                    "superCategory": { "id": "work", "name": "工作" },
+                    "superCategory": { "id": "work", "name": "工作", "color": "#8b5cf6" },
                 },
             ])
         );
