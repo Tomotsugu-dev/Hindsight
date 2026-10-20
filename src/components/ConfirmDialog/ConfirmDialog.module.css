@@ -40,6 +40,10 @@
   margin: 0;
 }
 
+.titleCenter {
+  text-align: center;
+}
+
 /* A flex item is no shorter than its content unless min-height is 0, so without it a long
    message pushes the dialog past max-height */
 .messageWrap {

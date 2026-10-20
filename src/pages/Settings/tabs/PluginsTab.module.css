@@ -203,6 +203,12 @@
   border-radius: var(--radius-sm);
   background: var(--status-pending-soft);
   color: var(--text-regular);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.callout p {
+  margin: 0;
 }
 
 .calloutIcon {
@@ -240,15 +246,25 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  counter-reset: permission;
 }
 
+/* A flex item shows no list marker, so the number comes from a counter */
 .permissions li {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: 8px 12px;
   font-size: 12.5px;
+  counter-increment: permission;
+}
+
+.permissions li::before {
+  content: counter(permission) ".";
+  flex: none;
+  min-width: 1.4em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .permissions li + li {
@@ -257,6 +273,7 @@
 
 .risk {
   flex: none;
+  margin-left: auto;
   margin-top: 1px;
   padding: 0 6px;
   border-radius: var(--radius-pill);

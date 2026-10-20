@@ -369,9 +369,11 @@ export default function PluginsTab() {
           installing?.source === "thirdParty"
             ? t("plugins.install.trustTitle", { author: installing.author })
             : installing
-              ? t("plugins.install.title", { name: installing.name, version: installing.version })
+              ? t("plugins.install.title", { name: installing.name })
               : ""
         }
+        centerTitle
+        notice={installing ? <InstallWarning target={installing} /> : null}
         message={
           installing ? (
             <InstallDetails target={installing} agreed={agreed} onAgree={setAgreed} />
@@ -457,8 +459,31 @@ function MarketCard({
   );
 }
 
-/** What the plugin may do, shown before the user agrees. High-risk permissions are marked.
- * Third-party plugins and zips also get a warning. */
+/** The warning for a third-party plugin or a zip. It sits outside the scrolling details, so it is
+ * still in view when the user scrolls down to agree. Nothing for an official plugin. */
+function InstallWarning({ target }: { target: InstallTarget }) {
+  const { t } = useTranslation();
+  if (target.source === "official") return null;
+  return (
+    <div className={styles.callout}>
+      <ShieldAlert size={16} className={styles.calloutIcon} aria-hidden />
+      <div>
+        <p>
+          {target.source === "thirdParty"
+            ? t("plugins.install.notOfficial", { name: target.name, author: target.author })
+            : t("plugins.install.notFromMarket", { name: target.name })}
+        </p>
+        <p className={styles.calloutRisk}>
+          {t("plugins.install.leakRisk")}
+          <br />
+          {t("plugins.install.trustOnly")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** What the plugin may do, shown before the user agrees. High-risk permissions are marked. */
 function InstallDetails({
   target,
   agreed,
@@ -474,29 +499,12 @@ function InstallDetails({
     target.permissions.length === 0 && target.storageMb === null && !target.runsInBackground;
   return (
     <div className={styles.details}>
-      {official ? null : (
-        <div className={styles.callout}>
-          <ShieldAlert size={16} className={styles.calloutIcon} aria-hidden />
-          <div>
-            <p>
-              {target.source === "thirdParty"
-                ? t("plugins.install.notOfficial", { name: target.name, author: target.author })
-                : t("plugins.install.notFromMarket", { name: target.name })}
-            </p>
-            <p className={styles.calloutRisk}>
-              {t("plugins.install.leakRisk")}
-              <br />
-              {t("plugins.install.trustOnly")}
-            </p>
-          </div>
-        </div>
-      )}
       {nothingAsked ? (
         <p>{t("plugins.install.noPermissions")}</p>
       ) : (
         <div className={styles.asks}>
           <p className={styles.listLabel}>{t("plugins.install.permissions")}</p>
-          <ul className={styles.permissions}>
+          <ol className={styles.permissions}>
             {target.permissions.map((p) => (
               <li key={p}>
                 <span>{t(`plugins.permissions.${permissionKey(p)}`, { defaultValue: p })}</span>
@@ -509,7 +517,7 @@ function InstallDetails({
               <li>{t("plugins.install.storage", { mb: target.storageMb })}</li>
             ) : null}
             {target.runsInBackground ? <li>{t("plugins.install.background")}</li> : null}
-          </ul>
+          </ol>
         </div>
       )}
       <label className={styles.consent}>

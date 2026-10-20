@@ -8,6 +8,9 @@ import styles from "./ConfirmDialog.module.css";
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
+  centerTitle?: boolean;
+  /** Shown under the title, and stays in view when the message scrolls */
+  notice?: ReactNode;
   /** Optional body. Strings preserve line breaks; nodes can contain rich content. */
   message?: ReactNode;
   confirmLabel?: string;
@@ -22,6 +25,8 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   open,
   title,
+  centerTitle = false,
+  notice,
   message,
   confirmLabel,
   cancelLabel,
@@ -62,9 +67,13 @@ export function ConfirmDialog({
         aria-labelledby="confirm-title"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 id="confirm-title" className={styles.title}>
+        <h2
+          id="confirm-title"
+          className={`${styles.title} ${centerTitle ? styles.titleCenter : ""}`}
+        >
           {title}
         </h2>
+        {notice}
         {message != null && (
           <div className={styles.messageWrap}>
             <div ref={messageRef} className={styles.messageScroll}>

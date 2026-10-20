@@ -1795,7 +1795,7 @@
       "empty": "No hay zips de plugins en la carpeta."
     },
     "install": {
-      "title": "¿Instalar {{name}} v{{version}}?",
+      "title": "¿Instalar «{{name}}»?",
       "trustTitle": "¿Confías en {{author}}?",
       "notOfficial": "{{name}} no es un plugin oficial de Hindsight. Su autor es {{author}}.",
       "notFromMarket": "{{name}} no se descargó de la tienda de plugins y Hindsight no lo ha revisado.",
@@ -1806,7 +1806,7 @@
       "noPermissions": "Este plugin no lee ninguno de tus datos.",
       "highRisk": "Alto riesgo",
       "storage": "Hasta {{mb}} MB de espacio en disco",
-      "background": "Sigue ejecutándose en segundo plano.",
+      "background": "Permiso para ejecutarse en segundo plano",
       "agree": "Al marcar, aceptas darle estos permisos al plugin",
       "agreeRisk": "Al marcar, confirmas que conoces los riesgos anteriores y aceptas darle estos permisos al plugin"
     },

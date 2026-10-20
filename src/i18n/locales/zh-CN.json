@@ -1792,7 +1792,7 @@
       "empty": "文件夹里没有插件安装包。"
     },
     "install": {
-      "title": "安装 {{name}} v{{version}}？",
+      "title": "安装 “{{name}}”？",
       "trustTitle": "要信任 {{author}} 吗？",
       "notOfficial": "{{name}} 不是 Hindsight 官方的插件，作者是 {{author}}。",
       "notFromMarket": "{{name}} 不是从插件市场下载的，没有经过 Hindsight 审核。",
@@ -1803,7 +1803,7 @@
       "noPermissions": "这个插件不读取你的任何数据。",
       "highRisk": "高风险",
       "storage": "最多 {{mb}} MB 的磁盘空间占用",
-      "background": "会一直在后台运行。",
+      "background": "后台运行的权限",
       "agree": "勾选代表同意插件获取这些权限",
       "agreeRisk": "勾选代表知悉上述风险，并同意插件获取这些权限"
     },

@@ -1792,7 +1792,7 @@
       "empty": "資料夾裡沒有外掛安裝包。"
     },
     "install": {
-      "title": "安裝 {{name}} v{{version}}？",
+      "title": "安裝「{{name}}」？",
       "trustTitle": "要信任 {{author}} 嗎？",
       "notOfficial": "{{name}} 不是 Hindsight 官方的外掛，作者是 {{author}}。",
       "notFromMarket": "{{name}} 不是從外掛市集下載的，沒有經過 Hindsight 審核。",
@@ -1803,7 +1803,7 @@
       "noPermissions": "這個外掛不讀取你的任何資料。",
       "highRisk": "高風險",
       "storage": "最多 {{mb}} MB 的磁碟空間佔用",
-      "background": "會一直在背景執行。",
+      "background": "在背景執行的權限",
       "agree": "勾選代表同意外掛取得這些權限",
       "agreeRisk": "勾選代表知悉上述風險，並同意外掛取得這些權限"
     },
