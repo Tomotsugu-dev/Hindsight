@@ -27,7 +27,7 @@
     <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
   </a>
   <a href="../../../LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+    <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-green">
   </a>
 </p>
 <p align="center">
@@ -119,6 +119,7 @@
 ## License
 
 <p align="center">
-  本项目基于 <a href="../../../LICENSE"><b>MIT License</b></a> 开源，欢迎自由使用、修改与分发。<br/>
+  本项目基于 <a href="../../../LICENSE"><b>GPL 3.0</b></a> 开源，可按协议条款使用、修改与分发。<br/>
+  旧版 MIT 授权与第三方许可证的说明见<a href="../../../CONTRIBUTING.md#license">贡献指南</a>。<br/>
   <sub>© 2026 Hindsight contributors</sub>
 </p>

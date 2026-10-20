@@ -161,7 +161,7 @@ function renderPage({ lang, key, title, body, toc, pages, isIndex }) {
       <article class="doc-body"${isIndex ? "" : " data-pagefind-body"}>
 ${body}
       </article>
-      <footer class="doc-footer">© 2026 Hindsight · MIT License</footer>
+      <footer class="doc-footer">© 2026 Hindsight · GPL 3.0</footer>
     </main>
   </div>
 
