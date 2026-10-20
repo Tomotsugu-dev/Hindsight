@@ -173,7 +173,7 @@ mod tests {
         day_by_category(pool, &plugin, params, ui_device.map(String::from), SELF_ID).await
     }
 
-    /// 返回 id、库里的名字、颜色、秒数和所在的大类，用时多的在前；没归入大类的是 null。
+    /// 返回 id、库里的名字、颜色、图标、秒数和所在的大类，用时多的在前；没归入大类的是 null。
     /// 插件按这些键取值，返回的 JSON 整个锁在这里，改了已发布的插件就读错。
     #[tokio::test]
     async fn day_by_category_returns_names_seconds_and_super_category() {
@@ -211,6 +211,7 @@ mod tests {
                     "id": job_hunting.id,
                     "name": "求职",
                     "color": "#000000",
+                    "icon": "Briefcase",
                     "seconds": 1200,
                     "superCategory": null,
                 },
@@ -218,8 +219,14 @@ mod tests {
                     "id": "code",
                     "name": "编程",
                     "color": "#a78bfa",
+                    "icon": "Code",
                     "seconds": 600,
-                    "superCategory": { "id": "work", "name": "工作", "color": "#8b5cf6" },
+                    "superCategory": {
+                        "id": "work",
+                        "name": "工作",
+                        "color": "#8b5cf6",
+                        "icon": "Briefcase",
+                    },
                 },
             ])
         );

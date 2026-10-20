@@ -38,10 +38,15 @@ impl From<&FocusCategory> for CategoryRef {
             id: c.id.clone(),
             name: c.name.clone(),
             color: c.color.clone(),
-            super_category: c
-                .super_category
-                .clone()
-                .map(|(id, name, color)| SuperCategoryRef { id, name, color }),
+            icon: c.icon.clone(),
+            super_category: c.super_category.clone().map(|(id, name, color, icon)| {
+                SuperCategoryRef {
+                    id,
+                    name,
+                    color,
+                    icon,
+                }
+            }),
         }
     }
 }
@@ -171,7 +176,13 @@ mod tests {
             id: "code".into(),
             name: "编程".into(),
             color: "#a78bfa".into(),
-            super_category: Some(("work".into(), "工作".into(), "#8b5cf6".into())),
+            icon: "Code".into(),
+            super_category: Some((
+                "work".into(),
+                "工作".into(),
+                "#8b5cf6".into(),
+                "Briefcase".into(),
+            )),
         }
     }
 
@@ -207,7 +218,13 @@ mod tests {
                     "id": "code",
                     "name": "编程",
                     "color": "#a78bfa",
-                    "superCategory": { "id": "work", "name": "工作", "color": "#8b5cf6" },
+                    "icon": "Code",
+                    "superCategory": {
+                        "id": "work",
+                        "name": "工作",
+                        "color": "#8b5cf6",
+                        "icon": "Briefcase",
+                    },
                 },
                 "title": "GitHub",
                 "host": "github.com",

@@ -9,8 +9,8 @@ use crate::error::Result;
 use crate::repo::{categories, super_categories};
 use crate::storage::DbPool;
 
-/// A category as a plugin gets it: its id, name, color and super-category. `categories.list`,
-/// `stats.day_by_category` and the `focus.changed` event all use this format.
+/// A category as a plugin gets it: its id, name, color, icon and super-category.
+/// `categories.list`, `stats.day_by_category` and the `focus.changed` event all use this format.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CategoryRef {
@@ -18,17 +18,21 @@ pub(crate) struct CategoryRef {
     pub(crate) name: String,
     /// Hex color `#rrggbb`, the same as in the main window
     pub(crate) color: String,
+    /// Lucide icon name, the same as in the main window
+    pub(crate) icon: String,
     /// `null` if the category is in no super-category
     pub(crate) super_category: Option<SuperCategoryRef>,
 }
 
-/// A super-category as a plugin gets it: its id, name and color.
+/// A super-category as a plugin gets it: its id, name, color and icon.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(crate) struct SuperCategoryRef {
     pub(crate) id: String,
     pub(crate) name: String,
     /// Hex color `#rrggbb`
     pub(crate) color: String,
+    /// Lucide icon name
+    pub(crate) icon: String,
 }
 
 impl CategoryRef {
@@ -49,6 +53,7 @@ impl CategoryRef {
                 id: c.id,
                 name: c.name,
                 color: c.color,
+                icon: c.icon,
             })
             .collect())
     }
@@ -65,6 +70,7 @@ impl SuperCategoryRef {
                 id: s.id,
                 name: s.name,
                 color: s.color,
+                icon: s.icon,
             })
             .collect())
     }
@@ -87,8 +93,8 @@ mod tests {
             .unwrap_or_else(|| panic!("no {id}: {list}"))
     }
 
-    /// 列出全部分类：带所在的大类，没归入大类的是 null；只有 id、名字、颜色和大类，不带应用。
-    /// 插件按这些键取值，JSON 整个锁在这里。
+    /// 列出全部分类：带所在的大类，没归入大类的是 null；只有 id、名字、颜色、图标和大类，不带
+    /// 应用。插件按这些键取值，JSON 整个锁在这里。
     #[tokio::test]
     async fn list_returns_every_category_with_its_super_category() {
         let pool = fresh_test_pool().await;
@@ -114,7 +120,13 @@ mod tests {
                 "id": "code",
                 "name": "编程",
                 "color": "#a78bfa",
-                "superCategory": { "id": "work", "name": "工作", "color": "#8b5cf6" },
+                "icon": "Code",
+                "superCategory": {
+                    "id": "work",
+                    "name": "工作",
+                    "color": "#8b5cf6",
+                    "icon": "Briefcase",
+                },
             })
         );
         assert_eq!(
@@ -123,12 +135,13 @@ mod tests {
                 "id": job_hunting.id,
                 "name": "求职",
                 "color": "#000000",
+                "icon": "Briefcase",
                 "superCategory": null,
             })
         );
     }
 
-    /// 列出全部大类，里面没有分类的大类也列出来；只有 id、名字和颜色。
+    /// 列出全部大类，里面没有分类的大类也列出来；只有 id、名字、颜色和图标。
     #[tokio::test]
     async fn list_super_returns_every_super_category() {
         let pool = fresh_test_pool().await;
@@ -147,11 +160,21 @@ mod tests {
 
         assert_eq!(
             find(&got, "work"),
-            serde_json::json!({ "id": "work", "name": "工作", "color": "#8b5cf6" })
+            serde_json::json!({
+                "id": "work",
+                "name": "工作",
+                "color": "#8b5cf6",
+                "icon": "Briefcase",
+            })
         );
         assert_eq!(
             find(&got, &empty.id),
-            serde_json::json!({ "id": empty.id, "name": "副业", "color": "#000000" })
+            serde_json::json!({
+                "id": empty.id,
+                "name": "副业",
+                "color": "#000000",
+                "icon": "Star",
+            })
         );
     }
 }

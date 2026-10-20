@@ -44,9 +44,9 @@ sequenceDiagram
 
 | Method | Permissions needed | Parameters | Returns |
 |---|---|---|---|
-| `stats.day_by_category` | `stats.read` and one range | `{ "date": "2026-10-19", "devices": "selected" }`; `devices` is optional | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "seconds": 12600, "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6" } }]`, longest first. For a category in no super-category, `superCategory` is `null` |
-| `categories.list` | `categories.read` | None | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6" } }]`, in the order of the main window. For a category in no super-category, `superCategory` is `null` |
-| `super_categories.list` | `super_categories.read` | None | `[{ "id": "work", "name": "Work", "color": "#8b5cf6" }]`, in the order of the main window |
+| `stats.day_by_category` | `stats.read` and one range | `{ "date": "2026-10-19", "devices": "selected" }`; `devices` is optional | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "icon": "Code", "seconds": 12600, "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" } }]`, longest first. For a category in no super-category, `superCategory` is `null` |
+| `categories.list` | `categories.read` | None | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "icon": "Code", "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" } }]`, in the order of the main window. For a category in no super-category, `superCategory` is `null` |
+| `super_categories.list` | `super_categories.read` | None | `[{ "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" }]`, in the order of the main window |
 | `notifications.send` | `notifications` | `{ "body": "10 minutes on YouTube already" }` | Nothing |
 | `db.execute` | No permission; needs the disk space the user approved | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`; `params` is optional | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | Same as above | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`, one object per row, keyed by column name; at most 10 MB |
