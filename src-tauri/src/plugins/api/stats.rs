@@ -21,7 +21,7 @@ use crate::storage::DbPool;
 ///
 /// # Errors
 ///
-/// - The parameters are wrong: [`Error::InvalidInput`]
+/// - The parameters are wrong, or `date` is after today: [`Error::InvalidInput`]
 /// - The plugin has no access to this day, or it asks for the devices selected in the main
 ///   window without `devices.read`: [`Error::PluginNoPermission`]
 pub(super) async fn day_by_category(
@@ -36,7 +36,13 @@ pub(super) async fn day_by_category(
             r#"stats.day_by_category needs { date: "YYYY-MM-DD", devices?: "this" | "selected" }"#,
         )
     })?;
-    check_range(plugin, date, Local::now().date_naive())?;
+    let today = Local::now().date_naive();
+    if date > today {
+        return Err(Error::InvalidInput(
+            "stats.day_by_category cannot read a day after today",
+        ));
+    }
+    check_range(plugin, date, today)?;
     let device = match devices {
         Devices::This => DeviceFilter::Only(self_id.into()),
         Devices::Selected => {
@@ -257,14 +263,17 @@ mod tests {
         );
     }
 
-    /// 没有日期、日期格式不对、devices 不认识：都报参数错误。
+    /// 没有日期、日期格式不对、日期在今天之后、devices 不认识：都报参数错误。
     #[tokio::test]
     async fn day_by_category_rejects_bad_params() {
         let pool = fresh_test_pool().await;
         let permissions = ["stats.read", "stats.history"];
+        let tomorrow = Local::now().date_naive().succ_opt().unwrap();
         for params in [
             Value::Null,
             serde_json::json!({ "date": "2026/10/19" }),
+            serde_json::json!({ "date": tomorrow }),
+            serde_json::json!({ "date": NaiveDate::MAX }),
             serde_json::json!({ "date": today(), "devices": "all" }),
         ] {
             let err = day(&pool, &permissions, params.clone(), None)
@@ -281,7 +290,6 @@ mod tests {
         // (今天, 插件的档位, 要读的日子, 结果)，档位名省掉了前缀 stats.
         let cases = [
             ("2026-10-01", "today", "2026-10-01", Ok(())),
-            ("2026-10-01", "today", "2026-10-02", Ok(())),
             ("2026-10-01", "today", "2026-09-30", Err("week")),
             ("2026-10-01", "week", "2026-09-28", Ok(())),
             ("2026-10-01", "month", "2026-09-28", Ok(())),
