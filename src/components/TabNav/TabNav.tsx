@@ -19,6 +19,8 @@ export interface TabDef {
   labelKey: string;
   /** 是否需要精确匹配（对父路由空 to 必须 true） */
   end?: boolean;
+  /** i18n key of short text after the label, such as 「新」 */
+  badgeKey?: string;
 }
 
 interface TabNavProps {
@@ -99,6 +101,9 @@ export function TabNav({ tabs, groups, ariaLabel }: TabNavProps) {
               }
             >
               {t(tab.labelKey)}
+              {tab.badgeKey ? (
+                <span className={styles.badge}>{t(tab.badgeKey)}</span>
+              ) : null}
             </NavLink>
           ))}
         </span>

@@ -44,7 +44,8 @@
       "primary": "统计",
       "ai": "AI-beta",
       "data": "数据",
-      "system": "系统"
+      "system": "系统",
+      "plugins": "插件"
     },
     "items": {
       "today": "日统计",
@@ -104,6 +105,7 @@
       "appearance": "外观",
       "data": "数据",
       "privacy": "隐私",
+      "plugins": "插件",
       "about": "关于"
     },
     "appearance": {
@@ -1755,6 +1757,70 @@
       "max": "最强",
       "hintLevels": "强度越高,响应越慢",
       "hintOpenai": "OpenAI 官方接口在对话中不支持思考"
+    }
+  },
+  "plugins": {
+    "newBadge": "新",
+    "loading": "正在读取插件列表…",
+    "loadFailed": "读不到插件列表：{{error}}",
+    "working": "处理中…",
+    "opensIn": {
+      "main": "嵌入主窗口",
+      "window": "独立窗口",
+      "hidden": "不在侧边栏显示"
+    },
+    "installed": {
+      "title": "已安装的插件",
+      "empty": "（无）",
+      "background": "在后台运行",
+      "enabled": "启用插件",
+      "update": "更新到 v{{version}}",
+      "current": "v{{version}}（当前）",
+      "uninstall": "卸载"
+    },
+    "market": {
+      "title": "插件市场",
+      "empty": "市场里暂时没有其他插件。",
+      "offline": "连不上插件市场：{{error}}",
+      "install": "安装"
+    },
+    "local": {
+      "title": "从文件安装",
+      "description": "把插件的 zip 放进插件文件夹，再回到这里安装。",
+      "openFolder": "打开文件夹",
+      "refresh": "刷新",
+      "empty": "文件夹里没有插件安装包。"
+    },
+    "install": {
+      "title": "安装 {{name}} v{{version}}？",
+      "confirm": "同意并安装",
+      "permissions": "这个插件需要以下权限：",
+      "noPermissions": "这个插件不读取你的任何数据。",
+      "highRisk": "高风险",
+      "storage": "最多占用 {{mb}} MB 磁盘空间存自己的数据。",
+      "background": "会一直在后台运行。"
+    },
+    "uninstall": {
+      "title": "卸载 {{name}}？",
+      "deleteData": "同时删除这个插件存的数据"
+    },
+    "page": {
+      "kind": "插件",
+      "manage": "管理",
+      "gone": "这个插件已经停用或卸载了。"
+    },
+    "permissions": {
+      "stats_read": "读取每个分类、每个应用用了多久（不含窗口标题和网址）",
+      "stats_today": "只能读今天",
+      "stats_week": "能读本周",
+      "stats_month": "能读本月",
+      "stats_history": "能读所有日子",
+      "devices_read": "按你在主界面选的设备统计",
+      "notifications": "发送系统通知",
+      "focus_changed": "在你切换应用、离开电脑时收到通知（只有时间）",
+      "focus_app": "知道你切换到了哪个应用",
+      "focus_category": "知道你切换到的应用属于哪个分类",
+      "focus_title": "看到窗口标题和网站域名"
     }
   }
 }

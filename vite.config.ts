@@ -15,12 +15,13 @@ export default defineConfig(async () => ({
     entries: ["index.html"],
   },
 
-  // Two pages: the main window, and the plugin background window
+  // Three pages: the main window, the plugin background window, and a plugin page's own window
   build: {
     rollupOptions: {
       input: {
         main: "index.html",
         pluginBackground: "src/plugin-background/index.html",
+        pluginWindow: "src/plugin-window/index.html",
       },
     },
   },

@@ -44,7 +44,8 @@
       "primary": "統計",
       "ai": "AI-beta",
       "data": "資料",
-      "system": "系統"
+      "system": "系統",
+      "plugins": "外掛"
     },
     "items": {
       "today": "日統計",
@@ -104,6 +105,7 @@
       "appearance": "外觀",
       "data": "資料",
       "privacy": "隱私",
+      "plugins": "外掛",
       "about": "關於"
     },
     "appearance": {
@@ -1755,6 +1757,70 @@
       "max": "最強",
       "hintLevels": "強度越高,回應越慢",
       "hintOpenai": "OpenAI 官方介面在對話中不支援思考"
+    }
+  },
+  "plugins": {
+    "newBadge": "新",
+    "loading": "正在讀取外掛清單…",
+    "loadFailed": "讀不到外掛清單：{{error}}",
+    "working": "處理中…",
+    "opensIn": {
+      "main": "嵌入主視窗",
+      "window": "獨立視窗",
+      "hidden": "不在側邊欄顯示"
+    },
+    "installed": {
+      "title": "已安裝的外掛",
+      "empty": "（無）",
+      "background": "在背景執行",
+      "enabled": "啟用外掛",
+      "update": "更新到 v{{version}}",
+      "current": "v{{version}}（目前）",
+      "uninstall": "解除安裝"
+    },
+    "market": {
+      "title": "外掛市集",
+      "empty": "市集裡暫時沒有其他外掛。",
+      "offline": "連不上外掛市集：{{error}}",
+      "install": "安裝"
+    },
+    "local": {
+      "title": "從檔案安裝",
+      "description": "把外掛的 zip 放進外掛資料夾，再回到這裡安裝。",
+      "openFolder": "開啟資料夾",
+      "refresh": "重新整理",
+      "empty": "資料夾裡沒有外掛安裝包。"
+    },
+    "install": {
+      "title": "安裝 {{name}} v{{version}}？",
+      "confirm": "同意並安裝",
+      "permissions": "這個外掛需要以下權限：",
+      "noPermissions": "這個外掛不讀取你的任何資料。",
+      "highRisk": "高風險",
+      "storage": "最多佔用 {{mb}} MB 磁碟空間存自己的資料。",
+      "background": "會一直在背景執行。"
+    },
+    "uninstall": {
+      "title": "解除安裝 {{name}}？",
+      "deleteData": "同時刪除這個外掛存的資料"
+    },
+    "page": {
+      "kind": "外掛",
+      "manage": "管理",
+      "gone": "這個外掛已經停用或解除安裝了。"
+    },
+    "permissions": {
+      "stats_read": "讀取每個分類、每個應用程式用了多久（不含視窗標題和網址）",
+      "stats_today": "只能讀今天",
+      "stats_week": "能讀本週",
+      "stats_month": "能讀本月",
+      "stats_history": "能讀所有日子",
+      "devices_read": "按你在主介面選的裝置統計",
+      "notifications": "傳送系統通知",
+      "focus_changed": "在你切換應用程式、離開電腦時收到通知（只有時間）",
+      "focus_app": "知道你切換到了哪個應用程式",
+      "focus_category": "知道你切換到的應用程式屬於哪個分類",
+      "focus_title": "看到視窗標題和網站網域"
     }
   }
 }

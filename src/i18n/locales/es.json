@@ -44,7 +44,8 @@
       "primary": "Estadísticas",
       "ai": "IA-beta",
       "data": "Datos",
-      "system": "Sistema"
+      "system": "Sistema",
+      "plugins": "Plugins"
     },
     "items": {
       "today": "Diario",
@@ -104,6 +105,7 @@
       "appearance": "Apariencia",
       "data": "Datos",
       "privacy": "Privacidad",
+      "plugins": "Plugins",
       "about": "Acerca de"
     },
     "appearance": {
@@ -1758,6 +1760,70 @@
       "max": "Máximo",
       "hintLevels": "Cuanto mayor sea el esfuerzo, más lenta será la respuesta",
       "hintOpenai": "La API de OpenAI no admite el razonamiento en el chat"
+    }
+  },
+  "plugins": {
+    "newBadge": "Nuevo",
+    "loading": "Cargando plugins…",
+    "loadFailed": "No se pudieron cargar los plugins: {{error}}",
+    "working": "Procesando…",
+    "opensIn": {
+      "main": "En la ventana principal",
+      "window": "En su propia ventana",
+      "hidden": "Fuera de la barra lateral"
+    },
+    "installed": {
+      "title": "Plugins instalados",
+      "empty": "(ninguno)",
+      "background": "Se ejecuta en segundo plano",
+      "enabled": "Activar plugin",
+      "update": "Actualizar a v{{version}}",
+      "current": "v{{version}} (actual)",
+      "uninstall": "Desinstalar"
+    },
+    "market": {
+      "title": "Tienda de plugins",
+      "empty": "Todavía no hay otros plugins en la tienda.",
+      "offline": "No se pudo conectar con la tienda de plugins: {{error}}",
+      "install": "Instalar"
+    },
+    "local": {
+      "title": "Instalar desde un archivo",
+      "description": "Pon el zip del plugin en la carpeta de plugins y vuelve aquí para instalarlo.",
+      "openFolder": "Abrir carpeta",
+      "refresh": "Actualizar",
+      "empty": "No hay zips de plugins en la carpeta."
+    },
+    "install": {
+      "title": "¿Instalar {{name}} v{{version}}?",
+      "confirm": "Aceptar e instalar",
+      "permissions": "Este plugin pide:",
+      "noPermissions": "Este plugin no lee ninguno de tus datos.",
+      "highRisk": "Alto riesgo",
+      "storage": "Usa hasta {{mb}} MB de disco para sus propios datos.",
+      "background": "Sigue ejecutándose en segundo plano."
+    },
+    "uninstall": {
+      "title": "¿Desinstalar {{name}}?",
+      "deleteData": "Borrar también los datos que guardó este plugin"
+    },
+    "page": {
+      "kind": "Plugin",
+      "manage": "Gestionar",
+      "gone": "Este plugin se desactivó o se desinstaló."
+    },
+    "permissions": {
+      "stats_read": "Ver cuánto tiempo se usó cada categoría y app (sin títulos de ventana ni URL)",
+      "stats_today": "Solo hoy",
+      "stats_week": "Esta semana",
+      "stats_month": "Este mes",
+      "stats_history": "Todos los días",
+      "devices_read": "Contar según el dispositivo que eliges en la ventana principal",
+      "notifications": "Enviar notificaciones del sistema",
+      "focus_changed": "Saber cuándo cambias de app o te alejas (solo la hora)",
+      "focus_app": "Saber a qué app cambiaste",
+      "focus_category": "Saber la categoría de la app a la que cambiaste",
+      "focus_title": "Ver títulos de ventana y dominios de sitios web"
     }
   }
 }

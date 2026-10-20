@@ -44,7 +44,8 @@
       "primary": "Stats",
       "ai": "AI-beta",
       "data": "Data",
-      "system": "System"
+      "system": "System",
+      "plugins": "Plugins"
     },
     "items": {
       "today": "Daily",
@@ -104,6 +105,7 @@
       "appearance": "Appearance",
       "data": "Data",
       "privacy": "Privacy",
+      "plugins": "Plugins",
       "about": "About"
     },
     "appearance": {
@@ -1758,6 +1760,70 @@
       "max": "Max",
       "hintLevels": "Higher effort means slower responses",
       "hintOpenai": "OpenAI's API doesn't support thinking in chat"
+    }
+  },
+  "plugins": {
+    "newBadge": "New",
+    "loading": "Loading plugins…",
+    "loadFailed": "Cannot load plugins: {{error}}",
+    "working": "Working…",
+    "opensIn": {
+      "main": "In the main window",
+      "window": "In its own window",
+      "hidden": "Not in the sidebar"
+    },
+    "installed": {
+      "title": "Installed plugins",
+      "empty": "(none)",
+      "background": "Runs in the background",
+      "enabled": "Enable plugin",
+      "update": "Update to v{{version}}",
+      "current": "v{{version}} (current)",
+      "uninstall": "Uninstall"
+    },
+    "market": {
+      "title": "Plugin market",
+      "empty": "No other plugins in the market yet.",
+      "offline": "Cannot reach the plugin market: {{error}}",
+      "install": "Install"
+    },
+    "local": {
+      "title": "Install from a file",
+      "description": "Put a plugin zip in the plugin folder, then come back here to install it.",
+      "openFolder": "Open folder",
+      "refresh": "Refresh",
+      "empty": "No plugin zips in the folder."
+    },
+    "install": {
+      "title": "Install {{name}} v{{version}}?",
+      "confirm": "Agree and install",
+      "permissions": "This plugin asks for:",
+      "noPermissions": "This plugin reads none of your data.",
+      "highRisk": "High risk",
+      "storage": "Uses up to {{mb}} MB of disk for its own data.",
+      "background": "Keeps running in the background."
+    },
+    "uninstall": {
+      "title": "Uninstall {{name}}?",
+      "deleteData": "Also delete the data this plugin saved"
+    },
+    "page": {
+      "kind": "Plugin",
+      "manage": "Manage",
+      "gone": "This plugin was turned off or uninstalled."
+    },
+    "permissions": {
+      "stats_read": "See how long each category and app was used (no window titles or URLs)",
+      "stats_today": "Today only",
+      "stats_week": "This week",
+      "stats_month": "This month",
+      "stats_history": "All days",
+      "devices_read": "Count by the device you choose in the main window",
+      "notifications": "Send system notifications",
+      "focus_changed": "Know when you switch apps or step away (time only)",
+      "focus_app": "Know which app you switched to",
+      "focus_category": "Know the category of the app you switched to",
+      "focus_title": "See window titles and website domains"
     }
   }
 }

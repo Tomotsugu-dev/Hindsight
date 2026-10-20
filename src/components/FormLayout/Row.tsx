@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { Info, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { RowLabelContext } from "./rowLabelContext";
@@ -14,6 +14,9 @@ interface RowProps {
   block?: boolean;
   /** 行首小图标 */
   icon?: LucideIcon;
+  /** An image shown instead of `icon`, such as a plugin's own icon. If it cannot be loaded,
+   * `icon` is shown */
+  iconSrc?: string;
   /** 图标色调 */
   tone?: "primary" | "danger";
   /** label 右侧 info 图标的 hover 提示（多行用 \n 分隔） */
@@ -30,17 +33,32 @@ export function Row({
   disabled,
   block,
   icon: Icon,
+  iconSrc,
   tone = "primary",
   labelHint,
   actions,
 }: RowProps) {
   const labelId = useId();
+  // Kept per URL, so a new `iconSrc` is tried again
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const showImage = iconSrc !== undefined && iconSrc !== brokenSrc;
   return (
     <div
       className={`${styles.row} ${block ? styles.rowBlock : ""} ${disabled ? styles.rowDisabled : ""}`}
     >
       <div className={styles.left}>
-        {Icon ? (
+        {showImage ? (
+          <div className={styles.icon}>
+            {/* onError falls back to `icon` when the image is missing; it is not user input */}
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+            <img
+              className={styles.iconImage}
+              src={iconSrc}
+              alt=""
+              onError={() => setBrokenSrc(iconSrc)}
+            />
+          </div>
+        ) : Icon ? (
           <div className={`${styles.icon} ${styles[`tone_${tone}`]}`}>
             <Icon size={16} strokeWidth={1.85} />
           </div>

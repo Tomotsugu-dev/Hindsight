@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { DEVICE_SELECTED_KEY } from "../state/deviceFilterKey";
+import { isRequest } from "../plugin-page/forwarder";
 import { type BackgroundPlugin, diffFrames } from "./frames";
 
 const frames = new Map<string, { url: string; frame: HTMLIFrameElement }>();
@@ -20,15 +21,6 @@ function show(plugins: BackgroundPlugin[]) {
     document.body.append(frame);
     frames.set(plugin.id, { url: plugin.launcherUrl, frame });
   }
-}
-
-/** A `hindsight.call()` from a plugin's Worker, passed on by its launcher. */
-type PluginRequest = { id: number; method: string; params?: unknown };
-
-function isRequest(data: unknown): data is PluginRequest {
-  if (typeof data !== "object" || data === null) return false;
-  const { id, method } = data as Record<string, unknown>;
-  return typeof id === "number" && typeof method === "string";
 }
 
 // The plugin is the one whose iframe sent the message. The browser sets event.source, so a
