@@ -1765,9 +1765,8 @@
     "loadFailed": "读不到插件列表：{{error}}",
     "working": "处理中…",
     "opensIn": {
-      "main": "嵌入主窗口",
-      "window": "独立窗口",
-      "hidden": "不在侧边栏显示"
+      "main": "侧边栏",
+      "window": "独立窗口"
     },
     "installed": {
       "title": "已安装的插件",
@@ -1776,6 +1775,7 @@
       "enabled": "启用插件",
       "update": "更新到 v{{version}}",
       "current": "v{{version}}（当前）",
+      "show": "显示",
       "uninstall": "卸载"
     },
     "market": {

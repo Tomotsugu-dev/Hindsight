@@ -1765,9 +1765,8 @@
     "loadFailed": "プラグイン一覧を読み込めません：{{error}}",
     "working": "処理中…",
     "opensIn": {
-      "main": "メインウィンドウ内",
-      "window": "別ウィンドウ",
-      "hidden": "サイドバーに表示しない"
+      "main": "サイドバー",
+      "window": "別ウィンドウ"
     },
     "installed": {
       "title": "インストール済みのプラグイン",
@@ -1776,6 +1775,7 @@
       "enabled": "プラグインを有効にする",
       "update": "v{{version}} に更新",
       "current": "v{{version}}（現在）",
+      "show": "表示",
       "uninstall": "アンインストール"
     },
     "market": {

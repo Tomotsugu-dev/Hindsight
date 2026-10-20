@@ -1765,9 +1765,8 @@
     "loadFailed": "讀不到外掛清單：{{error}}",
     "working": "處理中…",
     "opensIn": {
-      "main": "嵌入主視窗",
-      "window": "獨立視窗",
-      "hidden": "不在側邊欄顯示"
+      "main": "側邊欄",
+      "window": "獨立視窗"
     },
     "installed": {
       "title": "已安裝的外掛",
@@ -1776,6 +1775,7 @@
       "enabled": "啟用外掛",
       "update": "更新到 v{{version}}",
       "current": "v{{version}}（目前）",
+      "show": "顯示",
       "uninstall": "解除安裝"
     },
     "market": {

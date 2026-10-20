@@ -8,11 +8,9 @@ import { NavItem } from "./NavItem";
 import { StatusFooter } from "./StatusFooter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import { api, type AuthState } from "../../api/hindsight";
-import { pluginsApi } from "../../api/plugins";
 import { usePluginPages } from "../../state/pluginPages";
 import { usePluginIcons } from "../../state/pluginIcons";
 import { usePluginsSeen } from "../../state/pluginsSeen";
-import { logError } from "../../lib/logger";
 import logoUrl from "../../assets/logo.png";
 import styles from "./Sidebar.module.css";
 
@@ -37,9 +35,9 @@ export function Sidebar() {
   const { t, i18n } = useTranslation();
   const { status, toggle } = useCaptureStatus();
   const pluginsSeen = usePluginsSeen();
-  // Plugins whose page has a place in the sidebar; a plugin without opensIn is opened only from
-  // the settings
-  const pluginPages = (usePluginPages() ?? []).filter((p) => p.opensIn !== null);
+  // Only pages that open in the main window are here; the others open in their own window from the
+  // settings
+  const pluginPages = (usePluginPages() ?? []).filter((p) => p.opensIn === "main");
   const pluginKey = pluginPages.map((p) => p.id).join(",");
   const pluginIcons = usePluginIcons();
 
@@ -216,15 +214,6 @@ export function Sidebar() {
                         Icon={Puzzle}
                         iconSrc={pluginIcons[page.id]}
                         color="#eab308"
-                        onClick={
-                          page.opensIn === "window"
-                            ? () => {
-                                pluginsApi
-                                  .openWindow(page.id)
-                                  .catch((e) => logError("plugins.openWindow", e));
-                              }
-                            : undefined
-                        }
                       />
                     ))}
                   </div>

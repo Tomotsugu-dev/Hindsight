@@ -1768,9 +1768,8 @@
     "loadFailed": "Não foi possível carregar os plugins: {{error}}",
     "working": "Processando…",
     "opensIn": {
-      "main": "Na janela principal",
-      "window": "Em janela própria",
-      "hidden": "Fora da barra lateral"
+      "main": "Na barra lateral",
+      "window": "Em janela própria"
     },
     "installed": {
       "title": "Plugins instalados",
@@ -1779,6 +1778,7 @@
       "enabled": "Ativar plugin",
       "update": "Atualizar para v{{version}}",
       "current": "v{{version}} (atual)",
+      "show": "Mostrar",
       "uninstall": "Desinstalar"
     },
     "market": {

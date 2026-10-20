@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, Package, Puzzle, RefreshCw, ShieldAlert, Store } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
@@ -8,7 +7,6 @@ import { Toggle } from "../../../components/FormControls/Toggle";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { EmptyHint } from "../../../components/EmptyHint/EmptyHint";
-import { ROUTES } from "../../../config/nav";
 import {
   pluginsApi,
   type InstalledPlugin,
@@ -40,10 +38,11 @@ interface InstallTarget {
   run: () => Promise<void>;
 }
 
-type OpensInChoice = "main" | "window" | "hidden";
+type OpensInChoice = "main" | "window";
 
-const toChoice = (opensIn: OpensIn): OpensInChoice => opensIn ?? "hidden";
-const fromChoice = (choice: OpensInChoice): OpensIn => (choice === "hidden" ? null : choice);
+/** A plugin whose manifest leaves out opens_in is not in the sidebar either, and opens in its own
+ * window from here */
+const toChoice = (opensIn: OpensIn): OpensInChoice => (opensIn === "main" ? "main" : "window");
 
 /** The install dialog for one version in the online list. */
 const onlineTarget = (plugin: OnlinePlugin, v: OnlineVersion): InstallTarget => ({
@@ -61,7 +60,6 @@ const onlineTarget = (plugin: OnlinePlugin, v: OnlineVersion): InstallTarget => 
  * Opening this tab is the only thing that fetches the online list. */
 export default function PluginsTab() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const icons = usePluginIcons();
   const [market, setMarket] = useState<Market | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -130,12 +128,7 @@ export default function PluginsTab() {
       false,
     );
 
-  const openPage = (plugin: InstalledPlugin) => {
-    if (plugin.ui.opensIn === "main") {
-      void navigate(`${ROUTES.plugin}/${plugin.id}`);
-      return;
-    }
-    // In its own window, and also for a plugin that is not in the sidebar
+  const showWindow = (plugin: InstalledPlugin) => {
     pluginsApi.openWindow(plugin.id).catch((e) => {
       logError("plugins.openWindow", e);
       setActionError(String(e));
@@ -162,7 +155,6 @@ export default function PluginsTab() {
   const opensInOptions = [
     { value: "main" as const, label: t("plugins.opensIn.main") },
     { value: "window" as const, label: t("plugins.opensIn.window") },
-    { value: "hidden" as const, label: t("plugins.opensIn.hidden") },
   ];
 
   if (!market) {
@@ -227,16 +219,19 @@ export default function PluginsTab() {
                         value={toChoice(plugin.ui.opensIn)}
                         options={opensInOptions}
                         disabled={working}
-                        onChange={(choice) => void setOpensIn(plugin, fromChoice(choice))}
+                        onChange={(choice) => void setOpensIn(plugin, choice)}
                       />
-                      <button
-                        type="button"
-                        className={styles.btn}
-                        disabled={!plugin.enabled}
-                        onClick={() => openPage(plugin)}
-                      >
-                        {t("common.open")}
-                      </button>
+                      {/* A plugin in the sidebar is opened from there */}
+                      {toChoice(plugin.ui.opensIn) === "window" ? (
+                        <button
+                          type="button"
+                          className={styles.btn}
+                          disabled={!plugin.enabled}
+                          onClick={() => showWindow(plugin)}
+                        >
+                          {t("plugins.installed.show")}
+                        </button>
+                      ) : null}
                     </>
                   ) : null}
                   {versionOptions.length > 0 ? (

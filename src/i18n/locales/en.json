@@ -1768,9 +1768,8 @@
     "loadFailed": "Cannot load plugins: {{error}}",
     "working": "Working…",
     "opensIn": {
-      "main": "In the main window",
-      "window": "In its own window",
-      "hidden": "Not in the sidebar"
+      "main": "In the sidebar",
+      "window": "In its own window"
     },
     "installed": {
       "title": "Installed plugins",
@@ -1779,6 +1778,7 @@
       "enabled": "Enable plugin",
       "update": "Update to v{{version}}",
       "current": "v{{version}} (current)",
+      "show": "Show",
       "uninstall": "Uninstall"
     },
     "market": {
