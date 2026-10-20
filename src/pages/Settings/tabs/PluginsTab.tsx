@@ -446,12 +446,7 @@ function MarketCard({
       </div>
       <p className={styles.marketDesc}>{plugin.description}</p>
       <div className={styles.marketFoot}>
-        <button
-          type="button"
-          className={styles.btnPrimary}
-          disabled={disabled}
-          onClick={onInstall}
-        >
+        <button type="button" className={styles.btnPrimary} disabled={disabled} onClick={onInstall}>
           {working ? t("plugins.working") : t("plugins.market.install")}
         </button>
       </div>
