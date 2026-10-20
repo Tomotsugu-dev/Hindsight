@@ -80,7 +80,7 @@ The plugin's background script receives events pushed by Hindsight (see [④ Rec
 
 | Permission | What it allows | Risk | Status |
 |---|---|---|---|
-| `focus.changed` | Get an event when the foreground app or browser URL changes, or when the user goes away. The event has only the time. Without this permission, a plugin gets no focus events | Low | MVP |
+| `focus.changed` | Get an event when the foreground app or browser URL changes, or when the user goes away. The event has only the time, and whether the user went away. Without this permission, a plugin gets no focus events | Low | MVP |
 | `focus.app` | Add the app name to the event. Must be requested with `focus.changed` | Medium | MVP |
 | `focus.category` | Add the category to the event. Must be requested with `focus.changed` | Low | MVP |
 | `focus.title` | Add the window title and website domain to the event. Must be requested with `focus.changed` | High | MVP |

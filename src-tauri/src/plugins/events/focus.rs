@@ -20,6 +20,8 @@ use crate::storage::DbPool;
 pub(super) struct FocusEvent {
     /// When the focus changed to this, or when the user went away, in RFC 3339
     at: String,
+    /// `true` when the user went away. The other fields are then empty
+    away: bool,
     /// The app name. Needs `focus.app`
     app: Option<String>,
     /// The category. Needs `focus.category`
@@ -116,6 +118,7 @@ async fn events_for(pool: &DbPool, change: &FocusChange) -> Result<Vec<(String, 
                 // The user went away, or the statistics do not show this window: only the time
                 None => FocusEvent {
                     at: at.to_rfc3339(),
+                    away: window.is_none(),
                     ..Default::default()
                 },
             };
@@ -132,6 +135,7 @@ fn assemble(
 ) -> FocusEvent {
     FocusEvent {
         at: window.at.to_rfc3339(),
+        away: false,
         app: fields.app.then(|| window.app_name.clone()),
         category: category.filter(|_| fields.category).map(CategoryRef::from),
         // No title for a window that matches a privacy keyword
@@ -184,6 +188,7 @@ mod tests {
             json(&["focus.changed"]),
             serde_json::json!({
                 "at": at,
+                "away": false,
                 "app": null,
                 "category": null,
                 "title": null,
@@ -194,6 +199,7 @@ mod tests {
             json(&ALL),
             serde_json::json!({
                 "at": at,
+                "away": false,
                 "app": "Chrome",
                 "category": {
                     "id": "code",
@@ -219,7 +225,7 @@ mod tests {
     }
 
     /// 隐藏的应用按分类认出来，命中忽略规则的不查分类，用户离开时没有窗口：
-    /// 插件四个权限都有也只拿到时间。
+    /// 插件四个权限都有也只拿到时间。只有离开时 away 是 true。
     #[tokio::test]
     async fn hidden_windows_and_away_give_only_the_time() {
         let pool = fresh_test_pool().await;
@@ -235,14 +241,20 @@ mod tests {
         let mut excluded = FocusedWindow::for_test("Code", "main.rs", None);
         excluded.excluded = true;
         let away = Local::now();
-        for (case, at, change) in [
-            ("secret", secret.at, FocusChange::Window(secret)),
-            ("excluded", excluded.at, FocusChange::Window(excluded)),
-            ("away", away, FocusChange::Away { at: away }),
+        for (case, at, change, is_away) in [
+            ("secret", secret.at, FocusChange::Window(secret), false),
+            (
+                "excluded",
+                excluded.at,
+                FocusChange::Window(excluded),
+                false,
+            ),
+            ("away", away, FocusChange::Away { at: away }, true),
         ] {
             let events = events_for(&pool, &change).await.unwrap();
             let only_time = FocusEvent {
                 at: at.to_rfc3339(),
+                away: is_away,
                 ..Default::default()
             };
             assert_eq!(events[0].1, only_time, "{case}");

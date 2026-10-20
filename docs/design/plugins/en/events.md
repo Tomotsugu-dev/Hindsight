@@ -37,6 +37,7 @@ sequenceDiagram
 - An event for a plugin lists only the fields it can get: whatever the app records later, plugins do not get it unless it is added.
 - Websites are given as domains only, the same as Hindsight records: a full URL may contain login details.
 - Times the statistics do not count (hidden apps, ignored windows, the user away) are pushed too, with only the time, for the same reason.
+- `away` is `true` only when the user goes away. A plugin must tell "the user went away" from "the focus moved to a window the statistics do not show". For example, the Focus plugin counts time away as rest.
 - Event times never go backwards, so plugins do not need to handle that.
 - A window that matches a privacy keyword gets no title. This is the same check as for skipping screenshots.
 - Events go only to background scripts, so a plugin that does not run in the background cannot request `focus.changed`.
