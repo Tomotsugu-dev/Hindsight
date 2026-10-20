@@ -362,8 +362,8 @@
         "rowLabel": "URL キーワード",
         "addLabel": "URL の一部を追加",
         "placeholder": "例: /login",
-        "hostLabel": "完全な URL を保存しない",
-        "hostInfo": "ドメイン（例: github.com）のみを記録し、完全な URL は記録しません"
+        "hostLabel": "サイトのドメインを記録",
+        "hostInfo": "アクセスしたサイトのドメイン（例: github.com）を記録し、サイト別の統計に使います。"
       },
       "app": {
         "title": "アプリフィルター",

@@ -362,8 +362,8 @@
         "rowLabel": "URL 關鍵詞",
         "addLabel": "新增 URL 字尾",
         "placeholder": "如 /login",
-        "hostLabel": "不儲存完整網址",
-        "hostInfo": "只記錄網域（如 github.com），不記錄完整網址"
+        "hostLabel": "記錄網站網域",
+        "hostInfo": "記錄造訪的網站網域（如 github.com），用於按網站統計。"
       },
       "app": {
         "title": "應用程式過濾",

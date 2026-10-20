@@ -362,8 +362,8 @@
         "rowLabel": "URL keywords",
         "addLabel": "Add URL fragment",
         "placeholder": "e.g. /login",
-        "hostLabel": "Don't store full URLs",
-        "hostInfo": "Only the domain (e.g. github.com) is recorded, never the full URL"
+        "hostLabel": "Record website domains",
+        "hostInfo": "Records the domains of the sites you visit (e.g. github.com), for the By site statistics."
       },
       "app": {
         "title": "App filter",

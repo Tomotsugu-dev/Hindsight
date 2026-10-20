@@ -362,8 +362,8 @@
         "rowLabel": "URL 关键词",
         "addLabel": "添加 URL 后缀",
         "placeholder": "如 /login",
-        "hostLabel": "不保存完整网址",
-        "hostInfo": "只记录域名（如 github.com），不记录完整网址"
+        "hostLabel": "记录网站域名",
+        "hostInfo": "记录访问的网站域名（如 github.com），用于按网站统计。"
       },
       "app": {
         "title": "应用过滤",

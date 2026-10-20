@@ -362,8 +362,8 @@
         "rowLabel": "Palavras-chave de URL",
         "addLabel": "Adicionar fragmento de URL",
         "placeholder": "ex.: /login",
-        "hostLabel": "Não salvar URLs completas",
-        "hostInfo": "Apenas o domínio (ex.: github.com) é registrado, nunca a URL completa"
+        "hostLabel": "Registrar domínios dos sites",
+        "hostInfo": "Registra os domínios dos sites que você visita (ex.: github.com), para as estatísticas por site."
       },
       "app": {
         "title": "Filtro de aplicativos",
