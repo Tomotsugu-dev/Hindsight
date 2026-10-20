@@ -1810,19 +1810,19 @@
       "gone": "这个插件已经停用或卸载了。"
     },
     "permissions": {
-      "stats_read": "读取每个分类、每个应用用了多久（不含窗口标题和网址）",
-      "stats_today": "只能读今天",
-      "stats_week": "能读本周",
-      "stats_month": "能读本月",
-      "stats_history": "能读所有日子",
-      "devices_read": "按你在主界面选的设备统计",
-      "categories_read": "读取全部分类的名字和所属的大类",
-      "super_categories_read": "读取全部大类的名字",
-      "notifications": "发送系统通知",
-      "focus_changed": "在你切换应用、离开电脑时收到通知（只有时间）",
-      "focus_app": "知道你切换到了哪个应用",
-      "focus_category": "知道你切换到的应用属于哪个分类",
-      "focus_title": "看到窗口标题和网站域名"
+      "stats_read": "读取每个分类、每个应用用了多久（不含窗口标题和网址）的权限",
+      "stats_today": "读取今天的每个分类、每个应用每天使用情况的权限",
+      "stats_week": "读取本周的每个分类、每个应用每天使用情况的权限",
+      "stats_month": "读取本月的每个分类、每个应用每天使用情况的权限",
+      "stats_history": "读取所有时间的每个分类、每个应用每天使用情况的权限",
+      "devices_read": "读取其他设备的统计、名字等信息的权限",
+      "categories_read": "读取全部小分类的名字和其所属的大类的权限",
+      "super_categories_read": "读取全部大类的名字的权限",
+      "notifications": "发送系统通知的权限",
+      "focus_changed": "读取切换应用、离开电脑事件的权限",
+      "focus_app": "读取切换应用事件，及其切换应用名的权限",
+      "focus_category": "读取切换到的应用属于哪个分类的权限",
+      "focus_title": "读取应用窗口标题和网站域名的权限"
     }
   }
 }

@@ -1813,19 +1813,19 @@
       "gone": "Este plugin foi desativado ou desinstalado."
     },
     "permissions": {
-      "stats_read": "Ver quanto tempo cada categoria e app foi usado (sem títulos de janela nem URLs)",
-      "stats_today": "Só hoje",
-      "stats_week": "Esta semana",
-      "stats_month": "Este mês",
-      "stats_history": "Todos os dias",
-      "devices_read": "Contar pelo dispositivo que você escolhe na janela principal",
-      "categories_read": "Ver os nomes de todas as categorias e suas supercategorias",
-      "super_categories_read": "Ver os nomes de todas as supercategorias",
-      "notifications": "Enviar notificações do sistema",
-      "focus_changed": "Saber quando você troca de app ou se afasta (só o horário)",
-      "focus_app": "Saber para qual app você trocou",
-      "focus_category": "Saber a categoria do app para o qual você trocou",
-      "focus_title": "Ver títulos de janela e domínios de sites"
+      "stats_read": "Permissão para ler quanto tempo cada categoria e aplicativo foi usado (sem títulos de janela nem URLs)",
+      "stats_today": "Permissão para ler o uso diário de cada categoria e aplicativo de hoje",
+      "stats_week": "Permissão para ler o uso diário de cada categoria e aplicativo desta semana",
+      "stats_month": "Permissão para ler o uso diário de cada categoria e aplicativo deste mês",
+      "stats_history": "Permissão para ler o uso diário de cada categoria e aplicativo de todas as datas",
+      "devices_read": "Permissão para ler as estatísticas, os nomes e outras informações de outros dispositivos",
+      "categories_read": "Permissão para ler os nomes de todas as categorias e as supercategorias a que pertencem",
+      "super_categories_read": "Permissão para ler os nomes de todas as supercategorias",
+      "notifications": "Permissão para enviar notificações do sistema",
+      "focus_changed": "Permissão para ler eventos quando você troca de aplicativo ou sai do computador",
+      "focus_app": "Permissão para ler eventos de troca de aplicativo e o nome do aplicativo para o qual você troca",
+      "focus_category": "Permissão para ler a categoria do aplicativo para o qual você troca",
+      "focus_title": "Permissão para ler títulos de janela dos aplicativos e domínios de sites"
     }
   }
 }

@@ -1813,19 +1813,19 @@
       "gone": "This plugin was turned off or uninstalled."
     },
     "permissions": {
-      "stats_read": "See how long each category and app was used (no window titles or URLs)",
-      "stats_today": "Today only",
-      "stats_week": "This week",
-      "stats_month": "This month",
-      "stats_history": "All days",
-      "devices_read": "Count by the device you choose in the main window",
-      "categories_read": "See the names of all categories and their super-categories",
-      "super_categories_read": "See the names of all super-categories",
-      "notifications": "Send system notifications",
-      "focus_changed": "Know when you switch apps or step away (time only)",
-      "focus_app": "Know which app you switched to",
-      "focus_category": "Know the category of the app you switched to",
-      "focus_title": "See window titles and website domains"
+      "stats_read": "Permission to read how long each category and app was used (no window titles or URLs)",
+      "stats_today": "Permission to read today's daily use of each category and app",
+      "stats_week": "Permission to read this week's daily use of each category and app",
+      "stats_month": "Permission to read this month's daily use of each category and app",
+      "stats_history": "Permission to read the daily use of each category and app on all dates",
+      "devices_read": "Permission to read the statistics, names and other information of other devices",
+      "categories_read": "Permission to read the names of all categories and the super-categories they belong to",
+      "super_categories_read": "Permission to read the names of all super-categories",
+      "notifications": "Permission to send system notifications",
+      "focus_changed": "Permission to read events when you switch apps or leave the computer",
+      "focus_app": "Permission to read app switch events and the name of the app you switch to",
+      "focus_category": "Permission to read which category the app you switch to belongs to",
+      "focus_title": "Permission to read app window titles and website domains"
     }
   }
 }
