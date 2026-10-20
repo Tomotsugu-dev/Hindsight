@@ -39,6 +39,8 @@ pub async fn day_hours(
                 from = from_stats_category_sql("activities"),
                 device = device.sql_clause(),
             );
+            // TODO: panics on the earliest date, which has no day before; only the main window
+            // calls this now
             let prev_date = (day - Duration::days(1)).format("%Y-%m-%d").to_string();
             let mut params: Vec<&dyn ToSql> = vec![&prev_date, &date, &date, &prev_date, &date];
             if let Some(extra) = device.sql_param() {
@@ -142,6 +144,8 @@ pub async fn day_hour_apps(
                 from = from_stats_category_sql("activities"),
                 device = device.sql_clause(),
             );
+            // TODO: panics on the earliest date, which has no day before; only the main window
+            // calls this now
             let prev_date = (day - Duration::days(1)).format("%Y-%m-%d").to_string();
             let mut params: Vec<&dyn ToSql> = vec![&prev_date, &date, &date, &prev_date, &date];
             if let Some(extra) = device.sql_param() {

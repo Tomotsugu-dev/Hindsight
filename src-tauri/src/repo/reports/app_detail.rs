@@ -83,6 +83,8 @@ pub async fn app_range_detail(
                 device.sql_clause()
             );
             // Activities that cross midnight may start as early as the day before `from`.
+            // TODO: panics on the earliest date, which has no day before; only the main window
+            // calls this now
             let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
             let crossing_params = bind(vec![&crossing_from_str, &to_str], &processes, &device);
             let mut crossing_stmt = conn.prepare(&crossing_sql).db()?;
@@ -135,6 +137,8 @@ pub async fn app_range_detail(
                            {}",
                         device.sql_clause()
                     );
+                    // TODO: panics on the earliest date, which has no day before; only the main
+                    // window calls this now
                     let prev_date = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
                     let session_params =
                         bind(vec![&from_str, &prev_date, &from_str], &processes, &device);
@@ -273,6 +277,8 @@ pub async fn app_range_detail(
                 let key = current_date.format("%Y-%m-%d").to_string();
                 let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
                 out.push(DetailBucket { key, secs });
+                // TODO: panics on the latest date, which has no next day; only the main window
+                // calls this now
                 current_date += Duration::days(1);
             }
             out
