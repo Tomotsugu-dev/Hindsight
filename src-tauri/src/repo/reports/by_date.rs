@@ -1,7 +1,7 @@
 //! Reports queried by start and end date: each category's time per day, and the top apps. Used by
 //! the Daily, Weekly and Monthly pages.
 
-use chrono::{Duration, NaiveDate};
+use chrono::NaiveDate;
 use rusqlite::ToSql;
 
 use crate::error::Result;
@@ -80,7 +80,7 @@ pub async fn day_category_time(
             );
 
             // Activities that cross midnight may start as early as the day before `from`.
-            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let crossing_from_str = from.pred_opt().unwrap_or(from).format("%Y-%m-%d").to_string();
             let mut params: Vec<&dyn ToSql> =
                 vec![&crossing_from_str, &to_str, &crossing_from_str, &to_str];
             if let Some(extra) = device.sql_param() {
@@ -142,7 +142,10 @@ pub async fn day_category_time(
             date: key,
             segments: segs,
         });
-        cur_date += Duration::days(1);
+        let Some(next) = cur_date.succ_opt() else {
+            break;
+        };
+        cur_date = next;
     }
 
     Ok(out)
@@ -229,7 +232,11 @@ pub async fn top_apps(
                 device = device.sql_clause(),
             );
             // Activities that cross midnight may start as early as the day before `from`.
-            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let crossing_from_str = from
+                .pred_opt()
+                .unwrap_or(from)
+                .format("%Y-%m-%d")
+                .to_string();
             let mut params: Vec<&dyn ToSql> =
                 vec![&crossing_from_str, &to_str, &crossing_from_str, &to_str];
             if let Some(extra) = device.sql_param() {
@@ -312,7 +319,7 @@ mod tests {
     };
     use crate::repo::reports::time::{month_range, week_range};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::Local;
+    use chrono::{Duration, Local};
 
     fn code_secs(day: &DaySummary) -> u64 {
         day.segments
@@ -541,6 +548,19 @@ mod tests {
         assert_eq!(code_secs(&days[1]), 600, "10-02 只算 23:50 到午夜");
     }
 
+    /// 能表示的最早、最晚那天也照常返回一天空数据，不 panic：最早那天没有前一天，最晚那天没有后一天。
+    #[tokio::test]
+    async fn day_category_time_handles_the_earliest_and_latest_dates() {
+        let pool = fresh_test_pool().await;
+        for day in [NaiveDate::MIN, NaiveDate::MAX] {
+            let days = day_category_time(&pool, day, day, DeviceFilter::All)
+                .await
+                .unwrap();
+            assert_eq!(days.len(), 1, "{day}");
+            assert!(days[0].segments.is_empty(), "{day}");
+        }
+    }
+
     /// 测 [`top_apps`]（本月）：top N 按总时长降序。
     #[tokio::test]
     async fn top_apps_top_n_correct() {
@@ -701,6 +721,18 @@ mod tests {
             .unwrap();
         assert_eq!(apps.len(), 1);
         assert_eq!(apps[0].minutes, 20, "两头各 10 分钟");
+    }
+
+    /// 能表示的最早、最晚那天也照常返回空排行，不 panic：最早那天没有前一天。
+    #[tokio::test]
+    async fn top_apps_handles_the_earliest_and_latest_dates() {
+        let pool = fresh_test_pool().await;
+        for day in [NaiveDate::MIN, NaiveDate::MAX] {
+            let apps = top_apps(&pool, day, day, 50, DeviceFilter::All)
+                .await
+                .unwrap();
+            assert!(apps.is_empty(), "{day}");
+        }
     }
 
     /// 跨午夜那段加回去以后才排名次：10-02 当天 Chrome 15 分钟、Code 10 分钟，Code 还有前一晚
