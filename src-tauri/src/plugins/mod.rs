@@ -7,10 +7,24 @@ pub mod file_reader;
 pub mod install;
 pub mod manifest;
 pub mod market;
+pub mod pages;
 #[cfg(test)]
 mod test_util;
 
 use std::path::PathBuf;
+
+use tauri::AppHandle;
+
+use crate::storage::DbPool;
+
+/// Call after a plugin is installed, uninstalled, enabled or disabled, so that the plugin
+/// background window and the page windows follow the new plugin list.
+///
+/// See [`background_window::refresh`] and [`pages::refresh`].
+pub async fn refresh(app: &AppHandle, pool: &DbPool) {
+    background_window::refresh(app, pool).await;
+    pages::refresh(app, pool).await;
+}
 
 /// Returns the plugin library: one folder per plugin, inside the data folder.
 pub fn plugins_dir() -> PathBuf {

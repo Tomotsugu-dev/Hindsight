@@ -248,6 +248,11 @@ pub enum Error {
     #[error("plugin not enabled: {0}")]
     PluginNotEnabled(String),
 
+    /// The plugin has no page to open: it is not installed, is turned off, or its package has no
+    /// page.
+    #[error("plugin has no page: {0}")]
+    PluginNoPage(String),
+
     /// The plugin API has no method with this name.
     #[error("plugin unknown method: {0}")]
     PluginUnknownMethod(String),

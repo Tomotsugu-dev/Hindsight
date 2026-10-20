@@ -7,7 +7,8 @@ use crate::error::Error;
 use crate::plugins::api;
 use crate::plugins::background_window::{self, BackgroundPlugin};
 use crate::plugins::market::{self, Market};
-use crate::plugins::{install, plugin_zips_dir, plugins_dir};
+use crate::plugins::pages::{self, PluginPage};
+use crate::plugins::{self, install, manifest, plugin_zips_dir, plugins_dir};
 use crate::repo::plugins as repo;
 use crate::storage::DbPool;
 
@@ -33,7 +34,7 @@ pub async fn plugin_open_market(pool: State<'_, DbPool>) -> Result<Market, Strin
 
 /// Installs or updates a plugin from the zip `file_name` in the plugin zip folder.
 ///
-/// See [`install::install`] and [`background_window::refresh`].
+/// See [`install::install`] and [`plugins::refresh`].
 #[tauri::command]
 pub async fn plugin_install(
     app: AppHandle,
@@ -44,7 +45,7 @@ pub async fn plugin_install(
 ) -> Result<(), String> {
     let zip = market::zip_path(&plugin_zips_dir(), &file_name)?;
     install::install(&pool, &plugins_dir(), &zip, approved, storage_mb).await?;
-    background_window::refresh(&app, &pool).await;
+    plugins::refresh(&app, &pool).await;
     Ok(())
 }
 
@@ -52,7 +53,7 @@ pub async fn plugin_install(
 ///
 /// Takes only the id and version. The download URL and SHA-256 are read again from the online
 /// list: the check only works if both come from the same list.
-/// See [`market::download`], [`install::install`] and [`background_window::refresh`].
+/// See [`market::download`], [`install::install`] and [`plugins::refresh`].
 #[tauri::command]
 pub async fn plugin_install_online(
     app: AppHandle,
@@ -66,13 +67,13 @@ pub async fn plugin_install_online(
     let target = market::find_version(&online, &id, &version)?;
     let zip = market::download(&plugin_zips_dir(), &id, target).await?;
     install::install(&pool, &plugins_dir(), &zip, approved, storage_mb).await?;
-    background_window::refresh(&app, &pool).await;
+    plugins::refresh(&app, &pool).await;
     Ok(())
 }
 
 /// Uninstalls a plugin.
 ///
-/// See [`install::uninstall`] and [`background_window::refresh`].
+/// See [`install::uninstall`] and [`plugins::refresh`].
 #[tauri::command]
 pub async fn plugin_uninstall(
     app: AppHandle,
@@ -81,13 +82,13 @@ pub async fn plugin_uninstall(
     delete_data: bool,
 ) -> Result<(), String> {
     install::uninstall(&pool, &plugins_dir(), &id, delete_data).await?;
-    background_window::refresh(&app, &pool).await;
+    plugins::refresh(&app, &pool).await;
     Ok(())
 }
 
 /// Enables or disables a plugin.
 ///
-/// See [`background_window::refresh`].
+/// See [`plugins::refresh`].
 #[tauri::command]
 pub async fn plugin_set_enabled(
     app: AppHandle,
@@ -96,8 +97,48 @@ pub async fn plugin_set_enabled(
     enabled: bool,
 ) -> Result<(), String> {
     repo::set_enabled(&pool, &id, enabled).await?;
-    background_window::refresh(&app, &pool).await;
+    plugins::refresh(&app, &pool).await;
     Ok(())
+}
+
+/// Lists the enabled plugins that have a page, for the sidebar and the plugin pages.
+///
+/// See [`pages::list`].
+#[tauri::command]
+pub async fn plugin_pages(pool: State<'_, DbPool>) -> Result<Vec<PluginPage>, String> {
+    pages::list(&pool).await.map_err(Into::into)
+}
+
+/// Changes where a plugin page opens: `main`, `window`, or `None` (not shown in the sidebar).
+///
+/// See [`manifest::check_opens_in`] and [`pages::refresh`].
+#[tauri::command]
+pub async fn plugin_set_opens_in(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    id: String,
+    opens_in: Option<String>,
+) -> Result<(), String> {
+    if let Some(opens_in) = &opens_in {
+        manifest::check_opens_in(opens_in)?;
+    }
+    repo::set_opens_in(&pool, &id, opens_in).await?;
+    pages::refresh(&app, &pool).await;
+    Ok(())
+}
+
+/// Opens a plugin page in its own window.
+///
+/// See [`pages::open_window`].
+#[tauri::command]
+pub async fn plugin_open_window(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    id: String,
+) -> Result<(), String> {
+    pages::open_window(&app, &pool, &id)
+        .await
+        .map_err(Into::into)
 }
 
 /// Lists the plugins the plugin background window runs.

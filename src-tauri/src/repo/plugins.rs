@@ -143,6 +143,50 @@ pub async fn set_enabled(pool: &DbPool, id: &str, enabled: bool) -> Result<()> {
     Ok(())
 }
 
+/// Changes where the plugin page opens.
+pub async fn set_opens_in(pool: &DbPool, id: &str, opens_in: Option<String>) -> Result<()> {
+    let id = id.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE plugins SET opens_in = ?2 WHERE id = ?1",
+                rusqlite::params![id, opens_in],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// Saves the position and size of the page's own window, in logical pixels.
+///
+/// Changes only these four columns, so this and [`set_opens_in`] cannot overwrite each other
+/// when they write close together.
+pub async fn set_window_bounds(
+    pool: &DbPool,
+    id: &str,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Result<()> {
+    let id = id.to_string();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE plugins SET window_x = ?2, window_y = ?3, window_width = ?4,
+                                    window_height = ?5
+                  WHERE id = ?1",
+                rusqlite::params![id, x, y, width, height],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// Removes a plugin record from the database.
 ///
 /// The database row is deleted before removing the plugin directory from disk: if a crash occurs
@@ -273,6 +317,38 @@ mod tests {
                 runs_in_background: newer.runs_in_background,
                 ..older
             }
+        );
+    }
+
+    /// 改打开方式、存窗口：只动自己那几列，别的列不变；改成 None 就是侧边栏里不显示。
+    #[tokio::test]
+    async fn set_opens_in_and_window_bounds() {
+        let pool = fresh_test_pool().await;
+        save(&pool, focus("0.1.0")).await.unwrap();
+
+        set_window_bounds(&pool, "hindsight-focus", -1200, 80, 400, 700)
+            .await
+            .unwrap();
+        set_opens_in(&pool, "hindsight-focus", None).await.unwrap();
+
+        let got = get(&pool, "hindsight-focus").await.unwrap().unwrap();
+        assert_eq!(
+            got.ui,
+            UiSettings {
+                opens_in: None,
+                window_x: Some(-1200),
+                window_y: Some(80),
+                window_width: 400,
+                window_height: 700,
+                ..focus("0.1.0").ui
+            }
+        );
+        assert_eq!(
+            Plugin {
+                ui: focus("0.1.0").ui,
+                ..got
+            },
+            focus("0.1.0")
         );
     }
 

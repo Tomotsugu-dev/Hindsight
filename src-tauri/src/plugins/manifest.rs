@@ -77,11 +77,7 @@ pub fn parse(json: &[u8]) -> Result<Manifest> {
         return Err(Error::PluginManifest("name is empty".into()));
     }
     if let Some(opens_in) = &manifest.opens_in {
-        if !OPENS_IN.contains(&opens_in.as_str()) {
-            return Err(Error::PluginManifest(format!(
-                "unknown opens_in {opens_in:?}"
-            )));
-        }
+        check_opens_in(opens_in)?;
     }
     if let Some(WindowSize { width, height }) = manifest.window {
         let width_range = MIN_WINDOW_SIDE..=MAX_WINDOW_WIDTH;
@@ -103,6 +99,21 @@ pub fn parse(json: &[u8]) -> Result<Manifest> {
         check_storage_mb(mb)?;
     }
     Ok(manifest)
+}
+
+/// Checks that `opens_in` is one of [`OPENS_IN`], whether the author wrote it in the manifest or
+/// the user chose it in the settings.
+///
+/// # Errors
+///
+/// - It is not one of them: [`Error::PluginManifest`]
+pub fn check_opens_in(opens_in: &str) -> Result<()> {
+    if !OPENS_IN.contains(&opens_in) {
+        return Err(Error::PluginManifest(format!(
+            "unknown opens_in {opens_in:?}"
+        )));
+    }
+    Ok(())
 }
 
 /// Checks that the disk capacity requested by the plugin or approved by the user is between 1 MB and [`MAX_STORAGE_MB`].

@@ -2,10 +2,11 @@
 
 Overview: [Plugin backend architecture](plugins-architecture.md).
 
-**This doc designs**: how installed plugins start running. It covers three things:
+**This doc designs**: how installed plugins start running. It covers four things:
 
 - at startup, how the app opens the plugin background window and loads the plugins that run in the background;
 - when one plugin hangs, how it avoids stopping the other plugins and the app;
+- how plugin pages show in the main window and in their own windows;
 - when the WebView asks for a plugin's file, how the plugin file reader hands it over.
 
 ## What is in the plugin background window
@@ -56,6 +57,25 @@ sequenceDiagram
 ```
 
 > Content Security Policy (CSP): a rule sent along with a web page. It tells the WebView what the page may and may not do, for example no network access. If plugin JS tries to send data to an outside website, the WebView itself blocks the request.
+
+## Plugin pages
+
+```mermaid
+flowchart TB
+  subgraph MW["Main window"]
+    H1["Hindsight's page<br/>forwarder"]
+    P1["iframe: Focus page<br/>plugin's own origin"]
+  end
+  subgraph PW["Pomodoro's own window"]
+    H2["Hindsight's page<br/>forwarder"]
+    P2["iframe: Pomodoro page<br/>plugin's own origin"]
+  end
+  P1 -->|"hindsight.call()"| H1
+  P2 -->|"hindsight.call()"| H2
+```
+
+- **The plugin page is in an iframe inside a Hindsight page**: the iframe opens at the plugin's own origin, so it cannot reach the call interface Tauri injects into Hindsight's pages, and its storage is separate from Hindsight's. It hands requests to the forwarder in the outer page, and the forwarder tells which plugin it is by which iframe the message came from.
+- **The main window and a page's own window show the same plugin page**: only the outer page differs, so the author does not write two versions.
 
 ## Implementation details
 
