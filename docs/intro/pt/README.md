@@ -27,7 +27,7 @@
     <img alt="CI" src="https://github.com/Tomotsugu-dev/Hindsight/actions/workflows/ci.yml/badge.svg">
   </a>
   <a href="../../../LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+    <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-green">
   </a>
 </p>
 <p align="center">
@@ -119,6 +119,7 @@ Baixe `hindsight_x.y.z_universal.dmg`, clique duas vezes para montar e arraste o
 ## Licença
 
 <p align="center">
-  Este projeto é de código aberto sob a <a href="../../../LICENSE"><b>Licença MIT</b></a>. Sinta-se à vontade para usar, modificar e distribuir.<br/>
+  Este projeto está disponível sob a <a href="../../../LICENSE"><b>GPL 3.0</b></a>. O uso, a modificação e a redistribuição são permitidos conforme seus termos.<br/>
+  Consulte o <a href="../../../CONTRIBUTING.md#license">guia de contribuição</a> sobre permissões MIT anteriores e licenças de terceiros.<br/>
   <sub>© 2026 colaboradores do Hindsight</sub>
 </p>
