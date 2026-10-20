@@ -51,6 +51,8 @@ export interface OnlinePlugin {
   versions: OnlineVersion[];
   /** The icon in the official repository. It may not exist; show the default icon then */
   icon_url: string | null;
+  /** Made by Hindsight: `repo` is under the official account */
+  official: boolean;
 }
 
 export interface Manifest {

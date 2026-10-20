@@ -24,6 +24,9 @@ pub const PLUGINS_JSON_URL: &str =
 const ICONS_URL: &str =
     "https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/main/icons/";
 
+/// The GitHub account that holds the code of official plugins.
+const OFFICIAL_ACCOUNT: &str = "Tomotsugu-dev";
+
 /// The current plugins.json format version.
 const PLUGINS_JSON_FORMAT_VERSION: u32 = 1;
 
@@ -245,6 +248,11 @@ pub struct OnlinePlugin {
     /// has no such image, the frontend shows the default icon
     #[serde(skip_deserializing)]
     pub icon_url: Option<String>,
+    /// Whether this is an official Hindsight plugin: its `repo` is under the official account. It
+    /// is not in plugins.json; it is set when the list is parsed. `repo` is checked in PR review,
+    /// so an author cannot set it alone
+    #[serde(skip_deserializing)]
+    pub official: bool,
 }
 
 /// One version of an online plugin.
@@ -283,7 +291,7 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
     parse_plugins_json(&body)
 }
 
-/// Parses plugins.json, then fills in each plugin's icon URL from its id.
+/// Parses plugins.json, then fills in each plugin's icon URL and whether it is official.
 ///
 /// # Errors
 ///
@@ -301,6 +309,11 @@ fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
         plugin.icon_url = check_id(&plugin.id)
             .is_ok()
             .then(|| format!("{ICONS_URL}{}.png", plugin.id));
+        // GitHub account names ignore case
+        plugin.official = plugin
+            .repo
+            .split_once('/')
+            .is_some_and(|(owner, _)| owner.eq_ignore_ascii_case(OFFICIAL_ACCOUNT));
     }
     Ok(plugins)
 }
@@ -751,6 +764,30 @@ mod tests {
                 None
             ]
         );
+    }
+
+    /// `repo` 在官方账号下才算官方插件，账号名不分大小写；名字只是像官方账号的不算。
+    #[test]
+    fn official_comes_from_the_repo_account() {
+        let plugin = |repo: &str| {
+            serde_json::json!({ "id": "p", "name": "", "author": "", "description": "",
+                                "repo": repo, "versions": [] })
+        };
+        let json = serde_json::json!({
+            "format_version": 1,
+            "plugins": [
+                plugin("Tomotsugu-dev/hindsight-focus"),
+                plugin("tomotsugu-dev/hindsight-focus"),
+                plugin("someone/hindsight-focus"),
+                plugin("Tomotsugu-dev-fake/hindsight-focus"),
+                plugin("Tomotsugu-dev"),
+            ]
+        });
+
+        let plugins = parse_plugins_json(json.to_string().as_bytes()).unwrap();
+
+        let official: Vec<bool> = plugins.iter().map(|p| p.official).collect();
+        assert_eq!(official, [true, true, false, false, false]);
     }
 
     /// 不认识的格式：报格式错误，不硬解。

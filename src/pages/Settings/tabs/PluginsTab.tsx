@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, Package, Puzzle, RefreshCw, Store } from "lucide-react";
+import { FolderOpen, Package, Puzzle, RefreshCw, ShieldAlert, Store } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -13,6 +13,7 @@ import {
   pluginsApi,
   type InstalledPlugin,
   type Market,
+  type OnlinePlugin,
   type OnlineVersion,
   type OpensIn,
 } from "../../../api/plugins";
@@ -22,10 +23,16 @@ import { logError } from "../../../lib/logger";
 import { HIGH_RISK, permissionKey } from "./pluginPermissions";
 import styles from "./PluginsTab.module.css";
 
+/** Where a plugin comes from. Third-party plugins and zips get a warning in the install dialog */
+type Source = "official" | "thirdParty" | "local";
+
 /** What the install dialog shows, and how to install once the user agrees. */
 interface InstallTarget {
   name: string;
   version: string;
+  source: Source;
+  /** From the online list. `null` for a zip */
+  author: string | null;
   permissions: string[];
   storageMb: number | null;
   /** `null` when the online list does not say */
@@ -39,13 +46,15 @@ const toChoice = (opensIn: OpensIn): OpensInChoice => opensIn ?? "hidden";
 const fromChoice = (choice: OpensInChoice): OpensIn => (choice === "hidden" ? null : choice);
 
 /** The install dialog for one version in the online list. */
-const onlineTarget = (id: string, name: string, v: OnlineVersion): InstallTarget => ({
-  name,
+const onlineTarget = (plugin: OnlinePlugin, v: OnlineVersion): InstallTarget => ({
+  name: plugin.name,
   version: v.version,
+  source: plugin.official ? "official" : "thirdParty",
+  author: plugin.author,
   permissions: v.permissions,
   storageMb: v.storage_mb,
   runsInBackground: null,
-  run: () => pluginsApi.installOnline(id, v.version, v.permissions, v.storage_mb),
+  run: () => pluginsApi.installOnline(plugin.id, v.version, v.permissions, v.storage_mb),
 });
 
 /** Settings → Plugins: installed plugins, the plugin market, and zips installed by hand.
@@ -60,6 +69,8 @@ export default function PluginsTab() {
   /** The plugin or zip with an action running; other actions wait for it */
   const [busy, setBusy] = useState<string | null>(null);
   const [installing, setInstalling] = useState<InstallTarget | null>(null);
+  /** The checkbox in the install dialog. Install is allowed only when it is checked */
+  const [agreed, setAgreed] = useState(false);
   const [uninstalling, setUninstalling] = useState<InstalledPlugin | null>(null);
   const [deleteData, setDeleteData] = useState(false);
 
@@ -131,6 +142,11 @@ export default function PluginsTab() {
     });
   };
 
+  const openInstall = (target: InstallTarget) => {
+    setAgreed(false);
+    setInstalling(target);
+  };
+
   const confirmInstall = () => {
     const target = installing;
     setInstalling(null);
@@ -166,7 +182,8 @@ export default function PluginsTab() {
           <EmptyHint message={t("plugins.installed.empty")} />
         ) : (
           market.installed.map((plugin) => {
-            const online = market.installedOnline.find((o) => o.id === plugin.id)?.versions ?? [];
+            const onlinePlugin = market.installedOnline.find((o) => o.id === plugin.id);
+            const online = onlinePlugin?.versions ?? [];
             // Versions come newest first, so the first update is the newest
             const update = online.find((v) => v.kind === "update");
             const versionOptions = online.map((v) => ({
@@ -229,18 +246,18 @@ export default function PluginsTab() {
                       disabled={working}
                       onChange={(version) => {
                         const v = online.find((o) => o.version === version);
-                        if (v && v.kind !== "same") {
-                          setInstalling(onlineTarget(plugin.id, plugin.name, v));
+                        if (onlinePlugin && v && v.kind !== "same") {
+                          openInstall(onlineTarget(onlinePlugin, v));
                         }
                       }}
                     />
                   ) : null}
-                  {update ? (
+                  {onlinePlugin && update ? (
                     <button
                       type="button"
                       className={styles.btnPrimary}
                       disabled={working}
-                      onClick={() => setInstalling(onlineTarget(plugin.id, plugin.name, update))}
+                      onClick={() => openInstall(onlineTarget(onlinePlugin, update))}
                     >
                       {t("plugins.installed.update", { version: update.version })}
                     </button>
@@ -286,7 +303,7 @@ export default function PluginsTab() {
                   type="button"
                   className={styles.btnPrimary}
                   disabled={busy !== null}
-                  onClick={() => setInstalling(onlineTarget(plugin.id, plugin.name, latest))}
+                  onClick={() => openInstall(onlineTarget(plugin, latest))}
                 >
                   {busy === key ? t("plugins.working") : t("plugins.market.install")}
                 </button>
@@ -342,9 +359,11 @@ export default function PluginsTab() {
                   disabled={busy !== null || !m || zip.error !== null}
                   onClick={() =>
                     m &&
-                    setInstalling({
+                    openInstall({
                       name: m.name,
                       version: m.version,
+                      source: "local",
+                      author: null,
                       permissions: m.permissions,
                       storageMb: m.storageMb,
                       runsInBackground: m.runsInBackground,
@@ -363,12 +382,19 @@ export default function PluginsTab() {
       <ConfirmDialog
         open={installing !== null}
         title={
-          installing
-            ? t("plugins.install.title", { name: installing.name, version: installing.version })
-            : ""
+          installing?.source === "thirdParty"
+            ? t("plugins.install.trustTitle", { author: installing.author })
+            : installing
+              ? t("plugins.install.title", { name: installing.name, version: installing.version })
+              : ""
         }
-        message={installing ? <InstallDetails target={installing} /> : null}
+        message={
+          installing ? (
+            <InstallDetails target={installing} agreed={agreed} onAgree={setAgreed} />
+          ) : null
+        }
         confirmLabel={t("plugins.install.confirm")}
+        confirmDisabled={!agreed}
         onConfirm={confirmInstall}
         onCancel={() => setInstalling(null)}
       />
@@ -395,32 +421,65 @@ export default function PluginsTab() {
   );
 }
 
-/** What the plugin may do, shown before the user agrees. High-risk permissions are marked. */
-function InstallDetails({ target }: { target: InstallTarget }) {
+/** What the plugin may do, shown before the user agrees. High-risk permissions are marked.
+ * Third-party plugins and zips also get a warning. */
+function InstallDetails({
+  target,
+  agreed,
+  onAgree,
+}: {
+  target: InstallTarget;
+  agreed: boolean;
+  onAgree: (agreed: boolean) => void;
+}) {
   const { t } = useTranslation();
+  const official = target.source === "official";
+  const nothingAsked =
+    target.permissions.length === 0 && target.storageMb === null && !target.runsInBackground;
   return (
     <div className={styles.details}>
-      {target.permissions.length === 0 ? (
+      {official ? null : (
+        <div className={styles.callout}>
+          <ShieldAlert size={16} className={styles.calloutIcon} aria-hidden />
+          <div>
+            <p>
+              {target.source === "thirdParty"
+                ? t("plugins.install.notOfficial", { name: target.name, author: target.author })
+                : t("plugins.install.notFromMarket", { name: target.name })}
+            </p>
+            <p className={styles.calloutRisk}>
+              {t("plugins.install.leakRisk")}
+              <br />
+              {t("plugins.install.trustOnly")}
+            </p>
+          </div>
+        </div>
+      )}
+      {nothingAsked ? (
         <p>{t("plugins.install.noPermissions")}</p>
       ) : (
-        <>
-          <p>{t("plugins.install.permissions")}</p>
+        <div className={styles.asks}>
+          <p className={styles.listLabel}>{t("plugins.install.permissions")}</p>
           <ul className={styles.permissions}>
             {target.permissions.map((p) => (
               <li key={p}>
-                {t(`plugins.permissions.${permissionKey(p)}`, { defaultValue: p })}
+                <span>{t(`plugins.permissions.${permissionKey(p)}`, { defaultValue: p })}</span>
                 {HIGH_RISK.has(p) ? (
                   <span className={styles.risk}>{t("plugins.install.highRisk")}</span>
                 ) : null}
               </li>
             ))}
+            {target.storageMb !== null ? (
+              <li>{t("plugins.install.storage", { mb: target.storageMb })}</li>
+            ) : null}
+            {target.runsInBackground ? <li>{t("plugins.install.background")}</li> : null}
           </ul>
-        </>
+        </div>
       )}
-      {target.storageMb !== null ? (
-        <p>{t("plugins.install.storage", { mb: target.storageMb })}</p>
-      ) : null}
-      {target.runsInBackground ? <p>{t("plugins.install.background")}</p> : null}
+      <label className={styles.consent}>
+        <input type="checkbox" checked={agreed} onChange={(e) => onAgree(e.target.checked)} />
+        <span>{official ? t("plugins.install.agree") : t("plugins.install.agreeRisk")}</span>
+      </label>
     </div>
   );
 }

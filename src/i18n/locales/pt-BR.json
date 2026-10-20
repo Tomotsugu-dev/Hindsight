@@ -1796,12 +1796,19 @@
     },
     "install": {
       "title": "Instalar {{name}} v{{version}}?",
-      "confirm": "Concordar e instalar",
-      "permissions": "Este plugin pede:",
+      "trustTitle": "Você confia em {{author}}?",
+      "notOfficial": "{{name}} não é um plugin oficial do Hindsight. O autor é {{author}}.",
+      "notFromMarket": "{{name}} não foi baixado da loja de plugins e não foi revisado pelo Hindsight.",
+      "leakRisk": "Este plugin pode causar vazamento de informações pessoais.",
+      "trustOnly": "Verifique com cuidado e instale apenas se você confia no autor.",
+      "confirm": "Confiar e instalar",
+      "permissions": "Este plugin vai pedir as seguintes permissões:",
       "noPermissions": "Este plugin não lê nenhum dado seu.",
       "highRisk": "Alto risco",
-      "storage": "Usa até {{mb}} MB de disco para os próprios dados.",
-      "background": "Fica rodando em segundo plano."
+      "storage": "Até {{mb}} MB de espaço em disco",
+      "background": "Fica rodando em segundo plano.",
+      "agree": "Ao marcar, você concorda em dar estas permissões ao plugin",
+      "agreeRisk": "Ao marcar, você declara estar ciente dos riscos acima e concorda em dar estas permissões ao plugin"
     },
     "uninstall": {
       "title": "Desinstalar {{name}}?",

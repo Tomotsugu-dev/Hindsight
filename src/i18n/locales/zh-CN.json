@@ -1793,12 +1793,19 @@
     },
     "install": {
       "title": "安装 {{name}} v{{version}}？",
-      "confirm": "同意并安装",
-      "permissions": "这个插件需要以下权限：",
+      "trustTitle": "要信任 {{author}} 吗？",
+      "notOfficial": "{{name}} 不是 Hindsight 官方的插件，作者是 {{author}}。",
+      "notFromMarket": "{{name}} 不是从插件市场下载的，没有经过 Hindsight 审核。",
+      "leakRisk": "此插件有可能造成个人信息泄漏等后果。",
+      "trustOnly": "请你仔细甄别，并只在你信任作者时安装。",
+      "confirm": "信任并安装",
+      "permissions": "此插件将申请以下权限：",
       "noPermissions": "这个插件不读取你的任何数据。",
       "highRisk": "高风险",
-      "storage": "最多占用 {{mb}} MB 磁盘空间存自己的数据。",
-      "background": "会一直在后台运行。"
+      "storage": "最多 {{mb}} MB 的磁盘空间占用",
+      "background": "会一直在后台运行。",
+      "agree": "勾选代表同意插件获取这些权限",
+      "agreeRisk": "勾选代表知悉上述风险，并同意插件获取这些权限"
     },
     "uninstall": {
       "title": "卸载 {{name}}？",

@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "primary" | "danger";
+  /** Grays out the confirm button, and Enter does nothing */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -23,6 +25,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   variant = "primary",
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -34,11 +37,11 @@ export function ConfirmDialog({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
-      if (e.key === "Enter") onConfirm();
+      if (e.key === "Enter" && !confirmDisabled) onConfirm();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onCancel, onConfirm]);
+  }, [open, onCancel, onConfirm, confirmDisabled]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(open, dialogRef);
@@ -74,6 +77,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`${styles.btn} ${variant === "danger" ? styles.btnDanger : styles.btnConfirm}`}
+            disabled={confirmDisabled}
             onClick={onConfirm}
             // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践（屏幕阅读器、键盘 user 都期望）
             // eslint-disable-next-line jsx-a11y/no-autofocus
