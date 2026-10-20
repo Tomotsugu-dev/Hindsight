@@ -59,11 +59,6 @@ flowchart LR
 - **Limits can only go up**: if a limit goes down, rows that already hold larger values can no longer be read or changed.
 - Plugin databases do not sync. They stay on this machine.
 
-### Known risks
-
-- Intermediate results, such as for sorting, write temp files to disk with no size limit. Only the run time limit bounds them.
-- One call has no hard memory limit. Only the other limits keep it down. A plugin that keeps calling can hold a few hundred MB all the time. Later, the forwarder will limit how often a plugin can call.
-
 ## Uninstalling
 
 1. Delete this plugin's row from the `plugins` table in one transaction.
