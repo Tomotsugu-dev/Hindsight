@@ -93,6 +93,98 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* Plugin market: two cards a row, cards in a row as tall as the tallest */
+.marketGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.marketCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.marketHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.marketIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.marketIcon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Same as the row icons */
+.marketIconFallback {
+  background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+  color: var(--color-accent);
+}
+
+.marketTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.marketName,
+.marketMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketName {
+  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+}
+
+.marketMeta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* At most two lines. It fills the free height, so the buttons in a row line up at the bottom */
+.marketDesc {
+  display: -webkit-box;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-regular);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.marketFoot {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Install dialog */
 .details {
   display: flex;

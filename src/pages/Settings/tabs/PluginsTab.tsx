@@ -283,28 +283,17 @@ export default function PluginsTab() {
         ) : market.downloadable.length === 0 ? (
           <EmptyHint message={t("plugins.market.empty")} />
         ) : (
-          market.downloadable.map((plugin) => {
-            const latest = plugin.versions[0];
-            const key = `install:${plugin.name}`;
-            return (
-              <Row
+          <div className={styles.marketGrid}>
+            {market.downloadable.map((plugin) => (
+              <MarketCard
                 key={plugin.id}
-                label={`${plugin.name}  v${latest.version}`}
-                description={`${plugin.author} · ${plugin.description}`}
-                icon={Puzzle}
-                iconSrc={plugin.icon_url ?? undefined}
-              >
-                <button
-                  type="button"
-                  className={styles.btnPrimary}
-                  disabled={busy !== null}
-                  onClick={() => openInstall(onlineTarget(plugin, latest))}
-                >
-                  {busy === key ? t("plugins.working") : t("plugins.market.install")}
-                </button>
-              </Row>
-            );
-          })
+                plugin={plugin}
+                working={busy === `install:${plugin.name}`}
+                disabled={busy !== null}
+                onInstall={() => openInstall(onlineTarget(plugin, plugin.versions[0]))}
+              />
+            ))}
+          </div>
         )}
       </Section>
 
@@ -413,6 +402,58 @@ export default function PluginsTab() {
         onCancel={() => setUninstalling(null)}
       />
     </>
+  );
+}
+
+/** One plugin in the market: its icon, name, latest version, author and description. */
+function MarketCard({
+  plugin,
+  working,
+  disabled,
+  onInstall,
+}: {
+  plugin: OnlinePlugin;
+  /** This plugin is being installed */
+  working: boolean;
+  disabled: boolean;
+  onInstall: () => void;
+}) {
+  const { t } = useTranslation();
+  const iconSrc = plugin.icon_url ?? null;
+  // Kept per URL, so a new icon is tried again
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const showImage = iconSrc !== null && iconSrc !== brokenSrc;
+  return (
+    <div className={styles.marketCard}>
+      <div className={styles.marketHead}>
+        <span className={`${styles.marketIcon} ${showImage ? "" : styles.marketIconFallback}`}>
+          {showImage ? (
+            // onError falls back to the puzzle icon when the image is missing
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+            <img src={iconSrc} alt="" onError={() => setBrokenSrc(iconSrc)} />
+          ) : (
+            <Puzzle size={18} strokeWidth={1.85} />
+          )}
+        </span>
+        <div className={styles.marketTitle}>
+          <span className={styles.marketName}>{plugin.name}</span>
+          <span className={styles.marketMeta}>
+            v{plugin.versions[0].version} · {plugin.author}
+          </span>
+        </div>
+      </div>
+      <p className={styles.marketDesc}>{plugin.description}</p>
+      <div className={styles.marketFoot}>
+        <button
+          type="button"
+          className={styles.btnPrimary}
+          disabled={disabled}
+          onClick={onInstall}
+        >
+          {working ? t("plugins.working") : t("plugins.market.install")}
+        </button>
+      </div>
+    </div>
   );
 }
 
