@@ -972,7 +972,6 @@ const ADD_IS_DEFAULT_NAME_SQL: &str = r#"
 /// v45: installed plugins, one row each. `permissions` is the permissions the user approved (a
 /// JSON array), not the ones the manifest asks for. `storage_mb` is the disk space the user
 /// approved, in MB, and NULL if the plugin asked for none. Only on this machine; not synced.
-/// `ui_location` 不加 CHECK：以后加新的页面位置不用迁移。
 const PLUGINS_TABLE_SQL: &str = r#"
     CREATE TABLE IF NOT EXISTS plugins (
         id                 TEXT PRIMARY KEY,
@@ -981,7 +980,12 @@ const PLUGINS_TABLE_SQL: &str = r#"
         enabled            INTEGER NOT NULL DEFAULT 1,
         permissions        TEXT NOT NULL DEFAULT '[]',
         storage_mb         INTEGER,
-        ui_location        TEXT NOT NULL,
+        has_page           INTEGER NOT NULL,
+        opens_in           TEXT,
+        window_x           INTEGER,
+        window_y           INTEGER,
+        window_width       INTEGER NOT NULL,
+        window_height      INTEGER NOT NULL,
         runs_in_background INTEGER NOT NULL,
         installed_at       TEXT NOT NULL
     );

@@ -19,19 +19,38 @@ pub struct Plugin {
     /// The disk space the user approved, in MB. `None` if the plugin asked for none; then it
     /// cannot use its own database
     pub storage_mb: Option<u32>,
-    /// Where the plugin page shows: `sidebar`, `window` or `none`
-    pub ui_location: String,
+    pub ui: UiSettings,
     pub runs_in_background: bool,
     pub installed_at: String,
 }
 
-const COLUMNS: &str = "id, name, version, enabled, permissions, ui_location, runs_in_background, \
-                       installed_at, storage_mb";
+/// How the plugin page shows. `has_page` comes from the package and is replaced on update.
+/// The other fields are the user's settings and are kept on update.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiSettings {
+    /// Whether the package has `ui/index.html`
+    pub has_page: bool,
+    /// Where the page opens: `main` in the main window, `window` in its own window. `None`: not
+    /// shown in the sidebar
+    pub opens_in: Option<String>,
+    /// Where the page's own window was last, in logical pixels. `None` if it was never opened
+    pub window_x: Option<i32>,
+    pub window_y: Option<i32>,
+    /// The size of the page's own window, in logical pixels. The manifest's size at install, and
+    /// the user's size once the user resizes it
+    pub window_width: u32,
+    pub window_height: u32,
+}
 
-/// Inserts a new plugin or updates an existing plugin's metadata.
+const COLUMNS: &str = "id, name, version, enabled, permissions, has_page, runs_in_background, \
+                       installed_at, storage_mb, opens_in, window_x, window_y, window_width, \
+                       window_height";
+
+/// Installs a plugin, or updates one that is already installed.
 ///
-/// Preserves the user's toggle state (`enabled`) and original `installed_at`
-/// timestamp when updating an already installed plugin.
+/// An update keeps what the user set: the on/off switch, the fields of [`UiSettings`] other than
+/// `has_page`, and the install time.
 pub async fn save(pool: &DbPool, plugin: Plugin) -> Result<()> {
     let permissions = serde_json::to_string(&plugin.permissions)?;
     pool.0
@@ -39,12 +58,12 @@ pub async fn save(pool: &DbPool, plugin: Plugin) -> Result<()> {
             conn.execute(
                 &format!(
                     "INSERT INTO plugins({COLUMNS})
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                      ON CONFLICT(id) DO UPDATE
                         SET name = excluded.name,
                             version = excluded.version,
                             permissions = excluded.permissions,
-                            ui_location = excluded.ui_location,
+                            has_page = excluded.has_page,
                             runs_in_background = excluded.runs_in_background,
                             storage_mb = excluded.storage_mb"
                 ),
@@ -54,10 +73,15 @@ pub async fn save(pool: &DbPool, plugin: Plugin) -> Result<()> {
                     plugin.version,
                     plugin.enabled,
                     permissions,
-                    plugin.ui_location,
+                    plugin.ui.has_page,
                     plugin.runs_in_background,
                     plugin.installed_at,
-                    plugin.storage_mb
+                    plugin.storage_mb,
+                    plugin.ui.opens_in,
+                    plugin.ui.window_x,
+                    plugin.ui.window_y,
+                    plugin.ui.window_width,
+                    plugin.ui.window_height
                 ],
             )
             .db()?;
@@ -146,10 +170,17 @@ fn from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Plugin> {
         permissions: serde_json::from_str(&permissions).map_err(|e| {
             rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
         })?,
-        ui_location: r.get(5)?,
         runs_in_background: r.get(6)?,
         installed_at: r.get(7)?,
         storage_mb: r.get(8)?,
+        ui: UiSettings {
+            has_page: r.get(5)?,
+            opens_in: r.get(9)?,
+            window_x: r.get(10)?,
+            window_y: r.get(11)?,
+            window_width: r.get(12)?,
+            window_height: r.get(13)?,
+        },
     })
 }
 
@@ -166,7 +197,14 @@ mod tests {
             enabled: true,
             permissions: vec!["stats.read".into(), "focus.changed".into()],
             storage_mb: Some(10),
-            ui_location: "sidebar".into(),
+            ui: UiSettings {
+                has_page: true,
+                opens_in: Some("main".into()),
+                window_x: None,
+                window_y: None,
+                window_width: 900,
+                window_height: 640,
+            },
             runs_in_background: true,
             installed_at: "2026-10-17T00:00:00+00:00".into(),
         }
@@ -194,31 +232,48 @@ mod tests {
         assert_eq!(get(&pool, "not-installed").await.unwrap(), None);
     }
 
-    /// 更新：名字、版本、权限、容量、页面位置、后台运行换成新的；用户关掉的开关和安装时间不变。
+    /// 更新：名字、版本、权限、容量、有没有页面、后台运行换成新的；用户设的开关、
+    /// 页面显示的其余几项，以及安装时间不变。
     #[tokio::test]
-    async fn update_keeps_switch_and_install_time() {
+    async fn update_keeps_what_the_user_set() {
         let pool = fresh_test_pool().await;
-        save(&pool, focus("0.1.0")).await.unwrap();
-        set_enabled(&pool, "hindsight-focus", false).await.unwrap();
+        let mut older = focus("0.1.0");
+        older.enabled = false;
+        older.ui = UiSettings {
+            has_page: true,
+            opens_in: Some("window".into()),
+            window_x: Some(-1200),
+            window_y: Some(80),
+            window_width: 400,
+            window_height: 700,
+        };
+        save(&pool, older.clone()).await.unwrap();
 
         let mut newer = focus("0.2.0");
         newer.name = "Focus Timer".into();
         newer.permissions.push("notifications".into());
         newer.storage_mb = Some(200);
-        newer.ui_location = "window".into();
+        newer.ui.has_page = false;
         newer.runs_in_background = false;
         newer.installed_at = "2026-10-20T00:00:00+00:00".into();
         save(&pool, newer.clone()).await.unwrap();
 
         let got = get(&pool, "hindsight-focus").await.unwrap().unwrap();
-        assert_eq!(got.name, "Focus Timer");
-        assert_eq!(got.version, "0.2.0");
-        assert_eq!(got.permissions, newer.permissions);
-        assert_eq!(got.storage_mb, Some(200));
-        assert_eq!(got.ui_location, "window");
-        assert!(!got.runs_in_background);
-        assert!(!got.enabled, "更新不能把用户关掉的插件重新打开");
-        assert_eq!(got.installed_at, "2026-10-17T00:00:00+00:00");
+        assert_eq!(
+            got,
+            Plugin {
+                name: newer.name,
+                version: newer.version,
+                permissions: newer.permissions,
+                storage_mb: newer.storage_mb,
+                ui: UiSettings {
+                    has_page: newer.ui.has_page,
+                    ..older.ui
+                },
+                runs_in_background: newer.runs_in_background,
+                ..older
+            }
+        );
     }
 
     /// 按 id 排序列出；卸载后不再出现，别的插件不受影响。

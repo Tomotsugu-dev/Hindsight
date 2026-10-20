@@ -18,19 +18,17 @@ erDiagram
     INTEGER enabled "1 on / 0 off"
     TEXT permissions "JSON array"
     INTEGER storage_mb "disk space in MB, NULL if none asked for"
-    TEXT ui_location "sidebar / window / none"
+    INTEGER has_page "has a page or not"
+    TEXT opens_in "main / window, NULL: not in the sidebar"
+    INTEGER window_x "position of its own window"
+    INTEGER window_y
+    INTEGER window_width "size of its own window"
+    INTEGER window_height
     INTEGER runs_in_background "runs in the background or not"
     TEXT installed_at "install time"
   }
 ```
 
-- `name`, `ui_location` and `runs_in_background` are copied from `manifest.json` at install time. At runtime the app reads only the table, not the manifest.
-- `name`: the name the plugin shows, used by the sidebar entry and the plugin list.
-- `ui_location`: where the plugin page shows:
-  - `sidebar`: adds an entry to the main window's sidebar
-  - `window`: opens a separate window when clicked
-  - `none`: no page
-- `runs_in_background`: whether the plugin runs in the background.
 - `permissions` and `storage_mb` hold what the user approved, not what the manifest asks for (see [① Installing plugins](install.md)).
 
 ## Each plugin's own database

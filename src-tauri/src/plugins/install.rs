@@ -8,7 +8,7 @@ use zip::ZipArchive;
 
 use crate::error::{Error, Result};
 use crate::plugins::manifest::{self, Manifest};
-use crate::repo::plugins::{self as repo, Plugin};
+use crate::repo::plugins::{self as repo, Plugin, UiSettings};
 use crate::storage::{utc_now_rfc3339, DbPool};
 
 /// Install, uninstall and leftover removal must not run at the same time, to avoid race
@@ -69,6 +69,7 @@ pub async fn install(
     let _lock = LOCK.lock().await;
     let mut archive = open(zip_path)?;
     let manifest = read_checked_manifest(&mut archive)?;
+    let has_page = archive.file_names().any(|n| n == "ui/index.html");
     let old = repo::get(pool, &manifest.id).await?;
     if old.as_ref().is_some_and(|p| p.version == manifest.version) {
         return Err(Error::PluginAlreadyInstalled(manifest.version));
@@ -95,6 +96,7 @@ pub async fn install(
     fs::create_dir_all(&plugin_dir)?;
     fs::rename(&tmp, &version_dir)?;
 
+    let window = manifest.window.unwrap_or(manifest::DEFAULT_WINDOW);
     repo::save(
         pool,
         Plugin {
@@ -104,7 +106,14 @@ pub async fn install(
             enabled: true,
             permissions: approved,
             storage_mb,
-            ui_location: manifest.ui_location,
+            ui: UiSettings {
+                has_page,
+                opens_in: manifest.opens_in,
+                window_x: None,
+                window_y: None,
+                window_width: window.width,
+                window_height: window.height,
+            },
             runs_in_background: manifest.runs_in_background,
             installed_at: utc_now_rfc3339(),
         },
@@ -239,15 +248,9 @@ fn read_checked_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
         ));
     }
     let manifest = manifest::parse(&json)?;
-    let has = |name: &str| archive.file_names().any(|n| n == name);
-    // If the plugin runs in the background or has a page, its entry file must be in the zip:
-    // the app starts `background.js` and opens `ui/index.html`. Other pages and scripts are
-    // loaded from these two.
-    if manifest.runs_in_background && !has("background.js") {
+    // A plugin that runs in the background must have `background.js` in the package.
+    if manifest.runs_in_background && !archive.file_names().any(|n| n == "background.js") {
         return Err(Error::PluginPackage("no background.js".into()));
-    }
-    if manifest.ui_location != "none" && !has("ui/index.html") {
-        return Err(Error::PluginPackage("no ui/index.html".into()));
     }
     Ok(manifest)
 }
@@ -344,6 +347,55 @@ mod tests {
         assert_eq!(row.version, "0.1.0");
         assert_eq!(row.permissions, ["stats.read"]);
         assert_eq!(row.storage_mb, Some(200));
+    }
+
+    /// 有没有页面看包里有没有 ui/index.html，更新时按新包重写。打开方式和窗口大小用清单里的；
+    /// 清单没写，打开方式是 None（侧边栏里不显示），窗口是 900×640。
+    #[tokio::test]
+    async fn ui_settings_come_from_the_package() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        install_focus(&pool, &dir, "0.1.0").await;
+        let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
+        assert!(!row.ui.has_page);
+        assert_eq!(row.ui.opens_in, None);
+        assert_eq!((row.ui.window_width, row.ui.window_height), (900, 640));
+
+        // 0.2.0 加了页面
+        let zip = dir.0.join("focus-0.2.0.zip");
+        write_zip(
+            &zip,
+            &[
+                ("manifest.json", &manifest_json("0.2.0")),
+                ("background.js", "x"),
+                ("ui/index.html", "x"),
+            ],
+        );
+        install(&pool, &dir.plugins(), &zip, vec![], None)
+            .await
+            .unwrap();
+        let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
+        assert!(row.ui.has_page);
+
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&manifest_json("0.1.0")).unwrap();
+        manifest["id"] = "pomodoro".into();
+        manifest["opens_in"] = "window".into();
+        manifest["window"] = serde_json::json!({ "width": 360, "height": 480 });
+        let zip = dir.0.join("pomodoro.zip");
+        write_zip(
+            &zip,
+            &[
+                ("manifest.json", &manifest.to_string()),
+                ("background.js", "x"),
+            ],
+        );
+        install(&pool, &dir.plugins(), &zip, vec![], None)
+            .await
+            .unwrap();
+        let row = repo::get(&pool, "pomodoro").await.unwrap().unwrap();
+        assert_eq!(row.ui.opens_in.as_deref(), Some("window"));
+        assert_eq!((row.ui.window_width, row.ui.window_height), (360, 480));
     }
 
     /// 容量是 0 或超过 10 GB：报清单错误，什么都不装，zip 不删。

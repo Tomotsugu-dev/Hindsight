@@ -18,19 +18,17 @@ erDiagram
     INTEGER enabled "1 开 / 0 关"
     TEXT permissions "JSON 数组"
     INTEGER storage_mb "磁盘容量 MB，没申请是 NULL"
-    TEXT ui_location "sidebar / window / none"
+    INTEGER has_page "有没有页面"
+    TEXT opens_in "main / window，NULL 是不在侧边栏显示"
+    INTEGER window_x "独立窗口的位置"
+    INTEGER window_y
+    INTEGER window_width "独立窗口的大小"
+    INTEGER window_height
     INTEGER runs_in_background "要不要在后台一直运行"
     TEXT installed_at "安装时间"
   }
 ```
 
-- `name`、`ui_location`、`runs_in_background` 安装时从 `manifest.json` 抄进来。运行时只查表，不再读 manifest。
-- `name`：插件显示的名字，侧边栏入口和插件列表用它。
-- `ui_location`：控制页面显示在哪：
-  - `sidebar` 在主窗口侧边栏加一个入口
-  - `window` 点开时弹出独立窗口
-  - `none` 没有页面
-- `runs_in_background`：程序是否在后台运行。
 - `permissions`、`storage_mb` 存的是用户同意的，不是清单申请的（见 [① 插件安装](install.md)）。
 
 ## 插件自己的数据库

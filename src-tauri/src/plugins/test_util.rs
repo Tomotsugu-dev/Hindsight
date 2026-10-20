@@ -9,7 +9,7 @@ use zip::ZipWriter;
 
 use crate::plugins::install;
 use crate::plugins::market::{InstallKind, OnlinePlugin, OnlineVersion};
-use crate::repo::plugins::Plugin;
+use crate::repo::plugins::{Plugin, UiSettings};
 use crate::storage::DbPool;
 
 /// 一个测试一个空文件夹，放 zip 和插件库，测完删掉。
@@ -45,7 +45,14 @@ pub fn plugin_row(id: &str, enabled: bool, runs_in_background: bool) -> Plugin {
         enabled,
         permissions: vec![],
         storage_mb: None,
-        ui_location: "sidebar".into(),
+        ui: UiSettings {
+            has_page: true,
+            opens_in: Some("main".into()),
+            window_x: None,
+            window_y: None,
+            window_width: 900,
+            window_height: 640,
+        },
         runs_in_background,
         installed_at: "2026-10-18T00:00:00+00:00".into(),
     }
@@ -64,7 +71,6 @@ pub fn manifest_json(version: &str) -> String {
         "name": "Focus",
         "version": version,
         "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category"],
-        "ui_location": "none",
         "runs_in_background": true
     })
     .to_string()

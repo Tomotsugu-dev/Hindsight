@@ -21,10 +21,30 @@ const PERMISSIONS: [(&str, Option<&str>); 11] = [
     ("focus.title", Some("focus.changed")),
 ];
 
-const UI_LOCATIONS: [&str; 3] = ["sidebar", "window", "none"];
-
 /// Maximum disk space a plugin can request: 10 GB.
 pub const MAX_STORAGE_MB: u32 = 10 * 1024;
+
+/// Where the page opens: `main` in the main window, `window` in its own window.
+const OPENS_IN: [&str; 2] = ["main", "window"];
+
+/// The window size a plugin can ask for, in logical pixels: each side at least 200, and at most
+/// the size of a 2K screen.
+const MIN_WINDOW_SIDE: u32 = 200;
+const MAX_WINDOW_WIDTH: u32 = 2560;
+const MAX_WINDOW_HEIGHT: u32 = 1440;
+
+/// Used when the manifest gives no window size.
+pub const DEFAULT_WINDOW: WindowSize = WindowSize {
+    width: 900,
+    height: 640,
+};
+
+/// A window size, in logical pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowSize {
+    pub width: u32,
+    pub height: u32,
+}
 
 /// The contents of manifest.json.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +58,12 @@ pub struct Manifest {
     /// Disk space (MB) the plugin requests for its own database.
     /// If omitted, this is `None` and the plugin cannot use its database.
     pub storage_mb: Option<u32>,
-    pub ui_location: String,
+    /// Where the page opens by default, see [`OPENS_IN`]. `None`: not shown in the sidebar, and
+    /// opened only from the settings
+    pub opens_in: Option<String>,
+    /// The window size the first time the page opens in its own window. `None`: install uses
+    /// [`DEFAULT_WINDOW`]
+    pub window: Option<WindowSize>,
     pub runs_in_background: bool,
 }
 
@@ -51,11 +76,22 @@ pub fn parse(json: &[u8]) -> Result<Manifest> {
     if manifest.name.trim().is_empty() {
         return Err(Error::PluginManifest("name is empty".into()));
     }
-    if !UI_LOCATIONS.contains(&manifest.ui_location.as_str()) {
-        return Err(Error::PluginManifest(format!(
-            "unknown ui_location {:?}",
-            manifest.ui_location
-        )));
+    if let Some(opens_in) = &manifest.opens_in {
+        if !OPENS_IN.contains(&opens_in.as_str()) {
+            return Err(Error::PluginManifest(format!(
+                "unknown opens_in {opens_in:?}"
+            )));
+        }
+    }
+    if let Some(WindowSize { width, height }) = manifest.window {
+        let width_range = MIN_WINDOW_SIDE..=MAX_WINDOW_WIDTH;
+        let height_range = MIN_WINDOW_SIDE..=MAX_WINDOW_HEIGHT;
+        if !width_range.contains(&width) || !height_range.contains(&height) {
+            return Err(Error::PluginManifest(format!(
+                "window must be {MIN_WINDOW_SIDE}x{MIN_WINDOW_SIDE} to \
+                 {MAX_WINDOW_WIDTH}x{MAX_WINDOW_HEIGHT}, not {width}x{height}"
+            )));
+        }
     }
     check_permissions(&manifest.permissions)?;
     if !manifest.runs_in_background && manifest.permissions.iter().any(|p| p == "focus.changed") {
@@ -153,7 +189,6 @@ mod tests {
             "name": "Focus",
             "version": "0.1.0",
             "permissions": ["stats.read", "stats.today", "focus.changed", "focus.category"],
-            "ui_location": "sidebar",
             "runs_in_background": true
         })
     }
@@ -172,11 +207,10 @@ mod tests {
         assert_eq!(m.name, "Focus");
         assert_eq!(m.version, "0.1.0");
         assert_eq!(json!(m.permissions), focus()["permissions"]);
-        assert_eq!(m.ui_location, "sidebar");
         assert!(m.runs_in_background);
     }
 
-    /// 不是 JSON、缺字段、名字为空、不认识的页面位置：都报清单错误。
+    /// 不是 JSON、缺字段、名字为空：都报清单错误。
     #[test]
     fn rejects_broken_manifest() {
         assert!(matches!(
@@ -190,10 +224,6 @@ mod tests {
 
         let mut v = focus();
         v["name"] = json!("  ");
-        assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
-
-        let mut v = focus();
-        v["ui_location"] = json!("dynamic-island");
         assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
     }
 
@@ -288,6 +318,54 @@ mod tests {
         for bad in [json!(0), json!(MAX_STORAGE_MB + 1), json!(-1), json!(1.5)] {
             let mut v = focus();
             v["storage_mb"] = bad.clone();
+            assert!(
+                matches!(parse_value(&v), Err(Error::PluginManifest(_))),
+                "{bad} 应该被拒绝"
+            );
+        }
+    }
+
+    /// 打开方式：不写是 None；main、window 通过；别的都拒绝。
+    #[test]
+    fn opens_in_rules() {
+        assert_eq!(parse_value(&focus()).unwrap().opens_in, None);
+        for ok in ["main", "window"] {
+            let mut v = focus();
+            v["opens_in"] = json!(ok);
+            assert_eq!(parse_value(&v).unwrap().opens_in.as_deref(), Some(ok));
+        }
+        for bad in ["sidebar", "hidden", ""] {
+            let mut v = focus();
+            v["opens_in"] = json!(bad);
+            assert!(
+                matches!(parse_value(&v), Err(Error::PluginManifest(_))),
+                "{bad:?} 应该被拒绝"
+            );
+        }
+    }
+
+    /// 窗口大小：不写是 None；200×200 到 2560×1440 之间通过；哪条边短于 200、宽过 2560、
+    /// 高过 1440、缺一条边都拒绝。
+    #[test]
+    fn window_rules() {
+        assert_eq!(parse_value(&focus()).unwrap().window, None);
+        for (width, height) in [(200, 200), (360, 480), (2560, 1440)] {
+            let mut v = focus();
+            v["window"] = json!({ "width": width, "height": height });
+            assert_eq!(
+                parse_value(&v).unwrap().window,
+                Some(WindowSize { width, height })
+            );
+        }
+        for bad in [
+            json!({ "width": 199, "height": 480 }),
+            json!({ "width": 360, "height": 199 }),
+            json!({ "width": 2561, "height": 480 }),
+            json!({ "width": 360, "height": 1441 }),
+            json!({ "width": 360 }),
+        ] {
+            let mut v = focus();
+            v["window"] = bad.clone();
             assert!(
                 matches!(parse_value(&v), Err(Error::PluginManifest(_))),
                 "{bad} 应该被拒绝"

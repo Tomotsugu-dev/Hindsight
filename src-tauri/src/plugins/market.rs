@@ -435,7 +435,7 @@ pub fn remove_partial_downloads(zips_dir: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use crate::plugins::test_util::{
-        focus_zip, install_focus, names, online_plugin, serve, write_zip, TempDir,
+        focus_zip, install_focus, names, online_plugin, plugin_row, serve, write_zip, TempDir,
     };
     use crate::repo::test_util::fresh_test_pool;
 
@@ -607,15 +607,8 @@ mod tests {
             repo::save(
                 &pool,
                 Plugin {
-                    id: id.into(),
-                    name: id.into(),
                     version: version.into(),
-                    enabled: true,
-                    permissions: vec![],
-                    storage_mb: None,
-                    ui_location: "none".into(),
-                    runs_in_background: true,
-                    installed_at: "2026-10-18T00:00:00+00:00".into(),
+                    ..plugin_row(id, true, true)
                 },
             )
             .await
