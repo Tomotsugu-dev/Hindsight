@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
 import { useSettings } from "./state/settings";
+import { usePluginsSeen } from "./state/pluginsSeen";
 import { api, type PromptLanguage } from "./api/hindsight";
 import {
   isDefaultSegments,
@@ -62,6 +63,7 @@ function i18nToPromptLang(lang: string): PromptLanguage {
 function App() {
   const { t, i18n } = useTranslation();
   const { settings, update } = useSettings();
+  const pluginsSeen = usePluginsSeen();
 
   // UI 语言切换时同步 AI 设置：
   //  1. promptLanguage —— 让 AISettings 提示词编辑器、DebugTab、后端 generate 的 prompt 都跟随 UI 语言
@@ -92,6 +94,11 @@ function App() {
   useEffect(() => {
     void api.setTrayLabels(t("tray.show"), t("tray.quit")).catch(() => {});
   }, [t, i18n.language]);
+
+  // 托盘、任务栏上的红点和侧边栏的「新」一起出现、一起消失
+  useEffect(() => {
+    void api.setPluginsBadge(!pluginsSeen).catch(() => {});
+  }, [pluginsSeen]);
 
   // <html lang> 跟随 UI 语言：① a11y / 屏幕阅读器；② CSS 据此按语言调侧栏宽度（中文标签短，收窄）
   useEffect(() => {
