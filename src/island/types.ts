@@ -18,16 +18,24 @@ export type Component =
 export type Content = {
   closed: { left: Component | null; right: Component | null };
   /** `null`: the island does not open */
-  open: { topRight: Text | null; left: Component[]; right: Component[] } | null;
+  open: {
+    topRight: Text | null;
+    left: Component[];
+    right: Component[];
+    /** 右边那一行下面，靠右 */
+    bottomRight: Text | null;
+  } | null;
 };
 
 /** In the page: from the top-left corner of the window, y growing downward */
 export type PageRect = { x: number; y: number; width: number; height: number };
 
-/** Where the content of each closed side goes. `topRight`：展开时右上角的字放在哪 */
+/** Where the content of each closed side goes. `topRight`：展开时右上角的字放在哪；`open`：展开
+ * 的岛在哪 */
 export type Layout = {
   notch: boolean;
   left: PageRect | null;
   right: PageRect | null;
   topRight: PageRect;
+  open: PageRect;
 };

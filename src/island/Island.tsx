@@ -10,6 +10,8 @@ import styles from "./Island.module.css";
 
 /** Space on each side of the closed content in a capsule */
 const CAPSULE_PADDING = 10;
+/** 右上角的字两边留的空，和 CSS 里 .topRight 的一样 */
+const TOP_RIGHT_PADDING = 12;
 
 /** A content with where Rust put its sides */
 type Placed = { content: Content; layout: Layout };
@@ -49,7 +51,8 @@ function Slot({ rect, className, children }: SlotProps) {
   );
 }
 
-/** 展开时下面的面板：左边一列，右边一行。量高度的那份和显示的那份是同一个组件 */
+/** 展开时下面的面板：左边一列；右边一行，下面可以再有一个小字。量高度的那份和显示的那份是同一个
+ * 组件 */
 function Panel({ open, now }: { open: Open; now: number }) {
   return (
     <div className={styles.panelBody}>
@@ -58,10 +61,13 @@ function Panel({ open, now }: { open: Open; now: number }) {
           <Block key={i} component={component} now={now} />
         ))}
       </div>
-      <div className={styles.row}>
-        {open.right.map((component, i) => (
-          <Block key={i} component={component} now={now} />
-        ))}
+      <div className={styles.right}>
+        <div className={styles.row}>
+          {open.right.map((component, i) => (
+            <Block key={i} component={component} now={now} />
+          ))}
+        </div>
+        {open.bottomRight ? <TextView text={open.bottomRight} /> : null}
       </div>
     </div>
   );
@@ -76,6 +82,7 @@ export function Island() {
   const now = useNow();
   const left = useRef<HTMLSpanElement>(null);
   const right = useRef<HTMLSpanElement>(null);
+  const topRightText = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,12 +121,22 @@ export function Island() {
   useLayoutEffect(() => {
     if (!content) return;
     let current = true;
+    const opened = () => {
+      const box = panel.current?.getBoundingClientRect();
+      if (!content.open || !box) return null;
+      const text = content.open.topRight ? topRightText.current?.getBoundingClientRect() : null;
+      return {
+        width: box.width,
+        height: box.height,
+        topRight: text ? text.width + 2 * TOP_RIGHT_PADDING : null,
+      };
+    };
     void document.fonts.ready
       .then(() =>
         invoke<Layout | null>("island_measured", {
           left: widthOf(left.current, content.closed.left),
           right: widthOf(right.current, content.closed.right),
-          panel: content.open ? (panel.current?.getBoundingClientRect().height ?? null) : null,
+          panel: opened(),
         }),
       )
       .then((layout) => {
@@ -149,7 +166,10 @@ export function Island() {
         <span ref={right}>
           {content?.closed.right ? <Side component={content.closed.right} now={now} /> : null}
         </span>
-        {/* 和窗口一样宽，量出展开面板的高度 */}
+        <span ref={topRightText}>
+          {content?.open?.topRight ? <TextView text={content.open.topRight} /> : null}
+        </span>
+        {/* 不折行时多宽多高，最宽到窗口那么宽 */}
         <div ref={panel} className={styles.measurePanel}>
           {content?.open ? <Panel open={content.open} now={now} /> : null}
         </div>
@@ -171,7 +191,14 @@ export function Island() {
         </Slot>
       ) : null}
       {drawn?.content.open ? (
-        <div className={styles.panel} style={{ top: drawn.layout.topRight.height }}>
+        <div
+          className={styles.panel}
+          style={{
+            left: drawn.layout.open.x,
+            width: drawn.layout.open.width,
+            top: drawn.layout.topRight.height,
+          }}
+        >
           <Panel open={drawn.content.open} now={now} />
         </div>
       ) : null}

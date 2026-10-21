@@ -5,7 +5,7 @@
 use tauri::{AppHandle, State};
 
 use crate::island::content::Content;
-use crate::island::{self, Layout};
+use crate::island::{self, Layout, PanelSize};
 use crate::plugins;
 use crate::storage::DbPool;
 
@@ -20,7 +20,7 @@ pub fn island_content() -> Option<Content> {
 pub fn island_measured(
     left: Option<f64>,
     right: Option<f64>,
-    panel: Option<f64>,
+    panel: Option<PanelSize>,
 ) -> Option<Layout> {
     island::measured(left, right, panel)
 }

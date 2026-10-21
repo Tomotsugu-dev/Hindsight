@@ -51,6 +51,8 @@ pub struct OpenContent {
     pub top_right: Option<Text>,
     pub left: Vec<Component>,
     pub right: Vec<Component>,
+    /// 右边那一行下面，靠右
+    pub bottom_right: Option<Text>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -166,6 +168,7 @@ struct RawOpen {
     left: Vec<Value>,
     #[serde(default)]
     right: Vec<Value>,
+    bottom_right: Option<Value>,
 }
 
 /// Where a component is: the rules differ
@@ -238,15 +241,7 @@ fn open(raw: RawOpen) -> Result<Option<OpenContent>, Error> {
             ));
         }
     }
-    let top_right = match raw.top_right {
-        Some(value) => component(value, "open.topRight", Place::Open)?,
-        None => None,
-    };
-    let top_right = match top_right {
-        Some(Component::Text(text)) if text.size == Size::Small => Some(text),
-        Some(_) => return Err(invalid("open.topRight", "only small text can go here")),
-        None => None,
-    };
+    let top_right = small_text(raw.top_right, "open.topRight")?;
     let list = |values: Vec<Value>, side: &str| -> Result<Vec<Component>, Error> {
         let mut components = Vec::new();
         for (i, value) in values.into_iter().enumerate() {
@@ -256,14 +251,28 @@ fn open(raw: RawOpen) -> Result<Option<OpenContent>, Error> {
     };
     let left = list(raw.left, "left")?;
     let right = list(raw.right, "right")?;
-    if top_right.is_none() && left.is_empty() && right.is_empty() {
+    let bottom_right = small_text(raw.bottom_right, "open.bottomRight")?;
+    if top_right.is_none() && left.is_empty() && right.is_empty() && bottom_right.is_none() {
         return Ok(None);
     }
     Ok(Some(OpenContent {
         top_right,
         left,
         right,
+        bottom_right,
     }))
+}
+
+/// 读只能放一个小字的地方：`open.topRight`、`open.bottomRight`。不认识的组件返回 `None`。
+fn small_text(value: Option<Value>, path: &str) -> Result<Option<Text>, Error> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    match component(value, path, Place::Open)? {
+        Some(Component::Text(text)) if text.size == Size::Small => Ok(Some(text)),
+        Some(_) => Err(invalid(path, "only small text can go here")),
+        None => Ok(None),
+    }
 }
 
 /// Reads one component and checks it for where it is. Returns `None` for an unknown component.
@@ -541,10 +550,15 @@ mod tests {
             "open": {
                 "topRight": {
                     "type": "text",
-                    "text": ["分心 ", { "text": "3", "color": "#f87171", "bold": true }, " 次"]
+                    "text": [{ "text": "工作中", "bold": true }, { "text": " · Code", "dim": true }]
                 },
                 "left": [
-                    { "type": "text", "text": "2:40", "sub": "/ 4:00", "size": "large" },
+                    {
+                        "type": "text",
+                        "text": [{ "text": "2:40", "bold": true }],
+                        "sub": "/ 6:00",
+                        "size": "large"
+                    },
                     {
                         "type": "cells",
                         "colors": ["#a78bfa", "#a78bfa", "#f87171", null, null],
@@ -552,15 +566,32 @@ mod tests {
                         "columns": 15
                     }
                 ],
-                "right": [timer, { "type": "button", "id": "pause", "icon": "Pause" }]
+                "right": [timer, { "type": "button", "id": "pause", "icon": "Pause" }],
+                "bottomRight": {
+                    "type": "text",
+                    "text": ["分心 ", { "text": "3", "color": "#f87171", "bold": true }, " 次"]
+                }
             }
         }))
         .unwrap();
         assert!(content.has_button());
         let open = content.open.unwrap();
+        assert_eq!(
+            open.left[0],
+            Component::Text(Text {
+                text: vec![Run {
+                    text: "2:40".into(),
+                    bold: true,
+                    ..Run::default()
+                }],
+                sub: Some("/ 6:00".into()),
+                size: Size::Large,
+            })
+        );
+        assert_eq!(open.right.len(), 2);
         // 字符串段是不带样式的一段
         assert_eq!(
-            open.top_right.unwrap().text,
+            open.bottom_right.unwrap().text,
             vec![
                 run("分心 "),
                 Run {
@@ -573,12 +604,12 @@ mod tests {
             ]
         );
         assert_eq!(
-            open.left[0],
-            Component::Text(Text {
-                text: vec![run("2:40")],
-                sub: Some("/ 4:00".into()),
-                size: Size::Large,
-            })
+            open.top_right.unwrap().text[1],
+            Run {
+                text: " · Code".into(),
+                dim: true,
+                ..Run::default()
+            }
         );
     }
 
@@ -656,15 +687,26 @@ mod tests {
     }
 
     #[test]
-    fn top_right_takes_only_small_text() {
-        for component in [
-            icon(),
-            json!({ "type": "text", "text": "2:40", "size": "large" }),
-        ] {
-            assert_eq!(
-                error(with_open(json!({ "topRight": component }))),
-                "open.topRight: only small text can go here"
-            );
+    fn the_top_right_and_the_bottom_right_take_only_small_text() {
+        for place in ["topRight", "bottomRight"] {
+            for component in [
+                icon(),
+                json!({ "type": "text", "text": "2:40", "size": "large" }),
+            ] {
+                assert_eq!(
+                    error(with_open(json!({ place: component }))),
+                    format!("open.{place}: only small text can go here")
+                );
+            }
+            // 只放了这一处，展开时也有东西
+            let content = Content::parse(with_open(
+                json!({ place: { "type": "text", "text": "分心 3 次" } }),
+            ))
+            .unwrap();
+            assert!(content.open.is_some());
+            // 不认识的组件跳过
+            let content = Content::parse(with_open(json!({ place: { "type": "chart" } }))).unwrap();
+            assert_eq!(content.open, None);
         }
     }
 
