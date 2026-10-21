@@ -555,7 +555,7 @@ mod tests {
                 "left": [
                     {
                         "type": "text",
-                        "text": [{ "text": "2:40", "color": "#34d399", "bold": true }],
+                        "text": [{ "text": "2:40", "bold": true }],
                         "sub": "/ 6:00",
                         "size": "large"
                     },
@@ -581,7 +581,6 @@ mod tests {
             Component::Text(Text {
                 text: vec![Run {
                     text: "2:40".into(),
-                    color: Some("#34d399".into()),
                     bold: true,
                     ..Run::default()
                 }],
