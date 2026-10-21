@@ -809,6 +809,8 @@ export const api = {
   /** 把托盘菜单文案同步成当前 UI 语言（show=显示主窗口 / quit=退出 的译文） */
   setTrayLabels: (show: string, quit: string) =>
     invoke<void>("set_tray_labels", { show, quit }),
+  /** 加上或去掉托盘、任务栏上的红点 */
+  setPluginsBadge: (show: boolean) => invoke<void>("set_plugins_badge", { show }),
   getDayHours: (dayOffset: number, deviceId?: string) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>
