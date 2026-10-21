@@ -1,12 +1,14 @@
 //! 哪个插件占着岛：最后调 `island.show` 的那个。它撤下内容，或者被停用、卸载以后，前一个还没撤
-//! 的插件回到岛上。
+//! 的插件回到岛上。岛被点了，交给占着岛的插件。
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use tauri::AppHandle;
 
 use super::api::has_permission;
-use crate::island::content::Content;
+use super::{events, pages};
+use crate::error::Result;
+use crate::island::content::{Component, Content};
 use crate::repo::plugins as repo;
 use crate::storage::DbPool;
 
@@ -30,6 +32,13 @@ impl Queue {
     /// 返回岛上的内容。
     pub fn on_island(&self) -> Option<&Content> {
         self.shown.last().map(|(_, content)| content)
+    }
+
+    /// 返回占着岛的插件，和它的内容。
+    pub fn owner(&self) -> Option<(&str, &Content)> {
+        self.shown
+            .last()
+            .map(|(id, content)| (id.as_str(), content))
     }
 
     /// 把插件 `plugin_id` 的内容放到最后，让它占着岛。
@@ -95,6 +104,41 @@ pub async fn refresh(app: &AppHandle, pool: &DbPool) {
     }
 }
 
+/// 岛被点了：`button` 是被点的按钮的 `id`，点在按钮以外是 `None`。
+///
+/// - 点了按钮：占着岛的插件收到 `island.clicked`；
+/// - 点在别处：在单独的窗口里打开它的页面。岛在主窗口外面，主窗口可能已经关了。
+///
+/// # Errors
+///
+/// - 插件没有页面：[`crate::error::Error::PluginNoPage`]
+pub async fn clicked(app: &AppHandle, pool: &DbPool, button: Option<String>) -> Result<()> {
+    // 先取出来再放开锁：打开窗口要等数据库
+    let Some((plugin_id, content)) = lock()
+        .owner()
+        .map(|(id, content)| (id.to_string(), content.clone()))
+    else {
+        return Ok(());
+    };
+    match button {
+        // 点下去的时候，岛上可能刚换了内容：只认现在岛上有的按钮
+        Some(button) if has_button(&content, &button) => {
+            events::island::clicked(app, &plugin_id, button);
+            Ok(())
+        }
+        Some(_) => Ok(()),
+        None => pages::open_window(app, pool, &plugin_id).await,
+    }
+}
+
+fn has_button(content: &Content, id: &str) -> bool {
+    content
+        .open
+        .iter()
+        .flat_map(|open| open.left.iter().chain(&open.right))
+        .any(|component| matches!(component, Component::Button(button) if button.id == id))
+}
+
 fn lock() -> MutexGuard<'static, Queue> {
     // 中毒了照样用：队列的每次改动都不会停在一半
     QUEUE.lock().unwrap_or_else(PoisonError::into_inner)
@@ -124,6 +168,7 @@ mod tests {
         assert!(queue.show("focus", content("25:00")));
         assert!(queue.show("water", content("喝水")));
         assert_eq!(queue.on_island(), Some(&content("喝水")));
+        assert_eq!(queue.owner().map(|(id, _)| id), Some("water"));
         // 前一个插件更新内容，又回到岛上
         assert!(queue.show("focus", content("24:00")));
         assert_eq!(queue.on_island(), Some(&content("24:00")));
@@ -154,6 +199,18 @@ mod tests {
         // 再交一遍同样的内容
         assert!(!queue.show("water", content("喝水")));
         assert_eq!(queue.on_island(), Some(&content("喝水")));
+    }
+
+    #[test]
+    fn a_click_counts_only_buttons_on_the_island() {
+        let content = Content::parse(json!({
+            "closed": { "right": { "type": "text", "text": "25:00" } },
+            "open": { "right": [{ "type": "button", "id": "pause", "icon": "Pause" }] }
+        }))
+        .unwrap();
+        assert!(has_button(&content, "pause"));
+        // 换内容之前那份里的按钮
+        assert!(!has_button(&content, "stop"));
     }
 
     #[test]
