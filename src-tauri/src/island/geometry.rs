@@ -6,7 +6,7 @@
 
 use super::PanelSize;
 
-/// How far the closed island reaches past the notch on each side
+/// The most the closed island reaches past the notch on each side
 const EAR: f64 = 90.0;
 /// 展开的岛最宽多少。内容按上限放满时要这么宽：刘海屏上右上角 20 宽的字放在刘海右边
 const MAX_OPEN_WIDTH: f64 = 520.0;
@@ -91,7 +91,10 @@ pub fn open(screen: &Screen, closed: &Closed, panel: &PanelSize) -> Rect {
         (Some(text), None) => text,
         (None, _) => 0.0,
     };
-    let closed_width = closed.bounds().map_or(0.0, |bounds| bounds.width);
+    // 刘海两边的耳朵各按内容宽，收起的形状不一定居中：要盖住它离中线远的那边
+    let closed_width = closed.bounds().map_or(0.0, |bounds| {
+        2.0 * (center - bounds.x).max(bounds.right() - center)
+    });
     let width = panel
         .width
         .max(top_right)
@@ -117,8 +120,8 @@ fn strip(screen: &Screen) -> f64 {
 /// The closed island.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Closed {
-    /// Around the notch: the notch and an ear on each side
-    Notch(Rect),
+    /// 包着刘海：刘海加两边的耳朵。`left`、`right` 是两边耳朵的宽，没有内容的一边是 0
+    Notch { rect: Rect, left: f64, right: f64 },
     /// Two capsules as wide as their content; `None` on a side with nothing in it
     Floating {
         left: Option<Rect>,
@@ -131,18 +134,26 @@ impl Closed {
     ///
     /// - `screen`: the main screen
     /// - `left`, `right`: the widths of the content on each side, measured by the page. `None` for
-    ///   a side with nothing in it. Not used with a notch
+    ///   a side with nothing in it
     pub fn new(screen: &Screen, left: Option<f64>, right: Option<f64>) -> Self {
         let window = window(screen);
         let height = strip(screen);
         if let Some(notch) = &screen.notch {
-            let width = notch.width + 2.0 * EAR;
-            return Closed::Notch(Rect {
-                x: window.x + (window.width - width) / 2.0,
-                y: window.top() - height,
-                width,
-                height,
-            });
+            // 耳朵和胶囊一样最窄是圆，最宽 EAR
+            let ear = |width: Option<f64>| width.map_or(0.0, |width| width.max(height).min(EAR));
+            let (left, right) = (ear(left), ear(right));
+            // 刘海在屏幕正中。窗口取整以后可能偏半个点，不按它算
+            let x = screen.frame.x + (screen.frame.width - notch.width) / 2.0 - left;
+            return Closed::Notch {
+                rect: Rect {
+                    x,
+                    y: window.top() - height,
+                    width: left + notch.width + right,
+                    height,
+                },
+                left,
+                right,
+            };
         }
         // At its narrowest a capsule is a circle, never narrower than it is tall. At its widest it
         // is half the island
@@ -171,11 +182,14 @@ impl Closed {
     /// Returns where the content of each side goes: beside the notch, or in the capsules.
     pub fn sides(&self) -> (Option<Rect>, Option<Rect>) {
         match *self {
-            Closed::Notch(rect) => (
-                Some(Rect { width: EAR, ..rect }),
-                Some(Rect {
-                    x: rect.right() - EAR,
-                    width: EAR,
+            Closed::Notch { rect, left, right } => (
+                (left > 0.0).then_some(Rect {
+                    width: left,
+                    ..rect
+                }),
+                (right > 0.0).then_some(Rect {
+                    x: rect.right() - right,
+                    width: right,
                     ..rect
                 }),
             ),
@@ -199,7 +213,7 @@ impl Closed {
     /// 右上角的字最左从哪里开始：刘海右边，或者左边胶囊右边。`None`：左边没有胶囊。
     fn top_right_start(&self) -> Option<f64> {
         match *self {
-            Closed::Notch(rect) => Some(rect.right() - EAR),
+            Closed::Notch { rect, right, .. } => Some(rect.right() - right),
             Closed::Floating { left, .. } => left.map(|left| left.right()),
         }
     }
@@ -207,7 +221,7 @@ impl Closed {
     /// Returns the shapes, from left to right.
     pub fn shapes(&self) -> Vec<Rect> {
         match *self {
-            Closed::Notch(rect) => vec![rect],
+            Closed::Notch { rect, .. } => vec![rect],
             Closed::Floating { left, right } => left.into_iter().chain(right).collect(),
         }
     }
@@ -280,13 +294,20 @@ mod tests {
 
     #[test]
     fn wraps_the_notch() {
-        // 收起：刘海加两边各 90，贴着屏幕顶边居中；用不到内容宽度
+        // 收起：刘海在 656 到 856，左边伸出 40、右边 60，贴着屏幕顶边
         let closed = Closed::new(&built_in(), Some(40.0), Some(60.0));
-        assert_eq!(closed, Closed::Notch(rect(566.0, 950.0, 380.0, 32.0)));
-        // 展开：面板比收起窄时和收起一样宽；高是刘海加面板：982 - 112 = 870
+        assert_eq!(
+            closed,
+            Closed::Notch {
+                rect: rect(616.0, 950.0, 300.0, 32.0),
+                left: 40.0,
+                right: 60.0,
+            }
+        );
+        // 展开：居中，盖住收起时离中线 756 远的右边 916：宽 2 * 160；高是刘海加面板：982 - 112 = 870
         assert_eq!(
             open(&built_in(), &closed, &panel(300.0, 80.0, None)),
-            rect(566.0, 870.0, 380.0, 112.0)
+            rect(596.0, 870.0, 320.0, 112.0)
         );
         // 面板宽 450：还在屏幕正中，756 - 225 = 531
         assert_eq!(
@@ -363,10 +384,14 @@ mod tests {
 
     #[test]
     fn the_content_goes_beside_the_notch() {
-        // 刘海在 656 到 856 之间，两边的内容各占 90
-        let (left, right) = Closed::new(&built_in(), None, None).sides();
-        assert_eq!(left, Some(rect(566.0, 950.0, 90.0, 32.0)));
+        // 刘海在 656 到 856 之间。只放图标的一边和刘海一样高，最窄是圆；内容宽的一边最多伸出 90
+        let (left, right) = Closed::new(&built_in(), Some(0.0), Some(500.0)).sides();
+        assert_eq!(left, Some(rect(624.0, 950.0, 32.0, 32.0)));
         assert_eq!(right, Some(rect(856.0, 950.0, 90.0, 32.0)));
+        // 没有内容的一边不伸出去
+        let closed = Closed::new(&built_in(), None, Some(70.0));
+        assert_eq!(closed.sides().0, None);
+        assert_eq!(closed.shapes()[0], rect(656.0, 950.0, 270.0, 32.0));
         // 没有刘海时，内容就在胶囊里
         let closed = Closed::new(&external(), None, Some(60.0));
         assert_eq!(closed.sides(), (None, Some(closed.shapes()[0])));

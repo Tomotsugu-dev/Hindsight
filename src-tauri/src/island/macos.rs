@@ -374,7 +374,7 @@ impl Island {
     fn draw(&self, animated: bool) {
         let window = geometry::window(&self.screen);
         let closed = self.closed();
-        let notch = matches!(closed, Closed::Notch(_));
+        let notch = matches!(closed, Closed::Notch { .. });
         let shapes = closed.shapes();
         CATransaction::begin();
         if animated {
@@ -441,7 +441,7 @@ impl Island {
         let closed = self.closed();
         let (left, right) = closed.sides();
         Layout {
-            notch: matches!(closed, Closed::Notch(_)),
+            notch: matches!(closed, Closed::Notch { .. }),
             left: left.map(|rect| page_rect(window, rect)),
             right: right.map(|rect| page_rect(window, rect)),
             top_right: page_rect(window, closed.top_right(&self.screen, self.opened())),
