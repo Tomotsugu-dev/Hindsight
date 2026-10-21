@@ -7,6 +7,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::error::Error;
+use crate::island::content::Content;
 use crate::plugins::api;
 use crate::plugins::background_window::{self, BackgroundPlugin};
 use crate::plugins::icon;
@@ -189,12 +190,17 @@ pub async fn plugin_call(
             .show()
             .map_err(|e| Error::Other(format!("notification: {e}")))
     };
+    let island = |content: Option<Content>| match content {
+        Some(content) => island::show(&app, &plugin_id, content),
+        None => island::hide(&app, &plugin_id),
+    };
     let plugins_dir = plugins_dir();
     let host = api::Host {
         pool: &pool,
         plugins_dir: &plugins_dir,
         self_id: crate::device::self_id()?,
         notify,
+        island,
     };
     api::call(host, &plugin_id, &method, params, device)
         .await
