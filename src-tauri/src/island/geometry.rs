@@ -133,6 +133,21 @@ impl Closed {
         }
     }
 
+    /// Returns where the content of each side goes: beside the notch, or in the capsules.
+    pub fn sides(&self) -> (Option<Rect>, Option<Rect>) {
+        match *self {
+            Closed::Notch(rect) => (
+                Some(Rect { width: EAR, ..rect }),
+                Some(Rect {
+                    x: rect.right() - EAR,
+                    width: EAR,
+                    ..rect
+                }),
+            ),
+            Closed::Floating { left, right } => (left, right),
+        }
+    }
+
     /// Returns the shapes, from left to right.
     pub fn shapes(&self) -> Vec<Rect> {
         match *self {
@@ -208,6 +223,17 @@ mod tests {
             Closed::new(&built_in(), Some(40.0), Some(60.0)),
             Closed::Notch(rect(566.0, 950.0, 380.0, 32.0))
         );
+    }
+
+    #[test]
+    fn the_content_goes_beside_the_notch() {
+        // 刘海在 656 到 856 之间，两边的内容各占 90
+        let (left, right) = Closed::new(&built_in(), None, None).sides();
+        assert_eq!(left, Some(rect(566.0, 950.0, 90.0, 32.0)));
+        assert_eq!(right, Some(rect(856.0, 950.0, 90.0, 32.0)));
+        // 没有刘海时，内容就在胶囊里
+        let closed = Closed::new(&external(), None, Some(60.0));
+        assert_eq!(closed.sides(), (None, Some(closed.shapes()[0])));
     }
 
     #[test]
