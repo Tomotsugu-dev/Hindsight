@@ -1,0 +1,209 @@
+/* The island is always black: Rust's mask shows only its shapes, and the text is white or grey
+   so it is always easy to read */
+.island {
+  position: fixed;
+  inset: 0;
+  color: #fff;
+  font:
+    500 12px/1.2 -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Off screen, at natural width: where the closed sides are measured */
+.measure {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.measure > span {
+  position: absolute;
+  display: inline-flex;
+}
+
+.slot {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 160ms ease-out;
+}
+
+.open .closedOnly {
+  opacity: 0;
+}
+
+.topRight {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 12px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.open .topRight {
+  opacity: 1;
+  transition-delay: 90ms;
+}
+
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 18px 14px;
+  box-sizing: border-box;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 160ms ease-out,
+    transform 200ms ease-out;
+  pointer-events: none;
+}
+
+.open .panel {
+  opacity: 1;
+  transform: none;
+  transition-delay: 80ms;
+  pointer-events: auto;
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.large {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sub {
+  margin-left: 4px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.large .sub {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Opacity, not a grey: a run can have its own color and still be dim */
+.dim {
+  opacity: 0.55;
+}
+
+.bold {
+  font-weight: 700;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ring {
+  flex: none;
+  transform: rotate(-90deg);
+}
+
+.ringTrack {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+}
+
+.bigRing {
+  display: grid;
+  place-items: center;
+}
+
+.bigRing > * {
+  grid-area: 1 / 1;
+}
+
+.ringText {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cells {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.current {
+  outline: 1.5px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 1px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: inherit;
+  cursor: default;
+}
+
+.iconOnly {
+  width: 32px;
+  padding: 0;
+}
+
+.button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.button:active {
+  background: rgba(255, 255, 255, 0.3);
+}
