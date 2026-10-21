@@ -17,8 +17,12 @@ pub fn island_content() -> Option<Content> {
 
 /// 见 [`island::measured`]。
 #[tauri::command]
-pub fn island_measured(left: Option<f64>, right: Option<f64>) -> Option<Layout> {
-    island::measured(left, right)
+pub fn island_measured(
+    left: Option<f64>,
+    right: Option<f64>,
+    panel: Option<f64>,
+) -> Option<Layout> {
+    island::measured(left, right, panel)
 }
 
 /// 见 [`island::ready`]。

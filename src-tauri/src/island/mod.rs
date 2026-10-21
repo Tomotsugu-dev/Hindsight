@@ -21,10 +21,13 @@ pub use other::{content, hide, measured, ready, show};
 
 /// Where the content of each closed side goes in the page.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Layout {
     pub notch: bool,
     pub left: Option<PageRect>,
     pub right: Option<PageRect>,
+    /// 展开时右上角的字放在哪
+    pub top_right: PageRect,
 }
 
 /// A rectangle in the page: in logical pixels, from the top-left corner of the window, with y

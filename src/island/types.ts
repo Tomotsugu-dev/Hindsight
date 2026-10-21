@@ -24,5 +24,10 @@ export type Content = {
 /** In the page: from the top-left corner of the window, y growing downward */
 export type PageRect = { x: number; y: number; width: number; height: number };
 
-/** Where the content of each closed side goes */
-export type Layout = { notch: boolean; left: PageRect | null; right: PageRect | null };
+/** Where the content of each closed side goes. `topRight`：展开时右上角的字放在哪 */
+export type Layout = {
+  notch: boolean;
+  left: PageRect | null;
+  right: PageRect | null;
+  topRight: PageRect;
+};

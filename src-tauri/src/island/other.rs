@@ -13,7 +13,7 @@ pub fn content() -> Option<Content> {
     None
 }
 
-pub fn measured(_left: Option<f64>, _right: Option<f64>) -> Option<Layout> {
+pub fn measured(_left: Option<f64>, _right: Option<f64>, _panel: Option<f64>) -> Option<Layout> {
     None
 }
 

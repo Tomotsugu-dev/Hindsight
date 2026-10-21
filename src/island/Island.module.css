@@ -28,6 +28,14 @@
   display: inline-flex;
 }
 
+/* 和窗口一样宽，量出来的高度和显示时一样 */
+.measurePanel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+}
+
 .slot {
   position: absolute;
   display: flex;
@@ -42,17 +50,12 @@
   opacity: 0;
 }
 
+/* 展开时才显示 */
 .topRight {
-  position: absolute;
-  display: flex;
-  align-items: center;
   justify-content: flex-end;
   padding: 0 12px;
   box-sizing: border-box;
-  white-space: nowrap;
-  overflow: hidden;
   opacity: 0;
-  transition: opacity 160ms ease-out;
 }
 
 .open .topRight {
@@ -60,16 +63,11 @@
   transition-delay: 90ms;
 }
 
+/* 高度跟内容走：Rust 按量出来的高度画展开的岛 */
 .panel {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 18px 14px;
-  box-sizing: border-box;
   opacity: 0;
   transform: translateY(-6px);
   transition:
@@ -85,12 +83,26 @@
   pointer-events: auto;
 }
 
+.panelBody {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 18px 14px;
+  box-sizing: border-box;
+}
+
 .column {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
+}
+
+/* 右边一行放不下时，左边这列让出来：字出省略号，格子变小 */
+.column > * {
+  max-width: 100%;
 }
 
 .row {
@@ -98,6 +110,13 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.small,
+.large {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .small {
@@ -163,8 +182,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 格子最大 10px，不跟着面板变宽：三行要放得进面板 */
 .cells {
   display: grid;
+  justify-content: start;
   gap: 3px;
   width: 100%;
 }

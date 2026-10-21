@@ -1,6 +1,6 @@
 // The island page. Rust sends the content and says when the island opens. For each new content,
-// the page measures the closed sides, Rust answers where they go, and the page says when it is in
-// place: only then does Rust show the window. See src-tauri/src/island/macos.rs.
+// the page measures the closed sides and the open panel, Rust answers where they go, and the page
+// says when it is in place: only then does Rust show the window. See src-tauri/src/island/macos.rs.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -13,6 +13,8 @@ const CAPSULE_PADDING = 10;
 
 /** A content with where Rust put its sides */
 type Placed = { content: Content; layout: Layout };
+
+type Open = NonNullable<Content["open"]>;
 
 /** The width a closed side asks for. `null`: nothing on that side. */
 function widthOf(element: HTMLElement | null, component: Component | null): number | null {
@@ -47,6 +49,24 @@ function Slot({ rect, className, children }: SlotProps) {
   );
 }
 
+/** 展开时下面的面板：左边一列，右边一行。量高度的那份和显示的那份是同一个组件 */
+function Panel({ open, now }: { open: Open; now: number }) {
+  return (
+    <div className={styles.panelBody}>
+      <div className={styles.column}>
+        {open.left.map((component, i) => (
+          <Block key={i} component={component} now={now} />
+        ))}
+      </div>
+      <div className={styles.row}>
+        {open.right.map((component, i) => (
+          <Block key={i} component={component} now={now} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Island() {
   const [content, setContent] = useState<Content | null>(null);
   // What is drawn. A new content is drawn only once Rust has placed it, so it never shows in the
@@ -56,6 +76,7 @@ export function Island() {
   const now = useNow();
   const left = useRef<HTMLSpanElement>(null);
   const right = useRef<HTMLSpanElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let changed = false;
@@ -88,7 +109,8 @@ export function Island() {
     return () => window.removeEventListener("click", onClick);
   }, []);
 
-  // Measures the closed sides of a new content, and draws it where Rust puts them
+  // Measures the closed sides and the open panel of a new content, and draws it where Rust puts
+  // them
   useLayoutEffect(() => {
     if (!content) return;
     let current = true;
@@ -97,6 +119,7 @@ export function Island() {
         invoke<Layout | null>("island_measured", {
           left: widthOf(left.current, content.closed.left),
           right: widthOf(right.current, content.closed.right),
+          panel: content.open ? (panel.current?.getBoundingClientRect().height ?? null) : null,
         }),
       )
       .then((layout) => {
@@ -114,9 +137,7 @@ export function Island() {
   }, [placed]);
 
   const drawn = content ? placed : null;
-  const bar = Math.max(drawn?.layout.left?.height ?? 0, drawn?.layout.right?.height ?? 0);
   const topRight = drawn?.content.open?.topRight;
-  const rightRect = drawn?.layout.right;
 
   return (
     <div className={open ? `${styles.island} ${styles.open}` : styles.island}>
@@ -128,42 +149,30 @@ export function Island() {
         <span ref={right}>
           {content?.closed.right ? <Side component={content.closed.right} now={now} /> : null}
         </span>
+        {/* 和窗口一样宽，量出展开面板的高度 */}
+        <div ref={panel} className={styles.measurePanel}>
+          {content?.open ? <Panel open={content.open} now={now} /> : null}
+        </div>
       </div>
       {drawn?.layout.left && drawn.content.closed.left ? (
         <Slot rect={drawn.layout.left}>
           <Side component={drawn.content.closed.left} now={now} />
         </Slot>
       ) : null}
-      {rightRect && drawn.content.closed.right ? (
+      {drawn?.layout.right && drawn.content.closed.right ? (
         // Open, the text at the top right takes its place
-        <Slot rect={rightRect} className={topRight ? styles.closedOnly : undefined}>
+        <Slot rect={drawn.layout.right} className={topRight ? styles.closedOnly : undefined}>
           <Side component={drawn.content.closed.right} now={now} />
         </Slot>
       ) : null}
-      {topRight ? (
-        <div
-          className={styles.topRight}
-          style={
-            rightRect
-              ? { left: rightRect.x, top: rightRect.y, width: rightRect.width, height: bar }
-              : { right: 0, top: 0, height: bar }
-          }
-        >
+      {drawn && topRight ? (
+        <Slot rect={drawn.layout.topRight} className={styles.topRight}>
           <TextView text={topRight} />
-        </div>
+        </Slot>
       ) : null}
       {drawn?.content.open ? (
-        <div className={styles.panel} style={{ top: bar }}>
-          <div className={styles.column}>
-            {drawn.content.open.left.map((component, i) => (
-              <Block key={i} component={component} now={now} />
-            ))}
-          </div>
-          <div className={styles.row}>
-            {drawn.content.open.right.map((component, i) => (
-              <Block key={i} component={component} now={now} />
-            ))}
-          </div>
+        <div className={styles.panel} style={{ top: drawn.layout.topRight.height }}>
+          <Panel open={drawn.content.open} now={now} />
         </div>
       ) : null}
     </div>

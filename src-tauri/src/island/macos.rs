@@ -1,14 +1,14 @@
-//! The island window on macOS. The window is always the size of the open island. A Core Animation
-//! mask shows only the closed shapes or the open panel, so the window never resizes and the page
-//! never re-lays out while it animates. A tracking area tells when the mouse goes over the island
-//! and leaves it, also while another app is active.
+//! The island window on macOS. The window is always the size of the open island at its tallest. A
+//! Core Animation mask shows only the closed shapes or the open panel, so the window never resizes
+//! and the page never re-lays out while it animates. A tracking area tells when the mouse goes over
+//! the island and leaves it, also while another app is active.
 //!
 //! AppKit objects may only be used on the main thread, so the island lives there.
 //!
 //! When the content changes:
 //! 1. this sends it to the page;
-//! 2. the page draws it, measures the closed content, and calls [`measured`], which returns where
-//!    each side goes;
+//! 2. the page draws it, measures the closed content and the open panel, and calls [`measured`],
+//!    which returns where each side goes;
 //! 3. the page puts the content there and calls [`ready`]. Only then does the window show, so it
 //!    never shows content that is not in place.
 
@@ -62,6 +62,8 @@ struct Island {
     content: Option<Content>,
     /// The widths of the closed content, as last measured by the page
     widths: (Option<f64>, Option<f64>),
+    /// 页面上次量出的展开面板的高度；`None`：内容不展开
+    panel: Option<f64>,
     open: bool,
 }
 
@@ -140,12 +142,13 @@ pub fn content() -> Option<Content> {
     with_island(|island| island.content.clone()).flatten()
 }
 
-/// Takes the widths of the closed content measured by the page, and returns where each side goes.
-/// `None` when there is no island. 要在主线程上调用。
-pub fn measured(left: Option<f64>, right: Option<f64>) -> Option<Layout> {
+/// Takes the widths of the closed content and the height of the open panel measured by the page,
+/// and returns where each side goes. `None` when there is no island. 要在主线程上调用。
+pub fn measured(left: Option<f64>, right: Option<f64>, panel: Option<f64>) -> Option<Layout> {
     main_thread()?;
     with_island(|island| {
         island.widths = (left, right);
+        island.panel = panel;
         // A side that grows or shrinks in view moves smoothly
         island.draw(island.ns_window.isVisible());
         island.track();
@@ -254,6 +257,7 @@ impl Island {
             screen,
             content: None,
             widths: (None, None),
+            panel: None,
             open: false,
         };
         island.place();
@@ -300,11 +304,11 @@ impl Island {
 
     /// Puts the window and the mask on the main screen as it is now.
     fn place(&mut self) {
-        let open = geometry::open(&self.screen);
-        self.ns_window.setFrame_display(ns_rect(open), true);
+        let window = geometry::window(&self.screen);
+        self.ns_window.setFrame_display(ns_rect(window), true);
         CATransaction::begin();
         CATransaction::setDisableActions(true);
-        self.mask.setFrame(local(open, open));
+        self.mask.setFrame(local(window, window));
         CATransaction::commit();
         self.draw(false);
         self.track();
@@ -314,9 +318,13 @@ impl Island {
         Closed::new(&self.screen, self.widths.0, self.widths.1)
     }
 
+    fn opened(&self) -> Rect {
+        geometry::open(&self.screen, self.panel.unwrap_or(0.0))
+    }
+
     /// Moves the mask's layers to the open panel or to the closed shapes.
     fn draw(&self, animated: bool) {
-        let open = geometry::open(&self.screen);
+        let window = geometry::window(&self.screen);
         let closed = self.closed();
         let notch = matches!(closed, Closed::Notch(_));
         let shapes = closed.shapes();
@@ -348,11 +356,11 @@ impl Island {
         };
         for (i, layer) in self.shapes.iter().enumerate() {
             let (frame, radius) = if self.open {
-                (local(open, open), OPEN_RADIUS)
+                (local(window, self.opened()), OPEN_RADIUS)
             } else {
                 match shapes.get(i).or(shapes.last()) {
-                    Some(&shape) if notch => (local(open, shape), NOTCH_RADIUS),
-                    Some(&shape) => (local(open, shape), shape.height / 2.0),
+                    Some(&shape) if notch => (local(window, shape), NOTCH_RADIUS),
+                    Some(&shape) => (local(window, shape), shape.height / 2.0),
                     None => (NSRect::ZERO, 0.0),
                 }
             };
@@ -366,9 +374,9 @@ impl Island {
     /// Makes the tracking area match what shows: the whole panel when open, the shapes when
     /// closed.
     fn track(&mut self) {
-        let open = geometry::open(&self.screen);
+        let window = geometry::window(&self.screen);
         let area = if self.open {
-            Some(open)
+            Some(self.opened())
         } else {
             self.closed().bounds()
         };
@@ -376,18 +384,19 @@ impl Island {
         self.area = tracking_area(
             &self.view,
             &self.observer,
-            area.map_or(NSRect::ZERO, |area| local(open, area)),
+            area.map_or(NSRect::ZERO, |area| local(window, area)),
         );
     }
 
     fn layout(&self) -> Layout {
-        let open = geometry::open(&self.screen);
+        let window = geometry::window(&self.screen);
         let closed = self.closed();
         let (left, right) = closed.sides();
         Layout {
             notch: matches!(closed, Closed::Notch(_)),
-            left: left.map(|rect| page_rect(open, rect)),
-            right: right.map(|rect| page_rect(open, rect)),
+            left: left.map(|rect| page_rect(window, rect)),
+            right: right.map(|rect| page_rect(window, rect)),
+            top_right: page_rect(window, closed.top_right(&self.screen)),
         }
     }
 
@@ -509,12 +518,12 @@ mod tests {
 
     #[test]
     fn the_view_and_the_page_count_from_different_corners() {
-        // 外接屏上展开的岛，和右边一个宽 60 的胶囊（见 geometry 的测试）
+        // 外接屏上岛的窗口，和右边一个宽 60 的胶囊（见 geometry 的测试）
         let window = Rect {
-            x: 792.0,
-            y: 959.0,
-            width: 336.0,
-            height: 118.0,
+            x: 700.0,
+            y: 858.0,
+            width: 520.0,
+            height: 219.0,
         };
         let capsule = Rect {
             x: 930.0,
@@ -522,16 +531,16 @@ mod tests {
             width: 60.0,
             height: 19.0,
         };
-        // 视图从窗口左下角算：1058 - 959 = 99
+        // 视图从窗口左下角算：1058 - 858 = 200
         assert_eq!(
             local(window, capsule),
-            NSRect::new(NSPoint::new(138.0, 99.0), NSSize::new(60.0, 19.0))
+            NSRect::new(NSPoint::new(230.0, 200.0), NSSize::new(60.0, 19.0))
         );
         // 页面从窗口左上角算：胶囊贴着窗口顶边
         assert_eq!(
             page_rect(window, capsule),
             PageRect {
-                x: 138.0,
+                x: 230.0,
                 y: 0.0,
                 width: 60.0,
                 height: 19.0,

@@ -105,7 +105,7 @@ export function Block({ component, now }: { component: Component; now: number })
       return (
         <span
           className={styles.cells}
-          style={{ gridTemplateColumns: `repeat(${component.columns}, 1fr)` }}
+          style={{ gridTemplateColumns: `repeat(${component.columns}, minmax(0, 10px))` }}
         >
           {component.colors.map((color, i) => (
             <span

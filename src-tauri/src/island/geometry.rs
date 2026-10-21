@@ -4,17 +4,17 @@
 //! All coordinates are places on the screen: in logical pixels, from the bottom-left corner of the
 //! main screen, with y growing upward.
 
-/// How far the island reaches past the notch on each side
+/// How far the closed island reaches past the notch on each side
 const EAR: f64 = 90.0;
-/// How much taller the island is open than closed
-const OPEN_EXTRA_HEIGHT: f64 = 96.0;
+/// 展开的岛的宽度。刘海屏上右上角的字放在刘海右边，要放得下 20 宽的字
+const OPEN_WIDTH: f64 = 520.0;
+/// 展开时下面的面板最高多少：内容按上限放满也放得下
+const MAX_PANEL_HEIGHT: f64 = 200.0;
 /// With no notch: the gap from the island to the top of the screen, and from the capsules to the
 /// bottom of the menu bar
 const MENU_BAR_GAP: f64 = 3.0;
 /// With no notch: the gap between the two capsules
 const CAPSULE_GAP: f64 = 6.0;
-/// With no notch: the width of the open island
-const FLOATING_WIDTH: f64 = 336.0;
 /// Used when the menu bar hides itself and its height cannot be measured
 const DEFAULT_MENU_BAR_HEIGHT: f64 = 30.0;
 /// The radius of the two bottom corners around the notch
@@ -56,22 +56,15 @@ pub struct Notch {
     pub height: f64,
 }
 
-/// Returns the open island. The window is this size: when closed, only the shapes of [`Closed`]
-/// show, and the rest is clear.
-pub fn open(screen: &Screen) -> Rect {
-    let (width, height, gap) = match &screen.notch {
-        Some(notch) => (
-            notch.width + 2.0 * EAR,
-            notch.height + OPEN_EXTRA_HEIGHT,
-            0.0,
-        ),
+/// 返回岛的窗口：和展开的岛一样宽，和展开到最高时一样高。只有 [`Closed`] 的形状或者
+/// [`open`] 显示出来，其余是透明的。
+pub fn window(screen: &Screen) -> Rect {
+    let (width, gap) = match &screen.notch {
+        Some(notch) => (OPEN_WIDTH.max(notch.width + 2.0 * EAR), 0.0),
         // The same gap to the top of the screen as when closed
-        None => (
-            FLOATING_WIDTH,
-            menu_bar_height(screen) - MENU_BAR_GAP + OPEN_EXTRA_HEIGHT,
-            MENU_BAR_GAP,
-        ),
+        None => (OPEN_WIDTH, MENU_BAR_GAP),
     };
+    let height = strip(screen) + MAX_PANEL_HEIGHT;
     let frame = screen.frame;
     Rect {
         x: frame.x + (frame.width - width) / 2.0,
@@ -81,10 +74,32 @@ pub fn open(screen: &Screen) -> Rect {
     }
 }
 
+/// 返回展开的岛：最上面一条，加上下面 `panel` 高的面板。
+///
+/// `panel` 是页面量出来的；太矮的补到圆角放得下，太高的截到 [`MAX_PANEL_HEIGHT`]。页面经 JSON 传来，
+/// 不会是 NaN。
+pub fn open(screen: &Screen, panel: f64) -> Rect {
+    let window = window(screen);
+    let height = strip(screen) + panel.clamp(2.0 * OPEN_RADIUS, MAX_PANEL_HEIGHT);
+    Rect {
+        y: window.top() - height,
+        height,
+        ..window
+    }
+}
+
+/// 返回最上面那一条的高度：刘海的高度，没有刘海时是胶囊的高度。
+fn strip(screen: &Screen) -> f64 {
+    match &screen.notch {
+        Some(notch) => notch.height,
+        None => menu_bar_height(screen) - 2.0 * MENU_BAR_GAP,
+    }
+}
+
 /// The closed island.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Closed {
-    /// Around the notch: the top strip of the open island
+    /// Around the notch: the notch and an ear on each side
     Notch(Rect),
     /// Two capsules as wide as their content; `None` on a side with nothing in it
     Floating {
@@ -100,18 +115,20 @@ impl Closed {
     /// - `left`, `right`: the widths of the content on each side, measured by the page. `None` for
     ///   a side with nothing in it. Not used with a notch
     pub fn new(screen: &Screen, left: Option<f64>, right: Option<f64>) -> Self {
-        let open = open(screen);
+        let window = window(screen);
+        let height = strip(screen);
         if let Some(notch) = &screen.notch {
+            let width = notch.width + 2.0 * EAR;
             return Closed::Notch(Rect {
-                y: open.top() - notch.height,
-                height: notch.height,
-                ..open
+                x: window.x + (window.width - width) / 2.0,
+                y: window.top() - height,
+                width,
+                height,
             });
         }
-        let height = menu_bar_height(screen) - 2.0 * MENU_BAR_GAP;
         // At its narrowest a capsule is a circle, never narrower than it is tall. At its widest it
         // is half the island
-        let widest = ((open.width - CAPSULE_GAP) / 2.0).max(height);
+        let widest = ((window.width - CAPSULE_GAP) / 2.0).max(height);
         let fit = |width: f64| width.max(height).min(widest);
         let (left, right) = (left.map(fit), right.map(fit));
         let gap = if left.is_some() && right.is_some() {
@@ -120,10 +137,10 @@ impl Closed {
             0.0
         };
         let total = left.unwrap_or(0.0) + gap + right.unwrap_or(0.0);
-        let x = open.x + (open.width - total) / 2.0;
+        let x = window.x + (window.width - total) / 2.0;
         let capsule = |x: f64, width: f64| Rect {
             x,
-            y: open.top() - height,
+            y: window.top() - height,
             width,
             height,
         };
@@ -145,6 +162,23 @@ impl Closed {
                 }),
             ),
             Closed::Floating { left, right } => (left, right),
+        }
+    }
+
+    /// 返回展开时右上角的字放在哪：最上面一条里，刘海右边，或者左边胶囊右边。
+    pub fn top_right(&self, screen: &Screen) -> Rect {
+        let window = window(screen);
+        let x = match *self {
+            Closed::Notch(rect) => rect.right() - EAR,
+            // 左边没有胶囊时整条都可以用：字靠右放
+            Closed::Floating { left, .. } => left.map_or(window.x, |left| left.right()),
+        };
+        let height = strip(screen);
+        Rect {
+            x,
+            y: window.top() - height,
+            width: window.right() - x,
+            height,
         }
     }
 
@@ -216,13 +250,48 @@ mod tests {
 
     #[test]
     fn wraps_the_notch() {
-        // 刘海加两边各 90，贴着屏幕顶边居中：854 + 128 = 982
-        assert_eq!(open(&built_in()), rect(566.0, 854.0, 380.0, 128.0));
-        // 收起时是最上面一条，用不到内容宽度
+        // 收起：刘海加两边各 90，贴着屏幕顶边居中；用不到内容宽度
         assert_eq!(
             Closed::new(&built_in(), Some(40.0), Some(60.0)),
             Closed::Notch(rect(566.0, 950.0, 380.0, 32.0))
         );
+        // 展开比收起宽，(1512 - 520) / 2 = 496；高是刘海加面板：982 - 112 = 870
+        assert_eq!(open(&built_in(), 80.0), rect(496.0, 870.0, 520.0, 112.0));
+    }
+
+    #[test]
+    fn the_panel_is_kept_between_the_corners_and_the_window() {
+        // 窗口和面板最高时的岛一样大：32 + 200
+        let window = window(&built_in());
+        assert_eq!(window, rect(496.0, 750.0, 520.0, 232.0));
+        assert_eq!(open(&built_in(), 1000.0), window);
+        // 太矮：补到圆角放得下
+        for panel in [0.0, -5.0] {
+            assert_eq!(
+                open(&built_in(), panel).height,
+                32.0 + 2.0 * OPEN_RADIUS,
+                "{panel}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_text_at_the_top_right_goes_right_of_the_notch() {
+        // 刘海右边 856 到窗口右边 1016
+        let closed = Closed::new(&built_in(), None, None);
+        assert_eq!(
+            closed.top_right(&built_in()),
+            rect(856.0, 950.0, 160.0, 32.0)
+        );
+        // 没有刘海：从左边胶囊的右边 927 到窗口右边 1220
+        let closed = Closed::new(&external(), Some(40.0), Some(100.0));
+        assert_eq!(
+            closed.top_right(&external()),
+            rect(927.0, 1058.0, 293.0, 19.0)
+        );
+        // 没有左边的胶囊，整条都用
+        let closed = Closed::new(&external(), None, Some(100.0));
+        assert_eq!(closed.top_right(&external()).x, 700.0);
     }
 
     #[test]
@@ -238,8 +307,8 @@ mod tests {
 
     #[test]
     fn floats_without_a_notch() {
-        // 离屏幕顶 3：959 + 118 + 3 = 1080
-        assert_eq!(open(&external()), rect(792.0, 959.0, 336.0, 118.0));
+        // 离屏幕顶 3；高是胶囊的 19 加面板：978 + 99 + 3 = 1080
+        assert_eq!(open(&external(), 80.0), rect(700.0, 978.0, 520.0, 99.0));
         // 页面量出内容之前，没有胶囊
         assert_eq!(Closed::new(&external(), None, None).bounds(), None);
     }
@@ -285,19 +354,19 @@ mod tests {
         let bounds = Closed::new(&external(), Some(1000.0), Some(1000.0))
             .bounds()
             .unwrap();
-        let open = open(&external());
-        assert_eq!(bounds.x, open.x);
-        assert_eq!(bounds.right(), open.right());
+        let window = window(&external());
+        assert_eq!(bounds.x, window.x);
+        assert_eq!(bounds.right(), window.right());
     }
 
     #[test]
     fn a_hidden_menu_bar_uses_the_default_height() {
         let mut screen = external();
         screen.visible_frame = screen.frame;
-        // 按 30 算：胶囊高 30 - 6，展开高 30 - 3 + 96
+        // 按 30 算：胶囊高 30 - 6，展开高 24 加面板
         let closed = Closed::new(&screen, Some(40.0), None);
         assert_eq!(closed.shapes()[0].height, 24.0);
-        assert_eq!(open(&screen).height, 123.0);
+        assert_eq!(open(&screen, 80.0).height, 104.0);
     }
 
     #[test]
@@ -306,7 +375,7 @@ mod tests {
         let notch = Closed::new(&built_in(), None, None).shapes()[0];
         assert!(NOTCH_RADIUS <= notch.height / 2.0);
         for screen in [built_in(), external()] {
-            let open = open(&screen);
+            let open = open(&screen, 0.0);
             assert!(OPEN_RADIUS <= open.width.min(open.height) / 2.0);
         }
     }
