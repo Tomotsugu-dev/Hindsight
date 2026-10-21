@@ -40,7 +40,7 @@ use super::geometry::{self, Closed, Notch, Rect, Screen, NOTCH_RADIUS, OPEN_RADI
 use super::{Layout, PageRect};
 
 /// The label of the island window. `capabilities/island.json` uses the same label
-const LABEL: &str = "island";
+pub const LABEL: &str = "island";
 const PAGE: &str = "src/island/index.html";
 /// Sent to the page with the new content, or `null` when nothing is on the island
 const CONTENT_EVENT: &str = "island-content";

@@ -15,7 +15,7 @@ use serde::Serialize;
 
 // 两个文件对外的函数一样，调用的地方不用分系统
 #[cfg(target_os = "macos")]
-pub use macos::{content, hide, measured, ready, show};
+pub use macos::{content, hide, measured, ready, show, LABEL};
 #[cfg(not(target_os = "macos"))]
 pub use other::{content, hide, measured, ready, show};
 
