@@ -66,10 +66,12 @@ pub fn window(screen: &Screen) -> Rect {
         // The same gap to the top of the screen as when closed
         None => (MAX_OPEN_WIDTH, MENU_BAR_GAP),
     };
-    let height = strip(screen) + MAX_PANEL_HEIGHT;
+    // AppKit 把窗口放在整数的点上，这里先取整：遮罩按这个窗口画，形状的边才和窗口的边对得上。
+    // 刘海高可以是 33.5
+    let height = (strip(screen) + MAX_PANEL_HEIGHT).ceil();
     let frame = screen.frame;
     Rect {
-        x: frame.x + (frame.width - width) / 2.0,
+        x: (frame.x + (frame.width - width) / 2.0).round(),
         y: frame.top() - gap - height,
         width,
         height,
@@ -314,6 +316,33 @@ mod tests {
             open(&built_in(), &closed, &panel(450.0, 80.0, None)),
             rect(531.0, 870.0, 450.0, 112.0)
         );
+    }
+
+    #[test]
+    fn the_window_is_in_whole_points() {
+        // 15 寸 MacBook Air 的内置屏幕：刘海高 33.5
+        let screen = Screen {
+            frame: rect(0.0, 0.0, 1710.0, 1107.0),
+            visible_frame: rect(0.0, 55.0, 1710.0, 1018.0),
+            notch: Some(Notch {
+                width: 185.0,
+                height: 33.5,
+            }),
+        };
+        let placed = window(&screen);
+        assert_eq!(placed, rect(595.0, 873.0, 520.0, 234.0));
+        // 形状还是刘海那么高，贴着窗口和屏幕的顶边
+        let shape = Closed::new(&screen, Some(0.0), Some(80.0)).shapes()[0];
+        assert_eq!(shape.height, 33.5);
+        assert_eq!(shape.top(), placed.top());
+        // 屏幕宽减窗口宽是单数：窗口取整，刘海还按屏幕正中算
+        let screen = Screen {
+            frame: rect(0.0, 0.0, 1511.0, 982.0),
+            ..built_in()
+        };
+        assert_eq!(window(&screen).x, 496.0);
+        let shape = Closed::new(&screen, None, None).shapes()[0];
+        assert_eq!(shape.x, 655.5);
     }
 
     #[test]
