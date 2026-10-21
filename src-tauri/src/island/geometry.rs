@@ -184,7 +184,7 @@ impl Closed {
     }
 
     /// 返回展开时右上角的字放在哪：展开的岛 `open` 最上面一条里，从刘海或者左边胶囊的右边到岛的
-    /// 右边。左边没有胶囊时整条都可以用，字靠右放。
+    /// 右边。左边没有胶囊时整条都可以用。字靠左放，紧跟在左边的内容后面。
     pub fn top_right(&self, screen: &Screen, open: Rect) -> Rect {
         let x = self.top_right_start().unwrap_or(open.x);
         let height = strip(screen);

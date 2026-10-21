@@ -51,9 +51,9 @@
   opacity: 0;
 }
 
-/* 展开时才显示 */
+/* 展开时才显示，紧跟在左边的内容或者刘海后面 */
 .topRight {
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 0 12px;
   box-sizing: border-box;
   opacity: 0;
