@@ -27,8 +27,15 @@ function show(plugins: BackgroundPlugin[]) {
 // plugin cannot claim to be another plugin
 window.addEventListener("message", (event) => {
   const entry = [...frames].find(([, f]) => f.frame.contentWindow === event.source);
-  if (!entry || !isRequest(event.data)) return;
+  if (!entry) return;
   const [pluginId, { frame }] = entry;
+  // The launcher stopped the plugin's Worker: it did not answer two pings in a row
+  const data: unknown = event.data;
+  if (typeof data === "object" && data !== null && "stopped" in data && data.stopped === true) {
+    invoke("plugin_stopped", { pluginId }).catch((e) => console.error("plugin_stopped:", e));
+    return;
+  }
+  if (!isRequest(event.data)) return;
   const { id, method, params } = event.data;
   // "*": the iframe always holds Hindsight's launcher, and plugin code cannot navigate it.
   // If the plugin was turned off in the meantime, contentWindow is null and the reply is dropped
