@@ -122,6 +122,24 @@ pub fn set_dock_icon_visible(app: &tauri::AppHandle, visible: bool) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_dock_icon_visible(_app: &tauri::AppHandle, _visible: bool) {}
 
+/// 在任务栏按钮上叠 `dot`，`dot` 为 `None` 时去掉。
+#[cfg(target_os = "windows")]
+pub fn set_taskbar_dot(
+    window: &tauri::Window,
+    dot: Option<tauri::image::Image<'static>>,
+) -> tauri::Result<()> {
+    window.set_overlay_icon(dot)
+}
+
+/// 非 Windows 平台：no-op（只有 Windows 的任务栏按钮能叠图）。
+#[cfg(not(target_os = "windows"))]
+pub fn set_taskbar_dot(
+    _window: &tauri::Window,
+    _dot: Option<tauri::image::Image<'static>>,
+) -> tauri::Result<()> {
+    Ok(())
+}
+
 /// Auto start argument for Windows platform.
 pub const AUTOSTART_ARG: &str = "--autostart";
 

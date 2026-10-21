@@ -331,6 +331,7 @@ pub fn run() {
             commands::settings::remove_ignore_rule,
             // --- 托盘菜单文案随 UI 语言同步 ---
             bootstrap::set_tray_labels,
+            bootstrap::set_plugins_badge,
             // --- storage: 存储 / 数据目录 ---
             commands::storage::get_storage_info,
             commands::storage::purge_local_data,
