@@ -3,4 +3,8 @@
 //! `plugins/`. For the design, see island.md in docs/design/plugins/.
 
 pub mod content;
+// Only the macOS window uses the shapes
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod geometry;
+#[cfg(target_os = "macos")]
+pub mod macos;

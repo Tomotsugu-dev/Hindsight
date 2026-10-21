@@ -212,6 +212,8 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
         // the app normally switches to Accessory policy without a Dock icon; this serves as a fallback
         // in case the policy switch failed, ensuring the main window is restored or recreated.
         tauri::RunEvent::Reopen {
+            // TODO: check whether the island window counts as a visible window. If it does, while
+            // the island shows, clicking the Dock icon does not bring back a hidden main window
             has_visible_windows: false,
             ..
         } => {
