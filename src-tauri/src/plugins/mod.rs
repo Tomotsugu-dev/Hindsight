@@ -6,6 +6,7 @@ pub mod events;
 pub mod file_reader;
 pub mod icon;
 pub mod install;
+pub mod island;
 pub mod manifest;
 pub mod market;
 pub mod navigation;
@@ -19,13 +20,13 @@ use tauri::AppHandle;
 
 use crate::storage::DbPool;
 
-/// Call after a plugin is installed, uninstalled, enabled or disabled, so that the plugin
-/// background window and the page windows follow the new plugin list.
+/// 装好、卸载、打开、关闭插件以后调用，让插件后台窗口、页面窗口和岛跟上新的插件列表。
 ///
-/// See [`background_window::refresh`] and [`pages::refresh`].
+/// 见 [`background_window::refresh`]、[`pages::refresh`] 和 [`island::refresh`]。
 pub async fn refresh(app: &AppHandle, pool: &DbPool) {
     background_window::refresh(app, pool).await;
     pages::refresh(app, pool).await;
+    island::refresh(app, pool).await;
 }
 
 /// Returns the plugin library: one folder per plugin, inside the data folder.
