@@ -1,7 +1,8 @@
 //! The island window on macOS. The window is always the size of the open island at its tallest. A
 //! Core Animation mask shows only the closed shapes or the open panel, so the window never resizes
 //! and the page never re-lays out while it animates. A tracking area tells when the mouse goes over
-//! the island and leaves it, also while another app is active.
+//! the island and leaves it, also while another app is active. 窗口是不激活的 NSPanel：点岛不会
+//! 让 Hindsight 变成前台 app，用户正在用的 app 还在前台。
 //!
 //! AppKit objects may only be used on the main thread, so the island lives there.
 //!
@@ -16,13 +17,17 @@ use std::cell::RefCell;
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2::{define_class, msg_send, sel, AllocAnyThread, MainThreadMarker, MainThreadOnly};
-use objc2_app_kit::{
-    NSApplicationDidChangeScreenParametersNotification, NSColor, NSEvent, NSScreen,
-    NSStatusWindowLevel, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindow,
-    NSWindowCollectionBehavior,
+use objc2::{
+    define_class, msg_send, sel, AllocAnyThread, ClassType, MainThreadMarker, MainThreadOnly,
 };
-use objc2_foundation::{NSNotification, NSNotificationCenter, NSObject, NSPoint, NSRect, NSSize};
+use objc2_app_kit::{
+    NSApplicationDidChangeScreenParametersNotification, NSColor, NSEvent, NSPanel, NSResponder,
+    NSScreen, NSStatusWindowLevel, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
+};
+use objc2_foundation::{
+    NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize,
+};
 use objc2_quartz_core::{
     kCAMediaTimingFunctionEaseInEaseOut, kCAMediaTimingFunctionEaseOut, CACornerMask, CALayer,
     CAMediaTimingFunction, CATransaction,
@@ -103,6 +108,27 @@ impl Observer {
         unsafe { msg_send![super(this), init] }
     }
 }
+
+define_class!(
+    // 岛的窗口建好以后换成这个类。只有 NSPanel 能做到点了不激活 app
+    #[unsafe(super(NSPanel, NSWindow, NSResponder, NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "HindsightIslandPanel"]
+    struct Panel;
+
+    impl Panel {
+        // 岛不接键盘：成了 key window，用户正在打字的 app 就收不到键盘了
+        #[unsafe(method(canBecomeKeyWindow))]
+        fn can_become_key_window(&self) -> bool {
+            false
+        }
+
+        #[unsafe(method(canBecomeMainWindow))]
+        fn can_become_main_window(&self) -> bool {
+            false
+        }
+    }
+);
 
 /// Shows `content` on the island in place of what is there. Opens the window the first time.
 pub fn show(app: &AppHandle, content: Content) {
@@ -206,6 +232,24 @@ impl Island {
         // SAFETY: Tauri gives the window's NSWindow, which lives as long as the window
         let ns_window = unsafe { Retained::retain(ns_window.cast::<NSWindow>()) }
             .ok_or("the window has no NSWindow")?;
+        // SAFETY: Panel 没有自己的实例变量，对象只会比它要的大。原来的类是 tao 的 NSWindow 子类，
+        // 它改写的方法 Panel 都改写了或者用不到；它的实例变量只有 `set_focusable` 会读，岛不调用
+        unsafe {
+            objc2::ffi::object_setClass(
+                Retained::as_ptr(&ns_window).cast_mut().cast(),
+                Panel::class(),
+            );
+        }
+        ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+        // 窗口建好以后才改样式，窗口服务器那边不跟着变，点了还是激活 app（实测）。AppKit 自己用这个
+        // 私有方法同步；没有这个方法就不调：点岛会激活 Hindsight，别的照常
+        let prevents = sel!(_setPreventsActivation:);
+        if ns_window.respondsToSelector(prevents) {
+            // SAFETY: 上面查过有这个方法，它收一个 BOOL
+            let _: () = unsafe { msg_send![&*ns_window, _setPreventsActivation: true] };
+        }
+        // NSPanel 默认在 app 不是前台时藏起来，岛要一直在
+        ns_window.setHidesOnDeactivate(false);
         ns_window.setOpaque(false);
         ns_window.setBackgroundColor(Some(&NSColor::clearColor()));
         ns_window.setHasShadow(false);

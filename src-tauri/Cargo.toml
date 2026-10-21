@@ -102,7 +102,7 @@ windows-core = "0.61"
 plist = "1"
 icns = "0.3"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphics", "NSApplication", "NSColor", "NSEvent", "NSResponder", "NSScreen", "NSTrackingArea", "NSView", "NSWindow", "objc2-core-graphics", "objc2-quartz-core"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphics", "NSApplication", "NSColor", "NSEvent", "NSPanel", "NSResponder", "NSScreen", "NSTrackingArea", "NSView", "NSWindow", "objc2-core-graphics", "objc2-quartz-core"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSData", "NSDictionary", "NSArray", "NSURL", "NSError", "NSEnumerator", "NSValue", "NSRange", "NSGeometry", "NSNotification"] }
 # The island's shapes and their animation: a Core Animation mask on the island window
 objc2-quartz-core = { version = "0.3", default-features = false, features = ["CALayer", "CATransaction", "CAMediaTimingFunction", "objc2-core-foundation", "objc2-core-graphics"] }
