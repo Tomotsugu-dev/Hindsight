@@ -3,7 +3,7 @@
 use tauri::AppHandle;
 
 use super::content::Content;
-use super::Layout;
+use super::{Layout, PanelSize};
 
 pub fn show(_app: &AppHandle, _content: Content) {}
 
@@ -13,7 +13,11 @@ pub fn content() -> Option<Content> {
     None
 }
 
-pub fn measured(_left: Option<f64>, _right: Option<f64>, _panel: Option<f64>) -> Option<Layout> {
+pub fn measured(
+    _left: Option<f64>,
+    _right: Option<f64>,
+    _panel: Option<PanelSize>,
+) -> Option<Layout> {
     None
 }
 

@@ -140,6 +140,9 @@ pub fn run() {
             // 托盘 + 关闭行为：稳定的一次性安装逻辑，挪到 bootstrap 里
             bootstrap::install_tray_and_window(app)?;
 
+            // 插件窗口最小化、还原时告诉插件，见 plugins::pages。这里在主线程上
+            plugins::pages::watch_minimize(&handle);
+
             // macOS：老版本 LaunchAgent 自启迁移到登录项（显示 app 名）；无 plist 时 no-op
             bootstrap::migrate_autostart_launch_agent(&handle);
 

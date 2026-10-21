@@ -28,12 +28,13 @@
   display: inline-flex;
 }
 
-/* 和窗口一样宽，量出来的高度和显示时一样 */
+/* 内容多宽就多宽，最宽到窗口那么宽：量出来的宽高和显示时一样 */
 .measurePanel {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: max-content;
+  max-width: 100vw;
 }
 
 .slot {
@@ -50,9 +51,9 @@
   opacity: 0;
 }
 
-/* 展开时才显示 */
+/* 展开时才显示，紧跟在左边的内容或者刘海后面 */
 .topRight {
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 0 12px;
   box-sizing: border-box;
   opacity: 0;
@@ -63,11 +64,9 @@
   transition-delay: 90ms;
 }
 
-/* 高度跟内容走：Rust 按量出来的高度画展开的岛 */
+/* 宽高跟内容走：Rust 按量出来的大小画展开的岛，再告诉页面面板放在哪 */
 .panel {
   position: absolute;
-  left: 0;
-  right: 0;
   opacity: 0;
   transform: translateY(-6px);
   transition:
@@ -105,8 +104,15 @@
   max-width: 100%;
 }
 
-.row {
+.right {
   flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.row {
   display: flex;
   align-items: center;
   gap: 12px;
