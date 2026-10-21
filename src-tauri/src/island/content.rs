@@ -553,7 +553,12 @@ mod tests {
                     "text": [{ "text": "工作中", "bold": true }, { "text": " · Code", "dim": true }]
                 },
                 "left": [
-                    { "type": "text", "text": ["今日目标 ", { "text": "2:40", "bold": true }, { "text": "/6:00", "dim": true }] },
+                    {
+                        "type": "text",
+                        "text": [{ "text": "2:40", "color": "#34d399", "bold": true }],
+                        "sub": "/ 6:00",
+                        "size": "large"
+                    },
                     {
                         "type": "cells",
                         "colors": ["#a78bfa", "#a78bfa", "#f87171", null, null],
@@ -571,7 +576,19 @@ mod tests {
         .unwrap();
         assert!(content.has_button());
         let open = content.open.unwrap();
-        assert_eq!(open.left.len(), 2);
+        assert_eq!(
+            open.left[0],
+            Component::Text(Text {
+                text: vec![Run {
+                    text: "2:40".into(),
+                    color: Some("#34d399".into()),
+                    bold: true,
+                    ..Run::default()
+                }],
+                sub: Some("/ 6:00".into()),
+                size: Size::Large,
+            })
+        );
         assert_eq!(open.right.len(), 2);
         // 字符串段是不带样式的一段
         assert_eq!(
