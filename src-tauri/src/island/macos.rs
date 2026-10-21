@@ -32,6 +32,7 @@ use tauri::{AppHandle, Emitter, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 
 use super::content::Content;
 use super::geometry::{self, Closed, Notch, Rect, Screen, NOTCH_RADIUS, OPEN_RADIUS};
+use super::{Layout, PageRect};
 
 /// The label of the island window. `capabilities/island.json` uses the same label
 const LABEL: &str = "island";
@@ -46,24 +47,6 @@ const OPEN_EVENT: &str = "island-open";
 const OPEN_SECONDS: f64 = 0.32;
 /// How long closing takes, in seconds
 const CLOSE_SECONDS: f64 = 0.24;
-
-/// Where the content of each closed side goes in the page.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct Layout {
-    pub notch: bool,
-    pub left: Option<PageRect>,
-    pub right: Option<PageRect>,
-}
-
-/// A rectangle in the page: in logical pixels, from the top-left corner of the window, with y
-/// growing downward.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct PageRect {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-}
 
 struct Island {
     window: WebviewWindow,
@@ -151,14 +134,16 @@ pub fn hide(app: &AppHandle) {
     });
 }
 
-/// Returns what is on the island now, for the page when it loads.
-pub fn content(_mtm: MainThreadMarker) -> Option<Content> {
+/// Returns what is on the island now, for the page when it loads. 要在主线程上调用。
+pub fn content() -> Option<Content> {
+    main_thread()?;
     with_island(|island| island.content.clone()).flatten()
 }
 
 /// Takes the widths of the closed content measured by the page, and returns where each side goes.
-/// `None` when there is no island.
-pub fn measured(_mtm: MainThreadMarker, left: Option<f64>, right: Option<f64>) -> Option<Layout> {
+/// `None` when there is no island. 要在主线程上调用。
+pub fn measured(left: Option<f64>, right: Option<f64>) -> Option<Layout> {
+    main_thread()?;
     with_island(|island| {
         island.widths = (left, right);
         // A side that grows or shrinks in view moves smoothly
@@ -169,8 +154,11 @@ pub fn measured(_mtm: MainThreadMarker, left: Option<f64>, right: Option<f64>) -
 }
 
 /// Shows the window: the page has put the content in place. Does nothing when nothing is on the
-/// island.
-pub fn ready(_mtm: MainThreadMarker) {
+/// island. 要在主线程上调用。
+pub fn ready() {
+    if main_thread().is_none() {
+        return;
+    }
     with_island(|island| {
         if island.content.is_some() {
             island.ns_window.orderFrontRegardless();
@@ -421,6 +409,15 @@ fn with_island<R>(f: impl FnOnce(&mut Island) -> R) -> Option<R> {
         };
         island.as_mut().map(f)
     })
+}
+
+/// 不在主线程上时返回 `None`，并记日志：岛只在主线程上，别的线程看到的岛总是空的。
+fn main_thread() -> Option<MainThreadMarker> {
+    let mtm = MainThreadMarker::new();
+    if mtm.is_none() {
+        log::warn!("island: not on the main thread");
+    }
+    mtm
 }
 
 fn on_main_thread(app: &AppHandle, f: impl FnOnce(MainThreadMarker) + Send + 'static) {

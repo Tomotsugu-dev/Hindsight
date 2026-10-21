@@ -7,24 +7,32 @@ pub mod content;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod geometry;
 #[cfg(target_os = "macos")]
-pub mod macos;
+mod macos;
+#[cfg(not(target_os = "macos"))]
+mod other;
 
-use tauri::AppHandle;
+use serde::Serialize;
 
-use content::Content;
+// 两个文件对外的函数一样，调用的地方不用分系统
+#[cfg(target_os = "macos")]
+pub use macos::{content, hide, measured, ready, show};
+#[cfg(not(target_os = "macos"))]
+pub use other::{content, hide, measured, ready, show};
 
-/// 把岛上的内容换成 `content`。只有 macOS 上有岛，别的系统上什么都不做。
-pub fn show(app: &AppHandle, content: Content) {
-    #[cfg(target_os = "macos")]
-    macos::show(app, content);
-    #[cfg(not(target_os = "macos"))]
-    let _ = (app, content);
+/// Where the content of each closed side goes in the page.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Layout {
+    pub notch: bool,
+    pub left: Option<PageRect>,
+    pub right: Option<PageRect>,
 }
 
-/// 撤掉岛上的所有内容。只有 macOS 上有岛，别的系统上什么都不做。
-pub fn hide(app: &AppHandle) {
-    #[cfg(target_os = "macos")]
-    macos::hide(app);
-    #[cfg(not(target_os = "macos"))]
-    let _ = app;
+/// A rectangle in the page: in logical pixels, from the top-left corner of the window, with y
+/// growing downward.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct PageRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
