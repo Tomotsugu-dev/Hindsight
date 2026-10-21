@@ -3,6 +3,7 @@
 
 pub mod focus;
 pub mod island;
+pub mod window;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -10,6 +11,7 @@ use tauri::{AppHandle, Emitter};
 use crate::plugins::background_window::LABEL;
 use focus::FocusEvent;
 use island::IslandClick;
+use window::WindowState;
 
 /// The event name the plugin background window listens to.
 const EVENT: &str = "plugin-event";
@@ -35,6 +37,9 @@ enum PluginEvent {
     /// JSON 里是 `{ "eventName": "island.clicked", "data": { "button": "pause" } }`。
     #[serde(rename = "island.clicked")]
     IslandClicked(IslandClick),
+    /// JSON 里是 `{ "eventName": "window.changed", "data": { "state": "minimized" } }`。
+    #[serde(rename = "window.changed")]
+    WindowChanged(WindowState),
 }
 
 /// Sends one event to one plugin. If it cannot be sent, it is only logged, and the other plugins
@@ -80,5 +85,20 @@ mod tests {
             serde_json::to_value(event).unwrap(),
             serde_json::json!({ "eventName": "island.clicked", "data": { "button": "pause" } })
         );
+    }
+
+    /// 窗口事件里只有窗口现在的样子。
+    #[test]
+    fn window_changed_json() {
+        for (state, name) in [
+            (WindowState::Open, "open"),
+            (WindowState::Minimized, "minimized"),
+            (WindowState::Closed, "closed"),
+        ] {
+            assert_eq!(
+                serde_json::to_value(PluginEvent::WindowChanged(state)).unwrap(),
+                serde_json::json!({ "eventName": "window.changed", "data": { "state": name } })
+            );
+        }
     }
 }
