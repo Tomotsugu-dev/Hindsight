@@ -3,8 +3,9 @@
 //! plugins change, this closes the windows that should no longer be open, and sends the new page
 //! list to all windows.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -13,6 +14,7 @@ use tauri::{
 };
 
 use crate::error::{Error, Result};
+use crate::plugins::events::window::{self as window_event, WindowState};
 use crate::plugins::file_reader;
 use crate::repo::plugins as repo;
 use crate::storage::DbPool;
@@ -27,6 +29,9 @@ const CHANGED_EVENT: &str = "plugin-pages-changed";
 /// How long a window must stay still before its position and size are saved, so that a drag
 /// does not write to the table on every move.
 const SAVE_DELAY: Duration = Duration::from_millis(500);
+
+/// 每个插件的窗口上次告诉插件的样子，按插件 id。窗口关掉的插件不在里面
+static STATES: Mutex<BTreeMap<String, WindowState>> = Mutex::new(BTreeMap::new());
 
 /// A plugin that has a page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -118,15 +123,62 @@ pub async fn open_window(app: &AppHandle, pool: &DbPool, id: &str) -> Result<()>
         _ => builder.center(),
     };
     let window = builder.build().map_err(window_error)?;
+    report(app, id, WindowState::Open);
 
     let changes = Arc::new(AtomicU64::new(0));
     let (app, id) = (app.clone(), id.to_string());
-    window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+    window.on_window_event(move |event| match event {
+        WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
             save_later(&app, &id, &changes);
+            // Windows 上最小化、还原都会发 Resized
+            report_now(&app, &id);
         }
+        WindowEvent::Focused(_) => report_now(&app, &id),
+        WindowEvent::Destroyed => report(&app, &id, WindowState::Closed),
+        _ => {}
     });
     Ok(())
+}
+
+/// 插件窗口最小化或者还原时告诉那个插件。在主线程上调一次。
+pub fn watch_minimize(app: &AppHandle) {
+    let app = app.clone();
+    crate::platform::on_minimize_changed(move || {
+        for label in app.webview_windows().into_keys() {
+            if let Some(id) = label.strip_prefix(LABEL_PREFIX) {
+                report_now(&app, id);
+            }
+        }
+    });
+}
+
+/// 看插件 `id` 的窗口现在有没有最小化，告诉插件。
+fn report_now(app: &AppHandle, id: &str) {
+    let Some(window) = app.get_webview_window(&label(id)) else {
+        return;
+    };
+    match window.is_minimized() {
+        Ok(true) => report(app, id, WindowState::Minimized),
+        Ok(false) => report(app, id, WindowState::Open),
+        Err(e) => log::warn!("plugins: cannot read the window of {id}: {e}"),
+    }
+}
+
+/// 告诉插件 `id` 它的窗口现在是 `state`。和上次告诉它的一样就不发。
+fn report(app: &AppHandle, id: &str, state: WindowState) {
+    let changed = remember(&mut STATES.lock().unwrap(), id, state);
+    if changed {
+        window_event::changed(app, id, state);
+    }
+}
+
+/// 把插件 `id` 的窗口记成 `state`。返回和上次记的是不是不一样。
+fn remember(states: &mut BTreeMap<String, WindowState>, id: &str, state: WindowState) -> bool {
+    match state {
+        // 关掉的不记：下次打开从头算
+        WindowState::Closed => states.remove(id).is_some(),
+        _ => states.insert(id.to_string(), state) != Some(state),
+    }
 }
 
 // Returns the label of the plugin window for the given plugin id.
@@ -248,6 +300,23 @@ mod tests {
                 url: file_reader::page_url("hindsight-focus", "0.1.0"),
             }]
         );
+    }
+
+    /// 窗口的样子变了才告诉插件：失去焦点、移动这些事件也会来问，样子没变就不发。
+    #[test]
+    fn tells_the_plugin_only_when_the_window_changes() {
+        let mut states = BTreeMap::new();
+        let mut tell = |state| remember(&mut states, "hindsight-focus", state);
+        assert!(tell(WindowState::Open));
+        assert!(!tell(WindowState::Open));
+        assert!(tell(WindowState::Minimized));
+        assert!(!tell(WindowState::Minimized));
+        assert!(tell(WindowState::Open));
+        assert!(tell(WindowState::Closed));
+        // 没开着的窗口关不了第二次
+        assert!(!tell(WindowState::Closed));
+        // 再打开又从头算
+        assert!(tell(WindowState::Open));
     }
 
     /// 记下的位置在某块屏幕上才用；外接屏拔掉以后，原来在它上面的位置就不算了。
