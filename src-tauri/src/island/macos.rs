@@ -1,4 +1,4 @@
-//! The island window on macOS. The window is always the size of the open island at its tallest. A
+//! The island window on macOS. The window is always the size of the open island at its largest. A
 //! Core Animation mask shows only the closed shapes or the open panel, so the window never resizes
 //! and the page never re-lays out while it animates. A tracking area tells when the mouse goes over
 //! the island and leaves it, also while another app is active. 窗口是不激活的 NSPanel：点岛不会
@@ -37,7 +37,7 @@ use tauri::{AppHandle, Emitter, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 
 use super::content::Content;
 use super::geometry::{self, Closed, Notch, Rect, Screen, NOTCH_RADIUS, OPEN_RADIUS};
-use super::{Layout, PageRect};
+use super::{Layout, PageRect, PanelSize};
 
 /// The label of the island window. `capabilities/island.json` uses the same label
 pub const LABEL: &str = "island";
@@ -67,8 +67,8 @@ struct Island {
     content: Option<Content>,
     /// The widths of the closed content, as last measured by the page
     widths: (Option<f64>, Option<f64>),
-    /// 页面上次量出的展开面板的高度；`None`：内容不展开
-    panel: Option<f64>,
+    /// 页面上次量出的展开内容的大小；`None`：内容不展开
+    panel: Option<PanelSize>,
     open: bool,
 }
 
@@ -168,9 +168,9 @@ pub fn content() -> Option<Content> {
     with_island(|island| island.content.clone()).flatten()
 }
 
-/// Takes the widths of the closed content and the height of the open panel measured by the page,
+/// Takes the widths of the closed content and the size of the open content measured by the page,
 /// and returns where each side goes. `None` when there is no island. 要在主线程上调用。
-pub fn measured(left: Option<f64>, right: Option<f64>, panel: Option<f64>) -> Option<Layout> {
+pub fn measured(left: Option<f64>, right: Option<f64>, panel: Option<PanelSize>) -> Option<Layout> {
     main_thread()?;
     with_island(|island| {
         island.widths = (left, right);
@@ -363,7 +363,11 @@ impl Island {
     }
 
     fn opened(&self) -> Rect {
-        geometry::open(&self.screen, self.panel.unwrap_or(0.0))
+        geometry::open(
+            &self.screen,
+            &self.closed(),
+            &self.panel.unwrap_or_default(),
+        )
     }
 
     /// Moves the mask's layers to the open panel or to the closed shapes.
@@ -440,7 +444,8 @@ impl Island {
             notch: matches!(closed, Closed::Notch(_)),
             left: left.map(|rect| page_rect(window, rect)),
             right: right.map(|rect| page_rect(window, rect)),
-            top_right: page_rect(window, closed.top_right(&self.screen)),
+            top_right: page_rect(window, closed.top_right(&self.screen, self.opened())),
+            open: page_rect(window, self.opened()),
         }
     }
 

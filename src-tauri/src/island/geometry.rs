@@ -4,10 +4,12 @@
 //! All coordinates are places on the screen: in logical pixels, from the bottom-left corner of the
 //! main screen, with y growing upward.
 
+use super::PanelSize;
+
 /// How far the closed island reaches past the notch on each side
 const EAR: f64 = 90.0;
-/// 展开的岛的宽度。刘海屏上右上角的字放在刘海右边，要放得下 20 宽的字
-const OPEN_WIDTH: f64 = 520.0;
+/// 展开的岛最宽多少。内容按上限放满时要这么宽：刘海屏上右上角 20 宽的字放在刘海右边
+const MAX_OPEN_WIDTH: f64 = 520.0;
 /// 展开时下面的面板最高多少：内容按上限放满也放得下
 const MAX_PANEL_HEIGHT: f64 = 200.0;
 /// With no notch: the gap from the island to the top of the screen, and from the capsules to the
@@ -56,13 +58,13 @@ pub struct Notch {
     pub height: f64,
 }
 
-/// 返回岛的窗口：和展开的岛一样宽，和展开到最高时一样高。只有 [`Closed`] 的形状或者
-/// [`open`] 显示出来，其余是透明的。
+/// 返回岛的窗口：和展开到最宽、最高时的岛一样大。只有 [`Closed`] 的形状或者 [`open`] 显示出来，
+/// 其余是透明的。
 pub fn window(screen: &Screen) -> Rect {
     let (width, gap) = match &screen.notch {
-        Some(notch) => (OPEN_WIDTH.max(notch.width + 2.0 * EAR), 0.0),
+        Some(notch) => (MAX_OPEN_WIDTH.max(notch.width + 2.0 * EAR), 0.0),
         // The same gap to the top of the screen as when closed
-        None => (OPEN_WIDTH, MENU_BAR_GAP),
+        None => (MAX_OPEN_WIDTH, MENU_BAR_GAP),
     };
     let height = strip(screen) + MAX_PANEL_HEIGHT;
     let frame = screen.frame;
@@ -74,17 +76,33 @@ pub fn window(screen: &Screen) -> Rect {
     }
 }
 
-/// 返回展开的岛：最上面一条，加上下面 `panel` 高的面板。
+/// 返回展开的岛：最上面一条，加上下面的面板，在屏幕正中。
 ///
-/// `panel` 是页面量出来的；太矮的补到圆角放得下，太高的截到 [`MAX_PANEL_HEIGHT`]。页面经 JSON 传来，
-/// 不会是 NaN。
-pub fn open(screen: &Screen, panel: f64) -> Rect {
+/// - 宽：放得下面板、右上角的字和收起时的形状，最宽到窗口那么宽；
+/// - 高：最上面一条加面板。面板太矮的补到圆角放得下，太高的截到 [`MAX_PANEL_HEIGHT`]。
+///
+/// `panel` 是页面量出来的，经 JSON 传来，不会是 NaN。
+pub fn open(screen: &Screen, closed: &Closed, panel: &PanelSize) -> Rect {
     let window = window(screen);
-    let height = strip(screen) + panel.clamp(2.0 * OPEN_RADIUS, MAX_PANEL_HEIGHT);
+    let center = window.x + window.width / 2.0;
+    // 字从刘海或左边胶囊的右边开始，岛又是居中的，所以要的宽度是它到中线距离的两倍
+    let top_right = match (panel.top_right, closed.top_right_start()) {
+        (Some(text), Some(start)) => 2.0 * (start - center + text),
+        (Some(text), None) => text,
+        (None, _) => 0.0,
+    };
+    let closed_width = closed.bounds().map_or(0.0, |bounds| bounds.width);
+    let width = panel
+        .width
+        .max(top_right)
+        .max(closed_width)
+        .clamp(2.0 * OPEN_RADIUS, window.width);
+    let height = strip(screen) + panel.height.clamp(2.0 * OPEN_RADIUS, MAX_PANEL_HEIGHT);
     Rect {
+        x: center - width / 2.0,
         y: window.top() - height,
+        width,
         height,
-        ..window
     }
 }
 
@@ -165,20 +183,24 @@ impl Closed {
         }
     }
 
-    /// 返回展开时右上角的字放在哪：最上面一条里，刘海右边，或者左边胶囊右边。
-    pub fn top_right(&self, screen: &Screen) -> Rect {
-        let window = window(screen);
-        let x = match *self {
-            Closed::Notch(rect) => rect.right() - EAR,
-            // 左边没有胶囊时整条都可以用：字靠右放
-            Closed::Floating { left, .. } => left.map_or(window.x, |left| left.right()),
-        };
+    /// 返回展开时右上角的字放在哪：展开的岛 `open` 最上面一条里，从刘海或者左边胶囊的右边到岛的
+    /// 右边。左边没有胶囊时整条都可以用，字靠右放。
+    pub fn top_right(&self, screen: &Screen, open: Rect) -> Rect {
+        let x = self.top_right_start().unwrap_or(open.x);
         let height = strip(screen);
         Rect {
             x,
-            y: window.top() - height,
-            width: window.right() - x,
+            y: open.top() - height,
+            width: open.right() - x,
             height,
+        }
+    }
+
+    /// 右上角的字最左从哪里开始：刘海右边，或者左边胶囊右边。`None`：左边没有胶囊。
+    fn top_right_start(&self) -> Option<f64> {
+        match *self {
+            Closed::Notch(rect) => Some(rect.right() - EAR),
+            Closed::Floating { left, .. } => left.map(|left| left.right()),
         }
     }
 
@@ -248,50 +270,95 @@ mod tests {
         }
     }
 
+    fn panel(width: f64, height: f64, top_right: Option<f64>) -> PanelSize {
+        PanelSize {
+            width,
+            height,
+            top_right,
+        }
+    }
+
     #[test]
     fn wraps_the_notch() {
         // 收起：刘海加两边各 90，贴着屏幕顶边居中；用不到内容宽度
+        let closed = Closed::new(&built_in(), Some(40.0), Some(60.0));
+        assert_eq!(closed, Closed::Notch(rect(566.0, 950.0, 380.0, 32.0)));
+        // 展开：面板比收起窄时和收起一样宽；高是刘海加面板：982 - 112 = 870
         assert_eq!(
-            Closed::new(&built_in(), Some(40.0), Some(60.0)),
-            Closed::Notch(rect(566.0, 950.0, 380.0, 32.0))
+            open(&built_in(), &closed, &panel(300.0, 80.0, None)),
+            rect(566.0, 870.0, 380.0, 112.0)
         );
-        // 展开比收起宽，(1512 - 520) / 2 = 496；高是刘海加面板：982 - 112 = 870
-        assert_eq!(open(&built_in(), 80.0), rect(496.0, 870.0, 520.0, 112.0));
+        // 面板宽 450：还在屏幕正中，756 - 225 = 531
+        assert_eq!(
+            open(&built_in(), &closed, &panel(450.0, 80.0, None)),
+            rect(531.0, 870.0, 450.0, 112.0)
+        );
+    }
+
+    #[test]
+    fn the_open_island_is_as_wide_as_its_content() {
+        let closed = Closed::new(&external(), Some(40.0), Some(100.0));
+        let width = |w: f64| open(&external(), &closed, &panel(w, 80.0, None)).width;
+        assert_eq!(width(300.0), 300.0);
+        // 至少盖住收起时的两个胶囊和中间的空隙
+        assert_eq!(width(10.0), 146.0);
+        // 最宽到窗口那么宽
+        assert_eq!(width(2000.0), 520.0);
     }
 
     #[test]
     fn the_panel_is_kept_between_the_corners_and_the_window() {
-        // 窗口和面板最高时的岛一样大：32 + 200
+        // 窗口和展开到最宽、最高时的岛一样大：32 + 200
         let window = window(&built_in());
         assert_eq!(window, rect(496.0, 750.0, 520.0, 232.0));
-        assert_eq!(open(&built_in(), 1000.0), window);
+        let closed = Closed::new(&built_in(), None, None);
+        assert_eq!(
+            open(&built_in(), &closed, &panel(2000.0, 1000.0, None)),
+            window
+        );
         // 太矮：补到圆角放得下
-        for panel in [0.0, -5.0] {
+        for height in [0.0, -5.0] {
             assert_eq!(
-                open(&built_in(), panel).height,
+                open(&built_in(), &closed, &panel(300.0, height, None)).height,
                 32.0 + 2.0 * OPEN_RADIUS,
-                "{panel}"
+                "{height}"
             );
         }
     }
 
     #[test]
     fn the_text_at_the_top_right_goes_right_of_the_notch() {
-        // 刘海右边 856 到窗口右边 1016
+        // 刘海右边 856 到岛的右边 1016
         let closed = Closed::new(&built_in(), None, None);
+        let open = window(&built_in());
         assert_eq!(
-            closed.top_right(&built_in()),
+            closed.top_right(&built_in(), open),
             rect(856.0, 950.0, 160.0, 32.0)
         );
-        // 没有刘海：从左边胶囊的右边 927 到窗口右边 1220
+        // 没有刘海：从左边胶囊的右边 927 到岛的右边 1220
         let closed = Closed::new(&external(), Some(40.0), Some(100.0));
+        let open = window(&external());
         assert_eq!(
-            closed.top_right(&external()),
+            closed.top_right(&external(), open),
             rect(927.0, 1058.0, 293.0, 19.0)
         );
         // 没有左边的胶囊，整条都用
         let closed = Closed::new(&external(), None, Some(100.0));
-        assert_eq!(closed.top_right(&external()).x, 700.0);
+        assert_eq!(closed.top_right(&external(), open).x, 700.0);
+    }
+
+    #[test]
+    fn the_island_opens_wide_enough_for_the_text_at_the_top_right() {
+        // 刘海右边到中线 100，字要 150：岛两边各 250
+        let closed = Closed::new(&built_in(), None, None);
+        let opened = open(&built_in(), &closed, &panel(100.0, 80.0, Some(150.0)));
+        assert_eq!(opened.width, 500.0);
+        assert_eq!(closed.top_right(&built_in(), opened).width, 150.0);
+        // 没有刘海：左边胶囊的右边 927 在中线 960 左边 33
+        let closed = Closed::new(&external(), Some(40.0), Some(100.0));
+        let opened = open(&external(), &closed, &panel(100.0, 80.0, Some(200.0)));
+        assert_eq!(opened.width, 2.0 * (200.0 - 33.0));
+        assert_eq!(closed.top_right(&external(), opened).width, 200.0);
     }
 
     #[test]
@@ -307,8 +374,12 @@ mod tests {
 
     #[test]
     fn floats_without_a_notch() {
-        // 离屏幕顶 3；高是胶囊的 19 加面板：978 + 99 + 3 = 1080
-        assert_eq!(open(&external(), 80.0), rect(700.0, 978.0, 520.0, 99.0));
+        // 在屏幕正中，离屏幕顶 3；高是胶囊的 19 加面板：978 + 99 + 3 = 1080
+        let closed = Closed::new(&external(), None, Some(60.0));
+        assert_eq!(
+            open(&external(), &closed, &panel(300.0, 80.0, None)),
+            rect(810.0, 978.0, 300.0, 99.0)
+        );
         // 页面量出内容之前，没有胶囊
         assert_eq!(Closed::new(&external(), None, None).bounds(), None);
     }
@@ -366,7 +437,10 @@ mod tests {
         // 按 30 算：胶囊高 30 - 6，展开高 24 加面板
         let closed = Closed::new(&screen, Some(40.0), None);
         assert_eq!(closed.shapes()[0].height, 24.0);
-        assert_eq!(open(&screen, 80.0).height, 104.0);
+        assert_eq!(
+            open(&screen, &closed, &panel(300.0, 80.0, None)).height,
+            104.0
+        );
     }
 
     #[test]
@@ -374,8 +448,10 @@ mod tests {
         // 圆角超过短边的一半，形状就画坏了
         let notch = Closed::new(&built_in(), None, None).shapes()[0];
         assert!(NOTCH_RADIUS <= notch.height / 2.0);
+        // 最小的展开：面板什么都没量出来，只有一个圆形胶囊
         for screen in [built_in(), external()] {
-            let open = open(&screen, 0.0);
+            let closed = Closed::new(&screen, Some(0.0), None);
+            let open = open(&screen, &closed, &PanelSize::default());
             assert!(OPEN_RADIUS <= open.width.min(open.height) / 2.0);
         }
     }
