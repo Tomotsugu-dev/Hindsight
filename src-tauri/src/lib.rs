@@ -7,6 +7,7 @@ mod commands;
 mod device;
 mod error;
 mod icons;
+mod island;
 mod memory;
 mod permissions;
 mod platform;
