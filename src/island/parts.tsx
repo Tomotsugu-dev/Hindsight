@@ -13,10 +13,18 @@ function Icon({ name, color, size }: { name: string; color: string | null; size:
   return <Shape size={size} color={tint(color) ?? "#fff"} strokeWidth={2.25} />;
 }
 
-function Ring({ share, size, color }: { share: number; size: number; color: string | null }) {
+/** 计时器的环两头之间至少空多少：剩的时间是满的也看得出是个环 */
+const TIMER_GAP = 2;
+
+type RingProps = { share: number; size: number; color: string | null; gap?: boolean };
+
+/** `gap`：两头之间留一条缝，计时器用。`ring` 组件不留，它的 1 是做完了，画满圈 */
+function Ring({ share, size, color, gap = false }: RingProps) {
   const stroke = Math.max(2, size / 8);
   const r = (size - stroke) / 2;
   const length = 2 * Math.PI * r;
+  // 两头的圆角各伸出半个线宽，所以还要多让一个线宽。按比例缩短，环一开始就跟着时间走
+  const most = gap ? Math.max(0, (length - stroke - TIMER_GAP) / length) : 1;
   return (
     <svg className={styles.ring} width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle cx={size / 2} cy={size / 2} r={r} className={styles.ringTrack} strokeWidth={stroke} />
@@ -29,7 +37,7 @@ function Ring({ share, size, color }: { share: number; size: number; color: stri
         strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={length}
-        strokeDashoffset={length * (1 - share)}
+        strokeDashoffset={length * (1 - share * most)}
       />
     </svg>
   );
@@ -62,7 +70,7 @@ export function Side({ component, now }: { component: Component; now: number }) 
     case "timer":
       return (
         <span className={styles.inline}>
-          <Ring share={shareLeft(component, now)} size={14} color={component.color} />
+          <Ring share={shareLeft(component, now)} size={14} color={component.color} gap />
           <span className={styles.time}>{formatSeconds(secondsLeft(component, now))}</span>
         </span>
       );
@@ -88,7 +96,7 @@ export function Block({ component, now }: { component: Component; now: number })
     case "timer":
       return (
         <span className={styles.inline}>
-          <Ring share={shareLeft(component, now)} size={20} color={component.color} />
+          <Ring share={shareLeft(component, now)} size={20} color={component.color} gap />
           <span className={`${styles.large} ${styles.time}`}>
             {formatSeconds(secondsLeft(component, now))}
           </span>
