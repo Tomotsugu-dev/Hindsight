@@ -211,14 +211,22 @@ pub fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
         // User clicked the app icon in the Dock (macOS Reopen event). When minimized to tray,
         // the app normally switches to Accessory policy without a Dock icon; this serves as a fallback
         // in case the policy switch failed, ensuring the main window is restored or recreated.
-        tauri::RunEvent::Reopen {
-            has_visible_windows: false,
-            ..
-        } => {
+        // 不用事件里的 has_visible_windows：AppKit 可能把一直显示着的岛也算进去，那样点 Dock 图标就
+        // 叫不回主窗口了
+        tauri::RunEvent::Reopen { .. } if !shows_a_window(app) => {
             crate::bootstrap::show_or_recreate_main(app);
         }
         _ => {}
     }
+}
+
+/// 有没有显示着的窗口，岛不算。
+#[cfg(target_os = "macos")]
+fn shows_a_window(app: &tauri::AppHandle) -> bool {
+    use tauri::Manager;
+    app.webview_windows().iter().any(|(label, window)| {
+        label != crate::island::LABEL && window.is_visible().unwrap_or(false)
+    })
 }
 
 /// Non-macOS: no-op (Reopen is a macOS Dock concept).

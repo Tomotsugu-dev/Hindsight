@@ -1829,6 +1829,7 @@
       "categories_read": "Permiso para leer los nombres de todas las categorías y las supercategorías a las que pertenecen",
       "super_categories_read": "Permiso para leer los nombres de todas las supercategorías",
       "notifications": "Permiso para enviar notificaciones del sistema",
+      "island": "Permiso para mostrar contenido en la isla del centro de la barra de menús",
       "focus_changed": "Permiso para leer eventos cuando cambias de aplicación o dejas el ordenador",
       "focus_app": "Permiso para leer eventos de cambio de aplicación y el nombre de la aplicación a la que cambias",
       "focus_category": "Permiso para leer a qué categoría pertenece la aplicación a la que cambias",

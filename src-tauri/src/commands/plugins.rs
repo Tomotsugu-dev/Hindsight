@@ -7,12 +7,13 @@ use tauri::{AppHandle, State};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::error::Error;
+use crate::island::content::Content;
 use crate::plugins::api;
 use crate::plugins::background_window::{self, BackgroundPlugin};
 use crate::plugins::icon;
 use crate::plugins::market::{self, Market};
 use crate::plugins::pages::{self, PluginPage};
-use crate::plugins::{self, install, manifest, plugin_zips_dir, plugins_dir};
+use crate::plugins::{self, install, island, manifest, plugin_zips_dir, plugins_dir};
 use crate::repo::plugins as repo;
 use crate::storage::DbPool;
 
@@ -189,16 +190,28 @@ pub async fn plugin_call(
             .show()
             .map_err(|e| Error::Other(format!("notification: {e}")))
     };
+    let island = |content: Option<Content>| match content {
+        Some(content) => island::show(&app, &plugin_id, content),
+        None => island::hide(&app, &plugin_id),
+    };
     let plugins_dir = plugins_dir();
     let host = api::Host {
         pool: &pool,
         plugins_dir: &plugins_dir,
         self_id: crate::device::self_id()?,
         notify,
+        island,
     };
     api::call(host, &plugin_id, &method, params, device)
         .await
         .map_err(Into::into)
+}
+
+/// 插件 `plugin_id` 的后台被启动器停下了：连着两次 ping 都没回。撤下它放在岛上的内容。
+#[tauri::command]
+pub fn plugin_stopped(app: AppHandle, plugin_id: String) {
+    log::warn!("plugins: {plugin_id} was stopped: no reply to two pings");
+    island::hide(&app, &plugin_id);
 }
 
 /// Opens the local plugin zip folder in the file manager, creating it if it does not exist.

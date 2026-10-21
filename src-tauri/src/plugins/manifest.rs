@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 
 /// Permissions this version knows, and the permission each one must be requested with.
 /// For all permissions, see docs/design/plugins/en/permissions.md.
-const PERMISSIONS: [(&str, Option<&str>); 13] = [
+const PERMISSIONS: [(&str, Option<&str>); 14] = [
     ("stats.read", None),
     ("stats.today", Some("stats.read")),
     ("stats.week", Some("stats.read")),
@@ -17,6 +17,7 @@ const PERMISSIONS: [(&str, Option<&str>); 13] = [
     ("categories.read", None),
     ("super_categories.read", None),
     ("notifications", None),
+    ("island", None),
     ("focus.changed", None),
     ("focus.app", Some("focus.changed")),
     ("focus.category", Some("focus.changed")),

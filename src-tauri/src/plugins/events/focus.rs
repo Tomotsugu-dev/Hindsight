@@ -85,7 +85,11 @@ pub async fn run(app: AppHandle, pool: DbPool, mut focus: mpsc::Receiver<FocusCh
             }
         };
         for (to_plugin_id, data) in events {
-            send(&app, to_plugin_id, PluginEvent::FocusChanged(data));
+            send(
+                &app,
+                to_plugin_id,
+                PluginEvent::FocusChanged(Box::new(data)),
+            );
         }
     }
 }

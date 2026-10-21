@@ -3,6 +3,7 @@
 
 pub(super) mod categories;
 mod db;
+mod island;
 mod notifications;
 mod stats;
 
@@ -12,12 +13,13 @@ use serde_json::value::{to_raw_value, RawValue};
 use serde_json::Value;
 
 use crate::error::{Error, Result};
+use crate::island::content::Content;
 use crate::repo::plugins::{self as repo, Plugin};
 use crate::storage::DbPool;
 use categories::{CategoryRef, SuperCategoryRef};
 
 /// What a call needs from the app. It is the same for every call.
-pub struct Host<'a, N> {
+pub struct Host<'a, N, I> {
     pub pool: &'a DbPool,
     /// The plugin library. Each plugin's own database is in it too
     pub plugins_dir: &'a Path,
@@ -25,6 +27,8 @@ pub struct Host<'a, N> {
     pub self_id: &'a str,
     /// Shows a system notification. The parameters are the title and the body
     pub notify: N,
+    /// 把这个插件的内容放到岛上（`Some`），或者撤下（`None`）
+    pub island: I,
 }
 
 /// Runs one call from plugin `plugin_id`.
@@ -38,10 +42,11 @@ pub struct Host<'a, N> {
 /// - There is no such method: [`Error::PluginUnknownMethod`]
 /// - The plugin does not have the permission the method needs: [`Error::PluginNoPermission`]
 /// - The parameters are wrong: [`Error::InvalidInput`]
+/// - 岛的内容不合规则：[`Error::InvalidInputDyn`]
 /// - The plugin's SQL has an error, is denied, runs too long, or its database is full:
 ///   [`Error::Sqlite`]
 pub async fn call(
-    host: Host<'_, impl FnOnce(&str, &str) -> Result<()>>,
+    host: Host<'_, impl FnOnce(&str, &str) -> Result<()>, impl FnOnce(Option<Content>)>,
     plugin_id: &str,
     method: &str,
     params: Value,
@@ -52,6 +57,7 @@ pub async fn call(
         plugins_dir,
         self_id,
         notify,
+        island,
     } = host;
     let plugin = repo::get(pool, plugin_id)
         .await?
@@ -68,6 +74,8 @@ pub async fn call(
         Method::ListCategories => serde_json::to_value(CategoryRef::list(pool).await?)?,
         Method::ListSuperCategories => serde_json::to_value(SuperCategoryRef::list(pool).await?)?,
         Method::SendNotification => notifications::send(&plugin, params, notify)?,
+        Method::ShowIsland => island::show(&plugin, params, island)?,
+        Method::HideIsland => island::hide(island)?,
         Method::DbExecute => db::execute(plugins_dir, &plugin, params).await?,
         // The rows are written as JSON text while they are read, so the size can be limited in
         // bytes
@@ -86,6 +94,10 @@ enum Method {
     ListSuperCategories,
     /// `notifications.send`
     SendNotification,
+    /// `island.show`
+    ShowIsland,
+    /// `island.hide`
+    HideIsland,
     /// `db.execute`
     DbExecute,
     /// `db.query`
@@ -104,6 +116,8 @@ impl Method {
             "categories.list" => Ok(Self::ListCategories),
             "super_categories.list" => Ok(Self::ListSuperCategories),
             "notifications.send" => Ok(Self::SendNotification),
+            "island.show" => Ok(Self::ShowIsland),
+            "island.hide" => Ok(Self::HideIsland),
             "db.execute" => Ok(Self::DbExecute),
             "db.query" => Ok(Self::DbQuery),
             _ => Err(Error::PluginUnknownMethod(name.into())),
@@ -118,6 +132,7 @@ impl Method {
             Self::ListCategories => Some("categories.read"),
             Self::ListSuperCategories => Some("super_categories.read"),
             Self::SendNotification => Some("notifications"),
+            Self::ShowIsland | Self::HideIsland => Some("island"),
             Self::DbExecute | Self::DbQuery => None,
         }
     }
@@ -147,7 +162,7 @@ mod tests {
     use crate::plugins::test_util::{plugin_row, plugin_with_permissions, TempDir};
     use crate::repo::test_util::fresh_test_pool;
 
-    /// 主界面没选过设备，通知什么都不做。
+    /// 主界面没选过设备，通知和岛都什么都不做。
     async fn call_in(
         pool: &DbPool,
         plugins_dir: &Path,
@@ -160,6 +175,7 @@ mod tests {
             plugins_dir,
             self_id: "this-mac",
             notify: |_: &str, _: &str| Ok(()),
+            island: |_: Option<Content>| {},
         };
         let raw = call(host, id, method, params, None).await?;
         Ok(serde_json::from_str(raw.get()).unwrap())
@@ -212,6 +228,8 @@ mod tests {
             ("categories.list", "categories.read"),
             ("super_categories.list", "super_categories.read"),
             ("notifications.send", "notifications"),
+            ("island.show", "island"),
+            ("island.hide", "island"),
         ] {
             let err = call_simple(&pool, "no-permissions", method, Value::Null)
                 .await

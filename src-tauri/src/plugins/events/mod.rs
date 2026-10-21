@@ -2,12 +2,14 @@
 //! plugin background window. Each kind of event has its own file.
 
 pub mod focus;
+pub mod island;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::plugins::background_window::LABEL;
 use focus::FocusEvent;
+use island::IslandClick;
 
 /// The event name the plugin background window listens to.
 const EVENT: &str = "plugin-event";
@@ -28,7 +30,11 @@ struct Envelope {
 enum PluginEvent {
     /// In JSON: `{ "eventName": "focus.changed", "data": { … } }`.
     #[serde(rename = "focus.changed")]
-    FocusChanged(FocusEvent),
+    // Box：比按钮事件大得多，放在一起会让每个事件都占这么大
+    FocusChanged(Box<FocusEvent>),
+    /// JSON 里是 `{ "eventName": "island.clicked", "data": { "button": "pause" } }`。
+    #[serde(rename = "island.clicked")]
+    IslandClicked(IslandClick),
 }
 
 /// Sends one event to one plugin. If it cannot be sent, it is only logged, and the other plugins
@@ -55,12 +61,24 @@ mod tests {
     fn envelope_json() {
         let envelope = Envelope {
             to_plugin_id: "hindsight-focus".into(),
-            event: PluginEvent::FocusChanged(FocusEvent::default()),
+            event: PluginEvent::FocusChanged(Box::default()),
         };
         let json = serde_json::to_value(envelope).unwrap();
         assert_eq!(json["toPluginId"], "hindsight-focus");
         assert_eq!(json["eventName"], "focus.changed");
         assert!(json["data"].is_object());
         assert_eq!(json.as_object().unwrap().len(), 3);
+    }
+
+    /// 按钮事件里只有按钮的 id。
+    #[test]
+    fn island_click_json() {
+        let event = PluginEvent::IslandClicked(IslandClick {
+            button: "pause".into(),
+        });
+        assert_eq!(
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({ "eventName": "island.clicked", "data": { "button": "pause" } })
+        );
     }
 }

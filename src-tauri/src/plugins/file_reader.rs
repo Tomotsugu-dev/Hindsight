@@ -66,7 +66,7 @@ const LAUNCHER_HTML: &str = r#"<!doctype html><script src="_launcher.js"></scrip
 /// and the parent page.
 ///
 /// Heartbeat: pings the Worker every 10 seconds, and stops it when two pings in a row get no
-/// reply, so that a plugin stuck in a loop does not keep a CPU core busy.
+/// reply, so that a plugin stuck in a loop does not keep a CPU core busy. 停下以后告诉父页面。
 ///
 /// `"*"`: the parent page can only be a Hindsight page, see [`ok`].
 const LAUNCHER_JS: &str = r#"const worker = new Worker("_worker.js");
@@ -76,6 +76,7 @@ const heartbeat = setInterval(() => {
     clearInterval(heartbeat);
     worker.terminate();
     console.warn("plugin stopped: no reply to two pings");
+    parent.postMessage({ stopped: true }, "*");
     return;
   }
   missed += 1;
