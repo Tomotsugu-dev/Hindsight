@@ -51,7 +51,8 @@ function Slot({ rect, className, children }: SlotProps) {
   );
 }
 
-/** 展开时下面的面板：左边一列，右边一行。量高度的那份和显示的那份是同一个组件 */
+/** 展开时下面的面板：左边一列；右边一行，下面可以再有一个小字。量高度的那份和显示的那份是同一个
+ * 组件 */
 function Panel({ open, now }: { open: Open; now: number }) {
   return (
     <div className={styles.panelBody}>
@@ -60,10 +61,13 @@ function Panel({ open, now }: { open: Open; now: number }) {
           <Block key={i} component={component} now={now} />
         ))}
       </div>
-      <div className={styles.row}>
-        {open.right.map((component, i) => (
-          <Block key={i} component={component} now={now} />
-        ))}
+      <div className={styles.right}>
+        <div className={styles.row}>
+          {open.right.map((component, i) => (
+            <Block key={i} component={component} now={now} />
+          ))}
+        </div>
+        {open.bottomRight ? <TextView text={open.bottomRight} /> : null}
       </div>
     </div>
   );

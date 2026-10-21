@@ -104,8 +104,15 @@
   max-width: 100%;
 }
 
-.row {
+.right {
   flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.row {
   display: flex;
   align-items: center;
   gap: 12px;
