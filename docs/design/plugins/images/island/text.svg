@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="170" viewBox="0 0 560 170" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif" font-weight="500" fill="#fff">
+  <rect width="560" height="170" rx="12" fill="#f3f4f6"/>
+  <!-- Closed: small text only, no sub -->
+  <rect x="72" y="55" width="96" height="60" rx="30" fill="#000"/>
+  <text x="120" y="85" font-size="24" text-anchor="middle" dominant-baseline="central">专注</text>
+  <!-- Open: large text with sub, and small text in runs -->
+  <rect x="230" y="15" width="300" height="140" rx="32" fill="#000"/>
+  <text x="262" y="78" font-size="44" font-weight="600"><tspan font-weight="700">2:40</tspan><tspan dx="8" font-size="30" font-weight="500" fill-opacity="0.55">/ 6:00</tspan></text>
+  <text x="262" y="128" font-size="24"><tspan font-weight="700">工作中</tspan><tspan fill-opacity="0.55"> · Code</tspan></text>
+</svg>

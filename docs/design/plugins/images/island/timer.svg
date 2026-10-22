@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="140" viewBox="0 0 560 140" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif" font-weight="500" fill="#fff">
+  <rect width="560" height="140" rx="12" fill="#f3f4f6"/>
+  <!-- Closed: a 14 px ring and small text. A quarter of the time is gone -->
+  <rect x="45" y="40" width="150" height="60" rx="30" fill="#000"/>
+  <circle cx="79" cy="70" r="12" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="4"/>
+  <circle cx="79" cy="70" r="12" fill="none" stroke="#fb923c" stroke-width="4" stroke-linecap="round" stroke-dasharray="75.4" stroke-dashoffset="24.85" transform="rotate(-90 79 70)"/>
+  <text x="105" y="70" font-size="24" dominant-baseline="central">18:42</text>
+  <!-- Open: a 20 px ring and large text -->
+  <rect x="250" y="15" width="270" height="110" rx="32" fill="#000"/>
+  <circle cx="316.5" cy="70" r="17.5" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="5"/>
+  <circle cx="316.5" cy="70" r="17.5" fill="none" stroke="#fb923c" stroke-width="5" stroke-linecap="round" stroke-dasharray="110" stroke-dashoffset="34.3" transform="rotate(-90 316.5 70)"/>
+  <text x="348.5" y="70" font-size="44" font-weight="600" dominant-baseline="central">18:42</text>
+</svg>

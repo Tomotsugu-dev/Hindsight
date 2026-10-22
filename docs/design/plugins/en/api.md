@@ -50,6 +50,8 @@ sequenceDiagram
 | `notifications.send` | `notifications` | `{ "body": "10 minutes on YouTube already" }` | Nothing |
 | `db.execute` | No permission; needs the disk space the user approved | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`; `params` is optional | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | Same as above | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`, one object per row, keyed by column name; at most 10 MB |
+| `island.show` | `island` | What to put on the island. For the format, see [The island](island.md) | None |
+| `island.hide` | `island` | None | None |
 
 - A plugin adds up super-category times itself by `superCategory`, the same way the main window does.
 - `categories.list` and `super_categories.list` let a plugin's settings page list every category and super-category for the user to choose from. Statistics show only the categories that were used.

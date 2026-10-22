@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="140" viewBox="0 0 560 140">
+  <rect width="560" height="140" rx="12" fill="#f3f4f6"/>
+  <!-- Open only: 10 columns, 14 cells, the 8th is the current one -->
+  <rect x="120" y="15" width="320" height="110" rx="32" fill="#000"/>
+  <g fill="#a78bfa">
+    <rect x="153" y="47" width="20" height="20" rx="4"/>
+    <rect x="179" y="47" width="20" height="20" rx="4"/>
+    <rect x="205" y="47" width="20" height="20" rx="4"/>
+    <rect x="231" y="47" width="20" height="20" rx="4"/>
+    <rect x="257" y="47" width="20" height="20" rx="4"/>
+    <rect x="309" y="47" width="20" height="20" rx="4"/>
+    <rect x="335" y="47" width="20" height="20" rx="4"/>
+  </g>
+  <rect x="283" y="47" width="20" height="20" rx="4" fill="#f87171"/>
+  <g fill="#fff" fill-opacity="0.26">
+    <rect x="361" y="47" width="20" height="20" rx="4"/>
+    <rect x="387" y="47" width="20" height="20" rx="4"/>
+    <rect x="153" y="73" width="20" height="20" rx="4"/>
+    <rect x="179" y="73" width="20" height="20" rx="4"/>
+    <rect x="205" y="73" width="20" height="20" rx="4"/>
+    <rect x="231" y="73" width="20" height="20" rx="4"/>
+  </g>
+  <rect x="331.5" y="43.5" width="27" height="27" rx="7" fill="none" stroke="#fff" stroke-opacity="0.6" stroke-width="3"/>
+</svg>
