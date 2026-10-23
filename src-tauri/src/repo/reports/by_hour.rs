@@ -35,7 +35,7 @@ pub async fn day_hours(
                    -- Keep uncategorized activities under `other`; exclude only `hidden` ones.
                    AND c.id IS NOT 'hidden'
                    AND a.excluded = 0",
-                with = host_rule_with_sql(),
+                with = host_rule_with_sql("activities"),
                 from = from_stats_category_sql("activities"),
                 device = device.sql_clause(),
             );
@@ -140,7 +140,7 @@ pub async fn day_hour_apps(
                         OR (a.local_date = ? AND substr(a.ended_at, 1, 10) = ?)) {device}
                    AND c.id IS NOT 'hidden'
                    AND a.excluded = 0",
-                with = host_rule_with_sql(),
+                with = host_rule_with_sql("activities"),
                 from = from_stats_category_sql("activities"),
                 device = device.sql_clause(),
             );

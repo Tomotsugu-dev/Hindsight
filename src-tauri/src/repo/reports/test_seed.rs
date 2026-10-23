@@ -230,3 +230,47 @@ pub(crate) async fn seed_solo_group(pool: &DbPool, name: &str, category_id: &str
         .await
         .unwrap();
 }
+
+/// `daily_usage` 的一行：(日期, 设备, 进程, 网站, 秒数)。
+pub(super) type UsageRow = (String, String, String, String, i64);
+
+/// `daily_usage` 的全部行，按主键排好。
+pub(super) async fn daily_usage_rows(pool: &DbPool) -> Vec<UsageRow> {
+    pool.0
+        .call(|conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT local_date, device_id, process_name, url_host, secs
+                       FROM daily_usage ORDER BY 1, 2, 3, 4",
+                )
+                .db()?;
+            let rows = stmt
+                .query_map([], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<UsageRow>>>()
+                .db()?;
+            Ok(rows)
+        })
+        .await
+        .unwrap()
+}
+
+/// `daily_usage_stale` 里记下的日期范围：(开始那天, 结束那天)，排好序。
+pub(super) async fn daily_usage_notes(pool: &DbPool) -> Vec<(String, String)> {
+    pool.0
+        .call(|conn| {
+            let mut stmt = conn
+                .prepare("SELECT from_date, to_date FROM daily_usage_stale ORDER BY 1, 2")
+                .db()?;
+            let notes = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            Ok(notes)
+        })
+        .await
+        .unwrap()
+}

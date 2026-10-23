@@ -148,7 +148,7 @@ pub(crate) fn fetch_raw_rows(
          ORDER BY a.started_at
          LIMIT {}",
         RAW_ROW_CAP + 1,
-        with = host_rule_with_sql(),
+        with = host_rule_with_sql("activities"),
         from = from_stats_category_sql("activities"),
     );
     let mut stmt = conn.prepare(&sql)?;

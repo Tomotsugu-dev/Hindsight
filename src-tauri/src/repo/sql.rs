@@ -78,21 +78,22 @@ pub fn matching_rule_host_sql(hosts_sql: &str) -> String {
     )
 }
 
-/// Generates the leading `WITH RECURSIVE` clause required by statistics queries.
+/// Generates the leading `WITH RECURSIVE` clause for statistics queries.
 ///
-/// It collects non-null domains visited in the given date range from `activities`,
-/// finds the applicable website rule for each (preferring an exact match, then the
-/// nearest parent domain), and defines the `host_rule(host, rule_host, category_id)`
-/// CTE for [`from_stats_category_sql`] to join.
+/// It takes the websites seen in the date range from the `source` table (`activities` or
+/// `daily_usage`), finds the website rule that applies to each (an exact match first, then the
+/// nearest parent domain), and defines `host_rule(host, rule_host, category_id)` for
+/// [`from_stats_category_sql`] to join. The condition is `url_host <> ''`, which leaves out both
+/// NULL and '': rows without a website in `daily_usage` store ''.
 ///
-/// The returned SQL has two `?` parameters, bound in order: start date and end date.
-pub fn host_rule_with_sql() -> String {
+/// The returned SQL has two `?` parameters: the start date, then the end date.
+pub fn host_rule_with_sql(source: &str) -> String {
     format!(
         "WITH RECURSIVE {}",
-        matching_rule_host_sql(
-            "SELECT DISTINCT url_host FROM activities
-              WHERE url_host IS NOT NULL AND local_date >= ? AND local_date <= ?"
-        )
+        matching_rule_host_sql(&format!(
+            "SELECT DISTINCT url_host FROM {source}
+              WHERE url_host <> '' AND local_date >= ? AND local_date <= ?"
+        ))
     )
 }
 
