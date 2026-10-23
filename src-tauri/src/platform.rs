@@ -140,6 +140,19 @@ pub fn set_taskbar_dot(
     Ok(())
 }
 
+/// The notification sound name that plays the system alert sound. `None`: the platform has no
+/// such name, and notifications stay silent.
+#[cfg(target_os = "macos")]
+pub const NOTIFICATION_SOUND: Option<&str> = Some("NSUserNotificationDefaultSoundName");
+
+/// The notification sound name that plays the system alert sound.
+#[cfg(target_os = "windows")]
+pub const NOTIFICATION_SOUND: Option<&str> = Some("Default");
+
+/// Other platforms: notifications stay silent.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub const NOTIFICATION_SOUND: Option<&str> = None;
+
 /// Auto start argument for Windows platform.
 pub const AUTOSTART_ARG: &str = "--autostart";
 

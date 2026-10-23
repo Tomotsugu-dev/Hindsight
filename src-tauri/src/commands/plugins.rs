@@ -182,11 +182,12 @@ pub async fn plugin_call(
     device: Option<String>,
 ) -> Result<Box<serde_json::value::RawValue>, String> {
     log::debug!("plugins: {plugin_id} calls {method}");
-    let notify = |title: &str, body: &str| {
-        app.notification()
-            .builder()
-            .title(title)
-            .body(body)
+    let notify = |title: &str, body: &str, sound: bool| {
+        let mut notification = app.notification().builder().title(title).body(body);
+        if let Some(name) = crate::platform::NOTIFICATION_SOUND.filter(|_| sound) {
+            notification = notification.sound(name);
+        }
+        notification
             .show()
             .map_err(|e| Error::Other(format!("notification: {e}")))
     };

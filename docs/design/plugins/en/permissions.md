@@ -90,6 +90,7 @@ The plugin's background script receives events pushed by Hindsight (see [④ Rec
 | Permission | What it allows | Risk | Status |
 |---|---|---|---|
 | `notifications` | Send system notifications | Low | MVP |
+| `notifications.sound` | Play the system alert sound with a notification. Must be requested with `notifications` | Low | MVP |
 | `island` | Put content on the island in the middle of the menu bar (see [The island](island.md)), and get clicks on its own buttons there | Low | MVP |
 | `network` | Connect to the addresses listed in the manifest, such as a server for a friends' leaderboard | High | Later |
 | `links.open` | Open a URL in the browser | Low | Later |

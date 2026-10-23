@@ -47,7 +47,7 @@ sequenceDiagram
 | `stats.day_by_category` | `stats.read` and one range | `{ "date": "2026-10-19", "devices": "selected" }`; `devices` is optional | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "icon": "Code", "seconds": 12600, "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" } }]`, longest first. For a category in no super-category, `superCategory` is `null` |
 | `categories.list` | `categories.read` | None | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "icon": "Code", "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" } }]`, in the order of the main window. For a category in no super-category, `superCategory` is `null` |
 | `super_categories.list` | `super_categories.read` | None | `[{ "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" }]`, in the order of the main window |
-| `notifications.send` | `notifications` | `{ "body": "10 minutes on YouTube already" }` | Nothing |
+| `notifications.send` | `notifications`; with a sound, also `notifications.sound` | `{ "body": "10 minutes on YouTube already", "sound": true }`; `sound` is optional | Nothing |
 | `db.execute` | No permission; needs the disk space the user approved | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`; `params` is optional | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | Same as above | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`, one object per row, keyed by column name; at most 10 MB |
 | `island.show` | `island` | What to put on the island. For the format, see [The island](island.md) | None |
@@ -60,3 +60,4 @@ sequenceDiagram
 - The plugin says which devices to count. If `devices` is missing or `"this"`, only this computer counts. If it is `"selected"`, the devices selected in the main window count. This needs `devices.read`, and the call fails without it. The range is never changed quietly, so the plugin always gets the numbers it asked for.
 - The forwarder adds the device selected in the main window to every call. The plugin cannot change it.
 - The notification title is always the plugin name, so a plugin cannot pose as Hindsight. There is no rate limit. If a plugin sends too many, the user can turn it off.
+- With `sound: true`, the notification also plays the system alert sound. There is only the system default sound. Without `notifications.sound` the call fails and no notification is shown: it is never sent silently instead. Without `sound`, the notification is silent.
