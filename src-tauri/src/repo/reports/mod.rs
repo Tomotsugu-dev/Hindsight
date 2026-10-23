@@ -6,6 +6,7 @@
 //!   and the app ranking for a selected hour, for the Daily page.
 //! - `by_date.rs`: queries daily time per category and app rankings within a date range for the
 //!   Daily, Weekly and Monthly pages.
+//! - `daily_usage.rs`: keeps the daily totals that `by_date.rs` reads up to date (ADR-0016).
 //! - `app_detail.rs`: queries the details shown after clicking an app, for daily, weekly and
 //!   monthly time ranges.
 //! - `time.rs`: provides helpers for parsing times, splitting time ranges by hour, and calculating
@@ -21,6 +22,7 @@ use serde::Serialize;
 mod app_detail;
 mod by_date;
 mod by_hour;
+mod daily_usage;
 #[cfg(test)]
 pub(crate) mod test_seed;
 mod time;
