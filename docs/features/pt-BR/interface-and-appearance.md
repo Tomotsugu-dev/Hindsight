@@ -18,12 +18,15 @@ Ao mudar o idioma da interface, o idioma dos prompts usados nos resumos de IA ta
 
 ## Temas
 
-O Hindsight oferece três temas: Padrão, Minimalista e Escuro.
+O Hindsight oferece quatro temas: Padrão, Minimalista, Plano e espaçoso e Escuro.
+
+O tema Plano e espaçoso usa fundo branco, espaço generoso e divisórias sutis e pode ser selecionado em “Ajustes → Aparência”.
 
 <table align="center">
   <tr>
     <td align="center"><img src="./imgs/interface-and-appearance/day-default.png" alt="Estatísticas diárias no tema Padrão"><br />Padrão</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-minimal.png" alt="Estatísticas diárias no tema Minimalista"><br />Minimalista</td>
+    <td align="center"><img src="./imgs/interface-and-appearance/day-flat.png" alt="Estatísticas diárias no tema Plano e espaçoso"><br />Plano e espaçoso</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-dark.png" alt="Estatísticas diárias no tema Escuro"><br />Escuro</td>
   </tr>
 </table>

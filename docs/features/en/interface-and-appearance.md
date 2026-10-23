@@ -18,12 +18,15 @@ Changing the interface language also changes the prompt language used for AI sum
 
 ## Themes
 
-Hindsight offers three themes: Default, Minimal, and Dark.
+Hindsight offers four themes: Default, Minimal, Airy flat, and Dark.
+
+Airy flat uses a white background, generous spacing, and thin dividers; select it in “Settings → Appearance”.
 
 <table align="center">
   <tr>
     <td align="center"><img src="./imgs/interface-and-appearance/day-default.png" alt="Daily — Default theme"><br />Default</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-minimal.png" alt="Daily — Minimal theme"><br />Minimal</td>
+    <td align="center"><img src="./imgs/interface-and-appearance/day-flat.png" alt="Daily — Airy flat theme"><br />Airy flat</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-dark.png" alt="Daily — Dark theme"><br />Dark</td>
   </tr>
 </table>

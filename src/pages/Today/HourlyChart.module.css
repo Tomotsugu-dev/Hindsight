@@ -2,6 +2,10 @@
   padding: 18px 16px 10px;
 }
 
+:global([data-theme="flat"]) .chart {
+  padding: 18px 12px 10px 0;
+}
+
 /* —— 绘图主体（Y 轴 + 绘图区） —— */
 .plot {
   display: flex;

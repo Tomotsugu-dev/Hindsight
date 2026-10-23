@@ -2,12 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Palette } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
-import {
-  APP_THEMES,
-  getStoredTheme,
-  setStoredTheme,
-  type AppTheme,
-} from "../../../lib/theme";
+import { APP_THEMES, getStoredTheme, setStoredTheme, type AppTheme } from "../../../lib/theme";
 import styles from "./AppearanceTab.module.css";
 
 export default function AppearanceTab() {
@@ -38,31 +33,36 @@ export default function AppearanceTab() {
               onClick={() => choose(key)}
               aria-pressed={active}
             >
-              <span
-                className={`${styles.preview} ${styles[`preview_${key}`]}`}
-                aria-hidden
-              >
+              <span className={`${styles.preview} ${styles[`preview_${key}`]}`} aria-hidden>
                 <span className={styles.previewSidebar} />
                 <span className={styles.previewBody}>
                   <span className={styles.previewLine} />
-                  <span className={styles.previewLine} />
-                  <span className={styles.previewCard} />
+                  {key === "flat" ? (
+                    <>
+                      <span className={styles.previewFlatChart}>
+                        {Array.from({ length: 9 }, (_, index) => (
+                          <span key={index} />
+                        ))}
+                      </span>
+                      <span className={styles.previewFlatLists}>
+                        <span />
+                        <span />
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={styles.previewLine} />
+                      <span className={styles.previewCard} />
+                    </>
+                  )}
                 </span>
               </span>
               <span className={styles.meta}>
                 <span className={styles.name}>
                   {t(`settings.appearance.themes.${key}.name`)}
-                  {active ? (
-                    <Check
-                      size={14}
-                      strokeWidth={2.4}
-                      className={styles.check}
-                    />
-                  ) : null}
+                  {active ? <Check size={14} strokeWidth={2.4} className={styles.check} /> : null}
                 </span>
-                <span className={styles.desc}>
-                  {t(`settings.appearance.themes.${key}.desc`)}
-                </span>
+                <span className={styles.desc}>{t(`settings.appearance.themes.${key}.desc`)}</span>
               </span>
             </button>
           );

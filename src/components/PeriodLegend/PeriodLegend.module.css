@@ -33,3 +33,19 @@
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   border-top: 1px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
+
+:global([data-theme="flat"]) .legend {
+  padding: 14px 0 0;
+  border-top: 0;
+}
+
+:global([data-theme="flat"]) .legendItem {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-400);
+}
+
+:global([data-theme="flat"]) .legendDot {
+  width: 8px;
+  height: 8px;
+  box-shadow: none;
+}

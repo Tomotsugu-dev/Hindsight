@@ -80,3 +80,22 @@
   border-bottom-left-radius: 12px;
   padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
 }
+
+:global([data-theme="flat"]) .tile {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .tile:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+:global([data-theme="flat"]) .tiles[data-drill] .tile {
+  border-left: 2px solid var(--accent);
+  border-radius: 0;
+  padding-left: 14px;
+}

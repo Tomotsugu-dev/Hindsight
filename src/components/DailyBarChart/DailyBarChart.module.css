@@ -2,6 +2,10 @@
   padding: 18px 16px 10px;
 }
 
+:global([data-theme="flat"]) .chart {
+  padding: 18px 12px 10px 0;
+}
+
 .plot {
   display: flex;
   align-items: stretch;

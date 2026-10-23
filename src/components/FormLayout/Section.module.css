@@ -197,3 +197,20 @@
 .section.collapsible:not(:hover):not(:focus-within) .header {
   opacity: 0.7;
 }
+
+/* Flat settings sections use a single rule to separate their contents. */
+:global([data-theme="flat"]) .section {
+  gap: 16px;
+}
+
+:global([data-theme="flat"]) .header {
+  padding: 0;
+}
+
+:global([data-theme="flat"]) .card {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}

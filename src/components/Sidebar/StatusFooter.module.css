@@ -222,3 +222,16 @@
     filter: none !important;
   }
 }
+
+:global([data-theme="flat"]) .row {
+  border-radius: 5px;
+  font-weight: var(--font-weight-400);
+}
+
+:global([data-theme="flat"]) .dot {
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .cloudOn {
+  filter: none;
+}

@@ -18,12 +18,15 @@
 
 ## テーマ
 
-デフォルト、シンプル、ダークの 3 つのテーマがあります。
+デフォルト、シンプル、余白フラット、ダークの 4 つのテーマがあります。
+
+余白フラットは白い背景、ゆとりある余白、細い区切り線を使ったテーマで、「設定 → 外観」で選べます。
 
 <table align="center">
   <tr>
     <td align="center"><img src="./imgs/interface-and-appearance/day-default.png" alt="日次統計のデフォルトテーマ"><br />デフォルト</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-minimal.png" alt="日次統計のシンプルテーマ"><br />シンプル</td>
+    <td align="center"><img src="./imgs/interface-and-appearance/day-flat.png" alt="日次統計の余白フラットテーマ"><br />余白フラット</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-dark.png" alt="日次統計のダークテーマ"><br />ダーク</td>
   </tr>
 </table>

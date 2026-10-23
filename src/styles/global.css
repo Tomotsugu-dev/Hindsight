@@ -128,6 +128,10 @@ a {
   opacity: 0;
 }
 
+[data-theme="flat"] .glow::before {
+  display: none;
+}
+
 /* —— View Transitions：占比视图的圆环 morph + body 交叉淡入 —— */
 /* 圆环在 PieView ↔ PieDrillDetail 之间形变（180→156 + 中心字交叉淡入） */
 ::view-transition-old(super-donut),

@@ -182,3 +182,46 @@
 .toggleBtn:active {
   transform: scale(0.96);
 }
+
+:global([data-theme="flat"]) .row,
+:global([data-theme="flat"]) .rowClickable {
+  border-bottom: 0;
+}
+
+:global([data-theme="flat"]) .row,
+:global([data-theme="flat"]) .rowBtn {
+  padding: 12px 0;
+}
+
+:global([data-theme="flat"]) .rowBtn {
+  border-radius: var(--radius-sm);
+}
+
+:global([data-theme="flat"]) .dot {
+  width: 8px;
+  height: 8px;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .barWrap,
+:global([data-theme="flat"]) .barFill {
+  border-radius: 0;
+}
+
+:global([data-theme="flat"]) .barWrap {
+  height: 4px;
+  min-width: 24px;
+  background: var(--border-subtle);
+}
+
+:global([data-theme="flat"]) .extras {
+  width: 40px;
+}
+
+:global([data-theme="flat"]) .extras:empty {
+  width: 0;
+}
+
+:global([data-theme="flat"]) .time {
+  font-weight: var(--font-weight-400);
+}

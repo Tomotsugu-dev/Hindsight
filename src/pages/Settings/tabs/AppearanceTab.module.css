@@ -1,6 +1,6 @@
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: var(--space-3);
 }
 
@@ -33,7 +33,7 @@
     var(--shadow-md);
 }
 
-/* —— 迷你预览：左侧栏 + 右内容，用真实色值直接画三种主题效果 —— */
+/* Mini previews use fixed colors to illustrate each theme's sidebar and content. */
 .preview {
   display: flex;
   height: 76px;
@@ -94,6 +94,80 @@
   background: #f4f4f6;
 }
 
+/* Flat places charts and lists on white beside a gray sidebar and purple marker. */
+.preview_flat .previewSidebar {
+  position: relative;
+  width: 26%;
+  background: #f7f7f9;
+}
+.preview_flat .previewSidebar::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  background: #dcdbe2;
+}
+.preview_flat .previewSidebar::after {
+  content: "";
+  position: absolute;
+  top: 27px;
+  left: 5px;
+  right: 5px;
+  height: 8px;
+  border-left: 2px solid #7560c8;
+  background: #eeeaf8;
+}
+.preview_flat .previewBody {
+  gap: 6px;
+  padding: 8px 10px;
+  background: #fff;
+}
+.preview_flat .previewLine {
+  width: 42%;
+  height: 3px;
+  background: #dcdbe2;
+}
+.previewFlatChart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 25px;
+  border-bottom: 1px solid #eae9ef;
+}
+.previewFlatChart > span {
+  flex: 1;
+  height: 48%;
+  background: #a18cde;
+}
+.previewFlatChart > span:nth-child(3n + 1) {
+  height: 76%;
+  background: #78a7da;
+}
+.previewFlatChart > span:nth-child(3n + 2) {
+  height: 100%;
+}
+.previewFlatChart > span:nth-child(4n) {
+  height: 35%;
+  background: #66b69a;
+}
+.previewFlatLists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.previewFlatLists > span {
+  height: 15px;
+  background: repeating-linear-gradient(
+    to bottom,
+    #eae9ef 0,
+    #eae9ef 2px,
+    transparent 2px,
+    transparent 6px
+  );
+}
+
 /* dark：深色侧栏 + 深内容 */
 .preview_dark {
   border-color: rgba(255, 255, 255, 0.08);
@@ -137,4 +211,13 @@
 :global([data-theme="dark"]) .card {
   background: var(--surface-card-elevated);
   border-color: var(--border-default);
+}
+
+:global([data-theme="flat"]) .card:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+:global([data-theme="flat"]) .cardActive {
+  box-shadow: 0 0 0 1px var(--color-accent);
 }

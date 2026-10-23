@@ -369,3 +369,12 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+:global([data-theme="flat"]) .card {
+  padding: 24px 0 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}

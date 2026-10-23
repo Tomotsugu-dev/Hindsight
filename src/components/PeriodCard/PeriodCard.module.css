@@ -141,3 +141,32 @@
   flex: 0 0 100%;
   min-width: 0;
 }
+
+/* Separate report sections with whitespace and one rule instead of a card. */
+:global([data-theme="flat"]) .card {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+:global([data-theme="flat"]) .cardHead {
+  padding: 22px 0 12px;
+  gap: 14px;
+  border-bottom: 0;
+}
+
+:global([data-theme="flat"]) .navBtn,
+:global([data-theme="flat"]) .dayPill {
+  border-color: var(--border-default);
+}
+
+@media (max-width: 900px) {
+  :global([data-theme="flat"]) .cardControlsRow,
+  :global([data-theme="flat"]) .headRight {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}

@@ -182,3 +182,8 @@
   background: color-mix(in oklab, #ef4444 13%, transparent);
   color: var(--status-error);
 }
+
+:global([data-theme="flat"]) .row {
+  padding: 18px 0;
+  border-bottom-color: var(--border-default);
+}
