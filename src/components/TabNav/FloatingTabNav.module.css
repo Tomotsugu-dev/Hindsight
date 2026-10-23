@@ -67,3 +67,12 @@
     0 4px 14px rgba(0, 0, 0, 0.4),
     0 1px 3px rgba(0, 0, 0, 0.3);
 }
+
+/* Keep scrolling content behind an opaque surface without a floating card. */
+:global([data-theme="flat"]) .floatingTabs nav {
+  background-color: var(--surface-card);
+  background-image: none;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}

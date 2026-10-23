@@ -94,3 +94,12 @@
   font-weight: var(--font-weight-semibold);
   line-height: 16px;
 }
+
+:global([data-theme="flat"]) .item {
+  border-radius: 5px;
+  font-weight: var(--font-weight-400);
+}
+
+:global([data-theme="flat"]) .item.active {
+  font-weight: var(--font-weight-500);
+}

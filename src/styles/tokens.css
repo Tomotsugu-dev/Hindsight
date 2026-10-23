@@ -1,6 +1,5 @@
-/* Design tokens — Arc-inspired light palette for Hindsight.
-   :root = 默认（default）主题；简约（minimal）/ 暗色（dark）的 token 覆盖见文件末尾
-   [data-theme=...] 块，由 lib/theme.ts 写到 <html data-theme> 上驱动。 */
+/* Design tokens. The default palette is Arc-inspired; named themes override
+   it below through the data-theme attribute managed by lib/theme.ts. */
 
 :root {
   /* —— Brand / accent —— */
@@ -17,8 +16,8 @@
   --surface-card: #ffffff;
   --surface-card-elevated: #fbfbfd;
   --surface-overlay: rgba(255, 255, 255, 0.75);
-  /* 组件里散用的 surface 别名（历史遗留：曾各自带 #fff / rgba 兜底）——正式纳入
-     token，让三种主题都能覆盖，避免暗色下走白色兜底出现荧光亮块。 */
+  /* Legacy surface aliases share theme tokens so dark mode never falls back
+     to an unthemed white surface. */
   --surface-1: var(--surface-card);
   --surface-2: rgba(0, 0, 0, 0.025);
   --surface: var(--surface-card);
@@ -171,8 +170,8 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   外观主题覆盖：<html data-theme> 由 lib/theme.ts 写入。
-   default 走上面的 :root；minimal / dark 只覆盖需要变的 token。
+   Theme overrides selected by <html data-theme> in lib/theme.ts.
+   Named themes override only the tokens that differ from :root.
    ═══════════════════════════════════════════════════════════════════ */
 
 /* —— 简约：去掉侧栏渐变，纯色扁平；亮色配色其余继承默认 —— */
@@ -190,6 +189,52 @@
 
   /* hover 在浅灰侧栏上用淡黑，比默认的半透明白更可见 */
   --hover-bg: rgba(0, 0, 0, 0.045);
+}
+
+/* Flat uses a single white canvas; structural panels opt out of card chrome.
+   Keep overlay surfaces opaque so menus and dialogs remain legible. */
+[data-theme="flat"] {
+  --color-accent: #7560c8;
+  --color-accent-soft: #eeebf8;
+  --sidebar-gradient: #f7f7f9;
+  --sidebar-border: #eae9ef;
+
+  --surface-app: #ffffff;
+  --surface-card: #ffffff;
+  --surface-card-elevated: #ffffff;
+  --surface-overlay: rgba(255, 255, 255, 0.95);
+  --surface-2: #f7f7f9;
+
+  --pill-bg: #eeebf8;
+  --pill-blur: none;
+  --pill-shadow: none;
+  --hover-bg: #eeedf2;
+  --text-strong: #272631;
+  --text-regular: #393844;
+  --text-muted: #71707e;
+  --text-faint: #7b7989;
+  --text-on-pill: #7560c8;
+
+  --border-subtle: #f0eff4;
+  --border-default: #eae9ef;
+  --border-strong: #d6d3df;
+  --hairline-hi: transparent;
+  --control-bg: #ffffff;
+  --control-bg-hover: #f7f7f9;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-inset-hi: none;
+
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;
+  --font-weight-600: 500;
+  --font-weight-700: 500;
 }
 
 /* —— 暗色：深色背景，surface 分三级明度制造层次 —— */

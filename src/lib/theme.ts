@@ -1,17 +1,17 @@
-// 应用外观主题。纯前端偏好：存 localStorage，通过 <html data-theme> 驱动
-// styles/tokens.css 里的 [data-theme=...] 变量覆盖，不经过后端 settings。
+// App themes are a frontend-only preference stored in localStorage. The
+// <html data-theme> attribute selects token overrides without backend settings.
 
-export type AppTheme = "default" | "minimal" | "dark";
+export type AppTheme = "default" | "minimal" | "flat" | "dark";
 
-/** 三种可选主题，供 UI 遍历渲染选项。 */
-export const APP_THEMES: AppTheme[] = ["default", "minimal", "dark"];
+/** Theme options rendered by the appearance picker. */
+export const APP_THEMES: AppTheme[] = ["default", "minimal", "flat", "dark"];
 
 const STORAGE_KEY = "hindsight.theme";
 
-/** 读已保存的主题；无 / 非法值回退 minimal（简约为应用默认外观）。 */
+/** Read the saved theme; missing or invalid values use the default minimal theme. */
 export function getStoredTheme(): AppTheme {
   const v = localStorage.getItem(STORAGE_KEY);
-  if (v === "default" || v === "dark") return v;
+  if (v === "default" || v === "flat" || v === "dark") return v;
   return "minimal";
 }
 
@@ -40,8 +40,8 @@ export function subscribeTheme(cb: () => void): () => void {
   };
 }
 
-/** 读当前生效主题（从 `<html data-theme>`，非法/缺省回退 minimal）。 */
+/** Read the active theme from `<html data-theme>`, falling back to minimal. */
 export function getCurrentTheme(): AppTheme {
   const t = document.documentElement.dataset.theme;
-  return t === "default" || t === "dark" ? t : "minimal";
+  return t === "default" || t === "flat" || t === "dark" ? t : "minimal";
 }

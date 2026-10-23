@@ -7,6 +7,29 @@
   gap: 24px;
 }
 
+/* Keep category colors and drag feedback while presenting the list as rows. */
+:global([data-theme="flat"]) .page {
+  gap: 32px;
+}
+
+:global([data-theme="flat"]) .card {
+  gap: 0;
+}
+
+:global([data-theme="flat"]) .catRow {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .catRowHot {
+  background: color-mix(in oklab, var(--color-accent) 8%, white);
+  border-bottom-color: var(--color-accent);
+  outline: 1px solid var(--color-accent);
+}
+
 .header {
   display: flex;
   align-items: flex-start;

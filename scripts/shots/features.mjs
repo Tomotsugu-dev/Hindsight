@@ -89,7 +89,7 @@ const SHOTS = [
     scrollToEnd: true,
     sections: ["aiSettings.segments.sectionTitle", "aiSettings.filter.sectionTitle"],
   },
-  // 日统计页面在三种主题下的样子，全窗口
+  // Capture the full daily statistics window in each of the four themes.
   {
     doc: "interface-and-appearance",
     file: "day-default",
@@ -103,6 +103,13 @@ const SHOTS = [
     page: "day",
     view: "bars",
     theme: "minimal",
+  },
+  {
+    doc: "interface-and-appearance",
+    file: "day-flat",
+    page: "day",
+    view: "bars",
+    theme: "flat",
   },
   {
     doc: "interface-and-appearance",
@@ -129,7 +136,7 @@ async function options() {
   --only NAME,NAME               只截这几张，默认全截：${SHOTS.map((s) => s.file).join("、")}
   --out PATH                     输出目录，默认 docs/features/zh/imgs，每份文档一个子文件夹
   --lang LOCALE                  界面语言，默认 zh-CN
-  --theme minimal|default|dark   外观，默认 minimal
+  --theme minimal|default|flat|dark  外观，默认 minimal
   --date YYYY-MM-DD              演示数据的「今天」，默认东京当天
 
 窗口尺寸取 src-tauri/tauri.macos.conf.json。需要 Google Chrome，

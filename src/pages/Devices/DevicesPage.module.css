@@ -7,6 +7,53 @@
   gap: 24px;
 }
 
+/* Device sections share the flat theme's open layout and light dividers. */
+:global([data-theme="flat"]) .page {
+  gap: 32px;
+}
+
+:global([data-theme="flat"]) .syncCard {
+  padding: 20px 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .deviceRow {
+  padding-right: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .sectionTitle {
+  padding: 0;
+  font-weight: var(--font-weight-500);
+}
+
+:global([data-theme="flat"]) .syncTitle {
+  font-weight: var(--font-weight-500);
+}
+
+:global([data-theme="flat"]) .setupPanel {
+  background: var(--surface-card);
+  border-color: var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .empty {
+  padding: 18px 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  border-radius: 0;
+}
+
 .header {
   display: flex;
   flex-direction: column;

@@ -42,7 +42,7 @@ npm run shots:features -- --only search-results,search-preview --lang en --out d
 | `--only` | 要生成的截图名称，以逗号分隔 | 全部截图 |
 | `--out` | 输出根目录，脚本按文档名创建子目录 | `docs/features/zh/imgs` |
 | `--lang` | 界面语言 | `zh-CN` |
-| `--theme` | `minimal`、`default` 或 `dark` | `minimal` |
+| `--theme` | `minimal`、`default`、`flat` 或 `dark` | `minimal` |
 | `--date` | 演示数据的日期，格式为 `YYYY-MM-DD` | 东京当天 |
 
 截图配置集中在 `features.mjs` 的 `SHOTS` 数组中。搜索截图的 `query` 指定关键词，`resultTitle` 指定结果标题，`preview: true` 表示打开该结果的截图预览，`highlights: true` 表示等待高亮框出现后再截图。
@@ -67,7 +67,7 @@ npm run shots:readme -- --only daily,cloud_sync
 | `--only` | 要生成的截图名称，以逗号分隔 | 全部截图 |
 | `--lang` | 界面语言，以逗号分隔 | `zh-CN,zh-TW,en,ja,pt-BR,es` |
 | `--out` | 输出根目录，图保存到 `<语言目录>/imgs` | `docs/intro` |
-| `--theme` | `minimal`、`default` 或 `dark` | `minimal` |
+| `--theme` | `minimal`、`default`、`flat` 或 `dark` | `minimal` |
 | `--date` | 演示数据的日期，格式为 `YYYY-MM-DD` | 东京最近一个周日 |
 
 语言对应的目录：`zh-CN` → `zh`，`zh-TW` → `zh-TW`，`en` → `en`，`ja` → `ja`，`pt-BR` → `pt`，`es` → `es`。

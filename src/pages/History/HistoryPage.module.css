@@ -337,3 +337,31 @@
   gap: 10px;
   padding: 12px 16px 14px;
 }
+
+:global([data-theme="flat"]) .page {
+  max-width: 1040px;
+  gap: 28px;
+}
+
+:global([data-theme="flat"]) .stats {
+  gap: 28px;
+}
+
+:global([data-theme="flat"]) .carousel {
+  padding-top: 22px;
+  border-top: 1px solid var(--border-default);
+}
+
+:global([data-theme="flat"]) .card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .cardHead {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 0 12px;
+  border-bottom: 0;
+}

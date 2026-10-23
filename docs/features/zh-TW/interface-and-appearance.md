@@ -18,12 +18,15 @@ Hindsight 可切換介面語言與外觀主題，也可設定是否隨系統啟�
 
 ## 外觀主題
 
-Hindsight 提供明亮、簡約和暗色三種外觀主題：
+Hindsight 提供明亮、簡約、留白扁平和暗色四種外觀主題。
+
+留白扁平採用純白底色、寬鬆留白和細線分隔，可在「設定 → 外觀」中選擇。
 
 <table align="center">
   <tr>
     <td align="center"><img src="./imgs/interface-and-appearance/day-default.png" alt="日統計-明亮主題"><br />明亮</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-minimal.png" alt="日統計-簡約主題"><br />簡約</td>
+    <td align="center"><img src="./imgs/interface-and-appearance/day-flat.png" alt="日統計-留白扁平主題"><br />留白扁平</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-dark.png" alt="日統計-暗色主題"><br />暗色</td>
   </tr>
 </table>

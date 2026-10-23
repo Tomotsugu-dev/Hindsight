@@ -65,7 +65,7 @@ async function options() {
   --only NAME,NAME               只截这几张，默认全截：${SHOTS.map((s) => s.file).join("、")}
   --lang LOCALE,LOCALE           只截这几种界面语言，默认全部：${Object.keys(imgDirs).join("、")}
   --out PATH                     输出根目录，默认 docs/intro，图存到 <语言目录>/imgs
-  --theme minimal|default|dark   外观，默认 minimal
+  --theme minimal|default|flat|dark  外观，默认 minimal
   --date YYYY-MM-DD              演示数据的「今天」，默认东京最近一个周日
 
 窗口尺寸取 src-tauri/tauri.macos.conf.json。需要 Google Chrome，

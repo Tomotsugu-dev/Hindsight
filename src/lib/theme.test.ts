@@ -11,6 +11,7 @@ vi.stubGlobal("localStorage", {
 vi.stubGlobal("document", { documentElement: { dataset: {} as Record<string, string> } });
 
 import {
+  APP_THEMES,
   applyTheme,
   getCurrentTheme,
   getStoredTheme,
@@ -28,6 +29,25 @@ describe("theme", () => {
     expect(getStoredTheme()).toBe("minimal");
     store.set("hindsight.theme", "neon");
     expect(getStoredTheme()).toBe("minimal");
+  });
+  it.each(APP_THEMES)("%s 主题保存后可恢复且与当前主题一致", (theme) => {
+    setStoredTheme(theme);
+    expect(store.get("hindsight.theme")).toBe(theme);
+    expect(getStoredTheme()).toBe(theme);
+    expect(getCurrentTheme()).toBe(theme);
+
+    // Simulate reopening the app by restoring only the persisted preference.
+    document.documentElement.dataset.theme = "";
+    applyTheme(getStoredTheme());
+    expect(getCurrentTheme()).toBe(theme);
+  });
+  it("flat 是可选主题，切换时通知订阅者", () => {
+    expect(APP_THEMES).toContain("flat");
+    const onChange = vi.fn(() => getCurrentTheme());
+    const off = subscribeTheme(onChange);
+    setStoredTheme("flat");
+    expect(onChange).toHaveReturnedWith("flat");
+    off();
   });
   it("setStoredTheme 持久化 + 应用到 dataset + 通知订阅者", () => {
     const seen: string[] = [];

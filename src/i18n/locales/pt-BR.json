@@ -120,6 +120,10 @@
           "name": "Minimalista",
           "desc": "Barra lateral sólida, plana e sem gradiente"
         },
+        "flat": {
+          "name": "Plano e espaçoso",
+          "desc": "Fundo branco, espaço generoso e divisórias sutis"
+        },
         "dark": {
           "name": "Escuro",
           "desc": "Fundo escuro, confortável à noite"
