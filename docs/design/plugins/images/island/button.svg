@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="140" viewBox="0 0 560 140" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif" font-weight="500" fill="#fff">
+  <rect width="560" height="140" rx="12" fill="#f3f4f6"/>
+  <!-- Open only: a button with only an icon, and one with an icon and text -->
+  <rect x="110" y="15" width="340" height="110" rx="32" fill="#000"/>
+  <rect x="166" y="38" width="64" height="64" rx="32" fill="#fff" fill-opacity="0.14"/>
+  <g transform="translate(182 54) scale(1.3333)" fill="none" stroke="#fff" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="4" width="4" height="16" rx="1"/>
+    <rect x="6" y="4" width="4" height="16" rx="1"/>
+  </g>
+  <rect x="254" y="38" width="140" height="64" rx="32" fill="#fff" fill-opacity="0.14"/>
+  <g transform="translate(278 54) scale(1.3333)" fill="none" stroke="#fff" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="5 4 15 12 5 20 5 4"/>
+    <line x1="19" x2="19" y1="5" y2="19"/>
+  </g>
+  <text x="322" y="70" font-size="24" dominant-baseline="central">跳过</text>
+</svg>

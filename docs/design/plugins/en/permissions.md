@@ -10,7 +10,7 @@ Overview: [Plugin backend architecture](plugins-architecture.md).
 
 ## Rules
 
-- A name is `<area>.<action>`, such as `stats.read`. An event permission has the same name as its event, such as `focus.changed`.
+- A name is `<area>.<action>`, such as `stats.read`. An event permission has the same name as its event, such as `focus.changed`. The click event of island buttons, `island.clicked`, needs no permission of its own and comes with `island`: the event holds only the button `id` the plugin picked. The plugin window event `window.changed` needs no permission either: it goes only to this plugin, and holds only the state of its own window, `{ "state": "open" | "minimized" | "closed" }`.
 - Some permissions only add fields to another permission. For example, `focus.app` only adds the app name to `focus.changed` events. Such a permission must be requested together with the one it depends on. Requesting it alone fails the manifest check.
 - A permission gives only the fields it lists. Data returned to plugins uses separate structs (see [③ Requesting data](api.md)).
 - Reading and writing the plugin's own database needs no permission. But the plugin must ask for disk space with `storage_mb` in its manifest, and can use the database only after the user approves it on the install page (see [Plugin data](data.md)).
@@ -90,6 +90,7 @@ The plugin's background script receives events pushed by Hindsight (see [④ Rec
 | Permission | What it allows | Risk | Status |
 |---|---|---|---|
 | `notifications` | Send system notifications | Low | MVP |
+| `island` | Put content on the island in the middle of the menu bar (see [The island](island.md)), and get clicks on its own buttons there | Low | MVP |
 | `network` | Connect to the addresses listed in the manifest, such as a server for a friends' leaderboard | High | Later |
 | `links.open` | Open a URL in the browser | Low | Later |
 | `clipboard.write` | Write text to the clipboard, such as copying a weekly report | Low | Later |

@@ -50,6 +50,8 @@ sequenceDiagram
 | `notifications.send` | `notifications` | `{ "body": "已经看了 10 分钟 YouTube" }` | 无 |
 | `db.execute` | 不要权限，要用户同意的磁盘容量 | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`，`params` 可以不传 | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | 同上 | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`，每行一个对象，键是列名；最多 10 MB |
+| `island.show` | `island` | 岛上放什么，格式见 [岛](island.md) | 无 |
+| `island.hide` | `island` | 无 | 无 |
 
 - 大类的时长由插件自己按 `superCategory` 加总，和主界面的算法一样。
 - `categories.list`、`super_categories.list` 给插件的设置页列出全部分类和大类，让用户挑：读统计只能看到用过的分类。

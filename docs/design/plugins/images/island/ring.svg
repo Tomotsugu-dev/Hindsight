@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="140" viewBox="0 0 560 140" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif" font-weight="500" fill="#fff">
+  <rect width="560" height="140" rx="12" fill="#f3f4f6"/>
+  <!-- Closed: a 14 px ring, the text to its right. value is 0.75 -->
+  <rect x="57" y="40" width="126" height="60" rx="30" fill="#000"/>
+  <circle cx="91" cy="70" r="12" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="4"/>
+  <circle cx="91" cy="70" r="12" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-dasharray="75.4" stroke-dashoffset="18.85" transform="rotate(-90 91 70)"/>
+  <text x="117" y="70" font-size="24" dominant-baseline="central">75%</text>
+  <!-- Open: a 52 px ring, the text in its middle -->
+  <rect x="250" y="10" width="270" height="120" rx="32" fill="#000"/>
+  <circle cx="385" cy="70" r="45.5" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="13"/>
+  <circle cx="385" cy="70" r="45.5" fill="none" stroke="#34d399" stroke-width="13" stroke-linecap="round" stroke-dasharray="285.9" stroke-dashoffset="71.5" transform="rotate(-90 385 70)"/>
+  <text x="385" y="70" font-size="26" text-anchor="middle" dominant-baseline="central">75%</text>
+</svg>

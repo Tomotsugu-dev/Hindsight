@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="256" viewBox="0 0 760 256" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" text-anchor="middle" dominant-baseline="central" fill="#0f172a" font-size="13">
+  <rect x="0" y="0" width="760" height="256" fill="#f3f4f6"/>
+  <rect x="0" y="0" width="760" height="48" fill="#dde1e6"/>
+  <g fill="#b8bfc9">
+    <rect x="16" y="19" width="12" height="10" rx="3"/>
+    <rect x="684" y="19" width="12" height="10" rx="3"/>
+    <rect x="708" y="19" width="36" height="10" rx="3"/>
+  </g>
+  <!-- The open island: the top strip is as tall as the closed one, the panel is below it -->
+  <path d="M35 0 H725 V192 A24 24 0 0 1 701 216 H59 A24 24 0 0 1 35 192 Z" fill="#000"/>
+  <path d="M242 0 H518 V33 A15 15 0 0 1 503 48 H257 A15 15 0 0 1 242 33 Z" fill="#2b2b2b"/>
+  <circle cx="380" cy="20" r="4" fill="#4a4a4a"/>
+
+  <rect x="115" y="8" width="119" height="32" rx="6" fill="#5eead4"/>
+  <text x="174.5" y="24">closed.left</text>
+  <rect x="530" y="10" width="183" height="28" rx="6" fill="#f472b6"/>
+  <text x="621.5" y="24">open.topRight</text>
+
+  <g fill="#60a5fa">
+    <rect x="59" y="66" width="240" height="36" rx="6"/>
+    <rect x="59" y="114" width="240" height="36" rx="6"/>
+    <rect x="59" y="162" width="240" height="36" rx="6"/>
+  </g>
+  <text x="179" y="84">open.left[0]</text>
+  <text x="179" y="132">open.left[1]</text>
+  <text x="179" y="180">open.left[2]</text>
+
+  <g fill="#a3e635">
+    <rect x="445" y="96" width="122" height="36" rx="6"/>
+    <rect x="579" y="96" width="122" height="36" rx="6"/>
+  </g>
+  <text x="506" y="114">open.right[0]</text>
+  <text x="640" y="114">open.right[1]</text>
+
+  <rect x="541" y="142" width="160" height="26" rx="6" fill="#fb923c"/>
+  <text x="621" y="155">open.bottomRight</text>
+</svg>
