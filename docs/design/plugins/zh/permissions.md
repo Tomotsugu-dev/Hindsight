@@ -90,6 +90,7 @@
 | 权限 | 能做什么 | 风险 | 状态 |
 |---|---|---|---|
 | `notifications` | 发系统通知 | 低 | MVP |
+| `notifications.sound` | 通知时播放系统提示音。要和 `notifications` 一起申请 | 低 | MVP |
 | `island` | 在菜单栏正中间的岛上放内容（见 [岛](island.md)），收到岛上自己按钮的点击 | 低 | MVP |
 | `network` | 连清单里写明的地址，比如好友排行榜的服务器 | 高 | 以后 |
 | `links.open` | 在浏览器里打开一个网址 | 低 | 以后 |

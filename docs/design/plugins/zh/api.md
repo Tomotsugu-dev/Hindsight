@@ -47,7 +47,7 @@ sequenceDiagram
 | `stats.day_by_category` | `stats.read` 加一档 | `{ "date": "2026-10-19", "devices": "selected" }`，`devices` 可以不传 | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "icon": "Code", "seconds": 12600, "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" } }]`，用时多的在前；没归入大类的，`superCategory` 是 `null` |
 | `categories.list` | `categories.read` | 无 | `[{ "id": "code", "name": "Coding", "color": "#a78bfa", "icon": "Code", "superCategory": { "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" } }]`，顺序和主界面一样；没归入大类的，`superCategory` 是 `null` |
 | `super_categories.list` | `super_categories.read` | 无 | `[{ "id": "work", "name": "Work", "color": "#8b5cf6", "icon": "Briefcase" }]`，顺序和主界面一样 |
-| `notifications.send` | `notifications` | `{ "body": "已经看了 10 分钟 YouTube" }` | 无 |
+| `notifications.send` | `notifications`；带提示音还要 `notifications.sound` | `{ "body": "已经看了 10 分钟 YouTube", "sound": true }`，`sound` 可以不传 | 无 |
 | `db.execute` | 不要权限，要用户同意的磁盘容量 | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`，`params` 可以不传 | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | 同上 | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`，每行一个对象，键是列名；最多 10 MB |
 | `island.show` | `island` | 岛上放什么，格式见 [岛](island.md) | 无 |
@@ -60,3 +60,4 @@ sequenceDiagram
 - 算哪些设备由插件自己说：`devices` 不传或者是 `"this"`，只算本机；是 `"selected"`，按主界面选的设备算，要 `devices.read`，没有就报错。不会悄悄换成别的范围，插件拿到的数一定是它要的那种。
 - 主界面选的设备由转发层每次转发时带上，插件改不了。
 - 通知的标题固定是插件名，插件不能冒充 Hindsight 发通知。不限频率，插件刷屏的话用户可以把它关掉。
+- `sound` 为 `true` 时同时播放系统提示音，只有系统默认的那一种。没有 `notifications.sound` 就报错，不弹通知，不会悄悄发成没声音的通知。不传 `sound` 时通知没有声音。
