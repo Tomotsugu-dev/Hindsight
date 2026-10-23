@@ -1826,6 +1826,7 @@
       "categories_read": "讀取全部小分類的名稱和其所屬的大類的權限",
       "super_categories_read": "讀取全部大類的名稱的權限",
       "notifications": "傳送系統通知的權限",
+      "notifications_sound": "允許通知時播放系統提示音的權限",
       "island": "在選單列正中間的島上顯示內容的權限",
       "focus_changed": "讀取切換應用程式、離開電腦事件的權限",
       "focus_app": "讀取切換應用程式事件，及其切換的應用程式名稱的權限",

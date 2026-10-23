@@ -1829,6 +1829,7 @@
       "categories_read": "Permission to read the names of all categories and the super-categories they belong to",
       "super_categories_read": "Permission to read the names of all super-categories",
       "notifications": "Permission to send system notifications",
+      "notifications_sound": "Permission to play the system alert sound with notifications",
       "island": "Permission to show content on the island in the middle of the menu bar",
       "focus_changed": "Permission to read events when you switch apps or leave the computer",
       "focus_app": "Permission to read app switch events and the name of the app you switch to",

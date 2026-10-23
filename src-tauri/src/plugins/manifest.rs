@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 
 /// Permissions this version knows, and the permission each one must be requested with.
 /// For all permissions, see docs/design/plugins/en/permissions.md.
-const PERMISSIONS: [(&str, Option<&str>); 14] = [
+const PERMISSIONS: [(&str, Option<&str>); 15] = [
     ("stats.read", None),
     ("stats.today", Some("stats.read")),
     ("stats.week", Some("stats.read")),
@@ -17,6 +17,7 @@ const PERMISSIONS: [(&str, Option<&str>); 14] = [
     ("categories.read", None),
     ("super_categories.read", None),
     ("notifications", None),
+    ("notifications.sound", Some("notifications")),
     ("island", None),
     ("focus.changed", None),
     ("focus.app", Some("focus.changed")),
@@ -304,6 +305,17 @@ mod tests {
         assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
 
         v["permissions"] = json!(["focus.changed", "focus.app", "focus.title"]);
+        assert!(parse_value(&v).is_ok());
+    }
+
+    /// notifications.sound 没有 notifications 就拒绝；一起申请就通过。
+    #[test]
+    fn notification_sound_needs_notifications() {
+        let mut v = focus();
+        v["permissions"] = json!(["notifications.sound"]);
+        assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
+
+        v["permissions"] = json!(["notifications", "notifications.sound"]);
         assert!(parse_value(&v).is_ok());
     }
 

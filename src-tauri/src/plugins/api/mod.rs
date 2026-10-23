@@ -25,7 +25,8 @@ pub struct Host<'a, N, I> {
     pub plugins_dir: &'a Path,
     /// The device id of this machine
     pub self_id: &'a str,
-    /// Shows a system notification. The parameters are the title and the body
+    /// Shows a system notification. The parameters are the title, the body, and whether to play
+    /// the system alert sound
     pub notify: N,
     /// 把这个插件的内容放到岛上（`Some`），或者撤下（`None`）
     pub island: I,
@@ -46,7 +47,7 @@ pub struct Host<'a, N, I> {
 /// - The plugin's SQL has an error, is denied, runs too long, or its database is full:
 ///   [`Error::Sqlite`]
 pub async fn call(
-    host: Host<'_, impl FnOnce(&str, &str) -> Result<()>, impl FnOnce(Option<Content>)>,
+    host: Host<'_, impl FnOnce(&str, &str, bool) -> Result<()>, impl FnOnce(Option<Content>)>,
     plugin_id: &str,
     method: &str,
     params: Value,
@@ -174,7 +175,7 @@ mod tests {
             pool,
             plugins_dir,
             self_id: "this-mac",
-            notify: |_: &str, _: &str| Ok(()),
+            notify: |_: &str, _: &str, _: bool| Ok(()),
             island: |_: Option<Content>| {},
         };
         let raw = call(host, id, method, params, None).await?;
