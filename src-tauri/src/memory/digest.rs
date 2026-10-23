@@ -1249,7 +1249,10 @@ mod tests {
         // 识别函数阻塞在通道上,把一批钉在"正在消化"状态
         let (tx, rx) = std::sync::mpsc::channel::<()>();
         let rx = std::sync::Mutex::new(rx);
+        let entered = Arc::new(AtomicBool::new(false));
+        let entered_rc = Arc::clone(&entered);
         let mut pipe = Pipeline::with_recognizer(Arc::new(move |_p| {
+            entered_rc.store(true, Ordering::SeqCst);
             rx.lock().unwrap().recv().unwrap();
             Ok(vec!["放行后识别出的行".to_string()])
         }));
@@ -1257,12 +1260,15 @@ mod tests {
         let stop_bg = Arc::new(AtomicBool::new(false));
         let stop_bg2 = Arc::clone(&stop_bg);
         let batch = tokio::spawn(async move { drain(&mem_bg, &mut pipe, &stop_bg2).await });
+        // 等到识别函数真的卡住,而不只是批占住槽位:占住之后批还要先读这一批帧,
+        // 这期间 hold 发出的停止请求会让它在第一帧前就停下
         for _ in 0..200 {
-            if is_running() {
+            if entered.load(Ordering::SeqCst) {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
+        assert!(entered.load(Ordering::SeqCst), "批应进入识别");
         assert!(is_running(), "批应进入运行态");
 
         // hold 拿不到槽位就请求停止并等待;放行一帧后,批在下一帧前停下
