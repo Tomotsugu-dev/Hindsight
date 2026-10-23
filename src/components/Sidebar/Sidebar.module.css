@@ -190,3 +190,17 @@
   color: var(--color-accent);
   filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-accent) 35%, transparent));
 }
+
+/* Flat separates the sidebar with a solid surface and a subtle selected state. */
+:global([data-theme="flat"]) .sidebar {
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .pill,
+:global([data-theme="flat"]) .accountRow {
+  border-radius: 5px;
+}
+
+:global([data-theme="flat"]) .cloudOn {
+  filter: none;
+}

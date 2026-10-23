@@ -118,3 +118,31 @@
   font-weight: var(--font-weight-semibold);
   line-height: 16px;
 }
+
+/* Preserve tab measurements when the theme changes while using an underline. */
+:global([data-theme="flat"]) .tabs {
+  background: transparent;
+  border-radius: 0;
+}
+
+:global([data-theme="flat"]) .tab {
+  border-radius: 0;
+  font-weight: 550;
+}
+
+:global([data-theme="flat"]) .tabActive {
+  color: var(--color-accent);
+}
+
+:global([data-theme="flat"]) .divider {
+  background: var(--border-default);
+}
+
+:global([data-theme="flat"]) .pill {
+  top: auto;
+  bottom: 4px;
+  height: 2px;
+  background: var(--color-accent);
+  border-radius: 0;
+  box-shadow: none;
+}

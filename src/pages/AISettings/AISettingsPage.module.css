@@ -9,3 +9,7 @@
   flex-direction: column;
   gap: 24px;
 }
+
+:global([data-theme="flat"]) .page {
+  gap: 32px;
+}

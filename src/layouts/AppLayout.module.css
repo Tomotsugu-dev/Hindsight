@@ -104,3 +104,7 @@
   z-index: var(--z-chrome-sidebar);
   filter: drop-shadow(8px 0 18px rgba(20, 20, 40, 0.06));
 }
+
+:global([data-theme="flat"]) .sidebarHost {
+  filter: none;
+}

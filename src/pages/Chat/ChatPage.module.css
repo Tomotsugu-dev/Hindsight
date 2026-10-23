@@ -349,3 +349,12 @@
   border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--text-secondary) 6%, transparent);
 }
+
+:global([data-theme="flat"]) .columns {
+  gap: 24px;
+}
+
+:global([data-theme="flat"]) .convList {
+  padding-right: 16px;
+  border-right: 1px solid var(--border-default);
+}

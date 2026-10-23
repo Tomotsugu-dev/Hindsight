@@ -52,8 +52,8 @@ export function tokyoToday() {
  */
 export async function demoOptions({ lang, theme, date }) {
   if (!languages.has(lang)) throw new Error("不支持的界面语言。");
-  if (!["minimal", "default", "dark"].includes(theme)) {
-    throw new Error("--theme 只支持 minimal、default、dark。");
+  if (!["minimal", "default", "flat", "dark"].includes(theme)) {
+    throw new Error("--theme 只支持 minimal、default、flat、dark。");
   }
 
   const day = date ?? tokyoToday();

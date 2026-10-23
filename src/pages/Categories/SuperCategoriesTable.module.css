@@ -243,3 +243,36 @@
   flex-direction: column;
   gap: 8px;
 }
+
+:global([data-theme="flat"]) .table {
+  gap: 32px;
+}
+
+:global([data-theme="flat"]) .superCard,
+:global([data-theme="flat"]) .superBox.orphan .superCard {
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global([data-theme="flat"]) .superName {
+  font-weight: var(--font-weight-500);
+}
+
+/* Group drop targets retain an explicit boundary during drag operations. */
+:global([data-theme="flat"]) .superCard.dropTarget {
+  outline: 1px dashed var(--color-accent);
+  outline-offset: -1px;
+}
+
+:global([data-theme="flat"]) .superCard.dropHot {
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+  background: color-mix(in oklab, var(--color-accent) 8%, white);
+}
+
+:global([data-theme="flat"]) .superIcon {
+  box-shadow: none;
+}

@@ -18,12 +18,15 @@ Al cambiar el idioma de la interfaz, también cambia el idioma de los prompts de
 
 ## Temas
 
-Hindsight ofrece tres temas: Predeterminado, Minimalista y Oscuro.
+Hindsight ofrece cuatro temas: Predeterminado, Minimalista, Plano y espacioso y Oscuro.
+
+El tema Plano y espacioso usa un fondo blanco, espacio generoso y divisores sutiles y se puede seleccionar en «Ajustes → Apariencia».
 
 <table align="center">
   <tr>
     <td align="center"><img src="./imgs/interface-and-appearance/day-default.png" alt="Estadísticas diarias: tema Predeterminado"><br />Predeterminado</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-minimal.png" alt="Estadísticas diarias: tema Minimalista"><br />Minimalista</td>
+    <td align="center"><img src="./imgs/interface-and-appearance/day-flat.png" alt="Estadísticas diarias: tema Plano y espacioso"><br />Plano y espacioso</td>
     <td align="center"><img src="./imgs/interface-and-appearance/day-dark.png" alt="Estadísticas diarias: tema Oscuro"><br />Oscuro</td>
   </tr>
 </table>

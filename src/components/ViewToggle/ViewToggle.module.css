@@ -60,3 +60,7 @@
 .toggle[data-view="pie"] .underline {
   transform: translateX(100%);
 }
+
+:global([data-theme="flat"]) .underline {
+  box-shadow: none;
+}

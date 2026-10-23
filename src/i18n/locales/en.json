@@ -120,6 +120,10 @@
           "name": "Minimal",
           "desc": "Solid sidebar, flat and gradient-free"
         },
+        "flat": {
+          "name": "Airy flat",
+          "desc": "White canvas, generous spacing, subtle dividers"
+        },
         "dark": {
           "name": "Dark",
           "desc": "Dark background, easy on the eyes at night"

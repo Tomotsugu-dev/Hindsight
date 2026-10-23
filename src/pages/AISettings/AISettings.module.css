@@ -1982,3 +1982,7 @@
 .modelSuggestOption[aria-selected="true"] {
   background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 }
+
+:global([data-theme="flat"]) .content {
+  gap: 32px;
+}

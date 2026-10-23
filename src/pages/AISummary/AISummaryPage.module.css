@@ -14,3 +14,8 @@
   flex-direction: column;
   gap: 24px;
 }
+
+:global([data-theme="flat"]) .page,
+:global([data-theme="flat"]) .tabContent {
+  gap: 32px;
+}

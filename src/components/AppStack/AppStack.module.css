@@ -23,3 +23,7 @@
 .item:first-child {
   margin-left: 0;
 }
+
+:global([data-theme="flat"]) .item {
+  box-shadow: none;
+}
