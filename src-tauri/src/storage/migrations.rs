@@ -991,12 +991,65 @@ const PLUGINS_TABLE_SQL: &str = r#"
     );
 "#;
 
+/// v46: daily totals for the reports (ADR-0016). `daily_usage` stores the seconds for each date,
+/// device, process and website. Records without a website store '' in `url_host`.
+/// `daily_usage_stale` stores the date ranges to recompute before the next query.
+///
+/// The triggers note the dates a changed row covers, both before and after the change. The last
+/// statement notes the dates of the records already in the database, so the first query after the
+/// upgrade computes the whole table. The partial index holds only the records that run past
+/// midnight, because every recompute reads them.
+const DAILY_USAGE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS daily_usage (
+        local_date   TEXT NOT NULL,
+        device_id    TEXT NOT NULL,
+        process_name TEXT NOT NULL,
+        url_host     TEXT NOT NULL,
+        secs         INTEGER NOT NULL,
+        PRIMARY KEY (local_date, device_id, process_name, url_host)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS daily_usage_stale (
+        from_date TEXT NOT NULL,
+        to_date   TEXT NOT NULL,
+        PRIMARY KEY (from_date, to_date)
+    ) WITHOUT ROWID;
+
+    CREATE INDEX IF NOT EXISTS idx_activities_past_midnight ON activities(local_date)
+     WHERE substr(ended_at, 1, 10) <> local_date;
+
+    CREATE TRIGGER IF NOT EXISTS daily_usage_insert AFTER INSERT ON activities
+    BEGIN
+        INSERT OR IGNORE INTO daily_usage_stale
+        VALUES (NEW.local_date, substr(NEW.ended_at, 1, 10));
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS daily_usage_delete AFTER DELETE ON activities
+    BEGIN
+        INSERT OR IGNORE INTO daily_usage_stale
+        VALUES (OLD.local_date, substr(OLD.ended_at, 1, 10));
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS daily_usage_update
+    AFTER UPDATE OF local_date, device_id, process_name, url_host, duration_secs,
+                    started_at, ended_at, excluded
+    ON activities
+    BEGIN
+        INSERT OR IGNORE INTO daily_usage_stale
+        VALUES (OLD.local_date, substr(OLD.ended_at, 1, 10)),
+               (NEW.local_date, substr(NEW.ended_at, 1, 10));
+    END;
+
+    INSERT OR IGNORE INTO daily_usage_stale
+    SELECT DISTINCT local_date, substr(ended_at, 1, 10) FROM activities;
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 35] = [
+    let extras: [&'static str; 36] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -1032,6 +1085,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         BACKFILL_SUPER_CATEGORY_OUTBOX_SQL,    // v43
         ADD_IS_DEFAULT_NAME_SQL,               // v44
         PLUGINS_TABLE_SQL,                     // v45
+        DAILY_USAGE_SQL,                       // v46
     ];
     pool.0
         .call(move |conn| {
@@ -1173,7 +1227,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            45
+            46
         );
 
         let tables = table_names(&pool).await;
@@ -1197,6 +1251,8 @@ mod tests {
             "webdav_accounts",
             "site_rules",
             "plugins",
+            "daily_usage",
+            "daily_usage_stale",
         ] {
             assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
         }
@@ -1391,6 +1447,82 @@ mod tests {
         assert_eq!(count(&pool, sql).await, 2);
     }
 
+    /// v46：升级时库里已有记录，记下每条记录覆盖的日期，第一次查询时整表算出来。
+    #[tokio::test]
+    async fn v46_notes_every_date_of_an_existing_database() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        // 退回 v46 之前的样子：拆掉它建的东西，放进升级前就有的记录（最后一条跨午夜）
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "DROP TRIGGER IF EXISTS daily_usage_insert;
+                     DROP TRIGGER IF EXISTS daily_usage_update;
+                     DROP TRIGGER IF EXISTS daily_usage_delete;
+                     DROP TABLE IF EXISTS daily_usage;
+                     DROP TABLE IF EXISTS daily_usage_stale;
+                     DELETE FROM schema_version WHERE version = 46;
+                     INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                         local_hour, process_name, window_title, category_id, device_id,
+                         updated_at, origin)
+                     VALUES('2026-05-15T10:00:00Z', '2026-05-15T10:00:30Z', 30, '2026-05-15',
+                         10, 'Code', '', 'other', 'd', '2026-05-15T10:00:30Z', 'local'),
+                           ('2026-10-21T23:50:00Z', '2026-10-22T00:10:00Z', 1200, '2026-10-21',
+                         23, 'Code', '', 'other', 'd', '2026-10-22T00:10:00Z', 'local');",
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        run(&pool).await.unwrap();
+
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM daily_usage_stale
+                  WHERE (from_date, to_date) IN (VALUES ('2026-05-15', '2026-05-15'),
+                                                        ('2026-10-21', '2026-10-22'))"
+            )
+            .await,
+            2
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM daily_usage_stale").await,
+            2
+        );
+    }
+
+    /// v46：全新安装没有记录，不记任何日期。
+    #[tokio::test]
+    async fn v46_on_an_empty_database_notes_nothing() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM daily_usage_stale").await,
+            0
+        );
+    }
+
+    /// ADR-0016 的约束：触发器没了，daily_usage 就不会再更新。以后哪条迁移重建 activities 表
+    /// 却忘了重建触发器，这里会红。
+    #[tokio::test]
+    async fn daily_usage_triggers_exist_after_all_migrations() {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM sqlite_master
+                  WHERE type = 'trigger' AND tbl_name = 'activities'
+                    AND name IN ('daily_usage_insert', 'daily_usage_update', 'daily_usage_delete')"
+            )
+            .await,
+            3
+        );
+    }
+
     /// v44 第二步:只换 is_default_name 为 1 的,换完变成 0,updated_at 不变,不进 outbox;
     /// 改过名的、没给译名的、译名为空的不动。换过一次,再换成别的语言也不动。
     #[tokio::test]
@@ -1468,7 +1600,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            45
+            46
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1524,7 +1656,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            45
+            46
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(
