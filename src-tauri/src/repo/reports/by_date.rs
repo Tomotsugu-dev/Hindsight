@@ -5,26 +5,12 @@ use chrono::NaiveDate;
 use rusqlite::ToSql;
 
 use crate::error::Result;
-use crate::repo::sql::{from_stats_category_sql, matching_rule_host_sql};
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::DbPool;
 use crate::storage::SqliteResultExt;
 
 use super::daily_usage;
 use super::{AppTotals, AppUsage, CategoryTime, DaySummary, DeviceFilter};
-
-/// Builds the `WITH` clause both queries share: the website rule for each website in the date
-/// range.
-///
-/// The SQL has two `?` parameters: the start date, then the end date.
-fn host_rule_with_sql() -> String {
-    format!(
-        "WITH RECURSIVE {}",
-        matching_rule_host_sql(
-            "SELECT DISTINCT url_host FROM daily_usage
-              WHERE url_host <> '' AND local_date >= ? AND local_date <= ?"
-        )
-    )
-}
 
 /// Each category's time on each day of a date range, for drawing a bar chart with one bar per day:
 /// one entry per day from `from` to `to`, each bar split by category, with empty `segments` on days
@@ -54,7 +40,7 @@ pub async fn day_category_time(
                  WHERE a.local_date >= ? AND a.local_date <= ? {device}
                    AND c.id IS NOT 'hidden'
                  GROUP BY a.local_date, cat",
-                with = host_rule_with_sql(),
+                with = host_rule_with_sql("daily_usage"),
                 from = from_stats_category_sql("daily_usage"),
                 device = device.sql_clause(),
             );
@@ -149,7 +135,7 @@ pub async fn top_apps(
                  {from}
                  WHERE c.id IS NOT 'hidden'
                  GROUP BY group_id, display, app_cat, cat",
-                with = host_rule_with_sql(),
+                with = host_rule_with_sql("daily_usage"),
                 from = from_stats_category_sql("per_process"),
                 device = device.sql_clause(),
             );
