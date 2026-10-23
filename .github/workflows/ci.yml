@@ -12,6 +12,9 @@
 #   the Windows runner, and both are release targets.
 # - debuginfo is off for CI builds. Nothing reads it, and generating it is a
 #   large part of the compile and link time.
+# - backend checks use Tauri's dev context, so they do not need frontend assets.
+# - tests skip optimizing the application, while dependencies keep their O2
+#   override for CPU-heavy tests such as XLSX export.
 
 name: CI
 
@@ -91,17 +94,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      # tauri_build checks that frontendDist (../dist) exists before cargo runs.
-      - name: Build frontend (dist for tauri_build)
-        run: |
-          npm ci
-          npx vite build
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -130,17 +122,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      # tauri_build checks that frontendDist (../dist) exists before cargo runs.
-      - name: Build frontend (dist for tauri_build)
-        run: |
-          npm ci
-          npx vite build
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -150,4 +131,7 @@ jobs:
 
       - name: test
         working-directory: src-tauri
+        env:
+          # Only the workspace crate changes; keep the existing dependency cache.
+          CARGO_PROFILE_TEST_OPT_LEVEL: 0
         run: cargo test
