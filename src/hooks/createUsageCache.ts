@@ -112,8 +112,8 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     useEffect(() => {
       const t = setInterval(() => {
         if (!invalidateOnRollover()) return;
-        void fetchOne(currentOffset - 1);
         void fetchOne(currentOffset, currentOffset === 0);
+        void fetchOne(currentOffset - 1);
         void fetchOne(currentOffset + 1);
       }, 30_000);
       return () => clearInterval(t);
@@ -131,24 +131,28 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
     //     之前误把"切到昨天也 force=true"导致 cached 显示后 50ms 又被新 fetch 覆盖，
     //     就是用户看到的"16h 柱子突然变长 / 变短"。
     //   - 邻居（currentOffset ± 1）：永远 force=false，cache 有就跳过预取。
+    //
+    // The period on screen goes first: the backend answers commands one at a time, in the
+    // order they arrive, so a neighbour sent first makes the page wait for it.
     useEffect(() => {
       invalidateOnRollover();
-      void fetchOne(currentOffset - 1);
       void fetchOne(currentOffset, currentOffset === 0);
+      void fetchOne(currentOffset - 1);
       void fetchOne(currentOffset + 1);
     }, [currentOffset, fetchOne, categories, invalidateOnRollover]);
 
     useEffect(() => {
       if (currentOffset !== 0) return;
       const t = setInterval(() => {
-        // 翻转后除了 0 还要补邻居——只重拉 0 的话"昨天"面板会停在 emptyValue
-        if (invalidateOnRollover()) {
-          void fetchOne(-1);
-          void fetchOne(1);
-        }
+        const rolledOver = invalidateOnRollover();
         // 不再无条件 delete(0)：交给 fetchOne 自身的 inFlight 守卫去重，
         // 避免同一 offset=0 并发多发、回来乱序覆盖（"柱子忽长忽短"的另一来源）。
         void fetchOne(0, true);
+        // 翻转后除了 0 还要补邻居——只重拉 0 的话"昨天"面板会停在 emptyValue
+        if (rolledOver) {
+          void fetchOne(-1);
+          void fetchOne(1);
+        }
       }, pollInterval);
       return () => clearInterval(t);
     }, [currentOffset, fetchOne, invalidateOnRollover]);
