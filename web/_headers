@@ -1,0 +1,11 @@
+# 静态资源响应头规则：https://developers.cloudflare.com/workers/static-assets/headers/
+# 本文件不会作为静态文件对外提供。没列出的文件用默认的 max-age=0 + ETag，
+# 每次向边缘确认，发布后立即生效。
+
+# Vite 产物的文件名带内容哈希，内容一变文件名就变，可以永久缓存
+/demo/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 视频和封面重录后文件名不变，缓存一天
+/assets/video/*
+  Cache-Control: public, max-age=86400
