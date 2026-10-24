@@ -45,7 +45,8 @@ export interface OnlinePlugin {
   id: string;
   name: string;
   author: string;
-  description: string;
+  /** 各种语言的简介：语言代码 → 文字。用 pickDescription 按界面语言挑一种 */
+  description: Record<string, string>;
   repo: string;
   /** Newest first */
   versions: OnlineVersion[];

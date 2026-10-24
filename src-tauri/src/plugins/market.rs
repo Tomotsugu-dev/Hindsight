@@ -1,7 +1,7 @@
 //! The plugin packages listed on the plugin market page.
 
 use std::cmp::{Ordering, Reverse};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -28,7 +28,7 @@ const ICONS_URL: &str =
 const OFFICIAL_ACCOUNT: &str = "Tomotsugu-dev";
 
 /// The current plugins.json format version.
-const PLUGINS_JSON_FORMAT_VERSION: u32 = 1;
+const PLUGINS_JSON_FORMAT_VERSION: u32 = 2;
 
 /// The timeout for network requests from the market page.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
@@ -239,7 +239,9 @@ pub struct OnlinePlugin {
     pub id: String,
     pub name: String,
     pub author: String,
-    pub description: String,
+    /// The description in each language: interface language code (such as `zh-CN` or `en`) →
+    /// text. The frontend picks one by the interface language
+    pub description: BTreeMap<String, String>,
     /// The author's repository, such as `someone/hindsight-focus`
     pub repo: String,
     pub versions: Vec<OnlineVersion>,
@@ -272,9 +274,14 @@ pub struct OnlineVersion {
     pub kind: InstallKind,
 }
 
+/// Only the format version of plugins.json. The rest of the file is not read.
+#[derive(Deserialize)]
+struct FormatVersion {
+    format_version: u32,
+}
+
 #[derive(Deserialize)]
 struct PluginsJson {
-    format_version: u32,
     plugins: Vec<OnlinePlugin>,
 }
 
@@ -297,12 +304,13 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
 ///
 /// Returns [`Error::PluginsJsonFormatVersion`] if `format_version` is not known.
 fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
-    let file: PluginsJson = serde_json::from_slice(json)?;
-    // Do not parse an unknown format as if it were the current one
-    if file.format_version != PLUGINS_JSON_FORMAT_VERSION {
-        return Err(Error::PluginsJsonFormatVersion(file.format_version));
+    // Check the format version before the plugins: an unknown format must report a format error,
+    // not a JSON error from parsing it as the current format
+    let FormatVersion { format_version } = serde_json::from_slice(json)?;
+    if format_version != PLUGINS_JSON_FORMAT_VERSION {
+        return Err(Error::PluginsJsonFormatVersion(format_version));
     }
-    let mut plugins = file.plugins;
+    let mut plugins = serde_json::from_slice::<PluginsJson>(json)?.plugins;
     for plugin in &mut plugins {
         // The id goes into the URL. An id with `/` or `..` would point outside the official
         // repository
@@ -690,7 +698,7 @@ mod tests {
         install_focus(&pool, &dir, "0.1.0").await;
         focus_zip(&dir, "0.2.0");
 
-        let market = list(&pool, &dir.0, Err(Error::PluginsJsonFormatVersion(2)))
+        let market = list(&pool, &dir.0, Err(Error::PluginsJsonFormatVersion(3)))
             .await
             .unwrap();
 
@@ -698,22 +706,25 @@ mod tests {
         assert!(market.downloadable.is_empty());
         assert_eq!(
             market.online_error.as_deref(),
-            Some("plugins.json format version 2 is not supported")
+            Some("plugins.json format version 3 is not supported")
         );
         assert_eq!(market.installed.len(), 1);
         assert_eq!(market.local_zips.len(), 1);
     }
 
-    /// 认识的格式：按顺序读出每个插件，不认识的字段忽略；版本没写容量是 None。
+    /// 认识的格式：按顺序读出每个插件，简介按语言原样读出，不认识的字段忽略；版本没写容量是 None。
     #[test]
-    fn parses_plugins_json_format_1() {
+    fn parses_plugins_json_format_2() {
         let json = serde_json::json!({
-            "format_version": 1,
+            "format_version": 2,
             "plugins": [{
                 "id": "hindsight-focus",
                 "name": "专注",
                 "author": "someone",
-                "description": "离今天的目标还差多少",
+                "description": {
+                    "zh-CN": "离今天的目标还差多少",
+                    "en": "How far you are from today's goal"
+                },
                 "repo": "someone/hindsight-focus",
                 "versions": [{
                     "version": "0.1.0",
@@ -735,6 +746,16 @@ mod tests {
 
         assert_eq!(plugins.len(), 1);
         assert_eq!(plugins[0].id, "hindsight-focus");
+        assert_eq!(
+            plugins[0].description,
+            BTreeMap::from([
+                (
+                    "en".to_string(),
+                    "How far you are from today's goal".to_string()
+                ),
+                ("zh-CN".to_string(), "离今天的目标还差多少".to_string()),
+            ])
+        );
         assert_eq!(plugins[0].versions[0].version, "0.1.0");
         assert_eq!(plugins[0].versions[0].permissions, ["stats.read"]);
         assert_eq!(plugins[0].versions[0].storage_mb, Some(50));
@@ -745,11 +766,11 @@ mod tests {
     #[test]
     fn icon_urls_come_from_valid_ids() {
         let json = serde_json::json!({
-            "format_version": 1,
+            "format_version": 2,
             "plugins": [
-                { "id": "pomodoro", "name": "", "author": "", "description": "", "repo": "",
+                { "id": "pomodoro", "name": "", "author": "", "description": {}, "repo": "",
                   "versions": [] },
-                { "id": "../../evil", "name": "", "author": "", "description": "", "repo": "",
+                { "id": "../../evil", "name": "", "author": "", "description": {}, "repo": "",
                   "versions": [] }
             ]
         });
@@ -770,11 +791,11 @@ mod tests {
     #[test]
     fn official_comes_from_the_repo_account() {
         let plugin = |repo: &str| {
-            serde_json::json!({ "id": "p", "name": "", "author": "", "description": "",
+            serde_json::json!({ "id": "p", "name": "", "author": "", "description": {},
                                 "repo": repo, "versions": [] })
         };
         let json = serde_json::json!({
-            "format_version": 1,
+            "format_version": 2,
             "plugins": [
                 plugin("Tomotsugu-dev/hindsight-focus"),
                 plugin("tomotsugu-dev/hindsight-focus"),
@@ -790,13 +811,29 @@ mod tests {
         assert_eq!(official, [true, true, false, false, false]);
     }
 
-    /// 不认识的格式：报格式错误，不硬解。
+    /// 不认识的格式：报格式错误，不硬解。旧的格式 1 也不再认识。
     #[test]
     fn rejects_unknown_plugins_json_format_version() {
-        let json = serde_json::json!({ "format_version": 2, "plugins": [] });
+        for version in [1, 3] {
+            let json = serde_json::json!({ "format_version": version, "plugins": [] });
+            let result = parse_plugins_json(json.to_string().as_bytes());
+            assert!(
+                matches!(result, Err(Error::PluginsJsonFormatVersion(v)) if v == version),
+                "{result:?}"
+            );
+        }
+    }
+
+    /// 先看格式版本，再解析插件：不认识的格式里，插件长什么样都报格式错误，不报 JSON 错误。
+    #[test]
+    fn checks_the_format_version_before_the_plugins() {
+        let json = serde_json::json!({
+            "format_version": 3,
+            "plugins": [{ "id": "p", "description": 42, "versions": "not a list" }]
+        });
         let result = parse_plugins_json(json.to_string().as_bytes());
         assert!(
-            matches!(result, Err(Error::PluginsJsonFormatVersion(2))),
+            matches!(result, Err(Error::PluginsJsonFormatVersion(3))),
             "{result:?}"
         );
     }

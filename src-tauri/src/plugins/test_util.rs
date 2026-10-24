@@ -118,7 +118,7 @@ pub fn online_plugin(id: &str, versions: &[&str]) -> OnlinePlugin {
         id: id.into(),
         name: id.into(),
         author: "someone".into(),
-        description: String::new(),
+        description: Default::default(),
         repo: format!("someone/{id}"),
         versions: versions
             .iter()
