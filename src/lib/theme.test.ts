@@ -13,6 +13,7 @@ vi.stubGlobal("document", { documentElement: { dataset: {} as Record<string, str
 import {
   APP_THEMES,
   applyTheme,
+  getCurrentMode,
   getCurrentTheme,
   getStoredTheme,
   setStoredTheme,
@@ -65,5 +66,29 @@ describe("theme", () => {
     expect(getCurrentTheme()).toBe("default");
     (document.documentElement.dataset as Record<string, string>).theme = "junk";
     expect(getCurrentTheme()).toBe("minimal");
+  });
+  it.each([
+    ["default", "card", "light"],
+    ["minimal", "card", "light"],
+    ["flat", "flat", "light"],
+    ["dark", "card", "dark"],
+  ] as const)("内置主题 %s 设 data-layout=%s、data-mode=%s", (theme, layout, mode) => {
+    applyTheme(theme);
+    const { dataset } = document.documentElement;
+    expect(dataset.theme).toBe(theme);
+    expect(dataset.layout).toBe(layout);
+    expect(dataset.mode).toBe(mode);
+    expect(getCurrentMode()).toBe(mode);
+  });
+  it("getCurrentMode 只看 data-mode，没设或非法值当亮色", () => {
+    const dataset = document.documentElement.dataset as Record<string, string>;
+    dataset.theme = "dark";
+    dataset.mode = "";
+    expect(getCurrentMode()).toBe("light");
+    dataset.mode = "dim";
+    expect(getCurrentMode()).toBe("light");
+    dataset.theme = "minimal";
+    dataset.mode = "dark";
+    expect(getCurrentMode()).toBe("dark");
   });
 });

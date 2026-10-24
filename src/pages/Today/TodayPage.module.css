@@ -89,12 +89,12 @@
   align-items: stretch;
 }
 
-:global([data-theme="flat"]) .page {
+:global([data-layout="flat"]) .page {
   max-width: 1040px;
   gap: 28px;
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   min-width: 0;
   background: transparent;
   border: 0;
@@ -102,14 +102,14 @@
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .cardHead {
+:global([data-layout="flat"]) .cardHead {
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 0 10px;
   border-bottom: 0;
 }
 
-:global([data-theme="flat"]) .ranks {
+:global([data-layout="flat"]) .ranks {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 32px;
   padding-top: 22px;
@@ -117,7 +117,7 @@
 }
 
 @media (max-width: 900px) {
-  :global([data-theme="flat"]) .ranks {
+  :global([data-layout="flat"]) .ranks {
     grid-template-columns: minmax(0, 1fr);
   }
 }

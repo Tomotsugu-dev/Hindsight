@@ -183,7 +183,7 @@
   color: var(--status-error);
 }
 
-:global([data-theme="flat"]) .row {
+:global([data-layout="flat"]) .row {
   padding: 18px 0;
   border-bottom-color: var(--border-default);
 }

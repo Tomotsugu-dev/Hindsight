@@ -8,15 +8,15 @@
 }
 
 /* Keep category colors and drag feedback while presenting the list as rows. */
-:global([data-theme="flat"]) .page {
+:global([data-layout="flat"]) .page {
   gap: 32px;
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   gap: 0;
 }
 
-:global([data-theme="flat"]) .catRow {
+:global([data-layout="flat"]) .catRow {
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--border-default);
@@ -24,7 +24,7 @@
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .catRowHot {
+:global([data-layout="flat"]) .catRowHot {
   background: color-mix(in oklab, var(--color-accent) 8%, white);
   border-bottom-color: var(--color-accent);
   outline: 1px solid var(--color-accent);
@@ -832,13 +832,13 @@
 /* 暗色：亮色是「淡彩底(混白) + 深彩字(混黑)」，暗色下混白会让 chip 发亮白。
    改成「分类色淡染暗底(混 transparent 露出行底) + 亮彩字(混 white)」——像标准暗色标签，
    保留分类识别但不发白。小面积彩色 chip 按规范保留鲜度。 */
-:global([data-theme="dark"]) .assignBtnPicked {
+:global([data-mode="dark"]) .assignBtnPicked {
   background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 22%, transparent);
   border-color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 38%, transparent);
   color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 72%, white);
 }
 
-:global([data-theme="dark"]) .assignBtnPicked:hover {
+:global([data-mode="dark"]) .assignBtnPicked:hover {
   background: color-mix(in oklab, var(--cat-color, var(--color-accent)) 30%, transparent);
   border-color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 52%, transparent);
   color: color-mix(in oklab, var(--cat-color, var(--color-accent)) 80%, white);

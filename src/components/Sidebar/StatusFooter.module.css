@@ -223,15 +223,15 @@
   }
 }
 
-:global([data-theme="flat"]) .row {
+:global([data-layout="flat"]) .row {
   border-radius: 5px;
   font-weight: var(--font-weight-400);
 }
 
-:global([data-theme="flat"]) .dot {
+:global([data-layout="flat"]) .dot {
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .cloudOn {
+:global([data-layout="flat"]) .cloudOn {
   filter: none;
 }

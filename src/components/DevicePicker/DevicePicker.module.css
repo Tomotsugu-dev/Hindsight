@@ -162,11 +162,11 @@
   background: var(--border-default);
 }
 
-:global([data-theme="flat"]) .trigger {
+:global([data-layout="flat"]) .trigger {
   border-color: var(--border-default);
 }
 
-:global([data-theme="flat"]) .tile {
+:global([data-layout="flat"]) .tile {
   background: transparent;
   border-color: transparent;
   box-shadow: none;

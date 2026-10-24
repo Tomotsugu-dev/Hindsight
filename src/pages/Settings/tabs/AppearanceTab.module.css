@@ -208,16 +208,16 @@
   line-height: 1.4;
 }
 
-:global([data-theme="dark"]) .card {
+:global([data-mode="dark"]) .card {
   background: var(--surface-card-elevated);
   border-color: var(--border-default);
 }
 
-:global([data-theme="flat"]) .card:hover {
+:global([data-layout="flat"]) .card:hover {
   box-shadow: none;
   transform: none;
 }
 
-:global([data-theme="flat"]) .cardActive {
+:global([data-layout="flat"]) .cardActive {
   box-shadow: 0 0 0 1px var(--color-accent);
 }

@@ -24,6 +24,6 @@
   margin-left: 0;
 }
 
-:global([data-theme="flat"]) .item {
+:global([data-layout="flat"]) .item {
   box-shadow: none;
 }

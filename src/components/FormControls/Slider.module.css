@@ -121,7 +121,7 @@
 
 /* 暗色：未填充轨道段是 7% 黑（暗底看不见空轨）、valueBox 黑边看不见。
    未填充段改淡白（空轨可见）、valueBox 边淡白。白球 thumb + accent 填充保留。亮色不动。 */
-:global([data-theme="dark"]) .input {
+:global([data-mode="dark"]) .input {
   background: linear-gradient(
     to right,
     color-mix(in oklab, var(--color-accent) 78%, white) 0%,
@@ -131,7 +131,7 @@
   );
 }
 
-:global([data-theme="dark"]) .valueBox {
+:global([data-mode="dark"]) .valueBox {
   border-color: rgba(255, 255, 255, 0.1);
 }
 

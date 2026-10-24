@@ -697,18 +697,18 @@
   cursor: not-allowed;
 }
 
-:global([data-theme="flat"]) .empty {
+:global([data-layout="flat"]) .empty {
   background: transparent;
   border: 0;
   border-radius: 0;
 }
 
-:global([data-theme="flat"]) .emptyHeroTitle {
+:global([data-layout="flat"]) .emptyHeroTitle {
   font-weight: var(--font-weight-500);
 }
 
 /* Action cards and the composer keep their boundaries without elevation. */
-:global([data-theme="flat"]) .presetCard:hover,
-:global([data-theme="flat"]) .composer:not(:focus-within) {
+:global([data-layout="flat"]) .presetCard:hover,
+:global([data-layout="flat"]) .composer:not(:focus-within) {
   box-shadow: none;
 }

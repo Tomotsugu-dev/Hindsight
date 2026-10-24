@@ -161,7 +161,7 @@
   background: var(--control-bg-hover);
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   background: transparent;
   border: 0;
   border-top: 1px solid var(--border-default);
@@ -170,23 +170,23 @@
   overflow: visible;
 }
 
-:global([data-theme="flat"]) .head {
+:global([data-layout="flat"]) .head {
   padding: 22px 0 12px;
   border-bottom: 0;
 }
 
-:global([data-theme="flat"]) .underline {
+:global([data-layout="flat"]) .underline {
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .navBtn,
-:global([data-theme="flat"]) .pill {
+:global([data-layout="flat"]) .navBtn,
+:global([data-layout="flat"]) .pill {
   border-color: var(--border-default);
 }
 
 @media (max-width: 900px) {
-  :global([data-theme="flat"]) .controls,
-  :global([data-theme="flat"]) .right {
+  :global([data-layout="flat"]) .controls,
+  :global([data-layout="flat"]) .right {
     flex-wrap: wrap;
     gap: 10px;
   }

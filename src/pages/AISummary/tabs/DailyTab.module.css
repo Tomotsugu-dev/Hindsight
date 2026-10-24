@@ -434,11 +434,11 @@
   to   { transform: rotate(360deg); }
 }
 
-:global([data-theme="flat"]) .cardList {
+:global([data-layout="flat"]) .cardList {
   gap: 24px;
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   padding: 20px 0 0;
   background: transparent;
   border: 0;
@@ -447,6 +447,6 @@
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .chip {
+:global([data-layout="flat"]) .chip {
   font-weight: var(--font-weight-500);
 }

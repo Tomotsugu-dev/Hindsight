@@ -199,15 +199,15 @@
 }
 
 /* Flat settings sections use a single rule to separate their contents. */
-:global([data-theme="flat"]) .section {
+:global([data-layout="flat"]) .section {
   gap: 16px;
 }
 
-:global([data-theme="flat"]) .header {
+:global([data-layout="flat"]) .header {
   padding: 0;
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   background: transparent;
   border: 0;
   border-top: 1px solid var(--border-default);

@@ -350,11 +350,11 @@
   background: color-mix(in oklab, var(--text-secondary) 6%, transparent);
 }
 
-:global([data-theme="flat"]) .columns {
+:global([data-layout="flat"]) .columns {
   gap: 24px;
 }
 
-:global([data-theme="flat"]) .convList {
+:global([data-layout="flat"]) .convList {
   padding-right: 16px;
   border-right: 1px solid var(--border-default);
 }

@@ -61,6 +61,6 @@
   transform: translateX(100%);
 }
 
-:global([data-theme="flat"]) .underline {
+:global([data-layout="flat"]) .underline {
   box-shadow: none;
 }

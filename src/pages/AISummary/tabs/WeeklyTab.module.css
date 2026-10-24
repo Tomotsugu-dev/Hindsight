@@ -370,7 +370,7 @@
   to   { transform: rotate(360deg); }
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   padding: 24px 0 0;
   background: transparent;
   border: 0;

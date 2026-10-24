@@ -192,15 +192,15 @@
 }
 
 /* Flat separates the sidebar with a solid surface and a subtle selected state. */
-:global([data-theme="flat"]) .sidebar {
+:global([data-layout="flat"]) .sidebar {
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .pill,
-:global([data-theme="flat"]) .accountRow {
+:global([data-layout="flat"]) .pill,
+:global([data-layout="flat"]) .accountRow {
   border-radius: 5px;
 }
 
-:global([data-theme="flat"]) .cloudOn {
+:global([data-layout="flat"]) .cloudOn {
   filter: none;
 }

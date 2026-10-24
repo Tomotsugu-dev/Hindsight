@@ -183,45 +183,45 @@
   transform: scale(0.96);
 }
 
-:global([data-theme="flat"]) .row,
-:global([data-theme="flat"]) .rowClickable {
+:global([data-layout="flat"]) .row,
+:global([data-layout="flat"]) .rowClickable {
   border-bottom: 0;
 }
 
-:global([data-theme="flat"]) .row,
-:global([data-theme="flat"]) .rowBtn {
+:global([data-layout="flat"]) .row,
+:global([data-layout="flat"]) .rowBtn {
   padding: 12px 0;
 }
 
-:global([data-theme="flat"]) .rowBtn {
+:global([data-layout="flat"]) .rowBtn {
   border-radius: var(--radius-sm);
 }
 
-:global([data-theme="flat"]) .dot {
+:global([data-layout="flat"]) .dot {
   width: 8px;
   height: 8px;
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .barWrap,
-:global([data-theme="flat"]) .barFill {
+:global([data-layout="flat"]) .barWrap,
+:global([data-layout="flat"]) .barFill {
   border-radius: 0;
 }
 
-:global([data-theme="flat"]) .barWrap {
+:global([data-layout="flat"]) .barWrap {
   height: 4px;
   min-width: 24px;
   background: var(--border-subtle);
 }
 
-:global([data-theme="flat"]) .extras {
+:global([data-layout="flat"]) .extras {
   width: 40px;
 }
 
-:global([data-theme="flat"]) .extras:empty {
+:global([data-layout="flat"]) .extras:empty {
   width: 0;
 }
 
-:global([data-theme="flat"]) .time {
+:global([data-layout="flat"]) .time {
   font-weight: var(--font-weight-400);
 }

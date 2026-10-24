@@ -11,7 +11,7 @@ export default function AppearanceTab() {
   const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
 
   const choose = (next: AppTheme) => {
-    setStoredTheme(next); // 立即写 <html data-theme> + localStorage
+    setStoredTheme(next); // 立即写 <html> 的三个属性 + localStorage
     setTheme(next);
   };
 

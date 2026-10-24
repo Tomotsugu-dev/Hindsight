@@ -1983,6 +1983,6 @@
   background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 }
 
-:global([data-theme="flat"]) .content {
+:global([data-layout="flat"]) .content {
   gap: 32px;
 }
