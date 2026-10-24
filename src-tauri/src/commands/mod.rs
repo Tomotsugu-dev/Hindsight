@@ -21,3 +21,4 @@ pub mod site_rules;
 pub mod storage;
 pub mod super_categories;
 pub mod sync;
+pub mod themes;

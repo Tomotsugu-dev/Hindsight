@@ -16,6 +16,11 @@ const THEME_JSON: &str = "theme.json";
 /// The theme.css in a theme's folder. A theme may have none.
 const THEME_CSS: &str = "theme.css";
 
+/// Returns the absolute path of the theme library: `themes/` in the data folder.
+pub fn themes_dir() -> PathBuf {
+    crate::bootstrap::data_root().join("themes")
+}
+
 /// A folder in the theme library. If the theme can be read, `theme` is `Some`. If not, `error` is
 /// `Some` and holds the reason.
 #[derive(Debug, Serialize)]

@@ -423,6 +423,12 @@ pub fn run() {
             commands::plugins::plugin_open_window,
             commands::plugins::plugin_call,
             commands::plugins::plugin_stopped,
+            // --- themes: custom themes in the theme library ---
+            commands::themes::theme_list,
+            commands::themes::theme_css,
+            commands::themes::theme_import,
+            commands::themes::theme_delete,
+            commands::themes::theme_open_folder,
             // --- island: the page of the island in the middle of the menu bar ---
             commands::island::island_content,
             commands::island::island_measured,
