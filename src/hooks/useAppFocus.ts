@@ -4,7 +4,7 @@ import type { RingFocusApp } from "../components/PieView/ringItems";
 import { useCategories } from "../state/categories";
 import { secsIn } from "../utils/appCategoryTime";
 import { displayAppName } from "../utils/displayName";
-import { useAppDetail, type DetailScope } from "./useAppDetail";
+import { useAppBuckets, type DetailScope } from "./useAppDetail";
 import type { PeriodInsights } from "./usePeriodInsights";
 import type { BreakdownSlice } from "./useSuperCategoryBreakdown";
 
@@ -78,7 +78,8 @@ export function useAppFocus({
   }, [hoverId]);
 
   const app = enabled && settledId ? (apps.find((a) => a.groupId === settledId) ?? null) : null;
-  const { detail } = useAppDetail(scope, offset, app?.groupId ?? null, deviceId);
+  // null = 还在拉这个应用每天的时长
+  const { buckets: appBuckets } = useAppBuckets(scope, offset, app?.groupId ?? null, deviceId);
 
   return useMemo<AppFocus>(() => {
     if (!app) return { focusApp: null, insights: null };
@@ -104,7 +105,7 @@ export function useAppFocus({
     };
 
     const prevMinutes = prevApps.find((a) => a.groupId === app.groupId)?.minutes ?? 0;
-    const buckets = detail?.buckets ?? [];
+    const buckets = appBuckets ?? [];
     const best = buckets.reduce<{ key: string; secs: number } | null>(
       (top, b) => (b.secs > 0 && (!top || b.secs > top.secs) ? b : top),
       null,
@@ -127,7 +128,7 @@ export function useAppFocus({
 
     // 日均只算已经过完的天，跟总览的日均同口径
     let avgMinutes: number | null | undefined = null;
-    if (detail) {
+    if (appBuckets) {
       const today = todayKey();
       const done = buckets.filter((b) => b.key < today);
       avgMinutes =
@@ -138,5 +139,5 @@ export function useAppFocus({
     const prevAvgMinutes =
       prevTotal > 0 && avg.prevDays > 0 ? Math.round(prevMinutes / avg.prevDays) : undefined;
     return { focusApp, insights, avgMinutes, prevAvgMinutes, color };
-  }, [app, apps, prevApps, prevTotal, slices, detail, peakLabel, avg, getCategory]);
+  }, [app, apps, prevApps, prevTotal, slices, appBuckets, peakLabel, avg, getCategory]);
 }

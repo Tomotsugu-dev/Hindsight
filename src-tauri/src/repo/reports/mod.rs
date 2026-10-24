@@ -27,7 +27,7 @@ mod daily_usage;
 pub(crate) mod test_seed;
 mod time;
 
-pub use app_detail::{app_range_detail, BucketBy};
+pub use app_detail::{app_buckets, app_range_detail, app_titles, BucketBy};
 pub use by_date::{day_category_time, top_apps};
 pub use by_hour::{day_hour_apps, day_hours};
 pub use time::{day_date, month_range, week_range};
@@ -162,6 +162,16 @@ pub struct AppDetail {
     pub titles: Vec<TitleUsage>,
     /// Whether the representative process is a browser; the frontend uses it to decide whether to
     /// group the titles by site.
+    pub is_browser: bool,
+}
+
+/// One app's time per window title over a date range, and whether it is a browser.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppTitles {
+    /// As in [`AppDetail::titles`]
+    pub titles: Vec<TitleUsage>,
+    /// As in [`AppDetail::is_browser`]
     pub is_browser: bool,
 }
 

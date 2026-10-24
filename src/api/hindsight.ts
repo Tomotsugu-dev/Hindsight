@@ -28,14 +28,21 @@ export interface AppUsage {
   byCategory: CategoryTime[];
 }
 
-/** 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时（日/周/月共用）。 */
-export interface AppDetail {
-  /** 时间柱：日=24 根(key "0".."23")，周/月=每天一根(key "YYYY-MM-DD")；含 0 空桶、已排序 */
-  buckets: DetailBucket[];
+/** 统计页的范围：日、周、月 */
+export type DetailScope = "day" | "week" | "month";
+
+/** 一个应用的窗口标题用时，和它是不是浏览器 */
+export interface AppTitles {
   /** 按窗口标题聚合的用时（降序）；原始标题，前端再剥 app 名后缀 + 合并 */
   titles: TitleUsage[];
-  /** 代表进程是否浏览器——是则详情按网站分组展示 */
+  /** 是不是浏览器：是却一个网站都没有时，标题列表上方解释原因 */
   isBrowser: boolean;
+}
+
+/** 「点应用 → 详情抽屉」聚合数据：时间柱 + 窗口标题用时（日/周/月共用）。 */
+export interface AppDetail extends AppTitles {
+  /** 时间柱：日=24 根(key "0".."23")，周/月=每天一根(key "YYYY-MM-DD")；含 0 空桶、已排序 */
+  buckets: DetailBucket[];
 }
 
 export interface DetailBucket {
@@ -822,20 +829,10 @@ export const api = {
     deviceId?: string,
   ) =>
     invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
-  getAppDayDetail: (dayOffset: number, groupId: string, deviceId?: string) =>
-    invoke<AppDetail>("get_app_day_detail", { dayOffset, groupId, deviceId }),
-  getAppWeekDetail: (weekOffset: number, groupId: string, deviceId?: string) =>
-    invoke<AppDetail>("get_app_week_detail", { weekOffset, groupId, deviceId }),
-  getAppMonthDetail: (
-    monthOffset: number,
-    groupId: string,
-    deviceId?: string,
-  ) =>
-    invoke<AppDetail>("get_app_month_detail", {
-      monthOffset,
-      groupId,
-      deviceId,
-    }),
+  getAppBuckets: (scope: DetailScope, offset: number, groupId: string, deviceId?: string) =>
+    invoke<DetailBucket[]>("get_app_buckets", { scope, offset, groupId, deviceId }),
+  getAppTitles: (scope: DetailScope, offset: number, groupId: string, deviceId?: string) =>
+    invoke<AppTitles>("get_app_titles", { scope, offset, groupId, deviceId }),
   getWeekDays: (weekOffset: number, deviceId?: string) =>
     invoke<DaySummaryDto[]>("get_week_days", { weekOffset, deviceId }),
   getWeekApps: (weekOffset: number, limit?: number, deviceId?: string) =>
