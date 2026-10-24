@@ -1,6 +1,6 @@
 [package]
 name = "hindsight"
-version = "0.10.1"
+version = "0.10.2"
 description = "Privacy-first activity tracking and AI summaries for desktop"
 authors = ["Tomotsugu-dev <heroburnning@gmail.com>"]
 license = "GPL-3.0-only"
