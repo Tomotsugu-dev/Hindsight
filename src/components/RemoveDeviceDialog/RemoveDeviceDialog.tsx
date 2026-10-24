@@ -55,6 +55,7 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
       <div
         ref={dialogRef}
         className={styles.dialog}
+        data-part="dialog"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="remove-device-title"

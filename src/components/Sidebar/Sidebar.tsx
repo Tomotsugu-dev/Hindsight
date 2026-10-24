@@ -123,7 +123,7 @@ export function Sidebar() {
   }, [i18n.language]);
 
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} data-part="sidebar">
       <div className={styles.brand} data-tauri-drag-region>
         <img
           className={styles.logoMark}

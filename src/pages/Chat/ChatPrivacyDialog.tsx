@@ -49,6 +49,7 @@ export function ChatPrivacyDialog({ open, ai, onConfirm, onCancel }: ChatPrivacy
       <div
         ref={dialogRef}
         className={styles.dialog}
+        data-part="dialog"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="chat-privacy-title"

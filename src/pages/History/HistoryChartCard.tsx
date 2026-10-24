@@ -49,7 +49,7 @@ export function HistoryChartCard({
   const { ref: nextRef } = useMouseGlow<HTMLButtonElement>();
 
   return (
-    <section className={styles.card}>
+    <section className={styles.card} data-part="card">
       <header className={styles.head}>
         <div className={styles.titleRow}>
           <h2 className={styles.title}>{title}</h2>

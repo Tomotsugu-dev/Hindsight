@@ -78,7 +78,7 @@ export function RankedList({
   };
 
   return (
-    <ol ref={listRef} className={styles.list}>
+    <ol ref={listRef} className={styles.list} data-part="ranked-list">
       {visibleItems.map((item, idx) => {
         const pct = (item.minutes / denom) * 100;
         const inner = (

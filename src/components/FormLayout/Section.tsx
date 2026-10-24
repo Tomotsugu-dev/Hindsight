@@ -36,6 +36,7 @@ export function Section({
   return (
     <section
       className={`${styles.section} ${collapsible ? styles.collapsible : ""}`}
+      data-part="section"
     >
       <header className={styles.header}>
         {Icon ? (

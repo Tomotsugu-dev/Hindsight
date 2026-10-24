@@ -399,7 +399,7 @@ export default function StatsTab() {
             if (e.target === e.currentTarget && !open) setApp(null);
           }}
         >
-          <section className={styles.card} inert={open}>
+          <section className={styles.card} data-part="card" inert={open}>
             <header className={styles.cardHead}>
               <h2 className={styles.cardTitle}>{t("history.superCategories")}</h2>
               <span className={styles.cardTotal}>{fmtHM(scopedBreakdown.total)}</span>

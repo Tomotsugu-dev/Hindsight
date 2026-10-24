@@ -59,7 +59,7 @@ export function DailyBarChart({
     });
 
   return (
-    <div className={styles.chart}>
+    <div className={styles.chart} data-part="chart">
       <div className={styles.plot}>
         <div className={styles.yAxis} aria-hidden>
           {yTicks.map((tick) => (

@@ -19,7 +19,7 @@ interface PageHeaderProps {
 export function PageHeader({ title, tabs, groups, children }: PageHeaderProps) {
   const hasTabs = Boolean(tabs || groups);
   return (
-    <header className={styles.header}>
+    <header className={styles.header} data-part="page-header">
       <div className={styles.text}>
         <h1 className={styles.title}>{title}</h1>
         {children}

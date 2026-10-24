@@ -130,6 +130,7 @@ export function PieView({
   return (
     <div
       className={styles.body}
+      data-part="chart"
       data-depth={depth}
       style={
         interactive

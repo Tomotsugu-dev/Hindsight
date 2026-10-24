@@ -459,7 +459,7 @@ export default function WeeklyTab() {
         </div>
       ) : null}
 
-      <div className={styles.card}>
+      <div className={styles.card} data-part="card">
         <div className={styles.cardHead}>
           <span className={styles.weekRange}>
             <Clock size={12} strokeWidth={2.2} />
