@@ -64,6 +64,7 @@ const PUBLIC_TOKENS: &[&str] = &[
     "--shadow-md",
     "--shadow-lg",
     "--shadow-inset-hi",
+    "--shadow-strength",
     // Radii
     "--radius-xs",
     "--radius-sm",
@@ -72,6 +73,7 @@ const PUBLIC_TOKENS: &[&str] = &[
     "--radius-xl",
     // Fonts
     "--font-sans",
+    "--font-mono",
 ];
 
 /// Whether the page shows its content in cards or flat.
