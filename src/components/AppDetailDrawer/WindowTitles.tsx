@@ -69,9 +69,8 @@ export function WindowTitles({
     targets: string[];
   } | null>(null);
   const [ignoreBusy, setIgnoreBusy] = useState(false);
-  // 「按网站」分组的展开集合：null = 默认态（只展开时长最多的第一组），
-  // 用户点过之后才具体化。
-  const [openKeys, setOpenKeys] = useState<Set<string> | null>(null);
+  // 「按网站」里展开了的组
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
   // 传了 limit 时：顶层列表是否展开全部、哪些网站组展开了全部页面
   const [showAll, setShowAll] = useState(false);
   const [allPagesKeys, setAllPagesKeys] = useState<Set<string>>(new Set());
@@ -195,13 +194,9 @@ export function WindowTitles({
   // 在标题列表上方解释一句。用户自己关了记录开关则不提示。
   const showNoHostHint =
     isBrowser && !hasHost && pageRows.length > 0 && settings?.recordBrowserHost !== false;
-  const openSet = useMemo<Set<string>>(() => {
-    if (openKeys) return openKeys;
-    return siteGroups.length > 0 ? new Set([siteKey(siteGroups[0])]) : new Set();
-  }, [openKeys, siteGroups]);
   const toggleSite = (key: string) => {
     setOpenKeys((prev) => {
-      const next = new Set(prev ?? openSet);
+      const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
@@ -298,7 +293,7 @@ export function WindowTitles({
           <ul className={styles.siteList}>
             {cut(siteGroups, showAll).map((g) => {
               const key = siteKey(g);
-              const isOpen = openSet.has(key);
+              const isOpen = openKeys.has(key);
               const isUnknown = g.host === null;
               const label = g.host ?? t("appDetail.sites.unknown");
               const allPages = allPagesKeys.has(key);
