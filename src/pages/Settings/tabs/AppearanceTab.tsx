@@ -123,12 +123,7 @@ export default function AppearanceTab() {
 
   return (
     <>
-      <Section
-        title={t("settings.appearance.sectionTitle")}
-        description={t("settings.appearance.description")}
-        icon={Palette}
-        bare
-      >
+      <Section title={t("settings.appearance.sectionTitle")} icon={Palette} bare>
         <div className={styles.grid}>
           {APP_THEMES.map((key) => {
             const active = key === theme;
@@ -177,12 +172,7 @@ export default function AppearanceTab() {
         </div>
       </Section>
 
-      <Section
-        title={t("settings.appearance.custom.title")}
-        description={t("settings.appearance.custom.description")}
-        icon={Paintbrush}
-        bare
-      >
+      <Section title={t("settings.appearance.custom.title")} icon={Paintbrush} bare>
         <div className={styles.body}>
           {/* 按钮不放标题行：设置页只有 656px 宽，放标题行会把说明挤成窄窄一列 */}
           <div className={styles.actions}>

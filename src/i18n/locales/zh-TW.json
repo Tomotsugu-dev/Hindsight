@@ -110,7 +110,6 @@
     },
     "appearance": {
       "sectionTitle": "主題",
-      "description": "選擇介面外觀，設定立即生效並儲存在本機。",
       "themes": {
         "default": {
           "name": "明亮",
@@ -131,7 +130,6 @@
       },
       "custom": {
         "title": "自訂主題",
-        "description": "主題放在主題資料夾裡。只安裝信得過的主題：主題的 CSS 能改這個視窗裡的任何東西。",
         "import": "匯入主題",
         "openFolder": "開啟主題資料夾",
         "fileFilter": "主題檔案",

@@ -110,7 +110,6 @@
     },
     "appearance": {
       "sectionTitle": "Theme",
-      "description": "Choose how the interface looks. Applies instantly and is saved on this device.",
       "themes": {
         "default": {
           "name": "Default",
@@ -131,7 +130,6 @@
       },
       "custom": {
         "title": "Custom themes",
-        "description": "Themes in the themes folder. Install only themes you trust: a theme's CSS can change anything in this window.",
         "import": "Import theme",
         "openFolder": "Open themes folder",
         "fileFilter": "Theme file",
