@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Link } from "react-router-dom";
 import { ArrowRight, ChevronDown, ChevronRight, Globe, Info, Search } from "lucide-react";
 import youtubeIcon from "../../assets/site-icons/youtube.svg";
@@ -11,6 +10,8 @@ import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { Toggle } from "../../components/FormControls/Toggle";
+import { SiteIcon } from "../../components/SiteIcon/SiteIcon";
+import { useSiteIcons } from "../../components/SiteIcon/useSiteIcons";
 import { CategoryFilterDropdown } from "../Apps/CategoryFilterDropdown";
 import { SortDropdown } from "../Apps/AppsFilterBar";
 import { useDurationFormatter } from "../../utils/duration";
@@ -18,7 +19,6 @@ import { AssignDropdown } from "../Categories/parts";
 import categoriesStyles from "../Categories/Categories.module.css";
 import filterBarStyles from "../Apps/AppsFilterBar.module.css";
 import { filterGroups, groupSites, ruleSource, sortGroups, type SiteSortBy } from "./siteRows";
-import { useSiteIcons } from "./useSiteIcons";
 import styles from "./SitesPage.module.css";
 
 const SORT_OPTIONS: SiteSortBy[] = [
@@ -33,26 +33,6 @@ const SORT_OPTIONS: SiteSortBy[] = [
 
 /** Opened groups, kept outside the component so they stay open after visiting another page. */
 const openedGroups = new Set<string>();
-
-/** A missing or unreadable cached file keeps the same globe placeholder as an undownloaded icon. */
-function SiteIcon({ path }: { path?: string }) {
-  const [failedPath, setFailedPath] = useState<string | null>(null);
-  if (!path || path === failedPath) {
-    return <Globe size={14} strokeWidth={2} className={styles.siteIcon} aria-hidden />;
-  }
-  return (
-    <img
-      className={styles.siteIcon}
-      src={convertFileSrc(path)}
-      width={16}
-      height={16}
-      alt=""
-      aria-hidden
-      draggable={false}
-      onError={() => setFailedPath(path)}
-    />
-  );
-}
 
 /** A bundled example keeps the confirmation preview from contacting websites. */
 function SiteIconPreview() {
