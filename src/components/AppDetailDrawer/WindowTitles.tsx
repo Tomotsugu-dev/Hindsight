@@ -9,6 +9,8 @@ import { stripAppSuffix } from "../../utils/windowTitle";
 import { logError } from "../../lib/logger";
 import { api, type AppGroup, type TitleUsage } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { SiteIcon } from "../SiteIcon/SiteIcon";
+import { useSiteIcons } from "../SiteIcon/useSiteIcons";
 import { groupBySite, type SiteGroup } from "./groupBySite";
 import styles from "./AppDetailDrawer.module.css";
 
@@ -67,9 +69,8 @@ export function WindowTitles({
     targets: string[];
   } | null>(null);
   const [ignoreBusy, setIgnoreBusy] = useState(false);
-  // 「按网站」分组的展开集合：null = 默认态（只展开时长最多的第一组），
-  // 用户点过之后才具体化。
-  const [openKeys, setOpenKeys] = useState<Set<string> | null>(null);
+  // 「按网站」里展开了的组
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
   // 传了 limit 时：顶层列表是否展开全部、哪些网站组展开了全部页面
   const [showAll, setShowAll] = useState(false);
   const [allPagesKeys, setAllPagesKeys] = useState<Set<string>>(new Set());
@@ -178,6 +179,12 @@ export function WindowTitles({
     [hasHost, pageRows],
   );
   const siteMax = useMemo(() => Math.max(...siteGroups.map((g) => g.secs), 1), [siteGroups]);
+  // 和「网站」页同一套：开了「下载网站图标」时，缺的图标也会下载回来
+  const iconHosts = useMemo(
+    () => (hasHost ? siteGroups.flatMap((g) => (g.host === null ? [] : [g.host])) : null),
+    [hasHost, siteGroups],
+  );
+  const { icons } = useSiteIcons(iconHosts, settings?.downloadSiteIcons === true);
   // 组内页面已按秒数降序，每组取首项即可
   const pageMax = useMemo(
     () => Math.max(...siteGroups.map((g) => g.pages[0]?.secs ?? 0), 1),
@@ -187,13 +194,9 @@ export function WindowTitles({
   // 在标题列表上方解释一句。用户自己关了记录开关则不提示。
   const showNoHostHint =
     isBrowser && !hasHost && pageRows.length > 0 && settings?.recordBrowserHost !== false;
-  const openSet = useMemo<Set<string>>(() => {
-    if (openKeys) return openKeys;
-    return siteGroups.length > 0 ? new Set([siteKey(siteGroups[0])]) : new Set();
-  }, [openKeys, siteGroups]);
   const toggleSite = (key: string) => {
     setOpenKeys((prev) => {
-      const next = new Set(prev ?? openSet);
+      const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
@@ -290,7 +293,7 @@ export function WindowTitles({
           <ul className={styles.siteList}>
             {cut(siteGroups, showAll).map((g) => {
               const key = siteKey(g);
-              const isOpen = openSet.has(key);
+              const isOpen = openKeys.has(key);
               const isUnknown = g.host === null;
               const label = g.host ?? t("appDetail.sites.unknown");
               const allPages = allPagesKeys.has(key);
@@ -309,6 +312,7 @@ export function WindowTitles({
                       className={`${styles.siteChevron} ${isOpen ? styles.siteChevronOpen : ""}`}
                       aria-hidden
                     />
+                    <SiteIcon path={g.host === null ? undefined : icons[g.host]} />
                     <span
                       className={`${styles.siteHost} ${isUnknown ? styles.siteHostUnknown : ""}`}
                     >
