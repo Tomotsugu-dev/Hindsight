@@ -40,7 +40,7 @@
   border: 1px solid rgba(0, 0, 0, 0.14);
   border-radius: var(--radius-md);
   background: var(--surface-card);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, calc(0.06 * var(--shadow-strength)));
   transition:
     border-color 140ms ease-out,
     box-shadow 140ms ease-out;
@@ -325,7 +325,7 @@
   max-width: min(92vw, 1280px);
   max-height: calc(92vh - 48px);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   display: block;
   user-select: none;
   -webkit-user-drag: none;

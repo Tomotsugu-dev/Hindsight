@@ -29,8 +29,8 @@
   --pill-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 0 0 1px rgba(255, 255, 255, 0.5) inset,
-    0 1px 2px rgba(20, 20, 40, 0.06),
-    0 6px 16px rgba(20, 20, 40, 0.05);
+    0 1px 2px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength))),
+    0 6px 16px rgba(20, 20, 40, calc(0.05 * var(--shadow-strength)));
 
   /* Hover (translucent wash on tinted bg) */
   --hover-bg: rgba(255, 255, 255, 0.45);
@@ -80,14 +80,17 @@
   --control-bg-hover: rgba(255, 255, 255, 0.85);
 
   /* —— Shadows —— */
-  --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.08);
+  /* 阴影强度：组件和下面几档阴影里，深色投影的透明度都乘它。0 去掉投影，2 加深一倍；
+     白色高光和 0 偏移 0 模糊的描边环不乘 */
+  --shadow-strength: 1;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
   --shadow-lg:
-    0 12px 32px rgba(20, 20, 40, 0.16),
-    0 2px 6px rgba(20, 20, 40, 0.08);
+    0 12px 32px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength))),
+    0 2px 6px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
   --shadow-inset-hi: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 
   /* —— Radii —— 统一圆角阶梯：组件 CSS 一律走这些 token，别再裸写 px。
@@ -114,6 +117,8 @@
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* 路径、代码、调试输出这类等宽文字 */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-size-xs: 11px;
   --font-size-sm: 13px;
   --font-size-md: 14px;
@@ -188,7 +193,7 @@
   --pill-blur: none;
   --pill-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 1px 2px rgba(20, 20, 40, 0.08);
+    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
 
   /* hover 在浅灰侧栏上用淡黑，比默认的半透明白更可见 */
   --hover-bg: rgba(0, 0, 0, 0.045);
@@ -260,8 +265,8 @@
   --pill-blur: saturate(140%) blur(14px);
   --pill-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 6px 16px rgba(0, 0, 0, 0.3);
+    0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength))),
+    0 6px 16px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
 
   --hover-bg: rgba(255, 255, 255, 0.05);
 
@@ -277,14 +282,14 @@
   --status-pending-soft: rgba(245, 158, 11, 0.18);
 
   /* 阴影改深黑，深背景上才有立体感 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0) inset,
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 8px 20px rgba(0, 0, 0, 0.35);
+    0 1px 2px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength))),
+    0 8px 20px rgba(0, 0, 0, calc(0.35 * var(--shadow-strength)));
   --shadow-lg:
-    0 12px 32px rgba(0, 0, 0, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.4);
+    0 12px 32px rgba(0, 0, 0, calc(0.5 * var(--shadow-strength))),
+    0 2px 6px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   --shadow-inset-hi: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 

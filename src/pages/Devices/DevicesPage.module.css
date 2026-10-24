@@ -83,8 +83,8 @@
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
 }
 
 .syncHeader {
@@ -121,7 +121,7 @@
   );
   border-color: color-mix(in oklab, var(--color-accent) 26%, transparent);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.2);
+    0 1px 2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength)));
 }
 
 :global([data-mode="dark"]) .setupClose {
@@ -515,7 +515,7 @@
   border: 1px solid color-mix(in oklab, var(--color-accent) 16%, rgba(0, 0, 0, 0.05));
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 2px rgba(108, 92, 231, 0.05);
+    0 1px 2px color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 .setupHeader {
@@ -607,7 +607,7 @@
   letter-spacing: 0;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
-    0 1px 2px rgba(108, 92, 231, 0.18),
+    0 1px 2px color-mix(in srgb, var(--color-accent) 18%, transparent),
     0 0 0 1px color-mix(in oklab, var(--color-accent) 22%, transparent);
   position: relative;
   z-index: 1;
@@ -719,10 +719,9 @@
   border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--text-strong);
-  font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas,
-    monospace;
+  font-family: var(--font-mono);
   outline: none;
-  box-shadow: 0 1px 1px rgba(20, 20, 40, 0.03) inset;
+  box-shadow: 0 1px 1px rgba(20, 20, 40, calc(0.03 * var(--shadow-strength))) inset;
   transition:
     border-color 200ms ease-out,
     background-color 200ms ease-out,
@@ -777,7 +776,7 @@
   background: var(--surface-card);
   border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
   box-shadow:
-    0 1px 1px rgba(20, 20, 40, 0.03) inset,
+    0 1px 1px rgba(20, 20, 40, calc(0.03 * var(--shadow-strength))) inset,
     0 0 0 3px color-mix(in oklab, var(--color-accent) 16%, transparent);
 }
 
@@ -806,7 +805,7 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 1px 16px rgba(20, 20, 40, 0.04);
+    0 1px 16px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
 }
 
 /* 暗色：surface-card(#16161a) 跟页面底(#0e0e11) 太接近，卡几乎看不出填充、显得扁平。

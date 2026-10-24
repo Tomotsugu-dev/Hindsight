@@ -10,7 +10,7 @@
   height: 56px;
   border-radius: var(--radius-lg);
   object-fit: cover;
-  box-shadow: 0 4px 14px rgba(20, 20, 40, 0.12);
+  box-shadow: 0 4px 14px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength)));
   user-select: none;
 }
 

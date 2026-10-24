@@ -72,8 +72,8 @@
   border-radius: var(--radius-sm);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
-    0 1px 2px rgba(20, 20, 40, 0.08),
-    0 4px 10px rgba(20, 20, 40, 0.04);
+    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 4px 10px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
   pointer-events: none;
   /* 首帧不带过渡，避免从 0 滑过来 */
   transition: opacity 200ms var(--ease-out);
@@ -103,8 +103,8 @@
   background: var(--surface-card-elevated);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 4px 10px rgba(0, 0, 0, 0.3);
+    0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength))),
+    0 4px 10px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
 }
 
 /* 「新」 after a tab label */

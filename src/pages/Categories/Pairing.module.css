@@ -323,8 +323,8 @@
   border-radius: var(--radius-sm);
   padding: 6px 10px;
   box-shadow:
-    0 8px 24px rgba(20, 20, 40, 0.18),
-    0 2px 4px rgba(20, 20, 40, 0.08),
+    0 8px 24px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
+    0 2px 4px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
     0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
   display: inline-flex;
   align-items: center;

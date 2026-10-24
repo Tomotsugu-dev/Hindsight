@@ -67,8 +67,8 @@
   border-radius: var(--radius-md);
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 4px 12px rgba(20, 20, 40, 0.08),
-    0 12px 28px rgba(20, 20, 40, 0.1);
+    0 4px 12px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 12px 28px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
   animation-duration: 200ms;
   animation-timing-function: var(--ease-out);
 }

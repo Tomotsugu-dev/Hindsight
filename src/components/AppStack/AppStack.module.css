@@ -17,7 +17,7 @@
   margin-left: -7px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.05),
-    0 1px 2px rgba(20, 20, 40, 0.08);
+    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
 }
 
 .item:first-child {

@@ -22,7 +22,7 @@
   border-radius: var(--radius-xs);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.4),
-    0 1px 1px rgba(20, 20, 40, 0.1);
+    0 1px 1px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
 }
 
 /* 工作时段图例条 — 与图表里的 workBand 视觉一致 */

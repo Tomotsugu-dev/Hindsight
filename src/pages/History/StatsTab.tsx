@@ -40,8 +40,8 @@ import styles from "./HistoryPage.module.css";
 const NO_DAYS: DaySummaryDto[] = [];
 const NO_APPS: AppUsage[] = [];
 
-/** 没选大类时图表用的颜色（同 --color-accent 亮色） */
-const ACCENT = "#6c5ce7";
+/** 没选大类时图表用的颜色：跟着主题的强调色。图表只把它写进 style，所以可以是 var() */
+const ACCENT = "var(--color-accent)";
 
 /**
  * 全部历史的「统计」标签：上面是图表卡片（年表 ｜ 月表），下面左边大类、右边应用。

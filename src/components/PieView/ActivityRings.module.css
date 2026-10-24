@@ -32,7 +32,7 @@
   border: 2px solid;
   border-radius: 50%;
   background: var(--surface-card-elevated);
-  box-shadow: 0 4px 12px rgba(20, 20, 40, 0.16);
+  box-shadow: 0 4px 12px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength)));
   pointer-events: none;
   animation: chipPop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both;
 }

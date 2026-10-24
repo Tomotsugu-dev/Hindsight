@@ -130,5 +130,5 @@
 }
 
 :global([data-mode="dark"]) .segment:not(:first-child) {
-  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.32);
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
 }

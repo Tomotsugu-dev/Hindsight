@@ -107,9 +107,9 @@ a {
   border-radius: inherit;
   background: radial-gradient(
     var(--glow-radius) circle at var(--glow-mx) var(--glow-my),
-    rgba(108, 92, 231, 0.95) 0%,
+    color-mix(in srgb, var(--color-accent) 95%, transparent) 0%,
     rgba(255, 145, 90, 0.7) 28%,
-    rgba(108, 92, 231, 0.18) 55%,
+    color-mix(in srgb, var(--color-accent) 18%, transparent) 55%,
     transparent 78%
   );
   -webkit-mask:

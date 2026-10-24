@@ -41,7 +41,7 @@
 .subTabActive {
   background: var(--surface);
   color: var(--text-strong);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.06 * var(--shadow-strength)));
 }
 
 /* —— 顶部控件行：日期 / 段下拉 / 开始按钮 / 导出 —— */
@@ -400,8 +400,7 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
-  font-family:
-    ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   line-height: 1.6;
   color: var(--text-strong);
   resize: vertical;
@@ -593,7 +592,7 @@
   color: var(--text-strong);
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .placeholder {
@@ -627,7 +626,7 @@
   background: rgba(0, 0, 0, 0.025);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.6;
   color: var(--text-muted);
