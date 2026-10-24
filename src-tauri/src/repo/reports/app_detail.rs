@@ -7,10 +7,10 @@ use rusqlite::ToSql;
 use crate::error::{Error, Result};
 use crate::repo::sql::FROM_MEMBER_GROUP;
 use crate::storage::DbPool;
-use crate::storage::SqliteResultExt;
+use crate::storage::{DbResult, SqliteResultExt};
 
 use super::time::{parse_stored_time, slice_by_hour, split_by_date};
-use super::{AppDetail, DetailBucket, DeviceFilter, TitleUsage};
+use super::{daily_usage, AppDetail, AppTitles, DetailBucket, DeviceFilter, TitleUsage};
 
 /// How the detail time bars are grouped: by hour on the Daily page, by day on the Weekly and
 /// Monthly pages. Each bucket holds the total seconds for one clock hour or one activity date.
@@ -31,6 +31,33 @@ pub async fn app_range_detail(
     device: DeviceFilter,
     bucket_by: BucketBy,
 ) -> Result<AppDetail> {
+    let buckets = app_buckets(pool, from, to, group_id.clone(), device.clone(), bucket_by).await?;
+    let AppTitles { titles, is_browser } = app_titles(pool, from, to, group_id, device).await?;
+    Ok(AppDetail {
+        buckets,
+        titles,
+        is_browser,
+    })
+}
+
+/// Returns one app's time per hour or per day in the inclusive `[from, to]` date range, in time
+/// order, with 0 where there are no records.
+///
+/// `bucket_by` picks hours or days: by hour covers one day and always gives 24; by day gives one
+/// per date in the range.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidInputDyn`] when bucketing by hour and `from` and `to` are not the same
+/// day.
+pub async fn app_buckets(
+    pool: &DbPool,
+    from: NaiveDate,
+    to: NaiveDate,
+    group_id: String,
+    device: DeviceFilter,
+    bucket_by: BucketBy,
+) -> Result<Vec<DetailBucket>> {
     if matches!(bucket_by, BucketBy::Hour) && from != to {
         return Err(Error::InvalidInputDyn(format!(
             "hour bars cover one day, got {from} to {to}"
@@ -39,92 +66,48 @@ pub async fn app_range_detail(
     let from_str = from.format("%Y-%m-%d").to_string();
     let to_str = to.format("%Y-%m-%d").to_string();
 
-    let (secs_by_bucket, titles, has_browser_member) = pool
+    let secs_by_bucket = pool
         .0
         .call(move |conn| {
-            // 1) Resolve the app identifier to process names: use active group members, or the
-            //    identifier itself when it represents a standalone process.
-            let mut process_stmt = conn
-                .prepare(&format!(
-                    "SELECT gm.process_name {FROM_MEMBER_GROUP}
-                      WHERE gm.group_id = ?1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL
-                     UNION
-                     SELECT ?1 WHERE NOT EXISTS (
-                         SELECT 1 {FROM_MEMBER_GROUP}
-                          WHERE gm.process_name = ?1
-                            AND gm.deleted_at IS NULL AND g.deleted_at IS NULL)"
-                ))
-                .db()?;
-            let processes = process_stmt
-                .query_map([&group_id], |row| row.get::<_, String>(0))
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?;
-            let has_browser_member = processes
-                .iter()
-                .any(|p| crate::capture::browser_url::is_browser_app(p));
-            // Read through the date index and only compare process names. The `+` keeps SQLite off the
-            // process name index, which would read the app's whole history even for one day.
-            let process_filter = format!(
-                "+a.process_name IN ({})",
-                vec!["?"; processes.len()].join(", ")
-            );
-
-            // Activities that cross midnight (end date not equal to local_date)
-            let crossing_sql = format!(
-                "SELECT COALESCE(a.window_title, '') AS title, a.url_host AS host,
-                        a.started_at, a.ended_at
-                 FROM activities a
-                 WHERE a.local_date >= ? AND a.local_date <= ?
-                   AND substr(a.ended_at, 1, 10) <> a.local_date
-                   AND {process_filter}
-                   AND a.excluded = 0
-                   {}",
-                device.sql_clause()
-            );
-            // Activities that cross midnight may start as early as the day before `from`.
-            // TODO: panics on the earliest date, which has no day before; only the main window
-            // calls this now
-            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
-            let crossing_params = bind(vec![&crossing_from_str, &to_str], &processes, &device);
-            let mut crossing_stmt = conn.prepare(&crossing_sql).db()?;
-            let crossing_rows = crossing_stmt
-                .query_map(crossing_params.as_slice(), |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, Option<String>>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                    ))
-                })
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?;
-            // (title, host, the parts in range as (date, seconds))
-            let crossing = crossing_rows
-                .into_iter()
-                .filter_map(|(title, host, started, ended)| {
-                    let (s, e) = (parse_stored_time(&started)?, parse_stored_time(&ended)?);
-                    let parts = split_by_date(s, e)
-                        .into_iter()
-                        .filter(|(date, ..)| *date >= from && *date <= to)
-                        .map(|(date, s, e)| (date, (e - s).num_seconds()))
-                        .collect::<Vec<_>>();
-                    Some((title, host, parts))
-                })
-                .collect::<Vec<_>>();
-
-            // 2) Time bars. By hour, rows can't be grouped by local_hour: it is the hour the
-            //    session *started* and is not updated when the session is sealed (see the note on
-            //    day_hour_apps), so a session crossing an hour lands whole in its first hour and
-            //    won't match the day_hours bars. So, as there, fetch the rows and split them by
-            //    clock hour with slice_by_hour in Rust. By day, local_date is still summed in SQL.
+            let processes = group_processes(conn, &group_id)?;
             // Sparse totals keyed by hour ("0".."23") or date ("YYYY-MM-DD"). Missing keys get
             // zero seconds when the ordered time bars are built below.
             let mut secs_by_bucket: std::collections::HashMap<String, u64> =
                 std::collections::HashMap::new();
             match bucket_by {
+                BucketBy::Day => {
+                    // TODO: the ranking leaves out sites set to Hidden but this counts them, so an
+                    // app's peak and daily average on the cards don't match its time in the ranking
+                    daily_usage::refresh(conn)?;
+                    let day_sql = format!(
+                        "SELECT a.local_date, SUM(a.secs)
+                         FROM daily_usage a
+                         WHERE a.local_date >= ? AND a.local_date <= ?
+                           AND a.process_name IN ({})
+                           {}
+                         GROUP BY a.local_date",
+                        vec!["?"; processes.len()].join(", "),
+                        device.sql_clause()
+                    );
+                    let day_params = bind(vec![&from_str, &to_str], &processes, &device);
+                    let mut day_stmt = conn.prepare(&day_sql).db()?;
+                    let day_rows = day_stmt
+                        .query_map(day_params.as_slice(), |r| {
+                            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?.max(0) as u64))
+                        })
+                        .db()?;
+                    for row in day_rows {
+                        let (date, secs) = row.db()?;
+                        secs_by_bucket.insert(date, secs);
+                    }
+                }
+                // Rows can't be grouped by local_hour: it is the hour the session *started* and is
+                // not updated when the session is sealed (see the note on day_hour_apps), so a
+                // session crossing an hour lands whole in its first hour and won't match the
+                // day_hours bars. So, as there, fetch the rows and split them by clock hour with
+                // slice_by_hour in Rust.
                 BucketBy::Hour => {
+                    let process_filter = process_filter(&processes);
                     // Activities assigned to this day,
                     // plus previous-day activities that cross midnight into it.
                     let session_sql = format!(
@@ -168,42 +151,106 @@ pub async fn app_range_detail(
                         }
                     }
                 }
-                BucketBy::Day => {
-                    let day_sql = format!(
-                        "SELECT a.local_date, SUM(a.duration_secs)
-                         FROM activities a
-                         WHERE a.local_date >= ? AND a.local_date <= ?
-                           AND substr(a.ended_at, 1, 10) = a.local_date
-                           AND {process_filter}
-                           AND a.excluded = 0
-                           {}
-                         GROUP BY a.local_date",
-                        device.sql_clause()
-                    );
-                    let day_params = bind(vec![&from_str, &to_str], &processes, &device);
-                    let mut day_stmt = conn.prepare(&day_sql).db()?;
-                    let day_rows = day_stmt
-                        .query_map(day_params.as_slice(), |r| {
-                            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?.max(0) as u64))
-                        })
-                        .db()?;
-                    for row in day_rows {
-                        let (date, secs) = row.db()?;
-                        *secs_by_bucket.entry(date).or_insert(0) += secs;
-                    }
-                    for (_, _, parts) in &crossing {
-                        for (date, secs) in parts {
-                            *secs_by_bucket
-                                .entry(date.format("%Y-%m-%d").to_string())
-                                .or_insert(0) += *secs as u64;
-                        }
-                    }
-                }
             }
+            Ok(secs_by_bucket)
+        })
+        .await?;
 
-            // 3) Time per window title: grouped by (window_title, url_host), with a missing title
-            //    as an empty string, most first. The same title on different sites (e.g. "Home")
-            //    is counted separately: they are pages of different sites.
+    // Spread the sparse totals into a full, ordered row of bars, empty ones as 0, ready to draw
+    let buckets = match bucket_by {
+        BucketBy::Hour => (0u8..24)
+            .map(|hour| {
+                let key = hour.to_string();
+                let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
+                DetailBucket { key, secs }
+            })
+            .collect(),
+        BucketBy::Day => {
+            let mut out = Vec::new();
+            let mut current_date = from;
+            while current_date <= to {
+                let key = current_date.format("%Y-%m-%d").to_string();
+                let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
+                out.push(DetailBucket { key, secs });
+                let Some(next) = current_date.succ_opt() else {
+                    break;
+                };
+                current_date = next;
+            }
+            out
+        }
+    };
+    Ok(buckets)
+}
+
+/// Returns one app's time per window title in the inclusive `[from, to]` date range, most first,
+/// and whether the app is a browser.
+pub async fn app_titles(
+    pool: &DbPool,
+    from: NaiveDate,
+    to: NaiveDate,
+    group_id: String,
+    device: DeviceFilter,
+) -> Result<AppTitles> {
+    let from_str = from.format("%Y-%m-%d").to_string();
+    let to_str = to.format("%Y-%m-%d").to_string();
+
+    let (titles, has_browser_member) = pool
+        .0
+        .call(move |conn| {
+            let processes = group_processes(conn, &group_id)?;
+            let has_browser_member = processes
+                .iter()
+                .any(|p| crate::capture::browser_url::is_browser_app(p));
+            let process_filter = process_filter(&processes);
+
+            // Activities that cross midnight (end date not equal to local_date)
+            let crossing_sql = format!(
+                "SELECT COALESCE(a.window_title, '') AS title, a.url_host AS host,
+                        a.started_at, a.ended_at
+                 FROM activities a
+                 WHERE a.local_date >= ? AND a.local_date <= ?
+                   AND substr(a.ended_at, 1, 10) <> a.local_date
+                   AND {process_filter}
+                   AND a.excluded = 0
+                   {}",
+                device.sql_clause()
+            );
+            // Activities that cross midnight may start as early as the day before `from`.
+            // TODO: panics on the earliest date, which has no day before; only the main window
+            // calls this now
+            let crossing_from_str = (from - Duration::days(1)).format("%Y-%m-%d").to_string();
+            let crossing_params = bind(vec![&crossing_from_str, &to_str], &processes, &device);
+            let mut crossing_stmt = conn.prepare(&crossing_sql).db()?;
+            let crossing_rows = crossing_stmt
+                .query_map(crossing_params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .db()?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .db()?;
+            // (title, host, seconds in range)
+            let crossing = crossing_rows
+                .into_iter()
+                .filter_map(|(title, host, started, ended)| {
+                    let (s, e) = (parse_stored_time(&started)?, parse_stored_time(&ended)?);
+                    let secs: i64 = split_by_date(s, e)
+                        .into_iter()
+                        .filter(|(date, ..)| *date >= from && *date <= to)
+                        .map(|(_, s, e)| (e - s).num_seconds())
+                        .sum();
+                    Some((title, host, secs))
+                })
+                .collect::<Vec<_>>();
+
+            // Time per window title: grouped by (window_title, url_host), with a missing title
+            // as an empty string, most first. The same title on different sites (e.g. "Home")
+            // is counted separately: they are pages of different sites.
             // A window can be untitled, title reads can fail, and synced records can omit the
             // title. Keep those records in the totals, treating NULL titles as empty strings.
             let window_title_sql = format!(
@@ -236,8 +283,7 @@ pub async fn app_range_detail(
                     .into_iter()
                     .map(|(title, host, secs)| ((title, host), secs))
                     .collect();
-            for (title, host, parts) in crossing {
-                let secs: i64 = parts.iter().map(|(_, secs)| secs).sum();
+            for (title, host, secs) in crossing {
                 if secs > 0 {
                     *secs_by_title.entry((title, host)).or_insert(0) += secs;
                 }
@@ -257,41 +303,44 @@ pub async fn app_range_detail(
                     .then_with(|| a.host.cmp(&b.host))
             });
 
-            Ok((secs_by_bucket, titles, has_browser_member))
+            Ok((titles, has_browser_member))
         })
         .await?;
 
-    // 4) Spread the sparse totals into a full, ordered row of bars, empty ones as 0, ready to draw
-    let buckets = match bucket_by {
-        BucketBy::Hour => (0u8..24)
-            .map(|hour| {
-                let key = hour.to_string();
-                let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
-                DetailBucket { key, secs }
-            })
-            .collect(),
-        BucketBy::Day => {
-            let mut out = Vec::new();
-            let mut current_date = from;
-            while current_date <= to {
-                let key = current_date.format("%Y-%m-%d").to_string();
-                let secs = secs_by_bucket.get(&key).copied().unwrap_or(0) as u32;
-                out.push(DetailBucket { key, secs });
-                // TODO: panics on the latest date, which has no next day; only the main window
-                // calls this now
-                current_date += Duration::days(1);
-            }
-            out
-        }
-    };
-
     // A browser if any process in the group is one, or any record has a site
     let is_browser = has_browser_member || titles.iter().any(|t| t.host.is_some());
-    Ok(AppDetail {
-        buckets,
-        titles,
-        is_browser,
-    })
+    Ok(AppTitles { titles, is_browser })
+}
+
+/// Resolves the app identifier to process names: use active group members, or the identifier
+/// itself when it represents a standalone process.
+fn group_processes(conn: &rusqlite::Connection, group_id: &str) -> DbResult<Vec<String>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT gm.process_name {FROM_MEMBER_GROUP}
+              WHERE gm.group_id = ?1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL
+             UNION
+             SELECT ?1 WHERE NOT EXISTS (
+                 SELECT 1 {FROM_MEMBER_GROUP}
+                  WHERE gm.process_name = ?1
+                    AND gm.deleted_at IS NULL AND g.deleted_at IS NULL)"
+        ))
+        .db()?;
+    let processes = stmt
+        .query_map([group_id], |row| row.get::<_, String>(0))
+        .db()?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .db()?;
+    Ok(processes)
+}
+
+/// Read through the date index and only compare process names. The `+` keeps SQLite off the
+/// process name index, which would read the app's whole history even for one day.
+fn process_filter(processes: &[String]) -> String {
+    format!(
+        "+a.process_name IN ({})",
+        vec!["?"; processes.len()].join(", ")
+    )
 }
 
 /// Builds the bound values for an app-detail SQL query. The SQL placeholders must be ordered as
@@ -489,7 +538,7 @@ mod tests {
 
     /// 窗口标题也只算当天那段：日统计看 10-01 和 10-02，main.rs 各 600 秒。
     #[tokio::test]
-    async fn app_range_detail_titles_split_record_crossing_midnight() {
+    async fn app_titles_split_record_crossing_midnight() {
         let pool = fresh_test_pool().await;
         insert_session_titled(
             &pool,
@@ -505,16 +554,9 @@ mod tests {
 
         let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
         for day in [oct1, oct1 + Duration::days(1)] {
-            let detail = app_range_detail(
-                &pool,
-                day,
-                day,
-                "Code".into(),
-                DeviceFilter::All,
-                BucketBy::Hour,
-            )
-            .await
-            .unwrap();
+            let detail = app_titles(&pool, day, day, "Code".into(), DeviceFilter::All)
+                .await
+                .unwrap();
             assert_eq!(detail.titles.len(), 1, "{day} 应该有 main.rs");
             assert_eq!(detail.titles[0].title, "main.rs");
             assert_eq!(detail.titles[0].secs, 600, "{day} 只算当天那 10 分钟");
@@ -525,7 +567,7 @@ mod tests {
     /// （"首页"在 github 和 youtube 各算各的），无域名的老行照常返回且 host=None；
     /// 代表进程是浏览器时 is_browser=true，否则 false——前端据此决定是否分组。
     #[tokio::test]
-    async fn app_range_detail_titles_carry_url_host_and_browser_flag() {
+    async fn app_titles_carry_url_host_and_browser_flag() {
         let pool = fresh_test_pool().await;
         let day = Local::now().date_naive();
         let today = day.format("%Y-%m-%d").to_string();
@@ -561,16 +603,9 @@ mod tests {
             .await
             .unwrap();
 
-        let chrome = app_range_detail(
-            &pool,
-            day,
-            day,
-            "Google Chrome".into(),
-            DeviceFilter::All,
-            BucketBy::Hour,
-        )
-        .await
-        .unwrap();
+        let chrome = app_titles(&pool, day, day, "Google Chrome".into(), DeviceFilter::All)
+            .await
+            .unwrap();
         assert!(chrome.is_browser, "Google Chrome 是浏览器");
         let secs_of = |t: &str, h: Option<&str>| {
             chrome
@@ -593,16 +628,9 @@ mod tests {
         );
         assert_eq!(chrome.titles.len(), 4, "不掺入组外应用");
 
-        let code = app_range_detail(
-            &pool,
-            day,
-            day,
-            "Code".into(),
-            DeviceFilter::All,
-            BucketBy::Hour,
-        )
-        .await
-        .unwrap();
+        let code = app_titles(&pool, day, day, "Code".into(), DeviceFilter::All)
+            .await
+            .unwrap();
         assert!(!code.is_browser, "Code 不是浏览器");
         assert_eq!(code.titles.len(), 1);
         assert_eq!(code.titles[0].host, None);
@@ -877,6 +905,202 @@ mod tests {
                 _ => 0,
             };
             assert_eq!(b.secs, expect, "{} 的 secs 不符", b.key);
+        }
+    }
+
+    /// 周统计、月统计每天的时长：跨午夜的记录按日期拆开，10-01 和 10-02 各 600 秒。
+    #[tokio::test]
+    async fn app_buckets_by_day_split_record_crossing_midnight() {
+        let pool = fresh_test_pool().await;
+        insert_session_with_times(
+            &pool,
+            TEST_SELF_ID,
+            "2026-10-01",
+            "Code",
+            local_time(10, 1, 23, 50),
+            local_time(10, 2, 0, 10),
+        )
+        .await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let buckets = app_buckets(
+            &pool,
+            oct1,
+            oct1 + Duration::days(1),
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        let secs: Vec<u32> = buckets.iter().map(|b| b.secs).collect();
+        assert_eq!(secs, vec![600, 600]);
+    }
+
+    /// 每天的时长算整个组：mac 的 Code 300 秒加 Windows 的 Code.exe 240 秒，组外的 Random 不算；
+    /// 只看本机时只剩 Code 的 300 秒。
+    #[tokio::test]
+    async fn app_buckets_by_day_merge_all_members_of_the_group() {
+        let pool = fresh_test_pool().await;
+        insert_activity(&pool, TEST_SELF_ID, "2026-10-01", "Code", 300).await;
+        insert_activity(&pool, "device-win", "2026-10-01", "Code.exe", 240).await;
+        insert_activity(&pool, TEST_SELF_ID, "2026-10-01", "Random", 999).await;
+        seed_group(
+            &pool,
+            "Visual Studio Code",
+            "Visual Studio Code",
+            "code",
+            &["Code", "Code.exe"],
+        )
+        .await;
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let all = app_buckets(
+            &pool,
+            oct1,
+            oct1,
+            "Visual Studio Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        assert_eq!(all[0].secs, 540, "两个成员加起来，不算 Random");
+
+        let only_self = app_buckets(
+            &pool,
+            oct1,
+            oct1,
+            "Visual Studio Code".into(),
+            DeviceFilter::Only(TEST_SELF_ID.into()),
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        assert_eq!(only_self[0].secs, 300, "只看本机时不带 Windows 的时长");
+    }
+
+    /// 被忽略规则标掉的记录不算进每天的时长。
+    #[tokio::test]
+    async fn app_buckets_by_day_skip_excluded_rows() {
+        let pool = fresh_test_pool().await;
+        insert_activity(&pool, TEST_SELF_ID, "2026-10-01", "Code", 600).await;
+        insert_activity(&pool, TEST_SELF_ID, "2026-10-01", "Code", 300).await;
+        seed_solo_group(&pool, "Code", "code").await;
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE activities SET excluded = 1 WHERE duration_secs = 300",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let buckets = app_buckets(
+            &pool,
+            oct1,
+            oct1,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        assert_eq!(buckets[0].secs, 600);
+    }
+
+    /// 查过一次以后新写的记录，下一次就能看到：600 秒查过以后再写 300 秒，第二次是 900 秒。
+    #[tokio::test]
+    async fn app_buckets_include_rows_written_since_the_last_query() {
+        let pool = fresh_test_pool().await;
+        seed_solo_group(&pool, "Code", "code").await;
+        let oct1 = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+
+        insert_activity(&pool, TEST_SELF_ID, "2026-10-01", "Code", 600).await;
+        let first = app_buckets(
+            &pool,
+            oct1,
+            oct1,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        assert_eq!(first[0].secs, 600);
+
+        insert_activity(&pool, TEST_SELF_ID, "2026-10-01", "Code", 300).await;
+        let second = app_buckets(
+            &pool,
+            oct1,
+            oct1,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        assert_eq!(second[0].secs, 900);
+    }
+
+    /// 月统计每天的时长：一天一个、按日期排好，没数据的天是 0，上个月最后一天的不算进来。
+    #[tokio::test]
+    async fn app_buckets_by_day_zero_fill_whole_month() {
+        let pool = fresh_test_pool().await;
+        let (first, last) = month_range(Local::now().date_naive(), 0);
+        let n_days = ((last - first).num_days() + 1) as usize;
+        let day = |off: i64| (first + Duration::days(off)).format("%Y-%m-%d").to_string();
+
+        insert_activity(&pool, TEST_SELF_ID, &day(0), "Code", 300).await;
+        insert_activity(&pool, TEST_SELF_ID, &day(14), "Code", 450).await;
+        insert_activity(&pool, TEST_SELF_ID, &day(-1), "Code", 999).await;
+        seed_solo_group(&pool, "Code", "code").await;
+
+        let buckets = app_buckets(
+            &pool,
+            first,
+            last,
+            "Code".into(),
+            DeviceFilter::All,
+            BucketBy::Day,
+        )
+        .await
+        .unwrap();
+        assert_eq!(buckets.len(), n_days, "当月有几天就有几个");
+        for (i, b) in buckets.iter().enumerate() {
+            assert_eq!(b.key, day(i as i64), "第 {i} 个的日期不对");
+            let expect = match i {
+                0 => 300,
+                14 => 450,
+                _ => 0,
+            };
+            assert_eq!(b.secs, expect, "{} 的秒数不对", b.key);
+        }
+    }
+
+    /// 能表示的最早、最晚那天也照常返回一天 0 秒，不 panic：最晚那天没有后一天。
+    #[tokio::test]
+    async fn app_buckets_by_day_handle_the_earliest_and_latest_dates() {
+        let pool = fresh_test_pool().await;
+        seed_solo_group(&pool, "Code", "code").await;
+        for day in [NaiveDate::MIN, NaiveDate::MAX] {
+            let buckets = app_buckets(
+                &pool,
+                day,
+                day,
+                "Code".into(),
+                DeviceFilter::All,
+                BucketBy::Day,
+            )
+            .await
+            .unwrap();
+            assert_eq!(buckets.len(), 1, "{day}");
+            assert_eq!(buckets[0].secs, 0, "{day}");
         }
     }
 }

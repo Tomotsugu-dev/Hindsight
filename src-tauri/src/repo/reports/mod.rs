@@ -165,6 +165,16 @@ pub struct AppDetail {
     pub is_browser: bool,
 }
 
+/// One app's time per window title over a date range, and whether it is a browser.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppTitles {
+    /// As in [`AppDetail::titles`]
+    pub titles: Vec<TitleUsage>,
+    /// As in [`AppDetail::is_browser`]
+    pub is_browser: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetailBucket {
