@@ -110,7 +110,6 @@
     },
     "appearance": {
       "sectionTitle": "Tema",
-      "description": "Elige la apariencia de la interfaz. Se aplica al instante y se guarda en este dispositivo.",
       "themes": {
         "default": {
           "name": "Predeterminado",
@@ -131,7 +130,6 @@
       },
       "custom": {
         "title": "Temas personalizados",
-        "description": "Temas de la carpeta de temas. Instala solo temas de confianza: el CSS de un tema puede cambiar cualquier cosa en esta ventana.",
         "import": "Importar tema",
         "openFolder": "Abrir carpeta de temas",
         "fileFilter": "Archivo de tema",

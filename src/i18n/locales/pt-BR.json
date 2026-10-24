@@ -110,7 +110,6 @@
     },
     "appearance": {
       "sectionTitle": "Tema",
-      "description": "Escolha a aparência da interface. Aplica na hora e fica salvo neste dispositivo.",
       "themes": {
         "default": {
           "name": "Padrão",
@@ -131,7 +130,6 @@
       },
       "custom": {
         "title": "Temas personalizados",
-        "description": "Temas da pasta de temas. Instale só temas em que você confia: o CSS de um tema pode mudar qualquer coisa nesta janela.",
         "import": "Importar tema",
         "openFolder": "Abrir pasta de temas",
         "fileFilter": "Arquivo de tema",

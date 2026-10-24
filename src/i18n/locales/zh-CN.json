@@ -110,7 +110,6 @@
     },
     "appearance": {
       "sectionTitle": "主题",
-      "description": "选择界面外观，设置立即生效并保存在本机。",
       "themes": {
         "default": {
           "name": "明亮",
@@ -131,7 +130,6 @@
       },
       "custom": {
         "title": "自定义主题",
-        "description": "主题放在主题文件夹里。只安装信得过的主题：主题的 CSS 能改这个窗口里的任何东西。",
         "import": "导入主题",
         "openFolder": "打开主题文件夹",
         "fileFilter": "主题文件",
