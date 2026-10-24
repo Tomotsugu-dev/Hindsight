@@ -38,13 +38,16 @@ The outer level is the format version. `plugins` has one record per plugin, and 
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "plugins": [
     {
       "id": "hindsight-focus",
       "name": "Focus",
       "author": "someone",
-      "description": "How far you are from today's goal. Reminds you when you switch to entertainment.",
+      "description": {
+        "zh-CN": "离今天的目标还差多少，切到娱乐时提醒",
+        "en": "How far you are from today's goal. Reminds you when you switch to entertainment."
+      },
       "repo": "someone/hindsight-focus",
       "versions": [
         {
@@ -66,7 +69,8 @@ The outer level is the format version. `plugins` has one record per plugin, and 
 }
 ```
 
-- `format_version` is the version of this file's structure.
+- `format_version` is the version of this file's structure. Hindsight reads it first. If it does not know the version, it reports an error and does not parse the plugins.
+- `description` holds the description in each language. The keys are the language codes of the interface: `zh-CN`, `zh-TW`, `en`, `ja`, `pt-BR` and `es`. The market page shows the interface language. Without it, it shows `en`; without `en`, the first language by code.
 - When a plugin with the same `id` has a new version, the author opens a PR that adds a record to `versions`. Old versions can be kept.
 - Each version has its own `permissions` and `storage_mb`, because different versions may ask for different ones. `storage_mb` is the disk space, in MB, that the plugin asks for its own database. A plugin that uses no database leaves it out, like 0.1.0 above. The market page shows the permissions and disk space of that version before the download. What the user approved is passed to the install and stored in the plugins table (see [① Installing plugins](install.md)).
 

@@ -38,13 +38,16 @@ flowchart LR
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "plugins": [
     {
       "id": "hindsight-focus",
       "name": "专注",
       "author": "someone",
-      "description": "离今天的目标还差多少，切到娱乐时提醒",
+      "description": {
+        "zh-CN": "离今天的目标还差多少，切到娱乐时提醒",
+        "en": "How far you are from today's goal. Reminds you when you switch to entertainment."
+      },
       "repo": "someone/hindsight-focus",
       "versions": [
         {
@@ -66,7 +69,8 @@ flowchart LR
 }
 ```
 
-- `format_version` 是这个文件结构的版本。
+- `format_version` 是这个文件结构的版本。Hindsight 先读它，不认识就报错，不解析后面的插件。
+- `description` 是各种语言的简介，键是界面的语言代码：`zh-CN`、`zh-TW`、`en`、`ja`、`pt-BR`、`es`。市场页按界面语言显示；没有这种语言就用 `en`，`en` 也没有就用语言代码排序后的第一个。
 - 同一个 `id` 的插件有新版本时，提 PR 在 `versions` 里加一条，旧版本可以选择保留。
 - 每个版本自带 `permissions` 和 `storage_mb`，因为不同版本申请的可能不一样。`storage_mb` 是给插件自己的库申请的磁盘容量（MB），不用库的插件不写，上面的 0.1.0 就没写。市场页在下载前就把这个版本的权限和磁盘容量给用户看，用户同意的传给安装，存进 plugins 表（见 [① 插件安装](install.md)）。
 
