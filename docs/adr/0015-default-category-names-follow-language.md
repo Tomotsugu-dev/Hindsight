@@ -1,8 +1,8 @@
 # ADR-0015 · Default category names are translated once into the UI language, and names no longer sync
 
 - **Date**: 2026-10-19
-- **Status**: Proposed
-- **Related**: [ADR-0005](0005-push-rewrites-whole-files.md)
+- **Status**: **Accepted**
+- **Related**: [ADR-0005](0005-push-rewrites-whole-files.md) · PR #154
 
 The database stores the default categories under their original Chinese names. For example, `code` is stored as 编程. The frontend translates a name only when it finds the original Chinese name, so Rust never gets the translation. With an English UI, AI chat still reads 编程, and the rename box also shows 编程.
 

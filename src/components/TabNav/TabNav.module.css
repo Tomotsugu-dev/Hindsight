@@ -72,8 +72,8 @@
   border-radius: var(--radius-sm);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
-    0 1px 2px rgba(20, 20, 40, 0.08),
-    0 4px 10px rgba(20, 20, 40, 0.04);
+    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 4px 10px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
   pointer-events: none;
   /* 首帧不带过渡，避免从 0 滑过来 */
   transition: opacity 200ms var(--ease-out);
@@ -90,21 +90,21 @@
 
 /* 暗色：亮色 .tabs 用 3.5% 黑底，暗色下消失=透明。tabs 条用 surface-card 做底，
    pill 用 elevated（更亮一档），制造"选中项浮起"的对比。 */
-:global([data-theme="dark"]) .tabs {
+:global([data-mode="dark"]) .tabs {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
 }
 
-:global([data-theme="dark"]) .divider {
+:global([data-mode="dark"]) .divider {
   background: var(--border-strong);
 }
 
-:global([data-theme="dark"]) .pill {
+:global([data-mode="dark"]) .pill {
   background: var(--surface-card-elevated);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 4px 10px rgba(0, 0, 0, 0.3);
+    0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength))),
+    0 4px 10px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
 }
 
 /* 「新」 after a tab label */
@@ -120,25 +120,25 @@
 }
 
 /* Preserve tab measurements when the theme changes while using an underline. */
-:global([data-theme="flat"]) .tabs {
+:global([data-layout="flat"]) .tabs {
   background: transparent;
   border-radius: 0;
 }
 
-:global([data-theme="flat"]) .tab {
+:global([data-layout="flat"]) .tab {
   border-radius: 0;
   font-weight: 550;
 }
 
-:global([data-theme="flat"]) .tabActive {
+:global([data-layout="flat"]) .tabActive {
   color: var(--color-accent);
 }
 
-:global([data-theme="flat"]) .divider {
+:global([data-layout="flat"]) .divider {
   background: var(--border-default);
 }
 
-:global([data-theme="flat"]) .pill {
+:global([data-layout="flat"]) .pill {
   top: auto;
   bottom: 4px;
   height: 2px;

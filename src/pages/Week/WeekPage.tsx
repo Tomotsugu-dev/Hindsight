@@ -429,7 +429,7 @@ export default function WeekPage() {
       )}
 
       <div className={styles.ranks}>
-        <section className={styles.card} data-keeps-bar-selection>
+        <section className={styles.card} data-part="card" data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{appsTitle}</h2>
             <div className={styles.cardHeadRight}>
@@ -475,7 +475,7 @@ export default function WeekPage() {
           )}
         </section>
 
-        <section className={styles.card} data-keeps-bar-selection>
+        <section className={styles.card} data-part="card" data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
             {selectionLabel && (

@@ -50,7 +50,7 @@ export function MonthCalendar({
   const base = adjustCategoryColor(color, isDark);
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-part="chart">
       <div className={styles.grid}>
         {weekdays.map((w) => (
           <span key={w} className={styles.weekday}>

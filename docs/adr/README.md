@@ -21,5 +21,6 @@ Each ADR records one decision: the problem, what we chose, and why. Start a new 
 | [0012](0012-webdav-device-tombstone.md) | WebDAV: remove a device with a tombstone | 🟢 | ⬜ | [中文](zh/0012-webdav-device-tombstone.md) |
 | [0013](0013-site-category-rules.md) | Website category rules | 🟢 | ✅ | [中文](zh/0013-site-category-rules.md) |
 | [0014](0014-site-icons.md) | Website icons | 🟢 | ✅ | [中文](zh/0014-site-icons.md) |
-| [0015](0015-default-category-names-follow-language.md) | Translate default category names once; names no longer sync | 🟡 | ⬜ | [中文](zh/0015-default-category-names-follow-language.md) |
-| [0016](0016-daily-usage-rollup.md) | Speed up the usage reports with a table of daily totals | 🟡 | ⬜ | [中文](zh/0016-daily-usage-rollup.md) |
+| [0015](0015-default-category-names-follow-language.md) | Translate default category names once; names no longer sync | 🟢 | ✅ | [中文](zh/0015-default-category-names-follow-language.md) |
+| [0016](0016-daily-usage-rollup.md) | Speed up the usage reports with a table of daily totals | 🟢 | ✅ | [中文](zh/0016-daily-usage-rollup.md) |
+| [0017](0017-theme-files.md) | Theme files: separate switches for layout and light or dark, and public variables | 🟡 | ⬜ | [中文](zh/0017-theme-files.md) |

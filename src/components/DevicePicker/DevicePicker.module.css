@@ -70,7 +70,7 @@
   border: 1px solid color-mix(in oklab, var(--tile-color, var(--color-accent)) 22%, rgba(0, 0, 0, 0.05));
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 1px 1px rgba(20, 20, 40, 0.04);
+    0 1px 1px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
 }
 
 .tileMuted {
@@ -94,8 +94,8 @@
   border-radius: var(--radius-sm);
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 4px 12px rgba(20, 20, 40, 0.08),
-    0 12px 28px rgba(20, 20, 40, 0.1);
+    0 4px 12px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 12px 28px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
   /* 出场 */
   animation: menuIn 200ms var(--ease-out);
   transform-origin: top center;
@@ -162,11 +162,11 @@
   background: var(--border-default);
 }
 
-:global([data-theme="flat"]) .trigger {
+:global([data-layout="flat"]) .trigger {
   border-color: var(--border-default);
 }
 
-:global([data-theme="flat"]) .tile {
+:global([data-layout="flat"]) .tile {
   background: transparent;
   border-color: transparent;
   box-shadow: none;

@@ -142,6 +142,7 @@ export function AppDetailDrawer({
       <aside
         ref={panelRef}
         className={styles.panel}
+        data-part="drawer"
         role="dialog"
         aria-modal="true"
         aria-label={app.name}

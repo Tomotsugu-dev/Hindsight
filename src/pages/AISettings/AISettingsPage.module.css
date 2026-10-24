@@ -10,6 +10,6 @@
   gap: 24px;
 }
 
-:global([data-theme="flat"]) .page {
+:global([data-layout="flat"]) .page {
   gap: 32px;
 }

@@ -44,7 +44,7 @@
   background: color-mix(in oklab, var(--sup-color, #94a3b8) 14%, var(--surface-1, #fff));
   border: 1px solid color-mix(in oklab, var(--sup-color, #94a3b8) 28%, transparent);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.04),
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
     0 8px 24px color-mix(in oklab, var(--sup-color, #94a3b8) 12%, transparent);
   user-select: none;
   transition:
@@ -60,8 +60,8 @@
   background: color-mix(in oklab, #94a3b8 6%, var(--surface-1, #fff));
   border-color: rgba(0, 0, 0, 0.06);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 6px 18px rgba(20, 20, 40, 0.05);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 6px 18px rgba(20, 20, 40, calc(0.05 * var(--shadow-strength)));
   /* orphan 不能被拖（"未归入"是固定行），不显示 grab 提示 */
   cursor: default;
 }
@@ -169,8 +169,8 @@
   color: var(--text-muted);
   cursor: pointer;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.08),
-    0 2px 6px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 2px 6px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
   opacity: 0;
   transform: scale(0.7);
   transform-origin: center;
@@ -244,12 +244,12 @@
   gap: 8px;
 }
 
-:global([data-theme="flat"]) .table {
+:global([data-layout="flat"]) .table {
   gap: 32px;
 }
 
-:global([data-theme="flat"]) .superCard,
-:global([data-theme="flat"]) .superBox.orphan .superCard {
+:global([data-layout="flat"]) .superCard,
+:global([data-layout="flat"]) .superBox.orphan .superCard {
   background: transparent;
   border: 0;
   border-right: 1px solid var(--border-default);
@@ -257,22 +257,22 @@
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .superName {
+:global([data-layout="flat"]) .superName {
   font-weight: var(--font-weight-500);
 }
 
 /* Group drop targets retain an explicit boundary during drag operations. */
-:global([data-theme="flat"]) .superCard.dropTarget {
+:global([data-layout="flat"]) .superCard.dropTarget {
   outline: 1px dashed var(--color-accent);
   outline-offset: -1px;
 }
 
-:global([data-theme="flat"]) .superCard.dropHot {
+:global([data-layout="flat"]) .superCard.dropHot {
   outline: 1px solid var(--color-accent);
   outline-offset: -1px;
   background: color-mix(in oklab, var(--color-accent) 8%, white);
 }
 
-:global([data-theme="flat"]) .superIcon {
+:global([data-layout="flat"]) .superIcon {
   box-shadow: none;
 }

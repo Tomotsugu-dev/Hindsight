@@ -2,7 +2,7 @@
   padding: 18px 16px 10px;
 }
 
-:global([data-theme="flat"]) .chart {
+:global([data-layout="flat"]) .chart {
   padding: 18px 12px 10px 0;
 }
 
@@ -42,7 +42,7 @@
 }
 
 /* 暗色专属：黑基线在深底看不见，改画淡白基线。亮色声明保持原样不动。 */
-:global([data-theme="dark"]) .plotArea {
+:global([data-mode="dark"]) .plotArea {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -57,7 +57,7 @@
 }
 
 /* 暗色专属：黑网格线在深底看不见，改画极淡白线。亮色不动。 */
-:global([data-theme="dark"]) .gridLine {
+:global([data-mode="dark"]) .gridLine {
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -141,8 +141,8 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-:global([data-theme="dark"]) .segment:not(:last-child) {
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.32);
+:global([data-mode="dark"]) .segment:not(:last-child) {
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
 }
 
 /* —— X 轴 —— */

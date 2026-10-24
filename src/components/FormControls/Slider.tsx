@@ -59,7 +59,7 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
   };
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-part="slider">
       <div className={styles.trackWrap}>
         <input
           id={id}

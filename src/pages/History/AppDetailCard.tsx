@@ -92,7 +92,7 @@ export function AppDetailCard({
       : null;
 
   return (
-    <section className={styles.card}>
+    <section className={styles.card} data-part="card">
       {/* 一项一行：名字、分类、首次和最近使用、总时长；卡片窄，挤在一行会把名字和日期都截断 */}
       <header className={styles.detailHead}>
         <div className={styles.detailHeadTop}>

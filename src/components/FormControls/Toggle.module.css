@@ -34,7 +34,7 @@
   background: var(--surface-card);
   border-radius: 50%;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.18),
+    0 1px 2px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
     0 0 0 0.5px rgba(0, 0, 0, 0.04);
   transition: transform 240ms var(--ease-spring);
 }
@@ -51,14 +51,14 @@
 /* 暗色：关闭态 track 是 12% 黑、thumb 是深色 surface-card → 暗底上整个开关看不见。
    关闭态 track 改淡白（可见）、thumb 改亮白（深/紫 track 上都清晰）；开启态 accent 紫
    由 :not(.on) 排除、保持原样。亮色不动。 */
-:global([data-theme="dark"]) .toggle:not(.on) {
+:global([data-mode="dark"]) .toggle:not(.on) {
   background: rgba(255, 255, 255, 0.18);
 }
 
-:global([data-theme="dark"]) .toggle:not(.on):hover {
+:global([data-mode="dark"]) .toggle:not(.on):hover {
   background: rgba(255, 255, 255, 0.26);
 }
 
-:global([data-theme="dark"]) .thumb {
+:global([data-mode="dark"]) .thumb {
   background: #e9e9ec;
 }

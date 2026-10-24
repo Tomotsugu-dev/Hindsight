@@ -5,8 +5,8 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
 }
 
 .cardHead {
@@ -143,7 +143,7 @@
 }
 
 /* Separate report sections with whitespace and one rule instead of a card. */
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   background: transparent;
   border: 0;
   border-top: 1px solid var(--border-default);
@@ -152,20 +152,20 @@
   overflow: visible;
 }
 
-:global([data-theme="flat"]) .cardHead {
+:global([data-layout="flat"]) .cardHead {
   padding: 22px 0 12px;
   gap: 14px;
   border-bottom: 0;
 }
 
-:global([data-theme="flat"]) .navBtn,
-:global([data-theme="flat"]) .dayPill {
+:global([data-layout="flat"]) .navBtn,
+:global([data-layout="flat"]) .dayPill {
   border-color: var(--border-default);
 }
 
 @media (max-width: 900px) {
-  :global([data-theme="flat"]) .cardControlsRow,
-  :global([data-theme="flat"]) .headRight {
+  :global([data-layout="flat"]) .cardControlsRow,
+  :global([data-layout="flat"]) .headRight {
     flex-wrap: wrap;
     gap: 10px;
   }

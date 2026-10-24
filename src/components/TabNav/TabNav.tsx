@@ -76,7 +76,7 @@ export function TabNav({ tabs, groups, ariaLabel }: TabNavProps) {
   }, [pill.visible, animated]);
 
   return (
-    <nav className={styles.tabs} aria-label={ariaLabel} ref={navRef}>
+    <nav className={styles.tabs} data-part="tabs" aria-label={ariaLabel} ref={navRef}>
       {/* 浮动胶囊 — 位于所有 tab 之下 */}
       <div
         className={`${styles.pill} ${animated ? styles.pillAnimated : ""}`}

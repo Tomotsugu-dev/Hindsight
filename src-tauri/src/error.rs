@@ -261,6 +261,11 @@ pub enum Error {
     #[error("plugin has no permission: {0}")]
     PluginNoPermission(String),
 
+    // ───────────── Themes ─────────────
+    /// theme.json or theme.css breaks a rule.
+    #[error("theme: {0}")]
+    ThemeInvalid(String),
+
     // ───────────── 真兜底（少用）─────────────
     #[error("{0}")]
     Other(String),

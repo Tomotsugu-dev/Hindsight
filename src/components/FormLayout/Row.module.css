@@ -112,8 +112,8 @@
   background: rgba(28, 28, 36, 0.94);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.20),
-    0 2px 4px rgba(0, 0, 0, 0.10);
+    0 4px 12px -2px rgba(0, 0, 0, calc(0.20 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   transition:
@@ -183,7 +183,7 @@
   color: var(--status-error);
 }
 
-:global([data-theme="flat"]) .row {
+:global([data-layout="flat"]) .row {
   padding: 18px 0;
   border-bottom-color: var(--border-default);
 }

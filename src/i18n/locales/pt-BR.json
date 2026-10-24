@@ -128,6 +128,22 @@
           "name": "Escuro",
           "desc": "Fundo escuro, confortável à noite"
         }
+      },
+      "custom": {
+        "title": "Temas personalizados",
+        "description": "Temas da pasta de temas. Instale só temas em que você confia: o CSS de um tema pode mudar qualquer coisa nesta janela.",
+        "import": "Importar tema",
+        "openFolder": "Abrir pasta de temas",
+        "fileFilter": "Arquivo de tema",
+        "loading": "Lendo temas…",
+        "loadFailed": "Não foi possível ler os temas: {{error}}",
+        "empty": "Ainda não há temas personalizados. Importe um theme.json ou coloque a pasta de um tema na pasta de temas.",
+        "ignored": "Não aplicadas porque não são variáveis públicas: {{names}}",
+        "delete": "Excluir",
+        "deleteTitle": "Excluir {{name}}?",
+        "deleteMessage": "Isso exclui a pasta {{folder}} da pasta de temas. Não dá para desfazer.",
+        "missing": "O tema {{id}} que você escolheu não está mais na pasta de temas, então o Minimalista é exibido. Ele volta quando você colocar o tema de volta.",
+        "invalid": "O tema {{id}} que você escolheu não pode ser usado, então o Minimalista é exibido. Ele volta quando o tema for corrigido. Motivo: {{error}}"
       }
     },
     "language": {

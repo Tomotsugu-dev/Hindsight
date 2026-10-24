@@ -54,6 +54,7 @@ export function ForgetRemoteDeviceDialog({ open, deviceName, onConfirm, onCancel
       <div
         ref={dialogRef}
         className={styles.dialog}
+        data-part="dialog"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="forget-remote-device-title"

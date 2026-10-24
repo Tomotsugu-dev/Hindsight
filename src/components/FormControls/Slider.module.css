@@ -29,7 +29,7 @@
       rgba(0, 0, 0, 0.07) var(--fill, 0%),
       rgba(0, 0, 0, 0.07) 100%
     );
-  box-shadow: inset 0 1px 1.5px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 1.5px rgba(0, 0, 0, calc(0.06 * var(--shadow-strength)));
   outline: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -47,7 +47,7 @@
   background: linear-gradient(180deg, #ffffff 0%, #f3f3f5 100%);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.16),
+    0 1px 2px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength))),
     0 0 0 0 color-mix(in oklab, var(--color-accent) 25%, transparent);
   cursor: grab;
   transition:
@@ -58,7 +58,7 @@
 .input::-webkit-slider-thumb:hover {
   transform: scale(1.08);
   box-shadow:
-    0 1px 3px rgba(20, 20, 40, 0.18),
+    0 1px 3px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
     0 0 0 6px color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
@@ -67,7 +67,7 @@
   cursor: grabbing;
   transform: scale(1.14);
   box-shadow:
-    0 2px 5px rgba(20, 20, 40, 0.22),
+    0 2px 5px rgba(20, 20, 40, calc(0.22 * var(--shadow-strength))),
     0 0 0 8px color-mix(in oklab, var(--color-accent) 20%, transparent);
 }
 
@@ -78,7 +78,7 @@
   border-radius: 50%;
   background: linear-gradient(180deg, #ffffff 0%, #f3f3f5 100%);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 1px 2px rgba(20, 20, 40, 0.16);
+  box-shadow: 0 1px 2px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength)));
   cursor: grab;
 }
 
@@ -96,7 +96,7 @@
   border-radius: var(--radius-sm);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 1px 2px rgba(20, 20, 40, 0.04);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
   font-variant-numeric: tabular-nums;
   outline: none;
   cursor: text;
@@ -121,7 +121,7 @@
 
 /* 暗色：未填充轨道段是 7% 黑（暗底看不见空轨）、valueBox 黑边看不见。
    未填充段改淡白（空轨可见）、valueBox 边淡白。白球 thumb + accent 填充保留。亮色不动。 */
-:global([data-theme="dark"]) .input {
+:global([data-mode="dark"]) .input {
   background: linear-gradient(
     to right,
     color-mix(in oklab, var(--color-accent) 78%, white) 0%,
@@ -131,7 +131,7 @@
   );
 }
 
-:global([data-theme="dark"]) .valueBox {
+:global([data-mode="dark"]) .valueBox {
   border-color: rgba(255, 255, 255, 0.1);
 }
 

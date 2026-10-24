@@ -11,7 +11,8 @@ import { SettingsProvider } from "./state/settings";
 import { UpdaterProvider } from "./state/updater";
 import { ensureInitialLocale } from "./i18n";
 import { translateDefaultCategoryNames } from "./utils/categoryName";
-import { applyTheme, getStoredTheme } from "./lib/theme";
+import { restoreTheme } from "./lib/theme";
+import { watchThemeLibrary } from "./lib/themeLibrary";
 import "./styles/global.css";
 
 // 把当前 OS 写到 body[data-platform]，CSS 据此区分 macOS / windows / linux 的 chrome 表现
@@ -21,8 +22,10 @@ try {
   document.body.dataset.platform = "windows"; // 默认按 Windows 渲染
 }
 
-// 渲染前先套用已保存的外观主题，避免首帧闪一下默认亮色再切到简约 / 暗色
-applyTheme(getStoredTheme());
+// 渲染前先套用已保存的外观主题，避免首帧闪一下默认亮色再切到简约 / 暗色。
+// 自定义主题先用 localStorage 里的副本，再读主题库拿最新的
+restoreTheme();
+watchThemeLibrary();
 
 // 首启按系统语言设好 locale 再渲染，避免闪一下兜底语言；有显式选择则瞬时 resolve。
 // 默认分类名按这个语言换好再渲染，分类列表第一次读到的就是译名

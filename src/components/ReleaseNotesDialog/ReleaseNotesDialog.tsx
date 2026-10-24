@@ -72,6 +72,7 @@ export function ReleaseNotesDialog({ version, onClose }: ReleaseNotesDialogProps
       <div
         ref={dialogRef}
         className={styles.dialog}
+        data-part="dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="release-notes-title"

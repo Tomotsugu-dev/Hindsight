@@ -105,6 +105,6 @@
   filter: drop-shadow(8px 0 18px rgba(20, 20, 40, 0.06));
 }
 
-:global([data-theme="flat"]) .sidebarHost {
+:global([data-layout="flat"]) .sidebarHost {
   filter: none;
 }

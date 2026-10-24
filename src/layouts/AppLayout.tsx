@@ -10,10 +10,10 @@ export function AppLayout() {
   const location = useLocation();
   const contentRef = useRef<HTMLElement>(null);
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-part="app">
       <div className={styles.dragStrip} data-tauri-drag-region />
 
-      <main ref={contentRef} className={styles.content}>
+      <main ref={contentRef} className={styles.content} data-part="content">
         {/* 页面级边界：单页崩溃只换掉内容区，侧栏/窗口 chrome 仍在；
             key=路由让用户切到别的页时边界重挂、自动恢复 */}
         <ErrorBoundary key={location.pathname} scope="page.crash">

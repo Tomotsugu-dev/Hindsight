@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Tomotsugu-dev/Hindsight/main/docs/design/themes/theme.schema.json",
+  "format": 1,
+  "id": "harbor",
+  "name": "Harbor",
+  "version": "1.0.0",
+  "author": "Hindsight",
+  "description": {
+    "en": "Slate blue on cool grey.",
+    "zh-CN": "冷灰底色，石板蓝点缀。"
+  },
+  "layout": "card",
+  "mode": "light",
+  "tokens": {
+    "--color-accent": "#3b6e8f",
+    "--color-accent-soft": "rgba(59, 110, 143, 0.12)",
+    "--sidebar-gradient": "linear-gradient(180deg, #e8eef2 0%, #dde5eb 100%)",
+    "--surface-app": "#f4f6f8",
+    "--text-strong": "#1c2a33",
+    "--text-regular": "#2c3a44",
+    "--text-muted": "#5f6f7a",
+    "--shadow-strength": "0.6",
+    "--radius-lg": "12px"
+  }
+}

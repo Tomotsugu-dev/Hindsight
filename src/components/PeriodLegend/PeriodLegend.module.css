@@ -22,7 +22,7 @@
   border-radius: var(--radius-xs);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.4),
-    0 1px 1px rgba(20, 20, 40, 0.1);
+    0 1px 1px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
 }
 
 /* 工作时段图例条 — 与图表里的 workBand 视觉一致 */
@@ -34,17 +34,17 @@
   border-top: 1px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
 
-:global([data-theme="flat"]) .legend {
+:global([data-layout="flat"]) .legend {
   padding: 14px 0 0;
   border-top: 0;
 }
 
-:global([data-theme="flat"]) .legendItem {
+:global([data-layout="flat"]) .legendItem {
   color: var(--text-muted);
   font-weight: var(--font-weight-400);
 }
 
-:global([data-theme="flat"]) .legendDot {
+:global([data-layout="flat"]) .legendDot {
   width: 8px;
   height: 8px;
   box-shadow: none;

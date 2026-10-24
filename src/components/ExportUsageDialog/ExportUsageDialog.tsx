@@ -225,6 +225,7 @@ export function ExportUsageDialog({ open, onClose, defaultQuick = "month" }: Pro
       <div
         ref={dialogRef}
         className={styles.dialog}
+        data-part="dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-usage-title"

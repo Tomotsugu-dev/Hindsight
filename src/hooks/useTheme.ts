@@ -2,7 +2,7 @@
 // 在切主题时重渲、按新主题重新取色（走 utils/categoryColor 的 adjustCategoryColor）。
 
 import { useSyncExternalStore } from "react";
-import { subscribeTheme, getCurrentTheme, type AppTheme } from "../lib/theme";
+import { subscribeTheme, getCurrentMode, getCurrentTheme, type AppTheme } from "../lib/theme";
 
 /** 订阅并返回当前主题。 */
 export function useTheme(): AppTheme {
@@ -13,7 +13,9 @@ export function useTheme(): AppTheme {
   );
 }
 
-/** 便捷：当前是否暗色主题。 */
+const isDarkNow = () => getCurrentMode() === "dark";
+
+/** 便捷：当前是否暗色。读 data-mode，不看主题名。 */
 export function useIsDark(): boolean {
-  return useTheme() === "dark";
+  return useSyncExternalStore(subscribeTheme, isDarkNow, isDarkNow);
 }

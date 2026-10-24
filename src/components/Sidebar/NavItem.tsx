@@ -79,6 +79,7 @@ export function NavItem({
         type="button"
         style={cssVar}
         className={`${styles.item} ${styles.button}`}
+        data-part="nav-item"
         onClick={onClick}
       >
         {content}
@@ -90,6 +91,7 @@ export function NavItem({
       to={to}
       style={cssVar}
       className={`${styles.item} ${isActive ? styles.active : ""}`}
+      data-part="nav-item"
       aria-current={isActive ? "page" : undefined}
     >
       {content}

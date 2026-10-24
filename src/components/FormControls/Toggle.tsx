@@ -16,6 +16,7 @@ export function Toggle({ checked, onChange, ariaLabel, disabled = false }: Toggl
     <button
       type="button"
       role="switch"
+      data-part="toggle"
       aria-checked={checked}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabel ? undefined : rowLabelId}

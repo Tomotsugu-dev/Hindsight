@@ -30,7 +30,7 @@
   letter-spacing: 0.005em;
   white-space: nowrap;
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 14px rgba(20, 20, 40, 0.18);
+  box-shadow: 0 4px 14px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   z-index: 20;

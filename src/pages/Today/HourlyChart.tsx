@@ -54,7 +54,7 @@ export function HourlyChart({
   // 4 等分刻度：max/4, max/2, 3max/4, max。每条对应 25/50/75/100% 高度。
   const yTicks = [maxMinutes / 4, maxMinutes / 2, (maxMinutes * 3) / 4, maxMinutes];
   return (
-    <div className={styles.chart}>
+    <div className={styles.chart} data-part="chart">
       <div className={styles.plot}>
         {/* Y 轴 */}
         <div className={styles.yAxis} aria-hidden>

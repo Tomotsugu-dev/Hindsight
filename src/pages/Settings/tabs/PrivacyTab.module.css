@@ -18,8 +18,7 @@
   font-weight: var(--font-weight-500);
   color: var(--text-regular);
   font-variant-numeric: tabular-nums;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
 }
 
 .chipText {
@@ -85,8 +84,7 @@
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
 }
 
 .addInput::placeholder {
@@ -129,7 +127,7 @@
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, calc(0.12 * var(--shadow-strength)));
 }
 
 .suggestOption {

@@ -122,19 +122,19 @@
    黑虚线全看不见 → 行糊在一起。恢复暗色的分行信号（亮色声明一律不动）：行距加大、
    斑马纹改淡白、hover 可见、空列虚线改淡白。unassigned/hot 等特殊态用 :not 排除，
    保持它们各自的黄/accent 高亮。 —— */
-:global([data-theme="dark"]) .pairing {
+:global([data-mode="dark"]) .pairing {
   gap: 7px;
 }
 
-:global([data-theme="dark"]) .rowEven:not(.unassigned):not(.hot) {
+:global([data-mode="dark"]) .rowEven:not(.unassigned):not(.hot) {
   background: rgba(255, 255, 255, 0.04);
 }
 
-:global([data-theme="dark"]) .row:hover:not(.unassigned):not(.hot) {
+:global([data-mode="dark"]) .row:hover:not(.unassigned):not(.hot) {
   background: rgba(255, 255, 255, 0.07);
 }
 
-:global([data-theme="dark"]) .emptyDash {
+:global([data-mode="dark"]) .emptyDash {
   border-top-color: rgba(255, 255, 255, 0.14);
 }
 
@@ -247,8 +247,8 @@
 }
 
 /* 暗色：hover 提示底亮色是 60% 白，暗色下就是刺眼灰白框。改成淡白提示。亮色不动。 */
-:global([data-theme="dark"]) .row:hover .nameInput,
-:global([data-theme="dark"]) .nameInput:hover {
+:global([data-mode="dark"]) .row:hover .nameInput,
+:global([data-mode="dark"]) .nameInput:hover {
   border-color: rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.08);
 }
@@ -323,8 +323,8 @@
   border-radius: var(--radius-sm);
   padding: 6px 10px;
   box-shadow:
-    0 8px 24px rgba(20, 20, 40, 0.18),
-    0 2px 4px rgba(20, 20, 40, 0.08),
+    0 8px 24px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
+    0 2px 4px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
     0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
   display: inline-flex;
   align-items: center;

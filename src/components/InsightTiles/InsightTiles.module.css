@@ -20,8 +20,8 @@
   gap: 4px;
   min-width: 0;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
   transition:
     background-color 220ms var(--ease-out),
     border-color 220ms var(--ease-out);
@@ -81,7 +81,7 @@
   padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
 }
 
-:global([data-theme="flat"]) .tile {
+:global([data-layout="flat"]) .tile {
   background: transparent;
   border: 0;
   border-left: 1px solid var(--border-default);
@@ -89,12 +89,12 @@
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .tile:first-child {
+:global([data-layout="flat"]) .tile:first-child {
   border-left: 0;
   padding-left: 0;
 }
 
-:global([data-theme="flat"]) .tiles[data-drill] .tile {
+:global([data-layout="flat"]) .tiles[data-drill] .tile {
   border-left: 2px solid var(--accent);
   border-radius: 0;
   padding-left: 14px;

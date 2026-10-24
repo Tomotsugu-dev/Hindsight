@@ -128,6 +128,22 @@
           "name": "暗色",
           "desc": "深色背景，適合夜間"
         }
+      },
+      "custom": {
+        "title": "自訂主題",
+        "description": "主題放在主題資料夾裡。只安裝信得過的主題：主題的 CSS 能改這個視窗裡的任何東西。",
+        "import": "匯入主題",
+        "openFolder": "開啟主題資料夾",
+        "fileFilter": "主題檔案",
+        "loading": "正在讀取主題…",
+        "loadFailed": "讀取主題失敗：{{error}}",
+        "empty": "還沒有自訂主題。匯入一個 theme.json，或把主題的資料夾放進主題資料夾。",
+        "ignored": "這些變數不在公開名單裡，沒有生效：{{names}}",
+        "delete": "刪除",
+        "deleteTitle": "刪除 {{name}}？",
+        "deleteMessage": "會刪除主題資料夾裡的 {{folder}}，無法復原。",
+        "missing": "選取的主題 {{id}} 已不在主題資料夾裡，目前顯示「簡約」。把主題放回去就會換回來。",
+        "invalid": "選取的主題 {{id}} 無法使用，目前顯示「簡約」。主題修好後會自動換回來。原因：{{error}}"
       }
     },
     "language": {

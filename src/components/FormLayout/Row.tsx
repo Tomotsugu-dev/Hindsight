@@ -45,6 +45,7 @@ export function Row({
   return (
     <div
       className={`${styles.row} ${block ? styles.rowBlock : ""} ${disabled ? styles.rowDisabled : ""}`}
+      data-part="row"
     >
       <div className={styles.left}>
         {showImage ? (

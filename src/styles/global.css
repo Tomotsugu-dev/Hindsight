@@ -49,7 +49,7 @@ a {
 
 /* 暗色：--color-accent-soft 在深底上太淡，鼠标拖拽选中几乎看不见。
    改成 accent 半透明高亮 + 白字，选中范围清晰。亮色不动。 */
-[data-theme="dark"] ::selection {
+[data-mode="dark"] ::selection {
   background: color-mix(in oklab, var(--color-accent) 45%, transparent);
   color: #fff;
 }
@@ -107,9 +107,9 @@ a {
   border-radius: inherit;
   background: radial-gradient(
     var(--glow-radius) circle at var(--glow-mx) var(--glow-my),
-    rgba(108, 92, 231, 0.95) 0%,
+    color-mix(in srgb, var(--color-accent) 95%, transparent) 0%,
     rgba(255, 145, 90, 0.7) 28%,
-    rgba(108, 92, 231, 0.18) 55%,
+    color-mix(in srgb, var(--color-accent) 18%, transparent) 55%,
     transparent 78%
   );
   -webkit-mask:
@@ -128,7 +128,7 @@ a {
   opacity: 0;
 }
 
-[data-theme="flat"] .glow::before {
+[data-layout="flat"] .glow::before {
   display: none;
 }
 

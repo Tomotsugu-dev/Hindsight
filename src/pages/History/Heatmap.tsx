@@ -145,7 +145,7 @@ export function Heatmap({
   const dragHi = drag && (drag.start < drag.end ? drag.end : drag.start);
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-part="chart">
       <div
         key={rangeKey}
         className={`${styles.body} ${rangeChanged.current ? styles.rangeIn : ""}`}

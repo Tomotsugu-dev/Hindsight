@@ -95,12 +95,14 @@
 
 ## Funciones principales
 
-- 📊 **Descubre en qué empleas tu tiempo** — Registra automáticamente la actividad del ordenador en segundo plano, la visualiza con distintos gráficos y permite consultar estadísticas por categoría de actividad (trabajo, entretenimiento, etc.)
-- 🤖 **Informe diario con IA** — Un modelo local resume las actividades del día por franjas horarias y las convierte en un informe diario
-- 💬 **Chat con IA** — Pregunta «¿Qué he hecho hoy?» o «¿Cuánto tiempo he dedicado al proyecto X este mes?» y recibe respuestas basadas en tus propios registros
-- 🔍 **Búsqueda en el historial de pantalla** — Encuentra cualquier texto que haya aparecido en tu pantalla y accede a la captura y al momento correspondiente (las capturas de pantalla y el OCR están desactivados por defecto; actívalos según lo necesites)
-- ☁️ **Vista conjunta de varios dispositivos** — Sincroniza opcionalmente los datos de actividad mediante Google Drive o WebDAV y combina datos de varios dispositivos para analizarlos
-- 🔒 **Almacenamiento local y privacidad ante todo** — Tus datos permanecen en tu equipo por defecto
+- **Descubre en qué empleas tu tiempo** — Registra automáticamente la actividad del ordenador en segundo plano, la visualiza con distintos gráficos y permite consultar estadísticas por categoría de actividad (trabajo, entretenimiento, etc.)
+- **Informe diario con IA** — Un modelo local resume las actividades del día por franjas horarias y las convierte en un informe diario
+- **Chat con IA** — Pregunta «¿Qué he hecho hoy?» o «¿Cuánto tiempo he dedicado al proyecto X este mes?» y recibe respuestas basadas en tus propios registros
+- **Búsqueda en el historial de pantalla** — Encuentra cualquier texto que haya aparecido en tu pantalla y accede a la captura y al momento correspondiente (las capturas de pantalla y el OCR están desactivados por defecto; actívalos según lo necesites)
+- **Vista conjunta de varios dispositivos** — Sincroniza opcionalmente los datos de actividad mediante Google Drive o WebDAV y combina datos de varios dispositivos para analizarlos
+- **Almacenamiento local y privacidad ante todo** — Tus datos permanecen en tu equipo por defecto
+- **Mercado de plugins** — Usuarios y desarrolladores pueden crear sus propias herramientas de plugins para aumentar la productividad. Más información en el [Mercado de plugins](https://github.com/Tomotsugu-dev/hindsight-plugins)
+- **Temas personalizados** — Importa un archivo de tema desde Ajustes → Apariencia → Temas personalizados para personalizar los colores, el modo claro u oscuro y la distribución de la página.
 
 ## Inicio rápido
 

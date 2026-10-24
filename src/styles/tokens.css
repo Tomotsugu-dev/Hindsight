@@ -1,5 +1,6 @@
-/* Design tokens. The default palette is Arc-inspired; named themes override
-   it below through the data-theme attribute managed by lib/theme.ts. */
+/* Design tokens. The default palette is Arc-inspired; the blocks below override
+   it through the data-theme, data-mode and data-layout attributes that
+   lib/theme.ts sets on <html>. */
 
 :root {
   /* —— Brand / accent —— */
@@ -28,8 +29,8 @@
   --pill-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 0 0 1px rgba(255, 255, 255, 0.5) inset,
-    0 1px 2px rgba(20, 20, 40, 0.06),
-    0 6px 16px rgba(20, 20, 40, 0.05);
+    0 1px 2px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength))),
+    0 6px 16px rgba(20, 20, 40, calc(0.05 * var(--shadow-strength)));
 
   /* Hover (translucent wash on tinted bg) */
   --hover-bg: rgba(255, 255, 255, 0.45);
@@ -61,7 +62,7 @@
 
   /* —— 边框语义色（完整值）——
      组件 CSS 一律走这三档，别再裸写 rgba(0,0,0,X)：亮色是淡黑描边，暗色自动转淡白描边
-     （见 [data-theme="dark"]），否则黑描边在深底上直接隐形。 */
+     （见 [data-mode="dark"]），否则黑描边在深底上直接隐形。 */
   --border-subtle: rgba(0, 0, 0, 0.05);
   --border-default: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.12);
@@ -74,19 +75,22 @@
   --hairline-hi: rgba(255, 255, 255, 0.6);
 
   /* 控件（下拉 / 日期导航钮）的半透明底：亮色是玻璃白，暗色转成很淡的白 wash
-     （见 [data-theme="dark"]），否则半透明白在深底上是一块刺眼灰白。 */
+     （见 [data-mode="dark"]），否则半透明白在深底上是一块刺眼灰白。 */
   --control-bg: rgba(255, 255, 255, 0.55);
   --control-bg-hover: rgba(255, 255, 255, 0.85);
 
   /* —— Shadows —— */
-  --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.08);
+  /* 阴影强度：组件和下面几档阴影里，深色投影的透明度都乘它。0 去掉投影，2 加深一倍；
+     白色高光和 0 偏移 0 模糊的描边环不乘 */
+  --shadow-strength: 1;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
   --shadow-lg:
-    0 12px 32px rgba(20, 20, 40, 0.16),
-    0 2px 6px rgba(20, 20, 40, 0.08);
+    0 12px 32px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength))),
+    0 2px 6px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
   --shadow-inset-hi: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 
   /* —— Radii —— 统一圆角阶梯：组件 CSS 一律走这些 token，别再裸写 px。
@@ -113,6 +117,8 @@
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* 路径、代码、调试输出这类等宽文字 */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-size-xs: 11px;
   --font-size-sm: 13px;
   --font-size-md: 14px;
@@ -170,8 +176,10 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Theme overrides selected by <html data-theme> in lib/theme.ts.
-   Named themes override only the tokens that differ from :root.
+   Overrides selected by the attributes lib/theme.ts sets on <html>:
+   data-theme picks a built-in palette, data-mode="dark" the dark colors,
+   data-layout="flat" the flat look. Each block overrides only the tokens
+   that differ from :root.
    ═══════════════════════════════════════════════════════════════════ */
 
 /* —— 简约：去掉侧栏渐变，纯色扁平；亮色配色其余继承默认 —— */
@@ -185,14 +193,14 @@
   --pill-blur: none;
   --pill-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 1px 2px rgba(20, 20, 40, 0.08);
+    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
 
   /* hover 在浅灰侧栏上用淡黑，比默认的半透明白更可见 */
   --hover-bg: rgba(0, 0, 0, 0.045);
 }
 
-/* Flat uses a single white canvas; structural panels opt out of card chrome.
-   Keep overlay surfaces opaque so menus and dialogs remain legible. */
+/* Flat palette: a single white canvas. Keep overlay surfaces opaque so menus
+   and dialogs remain legible. The flat look itself is [data-layout="flat"]. */
 [data-theme="flat"] {
   --color-accent: #7560c8;
   --color-accent-soft: #eeebf8;
@@ -206,8 +214,6 @@
   --surface-2: #f7f7f9;
 
   --pill-bg: #eeebf8;
-  --pill-blur: none;
-  --pill-shadow: none;
   --hover-bg: #eeedf2;
   --text-strong: #272631;
   --text-regular: #393844;
@@ -218,27 +224,12 @@
   --border-subtle: #f0eff4;
   --border-default: #eae9ef;
   --border-strong: #d6d3df;
-  --hairline-hi: transparent;
   --control-bg: #ffffff;
   --control-bg-hover: #f7f7f9;
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-inset-hi: none;
-
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 500;
-  --font-weight-600: 500;
-  --font-weight-700: 500;
 }
 
 /* —— 暗色：深色背景，surface 分三级明度制造层次 —— */
-[data-theme="dark"] {
+[data-mode="dark"] {
   --color-accent: #8b7bf0;
   --color-accent-soft: rgba(139, 123, 240, 0.18);
 
@@ -274,8 +265,8 @@
   --pill-blur: saturate(140%) blur(14px);
   --pill-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 6px 16px rgba(0, 0, 0, 0.3);
+    0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength))),
+    0 6px 16px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
 
   --hover-bg: rgba(255, 255, 255, 0.05);
 
@@ -291,13 +282,35 @@
   --status-pending-soft: rgba(245, 158, 11, 0.18);
 
   /* 阴影改深黑，深背景上才有立体感 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0) inset,
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 8px 20px rgba(0, 0, 0, 0.35);
+    0 1px 2px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength))),
+    0 8px 20px rgba(0, 0, 0, calc(0.35 * var(--shadow-strength)));
   --shadow-lg:
-    0 12px 32px rgba(0, 0, 0, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.4);
+    0 12px 32px rgba(0, 0, 0, calc(0.5 * var(--shadow-strength))),
+    0 2px 6px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   --shadow-inset-hi: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+/* —— 扁平布局：去掉阴影和高光、圆角变小、字重变轻；配色由 data-theme 和 data-mode 决定 ——
+   放在暗色之后：暗色扁平时，这里的「没有阴影」要压过暗色的深黑阴影。 */
+[data-layout="flat"] {
+  --pill-blur: none;
+  --pill-shadow: none;
+  --hairline-hi: transparent;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-inset-hi: none;
+
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;
+  --font-weight-600: 500;
+  --font-weight-700: 500;
 }

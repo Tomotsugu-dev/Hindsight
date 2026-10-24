@@ -294,8 +294,8 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, 0.04),
-    0 8px 20px rgba(20, 20, 40, 0.06);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
 }
 
 .cardHead {
@@ -434,11 +434,11 @@
   to   { transform: rotate(360deg); }
 }
 
-:global([data-theme="flat"]) .cardList {
+:global([data-layout="flat"]) .cardList {
   gap: 24px;
 }
 
-:global([data-theme="flat"]) .card {
+:global([data-layout="flat"]) .card {
   padding: 20px 0 0;
   background: transparent;
   border: 0;
@@ -447,6 +447,6 @@
   box-shadow: none;
 }
 
-:global([data-theme="flat"]) .chip {
+:global([data-layout="flat"]) .chip {
   font-weight: var(--font-weight-500);
 }

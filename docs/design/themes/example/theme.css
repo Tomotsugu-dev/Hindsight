@@ -1,0 +1,9 @@
+/* Cards get a thin border in the theme's border color. */
+[data-part="card"] {
+  border: 1px solid var(--border-default);
+}
+
+/* The current page in the sidebar is bold. */
+[data-part="nav-item"][aria-current="page"] {
+  font-weight: 600;
+}

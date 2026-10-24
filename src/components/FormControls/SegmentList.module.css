@@ -34,7 +34,7 @@
   /* 顶部一道白色高光 + 底部微暗——给胶囊"从上往下打灯"的立体感 */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.04);
+    inset 0 -1px 2px rgba(0, 0, 0, calc(0.04 * var(--shadow-strength)));
 }
 
 /* off 斜纹背景：未被段覆盖的区域可见，段块叠上去盖住 */
@@ -178,7 +178,7 @@
   opacity: 0;
   box-shadow:
     0 4px 12px -2px rgba(239, 68, 68, 0.35),
-    0 2px 4px rgba(0, 0, 0, 0.10);
+    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
   transition:
     opacity 160ms ease-out,
     transform 200ms var(--ease-out),
@@ -262,7 +262,7 @@
   background: #fff;
   border-radius: var(--radius-xs);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(0, 0, 0, calc(0.18 * var(--shadow-strength))),
     0 0 0 1px rgba(0, 0, 0, 0.06);
   transition:
     transform 160ms ease-out,
@@ -281,7 +281,7 @@
 .handle:active .handleGrip {
   transform: scale(1.06);
   box-shadow:
-    0 3px 8px rgba(0, 0, 0, 0.22),
+    0 3px 8px rgba(0, 0, 0, calc(0.22 * var(--shadow-strength))),
     0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
@@ -316,8 +316,8 @@
   white-space: nowrap;
   opacity: 0;
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.20),
-    0 2px 4px rgba(0, 0, 0, 0.10);
+    0 4px 12px -2px rgba(0, 0, 0, calc(0.20 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
   transition:
     opacity 160ms ease-out,
     transform 200ms var(--ease-out);
@@ -363,8 +363,8 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 6px 16px -4px rgba(0, 0, 0, 0.18),
-    0 2px 4px rgba(0, 0, 0, 0.08);
+    0 6px 16px -4px rgba(0, 0, 0, calc(0.18 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.08 * var(--shadow-strength)));
   pointer-events: auto;
   white-space: nowrap;
 }

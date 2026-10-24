@@ -68,7 +68,7 @@ export function PeriodCard({
   const pillClickable = offset !== 0;
 
   return (
-    <section className={styles.card}>
+    <section className={styles.card} data-part="card">
       {/* 卡片头：title 单独一行（行 1），controls（ViewToggle + DevicePicker + day-nav）一行（行 2）
           —— 横向单行时四个东西挤一起，每个都被压窄；拆成两行让 title 喘口气，
              ViewToggle / day-nav 各自有完整宽度 */}

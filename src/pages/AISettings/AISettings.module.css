@@ -119,8 +119,7 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
-  font-family:
-    ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   line-height: 1.6;
   color: var(--text-strong);
   resize: vertical;
@@ -547,8 +546,8 @@
   background: rgba(28, 28, 36, 0.94);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.20),
-    0 2px 4px rgba(0, 0, 0, 0.10);
+    0 4px 12px -2px rgba(0, 0, 0, calc(0.20 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
@@ -681,7 +680,7 @@
   cursor: pointer;
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 1px 2px rgba(20, 20, 40, 0.04);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
   transition:
     background 160ms var(--ease-out),
     border-color 160ms var(--ease-out),
@@ -703,7 +702,7 @@
   transform: scale(0.97);
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 1px 2px rgba(20, 20, 40, 0.04);
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
 }
 
 .vramRecommendBtn:disabled {
@@ -1212,8 +1211,8 @@
   background: rgba(28, 28, 36, 0.94);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.20),
-    0 2px 4px rgba(0, 0, 0, 0.10);
+    0 4px 12px -2px rgba(0, 0, 0, calc(0.20 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   white-space: normal;
@@ -1596,7 +1595,7 @@
 /* 启动失败时的 stderr 详情：浅红框包起来，等宽字便于看 */
 .engineRuntimeError {
   font-size: 11px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono);
   line-height: 1.5;
   color: #7f1d1d;
   background: color-mix(in oklab, #dc2626 6%, transparent);
@@ -1698,7 +1697,7 @@
   border-radius: var(--radius-sm);
   font-size: 12.5px;
   color: var(--text-strong);
-  font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   outline: none;
   transition:
     border-color 200ms ease-out,
@@ -1949,8 +1948,8 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 6px 18px rgba(20, 20, 40, 0.12),
-    0 1px 2px rgba(20, 20, 40, 0.06);
+    0 6px 18px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength))),
+    0 1px 2px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1967,7 +1966,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   font-size: 12.5px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   color: var(--text-strong);
   cursor: pointer;
   text-align: left;
@@ -1983,6 +1982,6 @@
   background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 }
 
-:global([data-theme="flat"]) .content {
+:global([data-layout="flat"]) .content {
   gap: 32px;
 }

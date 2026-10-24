@@ -624,7 +624,7 @@ function SegmentCard({ seg, state, onRetry, retryDisabled }: SegmentCardProps) {
   // 文字保持中性深灰，不再压在饱和色块上。
   const dotColor = resolveSegmentDotColor(seg);
   return (
-    <div className={styles.card}>
+    <div className={styles.card} data-part="card">
       <div className={styles.cardHead}>
         <span className={styles.chip}>
           <span

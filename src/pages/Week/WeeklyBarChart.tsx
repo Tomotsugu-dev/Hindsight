@@ -60,7 +60,7 @@ export function WeeklyBarChart({
 
   const interactive = !!onIndexClick;
   return (
-    <div className={styles.chart}>
+    <div className={styles.chart} data-part="chart">
       {days.map((day, i) => {
         const total = totals[i];
         const totalSecs = barSecs(day.segments);
