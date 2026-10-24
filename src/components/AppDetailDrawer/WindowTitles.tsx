@@ -9,6 +9,8 @@ import { stripAppSuffix } from "../../utils/windowTitle";
 import { logError } from "../../lib/logger";
 import { api, type AppGroup, type TitleUsage } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { SiteIcon } from "../SiteIcon/SiteIcon";
+import { useSiteIcons } from "../SiteIcon/useSiteIcons";
 import { groupBySite, type SiteGroup } from "./groupBySite";
 import styles from "./AppDetailDrawer.module.css";
 
@@ -178,6 +180,12 @@ export function WindowTitles({
     [hasHost, pageRows],
   );
   const siteMax = useMemo(() => Math.max(...siteGroups.map((g) => g.secs), 1), [siteGroups]);
+  // 和「网站」页同一套：开了「下载网站图标」时，缺的图标也会下载回来
+  const iconHosts = useMemo(
+    () => (hasHost ? siteGroups.flatMap((g) => (g.host === null ? [] : [g.host])) : null),
+    [hasHost, siteGroups],
+  );
+  const { icons } = useSiteIcons(iconHosts, settings?.downloadSiteIcons === true);
   // 组内页面已按秒数降序，每组取首项即可
   const pageMax = useMemo(
     () => Math.max(...siteGroups.map((g) => g.pages[0]?.secs ?? 0), 1),
@@ -309,6 +317,7 @@ export function WindowTitles({
                       className={`${styles.siteChevron} ${isOpen ? styles.siteChevronOpen : ""}`}
                       aria-hidden
                     />
+                    <SiteIcon path={g.host === null ? undefined : icons[g.host]} />
                     <span
                       className={`${styles.siteHost} ${isUnknown ? styles.siteHostUnknown : ""}`}
                     >
