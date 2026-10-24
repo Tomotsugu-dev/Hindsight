@@ -1,8 +1,8 @@
 # ADR-0016 · Speed up the usage reports with a table of daily totals
 
 - **Date**: 2026-10-24
-- **Status**: Proposed
-- **Related**: PR #170
+- **Status**: **Accepted**
+- **Related**: PR #170 · PR #173
 
 ## Goal
 
