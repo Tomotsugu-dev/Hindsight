@@ -185,6 +185,47 @@
   background: #24242b;
 }
 
+/* 自定义主题：主题设了的颜色从 style 上的 --preview-* 来，没设的用默认主题的配色 */
+.preview_custom .previewSidebar {
+  background: var(
+    --preview-sidebar,
+    radial-gradient(120% 80% at 0% 0%, #efe7ff 0%, #ffe9f0 60%, #fff4e6 100%)
+  );
+}
+.preview_custom .previewBody {
+  background: var(--preview-body, #fafafa);
+}
+.preview_custom .previewLine {
+  background: var(--preview-line, rgba(0, 0, 0, 0.12));
+}
+.preview_custom .previewCard {
+  border-left: 3px solid var(--preview-accent, #6c5ce7);
+  background: var(--preview-card, #ffffff);
+}
+
+/* 暗色的自定义主题没设的颜色用暗色主题的配色 */
+.preview_customDark {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.preview_customDark .previewSidebar {
+  background: var(--preview-sidebar, linear-gradient(180deg, #1b1b21 0%, #141418 100%));
+}
+.preview_customDark .previewBody {
+  background: var(--preview-body, #0e0e11);
+}
+.preview_customDark .previewLine {
+  background: var(--preview-line, rgba(255, 255, 255, 0.16));
+}
+.preview_customDark .previewCard {
+  border-left-color: var(--preview-accent, #8b7bf0);
+  background: var(--preview-card, #16161a);
+}
+
+.preview_customFlat .previewLine,
+.preview_customFlat .previewCard {
+  border-radius: 1px;
+}
+
 /* —— 名称 + 描述 —— */
 .meta {
   display: flex;
@@ -206,6 +247,139 @@
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   line-height: 1.4;
+}
+.version {
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+}
+
+/* —— 自定义主题 —— */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 自定义主题的卡片是 div：里面的选择按钮和删除按钮不能嵌套 */
+.choose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.choose:disabled {
+  cursor: default;
+}
+.cardFoot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+.ignored {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--status-pending);
+  overflow-wrap: anywhere;
+}
+.cardBroken {
+  border-style: dashed;
+  box-shadow: none;
+}
+.cardBroken:hover {
+  border-color: var(--border-default);
+  box-shadow: none;
+  transform: none;
+}
+.cardBroken .desc {
+  overflow-wrap: anywhere;
+}
+.brokenIcon {
+  flex-shrink: 0;
+  color: var(--status-error);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+.error,
+.notice {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.error {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+.notice {
+  background: var(--status-pending-soft);
+  color: var(--text-strong);
+}
+
+.btn,
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    transform 120ms ease-out;
+}
+.btn {
+  background: rgba(0, 0, 0, 0.045);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--text-strong);
+}
+.btn:hover {
+  background: rgba(0, 0, 0, 0.075);
+}
+.btnDanger {
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--status-error);
+}
+.btnDanger:hover {
+  background: var(--status-error-soft);
+}
+.btn:active,
+.btnDanger:active {
+  transform: scale(0.97);
+}
+.btn:disabled,
+.btnDanger:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+:global([data-mode="dark"]) .btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+:global([data-mode="dark"]) .btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 :global([data-mode="dark"]) .card {

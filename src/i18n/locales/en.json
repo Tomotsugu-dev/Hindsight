@@ -128,6 +128,22 @@
           "name": "Dark",
           "desc": "Dark background, easy on the eyes at night"
         }
+      },
+      "custom": {
+        "title": "Custom themes",
+        "description": "Themes in the themes folder. Install only themes you trust: a theme's CSS can change anything in this window.",
+        "import": "Import theme",
+        "openFolder": "Open themes folder",
+        "fileFilter": "Theme file",
+        "loading": "Reading themes…",
+        "loadFailed": "Could not read the themes: {{error}}",
+        "empty": "No custom themes yet. Import a theme.json, or put a theme's folder in the themes folder.",
+        "ignored": "Not applied, because they are not public variables: {{names}}",
+        "delete": "Delete",
+        "deleteTitle": "Delete {{name}}?",
+        "deleteMessage": "This deletes the folder {{folder}} in the themes folder. You can't undo this.",
+        "missing": "The theme {{id}} you chose is no longer in the themes folder, so Minimal is shown. It comes back when you put the theme back.",
+        "invalid": "The theme {{id}} you chose can't be used, so Minimal is shown. It comes back when the theme is fixed. Reason: {{error}}"
       }
     },
     "language": {

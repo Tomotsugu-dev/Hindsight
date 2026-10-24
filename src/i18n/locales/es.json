@@ -128,6 +128,22 @@
           "name": "Oscuro",
           "desc": "Fondo oscuro, cómodo de noche"
         }
+      },
+      "custom": {
+        "title": "Temas personalizados",
+        "description": "Temas de la carpeta de temas. Instala solo temas de confianza: el CSS de un tema puede cambiar cualquier cosa en esta ventana.",
+        "import": "Importar tema",
+        "openFolder": "Abrir carpeta de temas",
+        "fileFilter": "Archivo de tema",
+        "loading": "Leyendo temas…",
+        "loadFailed": "No se pudieron leer los temas: {{error}}",
+        "empty": "Aún no hay temas personalizados. Importa un theme.json o pon la carpeta de un tema en la carpeta de temas.",
+        "ignored": "No se aplican porque no son variables públicas: {{names}}",
+        "delete": "Eliminar",
+        "deleteTitle": "¿Eliminar {{name}}?",
+        "deleteMessage": "Se eliminará la carpeta {{folder}} de la carpeta de temas. No se puede deshacer.",
+        "missing": "El tema {{id}} que elegiste ya no está en la carpeta de temas, así que se muestra Minimalista. Vuelve cuando pongas el tema de nuevo.",
+        "invalid": "El tema {{id}} que elegiste no se puede usar, así que se muestra Minimalista. Vuelve cuando se arregle el tema. Motivo: {{error}}"
       }
     },
     "language": {

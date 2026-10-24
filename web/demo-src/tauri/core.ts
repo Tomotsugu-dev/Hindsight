@@ -7,6 +7,8 @@ export async function invoke<T = unknown>(
   cmd: string,
   _args?: Record<string, unknown>,
 ): Promise<T> {
+  // 外观页会列主题库：demo 里没有自定义主题
+  if (cmd === "theme_list") return [] as T;
   // eslint-disable-next-line no-console
   console.warn(`[demo] invoke("${cmd}") 在 demo 模式下未实现，返回 undefined`);
   return undefined as T;

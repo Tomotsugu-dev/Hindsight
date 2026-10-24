@@ -128,6 +128,22 @@
           "name": "暗色",
           "desc": "深色背景，适合夜间"
         }
+      },
+      "custom": {
+        "title": "自定义主题",
+        "description": "主题放在主题文件夹里。只安装信得过的主题：主题的 CSS 能改这个窗口里的任何东西。",
+        "import": "导入主题",
+        "openFolder": "打开主题文件夹",
+        "fileFilter": "主题文件",
+        "loading": "正在读取主题…",
+        "loadFailed": "读取主题失败：{{error}}",
+        "empty": "还没有自定义主题。导入一个 theme.json，或者把主题的文件夹放进主题文件夹。",
+        "ignored": "这些变量不在公开名单里，没有生效：{{names}}",
+        "delete": "删除",
+        "deleteTitle": "删除 {{name}}？",
+        "deleteMessage": "会删除主题文件夹里的 {{folder}}，不能撤销。",
+        "missing": "选中的主题 {{id}} 已经不在主题文件夹里，现在显示「简约」。把主题放回去就会换回来。",
+        "invalid": "选中的主题 {{id}} 用不了，现在显示「简约」。主题修好后会自动换回来。原因：{{error}}"
       }
     },
     "language": {
