@@ -2,13 +2,19 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Palette } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
-import { APP_THEMES, getStoredTheme, setStoredTheme, type AppTheme } from "../../../lib/theme";
+import {
+  APP_THEMES,
+  getStoredTheme,
+  setStoredTheme,
+  type AppTheme,
+  type ThemeChoice,
+} from "../../../lib/theme";
 import styles from "./AppearanceTab.module.css";
 
 export default function AppearanceTab() {
   const { t } = useTranslation();
   // 主题是纯前端偏好（localStorage），不走后端 settings；本地 state 仅用于高亮选中项
-  const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
+  const [theme, setTheme] = useState<ThemeChoice>(getStoredTheme);
 
   const choose = (next: AppTheme) => {
     setStoredTheme(next); // 立即写 <html> 的三个属性 + localStorage
