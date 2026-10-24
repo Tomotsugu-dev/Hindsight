@@ -18,6 +18,7 @@ import {
 import { markPluginsSeen } from "../../../state/pluginsSeen";
 import { usePluginIcons } from "../../../state/pluginIcons";
 import { logError } from "../../../lib/logger";
+import { pickDescription } from "../../../utils/pickDescription";
 import { HIGH_RISK, permissionKey } from "./pluginPermissions";
 import styles from "./PluginsTab.module.css";
 
@@ -420,7 +421,7 @@ function MarketCard({
   disabled: boolean;
   onInstall: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const iconSrc = plugin.icon_url ?? null;
   // Kept per URL, so a new icon is tried again
   const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
@@ -444,7 +445,7 @@ function MarketCard({
           </span>
         </div>
       </div>
-      <p className={styles.marketDesc}>{plugin.description}</p>
+      <p className={styles.marketDesc}>{pickDescription(plugin.description, i18n.language)}</p>
       <div className={styles.marketFoot}>
         <button type="button" className={styles.btnPrimary} disabled={disabled} onClick={onInstall}>
           {working ? t("plugins.working") : t("plugins.market.install")}
