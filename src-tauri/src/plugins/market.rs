@@ -272,9 +272,14 @@ pub struct OnlineVersion {
     pub kind: InstallKind,
 }
 
+/// Only the format version of plugins.json. The rest of the file is not read.
+#[derive(Deserialize)]
+struct FormatVersion {
+    format_version: u32,
+}
+
 #[derive(Deserialize)]
 struct PluginsJson {
-    format_version: u32,
     plugins: Vec<OnlinePlugin>,
 }
 
@@ -297,12 +302,13 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
 ///
 /// Returns [`Error::PluginsJsonFormatVersion`] if `format_version` is not known.
 fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
-    let file: PluginsJson = serde_json::from_slice(json)?;
-    // Do not parse an unknown format as if it were the current one
-    if file.format_version != PLUGINS_JSON_FORMAT_VERSION {
-        return Err(Error::PluginsJsonFormatVersion(file.format_version));
+    // Check the format version before the plugins: an unknown format must report a format error,
+    // not a JSON error from parsing it as the current format
+    let FormatVersion { format_version } = serde_json::from_slice(json)?;
+    if format_version != PLUGINS_JSON_FORMAT_VERSION {
+        return Err(Error::PluginsJsonFormatVersion(format_version));
     }
-    let mut plugins = file.plugins;
+    let mut plugins = serde_json::from_slice::<PluginsJson>(json)?.plugins;
     for plugin in &mut plugins {
         // The id goes into the URL. An id with `/` or `..` would point outside the official
         // repository
@@ -797,6 +803,20 @@ mod tests {
         let result = parse_plugins_json(json.to_string().as_bytes());
         assert!(
             matches!(result, Err(Error::PluginsJsonFormatVersion(2))),
+            "{result:?}"
+        );
+    }
+
+    /// 先看格式版本，再解析插件：不认识的格式里，插件长什么样都报格式错误，不报 JSON 错误。
+    #[test]
+    fn checks_the_format_version_before_the_plugins() {
+        let json = serde_json::json!({
+            "format_version": 3,
+            "plugins": [{ "id": "p", "description": 42, "versions": "not a list" }]
+        });
+        let result = parse_plugins_json(json.to_string().as_bytes());
+        assert!(
+            matches!(result, Err(Error::PluginsJsonFormatVersion(3))),
             "{result:?}"
         );
     }
