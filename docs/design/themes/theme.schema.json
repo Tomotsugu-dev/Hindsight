@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Tomotsugu-dev/Hindsight/main/docs/design/themes/theme.schema.json",
+  "title": "Hindsight theme.json",
+  "description": "A Hindsight theme. See docs/design/themes/README.md.",
+  "type": "object",
+  "required": ["format", "id", "name", "version"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Lets editors check the file. Hindsight ignores it."
+    },
+    "format": {
+      "const": 1,
+      "description": "The version of this file format."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "description": "Lowercase letters, digits and -. 1 to 63 characters, and not starting or ending with -. It must be the name of the theme's folder."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "\\S",
+      "description": "The name shown in Settings > Appearance."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Three numbers, for example 1.0.0."
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "description": {
+      "type": "object",
+      "description": "The description in each language: language code (such as en, zh-CN, zh-TW, ja, es, pt-BR) → text. Hindsight shows the interface language, then English, then the first language by code.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "layout": {
+      "enum": ["card", "flat"],
+      "default": "card",
+      "description": "card shows the content in cards with shadows. flat shows it on one surface, without shadows and with smaller corners."
+    },
+    "mode": {
+      "enum": ["light", "dark"],
+      "default": "light",
+      "description": "Whether the colors are light or dark. Charts follow it. dark starts from the built-in dark palette."
+    },
+    "tokens": {
+      "type": "object",
+      "description": "Public CSS variables: name → value. Names that are not listed here are ignored.",
+      "properties": {
+        "--color-accent": { "$ref": "#/$defs/value" },
+        "--color-accent-soft": { "$ref": "#/$defs/value" },
+        "--sidebar-gradient": { "$ref": "#/$defs/value" },
+        "--sidebar-border": { "$ref": "#/$defs/value" },
+        "--surface-app": { "$ref": "#/$defs/value" },
+        "--surface-card": { "$ref": "#/$defs/value" },
+        "--surface-card-elevated": { "$ref": "#/$defs/value" },
+        "--surface-overlay": { "$ref": "#/$defs/value" },
+        "--surface-1": { "$ref": "#/$defs/value" },
+        "--surface-2": { "$ref": "#/$defs/value" },
+        "--pill-bg": { "$ref": "#/$defs/value" },
+        "--pill-blur": { "$ref": "#/$defs/value" },
+        "--pill-shadow": { "$ref": "#/$defs/value" },
+        "--hover-bg": { "$ref": "#/$defs/value" },
+        "--text-strong": { "$ref": "#/$defs/value" },
+        "--text-regular": { "$ref": "#/$defs/value" },
+        "--text-muted": { "$ref": "#/$defs/value" },
+        "--text-faint": { "$ref": "#/$defs/value" },
+        "--text-on-pill": { "$ref": "#/$defs/value" },
+        "--status-ok": { "$ref": "#/$defs/value" },
+        "--status-pending": { "$ref": "#/$defs/value" },
+        "--status-idle": { "$ref": "#/$defs/value" },
+        "--status-error": { "$ref": "#/$defs/value" },
+        "--status-ok-soft": { "$ref": "#/$defs/value" },
+        "--status-error-soft": { "$ref": "#/$defs/value" },
+        "--status-pending-soft": { "$ref": "#/$defs/value" },
+        "--border-subtle": { "$ref": "#/$defs/value" },
+        "--border-default": { "$ref": "#/$defs/value" },
+        "--border-strong": { "$ref": "#/$defs/value" },
+        "--scrollbar-thumb": { "$ref": "#/$defs/value" },
+        "--scrollbar-thumb-hover": { "$ref": "#/$defs/value" },
+        "--hairline-hi": { "$ref": "#/$defs/value" },
+        "--control-bg": { "$ref": "#/$defs/value" },
+        "--control-bg-hover": { "$ref": "#/$defs/value" },
+        "--shadow-sm": { "$ref": "#/$defs/value" },
+        "--shadow-md": { "$ref": "#/$defs/value" },
+        "--shadow-lg": { "$ref": "#/$defs/value" },
+        "--shadow-inset-hi": { "$ref": "#/$defs/value" },
+        "--shadow-strength": { "$ref": "#/$defs/value" },
+        "--radius-xs": { "$ref": "#/$defs/value" },
+        "--radius-sm": { "$ref": "#/$defs/value" },
+        "--radius-md": { "$ref": "#/$defs/value" },
+        "--radius-lg": { "$ref": "#/$defs/value" },
+        "--radius-xl": { "$ref": "#/$defs/value" },
+        "--font-sans": { "$ref": "#/$defs/value" },
+        "--font-mono": { "$ref": "#/$defs/value" }
+      },
+      "additionalProperties": {
+        "type": "string",
+        "description": "Not a public variable. Hindsight ignores it and lists it on the theme's card."
+      }
+    }
+  },
+  "$defs": {
+    "value": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^[^;{}\\u0000-\\u001F\\u007F-\\u009F]+$",
+      "allOf": [{ "pattern": "\\S" }],
+      "description": "A CSS value. At most 300 characters, not only spaces, and without ;, {, } or control characters."
+    }
+  }
+}

@@ -42,7 +42,7 @@
 
 - 主题由两部分组成：`theme.json` 写布局、明暗和变量；`theme.css` 可选，能改任何东西。优先级：`theme.json` 的变量高于 `theme.css`，`theme.css` 高于内置主题。
 - 自定义主题从默认主题的配色开始，`data-mode="dark"` 时换成暗色的配色，再用 `tokens` 覆盖。
-- 对外的约定只有两样：公开变量的名单，和给 CSS 主题用的 `data-part` 名字。改其中任何一个名字都会弄坏别人的主题。名单只在 Rust 代码里写一份，测试保证 `tokens.css` 和文档里的 JSON Schema 跟它一致。字段和规则写在 `docs/themes/`。
+- 对外的约定只有两样：公开变量的名单，和给 CSS 主题用的 `data-part` 名字。改其中任何一个名字都会弄坏别人的主题。名单只在 Rust 代码里写一份，测试保证 `tokens.css` 和文档里的 JSON Schema 跟它一致。字段和规则写在 `docs/design/themes/`。
 - 写入只有一个入口 `install`。导入和以后的主题市场都调用它。
 
 ## 备选

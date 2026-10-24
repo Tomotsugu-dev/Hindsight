@@ -42,7 +42,7 @@ By default, the data folder is `~/Library/Application Support/Hindsight/` on mac
 
 - A theme has two parts. `theme.json` sets the layout, light or dark, and the variables. `theme.css` is optional and can change anything. Precedence: the variables in `theme.json` win over `theme.css`, and `theme.css` wins over the built-in theme.
 - A custom theme starts from the palette of the default theme. With `data-mode="dark"`, it starts from the dark palette instead. Then `tokens` override the palette.
-- Only two things are a public contract: the list of public variables, and the `data-part` names for CSS themes. Renaming any of them breaks other people's themes. The list is written only once, in the Rust code. Tests make sure that `tokens.css` and the JSON Schema in the docs match it. The fields and rules are in `docs/themes/`.
+- Only two things are a public contract: the list of public variables, and the `data-part` names for CSS themes. Renaming any of them breaks other people's themes. The list is written only once, in the Rust code. Tests make sure that `tokens.css` and the JSON Schema in the docs match it. The fields and rules are in `docs/design/themes/`.
 - There is only one way to write a theme: `install`. Import calls it, and a later theme market will call it too.
 
 ## Alternatives

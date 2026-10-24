@@ -1,4 +1,4 @@
-//! The theme.json format and its checks. `docs/themes/` lists the fields and rules.
+//! The theme.json format and its checks. `docs/design/themes/` lists the fields and rules.
 
 use std::collections::BTreeMap;
 
@@ -511,5 +511,44 @@ mod tests {
         for token in PUBLIC_TOKENS {
             assert!(root.contains(&format!("{token}:")), "{token}");
         }
+    }
+
+    /// 文档里的 JSON Schema 和这里的规则一致：公开变量的名单、格式号、长度上限。
+    #[test]
+    fn schema_matches_the_rules() {
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../docs/design/themes/theme.schema.json"
+        ))
+        .unwrap();
+        let properties = &schema["properties"];
+
+        let mut tokens: Vec<&str> = properties["tokens"]["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut public = PUBLIC_TOKENS.to_vec();
+        tokens.sort_unstable();
+        public.sort_unstable();
+        assert_eq!(tokens, public);
+
+        assert_eq!(properties["format"]["const"], FORMAT);
+        assert_eq!(properties["name"]["maxLength"], MAX_TEXT_CHARS);
+        assert_eq!(properties["author"]["maxLength"], MAX_TEXT_CHARS);
+        assert_eq!(schema["$defs"]["value"]["maxLength"], MAX_TOKEN_VALUE_CHARS);
+    }
+
+    /// 文档里的示例主题能通过检查，每个变量都生效。
+    #[test]
+    fn docs_example_theme_is_valid() {
+        let theme = parse(
+            include_bytes!("../../../../docs/design/themes/example/theme.json"),
+            Some(include_bytes!("../../../../docs/design/themes/example/theme.css").as_slice()),
+        )
+        .unwrap();
+
+        assert_eq!(theme.id, "harbor");
+        assert_eq!(theme.ignored_tokens, Vec::<String>::new());
     }
 }
