@@ -22,7 +22,8 @@ export interface Theme {
 
 /** 主题库里的一个文件夹。读出来了 `theme` 有值；读不出来 `error` 写着原因。 */
 export interface InstalledTheme {
-  folder: string;
+  /** 文件夹名，不是路径。删除按它删：坏掉的主题读不出 id */
+  folderName: string;
   theme: Theme | null;
   error: string | null;
 }
@@ -34,6 +35,6 @@ export const themesApi = {
   /** 导入用户选的 theme.json，同一文件夹里的 theme.css 一起导入；已有同 id 的主题时替换它 */
   import: (path: string) => invoke<Theme>("theme_import", { path }),
   /** 按文件夹名删，坏掉的主题也能删 */
-  delete: (folder: string) => invoke<void>("theme_delete", { folder }),
+  delete: (folderName: string) => invoke<void>("theme_delete", { folderName }),
   openFolder: () => invoke<void>("theme_open_folder"),
 };

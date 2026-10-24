@@ -109,15 +109,15 @@ export default function AppearanceTab() {
     setDeleting(null);
     if (!target) return;
     void act(async () => {
-      await themesApi.delete(target.folder);
+      await themesApi.delete(target.folderName);
       // 删的是正在用的主题：换回简约
-      if (customIdOf(theme) === target.folder) chooseBuiltIn("minimal");
+      if (customIdOf(theme) === target.folderName) chooseBuiltIn("minimal");
       await reload();
     });
   };
 
   const activeId = customIdOf(theme);
-  const activeEntry = library?.find((item) => item.folder === activeId);
+  const activeEntry = library?.find((item) => item.folderName === activeId);
   // 选中的自定义主题在主题库里用不了，窗口现在显示的是简约
   const unavailable = activeId !== null && library !== null && !activeEntry?.theme;
 
@@ -226,16 +226,16 @@ export default function AppearanceTab() {
               {library.map((item) =>
                 item.theme ? (
                   <CustomThemeCard
-                    key={item.folder}
+                    key={item.folderName}
                     theme={item.theme}
-                    active={item.folder === activeId}
+                    active={item.folderName === activeId}
                     disabled={busy}
                     onChoose={(next) => void chooseCustom(next)}
                     onDelete={() => setDeleting(item)}
                   />
                 ) : (
                   <BrokenThemeCard
-                    key={item.folder}
+                    key={item.folderName}
                     item={item}
                     disabled={busy}
                     onDelete={() => setDeleting(item)}
@@ -253,13 +253,13 @@ export default function AppearanceTab() {
         title={
           deleting
             ? t("settings.appearance.custom.deleteTitle", {
-                name: deleting.theme?.name ?? deleting.folder,
+                name: deleting.theme?.name ?? deleting.folderName,
               })
             : ""
         }
         message={
           deleting
-            ? t("settings.appearance.custom.deleteMessage", { folder: deleting.folder })
+            ? t("settings.appearance.custom.deleteMessage", { folder: deleting.folderName })
             : undefined
         }
         confirmLabel={t("settings.appearance.custom.delete")}
@@ -339,7 +339,7 @@ function BrokenThemeCard({
       <span className={styles.meta}>
         <span className={styles.name}>
           <TriangleAlert size={14} strokeWidth={2} className={styles.brokenIcon} />
-          {item.folder}
+          {item.folderName}
         </span>
         <span className={styles.desc}>{item.error}</span>
       </span>

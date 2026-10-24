@@ -28,7 +28,7 @@ const ocean: Theme = {
 };
 const OCEAN_CSS = "[data-part='card'] { border-color: #0af; }";
 
-const ok = (theme: Theme): InstalledTheme => ({ folder: theme.id, theme, error: null });
+const ok = (theme: Theme): InstalledTheme => ({ folderName: theme.id, theme, error: null });
 
 describe("themeLibrary", () => {
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe("themeLibrary", () => {
 
   it.each([
     ["主题库里没有了", [] as InstalledTheme[]],
-    ["主题坏了", [{ folder: "ocean", theme: null, error: "theme: no theme.json" }]],
+    ["主题坏了", [{ folderName: "ocean", theme: null, error: "theme: no theme.json" }]],
   ])("%s：保留选择，先显示简约", async (_, list) => {
     await chooseCustomTheme(ocean);
     api.list.mockResolvedValue(list);

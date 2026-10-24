@@ -41,7 +41,7 @@ export function watchThemeLibrary(): void {
 async function syncActiveTheme(themes: InstalledTheme[]): Promise<void> {
   const id = customIdOf(getStoredTheme());
   if (id === null) return;
-  const theme = themes.find((t) => t.folder === id)?.theme ?? null;
+  const theme = themes.find((t) => t.folderName === id)?.theme ?? null;
   let next: CustomTheme | null = null;
   if (theme !== null) {
     try {
