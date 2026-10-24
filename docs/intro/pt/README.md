@@ -95,12 +95,14 @@
 
 ## Principais recursos
 
-- 📊 **Veja para onde vai o seu tempo** — Registra automaticamente a atividade do computador em segundo plano, exibe os dados em vários gráficos e permite consultar estatísticas por categoria (trabalho, entretenimento etc.)
-- 🤖 **Relatório diário por IA** — Um modelo local resume as atividades do dia por período e as transforma em um relatório diário
-- 💬 **Chat com IA** — Pergunte "o que eu fiz hoje?" ou "quanto tempo passei no projeto X este mês?" — respondido com base nos seus próprios registros
-- 🔍 **Busca na memória de tela** — Encontre qualquer texto que já apareceu na sua tela e vá direto à captura e ao momento (capturas e OCR vêm desativados por padrão, ative se quiser)
-- ☁️ **Agregação multi-dispositivo** — Sincronize opcionalmente os dados de atividade pelo Google Drive ou WebDAV e combine dados de vários dispositivos para análise
-- 🔒 **Local e privado por padrão** — Os dados ficam apenas na sua máquina
+- **Veja para onde vai o seu tempo** — Registra automaticamente a atividade do computador em segundo plano, exibe os dados em vários gráficos e permite consultar estatísticas por categoria (trabalho, entretenimento etc.)
+- **Relatório diário por IA** — Um modelo local resume as atividades do dia por período e as transforma em um relatório diário
+- **Chat com IA** — Pergunte "o que eu fiz hoje?" ou "quanto tempo passei no projeto X este mês?" — respondido com base nos seus próprios registros
+- **Busca na memória de tela** — Encontre qualquer texto que já apareceu na sua tela e vá direto à captura e ao momento (capturas e OCR vêm desativados por padrão, ative se quiser)
+- **Agregação multi-dispositivo** — Sincronize opcionalmente os dados de atividade pelo Google Drive ou WebDAV e combine dados de vários dispositivos para análise
+- **Local e privado por padrão** — Os dados ficam apenas na sua máquina
+- **Mercado de plugins** — Usuários e desenvolvedores podem criar suas próprias ferramentas de plugin para aumentar a produtividade. Saiba mais no [Mercado de plugins](https://github.com/Tomotsugu-dev/hindsight-plugins)
+- **Temas personalizados** — Importe um arquivo de tema em Configurações → Aparência → Temas personalizados para personalizar as cores, o modo claro ou escuro e o layout da página.
 
 ## Começo rápido
 

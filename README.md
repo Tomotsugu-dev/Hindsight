@@ -95,12 +95,14 @@
 
 ## Key Features
 
-- 📊 **See where your time goes** — Automatically records computer activity in the background and visualizes it in a range of charts, with statistics by activity category (such as entertainment or work)
-- 🤖 **AI daily report** — A local model summarizes your activities throughout the day into a daily report
-- 💬 **AI chat** — Ask "What did I do today?" or "How long did I spend on project X this month?" — answered from your own records
-- 🔍 **Screen memory search** — Find any text that ever appeared on your screen and jump to the screenshot and moment (screenshots and OCR are off by default, enable as needed)
-- ☁️ **Multi-device aggregation** — Optionally sync activity data with Google Drive or WebDAV and combine data from multiple devices for analysis
-- 🔒 **Local & privacy-first** — Data stays on your machine by default
+- **See where your time goes** — Automatically records computer activity in the background and visualizes it in a range of charts, with statistics by activity category (such as entertainment or work)
+- **AI daily report** — A local model summarizes your activities throughout the day into a daily report
+- **AI chat** — Ask "What did I do today?" or "How long did I spend on project X this month?" — answered from your own records
+- **Screen memory search** — Find any text that ever appeared on your screen and jump to the screenshot and moment (screenshots and OCR are off by default, enable as needed)
+- **Multi-device aggregation** — Optionally sync activity data with Google Drive or WebDAV and combine data from multiple devices for analysis
+- **Local & privacy-first** — Data stays on your machine by default
+- **Plugin marketplace** — Users and developers can create their own plugin tools to boost productivity. Learn more in the [Plugin Marketplace](https://github.com/Tomotsugu-dev/hindsight-plugins)
+- **Custom themes** — Import a theme file from Settings → Appearance → Custom Themes to customize colors, light or dark mode, and page layout.
 
 ## Quick Start
 
