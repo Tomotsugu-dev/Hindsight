@@ -91,6 +91,8 @@ prototypes/
 
 # demo 构建产物：npm run build:demo 生成，不入仓
 web/demo/
+# 主题页构建产物：npm run build:themes 由 web/themes-src 生成，不入仓
+web/themes/
 
 # 官网整站产物：npm run build:web 组装，部署到 Cloudflare Workers 静态资源，不入仓
 dist-web/

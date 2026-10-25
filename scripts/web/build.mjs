@@ -16,6 +16,7 @@ const INTRO = path.join(ROOT, "docs/intro");
 // Exclude source-only files and the separately authenticated internal tools.
 const SOURCE_ONLY = new Set([
   "demo-src",
+  "themes-src",
   "tsconfig.json",
   "vite.config.ts",
   "wrangler.jsonc",
@@ -41,9 +42,9 @@ const walk = (dir) =>
   );
 
 function build() {
-  for (const required of ["demo/index.html", "docs/index.html"]) {
+  for (const required of ["demo/index.html", "themes/index.html", "docs/index.html"]) {
     if (!existsSync(path.join(WEB, required))) {
-      console.error(`缺少 web/${required}，先跑 npm run build:demo 和 npm run build:docs`);
+      console.error(`缺少 web/${required}，先跑 npm run build:demo、build:themes 和 build:docs`);
       process.exit(1);
     }
   }

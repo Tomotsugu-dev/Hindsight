@@ -8,8 +8,16 @@
 /demo/*
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn-avatars.huggingface.co https://raw.githubusercontent.com https://cdn.simpleicons.org; font-src 'self' data:; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'
 
+# 主题页显示作者写的名称、简介和链接。React 会转义文字，链接只收 https；CSP 再兜一层：只运行
+# 本站的脚本，图片只从本站和放 logo 的 jsDelivr 来。/themes/data/* 由 Worker 回答，不套这些头
+/themes/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'
+
 # Vite 产物的文件名带内容哈希，内容一变文件名就变，可以永久缓存
 /demo/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/themes/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 # 视频和封面重录后文件名不变，缓存一天
