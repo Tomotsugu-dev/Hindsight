@@ -15,7 +15,9 @@
     // /en/index.html 以 /en/ 提供，/en 自动跳到 /en/
     "html_handling": "auto-trailing-slash"
   },
-  // hindsight.<账号子域>.workers.dev，用于切换域名前的验证和 PR 预览
+  // 正式域名。Cloudflare 自动维护 DNS 记录和证书
+  "routes": [{ "pattern": "hindsight.kyosweb.com", "custom_domain": true }],
+  // hindsight.<账号子域>.workers.dev，用于验证和 PR 预览
   "workers_dev": true,
   "preview_urls": true
 }
