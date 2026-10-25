@@ -1,11 +1,8 @@
 <p align="center">
-  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
+  <img src="../../social-preview.png" alt="Hindsight — 本機優先的活動日誌與 AI 復盤工具" width="100%">
 </p>
-
-<h1 align="center">Hindsight</h1>
-
 <p align="center">
-  <strong>本機優先的電腦活動日誌與 AI 復盤工具</strong><br/>
+<br/>
   自動記錄應用與視窗活動，按日、週、月還原時間去向；無需手動計時，也無需維護專案標籤。
 </p>
 
@@ -60,12 +57,12 @@
 
 <p align="center">
   <img src="./imgs/app_detail.png" alt="應用明細" width="800"><br/>
-  <sub><b>應用明細</b> · 點開任意應用，看到都在應用中做什麼</sub>
+  <sub><b>應用明細</b> · 點開任意應用，查看你在其中做了什麼</sub>
 </p>
 
 <p align="center">
   <img src="./imgs/weekly.png" alt="週統計" width="800"><br/>
-  <sub><b>週統計</b> · 一週七天的工作情況</sub>
+  <sub><b>週統計</b> · 一週的時間去向，一目了然</sub>
 </p>
 
 <p align="center">
@@ -90,7 +87,7 @@
 
 <p align="center">
   <img src="./imgs/cloud_sync.png" alt="多裝置同步" width="800"><br/>
-  <sub><b>多裝置同步</b> · 適合持有多台裝置的使用者</sub>
+  <sub><b>多裝置同步</b> · 適合使用多台電腦的使用者</sub>
 </p>
 
 ## 主要功能
@@ -112,16 +109,16 @@
 
 下載 `hindsight_x.y.z_x64-setup.exe`，按兩下安裝即可。
 
-> ⚠️ **首次執行會跳出「Windows 已保護你的電腦」** — 安裝檔尚未購買 EV 程式碼簽章憑證，會被 SmartScreen 攔下。點選「其他資訊」→「仍要執行」即可繼續安裝。
+> ⚠️ **首次執行會跳出「Windows 已保護你的電腦」** — 安裝檔尚未使用 EV 程式碼簽章憑證簽章，會被 SmartScreen 攔下。點選「其他資訊」→「仍要執行」即可繼續。
 
-### MacOS
+### macOS
 
 下載 `hindsight_x.y.z_universal.dmg`，按兩下掛載後將 Hindsight 拖入「應用程式」即可。
 
-## License
+## 授權條款
 
 <p align="center">
   本專案基於 <a href="../../../LICENSE"><b>GPL 3.0</b></a> 開源，可依協議條款使用、修改與散布。<br/>
   舊版 MIT 授權與第三方授權的說明請見<a href="../../../CONTRIBUTING.md#license">貢獻指南</a>。<br/>
-  <sub>© 2026 Hindsight contributors</sub>
+  <sub>© 2026 Hindsight 貢獻者</sub>
 </p>
