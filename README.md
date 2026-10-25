@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/social-preview.png" alt="Hindsight — Local-First Activity Log & AI Review" width="100%">
+  <img src="docs/intro/social-preview.png" alt="Hindsight — Local-First Activity Log & AI Review" width="100%">
 </p>
 <p align="center">
 <br/>

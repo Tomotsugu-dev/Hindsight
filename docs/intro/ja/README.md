@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../social-preview.png" alt="Hindsight — ローカルファーストのアクティビティログ & AI 振り返り" width="100%">
+  <img src="../social-preview.png" alt="Hindsight — ローカルファーストのアクティビティログ & AI 振り返り" width="100%">
 </p>
 <p align="center">
 <br/>
