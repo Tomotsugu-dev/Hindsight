@@ -20,6 +20,7 @@ test("public site build preserves public pages and omits the internal dashboard 
     ["index.html", '<!doctype html><link href="/assets/site.css"><a href="/demo/">Demo</a><a href="/docs/">Docs</a><video src="/assets/video/fixture.mp4" poster="/assets/video/fixture.jpg"></video>'],
     ["assets/site.css", "body { color: #123; }"],
     ["demo/index.html", "<!doctype html><title>Public demo</title>"],
+    ["themes/index.html", "<!doctype html><title>Public themes</title>"],
     ["docs/index.html", "<!doctype html><title>Public documentation</title>"],
   ]);
   for (const [relative, contents] of publicFiles) write(`web/${relative}`, contents);
@@ -29,6 +30,8 @@ test("public site build preserves public pages and omits the internal dashboard 
   write("web/internal/github-insights/worker.mjs", 'export default { fetch: () => new Response("Internal worker marker") };');
   write("web/internal/github-insights/nested/private-marker.txt", "synthetic internal-only marker");
   write("web/worker.js", "source-only public Worker");
+  write("web/themes-data.js", "source-only Worker module");
+  write("web/headers.test.js", "test only");
   write("web/wrangler.jsonc", "{}");
   write("scripts/web/build.mjs", buildSource);
 
@@ -41,5 +44,7 @@ test("public site build preserves public pages and omits the internal dashboard 
   assert.equal(readFileSync(path.join(root, "dist-web/assets/video/fixture.jpg"), "utf8"), "synthetic poster fixture");
   assert.equal(existsSync(path.join(root, "dist-web/internal")), false, "internal tools must not be published with the public site");
   assert.equal(existsSync(path.join(root, "dist-web/worker.js")), false);
+  assert.equal(existsSync(path.join(root, "dist-web/themes-data.js")), false);
+  assert.equal(existsSync(path.join(root, "dist-web/headers.test.js")), false);
   assert.equal(existsSync(path.join(root, "dist-web/wrangler.jsonc")), false);
 });
