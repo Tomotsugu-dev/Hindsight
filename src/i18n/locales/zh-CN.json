@@ -132,6 +132,7 @@
         "title": "自定义主题",
         "import": "导入主题",
         "openFolder": "打开主题文件夹",
+        "getThemes": "获取主题",
         "fileFilter": "主题文件",
         "loading": "正在读取主题…",
         "loadFailed": "读取主题失败：{{error}}",

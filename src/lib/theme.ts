@@ -74,7 +74,8 @@ export function getStoredCustomTheme(): CustomTheme | null {
   }
 }
 
-function isCustomTheme(v: unknown): v is CustomTheme {
+/** 读出来的值是不是 CustomTheme：localStorage 里的副本、官网主题预览读到的文件都用它检查。 */
+export function isCustomTheme(v: unknown): v is CustomTheme {
   if (typeof v !== "object" || v === null) return false;
   const t = v as Record<string, unknown>;
   return (

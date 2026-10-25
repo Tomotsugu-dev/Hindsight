@@ -132,6 +132,7 @@
         "title": "Temas personalizados",
         "import": "Importar tema",
         "openFolder": "Abrir carpeta de temas",
+        "getThemes": "Obtener temas",
         "fileFilter": "Archivo de tema",
         "loading": "Leyendo temas…",
         "loadFailed": "No se pudieron leer los temas: {{error}}",

@@ -132,6 +132,7 @@
         "title": "自訂主題",
         "import": "匯入主題",
         "openFolder": "開啟主題資料夾",
+        "getThemes": "取得主題",
         "fileFilter": "主題檔案",
         "loading": "正在讀取主題…",
         "loadFailed": "讀取主題失敗：{{error}}",

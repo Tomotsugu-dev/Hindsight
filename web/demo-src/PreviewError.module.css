@@ -1,0 +1,15 @@
+/* 盖在 demo 顶上，不挤占页面的位置 */
+.banner {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--status-error-soft);
+  color: var(--status-error);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+}

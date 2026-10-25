@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Check,
   FileUp,
   FolderOpen,
   Paintbrush,
   Palette,
+  Store,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -28,8 +30,10 @@ import { logError } from "../../../lib/logger";
 import { pickDescription } from "../../../utils/pickDescription";
 import styles from "./AppearanceTab.module.css";
 
+const THEMES_URL = "https://hindsight.kyosweb.com/themes/";
+
 export default function AppearanceTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // 主题是纯前端偏好（localStorage），不走后端 settings；本地 state 仅用于高亮选中项
   const [theme, setTheme] = useState<ThemeChoice>(getStoredTheme);
   /** 主题库里的主题；还没读完时是 null */
@@ -100,6 +104,14 @@ export default function AppearanceTab() {
   const openFolder = () => {
     themesApi.openFolder().catch((e) => {
       logError("theme.openFolder", e);
+      setActionError(String(e));
+    });
+  };
+
+  // 网页按 lang 选显示的语言，和应用界面一致
+  const getThemes = () => {
+    openUrl(`${THEMES_URL}?lang=${encodeURIComponent(i18n.language)}`).catch((e) => {
+      logError("theme.getThemes", e);
       setActionError(String(e));
     });
   };
@@ -176,6 +188,10 @@ export default function AppearanceTab() {
         <div className={styles.body}>
           {/* 按钮不放标题行：设置页只有 656px 宽，放标题行会把说明挤成窄窄一列 */}
           <div className={styles.actions}>
+            <button type="button" className={styles.btn} onClick={getThemes}>
+              <Store size={14} strokeWidth={1.85} />
+              {t("settings.appearance.custom.getThemes")}
+            </button>
             <button
               type="button"
               className={styles.btn}

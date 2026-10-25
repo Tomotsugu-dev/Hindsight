@@ -1,11 +1,18 @@
-// 只处理 /assets/video/*（web/wrangler.jsonc 的 run_worker_first），其它请求由静态资源直接响应。
+// 只处理 /themes/data/* 和 /assets/video/*（web/wrangler.jsonc 的 run_worker_first），其它请求由静态
+// 资源直接响应。/themes/data/* 转发主题文件，见 themes-data.js。
 //
 // 静态资源不支持 Range 请求：带 Range 也返回 200 和整个文件。Safari 播放 <video> 要求服务器
 // 支持按字节范围取（先发 Range: bytes=0-1 探测，拿不到 206 就不播），所以视频在这里切片，
 // 返回 206。只支持单个范围；多个范围按 RFC 9110 退回 200 整个文件。
 
+import { serveThemeData, THEMES_DATA_PREFIX } from "./themes-data.js";
+
 export default {
   async fetch(request, env, ctx) {
+    if (new URL(request.url).pathname.startsWith(THEMES_DATA_PREFIX)) {
+      return serveThemeData(request);
+    }
+
     const res = await env.ASSETS.fetch(request);
     if (res.status !== 200) return res;
 

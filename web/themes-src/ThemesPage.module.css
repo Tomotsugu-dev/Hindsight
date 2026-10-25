@@ -1,0 +1,292 @@
+/* 配色、圆角、阴影用官网 styles.css 里的变量，和首页一致 */
+
+.main {
+  padding-top: 48px;
+  padding-bottom: 96px;
+}
+
+.header {
+  max-width: 720px;
+  margin-bottom: 32px;
+}
+
+.title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.intro {
+  margin-top: 12px;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--text-mute);
+}
+
+.install {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-faded);
+}
+
+/* 读取中、读不到、没有主题 */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  color: var(--text-mute);
+  text-align: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px 4px;
+}
+
+.name {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--text-mute);
+}
+
+.description {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.downloads {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-mute);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 18px 16px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color var(--trans-fast),
+    color var(--trans-fast),
+    background var(--trans-fast);
+}
+
+.button:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.primary:hover {
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+/* —— 色块：缩小的窗口。颜色由 ThemeCard 写在 --sw-* 上 —— */
+
+.swatch {
+  display: flex;
+  height: 140px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sw-app);
+}
+
+.swatchSidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 28%;
+  padding: 16px 10px;
+  border-right: 1px solid var(--sw-border);
+  background: var(--sw-sidebar);
+}
+
+.swatchNav {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--sw-muted);
+  opacity: 0.35;
+}
+
+.swatchNavActive {
+  background: var(--sw-accent);
+  opacity: 1;
+}
+
+.swatchMain {
+  flex: 1;
+  padding: 14px;
+}
+
+.swatchCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 12px;
+  border: 1px solid var(--sw-border);
+  border-radius: 8px;
+  background: var(--sw-card);
+}
+
+.swatchTitle {
+  width: 55%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--sw-strong);
+}
+
+.swatchLine {
+  width: 80%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--sw-muted);
+  opacity: 0.6;
+}
+
+.swatchBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 40px;
+  margin-top: auto;
+}
+
+.swatchBar {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  background: var(--sw-accent);
+  opacity: 0.85;
+}
+
+/* —— 预览面板 —— */
+
+/* 盖过首页样式里 z-index 是 100 的导航栏 */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 24, 0.55);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  height: min(780px, 100%);
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panelTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-mute);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--bg-warm);
+  color: var(--text);
+}
+
+.frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+}
+
+/* 手机上占满整屏 */
+@media (max-width: 640px) {
+  .backdrop {
+    padding: 0;
+  }
+
+  .panel {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}
