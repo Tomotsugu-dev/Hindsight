@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../social-preview.png" alt="Hindsight — 本機優先的活動日誌與 AI 復盤工具" width="100%">
+  <img src="../social-preview.png" alt="Hindsight — 本機優先的活動日誌與 AI 復盤工具" width="100%">
 </p>
 <p align="center">
 <br/>
