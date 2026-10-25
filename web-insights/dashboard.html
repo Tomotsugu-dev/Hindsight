@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="same-origin" />
+    <title>GitHub Insights · Hindsight</title>
+    <link rel="stylesheet" href="./dashboard.css" />
+    <script src="./dashboard.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Hindsight 首页"><span class="brand-mark" aria-hidden="true">h</span><span>Hindsight</span></a>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <span class="topbar-section">GitHub Insights</span>
+      <span class="private-badge"><span aria-hidden="true">●</span> 内部看板</span>
+    </header>
+
+    <main class="dashboard">
+      <section class="page-heading" aria-labelledby="pageTitle">
+        <div><p class="eyebrow">PROJECT ANALYTICS</p><h1 id="pageTitle">项目访问与增长<span class="heading-dot">.</span></h1><p class="page-description">持续记录仓库访问、下载和关注的变化。</p></div>
+        <div class="repository-controls">
+          <label class="field-label" for="repositorySelect">当前仓库</label>
+          <div class="repository-control-row"><select id="repositorySelect" disabled aria-label="选择仓库"><option>正在读取仓库…</option></select><button id="refreshButton" class="icon-button" type="button" aria-label="刷新已采集的数据" title="刷新已采集的数据" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 7A7 7 0 0 1 18 5l2 2M4 17l2 2a7 7 0 0 0 11.9-2" /></svg></button></div>
+        </div>
+      </section>
+
+      <div id="notice" class="notice notice-loading" role="status" aria-live="polite"><span class="notice-indicator" aria-hidden="true"></span><div><strong id="noticeTitle">正在读取采集记录</strong><p id="noticeMessage">稍等片刻，正在获取最新数据。</p><button id="noticeAction" class="text-button" type="button" hidden>重试</button></div></div>
+
+      <div class="data-meta"><p id="collectionMeta">尚未读取采集时间</p><p><span class="utc-badge">UTC</span> 统计日为日本时间 09:00 至次日 09:00</p></div>
+
+      <section aria-labelledby="overviewTitle">
+        <div class="section-heading"><div><h2 id="overviewTitle">项目概览</h2><p id="overviewDate">日流量与最新仓库快照</p></div><a id="githubLink" class="subtle-link" href="https://github.com/" target="_blank" rel="noopener noreferrer" hidden>在 GitHub 查看 <span aria-hidden="true">↗</span></a></div>
+        <div class="metric-grid" id="metricGrid" aria-busy="true"></div>
+      </section>
+
+      <section class="panel trend-panel" aria-labelledby="trendTitle">
+        <div class="panel-heading chart-heading"><div><p class="section-kicker">GROWTH OVER TIME</p><h2 id="trendTitle">增长趋势</h2></div><div class="chart-controls"><label class="sr-only" for="metricSelect">趋势指标</label><select id="metricSelect"><option value="views">浏览量 · PV</option><option value="visitors">独立访客 · 日 UV</option><option value="clones">Clone 次数</option><option value="cloners">独立 Clone 用户 · 每日</option><option value="stars">Star 总数</option><option value="forks">Fork 总数</option><option value="watchers">订阅人数</option><option value="downloads">Release 累计下载</option></select><div class="range-control" role="group" aria-label="选择时间范围"><button type="button" data-range="7" aria-pressed="false">7 天</button><button type="button" data-range="30" aria-pressed="true">30 天</button><button type="button" data-range="90" aria-pressed="false">90 天</button><button type="button" data-range="all" aria-pressed="false">全部</button></div></div></div>
+        <div class="trend-summary"><div><span id="trendSummaryLabel">所选时段</span><strong id="trendSummaryValue">—</strong><span id="trendSummaryUnit"></span></div><p id="coverageLabel">等待采集记录</p></div>
+        <div class="chart-wrap" id="chartWrap"><svg id="trendChart" viewBox="0 0 1000 270" role="img" tabindex="0" aria-label="增长趋势图" aria-describedby="chartKeyboardHint"></svg><div id="chartTooltip" class="chart-tooltip" hidden></div><div id="chartEmpty" class="chart-empty" hidden><span class="empty-symbol" aria-hidden="true">↗</span><strong>这个时段还没有数据</strong><p>采集成功后会在这里出现；缺失记录不会按 0 计算。</p></div></div>
+        <div class="chart-footer"><p id="chartFootnote">缺失日期显示断点；当天 UTC 数据尚未结束。</p><p id="chartKeyboardHint">聚焦图表后，可用 ← → 查看每日数据。</p></div>
+      </section>
+
+      <section class="source-section" aria-labelledby="sourcesTitle">
+        <div class="section-heading"><div><h2 id="sourcesTitle">访问来源与热门页面</h2><p id="rollingMeta">最近 14 天滚动榜单 · 每次采集保留快照，不是每日明细</p></div><span class="soft-badge">TOP 10 · ROLLING 14 DAYS</span></div>
+        <div class="two-column">
+          <section class="panel table-panel" aria-labelledby="referrersTitle"><div class="panel-heading"><h3 id="referrersTitle">来源网站</h3><span class="table-note">浏览 / 独立访客</span></div><div class="table-scroll"><table><thead><tr><th scope="col">来源</th><th scope="col" class="numeric">PV</th><th scope="col" class="numeric">UV</th></tr></thead><tbody id="referrersBody"><tr><td colspan="3" class="table-empty">正在读取来源数据…</td></tr></tbody></table></div></section>
+          <section class="panel table-panel" aria-labelledby="pathsTitle"><div class="panel-heading"><h3 id="pathsTitle">热门页面</h3><span class="table-note">浏览 / 独立访客</span></div><div class="table-scroll"><table><thead><tr><th scope="col">页面</th><th scope="col" class="numeric">PV</th><th scope="col" class="numeric">UV</th></tr></thead><tbody id="pathsBody"><tr><td colspan="3" class="table-empty">正在读取页面数据…</td></tr></tbody></table></div></section>
+        </div>
+      </section>
+
+      <section class="panel table-panel" aria-labelledby="dailyTitle"><div class="panel-heading"><div><p class="section-kicker">DAILY RECORDS</p><h2 id="dailyTitle">每日记录</h2><p class="panel-description">使用上方时间范围。空白指标表示未采集，不代表 0；累计指标来自当天快照。</p></div><button id="exportButton" class="secondary-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m-3-3 3 3 3-3M4 13v4h12v-4" /></svg>导出 CSV</button></div><div class="table-scroll"><table class="daily-table"><thead><tr><th scope="col">统计日期 · UTC</th><th scope="col" class="numeric">PV</th><th scope="col" class="numeric">日 UV</th><th scope="col" class="numeric">Clones</th><th scope="col" class="numeric">独立 Cloners</th><th scope="col" class="numeric">Stars</th><th scope="col" class="numeric">Forks</th><th scope="col" class="numeric">订阅人数</th><th scope="col" class="numeric">累计下载</th></tr></thead><tbody id="dailyBody"><tr><td colspan="9" class="table-empty">正在读取每日记录…</td></tr></tbody></table></div><div class="table-bottom"><span id="dailyCount">—</span><button id="moreRowsButton" class="text-button" type="button" hidden>显示更多记录</button></div></section>
+
+      <section class="panel table-panel" aria-labelledby="releasesTitle"><div class="panel-heading"><div><p class="section-kicker">RELEASE ADOPTION</p><h2 id="releasesTitle">发布文件下载</h2><p class="panel-description">GitHub Release 附件的累计下载，不含自动生成的源码压缩包，也不代表安装或活跃用户。</p></div><span id="releaseCount" class="soft-badge">等待记录</span></div><div class="table-scroll"><table><thead><tr><th scope="col">版本 / 文件</th><th scope="col">发布日期</th><th scope="col" class="numeric">大小</th><th scope="col" class="numeric">累计下载</th><th scope="col" class="numeric">较上次快照</th></tr></thead><tbody id="releasesBody"><tr><td colspan="5" class="table-empty">正在读取发布记录…</td></tr></tbody></table></div></section>
+
+      <footer class="dashboard-footer"><span>Hindsight <span aria-hidden="true">/</span> GitHub Insights</span><p>日 UV 不能相加得到跨日去重人数。流量由 GitHub 汇总，无法识别具体访客。</p></footer>
+    </main>
+    <noscript><p class="noscript-notice">这个内部看板需要启用 JavaScript，才能读取采集数据。</p></noscript>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "hindsight-insights",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-25",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "hindsight.kyosweb.com/internal/github-insights", "zone_name": "kyosweb.com" },
+    { "pattern": "hindsight.kyosweb.com/internal/github-insights/*", "zone_name": "kyosweb.com" }
+  ],
+  "kv_namespaces": [{ "binding": "INSIGHTS", "id": "45bdf03c8fe5441eaa0e6d2f47b4dfa6" }],
+  "vars": {
+    "INSIGHTS_HOST": "hindsight.kyosweb.com",
+    "ACCESS_AUD": ""
+  },
+  "rules": [
+    { "type": "Text", "globs": ["**/dashboard.html", "**/dashboard.css", "**/dashboard.js"], "fallthrough": true }
+  ]
+}
