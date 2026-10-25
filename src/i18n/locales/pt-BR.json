@@ -1803,7 +1803,11 @@
       "title": "Loja de plugins",
       "empty": "Ainda não há outros plugins na loja.",
       "offline": "Não foi possível acessar a loja de plugins: {{error}}",
-      "install": "Instalar"
+      "install": "Instalar",
+      "search": "Pesquisar plugins",
+      "noMatch": "Nenhum plugin corresponde a \"{{query}}\".",
+      "downloads": "Downloads",
+      "repo": "Abrir o repositório no GitHub"
     },
     "local": {
       "title": "Instalar de um arquivo",

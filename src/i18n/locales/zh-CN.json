@@ -1800,7 +1800,11 @@
       "title": "插件市场",
       "empty": "市场里暂时没有其他插件。",
       "offline": "连不上插件市场：{{error}}",
-      "install": "安装"
+      "install": "安装",
+      "search": "搜索插件",
+      "noMatch": "没有找到含有「{{query}}」的插件。",
+      "downloads": "下载次数",
+      "repo": "在 GitHub 上打开仓库"
     },
     "local": {
       "title": "从文件安装",
