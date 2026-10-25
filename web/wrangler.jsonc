@@ -3,13 +3,13 @@
 {
   "name": "hindsight",
   "compatibility_date": "2026-10-24",
-  // 只给视频补 Range 支持，见 worker.js
+  // 转发主题文件、给视频补 Range 支持，见 worker.js
   "main": "worker.js",
   "assets": {
     "directory": "../dist-web",
     "binding": "ASSETS",
     // 只有这些路径先进 worker.js；其余请求由静态资源直接响应，不计 Worker 请求数
-    "run_worker_first": ["/assets/video/*"],
+    "run_worker_first": ["/themes/data/*", "/assets/video/*"],
     // 找不到文件时返回最近的 404.html 和 404 状态码，不当 SPA 处理
     "not_found_handling": "404-page",
     // /en/index.html 以 /en/ 提供，/en 自动跳到 /en/
