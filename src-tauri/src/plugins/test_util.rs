@@ -133,6 +133,7 @@ pub fn online_plugin(id: &str, versions: &[&str]) -> OnlinePlugin {
             .collect(),
         icon_url: None,
         official: false,
+        download_count: None,
     }
 }
 

@@ -239,6 +239,11 @@ pub enum Error {
     #[error("plugins.json format version {0} is not supported")]
     PluginsJsonFormatVersion(u32),
 
+    /// downloads.json has a `format_version` this version does not know: it was written for a
+    /// newer Hindsight.
+    #[error("downloads.json format version {0} is not supported")]
+    DownloadsJsonFormatVersion(u32),
+
     /// Downloading from the plugin market failed: the list does not have this version, the file
     /// is too large, or the SHA-256 or manifest does not match.
     #[error("plugin download: {0}")]

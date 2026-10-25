@@ -20,6 +20,11 @@ use crate::storage::DbPool;
 pub const PLUGINS_JSON_URL: &str =
     "https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/main/plugins.json";
 
+/// The download count of each plugin. hindsight-plugins counts them once a day and writes them to
+/// the stats branch.
+pub const DOWNLOADS_JSON_URL: &str =
+    "https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/stats/downloads.json";
+
 /// The folder of plugin icons in the official repository. A plugin's icon is `<id>.png` in it.
 const ICONS_URL: &str =
     "https://raw.githubusercontent.com/Tomotsugu-dev/hindsight-plugins/main/icons/";
@@ -29,6 +34,9 @@ const OFFICIAL_ACCOUNT: &str = "Tomotsugu-dev";
 
 /// The current plugins.json format version.
 const PLUGINS_JSON_FORMAT_VERSION: u32 = 2;
+
+/// The current downloads.json format version.
+const DOWNLOADS_JSON_FORMAT_VERSION: u32 = 1;
 
 /// The timeout for network requests from the market page.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
@@ -75,11 +83,13 @@ pub enum InstallKind {
 
 /// Lists the items displayed on the plugin market page.
 ///
-/// `online` is the result of [`fetch_online`].
+/// `online` is the result of [`fetch_online`]. `download_counts` is the download count of each
+/// plugin from [`fetch_download_counts`], or empty if they cannot be read.
 pub async fn list(
     pool: &DbPool,
     zips_dir: &Path,
     online: Result<Vec<OnlinePlugin>>,
+    download_counts: &BTreeMap<String, u64>,
 ) -> Result<Market> {
     let installed = repo::list(pool).await?;
     let mut local_zips = scan_local_zips(zips_dir)?;
@@ -92,13 +102,18 @@ pub async fn list(
         }
         zip.kind = kind;
     }
-    let (online, online_error) = match online {
+    let (mut online, online_error) = match online {
         Ok(plugins) => (mark_versions(&installed, plugins), None),
         Err(e) => (Vec::new(), Some(e.to_string())),
     };
-    let (installed_online, downloadable) = online
+    for plugin in &mut online {
+        plugin.download_count = download_counts.get(&plugin.id).copied();
+    }
+    let (installed_online, mut downloadable): (Vec<_>, Vec<_>) = online
         .into_iter()
         .partition(|o| installed.iter().any(|p| p.id == o.id));
+    // A stable sort: plugins with the same count keep their order in the online list
+    downloadable.sort_by_key(|p| Reverse(p.download_count.unwrap_or(0)));
     Ok(Market {
         installed,
         installed_online,
@@ -255,6 +270,10 @@ pub struct OnlinePlugin {
     /// so an author cannot set it alone
     #[serde(skip_deserializing)]
     pub official: bool,
+    /// How many times the plugin was downloaded. It is not in plugins.json; [`list`] fills it in
+    /// from downloads.json. `None` if downloads.json cannot be read or does not have this plugin
+    #[serde(skip_deserializing)]
+    pub download_count: Option<u64>,
 }
 
 /// One version of an online plugin.
@@ -274,8 +293,26 @@ pub struct OnlineVersion {
     pub kind: InstallKind,
 }
 
+/// Only the format version of a JSON file in the official repository. The rest of the file is not
+/// read.
+#[derive(Deserialize)]
+struct FormatVersion {
+    format_version: u32,
+}
+
 /// Downloads plugins.json from GitHub and parses it.
 pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
+    parse_plugins_json(&fetch_file(url).await?)
+}
+
+/// Downloads downloads.json from GitHub and reads the download count of each plugin: plugin id →
+/// count.
+pub async fn fetch_download_counts(url: &str) -> Result<BTreeMap<String, u64>> {
+    parse_downloads_json(&fetch_file(url).await?)
+}
+
+/// Downloads a small file in one piece.
+async fn fetch_file(url: &str) -> Result<Vec<u8>> {
     let client = reqwest::Client::builder().timeout(FETCH_TIMEOUT).build()?;
     let body = client
         .get(url)
@@ -284,7 +321,7 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
         .error_for_status()?
         .bytes()
         .await?;
-    parse_plugins_json(&body)
+    Ok(body.to_vec())
 }
 
 /// Parses plugins.json, then fills in each plugin's icon URL and whether it is official.
@@ -295,12 +332,6 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
 ///
 /// Returns [`Error::PluginsJsonFormatVersion`] if `format_version` is not known.
 fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
-    /// Only the format version of plugins.json. The rest of the file is not read.
-    #[derive(Deserialize)]
-    struct FormatVersion {
-        format_version: u32,
-    }
-
     /// The plugins are read as JSON values first and parsed one by one, so a plugin with an error
     /// drops only itself.
     #[derive(Deserialize)]
@@ -341,6 +372,25 @@ fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
             .is_some_and(|(owner, _)| owner.eq_ignore_ascii_case(OFFICIAL_ACCOUNT));
     }
     Ok(plugins)
+}
+
+/// Parses downloads.json: plugin id → download count.
+///
+/// # Errors
+///
+/// Returns [`Error::DownloadsJsonFormatVersion`] if `format_version` is not known.
+fn parse_downloads_json(json: &[u8]) -> Result<BTreeMap<String, u64>> {
+    #[derive(Deserialize)]
+    struct DownloadsJson {
+        downloads: BTreeMap<String, u64>,
+    }
+
+    // As with plugins.json, check the format version before the rest
+    let FormatVersion { format_version } = serde_json::from_slice(json)?;
+    if format_version != DOWNLOADS_JSON_FORMAT_VERSION {
+        return Err(Error::DownloadsJsonFormatVersion(format_version));
+    }
+    Ok(serde_json::from_slice::<DownloadsJson>(json)?.downloads)
 }
 
 /// Finds `version` of plugin `id` in the online list.
@@ -623,7 +673,9 @@ mod tests {
         focus_zip(&dir, "0.1.0");
         focus_zip(&dir, "0.2.0");
 
-        let market = list(&pool, &dir.0, Ok(vec![])).await.unwrap();
+        let market = list(&pool, &dir.0, Ok(vec![]), &BTreeMap::new())
+            .await
+            .unwrap();
 
         let installed: Vec<&str> = market
             .installed
@@ -676,7 +728,9 @@ mod tests {
             online_plugin("broken", &["1.0"]),
         ];
 
-        let market = list(&pool, &dir.0, Ok(online)).await.unwrap();
+        let market = list(&pool, &dir.0, Ok(online), &BTreeMap::new())
+            .await
+            .unwrap();
 
         use InstallKind::*;
         assert_eq!(
@@ -715,9 +769,14 @@ mod tests {
         install_focus(&pool, &dir, "0.1.0").await;
         focus_zip(&dir, "0.2.0");
 
-        let market = list(&pool, &dir.0, Err(Error::PluginsJsonFormatVersion(3)))
-            .await
-            .unwrap();
+        let market = list(
+            &pool,
+            &dir.0,
+            Err(Error::PluginsJsonFormatVersion(3)),
+            &BTreeMap::new(),
+        )
+        .await
+        .unwrap();
 
         assert!(market.installed_online.is_empty());
         assert!(market.downloadable.is_empty());
@@ -727,6 +786,95 @@ mod tests {
         );
         assert_eq!(market.installed.len(), 1);
         assert_eq!(market.local_zips.len(), 1);
+    }
+
+    /// 可下载的按下载次数从多到少排；一样多的按线上列表原来的顺序；没有数的当 0。
+    #[tokio::test]
+    async fn sorts_downloadable_by_download_count() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let online = ["a", "b", "c", "d", "e"]
+            .map(|id| online_plugin(id, &["0.1.0"]))
+            .to_vec();
+        let download_counts = BTreeMap::from([
+            ("b".to_string(), 5),
+            ("c".to_string(), 10),
+            ("d".to_string(), 5),
+            ("e".to_string(), 0),
+        ]);
+
+        let market = list(&pool, &dir.0, Ok(online), &download_counts)
+            .await
+            .unwrap();
+
+        let listed: Vec<(&str, Option<u64>)> = market
+            .downloadable
+            .iter()
+            .map(|p| (p.id.as_str(), p.download_count))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("c", Some(10)),
+                ("b", Some(5)),
+                ("d", Some(5)),
+                ("a", None),
+                ("e", Some(0))
+            ]
+        );
+    }
+
+    /// 读不到下载次数：都没有数，按线上列表原来的顺序。
+    #[tokio::test]
+    async fn list_without_downloads_keeps_the_list_order() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let online = ["c", "a", "b"]
+            .map(|id| online_plugin(id, &["0.1.0"]))
+            .to_vec();
+
+        let market = list(&pool, &dir.0, Ok(online), &BTreeMap::new())
+            .await
+            .unwrap();
+
+        let listed: Vec<(&str, Option<u64>)> = market
+            .downloadable
+            .iter()
+            .map(|p| (p.id.as_str(), p.download_count))
+            .collect();
+        assert_eq!(listed, [("c", None), ("a", None), ("b", None)]);
+    }
+
+    /// 认识的格式：按插件 id 读出下载次数。
+    #[test]
+    fn parses_downloads_json() {
+        let json = serde_json::json!({
+            "format_version": 1,
+            "downloads": { "hindsight-focus": 10, "hindsight-reminder": 6 }
+        });
+
+        let downloads = parse_downloads_json(json.to_string().as_bytes()).unwrap();
+
+        assert_eq!(
+            downloads,
+            BTreeMap::from([
+                ("hindsight-focus".to_string(), 10),
+                ("hindsight-reminder".to_string(), 6)
+            ])
+        );
+    }
+
+    /// 不认识的格式：报格式错误，不按现在的格式硬解。
+    #[test]
+    fn rejects_unknown_downloads_json_format_version() {
+        let json = serde_json::json!({ "format_version": 2, "downloads": [] });
+
+        let result = parse_downloads_json(json.to_string().as_bytes());
+
+        assert!(
+            matches!(result, Err(Error::DownloadsJsonFormatVersion(2))),
+            "{result:?}"
+        );
     }
 
     /// 认识的格式：按顺序读出每个插件，简介按语言原样读出，不认识的字段忽略；版本没写容量是 None。
