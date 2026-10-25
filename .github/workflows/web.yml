@@ -62,9 +62,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # wrangler 4 needs Node 22 or newer; the site itself also builds on 20.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install deps

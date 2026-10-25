@@ -55,7 +55,7 @@ npx wrangler dev --config web/wrangler.jsonc   # 按线上规则（_headers、40
 | `CLOUDFLARE_API_TOKEN` | Cloudflare 控制台 → My Profile → API Tokens → Create Token → 模板 **Edit Cloudflare Workers** |
 | `CLOUDFLARE_ACCOUNT_ID` | `npx wrangler whoami` 显示的 Account ID |
 
-手动发布（需先 `npx wrangler login`）：
+手动发布（wrangler 需要 Node 22 以上，并先 `npx wrangler login`）：
 
 ```bash
 npm run build:web
