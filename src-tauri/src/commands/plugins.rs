@@ -31,8 +31,17 @@ pub async fn plugin_open_market(pool: State<'_, DbPool>) -> Result<Market, Strin
     if let Err(e) = market::remove_partial_downloads(&plugin_zips_dir()) {
         log::warn!("plugins: cannot remove partial downloads: {e}");
     }
-    let online = market::fetch_online(market::PLUGINS_JSON_URL).await;
-    market::list(&pool, &plugin_zips_dir(), online)
+    // Download both files at once, so the second file does not make the market slower to open
+    let (online, download_counts) = tokio::join!(
+        market::fetch_online(market::PLUGINS_JSON_URL),
+        market::fetch_download_counts(market::DOWNLOADS_JSON_URL),
+    );
+    // Without download counts the market still opens. It shows no counts and does not sort by them
+    let download_counts = download_counts.unwrap_or_else(|e| {
+        log::warn!("plugins: cannot read the download counts: {e}");
+        Default::default()
+    });
+    market::list(&pool, &plugin_zips_dir(), online, &download_counts)
         .await
         .map_err(Into::into)
 }

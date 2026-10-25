@@ -2,11 +2,12 @@
 
 Overview: [Plugin backend architecture](plugins-architecture.md).
 
-**This doc designs**: where plugins come from. It covers three things:
+**This doc designs**: where plugins come from. It covers four things:
 
 - how plugin authors publish a plugin;
 - where Hindsight finds plugins and downloads them;
-- how to make sure downloaded files were not changed, and that plugin ids are unique.
+- how to make sure downloaded files were not changed, and that plugin ids are unique;
+- where the download counts come from, and how the market page sorts and filters plugins.
 
 **Publishing**
 
@@ -20,9 +21,19 @@ flowchart LR
 **Installing**
 
 ```mermaid
-flowchart LR
-  MKT["Hindsight<br/>market page"] -->|"1. reads the list"| IDX[("Official repo<br/>plugins.json")]
-  MKT -->|"2. downloads the zip<br/>from the URL in the list"| REL[("Author's repo<br/>Releases")]
+sequenceDiagram
+  participant H as Hindsight<br/>market page
+  participant I as Official repo main<br/>plugins.json
+  participant S as Official repo stats<br/>downloads.json
+  participant R as Author's repo<br/>Releases
+  Note over H: The user opens<br/>the market page
+  par At the same time
+    H->>I: Reads the list
+  and
+    H->>S: Reads the<br/>download counts
+  end
+  Note over H: The user clicks<br/>Install
+  H->>R: Downloads the zip<br/>from the URL in the list
 ```
 
 - The official repo holds only the list file `plugins.json` and the plugin icons `icons/<id>.png`. It holds no plugin code. The zip lives in the Releases of the author's own repo.
@@ -75,13 +86,34 @@ The outer level is the format version. `plugins` has one record per plugin, and 
 - When a plugin with the same `id` has a new version, the author opens a PR that adds a record to `versions`. Old versions can be kept.
 - Each version has its own `permissions` and `storage_mb`, because different versions may ask for different ones. `storage_mb` is the disk space, in MB, that the plugin asks for its own database. A plugin that uses no database leaves it out, like 0.1.0 above. The market page shows the permissions and disk space of that version before the download. What the user approved is passed to the install and stored in the plugins table (see [① Installing plugins](install.md)).
 
+### Download counts
+
+hindsight-plugins counts the downloads of each plugin once a day and writes them to `downloads.json` in its `stats` branch. How it counts them is in [count_downloads.py](https://github.com/Tomotsugu-dev/hindsight-plugins/blob/main/scripts/count_downloads.py) in that repo.
+
+```json
+{
+  "format_version": 1,
+  "downloads": {
+    "hindsight-focus": 10,
+    "hindsight-reminder": 6
+  }
+}
+```
+
+- Hindsight does not ask the GitHub API itself: requests without a login get only 60 per hour per IP.
+- If Hindsight cannot read this file, the market still opens. It shows no download counts and keeps the order of plugins.json.
+
 ## The three columns of the market page
 
 | Column | What it shows | Where the data comes from |
 |---|---|---|
-| Installed | Installed plugins. When there is a newer version, it shows "Update to x", and the menu next to it can pick any online version | The plugins table, plus the online versions with the same id |
-| Downloadable | Online plugins that are not installed | plugins.json |
+| Installed | Installed plugins. When there is a newer version, it shows "Update to x", and the menu next to it can pick any online version | The plugins table, plus the online versions, description and download count with the same id |
+| Downloadable | Online plugins that are not installed, sorted by download count from most to fewest | plugins.json and downloads.json |
 | Local zips | Packages in `plugin-zips/` (see [① Installing plugins](install.md)) | The folder |
 
 - "Downloadable" is split by id: an installed plugin is not in the "Downloadable" column, whether or not there is a newer version online.
 - If an installed plugin can be updated, the update shows in "Installed".
+- Sorting: plugins with more downloads come first. Plugins with the same count, or with no count, keep the order of plugins.json.
+- Filter: "Most downloaded" shows every plugin and is the default. "Official" shows only official plugins.
+- Search: looks in the name, author, repository name and the description in the interface language. It ignores case and runs only on this computer.
+- Cards and installed plugins have one more line: the download count and a link to the repository. The link shows only the repository name, because the author is shown above it. A plugin that is not in the online list shows neither this line nor a description.

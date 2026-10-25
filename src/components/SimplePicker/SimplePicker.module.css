@@ -63,6 +63,16 @@
   overflow: hidden;
 }
 
+/* 有图标时，图标和文字靠左，箭头留在最右 */
+.icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.icon + .labelStack {
+  margin-right: auto;
+}
+
 .chev {
   color: var(--text-faint);
   transition: transform 200ms var(--ease-out);

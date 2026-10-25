@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, Package, Puzzle, RefreshCw, ShieldAlert, Store } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  CloudDownload,
+  ExternalLink,
+  FolderOpen,
+  ListFilter,
+  Package,
+  Puzzle,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Store,
+} from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -20,6 +32,8 @@ import { usePluginIcons } from "../../../state/pluginIcons";
 import { logError } from "../../../lib/logger";
 import { pickDescription } from "../../../utils/pickDescription";
 import { HIGH_RISK, permissionKey } from "./pluginPermissions";
+import { filterMarket, repoUrl, type MarketFilter } from "./pluginMarket";
+import filterBarStyles from "../../Apps/AppsFilterBar.module.css";
 import styles from "./PluginsTab.module.css";
 
 /** Where a plugin comes from. Third-party plugins and zips get a warning in the install dialog */
@@ -60,9 +74,12 @@ const onlineTarget = (plugin: OnlinePlugin, v: OnlineVersion): InstallTarget => 
 /** Settings → Plugins: installed plugins, the plugin market, and zips installed by hand.
  * Opening this tab is the only thing that fetches the online list. */
 export default function PluginsTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const icons = usePluginIcons();
   const [market, setMarket] = useState<Market | null>(null);
+  /** 插件市场搜索框里的字 */
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<MarketFilter>("popular");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   /** The plugin or zip with an action running; other actions wait for it */
@@ -158,6 +175,11 @@ export default function PluginsTab() {
     { value: "window" as const, label: t("plugins.opensIn.window") },
   ];
 
+  const filterOptions: { value: MarketFilter; label: string }[] = [
+    { value: "popular", label: t("plugins.market.filter.popular") },
+    { value: "official", label: t("plugins.market.filter.official") },
+  ];
+
   if (!market) {
     return (
       <p className={styles.hint}>
@@ -165,6 +187,10 @@ export default function PluginsTab() {
       </p>
     );
   }
+
+  const found = filterMarket(market.downloadable, filter, query, i18n.language);
+  // 市场里有插件才需要搜索
+  const showSearch = !market.onlineError && market.downloadable.length > 0;
 
   return (
     <>
@@ -198,8 +224,14 @@ export default function PluginsTab() {
               <Row
                 key={plugin.id}
                 label={`${plugin.name}  v${plugin.version}`}
+                // 简介只在线上列表里有，本机不存；从 zip 装、列表里没有的插件就没有简介
                 description={
-                  plugin.runsInBackground ? t("plugins.installed.background") : undefined
+                  [
+                    onlinePlugin ? pickDescription(onlinePlugin.description, i18n.language) : "",
+                    plugin.runsInBackground ? t("plugins.installed.background") : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || undefined
                 }
                 icon={Puzzle}
                 iconSrc={icons[plugin.id]}
@@ -213,27 +245,21 @@ export default function PluginsTab() {
                   />
                 }
               >
-                <div className={styles.controls}>
+                <div className={`${styles.controls} ${styles.installedControls}`}>
+                  {onlinePlugin ? (
+                    <MarketStats
+                      count={onlinePlugin.download_count}
+                      repo={onlinePlugin.repo}
+                      className={styles.installedStats}
+                    />
+                  ) : null}
                   {plugin.ui.hasPage ? (
-                    <>
-                      <SimplePicker
-                        value={toChoice(plugin.ui.opensIn)}
-                        options={opensInOptions}
-                        disabled={working}
-                        onChange={(choice) => void setOpensIn(plugin, choice)}
-                      />
-                      {/* A plugin in the sidebar is opened from there */}
-                      {toChoice(plugin.ui.opensIn) === "window" ? (
-                        <button
-                          type="button"
-                          className={styles.btn}
-                          disabled={!plugin.enabled}
-                          onClick={() => showWindow(plugin)}
-                        >
-                          {t("plugins.installed.show")}
-                        </button>
-                      ) : null}
-                    </>
+                    <SimplePicker
+                      value={toChoice(plugin.ui.opensIn)}
+                      options={opensInOptions}
+                      disabled={working}
+                      onChange={(choice) => void setOpensIn(plugin, choice)}
+                    />
                   ) : null}
                   {versionOptions.length > 0 ? (
                     <SimplePicker
@@ -258,9 +284,20 @@ export default function PluginsTab() {
                       {t("plugins.installed.update", { version: update.version })}
                     </button>
                   ) : null}
+                  {/* A plugin in the sidebar is opened from there */}
+                  {plugin.ui.hasPage && toChoice(plugin.ui.opensIn) === "window" ? (
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={!plugin.enabled}
+                      onClick={() => showWindow(plugin)}
+                    >
+                      {t("plugins.installed.show")}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className={styles.btnDanger}
+                    className={`${styles.btnDanger} ${styles.rowEnd}`}
                     disabled={working}
                     onClick={() => {
                       setDeleteData(false);
@@ -276,16 +313,57 @@ export default function PluginsTab() {
         )}
       </Section>
 
-      <Section title={t("plugins.market.title")} icon={Store}>
+      <Section
+        title={t("plugins.market.title")}
+        icon={Store}
+        headerAction={
+          showSearch ? (
+            <>
+              <SimplePicker
+                value={filter}
+                options={filterOptions}
+                onChange={setFilter}
+                icon={ListFilter}
+              />
+              <div className={`${filterBarStyles.searchWrap} ${styles.marketSearch}`}>
+                <Search
+                  size={14}
+                  strokeWidth={2}
+                  className={filterBarStyles.searchIcon}
+                  aria-hidden
+                />
+                <input
+                  className={filterBarStyles.searchInput}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t("plugins.market.search")}
+                  aria-label={t("plugins.market.search")}
+                  spellCheck={false}
+                />
+              </div>
+            </>
+          ) : undefined
+        }
+      >
         {market.onlineError ? (
           <p className={styles.error}>
             {t("plugins.market.offline", { error: market.onlineError })}
           </p>
         ) : market.downloadable.length === 0 ? (
           <EmptyHint message={t("plugins.market.empty")} />
+        ) : found.length === 0 ? (
+          // 搜索框空着还是空的，只可能是筛了官方插件
+          <EmptyHint
+            message={
+              query.trim()
+                ? t("plugins.market.noMatch", { query: query.trim() })
+                : t("plugins.market.noOfficial")
+            }
+          />
         ) : (
           <div className={styles.marketGrid}>
-            {market.downloadable.map((plugin) => (
+            {found.map((plugin) => (
               <MarketCard
                 key={plugin.id}
                 plugin={plugin}
@@ -443,6 +521,7 @@ function MarketCard({
           <span className={styles.marketMeta}>
             v{plugin.versions[0].version} · {plugin.author}
           </span>
+          <MarketStats count={plugin.download_count} repo={plugin.repo} />
         </div>
       </div>
       <p className={styles.marketDesc}>{pickDescription(plugin.description, i18n.language)}</p>
@@ -452,6 +531,44 @@ function MarketCard({
         </button>
       </div>
     </div>
+  );
+}
+
+/** 下载次数和仓库链接，市场卡片和已安装的插件共用。两样都没有就不显示。
+ * 链接只显示仓库名：作者已经显示在上面了 */
+function MarketStats({
+  count,
+  repo,
+  className = "",
+}: {
+  count: number | null;
+  repo: string;
+  className?: string;
+}) {
+  const { t, i18n } = useTranslation();
+  const url = repoUrl(repo);
+  const name = repo.slice(repo.indexOf("/") + 1);
+  if (count === null && url === null) return null;
+  return (
+    <span className={`${styles.marketStats} ${className}`}>
+      {count !== null ? (
+        <span className={styles.marketDownloads} title={t("plugins.market.downloads")}>
+          <CloudDownload size={13} strokeWidth={1.85} aria-hidden />
+          {new Intl.NumberFormat(i18n.language).format(count)}
+        </span>
+      ) : null}
+      {url !== null ? (
+        <button
+          type="button"
+          className={styles.marketRepo}
+          title={t("plugins.market.repo")}
+          onClick={() => openUrl(url).catch((e) => logError("plugins.openRepo", e))}
+        >
+          <span className={styles.marketRepoName}>{name}</span>
+          <ExternalLink size={12} strokeWidth={1.85} aria-hidden />
+        </button>
+      ) : null}
+    </span>
   );
 }
 

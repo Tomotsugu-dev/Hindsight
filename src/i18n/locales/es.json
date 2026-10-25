@@ -1803,7 +1803,16 @@
       "title": "Tienda de plugins",
       "empty": "Todavía no hay otros plugins en la tienda.",
       "offline": "No se pudo conectar con la tienda de plugins: {{error}}",
-      "install": "Instalar"
+      "install": "Instalar",
+      "search": "Buscar plugins",
+      "noMatch": "Ningún plugin coincide con «{{query}}».",
+      "downloads": "Descargas",
+      "repo": "Abrir el repositorio en GitHub",
+      "filter": {
+        "popular": "Más descargados",
+        "official": "Oficiales"
+      },
+      "noOfficial": "No hay plugins oficiales para descargar."
     },
     "local": {
       "title": "Instalar desde un archivo",

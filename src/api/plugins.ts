@@ -54,6 +54,8 @@ export interface OnlinePlugin {
   icon_url: string | null;
   /** Made by Hindsight: `repo` is under the official account */
   official: boolean;
+  /** 下载次数，来自 downloads.json。读不到或者里面没有这个插件时是 null */
+  download_count: number | null;
 }
 
 export interface Manifest {

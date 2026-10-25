@@ -896,11 +896,6 @@
   gap: 6px;
 }
 
-.modelsToolbarIcon {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
 /* 云端模型卡——external_enabled 时模型列表第一行的特殊卡片，跟普通推荐卡同一容器，
    但用偏蓝调底色 + 蓝描边把它跟"本地"区分开。不可点、不参与筛选/排序。 */
 .modelCardCloud {
