@@ -14,11 +14,22 @@ const OUT = path.join(ROOT, "dist-web");
 const INTRO = path.join(ROOT, "docs/intro");
 
 // Exclude source-only files and the separately authenticated internal tools.
-const SOURCE_ONLY = new Set(["demo-src", "tsconfig.json", "vite.config.ts", "wrangler.jsonc", "worker.js"]);
+const SOURCE_ONLY = new Set([
+  "demo-src",
+  "tsconfig.json",
+  "vite.config.ts",
+  "wrangler.jsonc",
+  "worker.js",
+  "themes-data.js",
+]);
+// 测试只在 CI 里跑，不发布
+const TEST_FILE = /\.test\.[jt]s$/;
 const published = (src) => {
   if (src === INTERNAL || src.startsWith(`${INTERNAL}${path.sep}`)) return false;
   const name = path.basename(src);
-  return !name.startsWith(".") && !name.startsWith("README") && !SOURCE_ONLY.has(name);
+  return (
+    !name.startsWith(".") && !name.startsWith("README") && !SOURCE_ONLY.has(name) && !TEST_FILE.test(name)
+  );
 };
 
 // Workers 静态资源单个文件上限 25 MiB
