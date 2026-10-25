@@ -137,6 +137,7 @@
   }
   function latestSnapshots() { const rows = snapshots(); return { latest: rows.at(-1), previous: rows.at(-2) }; }
   function downloadTotal(snapshot) {
+    if (numeric(snapshot?.releaseDownloads) !== null) return snapshot.releaseDownloads;
     if (!snapshot || !Array.isArray(snapshot.releases)) return null;
     let total = 0;
     for (const release of snapshot.releases) {
@@ -291,7 +292,7 @@
       const position = y(value);
       svg.append(svgElement("line", { x1: left, x2: right, y1: position, y2: position, class: "chart-grid" }), svgElement("text", { x: left - 13, y: position + 3, "text-anchor": "end", class: "chart-axis-label" }, shortNumber(Number(value.toFixed(2)))));
     }
-    const labels = [...new Set([0, Math.floor((rows.length - 1) / 4), Math.floor((rows.length - 1) / 2), Math.floor((rows.length - 1) * 3 / 4), rows.length - 1])].filter((index) => index >= 0);
+    const labels = [...new Set([0, Math.floor((rows.length - 1) / 4), Math.floor((rows.length - 1) / 2), Math.floor((rows.length - 1) * 3 / 4), rows.length - 1])].filter((index) => index >= 0 && index < rows.length);
     labels.forEach((index) => svg.append(svgElement("text", { x: x(index), y: bottom + 25, "text-anchor": index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle", class: "chart-axis-label" }, rows[index].date.slice(5).replace("-", "/"))));
     let segment = [];
     const drawSegment = () => {

@@ -22,9 +22,17 @@ does not expose the Administration permission needed by the Traffic API.
 ## Data and failure behavior
 
 - `history:v1:owner/repo` stores merged daily view/clone records and one repository,
-  source, path and release snapshot per UTC collection date.
+  source and path snapshot per UTC collection date. Each snapshot retains a
+  `releaseDownloads` total; full release/asset details remain only in the latest
+  two dates for asset-level download comparisons. This prevents the same large
+  release catalog from filling the single-value KV storage limit over time.
+- Existing release snapshots are migrated to totals during the next collection.
+  A successful empty release list means zero downloads; absent or invalid legacy
+  release data remains unknown (`null`) rather than becoming zero.
 - `snapshot:v1:owner/repo:YYYY-MM-DD` stores the corresponding daily collection as
-  a separate recovery copy. A manual rerun replaces only that same date's copy.
+  a separate recovery copy, including the full release catalog for every date.
+  History compaction does not change these copies. A manual rerun replaces only
+  that same date's copy.
 - `status:v1` stores the attempt time, previous complete success time,
   per-repository success times, and sanitized failures.
 - Every run rereads GitHub's last 14 days. It replaces overlapping calendar days
