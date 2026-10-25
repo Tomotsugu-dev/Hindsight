@@ -24,14 +24,20 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { restoreTheme } from "@app/lib/theme";
 import { AppDemo } from "./AppDemo";
+import { PreviewError } from "./PreviewError";
+import { applyPreviewTheme } from "./preview-theme";
 import "./mobile-overrides.css";
 
 // 跟主 main.tsx 一致:启动即应用主题(默认 minimal 简约),
 // 否则 <html> 无 data-theme,会渲染成 default 多彩主题
 restoreTheme();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <AppDemo />
-  </React.StrictMode>,
-);
+// 官网主题页的预览：先套好 ?theme= 的主题，再画页面
+applyPreviewTheme(location.search).then((failed) => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      {failed && <PreviewError />}
+      <AppDemo />
+    </React.StrictMode>,
+  );
+});
