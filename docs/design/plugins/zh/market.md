@@ -6,7 +6,8 @@
 
 - 插件作者怎么上架；
 - Hindsight 去哪找插件、从哪下载；
-- 怎么保证下载到的文件没被改过、插件 id 不重复。
+- 怎么保证下载到的文件没被改过、插件 id 不重复；
+- 下载次数从哪来，市场页怎么排序、筛选。
 
 **上架**
 
@@ -20,9 +21,19 @@ flowchart LR
 **安装**
 
 ```mermaid
-flowchart LR
-  MKT["Hindsight<br/>插件市场页"] -->|"1. 读列表"| IDX[("官方仓库<br/>plugins.json")]
-  MKT -->|"2. 按列表里的地址<br/>下载 zip"| REL[("作者自己的仓库<br/>Release")]
+sequenceDiagram
+  participant H as Hindsight<br/>插件市场页
+  participant I as 官方仓库 main<br/>plugins.json
+  participant S as 官方仓库 stats 分支<br/>downloads.json
+  participant R as 作者自己的仓库<br/>Release
+  Note over H: 用户打开市场页
+  par 同时读
+    H->>I: 读列表
+  and
+    H->>S: 读下载次数
+  end
+  Note over H: 用户点安装
+  H->>R: 按列表里的地址<br/>下载 zip
 ```
 
 - 官方仓库只放列表文件 `plugins.json` 和插件图标 `icons/<id>.png`，不放插件的代码。zip 放在作者自己仓库的 Release 里。
@@ -75,13 +86,34 @@ flowchart LR
 - 同一个 `id` 的插件有新版本时，提 PR 在 `versions` 里加一条，旧版本可以选择保留。
 - 每个版本自带 `permissions` 和 `storage_mb`，因为不同版本申请的可能不一样。`storage_mb` 是给插件自己的库申请的磁盘容量（MB），不用库的插件不写，上面的 0.1.0 就没写。市场页在下载前就把这个版本的权限和磁盘容量给用户看，用户同意的传给安装，存进 plugins 表（见 [① 插件安装](install.md)）。
 
+### 下载次数
+
+hindsight-plugins 每天统计一次各插件的下载次数，写进 `stats` 分支的 `downloads.json`。怎么统计见那个仓库的 [count_downloads.py](https://github.com/Tomotsugu-dev/hindsight-plugins/blob/main/scripts/count_downloads.py)。
+
+```json
+{
+  "format_version": 1,
+  "downloads": {
+    "hindsight-focus": 10,
+    "hindsight-reminder": 6
+  }
+}
+```
+
+- 不让 Hindsight 自己查 GitHub API：不登录的请求，每个 IP 每小时只有 60 次。
+- Hindsight 读不到这个文件时，市场照常打开，不显示下载次数，按 plugins.json 的顺序排。
+
 ## 市场页的三栏
 
 | 栏 | 内容 | 数据从哪来 |
 |---|---|---|
-| 已安装 | 装了的插件。有新版本时显示「更新到 x」，旁边的下拉可以选线上的任一版本 | plugins 表，加上线上同 id 的版本 |
-| 可下载 | 线上有、还没装的插件 | plugins.json |
+| 已安装 | 装了的插件。有新版本时显示「更新到 x」，旁边的下拉可以选线上的任一版本 | plugins 表，加上线上同 id 的版本、简介和下载次数 |
+| 可下载 | 线上有、还没装的插件，按下载次数从多到少排 | plugins.json 和 downloads.json |
 | 本地 zip | `plugin-zips/` 里的包（见 [① 插件安装](install.md)） | 文件夹 |
 
 - 「可下载」按 id 分：装了的插件不管线上有没有新版本，都不在「可下载」栏中。
 - 「已安装」软件如果可更新，则显示在「已安装」里。
+- 排序：下载次数多的在前；一样多或没有数的，保持 plugins.json 的顺序。
+- 筛选：「下载最多」显示全部，是默认的；「官方插件」只显示官方的。
+- 搜索：找名称、作者、仓库名和界面语言的简介，不分大小写，只在本机筛。
+- 卡片和已安装的插件多一行：下载次数和仓库链接。链接只显示仓库名，作者已经在上面了。线上列表里没有的插件，不显示这一行和简介。
