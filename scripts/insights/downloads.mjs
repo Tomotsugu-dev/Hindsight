@@ -100,3 +100,31 @@ export function installerDailyRows(snapshots, platform = "total") {
     return { date: snapshot.date, cumulative, increase };
   });
 }
+
+export function installerWindowSummary(snapshots, { days = 7, platform = "total", endDate = new Date().toISOString().slice(0, 10) } = {}) {
+  if (!Number.isInteger(days) || days < 1 || days > 366) throw new RangeError("Installer window days must be an integer from 1 to 366");
+  const end = utcDay(endDate);
+  if (end === null) throw new RangeError("Installer window endDate must be a valid UTC date (YYYY-MM-DD)");
+  const start = end - (days - 1) * DAY_MS;
+  const startDate = new Date(start).toISOString().slice(0, 10);
+  if (utcDay(startDate) === null) throw new RangeError("Installer window starts outside supported UTC dates");
+
+  // Calculate daily changes before filtering. The snapshot immediately before
+  // the window is a valid baseline for the first included day's downloads.
+  const daily = new Map(installerDailyRows(snapshots, platform).map((row) => [row.date, row.increase]));
+  const rows = Array.from({ length: days }, (_, index) => {
+    const date = new Date(start + index * DAY_MS).toISOString().slice(0, 10);
+    return { date, downloads: daily.get(date) ?? null };
+  });
+  const knownRows = rows.filter((row) => row.downloads !== null);
+  const knownDays = knownRows.length;
+  return {
+    days,
+    startDate,
+    endDate,
+    rows,
+    knownDays,
+    total: knownDays ? knownRows.reduce((sum, row) => sum + row.downloads, 0) : null,
+    complete: knownDays === days,
+  };
+}
