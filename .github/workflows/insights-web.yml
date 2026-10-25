@@ -1,0 +1,44 @@
+name: Internal Insights Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - web-insights/**
+      - scripts/insights/config.json
+      - .github/workflows/insights-web.yml
+  pull_request:
+    paths:
+      - web-insights/**
+      - scripts/insights/config.json
+      - .github/workflows/insights-web.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: insights-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify authentication and data access
+        run: node --test web-insights/worker.test.mjs
+      - name: Check dashboard JavaScript
+        run: node --check web-insights/dashboard.js
+      - name: Package the private Worker
+        run: npx --yes wrangler@4.152.0 deploy --config web-insights/wrangler.jsonc --dry-run
+      - name: Deploy internal dashboard
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.152.0 deploy --config web-insights/wrangler.jsonc
