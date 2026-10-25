@@ -518,8 +518,8 @@ select {
   border-radius:8px;
   padding:10px 13px;
   box-shadow:0 4px 18px #302a2120;
-  min-width:180px;
-  max-width:300px;
+  min-width:min(180px,calc(100% - 16px));
+  max-width:min(300px,calc(100% - 16px));
   font-size:15px;
   transform:translate(-50%,0);
   line-height:1.6}

@@ -254,7 +254,8 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     const width = $(chart.wrapId).clientWidth;
     const matrix = $(chart.svgId).getScreenCTM();
     const chartLeft = matrix ? chart.x(index) * matrix.a + matrix.e - $(chart.wrapId).getBoundingClientRect().left : chart.x(index) / chart.width * width;
-    tooltip.style.left = Math.min(width - 82, Math.max(82, chartLeft)) + "px";
+    const tooltipHalfWidth = Math.min(width / 2, (tooltip.offsetWidth || 180) / 2 + 8);
+    tooltip.style.left = Math.min(width - tooltipHalfWidth, Math.max(tooltipHalfWidth, chartLeft)) + "px";
     tooltip.style.top = "4px";
   }
   function hideChartPoint(chartKey = "chart") {
