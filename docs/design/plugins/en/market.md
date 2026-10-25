@@ -70,6 +70,7 @@ The outer level is the format version. `plugins` has one record per plugin, and 
 ```
 
 - `format_version` is the version of this file's structure. Hindsight reads it first. If it does not know the version, it reports an error and does not parse the plugins.
+- If the entry of one plugin cannot be parsed (a field is missing or has the wrong type), Hindsight skips that plugin and still shows the others. Hindsight 0.10.2 and older report an error for the whole file and cannot open the market, so check the format of a PR before it is merged.
 - `description` holds the description in each language. The keys are the language codes of the interface: `zh-CN`, `zh-TW`, `en`, `ja`, `pt-BR` and `es`. The market page shows the interface language. Without it, it shows `en`; without `en`, the first language by code.
 - When a plugin with the same `id` has a new version, the author opens a PR that adds a record to `versions`. Old versions can be kept.
 - Each version has its own `permissions` and `storage_mb`, because different versions may ask for different ones. `storage_mb` is the disk space, in MB, that the plugin asks for its own database. A plugin that uses no database leaves it out, like 0.1.0 above. The market page shows the permissions and disk space of that version before the download. What the user approved is passed to the install and stored in the plugins table (see [① Installing plugins](install.md)).
