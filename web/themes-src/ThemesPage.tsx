@@ -10,9 +10,9 @@ const LANGUAGE = pageLanguage(location.search, navigator.languages);
 
 const LOGO = "https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png";
 
-// 主题文件的格式和做法
+// 怎么上架主题。那一节开头再链到主题文件的格式
 const MAKE_A_THEME =
-  "https://github.com/Tomotsugu-dev/Hindsight/blob/main/docs/design/themes/README.md";
+  "https://github.com/Tomotsugu-dev/hindsight-plugins/blob/main/CONTRIBUTING.md#themes";
 
 type State =
   | { status: "loading" }
