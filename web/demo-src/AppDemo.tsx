@@ -5,6 +5,7 @@
 // 3. data-platform 强制 "windows"；`?platform=macos` 时按 macOS 窗口画（见 MACOS_WINDOW）
 
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import { SettingsProvider } from "@app/state/settings";
@@ -61,6 +62,12 @@ const PrivacyTab = lazy(() => import("@app/pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("@app/pages/Settings/tabs/AboutTab"));
 
 function DemoLayout() {
+  const { i18n } = useTranslation();
+  // 和主应用的 App.tsx 一样：<html lang> 跟着界面语言，CSS 按它调侧栏的宽度
+  useEffect(() => {
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
+
   return (
     <div className={styles.shell}>
       <main className={styles.content}>
