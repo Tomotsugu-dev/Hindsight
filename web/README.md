@@ -1,102 +1,77 @@
-# Hindsight Landing Page
+# Hindsight 官网
 
-`hindsight.kyosweb.com` 的静态 landing page。纯 HTML + CSS + 少量 JS，零构建步骤。
+`hindsight.kyosweb.com` 的全部内容：各语言 landing page、可交互的 web demo（`/demo/`）和功能文档站（`/docs/`）。
+整站都是静态文件，发布在 Cloudflare Workers 静态资源上，从全球边缘节点直接响应，没有源站。
 
 ## 文件
 
 ```
 web/
-├── index.html       中文版主页
-├── styles.css       全部样式
-└── README.md        本文件
+├── index.html         简体中文主页（默认语言）
+├── en/ ja/ pt/ tw/    其它语言主页
+├── styles.css         全部样式（landing 和文档站共用）
+├── 404.html           找不到页面时返回
+├── _headers           响应头（缓存）规则
+├── wrangler.jsonc     Cloudflare 部署配置
+├── worker.js          只处理 /assets/video/*：给视频补上 Range（206）支持，Safari 播放需要
+├── demo-src/          web demo 源码（mock + 入口），复用主应用 src/ 的组件
+├── vite.config.ts     web demo 的构建配置
+├── demo/              ← npm run build:demo 产物，不入仓
+└── docs/              ← npm run build:docs 产物，不入仓
 ```
 
-## 本地预览
+视频和封面不在 `web/` 里，在 `docs/intro/<lang>/shot_video/`，构建时按页面引用拷到 `/assets/video/`。
 
-任选一种：
+## 构建与本地预览
 
 ```bash
-# 方式 1: Python（最简单）
-cd web && python -m http.server 8000
-# 浏览器开 http://localhost:8000
-
-# 方式 2: Node
-npx serve web
-
-# 方式 3: VS Code Live Server 插件，右键 index.html → Open with Live Server
+npm run build:web     # demo + 文档站 + 拼装，产物在 dist-web/
+npx wrangler dev --config web/wrangler.jsonc   # 按线上规则（_headers、404）预览
 ```
 
-> ⚠️ **直接 file:// 打开 index.html 视频可能不播**——视频用了 GitHub user-attachments URL，
-> 现代浏览器对 file:// scheme 限制 cors / 媒体加载。一定用本地 server 预览。
+`build:web` 会校验所有站内 `src` / `href` / `poster` 都指向存在的文件，有一个缺失就构建失败。
 
-## 资源策略
+## 资源
 
-- **图片**（logo + 截图）通过 [jsDelivr CDN](https://www.jsdelivr.com/) 引用 GitHub 主分支文件：
+- **视频**：`docs/intro/<lang>/shot_video/Hindsight_<lang>.mp4`，单个文件不能超过 25 MiB。
+- **视频封面**：同目录的同名 `.jpg`，是视频第一帧。重录视频后重新生成：
+  ```bash
+  for v in docs/intro/*/shot_video/*.mp4; do ffmpeg -v error -y -i "$v" -frames:v 1 -q:v 4 "${v%.mp4}.jpg"; done
   ```
-  https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/...
-  ```
-  好处：自动跟主分支同步；CDN 全球加速；不用复制图片到 web/。
-- **视频** 使用 GitHub user-attachments CDN URL（docs/intro/zh/README.md 同款）
-- **下载按钮** 默认指向 `releases/latest`，JS 加载后改写为具体安装包直链 + 显示版本和大小
+- **logo** 通过 [jsDelivr](https://www.jsdelivr.com/) 引用主分支文件 `https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/...`。
+- **下载按钮** 默认指向 `releases/latest`，JS 加载后改写为具体安装包直链，并显示文件大小。
 
-## 部署 Cloudflare Pages
+## 部署
 
-### Step 1: Cloudflare Pages 后台
+`.github/workflows/web.yml` 自动完成：
 
-1. 进 [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages → Pages
-2. **Connect to Git** → 选 Hindsight repo
-3. 部署设置：
-   - **Production branch**: `main`
-   - **Build command**: `npm ci && npm run build:demo`（构建可交互 demo；landing page 本身纯静态，但 `/demo/` 子目录需构建）
-   - **Build output directory**: `web`
-   - **Root directory**: 留空（用 repo 根）
-   - **Node version**: 设环境变量 `NODE_VERSION=20`（package.json engines.node >=20）
-4. **Save and Deploy**
+- push 到 `main`：构建并发布到 `hindsight.kyosweb.com`，约 1–2 分钟生效。
+- 本仓库分支的 PR：上传预览版本，地址是 `<分支名>-hindsight.<账号子域>.workers.dev`，不影响线上。
 
-> ⚠️ `web/demo/` 是 `npm run build:demo` 的构建产物，**不入仓**（见根 `.gitignore`）。Cloudflare 每次部署由上面的 Build command 重新生成；本地预览先 `npm run build:demo` 再 `npm run preview:demo`。
-> 若 Build command 仍留空，下次部署的 `web` 树将缺少 `/demo/` 子目录，三个 landing page 内嵌的 demo iframe 会 404。
+需要的仓库 secrets（Settings → Secrets and variables → Actions）：
 
-部署后会拿到 `<project-name>.pages.dev` 默认域名。
+| 名称 | 值 |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare 控制台 → My Profile → API Tokens → Create Token → 模板 **Edit Cloudflare Workers** |
+| `CLOUDFLARE_ACCOUNT_ID` | `npx wrangler whoami` 显示的 Account ID |
 
-### Step 2: 绑定自定义域名
+手动发布（需先 `npx wrangler login`）：
 
-1. Pages 项目 → **Custom domains** → **Set up a custom domain**
-2. 输入 `hindsight.kyosweb.com`
-3. Cloudflare 自动添加 CNAME 记录指向 `<project-name>.pages.dev`
-   - 你 kyosweb.com 在 Cloudflare DNS 下 → 自动完成
-   - 不在 Cloudflare → 手动到 DNS 提供商加 CNAME
-
-5 分钟后 `hindsight.kyosweb.com` 生效，自动 HTTPS。
-
-### 后续 push 自动部署
-
-之后每次 `git push origin main`，Cloudflare Pages 自动检测 `web/` 改动并重新部署，~30 秒生效。
-
-## 多语言扩展（未来）
-
-加 en / ja 版本时：
-
-```
-web/
-├── index.html       中文（默认）
-├── en/index.html    英文
-└── ja/index.html    日文
+```bash
+npm run build:web
+npx wrangler deploy --config web/wrangler.jsonc
 ```
 
-Nav 里的 lang switch 改成实际链接 `/en/` / `/ja/`。共用 `styles.css`。
+回滚：Cloudflare 控制台 → Workers & Pages → hindsight → Deployments，选旧版本 Rollback；或 `npx wrangler rollback --config web/wrangler.jsonc`。
 
 ## 修改清单
 
-改文案 / 配色 / 布局：
-
 - 全局配色 token：`styles.css` 顶部 `:root { ... }`
-- 各 section 文案：`index.html` 里有注释 `<!-- ============ XXX ============ -->` 分隔
-- 视频 URL：搜 `user-attachments/assets/df92b5b8` 替换
-- 截图：搜 `intro/zh/imgs/` 替换文件名
+- 各 section 文案：各语言 `index.html` 里有注释 `<!-- ============ XXX ============ -->` 分隔
+- 视频：替换 `docs/intro/<lang>/shot_video/` 下的 mp4，并重新生成封面
+- 缓存时长：`_headers`
 
 ## 后续可加
 
-- 多语言版本（en, ja）
 - Pro waitlist 邮件订阅区块（Tally embed）
 - Analytics（Cloudflare Web Analytics 免费、隐私友好）
-- 博客 / 文档子站（`docs/` / `blog/` 子目录）

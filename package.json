@@ -23,6 +23,7 @@
     "build:demo": "vite build --config web/vite.config.ts",
     "preview:demo": "vite preview --config web/vite.config.ts",
     "build:docs": "node scripts/docs/build.mjs && pagefind --site web/docs --output-path web/docs/pagefind",
+    "build:web": "npm run build:demo && npm run build:docs && node scripts/web/build.mjs",
     "shots:features": "node scripts/shots/features.mjs",
     "shots:readme": "node scripts/shots/readme/shoot.mjs",
     "tauri": "tauri",

@@ -89,8 +89,13 @@ web/README-pi.md
 # 设计原型 / 草稿 HTML：本地预览用，不入仓
 prototypes/
 
-# demo 构建产物：由 Cloudflare Pages 部署时 `npm ci && npm run build:demo` 重新生成，不入仓
+# demo 构建产物：npm run build:demo 生成，不入仓
 web/demo/
+
+# 官网整站产物：npm run build:web 组装，部署到 Cloudflare Workers 静态资源，不入仓
+dist-web/
+# wrangler dev 的本地状态
+.wrangler/
 
 
 # POC 输出（含真实屏幕内容，勿提交）
