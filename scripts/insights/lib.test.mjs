@@ -68,6 +68,29 @@ test("legacy release histories migrate totals without confusing missing data wit
   assert.deepEqual(merged.snapshots[5].releases, []);
 });
 
+test("installer platform totals migrate before compaction and survive later collections", () => {
+  const legacy = mergeHistory(null, sample("2026-10-20"));
+  legacy.snapshots = [
+    { date: "2026-10-20", releases: [{ assets: [{ name: "setup.exe", downloadCount: 4 }, { name: "app.dmg", downloadCount: 6 }, { name: "setup.exe.sig", downloadCount: 900 }] }] },
+    { date: "2026-10-21", releases: [] },
+    { date: "2026-10-22", releaseDownloads: 4000 },
+  ];
+  const incoming = sample("2026-10-23");
+  incoming.snapshot.releases = [{ assets: [{ name: "setup.exe", downloadCount: 8 }, { name: "app.dmg", downloadCount: 10 }] }];
+  const history = mergeHistory(legacy, incoming);
+  assert.deepEqual(history.snapshots.map((snapshot) => snapshot.installerDownloads), [
+    { total: 10, windows: 4, macos: 6, linux: 0, other: 0 },
+    { total: 0, windows: 0, macos: 0, linux: 0, other: 0 },
+    null,
+    { total: 18, windows: 8, macos: 10, linux: 0, other: 0 },
+  ]);
+  assert.equal(Object.hasOwn(history.snapshots[0], "releases"), false);
+  const later = mergeHistory(history, sample("2026-10-24"));
+  assert.deepEqual(later.snapshots[0].installerDownloads, { total: 10, windows: 4, macos: 6, linux: 0, other: 0 });
+  assert.deepEqual(mergeHistory(history, incoming), history);
+  assert.equal(incoming.snapshot.releases[0].assets[0].downloadCount, 8);
+});
+
 test("daily recovery copies retain full release catalogs after history compaction", async () => {
   const store = memoryStore();
   for (const date of ["2026-10-20", "2026-10-21", "2026-10-22"]) {

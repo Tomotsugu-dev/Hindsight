@@ -1,3 +1,5 @@
+import { installerTotals } from "./downloads.mjs";
+
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -72,7 +74,13 @@ function compactSnapshots(snapshots) {
   // complete release catalog throughout the long-lived history value.
   const detailedDates = new Set(snapshots.slice(-2).map((snapshot) => snapshot.date));
   return snapshots.map((snapshot) => {
-    const compacted = { ...snapshot, releaseDownloads: releaseDownloadTotal(snapshot) };
+    const compacted = {
+      ...snapshot,
+      releaseDownloads: releaseDownloadTotal(snapshot),
+      // Preserve installer-only platform totals before discarding old asset
+      // details. The legacy all-asset total is not an installer count.
+      installerDownloads: installerTotals(snapshot),
+    };
     if (!detailedDates.has(snapshot.date)) delete compacted.releases;
     return compacted;
   });

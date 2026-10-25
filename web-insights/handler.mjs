@@ -17,10 +17,10 @@ function response(body, status = 200, type = "application/json; charset=utf-8", 
   });
 }
 
-// No Static Assets binding: all three dashboard files pass through the same
+// No Static Assets binding: all dashboard resources pass through the same
 // Access check, including when requested via a preview or workers.dev hostname.
 // ctx.access is supplied and verified by Cloudflare, never by request headers.
-export function createHandler({ html, css, javascript, repositories }) {
+export function createHandler({ html, css, javascript, downloadsModule = "", repositories }) {
   const allowedRepositories = new Set(repositories);
   return {
     async fetch(request, env, ctx) {
@@ -55,6 +55,7 @@ export function createHandler({ html, css, javascript, repositories }) {
         [`${BASE_PATH}/`, [html, "text/html; charset=utf-8"]],
         [`${BASE_PATH}/dashboard.css`, [css, "text/css; charset=utf-8"]],
         [`${BASE_PATH}/dashboard.js`, [javascript, "application/javascript; charset=utf-8"]],
+        [`${BASE_PATH}/downloads.mjs`, [downloadsModule, "application/javascript; charset=utf-8"]],
       ]);
       if (resources.has(url.pathname)) {
         const [body, type] = resources.get(url.pathname);

@@ -1,4 +1,4 @@
-"use strict";
+import { installerPlatform, installerTotals, summarizeInstallerReleases, installerDailyRows } from "./downloads.mjs";
 
 (() => {
   const DAY = 86400000;
@@ -9,7 +9,8 @@
     hour: "2-digit", minute: "2-digit", hour12: false,
   });
   const $ = (id) => document.getElementById(id);
-  const state = { status: null, data: null, repository: "", range: "30", metric: "views", rowsShown: 50, request: 0, chart: null };
+  const state = { status: null, data: null, repository: "", range: "30", metric: "views", installerMode: "cumulative", installerPlatform: "total", rowsShown: 50, request: 0, chart: null, installerChart: null };
+  const platforms = { total: "全部平台", windows: "Windows", macos: "macOS", linux: "Linux", other: "其他平台" };
   const definitions = {
     views: { label: "浏览量 · PV", short: "PV", daily: true, unit: "次浏览" },
     visitors: { label: "独立访客 · 日 UV", short: "日 UV", daily: true, unique: true, unit: "人次（日 UV 之和）" },
@@ -18,7 +19,7 @@
     stars: { label: "Star 总数", short: "Stars", unit: "个 Star" },
     forks: { label: "Fork 总数", short: "Forks", unit: "个 Fork" },
     watchers: { label: "订阅人数", short: "订阅人数", unit: "位订阅者" },
-    downloads: { label: "Release 累计下载", short: "累计下载", unit: "次附件下载" },
+    downloads: { label: "安装包累计下载", short: "安装包下载", unit: "次安装包下载" },
   };
 
   function element(tag, className, text) {
@@ -137,14 +138,7 @@
   }
   function latestSnapshots() { const rows = snapshots(); return { latest: rows.at(-1), previous: rows.at(-2) }; }
   function downloadTotal(snapshot) {
-    if (numeric(snapshot?.releaseDownloads) !== null) return snapshot.releaseDownloads;
-    if (!snapshot || !Array.isArray(snapshot.releases)) return null;
-    let total = 0;
-    for (const release of snapshot.releases) {
-      if (!Array.isArray(release.assets)) return null;
-      for (const asset of release.assets) { const count = numeric(asset.downloadCount); if (count === null) return null; total += count; }
-    }
-    return total;
+    return snapshot ? numeric(installerTotals(snapshot)?.total) : null;
   }
   function rowsByDate() {
     const rows = new Map();
@@ -161,7 +155,9 @@
     return rows;
   }
   function selectedRows(includeMissing = false) {
-    const map = rowsByDate();
+    return rowsInRange(rowsByDate(), includeMissing);
+  }
+  function rowsInRange(map, includeMissing = false) {
     const keys = [...map.keys()].sort();
     if (!keys.length) return [];
     const end = utcToday();
@@ -212,7 +208,7 @@
       ["views", "浏览量 · PV", "↗"], ["visitors", "独立访客 · 日 UV", "◌"],
       ["clones", "Clone 次数", "↓"], ["cloners", "独立 Clone 用户 · 每日", "⌘"],
       ["stars", "Star 总数", "☆"], ["forks", "Fork 总数", "⑂"],
-      ["watchers", "订阅人数 · Watch", "◉"], ["downloads", "Release 累计下载", "↓"],
+      ["watchers", "订阅人数 · Watch", "◉"], ["downloads", "安装包累计下载", "↓"],
     ];
     const cards = cardDefinitions.map(([key, label, mark], index) => {
       const definition = definitions[key];
@@ -238,49 +234,55 @@
     if (value >= 1000) return (value / 1000).toFixed(value % 1000 === 0 ? 0 : 1) + "k";
     return String(value);
   }
-  function showChartPoint(index) {
-    const chart = state.chart;
+  function showChartPoint(index, chartKey = "chart") {
+    const chart = state[chartKey];
     if (!chart || !chart.rows.length) return;
     index = Math.max(0, Math.min(chart.rows.length - 1, index));
     chart.index = index;
     const row = chart.rows[index];
-    const value = numeric(row[state.metric]);
+    const value = numeric(row[chart.valueKey]);
     chart.cursor.setAttribute("x1", chart.x(index));
     chart.cursor.setAttribute("x2", chart.x(index));
-    chart.cursor.hidden = false;
-    chart.cursor.style.display = "";
-    chart.dot.style.display = value === null ? "none" : "";
+    chart.cursor.setAttribute("visibility", "visible");
+    chart.dot.setAttribute("visibility", value === null ? "hidden" : "visible");
     if (value !== null) { chart.dot.setAttribute("cx", chart.x(index)); chart.dot.setAttribute("cy", chart.y(value)); }
-    const tooltip = $("chartTooltip");
-    tooltip.replaceChildren(element("strong", "", row.date + " · UTC"), element("span", "", definitions[state.metric].short + "  " + formatted(value)));
-    if (value === null) tooltip.append(element("small", "", "未采集，不按 0 计算"));
+    const tooltip = $(chart.tooltipId);
+    tooltip.replaceChildren(element("strong", "", row.date + " · UTC"), element("span", "", chart.label + "  " + formatted(value)));
+    if (value === null) tooltip.append(element("small", "", chart.missingMessage || "未采集，不按 0 计算"));
     else if (row.date === utcToday()) tooltip.append(element("small", "", "当天 UTC 统计日尚未结束"));
     tooltip.hidden = false;
-    const width = $("chartWrap").clientWidth;
-    const matrix = $("trendChart").getScreenCTM();
-    const chartLeft = matrix ? chart.x(index) * matrix.a + matrix.e - $("chartWrap").getBoundingClientRect().left : chart.x(index) / 1000 * width;
+    const width = $(chart.wrapId).clientWidth;
+    const matrix = $(chart.svgId).getScreenCTM();
+    const chartLeft = matrix ? chart.x(index) * matrix.a + matrix.e - $(chart.wrapId).getBoundingClientRect().left : chart.x(index) / 1000 * width;
     tooltip.style.left = Math.min(width - 82, Math.max(82, chartLeft)) + "px";
     tooltip.style.top = "4px";
   }
-  function hideChartPoint() {
-    $("chartTooltip").hidden = true;
-    if (state.chart) { state.chart.cursor.style.display = "none"; state.chart.dot.style.display = "none"; }
+  function hideChartPoint(chartKey = "chart") {
+    const chart = state[chartKey];
+    if (!chart) return;
+    $(chart.tooltipId).hidden = true;
+    chart.cursor.setAttribute("visibility", "hidden");
+    chart.dot.setAttribute("visibility", "hidden");
   }
   function renderChart() {
     const rows = selectedRows(true);
     const definition = definitions[state.metric];
     const valid = rows.filter((row) => numeric(row[state.metric]) !== null);
-    const svg = $("trendChart");
-    svg.replaceChildren(svgElement("title", {}, definition.label + "趋势"), svgElement("desc", {}, "按 UTC 统计日展示。缺失记录显示断点，当天数据尚未结束。每日明细可在下方表格读取。"));
-    $("chartEmpty").hidden = valid.length > 0;
     const sum = valid.reduce((total, row) => total + row[state.metric], 0);
     $("trendSummaryLabel").textContent = definition.daily ? definition.unique ? "所选时段日去重数之和" : "所选时段合计" : "所选时段最新快照";
     $("trendSummaryValue").textContent = valid.length ? formatted(definition.daily ? sum : valid.at(-1)[state.metric]) : "—";
     $("trendSummaryUnit").textContent = valid.length ? definition.unit : "";
     $("coverageLabel").textContent = rows.length ? valid.length + " / " + rows.length + " 天有记录" : "等待采集记录";
     $("chartFootnote").textContent = definition.unique ? "日去重人数之和不等于跨日独立人数；缺失日期显示断点，当天数据未结束。" : definition.daily ? "缺失日期显示断点；当天 UTC 数据尚未结束。" : "累计指标仅在有快照的日期显示，连线不代表两次采集之间的准确变化时点。";
+    drawChart({ chartKey: "chart", svgId: "trendChart", wrapId: "chartWrap", tooltipId: "chartTooltip", emptyId: "chartEmpty", rows, valueKey: state.metric, label: definition.short });
+  }
+  function drawChart({ chartKey, svgId, wrapId, tooltipId, emptyId, rows, valueKey, label, missingMessage }) {
+    const valid = rows.filter((row) => numeric(row[valueKey]) !== null);
+    const svg = $(svgId);
+    svg.replaceChildren(svgElement("title", {}, label + "趋势"), svgElement("desc", {}, "按 UTC 日期展示，缺失记录显示断点。可聚焦图表并使用左右方向键逐日查看。"));
+    $(emptyId).hidden = valid.length > 0;
     const left = 54, right = 978, top = 38, bottom = 232;
-    const max = valid.length ? Math.max(...valid.map((row) => row[state.metric])) : 0;
+    const max = valid.length ? Math.max(...valid.map((row) => row[valueKey])) : 0;
     const rawStep = Math.max(max, 1) / 4;
     const magnitude = 10 ** Math.floor(Math.log10(rawStep));
     const step = Math.max(1, [1, 2, 2.5, 5, 10].map((part) => part * magnitude).find((part) => part >= rawStep) || magnitude * 10);
@@ -301,17 +303,21 @@
       if (segment.length > 1) {
         svg.append(svgElement("polygon", { points: segment[0][0] + "," + bottom + " " + points + " " + segment.at(-1)[0] + "," + bottom, class: "chart-area" }), svgElement("polyline", { points, class: "chart-line" }));
       }
-      if (valid.length <= 40 || segment.length === 1) segment.forEach(([cx, cy]) => svg.append(svgElement("circle", { cx, cy, r: segment.length === 1 ? 3.5 : 2.5, class: "chart-point" })));
+      if (valid.length <= 40 || segment.length === 1) segment.forEach(([cx, cy]) => svg.append(svgElement("circle", { cx, cy, r: segment.length === 1 ? 5 : 2.5, class: "chart-point" })));
       segment = [];
     };
-    rows.forEach((row, index) => { const value = numeric(row[state.metric]); if (value === null) drawSegment(); else segment.push([x(index), y(value)]); });
+    rows.forEach((row, index) => { const value = numeric(row[valueKey]); if (value === null) drawSegment(); else segment.push([x(index), y(value)]); });
     drawSegment();
-    const cursor = svgElement("line", { y1: top, y2: bottom, class: "chart-cursor", style: "display:none" });
-    const dot = svgElement("circle", { r: 5, class: "chart-focus-point", style: "display:none" });
+    if (valid.length === 1) {
+      const index = rows.findIndex((row) => numeric(row[valueKey]) !== null);
+      svg.append(svgElement("text", { x: x(index), y: y(valid[0][valueKey]) - 13, "text-anchor": x(index) > right - 50 ? "end" : x(index) < left + 50 ? "start" : "middle", class: "chart-single-value" }, formatted(valid[0][valueKey])));
+    }
+    const cursor = svgElement("line", { y1: top, y2: bottom, class: "chart-cursor", visibility: "hidden" });
+    const dot = svgElement("circle", { r: 5, class: "chart-focus-point", visibility: "hidden" });
     svg.append(cursor, dot);
-    state.chart = { rows, x, y, cursor, dot, index: rows.length - 1 };
-    svg.setAttribute("aria-label", definition.label + "趋势；" + valid.length + " 天有记录。使用左右方向键逐日查看。");
-    hideChartPoint();
+    state[chartKey] = { rows, x, y, cursor, dot, valueKey, label, svgId, wrapId, tooltipId, missingMessage, index: Math.max(0, rows.findLastIndex((row) => numeric(row[valueKey]) !== null)) };
+    svg.setAttribute("aria-label", label + "趋势；" + valid.length + " 天有记录。使用左右方向键逐日查看。");
+    hideChartPoint(chartKey);
   }
   function renderRollingTables() {
     const { latest } = latestSnapshots();
@@ -356,44 +362,94 @@
       return row;
     }));
   }
-  function fileSize(size) {
-    if (numeric(size) === null) return "—";
-    if (size < 1024) return size + " B";
-    if (size < 1048576) return (size / 1024).toFixed(1) + " KB";
-    if (size < 1073741824) return (size / 1048576).toFixed(1) + " MB";
-    return (size / 1073741824).toFixed(1) + " GB";
+  function availablePlatforms() {
+    const present = new Set(["total", "windows", "macos"]);
+    snapshots().forEach((snapshot) => {
+      const totals = installerTotals(snapshot);
+      ["linux", "other"].forEach((key) => { if (numeric(totals?.[key]) > 0) present.add(key); });
+      (snapshot.releases || []).forEach((release) => (release.assets || []).forEach((asset) => {
+        const platform = installerPlatform(asset.name);
+        if (platform) present.add(platform);
+      }));
+    });
+    return Object.keys(platforms).filter((key) => present.has(key));
   }
-  function renderReleases() {
-    const { latest, previous } = latestSnapshots();
-    const releases = latest?.releases;
-    if (!Array.isArray(releases) || !releases.length) {
-      $("releaseCount").textContent = latest ? "暂无 Release 附件" : "等待记录";
-      emptyRow("releasesBody", 5, latest ? "尚无可展示的 Release 附件" : "等待首次采集", "自动生成的 Source code 下载量不在 GitHub API 提供的数据中。");
+  function renderInstallerDownloads() {
+    const { latest } = latestSnapshots();
+    const totals = latest ? installerTotals(latest) : null;
+    const available = availablePlatforms();
+    $("installerTotals").replaceChildren(...available.map((platform) => {
+      const card = element("article", "installer-total-card platform-" + platform);
+      const label = element("p", "installer-total-label", platform === "total" ? "安装包下载总计" : platforms[platform]);
+      const value = numeric(totals?.[platform]);
+      const detail = platform === "total" ? "所有版本累计" : value !== null && numeric(totals?.total) > 0 ? "占全部安装包 " + (value / totals.total * 100).toFixed(1) + "%" : "累计下载次数";
+      card.append(label, element("strong", "installer-total-value", formatted(value)), element("p", "installer-total-detail", detail));
+      return card;
+    }));
+    $("installerMeta").textContent = latest ? "截至 " + timeLabel(latest.collectedAt) + " · 已保存 " + new Set(snapshots().map((row) => dateKey(row.date))).size + " 个 UTC 日快照" : "首次采集后显示历史累计；从相邻两日快照开始计算每日新增。";
+    const selector = $("installerPlatformSelect");
+    if (!available.includes(state.installerPlatform)) state.installerPlatform = "total";
+    selector.replaceChildren(...available.map((key) => {
+      const option = element("option", "", platforms[key]);
+      option.value = key;
+      return option;
+    }));
+    selector.value = state.installerPlatform;
+    const legend = available.filter((key) => key !== "total").map((key) => element("span", "platform-legend-item platform-" + key, platforms[key]));
+    $("installerLegend").replaceChildren(...legend);
+    renderInstallerVersions(latest);
+    renderInstallerHistory();
+  }
+  function renderInstallerVersions(latest) {
+    const releases = latest ? summarizeInstallerReleases(latest).slice().sort((a, b) => (timestamp(b.publishedAt) || 0) - (timestamp(a.publishedAt) || 0) || (Number(b.id) || 0) - (Number(a.id) || 0)) : [];
+    const shown = releases.slice(0, 10);
+    $("installerVersionCount").textContent = releases.length ? "展示 " + shown.length + " / " + releases.length + " 个版本" : "暂无版本";
+    if (!shown.length) {
+      $("installerVersionBars").replaceChildren(element("p", "compact-empty", latest ? "这次快照没有可用的安装包版本记录" : "等待首次采集"));
       return;
     }
-    const previousAssets = new Map();
-    (previous?.releases || []).forEach((release) => (release.assets || []).forEach((asset) => previousAssets.set(String(asset.id), asset)));
-    const rows = [];
-    releases.forEach((release) => (release.assets || []).forEach((asset) => {
-      const row = element("tr");
-      const name = element("td");
-      name.append(element("span", "release-name", asset.name || "未命名附件"));
-      const title = element("div", "release-title");
-      title.append(element("span", "release-tag", release.tag || "未标记版本"), document.createTextNode(release.name || ""));
-      name.append(title);
-      const difference = element("td", "numeric");
-      const last = previousAssets.get(String(asset.id));
-      if (last && numeric(asset.downloadCount) !== null && numeric(last.downloadCount) !== null) {
-        const change = asset.downloadCount - last.downloadCount;
-        difference.classList.add(change > 0 ? "positive" : change < 0 ? "negative" : "neutral");
-        difference.textContent = (change > 0 ? "+" : change < 0 ? "−" : "") + numberFormat.format(Math.abs(change));
-      } else { difference.textContent = "—"; difference.title = "没有可比较的同一附件快照"; }
-      row.append(name, element("td", "", dateKey(release.publishedAt) || "—"), element("td", "numeric", fileSize(asset.size)), element("td", "numeric", formatted(asset.downloadCount)), difference);
-      rows.push(row);
+    const maximum = Math.max(1, ...shown.map((release) => numeric(release.total) || 0));
+    $("installerVersionBars").replaceChildren(...shown.map((release) => {
+      const row = element("div", "installer-version-row");
+      const heading = element("div", "installer-version-heading");
+      const name = element("span", "installer-version-name", release.tag || "未标记版本");
+      name.title = "发布于 " + (dateKey(release.publishedAt) || "未知日期");
+      heading.append(name, element("span", "installer-version-total", formatted(release.total)));
+      const chart = svgElement("svg", { viewBox: "0 0 1000 10", preserveAspectRatio: "none", class: "installer-version-bar", role: "img" });
+      const description = (release.tag || "未标记版本") + "：" + ["windows", "macos", "linux", "other"].map((key) => platforms[key] + " " + formatted(release[key])).join("，");
+      chart.setAttribute("aria-label", description);
+      chart.append(svgElement("title", {}, description), svgElement("rect", { x: 0, y: 0, width: 1000, height: 10, rx: 3, class: "installer-bar-track" }));
+      let x = 0;
+      ["windows", "macos", "linux", "other"].forEach((key) => {
+        const value = numeric(release[key]);
+        if (value === null || value === 0) return;
+        const width = value / maximum * 1000;
+        const segment = svgElement("rect", { x, y: 0, width, height: 10, rx: 2, class: "installer-bar-segment platform-" + key });
+        segment.append(svgElement("title", {}, platforms[key] + "：" + formatted(value)));
+        chart.append(segment);
+        x += width;
+      });
+      row.append(heading, chart);
+      return row;
     }));
-    $("releaseCount").textContent = releases.length + " 个版本 · " + rows.length + " 个附件";
-    if (rows.length) $("releasesBody").replaceChildren(...rows);
-    else emptyRow("releasesBody", 5, "已发布的版本尚无附件", "自动生成的源码压缩包不计入附件下载。");
+  }
+  function renderInstallerHistory() {
+    const key = state.installerMode;
+    const dailyRows = installerDailyRows(snapshots(), state.installerPlatform);
+    const rows = rowsInRange(new Map(dailyRows.map((row) => [row.date, row])), true);
+    const valid = rows.filter((row) => numeric(row[key]) !== null);
+    const latest = valid.at(-1);
+    const sum = valid.reduce((total, row) => total + row[key], 0);
+    const isIncrease = key === "increase";
+    $("installerRangeLabel").textContent = "跟随上方时间范围 · " + (state.range === "all" ? "全部记录" : state.range + " 天") + " · UTC";
+    $("installerSummaryLabel").textContent = isIncrease ? "已知日期新增之和" : "所选时段最新累计";
+    $("installerSummaryValue").textContent = valid.length ? formatted(isIncrease ? sum : latest[key]) : "—";
+    $("installerCoverage").textContent = rows.length ? valid.length + " / " + rows.length + " 天" + (isIncrease ? "可比较" : "有快照") + (valid.length === 1 && !isIncrease ? dailyRows.length === 1 ? " · 已记录首个累计基线" : " · 当前范围仅一次快照" : "") : "等待下载快照";
+    $("installerChartEmptyTitle").textContent = isIncrease ? "还不能计算每日新增" : "这个时段没有安装包下载快照";
+    $("installerChartEmptyMessage").textContent = isIncrease ? "需要相邻 UTC 日期的快照。首日和断采后的第一天保留为未知，不按 0 计算。" : "切换更长时间范围，或等待首次采集完成。";
+    $("installerFootnote").textContent = isIncrease ? "新增量是相邻 UTC 日期快照之间的增量，覆盖两次采集的间隔；首日、断采及无法比较的变化保留为空。" : "首个快照是此前历史下载的累计基线，不是首日新增；断采日期显示断点。下载不代表实际安装。";
+    $("installerChart").dataset.platform = state.installerPlatform;
+    drawChart({ chartKey: "installerChart", svgId: "installerChart", wrapId: "installerChartWrap", tooltipId: "installerChartTooltip", emptyId: "installerChartEmpty", rows, valueKey: key, label: platforms[state.installerPlatform] + (isIncrease ? "新增下载" : "累计下载"), missingMessage: isIncrease ? "没有相邻 UTC 快照，新增量未知" : "未保存快照，不按 0 计算" });
   }
   function csvCell(value) {
     if (value === null || value === undefined) return "";
@@ -405,7 +461,7 @@
   function exportCsv() {
     const rows = selectedRows(false);
     if (!rows.length) return;
-    const headers = ["repository", "date_utc", "views", "daily_unique_visitors", "clones", "daily_unique_cloners", "stars_snapshot", "forks_snapshot", "subscribers_snapshot", "release_downloads_total_snapshot", "snapshot_collected_at", "utc_day_status"];
+    const headers = ["repository", "date_utc", "views", "daily_unique_visitors", "clones", "daily_unique_cloners", "stars_snapshot", "forks_snapshot", "subscribers_snapshot", "installer_downloads_total_snapshot", "snapshot_collected_at", "utc_day_status"];
     const lines = [headers.join(","), ...rows.map((row) => [state.repository, row.date, row.views, row.visitors, row.clones, row.cloners, row.stars, row.forks, row.watchers, row.downloads, row.collectedAt, row.date === utcToday() ? "in_progress" : "ended"].map(csvCell).join(","))];
     const url = URL.createObjectURL(new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
     const link = element("a");
@@ -414,7 +470,7 @@
     document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function render() { renderCards(); renderChart(); renderRollingTables(); renderDaily(); renderReleases(); }
+  function render() { renderCards(); renderChart(); renderInstallerDownloads(); renderRollingTables(); renderDaily(); }
 
   $("repositorySelect").addEventListener("change", (event) => { state.repository = event.target.value; loadRepository(); });
   $("refreshButton").addEventListener("click", () => loadStatus(true));
@@ -422,28 +478,40 @@
   document.querySelectorAll("[data-range]").forEach((button) => button.addEventListener("click", () => {
     state.range = button.dataset.range; state.rowsShown = 50;
     document.querySelectorAll("[data-range]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
-    renderChart(); renderDaily();
+    renderChart(); renderInstallerHistory(); renderDaily();
+  }));
+  $("installerPlatformSelect").addEventListener("change", (event) => { state.installerPlatform = event.target.value; renderInstallerHistory(); });
+  document.querySelectorAll("[data-installer-mode]").forEach((button) => button.addEventListener("click", () => {
+    state.installerMode = button.dataset.installerMode;
+    document.querySelectorAll("[data-installer-mode]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+    renderInstallerHistory();
   }));
   $("moreRowsButton").addEventListener("click", () => { state.rowsShown += 50; renderDaily(); });
   $("exportButton").addEventListener("click", exportCsv);
-  $("trendChart").addEventListener("pointermove", (event) => {
-    if (!state.chart?.rows.length) return;
-    const point = event.currentTarget.createSVGPoint();
-    point.x = event.clientX; point.y = event.clientY;
-    const matrix = event.currentTarget.getScreenCTM();
-    if (!matrix) return;
-    const value = point.matrixTransform(matrix.inverse()).x;
-    const index = Math.round((value - state.chart.x(0)) / Math.max(1, state.chart.x(state.chart.rows.length - 1) - state.chart.x(0)) * (state.chart.rows.length - 1));
-    showChartPoint(index);
-  });
-  $("trendChart").addEventListener("pointerleave", hideChartPoint);
-  $("trendChart").addEventListener("focus", () => showChartPoint(state.chart?.index || 0));
-  $("trendChart").addEventListener("blur", hideChartPoint);
-  $("trendChart").addEventListener("keydown", (event) => {
-    if (!state.chart?.rows.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    showChartPoint(event.key === "Home" ? 0 : event.key === "End" ? state.chart.rows.length - 1 : state.chart.index + (event.key === "ArrowLeft" ? -1 : 1));
-  });
+  function bindChart(svgId, chartKey) {
+    $(svgId).addEventListener("pointermove", (event) => {
+      const chart = state[chartKey];
+      if (!chart?.rows.length) return;
+      const point = event.currentTarget.createSVGPoint();
+      point.x = event.clientX; point.y = event.clientY;
+      const matrix = event.currentTarget.getScreenCTM();
+      if (!matrix) return;
+      const value = point.matrixTransform(matrix.inverse()).x;
+      const index = Math.round((value - chart.x(0)) / Math.max(1, chart.x(chart.rows.length - 1) - chart.x(0)) * (chart.rows.length - 1));
+      showChartPoint(index, chartKey);
+    });
+    $(svgId).addEventListener("pointerleave", () => hideChartPoint(chartKey));
+    $(svgId).addEventListener("focus", () => showChartPoint(state[chartKey]?.index ?? 0, chartKey));
+    $(svgId).addEventListener("blur", () => hideChartPoint(chartKey));
+    $(svgId).addEventListener("keydown", (event) => {
+      const chart = state[chartKey];
+      if (!chart?.rows.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      showChartPoint(event.key === "Home" ? 0 : event.key === "End" ? chart.rows.length - 1 : chart.index + (event.key === "ArrowLeft" ? -1 : 1), chartKey);
+    });
+  }
+  bindChart("trendChart", "chart");
+  bindChart("installerChart", "installerChart");
   render();
   loadStatus();
 })();
