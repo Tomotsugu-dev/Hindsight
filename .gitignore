@@ -94,6 +94,8 @@ web/demo/
 
 # 官网整站产物：npm run build:web 组装，部署到 Cloudflare Workers 静态资源，不入仓
 dist-web/
+# wrangler dev 的本地状态
+.wrangler/
 
 
 # POC 输出（含真实屏幕内容，勿提交）
