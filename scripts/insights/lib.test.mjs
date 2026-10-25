@@ -38,6 +38,51 @@ test("rerunning on the same UTC date replaces its snapshot without inflating his
   assert.equal(next.snapshots.length, 1);
 });
 
+test("release totals survive detail compaction and only the latest two UTC dates retain assets", () => {
+  let history = null;
+  for (const [date, downloads] of [["2026-10-20", 10], ["2026-10-21", 15], ["2026-10-22", 21], ["2026-10-23", 28]]) {
+    const collected = sample(date);
+    collected.snapshot.releases = [{ id: 1, assets: [{ id: 2, downloadCount: downloads }] }];
+    history = mergeHistory(history, collected);
+  }
+  assert.deepEqual(history.snapshots.map((snapshot) => snapshot.releaseDownloads), [10, 15, 21, 28]);
+  assert.deepEqual(history.snapshots.filter((snapshot) => Object.hasOwn(snapshot, "releases")).map((snapshot) => snapshot.date), ["2026-10-22", "2026-10-23"]);
+  const rerun = sample("2026-10-23");
+  rerun.snapshot.releases = [{ id: 1, assets: [{ id: 2, downloadCount: 28 }] }];
+  assert.deepEqual(mergeHistory(history, rerun), history);
+});
+
+test("legacy release histories migrate totals without confusing missing data with zero", () => {
+  const legacy = mergeHistory(null, sample("2026-10-20"));
+  legacy.snapshots = [
+    { date: "2026-10-20", releases: [{ assets: [{ downloadCount: 4 }, { downloadCount: 6 }] }] },
+    { date: "2026-10-21", releases: [] },
+    { date: "2026-10-22" },
+    { date: "2026-10-23", releaseDownloads: 12 },
+    { date: "2026-10-24", releases: [{ assets: [{ downloadCount: null }] }] },
+  ];
+  const merged = mergeHistory(legacy, sample("2026-10-25"));
+  assert.deepEqual(merged.snapshots.map((snapshot) => snapshot.releaseDownloads), [10, 0, null, 12, null, 0]);
+  assert.equal(Object.hasOwn(merged.snapshots[0], "releases"), false);
+  assert.equal(Object.hasOwn(merged.snapshots[4], "releases"), true);
+  assert.deepEqual(merged.snapshots[5].releases, []);
+});
+
+test("daily recovery copies retain full release catalogs after history compaction", async () => {
+  const store = memoryStore();
+  for (const date of ["2026-10-20", "2026-10-21", "2026-10-22"]) {
+    const collected = sample(date);
+    collected.snapshot.releases = [{ id: 1, assets: [{ id: 2, downloadCount: 10 }] }];
+    await collectAll({ repositories: [repository], store, collectRepository: async () => collected, now: new Date(collected.collectedAt) });
+    // Compaction must not mutate the original response used for recovery.
+    assert.equal(collected.snapshot.releases[0].assets[0].downloadCount, 10);
+  }
+  const history = await store.get(historyKey(repository));
+  assert.equal(Object.hasOwn(history.snapshots[0], "releases"), false);
+  const recovery = await store.get(snapshotKey(repository, "2026-10-20"));
+  assert.equal(recovery.snapshot.releases[0].assets[0].downloadCount, 10);
+});
+
 test("a failed GitHub request preserves successful history and reports stale collection", async () => {
   const store = memoryStore();
   await collectAll({ repositories: [repository], store, collectRepository: async () => sample("2026-10-20"), now: new Date("2026-10-20T03:17:00Z") });

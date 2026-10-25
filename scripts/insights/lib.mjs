@@ -47,6 +47,37 @@ export function mergeByDate(previous, incoming) {
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+function releaseDownloadTotal(snapshot) {
+  if (Number.isSafeInteger(snapshot.releaseDownloads) && snapshot.releaseDownloads >= 0) {
+    return snapshot.releaseDownloads;
+  }
+  // Legacy snapshots may have no release data. That means unknown, while a
+  // successful response containing no releases is a known total of zero.
+  if (!Array.isArray(snapshot.releases)) return null;
+  let total = 0;
+  for (const release of snapshot.releases) {
+    if (!Array.isArray(release?.assets)) return null;
+    for (const asset of release.assets) {
+      if (!Number.isSafeInteger(asset?.downloadCount) || asset.downloadCount < 0) return null;
+      total += asset.downloadCount;
+      if (!Number.isSafeInteger(total)) return null;
+    }
+  }
+  return total;
+}
+
+function compactSnapshots(snapshots) {
+  // Keep asset-level details only for the latest two UTC collection dates so
+  // the dashboard can calculate current asset deltas without repeating the
+  // complete release catalog throughout the long-lived history value.
+  const detailedDates = new Set(snapshots.slice(-2).map((snapshot) => snapshot.date));
+  return snapshots.map((snapshot) => {
+    const compacted = { ...snapshot, releaseDownloads: releaseDownloadTotal(snapshot) };
+    if (!detailedDates.has(snapshot.date)) delete compacted.releases;
+    return compacted;
+  });
+}
+
 export function mergeHistory(previous, collected) {
   if (previous && (previous.version !== 1 || previous.repository !== collected.repository)) {
     throw new Error("Stored Insights history has an incompatible version or repository");
@@ -58,7 +89,7 @@ export function mergeHistory(previous, collected) {
     lastCollectedAt: collected.collectedAt,
     views: mergeByDate(previous?.views ?? [], collected.views),
     clones: mergeByDate(previous?.clones ?? [], collected.clones),
-    snapshots: mergeByDate(previous?.snapshots ?? [], [collected.snapshot]),
+    snapshots: compactSnapshots(mergeByDate(previous?.snapshots ?? [], [collected.snapshot])),
   };
 }
 

@@ -137,6 +137,7 @@
   }
   function latestSnapshots() { const rows = snapshots(); return { latest: rows.at(-1), previous: rows.at(-2) }; }
   function downloadTotal(snapshot) {
+    if (numeric(snapshot?.releaseDownloads) !== null) return snapshot.releaseDownloads;
     if (!snapshot || !Array.isArray(snapshot.releases)) return null;
     let total = 0;
     for (const release of snapshot.releases) {
