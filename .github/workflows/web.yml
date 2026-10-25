@@ -5,8 +5,9 @@
 # - A push to main deploys production, served at hindsight.kyosweb.com.
 # - A pull request from a branch of this repo uploads a preview version at
 #   <branch>-hindsight.<account subdomain>.workers.dev without touching
-#   production. Pull requests from forks have no access to the secrets, so
-#   they only build, which still runs the link check.
+#   production. Without the API token (pull requests from forks never get
+#   secrets) the preview is skipped and the job only builds, which still
+#   runs the link check. Production fails instead, so a missing secret shows.
 # - The demo renders the app's own components from src/, so changes there
 #   redeploy the site too.
 #
@@ -77,7 +78,7 @@ jobs:
         run: npx --yes wrangler@4.152.0 deploy --config web/wrangler.jsonc
 
       - name: Upload a preview
-        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
+        if: github.event_name == 'pull_request' && env.CLOUDFLARE_API_TOKEN != ''
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
