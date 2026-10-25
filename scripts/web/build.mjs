@@ -1,21 +1,22 @@
-// 把整站组装到 dist-web/，由 Cloudflare Workers 静态资源发布（见 web/wrangler.jsonc）。
-// demo 和文档站先由 build:demo、build:docs 生成到 web/ 里（见 package.json 的 build:web），
-// 这里只负责拼装：
-//   web/ 下的页面、样式和构建产物（不含 demo-src、配置、README 这些源文件）
-//   页面引用的 /assets/video/* → 从 docs/intro/<lang>/shot_video/ 取
-// 拼完校验所有站内 src / href / poster 都指向存在的文件。
+// Assemble the public site in dist-web/ for the Worker in web/wrangler.jsonc.
+// build:demo and build:docs generate their web/ outputs before this script runs.
+// Copy public pages and assets, plus referenced videos from docs/intro/;
+// internal dashboards deploy separately and must never enter this public bundle.
+// Validate that every local src, href, and poster points to an existing file.
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const WEB = path.join(ROOT, "web");
+const INTERNAL = path.join(WEB, "internal");
 const OUT = path.join(ROOT, "dist-web");
 const INTRO = path.join(ROOT, "docs/intro");
 
-// web/ 里只在构建时用、不该发布出去的文件
+// Exclude source-only files and the separately authenticated internal tools.
 const SOURCE_ONLY = new Set(["demo-src", "tsconfig.json", "vite.config.ts", "wrangler.jsonc", "worker.js"]);
 const published = (src) => {
+  if (src === INTERNAL || src.startsWith(`${INTERNAL}${path.sep}`)) return false;
   const name = path.basename(src);
   return !name.startsWith(".") && !name.startsWith("README") && !SOURCE_ONLY.has(name);
 };

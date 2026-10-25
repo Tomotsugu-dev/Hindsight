@@ -32,7 +32,7 @@ must be configured separately before authorized visitors can enter.
 
 ## Collection and deployment
 
-See [the collector documentation](../scripts/insights/README.md) for repository
+See [the collector documentation](../../../scripts/insights/README.md) for repository
 selection, token permissions, daily schedule and data definitions.
 
 `.github/workflows/insights-web.yml` verifies and packages pull requests, then
@@ -40,10 +40,10 @@ deploys this Worker on relevant pushes to `main`. It reuses the existing
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets.
 
 ```sh
-node --test scripts/insights/*.test.mjs web-insights/worker.test.mjs
-node --check web-insights/dashboard.js
-npx wrangler@4.152.0 deploy --config web-insights/wrangler.jsonc --dry-run
-npx wrangler@4.152.0 deploy --config web-insights/wrangler.jsonc
+node --test scripts/insights/*.test.mjs web/internal/github-insights/worker.test.mjs
+node --check web/internal/github-insights/dashboard.js
+npx wrangler@4.152.0 deploy --config web/internal/github-insights/wrangler.jsonc --dry-run
+npx wrangler@4.152.0 deploy --config web/internal/github-insights/wrangler.jsonc
 ```
 
 `scripts/insights/config.json` and this Worker's `INSIGHTS` binding must refer to

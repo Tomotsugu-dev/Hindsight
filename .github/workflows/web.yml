@@ -1,6 +1,7 @@
 # Builds the website (landing pages, web demo, docs) with `npm run build:web`
 # and publishes dist-web/ as the Cloudflare Worker `hindsight`, which serves
 # static assets only (configured in web/wrangler.jsonc).
+# Internal tools under web/internal/ use their own build and deployment workflow.
 #
 # - A push to main deploys production, served at hindsight.kyosweb.com.
 # - A pull request from a branch of this repo uploads a preview version at
@@ -24,6 +25,7 @@ on:
       - main
     paths:
       - web/**
+      - '!web/internal/**'
       - src/**
       - docs/intro/**
       - docs/features/**
@@ -35,6 +37,7 @@ on:
   pull_request:
     paths:
       - web/**
+      - '!web/internal/**'
       - src/**
       - docs/intro/**
       - docs/features/**
@@ -67,6 +70,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Verify public build excludes internal tools
+        run: node --test scripts/web/build.test.mjs
 
       - name: Install deps
         run: npm ci
