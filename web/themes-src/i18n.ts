@@ -2,7 +2,17 @@
 
 export type PageLanguage = "zh-CN" | "zh-TW" | "en" | "ja" | "pt-BR" | "es";
 
-const LANGUAGES: readonly string[] = ["zh-CN", "zh-TW", "en", "ja", "pt-BR", "es"];
+/** 语言切换里每种语言的名字。顺序就是显示的顺序，和官网首页一样。 */
+export const LANGUAGE_NAMES: Record<PageLanguage, string> = {
+  "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
+  en: "English",
+  ja: "日本語",
+  "pt-BR": "Português",
+  es: "Español",
+};
+
+const LANGUAGES: readonly string[] = Object.keys(LANGUAGE_NAMES);
 
 /**
  * 页面用的语言：先看 ?lang=（应用里的「获取主题」按钮会带上界面语言），再看浏览器的语言，

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { RotateCw } from "lucide-react";
-import { HOME_PAGE, STRINGS, pageLanguage } from "./i18n";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Globe, RotateCw } from "lucide-react";
+import { HOME_PAGE, LANGUAGE_NAMES, STRINGS, pageLanguage, type PageLanguage } from "./i18n";
 import { loadIndex, type ThemeEntry } from "./index-data";
 import { PreviewPanel } from "./PreviewPanel";
 import { ThemeCard } from "./ThemeCard";
@@ -10,9 +10,9 @@ const LANGUAGE = pageLanguage(location.search, navigator.languages);
 
 const LOGO = "https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png";
 
-// 主题文件的格式和做法
+// 怎么上架主题。那一节开头再链到主题文件的格式
 const MAKE_A_THEME =
-  "https://github.com/Tomotsugu-dev/Hindsight/blob/main/docs/design/themes/README.md";
+  "https://github.com/Tomotsugu-dev/hindsight-plugins/blob/main/CONTRIBUTING.md#themes";
 
 type State =
   | { status: "loading" }
@@ -47,9 +47,12 @@ export function ThemesPage() {
             <img src={LOGO} alt="" className="nav-logo" />
             <span className="nav-name">Hindsight</span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight" className="nav-github" aria-label="GitHub">
-            <GitHubIcon />
-          </a>
+          <div className="nav-links">
+            <LanguageSwitch />
+            <a href="https://github.com/Tomotsugu-dev/Hindsight" className="nav-github" aria-label="GitHub">
+              <GitHubIcon />
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -94,6 +97,28 @@ export function ThemesPage() {
         <PreviewPanel theme={previewing} language={LANGUAGE} onClose={() => setPreviewing(null)} />
       )}
     </>
+  );
+}
+
+/** 和官网首页一样的语言切换。换语言就是带着 ?lang= 重新打开这一页。 */
+function LanguageSwitch() {
+  const languages = Object.keys(LANGUAGE_NAMES) as PageLanguage[];
+  return (
+    <div className="lang-switch">
+      <Globe size={16} strokeWidth={2} className="lang-icon" aria-hidden />
+      {languages.map((code, i) => (
+        <Fragment key={code}>
+          {i > 0 && <span className="lang-sep">·</span>}
+          {code === LANGUAGE ? (
+            <span className="lang-active">{LANGUAGE_NAMES[code]}</span>
+          ) : (
+            <a href={`?lang=${code}`} lang={code}>
+              {LANGUAGE_NAMES[code]}
+            </a>
+          )}
+        </Fragment>
+      ))}
+    </div>
   );
 }
 
