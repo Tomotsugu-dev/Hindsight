@@ -54,8 +54,8 @@ not credentials. Never put API tokens in either configuration file.
 
 - Daily views, unique visitors, clones and unique cloners, with gaps preserved.
 - Stars, forks, actual subscribers, and primary installer downloads.
-- Installer totals by platform, compact version comparisons, and cumulative or
-  daily-increase download charts. Signature files, update manifests, archives,
+- Installer totals by platform, compact version comparisons, and independent
+  7/30-day download totals with daily bars. Signature files, update manifests, archives,
   and other release attachments do not count as installers.
 - Repository switcher; 7/30/90-day or full-history charts; CSV export.
 - Rolling 14-day Top 10 referrers and paths, explicitly distinct from daily data.
@@ -64,6 +64,9 @@ not credentials. Never put API tokens in either configuration file.
 - Daily detail is collapsed by default; the full attachment catalog is not
   rendered. Download increases require consecutive UTC snapshots and cannot
   reconstruct the dates of downloads before collection began.
+- Period totals sum only known daily increases. Partial windows display the
+  number of recorded days and label their total as recorded downloads; windows
+  with no known increases show an unknown total instead of zero.
 
 Public GitHub Actions scheduling is best effort. The website displays the latest
 saved collection, not a live request to GitHub. Refreshing the page does not run

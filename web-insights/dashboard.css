@@ -1135,53 +1135,190 @@ th,td {
   color:var(--faded);
   font-size:14px;
   line-height:1.8}
-.installer-history-panel {
-  display:flex;
-  flex-direction:column}
-.installer-history-panel>.panel-heading select {
+.installer-window-panel {
+  align-self:start;
+}
+.installer-window-panel>.panel-heading select {
   min-width:142px;
   max-width:100%;
-  font-size:15px}
-.installer-history-summary {
+  font-size:15px;
+}
+.installer-window-controls {
   display:flex;
+  align-items:center;
   justify-content:space-between;
-  align-items:flex-start;
+  flex-wrap:wrap;
   gap:12px;
-  margin:0 26px;
-  flex-wrap:wrap;
-  row-gap:12px}
-.installer-history-summary>div:first-child {
-  display:flex;
-  flex-wrap:wrap;
-  align-items:baseline;
-  gap:7px}
-.installer-history-summary>div>span {
+  margin:0 26px 22px;
+}
+.installer-window-controls .soft-badge {
   font-size:14px;
+  font-weight:600;
   color:var(--muted);
-  font-weight:500}
-.installer-history-summary strong {
-  font-size:38px;
-  letter-spacing:-.7px;
+}
+.installer-window-controls .range-control {
+  width:auto;
+  margin-top:0;
+}
+.installer-window-controls .installer-window-complete {
+  color:var(--green);
+  background:#eff7f0;
+  border-color:#c9dfcf;
+}
+.installer-window-summary {
+  margin:0 26px 22px;
+}
+#installerSummaryLabel {
+  color:var(--text);
+  font-size:16px;
+  font-weight:600;
+}
+.installer-window-total {
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:3px 0 8px;
+}
+.installer-window-total strong {
+  color:var(--text);
+  font-size:52px;
   font-weight:650;
+  line-height:1.2;
+  letter-spacing:-1px;
   font-variant-numeric:tabular-nums;
-  line-height:1.3}
-.installer-history-summary .range-control {
-  flex-shrink:0}
-.installer-coverage {
-  margin:4px 26px 0;
-  font-size:13px;
-  color:var(--faded);
+  overflow-wrap:anywhere;
+}
+.installer-window-total>span {
+  color:var(--muted);
+  font-size:16px;
   font-weight:500;
+}
+.installer-window-status {
+  font-size:14px;
+  font-weight:450;
+  color:var(--muted);
   line-height:1.8;
-  margin-top:8px}
-.installer-chart-wrap {
-  flex:1 0 300px;
-  min-height:280px;
-  height:300px;
-  margin-top:0}
-.installer-history-panel>.chart-footer {
-  font-size:13px;
-  line-height:1.8}
+}
+.installer-distribution-heading {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:6px 14px;
+  margin:0 26px 14px;
+}
+.installer-distribution-heading h4 {
+  font-size:15px;
+  font-weight:600;
+  margin:0;
+}
+.installer-distribution-heading>span {
+  color:var(--muted);
+  font-size:14px;
+  font-weight:500;
+}
+.installer-daily-scroll {
+  margin:0 26px 22px;
+  overflow-x:auto;
+  overscroll-behavior-x:contain;
+  padding-bottom:8px;
+}
+.installer-daily-bars {
+  display:grid;
+  gap:4px;
+  align-items:end;
+}
+.installer-daily-bars.days-7 {
+  grid-template-columns:repeat(7,minmax(42px,1fr));
+}
+.installer-daily-bars.days-30 {
+  grid-template-columns:repeat(30,minmax(42px,1fr));
+}
+.installer-day-column {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  min-width:0;
+  gap:7px;
+  text-align:center;
+}
+.installer-day-value {
+  color:var(--text);
+  font-size:14px;
+  font-weight:600;
+  line-height:1.6;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.installer-day-track {
+  height:104px;
+  position:relative;
+  border-bottom:1px solid #cbd0d5;
+  background:#f4f5f6;
+  border-radius:4px 4px 0 0;
+  overflow:hidden;
+}
+.installer-day-fill {
+  display:block;
+  position:absolute;
+  bottom:0;
+  left:15%;
+  width:70%;
+  min-height:3px;
+  background:var(--platform-color,var(--accent));
+  border-radius:4px 4px 0 0;
+}
+.installer-day-date {
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:14px;
+  font-weight:500;
+  white-space:nowrap;
+  line-height:1.6;
+}
+.installer-day-column.is-missing .installer-day-track {
+  background:repeating-linear-gradient(135deg,#fff,#fff 5px,#e8ebee 5px,#e8ebee 7px);
+  border:1px dashed #aeb6bf;
+  border-radius:4px;
+}
+.installer-day-column.is-missing .installer-day-value {
+  color:var(--muted);
+  font-weight:500;
+}
+.installer-day-column.is-zero .installer-day-track {
+  background:#fff;
+}
+.installer-daily-bars.is-accumulating .installer-day-track {
+  height:40px;
+}
+.installer-window-footnote {
+  border-top:1px solid var(--border);
+  margin:0 26px;
+  padding:16px 0 20px;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.8;
+}
+@media(max-width:760px) {
+  .installer-window-controls,.installer-window-summary,.installer-distribution-heading,.installer-daily-scroll {
+    margin-left:20px;
+    margin-right:20px;
+  }
+  .installer-window-footnote {
+    margin-left:20px;
+    margin-right:20px;
+  }
+  .installer-window-total strong {
+    font-size:46px;
+  }
+}
+@media(max-width:400px) {
+  .installer-window-controls,.installer-window-summary,.installer-distribution-heading,.installer-daily-scroll,.installer-window-footnote {
+    margin-left:16px;
+    margin-right:16px;
+  }
+}
 .installer-method-note {
   margin-top:11px;
   color:var(--faded);
@@ -1204,14 +1341,6 @@ th,td {
 .chart-area {
   fill:var(--chart-color,var(--accent));
   opacity:.05}
-#installerChart[data-platform=windows] {
-  --chart-color:#3c6e99}
-#installerChart[data-platform=macos] {
-  --chart-color:#8760a7}
-#installerChart[data-platform=linux] {
-  --chart-color:#47785d}
-#installerChart[data-platform=other] {
-  --chart-color:#8d683a}
 
 .daily-details>summary {
   cursor:pointer;
@@ -1239,28 +1368,6 @@ th,td {
   .installer-charts-grid {
   grid-template-columns:minmax(0,.8fr) minmax(0,1.1fr);
   gap:14px}
-.installer-history-summary {
-  margin-left:20px;
-  margin-right:20px;
-  flex-wrap:wrap;
-  align-items:flex-start;
-  row-gap:12px}
-.installer-history-summary>div:first-child {
-  display:block}
-.installer-history-summary>div:first-child>span:first-child {
-  display:block}
-.installer-history-summary strong {
-  margin-right:5px;
-  font-size:38px;
-  font-weight:650;
-  line-height:1.3}
-.installer-coverage {
-  margin-left:20px;
-  margin-right:20px;
-  font-size:13px;
-  font-weight:500;
-  line-height:1.8;
-  margin-top:8px}
 .installer-version-bars,.platform-legend {
   padding-left:20px;
   padding-right:20px}
@@ -1289,23 +1396,8 @@ th,td {
   font-size:38px}
 .installer-total-card.platform-total .installer-total-detail {
   grid-column:1}
-.installer-history-panel>.panel-heading {
-  align-items:center}
-.installer-history-summary>div:first-child {
-  display:flex}
-.installer-history-summary>div:first-child>span:first-child {
-  display:inline}
-.installer-chart-wrap {
-  height:300px;
-  flex:1 0 300px;
-  min-height:280px}
-.installer-history-summary .range-control {
-  width:auto;
-  margin-top:0}
 .installer-versions-panel .panel-description {
   font-size:14px}
-.installer-history-panel .chart-footer {
-  padding-bottom:15px}
 .installer-version-row {
   padding:9px 0}
 .daily-details>summary {
@@ -1317,27 +1409,6 @@ th,td {
 }
 
 @media(max-width:400px) {
-  .installer-history-summary {
-  margin-left:16px;
-  margin-right:16px;
-  align-items:flex-start;
-  flex-wrap:wrap;
-  row-gap:12px}
-.installer-history-summary>div:first-child {
-  display:block}
-.installer-history-summary>div:first-child>span:first-child {
-  display:block}
-.installer-coverage {
-  margin-left:16px;
-  margin-right:16px;
-  font-size:13px;
-  font-weight:500;
-  line-height:1.8;
-  margin-top:8px}
-.installer-history-summary .range-control button {
-  padding:8px 12px;
-  font-size:14px;
-  min-height:40px}
 .installer-method-note {
   font-size:13px;
   font-weight:450;

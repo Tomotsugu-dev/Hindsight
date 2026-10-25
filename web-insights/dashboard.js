@@ -1,4 +1,4 @@
-import { installerPlatform, installerTotals, summarizeInstallerReleases, installerDailyRows } from "./downloads.mjs";
+import { installerPlatform, installerTotals, summarizeInstallerReleases, installerWindowSummary } from "./downloads.mjs";
 
 (() => {
   const DAY = 86400000;
@@ -9,7 +9,7 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     hour: "2-digit", minute: "2-digit", hour12: false,
   });
   const $ = (id) => document.getElementById(id);
-  const state = { status: null, data: null, repository: "", range: "30", metric: "views", installerMode: "cumulative", installerPlatform: "total", rowsShown: 50, request: 0, chart: null, installerChart: null };
+  const state = { status: null, data: null, repository: "", range: "30", metric: "views", installerDays: 7, installerPlatform: "total", rowsShown: 50, request: 0, chart: null };
   const platforms = { total: "全部平台", windows: "Windows", macos: "macOS", linux: "Linux", other: "其他平台" };
   const definitions = {
     views: { label: "浏览量 · PV", short: "PV", daily: true, unit: "次浏览" },
@@ -282,8 +282,7 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     const svg = $(svgId);
     svg.replaceChildren(svgElement("title", {}, label + "趋势"), svgElement("desc", {}, "按 UTC 日期展示，缺失记录显示断点。可聚焦图表并使用左右方向键逐日查看。"));
     $(emptyId).hidden = valid.length > 0;
-    // Match the SVG coordinate system to its actual CSS size. A fixed 1000px
-    // viewBox shrank 14px labels to 6–7px in the half-width download panel.
+    // Keep axis labels at their CSS pixel size as the chart container resizes.
     const wrap = $(wrapId);
     const width = Math.max(240, Math.round(wrap.clientWidth || 1000));
     const height = Math.max(240, Math.round(wrap.clientHeight || 288));
@@ -406,7 +405,7 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     const legend = available.filter((key) => key !== "total").map((key) => element("span", "platform-legend-item platform-" + key, platforms[key]));
     $("installerLegend").replaceChildren(...legend);
     renderInstallerVersions(latest);
-    renderInstallerHistory();
+    renderInstallerWindow();
   }
   function renderInstallerVersions(latest) {
     const releases = latest ? summarizeInstallerReleases(latest).slice().sort((a, b) => (timestamp(b.publishedAt) || 0) - (timestamp(a.publishedAt) || 0) || (Number(b.id) || 0) - (Number(a.id) || 0)) : [];
@@ -441,23 +440,41 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
       return row;
     }));
   }
-  function renderInstallerHistory() {
-    const key = state.installerMode;
-    const dailyRows = installerDailyRows(snapshots(), state.installerPlatform);
-    const rows = rowsInRange(new Map(dailyRows.map((row) => [row.date, row])), true);
-    const valid = rows.filter((row) => numeric(row[key]) !== null);
-    const latest = valid.at(-1);
-    const sum = valid.reduce((total, row) => total + row[key], 0);
-    const isIncrease = key === "increase";
-    $("installerRangeLabel").textContent = "跟随上方时间范围 · " + (state.range === "all" ? "全部记录" : state.range + " 天") + " · UTC";
-    $("installerSummaryLabel").textContent = isIncrease ? "已知日期新增之和" : "所选时段最新累计";
-    $("installerSummaryValue").textContent = valid.length ? formatted(isIncrease ? sum : latest[key]) : "—";
-    $("installerCoverage").textContent = rows.length ? valid.length + " / " + rows.length + " 天" + (isIncrease ? "可比较" : "有快照") + (valid.length === 1 && !isIncrease ? dailyRows.length === 1 ? " · 已记录首个累计基线" : " · 当前范围仅一次快照" : "") : "等待下载快照";
-    $("installerChartEmptyTitle").textContent = isIncrease ? "还不能计算每日新增" : "这个时段没有安装包下载快照";
-    $("installerChartEmptyMessage").textContent = isIncrease ? "需要相邻 UTC 日期的快照。首日和断采后的第一天保留为未知，不按 0 计算。" : "切换更长时间范围，或等待首次采集完成。";
-    $("installerFootnote").textContent = isIncrease ? "新增量是相邻 UTC 日期快照之间的增量，覆盖两次采集的间隔；首日、断采及无法比较的变化保留为空。" : "首个快照是此前历史下载的累计基线，不是首日新增；断采日期显示断点。下载不代表实际安装。";
-    $("installerChart").dataset.platform = state.installerPlatform;
-    drawChart({ chartKey: "installerChart", svgId: "installerChart", wrapId: "installerChartWrap", tooltipId: "installerChartTooltip", emptyId: "installerChartEmpty", rows, valueKey: key, label: platforms[state.installerPlatform] + (isIncrease ? "新增下载" : "累计下载"), missingMessage: isIncrease ? "没有相邻 UTC 快照，新增量未知" : "未保存快照，不按 0 计算" });
+  function renderInstallerWindow() {
+    const days = state.installerDays;
+    const summary = installerWindowSummary(snapshots(), { days, platform: state.installerPlatform, endDate: utcToday() });
+    const period = "近" + days + "天";
+    $("installerWindowTitle").textContent = period + "下载量";
+    $("installerRangeLabel").textContent = summary.startDate + " — " + summary.endDate + " · UTC · " + platforms[state.installerPlatform];
+    $("installerSummaryLabel").textContent = period + (summary.complete ? "总下载量" : "已记录下载");
+    $("installerSummaryValue").textContent = formatted(summary.total);
+    $("installerCoverage").textContent = "已记录 " + summary.knownDays + "/" + days + " 天";
+    $("installerCoverage").className = "soft-badge" + (summary.complete ? " installer-window-complete" : "");
+    $("installerWindowStatus").textContent = summary.complete ? days + " 天记录完整。" : summary.knownDays > 0 ? "仅汇总已记录的 " + summary.knownDays + " 天，其余 " + (days - summary.knownDays) + " 天未记录。" : "正在积累记录。首个快照是基线，无法补回此前 " + days + " 天下载。";
+    $("installerFootnote").textContent = "按相邻 UTC 日期快照之间的新增下载汇总，覆盖两次采集的间隔；首日和断采日期未知，不按 0 计算。";
+    const maximum = Math.max(1, ...summary.rows.map((row) => numeric(row.downloads) || 0));
+    const bars = $("installerDailyBars");
+    bars.className = "installer-daily-bars days-" + days + " platform-" + state.installerPlatform + (summary.knownDays === 0 ? " is-accumulating" : "");
+    bars.setAttribute("aria-label", period + "每日安装包下载，" + platforms[state.installerPlatform]);
+    bars.replaceChildren(...summary.rows.map((row) => {
+      const count = numeric(row.downloads);
+      const missing = count === null;
+      const column = element("div", "installer-day-column" + (missing ? " is-missing" : count === 0 ? " is-zero" : ""));
+      const label = row.date + " · " + (missing ? "未记录" : formatted(count) + " 次下载");
+      column.setAttribute("role", "listitem");
+      column.setAttribute("aria-label", label);
+      column.title = label;
+      const value = element("span", "installer-day-value", missing ? "未记录" : formatted(count));
+      const track = element("div", "installer-day-track");
+      track.setAttribute("aria-hidden", "true");
+      if (!missing) {
+        const fill = element("span", "installer-day-fill");
+        fill.style.height = count === 0 ? "3px" : Math.max(3, count / maximum * 100) + "%";
+        track.append(fill);
+      }
+      column.append(value, track, element("span", "installer-day-date", row.date.slice(5).replace("-", "/")));
+      return column;
+    }));
   }
   function csvCell(value) {
     if (value === null || value === undefined) return "";
@@ -486,13 +503,13 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
   document.querySelectorAll("[data-range]").forEach((button) => button.addEventListener("click", () => {
     state.range = button.dataset.range; state.rowsShown = 50;
     document.querySelectorAll("[data-range]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
-    renderChart(); renderInstallerHistory(); renderDaily();
+    renderChart(); renderDaily();
   }));
-  $("installerPlatformSelect").addEventListener("change", (event) => { state.installerPlatform = event.target.value; renderInstallerHistory(); });
-  document.querySelectorAll("[data-installer-mode]").forEach((button) => button.addEventListener("click", () => {
-    state.installerMode = button.dataset.installerMode;
-    document.querySelectorAll("[data-installer-mode]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
-    renderInstallerHistory();
+  $("installerPlatformSelect").addEventListener("change", (event) => { state.installerPlatform = event.target.value; renderInstallerWindow(); });
+  document.querySelectorAll("[data-installer-days]").forEach((button) => button.addEventListener("click", () => {
+    state.installerDays = Number(button.dataset.installerDays);
+    document.querySelectorAll("[data-installer-days]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+    renderInstallerWindow();
   }));
   $("moreRowsButton").addEventListener("click", () => { state.rowsShown += 50; renderDaily(); });
   $("exportButton").addEventListener("click", exportCsv);
@@ -519,7 +536,6 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     });
   }
   bindChart("trendChart", "chart");
-  bindChart("installerChart", "installerChart");
   if (typeof ResizeObserver === "function" && typeof requestAnimationFrame === "function") {
     const chartSizes = new Map();
     let resizeFrame = 0;
@@ -537,11 +553,9 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
       resizeFrame = requestAnimationFrame(() => {
         resizeFrame = 0;
         renderChart();
-        renderInstallerHistory();
       });
     });
     chartObserver.observe($("chartWrap"));
-    chartObserver.observe($("installerChartWrap"));
   }
   render();
   loadStatus();

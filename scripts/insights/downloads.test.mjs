@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { installerDailyRows, installerPlatform, installerTotals, summarizeInstallerReleases } from "./downloads.mjs";
+import { installerDailyRows, installerPlatform, installerTotals, installerWindowSummary, summarizeInstallerReleases } from "./downloads.mjs";
 
 const asset = (name, downloadCount) => ({ name, downloadCount });
 const release = (id, assets) => ({ id, tag: `v${id}`, publishedAt: `2026-10-${String(id).padStart(2, "0")}T00:00:00Z`, assets });
@@ -84,4 +84,83 @@ test("sorts UTC dates, deduplicates by latest collection time, and accepts zero 
   ]);
   assert.deepEqual(installerDailyRows([]), []);
   assert.throws(() => installerDailyRows([], "android"), /Unknown installer platform/);
+});
+
+const weekSnapshots = () => Array.from({ length: 8 }, (_, index) => snapshot(`2026-10-${18 + index}`, totals(1000 + index, 2000 + index * 2)));
+
+test("seven-day total counts changes with the preceding baseline instead of lifetime downloads", () => {
+  const summary = installerWindowSummary(weekSnapshots(), { endDate: "2026-10-25" });
+  assert.equal(summary.days, 7);
+  assert.equal(summary.startDate, "2026-10-19");
+  assert.equal(summary.endDate, "2026-10-25");
+  assert.deepEqual(summary.rows, Array.from({ length: 7 }, (_, index) => ({ date: `2026-10-${19 + index}`, downloads: 3 })));
+  assert.equal(summary.knownDays, 7);
+  assert.equal(summary.total, 21);
+  assert.equal(summary.complete, true);
+});
+
+test("partial windows keep calendar gaps and first snapshots unknown rather than zero", () => {
+  const summary = installerWindowSummary([
+    snapshot("2026-10-20", totals(5)),
+    snapshot("2026-10-21", totals(8)),
+    snapshot("2026-10-23", totals(12)),
+    snapshot("2026-10-24", totals(14)),
+  ], { endDate: "2026-10-27" });
+  assert.deepEqual(summary.rows, [
+    { date: "2026-10-21", downloads: 3 },
+    { date: "2026-10-22", downloads: null },
+    { date: "2026-10-23", downloads: null },
+    { date: "2026-10-24", downloads: 2 },
+    { date: "2026-10-25", downloads: null },
+    { date: "2026-10-26", downloads: null },
+    { date: "2026-10-27", downloads: null },
+  ]);
+  assert.equal(summary.knownDays, 2);
+  assert.equal(summary.total, 5);
+  assert.equal(summary.complete, false);
+  assert.deepEqual(installerWindowSummary([snapshot("2026-10-25", totals(9000))], { days: 1, endDate: "2026-10-25" }).rows, [{ date: "2026-10-25", downloads: null }]);
+});
+
+test("known zero downloads remain a complete zero while no coverage has a null total", () => {
+  const unchanged = weekSnapshots().map((row) => ({ ...row, installerDownloads: totals(4) }));
+  const summary = installerWindowSummary(unchanged, { endDate: "2026-10-25" });
+  assert.equal(summary.total, 0);
+  assert.equal(summary.knownDays, 7);
+  assert.equal(summary.complete, true);
+  assert.ok(summary.rows.every((row) => row.downloads === 0));
+  const missing = installerWindowSummary([], { endDate: "2026-10-25" });
+  assert.equal(missing.total, null);
+  assert.equal(missing.knownDays, 0);
+  assert.equal(missing.complete, false);
+  assert.ok(missing.rows.every((row) => row.downloads === null));
+});
+
+test("counter resets do not invent negative or zero weekly downloads", () => {
+  const summary = installerWindowSummary([
+    snapshot("2026-10-20", totals(100)),
+    snapshot("2026-10-21", totals(5)),
+    snapshot("2026-10-22", totals(8)),
+  ], { days: 2, endDate: "2026-10-22" });
+  assert.deepEqual(summary.rows, [{ date: "2026-10-21", downloads: null }, { date: "2026-10-22", downloads: 3 }]);
+  assert.equal(summary.total, 3);
+  assert.equal(summary.knownDays, 1);
+  assert.equal(summary.complete, false);
+});
+
+test("window excludes stale and future data and supports separate platform totals", () => {
+  const data = [snapshot("2026-10-01", totals(100)), snapshot("2026-10-02", totals(900)), ...weekSnapshots(), snapshot("2026-10-26", totals(999999))];
+  assert.equal(installerWindowSummary(data, { endDate: "2026-10-25" }).total, 21);
+  assert.equal(installerWindowSummary(data, { endDate: "2026-10-25", platform: "windows" }).total, 7);
+  assert.equal(installerWindowSummary(data, { endDate: "2026-10-25", platform: "macos" }).total, 14);
+  const stale = installerWindowSummary(data.slice(0, 2), { endDate: "2026-10-25" });
+  assert.equal(stale.total, null);
+  assert.equal(stale.knownDays, 0);
+});
+
+test("window validates arguments and defaults its end date to today's UTC date", () => {
+  for (const days of [0, -1, 367, 1.5, "7", null, NaN]) assert.throws(() => installerWindowSummary([], { days }), /days must be an integer/);
+  for (const endDate of ["2026-02-31", "2026-10-25T00:00:00Z", "invalid", null]) assert.throws(() => installerWindowSummary([], { endDate }), /valid UTC date/);
+  assert.throws(() => installerWindowSummary([], { platform: "android" }), /Unknown installer platform/);
+  assert.equal(installerWindowSummary([], { days: 366, endDate: "2026-10-25" }).rows.length, 366);
+  assert.equal(installerWindowSummary([]).endDate, new Date().toISOString().slice(0, 10));
 });
