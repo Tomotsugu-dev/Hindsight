@@ -18,6 +18,8 @@ if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__) {
   };
 }
 
+// 必须是第一个 import：要在 i18n 启动前设好语言
+import "./lang-from-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { restoreTheme } from "@app/lib/theme";

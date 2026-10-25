@@ -2,6 +2,12 @@
 # 本文件不会作为静态文件对外提供。没列出的文件用默认的 max-age=0 + ETag，
 # 每次向边缘确认，发布后立即生效。
 
+# demo 显示的是应用自己的页面，用和应用主窗口一样的 CSP（src-tauri/tauri.conf.json）：主题页的
+# 预览里，主题的 CSS 能加载的图片、字体和应用里一样，也不能借加载图片记下访客。只多一个
+# cdn.simpleicons.org，demo 的假数据要用它的图标。web/headers.test.js 检查两边一致
+/demo/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn-avatars.huggingface.co https://raw.githubusercontent.com https://cdn.simpleicons.org; font-src 'self' data:; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'
+
 # Vite 产物的文件名带内容哈希，内容一变文件名就变，可以永久缓存
 /demo/assets/*
   Cache-Control: public, max-age=31536000, immutable
