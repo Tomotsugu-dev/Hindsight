@@ -14,7 +14,7 @@ const OUT = path.join(ROOT, "dist-web");
 const INTRO = path.join(ROOT, "docs/intro");
 
 // web/ 里只在构建时用、不该发布出去的文件
-const SOURCE_ONLY = new Set(["demo-src", "tsconfig.json", "vite.config.ts", "wrangler.jsonc"]);
+const SOURCE_ONLY = new Set(["demo-src", "tsconfig.json", "vite.config.ts", "wrangler.jsonc", "worker.js"]);
 const published = (src) => {
   const name = path.basename(src);
   return !name.startsWith(".") && !name.startsWith("README") && !SOURCE_ONLY.has(name);

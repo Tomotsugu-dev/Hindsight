@@ -1,11 +1,15 @@
 // Cloudflare Workers 静态资源配置：把 npm run build:web 组装的 dist-web/ 发布到全球边缘。
-// 没有 Worker 脚本，所有请求都由静态资源直接响应（静态资源请求免费、不计次）。
 // 部署：npx wrangler deploy --config web/wrangler.jsonc（路径相对本文件）
 {
   "name": "hindsight",
   "compatibility_date": "2026-10-24",
+  // 只给视频补 Range 支持，见 worker.js
+  "main": "worker.js",
   "assets": {
     "directory": "../dist-web",
+    "binding": "ASSETS",
+    // 只有这些路径先进 worker.js；其余请求由静态资源直接响应，不计 Worker 请求数
+    "run_worker_first": ["/assets/video/*"],
     // 找不到文件时返回最近的 404.html 和 404 状态码，不当 SPA 处理
     "not_found_handling": "404-page",
     // /en/index.html 以 /en/ 提供，/en 自动跳到 /en/

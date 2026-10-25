@@ -13,6 +13,7 @@ web/
 ├── 404.html           找不到页面时返回
 ├── _headers           响应头（缓存）规则
 ├── wrangler.jsonc     Cloudflare 部署配置
+├── worker.js          只处理 /assets/video/*：给视频补上 Range（206）支持，Safari 播放需要
 ├── demo-src/          web demo 源码（mock + 入口），复用主应用 src/ 的组件
 ├── vite.config.ts     web demo 的构建配置
 ├── demo/              ← npm run build:demo 产物，不入仓
