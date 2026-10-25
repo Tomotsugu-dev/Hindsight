@@ -31,7 +31,7 @@ import { usePluginIcons } from "../../../state/pluginIcons";
 import { logError } from "../../../lib/logger";
 import { pickDescription } from "../../../utils/pickDescription";
 import { HIGH_RISK, permissionKey } from "./pluginPermissions";
-import { matchesQuery, repoUrl } from "./pluginMarket";
+import { filterMarket, repoUrl, type MarketFilter } from "./pluginMarket";
 import filterBarStyles from "../../Apps/AppsFilterBar.module.css";
 import styles from "./PluginsTab.module.css";
 
@@ -78,6 +78,7 @@ export default function PluginsTab() {
   const [market, setMarket] = useState<Market | null>(null);
   /** 插件市场搜索框里的字 */
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<MarketFilter>("popular");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   /** The plugin or zip with an action running; other actions wait for it */
@@ -173,6 +174,11 @@ export default function PluginsTab() {
     { value: "window" as const, label: t("plugins.opensIn.window") },
   ];
 
+  const filterOptions: { value: MarketFilter; label: string }[] = [
+    { value: "popular", label: t("plugins.market.filter.popular") },
+    { value: "official", label: t("plugins.market.filter.official") },
+  ];
+
   if (!market) {
     return (
       <p className={styles.hint}>
@@ -181,7 +187,7 @@ export default function PluginsTab() {
     );
   }
 
-  const found = market.downloadable.filter((p) => matchesQuery(p, query, i18n.language));
+  const found = filterMarket(market.downloadable, filter, query, i18n.language);
   // 市场里有插件才需要搜索
   const showSearch = !market.onlineError && market.downloadable.length > 0;
 
@@ -311,23 +317,26 @@ export default function PluginsTab() {
         icon={Store}
         headerAction={
           showSearch ? (
-            <div className={`${filterBarStyles.searchWrap} ${styles.marketSearch}`}>
-              <Search
-                size={14}
-                strokeWidth={2}
-                className={filterBarStyles.searchIcon}
-                aria-hidden
-              />
-              <input
-                className={filterBarStyles.searchInput}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("plugins.market.search")}
-                aria-label={t("plugins.market.search")}
-                spellCheck={false}
-              />
-            </div>
+            <>
+              <SimplePicker value={filter} options={filterOptions} onChange={setFilter} />
+              <div className={`${filterBarStyles.searchWrap} ${styles.marketSearch}`}>
+                <Search
+                  size={14}
+                  strokeWidth={2}
+                  className={filterBarStyles.searchIcon}
+                  aria-hidden
+                />
+                <input
+                  className={filterBarStyles.searchInput}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t("plugins.market.search")}
+                  aria-label={t("plugins.market.search")}
+                  spellCheck={false}
+                />
+              </div>
+            </>
           ) : undefined
         }
       >
@@ -338,7 +347,14 @@ export default function PluginsTab() {
         ) : market.downloadable.length === 0 ? (
           <EmptyHint message={t("plugins.market.empty")} />
         ) : found.length === 0 ? (
-          <EmptyHint message={t("plugins.market.noMatch", { query: query.trim() })} />
+          // 搜索框空着还是空的，只可能是筛了官方插件
+          <EmptyHint
+            message={
+              query.trim()
+                ? t("plugins.market.noMatch", { query: query.trim() })
+                : t("plugins.market.noOfficial")
+            }
+          />
         ) : (
           <div className={styles.marketGrid}>
             {found.map((plugin) => (

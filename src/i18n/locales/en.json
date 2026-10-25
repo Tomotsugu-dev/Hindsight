@@ -1807,7 +1807,12 @@
       "search": "Search plugins",
       "noMatch": "No plugins match \"{{query}}\".",
       "downloads": "Downloads",
-      "repo": "Open the repository on GitHub"
+      "repo": "Open the repository on GitHub",
+      "filter": {
+        "popular": "Most downloaded",
+        "official": "Official"
+      },
+      "noOfficial": "No official plugins to download."
     },
     "local": {
       "title": "Install from a file",

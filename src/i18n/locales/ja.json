@@ -1804,7 +1804,12 @@
       "search": "プラグインを検索",
       "noMatch": "「{{query}}」に一致するプラグインはありません。",
       "downloads": "ダウンロード数",
-      "repo": "GitHub でリポジトリを開く"
+      "repo": "GitHub でリポジトリを開く",
+      "filter": {
+        "popular": "ダウンロード数順",
+        "official": "公式プラグイン"
+      },
+      "noOfficial": "ダウンロードできる公式プラグインはありません。"
     },
     "local": {
       "title": "ファイルからインストール",

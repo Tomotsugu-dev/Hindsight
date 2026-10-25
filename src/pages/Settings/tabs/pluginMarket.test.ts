@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { OnlinePlugin } from "../../../api/plugins";
-import { matchesQuery, repoUrl } from "./pluginMarket";
+import { filterMarket, matchesQuery, repoUrl } from "./pluginMarket";
 
 const plugin: OnlinePlugin = {
   id: "hindsight-reminder",
@@ -37,6 +37,32 @@ describe("matchesQuery", () => {
 
   it("哪里都没有就不显示", () => {
     expect(matchesQuery(plugin, "pomodoro", "en")).toBe(false);
+  });
+});
+
+describe("filterMarket", () => {
+  // 后端已经按下载次数从多到少排好：focus 10、reminder 6、timer 3
+  const focus = { ...plugin, id: "focus", name: "Focus", official: true };
+  const reminder = plugin;
+  const timer = { ...plugin, id: "timer", name: "Timer", official: true };
+  const plugins = [focus, reminder, timer];
+  const ids = (list: OnlinePlugin[]) => list.map((p) => p.id);
+
+  it("下载最多：全部显示，顺序不变", () => {
+    expect(ids(filterMarket(plugins, "popular", "", "en"))).toEqual([
+      "focus",
+      "hindsight-reminder",
+      "timer",
+    ]);
+  });
+
+  it("官方插件：只留官方的，顺序不变", () => {
+    expect(ids(filterMarket(plugins, "official", "", "en"))).toEqual(["focus", "timer"]);
+  });
+
+  it("和搜索一起用时，两个条件都要满足", () => {
+    expect(ids(filterMarket(plugins, "official", "timer", "en"))).toEqual(["timer"]);
+    expect(ids(filterMarket(plugins, "official", "提醒", "en"))).toEqual([]);
   });
 });
 

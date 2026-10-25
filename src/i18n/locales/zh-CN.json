@@ -1804,7 +1804,12 @@
       "search": "搜索插件",
       "noMatch": "没有找到含有「{{query}}」的插件。",
       "downloads": "下载次数",
-      "repo": "在 GitHub 上打开仓库"
+      "repo": "在 GitHub 上打开仓库",
+      "filter": {
+        "popular": "下载最多",
+        "official": "官方插件"
+      },
+      "noOfficial": "没有可以下载的官方插件。"
     },
     "local": {
       "title": "从文件安装",

@@ -1804,7 +1804,12 @@
       "search": "搜尋外掛",
       "noMatch": "找不到含有「{{query}}」的外掛。",
       "downloads": "下載次數",
-      "repo": "在 GitHub 上開啟儲存庫"
+      "repo": "在 GitHub 上開啟儲存庫",
+      "filter": {
+        "popular": "下載最多",
+        "official": "官方外掛"
+      },
+      "noOfficial": "沒有可以下載的官方外掛。"
     },
     "local": {
       "title": "從檔案安裝",
