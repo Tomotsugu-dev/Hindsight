@@ -11,7 +11,7 @@
   "kv_namespaces": [{ "binding": "INSIGHTS", "id": "45bdf03c8fe5441eaa0e6d2f47b4dfa6" }],
   "vars": {
     "INSIGHTS_HOST": "hindsight.kyosweb.com",
-    "ACCESS_AUD": ""
+    "ACCESS_AUD": "c69c22fb15e55c41a750222ad34594ff926a64a32f18c5513ec77aad472c3231"
   },
   "rules": [
     { "type": "Text", "globs": ["**/dashboard.html", "**/dashboard.css", "**/dashboard.js"], "fallthrough": true }
