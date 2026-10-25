@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="../social-preview.png" alt="Hindsight — 本機優先的活動日誌與 AI 復盤工具" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../readme-banner-dark.png">
+    <img src="../readme-banner.png" alt="Hindsight — 本機優先的活動日誌與 AI 復盤工具" width="100%">
+  </picture>
 </p>
 <p align="center">
 <br/>
