@@ -253,8 +253,9 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     tooltip.hidden = false;
     const width = $(chart.wrapId).clientWidth;
     const matrix = $(chart.svgId).getScreenCTM();
-    const chartLeft = matrix ? chart.x(index) * matrix.a + matrix.e - $(chart.wrapId).getBoundingClientRect().left : chart.x(index) / 1000 * width;
-    tooltip.style.left = Math.min(width - 82, Math.max(82, chartLeft)) + "px";
+    const chartLeft = matrix ? chart.x(index) * matrix.a + matrix.e - $(chart.wrapId).getBoundingClientRect().left : chart.x(index) / chart.width * width;
+    const tooltipHalfWidth = Math.min(width / 2, (tooltip.offsetWidth || 180) / 2 + 8);
+    tooltip.style.left = Math.min(width - tooltipHalfWidth, Math.max(tooltipHalfWidth, chartLeft)) + "px";
     tooltip.style.top = "4px";
   }
   function hideChartPoint(chartKey = "chart") {
@@ -281,7 +282,13 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     const svg = $(svgId);
     svg.replaceChildren(svgElement("title", {}, label + "趋势"), svgElement("desc", {}, "按 UTC 日期展示，缺失记录显示断点。可聚焦图表并使用左右方向键逐日查看。"));
     $(emptyId).hidden = valid.length > 0;
-    const left = 54, right = 978, top = 38, bottom = 232;
+    // Match the SVG coordinate system to its actual CSS size. A fixed 1000px
+    // viewBox shrank 14px labels to 6–7px in the half-width download panel.
+    const wrap = $(wrapId);
+    const width = Math.max(240, Math.round(wrap.clientWidth || 1000));
+    const height = Math.max(240, Math.round(wrap.clientHeight || 288));
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    const left = width < 420 ? 58 : 64, right = width - 20, top = 34, bottom = height - 38;
     const max = valid.length ? Math.max(...valid.map((row) => row[valueKey])) : 0;
     const rawStep = Math.max(max, 1) / 4;
     const magnitude = 10 ** Math.floor(Math.log10(rawStep));
@@ -294,8 +301,9 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
       const position = y(value);
       svg.append(svgElement("line", { x1: left, x2: right, y1: position, y2: position, class: "chart-grid" }), svgElement("text", { x: left - 13, y: position + 3, "text-anchor": "end", class: "chart-axis-label" }, shortNumber(Number(value.toFixed(2)))));
     }
-    const labels = [...new Set([0, Math.floor((rows.length - 1) / 4), Math.floor((rows.length - 1) / 2), Math.floor((rows.length - 1) * 3 / 4), rows.length - 1])].filter((index) => index >= 0 && index < rows.length);
-    labels.forEach((index) => svg.append(svgElement("text", { x: x(index), y: bottom + 25, "text-anchor": index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle", class: "chart-axis-label" }, rows[index].date.slice(5).replace("-", "/"))));
+    const labelPositions = width < 500 ? [0, .5, 1] : [0, .25, .5, .75, 1];
+    const labels = [...new Set(labelPositions.map((position) => Math.round((rows.length - 1) * position)))].filter((index) => index >= 0 && index < rows.length);
+    labels.forEach((index) => svg.append(svgElement("text", { x: x(index), y: bottom + 27, "text-anchor": rows.length === 1 ? "middle" : index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle", class: "chart-axis-label" }, rows[index].date.slice(5).replace("-", "/"))));
     let segment = [];
     const drawSegment = () => {
       if (!segment.length) return;
@@ -315,7 +323,7 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
     const cursor = svgElement("line", { y1: top, y2: bottom, class: "chart-cursor", visibility: "hidden" });
     const dot = svgElement("circle", { r: 5, class: "chart-focus-point", visibility: "hidden" });
     svg.append(cursor, dot);
-    state[chartKey] = { rows, x, y, cursor, dot, valueKey, label, svgId, wrapId, tooltipId, missingMessage, index: Math.max(0, rows.findLastIndex((row) => numeric(row[valueKey]) !== null)) };
+    state[chartKey] = { rows, x, y, width, height, cursor, dot, valueKey, label, svgId, wrapId, tooltipId, missingMessage, index: Math.max(0, rows.findLastIndex((row) => numeric(row[valueKey]) !== null)) };
     svg.setAttribute("aria-label", label + "趋势；" + valid.length + " 天有记录。使用左右方向键逐日查看。");
     hideChartPoint(chartKey);
   }
@@ -512,6 +520,29 @@ import { installerPlatform, installerTotals, summarizeInstallerReleases, install
   }
   bindChart("trendChart", "chart");
   bindChart("installerChart", "installerChart");
+  if (typeof ResizeObserver === "function" && typeof requestAnimationFrame === "function") {
+    const chartSizes = new Map();
+    let resizeFrame = 0;
+    const chartObserver = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const size = `${Math.round(entry.contentRect.width)}:${Math.round(entry.contentRect.height)}`;
+        if (chartSizes.get(entry.target) !== size) {
+          chartSizes.set(entry.target, size);
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        renderChart();
+        renderInstallerHistory();
+      });
+    });
+    chartObserver.observe($("chartWrap"));
+    chartObserver.observe($("installerChartWrap"));
+  }
   render();
   loadStatus();
 })();
