@@ -17,8 +17,9 @@ does not rebuild the landing pages or desktop application.
   on HTML, CSS, JavaScript and every API request. Missing configuration or Access
   context denies requests. Forged identity/JWT headers are not accepted.
 - Do not add an `assets` binding: Cloudflare's internal Static Assets router
-  does not currently forward `ctx.access` to the user Worker. These three small
-  files are bundled as text and served after authentication instead.
+  does not currently forward `ctx.access` to the user Worker. The small dashboard
+  files and shared download module are bundled as text and served after
+  authentication instead.
 - Both `workers_dev` and `preview_urls` are disabled. The handler also checks
   the canonical hostname. All responses are private/no-store and noindex.
 - Traffic records live only in private KV. No report JSON is included in the
@@ -39,7 +40,7 @@ deploys this Worker on relevant pushes to `main`. It reuses the existing
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets.
 
 ```sh
-node --test scripts/insights/lib.test.mjs web-insights/worker.test.mjs
+node --test scripts/insights/*.test.mjs web-insights/worker.test.mjs
 node --check web-insights/dashboard.js
 npx wrangler@4.152.0 deploy --config web-insights/wrangler.jsonc --dry-run
 npx wrangler@4.152.0 deploy --config web-insights/wrangler.jsonc
@@ -52,11 +53,17 @@ not credentials. Never put API tokens in either configuration file.
 ## Dashboard
 
 - Daily views, unique visitors, clones and unique cloners, with gaps preserved.
-- Stars, forks, actual subscribers, and release attachment downloads.
+- Stars, forks, actual subscribers, and primary installer downloads.
+- Installer totals by platform, compact version comparisons, and cumulative or
+  daily-increase download charts. Signature files, update manifests, archives,
+  and other release attachments do not count as installers.
 - Repository switcher; 7/30/90-day or full-history charts; CSV export.
 - Rolling 14-day Top 10 referrers and paths, explicitly distinct from daily data.
 - Collection freshness, failure and first-run states. UTC dates remain UTC;
   daily unique counts are never presented as a cross-day deduplicated total.
+- Daily detail is collapsed by default; the full attachment catalog is not
+  rendered. Download increases require consecutive UTC snapshots and cannot
+  reconstruct the dates of downloads before collection began.
 
 Public GitHub Actions scheduling is best effort. The website displays the latest
 saved collection, not a live request to GitHub. Refreshing the page does not run

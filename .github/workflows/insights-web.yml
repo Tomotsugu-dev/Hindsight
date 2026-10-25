@@ -6,11 +6,13 @@ on:
     paths:
       - web-insights/**
       - scripts/insights/config.json
+      - scripts/insights/downloads.mjs
       - .github/workflows/insights-web.yml
   pull_request:
     paths:
       - web-insights/**
       - scripts/insights/config.json
+      - scripts/insights/downloads.mjs
       - .github/workflows/insights-web.yml
   workflow_dispatch:
 
@@ -31,7 +33,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify authentication and data access
-        run: node --test web-insights/worker.test.mjs
+        run: node --test web-insights/worker.test.mjs scripts/insights/downloads.test.mjs
       - name: Check dashboard JavaScript
         run: node --check web-insights/dashboard.js
       - name: Package the private Worker

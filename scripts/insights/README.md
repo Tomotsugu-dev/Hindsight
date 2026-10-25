@@ -23,12 +23,22 @@ does not expose the Administration permission needed by the Traffic API.
 
 - `history:v1:owner/repo` stores merged daily view/clone records and one repository,
   source and path snapshot per UTC collection date. Each snapshot retains a
-  `releaseDownloads` total; full release/asset details remain only in the latest
-  two dates for asset-level download comparisons. This prevents the same large
-  release catalog from filling the single-value KV storage limit over time.
+  legacy all-asset `releaseDownloads` total and installer-only `installerDownloads`
+  totals for Windows, macOS, Linux and other platforms. Full release/asset details
+  remain only in the latest two dates for current version summaries. This prevents
+  the same large release catalog from filling the single-value KV limit over time.
 - Existing release snapshots are migrated to totals during the next collection.
   A successful empty release list means zero downloads; absent or invalid legacy
   release data remains unknown (`null`) rather than becoming zero.
+- Installer counts include only `.exe`, `.msi`, `.msix`, `.msixbundle`, `.appx`,
+  `.appxbundle` (Windows), `.dmg`, `.pkg` (macOS), `.deb`, `.rpm`, `.AppImage`
+  (Linux), and `.apk` (other), case-insensitively. Signatures, JSON manifests,
+  ZIP/tar archives and unrecognized files are excluded. Old all-asset totals
+  cannot be used to reconstruct installer-only counts after details were removed.
+- Daily installer increases are calculated only between adjacent UTC collection
+  dates with known, nondecreasing cumulative counts. The first date, missing-day
+  gaps, unknown data and counter resets produce an unknown increase (`null`),
+  never a fabricated zero. These are download counts, not unique users or installs.
 - `snapshot:v1:owner/repo:YYYY-MM-DD` stores the corresponding daily collection as
   a separate recovery copy, including the full release catalog for every date.
   History compaction does not change these copies. A manual rerun replaces only
@@ -48,7 +58,7 @@ does not expose the Administration permission needed by the Traffic API.
 ## Local checks
 
 ```sh
-node --test scripts/insights/lib.test.mjs
+node --test scripts/insights/lib.test.mjs scripts/insights/downloads.test.mjs
 node scripts/insights/collect.mjs --dry-run
 node scripts/insights/collect.mjs --output scripts/insights/output
 ```

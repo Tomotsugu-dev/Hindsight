@@ -3,7 +3,7 @@ import test from "node:test";
 import { BASE_PATH, createHandler } from "./handler.mjs";
 
 const repository = "Tomotsugu-dev/Hindsight";
-const handler = createHandler({ html: "<h1>Private dashboard</h1>", css: "body{}", javascript: "console.log('private')", repositories: [repository] });
+const handler = createHandler({ html: "<h1>Private dashboard</h1>", css: "body{}", javascript: "console.log('private')", downloadsModule: "export const privateHelper = true;", repositories: [repository] });
 const authenticated = { access: { aud: "test-access-audience" } };
 const env = { ACCESS_AUD: "test-access-audience" };
 const request = (path = "/", options) => new Request(`https://hindsight.kyosweb.com${BASE_PATH}${path}`, options);
@@ -11,7 +11,7 @@ const request = (path = "/", options) => new Request(`https://hindsight.kyosweb.
 test("all dashboard resources reject unauthenticated and forged-header requests before reading storage", async () => {
   let reads = 0;
   const bindings = { ...env, INSIGHTS: { get: async () => { reads++; return {}; } } };
-  for (const path of ["", "/", "/dashboard.css", "/dashboard.js", "/api/status", `/api/repository?repo=${repository}`]) {
+  for (const path of ["", "/", "/dashboard.css", "/dashboard.js", "/downloads.mjs", "/api/status", `/api/repository?repo=${repository}`]) {
     const res = await handler.fetch(request(path, { headers: { "Cf-Access-Jwt-Assertion": "forged", "Cf-Access-Authenticated-User-Email": "admin@example.com" } }), bindings, {});
     assert.equal(res.status, 403, path);
     assert.equal(res.headers.get("Cache-Control"), "private, no-store");
@@ -22,6 +22,14 @@ test("all dashboard resources reject unauthenticated and forged-header requests 
 test("a missing or different Access audience remains closed", async () => {
   assert.equal((await handler.fetch(request(), env, { access: { aud: "different-app" } })).status, 403);
   assert.equal((await handler.fetch(request(), {}, authenticated)).status, 403);
+});
+
+test("the browser download helpers require Access and are served as a module without public caching", async () => {
+  const res = await handler.fetch(request("/downloads.mjs"), env, authenticated);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("Content-Type"), /application\/javascript/);
+  assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(await res.text(), "export const privateHelper = true;");
 });
 
 test("alternate worker hostnames do not expose the dashboard", async () => {
