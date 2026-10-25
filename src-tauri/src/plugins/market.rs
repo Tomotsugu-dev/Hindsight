@@ -274,17 +274,6 @@ pub struct OnlineVersion {
     pub kind: InstallKind,
 }
 
-/// Only the format version of plugins.json. The rest of the file is not read.
-#[derive(Deserialize)]
-struct FormatVersion {
-    format_version: u32,
-}
-
-#[derive(Deserialize)]
-struct PluginsJson {
-    plugins: Vec<OnlinePlugin>,
-}
-
 /// Downloads plugins.json from GitHub and parses it.
 pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
     let client = reqwest::Client::builder().timeout(FETCH_TIMEOUT).build()?;
@@ -300,17 +289,45 @@ pub async fn fetch_online(url: &str) -> Result<Vec<OnlinePlugin>> {
 
 /// Parses plugins.json, then fills in each plugin's icon URL and whether it is official.
 ///
+/// Skips and logs a plugin that cannot be parsed. The other plugins are still returned.
+///
 /// # Errors
 ///
 /// Returns [`Error::PluginsJsonFormatVersion`] if `format_version` is not known.
 fn parse_plugins_json(json: &[u8]) -> Result<Vec<OnlinePlugin>> {
+    /// Only the format version of plugins.json. The rest of the file is not read.
+    #[derive(Deserialize)]
+    struct FormatVersion {
+        format_version: u32,
+    }
+
+    /// The plugins are read as JSON values first and parsed one by one, so a plugin with an error
+    /// drops only itself.
+    #[derive(Deserialize)]
+    struct PluginsJson {
+        plugins: Vec<serde_json::Value>,
+    }
+
     // Check the format version before the plugins: an unknown format must report a format error,
     // not a JSON error from parsing it as the current format
     let FormatVersion { format_version } = serde_json::from_slice(json)?;
     if format_version != PLUGINS_JSON_FORMAT_VERSION {
         return Err(Error::PluginsJsonFormatVersion(format_version));
     }
-    let mut plugins = serde_json::from_slice::<PluginsJson>(json)?.plugins;
+    let mut plugins: Vec<OnlinePlugin> = serde_json::from_slice::<PluginsJson>(json)?
+        .plugins
+        .into_iter()
+        .filter_map(|value| {
+            let id = value["id"].clone();
+            match serde_json::from_value(value) {
+                Ok(plugin) => Some(plugin),
+                Err(e) => {
+                    log::warn!("plugins.json: skipped {id}, it cannot be parsed: {e}");
+                    None
+                }
+            }
+        })
+        .collect();
     for plugin in &mut plugins {
         // The id goes into the URL. An id with `/` or `..` would point outside the official
         // repository
@@ -809,6 +826,28 @@ mod tests {
 
         let official: Vec<bool> = plugins.iter().map(|p| p.official).collect();
         assert_eq!(official, [true, true, false, false, false]);
+    }
+
+    /// 一个插件的条目解析不了，只跳过这一个，前后的照样按顺序列出来。
+    #[test]
+    fn skips_a_plugin_that_cannot_be_parsed() {
+        let plugin = |id: &str, description: serde_json::Value| {
+            serde_json::json!({ "id": id, "name": "", "author": "", "description": description,
+                                "repo": "", "versions": [] })
+        };
+        let json = serde_json::json!({
+            "format_version": 2,
+            "plugins": [
+                plugin("focus", serde_json::json!({ "en": "Focus" })),
+                plugin("reminder", serde_json::json!("Reminder")),
+                plugin("pomodoro", serde_json::json!({ "en": "Pomodoro" })),
+            ]
+        });
+
+        let plugins = parse_plugins_json(json.to_string().as_bytes()).unwrap();
+
+        let ids: Vec<&str> = plugins.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["focus", "pomodoro"]);
     }
 
     /// 不认识的格式：报格式错误，不硬解。旧的格式 1 也不再认识。
