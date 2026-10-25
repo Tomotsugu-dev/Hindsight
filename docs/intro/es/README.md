@@ -1,11 +1,8 @@
 <p align="center">
-  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
+  <img src="../../social-preview.png" alt="Hindsight — Registro de actividad local y análisis con IA" width="100%">
 </p>
-
-<h1 align="center">Hindsight</h1>
-
 <p align="center">
-  <strong>Una herramienta de registro de actividad del ordenador y análisis con IA que prioriza el almacenamiento local</strong><br/>
+  <br/>
   Registra automáticamente la actividad de aplicaciones y ventanas y muestra cómo has distribuido tu tiempo por día, semana y mes, sin temporizadores manuales ni etiquetas de proyecto que mantener.
 </p>
 

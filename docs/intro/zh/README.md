@@ -1,11 +1,8 @@
 <p align="center">
-  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
+  <img src="../../social-preview.png" alt="Hindsight — 本地优先的活动日志与 AI 复盘工具" width="100%">
 </p>
-
-<h1 align="center">Hindsight</h1>
-
 <p align="center">
-  <strong>本地优先的电脑活动日志与 AI 复盘工具</strong><br/>
+<br/>
   自动记录应用与窗口活动，按日、周、月还原时间去向；无需手动计时，也无需维护项目标签。
 </p>
 
@@ -60,12 +57,12 @@
 
 <p align="center">
   <img src="./imgs/app_detail.png" alt="应用明细" width="800"><br/>
-  <sub><b>应用明细</b> · 点开任意应用，看到都在应用中做什么</sub>
+  <sub><b>应用明细</b> · 点开任意应用，查看你在其中做了什么</sub>
 </p>
 
 <p align="center">
   <img src="./imgs/weekly.png" alt="周统计" width="800"><br/>
-  <sub><b>周统计</b> · 一周七天的工作情况</sub>
+  <sub><b>周统计</b> · 一周的时间去向，一目了然</sub>
 </p>
 
 <p align="center">
@@ -90,18 +87,18 @@
 
 <p align="center">
   <img src="./imgs/cloud_sync.png" alt="多设备同步" width="800"><br/>
-  <sub><b>多设备同步</b> · 适合持有多个设备的用户</sub>
+  <sub><b>多设备同步</b> · 适合使用多台电脑的用户</sub>
 </p>
 
 ## 主要功能
 
 - **看清时间花在哪** — 后台自动记录电脑活动，可视化出多种图表，并可按活动类别（娱乐、工作等）进行统计。
 - **AI 自动写日报** — 本地模型按时段把当天的活动写成日报
-- **AI 对话** — 直接问「这个月在 XX 项目上花了多久」，AI 将会基于你真实的活动记录回答
+- **AI 对话** — 直接问「我今天做了什么」或「这个月在 XX 项目上花了多久」，AI 会基于你自己的活动记录回答
 - **屏幕记忆搜索** — 屏幕上出现过的文字都能搜回来，定位到当时的截图与时刻（截图与文字识别默认关闭，按需开启）
 - **多设备汇总** — 可选 Google Drive 或者 WebDAV 同步活动数据，可整合多台设备的数据进行统计分析
 - **本地·隐私优先** — 数据默认仅存本机
-- **支持插件市场** - 用户、开发者可以自己 DIY 插件工具，进一步提高生产效率！详情见 [插件市场](https://github.com/Tomotsugu-dev/hindsight-plugins)
+- **插件市场** — 用户和开发者可以创建自己的插件工具，提高生产效率。详情见 [插件市场](https://github.com/Tomotsugu-dev/hindsight-plugins)
 - **支持自定义主题** — 用户可以在「设置 → 外观 → 自定义主题」导入主题文件，自定义配色、明暗模式和页面布局。
 
 ## 快速开始
@@ -112,16 +109,16 @@
 
 下载 `hindsight_x.y.z_x64-setup.exe`，双击安装即可。
 
-> ⚠️ **首次运行会弹出「Windows 已保护你的电脑」** — 安装包尚未购买 EV 代码签名证书，会被 SmartScreen 拦下。点击「更多信息」→「仍要运行」即可继续安装。
+> ⚠️ **首次运行会弹出「Windows 已保护你的电脑」** — 安装包尚未使用 EV 代码签名证书签名，会被 SmartScreen 拦下。点击「更多信息」→「仍要运行」即可继续。
 
-### MacOS
+### macOS
 
-下载 `hindsight_x.y.z_universal.dmg`，双击挂载后将 Hindsight 拖入「应用程序」即可正常打开
+下载 `hindsight_x.y.z_universal.dmg`，双击挂载后将 Hindsight 拖入「应用程序」文件夹。
 
-## License
+## 许可证
 
 <p align="center">
   本项目基于 <a href="../../../LICENSE"><b>GPL 3.0</b></a> 开源，可按协议条款使用、修改与分发。<br/>
   旧版 MIT 授权与第三方许可证的说明见<a href="../../../CONTRIBUTING.md#license">贡献指南</a>。<br/>
-  <sub>© 2026 Hindsight contributors</sub>
+  <sub>© 2026 Hindsight 贡献者</sub>
 </p>

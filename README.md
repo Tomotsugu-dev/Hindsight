@@ -1,17 +1,11 @@
 <p align="center">
   <img src="docs/social-preview.png" alt="Hindsight — Local-First Activity Log & AI Review" width="100%">
 </p>
-
 <p align="center">
-  <img src="./src/assets/logo.png" alt="Hindsight" width="180">
-</p>
-
-<h1 align="center">Hindsight</h1>
-
-<p align="center">
-  <strong>A local-first computer activity log & AI review tool</strong><br/>
+<br/>
   Automatically records app and window activity and shows where your time went by day, week, and month — no manual timers, no project tags to maintain.
 </p>
+
 
 <p align="center">
   <a href="docs/intro/zh/README.md">简体中文</a> · <a href="docs/intro/zh-TW/README.md">繁體中文</a> · <a href="README.md">English</a> · <a href="docs/intro/ja/README.md">日本語</a> · <a href="docs/intro/pt/README.md">Português</a> · <a href="docs/intro/es/README.md">Español</a>
