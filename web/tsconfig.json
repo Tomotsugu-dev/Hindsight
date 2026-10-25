@@ -1,9 +1,10 @@
-// The demo: the app's pages on a mock backend. Checked on its own so the mock keeps up with the
-// API types (the root config only covers src/).
+// demo（应用的页面接假后端）和主题页。单独检查，让假后端跟上 API 的类型：根目录的配置只管 src/
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "paths": { "@app/*": ["../src/*"] }
   },
-  "include": ["demo-src"]
+  "include": ["demo-src", "themes-src"],
+  // Vite 的配置跑在 Node 上，这份配置没有 Node 的类型
+  "exclude": ["themes-src/vite.config.ts"]
 }
