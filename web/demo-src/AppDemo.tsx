@@ -59,6 +59,7 @@ const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
 const AppearanceTab = lazy(() => import("@app/pages/Settings/tabs/AppearanceTab"));
 const DataTab = lazy(() => import("@app/pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("@app/pages/Settings/tabs/PrivacyTab"));
+const PluginsTab = lazy(() => import("@app/pages/Settings/tabs/PluginsTab"));
 const AboutTab = lazy(() => import("@app/pages/Settings/tabs/AboutTab"));
 
 function DemoLayout() {
@@ -110,6 +111,7 @@ function DemoLayout() {
             <Route path="appearance" element={<AppearanceTab />} />
             <Route path="data" element={<DataTab />} />
             <Route path="privacy" element={<PrivacyTab />} />
+            <Route path="plugins" element={<PluginsTab />} />
             <Route path="about" element={<AboutTab />} />
           </Route>
         </Routes>
