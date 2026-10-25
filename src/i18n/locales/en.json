@@ -132,6 +132,7 @@
         "title": "Custom themes",
         "import": "Import theme",
         "openFolder": "Open themes folder",
+        "getThemes": "Get themes",
         "fileFilter": "Theme file",
         "loading": "Reading themes…",
         "loadFailed": "Could not read the themes: {{error}}",

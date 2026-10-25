@@ -132,6 +132,7 @@
         "title": "カスタムテーマ",
         "import": "テーマを読み込む",
         "openFolder": "テーマフォルダを開く",
+        "getThemes": "テーマを入手",
         "fileFilter": "テーマファイル",
         "loading": "テーマを読み込み中…",
         "loadFailed": "テーマを読み込めませんでした：{{error}}",
