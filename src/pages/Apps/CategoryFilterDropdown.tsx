@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ListFilter } from "lucide-react";
 import type { Category } from "../../api/hindsight";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import styles from "./AppsFilterBar.module.css";
@@ -110,6 +110,7 @@ export function CategoryFilterDropdown({
         aria-haspopup="true"
         title={t("apps.filter.categoryTrigger")}
       >
+        <ListFilter size={14} strokeWidth={2} className={styles.triggerIcon} aria-hidden />
         <span className={styles.triggerLabel}>{t("apps.filter.categoryTrigger")}:</span>
         <span className={styles.triggerValue}>{triggerLabel}</span>
         <ChevronDown size={14} strokeWidth={2} className={styles.triggerChevron} />

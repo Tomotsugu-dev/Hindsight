@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { usePicker } from "../../hooks/usePicker";
 import styles from "./SimplePicker.module.css";
 
@@ -20,6 +20,8 @@ interface SimplePickerProps<T extends string> {
   options: SimplePickerOption<T>[];
   onChange: (next: T) => void;
   disabled?: boolean;
+  /** 文字左边的图标。筛选用 ListFilter，排序用 ArrowUpDown，全软件统一 */
+  icon?: LucideIcon;
 }
 
 /**
@@ -33,6 +35,7 @@ export function SimplePicker<T extends string>({
   options,
   onChange,
   disabled,
+  icon: Icon,
 }: SimplePickerProps<T>) {
   const { open, wrapRef, toggle, close } = usePicker();
   const current = options.find((o) => o.value === value);
@@ -61,6 +64,7 @@ export function SimplePicker<T extends string>({
         aria-haspopup="menu"
         aria-expanded={open}
       >
+        {Icon ? <Icon size={13} strokeWidth={2} className={styles.icon} aria-hidden /> : null}
         {/* 用 grid 让所有候选 label 占同一格，trigger 宽度跟着最宽的 label 走，
             切换不抖。隐藏的 measure span 只撑宽，可见的 label 居中显示。 */}
         <span className={styles.labelStack}>

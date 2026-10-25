@@ -5,6 +5,7 @@ import {
   CloudDownload,
   ExternalLink,
   FolderOpen,
+  ListFilter,
   Package,
   Puzzle,
   RefreshCw,
@@ -318,7 +319,12 @@ export default function PluginsTab() {
         headerAction={
           showSearch ? (
             <>
-              <SimplePicker value={filter} options={filterOptions} onChange={setFilter} />
+              <SimplePicker
+                value={filter}
+                options={filterOptions}
+                onChange={setFilter}
+                icon={ListFilter}
+              />
               <div className={`${filterBarStyles.searchWrap} ${styles.marketSearch}`}>
                 <Search
                   size={14}

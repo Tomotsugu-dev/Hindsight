@@ -8,8 +8,8 @@ import {
   Cloud,
   Download,
   FolderInput,
-  HardDrive,
   Info,
+  ListFilter,
   Atom,
   Brain,
   Code,
@@ -20,7 +20,6 @@ import {
   Plus,
   Scale,
   Star,
-  Tag,
   Trash2,
   Type,
   Wrench,
@@ -639,43 +638,31 @@ export function ModelsSection() {
           className={styles.modelsToolbarItem}
           title={t("aiSettings.models.toolbar.statusAll")}
         >
-          <HardDrive
-            size={14}
-            strokeWidth={2}
-            className={styles.modelsToolbarIcon}
-          />
           <SimplePicker<FilterStatus>
             value={filterStatus}
             options={statusOptions}
             onChange={setFilterStatus}
+            icon={ListFilter}
           />
         </div>
         <div
           className={styles.modelsToolbarItem}
           title={t("aiSettings.models.toolbar.brandAll")}
         >
-          <Tag
-            size={14}
-            strokeWidth={2}
-            className={styles.modelsToolbarIcon}
-          />
           <SimplePicker<string>
             value={filterBrand}
             options={brandOptions}
             onChange={setFilterBrand}
+            icon={ListFilter}
           />
         </div>
         <span className={styles.modelsToolbarSpacer} />
         <div className={styles.modelsToolbarItem}>
-          <ArrowUpDown
-            size={14}
-            strokeWidth={2}
-            className={styles.modelsToolbarIcon}
-          />
           <SimplePicker<SortKey>
             value={sortKey}
             options={sortOptions}
             onChange={setSortKey}
+            icon={ArrowUpDown}
           />
         </div>
       </div>

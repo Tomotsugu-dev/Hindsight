@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Search } from "lucide-react";
+import { ArrowUpDown, ChevronDown, Search } from "lucide-react";
 import type { Category } from "../../api/hindsight";
 import { CategoryFilterDropdown } from "./CategoryFilterDropdown";
 import type { AppsSortBy } from "./useAppsFilter";
@@ -149,6 +149,7 @@ export function SortDropdown<T extends string>({
         aria-expanded={open}
         aria-haspopup="true"
       >
+        <ArrowUpDown size={14} strokeWidth={2} className={styles.triggerIcon} aria-hidden />
         <span className={styles.triggerLabel}>{label}:</span>
         <span className={styles.triggerValue}>
           {options.find((option) => option.value === value)?.label}

@@ -105,6 +105,17 @@
   border-color: var(--color-accent);
 }
 
+/* 筛选用 ListFilter，排序用 ArrowUpDown，和 SimplePicker 的图标一致 */
+.triggerIcon {
+  flex-shrink: 0;
+  margin-right: 2px;
+  color: var(--text-faint);
+}
+
+.triggerActive .triggerIcon {
+  color: var(--color-accent);
+}
+
 .triggerLabel {
   color: var(--text-faint);
   font-weight: var(--font-weight-500);
