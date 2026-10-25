@@ -3,8 +3,6 @@
 `hindsight.kyosweb.com` 的全部内容：各语言 landing page、可交互的 web demo（`/demo/`）和功能文档站（`/docs/`）。
 整站都是静态文件，发布在 Cloudflare Workers 静态资源上，从全球边缘节点直接响应，没有源站。
 
-内部统计看板的源码放在 `web/internal/github-insights/`，由独立 Worker 构建、部署并通过 Access 控制访问，参见[内部看板说明](internal/github-insights/README.md)。公共官网构建会排除整个 `web/internal/` 目录。
-
 ## 文件
 
 ```
@@ -17,7 +15,6 @@ web/
 ├── wrangler.jsonc     Cloudflare 部署配置
 ├── worker.js          只处理 /assets/video/*：给视频补上 Range（206）支持，Safari 播放需要
 ├── demo-src/          web demo 源码（mock + 入口），复用主应用 src/ 的组件
-├── internal/          内部网页源码，独立部署，排除在公共官网产物之外
 ├── vite.config.ts     web demo 的构建配置
 ├── demo/              ← npm run build:demo 产物，不入仓
 └── docs/              ← npm run build:docs 产物，不入仓

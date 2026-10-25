@@ -8,7 +8,7 @@ import test from "node:test";
 
 const buildSource = readFileSync(fileURLToPath(new URL("./build.mjs", import.meta.url)), "utf8");
 
-test("public site build preserves public pages and omits the internal dashboard tree", (t) => {
+test("public site build preserves public pages and omits source-only files", (t) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "hindsight-public-build-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (relative, contents) => {
@@ -26,9 +26,6 @@ test("public site build preserves public pages and omits the internal dashboard 
   for (const [relative, contents] of publicFiles) write(`web/${relative}`, contents);
   write("docs/intro/en/shot_video/fixture.mp4", "synthetic video fixture");
   write("docs/intro/en/shot_video/fixture.jpg", "synthetic poster fixture");
-  write("web/internal/github-insights/dashboard.html", "<!doctype html><title>Internal dashboard marker</title>");
-  write("web/internal/github-insights/worker.mjs", 'export default { fetch: () => new Response("Internal worker marker") };');
-  write("web/internal/github-insights/nested/private-marker.txt", "synthetic internal-only marker");
   write("web/worker.js", "source-only public Worker");
   write("web/themes-data.js", "source-only Worker module");
   write("web/headers.test.js", "test only");
@@ -42,7 +39,6 @@ test("public site build preserves public pages and omits the internal dashboard 
   }
   assert.equal(readFileSync(path.join(root, "dist-web/assets/video/fixture.mp4"), "utf8"), "synthetic video fixture");
   assert.equal(readFileSync(path.join(root, "dist-web/assets/video/fixture.jpg"), "utf8"), "synthetic poster fixture");
-  assert.equal(existsSync(path.join(root, "dist-web/internal")), false, "internal tools must not be published with the public site");
   assert.equal(existsSync(path.join(root, "dist-web/worker.js")), false);
   assert.equal(existsSync(path.join(root, "dist-web/themes-data.js")), false);
   assert.equal(existsSync(path.join(root, "dist-web/headers.test.js")), false);

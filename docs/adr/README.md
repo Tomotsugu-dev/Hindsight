@@ -24,4 +24,3 @@ Each ADR records one decision: the problem, what we chose, and why. Start a new 
 | [0015](0015-default-category-names-follow-language.md) | Translate default category names once; names no longer sync | 🟢 | ✅ | [中文](zh/0015-default-category-names-follow-language.md) |
 | [0016](0016-daily-usage-rollup.md) | Speed up the usage reports with a table of daily totals | 🟢 | ✅ | [中文](zh/0016-daily-usage-rollup.md) |
 | [0017](0017-theme-files.md) | Theme files: separate switches for layout and light or dark, and public variables | 🟡 | ⬜ | [中文](zh/0017-theme-files.md) |
-| [0018](0018-internal-web-tools.md) | Keep internal web tools under web/internal | 🟢 | ✅ | |
