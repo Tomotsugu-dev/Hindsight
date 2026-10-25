@@ -13,6 +13,7 @@ A theme changes how Hindsight looks. It is a folder with two files:
 
 In Hindsight, open **Settings → Appearance → Custom themes**.
 
+- **Get themes**: opens the [theme website](https://hindsight.kyosweb.com/themes/) in your browser. Download a theme there and unzip it, then import it.
 - **Import theme**: pick the theme's `theme.json`. If the same folder has a `theme.css`, it is imported too. A theme with the same id is replaced.
 - **Open themes folder**: copy the theme's folder into it. The folder name must be the theme's id.
 
@@ -123,3 +124,7 @@ Limits of the main window:
 ## Compatibility
 
 The public variables and the `data-part` names are a promise: Hindsight keeps their names, so themes that use them keep working. Everything else on the page can change in any version.
+
+## Share a theme
+
+To list your theme on the [theme website](https://hindsight.kyosweb.com/themes/), see [Themes](https://github.com/Tomotsugu-dev/hindsight-plugins/blob/main/CONTRIBUTING.md#themes) in the hindsight-plugins repository.
