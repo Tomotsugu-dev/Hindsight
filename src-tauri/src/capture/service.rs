@@ -6,7 +6,8 @@ use serde::Serialize;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
-use crate::capture::{browser_url, ignore, screenshot, screenshot_policy, window};
+use crate::capture::focus::{self, FocusSource, FocusWaker, WindowInfo};
+use crate::capture::{browser_url, ignore, screenshot, screenshot_policy};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
@@ -152,6 +153,10 @@ const PROBE_MIN_GAP_SECS: u64 = 20;
 /// 临界区都极短（克隆配置 / 单赋值 / 取出 Option），不会因细粒度锁产生抖动。
 struct Inner {
     pool: DbPool,
+    /// 读焦点窗口，见 [`focus::detect`]。不加锁：实现自己负责内部状态。
+    focus: Arc<dyn FocusSource>,
+    /// 让 tick 循环提前醒来，见 [`FocusSource::watch`]。
+    waker: FocusWaker,
     /// 屏幕记忆库(L2 帧登记)。None = 记忆库打开失败,采集照常、只是不登记——
     /// 帧登记失败永远不该阻塞采集本身。
     memory: Option<MemoryDb>,
@@ -211,6 +216,8 @@ impl CaptureService {
         Self {
             inner: Arc::new(Inner {
                 pool,
+                focus: focus::detect(),
+                waker: FocusWaker::default(),
                 memory,
                 interval_secs: Mutex::new(interval_secs),
                 handle: Mutex::new(None),
@@ -282,8 +289,14 @@ impl CaptureService {
 
         let inner = Arc::clone(&self.inner);
         *h = Some(tokio::spawn(async move {
+            // 守卫放在任务里：stop() abort 任务时它跟着被丢弃，监听随之停止
+            let _watch = inner.focus.watch(inner.waker.clone());
             loop {
-                tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
+                // 轮询周期到了，或者焦点来源提前叫醒，哪个先到就跑一次 tick
+                tokio::select! {
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)) => {}
+                    _ = inner.waker.woken() => {}
+                }
                 if let Err(e) = tick(&inner).await {
                     log::warn!("采集 tick 失败: {e}");
                     let mut le = inner.last_error.lock().await;
@@ -508,7 +521,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
     }
 
-    let info = match window::current_window() {
+    let mut info = match inner.focus.focused_window() {
         Ok(i) => i,
         Err(e) => {
             log::debug!("跳过本次采集：{e}");
@@ -520,32 +533,24 @@ async fn tick(inner: &Inner) -> Result<()> {
         return Ok(());
     }
 
-    // macOS 标题兜底：CGWindowList 那条便宜路径（~1ms）在切换 / 跨 Space 等瞬间
-    // 会取不到标题，而标题只在会话开始时取这一次、之后整段沿用（title 不参与
-    // FocusState 比较），一次失手就是一整段"无标题"——实测占 Mac 侧记录的 20.3%，
-    // Windows 侧只有 0.5%。这里改走截图同款的 SCK 枚举补一次（~100ms，故扔
-    // spawn_blocking），只在便宜路径失败时才付这个钱。
-    //
-    // 整块用 cfg 后重新绑定 info，而不是把上面写成 `let mut info`：
-    // 非 macOS 上这段被编掉，那个 mut 就成了未使用（Windows CI 的 -D warnings 会红）。
-    #[cfg(target_os = "macos")]
-    let info = {
-        let mut info = info;
-        if info.title.trim().is_empty() && info.pid > 0 {
-            let pid = info.pid;
-            if let Ok(Some(title)) =
-                tokio::task::spawn_blocking(move || window::macos_recover_title(pid)).await
-            {
-                log::debug!("SCK 补取到标题：{} -> {title}", info.app_name);
-                info.title = title;
-            }
+    // 标题兜底：便宜的读取路径在切换 / 跨 Space 等瞬间会取不到标题，而标题只在会话
+    // 开始时取这一次、之后整段沿用（title 不参与 FocusState 比较），一次失手就是一整段
+    // "无标题"——实测占 Mac 侧记录的 20.3%，Windows 侧只有 0.5%。有慢速补取的来源
+    // （macOS：截图同款的 SCK 枚举，~100ms，故扔 spawn_blocking）在这里补一次，
+    // 只在便宜路径失败时才付这个钱；其它来源的默认实现直接返回 None。
+    if info.title.trim().is_empty() && info.pid > 0 {
+        let focus = Arc::clone(&inner.focus);
+        let pid = info.pid;
+        if let Ok(Some(title)) = tokio::task::spawn_blocking(move || focus.recover_title(pid)).await
+        {
+            log::debug!("补取到标题：{} -> {title}", info.app_name);
+            info.title = title;
         }
-        info
-    };
+    }
 
     // 调试字符串残片（如 "8607797 pid=58750 ]"）：进程启动/退出瞬间 AppKit/xcap
     // 偶尔给出的垃圾名。写进 activities 会在前端出现无图标的幽灵应用行，跳过本 tick。
-    if window::is_garbage_window_name(&info.app_name) {
+    if focus::is_garbage_window_name(&info.app_name) {
         log::debug!("跳过本次采集：app 名疑似调试残片 ({})", info.app_name);
         return Ok(());
     }
@@ -554,7 +559,7 @@ async fn tick(inner: &Inner) -> Result<()> {
     // platform::idle_secs() 在 macOS 锁屏后有时不增加 → 上面 idle 分支漏判 → 17 分钟
     // 锁屏被记成 17 分钟使用。这里基于"前台是谁"再做一次 force-idle 兜底。
     // 行为跟 idle 分支一致：seal 当前会话 + return，下一 tick 用户回来动鼠键自然开新会话。
-    if window::is_system_idle_proxy(&info.app_name) {
+    if focus::is_system_idle_proxy(&info.app_name) {
         let mut cur_lock = inner.current.lock().await;
         if let Some(prev) = cur_lock.take() {
             drop(cur_lock);
@@ -919,7 +924,7 @@ fn inherit_url(
 /// 比如浏览器刚启动的第一个 tick）→ 视为命中跳过截图。没法判定就不拍。
 async fn should_skip_for_privacy(
     inner: &Inner,
-    info: &window::WindowInfo,
+    info: &WindowInfo,
     url: Option<&str>,
     is_browser: bool,
 ) -> bool {
@@ -939,7 +944,7 @@ async fn should_skip_for_privacy(
 /// 无法证明安全就不留。没配任何关键词时直接 false，零开销。
 async fn recheck_privacy_after_shot(
     inner: &Inner,
-    expected: &window::WindowInfo,
+    expected: &WindowInfo,
     is_browser: bool,
 ) -> bool {
     let url_kw = inner.privacy_url_keywords.lock().await.clone();
@@ -947,7 +952,7 @@ async fn recheck_privacy_after_shot(
     if url_kw.is_empty() && app_kw.is_empty() {
         return false;
     }
-    let now_info = match window::current_window() {
+    let now_info = match inner.focus.focused_window() {
         Ok(i) => i,
         Err(_) => return true,
     };
