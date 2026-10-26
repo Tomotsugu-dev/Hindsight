@@ -38,7 +38,7 @@ pub(crate) fn outermost_app_bundle(exe_path: &Path) -> Option<PathBuf> {
 
 /// 把 NSWorkspace 返回的 (raw_name, raw_path) 折叠到最外层 app 身份。
 ///
-/// 调用方：[`crate::capture::window::macos_resolve_focused_window`]。
+/// 调用方：`crate::capture::focus::macos` 的 `resolve_focused_window`。
 ///
 /// 三种返回情况：
 /// 1. `raw_path = None` 或路径不含 `.app`（裸 binary，dev 跑的 Hindsight 自身）：
