@@ -43,7 +43,6 @@ sequenceDiagram
 | --- | --- |
 | `capture/focus/mod.rs` | `WindowInfo`、`FocusSource`、`FocusWaker`、`WatchGuard`、和平台无关的小工具（`basename`、`resolve_exe_path`） |
 | `windows.rs` / `macos.rs` / `linux/` | 每个系统一个来源；Linux 是文件夹，因为它的来源取决于桌面（目前只有 `linux/x11.rs`） |
-| `pick.rs` | macOS 的主窗口挑选，不依赖平台，所以在所有平台上测试 |
 
 各系统即使都调用 xcap，也各写一份，不共用：xcap 在每个系统底下的机制不同，以后也会各自改动（比如 Windows 改用 `GetForegroundWindow`，Linux 的 X11 路径在 Wayland 下不用）。共用文件会重新长出 `#[cfg]`。
 

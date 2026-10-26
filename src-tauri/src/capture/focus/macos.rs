@@ -7,7 +7,6 @@
 
 use std::sync::Arc;
 
-use super::pick::{pick_main_window_title, WindowCandidate};
 use super::{basename, FocusSource, WindowInfo};
 use crate::error::{Error, Result};
 
@@ -158,8 +157,125 @@ fn recover_title(pid: u32) -> Option<String> {
     })
 }
 
+/// Window properties used to choose the main window.
+#[derive(Debug, Clone, PartialEq)]
+struct WindowCandidate {
+    pid: u32,
+    layer: i32,
+    on_screen: bool,
+    area: f64,
+    title: String,
+}
+
+/// Returns the title of the process's main window.
+///
+/// Must choose the same window as [`crate::capture::screenshot_macos`], or the
+/// title and the screenshot come from different windows.
+fn pick_main_window_title(cands: &[WindowCandidate], pid: u32) -> Option<String> {
+    let main = cands
+        .iter()
+        .filter(|w| w.pid == pid && w.layer == 0 && w.on_screen)
+        .max_by(|a, b| {
+            a.area
+                .partial_cmp(&b.area)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })?;
+    let title = main.title.trim();
+    (!title.is_empty()).then(|| title.to_string())
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{pick_main_window_title, WindowCandidate};
+
+    /// fixture 尺寸取自实测：主窗口 2128×1114，无名窄条 2128×30 / 1710×34。
+    fn cand(pid: u32, layer: i32, on_screen: bool, w: f64, h: f64, title: &str) -> WindowCandidate {
+        WindowCandidate {
+            pid,
+            layer,
+            on_screen,
+            area: w * h,
+            title: title.into(),
+        }
+    }
+
+    #[test]
+    fn main_window_title_beats_nameless_strips() {
+        // 复现「无标题」的真实场景：同一 PID 名下一堆无名窄条 + 一个真窗口，
+        // 按 z 序取第一个会读到空串，按面积取则拿到真标题。
+        let cands = vec![
+            cand(760, 0, true, 2128.0, 30.0, ""),
+            cand(760, 0, true, 1710.0, 34.0, ""),
+            cand(
+                760,
+                0,
+                true,
+                2128.0,
+                1114.0,
+                "Issue #24 · Tomotsugu-dev/Hindsight",
+            ),
+            cand(760, 0, true, 2128.0, 30.0, ""),
+        ];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("Issue #24 · Tomotsugu-dev/Hindsight")
+        );
+    }
+
+    #[test]
+    fn main_window_title_ignores_other_processes() {
+        let cands = vec![
+            cand(1, 0, true, 3000.0, 2000.0, "别的 app 的大窗口"),
+            cand(760, 0, true, 1200.0, 800.0, "自己的窗口"),
+        ];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("自己的窗口")
+        );
+    }
+
+    #[test]
+    fn main_window_title_skips_non_normal_layer_and_offscreen() {
+        // layer≠0 = dock / menubar / 系统模态之流；on_screen=false = 其它 Space
+        // 或最小化。两者都不该被当成主窗口（与截图路径的过滤一致）。
+        let cands = vec![
+            cand(760, 103, true, 4000.0, 3000.0, "提示气泡"),
+            cand(760, 0, false, 5000.0, 4000.0, "另一个 Space 的窗口"),
+            cand(760, 0, true, 800.0, 600.0, "当前窗口"),
+        ];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("当前窗口")
+        );
+    }
+
+    #[test]
+    fn main_window_title_none_when_genuinely_untitled() {
+        // QQ音乐那种:主窗口本身就没标题，三套 API 都返回空串——救不回来，
+        // 返回 None 让调用方保持"无标题"，别拿窄条的空串冒充"取到了"。
+        let cands = vec![
+            cand(760, 0, true, 1049.0, 709.0, "   "),
+            cand(760, 0, true, 300.0, 200.0, "小面板"),
+        ];
+        assert_eq!(pick_main_window_title(&cands, 760), None);
+    }
+
+    #[test]
+    fn main_window_title_none_when_no_candidate() {
+        assert_eq!(pick_main_window_title(&[], 760), None);
+        let cands = vec![cand(999, 0, true, 100.0, 100.0, "别人的")];
+        assert_eq!(pick_main_window_title(&cands, 760), None);
+    }
+
+    #[test]
+    fn main_window_title_trims_whitespace() {
+        let cands = vec![cand(760, 0, true, 900.0, 700.0, "  带空格的标题  ")];
+        assert_eq!(
+            pick_main_window_title(&cands, 760).as_deref(),
+            Some("带空格的标题")
+        );
+    }
+
     /// Manual smoke test (ignored by default and not run in CI): tries SCK title
     /// recovery for the current foreground app and prints the result. Run it
     /// manually after changing the SCK bindings or upgrading screencapturekit:
