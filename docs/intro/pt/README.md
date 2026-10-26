@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../readme-banner-dark.png">
+    <img src="../readme-banner.png" alt="Hindsight — Registro de atividades com prioridade local e revisão por IA" width="100%">
+  </picture>
 </p>
-
-<h1 align="center">Hindsight</h1>
-
 <p align="center">
-  <strong>Um registro local de atividades do computador com revisão por IA</strong><br/>
+<br/>
   Registra automaticamente apps e janelas e mostra para onde foi seu tempo por dia, semana e mês — sem cronômetro manual nem etiquetas de projeto para manter.
 </p>
 
@@ -80,7 +80,7 @@
 
 <p align="center">
   <img src="./imgs/ai_summary.png" alt="Resumo por IA" width="800"><br/>
-  <sub><b>Relatório diário por IA</b> · Um modelo local ou na nuvem resume as atividades do dia por período e escreve o diário</sub>
+  <sub><b>Relatório diário por IA</b> · Um modelo local ou na nuvem resume as atividades do dia por período e gera um relatório</sub>
 </p>
 
 <p align="center">
@@ -100,7 +100,7 @@
 - **Chat com IA** — Pergunte "o que eu fiz hoje?" ou "quanto tempo passei no projeto X este mês?" — respondido com base nos seus próprios registros
 - **Busca na memória de tela** — Encontre qualquer texto que já apareceu na sua tela e vá direto à captura e ao momento (capturas e OCR vêm desativados por padrão, ative se quiser)
 - **Agregação multi-dispositivo** — Sincronize opcionalmente os dados de atividade pelo Google Drive ou WebDAV e combine dados de vários dispositivos para análise
-- **Local e privado por padrão** — Os dados ficam apenas na sua máquina
+- **Local e privado por padrão** — Por padrão, os dados ficam na sua máquina
 - **Mercado de plugins** — Usuários e desenvolvedores podem criar suas próprias ferramentas de plugin para aumentar a produtividade. Saiba mais no [Mercado de plugins](https://github.com/Tomotsugu-dev/hindsight-plugins)
 - **Temas personalizados** — Importe um arquivo de tema em Configurações → Aparência → Temas personalizados para personalizar as cores, o modo claro ou escuro e o layout da página.
 

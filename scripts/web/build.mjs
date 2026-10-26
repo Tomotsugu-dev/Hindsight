@@ -1,7 +1,6 @@
 // Assemble the public site in dist-web/ for the Worker in web/wrangler.jsonc.
 // build:demo and build:docs generate their web/ outputs before this script runs.
-// Copy public pages and assets, plus referenced videos from docs/intro/;
-// internal dashboards deploy separately and must never enter this public bundle.
+// Copy public pages and assets, plus referenced videos from docs/intro/.
 // Validate that every local src, href, and poster points to an existing file.
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
@@ -9,11 +8,10 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const WEB = path.join(ROOT, "web");
-const INTERNAL = path.join(WEB, "internal");
 const OUT = path.join(ROOT, "dist-web");
 const INTRO = path.join(ROOT, "docs/intro");
 
-// Exclude source-only files and the separately authenticated internal tools.
+// Exclude source-only files.
 const SOURCE_ONLY = new Set([
   "demo-src",
   "themes-src",
@@ -26,7 +24,6 @@ const SOURCE_ONLY = new Set([
 // 测试只在 CI 里跑，不发布
 const TEST_FILE = /\.test\.[jt]s$/;
 const published = (src) => {
-  if (src === INTERNAL || src.startsWith(`${INTERNAL}${path.sep}`)) return false;
   const name = path.basename(src);
   return (
     !name.startsWith(".") && !name.startsWith("README") && !SOURCE_ONLY.has(name) && !TEST_FILE.test(name)

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="../../../src/assets/logo.png" alt="Hindsight" width="180">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../readme-banner-dark.png">
+    <img src="../readme-banner.png" alt="Hindsight — ローカルファーストのアクティビティログ & AI 振り返り" width="100%">
+  </picture>
 </p>
-
-<h1 align="center">Hindsight</h1>
-
 <p align="center">
-  <strong>ローカルファーストの PC アクティビティログ & AI 振り返りツール</strong><br/>
+<br/>
   アプリとウィンドウの活動を自動記録し、日・週・月で時間の行き先を再現。手動計測もプロジェクトタグの管理も不要。
 </p>
 
@@ -112,7 +112,7 @@
 
 `hindsight_x.y.z_x64-setup.exe` をダウンロードしてダブルクリックでインストールできます。
 
-> ⚠️ **初回実行時に「WindowsによってPCが保護されました」と表示されます** — インストーラーはまだ EV コード署名証明書を取得していないため、SmartScreen にブロックされます。「詳細情報」→「実行」をクリックしてインストールを続行してください。
+> ⚠️ **初回実行時に「WindowsによってPCが保護されました」と表示されます** — インストーラーはまだ EV コード署名証明書で署名されていないため、SmartScreen にブロックされます。「詳細情報」→「実行」をクリックしてインストールを続行してください。
 
 ### macOS
 
