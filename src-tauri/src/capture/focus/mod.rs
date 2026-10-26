@@ -126,6 +126,8 @@ fn basename(s: &str) -> String {
     }
 }
 
+// macOS 用 NSWorkspace 给的 bundle 路径，不调它
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn resolve_exe_path(pid: u32) -> Option<String> {
     let mut sys = System::new();
     sys.refresh_processes_specifics(

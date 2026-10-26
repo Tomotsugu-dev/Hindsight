@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use super::pick::{pick_main_window_title, WindowCandidate};
-use super::{basename, resolve_exe_path, FocusSource, WindowInfo};
+use super::{basename, FocusSource, WindowInfo};
 use crate::error::{Error, Result};
 
 /// 返回 macOS 的焦点来源。
@@ -20,11 +20,8 @@ struct MacFocus;
 
 impl FocusSource for MacFocus {
     fn focused_window(&self) -> Result<WindowInfo> {
-        if let Some(info) = resolve_focused_window() {
-            return Ok(info);
-        }
-        // 极端 fallback：NSWorkspace 返 nil（锁屏 / 登录窗 等）→ 走老 xcap heuristic
-        xcap_focused_window()
+        resolve_focused_window()
+            .ok_or_else(|| Error::Capture("No foreground app was provided by NSWorkspace".into()))
     }
 
     fn recover_title(&self, pid: u32) -> Option<String> {
@@ -32,38 +29,9 @@ impl FocusSource for MacFocus {
     }
 }
 
-/// 老 xcap heuristic：在 xcap 的窗口列表里找有焦点的那个。只在 NSWorkspace 拿不到
-/// 前台 app 时用（见 [`MacFocus::focused_window`]）。
-///
-/// # Errors
-///
-/// xcap 列不出窗口，或者没有窗口有焦点。
-fn xcap_focused_window() -> Result<WindowInfo> {
-    let windows = xcap::Window::all().map_err(|e| Error::Capture(e.to_string()))?;
-
-    let focused = windows
-        .iter()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .ok_or_else(|| Error::Capture("没有焦点窗口".into()))?;
-
-    let raw_name = focused.app_name().unwrap_or_default().to_string();
-    let app_name = basename(&raw_name);
-    let title = focused.title().unwrap_or_default().to_string();
-    let pid = focused.pid().unwrap_or(0);
-
-    let app_path = if pid > 0 { resolve_exe_path(pid) } else { None };
-
-    Ok(WindowInfo {
-        app_name,
-        title,
-        app_path,
-        pid,
-    })
-}
-
 /// macOS：通过 NSWorkspace 拿系统层 frontmost app 的 (name, pid, bundle path)，
 /// 再用 PID filter xcap 窗口列表拿 title（拿不到无所谓，title 空着仍能正确归属
-/// 到对应 app）。返 None = NSWorkspace 这层失败，调用方落回老 xcap 路径。
+/// 到对应 app）。返 None = NSWorkspace 没给出前台应用，这一轮 tick 跳过。
 ///
 /// **helper / mini-program 子 bundle 归一**：WeChat 的 mini-program 跑在嵌套
 /// `WeChatAppEx.app` 里、Claude / Chrome 这种 Electron app 把渲染进程打成
