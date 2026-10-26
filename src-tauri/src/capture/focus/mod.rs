@@ -8,7 +8,7 @@
 //!
 //! 全平台都是轮询：采集服务每个 tick 调一次 [`FocusSource::focused_window`]。
 //! [`FocusSource::watch`] 让实现可以在焦点变化时提前叫醒 tick 循环，但数据仍然从
-//! `focused_window` 拉，tick 只有一条路径（ADR-0019）。
+//! `focused_window` 拉，tick 只有一条路径。
 
 use std::sync::Arc;
 
@@ -81,7 +81,7 @@ pub struct FocusWaker(Arc<Notify>);
 
 impl FocusWaker {
     /// 请求立刻跑一次 tick。
-    // 目前还没有实现会推送，第一个是 GNOME 扩展的 FocusChanged 信号（ADR-0019 后续工作），
+    // 目前还没有实现会推送，第一个是 GNOME 扩展的 FocusChanged 信号，
     // 接上后去掉这个 allow。
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn wake(&self) {

@@ -292,7 +292,7 @@ impl CaptureService {
             // 守卫放在任务里：stop() abort 任务时它跟着被丢弃，监听随之停止
             let _watch = inner.focus.watch(inner.waker.clone());
             loop {
-                // 轮询周期到了，或者焦点来源提前叫醒（ADR-0019），哪个先到就跑一次 tick
+                // 轮询周期到了，或者焦点来源提前叫醒，哪个先到就跑一次 tick
                 tokio::select! {
                     _ = tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)) => {}
                     _ = inner.waker.woken() => {}
