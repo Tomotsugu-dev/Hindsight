@@ -8,6 +8,8 @@ import styles from "./SimplePicker.module.css";
 const ITEM_HEIGHT = 32;
 const MENU_PADDING = 8;
 const TRIGGER_GAP = 6;
+/** 菜单最多露出 8 项，多的在菜单里滚动 */
+const MAX_MENU_HEIGHT = 8 * ITEM_HEIGHT + MENU_PADDING;
 
 export interface SimplePickerOption<T extends string> {
   value: T;
@@ -45,15 +47,14 @@ export function SimplePicker<T extends string>({
   // 撑出窗口被裁。useLayoutEffect 在 paint 前定位置，避免一帧闪现。
   useLayoutEffect(() => {
     if (!open || !wrapRef.current) return;
-    const estMenuHeight = options.length * ITEM_HEIGHT + MENU_PADDING;
-    setPlacement(
-      placeMenu(
-        wrapRef.current.getBoundingClientRect(),
-        window.innerHeight,
-        estMenuHeight,
-        TRIGGER_GAP,
-      ),
+    const estMenuHeight = Math.min(options.length * ITEM_HEIGHT + MENU_PADDING, MAX_MENU_HEIGHT);
+    const p = placeMenu(
+      wrapRef.current.getBoundingClientRect(),
+      window.innerHeight,
+      estMenuHeight,
+      TRIGGER_GAP,
     );
+    setPlacement({ ...p, maxHeight: Math.min(p.maxHeight, MAX_MENU_HEIGHT) });
   }, [open, options.length, wrapRef]);
 
   return (
