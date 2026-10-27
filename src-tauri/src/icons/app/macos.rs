@@ -14,7 +14,7 @@ const MAX_DIM: u32 = 128;
 /// CFBundleIconFile；SecurityAgent 这类 .bundle 不是 .app；icns 文件解析失败 等）
 /// 兜底走 `NSWorkspace.iconForFile`——它对任意路径都能给出系统渲染的图标，
 /// 覆盖上述全部场景。两条路都空才返回 `Ok(None)`。
-pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
+pub fn extract_png(_process_name: &str, exe_path: &Path) -> Result<Option<Vec<u8>>> {
     if let Some(png) = extract_via_icns(exe_path)? {
         return Ok(Some(png));
     }
@@ -76,7 +76,7 @@ fn extract_via_nsworkspace(path: &Path) -> Option<Vec<u8>> {
     if img.width() <= MAX_DIM && img.height() <= MAX_DIM {
         return Some(png);
     }
-    let resized = super::shrink_to_fit(img, MAX_DIM);
+    let resized = crate::icons::shrink_to_fit(img, MAX_DIM);
     let mut buf = std::io::Cursor::new(Vec::new());
     resized.write_to(&mut buf, image::ImageFormat::Png).ok()?;
     Some(buf.into_inner())
@@ -156,7 +156,7 @@ fn extract_largest_png(icns_path: &Path) -> Result<Option<Vec<u8>>> {
             None => return Ok(None),
         };
 
-    let final_img = super::shrink_to_fit(dyn_img, MAX_DIM);
+    let final_img = crate::icons::shrink_to_fit(dyn_img, MAX_DIM);
 
     let mut buf = std::io::Cursor::new(Vec::new());
     final_img

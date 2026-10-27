@@ -40,7 +40,8 @@ async fn resolve_icon_png(pool: &DbPool, process_name: &str) -> Result<Option<Ve
 
     // GDI / plist 解析是同步阻塞 IO，不应阻塞 Tauri runtime
     let exe = std::path::PathBuf::from(exe_path);
-    let png = match tokio::task::spawn_blocking(move || crate::icons::extract_png(&exe))
+    let name = process_name.to_string();
+    let png = match tokio::task::spawn_blocking(move || crate::icons::app::extract_png(&name, &exe))
         .await
         .map_err(|e| e.to_string())?
     {
