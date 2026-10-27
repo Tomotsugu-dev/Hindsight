@@ -1,14 +1,15 @@
 import { useLayoutEffect, useState } from "react";
 import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { usePicker } from "../../hooks/usePicker";
+import { placeMenu, type MenuPlacement } from "./menuPlacement";
 import styles from "./SimplePicker.module.css";
 
-/** 菜单展开方向：下拉默认向下，靠近视口底时自动翻向上。 */
-type MenuDirection = "down" | "up";
 /** 单条 .item 高度 32 + 4px 上下 padding 估算；6px 是 trigger 到菜单的 gap。 */
 const ITEM_HEIGHT = 32;
 const MENU_PADDING = 8;
 const TRIGGER_GAP = 6;
+/** 菜单最多露出 8 项，多的在菜单里滚动 */
+const MAX_MENU_HEIGHT = 8 * ITEM_HEIGHT + MENU_PADDING;
 
 export interface SimplePickerOption<T extends string> {
   value: T;
@@ -39,19 +40,21 @@ export function SimplePicker<T extends string>({
 }: SimplePickerProps<T>) {
   const { open, wrapRef, toggle, close } = usePicker();
   const current = options.find((o) => o.value === value);
-  const [direction, setDirection] = useState<MenuDirection>("down");
+  const [placement, setPlacement] = useState<MenuPlacement | null>(null);
 
-  // 打开时按 trigger 在视口里的位置 + 估算菜单高度，决定向下还是向上展开。
-  // 避免窗口最大 720px 高度下，靠底的 picker（如 EngineTab 的 ctxSize）下拉
-  // 撑出窗口被裁。useLayoutEffect 在 paint 前定方向，避免一帧闪现。
+  // 打开时按 trigger 在视口里的位置 + 估算菜单高度，决定向哪边展开、最多多高。
+  // 避免靠底的 picker（如 EngineTab 的 ctxSize）或选项很多的 picker（如插件版本）
+  // 撑出窗口被裁。useLayoutEffect 在 paint 前定位置，避免一帧闪现。
   useLayoutEffect(() => {
     if (!open || !wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
-    const estMenuHeight = options.length * ITEM_HEIGHT + MENU_PADDING + TRIGGER_GAP;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    // 下方装得下 → 下拉；下方不够但上方更宽敞 → 上拉
-    setDirection(spaceBelow >= estMenuHeight || spaceBelow >= spaceAbove ? "down" : "up");
+    const estMenuHeight = Math.min(options.length * ITEM_HEIGHT + MENU_PADDING, MAX_MENU_HEIGHT);
+    const p = placeMenu(
+      wrapRef.current.getBoundingClientRect(),
+      window.innerHeight,
+      estMenuHeight,
+      TRIGGER_GAP,
+    );
+    setPlacement({ ...p, maxHeight: Math.min(p.maxHeight, MAX_MENU_HEIGHT) });
   }, [open, options.length, wrapRef]);
 
   return (
@@ -83,7 +86,11 @@ export function SimplePicker<T extends string>({
       </button>
 
       {open && (
-        <div className={styles.menu} data-direction={direction}>
+        <div
+          className={styles.menu}
+          data-direction={placement?.direction ?? "down"}
+          style={{ maxHeight: placement?.maxHeight }}
+        >
           {options.map((opt) => (
             <button
               key={opt.value}
