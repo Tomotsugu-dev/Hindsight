@@ -118,6 +118,9 @@ libc = "0.2"
 # tauri-plugin-single-instance 已按默认特性把同一版本拉进 Linux 依赖树，零新增编译面。
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5"
+# X11 下读空闲时间、屏保和显示器电源状态。纯 Rust 实现 X11 协议，不依赖任何系统库，
+# 安装包不用加依赖。
+x11rb = { version = "0.14", default-features = false, features = ["screensaver", "dpms"] }
 
 # CI / 本地开发期 lint。新成员加进来时 clippy 即报，不再依赖手动审计。
 # 不开 needless_pass_by_value：Tauri callback 强制按值签名（MenuEvent / TrayIconEvent）、
