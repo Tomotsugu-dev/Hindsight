@@ -9,7 +9,7 @@ const ICON_SIZE: i32 = 48;
 
 /// Windows 实现：用 ExtractIconExW 拿 exe 关联的最大尺寸图标，DC + GDI 渲染到位图后编码 PNG。
 /// 文件不存在或无图标都返回 `Ok(None)`。
-pub fn extract_png(exe_path: &Path) -> Result<Option<Vec<u8>>> {
+pub fn extract_png(_process_name: &str, exe_path: &Path) -> Result<Option<Vec<u8>>> {
     if !exe_path.exists() {
         return Ok(None);
     }
