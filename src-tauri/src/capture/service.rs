@@ -7,6 +7,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use crate::capture::focus::{self, FocusSource, FocusWaker, WindowInfo};
+use crate::capture::idle::{self, IdleSource};
 use crate::capture::{browser_url, ignore, screenshot, screenshot_policy};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
@@ -157,6 +158,8 @@ struct Inner {
     focus: Arc<dyn FocusSource>,
     /// 让 tick 循环提前醒来，见 [`FocusSource::watch`]。
     waker: FocusWaker,
+    /// 读挂机判定用的信号，见 [`idle::detect`]。不加锁：实现自己负责内部状态。
+    idle: Arc<dyn IdleSource>,
     /// 屏幕记忆库(L2 帧登记)。None = 记忆库打开失败,采集照常、只是不登记——
     /// 帧登记失败永远不该阻塞采集本身。
     memory: Option<MemoryDb>,
@@ -213,11 +216,31 @@ impl CaptureService {
         interval_secs: u32,
         focus_tx: mpsc::Sender<FocusChange>,
     ) -> Self {
+        Self::with_sources(
+            pool,
+            memory,
+            interval_secs,
+            focus_tx,
+            focus::detect(),
+            idle::detect(),
+        )
+    }
+
+    /// 同 [`Self::new`]，只是焦点和挂机信号的来源由调用方给。测试用它换上假的来源。
+    fn with_sources(
+        pool: DbPool,
+        memory: Option<MemoryDb>,
+        interval_secs: u32,
+        focus_tx: mpsc::Sender<FocusChange>,
+        focus: Arc<dyn FocusSource>,
+        idle: Arc<dyn IdleSource>,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 pool,
-                focus: focus::detect(),
+                focus,
                 waker: FocusWaker::default(),
+                idle,
                 memory,
                 interval_secs: Mutex::new(interval_secs),
                 handle: Mutex::new(None),
@@ -465,11 +488,11 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 输入：真人看着屏幕变黑会动鼠标把它点亮，没点亮 = 息屏前那段空闲也没人在；
     // Win+L 主动锁屏时按键本身就是输入，idle≈0 等价于当下。
     // 息屏/锁屏期间每 tick 从这里 return，不开新会话、不截图。
-    if crate::platform::screen_unavailable() {
+    if inner.idle.screen_unavailable() {
         let mut cur_lock = inner.current.lock().await;
         if let Some(prev) = cur_lock.take() {
             drop(cur_lock);
-            let end = Local::now() - Duration::seconds(crate::platform::idle_secs() as i64);
+            let end = Local::now() - Duration::seconds(inner.idle.idle_secs() as i64);
             log::info!(
                 "屏幕不可看（息屏/锁屏/屏保），会话 {} 按最后输入时刻封口",
                 prev.id
@@ -491,7 +514,7 @@ async fn tick(inner: &Inner) -> Result<()> {
     // idle 读一次供两处用：本分支的阈值判断 + 下面 interval-roll 的抑制。
     // 被动观看豁免对桌面前台（Progman/WorkerW）不适用：Wallpaper Engine 等动态
     // 壁纸让桌面永远在变，但没人盯着桌面看——桌面焦点回归纯键鼠挂机语义。
-    let idle_now = crate::platform::idle_secs();
+    let idle_now = inner.idle.idle_secs();
     let idle_threshold = *inner.idle_threshold_secs.lock().await;
     if idle_threshold > 0 && idle_now as u32 >= idle_threshold {
         if inner.current.lock().await.is_none() {
@@ -556,7 +579,7 @@ async fn tick(inner: &Inner) -> Result<()> {
     }
 
     // 系统占位进程（锁屏 loginwindow / 屏保 ScreenSaverEngine 等）：用户明显挂机但
-    // platform::idle_secs() 在 macOS 锁屏后有时不增加 → 上面 idle 分支漏判 → 17 分钟
+    // IdleSource::idle_secs 在 macOS 锁屏后有时不增加 → 上面 idle 分支漏判 → 17 分钟
     // 锁屏被记成 17 分钟使用。这里基于"前台是谁"再做一次 force-idle 兜底。
     // 行为跟 idle 分支一致：seal 当前会话 + return，下一 tick 用户回来动鼠键自然开新会话。
     if focus::is_system_idle_proxy(&info.app_name) {
@@ -813,7 +836,7 @@ impl FocusSender {
 ///
 /// 媒体防睡断言探测（被动观看豁免的唯一信号）：
 /// - 限频 [`PROBE_MIN_GAP_SECS`]，窗口内直接复用上次判定；
-/// - 信号 = [`crate::platform::display_keepawake_active`]：播放器/浏览器播放时
+/// - 信号 = [`IdleSource::display_keepawake_active`]：播放器/浏览器播放时
 ///   向 OS 申请"别让屏幕睡"，与截图开关无关、静音播放也成立；
 /// - 平台 API 失败视为无断言（fail-closed），放行挂机封口——回到纯键鼠语义。
 async fn keepawake_active(inner: &Inner) -> bool {
@@ -824,7 +847,7 @@ async fn keepawake_active(inner: &Inner) -> bool {
         }
     }
     probe.last_probe_at = Some(Instant::now());
-    let active = crate::platform::display_keepawake_active();
+    let active = inner.idle.display_keepawake_active();
     probe.cached_active = active;
     if active {
         probe.last_active_at = Some(Local::now());
@@ -1199,5 +1222,154 @@ mod tests {
             inherit_url(None, true, "Chrome", Some(&no_url)),
             (None, false)
         );
+    }
+
+    /// 测试用的挂机信号：三个值直接给定。
+    struct FakeIdle {
+        idle_secs: u64,
+        screen_unavailable: bool,
+        keepawake: bool,
+    }
+
+    impl IdleSource for FakeIdle {
+        fn idle_secs(&self) -> u64 {
+            self.idle_secs
+        }
+
+        fn screen_unavailable(&self) -> bool {
+            self.screen_unavailable
+        }
+
+        fn display_keepawake_active(&self) -> bool {
+            self.keepawake
+        }
+    }
+
+    /// 测试用的焦点来源：永远读不到窗口，只记被问了几次。
+    #[derive(Default)]
+    struct NoWindow(std::sync::atomic::AtomicUsize);
+
+    impl FocusSource for NoWindow {
+        fn focused_window(&self) -> Result<WindowInfo> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(crate::error::Error::Capture("没有焦点窗口".into()))
+        }
+    }
+
+    struct Ticked {
+        pool: DbPool,
+        /// tick 之前正在记录的会话
+        id: i64,
+        /// tick 之后还在记录的会话；None = 被封口了
+        current: Option<i64>,
+        /// tick 读了几次焦点
+        focus_reads: usize,
+    }
+
+    /// 10 分钟前开始记录一段会话，然后用给定的挂机信号跑一次 tick。挂机阈值是默认的 180 秒。
+    async fn tick_with(idle: FakeIdle) -> Ticked {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let focus = Arc::new(NoWindow::default());
+        let (tx, _rx) = mpsc::channel(8);
+        let service =
+            CaptureService::with_sources(pool.clone(), None, 30, tx, focus.clone(), Arc::new(idle));
+        let info = WindowInfo {
+            app_name: "Code".into(),
+            title: "main.rs".into(),
+            app_path: None,
+            pid: 1,
+        };
+        let started = Local::now() - Duration::minutes(10);
+        let id = activities::insert_new(&pool, &info, started, None, false, None)
+            .await
+            .unwrap();
+        *service.inner.current.lock().await = Some(CurrentSession {
+            id,
+            focus: FocusState {
+                app_name: "Code".into(),
+                url: None,
+            },
+            last_extend_at: Instant::now(),
+        });
+
+        tick(&service.inner).await.unwrap();
+
+        let current = service.inner.current.lock().await.as_ref().map(|s| s.id);
+        let focus_reads = focus.0.load(std::sync::atomic::Ordering::SeqCst);
+        Ticked {
+            pool,
+            id,
+            current,
+            focus_reads,
+        }
+    }
+
+    /// 会话的结束时刻离现在多少秒。
+    async fn ended_secs_ago(pool: &DbPool, id: i64) -> i64 {
+        use crate::storage::SqliteResultExt;
+        let ended: String = pool
+            .0
+            .call(move |conn| {
+                conn.query_row("SELECT ended_at FROM activities WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })
+                .db()
+            })
+            .await
+            .unwrap();
+        let ended = DateTime::parse_from_rfc3339(&ended).unwrap();
+        (Local::now() - ended.with_timezone(&Local)).num_seconds()
+    }
+
+    #[tokio::test]
+    async fn screen_unavailable_seals_at_the_last_input() {
+        // 锁屏前 2 分钟没碰键鼠：会话记到最后一次输入，不读焦点
+        let t = tick_with(FakeIdle {
+            idle_secs: 120,
+            screen_unavailable: true,
+            keepawake: false,
+        })
+        .await;
+        assert_eq!(t.current, None);
+        assert!((ended_secs_ago(&t.pool, t.id).await - 120).abs() <= 2);
+        assert_eq!(t.focus_reads, 0);
+    }
+
+    #[tokio::test]
+    async fn idle_over_the_threshold_seals_at_the_last_input() {
+        let t = tick_with(FakeIdle {
+            idle_secs: 400,
+            screen_unavailable: false,
+            keepawake: false,
+        })
+        .await;
+        assert_eq!(t.current, None);
+        assert!((ended_secs_ago(&t.pool, t.id).await - 400).abs() <= 2);
+        assert_eq!(t.focus_reads, 0);
+    }
+
+    #[tokio::test]
+    async fn keepawake_keeps_the_session_while_idle() {
+        // 在看视频：键鼠超过阈值没动，但播放器要求屏幕别睡，会话继续，照常读焦点
+        let t = tick_with(FakeIdle {
+            idle_secs: 400,
+            screen_unavailable: false,
+            keepawake: true,
+        })
+        .await;
+        assert_eq!(t.current, Some(t.id));
+        assert_eq!(t.focus_reads, 1);
+    }
+
+    #[tokio::test]
+    async fn idle_under_the_threshold_keeps_the_session() {
+        let t = tick_with(FakeIdle {
+            idle_secs: 10,
+            screen_unavailable: false,
+            keepawake: false,
+        })
+        .await;
+        assert_eq!(t.current, Some(t.id));
+        assert_eq!(t.focus_reads, 1);
     }
 }
