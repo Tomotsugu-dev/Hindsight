@@ -8,9 +8,15 @@ import { flushSync } from "react-dom";
  * - `flushSync(fn)` 强制 React 在 snapshot 之前把 commit 跑完，否则 startViewTransition
  *   只能拍到旧 DOM、跑完才看到新 DOM，动画一闪而过
  * - SSR / 老浏览器（Safari ≤17.4 等）没 `startViewTransition`：直接 `fn()` 退化为无过渡
+ * - Linux：WebKitGTK 用不了 GPU 加速时（远程桌面、虚拟机等），一调 startViewTransition
+ *   程序就崩溃，所以 Linux 上也直接 `fn()`
  */
 export function withViewTransition(fn: () => void): void {
   if (typeof document === "undefined") {
+    fn();
+    return;
+  }
+  if (document.body?.dataset.platform === "linux") {
     fn();
     return;
   }
