@@ -1,90 +1,20 @@
 //! Downloads a website's icon (ADR-0014): `/favicon.ico` first, then the icon address the home
 //! page declares. The result is a PNG no larger than 32×32.
 
-use std::future::Future;
 use std::io::Cursor;
-use std::time::Duration;
 
 use image::ImageFormat;
 use reqwest::Url;
 
-use crate::error::{Error, Result};
+use super::http::is_local;
+use super::Http;
 
 /// Icons are drawn at 16 px; 32 leaves room for Retina screens.
 const ICON_PX: u32 = 32;
-/// Bodies are cut off here. An icon, or the `<head>` of a home page, fits well within it.
-const MAX_BODY: usize = 512 * 1024;
-const TIMEOUT: Duration = Duration::from_secs(8);
-const MAX_REDIRECTS: usize = 5;
-
-/// One answered GET.
-pub(crate) struct Fetched {
-    /// The address after redirects; a relative icon address in the page is resolved against it.
-    pub url: Url,
-    pub status: u16,
-    pub body: Vec<u8>,
-}
-
-/// The requests this module sends; tests use a fake.
-pub(crate) trait Http: Send + Sync {
-    /// `None` when there is no answer: a timeout, a refused connection, or a redirect to a
-    /// local address.
-    fn get(&self, url: Url) -> impl Future<Output = Option<Fetched>> + Send;
-}
-
-pub(crate) struct ReqwestHttp(reqwest::Client);
-
-impl ReqwestHttp {
-    pub(crate) fn new() -> Result<Self> {
-        // A website could redirect to a local address; those are never requested.
-        let redirect = reqwest::redirect::Policy::custom(|attempt| {
-            let local = attempt.url().host_str().is_none_or(is_local);
-            if local || attempt.previous().len() >= MAX_REDIRECTS {
-                attempt.stop()
-            } else {
-                attempt.follow()
-            }
-        });
-        let client = reqwest::Client::builder()
-            .timeout(TIMEOUT)
-            .redirect(redirect)
-            .user_agent(concat!("Hindsight/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .map_err(|e| Error::Other(format!("website icon HTTP client: {e}")))?;
-        Ok(Self(client))
-    }
-}
-
-impl Http for ReqwestHttp {
-    async fn get(&self, url: Url) -> Option<Fetched> {
-        let mut resp = self.0.get(url).send().await.ok()?;
-        let url = resp.url().clone();
-        let status = resp.status().as_u16();
-        let mut body = Vec::new();
-        while let Some(chunk) = resp.chunk().await.ok()? {
-            body.extend_from_slice(&chunk);
-            if body.len() >= MAX_BODY {
-                body.truncate(MAX_BODY);
-                break;
-            }
-        }
-        Some(Fetched { url, status, body })
-    }
-}
-
-/// Addresses that exist only on this machine or the local network. They are never requested.
-/// A company intranet name that looks like a normal domain cannot be told apart.
-pub(crate) fn is_local(host: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    !host.contains('.')
-        || host.ends_with(".localhost")
-        || host.ends_with(".local")
-        || host.parse::<std::net::IpAddr>().is_ok()
-}
 
 /// Finds and downloads the icon of website `host`, as a PNG. Tries `/favicon.ico` first,
 /// then the icon the home page declares. `None` when neither gives an image.
-pub(crate) async fn fetch_site_icon(http: &impl Http, host: &str) -> Option<Vec<u8>> {
+pub(super) async fn fetch_site_icon(http: &impl Http, host: &str) -> Option<Vec<u8>> {
     // First try the standard location `/favicon.ico`.
     let home = Url::parse(&format!("https://{host}/")).ok()?;
     if let Some(png) = fetch_icon_at_url(http, home.join("/favicon.ico").ok()?).await {
@@ -193,105 +123,14 @@ fn to_png(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// 测试用的假网络和图片。
-#[cfg(test)]
-pub(super) mod fake {
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    use super::*;
-
-    /// 按网址返回事先放好的回答，并记下请求过哪些网址。
-    #[derive(Default)]
-    pub(in crate::icons::site) struct FakeHttp {
-        /// 网址 → (跳转后的网址, 状态码, 内容)
-        answers: HashMap<String, (String, u16, Vec<u8>)>,
-        requested: Mutex<Vec<String>>,
-    }
-
-    impl FakeHttp {
-        pub(in crate::icons::site) fn answer(
-            mut self,
-            url: &str,
-            status: u16,
-            body: impl Into<Vec<u8>>,
-        ) -> Self {
-            self.answers
-                .insert(url.into(), (url.into(), status, body.into()));
-            self
-        }
-
-        /// `url` 跳到 `to`，回答的是 `to` 的内容。
-        pub(in crate::icons::site) fn redirect(
-            mut self,
-            url: &str,
-            to: &str,
-            status: u16,
-            body: impl Into<Vec<u8>>,
-        ) -> Self {
-            self.answers
-                .insert(url.into(), (to.into(), status, body.into()));
-            self
-        }
-
-        pub(in crate::icons::site) fn requested(&self) -> Vec<String> {
-            self.requested.lock().unwrap().clone()
-        }
-    }
-
-    impl Http for FakeHttp {
-        async fn get(&self, url: Url) -> Option<Fetched> {
-            self.requested.lock().unwrap().push(url.to_string());
-            let (to, status, body) = self.answers.get(url.as_str())?.clone();
-            Some(Fetched {
-                url: Url::parse(&to).unwrap(),
-                status,
-                body,
-            })
-        }
-    }
-
-    pub(in crate::icons::site) fn png(px: u32) -> Vec<u8> {
-        encode(px, ImageFormat::Png)
-    }
-
-    pub(in crate::icons::site) fn ico(px: u32) -> Vec<u8> {
-        encode(px, ImageFormat::Ico)
-    }
-
-    fn encode(px: u32, format: ImageFormat) -> Vec<u8> {
-        let img = image::DynamicImage::new_rgba8(px, px);
-        let mut out = Vec::new();
-        img.write_to(&mut Cursor::new(&mut out), format).unwrap();
-        out
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::fake::{ico, png, FakeHttp};
     use super::*;
+    use crate::icons::site::fake::{ico, png, FakeHttp};
 
     fn size(png: &[u8]) -> (u32, u32) {
         let img = image::load_from_memory(png).unwrap();
         (img.width(), img.height())
-    }
-
-    #[test]
-    fn local_addresses() {
-        for host in [
-            "localhost",
-            "router",
-            "dev.localhost",
-            "printer.local",
-            "192.168.1.10",
-            "::1",
-        ] {
-            assert!(is_local(host), "{host} 应算本地地址");
-        }
-        for host in ["github.com", "live.bilibili.com", "bbc.co.uk"] {
-            assert!(!is_local(host), "{host} 不是本地地址");
-        }
     }
 
     #[test]
