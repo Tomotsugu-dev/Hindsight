@@ -1883,6 +1883,7 @@ dependencies = [
  "winapi",
  "windows-core 0.61.2",
  "xcap",
+ "zbus",
  "zip 2.4.2",
 ]
 
