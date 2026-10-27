@@ -123,7 +123,7 @@
 - 被动观看(屏幕在变):帧照常进入 L2,并计入使用时长。
 
 实现(2026-07-23 定案):挂机豁免信号 = **显示防睡断言**
-(`platform::display_keepawake_active`,macOS IOPMCopyAssertionsStatus 的
+(`IdleSource::display_keepawake_active`,macOS IOPMCopyAssertionsStatus 的
 PreventUserIdleDisplaySleep / Windows CallNtPowerInformation 的 ES_DISPLAY_REQUIRED,
 限频 20s,fail-closed)。播放器/浏览器播放时必申请断言,与截图开关无关、静音也成立;
 监控类软件(AIDA64 仪表盘)刷屏但不申请——取代旧的屏幕帧差探测

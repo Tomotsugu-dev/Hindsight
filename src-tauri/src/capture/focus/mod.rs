@@ -153,7 +153,7 @@ pub(crate) fn is_garbage_window_name(name: &str) -> bool {
 /// 但 macOS 仍然把它当前台 app 返回的进程。capture 看到这些应该立刻 seal 当前会话
 /// 不再累计时长，等同于"用户挂机"。
 ///
-/// 不依赖 [`crate::platform::idle_secs`] —— macOS 锁屏后 idle 计数有时回 0 / 不增，
+/// 不依赖 [`crate::capture::idle::IdleSource::idle_secs`] —— macOS 锁屏后 idle 计数有时回 0 / 不增，
 /// 单靠系统 idle 信号会让 17 分钟锁屏被记成 17 分钟使用。
 ///
 /// 黑名单只列"无歧义占位"那几个：

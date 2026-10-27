@@ -2,6 +2,7 @@ pub mod browser_url;
 #[cfg(target_os = "macos")]
 pub mod bundle;
 pub mod focus;
+pub mod idle;
 pub mod ignore;
 pub mod screenshot;
 #[cfg(target_os = "macos")]
