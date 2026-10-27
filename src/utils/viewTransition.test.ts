@@ -26,4 +26,15 @@ describe("withViewTransition", () => {
     expect(start).toHaveBeenCalledTimes(1);
     expect(ran).toBe(1);
   });
+  it("Linux 上不用 startViewTransition:WebKitGTK 没有 GPU 加速时会崩溃", () => {
+    let ran = 0;
+    const start = vi.fn();
+    vi.stubGlobal("document", {
+      body: { dataset: { platform: "linux" } },
+      startViewTransition: start,
+    });
+    withViewTransition(() => ran++);
+    expect(start).not.toHaveBeenCalled();
+    expect(ran).toBe(1);
+  });
 });
