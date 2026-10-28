@@ -1834,6 +1834,7 @@ dependencies = [
  "fast_image_resize",
  "flate2",
  "futures-util",
+ "gtk",
  "icns",
  "image 0.25.10",
  "libc",
