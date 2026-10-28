@@ -14,7 +14,7 @@ impl FocusSource for X11Focus {
         let focused = windows
             .iter()
             .find(|w| w.is_focused().unwrap_or(false))
-            .ok_or_else(|| Error::Capture("没有焦点窗口".into()))?;
+            .ok_or_else(|| Error::Capture("no focused window".into()))?;
 
         let raw_name = focused.app_name().unwrap_or_default().to_string();
         let app_name = basename(&raw_name);

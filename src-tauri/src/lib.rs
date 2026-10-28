@@ -277,6 +277,10 @@ pub fn run() {
             commands::capture::start_capture,
             commands::capture::stop_capture,
             commands::capture::get_capture_status,
+            #[cfg(target_os = "linux")]
+            commands::gnome_extension::get_gnome_extension_status,
+            #[cfg(target_os = "linux")]
+            commands::gnome_extension::enable_gnome_extension,
             // --- data: 报表查询 ---
             commands::data::get_day_hours,
             commands::data::get_day_apps,

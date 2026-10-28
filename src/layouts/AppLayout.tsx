@@ -4,6 +4,7 @@ import { Sidebar } from "../components/Sidebar/Sidebar";
 import { WindowControls } from "../components/WindowControls/WindowControls";
 import { ErrorBoundary } from "../components/ErrorBoundary/ErrorBoundary";
 import { ScrollIndicator } from "../components/ScrollIndicator/ScrollIndicator";
+import { GnomeExtensionBanner } from "../components/GnomeExtensionBanner/GnomeExtensionBanner";
 import styles from "./AppLayout.module.css";
 
 export function AppLayout() {
@@ -14,6 +15,8 @@ export function AppLayout() {
       <div className={styles.dragStrip} data-tauri-drag-region />
 
       <main ref={contentRef} className={styles.content} data-part="content">
+        {/* 只有 GNOME Wayland 要靠扩展记录，其他环境不显示 */}
+        <GnomeExtensionBanner />
         {/* 页面级边界：单页崩溃只换掉内容区，侧栏/窗口 chrome 仍在；
             key=路由让用户切到别的页时边界重挂、自动恢复 */}
         <ErrorBoundary key={location.pathname} scope="page.crash">

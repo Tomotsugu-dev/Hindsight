@@ -452,6 +452,17 @@
     }
   },
   "components": {
+    "gnomeExtension": {
+      "off": "Hindsight 的 GNOME 扩展没有打开。",
+      "enable": "打开扩展",
+      "enabling": "正在打开…",
+      "needsRelogin": "请尝试注销并重新登录，以启用 GNOME 扩展。",
+      "missing": "没找到 Hindsight 的 GNOME 扩展。请尝试重新安装 Hindsight。",
+      "allOff": "GNOME 关掉了所有扩展。请在「扩展」或「扩展管理器」应用里，重新打开扩展总开关。",
+      "unsupported": "这个 GNOME 版本用不了 Hindsight 的扩展。请升级到 GNOME 46 或更新的版本。",
+      "failed": "Hindsight 的 GNOME 扩展出错了。请尝试注销并重新登录。",
+      "enableFailed": "打开失败：{{msg}}"
+    },
     "devicePicker": {
       "all": "所有设备",
       "thisDevice": "本机"

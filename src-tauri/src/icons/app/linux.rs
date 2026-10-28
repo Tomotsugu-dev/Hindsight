@@ -31,7 +31,7 @@ pub fn extract_png(process_name: &str, exe_path: &Path) -> Result<Option<Vec<u8>
     match rx.recv_timeout(MAIN_THREAD_TIMEOUT) {
         Ok(png) => Ok(png),
         Err(e) => {
-            log::warn!("主线程没有回应，{process_name} 的图标这次不取：{e}");
+            log::warn!("The main thread did not answer, so the icon of {process_name} is skipped this time: {e}");
             Ok(None)
         }
     }

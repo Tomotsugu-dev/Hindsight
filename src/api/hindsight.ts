@@ -178,6 +178,17 @@ export interface CaptureStatus {
   lastError: string | null;
 }
 
+/** Hindsight 的 GNOME 扩展的状态。只有 Linux 上有这两个命令；Linux 上只有 GNOME Wayland
+ *  要靠扩展记录，其他桌面都是 `ready`。 */
+export type GnomeExtensionStatus =
+  | "ready"
+  | "needsRelogin"
+  | "missing"
+  | "off"
+  | "allOff"
+  | "unsupported"
+  | "failed";
+
 export interface TimeRange {
   start: string;
   end: string;
@@ -914,6 +925,10 @@ export const api = {
   startCapture: () => invoke<void>("start_capture"),
   stopCapture: () => invoke<void>("stop_capture"),
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),
+  getGnomeExtensionStatus: () =>
+    invoke<GnomeExtensionStatus>("get_gnome_extension_status"),
+  /** 打开 Hindsight 的 GNOME 扩展，返回打开后的状态。 */
+  enableGnomeExtension: () => invoke<GnomeExtensionStatus>("enable_gnome_extension"),
   getAppIcon: (processName: string) =>
     invoke<string | null>("get_app_icon", { processName }),
   /** 导出 HTML 报告用：图标直接返回 base64 data URL，不用再经过文件路径。 */

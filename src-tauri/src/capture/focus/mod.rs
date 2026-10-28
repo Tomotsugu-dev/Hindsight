@@ -72,6 +72,47 @@ pub fn detect() -> Arc<dyn FocusSource> {
     imp::detect()
 }
 
+/// The state of the Hindsight GNOME extension. Only GNOME Wayland needs it to read the focused
+/// window; the frontend prompts the user when it is not [`Self::Ready`].
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GnomeExtensionStatus {
+    /// The extension is not needed, or it is running
+    Ready,
+    /// The extension is installed, but GNOME has not found it yet: log out and back in once
+    NeedsRelogin,
+    /// The extension is not installed
+    Missing,
+    /// GNOME has found it, but it is off: [`enable_gnome_extension`] turns it on
+    Off,
+    /// The user turned off all extensions in GNOME
+    AllOff,
+    /// This GNOME version cannot run the extension
+    Unsupported,
+    /// The extension hit an error
+    Failed,
+}
+
+/// Returns the state of the Hindsight GNOME extension. Asks GNOME Shell, so the caller runs it in
+/// `spawn_blocking`.
+#[cfg(target_os = "linux")]
+pub fn gnome_extension_status() -> GnomeExtensionStatus {
+    linux::gnome_extension_status()
+}
+
+/// Turns on the Hindsight GNOME extension. Asks GNOME Shell, so the caller runs it in
+/// `spawn_blocking`.
+///
+/// # Errors
+///
+/// GNOME Shell cannot be asked, or it did not turn the extension on:
+/// [`crate::error::Error::Capture`]
+#[cfg(target_os = "linux")]
+pub fn enable_gnome_extension() -> Result<()> {
+    linux::enable_gnome_extension()
+}
+
 /// 叫醒采集循环，让它立刻跑一次 tick，而不是等满轮询周期。
 ///
 /// tick 运行期间来的多次叫醒合并成一次：`Notify` 只保留一个待处理标记，所以 tick

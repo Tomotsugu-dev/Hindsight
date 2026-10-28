@@ -452,6 +452,17 @@
     }
   },
   "components": {
+    "gnomeExtension": {
+      "off": "La extensión de Hindsight para GNOME está desactivada.",
+      "enable": "Activar extensión",
+      "enabling": "Activando…",
+      "needsRelogin": "Prueba a cerrar sesión y volver a entrar para activar la extensión de GNOME.",
+      "missing": "No se encontró la extensión de Hindsight para GNOME. Prueba a reinstalar Hindsight.",
+      "allOff": "Todas las extensiones están desactivadas en GNOME. Vuelve a activarlas en la aplicación Extensiones o Gestor de extensiones.",
+      "unsupported": "Esta versión de GNOME no puede ejecutar la extensión de Hindsight. Actualiza a GNOME 46 o posterior.",
+      "failed": "La extensión de Hindsight para GNOME tuvo un error. Prueba a cerrar sesión y volver a entrar.",
+      "enableFailed": "No se pudo activar: {{msg}}"
+    },
     "devicePicker": {
       "all": "Todos los dispositivos",
       "thisDevice": "Este dispositivo"

@@ -11,6 +11,8 @@ pub mod chat;
 pub mod data;
 pub mod devices;
 pub mod export;
+#[cfg(target_os = "linux")]
+pub mod gnome_extension;
 pub mod icons;
 pub mod island;
 pub mod plugins;
