@@ -235,6 +235,12 @@ mod tests {
     /// 现在由硬/软两个上限兜底,与外面的标志是否卡住无关。
     #[tokio::test]
     async fn bounded_wait_when_backlog_never_drains() {
+        let _lock = digest::drain_lock().await;
+        // 占住批权、不跑批,就是"别人的批永远在跑"。不占的话本阶段会自己起批,
+        // Linux 上那一批会去下载 Paddle 模型,占着批权让 digest 的测试报"已在运行"
+        let _busy = digest::hold(std::time::Duration::from_secs(1))
+            .await
+            .expect("拿锁后没有别的批在跑");
         let (pool, mem) = fixture().await;
         enable_resident(&pool).await;
         // 一帧积压,且没有任何人会去消化它(测试环境没有识别引擎)
@@ -293,6 +299,8 @@ mod tests {
     /// 否则会毒害同进程随后的合法批(曾令 digest 的 drain 测试随机挂)。
     #[tokio::test]
     async fn cancel_exits_promptly_after_starting_event() {
+        // 取消时看到别的批在跑会请求停止,不串行就会停掉 digest 测试的批
+        let _lock = digest::drain_lock().await;
         let (pool, mem) = fixture().await;
         enable_resident(&pool).await;
         // 直接向登记簿塞一帧待识别(绕开真实截图文件)

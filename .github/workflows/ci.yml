@@ -10,6 +10,9 @@
 # - clippy runs on Windows so the Windows-only modules keep compiling.
 # - the tests run on macOS: the same crate compiles far faster there than on
 #   the Windows runner, and both are release targets.
+# - a Linux job runs clippy and the tests on Ubuntu 22.04, the system the
+#   Linux packages are built on, so the Linux-only modules keep compiling and
+#   their tests run.
 # - debuginfo is off for CI builds. Nothing reads it, and generating it is a
 #   large part of the compile and link time.
 # - backend checks use Tauri's dev context, so they do not need frontend assets.
@@ -133,5 +136,40 @@ jobs:
         working-directory: src-tauri
         env:
           # Only the workspace crate changes; keep the existing dependency cache.
+          CARGO_PROFILE_TEST_OPT_LEVEL: 0
+        run: cargo test
+
+  rust-linux:
+    name: Backend Linux (clippy + test)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-22.04
+    env:
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        working-directory: src-tauri
+        env:
           CARGO_PROFILE_TEST_OPT_LEVEL: 0
         run: cargo test

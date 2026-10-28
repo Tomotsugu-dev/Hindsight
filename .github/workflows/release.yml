@@ -1,4 +1,4 @@
-# 推 v* tag → 自动出 macOS（通用：Intel + Apple Silicon）+ Windows 双平台 release。
+# 推 v* tag → 自动出 macOS（通用：Intel + Apple Silicon）+ Windows + Linux 三平台 release。
 #
 # 触发：
 #   git tag v0.4.5-beta && git push origin v0.4.5-beta
@@ -10,6 +10,10 @@
 #   - hindsight_X.Y.Z_universal.app.tar.gz.sig
 #   - hindsight_X.Y.Z_x64-setup.exe            （Windows）
 #   - hindsight_X.Y.Z_x64-setup.exe.sig
+#   - hindsight_X.Y.Z_amd64.deb                （Linux，也是 updater 包）
+#   - hindsight_X.Y.Z_amd64.deb.sig
+#   - hindsight-X.Y.Z-1.x86_64.rpm             （Linux，也是 updater 包）
+#   - hindsight-X.Y.Z-1.x86_64.rpm.sig
 #   - latest.json                              （updater manifest，自动合并 platforms）
 
 name: Release
@@ -39,6 +43,9 @@ jobs:
           - platform: macos-14
             args: "--target universal-apple-darwin"
           - platform: windows-latest
+            args: ""
+          # 在 22.04 上构建：在更新的系统上构建，较老的系统会因为 glibc 版本不够打不开
+          - platform: ubuntu-22.04
             args: ""
     runs-on: ${{ matrix.platform }}
 
@@ -94,6 +101,12 @@ jobs:
 
           # sanity check
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Install Linux system libraries
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
 
       - name: Install npm deps
         run: npm ci
