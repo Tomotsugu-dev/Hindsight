@@ -1,4 +1,4 @@
-//! GNOME Wayland: asks the Hindsight Focus extension over D-Bus
+//! GNOME Wayland: asks the Hindsight GNOME extension over D-Bus
 //! (`src-tauri/linux/gnome-extension/`). The interface is described at the top of `extension.js`.
 
 use std::collections::HashMap;
@@ -61,8 +61,9 @@ impl FocusSource for GnomeFocus {
     fn focused_window(&self) -> Result<WindowInfo> {
         let fields = self
             .get_focused_window()
-            .map_err(|e| Error::Capture(format!("Hindsight Focus 扩展：{e}")))?;
-        window_info(&fields, resolve_exe_path).ok_or_else(|| Error::Capture("没有焦点窗口".into()))
+            .map_err(|e| Error::Capture(format!("Hindsight GNOME extension: {e}")))?;
+        window_info(&fields, resolve_exe_path)
+            .ok_or_else(|| Error::Capture("no focused window".into()))
     }
 }
 
