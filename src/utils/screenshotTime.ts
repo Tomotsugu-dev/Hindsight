@@ -1,4 +1,4 @@
-// 跟后端 capture/screenshot.rs 写文件名 + ai/summary_operations.rs::extract_time_label
+// 跟后端 capture/screenshot/mod.rs 写文件名 + ai/summary_operations.rs::extract_time_label
 // 同款规则：截图保存为 `HHMMSS_NNN.jpg`（本机时区），从中取出 `HH:MM` 给 UI 展示。
 //
 // 只到分级精度——逐图描述列表里精确到秒没意义（vision 模型本来就抽帧），

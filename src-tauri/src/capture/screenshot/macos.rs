@@ -24,6 +24,43 @@ use screencapturekit::{
 
 use crate::error::{Error, Result};
 
+/// Captures the frontmost app's window, or returns None when that fails or the foreground is no
+/// longer `expected_pid` (unless it is 0).
+pub(super) fn grab_focused(expected_pid: u32) -> Option<RgbaImage> {
+    let pid = frontmost_pid()?;
+    if expected_pid != 0 && pid != expected_pid {
+        log::debug!(
+            "Screenshot skipped: the foreground switched from pid={expected_pid} to pid={pid}"
+        );
+        return None;
+    }
+    match capture_focused_window(pid) {
+        Ok(img) => Some(img),
+        Err(e) => {
+            log::debug!("ScreenCaptureKit screenshot failed: {e}");
+            None
+        }
+    }
+}
+
+/// 调 `NSWorkspace.frontmostApplication()` 拿系统层最前 app 的 PID。
+/// 这是跨屏 / 跨 Space 都正确的"用户当前在用的 app"信号——比 xcap 的 is_focused()
+/// 在多屏场景下可靠很多。
+fn frontmost_pid() -> Option<u32> {
+    use objc2_app_kit::NSWorkspace;
+    // 在 tokio blocking 线程上调 AppKit，没有 ambient autoreleasepool 会导致
+    // NSRunningApplication 等 autorelease 临时对象堆积。
+    objc2::rc::autoreleasepool(|_| {
+        let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+        let pid = app.processIdentifier();
+        if pid > 0 {
+            Some(pid as u32)
+        } else {
+            None
+        }
+    })
+}
+
 /// 截取 `frontmost_pid` 所属 app 当前最大可见窗口的内容，返回 RGBA pixel buffer。
 ///
 /// `frontmost_pid` 由调用方先用 `NSWorkspace.frontmostApplication.processIdentifier()`
@@ -33,7 +70,7 @@ use crate::error::{Error, Result};
 /// - 用户没授 Screen Recording 权限：第一次调用时 OS 弹"打开系统设置"对话框，本次返 Err；
 ///   用户授权后下次 tick 即可成功
 /// - 目标 app 没有可见窗口（极少见——比如 menubar-only app）：返 Err，调用方跳过该 tick
-pub fn capture_focused_window(frontmost_pid: u32) -> Result<RgbaImage> {
+fn capture_focused_window(frontmost_pid: u32) -> Result<RgbaImage> {
     // tokio blocking pool 线程从不退出 → 没有 ambient autoreleasepool 来排空
     // SCK / CoreGraphics 内部 autorelease 的 NSString / NSValue / CMFormatDescription
     // 临时对象，长 uptime 下会逐渐沉积。包一层 pool 让本次 capture 的所有 Cocoa
