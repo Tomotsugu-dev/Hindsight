@@ -31,7 +31,9 @@ pub enum JobInitState {
     /// 全平台 match 仍要枚举它，因此不能 cfg-gate 掉，只能 allow。
     #[allow(dead_code)]
     Ok,
-    /// 保护降级；附原因（macOS 缺 prctl 时是预期降级；Windows Job 创建失败是异常降级）
+    /// 保护降级；附原因（macOS 缺 prctl 时是预期降级；Windows Job 创建失败是异常降级）。
+    /// Linux 不会降级，编译到 Linux 时没有地方构造它，同样只能 allow。
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     Degraded(String),
 }
 
