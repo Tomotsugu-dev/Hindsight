@@ -452,6 +452,17 @@
     }
   },
   "components": {
+    "gnomeExtension": {
+      "off": "Hindsight の GNOME 拡張機能がオフになっています。",
+      "enable": "拡張機能をオンにする",
+      "enabling": "オンにしています…",
+      "needsRelogin": "GNOME 拡張機能を有効にするには、一度ログアウトして再ログインしてみてください。",
+      "missing": "Hindsight の GNOME 拡張機能が見つかりません。Hindsight を再インストールしてみてください。",
+      "allOff": "GNOME ですべての拡張機能がオフになっています。「拡張機能」または「Extension Manager」アプリで、拡張機能をオンに戻してください。",
+      "unsupported": "この GNOME のバージョンでは Hindsight の拡張機能を使えません。GNOME 46 以降にアップデートしてください。",
+      "failed": "Hindsight の GNOME 拡張機能でエラーが起きました。一度ログアウトして再ログインしてみてください。",
+      "enableFailed": "オンにできませんでした：{{msg}}"
+    },
     "devicePicker": {
       "all": "すべてのデバイス",
       "thisDevice": "このデバイス"

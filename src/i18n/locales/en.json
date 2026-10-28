@@ -452,6 +452,17 @@
     }
   },
   "components": {
+    "gnomeExtension": {
+      "off": "The Hindsight GNOME extension is off.",
+      "enable": "Turn on extension",
+      "enabling": "Turning on…",
+      "needsRelogin": "Try logging out and back in to turn on the GNOME extension.",
+      "missing": "The Hindsight GNOME extension wasn't found. Try reinstalling Hindsight.",
+      "allOff": "All extensions are turned off in GNOME. Turn them back on in the Extensions or Extension Manager app.",
+      "unsupported": "This version of GNOME can't run the Hindsight extension. Update to GNOME 46 or later.",
+      "failed": "The Hindsight GNOME extension ran into an error. Try logging out and back in.",
+      "enableFailed": "Couldn't turn it on: {{msg}}"
+    },
     "devicePicker": {
       "all": "All devices",
       "thisDevice": "This device"

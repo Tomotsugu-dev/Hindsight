@@ -452,6 +452,17 @@
     }
   },
   "components": {
+    "gnomeExtension": {
+      "off": "Hindsight 的 GNOME 擴充功能沒有開啟。",
+      "enable": "開啟擴充功能",
+      "enabling": "正在開啟…",
+      "needsRelogin": "請嘗試登出並重新登入，以啟用 GNOME 擴充功能。",
+      "missing": "找不到 Hindsight 的 GNOME 擴充功能。請嘗試重新安裝 Hindsight。",
+      "allOff": "GNOME 關閉了所有擴充功能。請在「擴充功能」或「擴充套件管理員」應用程式中，重新開啟擴充功能總開關。",
+      "unsupported": "這個 GNOME 版本無法使用 Hindsight 的擴充功能。請升級到 GNOME 46 或更新的版本。",
+      "failed": "Hindsight 的 GNOME 擴充功能出錯了。請嘗試登出並重新登入。",
+      "enableFailed": "開啟失敗：{{msg}}"
+    },
     "devicePicker": {
       "all": "所有裝置",
       "thisDevice": "本機"

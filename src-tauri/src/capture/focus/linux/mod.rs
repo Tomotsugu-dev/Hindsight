@@ -3,16 +3,17 @@
 
 use std::sync::Arc;
 
-use super::{FocusSource, WindowInfo};
+use super::{FocusSource, GnomeExtensionStatus, WindowInfo};
 use crate::error::{Error, Result};
 
 mod gnome;
+mod gnome_extension;
 mod x11;
 
 /// The focus sources implemented on Linux.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Source {
-    /// GNOME on Wayland: asks the Hindsight Focus extension
+    /// GNOME on Wayland: asks the Hindsight GNOME extension
     Gnome,
     /// X11 on any desktop: xcap
     X11,
@@ -35,6 +36,24 @@ pub(super) fn detect() -> Arc<dyn FocusSource> {
         Source::Gnome => Arc::new(gnome::GnomeFocus::new()),
         Source::X11 => Arc::new(x11::X11Focus),
     }
+}
+
+/// Returns the state of the Hindsight GNOME extension. Only GNOME Wayland uses the extension;
+/// everywhere else it is [`GnomeExtensionStatus::Ready`].
+pub(super) fn gnome_extension_status() -> GnomeExtensionStatus {
+    if choose(&DesktopEnv::from_env()) != Some(Source::Gnome) {
+        return GnomeExtensionStatus::Ready;
+    }
+    gnome_extension::status()
+}
+
+/// Turns on the Hindsight GNOME extension.
+///
+/// # Errors
+///
+/// See [`gnome_extension::enable`]
+pub(super) fn enable_gnome_extension() -> Result<()> {
+    gnome_extension::enable()
 }
 
 /// Returns the focus source for this desktop environment.
