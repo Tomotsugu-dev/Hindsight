@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/gnome-shell/extensions/hindsight-focus@tomotsugu-dev.github.com": "linux/gnome-extension/hindsight-focus@tomotsugu-dev.github.com"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/gnome-shell/extensions/hindsight-focus@tomotsugu-dev.github.com": "linux/gnome-extension/hindsight-focus@tomotsugu-dev.github.com"
+        }
+      }
+    }
+  }
+}
