@@ -562,7 +562,7 @@ pub async fn backfill_from_activities(pool: &DbPool, mem: &MemoryDb) -> Result<u
 }
 
 /// [`RUNNING`] / [`STOP_REQUESTED`] 是进程级 static,cargo test 并行跑时
-/// 所有触碰 drain 或 [`hold`] 的测试(本模块的、清空数据的 e2e)必须互相串行,
+/// 所有触碰 drain 或 [`hold`] 的测试(本模块的、清空数据的 e2e、OCR 清积压的)必须互相串行,
 /// 否则会看见对方的"已在运行"错误或消费掉对方的停止请求。用异步锁:guard 要
 /// 横跨整个测试体(含 await 点),std 锁跨 await 会触发 clippy::await_holding_lock;
 /// 拿锁的测试 panic 时 guard 随栈展开释放,后续测试照常拿锁,无毒化问题。
