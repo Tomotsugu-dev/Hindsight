@@ -19,6 +19,20 @@ describe("displayAppName", () => {
     expect(displayAppName("my.exe.tool.exe")).toBe("my.exe.tool");
   });
 
+  it("Linux 的反向域名应用 ID 只留最后一段", () => {
+    expect(displayAppName("org.gnome.Nautilus")).toBe("Nautilus");
+    expect(displayAppName("org.kde.konsole")).toBe("konsole");
+    expect(displayAppName("com.microsoft.VSCode")).toBe("VSCode");
+    expect(displayAppName("io.github.flattool.Warehouse")).toBe("Warehouse");
+  });
+
+  it("不像应用 ID 的带点名字原样返回", () => {
+    // 只有两段
+    expect(displayAppName("draw.io")).toBe("draw.io");
+    // 第一段不是常见顶级域
+    expect(displayAppName("my.exe.tool")).toBe("my.exe.tool");
+  });
+
   it("无已知后缀时原样返回", () => {
     expect(displayAppName("chrome")).toBe("chrome");
     expect(displayAppName("notes.txt")).toBe("notes.txt");
