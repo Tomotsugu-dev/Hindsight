@@ -133,3 +133,45 @@ pub async fn backfill_builtin_categories(pool: &DbPool) -> Result<u64> {
     }
     Ok(updated_cnt)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Linux 记的是窗口类名，不是 macOS / Windows 的进程名。大小写不同也要命中。
+    #[test]
+    fn linux_window_classes_have_a_built_in_category() {
+        for (name, category) in [
+            ("google-chrome", "browse"),
+            ("Google-chrome", "browse"),
+            ("microsoft-edge", "browse"),
+            ("brave-browser", "browse"),
+            ("org.mozilla.firefox", "browse"),
+            ("chromium-browser", "browse"),
+            ("code", "code"),
+            ("jetbrains-idea", "code"),
+            ("jetbrains-idea-ce", "code"),
+            ("jetbrains-pycharm-ce", "code"),
+            ("jetbrains-pycharm-professional", "code"),
+            ("jetbrains-clion", "code"),
+            ("jetbrains-studio", "code"),
+            ("gnome-terminal", "code"),
+            ("org.gnome.Terminal", "code"),
+            ("konsole", "code"),
+            ("org.kde.konsole", "code"),
+            ("dbeaver", "code"),
+            ("dev.zed.Zed", "code"),
+            ("telegramdesktop", "talk"),
+            ("org.telegram.desktop", "talk"),
+            ("md.obsidian.Obsidian", "office"),
+            ("thunderbird-default", "office"),
+            ("libreoffice-writer", "office"),
+            ("libreoffice-calc", "office"),
+            ("libreoffice-impress", "office"),
+            ("org.gnome.Nautilus", "other"),
+            ("org.kde.dolphin", "other"),
+        ] {
+            assert_eq!(match_builtin_category(name), Some(category), "{name}");
+        }
+    }
+}

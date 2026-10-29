@@ -245,6 +245,25 @@ mod tests {
     use crate::repo::test_util::fresh_test_pool;
     use crate::storage::SqliteResultExt;
 
+    #[test]
+    fn linux_window_classes_share_the_canonical_app() {
+        assert_eq!(lookup_canonical("google-chrome"), Some("Google Chrome"));
+        assert_eq!(lookup_canonical("Google-chrome"), Some("Google Chrome"));
+        assert_eq!(lookup_canonical("microsoft-edge"), Some("Microsoft Edge"));
+        assert_eq!(lookup_canonical("brave-browser"), Some("Brave Browser"));
+        assert_eq!(lookup_canonical("org.mozilla.firefox"), Some("Firefox"));
+        assert_eq!(lookup_canonical("jetbrains-idea"), Some("IntelliJ IDEA"));
+        assert_eq!(lookup_canonical("jetbrains-pycharm-ce"), Some("PyCharm"));
+        assert_eq!(lookup_canonical("TelegramDesktop"), Some("Telegram"));
+        assert_eq!(lookup_canonical("md.obsidian.Obsidian"), Some("Obsidian"));
+        assert_eq!(lookup_canonical("thunderbird-default"), Some("Thunderbird"));
+        // 分类按 canonical 查，所以 Linux 类名进了别名表就会用上已有的内置分类
+        assert_eq!(
+            crate::repo::builtin_categories::match_builtin_category("Google Chrome"),
+            Some("browse")
+        );
+    }
+
     /// 测 [`pair_existing`]：把两个跨 OS 别名（默认 solo 组）合并到 canonical 组。
     /// 别名表已嵌入二进制：`Code` 和 `Code.exe` 都映射到 `"Visual Studio Code"`。
     #[tokio::test]
