@@ -601,17 +601,10 @@ async fn tick(inner: &Inner) -> Result<()> {
     let now = Local::now();
 
     // 浏览器场景：每次 tick 都抓 URL，因为 URL 是 focus 的一部分（切 URL 要立即触发新会话）。
-    // 平台调用阻塞 + 偶尔卡几百 ms，扔到 spawn_blocking 不堵 async runtime。
     // 非浏览器跳过这步，省 50–300ms。
     let is_browser = browser_url::is_browser_app(&info.app_name);
     let fetched_url = if is_browser {
-        let app_name_for_url = info.app_name.clone();
-        tokio::task::spawn_blocking(move || {
-            browser_url::try_get_foreground_browser_url(&app_name_for_url)
-        })
-        .await
-        .ok()
-        .flatten()
+        browser_url::read_url(&info).await
     } else {
         None
     };
@@ -984,11 +977,7 @@ async fn recheck_privacy_after_shot(
         return true;
     }
     let url = if is_browser && !url_kw.is_empty() {
-        let app_name = now_info.app_name.clone();
-        tokio::task::spawn_blocking(move || browser_url::try_get_foreground_browser_url(&app_name))
-            .await
-            .ok()
-            .flatten()
+        browser_url::read_url(&now_info).await
     } else {
         None
     };
