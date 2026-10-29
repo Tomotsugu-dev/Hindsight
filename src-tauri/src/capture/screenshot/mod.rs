@@ -1,3 +1,10 @@
+//! Screenshots: captures the focused window and saves it as a JPEG. Each system only grabs the
+//! focused window's pixels (`grab_focused`), chosen at compile time; scaling, skipping tiny
+//! images, encoding and writing the file are here, the same on every system.
+//!
+//! Whether to take one is up to [`policy`] (the privacy rules): the capture service asks it before
+//! calling [`capture_active_window`].
+
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
@@ -5,17 +12,30 @@ use image::{codecs::jpeg::JpegEncoder, DynamicImage, ExtendedColorType, ImageEnc
 
 use crate::error::{Error, Result};
 
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+pub mod policy;
+#[cfg(target_os = "windows")]
+mod windows;
+
+#[cfg(target_os = "linux")]
+use linux as imp;
+#[cfg(target_os = "macos")]
+use macos as imp;
+#[cfg(target_os = "windows")]
+use windows as imp;
+
 /// Screenshots smaller than this size in either width or height are not saved:
 /// the macOS OCR engine rejects images that are too small.
 const MIN_SIDE_PX: u32 = 16;
 
-/// 截当前激活窗口 → 缩放到 `max_width × max_height`（保持比例 + letterbox 透明）→
-/// JPEG 编码 → 写到 `dir/<HHMMSS_NNN>.jpg`。返回写入的绝对路径。
-/// 同步图像处理放在 `spawn_blocking` 里跑，不堵 Tokio runtime。
+/// Captures the focused window and saves it as `dir/<date>/<HHMMSS_mmm>.jpg`, returning the file's
+/// path; `Ok(None)` when nothing was captured.
 ///
-/// `expected_pid`：tick 开始时解析出的焦点进程。隐私过滤是基于那一刻的窗口信息
-/// 判定的，而截图在几百 ms 后才发生——若此刻前台已切到别的（可能命中隐私过滤的）
-/// 应用，直接放弃本次截图，避免"过滤按 A 判、镜头拍到 B"的 TOCTOU。0 = 不校验。
+/// `expected_pid` is the focused process when privacy was checked; if the foreground has changed
+/// by the time of the screenshot, none is taken. 0 = no check.
 pub async fn capture_active_window(
     dir: PathBuf,
     max_width: u32,
@@ -38,7 +58,7 @@ fn capture_blocking(
     jpeg_quality: u8,
     expected_pid: u32,
 ) -> Result<Option<String>> {
-    let rgba = match grab_focused_image(expected_pid) {
+    let rgba = match imp::grab_focused(expected_pid) {
         Some(img) => img,
         None => return Ok(None),
     };
@@ -58,7 +78,7 @@ fn save_image(
     let normalized = fit_within(img, max_width, max_height);
     if normalized.width() < MIN_SIDE_PX || normalized.height() < MIN_SIDE_PX {
         log::debug!(
-            "跳过截图：{}×{} 太小",
+            "Screenshot skipped: {}×{} is too small",
             normalized.width(),
             normalized.height()
         );
@@ -80,61 +100,6 @@ fn save_image(
         .map_err(|e| Error::Capture(format!("jpeg encode: {e}")))?;
 
     Ok(Some(target.to_string_lossy().to_string()))
-}
-
-/// 拿当前前台 app 的截图——macOS 走 ScreenCaptureKit（focused window only），
-/// 其它平台走 xcap heuristic。失败返 None，调用方跳过该 tick。
-///
-/// `expected_pid != 0` 时校验"现在的前台还是 tick 判定隐私时的那个进程"，
-/// 已经切走就放弃（宁可少一张图，不拍错人）。
-fn grab_focused_image(expected_pid: u32) -> Option<image::RgbaImage> {
-    #[cfg(target_os = "macos")]
-    {
-        let pid = macos_frontmost_pid()?;
-        if expected_pid != 0 && pid != expected_pid {
-            log::debug!("跳过截图：前台已从 pid={expected_pid} 切到 pid={pid}（TOCTOU 防护）");
-            return None;
-        }
-        match super::screenshot_macos::capture_focused_window(pid) {
-            Ok(img) => Some(img),
-            Err(e) => {
-                log::debug!("SCK 截图失败: {e}");
-                None
-            }
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let windows = xcap::Window::all().ok()?;
-        let focused = windows.iter().find(|w| w.is_focused().unwrap_or(false))?;
-        if expected_pid != 0 {
-            let pid = focused.pid().unwrap_or(0);
-            if pid != 0 && pid != expected_pid {
-                log::debug!("跳过截图：前台已从 pid={expected_pid} 切到 pid={pid}（TOCTOU 防护）");
-                return None;
-            }
-        }
-        focused.capture_image().ok()
-    }
-}
-
-/// macOS：调 `NSWorkspace.frontmostApplication()` 拿系统层最前 app 的 PID。
-/// 这是跨屏 / 跨 Space 都正确的"用户当前在用的 app"信号——比 xcap 的 is_focused()
-/// 在多屏场景下可靠很多。
-#[cfg(target_os = "macos")]
-fn macos_frontmost_pid() -> Option<u32> {
-    use objc2_app_kit::NSWorkspace;
-    // 在 tokio blocking 线程上调 AppKit，没有 ambient autoreleasepool 会导致
-    // NSRunningApplication 等 autorelease 临时对象堆积。
-    objc2::rc::autoreleasepool(|_| {
-        let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
-        let pid = app.processIdentifier();
-        if pid > 0 {
-            Some(pid as u32)
-        } else {
-            None
-        }
-    })
 }
 
 /// 整窗保留：等比缩放使其装入 max_w × max_h，超过任一上限才缩，否则保持原始尺寸。

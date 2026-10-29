@@ -8,7 +8,7 @@ use tokio::task::JoinHandle;
 
 use crate::capture::focus::{self, FocusSource, FocusWaker, WindowInfo};
 use crate::capture::idle::{self, IdleSource};
-use crate::capture::{browser_url, ignore, screenshot, screenshot_policy};
+use crate::capture::{browser_url, ignore, screenshot};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
@@ -959,7 +959,7 @@ async fn should_skip_for_privacy(
     if is_browser && url.is_none() && !url_kw.is_empty() {
         return true;
     }
-    screenshot_policy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
+    screenshot::policy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
 }
 
 /// 截图后的隐私复核：按"现在"的窗口标题（浏览器再抓一次 URL）重跑同一套隐私规则。

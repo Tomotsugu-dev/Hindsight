@@ -1,20 +1,21 @@
-// Hindsight Focus：告诉 Hindsight 现在哪个窗口有焦点。
+// Hindsight Focus：告诉 Hindsight 现在哪个窗口有焦点，并在它要求时截下这个窗口。
 //
 // GNOME 在 Wayland 下不让普通程序读焦点窗口（org.gnome.Shell.Introspect 只回答
 // xdg-desktop-portal）。扩展跑在 gnome-shell 进程里，看得到焦点窗口，再通过 session
 // bus 转告 Hindsight。
 //
 // 只回答 Hindsight：调用方的可执行文件必须叫 hindsight，并且属于 root（deb / rpm
-// 安装的位置）。不检查的话，同一会话里的任何程序都能借它读窗口标题，等于把 GNOME
+// 安装的位置）。不检查的话，同一会话里的任何程序都能借它读窗口标题、截焦点窗口，等于把 GNOME
 // 关上的口子又打开了。扩展装在用户目录里时（开发者自己放进去的），不检查属主，
 // 好让自己编译的 Hindsight 也能用。
 //
 // 这里的代码都跑在 gnome-shell 里，Wayland 下 gnome-shell 崩溃会结束整个登录会话：
 // 不要做阻塞调用，回调里的异常要兜住。
 //
-// D-Bus 接口是和 src-tauri/src/capture/focus/linux/gnome.rs 的约定。Wayland 下扩展
-// 更新后要重新登录才生效，所以 GetFocusedWindow 只加字段、不改不删；Hindsight
-// 需要扩展的新行为时，VERSION 加一。
+// D-Bus 接口是和 src-tauri/src/capture/focus/linux/gnome.rs、
+// src-tauri/src/capture/screenshot/linux/gnome.rs 的约定。Wayland 下扩展更新后要
+// 重新登录才生效，所以 GetFocusedWindow 只加字段、不改不删；新方法可以加。
+// Hindsight 需要扩展的新行为时，VERSION 加一。VERSION 2 起有 CaptureFocusedWindow。
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -24,15 +25,22 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 const BUS_NAME = 'com.tomotsugu.hindsight.Focus';
 const OBJECT_PATH = '/com/tomotsugu/hindsight/Focus';
 const INTERFACE_NAME = 'com.tomotsugu.hindsight.Focus';
-const VERSION = 1;
+const VERSION = 2;
 /** 调用方可执行文件的文件名 */
 const CALLER_NAME = 'hindsight';
+/** 没有截到窗口时返回的空 PNG */
+const EMPTY_PNG = new Uint8Array(0);
 
 const INTERFACE_XML = `<node>
   <interface name="${INTERFACE_NAME}">
     <!-- 焦点窗口：title (s)、wm-class (s)、app-id (s)、pid (u)。没有焦点窗口时为空 -->
     <method name="GetFocusedWindow">
       <arg type="a{sv}" direction="out" name="window"/>
+    </method>
+    <!-- 焦点窗口的 PNG 和 pid。没有焦点窗口或截不到时，png 为空、pid 为 0 -->
+    <method name="CaptureFocusedWindow">
+      <arg type="ay" direction="out" name="png"/>
+      <arg type="u" direction="out" name="pid"/>
     </method>
     <!-- 焦点窗口或它的标题变了。只发给验证过的调用方，不带数据 -->
     <signal name="FocusChanged"/>
@@ -74,6 +82,79 @@ class FocusService {
 
     get Version() {
         return VERSION;
+    }
+
+    CaptureFocusedWindowAsync(_params, invocation) {
+        this._checkCaller(invocation.get_sender(), allowed => {
+            if (!allowed) {
+                try {
+                    invocation.return_dbus_error('org.freedesktop.DBus.Error.AccessDenied',
+                        'Only Hindsight may capture the focused window');
+                } catch (e) {
+                    console.warn(`Hindsight Focus: cannot refuse the caller: ${e.message}`);
+                }
+                return;
+            }
+            this._captureFocusedWindow(invocation);
+        });
+    }
+
+    /**
+     * 截当前焦点窗口。Shell.Screenshot 一次只允许一个截图进行，所以每次 new 一个。
+     * 带窗口边框、不带光标。截图是异步的，回调里才能读结果。
+     */
+    _captureFocusedWindow(invocation) {
+        try {
+            // screenshot_window 在调用时就截下焦点窗口，回调只是等 PNG 编码完。
+            // 所以调用前读到的 pid 就是被截的窗口。
+            const pid = this._focusedPid();
+            if (pid === null) {
+                this._replyCapture(invocation, EMPTY_PNG, 0);
+                return;
+            }
+            const stream = Gio.MemoryOutputStream.new_resizable();
+            const shooter = new Shell.Screenshot();
+            // gnome-shell 用 Gio._promisify 包过 screenshot_window。带上回调时参数个数
+            // 和原函数一致，走原来的回调，不会变成没人等的 Promise。
+            shooter.screenshot_window(true, false, stream, (_obj, result) => {
+                this._finishCapture(invocation, shooter, stream, result, pid);
+            });
+        } catch (e) {
+            console.warn(`Hindsight Focus: cannot capture the focused window: ${e.message}`);
+            this._replyCapture(invocation, EMPTY_PNG, 0);
+        }
+    }
+
+    _finishCapture(invocation, shooter, stream, result, pid) {
+        try {
+            shooter.screenshot_window_finish(result);
+            stream.close(null);
+            this._replyCapture(invocation, stream.steal_as_bytes().toArray(), pid);
+        } catch (e) {
+            console.warn(`Hindsight Focus: cannot capture the focused window: ${e.message}`);
+            this._replyCapture(invocation, EMPTY_PNG, 0);
+        }
+    }
+
+    /** 没有焦点窗口时是 null，否则是 pid（未知算 0） */
+    _focusedPid() {
+        const window = global.display.focus_window;
+        if (!window)
+            return null;
+        return Math.max(window.get_pid(), 0);
+    }
+
+    _replyCapture(invocation, png, pid) {
+        try {
+            invocation.return_value(new GLib.Variant('(ayu)', [png, pid]));
+        } catch (e) {
+            console.warn(`Hindsight Focus: cannot return the screenshot: ${e.message}`);
+            try {
+                invocation.return_value(new GLib.Variant('(ayu)', [EMPTY_PNG, 0]));
+            } catch (again) {
+                console.warn(`Hindsight Focus: cannot return an empty screenshot: ${again.message}`);
+            }
+        }
     }
 
     GetFocusedWindowAsync(_params, invocation) {

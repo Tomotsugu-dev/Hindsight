@@ -23,7 +23,7 @@ An activity record passes four stages, and a control can stop it at any of them:
 
 ## Screenshot policy
 
-`capture/screenshot_policy.rs`, driven by the keyword lists in Settings → Privacy.
+`capture/screenshot/policy.rs`, driven by the keyword lists in Settings → Privacy.
 A match means no image is written to disk. The activity row is still stored, the
 time is still counted, and the row is still uploaded — the only thing that never
 exists is the picture.

@@ -169,7 +169,7 @@ struct WindowCandidate {
 
 /// Returns the title of the process's main window.
 ///
-/// Must choose the same window as [`crate::capture::screenshot_macos`], or the
+/// Must choose the same window as [`crate::capture::screenshot`] on macOS, or the
 /// title and the screenshot come from different windows.
 fn pick_main_window_title(cands: &[WindowCandidate], pid: u32) -> Option<String> {
     let main = cands

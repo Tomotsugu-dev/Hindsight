@@ -3,7 +3,7 @@
 //!
 //! A match only skips the screenshot — the activity row is still stored, still
 //! timed, and still uploaded. Whether it counts towards the stats is
-//! [`super::ignore`]'s job; the two are orthogonal.
+//! [`crate::capture::ignore`]'s job; the two are orthogonal.
 
 /// Whether to skip this screenshot: the URL matches `url_keywords`, or the app
 /// name or window title matches `window_keywords`. Substring, case-insensitive;

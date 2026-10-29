@@ -3,7 +3,7 @@
 //! skip the row — but it is still stored, still screenshotted, and still
 //! uploaded.
 //!
-//! Easy to confuse with [`super::screenshot_policy`]; the two are orthogonal.
+//! Easy to confuse with [`super::screenshot::policy`]; the two are orthogonal.
 //! That one decides whether to keep a screenshot, and time is counted either way.
 //!
 //! Reversible: delete the rule and run
