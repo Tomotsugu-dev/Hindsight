@@ -10,6 +10,7 @@ web/
 ├── index.html         简体中文主页（默认语言）
 ├── en/ ja/ pt/ tw/    其它语言主页
 ├── styles.css         全部样式（landing 和文档站共用）
+├── linux.svg          Linux 下载按钮的图标，取自 Simple Icons 13.21.0（CC0），styles.css 用 mask 引用
 ├── 404.html           找不到页面时返回
 ├── _headers           响应头（缓存）规则
 ├── wrangler.jsonc     Cloudflare 部署配置

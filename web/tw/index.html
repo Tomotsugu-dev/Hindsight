@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hindsight · 看清每一天的時間去向</title>
-  <meta name="description" content="開源免費的時間管理工具 — 自動記錄每個應用程式用了多久，按日、週、月彙總，AI 寫每日總結，還能直接問它「我昨天都做了什麼」。Win / Mac，多平台同步。">
+  <meta name="description" content="開源免費的時間管理工具 — 自動記錄每個應用程式用了多久，按日、週、月彙總，AI 寫每日總結，還能直接問它「我昨天都做了什麼」。Windows / macOS / Linux，多平台同步。">
 
   <meta property="og:title" content="Hindsight · 看清每一天的時間去向">
   <meta property="og:description" content="自動記錄每個應用程式用了多久，AI 寫每日總結，還能直接問它「我昨天都做了什麼」。">
@@ -87,6 +87,20 @@
               <span class="btn-platform-meta">.dmg · <span id="size-mac-hero">~ 14 MB</span></span>
             </span>
           </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-hero" class="btn btn-platform" data-platform="linux" hidden>
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">下載 .deb</span>
+              <span class="btn-platform-meta">Ubuntu / Debian · <span id="size-deb-hero">~ 7 MB</span></span>
+            </span>
+          </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-hero" class="btn btn-platform" data-platform="linux" hidden>
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">下載 .rpm</span>
+              <span class="btn-platform-meta">Fedora · <span id="size-rpm-hero">~ 7 MB</span></span>
+            </span>
+          </a>
         </div>
         <p class="trust"><a href="https://github.com/Tomotsugu-dev/Hindsight" class="trust-link">
           <svg class="trust-gh" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -146,6 +160,20 @@
               <span class="btn-platform-meta">.dmg · <span id="size-mac-final">~ 14 MB</span></span>
             </span>
           </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-final" class="btn btn-platform btn-platform-light">
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">下載 .deb</span>
+              <span class="btn-platform-meta">Ubuntu / Debian · <span id="size-deb-final">~ 7 MB</span></span>
+            </span>
+          </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-final" class="btn btn-platform btn-platform-light">
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">下載 .rpm</span>
+              <span class="btn-platform-meta">Fedora · <span id="size-rpm-final">~ 7 MB</span></span>
+            </span>
+          </a>
         </div>
       </div>
     </div>
@@ -197,58 +225,50 @@
   </footer>
 
   <script>
-    // Hero 区平台检测：只显示一个按钮 —— 当前 OS 对应的版本。
-    // Linux / 其它未知平台 fallback 到 Windows（用户基数最大）。
+    // Hero 区平台检测：只显示当前 OS 对应的版本，Linux 同时显示 .deb 和 .rpm。
+    // 其它未知平台 fallback 到 Windows（用户基数最大）。
     (function () {
       const platform = navigator.platform.toLowerCase();
       const ua = navigator.userAgent.toLowerCase();
       const isMac = platform.includes('mac') || ua.includes('mac os');
-
-      const winBtn = document.getElementById('dl-win-hero');
-      const macBtn = document.getElementById('dl-mac-hero');
+      // Android 的 UA 里也有 linux
+      const isLinux = (platform.includes('linux') || ua.includes('linux')) && !ua.includes('android');
+      const show = (id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.hidden = false;
+      };
 
       if (isMac) {
-        if (macBtn) macBtn.hidden = false;
+        show('dl-mac-hero');
+      } else if (isLinux) {
+        show('dl-deb-hero');
+        show('dl-rpm-hero');
       } else {
-        // Windows / Linux / unknown → Windows 按钮
-        if (winBtn) winBtn.hidden = false;
+        show('dl-win-hero');
       }
     })();
 
-    // 拉最新 release，把两个平台按钮各自指向具体安装包 + 显示真实大小
+    // 拉最新 release，把各平台按钮指向具体安装包 + 显示真实大小
     (function () {
       fetch('https://api.github.com/repos/Tomotsugu-dev/Hindsight/releases/latest')
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(data => {
-          const win = data.assets.find(a => /\.exe$/.test(a.name));
-          const mac = data.assets.find(a => /universal\.dmg$/.test(a.name));
           const fmt = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
+          const link = (key, pattern) => {
+            const asset = data.assets.find(a => pattern.test(a.name));
+            if (!asset) return;
+            ['hero', 'final'].forEach(where => {
+              const a = document.getElementById(`dl-${key}-${where}`);
+              if (a) a.href = asset.browser_download_url;
+              const s = document.getElementById(`size-${key}-${where}`);
+              if (s) s.textContent = fmt(asset.size);
+            });
+          };
 
-          if (win) {
-            const url = win.browser_download_url;
-            const size = fmt(win.size);
-            ['dl-win-hero', 'dl-win-final'].forEach(id => {
-              const a = document.getElementById(id);
-              if (a) a.href = url;
-            });
-            ['size-win-hero', 'size-win-final'].forEach(id => {
-              const s = document.getElementById(id);
-              if (s) s.textContent = size;
-            });
-          }
-
-          if (mac) {
-            const url = mac.browser_download_url;
-            const size = fmt(mac.size);
-            ['dl-mac-hero', 'dl-mac-final'].forEach(id => {
-              const a = document.getElementById(id);
-              if (a) a.href = url;
-            });
-            ['size-mac-hero', 'size-mac-final'].forEach(id => {
-              const s = document.getElementById(id);
-              if (s) s.textContent = size;
-            });
-          }
+          link('win', /\.exe$/);
+          link('mac', /universal\.dmg$/);
+          link('deb', /\.deb$/);
+          link('rpm', /\.rpm$/);
         })
         .catch(() => { /* 静默失败，按钮 fallback 到 releases/latest 页 */ });
     })();
