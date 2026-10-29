@@ -31,8 +31,9 @@
   </a>
 </p>
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGgxMXYxMUgwem0xMyAwaDExdjExSDEzek0wIDEzaDExdjExSDB6bTEzIDBoMTF2MTFIMTN6Ii8%2BPC9zdmc%2B">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
 <p align="center">
@@ -112,11 +113,15 @@
 
 下载 `hindsight_x.y.z_x64-setup.exe`，双击安装即可。
 
-> ⚠️ **首次运行会弹出「Windows 已保护你的电脑」** — 安装包尚未使用 EV 代码签名证书签名，会被 SmartScreen 拦下。点击「更多信息」→「仍要运行」即可继续。
+> ⚠️ 安装包还没有代码签名，Windows 可能会弹出「Windows 已保护你的电脑」。点击「更多信息」→「仍要运行」即可。
 
 ### macOS
 
 下载 `hindsight_x.y.z_universal.dmg`，双击挂载后将 Hindsight 拖入「应用程序」文件夹。
+
+### Linux
+
+下载 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 及以上、Debian 12 及以上）或 `hindsight-x.y.z-1.x86_64.rpm`（Fedora）并安装。Wayland 会话里只支持 GNOME 46 – 51。
 
 ## 许可证
 

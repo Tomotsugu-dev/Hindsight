@@ -1,8 +1,15 @@
 /**
- * 把进程名渲染成展示名：去掉常见可执行后缀 (.exe / .app / .lnk 等)，
- * 以及 Windows ".lnk" 链接、macOS bundle ".app"。原值仍用于 key / 后端 id。
+ * Turns a process name into the name shown to the user. The original value is
+ * still the key and the backend ID.
+ *
+ * - Removes the program suffix: `code.exe` → `code`, `Safari.app` → `Safari`
+ * - Keeps only the last part of a Linux app ID: `org.gnome.Nautilus` → `Nautilus`
  */
 export function displayAppName(name: string): string {
   if (!name) return name;
-  return name.replace(/\.(exe|lnk|app)$/i, "");
+  const stripped = name.replace(/\.(exe|lnk|app)$/i, "");
+  // Only IDs with three or more parts that start with a common top-level
+  // domain, so a name like `my.exe.tool` is not cut
+  const appId = /^(?:org|com|net|io|dev|app)\.(?:[\w-]+\.)+([\w-]+)$/.exec(stripped);
+  return appId ? appId[1] : stripped;
 }

@@ -32,8 +32,9 @@
   </a>
 </p>
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGgxMXYxMUgwem0xMyAwaDExdjExSDEzek0wIDEzaDExdjExSDB6bTEzIDBoMTF2MTFIMTN6Ii8%2BPC9zdmc%2B">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
 <p align="center">
@@ -113,11 +114,15 @@ Download the installer for your platform from [Releases](https://github.com/Tomo
 
 Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
-> ⚠️ **First launch will trigger "Windows protected your PC"** — the installer is not yet signed with an EV code-signing certificate, so SmartScreen will block it. Click "More info" → "Run anyway" to continue.
+> ⚠️ The installer is not code-signed yet, so Windows may show "Windows protected your PC". Click "More info" → "Run anyway".
 
 ### macOS
 
 Download `hindsight_x.y.z_universal.dmg`, double-click to mount, then drag Hindsight into the Applications folder.
+
+### Linux
+
+Download `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 or later, Debian 12 or later) or `hindsight-x.y.z-1.x86_64.rpm` (Fedora) and install it. In a Wayland session, only GNOME 46–51 is supported.
 
 ## License
 

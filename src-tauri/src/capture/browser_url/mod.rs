@@ -1,227 +1,44 @@
-//! 从浏览器地址栏抠取当前 URL，给隐私过滤判断用。
+//! Browser addresses: whether an app is a browser, and the address shown in the focused browser
+//! window.
 //!
-//! 平台路由：
-//! - Windows → [`windows`]：UI Automation 扫前台窗口的 Edit / Document 控件
-//! - macOS   → [`macos`]：osascript 内嵌 AppleScript，问浏览器要 URL
-//! - 其它    → 永远 None
+//! One implementation per system, chosen at compile time, all with the same interface:
+//! - Windows → [`windows`]
+//! - macOS → [`macos`]
+//! - Linux → [`linux`]
 //!
-//! 共享部分（`is_browser_app` 粗判 + `normalize_url` 串规范化）放在路由层，
-//! 平台子模块只负责"拿到一个原始字符串"。
-//!
-//! 阻塞调用：Windows UIA 偶尔卡 ~300ms，macOS osascript 启动 ~50–150ms。
-//! 调用方包 `spawn_blocking`，不要在 async runtime 直接调。
-//!
-//! 拿不到 URL（未授权 / 浏览器没开 / 平台不支持）一律返回 None；URL 关键词
-//! 那一路在 `screenshot_policy::should_skip_screenshot` 里会自动跳过，不影响 app/标题
-//! 关键词匹配。
+//! The browser name list is in [`browsers`], and the URL string helpers are in [`url`](self::url).
+//! Each system's implementation only reads the text in the address bar.
 
+use crate::capture::focus::WindowInfo;
+
+mod browsers;
+mod url;
+
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-mod stub {
-    pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
-        None
-    }
-}
 
+#[cfg(target_os = "linux")]
+use linux as imp;
 #[cfg(target_os = "macos")]
 use macos as imp;
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-use stub as imp;
 #[cfg(target_os = "windows")]
 use windows as imp;
 
-/// 词边界匹配：needle 必须按非字母数字切词后作为独立词出现。
-/// 给 edge/opera/arc 这类短词用——裸 contains 会把 "Ledger Live"(edge) /
-/// "Operator"(opera) / "Archive Utility"(arc) 误判成浏览器。
-pub(crate) fn name_has_word(app_name_lower: &str, needle: &str) -> bool {
-    app_name_lower
-        .split(|c: char| !c.is_alphanumeric())
-        .any(|tok| tok == needle)
-}
+pub use self::url::host_for_stats;
+pub use browsers::is_browser_app;
 
-/// 该应用是不是浏览器（基于进程名 / app_name 粗判）。
-/// 非浏览器就不要花平台调用的钱。
+/// Returns the address in the address bar of the focused window `window`, or None when it cannot
+/// be read.
 ///
-/// 误判成浏览器的代价不小：拿不到 URL 时隐私过滤 fail-closed → 该应用**永远
-/// 没有截图**；macOS 每 tick 对它发 AppleScript 还会触发"XX 想控制 YY"的
-/// 自动化授权弹窗；Windows 每 tick 白跑最多 ~4s 的 UIA 扫描。
-/// 所以短而泛的词（edge / opera / arc）必须按独立词匹配，不能裸 contains。
-pub fn is_browser_app(app_name: &str) -> bool {
-    let s = app_name.to_lowercase();
-    // 长且无歧义的名字子串匹配即可（覆盖 chrome.exe / Chromium / Brave Browser 等）
-    if s.contains("chrome")
-        || s.contains("msedge")
-        || s.contains("firefox")
-        || s.contains("brave")
-        || s.contains("vivaldi")
-        || s.contains("safari")
-        || s.contains("zen-browser")
-        || s.contains("librewolf")
-        || s.contains("waterfox")
-    {
-        return true;
-    }
-    ["edge", "opera", "arc"]
-        .iter()
-        .any(|w| name_has_word(&s, w))
-}
-
-/// 同步阻塞：从当前前台窗口抠 URL。调用方包 spawn_blocking。
-///
-/// `app_name` 在 macOS 上必填（osascript 需要知道目标 app）；Windows 上忽略
-/// （走 GetForegroundWindow + UIA，自洽拿前台 HWND）。
-pub fn try_get_foreground_browser_url(app_name: &str) -> Option<String> {
-    imp::try_get_url(app_name)
-}
-
-/// 统计用的网站域名：只认 http/https,取 host 小写、去掉 `www.` 前缀、不带端口。
-/// 浏览器内部页（chrome:// / about: / file://）、IP 以外的解析失败、空 host 一律 None
-/// ——这些不是"网站"。子域名保留（docs.github.com 与 github.com 分开），不引入
-/// 公共后缀库。完整 URL 永不落盘，落盘的只有这个返回值。
-pub fn host_for_stats(url: &str) -> Option<String> {
-    let parsed = url::Url::parse(url.trim()).ok()?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return None;
-    }
-    let host = parsed.host_str()?.to_ascii_lowercase();
-    let host = host.trim_end_matches('.');
-    let host = host.strip_prefix("www.").unwrap_or(host);
-    // "www." 这种只剩前缀的壳不是网站
-    if host.is_empty() || host == "www" {
-        None
-    } else {
-        Some(host.to_string())
-    }
-}
-
-/// 把平台拿到的字符串规范化成 URL。能解析就返回，否则 None。
-/// Windows / macOS 子模块共用。
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-pub(crate) fn normalize_url(raw: &str) -> Option<String> {
-    let s = raw.trim();
-    if s.is_empty() {
-        return None;
-    }
-    let lower = s.to_lowercase();
-    // 已经带 scheme 的直接收（含 chrome:// / edge:// / about: 等内部页 ——
-    // 关键词列表里 /password 等子串能照常匹配上）
-    if lower.starts_with("http://")
-        || lower.starts_with("https://")
-        || lower.starts_with("chrome://")
-        || lower.starts_with("edge://")
-        || lower.starts_with("about:")
-        || lower.starts_with("file://")
-    {
-        return Some(s.to_string());
-    }
-    // Chrome 默认隐藏 https:// 前缀，地址栏可能就显示 "example.com/path"
-    // 启发式：含 . 且不含空格、不含中文，补 https://
-    if !s.contains(' ') && s.contains('.') {
-        let has_cjk = s.chars().any(|c| c >= '\u{4E00}');
-        if !has_cjk {
-            return Some(format!("https://{s}"));
-        }
-    }
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// host_for_stats:小写、去 www.、去端口、保留子域;非 http(s) 与内部页为 None。
-    #[test]
-    fn host_for_stats_normalizes_and_filters() {
-        assert_eq!(
-            host_for_stats("https://www.GitHub.com/Tomotsugu-dev/Hindsight?x=1"),
-            Some("github.com".into())
-        );
-        assert_eq!(
-            host_for_stats("https://docs.github.com/en"),
-            Some("docs.github.com".into()),
-            "子域名保留,不并入主域"
-        );
-        assert_eq!(
-            host_for_stats("http://localhost:5173/chat"),
-            Some("localhost".into()),
-            "端口不进域名"
-        );
-        assert_eq!(
-            host_for_stats("https://192.168.1.10:8080/"),
-            Some("192.168.1.10".into())
-        );
-        assert_eq!(host_for_stats("https://www./"), None, "去 www. 后为空");
-        for internal in [
-            "chrome://settings",
-            "about:blank",
-            "file:///tmp/a.html",
-            "edge://flags",
-        ] {
-            assert_eq!(host_for_stats(internal), None, "{internal} 不是网站");
-        }
-        assert_eq!(host_for_stats("not a url"), None);
-        assert_eq!(host_for_stats(""), None);
-    }
-
-    #[test]
-    fn 浏览器名命中() {
-        assert!(is_browser_app("Google Chrome"));
-        assert!(is_browser_app("Safari"));
-        assert!(is_browser_app("firefox.exe"));
-        assert!(is_browser_app("Microsoft Edge"));
-        assert!(is_browser_app("Brave Browser"));
-    }
-
-    #[test]
-    fn 非浏览器不命中() {
-        assert!(!is_browser_app("Code"));
-        assert!(!is_browser_app("Slack"));
-        assert!(!is_browser_app("微信"));
-        // 短词误伤回归：这些名字含 arc/edge/opera 子串但不是浏览器
-        assert!(!is_browser_app("Archive Utility"));
-        assert!(!is_browser_app("Ledger Live"));
-        assert!(!is_browser_app("Operator"));
-        assert!(!is_browser_app("SearchHost.exe"));
-    }
-
-    #[test]
-    fn 短词浏览器仍命中() {
-        assert!(is_browser_app("Arc"));
-        assert!(is_browser_app("Microsoft Edge"));
-        assert!(is_browser_app("msedge.exe"));
-        assert!(is_browser_app("Opera GX"));
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    #[test]
-    fn normalize_url_带_scheme() {
-        assert_eq!(
-            normalize_url("https://example.com/").as_deref(),
-            Some("https://example.com/")
-        );
-        assert_eq!(
-            normalize_url("chrome://settings").as_deref(),
-            Some("chrome://settings")
-        );
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    #[test]
-    fn normalize_url_无_scheme_补_https() {
-        assert_eq!(
-            normalize_url("example.com/path").as_deref(),
-            Some("https://example.com/path")
-        );
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    #[test]
-    fn normalize_url_中文_或_空格_拒收() {
-        assert!(normalize_url("百度一下").is_none());
-        assert!(normalize_url("hello world").is_none());
-        assert!(normalize_url("").is_none());
-    }
+/// Reading blocks for tens to hundreds of milliseconds, so it runs on a background thread.
+pub async fn read_url(window: &WindowInfo) -> Option<String> {
+    let window = window.clone();
+    tokio::task::spawn_blocking(move || imp::read_url(&window))
+        .await
+        .ok()
+        .flatten()
 }

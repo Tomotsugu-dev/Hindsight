@@ -1,5 +1,6 @@
 //! GNOME Wayland: asks the Hindsight GNOME extension over D-Bus
 //! (`src-tauri/linux/gnome-extension/`). The interface is described at the top of `extension.js`.
+//! Screenshots use the same interface; see `capture/screenshot/linux/gnome.rs`.
 
 use std::collections::HashMap;
 use std::path::Path;

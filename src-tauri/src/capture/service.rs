@@ -8,7 +8,7 @@ use tokio::task::JoinHandle;
 
 use crate::capture::focus::{self, FocusSource, FocusWaker, WindowInfo};
 use crate::capture::idle::{self, IdleSource};
-use crate::capture::{browser_url, ignore, screenshot, screenshot_policy};
+use crate::capture::{browser_url, ignore, screenshot};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
@@ -601,17 +601,10 @@ async fn tick(inner: &Inner) -> Result<()> {
     let now = Local::now();
 
     // 浏览器场景：每次 tick 都抓 URL，因为 URL 是 focus 的一部分（切 URL 要立即触发新会话）。
-    // 平台调用阻塞 + 偶尔卡几百 ms，扔到 spawn_blocking 不堵 async runtime。
     // 非浏览器跳过这步，省 50–300ms。
     let is_browser = browser_url::is_browser_app(&info.app_name);
     let fetched_url = if is_browser {
-        let app_name_for_url = info.app_name.clone();
-        tokio::task::spawn_blocking(move || {
-            browser_url::try_get_foreground_browser_url(&app_name_for_url)
-        })
-        .await
-        .ok()
-        .flatten()
+        browser_url::read_url(&info).await
     } else {
         None
     };
@@ -959,7 +952,7 @@ async fn should_skip_for_privacy(
     if is_browser && url.is_none() && !url_kw.is_empty() {
         return true;
     }
-    screenshot_policy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
+    screenshot::policy::should_skip_screenshot(&info.app_name, &info.title, url, &url_kw, &app_kw)
 }
 
 /// 截图后的隐私复核：按"现在"的窗口标题（浏览器再抓一次 URL）重跑同一套隐私规则。
@@ -984,11 +977,7 @@ async fn recheck_privacy_after_shot(
         return true;
     }
     let url = if is_browser && !url_kw.is_empty() {
-        let app_name = now_info.app_name.clone();
-        tokio::task::spawn_blocking(move || browser_url::try_get_foreground_browser_url(&app_name))
-            .await
-            .ok()
-            .flatten()
+        browser_url::read_url(&now_info).await
     } else {
         None
     };

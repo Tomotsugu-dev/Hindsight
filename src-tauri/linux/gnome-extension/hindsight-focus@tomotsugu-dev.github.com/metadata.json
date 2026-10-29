@@ -1,7 +1,7 @@
 {
   "uuid": "hindsight-focus@tomotsugu-dev.github.com",
   "name": "Hindsight Focus",
-  "description": "Tells Hindsight which window has the focus, so it can record app usage on GNOME. Only Hindsight can read it.",
-  "shell-version": ["46", "47", "48", "49", "50"],
+  "description": "Tells Hindsight which window has the focus, and captures that window, so it can record app usage on GNOME. Only Hindsight can read it.",
+  "shell-version": ["46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/Tomotsugu-dev/Hindsight"
 }
