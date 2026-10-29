@@ -14,12 +14,14 @@
 //!
 //! 注意 matcher 必须显式 `.depth(50)` —— uiautomation 0.24 的 matcher 默认
 //! 只看直接子节点，浏览器地址栏埋在很深的子树里，不开 depth 永远找不到。
+//!
+//! 性能：UIA 偶尔卡 ~300ms。
 
 use super::url::normalize_url;
+use crate::capture::focus::WindowInfo;
 
-/// 同步阻塞：从当前前台窗口抠 URL。调用方包 spawn_blocking。
-/// `_app_name` 在 Windows 上忽略（走 GetForegroundWindow 自洽拿前台 HWND）。
-pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
+/// 同步阻塞：从前台窗口抠 URL。
+pub(super) fn read_url(_window: &WindowInfo) -> Option<String> {
     // catch_unwind 防 COM 异常一路把进程带崩
     std::panic::catch_unwind(get_url_via_uiautomation)
         .ok()
@@ -32,10 +34,12 @@ fn get_url_via_uiautomation() -> Option<String> {
     use uiautomation::UIAutomation;
     use winapi::um::winuser::GetForegroundWindow;
 
-    let hwnd_raw = unsafe { GetForegroundWindow() } as isize;
-    if hwnd_raw == 0 {
+    // SAFETY: 不收参数，只返回当前前台窗口的句柄，没有前台窗口时返回空指针
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.is_null() {
         return None;
     }
+    let hwnd_raw = hwnd as isize;
 
     let automation = UIAutomation::new().ok()?;
     let window_element = automation

@@ -21,18 +21,19 @@
 //! → Automation），文案来自 Info.plist 的 `NSAppleEventsUsageDescription`。
 //! 用户拒绝 / 撤销 → osascript 非零退出 → 我们返回 None，与未实现时一致。
 //!
-//! 性能：osascript 启动 ~50–150ms（fork 子进程 + 解析 AS）。调用方已在
-//! `service::tick` 里包了 `spawn_blocking`，且只在焦点切换时才调一次，可接受。
+//! 性能：osascript 启动 ~50–150ms（fork 子进程 + 解析 AS）。[`super::read_url`] 把它放到
+//! 后台线程；浏览器在前台时，每个 tick 调一次。
 
 use std::process::Command;
 
 use super::url::normalize_url;
+use crate::capture::focus::WindowInfo;
 
 const OSASCRIPT: &str = "/usr/bin/osascript";
 
-/// 同步阻塞：根据 app_name 选脚本，调 osascript 拿 URL。
-pub(super) fn try_get_url(app_name: &str) -> Option<String> {
-    let script = build_script(app_name)?;
+/// 同步阻塞：按窗口的应用名选脚本，调 osascript 拿 URL。
+pub(super) fn read_url(window: &WindowInfo) -> Option<String> {
+    let script = build_script(&window.app_name)?;
 
     let output = Command::new(OSASCRIPT)
         .arg("-e")

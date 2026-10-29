@@ -1,48 +1,42 @@
-//! 从浏览器地址栏抠取当前 URL，给隐私过滤判断用。
+//! 浏览器的网址：判断一个应用是不是浏览器，读出前台浏览器窗口地址栏里的网址。
 //!
-//! 平台路由：
-//! - Windows → [`windows`]：UI Automation 扫前台窗口的 Edit / Document 控件
-//! - macOS   → [`macos`]：osascript 内嵌 AppleScript，问浏览器要 URL
-//! - 其它    → 永远 None
+//! 每个系统一份实现，编译时选定，接口都一样：
+//! - Windows → [`windows`]
+//! - macOS → [`macos`]
+//! - Linux → [`linux`]
 //!
-//! 浏览器名单在 [`browsers`]，网址字符串的处理在 [`url`](self::url)，
-//! 平台子模块只负责"拿到一个原始字符串"。
-//!
-//! 阻塞调用：Windows UIA 偶尔卡 ~300ms，macOS osascript 启动 ~50–150ms。
-//! 调用方包 `spawn_blocking`，不要在 async runtime 直接调。
-//!
-//! 拿不到 URL（未授权 / 浏览器没开 / 平台不支持）一律返回 None；URL 关键词
-//! 那一路在 `screenshot::policy::should_skip_screenshot` 里会自动跳过，不影响 app/标题
-//! 关键词匹配。
+//! 浏览器名单在 [`browsers`]，网址字符串的处理在 [`url`](self::url)。
+//! 各系统的实现只负责读出地址栏里的文字。
+
+use crate::capture::focus::WindowInfo;
 
 mod browsers;
 mod url;
 
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-mod stub {
-    pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
-        None
-    }
-}
 
+#[cfg(target_os = "linux")]
+use linux as imp;
 #[cfg(target_os = "macos")]
 use macos as imp;
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-use stub as imp;
 #[cfg(target_os = "windows")]
 use windows as imp;
 
 pub use self::url::host_for_stats;
 pub use browsers::is_browser_app;
 
-/// 同步阻塞：从当前前台窗口抠 URL。调用方包 spawn_blocking。
+/// 读出焦点窗口 `window` 地址栏里的网址，读不到时返回 None。
 ///
-/// `app_name` 在 macOS 上必填（osascript 需要知道目标 app）；Windows 上忽略
-/// （走 GetForegroundWindow + UIA，自洽拿前台 HWND）。
-pub fn try_get_foreground_browser_url(app_name: &str) -> Option<String> {
-    imp::try_get_url(app_name)
+/// 各系统的读取会阻塞几十到几百毫秒，所以放到后台线程跑。
+pub async fn read_url(window: &WindowInfo) -> Option<String> {
+    let window = window.clone();
+    tokio::task::spawn_blocking(move || imp::read_url(&window))
+        .await
+        .ok()
+        .flatten()
 }
