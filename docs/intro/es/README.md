@@ -33,6 +33,7 @@
 <p align="center">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
 <p align="center">
@@ -117,6 +118,10 @@ Descarga `hindsight_x.y.z_x64-setup.exe` y haz doble clic para instalarlo.
 ### macOS
 
 Descarga `hindsight_x.y.z_universal.dmg`, haz doble clic para montar la imagen y arrastra Hindsight a la carpeta Aplicaciones.
+
+### Linux
+
+Descarga `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 o posterior, Debian 12 o posterior) o `hindsight-x.y.z-1.x86_64.rpm` (Fedora) e instálalo. En una sesión Wayland, solo es compatible GNOME 46 a 51.
 
 ## Licencia
 

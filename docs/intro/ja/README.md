@@ -33,6 +33,7 @@
 <p align="center">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
 <p align="center">
@@ -117,6 +118,10 @@
 ### macOS
 
 `hindsight_x.y.z_universal.dmg` をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。
+
+### Linux
+
+`hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以降、Debian 12 以降）または `hindsight-x.y.z-1.x86_64.rpm`（Fedora）をダウンロードしてインストールします。Wayland セッションでは GNOME 46 – 51 のみ対応しています。
 
 ## ライセンス
 
