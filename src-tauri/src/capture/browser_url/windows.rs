@@ -15,7 +15,7 @@
 //! 注意 matcher 必须显式 `.depth(50)` —— uiautomation 0.24 的 matcher 默认
 //! 只看直接子节点，浏览器地址栏埋在很深的子树里，不开 depth 永远找不到。
 
-use super::normalize_url;
+use super::url::normalize_url;
 
 /// 同步阻塞：从当前前台窗口抠 URL。调用方包 spawn_blocking。
 /// `_app_name` 在 Windows 上忽略（走 GetForegroundWindow 自洽拿前台 HWND）。

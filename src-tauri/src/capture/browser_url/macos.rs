@@ -26,7 +26,7 @@
 
 use std::process::Command;
 
-use super::normalize_url;
+use super::url::normalize_url;
 
 const OSASCRIPT: &str = "/usr/bin/osascript";
 
@@ -86,7 +86,7 @@ fn is_chromium_macos(lower: &str) -> bool {
         || lower.contains("vivaldi")
         || ["edge", "opera", "arc"]
             .iter()
-            .any(|w| super::name_has_word(lower, w))
+            .any(|w| super::browsers::name_has_word(lower, w))
 }
 
 /// AppleScript 字面量转义：反斜杠和双引号。
