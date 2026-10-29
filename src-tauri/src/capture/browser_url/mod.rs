@@ -1,12 +1,13 @@
-//! 浏览器的网址：判断一个应用是不是浏览器，读出前台浏览器窗口地址栏里的网址。
+//! Browser addresses: whether an app is a browser, and the address shown in the focused browser
+//! window.
 //!
-//! 每个系统一份实现，编译时选定，接口都一样：
+//! One implementation per system, chosen at compile time, all with the same interface:
 //! - Windows → [`windows`]
 //! - macOS → [`macos`]
 //! - Linux → [`linux`]
 //!
-//! 浏览器名单在 [`browsers`]，网址字符串的处理在 [`url`](self::url)。
-//! 各系统的实现只负责读出地址栏里的文字。
+//! The browser name list is in [`browsers`], and the URL string helpers are in [`url`](self::url).
+//! Each system's implementation only reads the text in the address bar.
 
 use crate::capture::focus::WindowInfo;
 
@@ -30,9 +31,10 @@ use windows as imp;
 pub use self::url::host_for_stats;
 pub use browsers::is_browser_app;
 
-/// 读出焦点窗口 `window` 地址栏里的网址，读不到时返回 None。
+/// Returns the address in the address bar of the focused window `window`, or None when it cannot
+/// be read.
 ///
-/// 各系统的读取会阻塞几十到几百毫秒，所以放到后台线程跑。
+/// Reading blocks for tens to hundreds of milliseconds, so it runs on a background thread.
 pub async fn read_url(window: &WindowInfo) -> Option<String> {
     let window = window.clone();
     tokio::task::spawn_blocking(move || imp::read_url(&window))
