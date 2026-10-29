@@ -31,8 +31,9 @@
   </a>
 </p>
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGgxMXYxMUgwem0xMyAwaDExdjExSDEzek0wIDEzaDExdjExSDB6bTEzIDBoMTF2MTFIMTN6Ii8%2BPC9zdmc%2B">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
 <p align="center">
@@ -112,11 +113,15 @@ Descarga el instalador para tu plataforma desde [Versiones](https://github.com/T
 
 Descarga `hindsight_x.y.z_x64-setup.exe` y haz doble clic para instalarlo.
 
-> ⚠️ **Al ejecutarlo por primera vez aparecerá el aviso «Windows protegió su PC»** — El instalador todavía no está firmado con un certificado de firma de código EV, por lo que SmartScreen lo bloqueará. Haz clic en «Más información» → «Ejecutar de todas formas» para continuar.
+> ⚠️ El instalador todavía no tiene firma de código, así que Windows puede mostrar «Windows protegió su PC». Haz clic en «Más información» → «Ejecutar de todas formas».
 
 ### macOS
 
 Descarga `hindsight_x.y.z_universal.dmg`, haz doble clic para montar la imagen y arrastra Hindsight a la carpeta Aplicaciones.
+
+### Linux
+
+Descarga `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 o posterior, Debian 12 o posterior) o `hindsight-x.y.z-1.x86_64.rpm` (Fedora) e instálalo. En una sesión Wayland, solo es compatible GNOME 46 a 51.
 
 ## Licencia
 

@@ -31,8 +31,9 @@
   </a>
 </p>
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=microsoftwindows&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGgxMXYxMUgwem0xMyAwaDExdjExSDEzek0wIDEzaDExdjExSDB6bTEzIDBoMTF2MTFIMTN6Ii8%2BPC9zdmc%2B">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
 <p align="center">
@@ -112,11 +113,15 @@
 
 `hindsight_x.y.z_x64-setup.exe` をダウンロードしてダブルクリックでインストールできます。
 
-> ⚠️ **初回実行時に「WindowsによってPCが保護されました」と表示されます** — インストーラーはまだ EV コード署名証明書で署名されていないため、SmartScreen にブロックされます。「詳細情報」→「実行」をクリックしてインストールを続行してください。
+> ⚠️ インストーラーはまだコード署名されていないため、「WindowsによってPCが保護されました」と表示されることがあります。「詳細情報」→「実行」をクリックしてください。
 
 ### macOS
 
 `hindsight_x.y.z_universal.dmg` をダウンロードし、ダブルクリックでマウントしてから Hindsight を「アプリケーション」フォルダにドラッグします。
+
+### Linux
+
+`hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以降、Debian 12 以降）または `hindsight-x.y.z-1.x86_64.rpm`（Fedora）をダウンロードしてインストールします。Wayland セッションでは GNOME 46 – 51 のみ対応しています。
 
 ## ライセンス
 
