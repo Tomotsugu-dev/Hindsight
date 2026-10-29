@@ -6,7 +6,7 @@
 </p>
 <p align="center">
   <br/>
-  Registra automáticamente la actividad de aplicaciones y ventanas y muestra cómo has distribuido tu tiempo por día, semana y mes, sin temporizadores manuales ni etiquetas de proyecto que mantener.
+  El tiempo de pantalla de tu ordenador, un temporizador Pomodoro para concentrarte en el trabajo y una IA que resume tu ritmo de trabajo.
 </p>
 
 <p align="center">
