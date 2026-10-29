@@ -151,7 +151,14 @@ mod tests {
 
     /// 手动验证：GNOME Wayland 上扩展已启用时跑，截下现在的焦点窗口，存到 `SHOT_OUT` 指定的 PNG。
     ///
-    /// 跑法：`SHOT_OUT=/tmp/shot.png cargo test --lib gnome_screenshot_manual -- --ignored --nocapture`
+    /// 扩展只回答叫 `hindsight` 的程序，`cargo test` 编出来的叫 `hindsight_lib-<hash>`，直接跑会被拒绝。
+    /// 要把测试程序复制成 `hindsight` 再跑；扩展要装在用户目录里，那里不查属主：
+    ///
+    /// ```text
+    /// cargo test --lib --no-run    # 输出里有 target/debug/deps/hindsight_lib-<hash>
+    /// cp target/debug/deps/hindsight_lib-<hash> /tmp/hindsight
+    /// SHOT_OUT=/tmp/shot.png /tmp/hindsight gnome_screenshot_manual --ignored --nocapture
+    /// ```
     #[test]
     #[ignore]
     fn gnome_screenshot_manual() {
