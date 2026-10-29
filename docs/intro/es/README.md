@@ -113,7 +113,7 @@ Descarga el instalador para tu plataforma desde [Versiones](https://github.com/T
 
 Descarga `hindsight_x.y.z_x64-setup.exe` y haz doble clic para instalarlo.
 
-> ⚠️ **Al ejecutarlo por primera vez aparecerá el aviso «Windows protegió su PC»** — El instalador todavía no está firmado con un certificado de firma de código EV, por lo que SmartScreen lo bloqueará. Haz clic en «Más información» → «Ejecutar de todas formas» para continuar.
+> ⚠️ El instalador todavía no tiene firma de código, así que Windows puede mostrar «Windows protegió su PC». Haz clic en «Más información» → «Ejecutar de todas formas».
 
 ### macOS
 

@@ -114,7 +114,7 @@ Download the installer for your platform from [Releases](https://github.com/Tomo
 
 Download `hindsight_x.y.z_x64-setup.exe` and double-click to install.
 
-> ⚠️ **First launch will trigger "Windows protected your PC"** — the installer is not yet signed with an EV code-signing certificate, so SmartScreen will block it. Click "More info" → "Run anyway" to continue.
+> ⚠️ The installer is not code-signed yet, so Windows may show "Windows protected your PC". Click "More info" → "Run anyway".
 
 ### macOS
 

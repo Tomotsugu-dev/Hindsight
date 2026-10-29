@@ -113,7 +113,7 @@ Baixe o instalador da sua plataforma em [Releases](https://github.com/Tomotsugu-
 
 Baixe `hindsight_x.y.z_x64-setup.exe` e clique duas vezes para instalar.
 
-> ⚠️ **A primeira execução vai disparar o aviso "O Windows protegeu o seu PC"** — o instalador ainda não está assinado com um certificado de assinatura de código EV, então o SmartScreen vai bloqueá-lo. Clique em "Mais informações" → "Executar assim mesmo" para continuar.
+> ⚠️ O instalador ainda não tem assinatura de código, então o Windows pode mostrar "O Windows protegeu o seu PC". Clique em "Mais informações" → "Executar assim mesmo".
 
 ### macOS
 
