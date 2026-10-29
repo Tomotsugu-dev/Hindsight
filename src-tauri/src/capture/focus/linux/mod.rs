@@ -12,9 +12,9 @@ mod x11;
 
 /// The focus sources implemented on Linux.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Source {
+pub(crate) enum Source {
     /// GNOME on Wayland: asks the Hindsight GNOME extension
-    Gnome,
+    GnomeWayland,
     /// X11 on any desktop: xcap
     X11,
 }
@@ -33,7 +33,7 @@ pub(super) fn detect() -> Arc<dyn FocusSource> {
     };
     log::info!("Focus source: {source:?} ({env:?}, XDG_SESSION_TYPE={session_type:?})");
     match source {
-        Source::Gnome => Arc::new(gnome::GnomeFocus::new()),
+        Source::GnomeWayland => Arc::new(gnome::GnomeFocus::new()),
         Source::X11 => Arc::new(x11::X11Focus),
     }
 }
@@ -41,10 +41,17 @@ pub(super) fn detect() -> Arc<dyn FocusSource> {
 /// Returns the state of the Hindsight GNOME extension. Only GNOME Wayland uses the extension;
 /// everywhere else it is [`GnomeExtensionStatus::Ready`].
 pub(super) fn gnome_extension_status() -> GnomeExtensionStatus {
-    if choose(&DesktopEnv::from_env()) != Some(Source::Gnome) {
+    if source() != Some(Source::GnomeWayland) {
         return GnomeExtensionStatus::Ready;
     }
     gnome_extension::status()
+}
+
+/// Returns the focus source for this desktop environment. Screenshots use the same source.
+///
+/// None = not supported
+pub(crate) fn source() -> Option<Source> {
+    choose(&DesktopEnv::from_env())
 }
 
 /// Turns on the Hindsight GNOME extension.
@@ -62,7 +69,7 @@ pub(super) fn enable_gnome_extension() -> Result<()> {
 fn choose(env: &DesktopEnv) -> Option<Source> {
     match env.display? {
         // GNOME on Wayland
-        DisplayServer::Wayland if env.has_desktop("GNOME") => Some(Source::Gnome),
+        DisplayServer::Wayland if env.has_desktop("GNOME") => Some(Source::GnomeWayland),
         // X11 on any desktop, GNOME included
         DisplayServer::X11 => Some(Source::X11),
         _ => None,
@@ -199,7 +206,7 @@ mod tests {
         for desktop in ["ubuntu:GNOME", "GNOME", "GNOME-Classic:GNOME", "pop:GNOME"] {
             assert_eq!(
                 chosen(&[WAYLAND_DISPLAY, X11_DISPLAY], desktop),
-                Some(Source::Gnome),
+                Some(Source::GnomeWayland),
                 "{desktop}"
             );
         }

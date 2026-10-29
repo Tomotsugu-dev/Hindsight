@@ -1,6 +1,6 @@
 //! X11: captures the focused window with xcap. xcap asks the X server to list the windows, find
-//! the focused one and capture it, so every desktop works the same way. In a Wayland session it
-//! only sees XWayland windows.
+//! the focused one and capture it, so every desktop works the same way. This path is only used in
+//! an X11 session. A Wayland session does not use it: xcap only sees XWayland windows there.
 
 use image::RgbaImage;
 
