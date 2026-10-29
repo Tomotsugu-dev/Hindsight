@@ -1,7 +1,7 @@
 //! Windows: UI Automation 抠前台窗口 URL。
 //!
 //! 设计：
-//!   1. `GetForegroundWindow()` 拿到当前前台窗口 HWND
+//!   1. `GetForegroundWindow()` 拿到当前前台窗口 HWND；它的进程不是焦点读到的那个就不读
 //!   2. UI Automation 扫该窗口下所有 Edit / Document 控件
 //!   3. 拿每个控件的 value pattern / legacy IAccessible value / name，
 //!      第一个能解析成 URL（含 chrome:// 等内部 scheme）就返回
@@ -14,28 +14,42 @@
 //!
 //! 注意 matcher 必须显式 `.depth(50)` —— uiautomation 0.24 的 matcher 默认
 //! 只看直接子节点，浏览器地址栏埋在很深的子树里，不开 depth 永远找不到。
+//!
+//! 性能：UIA 偶尔卡 ~300ms。
 
-use super::normalize_url;
+use super::url::normalize_url;
+use crate::capture::focus::WindowInfo;
 
-/// 同步阻塞：从当前前台窗口抠 URL。调用方包 spawn_blocking。
-/// `_app_name` 在 Windows 上忽略（走 GetForegroundWindow 自洽拿前台 HWND）。
-pub(super) fn try_get_url(_app_name: &str) -> Option<String> {
+/// 同步阻塞：从前台窗口抠 URL。前台已经换成别的进程时返回 None。
+pub(super) fn read_url(window: &WindowInfo) -> Option<String> {
+    let expected_pid = window.pid;
     // catch_unwind 防 COM 异常一路把进程带崩
-    std::panic::catch_unwind(get_url_via_uiautomation)
+    std::panic::catch_unwind(move || get_url_via_uiautomation(expected_pid))
         .ok()
         .flatten()
 }
 
-fn get_url_via_uiautomation() -> Option<String> {
+/// `expected_pid` 为 0 表示焦点没读到 pid，这时不核对。
+fn get_url_via_uiautomation(expected_pid: u32) -> Option<String> {
     use uiautomation::patterns::{UILegacyIAccessiblePattern, UIValuePattern};
     use uiautomation::types::{ControlType, Handle};
     use uiautomation::UIAutomation;
-    use winapi::um::winuser::GetForegroundWindow;
+    use winapi::um::winuser::{GetForegroundWindow, GetWindowThreadProcessId};
 
-    let hwnd_raw = unsafe { GetForegroundWindow() } as isize;
-    if hwnd_raw == 0 {
+    // SAFETY: 不收参数，只返回当前前台窗口的句柄，没有前台窗口时返回空指针
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.is_null() {
         return None;
     }
+    // 读焦点和读网址之间用户可能已经切走。前台换了进程就不读，免得把别的窗口里的文字
+    // 记成这个浏览器的网址
+    let mut pid: u32 = 0;
+    // SAFETY: hwnd 是上面刚拿到的非空句柄，&mut pid 指向本地变量
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    if expected_pid != 0 && pid != 0 && pid != expected_pid {
+        return None;
+    }
+    let hwnd_raw = hwnd as isize;
 
     let automation = UIAutomation::new().ok()?;
     let window_element = automation
