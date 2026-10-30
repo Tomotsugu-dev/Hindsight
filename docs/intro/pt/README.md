@@ -6,7 +6,7 @@
 </p>
 <p align="center">
 <br/>
-  Registra automaticamente apps e janelas e mostra para onde foi seu tempo por dia, semana e mês — sem cronômetro manual nem etiquetas de projeto para manter.
+  Tempo de tela do seu computador, um timer Pomodoro para manter o foco no trabalho e uma IA que resume o seu ritmo de trabalho.
 </p>
 
 <p align="center">

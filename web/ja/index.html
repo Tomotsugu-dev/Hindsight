@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hindsight · 毎日の時間の行き先が、ひと目でわかる</title>
-  <meta name="description" content="オープンソース・無料の時間管理ツール — 各アプリの使用時間を自動記録し、日・週・月ごとに集計。AI が毎日のまとめを作成し、「昨日は何をしてた？」と直接質問もできます。Windows / macOS、マルチデバイス同期。">
+  <meta name="description" content="オープンソース・無料の時間管理ツール — 各アプリの使用時間を自動記録し、日・週・月ごとに集計。AI が毎日のまとめを作成し、「昨日は何をしてた？」と直接質問もできます。Windows / macOS / Linux、マルチデバイス同期。">
 
   <meta property="og:title" content="Hindsight · 毎日の時間の行き先が、ひと目でわかる">
   <meta property="og:description" content="アプリ使用時間の自動記録と AI の毎日のまとめ。「昨日は何をしてた？」と質問もできます。">
@@ -86,6 +86,20 @@
               <span class="btn-platform-meta">.dmg · <span id="size-mac-hero">~ 14 MB</span></span>
             </span>
           </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-hero" class="btn btn-platform" data-platform="linux" hidden>
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">.deb をダウンロード</span>
+              <span class="btn-platform-meta">Ubuntu / Debian · <span id="size-deb-hero">~ 7 MB</span></span>
+            </span>
+          </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-hero" class="btn btn-platform" data-platform="linux" hidden>
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">.rpm をダウンロード</span>
+              <span class="btn-platform-meta">Fedora · <span id="size-rpm-hero">~ 7 MB</span></span>
+            </span>
+          </a>
         </div>
         <p class="trust"><a href="https://github.com/Tomotsugu-dev/Hindsight" class="trust-link">
           <svg class="trust-gh" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -145,6 +159,20 @@
               <span class="btn-platform-meta">.dmg · <span id="size-mac-final">~ 14 MB</span></span>
             </span>
           </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-final" class="btn btn-platform btn-platform-light">
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">.deb をダウンロード</span>
+              <span class="btn-platform-meta">Ubuntu / Debian · <span id="size-deb-final">~ 7 MB</span></span>
+            </span>
+          </a>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-final" class="btn btn-platform btn-platform-light">
+            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
+            <span class="btn-platform-text">
+              <span class="btn-platform-name">.rpm をダウンロード</span>
+              <span class="btn-platform-meta">Fedora · <span id="size-rpm-final">~ 7 MB</span></span>
+            </span>
+          </a>
         </div>
       </div>
     </div>
@@ -196,20 +224,26 @@
   </footer>
 
   <script>
-    // Hero プラットフォーム検出：現在の OS に対応したボタンを 1 つだけ表示。
-    // Linux / 不明なプラットフォームは Windows にフォールバック。
+    // Hero プラットフォーム検出：現在の OS に対応したボタンを表示（Linux は .deb と .rpm の 2 つ）。
+    // 不明なプラットフォームは Windows にフォールバック。
     (function () {
       const platform = navigator.platform.toLowerCase();
       const ua = navigator.userAgent.toLowerCase();
       const isMac = platform.includes('mac') || ua.includes('mac os');
-
-      const winBtn = document.getElementById('dl-win-hero');
-      const macBtn = document.getElementById('dl-mac-hero');
+      // Android の UA にも linux が含まれる
+      const isLinux = (platform.includes('linux') || ua.includes('linux')) && !ua.includes('android');
+      const show = (id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.hidden = false;
+      };
 
       if (isMac) {
-        if (macBtn) macBtn.hidden = false;
+        show('dl-mac-hero');
+      } else if (isLinux) {
+        show('dl-deb-hero');
+        show('dl-rpm-hero');
       } else {
-        if (winBtn) winBtn.hidden = false;
+        show('dl-win-hero');
       }
     })();
 
@@ -218,35 +252,22 @@
       fetch('https://api.github.com/repos/Tomotsugu-dev/Hindsight/releases/latest')
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(data => {
-          const win = data.assets.find(a => /\.exe$/.test(a.name));
-          const mac = data.assets.find(a => /universal\.dmg$/.test(a.name));
           const fmt = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
+          const link = (key, pattern) => {
+            const asset = data.assets.find(a => pattern.test(a.name));
+            if (!asset) return;
+            ['hero', 'final'].forEach(where => {
+              const a = document.getElementById(`dl-${key}-${where}`);
+              if (a) a.href = asset.browser_download_url;
+              const s = document.getElementById(`size-${key}-${where}`);
+              if (s) s.textContent = fmt(asset.size);
+            });
+          };
 
-          if (win) {
-            const url = win.browser_download_url;
-            const size = fmt(win.size);
-            ['dl-win-hero', 'dl-win-final'].forEach(id => {
-              const a = document.getElementById(id);
-              if (a) a.href = url;
-            });
-            ['size-win-hero', 'size-win-final'].forEach(id => {
-              const s = document.getElementById(id);
-              if (s) s.textContent = size;
-            });
-          }
-
-          if (mac) {
-            const url = mac.browser_download_url;
-            const size = fmt(mac.size);
-            ['dl-mac-hero', 'dl-mac-final'].forEach(id => {
-              const a = document.getElementById(id);
-              if (a) a.href = url;
-            });
-            ['size-mac-hero', 'size-mac-final'].forEach(id => {
-              const s = document.getElementById(id);
-              if (s) s.textContent = size;
-            });
-          }
+          link('win', /\.exe$/);
+          link('mac', /universal\.dmg$/);
+          link('deb', /\.deb$/);
+          link('rpm', /\.rpm$/);
         })
         .catch(() => { /* サイレントフェイル — releases/latest ページにフォールバック */ });
     })();

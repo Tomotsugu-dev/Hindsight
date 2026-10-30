@@ -6,7 +6,7 @@
 </p>
 <p align="center">
 <br/>
-  Automatically records app and window activity and shows where your time went by day, week, and month — no manual timers, no project tags to maintain.
+  Screen time for your computer, a Pomodoro timer that keeps you focused, and AI that sums up how you work.
 </p>
 
 

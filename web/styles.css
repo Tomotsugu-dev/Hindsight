@@ -252,7 +252,7 @@ h4 {
   display: none !important;
 }
 
-/* 平台下载按钮 —— 图标 + 两行文字，Windows / macOS 同款外观，仅图标区分 */
+/* 平台下载按钮 —— 图标 + 两行文字，各平台同款外观，仅图标区分 */
 .btn-platform {
   display: inline-flex;
   align-items: center;
@@ -278,6 +278,13 @@ h4 {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
+}
+
+/* Linux 图标太长，不内联进每个页面，用 mask 引用 linux.svg，颜色跟按钮文字走 */
+.btn-platform-icon-linux {
+  background-color: currentColor;
+  -webkit-mask: url("/linux.svg") center / contain no-repeat;
+  mask: url("/linux.svg") center / contain no-repeat;
 }
 
 .btn-platform-text {
