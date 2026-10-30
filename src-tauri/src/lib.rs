@@ -242,16 +242,8 @@ pub fn run() {
                 spawn_cleanup_task(pool.clone());
                 bootstrap::spawn_backfill_tasks(pool.clone());
                 let sync_engine = bootstrap::init_sync_engine(pool.clone(), memdb_for_sync).await;
-                // Plugin background window, see plugins::background_window
-                plugins::background_window::refresh(&handle, &pool).await;
-                // Send focus changes to plugins, see plugins::events::focus
-                tauri::async_runtime::spawn(plugins::events::focus::run(
-                    handle.clone(),
-                    pool.clone(),
-                    focus_rx,
-                ));
 
-                handle.manage(pool);
+                handle.manage(pool.clone());
                 handle.manage(svc);
                 handle.manage(sync_engine);
                 // 启动 idle watcher：跑完日报/调试 N 秒无新请求 → 自动 stop 释放显存。
@@ -264,6 +256,17 @@ pub fn run() {
                 // Chat 生成中注册表：同会话并发拒 + 停止按钮取消 + 重开会话恢复状态
                 handle.manage(commands::chat::ChatInflight::default());
                 handle.manage(commands::ai_summary::RunLock::default());
+                // Plugin background window, see plugins::background_window
+                // Must run after every manage() above. On Windows, creating a window also
+                // handles the requests the main window has waiting, so frontend commands run
+                // here and need their state.
+                plugins::background_window::refresh(&handle, &pool).await;
+                // Send focus changes to plugins, see plugins::events::focus
+                tauri::async_runtime::spawn(plugins::events::focus::run(
+                    handle.clone(),
+                    pool.clone(),
+                    focus_rx,
+                ));
                 // 自动总结调度:按 ai.auto_summary 开关自动补昨日日报/上周周报。
                 // 必须在上面全部 manage 之后 spawn——任务内按需取 managed state。
                 ai::auto_summary::spawn(handle.clone());
