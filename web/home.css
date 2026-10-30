@@ -1,0 +1,486 @@
+/* 首页：产品截图和视频当主角，系统黑体，强调色只用软件自己的紫色。
+   配色变量、顶栏和页脚在 web/site.css */
+
+:root {
+  /* 内容栏左边缘到窗口边的距离，横向滑动区靠它和内容栏对齐 */
+  --edge: max(var(--gutter), calc((100vw - var(--max)) / 2));
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+video,
+iframe {
+  display: block;
+  max-width: 100%;
+}
+
+mark {
+  background: none;
+  color: inherit;
+}
+
+.keep {
+  white-space: nowrap;
+}
+
+/* 最窄的手机上，一段 .keep 可能比内容栏还宽，放开让它折行，免得页面能横着滑 */
+@media (max-width: 359px) {
+  .keep {
+    white-space: normal;
+  }
+}
+
+/* ============ 首屏 ============ */
+
+/* 底部一条浅灰托住 demo 的下半截 */
+.hero {
+  padding: clamp(48px, 7vh, 80px) 0 72px;
+  text-align: center;
+  background: linear-gradient(var(--bg) calc(100% - 260px), var(--band) 0);
+}
+
+.hero h1 {
+  font-size: clamp(40px, 5.2vw, 68px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+.hero h1 br {
+  display: none;
+}
+
+.hero h1 mark {
+  color: var(--accent);
+}
+
+.hero-sub {
+  margin-top: 18px;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+
+.dl:hover {
+  background: var(--accent);
+}
+
+.dl[hidden] {
+  display: none;
+}
+
+.dl-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.dl-icon-linux {
+  background: currentColor;
+  -webkit-mask: url(/linux.svg) center / contain no-repeat;
+  mask: url(/linux.svg) center / contain no-repeat;
+}
+
+.dl-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.3;
+}
+
+.dl-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.dl-meta {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.dl-quiet {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.dl-quiet:hover {
+  background: var(--band);
+}
+
+/* 首屏只显示访客自己系统的下载按钮，这一行告诉他另外两个系统也有 */
+.platforms {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.platforms svg,
+.platforms .dl-icon-linux {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.platforms > span:last-child {
+  margin-left: 4px;
+}
+
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 20px;
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.tally a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.tally svg {
+  color: #e3a008;
+}
+
+.hero-demo {
+  margin-top: clamp(36px, 5vh, 56px);
+}
+
+.frame {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* 和应用窗口的默认大小 960×720 同比例。框比 960 窄时，页面脚本把 iframe 按 960×720 排版再缩小 */
+.hero-demo .frame {
+  aspect-ratio: 4 / 3;
+}
+
+.hero-demo iframe {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+.hero-demo figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.hero-demo figcaption svg {
+  color: var(--accent);
+}
+
+/* ============ 后面几节 ============ */
+
+.section {
+  padding-block: clamp(80px, 10vw, 128px);
+}
+
+section[id] {
+  scroll-margin-top: 60px;
+}
+
+h2 {
+  font-size: clamp(30px, 3.2vw, 44px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+/* 正文最后一行不只剩一个词。text-wrap 会重置 nowrap，所以不能选中正文里嵌套的 .keep */
+:is(.hero-sub, .feat-lead, .card-body > span) {
+  text-wrap: pretty;
+}
+
+.film {
+  text-align: center;
+}
+
+.film .frame {
+  margin-top: 40px;
+}
+
+.film video {
+  width: 100%;
+  height: auto;
+}
+
+/* ============ 功能：横向滑动 ============ */
+
+.feat-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.feat-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.feat-lead svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.feat-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.feat-nav button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+.feat-nav button:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.feat-nav button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 第一张和内容栏左对齐，右边一直延伸到窗口边，露出下一张的一截 */
+.cards {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min(340px, 78vw);
+  gap: 20px;
+  /* 滑动区会裁掉超出的部分：上面留的给放大后长高的卡片，下面的给阴影。
+     上面不能用负外边距收回来，否则滑动区会盖住右上角的箭头按钮 */
+  padding: 72px var(--edge) 64px;
+  margin-bottom: -36px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--edge);
+  scrollbar-width: none;
+  /* 左右两端淡出：卡片滑到窗口边上时渐渐变淡，不是被硬切断。
+     淡出带不超过内容栏外的留白，所以没滑动时第一张卡片完全不受影响 */
+  --fade: min(var(--edge), 200px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
+}
+
+.cards::-webkit-scrollbar {
+  display: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  scroll-snap-align: start;
+}
+
+.card-media {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--band);
+  border-bottom: 1px solid var(--line);
+}
+
+.card-media img,
+.card-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Dock 放大：离鼠标越近的卡片放得越大，从底边往上长。倍数和位置由页面底部的脚本算 */
+.card {
+  position: relative;
+  transform-origin: 50% 100%;
+  transition: transform 0.18s ease-out, box-shadow 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+
+.card.near {
+  border-color: #d6d6e4;
+  box-shadow: var(--shadow);
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 22px 24px;
+}
+
+.card-body strong {
+  font-size: 19px;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+/* 日文按词组断行，不拆开「表示」这类词；strong 里不能用 .keep，span 会套上说明文字的样式 */
+:lang(ja) .card-body strong {
+  word-break: auto-phrase;
+}
+
+.card-body span {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.card-body a {
+  margin-left: 6px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.card-body a:hover {
+  text-decoration: underline;
+}
+
+.list-more a {
+  /* 滑动区底部留白用负外边距收回，盖住了这一行；定位后才画在滑动区上面，点得到 */
+  position: relative;
+  font-weight: 600;
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+
+.list-more a:hover {
+  text-decoration: underline;
+}
+
+/* ============ 下载 ============ */
+
+.close {
+  background: var(--band);
+  text-align: center;
+}
+
+.close .cta {
+  margin-top: 32px;
+}
+
+.cta-all .dl {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.cta-all .dl:hover {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.close-notes {
+  display: grid;
+  gap: 6px;
+  max-width: 52em;
+  margin: 28px auto 0;
+  font-size: 14px;
+  color: var(--muted);
+  text-wrap: balance;
+}
+
+/* ============ 窄屏 ============ */
+
+@media (max-width: 760px) {
+  /* 窄屏一行放不下标题时在 <br> 处断开，免得最后一两个字单独掉到下一行 */
+  .hero h1 br {
+    display: inline;
+  }
+
+  /* 标题第二行在 40px 下比手机内容栏宽时，最后一个词会单独掉一行；字号缩到这行放得下。
+     --h1-line 是各语言第二行的宽度（单位 em），默认值是中文「屏幕使用时间。」的 */
+  .hero h1 {
+    font-size: min(40px, (100vw - 2 * var(--gutter)) / var(--h1-line, 7.2));
+  }
+
+  :root:lang(en) { --h1-line: 9.6; }
+  :root:lang(ja) { --h1-line: 9.7; }
+  :root:lang(pt) { --h1-line: 10; }
+
+  .hero {
+    background: linear-gradient(var(--bg) calc(100% - 200px), var(--band) 0);
+  }
+
+  .feat-nav {
+    display: none;
+  }
+
+  .cta-all {
+    display: grid;
+    max-width: 320px;
+    margin-inline: auto;
+  }
+
+  .cta-all .dl {
+    text-align: left;
+  }
+}
