@@ -123,6 +123,10 @@
 
 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以降、Debian 12 以降）または `hindsight-x.y.z-1.x86_64.rpm`（Fedora）をダウンロードしてインストールします。Wayland セッションでは GNOME 46 – 51 のみ対応しています。
 
+## 謝辞
+
+- [LINUX DO](https://linux.do/) コミュニティに感謝します。
+
 ## ライセンス
 
 <p align="center">

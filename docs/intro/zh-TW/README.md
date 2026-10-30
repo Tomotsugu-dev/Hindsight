@@ -123,6 +123,10 @@
 
 下載 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以上、Debian 12 以上）或 `hindsight-x.y.z-1.x86_64.rpm`（Fedora）並安裝。Wayland 工作階段裡只支援 GNOME 46 – 51。
 
+## 致謝
+
+- 感謝 [LINUX DO](https://linux.do/) 社群。
+
 ## 授權條款
 
 <p align="center">
