@@ -1,12 +1,14 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
-import { Globe, RotateCw } from "lucide-react";
-import { HOME_PAGE, LANGUAGE_NAMES, STRINGS, pageLanguage, type PageLanguage } from "./i18n";
+import { useCallback, useEffect, useState } from "react";
+import { RotateCw } from "lucide-react";
+import { DOCS_PAGE, HOME_PAGE, LANGUAGE_NAMES, STRINGS, pageLanguage, type PageLanguage } from "./i18n";
 import { loadIndex, type ThemeEntry } from "./index-data";
 import { PreviewPanel } from "./PreviewPanel";
 import { ThemeCard } from "./ThemeCard";
 import styles from "./ThemesPage.module.css";
 
 const LANGUAGE = pageLanguage(location.search, navigator.languages);
+// site.css 按 <html lang> 选字体，渲染前就设好
+document.documentElement.lang = LANGUAGE;
 
 const LOGO = "https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png";
 
@@ -34,29 +36,15 @@ export function ThemesPage() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.lang = LANGUAGE;
     document.title = `${s.title} · Hindsight`;
     load();
   }, [load, s.title]);
 
   return (
     <>
-      <nav className="nav">
-        <div className="container nav-inner">
-          <a href={HOME_PAGE[LANGUAGE]} className="nav-brand">
-            <img src={LOGO} alt="" className="nav-logo" />
-            <span className="nav-name">Hindsight</span>
-          </a>
-          <div className="nav-links">
-            <LanguageSwitch />
-            <a href="https://github.com/Tomotsugu-dev/Hindsight" className="nav-github" aria-label="GitHub">
-              <GitHubIcon />
-            </a>
-          </div>
-        </div>
-      </nav>
+      <TopLine />
 
-      <main className={`container ${styles.main}`}>
+      <main className={`page ${styles.main}`}>
         <header className={styles.header}>
           <h1 className={styles.title}>{s.title}</h1>
           <p className={styles.intro}>{s.intro}</p>
@@ -93,6 +81,8 @@ export function ThemesPage() {
         )}
       </main>
 
+      <Footer />
+
       {previewing && (
         <PreviewPanel theme={previewing} language={LANGUAGE} onClose={() => setPreviewing(null)} />
       )}
@@ -100,25 +90,111 @@ export function ThemesPage() {
   );
 }
 
+/** 和官网首页一样的顶栏。页面导航链到这种语言首页的各节。 */
+function TopLine() {
+  const s = STRINGS[LANGUAGE];
+  const home = HOME_PAGE[LANGUAGE];
+  return (
+    <header className="topline">
+      <div className="page topline-inner">
+        <a href={home} className="brand">
+          <img src={LOGO} alt="" width={28} height={28} />
+          <span>Hindsight</span>
+        </a>
+        <nav className="topline-links" aria-label={s.navLabel}>
+          <a href={`${home}#features`}>{s.navFeatures}</a>
+          <a href={`${home}#demo`}>{s.navDemo}</a>
+          <a href={`${home}#download`}>{s.navDownload}</a>
+        </nav>
+        <LanguageSwitch />
+        <a href="https://github.com/Tomotsugu-dev/Hindsight" className="topline-github" aria-label="GitHub">
+          <GitHubIcon />
+        </a>
+      </div>
+    </header>
+  );
+}
+
 /** 和官网首页一样的语言切换。换语言就是带着 ?lang= 重新打开这一页。 */
 function LanguageSwitch() {
+  const s = STRINGS[LANGUAGE];
   const languages = Object.keys(LANGUAGE_NAMES) as PageLanguage[];
   return (
-    <div className="lang-switch">
-      <Globe size={16} strokeWidth={2} className="lang-icon" aria-hidden />
-      {languages.map((code, i) => (
-        <Fragment key={code}>
-          {i > 0 && <span className="lang-sep">·</span>}
-          {code === LANGUAGE ? (
-            <span className="lang-active">{LANGUAGE_NAMES[code]}</span>
-          ) : (
-            <a href={`?lang=${code}`} lang={code}>
+    <details className="lang">
+      <summary aria-label={s.language}>
+        <GlobeIcon />
+        {LANGUAGE_NAMES[LANGUAGE]}
+      </summary>
+      <ul>
+        {languages.map((code) => (
+          <li key={code}>
+            <a href={`?lang=${code}`} lang={code} aria-current={code === LANGUAGE ? "page" : undefined}>
               {LANGUAGE_NAMES[code]}
             </a>
-          )}
-        </Fragment>
-      ))}
-    </div>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** 和官网首页一样的页脚。 */
+function Footer() {
+  const s = STRINGS[LANGUAGE];
+  return (
+    <footer className="foot">
+      <div className="page foot-grid">
+        <div className="foot-brand">
+          <p className="foot-name">Hindsight</p>
+          <p>© 2026 Hindsight contributors · GPL 3.0</p>
+        </div>
+        <ul>
+          <li>
+            <a href="https://github.com/Tomotsugu-dev/Hindsight/releases">{s.allReleases}</a>
+          </li>
+          <li>
+            <a href="https://github.com/Tomotsugu-dev/Hindsight/tree/main/docs/release-notes">{s.changelog}</a>
+          </li>
+          <li>
+            <a href={DOCS_PAGE[LANGUAGE]}>{s.docs}</a>
+          </li>
+        </ul>
+        <ul>
+          <li>
+            <a href="https://github.com/Tomotsugu-dev/Hindsight">{s.repository}</a>
+          </li>
+          <li>
+            <a href="https://github.com/Tomotsugu-dev/Hindsight/issues">{s.reportProblem}</a>
+          </li>
+          <li>
+            <a href={`?lang=${LANGUAGE}`} aria-current="page">
+              {s.themeMarket}
+            </a>
+          </li>
+        </ul>
+      </div>
+    </footer>
+  );
+}
+
+/** 首页顶栏用的地球图标，和 lucide 的画法不一样 */
+function GlobeIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+    </svg>
   );
 }
 
