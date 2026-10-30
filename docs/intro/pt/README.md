@@ -123,6 +123,10 @@ Baixe `hindsight_x.y.z_universal.dmg`, clique duas vezes para montar e arraste o
 
 Baixe `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 ou mais recente, Debian 12 ou mais recente) ou `hindsight-x.y.z-1.x86_64.rpm` (Fedora) e instale. Numa sessão Wayland, só o GNOME 46 a 51 é compatível.
 
+## Agradecimentos
+
+- Agradecemos à comunidade [LINUX DO](https://linux.do/).
+
 ## Licença
 
 <p align="center">

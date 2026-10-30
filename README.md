@@ -124,6 +124,10 @@ Download `hindsight_x.y.z_universal.dmg`, double-click to mount, then drag Hinds
 
 Download `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 or later, Debian 12 or later) or `hindsight-x.y.z-1.x86_64.rpm` (Fedora) and install it. In a Wayland session, only GNOME 46–51 is supported.
 
+## Acknowledgements
+
+- Thanks to the [LINUX DO](https://linux.do/) community.
+
 ## License
 
 <p align="center">

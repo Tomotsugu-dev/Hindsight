@@ -123,6 +123,10 @@
 
 下载 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 及以上、Debian 12 及以上）或 `hindsight-x.y.z-1.x86_64.rpm`（Fedora）并安装。Wayland 会话里只支持 GNOME 46 – 51。
 
+## 致谢
+
+- 感谢 [LINUX DO](https://linux.do/) 社区。
+
 ## 许可证
 
 <p align="center">
