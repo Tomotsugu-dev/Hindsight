@@ -2,7 +2,7 @@
 //
 // 自定义主题从默认主题的配色开始，mode 是 dark 时从深色主题的配色开始，theme.json 写了的变量再
 // 盖上去。主题没写的颜色从应用的 tokens.css 里取，所以这里不另存一份颜色。不直接把 tokens.css
-// 引进这一页：它和官网的 styles.css 都在 :root 上定义了 --shadow-sm 这类同名变量。
+// 引进这一页：它和官网的 site.css 都在 :root 上定义变量，同名的会互相覆盖。
 import type { ColorMode } from "@app/lib/theme";
 import tokensCss from "@app/styles/tokens.css?raw";
 

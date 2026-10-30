@@ -11,14 +11,57 @@ const SRC = path.join(ROOT, "docs/features");
 const OUT = path.join(ROOT, "web/docs");
 
 // dir: 源目录名；slug: 站点 URL 段（与 landing 页目录一致）；landing: 该语言官网首页
+// 简中首页带 ?hl=zh，和首页语言菜单一样，免得浏览器不是中文的人被根路径跳走
 const LANGS = [
-  { dir: "zh", slug: "zh", html: "zh-CN", name: "简体中文", docs: "功能", landing: "/" },
+  { dir: "zh", slug: "zh", html: "zh-CN", name: "简体中文", docs: "功能", landing: "/?hl=zh" },
   { dir: "zh-TW", slug: "tw", html: "zh-TW", name: "繁體中文", docs: "功能", landing: "/tw/" },
   { dir: "en", slug: "en", html: "en", name: "English", docs: "Features", landing: "/en/" },
   { dir: "ja", slug: "ja", html: "ja", name: "日本語", docs: "機能", landing: "/ja/" },
   { dir: "es", slug: "es", html: "es", name: "Español", docs: "Funciones", landing: "/en/" },
   { dir: "pt-BR", slug: "pt", html: "pt-BR", name: "Português", docs: "Recursos", landing: "/pt/" },
 ];
+
+// 顶栏和页脚的文字，和各语言首页一字不差；es 没有首页，照 pt 的说法译。nav 的键是首页各节的 id
+const UI = {
+  zh: {
+    nav: { features: "功能", demo: "演示", download: "下载" },
+    navLabel: "页面", language: "语言",
+    releases: "所有版本", changelog: "更新日志", guide: "功能说明",
+    repo: "GitHub 仓库", issues: "报告问题", themes: "主题市场",
+  },
+  tw: {
+    nav: { features: "功能", demo: "示範", download: "下載" },
+    navLabel: "頁面", language: "語言",
+    releases: "所有版本", changelog: "更新紀錄", guide: "功能說明",
+    repo: "GitHub 儲存庫", issues: "回報問題", themes: "主題市集",
+  },
+  en: {
+    nav: { features: "Features", demo: "Demo", download: "Download" },
+    navLabel: "Page", language: "Language",
+    releases: "All releases", changelog: "Changelog", guide: "Features",
+    repo: "GitHub repository", issues: "Report a problem", themes: "Theme market",
+  },
+  ja: {
+    nav: { features: "機能", demo: "デモ", download: "ダウンロード" },
+    navLabel: "ページ", language: "言語",
+    releases: "すべてのバージョン", changelog: "更新履歴", guide: "機能説明",
+    repo: "GitHub リポジトリ", issues: "問題を報告", themes: "テーママーケット",
+  },
+  es: {
+    nav: { features: "Funciones", demo: "Demo", download: "Descargar" },
+    navLabel: "Página", language: "Idioma",
+    releases: "Todas las versiones", changelog: "Novedades", guide: "Funciones",
+    repo: "Repositorio en GitHub", issues: "Informar de un problema", themes: "Tienda de temas",
+  },
+  pt: {
+    nav: { features: "Recursos", demo: "Demo", download: "Download" },
+    navLabel: "Página", language: "Idioma",
+    releases: "Todas as versões", changelog: "Novidades", guide: "Recursos",
+    repo: "Repositório no GitHub", issues: "Relatar um problema", themes: "Loja de temas",
+  },
+};
+
+const GITHUB = "https://github.com/Tomotsugu-dev/Hindsight";
 
 const escapeHtml = (s) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -38,6 +81,9 @@ function createMarkdown() {
       token.attrSet("id", slugger.slug(text));
     });
   });
+  // 窄屏放不下的表格在自己的框里横向滚动，不把页面撑宽
+  md.renderer.rules.table_open = () => '<div class="doc-table">\n<table>\n';
+  md.renderer.rules.table_close = () => "</table>\n</div>\n";
   return md;
 }
 
@@ -96,7 +142,8 @@ function rewriteLinks(html, slug) {
     .replace(/<img /g, '<img loading="lazy" ');
 }
 
-function renderPage({ lang, key, title, body, toc, pages, isIndex }) {
+function renderPage({ lang, key, title, body, toc, pages, isIndex, keysOf }) {
+  const ui = UI[lang.slug];
   const url = (k) => `/docs/${lang.slug}/${k ? `${k}/` : ""}`;
   // 当前页下面挂它的小节；只有一个小节时不挂
   const tocList = toc.length > 1
@@ -111,11 +158,16 @@ function renderPage({ lang, key, title, body, toc, pages, isIndex }) {
         : `<a href="${url(p.key)}">${escapeHtml(p.title)}</a>`,
     )
     .join("\n        ");
-  const langItems = LANGS.map((l) =>
-    l === lang
-      ? `<li><span class="lang-active">${l.name}</span></li>`
-      : `<li><a href="/docs/${l.slug}/${key ? `${key}/` : ""}" hreflang="${l.html}">${l.name}</a></li>`,
-  ).join("\n            ");
+  // 那种语言没有这一页时去它的目录页
+  const langItems = LANGS.map((l) => {
+    const href = `/docs/${l.slug}/${key && keysOf.get(l.slug).has(key) ? `${key}/` : ""}`;
+    return l === lang
+      ? `<li><a href="${href}" aria-current="page">${l.name}</a></li>`
+      : `<li><a href="${href}" hreflang="${l.html}">${l.name}</a></li>`;
+  }).join("\n          ");
+  const navLinks = Object.entries(ui.nav)
+    .map(([id, label]) => `<a href="${lang.landing}#${id}">${label}</a>`)
+    .join("\n        ");
   return `<!DOCTYPE html>
 <html lang="${lang.html}">
 <head>
@@ -123,47 +175,73 @@ function renderPage({ lang, key, title, body, toc, pages, isIndex }) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title.replace(/<[^>]+>/g, ""))} · Hindsight ${lang.docs}</title>
   <link rel="icon" type="image/png" href="/docs/assets/logo.png">
-  <link rel="stylesheet" href="/styles.css?v=2">
   <link rel="stylesheet" href="/docs/pagefind/pagefind-ui.css">
-  <link rel="stylesheet" href="/docs/docs.css?v=3">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/docs/docs.css?v=5">
 </head>
 <body>
-  <header class="nav">
-    <div class="container nav-inner">
-      <a href="${lang.landing}" class="nav-brand">
-        <img src="/docs/assets/logo.png" alt="" class="nav-logo">
-        <span class="nav-name">Hindsight</span>
+  <header class="topline">
+    <div class="page topline-inner">
+      <a href="${lang.landing}" class="brand">
+        <img src="/docs/assets/logo.png" alt="" width="28" height="28">
+        <span>Hindsight</span>
       </a>
-      <a href="${url("")}" class="docs-tag">${lang.docs}</a>
-      <div id="search" class="nav-search"></div>
-      <div class="nav-links">
-        <details class="lang-menu">
-          <summary>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
-            <span>${lang.name}</span>
-          </summary>
-          <ul>
-            ${langItems}
-          </ul>
-        </details>
-        <a href="https://github.com/Tomotsugu-dev/Hindsight" class="nav-github" aria-label="GitHub">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
-        </a>
-      </div>
+      <nav class="topline-links" aria-label="${ui.navLabel}">
+        ${navLinks}
+      </nav>
+      <details class="lang">
+        <summary aria-label="${ui.language}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+          </svg>
+          ${lang.name}
+        </summary>
+        <ul>
+          ${langItems}
+        </ul>
+      </details>
+      <a href="${GITHUB}" class="topline-github" aria-label="GitHub">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+        </svg>
+      </a>
     </div>
   </header>
 
-  <div class="doc-layout">
-    <nav class="doc-side" aria-label="${lang.docs}">
+  <div class="page doc-layout">
+    <aside class="doc-side">
+      <div id="search" class="doc-search"></div>
+      <nav class="doc-pages" aria-label="${lang.docs}">
         ${side}
-    </nav>
+      </nav>
+    </aside>
     <main class="doc-main">
       <article class="doc-body"${isIndex ? "" : " data-pagefind-body"}>
 ${body}
       </article>
-      <footer class="doc-footer">© 2026 Hindsight · GPL 3.0</footer>
     </main>
   </div>
+
+  <footer class="foot">
+    <div class="page foot-grid">
+      <div class="foot-brand">
+        <p class="foot-name">Hindsight</p>
+        <p>© 2026 Hindsight contributors · GPL 3.0</p>
+      </div>
+      <ul>
+        <li><a href="${GITHUB}/releases">${ui.releases}</a></li>
+        <li><a href="${GITHUB}/tree/main/docs/release-notes">${ui.changelog}</a></li>
+        <li><a href="${url("")}">${ui.guide}</a></li>
+      </ul>
+      <ul>
+        <li><a href="${GITHUB}">${ui.repo}</a></li>
+        <li><a href="${GITHUB}/issues">${ui.issues}</a></li>
+        <li><a href="/themes/?lang=${lang.html}">${ui.themes}</a></li>
+      </ul>
+    </div>
+  </footer>
 
   <script src="/docs/pagefind/pagefind-ui.js"></script>
   <script>
@@ -173,7 +251,7 @@ ${body}
     (function () {
       var links = document.querySelectorAll(".doc-toc a");
       if (!links.length) return;
-      var side = document.querySelector(".doc-side");
+      var side = document.querySelector(".doc-pages");
       var heads = Array.prototype.map.call(links, function (a) {
         return document.getElementById(decodeURIComponent(a.hash.slice(1)));
       });
@@ -202,6 +280,15 @@ ${body}
         }
       }, { passive: true });
       update();
+    })();
+
+    // 窄屏左栏是一行横着滑的标签，把当前页滑到中间
+    (function () {
+      var pages = document.querySelector(".doc-pages");
+      var here = pages.querySelector("a[aria-current]");
+      if (pages.scrollWidth > pages.clientWidth) {
+        pages.scrollLeft = here.offsetLeft - (pages.clientWidth - here.offsetWidth) / 2;
+      }
     })();
   </script>
 </body>
@@ -244,8 +331,8 @@ function build() {
   writeFileSync(path.join(OUT, "index.html"), renderRoot());
 
   const md = createMarkdown();
-  const written = []; // { file, slug, html }
-  for (const lang of LANGS) {
+  // 先读完所有语言，语言菜单要知道别的语言有没有同一页
+  const sites = LANGS.map((lang) => {
     const dir = path.join(SRC, lang.dir);
     const read = (name) => readFileSync(path.join(dir, `${name}.md`), "utf8");
     const readme = read("README");
@@ -255,12 +342,18 @@ function build() {
       index: pageTitle(md, readme, true),
       list: keys.map((k) => ({ key: k, title: pageTitle(md, sources[k], false) })),
     };
+    return { lang, dir, readme, keys, sources, pages };
+  });
+  const keysOf = new Map(sites.map((s) => [s.lang.slug, new Set(s.keys)]));
+
+  const written = []; // { file, slug, html }
+  for (const { lang, dir, readme, keys, sources, pages } of sites) {
     const emit = (key, source, isIndex) => {
       const title = isIndex ? pages.index : pages.list.find((p) => p.key === key).title;
       const tokens = md.parse(source, {});
       markInlineToc(tokens);
       const body = rewriteLinks(md.renderer.render(tokens, md.options, {}), lang.slug);
-      const html = renderPage({ lang, key, title, body, toc: headings(tokens), pages, isIndex });
+      const html = renderPage({ lang, key, title, body, toc: headings(tokens), pages, isIndex, keysOf });
       const file = path.join(OUT, lang.slug, key, "index.html");
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, html);

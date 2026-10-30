@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-// 官网首页的样式：导航栏和配色跟首页一样
-import "../styles.css";
+// 顶栏、页脚和配色和官网其它页共用
+import "../site.css";
 import { ThemesPage } from "./ThemesPage";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

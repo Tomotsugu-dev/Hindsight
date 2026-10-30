@@ -3,234 +3,280 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hindsight · See where every day actually goes</title>
-  <meta name="description" content="Free, open-source time tracking — automatically records how long you spend in every app, summarized by day, week and month, with AI daily recaps. Just ask what you did yesterday. Windows / macOS / Linux, multi-device sync.">
+  <title>Hindsight · Screen time for your computer</title>
+  <meta name="description" content="Free and open-source screen time for your computer. It tracks how long you use each app, by day, week and month. A local AI writes your daily report, and you can ask it “What did I do yesterday?” For Windows, macOS and Linux, with sync between computers.">
 
-  <meta property="og:title" content="Hindsight · See where every day actually goes">
-  <meta property="og:description" content="Automatic app-time tracking with AI daily recaps — just ask what you did yesterday.">
+  <meta property="og:title" content="Hindsight · Screen time for your computer">
+  <meta property="og:description" content="Tracks how long you use each app. A local AI writes your daily report, and you can ask it “What did I do yesterday?”">
   <meta property="og:image" content="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hindsight.kyosweb.com/en/">
 
   <link rel="icon" type="image/png" href="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png">
-  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/home.css">
 </head>
 <body>
 
   <!-- ============ Nav ============ -->
-  <nav class="nav">
-    <div class="container nav-inner">
-      <div class="nav-left">
-        <a href="/en/" class="nav-brand">
-          <img src="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png" alt="" class="nav-logo">
-          <span class="nav-name">Hindsight</span>
-        </a>
-        <nav class="nav-anchors">
-          <a href="#demo" class="nav-anchor">Demo</a>
-          <a href="#download" class="nav-anchor">Download</a>
-          <a href="/docs/en/" class="nav-anchor">Features</a>
-        </nav>
-      </div>
-      <div class="nav-links">
-        <div class="lang-switch">
-          <svg class="lang-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <header class="topline">
+    <div class="page topline-inner">
+      <a href="/en/" class="brand">
+        <img src="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png" alt="" width="28" height="28">
+        <span>Hindsight</span>
+      </a>
+      <nav class="topline-links" aria-label="Page">
+        <a href="#features">Features</a>
+        <a href="#demo">Demo</a>
+        <a href="#download">Download</a>
+      </nav>
+      <details class="lang">
+        <summary aria-label="Language">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
             <line x1="2" y1="12" x2="22" y2="12"></line>
           </svg>
-          <a href="/?hl=zh">简体中文</a>
-          <span class="lang-sep">·</span>
-          <a href="/tw/">繁體中文</a>
-          <span class="lang-sep">·</span>
-          <span class="lang-active">English</span>
-          <span class="lang-sep">·</span>
-          <a href="/ja/">日本語</a>
-          <span class="lang-sep">·</span>
-          <a href="/pt/">Português</a>
-        </div>
-        <a href="https://github.com/Tomotsugu-dev/Hindsight" class="nav-github" aria-label="GitHub">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
-          </svg>
-        </a>
-      </div>
+          English
+        </summary>
+        <ul>
+          <li><a href="/?hl=zh">简体中文</a></li>
+          <li><a href="/tw/">繁體中文</a></li>
+          <li><a href="/en/" aria-current="page">English</a></li>
+          <li><a href="/ja/">日本語</a></li>
+          <li><a href="/pt/">Português</a></li>
+        </ul>
+      </details>
+      <a href="https://github.com/Tomotsugu-dev/Hindsight" class="topline-github" aria-label="GitHub">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+        </svg>
+      </a>
     </div>
-  </nav>
+  </header>
 
-  <!-- ============ Hero ============ -->
-  <section class="hero">
-    <div class="container hero-grid">
-      <div class="hero-text">
-        <div class="eyebrow">Free &amp; open source · Multi-device sync</div>
-        <h1 class="display">Hindsight</h1>
-        <p class="subtitle">See where every day actually goes.</p>
-        <p class="intro">
-          Automatically tracks how long you use each app, with daily, weekly and monthly stats. AI writes your summary every day and can answer "How much time did I spend on project X?" Learn more in the <a href="/docs/en/">feature guide</a>.
-        </p>
-        <div class="cta-group">
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-win-hero" class="btn btn-platform" data-platform="win" hidden>
-            <svg class="btn-platform-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  <main>
+    <!-- ============ Hero ============ -->
+    <section class="hero">
+      <div class="page">
+        <h1><mark>Screen time</mark> <br>for your computer.</h1>
+        <p class="hero-sub">Tracks how long you use each app, in the background.<br>AI writes your daily report and answers your questions.</p>
+        <div class="cta">
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-win-hero" class="dl" hidden>
+            <svg class="dl-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.851"/>
             </svg>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download for Windows</span>
-              <span class="btn-platform-meta">.exe · <span id="size-win-hero">~ 5 MB</span></span>
-            </span>
+            <span class="dl-text"><span class="dl-name">Download for Windows</span><span class="dl-meta">.exe · <span id="size-win-hero">~ 5 MB</span></span></span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-mac-hero" class="btn btn-platform" data-platform="mac" hidden>
-            <svg class="btn-platform-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-mac-hero" class="dl" hidden>
+            <svg class="dl-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
             </svg>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download for macOS</span>
-              <span class="btn-platform-meta">.dmg · <span id="size-mac-hero">~ 14 MB</span></span>
-            </span>
+            <span class="dl-text"><span class="dl-name">Download for macOS</span><span class="dl-meta">.dmg · <span id="size-mac-hero">~ 14 MB</span></span></span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-hero" class="btn btn-platform" data-platform="linux" hidden>
-            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download .deb</span>
-              <span class="btn-platform-meta">Ubuntu / Debian · <span id="size-deb-hero">~ 7 MB</span></span>
-            </span>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-hero" class="dl" hidden>
+            <span class="dl-icon dl-icon-linux" aria-hidden="true"></span>
+            <span class="dl-text"><span class="dl-name">Download for Ubuntu&nbsp;/&nbsp;Debian</span><span class="dl-meta">.deb · <span id="size-deb-hero">~ 7 MB</span></span></span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-hero" class="btn btn-platform" data-platform="linux" hidden>
-            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download .rpm</span>
-              <span class="btn-platform-meta">Fedora · <span id="size-rpm-hero">~ 7 MB</span></span>
-            </span>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-hero" class="dl dl-quiet" hidden>
+            <span class="dl-icon dl-icon-linux" aria-hidden="true"></span>
+            <span class="dl-text"><span class="dl-name">Download for Fedora</span><span class="dl-meta">.rpm · <span id="size-rpm-hero">~ 7 MB</span></span></span>
           </a>
         </div>
-        <p class="trust"><a href="https://github.com/Tomotsugu-dev/Hindsight" class="trust-link">
-          <svg class="trust-gh" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.18 1.18a11.05 11.05 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
-          </svg>
-          Star on GitHub →
-        </a> &nbsp;·&nbsp; GPL 3.0 licensed · Free forever</p>
-      </div>
-      <div class="hero-visual">
-        <div class="hero-blob"></div>
-        <iframe
-          src="/demo/?lang=en"
-          class="hero-demo-frame"
-          title="Hindsight interactive preview"
-          loading="eager"
-          referrerpolicy="no-referrer"
-        ></iframe>
-      </div>
-    </div>
-  </section>
+        <p class="platforms">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.851"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+          <span class="dl-icon-linux" aria-hidden="true"></span>
+          <span>Windows, macOS, Linux.</span>
+        </p>
+        <p class="tally">
+          <a href="https://github.com/Tomotsugu-dev/Hindsight">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.94 5.96 6.56.95-4.75 4.63 1.12 6.54L12 17.5l-5.87 3.08 1.12-6.54L2.5 9.41l6.56-.95z"/></svg>
+            <span id="gh-stars">GitHub</span>
+          </a>
+          <span id="gh-downloads" hidden></span>
+          <span>Free and open source (GPL 3.0)</span>
+        </p>
 
-  <!-- ============ Video Demo ============ -->
-  <section class="demo" id="demo">
-    <div class="container">
-      <h2 class="section-title">Hindsight in 60 seconds</h2>
-      <div class="video-frame">
+        <figure class="hero-demo">
+          <div class="frame">
+            <iframe src="/demo/?lang=en" title="Hindsight interactive preview" loading="eager" referrerpolicy="no-referrer"></iframe>
+          </div>
+          <figcaption>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/>
+            </svg>
+            Try it: click around.
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ Features ============ -->
+    <section class="section" id="features">
+      <div class="page feat-head">
+        <div>
+          <h2 id="features-title">More things it can do</h2>
+          <p class="feat-lead">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="11" width="16" height="10" rx="2"/>
+              <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+            </svg>
+            By default, your data stays on your computer.
+          </p>
+        </div>
+        <div class="feat-nav">
+          <button type="button" id="feature-prev" aria-controls="feature-cards" aria-label="Previous">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button type="button" id="feature-next" aria-controls="feature-cards" aria-label="Next">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <ul class="cards" id="feature-cards" tabindex="0" aria-labelledby="features-title">
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/sync_en.mp4" poster="/assets/home/sync_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="The daily stats of two computers, My workstation and MacBook Pro, add up to one total for all devices"></video>
+          </div>
+          <div class="card-body"><strong>All your computers in one view</strong><span>Sync with your own Google Drive or WebDAV, and count the records from all your computers together.</span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/plugins_en.mp4" poster="/assets/home/plugins_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="Focus plugin: the mouse moves onto the island at the top of the screen. The island opens and shows today’s goal progress, the focus countdown and the number of distractions"></video>
+          </div>
+          <div class="card-body"><strong>Plugins (Focus)</strong><span>Install plugins like a Pomodoro timer in one click, or write your own. <a href="https://github.com/Tomotsugu-dev/hindsight-plugins">Plugin market</a></span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/garden.mp4" poster="/assets/home/garden.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="Time Garden, a community plugin: the garden starts with 5 flowers. They grow ring by ring to 25 and fill the whole garden"></video>
+          </div>
+          <div class="card-body"><strong>Plugins (Time Garden)</strong><span>A community plugin made by a user. Your activity time grows flowers. <a href="https://github.com/Yoshino2000/hindsight-garden">GitHub</a></span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/themes_en.mp4" poster="/assets/home/themes_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="The same monthly stats page changes to Minimal, Dark, the community theme Vermillion Cover, Airy flat and the community theme Sakura Notes"></video>
+          </div>
+          <div class="card-body"><strong>Custom themes</strong><span>Change the colors, light or dark mode, and page layout. <a href="/themes/">Theme market</a></span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/ai_chat_en.mp4" poster="/assets/home/ai_chat_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="Asking on the Chat page: How much time did I spend on the Hindsight project this week? The AI answers from your records, about 12 h 36 min, and lists three sources, each with its time range and app."></video>
+          </div>
+          <div class="card-body"><strong>Got a question? Ask the AI.</strong><span>The AI answers from your records. By default, it uses a local&nbsp;AI.</span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/ai_summary_en.mp4" poster="/assets/home/ai_summary_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="AI Summary daily report: the Late Night and Early Morning segments are summarized one after the other, then exported as Markdown, with a message confirming the export to the Downloads folder"></video>
+          </div>
+          <div class="card-body"><strong>AI writes your daily and weekly reports</strong><span>Sum up the day by time of day, choose which app categories to include, and export the result.</span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/search_en.mp4" poster="/assets/home/search_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="Search for OCR in Hindsight and open the result. The screenshot from that moment opens, with the matching lines marked"></video>
+          </div>
+          <div class="card-body"><strong>Search the text on your screen</strong><span>Find any text that was on your screen.</span></div>
+        </li>
+        <li class="card">
+          <div class="card-media">
+            <video src="/assets/home/categories_en.mp4" poster="/assets/home/categories_en.webp" width="960" height="720"
+                   muted loop playsinline preload="none"
+                   aria-label="In the Assign apps list, the Code, Chrome and Cursor rows start out yellow (unassigned). Each row’s Assign menu is opened in turn to pick Coding, Browsing and Coding, and today’s bar below grows Coding and Browsing segments"></video>
+          </div>
+          <div class="card-body"><strong>Custom activity categories</strong><span>Choose the category for each app, for clearer stats.</span></div>
+        </li>
+      </ul>
+
+      <p class="page list-more"><a href="/docs/en/">See all features</a></p>
+    </section>
+
+    <!-- ============ Video ============ -->
+    <section class="section page film" id="demo">
+      <h2>Hindsight in 1 minute</h2>
+      <div class="frame">
         <video src="/assets/video/Hindsight_en.mp4"
                controls muted autoplay loop playsinline preload="metadata"
                poster="/assets/video/Hindsight_en.jpg"></video>
       </div>
-      <p class="caption">Product walkthrough — Hindsight's core interactions</p>
-    </div>
-  </section>
+    </section>
 
-  <!-- ============ Final CTA ============ -->
-  <section class="final-cta" id="download">
-    <div class="container">
-      <div class="cta-card">
-        <h2>Start seeing where your time goes</h2>
-        <p>Free forever · GPL 3.0 licensed · 30-second install</p>
-        <div class="cta-group">
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-win-final" class="btn btn-platform btn-platform-light">
-            <svg class="btn-platform-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <!-- ============ Download ============ -->
+    <section class="section close" id="download">
+      <div class="page">
+        <h2><span class="keep">Starting today,</span> <span class="keep">know where</span> <span class="keep">your time goes.</span></h2>
+        <div class="cta cta-all">
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-win-final" class="dl">
+            <svg class="dl-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.851"/>
             </svg>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download for Windows</span>
-              <span class="btn-platform-meta">.exe · <span id="size-win-final">~ 5 MB</span></span>
-            </span>
+            <span class="dl-text"><span class="dl-name">Windows</span><span class="dl-meta">.exe · <span id="size-win-final">~ 5 MB</span></span></span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-mac-final" class="btn btn-platform btn-platform-light">
-            <svg class="btn-platform-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-mac-final" class="dl">
+            <svg class="dl-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
             </svg>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download for macOS</span>
-              <span class="btn-platform-meta">.dmg · <span id="size-mac-final">~ 14 MB</span></span>
-            </span>
+            <span class="dl-text"><span class="dl-name">macOS</span><span class="dl-meta">.dmg · <span id="size-mac-final">~ 14 MB</span></span></span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-final" class="btn btn-platform btn-platform-light">
-            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download .deb</span>
-              <span class="btn-platform-meta">Ubuntu / Debian · <span id="size-deb-final">~ 7 MB</span></span>
-            </span>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-deb-final" class="dl">
+            <span class="dl-icon dl-icon-linux" aria-hidden="true"></span>
+            <span class="dl-text"><span class="dl-name">Ubuntu / Debian</span><span class="dl-meta">.deb · <span id="size-deb-final">~ 7 MB</span></span></span>
           </a>
-          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-final" class="btn btn-platform btn-platform-light">
-            <span class="btn-platform-icon btn-platform-icon-linux" aria-hidden="true"></span>
-            <span class="btn-platform-text">
-              <span class="btn-platform-name">Download .rpm</span>
-              <span class="btn-platform-meta">Fedora · <span id="size-rpm-final">~ 7 MB</span></span>
-            </span>
+          <a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest" id="dl-rpm-final" class="dl">
+            <span class="dl-icon dl-icon-linux" aria-hidden="true"></span>
+            <span class="dl-text"><span class="dl-name">Fedora</span><span class="dl-meta">.rpm · <span id="size-rpm-final">~ 7 MB</span></span></span>
           </a>
         </div>
+        <ul class="close-notes">
+          <li>Windows: the installer is not signed yet. If you see <span class="keep">“Windows protected your PC”</span>, click “More info” → “Run anyway”.</li>
+          <li>Linux: Ubuntu 22.04 or later, Debian 12 or later, or Fedora. On Wayland, only GNOME 46–51 is supported.</li>
+        </ul>
       </div>
-    </div>
-  </section>
+    </section>
+  </main>
 
   <!-- ============ Footer ============ -->
-  <footer class="footer">
-    <div class="container">
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <div class="footer-logo-row">
-            <img src="https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/src/assets/logo.png" alt="" class="footer-logo">
-            <h3>Hindsight</h3>
-          </div>
-          <p>See where every day actually goes.</p>
-          <p class="muted">© 2026 Hindsight contributors<br>GPL 3.0</p>
-        </div>
-        <div class="footer-col">
-          <h4>Product</h4>
-          <ul>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/releases/latest">Latest release</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/releases">All releases</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/tree/main/docs/release-notes">Changelog</a></li>
-          </ul>
-        </div>
-        <div class="footer-col">
-          <h4>Resources</h4>
-          <ul>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight">GitHub repo</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight#readme">README</a></li>
-            <li><a href="https://github.com/Tomotsugu-dev/Hindsight/issues">Report an issue</a></li>
-          </ul>
-        </div>
-        <div class="footer-col">
-          <h4>Language</h4>
-          <ul>
-            <li><a href="/?hl=zh">简体中文</a></li>
-            <li><a href="/tw/">繁體中文</a></li>
-            <li><a href="/en/">English</a></li>
-            <li><a href="/ja/">日本語</a></li>
-            <li><a href="/pt/">Português</a></li>
-          </ul>
-        </div>
+  <footer class="foot">
+    <div class="page foot-grid">
+      <div class="foot-brand">
+        <p class="foot-name">Hindsight</p>
+        <p>© 2026 Hindsight contributors · GPL 3.0</p>
       </div>
-      <div class="footer-bottom">
-        © 2026 Hindsight · GPL 3.0 · Built by <a href="https://github.com/Tomotsugu-dev">Hindsight team</a>
-      </div>
+      <ul>
+        <li><a href="https://github.com/Tomotsugu-dev/Hindsight/releases">All releases</a></li>
+        <li><a href="https://github.com/Tomotsugu-dev/Hindsight/tree/main/docs/release-notes">Changelog</a></li>
+        <li><a href="/docs/en/">Features</a></li>
+      </ul>
+      <ul>
+        <li><a href="https://github.com/Tomotsugu-dev/Hindsight">GitHub repository</a></li>
+        <li><a href="https://github.com/Tomotsugu-dev/Hindsight/issues">Report a problem</a></li>
+        <li><a href="/themes/">Theme market</a></li>
+      </ul>
     </div>
   </footer>
 
   <script>
-    // Hero platform detection: show the download for the current OS; Linux gets both .deb and .rpm.
-    // Unknown platforms fall back to Windows (largest user base).
+    // Hero 区平台检测：只显示当前 OS 对应的版本，Linux 同时显示 .deb 和 .rpm。
+    // 其它未知平台 fallback 到 Windows（用户基数最大）。
     (function () {
       const platform = navigator.platform.toLowerCase();
       const ua = navigator.userAgent.toLowerCase();
       const isMac = platform.includes('mac') || ua.includes('mac os');
-      // Android's user agent also contains "linux"
+      // Android 的 UA 里也有 linux
       const isLinux = (platform.includes('linux') || ua.includes('linux')) && !ua.includes('android');
       const show = (id) => {
         const btn = document.getElementById(id);
@@ -247,7 +293,7 @@
       }
     })();
 
-    // Fetch latest release: point platform buttons at the real installer + show actual file size.
+    // 拉最新 release，把各平台按钮指向具体安装包 + 显示真实大小
     (function () {
       fetch('https://api.github.com/repos/Tomotsugu-dev/Hindsight/releases/latest')
         .then(r => r.ok ? r.json() : Promise.reject())
@@ -269,7 +315,164 @@
           link('deb', /\.deb$/);
           link('rpm', /\.rpm$/);
         })
-        .catch(() => { /* silent fail — buttons fall back to releases/latest */ });
+        .catch(() => { /* 静默失败，按钮 fallback 到 releases/latest 页 */ });
+    })();
+
+    // 星数和下载次数。下载只算安装包：latest.json 每次检查更新都算一次下载，.sig 是签名
+    (function () {
+      const num = (n) => n.toLocaleString('en');
+      fetch('https://api.github.com/repos/Tomotsugu-dev/Hindsight')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(repo => { document.getElementById('gh-stars').textContent = `${num(repo.stargazers_count)} stars`; })
+        .catch(() => {});
+      fetch('https://api.github.com/repos/Tomotsugu-dev/Hindsight/releases?per_page=100')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(releases => {
+          const total = releases
+            .flatMap(r => r.assets)
+            .filter(a => /\.(exe|dmg|deb|rpm)$/.test(a.name))
+            .reduce((n, a) => n + a.download_count, 0);
+          const el = document.getElementById('gh-downloads');
+          el.textContent = `${num(total)} installer downloads`;
+          el.hidden = false;
+        })
+        .catch(() => {});
+    })();
+
+    // 功能卡片左右翻：一次翻一张，翻到头那一侧的按钮变灰
+    (function () {
+      const track = document.getElementById('feature-cards');
+      const prev = document.getElementById('feature-prev');
+      const next = document.getElementById('feature-next');
+      const step = () => {
+        const card = track.querySelector('li');
+        return card.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap);
+      };
+      const behavior = () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      const update = () => {
+        prev.disabled = track.scrollLeft <= 2;
+        next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
+      };
+      prev.addEventListener('click', () => track.scrollBy({ left: -step(), behavior: behavior() }));
+      next.addEventListener('click', () => track.scrollBy({ left: step(), behavior: behavior() }));
+      track.addEventListener('scroll', update, { passive: true });
+      addEventListener('resize', update);
+      update();
+    })();
+
+    // 应用窗口最窄 960px。演示框比这窄时（手机、窄窗口），按 960×720 排版再整体缩小，侧栏和工具栏不会挤在一起
+    (function () {
+      const frame = document.querySelector('.hero-demo .frame');
+      const demo = frame && frame.querySelector('iframe');
+      if (!demo || !('ResizeObserver' in window)) return;
+      new ResizeObserver(([entry]) => {
+        const scale = entry.contentRect.width / 960;
+        demo.style.cssText = scale < 1 ? `width:960px;height:720px;transform:scale(${scale})` : '';
+      }).observe(frame);
+    })();
+
+    // 功能卡片的视频：卡片露出一半以上才下载、播放，滑走就暂停，免得一打开首页就下载全部视频。
+    // 系统要求减少动态效果时只显示封面
+    (function () {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+      const seen = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) e.target.play().catch(() => {});
+          else e.target.pause();
+        });
+      }, { threshold: 0.5 });
+      document.querySelectorAll('.card-media video').forEach(v => seen.observe(v));
+    })();
+
+    // 功能卡片的 Dock 放大：按鼠标到每张卡片中心的距离算放大倍数，再按放大后的宽度重新排开，
+    // 整排平移到鼠标下面那一点不动，卡片不会互相重叠。只认鼠标；系统要求减少动态效果时不做
+    (function () {
+      if (!matchMedia('(hover: hover)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const track = document.getElementById('feature-cards');
+      const cards = [...track.children];
+      const MAX = 0.16;   // 鼠标正下方最多放大 16%
+      const REACH = 1.3;  // 影响范围：约 1.3 张卡片宽
+      let clientX = null;
+      let frame = 0;
+
+      // x 是鼠标在滑动内容里的横坐标，和 offsetLeft 同一套坐标
+      function layout(x) {
+        const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+        const base = cards.map(c => ({ left: c.offsetLeft, w: c.offsetWidth }));
+        const scales = base.map(b => {
+          const d = Math.abs(x - (b.left + b.w / 2)) / (b.w * REACH);
+          return 1 + MAX * Math.cos(Math.min(d, 1) * Math.PI / 2);
+        });
+
+        // 原来的边界和放大后的边界一一对应，用来找鼠标那一点放大后跑到了哪
+        const pts = [];
+        let nx = base[0].left;
+        base.forEach((b, i) => {
+          pts.push([b.left, nx]);
+          nx += b.w * scales[i];
+          pts.push([b.left + b.w, nx]);
+          nx += gap;
+        });
+        let mapped = x;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [x0, n0] = pts[i];
+          const [x1, n1] = pts[i + 1];
+          if (x >= x0 && x <= x1) {
+            mapped = n0 + (x - x0) / (x1 - x0) * (n1 - n0);
+            break;
+          }
+        }
+        const shift = x - mapped;
+
+        cards.forEach((c, i) => {
+          const center = pts[2 * i][1] + base[i].w * scales[i] / 2 + shift;
+          const dx = center - (base[i].left + base[i].w / 2);
+          c.style.transform = `translateX(${dx}px) scale(${scales[i]})`;
+          c.style.zIndex = String(Math.round(scales[i] * 100));
+          c.classList.toggle('near', scales[i] > 1 + MAX / 2);
+        });
+      }
+
+      function reset() {
+        cards.forEach(c => {
+          c.style.transform = '';
+          c.style.zIndex = '';
+          c.classList.remove('near');
+        });
+      }
+
+      function schedule() {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          if (clientX === null) return reset();
+          layout(clientX - track.getBoundingClientRect().left + track.scrollLeft);
+        });
+      }
+
+      track.addEventListener('pointermove', e => {
+        if (e.pointerType !== 'mouse') return;
+        clientX = e.clientX;
+        schedule();
+      });
+      track.addEventListener('pointerleave', () => {
+        clientX = null;
+        schedule();
+      });
+      // 鼠标没动、内容滑走了，它下面换了卡片
+      track.addEventListener('scroll', () => {
+        if (clientX !== null) schedule();
+      }, { passive: true });
+      // 用 Tab 走到卡片里的链接时，把那张当成鼠标所在
+      track.addEventListener('focusin', e => {
+        const card = e.target.closest('.card');
+        if (!card) return;
+        clientX = track.getBoundingClientRect().left - track.scrollLeft + card.offsetLeft + card.offsetWidth / 2;
+        schedule();
+      });
+      track.addEventListener('focusout', () => {
+        clientX = null;
+        schedule();
+      });
     })();
   </script>
 
