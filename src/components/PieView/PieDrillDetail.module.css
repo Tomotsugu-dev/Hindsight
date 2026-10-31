@@ -36,6 +36,14 @@
   background: rgba(255, 255, 255, 0.85);
 }
 
+:global([data-mode="dark"]) .backBtn {
+  background: var(--surface-2);
+}
+
+:global([data-mode="dark"]) .backBtn:hover {
+  background: var(--hover-bg);
+}
+
 .sep {
   width: 1px;
   height: 16px;
