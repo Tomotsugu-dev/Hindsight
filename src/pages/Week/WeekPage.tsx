@@ -35,8 +35,10 @@ import {
 import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
 import {
+  getBarLevel,
   getPieDepth,
   getStatsView,
+  setBarLevel,
   setPieDepth,
   setStatsView,
   subscribeStatsView,
@@ -78,6 +80,8 @@ export default function WeekPage() {
   const [catId, setCatId] = useState<string | null>(null);
   /** 占比视图显示哪一层（跟 TodayPage 同款） */
   const pieDepth = useSyncExternalStore(subscribeStatsView, () => getPieDepth("week"));
+  /** Whether the bar chart is colored by category or by super category (same as TodayPage). */
+  const barLevel = useSyncExternalStore(subscribeStatsView, () => getBarLevel("week"));
   const changePieDepth = (d: PieDepth) => {
     setPieDepth("week", d);
     if (d === "supers") setCatId(null);
@@ -186,7 +190,9 @@ export default function WeekPage() {
     () => (selectedIndex === null ? apps : (dayApps.apps ?? apps)),
     [selectedIndex, apps, dayApps.apps],
   );
-  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks);
+  // The switch is only in the bar chart's legend, so the share view keeps ranking by category.
+  const rankLevel = view === "bars" ? barLevel : "cats";
+  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks, rankLevel);
 
   // —— 占比视图三 slide 的 super-category 聚合 ——
   const prevDaysData = useMemo(() => getWeek(offset - 1).days, [getWeek, offset]);
@@ -253,7 +259,9 @@ export default function WeekPage() {
     : t("week.ranks.topApps");
   const categoriesTitle = drilledSlice
     ? t("today.pie.drill.categoriesTitle")
-    : t("week.ranks.topCategories");
+    : rankLevel === "supers"
+      ? t("week.ranks.topSupers")
+      : t("week.ranks.topCategories");
 
   // 顶部洞察行：当期 vs 上周 · 峰值日 · 主力大类
   // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
@@ -366,18 +374,23 @@ export default function WeekPage() {
             <DevicePicker />
           </>
         }
-        footer={view === "bars" ? <PeriodLegend /> : null}
+        footer={
+          view === "bars" ? (
+            <PeriodLegend level={barLevel} onLevelChange={(l) => setBarLevel("week", l)} />
+          ) : null
+        }
         slides={
           view === "bars"
             ? [
-                <WeeklyBarChart key="prev" days={getWeek(offset - 1).days} />,
+                <WeeklyBarChart key="prev" days={getWeek(offset - 1).days} level={barLevel} />,
                 <WeeklyBarChart
                   key="current"
                   days={days}
                   selectedIndex={selectedIndex}
                   onIndexClick={handleDayClick}
+                  level={barLevel}
                 />,
-                <WeeklyBarChart key="next" days={getWeek(offset + 1).days} />,
+                <WeeklyBarChart key="next" days={getWeek(offset + 1).days} level={barLevel} />,
               ]
             : [
                 <PieView

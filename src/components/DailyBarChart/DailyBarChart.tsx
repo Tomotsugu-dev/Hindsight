@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { useCategories } from "../../state/categories";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
+import { useBarParts } from "../../hooks/useBarParts";
+import type { BarLevel } from "../../state/statsView";
 import { formatAxisTick, useDurationFormatter } from "../../utils/duration";
 import type { DaySummary } from "../../api/hindsight";
 import { barMinutes, barSecs } from "../../lib/segments";
@@ -16,6 +15,8 @@ interface DailyBarChartProps {
   selectedIndex?: number | null;
   /** 点击触发；不传 → 柱子非交互（PeriodCard prev/next 静态副本用）。 */
   onIndexClick?: (index: number) => void;
+  /** Colors the bars by category or by super category. */
+  level?: BarLevel;
 }
 
 /** 把 max 向上对齐到合理的整时刻度 */
@@ -33,10 +34,10 @@ export function DailyBarChart({
   xLabel,
   selectedIndex = null,
   onIndexClick,
+  level = "cats",
 }: DailyBarChartProps) {
   const { t } = useTranslation();
-  const { getCategory } = useCategories();
-  const isDark = useIsDark();
+  const toParts = useBarParts(level);
   const fmtHM = useDurationFormatter();
   const totals = days.map((d) => barMinutes(d.segments));
   const maxTotal = Math.max(0, ...totals);
@@ -109,25 +110,17 @@ export function DailyBarChart({
                     data-selected={selected || undefined}
                     data-dimmed={dimmed || undefined}
                   >
-                    {day.segments.map((seg) => {
-                      if (total === 0) return null;
-                      // categoryId 解析不到（分类刚被删、缓存未刷新）时不能跳过：
-                      // 柱高按全部 segments 求和，跳过会在柱顶留透明缺口。用中性灰兜底。
-                      const cat = getCategory(seg.categoryId);
-                      const color = cat
-                        ? adjustCategoryColor(cat.color, isDark)
-                        : "var(--cat-fallback, #9ca3af)";
-                      return (
+                    {total > 0 &&
+                      toParts(day.segments).map((part) => (
                         <div
-                          key={seg.categoryId}
+                          key={part.id}
                           className={styles.segment}
                           style={{
-                            height: `${(seg.secs / totalSecs) * 100}%`,
-                            background: color,
+                            height: `${(part.secs / totalSecs) * 100}%`,
+                            background: part.color,
                           }}
                         />
-                      );
-                    })}
+                      ))}
                   </div>
                 </button>
               );

@@ -14,6 +14,8 @@ import { logWarn } from "../lib/logger";
 export type StatsView = "bars" | "pie";
 /** 占比视图的哪一层：只有大类的环，或者往下滚出来的小类同心环 */
 export type PieDepth = "supers" | "cats";
+/** Which level the bar charts color by. Same values as {@link PieDepth}, but stored apart from it. */
+export type BarLevel = PieDepth;
 /** 三个统计页各自的偏好槽；决定 localStorage 键与快照读写的粒度。 */
 export type StatsViewScope = "today" | "week" | "month";
 
@@ -21,6 +23,8 @@ const KEY_PREFIX = "hindsight.stats.view.";
 const DEPTH_KEY_PREFIX = "hindsight.stats.pieDepth.";
 const DEFAULT_VIEW: StatsView = "bars";
 const DEFAULT_DEPTH: PieDepth = "supers";
+const BAR_LEVEL_KEY_PREFIX = "hindsight.stats.barLevel.";
+const DEFAULT_BAR_LEVEL: BarLevel = "cats";
 
 function isStatsView(v: unknown): v is StatsView {
   return v === "bars" || v === "pie";
@@ -62,6 +66,11 @@ const depths: Record<StatsViewScope, PieDepth> = {
   week: readStored(DEPTH_KEY_PREFIX + "week", isPieDepth, DEFAULT_DEPTH),
   month: readStored(DEPTH_KEY_PREFIX + "month", isPieDepth, DEFAULT_DEPTH),
 };
+const barLevels: Record<StatsViewScope, BarLevel> = {
+  today: readStored(BAR_LEVEL_KEY_PREFIX + "today", isPieDepth, DEFAULT_BAR_LEVEL),
+  week: readStored(BAR_LEVEL_KEY_PREFIX + "week", isPieDepth, DEFAULT_BAR_LEVEL),
+  month: readStored(BAR_LEVEL_KEY_PREFIX + "month", isPieDepth, DEFAULT_BAR_LEVEL),
+};
 // 单一 listener 集合：某页写入会通知全部订阅者，但各页 getSnapshot 只读自己的
 // scope，值没变的页 useSyncExternalStore 会自动 bail out 不重渲染。
 const listeners = new Set<() => void>();
@@ -92,5 +101,16 @@ export function setPieDepth(scope: StatsViewScope, next: PieDepth): void {
   if (depths[scope] === next) return;
   depths[scope] = next;
   writeStored(DEPTH_KEY_PREFIX + scope, next);
+  listeners.forEach((cb) => cb());
+}
+
+export function getBarLevel(scope: StatsViewScope): BarLevel {
+  return barLevels[scope];
+}
+
+export function setBarLevel(scope: StatsViewScope, next: BarLevel): void {
+  if (barLevels[scope] === next) return;
+  barLevels[scope] = next;
+  writeStored(BAR_LEVEL_KEY_PREFIX + scope, next);
   listeners.forEach((cb) => cb());
 }

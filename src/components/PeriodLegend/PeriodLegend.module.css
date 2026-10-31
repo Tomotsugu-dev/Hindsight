@@ -25,6 +25,38 @@
     0 1px 1px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
 }
 
+.level {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.levelBtn {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: var(--font-weight-500);
+  cursor: pointer;
+  transition:
+    background-color 180ms var(--ease-out),
+    color 180ms var(--ease-out);
+}
+
+.levelBtn:hover {
+  color: var(--text-strong);
+}
+
+.levelBtn[data-active] {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
 /* 工作时段图例条 — 与图表里的 workBand 视觉一致 */
 .legendBand {
   width: 22px;

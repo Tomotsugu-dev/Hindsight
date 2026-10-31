@@ -501,6 +501,11 @@
     "insightTiles": {
       "appShare": "佔所屬分類"
     },
+    "periodLegend": {
+      "levelAria": "長條按大類還是小類分色",
+      "supers": "大類",
+      "cats": "小類"
+    },
     "segmentList": {
       "empty": "還沒有段，點下面 “新增段” 開始",
       "newSegmentLabel": "新段",
@@ -596,7 +601,8 @@
     },
     "ranks": {
       "topApps": "最常用應用程式",
-      "topCategories": "最常用分類"
+      "topCategories": "最常用分類",
+      "topSupers": "最常用大類"
     },
     "selection": {
       "label": "{{hour}}:00–{{hour}}:59"
@@ -633,7 +639,8 @@
     },
     "ranks": {
       "topApps": "本週最常用應用程式",
-      "topCategories": "本週最常用分類"
+      "topCategories": "本週最常用分類",
+      "topSupers": "本週最常用大類"
     },
     "selection": {
       "label": "{{month}}月{{day}}日"
@@ -679,7 +686,8 @@
     },
     "ranks": {
       "topApps": "本月最常用應用程式",
-      "topCategories": "本月最常用分類"
+      "topCategories": "本月最常用分類",
+      "topSupers": "本月最常用大類"
     },
     "selection": {
       "label": "{{month}}月{{day}}日 {{weekday}}"

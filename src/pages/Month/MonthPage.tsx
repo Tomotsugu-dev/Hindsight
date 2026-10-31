@@ -35,8 +35,10 @@ import {
 import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
 import {
+  getBarLevel,
   getPieDepth,
   getStatsView,
+  setBarLevel,
   setPieDepth,
   setStatsView,
   subscribeStatsView,
@@ -74,6 +76,8 @@ export default function MonthPage() {
   const [catId, setCatId] = useState<string | null>(null);
   /** 占比视图显示哪一层（跟 TodayPage 同款） */
   const pieDepth = useSyncExternalStore(subscribeStatsView, () => getPieDepth("month"));
+  /** Whether the bar chart is colored by category or by super category (same as TodayPage). */
+  const barLevel = useSyncExternalStore(subscribeStatsView, () => getBarLevel("month"));
   const changePieDepth = (d: PieDepth) => {
     setPieDepth("month", d);
     if (d === "supers") setCatId(null);
@@ -178,7 +182,9 @@ export default function MonthPage() {
     () => (selectedIndex === null ? apps : (dayApps.apps ?? apps)),
     [selectedIndex, apps, dayApps.apps],
   );
-  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks);
+  // The switch is only in the bar chart's legend, so the share view keeps ranking by category.
+  const rankLevel = view === "bars" ? barLevel : "cats";
+  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks, rankLevel);
 
   const selectionLabel =
     selectedDay !== null
@@ -265,7 +271,9 @@ export default function MonthPage() {
     : t("month.ranks.topApps");
   const categoriesTitle = drilledSlice
     ? t("today.pie.drill.categoriesTitle")
-    : t("month.ranks.topCategories");
+    : rankLevel === "supers"
+      ? t("month.ranks.topSupers")
+      : t("month.ranks.topCategories");
 
   // 顶部洞察行：当期 vs 上月 · 峰值日 · 主力大类
   // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
@@ -386,7 +394,11 @@ export default function MonthPage() {
             <DevicePicker />
           </>
         }
-        footer={view === "bars" ? <PeriodLegend /> : null}
+        footer={
+          view === "bars" ? (
+            <PeriodLegend level={barLevel} onLevelChange={(l) => setBarLevel("month", l)} />
+          ) : null
+        }
         slides={
           view === "bars"
             ? [
@@ -394,6 +406,7 @@ export default function MonthPage() {
                   key="prev"
                   days={slideDaysList[0]}
                   xLabel={buildXLabel(slideDaysList[0])}
+                  level={barLevel}
                 />,
                 <DailyBarChart
                   key="current"
@@ -401,11 +414,13 @@ export default function MonthPage() {
                   xLabel={buildXLabel(slideDaysList[1])}
                   selectedIndex={selectedIndex}
                   onIndexClick={handleDayClick}
+                  level={barLevel}
                 />,
                 <DailyBarChart
                   key="next"
                   days={slideDaysList[2]}
                   xLabel={buildXLabel(slideDaysList[2])}
+                  level={barLevel}
                 />,
               ]
             : [

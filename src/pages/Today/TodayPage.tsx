@@ -17,8 +17,10 @@ import {
 import { ViewToggle } from "../../components/ViewToggle/ViewToggle";
 import { PieView } from "../../components/PieView/PieView";
 import {
+  getBarLevel,
   getPieDepth,
   getStatsView,
+  setBarLevel,
   setPieDepth,
   setStatsView,
   subscribeStatsView,
@@ -77,6 +79,8 @@ export default function TodayPage() {
   /** 占比视图显示哪一层，跟 view 一样存在页面外面，切页回来还在。
    *  回到只有大类的那一层时选中的小类看不见了，一起清掉 */
   const pieDepth = useSyncExternalStore(subscribeStatsView, () => getPieDepth("today"));
+  /** Whether the bar chart is colored by category or by super category; kept like `view`. */
+  const barLevel = useSyncExternalStore(subscribeStatsView, () => getBarLevel("today"));
   const changePieDepth = (d: PieDepth) => {
     setPieDepth("today", d);
     if (d === "supers") setCatId(null);
@@ -171,9 +175,12 @@ export default function TodayPage() {
     () => (selectedHour === null ? apps : (hourApps.apps ?? apps)),
     [selectedHour, apps, hourApps.apps],
   );
+  // The switch is only in the bar chart's legend, so the share view keeps ranking by category.
+  const rankLevel = view === "bars" ? barLevel : "cats";
   const { categoryRanks, appRanks } = usePeriodRankings(
     segmentsForRanks,
     appsForRanks,
+    rankLevel,
   );
 
   // —— 占比视图三 slide 的 super-category 聚合 —— //
@@ -233,7 +240,9 @@ export default function TodayPage() {
     : t("today.ranks.topApps");
   const categoriesTitle = drilledSlice
     ? t("today.pie.drill.categoriesTitle")
-    : t("today.ranks.topCategories");
+    : rankLevel === "supers"
+      ? t("today.ranks.topSupers")
+      : t("today.ranks.topCategories");
 
   // 顶部洞察行：当期 vs 上期 · 峰值小时 · 主力大类
   // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
@@ -328,6 +337,8 @@ export default function TodayPage() {
           view === "bars" ? (
             <PeriodLegend
               workHoursLabel={workRanges ? t("today.legend.workHours") : undefined}
+              level={barLevel}
+              onLevelChange={(l) => setBarLevel("today", l)}
             />
           ) : null
         }
@@ -335,15 +346,26 @@ export default function TodayPage() {
           view === "bars"
             ? [
                 // prev/next 是 PeriodCard 的滑动副本，不参与点击；只 current 接 onHourClick
-                <HourlyChart key="prev" hours={getDay(offset - 1).hours} workHours={workRanges} />,
+                <HourlyChart
+                  key="prev"
+                  hours={getDay(offset - 1).hours}
+                  workHours={workRanges}
+                  level={barLevel}
+                />,
                 <HourlyChart
                   key="current"
                   hours={hours}
                   workHours={workRanges}
                   selectedHour={selectedHour}
                   onHourClick={handleHourClick}
+                  level={barLevel}
                 />,
-                <HourlyChart key="next" hours={getDay(offset + 1).hours} workHours={workRanges} />,
+                <HourlyChart
+                  key="next"
+                  hours={getDay(offset + 1).hours}
+                  workHours={workRanges}
+                  level={barLevel}
+                />,
               ]
             : [
                 // 占比视图三 slide：prev/next 渲染但 interactive=false，不挂 view-transition-name

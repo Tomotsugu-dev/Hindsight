@@ -501,6 +501,11 @@
     "insightTiles": {
       "appShare": "分類内の割合"
     },
+    "periodLegend": {
+      "levelAria": "棒グラフを大分類と分類のどちらで色分けするか",
+      "supers": "大分類",
+      "cats": "分類"
+    },
     "segmentList": {
       "empty": "セグメントがまだありません。下の「セグメントを追加」をクリックして始めてください",
       "newSegmentLabel": "新しいセグメント",
@@ -596,7 +601,8 @@
     },
     "ranks": {
       "topApps": "よく使うアプリ",
-      "topCategories": "よく使う分類"
+      "topCategories": "よく使う分類",
+      "topSupers": "よく使う大分類"
     },
     "selection": {
       "label": "{{hour}}:00–{{hour}}:59"
@@ -636,7 +642,8 @@
     },
     "ranks": {
       "topApps": "今週よく使ったアプリ",
-      "topCategories": "今週よく使った分類"
+      "topCategories": "今週よく使った分類",
+      "topSupers": "今週よく使った大分類"
     },
     "dow": {
       "mon": "月",
@@ -679,7 +686,8 @@
     },
     "ranks": {
       "topApps": "今月よく使ったアプリ",
-      "topCategories": "今月よく使った分類"
+      "topCategories": "今月よく使った分類",
+      "topSupers": "今月よく使った大分類"
     },
     "selection": {
       "label": "{{month}}月{{day}}日（{{weekday}}）"
