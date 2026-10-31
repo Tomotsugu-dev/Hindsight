@@ -255,12 +255,6 @@ impl Island {
         ns_window.setHasShadow(false);
         // Above the menu bar
         ns_window.setLevel(NSStatusWindowLevel + 1);
-        ns_window.setCollectionBehavior(
-            NSWindowCollectionBehavior::CanJoinAllSpaces
-                | NSWindowCollectionBehavior::Stationary
-                | NSWindowCollectionBehavior::FullScreenAuxiliary
-                | NSWindowCollectionBehavior::IgnoresCycle,
-        );
 
         let view = ns_window.contentView().ok_or("the window has no view")?;
         view.setWantsLayer(true);
@@ -346,10 +340,13 @@ impl Island {
         self.emit(LAYOUT_EVENT, self.layout());
     }
 
-    /// Puts the window and the mask on the main screen as it is now.
+    /// Puts the window and the mask on the main screen as it is now, and sets whether the island
+    /// shows over full-screen apps on this screen.
     fn place(&mut self) {
         let window = geometry::window(&self.screen);
         self.ns_window.setFrame_display(ns_rect(window), true);
+        self.ns_window
+            .setCollectionBehavior(collection_behavior(self.screen.notch.is_some()));
         CATransaction::begin();
         CATransaction::setDisableActions(true);
         self.mask.setFrame(local(window, window));
@@ -509,6 +506,24 @@ fn main_screen(mtm: MainThreadMarker) -> Option<Screen> {
     })
 }
 
+/// Returns how the island's window shows across desktops: on every desktop, still while the
+/// desktops switch, and skipped when the user switches windows.
+///
+/// The island shows over full-screen apps only on a screen with a notch. There, a full-screen app
+/// draws below the notch by default and leaves a black band at the top, where the closed island
+/// sits. Without a notch, full-screen content reaches the top of the screen, and the island would
+/// cover it.
+fn collection_behavior(notch: bool) -> NSWindowCollectionBehavior {
+    let always = NSWindowCollectionBehavior::CanJoinAllSpaces
+        | NSWindowCollectionBehavior::Stationary
+        | NSWindowCollectionBehavior::IgnoresCycle;
+    if notch {
+        always | NSWindowCollectionBehavior::FullScreenAuxiliary
+    } else {
+        always
+    }
+}
+
 /// Adds a tracking area that tells `observer` when the mouse goes into `rect` and out of it.
 fn tracking_area(view: &NSView, observer: &Observer, rect: NSRect) -> Retained<NSTrackingArea> {
     let owner: &AnyObject = observer;
@@ -564,6 +579,21 @@ fn rect(rect: NSRect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 有刘海时，全屏 app 的内容在刘海下面，岛落在顶上的黑边里；没有刘海时，岛会盖住全屏的内容
+    #[test]
+    fn the_island_shows_over_full_screen_apps_only_beside_a_notch() {
+        let full_screen = NSWindowCollectionBehavior::FullScreenAuxiliary;
+        assert!(collection_behavior(true).contains(full_screen));
+        assert!(!collection_behavior(false).contains(full_screen));
+        // 其余和原来一样：每个桌面都有，切桌面时不跟着动，Cmd+` 切窗口时跳过它
+        let always = NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::Stationary
+            | NSWindowCollectionBehavior::IgnoresCycle;
+        for notch in [true, false] {
+            assert!(collection_behavior(notch).contains(always));
+        }
+    }
 
     #[test]
     fn the_view_and_the_page_count_from_different_corners() {
