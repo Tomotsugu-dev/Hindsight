@@ -80,4 +80,22 @@ describe("statsView", () => {
     expect(store.get("hindsight.stats.pieDepth.today")).toBe("cats");
     expect(m.getStatsView("today")).toBe("bars"); // 跟视图各存各的
   });
+
+  it("柱状图按什么上色：默认小类（和原来一样）；存过的各页独立恢复，非法值回退", async () => {
+    store.set("hindsight.stats.barLevel.week", "supers");
+    store.set("hindsight.stats.barLevel.month", "apps"); // 非法值 → 回退
+    const m = await freshImport();
+    expect(m.getBarLevel("today")).toBe("cats");
+    expect(m.getBarLevel("week")).toBe("supers");
+    expect(m.getBarLevel("month")).toBe("cats");
+  });
+
+  it("setBarLevel 只改本页，不动占比视图停在哪一层", async () => {
+    const m = await freshImport();
+    m.setPieDepth("today", "cats");
+    m.setBarLevel("today", "supers");
+    expect(store.get("hindsight.stats.barLevel.today")).toBe("supers");
+    expect(m.getBarLevel("week")).toBe("cats");
+    expect(m.getPieDepth("today")).toBe("cats");
+  });
 });
