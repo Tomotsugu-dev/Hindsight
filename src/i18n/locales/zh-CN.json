@@ -1874,7 +1874,7 @@
       "super_categories_read": "读取全部大类的名字的权限",
       "notifications": "发送系统通知的权限",
       "notifications_sound": "允许通知时播放系统提示音的权限",
-      "island": "在菜单栏正中间的岛上显示内容的权限",
+      "island": "在岛上显示内容的权限（macOS 上在菜单栏正中间，Windows 上是一个悬浮的胶囊）",
       "focus_changed": "读取切换应用、离开电脑事件的权限",
       "focus_app": "读取切换应用事件，及其切换应用名的权限",
       "focus_category": "读取切换到的应用属于哪个分类的权限",

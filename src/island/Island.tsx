@@ -152,9 +152,11 @@ export function Island() {
     document.body.style.background = "transparent";
   }, [shaped]);
 
-  // Windows：鼠标移入移出由页面告诉 Rust。停一会儿才展开
+  // Windows：鼠标移入移出由页面告诉 Rust。停一会儿才展开。内容撤下时窗口在光标底下藏起来，收不到
+  // 移出，所以内容回来时从头算；窗口再显示时不一定有 mouseover，所以光标在上面移动也算移入
+  const showing = content !== null;
   useEffect(() => {
-    if (!shaped) return;
+    if (!shaped || !showing) return;
     let inside = false;
     let timer: number | undefined;
     const enter = () => {
@@ -170,13 +172,15 @@ export function Island() {
       void invoke("island_hover", { inside: false });
     };
     document.addEventListener("mouseover", enter);
+    document.addEventListener("mousemove", enter);
     document.addEventListener("mouseout", leave);
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("mouseover", enter);
+      document.removeEventListener("mousemove", enter);
       document.removeEventListener("mouseout", leave);
     };
-  }, [shaped]);
+  }, [shaped, showing]);
 
   // Measures the closed sides and the open panel of a new content, and draws it where Rust puts
   // them
