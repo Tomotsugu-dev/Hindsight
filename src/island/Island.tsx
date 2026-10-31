@@ -1,6 +1,8 @@
 // The island page. Rust sends the content and says when the island opens. For each new content,
 // the page measures the closed sides and the open panel, Rust answers where they go, and the page
-// says when it is in place: only then does Rust show the window. See src-tauri/src/island/macos.rs.
+// says when it is in place: only then does Rust show the window. See src-tauri/src/island/macos/.
+// On Windows (src-tauri/src/island/windows/) the window is clear: the page draws the capsule and
+// the open island itself, tells Rust when the mouse comes in and leaves, and when to drag.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -12,6 +14,12 @@ import styles from "./Island.module.css";
 const CAPSULE_PADDING = 10;
 /** 右上角的字两边留的空，和 CSS 里 .topRight 的一样 */
 const TOP_RIGHT_PADDING = 12;
+/** 展开的岛的圆角，和 Rust 的 OPEN_RADIUS 一样。Windows 上页面自己画形状时用 */
+const OPEN_RADIUS = 16;
+/** 鼠标停多久才展开（Windows）：想拖动时一碰不会弹开 */
+const HOVER_DELAY = 150;
+/** 按下以后光标在屏幕上移动超过这么多才算拖动，不算点击。和 Rust 那边一样 */
+const DRAG_SLOP = 4;
 
 /** A content with where Rust put its sides */
 type Placed = { content: Content; layout: Layout };
@@ -38,6 +46,11 @@ function useNow(): number {
 }
 
 type SlotProps = { rect: PageRect; className?: string; children: ReactNode };
+
+/** 页面自己画的形状（Windows）：放在 `rect`，圆角 `radius` */
+function shapeStyle({ x, y, width, height }: PageRect, radius: number) {
+  return { left: x, top: y, width, height, borderRadius: radius };
+}
 
 function Slot({ rect, className, children }: SlotProps) {
   const { x, y, width, height } = rect;
@@ -79,6 +92,8 @@ export function Island() {
   // places of the one before
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [open, setOpen] = useState(false);
+  // Windows：页面自己画形状
+  const shaped = Boolean(placed?.layout.drawn);
   const now = useNow();
   const left = useRef<HTMLSpanElement>(null);
   const right = useRef<HTMLSpanElement>(null);
@@ -109,12 +124,59 @@ export function Island() {
   }, []);
 
   // The whole window is the island: a click anywhere but on a button opens the plugin's page.
-  // Buttons stop their clicks before they get here
+  // Buttons stop their clicks before they get here. On Windows, pressing anywhere but on a button
+  // drags the island, and letting go after a drag is not a click
   useEffect(() => {
-    const onClick = () => void invoke("island_clicked", { button: null });
+    let pressed: { x: number; y: number } | null = null;
+    const onDown = (e: PointerEvent) => {
+      pressed = { x: e.screenX, y: e.screenY };
+      const onButton = e.target instanceof Element && e.target.closest("button");
+      if (shaped && e.button === 0 && !onButton) void invoke("island_drag");
+    };
+    const onClick = (e: MouseEvent) => {
+      if (pressed && Math.hypot(e.screenX - pressed.x, e.screenY - pressed.y) > DRAG_SLOP) return;
+      void invoke("island_clicked", { button: null });
+    };
+    window.addEventListener("pointerdown", onDown);
     window.addEventListener("click", onClick);
-    return () => window.removeEventListener("click", onClick);
-  }, []);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("click", onClick);
+    };
+  }, [shaped]);
+
+  // Windows：窗口是透明的，页面只画胶囊和岛。macOS 整页是黑的，形状由遮罩裁出来
+  useEffect(() => {
+    if (!shaped) return;
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+  }, [shaped]);
+
+  // Windows：鼠标移入移出由页面告诉 Rust。停一会儿才展开
+  useEffect(() => {
+    if (!shaped) return;
+    let inside = false;
+    let timer: number | undefined;
+    const enter = () => {
+      if (inside) return;
+      inside = true;
+      timer = window.setTimeout(() => void invoke("island_hover", { inside: true }), HOVER_DELAY);
+    };
+    // relatedTarget 为空：鼠标离开了窗口露出来的那部分
+    const leave = (e: MouseEvent) => {
+      if (e.relatedTarget || !inside) return;
+      inside = false;
+      window.clearTimeout(timer);
+      void invoke("island_hover", { inside: false });
+    };
+    document.addEventListener("mouseover", enter);
+    document.addEventListener("mouseout", leave);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mouseover", enter);
+      document.removeEventListener("mouseout", leave);
+    };
+  }, [shaped]);
 
   // Measures the closed sides and the open panel of a new content, and draws it where Rust puts
   // them
@@ -155,6 +217,9 @@ export function Island() {
 
   const drawn = content ? placed : null;
   const topRight = drawn?.content.open?.topRight;
+  // Windows：页面自己画的形状。展开时左边的内容贴着展开的岛的左边
+  const shape = drawn?.layout.drawn;
+  const leftRect = open && shape?.openLeft ? shape.openLeft : drawn?.layout.left;
 
   return (
     <div className={open ? `${styles.island} ${styles.open}` : styles.island}>
@@ -174,8 +239,18 @@ export function Island() {
           {content?.open ? <Panel open={content.open} now={now} /> : null}
         </div>
       </div>
-      {drawn?.layout.left && drawn.content.closed.left ? (
-        <Slot rect={drawn.layout.left}>
+      {drawn && shape ? (
+        <div
+          className={styles.shape}
+          style={
+            open
+              ? shapeStyle(drawn.layout.open, OPEN_RADIUS)
+              : shapeStyle(shape.capsule, shape.capsule.height / 2)
+          }
+        />
+      ) : null}
+      {leftRect && drawn?.content.closed.left ? (
+        <Slot rect={leftRect} className={shape ? styles.follows : undefined}>
           <Side component={drawn.content.closed.left} now={now} />
         </Slot>
       ) : null}
@@ -192,11 +267,14 @@ export function Island() {
       ) : null}
       {drawn?.content.open ? (
         <div
-          className={styles.panel}
+          className={shape?.up ? `${styles.panel} ${styles.up}` : styles.panel}
           style={{
             left: drawn.layout.open.x,
             width: drawn.layout.open.width,
-            top: drawn.layout.topRight.height,
+            // 面板在最上面那一条下面；往上展开时在岛的最上面
+            top: shape?.up
+              ? drawn.layout.open.y
+              : drawn.layout.topRight.y + drawn.layout.topRight.height,
           }}
         >
           <Panel open={drawn.content.open} now={now} />

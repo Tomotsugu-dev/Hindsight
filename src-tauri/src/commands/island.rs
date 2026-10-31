@@ -1,6 +1,6 @@
 //! 岛的页面调用的命令。
 //!
-//! 前三个是同步命令：Tauri 在主线程上执行同步命令，岛只能在主线程上读写。
+//! 除了 `island_clicked` 都是同步命令：Tauri 在主线程上执行同步命令，岛只能在主线程上读写。
 
 use tauri::{AppHandle, State};
 
@@ -29,6 +29,18 @@ pub fn island_measured(
 #[tauri::command]
 pub fn island_ready() {
     island::ready();
+}
+
+/// 见 [`island::hover`]。
+#[tauri::command]
+pub fn island_hover(inside: bool) {
+    island::hover(inside);
+}
+
+/// 见 [`island::drag`]。
+#[tauri::command]
+pub fn island_drag() {
+    island::drag();
 }
 
 /// 见 [`plugins::island::clicked`]。

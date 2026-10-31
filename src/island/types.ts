@@ -30,12 +30,23 @@ export type Content = {
 /** In the page: from the top-left corner of the window, y growing downward */
 export type PageRect = { x: number; y: number; width: number; height: number };
 
+/** 页面自己画形状时（Windows）要的位置 */
+export type Drawn = {
+  /** 收起的胶囊 */
+  capsule: PageRect;
+  /** 展开时左边的内容放在哪：贴着展开的岛的左边 */
+  openLeft: PageRect | null;
+  /** 往上展开：面板在胶囊那一条上面 */
+  up: boolean;
+};
+
 /** Where the content of each closed side goes. `topRight`：展开时右上角的字放在哪；`open`：展开
- * 的岛在哪 */
+ * 的岛在哪；`drawn`：页面自己画形状时（Windows）要的位置，`null` 时形状由系统的遮罩画（macOS） */
 export type Layout = {
   notch: boolean;
   left: PageRect | null;
   right: PageRect | null;
   topRight: PageRect;
   open: PageRect;
+  drawn: Drawn | null;
 };

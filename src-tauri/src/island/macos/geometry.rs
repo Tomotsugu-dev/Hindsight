@@ -4,14 +4,10 @@
 //! All coordinates are places on the screen: in logical pixels, from the bottom-left corner of the
 //! main screen, with y growing upward.
 
-use super::PanelSize;
+use crate::island::{PanelSize, MAX_OPEN_WIDTH, MAX_PANEL_HEIGHT, OPEN_RADIUS};
 
 /// The most the closed island reaches past the notch on each side
 const EAR: f64 = 90.0;
-/// 展开的岛最宽多少。内容按上限放满时要这么宽：刘海屏上右上角 20 宽的字放在刘海右边
-const MAX_OPEN_WIDTH: f64 = 520.0;
-/// 展开时下面的面板最高多少：内容按上限放满也放得下
-const MAX_PANEL_HEIGHT: f64 = 200.0;
 /// With no notch: the gap from the island to the top of the screen, and from the capsules to the
 /// bottom of the menu bar
 const MENU_BAR_GAP: f64 = 3.0;
@@ -21,8 +17,6 @@ const CAPSULE_GAP: f64 = 6.0;
 const DEFAULT_MENU_BAR_HEIGHT: f64 = 30.0;
 /// The radius of the two bottom corners around the notch
 pub const NOTCH_RADIUS: f64 = 10.0;
-/// The corner radius of the open island
-pub const OPEN_RADIUS: f64 = 16.0;
 
 /// `x` and `y` are the bottom-left corner.
 #[derive(Debug, Clone, Copy, PartialEq)]
