@@ -12,6 +12,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.{test,spec}.{ts,tsx}", "web/**/*.test.{js,ts}"],
     // vitest 默认把 CSS 读成空串。主题页用 ?raw 读 tokens.css 取颜色，测试要拿到真的内容
-    css: { include: [/tokens\.css/] },
+    // InsightTiles 的测试读自己的样式，查深色模式下的底色
+    css: { include: [/tokens\.css/, /InsightTiles\.module\.css/] },
   },
 });

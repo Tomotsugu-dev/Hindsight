@@ -75,7 +75,7 @@
 /* drill 状态：每 tile 左 3px accent 条 + 4% accent tint bg */
 .tiles[data-drill] .tile {
   border-left: 3px solid var(--accent);
-  background: color-mix(in oklab, var(--accent) 4%, #fbfbfd);
+  background: color-mix(in oklab, var(--accent) 4%, var(--surface-card-elevated));
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
   padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
