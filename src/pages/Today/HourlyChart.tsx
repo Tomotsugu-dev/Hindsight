@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useCategories } from "../../state/categories";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
+import { useBarParts, type BarPart } from "../../hooks/useBarParts";
+import type { BarLevel } from "../../state/statsView";
 import { formatAxisTick } from "../../utils/duration";
 import type { HourSlot } from "../../api/hindsight";
 import { barMinutes, barSecs } from "../../lib/segments";
@@ -22,6 +21,8 @@ interface HourlyChartProps {
   selectedHour?: number | null;
   /** 点击柱子触发；不传 → 柱子非交互（用于 PeriodCard 的 prev/next 静态副本）。 */
   onHourClick?: (hour: number) => void;
+  /** Colors the bars by category or by super category. */
+  level?: BarLevel;
 }
 
 /** X 轴标签 */
@@ -36,9 +37,10 @@ export function HourlyChart({
   maxMinutes: externalMax,
   selectedHour = null,
   onHourClick,
+  level = "cats",
 }: HourlyChartProps) {
   const { t } = useTranslation();
-  const { getCategory } = useCategories();
+  const toParts = useBarParts(level);
   // 没传 maxMinutes 就按 hours 自己算：1h 起步，峰值超过就按 15min 步长向上对齐
   // —— 切日期时每个 slide 自带 maxMinutes，next-day chart 不会因为复用 current-day 的 max
   // 而造成"切换后还得再 transition 一次"的问题
@@ -100,8 +102,8 @@ export function HourlyChart({
               <HourBar
                 key={slot.hour}
                 slot={slot}
+                parts={toParts(slot.segments)}
                 maxMinutes={maxMinutes}
-                getCategory={getCategory}
                 t={t}
                 selected={selectedHour === slot.hour}
                 dimmed={selectedHour !== null && selectedHour !== slot.hour}
@@ -130,16 +132,16 @@ export function HourlyChart({
 
 function HourBar({
   slot,
+  parts,
   maxMinutes,
-  getCategory,
   t,
   selected,
   dimmed,
   onClick,
 }: {
   slot: HourSlot;
+  parts: BarPart[];
   maxMinutes: number;
-  getCategory: (id: string) => { color: string } | null | undefined;
   t: (key: string, options?: Record<string, unknown>) => string;
   selected: boolean;
   dimmed: boolean;
@@ -149,7 +151,6 @@ function HourBar({
   const totalSecs = barSecs(slot.segments);
   const heightPct = Math.min((total / maxMinutes) * 100, 100);
   const interactive = !!onClick;
-  const isDark = useIsDark();
   // 整列都可点（不只柱子的高度内），点空槽位也能选中那个小时——和"hit area
   // 限制在 bar 高度内会让点低柱难"的常见 UX 痛点对齐
   return (
@@ -173,24 +174,16 @@ function HourBar({
         data-dimmed={dimmed || undefined}
       >
         {total > 0 &&
-          slot.segments.map((seg) => {
-            // 分类解析不到（刚被删、缓存未刷新）不能跳过：柱高按全部 segments
-            // 求和，跳过会留透明缺口（同 DailyBarChart 的兜底）。
-            const cat = getCategory(seg.categoryId);
-            const color = cat
-              ? adjustCategoryColor(cat.color, isDark)
-              : "var(--cat-fallback, #9ca3af)";
-            return (
-              <div
-                key={seg.categoryId}
-                className={styles.segment}
-                style={{
-                  height: `${(seg.secs / totalSecs) * 100}%`,
-                  background: color,
-                }}
-              />
-            );
-          })}
+          parts.map((part) => (
+            <div
+              key={part.id}
+              className={styles.segment}
+              style={{
+                height: `${(part.secs / totalSecs) * 100}%`,
+                background: part.color,
+              }}
+            />
+          ))}
       </div>
     </button>
   );

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../../state/categories";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
+import { useBarParts } from "../../hooks/useBarParts";
+import type { BarLevel } from "../../state/statsView";
 import type { DaySummary } from "../../api/hindsight";
 import { barMinutes, barSecs } from "../../lib/segments";
 import styles from "./WeeklyBarChart.module.css";
@@ -12,6 +12,8 @@ interface WeeklyBarChartProps {
   selectedIndex?: number | null;
   /** 点击触发；不传 → 行非交互（PeriodCard prev/next 静态副本用）。 */
   onIndexClick?: (index: number) => void;
+  /** Colors the bars by category or by super category. */
+  level?: BarLevel;
 }
 
 // 周几标签的资源 key（按周一到周日顺序）
@@ -29,10 +31,11 @@ export function WeeklyBarChart({
   days,
   selectedIndex = null,
   onIndexClick,
+  level = "cats",
 }: WeeklyBarChartProps) {
   const { t } = useTranslation();
-  const { categories, getCategory } = useCategories();
-  const isDark = useIsDark();
+  const { categories } = useCategories();
+  const toParts = useBarParts(level);
   const order = new Map(categories.map((c, i) => [c.id, i]));
   const sortSegments = (segments: DaySummary["segments"]) =>
     [...segments].sort(
@@ -88,25 +91,17 @@ export function WeeklyBarChart({
             <div className={styles.track}>
               {total > 0 && (
                 <div className={styles.bar} style={{ width: `${widthPct}%` }}>
-                  {sortSegments(day.segments).map((seg) => {
-                    // 分类解析不到不能跳过：条宽按全部 segments 求和，跳过会留
-                    // 透明缺口（同 DailyBarChart 的兜底）。
-                    const cat = getCategory(seg.categoryId);
+                  {toParts(sortSegments(day.segments)).map((part) => {
+                    const minutes = fmtTotal(Math.round(part.secs / 60));
                     return (
                       <div
-                        key={seg.categoryId}
+                        key={part.id}
                         className={styles.segment}
                         style={{
-                          width: `${(seg.secs / totalSecs) * 100}%`,
-                          background: cat
-                            ? adjustCategoryColor(cat.color, isDark)
-                            : "var(--cat-fallback, #9ca3af)",
+                          width: `${(part.secs / totalSecs) * 100}%`,
+                          background: part.color,
                         }}
-                        title={
-                          cat
-                            ? `${cat.name} ·${fmtTotal(barMinutes([seg]))}`
-                            : fmtTotal(barMinutes([seg]))
-                        }
+                        title={part.name ? `${part.name} ·${minutes}` : minutes}
                       />
                     );
                   })}

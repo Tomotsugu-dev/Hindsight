@@ -501,6 +501,11 @@
     "insightTiles": {
       "appShare": "Share of its category"
     },
+    "periodLegend": {
+      "levelAria": "Color the bars by super-category or category",
+      "supers": "Super-categories",
+      "cats": "Categories"
+    },
     "segmentList": {
       "empty": "No segments yet — click \"Add segment\" below to start",
       "newSegmentLabel": "New segment",
@@ -596,7 +601,8 @@
     },
     "ranks": {
       "topApps": "Top apps",
-      "topCategories": "Top categories"
+      "topCategories": "Top categories",
+      "topSupers": "Top super-categories"
     },
     "selection": {
       "label": "{{hour}}:00–{{hour}}:59"
@@ -636,7 +642,8 @@
     },
     "ranks": {
       "topApps": "Top apps this week",
-      "topCategories": "Top categories this week"
+      "topCategories": "Top categories this week",
+      "topSupers": "Top super-categories this week"
     },
     "dow": {
       "mon": "Mon",
@@ -679,7 +686,8 @@
     },
     "ranks": {
       "topApps": "Top apps this month",
-      "topCategories": "Top categories this month"
+      "topCategories": "Top categories this month",
+      "topSupers": "Top super-categories this month"
     },
     "selection": {
       "label": "{{month}}/{{day}} {{weekday}}"
