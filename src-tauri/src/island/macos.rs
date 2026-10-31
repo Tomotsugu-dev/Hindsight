@@ -32,22 +32,14 @@ use objc2_quartz_core::{
     kCAMediaTimingFunctionEaseInEaseOut, kCAMediaTimingFunctionEaseOut, CACornerMask, CALayer,
     CAMediaTimingFunction, CATransaction,
 };
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, WebviewWindow};
 
 use super::content::Content;
 use super::geometry::{self, Closed, Notch, Rect, Screen, NOTCH_RADIUS, OPEN_RADIUS};
-use super::{Layout, PageRect, PanelSize};
+use super::{
+    emit, new_window, Layout, PageRect, PanelSize, State, CONTENT_EVENT, LAYOUT_EVENT, OPEN_EVENT,
+};
 
-/// The label of the island window. `capabilities/island.json` uses the same label
-pub const LABEL: &str = "island";
-const PAGE: &str = "src/island/index.html";
-/// Sent to the page with the new content, or `null` when nothing is on the island
-const CONTENT_EVENT: &str = "island-content";
-/// Sent to the page with a new [`Layout`] when the main screen changes
-const LAYOUT_EVENT: &str = "island-layout";
-/// Sent to the page with `true` when the island opens, and `false` when it closes
-const OPEN_EVENT: &str = "island-open";
 /// How long opening takes, in seconds
 const OPEN_SECONDS: f64 = 0.32;
 /// How long closing takes, in seconds
@@ -64,12 +56,7 @@ struct Island {
     observer: Retained<Observer>,
     area: Retained<NSTrackingArea>,
     screen: Screen,
-    content: Option<Content>,
-    /// The widths of the closed content, as last measured by the page
-    widths: (Option<f64>, Option<f64>),
-    /// 页面上次量出的展开内容的大小；`None`：内容不展开
-    panel: Option<PanelSize>,
-    open: bool,
+    state: State,
 }
 
 thread_local! {
@@ -165,7 +152,7 @@ pub fn hide(app: &AppHandle) {
 /// Returns what is on the island now, for the page when it loads. 要在主线程上调用。
 pub fn content() -> Option<Content> {
     main_thread()?;
-    with_island(|island| island.content.clone()).flatten()
+    with_island(|island| island.state.content.clone()).flatten()
 }
 
 /// Takes the widths of the closed content and the size of the open content measured by the page,
@@ -173,8 +160,7 @@ pub fn content() -> Option<Content> {
 pub fn measured(left: Option<f64>, right: Option<f64>, panel: Option<PanelSize>) -> Option<Layout> {
     main_thread()?;
     with_island(|island| {
-        island.widths = (left, right);
-        island.panel = panel;
+        island.state.measured(left, right, panel);
         // A side that grows or shrinks in view moves smoothly
         island.draw(island.ns_window.isVisible());
         island.track();
@@ -189,7 +175,7 @@ pub fn ready() {
         return;
     }
     with_island(|island| {
-        if island.content.is_some() {
+        if island.state.content.is_some() {
             island.ns_window.orderFrontRegardless();
         }
     });
@@ -198,23 +184,8 @@ pub fn ready() {
 impl Island {
     fn new(app: &AppHandle, mtm: MainThreadMarker) -> Result<Self, String> {
         let screen = main_screen(mtm).ok_or("there is no screen")?;
-        let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App(PAGE.into()))
-            .decorations(false)
-            .resizable(false)
-            .shadow(false)
-            .skip_taskbar(true)
-            .focused(false)
-            .visible(false)
-            // A click on the island works while another app is active
-            .accept_first_mouse(true)
-            .build()
-            .map_err(|e| e.to_string())?;
-        // It stays until the app quits: Cmd+W must not close it
-        window.on_window_event(|event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-            }
-        });
+        // A click on the island works while another app is active
+        let window = new_window(app, |builder| builder.accept_first_mouse(true))?;
         Self::set_up(window.clone(), screen, mtm).inspect_err(|_| {
             // Or the next try would fail too: the label is taken
             let _ = window.destroy();
@@ -293,10 +264,7 @@ impl Island {
             observer,
             area,
             screen,
-            content: None,
-            widths: (None, None),
-            panel: None,
-            open: false,
+            state: State::default(),
         };
         island.place();
         Ok(island)
@@ -306,28 +274,23 @@ impl Island {
         if content.is_none() {
             self.ns_window.orderOut(None);
         }
-        self.content = content;
-        if self.open && !self.can_open() {
-            self.set_open(false);
+        if self.state.set_content(content) {
+            self.open_changed();
         }
-        self.emit(CONTENT_EVENT, &self.content);
-    }
-
-    fn can_open(&self) -> bool {
-        self.content
-            .as_ref()
-            .is_some_and(|content| content.open.is_some())
+        emit(&self.window, CONTENT_EVENT, &self.state.content);
     }
 
     fn set_open(&mut self, open: bool) {
-        let open = open && self.can_open();
-        if open == self.open {
-            return;
+        if self.state.set_open(open) {
+            self.open_changed();
         }
-        self.open = open;
+    }
+
+    /// 展开或收起以后：遮罩和追踪区域跟着变，再告诉页面。
+    fn open_changed(&mut self) {
         self.draw(true);
         self.track();
-        self.emit(OPEN_EVENT, open);
+        emit(&self.window, OPEN_EVENT, self.state.open);
     }
 
     fn screens_changed(&mut self, mtm: MainThreadMarker) {
@@ -337,7 +300,7 @@ impl Island {
         };
         self.screen = screen;
         self.place();
-        self.emit(LAYOUT_EVENT, self.layout());
+        emit(&self.window, LAYOUT_EVENT, self.layout());
     }
 
     /// Puts the window and the mask on the main screen as it is now, and sets whether the island
@@ -356,14 +319,14 @@ impl Island {
     }
 
     fn closed(&self) -> Closed {
-        Closed::new(&self.screen, self.widths.0, self.widths.1)
+        Closed::new(&self.screen, self.state.widths.0, self.state.widths.1)
     }
 
     fn opened(&self) -> Rect {
         geometry::open(
             &self.screen,
             &self.closed(),
-            &self.panel.unwrap_or_default(),
+            &self.state.panel.unwrap_or_default(),
         )
     }
 
@@ -377,7 +340,7 @@ impl Island {
         if animated {
             // SAFETY: Core Animation's own constants
             let (seconds, timing) = unsafe {
-                if self.open {
+                if self.state.open {
                     (OPEN_SECONDS, kCAMediaTimingFunctionEaseOut)
                 } else {
                     (CLOSE_SECONDS, kCAMediaTimingFunctionEaseInEaseOut)
@@ -400,7 +363,7 @@ impl Island {
                 | CACornerMask::LayerMaxXMaxYCorner
         };
         for (i, layer) in self.shapes.iter().enumerate() {
-            let (frame, radius) = if self.open {
+            let (frame, radius) = if self.state.open {
                 (local(window, self.opened()), OPEN_RADIUS)
             } else {
                 match shapes.get(i).or(shapes.last()) {
@@ -420,7 +383,7 @@ impl Island {
     /// closed.
     fn track(&mut self) {
         let window = geometry::window(&self.screen);
-        let area = if self.open {
+        let area = if self.state.open {
             Some(self.opened())
         } else {
             self.closed().bounds()
@@ -443,12 +406,6 @@ impl Island {
             right: right.map(|rect| page_rect(window, rect)),
             top_right: page_rect(window, closed.top_right(&self.screen, self.opened())),
             open: page_rect(window, self.opened()),
-        }
-    }
-
-    fn emit<S: Serialize + Clone>(&self, event: &str, payload: S) {
-        if let Err(e) = self.window.emit_to(LABEL, event, payload) {
-            log::warn!("island: cannot send {event} to the page: {e}");
         }
     }
 }
