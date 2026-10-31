@@ -2,6 +2,7 @@
 //
 // 设计要点：
 // - 类型 100% 复用主仓库（type-only import），保证 demo 编译跟主应用同步
+// - 方法名和主仓库的 api 一一对应，api-mock.test.ts 检查
 // - 只读方法：从 fixtures 返数据（一些写操作改内存 + localStorage）
 // - 长任务（AI 总结、模型下载）：用 setTimeout 模拟阶段性 emit 进度事件
 // - 错误处理：尽量"成功"——demo 不应该让用户看到错误状态破坏体验
@@ -9,6 +10,7 @@
 import type {
   AppDetail,
   AppGroup,
+  AppTitles,
   AppUsage,
   AuthState,
   Category,
@@ -20,10 +22,15 @@ import type {
   ChatStoredMessage,
   DaySummary,
   DaySummaryDto,
+  DetailBucket,
+  DetailScope,
   DeviceRow,
   DigestReport,
   EngineStatus,
+  GnomeExtensionStatus,
   HourSlot,
+  IgnoreRule,
+  IgnoreRulesResult,
   MemoryPendingStats,
   MemorySearchResp,
   ModelEntry,
@@ -593,16 +600,6 @@ export const api = {
 
   // ─── App groups ───────────────────────────
   listAppGroups: async (): Promise<AppGroup[]> => structuredClone(state.appGroups),
-  createAppGroup: async (displayName: string): Promise<string> => {
-    const id = `g-${Date.now()}`;
-    state.appGroups.push({ id, displayName, categoryId: null, members: [] });
-    persist();
-    return id;
-  },
-  deleteAppGroup: async (groupId: string): Promise<void> => {
-    state.appGroups = state.appGroups.filter((g) => g.id !== groupId);
-    persist();
-  },
   mergeAppGroup: async (processName: string, targetGroupId: string): Promise<void> => {
     const g = state.appGroups.find((x) => x.id === targetGroupId);
     if (g && !g.members.find((m) => m.processName === processName)) {
@@ -703,6 +700,12 @@ export const api = {
   getAppIcon: async (processName: string): Promise<string | null> => {
     return APP_ICON_URLS[processName.toLowerCase()] ?? null;
   },
+  // 导出报告时没有图标，退回分类色
+  getAppIconDataUrl: async (_processName: string): Promise<string | null> => null,
+  setPluginsBadge: async (_show: boolean): Promise<void> => {},
+  // "ready" 时页面不显示 GNOME 扩展的提示
+  getGnomeExtensionStatus: async (): Promise<GnomeExtensionStatus> => "ready",
+  enableGnomeExtension: async (): Promise<GnomeExtensionStatus> => "ready",
 
   // ─── Settings ──────────────────────────────
   getSettings: async (): Promise<Settings> => {
@@ -735,6 +738,21 @@ export const api = {
     persist();
     return structuredClone(state.settings);
   },
+  addIgnoreRule: async (
+    processName: string,
+    titleKeyword: string | null,
+  ): Promise<IgnoreRulesResult> => {
+    const rules = state.settings.ignoreRules ?? [];
+    const exists = rules.some(sameIgnoreRule(processName, titleKeyword));
+    return saveIgnoreRules(exists ? rules : [...rules, { processName, titleKeyword }]);
+  },
+  removeIgnoreRule: async (
+    processName: string,
+    titleKeyword: string | null,
+  ): Promise<IgnoreRulesResult> => {
+    const same = sameIgnoreRule(processName, titleKeyword);
+    return saveIgnoreRules((state.settings.ignoreRules ?? []).filter((r) => !same(r)));
+  },
   getStorageInfo: async (): Promise<StorageInfo> => ({
     dbBytes: 42 * 1024 * 1024,
     memoryDbBytes: 18 * 1024 * 1024,
@@ -742,9 +760,9 @@ export const api = {
     dbPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\hindsight.db",
     screenshotsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\screenshots",
   }),
-  purgeActivities: async (): Promise<void> => {
+  purgeLocalData: async (): Promise<void> => {
     // eslint-disable-next-line no-console
-    console.warn("[demo] purgeActivities 在 demo 模式下不会真的清除数据");
+    console.warn("[demo] purgeLocalData 在 demo 模式下不会真的清除数据");
   },
   purgeScreenshots: async (): Promise<void> => {
     // eslint-disable-next-line no-console
@@ -938,21 +956,21 @@ export const api = {
     state.daySummaries.delete(`${source}:${date}`);
   },
   // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
-  getAppDayDetail: async (
-    _dayOffset: number,
+  getAppBuckets: async (
+    scope: DetailScope,
+    _offset: number,
     groupId: string,
     _deviceId?: string,
-  ): Promise<AppDetail> => mockAppDetail("hours", 24, groupId),
-  getAppWeekDetail: async (
-    _weekOffset: number,
+  ): Promise<DetailBucket[]> => mockScopeDetail(scope, groupId).buckets,
+  getAppTitles: async (
+    scope: DetailScope,
+    _offset: number,
     groupId: string,
     _deviceId?: string,
-  ): Promise<AppDetail> => mockAppDetail("days", 7, groupId),
-  getAppMonthDetail: async (
-    _monthOffset: number,
-    groupId: string,
-    _deviceId?: string,
-  ): Promise<AppDetail> => mockAppDetail("days", 30, groupId),
+  ): Promise<AppTitles> => {
+    const { titles, isBrowser } = mockScopeDetail(scope, groupId);
+    return { titles, isBrowser };
+  },
   getAppRangeDetail: async (
     from: string,
     to: string,
@@ -1153,7 +1171,6 @@ export const api = {
     message: "Demo 模式 · 假返回",
   }),
   importModel: async (srcPath: string): Promise<string> => srcPath,
-  purgeAppGroup: async (_groupId: string): Promise<void> => {},
   // demo 不真删数据,只让弹窗跑通(真实端会清活动/截图/OCR 索引)
   purgeAppGroupData: async (_groupId: string): Promise<void> => {},
   purgeCloudData: async (_keepLocal: boolean): Promise<void> => {},
@@ -1497,6 +1514,22 @@ function mockAppDetail(kind: "hours" | "days", count: number, iconProcess: strin
     ],
     isBrowser: false,
   };
+}
+
+function mockScopeDetail(scope: DetailScope, groupId: string): AppDetail {
+  if (scope === "day") return mockAppDetail("hours", 24, groupId);
+  return mockAppDetail("days", scope === "week" ? 7 : 30, groupId);
+}
+
+function sameIgnoreRule(processName: string, titleKeyword: string | null) {
+  return (r: IgnoreRule) => r.processName === processName && r.titleKeyword === titleKeyword;
+}
+
+/** demo 的统计不随规则重算，所以 reappliedRows 总是 0 */
+function saveIgnoreRules(rules: IgnoreRule[]): IgnoreRulesResult {
+  state.settings.ignoreRules = rules;
+  persist();
+  return { rules: structuredClone(rules), reappliedRows: 0 };
 }
 
 // ────────────────────────────────────────────

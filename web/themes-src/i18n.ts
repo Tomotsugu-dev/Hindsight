@@ -50,7 +50,29 @@ export const HOME_PAGE: Record<PageLanguage, string> = {
   es: "/en/",
 };
 
+/** 这种语言的功能说明，页脚链过去。 */
+export const DOCS_PAGE: Record<PageLanguage, string> = {
+  "zh-CN": "/docs/zh/",
+  "zh-TW": "/docs/tw/",
+  en: "/docs/en/",
+  ja: "/docs/ja/",
+  "pt-BR": "/docs/pt/",
+  es: "/docs/es/",
+};
+
 export interface Strings {
+  // 顶栏和页脚，文字和各语言首页的一样
+  navLabel: string;
+  navDemo: string;
+  navFeatures: string;
+  navDownload: string;
+  language: string;
+  allReleases: string;
+  changelog: string;
+  docs: string;
+  repository: string;
+  reportProblem: string;
+  themeMarket: string;
   title: string;
   intro: string;
   install: string;
@@ -69,6 +91,17 @@ export interface Strings {
 // 「设置 - 外观 - 自定义主题」「导入主题」照应用界面上的叫法
 export const STRINGS: Record<PageLanguage, Strings> = {
   "zh-CN": {
+    navLabel: "页面",
+    navDemo: "演示",
+    navFeatures: "功能",
+    navDownload: "下载",
+    language: "语言",
+    allReleases: "所有版本",
+    changelog: "更新日志",
+    docs: "功能说明",
+    repository: "GitHub 仓库",
+    reportProblem: "报告问题",
+    themeMarket: "主题市场",
     title: "主题",
     intro: "给 Hindsight 换个样子。每个主题都能先在这里试用。",
     install: "下载后解压，在 Hindsight 的「设置 - 外观 - 自定义主题」里点「导入主题」，选 theme.json。",
@@ -84,6 +117,17 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     close: "关闭",
   },
   "zh-TW": {
+    navLabel: "頁面",
+    navDemo: "示範",
+    navFeatures: "功能",
+    navDownload: "下載",
+    language: "語言",
+    allReleases: "所有版本",
+    changelog: "更新紀錄",
+    docs: "功能說明",
+    repository: "GitHub 儲存庫",
+    reportProblem: "回報問題",
+    themeMarket: "主題市集",
     title: "主題",
     intro: "幫 Hindsight 換個樣子。每個主題都能先在這裡試用。",
     install: "下載後解壓縮，在 Hindsight 的「設定 - 外觀 - 自訂主題」裡點「匯入主題」，選 theme.json。",
@@ -99,6 +143,17 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     close: "關閉",
   },
   en: {
+    navLabel: "Page",
+    navDemo: "Demo",
+    navFeatures: "Features",
+    navDownload: "Download",
+    language: "Language",
+    allReleases: "All releases",
+    changelog: "Changelog",
+    docs: "Features",
+    repository: "GitHub repository",
+    reportProblem: "Report a problem",
+    themeMarket: "Theme market",
     title: "Themes",
     intro: "Give Hindsight a new look. You can try each theme here first.",
     install:
@@ -115,6 +170,17 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     close: "Close",
   },
   ja: {
+    navLabel: "ページ",
+    navDemo: "デモ",
+    navFeatures: "機能",
+    navDownload: "ダウンロード",
+    language: "言語",
+    allReleases: "すべてのバージョン",
+    changelog: "更新履歴",
+    docs: "機能説明",
+    repository: "GitHub リポジトリ",
+    reportProblem: "問題を報告",
+    themeMarket: "テーママーケット",
     title: "テーマ",
     intro: "Hindsight の見た目を変えましょう。どのテーマもここで試せます。",
     install:
@@ -131,6 +197,17 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     close: "閉じる",
   },
   "pt-BR": {
+    navLabel: "Página",
+    navDemo: "Demo",
+    navFeatures: "Recursos",
+    navDownload: "Download",
+    language: "Idioma",
+    allReleases: "Todas as versões",
+    changelog: "Novidades",
+    docs: "Recursos",
+    repository: "Repositório no GitHub",
+    reportProblem: "Relatar um problema",
+    themeMarket: "Loja de temas",
     title: "Temas",
     intro: "Dê um novo visual ao Hindsight. Dá para testar cada tema aqui antes.",
     install:
@@ -147,6 +224,17 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     close: "Fechar",
   },
   es: {
+    navLabel: "Página",
+    navDemo: "Demo",
+    navFeatures: "Funciones",
+    navDownload: "Descargar",
+    language: "Idioma",
+    allReleases: "Todas las versiones",
+    changelog: "Novedades",
+    docs: "Funciones",
+    repository: "Repositorio en GitHub",
+    reportProblem: "Informar de un problema",
+    themeMarket: "Tienda de temas",
     title: "Temas",
     intro: "Dale a Hindsight un aspecto nuevo. Puedes probar cada tema aquí antes.",
     install:

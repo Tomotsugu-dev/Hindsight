@@ -9,15 +9,18 @@
 web/
 ├── index.html         简体中文主页（默认语言）
 ├── en/ ja/ pt/ tw/    其它语言主页
-├── styles.css         全部样式（landing 和文档站共用）
-├── linux.svg          Linux 下载按钮的图标，取自 Simple Icons 13.21.0（CC0），styles.css 用 mask 引用
+├── site.css           各页共用的配色变量、顶栏和页脚（首页、文档站、主题页、404 都先加载它）
+├── home.css           首页样式
+├── linux.svg          Linux 下载按钮的图标，取自 Simple Icons 13.21.0（CC0），home.css 用 mask 引用
 ├── 404.html           找不到页面时返回
 ├── _headers           响应头（缓存）规则
 ├── wrangler.jsonc     Cloudflare 部署配置
 ├── worker.js          只处理 /assets/video/*：给视频补上 Range（206）支持，Safari 播放需要
 ├── demo-src/          web demo 源码（mock + 入口），复用主应用 src/ 的组件
 ├── vite.config.ts     web demo 的构建配置
+├── themes-src/        主题页 /themes/ 源码，构建配置是自己的 vite.config.ts
 ├── demo/              ← npm run build:demo 产物，不入仓
+├── themes/            ← npm run build:themes 产物，不入仓
 └── docs/              ← npm run build:docs 产物，不入仓
 ```
 
@@ -39,6 +42,7 @@ npx wrangler dev --config web/wrangler.jsonc   # 按线上规则（_headers、40
   ```bash
   for v in docs/intro/*/shot_video/*.mp4; do ffmpeg -v error -y -i "$v" -frames:v 1 -q:v 4 "${v%.mp4}.jpg"; done
   ```
+- **首页功能卡片**：`web/assets/home/<名字>_<lang>.mp4` 和同名 `.webp`（第一帧，当封面）。960×720，30 fps，H.264，无音轨，单个不超过 400 KB。卡片只有约 340 CSS px 宽，所以画面里的字至少 31 px 高。
 - **logo** 通过 [jsDelivr](https://www.jsdelivr.com/) 引用主分支文件 `https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/...`。
 - **下载按钮** 默认指向 `releases/latest`，JS 加载后改写为具体安装包直链，并显示文件大小。
 
@@ -67,7 +71,8 @@ npx wrangler deploy --config web/wrangler.jsonc
 
 ## 修改清单
 
-- 全局配色 token：`styles.css` 顶部 `:root { ... }`
+- 全局配色 token、顶栏、页脚：`site.css`，改一处全站生效
+- 首页其余样式：`home.css`；文档站样式：`scripts/docs/docs.css`
 - 各 section 文案：各语言 `index.html` 里有注释 `<!-- ============ XXX ============ -->` 分隔
 - 视频：替换 `docs/intro/<lang>/shot_video/` 下的 mp4，并重新生成封面
 - 缓存时长：`_headers`

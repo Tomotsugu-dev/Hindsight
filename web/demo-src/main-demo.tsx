@@ -22,6 +22,7 @@ if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__) {
 import "./lang-from-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { ErrorBoundary } from "@app/components/ErrorBoundary/ErrorBoundary";
 import { restoreTheme } from "@app/lib/theme";
 import { AppDemo } from "./AppDemo";
 import { PreviewError } from "./PreviewError";
@@ -36,8 +37,10 @@ restoreTheme();
 applyPreviewTheme(location.search).then((failed) => {
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
-      {failed && <PreviewError />}
-      <AppDemo />
+      <ErrorBoundary scope="demo.crash">
+        {failed && <PreviewError />}
+        <AppDemo />
+      </ErrorBoundary>
     </React.StrictMode>,
   );
 });
