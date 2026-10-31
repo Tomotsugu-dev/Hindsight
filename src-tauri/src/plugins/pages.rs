@@ -123,6 +123,10 @@ pub async fn open_window(app: &AppHandle, pool: &DbPool, id: &str) -> Result<()>
         _ => builder.center(),
     };
     let window = builder.build().map_err(window_error)?;
+    #[cfg(target_os = "windows")]
+    if let Err(e) = window.set_focus() {
+        log::warn!("plugins: cannot bring the window of {id} to the front: {e}");
+    }
     report(app, id, WindowState::Open);
 
     let changes = Arc::new(AtomicU64::new(0));

@@ -1,5 +1,5 @@
-/* The island is always black: Rust's mask shows only its shapes, and the text is white or grey
-   so it is always easy to read */
+/* The island is always black: on macOS Rust's mask shows only its shapes, on Windows .shape draws
+   them. The text is white or grey so it is always easy to read */
 .island {
   position: fixed;
   inset: 0;
@@ -8,6 +8,8 @@
     500 12px/1.2 -apple-system,
     BlinkMacSystemFont,
     "PingFang SC",
+    "Segoe UI",
+    "Microsoft YaHei UI",
     sans-serif;
   user-select: none;
   -webkit-user-select: none;
@@ -51,6 +53,33 @@
   opacity: 0;
 }
 
+/* Windows：形状由页面画。收起时是胶囊，展开时长成整个岛，时长和 macOS 遮罩的动画一样 */
+.shape {
+  position: absolute;
+  background: #000;
+  transition-property: left, top, width, height, border-radius;
+  transition-duration: 240ms;
+  transition-timing-function: ease-in-out;
+}
+
+.open .shape {
+  transition-duration: 320ms;
+  transition-timing-function: ease-out;
+}
+
+/* Windows：展开时跟着岛的左边挪的那一边 */
+.follows {
+  transition:
+    opacity 160ms ease-out,
+    left 240ms ease-in-out;
+}
+
+.open .follows {
+  transition:
+    opacity 160ms ease-out,
+    left 320ms ease-out;
+}
+
 /* 展开时才显示，紧跟在左边的内容或者刘海后面 */
 .topRight {
   justify-content: flex-start;
@@ -80,6 +109,15 @@
   transform: none;
   transition-delay: 80ms;
   pointer-events: auto;
+}
+
+/* 往上展开（Windows）：面板从下面滑进来 */
+.panel.up {
+  transform: translateY(6px);
+}
+
+.open .panel.up {
+  transform: none;
 }
 
 .panelBody {

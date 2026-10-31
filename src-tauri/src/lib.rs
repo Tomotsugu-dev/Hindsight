@@ -436,11 +436,13 @@ pub fn run() {
             commands::themes::theme_import,
             commands::themes::theme_delete,
             commands::themes::theme_open_folder,
-            // --- island: the page of the island in the middle of the menu bar ---
+            // --- island: the page of the island (menu bar on macOS, floating on Windows) ---
             commands::island::island_content,
             commands::island::island_measured,
             commands::island::island_ready,
             commands::island::island_clicked,
+            commands::island::island_hover,
+            commands::island::island_drag,
         ])
         .build(tauri::generate_context!())
         // 启动期失败需快速失败：generate_context! / build() 失败 = Tauri runtime

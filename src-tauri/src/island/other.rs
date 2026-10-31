@@ -1,4 +1,4 @@
-//! 没有岛的系统：内容收下就算了，什么都不显示，岛的页面也不会打开。函数和 macos.rs 的一样。
+//! 没有岛的系统：内容收下就算了，什么都不显示，岛的页面也不会打开。函数和 macos/、windows/ 里的一样。
 
 use tauri::AppHandle;
 
@@ -22,3 +22,7 @@ pub fn measured(
 }
 
 pub fn ready() {}
+
+pub fn hover(_inside: bool) {}
+
+pub fn drag() {}
