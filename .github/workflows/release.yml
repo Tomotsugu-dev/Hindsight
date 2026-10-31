@@ -40,7 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-14
+          - platform: macos-15
             args: "--target universal-apple-darwin"
           - platform: windows-latest
             args: ""
@@ -60,7 +60,7 @@ jobs:
       - name: Install Rust (macOS universal needs both arches)
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-14' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-15' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -70,7 +70,7 @@ jobs:
       # macOS：把 Developer ID Application .p12 导入临时 keychain。
       # 用临时 keychain 而非 default 是为了 CI 隔离——run 结束随机 cleanup。
       - name: Import Apple Developer ID cert
-        if: matrix.platform == 'macos-14'
+        if: matrix.platform == 'macos-15'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
