@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useCategories } from "../state/categories";
 import { useSuperCategories } from "../state/superCategories";
+import { UNGROUPED_COLOR, UNGROUPED_ID, superIdOf } from "../lib/segments";
 
 /** 用于 donut 展开层的小分类条目（同大类内按 minutes 降序） */
 export interface BreakdownCat {
@@ -26,11 +27,6 @@ export interface BreakdownSlice {
   /** 该大类下的小分类（按 minutes 降序）；空数组表示该大类下没活动 */
   cats: BreakdownCat[];
 }
-
-const ORPHAN_KEY = "__orphan__";
-/** stone-400 暖中性灰 —— 比原来的 slate-400 (#94a3b8) 暖一点，
- *  避免"未归入"行在 donut/legend 里太死板冷淡 */
-const ORPHAN_COLOR = "#a8a29e";
 
 /** 输入形状：只关心 id + minutes，跟 RankedItem 兼容（cast 即可传入） */
 interface CategoryMinutesInput {
@@ -82,7 +78,7 @@ export function useSuperCategoryBreakdown(catMinutes: CategoryMinutesInput[]): {
 
   return useMemo(() => {
     const catById = new Map(categories.map((c) => [c.id, c]));
-    const supById = new Map(supers.map((s) => [s.id, s]));
+    const superIds = new Set(supers.map((s) => s.id));
 
     const sliceMap = new Map<string, BreakdownSlice>();
     // 预放真大类的空 slice，保证 supers 列表里没活动的也至少能在内部状态里 lookup
@@ -105,17 +101,14 @@ export function useSuperCategoryBreakdown(catMinutes: CategoryMinutesInput[]): {
       // builtin（hidden 等）不进 donut —— 它们的"占比"没语义
       if (cat.builtin) continue;
 
-      const superId =
-        cat.superCategoryId && supById.has(cat.superCategoryId)
-          ? cat.superCategoryId
-          : ORPHAN_KEY;
+      const superId = superIdOf(cat, superIds);
 
       let slice = sliceMap.get(superId);
       if (!slice) {
         slice = {
-          id: ORPHAN_KEY,
+          id: UNGROUPED_ID,
           name: t("categories.super.orphanLabel"),
-          color: ORPHAN_COLOR,
+          color: UNGROUPED_COLOR,
           icon: "Folder",
           minutes: 0,
           cats: [],
