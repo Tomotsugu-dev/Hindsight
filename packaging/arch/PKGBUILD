@@ -1,7 +1,8 @@
 # Maintainer: Your Name <your@email.example>
-# 上游仓库内的 Arch Linux 打包模板：从源码 tag 构建，产物由 pacman 管理。
-# 正式发布到 AUR 后，AUR 仓库里的 PKGBUILD 才是面向用户的最终版本；此文件用于
-# 上游验证构建流程并保持打包逻辑与源码同步演进。
+# Arch Linux packaging template kept in the upstream repository: builds from a
+# source tag and installs files managed by pacman. The AUR repository holds the
+# user-facing PKGBUILD once published; this one keeps the packaging logic in
+# sync with the source tree and documents a verified build recipe.
 
 pkgname=hindsight
 pkgver=0.11.1
@@ -10,51 +11,62 @@ pkgdesc="Privacy-first activity tracking and AI summaries for desktop"
 arch=(x86_64)
 url="https://github.com/Tomotsugu-dev/Hindsight"
 license=(GPL-3.0-only)
-# gtk3/webkit2gtk-4.1 是 Tauri 2 Linux 运行时必需；libayatana-appindicator 提供托盘；
-# libdbus 由 gtk3/webkit2gtk 间接引入，gtk3 已声明依赖，无需重复列出。
+# gtk3/webkit2gtk-4.1 are required by the Tauri 2 Linux runtime; tray support
+# comes from libayatana-appindicator. libdbus is pulled in transitively and
+# already declared by gtk3, so it is not listed again.
 depends=('gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator')
-# nodejs>=20 是 package.json 的 engines 要求；rust 通过 rustup 或官方包均可，
-# makepkg 只要求可用 cargo 工具链。含 >= 的依赖必须加引号，否则被 bash 当作重定向。
+# nodejs>=20 comes from the "engines" field in package.json; rust may come from
+# the official package or rustup, makepkg only needs a working cargo toolchain.
+# Dependencies containing >= must be quoted, otherwise bash reads them as a
+# redirection.
 makedepends=('git' 'nodejs>=20' 'npm' 'rust')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-# makepkg -g 生成；升级版本时需同步更新。codeload.github.com 在部分网络下直连易断流，
-# 需要代理或 curl -C - 续传。
+# Generated with makepkg -g; update when bumping pkgver. codeload.github.com
+# may drop connections on some networks; use a proxy or curl -C - to resume.
 sha512sums=('84d28512378359f8d06ae9a8a187e397a2499fe70abe6d4f37670018dc0adef75a8acaf95fac339eb35d40e1706d73572ed551b68bb267df6e4e5f1c113c3df4')
-# strip 由 Rust release 产物决定：Tauri 默认已 -Wl,--strip-all，无符号可拆；
-# debug 选项会产生空的 /usr/src/debug 目录（release 无 debug info 可拆），禁掉
+# strip: the Rust release binary is already linked with -Wl,--strip-all, so
+# there is nothing left to strip. debug: would only create empty /usr/src/debug
+# directories because the release build has no debug info to split out.
 options=(!strip !debug !lto)
 
 prepare() {
-  # GitHub tag tarball 解压后的顶层目录是仓库名 Hindsight-0.11.1（大写 H），
-  # 与 pkgname 小写不一致，不能用 $pkgname 拼
+  # The GitHub tag tarball extracts to Hindsight-<version> (capital H, the
+  # repository name), not the lowercase pkgname, so do not build the path from
+  # $pkgname.
   cd "Hindsight-$pkgver"
-  # makepkg 环境下 npm ci 需要联网；使用系统 node 而非 nvm
+  # npm ci needs network access in the makepkg environment; use the system
+  # node instead of nvm.
   export npm_config_yes=true
 }
 
 build() {
   cd "Hindsight-$pkgver"
-  # makepkg 默认导出的 CFLAGS/LDFLAGS（含 lto/debug 选项）会干扰 Rust 最终链接：
-  # lto=auto 让 rustc 走 lld 并带 -Wl,--strip-all，bundled sqlite 静态库符号丢失，
-  # 实测链接报大量 undefined symbol: sqlite3_*。清空后交给 cargo 自主控制编译。
+  # The CFLAGS/LDFLAGS exported by makepkg by default break the final Rust
+  # link: lto=auto makes rustc use lld with -Wl,--strip-all, and the bundled
+  # sqlite static library symbols go missing (verified: the link fails with
+  # many "undefined symbol: sqlite3_*" errors). Clear them and let cargo
+  # control its own compilation.
   export CFLAGS=""
   export CXXFLAGS=""
   export LDFLAGS=""
   export CPPFLAGS=""
-  # lint 已在上游 CI 保证；打包时跳过 lint 避免 eslint 拖慢构建且版本漂移风险
+  # Lint is already enforced in upstream CI; skipping it here avoids eslint
+  # slowing down the package build and version drift risks.
   npm ci --no-audit --no-fund
-  # --no-bundle：只出原生 ELF，不生成 deb/rpm；Arch 包由本 PKGBUILD 负责布局
+  # --no-bundle: produce the native ELF only, no deb/rpm; the Arch package
+  # layout is owned by this PKGBUILD.
   npm run tauri build -- --no-bundle
 }
 
 package() {
   cd "Hindsight-$pkgver"
-  # 主程序
+  # Main binary
   install -Dm755 src-tauri/target/release/hindsight \
     "$pkgdir/usr/bin/hindsight"
 
-  # hicolor 图标：Tauri 自带多尺寸 PNG（icon.png 实测 512x512，@2x 实测 256x256），
-  # 按实际像素尺寸安装到对应 hicolor 目录，避免尺寸与目录名不符
+  # hicolor icons: multi-size PNGs shipped by Tauri (icon.png is 512x512,
+  # 128x128@2x.png is 256x256, both verified). Install each under the hicolor
+  # directory matching its real pixel size so sizes and directory names agree.
   _icondir="$pkgdir/usr/share/icons/hicolor"
   install -Dm644 src-tauri/icons/32x32.png \
     "$_icondir/32x32/apps/hindsight.png"
@@ -65,8 +77,9 @@ package() {
   install -Dm644 src-tauri/icons/icon.png \
     "$_icondir/512x512/apps/hindsight.png"
 
-  # .desktop 从 PKGBUILD 所在目录取（它不在 tag tarball 里，$startdir 才能同时
-  # 在仓库内和 AUR 环境下工作）
+  # The .desktop file comes from the PKGBUILD directory ($startdir): it is not
+  # part of the tag tarball, and $startdir works both inside this repository
+  # and in an AUR checkout.
   install -Dm644 "$startdir/hindsight.desktop" \
     "$pkgdir/usr/share/applications/hindsight.desktop"
 
