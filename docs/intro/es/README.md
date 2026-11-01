@@ -123,6 +123,16 @@ Descarga `hindsight_x.y.z_universal.dmg`, haz doble clic para montar la imagen y
 
 Descarga `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 o posterior, Debian 12 o posterior) o `hindsight-x.y.z-1.x86_64.rpm` (Fedora) e instálalo. En una sesión Wayland, solo es compatible GNOME 46 a 51.
 
+#### Arch Linux
+
+Instala [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop) desde el AUR con un asistente de AUR como `yay`:
+
+```bash
+yay -S hindsight-desktop
+```
+
+El paquete se compila desde el código fuente en tu equipo, lo que tarda unos minutos, y después se instala con pacman. Se actualiza junto con el resto del sistema (`yay -Syu`).
+
 ## Agradecimientos
 
 - Gracias a la comunidad [LINUX DO](https://linux.do/).

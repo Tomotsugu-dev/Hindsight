@@ -1,0 +1,57 @@
+# Maintainer: TomokotoKiyoshi <heroburnning at gmail dot com>
+# Contributor: xcdmr <https://github.com/xcdmrCHP>
+
+# Arch Linux package for Hindsight, kept in the repository so it stays in step with the source. It
+# builds the release tag and installs files managed by pacman. scripts/release.mjs checks that
+# pkgver is the version being released, so bump pkgver (and reset pkgrel to 1) with the other
+# version numbers. After a release, .github/workflows/aur.yml pushes this folder to the AUR.
+
+# hindsight on the AUR is another program, which also installs /usr/bin/hindsight
+pkgname=hindsight-desktop
+pkgver=0.11.1
+pkgrel=1
+pkgdesc="Privacy-first activity tracking and AI summaries for desktop"
+arch=(x86_64)
+url="https://github.com/Tomotsugu-dev/Hindsight"
+license=(GPL-3.0-only)
+# The Tauri 2 Linux runtime needs gtk3 and webkit2gtk-4.1, and the tray loads
+# libayatana-appindicator. libdbus comes with gtk3
+depends=('gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator')
+conflicts=('hindsight')
+# nodejs>=20 is the "engines" field of package.json. Quoted: bash would read >= as a redirection
+makedepends=('git' 'nodejs>=20' 'npm' 'rust')
+# The tag from git: no tarball checksum to update after each release
+source=("$pkgname::git+$url.git#tag=v$pkgver"
+        hindsight.desktop)
+sha512sums=('SKIP'
+            '0fa0fc5f60e4d84e3fc7cff1bde86b511b41924b7700cfe86dd6277258ce830b4e215d21bd5ea2851d5f4fad6fc0d93d99aaab1814916851aa297afec966fdde')
+# strip: cargo already strips the release binary. debug: it has no debug info to split out.
+# lto: makepkg's -flto=auto turns the bundled SQLite into GCC LTO objects, and the Rust link then
+# cannot find the sqlite3_* symbols
+options=(!strip !debug !lto)
+
+prepare() {
+  cd "$pkgname"
+  npm ci --no-audit --no-fund
+}
+
+build() {
+  cd "$pkgname"
+  # --no-bundle: only the binary, no deb or rpm. The page is built without the lint, which CI runs
+  npm run tauri build -- --no-bundle \
+    --config '{"build":{"beforeBuildCommand":"npm run build:notest"}}'
+}
+
+package() {
+  cd "$pkgname"
+  install -Dm755 src-tauri/target/release/hindsight "$pkgdir/usr/bin/hindsight"
+  # Each icon goes in the folder of its real size: 128x128@2x.png is 256x256, icon.png 512x512
+  local icons="$pkgdir/usr/share/icons/hicolor"
+  install -Dm644 src-tauri/icons/32x32.png "$icons/32x32/apps/hindsight.png"
+  install -Dm644 src-tauri/icons/64x64.png "$icons/64x64/apps/hindsight.png"
+  install -Dm644 src-tauri/icons/128x128.png "$icons/128x128/apps/hindsight.png"
+  install -Dm644 src-tauri/icons/128x128@2x.png "$icons/256x256/apps/hindsight.png"
+  install -Dm644 src-tauri/icons/icon.png "$icons/512x512/apps/hindsight.png"
+  install -Dm644 "$srcdir/hindsight.desktop" "$pkgdir/usr/share/applications/hindsight.desktop"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

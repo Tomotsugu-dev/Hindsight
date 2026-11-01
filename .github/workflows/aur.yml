@@ -1,0 +1,64 @@
+# 把 packaging/arch 推到 AUR：Arch 用户 yay -S hindsight-desktop 安装，yay -Syu 更新。
+# AUR 上只放 PKGBUILD、它要的文件和 makepkg 从 PKGBUILD 生成的 .SRCINFO，用户机器上从源码编。
+#
+# 触发：
+#   release.yml 发完版调用它（pkgver 已由 scripts/release.mjs 核对过）
+#   或在 GitHub Actions 页手动 run：推 main 上的 PKGBUILD，比如只改了 pkgrel 时
+#
+# secret：AUR_SSH_KEY，公钥加在 AUR 账号里的那把私钥
+
+name: AUR
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Push PKGBUILD to AUR
+    runs-on: ubuntu-latest
+    # makepkg 只有 Arch 上有
+    container: archlinux:base-devel
+    steps:
+      - name: Install git and ssh
+        run: pacman -Syu --noconfirm --needed git openssh
+
+      - uses: actions/checkout@v4
+
+      - name: Push to AUR
+        shell: bash
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          # 读出 pkgname、pkgver、pkgrel
+          . packaging/arch/PKGBUILD
+
+          # 容器里 ssh 不看 $HOME，私钥和 known_hosts 用参数指给它
+          printf '%s\n' "$AUR_SSH_KEY" > "$RUNNER_TEMP/aur_key"
+          chmod 600 "$RUNNER_TEMP/aur_key"
+          ssh-keyscan aur.archlinux.org > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/aur_key -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+
+          git clone "ssh://aur@aur.archlinux.org/$pkgname.git" "$RUNNER_TEMP/aur"
+          cp packaging/arch/PKGBUILD packaging/arch/hindsight.desktop "$RUNNER_TEMP/aur/"
+
+          # makepkg 不让 root 跑
+          useradd -m builder
+          cp packaging/arch/PKGBUILD /home/builder/
+          su builder -c "cd ~ && makepkg --printsrcinfo" > "$RUNNER_TEMP/aur/.SRCINFO"
+
+          cd "$RUNNER_TEMP/aur"
+          git add PKGBUILD hindsight.desktop .SRCINFO
+          # 重跑同一个 tag 时没有改动
+          if git diff --cached --quiet; then
+            echo "AUR 上已经是 $pkgver-$pkgrel"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update to $pkgver-$pkgrel"
+          git push origin HEAD:master

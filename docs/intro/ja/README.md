@@ -123,6 +123,16 @@
 
 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以降、Debian 12 以降）または `hindsight-x.y.z-1.x86_64.rpm`（Fedora）をダウンロードしてインストールします。Wayland セッションでは GNOME 46 – 51 のみ対応しています。
 
+#### Arch Linux
+
+`yay` などの AUR ヘルパーで、AUR から [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop) をインストールします：
+
+```bash
+yay -S hindsight-desktop
+```
+
+パッケージはお使いのマシンでソースからビルドされ（数分かかります）、pacman でインストールされます。システムのほかのパッケージと一緒に更新できます（`yay -Syu`）。
+
 ## 謝辞
 
 - [LINUX DO](https://linux.do/) コミュニティに感謝します。

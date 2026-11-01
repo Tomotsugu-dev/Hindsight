@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hindsight
+Comment=Privacy-first activity tracking and AI summaries
+Exec=hindsight
+Icon=hindsight
+Terminal=false
+Categories=Utility;Office;
+StartupWMClass=hindsight
+StartupNotify=true
