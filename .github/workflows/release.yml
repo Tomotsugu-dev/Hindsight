@@ -229,3 +229,10 @@ jobs:
 
           gh release edit "$TAG" --notes-file /tmp/body_en.md
           echo "release body 已裁剪为英文块（$(wc -l < /tmp/body_en.md) 行）"
+
+  # 三个平台都出来了才更新 AUR 上的包。AUR 上的包从这个 tag 的源码编，不用上面的产物
+  aur:
+    name: Publish to AUR
+    needs: release
+    uses: ./.github/workflows/aur.yml
+    secrets: inherit

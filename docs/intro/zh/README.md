@@ -123,6 +123,16 @@
 
 下载 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 及以上、Debian 12 及以上）或 `hindsight-x.y.z-1.x86_64.rpm`（Fedora）并安装。Wayland 会话里只支持 GNOME 46 – 51。
 
+#### Arch Linux
+
+用 `yay` 等 AUR 助手从 AUR 安装 [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop)：
+
+```bash
+yay -S hindsight-desktop
+```
+
+这个包会在你的电脑上从源码编译，要几分钟，然后用 pacman 安装。和系统里的其他软件一起更新（`yay -Syu`）。
+
 ## 致谢
 
 - 感谢 [LINUX DO](https://linux.do/) 社区。

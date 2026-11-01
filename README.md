@@ -126,15 +126,13 @@ Download `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 or later, Debian 12 or later)
 
 #### Arch Linux
 
-Build from the packaged template in the repository:
+Install [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop) from the AUR with an AUR helper such as `yay`:
 
 ```bash
-git clone https://github.com/Tomotsugu-dev/Hindsight.git
-cd Hindsight/packaging/arch
-makepkg -si
+yay -S hindsight-desktop
 ```
 
-`makepkg -si` builds the package from source and installs it with pacman, so upgrades and removal are handled by your package manager. Required build dependencies: `nodejs` (≥ 20), `npm`, `rust`, and `git`; runtime dependencies are declared in the package itself.
+The package is built from source on your machine, which takes a few minutes, and then installed with pacman. Update it with the rest of your system (`yay -Syu`).
 
 ## Acknowledgements
 

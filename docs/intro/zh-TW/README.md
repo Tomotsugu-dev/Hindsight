@@ -123,6 +123,16 @@
 
 下載 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以上、Debian 12 以上）或 `hindsight-x.y.z-1.x86_64.rpm`（Fedora）並安裝。Wayland 工作階段裡只支援 GNOME 46 – 51。
 
+#### Arch Linux
+
+用 `yay` 等 AUR 輔助工具從 AUR 安裝 [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop)：
+
+```bash
+yay -S hindsight-desktop
+```
+
+這個套件會在你的電腦上從原始碼編譯，需要幾分鐘，然後用 pacman 安裝。和系統裡的其他軟體一起更新（`yay -Syu`）。
+
 ## 致謝
 
 - 感謝 [LINUX DO](https://linux.do/) 社群。
