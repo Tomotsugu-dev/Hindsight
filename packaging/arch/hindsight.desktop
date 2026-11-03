@@ -5,6 +5,6 @@ Comment=Privacy-first activity tracking and AI summaries
 Exec=hindsight
 Icon=hindsight
 Terminal=false
-Categories=Utility;Office;
+Categories=Utility;
 StartupWMClass=hindsight
 StartupNotify=true

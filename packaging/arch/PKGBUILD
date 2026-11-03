@@ -24,7 +24,7 @@ makedepends=('git' 'nodejs>=20' 'npm' 'rust')
 source=("$pkgname::git+$url.git#tag=v$pkgver"
         hindsight.desktop)
 sha512sums=('SKIP'
-            '0fa0fc5f60e4d84e3fc7cff1bde86b511b41924b7700cfe86dd6277258ce830b4e215d21bd5ea2851d5f4fad6fc0d93d99aaab1814916851aa297afec966fdde')
+            'fbd5313f514be6044856ea7d4929fc639f8ee13be2eb65b522498e1c1a755fbfdb714b6b1b77105e223b73afc55e6e6e18b9890c23fd8bf4a598adedafd16c80')
 # strip: cargo already strips the release binary. debug: it has no debug info to split out.
 # lto: makepkg's -flto=auto turns the bundled SQLite into GCC LTO objects, and the Rust link then
 # cannot find the sqlite3_* symbols
