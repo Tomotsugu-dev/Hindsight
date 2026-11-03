@@ -19,9 +19,13 @@ license=(GPL-3.0-only)
 depends=('gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator')
 conflicts=('hindsight')
 # nodejs>=20 is the "engines" field of package.json. Quoted: bash would read >= as a redirection
-makedepends=('git' 'nodejs>=20' 'npm' 'rust')
-# The tag from git: no tarball checksum to update after each release
-source=("$pkgname::git+$url.git#tag=v$pkgver"
+makedepends=('nodejs>=20' 'npm' 'rust')
+# The release tarball, not a git checkout: makepkg clones a git source with --mirror, which here is
+# 232 MB of history (84 tags) for a 7.5 MB package. The tarball is about 126 MB, and makepkg's HTTP
+# downloader retries three times where a git clone gets no retry at all. The checksum is SKIP because
+# .github/workflows/aur.yml runs updpkgsums before publishing, so it is regenerated every release
+# instead of being bumped by hand; run updpkgsums yourself after a checkout to verify local builds.
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         hindsight.desktop)
 sha512sums=('SKIP'
             'fbd5313f514be6044856ea7d4929fc639f8ee13be2eb65b522498e1c1a755fbfdb714b6b1b77105e223b73afc55e6e6e18b9890c23fd8bf4a598adedafd16c80')
@@ -31,19 +35,21 @@ sha512sums=('SKIP'
 options=(!strip !debug !lto)
 
 prepare() {
-  cd "$pkgname"
+  # The tarball unpacks to Hindsight-<version> (capital H, the repository name), not the package
+  # name, so every phase has to cd there explicitly
+  cd "Hindsight-$pkgver"
   npm ci --no-audit --no-fund
 }
 
 build() {
-  cd "$pkgname"
+  cd "Hindsight-$pkgver"
   # --no-bundle: only the binary, no deb or rpm. The page is built without the lint, which CI runs
   npm run tauri build -- --no-bundle \
     --config '{"build":{"beforeBuildCommand":"npm run build:notest"}}'
 }
 
 package() {
-  cd "$pkgname"
+  cd "Hindsight-$pkgver"
   install -Dm755 src-tauri/target/release/hindsight "$pkgdir/usr/bin/hindsight"
   # Each icon goes in the folder of its real size: 128x128@2x.png is 256x256, icon.png 512x512
   local icons="$pkgdir/usr/share/icons/hicolor"
