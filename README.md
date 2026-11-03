@@ -126,13 +126,15 @@ Download `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 or later, Debian 12 or later)
 
 #### Arch Linux
 
-Install [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop) from the AUR with an AUR helper such as `yay`:
+Build the package from source and install it with `makepkg`. It is built on your machine, which takes a few minutes:
 
 ```bash
-yay -S hindsight-desktop
+git clone --depth 1 https://github.com/Tomotsugu-dev/Hindsight.git
+cd Hindsight/packaging/arch
+makepkg -si
 ```
 
-The package is built from source on your machine, which takes a few minutes, and then installed with pacman. Update it with the rest of your system (`yay -Syu`).
+When a new version comes out, run `git pull` in the `Hindsight` folder, then run `makepkg -si` again in `packaging/arch`.
 
 ## Acknowledgements
 

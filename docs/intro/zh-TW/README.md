@@ -125,13 +125,15 @@
 
 #### Arch Linux
 
-用 `yay` 等 AUR 輔助工具從 AUR 安裝 [`hindsight-desktop`](https://aur.archlinux.org/packages/hindsight-desktop)：
+用 `makepkg` 在你的電腦上從原始碼編譯並安裝，需要幾分鐘：
 
 ```bash
-yay -S hindsight-desktop
+git clone --depth 1 https://github.com/Tomotsugu-dev/Hindsight.git
+cd Hindsight/packaging/arch
+makepkg -si
 ```
 
-這個套件會在你的電腦上從原始碼編譯，需要幾分鐘，然後用 pacman 安裝。和系統裡的其他軟體一起更新（`yay -Syu`）。
+有新版本時，在 `Hindsight` 目錄裡執行 `git pull`，再到 `packaging/arch` 裡重新執行 `makepkg -si`。
 
 ## 致謝
 
