@@ -37,7 +37,8 @@ jobs:
 
       - name: Install git and ssh
         if: steps.key.outputs.present == 'true'
-        run: pacman -Syu --noconfirm --needed git openssh
+        # pacman-contrib 提供 updpkgsums，用来算 PKGBUILD 里的 tarball 校验和
+        run: pacman -Syu --noconfirm --needed git openssh pacman-contrib
 
       - uses: actions/checkout@v4
         if: steps.key.outputs.present == 'true'
@@ -59,12 +60,16 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/aur_key -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
 
           git clone "ssh://aur@aur.archlinux.org/$pkgname.git" "$RUNNER_TEMP/aur"
-          cp packaging/arch/PKGBUILD packaging/arch/hindsight.desktop "$RUNNER_TEMP/aur/"
 
-          # makepkg 不让 root 跑
+          # makepkg 不让 root 跑；两个文件都要拷过去，updpkgsums 会把本地文件也重算一遍
           useradd -m builder
-          cp packaging/arch/PKGBUILD /home/builder/
+          cp packaging/arch/PKGBUILD packaging/arch/hindsight.desktop /home/builder/
+          # 仓库里的 PKGBUILD 把 tarball 校验和留成 SKIP：这里下载 release tarball 算出真值写回去
+          su builder -c "cd ~ && updpkgsums"
+          # .SRCINFO 必须在 updpkgsums 之后生成，否则推上去的是旧校验和
           su builder -c "cd ~ && makepkg --printsrcinfo" > "$RUNNER_TEMP/aur/.SRCINFO"
+          # 用算好校验和的那份，而不是仓库里的那份
+          cp /home/builder/PKGBUILD packaging/arch/hindsight.desktop "$RUNNER_TEMP/aur/"
 
           cd "$RUNNER_TEMP/aur"
           git add PKGBUILD hindsight.desktop .SRCINFO
