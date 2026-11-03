@@ -123,6 +123,18 @@ Descarga `hindsight_x.y.z_universal.dmg`, haz doble clic para montar la imagen y
 
 Descarga `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 o posterior, Debian 12 o posterior) o `hindsight-x.y.z-1.x86_64.rpm` (Fedora) e instálalo. En una sesión Wayland, solo es compatible GNOME 46 a 51.
 
+#### Arch Linux
+
+Compila el paquete desde el código fuente e instálalo con `makepkg`. La compilación se hace en tu equipo y tarda unos minutos:
+
+```bash
+git clone --depth 1 https://github.com/Tomotsugu-dev/Hindsight.git
+cd Hindsight/packaging/arch
+makepkg -si
+```
+
+Cuando salga una nueva versión, ejecuta `git pull` en la carpeta `Hindsight` y después vuelve a ejecutar `makepkg -si` en `packaging/arch`.
+
 ## Agradecimientos
 
 - Gracias a la comunidad [LINUX DO](https://linux.do/).

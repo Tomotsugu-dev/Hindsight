@@ -123,6 +123,18 @@
 
 下載 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以上、Debian 12 以上）或 `hindsight-x.y.z-1.x86_64.rpm`（Fedora）並安裝。Wayland 工作階段裡只支援 GNOME 46 – 51。
 
+#### Arch Linux
+
+用 `makepkg` 在你的電腦上從原始碼編譯並安裝，需要幾分鐘：
+
+```bash
+git clone --depth 1 https://github.com/Tomotsugu-dev/Hindsight.git
+cd Hindsight/packaging/arch
+makepkg -si
+```
+
+有新版本時，在 `Hindsight` 目錄裡執行 `git pull`，再到 `packaging/arch` 裡重新執行 `makepkg -si`。
+
 ## 致謝
 
 - 感謝 [LINUX DO](https://linux.do/) 社群。

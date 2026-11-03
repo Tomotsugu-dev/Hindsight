@@ -123,6 +123,18 @@
 
 `hindsight_x.y.z_amd64.deb`（Ubuntu 22.04 以降、Debian 12 以降）または `hindsight-x.y.z-1.x86_64.rpm`（Fedora）をダウンロードしてインストールします。Wayland セッションでは GNOME 46 – 51 のみ対応しています。
 
+#### Arch Linux
+
+`makepkg` で、お使いのマシン上でソースからビルドしてインストールします（数分かかります）：
+
+```bash
+git clone --depth 1 https://github.com/Tomotsugu-dev/Hindsight.git
+cd Hindsight/packaging/arch
+makepkg -si
+```
+
+新しいバージョンが出たら、`Hindsight` フォルダで `git pull` を実行してから、`packaging/arch` でもう一度 `makepkg -si` を実行します。
+
 ## 謝辞
 
 - [LINUX DO](https://linux.do/) コミュニティに感謝します。

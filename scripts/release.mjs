@@ -3,14 +3,15 @@
 // GitHub Actions 上跑（macOS + Windows 双平台并行）。
 //
 // 用法：
-//   1. 改 package.json / Cargo.toml / tauri.conf.json 的 version 为目标版本号
+//   1. 改 package.json / Cargo.toml / tauri.conf.json 的 version 和 packaging/arch/PKGBUILD 的
+//      pkgver 为目标版本号（pkgrel 改回 1）
 //   2. 写 docs/release-notes/v<version>.md（应用内"检查更新"对话框 + GitHub Release body 都用它）
 //   3. git commit -m "Bump version to X.Y.Z" && git push
 //   4. npm run release
 //
 // 脚本会：
 //   - 校验干净的 main 分支
-//   - 校验三处 version 一致
+//   - 校验四处 version 一致
 //   - 校验 release notes 文件存在
 //   - tag 不能已存在
 //   - push v<version> tag → 触发 .github/workflows/release.yml
@@ -44,6 +45,9 @@ async function readVersionFromPkg(file) {
   if (file.endsWith(".json")) {
     return JSON.parse(content).version;
   }
+  if (file.endsWith("PKGBUILD")) {
+    return content.match(/^pkgver=(\S+)$/m)?.[1];
+  }
   // Cargo.toml: 抠 [package] 段下第一个 version = "..."
   const m = content.match(/^\s*\[package\][^\[]*?^\s*version\s*=\s*"([^"]+)"/ms);
   return m?.[1];
@@ -57,14 +61,16 @@ async function main() {
   const branch = capture("git branch --show-current").trim();
   if (branch !== "main") fail(`Not on main (current: ${branch})`);
 
-  // —— 2. 三处版本号一致 ——
+  // —— 2. 四处版本号一致 ——
   const pkgVer = await readVersionFromPkg("package.json");
   const cargoVer = await readVersionFromPkg("src-tauri/Cargo.toml");
   const tauriVer = await readVersionFromPkg("src-tauri/tauri.conf.json");
+  // Arch 的 PKGBUILD 从这个 tag 编，忘了改就一直编旧版本
+  const archVer = await readVersionFromPkg("packaging/arch/PKGBUILD");
 
-  if (pkgVer !== cargoVer || pkgVer !== tauriVer) {
+  if (pkgVer !== cargoVer || pkgVer !== tauriVer || pkgVer !== archVer) {
     fail(
-      `Version mismatch:\n  package.json = ${pkgVer}\n  Cargo.toml   = ${cargoVer}\n  tauri.conf.json = ${tauriVer}`,
+      `Version mismatch:\n  package.json = ${pkgVer}\n  Cargo.toml   = ${cargoVer}\n  tauri.conf.json = ${tauriVer}\n  packaging/arch/PKGBUILD = ${archVer}`,
     );
   }
   const version = pkgVer;

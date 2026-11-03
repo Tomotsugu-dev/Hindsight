@@ -124,6 +124,18 @@ Download `hindsight_x.y.z_universal.dmg`, double-click to mount, then drag Hinds
 
 Download `hindsight_x.y.z_amd64.deb` (Ubuntu 22.04 or later, Debian 12 or later) or `hindsight-x.y.z-1.x86_64.rpm` (Fedora) and install it. In a Wayland session, only GNOME 46–51 is supported.
 
+#### Arch Linux
+
+Build the package from source and install it with `makepkg`. It is built on your machine, which takes a few minutes:
+
+```bash
+git clone --depth 1 https://github.com/Tomotsugu-dev/Hindsight.git
+cd Hindsight/packaging/arch
+makepkg -si
+```
+
+When a new version comes out, run `git pull` in the `Hindsight` folder, then run `makepkg -si` again in `packaging/arch`.
+
 ## Acknowledgements
 
 - Thanks to the [LINUX DO](https://linux.do/) community.
