@@ -20,3 +20,9 @@
 *.woff2 binary
 *.ttf binary
 *.otf binary
+
+# GitHub 生成的源码压缩包（Release 页的 Source code，Arch 包也下载它）不带这些目录：
+# 编译用不到，却占了压缩包的绝大部分
+/docs/intro export-ignore
+/docs/features export-ignore
+/web export-ignore
