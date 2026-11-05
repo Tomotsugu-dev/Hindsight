@@ -1500,7 +1500,14 @@
         "nextAria": "後一天",
         "todayBack": "回到今天",
         "today": "今天",
-        "yesterday": "昨天"
+        "yesterday": "昨天",
+        "groupAria": "選擇日期"
+      },
+      "status": {
+        "done": "{{count}} 段已生成",
+        "partial": "已生成 {{done}} / {{total}} 段",
+        "running": "正在總結「{{label}}」· 第 {{index}} 段，共 {{total}} 段",
+        "empty": "這一天還沒有日報。點「開始總結」，按時段逐段寫出來。"
       },
       "actions": {
         "stop": "停止",

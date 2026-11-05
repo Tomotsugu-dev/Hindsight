@@ -1503,7 +1503,14 @@
         "nextAria": "Next day",
         "todayBack": "Back to today",
         "today": "Today",
-        "yesterday": "Yesterday"
+        "yesterday": "Yesterday",
+        "groupAria": "Choose a day"
+      },
+      "status": {
+        "done": "{{count}} segments generated",
+        "partial": "{{done}} of {{total}} segments generated",
+        "running": "Summarizing \"{{label}}\" · segment {{index}} of {{total}}",
+        "empty": "No daily report for this day yet. Click \"Start summary\" to write it segment by segment."
       },
       "actions": {
         "stop": "Stop",

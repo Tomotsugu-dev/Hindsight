@@ -1500,7 +1500,14 @@
         "nextAria": "次の日",
         "todayBack": "今日に戻る",
         "today": "今日",
-        "yesterday": "昨日"
+        "yesterday": "昨日",
+        "groupAria": "日付を選択"
+      },
+      "status": {
+        "done": "{{count}} 帯を生成済み",
+        "partial": "{{total}} 帯中 {{done}} 帯を生成済み",
+        "running": "「{{label}}」を要約中 · {{total}} 帯中 {{index}} 帯目",
+        "empty": "この日の日報はまだありません。「サマリー開始」で時間帯ごとに生成します。"
       },
       "actions": {
         "stop": "停止",

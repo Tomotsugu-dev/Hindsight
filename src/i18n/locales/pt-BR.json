@@ -1503,7 +1503,14 @@
         "nextAria": "Próximo dia",
         "todayBack": "Voltar para hoje",
         "today": "Hoje",
-        "yesterday": "Ontem"
+        "yesterday": "Ontem",
+        "groupAria": "Escolher o dia"
+      },
+      "status": {
+        "done": "{{count}} segmentos gerados",
+        "partial": "{{done}} de {{total}} segmentos gerados",
+        "running": "Resumindo \"{{label}}\" · segmento {{index}} de {{total}}",
+        "empty": "Ainda não há relatório para este dia. Clique em \"Iniciar resumo\" para gerá-lo segmento por segmento."
       },
       "actions": {
         "stop": "Parar",
