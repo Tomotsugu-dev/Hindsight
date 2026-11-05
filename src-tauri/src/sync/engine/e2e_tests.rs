@@ -655,6 +655,71 @@ async fn turning_on_a_dataset_pulls_only_that_dataset() {
     );
 }
 
+/// 用户在 A 改写一段日报：B 收到改写后的正文；
+/// A 再拉到 B 那份还是旧正文的文件，修改也不会被盖回去。
+#[tokio::test]
+async fn edited_summary_reaches_other_device() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    enable_ai_summaries_sync(&a).await;
+    enable_ai_summaries_sync(&b).await;
+
+    a.pool
+        .0
+        .call(|conn| {
+            conn.execute(
+                "INSERT INTO ai_summaries(source, local_date, segment_idx, label, start_hour,
+                                          end_hour, content, model, status, error, generated_at)
+                 VALUES ('daily','2026-07-05',0,'上午',9,12,'AI 写错的正文','m','ok',NULL,
+                         '2026-07-05T10:00:00+00:00')",
+                [],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    // B 同步两轮：第二轮把带着旧正文的这一行推进 B 自己的文件
+    b.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(summary_text(&b).await, "AI 写错的正文");
+
+    crate::repo::ai_summaries::edit_content(&a.pool, "daily", "2026-07-05", 0, "用户改过的正文")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    assert_eq!(
+        summary_text(&a).await,
+        "用户改过的正文",
+        "A 拉到 B 的旧正文后，修改应还在"
+    );
+
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(
+        summary_text(&b).await,
+        "用户改过的正文",
+        "B 应收到 A 的修改"
+    );
+}
+
+async fn summary_text(dev: &TestDevice) -> String {
+    dev.pool
+        .0
+        .call(|conn| {
+            conn.query_row(
+                "SELECT content FROM ai_summaries
+                  WHERE source = 'daily' AND local_date = '2026-07-05' AND segment_idx = 0",
+                [],
+                |r| r.get(0),
+            )
+            .db()
+        })
+        .await
+        .unwrap()
+}
+
 /// Test 5：flush_pull cursor "longest true prefix" 推进逻辑 ——
 /// 中间文件失败时 cursor 应停在前一个成功文件的 modifiedTime，
 /// 不能跨过失败文件推到后面成功的（否则下次 pull 永久丢失失败文件）。
