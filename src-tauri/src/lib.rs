@@ -409,6 +409,7 @@ pub fn run() {
             commands::ai_summary::retry_summary_segment,
             commands::ai_summary::cancel_day_summary,
             commands::ai_summary::get_day_summary,
+            commands::ai_summary::edit_summary_segment,
             commands::ai_summary::clear_day_summary,
             commands::ai_summary::clear_day_segment_summaries,
             // --- ai: 周报 ---

@@ -14,7 +14,7 @@ use rusqlite::types::ToSql;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
@@ -215,6 +215,73 @@ pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()
         })
         .await?;
     Ok(())
+}
+
+/// Replaces the text of one segment with text written by the user, and returns the new row.
+///
+/// The row becomes `ok` and keeps its label, hours and model. `generated_at` moves forward,
+/// so the edit reaches other devices the same way a new generation does.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidInput`] if `content` is blank or the segment does not exist.
+pub async fn edit_content(
+    pool: &DbPool,
+    source: &str,
+    local_date: &str,
+    segment_idx: u32,
+    content: &str,
+) -> Result<SegmentSummaryRow> {
+    if content.trim().is_empty() {
+        return Err(Error::InvalidInput("summary text is empty"));
+    }
+    let src = source.to_string();
+    let date = local_date.to_string();
+    let text = content.to_string();
+    let found = pool
+        .0
+        .call(move |conn| {
+            let old: Option<String> = conn
+                .query_row(
+                    "SELECT generated_at FROM ai_summaries
+                      WHERE source = ?1 AND local_date = ?2 AND segment_idx = ?3",
+                    rusqlite::params![src, date, segment_idx as i64],
+                    |r| r.get(0),
+                )
+                .optional()
+                .db()?;
+            let Some(old) = old else {
+                return Ok(false);
+            };
+            conn.execute(
+                "UPDATE ai_summaries
+                    SET content = ?4, status = 'ok', error = NULL, generated_at = ?5
+                  WHERE source = ?1 AND local_date = ?2 AND segment_idx = ?3",
+                rusqlite::params![src, date, segment_idx as i64, text, later_than(&old)],
+            )
+            .db()?;
+            Ok(true)
+        })
+        .await?;
+    if !found {
+        return Err(Error::InvalidInput("summary segment not found"));
+    }
+    get_day(pool, source, local_date)
+        .await?
+        .into_iter()
+        .find(|r| r.segment_idx == segment_idx)
+        .ok_or(Error::InvalidInput("summary segment not found"))
+}
+
+/// Returns the current time, or one second after `old` if `old` is not earlier than now.
+///
+/// When devices merge summaries, the row with the later `generated_at` wins.
+fn later_than(old: &str) -> String {
+    let now = chrono::Utc::now();
+    match chrono::DateTime::parse_from_rfc3339(old).map(|t| t.with_timezone(&chrono::Utc)) {
+        Ok(old) if old >= now => (old + chrono::Duration::seconds(1)).to_rfc3339(),
+        _ => now.to_rfc3339(),
+    }
 }
 
 /// 清空某 source 下某天所有段总结 + 同日逐图描述。`force_refresh` 时调。
@@ -1187,5 +1254,85 @@ mod tests {
             ],
             "两端日期必须计入，区间外大时长行必须排除"
         );
+    }
+
+    /// 用户改写一段：正文换成用户写的，失败段变成 ok，标签、时段、模型不动；
+    /// generated_at 往后走，别的设备才会收下这次修改。
+    #[tokio::test]
+    async fn edit_content_replaces_text_and_marks_ok() {
+        let pool = fresh_test_pool().await;
+        let mut failed = seg("daily", "2026-07-20", 1);
+        failed.content = String::new();
+        failed.status = "error".to_string();
+        failed.error = Some("timeout".to_string());
+        upsert_segment(&pool, &failed).await.unwrap();
+
+        let row = edit_content(&pool, "daily", "2026-07-20", 1, "下午在写周报")
+            .await
+            .unwrap();
+
+        assert_eq!(row.content, "下午在写周报");
+        assert_eq!(row.status, "ok");
+        assert_eq!(row.error, None);
+        assert_eq!(row.label, failed.label);
+        assert_eq!((row.start_hour, row.end_hour), (9, 12));
+        assert_eq!(row.model, failed.model);
+        assert!(
+            row.generated_at > failed.generated_at,
+            "generated_at 应晚于改写前: {} vs {}",
+            row.generated_at,
+            failed.generated_at
+        );
+        let stored = get_day(&pool, "daily", "2026-07-20").await.unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].content, "下午在写周报");
+        assert_eq!(stored[0].status, "ok");
+        assert_eq!(stored[0].generated_at, row.generated_at);
+    }
+
+    /// 别的设备时钟快、生成时间比本机现在还晚时，改写后的 generated_at 也要比原来晚，
+    /// 否则合并时旧正文赢，用户的修改被丢掉。
+    #[tokio::test]
+    async fn edit_content_moves_past_a_generated_at_ahead_of_this_clock() {
+        let pool = fresh_test_pool().await;
+        let mut ahead = seg("weekly", "2026-07-20", 0);
+        ahead.generated_at = "2999-01-01T00:00:00+00:00".to_string();
+        upsert_segment(&pool, &ahead).await.unwrap();
+
+        let row = edit_content(&pool, "weekly", "2026-07-20", 0, "这周主要在改同步")
+            .await
+            .unwrap();
+
+        assert!(
+            row.generated_at > ahead.generated_at,
+            "generated_at 应晚于原值，实际: {}",
+            row.generated_at
+        );
+        assert!(chrono::DateTime::parse_from_rfc3339(&row.generated_at).is_ok());
+    }
+
+    /// 空白正文、不存在的段、别的 source 都拒绝，已有的行不被碰。
+    #[tokio::test]
+    async fn edit_content_rejects_blank_text_and_missing_segment() {
+        let pool = fresh_test_pool().await;
+        let original = seg("daily", "2026-07-20", 0);
+        upsert_segment(&pool, &original).await.unwrap();
+
+        let blank = edit_content(&pool, "daily", "2026-07-20", 0, " \n\t").await;
+        assert!(matches!(blank, Err(Error::InvalidInput(_))), "{blank:?}");
+        let missing = edit_content(&pool, "daily", "2026-07-20", 5, "正文").await;
+        assert!(
+            matches!(missing, Err(Error::InvalidInput(_))),
+            "{missing:?}"
+        );
+        let other_source = edit_content(&pool, "debug", "2026-07-20", 0, "正文").await;
+        assert!(
+            matches!(other_source, Err(Error::InvalidInput(_))),
+            "{other_source:?}"
+        );
+
+        let stored = get_day(&pool, "daily", "2026-07-20").await.unwrap();
+        assert_eq!(stored[0].content, original.content);
+        assert_eq!(stored[0].generated_at, original.generated_at);
     }
 }
