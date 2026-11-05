@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { save } from "@tauri-apps/plugin-dialog";
-import { AlertCircle, Download, Trash2, X } from "lucide-react";
+import { AlertCircle, Download, Pencil, Trash2, X } from "lucide-react";
 import { logError } from "../../../lib/logger";
 import { localizeAiError } from "../../../lib/aiErrors";
 import { ROUTES } from "../../../config/nav";
@@ -33,6 +33,7 @@ import { IconButton, MainButton, NoticeBars, PeriodNav, ReportHeader } from "./R
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
+import { SummaryEditor } from "./SummaryEditor";
 import {
   compactDuration,
   formatGeneratedAt,
@@ -120,6 +121,8 @@ export default function WeeklyTab() {
   const [dayRows, setDayRows] = useState<SegmentSummaryRow[] | null>(null);
   const [topNotice, setTopNotice] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // 整周回顾正在修改
+  const [editing, setEditing] = useState(false);
   /** 点击生成后 precheck 检出缺失日，弹"是否继续"确认前的待办上下文。
    *  null = 无弹框；非 null = ConfirmDialog 打开中。
    *  forceRefresh 透传给确认后真正发起的 generate 调用，保证语义一致。 */
@@ -131,6 +134,8 @@ export default function WeeklyTab() {
   } | null>(null);
 
   const { monday, sunday } = useMemo(() => weekRangeFromOffset(weekOffset), [weekOffset]);
+  const mondayRef = useRef(monday);
+  mondayRef.current = monday;
 
   // hasModel：周报走纯文本段总结——本地 summary 模型或选定云端 二选一即可。
   const activeMain = settings?.ai.activeMain ?? "";
@@ -154,7 +159,13 @@ export default function WeeklyTab() {
   useEffect(() => {
     setPendingConfirm(null);
     setSelected(null);
+    setEditing(false);
   }, [monday]);
+
+  // 点开某一天时面板换成那天的日报，编辑框跟着收起
+  useEffect(() => {
+    if (selected) setEditing(false);
+  }, [selected]);
 
   // 切周 / 进页：拉一次落库行
   useEffect(() => {
@@ -340,6 +351,23 @@ export default function WeeklyTab() {
 
   const hasOk = row?.status === "ok";
   const hasAnyRow = row != null;
+
+  // 开始生成就收起编辑框：这一轮会覆盖正在改的周报
+  useEffect(() => {
+    if (generating) setEditing(false);
+  }, [generating]);
+
+  const onSaveEdit = async (text: string) => {
+    try {
+      const updated = await api.editSummarySegment("weekly", monday, 0, text);
+      // 保存期间切到了别的周：不能把这一行放进新的一周
+      if (updated.localDate !== mondayRef.current) return;
+      setRow(updated);
+      setEditing(false);
+    } catch (e) {
+      setTopError(typeof e === "string" ? e : String(e));
+    }
+  };
 
   const cardState: CardState = isRunningHere
     ? { kind: "running" }
@@ -548,6 +576,17 @@ export default function WeeklyTab() {
               />
             )}
             <IconButton
+              label={t("aiSummary.edit.action")}
+              onClick={() => {
+                setSelected(null);
+                setEditing(true);
+              }}
+              disabled={generating || !hasOk || editing}
+              title={generating ? t("aiSummary.edit.runningTooltip") : t("aiSummary.edit.tooltip")}
+            >
+              <Pencil size={16} strokeWidth={2} />
+            </IconButton>
+            <IconButton
               label={t("aiSummary.weekly.actions.exportMarkdown")}
               onClick={() => void onExportMarkdown()}
               disabled={generating || !hasOk}
@@ -661,7 +700,13 @@ export default function WeeklyTab() {
               onGenerate={() => openDaily(selectedCell.date)}
             />
           ) : (
-            <WeekBody state={cardState} emptyHint={emptyHint} />
+            <WeekBody
+              state={cardState}
+              emptyHint={emptyHint}
+              editing={editing}
+              onSaveEdit={onSaveEdit}
+              onCancelEdit={() => setEditing(false)}
+            />
           )}
         </div>
       </section>
@@ -789,8 +834,17 @@ function DayBody({ cell, rows, segments, onGenerate }: DayBodyProps) {
   );
 }
 
-/** 面板默认的内容：整周回顾正文，或者生成中、失败、还没生成时的样子。 */
-function WeekBody({ state, emptyHint }: { state: CardState; emptyHint: string }) {
+interface WeekBodyProps {
+  state: CardState;
+  emptyHint: string;
+  /** 整周回顾正在修改 */
+  editing: boolean;
+  onSaveEdit: (text: string) => Promise<void>;
+  onCancelEdit: () => void;
+}
+
+/** 面板默认的内容：整周回顾正文或编辑框，或者生成中、失败、还没生成时的样子。 */
+function WeekBody({ state, emptyHint, editing, onSaveEdit, onCancelEdit }: WeekBodyProps) {
   const { t } = useTranslation();
   switch (state.kind) {
     case "empty":
@@ -806,7 +860,11 @@ function WeekBody({ state, emptyHint }: { state: CardState; emptyHint: string })
         </div>
       );
     case "ok":
-      return <MarkdownText text={state.row.content} className={styles.bodyText} />;
+      return editing ? (
+        <SummaryEditor initial={state.row.content} onSave={onSaveEdit} onCancel={onCancelEdit} />
+      ) : (
+        <MarkdownText text={state.row.content} className={styles.bodyText} />
+      );
     case "error":
       return (
         <div className={ctl.errorBox}>
