@@ -17,7 +17,7 @@
 -
 
 ## Screenshots
-<!-- For visible UI changes. Delete this section otherwise. -->
+<!-- For a large UI change: from the web demo, saved in docs/pr/<number>/. Delete this section otherwise. -->
 
 <!-- Link an issue with "Refs #N". Do not write Closes or Fixes. -->
 
