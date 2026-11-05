@@ -42,6 +42,7 @@ docs/intro_en/imgs/Hindsight_en.mp4
 
 # 内部 doc / TODO / 多设备测试笔记，仅本地保留不入仓
 docs/internal/
+TODO.md
 
 # Editor directories and files
 .vscode/*
