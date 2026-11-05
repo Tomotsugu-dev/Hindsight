@@ -1,0 +1,113 @@
+/* 日报页和周报面板共用的时间轴。外面套不套卡片由用的地方决定。
+   文字分三级：段名 16 → 正文 14 → 时间等辅助信息 12–13 */
+
+.timeline {
+  /* 圆点外圈用底色描一圈，盖住穿过它的竖线；放在别的底色上时覆盖它 */
+  --timeline-bg: var(--surface-card-elevated);
+  /* 圆点中心离一行顶部的距离 = .content 上内边距 + .rowHead 高度的一半 */
+  --dot-center: 32px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 52px 20px minmax(0, 1fr);
+  column-gap: 14px;
+}
+
+.time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-top: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeStart {
+  font-size: 13px;
+  line-height: 28px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-regular);
+}
+
+.timeEnd {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.rail {
+  position: relative;
+}
+
+.rail::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-default);
+}
+
+/* 竖线从第一个点开始，到最后一个点结束 */
+.row:first-child .rail::before {
+  top: var(--dot-center);
+}
+
+.row:last-child .rail::before {
+  bottom: auto;
+  height: var(--dot-center);
+}
+
+.row:only-child .rail::before {
+  display: none;
+}
+
+.dot {
+  position: absolute;
+  left: 4px;
+  top: calc(var(--dot-center) - 6px);
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--timeline-bg);
+}
+
+.content {
+  min-width: 0;
+  padding: 18px 0 20px;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.label {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+}
+
+.bodyText {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-regular);
+}
+
+.bodyMuted {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* 扁平布局：底色是页面本身 */
+:global([data-layout="flat"]) .timeline {
+  --timeline-bg: var(--surface-app);
+}

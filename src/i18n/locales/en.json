@@ -1419,9 +1419,34 @@
       "weekNav": {
         "prevAria": "Previous week",
         "nextAria": "Next week",
-        "thisWeek": "This week",
-        "lastWeek": "Last week",
-        "thisWeekBack": "Back to this week"
+        "thisWeekBack": "Back to this week",
+        "groupAria": "Choose a week"
+      },
+      "status": {
+        "generated": "Generated {{time}}",
+        "failed": "The last run failed",
+        "empty": "No weekly review for this week yet."
+      },
+      "days": {
+        "aria": "Daily reports this week",
+        "daily": "Daily report",
+        "noDaily": "No daily report",
+        "future": "Not yet"
+      },
+      "panel": {
+        "week": "Weekly review",
+        "day": "Daily report · {{date}}",
+        "openDaily": "Open in Daily",
+        "back": "Back to the weekly review",
+        "dayEmpty": "No daily report for this day yet",
+        "dayActivity": "{{duration}} of app records on this day.",
+        "dayNoActivity": "Nothing was recorded on this day.",
+        "generateDay": "Generate this day's report"
+      },
+      "empty": {
+        "ready": "Click \"Generate\" to turn these daily reports into one review.",
+        "fewDaily": "Only {{count}} days this week have a daily report. The more daily reports, the better the review. You can fill them in on the Daily tab first.",
+        "noDaily": "No daily reports this week yet. Generate them on the Daily tab first, or write a short review from app records only."
       },
       "actions": {
         "stop": "Stop",
@@ -1503,7 +1528,14 @@
         "nextAria": "Next day",
         "todayBack": "Back to today",
         "today": "Today",
-        "yesterday": "Yesterday"
+        "yesterday": "Yesterday",
+        "groupAria": "Choose a day"
+      },
+      "status": {
+        "done": "{{count}} segments generated",
+        "partial": "{{done}} of {{total}} segments generated",
+        "running": "Summarizing \"{{label}}\" · segment {{index}} of {{total}}",
+        "empty": "No daily report for this day yet. Click \"Start summary\" to write it segment by segment."
       },
       "actions": {
         "stop": "Stop",

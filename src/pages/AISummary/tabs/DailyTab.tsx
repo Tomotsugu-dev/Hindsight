@@ -1,24 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import { save } from "@tauri-apps/plugin-dialog";
-import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import { logError } from "../../../lib/logger";
 import { localizeAiError } from "../../../lib/aiErrors";
-import {
-  AlertTriangle,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Download,
-  Loader2,
-  Play,
-  RefreshCcw,
-  RotateCcw,
-  Square,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AlertCircle, Download, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import {
   api,
   SUMMARY_CLOUD_SENTINEL,
@@ -39,6 +25,11 @@ import {
   subscribeDailySummary,
   subscribeSegmentDone,
 } from "../../../state/dailySummary";
+import { IconButton, MainButton, NoticeBars, PeriodNav, ReportHeader } from "./ReportControls";
+import ctl from "./ReportControls.module.css";
+import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
+import tl from "./SegmentTimeline.module.css";
+import { dayOffsetOf, formatGeneratedAt, modelLabel, parseDateStr, toDateStr } from "./reportFormat";
 import styles from "./DailyTab.module.css";
 
 /** 段卡片在 UI 里的展示状态——由 ai_summaries 行 + 当前 in-flight 进度推导。 */
@@ -53,10 +44,7 @@ type CardState =
 function offsetToDateStr(dayOffset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dayOffset);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return toDateStr(d);
 }
 
 /**
@@ -66,12 +54,14 @@ function offsetToDateStr(dayOffset: number): string {
  *   empty → running → (ok | skipped | error)
  */
 export default function DailyTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, reload: reloadSettings } = useSettings();
-  const [dayOffset, setDayOffset] = useState(0);
+  // 从周报点某一天跳过来时带 ?date=YYYY-MM-DD，打开那一天
+  const [searchParams] = useSearchParams();
+  const [dayOffset, setDayOffset] = useState(() => dayOffsetOf(searchParams.get("date")));
   const [rows, setRows] = useState<Map<number, SegmentSummaryRow>>(new Map());
   // 在跑状态全部从 module-level store 读，组件 unmount 不丢；切走再回来按钮、
-  // engine hint、当前段 spinner 都自动恢复。
+  // 状态行、当前段 spinner 都自动恢复。
   const runSnap = useSyncExternalStore(
     subscribeDailySummary,
     getDailyRunningSnapshot,
@@ -81,12 +71,17 @@ export default function DailyTab() {
   const [topNotice, setTopNotice] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // 鼠标接近发光特效：Today 页同款，让日期导航更"活"
-  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
-
   const date = useMemo(() => offsetToDateStr(dayOffset), [dayOffset]);
+  // 状态行开头的「11月4日周三」：按界面语言排
+  const dateText = useMemo(
+    () =>
+      new Intl.DateTimeFormat(i18n.language, {
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      }).format(parseDateStr(date)),
+    [date, i18n.language],
+  );
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
   // hasModel 跟后端 summary_runner 的 check 对齐：段总结满足以下任一：
@@ -285,6 +280,65 @@ export default function DailyTab() {
   // 至少有一段已落库（不论 ok / skipped / error）就允许导出
   const hasAnyRow = rows.size > 0;
 
+  // 日期切换按钮上的字，跟日统计同一套说法；具体日期放在状态行开头
+  const navLabel =
+    dayOffset === 0
+      ? t("today.dayNav.today")
+      : dayOffset === -1
+        ? t("today.dayNav.yesterday")
+        : t("today.dayNav.daysAgo", { count: -dayOffset });
+
+  // 工具栏下面的状态行：在跑时说跑到哪，没数据时给提示，有数据时说生成了几段、
+  // 最近一段什么时候生成、用的哪个模型
+  const status = ((): { busy: boolean; text: string } => {
+    if (generating) {
+      const seg = runningIdx != null ? segments[runningIdx] : undefined;
+      let text: string;
+      if (stopping) text = t("aiSummary.daily.actions.stopping");
+      else if (enginePhase) text = enginePhase;
+      else if (seg && runningIdx != null)
+        text = t("aiSummary.daily.status.running", {
+          label: seg.label,
+          index: runningIdx + 1,
+          total: segments.length,
+        });
+      else text = t("aiSummary.daily.card.badge.summarizing");
+      return { busy: true, text };
+    }
+    if (!hasAnyRow) {
+      return {
+        busy: false,
+        text: hasModel
+          ? t("aiSummary.daily.status.empty")
+          : t("aiSummary.daily.actions.noModelTooltip"),
+      };
+    }
+    // 写出了内容或确认没活动的段算完成；失败的段不算
+    let finished = 0;
+    segments.forEach((_, i) => {
+      const status = rows.get(i)?.status;
+      if (
+        status === "ok" ||
+        status === "skipped_no_screenshots" ||
+        status === "skipped_no_activity"
+      )
+        finished += 1;
+    });
+    let latest: SegmentSummaryRow | null = null;
+    for (const r of rows.values()) {
+      if (!latest || r.generatedAt > latest.generatedAt) latest = r;
+    }
+    const parts = [
+      finished === segments.length
+        ? t("aiSummary.daily.status.done", { count: finished })
+        : t("aiSummary.daily.status.partial", { done: finished, total: segments.length }),
+    ];
+    const at = latest ? formatGeneratedAt(latest.generatedAt, i18n.language, date) : null;
+    if (at) parts.push(at);
+    if (latest?.model) parts.push(modelLabel(latest.model));
+    return { busy: false, text: parts.join(" · ") };
+  })();
+
   /** 把当前日期的所有段总结拼成 Markdown 文件并下载。
    *  含 YAML frontmatter（date / generated_at / model / 状态汇总）+ 顶部总览
    *  + 每段状态徽章 + 段间 --- 分隔，方便贴 Notion / Obsidian / GitHub 渲染。
@@ -401,171 +455,117 @@ export default function DailyTab() {
 
   return (
     <>
-      <p className={styles.subtitle}>{t("aiSummary.daily.subtitle")}</p>
-
-      <header className={styles.header}>
-        {/* 日期导航：< [今天] >，参照 Today 页（accent 描边 + glow 跟手） */}
-        <div className={styles.dateNav}>
-          <button
-            ref={prevBtnRef}
-            type="button"
-            className={`${styles.navBtn} glow`}
-            onClick={() => setDayOffset((v) => v - 1)}
-            disabled={generating}
-            aria-label={t("aiSummary.daily.dateNav.prevAria")}
-          >
-            <ChevronLeft size={14} strokeWidth={1.75} />
-          </button>
-          <button
-            ref={pillRef}
-            type="button"
-            className={`${styles.dayPill} ${dayOffset !== 0 ? styles.dayPillClickable : ""} glow`}
-            onClick={() => setDayOffset(0)}
-            disabled={generating || dayOffset === 0}
-            title={dayOffset === 0 ? undefined : t("aiSummary.daily.dateNav.todayBack")}
-          >
-            {offsetLabel(dayOffset)}
-          </button>
-          <button
-            ref={nextBtnRef}
-            type="button"
-            className={`${styles.navBtn} glow`}
-            onClick={() => setDayOffset((v) => v + 1)}
-            disabled={generating || dayOffset >= 0}
-            aria-label={t("aiSummary.daily.dateNav.nextAria")}
-          >
-            <ChevronRight size={14} strokeWidth={1.75} />
-          </button>
-        </div>
-
-        {/* 主操作按钮：紧跟日期导航 */}
-        {generating ? (
-          <button
-            type="button"
-            className={styles.stopBtn}
-            onClick={() => void onCancel()}
-            disabled={stopping}
-          >
-            <Square size={14} strokeWidth={2} />
-            {mainBtnLabel}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={styles.startBtn}
-            onClick={() => void onGenerate(allDone)}
-            disabled={!hasModel}
-            title={
-              hasModel
-                ? allDone
-                  ? t("aiSummary.daily.actions.regenerateTooltip")
-                  : t("aiSummary.daily.actions.startTooltip")
-                : t("aiSummary.daily.actions.noModelTooltip")
-            }
-          >
-            {allDone ? (
-              <RefreshCcw size={14} strokeWidth={2} />
+      <ReportHeader
+        subtitle={t("aiSummary.daily.subtitle")}
+        period={dateText}
+        status={status}
+        nav={
+          <PeriodNav
+            groupLabel={t("aiSummary.daily.dateNav.groupAria")}
+            prevLabel={t("aiSummary.daily.dateNav.prevAria")}
+            nextLabel={t("aiSummary.daily.dateNav.nextAria")}
+            resetTitle={t("aiSummary.daily.dateNav.todayBack")}
+            label={navLabel}
+            atCurrent={dayOffset >= 0}
+            locked={generating}
+            onPrev={() => setDayOffset((v) => v - 1)}
+            onNext={() => setDayOffset((v) => v + 1)}
+            onReset={() => setDayOffset(0)}
+          />
+        }
+        actions={
+          <>
+            {generating ? (
+              <MainButton
+                action="stop"
+                label={mainBtnLabel}
+                onClick={() => void onCancel()}
+                disabled={stopping}
+              />
             ) : (
-              <Play size={14} strokeWidth={2} />
+              <MainButton
+                action={allDone ? "regenerate" : "start"}
+                label={mainBtnLabel}
+                onClick={() => void onGenerate(allDone)}
+                disabled={!hasModel}
+                title={
+                  hasModel
+                    ? allDone
+                      ? t("aiSummary.daily.actions.regenerateTooltip")
+                      : t("aiSummary.daily.actions.startTooltip")
+                    : t("aiSummary.daily.actions.noModelTooltip")
+                }
+              />
             )}
-            {mainBtnLabel}
-          </button>
-        )}
+            <IconButton
+              label={t("aiSummary.daily.actions.exportMarkdown")}
+              onClick={() => void onExportMarkdown()}
+              disabled={generating || !hasAnyRow}
+              title={
+                !hasAnyRow
+                  ? t("aiSummary.daily.actions.exportEmptyTooltip")
+                  : generating
+                    ? t("aiSummary.daily.actions.exportRunningTooltip")
+                    : t("aiSummary.daily.actions.exportTooltip")
+              }
+            >
+              <Download size={16} strokeWidth={2} />
+            </IconButton>
+            <IconButton
+              label={t("aiSummary.daily.actions.delete")}
+              danger
+              onClick={() => {
+                if (generating) return;
+                setConfirmingDelete(true);
+              }}
+              disabled={generating || !hasAnyRow}
+              title={
+                !hasAnyRow
+                  ? t("aiSummary.daily.actions.deleteEmptyTooltip")
+                  : t("aiSummary.daily.actions.deleteTooltip")
+              }
+            >
+              <Trash2 size={16} strokeWidth={2} />
+            </IconButton>
+          </>
+        }
+      />
 
-        {/* 删除当天 daily 数据 */}
-        <button
-          type="button"
-          className={styles.deleteBtn}
-          onClick={() => {
-            if (generating) return;
-            setConfirmingDelete(true);
-          }}
-          disabled={generating || !hasAnyRow}
-          title={
-            !hasAnyRow
-              ? t("aiSummary.daily.actions.deleteEmptyTooltip")
-              : t("aiSummary.daily.actions.deleteTooltip")
-          }
-        >
-          <Trash2 size={14} strokeWidth={2} />
-          {t("aiSummary.daily.actions.delete")}
-        </button>
+      <NoticeBars
+        error={topError}
+        dismissLabel={t("aiSummary.daily.actions.dismissError")}
+        onDismissError={clearTopError}
+        notice={topNotice}
+      />
 
-        {/* 导出 Markdown：推到 header 最右 */}
-        <button
-          type="button"
-          className={styles.exportBtn}
-          onClick={() => void onExportMarkdown()}
-          disabled={generating || !hasAnyRow}
-          title={
-            !hasAnyRow
-              ? t("aiSummary.daily.actions.exportEmptyTooltip")
-              : generating
-                ? t("aiSummary.daily.actions.exportRunningTooltip")
-                : t("aiSummary.daily.actions.exportTooltip")
-          }
-        >
-          <Download size={14} strokeWidth={2} />
-          {t("aiSummary.daily.actions.exportMarkdown")}
-        </button>
-      </header>
+      {segments.length > 0 ? (
+        <SegmentTimeline className={styles.card} data-part="card">
+          {segments.map((seg, idx) => {
+            const row = rows.get(idx);
+            const isRunning = runningIdx === idx;
+            const state: CardState = isRunning
+              ? { kind: "running" }
+              : !row
+                ? { kind: "empty" }
+                : row.status === "ok"
+                  ? { kind: "ok", row }
+                  : row.status === "skipped_no_screenshots" ||
+                      row.status === "skipped_no_activity"
+                    ? { kind: "skipped", row }
+                    : { kind: "error", row };
 
-      {topError ? (
-        <div className={styles.errorBar}>
-          <AlertTriangle size={14} strokeWidth={2.2} />
-          <span>{topError}</span>
-          <button
-            type="button"
-            className={styles.errorClose}
-            onClick={clearTopError}
-            aria-label={t("aiSummary.daily.actions.dismissError")}
-            title={t("aiSummary.daily.actions.dismissError")}
-          >
-            <X size={12} strokeWidth={2.4} />
-          </button>
-        </div>
+            return (
+              <SegmentRow
+                key={idx}
+                seg={seg}
+                state={state}
+                onRetry={() => void onRetrySegment(idx)}
+                retryDisabled={generating}
+              />
+            );
+          })}
+        </SegmentTimeline>
       ) : null}
-
-      {topNotice ? (
-        <div className={styles.successBar}>
-          <Check size={14} strokeWidth={2.4} />
-          <span>{topNotice}</span>
-        </div>
-      ) : null}
-
-      {enginePhase ? (
-        <div className={styles.engineHint}>
-          <Loader2 size={14} className={styles.spin} />
-          <span>{enginePhase}</span>
-        </div>
-      ) : null}
-
-      <div className={styles.cardList}>
-        {segments.map((seg, idx) => {
-          const row = rows.get(idx);
-          const isRunning = runningIdx === idx;
-          const state: CardState = isRunning
-            ? { kind: "running" }
-            : !row
-              ? { kind: "empty" }
-              : row.status === "ok"
-                ? { kind: "ok", row }
-                : row.status === "skipped_no_screenshots" ||
-                    row.status === "skipped_no_activity"
-                  ? { kind: "skipped", row }
-                  : { kind: "error", row };
-
-          return (
-            <SegmentCard
-              key={idx}
-              seg={seg}
-              state={state}
-              onRetry={() => void onRetrySegment(idx)}
-              retryDisabled={generating}
-            />
-          );
-        })}
-      </div>
       <ConfirmDialog
         open={confirmingDelete}
         title={t("aiSummary.daily.actions.deleteConfirmTitle", { date })}
@@ -611,39 +611,37 @@ export default function DailyTab() {
   );
 }
 
-interface SegmentCardProps {
+interface SegmentRowProps {
   seg: AiSegment;
   state: CardState;
   onRetry: () => void;
   retryDisabled: boolean;
 }
 
-function SegmentCard({ seg, state, onRetry, retryDisabled }: SegmentCardProps) {
+/** 时间轴上的一段，加上生成中、未生成、重试这些日报页才有的东西。 */
+function SegmentRow({ seg, state, onRetry, retryDisabled }: SegmentRowProps) {
   const { t } = useTranslation();
-  // 段标签＝色点 + 中性文字：颜色只出现在 8px 圆点上（跟设置页同一份色源），
-  // 文字保持中性深灰，不再压在饱和色块上。
-  const dotColor = resolveSegmentDotColor(seg);
   return (
-    <div className={styles.card} data-part="card">
-      <div className={styles.cardHead}>
-        <span className={styles.chip}>
-          <span
-            className={styles.chipDot}
-            style={{ background: dotColor }}
-            aria-hidden
-          />
-          {seg.label}
-        </span>
-        <span className={styles.timeRange}>
-          <Clock size={12} strokeWidth={2.2} />
-          {String(seg.startHour).padStart(2, "0")}:00 –{" "}
-          {String(seg.endHour).padStart(2, "0")}:00
-        </span>
-        <CardStatusBadge state={state} />
-        {state.kind === "error" || state.kind === "ok" ? (
-          <button
-            type="button"
-            className={styles.retryBtn}
+    <SegmentTimelineRow
+      startHour={seg.startHour}
+      endHour={seg.endHour}
+      label={seg.label}
+      color={resolveSegmentDotColor(seg)}
+      hollow={state.kind === "empty" || state.kind === "skipped"}
+      heading="h3"
+      badge={
+        state.kind === "running" ? (
+          <span className={styles.runningChip}>
+            <Loader2 size={12} className={ctl.spin} />
+            {t("aiSummary.daily.card.badge.summarizing")}
+          </span>
+        ) : state.kind === "empty" ? (
+          <span className={styles.mutedTag}>{t("aiSummary.daily.card.badge.empty")}</span>
+        ) : state.kind === "ok" ? (
+          <IconButton
+            label={t("aiSummary.daily.actions.retryTooltip")}
+            small
+            className={styles.retryIcon}
             onClick={onRetry}
             disabled={retryDisabled}
             title={
@@ -652,86 +650,63 @@ function SegmentCard({ seg, state, onRetry, retryDisabled }: SegmentCardProps) {
                 : t("aiSummary.daily.actions.retryTooltip")
             }
           >
-            <RotateCcw size={12} strokeWidth={2.2} />
-            {t("aiSummary.daily.actions.retry")}
-          </button>
-        ) : null}
-      </div>
-      <CardBody state={state} />
-    </div>
+            <RotateCcw size={14} strokeWidth={2} />
+          </IconButton>
+        ) : null
+      }
+    >
+      <RowBody state={state} onRetry={onRetry} retryDisabled={retryDisabled} />
+    </SegmentTimelineRow>
   );
 }
 
-function CardStatusBadge({ state }: { state: CardState }) {
+function RowBody({ state, onRetry, retryDisabled }: Omit<SegmentRowProps, "seg">) {
   const { t } = useTranslation();
   switch (state.kind) {
     case "empty":
-      return (
-        <span className={`${styles.statusBadge} ${styles.statusEmpty}`}>
-          {t("aiSummary.daily.card.badge.empty")}
-        </span>
-      );
+      return null;
     case "running":
       return (
-        <span className={`${styles.statusBadge} ${styles.statusRunning}`}>
-          <Loader2 size={11} className={styles.spin} />
-          {t("aiSummary.daily.card.badge.summarizing")}
-        </span>
-      );
-    case "ok":
-      return (
-        <span className={`${styles.statusBadge} ${styles.statusOk}`}>
-          {t("aiSummary.daily.card.badge.ok")}
-        </span>
-      );
-    case "skipped":
-      return (
-        <span className={`${styles.statusBadge} ${styles.statusSkipped}`}>
-          {t("aiSummary.daily.card.badge.skipped")}
-        </span>
-      );
-    case "error":
-      return (
-        <span className={`${styles.statusBadge} ${styles.statusError}`}>
-          {t("aiSummary.daily.card.badge.error")}
-        </span>
-      );
-  }
-}
-
-function CardBody({ state }: { state: CardState }) {
-  const { t } = useTranslation();
-  switch (state.kind) {
-    case "empty":
-      return (
-        <div className={styles.bodyMuted}>
-          {t("aiSummary.daily.card.body.empty")}
-        </div>
-      );
-    case "running":
-      return (
-        <div className={styles.bodyMuted}>
-          {t("aiSummary.daily.card.body.summarizingNoTotal")}
+        <div className={ctl.skeleton} aria-hidden>
+          <span />
+          <span />
+          <span />
         </div>
       );
     case "ok":
-      return <MarkdownText text={state.row.content} className={styles.bodyText} />;
+      return <MarkdownText text={state.row.content} className={tl.bodyText} />;
     case "skipped":
       return (
-        <div className={styles.bodyMuted}>
+        <p className={tl.bodyMuted}>
           {state.row.status === "skipped_no_activity"
             ? t("aiSummary.daily.card.body.skippedNoActivity")
             : t("aiSummary.daily.card.body.skipped")}
-        </div>
+        </p>
       );
     case "error":
       return (
-        <div className={styles.bodyError}>
-          <strong>{t("aiSummary.daily.card.body.errorLabel")}</strong>
-          {/* 段级错误也过 localizeAiError——[LLM_*]/[AI_*] 码换成本地化人话 */}
-          {state.row.error
-            ? localizeAiError(state.row.error)
-            : t("aiSummary.daily.errors.unknown")}
+        <div className={ctl.errorBox}>
+          <AlertCircle size={14} strokeWidth={2} />
+          <span className={ctl.errorText}>
+            <strong>{t("aiSummary.daily.card.body.errorLabel")}</strong>
+            {/* 段级错误也过 localizeAiError——[LLM_*]/[AI_*] 码换成本地化人话 */}
+            {state.row.error
+              ? localizeAiError(state.row.error)
+              : t("aiSummary.daily.errors.unknown")}
+          </span>
+          <button
+            type="button"
+            className={ctl.textBtn}
+            onClick={onRetry}
+            disabled={retryDisabled}
+            title={
+              retryDisabled
+                ? t("aiSummary.daily.actions.retryDisabledTooltip")
+                : t("aiSummary.daily.actions.retryTooltip")
+            }
+          >
+            {t("aiSummary.daily.actions.retry")}
+          </button>
         </div>
       );
   }
