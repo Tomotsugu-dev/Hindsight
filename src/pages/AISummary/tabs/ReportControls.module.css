@@ -1,0 +1,376 @@
+/* 日报、周报共用：页面顶部（副标题、时段切换、操作按钮、状态行）、
+   提示条、正在生成的占位条、错误框。 */
+
+/* —— 顶部：副标题、工具栏、状态行收在一起，不吃 tab 内容区的大间距 —— */
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.subtitle {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 时段切换：照日统计 PeriodCard 的 dayNav，三个分开的描边按钮，配 .glow 跟随鼠标的描边光 */
+.periodNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.navBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  background: var(--control-bg);
+  color: var(--text-muted);
+  transition:
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
+}
+
+.navBtn:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: var(--control-bg-hover);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.navPill {
+  min-width: 64px;
+  height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  background: var(--control-bg);
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition:
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
+}
+
+.navPillClickable {
+  cursor: pointer;
+}
+
+.navPillClickable:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: var(--control-bg-hover);
+}
+
+/* 已经在当前时段，或者在跑：点了没用，但文字不变灰 */
+.navPill:disabled {
+  cursor: default;
+}
+
+:global([data-layout="flat"]) .navBtn,
+:global([data-layout="flat"]) .navPill {
+  border-color: var(--border-default);
+}
+
+/* —— 按钮 —— */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    filter 140ms var(--ease-out),
+    transform 120ms var(--ease-out);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 还没生成：开始总结是这页唯一要做的事 */
+.btnPrimary {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+/* 已经生成：重新生成退到次要 */
+.btnSoft {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.btnSoft:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.btnNeutral {
+  background: color-mix(in oklab, var(--text-strong) 8%, transparent);
+  color: var(--text-strong);
+}
+
+.btnNeutral:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--text-strong) 12%, transparent);
+}
+
+.iconBtn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--text-strong) 7%, transparent);
+  color: var(--text-strong);
+}
+
+.iconBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.iconBtnSmall {
+  width: 28px;
+  height: 28px;
+}
+
+.iconBtnDanger:hover:not(:disabled) {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+
+.textBtn {
+  flex: none;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.textBtn:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+}
+
+.textBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* —— 状态行 —— */
+.statusLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.statusSpin {
+  flex: none;
+  color: var(--color-accent);
+}
+
+/* 日期比后面的状态深一级，一眼看出在看哪天 */
+.statusPeriod {
+  flex: none;
+  font-weight: var(--font-weight-600);
+  color: var(--text-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.statusSep {
+  flex: none;
+}
+
+/* —— 顶部错误条 + 成功条 —— */
+.errorBar,
+.successBar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.errorBar > svg,
+.successBar > svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.errorBar > span,
+.successBar > span {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* 文字色和深色字混一下：浅色主题里更深，深色主题里更亮，两边都读得清 */
+.errorBar {
+  background: var(--status-error-soft);
+  color: color-mix(in oklab, var(--status-error) 70%, var(--text-strong));
+}
+
+.successBar {
+  background: var(--status-ok-soft);
+  color: color-mix(in oklab, var(--status-ok) 65%, var(--text-strong));
+  animation: reportFadeIn 200ms var(--ease-out);
+}
+
+@keyframes reportFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 错误条上的关闭按钮 X：让用户能主动 dismiss 旧错误，不被它一直挡视线 */
+.errorClose {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 120ms var(--ease-out), background 120ms var(--ease-out);
+}
+
+.errorClose:hover {
+  opacity: 1;
+  background: var(--status-error-soft);
+}
+
+/* —— 正在生成：几条灰条占位，最后两条收短，像一段话的结尾 —— */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 10px;
+  animation: reportPulse 1.4s ease-in-out infinite;
+}
+
+.skeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--text-strong) 8%, transparent);
+}
+
+.skeleton span:nth-last-child(2) {
+  width: 92%;
+}
+
+.skeleton span:last-child {
+  width: 58%;
+}
+
+@keyframes reportPulse {
+  50% { opacity: 0.5; }
+}
+
+/* —— 生成失败 —— */
+.errorBox {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--status-error-soft);
+  color: color-mix(in oklab, var(--status-error) 70%, var(--text-strong));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.errorBox > svg {
+  flex: none;
+}
+
+.errorText {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.spin {
+  animation: reportSpin 1s linear infinite;
+}
+
+@keyframes reportSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

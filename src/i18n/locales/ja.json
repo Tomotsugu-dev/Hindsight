@@ -1416,9 +1416,34 @@
       "weekNav": {
         "prevAria": "前週",
         "nextAria": "翌週",
-        "thisWeek": "今週",
-        "lastWeek": "先週",
-        "thisWeekBack": "今週へ戻る"
+        "thisWeekBack": "今週へ戻る",
+        "groupAria": "週を選択"
+      },
+      "status": {
+        "generated": "{{time}} に生成",
+        "failed": "前回の生成に失敗しました",
+        "empty": "この週の週報はまだありません。"
+      },
+      "days": {
+        "aria": "この週の毎日の日報",
+        "daily": "日報あり",
+        "noDaily": "日報なし",
+        "future": "まだ先"
+      },
+      "panel": {
+        "week": "週の振り返り",
+        "day": "{{date}}の日報",
+        "openDaily": "日次タブで開く",
+        "back": "週の振り返りに戻る",
+        "dayEmpty": "この日の日報はまだありません",
+        "dayActivity": "この日は {{duration}} のアプリ記録があります。",
+        "dayNoActivity": "この日の記録はありません。",
+        "generateDay": "この日の日報を生成"
+      },
+      "empty": {
+        "ready": "「生成開始」で、この数日の日報を 1 つの振り返りにまとめます。",
+        "fewDaily": "この週で日報があるのは {{count}} 日だけです。日報が多いほど週報は正確になります。先に日次タブで生成しておくのがおすすめです。",
+        "noDaily": "この週の日報はまだありません。先に日次タブで生成するか、アプリ記録だけで短い振り返りを作れます。"
       },
       "actions": {
         "stop": "停止",
@@ -1500,7 +1525,14 @@
         "nextAria": "次の日",
         "todayBack": "今日に戻る",
         "today": "今日",
-        "yesterday": "昨日"
+        "yesterday": "昨日",
+        "groupAria": "日付を選択"
+      },
+      "status": {
+        "done": "{{count}} 帯を生成済み",
+        "partial": "{{total}} 帯中 {{done}} 帯を生成済み",
+        "running": "「{{label}}」を要約中 · {{total}} 帯中 {{index}} 帯目",
+        "empty": "この日の日報はまだありません。「サマリー開始」で時間帯ごとに生成します。"
       },
       "actions": {
         "stop": "停止",

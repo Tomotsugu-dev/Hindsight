@@ -1419,9 +1419,34 @@
       "weekNav": {
         "prevAria": "Semana anterior",
         "nextAria": "Semana siguiente",
-        "thisWeek": "Esta semana",
-        "lastWeek": "Semana pasada",
-        "thisWeekBack": "Volver a esta semana"
+        "thisWeekBack": "Volver a esta semana",
+        "groupAria": "Elegir la semana"
+      },
+      "status": {
+        "generated": "Generado el {{time}}",
+        "failed": "La última generación falló",
+        "empty": "Todavía no hay resumen de esta semana."
+      },
+      "days": {
+        "aria": "Informes diarios de la semana",
+        "daily": "Con informe diario",
+        "noDaily": "Sin informe diario",
+        "future": "Aún no ha llegado"
+      },
+      "panel": {
+        "week": "Revisión de la semana",
+        "day": "Informe diario · {{date}}",
+        "openDaily": "Abrir en Diario",
+        "back": "Volver a la revisión de la semana",
+        "dayEmpty": "Todavía no hay informe diario de este día",
+        "dayActivity": "{{duration}} de registros de apps este día.",
+        "dayNoActivity": "No se registró nada este día.",
+        "generateDay": "Generar el informe de este día"
+      },
+      "empty": {
+        "ready": "Pulsa «Generar» para unir estos informes diarios en una revisión.",
+        "fewDaily": "Solo {{count}} días de esta semana tienen informe diario. Cuantos más informes diarios, mejor el resumen. Puedes generarlos antes en la pestaña Diario.",
+        "noDaily": "Todavía no hay informes diarios esta semana. Genéralos antes en la pestaña Diario o escribe una revisión corta solo con los registros de apps."
       },
       "actions": {
         "stop": "Detener",
@@ -1503,7 +1528,14 @@
         "nextAria": "Día siguiente",
         "todayBack": "Volver a hoy",
         "today": "Hoy",
-        "yesterday": "Ayer"
+        "yesterday": "Ayer",
+        "groupAria": "Elegir el día"
+      },
+      "status": {
+        "done": "{{count}} tramos generados",
+        "partial": "{{done}} de {{total}} tramos generados",
+        "running": "Resumiendo «{{label}}» · tramo {{index}} de {{total}}",
+        "empty": "Todavía no hay informe de este día. Pulsa «Iniciar el resumen» para generarlo tramo a tramo."
       },
       "actions": {
         "stop": "Detener",
