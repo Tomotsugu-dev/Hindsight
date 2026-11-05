@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { save } from "@tauri-apps/plugin-dialog";
 import { logError } from "../../../lib/logger";
 import { localizeAiError } from "../../../lib/aiErrors";
-import { AlertCircle, Download, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { AlertCircle, Download, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import {
   api,
   SUMMARY_CLOUD_SENTINEL,
@@ -29,6 +29,7 @@ import { IconButton, MainButton, NoticeBars, PeriodNav, ReportHeader } from "./R
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
+import { SummaryEditor } from "./SummaryEditor";
 import { dayOffsetOf, formatGeneratedAt, modelLabel, parseDateStr, toDateStr } from "./reportFormat";
 import styles from "./DailyTab.module.css";
 
@@ -70,6 +71,8 @@ export default function DailyTab() {
   // 导出 / 删除等操作完成后短暂显示的成功提示，3s 后自清
   const [topNotice, setTopNotice] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // 正在修改的段；null = 没在改
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
   const date = useMemo(() => offsetToDateStr(dayOffset), [dayOffset]);
   // 状态行开头的「11月4日周三」：按界面语言排
@@ -116,6 +119,7 @@ export default function DailyTab() {
   useEffect(() => {
     let cancelled = false;
     setRows(new Map());
+    setEditingIdx(null);
     api
       .getDaySummary(date)
       .then((list) => {
@@ -267,6 +271,23 @@ export default function DailyTab() {
   const topError = runSnap.topError;
   const generating = isRunningHere;
   const stopping = isRunningHere && runSnap.stopping;
+
+  // 开始生成就收起编辑框：这一轮会覆盖正在改的段
+  useEffect(() => {
+    if (generating) setEditingIdx(null);
+  }, [generating]);
+
+  const onSaveEdit = async (idx: number, text: string) => {
+    try {
+      const row = await api.editSummarySegment("daily", date, idx, text);
+      // 保存期间切到了别的日期：不能把这一行放进新日期
+      if (row.localDate !== dateRef.current) return;
+      setRows((prev) => new Map(prev).set(idx, row));
+      setEditingIdx(null);
+    } catch (e) {
+      setTopError(typeof e === "string" ? e : String(e));
+    }
+  };
 
   const allDone = segments.length > 0 && segments.every((_, i) => rows.has(i));
   const mainBtnLabel = generating
@@ -561,6 +582,10 @@ export default function DailyTab() {
                 state={state}
                 onRetry={() => void onRetrySegment(idx)}
                 retryDisabled={generating}
+                editing={editingIdx === idx}
+                onEdit={() => setEditingIdx(idx)}
+                onSaveEdit={(text) => onSaveEdit(idx, text)}
+                onCancelEdit={() => setEditingIdx(null)}
               />
             );
           })}
@@ -615,11 +640,18 @@ interface SegmentRowProps {
   seg: AiSegment;
   state: CardState;
   onRetry: () => void;
+  /** 整轮生成中：重试和修改都不能点 */
   retryDisabled: boolean;
+  /** 这一段正在修改 */
+  editing: boolean;
+  onEdit: () => void;
+  onSaveEdit: (text: string) => Promise<void>;
+  onCancelEdit: () => void;
 }
 
-/** 时间轴上的一段，加上生成中、未生成、重试这些日报页才有的东西。 */
-function SegmentRow({ seg, state, onRetry, retryDisabled }: SegmentRowProps) {
+/** 时间轴上的一段，加上生成中、未生成、重试、修改这些日报页才有的东西。 */
+function SegmentRow(props: SegmentRowProps) {
+  const { seg, state, onRetry, retryDisabled, editing, onEdit } = props;
   const { t } = useTranslation();
   return (
     <SegmentTimelineRow
@@ -637,30 +669,56 @@ function SegmentRow({ seg, state, onRetry, retryDisabled }: SegmentRowProps) {
           </span>
         ) : state.kind === "empty" ? (
           <span className={styles.mutedTag}>{t("aiSummary.daily.card.badge.empty")}</span>
-        ) : state.kind === "ok" ? (
-          <IconButton
-            label={t("aiSummary.daily.actions.retryTooltip")}
-            small
-            className={styles.retryIcon}
-            onClick={onRetry}
-            disabled={retryDisabled}
-            title={
-              retryDisabled
-                ? t("aiSummary.daily.actions.retryDisabledTooltip")
-                : t("aiSummary.daily.actions.retryTooltip")
-            }
-          >
-            <RotateCcw size={14} strokeWidth={2} />
-          </IconButton>
+        ) : state.kind === "ok" && !editing ? (
+          <span className={styles.rowActions}>
+            <IconButton
+              label={t("aiSummary.edit.action")}
+              small
+              onClick={onEdit}
+              disabled={retryDisabled}
+              title={
+                retryDisabled ? t("aiSummary.edit.runningTooltip") : t("aiSummary.edit.tooltip")
+              }
+            >
+              <Pencil size={14} strokeWidth={2} />
+            </IconButton>
+            <IconButton
+              label={t("aiSummary.daily.actions.retryTooltip")}
+              small
+              onClick={onRetry}
+              disabled={retryDisabled}
+              title={
+                retryDisabled
+                  ? t("aiSummary.daily.actions.retryDisabledTooltip")
+                  : t("aiSummary.daily.actions.retryTooltip")
+              }
+            >
+              <RotateCcw size={14} strokeWidth={2} />
+            </IconButton>
+          </span>
         ) : null
       }
     >
-      <RowBody state={state} onRetry={onRetry} retryDisabled={retryDisabled} />
+      <RowBody
+        state={state}
+        onRetry={onRetry}
+        retryDisabled={retryDisabled}
+        editing={editing}
+        onSaveEdit={props.onSaveEdit}
+        onCancelEdit={props.onCancelEdit}
+      />
     </SegmentTimelineRow>
   );
 }
 
-function RowBody({ state, onRetry, retryDisabled }: Omit<SegmentRowProps, "seg">) {
+function RowBody({
+  state,
+  onRetry,
+  retryDisabled,
+  editing,
+  onSaveEdit,
+  onCancelEdit,
+}: Omit<SegmentRowProps, "seg" | "onEdit">) {
   const { t } = useTranslation();
   switch (state.kind) {
     case "empty":
@@ -674,7 +732,11 @@ function RowBody({ state, onRetry, retryDisabled }: Omit<SegmentRowProps, "seg">
         </div>
       );
     case "ok":
-      return <MarkdownText text={state.row.content} className={tl.bodyText} />;
+      return editing ? (
+        <SummaryEditor initial={state.row.content} onSave={onSaveEdit} onCancel={onCancelEdit} />
+      ) : (
+        <MarkdownText text={state.row.content} className={tl.bodyText} />
+      );
     case "skipped":
       return (
         <p className={tl.bodyMuted}>

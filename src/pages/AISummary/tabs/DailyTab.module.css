@@ -30,7 +30,11 @@
   color: var(--text-muted);
 }
 
-.retryIcon {
+/* 段名右边的修改、重试两个按钮 */
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   margin-left: auto;
 }
 

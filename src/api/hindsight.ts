@@ -1113,6 +1113,10 @@ export const api = {
   /** 拉某天已落库的总结。前端进页面调一次：有就直接渲染，没有就显示"开始总结"按钮。 */
   getDaySummary: (date: string, source: string = "daily") =>
     invoke<SegmentSummaryRow[]>("get_day_summary", { date, source }),
+  /** 用用户自己写的文字替换一段总结，返回改好的行（status 变 ok，generatedAt 更新）。
+   *  周报传 source="weekly"、date=周一、segmentIdx=0。重新生成会覆盖这次修改。 */
+  editSummarySegment: (source: string, date: string, segmentIdx: number, content: string) =>
+    invoke<SegmentSummaryRow>("edit_summary_segment", { source, date, segmentIdx, content }),
   /** 跑某周的周报。命令本体异步等到 LLM 调用完毕（含 DB 写入）才 resolve；
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度（按 source="weekly" 过滤）。
    *  weekStart 推荐传周一日期 "YYYY-MM-DD"；不是周一时后端自动对齐到当周周一。

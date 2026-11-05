@@ -1412,6 +1412,14 @@
       "llmEmptyTruncated": "The model's answer was cut off before any usable text came out (likely a reasoning model). Use a regular text model like Gemma or Qwen3, or raise the context size in AI Settings.",
       "llmEmpty": "The model returned no content. Try a different model in AI Settings."
     },
+    "edit": {
+      "action": "Edit",
+      "tooltip": "Edit this text yourself",
+      "runningTooltip": "A summary is running. Edit after it finishes.",
+      "textareaLabel": "Summary text",
+      "note": "Markdown works here. Regenerating replaces your edits.",
+      "saving": "Saving…"
+    },
     "weekly": {
       "title": "Weekly",
       "hint": "Weekly activity rollup with date + theme breakdown.",
