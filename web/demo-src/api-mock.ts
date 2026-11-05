@@ -920,6 +920,21 @@ export const api = {
     }
     return structuredClone(state.daySummaries.get(key) ?? []);
   },
+  // 演示里不落盘：返回改好的行让页面显示，刷新后回到示例文字
+  editSummarySegment: async (
+    source: string,
+    date: string,
+    segmentIdx: number,
+    content: string,
+  ): Promise<SegmentSummaryRow> => {
+    const rows =
+      source === "weekly"
+        ? [await api.getWeekSummary(date)].filter((r) => r !== null)
+        : await api.getDaySummary(date, source);
+    const row = rows.find((r) => r.segmentIdx === segmentIdx);
+    if (!row) throw "invalid input: summary segment not found";
+    return { ...row, content, status: "ok", error: null, generatedAt: new Date().toISOString() };
+  },
 
   // ─── Weekly summary ────────────────────────
   generateWeekSummary: async (

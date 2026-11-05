@@ -161,6 +161,23 @@ pub async fn get_day_summary(
         .map_err(String::from)
 }
 
+/// Saves text written by the user in place of one generated summary, and returns the new row.
+///
+/// A weekly report is the row with `source = "weekly"`, its Monday as `date`, and
+/// `segment_idx = 0`.
+#[tauri::command]
+pub async fn edit_summary_segment(
+    pool: State<'_, DbPool>,
+    source: String,
+    date: String,
+    segment_idx: u32,
+    content: String,
+) -> Result<SegmentSummaryRow, String> {
+    ai_summaries::edit_content(&pool, &source, &date, segment_idx, &content)
+        .await
+        .map_err(String::from)
+}
+
 /// 删除某天的全部 AI 产物（段总结 + 历史遗留的逐图描述行）。DailyTab 删除按钮用。
 #[tauri::command]
 pub async fn clear_day_summary(

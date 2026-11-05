@@ -1412,6 +1412,14 @@
       "llmEmptyTruncated": "A resposta do modelo foi cortada antes de sair qualquer texto útil (provavelmente um modelo de reasoning). Use um modelo de texto comum, como Gemma ou Qwen3, ou aumente o contexto nos Ajustes de IA.",
       "llmEmpty": "O modelo não retornou nenhum conteúdo. Tente outro modelo nos Ajustes de IA."
     },
+    "edit": {
+      "action": "Editar",
+      "tooltip": "Edite este texto você mesmo",
+      "runningTooltip": "Um resumo está em execução. Edite quando terminar.",
+      "textareaLabel": "Texto do resumo",
+      "note": "Aceita Markdown. Regenerar substitui suas edições.",
+      "saving": "Salvando…"
+    },
     "weekly": {
       "title": "Semanal",
       "hint": "Resumo semanal de atividades com detalhamento por data + tema.",

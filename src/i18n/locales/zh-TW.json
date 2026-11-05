@@ -1409,6 +1409,14 @@
       "llmEmptyTruncated": "模型的回答還沒輸出有用內容就被截斷了（多半是推理模型）。換 Gemma 或 Qwen3 這類普通文本模型，或在 AI 設定裡調大上下文。",
       "llmEmpty": "模型沒有返回任何內容。在 AI 設定裡換一個模型試試。"
     },
+    "edit": {
+      "action": "修改",
+      "tooltip": "自己修改這段文字",
+      "runningTooltip": "總結進行中，等完成後再修改",
+      "textareaLabel": "總結內文",
+      "note": "支援 Markdown。重新生成會覆蓋你的修改。",
+      "saving": "儲存中…"
+    },
     "weekly": {
       "title": "週報",
       "hint": "一週的活動彙總；按日期 + 主題給出整週回顧。",
