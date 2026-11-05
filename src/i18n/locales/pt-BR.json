@@ -1419,9 +1419,34 @@
       "weekNav": {
         "prevAria": "Semana anterior",
         "nextAria": "Próxima semana",
-        "thisWeek": "Esta semana",
-        "lastWeek": "Semana passada",
-        "thisWeekBack": "Voltar para esta semana"
+        "thisWeekBack": "Voltar para esta semana",
+        "groupAria": "Escolher a semana"
+      },
+      "status": {
+        "generated": "Gerado em {{time}}",
+        "failed": "A última geração falhou",
+        "empty": "Ainda não há resumo desta semana."
+      },
+      "days": {
+        "aria": "Relatórios diários da semana",
+        "daily": "Com relatório diário",
+        "noDaily": "Sem relatório diário",
+        "future": "Ainda não chegou"
+      },
+      "panel": {
+        "week": "Revisão da semana",
+        "day": "Relatório diário · {{date}}",
+        "openDaily": "Abrir no Diário",
+        "back": "Voltar para a revisão da semana",
+        "dayEmpty": "Ainda não há relatório diário deste dia",
+        "dayActivity": "{{duration}} de registros de apps neste dia.",
+        "dayNoActivity": "Nada foi registrado neste dia.",
+        "generateDay": "Gerar o relatório deste dia"
+      },
+      "empty": {
+        "ready": "Clique em \"Gerar\" para juntar estes relatórios diários em uma revisão.",
+        "fewDaily": "Só {{count}} dias desta semana têm relatório diário. Quanto mais relatórios diários, melhor o resumo. Você pode gerá-los antes na aba Diário.",
+        "noDaily": "Ainda não há relatórios diários nesta semana. Gere-os antes na aba Diário ou escreva uma revisão curta só com os registros de apps."
       },
       "actions": {
         "stop": "Parar",

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  compactDuration,
   dayOffsetOf,
   formatGeneratedAt,
+  heatLevel,
   hourLabel,
   modelLabel,
   parseDateStr,
   toDateStr,
+  weekDayKind,
 } from "./reportFormat";
 
 describe("modelLabel", () => {
@@ -52,6 +55,35 @@ describe("hourLabel", () => {
   });
 });
 
+describe("compactDuration", () => {
+  it("不到一小时只写分钟，整点不写 0m", () => {
+    expect(compactDuration(0)).toBe("0m");
+    expect(compactDuration(45)).toBe("45m");
+    expect(compactDuration(360)).toBe("6h");
+    expect(compactDuration(380)).toBe("6h 20m");
+  });
+});
+
+describe("heatLevel", () => {
+  it("没有活动是 0 级，有一点活动就从 1 级起", () => {
+    expect(heatLevel(0, 600)).toBe(0);
+    expect(heatLevel(1, 600)).toBe(1);
+  });
+
+  it("按这周最忙的那天分级，最忙的那天是 5 级", () => {
+    // 一周都在 7 到 15 小时之间，颜色也要分得开
+    expect(heatLevel(935, 935)).toBe(5);
+    expect(heatLevel(679, 935)).toBe(4);
+    expect(heatLevel(452, 935)).toBe(2);
+  });
+
+  it("很闲的一周按 4 小时算，不会被染成最深", () => {
+    expect(heatLevel(60, 60)).toBe(1);
+    expect(heatLevel(120, 120)).toBe(3);
+    expect(heatLevel(240, 240)).toBe(5);
+  });
+});
+
 describe("dayOffsetOf", () => {
   const now = new Date(2026, 10, 5, 9, 30);
 
@@ -70,5 +102,18 @@ describe("dayOffsetOf", () => {
     expect(dayOffsetOf(null, now)).toBe(0);
     expect(dayOffsetOf("garbage", now)).toBe(0);
     expect(dayOffsetOf("2026-11-09", now)).toBe(0);
+  });
+});
+
+describe("weekDayKind", () => {
+  const today = "2026-11-04";
+
+  it("今天之后的算未来，哪怕标着有日报", () => {
+    expect(weekDayKind({ date: "2026-11-05", hasDaily: true }, today)).toBe("future");
+  });
+
+  it("今天和之前看有没有日报", () => {
+    expect(weekDayKind({ date: today, hasDaily: true }, today)).toBe("daily");
+    expect(weekDayKind({ date: "2026-11-02", hasDaily: false }, today)).toBe("noDaily");
   });
 });

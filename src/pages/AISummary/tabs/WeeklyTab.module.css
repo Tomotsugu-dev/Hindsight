@@ -1,281 +1,129 @@
-/* 周报 tab 内部样式：周导航 + 主操作 + 错误条 + 引擎冷启动 + 单卡片。
-   外壳样式（.page / .title / .tabs）在 AISummaryPage.module.css。
-   尽量复用 DailyTab.module.css 的视觉语言（按钮配色、卡片阴影），但布局上更简单：
-   只有一个总结卡片，没有段列表。 */
+/* 周报 tab：七天热力图 + 下方面板（整周回顾，或点中那天的日报）。
+   顶部工具栏、提示条、占位条、错误框在 ReportControls.module.css；
+   外壳样式（.page / .title / .tabs）在 AISummaryPage.module.css。 */
 
-.subtitle {
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  letter-spacing: -0.005em;
-  margin: 0 0 12px;
+/* —— 热力图 —— */
+.heat {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.header {
+.tile {
+  /* 主题色占多少，按 data-level 定 */
+  --heat: 0%;
+  position: relative;
+  width: 100%;
+  height: 88px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.weekNav {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.navBtn {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.navBtn:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-.navBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* 周 pill 比 day pill 宽——要塞 "MM-DD ~ MM-DD" */
-.weekPill {
-  min-width: 130px;
-  height: 26px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  font-size: 12px;
-  font-weight: var(--font-weight-600);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--color-accent) var(--heat), var(--surface-card-elevated));
   color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.005em;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.weekPillClickable {
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
 }
 
-.weekPillClickable:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
+.tile:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
 }
 
-.weekPill:disabled {
+.tile:focus-visible,
+.tile[aria-pressed="true"] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.tile[data-level="1"] { --heat: 14%; }
+.tile[data-level="2"] { --heat: 30%; }
+.tile[data-level="3"] { --heat: 48%; }
+.tile[data-level="4"] { --heat: 68%; }
+.tile[data-level="5"] { --heat: 100%; }
+
+/* 浅色主题最深一级换白字，其余用深字，对比度都在 4.5 以上 */
+.tile[data-level="5"] {
+  color: #fff;
+}
+
+/* 深色主题整体压暗一档：满色的主题色在黑底上太刺眼。这几档用默认的浅字就够 */
+:global([data-mode="dark"]) .tile[data-level="1"] { --heat: 12%; }
+:global([data-mode="dark"]) .tile[data-level="2"] { --heat: 24%; }
+:global([data-mode="dark"]) .tile[data-level="3"] { --heat: 38%; }
+:global([data-mode="dark"]) .tile[data-level="4"] { --heat: 56%; }
+
+:global([data-mode="dark"]) .tile[data-level="5"] {
+  --heat: 78%;
+  color: #fff;
+}
+
+/* 没有日报：不上色，虚线框，点了看空 */
+.tile[data-kind="noDaily"] {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-muted);
+}
+
+/* 还没到的日子：点不了 */
+.tile[data-kind="future"] {
+  background: transparent;
+  border: 1px dashed var(--border-default);
+  color: var(--text-faint);
   cursor: default;
 }
 
-/* outline 风（透明底 + 1.5px 紫边 + 紫字）。跟 DailyTab / DebugTab 的 startBtn
-   同一族，跟 AI 设置 .downloadOutline 视觉一致。 */
-.startBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
+/* 还没读到这天有没有日报 */
+.tile[data-kind="unknown"] {
+  background: color-mix(in oklab, var(--text-strong) 4%, transparent);
 }
 
-.startBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.startBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.startBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.stopBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  background: color-mix(in oklab, #f59e0b 14%, transparent);
-  border: 1px solid color-mix(in oklab, #f59e0b 38%, transparent);
-  color: #b45309;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.stopBtn:hover {
-  background: color-mix(in oklab, #f59e0b 22%, transparent);
-}
-
-/* outline 风：透明底 + 1.5px 红边 + 红字。跟 DailyTab / DebugTab / AISettings
-   的 uninstallOutline 同一族；红 = 破坏性操作的视觉编码统一。 */
-.deleteBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
-  color: #b91c1c;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
-}
-
-.deleteBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: var(--status-error);
-}
-
-.deleteBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.deleteBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.exportBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  margin-left: auto;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-500);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-
-.exportBtn:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.exportBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.errorBar {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: color-mix(in oklab, #dc2626 8%, transparent);
-  border: 1px solid color-mix(in oklab, #dc2626 25%, transparent);
-  border-radius: var(--radius-sm);
+.tileWeekday {
   font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: #991b1b;
+  opacity: 0.8;
 }
 
-.errorClose {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 4px;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-xs);
-  color: #991b1b;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 120ms var(--ease-out), background 120ms var(--ease-out);
+.tileDate {
+  font-size: 22px;
+  font-weight: var(--font-weight-600);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-.errorClose:hover {
-  opacity: 1;
-  background: color-mix(in oklab, #dc2626 12%, transparent);
+.tileTime {
+  min-height: 1.2em;
+  font-size: 11.5px;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
 }
 
-.successBar {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: color-mix(in oklab, #16a34a 10%, transparent);
-  border: 1px solid color-mix(in oklab, #16a34a 28%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: #15803d;
-  animation: weeklyTabSuccessIn 200ms var(--ease-out);
+.todayDot {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-@keyframes weeklyTabSuccessIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.engineHint {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 22%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-strong);
-}
-
-/* —— 周报卡片：单一文本卡，比段卡更宽松的内边距 —— */
-.card {
+/* —— 下方面板 —— */
+/* 面板标题 18，比时间轴的段名 16 大一级 */
+.panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
+  gap: 16px;
+  padding: 20px 24px 24px;
   background: var(--surface-card-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -284,97 +132,96 @@
     0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
 }
 
-.cardHead {
+.panelHead {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 28px;
 }
 
-.weekRange {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
-.statusBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: var(--font-weight-600);
-  letter-spacing: -0.005em;
-}
-
-.statusEmpty {
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-
-.statusRunning {
-  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
-}
-
-.statusOk {
-  background: color-mix(in oklab, #16a34a 16%, transparent);
-  color: #15803d;
-}
-
-.statusError {
-  background: color-mix(in oklab, #dc2626 14%, transparent);
-  color: #991b1b;
-}
-
-.bodyText {
-  font-size: 14px;
-  line-height: 1.7;
+.panelTitle {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+
+.panelActions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.panelBody {
+  animation: panelIn 180ms var(--ease-out);
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 整周回顾：一整段连贯的文字，按文章排 */
+.bodyText {
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--text-regular);
+}
+
+.bodyText p:not(:last-child) {
+  margin-bottom: 0.8em;
 }
 
 .bodyMuted {
-  font-size: 12.5px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
   color: var(--text-muted);
-  font-style: italic;
 }
 
-.bodyError {
-  font-size: 12.5px;
-  color: #991b1b;
-  background: color-mix(in oklab, #dc2626 6%, transparent);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  word-break: break-word;
+/* 点中那天的日报：时间轴和日报页同一套，第一段的上边距让给面板标题 */
+.dayTimeline {
+  margin-top: -14px;
 }
 
-.bodyError strong {
-  display: block;
-  margin-bottom: 4px;
+/* 点中的那天没有日报 */
+.dayEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 0 8px;
+  text-align: center;
 }
 
-.spin {
-  animation: weeklyTabSpin 1s linear infinite;
+.dayEmptyTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
 }
 
-@keyframes weeklyTabSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+.dayEmptyNote {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
-:global([data-layout="flat"]) .card {
-  padding: 24px 0 0;
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .panelBody {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* 扁平布局：面板去掉卡片外框 */
+:global([data-layout="flat"]) .panel {
+  padding: 0;
   background: transparent;
   border: 0;
-  border-top: 1px solid var(--border-default);
   border-radius: 0;
   box-shadow: none;
 }

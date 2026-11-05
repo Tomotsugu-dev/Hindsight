@@ -39,6 +39,28 @@ export function hourLabel(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00`;
 }
 
+/** 格子里放得下的短时长：45m、6h、6h 20m。各语言一样，和图表刻度的写法一致。 */
+export function compactDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/** 热力图分级时，一周里最忙的那天至少按这么多分钟算。 */
+const HEAT_MIN_SCALE = 240;
+
+/**
+ * 热力图的深浅，1 到 5 级；0 分钟是 0 级。
+ * 按这周最忙的那天分级：一天用电脑七八个小时很常见，按绝对时长会整周一个颜色。
+ * 最忙的那天不到 4 小时时按 4 小时算，免得很闲的一周也被染成最深。
+ */
+export function heatLevel(minutes: number, weekMax: number): number {
+  if (minutes <= 0) return 0;
+  const scale = Math.max(weekMax, HEAT_MIN_SCALE);
+  return Math.min(5, Math.max(1, Math.round((5 * minutes) / scale)));
+}
+
 /**
  * `date` 离今天往前几天：今天是 0，昨天是 -1。
  * 读不出来、或者在今天之后，都当今天。
@@ -51,4 +73,13 @@ export function dayOffsetOf(date: string | null, now: Date = new Date()): number
   // 四舍五入：夏令时那天差一个小时，不能算成差一天
   const diff = Math.round((target.getTime() - today.getTime()) / 86_400_000);
   return Math.min(diff, 0);
+}
+
+/** 周报七天格子里一天的样子。 */
+export type WeekDayKind = "daily" | "noDaily" | "future";
+
+/** 今天之后的算未来；其余看有没有日报。 */
+export function weekDayKind(day: { date: string; hasDaily: boolean }, today: string): WeekDayKind {
+  if (day.date > today) return "future";
+  return day.hasDaily ? "daily" : "noDaily";
 }

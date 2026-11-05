@@ -1416,9 +1416,34 @@
       "weekNav": {
         "prevAria": "上一周",
         "nextAria": "下一周",
-        "thisWeek": "本周",
-        "lastWeek": "上周",
-        "thisWeekBack": "回到本周"
+        "thisWeekBack": "回到本周",
+        "groupAria": "选择周"
+      },
+      "status": {
+        "generated": "生成于 {{time}}",
+        "failed": "上次生成失败",
+        "empty": "这周还没有周报。"
+      },
+      "days": {
+        "aria": "这周每天的日报",
+        "daily": "有日报",
+        "noDaily": "没有日报",
+        "future": "还没到"
+      },
+      "panel": {
+        "week": "整周回顾",
+        "day": "{{date}}的日报",
+        "openDaily": "在日报页打开",
+        "back": "回到整周回顾",
+        "dayEmpty": "这天还没有日报",
+        "dayActivity": "当天有 {{duration}} 的应用记录。",
+        "dayNoActivity": "当天没有任何记录。",
+        "generateDay": "生成这天的日报"
+      },
+      "empty": {
+        "ready": "点「开始总结」，把这几天的日报写成一段回顾。",
+        "fewDaily": "这周只有 {{count}} 天有日报。日报越全，周报越准，可以先去日报页补上。",
+        "noDaily": "这周还没有日报。可以先去日报页生成，也可以直接用应用记录写一份简短的回顾。"
       },
       "actions": {
         "stop": "停止",

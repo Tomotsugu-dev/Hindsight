@@ -1416,9 +1416,34 @@
       "weekNav": {
         "prevAria": "上一週",
         "nextAria": "下一週",
-        "thisWeek": "本週",
-        "lastWeek": "上週",
-        "thisWeekBack": "回到本週"
+        "thisWeekBack": "回到本週",
+        "groupAria": "選擇週次"
+      },
+      "status": {
+        "generated": "生成於 {{time}}",
+        "failed": "上次生成失敗",
+        "empty": "這週還沒有週報。"
+      },
+      "days": {
+        "aria": "這週每天的日報",
+        "daily": "有日報",
+        "noDaily": "沒有日報",
+        "future": "還沒到"
+      },
+      "panel": {
+        "week": "整週回顧",
+        "day": "{{date}}的日報",
+        "openDaily": "在日報頁開啟",
+        "back": "回到整週回顧",
+        "dayEmpty": "這天還沒有日報",
+        "dayActivity": "當天有 {{duration}} 的應用程式記錄。",
+        "dayNoActivity": "當天沒有任何記錄。",
+        "generateDay": "生成這天的日報"
+      },
+      "empty": {
+        "ready": "點「開始總結」，把這幾天的日報寫成一段回顧。",
+        "fewDaily": "這週只有 {{count}} 天有日報。日報越完整，週報越準，可以先到日報頁補上。",
+        "noDaily": "這週還沒有日報。可以先到日報頁生成，也可以直接用應用程式記錄寫一份簡短的回顧。"
       },
       "actions": {
         "stop": "停止",
