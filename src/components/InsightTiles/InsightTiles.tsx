@@ -211,6 +211,9 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
     : cards;
   const landing = drag?.landing ? drag.id : null;
   const overLibrary = moving?.from === "row" && moving.overLibrary;
+  const note = scopeNote(t, ctx, data.windows, data.now);
+  // While editing, the day page shows the note in the mode row instead
+  const noteInModeRow = editing && scope === "today";
 
   return (
     <section
@@ -223,6 +226,7 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
         <EditBar
           scope={scope}
           mode={mode}
+          note={note}
           onMode={changeMode}
           onReset={reset}
           onDone={exit}
@@ -230,20 +234,22 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
           modeRef={modeRef}
         />
       )}
-      <div className={styles.head}>
-        <p className={styles.note}>{scopeNote(t, ctx, data.windows, data.now)}</p>
-        {!editing && (
-          <button
-            ref={editRef}
-            type="button"
-            className={`${styles.btn} ${styles.btnPlain}`}
-            onClick={start}
-          >
-            <SlidersHorizontal size={14} aria-hidden />
-            {t(`${K}.edit`)}
-          </button>
-        )}
-      </div>
+      {!noteInModeRow && (
+        <div className={styles.head}>
+          <p className={styles.note}>{note}</p>
+          {!editing && (
+            <button
+              ref={editRef}
+              type="button"
+              className={`${styles.btn} ${styles.btnPlain}`}
+              onClick={start}
+            >
+              <SlidersHorizontal size={14} aria-hidden />
+              {t(`${K}.edit`)}
+            </button>
+          )}
+        </div>
+      )}
       <div
         className={styles.tiles}
         role="list"

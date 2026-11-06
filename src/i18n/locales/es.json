@@ -508,7 +508,6 @@
         "same": "Mismo punto",
         "rolling": "Días recientes"
       },
-      "dayOnlySame": "La vista diaria siempre compara hasta la misma hora",
       "library": "Biblioteca de tarjetas",
       "placed": "<b>{{count}}</b> colocadas",
       "limit": "{{min}}–{{max}} tarjetas",

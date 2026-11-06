@@ -508,7 +508,6 @@
         "same": "Same point",
         "rolling": "Rolling days"
       },
-      "dayOnlySame": "The day page always compares up to the same time",
       "library": "Card library",
       "placed": "<b>{{count}}</b> placed",
       "limit": "{{min}}–{{max}} cards",

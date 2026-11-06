@@ -508,7 +508,6 @@
         "same": "同期對比",
         "rolling": "滾動視窗"
       },
-      "dayOnlySame": "日統計只有同期對比",
       "library": "卡片庫",
       "placed": "已放 <b>{{count}}</b> 張",
       "limit": "可放 {{min}}–{{max}} 張",

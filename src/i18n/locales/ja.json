@@ -508,7 +508,6 @@
         "same": "同時点比較",
         "rolling": "直近の日数"
       },
-      "dayOnlySame": "日次統計は同時点比較のみです",
       "library": "カードライブラリ",
       "placed": "<b>{{count}}</b> 枚配置中",
       "limit": "{{min}}〜{{max}} 枚まで",

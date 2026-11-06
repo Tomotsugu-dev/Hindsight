@@ -508,7 +508,6 @@
         "same": "同期对比",
         "rolling": "滚动窗口"
       },
-      "dayOnlySame": "日统计只有同期对比",
       "library": "卡片库",
       "placed": "已放 <b>{{count}}</b> 张",
       "limit": "可放 {{min}}–{{max}} 张",

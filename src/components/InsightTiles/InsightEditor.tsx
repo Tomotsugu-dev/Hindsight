@@ -11,10 +11,15 @@ import styles from "./InsightTiles.module.css";
 
 const K = "components.insightCards";
 
-/** The bar over the cards while editing: the mode switch, reset, and done. */
+/**
+ * The bar over the cards while editing: the mode switch, reset, and done.
+ *
+ * The day page has one mode, so it shows `note` in place of the switch.
+ */
 export function EditBar({
   scope,
   mode,
+  note,
   onMode,
   onReset,
   onDone,
@@ -23,6 +28,7 @@ export function EditBar({
 }: {
   scope: InsightScope;
   mode: InsightMode;
+  note: string;
   onMode: (mode: InsightMode) => void;
   onReset: () => void;
   onDone: () => void;
@@ -51,7 +57,7 @@ export function EditBar({
       <div className={styles.modeRow}>
         <span className={styles.modeLabel}>{t(`${K}.modeLabel`)}</span>
         {scope === "today" ? (
-          <span>{t(`${K}.dayOnlySame`)}</span>
+          <span className={styles.note}>{note}</span>
         ) : (
           <div ref={modeRef} className={styles.seg} role="group" aria-label={t(`${K}.modeLabel`)}>
             {(["same", "rolling"] as const).map((m) => (
