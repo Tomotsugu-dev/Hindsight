@@ -69,6 +69,19 @@ export type InsightFocus =
   | { kind: "cat"; catId: string }
   | { kind: "app"; groupId: string; categoryId: string };
 
+/** What the cards narrow down to: a hovered app first, then a picked category, then a drilled
+ *  super category. */
+export function insightFocusOf(
+  app: { groupId: string; categoryId: string } | null,
+  catId: string | null,
+  superId: string | null,
+): InsightFocus {
+  if (app) return { kind: "app", groupId: app.groupId, categoryId: app.categoryId };
+  if (catId !== null) return { kind: "cat", catId };
+  if (superId !== null) return { kind: "super", superId };
+  return { kind: "all" };
+}
+
 export interface InsightData {
   windows: InsightWindows;
   /** One entry for each card asked for; null shows "—". */

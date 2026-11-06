@@ -1,15 +1,36 @@
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+.area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.tiles.hasAvg {
-  grid-template-columns: repeat(4, 1fr);
+/* 卡片上方一行：左边是卡片算的哪段时间，右边是编辑按钮 */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 28px;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 12 列：3、4 张一行排满，5 张上 3 下 2，6 张两行各 3（见 spanOf） */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
 }
 
 /* 单 tile 复用三页 .card token 的视觉语言 */
 .tile {
+  grid-column: span var(--span, 4);
   position: relative;
   background: var(--surface-card-elevated);
   border: 1px solid var(--border-default);
@@ -32,6 +53,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 18px;
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
@@ -42,14 +64,23 @@
   text-overflow: ellipsis;
 }
 
+/* 卡片库里的小号预览 */
+.preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* 占位「—」用同一行高度，颜色淡化 */
 .dash {
-  font-size: 18px;
-  font-weight: var(--font-weight-600);
   color: var(--text-faint);
 }
 
-/* up / down 着色 */
 .up {
   color: #16a34a;
 }
@@ -66,16 +97,40 @@
   flex-shrink: 0;
 }
 
+/* 设备分布：一根条，每台设备一段；名字和比例写在 label 里 */
+.devbar {
+  display: flex;
+  gap: 2px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.value.devbar {
+  width: 100%;
+  height: 10px;
+  margin-block: 7px;
+}
+.preview.devbar {
+  width: 56px;
+  height: 6px;
+}
+.devbar > span {
+  display: block;
+  height: 100%;
+}
+
 .label {
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* drill 状态：每 tile 左 3px accent 条 + 4% accent tint bg */
 .tiles[data-drill] .tile {
-  border-left: 3px solid var(--accent);
-  background: color-mix(in oklab, var(--accent) 4%, var(--surface-card-elevated));
+  border-left: 3px solid var(--tile-accent);
+  background: color-mix(in oklab, var(--tile-accent) 4%, var(--surface-card-elevated));
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
   padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
@@ -89,13 +144,22 @@
   box-shadow: none;
 }
 
-:global([data-layout="flat"]) .tile:first-child {
+:global([data-layout="flat"]) .tile[data-row-start] {
   border-left: 0;
   padding-left: 0;
 }
 
 :global([data-layout="flat"]) .tiles[data-drill] .tile {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--tile-accent);
   border-radius: 0;
   padding-left: 14px;
+}
+
+@media (max-width: 600px) {
+  .tile {
+    grid-column: span 6;
+  }
+  .tile:last-child:nth-child(odd) {
+    grid-column: span 12;
+  }
 }

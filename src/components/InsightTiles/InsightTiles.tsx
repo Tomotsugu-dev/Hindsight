@@ -1,168 +1,158 @@
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import type { PeriodInsights } from "../../hooks/usePeriodInsights";
-import type { BreakdownSlice } from "../../hooks/useSuperCategoryBreakdown";
+import { useInsightData, type InsightFocus } from "../../hooks/useInsightData";
+import { useInsightCards, useInsightMode } from "../../state/insightCards";
 import { useDurationFormatter } from "../../utils/duration";
+import type { CardId, CardValue } from "../../utils/insightCards";
+import type { InsightScope } from "../../utils/insightWindows";
+import {
+  cardContext,
+  cardLabel,
+  dateText,
+  hourText,
+  scopeNote,
+  weekdayText,
+  type CardContext,
+} from "./cardText";
 import styles from "./InsightTiles.module.css";
 
 interface Props {
-  insights: PeriodInsights;
-  scope: "today" | "week" | "month";
-  /** drill 状态下整行换 accent 色（左侧色条 + 浅 tint）；null = 默认模式 */
-  drilledSlice: BreakdownSlice | null;
-  /** 不按大类、按别的东西（鼠标停着的应用）换 accent 色时传；优先于 drilledSlice 的颜色 */
-  accentColor?: string;
-  /** 日均分钟数；传入后第二个 tile 从"峰值"切换为"日均"。null = tile 留着但显示「—」 */
-  avgMinutes?: number | null;
-  /** 上期日均分钟数；传入后追加第 4 个 tile 显示日均对比。null = tile 留着但显示「—」 */
-  prevAvgMinutes?: number | null;
+  scope: InsightScope;
+  offset: number;
+  focus: InsightFocus;
+  /** The color of the drilled super category or the hovered app; the cards take it on. */
+  accent?: string;
 }
 
-const DASH = "—";
+/** Columns of a 12-column grid: 3 and 4 cards fill one row, 5 go 3 then 2, 6 go 3 and 3. */
+function spanOf(count: number, index: number): number {
+  if (count === 4) return 3;
+  if (count === 5) return index < 3 ? 4 : 6;
+  return 4;
+}
 
-/**
- * 三页 header 与 PeriodCard 之间的 3 stat tile 横排。
- * - 任一 tile 数据 null：tile 保留位置 + 显示「—」，避免 grid 抖动
- * - 三项全 null：整行不渲染（header 收回那行高度）
- * - drill 状态：每 tile 走 super-cat accent（左 3px 色条 + 4% tint）
- */
-export function InsightTiles({
-  insights,
-  scope,
-  drilledSlice,
-  accentColor,
-  avgMinutes,
-  prevAvgMinutes,
-}: Props) {
+/** Whether the card starts a row, where the flat layout draws no divider. */
+const startsRow = (count: number, index: number) => index === 0 || (count > 4 && index === 3);
+
+/** The big value of a card; `small` is the preview in the card library. */
+export function CardValueView({
+  value,
+  ctx,
+  small = false,
+}: {
+  value: CardValue | null | undefined;
+  ctx: CardContext;
+  small?: boolean;
+}) {
   const { t } = useTranslation();
-  const fmtHM = useDurationFormatter();
-  const { diff, peak, third } = insights;
-
-  if (!diff && !peak && !third && avgMinutes == null) return null;
-
-  const showAvg = avgMinutes !== undefined;
-  const showAvgVsPrev = showAvg && prevAvgMinutes !== undefined;
-
-  // —— A：vs 上期 ——
-  let aValue: React.ReactNode;
-  if (!diff) {
-    aValue = <span className={styles.dash}>{DASH}</span>;
-  } else if (diff.signMinutes === 0) {
-    aValue = (
-      <span className={styles.value}>{t(`${scope}.insights.vsPrev.flat`)}</span>
-    );
-  } else {
-    const abs = Math.abs(diff.signMinutes);
-    const isUp = diff.signMinutes > 0;
-    aValue = (
-      <span
-        className={`${styles.value} ${isUp ? styles.up : styles.down}`}
-      >
-        {isUp ? (
-          <ArrowUp size={14} strokeWidth={2.4} aria-hidden />
-        ) : (
-          <ArrowDown size={14} strokeWidth={2.4} aria-hidden />
-        )}
-        {fmtHM(abs)}
-      </span>
-    );
-  }
-
-  // —— B：峰值 / 日均 ——
-  const bValue =
-    avgMinutes != null ? (
-      <span className={styles.value}>{fmtHM(avgMinutes)}</span>
-    ) : showAvg ? (
-      <span className={styles.dash}>{DASH}</span>
-    ) : peak ? (
-      <span className={styles.value}>{peak.label}</span>
-    ) : (
-      <span className={styles.dash}>{DASH}</span>
-    );
-
-  const bLabel =
-    showAvg
-      ? t(`${scope}.insights.avg`)
-      : peak
-        ? `${t(`${scope}.insights.peak`)} · ${fmtHM(peak.minutes)}`
-        : t(`${scope}.insights.peak`);
-
-  // —— C：主力 / 构成 ——
-  const cValue = third ? (
-    <span className={styles.value}>
-      <span
-        className={styles.swatch}
-        style={{ background: third.color }}
-        aria-hidden
-      />
-      {third.name} {third.pct}%
-    </span>
-  ) : (
-    <span className={styles.dash}>{DASH}</span>
-  );
-
-  const cLabel =
-    third?.kind === "appShare"
-      ? t("components.insightTiles.appShare")
-      : third?.kind === "composition"
-        ? t(`${scope}.insights.composition`)
-        : t(`${scope}.insights.dominant`);
-
-  // —— D：日均对比 ——
-  let dValue: React.ReactNode = <span className={styles.dash}>{DASH}</span>;
-  if (showAvgVsPrev && avgMinutes != null && prevAvgMinutes != null) {
-    const diffAvg = avgMinutes - prevAvgMinutes;
-    if (diffAvg === 0) {
-      dValue = <span className={styles.value}>{t(`${scope}.insights.vsPrev.flat`)}</span>;
-    } else {
-      const abs = Math.abs(diffAvg);
-      const isUp = diffAvg > 0;
-      dValue = (
-        <span className={`${styles.value} ${isUp ? styles.up : styles.down}`}>
-          {isUp ? (
-            <ArrowUp size={14} strokeWidth={2.4} aria-hidden />
-          ) : (
-            <ArrowDown size={14} strokeWidth={2.4} aria-hidden />
-          )}
-          {fmtHM(abs)}
+  const duration = useDurationFormatter();
+  const cls = small ? styles.preview : styles.value;
+  if (!value) return <span className={`${cls} ${styles.dash}`}>—</span>;
+  switch (value.kind) {
+    case "delta": {
+      if (value.minutes === 0) {
+        return <span className={cls}>{t("components.insightCards.flat")}</span>;
+      }
+      const up = value.minutes > 0;
+      const Arrow = up ? ArrowUp : ArrowDown;
+      return (
+        <span className={`${cls} ${up ? styles.up : styles.down}`}>
+          <Arrow size={14} strokeWidth={2.4} aria-hidden />
+          {duration(Math.abs(value.minutes))}
         </span>
       );
     }
+    case "duration":
+      return <span className={cls}>{duration(value.minutes)}</span>;
+    case "peakHour":
+      return <span className={cls}>{hourText(value.hour)}</span>;
+    case "peakDay":
+      // A week compared up to the same point reads best by weekday; a rolling one crosses weeks
+      return (
+        <span className={cls}>
+          {ctx.scope === "week" && ctx.mode === "same"
+            ? weekdayText(t, value.date)
+            : dateText(t, value.date)}
+        </span>
+      );
+    case "share":
+      return (
+        <span className={cls}>
+          <span className={styles.swatch} style={{ background: value.color }} aria-hidden />
+          {value.name} {value.pct}%
+        </span>
+      );
+    case "edges":
+      return (
+        <span className={cls}>
+          {hourText(value.start)} – {hourText(value.end)}
+        </span>
+      );
+    case "hourCount":
+      return (
+        <span className={cls}>
+          {t("components.insightCards.hourCount", { count: value.hours })}
+        </span>
+      );
+    case "devices":
+      return (
+        <span className={`${cls} ${styles.devbar}`} aria-hidden>
+          {value.shares.map((s) => (
+            <span key={s.id} style={{ flex: s.pct, background: s.color ?? "var(--text-faint)" }} />
+          ))}
+        </span>
+      );
   }
+}
 
-  const accent = accentColor ?? drilledSlice?.color;
-  const rootStyle: CSSProperties | undefined = accent
-    ? ({ "--accent": accent } as CSSProperties)
-    : undefined;
+/** One card: its value and the label under it. */
+export function CardBody({
+  id,
+  value,
+  ctx,
+}: {
+  id: CardId;
+  value: CardValue | null | undefined;
+  ctx: CardContext;
+}) {
+  const { t } = useTranslation();
+  const duration = useDurationFormatter();
+  return (
+    <>
+      <CardValueView value={value} ctx={ctx} />
+      <span className={styles.label}>{cardLabel(t, id, ctx, value, duration)}</span>
+    </>
+  );
+}
+
+/** The stats cards under the share view: 3 to 6 cards, each counted over the same stretch. */
+export function InsightTiles({ scope, offset, focus, accent }: Props) {
+  const { t } = useTranslation();
+  const cards = useInsightCards(scope);
+  const mode = useInsightMode(scope);
+  const data = useInsightData({ scope, offset, mode, cards, focus });
+  const ctx = cardContext(scope, mode, data.windows, data.now, focus);
+  const style = accent ? ({ "--tile-accent": accent } as CSSProperties) : undefined;
 
   return (
-    <div
-      className={`${styles.tiles} ${showAvg ? styles.hasAvg : ""}`}
-      data-drill={accent ? "" : undefined}
-      style={rootStyle}
-    >
-      <div className={styles.tile}>
-        {aValue}
-        <div className={styles.label}>{t(`${scope}.insights.vsPrev.label`)}</div>
+    <section className={styles.area} aria-label={t("components.insightCards.listLabel")}>
+      <div className={styles.head}>
+        <p className={styles.note}>{scopeNote(t, ctx, data.windows, data.now)}</p>
       </div>
-      <div className={styles.tile}>
-        {bValue}
-        <div className={styles.label}>{bLabel}</div>
+      <div className={styles.tiles} role="list" data-drill={accent ? "" : undefined} style={style}>
+        {cards.map((id, i) => (
+          <div
+            key={id}
+            role="listitem"
+            className={styles.tile}
+            data-row-start={startsRow(cards.length, i) ? "" : undefined}
+            style={{ "--span": spanOf(cards.length, i) } as CSSProperties}
+          >
+            <CardBody id={id} value={data.values[id]} ctx={ctx} />
+          </div>
+        ))}
       </div>
-      {showAvgVsPrev && (
-        <div className={styles.tile}>
-          {dValue}
-          <div className={styles.label}>{t(`${scope}.insights.avgVsPrev`)}</div>
-        </div>
-      )}
-      {/* No breakdown tile for a picked category; the grid keeps its columns, so nothing moves. */}
-      {third !== undefined && (
-        <div className={styles.tile}>
-          {cValue}
-          <div className={styles.label}>{cLabel}</div>
-        </div>
-      )}
-    </div>
+    </section>
   );
 }
