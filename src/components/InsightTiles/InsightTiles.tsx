@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { GripVertical, SlidersHorizontal, X } from "lucide-react";
 import { useInsightData, type InsightFocus } from "../../hooks/useInsightData";
@@ -29,6 +30,7 @@ import { CardBody } from "./CardValue";
 import { cardContext, cardName, scopeNote } from "./cardText";
 import { CardLibrary, EditBar } from "./InsightEditor";
 import styles from "./InsightTiles.module.css";
+import { useCardDrag, useFlip } from "./useCardDrag";
 
 const K = "components.insightCards";
 const MESSAGE_MS = 3500;
@@ -79,11 +81,14 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
   });
   const ctx = cardContext(scope, mode, data.windows, data.now, focus);
 
+  const rootRef = useRef<HTMLElement>(null);
+  const floatRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLButtonElement>(null);
   const doneRef = useRef<HTMLButtonElement>(null);
   const modeRef = useRef<HTMLDivElement>(null);
   const grips = useRef(new Map<CardId, HTMLButtonElement>());
   const pendingFocus = useRef<FocusTarget | null>(null);
+  const slide = useFlip(rootRef);
 
   // A moved card's node is moved, and a removed one is gone, so focus is put back by hand
   useLayoutEffect(() => {
@@ -129,35 +134,51 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
     pendingFocus.current = { kind: "done" };
   };
 
-  const remove = (id: CardId) => {
+  // A dropped card keeps focus where it was; a button press moves it to the card it changed
+  const remove = (id: CardId, moveFocus = true) => {
     const index = cards.indexOf(id);
+    slide();
     if (removeCard(scope, id) === "min") {
       say(t(`${K}.atMin`, { count: MIN_CARDS }));
-      pendingFocus.current = { kind: "grip", id };
+      if (moveFocus) pendingFocus.current = { kind: "grip", id };
       return;
     }
     const left = getCards(scope);
     say(t(`${K}.removed`, { name: nameOf(id), count: left.length }));
     const next = left[Math.min(index, left.length - 1)];
-    pendingFocus.current = next ? { kind: "grip", id: next } : { kind: "done" };
+    if (moveFocus) pendingFocus.current = next ? { kind: "grip", id: next } : { kind: "done" };
   };
 
-  const add = (id: CardId) => {
-    if (addCard(scope, id) === "max") {
+  const add = (id: CardId, at?: number) => {
+    slide();
+    if (addCard(scope, id, at) === "max") {
       say(t(`${K}.atMax`, { count: MAX_CARDS }));
       return;
     }
     say(t(`${K}.added`, { name: nameOf(id), count: getCards(scope).length }));
-    pendingFocus.current = { kind: "grip", id };
+    if (at === undefined) pendingFocus.current = { kind: "grip", id };
   };
 
   const move = (id: CardId, delta: number) => {
     const to = cards.indexOf(id) + delta;
     pendingFocus.current = { kind: "grip", id };
     if (to < 0 || to >= cards.length) return;
+    slide();
     moveCard(scope, id, to);
     say(t(`${K}.moved`, { name: nameOf(id), position: to + 1 }));
   };
+
+  const { drag, onPointerDown } = useCardDrag({
+    scope,
+    cards,
+    enabled: editing,
+    root: rootRef,
+    floating: floatRef,
+    capture: slide,
+    onAdd: add,
+    onRemove: (id) => remove(id, false),
+    onFull: () => say(t(`${K}.atMax`, { count: MAX_CARDS })),
+  });
 
   const onGripKey = (id: CardId) => (e: KeyboardEvent) => {
     if (e.key === "ArrowLeft" || e.key === "ArrowUp") move(id, -1);
@@ -175,15 +196,29 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
   };
 
   const reset = () => {
+    slide();
     resetCards(scope);
     say(t(`${K}.resetDone`));
   };
 
   const atMin = cards.length <= MIN_CARDS;
   const style = accent ? ({ "--tile-accent": accent } as CSSProperties) : undefined;
+  const moving = drag && !drag.landing ? drag : null;
+  // A card from the library held over the row shows where it would go
+  const pending = moving?.from === "library" && moving.insertAt !== null ? moving : null;
+  const row = pending
+    ? [...cards.slice(0, pending.insertAt ?? 0), pending.id, ...cards.slice(pending.insertAt ?? 0)]
+    : cards;
+  const landing = drag?.landing ? drag.id : null;
+  const overLibrary = moving?.from === "row" && moving.overLibrary;
 
   return (
-    <section className={styles.area} aria-label={t(`${K}.listLabel`)}>
+    <section
+      ref={rootRef}
+      className={styles.area}
+      aria-label={t(`${K}.listLabel`)}
+      onPointerDown={onPointerDown}
+    >
       {editing && (
         <EditBar
           scope={scope}
@@ -212,23 +247,29 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
       <div
         className={styles.tiles}
         role="list"
+        data-tiles=""
         data-editing={editing ? "" : undefined}
         data-drill={accent ? "" : undefined}
         style={style}
       >
-        {cards.map((id, i) => (
+        {row.map((id, i) => (
           <div
             key={id}
             role="listitem"
             className={styles.tile}
-            data-row-start={startsRow(cards.length, i) ? "" : undefined}
-            style={{ "--span": spanOf(cards.length, i) } as CSSProperties}
+            data-card={id}
+            data-row-start={startsRow(row.length, i) ? "" : undefined}
+            data-ghost={moving?.from === "row" && moving.id === id ? "" : undefined}
+            data-pending={pending?.id === id ? "" : undefined}
+            data-landing={landing === id ? "" : undefined}
+            style={{ "--span": spanOf(row.length, i) } as CSSProperties}
           >
             <CardBody id={id} value={data.values[id]} ctx={ctx} />
             {editing && (
               <>
                 <button
                   type="button"
+                  data-no-drag=""
                   className={styles.tileX}
                   aria-label={t(`${K}.remove`, { name: nameOf(id) })}
                   aria-disabled={atMin || undefined}
@@ -257,17 +298,32 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
       {editing && (
         <>
           <CardLibrary
-            ids={CARD_LIBRARY[scope].filter((id) => !cards.includes(id))}
+            ids={CARD_LIBRARY[scope].filter((id) => !row.includes(id))}
             placed={cards.length}
             ctx={ctx}
             values={data.values}
-            onAdd={add}
+            onAdd={(id) => add(id)}
+            drop={overLibrary ? (atMin ? "blocked" : "remove") : undefined}
+            dropName={overLibrary ? nameOf(moving.id) : undefined}
+            landing={landing}
           />
           <p className={styles.msg} role="status" aria-live="polite">
             {message?.text ?? ""}
           </p>
         </>
       )}
+      {drag &&
+        createPortal(
+          <div
+            ref={floatRef}
+            className={`${styles.tile} ${styles.floating}`}
+            style={{ width: drag.width, height: drag.height }}
+            aria-hidden
+          >
+            <CardBody id={drag.id} value={data.values[drag.id]} ctx={ctx} />
+          </div>,
+          document.body,
+        )}
     </section>
   );
 }

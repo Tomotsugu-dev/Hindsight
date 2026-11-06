@@ -79,18 +79,31 @@ export function CardLibrary({
   ctx,
   values,
   onAdd,
+  drop,
+  dropName,
+  landing,
 }: {
   ids: readonly CardId[];
   placed: number;
   ctx: CardContext;
   values: Partial<Record<CardId, CardValue | null>>;
   onAdd: (id: CardId) => void;
+  /** A card from the row is dragged over the library: it will be removed, or it cannot be. */
+  drop?: "remove" | "blocked";
+  dropName?: string;
+  /** The card the dragged copy is flying back to; it is drawn once the copy lands. */
+  landing?: CardId | null;
 }) {
   const { t } = useTranslation();
   const duration = useDurationFormatter();
   const full = placed >= MAX_CARDS;
   return (
-    <section className={styles.tray} aria-label={t(`${K}.library`)}>
+    <section
+      className={styles.tray}
+      data-library=""
+      data-drop={drop}
+      aria-label={t(`${K}.library`)}
+    >
       <div className={styles.trayHead}>
         <h2>{t(`${K}.library`)}</h2>
         <span className={styles.count}>
@@ -99,6 +112,13 @@ export function CardLibrary({
           {t(`${K}.limit`, { min: MIN_CARDS, max: MAX_CARDS })}
         </span>
       </div>
+      {drop && (
+        <p className={styles.dropNote}>
+          {drop === "remove"
+            ? t(`${K}.dropRemove`, { name: dropName })
+            : t(`${K}.dropBlocked`, { count: MIN_CARDS })}
+        </p>
+      )}
       {ids.length > 0 ? (
         <div className={styles.trayList}>
           {ids.map((id) => {
@@ -108,6 +128,8 @@ export function CardLibrary({
                 key={id}
                 type="button"
                 className={styles.pick}
+                data-pick={id}
+                data-landing={landing === id ? "" : undefined}
                 aria-disabled={full || undefined}
                 title={full ? t(`${K}.atMax`, { count: MAX_CARDS }) : undefined}
                 aria-label={t(`${K}.add`, { name })}

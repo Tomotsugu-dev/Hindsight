@@ -423,12 +423,87 @@
   color: var(--text-muted);
 }
 
+/* —— 拖动 —— */
+
+:global(body[data-card-dragging]) {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 行里被拖走的那张：留在原位，变淡 */
+.tile[data-ghost] {
+  opacity: 0.35;
+  border-style: dashed;
+  border-color: var(--color-accent);
+  box-shadow: none;
+}
+
+/* 从卡片库拖到行上：放下后会在这里 */
+.tile[data-pending] {
+  border: 1.5px dashed var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: none;
+}
+.tile[data-pending] > * {
+  opacity: 0.55;
+}
+
+/* 跟着指针的那张飞回来之前，落点上的卡片先不画 */
+.tile[data-landing],
+.pick[data-landing] {
+  visibility: hidden;
+}
+
+.tile.floating,
+:global([data-layout="flat"]) .tile.floating {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--z-drag-fly);
+  box-sizing: border-box;
+  margin: 0;
+  pointer-events: none;
+  background: var(--surface-card-elevated);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 16px 36px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
+    0 2px 6px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
+}
+.tile.floating[data-landed] {
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+}
+
+/* 从行里拖到卡片库上：松开会移除；只剩 3 张时移不走 */
+.dropNote {
+  margin: 0;
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+}
+.tray[data-drop="remove"] {
+  border-color: var(--status-error);
+  background: color-mix(in oklab, var(--status-error) 7%, var(--surface-card));
+}
+.tray[data-drop="remove"] .dropNote {
+  color: var(--status-error);
+}
+.tray[data-drop="blocked"] {
+  border-color: var(--status-pending);
+  background: var(--status-pending-soft);
+}
+.tray[data-drop="blocked"] .dropNote,
+.msg {
+  color: color-mix(in oklab, var(--status-pending) 65%, var(--text-strong));
+}
+
 /* 操作后的提示（至少 3 张、已经 6 张、已加入……），几秒后自己清掉 */
 .msg {
   margin: -4px 0 0;
   min-height: 18px;
   font-size: 12px;
-  color: color-mix(in oklab, var(--status-pending) 65%, var(--text-strong));
 }
 
 @media (max-width: 600px) {
