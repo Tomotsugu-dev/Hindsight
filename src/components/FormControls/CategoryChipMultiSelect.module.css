@@ -54,7 +54,7 @@
 }
 
 .excluded:hover {
-  background: rgba(0, 0, 0, 0.03) !important;
+  background: var(--fill-subtle) !important;
   border-color: rgba(0, 0, 0, 0.28) !important;
   color: var(--text-strong);
 }

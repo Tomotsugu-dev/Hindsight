@@ -108,7 +108,7 @@
 }
 
 .option:hover {
-  background: rgba(0, 0, 0, 0.025);
+  background: var(--fill-subtle);
 }
 
 .optionChecked {
@@ -195,7 +195,7 @@
   align-self: center;
   height: 26px;
   padding: 0 10px;
-  background: rgba(0, 0, 0, 0.045);
+  background: var(--fill-default);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -206,7 +206,7 @@
 }
 
 .revealBtn:hover {
-  background: rgba(0, 0, 0, 0.075);
+  background: var(--fill-strong);
 }
 
 .errorBar {
@@ -257,22 +257,22 @@
 }
 
 .btnCancel {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-color: rgba(0, 0, 0, 0.06);
   color: var(--text-strong);
 }
 
 .btnCancel:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--fill-strong);
 }
 
 .btnPrimary {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 88%, #000000);
+  background: var(--accent-fill-hover);
 }
 
 .spinning {

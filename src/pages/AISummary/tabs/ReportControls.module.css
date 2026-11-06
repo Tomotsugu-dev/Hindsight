@@ -130,12 +130,12 @@
 
 /* 还没生成：开始总结是这页唯一要做的事 */
 .btnPrimary {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: var(--accent-fill-hover);
 }
 
 /* 已经生成：重新生成退到次要 */

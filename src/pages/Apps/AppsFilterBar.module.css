@@ -57,7 +57,7 @@
 }
 
 .searchInput:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 .searchInput:focus {
@@ -87,7 +87,7 @@
 }
 
 .trigger:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--fill-subtle);
   border-color: color-mix(in oklab, var(--text-faint) 50%, transparent);
 }
 
@@ -172,7 +172,7 @@
 
 .panelDivider {
   height: 1px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--border-subtle);
   margin: 2px 0;
 }
 
@@ -193,7 +193,7 @@
 }
 
 .pseudoChip:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 .pseudoChipActive {
@@ -272,7 +272,7 @@
 }
 
 .sortItem:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 .sortItemActive {

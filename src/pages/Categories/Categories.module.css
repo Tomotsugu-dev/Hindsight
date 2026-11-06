@@ -258,7 +258,7 @@
 
 .catDragHandle:hover {
   color: var(--text-strong);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fill-default);
 }
 
 .catDragHandle:active {
@@ -405,7 +405,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fill-default);
   color: var(--text-muted, #64748b);
   border: none;
   cursor: pointer;
@@ -486,7 +486,7 @@
   gap: 5px;
   height: 24px;
   padding: 0 4px 0 5px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: var(--font-weight-500);
@@ -636,7 +636,7 @@
   justify-content: center;
   border-radius: var(--radius-sm);
   color: var(--text-faint);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   transition:
     background-color 160ms ease-out,
     color 160ms ease-out,
@@ -646,7 +646,7 @@
 }
 
 .iconBtn:hover {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--fill-strong);
   color: var(--text-strong);
 }
 
@@ -655,12 +655,12 @@
 }
 
 .iconBtnPrimary {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
 }
 
 .iconBtnPrimary:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  background: var(--accent-fill-hover);
   color: #ffffff;
 }
 
@@ -700,7 +700,7 @@
   gap: 4px;
   height: 26px;
   padding: 0 10px;
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--fill-subtle);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -858,7 +858,7 @@
 }
 
 .assignOptionClear:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fill-default);
 }
 
 /* 当前已选中那项：背景填充 + 加粗，告诉用户「就是这个」*/
@@ -907,7 +907,7 @@
 }
 
 .appSuggestOptionHi {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fill-default);
 }
 
 .appSuggestLabel {

@@ -5,8 +5,6 @@ import { UNGROUPED_COLOR, segmentsBySuper } from "../lib/segments";
 import { useCategories } from "../state/categories";
 import type { BarLevel } from "../state/statsView";
 import { useSuperCategories } from "../state/superCategories";
-import { adjustCategoryColor } from "../utils/categoryColor";
-import { useIsDark } from "./useTheme";
 
 /** One colored part of a bar, ready to draw. */
 export interface BarPart {
@@ -29,7 +27,6 @@ export function useBarParts(level: BarLevel): (segments: CategoryTime[]) => BarP
   const { t } = useTranslation();
   const { categories, getCategory } = useCategories();
   const { supers } = useSuperCategories();
-  const isDark = useIsDark();
 
   return useCallback(
     (segments) => {
@@ -39,7 +36,7 @@ export function useBarParts(level: BarLevel): (segments: CategoryTime[]) => BarP
           return {
             id: seg.categoryId,
             name: cat?.name ?? "",
-            color: cat ? adjustCategoryColor(cat.color, isDark) : MISSING_COLOR,
+            color: cat?.color ?? MISSING_COLOR,
             secs: seg.secs,
           };
         });
@@ -50,11 +47,11 @@ export function useBarParts(level: BarLevel): (segments: CategoryTime[]) => BarP
         return {
           id: part.id,
           name: sup?.name ?? t("categories.super.orphanLabel"),
-          color: adjustCategoryColor(sup?.color ?? UNGROUPED_COLOR, isDark),
+          color: sup?.color ?? UNGROUPED_COLOR,
           secs: part.secs,
         };
       });
     },
-    [level, categories, getCategory, supers, isDark, t],
+    [level, categories, getCategory, supers, t],
   );
 }
