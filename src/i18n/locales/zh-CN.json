@@ -501,6 +501,139 @@
     "insightTiles": {
       "appShare": "占所属分类"
     },
+    "insightCards": {
+      "listLabel": "统计卡片",
+      "edit": "编辑卡片",
+      "done": "完成",
+      "reset": "恢复默认",
+      "modeLabel": "统计口径",
+      "mode": {
+        "same": "同期对比",
+        "rolling": "滚动窗口"
+      },
+      "dayOnlySame": "日统计只有同期对比",
+      "library": "卡片库",
+      "placed": "已放 <b>{{count}}</b> 张",
+      "limit": "可放 {{min}}–{{max}} 张",
+      "libraryEmpty": "卡片库里的卡片都放上去了。",
+      "atMin": "至少要 {{count}} 张。",
+      "atMax": "已经 {{count}} 张了，先移除一张再加。",
+      "keepMin": "至少保留 {{count}} 张",
+      "dropRemove": "松开就移除「{{name}}」",
+      "dropBlocked": "至少保留 {{count}} 张，这张移不走",
+      "removed": "已移除「{{name}}」，现在 {{count}} 张",
+      "added": "已加入「{{name}}」，现在 {{count}} 张",
+      "moved": "「{{name}}」移到第 {{position}} 张",
+      "resetDone": "已恢复默认",
+      "modeChanged": "已换成{{mode}}，所有卡片重新计算",
+      "remove": "移除「{{name}}」",
+      "move": "移动「{{name}}」：方向键换位置，Delete 移除",
+      "add": "加入「{{name}}」",
+      "flat": "持平",
+      "other": "其他",
+      "hourCount": "{{count}} 小时",
+      "date": "{{month}}月{{day}}日",
+      "range": "{{from}} – {{to}}",
+      "note": {
+        "todayLive": "今天 0:00 到现在，对比昨天 0:00 到 {{time}}",
+        "weekLive": "本周一 0:00 到现在，对比上周一 0:00 到上{{weekday}} {{time}}",
+        "monthLive": "{{from}} 0:00 到现在，对比 {{prevFrom}} 0:00 到 {{prevCut}} {{time}}",
+        "liveWholePrev": "{{from}} 0:00 到现在，对比 {{prev}}（上月没有今天这个日子，算整月）",
+        "whole": "{{curr}}，对比 {{prev}}",
+        "rolling": "近 {{count}} 天：{{curr}}（不含今天），对比前 {{count}} 天：{{prev}}",
+        "rollingPast": "{{curr}} 这 {{count}} 天，对比前 {{count}} 天：{{prev}}"
+      },
+      "name": {
+        "vsPrev": "较上期",
+        "vsPrevToday": "较昨日同期",
+        "avg": "日均",
+        "avgVsPrev": "日均较上期",
+        "peakHour": "峰值时段",
+        "peakDay": "峰值日",
+        "dominant": "主力大类",
+        "total": "总时长",
+        "activeHours": "有记录的小时",
+        "devices": "设备分布",
+        "span": "最早开始 – 最晚结束",
+        "avgSpan": "平均开始 – 结束"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "较昨日同期",
+          "today": "较前一天",
+          "weekLive": "较上周同期",
+          "week": "较上周",
+          "monthLive": "较上月同期",
+          "month": "较上月",
+          "rolling": "较前 {{count}} 天"
+        },
+        "avgVsPrev": {
+          "weekLive": "日均较上周同期",
+          "week": "日均较上周",
+          "monthLive": "日均较上月同期",
+          "month": "日均较上月",
+          "rolling": "日均较前 {{count}} 天"
+        },
+        "avg": "日均",
+        "avgRolling": "近 {{count}} 天日均",
+        "total": "总时长",
+        "totalRolling": "近 {{count}} 天总时长",
+        "peak": "峰值",
+        "peakWith": "峰值 · {{duration}}",
+        "dominant": "主力",
+        "composition": "构成",
+        "appShare": "占所属分类",
+        "activeHours": "有记录的小时",
+        "devices": "设备分布",
+        "span": "最早开始 – 最晚结束",
+        "avgSpan": "平均开始 – 结束"
+      },
+      "spanOf": {
+        "today": "今天到现在",
+        "week": "本周到现在",
+        "month": "本月到现在",
+        "rolling": "近 {{count}} 天"
+      },
+      "desc": {
+        "vsPrev": {
+          "today": "今天到现在，对比昨天到同一时刻",
+          "week": "本周到现在，对比上周到同一时刻",
+          "month": "本月到现在，对比上月到同一时刻",
+          "rolling": "近 {{count}} 天，对比再往前 {{count}} 天"
+        },
+        "avg": {
+          "week": "本周过完的几天平均每天多久，不算今天",
+          "month": "本月过完的几天平均每天多久，不算今天",
+          "rolling": "近 {{count}} 天平均每天多久"
+        },
+        "avgVsPrev": {
+          "week": "本周过完的几天的日均，对比上周同样的几天",
+          "month": "本月过完的几天的日均，对比上月同样的几天",
+          "rolling": "近 {{count}} 天日均，对比前 {{count}} 天日均"
+        },
+        "peak": {
+          "today": "今天用得最多的那个小时",
+          "week": "本周到现在用得最多的那一天",
+          "month": "本月到现在用得最多的那一天",
+          "rolling": "近 {{count}} 天里用得最多的那一天"
+        },
+        "span": {
+          "today": "今天第一次开始、最后一次结束的时间",
+          "week": "本周过完的几天里，最早几点开始、最晚几点结束",
+          "month": "本月过完的几天里，最早几点开始、最晚几点结束",
+          "rolling": "近 {{count}} 天里，最早几点开始、最晚几点结束"
+        },
+        "avgSpan": {
+          "week": "本周过完的几天，平均几点开始、几点结束；没有记录的天不算",
+          "month": "本月过完的几天，平均几点开始、几点结束；没有记录的天不算",
+          "rolling": "近 {{count}} 天平均几点开始、几点结束；没有记录的天不算"
+        },
+        "dominant": "{{span}}，时间最多的大类占几成；下钻时换成里面最多的小类",
+        "total": "{{span}}一共用了多久",
+        "devices": "{{span}}，每台设备各用了多少",
+        "activeHours": "今天有几个小时有使用记录"
+      }
+    },
     "periodLegend": {
       "levelAria": "柱子按大类还是小类分色",
       "supers": "大类",

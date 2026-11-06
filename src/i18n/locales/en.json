@@ -501,6 +501,139 @@
     "insightTiles": {
       "appShare": "Share of its category"
     },
+    "insightCards": {
+      "listLabel": "Stats cards",
+      "edit": "Edit cards",
+      "done": "Done",
+      "reset": "Reset",
+      "modeLabel": "Compare",
+      "mode": {
+        "same": "Same point",
+        "rolling": "Rolling days"
+      },
+      "dayOnlySame": "The day page always compares up to the same time",
+      "library": "Card library",
+      "placed": "<b>{{count}}</b> placed",
+      "limit": "{{min}}–{{max}} cards",
+      "libraryEmpty": "All the cards are placed.",
+      "atMin": "Keep at least {{count}} cards.",
+      "atMax": "There are already {{count}} cards. Remove one first.",
+      "keepMin": "Keep at least {{count}} cards",
+      "dropRemove": "Drop to remove “{{name}}”",
+      "dropBlocked": "Keep at least {{count}} cards. This one stays.",
+      "removed": "Removed “{{name}}”. {{count}} cards now.",
+      "added": "Added “{{name}}”. {{count}} cards now.",
+      "moved": "“{{name}}” is now card {{position}}.",
+      "resetDone": "Back to the default cards.",
+      "modeChanged": "Now using {{mode}}. Every card was worked out again.",
+      "remove": "Remove “{{name}}”",
+      "move": "Move “{{name}}”: arrow keys move it, Delete removes it",
+      "add": "Add “{{name}}”",
+      "flat": "No change",
+      "other": "Other",
+      "hourCount": "{{count}} h",
+      "date": "{{month}}/{{day}}",
+      "range": "{{from}} – {{to}}",
+      "note": {
+        "todayLive": "Today 0:00 to now, against yesterday 0:00 to {{time}}",
+        "weekLive": "This Monday 0:00 to now, against last Monday 0:00 to last {{weekday}} {{time}}",
+        "monthLive": "{{from}} 0:00 to now, against {{prevFrom}} 0:00 to {{prevCut}} {{time}}",
+        "liveWholePrev": "{{from}} 0:00 to now, against {{prev}} (last month has no such day, so all of it counts)",
+        "whole": "{{curr}}, against {{prev}}",
+        "rolling": "Last {{count}} days: {{curr}} (not today), against the {{count}} days before: {{prev}}",
+        "rollingPast": "{{count}} days: {{curr}}, against the {{count}} days before: {{prev}}"
+      },
+      "name": {
+        "vsPrev": "Change",
+        "vsPrevToday": "Change from yesterday",
+        "avg": "Daily average",
+        "avgVsPrev": "Daily average change",
+        "peakHour": "Peak hour",
+        "peakDay": "Peak day",
+        "dominant": "Top super category",
+        "total": "Total",
+        "activeHours": "Hours with records",
+        "devices": "Devices",
+        "span": "Earliest start – latest end",
+        "avgSpan": "Average start – end"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "vs. yesterday so far",
+          "today": "vs. the day before",
+          "weekLive": "vs. last week so far",
+          "week": "vs. last week",
+          "monthLive": "vs. last month so far",
+          "month": "vs. last month",
+          "rolling": "vs. the {{count}} days before"
+        },
+        "avgVsPrev": {
+          "weekLive": "Daily avg. vs. last week so far",
+          "week": "Daily avg. vs. last week",
+          "monthLive": "Daily avg. vs. last month so far",
+          "month": "Daily avg. vs. last month",
+          "rolling": "Daily avg. vs. the {{count}} days before"
+        },
+        "avg": "Daily average",
+        "avgRolling": "Daily avg., last {{count}} days",
+        "total": "Total",
+        "totalRolling": "Total, last {{count}} days",
+        "peak": "Peak",
+        "peakWith": "Peak · {{duration}}",
+        "dominant": "Top",
+        "composition": "Inside",
+        "appShare": "Share of its category",
+        "activeHours": "Hours with records",
+        "devices": "Devices",
+        "span": "Earliest start – latest end",
+        "avgSpan": "Average start – end"
+      },
+      "spanOf": {
+        "today": "Today so far",
+        "week": "This week so far",
+        "month": "This month so far",
+        "rolling": "The last {{count}} days"
+      },
+      "desc": {
+        "vsPrev": {
+          "today": "Today so far, against yesterday up to the same time",
+          "week": "This week so far, against last week up to the same time",
+          "month": "This month so far, against last month up to the same time",
+          "rolling": "The last {{count}} days, against the {{count}} days before them"
+        },
+        "avg": {
+          "week": "Time per day over the finished days of this week, not today",
+          "month": "Time per day over the finished days of this month, not today",
+          "rolling": "Time per day over the last {{count}} days"
+        },
+        "avgVsPrev": {
+          "week": "The daily average of this week's finished days, against the same days last week",
+          "month": "The daily average of this month's finished days, against the same days last month",
+          "rolling": "The daily average of the last {{count}} days, against the {{count}} days before"
+        },
+        "peak": {
+          "today": "The hour with the most time today",
+          "week": "The day with the most time this week so far",
+          "month": "The day with the most time this month so far",
+          "rolling": "The day with the most time in the last {{count}} days"
+        },
+        "span": {
+          "today": "When today's first record starts and the last one ends",
+          "week": "The earliest start and latest end over this week's finished days",
+          "month": "The earliest start and latest end over this month's finished days",
+          "rolling": "The earliest start and latest end over the last {{count}} days"
+        },
+        "avgSpan": {
+          "week": "The average start and end over this week's finished days. Days without records are left out.",
+          "month": "The average start and end over this month's finished days. Days without records are left out.",
+          "rolling": "The average start and end over the last {{count}} days. Days without records are left out."
+        },
+        "dominant": "{{span}}: the super category with the most time and its share. When you drill in, the biggest category inside.",
+        "total": "{{span}}: all the time together",
+        "devices": "{{span}}: how much time each device has",
+        "activeHours": "How many hours today have records"
+      }
+    },
     "periodLegend": {
       "levelAria": "Color the bars by super-category or category",
       "supers": "Super-categories",
