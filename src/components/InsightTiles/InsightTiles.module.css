@@ -155,6 +155,282 @@
   padding-left: 14px;
 }
 
+/* —— 编辑模式 —— */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+/* 平时卡片上方的「编辑卡片」 */
+.btnPlain {
+  background: var(--control-bg);
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
+.btnPlain:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.btnQuiet {
+  background: transparent;
+  color: var(--text-muted);
+}
+.btnQuiet:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.btnPrimary {
+  background: var(--color-accent);
+  color: #ffffff;
+  font-weight: var(--font-weight-600);
+}
+.btnPrimary:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+}
+
+.editBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.editTitle {
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.editActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 统计口径：所有卡片跟着它重新算 */
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modeLabel {
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+}
+.seg button {
+  border: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.seg button:hover {
+  color: var(--text-strong);
+}
+.seg button[aria-pressed="true"] {
+  background: var(--surface-card-elevated);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tiles[data-editing] .tile {
+  cursor: grab;
+  padding-right: 40px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tiles[data-editing] .tile:hover {
+  border-color: var(--border-strong);
+}
+
+.tileX,
+.tileGrip {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-faint);
+}
+.tileX {
+  top: 6px;
+  cursor: pointer;
+}
+.tileGrip {
+  bottom: 6px;
+  cursor: grab;
+}
+.tileX:hover,
+.tileGrip:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+.tileX[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tileX[aria-disabled="true"]:hover {
+  background: transparent;
+  color: var(--text-faint);
+}
+
+/* —— 卡片库 —— */
+
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  transition:
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out);
+}
+
+.trayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.trayHead h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.count b {
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.trayList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card-elevated);
+  color: var(--text-regular);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+}
+.pick:hover {
+  border-color: var(--border-strong);
+}
+.pick[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pickTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pickName {
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+.pickPlus {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+.pickDesc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.pickPrev {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.pickPrevLabel {
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trayEmpty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 操作后的提示（至少 3 张、已经 6 张、已加入……），几秒后自己清掉 */
+.msg {
+  margin: -4px 0 0;
+  min-height: 18px;
+  font-size: 12px;
+  color: color-mix(in oklab, var(--status-pending) 65%, var(--text-strong));
+}
+
 @media (max-width: 600px) {
   .tile {
     grid-column: span 6;
