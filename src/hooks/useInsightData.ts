@@ -1,0 +1,364 @@
+/**
+ * Loads what the stats cards need and works out what each card shows.
+ *
+ * Only the cards asked for are loaded: the cards on the page, or the whole card library while
+ * editing. The hours of every day are loaded only for the start and end cards.
+ */
+
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  api,
+  type AppUsage,
+  type CategoryTime,
+  type DaySummaryDto,
+  type DetailBucket,
+  type HourSlot,
+} from "../api/hindsight";
+import { superIdOf } from "../lib/segments";
+import { useCategories } from "../state/categories";
+import { useDeviceFilter } from "../state/deviceFilter";
+import { useSuperCategories } from "../state/superCategories";
+import {
+  appSeries,
+  cardValue,
+  categorySeries,
+  deviceShares,
+  OTHER_SHARE,
+  secsOf,
+  type CardId,
+  type CardValue,
+  type DeviceShare,
+  type Series,
+  type ShareValue,
+} from "../utils/insightCards";
+import {
+  canCompare,
+  dateKey,
+  datesOf,
+  daysBetween,
+  firstDate,
+  insightWindows,
+  periodRange,
+  type DateKey,
+  type InsightMode,
+  type InsightScope,
+  type InsightWindows,
+} from "../utils/insightWindows";
+import {
+  clearOnNewCategories,
+  LIVE_TTL_MS,
+  peekQuery,
+  queriesVersion,
+  requestQueries,
+  subscribeQueries,
+  type Query,
+} from "./insightQueries";
+import { loadAppBuckets } from "./useAppDetail";
+import { catMinutesFromSegments, useSuperCategoryBreakdown } from "./useSuperCategoryBreakdown";
+
+/** What the cards cover: everything, a drilled super category, a picked category, or one app. */
+export type InsightFocus =
+  | { kind: "all" }
+  | { kind: "super"; superId: string }
+  | { kind: "cat"; catId: string }
+  | { kind: "app"; groupId: string; categoryId: string };
+
+export interface InsightData {
+  windows: InsightWindows;
+  /** One entry for each card asked for; null shows "—". */
+  values: Partial<Record<CardId, CardValue | null>>;
+}
+
+interface Args {
+  scope: InsightScope;
+  offset: number;
+  mode: InsightMode;
+  cards: readonly CardId[];
+  focus: InsightFocus;
+}
+
+type Row = { date: DateKey; segments: CategoryTime[] };
+type Keyed = { date: DateKey; key: string };
+
+/** The queries to ask, in order, and the keys to read their results back. */
+interface Plan {
+  queries: Query[];
+  earliest: string;
+  /** Days of categories; the day page builds them from the hours instead. */
+  rows: string | null;
+  hours: Keyed[];
+  appDays: string[];
+  appHours: Keyed[];
+  /** Every app's time over what the cards cover, for an app's share of its category. */
+  apps: string | null;
+  devices: { id: string; key: string }[];
+}
+
+/** The offsets of the periods that hold any day from `from` to `to`. */
+function periodOffsets(scope: "week" | "month", from: DateKey, to: DateKey, now: Date): number[] {
+  let off = 0;
+  while (periodRange(scope, off, now).from > to) off--;
+  const out: number[] = [];
+  for (; periodRange(scope, off, now).to >= from; off--) out.push(off);
+  return out;
+}
+
+function planQueries(
+  scope: InsightScope,
+  windows: InsightWindows,
+  cards: readonly CardId[],
+  focus: InsightFocus,
+  deviceId: string | undefined,
+  deviceIds: readonly string[],
+  now: Date,
+): Plan {
+  const today = dateKey(now);
+  const offsetOf = (date: DateKey) => daysBetween(today, date);
+  const dev = deviceId ?? "";
+  const curr = windows.curr.days ?? { from: today, to: today };
+  const from = firstDate(windows.prev) ?? curr.from;
+  const app = focus.kind === "app" ? focus : null;
+  const needs = (...ids: CardId[]) => ids.some((id) => cards.includes(id));
+
+  const queries: Query[] = [];
+  const add = (key: string, live: boolean, run: () => Promise<unknown>) => {
+    queries.push({ key, live, run });
+    return key;
+  };
+  const rowsOf = (f: DateKey, t: DateKey, d: string | undefined) =>
+    add(`rows|${f}|${t}|${d ?? ""}`, t >= today, () => api.getRangeCategoryTime(f, t, d));
+  const appsOf = (d: string | undefined) =>
+    add(`apps|${curr.from}|${curr.to}|${d ?? ""}`, curr.to >= today, () =>
+      api.getRangeApps(curr.from, curr.to, d),
+    );
+  const hoursOf = (date: DateKey): Keyed => ({
+    date,
+    key: add(`hours|${date}|${dev}`, date >= today, () =>
+      api.getDayHours(offsetOf(date), deviceId),
+    ),
+  });
+  const appHoursOf = (groupId: string, date: DateKey): Keyed => ({
+    date,
+    key: add(`appHours|${groupId}|${date}|${dev}`, date >= today, () =>
+      loadAppBuckets("day", offsetOf(date), groupId, deviceId),
+    ),
+  });
+
+  const plan: Plan = {
+    queries,
+    earliest: add("earliest", true, () => api.earliestActivityDate()),
+    rows: null,
+    hours: [],
+    appDays: [],
+    appHours: [],
+    apps: null,
+    devices: [],
+  };
+  if (scope === "today") {
+    const days = [...new Set([from, curr.from])];
+    plan.hours = days.map(hoursOf);
+    if (app) plan.appHours = days.map((d) => appHoursOf(app.groupId, d));
+  } else {
+    plan.rows = rowsOf(from, curr.to, deviceId);
+    const part = windows.prev.part?.date;
+    if (part) plan.hours.push(hoursOf(part));
+    if (app) {
+      plan.appDays = periodOffsets(scope, from, curr.to, now).map((off) =>
+        add(
+          `appDays|${scope}|${off}|${app.groupId}|${dev}`,
+          periodRange(scope, off, now).to >= today,
+          () => loadAppBuckets(scope, off, app.groupId, deviceId),
+        ),
+      );
+      if (part) plan.appHours.push(appHoursOf(app.groupId, part));
+    }
+  }
+  if (app && needs("dominant")) plan.apps = appsOf(deviceId);
+  if (needs("devices") && deviceId === undefined && deviceIds.length >= 2) {
+    plan.devices = deviceIds.map((id) => ({
+      id,
+      key: app ? appsOf(id) : rowsOf(curr.from, curr.to, id),
+    }));
+  }
+  // Last, and only for these cards: the hours of every finished day
+  if (scope !== "today" && !app && needs("span", "avgSpan") && windows.currDays) {
+    const have = new Set(plan.hours.map((h) => h.date));
+    for (const d of datesOf(windows.currDays)) if (!have.has(d)) plan.hours.push(hoursOf(d));
+  }
+  return plan;
+}
+
+/** One day's time per category, added up from its hours. */
+function dayOf(date: DateKey, hours: readonly HourSlot[]): Row {
+  const secs = new Map<string, number>();
+  for (const h of hours) {
+    for (const s of h.segments) secs.set(s.categoryId, (secs.get(s.categoryId) ?? 0) + s.secs);
+  }
+  return { date, segments: [...secs].map(([categoryId, s]) => ({ categoryId, secs: s })) };
+}
+
+function loaded<T>(list: readonly Keyed[]): { date: DateKey; value: T }[] {
+  const out: { date: DateKey; value: T }[] = [];
+  for (const { date, key } of list) {
+    const value = peekQuery<T>(key);
+    if (value !== undefined) out.push({ date, value });
+  }
+  return out;
+}
+
+const appSecs = (apps: readonly AppUsage[], groupId: string): number =>
+  secsOf(apps.find((a) => a.groupId === groupId)?.byCategory ?? [], null);
+
+const pctOf = (part: number, whole: number) => Math.round((part / whole) * 100);
+
+export function useInsightData({ scope, offset, mode, cards, focus: given }: Args): InsightData {
+  const { categories, getCategory } = useCategories();
+  const { supers } = useSuperCategories();
+  const { devices, selectedDeviceId: deviceId } = useDeviceFilter();
+  const version = useSyncExternalStore(subscribeQueries, queriesVersion);
+  // Pages build a new focus object on every render; only a new value should plan again
+  const focusKey = JSON.stringify(given);
+  const focus = useMemo(() => JSON.parse(focusKey) as InsightFocus, [focusKey]);
+
+  // The previous period is cut at the current minute, so the clock moves the cut
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), LIVE_TTL_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => clearOnNewCategories(categories), [categories]);
+
+  const windows = useMemo(
+    () => insightWindows(scope, offset, mode, now),
+    [scope, offset, mode, now],
+  );
+  const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
+  const plan = useMemo(
+    () => planQueries(scope, windows, cards, focus, deviceId, deviceIds, now),
+    [scope, windows, cards, focus, deviceId, deviceIds, now],
+  );
+  useEffect(() => requestQueries(plan.queries), [plan]);
+
+  const rows = useMemo<Row[]>(() => {
+    void version;
+    if (plan.rows) return peekQuery<DaySummaryDto[]>(plan.rows) ?? [];
+    return loaded<HourSlot[]>(plan.hours).map(({ date, value }) => dayOf(date, value));
+  }, [plan, version]);
+
+  const curr = windows.curr.days;
+  const currRows = useMemo(
+    () => (curr ? rows.filter((r) => r.date >= curr.from && r.date <= curr.to) : []),
+    [rows, curr],
+  );
+  const breakdown = useSuperCategoryBreakdown(
+    useMemo(() => catMinutesFromSegments(currRows), [currRows]),
+  );
+
+  // A drilled super category counts all its categories, also those with no time in this period
+  const only = useMemo(() => {
+    if (focus.kind === "cat") return new Set([focus.catId]);
+    if (focus.kind !== "super") return null;
+    const superIds = new Set(supers.map((s) => s.id));
+    return new Set(
+      categories
+        .filter((c) => !c.builtin && superIdOf(c, superIds) === focus.superId)
+        .map((c) => c.id),
+    );
+  }, [focus, supers, categories]);
+
+  const values = useMemo(() => {
+    void version;
+    const hourDays = loaded<HourSlot[]>(plan.hours).map(({ date, value }) => ({
+      date,
+      hours: value,
+    }));
+
+    let series: Series;
+    if (focus.kind === "app") {
+      const appHours = loaded<DetailBucket[]>(plan.appHours).map(({ date, value }) => ({
+        date,
+        buckets: value,
+      }));
+      // The day page has no day buckets: a day's time is the sum of its hours
+      const dayBuckets =
+        scope === "today"
+          ? appHours.map((d) => ({ key: d.date, secs: d.buckets.reduce((s, b) => s + b.secs, 0) }))
+          : plan.appDays.every((k) => peekQuery(k) !== undefined)
+            ? plan.appDays.flatMap((k) => peekQuery<DetailBucket[]>(k) ?? [])
+            : [];
+      series = appSeries(dayBuckets, appHours);
+    } else {
+      series = categorySeries(rows, hourDays, only);
+    }
+
+    // The dominant card: the biggest super category, the biggest category in the drilled one,
+    // or the hovered app's share of its own category. A picked category has nothing below it.
+    let share: ShareValue | null = null;
+    const shareOf = (name: string, color: string, part: number, whole: number) =>
+      whole > 0 ? ({ kind: "share", name, color, pct: pctOf(part, whole) } as const) : null;
+    if (focus.kind === "all") {
+      const top = breakdown.slices[0];
+      // Same total as the period's other cards: all the time, not only the ring's
+      const total = currRows.reduce((sum, r) => sum + secsOf(r.segments, null), 0) / 60;
+      if (top) share = shareOf(top.name, top.color, top.minutes, Math.round(total));
+    } else if (focus.kind === "super") {
+      const slice = breakdown.slices.find((s) => s.id === focus.superId);
+      const top = slice?.cats[0];
+      if (slice && top) share = shareOf(top.name, top.color, top.minutes, slice.minutes);
+    } else if (focus.kind === "app" && plan.apps) {
+      const own = new Set([focus.categoryId]);
+      const cat = getCategory(focus.categoryId);
+      const app = peekQuery<AppUsage[]>(plan.apps)?.find((a) => a.groupId === focus.groupId);
+      const catSecs = currRows.reduce((sum, r) => sum + secsOf(r.segments, own), 0);
+      if (cat && app) share = shareOf(cat.name, cat.color, secsOf(app.byCategory, own), catSecs);
+    }
+
+    let deviceSplit: DeviceShare[] | null = null;
+    if (plan.devices.length > 0) {
+      const totals: { id: string; secs: number }[] = [];
+      for (const { id, key } of plan.devices) {
+        const v = peekQuery<DaySummaryDto[] | AppUsage[]>(key);
+        if (v === undefined) break;
+        const secs =
+          focus.kind === "app"
+            ? appSecs(v as AppUsage[], focus.groupId)
+            : (v as DaySummaryDto[]).reduce((sum, r) => sum + secsOf(r.segments, only), 0);
+        totals.push({ id, secs });
+      }
+      const shares = totals.length === plan.devices.length ? deviceShares(totals) : null;
+      deviceSplit =
+        shares?.map((s) => {
+          const d = s.id === OTHER_SHARE ? undefined : devices.find((x) => x.id === s.id);
+          return { id: s.id, name: d?.name ?? null, color: d?.color ?? null, pct: s.pct };
+        }) ?? null;
+    }
+
+    const input = {
+      scope,
+      windows,
+      comparable: canCompare(windows, peekQuery<string | null>(plan.earliest) ?? null),
+      series,
+      edges: scope === "today" || focus.kind !== "app",
+      share,
+      devices: deviceSplit,
+    };
+    const out: Partial<Record<CardId, CardValue | null>> = {};
+    for (const id of cards) out[id] = cardValue(id, input);
+    return out;
+  }, [
+    version,
+    focus,
+    only,
+    plan,
+    scope,
+    rows,
+    breakdown,
+    currRows,
+    getCategory,
+    devices,
+    windows,
+    cards,
+  ]);
+
+  return { windows, values };
+}
