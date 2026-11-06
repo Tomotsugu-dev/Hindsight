@@ -6,7 +6,26 @@
  */
 
 import type { CategoryTime, DetailBucket, HourSlot } from "../api/hindsight";
-import { datesOf, type DateKey, type DateRange, type Stretch } from "./insightWindows";
+import {
+  datesOf,
+  type DateKey,
+  type DateRange,
+  type InsightScope,
+  type InsightWindows,
+  type Stretch,
+} from "./insightWindows";
+
+export type CardId =
+  | "vsPrev"
+  | "avg"
+  | "avgVsPrev"
+  | "peak"
+  | "dominant"
+  | "total"
+  | "activeHours"
+  | "devices"
+  | "span"
+  | "avgSpan";
 
 export interface Series {
   /** Seconds on each whole day. */
@@ -189,4 +208,94 @@ export function deviceShares(totals: readonly { id: string; secs: number }[]): S
   const left = 100 - pcts.reduce((a, b) => a + b, 0);
   for (let k = 0; k < left; k++) pcts[order[k].i]++;
   return parts.map((p, i) => ({ id: p.id, secs: p.secs, pct: pcts[i] }));
+}
+
+/** What one card shows. A card with no value shows "—". */
+export type CardValue =
+  | { kind: "delta"; minutes: number }
+  | { kind: "duration"; minutes: number }
+  | { kind: "peakHour"; hour: number; minutes: number }
+  | { kind: "peakDay"; date: DateKey; minutes: number }
+  | { kind: "share"; name: string; color: string; pct: number }
+  | { kind: "edges"; start: number; end: number }
+  | { kind: "hourCount"; hours: number }
+  | { kind: "devices"; shares: DeviceShare[] };
+
+export type ShareValue = Extract<CardValue, { kind: "share" }>;
+
+export interface DeviceShare {
+  id: string;
+  /** null for the devices after the first two, shown together. */
+  name: string | null;
+  color: string | null;
+  pct: number;
+}
+
+export interface CardInputs {
+  scope: InsightScope;
+  windows: InsightWindows;
+  /** Whether there are records from before the comparison starts; see `canCompare`. */
+  comparable: boolean;
+  series: Series;
+  /** Whether start and end times are worked out; not for one app on the week and month pages. */
+  edges: boolean;
+  /** For the dominant card: the biggest part, worked out by the caller. */
+  share: ShareValue | null;
+  devices: DeviceShare[] | null;
+}
+
+/** Works out one card. Every card is empty while the time it covers is not loaded or is empty. */
+export function cardValue(id: CardId, input: CardInputs): CardValue | null {
+  const { scope, windows, series } = input;
+  const currSecs = stretchSecs(series, windows.curr);
+  if (currSecs === null || currSecs <= 0 || !windows.curr.days) return null;
+  const { currDays, prevDays } = windows;
+  // The day page covers one day; its hours give the peak, the active hours and the edges
+  const dayHours = scope === "today" ? series.hours.get(windows.curr.days.from) : undefined;
+
+  switch (id) {
+    case "vsPrev": {
+      const prevSecs = input.comparable ? stretchSecs(series, windows.prev) : null;
+      return prevSecs === null
+        ? null
+        : { kind: "delta", minutes: toMinutes(currSecs) - toMinutes(prevSecs) };
+    }
+    case "avg": {
+      const avg = currDays ? averageMinutes(series, currDays) : null;
+      return avg === null ? null : { kind: "duration", minutes: avg };
+    }
+    case "avgVsPrev": {
+      if (!input.comparable || !currDays || !prevDays) return null;
+      const curr = averageMinutes(series, currDays);
+      const prev = averageMinutes(series, prevDays);
+      return curr === null || prev === null ? null : { kind: "delta", minutes: curr - prev };
+    }
+    case "peak": {
+      if (scope === "today") {
+        const best = dayHours ? peakHour(dayHours) : null;
+        return best && { kind: "peakHour", hour: best.hour, minutes: toMinutes(best.secs) };
+      }
+      const best = peakDay(series, windows.curr.days);
+      return best && { kind: "peakDay", date: best.date, minutes: toMinutes(best.secs) };
+    }
+    case "dominant":
+      return input.share;
+    case "total":
+      return { kind: "duration", minutes: toMinutes(currSecs) };
+    case "activeHours":
+      return dayHours ? { kind: "hourCount", hours: activeHourCount(dayHours) } : null;
+    case "devices":
+      return input.devices && { kind: "devices", shares: input.devices };
+    case "span":
+    case "avgSpan": {
+      if (scope === "today") {
+        const e = dayHours ? dayEdges(dayHours) : null;
+        return e && { kind: "edges", ...e };
+      }
+      if (!input.edges || !currDays) return null;
+      const dates = datesOf(currDays);
+      const e = id === "span" ? widestEdges(series, dates) : averageEdges(series, dates);
+      return e && { kind: "edges", ...e };
+    }
+  }
 }

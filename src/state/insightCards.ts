@@ -7,19 +7,10 @@
 
 import { useSyncExternalStore } from "react";
 import { logWarn } from "../lib/logger";
+import type { CardId } from "../utils/insightCards";
 import type { InsightMode, InsightScope } from "../utils/insightWindows";
 
-export type CardId =
-  | "vsPrev"
-  | "avg"
-  | "avgVsPrev"
-  | "peak"
-  | "dominant"
-  | "total"
-  | "activeHours"
-  | "devices"
-  | "span"
-  | "avgSpan";
+export type { CardId };
 
 export const MIN_CARDS = 3;
 export const MAX_CARDS = 6;

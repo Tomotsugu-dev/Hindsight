@@ -4,13 +4,16 @@ import {
   appSeries,
   averageEdges,
   averageMinutes,
+  cardValue,
   categorySeries,
   dayEdges,
   deviceShares,
   peakDay,
   stretchSecs,
   widestEdges,
+  type CardInputs,
 } from "./insightCards";
+import { insightWindows } from "./insightWindows";
 
 /** 一天 24 个小时格；`busy` 里列出的小时各有 `secs` 秒，分在 work 和 fun 两个分类 */
 function hoursOf(busy: number[], secs = 600): HourSlot[] {
@@ -179,5 +182,91 @@ describe("deviceShares", () => {
 
   it("is null when no device has time", () => {
     expect(deviceShares([{ id: "a", secs: 0 }])).toBeNull();
+  });
+});
+
+describe("cardValue", () => {
+  // 周四 15:40 看本周：本周一到周四，对比上周一到周三整天加上周四 15:40 之前
+  const now = new Date(2026, 10, 5, 15, 40);
+  const windows = insightWindows("week", 0, "same", now);
+  const series = categorySeries(
+    [
+      day("2026-10-26", 3600),
+      day("2026-10-27", 3600),
+      day("2026-10-28", 3600),
+      day("2026-10-29", 9999), // 上周四整天，不该算进去
+      day("2026-11-02", 7200),
+      day("2026-11-03", 3600),
+      day("2026-11-04", 5400),
+      day("2026-11-05", 1800),
+    ],
+    // 上周四：9 点 1200 秒，15 点 1200 秒（截到 40 分算 800）
+    [{ date: "2026-10-29", hours: hoursOf([9, 15], 1200) }],
+    null,
+  );
+  const input: CardInputs = {
+    scope: "week",
+    windows,
+    comparable: true,
+    series,
+    edges: true,
+    share: null,
+    devices: null,
+  };
+
+  it("compares up to now with the previous week up to the same minute", () => {
+    // 本周 2h+1h+1.5h+0.5h = 300 分；上周 3h + 1200/60 + 800/60 = 180 + 33 = 213 分
+    expect(cardValue("vsPrev", input)).toEqual({ kind: "delta", minutes: 300 - 213 });
+  });
+
+  it("averages the finished days and compares them with the same days last week", () => {
+    // 周一到周三：(120 + 60 + 90) / 3 = 90；上周一到周三 60
+    expect(cardValue("avg", input)).toEqual({ kind: "duration", minutes: 90 });
+    expect(cardValue("avgVsPrev", input)).toEqual({ kind: "delta", minutes: 30 });
+  });
+
+  it("shows no comparison when records start inside the compared stretch", () => {
+    expect(cardValue("vsPrev", { ...input, comparable: false })).toBeNull();
+    expect(cardValue("avgVsPrev", { ...input, comparable: false })).toBeNull();
+    expect(cardValue("total", { ...input, comparable: false })).toEqual({
+      kind: "duration",
+      minutes: 300,
+    });
+  });
+
+  it("finds the peak day in what the cards cover", () => {
+    expect(cardValue("peak", input)).toEqual({ kind: "peakDay", date: "2026-11-02", minutes: 120 });
+  });
+
+  it("shows nothing while a day is not loaded, or when the stretch is empty", () => {
+    const partial = categorySeries([day("2026-11-02", 7200)], [], null);
+    expect(cardValue("total", { ...input, series: partial })).toBeNull();
+    const empty = categorySeries(
+      ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"].map((d) => day(d, 0)),
+      [],
+      null,
+    );
+    expect(cardValue("total", { ...input, series: empty })).toBeNull();
+  });
+
+  it("leaves out start and end times when it is told to", () => {
+    expect(cardValue("span", { ...input, edges: false })).toBeNull();
+  });
+
+  it("reads the hours of the day on the day page", () => {
+    const today = categorySeries(
+      [day("2026-11-05", 1800)],
+      [{ date: "2026-11-05", hours: hoursOf([9, 10, 14], 600) }],
+      null,
+    );
+    const dayInput: CardInputs = {
+      ...input,
+      scope: "today",
+      windows: insightWindows("today", 0, "same", now),
+      series: today,
+    };
+    expect(cardValue("peak", dayInput)).toEqual({ kind: "peakHour", hour: 9, minutes: 10 });
+    expect(cardValue("activeHours", dayInput)).toEqual({ kind: "hourCount", hours: 3 });
+    expect(cardValue("span", dayInput)).toEqual({ kind: "edges", start: 9, end: 15 });
   });
 });
