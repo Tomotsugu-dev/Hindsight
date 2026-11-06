@@ -5,7 +5,8 @@
 // 用法：
 //   1. 改 package.json / Cargo.toml / tauri.conf.json 的 version 和 packaging/arch/PKGBUILD 的
 //      pkgver 为目标版本号（pkgrel 改回 1）
-//   2. 写 docs/release-notes/v<version>.md（应用内"检查更新"对话框 + GitHub Release body 都用它）
+//   2. 写 docs/release-notes/<小版本>/v<version>.md，如 0.11/v0.11.2.md
+//      （应用内"检查更新"对话框 + GitHub Release body 都用它）
 //   3. git commit -m "Bump version to X.Y.Z" && git push
 //   4. npm run release
 //
@@ -78,7 +79,8 @@ async function main() {
   console.log(`\n=== Releasing ${tag} ===`);
 
   // —— 3. release notes 必须存在 ——
-  const notesPath = path.join("docs", "release-notes", `${tag}.md`);
+  const minor = version.split(".").slice(0, 2).join(".");
+  const notesPath = path.join("docs", "release-notes", minor, `${tag}.md`);
   if (!existsSync(notesPath)) {
     fail(
       `Missing ${notesPath}\n  CI 会读这个文件填进 GitHub Release body 和应用内"检查更新"对话框，\n  没有就发了等于用户看不到 changelog。先写完再 release。`,

@@ -1,6 +1,6 @@
 /** 更新通知里的 release note 按界面语言挑一段显示。
  *
- * release.yml 把整个 `docs/release-notes/<tag>.md` 当 GitHub Release body + updater
+ * release.yml 把整个 `docs/release-notes/<小版本>/<tag>.md` 当 GitHub Release body + updater
  * 的 `latest.json` notes 字段，前端 `update.body` 拿到的是这一整坨（含所有语言）。
  * tauri updater 的 notes 是单字符串、不支持按语言分发，所以在 `.md` 里给每个语言块
  * 加一行隐藏标记 `<!-- pt -->`（GitHub 渲染页不可见），前端按界面语言抽出对应块。

@@ -1,18 +1,18 @@
 /** Release notes for the About page, read from the app bundle.
  *
- * `docs/release-notes/v<version>.md` is the single source of truth: release.yml uses it as the
+ * `docs/release-notes/<minor>/v<version>.md` is the single source of truth: release.yml uses it as the
  * GitHub Release body, and the build embeds the same files with `?raw`. Reading the bundled copies
  * makes the dialog instant and keeps it working offline, with no network request.
  *
  * `eager: false` keeps one lazy chunk per version, so only the versions the user opens are loaded.
  * Every matched file is still built into the app, so versions before 0.8.0 are left out.
  */
-const files = import.meta.glob(["../../docs/release-notes/v*.md", "!**/v0.[0-7].*.md"], {
+const files = import.meta.glob(["../../docs/release-notes/*/v*.md", "!**/v0.[0-7].*.md"], {
   query: "?raw",
   import: "default",
 }) as Record<string, () => Promise<string>>;
 
-/** "../../docs/release-notes/v0.9.3.md" → "0.9.3". */
+/** "../../docs/release-notes/0.9/v0.9.3.md" → "0.9.3". */
 function versionOf(key: string): string {
   return key.slice(key.lastIndexOf("/v") + 2, -".md".length);
 }

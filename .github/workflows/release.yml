@@ -111,14 +111,16 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
-      # 读 docs/release-notes/<tag>.md 当 release body + 应用内"检查更新"对话框文案
+      # 读 docs/release-notes/<小版本>/<tag>.md 当 release body + 应用内"检查更新"对话框文案，
+      # 如 v0.11.2 → docs/release-notes/0.11/v0.11.2.md
       - name: Read release notes
         id: notes
         shell: bash
         env:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          NOTES_FILE="docs/release-notes/${TAG}.md"
+          MINOR=$(echo "${TAG#v}" | cut -d. -f1,2)
+          NOTES_FILE="docs/release-notes/${MINOR}/${TAG}.md"
           if [ -f "$NOTES_FILE" ]; then
             {
               echo 'body<<RELEASE_NOTES_EOF'
@@ -184,7 +186,8 @@ jobs:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          NOTES_FILE="docs/release-notes/${TAG}.md"
+          MINOR=$(echo "${TAG#v}" | cut -d. -f1,2)
+          NOTES_FILE="docs/release-notes/${MINOR}/${TAG}.md"
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             echo "::warning::release $TAG 不存在（构建可能全失败），跳过裁剪"
