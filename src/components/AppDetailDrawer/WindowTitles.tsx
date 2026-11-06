@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, ChevronUp, EyeOff, Info } from "lucide-react";
 import { useDurationFormatter } from "../../utils/duration";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import { ignoreKeywordFromTitle } from "../../utils/ignoreKeyword";
 import { stripAppSuffix } from "../../utils/windowTitle";
 import { logError } from "../../lib/logger";
@@ -56,7 +54,6 @@ export function WindowTitles({
 }: WindowTitlesProps) {
   const { t } = useTranslation();
   const fmtHM = useDurationFormatter();
-  const isDark = useIsDark();
   const { settings } = useSettings();
 
   // —— 忽略窗口（写进 settings 的 ignore 规则，行照常记录仅不计入统计）——
@@ -215,7 +212,7 @@ export function WindowTitles({
   if (byTitle.length === 0 && !ignoreNotice) return null;
 
   const fmtSecs = (secs: number): string => fmtHM(Math.max(1, Math.round(secs / 60)));
-  const barColor = `color-mix(in oklab, ${adjustCategoryColor(app.color, isDark)} 70%, transparent)`;
+  const barColor = `color-mix(in oklab, ${app.color} 70%, transparent)`;
   const cut = <T,>(rows: T[], all: boolean) =>
     limit === undefined || all ? rows : rows.slice(0, limit);
   const bar = (secs: number, max: number) =>

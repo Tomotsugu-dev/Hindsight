@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useDurationFormatter } from "../../utils/duration";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import { buildHeatMonth, parseDayKey } from "./heatmapGrid";
 import styles from "./MonthCalendar.module.css";
 
@@ -35,7 +33,6 @@ export function MonthCalendar({
 }: MonthCalendarProps) {
   const { i18n } = useTranslation();
   const fmtHM = useDurationFormatter();
-  const isDark = useIsDark();
 
   const weeks = useMemo(
     () => buildHeatMonth(year, month, secsByDay, from, to),
@@ -46,8 +43,6 @@ export function MonthCalendar({
     const fmt = new Intl.DateTimeFormat(i18n.language, { weekday: "short" });
     return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2024, 0, 1 + i)));
   }, [i18n.language]);
-
-  const base = adjustCategoryColor(color, isDark);
 
   return (
     <div className={styles.wrap} data-part="chart">
@@ -78,7 +73,7 @@ export function MonthCalendar({
                 style={{
                   background:
                     cell.level > 0
-                      ? `color-mix(in oklab, ${base} ${CALENDAR_MIX[cell.level]}%, transparent)`
+                      ? `color-mix(in oklab, ${color} ${CALENDAR_MIX[cell.level]}%, transparent)`
                       : undefined,
                 }}
                 disabled={cell.secs === 0 && !selected}

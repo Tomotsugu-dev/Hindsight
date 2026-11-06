@@ -5,8 +5,6 @@ import { AppIcon } from "../AppIcon/AppIcon";
 import type { BreakdownSlice } from "../../hooks/useSuperCategoryBreakdown";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { useCategories } from "../../state/categories";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import { useDurationFormatter } from "../../utils/duration";
 import { useWheelSteps } from "../../hooks/useWheelSteps";
 import {
@@ -148,7 +146,6 @@ export function ActivityRings({
 }: Props) {
   const { t } = useTranslation();
   const fmtHM = useDurationFormatter();
-  const isDark = useIsDark();
   const { getCategory } = useCategories();
   // 鼠标停着的：外框上的大类、同心环的某一圈、钉住时圆环的某一段；只用来强调
   const [frameHover, setFrameHover] = useState<string | null>(null);
@@ -315,7 +312,7 @@ export function ActivityRings({
   // 这样引线从哪个方向穿进来，经过的都是这个大类。停在应用上时淡化
   const zoomFrame = pinned
     ? (() => {
-        const color = adjustCategoryColor(pinned.color, isDark);
+        const color = pinned.color;
         const cap = FRAME_BOLD / 2 / frameR;
         const a0 = TOP + cap;
         const a1 = TOP + 2 * Math.PI - cap - FRAME_GAP / frameR;
@@ -351,7 +348,7 @@ export function ActivityRings({
   const frame = zoomFrame ?? slices.map((s, i) => {
     const lit = litSuperId === null || litSuperId === s.id;
     const bold = litSuperId === s.id;
-    const color = adjustCategoryColor(s.color, isDark);
+    const color = s.color;
     const span = (s.minutes / total) * 2 * Math.PI;
     const Icon = span >= frameIconMinSpan ? resolveCategoryIcon(s.icon) : null;
     const at = polar(c, frameR, frameSegs[i][0] + (CHIP - FRAME_BOLD / 2) / frameR);
@@ -462,7 +459,7 @@ export function ActivityRings({
                 key={seg.id}
                 className={`${styles.segment} ${segClass(seg.id)} ${seg.id === OTHERS_ID ? "" : styles.interactive}`}
                 d={arcPath(c, singleR, singleSegs[i][0], singleSegs[i][1])}
-                stroke={adjustCategoryColor(seg.color, isDark)}
+                stroke={seg.color}
                 strokeWidth={RING}
                 pathLength={1}
                 style={{ animationDelay: `${i * 60}ms` }}
@@ -477,7 +474,7 @@ export function ActivityRings({
                 key={`app:${focus.groupId}`}
                 className={styles.progress}
                 d={arcPath(c, singleR, appArc.a0, Math.max(appArc.end, appArc.a0 + 0.001))}
-                stroke={adjustCategoryColor(focus.color, isDark)}
+                stroke={focus.color}
                 strokeWidth={RING}
                 pathLength={1}
               />
@@ -502,7 +499,7 @@ export function ActivityRings({
                       cx={at.x}
                       cy={at.y}
                       r={CHIP}
-                      fill={adjustCategoryColor(seg.color, isDark)}
+                      fill={seg.color}
                     />
                     <Icon
                       x={at.x - 5.5}
@@ -532,7 +529,7 @@ export function ActivityRings({
           <g key="rings">
             {draw.map((ring) => {
               const r = ringR(ring.index);
-              const color = adjustCategoryColor(ring.color, isDark);
+              const color = ring.color;
               const span = Math.min(ring.minutes / total, 1) * 2 * Math.PI;
               const dim =
                 litRingId !== null
@@ -590,7 +587,7 @@ export function ActivityRings({
             key={`leader:${focus.groupId}`}
             className={styles.leader}
             d={`M${leader.from.x.toFixed(2)} ${leader.from.y.toFixed(2)}L${leader.to.x.toFixed(2)} ${leader.to.y.toFixed(2)}`}
-            stroke={adjustCategoryColor(focus.color, isDark)}
+            stroke={focus.color}
             pathLength={1}
           />
         )}
@@ -671,7 +668,7 @@ export function ActivityRings({
             top: leader.bubble.y - BUBBLE / 2,
             width: BUBBLE,
             height: BUBBLE,
-            borderColor: adjustCategoryColor(focus.color, isDark),
+            borderColor: focus.color,
           }}
           aria-hidden
         >

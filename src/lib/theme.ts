@@ -189,8 +189,8 @@ export function restoreTheme(): void {
 }
 
 // —— 主题变更订阅 ——
-// 图表 / 图例这类组件把分类色注入 inline style（绕过 CSS 变量），切主题时得靠 JS
-// 重新取色。这里给一个订阅点，配合 hooks/useTheme 的 useSyncExternalStore 让它们重渲。
+// TODO: Nothing subscribes since the category colors stopped changing with the theme. Delete
+// subscribeTheme, getCurrentTheme and getCurrentMode, and their tests, or keep them for later use.
 const listeners = new Set<() => void>();
 
 function notify(): void {

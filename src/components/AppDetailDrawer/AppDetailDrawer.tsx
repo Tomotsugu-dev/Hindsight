@@ -7,8 +7,6 @@ import { EmptyHint } from "../EmptyHint/EmptyHint";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useAppDetail, type DetailScope } from "../../hooks/useAppDetail";
 import { useDurationFormatter } from "../../utils/duration";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import type { DetailBucket } from "../../api/hindsight";
 import { WindowTitles } from "./WindowTitles";
 import styles from "./AppDetailDrawer.module.css";
@@ -70,7 +68,6 @@ export function AppDetailDrawer({
 }: AppDetailDrawerProps) {
   const { t, i18n } = useTranslation();
   const fmtHM = useDurationFormatter();
-  const isDark = useIsDark();
   const panelRef = useRef<HTMLDivElement>(null);
 
   const { detail, loading } = useAppDetail(
@@ -200,7 +197,7 @@ export function AppDetailDrawer({
                         className={styles.fill}
                         style={{
                           height: `${(b.secs / maxBucket) * 100}%`,
-                          background: adjustCategoryColor(app.color, isDark),
+                          background: app.color,
                         }}
                       />
                     </div>
