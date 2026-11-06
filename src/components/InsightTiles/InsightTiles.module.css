@@ -205,24 +205,19 @@
   background: color-mix(in oklab, var(--color-accent) 88%, white);
 }
 
+/* 编辑时卡片上方一行：统计口径在左，恢复默认和完成在右 */
 .editBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-}
-
-.editTitle {
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
+  gap: 8px 20px;
 }
 
 .editActions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-left: auto;
 }
 
 /* 统计口径：所有卡片跟着它重新算 */

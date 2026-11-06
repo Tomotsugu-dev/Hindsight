@@ -37,23 +37,7 @@ export function EditBar({
 }) {
   const { t } = useTranslation();
   return (
-    <>
-      <div className={styles.editBar}>
-        <span className={styles.editTitle}>{t(`${K}.edit`)}</span>
-        <div className={styles.editActions}>
-          <button type="button" className={`${styles.btn} ${styles.btnQuiet}`} onClick={onReset}>
-            {t(`${K}.reset`)}
-          </button>
-          <button
-            ref={doneRef}
-            type="button"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={onDone}
-          >
-            {t(`${K}.done`)}
-          </button>
-        </div>
-      </div>
+    <div className={styles.editBar}>
       <div className={styles.modeRow}>
         <span className={styles.modeLabel}>{t(`${K}.modeLabel`)}</span>
         {scope === "today" ? (
@@ -74,7 +58,20 @@ export function EditBar({
           </div>
         )}
       </div>
-    </>
+      <div className={styles.editActions}>
+        <button type="button" className={`${styles.btn} ${styles.btnQuiet}`} onClick={onReset}>
+          {t(`${K}.reset`)}
+        </button>
+        <button
+          ref={doneRef}
+          type="button"
+          className={`${styles.btn} ${styles.btnPrimary}`}
+          onClick={onDone}
+        >
+          {t(`${K}.done`)}
+        </button>
+      </div>
+    </div>
   );
 }
 
