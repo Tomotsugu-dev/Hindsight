@@ -1,0 +1,7 @@
+/* A light backing behind an icon that is hard to see. The token is transparent outside dark mode.
+   The shadow grows the backing past the image without moving the layout. */
+.dark {
+  border-radius: var(--radius-xs);
+  background: var(--icon-backing);
+  box-shadow: 0 0 0 2px var(--icon-backing);
+}

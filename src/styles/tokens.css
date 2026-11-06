@@ -77,6 +77,9 @@
   --fill-default: rgba(0, 0, 0, 0.045);
   --fill-strong: rgba(0, 0, 0, 0.075);
 
+  /* Backing behind app and site icons that are hard to see on the card. Only dark mode needs it. */
+  --icon-backing: transparent;
+
   /* 滚动条:自绘替代系统原生(Windows 原生方块箭头与整体视觉不搭)。
      滑块偏中性、轨道透明,只在需要时存在感刚够 */
   --scrollbar-thumb: rgba(0, 0, 0, 0.18);
@@ -264,6 +267,8 @@
   --fill-subtle: rgba(255, 255, 255, 0.04);
   --fill-default: rgba(255, 255, 255, 0.06);
   --fill-strong: rgba(255, 255, 255, 0.1);
+
+  --icon-backing: #ececf0;
 
   /* 深底上黑滑块隐形,转半透明白 */
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
