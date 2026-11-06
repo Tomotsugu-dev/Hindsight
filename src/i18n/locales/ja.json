@@ -501,6 +501,139 @@
     "insightTiles": {
       "appShare": "分類内の割合"
     },
+    "insightCards": {
+      "listLabel": "統計カード",
+      "edit": "カードを編集",
+      "done": "完了",
+      "reset": "初期状態に戻す",
+      "modeLabel": "比較方法",
+      "mode": {
+        "same": "同時点比較",
+        "rolling": "直近の日数"
+      },
+      "dayOnlySame": "日次統計は同時点比較のみです",
+      "library": "カードライブラリ",
+      "placed": "<b>{{count}}</b> 枚配置中",
+      "limit": "{{min}}〜{{max}} 枚まで",
+      "libraryEmpty": "すべてのカードを配置済みです。",
+      "atMin": "{{count}} 枚以上必要です。",
+      "atMax": "すでに {{count}} 枚あります。先に 1 枚外してください。",
+      "keepMin": "{{count}} 枚は残してください",
+      "dropRemove": "離すと「{{name}}」を外します",
+      "dropBlocked": "{{count}} 枚は必要なので、このカードは外せません",
+      "removed": "「{{name}}」を外しました（現在 {{count}} 枚）",
+      "added": "「{{name}}」を追加しました（現在 {{count}} 枚）",
+      "moved": "「{{name}}」を {{position}} 番目に移動しました",
+      "resetDone": "初期状態に戻しました",
+      "modeChanged": "{{mode}}に切り替え、すべてのカードを計算し直しました",
+      "remove": "「{{name}}」を外す",
+      "move": "「{{name}}」を移動：矢印キーで移動、Delete で外す",
+      "add": "「{{name}}」を追加",
+      "flat": "変化なし",
+      "other": "その他",
+      "hourCount": "{{count}} 時間",
+      "date": "{{month}}月{{day}}日",
+      "range": "{{from}}〜{{to}}",
+      "note": {
+        "todayLive": "今日 0:00〜現在、昨日 0:00〜{{time}} と比較",
+        "weekLive": "今週月曜 0:00〜現在、先週月曜 0:00〜先週{{weekday}}曜 {{time}} と比較",
+        "monthLive": "{{from}} 0:00〜現在、{{prevFrom}} 0:00〜{{prevCut}} {{time}} と比較",
+        "liveWholePrev": "{{from}} 0:00〜現在、{{prev}} と比較（先月には同じ日がないため月全体）",
+        "whole": "{{curr}}、{{prev}} と比較",
+        "rolling": "直近 {{count}} 日：{{curr}}（今日を除く）、その前の {{count}} 日：{{prev}} と比較",
+        "rollingPast": "{{curr}} の {{count}} 日間、その前の {{count}} 日：{{prev}} と比較"
+      },
+      "name": {
+        "vsPrev": "前期比",
+        "vsPrevToday": "昨日の同時刻比",
+        "avg": "日平均",
+        "avgVsPrev": "日平均の前期比",
+        "peakHour": "ピーク時間帯",
+        "peakDay": "ピーク日",
+        "dominant": "主要な大分類",
+        "total": "合計時間",
+        "activeHours": "記録のある時間",
+        "devices": "デバイス別",
+        "span": "最も早い開始 – 最も遅い終了",
+        "avgSpan": "平均の開始 – 終了"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "昨日の同時刻比",
+          "today": "前日比",
+          "weekLive": "先週の同時点比",
+          "week": "先週比",
+          "monthLive": "先月の同時点比",
+          "month": "先月比",
+          "rolling": "前の {{count}} 日比"
+        },
+        "avgVsPrev": {
+          "weekLive": "日平均 先週の同時点比",
+          "week": "日平均 先週比",
+          "monthLive": "日平均 先月の同時点比",
+          "month": "日平均 先月比",
+          "rolling": "日平均 前の {{count}} 日比"
+        },
+        "avg": "日平均",
+        "avgRolling": "直近 {{count}} 日の日平均",
+        "total": "合計時間",
+        "totalRolling": "直近 {{count}} 日の合計",
+        "peak": "ピーク",
+        "peakWith": "ピーク · {{duration}}",
+        "dominant": "主要",
+        "composition": "構成",
+        "appShare": "分類内の割合",
+        "activeHours": "記録のある時間",
+        "devices": "デバイス別",
+        "span": "最も早い開始 – 最も遅い終了",
+        "avgSpan": "平均の開始 – 終了"
+      },
+      "spanOf": {
+        "today": "今日これまで",
+        "week": "今週これまで",
+        "month": "今月これまで",
+        "rolling": "直近 {{count}} 日"
+      },
+      "desc": {
+        "vsPrev": {
+          "today": "今日これまでを、昨日の同じ時刻までと比較",
+          "week": "今週これまでを、先週の同じ時点までと比較",
+          "month": "今月これまでを、先月の同じ時点までと比較",
+          "rolling": "直近 {{count}} 日を、その前の {{count}} 日と比較"
+        },
+        "avg": {
+          "week": "今週の終わった日の 1 日あたりの時間。今日は含みません",
+          "month": "今月の終わった日の 1 日あたりの時間。今日は含みません",
+          "rolling": "直近 {{count}} 日の 1 日あたりの時間"
+        },
+        "avgVsPrev": {
+          "week": "今週の終わった日の日平均を、先週の同じ曜日と比較",
+          "month": "今月の終わった日の日平均を、先月の同じ日付と比較",
+          "rolling": "直近 {{count}} 日の日平均を、その前の {{count}} 日と比較"
+        },
+        "peak": {
+          "today": "今日いちばん使った 1 時間",
+          "week": "今週これまででいちばん使った日",
+          "month": "今月これまででいちばん使った日",
+          "rolling": "直近 {{count}} 日でいちばん使った日"
+        },
+        "span": {
+          "today": "今日最初に始めた時刻と、最後に終えた時刻",
+          "week": "今週の終わった日のうち、最も早い開始と最も遅い終了",
+          "month": "今月の終わった日のうち、最も早い開始と最も遅い終了",
+          "rolling": "直近 {{count}} 日のうち、最も早い開始と最も遅い終了"
+        },
+        "avgSpan": {
+          "week": "今週の終わった日の、平均の開始と終了。記録のない日は除きます",
+          "month": "今月の終わった日の、平均の開始と終了。記録のない日は除きます",
+          "rolling": "直近 {{count}} 日の、平均の開始と終了。記録のない日は除きます"
+        },
+        "dominant": "{{span}}で時間が最も多い大分類とその割合。ドリルダウン中はその中で最も多い小分類",
+        "total": "{{span}}の合計時間",
+        "devices": "{{span}}、デバイスごとの使用時間",
+        "activeHours": "今日、記録のある時間が何時間あるか"
+      }
+    },
     "periodLegend": {
       "levelAria": "棒グラフを大分類と分類のどちらで色分けするか",
       "supers": "大分類",

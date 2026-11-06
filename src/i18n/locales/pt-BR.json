@@ -501,6 +501,139 @@
     "insightTiles": {
       "appShare": "Parte da sua categoria"
     },
+    "insightCards": {
+      "listLabel": "Cartões de estatísticas",
+      "edit": "Editar cartões",
+      "done": "Concluir",
+      "reset": "Restaurar padrão",
+      "modeLabel": "Comparar",
+      "mode": {
+        "same": "Mesmo ponto",
+        "rolling": "Dias recentes"
+      },
+      "dayOnlySame": "A visão diária sempre compara até o mesmo horário",
+      "library": "Biblioteca de cartões",
+      "placed": "<b>{{count}}</b> colocados",
+      "limit": "{{min}}–{{max}} cartões",
+      "libraryEmpty": "Todos os cartões já foram colocados.",
+      "atMin": "Mantenha pelo menos {{count}} cartões.",
+      "atMax": "Já há {{count}} cartões. Remova um primeiro.",
+      "keepMin": "Mantenha pelo menos {{count}} cartões",
+      "dropRemove": "Solte para remover “{{name}}”",
+      "dropBlocked": "É preciso manter {{count}} cartões. Este fica.",
+      "removed": "“{{name}}” removido. Agora são {{count}}.",
+      "added": "“{{name}}” adicionado. Agora são {{count}}.",
+      "moved": "“{{name}}” agora é o cartão {{position}}.",
+      "resetDone": "Os cartões padrão voltaram.",
+      "modeChanged": "Agora usando {{mode}}. Todos os cartões foram recalculados.",
+      "remove": "Remover “{{name}}”",
+      "move": "Mover “{{name}}”: as setas movem, Delete remove",
+      "add": "Adicionar “{{name}}”",
+      "flat": "Sem mudança",
+      "other": "Outros",
+      "hourCount": "{{count}} h",
+      "date": "{{day}}/{{month}}",
+      "range": "{{from}} – {{to}}",
+      "note": {
+        "todayLive": "Hoje de 0:00 até agora, contra ontem de 0:00 até {{time}}",
+        "weekLive": "Desde segunda 0:00 até agora, contra a semana passada de segunda 0:00 até {{weekday}} {{time}}",
+        "monthLive": "De {{from}} 0:00 até agora, contra {{prevFrom}} 0:00 até {{prevCut}} {{time}}",
+        "liveWholePrev": "De {{from}} 0:00 até agora, contra {{prev}} (o mês passado não tem esse dia, então conta inteiro)",
+        "whole": "{{curr}}, contra {{prev}}",
+        "rolling": "Últimos {{count}} dias: {{curr}} (sem hoje), contra os {{count}} dias anteriores: {{prev}}",
+        "rollingPast": "{{count}} dias: {{curr}}, contra os {{count}} dias anteriores: {{prev}}"
+      },
+      "name": {
+        "vsPrev": "Variação",
+        "vsPrevToday": "Variação vs. ontem",
+        "avg": "Média diária",
+        "avgVsPrev": "Variação da média diária",
+        "peakHour": "Hora de pico",
+        "peakDay": "Dia de pico",
+        "dominant": "Supercategoria principal",
+        "total": "Total",
+        "activeHours": "Horas com registros",
+        "devices": "Dispositivos",
+        "span": "Início mais cedo – fim mais tarde",
+        "avgSpan": "Início – fim médio"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "vs. ontem até agora",
+          "today": "vs. o dia anterior",
+          "weekLive": "vs. semana passada até agora",
+          "week": "vs. semana passada",
+          "monthLive": "vs. mês passado até agora",
+          "month": "vs. mês passado",
+          "rolling": "vs. os {{count}} dias anteriores"
+        },
+        "avgVsPrev": {
+          "weekLive": "Média vs sem. passada até agora",
+          "week": "Média vs sem. passada",
+          "monthLive": "Média vs mês passado até agora",
+          "month": "Média vs mês passado",
+          "rolling": "Média vs os {{count}} dias anteriores"
+        },
+        "avg": "Média diária",
+        "avgRolling": "Média diária, últimos {{count}} dias",
+        "total": "Total",
+        "totalRolling": "Total, últimos {{count}} dias",
+        "peak": "Pico",
+        "peakWith": "Pico · {{duration}}",
+        "dominant": "Principal",
+        "composition": "Detalhamento",
+        "appShare": "Parte da sua categoria",
+        "activeHours": "Horas com registros",
+        "devices": "Dispositivos",
+        "span": "Início mais cedo – fim mais tarde",
+        "avgSpan": "Início – fim médio"
+      },
+      "spanOf": {
+        "today": "Hoje até agora",
+        "week": "Esta semana até agora",
+        "month": "Este mês até agora",
+        "rolling": "Os últimos {{count}} dias"
+      },
+      "desc": {
+        "vsPrev": {
+          "today": "Hoje até agora, contra ontem até o mesmo horário",
+          "week": "Esta semana até agora, contra a semana passada até o mesmo ponto",
+          "month": "Este mês até agora, contra o mês passado até o mesmo ponto",
+          "rolling": "Os últimos {{count}} dias, contra os {{count}} dias anteriores"
+        },
+        "avg": {
+          "week": "Tempo por dia nos dias já terminados desta semana, sem hoje",
+          "month": "Tempo por dia nos dias já terminados deste mês, sem hoje",
+          "rolling": "Tempo por dia nos últimos {{count}} dias"
+        },
+        "avgVsPrev": {
+          "week": "A média dos dias terminados desta semana, contra os mesmos dias da semana passada",
+          "month": "A média dos dias terminados deste mês, contra os mesmos dias do mês passado",
+          "rolling": "A média dos últimos {{count}} dias, contra os {{count}} dias anteriores"
+        },
+        "peak": {
+          "today": "A hora com mais tempo hoje",
+          "week": "O dia com mais tempo nesta semana até agora",
+          "month": "O dia com mais tempo neste mês até agora",
+          "rolling": "O dia com mais tempo nos últimos {{count}} dias"
+        },
+        "span": {
+          "today": "Quando começa o primeiro registro de hoje e quando termina o último",
+          "week": "O início mais cedo e o fim mais tarde nos dias terminados desta semana",
+          "month": "O início mais cedo e o fim mais tarde nos dias terminados deste mês",
+          "rolling": "O início mais cedo e o fim mais tarde nos últimos {{count}} dias"
+        },
+        "avgSpan": {
+          "week": "O início e o fim médios nos dias terminados desta semana. Dias sem registros ficam de fora.",
+          "month": "O início e o fim médios nos dias terminados deste mês. Dias sem registros ficam de fora.",
+          "rolling": "O início e o fim médios nos últimos {{count}} dias. Dias sem registros ficam de fora."
+        },
+        "dominant": "{{span}}: a supercategoria com mais tempo e sua parte. Ao entrar em uma, a maior categoria dentro dela.",
+        "total": "{{span}}: todo o tempo somado",
+        "devices": "{{span}}: quanto tempo cada dispositivo tem",
+        "activeHours": "Quantas horas de hoje têm registros"
+      }
+    },
     "periodLegend": {
       "levelAria": "Colorir as barras por supercategoria ou categoria",
       "supers": "Supercategorias",
