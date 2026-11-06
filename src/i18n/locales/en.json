@@ -498,9 +498,6 @@
       "expand": "Show {{count}} more",
       "collapse": "Collapse"
     },
-    "insightTiles": {
-      "appShare": "Share of its category"
-    },
     "insightCards": {
       "listLabel": "Stats cards",
       "edit": "Edit cards",
@@ -682,15 +679,6 @@
   "today": {
     "title": "Daily",
     "meta": "{{date}} {{weekday}}",
-    "insights": {
-      "vsPrev": {
-        "label": "vs yesterday",
-        "flat": "Same as yesterday"
-      },
-      "peak": "Peak",
-      "dominant": "Top",
-      "composition": "Breakdown"
-    },
     "chart": {
       "title": "24-hour activity",
       "barTitle": "{{hour}}:00 — {{minutes}} min",
@@ -744,17 +732,6 @@
   "week": {
     "title": "Weekly",
     "meta": "{{range}} · {{avg}} daily avg",
-    "insights": {
-      "vsPrev": {
-        "label": "vs last week",
-        "flat": "Same as last week"
-      },
-      "peak": "Peak",
-      "dominant": "Top",
-      "composition": "Breakdown",
-      "avg": "Daily avg",
-      "avgVsPrev": "Avg vs last week"
-    },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -792,18 +769,6 @@
   "month": {
     "title": "Monthly",
     "meta": "{{month}} · {{avg}} daily avg",
-    "insights": {
-      "vsPrev": {
-        "label": "vs last month",
-        "flat": "Same as last month"
-      },
-      "peak": "Peak",
-      "peakDate": "{{month}}/{{day}}",
-      "dominant": "Top",
-      "composition": "Breakdown",
-      "avg": "Daily avg",
-      "avgVsPrev": "Avg vs last month"
-    },
     "monthLabel": "{{month}} {{year}}",
     "chart": {
       "title": "Daily activity"

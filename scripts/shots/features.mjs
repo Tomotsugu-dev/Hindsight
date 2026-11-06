@@ -150,7 +150,7 @@ async function options() {
 
 /**
  * 不要侧栏、只截到统计卡片那一行的范围：左边从内容区开始，下边停在统计卡片和下面
- * 「最常用应用」之间的空隙正中。统计卡片用「较上期」那张卡片的标签找。
+ * 「最常用应用」之间的空隙正中。统计卡片按它整块区域的名字找。
  *
  * 侧栏的投影会落到内容区左边，所以先把侧栏藏起来；下一张图会重新载入页面。
  */
@@ -164,9 +164,7 @@ async function cardsClip(page, shot, labels) {
     });
   const main = await page.locator("main").boundingBox();
   const cards = await page
-    .getByText(labels[scope].insights.vsPrev.label, { exact: true })
-    .first()
-    .locator("xpath=../..")
+    .getByRole("region", { name: labels.components.insightCards.listLabel, exact: true })
     .boundingBox();
   const appListTitle = [labels[scope].ranks.topApps, labels.today.pie.drill.appsTitle];
   let appList = null;

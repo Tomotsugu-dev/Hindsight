@@ -498,9 +498,6 @@
       "expand": "Mostrar {{count}} más",
       "collapse": "Contraer"
     },
-    "insightTiles": {
-      "appShare": "Parte de su categoría"
-    },
     "insightCards": {
       "listLabel": "Tarjetas de estadísticas",
       "edit": "Editar tarjetas",
@@ -682,15 +679,6 @@
   "today": {
     "title": "Diario",
     "meta": "{{date}} {{weekday}}",
-    "insights": {
-      "vsPrev": {
-        "label": "frente a ayer",
-        "flat": "Igual que ayer"
-      },
-      "peak": "Pico",
-      "dominant": "Principal",
-      "composition": "Desglose"
-    },
     "chart": {
       "title": "Actividad de 24 horas",
       "barTitle": "{{hour}}:00 — {{minutes}} min",
@@ -744,17 +732,6 @@
   "week": {
     "title": "Semanal",
     "meta": "{{range}} · {{avg}} de media diaria",
-    "insights": {
-      "vsPrev": {
-        "label": "frente a la semana pasada",
-        "flat": "Igual que la semana pasada"
-      },
-      "peak": "Pico",
-      "dominant": "Principal",
-      "composition": "Desglose",
-      "avg": "Media diaria",
-      "avgVsPrev": "Media frente a sem. pasada"
-    },
     "rangeSameMonth": "{{startDay}} — {{endDay}}/{{month}}",
     "rangeCrossMonth": "{{startDay}}/{{startMonth}} — {{endDay}}/{{endMonth}}",
     "chart": {
@@ -792,18 +769,6 @@
   "month": {
     "title": "Mensual",
     "meta": "{{month}} · {{avg}} de media diaria",
-    "insights": {
-      "vsPrev": {
-        "label": "frente al mes pasado",
-        "flat": "Igual que el mes pasado"
-      },
-      "peak": "Pico",
-      "peakDate": "{{day}}/{{month}}",
-      "dominant": "Principal",
-      "composition": "Desglose",
-      "avgVsPrev": "Media frente al mes pasado",
-      "avg": "Media diaria"
-    },
     "monthLabel": "{{month}} de {{year}}",
     "chart": {
       "title": "Actividad diaria"
