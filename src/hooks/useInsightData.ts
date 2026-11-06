@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   api,
   type AppUsage,
+  type Category,
   type CategoryTime,
   type DaySummaryDto,
   type DetailBucket,
@@ -27,6 +28,7 @@ import {
   secsOf,
   type CardId,
   type CardValue,
+  type CategoryFilter,
   type DeviceShare,
   type Series,
   type ShareValue,
@@ -54,7 +56,11 @@ import {
   type Query,
 } from "./insightQueries";
 import { loadAppBuckets } from "./useAppDetail";
-import { catMinutesFromSegments, useSuperCategoryBreakdown } from "./useSuperCategoryBreakdown";
+import {
+  catMinutesFromSegments,
+  useSuperCategoryBreakdown,
+  type BreakdownSlice,
+} from "./useSuperCategoryBreakdown";
 
 /** What the cards cover: everything, a drilled super category, a picked category, or one app. */
 export type InsightFocus =
@@ -67,6 +73,8 @@ export interface InsightData {
   windows: InsightWindows;
   /** One entry for each card asked for; null shows "—". */
   values: Partial<Record<CardId, CardValue | null>>;
+  /** The time the windows were worked out at; it moves every 30 seconds. */
+  now: Date;
 }
 
 interface Args {
@@ -209,7 +217,58 @@ function loaded<T>(list: readonly Keyed[]): { date: DateKey; value: T }[] {
 const appSecs = (apps: readonly AppUsage[], groupId: string): number =>
   secsOf(apps.find((a) => a.groupId === groupId)?.byCategory ?? [], null);
 
-const pctOf = (part: number, whole: number) => Math.round((part / whole) * 100);
+/** The categories whose time the cards count; null counts all of it. A drilled super category
+ *  counts all its categories, also those with no time in the period. */
+export function focusCategories(
+  focus: InsightFocus,
+  categories: readonly Category[],
+  superIds: ReadonlySet<string>,
+): CategoryFilter {
+  if (focus.kind === "cat") return new Set([focus.catId]);
+  if (focus.kind !== "super") return null;
+  return new Set(
+    categories
+      .filter((c) => !c.builtin && superIdOf(c, superIds) === focus.superId)
+      .map((c) => c.id),
+  );
+}
+
+/**
+ * The dominant card: the biggest super category, the biggest category in the drilled one, or the
+ * hovered app's share of its own category. A picked category has nothing below it.
+ *
+ * `rows` are the days the cards cover; `apps` is every app's time over them.
+ */
+export function dominantShare(
+  focus: InsightFocus,
+  slices: readonly BreakdownSlice[],
+  rows: readonly Row[],
+  apps: readonly AppUsage[] | undefined,
+  category: Category | undefined,
+): ShareValue | null {
+  const shareOf = (name: string, color: string, part: number, whole: number): ShareValue | null =>
+    whole > 0 ? { kind: "share", name, color, pct: Math.round((part / whole) * 100) } : null;
+  const secsIn = (only: CategoryFilter) =>
+    rows.reduce((sum, r) => sum + secsOf(r.segments, only), 0);
+  if (focus.kind === "all") {
+    const top = slices[0];
+    // The same total as the other cards: all the time, not only what the ring shows
+    return top ? shareOf(top.name, top.color, top.minutes, Math.round(secsIn(null) / 60)) : null;
+  }
+  if (focus.kind === "super") {
+    const slice = slices.find((s) => s.id === focus.superId);
+    const top = slice?.cats[0];
+    return slice && top ? shareOf(top.name, top.color, top.minutes, slice.minutes) : null;
+  }
+  if (focus.kind === "app") {
+    const own = new Set([focus.categoryId]);
+    const app = apps?.find((a) => a.groupId === focus.groupId);
+    return category && app
+      ? shareOf(category.name, category.color, secsOf(app.byCategory, own), secsIn(own))
+      : null;
+  }
+  return null;
+}
 
 export function useInsightData({ scope, offset, mode, cards, focus: given }: Args): InsightData {
   const { categories, getCategory } = useCategories();
@@ -254,17 +313,10 @@ export function useInsightData({ scope, offset, mode, cards, focus: given }: Arg
     useMemo(() => catMinutesFromSegments(currRows), [currRows]),
   );
 
-  // A drilled super category counts all its categories, also those with no time in this period
-  const only = useMemo(() => {
-    if (focus.kind === "cat") return new Set([focus.catId]);
-    if (focus.kind !== "super") return null;
-    const superIds = new Set(supers.map((s) => s.id));
-    return new Set(
-      categories
-        .filter((c) => !c.builtin && superIdOf(c, superIds) === focus.superId)
-        .map((c) => c.id),
-    );
-  }, [focus, supers, categories]);
+  const only = useMemo(
+    () => focusCategories(focus, categories, new Set(supers.map((s) => s.id))),
+    [focus, supers, categories],
+  );
 
   const values = useMemo(() => {
     void version;
@@ -291,27 +343,13 @@ export function useInsightData({ scope, offset, mode, cards, focus: given }: Arg
       series = categorySeries(rows, hourDays, only);
     }
 
-    // The dominant card: the biggest super category, the biggest category in the drilled one,
-    // or the hovered app's share of its own category. A picked category has nothing below it.
-    let share: ShareValue | null = null;
-    const shareOf = (name: string, color: string, part: number, whole: number) =>
-      whole > 0 ? ({ kind: "share", name, color, pct: pctOf(part, whole) } as const) : null;
-    if (focus.kind === "all") {
-      const top = breakdown.slices[0];
-      // Same total as the period's other cards: all the time, not only the ring's
-      const total = currRows.reduce((sum, r) => sum + secsOf(r.segments, null), 0) / 60;
-      if (top) share = shareOf(top.name, top.color, top.minutes, Math.round(total));
-    } else if (focus.kind === "super") {
-      const slice = breakdown.slices.find((s) => s.id === focus.superId);
-      const top = slice?.cats[0];
-      if (slice && top) share = shareOf(top.name, top.color, top.minutes, slice.minutes);
-    } else if (focus.kind === "app" && plan.apps) {
-      const own = new Set([focus.categoryId]);
-      const cat = getCategory(focus.categoryId);
-      const app = peekQuery<AppUsage[]>(plan.apps)?.find((a) => a.groupId === focus.groupId);
-      const catSecs = currRows.reduce((sum, r) => sum + secsOf(r.segments, own), 0);
-      if (cat && app) share = shareOf(cat.name, cat.color, secsOf(app.byCategory, own), catSecs);
-    }
+    const share = dominantShare(
+      focus,
+      breakdown.slices,
+      currRows,
+      plan.apps ? peekQuery<AppUsage[]>(plan.apps) : undefined,
+      focus.kind === "app" ? getCategory(focus.categoryId) : undefined,
+    );
 
     let deviceSplit: DeviceShare[] | null = null;
     if (plan.devices.length > 0) {
@@ -360,5 +398,5 @@ export function useInsightData({ scope, offset, mode, cards, focus: given }: Arg
     cards,
   ]);
 
-  return { windows, values };
+  return { windows, values, now };
 }
