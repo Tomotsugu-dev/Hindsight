@@ -23,7 +23,6 @@ export type CardId =
   | "dominant"
   | "total"
   | "activeHours"
-  | "devices"
   | "span"
   | "avgSpan";
 
@@ -42,16 +41,6 @@ export interface Edges {
   start: number;
   end: number;
 }
-
-export interface Share {
-  /** A device id, or "other" for the devices after the first two. */
-  id: string;
-  secs: number;
-  /** Whole percents; the shares add up to 100. */
-  pct: number;
-}
-
-export const OTHER_SHARE = "other";
 
 export function secsOf(segments: readonly CategoryTime[], only: CategoryFilter): number {
   let secs = 0;
@@ -187,29 +176,6 @@ export function activeHourCount(hours: readonly number[]): number {
   return hours.filter((s) => s > 0).length;
 }
 
-/** The two biggest devices and the rest as one share; null when no device has time. */
-export function deviceShares(totals: readonly { id: string; secs: number }[]): Share[] | null {
-  const sorted = totals.filter((t) => t.secs > 0).sort((a, b) => b.secs - a.secs);
-  const total = sorted.reduce((sum, t) => sum + t.secs, 0);
-  if (total <= 0) return null;
-  const parts =
-    sorted.length > 2
-      ? [
-          ...sorted.slice(0, 2),
-          { id: OTHER_SHARE, secs: sorted.slice(2).reduce((sum, t) => sum + t.secs, 0) },
-        ]
-      : sorted;
-  // Round down, then give the points left over to the biggest remainders, so they add up to 100
-  const exact = parts.map((p) => (p.secs / total) * 100);
-  const pcts = exact.map(Math.floor);
-  const order = exact
-    .map((x, i) => ({ i, rest: x - Math.floor(x) }))
-    .sort((a, b) => b.rest - a.rest);
-  const left = 100 - pcts.reduce((a, b) => a + b, 0);
-  for (let k = 0; k < left; k++) pcts[order[k].i]++;
-  return parts.map((p, i) => ({ id: p.id, secs: p.secs, pct: pcts[i] }));
-}
-
 /** What one card shows. A card with no value shows "—". */
 export type CardValue =
   | { kind: "delta"; minutes: number }
@@ -218,18 +184,9 @@ export type CardValue =
   | { kind: "peakDay"; date: DateKey; minutes: number }
   | { kind: "share"; name: string; color: string; pct: number }
   | { kind: "edges"; start: number; end: number }
-  | { kind: "hourCount"; hours: number }
-  | { kind: "devices"; shares: DeviceShare[] };
+  | { kind: "hourCount"; hours: number };
 
 export type ShareValue = Extract<CardValue, { kind: "share" }>;
-
-export interface DeviceShare {
-  id: string;
-  /** null for the devices after the first two, shown together. */
-  name: string | null;
-  color: string | null;
-  pct: number;
-}
 
 export interface CardInputs {
   scope: InsightScope;
@@ -241,7 +198,6 @@ export interface CardInputs {
   edges: boolean;
   /** For the dominant card: the biggest part, worked out by the caller. */
   share: ShareValue | null;
-  devices: DeviceShare[] | null;
 }
 
 /** Works out one card. Every card is empty while the time it covers is not loaded or is empty. */
@@ -284,8 +240,6 @@ export function cardValue(id: CardId, input: CardInputs): CardValue | null {
       return { kind: "duration", minutes: toMinutes(currSecs) };
     case "activeHours":
       return dayHours ? { kind: "hourCount", hours: activeHourCount(dayHours) } : null;
-    case "devices":
-      return input.devices && { kind: "devices", shares: input.devices };
     case "span":
     case "avgSpan": {
       if (scope === "today") {

@@ -23,13 +23,10 @@ import {
   appSeries,
   cardValue,
   categorySeries,
-  deviceShares,
-  OTHER_SHARE,
   secsOf,
   type CardId,
   type CardValue,
   type CategoryFilter,
-  type DeviceShare,
   type Series,
   type ShareValue,
 } from "../utils/insightCards";
@@ -112,7 +109,6 @@ interface Plan {
   appHours: Keyed[];
   /** Every app's time over what the cards cover, for an app's share of its category. */
   apps: string | null;
-  devices: { id: string; key: string }[];
 }
 
 /** The offsets of the periods that hold any day from `from` to `to`. */
@@ -130,7 +126,6 @@ function planQueries(
   cards: readonly CardId[],
   focus: InsightFocus,
   deviceId: string | undefined,
-  deviceIds: readonly string[],
   now: Date,
 ): Plan {
   const today = dateKey(now);
@@ -146,12 +141,6 @@ function planQueries(
     queries.push({ key, live, run });
     return key;
   };
-  const rowsOf = (f: DateKey, t: DateKey, d: string | undefined) =>
-    add(`rows|${f}|${t}|${d ?? ""}`, t >= today, () => api.getRangeCategoryTime(f, t, d));
-  const appsOf = (d: string | undefined) =>
-    add(`apps|${curr.from}|${curr.to}|${d ?? ""}`, curr.to >= today, () =>
-      api.getRangeApps(curr.from, curr.to, d),
-    );
   const hoursOf = (date: DateKey): Keyed => ({
     date,
     key: add(`hours|${date}|${dev}`, date >= today, () =>
@@ -173,14 +162,15 @@ function planQueries(
     appDays: [],
     appHours: [],
     apps: null,
-    devices: [],
   };
   if (scope === "today") {
     const days = [...new Set([from, curr.from])];
     plan.hours = days.map(hoursOf);
     if (app) plan.appHours = days.map((d) => appHoursOf(app.groupId, d));
   } else {
-    plan.rows = rowsOf(from, curr.to, deviceId);
+    plan.rows = add(`rows|${from}|${curr.to}|${dev}`, curr.to >= today, () =>
+      api.getRangeCategoryTime(from, curr.to, deviceId),
+    );
     const part = windows.prev.part?.date;
     if (part) plan.hours.push(hoursOf(part));
     if (app) {
@@ -194,12 +184,10 @@ function planQueries(
       if (part) plan.appHours.push(appHoursOf(app.groupId, part));
     }
   }
-  if (app && needs("dominant")) plan.apps = appsOf(deviceId);
-  if (needs("devices") && deviceId === undefined && deviceIds.length >= 2) {
-    plan.devices = deviceIds.map((id) => ({
-      id,
-      key: app ? appsOf(id) : rowsOf(curr.from, curr.to, id),
-    }));
+  if (app && needs("dominant")) {
+    plan.apps = add(`apps|${curr.from}|${curr.to}|${dev}`, curr.to >= today, () =>
+      api.getRangeApps(curr.from, curr.to, deviceId),
+    );
   }
   // Last, and only for these cards: the hours of every finished day
   if (scope !== "today" && !app && needs("span", "avgSpan") && windows.currDays) {
@@ -226,9 +214,6 @@ function loaded<T>(list: readonly Keyed[]): { date: DateKey; value: T }[] {
   }
   return out;
 }
-
-const appSecs = (apps: readonly AppUsage[], groupId: string): number =>
-  secsOf(apps.find((a) => a.groupId === groupId)?.byCategory ?? [], null);
 
 /** The categories whose time the cards count; null counts all of it. A drilled super category
  *  counts all its categories, also those with no time in the period. */
@@ -286,7 +271,7 @@ export function dominantShare(
 export function useInsightData({ scope, offset, mode, cards, focus: given }: Args): InsightData {
   const { categories, getCategory } = useCategories();
   const { supers } = useSuperCategories();
-  const { devices, selectedDeviceId: deviceId } = useDeviceFilter();
+  const { selectedDeviceId: deviceId } = useDeviceFilter();
   const version = useSyncExternalStore(subscribeQueries, queriesVersion);
   // Pages build a new focus object on every render; only a new value should plan again
   const focusKey = JSON.stringify(given);
@@ -304,10 +289,9 @@ export function useInsightData({ scope, offset, mode, cards, focus: given }: Arg
     () => insightWindows(scope, offset, mode, now),
     [scope, offset, mode, now],
   );
-  const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
   const plan = useMemo(
-    () => planQueries(scope, windows, cards, focus, deviceId, deviceIds, now),
-    [scope, windows, cards, focus, deviceId, deviceIds, now],
+    () => planQueries(scope, windows, cards, focus, deviceId, now),
+    [scope, windows, cards, focus, deviceId, now],
   );
   useEffect(() => requestQueries(plan.queries), [plan]);
 
@@ -364,26 +348,6 @@ export function useInsightData({ scope, offset, mode, cards, focus: given }: Arg
       focus.kind === "app" ? getCategory(focus.categoryId) : undefined,
     );
 
-    let deviceSplit: DeviceShare[] | null = null;
-    if (plan.devices.length > 0) {
-      const totals: { id: string; secs: number }[] = [];
-      for (const { id, key } of plan.devices) {
-        const v = peekQuery<DaySummaryDto[] | AppUsage[]>(key);
-        if (v === undefined) break;
-        const secs =
-          focus.kind === "app"
-            ? appSecs(v as AppUsage[], focus.groupId)
-            : (v as DaySummaryDto[]).reduce((sum, r) => sum + secsOf(r.segments, only), 0);
-        totals.push({ id, secs });
-      }
-      const shares = totals.length === plan.devices.length ? deviceShares(totals) : null;
-      deviceSplit =
-        shares?.map((s) => {
-          const d = s.id === OTHER_SHARE ? undefined : devices.find((x) => x.id === s.id);
-          return { id: s.id, name: d?.name ?? null, color: d?.color ?? null, pct: s.pct };
-        }) ?? null;
-    }
-
     const input = {
       scope,
       windows,
@@ -391,25 +355,11 @@ export function useInsightData({ scope, offset, mode, cards, focus: given }: Arg
       series,
       edges: scope === "today" || focus.kind !== "app",
       share,
-      devices: deviceSplit,
     };
     const out: Partial<Record<CardId, CardValue | null>> = {};
     for (const id of cards) out[id] = cardValue(id, input);
     return out;
-  }, [
-    version,
-    focus,
-    only,
-    plan,
-    scope,
-    rows,
-    breakdown,
-    currRows,
-    getCategory,
-    devices,
-    windows,
-    cards,
-  ]);
+  }, [version, focus, only, plan, scope, rows, breakdown, currRows, getCategory, windows, cards]);
 
   return { windows, values, now };
 }

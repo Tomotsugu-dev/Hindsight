@@ -526,7 +526,6 @@
       "move": "Move “{{name}}”: arrow keys move it, Delete removes it",
       "add": "Add “{{name}}”",
       "flat": "No change",
-      "other": "Other",
       "hourCount": "{{count}} h",
       "date": "{{month}}/{{day}}",
       "range": "{{from}} – {{to}}",
@@ -549,7 +548,6 @@
         "dominant": "Top super category",
         "total": "Total",
         "activeHours": "Hours with records",
-        "devices": "Devices",
         "span": "Earliest start – latest end",
         "avgSpan": "Average start – end"
       },
@@ -580,7 +578,6 @@
         "composition": "Inside",
         "appShare": "Share of its category",
         "activeHours": "Hours with records",
-        "devices": "Devices",
         "span": "Earliest start – latest end",
         "avgSpan": "Average start – end"
       },
@@ -626,7 +623,6 @@
         },
         "dominant": "{{span}}: the super category with the most time and its share. When you drill in, the biggest category inside.",
         "total": "{{span}}: all the time together",
-        "devices": "{{span}}: how much time each device has",
         "activeHours": "How many hours today have records"
       }
     },

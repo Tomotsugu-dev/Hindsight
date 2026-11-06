@@ -83,19 +83,11 @@ describe("cardLabel", () => {
     expect(label({ kind: "app", groupId: "code", categoryId: "work" })).toBe("占所属分类");
   });
 
-  it("adds the peak's time and the device names", () => {
+  it("adds the peak's time", () => {
     const week = ctx("week", 0, "same");
     expect(
       cardLabel(t, "peak", week, { kind: "peakDay", date: "2026-11-03", minutes: 280 }, minutes),
     ).toBe("峰值 · 280m");
     expect(cardLabel(t, "peak", week, null, minutes)).toBe("峰值");
-    const shares = [
-      { id: "mac", name: "Mac", color: "#000", pct: 60 },
-      { id: "win", name: "Windows", color: "#111", pct: 30 },
-      { id: "other", name: null, color: null, pct: 10 },
-    ];
-    expect(cardLabel(t, "devices", week, { kind: "devices", shares }, minutes)).toBe(
-      "Mac 60% · Windows 30% · 其他 10%",
-    );
   });
 });

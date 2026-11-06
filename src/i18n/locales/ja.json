@@ -526,7 +526,6 @@
       "move": "「{{name}}」を移動：矢印キーで移動、Delete で外す",
       "add": "「{{name}}」を追加",
       "flat": "変化なし",
-      "other": "その他",
       "hourCount": "{{count}} 時間",
       "date": "{{month}}月{{day}}日",
       "range": "{{from}}〜{{to}}",
@@ -549,7 +548,6 @@
         "dominant": "主要な大分類",
         "total": "合計時間",
         "activeHours": "記録のある時間",
-        "devices": "デバイス別",
         "span": "最も早い開始 – 最も遅い終了",
         "avgSpan": "平均の開始 – 終了"
       },
@@ -580,7 +578,6 @@
         "composition": "構成",
         "appShare": "分類内の割合",
         "activeHours": "記録のある時間",
-        "devices": "デバイス別",
         "span": "最も早い開始 – 最も遅い終了",
         "avgSpan": "平均の開始 – 終了"
       },
@@ -626,7 +623,6 @@
         },
         "dominant": "{{span}}で時間が最も多い大分類とその割合。ドリルダウン中はその中で最も多い小分類",
         "total": "{{span}}の合計時間",
-        "devices": "{{span}}、デバイスごとの使用時間",
         "activeHours": "今日、記録のある時間が何時間あるか"
       }
     },

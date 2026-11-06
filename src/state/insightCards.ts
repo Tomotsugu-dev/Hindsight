@@ -22,14 +22,13 @@ const PERIOD_LIBRARY: readonly CardId[] = [
   "peak",
   "dominant",
   "total",
-  "devices",
   "avgSpan",
   "span",
 ];
 
 /** The cards a page can hold, in the order the card library lists them. */
 export const CARD_LIBRARY: Record<InsightScope, readonly CardId[]> = {
-  today: ["vsPrev", "peak", "dominant", "total", "activeHours", "span", "devices"],
+  today: ["vsPrev", "peak", "dominant", "total", "activeHours", "span"],
   week: PERIOD_LIBRARY,
   month: PERIOD_LIBRARY,
 };

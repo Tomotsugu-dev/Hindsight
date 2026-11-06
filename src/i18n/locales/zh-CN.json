@@ -526,7 +526,6 @@
       "move": "移动「{{name}}」：方向键换位置，Delete 移除",
       "add": "加入「{{name}}」",
       "flat": "持平",
-      "other": "其他",
       "hourCount": "{{count}} 小时",
       "date": "{{month}}月{{day}}日",
       "range": "{{from}} – {{to}}",
@@ -549,7 +548,6 @@
         "dominant": "主力大类",
         "total": "总时长",
         "activeHours": "有记录的小时",
-        "devices": "设备分布",
         "span": "最早开始 – 最晚结束",
         "avgSpan": "平均开始 – 结束"
       },
@@ -580,7 +578,6 @@
         "composition": "构成",
         "appShare": "占所属分类",
         "activeHours": "有记录的小时",
-        "devices": "设备分布",
         "span": "最早开始 – 最晚结束",
         "avgSpan": "平均开始 – 结束"
       },
@@ -626,7 +623,6 @@
         },
         "dominant": "{{span}}，时间最多的大类占几成；下钻时换成里面最多的小类",
         "total": "{{span}}一共用了多久",
-        "devices": "{{span}}，每台设备各用了多少",
         "activeHours": "今天有几个小时有使用记录"
       }
     },

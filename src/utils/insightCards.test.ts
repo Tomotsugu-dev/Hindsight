@@ -7,7 +7,6 @@ import {
   cardValue,
   categorySeries,
   dayEdges,
-  deviceShares,
   peakDay,
   stretchSecs,
   widestEdges,
@@ -136,55 +135,6 @@ describe("start and end times", () => {
   });
 });
 
-describe("deviceShares", () => {
-  it("splits the time between devices in whole percents", () => {
-    expect(
-      deviceShares([
-        { id: "mac", secs: 700 },
-        { id: "win", secs: 300 },
-      ]),
-    ).toEqual([
-      { id: "mac", secs: 700, pct: 70 },
-      { id: "win", secs: 300, pct: 30 },
-    ]);
-  });
-
-  it("keeps the two biggest devices and puts the rest together", () => {
-    const shares = deviceShares([
-      { id: "a", secs: 100 },
-      { id: "b", secs: 500 },
-      { id: "c", secs: 300 },
-      { id: "d", secs: 100 },
-    ]);
-    expect(shares?.map((s) => [s.id, s.pct])).toEqual([
-      ["b", 50],
-      ["c", 30],
-      ["other", 20],
-    ]);
-  });
-
-  it("makes the percents add up to 100", () => {
-    // 三等分：33.3 各取整是 99，多出的 1 给余数最大的
-    const shares = deviceShares([
-      { id: "a", secs: 1 },
-      { id: "b", secs: 1 },
-      { id: "c", secs: 1 },
-    ]);
-    expect(shares?.reduce((sum, s) => sum + s.pct, 0)).toBe(100);
-    // 33.6、33.6、32.8 取整是 98，多出的 2 给余数最大的 c（0.8）和 a（0.6）
-    const two = deviceShares([
-      { id: "a", secs: 42 },
-      { id: "b", secs: 42 },
-      { id: "c", secs: 41 },
-    ]);
-    expect(two?.map((s) => s.pct)).toEqual([34, 33, 33]);
-  });
-
-  it("is null when no device has time", () => {
-    expect(deviceShares([{ id: "a", secs: 0 }])).toBeNull();
-  });
-});
-
 describe("cardValue", () => {
   // 周四 15:40 看本周：本周一到周四，对比上周一到周三整天加上周四 15:40 之前
   const now = new Date(2026, 10, 5, 15, 40);
@@ -211,7 +161,6 @@ describe("cardValue", () => {
     series,
     edges: true,
     share: null,
-    devices: null,
   };
 
   it("compares up to now with the previous week up to the same minute", () => {

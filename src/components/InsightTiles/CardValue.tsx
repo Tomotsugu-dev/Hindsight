@@ -65,14 +65,6 @@ export function CardValueView({
           {t("components.insightCards.hourCount", { count: value.hours })}
         </span>
       );
-    case "devices":
-      return (
-        <span className={`${cls} ${styles.devbar}`} aria-hidden>
-          {value.shares.map((s) => (
-            <span key={s.id} style={{ flex: s.pct, background: s.color ?? "var(--text-faint)" }} />
-          ))}
-        </span>
-      );
   }
 }
 

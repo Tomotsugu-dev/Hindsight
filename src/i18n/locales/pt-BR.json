@@ -526,7 +526,6 @@
       "move": "Mover “{{name}}”: as setas movem, Delete remove",
       "add": "Adicionar “{{name}}”",
       "flat": "Sem mudança",
-      "other": "Outros",
       "hourCount": "{{count}} h",
       "date": "{{day}}/{{month}}",
       "range": "{{from}} – {{to}}",
@@ -549,7 +548,6 @@
         "dominant": "Supercategoria principal",
         "total": "Total",
         "activeHours": "Horas com registros",
-        "devices": "Dispositivos",
         "span": "Início mais cedo – fim mais tarde",
         "avgSpan": "Início – fim médio"
       },
@@ -580,7 +578,6 @@
         "composition": "Detalhamento",
         "appShare": "Parte da sua categoria",
         "activeHours": "Horas com registros",
-        "devices": "Dispositivos",
         "span": "Início mais cedo – fim mais tarde",
         "avgSpan": "Início – fim médio"
       },
@@ -626,7 +623,6 @@
         },
         "dominant": "{{span}}: a supercategoria com mais tempo e sua parte. Ao entrar em uma, a maior categoria dentro dela.",
         "total": "{{span}}: todo o tempo somado",
-        "devices": "{{span}}: quanto tempo cada dispositivo tem",
         "activeHours": "Quantas horas de hoje têm registros"
       }
     },

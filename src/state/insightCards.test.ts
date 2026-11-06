@@ -33,7 +33,7 @@ describe("reading stored cards", () => {
   it("drops unknown and repeated cards, keeps 6, fills up to 3 from the defaults", async () => {
     // 日统计没有 avg；peak 重复；只剩两张有效，从默认里补 vsPrev
     store.set(cardsKey("today"), JSON.stringify({ v: 1, cards: ["avg", "peak", "peak", "total"] }));
-    const all = ["span", "avgSpan", "devices", "total", "dominant", "peak", "avg"];
+    const all = ["span", "avgSpan", "vsPrev", "total", "dominant", "peak", "avg"];
     store.set(cardsKey("week"), JSON.stringify({ v: 1, cards: all }));
     const m = await freshImport();
     expect(m.getCards("today")).toEqual(["peak", "total", "vsPrev"]);
@@ -42,7 +42,7 @@ describe("reading stored cards", () => {
 
   it("gives the defaults and warns on another version or broken JSON", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    store.set(cardsKey("week"), JSON.stringify({ v: 2, cards: ["total", "span", "devices"] }));
+    store.set(cardsKey("week"), JSON.stringify({ v: 2, cards: ["total", "span", "peak"] }));
     store.set(cardsKey("month"), "{not json");
     const m = await freshImport();
     expect(m.getCards("week")).toEqual(m.DEFAULT_CARDS.week);
@@ -65,7 +65,7 @@ describe("editing cards", () => {
     const m = await freshImport();
     expect(m.removeCard("today", "peak")).toBe("min");
     expect(m.getCards("today")).toHaveLength(3);
-    for (const id of ["total", "devices"] as const) expect(m.addCard("week", id)).toBeNull();
+    for (const id of ["total", "peak"] as const) expect(m.addCard("week", id)).toBeNull();
     expect(m.addCard("week", "span")).toBe("max");
     expect(m.getCards("week")).toHaveLength(6);
   });

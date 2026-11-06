@@ -139,10 +139,6 @@ export function cardLabel(
         ctx.focus === "all" ? "dominant" : ctx.focus === "app" ? "appShare" : "composition";
       return t(`${K}.label.${kind}`);
     }
-    case "devices":
-      return value?.kind === "devices"
-        ? value.shares.map((s) => `${s.name ?? t(`${K}.other`)} ${s.pct}%`).join(" · ")
-        : t(`${K}.label.devices`);
     default:
       return t(`${K}.label.${id}`);
   }
@@ -155,7 +151,6 @@ export function cardDesc(t: TFunction, id: CardId, ctx: CardContext): string {
   switch (id) {
     case "dominant":
     case "total":
-    case "devices":
       return t(`${K}.desc.${id}`, { span: t(`${K}.spanOf.${variant}`, { count }) });
     case "activeHours":
       return t(`${K}.desc.activeHours`);
