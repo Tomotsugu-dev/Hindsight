@@ -117,7 +117,7 @@
 }
 
 .chipClear:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--fill-strong);
   color: var(--text-strong);
 }
 
@@ -326,7 +326,7 @@
 }
 
 .closeBtn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--fill-strong);
   color: var(--text-strong);
 }
 

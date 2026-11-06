@@ -52,15 +52,11 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--border-subtle);
   pointer-events: none;
 }
 
 /* 暗色专属：黑网格线在深底看不见，改画极淡白线。亮色不动。 */
-:global([data-mode="dark"]) .gridLine {
-  background: rgba(255, 255, 255, 0.06);
-}
-
 /* —— 工作时段柔色填充 —— */
 .workBand {
   position: absolute;

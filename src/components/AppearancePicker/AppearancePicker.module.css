@@ -91,7 +91,7 @@
 }
 
 .iconBtn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   color: var(--text-strong);
   transform: scale(1.06);
 }

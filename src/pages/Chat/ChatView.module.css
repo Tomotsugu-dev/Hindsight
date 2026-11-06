@@ -24,7 +24,7 @@
   flex: 1;
   gap: 24px;
   padding: 40px 16px;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--fill-subtle);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
 }
@@ -151,11 +151,11 @@
   background: transparent;
 }
 .messageList::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--scrollbar-thumb);
   border-radius: var(--radius-xs);
 }
 .messageList::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ── 单条消息：行 + 气泡 ── */

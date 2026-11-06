@@ -44,7 +44,7 @@
 }
 
 .rowBtn:hover {
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--fill-default);
 }
 
 .rowBtn:focus-visible {
@@ -123,7 +123,7 @@
   flex: 1;
   height: 6px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   overflow: hidden;
   min-width: 40px;
 }
@@ -175,7 +175,7 @@
 }
 
 .toggleBtn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   color: var(--text-strong);
 }
 

@@ -112,13 +112,13 @@
 }
 
 .btnCancel {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-color: rgba(0, 0, 0, 0.06);
   color: var(--text-strong);
 }
 
 .btnCancel:hover {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--fill-strong);
 }
 
 .btnConfirm {

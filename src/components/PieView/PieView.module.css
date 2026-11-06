@@ -132,7 +132,7 @@
 .barWrap {
   position: relative;
   height: 7px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fill-default);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }

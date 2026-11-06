@@ -6,7 +6,7 @@
   justify-content: center;
   gap: 8px;
   padding: 56px 24px;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--fill-subtle);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
   text-align: center;

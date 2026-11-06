@@ -14,18 +14,18 @@
 }
 
 .pairing::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-radius: var(--radius-xs);
 }
 
 .pairing::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: var(--radius-xs);
   transition: background-color 140ms ease-out;
 }
 
 .pairing::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Firefox 滚动条样式（细 + 半透明拇指） */
@@ -64,7 +64,7 @@
 /* zebra：相邻行底色错开一档，分块更清晰。先于 hover / hot 写，
    让那几个交互状态的特定 background 能覆盖。 */
 .rowEven {
-  background: rgba(0, 0, 0, 0.025);
+  background: var(--fill-subtle);
 }
 
 .rowOdd {
@@ -72,7 +72,7 @@
 }
 
 .row:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 /* 未分类行：淡黄橙色背景提醒去指派。优先级压过 .rowEven / .rowOdd 的灰色斑马纹 */
@@ -126,14 +126,6 @@
   gap: 7px;
 }
 
-:global([data-mode="dark"]) .rowEven:not(.unassigned):not(.hot) {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-:global([data-mode="dark"]) .row:hover:not(.unassigned):not(.hot) {
-  background: rgba(255, 255, 255, 0.07);
-}
-
 :global([data-mode="dark"]) .emptyDash {
   border-top-color: rgba(255, 255, 255, 0.14);
 }
@@ -157,7 +149,7 @@
 }
 
 .chip:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-color: rgba(0, 0, 0, 0.06);
 }
 
@@ -213,7 +205,7 @@
 }
 
 .chipUnmerge:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--fill-strong);
   color: var(--text-strong);
 }
 
