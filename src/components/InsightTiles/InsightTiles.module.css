@@ -97,13 +97,16 @@
   flex-shrink: 0;
 }
 
+/* 四张一行时，西文、日文的标签放不下一行：折成两行，不截断 */
 .label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* drill 状态：每 tile 左 3px accent 条 + 4% accent tint bg */
