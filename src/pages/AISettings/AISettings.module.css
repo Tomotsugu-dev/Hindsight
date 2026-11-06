@@ -188,18 +188,18 @@
   gap: 6px;
   height: 30px;
   padding: 0 14px;
-  background: var(--color-accent);
-  border: 1px solid var(--color-accent);
+  background: var(--accent-fill);
+  border: 1px solid var(--accent-fill);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: var(--font-weight-600);
   color: #fff;
   cursor: pointer;
-  transition: filter 140ms ease-out;
+  transition: background-color 140ms ease-out;
 }
 
 .promptSaveBtn:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: var(--accent-fill-hover);
 }
 
 .promptSaveBtn:disabled {
@@ -221,7 +221,7 @@
   gap: 8px;
   height: 36px;
   padding: 0 24px;
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -229,12 +229,12 @@
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
-    filter 160ms ease-out,
+    background-color 160ms ease-out,
     transform 120ms ease-out;
 }
 
 .testBtn:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--accent-fill-hover);
 }
 
 .testBtn:active:not(:disabled) {
@@ -1757,7 +1757,7 @@
   gap: 6px;
   height: 30px;
   padding: 0 14px;
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -1765,12 +1765,12 @@
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
-    filter 160ms ease-out,
+    background-color 160ms ease-out,
     transform 120ms ease-out;
 }
 
 .externalTestBtn:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--accent-fill-hover);
 }
 
 .externalTestBtn:active:not(:disabled) {

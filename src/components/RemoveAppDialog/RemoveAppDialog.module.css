@@ -122,12 +122,12 @@
 }
 
 .btnConfirm {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
 }
 
 .btnConfirm:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  background: var(--accent-fill-hover);
 }
 
 /* 删除是次要动作:不给实心红(那会把视线拉过去),用描边警示 */

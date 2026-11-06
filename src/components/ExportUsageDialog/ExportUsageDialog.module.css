@@ -267,12 +267,12 @@
 }
 
 .btnPrimary {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 88%, #000000);
+  background: var(--accent-fill-hover);
 }
 
 .spinning {

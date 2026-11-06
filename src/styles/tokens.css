@@ -6,6 +6,10 @@
   /* —— Brand / accent —— */
   --color-accent: #6c5ce7;
   --color-accent-soft: rgba(108, 92, 231, 0.12);
+  /* Accent background under white text, such as primary buttons. Dark mode makes it darker,
+     because its accent is light. */
+  --accent-fill: var(--color-accent);
+  --accent-fill-hover: color-mix(in oklab, var(--accent-fill) 88%, white);
 
   /* Sidebar — soft lavender → pink gradient (Arc-esque) */
   --sidebar-gradient:
@@ -238,6 +242,7 @@
 [data-mode="dark"] {
   --color-accent: #8b7bf0;
   --color-accent-soft: rgba(139, 123, 240, 0.18);
+  --accent-fill: color-mix(in oklab, var(--color-accent) 78%, black);
 
   /* 侧栏低调深色渐变（顶部略亮），不喧宾夺主 */
   --sidebar-gradient: linear-gradient(180deg, #1b1b21 0%, #141418 100%);

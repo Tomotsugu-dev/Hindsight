@@ -51,13 +51,13 @@
 }
 
 .btnPrimary {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   border: 1px solid transparent;
   color: #fff;
 }
 
 .btnPrimary:hover {
-  filter: brightness(1.08);
+  background: var(--accent-fill-hover);
 }
 
 .btnDanger {

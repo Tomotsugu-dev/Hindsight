@@ -134,12 +134,12 @@
 }
 
 .btnConfirm {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
 }
 
 .btnConfirm:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  background: var(--accent-fill-hover);
 }
 
 .btnDanger {

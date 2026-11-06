@@ -185,7 +185,7 @@
 }
 
 .bubbleUser {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  background: var(--accent-fill);
   color: #fff;
   border-bottom-right-radius: 4px;
   /* 提问支持 Shift+Enter 多行后,气泡里保留用户敲的换行 */
@@ -352,8 +352,8 @@
 }
 
 .editSave {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: #fff;
 }
 
@@ -674,18 +674,18 @@
   flex-shrink: 0;
   width: 32px;
   height: 32px;
-  background: var(--color-accent);
+  background: var(--accent-fill);
   border: none;
   border-radius: var(--radius-md);
   color: #fff;
   cursor: pointer;
   transition:
-    filter 140ms ease-out,
+    background-color 140ms ease-out,
     transform 140ms ease-out;
 }
 
 .composerSend:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: var(--accent-fill-hover);
 }
 
 .composerSend:active:not(:disabled) {
