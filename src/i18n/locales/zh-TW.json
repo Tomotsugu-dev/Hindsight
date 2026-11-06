@@ -498,8 +498,102 @@
       "expand": "展開剩餘 {{count}} 項",
       "collapse": "收起"
     },
-    "insightTiles": {
-      "appShare": "佔所屬分類"
+    "insightCards": {
+      "listLabel": "統計卡片",
+      "edit": "編輯卡片",
+      "done": "完成",
+      "reset": "恢復預設",
+      "modeLabel": "統計口徑",
+      "mode": {
+        "same": "同期對比",
+        "rolling": "滾動視窗"
+      },
+      "library": "卡片庫",
+      "placed": "已放 <b>{{count}}</b> 張",
+      "limit": "可放 {{min}}–{{max}} 張",
+      "libraryEmpty": "卡片庫裡的卡片都放上去了。",
+      "atMin": "至少要 {{count}} 張。",
+      "atMax": "已經 {{count}} 張了，先移除一張再加。",
+      "keepMin": "至少保留 {{count}} 張",
+      "dropRemove": "放開就移除「{{name}}」",
+      "dropBlocked": "至少保留 {{count}} 張，這張移不走",
+      "removed": "已移除「{{name}}」，現在 {{count}} 張",
+      "added": "已加入「{{name}}」，現在 {{count}} 張",
+      "moved": "「{{name}}」移到第 {{position}} 張",
+      "resetDone": "已恢復預設",
+      "modeChanged": "已換成{{mode}}，所有卡片重新計算",
+      "remove": "移除「{{name}}」",
+      "move": "移動「{{name}}」：方向鍵換位置，Delete 移除",
+      "add": "加入「{{name}}」",
+      "flat": "持平",
+      "hourCount": "{{count}} 小時",
+      "date": "{{month}}月{{day}}日",
+      "range": "{{from}} – {{to}}",
+      "note": {
+        "todayLive": "今天 0:00 到現在，對比昨天 0:00 到 {{time}}",
+        "weekLive": "本週一 0:00 到現在，對比上週一 0:00 到上{{weekday}} {{time}}",
+        "monthLive": "{{from}} 0:00 到現在，對比 {{prevFrom}} 0:00 到 {{prevCut}} {{time}}",
+        "liveWholePrev": "{{from}} 0:00 到現在，對比 {{prev}}（上個月沒有今天這個日子，算整個月）",
+        "whole": "{{curr}}，對比 {{prev}}",
+        "rolling": "近 {{count}} 天：{{curr}}（不含今天），對比前 {{count}} 天：{{prev}}",
+        "rollingPast": "{{curr}} 這 {{count}} 天，對比前 {{count}} 天：{{prev}}"
+      },
+      "name": {
+        "vsPrev": "較上期",
+        "vsPrevToday": "較昨日同期",
+        "avg": "日均",
+        "avgVsPrev": "日均較上期",
+        "peakHour": "峰值時段",
+        "peakDay": "峰值日",
+        "dominant": "主力大類",
+        "total": "總時長",
+        "activeHours": "有紀錄的小時",
+        "span": "最早開始 – 最晚結束",
+        "avgSpan": "平均開始 – 結束"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "較昨日同期",
+          "today": "較前一天",
+          "weekLive": "較上週同期",
+          "week": "較上週",
+          "monthLive": "較上月同期",
+          "month": "較上月",
+          "rolling": "較前 {{count}} 天"
+        },
+        "avgVsPrev": {
+          "weekLive": "日均較上週同期",
+          "week": "日均較上週",
+          "monthLive": "日均較上月同期",
+          "month": "日均較上月",
+          "rolling": "日均較前 {{count}} 天"
+        },
+        "avg": "日均",
+        "avgRolling": "近 {{count}} 天日均",
+        "total": "總時長",
+        "totalRolling": "近 {{count}} 天總時長",
+        "peak": "峰值",
+        "peakWith": "峰值 · {{duration}}",
+        "dominant": "主力",
+        "composition": "構成",
+        "appShare": "佔所屬分類",
+        "activeHours": "有紀錄的小時",
+        "span": "最早開始 – 最晚結束",
+        "avgSpan": "平均開始 – 結束"
+      },
+      "desc": {
+        "vsPrev": "比上一期多用或少用的時間",
+        "avg": "過完的每天平均用的時間",
+        "avgVsPrev": "日均比上一期多或少的時間",
+        "peakHour": "用電腦最多的那個小時",
+        "peakDay": "用電腦最多的那一天",
+        "dominant": "用時最多的大類和佔比",
+        "total": "使用電腦的總時間",
+        "activeHours": "用過電腦的小時數",
+        "spanToday": "開始/結束使用電腦的時間",
+        "span": "最早開始/最晚結束使用電腦的時間",
+        "avgSpan": "平均開始/結束使用電腦的時間"
+      }
     },
     "periodLegend": {
       "levelAria": "長條按大類還是小類分色",
@@ -549,15 +643,6 @@
   "today": {
     "title": "日統計",
     "meta": "{{date}} {{weekday}}",
-    "insights": {
-      "vsPrev": {
-        "label": "較昨日",
-        "flat": "持平昨日"
-      },
-      "peak": "峰值",
-      "dominant": "主力",
-      "composition": "構成"
-    },
     "chart": {
       "title": "24 小時活動分佈",
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
@@ -611,17 +696,6 @@
   "week": {
     "title": "周統計",
     "meta": "{{range}} · 日均 {{avg}}",
-    "insights": {
-      "vsPrev": {
-        "label": "較上週",
-        "flat": "持平上週"
-      },
-      "peak": "峰值",
-      "dominant": "主力",
-      "composition": "構成",
-      "avg": "日均",
-      "avgVsPrev": "日均較上週"
-    },
     "rangeSameMonth": "{{month}}月{{startDay}}日 — {{endDay}}日",
     "rangeCrossMonth": "{{startMonth}}月{{startDay}}日 — {{endMonth}}月{{endDay}}日",
     "chart": {
@@ -659,18 +733,6 @@
   "month": {
     "title": "月統計",
     "meta": "{{month}} · 日均 {{avg}}",
-    "insights": {
-      "vsPrev": {
-        "label": "較上月",
-        "flat": "持平上月"
-      },
-      "peak": "峰值",
-      "peakDate": "{{month}}月{{day}}日",
-      "dominant": "主力",
-      "composition": "構成",
-      "avgVsPrev": "日均較上月",
-      "avg": "日均"
-    },
     "monthLabel": "{{year}}年{{month}}月",
     "chart": {
       "title": "每日活動分佈"

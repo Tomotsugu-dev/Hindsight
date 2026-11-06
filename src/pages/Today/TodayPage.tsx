@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../../state/settings";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
@@ -32,8 +32,8 @@ import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
-import { insightDrill, usePeriodInsights } from "../../hooks/usePeriodInsights";
 import { useAppFocus } from "../../hooks/useAppFocus";
+import { insightFocusOf } from "../../hooks/useInsightData";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
@@ -41,7 +41,6 @@ import {
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
 import { appsInCategories } from "../../utils/appCategoryTime";
-import type { HourSlot } from "../../api/hindsight";
 import styles from "./TodayPage.module.css";
 
 function parseHM(s: string): number {
@@ -244,54 +243,13 @@ export default function TodayPage() {
       ? t("today.ranks.topSupers")
       : t("today.ranks.topCategories");
 
-  // 顶部洞察行：当期 vs 上期 · 峰值小时 · 主力大类
-  // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
-  const peakLabelForHour = useCallback(
-    (slot: HourSlot) => `${String(slot.hour).padStart(2, "0")}:00`,
-    [],
+  // 鼠标停在某个应用上：圆环展开它，统计卡片只算它；否则按选中的小类、点进的大类缩小
+  const appFocus = useAppFocus({ hoverId: hoverAppId, enabled: view === "pie", apps });
+  const insightFocus = insightFocusOf(
+    appFocus.app,
+    pickedCat?.id ?? null,
+    drilledSlice?.id ?? null,
   );
-  const drill = useMemo(
-    () =>
-      insightDrill(
-        currBreakdown.slices,
-        prevBreakdown.slices,
-        drilledSlice?.id ?? null,
-        pickedCat?.id ?? null,
-      ),
-    [currBreakdown, prevBreakdown, drilledSlice, pickedCat],
-  );
-  const insights = usePeriodInsights({
-    curr: hours,
-    prev: prevHoursData,
-    buildPeakLabel: peakLabelForHour,
-    topSlice: currBreakdown.slices[0] ?? null,
-    currTotal: totalMinutes,
-    drill,
-  });
-
-  // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字
-  const prevApps = useMemo(() => getDay(offset - 1).apps, [getDay, offset]);
-  const prevTotalMinutes = useMemo(
-    () =>
-      Math.round(
-        prevHoursData.reduce((sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0), 0) /
-          60,
-      ),
-    [prevHoursData],
-  );
-  const peakLabelForHourKey = useCallback((key: string) => `${key.padStart(2, "0")}:00`, []);
-  const appFocus = useAppFocus({
-    hoverId: hoverAppId,
-    enabled: view === "pie",
-    apps,
-    prevApps,
-    prevTotal: prevTotalMinutes,
-    slices: currBreakdown.slices,
-    scope: "day",
-    offset,
-    deviceId: selectedDeviceId,
-    peakLabel: peakLabelForHourKey,
-  });
 
   return (
     <div className={styles.page}>
@@ -408,10 +366,10 @@ export default function TodayPage() {
       {/* 仅占比视图显示：tile 是饼图的数字摘要（drill 联动 / 主力 / 构成） */}
       {view === "pie" && (
         <InsightTiles
-          insights={appFocus.insights ?? insights}
           scope="today"
-          drilledSlice={drilledSlice}
-          accentColor={appFocus.color}
+          offset={offset}
+          focus={insightFocus}
+          accent={appFocus.color ?? drilledSlice?.color}
         />
       )}
 

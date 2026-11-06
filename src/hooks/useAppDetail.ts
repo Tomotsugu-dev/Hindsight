@@ -1,5 +1,5 @@
 // 按 scope(day/week/month) lazy fetch 选中 app 的详情，分两份查、两份缓存：
-// - 每天（日统计是每小时）的用时：悬停排行行（useAppFocus）只要这份，算峰值和日均；
+// - 每天（日统计是每小时）的用时：悬停排行行时统计卡片（useInsightData）只要这份；
 // - 窗口标题用时：只有点开详情抽屉才查。
 // 抽屉的时间柱直接用悬停时查好的那份。缓存放在模块里，两处共用，
 // 按 (scope, offset, groupId, deviceId) 全键，超过上限先删最早放进去的。
@@ -167,25 +167,6 @@ function useCached<T>(
     return { value: null, loading: currentKey !== null };
   }
   return { value: state.value, loading: state.loading };
-}
-
-/** 悬停用：一个应用每天（日统计是每小时）的用时。`groupId === null` = 没停在应用上 */
-export function useAppBuckets(
-  scope: DetailScope,
-  offset: number,
-  groupId: string | null,
-  deviceId?: string,
-): { buckets: DetailBucket[] | null; loading: boolean } {
-  const { value, loading } = useCached(
-    cachedAppBuckets,
-    loadAppBuckets,
-    NO_BUCKETS,
-    scope,
-    offset,
-    groupId,
-    deviceId,
-  );
-  return { buckets: value, loading };
 }
 
 /** 详情抽屉用：时间柱 + 窗口标题。`groupId === null` = 抽屉关着 */

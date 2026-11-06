@@ -498,8 +498,102 @@
       "expand": "Mostrar mais {{count}}",
       "collapse": "Recolher"
     },
-    "insightTiles": {
-      "appShare": "Parte da sua categoria"
+    "insightCards": {
+      "listLabel": "Cartões de estatísticas",
+      "edit": "Editar cartões",
+      "done": "Concluir",
+      "reset": "Restaurar padrão",
+      "modeLabel": "Comparar",
+      "mode": {
+        "same": "Mesmo ponto",
+        "rolling": "Dias recentes"
+      },
+      "library": "Biblioteca de cartões",
+      "placed": "<b>{{count}}</b> colocados",
+      "limit": "{{min}}–{{max}} cartões",
+      "libraryEmpty": "Todos os cartões já foram colocados.",
+      "atMin": "Mantenha pelo menos {{count}} cartões.",
+      "atMax": "Já há {{count}} cartões. Remova um primeiro.",
+      "keepMin": "Mantenha pelo menos {{count}} cartões",
+      "dropRemove": "Solte para remover “{{name}}”",
+      "dropBlocked": "É preciso manter {{count}} cartões. Este fica.",
+      "removed": "“{{name}}” removido. Agora são {{count}}.",
+      "added": "“{{name}}” adicionado. Agora são {{count}}.",
+      "moved": "“{{name}}” agora é o cartão {{position}}.",
+      "resetDone": "Os cartões padrão voltaram.",
+      "modeChanged": "Agora usando {{mode}}. Todos os cartões foram recalculados.",
+      "remove": "Remover “{{name}}”",
+      "move": "Mover “{{name}}”: as setas movem, Delete remove",
+      "add": "Adicionar “{{name}}”",
+      "flat": "Sem mudança",
+      "hourCount": "{{count}} h",
+      "date": "{{day}}/{{month}}",
+      "range": "{{from}} – {{to}}",
+      "note": {
+        "todayLive": "Hoje de 0:00 até agora, contra ontem de 0:00 até {{time}}",
+        "weekLive": "Desde segunda 0:00 até agora, contra a semana passada de segunda 0:00 até {{weekday}} {{time}}",
+        "monthLive": "De {{from}} 0:00 até agora, contra {{prevFrom}} 0:00 até {{prevCut}} {{time}}",
+        "liveWholePrev": "De {{from}} 0:00 até agora, contra {{prev}} (o mês passado não tem esse dia, então conta inteiro)",
+        "whole": "{{curr}}, contra {{prev}}",
+        "rolling": "Últimos {{count}} dias: {{curr}} (sem hoje), contra os {{count}} dias anteriores: {{prev}}",
+        "rollingPast": "{{count}} dias: {{curr}}, contra os {{count}} dias anteriores: {{prev}}"
+      },
+      "name": {
+        "vsPrev": "Variação",
+        "vsPrevToday": "Variação vs. ontem",
+        "avg": "Média diária",
+        "avgVsPrev": "Variação da média diária",
+        "peakHour": "Hora de pico",
+        "peakDay": "Dia de pico",
+        "dominant": "Supercategoria principal",
+        "total": "Total",
+        "activeHours": "Horas com registros",
+        "span": "Início mais cedo – fim mais tarde",
+        "avgSpan": "Início – fim médio"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "vs. ontem até agora",
+          "today": "vs. o dia anterior",
+          "weekLive": "vs. semana passada até agora",
+          "week": "vs. semana passada",
+          "monthLive": "vs. mês passado até agora",
+          "month": "vs. mês passado",
+          "rolling": "vs. os {{count}} dias anteriores"
+        },
+        "avgVsPrev": {
+          "weekLive": "Média vs sem. passada até agora",
+          "week": "Média vs sem. passada",
+          "monthLive": "Média vs mês passado até agora",
+          "month": "Média vs mês passado",
+          "rolling": "Média vs os {{count}} dias anteriores"
+        },
+        "avg": "Média diária",
+        "avgRolling": "Média diária, últimos {{count}} dias",
+        "total": "Total",
+        "totalRolling": "Total, últimos {{count}} dias",
+        "peak": "Pico",
+        "peakWith": "Pico · {{duration}}",
+        "dominant": "Principal",
+        "composition": "Detalhamento",
+        "appShare": "Parte da sua categoria",
+        "activeHours": "Horas com registros",
+        "span": "Início mais cedo – fim mais tarde",
+        "avgSpan": "Início – fim médio"
+      },
+      "desc": {
+        "vsPrev": "Quanto a mais ou a menos que o período anterior",
+        "avg": "Tempo médio por dia já terminado",
+        "avgVsPrev": "A média diária, a mais ou a menos que o período anterior",
+        "peakHour": "A hora em que você mais usou o computador",
+        "peakDay": "O dia em que você mais usou o computador",
+        "dominant": "A supercategoria com mais tempo e sua parte",
+        "total": "Todo o tempo no computador",
+        "activeHours": "Quantas horas você usou o computador",
+        "spanToday": "Quando você começa e para de usar o computador",
+        "span": "Início mais cedo/fim mais tarde no computador",
+        "avgSpan": "Início/fim médio no computador"
+      }
     },
     "periodLegend": {
       "levelAria": "Colorir as barras por supercategoria ou categoria",
@@ -549,15 +643,6 @@
   "today": {
     "title": "Diário",
     "meta": "{{date}} {{weekday}}",
-    "insights": {
-      "vsPrev": {
-        "label": "vs. ontem",
-        "flat": "Igual a ontem"
-      },
-      "peak": "Pico",
-      "dominant": "Principal",
-      "composition": "Detalhamento"
-    },
     "chart": {
       "title": "Atividade de 24 horas",
       "barTitle": "{{hour}}:00 — {{minutes}} min",
@@ -611,17 +696,6 @@
   "week": {
     "title": "Semanal",
     "meta": "{{range}} · {{avg}} média diária",
-    "insights": {
-      "vsPrev": {
-        "label": "vs. semana passada",
-        "flat": "Igual à semana passada"
-      },
-      "peak": "Pico",
-      "dominant": "Principal",
-      "composition": "Detalhamento",
-      "avg": "Média diária",
-      "avgVsPrev": "Média vs sem. passada"
-    },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -659,18 +733,6 @@
   "month": {
     "title": "Mensal",
     "meta": "{{month}} · {{avg}} média diária",
-    "insights": {
-      "vsPrev": {
-        "label": "vs. mês passado",
-        "flat": "Igual ao mês passado"
-      },
-      "peak": "Pico",
-      "peakDate": "{{month}}/{{day}}",
-      "dominant": "Principal",
-      "composition": "Detalhamento",
-      "avgVsPrev": "Média vs mês passado",
-      "avg": "Média diária"
-    },
     "monthLabel": "{{month}} {{year}}",
     "chart": {
       "title": "Atividade diária"

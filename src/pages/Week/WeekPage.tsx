@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
 import { ExportUsageButton } from "../../components/ExportUsageButton/ExportUsageButton";
@@ -13,12 +13,8 @@ import { useClickOutsideBars } from "../../hooks/useClickOutsideBars";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodNavigation } from "../../hooks/usePeriodNavigation";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
-import {
-  drillMinutes,
-  insightDrill,
-  usePeriodInsights,
-} from "../../hooks/usePeriodInsights";
 import { useAppFocus } from "../../hooks/useAppFocus";
+import { insightFocusOf } from "../../hooks/useInsightData";
 import {
   useSuperCategoryBreakdown,
   catMinutesFromSegments,
@@ -47,9 +43,6 @@ import {
 import type { DaySummary } from "../../api/hindsight";
 import { appsInCategories } from "../../utils/appCategoryTime";
 import styles from "./WeekPage.module.css";
-
-/** Sun..Sat → mon..sun key（i18n 里是星期一开头）。 */
-const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 /** 把 days[i].date 折算成相对今天的 dayOffset（0=今天，-1=昨天）。
  *  用 startOfDay 做差，避免时区/夏令时错位一格。 */
@@ -203,19 +196,6 @@ export default function WeekPage() {
   const prevBreakdown = useSuperCategoryBreakdown(prevCatMinutes);
   const currBreakdown = useSuperCategoryBreakdown(currCatMinutes);
   const nextBreakdown = useSuperCategoryBreakdown(nextCatMinutes);
-  // 日均 tile 的 drill 分子:只累计已完成天(饼图/总时长仍是全周口径含今天)
-  const completedCatMinutes = useMemo(
-    () => catMinutesFromSegments(completedDays),
-    [completedDays],
-  );
-  const completedBreakdown = useSuperCategoryBreakdown(completedCatMinutes);
-  // 上周完全无数据时是 undefined（tile 显示 —）而不是 0——0 会被渲染成
-  // "↑ 满值 比上周" 的假涨幅，跟旁边 vs-prev tile 的 "—" 自相矛盾。
-  const prevAvgPerTotalDays = useMemo(
-    () =>
-      prevBreakdown.total > 0 ? Math.round(prevBreakdown.total / 7) : undefined,
-    [prevBreakdown.total],
-  );
 
   const selectionLabel =
     selectedDay !== null
@@ -263,78 +243,13 @@ export default function WeekPage() {
       ? t("week.ranks.topSupers")
       : t("week.ranks.topCategories");
 
-  // 顶部洞察行：当期 vs 上周 · 峰值日 · 主力大类
-  // drill 时该大类视角，选中小类时该小类视角；上期按同一个 id 查
-  const peakLabelForDay = useCallback(
-    (day: DaySummary) => t(`week.dow.${DOW_KEYS[day.date.getDay()]}`),
-    [t],
+  // 鼠标停在某个应用上：圆环展开它，统计卡片只算它；否则按选中的小类、点进的大类缩小
+  const appFocus = useAppFocus({ hoverId: hoverAppId, enabled: view === "pie", apps });
+  const insightFocus = insightFocusOf(
+    appFocus.app,
+    pickedCat?.id ?? null,
+    drilledSlice?.id ?? null,
   );
-  const drill = useMemo(
-    () =>
-      insightDrill(
-        currBreakdown.slices,
-        prevBreakdown.slices,
-        drilledSlice?.id ?? null,
-        pickedCat?.id ?? null,
-      ),
-    [currBreakdown, prevBreakdown, drilledSlice, pickedCat],
-  );
-  // 日均 / 日均对比 tile 跟其它 tile 一样支持 drill：drill 时显示该大类（或选中小类）的日均，
-  // 分子分母都按已完成天口径（上周是完整周期,分母固定 7）。上周没有它按 0 算，
-  // 对比语义即"从无到有"。
-  const displayedAvgMinutes = drill
-    ? completedDays.length > 0
-      ? Math.round(
-          drillMinutes(
-            completedBreakdown.slices,
-            drilledSlice?.id ?? null,
-            pickedCat?.id ?? null,
-          ) / completedDays.length,
-        )
-      : undefined
-    : avgPerCompletedDay;
-  const displayedPrevAvgMinutes = drill
-    ? prevBreakdown.total > 0
-      ? Math.round(drill.prevMinutes / 7)
-      : undefined // 上周整周无数据：连"从无到有"都谈不上，显示 —
-    : prevAvgPerTotalDays;
-  const insights = usePeriodInsights({
-    curr: days,
-    prev: prevDaysData,
-    buildPeakLabel: peakLabelForDay,
-    topSlice: currBreakdown.slices[0] ?? null,
-    currTotal: totalMinutes,
-    drill,
-  });
-
-  // 鼠标停在某个应用上：圆环展开它，统计卡片换成它自己的数字（日均按上周 7 天算）
-  const prevApps = useMemo(() => getWeek(offset - 1).apps, [getWeek, offset]);
-  const prevTotalMinutes = useMemo(
-    () =>
-      Math.round(
-        prevDaysData.reduce((sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0), 0) /
-          60,
-      ),
-    [prevDaysData],
-  );
-  const peakLabelForDayKey = useCallback(
-    (key: string) => t(`week.dow.${DOW_KEYS[new Date(`${key}T00:00:00`).getDay()]}`),
-    [t],
-  );
-  const appFocusAvg = useMemo(() => ({ prevDays: 7 }), []);
-  const appFocus = useAppFocus({
-    hoverId: hoverAppId,
-    enabled: view === "pie",
-    apps,
-    prevApps,
-    prevTotal: prevTotalMinutes,
-    slices: currBreakdown.slices,
-    scope: "week",
-    offset,
-    deviceId: selectedDeviceId,
-    peakLabel: peakLabelForDayKey,
-    avg: appFocusAvg,
-  });
 
   return (
     <div className={styles.page}>
@@ -432,12 +347,10 @@ export default function WeekPage() {
       {/* 仅占比视图显示：tile 是饼图的数字摘要（drill 联动 / 主力 / 构成） */}
       {view === "pie" && (
         <InsightTiles
-          insights={appFocus.insights ?? insights}
           scope="week"
-          drilledSlice={drilledSlice}
-          accentColor={appFocus.color}
-          avgMinutes={appFocus.insights ? appFocus.avgMinutes : displayedAvgMinutes}
-          prevAvgMinutes={appFocus.insights ? appFocus.prevAvgMinutes : displayedPrevAvgMinutes}
+          offset={offset}
+          focus={insightFocus}
+          accent={appFocus.color ?? drilledSlice?.color}
         />
       )}
 

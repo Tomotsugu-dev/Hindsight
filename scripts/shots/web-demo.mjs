@@ -470,13 +470,14 @@ export async function shoot(demo, shot, { output, clip }) {
   if (errors.length) throw new Error(`页面运行错误：${errors.join("；")}`);
   const area = (await clip?.(page)) ?? { x: 0, y: 0, width, height };
   await page.screenshot({ path: output, animations: "disabled", clip: area });
-  // 裁剪时藏起来的侧栏要还原，下一张图还要靠它切页面。
+  // 裁剪时藏起来的侧栏要还原，下一张图还要靠它切页面；拉高过的窗口也改回原尺寸。
   await page
     .locator("aside")
     .first()
     .evaluate((aside) => {
       aside.style.visibility = "";
     });
+  await page.setViewportSize({ width, height });
   console.log(
     `已保存 ${path.relative(repo, output)}（${Math.round(area.width * 2)} × ${Math.round(area.height * 2)}）`,
   );

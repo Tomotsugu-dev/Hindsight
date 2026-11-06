@@ -120,6 +120,9 @@ const SHOTS = [
   },
 ];
 
+/** 窗口上下沿模糊带的高度，同 src/layouts/AppLayout.module.css 的 .shell::after。 */
+const EDGE_BLUR_PX = 32;
+
 async function options() {
   const { values } = parseArgs({
     options: {
@@ -150,9 +153,10 @@ async function options() {
 
 /**
  * 不要侧栏、只截到统计卡片那一行的范围：左边从内容区开始，下边停在统计卡片和下面
- * 「最常用应用」之间的空隙正中。统计卡片用「较上期」那张卡片的标签找。
+ * 「最常用应用」之间的空隙正中。统计卡片按它整块区域的名字找。
  *
  * 侧栏的投影会落到内容区左边，所以先把侧栏藏起来；下一张图会重新载入页面。
+ * 窗口下沿有一条模糊带，下边落进去时把窗口拉高到刚好避开它，shoot 截完会改回原尺寸。
  */
 async function cardsClip(page, shot, labels) {
   const scope = scopes[shot.page];
@@ -162,12 +166,10 @@ async function cardsClip(page, shot, labels) {
     .evaluate((aside) => {
       aside.style.visibility = "hidden";
     });
-  const main = await page.locator("main").boundingBox();
-  const cards = await page
-    .getByText(labels[scope].insights.vsPrev.label, { exact: true })
-    .first()
-    .locator("xpath=../..")
-    .boundingBox();
+  const cards = page.getByRole("region", {
+    name: labels.components.insightCards.listLabel,
+    exact: true,
+  });
   const appListTitle = [labels[scope].ranks.topApps, labels.today.pie.drill.appsTitle];
   let appList = null;
   for (const name of appListTitle) {
@@ -178,9 +180,22 @@ async function cardsClip(page, shot, labels) {
     }
   }
   if (!appList) throw new Error("找不到应用列表，无法裁到统计卡片。");
-  const next = await appList.boundingBox();
-  const cardsBottom = cards.y + cards.height;
-  return { x: main.x, y: 0, width: main.width, height: (cardsBottom + next.y) / 2 };
+  const cut = async () => {
+    const box = await cards.boundingBox();
+    const next = await appList.boundingBox();
+    return (box.y + box.height + next.y) / 2;
+  };
+  let bottom = await cut();
+  const { width, height } = page.viewportSize();
+  if (bottom > height - EDGE_BLUR_PX) {
+    await page.setViewportSize({ width, height: Math.ceil(bottom) + EDGE_BLUR_PX });
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    bottom = await cut();
+  }
+  const main = await page.locator("main").boundingBox();
+  return { x: main.x, y: 0, width: main.width, height: bottom };
 }
 
 /**

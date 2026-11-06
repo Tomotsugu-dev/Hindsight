@@ -1,15 +1,36 @@
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+.area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.tiles.hasAvg {
-  grid-template-columns: repeat(4, 1fr);
+/* 卡片上方一行：左边是卡片算的哪段时间，右边是编辑按钮 */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 28px;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 12 列：3、4 张一行排满，5 张上 3 下 2，6 张两行各 3（见 spanOf） */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
 }
 
 /* 单 tile 复用三页 .card token 的视觉语言 */
 .tile {
+  grid-column: span var(--span, 4);
   position: relative;
   background: var(--surface-card-elevated);
   border: 1px solid var(--border-default);
@@ -32,6 +53,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 18px;
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
@@ -42,14 +64,23 @@
   text-overflow: ellipsis;
 }
 
+/* 卡片库里的小号预览 */
+.preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* 占位「—」用同一行高度，颜色淡化 */
 .dash {
-  font-size: 18px;
-  font-weight: var(--font-weight-600);
   color: var(--text-faint);
 }
 
-/* up / down 着色 */
 .up {
   color: #16a34a;
 }
@@ -66,7 +97,13 @@
   flex-shrink: 0;
 }
 
+/* 四张一行时，西文、日文的标签放不下一行：折成两行，不截断 */
 .label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 0;
@@ -74,8 +111,8 @@
 
 /* drill 状态：每 tile 左 3px accent 条 + 4% accent tint bg */
 .tiles[data-drill] .tile {
-  border-left: 3px solid var(--accent);
-  background: color-mix(in oklab, var(--accent) 4%, var(--surface-card-elevated));
+  border-left: 3px solid var(--tile-accent);
+  background: color-mix(in oklab, var(--tile-accent) 4%, var(--surface-card-elevated));
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
   padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
@@ -89,13 +126,370 @@
   box-shadow: none;
 }
 
-:global([data-layout="flat"]) .tile:first-child {
+:global([data-layout="flat"]) .tile[data-row-start] {
   border-left: 0;
   padding-left: 0;
 }
 
 :global([data-layout="flat"]) .tiles[data-drill] .tile {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--tile-accent);
   border-radius: 0;
   padding-left: 14px;
+}
+
+/* —— 编辑模式 —— */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+/* 平时卡片上方的「编辑卡片」 */
+.btnPlain {
+  background: var(--control-bg);
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
+.btnPlain:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.btnQuiet {
+  background: transparent;
+  color: var(--text-muted);
+}
+.btnQuiet:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.btnPrimary {
+  background: var(--color-accent);
+  color: #ffffff;
+  font-weight: var(--font-weight-600);
+}
+.btnPrimary:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+}
+
+/* 编辑时卡片上方一行：统计口径在左，恢复默认和完成在右 */
+.editBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+.editActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* 统计口径：所有卡片跟着它重新算 */
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modeLabel {
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+}
+.seg button {
+  border: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.seg button:hover {
+  color: var(--text-strong);
+}
+.seg button[aria-pressed="true"] {
+  background: var(--surface-card-elevated);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tiles[data-editing] .tile {
+  cursor: grab;
+  padding-right: 40px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tiles[data-editing] .tile:hover {
+  border-color: var(--border-strong);
+}
+
+.tileX,
+.tileGrip {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-faint);
+}
+.tileX {
+  top: 6px;
+  cursor: pointer;
+}
+.tileGrip {
+  bottom: 6px;
+  cursor: grab;
+}
+.tileX:hover,
+.tileGrip:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+.tileX[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tileX[aria-disabled="true"]:hover {
+  background: transparent;
+  color: var(--text-faint);
+}
+
+/* —— 卡片库 —— */
+
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  transition:
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out);
+}
+
+.trayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.trayHead h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.count b {
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.trayList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card-elevated);
+  color: var(--text-regular);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+}
+.pick:hover {
+  border-color: var(--border-strong);
+}
+.pick[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pickTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pickName {
+  font-size: 13px;
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+.pickPlus {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+.pickDesc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+/* 贴底：介绍一行、两行的卡片，数值都对齐 */
+.pickPrev {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: auto;
+  font-size: 12px;
+}
+.pickPrevLabel {
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trayEmpty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* —— 拖动 —— */
+
+:global(body[data-card-dragging]) {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 行里被拖走的那张：留在原位，变淡 */
+.tile[data-ghost] {
+  opacity: 0.35;
+  border-style: dashed;
+  border-color: var(--color-accent);
+  box-shadow: none;
+}
+
+/* 从卡片库拖到行上：放下后会在这里 */
+.tile[data-pending] {
+  border: 1.5px dashed var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: none;
+}
+.tile[data-pending] > * {
+  opacity: 0.55;
+}
+
+/* 跟着指针的那张飞回来之前，落点上的卡片先不画 */
+.tile[data-landing],
+.pick[data-landing] {
+  visibility: hidden;
+}
+
+.tile.floating,
+:global([data-layout="flat"]) .tile.floating {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--z-drag-fly);
+  box-sizing: border-box;
+  margin: 0;
+  pointer-events: none;
+  background: var(--surface-card-elevated);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 16px 36px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
+    0 2px 6px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
+}
+.tile.floating[data-landed] {
+  box-shadow:
+    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+}
+
+/* 从行里拖到卡片库上：松开会移除；只剩 3 张时移不走 */
+.dropNote {
+  margin: 0;
+  font-size: 12px;
+  font-weight: var(--font-weight-600);
+}
+.tray[data-drop="remove"] {
+  border-color: var(--status-error);
+  background: color-mix(in oklab, var(--status-error) 7%, var(--surface-card));
+}
+.tray[data-drop="remove"] .dropNote {
+  color: var(--status-error);
+}
+.tray[data-drop="blocked"] {
+  border-color: var(--status-pending);
+  background: var(--status-pending-soft);
+}
+.tray[data-drop="blocked"] .dropNote,
+.msg {
+  color: color-mix(in oklab, var(--status-pending) 65%, var(--text-strong));
+}
+
+/* 操作后的提示（至少 3 张、已经 6 张、已加入……），几秒后自己清掉 */
+.msg {
+  margin: -4px 0 0;
+  min-height: 18px;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .tile {
+    grid-column: span 6;
+  }
+  .tile:last-child:nth-child(odd) {
+    grid-column: span 12;
+  }
 }

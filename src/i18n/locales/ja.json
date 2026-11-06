@@ -498,8 +498,102 @@
       "expand": "残り {{count}} 件を表示",
       "collapse": "閉じる"
     },
-    "insightTiles": {
-      "appShare": "分類内の割合"
+    "insightCards": {
+      "listLabel": "統計カード",
+      "edit": "カードを編集",
+      "done": "完了",
+      "reset": "初期状態に戻す",
+      "modeLabel": "比較方法",
+      "mode": {
+        "same": "同時点比較",
+        "rolling": "直近の日数"
+      },
+      "library": "カードライブラリ",
+      "placed": "<b>{{count}}</b> 枚配置中",
+      "limit": "{{min}}〜{{max}} 枚まで",
+      "libraryEmpty": "すべてのカードを配置済みです。",
+      "atMin": "{{count}} 枚以上必要です。",
+      "atMax": "すでに {{count}} 枚あります。先に 1 枚外してください。",
+      "keepMin": "{{count}} 枚は残してください",
+      "dropRemove": "離すと「{{name}}」を外します",
+      "dropBlocked": "{{count}} 枚は必要なので、このカードは外せません",
+      "removed": "「{{name}}」を外しました（現在 {{count}} 枚）",
+      "added": "「{{name}}」を追加しました（現在 {{count}} 枚）",
+      "moved": "「{{name}}」を {{position}} 番目に移動しました",
+      "resetDone": "初期状態に戻しました",
+      "modeChanged": "{{mode}}に切り替え、すべてのカードを計算し直しました",
+      "remove": "「{{name}}」を外す",
+      "move": "「{{name}}」を移動：矢印キーで移動、Delete で外す",
+      "add": "「{{name}}」を追加",
+      "flat": "変化なし",
+      "hourCount": "{{count}} 時間",
+      "date": "{{month}}月{{day}}日",
+      "range": "{{from}}〜{{to}}",
+      "note": {
+        "todayLive": "今日 0:00〜現在、昨日 0:00〜{{time}} と比較",
+        "weekLive": "今週月曜 0:00〜現在、先週月曜 0:00〜先週{{weekday}}曜 {{time}} と比較",
+        "monthLive": "{{from}} 0:00〜現在、{{prevFrom}} 0:00〜{{prevCut}} {{time}} と比較",
+        "liveWholePrev": "{{from}} 0:00〜現在、{{prev}} と比較（先月には同じ日がないため月全体）",
+        "whole": "{{curr}}、{{prev}} と比較",
+        "rolling": "直近 {{count}} 日：{{curr}}（今日を除く）、その前の {{count}} 日：{{prev}} と比較",
+        "rollingPast": "{{curr}} の {{count}} 日間、その前の {{count}} 日：{{prev}} と比較"
+      },
+      "name": {
+        "vsPrev": "前期比",
+        "vsPrevToday": "昨日の同時刻比",
+        "avg": "日平均",
+        "avgVsPrev": "日平均の前期比",
+        "peakHour": "ピーク時間帯",
+        "peakDay": "ピーク日",
+        "dominant": "主要な大分類",
+        "total": "合計時間",
+        "activeHours": "記録のある時間",
+        "span": "最も早い開始 – 最も遅い終了",
+        "avgSpan": "平均の開始 – 終了"
+      },
+      "label": {
+        "vsPrev": {
+          "todayLive": "昨日の同時刻比",
+          "today": "前日比",
+          "weekLive": "先週の同時点比",
+          "week": "先週比",
+          "monthLive": "先月の同時点比",
+          "month": "先月比",
+          "rolling": "前の {{count}} 日比"
+        },
+        "avgVsPrev": {
+          "weekLive": "日平均 先週の同時点比",
+          "week": "日平均 先週比",
+          "monthLive": "日平均 先月の同時点比",
+          "month": "日平均 先月比",
+          "rolling": "日平均 前の {{count}} 日比"
+        },
+        "avg": "日平均",
+        "avgRolling": "直近 {{count}} 日の日平均",
+        "total": "合計時間",
+        "totalRolling": "直近 {{count}} 日の合計",
+        "peak": "ピーク",
+        "peakWith": "ピーク · {{duration}}",
+        "dominant": "主要",
+        "composition": "構成",
+        "appShare": "分類内の割合",
+        "activeHours": "記録のある時間",
+        "span": "最も早い開始 – 最も遅い終了",
+        "avgSpan": "平均の開始 – 終了"
+      },
+      "desc": {
+        "vsPrev": "前の期間より増えた・減った時間",
+        "avg": "終わった日の 1 日あたりの平均時間",
+        "avgVsPrev": "日平均が前の期間より増えた・減った時間",
+        "peakHour": "パソコンをいちばん使った 1 時間",
+        "peakDay": "パソコンをいちばん使った日",
+        "dominant": "時間が最も多い大分類とその割合",
+        "total": "パソコンを使った合計時間",
+        "activeHours": "パソコンを使った時間帯の数",
+        "spanToday": "パソコンを使い始めた時刻と使い終えた時刻",
+        "span": "パソコンを使い始める最も早い時刻/使い終える最も遅い時刻",
+        "avgSpan": "パソコンを使い始める/使い終える平均時刻"
+      }
     },
     "periodLegend": {
       "levelAria": "棒グラフを大分類と分類のどちらで色分けするか",
@@ -549,15 +643,6 @@
   "today": {
     "title": "日次",
     "meta": "{{date}} {{weekday}}",
-    "insights": {
-      "vsPrev": {
-        "label": "昨日比",
-        "flat": "昨日と同じ"
-      },
-      "peak": "ピーク",
-      "dominant": "主要",
-      "composition": "構成"
-    },
     "chart": {
       "title": "24 時間のアクティビティ",
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
@@ -611,17 +696,6 @@
   "week": {
     "title": "週次",
     "meta": "{{range}} · 1 日平均 {{avg}}",
-    "insights": {
-      "vsPrev": {
-        "label": "先週比",
-        "flat": "先週と同じ"
-      },
-      "peak": "ピーク",
-      "dominant": "主要",
-      "composition": "構成",
-      "avg": "日平均",
-      "avgVsPrev": "日平均 vs 先週"
-    },
     "rangeSameMonth": "{{month}}/{{startDay}} — {{endDay}}",
     "rangeCrossMonth": "{{startMonth}}/{{startDay}} — {{endMonth}}/{{endDay}}",
     "chart": {
@@ -659,18 +733,6 @@
   "month": {
     "title": "月次",
     "meta": "{{month}} · 1 日平均 {{avg}}",
-    "insights": {
-      "vsPrev": {
-        "label": "先月比",
-        "flat": "先月と同じ"
-      },
-      "peak": "ピーク",
-      "peakDate": "{{month}}月{{day}}日",
-      "dominant": "主要",
-      "composition": "構成",
-      "avgVsPrev": "日平均 vs 先月",
-      "avg": "日平均"
-    },
     "monthLabel": "{{year}}年{{month}}",
     "chart": {
       "title": "毎日のアクティビティ"
