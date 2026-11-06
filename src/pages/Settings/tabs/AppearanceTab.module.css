@@ -347,12 +347,12 @@
     transform 120ms ease-out;
 }
 .btn {
-  background: rgba(0, 0, 0, 0.045);
+  background: var(--fill-default);
   border: 1px solid rgba(0, 0, 0, 0.06);
   color: var(--text-strong);
 }
 .btn:hover {
-  background: rgba(0, 0, 0, 0.075);
+  background: var(--fill-strong);
 }
 .btnDanger {
   height: 26px;
@@ -376,11 +376,7 @@
 }
 
 :global([data-mode="dark"]) .btn {
-  background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.08);
-}
-:global([data-mode="dark"]) .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 :global([data-mode="dark"]) .card {

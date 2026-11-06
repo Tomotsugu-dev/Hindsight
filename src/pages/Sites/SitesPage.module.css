@@ -41,11 +41,11 @@
 }
 
 .rowEven {
-  background: rgba(0, 0, 0, 0.025);
+  background: var(--fill-subtle);
 }
 
 .row:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 .siteCol {
@@ -181,7 +181,7 @@ button.toggle {
 }
 
 button.toggle:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--fill-strong);
   color: var(--text-strong);
 }
 

@@ -1,7 +1,5 @@
 import { useState, type ReactNode } from "react";
 import type { CategoryTime } from "../../api/hindsight";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import { useTranslation } from "react-i18next";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -53,7 +51,6 @@ export function RankedList({
   onItemHover,
 }: RankedListProps) {
   const { t } = useTranslation();
-  const isDark = useIsDark();
   const denom = totalMinutes ?? Math.max(...items.map((i) => i.minutes), 1);
   // 切日 / 切设备 / 选时段 → items 重排时，让 row 平滑滑到新位置；
   // 新增 / 消失 fade。`key={item.id}` 是稳定 key，库据此识别 reorder vs add/remove。
@@ -103,7 +100,7 @@ export function RankedList({
                 className={styles.barFill}
                 style={{
                   width: `${pct}%`,
-                  background: `color-mix(in oklab, ${adjustCategoryColor(item.color, isDark)} 75%, transparent)`,
+                  background: `color-mix(in oklab, ${item.color} 75%, transparent)`,
                 }}
               />
             </div>

@@ -5,7 +5,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px;
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--fill-default);
   border-radius: var(--radius-md);
   width: fit-content;
   margin-bottom: 24px;
@@ -27,7 +27,7 @@
   width: 1px;
   height: 16px;
   margin: 0 8px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--border-strong);
   flex-shrink: 0;
 }
 
@@ -93,10 +93,6 @@
 :global([data-mode="dark"]) .tabs {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
-}
-
-:global([data-mode="dark"]) .divider {
-  background: var(--border-strong);
 }
 
 :global([data-mode="dark"]) .pill {

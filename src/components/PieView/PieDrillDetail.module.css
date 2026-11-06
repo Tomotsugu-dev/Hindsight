@@ -180,7 +180,7 @@
 .drillBarWrap {
   position: relative;
   height: 6px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }

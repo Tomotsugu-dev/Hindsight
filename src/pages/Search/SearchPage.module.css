@@ -162,7 +162,7 @@
 }
 
 .hit:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--fill-subtle);
   border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
 }
 
@@ -172,7 +172,7 @@
   height: 68px;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 .hitThumb {

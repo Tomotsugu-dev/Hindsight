@@ -188,13 +188,13 @@
 }
 
 .cellEndpoint {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #fff;
   font-weight: var(--font-weight-600);
 }
 
 .cellEndpoint:hover:not(:disabled) {
-  background: var(--color-accent);
+  background: var(--accent-fill-hover);
 }
 
 /* 今天:下缘小圆点标记(端点态下点变白保持可见) */

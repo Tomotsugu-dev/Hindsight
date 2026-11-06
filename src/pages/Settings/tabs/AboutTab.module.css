@@ -57,7 +57,7 @@
   gap: 6px;
   height: 28px;
   padding: 0 12px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -70,7 +70,7 @@
 }
 
 .checkBtn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--fill-strong);
 }
 
 .checkBtn:active:not(:disabled) {
@@ -83,13 +83,13 @@
 }
 
 .installBtn {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #fff;
   border-color: transparent;
 }
 
 .installBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 90%, black);
+  background: var(--accent-fill-hover);
 }
 
 .spinning {

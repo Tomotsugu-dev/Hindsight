@@ -6,10 +6,8 @@ import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import type { BreakdownSlice } from "../../hooks/useSuperCategoryBreakdown";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { useCategories } from "../../state/categories";
-import { useIsDark } from "../../hooks/useTheme";
 import { useWheelSteps } from "../../hooks/useWheelSteps";
 import type { PieDepth } from "../../state/statsView";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import { withViewTransition } from "../../utils/viewTransition";
 import { ActivityRings } from "./ActivityRings";
 import { Donut } from "./Donut";
@@ -62,7 +60,6 @@ export function PieView({
 }: Props) {
   const { t } = useTranslation();
   const fmtHM = useDurationFormatter();
-  const isDark = useIsDark();
   const { getCategory } = useCategories();
   const [hover, setHover] = useState<string | null>(null);
   const [tagHover, setTagHover] = useState<string | null>(null);
@@ -163,7 +160,7 @@ export function PieView({
               thickness={20}
               segments={slices.map((s) => ({
                 id: s.id,
-                color: adjustCategoryColor(s.color, isDark),
+                color: s.color,
                 value: s.minutes,
               }))}
               total={total}
@@ -198,7 +195,7 @@ export function PieView({
                 type="button"
                 className={styles.row}
                 style={
-                  { "--row-color": adjustCategoryColor(s.color, isDark) } as CSSProperties
+                  { "--row-color": s.color } as CSSProperties
                 }
                 data-active={isActive || undefined}
                 data-dim={dim || undefined}
@@ -242,7 +239,7 @@ export function PieView({
                   type="button"
                   className={styles.tag}
                   style={
-                    { "--row-color": adjustCategoryColor(cat.color, isDark) } as CSSProperties
+                    { "--row-color": cat.color } as CSSProperties
                   }
                   data-active={isActive || undefined}
                   data-dim={dim || undefined}

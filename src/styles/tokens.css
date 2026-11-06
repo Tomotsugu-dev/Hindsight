@@ -6,6 +6,10 @@
   /* —— Brand / accent —— */
   --color-accent: #6c5ce7;
   --color-accent-soft: rgba(108, 92, 231, 0.12);
+  /* Accent background under white text, such as primary buttons. Dark mode makes it darker,
+     because its accent is light. */
+  --accent-fill: var(--color-accent);
+  --accent-fill-hover: color-mix(in oklab, var(--accent-fill) 88%, white);
 
   /* Sidebar — soft lavender → pink gradient (Arc-esque) */
   --sidebar-gradient:
@@ -20,7 +24,7 @@
   /* Legacy surface aliases share theme tokens so dark mode never falls back
      to an unthemed white surface. */
   --surface-1: var(--surface-card);
-  --surface-2: rgba(0, 0, 0, 0.025);
+  --surface-2: var(--fill-subtle);
   --surface: var(--surface-card);
 
   /* Pill (active nav item) — 半透明 + 毛玻璃，能透出渐变 */
@@ -66,6 +70,15 @@
   --border-subtle: rgba(0, 0, 0, 0.05);
   --border-default: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.12);
+
+  /* Gray fills: tracks, inputs, quiet buttons and their hover. Three steps like the borders:
+     faint black here, faint white in dark mode. */
+  --fill-subtle: rgba(0, 0, 0, 0.025);
+  --fill-default: rgba(0, 0, 0, 0.045);
+  --fill-strong: rgba(0, 0, 0, 0.075);
+
+  /* Backing behind app and site icons that are hard to see on the card. Only dark mode needs it. */
+  --icon-backing: transparent;
 
   /* 滚动条:自绘替代系统原生(Windows 原生方块箭头与整体视觉不搭)。
      滑块偏中性、轨道透明,只在需要时存在感刚够 */
@@ -232,6 +245,7 @@
 [data-mode="dark"] {
   --color-accent: #8b7bf0;
   --color-accent-soft: rgba(139, 123, 240, 0.18);
+  --accent-fill: color-mix(in oklab, var(--color-accent) 78%, black);
 
   /* 侧栏低调深色渐变（顶部略亮），不喧宾夺主 */
   --sidebar-gradient: linear-gradient(180deg, #1b1b21 0%, #141418 100%);
@@ -244,12 +258,17 @@
   /* 大类卡等用 --surface-1 当底：给它比内容亮一档的 elevated 深灰（表层越高越亮），
      大面积不再用高饱和分类色，色相只作微弱掺入 + 边条强调 */
   --surface-1: var(--surface-card-elevated);
-  --surface-2: rgba(255, 255, 255, 0.04);
 
   /* 边框转淡白描边——深底上黑描边不可见 */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.16);
+
+  --fill-subtle: rgba(255, 255, 255, 0.04);
+  --fill-default: rgba(255, 255, 255, 0.06);
+  --fill-strong: rgba(255, 255, 255, 0.1);
+
+  --icon-backing: #ececf0;
 
   /* 深底上黑滑块隐形,转半透明白 */
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);

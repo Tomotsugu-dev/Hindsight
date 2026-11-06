@@ -9,8 +9,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { ZoomOut } from "lucide-react";
 import { useDurationFormatter } from "../../utils/duration";
-import { useIsDark } from "../../hooks/useTheme";
-import { adjustCategoryColor } from "../../utils/categoryColor";
 import {
   buildHeatmap,
   clipRange,
@@ -61,7 +59,6 @@ export function Heatmap({
 }: HeatmapProps) {
   const { t, i18n } = useTranslation();
   const fmtHM = useDurationFormatter();
-  const isDark = useIsDark();
   const [drag, setDrag] = useState<{ start: string; end: string } | null>(null);
 
   const { weeks, monthCols } = useMemo(
@@ -117,10 +114,9 @@ export function Heatmap({
     );
   }, [i18n.language]);
 
-  const base = adjustCategoryColor(color, isDark);
   // 0 档不给，用 CSS 里的灰色
   const fill = (level: number) =>
-    level === 0 ? undefined : `color-mix(in oklab, ${base} ${LEVEL_MIX[level]}%, transparent)`;
+    level === 0 ? undefined : `color-mix(in oklab, ${color} ${LEVEL_MIX[level]}%, transparent)`;
   // 格子右边、下边那条缝上画什么线：跟旁边的格子不是同一个月，画月份实线；
   // 两边都没有数据，画格子虚线；有数据的地方方块之间的缝就是分隔，不画
   const edges = (col: number, row: number, cell: HeatCell): CSSProperties => {

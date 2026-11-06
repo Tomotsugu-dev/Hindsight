@@ -179,12 +179,12 @@
 }
 
 .btnPrimary {
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
   font-weight: var(--font-weight-600);
 }
 .btnPrimary:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  background: var(--accent-fill-hover);
 }
 
 /* 编辑时卡片上方一行：统计口径在左，恢复默认和完成在右 */

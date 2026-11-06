@@ -39,11 +39,15 @@
   padding: 7px 12px;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: white;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: var(--accent-fill-hover);
 }
 
 .input:disabled,

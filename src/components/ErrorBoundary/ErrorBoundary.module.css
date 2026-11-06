@@ -31,17 +31,17 @@
   padding: var(--space-2) var(--space-5);
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-accent);
+  background: var(--accent-fill);
   color: #ffffff;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: filter var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .btn:hover {
-  filter: brightness(1.05);
+  background: var(--accent-fill-hover);
 }
 
 .btn:active {

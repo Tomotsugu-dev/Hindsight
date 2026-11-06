@@ -74,7 +74,7 @@
 }
 
 .tileMuted {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fill-default);
   color: var(--text-muted);
   border-color: var(--border-default);
 }

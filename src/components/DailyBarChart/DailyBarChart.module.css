@@ -42,7 +42,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--border-subtle);
   pointer-events: none;
 }
 
@@ -131,10 +131,6 @@
    亮色声明一律不动。 —— */
 :global([data-mode="dark"]) .plotArea {
   border-bottom-color: rgba(255, 255, 255, 0.1);
-}
-
-:global([data-mode="dark"]) .gridLine {
-  background: rgba(255, 255, 255, 0.06);
 }
 
 :global([data-mode="dark"]) .segment:not(:last-child) {

@@ -45,7 +45,7 @@
 }
 
 .row:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
 }
 
 .proc {
@@ -90,7 +90,7 @@
 }
 
 .removeBtn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--fill-strong);
   color: var(--text-strong);
 }
 

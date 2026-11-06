@@ -18,7 +18,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 4px 3px 6px;
-  background: rgba(0, 0, 0, 0.025);
+  background: var(--fill-subtle);
   border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: var(--radius-sm);
 }
@@ -52,7 +52,7 @@
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  background: rgba(0, 0, 0, 0.045);
+  background: var(--fill-default);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -64,7 +64,7 @@
 }
 
 .add:hover {
-  background: rgba(0, 0, 0, 0.075);
+  background: var(--fill-strong);
 }
 
 .add:active {

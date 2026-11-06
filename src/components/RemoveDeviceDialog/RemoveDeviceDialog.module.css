@@ -89,7 +89,7 @@
 }
 
 .option:hover {
-  background: rgba(0, 0, 0, 0.025);
+  background: var(--fill-subtle);
 }
 
 .optionChecked {
@@ -134,7 +134,7 @@
   font-family: var(--font-mono);
   border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--fill-subtle);
   outline: none;
   transition: border-color 120ms ease-out, background-color 120ms ease-out;
 }
@@ -180,13 +180,13 @@
 }
 
 .btnCancel {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--fill-default);
   border-color: rgba(0, 0, 0, 0.06);
   color: var(--text-strong);
 }
 
 .btnCancel:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--fill-strong);
 }
 
 .btnDanger {
