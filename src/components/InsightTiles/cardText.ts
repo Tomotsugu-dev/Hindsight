@@ -144,17 +144,13 @@ export function cardLabel(
   }
 }
 
-/** What the card covers, for the card library. */
-export function cardDesc(t: TFunction, id: CardId, ctx: CardContext): string {
-  const count = ROLLING_DAYS[ctx.scope];
-  const variant = ctx.mode === "rolling" ? "rolling" : ctx.scope;
-  switch (id) {
-    case "dominant":
-    case "total":
-      return t(`${K}.desc.${id}`, { span: t(`${K}.spanOf.${variant}`, { count }) });
-    case "activeHours":
-      return t(`${K}.desc.activeHours`);
-    default:
-      return t(`${K}.desc.${id}.${variant}`, { count });
-  }
+/**
+ * What the card shows, for the card library.
+ *
+ * The line above the cards says which time they cover, so this does not.
+ */
+export function cardDesc(t: TFunction, id: CardId, scope: InsightScope): string {
+  if (id === "peak") return t(`${K}.desc.${scope === "today" ? "peakHour" : "peakDay"}`);
+  if (id === "span" && scope === "today") return t(`${K}.desc.spanToday`);
+  return t(`${K}.desc.${id}`);
 }

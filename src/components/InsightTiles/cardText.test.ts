@@ -3,8 +3,9 @@ import i18next, { type TFunction } from "i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { InsightFocus } from "../../hooks/useInsightData";
 import zhCN from "../../i18n/locales/zh-CN.json";
+import { CARD_LIBRARY } from "../../state/insightCards";
 import { insightWindows } from "../../utils/insightWindows";
-import { cardContext, cardLabel, scopeNote } from "./cardText";
+import { cardContext, cardDesc, cardLabel, scopeNote } from "./cardText";
 
 let t: TFunction;
 beforeAll(async () => {
@@ -89,5 +90,28 @@ describe("cardLabel", () => {
       cardLabel(t, "peak", week, { kind: "peakDay", date: "2026-11-03", minutes: 280 }, minutes),
     ).toBe("峰值 · 280m");
     expect(cardLabel(t, "peak", week, null, minutes)).toBe("峰值");
+  });
+});
+
+describe("cardDesc", () => {
+  it("gives every card in every library a description", () => {
+    for (const scope of ["today", "week", "month"] as const) {
+      for (const id of CARD_LIBRARY[scope]) {
+        // 缺文案时 i18next 会原样返回键名
+        expect(cardDesc(t, id, scope)).not.toContain("insightCards");
+      }
+    }
+  });
+
+  it("says the same on every page, except where the day page shows something else", () => {
+    // 时间范围写在卡片上方那一行，介绍里不再重复
+    expect(cardDesc(t, "total", "today")).toBe("使用电脑的总时间");
+    expect(cardDesc(t, "total", "month")).toBe("使用电脑的总时间");
+    // 日统计的峰值是一个小时，周、月是一天；开始结束同理
+    expect(cardDesc(t, "peak", "today")).toBe("用电脑最多的那个小时");
+    expect(cardDesc(t, "peak", "week")).toBe("用电脑最多的那一天");
+    expect(cardDesc(t, "span", "today")).toBe("开始/结束使用电脑的时间");
+    expect(cardDesc(t, "span", "week")).toBe("最早开始/最晚结束使用电脑的时间");
+    expect(cardDesc(t, "avgSpan", "week")).toBe("平均开始/结束使用电脑的时间");
   });
 });

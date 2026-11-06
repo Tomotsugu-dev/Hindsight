@@ -142,7 +142,7 @@ export function CardLibrary({
                   <span className={styles.pickName}>{name}</span>
                   <Plus size={16} className={styles.pickPlus} aria-hidden />
                 </span>
-                <span className={styles.pickDesc}>{cardDesc(t, id, ctx)}</span>
+                <span className={styles.pickDesc}>{cardDesc(t, id, ctx.scope)}</span>
                 <span className={styles.pickPrev}>
                   <CardValueView value={values[id]} ctx={ctx} small />
                   <span className={styles.pickPrevLabel}>

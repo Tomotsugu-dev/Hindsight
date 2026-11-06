@@ -581,49 +581,18 @@
         "span": "Início mais cedo – fim mais tarde",
         "avgSpan": "Início – fim médio"
       },
-      "spanOf": {
-        "today": "Hoje até agora",
-        "week": "Esta semana até agora",
-        "month": "Este mês até agora",
-        "rolling": "Os últimos {{count}} dias"
-      },
       "desc": {
-        "vsPrev": {
-          "today": "Hoje até agora, contra ontem até o mesmo horário",
-          "week": "Esta semana até agora, contra a semana passada até o mesmo ponto",
-          "month": "Este mês até agora, contra o mês passado até o mesmo ponto",
-          "rolling": "Os últimos {{count}} dias, contra os {{count}} dias anteriores"
-        },
-        "avg": {
-          "week": "Tempo por dia nos dias já terminados desta semana, sem hoje",
-          "month": "Tempo por dia nos dias já terminados deste mês, sem hoje",
-          "rolling": "Tempo por dia nos últimos {{count}} dias"
-        },
-        "avgVsPrev": {
-          "week": "A média dos dias terminados desta semana, contra os mesmos dias da semana passada",
-          "month": "A média dos dias terminados deste mês, contra os mesmos dias do mês passado",
-          "rolling": "A média dos últimos {{count}} dias, contra os {{count}} dias anteriores"
-        },
-        "peak": {
-          "today": "A hora com mais tempo hoje",
-          "week": "O dia com mais tempo nesta semana até agora",
-          "month": "O dia com mais tempo neste mês até agora",
-          "rolling": "O dia com mais tempo nos últimos {{count}} dias"
-        },
-        "span": {
-          "today": "Quando começa o primeiro registro de hoje e quando termina o último",
-          "week": "O início mais cedo e o fim mais tarde nos dias terminados desta semana",
-          "month": "O início mais cedo e o fim mais tarde nos dias terminados deste mês",
-          "rolling": "O início mais cedo e o fim mais tarde nos últimos {{count}} dias"
-        },
-        "avgSpan": {
-          "week": "O início e o fim médios nos dias terminados desta semana. Dias sem registros ficam de fora.",
-          "month": "O início e o fim médios nos dias terminados deste mês. Dias sem registros ficam de fora.",
-          "rolling": "O início e o fim médios nos últimos {{count}} dias. Dias sem registros ficam de fora."
-        },
-        "dominant": "{{span}}: a supercategoria com mais tempo e sua parte. Ao entrar em uma, a maior categoria dentro dela.",
-        "total": "{{span}}: todo o tempo somado",
-        "activeHours": "Quantas horas de hoje têm registros"
+        "vsPrev": "Quanto a mais ou a menos que o período anterior",
+        "avg": "Tempo médio por dia já terminado",
+        "avgVsPrev": "A média diária, a mais ou a menos que o período anterior",
+        "peakHour": "A hora em que você mais usou o computador",
+        "peakDay": "O dia em que você mais usou o computador",
+        "dominant": "A supercategoria com mais tempo e sua parte",
+        "total": "Todo o tempo no computador",
+        "activeHours": "Quantas horas você usou o computador",
+        "spanToday": "Quando você começa e para de usar o computador",
+        "span": "Início mais cedo/fim mais tarde no computador",
+        "avgSpan": "Início/fim médio no computador"
       }
     },
     "periodLegend": {

@@ -377,11 +377,13 @@
   line-height: 1.5;
   color: var(--text-muted);
 }
+/* 贴底：介绍一行、两行的卡片，数值都对齐 */
 .pickPrev {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  margin-top: auto;
   font-size: 12px;
 }
 .pickPrevLabel {

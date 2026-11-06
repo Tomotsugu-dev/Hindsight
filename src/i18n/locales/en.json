@@ -581,49 +581,18 @@
         "span": "Earliest start – latest end",
         "avgSpan": "Average start – end"
       },
-      "spanOf": {
-        "today": "Today so far",
-        "week": "This week so far",
-        "month": "This month so far",
-        "rolling": "The last {{count}} days"
-      },
       "desc": {
-        "vsPrev": {
-          "today": "Today so far, against yesterday up to the same time",
-          "week": "This week so far, against last week up to the same time",
-          "month": "This month so far, against last month up to the same time",
-          "rolling": "The last {{count}} days, against the {{count}} days before them"
-        },
-        "avg": {
-          "week": "Time per day over the finished days of this week, not today",
-          "month": "Time per day over the finished days of this month, not today",
-          "rolling": "Time per day over the last {{count}} days"
-        },
-        "avgVsPrev": {
-          "week": "The daily average of this week's finished days, against the same days last week",
-          "month": "The daily average of this month's finished days, against the same days last month",
-          "rolling": "The daily average of the last {{count}} days, against the {{count}} days before"
-        },
-        "peak": {
-          "today": "The hour with the most time today",
-          "week": "The day with the most time this week so far",
-          "month": "The day with the most time this month so far",
-          "rolling": "The day with the most time in the last {{count}} days"
-        },
-        "span": {
-          "today": "When today's first record starts and the last one ends",
-          "week": "The earliest start and latest end over this week's finished days",
-          "month": "The earliest start and latest end over this month's finished days",
-          "rolling": "The earliest start and latest end over the last {{count}} days"
-        },
-        "avgSpan": {
-          "week": "The average start and end over this week's finished days. Days without records are left out.",
-          "month": "The average start and end over this month's finished days. Days without records are left out.",
-          "rolling": "The average start and end over the last {{count}} days. Days without records are left out."
-        },
-        "dominant": "{{span}}: the super category with the most time and its share. When you drill in, the biggest category inside.",
-        "total": "{{span}}: all the time together",
-        "activeHours": "How many hours today have records"
+        "vsPrev": "How much more or less than the last period",
+        "avg": "Average time per finished day",
+        "avgVsPrev": "Daily average, more or less than the last period",
+        "peakHour": "The hour you used the computer most",
+        "peakDay": "The day you used the computer most",
+        "dominant": "The super category with the most time, and its share",
+        "total": "All your time on the computer",
+        "activeHours": "How many hours you used the computer",
+        "spanToday": "When you start and stop using the computer",
+        "span": "Earliest start/latest end on the computer",
+        "avgSpan": "Average start/end on the computer"
       }
     },
     "periodLegend": {
