@@ -184,8 +184,16 @@ impl WebDavClient {
         ))
     }
 
-    /// Reads the user name and password from `auth_state` at the start of each
-    /// round. No password means the user signed out: this round does not sync.
+    /// Reads the saved user name and password, so that later requests to the
+    /// server carry them.
+    ///
+    /// Returns `false` when either one is not saved.
+    ///
+    /// # Errors
+    ///
+    /// The saved password cannot be decrypted, for example because the local key
+    /// has changed (the database was copied to another machine, or the system was
+    /// reinstalled): [`Error::Crypto`]
     pub(crate) async fn ensure_credential(&self) -> Result<bool> {
         let Some((user, password_enc)) = read_credentials(&self.pool).await? else {
             return Ok(false);
@@ -231,10 +239,12 @@ impl WebDavClient {
         ))
     }
 
-    /// Finds the peers' files the running datasets still have to merge, per
-    /// ADR-0008. `streams` lists each running dataset with its local cursor:
-    /// how far the engine merged; a dataset not in it is left alone. Each
-    /// file's `modified_time` is the server time of its manifest.
+    /// Returns the peers' files this device has not merged yet, each with the time
+    /// its manifest was last modified on the server.
+    ///
+    /// Also updates the bookmarks: when a dataset has nothing left to merge from a
+    /// manifest, its bookmark records that manifest, and the next round does not
+    /// download it for that dataset (ADR-0009 §4).
     pub(crate) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
         let entries = match self.dav.propfind("").await {
             Ok(entries) => entries,

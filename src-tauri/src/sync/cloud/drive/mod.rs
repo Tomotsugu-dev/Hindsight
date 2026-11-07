@@ -170,6 +170,9 @@ impl DriveClient {
         .await
     }
 
+    /// Download a file's content from Drive by its file ID.
+    ///
+    /// Returns the raw file content.
     pub(super) async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
@@ -178,6 +181,10 @@ impl DriveClient {
         .await
     }
 
+    /// Upload a file to Drive, updating an existing file with the same name or
+    /// creating a new one when no match exists.
+    ///
+    /// Returns the Drive file ID.
     pub(super) async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         self.with_token_retry(|tok| {
             let name = name.to_string();
