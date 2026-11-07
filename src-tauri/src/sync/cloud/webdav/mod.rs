@@ -33,12 +33,12 @@ use crate::sync::file_name::{Dataset, FileName};
 use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
 /// WebDAV Server only provides modification times with second precision (ADR-0007 §4).
-pub(crate) const TIME_PRECISION: Duration = Duration::from_secs(1);
+const TIME_PRECISION: Duration = Duration::from_secs(1);
 
 /// Sync interval (ADR-0007 §3): Nutstore limits
 /// the number of requests, both push and pull are 5 minutes.
-pub(crate) const PUSH_INTERVAL: Duration = Duration::from_secs(300);
-pub(crate) const PULL_INTERVAL: Duration = Duration::from_secs(300);
+const PUSH_INTERVAL: Duration = Duration::from_secs(300);
+const PULL_INTERVAL: Duration = Duration::from_secs(300);
 
 /// How a file already on the server is replaced so that other devices never
 /// read half of it. Servers differ here (ADR-0009).
@@ -52,7 +52,7 @@ pub(crate) enum UploadMethod {
     TempThenMove,
 }
 
-pub(crate) fn failure_kind(e: &Error) -> FailureKind {
+fn failure_kind(e: &Error) -> FailureKind {
     match e {
         // WebDAV 401: the user name or app password is wrong or was revoked.
         // There is no refresh; the user has to enter it again (ADR-0007).
@@ -197,8 +197,28 @@ impl WebDavClient {
         Ok(true)
     }
 
-    pub(crate) fn name_prefix(&self) -> &str {
-        &self.name_prefix
+    pub(crate) fn time_precision(&self) -> Duration {
+        TIME_PRECISION
+    }
+
+    pub(crate) fn push_interval(&self) -> Duration {
+        PUSH_INTERVAL
+    }
+
+    pub(crate) fn pull_interval(&self) -> Duration {
+        PULL_INTERVAL
+    }
+
+    pub(crate) fn failure_kind(&self, e: &Error) -> FailureKind {
+        failure_kind(e)
+    }
+
+    pub(crate) fn pull_cursor_name(&self, dataset: Dataset) -> String {
+        format!("{}pull.{}", self.name_prefix, dataset.name())
+    }
+
+    pub(crate) fn push_fingerprint_name(&self, dataset: Dataset) -> String {
+        format!("{}push.{}", self.name_prefix, dataset.name())
     }
 
     /// Finds the peers' files the running datasets still have to merge, per

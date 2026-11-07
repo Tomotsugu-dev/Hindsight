@@ -2,10 +2,12 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
-use crate::sync::cloud::FileMeta;
+use crate::sync::cloud::{FailureKind, FileMeta};
+use crate::sync::file_name::Dataset;
 
 #[cfg(test)]
 #[derive(Debug, Clone)]
@@ -54,6 +56,43 @@ impl InMemoryDriveStore {
 
     pub(crate) fn signed_in(&self) -> bool {
         self.signed_in.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn time_precision(&self) -> Duration {
+        super::TIME_PRECISION
+    }
+
+    pub(crate) fn push_interval(&self) -> Duration {
+        super::DRIVE_PUSH_INTERVAL
+    }
+
+    pub(crate) fn pull_interval(&self) -> Duration {
+        super::DRIVE_PULL_INTERVAL
+    }
+
+    pub(crate) async fn ensure_credential(&self) -> Result<bool> {
+        Ok(self.signed_in())
+    }
+
+    pub(crate) fn failure_kind(&self, e: &Error) -> FailureKind {
+        super::failure_kind(e)
+    }
+
+    pub(crate) fn pull_cursor_name(&self, dataset: Dataset) -> String {
+        super::pull_cursor_name(dataset)
+    }
+
+    pub(crate) fn push_fingerprint_name(&self, dataset: Dataset) -> String {
+        super::push_fingerprint_name(dataset)
+    }
+
+    pub(crate) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
+        self.list_appdata_files(super::earliest_cursor(streams))
+            .await
+    }
+
+    pub(crate) async fn end_push_round(&self) -> Result<()> {
+        Ok(())
     }
 
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。

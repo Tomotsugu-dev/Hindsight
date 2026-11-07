@@ -107,15 +107,12 @@ impl CloudBackend {
 
     /// How much pull should rewind its cursor to avoid missing files that share
     /// the same timestamp.
-    ///
-    /// Drive uses zero because its timestamps are precise enough, and pull already
-    /// stops before failed files instead of advancing past them.
     pub fn time_precision(&self) -> Duration {
         match self {
-            CloudBackend::Drive(_) => Duration::ZERO,
-            CloudBackend::WebDav(_) => webdav::TIME_PRECISION,
+            CloudBackend::Drive(c) => c.time_precision(),
+            CloudBackend::WebDav(c) => c.time_precision(),
             #[cfg(test)]
-            CloudBackend::InMemory(_) => Duration::ZERO,
+            CloudBackend::InMemory(store) => store.time_precision(),
         }
     }
 
@@ -124,20 +121,20 @@ impl CloudBackend {
     /// A backend that counts requests (WebDAV, ADR-0007 §3) sets minutes.
     pub fn push_interval(&self) -> Duration {
         match self {
-            CloudBackend::Drive(_) => drive::DRIVE_PUSH_INTERVAL,
-            CloudBackend::WebDav(_) => webdav::PUSH_INTERVAL,
+            CloudBackend::Drive(c) => c.push_interval(),
+            CloudBackend::WebDav(c) => c.push_interval(),
             #[cfg(test)]
-            CloudBackend::InMemory(_) => drive::DRIVE_PUSH_INTERVAL,
+            CloudBackend::InMemory(store) => store.push_interval(),
         }
     }
 
     /// The least time between two pulls; see [`Self::push_interval`].
     pub fn pull_interval(&self) -> Duration {
         match self {
-            CloudBackend::Drive(_) => drive::DRIVE_PULL_INTERVAL,
-            CloudBackend::WebDav(_) => webdav::PULL_INTERVAL,
+            CloudBackend::Drive(c) => c.pull_interval(),
+            CloudBackend::WebDav(c) => c.pull_interval(),
             #[cfg(test)]
-            CloudBackend::InMemory(_) => drive::DRIVE_PULL_INTERVAL,
+            CloudBackend::InMemory(store) => store.pull_interval(),
         }
     }
 
@@ -153,7 +150,7 @@ impl CloudBackend {
             CloudBackend::Drive(c) => c.ensure_credential().await,
             CloudBackend::WebDav(c) => c.ensure_credential().await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => Ok(store.signed_in()),
+            CloudBackend::InMemory(store) => store.ensure_credential().await,
         }
     }
 
@@ -161,10 +158,10 @@ impl CloudBackend {
     /// at the error's text, so the result is safe to log.
     pub fn failure_kind(&self, e: &Error) -> FailureKind {
         match self {
-            CloudBackend::Drive(_) => drive::failure_kind(e),
-            CloudBackend::WebDav(_) => webdav::failure_kind(e),
+            CloudBackend::Drive(c) => c.failure_kind(e),
+            CloudBackend::WebDav(c) => c.failure_kind(e),
             #[cfg(test)]
-            CloudBackend::InMemory(_) => drive::failure_kind(e),
+            CloudBackend::InMemory(store) => store.failure_kind(e),
         }
     }
 
@@ -172,38 +169,21 @@ impl CloudBackend {
     /// Each backend has its own names, so no backend reads another's progress
     /// (ADR-0011 §3).
     pub fn pull_cursor_name(&self, dataset: Dataset) -> String {
-        // Existing databases hold this name. Renamed, the old row would not be
-        // found and every cloud file would be downloaded again.
-        if self.is_drive() && dataset == Dataset::Core {
-            return "drive_files".to_string();
+        match self {
+            CloudBackend::Drive(c) => c.pull_cursor_name(dataset),
+            CloudBackend::WebDav(c) => c.pull_cursor_name(dataset),
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => store.pull_cursor_name(dataset),
         }
-        format!("{}pull.{}", self.name_prefix(), dataset.name())
     }
 
     /// The same for an optional dataset's push fingerprint.
     pub fn push_fingerprint_name(&self, dataset: Dataset) -> String {
-        format!("{}push.{}", self.name_prefix(), dataset.name())
-    }
-
-    /// The prefix of this backend's names in `sync_cursor`, e.g.,
-    /// `webdav.dav.jianguoyun.com.`. Drive has none: its names existed before
-    /// each backend got its own.
-    fn name_prefix(&self) -> &str {
         match self {
-            CloudBackend::Drive(_) => "",
-            CloudBackend::WebDav(c) => c.name_prefix(),
+            CloudBackend::Drive(c) => c.push_fingerprint_name(dataset),
+            CloudBackend::WebDav(c) => c.push_fingerprint_name(dataset),
             #[cfg(test)]
-            CloudBackend::InMemory(_) => "",
-        }
-    }
-
-    /// Drive, or `InMemory`, which stands in for Drive in tests.
-    fn is_drive(&self) -> bool {
-        match self {
-            CloudBackend::Drive(_) => true,
-            CloudBackend::WebDav(_) => false,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => true,
+            CloudBackend::InMemory(store) => store.push_fingerprint_name(dataset),
         }
     }
 
@@ -215,12 +195,10 @@ impl CloudBackend {
     /// contract.
     pub async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
         match self {
-            CloudBackend::Drive(c) => c.list(earliest_cursor(streams)).await,
+            CloudBackend::Drive(c) => c.list(streams).await,
             CloudBackend::WebDav(c) => c.list(streams).await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => {
-                store.list_appdata_files(earliest_cursor(streams)).await
-            }
+            CloudBackend::InMemory(store) => store.list(streams).await,
         }
     }
 
@@ -272,22 +250,12 @@ impl CloudBackend {
     /// manifest here (ADR-0008); the others have nothing to do.
     pub async fn end_push_round(&self) -> Result<()> {
         match self {
-            CloudBackend::Drive(_) => Ok(()),
+            CloudBackend::Drive(c) => c.end_push_round().await,
             CloudBackend::WebDav(c) => c.end_push_round().await,
             #[cfg(test)]
-            CloudBackend::InMemory(_) => Ok(()),
+            CloudBackend::InMemory(store) => store.end_push_round().await,
         }
     }
-}
-
-/// The earliest of the streams' cursors: a listing by time from there covers
-/// every stream.
-fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
-    streams
-        .iter()
-        .map(|(_, cursor)| *cursor)
-        .min()
-        .unwrap_or("")
 }
 
 /// Rewinds the cursor for backends whose timestamps have only coarse precision.

@@ -33,13 +33,18 @@ use serde_json::json;
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::cloud::{http_client, FailureKind, FileMeta};
+use crate::sync::file_name::Dataset;
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
 /// Drive's sync cadence: 5 minutes.
-pub(super) const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(300);
-pub(super) const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(300);
+const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(300);
+const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(300);
+
+/// Drive uses zero because its timestamps are precise enough, and pull already
+/// stops before failed files instead of advancing past them.
+const TIME_PRECISION: Duration = Duration::ZERO;
 
 /// One entry of Google's file listing, as it arrives. `size` comes as a string
 /// and is missing for folders; the rest of the engine sees the converted
@@ -65,7 +70,7 @@ struct ListResp {
     next_page_token: Option<String>,
 }
 
-pub(crate) fn failure_kind(e: &Error) -> FailureKind {
+fn failure_kind(e: &Error) -> FailureKind {
     match e {
         // 400 and 401 are Google saying it no longer accepts this refresh token:
         // the user revoked the grant, or the token expired.
@@ -85,6 +90,33 @@ pub(crate) fn failure_kind(e: &Error) -> FailureKind {
     }
 }
 
+/// Drive's names in `sync_cursor` have no prefix: they existed before each
+/// backend got its own.
+fn pull_cursor_name(dataset: Dataset) -> String {
+    // `Core` used this name before cursors were split by dataset. Keep it so
+    // existing databases find their old row instead of downloading every
+    // cloud file again after an upgrade.
+    if dataset == Dataset::Core {
+        return "drive_files".to_string();
+    }
+    // Newer datasets keep separate pull progress under a namespaced key.
+    format!("pull.{}", dataset.name())
+}
+
+fn push_fingerprint_name(dataset: Dataset) -> String {
+    format!("push.{}", dataset.name())
+}
+
+/// The earliest of the streams' cursors: a listing by time from there covers
+/// every stream.
+fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
+    streams
+        .iter()
+        .map(|(_, cursor)| *cursor)
+        .min()
+        .unwrap_or("")
+}
+
 /// The Google Drive backend. `pool` serves one purpose: reading and writing
 /// `auth_state`, which holds the access token and when it expires.
 pub struct DriveClient {
@@ -96,6 +128,18 @@ impl DriveClient {
         Self { pool }
     }
 
+    pub(super) fn time_precision(&self) -> Duration {
+        TIME_PRECISION
+    }
+
+    pub(super) fn push_interval(&self) -> Duration {
+        DRIVE_PUSH_INTERVAL
+    }
+
+    pub(super) fn pull_interval(&self) -> Duration {
+        DRIVE_PULL_INTERVAL
+    }
+
     pub(super) async fn ensure_credential(&self) -> Result<bool> {
         match auth::ensure_valid_token(&self.pool).await {
             Ok(_) => Ok(true),
@@ -104,7 +148,20 @@ impl DriveClient {
         }
     }
 
-    pub(super) async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+    pub(super) fn failure_kind(&self, e: &Error) -> FailureKind {
+        failure_kind(e)
+    }
+
+    pub(super) fn pull_cursor_name(&self, dataset: Dataset) -> String {
+        pull_cursor_name(dataset)
+    }
+
+    pub(super) fn push_fingerprint_name(&self, dataset: Dataset) -> String {
+        push_fingerprint_name(dataset)
+    }
+
+    pub(super) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
+        let modified_after = earliest_cursor(streams);
         self.with_token_retry(|tok| {
             let after = modified_after.to_string();
             async move { http_list_appdata_files(&tok, &after).await }
@@ -135,6 +192,10 @@ impl DriveClient {
             async move { http_delete(&tok, &id).await }
         })
         .await
+    }
+
+    pub(super) async fn end_push_round(&self) -> Result<()> {
+        Ok(())
     }
 
     /// Why the retry exists: `ensure_valid_token` only checks the expiry time
