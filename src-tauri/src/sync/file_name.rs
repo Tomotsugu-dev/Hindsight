@@ -123,7 +123,16 @@ impl FileKind {
     pub(crate) fn date(&self) -> Option<NaiveDate> {
         match self {
             FileKind::Activities(date) | FileKind::Memory(date) => Some(*date),
-            _ => None,
+            FileKind::Categories
+            | FileKind::SuperCategories
+            | FileKind::SiteRules
+            | FileKind::DeviceMeta
+            | FileKind::AppIcons
+            | FileKind::AppGroups
+            | FileKind::AppGroupMembers
+            | FileKind::Tombstone
+            | FileKind::AiSummaries
+            | FileKind::Chat => None,
         }
     }
 }
@@ -132,11 +141,9 @@ impl FileName {
     pub(crate) fn to_file_name(&self) -> String {
         let id = &self.device_id;
         let kind = self.kind.segment();
-        match &self.kind {
-            FileKind::Activities(date) | FileKind::Memory(date) => {
-                format!("device.{id}.{kind}.{date}.ndjson")
-            }
-            _ => format!("device.{id}.{kind}.json"),
+        match self.kind.date() {
+            Some(date) => format!("device.{id}.{kind}.{date}.ndjson"),
+            None => format!("device.{id}.{kind}.json"),
         }
     }
 
