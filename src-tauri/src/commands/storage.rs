@@ -12,9 +12,7 @@ use tauri::State;
 use crate::capture::CaptureService;
 use crate::repo::settings;
 use crate::storage::{db_path, utc_now_rfc3339, DbError, DbPool, SqliteResultExt};
-use crate::sync::cloud::CloudBackend;
 use crate::sync::engine::SyncEngine;
-use crate::sync::file_name::{FileKind, FileName};
 
 /// [`get_storage_info`] Command's return structure.
 /// Used by the front-end "Settings → Data" panel to render current storage usage.
@@ -283,56 +281,21 @@ pub(crate) async fn purge_cloud_data_impl(
         return Err("self_id 未初始化".into());
     }
 
-    let prefix = FileName::device_prefix(self_id);
-
     // Held until this function returns: a push landing mid-way would upload
     // this device's files again right after they were deleted.
     let _gate = engine.pause_flushes().await;
     let cloud = engine.cloud();
-    refuse_on_webdav(&cloud)?;
     if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
         return Err(crate::error::Error::NotSignedIn.to_string());
     }
 
-    // 1. **先上传 tombstone**（覆盖任何旧版本，modifiedTime 刷新让对端 pull 看到）。
-    //    顺序是关键：tombstone 是"对端请清掉这台设备镜像"的唯一信号——若像旧实现
-    //    那样最后才传、失败还只 warn，就会出现"Drive 文件删了、本地清了、界面报成功，
-    //    但对端永远不知道"的静默半成功。现在 tombstone 失败 = 整个命令失败，
-    //    此时什么都还没删，用户直接重试即可。
-    let cleared_at = utc_now_rfc3339();
-    let tombstone_name = FileName {
-        device_id: self_id.to_string(),
-        kind: FileKind::Tombstone,
-    }
-    .to_file_name();
-    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
-        cleared_at: cleared_at.clone(),
-    })
-    .map_err(|e| e.to_string())?;
-    cloud
-        .upsert_by_name(&tombstone_name, &tombstone_payload)
+    let deleted = cloud
+        .remove_device(self_id, &utc_now_rfc3339())
         .await
-        .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
+        .map_err(|e| e.to_string())?;
 
-    // 2. 列云端全量文件，按本机 prefix 过滤；跳过 tombstone 本身（留着当 marker）。
-    let files = cloud.list_all().await.map_err(|e| e.to_string())?;
-    let mine: Vec<_> = files
-        .iter()
-        .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
-        .collect();
-
-    // 3. 逐个 DELETE；单文件失败不抛，让能删的尽量删完（漏删的对端也会因
-    //    tombstone 的 clearedAt trim 掉，只是 Drive 上多占点空间）
-    let mut deleted = 0u64;
-    for f in &mine {
-        match cloud.delete(&f.id).await {
-            Ok(()) => deleted += 1,
-            Err(e) => log::warn!("purge_cloud_data: delete {} 失败: {e}", f.name),
-        }
-    }
-
-    // 4. 「也一并清空」：跑一遍清空数据 + 清空截图。丢掉采集中的会话，
-    //    否则下一 tick 会去更新已被删掉的行。
+    // 「也一并清空」：跑一遍清空数据 + 清空截图。丢掉采集中的会话，
+    // 否则下一 tick 会去更新已被删掉的行。
     if !keep_local {
         let clear_local = || async {
             purge_local_data_impl(pool, mem).await?;
@@ -349,18 +312,6 @@ pub(crate) async fn purge_cloud_data_impl(
         .map_err(|e| e.to_string())?;
 
     Ok(deleted)
-}
-
-/// Fails on WebDAV, so the commands that clear cloud data do nothing there.
-/// WebDAV cannot do it yet: this device's own files cannot be listed, so the
-/// command would delete nothing and still report success; deleting another
-/// device's files means changing its manifest, which only that device may write
-/// (ADR-0008).
-fn refuse_on_webdav(cloud: &CloudBackend) -> Result<(), String> {
-    match cloud {
-        CloudBackend::WebDav(_) => Err("Clearing cloud data is not supported on WebDAV yet".into()),
-        _ => Ok(()),
-    }
 }
 
 /// 从云端永久移除一台已经不在自己手里的远端设备。
@@ -427,17 +378,9 @@ pub(crate) async fn forget_remote_device_impl(
         return Err("不能用 forget_remote_device 清自己，请用 purge_cloud_data".into());
     }
 
-    let prefix = FileName::device_prefix(target_id);
-    let tombstone_name = FileName {
-        device_id: target_id.to_string(),
-        kind: FileKind::Tombstone,
-    }
-    .to_file_name();
-
     // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
     let _gate = engine.pause_flushes().await;
     let cloud = engine.cloud();
-    refuse_on_webdav(&cloud)?;
 
     // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
     let signed_in = cloud
@@ -451,38 +394,13 @@ pub(crate) async fn forget_remote_device_impl(
         ));
     }
 
-    // 1. **先上传 tombstone**（覆盖任何旧版本）。其它机器 pull 后按 cleared_at trim
-    //    activities + mark devices.deleted_at。顺序同 purge_cloud_data_impl：tombstone
-    //    是对端清镜像的唯一信号，失败必须让整个命令失败（此时云端和本地都还没动，
-    //    重试即可），不能只 warn 然后照常删文件清本地——那是"界面报成功、对端永远
-    //    留着这台设备数据"的静默半成功。
     let cleared_at = utc_now_rfc3339();
-    let tombstone_payload = serde_json::to_vec(&crate::sync::payload::TombstonePayload {
-        cleared_at: cleared_at.clone(),
-    })
-    .map_err(|e| e.to_string())?;
-    cloud
-        .upsert_by_name(&tombstone_name, &tombstone_payload)
+    let deleted = cloud
+        .remove_device(target_id, &cleared_at)
         .await
-        .map_err(|e| format!("上传 tombstone 失败（云端未动，请重试）: {e}"))?;
+        .map_err(|e| e.to_string())?;
 
-    // 2. 列云端上属于该设备的所有文件（跳过 tombstone 本身：留下当 marker）
-    let files = cloud.list_all().await.map_err(|e| e.to_string())?;
-    let target_files: Vec<_> = files
-        .iter()
-        .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
-        .collect();
-
-    // 3. 逐个 DELETE；单文件失败不抛，让能删的尽量删完（漏删的对端也会被 tombstone trim）
-    let mut deleted = 0u64;
-    for f in &target_files {
-        match cloud.delete(&f.id).await {
-            Ok(()) => deleted += 1,
-            Err(e) => log::warn!("forget_remote_device: delete {} 失败: {e}", f.name),
-        }
-    }
-
-    // 4. 本机：删活动 + 软删设备。事务保证两步原子。
+    // 本机：删活动 + 软删设备。事务保证两步原子。
     let target_owned = target_id.to_string();
     let cleared_at_for_db = cleared_at.clone();
     pool.0
@@ -1042,9 +960,11 @@ mod tests {
     /// WebDAV 上两个清云端命令都在动手之前拒绝：假服务器一个请求都没收到，本地数据不动。
     #[tokio::test]
     async fn clearing_cloud_data_is_refused_on_webdav() {
-        use crate::sync::cloud::webdav::{FakeDav, WebDavClient};
+        use crate::sync::cloud::webdav::{save_test_credentials, FakeDav, WebDavClient};
 
         let pool = fresh_test_pool().await;
+        // 登录着：拒绝来自 WebDAV 的删除，不是因为没登录
+        save_test_credentials(&pool, "user", "app-password").await;
         insert_device_row(&pool, "ghost").await;
         insert_activity_for(&pool, "ghost", "Code").await;
         insert_activity_for(&pool, "self-dev", "Code").await;

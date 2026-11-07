@@ -1,6 +1,7 @@
 // ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -95,6 +96,10 @@ impl InMemoryDriveStore {
         Ok(())
     }
 
+    pub(crate) async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
+        super::remove_device(self, device_id, cleared_at).await
+    }
+
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
     /// 仅测试用 —— 验证 push 失败后 outbox 重试不变量。
     #[allow(dead_code)]
@@ -177,6 +182,25 @@ impl InMemoryDriveStore {
         let mut files = self.files.lock().await;
         files.remove(file_id);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl super::DriveFiles for InMemoryDriveStore {
+    fn upsert_by_name(
+        &self,
+        name: &str,
+        content: &[u8],
+    ) -> impl Future<Output = Result<String>> + Send {
+        InMemoryDriveStore::upsert_by_name(self, name, content)
+    }
+
+    fn list_all(&self) -> impl Future<Output = Result<Vec<FileMeta>>> + Send {
+        self.list_appdata_files("")
+    }
+
+    fn delete(&self, file_id: &str) -> impl Future<Output = Result<()>> + Send {
+        InMemoryDriveStore::delete(self, file_id)
     }
 }
 

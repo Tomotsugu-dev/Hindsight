@@ -230,6 +230,21 @@ impl CloudBackend {
         .await
     }
 
+    /// Removes `device_id` from the cloud, so that the other devices drop its
+    /// rows. Returns how many files were deleted.
+    ///
+    /// The tombstone goes first: it is the only thing that tells the other devices
+    /// to drop this device's rows. If its upload fails, nothing has changed yet and
+    /// the user can retry.
+    pub async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
+        match self {
+            CloudBackend::Drive(c) => c.remove_device(device_id, cleared_at).await,
+            CloudBackend::WebDav(c) => c.remove_device(device_id, cleared_at).await,
+            #[cfg(test)]
+            CloudBackend::InMemory(store) => store.remove_device(device_id, cleared_at).await,
+        }
+    }
+
     /// Downloads a file's whole content into memory.
     pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         match self {

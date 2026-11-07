@@ -221,6 +221,16 @@ impl WebDavClient {
         format!("{}push.{}", self.name_prefix, dataset.name())
     }
 
+    /// WebDAV cannot do it yet: this device's own files cannot be listed, so the
+    /// command would delete nothing and still report success; deleting another
+    /// device's files means changing its manifest, which only that device may write
+    /// (ADR-0008).
+    pub(crate) async fn remove_device(&self, _device_id: &str, _cleared_at: &str) -> Result<u64> {
+        Err(Error::Other(
+            "Clearing cloud data is not supported on WebDAV yet".into(),
+        ))
+    }
+
     /// Finds the peers' files the running datasets still have to merge, per
     /// ADR-0008. `streams` lists each running dataset with its local cursor:
     /// how far the engine merged; a dataset not in it is left alone. Each
