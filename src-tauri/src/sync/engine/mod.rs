@@ -165,13 +165,7 @@ impl SyncEngine {
     /// Used at app startup: the backend is built from `auth_state`.
     pub async fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
         let self_id = crate::device::self_id().unwrap_or("").to_string();
-        let cloud = match CloudBackend::from_auth_state(pool.clone(), self_id.clone()).await {
-            Ok(cloud) => cloud,
-            Err(e) => {
-                log::warn!("sync: the saved backend cannot be built, using Drive: {e}");
-                CloudBackend::drive(pool.clone())
-            }
-        };
+        let cloud = CloudBackend::from_auth_state(pool.clone(), self_id.clone()).await;
         Self::with_backend(pool, mem, cloud, self_id)
     }
 

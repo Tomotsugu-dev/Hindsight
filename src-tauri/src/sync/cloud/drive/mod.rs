@@ -124,7 +124,7 @@ pub struct DriveClient {
 }
 
 impl DriveClient {
-    pub(super) fn new(pool: DbPool) -> Self {
+    pub(crate) fn new(pool: DbPool) -> Self {
         Self { pool }
     }
 

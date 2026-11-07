@@ -42,7 +42,7 @@ async fn make_device(self_id: &str, drive: Arc<InMemoryDriveStore>) -> TestDevic
     let engine = Arc::new(SyncEngine::with_backend(
         pool.clone(),
         Some(mem.clone()),
-        CloudBackend::InMemory(drive),
+        CloudBackend::from(drive),
         self_id.to_string(),
     ));
     TestDevice {
@@ -1822,7 +1822,7 @@ async fn make_webdav_device(self_id: &str, dav: Arc<FakeDav>) -> TestDevice {
     let engine = Arc::new(SyncEngine::with_backend(
         pool.clone(),
         Some(mem.clone()),
-        CloudBackend::WebDav(Box::new(client)),
+        CloudBackend::from(client),
         self_id.to_string(),
     ));
     TestDevice {
@@ -2202,8 +2202,7 @@ async fn switching_to_webdav_uploads_this_devices_history() {
         switch_backend(&a.pool, "device-a", to_webdav)
             .await
             .unwrap();
-        a.engine
-            .replace_cloud(CloudBackend::WebDav(Box::new(client)));
+        a.engine.replace_cloud(CloudBackend::from(client));
     }
     a.engine.sync_now().await.unwrap();
 
@@ -2474,7 +2473,7 @@ async fn site_rules_first_pull_retries_and_preserves_progress_after_restart() {
     let restarted = SyncEngine::with_backend(
         b.pool.clone(),
         Some(b.mem.clone()),
-        CloudBackend::InMemory(drive.clone()),
+        CloudBackend::from(drive.clone()),
         "device-b".into(),
     );
     restarted.sync_now().await.unwrap();
@@ -2794,8 +2793,7 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
     a.engine.sync_now().await.unwrap();
     save_test_credentials(&b.pool, "me", "app-password").await;
     let client = WebDavClient::with_fake_server(dav, b.pool.clone(), "device-b".into());
-    b.engine
-        .replace_cloud(CloudBackend::WebDav(Box::new(client)));
+    b.engine.replace_cloud(CloudBackend::from(client));
     let webdav_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
     b.engine.sync_now().await.unwrap();
     assert_eq!(
@@ -2813,7 +2811,7 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
         "1970-01-01T00:00:00Z"
     );
 
-    b.engine.replace_cloud(CloudBackend::InMemory(drive));
+    b.engine.replace_cloud(CloudBackend::from(drive));
     b.engine.sync_now().await.unwrap();
     assert_eq!(
         stored_site_rule(&b.pool, "drive.example").await,

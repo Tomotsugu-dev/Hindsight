@@ -889,7 +889,7 @@ mod tests {
         SyncEngine::with_backend(
             pool.clone(),
             None,
-            CloudBackend::InMemory(drive),
+            CloudBackend::from(drive),
             self_id.to_string(),
         )
     }
@@ -1053,7 +1053,7 @@ mod tests {
         let engine = SyncEngine::with_backend(
             pool.clone(),
             None,
-            CloudBackend::WebDav(Box::new(client)),
+            CloudBackend::from(client),
             "self-dev".into(),
         );
 
