@@ -286,6 +286,24 @@ fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
         .unwrap_or("")
 }
 
+/// Rewinds the cursor for backends whose timestamps have only coarse precision.
+/// Without the rewind, a file written in the same second as the last handled
+/// file could be skipped by the next listing.
+///
+/// The result keeps the backend's RFC3339 format so string comparison remains
+/// valid. An invalid cursor means the backend returned an invalid timestamp.
+pub(crate) fn rewind_cursor(cursor: &str, back: Duration) -> Result<String> {
+    if back.is_zero() {
+        return Ok(cursor.to_string());
+    }
+    let parsed = chrono::DateTime::parse_from_rfc3339(cursor)
+        .map_err(|_| Error::SyncTimeFormat(cursor.to_string()))?;
+    let back = chrono::Duration::from_std(back).expect("a backend's time precision is tiny");
+    Ok((parsed - back)
+        .with_timezone(&chrono::Utc)
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+}
+
 /// Maximum time to wait for a connection to the server.
 const MAX_WAIT_TO_CONNECT: Duration = Duration::from_secs(30);
 /// Maximum time to wait for the server to respond.
@@ -328,6 +346,31 @@ mod tests {
             .await
             .expect("5 秒内请求还在等，没有超时");
         assert!(result.unwrap_err().is_timeout());
+    }
+
+    /// 精度为 0 时原串返回，一个字节都不碰——Drive 的毫秒时间戳格式不能被改写。
+    #[test]
+    fn rewind_cursor_zero_precision_returns_input_untouched() {
+        let cursor = "2026-05-15T10:00:00.123456789Z";
+        assert_eq!(rewind_cursor(cursor, Duration::ZERO).unwrap(), cursor);
+    }
+
+    /// 秒级精度退一秒，结果保持「秒 + Z」的形状，能跟后端返回的字符串按字典序比。
+    #[test]
+    fn rewind_cursor_one_second_keeps_rfc3339_shape() {
+        assert_eq!(
+            rewind_cursor("2026-05-15T10:00:00Z", Duration::from_secs(1)).unwrap(),
+            "2026-05-15T09:59:59Z"
+        );
+    }
+
+    /// 解析不了的游标是后端的 bug，要整轮报错，不能悄悄跳过退格。
+    #[test]
+    fn rewind_cursor_unparseable_is_an_error() {
+        assert!(matches!(
+            rewind_cursor("not-a-time", Duration::from_secs(1)),
+            Err(Error::SyncTimeFormat(_))
+        ));
     }
 
     /// Drive 的游标名字钉死：老用户的数据库里存的就是这些，改一个就找不到原来那一行。

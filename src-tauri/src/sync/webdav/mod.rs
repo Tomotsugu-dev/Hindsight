@@ -28,8 +28,7 @@ use manifest::{manifest_path, manifest_to_device_id, Manifest};
 
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
-use crate::sync::cloud::{FailureKind, FileMeta};
-use crate::sync::engine::rewind_cursor;
+use crate::sync::cloud::{rewind_cursor, FailureKind, FileMeta};
 use crate::sync::file_name::{Dataset, FileName};
 use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
