@@ -1,6 +1,15 @@
 //! Push 路径：把 sync_outbox 翻译成"哪些 device-scoped 文件需要重写"，每个 dirty key
 //! 调一次 build_* 全量重新生成 JSON / NDJSON 内容，再 upload 到 Drive。
 
+mod activities;
+mod app_group_members;
+mod app_groups;
+mod app_icons;
+mod categories;
+mod device_meta;
+mod site_rules;
+mod super_categories;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -12,10 +21,6 @@ use crate::error::{Error, Result};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::cloud::FailureKind;
 use crate::sync::file_name::{FileKind, FileName};
-use crate::sync::payload::{
-    ActivityPayload, AppGroupMemberPayload, AppGroupPayload, AppIconPayload, CategoryPayload,
-    DeviceMetaPayload, SiteRulePayload, SuperCategoryPayload,
-};
 
 const PUSH_BATCH_SIZE: usize = 200;
 
@@ -213,71 +218,24 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
 /// optional datasets are not outbox-driven; `datasets.rs` builds those.
 async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<Vec<u8>> {
     match kind {
-        FileKind::Activities(date) => build_activities_day(pool, self_id, &date.to_string()).await,
-        FileKind::Categories => build_categories(pool).await,
-        FileKind::SuperCategories => build_super_categories(pool).await,
-        FileKind::SiteRules => build_site_rules(pool).await,
-        FileKind::DeviceMeta => build_device_meta(pool, self_id).await,
-        FileKind::AppIcons => build_app_icons(pool).await,
-        FileKind::AppGroups => build_app_groups(pool).await,
-        FileKind::AppGroupMembers => build_app_group_members(pool).await,
+        FileKind::Activities(date) => activities::build(pool, self_id, &date.to_string()).await,
+        FileKind::Categories => categories::build(pool).await,
+        FileKind::SuperCategories => super_categories::build(pool).await,
+        FileKind::SiteRules => site_rules::build(pool).await,
+        FileKind::DeviceMeta => device_meta::build(pool, self_id).await,
+        FileKind::AppIcons => app_icons::build(pool).await,
+        FileKind::AppGroups => app_groups::build(pool).await,
+        FileKind::AppGroupMembers => app_group_members::build(pool).await,
         FileKind::Tombstone | FileKind::AiSummaries | FileKind::Chat | FileKind::Memory(_) => {
             Err(Error::Other(format!("{kind:?} is not an outbox file")))
         }
     }
 }
 
-async fn build_activities_day(pool: &DbPool, self_id: &str, day: &str) -> Result<Vec<u8>> {
-    let self_id = self_id.to_string();
-    let day = day.to_string();
-    let rows: Vec<ActivityPayload> = pool
-        .0
-        .call(move |conn| {
-            // By the `device_id` column only: every row of this device goes into the
-            // day file, and no peer's row is pushed back.
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, started_at, ended_at, duration_secs, local_date, local_hour,
-                            process_name, window_title, category_id, updated_at, url_host
-                     FROM activities
-                     WHERE device_id = ?1 AND local_date = ?2
-                     ORDER BY id",
-                )
-                .db()?;
-            let rows = stmt
-                .query_map(rusqlite::params![self_id, day], |r| {
-                    Ok(ActivityPayload {
-                        id: r.get(0)?,
-                        started_at: r.get(1)?,
-                        ended_at: r.get(2)?,
-                        duration_secs: r.get(3)?,
-                        local_date: r.get(4)?,
-                        local_hour: r.get(5)?,
-                        process_name: r.get(6)?,
-                        window_title: r.get(7)?,
-                        category_id: r.get(8)?,
-                        updated_at: r.get(9)?,
-                        url_host: r.get(10)?,
-                    })
-                })
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?;
-            Ok(rows)
-        })
-        .await?;
-
-    let mut out = Vec::with_capacity(rows.len() * 200);
-    for row in &rows {
-        let s = serde_json::to_string(row)?;
-        out.extend_from_slice(s.as_bytes());
-        out.push(b'\n');
-    }
-    Ok(out)
-}
-
 /// 把一张表全量 SELECT 出来 → 每行映射成 `T` → 整体序列化成 JSON 字节。
 ///
+// TODO: the list below is out of date: process_paths is no longer synced
+// (ADR-0003), and site_rules and super_categories use this too.
 /// 5 个共享表 (categories / process_paths / app_icons / app_groups /
 /// app_group_members) 的 build_* 函数都是这一模板的实例化。
 async fn build_table_rows<T, F>(pool: &DbPool, sql: &str, map: F) -> Result<Vec<u8>>
@@ -302,250 +260,11 @@ where
     Ok(serde_json::to_vec(&rows)?)
 }
 
-async fn build_categories(pool: &DbPool) -> Result<Vec<u8>> {
-    build_table_rows(
-        pool,
-        "SELECT id, name, color, icon, builtin, sort_order, updated_at, deleted_at,
-                super_category_id
-         FROM categories ORDER BY id",
-        |r| {
-            Ok(CategoryPayload {
-                id: r.get(0)?,
-                name: r.get(1)?,
-                color: r.get(2)?,
-                icon: r.get(3)?,
-                builtin: r.get::<_, i64>(4)? != 0,
-                sort_order: r.get(5)?,
-                updated_at: r.get(6)?,
-                deleted_at: r.get(7)?,
-                super_category_id: Some(r.get(8)?),
-            })
-        },
-    )
-    .await
-}
-
-async fn build_super_categories(pool: &DbPool) -> Result<Vec<u8>> {
-    build_table_rows(
-        pool,
-        "SELECT id, name, color, icon, sort_order, updated_at, deleted_at
-         FROM super_categories ORDER BY id",
-        |r| {
-            Ok(SuperCategoryPayload {
-                id: r.get(0)?,
-                name: r.get(1)?,
-                color: r.get(2)?,
-                icon: r.get(3)?,
-                sort_order: r.get(4)?,
-                updated_at: r.get(5)?,
-                deleted_at: r.get(6)?,
-            })
-        },
-    )
-    .await
-}
-
-async fn build_site_rules(pool: &DbPool) -> Result<Vec<u8>> {
-    build_table_rows(
-        pool,
-        "SELECT host, browser, device, category_id, updated_at, deleted_at
-         FROM site_rules ORDER BY host, browser, device",
-        |r| {
-            Ok(SiteRulePayload {
-                host: r.get(0)?,
-                browser: r.get(1)?,
-                device: r.get(2)?,
-                category_id: r.get(3)?,
-                updated_at: r.get(4)?,
-                deleted_at: r.get(5)?,
-            })
-        },
-    )
-    .await
-}
-
-async fn build_app_icons(pool: &DbPool) -> Result<Vec<u8>> {
-    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-    build_table_rows(
-        pool,
-        "SELECT process_name, icon_png, updated_at, deleted_at
-         FROM app_icons ORDER BY process_name",
-        |r| {
-            let bytes: Vec<u8> = r.get(1)?;
-            Ok(AppIconPayload {
-                process_name: r.get(0)?,
-                // BLOB → base64：JSON 不支持 binary，统一用 base64 标准编码
-                icon_png_base64: BASE64.encode(&bytes),
-                updated_at: r.get(2)?,
-                deleted_at: r.get(3)?,
-            })
-        },
-    )
-    .await
-}
-
-async fn build_app_groups(pool: &DbPool) -> Result<Vec<u8>> {
-    build_table_rows(
-        pool,
-        "SELECT id, display_name, category_id, updated_at, deleted_at
-         FROM app_groups ORDER BY id",
-        |r| {
-            Ok(AppGroupPayload {
-                id: r.get(0)?,
-                display_name: r.get(1)?,
-                category_id: r.get(2)?,
-                updated_at: r.get(3)?,
-                deleted_at: r.get(4)?,
-            })
-        },
-    )
-    .await
-}
-
-async fn build_app_group_members(pool: &DbPool) -> Result<Vec<u8>> {
-    build_table_rows(
-        pool,
-        "SELECT process_name, group_id, updated_at, deleted_at
-         FROM app_group_members ORDER BY process_name",
-        |r| {
-            Ok(AppGroupMemberPayload {
-                process_name: r.get(0)?,
-                group_id: r.get(1)?,
-                updated_at: r.get(2)?,
-                deleted_at: r.get(3)?,
-            })
-        },
-    )
-    .await
-}
-
-async fn build_device_meta(pool: &DbPool, self_id: &str) -> Result<Vec<u8>> {
-    let self_id = self_id.to_string();
-    let obj: Option<DeviceMetaPayload> = pool
-        .0
-        .call(move |conn| {
-            let row = conn
-                .query_row(
-                    "SELECT device_id, display_name, color, icon, os, last_seen_at, updated_at
-                     FROM devices WHERE device_id = ?1",
-                    rusqlite::params![self_id],
-                    |r| {
-                        Ok(DeviceMetaPayload {
-                            device_id: r.get(0)?,
-                            display_name: r.get(1)?,
-                            color: r.get(2)?,
-                            icon: r.get(3)?,
-                            os: r.get(4)?,
-                            last_seen_at: r.get(5)?,
-                            updated_at: r.get(6)?,
-                        })
-                    },
-                )
-                .ok();
-            Ok(row)
-        })
-        .await?;
-    let Some(meta) = obj else {
-        return Ok(b"{}".to_vec());
-    };
-    Ok(serde_json::to_vec(&meta)?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
-    use chrono::Local;
-
-    /// 测 [`build_activities_day`] 的 device + date 过滤：
-    /// - 只导出 `device_id = self_id` 的行
-    /// - 跨日期不混（昨天的 self 行不能出现在今天的 ndjson）
-    /// - 跨设备不混（对端 mirror 行不能被当作"本机贡献"重推）
-    ///
-    /// 这条防"mac 重推 Win 镜像数据"的 bug 重现。
-    #[tokio::test]
-    async fn build_activities_day_filters_by_device_and_date() {
-        let pool = fresh_test_pool().await;
-        let today = Local::now().format("%Y-%m-%d").to_string();
-        let yesterday = (Local::now() - chrono::Duration::days(1))
-            .format("%Y-%m-%d")
-            .to_string();
-
-        // 3 行 self + today，process_name 各不同
-        for process in ["Code", "Chrome", "Slack"] {
-            insert_sealed(&pool, TEST_SELF_ID, &today, process, "local").await;
-        }
-        // 2 行 other device + today，origin='remote'（mac pull 来的镜像 —— 不能被回推）
-        for process in ["Win-only-A", "Win-only-B"] {
-            insert_sealed(&pool, "device-other", &today, process, "remote").await;
-        }
-        // 1 行 self 但是昨天 —— 当天的 ndjson 不该含它
-        insert_sealed(&pool, TEST_SELF_ID, &yesterday, "Yesterday-app", "local").await;
-
-        let body = build_activities_day(&pool, TEST_SELF_ID, &today)
-            .await
-            .unwrap();
-
-        let lines: Vec<&[u8]> = body
-            .split(|b| *b == b'\n')
-            .filter(|l| !l.is_empty())
-            .collect();
-        assert_eq!(lines.len(), 3, "应仅导出 3 行 (self + today)");
-
-        let processes: Vec<String> = lines
-            .iter()
-            .map(|l| {
-                let p: ActivityPayload = serde_json::from_slice(l).unwrap();
-                p.process_name
-            })
-            .collect();
-
-        let expected: std::collections::HashSet<&str> =
-            ["Code", "Chrome", "Slack"].into_iter().collect();
-        let got: std::collections::HashSet<&str> = processes.iter().map(|s| s.as_str()).collect();
-        assert_eq!(
-            got, expected,
-            "导出的 process_name 集合应正好是 self+today 的 3 个"
-        );
-
-        // 显式断言对端 + 昨日的没漏出
-        for forbidden in ["Win-only-A", "Win-only-B", "Yesterday-app"] {
-            assert!(
-                !processes.iter().any(|p| p == forbidden),
-                "不应导出 process_name={forbidden}（要么跨设备要么跨日期）"
-            );
-        }
-    }
-
-    async fn insert_sealed(
-        pool: &DbPool,
-        device_id: &str,
-        local_date: &str,
-        process_name: &str,
-        origin: &str,
-    ) {
-        let device_id = device_id.to_string();
-        let local_date = local_date.to_string();
-        let process_name = process_name.to_string();
-        let origin = origin.to_string();
-        pool.0
-            .call(move |conn| {
-                conn.execute(
-                    "INSERT INTO activities(
-                        started_at, ended_at, duration_secs, local_date, local_hour,
-                        process_name, window_title, category_id, device_id, updated_at, origin
-                     ) VALUES(
-                        ?1 || 'T10:00:00Z', ?1 || 'T10:00:30Z', 30, ?1, 10,
-                        ?2, '', 'other', ?3, ?1 || 'T10:00:30Z', ?4
-                     )",
-                    rusqlite::params![local_date, process_name, device_id, origin],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await
-            .unwrap();
-    }
+    use crate::sync::payload::SuperCategoryPayload;
 
     /// 测 [`group_outbox`]：同一 local_date 的 5 条 outbox 应塌成 1 个
     /// `FileKind::Activities(date)` 键，5 个 row id 全部进 value。
@@ -613,49 +332,6 @@ mod tests {
         assert_eq!(d2, vec![2]);
     }
 
-    /// 任务 6:[`build_device_meta`] 导出 devices 行的全部字段(尤其 os ——
-    /// pull 侧的跨 OS 过滤完全依赖它),并用 pull 同款 DTO
-    /// [`DeviceMetaPayload`] 反序列化,钉死字段名往返一致(camelCase 契约)。
-    #[tokio::test]
-    async fn build_device_meta_exports_all_fields_roundtrip() {
-        let pool = fresh_test_pool().await;
-        pool.0
-            .call(|conn| {
-                conn.execute(
-                    "INSERT INTO devices(device_id, display_name, color, icon, os,
-                                         last_seen_at, is_self, updated_at, deleted_at)
-                     VALUES(?1, '我的 Mac', '#a1b2c3', 'Laptop', 'macos',
-                            '2026-07-01T08:00:00Z', 1, '2026-07-02T09:00:00Z', NULL)",
-                    rusqlite::params![crate::repo::test_util::TEST_SELF_ID],
-                )
-                .db()?;
-                Ok(())
-            })
-            .await
-            .unwrap();
-
-        let body = build_device_meta(&pool, TEST_SELF_ID).await.unwrap();
-        let meta: DeviceMetaPayload = serde_json::from_slice(&body)
-            .expect("meta.json 应能被 pull 同款 DeviceMetaPayload 解析");
-
-        assert_eq!(meta.device_id, TEST_SELF_ID);
-        assert_eq!(meta.display_name, "我的 Mac");
-        assert_eq!(meta.color, "#a1b2c3");
-        assert_eq!(meta.icon, "Laptop");
-        assert_eq!(meta.os.as_deref(), Some("macos"), "os 随 meta 一起导出");
-        assert_eq!(meta.last_seen_at.as_deref(), Some("2026-07-01T08:00:00Z"));
-        assert_eq!(meta.updated_at, "2026-07-02T09:00:00Z");
-    }
-
-    /// devices 无本机行(device::ensure_loaded 尚未跑)时导出空对象 `{}` ——
-    /// pull 侧 merge_device_meta 对空对象是跳过语义,不会误插一行空 meta。
-    #[tokio::test]
-    async fn build_device_meta_returns_empty_object_without_row() {
-        let pool = fresh_test_pool().await;
-        let body = build_device_meta(&pool, TEST_SELF_ID).await.unwrap();
-        assert_eq!(body, b"{}".to_vec(), "无 devices 行应返回空 JSON 对象");
-    }
-
     #[tokio::test]
     async fn build_super_categories_exports_rows_with_tombstones() {
         let pool = fresh_test_pool().await;
@@ -680,40 +356,6 @@ mod tests {
             .any(|r| r.id == "work" && r.deleted_at.is_none()));
         let gone = rows.iter().find(|r| r.id == "zz").unwrap();
         assert_eq!(gone.deleted_at.as_deref(), Some("2026-06-01T00:00:00Z"));
-    }
-
-    #[tokio::test]
-    async fn build_categories_carries_super_category_id() {
-        let pool = fresh_test_pool().await;
-        pool.0
-            .call(|conn| {
-                conn.execute(
-                    "UPDATE categories SET super_category_id = 'work' WHERE id = 'code'",
-                    [],
-                )
-                .unwrap();
-                conn.execute(
-                    "UPDATE categories SET super_category_id = NULL WHERE id = 'other'",
-                    [],
-                )
-                .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-        let bytes = build_categories(&pool).await.unwrap();
-        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        let find = |id: &str| {
-            v.as_array()
-                .unwrap()
-                .iter()
-                .find(|c| c["id"] == id)
-                .unwrap()
-                .clone()
-        };
-        assert_eq!(find("code")["superCategoryId"], "work");
-        // 显式 null 必须写出来,对端才能区分"移出大类"和"老版本没这个字段"
-        assert!(find("other").get("superCategoryId").unwrap().is_null());
     }
 
     #[test]
