@@ -1,5 +1,12 @@
-//! Push 路径：把 sync_outbox 翻译成"哪些 device-scoped 文件需要重写"，每个 dirty key
-//! 调一次 build_* 全量重新生成 JSON / NDJSON 内容，再 upload 到 Drive。
+//! Push: rewrites this device's changed files in the cloud, each one whole.
+//!
+//! The outbox says which files to rewrite: each row points to one file, and a
+//! round rewrites a file only once. The optional datasets do not use the outbox;
+//! `datasets.rs` compares fingerprints to decide.
+//!
+//! Each kind of file has a submodule that reads its whole content from the local
+//! tables. A submodule only reads tables: it does not touch the cloud, the
+//! outbox or the cursors.
 
 mod activities;
 mod app_group_members;
