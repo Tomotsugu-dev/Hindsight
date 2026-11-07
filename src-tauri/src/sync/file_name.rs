@@ -109,7 +109,13 @@ impl FileKind {
             FileKind::AiSummaries => Dataset::AiSummaries,
             FileKind::Chat => Dataset::Chat,
             FileKind::Memory(_) => Dataset::Memory,
-            _ => Dataset::Core,
+            FileKind::Activities(_)
+            | FileKind::Categories
+            | FileKind::DeviceMeta
+            | FileKind::AppIcons
+            | FileKind::AppGroups
+            | FileKind::AppGroupMembers
+            | FileKind::Tombstone => Dataset::Core,
         }
     }
 
