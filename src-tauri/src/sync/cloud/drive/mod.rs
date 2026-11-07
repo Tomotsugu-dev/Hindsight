@@ -122,11 +122,25 @@ fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
 /// `auth_state`, which holds the access token and when it expires.
 pub struct DriveClient {
     pool: DbPool,
+    server: Server,
 }
 
 impl DriveClient {
     pub(crate) fn new(pool: DbPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            server: Server::Http,
+        }
+    }
+
+    /// 测试用：文件存在 `store` 里，不走网络。几台设备传同一个 `store`，就是共用一个
+    /// Drive。token 照样从 `pool` 的 `auth_state` 读，测试要先塞一个。
+    #[cfg(test)]
+    pub(crate) fn with_fake_drive(store: std::sync::Arc<InMemoryDriveStore>, pool: DbPool) -> Self {
+        Self {
+            pool,
+            server: Server::Fake(store),
+        }
     }
 
     pub(super) fn time_precision(&self) -> Duration {
@@ -165,7 +179,7 @@ impl DriveClient {
         let modified_after = earliest_cursor(streams);
         self.with_token_retry(|tok| {
             let after = modified_after.to_string();
-            async move { http_list_appdata_files(&tok, &after).await }
+            async move { self.server.list(&tok, &after).await }
         })
         .await
     }
@@ -176,7 +190,7 @@ impl DriveClient {
     pub(super) async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
-            async move { http_download(&tok, &id).await }
+            async move { self.server.download(&tok, &id).await }
         })
         .await
     }
@@ -189,7 +203,7 @@ impl DriveClient {
         self.with_token_retry(|tok| {
             let name = name.to_string();
             let content = content.to_vec();
-            async move { http_upsert_by_name(&tok, &name, &content).await }
+            async move { self.server.upsert_by_name(&tok, &name, &content).await }
         })
         .await
     }
@@ -197,7 +211,7 @@ impl DriveClient {
     pub(super) async fn delete(&self, file_id: &str) -> Result<()> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
-            async move { http_delete(&tok, &id).await }
+            async move { self.server.delete(&tok, &id).await }
         })
         .await
     }
@@ -307,6 +321,47 @@ async fn remove_device(drive: &impl DriveFiles, device_id: &str, cleared_at: &st
 }
 
 // ─────────────── Drive REST calls ───────────────
+
+/// Which server the requests go to: Google, or in tests a fake one in memory.
+enum Server {
+    Http,
+    #[cfg(test)]
+    Fake(std::sync::Arc<InMemoryDriveStore>),
+}
+
+impl Server {
+    async fn list(&self, token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
+        match self {
+            Server::Http => http_list_appdata_files(token, modified_after).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.list_appdata_files(modified_after).await,
+        }
+    }
+
+    async fn download(&self, token: &str, file_id: &str) -> Result<Vec<u8>> {
+        match self {
+            Server::Http => http_download(token, file_id).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.download(file_id).await,
+        }
+    }
+
+    async fn upsert_by_name(&self, token: &str, name: &str, content: &[u8]) -> Result<String> {
+        match self {
+            Server::Http => http_upsert_by_name(token, name, content).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.upsert_by_name(name, content).await,
+        }
+    }
+
+    async fn delete(&self, token: &str, file_id: &str) -> Result<()> {
+        match self {
+            Server::Http => http_delete(token, file_id).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.delete(file_id).await,
+        }
+    }
+}
 
 async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
     let client = http_client();

@@ -20,7 +20,7 @@ use chrono::{DateTime, Duration, Local, Timelike};
 use crate::repo::test_util::DataDirOverride;
 use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::backend_switch::{switch_backend, NewBackend};
-use crate::sync::cloud::drive::InMemoryDriveStore;
+use crate::sync::cloud::drive::{DriveClient, InMemoryDriveStore};
 use crate::sync::cloud::webdav::{save_test_credentials, Call, FakeDav, WebDavClient};
 use crate::sync::cloud::CloudBackend;
 use crate::sync::engine::SyncEngine;
@@ -42,7 +42,7 @@ async fn make_device(self_id: &str, drive: Arc<InMemoryDriveStore>) -> TestDevic
     let engine = Arc::new(SyncEngine::with_backend(
         pool.clone(),
         Some(mem.clone()),
-        CloudBackend::from(drive),
+        CloudBackend::from(DriveClient::with_fake_drive(drive, pool.clone())),
         self_id.to_string(),
     ));
     TestDevice {
@@ -296,7 +296,6 @@ async fn remove_device_requires_sign_in() {
     crate::sync::backend_switch::sign_out(&a.pool)
         .await
         .unwrap();
-    drive.sign_out();
 
     let res = crate::commands::storage::purge_cloud_data_impl(
         &a.pool,
@@ -2473,7 +2472,7 @@ async fn site_rules_first_pull_retries_and_preserves_progress_after_restart() {
     let restarted = SyncEngine::with_backend(
         b.pool.clone(),
         Some(b.mem.clone()),
-        CloudBackend::from(drive.clone()),
+        CloudBackend::from(DriveClient::with_fake_drive(drive.clone(), b.pool.clone())),
         "device-b".into(),
     );
     restarted.sync_now().await.unwrap();
@@ -2811,7 +2810,8 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
         "1970-01-01T00:00:00Z"
     );
 
-    b.engine.replace_cloud(CloudBackend::from(drive));
+    let drive_client = DriveClient::with_fake_drive(drive, b.pool.clone());
+    b.engine.replace_cloud(CloudBackend::from(drive_client));
     b.engine.sync_now().await.unwrap();
     assert_eq!(
         stored_site_rule(&b.pool, "drive.example").await,

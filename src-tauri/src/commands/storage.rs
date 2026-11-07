@@ -778,7 +778,7 @@ mod tests {
 
     // ═════════════ forget_remote_device_impl（桩照抄 e2e 的 InMemoryDriveStore 用法）═════════════
 
-    use crate::sync::cloud::drive::InMemoryDriveStore;
+    use crate::sync::cloud::drive::{DriveClient, InMemoryDriveStore};
     use crate::sync::cloud::CloudBackend;
 
     /// e2e 同款 fake auth：四列全 Some + expires_at 远未来，让
@@ -807,7 +807,7 @@ mod tests {
         SyncEngine::with_backend(
             pool.clone(),
             None,
-            CloudBackend::from(drive),
+            CloudBackend::from(DriveClient::with_fake_drive(drive, pool.clone())),
             self_id.to_string(),
         )
     }
@@ -938,7 +938,6 @@ mod tests {
             .upsert_by_name("device.ghost.data.2026-05-01.ndjson", b"d")
             .await
             .unwrap();
-        drive.sign_out();
         insert_device_row(&pool, "ghost").await;
         insert_activity_for(&pool, "ghost", "Code").await;
         let engine = make_engine(&pool, "self-dev", drive.clone());
