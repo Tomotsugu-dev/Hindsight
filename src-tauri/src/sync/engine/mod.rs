@@ -1,8 +1,16 @@
-//! 同步引擎：登录后台跑两件事，间隔由后端定（Drive：push 每 30 秒、pull 每 60 秒）
-//!   - push：把 sync_outbox 翻成"哪些文件脏了"，对每个脏文件全量重写到云端
-//!   - pull：列云端上其他设备的文件，按修改时间增量下载并 LWW merge 到本地
+//! Sync engine: once signed in, runs push and pull in the background on a
+//! timer. The backend sets the intervals.
 //!
-//! 失败走指数退避（最多 1 小时），attempts > 10 留在 outbox 作为 dead-letter，UI 可以看见。
+//! - push: rewrites the files this device changed in the cloud, each one whole.
+//! - pull: merges the files other devices wrote to the cloud into the local
+//!   database.
+//!
+//! Push and pull both ask [`enabled_datasets`] which datasets sync this round.
+//!
+//! When an outbox row fails to upload, the wait before the next try doubles
+//! each time, up to `RETRY_MAX_SECS`. After `MAX_ATTEMPTS` failures the row is
+//! no longer retried. It stays in the outbox, and the Devices page shows how
+//! many such rows there are.
 
 mod io;
 mod pull;
@@ -141,7 +149,8 @@ impl Inner {
     }
 }
 
-/// RAII:作用域内置位 sync_in_flight,离开(含错误提前返回)自动清零。
+/// Sets `sync_in_flight` while it lives and clears it when dropped, early
+/// returns included.
 struct InFlightGuard<'a>(&'a std::sync::atomic::AtomicBool);
 
 impl<'a> InFlightGuard<'a> {
@@ -157,7 +166,8 @@ impl Drop for InFlightGuard<'_> {
     }
 }
 
-/// 同步引擎对外句柄。一个进程一份；`app.manage(Arc::new(SyncEngine::new))` 注册。
+/// The sync engine's public handle. One instance per process, registered with
+/// `app.manage(Arc::new(SyncEngine::new))`.
 pub struct SyncEngine {
     inner: Arc<Inner>,
 }
@@ -213,13 +223,12 @@ impl SyncEngine {
         self.inner.cloud()
     }
 
-    /// 借出当前设备身份。给 command-layer 入口（`purge_cloud_data` 等）走，
-    /// 测试场景 self_id 不等于 `device::self_id()`，必须从 engine 拿。
+    /// Returns this device's `device_id`.
     pub fn self_id(&self) -> &str {
         &self.inner.self_id
     }
 
-    /// 启动后台 push/pull 循环。已在跑时 no-op。未登录时循环内每次都 silently 跳过。
+    /// Starts the background push/pull loop.
     pub async fn start(&self) {
         let mut h = self.inner.handle.lock().await;
         if h.is_some() {
@@ -232,7 +241,7 @@ impl SyncEngine {
         log::info!("sync engine 已启动");
     }
 
-    /// 停止后台 push/pull 循环。当前没有 UI 入口；保留给将来"sign_out 后停 engine"的场景。
+    /// Stops the background push/pull loop.
     #[allow(dead_code)]
     pub async fn stop(&self) {
         let mut h = self.inner.handle.lock().await;
@@ -242,18 +251,20 @@ impl SyncEngine {
         }
     }
 
-    /// 后台循环是否在跑（仅看 task handle，未登录时也算 running）。
+    /// Returns whether the background loop has started. Without a sign-in it
+    /// has started too: the loop keeps running and skips every round.
     pub async fn is_running(&self) -> bool {
         self.inner.handle.lock().await.is_some()
     }
 
-    /// 清掉缓存的 last_error。重新登录成功后调用，避免 UI 还显示旧的
-    /// "登录凭证失效"错误，导致"退出"按钮一直停留在"重新登录"形态。
+    /// Clears the last error the Devices page shows. Call it after a new sign-in:
+    /// otherwise it stays until a push uploads something, and all that time the
+    /// Devices page asks to sign in again.
     pub async fn clear_last_error(&self) {
         self.inner.status.write().await.last_error = None;
     }
 
-    /// 拉一份快照（含 outbox 行数实时查询）给前端 sync_status 命令用。
+    /// Returns the sync status the Devices page shows.
     pub async fn status(&self) -> SyncStatus {
         let mut s = self.inner.status.read().await.clone();
         s.running = self.is_running().await;
@@ -266,10 +277,16 @@ impl SyncEngine {
         s
     }
 
-    /// UI "立即同步" 按钮：跑一次 push + pull，不等下个 tick。
+    /// Runs a round of push and pull now, without waiting for the background loop.
+    ///
+    /// # Errors
+    ///
+    /// A round is already running: [`Error::InvalidInput`]
     pub async fn sync_now(&self) -> Result<()> {
-        // 已有一次在跑(手动或后台 tick)→ 明确拒绝而不是排队再跑一遍。
-        // 前端按 syncInFlight 禁用按钮,正常点不到这里;真racing到了给人话。
+        // A round is already running: refuse, do not queue. That round is already
+        // syncing, so another one right after it is no use. The Devices page
+        // disables the button during a sync; this only stops two starts at the
+        // same moment.
         if self
             .inner
             .sync_in_flight
@@ -332,11 +349,14 @@ async fn run_loop(inner: Arc<Inner>) {
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
         let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
+        // TODO: a push or pull that succeeds does not clear `last_error`. A
+        // `[TRANSIENT]` error stays on the Devices page until a push uploads
+        // something.
         if let Err(e) = push::flush_push(&inner).await {
             record_round_failure(&inner, "push", &e).await;
         }
 
-        // 间隔每轮都问：两轮之间可能换了后端。
+        // Check the interval on every round: the backend may have changed between rounds.
         let pull_every = chrono::Duration::from_std(inner.cloud().pull_interval())
             .expect("a backend's pull interval is minutes, not centuries");
         let now = Utc::now();
@@ -350,8 +370,10 @@ async fn run_loop(inner: Arc<Inner>) {
             }
             last_pull = Some(now);
         }
-        drop(_in_flight); // sleep 期间不算"同步中"
 
+        // Waiting for the next round is not syncing. Without this, the Devices
+        // page would always show "Syncing…", and "Sync now" would always refuse.
+        drop(_in_flight);
         tokio::time::sleep(inner.cloud().push_interval()).await;
     }
 }
