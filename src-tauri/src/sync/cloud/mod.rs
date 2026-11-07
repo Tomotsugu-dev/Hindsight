@@ -1,15 +1,10 @@
 //! The cloud storage sync runs on. Files live in one flat folder and are
 //! addressed by name; the operations of [`CloudBackend`] are all the engine
 //! needs, and every backend must give them the same meaning.
-//!
-//! `InMemory` keeps the files in a map for the end-to-end tests, with its own
-//! clock so that modification times only ever move forward.
 
 pub mod drive;
 pub mod webdav;
 
-#[cfg(test)]
-use std::sync::Arc;
 use std::time::Duration;
 
 use rusqlite::OptionalExtension;
@@ -19,8 +14,6 @@ use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::file_name::Dataset;
 
 use drive::DriveClient;
-#[cfg(test)]
-use drive::InMemoryDriveStore;
 use webdav::WebDavClient;
 
 /// Cloud file metadata (id + name + modified time), without the file content.
@@ -58,17 +51,12 @@ pub enum FailureKind {
 
 /// The cloud behind sync. The sync engine holds one, and push, pull and the
 /// cloud-clearing commands reach the cloud only through its methods.
-/// `InMemory` stands in for a real cloud in tests and is the reference for
-/// what each method must do.
 pub struct CloudBackend(Backend);
 
 enum Backend {
     Drive(DriveClient),
     /// WebDAV: Nutstore, Nextcloud and the like (ADR-0007, ADR-0008).
     WebDav(Box<WebDavClient>),
-    /// The tests' stand-in; not compiled into the shipped binary.
-    #[cfg(test)]
-    InMemory(Arc<InMemoryDriveStore>),
 }
 
 impl From<DriveClient> for CloudBackend {
@@ -80,13 +68,6 @@ impl From<DriveClient> for CloudBackend {
 impl From<WebDavClient> for CloudBackend {
     fn from(client: WebDavClient) -> Self {
         CloudBackend(Backend::WebDav(Box::new(client)))
-    }
-}
-
-#[cfg(test)]
-impl From<Arc<InMemoryDriveStore>> for CloudBackend {
-    fn from(store: Arc<InMemoryDriveStore>) -> Self {
-        CloudBackend(Backend::InMemory(store))
     }
 }
 
@@ -130,8 +111,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.time_precision(),
             Backend::WebDav(c) => c.time_precision(),
-            #[cfg(test)]
-            Backend::InMemory(store) => store.time_precision(),
         }
     }
 
@@ -142,8 +121,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.push_interval(),
             Backend::WebDav(c) => c.push_interval(),
-            #[cfg(test)]
-            Backend::InMemory(store) => store.push_interval(),
         }
     }
 
@@ -152,8 +129,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.pull_interval(),
             Backend::WebDav(c) => c.pull_interval(),
-            #[cfg(test)]
-            Backend::InMemory(store) => store.pull_interval(),
         }
     }
 
@@ -168,8 +143,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.ensure_credential().await,
             Backend::WebDav(c) => c.ensure_credential().await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.ensure_credential().await,
         }
     }
 
@@ -179,8 +152,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.failure_kind(e),
             Backend::WebDav(c) => c.failure_kind(e),
-            #[cfg(test)]
-            Backend::InMemory(store) => store.failure_kind(e),
         }
     }
 
@@ -191,8 +162,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.pull_cursor_name(dataset),
             Backend::WebDav(c) => c.pull_cursor_name(dataset),
-            #[cfg(test)]
-            Backend::InMemory(store) => store.pull_cursor_name(dataset),
         }
     }
 
@@ -201,8 +170,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.push_fingerprint_name(dataset),
             Backend::WebDav(c) => c.push_fingerprint_name(dataset),
-            #[cfg(test)]
-            Backend::InMemory(store) => store.push_fingerprint_name(dataset),
         }
     }
 
@@ -216,8 +183,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.list(streams).await,
             Backend::WebDav(c) => c.list(streams).await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.list(streams).await,
         }
     }
 
@@ -242,8 +207,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.remove_device(device_id, cleared_at).await,
             Backend::WebDav(c) => c.remove_device(device_id, cleared_at).await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.remove_device(device_id, cleared_at).await,
         }
     }
 
@@ -252,8 +215,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.download(file_id).await,
             Backend::WebDav(c) => c.download(file_id).await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.download(file_id).await,
         }
     }
 
@@ -264,8 +225,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.upsert_by_name(name, content).await,
             Backend::WebDav(c) => c.upsert_by_name(name, content).await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.upsert_by_name(name, content).await,
         }
     }
 
@@ -275,8 +234,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.delete(file_id).await,
             Backend::WebDav(c) => c.delete(file_id).await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.delete(file_id).await,
         }
     }
 
@@ -286,8 +243,6 @@ impl CloudBackend {
         match &self.0 {
             Backend::Drive(c) => c.end_push_round().await,
             Backend::WebDav(c) => c.end_push_round().await,
-            #[cfg(test)]
-            Backend::InMemory(store) => store.end_push_round().await,
         }
     }
 }

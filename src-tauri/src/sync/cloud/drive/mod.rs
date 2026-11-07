@@ -220,8 +220,40 @@ impl DriveClient {
         Ok(())
     }
 
+    /// Drive's steps to remove a device: upload `device.<id>.tombstone.json`, then
+    /// delete the device's other files one by one. A file that fails to delete is
+    /// only logged: the other devices still drop its rows because of the
+    /// tombstone, and the file only takes up space.
     pub(super) async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
-        remove_device(self, device_id, cleared_at).await
+        let tombstone_name = FileName {
+            device_id: device_id.to_string(),
+            kind: FileKind::Tombstone,
+        }
+        .to_file_name();
+        let tombstone = serde_json::to_vec(&TombstonePayload {
+            cleared_at: cleared_at.to_string(),
+        })?;
+        self.upsert_by_name(&tombstone_name, &tombstone)
+            .await
+            .map_err(|e| Error::Other(format!("上传 tombstone 失败（云端未动，请重试）: {e}")))?;
+
+        // The tombstone itself stays: it is the signal.
+        let prefix = FileName::device_prefix(device_id);
+        // Every file, whatever its modified time.
+        let files = self.list(&[]).await?;
+        let device_files: Vec<_> = files
+            .iter()
+            .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
+            .collect();
+
+        let mut deleted = 0u64;
+        for f in &device_files {
+            match self.delete(&f.id).await {
+                Ok(()) => deleted += 1,
+                Err(e) => log::warn!("remove device from cloud: delete {} failed: {e}", f.name),
+            }
+        }
+        Ok(deleted)
     }
 
     /// Why the retry exists: `ensure_valid_token` only checks the expiry time
@@ -250,74 +282,6 @@ impl DriveClient {
             other => other,
         }
     }
-}
-
-/// The file operations that [`remove_device`] needs. [`DriveClient`] does them
-/// over HTTP and the test stand-in does them in memory, so the tests run the
-/// same steps.
-trait DriveFiles: Send + Sync {
-    fn upsert_by_name(
-        &self,
-        name: &str,
-        content: &[u8],
-    ) -> impl Future<Output = Result<String>> + Send;
-    /// Every file, whatever its modified time.
-    fn list_all(&self) -> impl Future<Output = Result<Vec<FileMeta>>> + Send;
-    fn delete(&self, file_id: &str) -> impl Future<Output = Result<()>> + Send;
-}
-
-impl DriveFiles for DriveClient {
-    fn upsert_by_name(
-        &self,
-        name: &str,
-        content: &[u8],
-    ) -> impl Future<Output = Result<String>> + Send {
-        DriveClient::upsert_by_name(self, name, content)
-    }
-
-    fn list_all(&self) -> impl Future<Output = Result<Vec<FileMeta>>> + Send {
-        self.list(&[])
-    }
-
-    fn delete(&self, file_id: &str) -> impl Future<Output = Result<()>> + Send {
-        DriveClient::delete(self, file_id)
-    }
-}
-
-/// Drive's steps to remove a device: upload `device.<id>.tombstone.json`, then
-/// delete the device's other files one by one. A file that fails to delete is
-/// only logged: the other devices still drop its rows because of the
-/// tombstone, and the file only takes up space.
-async fn remove_device(drive: &impl DriveFiles, device_id: &str, cleared_at: &str) -> Result<u64> {
-    let tombstone_name = FileName {
-        device_id: device_id.to_string(),
-        kind: FileKind::Tombstone,
-    }
-    .to_file_name();
-    let tombstone = serde_json::to_vec(&TombstonePayload {
-        cleared_at: cleared_at.to_string(),
-    })?;
-    drive
-        .upsert_by_name(&tombstone_name, &tombstone)
-        .await
-        .map_err(|e| Error::Other(format!("上传 tombstone 失败（云端未动，请重试）: {e}")))?;
-
-    // The tombstone itself stays: it is the signal.
-    let prefix = FileName::device_prefix(device_id);
-    let files = drive.list_all().await?;
-    let device_files: Vec<_> = files
-        .iter()
-        .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
-        .collect();
-
-    let mut deleted = 0u64;
-    for f in &device_files {
-        match drive.delete(&f.id).await {
-            Ok(()) => deleted += 1,
-            Err(e) => log::warn!("remove device from cloud: delete {} failed: {e}", f.name),
-        }
-    }
-    Ok(deleted)
 }
 
 // ─────────────── Drive REST calls ───────────────

@@ -1,14 +1,11 @@
 // ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
 
 use std::collections::HashMap;
-use std::future::Future;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
-use crate::sync::cloud::{FailureKind, FileMeta};
-use crate::sync::file_name::Dataset;
+use crate::sync::cloud::FileMeta;
 
 #[cfg(test)]
 #[derive(Debug, Clone)]
@@ -32,9 +29,6 @@ pub struct InMemoryDriveStore {
     /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
     /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
     fail_next_upserts: AtomicU64,
-    /// 这个假云端认不认当前用户。真后端从自己的凭证表判断，假后端没有那张表，
-    /// 所以由测试用 [`Self::sign_out`] 直接拨。
-    signed_in: AtomicBool,
 }
 
 #[cfg(test)]
@@ -45,59 +39,7 @@ impl InMemoryDriveStore {
             next_id: AtomicU64::new(1),
             clock: Mutex::new(0),
             fail_next_upserts: AtomicU64::new(0),
-            signed_in: AtomicBool::new(true),
         }
-    }
-
-    /// 让这个假云端当作用户没登录。仅测试用。
-    #[allow(dead_code)]
-    pub fn sign_out(&self) {
-        self.signed_in.store(false, Ordering::SeqCst);
-    }
-
-    pub(crate) fn signed_in(&self) -> bool {
-        self.signed_in.load(Ordering::SeqCst)
-    }
-
-    pub(crate) fn time_precision(&self) -> Duration {
-        super::TIME_PRECISION
-    }
-
-    pub(crate) fn push_interval(&self) -> Duration {
-        super::DRIVE_PUSH_INTERVAL
-    }
-
-    pub(crate) fn pull_interval(&self) -> Duration {
-        super::DRIVE_PULL_INTERVAL
-    }
-
-    pub(crate) async fn ensure_credential(&self) -> Result<bool> {
-        Ok(self.signed_in())
-    }
-
-    pub(crate) fn failure_kind(&self, e: &Error) -> FailureKind {
-        super::failure_kind(e)
-    }
-
-    pub(crate) fn pull_cursor_name(&self, dataset: Dataset) -> String {
-        super::pull_cursor_name(dataset)
-    }
-
-    pub(crate) fn push_fingerprint_name(&self, dataset: Dataset) -> String {
-        super::push_fingerprint_name(dataset)
-    }
-
-    pub(crate) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
-        self.list_appdata_files(super::earliest_cursor(streams))
-            .await
-    }
-
-    pub(crate) async fn end_push_round(&self) -> Result<()> {
-        Ok(())
-    }
-
-    pub(crate) async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
-        super::remove_device(self, device_id, cleared_at).await
     }
 
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。
@@ -182,25 +124,6 @@ impl InMemoryDriveStore {
         let mut files = self.files.lock().await;
         files.remove(file_id);
         Ok(())
-    }
-}
-
-#[cfg(test)]
-impl super::DriveFiles for InMemoryDriveStore {
-    fn upsert_by_name(
-        &self,
-        name: &str,
-        content: &[u8],
-    ) -> impl Future<Output = Result<String>> + Send {
-        InMemoryDriveStore::upsert_by_name(self, name, content)
-    }
-
-    fn list_all(&self) -> impl Future<Output = Result<Vec<FileMeta>>> + Send {
-        self.list_appdata_files("")
-    }
-
-    fn delete(&self, file_id: &str) -> impl Future<Output = Result<()>> + Send {
-        InMemoryDriveStore::delete(self, file_id)
     }
 }
 
