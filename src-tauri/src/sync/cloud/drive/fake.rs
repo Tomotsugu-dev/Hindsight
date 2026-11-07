@@ -1,7 +1,7 @@
 // ─────────────── InMemoryDriveStore：测试用的 mock Drive ───────────────
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
@@ -29,9 +29,6 @@ pub struct InMemoryDriveStore {
     /// 瞬时故障），每失败一次消耗一次配额，归零后自动恢复正常。默认 0 = 不注入，
     /// 生产路径（HTTP 分支）完全不经过这里，默认行为不变。
     fail_next_upserts: AtomicU64,
-    /// 这个假云端认不认当前用户。真后端从自己的凭证表判断，假后端没有那张表，
-    /// 所以由测试用 [`Self::sign_out`] 直接拨。
-    signed_in: AtomicBool,
 }
 
 #[cfg(test)]
@@ -42,18 +39,7 @@ impl InMemoryDriveStore {
             next_id: AtomicU64::new(1),
             clock: Mutex::new(0),
             fail_next_upserts: AtomicU64::new(0),
-            signed_in: AtomicBool::new(true),
         }
-    }
-
-    /// 让这个假云端当作用户没登录。仅测试用。
-    #[allow(dead_code)]
-    pub fn sign_out(&self) {
-        self.signed_in.store(false, Ordering::SeqCst);
-    }
-
-    pub(crate) fn signed_in(&self) -> bool {
-        self.signed_in.load(Ordering::SeqCst)
     }
 
     /// 注入：让接下来 `n` 次 [`Self::upsert_by_name`] 失败（500 瞬时错误）。

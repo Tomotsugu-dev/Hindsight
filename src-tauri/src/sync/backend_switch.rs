@@ -11,8 +11,8 @@ use crate::error::Result;
 use crate::repo::outbox::enqueue_every_file;
 use crate::repo::settings;
 use crate::storage::{DbPool, SqliteResultExt};
+use crate::sync::cloud::webdav::account_hash::{account_hash, server_host};
 use crate::sync::local_key::{aes_encrypt, derive_master_key};
-use crate::sync::webdav::account_hash::{account_hash, server_host};
 
 /// The backend to switch to, with its credentials.
 pub(crate) enum NewBackend<'a> {
@@ -32,7 +32,7 @@ pub(crate) enum NewBackend<'a> {
 
 /// Switches to another backend. Call it while sync is paused. Once it returns,
 /// and before sync resumes, hand the new backend to the sync engine
-/// ([`SyncEngine::replace_cloud`](crate::sync::engine::SyncEngine::replace_cloud))
+/// ([`Paused::replace_cloud`](crate::sync::engine::Paused::replace_cloud))
 /// or restart the app.
 pub(crate) async fn switch_backend(pool: &DbPool, self_id: &str, to: NewBackend<'_>) -> Result<()> {
     let statements = credential_statements(to)?;

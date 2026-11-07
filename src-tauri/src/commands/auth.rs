@@ -7,10 +7,10 @@ use crate::sync::backend_switch::{
     self, decide_connect_action, switch_backend, update_credentials, AuthState, ConnectAction,
     NewBackend,
 };
+use crate::sync::cloud::drive::{auth, DriveClient};
+use crate::sync::cloud::webdav::{self, account_hash::account_hash, WebDavClient};
 use crate::sync::cloud::CloudBackend;
-use crate::sync::drive::auth;
 use crate::sync::engine::SyncEngine;
-use crate::sync::webdav::{self, account_hash::account_hash};
 
 /// The event that sends the Google authorization link to the frontend once it
 /// is ready, as `{ url, opened }`. When the browser does not open, the frontend
@@ -64,7 +64,7 @@ pub async fn sign_in_with_google(
         access_token: &google.access_token,
         expires_at: &google.expires_at,
     };
-    let cloud = CloudBackend::drive((*pool).clone());
+    let cloud = CloudBackend::from(DriveClient::new((*pool).clone()));
     switch_to_account(&app, &pool, &engine, to, &google.uid, cloud).await?;
     backend_switch::current_state(&pool)
         .await
@@ -90,7 +90,8 @@ pub async fn connect_webdav(
 ) -> Result<(), String> {
     webdav::test_login(&server_url, &user, &password).await?;
     let self_id = engine.self_id().to_string();
-    let cloud = CloudBackend::webdav(&server_url, (*pool).clone(), self_id)?;
+    let client = WebDavClient::connect(&server_url, (*pool).clone(), self_id)?;
+    let cloud = CloudBackend::from(client);
     let to = NewBackend::WebDav {
         server_url: &server_url,
         user: &user,
@@ -120,7 +121,7 @@ async fn switch_to_account(
         return Ok(());
     }
 
-    let _paused = engine.pause_flushes().await;
+    let mut paused = engine.pause_flushes().await;
     match action {
         ConnectAction::UseThisDatabase => switch_backend(pool, engine.self_id(), to).await?,
         ConnectAction::ClaimThisDatabase => {
@@ -137,7 +138,7 @@ async fn switch_to_account(
         }
         ConnectAction::UpdateCredentials => {}
     }
-    engine.replace_cloud(cloud);
+    paused.replace_cloud(cloud);
     engine.clear_last_error().await;
     Ok(())
 }

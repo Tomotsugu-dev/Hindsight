@@ -46,6 +46,9 @@ pub(crate) enum FileKind {
 /// Which dataset a file belongs to. A dataset is a group of files pulled together,
 /// each with its own pull cursor. Core, website rules and super-categories are
 /// always on; AI summaries, chat and memory follow their settings switches (ADR-0006).
+///
+/// A new variant also goes into [`Self::ALL`]: a round syncs only the datasets
+/// listed there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Dataset {
     Core,
@@ -57,6 +60,15 @@ pub(crate) enum Dataset {
 }
 
 impl Dataset {
+    pub(crate) const ALL: [Dataset; 6] = [
+        Dataset::Core,
+        Dataset::SiteRules,
+        Dataset::SuperCategories,
+        Dataset::AiSummaries,
+        Dataset::Chat,
+        Dataset::Memory,
+    ];
+
     /// The dataset's name in `sync_cursor`: the `chat` in `push.chat`, and the key
     /// of WebDAV bookmarks. Users' databases hold it, so it must not change.
     pub(crate) fn name(self) -> &'static str {
@@ -97,7 +109,13 @@ impl FileKind {
             FileKind::AiSummaries => Dataset::AiSummaries,
             FileKind::Chat => Dataset::Chat,
             FileKind::Memory(_) => Dataset::Memory,
-            _ => Dataset::Core,
+            FileKind::Activities(_)
+            | FileKind::Categories
+            | FileKind::DeviceMeta
+            | FileKind::AppIcons
+            | FileKind::AppGroups
+            | FileKind::AppGroupMembers
+            | FileKind::Tombstone => Dataset::Core,
         }
     }
 
@@ -105,7 +123,16 @@ impl FileKind {
     pub(crate) fn date(&self) -> Option<NaiveDate> {
         match self {
             FileKind::Activities(date) | FileKind::Memory(date) => Some(*date),
-            _ => None,
+            FileKind::Categories
+            | FileKind::SuperCategories
+            | FileKind::SiteRules
+            | FileKind::DeviceMeta
+            | FileKind::AppIcons
+            | FileKind::AppGroups
+            | FileKind::AppGroupMembers
+            | FileKind::Tombstone
+            | FileKind::AiSummaries
+            | FileKind::Chat => None,
         }
     }
 }
@@ -114,11 +141,9 @@ impl FileName {
     pub(crate) fn to_file_name(&self) -> String {
         let id = &self.device_id;
         let kind = self.kind.segment();
-        match &self.kind {
-            FileKind::Activities(date) | FileKind::Memory(date) => {
-                format!("device.{id}.{kind}.{date}.ndjson")
-            }
-            _ => format!("device.{id}.{kind}.json"),
+        match self.kind.date() {
+            Some(date) => format!("device.{id}.{kind}.{date}.ndjson"),
+            None => format!("device.{id}.{kind}.json"),
         }
     }
 

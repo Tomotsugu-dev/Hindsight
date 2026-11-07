@@ -1,18 +1,23 @@
-//! 同步引擎：登录后台跑两件事，间隔由后端定（Drive：push 每 30 秒、pull 每 60 秒）
-//!   - push：把 sync_outbox 翻成"哪些文件脏了"，对每个脏文件全量重写到云端
-//!   - pull：列云端上其他设备的文件，按修改时间增量下载并 LWW merge 到本地
+//! Sync engine: once signed in, runs push and pull in the background on a
+//! timer. The backend sets the intervals.
 //!
-//! 失败走指数退避（最多 1 小时），attempts > 10 留在 outbox 作为 dead-letter，UI 可以看见。
+//! - push: rewrites the files this device changed in the cloud, each one whole.
+//! - pull: merges the files other devices wrote to the cloud into the local
+//!   database.
+//!
+//! Push and pull both ask [`enabled_datasets`] which datasets sync this round.
+//!
+//! When an outbox row fails to upload, the wait before the next try doubles
+//! each time, up to `RETRY_MAX_SECS`. After `MAX_ATTEMPTS` failures the row is
+//! no longer retried. It stays in the outbox, and the Devices page shows how
+//! many such rows there are.
 
-mod datasets;
 mod io;
 mod pull;
 mod push;
 
 #[cfg(test)]
 mod e2e_tests;
-
-pub(crate) use pull::rewind_cursor;
 
 use std::sync::Arc;
 
@@ -22,8 +27,10 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
+use crate::repo::settings::Settings;
 use crate::storage::DbPool;
 use crate::sync::cloud::{CloudBackend, FailureKind};
+use crate::sync::file_name::Dataset;
 
 /// Prefix of `last_error` when the user has to sign in again. The Devices page
 /// matches these prefixes as written.
@@ -107,9 +114,9 @@ pub(super) struct Inner {
     /// and screen text. `None` when it failed to open at startup; those two
     /// datasets then never sync, whatever the settings say.
     pub(super) mem: Option<crate::memory::MemoryDb>,
-    /// The cloud backend sync uses: Google Drive or WebDAV. Replacing it takes
-    /// `flush_gate`, which a push or pull round holds from start to end, so a
-    /// round uses one backend throughout.
+    /// The cloud backend sync uses: Google Drive or WebDAV. Only
+    /// [`Paused::replace_cloud`] replaces it, and a push or pull round holds
+    /// `flush_gate` from start to end, so a round uses one backend throughout.
     pub(super) cloud: std::sync::Mutex<Arc<CloudBackend>>,
     /// This device's `device_id`, a UUID. Every file this device uploads is named
     /// `device.<self_id>.…`, which is how pull tells other devices' files apart.
@@ -142,7 +149,8 @@ impl Inner {
     }
 }
 
-/// RAII:作用域内置位 sync_in_flight,离开(含错误提前返回)自动清零。
+/// Sets `sync_in_flight` while it lives and clears it when dropped, early
+/// returns included.
 struct InFlightGuard<'a>(&'a std::sync::atomic::AtomicBool);
 
 impl<'a> InFlightGuard<'a> {
@@ -158,7 +166,8 @@ impl Drop for InFlightGuard<'_> {
     }
 }
 
-/// 同步引擎对外句柄。一个进程一份；`app.manage(Arc::new(SyncEngine::new))` 注册。
+/// The sync engine's public handle. One instance per process, registered with
+/// `app.manage(Arc::new(SyncEngine::new))`.
 pub struct SyncEngine {
     inner: Arc<Inner>,
 }
@@ -167,13 +176,7 @@ impl SyncEngine {
     /// Used at app startup: the backend is built from `auth_state`.
     pub async fn new(pool: DbPool, mem: Option<crate::memory::MemoryDb>) -> Self {
         let self_id = crate::device::self_id().unwrap_or("").to_string();
-        let cloud = match CloudBackend::from_auth_state(pool.clone(), self_id.clone()).await {
-            Ok(cloud) => cloud,
-            Err(e) => {
-                log::warn!("sync: the saved backend cannot be built, using Drive: {e}");
-                CloudBackend::drive(pool.clone())
-            }
-        };
+        let cloud = CloudBackend::from_auth_state(pool.clone(), self_id.clone()).await;
         Self::with_backend(pool, mem, cloud, self_id)
     }
 
@@ -200,31 +203,32 @@ impl SyncEngine {
         }
     }
 
-    /// 暂停 push/pull：等在途 flush 结束并挡住新的，直到返回的 guard 被 drop。
-    /// purge_local_data / purge_cloud_data 这类"动表"的命令在整个清理期间持有它。
-    pub async fn pause_flushes(&self) -> tokio::sync::MutexGuard<'_, ()> {
-        self.inner.flush_gate.lock().await
+    /// Pauses sync: waits for the running push or pull to finish, and holds back
+    /// new ones until the returned guard is dropped. A command that changes the
+    /// tables or replaces the backend holds it from start to end; see
+    /// `Inner::flush_gate` for why.
+    pub async fn pause_flushes(&self) -> Paused<'_> {
+        let gate = self.inner.flush_gate.lock().await;
+        Paused {
+            inner: &self.inner,
+            cloud: self.inner.cloud(),
+            _gate: gate,
+        }
     }
 
-    /// 同步现在用的后端，给清云端的命令用。要在暂停同步以后取：先取再暂停的话，中间
-    /// 换了后端，命令会删到旧后端上。
-    pub fn cloud(&self) -> Arc<CloudBackend> {
+    /// For tests: returns the backend without pausing sync, for example to read
+    /// a cursor name.
+    #[cfg(test)]
+    pub(crate) fn cloud(&self) -> Arc<CloudBackend> {
         self.inner.cloud()
     }
 
-    /// 换掉同步用的后端。换后端的事务提交后、恢复同步之前调用，这样下一轮就用新后端，
-    /// 不用重启。
-    pub fn replace_cloud(&self, cloud: CloudBackend) {
-        *self.inner.cloud.lock().unwrap() = Arc::new(cloud);
-    }
-
-    /// 借出当前设备身份。给 command-layer 入口（`purge_cloud_data` 等）走，
-    /// 测试场景 self_id 不等于 `device::self_id()`，必须从 engine 拿。
+    /// Returns this device's `device_id`.
     pub fn self_id(&self) -> &str {
         &self.inner.self_id
     }
 
-    /// 启动后台 push/pull 循环。已在跑时 no-op。未登录时循环内每次都 silently 跳过。
+    /// Starts the background push/pull loop.
     pub async fn start(&self) {
         let mut h = self.inner.handle.lock().await;
         if h.is_some() {
@@ -237,7 +241,7 @@ impl SyncEngine {
         log::info!("sync engine 已启动");
     }
 
-    /// 停止后台 push/pull 循环。当前没有 UI 入口；保留给将来"sign_out 后停 engine"的场景。
+    /// Stops the background push/pull loop.
     #[allow(dead_code)]
     pub async fn stop(&self) {
         let mut h = self.inner.handle.lock().await;
@@ -247,18 +251,20 @@ impl SyncEngine {
         }
     }
 
-    /// 后台循环是否在跑（仅看 task handle，未登录时也算 running）。
+    /// Returns whether the background loop has started. Without a sign-in it
+    /// has started too: the loop keeps running and skips every round.
     pub async fn is_running(&self) -> bool {
         self.inner.handle.lock().await.is_some()
     }
 
-    /// 清掉缓存的 last_error。重新登录成功后调用，避免 UI 还显示旧的
-    /// "登录凭证失效"错误，导致"退出"按钮一直停留在"重新登录"形态。
+    /// Clears the last error the Devices page shows. Call it after a new sign-in:
+    /// otherwise it stays until a push uploads something, and all that time the
+    /// Devices page asks to sign in again.
     pub async fn clear_last_error(&self) {
         self.inner.status.write().await.last_error = None;
     }
 
-    /// 拉一份快照（含 outbox 行数实时查询）给前端 sync_status 命令用。
+    /// Returns the sync status the Devices page shows.
     pub async fn status(&self) -> SyncStatus {
         let mut s = self.inner.status.read().await.clone();
         s.running = self.is_running().await;
@@ -271,10 +277,16 @@ impl SyncEngine {
         s
     }
 
-    /// UI "立即同步" 按钮：跑一次 push + pull，不等下个 tick。
+    /// Runs a round of push and pull now, without waiting for the background loop.
+    ///
+    /// # Errors
+    ///
+    /// A round is already running: [`Error::InvalidInput`]
     pub async fn sync_now(&self) -> Result<()> {
-        // 已有一次在跑(手动或后台 tick)→ 明确拒绝而不是排队再跑一遍。
-        // 前端按 syncInFlight 禁用按钮,正常点不到这里;真racing到了给人话。
+        // A round is already running: refuse, do not queue. That round is already
+        // syncing, so another one right after it is no use. The Devices page
+        // disables the button during a sync; this only stops two starts at the
+        // same moment.
         if self
             .inner
             .sync_in_flight
@@ -297,15 +309,54 @@ impl SyncEngine {
     }
 }
 
+/// A pause in sync, which ends when this is dropped. Only this hands out and
+/// replaces the backend, so a command that holds it uses the backend sync uses,
+/// and the backend does not change halfway through.
+///
+/// Push, pull and `Paused` take turns holding the same lock:
+///
+/// ```text
+/// push    hold → upload → release
+/// Paused                          hold → replace backend → release
+/// ```
+///
+/// While holding it, do not sync or pause again: the lock is not reentrant, so
+/// it would wait forever.
+pub struct Paused<'a> {
+    inner: &'a Inner,
+    /// The backend when sync was paused. It is kept here so that
+    /// [`Self::cloud`] can lend a reference, which cannot be used after `Paused`
+    /// is dropped.
+    cloud: Arc<CloudBackend>,
+    _gate: tokio::sync::MutexGuard<'a, ()>,
+}
+
+impl Paused<'_> {
+    /// Returns the backend sync uses.
+    pub fn cloud(&self) -> &CloudBackend {
+        &self.cloud
+    }
+
+    /// Replaces the backend sync uses. Call it after the backend switch commits.
+    pub fn replace_cloud(&mut self, cloud: CloudBackend) {
+        let cloud = Arc::new(cloud);
+        *self.inner.cloud.lock().unwrap() = Arc::clone(&cloud);
+        self.cloud = cloud;
+    }
+}
+
 async fn run_loop(inner: Arc<Inner>) {
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
         let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
+        // TODO: a push or pull that succeeds does not clear `last_error`. A
+        // `[TRANSIENT]` error stays on the Devices page until a push uploads
+        // something.
         if let Err(e) = push::flush_push(&inner).await {
             record_round_failure(&inner, "push", &e).await;
         }
 
-        // 间隔每轮都问：两轮之间可能换了后端。
+        // Check the interval on every round: the backend may have changed between rounds.
         let pull_every = chrono::Duration::from_std(inner.cloud().pull_interval())
             .expect("a backend's pull interval is minutes, not centuries");
         let now = Utc::now();
@@ -319,15 +370,91 @@ async fn run_loop(inner: Arc<Inner>) {
             }
             last_pull = Some(now);
         }
-        drop(_in_flight); // sleep 期间不算"同步中"
 
+        // Waiting for the next round is not syncing. Without this, the Devices
+        // page would always show "Syncing…", and "Sync now" would always refuse.
+        drop(_in_flight);
         tokio::time::sleep(inner.cloud().push_interval()).await;
     }
+}
+
+/// Returns the datasets that sync this round, for push and pull alike. Core,
+/// website rules and super-categories always do; the optional ones follow their
+/// switches, and chat and screen memory also need the memory database.
+fn enabled_datasets(cfg: &Settings, has_mem: bool) -> Vec<Dataset> {
+    Dataset::ALL
+        .into_iter()
+        .filter(|dataset| match dataset {
+            Dataset::Core | Dataset::SiteRules | Dataset::SuperCategories => true,
+            Dataset::AiSummaries => cfg.sync_ai_summaries,
+            Dataset::Chat => cfg.sync_chat_history && has_mem,
+            Dataset::Memory => cfg.sync_screen_memory && has_mem,
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 开关和记忆库决定哪些数据集同步：核心三类总在；聊天和屏幕记忆还要有记忆库。
+    #[test]
+    fn enabled_datasets_follow_the_switches() {
+        use Dataset::{AiSummaries, Chat, Core, Memory, SiteRules, SuperCategories};
+        let mut cfg = Settings::default();
+        assert_eq!(
+            enabled_datasets(&cfg, true),
+            vec![Core, SiteRules, SuperCategories]
+        );
+
+        cfg.sync_ai_summaries = true;
+        cfg.sync_chat_history = true;
+        cfg.sync_screen_memory = true;
+        assert_eq!(
+            enabled_datasets(&cfg, true),
+            vec![Core, SiteRules, SuperCategories, AiSummaries, Chat, Memory]
+        );
+        // 没有记忆库：聊天和屏幕记忆开着也不同步
+        assert_eq!(
+            enabled_datasets(&cfg, false),
+            vec![Core, SiteRules, SuperCategories, AiSummaries]
+        );
+    }
+
+    /// 暂停期间换了后端，再从同一个 `Paused` 取，拿到的是新后端。
+    #[tokio::test]
+    async fn paused_cloud_is_the_replaced_backend() {
+        use crate::sync::cloud::drive::{DriveClient, InMemoryDriveStore};
+        use crate::sync::cloud::webdav::{FakeDav, WebDavClient};
+        let pool = DbPool::open_in_memory().await.unwrap();
+        let drive = DriveClient::with_fake_drive(Arc::new(InMemoryDriveStore::new()), pool.clone());
+        let engine = SyncEngine::with_backend(
+            pool.clone(),
+            None,
+            CloudBackend::from(drive),
+            "device-a".into(),
+        );
+        let webdav = || {
+            let dav = Arc::new(FakeDav::new());
+            CloudBackend::from(WebDavClient::with_fake_server(
+                dav,
+                pool.clone(),
+                "device-a".into(),
+            ))
+        };
+        let webdav_cursor = webdav().pull_cursor_name(Dataset::Core);
+
+        let mut paused = engine.pause_flushes().await;
+        assert_ne!(
+            paused.cloud().pull_cursor_name(Dataset::Core),
+            webdav_cursor
+        );
+        paused.replace_cloud(webdav());
+        assert_eq!(
+            paused.cloud().pull_cursor_name(Dataset::Core),
+            webdav_cursor
+        );
+    }
 
     /// 「云同步」页按前缀选提示：限流要有自己的前缀，不能和「下一轮自动重试」混在一起。
     #[test]

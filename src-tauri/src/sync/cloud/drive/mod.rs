@@ -33,13 +33,19 @@ use serde_json::json;
 use crate::error::{Error, Result};
 use crate::storage::DbPool;
 use crate::sync::cloud::{http_client, FailureKind, FileMeta};
+use crate::sync::file_name::{Dataset, FileKind, FileName};
+use crate::sync::payload::TombstonePayload;
 
 const DRIVE_BASE: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
 /// Drive's sync cadence: 5 minutes.
-pub(super) const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(300);
-pub(super) const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(300);
+const DRIVE_PUSH_INTERVAL: Duration = Duration::from_secs(300);
+const DRIVE_PULL_INTERVAL: Duration = Duration::from_secs(300);
+
+/// Drive uses zero because its timestamps are precise enough, and pull already
+/// stops before failed files instead of advancing past them.
+const TIME_PRECISION: Duration = Duration::ZERO;
 
 /// One entry of Google's file listing, as it arrives. `size` comes as a string
 /// and is missing for folders; the rest of the engine sees the converted
@@ -65,7 +71,7 @@ struct ListResp {
     next_page_token: Option<String>,
 }
 
-pub(crate) fn failure_kind(e: &Error) -> FailureKind {
+fn failure_kind(e: &Error) -> FailureKind {
     match e {
         // 400 and 401 are Google saying it no longer accepts this refresh token:
         // the user revoked the grant, or the token expired.
@@ -85,15 +91,68 @@ pub(crate) fn failure_kind(e: &Error) -> FailureKind {
     }
 }
 
+/// Drive's names in `sync_cursor` have no prefix: they existed before each
+/// backend got its own.
+fn pull_cursor_name(dataset: Dataset) -> String {
+    // `Core` used this name before cursors were split by dataset. Keep it so
+    // existing databases find their old row instead of downloading every
+    // cloud file again after an upgrade.
+    if dataset == Dataset::Core {
+        return "drive_files".to_string();
+    }
+    // Newer datasets keep separate pull progress under a namespaced key.
+    format!("pull.{}", dataset.name())
+}
+
+fn push_fingerprint_name(dataset: Dataset) -> String {
+    format!("push.{}", dataset.name())
+}
+
+/// The earliest of the streams' cursors: a listing by time from there covers
+/// every stream.
+fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
+    streams
+        .iter()
+        .map(|(_, cursor)| *cursor)
+        .min()
+        .unwrap_or("")
+}
+
 /// The Google Drive backend. `pool` serves one purpose: reading and writing
 /// `auth_state`, which holds the access token and when it expires.
 pub struct DriveClient {
     pool: DbPool,
+    server: Server,
 }
 
 impl DriveClient {
-    pub(super) fn new(pool: DbPool) -> Self {
-        Self { pool }
+    pub(crate) fn new(pool: DbPool) -> Self {
+        Self {
+            pool,
+            server: Server::Http,
+        }
+    }
+
+    /// 测试用：文件存在 `store` 里，不走网络。几台设备传同一个 `store`，就是共用一个
+    /// Drive。token 照样从 `pool` 的 `auth_state` 读，测试要先塞一个。
+    #[cfg(test)]
+    pub(crate) fn with_fake_drive(store: std::sync::Arc<InMemoryDriveStore>, pool: DbPool) -> Self {
+        Self {
+            pool,
+            server: Server::Fake(store),
+        }
+    }
+
+    pub(super) fn time_precision(&self) -> Duration {
+        TIME_PRECISION
+    }
+
+    pub(super) fn push_interval(&self) -> Duration {
+        DRIVE_PUSH_INTERVAL
+    }
+
+    pub(super) fn pull_interval(&self) -> Duration {
+        DRIVE_PULL_INTERVAL
     }
 
     pub(super) async fn ensure_credential(&self) -> Result<bool> {
@@ -104,27 +163,47 @@ impl DriveClient {
         }
     }
 
-    pub(super) async fn list(&self, modified_after: &str) -> Result<Vec<FileMeta>> {
+    pub(super) fn failure_kind(&self, e: &Error) -> FailureKind {
+        failure_kind(e)
+    }
+
+    pub(super) fn pull_cursor_name(&self, dataset: Dataset) -> String {
+        pull_cursor_name(dataset)
+    }
+
+    pub(super) fn push_fingerprint_name(&self, dataset: Dataset) -> String {
+        push_fingerprint_name(dataset)
+    }
+
+    pub(super) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
+        let modified_after = earliest_cursor(streams);
         self.with_token_retry(|tok| {
             let after = modified_after.to_string();
-            async move { http_list_appdata_files(&tok, &after).await }
+            async move { self.server.list(&tok, &after).await }
         })
         .await
     }
 
+    /// Download a file's content from Drive by its file ID.
+    ///
+    /// Returns the raw file content.
     pub(super) async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
-            async move { http_download(&tok, &id).await }
+            async move { self.server.download(&tok, &id).await }
         })
         .await
     }
 
+    /// Upload a file to Drive, updating an existing file with the same name or
+    /// creating a new one when no match exists.
+    ///
+    /// Returns the Drive file ID.
     pub(super) async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
         self.with_token_retry(|tok| {
             let name = name.to_string();
             let content = content.to_vec();
-            async move { http_upsert_by_name(&tok, &name, &content).await }
+            async move { self.server.upsert_by_name(&tok, &name, &content).await }
         })
         .await
     }
@@ -132,9 +211,54 @@ impl DriveClient {
     pub(super) async fn delete(&self, file_id: &str) -> Result<()> {
         self.with_token_retry(|tok| {
             let id = file_id.to_string();
-            async move { http_delete(&tok, &id).await }
+            async move { self.server.delete(&tok, &id).await }
         })
         .await
+    }
+
+    pub(super) async fn end_push_round(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Removes `device_id` from Drive and returns how many files were deleted.
+    ///
+    /// A file that cannot be deleted is only logged and is not counted: the
+    /// tombstone is already uploaded, so the other devices still drop the rows of
+    /// `device_id`, and the file left behind only takes up space.
+    ///
+    /// # Errors
+    ///
+    /// The tombstone cannot be uploaded: [`Error::Other`]
+    pub(super) async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
+        let tombstone_name = FileName {
+            device_id: device_id.to_string(),
+            kind: FileKind::Tombstone,
+        }
+        .to_file_name();
+        let tombstone = serde_json::to_vec(&TombstonePayload {
+            cleared_at: cleared_at.to_string(),
+        })?;
+        self.upsert_by_name(&tombstone_name, &tombstone)
+            .await
+            .map_err(|e| Error::Other(format!("上传 tombstone 失败（云端未动，请重试）: {e}")))?;
+
+        // The tombstone itself stays: it is the signal.
+        let prefix = FileName::device_prefix(device_id);
+        // Every file, whatever its modified time.
+        let files = self.list(&[]).await?;
+        let device_files: Vec<_> = files
+            .iter()
+            .filter(|f| f.name.starts_with(&prefix) && f.name != tombstone_name)
+            .collect();
+
+        let mut deleted = 0u64;
+        for f in &device_files {
+            match self.delete(&f.id).await {
+                Ok(()) => deleted += 1,
+                Err(e) => log::warn!("remove device from cloud: delete {} failed: {e}", f.name),
+            }
+        }
+        Ok(deleted)
     }
 
     /// Why the retry exists: `ensure_valid_token` only checks the expiry time
@@ -166,6 +290,47 @@ impl DriveClient {
 }
 
 // ─────────────── Drive REST calls ───────────────
+
+/// Which server the requests go to: Google, or in tests a fake one in memory.
+enum Server {
+    Http,
+    #[cfg(test)]
+    Fake(std::sync::Arc<InMemoryDriveStore>),
+}
+
+impl Server {
+    async fn list(&self, token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
+        match self {
+            Server::Http => http_list_appdata_files(token, modified_after).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.list_appdata_files(modified_after).await,
+        }
+    }
+
+    async fn download(&self, token: &str, file_id: &str) -> Result<Vec<u8>> {
+        match self {
+            Server::Http => http_download(token, file_id).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.download(file_id).await,
+        }
+    }
+
+    async fn upsert_by_name(&self, token: &str, name: &str, content: &[u8]) -> Result<String> {
+        match self {
+            Server::Http => http_upsert_by_name(token, name, content).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.upsert_by_name(name, content).await,
+        }
+    }
+
+    async fn delete(&self, token: &str, file_id: &str) -> Result<()> {
+        match self {
+            Server::Http => http_delete(token, file_id).await,
+            #[cfg(test)]
+            Server::Fake(store) => store.delete(file_id).await,
+        }
+    }
+}
 
 async fn http_list_appdata_files(token: &str, modified_after: &str) -> Result<Vec<FileMeta>> {
     let client = http_client();

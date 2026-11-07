@@ -28,18 +28,17 @@ use manifest::{manifest_path, manifest_to_device_id, Manifest};
 
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
-use crate::sync::cloud::{FailureKind, FileMeta};
-use crate::sync::engine::rewind_cursor;
+use crate::sync::cloud::{rewind_cursor, FailureKind, FileMeta};
 use crate::sync::file_name::{Dataset, FileName};
 use crate::sync::local_key::{aes_decrypt, derive_master_key};
 
 /// WebDAV Server only provides modification times with second precision (ADR-0007 §4).
-pub(crate) const TIME_PRECISION: Duration = Duration::from_secs(1);
+const TIME_PRECISION: Duration = Duration::from_secs(1);
 
 /// Sync interval (ADR-0007 §3): Nutstore limits
 /// the number of requests, both push and pull are 5 minutes.
-pub(crate) const PUSH_INTERVAL: Duration = Duration::from_secs(300);
-pub(crate) const PULL_INTERVAL: Duration = Duration::from_secs(300);
+const PUSH_INTERVAL: Duration = Duration::from_secs(300);
+const PULL_INTERVAL: Duration = Duration::from_secs(300);
 
 /// How a file already on the server is replaced so that other devices never
 /// read half of it. Servers differ here (ADR-0009).
@@ -53,7 +52,7 @@ pub(crate) enum UploadMethod {
     TempThenMove,
 }
 
-pub(crate) fn failure_kind(e: &Error) -> FailureKind {
+fn failure_kind(e: &Error) -> FailureKind {
     match e {
         // WebDAV 401: the user name or app password is wrong or was revoked.
         // There is no refresh; the user has to enter it again (ADR-0007).
@@ -185,8 +184,16 @@ impl WebDavClient {
         ))
     }
 
-    /// Reads the user name and password from `auth_state` at the start of each
-    /// round. No password means the user signed out: this round does not sync.
+    /// Reads the saved user name and password, so that later requests to the
+    /// server carry them.
+    ///
+    /// Returns `false` when either one is not saved.
+    ///
+    /// # Errors
+    ///
+    /// The saved password cannot be decrypted, for example because the local key
+    /// has changed (the database was copied to another machine, or the system was
+    /// reinstalled): [`Error::Crypto`]
     pub(crate) async fn ensure_credential(&self) -> Result<bool> {
         let Some((user, password_enc)) = read_credentials(&self.pool).await? else {
             return Ok(false);
@@ -198,14 +205,46 @@ impl WebDavClient {
         Ok(true)
     }
 
-    pub(crate) fn name_prefix(&self) -> &str {
-        &self.name_prefix
+    pub(crate) fn time_precision(&self) -> Duration {
+        TIME_PRECISION
     }
 
-    /// Finds the peers' files the running datasets still have to merge, per
-    /// ADR-0008. `streams` lists each running dataset with its local cursor:
-    /// how far the engine merged; a dataset not in it is left alone. Each
-    /// file's `modified_time` is the server time of its manifest.
+    pub(crate) fn push_interval(&self) -> Duration {
+        PUSH_INTERVAL
+    }
+
+    pub(crate) fn pull_interval(&self) -> Duration {
+        PULL_INTERVAL
+    }
+
+    pub(crate) fn failure_kind(&self, e: &Error) -> FailureKind {
+        failure_kind(e)
+    }
+
+    pub(crate) fn pull_cursor_name(&self, dataset: Dataset) -> String {
+        format!("{}pull.{}", self.name_prefix, dataset.name())
+    }
+
+    pub(crate) fn push_fingerprint_name(&self, dataset: Dataset) -> String {
+        format!("{}push.{}", self.name_prefix, dataset.name())
+    }
+
+    /// WebDAV cannot do it yet: this device's own files cannot be listed, so the
+    /// command would delete nothing and still report success; deleting another
+    /// device's files means changing its manifest, which only that device may write
+    /// (ADR-0008).
+    pub(crate) async fn remove_device(&self, _device_id: &str, _cleared_at: &str) -> Result<u64> {
+        Err(Error::Other(
+            "Clearing cloud data is not supported on WebDAV yet".into(),
+        ))
+    }
+
+    /// Returns the peers' files this device has not merged yet, each with the time
+    /// its manifest was last modified on the server.
+    ///
+    /// Also updates the bookmarks: when a dataset has nothing left to merge from a
+    /// manifest, its bookmark records that manifest, and the next round does not
+    /// download it for that dataset (ADR-0009 §4).
     pub(crate) async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
         let entries = match self.dav.propfind("").await {
             Ok(entries) => entries,

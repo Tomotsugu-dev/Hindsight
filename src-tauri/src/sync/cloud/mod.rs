@@ -1,23 +1,20 @@
 //! The cloud storage sync runs on. Files live in one flat folder and are
 //! addressed by name; the operations of [`CloudBackend`] are all the engine
 //! needs, and every backend must give them the same meaning.
-//!
-//! `InMemory` keeps the files in a map for the end-to-end tests, with its own
-//! clock so that modification times only ever move forward.
 
-#[cfg(test)]
-use std::sync::Arc;
+pub mod drive;
+pub mod webdav;
+
 use std::time::Duration;
 
 use rusqlite::OptionalExtension;
 
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
-#[cfg(test)]
-use crate::sync::drive::InMemoryDriveStore;
-use crate::sync::drive::{self, DriveClient};
 use crate::sync::file_name::Dataset;
-use crate::sync::webdav::{self, WebDavClient};
+
+use drive::DriveClient;
+use webdav::WebDavClient;
 
 /// Cloud file metadata (id + name + modified time), without the file content.
 #[derive(Debug, Clone)]
@@ -54,22 +51,41 @@ pub enum FailureKind {
 
 /// The cloud behind sync. The sync engine holds one, and push, pull and the
 /// cloud-clearing commands reach the cloud only through its methods.
-/// `InMemory` stands in for a real cloud in tests and is the reference for
-/// what each method must do.
-pub enum CloudBackend {
+pub struct CloudBackend(Backend);
+
+enum Backend {
     Drive(DriveClient),
     /// WebDAV: Nutstore, Nextcloud and the like (ADR-0007, ADR-0008).
     WebDav(Box<WebDavClient>),
-    /// The tests' stand-in; not compiled into the shipped binary.
-    #[cfg(test)]
-    InMemory(Arc<InMemoryDriveStore>),
+}
+
+impl From<DriveClient> for CloudBackend {
+    fn from(client: DriveClient) -> Self {
+        CloudBackend(Backend::Drive(client))
+    }
+}
+
+impl From<WebDavClient> for CloudBackend {
+    fn from(client: WebDavClient) -> Self {
+        CloudBackend(Backend::WebDav(Box::new(client)))
+    }
 }
 
 impl CloudBackend {
     /// Builds the backend at startup: WebDAV when `auth_state` records WebDAV and
     /// its address, Drive otherwise. A Drive that is not signed in skips every
     /// round (ADR-0011 §2).
-    pub async fn from_auth_state(pool: DbPool, self_id: String) -> Result<Self> {
+    pub async fn from_auth_state(pool: DbPool, self_id: String) -> Self {
+        match Self::saved_backend(pool.clone(), self_id).await {
+            Ok(cloud) => cloud,
+            Err(e) => {
+                log::warn!("sync: the saved backend cannot be built, using Drive: {e}");
+                DriveClient::new(pool).into()
+            }
+        }
+    }
+
+    async fn saved_backend(pool: DbPool, self_id: String) -> Result<Self> {
         let webdav_url: Option<String> = pool
             .0
             .call(|conn| {
@@ -84,34 +100,17 @@ impl CloudBackend {
             })
             .await?;
         match webdav_url {
-            Some(url) => Self::webdav(&url, pool, self_id),
-            None => Ok(Self::drive(pool)),
+            Some(url) => Ok(WebDavClient::connect(&url, pool, self_id)?.into()),
+            None => Ok(DriveClient::new(pool).into()),
         }
-    }
-
-    /// Google Drive, with the credential taken from `pool`'s `auth_state` table.
-    pub fn drive(pool: DbPool) -> Self {
-        CloudBackend::Drive(DriveClient::new(pool))
-    }
-
-    /// WebDAV at the server address the user entered. The user name and
-    /// password are read from `pool`'s `auth_state` table every round.
-    pub fn webdav(server_url: &str, pool: DbPool, self_id: String) -> Result<Self> {
-        let client = WebDavClient::connect(server_url, pool, self_id)?;
-        Ok(CloudBackend::WebDav(Box::new(client)))
     }
 
     /// How much pull should rewind its cursor to avoid missing files that share
     /// the same timestamp.
-    ///
-    /// Drive uses zero because its timestamps are precise enough, and pull already
-    /// stops before failed files instead of advancing past them.
     pub fn time_precision(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(_) => Duration::ZERO,
-            CloudBackend::WebDav(_) => webdav::TIME_PRECISION,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => Duration::ZERO,
+        match &self.0 {
+            Backend::Drive(c) => c.time_precision(),
+            Backend::WebDav(c) => c.time_precision(),
         }
     }
 
@@ -119,21 +118,17 @@ impl CloudBackend {
     /// a tick also pulls once `pull_interval` has passed since the last pull.
     /// A backend that counts requests (WebDAV, ADR-0007 §3) sets minutes.
     pub fn push_interval(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(_) => drive::DRIVE_PUSH_INTERVAL,
-            CloudBackend::WebDav(_) => webdav::PUSH_INTERVAL,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => drive::DRIVE_PUSH_INTERVAL,
+        match &self.0 {
+            Backend::Drive(c) => c.push_interval(),
+            Backend::WebDav(c) => c.push_interval(),
         }
     }
 
     /// The least time between two pulls; see [`Self::push_interval`].
     pub fn pull_interval(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(_) => drive::DRIVE_PULL_INTERVAL,
-            CloudBackend::WebDav(_) => webdav::PULL_INTERVAL,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => drive::DRIVE_PULL_INTERVAL,
+        match &self.0 {
+            Backend::Drive(c) => c.pull_interval(),
+            Backend::WebDav(c) => c.pull_interval(),
         }
     }
 
@@ -145,22 +140,18 @@ impl CloudBackend {
     /// credential is there but no usable one came of it, a refused refresh for
     /// instance; the round fails and the Devices page shows the error.
     pub async fn ensure_credential(&self) -> Result<bool> {
-        match self {
-            CloudBackend::Drive(c) => c.ensure_credential().await,
-            CloudBackend::WebDav(c) => c.ensure_credential().await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => Ok(store.signed_in()),
+        match &self.0 {
+            Backend::Drive(c) => c.ensure_credential().await,
+            Backend::WebDav(c) => c.ensure_credential().await,
         }
     }
 
     /// Sorts an error from a sync round into a [`FailureKind`]. It never looks
     /// at the error's text, so the result is safe to log.
     pub fn failure_kind(&self, e: &Error) -> FailureKind {
-        match self {
-            CloudBackend::Drive(_) => drive::failure_kind(e),
-            CloudBackend::WebDav(_) => webdav::failure_kind(e),
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => drive::failure_kind(e),
+        match &self.0 {
+            Backend::Drive(c) => c.failure_kind(e),
+            Backend::WebDav(c) => c.failure_kind(e),
         }
     }
 
@@ -168,38 +159,17 @@ impl CloudBackend {
     /// Each backend has its own names, so no backend reads another's progress
     /// (ADR-0011 §3).
     pub fn pull_cursor_name(&self, dataset: Dataset) -> String {
-        // Existing databases hold this name. Renamed, the old row would not be
-        // found and every cloud file would be downloaded again.
-        if self.is_drive() && dataset == Dataset::Core {
-            return "drive_files".to_string();
+        match &self.0 {
+            Backend::Drive(c) => c.pull_cursor_name(dataset),
+            Backend::WebDav(c) => c.pull_cursor_name(dataset),
         }
-        format!("{}pull.{}", self.name_prefix(), dataset.name())
     }
 
     /// The same for an optional dataset's push fingerprint.
     pub fn push_fingerprint_name(&self, dataset: Dataset) -> String {
-        format!("{}push.{}", self.name_prefix(), dataset.name())
-    }
-
-    /// The prefix of this backend's names in `sync_cursor`, e.g.,
-    /// `webdav.dav.jianguoyun.com.`. Drive has none: its names existed before
-    /// each backend got its own.
-    fn name_prefix(&self) -> &str {
-        match self {
-            CloudBackend::Drive(_) => "",
-            CloudBackend::WebDav(c) => c.name_prefix(),
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => "",
-        }
-    }
-
-    /// Drive, or `InMemory`, which stands in for Drive in tests.
-    fn is_drive(&self) -> bool {
-        match self {
-            CloudBackend::Drive(_) => true,
-            CloudBackend::WebDav(_) => false,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => true,
+        match &self.0 {
+            Backend::Drive(c) => c.push_fingerprint_name(dataset),
+            Backend::WebDav(c) => c.push_fingerprint_name(dataset),
         }
     }
 
@@ -210,13 +180,9 @@ impl CloudBackend {
     /// cursors here, so "strictly after" and the ordering are part of the
     /// contract.
     pub async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
-        match self {
-            CloudBackend::Drive(c) => c.list(earliest_cursor(streams)).await,
-            CloudBackend::WebDav(c) => c.list(streams).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => {
-                store.list_appdata_files(earliest_cursor(streams)).await
-            }
+        match &self.0 {
+            Backend::Drive(c) => c.list(streams).await,
+            Backend::WebDav(c) => c.list(streams).await,
         }
     }
 
@@ -231,13 +197,24 @@ impl CloudBackend {
         .await
     }
 
+    /// Removes `device_id` from the cloud, so that the other devices drop its
+    /// rows. Returns how many files were deleted.
+    ///
+    /// The tombstone goes first: it is the only thing that tells the other devices
+    /// to drop this device's rows. If its upload fails, nothing has changed yet and
+    /// the user can retry.
+    pub async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
+        match &self.0 {
+            Backend::Drive(c) => c.remove_device(device_id, cleared_at).await,
+            Backend::WebDav(c) => c.remove_device(device_id, cleared_at).await,
+        }
+    }
+
     /// Downloads a file's whole content into memory.
     pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
-        match self {
-            CloudBackend::Drive(c) => c.download(file_id).await,
-            CloudBackend::WebDav(c) => c.download(file_id).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.download(file_id).await,
+        match &self.0 {
+            Backend::Drive(c) => c.download(file_id).await,
+            Backend::WebDav(c) => c.download(file_id).await,
         }
     }
 
@@ -245,45 +222,47 @@ impl CloudBackend {
     /// creates the file otherwise. Either way the modification time moves to
     /// now. Returns the file's id.
     pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
-        match self {
-            CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
-            CloudBackend::WebDav(c) => c.upsert_by_name(name, content).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.upsert_by_name(name, content).await,
+        match &self.0 {
+            Backend::Drive(c) => c.upsert_by_name(name, content).await,
+            Backend::WebDav(c) => c.upsert_by_name(name, content).await,
         }
     }
 
     /// Deletes a file for good; there is no trash to recover it from. Deleting
     /// a file that is already gone counts as success.
     pub async fn delete(&self, file_id: &str) -> Result<()> {
-        match self {
-            CloudBackend::Drive(c) => c.delete(file_id).await,
-            CloudBackend::WebDav(c) => c.delete(file_id).await,
-            #[cfg(test)]
-            CloudBackend::InMemory(store) => store.delete(file_id).await,
+        match &self.0 {
+            Backend::Drive(c) => c.delete(file_id).await,
+            Backend::WebDav(c) => c.delete(file_id).await,
         }
     }
 
     /// The end of a push round, whether it succeeded or not. WebDAV writes its
     /// manifest here (ADR-0008); the others have nothing to do.
     pub async fn end_push_round(&self) -> Result<()> {
-        match self {
-            CloudBackend::Drive(_) => Ok(()),
-            CloudBackend::WebDav(c) => c.end_push_round().await,
-            #[cfg(test)]
-            CloudBackend::InMemory(_) => Ok(()),
+        match &self.0 {
+            Backend::Drive(c) => c.end_push_round().await,
+            Backend::WebDav(c) => c.end_push_round().await,
         }
     }
 }
 
-/// The earliest of the streams' cursors: a listing by time from there covers
-/// every stream.
-fn earliest_cursor<'a>(streams: &[(Dataset, &'a str)]) -> &'a str {
-    streams
-        .iter()
-        .map(|(_, cursor)| *cursor)
-        .min()
-        .unwrap_or("")
+/// Rewinds the cursor for backends whose timestamps have only coarse precision.
+/// Without the rewind, a file written in the same second as the last handled
+/// file could be skipped by the next listing.
+///
+/// The result keeps the backend's RFC3339 format so string comparison remains
+/// valid. An invalid cursor means the backend returned an invalid timestamp.
+pub(crate) fn rewind_cursor(cursor: &str, back: Duration) -> Result<String> {
+    if back.is_zero() {
+        return Ok(cursor.to_string());
+    }
+    let parsed = chrono::DateTime::parse_from_rfc3339(cursor)
+        .map_err(|_| Error::SyncTimeFormat(cursor.to_string()))?;
+    let back = chrono::Duration::from_std(back).expect("a backend's time precision is tiny");
+    Ok((parsed - back)
+        .with_timezone(&chrono::Utc)
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 
 /// Maximum time to wait for a connection to the server.
@@ -330,11 +309,36 @@ mod tests {
         assert!(result.unwrap_err().is_timeout());
     }
 
+    /// 精度为 0 时原串返回，一个字节都不碰——Drive 的毫秒时间戳格式不能被改写。
+    #[test]
+    fn rewind_cursor_zero_precision_returns_input_untouched() {
+        let cursor = "2026-05-15T10:00:00.123456789Z";
+        assert_eq!(rewind_cursor(cursor, Duration::ZERO).unwrap(), cursor);
+    }
+
+    /// 秒级精度退一秒，结果保持「秒 + Z」的形状，能跟后端返回的字符串按字典序比。
+    #[test]
+    fn rewind_cursor_one_second_keeps_rfc3339_shape() {
+        assert_eq!(
+            rewind_cursor("2026-05-15T10:00:00Z", Duration::from_secs(1)).unwrap(),
+            "2026-05-15T09:59:59Z"
+        );
+    }
+
+    /// 解析不了的游标是后端的 bug，要整轮报错，不能悄悄跳过退格。
+    #[test]
+    fn rewind_cursor_unparseable_is_an_error() {
+        assert!(matches!(
+            rewind_cursor("not-a-time", Duration::from_secs(1)),
+            Err(Error::SyncTimeFormat(_))
+        ));
+    }
+
     /// Drive 的游标名字钉死：老用户的数据库里存的就是这些，改一个就找不到原来那一行。
     /// 坚果云的名字都带自己的前缀，跟 Drive 的不会重。
     #[tokio::test]
     async fn each_backend_has_its_own_names() {
-        let drive = CloudBackend::drive(fresh_test_pool().await);
+        let drive = CloudBackend::from(DriveClient::new(fresh_test_pool().await));
         assert_eq!(
             [Core, SiteRules, SuperCategories, AiSummaries, Chat, Memory]
                 .map(|d| drive.pull_cursor_name(d)),
@@ -352,12 +356,14 @@ mod tests {
             ["push.ai_summaries", "push.chat", "push.memory"]
         );
 
-        let nutstore = CloudBackend::webdav(
-            "https://dav.jianguoyun.com/dav/",
-            fresh_test_pool().await,
-            "me".into(),
-        )
-        .unwrap();
+        let nutstore = CloudBackend::from(
+            WebDavClient::connect(
+                "https://dav.jianguoyun.com/dav/",
+                fresh_test_pool().await,
+                "me".into(),
+            )
+            .unwrap(),
+        );
         assert_eq!(
             nutstore.pull_cursor_name(Core),
             "webdav.dav.jianguoyun.com.pull.core"
@@ -395,24 +401,28 @@ mod tests {
         let build = || CloudBackend::from_auth_state(pool.clone(), "me".into());
 
         // 从没同步过
-        assert!(matches!(build().await.unwrap(), CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
 
         set("UPDATE auth_state SET backend = 'webdav', webdav_url = 'https://dav.jianguoyun.com/dav/'")
             .await;
-        let nutstore = build().await.unwrap();
-        assert!(matches!(nutstore, CloudBackend::WebDav(_)));
+        let nutstore = build().await;
+        assert!(matches!(nutstore.0, Backend::WebDav(_)));
         assert_eq!(
             nutstore.pull_cursor_name(Core),
             "webdav.dav.jianguoyun.com.pull.core"
         );
 
+        // 记着 WebDAV，地址却建不出来（不是 HTTPS）：当成 Drive
+        set("UPDATE auth_state SET webdav_url = 'http://dav.example.com/dav/'").await;
+        assert!(matches!(build().await.0, Backend::Drive(_)));
+
         // 记着 WebDAV 却没有地址：建不出来，当成 Drive
         set("UPDATE auth_state SET webdav_url = NULL").await;
-        assert!(matches!(build().await.unwrap(), CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
 
         // 换回了 Drive，WebDAV 的地址还留着
         set("UPDATE auth_state SET backend = 'drive', webdav_url = 'https://dav.jianguoyun.com/dav/'")
             .await;
-        assert!(matches!(build().await.unwrap(), CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
     }
 }

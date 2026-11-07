@@ -19,7 +19,10 @@ impl OutboxOp {
 
 /// Value written to the outbox `entity` column; it decides which cloud file the
 /// next push rewrites.
-#[derive(Debug, Clone, Copy)]
+///
+/// A new variant also goes into [`Self::ALL`]: [`Self::parse`] only knows the
+/// variants listed there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutboxEntity {
     Activity,
     Category,
@@ -32,6 +35,17 @@ pub enum OutboxEntity {
 }
 
 impl OutboxEntity {
+    pub const ALL: [OutboxEntity; 8] = [
+        OutboxEntity::Activity,
+        OutboxEntity::Category,
+        OutboxEntity::SiteRule,
+        OutboxEntity::Device,
+        OutboxEntity::AppIcon,
+        OutboxEntity::AppGroup,
+        OutboxEntity::AppGroupMember,
+        OutboxEntity::SuperCategory,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             OutboxEntity::Activity => "activity",
@@ -43,6 +57,12 @@ impl OutboxEntity {
             OutboxEntity::AppGroupMember => "app_group_member",
             OutboxEntity::SuperCategory => "super_category",
         }
+    }
+
+    /// Returns the variant whose [`Self::as_str`] is `s`, or `None` when there
+    /// is none.
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|e| e.as_str() == s)
     }
 }
 
@@ -105,4 +125,18 @@ pub fn enqueue_every_file(conn: &Connection, self_id: &str) -> rusqlite::Result<
         enqueue(conn, OutboxOp::Upsert, entity, "*", "{}")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 每个变体写进 outbox 的文本都能读回同一个变体。读不回的行，push 会当成认不出的丢掉。
+    #[test]
+    fn parse_reads_back_every_entity() {
+        for entity in OutboxEntity::ALL {
+            assert_eq!(OutboxEntity::parse(entity.as_str()), Some(entity));
+        }
+        assert_eq!(OutboxEntity::parse("no_such_entity"), None);
+    }
 }

@@ -1,7 +1,7 @@
 # ADR-0017 · Theme files: separate switches for layout and light or dark, and public variables
 
 - **Date**: 2026-10-24
-- **Status**: Proposed
+- **Status**: **Accepted**
 - **Related**: PR #176 (plugins.json format 2)
 
 Users can only pick one of four built-in themes, and they cannot share themes. We read themes from the data folder. Each theme is a `theme.json` that picks a layout, picks light or dark, and sets public CSS variables. A theme can also have a `theme.css`.
