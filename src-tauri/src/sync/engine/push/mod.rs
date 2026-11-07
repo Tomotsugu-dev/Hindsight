@@ -29,6 +29,7 @@ use super::io::{self, OutboxRow};
 use super::Inner;
 use crate::error::{Error, Result};
 use crate::memory::MemoryDb;
+use crate::repo::outbox::OutboxEntity;
 use crate::repo::settings::Settings;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::cloud::FailureKind;
@@ -193,37 +194,45 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
     let mut groups: HashMap<FileKind, Vec<i64>> = HashMap::new();
     let mut ungroupable: Vec<i64> = Vec::new();
     for row in rows {
-        let key = match row.entity.as_str() {
-            "activity" => match serde_json::from_str::<Value>(&row.payload)
+        match from_outbox(row) {
+            Some(kind) => groups.entry(kind).or_default().push(row.id),
+            None => ungroupable.push(row.id),
+        }
+    }
+    (groups, ungroupable)
+}
+
+/// Returns the file that `row` marks dirty, or `None` when its entity is
+/// unknown or an activity row has no usable `localDate`.
+fn from_outbox(row: &OutboxRow) -> Option<FileKind> {
+    let Some(entity) = OutboxEntity::parse(&row.entity) else {
+        log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
+        return None;
+    };
+    let kind = match entity {
+        OutboxEntity::Activity => {
+            let date = serde_json::from_str::<Value>(&row.payload)
                 .ok()
                 .and_then(|p| {
                     p.get("localDate")
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse::<chrono::NaiveDate>().ok())
-                }) {
-                Some(d) => FileKind::Activities(d),
-                None => {
-                    log::warn!("outbox row {} has no usable localDate", row.id);
-                    ungroupable.push(row.id);
-                    continue;
-                }
-            },
-            "category" => FileKind::Categories,
-            "super_category" => FileKind::SuperCategories,
-            "site_rule" => FileKind::SiteRules,
-            "device" => FileKind::DeviceMeta,
-            "app_icon" => FileKind::AppIcons,
-            "app_group" => FileKind::AppGroups,
-            "app_group_member" => FileKind::AppGroupMembers,
-            _ => {
-                log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
-                ungroupable.push(row.id);
-                continue;
-            }
-        };
-        groups.entry(key).or_default().push(row.id);
-    }
-    (groups, ungroupable)
+                });
+            let Some(date) = date else {
+                log::warn!("outbox row {} has no usable localDate", row.id);
+                return None;
+            };
+            FileKind::Activities(date)
+        }
+        OutboxEntity::Category => FileKind::Categories,
+        OutboxEntity::SuperCategory => FileKind::SuperCategories,
+        OutboxEntity::SiteRule => FileKind::SiteRules,
+        OutboxEntity::Device => FileKind::DeviceMeta,
+        OutboxEntity::AppIcon => FileKind::AppIcons,
+        OutboxEntity::AppGroup => FileKind::AppGroups,
+        OutboxEntity::AppGroupMember => FileKind::AppGroupMembers,
+    };
+    Some(kind)
 }
 
 /// The whole content of one outbox-driven file, built from the tables. The
@@ -467,6 +476,19 @@ mod tests {
             .any(|r| r.id == "work" && r.deleted_at.is_none()));
         let gone = rows.iter().find(|r| r.id == "zz").unwrap();
         assert_eq!(gone.deleted_at.as_deref(), Some("2026-06-01T00:00:00Z"));
+    }
+
+    /// 每种 outbox 行都要找得到它要重写的文件。找不到的行会被当成认不出的删掉，改动就丢了。
+    #[test]
+    fn every_outbox_entity_maps_to_a_file_kind() {
+        for entity in OutboxEntity::ALL {
+            let row = OutboxRow {
+                id: 1,
+                entity: entity.as_str().into(),
+                payload: serde_json::json!({ "localDate": "2026-05-15" }).to_string(),
+            };
+            assert!(from_outbox(&row).is_some(), "{entity:?} 没有对应的文件");
+        }
     }
 
     #[test]
