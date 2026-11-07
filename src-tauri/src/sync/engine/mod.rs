@@ -4,7 +4,6 @@
 //!
 //! 失败走指数退避（最多 1 小时），attempts > 10 留在 outbox 作为 dead-letter，UI 可以看见。
 
-mod datasets;
 mod io;
 mod pull;
 mod push;

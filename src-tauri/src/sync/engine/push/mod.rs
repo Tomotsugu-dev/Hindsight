@@ -2,18 +2,21 @@
 //!
 //! The outbox says which files to rewrite: each row points to one file, and a
 //! round rewrites a file only once. The optional datasets do not use the outbox;
-//! `datasets.rs` compares fingerprints to decide.
+//! `push_optional` compares fingerprints to decide.
 //!
 //! Each kind of file has a submodule that reads its whole content from the local
 //! tables. A submodule only reads tables: it does not touch the cloud, the
 //! outbox or the cursors.
 
 mod activities;
+mod ai_summaries;
 mod app_group_members;
 mod app_groups;
 mod app_icons;
 mod categories;
+mod chat;
 mod device_meta;
+mod memory;
 mod site_rules;
 mod super_categories;
 
@@ -25,9 +28,11 @@ use serde_json::Value;
 use super::io::{self, OutboxRow};
 use super::Inner;
 use crate::error::{Error, Result};
+use crate::memory::MemoryDb;
+use crate::repo::settings::Settings;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::cloud::FailureKind;
-use crate::sync::file_name::{FileKind, FileName};
+use crate::sync::file_name::{Dataset, FileKind, FileName};
 
 const PUSH_BATCH_SIZE: usize = 200;
 
@@ -66,7 +71,7 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     // 放在 outbox 早退之前保证每轮 push tick 都有机会跑到。
     match crate::repo::settings::load(&inner.pool).await {
         Ok(cfg) => {
-            if let Err(e) = super::datasets::push_optional(inner, &cfg).await {
+            if let Err(e) = push_optional(inner, &cfg).await {
                 log::warn!("push 可选数据集失败: {e}");
             }
         }
@@ -222,7 +227,7 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
 }
 
 /// The whole content of one outbox-driven file, built from the tables. The
-/// optional datasets are not outbox-driven; `datasets.rs` builds those.
+/// optional datasets are not outbox-driven; `push_optional` builds those.
 async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<Vec<u8>> {
     match kind {
         FileKind::Activities(date) => activities::build(pool, self_id, &date.to_string()).await,
@@ -265,6 +270,105 @@ where
         })
         .await?;
     Ok(serde_json::to_vec(&rows)?)
+}
+
+/// 每轮 push 调一次:对启用的数据集做水位线检测,变了才上传。
+/// 单个数据集失败只记 warn(下一轮水位线仍不同会重试),不阻塞其它数据集。
+///
+/// 与 outbox 驱动的核心数据集不同,这三类走**水位线检测**:
+/// 每轮 push 先算数据集当前水位(最大时间戳+行数),与 sync_cursor 里存的
+/// 上次推送水位比对,变了才全量重建文件上传——记忆库没有 outbox,
+/// ai_summaries 也明确不入 outbox,这条路径对两边一视同仁。
+///
+/// 开关语义:settings 三挡分别门控各自数据集的**推与拉**。拉取时每一类有自己的
+/// 游标(`pull.ai_summaries` / `pull.chat` / `pull.memory`,见 ADR-0006):开关关着
+/// 那一类不拉、游标不动,打开后从停下的地方接着拉,历史文件自然补上。
+async fn push_optional(inner: &Arc<Inner>, cfg: &Settings) -> Result<()> {
+    let self_id = inner.self_id.as_str();
+    if self_id.is_empty() {
+        return Ok(());
+    }
+
+    if cfg.sync_ai_summaries {
+        if let Err(e) = push_ai_summaries(inner).await {
+            log::warn!("push ai_summaries 失败: {e}");
+        }
+    }
+    if cfg.sync_chat_history {
+        if let Some(mem) = &inner.mem {
+            if let Err(e) = push_chat(inner, mem).await {
+                log::warn!("push chat 失败: {e}");
+            }
+        }
+    }
+    if cfg.sync_screen_memory {
+        if let Some(mem) = &inner.mem {
+            if let Err(e) = push_memory(inner, mem).await {
+                log::warn!("push memory 失败: {e}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Uploads one of this device's files.
+async fn upload(inner: &Arc<Inner>, kind: FileKind, content: Vec<u8>) -> Result<()> {
+    let name = FileName {
+        device_id: inner.self_id.clone(),
+        kind,
+    }
+    .to_file_name();
+    inner.cloud().upsert_by_name(&name, &content).await?;
+    Ok(())
+}
+
+async fn push_ai_summaries(inner: &Arc<Inner>) -> Result<()> {
+    let watermark = ai_summaries::fingerprint(&inner.pool).await?;
+    let name = inner.cloud().push_fingerprint_name(Dataset::AiSummaries);
+    if io::read_cursor(&inner.pool, &name).await? == watermark {
+        return Ok(());
+    }
+    let content = ai_summaries::build(&inner.pool).await?;
+    upload(inner, FileKind::AiSummaries, content).await?;
+    io::write_cursor(&inner.pool, &name, &watermark).await?;
+    log::info!("push ai_summaries: uploaded");
+    Ok(())
+}
+
+async fn push_chat(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
+    let watermark = chat::fingerprint(mem).await?;
+    let name = inner.cloud().push_fingerprint_name(Dataset::Chat);
+    if io::read_cursor(&inner.pool, &name).await? == watermark {
+        return Ok(());
+    }
+    let content = chat::build(mem).await?;
+    upload(inner, FileKind::Chat, content).await?;
+    io::write_cursor(&inner.pool, &name, &watermark).await?;
+    log::info!("push chat: uploaded");
+    Ok(())
+}
+
+async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
+    let watermark = memory::fingerprint(mem).await?;
+    let name = inner.cloud().push_fingerprint_name(Dataset::Memory);
+    let prev = io::read_cursor(&inner.pool, &name).await?;
+    if prev == watermark || watermark.is_empty() {
+        return Ok(());
+    }
+    let days = memory::changed_days(mem, prev).await?;
+    for day in &days {
+        let Ok(date) = day.parse::<chrono::NaiveDate>() else {
+            log::warn!("push memory: local_date {day:?} is not a date, skipped");
+            continue;
+        };
+        let content = memory::build(mem, day).await?;
+        upload(inner, FileKind::Memory(date), content).await?;
+    }
+    io::write_cursor(&inner.pool, &name, &watermark).await?;
+    if !days.is_empty() {
+        log::info!("push memory: {} 天的会话文件", days.len());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
