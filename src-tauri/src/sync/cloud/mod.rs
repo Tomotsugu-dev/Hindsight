@@ -60,7 +60,9 @@ pub enum FailureKind {
 /// cloud-clearing commands reach the cloud only through its methods.
 /// `InMemory` stands in for a real cloud in tests and is the reference for
 /// what each method must do.
-pub enum CloudBackend {
+pub struct CloudBackend(Backend);
+
+enum Backend {
     Drive(DriveClient),
     /// WebDAV: Nutstore, Nextcloud and the like (ADR-0007, ADR-0008).
     WebDav(Box<WebDavClient>),
@@ -71,20 +73,20 @@ pub enum CloudBackend {
 
 impl From<DriveClient> for CloudBackend {
     fn from(client: DriveClient) -> Self {
-        CloudBackend::Drive(client)
+        CloudBackend(Backend::Drive(client))
     }
 }
 
 impl From<WebDavClient> for CloudBackend {
     fn from(client: WebDavClient) -> Self {
-        CloudBackend::WebDav(Box::new(client))
+        CloudBackend(Backend::WebDav(Box::new(client)))
     }
 }
 
 #[cfg(test)]
 impl From<Arc<InMemoryDriveStore>> for CloudBackend {
     fn from(store: Arc<InMemoryDriveStore>) -> Self {
-        CloudBackend::InMemory(store)
+        CloudBackend(Backend::InMemory(store))
     }
 }
 
@@ -125,11 +127,11 @@ impl CloudBackend {
     /// How much pull should rewind its cursor to avoid missing files that share
     /// the same timestamp.
     pub fn time_precision(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(c) => c.time_precision(),
-            CloudBackend::WebDav(c) => c.time_precision(),
+        match &self.0 {
+            Backend::Drive(c) => c.time_precision(),
+            Backend::WebDav(c) => c.time_precision(),
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.time_precision(),
+            Backend::InMemory(store) => store.time_precision(),
         }
     }
 
@@ -137,21 +139,21 @@ impl CloudBackend {
     /// a tick also pulls once `pull_interval` has passed since the last pull.
     /// A backend that counts requests (WebDAV, ADR-0007 §3) sets minutes.
     pub fn push_interval(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(c) => c.push_interval(),
-            CloudBackend::WebDav(c) => c.push_interval(),
+        match &self.0 {
+            Backend::Drive(c) => c.push_interval(),
+            Backend::WebDav(c) => c.push_interval(),
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.push_interval(),
+            Backend::InMemory(store) => store.push_interval(),
         }
     }
 
     /// The least time between two pulls; see [`Self::push_interval`].
     pub fn pull_interval(&self) -> Duration {
-        match self {
-            CloudBackend::Drive(c) => c.pull_interval(),
-            CloudBackend::WebDav(c) => c.pull_interval(),
+        match &self.0 {
+            Backend::Drive(c) => c.pull_interval(),
+            Backend::WebDav(c) => c.pull_interval(),
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.pull_interval(),
+            Backend::InMemory(store) => store.pull_interval(),
         }
     }
 
@@ -163,22 +165,22 @@ impl CloudBackend {
     /// credential is there but no usable one came of it, a refused refresh for
     /// instance; the round fails and the Devices page shows the error.
     pub async fn ensure_credential(&self) -> Result<bool> {
-        match self {
-            CloudBackend::Drive(c) => c.ensure_credential().await,
-            CloudBackend::WebDav(c) => c.ensure_credential().await,
+        match &self.0 {
+            Backend::Drive(c) => c.ensure_credential().await,
+            Backend::WebDav(c) => c.ensure_credential().await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.ensure_credential().await,
+            Backend::InMemory(store) => store.ensure_credential().await,
         }
     }
 
     /// Sorts an error from a sync round into a [`FailureKind`]. It never looks
     /// at the error's text, so the result is safe to log.
     pub fn failure_kind(&self, e: &Error) -> FailureKind {
-        match self {
-            CloudBackend::Drive(c) => c.failure_kind(e),
-            CloudBackend::WebDav(c) => c.failure_kind(e),
+        match &self.0 {
+            Backend::Drive(c) => c.failure_kind(e),
+            Backend::WebDav(c) => c.failure_kind(e),
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.failure_kind(e),
+            Backend::InMemory(store) => store.failure_kind(e),
         }
     }
 
@@ -186,21 +188,21 @@ impl CloudBackend {
     /// Each backend has its own names, so no backend reads another's progress
     /// (ADR-0011 §3).
     pub fn pull_cursor_name(&self, dataset: Dataset) -> String {
-        match self {
-            CloudBackend::Drive(c) => c.pull_cursor_name(dataset),
-            CloudBackend::WebDav(c) => c.pull_cursor_name(dataset),
+        match &self.0 {
+            Backend::Drive(c) => c.pull_cursor_name(dataset),
+            Backend::WebDav(c) => c.pull_cursor_name(dataset),
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.pull_cursor_name(dataset),
+            Backend::InMemory(store) => store.pull_cursor_name(dataset),
         }
     }
 
     /// The same for an optional dataset's push fingerprint.
     pub fn push_fingerprint_name(&self, dataset: Dataset) -> String {
-        match self {
-            CloudBackend::Drive(c) => c.push_fingerprint_name(dataset),
-            CloudBackend::WebDav(c) => c.push_fingerprint_name(dataset),
+        match &self.0 {
+            Backend::Drive(c) => c.push_fingerprint_name(dataset),
+            Backend::WebDav(c) => c.push_fingerprint_name(dataset),
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.push_fingerprint_name(dataset),
+            Backend::InMemory(store) => store.push_fingerprint_name(dataset),
         }
     }
 
@@ -211,11 +213,11 @@ impl CloudBackend {
     /// cursors here, so "strictly after" and the ordering are part of the
     /// contract.
     pub async fn list(&self, streams: &[(Dataset, &str)]) -> Result<Vec<FileMeta>> {
-        match self {
-            CloudBackend::Drive(c) => c.list(streams).await,
-            CloudBackend::WebDav(c) => c.list(streams).await,
+        match &self.0 {
+            Backend::Drive(c) => c.list(streams).await,
+            Backend::WebDav(c) => c.list(streams).await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.list(streams).await,
+            Backend::InMemory(store) => store.list(streams).await,
         }
     }
 
@@ -237,21 +239,21 @@ impl CloudBackend {
     /// to drop this device's rows. If its upload fails, nothing has changed yet and
     /// the user can retry.
     pub async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
-        match self {
-            CloudBackend::Drive(c) => c.remove_device(device_id, cleared_at).await,
-            CloudBackend::WebDav(c) => c.remove_device(device_id, cleared_at).await,
+        match &self.0 {
+            Backend::Drive(c) => c.remove_device(device_id, cleared_at).await,
+            Backend::WebDav(c) => c.remove_device(device_id, cleared_at).await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.remove_device(device_id, cleared_at).await,
+            Backend::InMemory(store) => store.remove_device(device_id, cleared_at).await,
         }
     }
 
     /// Downloads a file's whole content into memory.
     pub async fn download(&self, file_id: &str) -> Result<Vec<u8>> {
-        match self {
-            CloudBackend::Drive(c) => c.download(file_id).await,
-            CloudBackend::WebDav(c) => c.download(file_id).await,
+        match &self.0 {
+            Backend::Drive(c) => c.download(file_id).await,
+            Backend::WebDav(c) => c.download(file_id).await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.download(file_id).await,
+            Backend::InMemory(store) => store.download(file_id).await,
         }
     }
 
@@ -259,33 +261,33 @@ impl CloudBackend {
     /// creates the file otherwise. Either way the modification time moves to
     /// now. Returns the file's id.
     pub async fn upsert_by_name(&self, name: &str, content: &[u8]) -> Result<String> {
-        match self {
-            CloudBackend::Drive(c) => c.upsert_by_name(name, content).await,
-            CloudBackend::WebDav(c) => c.upsert_by_name(name, content).await,
+        match &self.0 {
+            Backend::Drive(c) => c.upsert_by_name(name, content).await,
+            Backend::WebDav(c) => c.upsert_by_name(name, content).await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.upsert_by_name(name, content).await,
+            Backend::InMemory(store) => store.upsert_by_name(name, content).await,
         }
     }
 
     /// Deletes a file for good; there is no trash to recover it from. Deleting
     /// a file that is already gone counts as success.
     pub async fn delete(&self, file_id: &str) -> Result<()> {
-        match self {
-            CloudBackend::Drive(c) => c.delete(file_id).await,
-            CloudBackend::WebDav(c) => c.delete(file_id).await,
+        match &self.0 {
+            Backend::Drive(c) => c.delete(file_id).await,
+            Backend::WebDav(c) => c.delete(file_id).await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.delete(file_id).await,
+            Backend::InMemory(store) => store.delete(file_id).await,
         }
     }
 
     /// The end of a push round, whether it succeeded or not. WebDAV writes its
     /// manifest here (ADR-0008); the others have nothing to do.
     pub async fn end_push_round(&self) -> Result<()> {
-        match self {
-            CloudBackend::Drive(c) => c.end_push_round().await,
-            CloudBackend::WebDav(c) => c.end_push_round().await,
+        match &self.0 {
+            Backend::Drive(c) => c.end_push_round().await,
+            Backend::WebDav(c) => c.end_push_round().await,
             #[cfg(test)]
-            CloudBackend::InMemory(store) => store.end_push_round().await,
+            Backend::InMemory(store) => store.end_push_round().await,
         }
     }
 }
@@ -444,12 +446,12 @@ mod tests {
         let build = || CloudBackend::from_auth_state(pool.clone(), "me".into());
 
         // 从没同步过
-        assert!(matches!(build().await, CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
 
         set("UPDATE auth_state SET backend = 'webdav', webdav_url = 'https://dav.jianguoyun.com/dav/'")
             .await;
         let nutstore = build().await;
-        assert!(matches!(nutstore, CloudBackend::WebDav(_)));
+        assert!(matches!(nutstore.0, Backend::WebDav(_)));
         assert_eq!(
             nutstore.pull_cursor_name(Core),
             "webdav.dav.jianguoyun.com.pull.core"
@@ -457,15 +459,15 @@ mod tests {
 
         // 记着 WebDAV，地址却建不出来（不是 HTTPS）：当成 Drive
         set("UPDATE auth_state SET webdav_url = 'http://dav.example.com/dav/'").await;
-        assert!(matches!(build().await, CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
 
         // 记着 WebDAV 却没有地址：建不出来，当成 Drive
         set("UPDATE auth_state SET webdav_url = NULL").await;
-        assert!(matches!(build().await, CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
 
         // 换回了 Drive，WebDAV 的地址还留着
         set("UPDATE auth_state SET backend = 'drive', webdav_url = 'https://dav.jianguoyun.com/dav/'")
             .await;
-        assert!(matches!(build().await, CloudBackend::Drive(_)));
+        assert!(matches!(build().await.0, Backend::Drive(_)));
     }
 }
