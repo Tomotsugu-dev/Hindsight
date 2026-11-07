@@ -860,8 +860,8 @@ mod tests {
 
     // ═════════════ forget_remote_device_impl（桩照抄 e2e 的 InMemoryDriveStore 用法）═════════════
 
+    use crate::sync::cloud::drive::InMemoryDriveStore;
     use crate::sync::cloud::CloudBackend;
-    use crate::sync::drive::InMemoryDriveStore;
 
     /// e2e 同款 fake auth：四列全 Some + expires_at 远未来，让
     /// `ensure_valid_token` 走"未过期直接复用"分支，零网络调用。
@@ -1042,7 +1042,7 @@ mod tests {
     /// WebDAV 上两个清云端命令都在动手之前拒绝：假服务器一个请求都没收到，本地数据不动。
     #[tokio::test]
     async fn clearing_cloud_data_is_refused_on_webdav() {
-        use crate::sync::webdav::{FakeDav, WebDavClient};
+        use crate::sync::cloud::webdav::{FakeDav, WebDavClient};
 
         let pool = fresh_test_pool().await;
         insert_device_row(&pool, "ghost").await;

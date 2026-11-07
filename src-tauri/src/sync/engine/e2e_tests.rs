@@ -20,11 +20,11 @@ use chrono::{DateTime, Duration, Local, Timelike};
 use crate::repo::test_util::DataDirOverride;
 use crate::storage::{migrations, utc_now_rfc3339, DbPool, SqliteResultExt};
 use crate::sync::backend_switch::{switch_backend, NewBackend};
+use crate::sync::cloud::drive::InMemoryDriveStore;
+use crate::sync::cloud::webdav::{save_test_credentials, Call, FakeDav, WebDavClient};
 use crate::sync::cloud::CloudBackend;
-use crate::sync::drive::InMemoryDriveStore;
 use crate::sync::engine::SyncEngine;
 use crate::sync::file_name::Dataset;
-use crate::sync::webdav::{save_test_credentials, Call, FakeDav, WebDavClient};
 
 struct TestDevice {
     pool: DbPool,

@@ -7,10 +7,10 @@ use crate::sync::backend_switch::{
     self, decide_connect_action, switch_backend, update_credentials, AuthState, ConnectAction,
     NewBackend,
 };
+use crate::sync::cloud::drive::auth;
+use crate::sync::cloud::webdav::{self, account_hash::account_hash};
 use crate::sync::cloud::CloudBackend;
-use crate::sync::drive::auth;
 use crate::sync::engine::SyncEngine;
-use crate::sync::webdav::{self, account_hash::account_hash};
 
 /// The event that sends the Google authorization link to the frontend once it
 /// is ready, as `{ url, opened }`. When the browser does not open, the frontend

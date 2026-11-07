@@ -5,6 +5,9 @@
 //! `InMemory` keeps the files in a map for the end-to-end tests, with its own
 //! clock so that modification times only ever move forward.
 
+pub mod drive;
+pub mod webdav;
+
 #[cfg(test)]
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,11 +16,12 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{Error, Result};
 use crate::storage::{DbPool, SqliteResultExt};
-#[cfg(test)]
-use crate::sync::drive::InMemoryDriveStore;
-use crate::sync::drive::{self, DriveClient};
 use crate::sync::file_name::Dataset;
-use crate::sync::webdav::{self, WebDavClient};
+
+use drive::DriveClient;
+#[cfg(test)]
+use drive::InMemoryDriveStore;
+use webdav::WebDavClient;
 
 /// Cloud file metadata (id + name + modified time), without the file content.
 #[derive(Debug, Clone)]

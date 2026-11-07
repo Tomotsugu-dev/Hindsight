@@ -11,8 +11,8 @@ use crate::error::Result;
 use crate::repo::outbox::enqueue_every_file;
 use crate::repo::settings;
 use crate::storage::{DbPool, SqliteResultExt};
+use crate::sync::cloud::webdav::account_hash::{account_hash, server_host};
 use crate::sync::local_key::{aes_encrypt, derive_master_key};
-use crate::sync::webdav::account_hash::{account_hash, server_host};
 
 /// The backend to switch to, with its credentials.
 pub(crate) enum NewBackend<'a> {
