@@ -19,8 +19,10 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
+use crate::repo::settings::Settings;
 use crate::storage::DbPool;
 use crate::sync::cloud::{CloudBackend, FailureKind};
+use crate::sync::file_name::Dataset;
 
 /// Prefix of `last_error` when the user has to sign in again. The Devices page
 /// matches these prefixes as written.
@@ -316,9 +318,48 @@ async fn run_loop(inner: Arc<Inner>) {
     }
 }
 
+/// Returns the datasets that sync this round, for push and pull alike. Core,
+/// website rules and super-categories always do; the optional ones follow their
+/// switches, and chat and screen memory also need the memory database.
+fn enabled_datasets(cfg: &Settings, has_mem: bool) -> Vec<Dataset> {
+    Dataset::ALL
+        .into_iter()
+        .filter(|dataset| match dataset {
+            Dataset::Core | Dataset::SiteRules | Dataset::SuperCategories => true,
+            Dataset::AiSummaries => cfg.sync_ai_summaries,
+            Dataset::Chat => cfg.sync_chat_history && has_mem,
+            Dataset::Memory => cfg.sync_screen_memory && has_mem,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 开关和记忆库决定哪些数据集同步：核心三类总在；聊天和屏幕记忆还要有记忆库。
+    #[test]
+    fn enabled_datasets_follow_the_switches() {
+        use Dataset::{AiSummaries, Chat, Core, Memory, SiteRules, SuperCategories};
+        let mut cfg = Settings::default();
+        assert_eq!(
+            enabled_datasets(&cfg, true),
+            vec![Core, SiteRules, SuperCategories]
+        );
+
+        cfg.sync_ai_summaries = true;
+        cfg.sync_chat_history = true;
+        cfg.sync_screen_memory = true;
+        assert_eq!(
+            enabled_datasets(&cfg, true),
+            vec![Core, SiteRules, SuperCategories, AiSummaries, Chat, Memory]
+        );
+        // 没有记忆库：聊天和屏幕记忆开着也不同步
+        assert_eq!(
+            enabled_datasets(&cfg, false),
+            vec![Core, SiteRules, SuperCategories, AiSummaries]
+        );
+    }
 
     /// 「云同步」页按前缀选提示：限流要有自己的前缀，不能和「下一轮自动重试」混在一起。
     #[test]

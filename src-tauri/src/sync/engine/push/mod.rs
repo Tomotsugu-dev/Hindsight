@@ -298,23 +298,16 @@ async fn push_optional(inner: &Arc<Inner>, cfg: &Settings) -> Result<()> {
         return Ok(());
     }
 
-    if cfg.sync_ai_summaries {
-        if let Err(e) = push_ai_summaries(inner).await {
-            log::warn!("push ai_summaries 失败: {e}");
-        }
-    }
-    if cfg.sync_chat_history {
-        if let Some(mem) = &inner.mem {
-            if let Err(e) = push_chat(inner, mem).await {
-                log::warn!("push chat 失败: {e}");
-            }
-        }
-    }
-    if cfg.sync_screen_memory {
-        if let Some(mem) = &inner.mem {
-            if let Err(e) = push_memory(inner, mem).await {
-                log::warn!("push memory 失败: {e}");
-            }
+    for dataset in super::enabled_datasets(cfg, inner.mem.is_some()) {
+        let res = match dataset {
+            // The outbox drives these; push_round uploads them.
+            Dataset::Core | Dataset::SiteRules | Dataset::SuperCategories => continue,
+            Dataset::AiSummaries => push_ai_summaries(inner).await,
+            Dataset::Chat => push_chat(inner, inner.mem.as_ref().expect("gated")).await,
+            Dataset::Memory => push_memory(inner, inner.mem.as_ref().expect("gated")).await,
+        };
+        if let Err(e) = res {
+            log::warn!("push {} 失败: {e}", dataset.name());
         }
     }
     Ok(())

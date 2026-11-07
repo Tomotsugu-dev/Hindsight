@@ -46,6 +46,9 @@ pub(crate) enum FileKind {
 /// Which dataset a file belongs to. A dataset is a group of files pulled together,
 /// each with its own pull cursor. Core, website rules and super-categories are
 /// always on; AI summaries, chat and memory follow their settings switches (ADR-0006).
+///
+/// A new variant also goes into [`Self::ALL`]: a round syncs only the datasets
+/// listed there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Dataset {
     Core,
@@ -57,6 +60,15 @@ pub(crate) enum Dataset {
 }
 
 impl Dataset {
+    pub(crate) const ALL: [Dataset; 6] = [
+        Dataset::Core,
+        Dataset::SiteRules,
+        Dataset::SuperCategories,
+        Dataset::AiSummaries,
+        Dataset::Chat,
+        Dataset::Memory,
+    ];
+
     /// The dataset's name in `sync_cursor`: the `chat` in `push.chat`, and the key
     /// of WebDAV bookmarks. Users' databases hold it, so it must not change.
     pub(crate) fn name(self) -> &'static str {

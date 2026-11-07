@@ -85,37 +85,14 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         return Ok(());
     }
     // Settings: pull reads the optional-dataset switches and the ignore rules.
-    let opt_cfg = crate::repo::settings::load(&inner.pool).await.ok();
-    let ignore_rules: Vec<IgnoreRule> = opt_cfg
-        .as_ref()
-        .map(|c| c.ignore_rules.clone())
+    // Settings that cannot be read count as the defaults: every switch off.
+    let cfg = crate::repo::settings::load(&inner.pool)
+        .await
         .unwrap_or_default();
-    let (sync_ai, sync_chat, sync_scrn_mem) = opt_cfg
-        .map(|c| {
-            (
-                c.sync_ai_summaries,
-                c.sync_chat_history,
-                c.sync_screen_memory,
-            )
-        })
-        .unwrap_or((false, false, false));
-
-    // Core, website rules and super-categories always run. Optional datasets follow
-    // their switches; chat and screen memory also need the memory database.
-    let has_mem = inner.mem.is_some();
     let mut streams: Vec<(Dataset, String)> = Vec::new();
-    for (dataset, enabled) in [
-        (Dataset::Core, true),
-        (Dataset::SiteRules, true),
-        (Dataset::SuperCategories, true),
-        (Dataset::AiSummaries, sync_ai),
-        (Dataset::Chat, sync_chat && has_mem),
-        (Dataset::Memory, sync_scrn_mem && has_mem),
-    ] {
-        if enabled {
-            let name = inner.cloud().pull_cursor_name(dataset);
-            streams.push((dataset, io::read_cursor(&inner.pool, &name).await?));
-        }
+    for dataset in super::enabled_datasets(&cfg, inner.mem.is_some()) {
+        let name = inner.cloud().pull_cursor_name(dataset);
+        streams.push((dataset, io::read_cursor(&inner.pool, &name).await?));
     }
 
     // One listing per round for all the running streams; each stream then
@@ -131,7 +108,7 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
 
     let mut applied = 0u64;
     for (dataset, cursor) in &streams {
-        applied += pull_stream(inner, *dataset, cursor, &files, self_id, &ignore_rules).await?;
+        applied += pull_stream(inner, *dataset, cursor, &files, self_id, &cfg.ignore_rules).await?;
     }
     if applied > 0 {
         log::info!("sync pull done, merged {applied} remote files");
