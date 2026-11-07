@@ -2197,11 +2197,11 @@ async fn switching_to_webdav_uploads_this_devices_history() {
     let dav = Arc::new(FakeDav::new());
     let client = WebDavClient::with_fake_server(dav.clone(), a.pool.clone(), "device-a".into());
     {
-        let _paused = a.engine.pause_flushes().await;
+        let mut paused = a.engine.pause_flushes().await;
         switch_backend(&a.pool, "device-a", to_webdav)
             .await
             .unwrap();
-        a.engine.replace_cloud(CloudBackend::from(client));
+        paused.replace_cloud(CloudBackend::from(client));
     }
     a.engine.sync_now().await.unwrap();
 
@@ -2792,7 +2792,10 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
     a.engine.sync_now().await.unwrap();
     save_test_credentials(&b.pool, "me", "app-password").await;
     let client = WebDavClient::with_fake_server(dav, b.pool.clone(), "device-b".into());
-    b.engine.replace_cloud(CloudBackend::from(client));
+    b.engine
+        .pause_flushes()
+        .await
+        .replace_cloud(CloudBackend::from(client));
     let webdav_cursor = b.engine.cloud().pull_cursor_name(Dataset::SiteRules);
     b.engine.sync_now().await.unwrap();
     assert_eq!(
@@ -2811,7 +2814,10 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
     );
 
     let drive_client = DriveClient::with_fake_drive(drive, b.pool.clone());
-    b.engine.replace_cloud(CloudBackend::from(drive_client));
+    b.engine
+        .pause_flushes()
+        .await
+        .replace_cloud(CloudBackend::from(drive_client));
     b.engine.sync_now().await.unwrap();
     assert_eq!(
         stored_site_rule(&b.pool, "drive.example").await,

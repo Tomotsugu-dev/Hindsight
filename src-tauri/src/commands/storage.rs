@@ -283,8 +283,8 @@ pub(crate) async fn purge_cloud_data_impl(
 
     // Held until this function returns: a push landing mid-way would upload
     // this device's files again right after they were deleted.
-    let _gate = engine.pause_flushes().await;
-    let cloud = engine.cloud();
+    let paused = engine.pause_flushes().await;
+    let cloud = paused.cloud();
     if !cloud.ensure_credential().await.map_err(|e| e.to_string())? {
         return Err(crate::error::Error::NotSignedIn.to_string());
     }
@@ -379,8 +379,8 @@ pub(crate) async fn forget_remote_device_impl(
     }
 
     // 挡住并发 push/pull（详见 purge_cloud_data_impl 同位置注释）
-    let _gate = engine.pause_flushes().await;
-    let cloud = engine.cloud();
+    let paused = engine.pause_flushes().await;
+    let cloud = paused.cloud();
 
     // 没登录直接拒绝 —— 不能只动本机不动云端：那样下次 pull 会把刚清的设备又拉回来
     let signed_in = cloud

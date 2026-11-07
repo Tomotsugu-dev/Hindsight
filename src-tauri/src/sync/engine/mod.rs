@@ -106,9 +106,9 @@ pub(super) struct Inner {
     /// and screen text. `None` when it failed to open at startup; those two
     /// datasets then never sync, whatever the settings say.
     pub(super) mem: Option<crate::memory::MemoryDb>,
-    /// The cloud backend sync uses: Google Drive or WebDAV. Replacing it takes
-    /// `flush_gate`, which a push or pull round holds from start to end, so a
-    /// round uses one backend throughout.
+    /// The cloud backend sync uses: Google Drive or WebDAV. Only
+    /// [`Paused::replace_cloud`] replaces it, and a push or pull round holds
+    /// `flush_gate` from start to end, so a round uses one backend throughout.
     pub(super) cloud: std::sync::Mutex<Arc<CloudBackend>>,
     /// This device's `device_id`, a UUID. Every file this device uploads is named
     /// `device.<self_id>.…`, which is how pull tells other devices' files apart.
@@ -193,22 +193,24 @@ impl SyncEngine {
         }
     }
 
-    /// 暂停 push/pull：等在途 flush 结束并挡住新的，直到返回的 guard 被 drop。
-    /// purge_local_data / purge_cloud_data 这类"动表"的命令在整个清理期间持有它。
-    pub async fn pause_flushes(&self) -> tokio::sync::MutexGuard<'_, ()> {
-        self.inner.flush_gate.lock().await
+    /// Pauses sync: waits for the running push or pull to finish, and holds back
+    /// new ones until the returned guard is dropped. A command that changes the
+    /// tables or replaces the backend holds it from start to end; see
+    /// `Inner::flush_gate` for why.
+    pub async fn pause_flushes(&self) -> Paused<'_> {
+        let gate = self.inner.flush_gate.lock().await;
+        Paused {
+            inner: &self.inner,
+            cloud: self.inner.cloud(),
+            _gate: gate,
+        }
     }
 
-    /// 同步现在用的后端，给清云端的命令用。要在暂停同步以后取：先取再暂停的话，中间
-    /// 换了后端，命令会删到旧后端上。
-    pub fn cloud(&self) -> Arc<CloudBackend> {
+    /// For tests: returns the backend without pausing sync, for example to read
+    /// a cursor name.
+    #[cfg(test)]
+    pub(crate) fn cloud(&self) -> Arc<CloudBackend> {
         self.inner.cloud()
-    }
-
-    /// 换掉同步用的后端。换后端的事务提交后、恢复同步之前调用，这样下一轮就用新后端，
-    /// 不用重启。
-    pub fn replace_cloud(&self, cloud: CloudBackend) {
-        *self.inner.cloud.lock().unwrap() = Arc::new(cloud);
     }
 
     /// 借出当前设备身份。给 command-layer 入口（`purge_cloud_data` 等）走，
@@ -290,6 +292,42 @@ impl SyncEngine {
     }
 }
 
+/// A pause in sync, which ends when this is dropped. Only this hands out and
+/// replaces the backend, so a command that holds it uses the backend sync uses,
+/// and the backend does not change halfway through.
+///
+/// Push, pull and `Paused` take turns holding the same lock:
+///
+/// ```text
+/// push    hold → upload → release
+/// Paused                          hold → replace backend → release
+/// ```
+///
+/// While holding it, do not sync or pause again: the lock is not reentrant, so
+/// it would wait forever.
+pub struct Paused<'a> {
+    inner: &'a Inner,
+    /// The backend when sync was paused. It is kept here so that
+    /// [`Self::cloud`] can lend a reference, which cannot be used after `Paused`
+    /// is dropped.
+    cloud: Arc<CloudBackend>,
+    _gate: tokio::sync::MutexGuard<'a, ()>,
+}
+
+impl Paused<'_> {
+    /// Returns the backend sync uses.
+    pub fn cloud(&self) -> &CloudBackend {
+        &self.cloud
+    }
+
+    /// Replaces the backend sync uses. Call it after the backend switch commits.
+    pub fn replace_cloud(&mut self, cloud: CloudBackend) {
+        let cloud = Arc::new(cloud);
+        *self.inner.cloud.lock().unwrap() = Arc::clone(&cloud);
+        self.cloud = cloud;
+    }
+}
+
 async fn run_loop(inner: Arc<Inner>) {
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
@@ -358,6 +396,41 @@ mod tests {
         assert_eq!(
             enabled_datasets(&cfg, false),
             vec![Core, SiteRules, SuperCategories, AiSummaries]
+        );
+    }
+
+    /// 暂停期间换了后端，再从同一个 `Paused` 取，拿到的是新后端。
+    #[tokio::test]
+    async fn paused_cloud_is_the_replaced_backend() {
+        use crate::sync::cloud::drive::{DriveClient, InMemoryDriveStore};
+        use crate::sync::cloud::webdav::{FakeDav, WebDavClient};
+        let pool = DbPool::open_in_memory().await.unwrap();
+        let drive = DriveClient::with_fake_drive(Arc::new(InMemoryDriveStore::new()), pool.clone());
+        let engine = SyncEngine::with_backend(
+            pool.clone(),
+            None,
+            CloudBackend::from(drive),
+            "device-a".into(),
+        );
+        let webdav = || {
+            let dav = Arc::new(FakeDav::new());
+            CloudBackend::from(WebDavClient::with_fake_server(
+                dav,
+                pool.clone(),
+                "device-a".into(),
+            ))
+        };
+        let webdav_cursor = webdav().pull_cursor_name(Dataset::Core);
+
+        let mut paused = engine.pause_flushes().await;
+        assert_ne!(
+            paused.cloud().pull_cursor_name(Dataset::Core),
+            webdav_cursor
+        );
+        paused.replace_cloud(webdav());
+        assert_eq!(
+            paused.cloud().pull_cursor_name(Dataset::Core),
+            webdav_cursor
         );
     }
 

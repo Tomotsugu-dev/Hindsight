@@ -121,7 +121,7 @@ async fn switch_to_account(
         return Ok(());
     }
 
-    let _paused = engine.pause_flushes().await;
+    let mut paused = engine.pause_flushes().await;
     match action {
         ConnectAction::UseThisDatabase => switch_backend(pool, engine.self_id(), to).await?,
         ConnectAction::ClaimThisDatabase => {
@@ -138,7 +138,7 @@ async fn switch_to_account(
         }
         ConnectAction::UpdateCredentials => {}
     }
-    engine.replace_cloud(cloud);
+    paused.replace_cloud(cloud);
     engine.clear_last_error().await;
     Ok(())
 }
