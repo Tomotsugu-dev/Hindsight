@@ -5,11 +5,14 @@
 //! that failed, so the files merged after it are merged again next round.
 
 mod activities;
+mod ai_summaries;
 mod app_group_members;
 mod app_groups;
 mod app_icons;
 mod categories;
+mod chat;
 mod device_meta;
+mod memory;
 mod site_rules;
 mod super_categories;
 #[cfg(test)]
@@ -221,17 +224,10 @@ async fn pull_stream(
             FileKind::AppIcons => app_icons::merge(&inner.pool, &body).await,
             FileKind::AppGroups => app_groups::merge(&inner.pool, &body).await,
             FileKind::AppGroupMembers => app_group_members::merge(&inner.pool, &body).await,
-            FileKind::AiSummaries => super::datasets::merge_ai_summaries(&inner.pool, &body).await,
-            FileKind::Chat => {
-                super::datasets::merge_chat(inner.mem.as_ref().expect("gated"), &body).await
-            }
+            FileKind::AiSummaries => ai_summaries::merge(&inner.pool, &body).await,
+            FileKind::Chat => chat::merge(inner.mem.as_ref().expect("gated"), &body).await,
             FileKind::Memory(_) => {
-                super::datasets::merge_memory_sessions(
-                    inner.mem.as_ref().expect("gated"),
-                    &device_id,
-                    &body,
-                )
-                .await
+                memory::merge(inner.mem.as_ref().expect("gated"), &device_id, &body).await
             }
             FileKind::Tombstone => tombstone::merge(&inner.pool, &device_id, &body).await,
         };
