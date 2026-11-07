@@ -220,10 +220,15 @@ impl DriveClient {
         Ok(())
     }
 
-    /// Drive's steps to remove a device: upload `device.<id>.tombstone.json`, then
-    /// delete the device's other files one by one. A file that fails to delete is
-    /// only logged: the other devices still drop its rows because of the
-    /// tombstone, and the file only takes up space.
+    /// Removes `device_id` from Drive and returns how many files were deleted.
+    ///
+    /// A file that cannot be deleted is only logged and is not counted: the
+    /// tombstone is already uploaded, so the other devices still drop the rows of
+    /// `device_id`, and the file left behind only takes up space.
+    ///
+    /// # Errors
+    ///
+    /// The tombstone cannot be uploaded: [`Error::Other`]
     pub(super) async fn remove_device(&self, device_id: &str, cleared_at: &str) -> Result<u64> {
         let tombstone_name = FileName {
             device_id: device_id.to_string(),
