@@ -61,6 +61,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { ChartOffIcon } from "../components/icons/ChartOffIcon";
 
 export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   // 开发
@@ -132,6 +133,7 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Monitor,
   MoreHorizontal,
   EyeOff,
+  ChartOff: ChartOffIcon,
   Tag,
 };
 

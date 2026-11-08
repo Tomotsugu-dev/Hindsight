@@ -1073,12 +1073,22 @@ const PRIVATE_CATEGORY_SQL: &str = r#"
      WHERE id = 'hidden' AND name IN ('隐藏', '隱藏', 'Hidden', '非表示', 'Oculto');
 "#;
 
+/// v48: changes the default icons of two built-in categories: `private` from `Lock` to
+/// `EyeOff`, and `hidden` from `EyeOff` to `ChartOff`.
+///
+/// An icon the user changed stays. `updated_at` does not change and nothing goes into the
+/// outbox: every device's migration changes the icons itself.
+const CATEGORY_ICONS_SQL: &str = r#"
+    UPDATE categories SET icon = 'EyeOff' WHERE id = 'private' AND icon = 'Lock';
+    UPDATE categories SET icon = 'ChartOff' WHERE id = 'hidden' AND icon = 'EyeOff';
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 37] = [
+    let extras: [&'static str; 38] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -1116,6 +1126,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         PLUGINS_TABLE_SQL,                     // v45
         DAILY_USAGE_SQL,                       // v46
         PRIVATE_CATEGORY_SQL,                  // v47
+        CATEGORY_ICONS_SQL,                    // v48
     ];
     pool.0
         .call(move |conn| {
@@ -1360,6 +1371,63 @@ mod tests {
         );
     }
 
+    /// 全新安装以后，把库退回 v47、两个分类是给定图标的样子，再升级一次。也返回升级前
+    /// 这两行的 `updated_at`。
+    async fn upgraded_from_v47(private_icon: &str, hidden_icon: &str) -> (DbPool, String) {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        exec(
+            &pool,
+            &format!(
+                "UPDATE categories SET icon = '{private_icon}' WHERE id = 'private';
+                 UPDATE categories SET icon = '{hidden_icon}' WHERE id = 'hidden';
+                 DELETE FROM schema_version WHERE version > 47;"
+            ),
+        )
+        .await;
+        let updated_at = text(&pool, BOTH_UPDATED_AT).await;
+        run(&pool).await.unwrap();
+        (pool, updated_at)
+    }
+
+    const BOTH_UPDATED_AT: &str = "SELECT
+        (SELECT updated_at FROM categories WHERE id = 'private') || ' | ' ||
+        (SELECT updated_at FROM categories WHERE id = 'hidden')";
+
+    /// v48：还是默认图标的「隐私」换成眼睛加一杠，「不计入统计」换成统计图加一杠；
+    /// 全新安装也一样；updated_at 不变。
+    #[tokio::test]
+    async fn default_icons_of_private_and_hidden_change() {
+        let fresh = DbPool::open_in_memory().await.unwrap();
+        run(&fresh).await.unwrap();
+        let (upgraded, updated_at) = upgraded_from_v47("Lock", "EyeOff").await;
+        for pool in [&fresh, &upgraded] {
+            assert_eq!(
+                text(pool, "SELECT icon FROM categories WHERE id = 'private'").await,
+                "EyeOff"
+            );
+            assert_eq!(
+                text(pool, "SELECT icon FROM categories WHERE id = 'hidden'").await,
+                "ChartOff"
+            );
+        }
+        assert_eq!(text(&upgraded, BOTH_UPDATED_AT).await, updated_at);
+    }
+
+    /// v48：用户自己换过的图标不动。
+    #[tokio::test]
+    async fn changed_icons_of_private_and_hidden_stay() {
+        let (pool, _) = upgraded_from_v47("Shield", "Tag").await;
+        assert_eq!(
+            text(&pool, "SELECT icon FROM categories WHERE id = 'private'").await,
+            "Shield"
+        );
+        assert_eq!(
+            text(&pool, "SELECT icon FROM categories WHERE id = 'hidden'").await,
+            "Tag"
+        );
+    }
+
     /// 空库全量跑:35 个版本齐、关键表齐、ALTER 链条的关键列在、种子数据就位。
     /// 任何一条迁移悄悄失效(表名打错/顺序错),这里第一时间红。
     #[tokio::test]
@@ -1369,7 +1437,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            47
+            48
         );
 
         let tables = table_names(&pool).await;
@@ -1742,7 +1810,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            47
+            48
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1798,7 +1866,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            47
+            48
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

@@ -151,6 +151,11 @@
   background: #dc2626;
 }
 
+.btnIcon {
+  flex-shrink: 0;
+  margin-right: 5px;
+}
+
 /* 正在执行的确认按钮：不像别的禁用按钮那样变淡，转圈要看得见 */
 .btnBusy:disabled {
   opacity: 0.85;

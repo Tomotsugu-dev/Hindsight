@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { EyeOff } from "lucide-react";
 import { ConfirmDialog } from "../ConfirmDialog/ConfirmDialog";
 import { describeCount } from "../../utils/privateCategory";
 import type { PrivacyDialogState } from "./usePrivacyDialog";
@@ -60,6 +61,7 @@ export function PrivacyDialog({ state, onConfirm, onCancel }: PrivacyDialogProps
         </div>
       }
       confirmLabel={confirmLabel}
+      confirmIcon={step.kind === "ask" ? EyeOff : undefined}
       cancelLabel={step.kind === "purgeFailed" ? t("common.close") : undefined}
       variant="danger"
       confirmDisabled={step.kind === "ask" && step.count.kind === "loading"}

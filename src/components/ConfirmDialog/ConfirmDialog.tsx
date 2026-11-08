@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, type LucideIcon } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 import { ScrollIndicator } from "../ScrollIndicator/ScrollIndicator";
@@ -15,6 +15,8 @@ interface ConfirmDialogProps {
   /** Optional body. Strings preserve line breaks; nodes can contain rich content. */
   message?: ReactNode;
   confirmLabel?: string;
+  /** Shown before the confirm text. The spinner takes its place while busy */
+  confirmIcon?: LucideIcon;
   cancelLabel?: string;
   variant?: "primary" | "danger";
   /** Grays out the confirm button, and Enter does nothing */
@@ -32,6 +34,7 @@ export function ConfirmDialog({
   notice,
   message,
   confirmLabel,
+  confirmIcon: ConfirmIcon,
   cancelLabel,
   variant = "primary",
   confirmDisabled = false,
@@ -111,8 +114,12 @@ export function ConfirmDialog({
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
-            {busy && (
+            {busy ? (
               <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} aria-hidden />
+            ) : (
+              ConfirmIcon && (
+                <ConfirmIcon size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+              )
             )}
             {confirmText}
           </button>
