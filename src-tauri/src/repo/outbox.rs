@@ -32,10 +32,13 @@ pub enum OutboxEntity {
     AppGroup,
     AppGroupMember,
     SuperCategory,
+    /// One day's screen-memory file of this device. Push drops these rows while
+    /// screen-memory sync is off.
+    Memory,
 }
 
 impl OutboxEntity {
-    pub const ALL: [OutboxEntity; 8] = [
+    pub const ALL: [OutboxEntity; 9] = [
         OutboxEntity::Activity,
         OutboxEntity::Category,
         OutboxEntity::SiteRule,
@@ -44,6 +47,7 @@ impl OutboxEntity {
         OutboxEntity::AppGroup,
         OutboxEntity::AppGroupMember,
         OutboxEntity::SuperCategory,
+        OutboxEntity::Memory,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -56,6 +60,7 @@ impl OutboxEntity {
             OutboxEntity::AppGroup => "app_group",
             OutboxEntity::AppGroupMember => "app_group_member",
             OutboxEntity::SuperCategory => "super_category",
+            OutboxEntity::Memory => "memory",
         }
     }
 
@@ -72,9 +77,9 @@ impl OutboxEntity {
 /// lands and this row does not, the file is never marked dirty, and the change
 /// only goes out once some later change to the same file marks it dirty again.
 ///
-/// An activity's `payload` must carry `localDate`: push uses it to find which
-/// day's file to rewrite, and drops the row without it. Push does not read the
-/// `payload` of any other entity.
+/// An activity or memory row's `payload` must carry `localDate`: push uses it to
+/// find which day's file to rewrite, and drops the row without it. Push does not
+/// read the `payload` of any other entity.
 pub fn enqueue(
     conn: &Connection,
     op: OutboxOp,

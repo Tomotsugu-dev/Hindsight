@@ -1,8 +1,9 @@
 //! Push: rewrites this device's changed files in the cloud, each one whole.
 //!
 //! The outbox says which files to rewrite: each row points to one file, and a
-//! round rewrites a file only once. The optional datasets do not use the outbox;
-//! `push_optional` compares fingerprints to decide.
+//! round rewrites a file only once. `push_optional` compares fingerprints to
+//! decide the optional datasets. Deleting sessions from a screen-memory day may
+//! not change the fingerprint, so the outbox marks that day dirty.
 //!
 //! Each kind of file has a submodule that reads its whole content from the local
 //! tables. A submodule only reads tables: it does not touch the cloud, the
@@ -68,15 +69,11 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
         }
     }
 
-    // 可选上云数据集(AI 总结/聊天历史/屏幕记忆):水位线检测,与 outbox 无关,
+    let cfg = crate::repo::settings::load(&inner.pool).await?;
+    // 可选上云数据集(AI 总结/聊天历史/屏幕记忆):水位线检测,
     // 放在 outbox 早退之前保证每轮 push tick 都有机会跑到。
-    match crate::repo::settings::load(&inner.pool).await {
-        Ok(cfg) => {
-            if let Err(e) = push_optional(inner, &cfg).await {
-                log::warn!("push 可选数据集失败: {e}");
-            }
-        }
-        Err(e) => log::warn!("push 可选数据集跳过(读设置失败): {e}"),
+    if let Err(e) = push_optional(inner, &cfg).await {
+        log::warn!("push 可选数据集失败: {e}");
     }
 
     let rows = io::read_due_outbox(&inner.pool, PUSH_BATCH_SIZE).await?;
@@ -85,11 +82,21 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     }
 
     // 把 outbox 行分组到"脏文件"
-    let (groups, ungroupable_ids) = group_outbox(&rows);
-    // 没法分组的行（entity 未知 / payload 损坏）立刻 drop：它们永远不可能发出去，
-    // 留着会每个 tick 重读一次、占 batch 名额、把 pending 计数永久顶高
-    if !ungroupable_ids.is_empty() {
-        io::delete_outbox_rows(&inner.pool, &ungroupable_ids).await?;
+    let (mut groups, mut dropped_ids) = group_outbox(&rows);
+    let enabled = super::enabled_datasets(&cfg, inner.mem.is_some());
+    groups.retain(|kind, ids| {
+        let on = enabled.contains(&kind.dataset());
+        if !on {
+            dropped_ids.append(ids);
+        }
+        on
+    });
+    // Drop the rows that will not be uploaded: rows nothing recognizes, and rows of
+    // a dataset that is switched off. Kept, they would be read again every round,
+    // take places in each batch, and keep "pending" on the Devices page from going
+    // down.
+    if !dropped_ids.is_empty() {
+        io::delete_outbox_rows(&inner.pool, &dropped_ids).await?;
     }
     if groups.is_empty() {
         return Ok(());
@@ -110,7 +117,7 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
             kind: kind.clone(),
         }
         .to_file_name();
-        let content = match build_content(&inner.pool, self_id, &kind).await {
+        let content = match build_content(&inner.pool, inner.mem.as_ref(), self_id, &kind).await {
             Ok(c) => c,
             Err(e) => {
                 log::warn!("生成 {} 内容失败: {e}", name);
@@ -203,27 +210,15 @@ fn group_outbox(rows: &[OutboxRow]) -> (HashMap<FileKind, Vec<i64>>, Vec<i64>) {
 }
 
 /// Returns the file that `row` marks dirty, or `None` when its entity is
-/// unknown or an activity row has no usable `localDate`.
+/// unknown or an activity or memory row has no usable `localDate`.
 fn from_outbox(row: &OutboxRow) -> Option<FileKind> {
     let Some(entity) = OutboxEntity::parse(&row.entity) else {
         log::warn!("outbox row {} entity 未知: {}", row.id, row.entity);
         return None;
     };
     let kind = match entity {
-        OutboxEntity::Activity => {
-            let date = serde_json::from_str::<Value>(&row.payload)
-                .ok()
-                .and_then(|p| {
-                    p.get("localDate")
-                        .and_then(|v| v.as_str())
-                        .and_then(|s| s.parse::<chrono::NaiveDate>().ok())
-                });
-            let Some(date) = date else {
-                log::warn!("outbox row {} has no usable localDate", row.id);
-                return None;
-            };
-            FileKind::Activities(date)
-        }
+        OutboxEntity::Activity => FileKind::Activities(local_date(row)?),
+        OutboxEntity::Memory => FileKind::Memory(local_date(row)?),
         OutboxEntity::Category => FileKind::Categories,
         OutboxEntity::SuperCategory => FileKind::SuperCategories,
         OutboxEntity::SiteRule => FileKind::SiteRules,
@@ -235,9 +230,26 @@ fn from_outbox(row: &OutboxRow) -> Option<FileKind> {
     Some(kind)
 }
 
-/// The whole content of one outbox-driven file, built from the tables. The
-/// optional datasets are not outbox-driven; `push_optional` builds those.
-async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<Vec<u8>> {
+/// Reads which day a day-file row points to: the `localDate` in its payload.
+fn local_date(row: &OutboxRow) -> Option<chrono::NaiveDate> {
+    let date = serde_json::from_str::<Value>(&row.payload)
+        .ok()
+        .and_then(|p| p.get("localDate")?.as_str()?.parse().ok());
+    if date.is_none() {
+        log::warn!("outbox row {} has no usable localDate", row.id);
+    }
+    date
+}
+
+/// Builds the whole content of a file the outbox marked dirty, from the tables.
+/// A screen-memory day is built from `mem`. AI summaries and chat do not go
+/// through the outbox; `push_optional` builds them.
+async fn build_content(
+    pool: &DbPool,
+    mem: Option<&MemoryDb>,
+    self_id: &str,
+    kind: &FileKind,
+) -> Result<Vec<u8>> {
     match kind {
         FileKind::Activities(date) => activities::build(pool, self_id, &date.to_string()).await,
         FileKind::Categories => categories::build(pool).await,
@@ -247,7 +259,11 @@ async fn build_content(pool: &DbPool, self_id: &str, kind: &FileKind) -> Result<
         FileKind::AppIcons => app_icons::build(pool).await,
         FileKind::AppGroups => app_groups::build(pool).await,
         FileKind::AppGroupMembers => app_group_members::build(pool).await,
-        FileKind::Tombstone | FileKind::AiSummaries | FileKind::Chat | FileKind::Memory(_) => {
+        FileKind::Memory(date) => match mem {
+            Some(mem) => memory::build(mem, &date.to_string()).await,
+            None => Err(Error::Other("the memory database is not open".into())),
+        },
+        FileKind::Tombstone | FileKind::AiSummaries | FileKind::Chat => {
             Err(Error::Other(format!("{kind:?} is not an outbox file")))
         }
     }
@@ -460,7 +476,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let bytes = build_content(&pool, TEST_SELF_ID, &FileKind::SuperCategories)
+        let bytes = build_content(&pool, None, TEST_SELF_ID, &FileKind::SuperCategories)
             .await
             .unwrap();
         let rows: Vec<SuperCategoryPayload> = serde_json::from_slice(&bytes).unwrap();
