@@ -35,10 +35,11 @@ pub async fn purge_app_group_data(
         .ok_or_else(|| "屏幕记忆库不可用(启动时打开失败,详见日志)".to_string())?;
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     let root = std::path::PathBuf::from(&cfg.screenshot_path);
+    let self_id = crate::device::self_id().map_err(String::from)?;
 
     let target = PurgeTarget::AppGroup(group_id);
     svc.run_with_session_cleared(|| async {
-        purge::purge(&pool, Some(memdb), &root, &target)
+        purge::purge(&pool, Some(memdb), &root, self_id, &target)
             .await
             .map(|_| ())
             .map_err(String::from)

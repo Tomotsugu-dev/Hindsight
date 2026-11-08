@@ -4,11 +4,43 @@
 //! crate Error 适配成 String 给前端。
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use tauri::State;
 
+use crate::capture::CaptureService;
+use crate::commands::screen_memory::MemoryState;
 use crate::repo::categories::{self, Category, CategoryInput, CategoryPatch, UnclassifiedApp};
+use crate::repo::purge::{self, PurgeReport, PurgeTarget};
+use crate::repo::settings;
 use crate::storage::{migrations, DbPool};
+use crate::sync::engine::SyncEngine;
+
+/// Deletes all data of the apps and websites now in the `private` category, and returns how
+/// much was deleted. When an app or a website is set as private, the category may be saved
+/// while the deletion fails. The frontend then calls this to try again.
+///
+/// Sync is paused first: the deletion writes outbox rows and deletes from tables that push
+/// reads. Then capture drops the activity row it is recording, because that row may be one of
+/// the rows to delete.
+#[tauri::command]
+pub async fn purge_private_data(
+    pool: State<'_, DbPool>,
+    mem: State<'_, MemoryState>,
+    svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
+) -> Result<PurgeReport, String> {
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let root = std::path::PathBuf::from(&cfg.screenshot_path);
+    let _paused = engine.pause_flushes().await;
+    svc.run_with_session_cleared(|| async {
+        let self_id = engine.self_id();
+        purge::purge(&pool, mem.0.as_ref(), &root, self_id, &PurgeTarget::Private)
+            .await
+            .map_err(String::from)
+    })
+    .await
+}
 
 /// 拉所有分类（包括内置和用户自建），按 sort_order 升序。
 #[tauri::command]

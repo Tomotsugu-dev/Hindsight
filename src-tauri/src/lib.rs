@@ -307,6 +307,7 @@ pub fn run() {
             commands::categories::unassign_app,
             commands::categories::list_unclassified_apps,
             commands::categories::translate_default_category_names,
+            commands::categories::purge_private_data,
             // --- site_rules: website rules (ADR-0013) ---
             commands::site_rules::list_sites,
             commands::site_rules::set_site_rule,

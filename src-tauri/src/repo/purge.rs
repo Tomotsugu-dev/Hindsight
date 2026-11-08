@@ -18,6 +18,8 @@ use rusqlite::Connection;
 use crate::error::{Error, Result};
 use crate::memory::MemoryDb;
 use crate::repo::app_groups;
+use crate::repo::outbox::{enqueue_days, OutboxEntity};
+use crate::repo::sql::{from_stats_category_sql, matching_rule_host_sql, FROM_MEMBER_GROUP};
 use crate::storage::{DbPool, DbResult, SqliteResultExt};
 
 /// What to delete.
@@ -28,6 +30,19 @@ pub enum PurgeTarget {
     /// "Delete anyway": the records of every process in this app group. The group is
     /// soft-deleted afterwards.
     AppGroup(String),
+    /// The activity records of apps and websites in the `private` category. The same SQL as the
+    /// reports decides which rows are private (ADR-0019).
+    Private,
+}
+
+impl PurgeTarget {
+    /// Whether the deletion is synced to the cloud.
+    fn should_sync_deletion(&self) -> bool {
+        match self {
+            PurgeTarget::AppGroup(_) => false,
+            PurgeTarget::Private => true,
+        }
+    }
 }
 
 /// How much [`purge`] deleted.
@@ -58,8 +73,9 @@ struct ToDelete {
 /// - In the memory database, the sessions of these processes and the sessions that contain
 ///   these screenshots. A session goes as a whole if any one of its screenshots is deleted.
 ///
-/// It deletes on this device only and writes nothing to the outbox. The day files in the
-/// cloud and the copies on other devices stay (ADR-0001).
+/// `AppGroup` deletes on this device only (ADR-0001). `Private` also deletes in the cloud
+/// through the outbox, so the caller must pause sync first, or already be inside a sync round.
+/// `self_id` is the ID of this device.
 ///
 /// # Errors
 ///
@@ -69,6 +85,7 @@ pub async fn purge(
     pool: &DbPool,
     mem: Option<&MemoryDb>,
     screenshot_root: &Path,
+    self_id: &str,
     target: &PurgeTarget,
 ) -> Result<PurgeReport> {
     let to_delete = find(pool, target).await?;
@@ -77,14 +94,21 @@ pub async fn purge(
     // find their data through the screenshot paths in the activity rows. So the main database
     // goes last, and a run that fails at an earlier step can run again and still find it.
     if let Some(mem) = mem {
+        if target.should_sync_deletion() {
+            // Before the screen-memory sessions are deleted: after that, their dates cannot be
+            // found.
+            enqueue_memory_days(pool, mem, &to_delete).await?;
+        }
         report.memory_sessions = delete_memory(mem, &to_delete).await?;
     }
     report.screenshots = delete_files(screenshot_root, &to_delete.screenshots).await?;
-    report.activities = delete_rows(pool, &to_delete).await?;
+    let sync_as = target.should_sync_deletion().then_some(self_id);
+    report.activities = delete_rows(pool, &to_delete, sync_as).await?;
     match target {
         PurgeTarget::AppGroup(group_id) => {
             delete_group(pool, &to_delete.processes, group_id).await?
         }
+        PurgeTarget::Private => {}
     }
     Ok(report)
 }
@@ -93,6 +117,14 @@ pub async fn purge(
 async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
     let processes = match target {
         PurgeTarget::AppGroup(group_id) => app_groups::active_member_names(pool, group_id).await?,
+        PurgeTarget::Private => {
+            let sql = format!(
+                "SELECT gm.process_name {FROM_MEMBER_GROUP}
+                  WHERE gm.deleted_at IS NULL AND g.deleted_at IS NULL
+                    AND g.category_id = 'private'"
+            );
+            pool.0.call(move |conn| column(conn, &sql, ())).await?
+        }
     };
     let target = target.clone();
     let processes_json = serde_json::to_string(&processes)?;
@@ -105,6 +137,7 @@ async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
                   WHERE process_name IN (SELECT value FROM json_each(?1))",
                 [processes_json],
             ),
+            PurgeTarget::Private => column(conn, &private_rows_sql(), ()),
         })
         .await?;
 
@@ -132,12 +165,46 @@ async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
     })
 }
 
+/// IDs of the activity rows in the `private` category. The category comes from the same SQL as
+/// the reports ([`from_stats_category_sql`]).
+fn private_rows_sql() -> String {
+    format!(
+        "WITH RECURSIVE {} SELECT a.id {} WHERE c.id = 'private'",
+        matching_rule_host_sql("SELECT DISTINCT url_host FROM activities WHERE url_host <> ''"),
+        from_stats_category_sql("activities"),
+    )
+}
+
 /// The sessions to delete in the memory database: those of these processes (`?1`), and those
 /// that contain a screenshot to delete (`?2`).
 const SESSIONS_TO_DELETE: &str = "SELECT id FROM text_sessions
       WHERE app_id IN (SELECT value FROM json_each(?1))
      UNION
      SELECT session_id FROM frames WHERE path IN (SELECT value FROM json_each(?2))";
+
+/// Writes the dates of the screen-memory sessions to delete into the outbox, one `memory` row
+/// per day, so the next push uploads this device's screen-memory files for those days again.
+/// Only sessions recorded on this device count (`text_sessions.origin_device` is NULL).
+async fn enqueue_memory_days(pool: &DbPool, mem: &MemoryDb, to_delete: &ToDelete) -> Result<()> {
+    let processes = serde_json::to_string(&to_delete.processes)?;
+    let screenshots = serde_json::to_string(&to_delete.screenshots)?;
+    let sql = format!(
+        "SELECT DISTINCT local_date FROM text_sessions
+          WHERE origin_device IS NULL AND id IN ({SESSIONS_TO_DELETE})"
+    );
+    let days: Vec<String> = mem
+        .0
+        .call(move |conn| column(conn, &sql, [&processes, &screenshots]))
+        .await?;
+    pool.0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            enqueue_days(&tx, OutboxEntity::Memory, &days).db()?;
+            tx.commit().db()
+        })
+        .await?;
+    Ok(())
+}
 
 /// Deletes the sessions to delete, their lines, and the `frames` rows of the screenshots to
 /// delete. Returns how many sessions were deleted.
@@ -205,13 +272,27 @@ async fn delete_files(root: &Path, screenshots: &[String]) -> Result<u64> {
 
 /// Deletes the data made from the screenshots, then the activity rows, in one transaction.
 /// Returns how many activity rows were deleted.
-async fn delete_rows(pool: &DbPool, to_delete: &ToDelete) -> Result<u64> {
+///
+/// `sync_as` is the ID of this device. When it is set, each day that has deleted rows recorded
+/// on this device gets one `activity` row in the outbox, in the same transaction as the
+/// deletion.
+async fn delete_rows(pool: &DbPool, to_delete: &ToDelete, sync_as: Option<&str>) -> Result<u64> {
     let rows = serde_json::to_string(&to_delete.rows)?;
     let screenshots = serde_json::to_string(&to_delete.screenshots)?;
+    let sync_as = sync_as.map(str::to_string);
     let deleted = pool
         .0
         .call(move |conn| {
             let tx = conn.transaction().db()?;
+            if let Some(self_id) = &sync_as {
+                let days: Vec<String> = column(
+                    &tx,
+                    "SELECT DISTINCT local_date FROM activities
+                      WHERE device_id = ?1 AND id IN (SELECT value FROM json_each(?2))",
+                    [self_id, &rows],
+                )?;
+                enqueue_days(&tx, OutboxEntity::Activity, &days).db()?;
+            }
             for sql in [
                 "DELETE FROM ai_image_descriptions
                   WHERE screenshot_path IN (SELECT value FROM json_each(?1))",
@@ -275,7 +356,8 @@ fn column<T: rusqlite::types::FromSql>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::test_util::fresh_test_pool;
+    use crate::repo::categories::assign_app;
+    use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
 
     async fn seed_vscode_group(pool: &DbPool) {
         pool.0
@@ -466,7 +548,9 @@ mod tests {
         seed_derived(&pool, "chrome.png", 1).await;
 
         let target = PurgeTarget::AppGroup("vscode".into());
-        let report = purge(&pool, Some(&mem), &dir, &target).await.unwrap();
+        let report = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target)
+            .await
+            .unwrap();
 
         assert_eq!(
             report,
@@ -536,7 +620,9 @@ mod tests {
         seed_app_traces(&pool, &mem, &dir, "Chrome", "shared.png", "乙的文字").await;
 
         let target = PurgeTarget::AppGroup("vscode".into());
-        purge(&pool, Some(&mem), &dir, &target).await.unwrap();
+        purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target)
+            .await
+            .unwrap();
 
         assert_eq!(count_activities(&pool, "Code").await, 0);
         assert!(
@@ -562,14 +648,241 @@ mod tests {
         std::fs::create_dir(dir.join("stuck.png")).unwrap();
         let target = PurgeTarget::AppGroup("vscode".into());
 
-        assert!(purge(&pool, Some(&mem), &dir, &target).await.is_err());
+        let failed = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target).await;
+        assert!(failed.is_err());
         assert_eq!(count_activities(&pool, "Code").await, 1, "主库不能动");
         assert!(!group_deleted(&pool, "vscode").await, "组也不能软删");
 
         std::fs::remove_dir(dir.join("stuck.png")).unwrap();
-        purge(&pool, Some(&mem), &dir, &target).await.unwrap();
+        purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target)
+            .await
+            .unwrap();
         assert_eq!(count_activities(&pool, "Code").await, 0);
         assert!(group_deleted(&pool, "vscode").await);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ───────────── Private：按隐私分类删 ─────────────
+
+    const PEER: &str = "peer-device";
+
+    /// 插一行活动：哪个应用、停在哪个网站、哪台设备记的、哪天。不带截图。
+    async fn seed_row(pool: &DbPool, app: &str, host: Option<&str>, device: &str, day: &str) {
+        let (app, host, device, day) = (
+            app.to_string(),
+            host.map(str::to_string),
+            device.to_string(),
+            day.to_string(),
+        );
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                                            local_hour, process_name, window_title,
+                                            category_id, device_id, url_host)
+                     VALUES(?3 || 'T10:00:00Z', ?3 || 'T10:05:00Z', 300, ?3,
+                            10, ?1, 'title', 'other', ?4, ?2)",
+                    rusqlite::params![app, host, day, device],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 插一条记忆会话。`origin` 为 None 是本机的会话。
+    async fn seed_session(mem: &MemoryDb, app: &str, day: &str, origin: Option<&str>) {
+        let (app, day, origin) = (app.to_string(), day.to_string(), origin.map(str::to_string));
+        mem.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title,
+                                               text, origin_device)
+                     VALUES(?1, ?1 || 'T10:00:00Z', ?1 || 'T10:05:00Z', ?2, 't', '文字', ?3)",
+                    rusqlite::params![day, app, origin],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// outbox 里按天的行，按 (entity, localDate) 排好。
+    async fn outbox_days(pool: &DbPool) -> Vec<(String, String)> {
+        pool.0
+            .call(|conn| {
+                column::<String>(
+                    conn,
+                    "SELECT entity || ' ' || json_extract(payload, '$.localDate') FROM sync_outbox
+                      WHERE entity IN ('activity', 'memory') ORDER BY 1",
+                    (),
+                )
+            })
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| {
+                let (entity, day) = row.split_once(' ').unwrap();
+                (entity.to_string(), day.to_string())
+            })
+            .collect()
+    }
+
+    /// 隐私的应用，和隐私网站（连同跟随它的子域名）的行都删；别的行留着。
+    #[tokio::test]
+    async fn private_purge_finds_private_apps_and_sites() {
+        let pool = fresh_test_pool().await;
+        let dir = std::env::temp_dir().join(format!("hs-purge-private-{}", std::process::id()));
+        assign_app(&pool, "Tor", "private").await.unwrap();
+        assign_app(&pool, "Firefox", "browse").await.unwrap();
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        let day = "2026-11-05";
+        seed_row(&pool, "Tor", None, TEST_SELF_ID, day).await;
+        seed_row(
+            &pool,
+            "Firefox",
+            Some("gemini.google.com"),
+            TEST_SELF_ID,
+            day,
+        )
+        .await;
+        seed_row(&pool, "Firefox", Some("github.com"), TEST_SELF_ID, day).await;
+        seed_row(&pool, "Code", None, TEST_SELF_ID, day).await;
+
+        let report = purge(&pool, None, &dir, TEST_SELF_ID, &PurgeTarget::Private)
+            .await
+            .unwrap();
+
+        assert_eq!(report.activities, 2);
+        assert_eq!(count_activities(&pool, "Tor").await, 0);
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM activities WHERE url_host = 'github.com'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(count_activities(&pool, "Code").await, 1);
+    }
+
+    /// 一个会话里只要有一张截图是隐私网站的，整个会话都删；非隐私那张截图的行和文件留下。
+    #[tokio::test]
+    async fn private_purge_deletes_the_whole_session_with_a_private_screenshot() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = std::env::temp_dir().join(format!("hs-purge-session-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assign_app(&pool, "Firefox", "browse").await.unwrap();
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        let day = "2026-11-05";
+        seed_row(
+            &pool,
+            "Firefox",
+            Some("gemini.google.com"),
+            TEST_SELF_ID,
+            day,
+        )
+        .await;
+        seed_row(&pool, "Firefox", Some("github.com"), TEST_SELF_ID, day).await;
+        // 两行各一张截图，两张截图的文字归进同一个会话
+        pool.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "UPDATE activities SET screenshot_path = 'a.png' WHERE url_host = 'gemini.google.com';
+                     UPDATE activities SET screenshot_path = 'b.png' WHERE url_host = 'github.com';",
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        std::fs::write(dir.join("a.png"), b"fake-png").unwrap();
+        std::fs::write(dir.join("b.png"), b"fake-png").unwrap();
+        seed_session(&mem, "Firefox", day, None).await;
+        mem.0
+            .call(|conn| {
+                conn.execute_batch(
+                    "INSERT INTO frames(path, ts, local_date, app_id, title, ocr_state, session_id)
+                     VALUES ('a.png', '2026-11-05T10:00:00Z', '2026-11-05', 'Firefox', 't', 1, 1),
+                            ('b.png', '2026-11-05T10:01:00Z', '2026-11-05', 'Firefox', 't', 1, 1);",
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+
+        let report = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &PurgeTarget::Private)
+            .await
+            .unwrap();
+
+        assert_eq!(report.memory_sessions, 1);
+        assert_eq!(report.screenshots, 1);
+        assert!(!dir.join("a.png").exists());
+        assert!(dir.join("b.png").exists());
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM activities WHERE url_host = 'github.com'"
+            )
+            .await,
+            1
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 别的设备同步过来的行和会话也删，但只有本机的日子进 outbox：别人的文件只能由别人重传。
+    #[tokio::test]
+    async fn private_purge_enqueues_only_this_devices_days() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = std::env::temp_dir().join(format!("hs-purge-days-{}", std::process::id()));
+        assign_app(&pool, "Tor", "private").await.unwrap();
+        seed_row(&pool, "Tor", None, TEST_SELF_ID, "2026-11-05").await;
+        seed_row(&pool, "Tor", None, PEER, "2026-11-06").await;
+        seed_session(&mem, "Tor", "2026-11-07", None).await;
+        seed_session(&mem, "Tor", "2026-11-08", Some(PEER)).await;
+
+        let report = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &PurgeTarget::Private)
+            .await
+            .unwrap();
+
+        assert_eq!(report.activities, 2);
+        assert_eq!(report.memory_sessions, 2);
+        assert_eq!(
+            outbox_days(&pool).await,
+            vec![
+                ("activity".to_string(), "2026-11-05".to_string()),
+                ("memory".to_string(), "2026-11-07".to_string()),
+            ]
+        );
+    }
+
+    /// 清理不记状态：第二次什么都不删，也不再往 outbox 里加行。
+    #[tokio::test]
+    async fn private_purge_twice_deletes_nothing_more() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = std::env::temp_dir().join(format!("hs-purge-twice-{}", std::process::id()));
+        assign_app(&pool, "Tor", "private").await.unwrap();
+        seed_row(&pool, "Tor", None, TEST_SELF_ID, "2026-11-05").await;
+        seed_session(&mem, "Tor", "2026-11-05", None).await;
+
+        let first = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &PurgeTarget::Private)
+            .await
+            .unwrap();
+        let outbox_after_first = outbox_days(&pool).await;
+        let second = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &PurgeTarget::Private)
+            .await
+            .unwrap();
+
+        assert_ne!(first, PurgeReport::default());
+        assert_eq!(second, PurgeReport::default());
+        assert_eq!(outbox_days(&pool).await, outbox_after_first);
     }
 }
