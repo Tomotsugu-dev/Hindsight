@@ -12,7 +12,7 @@ use crate::capture::{browser_url, ignore, screenshot};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
-use crate::repo::{activities, app_groups, process_paths};
+use crate::repo::{activities, app_groups, categories, process_paths};
 use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 5;
@@ -662,10 +662,18 @@ async fn tick(inner: &Inner) -> Result<()> {
                 log::warn!("seal_session 失败 (开新会话, id={}): {e}", prev.id);
             }
         }
-        // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
         // 继承来的 URL 按 None 处理（fail-closed）：它只证明"焦点大概率没变"，
         // 不能证明"当前页面安全"。
         let privacy_url = if url_inherited { None } else { url.as_deref() };
+        // Nothing is recorded for apps and websites in the `private` category, and plugins get
+        // "away". The domain for this check is read whether or not "record website domains" is
+        // on. It is used only here and never written to the database.
+        let host = stats_host(privacy_url, is_browser, true);
+        if categories::is_private(&inner.pool, &info.app_name, host.as_deref()).await? {
+            inner.focus_tx.lock().await.away(now);
+            return Ok(());
+        }
+        // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
         let skip = should_skip_for_privacy(inner, &info, privacy_url, is_browser).await;
         if skip {
             // TODO: the full URL and title are logged at info level, but the logging rule allows
@@ -1020,6 +1028,7 @@ async fn take_screenshot(inner: &Inner, expected_pid: u32) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo::categories::assign_app;
 
     fn tr(start: &str, end: &str) -> TimeRange {
         TimeRange {
@@ -1370,5 +1379,182 @@ mod tests {
         .await;
         assert_eq!(t.current, Some(t.id));
         assert_eq!(t.focus_reads, 1);
+    }
+
+    // ───────────── 隐私分类：不记录 ─────────────
+
+    /// 测试用的焦点来源：前台窗口和浏览器的网址由测试随时换。窗口标题就是应用名。
+    #[derive(Default)]
+    struct FakeFocus(std::sync::Mutex<(String, Option<String>)>);
+
+    impl FakeFocus {
+        fn show(&self, app: &str, url: Option<&str>) {
+            *self.0.lock().unwrap() = (app.into(), url.map(Into::into));
+        }
+    }
+
+    impl FocusSource for FakeFocus {
+        fn focused_window(&self) -> Result<WindowInfo> {
+            let app = self.0.lock().unwrap().0.clone();
+            Ok(WindowInfo {
+                title: app.clone(),
+                app_name: app,
+                app_path: None,
+                pid: 1,
+            })
+        }
+
+        fn read_url(&self, _window: &WindowInfo) -> Option<String> {
+            self.0.lock().unwrap().1.clone()
+        }
+    }
+
+    /// 一个用假焦点来源的采集服务，人一直在电脑前。返回服务、焦点来源、插件收到的消息。
+    fn fake_service(
+        pool: &DbPool,
+    ) -> (CaptureService, Arc<FakeFocus>, mpsc::Receiver<FocusChange>) {
+        let focus = Arc::new(FakeFocus::default());
+        let idle = FakeIdle {
+            idle_secs: 0,
+            screen_unavailable: false,
+            keepawake: false,
+        };
+        let (tx, rx) = mpsc::channel(8);
+        let service =
+            CaptureService::with_sources(pool.clone(), None, 30, tx, focus.clone(), Arc::new(idle));
+        (service, focus, rx)
+    }
+
+    /// 写进库里的活动行：应用和域名，按先后排。
+    async fn recorded(pool: &DbPool) -> Vec<(String, Option<String>)> {
+        use crate::storage::SqliteResultExt;
+        pool.0
+            .call(|conn| {
+                let mut stmt = conn
+                    .prepare("SELECT process_name, url_host FROM activities ORDER BY id")
+                    .db()?;
+                let rows = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                Ok(rows)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 隐私应用在前台：不写活动行，也没有正在记录的一段。
+    #[tokio::test]
+    async fn private_app_is_not_recorded() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        assign_app(&pool, "Signal", "private").await.unwrap();
+        let (service, focus, _rx) = fake_service(&pool);
+
+        focus.show("Signal", None);
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await, []);
+        assert!(service.inner.current.lock().await.is_none());
+    }
+
+    /// 从普通应用切到隐私应用：上一段在这一刻结束，隐私应用不开新的一段。
+    #[tokio::test]
+    async fn switching_to_a_private_app_ends_the_previous_session() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        assign_app(&pool, "Signal", "private").await.unwrap();
+        let (service, focus, _rx) = fake_service(&pool);
+        let info = WindowInfo {
+            app_name: "Code".into(),
+            title: "Code".into(),
+            app_path: None,
+            pid: 1,
+        };
+        let started = Local::now() - Duration::minutes(10);
+        let id = activities::insert_new(&pool, &info, started, None, false, None)
+            .await
+            .unwrap();
+        *service.inner.current.lock().await = Some(CurrentSession {
+            id,
+            focus: FocusState {
+                app_name: "Code".into(),
+                url: None,
+            },
+            last_extend_at: Instant::now(),
+        });
+
+        focus.show("Signal", None);
+        tick(&service.inner).await.unwrap();
+
+        assert!(ended_secs_ago(&pool, id).await <= 2, "Code 记到现在");
+        assert_eq!(recorded(&pool).await, [("Code".to_string(), None)]);
+        assert!(service.inner.current.lock().await.is_none());
+    }
+
+    /// 切到隐私应用，插件收到「离开」；一直停在上面，不再重复发。
+    #[tokio::test]
+    async fn focus_on_a_private_app_sends_away() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        assign_app(&pool, "Signal", "private").await.unwrap();
+        let (service, focus, mut rx) = fake_service(&pool);
+
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+        focus.show("Signal", None);
+        tick(&service.inner).await.unwrap();
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(received(&mut rx), ["Code", "away"]);
+    }
+
+    /// 隐私网站不记录，同一个浏览器里别的网站照常记录。
+    #[tokio::test]
+    async fn private_site_is_not_recorded_but_other_sites_are() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_record_browser_host(true).await;
+
+        focus.show("Firefox", Some("https://gemini.google.com/app"));
+        tick(&service.inner).await.unwrap();
+        focus.show("Firefox", Some("https://github.com/Tomotsugu-dev"));
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(
+            recorded(&pool).await,
+            [("Firefox".to_string(), Some("github.com".to_string()))]
+        );
+    }
+
+    /// 「记录网站域名」关着，也能认出隐私网站：判断用的域名只在内存里，不写进库。
+    #[tokio::test]
+    async fn private_site_is_found_with_host_recording_off() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        let (service, focus, _rx) = fake_service(&pool);
+
+        focus.show("Firefox", Some("https://gemini.google.com/app"));
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await, []);
+    }
+
+    /// 读不到网址时只看应用：浏览器不是隐私的，就照常记录。
+    #[tokio::test]
+    async fn unknown_url_counts_as_not_private() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        let (service, focus, _rx) = fake_service(&pool);
+
+        focus.show("Firefox", None);
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await, [("Firefox".to_string(), None)]);
     }
 }
