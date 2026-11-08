@@ -25,3 +25,4 @@ Each ADR records one decision: the problem, what we chose, and why. Start a new 
 | [0016](0016-daily-usage-rollup.md) | Speed up the usage reports with a table of daily totals | 🟢 | ✅ | [中文](zh/0016-daily-usage-rollup.md) |
 | [0017](0017-theme-files.md) | Theme files: separate switches for layout and light or dark, and public variables | 🟢 | ✅ | [中文](zh/0017-theme-files.md) |
 | [0018](0018-sync-engine-by-file-kind.md) | Sync engine split by file kind: one module per kind under `push/` and `pull/` | 🟡 | ✅ | [中文](zh/0018-sync-engine-by-file-kind.md) |
+| [0019](0019-private-category.md) | Private category: apps and websites in it are not recorded at all | 🟡 | ⬜ | [中文](zh/0019-private-category.md) |
