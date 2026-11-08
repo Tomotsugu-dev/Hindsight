@@ -1044,12 +1044,41 @@ const DAILY_USAGE_SQL: &str = r#"
     SELECT DISTINCT local_date, substr(ended_at, 1, 10) FROM activities;
 "#;
 
+/// v47: the two category changes of ADR-0019.
+///
+/// 1. Adds the built-in private category: apps and websites in it are not recorded. The name
+///    is the original Chinese name with `is_default_name` 1, and is translated once into the UI
+///    language after the start (ADR-0015). Nothing goes into the outbox: every device's
+///    migration adds this row itself.
+/// 2. Renames `hidden` to Excluded from stats, only while its name is still an old default
+///    name: it gets the original Chinese name back and `is_default_name` 1, and is translated
+///    again after the start. The list holds the old default name in 6 languages (es and pt-BR
+///    both use Oculto). A name the user changed stays. `updated_at` does not change and nothing
+///    goes into the outbox: names do not sync.
+const PRIVATE_CATEGORY_SQL: &str = r#"
+    INSERT OR IGNORE INTO categories(
+        id, name, color, icon, builtin, sort_order, updated_at, is_default_name)
+    VALUES (
+        'private',
+        '隐私',
+        '#475569',
+        'Lock',
+        1,
+        COALESCE((SELECT MAX(sort_order) + 1 FROM categories WHERE deleted_at IS NULL), 0),
+        '1970-01-01T00:00:00Z',
+        1
+    );
+
+    UPDATE categories SET name = '不计入统计', is_default_name = 1
+     WHERE id = 'hidden' AND name IN ('隐藏', '隱藏', 'Hidden', '非表示', 'Oculto');
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 36] = [
+    let extras: [&'static str; 37] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -1086,6 +1115,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         ADD_IS_DEFAULT_NAME_SQL,               // v44
         PLUGINS_TABLE_SQL,                     // v45
         DAILY_USAGE_SQL,                       // v46
+        PRIVATE_CATEGORY_SQL,                  // v47
     ];
     pool.0
         .call(move |conn| {
@@ -1218,6 +1248,118 @@ mod tests {
             .unwrap()
     }
 
+    async fn text(pool: &DbPool, sql: &str) -> String {
+        let sql = sql.to_string();
+        pool.0
+            .call(move |conn| Ok(conn.query_row(&sql, [], |r| r.get::<_, String>(0)).unwrap()))
+            .await
+            .unwrap()
+    }
+
+    async fn exec(pool: &DbPool, sql: &str) {
+        let sql = sql.to_string();
+        pool.0
+            .call(move |conn| {
+                conn.execute_batch(&sql).unwrap();
+                Ok(())
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 全新安装以后，把库退回 v46、名字已经翻译过的样子，再升级一次。也返回升级前
+    /// `hidden` 的 `updated_at`。
+    async fn upgraded_from_v46(hidden_name: &str) -> (DbPool, String) {
+        let pool = DbPool::open_in_memory().await.unwrap();
+        run(&pool).await.unwrap();
+        exec(
+            &pool,
+            &format!(
+                "UPDATE categories SET name = '{hidden_name}', is_default_name = 0
+                  WHERE id = 'hidden';
+                 DELETE FROM categories WHERE id = 'private';
+                 DELETE FROM schema_version WHERE version > 46;"
+            ),
+        )
+        .await;
+        let updated_at = text(
+            &pool,
+            "SELECT updated_at FROM categories WHERE id = 'hidden'",
+        )
+        .await;
+        run(&pool).await.unwrap();
+        (pool, updated_at)
+    }
+
+    /// v47：「隐私」分类是内置的，名字是中文原名、等着翻译；升级时也会加上。
+    #[tokio::test]
+    async fn private_category_is_added_once() {
+        let fresh = DbPool::open_in_memory().await.unwrap();
+        run(&fresh).await.unwrap();
+        let (upgraded, _) = upgraded_from_v46("Hidden").await;
+        for pool in [&fresh, &upgraded] {
+            assert_eq!(
+                count(
+                    pool,
+                    "SELECT COUNT(*) FROM categories
+                      WHERE id = 'private' AND builtin = 1 AND name = '隐私'
+                        AND is_default_name = 1 AND deleted_at IS NULL"
+                )
+                .await,
+                1
+            );
+        }
+    }
+
+    /// v47：还是旧默认名的「隐藏」改回中文原名「不计入统计」，等着重新翻译；updated_at 不变。
+    #[tokio::test]
+    async fn old_default_hidden_name_becomes_excluded_from_stats() {
+        for old in ["隐藏", "隱藏", "Hidden", "非表示", "Oculto"] {
+            let (pool, updated_at) = upgraded_from_v46(old).await;
+            assert_eq!(
+                text(&pool, "SELECT name FROM categories WHERE id = 'hidden'").await,
+                "不计入统计",
+                "{old}"
+            );
+            assert_eq!(
+                count(
+                    &pool,
+                    "SELECT COUNT(*) FROM categories WHERE id = 'hidden' AND is_default_name = 1"
+                )
+                .await,
+                1,
+                "{old}"
+            );
+            assert_eq!(
+                text(
+                    &pool,
+                    "SELECT updated_at FROM categories WHERE id = 'hidden'"
+                )
+                .await,
+                updated_at,
+                "{old}"
+            );
+        }
+    }
+
+    /// v47：用户自己改过名的「隐藏」不动。
+    #[tokio::test]
+    async fn renamed_hidden_category_keeps_its_name() {
+        let (pool, _) = upgraded_from_v46("私人").await;
+        assert_eq!(
+            text(&pool, "SELECT name FROM categories WHERE id = 'hidden'").await,
+            "私人"
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM categories WHERE id = 'hidden' AND is_default_name = 0"
+            )
+            .await,
+            1
+        );
+    }
+
     /// 空库全量跑:35 个版本齐、关键表齐、ALTER 链条的关键列在、种子数据就位。
     /// 任何一条迁移悄悄失效(表名打错/顺序错),这里第一时间红。
     #[tokio::test]
@@ -1227,7 +1369,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            46
+            47
         );
 
         let tables = table_names(&pool).await;
@@ -1319,7 +1461,7 @@ mod tests {
                 "SELECT COUNT(*) FROM categories WHERE is_default_name = 1"
             )
             .await,
-            11
+            12
         );
         assert_eq!(
             count(
@@ -1600,7 +1742,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            46
+            47
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1656,7 +1798,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            46
+            47
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

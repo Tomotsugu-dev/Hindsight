@@ -119,10 +119,12 @@ pub fn from_stats_category_sql(source: &str) -> String {
          LEFT JOIN host_rule hr ON hr.host = a.url_host
          LEFT JOIN categories rc
            ON rc.id = hr.category_id AND rc.deleted_at IS NULL
-         -- Resolve the effective category: hidden apps stay hidden; otherwise prefer a live
-         -- website-rule category and fall back to the app group's category.
+         -- Resolve the effective category: private wins over everything (ADR-0019); then
+         -- hidden apps stay hidden; otherwise prefer a live website-rule category and fall
+         -- back to the app group's category.
          LEFT JOIN categories c
-           ON c.id = CASE WHEN g.category_id = 'hidden' THEN 'hidden'
+           ON c.id = CASE WHEN g.category_id = 'private' OR rc.id = 'private' THEN 'private'
+                          WHEN g.category_id = 'hidden' THEN 'hidden'
                           ELSE COALESCE(rc.id, g.category_id) END
           AND c.deleted_at IS NULL"
     )

@@ -1469,4 +1469,75 @@ mod tests {
         assert_eq!(of("Secret", None).await.0, "hidden");
         assert_eq!(of("NeverSeen", None).await, ("other".into(), None));
     }
+
+    async fn category_of(pool: &DbPool, app: &str, host: Option<&str>) -> String {
+        classify(pool, app, host).await.unwrap().unwrap().id
+    }
+
+    /// ADR-0019 的表第 1 行：隐私的应用停在哪个网站上都是 private。
+    #[tokio::test]
+    async fn private_app_wins_over_any_site_rule() {
+        let pool = fresh_test_pool().await;
+        assign_app(&pool, "Tor", "private").await.unwrap();
+        crate::repo::site_rules::set(&pool, "youtube.com", "talk")
+            .await
+            .unwrap();
+        assert_eq!(
+            category_of(&pool, "Tor", Some("youtube.com")).await,
+            "private"
+        );
+    }
+
+    /// 第 2 行：隐私的网站压过「不计入统计」的应用；子域名跟着上一级的规则。
+    #[tokio::test]
+    async fn private_site_wins_over_a_hidden_app() {
+        let pool = fresh_test_pool().await;
+        assign_app(&pool, "Chrome", "hidden").await.unwrap();
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        assert_eq!(
+            category_of(&pool, "Chrome", Some("gemini.google.com")).await,
+            "private"
+        );
+    }
+
+    /// 第 3 行：「不计入统计」的应用压过别的网站规则。
+    #[tokio::test]
+    async fn hidden_app_wins_over_other_site_rules() {
+        let pool = fresh_test_pool().await;
+        assign_app(&pool, "Chrome", "hidden").await.unwrap();
+        crate::repo::site_rules::set(&pool, "youtube.com", "talk")
+            .await
+            .unwrap();
+        assert_eq!(
+            category_of(&pool, "Chrome", Some("youtube.com")).await,
+            "hidden"
+        );
+    }
+
+    /// 第 4 行：网站规则压过应用的分类。
+    #[tokio::test]
+    async fn site_rule_wins_over_the_app_category() {
+        let pool = fresh_test_pool().await;
+        assign_app(&pool, "Chrome", "browse").await.unwrap();
+        crate::repo::site_rules::set(&pool, "youtube.com", "talk")
+            .await
+            .unwrap();
+        assert_eq!(
+            category_of(&pool, "Chrome", Some("youtube.com")).await,
+            "talk"
+        );
+    }
+
+    /// 第 5 行：没有网站规则就用应用的分类。
+    #[tokio::test]
+    async fn app_category_when_no_site_rule() {
+        let pool = fresh_test_pool().await;
+        assign_app(&pool, "Chrome", "browse").await.unwrap();
+        assert_eq!(
+            category_of(&pool, "Chrome", Some("github.com")).await,
+            "browse"
+        );
+    }
 }
