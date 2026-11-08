@@ -1049,6 +1049,30 @@ async fn memory_outbox_rows_are_dropped_when_sync_is_off() {
     );
 }
 
+/// 别的设备把应用设成隐私：这边合并到分组以后，删掉这个应用的数据。本机自己记的、从那边拉来的都删。
+#[tokio::test]
+async fn pull_purges_private_data_after_merging_groups() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    let b = make_device("device-b", Arc::clone(&drive)).await;
+    let captured = Local::now();
+    insert_sealed(&a, "Tor", captured, 30).await;
+    insert_sealed(&b, "Tor", captured, 30).await;
+    insert_sealed(&b, "Code", captured, 30).await;
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 1);
+
+    crate::repo::categories::assign_app(&a.pool, "Tor", "private")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    assert_eq!(count_for_device(&b, "device-a").await, 0, "从 A 拉来的 Tor");
+    assert_eq!(count_for_device(&b, "device-b").await, 1, "只剩 B 的 Code");
+}
+
 // ───────────────────── 补测 C 批新增(push 失败重试 / metadata 往返 / OS 过滤) ─────────────────────
 
 async fn outbox_count(pool: &DbPool) -> i64 {

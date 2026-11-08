@@ -20,6 +20,7 @@ mod test_util;
 mod tombstone;
 
 use rusqlite::OptionalExtension;
+use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -28,6 +29,7 @@ use super::io;
 use super::Inner;
 use crate::capture::ignore::IgnoreRule;
 use crate::error::{Error, Result};
+use crate::repo::purge::{purge, PurgeReport, PurgeTarget};
 use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::cloud::{rewind_cursor, FailureKind};
 use crate::sync::file_name::{Dataset, FileKind, FileName};
@@ -106,18 +108,51 @@ pub(super) async fn flush_pull(inner: &Arc<Inner>) -> Result<()> {
         return Ok(());
     }
 
-    let mut applied = 0u64;
+    let mut merged: Vec<FileKind> = Vec::new();
     for (dataset, cursor) in &streams {
-        applied += pull_stream(inner, *dataset, cursor, &files, self_id, &cfg.ignore_rules).await?;
+        merged.extend(
+            pull_stream(inner, *dataset, cursor, &files, self_id, &cfg.ignore_rules).await?,
+        );
     }
-    if applied > 0 {
-        log::info!("sync pull done, merged {applied} remote files");
+    if !merged.is_empty() {
+        log::info!("sync pull done, merged {} remote files", merged.len());
+    }
+    let rules_merged = merged.iter().any(|kind| {
+        matches!(
+            kind,
+            FileKind::AppGroups | FileKind::AppGroupMembers | FileKind::SiteRules
+        )
+    });
+    if rules_merged {
+        purge_private(inner, self_id).await?;
+    }
+    Ok(())
+}
+
+/// Deletes the data that is now in the `private` category. Merged app groups and website rules
+/// may have made an app or a website private.
+async fn purge_private(inner: &Arc<Inner>, self_id: &str) -> Result<()> {
+    // Not the defaults when settings cannot be read, as above: the default screenshot folder is
+    // empty, so deleting screenshots would delete in the wrong place.
+    let root = crate::repo::settings::load(&inner.pool)
+        .await?
+        .screenshot_path;
+    let target = PurgeTarget::Private;
+    let mem = inner.mem.as_ref();
+    let report = purge(&inner.pool, mem, Path::new(&root), self_id, &target).await?;
+    if report != PurgeReport::default() {
+        log::info!(
+            "sync pull: deleted {} private activity rows, {} screenshots and {} screen-memory sessions",
+            report.activities,
+            report.screenshots,
+            report.memory_sessions
+        );
     }
     Ok(())
 }
 
 /// Merges the files of one stream: those it owns, newer than its cursor, and
-/// written by another device. Returns how many it merged.
+/// written by another device. Returns the kinds of the files it merged.
 async fn pull_stream(
     inner: &Arc<Inner>,
     dataset: Dataset,
@@ -125,8 +160,8 @@ async fn pull_stream(
     files: &[crate::sync::cloud::FileMeta],
     self_id: &str,
     ignore_rules: &[IgnoreRule],
-) -> Result<u64> {
-    let mut applied = 0u64;
+) -> Result<Vec<FileKind>> {
+    let mut merged: Vec<FileKind> = Vec::new();
     // One flag per file: merged, or not this stream's to merge.
     let mut handled = vec![false; files.len()];
 
@@ -183,7 +218,7 @@ async fn pull_stream(
             }
         };
 
-        let res = match kind {
+        let res = match &kind {
             FileKind::DeviceMeta => device_meta::merge(&inner.pool, &device_id, &body).await,
             FileKind::Activities(local_date) => {
                 activities::merge(
@@ -215,7 +250,7 @@ async fn pull_stream(
             continue;
         }
         handled[i] = true;
-        applied += 1;
+        merged.push(kind);
     }
 
     // The next list asks for files modified after the cursor, so it may only move
@@ -244,7 +279,7 @@ async fn pull_stream(
             io::write_cursor(&inner.pool, &name, &t).await?;
         }
     }
-    Ok(applied)
+    Ok(merged)
 }
 
 /// Hands every record in the file to `apply`, which writes it to the local
