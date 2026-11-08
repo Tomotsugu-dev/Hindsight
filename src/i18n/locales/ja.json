@@ -444,6 +444,8 @@
       },
       "links": {
         "title": "リンク",
+        "homepageLabel": "ホームページ",
+        "homepageLink": "開く →",
         "repoLabel": "GitHub リポジトリ",
         "repoLink": "表示 →",
         "feedbackLabel": "フィードバックと提案",
