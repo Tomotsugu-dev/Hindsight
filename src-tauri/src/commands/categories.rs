@@ -11,7 +11,7 @@ use tauri::State;
 use crate::capture::CaptureService;
 use crate::commands::screen_memory::MemoryState;
 use crate::repo::categories::{self, Category, CategoryInput, CategoryPatch, UnclassifiedApp};
-use crate::repo::purge::{self, PurgeReport, PurgeTarget};
+use crate::repo::purge::{self, DataCount, PurgeReport, PurgeTarget};
 use crate::repo::settings;
 use crate::storage::{migrations, DbPool};
 use crate::sync::engine::SyncEngine;
@@ -40,6 +40,20 @@ pub async fn purge_private_data(
             .map_err(String::from)
     })
     .await
+}
+
+/// Counts the data that deleting `target` would remove, for the confirm dialog. It changes no
+/// data.
+#[tauri::command]
+pub async fn count_target_data(
+    pool: State<'_, DbPool>,
+    target: PurgeTarget,
+) -> Result<DataCount, String> {
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let root = std::path::PathBuf::from(&cfg.screenshot_path);
+    purge::count(&pool, &root, &target)
+        .await
+        .map_err(String::from)
 }
 
 /// 拉所有分类（包括内置和用户自建），按 sort_order 升序。

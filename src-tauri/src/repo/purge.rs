@@ -23,13 +23,22 @@ use crate::repo::sql::{from_stats_category_sql, matching_rule_host_sql, FROM_MEM
 use crate::storage::{DbPool, DbResult, SqliteResultExt};
 
 /// What to delete.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum PurgeTarget {
     // TODO(ADR-0001): network-wide deletion: a `purge` sync entity (process names and
     // purgedAt) that makes peers run this same local purge and rewrites the cloud day files.
     /// "Delete anyway": the records of every process in this app group. The group is
     /// soft-deleted afterwards.
-    AppGroup(String),
+    AppGroup { group_id: String },
+    /// The activity records of one website: rows whose host is `host`, and rows of subdomains
+    /// that follow the rule of `host`. A subdomain does not count when it has its own rule, or
+    /// follows a rule nearer to it than `host`.
+    Site { host: String },
     /// The activity records of apps and websites in the `private` category. The same SQL as the
     /// reports decides which rows are private (ADR-0019).
     Private,
@@ -39,8 +48,8 @@ impl PurgeTarget {
     /// Whether the deletion is synced to the cloud.
     fn should_sync_deletion(&self) -> bool {
         match self {
-            PurgeTarget::AppGroup(_) => false,
-            PurgeTarget::Private => true,
+            PurgeTarget::AppGroup { .. } => false,
+            PurgeTarget::Site { .. } | PurgeTarget::Private => true,
         }
     }
 }
@@ -52,6 +61,17 @@ pub struct PurgeReport {
     pub activities: u64,
     pub screenshots: u64,
     pub memory_sessions: u64,
+}
+
+/// How much [`purge`] would delete, shown in the confirm dialog.
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCount {
+    pub activities: u64,
+    /// Screenshot files still on disk.
+    pub screenshots: u64,
+    /// The total size of these screenshot files.
+    pub screenshot_bytes: u64,
 }
 
 /// What to delete, all found before anything is deleted.
@@ -73,8 +93,9 @@ struct ToDelete {
 /// - In the memory database, the sessions of these processes and the sessions that contain
 ///   these screenshots. A session goes as a whole if any one of its screenshots is deleted.
 ///
-/// `AppGroup` deletes on this device only (ADR-0001). `Private` also deletes in the cloud
-/// through the outbox, so the caller must pause sync first, or already be inside a sync round.
+/// `AppGroup` deletes on this device only (ADR-0001). `Site` and `Private` also delete in the
+/// cloud through the outbox, so the caller must pause sync first, or already be inside a sync
+/// round.
 /// `self_id` is the ID of this device.
 ///
 /// # Errors
@@ -105,18 +126,45 @@ pub async fn purge(
     let sync_as = target.should_sync_deletion().then_some(self_id);
     report.activities = delete_rows(pool, &to_delete, sync_as).await?;
     match target {
-        PurgeTarget::AppGroup(group_id) => {
+        PurgeTarget::AppGroup { group_id } => {
             delete_group(pool, &to_delete.processes, group_id).await?
         }
-        PurgeTarget::Private => {}
+        PurgeTarget::Site { .. } | PurgeTarget::Private => {}
     }
     Ok(report)
+}
+
+/// Counts how much [`purge`] would delete for `target`. It changes no data.
+pub async fn count(
+    pool: &DbPool,
+    screenshot_root: &Path,
+    target: &PurgeTarget,
+) -> Result<DataCount> {
+    let to_delete = find(pool, target).await?;
+    let (root, screenshots) = (screenshot_root.to_path_buf(), to_delete.screenshots);
+    let (screenshots, screenshot_bytes) = tokio::task::spawn_blocking(move || {
+        let files = screenshots
+            .iter()
+            .filter_map(|rel| std::fs::metadata(root.join(rel)).ok())
+            .filter(|meta| meta.is_file());
+        files.fold((0, 0), |(n, bytes), meta| (n + 1, bytes + meta.len()))
+    })
+    .await
+    .map_err(|e| Error::Other(format!("screenshot size task failed: {e}")))?;
+    Ok(DataCount {
+        activities: to_delete.rows.len() as u64,
+        screenshots,
+        screenshot_bytes,
+    })
 }
 
 /// Finds the process names, activity rows and screenshots that `target` deletes.
 async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
     let processes = match target {
-        PurgeTarget::AppGroup(group_id) => app_groups::active_member_names(pool, group_id).await?,
+        PurgeTarget::AppGroup { group_id } => {
+            app_groups::active_member_names(pool, group_id).await?
+        }
+        PurgeTarget::Site { .. } => Vec::new(),
         PurgeTarget::Private => {
             let sql = format!(
                 "SELECT gm.process_name {FROM_MEMBER_GROUP}
@@ -131,12 +179,13 @@ async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
     let rows: Vec<i64> = pool
         .0
         .call(move |conn| match target {
-            PurgeTarget::AppGroup(_) => column(
+            PurgeTarget::AppGroup { .. } => column(
                 conn,
                 "SELECT id FROM activities
                   WHERE process_name IN (SELECT value FROM json_each(?1))",
                 [processes_json],
             ),
+            PurgeTarget::Site { host } => column(conn, &site_rows_sql(), [host]),
             PurgeTarget::Private => column(conn, &private_rows_sql(), ()),
         })
         .await?;
@@ -163,6 +212,21 @@ async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
         rows,
         screenshots,
     })
+}
+
+/// IDs of the activity rows of website `?1`.
+fn site_rows_sql() -> String {
+    let of_site = "(url_host = ?1 OR substr(url_host, -length(?1) - 1) = '.' || ?1)";
+    // A rule that a subdomain follows and that is not longer than `?1` is `?1` itself or a
+    // parent domain. So once `?1` is set, the subdomain follows `?1`.
+    format!(
+        "WITH RECURSIVE {}
+         SELECT a.id FROM activities a LEFT JOIN host_rule hr ON hr.host = a.url_host
+          WHERE {of_site} AND (hr.rule_host IS NULL OR length(hr.rule_host) <= length(?1))",
+        matching_rule_host_sql(&format!(
+            "SELECT DISTINCT url_host FROM activities WHERE {of_site}"
+        )),
+    )
 }
 
 /// IDs of the activity rows in the `private` category. The category comes from the same SQL as
@@ -385,6 +449,12 @@ mod tests {
             .unwrap();
     }
 
+    fn vscode_target() -> PurgeTarget {
+        PurgeTarget::AppGroup {
+            group_id: "vscode".into(),
+        }
+    }
+
     async fn group_deleted(pool: &DbPool, id: &str) -> bool {
         let id = id.to_string();
         pool.0
@@ -483,7 +553,7 @@ mod tests {
             .unwrap();
     }
 
-    async fn count(pool: &DbPool, sql: &'static str) -> i64 {
+    async fn query_count(pool: &DbPool, sql: &'static str) -> i64 {
         pool.0
             .call(move |conn| conn.query_row(sql, [], |r| r.get(0)).db())
             .await
@@ -547,7 +617,7 @@ mod tests {
         seed_derived(&pool, "code.png", 0).await;
         seed_derived(&pool, "chrome.png", 1).await;
 
-        let target = PurgeTarget::AppGroup("vscode".into());
+        let target = vscode_target();
         let report = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target)
             .await
             .unwrap();
@@ -592,7 +662,7 @@ mod tests {
             "SELECT COUNT(*) FROM screenshot_embeddings",
         ] {
             assert_eq!(
-                count(&pool, sql).await,
+                query_count(&pool, sql).await,
                 1,
                 "只剩 chrome.png 的那一行: {sql}"
             );
@@ -619,7 +689,7 @@ mod tests {
         seed_app_traces(&pool, &mem, &dir, "Code", "shared.png", "甲的文字").await;
         seed_app_traces(&pool, &mem, &dir, "Chrome", "shared.png", "乙的文字").await;
 
-        let target = PurgeTarget::AppGroup("vscode".into());
+        let target = vscode_target();
         purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target)
             .await
             .unwrap();
@@ -646,7 +716,7 @@ mod tests {
         // 换成同名文件夹：remove_file 删不掉它，报的也不是「文件不存在」
         std::fs::remove_file(dir.join("stuck.png")).unwrap();
         std::fs::create_dir(dir.join("stuck.png")).unwrap();
-        let target = PurgeTarget::AppGroup("vscode".into());
+        let target = vscode_target();
 
         let failed = purge(&pool, Some(&mem), &dir, TEST_SELF_ID, &target).await;
         assert!(failed.is_err());
@@ -760,7 +830,7 @@ mod tests {
         assert_eq!(report.activities, 2);
         assert_eq!(count_activities(&pool, "Tor").await, 0);
         assert_eq!(
-            count(
+            query_count(
                 &pool,
                 "SELECT COUNT(*) FROM activities WHERE url_host = 'github.com'"
             )
@@ -826,7 +896,7 @@ mod tests {
         assert!(!dir.join("a.png").exists());
         assert!(dir.join("b.png").exists());
         assert_eq!(
-            count(
+            query_count(
                 &pool,
                 "SELECT COUNT(*) FROM activities WHERE url_host = 'github.com'"
             )
@@ -884,5 +954,67 @@ mod tests {
         assert_ne!(first, PurgeReport::default());
         assert_eq!(second, PurgeReport::default());
         assert_eq!(outbox_days(&pool).await, outbox_after_first);
+    }
+
+    // ───────────── count：会删掉多少 ─────────────
+
+    /// 应用分组：组里每个进程的行都算；截图只算磁盘上还在的文件，大小按文件算。数完什么都不删。
+    #[tokio::test]
+    async fn count_app_group_data() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let dir = std::env::temp_dir().join(format!("hs-count-group-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        seed_vscode_group(&pool).await;
+        seed_app_traces(&pool, &mem, &dir, "Code", "code.png", "甲").await;
+        seed_app_traces(&pool, &mem, &dir, "Code.exe", "gone.png", "乙").await;
+        seed_app_traces(&pool, &mem, &dir, "Chrome", "chrome.png", "丙").await;
+        std::fs::remove_file(dir.join("gone.png")).unwrap();
+
+        let counted = count(&pool, &dir, &vscode_target()).await.unwrap();
+
+        assert_eq!(
+            counted,
+            DataCount {
+                activities: 2,
+                screenshots: 1,
+                screenshot_bytes: b"fake-png".len() as u64,
+            }
+        );
+        assert_eq!(count_activities(&pool, "Code").await, 1, "数完不能删");
+        assert!(dir.join("code.png").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 网站：域名相同的行，加上跟随它的子域名的行。自己有规则的子域名，连同它下面的，都不算；
+    /// 只是结尾字母相同的别的网站也不算。网站有没有自己的规则，结果都一样。
+    #[tokio::test]
+    async fn count_site_data_skips_subdomains_with_own_rules() {
+        let pool = fresh_test_pool().await;
+        let dir = std::env::temp_dir().join(format!("hs-count-site-{}", std::process::id()));
+        crate::repo::site_rules::set(&pool, "google.com", "browse")
+            .await
+            .unwrap();
+        crate::repo::site_rules::set(&pool, "mail.google.com", "talk")
+            .await
+            .unwrap();
+        for host in [
+            "google.com",
+            "gemini.google.com",
+            "mail.google.com",
+            "inbox.mail.google.com",
+            "notgoogle.com",
+            "github.com",
+            "gist.github.com",
+        ] {
+            seed_row(&pool, "Firefox", Some(host), TEST_SELF_ID, "2026-11-05").await;
+        }
+        let site = |host: &str| PurgeTarget::Site { host: host.into() };
+
+        let google = count(&pool, &dir, &site("google.com")).await.unwrap();
+        let github = count(&pool, &dir, &site("github.com")).await.unwrap();
+
+        assert_eq!(google.activities, 2, "google.com 有规则");
+        assert_eq!(github.activities, 2, "github.com 没有规则");
     }
 }

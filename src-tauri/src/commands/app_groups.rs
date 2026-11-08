@@ -37,7 +37,7 @@ pub async fn purge_app_group_data(
     let root = std::path::PathBuf::from(&cfg.screenshot_path);
     let self_id = crate::device::self_id().map_err(String::from)?;
 
-    let target = PurgeTarget::AppGroup(group_id);
+    let target = PurgeTarget::AppGroup { group_id };
     svc.run_with_session_cleared(|| async {
         purge::purge(&pool, Some(memdb), &root, self_id, &target)
             .await
