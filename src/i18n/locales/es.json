@@ -825,11 +825,11 @@
     "remove": {
       "title": "Quitar «{{name}}»",
       "deleteName": "Eliminar",
-      "deleteDesc": "Elimina {{data}}. El programa volverá a aparecer aquí la próxima vez que se ejecute. Los informes ya generados no cambian.",
+      "deleteDesc": "Elimina <b>{{data}}</b>. El programa volverá a aparecer aquí la próxima vez que se ejecute. Los informes ya generados no cambian. (Esta acción no se puede deshacer.)",
       "privateName": "Privado",
-      "privateDesc": "Elimina {{data}} y no registra nada más a partir de ahora. Tus otros dispositivos sincronizados también eliminan lo que registraron.",
+      "privateDesc": "Elimina <b>{{data}}</b> y no registra nada más a partir de ahora. (Esta acción no se puede deshacer.)",
       "excludeName": "Excluido de estadísticas",
-      "excludeDesc": "Se sigue registrando, pero queda fuera de las estadísticas, los resúmenes, las exportaciones y el chat. Para volver a contarla, sácala de «Excluido de estadísticas» en Categorías → Gestionar categorías.",
+      "excludeDesc": "Se guarda en el disco, pero queda fuera de las estadísticas, los resúmenes, las exportaciones y el chat. Para volver a contarla, saca la app de la categoría «Excluido de estadísticas».",
       "deleteAction": "Eliminar de todos modos",
       "privateAction": "Pasar a Privado",
       "excludeAction": "Excluir de estadísticas"

@@ -825,11 +825,11 @@
     "remove": {
       "title": "Remove “{{name}}”",
       "deleteName": "Delete",
-      "deleteDesc": "Deletes {{data}}. The program shows up here again the next time it runs. Reports already generated are left untouched.",
+      "deleteDesc": "Deletes <b>{{data}}</b>. The program shows up here again the next time it runs. Reports already generated are left untouched. (This cannot be undone.)",
       "privateName": "Private",
-      "privateDesc": "Deletes {{data}}, and records nothing from now on. Your other synced devices delete what they recorded too.",
+      "privateDesc": "Deletes <b>{{data}}</b>, and records nothing from now on. (This cannot be undone.)",
       "excludeName": "Excluded from stats",
-      "excludeDesc": "Still recorded, but left out of stats, summaries, exports and chat. To count it again, drag it out of “Excluded from stats” under Categories → Manage categories.",
+      "excludeDesc": "Saved to disk, but left out of stats, summaries, exports and chat. To count it again, move the app out of the “Excluded from stats” category.",
       "deleteAction": "Delete anyway",
       "privateAction": "Make private",
       "excludeAction": "Exclude from stats"

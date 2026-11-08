@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
-import { EyeOff, Lock, Trash2 } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
+import { EyeOff, Trash2 } from "lucide-react";
 import { api, type DataCount } from "../../api/hindsight";
+import { ChartOffIcon } from "../icons/ChartOffIcon";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { logError } from "../../lib/logger";
 import { describeCount } from "../../utils/privateCategory";
@@ -21,11 +22,12 @@ interface RemoveAppDialogProps {
 }
 
 /**
- * 从应用列表移除一个应用时的选择弹窗。三条路后果不同，说明写在正文里，不推荐哪一条：
+ * 从应用列表移除一个应用时的选择弹窗。三条路后果不同，说明写在正文里，不推荐哪一条。
+ * 说明和按钮都按从轻到重排：
+ *   - 不计入统计：归入内置的 `hidden` 分类，照常记录，只是不算进统计；
  *   - 删除：删掉已有的数据，不可逆。这个程序下次运行时还会出现在列表里；
- *   - 设为隐私：删掉已有的数据，以后也不记录。不可逆；
- *   - 不计入统计：归入内置的 `hidden` 分类，照常记录，只是不算进统计。
- * 前两条都删数据，按钮是红的；打开时焦点在「取消」上。
+ *   - 设为隐私：删掉已有的数据，以后也不记录。不可逆。
+ * 后两条都删数据，按钮和图标是红的；打开时焦点在「取消」上。
  *
  * **刻意不做「不再提示」**：记住「删除」意味着以后每次点行尾按钮都直接不可逆
  * 地删数据，省下的一次确认远不值这个风险。每次都问。
@@ -91,24 +93,44 @@ export function RemoveAppDialog({
 
         <ul className={styles.options}>
           <li className={styles.option}>
-            <Trash2 size={15} strokeWidth={2} className={styles.optionIcon} />
-            <div>
-              <p className={styles.optionName}>{t("apps.remove.deleteName")}</p>
-              <p className={styles.optionDesc}>{t("apps.remove.deleteDesc", { data })}</p>
-            </div>
-          </li>
-          <li className={styles.option}>
-            <Lock size={15} strokeWidth={2} className={styles.optionIcon} />
-            <div>
-              <p className={styles.optionName}>{t("apps.remove.privateName")}</p>
-              <p className={styles.optionDesc}>{t("apps.remove.privateDesc", { data })}</p>
-            </div>
-          </li>
-          <li className={styles.option}>
-            <EyeOff size={15} strokeWidth={2} className={styles.optionIcon} />
+            <ChartOffIcon size={15} strokeWidth={2} className={styles.optionIcon} />
             <div>
               <p className={styles.optionName}>{t("apps.remove.excludeName")}</p>
               <p className={styles.optionDesc}>{t("apps.remove.excludeDesc")}</p>
+            </div>
+          </li>
+          <li className={styles.option}>
+            <Trash2
+              size={15}
+              strokeWidth={2}
+              className={`${styles.optionIcon} ${styles.optionIconDanger}`}
+            />
+            <div>
+              <p className={styles.optionName}>{t("apps.remove.deleteName")}</p>
+              <p className={styles.optionDesc}>
+                <Trans
+                  i18nKey="apps.remove.deleteDesc"
+                  values={{ data }}
+                  components={{ b: <b /> }}
+                />
+              </p>
+            </div>
+          </li>
+          <li className={styles.option}>
+            <EyeOff
+              size={15}
+              strokeWidth={2}
+              className={`${styles.optionIcon} ${styles.optionIconDanger}`}
+            />
+            <div>
+              <p className={styles.optionName}>{t("apps.remove.privateName")}</p>
+              <p className={styles.optionDesc}>
+                <Trans
+                  i18nKey="apps.remove.privateDesc"
+                  values={{ data }}
+                  components={{ b: <b /> }}
+                />
+              </p>
             </div>
           </li>
         </ul>
@@ -123,11 +145,16 @@ export function RemoveAppDialog({
           >
             {t("common.cancel")}
           </button>
+          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onExclude}>
+            <ChartOffIcon size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+            {t("apps.remove.excludeAction")}
+          </button>
           <button
             type="button"
             className={`${styles.btn} ${styles.btnDanger}`}
             onClick={onDelete}
           >
+            <Trash2 size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
             {t("apps.remove.deleteAction")}
           </button>
           <button
@@ -135,10 +162,8 @@ export function RemoveAppDialog({
             className={`${styles.btn} ${styles.btnDanger}`}
             onClick={onMakePrivate}
           >
+            <EyeOff size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
             {t("apps.remove.privateAction")}
-          </button>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onExclude}>
-            {t("apps.remove.excludeAction")}
           </button>
         </div>
       </div>
