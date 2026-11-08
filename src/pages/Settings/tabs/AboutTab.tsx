@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Globe,
   Info,
   Link2,
   MessageSquare,
@@ -22,6 +23,7 @@ import { useUpdater } from "../../../state/updater";
 import logoUrl from "../../../assets/logo.png";
 import styles from "./AboutTab.module.css";
 
+const HOMEPAGE_URL = "https://hindsight.kyosweb.com/";
 const REPO_URL = "https://github.com/Tomotsugu-dev/Hindsight";
 const ISSUES_URL = "https://github.com/Tomotsugu-dev/Hindsight/issues";
 
@@ -181,6 +183,15 @@ export default function AboutTab() {
       </Section>
 
       <Section title={t("settings.about.links.title")} icon={Link2}>
+        <Row label={t("settings.about.links.homepageLabel")} icon={Globe}>
+          <a
+            href={HOMEPAGE_URL}
+            className={styles.link}
+            onClick={(e) => openExternal(e, HOMEPAGE_URL)}
+          >
+            {t("settings.about.links.homepageLink")}
+          </a>
+        </Row>
         <Row label={t("settings.about.links.repoLabel")} icon={GithubMark}>
           <a
             href={REPO_URL}
