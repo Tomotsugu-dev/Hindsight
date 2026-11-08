@@ -444,6 +444,8 @@
       },
       "links": {
         "title": "Links",
+        "homepageLabel": "Site",
+        "homepageLink": "Visitar →",
         "repoLabel": "Repositório no GitHub",
         "repoLink": "Ver →",
         "feedbackLabel": "Comentários e sugestões",

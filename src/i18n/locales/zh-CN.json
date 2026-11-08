@@ -444,6 +444,8 @@
       },
       "links": {
         "title": "链接",
+        "homepageLabel": "主页",
+        "homepageLink": "访问 →",
         "repoLabel": "GitHub 仓库",
         "repoLink": "查看 →",
         "feedbackLabel": "反馈与建议",
