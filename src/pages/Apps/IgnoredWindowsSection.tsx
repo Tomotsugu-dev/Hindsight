@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { EyeOff, X } from "lucide-react";
+import { X } from "lucide-react";
 import { api, type IgnoreRule } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { ChartOffIcon } from "../../components/icons/ChartOffIcon";
 import { displayAppName } from "../../utils/displayName";
 import { logError } from "../../lib/logger";
 import categoriesStyles from "../Categories/Categories.module.css";
@@ -64,7 +65,7 @@ export function IgnoredWindowsSection() {
   return (
     <section className={categoriesStyles.card}>
       <header className={styles.head}>
-        <EyeOff size={15} strokeWidth={2} aria-hidden />
+        <ChartOffIcon size={15} strokeWidth={2} aria-hidden />
         <span className={styles.title}>{t("apps.ignored.title")}</span>
         <span className={styles.hint}>{t("apps.ignored.hint")}</span>
       </header>
