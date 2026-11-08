@@ -597,11 +597,14 @@ pub async fn classify(
     Ok(category)
 }
 
+/// ID of the built-in Private category.
+pub const PRIVATE_CATEGORY_ID: &str = "private";
+
 /// Whether the activity of this app and website is in the `private` category, by the same rule
 /// as [`classify`].
 pub async fn is_private(pool: &DbPool, process_name: &str, url_host: Option<&str>) -> Result<bool> {
     let category = classify(pool, process_name, url_host).await?;
-    Ok(category.is_some_and(|c| c.id == "private"))
+    Ok(category.is_some_and(|c| c.id == PRIVATE_CATEGORY_ID))
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ mod memory;
 mod permissions;
 mod platform;
 mod plugins;
+mod privacy;
 mod repo;
 mod storage;
 mod sync;

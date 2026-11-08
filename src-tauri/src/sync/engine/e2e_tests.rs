@@ -1073,6 +1073,34 @@ async fn pull_purges_private_data_after_merging_groups() {
     assert_eq!(count_for_device(&b, "device-b").await, 1, "只剩 B 的 Code");
 }
 
+/// A 把应用设成隐私：A 删掉自己的数据并重传那天的文件，B 拉下来以后也删掉。两台设备上都没有了。
+#[tokio::test]
+async fn private_app_data_is_deleted_on_every_device() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    let b = make_device("device-b", Arc::clone(&drive)).await;
+    let captured = Local::now();
+    insert_sealed(&a, "Tor", captured, 30).await;
+    insert_sealed(&a, "Code", captured, 30).await;
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 2);
+
+    crate::repo::categories::assign_app(&a.pool, "Tor", "private")
+        .await
+        .unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel(8);
+    let capture = crate::capture::CaptureService::new(a.pool.clone(), None, 30, tx);
+    crate::privacy::purge_private_after_change(&a.pool, Some(&a.mem), &capture, &a.engine)
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    assert_eq!(count_for_device(&a, "device-a").await, 1, "A 只剩 Code");
+    assert_eq!(count_for_device(&b, "device-a").await, 1, "B 上也只剩 Code");
+}
+
 // ───────────────────── 补测 C 批新增(push 失败重试 / metadata 往返 / OS 过滤) ─────────────────────
 
 async fn outbox_count(pool: &DbPool) -> i64 {
