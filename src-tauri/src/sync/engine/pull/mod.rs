@@ -203,8 +203,9 @@ async fn pull_stream(
             FileKind::AppGroupMembers => app_group_members::merge(&inner.pool, &body).await,
             FileKind::AiSummaries => ai_summaries::merge(&inner.pool, &body).await,
             FileKind::Chat => chat::merge(inner.mem.as_ref().expect("gated"), &body).await,
-            FileKind::Memory(_) => {
-                memory::merge(inner.mem.as_ref().expect("gated"), &device_id, &body).await
+            FileKind::Memory(local_date) => {
+                let mem = inner.mem.as_ref().expect("gated");
+                memory::merge(mem, &device_id, &local_date.to_string(), &body).await
             }
             FileKind::Tombstone => tombstone::merge(&inner.pool, &device_id, &body).await,
         };
