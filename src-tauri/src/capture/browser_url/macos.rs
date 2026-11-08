@@ -21,8 +21,8 @@
 //! → Automation），文案来自 Info.plist 的 `NSAppleEventsUsageDescription`。
 //! 用户拒绝 / 撤销 → osascript 非零退出 → 我们返回 None，与未实现时一致。
 //!
-//! 性能：osascript 启动 ~50–150ms（fork 子进程 + 解析 AS）。[`super::read_url`] 把它放到
-//! 后台线程；浏览器在前台时，每个 tick 调一次。
+//! 性能：osascript 启动 ~50–150ms（fork 子进程 + 解析 AS）。[`super::read_url`] 的调用方把它
+//! 放到后台线程；浏览器在前台时，每个 tick 调一次。
 
 use std::process::Command;
 

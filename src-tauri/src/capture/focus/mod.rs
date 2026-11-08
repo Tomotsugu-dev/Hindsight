@@ -16,6 +16,7 @@ use serde::Serialize;
 use sysinfo::{Pid, System};
 use tokio::sync::Notify;
 
+use crate::capture::browser_url;
 use crate::error::Result;
 
 #[cfg(target_os = "linux")]
@@ -58,6 +59,13 @@ pub trait FocusSource: Send + Sync {
     /// 调用方在 `spawn_blocking` 里跑它。None = 没有更好的标题。
     fn recover_title(&self, _pid: u32) -> Option<String> {
         None
+    }
+
+    /// Reads the address in the address bar of the browser window `window`, see
+    /// [`browser_url::read_url`]. Callers run it in `spawn_blocking`. None means it cannot be
+    /// read.
+    fn read_url(&self, window: &WindowInfo) -> Option<String> {
+        browser_url::read_url(window)
     }
 
     /// 焦点或标题变化时调用 [`FocusWaker::wake`]，直到返回的守卫被丢弃。

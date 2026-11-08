@@ -604,7 +604,7 @@ async fn tick(inner: &Inner) -> Result<()> {
     // 非浏览器跳过这步，省 50–300ms。
     let is_browser = browser_url::is_browser_app(&info.app_name);
     let fetched_url = if is_browser {
-        browser_url::read_url(&info).await
+        read_url_in_background(inner, &info).await
     } else {
         None
     };
@@ -977,11 +977,21 @@ async fn recheck_privacy_after_shot(
         return true;
     }
     let url = if is_browser && !url_kw.is_empty() {
-        browser_url::read_url(&now_info).await
+        read_url_in_background(inner, &now_info).await
     } else {
         None
     };
     should_skip_for_privacy(inner, &now_info, url.as_deref(), is_browser).await
+}
+
+/// Reads the address of the browser window `window` on a background thread, see
+/// [`FocusSource::read_url`].
+async fn read_url_in_background(inner: &Inner, window: &WindowInfo) -> Option<String> {
+    let (focus, window) = (Arc::clone(&inner.focus), window.clone());
+    tokio::task::spawn_blocking(move || focus.read_url(&window))
+        .await
+        .ok()
+        .flatten()
 }
 
 async fn take_screenshot(inner: &Inner, expected_pid: u32) -> Option<String> {
