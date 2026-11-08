@@ -386,7 +386,7 @@
       },
       "app": {
         "title": "Filtro de aplicativos",
-        "info": "Ignorar capturas de tela quando o nome do aplicativo ou o título da janela contém qualquer um destes (não diferencia maiúsculas de minúsculas).",
+        "info": "Ignorar capturas de tela quando o nome do aplicativo ou o título da janela contém qualquer um destes (não diferencia maiúsculas de minúsculas). Para não registrar nada de um aplicativo, coloque-o na categoria “Privado”.",
         "rowLabel": "Palavras-chave de título / aplicativo",
         "addLabel": "Adicionar nome de aplicativo",
         "placeholder": "ex.: WeChat"
@@ -826,12 +826,15 @@
     },
     "remove": {
       "title": "Remover “{{name}}”",
-      "hideName": "Ocultar (recomendado)",
-      "hideDesc": "Fica fora das estatísticas, mas todo o histórico é preservado. Para analisar de novo, arraste-o para fora de “Oculto” em Categorias → Gerenciar categorias.",
       "deleteName": "Excluir",
-      "deleteDesc": "Exclui todo o tempo registrado, as capturas e o índice de texto deste aplicativo. O programa reaparece aqui na próxima vez que rodar. Relatórios já gerados não são alterados.",
-      "hideAction": "Ocultar",
-      "deleteAction": "Excluir mesmo assim"
+      "deleteDesc": "Exclui <b>{{data}}</b>. O programa reaparece aqui na próxima vez que rodar. Relatórios já gerados não são alterados. (Esta ação não pode ser desfeita.)",
+      "privateName": "Privado",
+      "privateDesc": "Exclui <b>{{data}}</b> e não registra mais nada daqui em diante. (Esta ação não pode ser desfeita.)",
+      "excludeName": "Fora das estatísticas",
+      "excludeDesc": "Fica salvo no disco, mas fora das estatísticas, resumos, exportações e chat. Para contar de novo, tire o app da categoria “Fora das estatísticas”.",
+      "deleteAction": "Excluir mesmo assim",
+      "privateAction": "Mover para Privado",
+      "excludeAction": "Tirar das estatísticas"
     }
   },
   "categories": {
@@ -869,11 +872,47 @@
       "design": "Design",
       "fun": "Entretenimento",
       "other": "Outros",
-      "hidden": "Oculto",
+      "hidden": "Fora das estatísticas",
+      "private": "Privado",
       "office": "Escritório",
       "workchat": "Chat de trabalho",
       "game": "Jogos",
       "video": "Mídia"
+    },
+    "private": {
+      "description": "Apps e sites aqui não são registrados: nem tempo, nem capturas, nem títulos",
+      "count": {
+        "unknown": "tudo o que foi registrado até agora, com as capturas",
+        "known": "o que foi registrado até agora: {{data}}",
+        "records_one": "{{count, number}} registro",
+        "records_other": "{{count, number}} registros",
+        "screenshots_one": "{{count, number}} captura ({{size}})",
+        "screenshots_other": "{{count, number}} capturas ({{size}})",
+        "both": "{{records}} e {{screenshots}}"
+      },
+      "dialog": {
+        "title": "Mover “{{name}}” para Privado",
+        "titleNoName": "Os dados privados não foram excluídos por completo",
+        "appEffect": "Daqui em diante, o Hindsight não registra tempo, capturas nem títulos enquanto você usa este aplicativo.",
+        "siteEffect": "Daqui em diante, o Hindsight não registra tempo, capturas nem títulos enquanto este site estiver aberto no navegador. O mesmo vale para os subdomínios sem categoria própria.",
+        "counting": "Contando o que será excluído…",
+        "countFailed": "Não foi possível contar o que será excluído: {{error}}",
+        "noData": "Ainda não há nada registrado neste dispositivo.",
+        "willDelete": "Neste dispositivo, será excluído {{data}}.",
+        "everyDevice": "Seus outros dispositivos sincronizados também excluem o que registraram. Resumos e chats já criados não mudam. Não dá para desfazer.",
+        "siteLimit": "Só dá para excluir os registros que guardaram o domínio. Registros mais antigos, e os de quando “Registrar domínios dos sites” estava desligado, não têm domínio: não dá para separá-los, então ficam.",
+        "sitePermission": "Para reconhecer este site, o Hindsight precisa ler a barra de endereços. No macOS, permita em Ajustes do Sistema · Privacidade e Segurança · Automação. Firefox e Linux ainda não são suportados. Quando não dá para ler, o registro continua normalmente.",
+        "waitForSync": "Se houver uma sincronização em andamento, a exclusão começa quando ela terminar. Pode demorar um pouco.",
+        "saveFailed": "Não foi possível salvar: {{error}}",
+        "purgeFailed": "O registro parou, mas os dados antigos não foram excluídos por completo: {{error}}",
+        "makePrivate": "Mover para Privado",
+        "deleteAndMakePrivate": "Excluir e mover para Privado",
+        "deleting": "Excluindo…",
+        "retry": "Tentar de novo"
+      }
+    },
+    "excluded": {
+      "description": "Continua sendo registrado, mas fica fora das estatísticas, resumos, exportações e chat"
     },
     "list": {
       "namePlaceholder": "Nome da categoria",

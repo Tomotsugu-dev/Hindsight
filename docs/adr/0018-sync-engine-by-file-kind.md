@@ -1,7 +1,7 @@
 # ADR-0018 · Sync engine split by file kind: one module per kind under `push/` and `pull/`
 
 - **Date**: 2026-11-07
-- **Status**: Proposed
+- **Status**: **Accepted**
 - **Related**: ADR-0006 · ADR-0007 · ADR-0011 · ADR-0012 · commits `3acc4eb3` to `9a18d9b2`
 
 `push.rs`, `pull.rs` and `datasets.rs` each held both the steps of a sync round and the reads and writes of every table. The code that called the cloud also checked which backend it had. A new synced table needed edits in several places, and some of them still compiled when they were missed. We put the reads and writes of each kind of file in its own module under `push/` and `pull/`. The cloud is reached only through the methods of `CloudBackend`. Where we can, a missed edit is now a compile error.

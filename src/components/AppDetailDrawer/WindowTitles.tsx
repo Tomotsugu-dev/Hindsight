@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, ChevronUp, EyeOff, Info } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Info } from "lucide-react";
 import { useDurationFormatter } from "../../utils/duration";
 import { ignoreKeywordFromTitle } from "../../utils/ignoreKeyword";
 import { stripAppSuffix } from "../../utils/windowTitle";
 import { logError } from "../../lib/logger";
 import { api, type AppGroup, type TitleUsage } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { ChartOffIcon } from "../icons/ChartOffIcon";
 import { SiteIcon } from "../SiteIcon/SiteIcon";
 import { useSiteIcons } from "../SiteIcon/useSiteIcons";
 import { groupBySite, type SiteGroup } from "./groupBySite";
@@ -261,7 +262,7 @@ export function WindowTitles({
           title={t("appDetail.ignore.button")}
           onClick={() => void ignoreTitle(row.title)}
         >
-          <EyeOff size={14} strokeWidth={2} />
+          <ChartOffIcon size={14} strokeWidth={2} />
         </button>
       )}
     </li>

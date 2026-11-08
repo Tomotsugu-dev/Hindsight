@@ -9,6 +9,9 @@ import { logError } from "../../lib/logger";
 import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
+import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
+import { PRIVATE_CATEGORY_ID, purgeFailedReason } from "../../utils/privateCategory";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SiteIcon } from "../../components/SiteIcon/SiteIcon";
 import { useSiteIcons } from "../../components/SiteIcon/useSiteIcons";
@@ -90,6 +93,8 @@ export default function SitesPage() {
     void reload();
   }, [reload]);
 
+  const privacy = usePrivacyDialog(reload);
+
   const groups = useMemo(() => (rows ? groupSites(rows) : null), [rows]);
   const visibleGroups = useMemo(
     () =>
@@ -158,6 +163,15 @@ export default function SitesPage() {
 
   // A rule on a parent domain changes its subdomains too, so reload the whole list.
   const onPick = async (host: string, categoryId: string | null) => {
+    if (categoryId === PRIVATE_CATEGORY_ID) {
+      privacy.confirm({
+        name: host,
+        site: true,
+        target: { kind: "site", host },
+        save: () => api.setSiteRule(host, PRIVATE_CATEGORY_ID),
+      });
+      return;
+    }
     try {
       if (categoryId === null) {
         await api.removeSiteRule(host);
@@ -165,7 +179,10 @@ export default function SitesPage() {
         await api.setSiteRule(host, categoryId);
       }
     } catch (e) {
-      logError("sites.setRule", e);
+      // 删掉子域名自己的规则以后，它可能跟着上级变成隐私：规则已经删了，只是数据没删完
+      const reason = purgeFailedReason(e);
+      if (reason === null) logError("sites.setRule", e);
+      else privacy.showPurgeFailed(reason);
     }
     await reload();
   };
@@ -390,6 +407,7 @@ export default function SitesPage() {
         onConfirm={() => void saveIconDownloads(true)}
         onCancel={() => setIconConsentOpen(false)}
       />
+      <PrivacyDialog {...privacy.dialogProps} />
     </>
   );
 }

@@ -386,7 +386,7 @@
       },
       "app": {
         "title": "應用程式過濾",
-        "info": "應用程式名或視窗標題包含其中任意一條（忽略大小寫）時跳過截圖。",
+        "info": "應用程式名或視窗標題包含其中任意一條（忽略大小寫）時跳過截圖。要完全不記錄某個應用程式，把它歸到「隱私」分類。",
         "rowLabel": "標題 / 應用程式關鍵詞",
         "addLabel": "新增應用程式名",
         "placeholder": "如 微信"
@@ -826,12 +826,15 @@
     },
     "remove": {
       "title": "移除「{{name}}」",
-      "hideName": "隱藏(建議)",
-      "hideDesc": "不再計入統計,但歷史資料完整保留。想找回進行分析時,到「分類 → 管理分類」的「隱藏」裡把它拖出來即可。",
       "deleteName": "刪除",
-      "deleteDesc": "刪除該應用的所有時長資料、螢幕截圖與文字索引,這個程式下次執行時會重新出現在清單裡。不影響已經產生的日報與總結。",
-      "hideAction": "隱藏",
-      "deleteAction": "仍要刪除"
+      "deleteDesc": "刪掉<b>{{data}}</b>。這個程式下次執行時還會出現在清單裡。不影響已經產生的日報與總結。（此操作無法復原）",
+      "privateName": "隱私",
+      "privateDesc": "刪掉<b>{{data}}</b>，以後也不再記錄。（此操作無法復原）",
+      "excludeName": "不計入統計",
+      "excludeDesc": "記錄進磁碟，但不算進統計、總結、匯出和聊天。想重新進行統計時把該應用程式從「不計入統計」分類中移出即可。",
+      "deleteAction": "仍要刪除",
+      "privateAction": "設為隱私",
+      "excludeAction": "不計入統計"
     }
   },
   "categories": {
@@ -869,11 +872,45 @@
       "design": "設計",
       "fun": "娛樂",
       "other": "其他",
-      "hidden": "隱藏",
+      "hidden": "不計入統計",
+      "private": "隱私",
       "office": "辦公",
       "workchat": "工作溝通",
       "game": "遊戲",
       "video": "影音"
+    },
+    "private": {
+      "description": "歸到這裡的應用程式和網站，不記時間、不截圖、不存標題",
+      "count": {
+        "unknown": "已有的全部記錄和螢幕截圖",
+        "known": "已有的 {{data}}",
+        "records": "{{count, number}} 筆記錄",
+        "screenshots": "{{count, number}} 張螢幕截圖（{{size}}）",
+        "both": "{{records}}和 {{screenshots}}"
+      },
+      "dialog": {
+        "title": "把「{{name}}」設為隱私",
+        "titleNoName": "隱私資料沒有刪完",
+        "appEffect": "以後切到它時，Hindsight 不記時間、不截圖、不存標題。",
+        "siteEffect": "以後在瀏覽器裡開啟這個網站時，Hindsight 不記時間、不截圖、不存標題。沒有單獨設分類的子網域也一樣。",
+        "counting": "正在統計要刪多少…",
+        "countFailed": "沒能統計出要刪多少：{{error}}",
+        "noData": "本機還沒有它的記錄。",
+        "willDelete": "本機{{data}}會被刪除。",
+        "everyDevice": "同步的其他裝置也會刪掉它們自己記下的。已經產生的總結和聊天不會改。刪除後無法復原。",
+        "siteLimit": "只能刪掉記下了網域的記錄。更早的記錄，或者關掉「記錄網站網域」那段時間的記錄，沒有存網域，分不出來，會留著。",
+        "sitePermission": "要讀到位址列才認得出這個網站：macOS 要在「系統設定 · 隱私權與安全性 · 自動化」裡授權，Firefox 和 Linux 暫不支援。讀不到時照常記錄。",
+        "waitForSync": "正在同步的話，要等這一輪同步結束才開始刪，可能要一會兒。",
+        "saveFailed": "沒能儲存：{{error}}",
+        "purgeFailed": "已停止記錄，但舊資料沒有刪完：{{error}}",
+        "makePrivate": "設為隱私",
+        "deleteAndMakePrivate": "刪除並設為隱私",
+        "deleting": "正在刪除…",
+        "retry": "重試"
+      }
+    },
+    "excluded": {
+      "description": "照常記錄，但不算進統計、總結、匯出和聊天"
     },
     "list": {
       "namePlaceholder": "分類名",

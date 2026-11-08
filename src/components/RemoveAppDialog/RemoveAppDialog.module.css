@@ -1,5 +1,4 @@
-/* 骨架与配色沿用 ConfirmDialog（同一套弹窗语言），只多出「两个选项说明」
-   与「不再提示」两块。 */
+/* 骨架与配色沿用 ConfirmDialog（同一套弹窗语言），只多出「三个选项说明」一块。 */
 
 .backdrop {
   position: fixed;
@@ -41,7 +40,7 @@
   margin: 0;
 }
 
-/* —— 两条路径的说明 —— */
+/* —— 三条路径的说明 —— */
 
 .options {
   list-style: none;
@@ -66,6 +65,11 @@
   color: var(--text-faint);
 }
 
+/* 会删数据的两条：图标和按钮一样是红的 */
+.optionIconDanger {
+  color: var(--status-error);
+}
+
 .optionName {
   font-size: 13px;
   font-weight: var(--font-weight-600);
@@ -80,8 +84,16 @@
   margin: 0;
 }
 
+/* 会删多少：加粗 */
+.optionDesc b {
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+/* 四个按钮在英文、西语里放不下一行，就折行 */
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 2px;
@@ -111,6 +123,12 @@
   transform: scale(0.97);
 }
 
+/* 按钮上的图标和上面说明里的一样，一眼对得上 */
+.btnIcon {
+  flex-shrink: 0;
+  margin-right: 5px;
+}
+
 .btnCancel {
   background: var(--fill-default);
   border-color: rgba(0, 0, 0, 0.06);
@@ -121,16 +139,7 @@
   background: var(--fill-strong);
 }
 
-.btnConfirm {
-  background: var(--accent-fill);
-  color: #ffffff;
-}
-
-.btnConfirm:hover {
-  background: var(--accent-fill-hover);
-}
-
-/* 删除是次要动作:不给实心红(那会把视线拉过去),用描边警示 */
+/* 删除、设为隐私都删数据:不给实心红(那会把视线拉过去),用描边警示 */
 .btnDanger {
   background: transparent;
   border-color: color-mix(in oklab, var(--status-error) 45%, transparent);

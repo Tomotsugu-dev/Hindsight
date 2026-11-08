@@ -1,0 +1,9 @@
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lines p {
+  margin: 0;
+}

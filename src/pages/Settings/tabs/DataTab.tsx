@@ -27,14 +27,8 @@ import { useSettings } from "../../../state/settings";
 import { api, type AuthState, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
 import { canClearCloud } from "../../Devices/syncAccount";
+import { formatBytes } from "../../../utils/formatBytes";
 import styles from "./DataTab.module.css";
-
-function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
-  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
 
 /** "db" = 从云端重建本机数据；"shots" = 清空截图；"remove" = 从云端移除本设备 */
 type PurgeTarget = "db" | "shots" | "remove";
@@ -196,16 +190,16 @@ export default function DataTab() {
           description={
             storage
               ? t("settings.data.storage.currentUsageDescription", {
-                  db: fmtBytes(storage.dbBytes),
-                  mem: fmtBytes(storage.memoryDbBytes),
-                  shots: fmtBytes(storage.screenshotsBytes),
+                  db: formatBytes(storage.dbBytes),
+                  mem: formatBytes(storage.memoryDbBytes),
+                  shots: formatBytes(storage.screenshotsBytes),
                 })
               : undefined
           }
           icon={PieChart}
         >
           <span style={{ fontSize: 13, color: "var(--text-strong)", fontWeight: 600 }}>
-            {storage ? fmtBytes(total) : "—"}
+            {storage ? formatBytes(total) : "—"}
           </span>
         </Row>
         <Row

@@ -1,5 +1,6 @@
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::Result;
+use crate::repo::categories::is_private;
 use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::payload::ActivityPayload;
 
@@ -31,6 +32,9 @@ pub(super) async fn merge(
                 continue;
             }
         };
+        if is_private(pool, &row.process_name, row.url_host.as_deref()).await? {
+            continue;
+        }
         let remote_id = row.id.to_string();
         seen_ids.insert(remote_id.clone());
         let excluded = is_excluded(
@@ -178,6 +182,7 @@ async fn upsert_remote_activity(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo::categories::assign_app;
     use crate::repo::test_util::fresh_test_pool;
 
     const DAY: &str = "2026-05-15";
@@ -276,6 +281,50 @@ mod tests {
         let (dur, excl) = row_state(&pool, OTHER_DEVICE, "1").await;
         assert_eq!(dur, 240, "LWW UPDATE 应生效（duration 更新）");
         assert_eq!(excl, 1, "LWW UPDATE 不触碰 excluded——本机打的标必须存活");
+    }
+
+    /// 隐私的应用和隐私网站的行不写进本地。不写的行不算文件里有，所以以前拉来的那几行也删掉。
+    #[tokio::test]
+    async fn pull_skips_private_activity_rows() {
+        let pool = fresh_test_pool().await;
+        let body = [
+            payload_of(1, "Tor", None),
+            payload_of(2, "Firefox", Some("gemini.google.com")),
+            payload_of(3, "Firefox", Some("github.com")),
+        ]
+        .join("\n");
+        merge(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+            .await
+            .unwrap();
+        assert_eq!(remote_ids_for(&pool, OTHER_DEVICE).await, ["1", "2", "3"]);
+
+        assign_app(&pool, "Tor", "private").await.unwrap();
+        crate::repo::site_rules::set(&pool, "google.com", "private")
+            .await
+            .unwrap();
+        merge(&pool, OTHER_DEVICE, DAY, body.as_bytes(), &[])
+            .await
+            .unwrap();
+
+        assert_eq!(remote_ids_for(&pool, OTHER_DEVICE).await, ["3"]);
+    }
+
+    /// 文件里的一行：哪个应用、停在哪个网站。
+    fn payload_of(id: i64, process: &str, host: Option<&str>) -> String {
+        let p = ActivityPayload {
+            id,
+            started_at: format!("{DAY}T10:0{id}:00Z"),
+            ended_at: format!("{DAY}T10:0{id}:30Z"),
+            duration_secs: 30,
+            local_date: DAY.into(),
+            local_hour: 10,
+            process_name: process.into(),
+            window_title: None,
+            category_id: "other".into(),
+            updated_at: format!("{DAY}T10:0{id}:30Z"),
+            url_host: host.map(str::to_string),
+        };
+        serde_json::to_string(&p).unwrap()
     }
 
     async fn excluded_of(pool: &DbPool, device_id: &str, remote_id: &str) -> i64 {

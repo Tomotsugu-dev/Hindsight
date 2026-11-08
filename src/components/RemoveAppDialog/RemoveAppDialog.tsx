@@ -1,28 +1,33 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { EyeOff, Trash2 } from "lucide-react";
+import { api, type DataCount } from "../../api/hindsight";
+import { ChartOffIcon } from "../icons/ChartOffIcon";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { logError } from "../../lib/logger";
+import { describeCount } from "../../utils/privateCategory";
 import styles from "./RemoveAppDialog.module.css";
 
 interface RemoveAppDialogProps {
   open: boolean;
   /** 要移除的应用显示名，写进标题 */
   appName: string;
-  onHide: () => void;
+  /** 这个应用的分组，统计会删多少用 */
+  groupId: string;
   onDelete: () => void;
+  onMakePrivate: () => void;
+  onExclude: () => void;
   onCancel: () => void;
 }
 
 /**
- * 从应用列表移除一个应用时的选择弹窗。
- *
- * 为什么不是简单的「确认删除」：这里的两条路后果完全不同，用户不知情就会选错——
- *   - 隐藏：归入内建的 `hidden` 分类。不再计入任何统计与 AI 总结，但历史数据
- *     一条不少，随时能从分类页拖回来；
- *   - 删除：真删——活动记录、截图文件、OCR 文字索引一并清掉。**不可逆**，而且
- *     这个程序下次运行时还会重新出现在列表里（除非勾上「不再记录」）。
- * 所以默认推荐隐藏，删除放次要位置，并把差异写在正文里。
+ * 从应用列表移除一个应用时的选择弹窗。三条路后果不同，说明写在正文里，不推荐哪一条。
+ * 说明和按钮都按从轻到重排：
+ *   - 不计入统计：归入内置的 `hidden` 分类，照常记录，只是不算进统计；
+ *   - 删除：删掉已有的数据，不可逆。这个程序下次运行时还会出现在列表里；
+ *   - 设为隐私：删掉已有的数据，以后也不记录。不可逆。
+ * 后两条都删数据，按钮和图标是红的；打开时焦点在「取消」上。
  *
  * **刻意不做「不再提示」**：记住「删除」意味着以后每次点行尾按钮都直接不可逆
  * 地删数据，省下的一次确认远不值这个风险。每次都问。
@@ -30,11 +35,30 @@ interface RemoveAppDialogProps {
 export function RemoveAppDialog({
   open,
   appName,
-  onHide,
+  groupId,
   onDelete,
+  onMakePrivate,
+  onExclude,
   onCancel,
 }: RemoveAppDialogProps) {
   const { t } = useTranslation();
+  // null：还在统计，或者统计出错
+  const [count, setCount] = useState<DataCount | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setCount(null);
+    let live = true;
+    void api.countTargetData({ kind: "appGroup", groupId }).then(
+      (c) => {
+        if (live) setCount(c);
+      },
+      (e) => logError("removeApp.count", e),
+    );
+    return () => {
+      live = false;
+    };
+  }, [open, groupId]);
 
   useEffect(() => {
     if (!open) return;
@@ -49,6 +73,7 @@ export function RemoveAppDialog({
   useFocusTrap(open, dialogRef);
 
   if (!open) return null;
+  const data = describeCount(t, count);
 
   return createPortal(
     <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
@@ -68,17 +93,44 @@ export function RemoveAppDialog({
 
         <ul className={styles.options}>
           <li className={styles.option}>
-            <EyeOff size={15} strokeWidth={2} className={styles.optionIcon} />
+            <ChartOffIcon size={15} strokeWidth={2} className={styles.optionIcon} />
             <div>
-              <p className={styles.optionName}>{t("apps.remove.hideName")}</p>
-              <p className={styles.optionDesc}>{t("apps.remove.hideDesc")}</p>
+              <p className={styles.optionName}>{t("apps.remove.excludeName")}</p>
+              <p className={styles.optionDesc}>{t("apps.remove.excludeDesc")}</p>
             </div>
           </li>
           <li className={styles.option}>
-            <Trash2 size={15} strokeWidth={2} className={styles.optionIcon} />
+            <Trash2
+              size={15}
+              strokeWidth={2}
+              className={`${styles.optionIcon} ${styles.optionIconDanger}`}
+            />
             <div>
               <p className={styles.optionName}>{t("apps.remove.deleteName")}</p>
-              <p className={styles.optionDesc}>{t("apps.remove.deleteDesc")}</p>
+              <p className={styles.optionDesc}>
+                <Trans
+                  i18nKey="apps.remove.deleteDesc"
+                  values={{ data }}
+                  components={{ b: <b /> }}
+                />
+              </p>
+            </div>
+          </li>
+          <li className={styles.option}>
+            <EyeOff
+              size={15}
+              strokeWidth={2}
+              className={`${styles.optionIcon} ${styles.optionIconDanger}`}
+            />
+            <div>
+              <p className={styles.optionName}>{t("apps.remove.privateName")}</p>
+              <p className={styles.optionDesc}>
+                <Trans
+                  i18nKey="apps.remove.privateDesc"
+                  values={{ data }}
+                  components={{ b: <b /> }}
+                />
+              </p>
             </div>
           </li>
         </ul>
@@ -88,24 +140,30 @@ export function RemoveAppDialog({
             type="button"
             className={`${styles.btn} ${styles.btnCancel}`}
             onClick={onCancel}
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus
           >
             {t("common.cancel")}
+          </button>
+          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onExclude}>
+            <ChartOffIcon size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+            {t("apps.remove.excludeAction")}
           </button>
           <button
             type="button"
             className={`${styles.btn} ${styles.btnDanger}`}
             onClick={onDelete}
           >
+            <Trash2 size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
             {t("apps.remove.deleteAction")}
           </button>
           <button
             type="button"
-            className={`${styles.btn} ${styles.btnConfirm}`}
-            onClick={onHide}
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
+            className={`${styles.btn} ${styles.btnDanger}`}
+            onClick={onMakePrivate}
           >
-            {t("apps.remove.hideAction")}
+            <EyeOff size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+            {t("apps.remove.privateAction")}
           </button>
         </div>
       </div>

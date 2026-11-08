@@ -17,12 +17,14 @@ import { logError } from "../../lib/logger";
 import { displayAppName } from "../../utils/displayName";
 import { AssignDropdown } from "./parts";
 import { RemoveAppDialog } from "../../components/RemoveAppDialog/RemoveAppDialog";
+import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
+import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
+import {
+  EXCLUDED_CATEGORY_ID,
+  PRIVATE_CATEGORY_ID,
+  purgeFailedReason,
+} from "../../utils/privateCategory";
 import styles from "./Pairing.module.css";
-
-/** 内建「隐藏」分类的 id。报表(repo/reports.rs)与 AI 总结(repo/ai_summaries.rs)
- *  的 SQL 里都写着 `g.category_id IS NOT 'hidden'`——归到它名下的应用不进任何
- *  统计。后端把这行守为 builtin,删不掉,所以前端可以安全地硬编码。 */
-const HIDDEN_CATEGORY_ID = "hidden";
 
 /** 把 group + 设备列表换算成「每个 device 列有哪些 member」的 lookup。
  *  必须返回数组：同一台设备上的两个进程合进一组时（拖拽允许），用 find 只取
@@ -114,6 +116,9 @@ export function PairingSection({
     if (!isControlled) void reload();
   }, [isControlled, reload]);
 
+  const privacy = usePrivacyDialog(() => Promise.all([reload(), refreshCategories()]));
+  const { showPurgeFailed } = privacy;
+
   // self 设备先排前面，其它按名字稳定排序
   const sortedDevices = useMemo<Device[]>(() => {
     const arr = [...devices];
@@ -160,6 +165,12 @@ export function PairingSection({
       if (cur && target && target !== cur.sourceGroupId) {
         void api
           .mergeAppGroup(cur.processName, target)
+          // 合并已经存好，只是隐私数据没删完：照样刷新
+          .catch((e) => {
+            const reason = purgeFailedReason(e);
+            if (reason === null) throw e;
+            showPurgeFailed(reason);
+          })
           .then(() => Promise.all([reload(), refreshCategories()]))
           .catch((e) => logError("pairing.merge", e));
       }
@@ -170,10 +181,19 @@ export function PairingSection({
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-  }, [drag, hoverGroupId, refreshCategories]);
+  }, [drag, hoverGroupId, refreshCategories, showPurgeFailed]);
 
   /** 「移除」弹窗:null = 关闭,否则是待处理的那一行 */
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+  /** 「设为隐私」：从下拉框选的先问，从移除弹窗选的直接存 */
+  const makePrivate = (groupId: string, name: string, ask: boolean) => {
+    const save = () => api.assignAppGroupCategory(groupId, PRIVATE_CATEGORY_ID);
+    if (ask) {
+      privacy.confirm({ name, site: false, target: { kind: "appGroup", groupId }, save });
+    } else {
+      privacy.run({ name, save });
+    }
+  };
 
   if (isLoading || visibleGroups === null) {
     return <div className={styles.toolbar}>{t("categories.pairing.loading")}</div>;
@@ -214,14 +234,14 @@ export function PairingSection({
     });
   };
 
-  /** 隐藏:归入内建 hidden 分类——报表与 AI 总结的 SQL 都排除它,
+  /** 不计入统计:归入内建 hidden 分类——报表与 AI 总结的 SQL 都排除它,
    *  数据一条不少,想找回就去分类页把它拖出来。 */
-  const hideRow = async (groupId: string) => {
+  const excludeRow = async (groupId: string) => {
     try {
-      await api.assignAppGroupCategory(groupId, HIDDEN_CATEGORY_ID);
+      await api.assignAppGroupCategory(groupId, EXCLUDED_CATEGORY_ID);
       await Promise.all([reload(), refreshCategories()]);
     } catch (e) {
-      logError("pairing.hideRow", e);
+      logError("pairing.excludeRow", e);
     }
   };
 
@@ -250,7 +270,12 @@ export function PairingSection({
     }
   };
 
-  const onAssignCategory = async (groupId: string, categoryId: string | null) => {
+  const onAssignCategory = async (group: AppGroup, categoryId: string | null) => {
+    const groupId = group.id;
+    if (categoryId === PRIVATE_CATEGORY_ID) {
+      makePrivate(groupId, group.displayName, true);
+      return;
+    }
     try {
       await api.assignAppGroupCategory(groupId, categoryId);
       await Promise.all([reload(), refreshCategories()]);
@@ -417,7 +442,7 @@ export function PairingSection({
                 categories={categories}
                 currentCategoryId={group.categoryId}
                 allowClear
-                onPick={(cid) => void onAssignCategory(group.id, cid)}
+                onPick={(cid) => void onAssignCategory(group, cid)}
               />
             </div>
 
@@ -463,18 +488,24 @@ export function PairingSection({
       <RemoveAppDialog
         open={removing !== null}
         appName={removing?.name ?? ""}
-        onHide={() => {
-          const id = removing?.id;
-          setRemoving(null);
-          if (id) void hideRow(id);
-        }}
+        groupId={removing?.id ?? ""}
         onDelete={() => {
           const id = removing?.id;
           setRemoving(null);
           if (id) void onDeleteRow(id);
         }}
+        onMakePrivate={() => {
+          setRemoving(null);
+          if (removing) makePrivate(removing.id, removing.name, false);
+        }}
+        onExclude={() => {
+          const id = removing?.id;
+          setRemoving(null);
+          if (id) void excludeRow(id);
+        }}
         onCancel={() => setRemoving(null)}
       />
+      <PrivacyDialog {...privacy.dialogProps} />
     </div>
   );
 }

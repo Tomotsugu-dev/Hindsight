@@ -969,6 +969,138 @@ async fn optional_datasets_cross_device_roundtrip() {
     assert!(text.contains("新增行"), "会话增长应覆盖到 B: {text}");
 }
 
+/// 往 outbox 加一行 memory，标记那天的记忆文件要重传。
+async fn enqueue_memory_day(dev: &TestDevice, day: &str) {
+    let payload = serde_json::json!({ "localDate": day }).to_string();
+    let day = day.to_string();
+    dev.pool
+        .0
+        .call(move |conn| {
+            use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
+            enqueue(conn, OutboxOp::Upsert, OutboxEntity::Memory, &day, &payload).db()
+        })
+        .await
+        .unwrap();
+}
+
+/// 往记忆库插两条这台设备自己的会话，都在 2026-07-05：g1 先结束，g2 后结束。
+async fn insert_two_memory_sessions(dev: &TestDevice) {
+    dev.mem
+        .0
+        .call(|conn| {
+            conn.execute_batch(
+                "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text, guid)
+                 VALUES ('2026-07-05','t0','t1','chrome','甲','早的会话','g1'),
+                        ('2026-07-05','t2','t3','code','乙','晚的会话','g2');",
+            )
+            .db()
+        })
+        .await
+        .unwrap();
+}
+
+/// 删掉先结束的会话，指纹（最大的 ended_ts）不变；outbox 里的 memory 行让那天的文件照样重传。
+#[tokio::test]
+async fn memory_outbox_row_uploads_that_day() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    enable_optional_sync(&a).await;
+    insert_two_memory_sessions(&a).await;
+    a.engine.sync_now().await.unwrap();
+
+    a.mem
+        .0
+        .call(|conn| {
+            conn.execute("DELETE FROM text_sessions WHERE guid = 'g1'", [])
+                .db()
+        })
+        .await
+        .unwrap();
+    enqueue_memory_day(&a, "2026-07-05").await;
+    a.engine.sync_now().await.unwrap();
+
+    let file = drive
+        .list_appdata_files("")
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|f| f.name == "device.device-a.memory.2026-07-05.ndjson")
+        .expect("那天的记忆文件应在云端");
+    let body = String::from_utf8(drive.download(&file.id).await.unwrap()).unwrap();
+    assert!(!body.contains("g1"), "删掉的会话应从云端文件消失: {body}");
+    assert!(body.contains("g2"), "没删的会话应留着: {body}");
+    assert_eq!(outbox_count(&a.pool).await, 0);
+}
+
+/// 屏幕记忆同步关着时，memory 行直接删掉：不上传，也不留在 outbox 里。
+#[tokio::test]
+async fn memory_outbox_rows_are_dropped_when_sync_is_off() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    insert_two_memory_sessions(&a).await;
+    enqueue_memory_day(&a, "2026-07-05").await;
+    a.engine.sync_now().await.unwrap();
+
+    assert_eq!(outbox_count(&a.pool).await, 0);
+    let files = drive.list_appdata_files("").await.unwrap();
+    assert!(
+        !files.iter().any(|f| f.name.contains(".memory.")),
+        "开关关着不应上传记忆文件"
+    );
+}
+
+/// 别的设备把应用设成隐私：这边合并到分组以后，删掉这个应用的数据。本机自己记的、从那边拉来的都删。
+#[tokio::test]
+async fn pull_purges_private_data_after_merging_groups() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    let b = make_device("device-b", Arc::clone(&drive)).await;
+    let captured = Local::now();
+    insert_sealed(&a, "Tor", captured, 30).await;
+    insert_sealed(&b, "Tor", captured, 30).await;
+    insert_sealed(&b, "Code", captured, 30).await;
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 1);
+
+    crate::repo::categories::assign_app(&a.pool, "Tor", "private")
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    assert_eq!(count_for_device(&b, "device-a").await, 0, "从 A 拉来的 Tor");
+    assert_eq!(count_for_device(&b, "device-b").await, 1, "只剩 B 的 Code");
+}
+
+/// A 把应用设成隐私：A 删掉自己的数据并重传那天的文件，B 拉下来以后也删掉。两台设备上都没有了。
+#[tokio::test]
+async fn private_app_data_is_deleted_on_every_device() {
+    let drive = Arc::new(InMemoryDriveStore::default());
+    let a = make_device("device-a", Arc::clone(&drive)).await;
+    let b = make_device("device-b", Arc::clone(&drive)).await;
+    let captured = Local::now();
+    insert_sealed(&a, "Tor", captured, 30).await;
+    insert_sealed(&a, "Code", captured, 30).await;
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+    assert_eq!(count_for_device(&b, "device-a").await, 2);
+
+    crate::repo::categories::assign_app(&a.pool, "Tor", "private")
+        .await
+        .unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel(8);
+    let capture = crate::capture::CaptureService::new(a.pool.clone(), None, 30, tx);
+    crate::privacy::purge_private_after_change(&a.pool, Some(&a.mem), &capture, &a.engine)
+        .await
+        .unwrap();
+    a.engine.sync_now().await.unwrap();
+    b.engine.sync_now().await.unwrap();
+
+    assert_eq!(count_for_device(&a, "device-a").await, 1, "A 只剩 Code");
+    assert_eq!(count_for_device(&b, "device-a").await, 1, "B 上也只剩 Code");
+}
+
 // ───────────────────── 补测 C 批新增(push 失败重试 / metadata 往返 / OS 过滤) ─────────────────────
 
 async fn outbox_count(pool: &DbPool) -> i64 {

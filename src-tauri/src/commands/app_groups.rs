@@ -6,9 +6,13 @@ use tauri::State;
 
 use crate::capture::CaptureService;
 use crate::commands::screen_memory::MemoryState;
+use crate::privacy::purge_private_after_change;
 use crate::repo::app_groups::{self, AppGroup};
+use crate::repo::categories::PRIVATE_CATEGORY_ID;
+use crate::repo::purge::{self, PurgeTarget};
 use crate::repo::settings;
 use crate::storage::DbPool;
+use crate::sync::engine::SyncEngine;
 
 /// 拉所有应用组（含 display_name + members + category_id）。
 #[tauri::command]
@@ -17,7 +21,7 @@ pub async fn list_app_groups(pool: State<'_, DbPool>) -> Result<Vec<AppGroup>, S
 }
 
 /// **真删**一个应用的数据:活动记录、截图文件、OCR 文字索引一并清掉,最后软删组。
-/// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_data`] 的文档。
+/// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_members`] 的文档。
 ///
 /// `run_with_session_cleared`:正在采集这个应用时直接删行,会留下一条永不 seal
 /// 的孤儿会话(指针还指着被删掉的 id)——同 `purge_local_data` 的处理。
@@ -34,26 +38,35 @@ pub async fn purge_app_group_data(
         .ok_or_else(|| "屏幕记忆库不可用(启动时打开失败,详见日志)".to_string())?;
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     let root = std::path::PathBuf::from(&cfg.screenshot_path);
+    let self_id = crate::device::self_id().map_err(String::from)?;
 
+    let target = PurgeTarget::AppGroup { group_id };
     svc.run_with_session_cleared(|| async {
-        app_groups::purge_with_data(&pool, memdb, &root, &group_id)
+        purge::purge(&pool, Some(memdb), &root, self_id, &target)
             .await
+            .map(|_| ())
             .map_err(String::from)
     })
     .await
 }
 
-/// 把某 process_name 合并到目标组（让两个 process 在统计上算同一应用）。
-/// 例如把 `chrome.exe` 和 `Google Chrome` 合并。
+/// Moves `process_name` into the target group, so the two processes count as one app in the
+/// statistics, for example `chrome.exe` and `Google Chrome`.
+///
+/// Deletes private data after saving.
 #[tauri::command]
 pub async fn merge_app_group(
     pool: State<'_, DbPool>,
+    mem: State<'_, MemoryState>,
+    svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
     process_name: String,
     target_group_id: String,
 ) -> Result<(), String> {
     app_groups::merge(&pool, &process_name, &target_group_id)
         .await
-        .map_err(Into::into)
+        .map_err(String::from)?;
+    purge_private_after_change(&pool, mem.0.as_ref(), &svc, &engine).await
 }
 
 /// 把某 process_name 从所在组拆出来变成单成员独立组。
@@ -79,10 +92,16 @@ pub async fn rename_app_group(
         .map_err(Into::into)
 }
 
-/// 给组指派分类。category_id = None / 空字符串 → 取消分类。
+/// Assigns a category to an app group. A `category_id` of None or an empty string removes the
+/// category.
+///
+/// When set to private, deletes private data after saving.
 #[tauri::command]
 pub async fn assign_app_group_category(
     pool: State<'_, DbPool>,
+    mem: State<'_, MemoryState>,
+    svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
     group_id: String,
     category_id: Option<String>,
 ) -> Result<(), String> {
@@ -94,7 +113,12 @@ pub async fn assign_app_group_category(
             Some(trimmed.to_string())
         }
     });
+    let to_private = cat.as_deref() == Some(PRIVATE_CATEGORY_ID);
     app_groups::assign_category(&pool, &group_id, cat)
         .await
-        .map_err(Into::into)
+        .map_err(String::from)?;
+    if to_private {
+        purge_private_after_change(&pool, mem.0.as_ref(), &svc, &engine).await?;
+    }
+    Ok(())
 }

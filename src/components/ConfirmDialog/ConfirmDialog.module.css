@@ -151,6 +151,25 @@
   background: #dc2626;
 }
 
+/* 正在执行的确认按钮：不像别的禁用按钮那样变淡，转圈要看得见 */
+.btnBusy:disabled {
+  opacity: 0.85;
+}
+
+.spinning {
+  margin-right: 6px;
+  animation: confirmDialogSpin 0.9s linear infinite;
+}
+
+@keyframes confirmDialogSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }

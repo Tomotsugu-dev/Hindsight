@@ -61,11 +61,11 @@ count it".
 
 ## Delete the app
 
-`repo::app_groups::purge_with_data`, the "Delete anyway" button on the pairing
-page. Physically removes, on this machine only: activity rows, icons, executable
-paths, the OCR text in the memory DB, and the screenshot files only this app
-referenced. The group itself is soft-deleted so the deletion reaches peers as a
-tombstone.
+`repo::purge::purge` with `PurgeTarget::AppGroup`, the "Delete anyway" button on
+the pairing page. Physically removes, on this machine only: activity rows, icons,
+executable paths, the OCR text in the memory DB, and the screenshot files only
+this app referenced, with their AI descriptions and embeddings. The group itself
+is soft-deleted so the deletion reaches peers as a tombstone.
 
 What it does not reach:
 

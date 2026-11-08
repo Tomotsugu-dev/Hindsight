@@ -1,14 +1,51 @@
 //! 应用分类相关 Tauri 命令——给前端「分类」页面用。
 //!
-//! 命令薄壳：参数 / 返回值校验由 [`crate::repo::categories`] 层做，本文件只把
-//! crate Error 适配成 String 给前端。
+//! 命令薄壳：参数 / 返回值校验由 [`crate::repo::categories`] 层做。
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use tauri::State;
 
-use crate::repo::categories::{self, Category, CategoryInput, CategoryPatch, UnclassifiedApp};
+use crate::capture::CaptureService;
+use crate::commands::screen_memory::MemoryState;
+use crate::privacy::{self, purge_private_after_change};
+use crate::repo::categories::{
+    self, Category, CategoryInput, CategoryPatch, UnclassifiedApp, PRIVATE_CATEGORY_ID,
+};
+use crate::repo::purge::{self, DataCount, PurgeReport, PurgeTarget};
+use crate::repo::settings;
 use crate::storage::{migrations, DbPool};
+use crate::sync::engine::SyncEngine;
+
+/// Deletes all data of the apps and websites now in the `private` category, and returns how
+/// much was deleted. When an app or a website is set as private, the category may be saved
+/// while the deletion fails. The frontend then calls this to try again.
+#[tauri::command]
+pub async fn purge_private_data(
+    pool: State<'_, DbPool>,
+    mem: State<'_, MemoryState>,
+    svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
+) -> Result<PurgeReport, String> {
+    privacy::purge_private(&pool, mem.0.as_ref(), &svc, &engine)
+        .await
+        .map_err(String::from)
+}
+
+/// Counts the data that deleting `target` would remove, for the confirm dialog. It changes no
+/// data.
+#[tauri::command]
+pub async fn count_target_data(
+    pool: State<'_, DbPool>,
+    target: PurgeTarget,
+) -> Result<DataCount, String> {
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let root = std::path::PathBuf::from(&cfg.screenshot_path);
+    purge::count(&pool, &root, &target)
+        .await
+        .map_err(String::from)
+}
 
 /// 拉所有分类（包括内置和用户自建），按 sort_order 升序。
 #[tauri::command]
@@ -56,17 +93,26 @@ pub async fn reorder_categories(
         .map_err(Into::into)
 }
 
-/// 把单个 process_name 归类到某 category。
-/// 实际写入 app_groups.category_id（process_name 通过 ensure_group 找到对应组）。
+/// Assigns one process to a category. It writes `app_groups.category_id` of the group the
+/// process is in, found through `ensure_group`.
+///
+/// When set to private, deletes private data after saving.
 #[tauri::command]
 pub async fn assign_app_to_category(
     pool: State<'_, DbPool>,
+    mem: State<'_, MemoryState>,
+    svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
     process_name: String,
     category_id: String,
 ) -> Result<(), String> {
     categories::assign_app(&pool, &process_name, &category_id)
         .await
-        .map_err(Into::into)
+        .map_err(String::from)?;
+    if category_id == PRIVATE_CATEGORY_ID {
+        purge_private_after_change(&pool, mem.0.as_ref(), &svc, &engine).await?;
+    }
+    Ok(())
 }
 
 /// 把某 process_name 的分类清空（退回 'other'）。

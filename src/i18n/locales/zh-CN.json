@@ -386,7 +386,7 @@
       },
       "app": {
         "title": "应用过滤",
-        "info": "应用名或窗口标题包含其中任意一条（忽略大小写）时跳过截图。",
+        "info": "应用名或窗口标题包含其中任意一条（忽略大小写）时跳过截图。要完全不记录某个应用，把它归到「隐私」分类。",
         "rowLabel": "标题 / 应用关键词",
         "addLabel": "添加应用名",
         "placeholder": "如 微信"
@@ -826,12 +826,15 @@
     },
     "remove": {
       "title": "移除「{{name}}」",
-      "hideName": "隐藏(推荐)",
-      "hideDesc": "不再计入统计,但历史数据完整保留。想找回进行分析时,到「分类 → 管理分类」的「隐藏」里把它拖出来即可。",
       "deleteName": "删除",
-      "deleteDesc": "删除该应用的所有时长数据、截图与文字索引,这个程序下次运行时会重新出现在列表里。不影响已经生成的日报与总结。",
-      "hideAction": "隐藏",
-      "deleteAction": "仍然删除"
+      "deleteDesc": "删掉<b>{{data}}</b>。这个程序下次运行时还会出现在列表里。不影响已经生成的日报与总结。（此操作不可恢复）",
+      "privateName": "隐私",
+      "privateDesc": "删掉<b>{{data}}</b>，以后也不再记录。（此操作不可恢复）",
+      "excludeName": "不计入统计",
+      "excludeDesc": "记录进磁盘，但不算进统计、总结、导出和聊天。想重新进行统计时把该应用从“不计入统计”分类中移出即可。",
+      "deleteAction": "仍然删除",
+      "privateAction": "设为隐私",
+      "excludeAction": "不计入统计"
     }
   },
   "categories": {
@@ -869,11 +872,45 @@
       "design": "设计",
       "fun": "娱乐",
       "other": "其他",
-      "hidden": "隐藏",
+      "hidden": "不计入统计",
+      "private": "隐私",
       "office": "办公",
       "workchat": "工作沟通",
       "game": "游戏",
       "video": "影音"
+    },
+    "private": {
+      "description": "归到这里的应用和网站，不记时间、不截图、不存标题",
+      "count": {
+        "unknown": "已有的全部记录和截图",
+        "known": "已有的 {{data}}",
+        "records": "{{count, number}} 条记录",
+        "screenshots": "{{count, number}} 张截图（{{size}}）",
+        "both": "{{records}}和 {{screenshots}}"
+      },
+      "dialog": {
+        "title": "把「{{name}}」设为隐私",
+        "titleNoName": "隐私数据没有删完",
+        "appEffect": "以后切到它时，Hindsight 不记时间、不截图、不存标题。",
+        "siteEffect": "以后在浏览器里打开这个网站时，Hindsight 不记时间、不截图、不存标题。没有单独设分类的子域名也一样。",
+        "counting": "正在统计要删多少…",
+        "countFailed": "没能统计出要删多少：{{error}}",
+        "noData": "本机还没有它的记录。",
+        "willDelete": "本机{{data}}会被删除。",
+        "everyDevice": "同步到的其他设备也会删掉它们自己记下的。已经生成的总结和聊天不会改。删除后不能恢复。",
+        "siteLimit": "只能删掉记下了域名的记录。更早的记录，或者关掉「记录网站域名」那段时间的记录，没有存域名，分不出来，会留着。",
+        "sitePermission": "要读到地址栏才认得出这个网站：macOS 要在「系统设置 · 隐私与安全性 · 自动化」里授权，Firefox 和 Linux 暂不支持。读不到时照常记录。",
+        "waitForSync": "正在同步的话，要等这一轮同步结束才开始删，可能要一会儿。",
+        "saveFailed": "没能保存：{{error}}",
+        "purgeFailed": "已停止记录，但旧数据没有删完：{{error}}",
+        "makePrivate": "设为隐私",
+        "deleteAndMakePrivate": "删除并设为隐私",
+        "deleting": "正在删除…",
+        "retry": "重试"
+      }
+    },
+    "excluded": {
+      "description": "照常记录，但不算进统计、总结、导出和聊天"
     },
     "list": {
       "namePlaceholder": "分类名",

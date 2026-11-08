@@ -149,6 +149,27 @@ export interface AppGroup {
   members: AppGroupMember[];
 }
 
+/** 要删谁的数据。同后端 `repo::purge::PurgeTarget`。 */
+export type PurgeTarget =
+  | { kind: "appGroup"; groupId: string }
+  | { kind: "site"; host: string }
+  | { kind: "private" };
+
+/** 删除前统计出来会删多少。 */
+export interface DataCount {
+  activities: number;
+  /** 还在磁盘上的截图文件 */
+  screenshots: number;
+  screenshotBytes: number;
+}
+
+/** 删掉了多少。 */
+export interface PurgeReport {
+  activities: number;
+  screenshots: number;
+  memorySessions: number;
+}
+
 /** One row of the website classification tab (ADR-0013). */
 export interface SiteRow {
   host: string;
@@ -902,7 +923,7 @@ export const api = {
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
   /** **真删**这个应用的数据：活动记录、截图文件、OCR 文字索引一并清掉，最后软删组。
    *  不可逆；不重算已生成的报表，也不传播数据删除到其它设备。
-   *  详见 `app_groups::purge_with_data`。 */
+   *  详见 `repo::purge::purge`。 */
   purgeAppGroupData: (groupId: string) =>
     invoke<void>("purge_app_group_data", { groupId }),
   mergeAppGroup: (processName: string, targetGroupId: string) =>
@@ -913,6 +934,10 @@ export const api = {
     invoke<void>("rename_app_group", { groupId, displayName }),
   assignAppGroupCategory: (groupId: string, categoryId: string | null) =>
     invoke<void>("assign_app_group_category", { groupId, categoryId }),
+  /** 统计删掉 `target` 会删多少。不改任何数据。 */
+  countTargetData: (target: PurgeTarget) => invoke<DataCount>("count_target_data", { target }),
+  /** 删掉「隐私」分类里所有应用和网站的数据。设置存好、删除失败以后，给「重试」用。 */
+  purgePrivateData: () => invoke<PurgeReport>("purge_private_data"),
   listSites: () => invoke<SiteRow[]>("list_sites"),
   /** Assigns a website and its subdomains to a category, on all browsers and devices. */
   setSiteRule: (host: string, categoryId: string) =>

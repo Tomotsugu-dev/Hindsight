@@ -370,6 +370,13 @@
   cursor: text;
 }
 
+/* 内置分类名字后面的一句说明 */
+.catDesc {
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
 .catNameInput {
   flex: 0 0 auto;
   min-width: 100px;

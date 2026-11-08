@@ -12,6 +12,7 @@ import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import type { Category } from "../../api/hindsight";
+import { EXCLUDED_CATEGORY_ID, PRIVATE_CATEGORY_ID } from "../../utils/privateCategory";
 import { AppList } from "./parts";
 import styles from "./Categories.module.css";
 
@@ -41,7 +42,7 @@ interface Props {
  *
  * v28 新增：整行 HTML5 draggable。dragstart 通知父组件 SuperCategoriesTable 谁正在
  * 被拖，父用这信号把所有大类 label 标 dropTarget；drop 到 label 上 = 归入该大类。
- * builtin（hidden）分类不可拖。
+ * builtin（hidden、private）分类不可拖。
  *
  * 老版 FLIP 行内拖拽重排序已**移除**（v1 不支持同大类内排序）；grip 现在仅作
  * 视觉提示"此行可拖"，不绑定 mousedown handler——HTML5 DnD 自动覆盖整个行的
@@ -115,6 +116,13 @@ export function CategoryRow({
   };
 
   const styleVar = { "--cat-color": category.color } as CSSProperties;
+  // 两个内置分类的名字说不清它们做什么，名字后面跟一句说明
+  const description =
+    category.id === PRIVATE_CATEGORY_ID
+      ? t("categories.private.description")
+      : category.id === EXCLUDED_CATEGORY_ID
+        ? t("categories.excluded.description")
+        : null;
 
   return (
     <div
@@ -199,6 +207,7 @@ export function CategoryRow({
               {category.name}
             </span>
           )}
+          {description && <span className={styles.catDesc}>{description}</span>}
         </div>
 
         <div className={styles.appListClip}>

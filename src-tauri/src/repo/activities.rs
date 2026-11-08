@@ -9,7 +9,7 @@ use crate::capture::ignore::{self, IgnoreRule};
 use crate::capture::WindowInfo;
 use crate::device;
 use crate::error::Result;
-use crate::repo::outbox::{enqueue, OutboxEntity, OutboxOp};
+use crate::repo::outbox::{enqueue, enqueue_days, OutboxEntity, OutboxOp};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 创建一条新的会话记录。device_id = self；updated_at = captured_at；
@@ -376,19 +376,7 @@ pub async fn purge_orphan_sessions(pool: &DbPool) -> Result<u64> {
                         rusqlite::params![device_id],
                     )
                     .db()? as u64;
-                for date in &local_dates {
-                    // payload 只用 localDate 字段（push.group_outbox 解析它决定 ndjson 文件名）。
-                    // entity_pk 给 device_id 占位（NOT NULL 约束），不参与去重
-                    let payload = serde_json::json!({ "localDate": date }).to_string();
-                    enqueue(
-                        conn,
-                        OutboxOp::Upsert,
-                        OutboxEntity::Activity,
-                        &device_id,
-                        &payload,
-                    )
-                    .db()?;
-                }
+                enqueue_days(conn, OutboxEntity::Activity, &local_dates).db()?;
                 Ok(n)
             }
         })

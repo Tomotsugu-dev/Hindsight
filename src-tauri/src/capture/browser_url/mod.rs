@@ -34,11 +34,7 @@ pub use browsers::is_browser_app;
 /// Returns the address in the address bar of the focused window `window`, or None when it cannot
 /// be read.
 ///
-/// Reading blocks for tens to hundreds of milliseconds, so it runs on a background thread.
-pub async fn read_url(window: &WindowInfo) -> Option<String> {
-    let window = window.clone();
-    tokio::task::spawn_blocking(move || imp::read_url(&window))
-        .await
-        .ok()
-        .flatten()
+/// It blocks for tens to hundreds of milliseconds, so callers must run it on a background thread.
+pub fn read_url(window: &WindowInfo) -> Option<String> {
+    imp::read_url(window)
 }
