@@ -7,6 +7,7 @@ use tauri::State;
 use crate::capture::CaptureService;
 use crate::commands::screen_memory::MemoryState;
 use crate::repo::app_groups::{self, AppGroup};
+use crate::repo::purge::{self, PurgeTarget};
 use crate::repo::settings;
 use crate::storage::DbPool;
 
@@ -17,7 +18,7 @@ pub async fn list_app_groups(pool: State<'_, DbPool>) -> Result<Vec<AppGroup>, S
 }
 
 /// **真删**一个应用的数据:活动记录、截图文件、OCR 文字索引一并清掉,最后软删组。
-/// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_data`] 的文档。
+/// 与 [`purge_app_group`] 的区别见 [`app_groups::purge_with_members`] 的文档。
 ///
 /// `run_with_session_cleared`:正在采集这个应用时直接删行,会留下一条永不 seal
 /// 的孤儿会话(指针还指着被删掉的 id)——同 `purge_local_data` 的处理。
@@ -35,9 +36,11 @@ pub async fn purge_app_group_data(
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     let root = std::path::PathBuf::from(&cfg.screenshot_path);
 
+    let target = PurgeTarget::AppGroup(group_id);
     svc.run_with_session_cleared(|| async {
-        app_groups::purge_with_data(&pool, memdb, &root, &group_id)
+        purge::purge(&pool, Some(memdb), &root, &target)
             .await
+            .map(|_| ())
             .map_err(String::from)
     })
     .await

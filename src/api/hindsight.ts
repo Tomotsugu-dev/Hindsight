@@ -902,7 +902,7 @@ export const api = {
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
   /** **真删**这个应用的数据：活动记录、截图文件、OCR 文字索引一并清掉，最后软删组。
    *  不可逆；不重算已生成的报表，也不传播数据删除到其它设备。
-   *  详见 `app_groups::purge_with_data`。 */
+   *  详见 `repo::purge::purge`。 */
   purgeAppGroupData: (groupId: string) =>
     invoke<void>("purge_app_group_data", { groupId }),
   mergeAppGroup: (processName: string, targetGroupId: string) =>

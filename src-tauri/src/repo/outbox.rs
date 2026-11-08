@@ -96,6 +96,20 @@ pub fn enqueue(
     Ok(())
 }
 
+/// Writes one `entity` row for each day, so the next push uploads this device's file for that
+/// day again. `entity` must be one of the two kinds kept by day: activity or screen memory.
+pub fn enqueue_days(
+    conn: &Connection,
+    entity: OutboxEntity,
+    days: &[String],
+) -> rusqlite::Result<()> {
+    for day in days {
+        let payload = serde_json::json!({ "localDate": day }).to_string();
+        enqueue(conn, OutboxOp::Upsert, entity, day, &payload)?;
+    }
+    Ok(())
+}
+
 /// Used on a backend switch: makes the next push upload all of this device's
 /// data to the new backend (ADR-0011 §2). One row for each day with activity on
 /// this device, and one for each whole-table file.
@@ -108,16 +122,7 @@ pub fn enqueue_every_file(conn: &Connection, self_id: &str) -> rusqlite::Result<
     let days = stmt
         .query_map([self_id], |r| r.get::<_, String>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    for day in days {
-        let payload = serde_json::json!({ "localDate": day }).to_string();
-        enqueue(
-            conn,
-            OutboxOp::Upsert,
-            OutboxEntity::Activity,
-            &day,
-            &payload,
-        )?;
-    }
+    enqueue_days(conn, OutboxEntity::Activity, &days)?;
     for entity in [
         OutboxEntity::Category,
         OutboxEntity::SiteRule,
