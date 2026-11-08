@@ -17,6 +17,8 @@ import type {
   CategoryInput,
   CategoryPatch,
   CaptureStatus,
+  DataCount,
+  PurgeReport,
   ChatAskResult,
   ChatConversationMeta,
   ChatStoredMessage,
@@ -1188,6 +1190,16 @@ export const api = {
   importModel: async (srcPath: string): Promise<string> => srcPath,
   // demo 不真删数据,只让弹窗跑通(真实端会清活动/截图/OCR 索引)
   purgeAppGroupData: async (_groupId: string): Promise<void> => {},
+  countTargetData: async (): Promise<DataCount> => ({
+    activities: 0,
+    screenshots: 0,
+    screenshotBytes: 0,
+  }),
+  purgePrivateData: async (): Promise<PurgeReport> => ({
+    activities: 0,
+    screenshots: 0,
+    memorySessions: 0,
+  }),
   purgeCloudData: async (_keepLocal: boolean): Promise<void> => {},
   forgetRemoteDevice: async (deviceId: string): Promise<void> => {
     const i = state.devices.findIndex((d) => d.deviceId === deviceId && !d.isSelf);

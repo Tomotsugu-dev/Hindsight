@@ -9,6 +9,9 @@ import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { displayAppName } from "../../utils/displayName";
 import { logError } from "../../lib/logger";
 import { ScrollIndicator } from "../../components/ScrollIndicator/ScrollIndicator";
+import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
+import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
+import { PRIVATE_CATEGORY_ID } from "../../utils/privateCategory";
 import { assignMenuLayout, type AssignMenuLayout } from "./menuLayout";
 import {
   buildAppSuggestions,
@@ -22,7 +25,8 @@ import styles from "./Categories.module.css";
 
 export function AppList({ category }: { category: Category }) {
   const { t } = useTranslation();
-  const { categories, unassignApp, assignApp } = useCategories();
+  const { categories, unassignApp, assignApp, refresh } = useCategories();
+  const privacy = usePrivacyDialog(refresh);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   // 自动补全:候选池(展开输入框时懒加载一次)、高亮下标(-1 = 无高亮,
@@ -83,7 +87,16 @@ export function AppList({ category }: { category: Category }) {
 
   const commitName = async (name: string) => {
     const trimmed = name.trim();
-    if (trimmed) {
+    if (trimmed && category.id === PRIVATE_CATEGORY_ID) {
+      // 设置作用在整个应用分组上，统计也按分组。找不到分组说明没有记录过它
+      const group = groups?.find((g) => g.members.some((m) => m.processName === trimmed));
+      privacy.confirm({
+        name: displayAppName(trimmed),
+        site: false,
+        target: { kind: "appGroup", groupId: group?.id ?? trimmed },
+        save: () => api.assignApp(trimmed, PRIVATE_CATEGORY_ID),
+      });
+    } else if (trimmed) {
       await assignApp(trimmed, category.id);
     }
     setDraft("");
@@ -229,6 +242,7 @@ export function AppList({ category }: { category: Category }) {
           {t("categories.appList.add")}
         </button>
       )}
+      <PrivacyDialog {...privacy.dialogProps} />
     </div>
   );
 }

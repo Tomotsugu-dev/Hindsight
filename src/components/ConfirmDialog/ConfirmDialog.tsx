@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Loader2 } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 import { ScrollIndicator } from "../ScrollIndicator/ScrollIndicator";
@@ -18,6 +19,8 @@ interface ConfirmDialogProps {
   variant?: "primary" | "danger";
   /** Grays out the confirm button, and Enter does nothing */
   confirmDisabled?: boolean;
+  /** 正在执行：确认按钮转圈，两个按钮都不能点，弹窗关不掉 */
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -32,6 +35,7 @@ export function ConfirmDialog({
   cancelLabel,
   variant = "primary",
   confirmDisabled = false,
+  busy = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -40,14 +44,14 @@ export function ConfirmDialog({
   const confirmText = confirmLabel ?? t("common.confirm");
   const cancelText = cancelLabel ?? t("common.cancel");
   useEffect(() => {
-    if (!open) return;
+    if (!open || busy) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
       if (e.key === "Enter" && !confirmDisabled) onConfirm();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onCancel, onConfirm, confirmDisabled]);
+  }, [open, busy, onCancel, onConfirm, confirmDisabled]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(open, dialogRef);
@@ -56,7 +60,7 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return createPortal(
-    <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
+    <div className={styles.backdrop} onMouseDown={busy ? undefined : onCancel} role="presentation">
       {/* role="alertdialog" 已是 interactive role，但 ESLint plugin 仍按 div 默认判定 */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
@@ -90,18 +94,26 @@ export function ConfirmDialog({
           </div>
         )}
         <div className={styles.actions}>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnCancel}`}
+            disabled={busy}
+            onClick={onCancel}
+          >
             {cancelText}
           </button>
           <button
             type="button"
-            className={`${styles.btn} ${variant === "danger" ? styles.btnDanger : styles.btnConfirm}`}
-            disabled={confirmDisabled}
+            className={`${styles.btn} ${variant === "danger" ? styles.btnDanger : styles.btnConfirm} ${busy ? styles.btnBusy : ""}`}
+            disabled={confirmDisabled || busy}
             onClick={onConfirm}
             // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践（屏幕阅读器、键盘 user 都期望）
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
+            {busy && (
+              <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} aria-hidden />
+            )}
             {confirmText}
           </button>
         </div>

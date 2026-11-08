@@ -53,6 +53,7 @@ describe("translateDefaultCategoryNames", () => {
         "hidden",
         "office",
         "other",
+        "private",
         "talk",
         "video",
         "workchat",
