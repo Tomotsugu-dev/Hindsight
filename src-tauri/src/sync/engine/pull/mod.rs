@@ -205,7 +205,8 @@ async fn pull_stream(
             FileKind::Chat => chat::merge(inner.mem.as_ref().expect("gated"), &body).await,
             FileKind::Memory(local_date) => {
                 let mem = inner.mem.as_ref().expect("gated");
-                memory::merge(mem, &device_id, &local_date.to_string(), &body).await
+                let day = local_date.to_string();
+                memory::merge(&inner.pool, mem, &device_id, &day, &body).await
             }
             FileKind::Tombstone => tombstone::merge(&inner.pool, &device_id, &body).await,
         };

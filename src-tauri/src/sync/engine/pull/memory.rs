@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::memory::MemoryDb;
-use crate::storage::SqliteResultExt;
+use crate::repo::categories::is_private;
+use crate::storage::{DbPool, SqliteResultExt};
 use crate::sync::payload::MemorySessionPayload;
 
 /// Merges another device's screen-memory file for one day into the memory database. After the
@@ -14,6 +15,7 @@ use crate::sync::payload::MemorySessionPayload;
 ///   later, it replaces the text and the title.
 /// - Sessions not in the file are deleted: the file holds all sessions of that device on that
 ///   day, so a missing one was deleted by that device.
+/// - Sessions of private apps are skipped.
 /// - Written sessions get that device as `origin_device`, so push does not send them back.
 ///
 /// # Errors
@@ -21,6 +23,7 @@ use crate::sync::payload::MemorySessionPayload;
 /// Returns an error when a line cannot be read. Then nothing in the file is merged, and nothing
 /// is deleted.
 pub(super) async fn merge(
+    pool: &DbPool,
     mem: &MemoryDb,
     device_id: &str,
     local_date: &str,
@@ -36,6 +39,11 @@ pub(super) async fn merge(
                 kind: "memory_session",
                 source: e,
             })?;
+        if let Some(app) = &row.app_id {
+            if is_private(pool, app, None).await? {
+                continue;
+            }
+        }
         rows.push(row);
     }
     let sessions_in_file =
@@ -86,22 +94,48 @@ pub(super) async fn merge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo::categories::assign_app;
+    use crate::repo::test_util::fresh_test_pool;
 
     const DAY: &str = "2026-11-05";
     const DEVICE: &str = "device-a";
 
-    /// 文件里的一行：一条会话。
+    /// 文件里的一行：Code 的一条会话。
     fn line(guid: &str, day: &str) -> String {
+        session_of(guid, day, "Code")
+    }
+
+    /// 文件里的一行：`app` 的一条会话。
+    fn session_of(guid: &str, day: &str, app: &str) -> String {
         serde_json::to_string(&MemorySessionPayload {
             guid: guid.into(),
             local_date: day.into(),
             started_ts: format!("{day}T10:00:00Z"),
             ended_ts: format!("{day}T10:05:00Z"),
-            app_id: Some("Code".into()),
+            app_id: Some(app.into()),
             title: Some("t".into()),
             text: "文字".into(),
         })
         .unwrap()
+    }
+
+    /// 隐私应用的会话不写进本地。不写的会话不算文件里有，所以以前拉来的那条也删掉。
+    #[tokio::test]
+    async fn pull_skips_sessions_of_private_apps() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let body = [session_of("g1", DAY, "Tor"), line("g2", DAY)].join("\n");
+        merge(&pool, &mem, DEVICE, DAY, body.as_bytes())
+            .await
+            .unwrap();
+        assert_eq!(guids(&mem).await, ["g1", "g2"]);
+
+        assign_app(&pool, "Tor", "private").await.unwrap();
+        merge(&pool, &mem, DEVICE, DAY, body.as_bytes())
+            .await
+            .unwrap();
+
+        assert_eq!(guids(&mem).await, ["g2"]);
     }
 
     /// 本地所有会话的 guid，本机自己的会话没有 guid，记成 "self"。
@@ -126,14 +160,23 @@ mod tests {
     /// 那台设备别的日子、别的设备、本机自己的会话都不动。
     #[tokio::test]
     async fn pull_deletes_sessions_missing_from_the_file() {
+        let pool = fresh_test_pool().await;
         let mem = MemoryDb::open_in_memory().await.unwrap();
         let first = [line("g1", DAY), line("g2", DAY)].join("\n");
-        merge(&mem, DEVICE, DAY, first.as_bytes()).await.unwrap();
-        let next_day = "2026-11-06";
-        merge(&mem, DEVICE, next_day, line("g3", next_day).as_bytes())
+        merge(&pool, &mem, DEVICE, DAY, first.as_bytes())
             .await
             .unwrap();
-        merge(&mem, "device-b", DAY, line("g4", DAY).as_bytes())
+        let next_day = "2026-11-06";
+        merge(
+            &pool,
+            &mem,
+            DEVICE,
+            next_day,
+            line("g3", next_day).as_bytes(),
+        )
+        .await
+        .unwrap();
+        merge(&pool, &mem, "device-b", DAY, line("g4", DAY).as_bytes())
             .await
             .unwrap();
         mem.0
@@ -149,7 +192,7 @@ mod tests {
             .await
             .unwrap();
 
-        merge(&mem, DEVICE, DAY, line("g1", DAY).as_bytes())
+        merge(&pool, &mem, DEVICE, DAY, line("g1", DAY).as_bytes())
             .await
             .unwrap();
 
@@ -159,12 +202,17 @@ mod tests {
     /// 文件有一行读不出来：整个文件都不合并，原有的会话一条不删。
     #[tokio::test]
     async fn pull_keeps_sessions_when_the_file_does_not_parse() {
+        let pool = fresh_test_pool().await;
         let mem = MemoryDb::open_in_memory().await.unwrap();
         let first = [line("g1", DAY), line("g2", DAY)].join("\n");
-        merge(&mem, DEVICE, DAY, first.as_bytes()).await.unwrap();
+        merge(&pool, &mem, DEVICE, DAY, first.as_bytes())
+            .await
+            .unwrap();
 
         let broken = format!("{}\nnot json", line("g1", DAY));
-        assert!(merge(&mem, DEVICE, DAY, broken.as_bytes()).await.is_err());
+        assert!(merge(&pool, &mem, DEVICE, DAY, broken.as_bytes())
+            .await
+            .is_err());
 
         assert_eq!(guids(&mem).await, ["g1", "g2"]);
     }
