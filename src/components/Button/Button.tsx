@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 import { Loader2, type LucideIcon } from "lucide-react";
+import { useMouseGlow } from "../../hooks/useMouseGlow";
 import styles from "./Button.module.css";
 
 /** How the button is drawn. */
@@ -19,6 +20,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: LucideIcon;
   /** Shows a spinner in place of the icon, and the button cannot be pressed */
   loading?: boolean;
+  /** Lights up the border as the mouse comes near, like the arrows that change the period */
+  glow?: boolean;
 }
 
 /**
@@ -33,17 +36,22 @@ export function Button({
   size = "md",
   icon: Icon,
   loading = false,
+  glow = false,
   type = "button",
   className,
   disabled,
   children,
   ...rest
 }: ButtonProps) {
+  // Hooks cannot be called conditionally, so every button has the ref; only a glow button uses it
+  const { ref: glowRef } = useMouseGlow<HTMLButtonElement>();
+  const classes = [styles.button, glow ? "glow" : null, className].filter(Boolean).join(" ");
   return (
     <button
       {...rest}
+      ref={glow ? glowRef : undefined}
       type={type}
-      className={className ? `${styles.button} ${className}` : styles.button}
+      className={classes}
       data-part="button"
       data-variant={variant}
       data-tone={tone}

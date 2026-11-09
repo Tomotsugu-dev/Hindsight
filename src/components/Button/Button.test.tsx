@@ -37,6 +37,11 @@ describe("Button", () => {
     expect(html).toContain('data-variant="solid"');
     expect(html).toContain('data-tone="danger"');
   });
+
+  it("glow 时带上全局的 glow 类，鼠标靠近时描边发光；默认没有", () => {
+    expect(renderToStaticMarkup(<Button glow>今天</Button>)).toMatch(/class="[^"]*\bglow\b/);
+    expect(renderToStaticMarkup(<Button>今天</Button>)).not.toMatch(/\bglow\b/);
+  });
 });
 
 describe("IconButton", () => {
