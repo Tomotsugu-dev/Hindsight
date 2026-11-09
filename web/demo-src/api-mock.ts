@@ -10,6 +10,7 @@
 import type {
   AppDetail,
   AppGroup,
+  AppGroupMember,
   AppTitles,
   AppUsage,
   AuthState,
@@ -264,6 +265,15 @@ function persist() {
     selfDevice,
     appGroups: state.appGroups,
   });
+}
+
+/** Takes an app out of the group it is in. Returns it, or undefined if no group has it */
+function takeMember(processName: string): AppGroupMember | undefined {
+  for (const g of state.appGroups) {
+    const i = g.members.findIndex((m) => m.processName === processName);
+    if (i >= 0) return g.members.splice(i, 1)[0];
+  }
+  return undefined;
 }
 
 function todayStr(): string {
@@ -604,15 +614,30 @@ export const api = {
   listAppGroups: async (): Promise<AppGroup[]> => structuredClone(state.appGroups),
   mergeAppGroup: async (processName: string, targetGroupId: string): Promise<void> => {
     const g = state.appGroups.find((x) => x.id === targetGroupId);
-    if (g && !g.members.find((m) => m.processName === processName)) {
-      g.members.push({ processName, recentSecs: 0, lastDeviceId: "demo-self" });
-      persist();
-    }
+    if (!g || g.members.some((m) => m.processName === processName)) return;
+    // Like the app, the old group stays, even when it is left empty
+    const member = takeMember(processName) ?? {
+      processName,
+      recentSecs: 0,
+      lastDeviceId: "demo-self",
+    };
+    g.members.push(member);
+    persist();
   },
   unmergeAppGroup: async (processName: string): Promise<void> => {
-    for (const g of state.appGroups) {
-      g.members = g.members.filter((m) => m.processName !== processName);
+    // Like the app: back to the group named after the process, made again if it is gone,
+    // with the category of the group it leaves
+    const from = state.appGroups.find((g) => g.members.some((m) => m.processName === processName));
+    if (!from || from.id === processName) return;
+    const member = takeMember(processName);
+    if (!member) return;
+    let own = state.appGroups.find((g) => g.id === processName);
+    if (!own) {
+      own = { id: processName, displayName: processName, categoryId: null, members: [] };
+      state.appGroups.push(own);
     }
+    own.categoryId = from.categoryId;
+    own.members.push(member);
     persist();
   },
   renameAppGroup: async (groupId: string, displayName: string): Promise<void> => {
