@@ -34,8 +34,8 @@
   background: var(--surface-card);
   border-radius: 50%;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
-    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
+    0 0 0 0.5px rgba(var(--shadow-rgb), 0.04);
   transition: transform 240ms var(--ease-spring);
 }
 
