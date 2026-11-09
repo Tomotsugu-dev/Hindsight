@@ -1,19 +1,5 @@
 .input {
   width: 100%;
-  min-width: 0;
-  height: calc(34px * var(--density));
-  padding: 0 calc(10px * var(--density));
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-  color: var(--text-strong);
-  font: inherit;
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-}
-
-.input:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
 }
 
 .note,
@@ -33,26 +19,6 @@
   display: flex;
   justify-content: flex-end;
   padding: calc(10px * var(--density)) calc(16px * var(--density));
-}
-
-.saveButton {
-  padding: calc(7px * var(--density)) calc(12px * var(--density));
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-  font: inherit;
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  cursor: pointer;
-}
-
-.saveButton:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.input:disabled,
-.saveButton:disabled {
-  opacity: 0.6;
 }
 
 .sourceLink {
