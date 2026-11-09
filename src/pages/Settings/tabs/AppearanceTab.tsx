@@ -12,6 +12,7 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { Section } from "../../../components/FormLayout/Section";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { EmptyHint } from "../../../components/EmptyHint/EmptyHint";
@@ -188,23 +189,15 @@ export default function AppearanceTab() {
         <div className={styles.body}>
           {/* 按钮不放标题行：设置页只有 656px 宽，放标题行会把说明挤成窄窄一列 */}
           <div className={styles.actions}>
-            <button type="button" className={styles.btn} onClick={getThemes}>
-              <Store size={14} strokeWidth={1.85} />
+            <Button icon={Store} onClick={getThemes}>
               {t("settings.appearance.custom.getThemes")}
-            </button>
-            <button
-              type="button"
-              className={styles.btn}
-              disabled={busy}
-              onClick={() => void importTheme()}
-            >
-              <FileUp size={14} strokeWidth={1.85} />
+            </Button>
+            <Button icon={FileUp} disabled={busy} onClick={() => void importTheme()}>
               {t("settings.appearance.custom.import")}
-            </button>
-            <button type="button" className={styles.btn} onClick={openFolder}>
-              <FolderOpen size={14} strokeWidth={1.85} />
+            </Button>
+            <Button icon={FolderOpen} onClick={openFolder}>
               {t("settings.appearance.custom.openFolder")}
-            </button>
+            </Button>
           </div>
           {unavailable ? (
             <p className={styles.notice}>
@@ -320,10 +313,16 @@ function CustomThemeCard({
         </p>
       ) : null}
       <div className={styles.cardFoot}>
-        <button type="button" className={styles.btnDanger} disabled={disabled} onClick={onDelete}>
-          <Trash2 size={13} strokeWidth={1.85} />
+        <Button
+          size="sm"
+          variant="outline"
+          tone="danger"
+          icon={Trash2}
+          disabled={disabled}
+          onClick={onDelete}
+        >
           {t("settings.appearance.custom.delete")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -350,10 +349,16 @@ function BrokenThemeCard({
         <span className={styles.desc}>{item.error}</span>
       </span>
       <div className={styles.cardFoot}>
-        <button type="button" className={styles.btnDanger} disabled={disabled} onClick={onDelete}>
-          <Trash2 size={13} strokeWidth={1.85} />
+        <Button
+          size="sm"
+          variant="outline"
+          tone="danger"
+          icon={Trash2}
+          disabled={disabled}
+          onClick={onDelete}
+        >
           {t("settings.appearance.custom.delete")}
-        </button>
+        </Button>
       </div>
     </div>
   );

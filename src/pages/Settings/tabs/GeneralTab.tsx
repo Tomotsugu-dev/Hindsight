@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
-import { Aperture, Clock, Languages, Loader2, Rocket } from "lucide-react";
+import { Aperture, Clock, Languages, Rocket } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -234,21 +235,11 @@ export default function GeneralTab() {
           description={t("settings.general.capture.backfillDescription")}
         >
           <div className={styles.backfillWrap}>
-            <button
-              type="button"
-              className={styles.backfillBtn}
-              onClick={() => void onBackfillClick()}
-              disabled={backfillBusy}
-            >
-              {backfillBusy ? (
-                <>
-                  <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} />
-                  {t("settings.general.capture.backfillRunning")}
-                </>
-              ) : (
-                t("settings.general.capture.backfillButton")
-              )}
-            </button>
+            <Button onClick={() => void onBackfillClick()} loading={backfillBusy}>
+              {backfillBusy
+                ? t("settings.general.capture.backfillRunning")
+                : t("settings.general.capture.backfillButton")}
+            </Button>
             {backfillMsg && <span className={styles.backfillMsg}>{backfillMsg}</span>}
           </div>
         </Row>
