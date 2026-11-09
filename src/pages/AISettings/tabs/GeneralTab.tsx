@@ -85,7 +85,9 @@ export default function GeneralTab() {
               <>
                 <IconButton
                   variant="outline"
-                  size="sm"
+                  tone="accent"
+                  quiet
+                  size="xs"
                   icon={Plus}
                   label={t("aiSettings.autoSummary.addTimeAria")}
                   onClick={() =>
@@ -101,7 +103,9 @@ export default function GeneralTab() {
                 />
                 <IconButton
                   variant="outline"
-                  size="sm"
+                  tone="accent"
+                  quiet
+                  size="xs"
                   icon={Minus}
                   label={t("aiSettings.autoSummary.removeTimeAria")}
                   onClick={() =>
@@ -146,7 +150,9 @@ export default function GeneralTab() {
               <>
                 <IconButton
                   variant="outline"
-                  size="sm"
+                  tone="accent"
+                  quiet
+                  size="xs"
                   icon={Plus}
                   label={t("aiSettings.autoSummary.addTimeAria")}
                   onClick={() =>
@@ -161,7 +167,9 @@ export default function GeneralTab() {
                 />
                 <IconButton
                   variant="outline"
-                  size="sm"
+                  tone="accent"
+                  quiet
+                  size="xs"
                   icon={Minus}
                   label={t("aiSettings.autoSummary.removeTimeAria")}
                   onClick={() => update({ memoryOcrDailyTimes: ocrTimes.slice(0, -1) })}
