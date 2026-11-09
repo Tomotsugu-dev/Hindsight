@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Info, Sparkles } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import {
   classifyVramRisk,
   effectiveVramGB,
@@ -91,8 +92,10 @@ export function VramEstimateLine({
           </span>
         )}
         {recommended && onApplyRecommended && (
-          <button
-            type="button"
+          <Button
+            tone="accent"
+            size="sm"
+            icon={Sparkles}
             className={styles.vramRecommendBtn}
             onClick={onApplyRecommended}
             disabled={recommendedApplied}
@@ -102,13 +105,10 @@ export function VramEstimateLine({
               batch: batchLabel(recommended.batchSize),
             })}
           >
-            <Sparkles size={12} strokeWidth={2.2} aria-hidden />
-            <span>
-              {recommendedApplied
-                ? t("aiSettings.engineParams.recommendedAlreadyApplied")
-                : t("aiSettings.engineParams.applyRecommended")}
-            </span>
-          </button>
+            {recommendedApplied
+              ? t("aiSettings.engineParams.recommendedAlreadyApplied")
+              : t("aiSettings.engineParams.applyRecommended")}
+          </Button>
         )}
       </div>
     </div>

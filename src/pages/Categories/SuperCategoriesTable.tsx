@@ -845,7 +845,8 @@ export function SuperCategoriesTable({
                 left: superSnap ? superSnap.left : superDrag.lockedX,
                 top: superSnap ? superSnap.top : superDrag.cursorY - superDrag.height / 2,
                 width: superDrag.width,
-                filter: "drop-shadow(0 12px 28px rgba(20, 20, 40, 0.18))",
+                filter:
+                  "drop-shadow(0 12px 28px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))))",
                 transition: superSnap
                   ? "left 420ms cubic-bezier(0.2, 0.9, 0.3, 1), top 420ms cubic-bezier(0.2, 0.9, 0.3, 1)"
                   : undefined,

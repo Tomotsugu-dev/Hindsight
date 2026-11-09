@@ -14,6 +14,9 @@ import {
   ShieldAlert,
   Store,
 } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
+import { Checkbox } from "../../../components/Checkbox/Checkbox";
+import { TextInput } from "../../../components/TextInput/TextInput";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -35,7 +38,6 @@ import { pickDescription } from "../../../utils/pickDescription";
 import { keptChoices } from "./pluginPermissions";
 import { PermissionTree } from "./PermissionTree";
 import { filterMarket, repoUrl, type MarketFilter } from "./pluginMarket";
-import filterBarStyles from "../../Apps/AppsFilterBar.module.css";
 import styles from "./PluginsTab.module.css";
 
 /** Where a plugin comes from. Third-party plugins and zips get a warning in the install dialog */
@@ -294,6 +296,7 @@ export default function PluginsTab() {
                     ) : null}
                     {plugin.ui.hasPage ? (
                       <SimplePicker
+                        size="md"
                         value={toChoice(plugin.ui.opensIn)}
                         options={opensInOptions}
                         disabled={working}
@@ -302,6 +305,7 @@ export default function PluginsTab() {
                     ) : null}
                     {versionOptions.length > 0 ? (
                       <SimplePicker
+                        size="md"
                         value={plugin.version}
                         options={versionOptions}
                         disabled={working}
@@ -314,30 +318,23 @@ export default function PluginsTab() {
                       />
                     ) : null}
                     {onlinePlugin && update ? (
-                      <button
-                        type="button"
-                        className={styles.btnPrimary}
+                      <Button
+                        variant="solid"
+                        tone="accent"
                         disabled={working}
                         onClick={() => openInstall(onlineTarget(onlinePlugin, update))}
                       >
                         {t("plugins.installed.update", { version: update.version })}
-                      </button>
+                      </Button>
                     ) : null}
                     {/* A plugin in the sidebar is opened from there */}
                     {plugin.ui.hasPage && toChoice(plugin.ui.opensIn) === "window" ? (
-                      <button
-                        type="button"
-                        className={styles.btn}
-                        disabled={!plugin.enabled}
-                        onClick={() => showWindow(plugin)}
-                      >
+                      <Button disabled={!plugin.enabled} onClick={() => showWindow(plugin)}>
                         {t("plugins.installed.show")}
-                      </button>
+                      </Button>
                     ) : null}
                     {asked.length > 0 ? (
-                      <button
-                        type="button"
-                        className={styles.btn}
+                      <Button
                         aria-expanded={editingThis}
                         onClick={() => setEditing(editingThis ? null : plugin.id)}
                       >
@@ -350,11 +347,12 @@ export default function PluginsTab() {
                           checked: plugin.permissions.length,
                           asked: asked.length,
                         })}
-                      </button>
+                      </Button>
                     ) : null}
-                    <button
-                      type="button"
-                      className={`${styles.btnDanger} ${styles.rowEnd}`}
+                    <Button
+                      variant="outline"
+                      tone="danger"
+                      className={styles.rowEnd}
                       disabled={working}
                       onClick={() => {
                         setDeleteData(false);
@@ -362,7 +360,7 @@ export default function PluginsTab() {
                       }}
                     >
                       {busy === plugin.id ? t("plugins.working") : t("plugins.installed.uninstall")}
-                    </button>
+                    </Button>
                   </div>
                   {editingThis ? (
                     <PermissionTree
@@ -387,28 +385,21 @@ export default function PluginsTab() {
           showSearch ? (
             <>
               <SimplePicker
+                size="md"
                 value={filter}
                 options={filterOptions}
                 onChange={setFilter}
                 icon={ListFilter}
               />
-              <div className={`${filterBarStyles.searchWrap} ${styles.marketSearch}`}>
-                <Search
-                  size={14}
-                  strokeWidth={2}
-                  className={filterBarStyles.searchIcon}
-                  aria-hidden
-                />
-                <input
-                  className={filterBarStyles.searchInput}
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t("plugins.market.search")}
-                  aria-label={t("plugins.market.search")}
-                  spellCheck={false}
-                />
-              </div>
+              <TextInput
+                className={styles.marketSearch}
+                icon={Search}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t("plugins.market.search")}
+                aria-label={t("plugins.market.search")}
+                spellCheck={false}
+              />
             </>
           ) : undefined
         }
@@ -450,9 +441,8 @@ export default function PluginsTab() {
         collapsible
         headerAction={
           <span className={styles.controls}>
-            <button
-              type="button"
-              className={styles.btn}
+            <Button
+              icon={FolderOpen}
               onClick={() =>
                 pluginsApi.openZipsFolder().catch((e) => {
                   logError("plugins.openZipsFolder", e);
@@ -460,13 +450,11 @@ export default function PluginsTab() {
                 })
               }
             >
-              <FolderOpen size={14} strokeWidth={1.85} />
               {t("plugins.local.openFolder")}
-            </button>
-            <button type="button" className={styles.btn} onClick={load}>
-              <RefreshCw size={14} strokeWidth={1.85} />
+            </Button>
+            <Button icon={RefreshCw} onClick={load}>
               {t("plugins.local.refresh")}
-            </button>
+            </Button>
           </span>
         }
       >
@@ -483,9 +471,9 @@ export default function PluginsTab() {
                 description={zip.error ?? zip.fileName}
                 icon={Puzzle}
               >
-                <button
-                  type="button"
-                  className={styles.btnPrimary}
+                <Button
+                  variant="solid"
+                  tone="accent"
                   disabled={busy !== null || !m || zip.error !== null}
                   onClick={() =>
                     m &&
@@ -503,7 +491,7 @@ export default function PluginsTab() {
                   }
                 >
                   {busy === key ? t("plugins.working") : t("plugins.market.install")}
-                </button>
+                </Button>
               </Row>
             );
           })
@@ -544,14 +532,9 @@ export default function PluginsTab() {
         variant="danger"
         title={uninstalling ? t("plugins.uninstall.title", { name: uninstalling.name }) : ""}
         message={
-          <label className={styles.check}>
-            <input
-              type="checkbox"
-              checked={deleteData}
-              onChange={(e) => setDeleteData(e.target.checked)}
-            />
+          <Checkbox checked={deleteData} onChange={(e) => setDeleteData(e.target.checked)}>
             {t("plugins.uninstall.deleteData")}
-          </label>
+          </Checkbox>
         }
         confirmLabel={t("plugins.installed.uninstall")}
         onConfirm={confirmUninstall}
@@ -601,9 +584,9 @@ function MarketCard({
       </div>
       <p className={styles.marketDesc}>{pickDescription(plugin.description, i18n.language)}</p>
       <div className={styles.marketFoot}>
-        <button type="button" className={styles.btnPrimary} disabled={disabled} onClick={onInstall}>
+        <Button variant="solid" tone="accent" disabled={disabled} onClick={onInstall}>
           {working ? t("plugins.working") : t("plugins.market.install")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -710,10 +693,13 @@ function InstallDetails({
           />
         </div>
       )}
-      <label className={styles.consent}>
-        <input type="checkbox" checked={agreed} onChange={(e) => onAgree(e.target.checked)} />
-        <span>{official ? t("plugins.install.agree") : t("plugins.install.agreeRisk")}</span>
-      </label>
+      <Checkbox
+        className={styles.consent}
+        checked={agreed}
+        onChange={(e) => onAgree(e.target.checked)}
+      >
+        {official ? t("plugins.install.agree") : t("plugins.install.agreeRisk")}
+      </Checkbox>
     </div>
   );
 }
