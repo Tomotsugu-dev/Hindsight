@@ -95,6 +95,13 @@
   border: 1px solid var(--border-default);
 }
 
+:global([data-mode="dark"]) .pill {
+  box-shadow:
+    var(--shadow-inset-hi),
+    var(--shadow-sm),
+    0 4px 10px rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
+}
+
 /* 「新」 after a tab label */
 .badge {
   margin-left: calc(6px * var(--density));

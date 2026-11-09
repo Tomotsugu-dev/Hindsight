@@ -56,6 +56,14 @@
   pointer-events: auto;
 }
 
+/* 暗色：亮色高光线在深底上刺眼，换成暗阴影 */
+:global([data-mode="dark"]) .floatingTabs nav {
+  box-shadow:
+    var(--shadow-inset-hi),
+    0 4px 14px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-strength))),
+    0 1px 3px rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
+}
+
 /* Keep scrolling content behind an opaque surface without a floating card. */
 :global([data-layout="flat"]) .floatingTabs nav {
   background-color: var(--surface-card);
