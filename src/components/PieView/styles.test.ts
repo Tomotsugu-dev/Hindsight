@@ -9,7 +9,7 @@ function block(css: string, selector: string): string {
   return css.slice(start, css.indexOf("}", start));
 }
 
-// 浅色模式下写死半透明白底，深色模式下文字是浅色，白底会让它看不清；用随模式切换的 token
+// Dark mode needs no separate rule.
 describe("PieView styles in dark mode", () => {
   it("hovers category rows with the theme's hover color", () => {
     expect(block(PIE_CSS, ".row:hover:not(:disabled)")).toContain("var(--hover-bg)");
