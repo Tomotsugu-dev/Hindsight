@@ -1,0 +1,5 @@
+# Commits that only change formatting. `git blame` skips them when run with
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs`; GitHub skips them by itself.
+
+# chore(ui): format src with prettier
+cba7423b5bea260e874022ac7b2652f79e6c5649
