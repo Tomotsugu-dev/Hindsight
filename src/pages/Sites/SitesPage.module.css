@@ -10,7 +10,7 @@
   display: grid;
   grid-template-columns:
     minmax(0, 1fr) calc(112px * var(--font-scale)) calc(112px * var(--font-scale))
-    calc(176px * var(--font-scale));
+    176px;
   align-items: center;
   gap: calc(12px * var(--density));
   padding: 0 calc(12px * var(--density));
