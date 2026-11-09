@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowUpDown, ChevronDown, Search } from "lucide-react";
 import type { Category } from "../../api/hindsight";
+import { TextInput } from "../../components/TextInput/TextInput";
 import { CategoryFilterDropdown } from "./CategoryFilterDropdown";
 import type { AppsSortBy } from "./useAppsFilter";
 import styles from "./AppsFilterBar.module.css";
@@ -45,17 +46,15 @@ export function AppsFilterBar({
 
   return (
     <div className={styles.bar}>
-      <div className={styles.searchWrap}>
-        <Search size={14} strokeWidth={2} className={styles.searchIcon} aria-hidden />
-        <input
-          className={styles.searchInput}
-          type="text"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={t("apps.filter.searchPlaceholder")}
-          spellCheck={false}
-        />
-      </div>
+      <TextInput
+        className={styles.search}
+        icon={Search}
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder={t("apps.filter.searchPlaceholder")}
+        aria-label={t("apps.filter.searchPlaceholder")}
+        spellCheck={false}
+      />
 
       <div className={styles.rightGroup}>
         <CategoryFilterDropdown
