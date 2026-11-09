@@ -19,6 +19,7 @@ import { AssignDropdown } from "./parts";
 import { RemoveAppDialog } from "../../components/RemoveAppDialog/RemoveAppDialog";
 import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
 import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
+import { findScrollContainer, useDragAutoScroll } from "../../hooks/useDragAutoScroll";
 import {
   EXCLUDED_CATEGORY_ID,
   PRIVATE_CATEGORY_ID,
@@ -97,6 +98,25 @@ export function PairingSection({
     },
     [],
   );
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const cursorYRef = useRef(0);
+  const dragRef = useRef<DragState | null>(null);
+  const hoverRef = useRef<string | null>(null);
+
+  const updateHit = useCallback((clientY: number) => {
+    let hit: string | null = null;
+    for (const [gid, el] of rowRefs.current) {
+      const r = el.getBoundingClientRect();
+      if (clientY >= r.top && clientY <= r.bottom) {
+        hit = gid;
+        break;
+      }
+    }
+    if (hoverRef.current !== hit) {
+      hoverRef.current = hit;
+      setHoverGroupId(hit);
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     if (isControlled) {
@@ -142,24 +162,22 @@ export function PairingSection({
   const isLoading = isControlled ? (loadingProp ?? false) : groupsInternal === null;
 
   // —— 拖拽：mousemove 实时锁 X、跟随 Y、命中检测 ——
+  const dragProcess = drag?.processName ?? null;
   useEffect(() => {
-    if (!drag) return;
+    if (!dragProcess) return;
     const onMove = (e: MouseEvent) => {
-      setDrag((d) => (d ? { ...d, cursorY: e.clientY } : null));
-      // 命中检测：找鼠标 Y 落在哪个 row 内（X 不参与，因为我们要求列锁但仍允许拖到任意行）
-      let hit: string | null = null;
-      for (const [gid, el] of rowRefs.current) {
-        const r = el.getBoundingClientRect();
-        if (e.clientY >= r.top && e.clientY <= r.bottom) {
-          hit = gid;
-          break;
-        }
+      cursorYRef.current = e.clientY;
+      if (dragRef.current) {
+        dragRef.current = { ...dragRef.current, cursorY: e.clientY };
       }
-      setHoverGroupId(hit);
+      setDrag((d) => (d ? { ...d, cursorY: e.clientY } : null));
+      updateHit(e.clientY);
     };
     const onUp = () => {
-      const cur = drag;
-      const target = hoverGroupId;
+      const cur = dragRef.current;
+      const target = hoverRef.current;
+      dragRef.current = null;
+      hoverRef.current = null;
       setDrag(null);
       setHoverGroupId(null);
       if (cur && target && target !== cur.sourceGroupId) {
@@ -181,7 +199,14 @@ export function PairingSection({
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-  }, [drag, hoverGroupId, refreshCategories, showPurgeFailed]);
+  }, [dragProcess, refreshCategories, showPurgeFailed, reload, updateHit]);
+
+  useDragAutoScroll({
+    active: dragProcess !== null,
+    containerRef: scrollRef,
+    cursorYRef,
+    onScroll: () => updateHit(cursorYRef.current),
+  });
 
   /** 「移除」弹窗:null = 关闭,否则是待处理的那一行 */
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
@@ -223,7 +248,10 @@ export function PairingSection({
     const colEl = chipEl.closest<HTMLElement>(`.${styles.devCol}`) ?? chipEl;
     const rect = colEl.getBoundingClientRect();
     const lockedX = rect.left + rect.width / 2;
-    setDrag({
+    scrollRef.current = findScrollContainer(chipEl);
+    cursorYRef.current = e.clientY;
+    hoverRef.current = null;
+    const nextDrag: DragState = {
       processName: member.processName,
       sourceGroupId,
       deviceColIdx,
@@ -231,7 +259,9 @@ export function PairingSection({
       displayName: displayAppName(member.processName),
       recentSecs: member.recentSecs,
       cursorY: e.clientY,
-    });
+    };
+    dragRef.current = nextDrag;
+    setDrag(nextDrag);
   };
 
   /** 不计入统计:归入内建 hidden 分类——报表与 AI 总结的 SQL 都排除它,
