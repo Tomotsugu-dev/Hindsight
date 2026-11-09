@@ -9,3 +9,28 @@ it("has exactly the methods of the real API", async () => {
 
   expect(Object.keys(mock).sort()).toEqual(Object.keys(real).sort());
 });
+
+// 归类应用页的拖动在演示里要和真的应用一样：一个应用只在一个组里
+it("moves a merged app out of its old group", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  const { api: mock } = await import("./api-mock");
+
+  await mock.mergeAppGroup("cursor.exe", "g-terminal");
+  const holders = (await mock.listAppGroups()).filter((g) =>
+    g.members.some((m) => m.processName === "cursor.exe"),
+  );
+  expect(holders.map((g) => g.id)).toEqual(["g-terminal"]);
+});
+
+it("puts an unmerged app in a group of its own, with the category of the group it leaves", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  const { api: mock } = await import("./api-mock");
+
+  await mock.unmergeAppGroup("Code");
+  const groups = await mock.listAppGroups();
+  const own = groups.find((g) => g.id === "Code");
+  expect(own?.categoryId).toBe("code");
+  expect(own?.members.map((m) => m.processName)).toEqual(["Code"]);
+  const vscode = groups.find((g) => g.id === "g-vscode");
+  expect(vscode?.members.some((m) => m.processName === "Code")).toBe(false);
+});

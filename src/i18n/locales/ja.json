@@ -959,6 +959,7 @@
       "chip": {
         "unmergeTooltip": "このグループから外す"
       },
+      "newGroupZone": "ここにドロップすると、単独のグループになります",
       "row": {
         "removeTooltip": "一覧から外す",
         "removeAria": "{{name}} を一覧から外す"
