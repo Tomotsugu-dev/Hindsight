@@ -227,26 +227,6 @@
   gap: 2px;
 }
 
-.msgAction {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 3px;
-  color: var(--text-faint);
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.msgAction:hover:not(:disabled) {
-  color: var(--text-muted);
-}
-
-.msgAction:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
 .versionNav {
   display: inline-flex;
   align-items: center;
@@ -336,28 +316,6 @@
   display: flex;
   gap: calc(8px * var(--density));
   flex-shrink: 0;
-}
-
-.editCancel,
-.editSave {
-  padding: calc(5px * var(--density)) calc(14px * var(--density));
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  cursor: pointer;
-  border: 1px solid var(--border-default);
-  background: var(--surface-card);
-  color: var(--text-strong);
-}
-
-.editSave {
-  background: var(--accent-fill);
-  border-color: var(--accent-fill);
-  color: var(--text-on-accent);
-}
-
-.editSave:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* —— 操作行统一悬浮提示:深底白字,悬停片刻后上方弹出(样式对齐 TimeField)—— */

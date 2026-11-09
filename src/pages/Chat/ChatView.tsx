@@ -34,6 +34,8 @@ import {
   type ChatCitation,
   type ChatStoredMessage,
 } from "../../api/hindsight";
+import { Button } from "../../components/Button/Button";
+import { IconButton } from "../../components/Button/IconButton";
 import styles from "./ChatView.module.css";
 import ThinkingToggle from "./ThinkingToggle";
 import { buildThread, type Message } from "./thread";
@@ -511,15 +513,14 @@ function CopyButton({ text, t }: { text: string; t: TFunction }) {
       .catch(() => {});
   };
   return (
-    <button
-      type="button"
-      className={styles.msgAction}
+    <IconButton
+      size="sm"
+      icon={copied ? Check : Copy}
+      label={t("chat.actions.copy")}
+      title=""
       onClick={copy}
       data-tip={t("chat.actions.copy")}
-      aria-label={t("chat.actions.copy")}
-    >
-      {copied ? <Check size={14} strokeWidth={2.2} /> : <Copy size={14} strokeWidth={2.2} />}
-    </button>
+    />
   );
 }
 
@@ -628,17 +629,18 @@ function UserBubble({
           <div className={styles.editFooter}>
             <span className={styles.editHint}>{t("chat.edit.hint")}</span>
             <div className={styles.editBtns}>
-              <button type="button" className={styles.editCancel} onClick={onCancelEdit}>
+              <Button size="sm" variant="outline" onClick={onCancelEdit}>
                 {t("chat.edit.cancel")}
-              </button>
-              <button
-                type="button"
-                className={styles.editSave}
+              </Button>
+              <Button
+                size="sm"
+                variant="solid"
+                tone="accent"
                 disabled={!draft.trim()}
                 onClick={() => onSaveEdit(m, draft)}
               >
                 {t("chat.edit.save")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -653,39 +655,36 @@ function UserBubble({
         <div className={styles.msgActionsUser}>
           {m.branchCount > 1 && (
             <span className={styles.versionNav}>
-              <button
-                type="button"
-                className={styles.msgAction}
+              <IconButton
+                size="sm"
+                icon={ChevronLeft}
+                label={t("chat.actions.prevBranch")}
+                title=""
                 onClick={() => onSwitchBranch(m.parentKey, m.siblings[m.branchIdx - 1])}
                 disabled={m.branchIdx === 0}
                 data-tip={t("chat.actions.prevBranch")}
-                aria-label={t("chat.actions.prevBranch")}
-              >
-                <ChevronLeft size={14} strokeWidth={2.2} />
-              </button>
+              />
               {m.branchIdx + 1}/{m.branchCount}
-              <button
-                type="button"
-                className={styles.msgAction}
+              <IconButton
+                size="sm"
+                icon={ChevronRight}
+                label={t("chat.actions.nextBranch")}
+                title=""
                 onClick={() => onSwitchBranch(m.parentKey, m.siblings[m.branchIdx + 1])}
                 disabled={m.branchIdx === m.branchCount - 1}
                 data-tip={t("chat.actions.nextBranch")}
-                aria-label={t("chat.actions.nextBranch")}
-              >
-                <ChevronRight size={14} strokeWidth={2.2} />
-              </button>
+              />
             </span>
           )}
-          <button
-            type="button"
-            className={styles.msgAction}
+          <IconButton
+            size="sm"
+            icon={Pencil}
+            label={t("chat.actions.edit")}
+            title=""
             onClick={() => onStartEdit(m.guid)}
             disabled={busy}
             data-tip={t("chat.actions.edit")}
-            aria-label={t("chat.actions.edit")}
-          >
-            <Pencil size={14} strokeWidth={2.2} />
-          </button>
+          />
           <CopyButton text={m.text} t={t} />
         </div>
       </div>
@@ -754,41 +753,38 @@ function AssistantBubble({
         <div className={styles.msgActions}>
           {versions.length > 1 && (
             <span className={styles.versionNav}>
-              <button
-                type="button"
-                className={styles.msgAction}
+              <IconButton
+                size="sm"
+                icon={ChevronLeft}
+                label={t("chat.actions.prevVersion")}
+                title=""
                 onClick={() => setIdx((i) => Math.max(0, i - 1))}
                 disabled={idx === 0}
                 data-tip={t("chat.actions.prevVersion")}
-                aria-label={t("chat.actions.prevVersion")}
-              >
-                <ChevronLeft size={14} strokeWidth={2.2} />
-              </button>
+              />
               {idx + 1}/{versions.length}
-              <button
-                type="button"
-                className={styles.msgAction}
+              <IconButton
+                size="sm"
+                icon={ChevronRight}
+                label={t("chat.actions.nextVersion")}
+                title=""
                 onClick={() => setIdx((i) => Math.min(versions.length - 1, i + 1))}
                 disabled={idx === versions.length - 1}
                 data-tip={t("chat.actions.nextVersion")}
-                aria-label={t("chat.actions.nextVersion")}
-              >
-                <ChevronRight size={14} strokeWidth={2.2} />
-              </button>
+              />
             </span>
           )}
           <CopyButton text={v.text} t={t} />
           {isLast && (
-            <button
-              type="button"
-              className={styles.msgAction}
+            <IconButton
+              size="sm"
+              icon={RefreshCw}
+              label={t("chat.actions.regenerate")}
+              title=""
               onClick={onRegenerate}
               disabled={busy}
               data-tip={t("chat.actions.regenerate")}
-              aria-label={t("chat.actions.regenerate")}
-            >
-              <RefreshCw size={14} strokeWidth={2.2} />
-            </button>
+            />
           )}
         </div>
       </div>
