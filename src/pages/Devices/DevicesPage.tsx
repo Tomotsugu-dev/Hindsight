@@ -452,6 +452,8 @@ function CloudSyncCard({
               {authExpired && (
                 <Button
                   size="sm"
+                  tone="danger"
+                  quiet
                   icon={LogOut}
                   onClick={onSignOut}
                   disabled={busy}
@@ -462,7 +464,8 @@ function CloudSyncCard({
               )}
               <Button
                 size="sm"
-                tone={authExpired ? "accent" : "neutral"}
+                tone={authExpired ? "accent" : "danger"}
+                quiet={!authExpired}
                 icon={authExpired ? LogIn : LogOut}
                 onClick={authExpired ? onReauth : onSignOut}
                 disabled={busy}
@@ -743,6 +746,8 @@ function SetupPanel({
                 />
                 <IconButton
                   size="sm"
+                  tone="accent"
+                  quiet
                   icon={secretVisible ? EyeOff : Eye}
                   className={styles.credEyeBtn}
                   onClick={() => setSecretVisible((v) => !v)}
@@ -991,6 +996,8 @@ function WebDavForm({
           />
           <IconButton
             size="sm"
+            tone="accent"
+            quiet
             icon={passwordVisible ? EyeOff : Eye}
             className={styles.credEyeBtn}
             onClick={() => setPasswordVisible((v) => !v)}
