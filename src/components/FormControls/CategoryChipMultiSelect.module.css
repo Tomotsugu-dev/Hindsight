@@ -25,7 +25,7 @@
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
-  color: var(--text-on-accent);
+  color: var(--text-on-color);
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength)));
   transition:
@@ -48,14 +48,14 @@
    "AI 看不到这个分类"——三个信号叠加但都很轻，不堆装饰 */
 .excluded {
   background: transparent !important;
-  border-color: var(--border-strong) !important;
+  border-color: color-mix(in oklab, var(--text-muted) 30%, transparent) !important;
   color: var(--text-muted);
   box-shadow: none;
 }
 
 .excluded:hover {
   background: var(--fill-subtle) !important;
-  border-color: rgba(0, 0, 0, 0.28) !important;
+  border-color: color-mix(in oklab, var(--text-muted) 50%, transparent) !important;
   color: var(--text-strong);
 }
 
