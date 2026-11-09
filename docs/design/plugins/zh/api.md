@@ -52,6 +52,7 @@ sequenceDiagram
 | `categories.app.write` | `categories.app.write` | `{ "app": "Code", "categoryId": "code" }`，`categoryId` 是 `null` 就是去掉分类 | 无 |
 | `categories.site.list` | `categories.site.read` | 无 | `[{ "host": "docs.github.com", "categoryId": "code", "inheritedFrom": "github.com" }]`，最近 30 天用得多的在前；用的是自己的规则，`inheritedFrom` 是 `null`；没有规则的，两个都是 `null` |
 | `categories.site.write` | `categories.site.write` | `{ "host": "github.com", "categoryId": "code" }`，`categoryId` 是 `null` 就是删掉规则 | 无 |
+| `permissions.list` | 不要权限 | 无 | `["stats.read", "stats.today"]`，用户同意了的权限 |
 | `notifications.send` | `notifications`；带提示音还要 `notifications.sound` | `{ "body": "已经看了 10 分钟 YouTube", "sound": true }`，`sound` 可以不传 | 无 |
 | `db.execute` | 不要权限，要用户同意的磁盘容量 | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`，`params` 可以不传 | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | 同上 | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`，每行一个对象，键是列名；最多 10 MB |

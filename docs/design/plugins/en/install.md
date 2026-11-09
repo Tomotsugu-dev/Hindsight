@@ -41,7 +41,7 @@ sequenceDiagram
   - If the app crashes midway, at most a folder that is not in the table is left. It is deleted the next time the plugin market opens (see "Removing leftovers" below).
   - If the table were written first, a crash would leave a row in the table with no files.
 - Unzip to a temp folder first, then rename it. On the same disk, a rename happens in one step, so the plugin library never holds a half-unzipped plugin folder.
-- The table stores the permissions and the disk space the user approved, passed in by the market page. They are not compared with what the manifest asks for. The plugin API and the event dispatcher check only the table, so however much the manifest asks for, the plugin cannot get what the user did not approve.
+- The table stores the permissions and the disk space the user approved. Every approved permission must be one the manifest asks for, and the permissions it depends on must be approved too (see "Choosing permissions" below). The plugin API and the event dispatcher check only the table, so the plugin cannot get what the user did not approve.
 - The approved disk space comes from the frontend, so the manifest checks did not see it. The install checks again that it is between 1 MB and 10 GB.
 
 ## Installing a local zip
@@ -78,6 +78,12 @@ sequenceDiagram
 - The frontend sends only the file name. The backend joins it to `plugin-zips/` and rejects a name with `/` or `..`. The zip is deleted after the install, so a full path could make it delete the wrong file.
 - After the install, the zip is deleted, so `plugin-zips/` usually holds only zips that are not installed yet. If the install fails, the zip is kept. If the zip cannot be deleted, this is only logged, and the next time the market page opens, the zip is listed with the reason "already installed".
 - From the manifest check on, it is the same as a market install: files first, table last.
+
+## Choosing permissions
+
+- At install, every permission is checked by default, and the user can uncheck any. After install, the user can change them in the plugin list.
+- The checked permissions must meet the same dependency rules as the manifest check.
+- On an update, a permission the user turned down stays turned down, and a new permission is checked by default.
 
 ## Updating
 

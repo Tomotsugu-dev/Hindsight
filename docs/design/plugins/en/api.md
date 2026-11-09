@@ -52,6 +52,7 @@ sequenceDiagram
 | `categories.app.write` | `categories.app.write` | `{ "app": "Code", "categoryId": "code" }`; a `null` `categoryId` removes the category | Nothing |
 | `categories.site.list` | `categories.site.read` | None | `[{ "host": "docs.github.com", "categoryId": "code", "inheritedFrom": "github.com" }]`, most used in the last 30 days first. If the website uses its own rule, `inheritedFrom` is `null`. If no rule applies, both are `null` |
 | `categories.site.write` | `categories.site.write` | `{ "host": "github.com", "categoryId": "code" }`; a `null` `categoryId` removes the rule | Nothing |
+| `permissions.list` | No permission | None | `["stats.read", "stats.today"]`, the permissions the user approved |
 | `notifications.send` | `notifications`; with a sound, also `notifications.sound` | `{ "body": "10 minutes on YouTube already", "sound": true }`; `sound` is optional | Nothing |
 | `db.execute` | No permission; needs the disk space the user approved | `{ "sql": "INSERT INTO pomodoro VALUES (?, ?)", "params": ["2026-10-19", 25] }`; `params` is optional | `{ "changes": 1, "lastInsertRowid": 1 }` |
 | `db.query` | Same as above | `{ "sql": "SELECT date, minutes FROM pomodoro" }` | `[{ "date": "2026-10-19", "minutes": 25 }]`, one object per row, keyed by column name; at most 10 MB |
