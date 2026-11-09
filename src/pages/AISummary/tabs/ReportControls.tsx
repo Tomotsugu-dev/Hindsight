@@ -1,17 +1,7 @@
 // 日报、周报共用的控件：页面顶部（副标题、时段切换、操作按钮、状态行）和提示条。
 // 样式在 ReportControls.module.css；占位条、错误框这类正文里的样式也在那里，各 tab 直接引用。
 import type { ReactNode } from "react";
-import {
-  AlertTriangle,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Play,
-  RefreshCcw,
-  Square,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Check, Loader2, Play, RefreshCcw, Square, X } from "lucide-react";
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
 import styles from "./ReportControls.module.css";
@@ -47,62 +37,6 @@ export function ReportHeader({ subtitle, nav, actions, period, status }: ReportH
         ) : null}
         <span>{status.text}</span>
       </div>
-    </div>
-  );
-}
-
-interface PeriodNavProps {
-  /** 整个控件的读屏名字，如「选择日期」 */
-  groupLabel: string;
-  prevLabel: string;
-  nextLabel: string;
-  /** 中间按钮的提示，如「回到今天」 */
-  resetTitle: string;
-  /** 中间按钮的字：「今天」「昨天」「3 天前」，跟日统计一样只写相对时间 */
-  label: string;
-  /** 已经是当前时段：中间按钮和「›」点不了 */
-  atCurrent: boolean;
-  /** 正在生成：不许切换 */
-  locked: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-  onReset: () => void;
-}
-
-/** 时段切换：[‹] [今天] [›]，点中间回到当前时段。样式照日统计的日期切换。 */
-export function PeriodNav(p: PeriodNavProps) {
-  const canReset = !p.atCurrent;
-  return (
-    <div className={styles.periodNav} role="group" aria-label={p.groupLabel}>
-      <IconButton
-        variant="soft"
-        size="sm"
-        glow
-        icon={ChevronLeft}
-        label={p.prevLabel}
-        onClick={p.onPrev}
-        disabled={p.locked}
-      />
-      <Button
-        variant="soft"
-        size="sm"
-        glow
-        className={styles.navPill}
-        onClick={p.onReset}
-        disabled={p.locked || !canReset}
-        title={canReset ? p.resetTitle : undefined}
-      >
-        {p.label}
-      </Button>
-      <IconButton
-        variant="soft"
-        size="sm"
-        glow
-        icon={ChevronRight}
-        label={p.nextLabel}
-        onClick={p.onNext}
-        disabled={p.locked || p.atCurrent}
-      />
     </div>
   );
 }
@@ -148,7 +82,13 @@ export function NoticeBars({ error, dismissLabel, onDismissError, notice }: Noti
         <div className={styles.errorBar}>
           <AlertTriangle size={14} strokeWidth={2.2} />
           <span>{error}</span>
-          <IconButton size="sm" icon={X} label={dismissLabel} onClick={onDismissError} />
+          <IconButton
+            size="sm"
+            tone="danger"
+            icon={X}
+            label={dismissLabel}
+            onClick={onDismissError}
+          />
         </div>
       ) : null}
       {notice ? (

@@ -4,8 +4,6 @@ import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Download,
   Info,
@@ -30,7 +28,7 @@ import { useDebugState } from "../DebugStateContext";
 import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
 import { Button } from "../../../components/Button/Button";
-import { IconButton } from "../../../components/Button/IconButton";
+import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
 import { Row } from "../../../components/FormLayout/Row";
 import { Section } from "../../../components/FormLayout/Section";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
@@ -403,55 +401,36 @@ export default function DebugTab() {
             disabled={generating}
           />
 
-          <div className={styles.dateNav}>
-            <IconButton
-              variant="soft"
-              size="sm"
-              glow
-              icon={ChevronLeft}
-              onClick={() => setDayOffset((v) => v - 1)}
-              disabled={generating}
-              label={t(
-                scope === "daily"
-                  ? "aiSummary.debug.dateNav.prevDayAria"
-                  : scope === "weekly"
-                    ? "aiSummary.debug.dateNav.prevWeekAria"
-                    : "aiSummary.debug.dateNav.prevMonthAria",
-              )}
-            />
-            <Button
-              variant="soft"
-              size="sm"
-              glow
-              className={styles.dayPill}
-              onClick={() => setDayOffset(0)}
-              disabled={generating || dayOffset === 0}
-              title={t(
-                scope === "daily"
-                  ? "aiSummary.debug.dateNav.todayBack"
-                  : scope === "weekly"
-                    ? "aiSummary.debug.dateNav.thisWeekBack"
-                    : "aiSummary.debug.dateNav.thisMonthBack",
-              )}
-            >
-              {offsetLabel(scope, dayOffset, t)}
-            </Button>
-            <IconButton
-              variant="soft"
-              size="sm"
-              glow
-              icon={ChevronRight}
-              onClick={() => setDayOffset((v) => v + 1)}
-              disabled={generating || dayOffset >= 0}
-              label={t(
-                scope === "daily"
-                  ? "aiSummary.debug.dateNav.nextDayAria"
-                  : scope === "weekly"
-                    ? "aiSummary.debug.dateNav.nextWeekAria"
-                    : "aiSummary.debug.dateNav.nextMonthAria",
-              )}
-            />
-          </div>
+          <PeriodNav
+            label={offsetLabel(scope, dayOffset, t)}
+            currentTitle={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.todayBack"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.thisWeekBack"
+                  : "aiSummary.debug.dateNav.thisMonthBack",
+            )}
+            prevLabel={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.prevDayAria"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.prevWeekAria"
+                  : "aiSummary.debug.dateNav.prevMonthAria",
+            )}
+            nextLabel={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.nextDayAria"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.nextWeekAria"
+                  : "aiSummary.debug.dateNav.nextMonthAria",
+            )}
+            isCurrent={dayOffset === 0}
+            canNext={dayOffset < 0}
+            busy={generating}
+            onPrev={() => setDayOffset((v) => v - 1)}
+            onNext={() => setDayOffset((v) => v + 1)}
+            onCurrent={() => setDayOffset(0)}
+          />
 
           {/* start / stop 放主行最右端：CSS margin-left:auto 推到行尾，"主操作"按钮放第一行
             最显眼位置。按钮文案缩短为"重新生成"避免在 960px 窗口里换行，旁边 Info icon hover 看完整说明。 */}

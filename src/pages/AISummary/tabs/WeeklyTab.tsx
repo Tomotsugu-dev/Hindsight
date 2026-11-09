@@ -31,7 +31,8 @@ import {
 import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
-import { MainButton, NoticeBars, PeriodNav, ReportHeader } from "./ReportControls";
+import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
+import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -545,13 +546,14 @@ export default function WeeklyTab() {
             groupLabel={t("aiSummary.weekly.weekNav.groupAria")}
             prevLabel={t("aiSummary.weekly.weekNav.prevAria")}
             nextLabel={t("aiSummary.weekly.weekNav.nextAria")}
-            resetTitle={t("aiSummary.weekly.weekNav.thisWeekBack")}
+            currentTitle={t("aiSummary.weekly.weekNav.thisWeekBack")}
             label={navLabel}
-            atCurrent={weekOffset >= 0}
-            locked={generating}
+            isCurrent={weekOffset >= 0}
+            canNext={weekOffset < 0}
+            busy={generating}
             onPrev={() => setWeekOffset((v) => v - 1)}
             onNext={() => setWeekOffset((v) => v + 1)}
-            onReset={() => setWeekOffset(0)}
+            onCurrent={() => setWeekOffset(0)}
           />
         }
         actions={

@@ -28,17 +28,6 @@
   gap: calc(4px * var(--density));
 }
 
-/* 时段切换：照日统计 PeriodCard 的 dayNav，三个分开的描边按钮，配 .glow 跟随鼠标的描边光 */
-.periodNav {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-}
-
-.navPill {
-  min-width: calc(64px * var(--font-scale));
-}
-
 /* —— 状态行 —— */
 .statusLine {
   display: flex;

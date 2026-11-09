@@ -16,16 +16,6 @@
   gap: calc(10px * var(--density));
 }
 
-.dateNav {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-}
-
-.dayPill {
-  min-width: calc(64px * var(--font-scale));
-}
-
 /* margin-left:auto 把 start/stop 推到 header flex 行的最右端——是 toolbar 的主操作按钮，
    按 mac 软件惯例放右下 / 右上当 primary。generating 时 stop 替换 start，位置必须保持一致
    避免布局跳动。delete / export 留在左侧次要操作组里。 */

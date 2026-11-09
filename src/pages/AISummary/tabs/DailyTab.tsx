@@ -27,7 +27,8 @@ import {
 } from "../../../state/dailySummary";
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
-import { MainButton, NoticeBars, PeriodNav, ReportHeader } from "./ReportControls";
+import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
+import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -491,13 +492,14 @@ export default function DailyTab() {
             groupLabel={t("aiSummary.daily.dateNav.groupAria")}
             prevLabel={t("aiSummary.daily.dateNav.prevAria")}
             nextLabel={t("aiSummary.daily.dateNav.nextAria")}
-            resetTitle={t("aiSummary.daily.dateNav.todayBack")}
+            currentTitle={t("aiSummary.daily.dateNav.todayBack")}
             label={navLabel}
-            atCurrent={dayOffset >= 0}
-            locked={generating}
+            isCurrent={dayOffset >= 0}
+            canNext={dayOffset < 0}
+            busy={generating}
             onPrev={() => setDayOffset((v) => v - 1)}
             onNext={() => setDayOffset((v) => v + 1)}
-            onReset={() => setDayOffset(0)}
+            onCurrent={() => setDayOffset(0)}
           />
         }
         actions={
