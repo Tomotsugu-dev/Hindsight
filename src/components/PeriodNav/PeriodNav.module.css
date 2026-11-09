@@ -1,0 +1,18 @@
+.nav {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+}
+
+/* At least as wide as "Today", so the arrows stay in place when the label becomes a date */
+.nav .pill {
+  min-width: calc(64px * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The pill names the period shown, so it stays clear when it cannot be pressed */
+.nav .pill:disabled {
+  opacity: 1;
+  cursor: default;
+}
