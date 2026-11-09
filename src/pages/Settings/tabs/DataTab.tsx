@@ -224,7 +224,7 @@ export default function DataTab() {
           description={t("settings.data.export.rowDescription")}
           icon={FileDown}
         >
-          <Button icon={FileDown} onClick={() => setExportOpen(true)}>
+          <Button variant="outline" icon={FileDown} onClick={() => setExportOpen(true)}>
             {t("settings.data.export.rowButton")}
           </Button>
         </Row>
