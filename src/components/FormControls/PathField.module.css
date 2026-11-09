@@ -6,7 +6,7 @@
   app-region: no-drag;
 }
 
-/* The input takes its font from the box, so the path is in the monospace font */
+/* The input takes its font family from the box, so the path is in the monospace font */
 .input {
   width: 280px;
   font-family: var(--font-mono);
