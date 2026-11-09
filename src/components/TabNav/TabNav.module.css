@@ -3,12 +3,12 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
+  gap: calc(4px * var(--density));
+  padding: calc(4px * var(--density));
   background: var(--fill-default);
   border-radius: var(--radius-md);
   width: fit-content;
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--density));
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -17,7 +17,7 @@
 .group {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
 }
 
 /* 跨组分隔竖线：1px 浅灰，左右内边距让它跟 tab 视觉气口一致。
@@ -26,7 +26,7 @@
   display: inline-block;
   width: 1px;
   height: 16px;
-  margin: 0 8px;
+  margin: 0 calc(8px * var(--density));
   background: var(--border-strong);
   flex-shrink: 0;
 }
@@ -36,10 +36,10 @@
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  padding: 0 14px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(14px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   letter-spacing: -0.005em;
@@ -64,16 +64,16 @@
 /* —— 浮动激活胶囊（弹簧 + 惯性） —— */
 .pill {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: calc(4px * var(--density));
+  bottom: calc(4px * var(--density));
   left: 0;
   z-index: 0;
-  background: var(--surface-card);
+  background: var(--surface-1);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.8) inset,
-    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
-    0 4px 10px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+    var(--shadow-inset-hi),
+    var(--shadow-sm),
+    0 4px 10px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
   pointer-events: none;
   /* 首帧不带过渡，避免从 0 滑过来 */
   transition: opacity 200ms var(--ease-out);
@@ -88,31 +88,23 @@
     opacity 200ms var(--ease-out);
 }
 
-/* 暗色：亮色 .tabs 用 3.5% 黑底，暗色下消失=透明。tabs 条用 surface-card 做底，
-   pill 用 elevated（更亮一档），制造"选中项浮起"的对比。 */
+/* In dark mode the gray fill barely shows, so the bar gets the card surface and a border.
+   The pill's --surface-1 is one step lighter there, so the selected tab stands out. */
 :global([data-mode="dark"]) .tabs {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
 }
 
-:global([data-mode="dark"]) .pill {
-  background: var(--surface-card-elevated);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength))),
-    0 4px 10px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
-}
-
 /* 「新」 after a tab label */
 .badge {
-  margin-left: 6px;
-  padding: 0 6px;
+  margin-left: calc(6px * var(--density));
+  padding: 0 calc(6px * var(--density));
   border-radius: var(--radius-pill);
   background: var(--status-error);
-  color: #fff;
-  font-size: 10px;
+  color: var(--text-on-accent);
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
-  line-height: 16px;
+  line-height: 1.6;
 }
 
 /* Preserve tab measurements when the theme changes while using an underline. */
@@ -136,7 +128,7 @@
 
 :global([data-layout="flat"]) .pill {
   top: auto;
-  bottom: 4px;
+  bottom: calc(4px * var(--density));
   height: 2px;
   background: var(--color-accent);
   border-radius: 0;
