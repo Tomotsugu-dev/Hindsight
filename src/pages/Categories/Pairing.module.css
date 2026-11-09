@@ -147,7 +147,7 @@
 .emptyDash {
   flex: 1;
   height: 0;
-  border-top: 1px dashed var(--border-strong);
+  border-top: 1px dashed var(--border-dashed);
   margin: 0 calc(12px * var(--density));
 }
 
@@ -187,7 +187,7 @@
 /* 源 chip 在拖动过程中变虚线占位 —— 占据原槽，告诉你"原始位置在这" */
 .chipPlaceholder {
   opacity: 0.35;
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   background: transparent;
   pointer-events: none;
 }

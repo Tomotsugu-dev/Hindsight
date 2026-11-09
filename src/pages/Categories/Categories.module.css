@@ -531,7 +531,7 @@
   height: calc(24px * var(--density));
   padding: 0 calc(8px * var(--density));
   background: transparent;
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   border-radius: var(--radius-xs);
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
