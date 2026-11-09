@@ -655,7 +655,9 @@ export default function DebugTab() {
             {t("aiSummary.debug.engineLogs.label")}
             <Button
               variant="outline"
-              size="sm"
+              tone="accent"
+              quiet
+              size="xs"
               className={styles.engineLogsRefreshBtn}
               onClick={() => void refreshEngineLogs()}
               disabled={engineLogsBusy}
@@ -667,7 +669,9 @@ export default function DebugTab() {
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              tone="accent"
+              quiet
+              size="xs"
               className={styles.engineLogsRefreshBtn}
               onClick={() => void copyEngineLogs()}
               disabled={engineLogs.length === 0}

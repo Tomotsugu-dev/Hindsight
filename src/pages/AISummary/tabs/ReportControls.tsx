@@ -83,7 +83,7 @@ export function NoticeBars({ error, dismissLabel, onDismissError, notice }: Noti
           <AlertTriangle size={14} strokeWidth={2.2} />
           <span>{error}</span>
           <IconButton
-            size="sm"
+            size="xs"
             tone="danger"
             icon={X}
             label={dismissLabel}
