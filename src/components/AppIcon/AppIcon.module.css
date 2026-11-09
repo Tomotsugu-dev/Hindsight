@@ -2,7 +2,7 @@
   flex-shrink: 0;
   border-radius: var(--radius-xs);
   object-fit: contain;
-  box-shadow: 0 0 0 0.5px var(--border-subtle);
+  box-shadow: 0 0 0 0.5px rgba(var(--shadow-rgb), 0.06);
 }
 
 .dot {
