@@ -199,7 +199,13 @@ export default function DataTab() {
           }
           icon={PieChart}
         >
-          <span style={{ fontSize: 13, color: "var(--text-strong)", fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: "calc(var(--font-size-body) * var(--font-scale))",
+              color: "var(--text-strong)",
+              fontWeight: "var(--font-weight-600)",
+            }}
+          >
             {storage ? formatBytes(total) : "—"}
           </span>
         </Row>
