@@ -1,5 +1,5 @@
-/* 复用 ConfirmDialog 的 backdrop / dialog / btn 视觉，加 radio + input 专属样式。
-   保留一致的 modal grammar（同尺寸、同动画、同按钮风格），降低视觉跳跃。 */
+/* 复用 ConfirmDialog 的 backdrop / dialog 视觉，加 radio + input 专属样式。
+   保留一致的 modal grammar（同尺寸、同动画），降低视觉跳跃。 */
 
 .backdrop {
   position: fixed;
@@ -130,22 +130,7 @@
 }
 
 .confirmInput {
-  height: calc(32px * var(--density));
-  padding: 0 calc(10px * var(--density));
-  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-family: var(--font-mono);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--fill-subtle);
-  outline: none;
-  transition:
-    border-color 120ms ease-out,
-    background-color 120ms ease-out;
-}
-
-.confirmInput:focus {
-  border-color: color-mix(in oklab, var(--status-error) 60%, transparent);
-  background: var(--surface-card);
 }
 
 .actions {
@@ -153,53 +138,6 @@
   justify-content: flex-end;
   gap: calc(8px * var(--density));
   margin-top: calc(6px * var(--density));
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    color 160ms ease-out,
-    transform 100ms ease-out;
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btnCancel {
-  background: var(--fill-default);
-  border-color: var(--border-subtle);
-  color: var(--text-strong);
-}
-
-.btnCancel:hover:not(:disabled) {
-  background: var(--fill-strong);
-}
-
-.btnDanger {
-  background: var(--status-error);
-  color: var(--text-on-accent);
-}
-
-.btnDanger:hover:not(:disabled) {
-  background: var(--status-error-strong);
 }
 
 @keyframes fadeIn {

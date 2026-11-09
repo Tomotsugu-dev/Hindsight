@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Trans, useTranslation } from "react-i18next";
 import { EyeOff, Trash2 } from "lucide-react";
 import { api, type DataCount } from "../../api/hindsight";
+import { Button } from "../Button/Button";
 import { ChartOffIcon } from "../icons/ChartOffIcon";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { logError } from "../../lib/logger";
@@ -136,31 +137,23 @@ export function RemoveAppDialog({
         </ul>
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
+          <Button
             onClick={onCancel}
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
             {t("common.cancel")}
-          </button>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onExclude}>
-            <ChartOffIcon size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+          </Button>
+          <Button icon={ChartOffIcon} onClick={onExclude}>
             {t("apps.remove.excludeAction")}
-          </button>
-          <button type="button" className={`${styles.btn} ${styles.btnDanger}`} onClick={onDelete}>
-            <Trash2 size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+          </Button>
+          {/* 删除、设为隐私都删数据:不给实心红(那会把视线拉过去),用描边警示 */}
+          <Button variant="outline" tone="danger" icon={Trash2} onClick={onDelete}>
             {t("apps.remove.deleteAction")}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnDanger}`}
-            onClick={onMakePrivate}
-          >
-            <EyeOff size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
+          </Button>
+          <Button variant="outline" tone="danger" icon={EyeOff} onClick={onMakePrivate}>
             {t("apps.remove.privateAction")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

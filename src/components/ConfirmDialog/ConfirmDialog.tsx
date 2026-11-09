@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
+import { Button } from "../Button/Button";
 import { ScrollIndicator } from "../ScrollIndicator/ScrollIndicator";
 import styles from "./ConfirmDialog.module.css";
 
@@ -97,32 +98,22 @@ export function ConfirmDialog({
           </div>
         )}
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
-            disabled={busy}
-            onClick={onCancel}
-          >
+          <Button disabled={busy} onClick={onCancel}>
             {cancelText}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${variant === "danger" ? styles.btnDanger : styles.btnConfirm} ${busy ? styles.btnBusy : ""}`}
-            disabled={confirmDisabled || busy}
+          </Button>
+          <Button
+            variant="solid"
+            tone={variant === "danger" ? "danger" : "accent"}
+            icon={ConfirmIcon}
+            loading={busy}
+            disabled={confirmDisabled}
             onClick={onConfirm}
             // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践（屏幕阅读器、键盘 user 都期望）
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
-            {busy ? (
-              <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} aria-hidden />
-            ) : (
-              ConfirmIcon && (
-                <ConfirmIcon size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
-              )
-            )}
             {confirmText}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,
