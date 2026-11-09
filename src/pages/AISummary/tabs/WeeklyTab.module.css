@@ -88,7 +88,7 @@
 /* 没有日报：不上色，虚线框，点了看空 */
 .tile[data-kind="noDaily"] {
   background: transparent;
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   color: var(--text-muted);
 }
 

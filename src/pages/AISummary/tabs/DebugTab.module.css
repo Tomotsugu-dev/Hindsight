@@ -610,7 +610,7 @@
   font-style: italic;
   padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--fill-subtle);
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   border-radius: var(--radius-sm);
   line-height: 1.6;
 }
@@ -764,7 +764,7 @@
   padding: calc(18px * var(--density)) calc(12px * var(--density));
   text-align: center;
   background: var(--fill-subtle);
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   border-radius: var(--radius-sm);
 }
 
