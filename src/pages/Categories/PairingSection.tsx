@@ -477,6 +477,8 @@ export function PairingSection({
               <IconButton
                 icon={Trash2}
                 variant="outline"
+                tone="danger"
+                quiet
                 size="sm"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => onRemoveClick(group.id, group.displayName)}
