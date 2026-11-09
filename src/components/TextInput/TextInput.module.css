@@ -5,23 +5,25 @@
   min-width: 0;
   height: calc(var(--control-height-md) * var(--density));
   padding: 0 calc(10px * var(--density));
-  background: var(--surface-2);
-  border: 1px solid transparent;
+  background: var(--fill-default);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-strong);
   cursor: text;
   transition:
     background-color var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .box:hover {
-  background: var(--fill-default);
+  border-color: var(--border-strong);
 }
 
 .box:focus-within {
-  background: transparent;
-  border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  background: var(--surface-card);
+  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
 }
 
 .box[data-size="sm"] {
