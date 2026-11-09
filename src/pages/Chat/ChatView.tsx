@@ -514,7 +514,7 @@ function CopyButton({ text, t }: { text: string; t: TFunction }) {
   };
   return (
     <IconButton
-      size="sm"
+      size="xs"
       icon={copied ? Check : Copy}
       label={t("chat.actions.copy")}
       title=""
@@ -656,7 +656,7 @@ function UserBubble({
           {m.branchCount > 1 && (
             <span className={styles.versionNav}>
               <IconButton
-                size="sm"
+                size="xs"
                 icon={ChevronLeft}
                 label={t("chat.actions.prevBranch")}
                 title=""
@@ -666,7 +666,7 @@ function UserBubble({
               />
               {m.branchIdx + 1}/{m.branchCount}
               <IconButton
-                size="sm"
+                size="xs"
                 icon={ChevronRight}
                 label={t("chat.actions.nextBranch")}
                 title=""
@@ -677,7 +677,7 @@ function UserBubble({
             </span>
           )}
           <IconButton
-            size="sm"
+            size="xs"
             icon={Pencil}
             label={t("chat.actions.edit")}
             title=""
@@ -754,7 +754,7 @@ function AssistantBubble({
           {versions.length > 1 && (
             <span className={styles.versionNav}>
               <IconButton
-                size="sm"
+                size="xs"
                 icon={ChevronLeft}
                 label={t("chat.actions.prevVersion")}
                 title=""
@@ -764,7 +764,7 @@ function AssistantBubble({
               />
               {idx + 1}/{versions.length}
               <IconButton
-                size="sm"
+                size="xs"
                 icon={ChevronRight}
                 label={t("chat.actions.nextVersion")}
                 title=""
@@ -777,7 +777,7 @@ function AssistantBubble({
           <CopyButton text={v.text} t={t} />
           {isLast && (
             <IconButton
-              size="sm"
+              size="xs"
               icon={RefreshCw}
               label={t("chat.actions.regenerate")}
               title=""
