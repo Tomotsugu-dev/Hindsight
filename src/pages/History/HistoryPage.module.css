@@ -140,7 +140,8 @@
   transition: transform 560ms cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-/* 左移一张卡加一道缝：轨道宽 = 两张卡 + 一道缝，所以是 50% + 半道缝 */
+/* Shifting one card left moves the track by one card and one gap. The track is two cards and
+   one gap wide, so that is 50% plus half a gap. */
 .trackShifted {
   transform: translateX(calc(-50% - 8px * var(--density)));
 }
