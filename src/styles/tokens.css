@@ -1,6 +1,15 @@
 /* Design tokens. The default palette is Arc-inspired; the blocks below override
    it through the data-theme, data-mode and data-layout attributes that
-   lib/theme.ts sets on <html>. */
+   lib/theme.ts sets on <html>.
+
+   Component CSS takes sizes and colors from these tokens, and scales sizes where it uses them:
+     font-size: calc(var(--font-size-body) * var(--font-scale));
+     padding: calc(10px * var(--density));
+     height: calc(var(--control-height-md) * var(--density));
+   A custom property is computed on the element that sets it, so a token built from
+   --font-scale or --density here would not follow a theme that sets them on one page. Scaling
+   where the size is used keeps both working: a theme can set --density on :root, on
+   [data-page="today"] or on one part. */
 
 :root {
   /* —— Brand / accent —— */
@@ -10,6 +19,8 @@
      because its accent is light. */
   --accent-fill: var(--color-accent);
   --accent-fill-hover: color-mix(in oklab, var(--accent-fill) 88%, white);
+  /* Text and icons on --accent-fill and on the status colors */
+  --text-on-accent: #ffffff;
 
   /* Sidebar — soft lavender → pink gradient (Arc-esque) */
   --sidebar-gradient: radial-gradient(120% 80% at 0% 0%, #efe7ff 0%, #ffe9f0 60%, #fff4e6 100%);
@@ -54,6 +65,32 @@
   --status-ok-soft: rgba(34, 197, 94, 0.12);
   --status-error-soft: rgba(239, 68, 68, 0.12);
   --status-pending-soft: rgba(245, 158, 11, 0.12);
+  /* Status colors for text, such as on the soft backgrounds: darker than the base colors here,
+     lighter in dark mode, so the text stands out from the page in both */
+  --status-ok-strong: #16a34a;
+  --status-error-strong: #dc2626;
+  --status-pending-strong: #b45309;
+  /* Information: neither good nor bad, such as a note or a step in progress */
+  --status-info: #3b82f6;
+  --status-info-strong: #1d4ed8;
+  --status-info-soft: rgba(59, 130, 246, 0.12);
+
+  /* Dark tooltips on hover. They stay dark in both modes */
+  --surface-tooltip: rgba(28, 28, 36, 0.94);
+  --text-on-tooltip: #ffffff;
+
+  /* Dims the page behind a dialog */
+  --surface-backdrop: rgba(20, 20, 40, 0.32);
+
+  /* Selected text */
+  --selection-bg: var(--color-accent-soft);
+  --selection-fg: var(--text-strong);
+
+  /* Category and chart colors come from data. These go on top of them: text, the light edge of a
+     swatch or bar, and the line between the stacked parts of a bar. */
+  --text-on-color: #ffffff;
+  --swatch-highlight: rgba(255, 255, 255, 0.4);
+  --segment-seam: rgba(255, 255, 255, 0.55);
 
   /* —— Borders / overlays（统一 rgba(0,0,0,X) 写法的级别） —— */
   --alpha-border-subtle: 0.04;
@@ -68,12 +105,19 @@
   --border-subtle: rgba(0, 0, 0, 0.05);
   --border-default: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.12);
+  /* Dashed edge of an empty slot or an "add" button */
+  --border-dashed: rgba(0, 0, 0, 0.18);
 
   /* Gray fills: tracks, inputs, quiet buttons and their hover. Three steps like the borders:
      faint black here, faint white in dark mode. */
   --fill-subtle: rgba(0, 0, 0, 0.025);
   --fill-default: rgba(0, 0, 0, 0.045);
   --fill-strong: rgba(0, 0, 0, 0.075);
+
+  /* The on/off switch while off: its track, the track on hover, and the knob */
+  --toggle-track: rgba(0, 0, 0, 0.12);
+  --toggle-track-hover: rgba(0, 0, 0, 0.18);
+  --toggle-thumb: var(--surface-card);
 
   /* Backing behind app and site icons that are hard to see on the card. Only dark mode needs it. */
   --icon-backing: transparent;
@@ -94,6 +138,9 @@
   /* 阴影强度：组件和下面几档阴影里，深色投影的透明度都乘它。0 去掉投影，2 加深一倍；
      白色高光和 0 偏移 0 模糊的描边环不乘 */
   --shadow-strength: 1;
+  /* The color of dark shadows as r, g, b, for a shadow that none of the levels below fits:
+     box-shadow: 0 2px 8px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength))); */
+  --shadow-rgb: 20, 20, 40;
   --shadow-sm: 0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
@@ -130,11 +177,20 @@
     "PingFang SC", "Microsoft YaHei", sans-serif;
   /* 路径、代码、调试输出这类等宽文字 */
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  --font-size-xs: 11px;
-  --font-size-sm: 13px;
-  --font-size-md: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 20px;
+  /* Text levels, from the page title down to chart ticks. Components multiply them by
+     --font-scale */
+  --font-size-display: 24px; /* page titles */
+  --font-size-headline: 18px; /* large numbers on cards */
+  --font-size-title: 15px; /* section and dialog titles */
+  --font-size-body-lg: 14px; /* settings row labels, the default text size */
+  --font-size-body: 13px; /* list items, tabs, body text */
+  --font-size-body-sm: 12px; /* descriptions, hints, buttons */
+  --font-size-caption: 11px; /* notes, ranks, other small details */
+  --font-size-micro: 10px; /* badges, chart ticks */
+  /* The heading levels set their weight too, so a theme can make titles lighter or bolder */
+  --font-weight-display: var(--font-weight-semibold);
+  --font-weight-headline: var(--font-weight-600);
+  --font-weight-title: var(--font-weight-semibold);
   --font-weight-regular: 450;
   --font-weight-medium: 550;
   --font-weight-semibold: 650;
@@ -144,6 +200,25 @@
   --font-weight-500: 500;
   --font-weight-600: 600;
   --font-weight-700: 700;
+
+  /* —— Scale ——
+     Components multiply font sizes by --font-scale, and spacing and control heights by
+     --density. 1.1 makes the text 10% larger; 0.85 makes the layout more compact */
+  --font-scale: 1;
+  --density: 1;
+
+  /* —— Controls —— buttons, inputs and menus. Components multiply the heights by --density */
+  /* Only buttons come in xs: small icons in dense rows, such as a list row's remove button */
+  --control-height-xs: 20px;
+  --control-height-sm: 26px;
+  --control-height-md: 30px;
+  --control-height-lg: 36px;
+  --button-radius: var(--radius-sm);
+  --button-font-weight: var(--font-weight-medium);
+  --button-border-width: 1px;
+  /* Icons in buttons and inputs. Components multiply them by --font-scale */
+  --control-icon-size: 14px;
+  --control-icon-size-xs: 12px;
 
   /* —— Layout —— */
   --sidebar-width: 176px;
@@ -260,10 +335,22 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.16);
+  --border-dashed: rgba(255, 255, 255, 0.2);
 
   --fill-subtle: rgba(255, 255, 255, 0.04);
   --fill-default: rgba(255, 255, 255, 0.06);
   --fill-strong: rgba(255, 255, 255, 0.1);
+
+  --toggle-track: rgba(255, 255, 255, 0.18);
+  --toggle-track-hover: rgba(255, 255, 255, 0.26);
+  --toggle-thumb: #e9e9ec;
+
+  /* A white highlight is too bright on a dark page, so the selection is accent with white text */
+  --selection-bg: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  --selection-fg: var(--text-on-accent);
+
+  /* A dark seam between the parts of a bar, where a white one would glare */
+  --segment-seam: rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
 
   --icon-backing: #ececf0;
 
@@ -296,8 +383,13 @@
   --status-ok-soft: rgba(34, 197, 94, 0.18);
   --status-error-soft: rgba(239, 68, 68, 0.18);
   --status-pending-soft: rgba(245, 158, 11, 0.18);
+  --status-ok-strong: #4ade80;
+  --status-error-strong: #f87171;
+  --status-pending-strong: #fbbf24;
+  --status-info-strong: #60a5fa;
 
   /* 阴影改深黑，深背景上才有立体感 */
+  --shadow-rgb: 0, 0, 0;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0) inset,

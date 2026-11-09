@@ -1,0 +1,21 @@
+/* The box lines up with the first line of the text, so long text wraps under itself */
+.checkbox {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: calc(8px * var(--density));
+  cursor: pointer;
+}
+
+.box {
+  flex: none;
+  width: calc(14px * var(--font-scale));
+  height: calc(14px * var(--font-scale));
+  margin: 0.1em 0 0;
+  accent-color: var(--color-accent);
+  cursor: inherit;
+}
+
+/* Only the box looks disabled; the text stays readable, as on a row that is always on */
+.checkbox:has(.box:disabled) {
+  cursor: not-allowed;
+}

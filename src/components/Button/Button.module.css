@@ -1,0 +1,193 @@
+/* The tone sets the colors below; the variant picks which of them to use. */
+.button {
+  --button-fg: var(--text-strong);
+  --button-solid-bg: var(--text-strong);
+  --button-solid-bg-hover: var(--text-regular);
+  --button-on-solid: var(--surface-card);
+  --button-soft-bg: var(--fill-default);
+  --button-soft-bg-hover: var(--fill-strong);
+  --button-soft-border: var(--border-subtle);
+  --button-outline-border: var(--border-strong);
+  --button-outline-border-hover: var(--border-strong);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
+  border: var(--button-border-width) solid transparent;
+  border-radius: var(--button-radius);
+  font-family: inherit;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  font-weight: var(--button-font-weight);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.button[data-tone="accent"] {
+  --button-fg: var(--color-accent);
+  --button-solid-bg: var(--accent-fill);
+  --button-solid-bg-hover: var(--accent-fill-hover);
+  --button-on-solid: var(--text-on-accent);
+  --button-soft-bg: var(--color-accent-soft);
+  --button-soft-bg-hover: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  --button-soft-border: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  --button-outline-border: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  --button-outline-border-hover: var(--color-accent);
+}
+
+.button[data-tone="warning"] {
+  --button-fg: var(--status-pending-strong);
+  --button-solid-bg: var(--status-pending);
+  --button-solid-bg-hover: color-mix(in oklab, var(--status-pending) 88%, black);
+  --button-on-solid: var(--text-on-accent);
+  --button-soft-bg: var(--status-pending-soft);
+  --button-soft-bg-hover: color-mix(in oklab, var(--status-pending) 18%, transparent);
+  --button-soft-border: color-mix(in oklab, var(--status-pending) 22%, transparent);
+  --button-outline-border: color-mix(in oklab, var(--status-pending) 50%, transparent);
+  --button-outline-border-hover: var(--status-pending);
+}
+
+.button[data-tone="danger"] {
+  --button-fg: var(--status-error-strong);
+  --button-solid-bg: var(--status-error);
+  --button-solid-bg-hover: color-mix(in oklab, var(--status-error) 88%, black);
+  --button-on-solid: var(--text-on-accent);
+  --button-soft-bg: var(--status-error-soft);
+  --button-soft-bg-hover: color-mix(in oklab, var(--status-error) 18%, transparent);
+  --button-soft-border: color-mix(in oklab, var(--status-error) 22%, transparent);
+  --button-outline-border: color-mix(in oklab, var(--status-error) 50%, transparent);
+  --button-outline-border-hover: var(--status-error);
+}
+
+.button[data-variant="solid"] {
+  background: var(--button-solid-bg);
+  color: var(--button-on-solid);
+}
+
+.button[data-variant="solid"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--button-solid-bg-hover);
+}
+
+.button[data-variant="soft"] {
+  background: var(--button-soft-bg);
+  border-color: var(--button-soft-border);
+  color: var(--button-fg);
+}
+
+.button[data-variant="soft"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--button-soft-bg-hover);
+}
+
+.button[data-variant="outline"] {
+  background: transparent;
+  border-color: var(--button-outline-border);
+  color: var(--button-fg);
+}
+
+.button[data-variant="outline"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--button-soft-bg);
+  border-color: var(--button-outline-border-hover);
+}
+
+.button[data-variant="ghost"] {
+  background: transparent;
+  color: var(--button-fg);
+}
+
+.button[data-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--button-soft-bg);
+}
+
+/* Quiet: gray at rest, so a row of them stays calm; the tone shows on hover */
+.button[data-quiet]:not([data-variant="solid"]) {
+  color: var(--text-muted);
+}
+
+.button[data-quiet][data-variant="soft"] {
+  background: var(--fill-default);
+  border-color: var(--border-subtle);
+}
+
+.button[data-quiet][data-variant="outline"] {
+  border-color: var(--border-strong);
+}
+
+.button[data-quiet]:not([data-variant="solid"]):hover:not(:disabled, [aria-disabled="true"]) {
+  color: var(--button-fg);
+}
+
+.button[data-quiet][data-variant="soft"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--button-soft-bg);
+  border-color: var(--button-soft-border);
+}
+
+.button[data-size="xs"] {
+  gap: calc(4px * var(--density));
+  height: calc(var(--control-height-xs) * var(--density));
+  padding: 0 calc(6px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+}
+
+.button[data-size="sm"] {
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
+}
+
+.button[data-size="lg"] {
+  height: calc(var(--control-height-lg) * var(--density));
+  padding: 0 calc(16px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+}
+
+/* IconButton: as wide as it is high. After the sizes, so it wins over their padding */
+.button.square {
+  padding: 0;
+  aspect-ratio: 1;
+}
+
+.button:active:not(:disabled, [aria-disabled="true"]) {
+  transform: scale(0.97);
+}
+
+/* aria-disabled is for a button that must stay focusable, such as one with a tooltip saying why */
+.button:disabled,
+.button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The button that is busy stays clear, so its spinner can be seen */
+.button[aria-busy="true"] {
+  opacity: 0.85;
+  cursor: progress;
+}
+
+.icon {
+  flex: none;
+  width: calc(var(--control-icon-size) * var(--font-scale));
+  height: calc(var(--control-icon-size) * var(--font-scale));
+}
+
+.button[data-size="xs"] .icon {
+  width: calc(var(--control-icon-size-xs) * var(--font-scale));
+  height: calc(var(--control-icon-size-xs) * var(--font-scale));
+}
+
+.spinning {
+  animation: buttonSpin 0.9s linear infinite;
+}
+
+@keyframes buttonSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

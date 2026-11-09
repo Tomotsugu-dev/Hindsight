@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AppLayout } from "./layouts/AppLayout";
 import { ROUTES } from "./config/nav";
@@ -44,6 +44,13 @@ const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
 const PluginsTab = lazy(() => import("./pages/Settings/tabs/PluginsTab"));
 const PluginPage = lazy(() => import("./pages/Plugin/PluginPage"));
 
+// A page of every shared control, for development. A release build sets import.meta.env.DEV to
+// false and leaves the page out.
+const DevGalleryPage = import.meta.env.DEV
+  ? lazy(() => import("./pages/DevGallery/DevGalleryPage"))
+  : null;
+const DEV_GALLERY_PATH = "/dev/components";
+
 /** 把 i18n 当前语言映射到 settings.ai.promptLanguage 的取值（zh/tw/en/ja/pt/es）。
  *  漏一个分支的代价不是回退到英文，而是**静默落回中文**：AI 日报仍用中文写，
  *  界面却已经整套换了语言。加新界面语言时必须同步这里。 */
@@ -61,6 +68,7 @@ function App() {
   const { t, i18n } = useTranslation();
   const { settings, update } = useSettings();
   const pluginsSeen = usePluginsSeen();
+  const navigate = useNavigate();
 
   // UI 语言切换时同步 AI 设置：
   //  1. promptLanguage —— 让 AISettings 提示词编辑器、DebugTab、后端 generate 的 prompt 都跟随 UI 语言
@@ -101,6 +109,19 @@ function App() {
   useEffect(() => {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
+
+  // The app window has no address bar, so Cmd/Ctrl+Shift+G opens the component gallery
+  useEffect(() => {
+    if (!DevGalleryPage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        void navigate(DEV_GALLERY_PATH);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
 
   return (
     // Suspense fallback 故意保持空 —— page chunk 通常 < 50KB，本地加载几十毫秒级，
@@ -154,6 +175,7 @@ function App() {
             <Route path="about" element={<AboutTab />} />
           </Route>
           <Route path={`${ROUTES.plugin}/:id`} element={<PluginPage />} />
+          {DevGalleryPage ? <Route path={DEV_GALLERY_PATH} element={<DevGalleryPage />} /> : null}
         </Route>
       </Routes>
     </Suspense>

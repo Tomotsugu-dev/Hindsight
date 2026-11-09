@@ -25,7 +25,7 @@
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-family: inherit;
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   cursor: pointer;
   transition:
@@ -61,7 +61,7 @@
 }
 
 .title {
-  font-size: var(--font-size-md, 14px);
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   letter-spacing: -0.01em;
@@ -76,13 +76,13 @@
 }
 
 .headTime {
-  font-size: var(--font-size-md, 14px);
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   font-weight: var(--font-weight-700);
   color: var(--text-strong);
 }
 
 .headPct {
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   font-weight: var(--font-weight-600);
 }
@@ -123,7 +123,7 @@
 
 .sectionTitle {
   margin: 0;
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -131,7 +131,7 @@
 }
 
 .sectionCount {
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -152,7 +152,7 @@
   align-items: center;
   gap: var(--space-3, 12px);
   padding: var(--space-2, 8px) 0;
-  font-size: var(--font-size-sm, 13px);
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
 }
 
@@ -195,7 +195,7 @@
 }
 
 .drillTime {
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -205,5 +205,5 @@
   margin: 0;
   padding: var(--space-3, 12px) 0;
   color: var(--text-faint);
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
 }
