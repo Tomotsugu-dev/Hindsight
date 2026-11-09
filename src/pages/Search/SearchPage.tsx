@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ImageOff, Loader2, ScanSearch, Search, ZoomIn, ZoomOut } from "lucide-react";
 import { api, type MemorySearchHit } from "../../api/hindsight";
+import { Button } from "../../components/Button/Button";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
+import { TextInput } from "../../components/TextInput/TextInput";
 import { logError } from "../../lib/logger";
 import styles from "./SearchPage.module.css";
 
@@ -145,10 +147,10 @@ export default function SearchPage() {
       <p className={styles.subtitle}>{t("search.subtitle")}</p>
 
       <div className={styles.searchBox}>
-        <Search size={15} strokeWidth={2} className={styles.searchIcon} />
-        <input
-          type="text"
-          className={styles.searchInput}
+        <TextInput
+          size="lg"
+          icon={Search}
+          className={styles.searchField}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("search.placeholder")}
@@ -158,7 +160,13 @@ export default function SearchPage() {
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
-        {searching && <Loader2 size={14} strokeWidth={2.25} className={styles.searchSpin} />}
+        {searching && (
+          <Loader2
+            size={14}
+            strokeWidth={2.25}
+            className={`${styles.searchSpin} ${styles.searchBusy}`}
+          />
+        )}
       </div>
 
       {!showInitial && !searching && !error && hits.length > 0 && (
@@ -184,17 +192,14 @@ export default function SearchPage() {
       </div>
 
       {hits.length < total && (
-        <button
-          type="button"
+        <Button
+          variant="outline"
           className={styles.loadMoreBtn}
+          loading={loadingMore}
           onClick={() => void loadMore()}
-          disabled={loadingMore}
         >
-          {loadingMore ? (
-            <Loader2 size={13} strokeWidth={2.25} className={styles.searchSpin} />
-          ) : null}
           {t("search.loadMore", { count: total - hits.length })}
-        </button>
+        </Button>
       )}
 
       {viewer && <Viewer hit={viewer} words={words} onClose={() => setViewer(null)} />}

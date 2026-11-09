@@ -32,42 +32,25 @@
   top: 60px;
   z-index: 5;
   display: flex;
-  align-items: center;
-  gap: calc(8px * var(--density));
-  height: calc(38px * var(--density));
   margin-top: calc(var(--space-4) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
+  /* The input's own fill is see-through, and results scroll under this box */
   background: var(--surface-card);
   box-shadow: 0 2px 10px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
-  transition:
-    border-color 140ms ease-out,
-    box-shadow 140ms ease-out;
 }
 
-.searchBox:focus-within {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
-}
-
-.searchIcon {
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.searchInput {
+.searchField {
   flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  color: var(--text-strong);
 }
 
-.searchInput::placeholder {
-  color: var(--text-faint);
+/* Inside the box at the right end, over the input */
+.searchBusy {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(12px * var(--density));
+  margin: auto 0;
+  pointer-events: none;
 }
 
 .searchSpin {
@@ -246,31 +229,8 @@
 /* ── 加载更多 ── */
 
 .loadMoreBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(6px * var(--density));
   align-self: center;
-  height: calc(var(--control-height-md) * var(--density));
   margin-top: calc(10px * var(--density));
-  padding: 0 calc(16px * var(--density));
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.loadMoreBtn:hover:not(:disabled) {
-  background: var(--surface-2);
-}
-
-.loadMoreBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 /* ── 大图预览(lightbox) ── */
