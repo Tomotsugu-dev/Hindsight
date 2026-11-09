@@ -2,18 +2,18 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  gap: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
 }
 
 /* 每种主题一张可点卡片（button reset 见 global.css） */
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
+  padding: calc(var(--space-3) * var(--density));
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
-  background: var(--surface-card);
+  background: var(--surface-1);
   box-shadow: var(--shadow-md);
   text-align: left;
   transition:
@@ -236,7 +236,7 @@
 .name {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5px * var(--density));
   font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
@@ -258,20 +258,20 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
 }
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--space-2) * var(--density));
 }
 
 /* 自定义主题的卡片是 div：里面的选择按钮和删除按钮不能嵌套 */
 .choose {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
   width: 100%;
   text-align: left;
   cursor: pointer;
@@ -316,7 +316,7 @@
 .error,
 .notice {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: calc(var(--space-2) * var(--density)) calc(var(--space-3) * var(--density));
   border-radius: var(--radius-sm);
   font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.5;
@@ -335,11 +335,11 @@
 .btnDanger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
@@ -348,15 +348,15 @@
 }
 .btn {
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   color: var(--text-strong);
 }
 .btn:hover {
   background: var(--fill-strong);
 }
 .btnDanger {
-  height: 26px;
-  padding: 0 10px;
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: transparent;
   border: 1px solid var(--border-strong);
   color: var(--status-error);
@@ -373,15 +373,6 @@
   opacity: 0.5;
   cursor: default;
   transform: none;
-}
-
-:global([data-mode="dark"]) .btn {
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-:global([data-mode="dark"]) .card {
-  background: var(--surface-card-elevated);
-  border-color: var(--border-default);
 }
 
 :global([data-layout="flat"]) .card:hover {
