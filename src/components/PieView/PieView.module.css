@@ -27,7 +27,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   text-align: center;
 }
@@ -64,7 +64,7 @@
   border-radius: var(--radius-md, 10px);
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--font-size-sm, 13px);
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   text-align: left;
   color: var(--text-strong);
   transition:
@@ -164,14 +164,14 @@
   display: inline-block;
   min-width: 30px;
   text-align: right;
-  font-size: var(--font-size-sm, 13px);
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-700);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
 
 .numSep {
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   font-weight: var(--font-weight-500);
 }
@@ -180,7 +180,7 @@
   display: inline-block;
   min-width: 84px;
   text-align: right;
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   font-weight: var(--font-weight-500);
 }
@@ -207,7 +207,7 @@
   background: color-mix(in oklab, var(--row-color) 8%, transparent);
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--font-size-xs, 11px);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-strong);
   transition:
     background-color 180ms var(--ease-out),

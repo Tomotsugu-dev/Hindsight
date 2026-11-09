@@ -15,7 +15,7 @@
   padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   transition:
     background-color var(--duration-base) var(--ease-out),

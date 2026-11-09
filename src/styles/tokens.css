@@ -1,6 +1,15 @@
 /* Design tokens. The default palette is Arc-inspired; the blocks below override
    it through the data-theme, data-mode and data-layout attributes that
-   lib/theme.ts sets on <html>. */
+   lib/theme.ts sets on <html>.
+
+   Component CSS takes sizes and colors from these tokens, and scales sizes where it uses them:
+     font-size: calc(var(--font-size-body) * var(--font-scale));
+     padding: calc(10px * var(--density));
+     height: calc(var(--control-height-md) * var(--density));
+   A custom property is computed on the element that sets it, so a token built from
+   --font-scale or --density here would not follow a theme that sets them on one page. Scaling
+   where the size is used keeps both working: a theme can set --density on :root, on
+   [data-page="today"] or on one part. */
 
 :root {
   /* —— Brand / accent —— */
@@ -130,11 +139,20 @@
     "PingFang SC", "Microsoft YaHei", sans-serif;
   /* 路径、代码、调试输出这类等宽文字 */
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  --font-size-xs: 11px;
-  --font-size-sm: 13px;
-  --font-size-md: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 20px;
+  /* Text levels, from the page title down to chart ticks. Components multiply them by
+     --font-scale */
+  --font-size-display: 24px; /* page titles */
+  --font-size-headline: 18px; /* large numbers on cards */
+  --font-size-title: 15px; /* section and dialog titles */
+  --font-size-body-lg: 14px; /* settings row labels, the default text size */
+  --font-size-body: 13px; /* list items, tabs, body text */
+  --font-size-body-sm: 12px; /* descriptions, hints, buttons */
+  --font-size-caption: 11px; /* notes, ranks, other small details */
+  --font-size-micro: 10px; /* badges, chart ticks */
+  /* The heading levels set their weight too, so a theme can make titles lighter or bolder */
+  --font-weight-display: var(--font-weight-semibold);
+  --font-weight-headline: var(--font-weight-600);
+  --font-weight-title: var(--font-weight-semibold);
   --font-weight-regular: 450;
   --font-weight-medium: 550;
   --font-weight-semibold: 650;
@@ -144,6 +162,22 @@
   --font-weight-500: 500;
   --font-weight-600: 600;
   --font-weight-700: 700;
+
+  /* —— Scale ——
+     Components multiply font sizes by --font-scale, and spacing and control heights by
+     --density. 1.1 makes the text 10% larger; 0.85 makes the layout more compact */
+  --font-scale: 1;
+  --density: 1;
+
+  /* —— Controls —— buttons, inputs and menus. Components multiply the heights by --density */
+  --control-height-sm: 26px;
+  --control-height-md: 30px;
+  --control-height-lg: 36px;
+  --button-radius: var(--radius-sm);
+  --button-font-weight: var(--font-weight-medium);
+  --button-border-width: 1px;
+  /* Icons in buttons and inputs. Components multiply them by --font-scale */
+  --control-icon-size: 14px;
 
   /* —— Layout —— */
   --sidebar-width: 176px;

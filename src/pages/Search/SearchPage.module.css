@@ -10,15 +10,15 @@
 }
 
 .title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-display) * var(--font-scale));
+  font-weight: var(--font-weight-display);
   color: var(--text-strong);
   letter-spacing: -0.01em;
   margin: 0;
 }
 
 .subtitle {
-  font-size: var(--font-size-sm);
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
   margin: 0;
 }
