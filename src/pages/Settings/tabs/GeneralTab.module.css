@@ -1,4 +1,4 @@
-/* —— 回填历史截图：ghost 按钮 + 右对齐的结果行 —— */
+/* —— 回填历史截图：按钮 + 右对齐的结果行 —— */
 
 .backfillWrap {
   display: flex;
@@ -7,53 +7,9 @@
   gap: calc(6px * var(--density));
 }
 
-.backfillBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  cursor: pointer;
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-
-.backfillBtn:hover:not(:disabled) {
-  background: var(--fill-strong);
-}
-
-.backfillBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.backfillBtn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
 .backfillMsg {
   font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   text-align: right;
   max-width: 260px;
-}
-
-.spinning {
-  animation: generalTabBtnSpin 0.9s linear infinite;
-}
-
-@keyframes generalTabBtnSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
