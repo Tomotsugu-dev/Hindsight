@@ -84,7 +84,7 @@ export function PieDrillDetail({ slice, allSlices, grandTotal, apps, onBack, cat
       onClick={handleBodyClick}
     >
       <header className={styles.head}>
-        <Button size="sm" icon={ArrowLeft} onClick={handleBack}>
+        <Button size="sm" tone="accent" quiet icon={ArrowLeft} onClick={handleBack}>
           {t("today.pie.drill.back")}
         </Button>
         <span className={styles.sep} />

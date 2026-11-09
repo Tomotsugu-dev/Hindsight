@@ -240,7 +240,7 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
         <div className={styles.head}>
           <p className={styles.note}>{note}</p>
           {!editing && (
-            <Button ref={editRef} size="sm" icon={SlidersHorizontal} onClick={start}>
+            <Button ref={editRef} size="sm" quiet icon={SlidersHorizontal} onClick={start}>
               {t(`${K}.edit`)}
             </Button>
           )}
