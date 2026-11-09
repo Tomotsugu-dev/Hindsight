@@ -1960,7 +1960,8 @@
       "update": "Atualizar para v{{version}}",
       "current": "v{{version}} (atual)",
       "show": "Mostrar",
-      "uninstall": "Desinstalar"
+      "uninstall": "Desinstalar",
+      "permissions": "Permissões {{checked}}/{{asked}}"
     },
     "market": {
       "title": "Loja de plugins",
@@ -1992,13 +1993,13 @@
       "leakRisk": "Este plugin pode causar vazamento de informações pessoais.",
       "trustOnly": "Verifique com cuidado e instale apenas se você confia no autor.",
       "confirm": "Confiar e instalar",
-      "permissions": "Este plugin vai pedir as seguintes permissões:",
+      "permissions": "Este plugin vai pedir as seguintes permissões. Desmarque as que você não quer dar:",
       "noPermissions": "Este plugin não lê nenhum dado seu.",
       "highRisk": "Alto risco",
       "storage": "Até {{mb}} MB de espaço em disco",
       "background": "Permissão para rodar em segundo plano",
-      "agree": "Ao marcar, você concorda em dar estas permissões ao plugin",
-      "agreeRisk": "Ao marcar, você declara estar ciente dos riscos acima e concorda em dar estas permissões ao plugin"
+      "agree": "Ao marcar, você concorda em dar ao plugin as permissões marcadas acima",
+      "agreeRisk": "Ao marcar, você declara estar ciente dos riscos acima e concorda em dar ao plugin as permissões marcadas acima"
     },
     "uninstall": {
       "title": "Desinstalar {{name}}?",
@@ -2029,6 +2030,11 @@
       "focus_app": "Permissão para ler eventos de troca de aplicativo e o nome do aplicativo para o qual você troca",
       "focus_category": "Permissão para ler a categoria do aplicativo para o qual você troca",
       "focus_title": "Permissão para ler títulos de janela dos aplicativos e domínios de sites"
+    },
+    "permissionTree": {
+      "expand": "Expandir",
+      "collapse": "Recolher",
+      "required": "Obrigatório"
     }
   }
 }

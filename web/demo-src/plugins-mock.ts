@@ -70,7 +70,30 @@ const ONLINE: OnlinePlugin[] = [
   },
 ];
 
+// Copied from permission_depends_on in the backend
+const PERMISSION_DEPENDS_ON: Record<string, string> = {
+  "stats.today": "stats.read",
+  "stats.week": "stats.read",
+  "stats.month": "stats.read",
+  "stats.history": "stats.read",
+  "categories.app.read": "categories.read",
+  "categories.app.write": "categories.app.read",
+  "categories.site.read": "categories.read",
+  "categories.site.write": "categories.site.read",
+  "notifications.sound": "notifications",
+  "focus.app": "focus.changed",
+  "focus.category": "focus.changed",
+  "focus.title": "focus.changed",
+};
+
 const installed = new Map<string, InstalledPlugin>();
+
+/** The permissions each installed plugin asks for. Each plugin has only one version. */
+function askedPermissions(): Record<string, string[]> {
+  return Object.fromEntries(
+    ONLINE.filter((p) => installed.has(p.id)).map((p) => [p.id, p.versions[0].permissions]),
+  );
+}
 
 /** 每个插件只有一个版本：装了就是「当前版本」，没装就是「新装」。 */
 function withKind(plugin: OnlinePlugin): OnlinePlugin {
@@ -91,6 +114,8 @@ export const pluginCommands: Record<string, (args: Record<string, unknown>) => u
     downloadable: ONLINE.filter((p) => !installed.has(p.id)).map(withKind),
     localZips: [],
     onlineError: null,
+    askedPermissions: askedPermissions(),
+    permissionDependsOn: PERMISSION_DEPENDS_ON,
   }),
   plugin_install_online: ({ id, approved, storageMb }) => {
     const plugin = ONLINE.find((p) => p.id === id);
@@ -116,6 +141,10 @@ export const pluginCommands: Record<string, (args: Record<string, unknown>) => u
     const plugin = installed.get(id as string);
     if (plugin) installed.set(plugin.id, { ...plugin, enabled: enabled as boolean });
     changed();
+  },
+  plugin_set_permissions: ({ id, permissions }) => {
+    const plugin = installed.get(id as string);
+    if (plugin) installed.set(plugin.id, { ...plugin, permissions: permissions as string[] });
   },
   plugin_icons: () =>
     Object.fromEntries(

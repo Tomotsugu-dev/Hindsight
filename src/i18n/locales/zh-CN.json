@@ -1955,7 +1955,8 @@
       "update": "更新到 v{{version}}",
       "current": "v{{version}}（当前）",
       "show": "显示",
-      "uninstall": "卸载"
+      "uninstall": "卸载",
+      "permissions": "权限 {{checked}}/{{asked}}"
     },
     "market": {
       "title": "插件市场",
@@ -1987,13 +1988,13 @@
       "leakRisk": "此插件有可能造成个人信息泄漏等后果。",
       "trustOnly": "请你仔细甄别，并只在你信任作者时安装。",
       "confirm": "信任并安装",
-      "permissions": "此插件将申请以下权限：",
+      "permissions": "此插件将申请以下权限，不想给的可以取消勾选：",
       "noPermissions": "这个插件不读取你的任何数据。",
       "highRisk": "高风险",
       "storage": "最多 {{mb}} MB 的磁盘空间占用",
       "background": "后台运行的权限",
-      "agree": "勾选代表同意插件获取这些权限",
-      "agreeRisk": "勾选代表知悉上述风险，并同意插件获取这些权限"
+      "agree": "勾选代表同意插件获取上面选中的权限",
+      "agreeRisk": "勾选代表知悉上述风险，并同意插件获取上面选中的权限"
     },
     "uninstall": {
       "title": "卸载 {{name}}？",
@@ -2024,6 +2025,11 @@
       "focus_app": "读取切换应用事件，及其切换应用名的权限",
       "focus_category": "读取切换到的应用属于哪个分类的权限",
       "focus_title": "读取应用窗口标题和网站域名的权限"
+    },
+    "permissionTree": {
+      "expand": "展开",
+      "collapse": "收起",
+      "required": "必需"
     }
   }
 }

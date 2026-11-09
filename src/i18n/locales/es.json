@@ -1960,7 +1960,8 @@
       "update": "Actualizar a v{{version}}",
       "current": "v{{version}} (actual)",
       "show": "Mostrar",
-      "uninstall": "Desinstalar"
+      "uninstall": "Desinstalar",
+      "permissions": "Permisos {{checked}}/{{asked}}"
     },
     "market": {
       "title": "Tienda de plugins",
@@ -1992,13 +1993,13 @@
       "leakRisk": "Este plugin puede provocar filtraciones de información personal.",
       "trustOnly": "Revísalo con cuidado e instálalo solo si confías en su autor.",
       "confirm": "Confiar e instalar",
-      "permissions": "Este plugin pedirá los siguientes permisos:",
+      "permissions": "Este plugin pedirá los siguientes permisos. Desmarca los que no quieras dar:",
       "noPermissions": "Este plugin no lee ninguno de tus datos.",
       "highRisk": "Alto riesgo",
       "storage": "Hasta {{mb}} MB de espacio en disco",
       "background": "Permiso para ejecutarse en segundo plano",
-      "agree": "Al marcar, aceptas darle estos permisos al plugin",
-      "agreeRisk": "Al marcar, confirmas que conoces los riesgos anteriores y aceptas darle estos permisos al plugin"
+      "agree": "Al marcar, aceptas darle al plugin los permisos marcados arriba",
+      "agreeRisk": "Al marcar, confirmas que conoces los riesgos anteriores y aceptas darle al plugin los permisos marcados arriba"
     },
     "uninstall": {
       "title": "¿Desinstalar {{name}}?",
@@ -2029,6 +2030,11 @@
       "focus_app": "Permiso para leer eventos de cambio de aplicación y el nombre de la aplicación a la que cambias",
       "focus_category": "Permiso para leer a qué categoría pertenece la aplicación a la que cambias",
       "focus_title": "Permiso para leer títulos de ventana de las aplicaciones y dominios de sitios web"
+    },
+    "permissionTree": {
+      "expand": "Expandir",
+      "collapse": "Contraer",
+      "required": "Obligatorio"
     }
   }
 }

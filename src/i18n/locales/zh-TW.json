@@ -1955,7 +1955,8 @@
       "update": "更新到 v{{version}}",
       "current": "v{{version}}（目前）",
       "show": "顯示",
-      "uninstall": "解除安裝"
+      "uninstall": "解除安裝",
+      "permissions": "權限 {{checked}}/{{asked}}"
     },
     "market": {
       "title": "外掛市集",
@@ -1987,13 +1988,13 @@
       "leakRisk": "此外掛有可能造成個人資訊外洩等後果。",
       "trustOnly": "請你仔細甄別，並只在你信任作者時安裝。",
       "confirm": "信任並安裝",
-      "permissions": "此外掛將申請以下權限：",
+      "permissions": "此外掛將申請以下權限，不想給的可以取消勾選：",
       "noPermissions": "這個外掛不讀取你的任何資料。",
       "highRisk": "高風險",
       "storage": "最多 {{mb}} MB 的磁碟空間佔用",
       "background": "在背景執行的權限",
-      "agree": "勾選代表同意外掛取得這些權限",
-      "agreeRisk": "勾選代表知悉上述風險，並同意外掛取得這些權限"
+      "agree": "勾選代表同意外掛取得上面選取的權限",
+      "agreeRisk": "勾選代表知悉上述風險，並同意外掛取得上面選取的權限"
     },
     "uninstall": {
       "title": "解除安裝 {{name}}？",
@@ -2024,6 +2025,11 @@
       "focus_app": "讀取切換應用程式事件，及其切換的應用程式名稱的權限",
       "focus_category": "讀取切換到的應用程式屬於哪個分類的權限",
       "focus_title": "讀取應用程式視窗標題和網站網域的權限"
+    },
+    "permissionTree": {
+      "expand": "展開",
+      "collapse": "收合",
+      "required": "必要"
     }
   }
 }

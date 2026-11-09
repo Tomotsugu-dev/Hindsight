@@ -1960,7 +1960,8 @@
       "update": "Update to v{{version}}",
       "current": "v{{version}} (current)",
       "show": "Show",
-      "uninstall": "Uninstall"
+      "uninstall": "Uninstall",
+      "permissions": "Permissions {{checked}}/{{asked}}"
     },
     "market": {
       "title": "Plugin market",
@@ -1992,13 +1993,13 @@
       "leakRisk": "This plugin may leak your personal information.",
       "trustOnly": "Check it carefully, and install it only if you trust its author.",
       "confirm": "Trust and install",
-      "permissions": "This plugin will ask for:",
+      "permissions": "This plugin will ask for the permissions below. Uncheck the ones you do not want to give:",
       "noPermissions": "This plugin reads none of your data.",
       "highRisk": "High risk",
       "storage": "Up to {{mb}} MB of disk space",
       "background": "Permission to run in the background",
-      "agree": "I agree to give the plugin these permissions",
-      "agreeRisk": "I understand the risks above, and I agree to give the plugin these permissions"
+      "agree": "I agree to give the plugin the permissions checked above",
+      "agreeRisk": "I understand the risks above, and I agree to give the plugin the permissions checked above"
     },
     "uninstall": {
       "title": "Uninstall {{name}}?",
@@ -2029,6 +2030,11 @@
       "focus_app": "Permission to read app switch events and the name of the app you switch to",
       "focus_category": "Permission to read which category the app you switch to belongs to",
       "focus_title": "Permission to read app window titles and website domains"
+    },
+    "permissionTree": {
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "required": "Required"
     }
   }
 }
