@@ -331,6 +331,10 @@
   color: var(--text-strong);
 }
 
+:global([data-mode="dark"]) .card {
+  border-color: var(--border-default);
+}
+
 :global([data-layout="flat"]) .card:hover {
   box-shadow: none;
   transform: none;
