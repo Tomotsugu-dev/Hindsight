@@ -1,8 +1,8 @@
 .hero {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 4px 4px 12px;
+  gap: calc(16px * var(--density));
+  padding: calc(4px * var(--density)) calc(4px * var(--density)) calc(12px * var(--density));
 }
 
 .logo {
@@ -10,25 +10,25 @@
   height: 56px;
   border-radius: var(--radius-lg);
   object-fit: cover;
-  box-shadow: 0 4px 14px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength)));
+  box-shadow: 0 4px 14px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
   user-select: none;
 }
 
 .appName {
-  font-size: 22px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-display) * var(--font-scale));
+  font-weight: var(--font-weight-display);
   color: var(--text-strong);
   letter-spacing: -0.012em;
 }
 
 .value {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   font-weight: var(--font-weight-500);
 }
 
 .link {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--color-accent);
   font-weight: var(--font-weight-medium);
   transition: opacity 160ms ease-out;
@@ -54,13 +54,13 @@
 .checkBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(28px * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   transition:
@@ -84,7 +84,7 @@
 
 .installBtn {
   background: var(--accent-fill);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: transparent;
 }
 
@@ -104,8 +104,8 @@
 
 .updateNotes {
   display: block;
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.55;
   white-space: pre-wrap;
@@ -114,7 +114,7 @@
 }
 
 .updateError {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--status-error);
 }
 
