@@ -75,7 +75,7 @@
 
 .sectionTitle {
   padding: 0 calc(var(--space-3) * var(--density));
-  height: calc(16px * var(--density));
+  min-height: calc(16px * var(--density));
   display: flex;
   align-items: center;
   font-size: calc(var(--font-size-micro) * var(--font-scale));
