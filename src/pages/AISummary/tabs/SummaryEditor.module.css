@@ -43,9 +43,3 @@
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
-
-/* 比 .btn 小一号；加上 .editor 让它不受两份样式表加载先后影响 */
-.editor .saveBtn {
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-}
