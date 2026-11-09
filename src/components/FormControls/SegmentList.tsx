@@ -255,7 +255,6 @@ export function SegmentList({ segments, onChange }: Props) {
                       width: pct(s.endHour - s.startHour),
                       background: bg,
                       color: light ? "#3a3f55" : "#fff",
-                      "--time-opacity": light ? "0.72" : "0.9",
                       "--text-shadow": light ? "none" : "0 1px 2px rgba(0, 0, 0, 0.18)",
                     } as React.CSSProperties
                   }

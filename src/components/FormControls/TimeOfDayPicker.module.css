@@ -3,21 +3,21 @@
 .wrap {
   width: 100%;
   /* 给标记头顶的时间气泡留空间 */
-  padding-top: 24px;
+  padding-top: calc(24px * var(--density));
 }
 
 .bar {
   position: relative;
-  height: 28px;
+  height: calc(28px * var(--density));
   border-radius: var(--radius-md);
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   cursor: pointer;
   user-select: none;
   touch-action: none;
   outline: none;
   /* 同段条的悬浮感 */
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.06));
+  filter: drop-shadow(0 2px 5px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength))));
 }
 
 .bar:focus-visible {
@@ -33,9 +33,8 @@
   pointer-events: none;
 }
 
-/* 小时分隔线:画在色带之上才看得清(压底下会被色带洗掉);
-   0.13 的深度在粉彩底和素底上都可读又不噪。
-   纵向 mask 把每根竖线切成 3px 段 + 3px 空 = 虚线。 */
+/* Hour lines sit above the bands, because a band would wash them out from below.
+   The vertical mask cuts each line into 3px dashes with 3px gaps. */
 .clip::after {
   content: "";
   position: absolute;
@@ -44,8 +43,8 @@
     to right,
     transparent 0,
     transparent calc(100% / 24 - 1px),
-    rgba(0, 0, 0, 0.13) calc(100% / 24 - 1px),
-    rgba(0, 0, 0, 0.13) calc(100% / 24)
+    var(--border-strong) calc(100% / 24 - 1px),
+    var(--border-strong) calc(100% / 24)
   );
   -webkit-mask-image: repeating-linear-gradient(
     to bottom,
@@ -118,14 +117,14 @@
 
 .bubble {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 6px * var(--density));
   left: 50%;
   transform: translateX(-50%);
-  padding: 1px 7px;
+  padding: 1px calc(7px * var(--density));
   border-radius: 999px;
   background: var(--accent-fill);
-  color: #ffffff;
-  font-size: 10.5px;
+  color: var(--text-on-accent);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -133,8 +132,8 @@
 
 .ticks {
   position: relative;
-  height: 18px;
-  margin-top: 4px;
+  height: calc(18px * var(--font-scale));
+  margin-top: calc(4px * var(--density));
 }
 
 .tick {
@@ -153,7 +152,7 @@
 }
 
 .tickLabel {
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
