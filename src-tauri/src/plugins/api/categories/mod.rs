@@ -1,6 +1,9 @@
 //! Category methods (`categories.*` and `super_categories.*`), and the category format that
 //! plugins get.
 
+pub(super) mod apps;
+pub(super) mod sites;
+
 use std::collections::HashMap;
 
 use serde::Serialize;

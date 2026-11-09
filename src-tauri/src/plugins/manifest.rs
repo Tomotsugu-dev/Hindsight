@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 
 /// Permissions this version knows, and the permission each one must be requested with.
 /// For all permissions, see docs/design/plugins/en/permissions.md.
-const PERMISSIONS: [(&str, Option<&str>); 15] = [
+const PERMISSIONS: [(&str, Option<&str>); 19] = [
     ("stats.read", None),
     ("stats.today", Some("stats.read")),
     ("stats.week", Some("stats.read")),
@@ -15,6 +15,10 @@ const PERMISSIONS: [(&str, Option<&str>); 15] = [
     ("stats.history", Some("stats.read")),
     ("devices.read", None),
     ("categories.read", None),
+    ("categories.app.read", Some("categories.read")),
+    ("categories.app.write", Some("categories.app.read")),
+    ("categories.site.read", Some("categories.read")),
+    ("categories.site.write", Some("categories.site.read")),
     ("super_categories.read", None),
     ("notifications", None),
     ("notifications.sound", Some("notifications")),
@@ -316,6 +320,33 @@ mod tests {
         assert!(matches!(parse_value(&v), Err(Error::PluginManifest(_))));
 
         v["permissions"] = json!(["notifications", "notifications.sound"]);
+        assert!(parse_value(&v).is_ok());
+    }
+
+    /// 应用、网站的读权限要带 categories.read，写权限要带对应的读权限；整条带齐就通过。
+    #[test]
+    fn category_rule_permissions_need_their_read_permission() {
+        let mut v = focus();
+        for permissions in [
+            json!(["categories.app.read"]),
+            json!(["categories.read", "categories.app.write"]),
+            json!(["categories.site.read"]),
+            json!(["categories.read", "categories.site.write"]),
+        ] {
+            v["permissions"] = permissions.clone();
+            assert!(
+                matches!(parse_value(&v), Err(Error::PluginManifest(_))),
+                "{permissions}"
+            );
+        }
+
+        v["permissions"] = json!([
+            "categories.read",
+            "categories.app.read",
+            "categories.app.write",
+            "categories.site.read",
+            "categories.site.write",
+        ]);
         assert!(parse_value(&v).is_ok());
     }
 

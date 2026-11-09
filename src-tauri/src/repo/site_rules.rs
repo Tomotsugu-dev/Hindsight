@@ -212,6 +212,28 @@ pub async fn remove(pool: &DbPool, host: &str) -> Result<()> {
     Ok(())
 }
 
+/// Returns the category of the rule a website uses now: its own rule, or else the rule of the
+/// nearest parent domain. `None` if neither exists.
+pub async fn category_of(pool: &DbPool, host: &str) -> Result<Option<String>> {
+    let host = host.to_string();
+    let sql = format!(
+        "WITH RECURSIVE {}
+         SELECT category_id FROM host_rule",
+        matching_rule_host_sql("SELECT ?1"),
+    );
+    let category = pool
+        .0
+        .call(move |conn| {
+            conn.prepare_cached(&sql)
+                .db()?
+                .query_row([&host], |r| r.get(0))
+                .optional()
+                .db()
+        })
+        .await?;
+    Ok(category)
+}
+
 /// Sessions store domains in lowercase (`browser_url::host_for_stats`), so rules do too,
 /// or they would not match.
 fn normalize_host(host: &str) -> Result<String> {
@@ -525,5 +547,27 @@ mod tests {
             remove(&pool, " ").await.unwrap_err(),
             Error::InvalidInput(_)
         ));
+    }
+
+    /// 自己有规则用自己的；没有就用最近的父域名的；删掉的规则不算；都没有是 None。
+    #[tokio::test]
+    async fn category_of_uses_own_rule_then_nearest_parent() {
+        let pool = fresh_test_pool().await;
+        set(&pool, "github.com", "code").await.unwrap();
+        set(&pool, "docs.github.com", "browse").await.unwrap();
+
+        for (host, want) in [
+            ("docs.github.com", Some("browse")),
+            ("api.docs.github.com", Some("browse")),
+            ("api.github.com", Some("code")),
+            ("gitlab.com", None),
+        ] {
+            let got = category_of(&pool, host).await.unwrap();
+            assert_eq!(got.as_deref(), want, "{host}");
+        }
+
+        remove(&pool, "docs.github.com").await.unwrap();
+        let got = category_of(&pool, "docs.github.com").await.unwrap();
+        assert_eq!(got.as_deref(), Some("code"));
     }
 }
