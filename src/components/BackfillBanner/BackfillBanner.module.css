@@ -4,9 +4,9 @@
 .banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
+  gap: calc(8px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
+  margin-bottom: calc(12px * var(--density));
   border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--status-pending) 8%, transparent);
   border: 1px solid color-mix(in oklab, var(--status-pending) 32%, transparent);
@@ -19,7 +19,7 @@
 
 .bannerText {
   flex: 1;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-strong);
   line-height: 1.4;
 }
@@ -28,12 +28,12 @@
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 12px;
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(12px * var(--density));
   border: 1px solid color-mix(in oklab, var(--status-pending) 45%, transparent);
   border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--status-pending);
   cursor: pointer;
