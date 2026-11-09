@@ -19,29 +19,29 @@
   z-index: var(--z-modal);
   min-width: 380px;
   max-width: 480px;
-  padding: 22px 22px 16px;
+  padding: calc(22px * var(--density)) calc(22px * var(--density)) calc(16px * var(--density));
   background: var(--surface-card);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 12px 36px rgba(20, 20, 40, calc(0.22 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength)));
+    0 1px 0 var(--hairline-hi) inset,
+    0 12px 36px rgba(var(--shadow-rgb), calc(0.22 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--density));
   animation: scaleIn 220ms var(--ease-spring);
 }
 
 .title {
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   margin: 0;
 }
 
 .intro {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-regular);
   line-height: 1.5;
   margin: 0;
@@ -49,24 +49,24 @@
 }
 
 .unaffected {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-regular);
   line-height: 1.5;
   margin: 0;
-  padding: 8px 10px;
-  background: rgba(34, 197, 94, 0.08);
-  border-left: 3px solid rgba(34, 197, 94, 0.55);
+  padding: calc(8px * var(--density)) calc(10px * var(--density));
+  background: color-mix(in oklab, var(--status-ok) 8%, transparent);
+  border-left: 3px solid color-mix(in oklab, var(--status-ok) 55%, transparent);
   border-radius: var(--radius-xs);
 }
 
 .divider {
   border: 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--border-default);
   margin: 2px 0;
 }
 
 .question {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   margin: 0;
@@ -75,14 +75,14 @@
 .options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .option {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  gap: calc(10px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
@@ -95,8 +95,8 @@
 }
 
 .optionChecked {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.05);
+  border-color: color-mix(in oklab, var(--status-error) 45%, transparent);
+  background: color-mix(in oklab, var(--status-error) 5%, transparent);
 }
 
 .optionRadio {
@@ -112,29 +112,30 @@
 }
 
 .optionLabel {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
 }
 
 .optionHint {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  /* TODO: --text-soft is not defined in tokens.css, so this color is inherited */
   color: var(--text-soft);
   line-height: 1.45;
 }
 
 .confirmPrompt {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   margin: 0;
 }
 
 .confirmInput {
-  height: 32px;
-  padding: 0 10px;
-  font-size: 13px;
+  height: calc(32px * var(--density));
+  padding: 0 calc(10px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-family: var(--font-mono);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--fill-subtle);
   outline: none;
@@ -144,25 +145,25 @@
 }
 
 .confirmInput:focus {
-  border-color: rgba(239, 68, 68, 0.6);
+  border-color: color-mix(in oklab, var(--status-error) 60%, transparent);
   background: var(--surface-card);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 6px;
+  gap: calc(8px * var(--density));
+  margin-top: calc(6px * var(--density));
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 14px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(14px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   border: 1px solid transparent;
@@ -185,7 +186,7 @@
 
 .btnCancel {
   background: var(--fill-default);
-  border-color: rgba(0, 0, 0, 0.06);
+  border-color: var(--border-subtle);
   color: var(--text-strong);
 }
 
@@ -195,11 +196,11 @@
 
 .btnDanger {
   background: var(--status-error);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 .btnDanger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--status-error-strong);
 }
 
 @keyframes fadeIn {
