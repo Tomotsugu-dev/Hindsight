@@ -147,18 +147,6 @@
     opacity 220ms var(--ease-out);
 }
 
-/* 已连接 Google Drive：云朵染成 accent 紫，并加内发光感的细微 drop-shadow */
-.cloudOn {
-  opacity: 1;
-  color: var(--color-accent);
-  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-accent) 35%, transparent));
-}
-
-.textOn {
-  color: var(--color-accent);
-  font-weight: var(--font-weight-semibold);
-}
-
 .pauseIcon {
   flex-shrink: 0;
 }
@@ -177,10 +165,6 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 280ms var(--ease-out);
-}
-
-.divider {
-  opacity: 0.5;
 }
 
 /* —— 语言行：双层 swap 切换（结构同 captureRow，但用默认配色，不染红） —— */
@@ -230,8 +214,4 @@
 
 :global([data-layout="flat"]) .dot {
   box-shadow: none;
-}
-
-:global([data-layout="flat"]) .cloudOn {
-  filter: none;
 }
